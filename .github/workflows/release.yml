@@ -76,21 +76,34 @@ jobs:
       - name: Prepare release assets
         run: |
           mkdir -p dist/release
-          # GoReleaser in snapshot mode creates binaries in dist/datamitsu_{OS}_{ARCH}_{MICROARCH}/
-          # We iterate over these directories and extract binaries for the release
+          VERSION="${{ needs.generate-unstable-version.outputs.version }}"
 
-          # Find all target directories
+          # GoReleaser creates archives with -SNAPSHOT-{sha} suffix
+          # We need to copy both archives and raw binaries
+
+          # 1. Copy archives (.tar.gz and .zip)
+          for archive in dist/datamitsu_*-SNAPSHOT-*.tar.gz dist/datamitsu_*-SNAPSHOT-*.zip; do
+            if [ -f "$archive" ]; then
+              filename=$(basename "$archive")
+              # Remove the -SNAPSHOT-{sha} suffix from the name
+              # datamitsu_0.0.0-unstable.20260412.becad38-SNAPSHOT-becad38_linux_amd64.tar.gz
+              # -> datamitsu_0.0.0-unstable.20260412.becad38_linux_amd64.tar.gz
+              newname=$(echo "$filename" | sed 's/-SNAPSHOT-[a-f0-9]*_/_/')
+              cp "$archive" "dist/release/$newname"
+              echo "✓ Copied archive: $archive -> dist/release/$newname"
+            fi
+          done
+
+          # 2. Copy raw binaries from target directories
           for dir in dist/datamitsu_*_*/; do
-            # Find the binary inside (datamitsu or datamitsu.exe)
             binary=$(find "$dir" -maxdepth 1 -type f \( -name "datamitsu" -o -name "datamitsu.exe" \) | head -1)
 
             if [ -f "$binary" ]; then
-              # Extract OS and ARCH from directory name: datamitsu_linux_amd64_v1 -> linux_amd64
               dirname=$(basename "$dir")
-              # Remove datamitsu_ prefix and _v* suffix
+              # Extract OS and ARCH: datamitsu_linux_amd64_v1 -> linux_amd64
               target=$(echo "$dirname" | sed 's/^datamitsu_//' | sed 's/_v[0-9.]*$//')
 
-              # Get filename extension (.exe for Windows, empty otherwise)
+              # Get filename extension
               ext="${binary##*.}"
               if [[ "$ext" == "exe" ]]; then
                 newname="datamitsu-${target}.exe"
@@ -99,10 +112,12 @@ jobs:
               fi
 
               cp "$binary" "dist/release/$newname"
-              echo "✓ Copied: $binary -> dist/release/$newname"
+              echo "✓ Copied binary: $binary -> dist/release/$newname"
             fi
           done
 
+          echo ""
+          echo "Release assets prepared:"
           ls -lh dist/release/
 
       - env:

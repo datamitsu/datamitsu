@@ -148,5 +148,6 @@ export default {
     "newname",
     "MICROARCH",
     "microarchitecture",
+    "becad",
   ],
 };

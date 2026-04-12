@@ -164,6 +164,9 @@ jobs:
       - name: Run Go tests
         run: pnpm test
 
+      - name: Build datamitsu binary
+        run: go build -o datamitsu .
+
       - name: Run JavaScript tests
         run: pnpm --filter @datamitsu/programmable-api-js test
 
