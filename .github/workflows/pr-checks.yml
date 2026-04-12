@@ -41,10 +41,21 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - uses: pnpm/action-setup@v5
+        # Auto-detects from package.json packageManager field
+
+      - uses: actions/setup-node@v6
+        with:
+          cache: pnpm
+          node-version-file: ".node-version"
+
       - uses: actions/setup-go@v6
         with:
           cache: true
           go-version-file: go.mod
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - env:
           GORELEASER_CURRENT_TAG: 0.0.0-pr.${{ github.event.pull_request.number }}
@@ -57,16 +68,23 @@ jobs:
           version: latest
       - name: Prepare binaries for Docker
         run: |
-          VERSION="0.0.0-pr.${{ github.event.pull_request.number }}"
-
-          # GoReleaser creates: dist/datamitsu-binary/datamitsu_{VERSION}_linux_{arch}
+          # GoReleaser in snapshot mode creates binaries in dist/datamitsu_{OS}_{ARCH}_{MICROARCH}/
           # Docker expects: dist/datamitsu-linux-{arch}/datamitsu
 
           mkdir -p dist/datamitsu-linux-amd64
           mkdir -p dist/datamitsu-linux-arm64
 
-          cp "dist/datamitsu-binary/datamitsu_${VERSION}_linux_amd64" dist/datamitsu-linux-amd64/datamitsu
-          cp "dist/datamitsu-binary/datamitsu_${VERSION}_linux_arm64" dist/datamitsu-linux-arm64/datamitsu
+          # Find binaries in target directories (strip microarchitecture suffix)
+          for dir in dist/datamitsu_linux_*_*/; do
+            binary=$(find "$dir" -maxdepth 1 -type f -name "datamitsu" | head -1)
+            if [ -f "$binary" ]; then
+              dirname=$(basename "$dir")
+              # Extract arch: datamitsu_linux_amd64_v1 -> amd64
+              arch=$(echo "$dirname" | sed 's/^datamitsu_linux_//' | sed 's/_v[0-9.]*$//')
+              cp "$binary" "dist/datamitsu-linux-${arch}/datamitsu"
+              echo "✓ Copied: $binary -> dist/datamitsu-linux-${arch}/datamitsu"
+            fi
+          done
 
           chmod +x dist/datamitsu-linux-*/datamitsu
           ls -lh dist/datamitsu-linux-*/

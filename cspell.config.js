@@ -147,5 +147,6 @@ export default {
     "trimpath",
     "newname",
     "MICROARCH",
+    "microarchitecture",
   ],
 };
