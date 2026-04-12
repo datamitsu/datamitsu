@@ -1,0 +1,9 @@
+# Platform-specific packages (generated during build)
+datamitsu-darwin-x64/
+datamitsu-darwin-arm64/
+datamitsu-linux-x64/
+datamitsu-linux-arm64/
+datamitsu-win32-x64/
+datamitsu-win32-arm64/
+datamitsu-freebsd-x64/
+datamitsu-freebsd-arm64/

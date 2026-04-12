@@ -57,13 +57,26 @@ jobs:
           export VERSION=${{ needs.generate-unstable-version.outputs.version }}
           pnpm pack:prepare
 
+      - name: Prepare release assets
+        run: |
+          mkdir -p dist/release
+          for dir in dist/datamitsu-*/; do
+            platform=$(basename "$dir" | sed 's/datamitsu-//')
+            if [ -f "$dir/datamitsu.exe" ]; then
+              cp "$dir/datamitsu.exe" "dist/release/datamitsu-${platform}.exe"
+            elif [ -f "$dir/datamitsu" ]; then
+              cp "$dir/datamitsu" "dist/release/datamitsu-${platform}"
+            fi
+          done
+          ls -lh dist/release/
+
       - env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           draft: false
-          files: dist/datamitsu-*/datamitsu*
+          files: dist/release/*
           name: Unstable Build ${{ needs.generate-unstable-version.outputs.short_sha }}
           prerelease: true
           tag_name: ${{ needs.generate-unstable-version.outputs.tag_name }}

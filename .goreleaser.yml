@@ -1,40 +1,45 @@
 archives:
   - files:
-      - LICENSE
-      - README.md
+      - LICENSE*
+      - README*
+
     format: tar.gz
     format_overrides:
       - format: zip
         goos: windows
     id: datamitsu-archive
+    ids:
+      - datamitsu
+    name_template: "datamitsu_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+  - format: binary
+    id: datamitsu-binary
+    ids:
+      - datamitsu
     name_template: "datamitsu_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 
 before:
   hooks:
     - go mod tidy
-    - go test ./...
 
 builds:
   - binary: datamitsu
     env:
       - CGO_ENABLED=0
+    flags:
+      - -trimpath
     goarch:
       - amd64
       - arm64
+
     goos:
       - linux
       - darwin
       - windows
       - freebsd
     id: datamitsu
-    ignore:
-      - goarch: arm64
-        goos: windows
     ldflags:
-      - -s -w
-      - -X github.com/datamitsu/datamitsu/internal/ldflags.Version={{.Version}}
+      - -s -w -X github.com/datamitsu/datamitsu/internal/ldflags.Version={{ .Version }}
     main: .
-
 changelog:
   filters:
     exclude:
@@ -42,22 +47,39 @@ changelog:
       - "^test:"
       - "^ci:"
       - "^chore:"
-  sort: asc
-  use: github
+      - Merge pull request
+      - Merge branch
 
+  sort: asc
 checksum:
   algorithm: sha256
-  name_template: "checksums.txt"
 
+  name_template: "checksums.txt"
+nfpms:
+  - bindir: /usr/local/bin
+    description: |-
+      Configuration management and binary distribution tool.
+      JavaScript-configurable tool orchestration for linting and development workflows.
+    file_name_template: "datamitsu_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats:
+      - deb
+      - rpm
+      - apk
+    homepage: https://github.com/datamitsu/datamitsu
+    id: datamitsu
+    ids:
+      - datamitsu
+    license: MIT
+    maintainer: "datamitsu <noreply@github.com>"
+    package_name: datamitsu
+    priority: optional
+
+    section: utils
+    vendor: datamitsu
 release:
   draft: false
   github:
     name: datamitsu
     owner: datamitsu
-  make_latest: true
-  mode: replace
-
-  name_template: "{{.ProjectName}} v{{.Version}}"
   prerelease: auto
-
 version: 2
