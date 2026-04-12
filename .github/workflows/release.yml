@@ -76,12 +76,12 @@ jobs:
       - name: Prepare release assets
         run: |
           mkdir -p dist/release
-          # GoReleaser in snapshot mode creates binaries directly in dist/
+          # GoReleaser in snapshot mode creates binaries in dist/datamitsu-binary/
           # Pattern: datamitsu_VERSION_OS_ARCH or datamitsu_VERSION_OS_ARCH.exe
           VERSION="${{ needs.generate-unstable-version.outputs.version }}"
 
           # Copy only binaries, skip archives (.tar.gz, .zip)
-          for file in dist/datamitsu_${VERSION}_*; do
+          for file in dist/datamitsu-binary/datamitsu_${VERSION}_*; do
             # Skip archives and checksums
             if [[ "$file" == *.tar.gz ]] || [[ "$file" == *.zip ]] || [[ "$file" == *checksums* ]]; then
               continue
