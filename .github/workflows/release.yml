@@ -13,7 +13,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           cache: true
-          go-version: "1.26"
+          go-version-file: go.mod
 
       - env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -24,6 +24,14 @@ jobs:
           args: release --clean
           distribution: goreleaser
           version: latest
+
+      - name: Upload GoReleaser dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: goreleaser-dist-stable
+          path: dist/
+          retention-days: 1
+
   build-unstable:
     if: needs.determine-release-type.outputs.is_unstable == 'true'
     name: Build Unstable Release
@@ -40,19 +48,25 @@ jobs:
           version: 10.32.1
 
       - uses: actions/setup-node@v4
-        with:
-          cache: "pnpm"
-          node-version: "24"
 
       - uses: actions/setup-go@v5
         with:
           cache: true
-          go-version: "1.26"
+          go-version-file: go.mod
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build all artifacts
+      - env:
+          GORELEASER_CURRENT_TAG: ${{ needs.generate-unstable-version.outputs.version }}
+        name: Build binaries with GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          args: release --snapshot --clean
+          distribution: goreleaser
+          version: latest
+
+      - name: Prepare npm packages
         run: |
           export VERSION=${{ needs.generate-unstable-version.outputs.version }}
           pnpm pack:prepare
@@ -60,13 +74,14 @@ jobs:
       - name: Prepare release assets
         run: |
           mkdir -p dist/release
-          for dir in dist/datamitsu-*/; do
-            platform=$(basename "$dir" | sed 's/datamitsu-//')
-            if [ -f "$dir/datamitsu.exe" ]; then
-              cp "$dir/datamitsu.exe" "dist/release/datamitsu-${platform}.exe"
-            elif [ -f "$dir/datamitsu" ]; then
-              cp "$dir/datamitsu" "dist/release/datamitsu-${platform}"
-            fi
+          # GoReleaser creates dist/datamitsu-binary/datamitsu_{VERSION}_{os}_{arch}[.exe]
+          # Rename to datamitsu-{os}-{arch}[.exe] for GitHub Release
+          VERSION="${{ needs.generate-unstable-version.outputs.version }}"
+          for file in dist/datamitsu-binary/*; do
+            filename=$(basename "$file")
+            # Remove datamitsu_ prefix and VERSION
+            newname=$(echo "$filename" | sed "s/datamitsu_${VERSION}_/datamitsu-/")
+            cp "$file" "dist/release/$newname"
           done
           ls -lh dist/release/
 
@@ -80,6 +95,13 @@ jobs:
           name: Unstable Build ${{ needs.generate-unstable-version.outputs.short_sha }}
           prerelease: true
           tag_name: ${{ needs.generate-unstable-version.outputs.tag_name }}
+
+      - name: Upload GoReleaser dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: goreleaser-dist-unstable
+          path: dist/
+          retention-days: 1
 
   determine-release-type:
     name: Determine Release Type
@@ -134,27 +156,27 @@ jobs:
         with:
           ref: ${{ needs.determine-release-type.outputs.checkout_ref }}
 
-      - uses: pnpm/action-setup@v4
+      - name: Download GoReleaser artifacts
+        uses: actions/download-artifact@v4
         with:
-          version: 10.32.1
+          name: ${{ needs.determine-release-type.outputs.is_stable == 'true' && 'goreleaser-dist-stable' || 'goreleaser-dist-unstable' }}
+          path: dist/
 
-      - uses: actions/setup-node@v4
-        with:
-          cache: "pnpm"
-          node-version: "24"
-
-      - uses: actions/setup-go@v5
-        with:
-          cache: true
-          go-version: "1.26"
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build Linux binaries for Docker
+      - name: Prepare binaries for Docker
         run: |
-          export VERSION=${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}
-          node packaging/pack.ts build
+          VERSION="${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}"
+
+          # GoReleaser creates: dist/datamitsu-binary/datamitsu_{VERSION}_linux_{arch}
+          # Docker expects: dist/datamitsu-linux-{arch}/datamitsu
+
+          mkdir -p dist/datamitsu-linux-amd64
+          mkdir -p dist/datamitsu-linux-arm64
+
+          cp "dist/datamitsu-binary/datamitsu_${VERSION}_linux_amd64" dist/datamitsu-linux-amd64/datamitsu
+          cp "dist/datamitsu-binary/datamitsu_${VERSION}_linux_arm64" dist/datamitsu-linux-arm64/datamitsu
+
+          chmod +x dist/datamitsu-linux-*/datamitsu
+          ls -lh dist/datamitsu-linux-*/
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -298,14 +320,13 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          cache: "pnpm"
-          node-version: "24"
           registry-url: "https://registry.npmjs.org"
 
-      - uses: actions/setup-go@v5
+      - name: Download GoReleaser artifacts
+        uses: actions/download-artifact@v4
         with:
-          cache: true
-          go-version: "1.26"
+          name: ${{ needs.determine-release-type.outputs.is_stable == 'true' && 'goreleaser-dist-stable' || 'goreleaser-dist-unstable' }}
+          path: dist/
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile

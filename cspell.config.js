@@ -144,5 +144,6 @@ export default {
     "nfpms",
     "softprops",
     "trimpath",
+    "newname",
   ],
 };

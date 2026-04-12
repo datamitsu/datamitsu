@@ -114,33 +114,10 @@ const PLATFORMS: PlatformConfig[] = [
   },
 ];
 
-function buildBinaries() {
-  console.log("\n🔨 Building Go binaries for all platforms...");
-
-  const ldflags = `-X datamitsu/internal/ldflags.Version=${VERSION}`;
-
-  for (const platform of PLATFORMS) {
-    const binaryName = platform.goos === "windows" ? "datamitsu.exe" : "datamitsu";
-    const outputPath = join(DIST_DIR, `datamitsu-${platform.goos}-${platform.goarch}`, binaryName);
-
-    mkdirSync(join(DIST_DIR, `datamitsu-${platform.goos}-${platform.goarch}`), { recursive: true });
-
-    console.log(`Building for ${platform.goos}/${platform.goarch}...`);
-    exec(
-      `CGO_ENABLED=0 GOOS=${platform.goos} GOARCH=${platform.goarch} go build -ldflags="${ldflags}" -o ${outputPath}`,
-      ROOT_DIR,
-    );
-  }
-}
-
 function clean() {
-  console.log("\n📦 Cleaning previous builds...");
-  if (existsSync(DIST_DIR)) {
-    rmSync(DIST_DIR, { force: true, recursive: true });
-  }
-  mkdirSync(DIST_DIR, { recursive: true });
+  console.log("\n📦 Cleaning npm packages...");
 
-  // Clean platform-specific packages
+  // Clean platform-specific packages only (not dist/ - that's managed by GoReleaser)
   for (const platform of PLATFORMS) {
     const platformDir = join(NPM_DIR, `datamitsu-${platform.npmPlatform}-${platform.npmArch}`);
     if (existsSync(platformDir)) {
@@ -192,11 +169,15 @@ function preparePlatformPackages() {
     const packageName = `datamitsu-${platform.npmPlatform}-${platform.npmArch}`;
     const packageDir = join(NPM_DIR, packageName);
     const binaryName = platform.goos === "windows" ? "datamitsu.exe" : "datamitsu";
-    const sourceBinary = join(
-      DIST_DIR,
-      `datamitsu-${platform.goos}-${platform.goarch}`,
-      binaryName,
-    );
+
+    // GoReleaser создает бинарники с именами:
+    // dist/datamitsu-binary/datamitsu_{VERSION}_{goos}_{goarch}[.exe]
+    const goreleaser_binary_name =
+      platform.goos === "windows"
+        ? `datamitsu_${VERSION}_${platform.goos}_${platform.goarch}.exe`
+        : `datamitsu_${VERSION}_${platform.goos}_${platform.goarch}`;
+
+    const sourceBinary = join(DIST_DIR, "datamitsu-binary", goreleaser_binary_name);
 
     // Create package directory
     mkdirSync(packageDir, { recursive: true });
@@ -338,21 +319,6 @@ const command = process.argv[2];
 
 async function main() {
   switch (command) {
-    case "all": {
-      clean();
-      buildBinaries();
-      preparePlatformPackages();
-      updateMainPackage();
-      await publishNpm(true);
-      break;
-    }
-
-    case "build": {
-      clean();
-      buildBinaries();
-      break;
-    }
-
     case "clean": {
       clean();
       break;
@@ -360,7 +326,6 @@ async function main() {
 
     case "prepare": {
       clean();
-      buildBinaries();
       preparePlatformPackages();
       updateMainPackage();
       break;
@@ -378,16 +343,16 @@ async function main() {
 Usage: tsx pack.ts <command>
 
 Commands:
-	clean       Clean previous builds
-	build       Build Go binaries for all platforms
-	prepare     Build binaries and prepare npm packages
+	clean       Clean npm packages
+	prepare     Prepare npm packages from GoReleaser binaries
 	publish     Publish to npm (use --dry-run for testing)
-	all         Run all steps including dry-run publish
 
 Examples:
 	tsx pack.ts prepare
 	tsx pack.ts publish --dry-run
-	VERSION=1.0.0 tsx pack.ts all
+	VERSION=1.0.0 tsx pack.ts prepare
+
+Note: Binaries are built by GoReleaser. This script only handles npm packaging.
 `);
       }
       process.exit(1);

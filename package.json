@@ -13,7 +13,6 @@
     "demo:capture": "pnpm dm exec task demo:capture",
     "preinstall": "npx only-allow@1.2.2 pnpm",
     "postinstall": "pnpm dm exec task -- build:lib",
-    "pack:build": "tsx packaging/pack.ts build",
     "pack:clean": "tsx packaging/pack.ts clean",
     "pack:prepare": "tsx packaging/pack.ts prepare",
     "pack:publish": "tsx packaging/pack.ts publish",
