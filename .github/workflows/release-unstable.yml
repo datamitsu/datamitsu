@@ -17,13 +17,13 @@ jobs:
         run: |
           DATE=$(date +%Y%m%d)
           SHORT_SHA=$(git rev-parse --short HEAD)
-          VERSION="unstable.${DATE}.${SHORT_SHA}"
+          VERSION="0.0.0-unstable.${DATE}.${SHORT_SHA}"
           TAG_NAME="unstable-${DATE}-${SHORT_SHA}"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
           echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
-          echo "📦 Version: $VERSION"
-          echo "🏷️  Tag: $TAG_NAME"
+          echo "📦 npm version: $VERSION"
+          echo "🏷️  git tag: $TAG_NAME"
 
       - uses: pnpm/action-setup@v4
         with:
@@ -131,7 +131,7 @@ jobs:
           push: true
           tags: |
             ${{ steps.image.outputs.name }}:${{ matrix.registry == 'ghcr' && 'latest' || 'unstable' }}${{ matrix.variant == 'alpine' && '-alpine' || '' }}
-            ${{ steps.image.outputs.name }}:${{ matrix.registry == 'ghcr' && needs.build.outputs.short_sha || format('unstable-{0}', needs.build.outputs.short_sha) }}${{ matrix.variant == 'alpine' && '-alpine' || '' }}
+            ${{ steps.image.outputs.name }}:${{ needs.build.outputs.tag_name }}${{ matrix.variant == 'alpine' && '-alpine' || '' }}
     strategy:
       matrix:
         registry: [ghcr, dockerhub]
@@ -180,7 +180,7 @@ jobs:
           cd packaging/npm
           for dir in datamitsu-*/ datamitsu/; do
             cd "$dir"
-            npm publish --access public --provenance --tag unstable || echo "⚠️  Package $dir already published"
+            npm publish --access public --provenance --tag unstable
             cd ..
           done
 

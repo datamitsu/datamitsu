@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/datamitsu/datamitsu/actions/workflows/ci.yml"><img src="https://github.com/datamitsu/datamitsu/actions/workflows/ci.yml/badge.svg" alt="build"></a>
+  <a href="https://github.com/datamitsu/datamitsu/actions/workflows/pr-checks.yml"><img src="https://github.com/datamitsu/datamitsu/actions/workflows/pr-checks.yml/badge.svg" alt="build"></a>
   <a href="https://goreportcard.com/report/github.com/datamitsu/datamitsu"><img src="https://goreportcard.com/badge/github.com/datamitsu/datamitsu?v=2" alt="Go Report Card"></a>
   <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT">
 </p>
