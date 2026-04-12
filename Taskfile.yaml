@@ -1,0 +1,70 @@
+tasks:
+  # ── Build ──
+
+  build:
+    cmds:
+      - go build
+      - task: pack:prepare
+    deps: [build:lib]
+    desc: Build datamitsu binary and prepare packages
+
+  build:lib:
+    cmds:
+      - pnpm exec tsdown --config ./config/tsdown.config.ts
+      - sed '/^export {};$/d' ./config/dist/main.mjs > ./internal/config/config.js
+      - cp ./config/config.d.ts ./internal/config/config.d.ts
+    deps: [generate:prompts]
+    desc: Build config library (generate prompts, compile, copy)
+
+  # ── Demo ──
+
+  demo:capture:
+    cmds:
+      - |
+        docker run --rm --platform linux/amd64 \
+          --volume "$(pwd)/scripts:/scripts:ro" \
+          --volume "$(pwd)/website/static:/output" \
+          node:24-slim \
+          sh /scripts/docker-capture.sh
+
+    desc: Run datamitsu check in ovineko/ovineko inside Docker (linux/amd64), write website/static/cold.cast + warm.cast
+  generate:prompts:
+    cmds:
+      - node config/scripts/generate-prompts.ts
+
+    desc: Generate prompts TypeScript file from markdown
+
+  # ── Packaging ──
+
+  pack:all:
+    cmds:
+      - node packaging/pack.ts all
+    desc: Full packaging workflow (clean, build, prepare, dry-run publish)
+
+  pack:build:
+    cmds:
+      - node packaging/pack.ts build
+    desc: Build Go binaries for all platforms
+
+  pack:clean:
+    cmds:
+      - node packaging/pack.ts clean
+    desc: Clean previous build artifacts
+
+  pack:prepare:
+    cmds:
+      - node packaging/pack.ts prepare
+      - pnpm datamitsu fix
+    desc: Build binaries and prepare npm packages
+
+  pack:publish:
+    cmds:
+      - node packaging/pack.ts publish
+    desc: Publish to npm
+
+  pack:publish:dry:
+    cmds:
+      - node packaging/pack.ts publish --dry-run
+    desc: Dry-run npm publish
+
+version: "3"

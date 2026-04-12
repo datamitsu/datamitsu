@@ -1,0 +1,206 @@
+{
+  "fnm": {
+    "kind": "fnm",
+    "mode": "managed",
+    "managed": {
+      "binaries": {
+        "darwin": {
+          "amd64": {
+            "unknown": {
+              "url": "https://github.com/Schniz/fnm/releases/download/v1.39.0/fnm-macos.zip",
+              "hash": "f046483e85c53b3278efe49a3620c8680f22efa58a8dabfd03eafc6b59b31a25",
+              "contentType": "zip",
+              "binaryPath": "fnm"
+            }
+          }
+        },
+        "linux": {
+          "amd64": {
+            "glibc": {
+              "url": "https://github.com/Schniz/fnm/releases/download/v1.39.0/fnm-linux.zip",
+              "hash": "7807664f39d39fc518da1c35ba0181e4b3267603c4b1dedeb4b5fc6ae440a224",
+              "contentType": "zip",
+              "binaryPath": "fnm"
+            }
+          },
+          "arm64": {
+            "glibc": {
+              "url": "https://github.com/Schniz/fnm/releases/download/v1.39.0/fnm-arm64.zip",
+              "hash": "4eaff58b2c5bf30d0934027572dd0b5bbb60d2a1af309230b53662d4b1d45599",
+              "contentType": "zip",
+              "binaryPath": "fnm"
+            }
+          }
+        },
+        "windows": {
+          "amd64": {
+            "unknown": {
+              "url": "https://github.com/Schniz/fnm/releases/download/v1.39.0/fnm-windows.zip",
+              "hash": "8183bed4348cb78fdfd8abb3d1247fbeab7b2082f941363929c61e747c001e10",
+              "contentType": "zip",
+              "binaryPath": "fnm.exe"
+            }
+          }
+        }
+      }
+    },
+    "fnm": {
+      "nodeVersion": "24.14.0",
+      "pnpmVersion": "10.32.1",
+      "pnpmHash": "9b943b94bc8f55efb993aad8e44b538e6b091e60a9e4a944dcde869855f233e3"
+    }
+  },
+  "jvm": {
+    "kind": "jvm",
+    "mode": "managed",
+    "managed": {
+      "binaries": {
+        "darwin": {
+          "amd64": {
+            "unknown": {
+              "url": "https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.2%2B10/OpenJDK25U-jdk_x64_mac_hotspot_25.0.2_10.tar.gz",
+              "hash": "7caddeb2d1d06a21487fdf55198349f122ba7b24bfc613b8923a42a133a92dc5",
+              "contentType": "tar.gz",
+              "binaryPath": "jdk-25.0.2+10/Contents/Home/bin/java",
+              "extractDir": true
+            }
+          },
+          "arm64": {
+            "unknown": {
+              "url": "https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.2%2B10/OpenJDK25U-jdk_aarch64_mac_hotspot_25.0.2_10.tar.gz",
+              "hash": "74ff6e892924a49767c35eb61251b1969c03213819d51065d9b8f9e0238c4f97",
+              "contentType": "tar.gz",
+              "binaryPath": "jdk-25.0.2+10/Contents/Home/bin/java",
+              "extractDir": true
+            }
+          }
+        },
+        "linux": {
+          "amd64": {
+            "glibc": {
+              "url": "https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.2%2B10/OpenJDK25U-jdk_x64_linux_hotspot_25.0.2_10.tar.gz",
+              "hash": "987387933b64b9833846dee373b640440d3e1fd48a04804ec01a6dbf718e8ab8",
+              "contentType": "tar.gz",
+              "binaryPath": "jdk-25.0.2+10/bin/java",
+              "extractDir": true
+            },
+            "musl": {
+              "url": "https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.2%2B10/OpenJDK25U-jdk_x64_alpine-linux_hotspot_25.0.2_10.tar.gz",
+              "hash": "961f13ba0ee1e18c41c50ab642361e4283dee5e7947a48ed6a72c8a661d0cca0",
+              "contentType": "tar.gz",
+              "binaryPath": "jdk-25.0.2+10/bin/java",
+              "extractDir": true
+            }
+          },
+          "arm64": {
+            "glibc": {
+              "url": "https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.2%2B10/OpenJDK25U-jdk_aarch64_linux_hotspot_25.0.2_10.tar.gz",
+              "hash": "a9d73e711d967dc44896d4f430f73a68fd33590dabc29a7f2fb9f593425b854c",
+              "contentType": "tar.gz",
+              "binaryPath": "jdk-25.0.2+10/bin/java",
+              "extractDir": true
+            },
+            "musl": {
+              "url": "https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.2%2B10/OpenJDK25U-jdk_aarch64_alpine-linux_hotspot_25.0.2_10.tar.gz",
+              "hash": "e8d928fb018eabb31a148ebadaa5a5ec69273e6562afede21c426960a6a67143",
+              "contentType": "tar.gz",
+              "binaryPath": "jdk-25.0.2+10/bin/java",
+              "extractDir": true
+            }
+          }
+        },
+        "windows": {
+          "amd64": {
+            "unknown": {
+              "url": "https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.2%2B10/OpenJDK25U-jdk_x64_windows_hotspot_25.0.2_10.zip",
+              "hash": "06ac5f5444a1269dd11d11cbb7ab6ebaecedc60dc1caca82cdb56f29100b7b8c",
+              "contentType": "zip",
+              "binaryPath": "jdk-25.0.2+10/bin/java.exe",
+              "extractDir": true
+            }
+          }
+        }
+      }
+    },
+    "jvm": {
+      "javaVersion": "25"
+    }
+  },
+  "uv": {
+    "kind": "uv",
+    "mode": "managed",
+    "managed": {
+      "binaries": {
+        "darwin": {
+          "amd64": {
+            "unknown": {
+              "url": "https://github.com/astral-sh/uv/releases/download/0.10.11/uv-x86_64-apple-darwin.tar.gz",
+              "hash": "ff90020b554cf02ef8008535c9aab6ef27bb7be6b075359300dec79c361df897",
+              "contentType": "tar.gz",
+              "binaryPath": "uv"
+            }
+          },
+          "arm64": {
+            "unknown": {
+              "url": "https://github.com/astral-sh/uv/releases/download/0.10.11/uv-aarch64-apple-darwin.tar.gz",
+              "hash": "437a7d498dd6564d5bf986074249ba1fc600e73da55ae04d7bd4c24d5f149b95",
+              "contentType": "tar.gz",
+              "binaryPath": "uv"
+            }
+          }
+        },
+        "linux": {
+          "amd64": {
+            "glibc": {
+              "url": "https://github.com/astral-sh/uv/releases/download/0.10.11/uv-x86_64-unknown-linux-gnu.tar.gz",
+              "hash": "5a360b0de092ddf4131f5313d0411b48c4e95e8107e40c3f8f2e9fcb636b3583",
+              "contentType": "tar.gz",
+              "binaryPath": "uv"
+            },
+            "musl": {
+              "url": "https://github.com/astral-sh/uv/releases/download/0.10.11/uv-x86_64-unknown-linux-musl.tar.gz",
+              "hash": "d78246139dc6cf3ed6d03c84da762686bced7ad1de67977ee372a45b95a1f6d0",
+              "contentType": "tar.gz",
+              "binaryPath": "uv"
+            }
+          },
+          "arm64": {
+            "glibc": {
+              "url": "https://github.com/astral-sh/uv/releases/download/0.10.11/uv-aarch64-unknown-linux-gnu.tar.gz",
+              "hash": "23003df007937dd607409c8ddf010baa82bad2673e60e254632ca5b04edcce13",
+              "contentType": "tar.gz",
+              "binaryPath": "uv"
+            },
+            "musl": {
+              "url": "https://github.com/astral-sh/uv/releases/download/0.10.11/uv-aarch64-unknown-linux-musl.tar.gz",
+              "hash": "5d80a7f6343d2676dfde1e5126582070a2bbc62df6f60d5527a169be3788532a",
+              "contentType": "tar.gz",
+              "binaryPath": "uv"
+            }
+          }
+        },
+        "windows": {
+          "amd64": {
+            "unknown": {
+              "url": "https://github.com/astral-sh/uv/releases/download/0.10.11/uv-x86_64-pc-windows-msvc.zip",
+              "hash": "9ee74df98582f37fdd6069e1caac80d2616f9a489f5dbb2b1c152f30be69c58e",
+              "contentType": "zip",
+              "binaryPath": "uv.exe"
+            }
+          },
+          "arm64": {
+            "unknown": {
+              "url": "https://github.com/astral-sh/uv/releases/download/0.10.11/uv-aarch64-pc-windows-msvc.zip",
+              "hash": "6a3eec4105c775dd87c11ef8ec41564648273751ff807c8955c24ddbcc636d03",
+              "contentType": "zip",
+              "binaryPath": "uv.exe"
+            }
+          }
+        }
+      }
+    },
+    "uv": {
+      "pythonVersion": "3.14.3"
+    }
+  }
+}

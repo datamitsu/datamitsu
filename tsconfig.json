@@ -1,0 +1,7 @@
+{
+  "extends": "@shibanet0/datamitsu-config/tsconfig/base.json",
+  "include": ["eslint.config.js"],
+  "compilerOptions": {
+    "rootDir": "."
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "name": "datamitsu",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Core engine for configuration management and binary distribution. JavaScript-configurable tool orchestration written in Go.",
+  "keywords": [],
+  "license": "MIT",
+  "author": "Alexander Svinarev <shibanet0@gmail.com> (shibanet0.com)",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "build": "pnpm dm exec task -- build",
+    "demo:capture": "pnpm dm exec task demo:capture",
+    "preinstall": "npx only-allow@1.2.2 pnpm",
+    "prepare": "datamitsu init",
+    "pull:fnm": "./datamitsu devtools pull-fnm ./config/src/fnmApps.json",
+    "pull:fnm:update": "./datamitsu devtools pull-fnm ./config/src/fnmApps.json --update",
+    "pull:github": "./datamitsu devtools pull-github ./config/src/githubApps.json",
+    "pull:github:update": "./datamitsu devtools pull-github ./config/src/githubApps.json --update",
+    "pull:runtimes": "./datamitsu devtools pull-runtimes ./config/src/runtimes.json --update",
+    "test": "go test ./...",
+    "test:coverage": "go test -coverprofile=coverage.out ./... && go tool cover -func=coverage.out | grep total"
+  },
+  "devDependencies": {
+    "@shibanet0/datamitsu-config": "0.0.3-alpha-27",
+    "@types/node": "25.0.2",
+    "tsdown": "0.21.6"
+  },
+  "packageManager": "pnpm@10.32.1",
+  "engines": {
+    "node": ">=24.14.0",
+    "pnpm": ">=10.32.1"
+  }
+}

@@ -1,0 +1,17 @@
+enableGlobalVirtualStore: true
+enablePrePostScripts: false
+hoistPattern: []
+ignorePatchFailures: false
+optimisticRepeatInstall: true
+packageExtensions:
+  langium:
+    dependencies:
+      "@chevrotain/regexp-to-ast": "*"
+      vscode-jsonrpc: "*"
+      vscode-languageserver-protocol: "*"
+      vscode-languageserver-types: "*"
+packages:
+  - programmable-api/js
+  - website
+resolutionMode: lowest-direct
+verifyDepsBeforeRun: install

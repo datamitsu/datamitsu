@@ -1,0 +1,132 @@
+.hexagonCard {
+  position: relative;
+  background: var(--ifm-background-color);
+  border: var(--hex-border-width) solid var(--datamitsu-gold);
+  border-radius: 12px;
+  padding: 2rem 1.5rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: var(--hex-shadow);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.hexagonCard:hover {
+  transform: translateY(-8px);
+  box-shadow: var(--hex-shadow-hover);
+  border-color: var(--datamitsu-gold-light);
+}
+
+.hexagonContent {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  flex: 1;
+}
+
+.stepNumber {
+  width: 48px;
+  height: 48px;
+  background: var(--gradient-gold);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--datamitsu-brown);
+  margin-bottom: 0.5rem;
+  flex-shrink: 0;
+}
+
+[data-theme='dark'] .stepNumber {
+  color: var(--datamitsu-cream);
+}
+
+.title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--datamitsu-brown);
+  margin: 0;
+}
+
+[data-theme='dark'] .title {
+  color: var(--datamitsu-brown);
+}
+
+.description {
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--datamitsu-brown-light);
+  margin: 0;
+}
+
+[data-theme='dark'] .description {
+  color: var(--datamitsu-brown-light);
+}
+
+.hexagonCard.step {
+  border-width: 2px;
+}
+
+.hexagonCard.feature {
+  min-height: 200px;
+}
+
+/* Icon wrapper — appears above the card title for feature variant */
+.iconWrapper {
+  width: 52px;
+  height: 52px;
+  background: linear-gradient(135deg, rgba(212, 168, 85, 0.15) 0%, rgba(212, 168, 85, 0.05) 100%);
+  border: 1.5px solid rgba(212, 168, 85, 0.35);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--datamitsu-gold-dark);
+  margin-bottom: 0.25rem;
+  flex-shrink: 0;
+  transition: background 0.3s ease, border-color 0.3s ease;
+}
+
+.hexagonCard:hover .iconWrapper {
+  background: linear-gradient(135deg, rgba(212, 168, 85, 0.25) 0%, rgba(212, 168, 85, 0.12) 100%);
+  border-color: rgba(212, 168, 85, 0.6);
+}
+
+[data-theme='dark'] .iconWrapper {
+  background: linear-gradient(135deg, rgba(212, 168, 85, 0.12) 0%, rgba(212, 168, 85, 0.04) 100%);
+  border-color: rgba(212, 168, 85, 0.25);
+  color: var(--datamitsu-gold-light);
+}
+
+[data-theme='dark'] .hexagonCard:hover .iconWrapper {
+  background: linear-gradient(135deg, rgba(212, 168, 85, 0.22) 0%, rgba(212, 168, 85, 0.1) 100%);
+  border-color: rgba(212, 168, 85, 0.45);
+}
+
+@media screen and (max-width: 996px) {
+  .hexagonCard {
+    padding: 1.5rem 1.25rem;
+  }
+
+  .stepNumber {
+    width: 40px;
+    height: 40px;
+    font-size: 1.25rem;
+  }
+
+  .title {
+    font-size: 1.125rem;
+  }
+
+  .description {
+    font-size: 0.9375rem;
+  }
+
+  .iconWrapper {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+  }
+}

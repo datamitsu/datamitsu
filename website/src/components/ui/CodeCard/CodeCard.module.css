@@ -1,0 +1,34 @@
+.card {
+  background: var(--card-background);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow:
+    var(--card-shadow-light),
+    0 0 0 1px var(--card-border-color);
+}
+
+[data-theme="dark"] .card {
+  background: var(--card-background);
+  box-shadow:
+    var(--card-shadow-dark),
+    0 0 0 1px var(--card-border-color);
+}
+
+.themeLight {
+  background: var(--card-background) !important;
+  box-shadow:
+    var(--card-shadow-light),
+    0 0 0 1px var(--card-border-color) !important;
+}
+
+.themeDark {
+  background: var(--card-background) !important;
+  box-shadow:
+    var(--card-shadow-dark),
+    0 0 0 1px var(--card-border-color) !important;
+}
+
+.cardBody {
+  overflow: hidden;
+  background-color: transparent;
+}

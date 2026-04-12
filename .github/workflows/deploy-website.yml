@@ -1,0 +1,53 @@
+jobs:
+  build:
+    name: Build Docusaurus
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+
+      - uses: actions/setup-node@v4
+        with:
+          cache: pnpm
+
+          node-version: "24"
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - env:
+          NODE_ENV: production
+
+        name: Build website
+        run: pnpm turbo run website#build
+      - name: Upload build artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./website/build
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    name: Deploy to GitHub Pages
+    needs: build
+    permissions:
+      id-token: write
+      pages: write
+    runs-on: ubuntu-latest
+    steps:
+      - id: deployment
+        name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4
+
+name: Deploy Website
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: {}

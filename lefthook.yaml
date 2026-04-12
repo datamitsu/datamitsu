@@ -1,0 +1,22 @@
+commit-msg:
+  commands:
+    lint commit message:
+      run: "pnpm datamitsu exec commitlint -- --edit {1}"
+post-checkout:
+  commands:
+    init datamitsu:
+      priority: 2
+      run: pnpm datamitsu init
+    install deps:
+      priority: 1
+      run: pnpm i
+pre-commit:
+  commands:
+    datamitsu-check:
+      priority: 1
+      run: pnpm datamitsu check --file-scoped
+      stage_fixed: true
+    test:
+      priority: 2
+      run: pnpm test
+  parallel: false

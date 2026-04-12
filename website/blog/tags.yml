@@ -1,0 +1,18 @@
+breaking-change:
+  description: Breaking changes and migration guides
+  label: Breaking Change
+  permalink: /breaking-change
+
+feature:
+  description: New feature announcements
+  label: Feature
+  permalink: /feature
+
+guide:
+  description: Guides and tutorials
+  label: Guide
+  permalink: /guide
+release:
+  description: Release announcements and changelogs
+  label: Release
+  permalink: /release

@@ -1,0 +1,65 @@
+.tabs {
+  display: flex;
+  gap: 2px;
+  background: var(--card-tabs-background);
+  border-radius: 6px;
+  padding: 2px;
+}
+
+.tab {
+  padding: 0.2rem 0.75rem;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: var(--card-tab-color);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.tab:hover {
+  color: var(--card-tab-color-hover);
+}
+
+/* Focus indicators for accessibility */
+.tab:focus {
+  outline: 2px solid var(--datamitsu-gold);
+  outline-offset: 2px;
+}
+
+.tab:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.tab:focus-visible {
+  outline: 2px solid var(--datamitsu-gold);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(212, 168, 85, 0.2);
+}
+
+.tabActive {
+  background: var(--card-tab-background-active);
+  color: var(--card-tab-color-active);
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 480px) {
+  .tab {
+    padding: 0.15rem 0.5rem;
+    font-size: 0.7rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .tab {
+    font-size: 0.72rem;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .tab:focus {
+    outline-width: 3px;
+  }
+}

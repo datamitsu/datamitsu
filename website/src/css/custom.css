@@ -1,0 +1,224 @@
+:root {
+  /* Warm Color Palette - Light Mode */
+  --datamitsu-cream: #FAF6ED;
+  --datamitsu-cream-dark: #F5EFE3;
+  --datamitsu-brown: #3D2817;
+  --datamitsu-brown-light: #5A4029;
+  --datamitsu-brown-muted: #6B543F;
+  --datamitsu-gold: #D4A855;
+  --datamitsu-gold-light: #E5C073;
+  --datamitsu-gold-dark: #B8923D;
+
+  /* Card-specific variables */
+  --card-background: #FAF8F3;
+  --card-header-background: rgba(212, 168, 85, 0.15);
+  --card-border-color: rgba(212, 168, 85, 0.2);
+  --card-shadow-light: 0 8px 32px rgba(61, 40, 23, 0.12);
+  --card-shadow-dark: 0 20px 60px rgba(0, 0, 0, 0.3);
+
+  /* Card tabs */
+  --card-tabs-background: rgba(212, 168, 85, 0.12);
+  --card-tab-color: #B8923D;
+  --card-tab-color-hover: #D4A855;
+  --card-tab-color-active: #8A6C2C;
+  --card-tab-background-active: rgba(212, 168, 85, 0.35);
+
+  /* Card header text */
+  --card-header-text-color: #B8923D;
+
+  /* Docusaurus theme mappings */
+  --ifm-background-color: #FAF6ED;
+  --ifm-font-color-base: #3D2817;
+  --ifm-color-primary: #D4A855;
+  --ifm-color-primary-dark: #B8923D;
+  --ifm-color-primary-darker: #A88436;
+  --ifm-color-primary-darkest: #8A6C2C;
+  --ifm-color-primary-light: #E5C073;
+  --ifm-color-primary-lighter: #EBD091;
+  --ifm-color-primary-lightest: #F5E5C3;
+
+  /* Hexagon design tokens */
+  --hex-border-width: 3px;
+  --hex-shadow: 0 4px 20px rgba(212, 168, 85, 0.2);
+  --hex-shadow-hover: 0 8px 30px rgba(212, 168, 85, 0.4);
+
+  /* Gradients */
+  --gradient-hero: linear-gradient(135deg, #FAF6ED 0%, #F5EFE3 100%);
+  --gradient-gold: linear-gradient(135deg, #D4A855 0%, #E5C073 100%);
+  --gradient-overlay: linear-gradient(180deg, transparent 0%, rgba(250, 246, 237, 0.8) 100%);
+
+  /* Code and typography */
+  --ifm-code-font-size: 95%;
+  --docusaurus-highlighted-code-line-bg: rgba(61, 40, 23, 0.1);
+}
+
+[data-theme='dark'] {
+  /* Warm Color Palette - Dark Mode */
+  --datamitsu-cream: #2A2419;
+  --datamitsu-cream-dark: #1F1912;
+  --datamitsu-brown: #F5EFE3;
+  --datamitsu-brown-light: #E5DDCC;
+  --datamitsu-brown-muted: #C9B99A;
+  --datamitsu-gold: #D4A855;
+  --datamitsu-gold-light: #E5C073;
+  --datamitsu-gold-dark: #B8923D;
+
+  /* Card-specific variables - darker than section backgrounds for contrast */
+  --card-background: #16120D;
+  --card-header-background: #211C15;
+  --card-border-color: rgba(212, 168, 85, 0.15);
+  --card-shadow-light: 0 8px 32px rgba(61, 40, 23, 0.12);
+  --card-shadow-dark: 0 20px 60px rgba(0, 0, 0, 0.3);
+
+  /* Card tabs - same colors work in dark theme */
+  --card-tabs-background: rgba(212, 168, 85, 0.18);
+  --card-tab-color: rgba(212, 168, 85, 0.75);
+  --card-tab-color-hover: rgba(212, 168, 85, 0.9);
+  --card-tab-color-active: #d4a855;
+  --card-tab-background-active: rgba(212, 168, 85, 0.5);
+
+  /* Card header text */
+  --card-header-text-color: rgba(212, 168, 85, 0.85);
+
+  /* Docusaurus theme mappings */
+  --ifm-background-color: #2A2419;
+  --ifm-font-color-base: #F5EFE3;
+  --ifm-color-primary: #E5C073;
+  --ifm-color-primary-dark: #D4A855;
+  --ifm-color-primary-darker: #C89E4A;
+  --ifm-color-primary-darkest: #B8923D;
+  --ifm-color-primary-light: #EBD091;
+  --ifm-color-primary-lighter: #F0DBA5;
+  --ifm-color-primary-lightest: #F5E5C3;
+
+  /* Hexagon design tokens */
+  --hex-shadow: 0 4px 20px rgba(229, 192, 115, 0.2);
+  --hex-shadow-hover: 0 8px 30px rgba(229, 192, 115, 0.4);
+
+  /* Gradients */
+  --gradient-hero: linear-gradient(135deg, #2A2419 0%, #1F1912 100%);
+  --gradient-gold: linear-gradient(135deg, #D4A855 0%, #E5C073 100%);
+  --gradient-overlay: linear-gradient(180deg, transparent 0%, rgba(42, 36, 25, 0.8) 100%);
+
+  /* Code */
+  --docusaurus-highlighted-code-line-bg: rgba(245, 239, 227, 0.1);
+}
+
+/* Navbar styling */
+:root {
+  --ifm-navbar-background-color: var(--datamitsu-cream);
+  --ifm-navbar-link-color: var(--datamitsu-brown);
+  --ifm-navbar-link-hover-color: var(--datamitsu-gold);
+}
+
+[data-theme='dark'] {
+  --ifm-navbar-background-color: var(--datamitsu-cream-dark);
+  --ifm-navbar-link-color: var(--datamitsu-brown);
+  --ifm-navbar-link-hover-color: var(--datamitsu-gold-light);
+}
+
+/* Footer styling */
+:root {
+  --ifm-footer-background-color: var(--datamitsu-brown);
+  --ifm-footer-color: var(--datamitsu-cream);
+  --ifm-footer-link-color: var(--datamitsu-gold-light);
+  --ifm-footer-link-hover-color: var(--datamitsu-gold);
+  --ifm-footer-title-color: var(--datamitsu-cream);
+}
+
+[data-theme='dark'] {
+  --ifm-footer-background-color: #3D2817;
+  --ifm-footer-color: var(--datamitsu-brown-light);
+  --ifm-footer-link-color: var(--datamitsu-gold-light);
+  --ifm-footer-link-hover-color: var(--datamitsu-gold);
+  --ifm-footer-title-color: var(--datamitsu-brown);
+}
+
+/* Card styling */
+:root {
+  --ifm-card-background-color: var(--datamitsu-cream);
+  --ifm-card-border-radius: 12px;
+}
+
+[data-theme='dark'] {
+  --ifm-card-background-color: var(--datamitsu-cream-dark);
+}
+
+/* Sidebar styling */
+:root {
+  --ifm-menu-color: var(--datamitsu-brown);
+  --ifm-menu-color-active: var(--datamitsu-gold-dark);
+  --ifm-menu-color-background-active: rgba(212, 168, 85, 0.1);
+  --ifm-menu-color-background-hover: rgba(212, 168, 85, 0.05);
+}
+
+[data-theme='dark'] {
+  --ifm-menu-color: var(--datamitsu-brown-light);
+  --ifm-menu-color-active: var(--datamitsu-gold-light);
+  --ifm-menu-color-background-active: rgba(212, 168, 85, 0.15);
+  --ifm-menu-color-background-hover: rgba(212, 168, 85, 0.08);
+}
+
+/* Link colors */
+:root {
+  --ifm-link-color: var(--datamitsu-gold-dark);
+  --ifm-link-hover-color: var(--datamitsu-gold);
+}
+
+[data-theme='dark'] {
+  --ifm-link-color: var(--datamitsu-gold-light);
+  --ifm-link-hover-color: var(--datamitsu-gold);
+}
+
+/* Heading colors */
+:root {
+  --ifm-heading-color: var(--datamitsu-brown);
+}
+
+[data-theme='dark'] {
+  --ifm-heading-color: var(--datamitsu-brown);
+}
+
+/* Code block styling */
+:root {
+  /* Inline code */
+  --ifm-code-background: rgba(212, 168, 85, 0.1);
+  --ifm-code-color: var(--datamitsu-brown);
+  --ifm-code-border-radius: 4px;
+  --ifm-code-padding-vertical: 0.1rem;
+  --ifm-code-padding-horizontal: 0.3rem;
+
+  /* Code blocks */
+  --ifm-pre-background: #F5EFE3;
+  --ifm-pre-color: var(--datamitsu-brown);
+  --ifm-pre-border-radius: 8px;
+  --ifm-pre-padding: 1rem;
+}
+
+[data-theme='dark'] {
+  /* Inline code */
+  --ifm-code-background: rgba(212, 168, 85, 0.15);
+  --ifm-code-color: var(--datamitsu-gold-light);
+
+  /* Code blocks */
+  --ifm-pre-background: #1F1912;
+  --ifm-pre-color: var(--datamitsu-brown-light);
+}
+
+/* Additional code block refinements */
+div[class*='codeBlockContainer'] {
+  box-shadow: 0 2px 8px rgba(61, 40, 23, 0.1);
+}
+
+[data-theme='dark'] div[class*='codeBlockContainer'] {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Inline code only - not code blocks */
+:not(pre) > code {
+  border: 1px solid rgba(212, 168, 85, 0.2);
+}
+
+[data-theme='dark'] :not(pre) > code {
+  border-color: rgba(212, 168, 85, 0.25);
+}

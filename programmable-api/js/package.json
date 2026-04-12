@@ -1,0 +1,23 @@
+{
+  "name": "@datamitsu/programmable-api-js",
+  "version": "0.0.3-alpha-21",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsdown",
+    "copy-to-package": "rm -rf ../../packaging/npm/datamitsu/lib && cp -r dist ../../packaging/npm/datamitsu/lib",
+    "prepare": "pnpm build",
+    "test": "node --experimental-test-module-mocks --import tsx --test 'src/**/*.test.ts' 'src/*.test.ts'"
+  },
+  "dependencies": {
+    "tinyexec": "1.0.4"
+  },
+  "devDependencies": {
+    "@datamitsu/datamitsu": "link:../../packaging/npm/datamitsu",
+    "@shibanet0/datamitsu-config": "0.0.3-alpha-27",
+    "@types/node": "25.0.2",
+    "tsdown": "0.21.6",
+    "tsx": "4.19.2",
+    "typescript": "5.7.3"
+  }
+}

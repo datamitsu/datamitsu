@@ -1,0 +1,63 @@
+{
+  "name": "@datamitsu/datamitsu",
+  "version": "0.0.0",
+  "description": "Configuration management and binary distribution tool. JavaScript-configurable tool orchestration written in Go.",
+  "keywords": [
+    "datamitsu",
+    "config",
+    "binary",
+    "tools",
+    "linter",
+    "lefthook",
+    "golangci-lint",
+    "hadolint",
+    "shellcheck"
+  ],
+  "homepage": "https://github.com/datamitsu/datamitsu#readme",
+  "bugs": {
+    "url": "https://github.com/datamitsu/datamitsu/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/datamitsu/datamitsu.git"
+  },
+  "license": "MIT",
+  "author": "Alexander Svinarev <shibanet0@gmail.com> (shibanet0.com)",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./get-exe.js": "./get-exe.js",
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "datamitsu": "bin/index.js",
+    "dm": "bin/index.js"
+  },
+  "files": [
+    "bin",
+    "lib",
+    "get-exe.js"
+  ],
+  "scripts": {
+    "test": "pnpm --filter @datamitsu/programmable-api-js test"
+  },
+  "dependencies": {
+    "tinyexec": "^1.0.4"
+  },
+  "devDependencies": {
+    "@shibanet0/datamitsu-config": "0.0.3-alpha-27"
+  },
+  "optionalDependencies": {
+    "@datamitsu/datamitsu-darwin-arm64": "0.0.0",
+    "@datamitsu/datamitsu-darwin-x64": "0.0.0",
+    "@datamitsu/datamitsu-freebsd-arm64": "0.0.0",
+    "@datamitsu/datamitsu-freebsd-x64": "0.0.0",
+    "@datamitsu/datamitsu-linux-arm64": "0.0.0",
+    "@datamitsu/datamitsu-linux-x64": "0.0.0",
+    "@datamitsu/datamitsu-win32-arm64": "0.0.0",
+    "@datamitsu/datamitsu-win32-x64": "0.0.0"
+  }
+}

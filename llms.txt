@@ -1,0 +1,56 @@
+# datamitsu
+
+> Your toolchain deserves a home.
+
+Every stack comes with a configuration tax. You pay it on the first project, then the second, then every time a tool updates—and it breaks differently in each repo. **datamitsu exists so you pay this tax only once.**
+
+datamitsu is a platform written in Go that manages binaries, runtimes, and configuration files so teams can standardize their tooling across all projects. It downloads, verifies (SHA-256), and manages binaries for linting and development tools across multiple platforms. Configuration is defined in JavaScript/TypeScript powered by the goja runtime, supporting config chaining and inheritance from base to project level.
+
+Key capabilities:
+- Security-first binary management with mandatory SHA-256 hash verification
+- Multi-runtime support: Python (UV), Node.js (FNM/PNPM), JVM, and native binaries
+- Monorepo-aware with per-project isolation for caches and tool execution
+- Programmable JavaScript/TypeScript configuration with remote config inheritance
+- Docker-optimized for reproducible CI builds
+
+## Documentation
+
+- [Introduction](https://datamitsu.com/docs/intro): Quick overview, key features, and quick start example with links to detailed pages
+- [Installation](https://datamitsu.com/docs/getting-started/installation): Installation methods and setup instructions
+- [Core Concepts](https://datamitsu.com/docs/getting-started/core-concepts): Architecture and fundamental concepts
+- [Configuration API](https://datamitsu.com/docs/reference/configuration-api): Complete API reference for JavaScript configuration
+- [CLI Commands](https://datamitsu.com/docs/reference/cli-commands): Command reference for all CLI operations
+- [JavaScript API](https://datamitsu.com/docs/reference/js-api): Programmatic API reference for the @datamitsu/datamitsu npm package
+
+## Guides
+
+- [Configuration Guide](https://datamitsu.com/docs/guides/configuration): How to write and structure configuration files
+- [Binary Management](https://datamitsu.com/docs/guides/binary-management): Managing tool binaries across platforms
+- [Runtime Management](https://datamitsu.com/docs/guides/runtime-management): Managing Python, Node.js, and JVM runtimes
+- [Tooling System](https://datamitsu.com/docs/guides/tooling-system): Understanding the lint/fix tooling pipeline
+- [Managed Configs](https://datamitsu.com/docs/guides/managed-configs): Distributing configuration files via symlinks
+- [Managed Content](https://datamitsu.com/docs/guides/managed-content): Bundles, shared storage, and zero-conflict content distribution via symlinks
+- [Using Wrappers](https://datamitsu.com/docs/guides/using-wrappers): How to use and configure wrapper packages in your projects
+
+### Architecture
+
+- [Architecture Overview](https://datamitsu.com/docs/guides/architecture): Internal architecture overview with component interaction diagram
+- [Task Planning](https://datamitsu.com/docs/guides/architecture/planner): Priority-based chunking, overlap detection, CWD-subtree restriction
+- [Parallel Execution](https://datamitsu.com/docs/guides/architecture/execution): Two-layer execution model, fail-fast semantics, progress tracking
+- [File Discovery](https://datamitsu.com/docs/guides/architecture/discovery): .gitignore-aware traversal, project auto-detection
+- [Caching Strategy](https://datamitsu.com/docs/guides/architecture/caching): Cache invalidation keys, per-file tracking, concurrency model
+
+## Optional
+
+- [How to Add a New Tool](https://datamitsu.com/docs/how-to/add-new-tool): Step-by-step guide for adding tools
+- [Configure Linters](https://datamitsu.com/docs/how-to/configure-linters): Setting up linter integrations
+- [Remote Configs](https://datamitsu.com/docs/how-to/use-remote-configs): Using remote configuration inheritance
+- [Cache Management](https://datamitsu.com/docs/how-to/manage-cache): Managing project and global caches
+- [Maintaining Wrappers](https://datamitsu.com/docs/how-to/maintain-wrapper): Devtools workflows for updating tool versions, lock files, and CI automation
+- [Alpine Linux](https://datamitsu.com/docs/how-to/use-in-alpine): Using datamitsu on Alpine Linux with musl libc
+- [Ignore Rules](https://datamitsu.com/docs/reference/ignore-rules): Configuring .datamitsuignore rules
+- [Template Placeholders](https://datamitsu.com/docs/reference/template-placeholders): Template variable reference
+- [Multiple Versions Example](https://datamitsu.com/docs/examples/multiple-versions): Running multiple versions of the same tool
+- [UV Isolation Example](https://datamitsu.com/docs/examples/uv-isolation): Python tool isolation patterns
+- [PNPM Patterns Example](https://datamitsu.com/docs/examples/pnpm-patterns): Node.js package management patterns
+- [Creating Wrappers](https://datamitsu.com/docs/contributing/creating-wrappers): Guide for creating and publishing wrapper packages
