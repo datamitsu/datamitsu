@@ -220,7 +220,7 @@ function preparePlatformPackages() {
     }
 
     // Copy README
-    const readmePath = join(ROOT_DIR, "README.md");
+    const readmePath = join(PACKAGING_DIR, "PACKAGE_README.md");
     if (existsSync(readmePath)) {
       cpSync(readmePath, join(packageDir, "README.md"));
     }
