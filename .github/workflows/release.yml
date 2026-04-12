@@ -76,25 +76,31 @@ jobs:
       - name: Prepare release assets
         run: |
           mkdir -p dist/release
-          # GoReleaser in snapshot mode creates binaries in dist/datamitsu-binary/
-          # Pattern: datamitsu_VERSION_OS_ARCH or datamitsu_VERSION_OS_ARCH.exe
-          VERSION="${{ needs.generate-unstable-version.outputs.version }}"
+          # GoReleaser in snapshot mode creates binaries in dist/datamitsu_{OS}_{ARCH}_{MICROARCH}/
+          # We iterate over these directories and extract binaries for the release
 
-          # Copy only binaries, skip archives (.tar.gz, .zip)
-          for file in dist/datamitsu-binary/datamitsu_${VERSION}_*; do
-            # Skip archives and checksums
-            if [[ "$file" == *.tar.gz ]] || [[ "$file" == *.zip ]] || [[ "$file" == *checksums* ]]; then
-              continue
-            fi
-            # Skip nfpm artifacts (.deb, .rpm, .apk)
-            if [[ "$file" == *.deb ]] || [[ "$file" == *.rpm ]] || [[ "$file" == *.apk ]]; then
-              continue
-            fi
+          # Find all target directories
+          for dir in dist/datamitsu_*_*/; do
+            # Find the binary inside (datamitsu or datamitsu.exe)
+            binary=$(find "$dir" -maxdepth 1 -type f \( -name "datamitsu" -o -name "datamitsu.exe" \) | head -1)
 
-            filename=$(basename "$file")
-            # Rename: datamitsu_VERSION_OS_ARCH → datamitsu-OS-ARCH
-            newname=$(echo "$filename" | sed "s/datamitsu_${VERSION}_/datamitsu-/")
-            cp "$file" "dist/release/$newname"
+            if [ -f "$binary" ]; then
+              # Extract OS and ARCH from directory name: datamitsu_linux_amd64_v1 -> linux_amd64
+              dirname=$(basename "$dir")
+              # Remove datamitsu_ prefix and _v* suffix
+              target=$(echo "$dirname" | sed 's/^datamitsu_//' | sed 's/_v[0-9.]*$//')
+
+              # Get filename extension (.exe for Windows, empty otherwise)
+              ext="${binary##*.}"
+              if [[ "$ext" == "exe" ]]; then
+                newname="datamitsu-${target}.exe"
+              else
+                newname="datamitsu-${target}"
+              fi
+
+              cp "$binary" "dist/release/$newname"
+              echo "✓ Copied: $binary -> dist/release/$newname"
+            fi
           done
 
           ls -lh dist/release/

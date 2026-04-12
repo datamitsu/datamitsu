@@ -146,5 +146,6 @@ export default {
     "softprops",
     "trimpath",
     "newname",
+    "MICROARCH",
   ],
 };
