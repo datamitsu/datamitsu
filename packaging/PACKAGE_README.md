@@ -1,8 +1,16 @@
 # datamitsu
 
-> Your toolchain deserves a home.
+<p align="center">
+  <img src="https://datamitsu.com/img/logo.png" alt="datamitsu" width="400" />
+</p>
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+<p align="center">
+  <a href="https://github.com/datamitsu/datamitsu/actions/workflows/ci.yml"><img src="https://github.com/datamitsu/datamitsu/actions/workflows/ci.yml/badge.svg" alt="build"></a>
+  <a href="https://goreportcard.com/report/github.com/datamitsu/datamitsu"><img src="https://goreportcard.com/badge/github.com/datamitsu/datamitsu?v=2" alt="Go Report Card"></a>
+  <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT">
+</p>
+
+> Your toolchain deserves a home.
 
 > **Alpha**: This project is in alpha. The configuration API is not yet stabilized and may change between versions.
 
