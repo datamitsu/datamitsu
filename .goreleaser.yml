@@ -1,0 +1,63 @@
+archives:
+  - files:
+      - LICENSE
+      - README.md
+    format: tar.gz
+    format_overrides:
+      - format: zip
+        goos: windows
+    id: datamitsu-archive
+    name_template: "datamitsu_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+before:
+  hooks:
+    - go mod tidy
+    - go test ./...
+
+builds:
+  - binary: datamitsu
+    env:
+      - CGO_ENABLED=0
+    goarch:
+      - amd64
+      - arm64
+    goos:
+      - linux
+      - darwin
+      - windows
+      - freebsd
+    id: datamitsu
+    ignore:
+      - goarch: arm64
+        goos: windows
+    ldflags:
+      - -s -w
+      - -X github.com/datamitsu/datamitsu/internal/ldflags.Version={{.Version}}
+    main: .
+
+changelog:
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+      - "^chore:"
+  sort: asc
+  use: github
+
+checksum:
+  algorithm: sha256
+  name_template: "checksums.txt"
+
+release:
+  draft: false
+  github:
+    name: datamitsu
+    owner: datamitsu
+  make_latest: true
+  mode: replace
+
+  name_template: "{{.ProjectName}} v{{.Version}}"
+  prerelease: auto
+
+version: 2

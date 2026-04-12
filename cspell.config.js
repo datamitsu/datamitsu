@@ -139,5 +139,8 @@ export default {
     "yourscope",
     "zmls",
     "zstd",
+    "dockerhub",
+    "softprops",
+    "adduser",
   ],
 };

@@ -127,7 +127,7 @@ function buildBinaries() {
 
     console.log(`Building for ${platform.goos}/${platform.goarch}...`);
     exec(
-      `GOOS=${platform.goos} GOARCH=${platform.goarch} go build -ldflags="${ldflags}" -o ${outputPath}`,
+      `CGO_ENABLED=0 GOOS=${platform.goos} GOARCH=${platform.goarch} go build -ldflags="${ldflags}" -o ${outputPath}`,
       ROOT_DIR,
     );
   }
@@ -250,7 +250,11 @@ async function publishNpm(dryRun: boolean = true) {
 
   console.log(`Publishing with tag: ${tag} (version: ${publishVersion})`);
 
-  const baseCommand = dryRun ? "npm publish --dry-run" : "npm publish --access public";
+  // Use --provenance for transparent publishing with OIDC
+  const provenanceFlag = dryRun ? "" : "--provenance";
+  const baseCommand = dryRun
+    ? "npm publish --dry-run"
+    : `npm publish --access public ${provenanceFlag}`;
   const npmCommand = `${baseCommand} --tag ${tag}`;
 
   let hasErrors = false;

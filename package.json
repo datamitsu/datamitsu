@@ -12,6 +12,7 @@
     "build": "pnpm dm exec task -- build",
     "demo:capture": "pnpm dm exec task demo:capture",
     "preinstall": "npx only-allow@1.2.2 pnpm",
+    "postinstall": "pnpm dm exec task -- build:lib",
     "prepare": "datamitsu init",
     "pull:fnm": "./datamitsu devtools pull-fnm ./config/src/fnmApps.json",
     "pull:fnm:update": "./datamitsu devtools pull-fnm ./config/src/fnmApps.json --update",

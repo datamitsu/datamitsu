@@ -26,12 +26,25 @@ tasks:
           --volume "$(pwd)/website/static:/output" \
           node:24-slim \
           sh /scripts/docker-capture.sh
-
     desc: Run datamitsu check in ovineko/ovineko inside Docker (linux/amd64), write website/static/cold.cast + warm.cast
+  # ── Docker ──
+
+  docker:build:
+    cmds:
+      - docker buildx build --platform linux/amd64,linux/arm64 --file docker/Dockerfile --tag datamitsu/datamitsu:dev --load .
+      - docker buildx build --platform linux/amd64,linux/arm64 --file docker/Dockerfile.alpine --tag datamitsu/datamitsu:dev-alpine --load .
+    deps: [pack:build]
+    desc: Build Docker images locally (Debian + Alpine)
+
+  docker:test:
+    cmds:
+      - docker run --rm datamitsu/datamitsu:dev version
+      - docker run --rm datamitsu/datamitsu:dev-alpine version
+    desc: Test local Docker images
+
   generate:prompts:
     cmds:
       - node config/scripts/generate-prompts.ts
-
     desc: Generate prompts TypeScript file from markdown
 
   # ── Packaging ──
