@@ -14,16 +14,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           cache: pnpm
-
           node-version: "24"
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - env:
           NODE_ENV: production
-
         name: Build website
-        run: pnpm turbo run website#build
+        run: pnpm --filter website build
+
       - name: Upload build artifact
         uses: actions/upload-pages-artifact@v3
         with:
