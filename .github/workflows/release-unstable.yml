@@ -3,6 +3,7 @@ jobs:
     name: Build Unstable Release
     outputs:
       short_sha: ${{ steps.version.outputs.short_sha }}
+      tag_name: ${{ steps.version.outputs.tag_name }}
       version: ${{ steps.version.outputs.version }}
     runs-on: ubuntu-latest
     steps:
@@ -16,10 +17,13 @@ jobs:
         run: |
           DATE=$(date +%Y%m%d)
           SHORT_SHA=$(git rev-parse --short HEAD)
-          VERSION="0.0.0-unstable.${DATE}.${SHORT_SHA}"
+          VERSION="unstable.${DATE}.${SHORT_SHA}"
+          TAG_NAME="unstable-${DATE}-${SHORT_SHA}"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
           echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
           echo "📦 Version: $VERSION"
+          echo "🏷️  Tag: $TAG_NAME"
 
       - uses: pnpm/action-setup@v4
         with:
@@ -52,7 +56,7 @@ jobs:
           files: dist/datamitsu-*/datamitsu*
           name: Unstable Build ${{ steps.version.outputs.short_sha }}
           prerelease: true
-          tag_name: v${{ steps.version.outputs.version }}
+          tag_name: ${{ steps.version.outputs.tag_name }}
 
   docker:
     name: Build Unstable Docker Images
