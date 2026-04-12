@@ -76,15 +76,27 @@ jobs:
       - name: Prepare release assets
         run: |
           mkdir -p dist/release
-          # GoReleaser creates dist/datamitsu-binary/datamitsu_{VERSION}_{os}_{arch}[.exe]
-          # Rename to datamitsu-{os}-{arch}[.exe] for GitHub Release
+          # GoReleaser in snapshot mode creates binaries directly in dist/
+          # Pattern: datamitsu_VERSION_OS_ARCH or datamitsu_VERSION_OS_ARCH.exe
           VERSION="${{ needs.generate-unstable-version.outputs.version }}"
-          for file in dist/datamitsu-binary/*; do
+
+          # Copy only binaries, skip archives (.tar.gz, .zip)
+          for file in dist/datamitsu_${VERSION}_*; do
+            # Skip archives and checksums
+            if [[ "$file" == *.tar.gz ]] || [[ "$file" == *.zip ]] || [[ "$file" == *checksums* ]]; then
+              continue
+            fi
+            # Skip nfpm artifacts (.deb, .rpm, .apk)
+            if [[ "$file" == *.deb ]] || [[ "$file" == *.rpm ]] || [[ "$file" == *.apk ]]; then
+              continue
+            fi
+
             filename=$(basename "$file")
-            # Remove datamitsu_ prefix and VERSION
+            # Rename: datamitsu_VERSION_OS_ARCH → datamitsu-OS-ARCH
             newname=$(echo "$filename" | sed "s/datamitsu_${VERSION}_/datamitsu-/")
             cp "$file" "dist/release/$newname"
           done
+
           ls -lh dist/release/
 
       - env:

@@ -141,6 +141,7 @@ export default {
     "zstd",
     "adduser",
     "dockerhub",
+    "nfpm",
     "nfpms",
     "softprops",
     "trimpath",
