@@ -1,0 +1,382 @@
+jobs:
+  build-stable:
+    if: needs.determine-release-type.outputs.is_stable == 'true'
+    name: Build Stable Release (GoReleaser)
+    needs: [determine-release-type, validate-stable]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.determine-release-type.outputs.checkout_ref }}
+
+      - uses: actions/setup-go@v5
+        with:
+          cache: true
+          go-version: "1.26"
+
+      - env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+        name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          args: release --clean
+          distribution: goreleaser
+          version: latest
+  build-unstable:
+    if: needs.determine-release-type.outputs.is_unstable == 'true'
+    name: Build Unstable Release
+    needs: [determine-release-type, generate-unstable-version]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.determine-release-type.outputs.checkout_ref }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+
+      - uses: actions/setup-node@v4
+        with:
+          cache: "pnpm"
+          node-version: "24"
+
+      - uses: actions/setup-go@v5
+        with:
+          cache: true
+          go-version: "1.26"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build all artifacts
+        run: |
+          export VERSION=${{ needs.generate-unstable-version.outputs.version }}
+          pnpm pack:prepare
+
+      - env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: false
+          files: dist/datamitsu-*/datamitsu*
+          name: Unstable Build ${{ needs.generate-unstable-version.outputs.short_sha }}
+          prerelease: true
+          tag_name: ${{ needs.generate-unstable-version.outputs.tag_name }}
+
+  determine-release-type:
+    name: Determine Release Type
+    outputs:
+      checkout_ref: ${{ steps.detect.outputs.checkout_ref }}
+      is_stable: ${{ steps.detect.outputs.is_stable }}
+      is_unstable: ${{ steps.detect.outputs.is_unstable }}
+    runs-on: ubuntu-latest
+    steps:
+      - id: detect
+        name: Detect release type
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            # Tag push → stable
+            echo "is_stable=true" >> $GITHUB_OUTPUT
+            echo "is_unstable=false" >> $GITHUB_OUTPUT
+            echo "checkout_ref=${{ github.ref }}" >> $GITHUB_OUTPUT
+            echo "📦 Detected: Stable release (tag push)"
+          elif [[ "${{ github.event.inputs.release_type }}" == "stable" ]]; then
+            # Manual stable release
+            VERSION_TAG="${{ github.event.inputs.version }}"
+            if [[ -z "$VERSION_TAG" ]]; then
+              echo "❌ Error: version input required for manual stable release"
+              exit 1
+            fi
+            echo "is_stable=true" >> $GITHUB_OUTPUT
+            echo "is_unstable=false" >> $GITHUB_OUTPUT
+            echo "checkout_ref=$VERSION_TAG" >> $GITHUB_OUTPUT
+            echo "📦 Detected: Manual stable release ($VERSION_TAG)"
+          else
+            # Manual unstable release
+            echo "is_stable=false" >> $GITHUB_OUTPUT
+            echo "is_unstable=true" >> $GITHUB_OUTPUT
+            echo "checkout_ref=${{ github.event.inputs.ref }}" >> $GITHUB_OUTPUT
+            echo "📦 Detected: Unstable release"
+          fi
+
+  docker:
+    if: |
+      always() &&
+      (needs.build-stable.result == 'success' || needs.build-unstable.result == 'success')
+    name: Build Docker Images
+    needs:
+      - determine-release-type
+      - validate-stable
+      - generate-unstable-version
+      - build-stable
+      - build-unstable
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.determine-release-type.outputs.checkout_ref }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+
+      - uses: actions/setup-node@v4
+        with:
+          cache: "pnpm"
+          node-version: "24"
+
+      - uses: actions/setup-go@v5
+        with:
+          cache: true
+          go-version: "1.26"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Linux binaries for Docker
+        run: |
+          export VERSION=${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}
+          node packaging/pack.ts build
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - if: matrix.registry == 'ghcr'
+        name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          password: ${{ secrets.GITHUB_TOKEN }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+
+      - if: matrix.registry == 'dockerhub'
+        name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+
+      - id: docker-tags
+        name: Generate Docker tags
+        run: |
+          IS_STABLE="${{ needs.determine-release-type.outputs.is_stable }}"
+          VARIANT="${{ matrix.variant }}"
+          REGISTRY="${{ matrix.registry }}"
+          SUFFIX=""
+          if [[ "$VARIANT" == "alpine" ]]; then
+            SUFFIX="-alpine"
+          fi
+
+          if [[ "$REGISTRY" == "ghcr" ]]; then
+            BASE_IMAGE="ghcr.io/datamitsu/datamitsu"
+          else
+            BASE_IMAGE="docker.io/datamitsu/datamitsu"
+          fi
+
+          if [[ "$IS_STABLE" == "true" ]]; then
+            VERSION="${{ needs.validate-stable.outputs.version }}"
+            # Stable: semver tags
+            TAGS="${BASE_IMAGE}:${VERSION}${SUFFIX}"
+            # Extract major.minor
+            MAJOR_MINOR=$(echo "$VERSION" | grep -oP '^\d+\.\d+' || true)
+            MAJOR=$(echo "$VERSION" | grep -oP '^\d+' || true)
+            if [[ -n "$MAJOR_MINOR" ]]; then
+              TAGS="$TAGS,${BASE_IMAGE}:${MAJOR_MINOR}${SUFFIX}"
+            fi
+            if [[ -n "$MAJOR" ]]; then
+              TAGS="$TAGS,${BASE_IMAGE}:${MAJOR}${SUFFIX}"
+            fi
+            # Add stable tag
+            TAGS="$TAGS,${BASE_IMAGE}:stable${SUFFIX}"
+            # Add latest for non-prerelease
+            if [[ ! "$VERSION" =~ -rc\. ]]; then
+              TAGS="$TAGS,${BASE_IMAGE}:latest${SUFFIX}"
+            fi
+          else
+            # Unstable: unstable tag + date-sha tag
+            TAG_NAME="${{ needs.generate-unstable-version.outputs.tag_name }}"
+            if [[ "$REGISTRY" == "ghcr" ]]; then
+              # GHCR uses different image name for unstable
+              BASE_IMAGE="ghcr.io/datamitsu/datamitsu-unstable"
+              TAGS="${BASE_IMAGE}:latest${SUFFIX},${BASE_IMAGE}:${TAG_NAME}${SUFFIX}"
+            else
+              TAGS="${BASE_IMAGE}:unstable${SUFFIX},${BASE_IMAGE}:${TAG_NAME}${SUFFIX}"
+            fi
+          fi
+
+          echo "tags=$TAGS" >> $GITHUB_OUTPUT
+          echo "Generated tags: $TAGS"
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          context: .
+          file: ${{ matrix.variant == 'alpine' && './docker/Dockerfile.alpine' || './docker/Dockerfile' }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.docker-tags.outputs.tags }}
+
+    strategy:
+      matrix:
+        registry: [ghcr, dockerhub]
+        variant: [debian, alpine]
+  generate-unstable-version:
+    if: needs.determine-release-type.outputs.is_unstable == 'true'
+    name: Generate Unstable Version
+    needs: determine-release-type
+    outputs:
+      short_sha: ${{ steps.version.outputs.short_sha }}
+      tag_name: ${{ steps.version.outputs.tag_name }}
+      version: ${{ steps.version.outputs.version }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.determine-release-type.outputs.checkout_ref }}
+
+      - id: version
+        name: Generate unstable version
+        run: |
+          DATE=$(date +%Y%m%d)
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          VERSION="0.0.0-unstable.${DATE}.${SHORT_SHA}"
+          TAG_NAME="unstable-${DATE}-${SHORT_SHA}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+          echo "📦 npm version: $VERSION"
+          echo "🏷️  git tag: $TAG_NAME"
+
+  npm-publish:
+    if: |
+      always() &&
+      (needs.build-stable.result == 'success' || needs.build-unstable.result == 'success')
+    name: Publish to npm
+    needs:
+      - determine-release-type
+      - validate-stable
+      - generate-unstable-version
+      - build-stable
+      - build-unstable
+    permissions:
+      contents: read
+      id-token: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.determine-release-type.outputs.checkout_ref }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+
+      - uses: actions/setup-node@v4
+        with:
+          cache: "pnpm"
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+
+      - uses: actions/setup-go@v5
+        with:
+          cache: true
+          go-version: "1.26"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - env:
+          VERSION: ${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}
+        name: Prepare npm packages
+        run: pnpm pack:prepare
+
+      - env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        name: Publish to npm
+        run: |
+          IS_STABLE="${{ needs.determine-release-type.outputs.is_stable }}"
+
+          cd packaging/npm
+
+          if [[ "$IS_STABLE" == "true" ]]; then
+            # Stable: use pack.ts publish (auto-detects tag)
+            node ../pack.ts publish
+          else
+            # Unstable: hardcoded unstable tag
+            for dir in datamitsu-*/ datamitsu/; do
+              cd "$dir"
+              npm publish --access public --provenance --tag unstable
+              cd ..
+            done
+          fi
+  validate-stable:
+    if: needs.determine-release-type.outputs.is_stable == 'true'
+    name: Validate Stable Release
+    needs: determine-release-type
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.determine-release-type.outputs.checkout_ref }}
+
+      - name: Verify tag is on main branch
+        run: |
+          TAG_REF="${{ needs.determine-release-type.outputs.checkout_ref }}"
+          TAG_COMMIT=$(git rev-parse $TAG_REF)
+          if ! git branch -r --contains $TAG_COMMIT | grep -q 'origin/main'; then
+            echo "❌ Error: Tag $TAG_REF is not on main branch"
+            exit 1
+          fi
+          echo "✅ Tag is on main branch"
+
+      - id: version
+        name: Extract version from tag
+        run: |
+          TAG_REF="${{ needs.determine-release-type.outputs.checkout_ref }}"
+          VERSION="${TAG_REF#refs/tags/v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "📦 Stable version: $VERSION"
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-rc.[0-9]+"
+  workflow_dispatch:
+    inputs:
+      ref:
+        default: "main"
+        description: "Branch or commit to build (unstable only)"
+        required: false
+      release_type:
+        default: unstable
+        description: "Release type"
+        options:
+          - unstable
+          - stable
+        required: true
+        type: choice
+      version:
+        description: "Version tag (stable manual, e.g., v1.0.0)"
+        required: false
+
+permissions:
+  contents: write
+  packages: write
