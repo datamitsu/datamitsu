@@ -139,5 +139,9 @@ export default {
     "yourscope",
     "zmls",
     "zstd",
+    "softprops",
+    "dockerhub",
+    "trimpath",
+    "nfpms",
   ],
 };
