@@ -11,8 +11,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           cache: pnpm
-          # Auto-detects from .node-version
 
+          node-version-file: ".node-version"
       - uses: actions/setup-go@v5
         with:
           cache: true
@@ -108,8 +108,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           cache: pnpm
-          # Auto-detects from .node-version
 
+          node-version-file: ".node-version"
       - uses: actions/setup-go@v5
         with:
           cache: true
@@ -133,8 +133,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           cache: pnpm
-          # Auto-detects from .node-version
 
+          node-version-file: ".node-version"
       - uses: actions/setup-go@v5
         with:
           cache: true
