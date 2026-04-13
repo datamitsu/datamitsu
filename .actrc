@@ -1,0 +1,7 @@
+-P ubuntu-latest=ghcr.io/catthehacker/ubuntu:act-latest
+--container-architecture linux/amd64
+--pull=false
+--use-gitignore=true
+--artifact-server-path .cache/act/artifacts
+--cache-server-path .cache/act/cache-server
+--action-cache-path .cache/act/cache-action
