@@ -95,7 +95,7 @@ jobs:
               else
                 newname="datamitsu-${target}"
               fi
-              cp "$binary" "dist/release/$newname"
+              cp -p "$binary" "dist/release/$newname"
               echo "✓ Copied binary: $binary -> dist/release/$newname"
             fi
           done

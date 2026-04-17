@@ -13,15 +13,7 @@
 // The `lib/` directory (programmable API) is built by CI workflow, not by this script.
 
 import { execSync, spawn } from "node:child_process";
-import {
-  chmodSync,
-  cpSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 // Track active child processes for cleanup on Ctrl+C
@@ -214,10 +206,7 @@ function preparePlatformPackages() {
 
     // Copy binary
     if (existsSync(sourceBinary)) {
-      const targetBinary = join(packageDir, binaryName);
-      cpSync(sourceBinary, targetBinary);
-      // Set executable permissions (0o755 = owner: read+write+execute, group/others: read+execute)
-      chmodSync(targetBinary, 0o755);
+      cpSync(sourceBinary, join(packageDir, binaryName));
       console.log(`✓ Created ${packageName}`);
     } else {
       console.error(`✗ Binary not found: ${sourceBinary}`);
