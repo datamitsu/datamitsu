@@ -403,6 +403,14 @@ jobs:
           name: release-artifacts
           path: .
 
+      - if: ${{ !env.ACT }}
+        name: Restore executable permissions
+        run: |
+          # GitHub Actions artifacts don't preserve executable permissions
+          # Restore them for all platform-specific binaries
+          find packaging/npm/datamitsu-* -type f \( -name "datamitsu" -o -name "datamitsu.exe" \) -exec chmod +x {} \;
+          echo "✓ Restored executable permissions for npm package binaries"
+
       - env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         name: Publish to npm
