@@ -41,6 +41,7 @@ export default {
     "getwd",
     "gname",
     "goarch",
+    "goamd",
     "goccy",
     "godoc",
     "gofmt",

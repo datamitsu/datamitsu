@@ -56,29 +56,45 @@ jobs:
           export VERSION=${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}
           pnpm pack:prepare
 
-      # 4. Prepare Release Assets (unstable only)
-      - if: needs.determine-release-type.outputs.is_unstable == 'true'
-        name: Prepare release assets
+      # 4. Prepare Release Assets
+      - name: Prepare release assets
         run: |
           mkdir -p dist/release
-          VERSION="${{ needs.generate-unstable-version.outputs.version }}"
+          IS_UNSTABLE="${{ needs.determine-release-type.outputs.is_unstable }}"
 
           # Copy archives (.tar.gz and .zip)
-          for archive in dist/datamitsu_*-SNAPSHOT-*.tar.gz dist/datamitsu_*-SNAPSHOT-*.zip; do
-            if [ -f "$archive" ]; then
-              filename=$(basename "$archive")
-              newname=$(echo "$filename" | sed 's/-SNAPSHOT-[a-f0-9]*_/_/')
-              cp "$archive" "dist/release/$newname"
-              echo "✓ Copied archive: $archive -> dist/release/$newname"
-            fi
-          done
+          # Unstable: datamitsu_*-SNAPSHOT-*.tar.gz → datamitsu_*_{os}_{arch}.tar.gz
+          # Stable: datamitsu_*.tar.gz (already clean)
+          if [[ "$IS_UNSTABLE" == "true" ]]; then
+            for archive in dist/datamitsu_*-SNAPSHOT-*.tar.gz dist/datamitsu_*-SNAPSHOT-*.zip; do
+              if [ -f "$archive" ]; then
+                filename=$(basename "$archive")
+                newname=$(echo "$filename" | sed 's/-SNAPSHOT-[a-f0-9]*_/_/')
+                cp "$archive" "dist/release/$newname"
+                echo "✓ Copied archive: $archive -> dist/release/$newname"
+              fi
+            done
+          else
+            for archive in dist/datamitsu_*.tar.gz dist/datamitsu_*.zip; do
+              if [ -f "$archive" ]; then
+                cp "$archive" dist/release/
+                echo "✓ Copied archive: $archive"
+              fi
+            done
+          fi
 
           # Copy raw binaries from target directories
+          # Unstable: dist/datamitsu_{os}_{arch}_v{goamd64}/datamitsu
+          # Stable: dist/datamitsu_{version}_{os}_{arch}/datamitsu
           for dir in dist/datamitsu_*_*/; do
             binary=$(find "$dir" -maxdepth 1 -type f \( -name "datamitsu" -o -name "datamitsu.exe" \) | head -1)
             if [ -f "$binary" ]; then
               dirname=$(basename "$dir")
               target=$(echo "$dirname" | sed 's/^datamitsu_//' | sed 's/_v[0-9.]*$//')
+              # Remove version prefix for stable releases: linux_amd64 (not 1.0.0_linux_amd64)
+              if [[ "$IS_UNSTABLE" != "true" ]]; then
+                target=$(echo "$target" | sed 's/^[0-9][^_]*_//')
+              fi
               ext="${binary##*.}"
               if [[ "$ext" == "exe" ]]; then
                 newname="datamitsu-${target}.exe"
@@ -97,13 +113,11 @@ jobs:
       # 5. Prepare Docker Binaries
       - name: Prepare Docker binaries
         run: |
-          VERSION="${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}"
-
           mkdir -p dist/datamitsu-linux-amd64
           mkdir -p dist/datamitsu-linux-arm64
 
-          cp "dist/datamitsu_${VERSION}_linux_amd64/datamitsu" dist/datamitsu-linux-amd64/datamitsu
-          cp "dist/datamitsu_${VERSION}_linux_arm64/datamitsu" dist/datamitsu-linux-arm64/datamitsu
+          cp dist/release/datamitsu-linux_amd64 dist/datamitsu-linux-amd64/datamitsu
+          cp dist/release/datamitsu-linux_arm64 dist/datamitsu-linux-arm64/datamitsu
 
           chmod +x dist/datamitsu-linux-*/datamitsu
           ls -lh dist/datamitsu-linux-*/
