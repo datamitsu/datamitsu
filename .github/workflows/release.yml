@@ -1,43 +1,14 @@
 jobs:
-  build-stable:
-    if: needs.determine-release-type.outputs.is_stable == 'true'
-    name: Build Stable Release (GoReleaser)
-    needs: [determine-release-type, validate-stable]
+  build:
+    if: |
+      always() &&
+      !cancelled() &&
+      (needs.validate-stable.result == 'success' || needs.generate-unstable-version.result == 'success')
+    name: Build Release
+    needs: [determine-release-type, validate-stable, generate-unstable-version]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          ref: ${{ needs.determine-release-type.outputs.checkout_ref }}
-
-      - uses: actions/setup-go@v6
-        with:
-          cache: true
-          go-version-file: go.mod
-
-      - env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-        name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v7
-        with:
-          args: release --clean
-          distribution: goreleaser
-          version: latest
-
-      - name: Upload GoReleaser dist
-        uses: actions/upload-artifact@v7
-        with:
-          name: goreleaser-dist-stable
-          path: dist/
-          retention-days: 1
-
-  build-unstable:
-    if: needs.determine-release-type.outputs.is_unstable == 'true'
-    name: Build Unstable Release
-    needs: [determine-release-type, generate-unstable-version]
-    runs-on: ubuntu-latest
-    steps:
+      # 1. Checkout + Setup
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
@@ -49,8 +20,8 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           cache: pnpm
-
           node-version-file: ".node-version"
+
       - uses: actions/setup-go@v6
         with:
           cache: true
@@ -68,58 +39,52 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # 2. Build Binaries (GoReleaser)
       - env:
-          GORELEASER_CURRENT_TAG: ${{ needs.generate-unstable-version.outputs.version }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GORELEASER_CURRENT_TAG: ${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}
         name: Build binaries with GoReleaser
         uses: goreleaser/goreleaser-action@v7
         with:
-          args: release --snapshot --clean
+          args: release ${{ needs.determine-release-type.outputs.is_unstable == 'true' && '--snapshot' || '' }} --clean
           distribution: goreleaser
           version: latest
 
+      # 3. Prepare npm Packages
       - name: Prepare npm packages
         run: |
-          export VERSION=${{ needs.generate-unstable-version.outputs.version }}
+          export VERSION=${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}
           pnpm pack:prepare
 
-      - name: Prepare release assets
+      # 4. Prepare Release Assets (unstable only)
+      - if: needs.determine-release-type.outputs.is_unstable == 'true'
+        name: Prepare release assets
         run: |
           mkdir -p dist/release
           VERSION="${{ needs.generate-unstable-version.outputs.version }}"
 
-          # GoReleaser creates archives with -SNAPSHOT-{sha} suffix
-          # We need to copy both archives and raw binaries
-
-          # 1. Copy archives (.tar.gz and .zip)
+          # Copy archives (.tar.gz and .zip)
           for archive in dist/datamitsu_*-SNAPSHOT-*.tar.gz dist/datamitsu_*-SNAPSHOT-*.zip; do
             if [ -f "$archive" ]; then
               filename=$(basename "$archive")
-              # Remove the -SNAPSHOT-{sha} suffix from the name
-              # datamitsu_0.0.0-unstable.20260412.becad38-SNAPSHOT-becad38_linux_amd64.tar.gz
-              # -> datamitsu_0.0.0-unstable.20260412.becad38_linux_amd64.tar.gz
               newname=$(echo "$filename" | sed 's/-SNAPSHOT-[a-f0-9]*_/_/')
               cp "$archive" "dist/release/$newname"
               echo "✓ Copied archive: $archive -> dist/release/$newname"
             fi
           done
 
-          # 2. Copy raw binaries from target directories
+          # Copy raw binaries from target directories
           for dir in dist/datamitsu_*_*/; do
             binary=$(find "$dir" -maxdepth 1 -type f \( -name "datamitsu" -o -name "datamitsu.exe" \) | head -1)
-
             if [ -f "$binary" ]; then
               dirname=$(basename "$dir")
-              # Extract OS and ARCH: datamitsu_linux_amd64_v1 -> linux_amd64
               target=$(echo "$dirname" | sed 's/^datamitsu_//' | sed 's/_v[0-9.]*$//')
-
-              # Get filename extension
               ext="${binary##*.}"
               if [[ "$ext" == "exe" ]]; then
                 newname="datamitsu-${target}.exe"
               else
                 newname="datamitsu-${target}"
               fi
-
               cp "$binary" "dist/release/$newname"
               echo "✓ Copied binary: $binary -> dist/release/$newname"
             fi
@@ -129,22 +94,58 @@ jobs:
           echo "Release assets prepared:"
           ls -lh dist/release/
 
-      - env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
-        with:
-          draft: false
-          files: dist/release/*
-          name: Unstable Build ${{ needs.generate-unstable-version.outputs.short_sha }}
-          prerelease: true
-          tag_name: ${{ needs.generate-unstable-version.outputs.tag_name }}
+      # 5. Prepare Docker Binaries
+      - name: Prepare Docker binaries
+        run: |
+          VERSION="${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}"
 
-      - name: Upload GoReleaser dist
+          mkdir -p dist/datamitsu-linux-amd64
+          mkdir -p dist/datamitsu-linux-arm64
+
+          cp "dist/datamitsu-binary/datamitsu_${VERSION}_linux_amd64" dist/datamitsu-linux-amd64/datamitsu
+          cp "dist/datamitsu-binary/datamitsu_${VERSION}_linux_arm64" dist/datamitsu-linux-arm64/datamitsu
+
+          chmod +x dist/datamitsu-linux-*/datamitsu
+          ls -lh dist/datamitsu-linux-*/
+
+      # 6. Test Docker Build (dry-run, no push)
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Test Docker build (Debian)
+        uses: docker/build-push-action@v7
+        with:
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+          context: .
+          file: ./docker/Dockerfile
+          load: false
+          platforms: linux/amd64,linux/arm64
+          push: false
+      - name: Test Docker build (Alpine)
+        uses: docker/build-push-action@v7
+        with:
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+          context: .
+          file: ./docker/Dockerfile.alpine
+          load: false
+          platforms: linux/amd64,linux/arm64
+          push: false
+      # 7. Upload Artifact (everything needed for publish jobs)
+      - if: ${{ !env.ACT }}
+        name: Upload build artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: goreleaser-dist-unstable
-          path: dist/
+          name: release-artifacts
+          path: |
+            dist/
+            packaging/npm/
           retention-days: 1
 
   determine-release-type:
@@ -183,135 +184,10 @@ jobs:
             echo "📦 Detected: Unstable release"
           fi
 
-  docker:
+  generate-unstable-version:
     if: |
       always() &&
-      (needs.build-stable.result == 'success' || needs.build-unstable.result == 'success')
-    name: Build Docker Images
-    needs:
-      - determine-release-type
-      - validate-stable
-      - generate-unstable-version
-      - build-stable
-      - build-unstable
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ needs.determine-release-type.outputs.checkout_ref }}
-
-      - name: Download GoReleaser artifacts
-        uses: actions/download-artifact@v7
-        with:
-          name: ${{ needs.determine-release-type.outputs.is_stable == 'true' && 'goreleaser-dist-stable' || 'goreleaser-dist-unstable' }}
-          path: dist/
-
-      - name: Prepare binaries for Docker
-        run: |
-          VERSION="${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}"
-
-          # GoReleaser creates: dist/datamitsu-binary/datamitsu_{VERSION}_linux_{arch}
-          # Docker expects: dist/datamitsu-linux-{arch}/datamitsu
-
-          mkdir -p dist/datamitsu-linux-amd64
-          mkdir -p dist/datamitsu-linux-arm64
-
-          cp "dist/datamitsu-binary/datamitsu_${VERSION}_linux_amd64" dist/datamitsu-linux-amd64/datamitsu
-          cp "dist/datamitsu-binary/datamitsu_${VERSION}_linux_arm64" dist/datamitsu-linux-arm64/datamitsu
-
-          chmod +x dist/datamitsu-linux-*/datamitsu
-          ls -lh dist/datamitsu-linux-*/
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - if: matrix.registry == 'ghcr'
-        name: Login to GHCR
-        uses: docker/login-action@v4
-        with:
-          password: ${{ secrets.GITHUB_TOKEN }}
-          registry: ghcr.io
-          username: ${{ github.actor }}
-
-      - if: matrix.registry == 'dockerhub'
-        name: Login to Docker Hub
-        uses: docker/login-action@v4
-        with:
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-          registry: docker.io
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-
-      - id: docker-tags
-        name: Generate Docker tags
-        run: |
-          IS_STABLE="${{ needs.determine-release-type.outputs.is_stable }}"
-          VARIANT="${{ matrix.variant }}"
-          REGISTRY="${{ matrix.registry }}"
-          SUFFIX=""
-          if [[ "$VARIANT" == "alpine" ]]; then
-            SUFFIX="-alpine"
-          fi
-
-          if [[ "$REGISTRY" == "ghcr" ]]; then
-            BASE_IMAGE="ghcr.io/datamitsu/datamitsu"
-          else
-            BASE_IMAGE="docker.io/datamitsu/datamitsu"
-          fi
-
-          if [[ "$IS_STABLE" == "true" ]]; then
-            VERSION="${{ needs.validate-stable.outputs.version }}"
-            # Stable: semver tags
-            TAGS="${BASE_IMAGE}:${VERSION}${SUFFIX}"
-            # Extract major.minor
-            MAJOR_MINOR=$(echo "$VERSION" | grep -oP '^\d+\.\d+' || true)
-            MAJOR=$(echo "$VERSION" | grep -oP '^\d+' || true)
-            if [[ -n "$MAJOR_MINOR" ]]; then
-              TAGS="$TAGS,${BASE_IMAGE}:${MAJOR_MINOR}${SUFFIX}"
-            fi
-            if [[ -n "$MAJOR" ]]; then
-              TAGS="$TAGS,${BASE_IMAGE}:${MAJOR}${SUFFIX}"
-            fi
-            # Add stable tag
-            TAGS="$TAGS,${BASE_IMAGE}:stable${SUFFIX}"
-            # Add latest for non-prerelease
-            if [[ ! "$VERSION" =~ -rc\. ]]; then
-              TAGS="$TAGS,${BASE_IMAGE}:latest${SUFFIX}"
-            fi
-          else
-            # Unstable: unstable tag + date-sha tag
-            TAG_NAME="${{ needs.generate-unstable-version.outputs.tag_name }}"
-            if [[ "$REGISTRY" == "ghcr" ]]; then
-              # GHCR uses different image name for unstable
-              BASE_IMAGE="ghcr.io/datamitsu/datamitsu-unstable"
-              TAGS="${BASE_IMAGE}:latest${SUFFIX},${BASE_IMAGE}:${TAG_NAME}${SUFFIX}"
-            else
-              TAGS="${BASE_IMAGE}:unstable${SUFFIX},${BASE_IMAGE}:${TAG_NAME}${SUFFIX}"
-            fi
-          fi
-
-          echo "tags=$TAGS" >> $GITHUB_OUTPUT
-          echo "Generated tags: $TAGS"
-
-      - name: Build and push
-        uses: docker/build-push-action@v7
-        with:
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          context: .
-          file: ${{ matrix.variant == 'alpine' && './docker/Dockerfile.alpine' || './docker/Dockerfile' }}
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.docker-tags.outputs.tags }}
-
-    strategy:
-      matrix:
-        registry: [ghcr, dockerhub]
-        variant: [debian, alpine]
-  generate-unstable-version:
-    if: needs.determine-release-type.outputs.is_unstable == 'true'
+      needs.determine-release-type.outputs.is_unstable == 'true'
     name: Generate Unstable Version
     needs: determine-release-type
     outputs:
@@ -338,17 +214,145 @@ jobs:
           echo "📦 npm version: $VERSION"
           echo "🏷️  git tag: $TAG_NAME"
 
-  npm-publish:
+  publish-docker:
     if: |
       always() &&
-      (needs.build-stable.result == 'success' || needs.build-unstable.result == 'success')
+      !cancelled() &&
+      needs.build.result == 'success'
+    name: Publish Docker Images
+    needs: [build, determine-release-type, validate-stable, generate-unstable-version]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.determine-release-type.outputs.checkout_ref }}
+
+      - if: ${{ !env.ACT }}
+        name: Download build artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: release-artifacts
+          path: .
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - if: ${{ !env.ACT && matrix.registry == 'ghcr' }}
+        name: Login to GHCR
+        uses: docker/login-action@v4
+        with:
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+          registry: ghcr.io
+          username: ${{ github.actor }}
+      - if: ${{ !env.ACT && matrix.registry == 'dockerhub' }}
+        name: Login to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+      - id: docker-tags
+        name: Generate Docker tags
+        run: |
+          IS_STABLE="${{ needs.determine-release-type.outputs.is_stable }}"
+          VARIANT="${{ matrix.variant }}"
+          REGISTRY="${{ matrix.registry }}"
+          SUFFIX=""
+          if [[ "$VARIANT" == "alpine" ]]; then
+            SUFFIX="-alpine"
+          fi
+
+          if [[ "$REGISTRY" == "ghcr" ]]; then
+            BASE_IMAGE="ghcr.io/datamitsu/datamitsu"
+          else
+            BASE_IMAGE="docker.io/datamitsu/datamitsu"
+          fi
+
+          if [[ "$IS_STABLE" == "true" ]]; then
+            VERSION="${{ needs.validate-stable.outputs.version }}"
+            # Stable: semver tags
+            TAGS="${BASE_IMAGE}:${VERSION}${SUFFIX}"
+            MAJOR_MINOR=$(echo "$VERSION" | grep -oP '^\d+\.\d+' || true)
+            MAJOR=$(echo "$VERSION" | grep -oP '^\d+' || true)
+            if [[ -n "$MAJOR_MINOR" ]]; then
+              TAGS="$TAGS,${BASE_IMAGE}:${MAJOR_MINOR}${SUFFIX}"
+            fi
+            if [[ -n "$MAJOR" ]]; then
+              TAGS="$TAGS,${BASE_IMAGE}:${MAJOR}${SUFFIX}"
+            fi
+            TAGS="$TAGS,${BASE_IMAGE}:stable${SUFFIX}"
+            if [[ ! "$VERSION" =~ -rc\. ]]; then
+              TAGS="$TAGS,${BASE_IMAGE}:latest${SUFFIX}"
+            fi
+          else
+            # Unstable: unstable tag + date-sha tag
+            TAG_NAME="${{ needs.generate-unstable-version.outputs.tag_name }}"
+            if [[ "$REGISTRY" == "ghcr" ]]; then
+              BASE_IMAGE="ghcr.io/datamitsu/datamitsu-unstable"
+              TAGS="${BASE_IMAGE}:latest${SUFFIX},${BASE_IMAGE}:${TAG_NAME}${SUFFIX}"
+            else
+              TAGS="${BASE_IMAGE}:unstable${SUFFIX},${BASE_IMAGE}:${TAG_NAME}${SUFFIX}"
+            fi
+          fi
+
+          echo "tags=$TAGS" >> $GITHUB_OUTPUT
+          echo "Generated tags: $TAGS"
+
+      - name: Build and push
+        uses: docker/build-push-action@v7
+        with:
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          context: .
+          file: ${{ matrix.variant == 'alpine' && './docker/Dockerfile.alpine' || './docker/Dockerfile' }}
+          platforms: linux/amd64,linux/arm64
+          push: ${{ !env.ACT }}
+          tags: ${{ steps.docker-tags.outputs.tags }}
+    strategy:
+      matrix:
+        registry: [ghcr, dockerhub]
+        variant: [debian, alpine]
+  publish-github:
+    if: needs.determine-release-type.outputs.is_unstable == 'true'
+    name: Publish to GitHub Releases
+    needs: [build, determine-release-type, generate-unstable-version]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.determine-release-type.outputs.checkout_ref }}
+
+      - if: ${{ !env.ACT }}
+        name: Download build artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: release-artifacts
+          path: .
+
+      - env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        if: ${{ !env.ACT }}
+        name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          draft: false
+          files: dist/release/*
+          name: Unstable Build ${{ needs.generate-unstable-version.outputs.short_sha }}
+          prerelease: true
+          tag_name: ${{ needs.generate-unstable-version.outputs.tag_name }}
+
+  publish-npm:
+    if: |
+      always() &&
+      !cancelled() &&
+      needs.build.result == 'success'
     name: Publish to npm
-    needs:
-      - determine-release-type
-      - validate-stable
-      - generate-unstable-version
-      - build-stable
-      - build-unstable
+    needs: [build, determine-release-type, validate-stable, generate-unstable-version]
     permissions:
       contents: read
       id-token: write
@@ -367,50 +371,47 @@ jobs:
           node-version-file: ".node-version"
           registry-url: "https://registry.npmjs.org"
 
-      - name: Cache datamitsu store
-        uses: actions/cache@v5
-        with:
-          key: datamitsu-store-${{ hashFiles('package.json', 'pnpm-lock.yaml', 'datamitsu.config.js', 'datamitsu.config.ts') }}
-          path: ~/.cache/datamitsu/store
-          restore-keys: |
-            datamitsu-store-${{ hashFiles('package.json', 'pnpm-lock.yaml') }}
-            datamitsu-store-
-
-      - name: Download GoReleaser artifacts
+      - if: ${{ !env.ACT }}
+        name: Download build artifacts
         uses: actions/download-artifact@v7
         with:
-          name: ${{ needs.determine-release-type.outputs.is_stable == 'true' && 'goreleaser-dist-stable' || 'goreleaser-dist-unstable' }}
-          path: dist/
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - env:
-          VERSION: ${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}
-        name: Prepare npm packages
-        run: pnpm pack:prepare
+          name: release-artifacts
+          path: .
 
       - env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         name: Publish to npm
         run: |
           IS_STABLE="${{ needs.determine-release-type.outputs.is_stable }}"
+          DRY_RUN=""
+          if [[ -n "$ACT" ]]; then
+            DRY_RUN="--dry-run"
+            echo "🏃 Running in act mode - using --dry-run for npm publish"
+          fi
 
           cd packaging/npm
 
           if [[ "$IS_STABLE" == "true" ]]; then
             # Stable: use pack.ts publish (auto-detects tag)
-            node ../pack.ts publish
+            if [[ -n "$DRY_RUN" ]]; then
+              echo "⚠️  Dry-run mode: pack.ts doesn't support --dry-run, skipping"
+            else
+              node ../pack.ts publish
+            fi
           else
             # Unstable: hardcoded unstable tag
             for dir in datamitsu-*/ datamitsu/; do
               cd "$dir"
-              npm publish --access public --provenance --tag unstable
+              echo "📦 Publishing $dir..."
+              npm publish --access public --tag unstable $DRY_RUN
               cd ..
             done
           fi
+
   validate-stable:
-    if: needs.determine-release-type.outputs.is_stable == 'true'
+    if: |
+      always() &&
+      needs.determine-release-type.outputs.is_stable == 'true'
     name: Validate Stable Release
     needs: determine-release-type
     outputs:
