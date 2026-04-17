@@ -50,13 +50,7 @@ jobs:
           distribution: goreleaser
           version: latest
 
-      # 3. Prepare npm Packages
-      - name: Prepare npm packages
-        run: |
-          export VERSION=${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}
-          pnpm pack:prepare
-
-      # 4. Prepare Release Assets
+      # 3. Prepare Release Assets
       - name: Prepare release assets
         run: |
           mkdir -p dist/release
@@ -110,7 +104,24 @@ jobs:
           echo "Release assets prepared:"
           ls -lh dist/release/
 
-      # 5. Prepare Docker Binaries
+      # 4. Build Programmable API
+      - name: Build programmable API
+        run: |
+          cd programmable-api/js
+          pnpm build
+          cd ../..
+          mkdir -p packaging/npm/datamitsu/lib
+          cp -r programmable-api/js/dist/* packaging/npm/datamitsu/lib/
+          echo "✓ Copied programmable API to lib/"
+          ls -lh packaging/npm/datamitsu/lib/
+
+      # 5. Prepare npm Packages
+      - name: Prepare npm packages
+        run: |
+          export VERSION=${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}
+          pnpm pack:prepare
+
+      # 6. Prepare Docker Binaries
       - name: Prepare Docker binaries
         run: |
           mkdir -p dist/datamitsu-linux-amd64
@@ -122,7 +133,7 @@ jobs:
           chmod +x dist/datamitsu-linux-*/datamitsu
           ls -lh dist/datamitsu-linux-*/
 
-      # 6. Test Docker Build (dry-run, no push)
+      # 7. Test Docker Build (dry-run, no push)
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
 
@@ -151,7 +162,7 @@ jobs:
           load: false
           platforms: linux/amd64,linux/arm64
           push: false
-      # 7. Upload Artifact (everything needed for publish jobs)
+      # 8. Upload Artifact (everything needed for publish jobs)
       - if: ${{ !env.ACT }}
         name: Upload build artifacts
         uses: actions/upload-artifact@v7

@@ -6,11 +6,11 @@
 //
 // 1. GoReleaser builds Go binaries -> dist/datamitsu_{os}_{arch}_*/
 // 2. CI workflow normalizes to -> dist/release/datamitsu-{os}_{arch}[.exe]
-// 3. Taskfile builds programmable-api and copies to lib/ (pack:build-api)
+// 3. CI workflow builds programmable-api and copies to lib/
 // 4. `pack:prepare` (this script) creates platform-specific npm packages
 // 5. `pack:publish` runs `npm publish` for each package
 //
-// The `lib/` directory (programmable API) is managed by Taskfile, not by this script.
+// The `lib/` directory (programmable API) is built by CI workflow, not by this script.
 
 import { execSync, spawn } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
