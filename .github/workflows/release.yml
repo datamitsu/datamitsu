@@ -102,8 +102,8 @@ jobs:
           mkdir -p dist/datamitsu-linux-amd64
           mkdir -p dist/datamitsu-linux-arm64
 
-          cp "dist/datamitsu-binary/datamitsu_${VERSION}_linux_amd64" dist/datamitsu-linux-amd64/datamitsu
-          cp "dist/datamitsu-binary/datamitsu_${VERSION}_linux_arm64" dist/datamitsu-linux-arm64/datamitsu
+          cp "dist/datamitsu_${VERSION}_linux_amd64/datamitsu" dist/datamitsu-linux-amd64/datamitsu
+          cp "dist/datamitsu_${VERSION}_linux_arm64/datamitsu" dist/datamitsu-linux-arm64/datamitsu
 
           chmod +x dist/datamitsu-linux-*/datamitsu
           ls -lh dist/datamitsu-linux-*/
