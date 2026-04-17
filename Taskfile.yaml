@@ -59,6 +59,13 @@ tasks:
       - node packaging/pack.ts build
     desc: Build Go binaries for all platforms
 
+  pack:build-api:
+    cmds:
+      - pnpm --filter @datamitsu/programmable-api-js build
+      - rm -rf packaging/npm/datamitsu/lib
+      - cp -r programmable-api/js/dist packaging/npm/datamitsu/lib
+    desc: Build programmable API and copy to wrapper
+
   pack:clean:
     cmds:
       - node packaging/pack.ts clean
@@ -68,6 +75,7 @@ tasks:
     cmds:
       - node packaging/pack.ts prepare
       - pnpm datamitsu fix
+    deps: [pack:build-api]
     desc: Build binaries and prepare npm packages
 
   pack:publish:

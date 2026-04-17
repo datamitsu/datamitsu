@@ -30,7 +30,7 @@ Binary apps are downloaded directly from GitHub releases. Use `pull-github` to f
 datamitsu devtools pull-github apps/githubApps.json --update
 ```
 
-With `--update`, the command fetches the latest release tags, downloads binaries for all platform tuples (Darwin/Linux/Windows/FreeBSD/OpenBSD on amd64/arm64, Linux with glibc/musl), computes SHA-256 hashes, and writes the results back to the JSON file.
+With `--update`, the command fetches the latest release tags, downloads binaries for all platform tuples (Darwin/Linux/Windows/FreeBSD/OpenBSD on amd64/arm64, Linux with glibc/musl), computes SHA-256 hashes, fetches the repository description from GitHub API, and writes the results back to the JSON file.
 
 **Verify binary extraction after update:**
 

@@ -1,5 +1,16 @@
 #!/usr/bin/env tsx
 
+// npm Publishing Flow
+//
+// This script handles platform-specific binary packaging. The full publish flow:
+//
+// 1. GoReleaser builds Go binaries -> dist/datamitsu-binary/
+// 2. Taskfile builds programmable-api and copies to lib/ (pack:build-api)
+// 3. `pack:prepare` (this script) creates platform-specific npm packages
+// 4. `pack:publish` runs `npm publish` for each package
+//
+// The `lib/` directory (programmable API) is managed by Taskfile, not by this script.
+
 import { execSync, spawn } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -170,7 +181,7 @@ function preparePlatformPackages() {
     const packageDir = join(NPM_DIR, packageName);
     const binaryName = platform.goos === "windows" ? "datamitsu.exe" : "datamitsu";
 
-    // GoReleaser создает бинарники с именами:
+    // GoReleaser creates binaries with names:
     // dist/datamitsu-binary/datamitsu_{VERSION}_{goos}_{goarch}[.exe]
     const goreleaser_binary_name =
       platform.goos === "windows"
@@ -353,6 +364,7 @@ Examples:
 	VERSION=1.0.0 tsx pack.ts prepare
 
 Note: Binaries are built by GoReleaser. This script only handles npm packaging.
+      The lib/ directory (programmable API) is built by Taskfile (pack:build-api).
 `);
       }
       process.exit(1);

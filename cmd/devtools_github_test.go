@@ -72,3 +72,4 @@ func TestPullGitHubCommand_FileAlreadyExists(t *testing.T) {
 		t.Errorf("expected file to remain unchanged, got %q", string(data))
 	}
 }
+

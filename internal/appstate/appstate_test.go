@@ -1,11 +1,13 @@
 package appstate
 
 import (
-	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/binmanager"
 )
 
 func TestLoad(t *testing.T) {
@@ -196,7 +198,7 @@ func TestSave(t *testing.T) {
 			t.Error("JSON should end with newline")
 		}
 
-		if !contains(content, "  ") {
+		if !strings.Contains(content, "  ") {
 			t.Error("JSON should be indented with 2 spaces")
 		}
 	})
@@ -305,6 +307,137 @@ func TestValidate(t *testing.T) {
 	}
 }
 
+func TestBinariesEntryDescription(t *testing.T) {
+	t.Run("marshal with description", func(t *testing.T) {
+		entry := &BinariesEntry{
+			ConfigHash:  "abc123",
+			Description: "A tool for testing",
+			Binaries:    binmanager.MapOfBinaries{},
+		}
+
+		data, err := json.Marshal(entry)
+		if err != nil {
+			t.Fatalf("Marshal() error = %v", err)
+		}
+
+		content := string(data)
+		if !strings.Contains(content, `"description":"A tool for testing"`) {
+			t.Errorf("expected description in JSON, got: %s", content)
+		}
+	})
+
+	t.Run("marshal without description omits field", func(t *testing.T) {
+		entry := &BinariesEntry{
+			ConfigHash: "abc123",
+			Binaries:   binmanager.MapOfBinaries{},
+		}
+
+		data, err := json.Marshal(entry)
+		if err != nil {
+			t.Fatalf("Marshal() error = %v", err)
+		}
+
+		content := string(data)
+		if strings.Contains(content, `"description"`) {
+			t.Errorf("expected no description in JSON when empty, got: %s", content)
+		}
+	})
+
+	t.Run("unmarshal with description", func(t *testing.T) {
+		jsonData := `{"configHash":"abc123","description":"A tool for testing","binaries":{}}`
+
+		var entry BinariesEntry
+		if err := json.Unmarshal([]byte(jsonData), &entry); err != nil {
+			t.Fatalf("Unmarshal() error = %v", err)
+		}
+
+		if entry.Description != "A tool for testing" {
+			t.Errorf("expected description 'A tool for testing', got '%s'", entry.Description)
+		}
+		if entry.ConfigHash != "abc123" {
+			t.Errorf("expected configHash 'abc123', got '%s'", entry.ConfigHash)
+		}
+	})
+
+	t.Run("unmarshal without description (backward compatibility)", func(t *testing.T) {
+		jsonData := `{"configHash":"abc123","binaries":{}}`
+
+		var entry BinariesEntry
+		if err := json.Unmarshal([]byte(jsonData), &entry); err != nil {
+			t.Fatalf("Unmarshal() error = %v", err)
+		}
+
+		if entry.Description != "" {
+			t.Errorf("expected empty description, got '%s'", entry.Description)
+		}
+		if entry.ConfigHash != "abc123" {
+			t.Errorf("expected configHash 'abc123', got '%s'", entry.ConfigHash)
+		}
+	})
+
+	t.Run("round-trip with description", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		path := filepath.Join(tmpDir, "roundtrip.json")
+
+		original := &State{
+			Apps: map[string]*AppMetadata{
+				"myapp": {Owner: "owner", Repo: "repo", Tag: "v1.0.0"},
+			},
+			Binaries: map[string]*BinariesEntry{
+				"myapp": {
+					ConfigHash:  "hash123",
+					Description: "My awesome tool",
+					Binaries:    binmanager.MapOfBinaries{},
+				},
+			},
+		}
+
+		if err := Save(path, original); err != nil {
+			t.Fatalf("Save() error = %v", err)
+		}
+
+		loaded, err := Load(path)
+		if err != nil {
+			t.Fatalf("Load() error = %v", err)
+		}
+
+		if loaded.Binaries["myapp"].Description != "My awesome tool" {
+			t.Errorf("expected description 'My awesome tool', got '%s'", loaded.Binaries["myapp"].Description)
+		}
+	})
+
+	t.Run("round-trip backward compatibility without description", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		path := filepath.Join(tmpDir, "compat.json")
+
+		// Simulate old JSON without description field
+		oldJSON := `{
+  "apps": {
+    "myapp": {"owner": "owner", "repo": "repo", "tag": "v1.0.0"}
+  },
+  "binaries": {
+    "myapp": {"configHash": "hash123", "binaries": {}}
+  }
+}
+`
+		if err := os.WriteFile(path, []byte(oldJSON), 0644); err != nil {
+			t.Fatalf("failed to write test file: %v", err)
+		}
+
+		loaded, err := Load(path)
+		if err != nil {
+			t.Fatalf("Load() error = %v", err)
+		}
+
+		if loaded.Binaries["myapp"].Description != "" {
+			t.Errorf("expected empty description for old format, got '%s'", loaded.Binaries["myapp"].Description)
+		}
+		if loaded.Binaries["myapp"].ConfigHash != "hash123" {
+			t.Errorf("expected configHash 'hash123', got '%s'", loaded.Binaries["myapp"].ConfigHash)
+		}
+	})
+}
+
 func TestComputeConfigHash(t *testing.T) {
 	t.Run("consistent hash", func(t *testing.T) {
 		metadata := &AppMetadata{
@@ -363,6 +496,3 @@ func TestComputeConfigHash(t *testing.T) {
 	})
 }
 
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && (s[:len(substr)] == substr || contains(s[1:], substr)))
-}
