@@ -1,0 +1,59 @@
+description: Setup pnpm, Node.js, Go, and datamitsu cache
+
+inputs:
+  cache-datamitsu:
+    default: "true"
+    description: Whether to cache datamitsu store
+    required: false
+  install-dependencies:
+    default: "true"
+    description: Whether to run pnpm install
+    required: false
+  registry-url:
+    default: ""
+
+    description: npm registry URL (for publishing workflows)
+    required: false
+  setup-go:
+    default: "true"
+    description: Whether to setup Go
+    required: false
+  setup-node:
+    default: "true"
+    description: Whether to setup Node.js and pnpm
+    required: false
+name: Setup Environment
+runs:
+  steps:
+    - if: ${{ inputs.setup-node == 'true' }}
+      uses: pnpm/action-setup@v5
+      # Auto-detects from package.json packageManager field
+
+    - if: ${{ inputs.setup-node == 'true' }}
+      uses: actions/setup-node@v6
+      with:
+        cache: pnpm
+        node-version-file: ".node-version"
+        registry-url: ${{ inputs.registry-url != '' && inputs.registry-url || null }}
+
+    - if: ${{ inputs.setup-go == 'true' }}
+      uses: actions/setup-go@v6
+      with:
+        cache: true
+        go-version-file: go.mod
+
+    - if: ${{ inputs.cache-datamitsu == 'true' }}
+      name: Cache datamitsu store
+      uses: actions/cache@v5
+      with:
+        key: datamitsu-store-${{ hashFiles('package.json', 'pnpm-lock.yaml', 'datamitsu.config.js', 'datamitsu.config.ts') }}
+        path: ~/.cache/datamitsu/store
+        restore-keys: |
+          datamitsu-store-${{ hashFiles('package.json', 'pnpm-lock.yaml') }}
+          datamitsu-store-
+
+    - if: ${{ inputs.install-dependencies == 'true' && inputs.setup-node == 'true' }}
+      name: Install dependencies
+      run: pnpm install --frozen-lockfile
+      shell: bash
+  using: composite

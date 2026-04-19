@@ -150,5 +150,6 @@ export default {
     "MICROARCH",
     "microarchitecture",
     "becad",
+    "trixie",
   ],
 };

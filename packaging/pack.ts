@@ -191,6 +191,14 @@ function preparePlatformPackages() {
 
     const sourceBinary = join(DIST_DIR, "release", releaseBinaryName);
 
+    // Verify binary exists before creating package
+    if (!existsSync(sourceBinary)) {
+      throw new Error(
+        `Binary not found: ${sourceBinary}\n` +
+          `Did GoReleaser build complete successfully for ${platform.goos}/${platform.goarch}?`,
+      );
+    }
+
     // Create package directory
     mkdirSync(packageDir, { recursive: true });
 
@@ -205,12 +213,8 @@ function preparePlatformPackages() {
     writeFileSync(join(packageDir, "package.json"), packageJson);
 
     // Copy binary
-    if (existsSync(sourceBinary)) {
-      cpSync(sourceBinary, join(packageDir, binaryName));
-      console.log(`✓ Created ${packageName}`);
-    } else {
-      console.error(`✗ Binary not found: ${sourceBinary}`);
-    }
+    cpSync(sourceBinary, join(packageDir, binaryName));
+    console.log(`✓ Created ${packageName}`);
 
     // Copy README
     const readmePath = join(PACKAGING_DIR, "PACKAGE_README.md");

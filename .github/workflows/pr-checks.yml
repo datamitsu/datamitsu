@@ -4,31 +4,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-
-      - uses: pnpm/action-setup@v5
-        # Auto-detects from package.json packageManager field
-
-      - uses: actions/setup-node@v6
-        with:
-          cache: pnpm
-
-          node-version-file: ".node-version"
-      - uses: actions/setup-go@v6
-        with:
-          cache: true
-          go-version-file: go.mod
-
-      - name: Cache datamitsu store
-        uses: actions/cache@v5
-        with:
-          key: datamitsu-store-${{ hashFiles('package.json', 'pnpm-lock.yaml', 'datamitsu.config.js', 'datamitsu.config.ts') }}
-          path: ~/.cache/datamitsu/store
-          restore-keys: |
-            datamitsu-store-${{ hashFiles('package.json', 'pnpm-lock.yaml') }}
-            datamitsu-store-
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup-environment
 
       - env:
           GORELEASER_CURRENT_TAG: 0.0.0-pr.${{ github.event.pull_request.number }}
@@ -49,31 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-
-      - uses: pnpm/action-setup@v5
-        # Auto-detects from package.json packageManager field
-
-      - uses: actions/setup-node@v6
-        with:
-          cache: pnpm
-          node-version-file: ".node-version"
-
-      - uses: actions/setup-go@v6
-        with:
-          cache: true
-          go-version-file: go.mod
-
-      - name: Cache datamitsu store
-        uses: actions/cache@v5
-        with:
-          key: datamitsu-store-${{ hashFiles('package.json', 'pnpm-lock.yaml', 'datamitsu.config.js', 'datamitsu.config.ts') }}
-          path: ~/.cache/datamitsu/store
-          restore-keys: |
-            datamitsu-store-${{ hashFiles('package.json', 'pnpm-lock.yaml') }}
-            datamitsu-store-
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup-environment
 
       - env:
           GORELEASER_CURRENT_TAG: 0.0.0-pr.${{ github.event.pull_request.number }}
@@ -137,31 +89,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-
-      - uses: pnpm/action-setup@v5
-        # Auto-detects from package.json packageManager field
-
-      - uses: actions/setup-node@v6
-        with:
-          cache: pnpm
-
-          node-version-file: ".node-version"
-      - uses: actions/setup-go@v6
-        with:
-          cache: true
-          go-version-file: go.mod
-
-      - name: Cache datamitsu store
-        uses: actions/cache@v5
-        with:
-          key: datamitsu-store-${{ hashFiles('package.json', 'pnpm-lock.yaml', 'datamitsu.config.js', 'datamitsu.config.ts') }}
-          path: ~/.cache/datamitsu/store
-          restore-keys: |
-            datamitsu-store-${{ hashFiles('package.json', 'pnpm-lock.yaml') }}
-            datamitsu-store-
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup-environment
 
       - name: Run datamitsu lint
         run: pnpm dm lint
@@ -171,31 +99,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-
-      - uses: pnpm/action-setup@v5
-        # Auto-detects from package.json packageManager field
-
-      - uses: actions/setup-node@v6
-        with:
-          cache: pnpm
-
-          node-version-file: ".node-version"
-      - uses: actions/setup-go@v6
-        with:
-          cache: true
-          go-version-file: go.mod
-
-      - name: Cache datamitsu store
-        uses: actions/cache@v5
-        with:
-          key: datamitsu-store-${{ hashFiles('package.json', 'pnpm-lock.yaml', 'datamitsu.config.js', 'datamitsu.config.ts') }}
-          path: ~/.cache/datamitsu/store
-          restore-keys: |
-            datamitsu-store-${{ hashFiles('package.json', 'pnpm-lock.yaml') }}
-            datamitsu-store-
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup-environment
 
       - name: Run Go tests
         run: pnpm test

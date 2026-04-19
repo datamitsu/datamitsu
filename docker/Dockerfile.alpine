@@ -6,7 +6,16 @@ ARG TARGETARCH
 COPY dist/datamitsu-linux-${TARGETARCH}/datamitsu /datamitsu
 
 # Stage 2: Runtime
-FROM alpine:3.20
+FROM alpine:3.23
+
+# Static OCI labels (dynamic labels injected via docker/metadata-action in CI)
+LABEL org.opencontainers.image.title="datamitsu" \
+      org.opencontainers.image.description="Configuration management and binary distribution tool. JavaScript-configurable tool orchestration written in Go." \
+      org.opencontainers.image.vendor="datamitsu" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.source="https://github.com/datamitsu/datamitsu" \
+      org.opencontainers.image.url="https://github.com/datamitsu/datamitsu" \
+      org.opencontainers.image.documentation="https://datamitsu.com"
 
 # Install runtime dependencies
 # hadolint ignore=DL3018
@@ -18,9 +27,10 @@ RUN apk add --no-cache \
 COPY --from=binary /datamitsu /usr/local/bin/datamitsu
 
 # Create non-root user and setup workspace
+ARG USER_UID=1000
 WORKDIR /workspace
 RUN chmod +x /usr/local/bin/datamitsu && \
-    adduser -D -u 1000 -s /bin/sh datamitsu && \
+    adduser -D -u ${USER_UID} -s /bin/sh datamitsu && \
     chown datamitsu:datamitsu /workspace
 
 USER datamitsu

@@ -114,7 +114,7 @@
 **/secrets.json
 .secrets
 .secrets.*
-!.secrets.example
+!.secrets.*.example
 
 # Testing
 **/coverage/

@@ -14,30 +14,7 @@ jobs:
           fetch-depth: 0
           ref: ${{ needs.determine-release-type.outputs.checkout_ref }}
 
-      - uses: pnpm/action-setup@v5
-        # Auto-detects from package.json packageManager field
-
-      - uses: actions/setup-node@v6
-        with:
-          cache: pnpm
-          node-version-file: ".node-version"
-
-      - uses: actions/setup-go@v6
-        with:
-          cache: true
-          go-version-file: go.mod
-
-      - name: Cache datamitsu store
-        uses: actions/cache@v5
-        with:
-          key: datamitsu-store-${{ hashFiles('package.json', 'pnpm-lock.yaml', 'datamitsu.config.js', 'datamitsu.config.ts') }}
-          path: ~/.cache/datamitsu/store
-          restore-keys: |
-            datamitsu-store-${{ hashFiles('package.json', 'pnpm-lock.yaml') }}
-            datamitsu-store-
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup-environment
 
       # 2. Build Binaries (GoReleaser)
       - env:
@@ -52,57 +29,7 @@ jobs:
 
       # 3. Prepare Release Assets
       - name: Prepare release assets
-        run: |
-          mkdir -p dist/release
-          IS_UNSTABLE="${{ needs.determine-release-type.outputs.is_unstable }}"
-
-          # Copy archives (.tar.gz and .zip)
-          # Unstable: datamitsu_*-SNAPSHOT-*.tar.gz → datamitsu_*_{os}_{arch}.tar.gz
-          # Stable: datamitsu_*.tar.gz (already clean)
-          if [[ "$IS_UNSTABLE" == "true" ]]; then
-            for archive in dist/datamitsu_*-SNAPSHOT-*.tar.gz dist/datamitsu_*-SNAPSHOT-*.zip; do
-              if [ -f "$archive" ]; then
-                filename=$(basename "$archive")
-                newname=$(echo "$filename" | sed 's/-SNAPSHOT-[a-f0-9]*_/_/')
-                cp "$archive" "dist/release/$newname"
-                echo "✓ Copied archive: $archive -> dist/release/$newname"
-              fi
-            done
-          else
-            for archive in dist/datamitsu_*.tar.gz dist/datamitsu_*.zip; do
-              if [ -f "$archive" ]; then
-                cp "$archive" dist/release/
-                echo "✓ Copied archive: $archive"
-              fi
-            done
-          fi
-
-          # Copy raw binaries from target directories
-          # Unstable: dist/datamitsu_{os}_{arch}_v{goamd64}/datamitsu
-          # Stable: dist/datamitsu_{version}_{os}_{arch}/datamitsu
-          for dir in dist/datamitsu_*_*/; do
-            binary=$(find "$dir" -maxdepth 1 -type f \( -name "datamitsu" -o -name "datamitsu.exe" \) | head -1)
-            if [ -f "$binary" ]; then
-              dirname=$(basename "$dir")
-              target=$(echo "$dirname" | sed 's/^datamitsu_//' | sed 's/_v[0-9.]*$//')
-              # Remove version prefix for stable releases: linux_amd64 (not 1.0.0_linux_amd64)
-              if [[ "$IS_UNSTABLE" != "true" ]]; then
-                target=$(echo "$target" | sed 's/^[0-9][^_]*_//')
-              fi
-              ext="${binary##*.}"
-              if [[ "$ext" == "exe" ]]; then
-                newname="datamitsu-${target}.exe"
-              else
-                newname="datamitsu-${target}"
-              fi
-              cp -p "$binary" "dist/release/$newname"
-              echo "✓ Copied binary: $binary -> dist/release/$newname"
-            fi
-          done
-
-          echo ""
-          echo "Release assets prepared:"
-          ls -lh dist/release/
+        run: .github/scripts/prepare-release-assets.sh "${{ needs.determine-release-type.outputs.is_unstable }}"
 
       # 4. Build Programmable API
       - name: Build programmable API
@@ -140,6 +67,33 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
+      # Generate metadata for test builds
+      - id: meta-debian
+        name: Generate Docker metadata (Debian)
+        uses: docker/metadata-action@v6
+        with:
+          images: |
+            ghcr.io/datamitsu/datamitsu
+            docker.io/datamitsu/datamitsu
+          labels: |
+            org.opencontainers.image.version=${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}
+
+          tags: |
+            type=raw,value=test-debian
+      - id: meta-alpine
+        name: Generate Docker metadata (Alpine)
+        uses: docker/metadata-action@v6
+        with:
+          flavor: |
+            suffix=-alpine
+          images: |
+            ghcr.io/datamitsu/datamitsu
+            docker.io/datamitsu/datamitsu
+          labels: |
+            org.opencontainers.image.version=${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}
+
+          tags: |
+            type=raw,value=test-alpine
       - name: Test Docker build (Debian)
         uses: docker/build-push-action@v7
         with:
@@ -148,6 +102,7 @@ jobs:
 
           context: .
           file: ./docker/Dockerfile
+          labels: ${{ steps.meta-debian.outputs.labels }}
           load: false
           platforms: linux/amd64,linux/arm64
           push: false
@@ -159,6 +114,7 @@ jobs:
 
           context: .
           file: ./docker/Dockerfile.alpine
+          labels: ${{ steps.meta-alpine.outputs.labels }}
           load: false
           platforms: linux/amd64,linux/arm64
           push: false
@@ -281,6 +237,27 @@ jobs:
 
           registry: docker.io
           username: ${{ secrets.DOCKERHUB_USERNAME }}
+
+      # Generate metadata for production builds
+      - id: meta
+        name: Generate Docker metadata
+        uses: docker/metadata-action@v6
+        with:
+          flavor: |
+            suffix=${{ matrix.variant == 'alpine' && '-alpine' || '' }}
+          images: |
+            ${{ matrix.registry == 'ghcr' && format('ghcr.io/datamitsu/{0}', needs.determine-release-type.outputs.is_stable == 'true' && 'datamitsu' || 'datamitsu-unstable') || 'docker.io/datamitsu/datamitsu' }}
+          labels: |
+            org.opencontainers.image.version=${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}
+
+          tags: |
+            type=semver,pattern={{version}},enable=${{ needs.determine-release-type.outputs.is_stable == 'true' }}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ needs.determine-release-type.outputs.is_stable == 'true' }}
+            type=semver,pattern={{major}},enable=${{ needs.determine-release-type.outputs.is_stable == 'true' }}
+            type=raw,value=stable,enable=${{ needs.determine-release-type.outputs.is_stable == 'true' }}
+            type=raw,value=latest,enable=${{ needs.determine-release-type.outputs.is_stable == 'true' && !contains(needs.validate-stable.outputs.version, '-rc.') }}
+            type=raw,value=unstable,enable=${{ needs.determine-release-type.outputs.is_unstable == 'true' && matrix.registry == 'dockerhub' }}
+            type=raw,value=${{ needs.generate-unstable-version.outputs.tag_name }},enable=${{ needs.determine-release-type.outputs.is_unstable == 'true' }}
       - id: docker-tags
         name: Generate Docker tags
         run: |
@@ -335,9 +312,10 @@ jobs:
           cache-to: type=gha,mode=max
           context: .
           file: ${{ matrix.variant == 'alpine' && './docker/Dockerfile.alpine' || './docker/Dockerfile' }}
+          labels: ${{ steps.meta.outputs.labels }}
           platforms: linux/amd64,linux/arm64
           push: ${{ !env.ACT }}
-          tags: ${{ steps.docker-tags.outputs.tags }}
+          tags: ${{ steps.meta.outputs.tags }}
     strategy:
       matrix:
         registry: [ghcr, dockerhub]
@@ -387,13 +365,8 @@ jobs:
         with:
           ref: ${{ needs.determine-release-type.outputs.checkout_ref }}
 
-      - uses: pnpm/action-setup@v5
-        # Auto-detects from package.json packageManager field
-
-      - uses: actions/setup-node@v6
+      - uses: ./.github/actions/setup-environment
         with:
-          cache: pnpm
-          node-version-file: ".node-version"
           registry-url: "https://registry.npmjs.org"
 
       - if: ${{ !env.ACT }}
@@ -411,6 +384,28 @@ jobs:
           find packaging/npm/datamitsu-* -type f \( -name "datamitsu" -o -name "datamitsu.exe" \) -exec chmod +x {} \;
           echo "✓ Restored executable permissions for npm package binaries"
 
+      - if: ${{ !env.ACT }}
+        name: Verify executable permissions
+        run: |
+          # Smoke test: ensure all binaries are executable before publishing
+          FAILED=0
+          for dir in packaging/npm/datamitsu-*/; do
+            binary=$(find "$dir" -type f \( -name "datamitsu" -o -name "datamitsu.exe" \) | head -1)
+            if [ -f "$binary" ]; then
+              if [ ! -x "$binary" ]; then
+                echo "❌ Binary not executable: $binary"
+                FAILED=1
+              else
+                echo "✓ Executable: $binary"
+              fi
+            fi
+          done
+          if [ $FAILED -eq 1 ]; then
+            echo "❌ Some binaries are not executable. Aborting publish."
+            exit 1
+          fi
+          echo "✓ All binaries are executable"
+
       - env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         name: Publish to npm
@@ -426,11 +421,7 @@ jobs:
 
           if [[ "$IS_STABLE" == "true" ]]; then
             # Stable: use pack.ts publish (auto-detects tag)
-            if [[ -n "$DRY_RUN" ]]; then
-              echo "⚠️  Dry-run mode: pack.ts doesn't support --dry-run, skipping"
-            else
-              node ../pack.ts publish
-            fi
+            node ../pack.ts publish $DRY_RUN
           else
             # Unstable: hardcoded unstable tag
             for dir in datamitsu-*/ datamitsu/; do
