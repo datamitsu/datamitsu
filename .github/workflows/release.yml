@@ -51,7 +51,8 @@ jobs:
       # 5. Prepare npm Packages
       - name: Prepare npm packages
         run: |
-          export VERSION=${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}
+          VERSION_WITH_V="${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}"
+          export VERSION="${VERSION_WITH_V#v}"
           pnpm pack:prepare
 
       # 6. Prepare Docker Binaries
@@ -75,6 +76,13 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
+      - id: version
+        name: Normalize version (remove v prefix for labels)
+        run: |
+          VERSION_WITH_V="${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}"
+          VERSION="${VERSION_WITH_V#v}"
+          echo "normalized=$VERSION" >> $GITHUB_OUTPUT
+
       # Generate metadata for test builds
       - id: meta-debian
         name: Generate Docker metadata (Debian)
@@ -84,7 +92,7 @@ jobs:
             ghcr.io/datamitsu/datamitsu
             docker.io/datamitsu/datamitsu
           labels: |
-            org.opencontainers.image.version=${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}
+            org.opencontainers.image.version=${{ steps.version.outputs.normalized }}
 
           tags: |
             type=raw,value=test-debian
@@ -98,7 +106,7 @@ jobs:
             ghcr.io/datamitsu/datamitsu
             docker.io/datamitsu/datamitsu
           labels: |
-            org.opencontainers.image.version=${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}
+            org.opencontainers.image.version=${{ steps.version.outputs.normalized }}
 
           tags: |
             type=raw,value=test-alpine
@@ -234,6 +242,13 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
+      - id: version
+        name: Normalize version (remove v prefix for labels)
+        run: |
+          VERSION_WITH_V="${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}"
+          VERSION="${VERSION_WITH_V#v}"
+          echo "normalized=$VERSION" >> $GITHUB_OUTPUT
+
       - if: ${{ !env.ACT && matrix.registry == 'ghcr' }}
         name: Login to GHCR
         uses: docker/login-action@v4
@@ -261,7 +276,7 @@ jobs:
           images: |
             ${{ matrix.registry == 'ghcr' && format('ghcr.io/datamitsu/{0}', needs.determine-release-type.outputs.is_stable == 'true' && 'datamitsu' || 'datamitsu-unstable') || 'docker.io/datamitsu/datamitsu' }}
           labels: |
-            org.opencontainers.image.version=${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}
+            org.opencontainers.image.version=${{ steps.version.outputs.normalized }}
 
           tags: |
             type=semver,pattern={{version}},enable=${{ needs.determine-release-type.outputs.is_stable == 'true' }}
@@ -363,10 +378,11 @@ jobs:
 
       - env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          VERSION: ${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}
         name: Publish to npm
         run: |
           IS_STABLE="${{ needs.determine-release-type.outputs.is_stable }}"
+          VERSION_WITH_V="${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}"
+          export VERSION="${VERSION_WITH_V#v}"
           DRY_RUN=""
           if [[ -n "$ACT" ]]; then
             DRY_RUN="--dry-run"
@@ -417,7 +433,7 @@ jobs:
         name: Extract version from tag
         run: |
           TAG_REF="${{ needs.determine-release-type.outputs.checkout_ref }}"
-          VERSION="${TAG_REF#refs/tags/v}"
+          VERSION="${TAG_REF#refs/tags/}"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "📦 Stable version: $VERSION"
 
