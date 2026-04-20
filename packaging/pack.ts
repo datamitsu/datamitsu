@@ -48,6 +48,8 @@ const VERSION = process.env.VERSION || "0.0.0";
 const ROOT_DIR = join(import.meta.dirname, "..");
 const PACKAGING_DIR = import.meta.dirname;
 const NPM_DIR = join(PACKAGING_DIR, "npm");
+const PYTHON_DIR = join(PACKAGING_DIR, "python");
+const PYTHON_PLATFORM_DIR = join(PYTHON_DIR, "platform-packages");
 const DIST_DIR = join(ROOT_DIR, "dist");
 
 interface PlatformConfig {
@@ -57,6 +59,10 @@ interface PlatformConfig {
   npmArch: string;
   npmPlatform: string;
   osName: string;
+  pythonArch: string;
+  // Python-specific fields
+  pythonPlatform: string;
+  wheelTag: string;
 }
 
 const PLATFORMS: PlatformConfig[] = [
@@ -67,6 +73,9 @@ const PLATFORMS: PlatformConfig[] = [
     npmArch: "x64",
     npmPlatform: "darwin",
     osName: "macOS",
+    pythonArch: "x86_64",
+    pythonPlatform: "darwin",
+    wheelTag: "macosx_11_0_x86_64",
   },
   {
     archName: "ARM64",
@@ -75,6 +84,9 @@ const PLATFORMS: PlatformConfig[] = [
     npmArch: "arm64",
     npmPlatform: "darwin",
     osName: "macOS",
+    pythonArch: "arm64",
+    pythonPlatform: "darwin",
+    wheelTag: "macosx_11_0_arm64",
   },
   {
     archName: "x64",
@@ -83,6 +95,9 @@ const PLATFORMS: PlatformConfig[] = [
     npmArch: "x64",
     npmPlatform: "linux",
     osName: "Linux",
+    pythonArch: "x86_64",
+    pythonPlatform: "linux",
+    wheelTag: "manylinux2014_x86_64",
   },
   {
     archName: "ARM64",
@@ -91,6 +106,9 @@ const PLATFORMS: PlatformConfig[] = [
     npmArch: "arm64",
     npmPlatform: "linux",
     osName: "Linux",
+    pythonArch: "arm64",
+    pythonPlatform: "linux",
+    wheelTag: "manylinux2014_aarch64",
   },
   {
     archName: "x64",
@@ -99,6 +117,9 @@ const PLATFORMS: PlatformConfig[] = [
     npmArch: "x64",
     npmPlatform: "win32",
     osName: "Windows",
+    pythonArch: "x86_64",
+    pythonPlatform: "windows",
+    wheelTag: "win_amd64",
   },
   {
     archName: "ARM64",
@@ -107,6 +128,9 @@ const PLATFORMS: PlatformConfig[] = [
     npmArch: "arm64",
     npmPlatform: "win32",
     osName: "Windows",
+    pythonArch: "arm64",
+    pythonPlatform: "windows",
+    wheelTag: "win_arm64",
   },
   {
     archName: "x64",
@@ -115,6 +139,9 @@ const PLATFORMS: PlatformConfig[] = [
     npmArch: "x64",
     npmPlatform: "freebsd",
     osName: "FreeBSD",
+    pythonArch: "",
+    pythonPlatform: "",
+    wheelTag: "",
   },
   {
     archName: "ARM64",
@@ -123,6 +150,9 @@ const PLATFORMS: PlatformConfig[] = [
     npmArch: "arm64",
     npmPlatform: "freebsd",
     osName: "FreeBSD",
+    pythonArch: "",
+    pythonPlatform: "",
+    wheelTag: "",
   },
 ];
 
@@ -135,6 +165,15 @@ function clean() {
     if (existsSync(platformDir)) {
       rmSync(platformDir, { force: true, recursive: true });
     }
+  }
+}
+
+function cleanPython() {
+  console.log("\n📦 Cleaning Python packages...");
+
+  if (existsSync(PYTHON_PLATFORM_DIR)) {
+    rmSync(PYTHON_PLATFORM_DIR, { force: true, recursive: true });
+    console.log("✓ Cleaned platform-packages/");
   }
 }
 
@@ -169,6 +208,39 @@ function execSafe(command: string, cwd?: string): Promise<{ error?: any; success
       resolve({ error, success: false });
     });
   });
+}
+
+function getOsClassifier(goos: string): string {
+  switch (goos) {
+    case "darwin": {
+      return "MacOS";
+    }
+    case "linux": {
+      return "POSIX :: Linux";
+    }
+    case "windows": {
+      return "Microsoft :: Windows";
+    }
+    default: {
+      return "OS Independent";
+    }
+  }
+}
+
+function normalizePythonVersion(version: string): string {
+  // Strip 'v' prefix
+  let normalized = version.replace(/^v/, "");
+
+  // Convert -rc.N to rcN (PEP 440)
+  normalized = normalized.replace(/-rc\.(\d+)/, "rc$1");
+
+  // Convert -alpha.N to aN
+  normalized = normalized.replace(/-alpha\.(\d+)/, "a$1");
+
+  // Convert -beta.N to bN
+  normalized = normalized.replace(/-beta\.(\d+)/, "b$1");
+
+  return normalized;
 }
 
 function preparePlatformPackages() {
@@ -224,7 +296,86 @@ function preparePlatformPackages() {
   }
 }
 
-async function publishNpm(dryRun: boolean = true) {
+// ============================================================================
+// Python Packaging
+// ============================================================================
+
+function preparePythonPackages() {
+  console.log("\n📦 Preparing Python packages...");
+
+  // Read template
+  const templatePath = join(PYTHON_DIR, "templates", "pyproject.toml.template");
+  const template = readFileSync(templatePath, "utf8");
+
+  // Filter platforms: only process those with pythonPlatform defined (skip FreeBSD)
+  const pythonPlatforms = PLATFORMS.filter((p) => p.pythonPlatform !== "");
+
+  for (const platform of pythonPlatforms) {
+    const packageName = `datamitsu-${platform.pythonPlatform}-${platform.pythonArch}`;
+    const packageDir = join(PYTHON_PLATFORM_DIR, packageName);
+    const moduleName = `datamitsu_${platform.pythonPlatform}_${platform.pythonArch}`;
+    const moduleDir = join(packageDir, moduleName);
+    const binDir = join(packageDir, "bin");
+
+    const binaryName = platform.goos === "windows" ? "datamitsu.exe" : "datamitsu";
+    const releaseBinaryName =
+      platform.goos === "windows"
+        ? `datamitsu-${platform.goos}_${platform.goarch}.exe`
+        : `datamitsu-${platform.goos}_${platform.goarch}`;
+
+    const sourceBinary = join(DIST_DIR, "binaries", releaseBinaryName);
+
+    // Verify binary exists
+    if (!existsSync(sourceBinary)) {
+      throw new Error(
+        `Binary not found: ${sourceBinary}\n` +
+          `Did GoReleaser build complete successfully for ${platform.goos}/${platform.goarch}?`,
+      );
+    }
+
+    // Create directories
+    mkdirSync(moduleDir, { recursive: true });
+    mkdirSync(binDir, { recursive: true });
+
+    // Create pyproject.toml from template
+    const pyprojectToml = replaceVariables(template, {
+      ARCH: platform.pythonArch,
+      ARCH_NAME: platform.archName,
+      OS_CLASSIFIER: getOsClassifier(platform.goos),
+      OS_NAME: platform.osName,
+      PLATFORM: platform.pythonPlatform,
+      VERSION: normalizePythonVersion(VERSION),
+    });
+    writeFileSync(join(packageDir, "pyproject.toml"), pyprojectToml);
+
+    // Create __init__.py
+    const initPy = `"""datamitsu binary for ${platform.pythonPlatform}-${platform.pythonArch}."""
+
+__version__ = "${normalizePythonVersion(VERSION)}"
+
+import os
+from pathlib import Path
+
+__file__ = Path(__file__)
+`;
+    writeFileSync(join(moduleDir, "__init__.py"), initPy);
+
+    // Copy binary to bin/
+    cpSync(sourceBinary, join(binDir, binaryName));
+    console.log(`✓ Created ${packageName}`);
+
+    // Copy README
+    const readmePath = join(PACKAGING_DIR, "PACKAGE_README.md");
+    if (existsSync(readmePath)) {
+      cpSync(readmePath, join(packageDir, "README.md"));
+    }
+  }
+
+  // Update main package version
+  updateMainPythonPackage();
+}
+
+async function publishNpm(dryRun = true) {
   console.log(`\n🚀 Publishing to npm (dry-run: ${dryRun})...`);
 
   // Read version from main package.json if VERSION env var is not set
@@ -303,6 +454,112 @@ async function publishNpm(dryRun: boolean = true) {
   }
 }
 
+async function publishPyPI(dryRun = true) {
+  console.log(`\n🚀 Publishing to PyPI (dry-run: ${dryRun})...`);
+
+  const normalizedVersion = normalizePythonVersion(VERSION);
+  const isPrerelease =
+    normalizedVersion.includes("a") ||
+    normalizedVersion.includes("b") ||
+    normalizedVersion.includes("rc");
+
+  console.log(`Version: ${normalizedVersion} (prerelease: ${isPrerelease})`);
+
+  let hasErrors = false;
+
+  // Build all wheels first
+  console.log("\n📦 Building wheels...");
+
+  // Filter platforms for Python (skip FreeBSD)
+  const pythonPlatforms = PLATFORMS.filter((p) => p.pythonPlatform !== "");
+
+  // Build platform-specific packages
+  for (const platform of pythonPlatforms) {
+    const packageName = `datamitsu-${platform.pythonPlatform}-${platform.pythonArch}`;
+    const packageDir = join(PYTHON_PLATFORM_DIR, packageName);
+
+    console.log(`\nBuilding ${packageName}...`);
+    const buildResult = await execSafe("uv build", packageDir);
+
+    if (buildResult.success) {
+      console.log(`✓ Built ${packageName}`);
+    } else {
+      console.error(`✗ Failed to build ${packageName}`);
+      hasErrors = true;
+      if (!dryRun) {
+        throw new Error(`Build failed for ${packageName}`);
+      }
+    }
+  }
+
+  // Build main package
+  console.log("\nBuilding main datamitsu package...");
+  const mainBuildResult = await execSafe("uv build", PYTHON_DIR);
+
+  if (mainBuildResult.success) {
+    console.log("✓ Built main package");
+  } else {
+    console.error("✗ Failed to build main package");
+    hasErrors = true;
+    if (!dryRun) {
+      throw new Error("Build failed for main package");
+    }
+  }
+
+  if (hasErrors && dryRun) {
+    console.log("\n⚠️  Some packages had build errors during dry-run");
+    return;
+  }
+
+  // Publish wheels
+  console.log("\n📤 Publishing wheels...");
+
+  // Publish platform packages
+  for (const platform of pythonPlatforms) {
+    const packageName = `datamitsu-${platform.pythonPlatform}-${platform.pythonArch}`;
+    const packageDir = join(PYTHON_PLATFORM_DIR, packageName);
+
+    if (dryRun) {
+      console.log(`\n[DRY RUN] Would publish ${packageName}`);
+    } else {
+      console.log(`\nPublishing ${packageName}...`);
+      const result = await execSafe("uv publish", packageDir);
+
+      if (result.success) {
+        console.log(`✓ Published ${packageName}`);
+      } else {
+        console.error(`✗ Failed to publish ${packageName}`);
+        hasErrors = true;
+      }
+    }
+  }
+
+  // Publish main package
+  if (dryRun) {
+    console.log("\n[DRY RUN] Would publish main datamitsu package");
+  } else {
+    console.log("\nPublishing main datamitsu package...");
+    const mainResult = await execSafe("uv publish", PYTHON_DIR);
+
+    if (mainResult.success) {
+      console.log("✓ Published main package");
+    } else {
+      console.error("✗ Failed to publish main package");
+      hasErrors = true;
+    }
+  }
+
+  if (hasErrors && !dryRun) {
+    throw new Error("Some packages failed to publish");
+  }
+
+  if (dryRun) {
+    console.log("\n✅ Dry-run completed!");
+  } else {
+    console.log("\n✅ All Python packages published successfully!");
+  }
+}
+
 function replaceVariables(content: string, vars: Record<string, string>): string {
   let result = content;
   for (const [key, value] of Object.entries(vars)) {
@@ -323,11 +580,44 @@ function updateMainPackage() {
 
   // Update optional dependencies versions
   for (const dep in packageJson.optionalDependencies) {
-    packageJson.optionalDependencies[dep] = VERSION;
+    if (Object.hasOwn(packageJson.optionalDependencies, dep)) {
+      packageJson.optionalDependencies[dep] = VERSION;
+    }
   }
 
   writeFileSync(mainPackagePath, JSON.stringify(packageJson, null, 2) + "\n");
   console.log(`✓ Updated main package to version ${VERSION}`);
+}
+
+function updateMainPythonPackage() {
+  console.log("\n📝 Updating main Python package version...");
+
+  const pyprojectPath = join(PYTHON_DIR, "pyproject.toml");
+  let content = readFileSync(pyprojectPath, "utf8");
+
+  const normalizedVersion = normalizePythonVersion(VERSION);
+
+  // Replace version in pyproject.toml
+  content = content.replace(/version = "[^"]*"/, `version = "${normalizedVersion}"`);
+
+  // Replace versions in dependencies
+  content = content.replaceAll(/datamitsu-[^=]+==[^;]*/g, (match) => {
+    const pkgName = match.split("==")[0];
+    return `${pkgName}==${normalizedVersion}`;
+  });
+
+  writeFileSync(pyprojectPath, content);
+
+  // Update __init__.py version
+  const initPath = join(PYTHON_DIR, "datamitsu", "__init__.py");
+  let initContent = readFileSync(initPath, "utf8");
+  initContent = initContent.replace(
+    /__version__ = "[^"]*"/,
+    `__version__ = "${normalizedVersion}"`,
+  );
+  writeFileSync(initPath, initContent);
+
+  console.log(`✓ Updated main Python package to version ${normalizedVersion}`);
 }
 
 // CLI
@@ -335,6 +625,26 @@ const command = process.argv[2];
 
 async function main() {
   switch (command) {
+    case "all": {
+      // Full packaging workflow for both npm and Python
+      console.log("\n🎯 Running full packaging workflow...");
+
+      // npm
+      clean();
+      preparePlatformPackages();
+      updateMainPackage();
+
+      // Python
+      cleanPython();
+      preparePythonPackages();
+
+      console.log("\n✅ All packages prepared!");
+      console.log("\nTo publish:");
+      console.log("  npm:    tsx pack.ts publish [--dry-run]");
+      console.log("  Python: tsx pack.ts publish-python [--dry-run]");
+      break;
+    }
+
     case "clean": {
       clean();
       break;
@@ -347,31 +657,46 @@ async function main() {
       break;
     }
 
+    case "prepare-python": {
+      cleanPython();
+      preparePythonPackages();
+      break;
+    }
+
     case "publish": {
       const dryRun = process.argv.includes("--dry-run");
       await publishNpm(dryRun);
       break;
     }
 
+    case "publish-python": {
+      const dryRun = process.argv.includes("--dry-run");
+      await publishPyPI(dryRun);
+      break;
+    }
+
     default: {
-      {
-        console.log(`
+      console.log(`
 Usage: tsx pack.ts <command>
 
 Commands:
-	clean       Clean npm packages
-	prepare     Prepare npm packages from GoReleaser binaries
-	publish     Publish to npm (use --dry-run for testing)
+  clean              Clean npm packages
+  prepare            Prepare npm packages from GoReleaser binaries
+  publish            Publish to npm (use --dry-run for testing)
+  prepare-python     Prepare Python packages from GoReleaser binaries
+  publish-python     Publish to PyPI (use --dry-run for testing)
+  all                Prepare both npm and Python packages
 
 Examples:
-	tsx pack.ts prepare
-	tsx pack.ts publish --dry-run
-	VERSION=1.0.0 tsx pack.ts prepare
+  tsx pack.ts prepare
+  tsx pack.ts publish --dry-run
+  tsx pack.ts prepare-python
+  tsx pack.ts publish-python --dry-run
+  VERSION=1.0.0 tsx pack.ts all
 
-Note: Binaries are built by GoReleaser. This script only handles npm packaging.
+Note: Binaries are built by GoReleaser. This script only handles packaging.
       The lib/ directory (programmable API) is built by Taskfile (pack:build-api).
 `);
-      }
       process.exit(1);
     }
   }

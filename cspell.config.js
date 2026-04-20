@@ -153,5 +153,6 @@ export default {
     "trixie",
     "gomod",
     "sboms",
+    "manylinux"
   ],
 };

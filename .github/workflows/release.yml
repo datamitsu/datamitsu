@@ -397,6 +397,98 @@ jobs:
             done
           fi
 
+  publish-pypi:
+    if: |
+      always() &&
+      !cancelled() &&
+      needs.build.result == 'success'
+    name: Publish to PyPI
+    needs: [build, determine-release-type, validate-stable, generate-unstable-version]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.determine-release-type.outputs.checkout_ref }}
+
+      - uses: ./.github/actions/setup-environment
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - if: ${{ !env.ACT }}
+        name: Download build artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: release-artifacts
+          path: .
+
+      - if: ${{ !env.ACT }}
+        name: Restore executable permissions
+        run: |
+          # Restore executable permissions for Python package binaries
+          # Note: packaging/python/platform-packages/ is created by pack.ts prepare-python
+          if [ -d "packaging/python/platform-packages" ]; then
+            find packaging/python/platform-packages/*/bin -type f -exec chmod +x {} \; 2>/dev/null || true
+            echo "✓ Restored executable permissions for Python package binaries"
+          fi
+
+      - name: Prepare Python packages
+        run: |
+          export VERSION=${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}
+          node packaging/pack.ts prepare-python
+
+      - name: Build Python wheels
+        run: |
+          # Build platform-specific packages
+          for dir in packaging/python/platform-packages/*/; do
+            if [ -d "$dir" ]; then
+              echo "Building $(basename $dir)..."
+              cd "$dir"
+              uv build
+              cd - > /dev/null
+            fi
+          done
+
+          # Build main package
+          cd packaging/python
+          uv build
+          cd - > /dev/null
+
+      - if: needs.determine-release-type.outputs.is_unstable == 'true'
+        name: Dry-run publish (unstable)
+        run: |
+          echo "🏃 Unstable release - skipping PyPI publish (dry-run only)"
+          echo ""
+          echo "Platform packages that would be published:"
+          ls -lh packaging/python/platform-packages/*/dist/ 2>/dev/null || echo "No platform packages found"
+          echo ""
+          echo "Main package that would be published:"
+          ls -lh packaging/python/dist/ 2>/dev/null || echo "No main package found"
+
+      - env:
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+        if: needs.determine-release-type.outputs.is_stable == 'true' && !env.ACT
+        name: Publish to PyPI (stable)
+        run: |
+          # Publish platform packages
+          for dir in packaging/python/platform-packages/*/; do
+            if [ -d "$dir" ]; then
+              echo "Publishing $(basename $dir)..."
+              cd "$dir"
+              uv publish || echo "⚠️  Package may already exist on PyPI"
+              cd - > /dev/null
+            fi
+          done
+
+          # Publish main package
+          cd packaging/python
+          uv publish || echo "⚠️  Package may already exist on PyPI"
+          cd - > /dev/null
+
+          echo "✅ PyPI publishing completed"
+
   validate-stable:
     if: |
       always() &&

@@ -1,0 +1,49 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "datamitsu"
+version = "0.0.0"
+description = "Configuration management and binary distribution tool. JavaScript-configurable tool orchestration written in Go."
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Alexander Svinarev", email = "shibanet0@gmail.com"}
+]
+keywords = ["datamitsu", "config", "binary", "tools", "linter", "lefthook", "golangci-lint"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Quality Assurance",
+]
+requires-python = ">=3.8"
+dependencies = [
+    "datamitsu-linux-x86_64==0.0.0; platform_system=='Linux' and platform_machine=='x86_64'",
+    "datamitsu-linux-arm64==0.0.0; platform_system=='Linux' and platform_machine=='aarch64'",
+    "datamitsu-darwin-x86_64==0.0.0; platform_system=='Darwin' and platform_machine=='x86_64'",
+    "datamitsu-darwin-arm64==0.0.0; platform_system=='Darwin' and platform_machine=='arm64'",
+    "datamitsu-windows-x86_64==0.0.0; platform_system=='Windows' and platform_machine=='AMD64'",
+    "datamitsu-windows-arm64==0.0.0; platform_system=='Windows' and platform_machine=='ARM64'",
+]
+
+[project.urls]
+Homepage = "https://github.com/datamitsu/datamitsu"
+Documentation = "https://datamitsu.com"
+Repository = "https://github.com/datamitsu/datamitsu"
+Issues = "https://github.com/datamitsu/datamitsu/issues"
+
+[project.scripts]
+datamitsu = "datamitsu.__main__:main"
+dm = "datamitsu.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["datamitsu"]

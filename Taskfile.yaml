@@ -78,10 +78,25 @@ tasks:
     deps: [pack:build-api]
     desc: Build binaries and prepare npm packages
 
+  pack:prepare-python:
+    cmds:
+      - node packaging/pack.ts prepare-python
+    desc: Prepare Python packages from normalized binaries
+
   pack:publish:
     cmds:
       - node packaging/pack.ts publish
     desc: Publish to npm
+
+  pack:publish-python:
+    cmds:
+      - node packaging/pack.ts publish-python
+    desc: Publish to PyPI
+
+  pack:publish-python:dry:
+    cmds:
+      - node packaging/pack.ts publish-python --dry-run
+    desc: Dry-run PyPI publish
 
   pack:publish:dry:
     cmds:
