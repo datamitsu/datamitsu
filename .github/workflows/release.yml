@@ -16,6 +16,9 @@ jobs:
 
       - uses: ./.github/actions/setup-environment
 
+      - name: Install syft
+        uses: anchore/sbom-action/download-syft@v0
+
       # 2. Build Binaries (GoReleaser)
       - env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -321,7 +324,9 @@ jobs:
         registry: [ghcr, dockerhub]
         variant: [debian, alpine]
   publish-github:
-    if: needs.determine-release-type.outputs.is_unstable == 'true'
+    if: |
+      needs.determine-release-type.outputs.is_unstable == 'true' &&
+      github.event.inputs.create_github_prerelease == 'true'
     name: Publish to GitHub Releases
     needs: [build, determine-release-type, generate-unstable-version]
     runs-on: ubuntu-latest
@@ -344,7 +349,10 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           draft: false
-          files: dist/release/*
+          files: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/checksums.txt
           name: Unstable Build ${{ needs.generate-unstable-version.outputs.short_sha }}
           prerelease: true
           tag_name: ${{ needs.generate-unstable-version.outputs.tag_name }}
@@ -474,6 +482,12 @@ on:
       - "v[0-9]+.[0-9]+.[0-9]+-rc.[0-9]+"
   workflow_dispatch:
     inputs:
+      create_github_prerelease:
+        default: false
+
+        description: "Create GitHub prerelease (for debugging binaries/checksums)"
+        required: false
+        type: boolean
       ref:
         default: "main"
         description: "Branch or commit to build (unstable only)"
@@ -489,7 +503,6 @@ on:
       version:
         description: "Version tag (stable manual, e.g., v1.0.0)"
         required: false
-
 permissions:
   contents: write
   packages: write
