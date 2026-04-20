@@ -151,5 +151,6 @@ export default {
     "microarchitecture",
     "becad",
     "trixie",
+    "gomod",
   ],
 };

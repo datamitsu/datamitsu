@@ -1,0 +1,80 @@
+updates:
+  # Go module dependencies
+  - commit-message:
+      prefix: "build(deps)"
+    directory: "/"
+    labels:
+      - "dependencies"
+      - "go"
+    open-pull-requests-limit: 5
+    package-ecosystem: "gomod"
+    schedule:
+      day: "monday"
+      interval: "weekly"
+
+  # npm dependencies - root workspace
+  - commit-message:
+      prefix: "build(deps)"
+    directory: "/"
+    labels:
+      - "dependencies"
+      - "npm"
+    open-pull-requests-limit: 5
+    package-ecosystem: "npm"
+    schedule:
+      day: "monday"
+      interval: "weekly"
+
+  # npm dependencies - programmable API
+  - commit-message:
+      prefix: "build(deps)"
+    directory: "/programmable-api/js"
+    labels:
+      - "dependencies"
+      - "npm"
+    open-pull-requests-limit: 5
+    package-ecosystem: "npm"
+    schedule:
+      day: "monday"
+      interval: "weekly"
+
+  # npm dependencies - website
+  - commit-message:
+      prefix: "build(deps)"
+    directory: "/website"
+    labels:
+      - "dependencies"
+      - "npm"
+    open-pull-requests-limit: 5
+    package-ecosystem: "npm"
+    schedule:
+      day: "monday"
+      interval: "weekly"
+
+  # GitHub Actions
+  - commit-message:
+      prefix: "ci(deps)"
+    directory: "/"
+    labels:
+      - "dependencies"
+      - "ci"
+    open-pull-requests-limit: 5
+    package-ecosystem: "github-actions"
+    schedule:
+      day: "monday"
+      interval: "weekly"
+
+  # Docker base images
+  - commit-message:
+      prefix: "build(deps)"
+    directory: "/docker"
+    labels:
+      - "dependencies"
+      - "docker"
+    open-pull-requests-limit: 3
+    package-ecosystem: "docker"
+    schedule:
+      day: "monday"
+      interval: "weekly"
+
+version: 2
