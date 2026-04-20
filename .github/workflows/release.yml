@@ -283,7 +283,7 @@ jobs:
   publish-github:
     if: |
       needs.determine-release-type.outputs.is_unstable == 'true' &&
-      github.event.inputs.create_github_prerelease == true
+      github.event.inputs.create_github_prerelease
     name: Publish to GitHub Releases
     needs: [build, determine-release-type, generate-unstable-version]
     runs-on: ubuntu-latest
