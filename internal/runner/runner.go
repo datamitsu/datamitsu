@@ -152,7 +152,7 @@ func initSharedContext(
 
 	log.Debug("files", zap.Strings("list", sc.files))
 
-	if len(sc.files) == 0 && !fileScoped {
+	if len(sc.files) == 0 && !fileScoped && sc.explainLevel != "json" {
 		fmt.Println("ℹ️  No files specified, running whole-project tools only")
 	}
 
@@ -192,20 +192,34 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	// Get detected project types from planner cache
 	projectTypes := sc.planner.GetDetectedProjectTypes()
 	if len(projectTypes) == 0 {
-		fmt.Println("⚠️  No project types detected")
+		if sc.explainLevel == "json" {
+			// In JSON mode, output empty plan even when no project types detected
+			output := formatExecutionPlan(plan, sc.rootPath, sc.cwdPath, operation, sc.explainLevel)
+			fmt.Println(output)
+		} else {
+			fmt.Println("⚠️  No project types detected")
+		}
 		return nil
 	}
 
-	fmt.Printf("📦 Detected project types: %v\n", projectTypes)
+	if sc.explainLevel != "json" {
+		fmt.Printf("📦 Detected project types: %v\n", projectTypes)
+	}
 
 	if len(plan.Groups) == 0 {
-		fmt.Println("ℹ️  No applicable tools found")
+		if sc.explainLevel == "json" {
+			// In JSON mode, output empty plan even when no applicable tools
+			output := formatExecutionPlan(plan, sc.rootPath, sc.cwdPath, operation, sc.explainLevel)
+			fmt.Println(output)
+		} else {
+			fmt.Println("ℹ️  No applicable tools found")
+		}
 		return nil
 	}
 
 	// Show matched tools
 	toolNames := plan.GetToolNames()
-	if len(toolNames) > 0 {
+	if len(toolNames) > 0 && sc.explainLevel != "json" {
 		fmt.Printf("🔧 Matched tools: %s\n", strings.Join(toolNames, ", "))
 	}
 

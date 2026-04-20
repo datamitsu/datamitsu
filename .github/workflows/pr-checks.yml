@@ -15,6 +15,35 @@ jobs:
 
           distribution: goreleaser
           version: latest
+      - name: Normalize binary paths for npm packaging
+        run: |
+          # GoReleaser in snapshot mode creates binaries in dist/datamitsu_{OS}_{ARCH}_{MICROARCH}/
+          # npm packaging expects: dist/release/datamitsu-{OS}_{ARCH}[.exe]
+
+          mkdir -p dist/release
+
+          # Find all binaries in GoReleaser output directories
+          for dir in dist/datamitsu_*_*/; do
+            binary=$(find "$dir" -maxdepth 1 -type f \( -name "datamitsu" -o -name "datamitsu.exe" \) | head -1)
+            if [ -f "$binary" ]; then
+              dirname=$(basename "$dir")
+              # Extract OS and arch: datamitsu_linux_amd64_v1 -> linux_amd64
+              os_arch=$(echo "$dirname" | sed 's/^datamitsu_//' | sed 's/_v[0-9.]*$//')
+
+              # Determine binary name (Windows needs .exe extension)
+              if [[ "$os_arch" == windows_* ]]; then
+                target="dist/release/datamitsu-${os_arch}.exe"
+              else
+                target="dist/release/datamitsu-${os_arch}"
+              fi
+
+              cp "$binary" "$target"
+              chmod +x "$target"
+              echo "✓ Normalized: $binary -> $target"
+            fi
+          done
+
+          ls -lh dist/release/
       - name: Prepare npm packages
         run: |
           export VERSION=0.0.0-pr.${{ github.event.pull_request.number }}
