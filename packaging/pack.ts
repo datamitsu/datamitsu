@@ -248,11 +248,16 @@ async function publishNpm(dryRun: boolean = true) {
   console.log(`Publishing with tag: ${tag} (version: ${publishVersion})`);
 
   // Use --provenance for transparent publishing with OIDC
-  const provenanceFlag = dryRun ? "" : "--provenance";
+  // Only enable provenance when OIDC token is available (GitHub Actions with id-token: write)
+  const hasOIDC = Boolean(process.env.ACTIONS_ID_TOKEN_REQUEST_URL);
+  const provenanceFlag = dryRun || !hasOIDC ? "" : "--provenance";
   const baseCommand = dryRun
     ? "npm publish --dry-run"
     : `npm publish --access public ${provenanceFlag}`;
   const npmCommand = `${baseCommand} --tag ${tag}`;
+  console.log(
+    `Provenance: ${hasOIDC && !dryRun ? "enabled" : "disabled"} (OIDC=${hasOIDC}, dry-run=${dryRun})`,
+  );
 
   let hasErrors = false;
 

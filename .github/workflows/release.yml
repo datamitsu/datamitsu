@@ -6,6 +6,9 @@ jobs:
       (needs.validate-stable.result == 'success' || needs.generate-unstable-version.result == 'success')
     name: Build Release
     needs: [determine-release-type, validate-stable, generate-unstable-version]
+    permissions:
+      actions: read
+      contents: read
     runs-on: ubuntu-latest
     steps:
       # 1. Checkout + Setup
@@ -17,7 +20,7 @@ jobs:
       - uses: ./.github/actions/setup-environment
 
       - name: Install syft
-        uses: anchore/sbom-action/download-syft@v0
+        uses: anchore/sbom-action/download-syft@v0.24.0
 
       # 2. Build Binaries (GoReleaser)
       - env:
@@ -66,6 +69,8 @@ jobs:
       # 7. Test Docker Build (dry-run, no push)
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
+        with:
+          platforms: linux/amd64,linux/arm64
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -205,6 +210,9 @@ jobs:
       needs.build.result == 'success'
     name: Publish Docker Images
     needs: [build, determine-release-type, validate-stable, generate-unstable-version]
+    permissions:
+      contents: read
+      packages: write
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -220,6 +228,8 @@ jobs:
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
+        with:
+          platforms: linux/amd64,linux/arm64
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -283,9 +293,11 @@ jobs:
   publish-github:
     if: |
       needs.determine-release-type.outputs.is_unstable == 'true' &&
-      github.event.inputs.create_github_prerelease
+      github.event.inputs.create_github_prerelease == 'true'
     name: Publish to GitHub Releases
     needs: [build, determine-release-type, generate-unstable-version]
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -342,37 +354,16 @@ jobs:
           path: .
 
       - if: ${{ !env.ACT }}
-        name: Restore executable permissions
+        name: Restore executable permissions for npm packages
         run: |
           # GitHub Actions artifacts don't preserve executable permissions
           # Restore them for all platform-specific binaries
           find packaging/npm/datamitsu-* -type f \( -name "datamitsu" -o -name "datamitsu.exe" \) -exec chmod +x {} \;
           echo "✓ Restored executable permissions for npm package binaries"
 
-      - if: ${{ !env.ACT }}
-        name: Verify executable permissions
-        run: |
-          # Smoke test: ensure all binaries are executable before publishing
-          FAILED=0
-          for dir in packaging/npm/datamitsu-*/; do
-            binary=$(find "$dir" -type f \( -name "datamitsu" -o -name "datamitsu.exe" \) | head -1)
-            if [ -f "$binary" ]; then
-              if [ ! -x "$binary" ]; then
-                echo "❌ Binary not executable: $binary"
-                FAILED=1
-              else
-                echo "✓ Executable: $binary"
-              fi
-            fi
-          done
-          if [ $FAILED -eq 1 ]; then
-            echo "❌ Some binaries are not executable. Aborting publish."
-            exit 1
-          fi
-          echo "✓ All binaries are executable"
-
       - env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          VERSION: ${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}
         name: Publish to npm
         run: |
           IS_STABLE="${{ needs.determine-release-type.outputs.is_stable }}"
@@ -460,5 +451,5 @@ on:
         description: "Version tag (stable manual, e.g., v1.0.0)"
         required: false
 permissions:
-  contents: write
-  packages: write
+  contents: read
+  packages: read

@@ -45,3 +45,38 @@ done
 echo ""
 echo "📋 Normalized binaries:"
 ls -lh dist/binaries/
+
+verify_permissions() {
+  echo ""
+  echo "🔍 Verifying executable permissions..."
+
+  local FAILED=0
+
+  for binary in dist/binaries/datamitsu*; do
+    [[ -f "$binary" ]] || continue
+
+    # Skip Windows executables (permission checks don't apply)
+    if [[ "$binary" == *.exe ]]; then
+      echo "⊙ Skipped: $binary (Windows binary)"
+      continue
+    fi
+
+    if [[ ! -x "$binary" ]]; then
+      echo "❌ Not executable: $binary"
+      FAILED=1
+    else
+      echo "✓ Executable: $binary"
+    fi
+  done
+
+  if [[ $FAILED -eq 1 ]]; then
+    echo "❌ Some binaries are not executable"
+    return 1
+  fi
+
+  echo "✓ All binaries have correct permissions"
+  return 0
+}
+
+# Call verification
+verify_permissions

@@ -7,7 +7,7 @@ jobs:
       - uses: ./.github/actions/setup-environment
 
       - name: Install syft
-        uses: anchore/sbom-action/download-syft@v0
+        uses: anchore/sbom-action/download-syft@v0.24.0
 
       - env:
           GORELEASER_CURRENT_TAG: 0.0.0-pr.${{ github.event.pull_request.number }}
@@ -33,7 +33,7 @@ jobs:
       - uses: ./.github/actions/setup-environment
 
       - name: Install syft
-        uses: anchore/sbom-action/download-syft@v0
+        uses: anchore/sbom-action/download-syft@v0.24.0
 
       - env:
           GORELEASER_CURRENT_TAG: 0.0.0-pr.${{ github.event.pull_request.number }}
