@@ -6,6 +6,9 @@ jobs:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-environment
 
+      - name: Install syft
+        uses: anchore/sbom-action/download-syft@v0
+
       - env:
           GORELEASER_CURRENT_TAG: 0.0.0-pr.${{ github.event.pull_request.number }}
         name: Build binaries with GoReleaser
@@ -28,6 +31,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-environment
+
+      - name: Install syft
+        uses: anchore/sbom-action/download-syft@v0
 
       - env:
           GORELEASER_CURRENT_TAG: 0.0.0-pr.${{ github.event.pull_request.number }}
