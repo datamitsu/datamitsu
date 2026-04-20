@@ -8,7 +8,7 @@ require (
 	github.com/dop251/goja v0.0.0-20260311135729-065cd970411c
 	github.com/evanw/esbuild v0.28.0
 	github.com/fatih/color v1.19.0
-	github.com/go-git/go-git/v6 v6.0.0-alpha.1
+	github.com/go-git/go-git/v6 v6.0.0-alpha.2
 	github.com/goccy/go-yaml v1.19.2
 	github.com/klauspost/compress v1.18.5
 	github.com/mattn/go-isatty v0.0.21
