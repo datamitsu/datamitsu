@@ -484,7 +484,6 @@ on:
     inputs:
       create_github_prerelease:
         default: false
-
         description: "Create GitHub prerelease (for debugging binaries/checksums)"
         required: false
         type: boolean
