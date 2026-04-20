@@ -25,11 +25,11 @@ jobs:
         with:
           args: release ${{ needs.determine-release-type.outputs.is_unstable == 'true' && '--snapshot' || '' }} --clean
           distribution: goreleaser
-          version: latest
+          version: "~> v2"
 
-      # 3. Prepare Release Assets
-      - name: Prepare release assets
-        run: .github/scripts/prepare-release-assets.sh "${{ needs.determine-release-type.outputs.is_unstable }}"
+      # 3. Normalize binaries
+      - name: Normalize binaries
+        run: .github/scripts/normalize-binaries.sh "${{ needs.determine-release-type.outputs.is_unstable }}"
 
       # 4. Build Programmable API
       - name: Build programmable API
@@ -54,8 +54,8 @@ jobs:
           mkdir -p dist/datamitsu-linux-amd64
           mkdir -p dist/datamitsu-linux-arm64
 
-          cp dist/release/datamitsu-linux_amd64 dist/datamitsu-linux-amd64/datamitsu
-          cp dist/release/datamitsu-linux_arm64 dist/datamitsu-linux-arm64/datamitsu
+          cp dist/binaries/datamitsu-linux_amd64 dist/datamitsu-linux-amd64/datamitsu
+          cp dist/binaries/datamitsu-linux_arm64 dist/datamitsu-linux-arm64/datamitsu
 
           chmod +x dist/datamitsu-linux-*/datamitsu
           ls -lh dist/datamitsu-linux-*/

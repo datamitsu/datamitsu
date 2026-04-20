@@ -4,8 +4,8 @@
 //
 // This script handles platform-specific binary packaging. The full publish flow:
 //
-// 1. GoReleaser builds Go binaries -> dist/datamitsu_{os}_{arch}_*/
-// 2. CI workflow normalizes to -> dist/release/datamitsu-{os}_{arch}[.exe]
+// 1. GoReleaser builds Go binaries -> dist/datamitsu_{version}_{os}_{arch}_*/
+// 2. CI workflow normalizes binaries -> dist/binaries/datamitsu-{os}_{arch}[.exe]
 // 3. CI workflow builds programmable-api and copies to lib/
 // 4. `pack:prepare` (this script) creates platform-specific npm packages
 // 5. `pack:publish` runs `npm publish` for each package
@@ -182,14 +182,14 @@ function preparePlatformPackages() {
     const packageDir = join(NPM_DIR, packageName);
     const binaryName = platform.goos === "windows" ? "datamitsu.exe" : "datamitsu";
 
-    // CI workflow normalizes GoReleaser output to:
-    // dist/release/datamitsu-{goos}_{goarch}[.exe]
+    // CI workflow normalizes binaries to:
+    // dist/binaries/datamitsu-{goos}_{goarch}[.exe]
     const releaseBinaryName =
       platform.goos === "windows"
         ? `datamitsu-${platform.goos}_${platform.goarch}.exe`
         : `datamitsu-${platform.goos}_${platform.goarch}`;
 
-    const sourceBinary = join(DIST_DIR, "release", releaseBinaryName);
+    const sourceBinary = join(DIST_DIR, "binaries", releaseBinaryName);
 
     // Verify binary exists before creating package
     if (!existsSync(sourceBinary)) {

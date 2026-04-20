@@ -152,5 +152,6 @@ export default {
     "becad",
     "trixie",
     "gomod",
+    "sboms",
   ],
 };

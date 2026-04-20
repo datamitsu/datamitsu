@@ -2,16 +2,15 @@ archives:
   - files:
       - LICENSE*
       - README*
-
-    format: tar.gz
     format_overrides:
-      - format: zip
+      - formats: [zip]
         goos: windows
+    formats: [tar.gz]
     id: datamitsu-archive
     ids:
       - datamitsu
     name_template: "datamitsu_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-  - format: binary
+  - formats: [binary]
     id: datamitsu-binary
     ids:
       - datamitsu
@@ -30,7 +29,6 @@ builds:
     goarch:
       - amd64
       - arm64
-
     goos:
       - linux
       - darwin
@@ -40,6 +38,7 @@ builds:
     ldflags:
       - -s -w -X github.com/datamitsu/datamitsu/internal/ldflags.Version={{ .Version }}
     main: .
+
 changelog:
   filters:
     exclude:
@@ -49,12 +48,25 @@ changelog:
       - "^chore:"
       - Merge pull request
       - Merge branch
-
+  groups:
+    - order: 0
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      title: Features
+    - order: 1
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      title: Bug Fixes
+    - order: 2
+      regexp: '^.*?perf(\([[:word:]]+\))??!?:.+$'
+      title: Performance Improvements
+    - order: 999
+      title: Others
   sort: asc
+  use: github
+
 checksum:
   algorithm: sha256
-
   name_template: "checksums.txt"
+
 nfpms:
   - bindir: /usr/local/bin
     description: |-
@@ -73,13 +85,19 @@ nfpms:
     maintainer: "datamitsu <noreply@github.com>"
     package_name: datamitsu
     priority: optional
-
     section: utils
     vendor: datamitsu
+
 release:
   draft: false
   github:
     name: datamitsu
     owner: datamitsu
   prerelease: auto
+
+sboms:
+  - artifacts: archive
+    documents:
+      - "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}.sbom"
+
 version: 2
