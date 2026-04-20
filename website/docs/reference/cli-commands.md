@@ -234,7 +234,7 @@ Developer utility commands for maintaining datamitsu configurations.
 
 ### devtools pull-github
 
-Update binary configurations from GitHub releases. Requires a file argument specifying the path to the GitHub apps JSON file. If the file doesn't exist, an empty appstate structure is created automatically.
+Update binary configurations from GitHub releases. Requires a file argument specifying the path to the GitHub apps JSON file. If the file doesn't exist, an empty appstate structure is created automatically. Fetches repository descriptions from the GitHub API and stores them in the output JSON.
 
 ```bash
 datamitsu devtools pull-github <file>

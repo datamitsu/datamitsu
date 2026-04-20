@@ -112,6 +112,9 @@
 **/*.crt
 **/secrets.yml
 **/secrets.json
+.secrets
+.secrets.*
+!.secrets.*.example
 
 # Testing
 **/coverage/

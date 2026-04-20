@@ -1,7 +1,8 @@
 # Build outputs
+**/dist/
+!dist/datamitsu-linux-*/
 **/.next/
 **/build/
-**/dist/
 **/out/
 **/.turbo/
 **/.vercel/

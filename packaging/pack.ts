@@ -1,5 +1,17 @@
 #!/usr/bin/env tsx
 
+// npm Publishing Flow
+//
+// This script handles platform-specific binary packaging. The full publish flow:
+//
+// 1. GoReleaser builds Go binaries -> dist/datamitsu_{version}_{os}_{arch}_*/
+// 2. CI workflow normalizes binaries -> dist/binaries/datamitsu-{os}_{arch}[.exe]
+// 3. CI workflow builds programmable-api and copies to lib/
+// 4. `pack:prepare` (this script) creates platform-specific npm packages
+// 5. `pack:publish` runs `npm publish` for each package
+//
+// The `lib/` directory (programmable API) is built by CI workflow, not by this script.
+
 import { execSync, spawn } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -114,33 +126,10 @@ const PLATFORMS: PlatformConfig[] = [
   },
 ];
 
-function buildBinaries() {
-  console.log("\n🔨 Building Go binaries for all platforms...");
-
-  const ldflags = `-X datamitsu/internal/ldflags.Version=${VERSION}`;
-
-  for (const platform of PLATFORMS) {
-    const binaryName = platform.goos === "windows" ? "datamitsu.exe" : "datamitsu";
-    const outputPath = join(DIST_DIR, `datamitsu-${platform.goos}-${platform.goarch}`, binaryName);
-
-    mkdirSync(join(DIST_DIR, `datamitsu-${platform.goos}-${platform.goarch}`), { recursive: true });
-
-    console.log(`Building for ${platform.goos}/${platform.goarch}...`);
-    exec(
-      `GOOS=${platform.goos} GOARCH=${platform.goarch} go build -ldflags="${ldflags}" -o ${outputPath}`,
-      ROOT_DIR,
-    );
-  }
-}
-
 function clean() {
-  console.log("\n📦 Cleaning previous builds...");
-  if (existsSync(DIST_DIR)) {
-    rmSync(DIST_DIR, { force: true, recursive: true });
-  }
-  mkdirSync(DIST_DIR, { recursive: true });
+  console.log("\n📦 Cleaning npm packages...");
 
-  // Clean platform-specific packages
+  // Clean platform-specific packages only (not dist/ - that's managed by GoReleaser)
   for (const platform of PLATFORMS) {
     const platformDir = join(NPM_DIR, `datamitsu-${platform.npmPlatform}-${platform.npmArch}`);
     if (existsSync(platformDir)) {
@@ -192,11 +181,23 @@ function preparePlatformPackages() {
     const packageName = `datamitsu-${platform.npmPlatform}-${platform.npmArch}`;
     const packageDir = join(NPM_DIR, packageName);
     const binaryName = platform.goos === "windows" ? "datamitsu.exe" : "datamitsu";
-    const sourceBinary = join(
-      DIST_DIR,
-      `datamitsu-${platform.goos}-${platform.goarch}`,
-      binaryName,
-    );
+
+    // CI workflow normalizes binaries to:
+    // dist/binaries/datamitsu-{goos}_{goarch}[.exe]
+    const releaseBinaryName =
+      platform.goos === "windows"
+        ? `datamitsu-${platform.goos}_${platform.goarch}.exe`
+        : `datamitsu-${platform.goos}_${platform.goarch}`;
+
+    const sourceBinary = join(DIST_DIR, "binaries", releaseBinaryName);
+
+    // Verify binary exists before creating package
+    if (!existsSync(sourceBinary)) {
+      throw new Error(
+        `Binary not found: ${sourceBinary}\n` +
+          `Did GoReleaser build complete successfully for ${platform.goos}/${platform.goarch}?`,
+      );
+    }
 
     // Create package directory
     mkdirSync(packageDir, { recursive: true });
@@ -212,12 +213,8 @@ function preparePlatformPackages() {
     writeFileSync(join(packageDir, "package.json"), packageJson);
 
     // Copy binary
-    if (existsSync(sourceBinary)) {
-      cpSync(sourceBinary, join(packageDir, binaryName));
-      console.log(`✓ Created ${packageName}`);
-    } else {
-      console.error(`✗ Binary not found: ${sourceBinary}`);
-    }
+    cpSync(sourceBinary, join(packageDir, binaryName));
+    console.log(`✓ Created ${packageName}`);
 
     // Copy README
     const readmePath = join(PACKAGING_DIR, "PACKAGE_README.md");
@@ -250,8 +247,17 @@ async function publishNpm(dryRun: boolean = true) {
 
   console.log(`Publishing with tag: ${tag} (version: ${publishVersion})`);
 
-  const baseCommand = dryRun ? "npm publish --dry-run" : "npm publish --access public";
+  // Use --provenance for transparent publishing with OIDC
+  // Only enable provenance when OIDC token is available (GitHub Actions with id-token: write)
+  const hasOIDC = Boolean(process.env.ACTIONS_ID_TOKEN_REQUEST_URL);
+  const provenanceFlag = dryRun || !hasOIDC ? "" : "--provenance";
+  const baseCommand = dryRun
+    ? "npm publish --dry-run"
+    : `npm publish --access public ${provenanceFlag}`;
   const npmCommand = `${baseCommand} --tag ${tag}`;
+  console.log(
+    `Provenance: ${hasOIDC && !dryRun ? "enabled" : "disabled"} (OIDC=${hasOIDC}, dry-run=${dryRun})`,
+  );
 
   let hasErrors = false;
 
@@ -334,21 +340,6 @@ const command = process.argv[2];
 
 async function main() {
   switch (command) {
-    case "all": {
-      clean();
-      buildBinaries();
-      preparePlatformPackages();
-      updateMainPackage();
-      await publishNpm(true);
-      break;
-    }
-
-    case "build": {
-      clean();
-      buildBinaries();
-      break;
-    }
-
     case "clean": {
       clean();
       break;
@@ -356,7 +347,6 @@ async function main() {
 
     case "prepare": {
       clean();
-      buildBinaries();
       preparePlatformPackages();
       updateMainPackage();
       break;
@@ -374,16 +364,17 @@ async function main() {
 Usage: tsx pack.ts <command>
 
 Commands:
-	clean       Clean previous builds
-	build       Build Go binaries for all platforms
-	prepare     Build binaries and prepare npm packages
+	clean       Clean npm packages
+	prepare     Prepare npm packages from GoReleaser binaries
 	publish     Publish to npm (use --dry-run for testing)
-	all         Run all steps including dry-run publish
 
 Examples:
 	tsx pack.ts prepare
 	tsx pack.ts publish --dry-run
-	VERSION=1.0.0 tsx pack.ts all
+	VERSION=1.0.0 tsx pack.ts prepare
+
+Note: Binaries are built by GoReleaser. This script only handles npm packaging.
+      The lib/ directory (programmable API) is built by Taskfile (pack:build-api).
 `);
       }
       process.exit(1);

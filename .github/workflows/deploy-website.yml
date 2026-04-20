@@ -3,21 +3,13 @@ jobs:
     name: Build Docusaurus
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - uses: pnpm/action-setup@v4
+      - uses: ./.github/actions/setup-environment
         with:
-          version: 10.32.1
-
-      - uses: actions/setup-node@v4
-        with:
-          cache: pnpm
-          node-version: "24"
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+          setup-go: "false"
 
       - env:
           NODE_ENV: production

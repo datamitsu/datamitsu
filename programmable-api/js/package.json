@@ -5,7 +5,6 @@
   "type": "module",
   "scripts": {
     "build": "tsdown",
-    "copy-to-package": "rm -rf ../../packaging/npm/datamitsu/lib && cp -r dist ../../packaging/npm/datamitsu/lib",
     "prepare": "pnpm build",
     "test": "node --experimental-test-module-mocks --import tsx --test 'src/**/*.test.ts' 'src/*.test.ts'"
   },

@@ -17,8 +17,9 @@ type AppMetadata struct {
 
 // BinariesEntry represents binaries for a single app with metadata
 type BinariesEntry struct {
-	ConfigHash string                       `json:"configHash,omitempty"` // Hash of owner:repo:tag
-	Binaries   binmanager.MapOfBinaries     `json:"binaries"`
+	ConfigHash  string                       `json:"configHash,omitempty"` // Hash of owner:repo:tag
+	Description string                       `json:"description,omitempty"`
+	Binaries    binmanager.MapOfBinaries     `json:"binaries"`
 }
 
 // State represents the githubApps.json structure

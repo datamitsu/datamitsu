@@ -173,6 +173,21 @@ func runPullGithub(cmd *cobra.Command, args []string) error {
 			continue
 		}
 
+		// Fetch repository description (matches FNM/UV pattern: use fetched if non-empty, else preserve existing)
+		desc := ""
+		repoInfo, err := client.GetRepository(metadata.Owner, metadata.Repo)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to fetch repository description for %s: %v\n", appName, err)
+		} else if repoInfo != nil {
+			desc = repoInfo.Description
+		}
+		if desc == "" {
+			if existing := state.Binaries[appName]; existing != nil {
+				desc = existing.Description
+			}
+		}
+		binariesEntry.Description = desc
+
 		// Commit changes to state only after full success
 		metadata.Tag = effectiveTag
 		state.Binaries[appName] = binariesEntry

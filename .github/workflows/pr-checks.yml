@@ -1,0 +1,125 @@
+jobs:
+  build-verify:
+    name: Build Verification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-environment
+
+      - name: Install syft
+        uses: anchore/sbom-action/download-syft@v0.24.0
+
+      - env:
+          GORELEASER_CURRENT_TAG: 0.0.0-pr.${{ github.event.pull_request.number }}
+        name: Build binaries with GoReleaser
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          args: release --snapshot --clean
+
+          distribution: goreleaser
+          version: "~> v2"
+      - name: Normalize binaries
+        run: .github/scripts/normalize-binaries.sh "true"
+      - name: Prepare npm packages
+        run: |
+          export VERSION=0.0.0-pr.${{ github.event.pull_request.number }}
+          pnpm pack:prepare
+
+  docker-build:
+    name: Docker Build Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-environment
+
+      - name: Install syft
+        uses: anchore/sbom-action/download-syft@v0.24.0
+
+      - env:
+          GORELEASER_CURRENT_TAG: 0.0.0-pr.${{ github.event.pull_request.number }}
+        name: Build binaries with GoReleaser
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          args: release --snapshot --clean
+
+          distribution: goreleaser
+          version: "~> v2"
+      - name: Prepare binaries for Docker
+        run: |
+          # GoReleaser in snapshot mode creates binaries in dist/datamitsu_{OS}_{ARCH}_{MICROARCH}/
+          # Docker expects: dist/datamitsu-linux-{arch}/datamitsu
+
+          mkdir -p dist/datamitsu-linux-amd64
+          mkdir -p dist/datamitsu-linux-arm64
+
+          # Find binaries in target directories (strip microarchitecture suffix)
+          for dir in dist/datamitsu_linux_*_*/; do
+            binary=$(find "$dir" -maxdepth 1 -type f -name "datamitsu" | head -1)
+            if [ -f "$binary" ]; then
+              dirname=$(basename "$dir")
+              # Extract arch: datamitsu_linux_amd64_v1 -> amd64
+              arch=$(echo "$dirname" | sed 's/^datamitsu_linux_//' | sed 's/_v[0-9.]*$//')
+              cp "$binary" "dist/datamitsu-linux-${arch}/datamitsu"
+              echo "✓ Copied: $binary -> dist/datamitsu-linux-${arch}/datamitsu"
+            fi
+          done
+
+          chmod +x dist/datamitsu-linux-*/datamitsu
+          ls -lh dist/datamitsu-linux-*/
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build Debian image
+        uses: docker/build-push-action@v7
+        with:
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          context: .
+          file: ./docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: false
+          tags: datamitsu:pr-${{ github.event.pull_request.number }}
+
+      - name: Build Alpine image
+        uses: docker/build-push-action@v7
+        with:
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          context: .
+          file: ./docker/Dockerfile.alpine
+          platforms: linux/amd64,linux/arm64
+          push: false
+          tags: datamitsu:pr-${{ github.event.pull_request.number }}-alpine
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-environment
+
+      - name: Run datamitsu lint
+        run: pnpm dm lint
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-environment
+
+      - name: Run Go tests
+        run: pnpm test
+
+      - name: Build datamitsu binary
+        run: go build -o datamitsu .
+
+      - name: Run JavaScript tests
+        run: pnpm --filter @datamitsu/programmable-api-js test
+
+name: PR Checks
+
+on:
+  pull_request:
+    branches: [main]
