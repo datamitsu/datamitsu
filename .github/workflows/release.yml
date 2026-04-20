@@ -261,54 +261,11 @@ jobs:
             type=raw,value=latest,enable=${{ needs.determine-release-type.outputs.is_stable == 'true' && !contains(needs.validate-stable.outputs.version, '-rc.') }}
             type=raw,value=unstable,enable=${{ needs.determine-release-type.outputs.is_unstable == 'true' && matrix.registry == 'dockerhub' }}
             type=raw,value=${{ needs.generate-unstable-version.outputs.tag_name }},enable=${{ needs.determine-release-type.outputs.is_unstable == 'true' }}
-      - id: docker-tags
-        name: Generate Docker tags
-        run: |
-          IS_STABLE="${{ needs.determine-release-type.outputs.is_stable }}"
-          VARIANT="${{ matrix.variant }}"
-          REGISTRY="${{ matrix.registry }}"
-          SUFFIX=""
-          if [[ "$VARIANT" == "alpine" ]]; then
-            SUFFIX="-alpine"
-          fi
 
-          if [[ "$REGISTRY" == "ghcr" ]]; then
-            BASE_IMAGE="ghcr.io/datamitsu/datamitsu"
-          else
-            BASE_IMAGE="docker.io/datamitsu/datamitsu"
-          fi
-
-          if [[ "$IS_STABLE" == "true" ]]; then
-            VERSION="${{ needs.validate-stable.outputs.version }}"
-            # Stable: semver tags
-            TAGS="${BASE_IMAGE}:${VERSION}${SUFFIX}"
-            MAJOR_MINOR=$(echo "$VERSION" | grep -oP '^\d+\.\d+' || true)
-            MAJOR=$(echo "$VERSION" | grep -oP '^\d+' || true)
-            if [[ -n "$MAJOR_MINOR" ]]; then
-              TAGS="$TAGS,${BASE_IMAGE}:${MAJOR_MINOR}${SUFFIX}"
-            fi
-            if [[ -n "$MAJOR" ]]; then
-              TAGS="$TAGS,${BASE_IMAGE}:${MAJOR}${SUFFIX}"
-            fi
-            TAGS="$TAGS,${BASE_IMAGE}:stable${SUFFIX}"
-            if [[ ! "$VERSION" =~ -rc\. ]]; then
-              TAGS="$TAGS,${BASE_IMAGE}:latest${SUFFIX}"
-            fi
-          else
-            # Unstable: unstable tag + date-sha tag
-            TAG_NAME="${{ needs.generate-unstable-version.outputs.tag_name }}"
-            if [[ "$REGISTRY" == "ghcr" ]]; then
-              BASE_IMAGE="ghcr.io/datamitsu/datamitsu-unstable"
-              TAGS="${BASE_IMAGE}:latest${SUFFIX},${BASE_IMAGE}:${TAG_NAME}${SUFFIX}"
-            else
-              TAGS="${BASE_IMAGE}:unstable${SUFFIX},${BASE_IMAGE}:${TAG_NAME}${SUFFIX}"
-            fi
-          fi
-
-          echo "tags=$TAGS" >> $GITHUB_OUTPUT
-          echo "Generated tags: $TAGS"
-
-      - name: Build and push
+      - if: |
+          matrix.registry == 'ghcr' ||
+          (matrix.registry == 'dockerhub' && needs.determine-release-type.outputs.is_stable == 'true')
+        name: Build and push
         uses: docker/build-push-action@v7
         with:
           cache-from: type=gha
@@ -326,7 +283,7 @@ jobs:
   publish-github:
     if: |
       needs.determine-release-type.outputs.is_unstable == 'true' &&
-      github.event.inputs.create_github_prerelease == 'true'
+      fromJSON(github.event.inputs.create_github_prerelease || 'false')
     name: Publish to GitHub Releases
     needs: [build, determine-release-type, generate-unstable-version]
     runs-on: ubuntu-latest
