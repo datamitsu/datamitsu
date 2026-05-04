@@ -40,7 +40,7 @@
   "devDependencies": {
     "@docusaurus/faster": "3.10.0",
     "@docusaurus/module-type-aliases": "3.10.0",
-    "@docusaurus/tsconfig": "3.10.0",
+    "@docusaurus/tsconfig": "3.10.1",
     "@docusaurus/types": "3.10.0",
     "@shibanet0/datamitsu-config": "0.0.3-alpha-27",
     "@types/react": "19.2.14",
