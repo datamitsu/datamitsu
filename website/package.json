@@ -38,7 +38,7 @@
     "react-dom": "19.2.4"
   },
   "devDependencies": {
-    "@docusaurus/faster": "3.10.0",
+    "@docusaurus/faster": "3.10.1",
     "@docusaurus/module-type-aliases": "3.10.0",
     "@docusaurus/tsconfig": "3.10.0",
     "@docusaurus/types": "3.10.0",
