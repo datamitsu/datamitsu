@@ -21,7 +21,7 @@ require (
 	go.uber.org/zap v1.27.1
 	golang.org/x/mod v0.35.0
 	golang.org/x/sync v0.20.0
-	gopkg.in/ini.v1 v1.67.1
+	gopkg.in/ini.v1 v1.67.2
 )
 
 require (
