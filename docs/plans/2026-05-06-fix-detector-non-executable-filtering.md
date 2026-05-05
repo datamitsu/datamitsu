@@ -85,7 +85,7 @@ out in `filterValidAssets`, the same way checksum files are already filtered.
 
 ### Task 5: [Final] Update documentation
 
-- [ ] update CLAUDE.md / agents-docs-website.md if the detector behaviour is
+- [x] update CLAUDE.md / agents-docs-website.md if the detector behaviour is
       documented there (check for any mention of filterValidAssets or
       ChecksumExtensions)
 
