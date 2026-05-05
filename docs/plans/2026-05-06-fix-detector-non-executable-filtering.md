@@ -78,10 +78,10 @@ out in `filterValidAssets`, the same way checksum files are already filtered.
 
 ### Task 4: Verify acceptance criteria
 
-- [ ] confirm `TestDetectBinary_FiltersVsix` passes
-- [ ] confirm `TestDetectBinary_PrefersArchiveOverVsix` passes
-- [ ] run full test suite `go test ./...` — no regressions
-- [ ] run linter `golangci-lint run ./internal/detector/...` (if available)
+- [x] confirm `TestDetectBinary_FiltersVsix` passes
+- [x] confirm `TestDetectBinary_PrefersArchiveOverVsix` passes
+- [x] run full test suite `go test ./...` — no regressions
+- [x] run linter `golangci-lint run ./internal/detector/...` (if available)
 
 ### Task 5: [Final] Update documentation
 
