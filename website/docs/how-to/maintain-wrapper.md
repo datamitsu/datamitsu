@@ -40,6 +40,10 @@ datamitsu devtools pull-github apps/githubApps.json --update --verify-extraction
 
 The `--verify-extraction` flag additionally downloads each binary and verifies it can be extracted correctly. This catches issues like changed archive structures or renamed binaries inside archives.
 
+:::note Releases with mixed asset types
+Some tools publish VS Code extensions (`.vsix`), Linux packages (`.deb`, `.rpm`), or Python wheels (`.whl`) alongside binary archives in the same GitHub release. datamitsu automatically excludes these non-executable formats before scoring, so only actual binaries compete for selection. No configuration is needed — the filtering is automatic.
+:::
+
 ### FNM Apps (npm): `devtools pull-fnm`
 
 FNM apps are Node.js packages managed via pnpm. Use `pull-fnm` to check for updates on the npm registry.

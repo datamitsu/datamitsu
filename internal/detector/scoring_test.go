@@ -3,6 +3,7 @@ package detector
 import (
 	"github.com/datamitsu/datamitsu/internal/github"
 	"github.com/datamitsu/datamitsu/internal/syslist"
+	"strings"
 	"testing"
 )
 
@@ -216,7 +217,10 @@ func TestDetectBinary_FiltersVsix(t *testing.T) {
 
 	_, err := DetectBinary(assets, syslist.OsTypeLinux, syslist.ArchTypeAmd64, "glibc")
 	if err == nil {
-		t.Error("expected error when only .vsix assets are present, got nil")
+		t.Fatal("expected error when only .vsix assets are present, got nil")
+	}
+	if !strings.Contains(err.Error(), "non-executable") {
+		t.Errorf("expected error to mention 'non-executable', got: %v", err)
 	}
 }
 
@@ -280,6 +284,15 @@ func TestDetectBinary_ScoringBased(t *testing.T) {
 			"filters checksum files",
 			[]github.Asset{
 				makeAsset("checksums.sha256"),
+				makeAsset("tool-linux-amd64.tar.gz"),
+			},
+			syslist.OsTypeLinux, syslist.ArchTypeAmd64, "",
+			"tool-linux-amd64.tar.gz", false,
+		},
+		{
+			"filters non-executable package files",
+			[]github.Asset{
+				makeAsset("tool-linux-amd64.deb"),
 				makeAsset("tool-linux-amd64.tar.gz"),
 			},
 			syslist.OsTypeLinux, syslist.ArchTypeAmd64, "",
