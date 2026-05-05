@@ -9,6 +9,7 @@ var NonExecutableExtensions = []string{
 	".rpm",   // RPM package
 	".nupkg", // NuGet package
 	".whl",   // Python wheel
+	".msi",   // Windows installer
 }
 
 // IsNonExecutableFile checks if filename is a non-executable package format

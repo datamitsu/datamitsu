@@ -1,10 +1,11 @@
 package detector
 
 import (
-	"github.com/datamitsu/datamitsu/internal/github"
-	"github.com/datamitsu/datamitsu/internal/syslist"
 	"strings"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/github"
+	"github.com/datamitsu/datamitsu/internal/syslist"
 )
 
 func makeAsset(name string) github.Asset {

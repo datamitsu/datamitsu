@@ -1,8 +1,9 @@
 package detector
 
 import (
-	"github.com/datamitsu/datamitsu/internal/syslist"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/syslist"
 )
 
 func TestIsNonExecutableFile(t *testing.T) {
@@ -16,6 +17,7 @@ func TestIsNonExecutableFile(t *testing.T) {
 		{"RPM extension", "tool-linux-x86_64.rpm", true},
 		{"NUPKG extension", "tool.nupkg", true},
 		{"WHL extension", "package-1.0.0-py3-none-any.whl", true},
+		{"MSI extension", "tool-windows-amd64.msi", true},
 		{"Regular tar.gz", "tool-linux-amd64.tar.gz", false},
 		{"Regular zip", "tool-windows-amd64.zip", false},
 		{"Plain binary", "tool-linux-amd64", false},

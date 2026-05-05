@@ -1,11 +1,12 @@
 package detector
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/github"
 	"github.com/datamitsu/datamitsu/internal/syslist"
-	"fmt"
-	"strings"
 )
 
 // DetectBinary finds the best matching asset for given OS, architecture, and libc type.
