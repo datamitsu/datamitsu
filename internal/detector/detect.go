@@ -19,7 +19,7 @@ func DetectBinary(assets []github.Asset, osType syslist.OsType, archType syslist
 
 	validAssets := filterValidAssets(assets)
 	if len(validAssets) == 0 {
-		return nil, fmt.Errorf("no valid assets found (all were checksum files)")
+		return nil, fmt.Errorf("no valid assets found (all were checksum or non-executable package files)")
 	}
 
 	best := selectBestAsset(validAssets, osType, archType, libcType)
@@ -30,11 +30,11 @@ func DetectBinary(assets []github.Asset, osType syslist.OsType, archType syslist
 	return &best.Asset, nil
 }
 
-// filterValidAssets removes checksum and invalid files
+// filterValidAssets removes checksum and non-executable package files
 func filterValidAssets(assets []github.Asset) []github.Asset {
 	var valid []github.Asset
 	for _, asset := range assets {
-		if !IsChecksumFile(asset.Name) {
+		if !IsChecksumFile(asset.Name) && !IsNonExecutableFile(asset.Name) {
 			valid = append(valid, asset)
 		}
 	}

@@ -208,6 +208,33 @@ func TestSelectBestAsset_ArchiveBeatsPlainBinary(t *testing.T) {
 	}
 }
 
+func TestDetectBinary_FiltersVsix(t *testing.T) {
+	assets := []github.Asset{
+		makeAsset("tombi-vscode-0.1.0-linux-x64.vsix"),
+		makeAsset("tombi-vscode-0.1.0-linux-arm64.vsix"),
+	}
+
+	_, err := DetectBinary(assets, syslist.OsTypeLinux, syslist.ArchTypeAmd64, "glibc")
+	if err == nil {
+		t.Error("expected error when only .vsix assets are present, got nil")
+	}
+}
+
+func TestDetectBinary_PrefersArchiveOverVsix(t *testing.T) {
+	assets := []github.Asset{
+		makeAsset("tombi-cli-0.1.0-x86_64-unknown-linux-musl.tar.gz"),
+		makeAsset("tombi-vscode-0.1.0-linux-x64.vsix"),
+	}
+
+	result, err := DetectBinary(assets, syslist.OsTypeLinux, syslist.ArchTypeAmd64, "glibc")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Name != "tombi-cli-0.1.0-x86_64-unknown-linux-musl.tar.gz" {
+		t.Errorf("expected tar.gz binary, got %q", result.Name)
+	}
+}
+
 func TestDetectBinary_ScoringBased(t *testing.T) {
 	tests := []struct {
 		name      string

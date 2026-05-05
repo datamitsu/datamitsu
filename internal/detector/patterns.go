@@ -2,6 +2,26 @@ package detector
 
 import "strings"
 
+// NonExecutableExtensions are file extensions for non-executable package formats to skip
+var NonExecutableExtensions = []string{
+	".vsix",  // VS Code extension
+	".deb",   // Debian package
+	".rpm",   // RPM package
+	".nupkg", // NuGet package
+	".whl",   // Python wheel
+}
+
+// IsNonExecutableFile checks if filename is a non-executable package format
+func IsNonExecutableFile(filename string) bool {
+	lowerName := strings.ToLower(filename)
+	for _, ext := range NonExecutableExtensions {
+		if strings.HasSuffix(lowerName, ext) {
+			return true
+		}
+	}
+	return false
+}
+
 // ChecksumExtensions are file extensions to skip (checksum files)
 var ChecksumExtensions = []string{
 	".sha256",
