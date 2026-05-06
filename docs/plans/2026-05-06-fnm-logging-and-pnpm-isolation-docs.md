@@ -64,9 +64,9 @@ Two independent improvements:
 
 ### Task 3: Verify acceptance criteria
 
-- [ ] `buildPNPMInstallArgs` does not contain `--silent`
-- [ ] `go test ./internal/runtimemanager/...` — all tests green
-- [ ] `maintain-wrapper.md` contains the new section with code examples
+- [x] `buildPNPMInstallArgs` does not contain `--silent`
+- [x] `go test ./internal/runtimemanager/...` — all tests green
+- [x] `maintain-wrapper.md` contains the new section with code examples
 
 ## Technical Details
 
