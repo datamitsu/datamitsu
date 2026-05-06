@@ -527,7 +527,7 @@ func (rm *RuntimeManager) GetFNMCommandInfo(appName string, appConfig *binmanage
 }
 
 func buildPNPMInstallArgs(pnpmCjsPath string, hasLockFile bool) []string {
-	args := []string{pnpmCjsPath, "install", "--silent"}
+	args := []string{pnpmCjsPath, "install"}
 	if hasLockFile {
 		args = append(args, "--frozen-lockfile")
 	}
