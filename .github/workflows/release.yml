@@ -229,7 +229,7 @@ jobs:
 
       - if: ${{ !env.ACT }}
         name: Download build artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: release-artifacts
           path: .
@@ -321,7 +321,7 @@ jobs:
 
       - if: ${{ !env.ACT }}
         name: Download build artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: release-artifacts
           path: .
@@ -363,7 +363,7 @@ jobs:
 
       - if: ${{ !env.ACT }}
         name: Download build artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: release-artifacts
           path: .
