@@ -202,7 +202,7 @@ Five types of applications are supported:
 - Cache keys use XXH3-128 hash of runtime config + app config + OS + arch
 - `RuntimeConfigFNM` (NodeVersion, PNPMVersion), `RuntimeConfigUV` (PythonVersion), and `RuntimeConfigJVM` (JavaVersion) on `RuntimeConfig` hold version info per runtime kind
 - Lockfiles are mandatory for all UV/FNM apps; `ValidateApps` enforces that all UV/FNM apps have a `LockFile` configured
-- FNM runtime: downloads FNM binary, uses it to install Node.js versions, downloads PNPM from npm registry, runs pnpm install (with `--silent`) in isolated app environments
+- FNM runtime: downloads FNM binary, uses it to install Node.js versions, downloads PNPM from npm registry, runs pnpm install in isolated app environments (stdout and stderr streamed to stderr so errors are visible)
 - UV runtime: uses project-based workflow (writes pyproject.toml + `uv sync`) instead of `uv tool install`; supports optional `--python {pythonVersion}` via `RuntimeConfigUV.PythonVersion`; `requires-python` in pyproject.toml resolved from app `RequiresPython` -> fallback `>=3.12` (decoupled from pythonVersion)
 - JVM runtime: downloads Temurin JDK archives per platform with `ExtractDir: true`, extracts full JDK tree to `.runtimes/jvm/{hash}/`; apps download JAR files with SHA256 verification to `.apps/jvm/{app}/{hash}/`; executes via `java -jar`
 - `RuntimeConfigSystem.SystemVersion`: optional string for manual cache invalidation when using system-mode runtimes; included in system runtime hash calculation
@@ -347,7 +347,7 @@ Tool operation arguments support template placeholders that the executor resolve
 - Three separate pattern layers: `patterns_os.go` (OS-only), `patterns_arch.go` (Arch-only), `patterns_libc.go` (Libc-only)
 - `ScoreAsset()` evaluates a filename against all pattern layers independently (no cross-contamination between dimensions)
 - `LibcPatterns`: detects musl (matches "musl", "alpine") and glibc (matches "gnu", "glibc") from filenames
-- `filterValidAssets()` in `detect.go` pre-filters assets before scoring: rejects checksum files (`IsChecksumFile` — `.sha256`, `.md5`, etc.) and non-executable package formats (`IsNonExecutableFile` — `.vsix`, `.deb`, `.rpm`, `.nupkg`, `.whl`, `.msi`); prevents package-manager bundles from outscoring real binaries — a `.vsix` with no libc indicator scores neutral (+5) while a musl-only binary on a glibc host scores mismatch (+1), causing the wrong file to win without this filter
+- `filterValidAssets()` in `detect.go` pre-filters assets before scoring: rejects checksum files (`IsChecksumFile` — `.sha256`, `.md5`, etc.) and non-executable package formats (`IsNonExecutableFile` — `.vsix`, `.deb`, `.rpm`, `.nupkg`, `.whl`, `.msi`, `.pkg`); prevents package-manager bundles from outscoring real binaries — a `.vsix` with no libc indicator scores neutral (+5) while a musl-only binary on a glibc host scores mismatch (+1), causing the wrong file to win without this filter
 - Used by `devtools pull-github` to match release assets to target tuples
 - Key files: `patterns_os.go`, `patterns_arch.go`, `patterns_libc.go`, `patterns.go`, `scoring.go`, `detect.go`
 

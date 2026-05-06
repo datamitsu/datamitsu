@@ -1,6 +1,7 @@
 package detector
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/github"
@@ -219,6 +220,9 @@ func TestDetectBinary_FiltersVsix(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when only .vsix assets are present, got nil")
 	}
+	if !strings.Contains(err.Error(), "non-executable") {
+		t.Errorf("expected error to mention non-executable, got: %v", err)
+	}
 }
 
 func TestDetectBinary_PrefersArchiveOverVsix(t *testing.T) {
@@ -294,6 +298,15 @@ func TestDetectBinary_ScoringBased(t *testing.T) {
 			},
 			syslist.OsTypeLinux, syslist.ArchTypeAmd64, "",
 			"tool-linux-amd64.tar.gz", false,
+		},
+		{
+			"filters macOS pkg installer",
+			[]github.Asset{
+				makeAsset("tool-darwin-arm64.pkg"),
+				makeAsset("tool-darwin-arm64.tar.gz"),
+			},
+			syslist.OsTypeDarwin, syslist.ArchTypeArm64, "",
+			"tool-darwin-arm64.tar.gz", false,
 		},
 	}
 
