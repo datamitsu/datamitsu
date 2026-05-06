@@ -347,8 +347,9 @@ Tool operation arguments support template placeholders that the executor resolve
 - Three separate pattern layers: `patterns_os.go` (OS-only), `patterns_arch.go` (Arch-only), `patterns_libc.go` (Libc-only)
 - `ScoreAsset()` evaluates a filename against all pattern layers independently (no cross-contamination between dimensions)
 - `LibcPatterns`: detects musl (matches "musl", "alpine") and glibc (matches "gnu", "glibc") from filenames
+- `filterValidAssets()` in `detect.go` pre-filters assets before scoring: rejects checksum files (`IsChecksumFile` — `.sha256`, `.md5`, etc.) and non-executable package formats (`IsNonExecutableFile` — `.vsix`, `.deb`, `.rpm`, `.nupkg`, `.whl`, `.msi`); prevents package-manager bundles from outscoring real binaries — a `.vsix` with no libc indicator scores neutral (+5) while a musl-only binary on a glibc host scores mismatch (+1), causing the wrong file to win without this filter
 - Used by `devtools pull-github` to match release assets to target tuples
-- Key files: `patterns_os.go`, `patterns_arch.go`, `patterns_libc.go`, `scoring.go`
+- Key files: `patterns_os.go`, `patterns_arch.go`, `patterns_libc.go`, `patterns.go`, `scoring.go`, `detect.go`
 
 **File Traverser** ([internal/traverser/](internal/traverser/))
 
