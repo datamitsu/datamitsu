@@ -307,3 +307,49 @@ When making breaking changes (removing tools, changing configuration structure),
 - What changed and why
 - Step-by-step instructions to update
 - The new minimum datamitsu version if changed
+
+### Configuring pnpm Settings for FNM Apps
+
+FNM apps run `pnpm install` in an isolated directory managed by datamitsu. You can include a `pnpm-workspace.yaml` file via `App.files` to control per-app pnpm behavior — supply chain security settings, script policies, and more. The file is written before `pnpm install` runs, so pnpm picks it up automatically.
+
+Minimal example (marks the install directory as a workspace root with no sub-packages):
+
+```js
+const myApp = {
+  files: {
+    "pnpm-workspace.yaml": "packages: []\n",
+  },
+  fnm: {
+    // ... FNM config
+  },
+};
+```
+
+Extended example with pnpm supply chain security settings:
+
+```js
+const myApp = {
+  files: {
+    "pnpm-workspace.yaml": [
+      "packages: []",
+      "verifyDepsBeforeRun: install",
+      "enablePrePostScripts: false",
+      "onlyBuiltDependencies: []",
+      "",
+    ].join("\n"),
+  },
+  fnm: {
+    // ... FNM config
+  },
+};
+```
+
+Key pnpm settings available via `pnpm-workspace.yaml`:
+
+- `verifyDepsBeforeRun: install` — verifies that installed dependencies match the lock file before each `pnpm run` command
+- `enablePrePostScripts: false` — disables `pre*`/`post*` lifecycle scripts for all packages
+- `onlyBuiltDependencies: []` — allowlist of packages permitted to run build scripts; an empty list blocks all build scripts
+
+:::note UV apps
+For UV apps, project-level settings are configured via `pyproject.toml`. However, any `pyproject.toml` included in `App.files` will be overwritten by the datamitsu core when it writes the managed `pyproject.toml`. This customization path is not available for UV apps.
+:::

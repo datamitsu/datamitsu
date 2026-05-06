@@ -55,12 +55,12 @@ Two independent improvements:
 
 ### Task 2: Document pnpm security settings via `files`
 
-- [ ] in `website/docs/how-to/maintain-wrapper.md`, Best Practices section (after line 309): add `### Configuring pnpm Settings for FNM Apps`
-- [ ] section explains: a wrapper maintainer can include `pnpm-workspace.yaml` via `App.files` to control per-app pnpm supply chain settings (`verifyDepsBeforeRun`, `enablePrePostScripts`, `onlyBuiltDependencies`, etc.)
-- [ ] minimal example: `files: { "pnpm-workspace.yaml": "packages: []\n" }`
-- [ ] extended example with security settings (`verifyDepsBeforeRun: install`)
-- [ ] note on UV: project-level settings are configured via `pyproject.toml`, but any `pyproject.toml` included in `files` will be overwritten by the core — this customization path is not available for UV
-- [ ] final check: `go test ./internal/runtimemanager/...`
+- [x] in `website/docs/how-to/maintain-wrapper.md`, Best Practices section (after line 309): add `### Configuring pnpm Settings for FNM Apps`
+- [x] section explains: a wrapper maintainer can include `pnpm-workspace.yaml` via `App.files` to control per-app pnpm supply chain settings (`verifyDepsBeforeRun`, `enablePrePostScripts`, `onlyBuiltDependencies`, etc.)
+- [x] minimal example: `files: { "pnpm-workspace.yaml": "packages: []\n" }`
+- [x] extended example with security settings (`verifyDepsBeforeRun: install`)
+- [x] note on UV: project-level settings are configured via `pyproject.toml`, but any `pyproject.toml` included in `files` will be overwritten by the core — this customization path is not available for UV
+- [x] final check: `go test ./internal/runtimemanager/...`
 
 ### Task 3: Verify acceptance criteria
 
