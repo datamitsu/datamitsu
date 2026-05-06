@@ -350,6 +350,8 @@ Key pnpm settings available via `pnpm-workspace.yaml`:
 - `enablePrePostScripts: false` — disables `pre*`/`post*` lifecycle scripts for all packages
 - `onlyBuiltDependencies: []` — allowlist of packages permitted to run build scripts; an empty list blocks all build scripts
 
-:::note UV apps
+:::note FNM and UV apps
+For FNM apps, any `package.json` included in `App.files` will be overwritten by the datamitsu core when it writes the managed `package.json`. Use `pnpm-workspace.yaml` for customization instead — the core never writes that file.
+
 For UV apps, project-level settings are configured via `pyproject.toml`. However, any `pyproject.toml` included in `App.files` will be overwritten by the datamitsu core when it writes the managed `pyproject.toml`. This customization path is not available for UV apps.
 :::

@@ -1,6 +1,7 @@
 package detector
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/github"
@@ -218,6 +219,9 @@ func TestDetectBinary_FiltersVsix(t *testing.T) {
 	_, err := DetectBinary(assets, syslist.OsTypeLinux, syslist.ArchTypeAmd64, "glibc")
 	if err == nil {
 		t.Fatal("expected error when only .vsix assets are present, got nil")
+	}
+	if !strings.Contains(err.Error(), "non-executable") {
+		t.Errorf("expected error to mention non-executable, got: %v", err)
 	}
 }
 

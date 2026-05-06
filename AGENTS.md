@@ -202,7 +202,7 @@ Five types of applications are supported:
 - Cache keys use XXH3-128 hash of runtime config + app config + OS + arch
 - `RuntimeConfigFNM` (NodeVersion, PNPMVersion), `RuntimeConfigUV` (PythonVersion), and `RuntimeConfigJVM` (JavaVersion) on `RuntimeConfig` hold version info per runtime kind
 - Lockfiles are mandatory for all UV/FNM apps; `ValidateApps` enforces that all UV/FNM apps have a `LockFile` configured
-- FNM runtime: downloads FNM binary, uses it to install Node.js versions, downloads PNPM from npm registry, runs pnpm install (with `--silent`) in isolated app environments
+- FNM runtime: downloads FNM binary, uses it to install Node.js versions, downloads PNPM from npm registry, runs pnpm install in isolated app environments (stdout and stderr streamed to stderr so errors are visible)
 - UV runtime: uses project-based workflow (writes pyproject.toml + `uv sync`) instead of `uv tool install`; supports optional `--python {pythonVersion}` via `RuntimeConfigUV.PythonVersion`; `requires-python` in pyproject.toml resolved from app `RequiresPython` -> fallback `>=3.12` (decoupled from pythonVersion)
 - JVM runtime: downloads Temurin JDK archives per platform with `ExtractDir: true`, extracts full JDK tree to `.runtimes/jvm/{hash}/`; apps download JAR files with SHA256 verification to `.apps/jvm/{app}/{hash}/`; executes via `java -jar`
 - `RuntimeConfigSystem.SystemVersion`: optional string for manual cache invalidation when using system-mode runtimes; included in system runtime hash calculation
