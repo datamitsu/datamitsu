@@ -299,6 +299,15 @@ func TestDetectBinary_ScoringBased(t *testing.T) {
 			syslist.OsTypeLinux, syslist.ArchTypeAmd64, "",
 			"tool-linux-amd64.tar.gz", false,
 		},
+		{
+			"filters macOS pkg installer",
+			[]github.Asset{
+				makeAsset("tool-darwin-arm64.pkg"),
+				makeAsset("tool-darwin-arm64.tar.gz"),
+			},
+			syslist.OsTypeDarwin, syslist.ArchTypeArm64, "",
+			"tool-darwin-arm64.tar.gz", false,
+		},
 	}
 
 	for _, tt := range tests {

@@ -41,7 +41,7 @@ datamitsu devtools pull-github apps/githubApps.json --update --verify-extraction
 The `--verify-extraction` flag additionally downloads each binary and verifies it can be extracted correctly. This catches issues like changed archive structures or renamed binaries inside archives.
 
 :::note Releases with mixed asset types
-Some tools publish VS Code extensions (`.vsix`), Linux packages (`.deb`, `.rpm`), NuGet packages (`.nupkg`), Python wheels (`.whl`), or Windows installers (`.msi`) alongside binary archives in the same GitHub release. datamitsu automatically excludes these non-executable formats before scoring, so only actual binaries compete for selection. No configuration is needed — the filtering is automatic.
+Some tools publish VS Code extensions (`.vsix`), Linux packages (`.deb`, `.rpm`), NuGet packages (`.nupkg`), Python wheels (`.whl`), Windows installers (`.msi`), or macOS installer packages (`.pkg`) alongside binary archives in the same GitHub release. datamitsu automatically excludes these non-executable formats before scoring, so only actual binaries compete for selection. No configuration is needed — the filtering is automatic.
 :::
 
 ### FNM Apps (npm): `devtools pull-fnm`
@@ -311,6 +311,10 @@ When making breaking changes (removing tools, changing configuration structure),
 ### Configuring pnpm Settings for FNM Apps
 
 FNM apps run `pnpm install` in an isolated directory managed by datamitsu. You can include a `pnpm-workspace.yaml` file via `App.files` to control per-app pnpm behavior — supply chain security settings, script policies, and more. The file is written before `pnpm install` runs, so pnpm picks it up automatically.
+
+:::caution Files are written only on initial install
+`App.files` (including `pnpm-workspace.yaml`) are written to the install directory only when the app is first installed. If you add or change files after the app is already cached, run `datamitsu store clear` (or delete the app's directory under `.apps/`) to force a reinstall.
+:::
 
 Minimal example (marks the install directory as a workspace root with no sub-packages):
 

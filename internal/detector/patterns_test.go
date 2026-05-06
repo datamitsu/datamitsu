@@ -22,8 +22,10 @@ func TestIsNonExecutableFile(t *testing.T) {
 		{"Regular zip", "tool-windows-amd64.zip", false},
 		{"Plain binary", "tool-linux-amd64", false},
 		{"EXE binary", "tool-windows-amd64.exe", false},
+		{"PKG extension", "tool-darwin-arm64.pkg", true},
 		{"Case insensitive VSIX", "tool-linux-x64.VSIX", true},
 		{"Case insensitive DEB", "tool-linux-amd64.DEB", true},
+		{"Case insensitive PKG", "tool-darwin-arm64.PKG", true},
 	}
 
 	for _, tt := range tests {
