@@ -313,7 +313,7 @@ When making breaking changes (removing tools, changing configuration structure),
 FNM apps run `pnpm install` in an isolated directory managed by datamitsu. You can include a `pnpm-workspace.yaml` file via `App.files` to control per-app pnpm behavior — supply chain security settings, script policies, and more. The file is written before `pnpm install` runs, so pnpm picks it up automatically.
 
 :::caution Files are written only on initial install
-`App.files` (including `pnpm-workspace.yaml`) are written to the install directory only when the app is first installed. If you add or change files after the app is already cached, run `datamitsu store clear` (or delete the app's directory under `.apps/`) to force a reinstall.
+`App.files` (including `pnpm-workspace.yaml`) are written to the install directory only when the app is first installed. If you add or change files after the app is already cached, run `datamitsu store clear` (or delete the app's subdirectory under `.apps/fnm/`) to force a reinstall.
 :::
 
 Minimal example (marks the install directory as a workspace root with no sub-packages):
@@ -350,7 +350,7 @@ const myApp = {
 Key pnpm settings available via `pnpm-workspace.yaml`:
 
 - `enablePrePostScripts: false` — disables `pre*`/`post*` lifecycle scripts for all packages
-- `onlyBuiltDependencies: []` — allowlist of packages permitted to run build scripts; an empty list blocks all build scripts
+- `onlyBuiltDependencies: []` — allowlist of packages permitted to run build scripts; an empty list blocks all build scripts (requires pnpm v9+; silently ignored on older versions)
 
 :::note FNM and UV apps
 For FNM apps, any `package.json` included in `App.files` will be overwritten by the datamitsu core when it writes the managed `package.json`. Use `pnpm-workspace.yaml` for customization instead — the core never writes that file.
