@@ -336,7 +336,6 @@ const myApp = {
   files: {
     "pnpm-workspace.yaml": [
       "packages: []",
-      "verifyDepsBeforeRun: install",
       "enablePrePostScripts: false",
       "onlyBuiltDependencies: []",
       "",
@@ -350,7 +349,6 @@ const myApp = {
 
 Key pnpm settings available via `pnpm-workspace.yaml`:
 
-- `verifyDepsBeforeRun: install` — verifies that installed dependencies match the lock file before each `pnpm run` command
 - `enablePrePostScripts: false` — disables `pre*`/`post*` lifecycle scripts for all packages
 - `onlyBuiltDependencies: []` — allowlist of packages permitted to run build scripts; an empty list blocks all build scripts
 
