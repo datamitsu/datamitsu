@@ -321,7 +321,7 @@ Minimal example (marks the install directory as a workspace root with no sub-pac
 ```js
 const myApp = {
   files: {
-    "pnpm-workspace.yaml": "packages: []\n",
+    "pnpm-workspace.yaml": YAML.stringify({ packages: [] }),
   },
   fnm: {
     // ... FNM config
@@ -334,12 +334,11 @@ Extended example with pnpm supply chain security settings:
 ```js
 const myApp = {
   files: {
-    "pnpm-workspace.yaml": [
-      "packages: []",
-      "enablePrePostScripts: false",
-      "onlyBuiltDependencies: []",
-      "",
-    ].join("\n"),
+    "pnpm-workspace.yaml": YAML.stringify({
+      packages: [],
+      enablePrePostScripts: false,
+      onlyBuiltDependencies: [],
+    }),
   },
   fnm: {
     // ... FNM config
