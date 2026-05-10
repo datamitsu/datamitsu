@@ -1,3 +1,9 @@
+allowBuilds:
+  "@shibanet0/datamitsu-config": false
+  "@swc/core": false
+  core-js: false
+  esbuild: false
+  sharp: true
 enableGlobalVirtualStore: true
 enablePrePostScripts: false
 hoistPattern: []

@@ -154,5 +154,6 @@ export default {
     "gomod",
     "sboms",
     "tombi",
+    "umami",
   ],
 };
