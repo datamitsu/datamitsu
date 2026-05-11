@@ -155,5 +155,6 @@ export default {
     "sboms",
     "tombi",
     "umami",
+    "goreleaserbot",
   ],
 };

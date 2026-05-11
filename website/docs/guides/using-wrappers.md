@@ -33,7 +33,7 @@ Wrapper packages contain:
 
 ### Step 1: Install datamitsu
 
-First, ensure you have the datamitsu binary installed. See [Installation](../getting-started/installation.md).
+First, ensure you have the datamitsu binary installed. See [Installation](../getting-started/installation/index.md).
 
 ### Step 2: Install the Wrapper Package
 

@@ -7,3 +7,4 @@ path = ".datamitsu/gitleaks-managed.toml"
 [allowlist]
 regexTarget = "match"
 regexes = ['''074677e081f2ba8b978c240e37a3ce59''']
+paths = ['''\.cache/act/''']

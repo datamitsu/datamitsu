@@ -7,33 +7,14 @@ description: How to install datamitsu on your system
 
 ## Prerequisites
 
-- **Go 1.25.2+** — Required to build from source
 - **Git** — datamitsu uses your git root to locate configuration files and manage project-scoped caches
 - **Platform support**: Linux (amd64, arm64), macOS (amd64, arm64). Windows support is available but requires Developer Mode for symlinks.
 
-## Build from Source
+## Install Methods
 
-Clone the repository and build:
-
-```bash
-git clone https://github.com/datamitsu/datamitsu.git
-cd datamitsu
-go build
-```
-
-This produces a `datamitsu` binary in the current directory. Move it to a directory in your `PATH`:
-
-```bash
-mv datamitsu /usr/local/bin/
-```
-
-### Using pnpm
-
-If you have pnpm installed, you can also build via:
-
-```bash
-pnpm build
-```
+- [Homebrew](./homebrew.md) — macOS and Linux
+- [npm](./npm.md) — any platform with Node.js
+- [Build from Source](./source.md) — requires Go 1.25.2+
 
 ## Verify Installation
 
@@ -60,5 +41,5 @@ datamitsu cache path
 
 ## Next Steps
 
-- [Quick Start](./quick-start.md) — Create your first configuration and run tools
-- [Core Concepts](./core-concepts.md) — Understand how datamitsu manages tools
+- [Quick Start](../quick-start.md) — Create your first configuration and run tools
+- [Core Concepts](../core-concepts.md) — Understand how datamitsu manages tools
