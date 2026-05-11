@@ -8,7 +8,9 @@ jobs:
     needs: [determine-release-type, validate-stable, generate-unstable-version]
     permissions:
       actions: read
+      attestations: write
       contents: write
+      id-token: write
     runs-on: ubuntu-latest
     steps:
       # 1. Checkout + Setup
@@ -34,11 +36,18 @@ jobs:
           distribution: goreleaser
           version: "~> v2"
 
-      # 3. Normalize binaries
+      # 3. Attest build artifacts
+      - if: ${{ !env.ACT }}
+        name: Attest build artifacts
+        uses: actions/attest@v4
+        with:
+          subject-checksums: ./dist/checksums.txt
+
+      # 4. Normalize binaries
       - name: Normalize binaries
         run: .github/scripts/normalize-binaries.sh "${{ needs.determine-release-type.outputs.is_unstable }}"
 
-      # 4. Build Programmable API
+      # 5. Build Programmable API
       - name: Build programmable API
         run: |
           cd programmable-api/js
@@ -49,14 +58,14 @@ jobs:
           echo "✓ Copied programmable API to lib/"
           ls -lh packaging/npm/datamitsu/lib/
 
-      # 5. Prepare npm Packages
+      # 6. Prepare npm Packages
       - name: Prepare npm packages
         run: |
           VERSION_WITH_V="${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}"
           export VERSION="${VERSION_WITH_V#v}"
           pnpm pack:prepare
 
-      # 6. Prepare Docker Binaries
+      # 7. Prepare Docker Binaries
       - name: Prepare Docker binaries
         run: |
           mkdir -p dist/datamitsu-linux-amd64
@@ -68,7 +77,7 @@ jobs:
           chmod +x dist/datamitsu-linux-*/datamitsu
           ls -lh dist/datamitsu-linux-*/
 
-      # 7. Test Docker Build (dry-run, no push)
+      # 8. Test Docker Build (dry-run, no push)
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
         with:
@@ -135,7 +144,7 @@ jobs:
           load: false
           platforms: linux/amd64,linux/arm64
           push: false
-      # 8. Upload Artifact (everything needed for publish jobs)
+      # 9. Upload Artifact (everything needed for publish jobs)
       - if: ${{ !env.ACT }}
         name: Upload build artifacts
         uses: actions/upload-artifact@v7
