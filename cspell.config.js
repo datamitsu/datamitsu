@@ -156,5 +156,6 @@ export default {
     "tombi",
     "umami",
     "goreleaserbot",
+    "xattr",
   ],
 };
