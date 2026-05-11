@@ -176,15 +176,15 @@ func moveFile(src, dst string) error {
 		}
 	}
 
+	if err := os.Chmod(src, 0755); err != nil {
+		return fmt.Errorf("failed to set executable permissions: %w", err)
+	}
+
 	if err := os.Rename(src, dst); err != nil {
 		if copyErr := copyFile(src, dst); copyErr != nil {
 			return fmt.Errorf("rename failed: %w, and copy fallback failed: %w", err, copyErr)
 		}
 		_ = os.Remove(src)
-	}
-
-	if err := os.Chmod(dst, 0755); err != nil {
-		return fmt.Errorf("failed to set executable permissions: %w", err)
 	}
 
 	log.Debug("file moved and permissions set", zap.String("dst", dst))

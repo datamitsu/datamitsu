@@ -24,7 +24,13 @@
 **/.tmp/
 
 # Claude Code project files
+.claude/*
+!.claude/skills/
 .claude/
+
+# Codex CLI project files
+.codex/*
+!.codex/prompts/
 
 # Dependencies
 **/node_modules/

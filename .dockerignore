@@ -1,13 +1,13 @@
 # Build outputs
-**/dist/
-!dist/datamitsu-linux-*/
 **/.next/
 **/build/
+**/dist/
 **/out/
 **/.turbo/
 **/.vercel/
 **/.output/
 **/public/build/
+!dist/datamitsu-linux-*/
 
 # Cache & temporary files
 .datamitsu/
@@ -25,7 +25,13 @@
 **/.tmp/
 
 # Claude Code project files
+.claude/*
+!.claude/skills/
 .claude/
+
+# Codex CLI project files
+.codex/*
+!.codex/prompts/
 
 # Dependencies
 **/node_modules/
