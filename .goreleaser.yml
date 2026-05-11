@@ -76,6 +76,15 @@ homebrew_casks:
     commit_msg_template: "chore: update {{ .ProjectName }} cask to {{ .Tag }}"
     description: "Configuration management and binary distribution tool."
     directory: Casks
+    generate_completions_from_executable:
+      args:
+        - completion
+      executable: bin/datamitsu
+      shell_parameter_format: cobra
+      shells:
+        - bash
+        - zsh
+        - fish
     homepage: "https://datamitsu.com/"
     ids:
       - datamitsu-archive
