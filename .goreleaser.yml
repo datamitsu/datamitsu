@@ -77,9 +77,7 @@ homebrew_casks:
     description: "Configuration management and binary distribution tool."
     directory: Casks
     generate_completions_from_executable:
-      args:
-        - completion
-      executable: bin/datamitsu
+      executable: datamitsu
       shell_parameter_format: cobra
       shells:
         - bash
