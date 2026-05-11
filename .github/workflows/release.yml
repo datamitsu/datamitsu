@@ -21,6 +21,11 @@ jobs:
 
       - uses: ./.github/actions/setup-environment
 
+      - name: Check Go modules are tidy
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+
       - name: Install syft
         uses: anchore/sbom-action/download-syft@v0.24.0
 
