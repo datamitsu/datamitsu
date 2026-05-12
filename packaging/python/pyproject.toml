@@ -28,14 +28,6 @@ classifiers = [
   "Topic :: Software Development :: Quality Assurance",
 ]
 requires-python = ">=3.8"
-dependencies = [
-  "datamitsu-darwin-arm64==0.0.0; platform_system=='Darwin' and platform_machine=='arm64'",
-  "datamitsu-darwin-x86_64==0.0.0; platform_system=='Darwin' and platform_machine=='x86_64'",
-  "datamitsu-linux-arm64==0.0.0; platform_system=='Linux' and platform_machine=='aarch64'",
-  "datamitsu-linux-x86_64==0.0.0; platform_system=='Linux' and platform_machine=='x86_64'",
-  "datamitsu-windows-arm64==0.0.0; platform_system=='Windows' and platform_machine=='ARM64'",
-  "datamitsu-windows-x86_64==0.0.0; platform_system=='Windows' and platform_machine=='AMD64'",
-]
 
 [project.urls]
 Documentation = "https://datamitsu.com"
@@ -44,8 +36,8 @@ Issues = "https://github.com/datamitsu/datamitsu/issues"
 Repository = "https://github.com/datamitsu/datamitsu"
 
 [project.scripts]
-datamitsu = "datamitsu.__main__:main"
-dm = "datamitsu.__main__:main"
+datamitsu = "datamitsu.main:main"
+dm = "datamitsu.main:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -53,3 +45,17 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["datamitsu"]
+artifacts = ["datamitsu"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "datamitsu/",
+]
+
+[tool.hatch.build.hooks.custom]
+path = "hatch_build.py"
+
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple/"
+default = true

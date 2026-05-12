@@ -13,7 +13,15 @@
 // The `lib/` directory (programmable API) is built by CI workflow, not by this script.
 
 import { execSync, spawn } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 
 // Track active child processes for cleanup on Ctrl+C
@@ -49,7 +57,7 @@ const ROOT_DIR = join(import.meta.dirname, "..");
 const PACKAGING_DIR = import.meta.dirname;
 const NPM_DIR = join(PACKAGING_DIR, "npm");
 const PYTHON_DIR = join(PACKAGING_DIR, "python");
-const PYTHON_PLATFORM_DIR = join(PYTHON_DIR, "platform-packages");
+const PYTHON_BIN_DIR = join(PYTHON_DIR, "datamitsu", "bin");
 const DIST_DIR = join(ROOT_DIR, "dist");
 
 interface PlatformConfig {
@@ -169,11 +177,26 @@ function clean() {
 }
 
 function cleanPython() {
-  console.log("\n📦 Cleaning Python packages...");
+  console.log("\n📦 Cleaning Python bin/ directory...");
 
-  if (existsSync(PYTHON_PLATFORM_DIR)) {
-    rmSync(PYTHON_PLATFORM_DIR, { force: true, recursive: true });
-    console.log("✓ Cleaned platform-packages/");
+  if (existsSync(PYTHON_BIN_DIR)) {
+    // Remove all subdirectories in bin/ (keep .keep)
+    for (const entry of readdirSync(PYTHON_BIN_DIR)) {
+      if (entry === ".keep") {
+        continue;
+      }
+      const entryPath = join(PYTHON_BIN_DIR, entry);
+      rmSync(entryPath, { force: true, recursive: true });
+    }
+    console.log("✓ Cleaned datamitsu/bin/");
+  }
+
+  // Clean build artifacts
+  for (const dir of ["dist", "build"]) {
+    const dirPath = join(PYTHON_DIR, dir);
+    if (existsSync(dirPath)) {
+      rmSync(dirPath, { force: true, recursive: true });
+    }
   }
 }
 
@@ -301,22 +324,13 @@ function preparePlatformPackages() {
 // ============================================================================
 
 function preparePythonPackages() {
-  console.log("\n📦 Preparing Python packages...");
-
-  // Read template
-  const templatePath = join(PYTHON_DIR, "templates", "pyproject.toml.template");
-  const template = readFileSync(templatePath, "utf8");
+  console.log("\n📦 Preparing Python package (single package, multi-platform wheels)...");
 
   // Filter platforms: only process those with pythonPlatform defined (skip FreeBSD)
   const pythonPlatforms = PLATFORMS.filter((p) => p.pythonPlatform !== "");
 
+  // Copy all platform binaries into datamitsu/bin/datamitsu-{os}-{arch}/
   for (const platform of pythonPlatforms) {
-    const packageName = `datamitsu-${platform.pythonPlatform}-${platform.pythonArch}`;
-    const packageDir = join(PYTHON_PLATFORM_DIR, packageName);
-    const moduleName = `datamitsu_${platform.pythonPlatform}_${platform.pythonArch}`;
-    const moduleDir = join(packageDir, moduleName);
-    const binDir = join(packageDir, "bin");
-
     const binaryName = platform.goos === "windows" ? "datamitsu.exe" : "datamitsu";
     const releaseBinaryName =
       platform.goos === "windows"
@@ -333,50 +347,16 @@ function preparePythonPackages() {
       );
     }
 
-    // Create directories
-    mkdirSync(moduleDir, { recursive: true });
-    mkdirSync(binDir, { recursive: true });
-
-    // Create pyproject.toml from template
-    const pyprojectToml = replaceVariables(template, {
-      ARCH: platform.pythonArch,
-      ARCH_NAME: platform.archName,
-      OS_CLASSIFIER: getOsClassifier(platform.goos),
-      OS_NAME: platform.osName,
-      PLATFORM: platform.pythonPlatform,
-      VERSION: normalizePythonVersion(VERSION),
-      WHEEL_TAG: platform.wheelTag,
-    });
-    writeFileSync(join(packageDir, "pyproject.toml"), pyprojectToml);
-
-    // Copy hatch_build.py build hook (sets platform-specific wheel tag)
-    const hatchBuildPath = join(PYTHON_DIR, "templates", "hatch_build.py");
-    cpSync(hatchBuildPath, join(packageDir, "hatch_build.py"));
-
-    // Create __init__.py
-    const initPy = `"""datamitsu binary for ${platform.pythonPlatform}-${platform.pythonArch}."""
-
-__version__ = "${normalizePythonVersion(VERSION)}"
-
-import os
-from pathlib import Path
-
-__file__ = Path(__file__)
-`;
-    writeFileSync(join(moduleDir, "__init__.py"), initPy);
-
-    // Copy binary to bin/
-    cpSync(sourceBinary, join(binDir, binaryName));
-    console.log(`✓ Created ${packageName}`);
-
-    // Copy README
-    const readmePath = join(PACKAGING_DIR, "PACKAGE_README.md");
-    if (existsSync(readmePath)) {
-      cpSync(readmePath, join(packageDir, "README.md"));
-    }
+    const targetDir = join(
+      PYTHON_BIN_DIR,
+      `datamitsu-${platform.pythonPlatform}-${platform.pythonArch}`,
+    );
+    mkdirSync(targetDir, { recursive: true });
+    cpSync(sourceBinary, join(targetDir, binaryName));
+    console.log(`✓ Copied binary for ${platform.pythonPlatform}-${platform.pythonArch}`);
   }
 
-  // Update main package version
+  // Update version in pyproject.toml
   updateMainPythonPackage();
 }
 
@@ -468,106 +448,56 @@ async function publishPyPI(dryRun = true) {
   console.log(`\n🚀 Publishing to PyPI (dry-run: ${dryRun})...`);
 
   const normalizedVersion = normalizePythonVersion(VERSION);
-  const isPrerelease =
-    normalizedVersion.includes("a") ||
-    normalizedVersion.includes("b") ||
-    normalizedVersion.includes("rc");
-
-  console.log(`Version: ${normalizedVersion} (prerelease: ${isPrerelease})`);
+  console.log(`Version: ${normalizedVersion}`);
 
   let hasErrors = false;
 
-  // Build all wheels first
-  console.log("\n📦 Building wheels...");
+  // Build one wheel per platform (env vars control which platform binary is included)
+  console.log("\n📦 Building platform wheels...");
 
-  // Filter platforms for Python (skip FreeBSD)
   const pythonPlatforms = PLATFORMS.filter((p) => p.pythonPlatform !== "");
 
-  // Build platform-specific packages
   for (const platform of pythonPlatforms) {
-    const packageName = `datamitsu-${platform.pythonPlatform}-${platform.pythonArch}`;
-    const packageDir = join(PYTHON_PLATFORM_DIR, packageName);
+    const target = `${platform.pythonPlatform}-${platform.pythonArch}`;
 
-    console.log(`\nBuilding ${packageName}...`);
-    const buildResult = await execSafe("uv build --wheel", packageDir);
+    console.log(`\nBuilding wheel for ${target}...`);
+    const buildResult = await execSafe(
+      `DATAMITSU_TARGET_PLATFORM=${platform.pythonPlatform} DATAMITSU_TARGET_ARCH=${platform.pythonArch} uv build --wheel`,
+      PYTHON_DIR,
+    );
 
     if (buildResult.success) {
-      console.log(`✓ Built ${packageName}`);
+      console.log(`✓ Built wheel for ${target}`);
     } else {
-      console.error(`✗ Failed to build ${packageName}`);
+      console.error(`✗ Failed to build wheel for ${target}`);
       hasErrors = true;
       if (!dryRun) {
-        throw new Error(`Build failed for ${packageName}`);
+        throw new Error(`Build failed for ${target}`);
       }
-    }
-  }
-
-  // Build main package
-  console.log("\nBuilding main datamitsu package...");
-  const mainBuildResult = await execSafe("uv build", PYTHON_DIR);
-
-  if (mainBuildResult.success) {
-    console.log("✓ Built main package");
-  } else {
-    console.error("✗ Failed to build main package");
-    hasErrors = true;
-    if (!dryRun) {
-      throw new Error("Build failed for main package");
     }
   }
 
   if (hasErrors && dryRun) {
-    console.log("\n⚠️  Some packages had build errors during dry-run");
+    console.log("\n⚠️  Some wheels had build errors during dry-run");
     return;
   }
 
-  // Publish wheels
-  console.log("\n📤 Publishing wheels...");
+  // Publish all wheels
+  if (dryRun) {
+    console.log("\n[DRY RUN] Would publish datamitsu wheels");
+  } else {
+    console.log("\n📤 Publishing wheels...");
+    const result = await execSafe("uv publish", PYTHON_DIR);
 
-  // Publish platform packages
-  for (const platform of pythonPlatforms) {
-    const packageName = `datamitsu-${platform.pythonPlatform}-${platform.pythonArch}`;
-    const packageDir = join(PYTHON_PLATFORM_DIR, packageName);
-
-    if (dryRun) {
-      console.log(`\n[DRY RUN] Would publish ${packageName}`);
+    if (result.success) {
+      console.log("✓ Published all wheels");
     } else {
-      console.log(`\nPublishing ${packageName}...`);
-      const result = await execSafe("uv publish", packageDir);
-
-      if (result.success) {
-        console.log(`✓ Published ${packageName}`);
-      } else {
-        console.error(`✗ Failed to publish ${packageName}`);
-        hasErrors = true;
-      }
+      console.error("✗ Failed to publish");
+      throw new Error("Publishing failed");
     }
   }
 
-  // Publish main package
-  if (dryRun) {
-    console.log("\n[DRY RUN] Would publish main datamitsu package");
-  } else {
-    console.log("\nPublishing main datamitsu package...");
-    const mainResult = await execSafe("uv publish", PYTHON_DIR);
-
-    if (mainResult.success) {
-      console.log("✓ Published main package");
-    } else {
-      console.error("✗ Failed to publish main package");
-      hasErrors = true;
-    }
-  }
-
-  if (hasErrors && !dryRun) {
-    throw new Error("Some packages failed to publish");
-  }
-
-  if (dryRun) {
-    console.log("\n✅ Dry-run completed!");
-  } else {
-    console.log("\n✅ All Python packages published successfully!");
-  }
+  console.log(dryRun ? "\n✅ Dry-run completed!" : "\n✅ All Python wheels published!");
 }
 
 function replaceVariables(content: string, vars: Record<string, string>): string {
@@ -600,7 +530,7 @@ function updateMainPackage() {
 }
 
 function updateMainPythonPackage() {
-  console.log("\n📝 Updating main Python package version...");
+  console.log("\n📝 Updating Python package version...");
 
   const pyprojectPath = join(PYTHON_DIR, "pyproject.toml");
   let content = readFileSync(pyprojectPath, "utf8");
@@ -609,25 +539,9 @@ function updateMainPythonPackage() {
 
   // Replace version in pyproject.toml
   content = content.replace(/version = "[^"]*"/, `version = "${normalizedVersion}"`);
-
-  // Replace versions in dependencies
-  content = content.replaceAll(/datamitsu-[^=]+==[^;]*/g, (match) => {
-    const pkgName = match.split("==")[0];
-    return `${pkgName}==${normalizedVersion}`;
-  });
-
   writeFileSync(pyprojectPath, content);
 
-  // Update __init__.py version
-  const initPath = join(PYTHON_DIR, "datamitsu", "__init__.py");
-  let initContent = readFileSync(initPath, "utf8");
-  initContent = initContent.replace(
-    /__version__ = "[^"]*"/,
-    `__version__ = "${normalizedVersion}"`,
-  );
-  writeFileSync(initPath, initContent);
-
-  console.log(`✓ Updated main Python package to version ${normalizedVersion}`);
+  console.log(`✓ Updated Python package to version ${normalizedVersion}`);
 }
 
 // CLI

@@ -449,7 +449,7 @@ jobs:
           name: release-artifacts
           path: .
 
-      - name: Prepare Python packages
+      - name: Prepare Python package
         run: |
           VERSION_WITH_V="${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}"
           export VERSION="${VERSION_WITH_V#v}"
@@ -465,54 +465,34 @@ jobs:
 
       - name: Build Python wheels
         run: |
-          # Build platform-specific packages (wheel-only, no sdist for native binaries)
-          for dir in packaging/python/platform-packages/*/; do
-            if [ -d "$dir" ]; then
-              echo "Building $(basename $dir)..."
-              cd "$dir"
-              uv build --wheel
-              cd - > /dev/null
-            fi
+          cd packaging/python
+
+          # Build one wheel per platform (hatch_build.py prunes binaries per target)
+          for platform in linux darwin windows; do
+            for arch in x86_64 arm64; do
+              echo "Building wheel for ${platform}-${arch}..."
+              DATAMITSU_TARGET_PLATFORM=$platform DATAMITSU_TARGET_ARCH=$arch uv build --wheel
+            done
           done
 
-          # Build main package (pure Python — sdist + wheel)
-          cd packaging/python
-          uv build
-          cd - > /dev/null
+          echo "✓ Built all platform wheels"
+          ls -lh dist/
 
       - if: needs.determine-release-type.outputs.is_unstable == 'true'
         name: Dry-run publish (unstable)
         run: |
           echo "🏃 Unstable release - skipping PyPI publish (dry-run only)"
           echo ""
-          echo "Platform packages that would be published:"
-          ls -lh packaging/python/platform-packages/*/dist/ 2>/dev/null || echo "No platform packages found"
-          echo ""
-          echo "Main package that would be published:"
-          ls -lh packaging/python/dist/ 2>/dev/null || echo "No main package found"
+          echo "Wheels that would be published:"
+          ls -lh packaging/python/dist/ 2>/dev/null || echo "No wheels found"
 
       - if: needs.determine-release-type.outputs.is_stable == 'true' && !env.ACT
         name: Publish to PyPI (stable)
         run: |
+          cd packaging/python
           # --trusted-publishing always: use OIDC, fail if unavailable (no API token fallback)
           # --check-url: skip already-published versions without masking real errors
-          PUBLISH_ARGS="--trusted-publishing always --check-url https://pypi.org/simple/"
-
-          # Publish platform packages first (main package depends on them)
-          for dir in packaging/python/platform-packages/*/; do
-            if [ -d "$dir" ]; then
-              echo "Publishing $(basename $dir)..."
-              cd "$dir"
-              uv publish $PUBLISH_ARGS
-              cd - > /dev/null
-            fi
-          done
-
-          # Publish main package
-          cd packaging/python
-          uv publish $PUBLISH_ARGS
-          cd - > /dev/null
-
+          uv publish --trusted-publishing always --check-url https://pypi.org/simple/
           echo "✅ PyPI publishing completed"
 
   validate-stable:
