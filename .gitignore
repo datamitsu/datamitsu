@@ -24,7 +24,13 @@
 **/.tmp/
 
 # Claude Code project files
+.claude/*
+!.claude/skills/
 .claude/
+
+# Codex CLI project files
+.codex/*
+!.codex/prompts/
 
 # Dependencies
 **/node_modules/
@@ -145,6 +151,12 @@ node_modules
 
 # Generated config files
 config/src/prompts/generated.ts
+
+# GoReleaser generated completions
+completions/
+!completions/datamitsu.bash
+!completions/_datamitsu
+!completions/datamitsu.fish
 
 # NPM Packaging artifacts
 packaging/npm/datamitsu-darwin-*/

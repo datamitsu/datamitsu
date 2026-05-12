@@ -1,9 +1,11 @@
 package detector
 
 import (
+	"strings"
+	"testing"
+
 	"github.com/datamitsu/datamitsu/internal/github"
 	"github.com/datamitsu/datamitsu/internal/syslist"
-	"testing"
 )
 
 func makeAsset(name string) github.Asset {
@@ -208,6 +210,36 @@ func TestSelectBestAsset_ArchiveBeatsPlainBinary(t *testing.T) {
 	}
 }
 
+func TestDetectBinary_FiltersVsix(t *testing.T) {
+	assets := []github.Asset{
+		makeAsset("tombi-vscode-0.1.0-linux-x64.vsix"),
+		makeAsset("tombi-vscode-0.1.0-linux-arm64.vsix"),
+	}
+
+	_, err := DetectBinary(assets, syslist.OsTypeLinux, syslist.ArchTypeAmd64, "glibc")
+	if err == nil {
+		t.Fatal("expected error when only .vsix assets are present, got nil")
+	}
+	if !strings.Contains(err.Error(), "non-executable") {
+		t.Errorf("expected error to mention non-executable, got: %v", err)
+	}
+}
+
+func TestDetectBinary_PrefersArchiveOverVsix(t *testing.T) {
+	assets := []github.Asset{
+		makeAsset("tombi-cli-0.1.0-x86_64-unknown-linux-musl.tar.gz"),
+		makeAsset("tombi-vscode-0.1.0-linux-x64.vsix"),
+	}
+
+	result, err := DetectBinary(assets, syslist.OsTypeLinux, syslist.ArchTypeAmd64, "glibc")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Name != "tombi-cli-0.1.0-x86_64-unknown-linux-musl.tar.gz" {
+		t.Errorf("expected tar.gz binary, got %q", result.Name)
+	}
+}
+
 func TestDetectBinary_ScoringBased(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -257,6 +289,24 @@ func TestDetectBinary_ScoringBased(t *testing.T) {
 			},
 			syslist.OsTypeLinux, syslist.ArchTypeAmd64, "",
 			"tool-linux-amd64.tar.gz", false,
+		},
+		{
+			"filters non-executable package files",
+			[]github.Asset{
+				makeAsset("tool-linux-amd64.deb"),
+				makeAsset("tool-linux-amd64.tar.gz"),
+			},
+			syslist.OsTypeLinux, syslist.ArchTypeAmd64, "",
+			"tool-linux-amd64.tar.gz", false,
+		},
+		{
+			"filters macOS pkg installer",
+			[]github.Asset{
+				makeAsset("tool-darwin-arm64.pkg"),
+				makeAsset("tool-darwin-arm64.tar.gz"),
+			},
+			syslist.OsTypeDarwin, syslist.ArchTypeArm64, "",
+			"tool-darwin-arm64.tar.gz", false,
 		},
 	}
 

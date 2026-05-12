@@ -269,6 +269,8 @@ The command scans releases for all platform combinations using OS/Arch/Libc targ
 
 Non-Linux platforms use `unknown` as the libc key. If a musl variant is not found for a Linux target, that entry is simply omitted.
 
+Before scoring, the detector filters out two categories of assets: checksum files (`.sha256`, `.md5`, `.sha512`, etc.) and non-executable package formats (`.vsix`, `.deb`, `.rpm`, `.nupkg`, `.whl`, `.msi`, `.pkg`). This prevents IDE extensions or package-manager bundles from outscoring actual binaries when releases mix executable and non-executable assets.
+
 **Examples:**
 
 ```bash

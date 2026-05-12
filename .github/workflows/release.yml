@@ -6,6 +6,11 @@ jobs:
       (needs.validate-stable.result == 'success' || needs.generate-unstable-version.result == 'success')
     name: Build Release
     needs: [determine-release-type, validate-stable, generate-unstable-version]
+    permissions:
+      actions: read
+      attestations: write
+      contents: write
+      id-token: write
     runs-on: ubuntu-latest
     steps:
       # 1. Checkout + Setup
@@ -16,13 +21,19 @@ jobs:
 
       - uses: ./.github/actions/setup-environment
 
+      - name: Check Go modules are tidy
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+
       - name: Install syft
-        uses: anchore/sbom-action/download-syft@v0
+        uses: anchore/sbom-action/download-syft@v0.24.0
 
       # 2. Build Binaries (GoReleaser)
       - env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GORELEASER_CURRENT_TAG: ${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         name: Build binaries with GoReleaser
         uses: goreleaser/goreleaser-action@v7
         with:
@@ -30,11 +41,18 @@ jobs:
           distribution: goreleaser
           version: "~> v2"
 
-      # 3. Normalize binaries
+      # 3. Attest build artifacts
+      - if: ${{ !env.ACT }}
+        name: Attest build artifacts
+        uses: actions/attest@v4
+        with:
+          subject-checksums: ./dist/checksums.txt
+
+      # 4. Normalize binaries
       - name: Normalize binaries
         run: .github/scripts/normalize-binaries.sh "${{ needs.determine-release-type.outputs.is_unstable }}"
 
-      # 4. Build Programmable API
+      # 5. Build Programmable API
       - name: Build programmable API
         run: |
           cd programmable-api/js
@@ -45,13 +63,14 @@ jobs:
           echo "✓ Copied programmable API to lib/"
           ls -lh packaging/npm/datamitsu/lib/
 
-      # 5. Prepare npm Packages
+      # 6. Prepare npm Packages
       - name: Prepare npm packages
         run: |
-          export VERSION=${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}
+          VERSION_WITH_V="${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}"
+          export VERSION="${VERSION_WITH_V#v}"
           pnpm pack:prepare
 
-      # 6. Prepare Docker Binaries
+      # 7. Prepare Docker Binaries
       - name: Prepare Docker binaries
         run: |
           mkdir -p dist/datamitsu-linux-amd64
@@ -63,12 +82,21 @@ jobs:
           chmod +x dist/datamitsu-linux-*/datamitsu
           ls -lh dist/datamitsu-linux-*/
 
-      # 7. Test Docker Build (dry-run, no push)
+      # 8. Test Docker Build (dry-run, no push)
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
+        with:
+          platforms: linux/amd64,linux/arm64
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
+
+      - id: version
+        name: Normalize version (remove v prefix for labels)
+        run: |
+          VERSION_WITH_V="${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}"
+          VERSION="${VERSION_WITH_V#v}"
+          echo "normalized=$VERSION" >> $GITHUB_OUTPUT
 
       # Generate metadata for test builds
       - id: meta-debian
@@ -79,7 +107,7 @@ jobs:
             ghcr.io/datamitsu/datamitsu
             docker.io/datamitsu/datamitsu
           labels: |
-            org.opencontainers.image.version=${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}
+            org.opencontainers.image.version=${{ steps.version.outputs.normalized }}
 
           tags: |
             type=raw,value=test-debian
@@ -93,7 +121,7 @@ jobs:
             ghcr.io/datamitsu/datamitsu
             docker.io/datamitsu/datamitsu
           labels: |
-            org.opencontainers.image.version=${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}
+            org.opencontainers.image.version=${{ steps.version.outputs.normalized }}
 
           tags: |
             type=raw,value=test-alpine
@@ -121,7 +149,7 @@ jobs:
           load: false
           platforms: linux/amd64,linux/arm64
           push: false
-      # 8. Upload Artifact (everything needed for publish jobs)
+      # 9. Upload Artifact (everything needed for publish jobs)
       - if: ${{ !env.ACT }}
         name: Upload build artifacts
         uses: actions/upload-artifact@v7
@@ -204,7 +232,9 @@ jobs:
       !cancelled() &&
       needs.build.result == 'success'
     name: Publish Docker Images
-    needs: [build, determine-release-type, validate-stable, generate-unstable-version]
+    permissions:
+      contents: read
+      packages: write
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -213,16 +243,25 @@ jobs:
 
       - if: ${{ !env.ACT }}
         name: Download build artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: release-artifacts
           path: .
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
+        with:
+          platforms: linux/amd64,linux/arm64
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
+
+      - id: version
+        name: Normalize version (remove v prefix for labels)
+        run: |
+          VERSION_WITH_V="${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}"
+          VERSION="${VERSION_WITH_V#v}"
+          echo "normalized=$VERSION" >> $GITHUB_OUTPUT
 
       - if: ${{ !env.ACT && matrix.registry == 'ghcr' }}
         name: Login to GHCR
@@ -251,7 +290,7 @@ jobs:
           images: |
             ${{ matrix.registry == 'ghcr' && format('ghcr.io/datamitsu/{0}', needs.determine-release-type.outputs.is_stable == 'true' && 'datamitsu' || 'datamitsu-unstable') || 'docker.io/datamitsu/datamitsu' }}
           labels: |
-            org.opencontainers.image.version=${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}
+            org.opencontainers.image.version=${{ steps.version.outputs.normalized }}
 
           tags: |
             type=semver,pattern={{version}},enable=${{ needs.determine-release-type.outputs.is_stable == 'true' }}
@@ -283,9 +322,11 @@ jobs:
   publish-github:
     if: |
       needs.determine-release-type.outputs.is_unstable == 'true' &&
-      github.event.inputs.create_github_prerelease
+      github.event.inputs.create_github_prerelease == 'true'
     name: Publish to GitHub Releases
     needs: [build, determine-release-type, generate-unstable-version]
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -294,7 +335,7 @@ jobs:
 
       - if: ${{ !env.ACT }}
         name: Download build artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: release-artifacts
           path: .
@@ -336,46 +377,26 @@ jobs:
 
       - if: ${{ !env.ACT }}
         name: Download build artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: release-artifacts
           path: .
 
       - if: ${{ !env.ACT }}
-        name: Restore executable permissions
+        name: Restore executable permissions for npm packages
         run: |
           # GitHub Actions artifacts don't preserve executable permissions
           # Restore them for all platform-specific binaries
           find packaging/npm/datamitsu-* -type f \( -name "datamitsu" -o -name "datamitsu.exe" \) -exec chmod +x {} \;
           echo "✓ Restored executable permissions for npm package binaries"
 
-      - if: ${{ !env.ACT }}
-        name: Verify executable permissions
-        run: |
-          # Smoke test: ensure all binaries are executable before publishing
-          FAILED=0
-          for dir in packaging/npm/datamitsu-*/; do
-            binary=$(find "$dir" -type f \( -name "datamitsu" -o -name "datamitsu.exe" \) | head -1)
-            if [ -f "$binary" ]; then
-              if [ ! -x "$binary" ]; then
-                echo "❌ Binary not executable: $binary"
-                FAILED=1
-              else
-                echo "✓ Executable: $binary"
-              fi
-            fi
-          done
-          if [ $FAILED -eq 1 ]; then
-            echo "❌ Some binaries are not executable. Aborting publish."
-            exit 1
-          fi
-          echo "✓ All binaries are executable"
-
       - env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         name: Publish to npm
         run: |
           IS_STABLE="${{ needs.determine-release-type.outputs.is_stable }}"
+          VERSION_WITH_V="${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}"
+          export VERSION="${VERSION_WITH_V#v}"
           DRY_RUN=""
           if [[ -n "$ACT" ]]; then
             DRY_RUN="--dry-run"
@@ -419,7 +440,7 @@ jobs:
 
       - if: ${{ !env.ACT }}
         name: Download build artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: release-artifacts
           path: .
@@ -436,7 +457,8 @@ jobs:
 
       - name: Prepare Python packages
         run: |
-          export VERSION=${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}
+          VERSION_WITH_V="${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}"
+          export VERSION="${VERSION_WITH_V#v}"
           node packaging/pack.ts prepare-python
 
       - name: Build Python wheels
@@ -518,7 +540,7 @@ jobs:
         name: Extract version from tag
         run: |
           TAG_REF="${{ needs.determine-release-type.outputs.checkout_ref }}"
-          VERSION="${TAG_REF#refs/tags/v}"
+          VERSION="${TAG_REF#refs/tags/}"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "📦 Stable version: $VERSION"
 
@@ -552,5 +574,5 @@ on:
         description: "Version tag (stable manual, e.g., v1.0.0)"
         required: false
 permissions:
-  contents: write
-  packages: write
+  contents: read
+  packages: read

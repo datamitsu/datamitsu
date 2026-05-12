@@ -1,16 +1,13 @@
 import type * as Preset from "@docusaurus/preset-classic";
 import type { Config } from "@docusaurus/types";
 
+import { withOvinekoDocs } from "@ovineko/docusaurus-config";
 import { themes as prismThemes } from "prism-react-renderer";
 
 const config: Config = {
   baseUrl: "/",
   deploymentBranch: "gh-pages",
   favicon: "img/favicon.ico",
-  future: {
-    faster: true,
-    v4: true,
-  },
 
   i18n: {
     defaultLocale: "en",
@@ -46,20 +43,18 @@ const config: Config = {
     ],
   ],
   projectName: "datamitsu",
-  scripts:
-    process.env.NODE_ENV === "production"
-      ? [
-          {
-            async: true,
-            "data-website-id": "85a400b1-e4d4-4eb8-bdd9-cc95fc51bdef",
-            src: "https://a.shibanet0.com/pzjlkgj6ujcurpo",
-          },
-        ]
-      : [],
+  scripts: [],
 
   tagline: "Your toolchain deserves a home.",
 
   themeConfig: {
+    algolia: {
+      // Public API key: it is safe to commit it
+      apiKey: "074677e081f2ba8b978c240e37a3ce59", // pragma: allowlist secret
+      appId: "252YCJ4OET",
+      indexName: "datamitsu documentation website",
+    },
+
     asciinema: {
       themes: {
         dark: "monokai", // cspell:disable-line
@@ -142,4 +137,16 @@ const config: Config = {
   url: "https://datamitsu.com",
 };
 
-export default config;
+export default withOvinekoDocs(config, {
+  idealImage: {
+    disableInDev: false,
+    max: 1030,
+    min: 640,
+    quality: 70,
+    steps: 2,
+  },
+  umami: {
+    src: "https://a.shibanet0.com/pzjlkgj6ujcurpo",
+    websiteId: "85a400b1-e4d4-4eb8-bdd9-cc95fc51bdef",
+  },
+});

@@ -77,7 +77,7 @@ datamitsu uses a [two-level architecture](./about.md#the-two-level-architecture)
 
 ## Next Steps
 
-- [Installation](./getting-started/installation.md) — Install datamitsu on your system
+- [Installation](./getting-started/installation/index.md) — Install datamitsu on your system
 - [Quick Start](./getting-started/quick-start.md) — Get up and running in minutes
 - [Core Concepts](./getting-started/core-concepts.md) — Understand how datamitsu works
 

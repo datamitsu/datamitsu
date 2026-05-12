@@ -2,8 +2,28 @@ package detector
 
 import "strings"
 
-// ChecksumExtensions are file extensions to skip (checksum files)
-var ChecksumExtensions = []string{
+var nonExecutableExtensions = []string{
+	".vsix",  // VS Code extension
+	".deb",   // Debian package
+	".rpm",   // RPM package
+	".nupkg", // NuGet package
+	".whl",   // Python wheel
+	".msi",   // Windows installer
+	".pkg",   // macOS installer package
+}
+
+// IsNonExecutableFile checks if filename is a non-executable package format
+func IsNonExecutableFile(filename string) bool {
+	lowerName := strings.ToLower(filename)
+	for _, ext := range nonExecutableExtensions {
+		if strings.HasSuffix(lowerName, ext) {
+			return true
+		}
+	}
+	return false
+}
+
+var checksumExtensions = []string{
 	".sha256",
 	".sha256sum",
 	".sha512",
@@ -19,7 +39,7 @@ var ChecksumExtensions = []string{
 func IsChecksumFile(filename string) bool {
 	lowerName := strings.ToLower(filename)
 
-	for _, ext := range ChecksumExtensions {
+	for _, ext := range checksumExtensions {
 		if strings.HasSuffix(lowerName, ext) {
 			return true
 		}

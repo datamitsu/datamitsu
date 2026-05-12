@@ -6,7 +6,16 @@ const sidebars: SidebarsConfig = {
     "about",
     {
       items: [
-        "getting-started/installation",
+        {
+          items: [
+            "getting-started/installation/homebrew",
+            "getting-started/installation/npm",
+            "getting-started/installation/source",
+          ],
+          label: "Installation",
+          link: { id: "getting-started/installation/index", type: "doc" },
+          type: "category",
+        },
         "getting-started/quick-start",
         "getting-started/core-concepts",
       ],

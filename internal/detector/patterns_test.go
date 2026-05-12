@@ -1,9 +1,42 @@
 package detector
 
 import (
-	"github.com/datamitsu/datamitsu/internal/syslist"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/syslist"
 )
+
+func TestIsNonExecutableFile(t *testing.T) {
+	tests := []struct {
+		name     string
+		filename string
+		expected bool
+	}{
+		{"VSIX extension", "tool-linux-x64.vsix", true},
+		{"DEB extension", "tool-linux-amd64.deb", true},
+		{"RPM extension", "tool-linux-x86_64.rpm", true},
+		{"NUPKG extension", "tool.nupkg", true},
+		{"WHL extension", "package-1.0.0-py3-none-any.whl", true},
+		{"MSI extension", "tool-windows-amd64.msi", true},
+		{"Regular tar.gz", "tool-linux-amd64.tar.gz", false},
+		{"Regular zip", "tool-windows-amd64.zip", false},
+		{"Plain binary", "tool-linux-amd64", false},
+		{"EXE binary", "tool-windows-amd64.exe", false},
+		{"PKG extension", "tool-darwin-arm64.pkg", true},
+		{"Case insensitive VSIX", "tool-linux-x64.VSIX", true},
+		{"Case insensitive DEB", "tool-linux-amd64.DEB", true},
+		{"Case insensitive PKG", "tool-darwin-arm64.PKG", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := IsNonExecutableFile(tt.filename)
+			if result != tt.expected {
+				t.Errorf("IsNonExecutableFile(%q) = %v, want %v", tt.filename, result, tt.expected)
+			}
+		})
+	}
+}
 
 func TestIsChecksumFile(t *testing.T) {
 	tests := []struct {

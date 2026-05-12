@@ -205,6 +205,160 @@
   --ifm-pre-color: var(--datamitsu-brown-light);
 }
 
+/* Algolia DocSearch styling */
+:root {
+  --docsearch-primary-color: #D4A855;
+  --docsearch-text-color: #3D2817;
+  --docsearch-highlight-color: #D4A855;
+  --docsearch-muted-color: #6B543F;
+  --docsearch-container-background: rgba(61, 40, 23, 0.4);
+  --docsearch-modal-background: #FAF6ED;
+  --docsearch-modal-shadow: 0 8px 40px rgba(61, 40, 23, 0.2);
+  --docsearch-searchbox-background: #F5EFE3;
+  --docsearch-searchbox-focus-background: #FAF6ED;
+  --docsearch-searchbox-shadow: inset 0 0 0 2px #D4A855;
+  --docsearch-hit-color: #3D2817;
+  --docsearch-hit-active-color: #3D2817;
+  --docsearch-hit-background: #FAF6ED;
+  --docsearch-hit-shadow: 0 1px 4px rgba(61, 40, 23, 0.1);
+  --docsearch-key-gradient: linear-gradient(180deg, #F5EFE3, #FAF6ED);
+  --docsearch-key-shadow: 0 1px 0 rgba(61, 40, 23, 0.3);
+  --docsearch-footer-background: #F5EFE3;
+  --docsearch-footer-shadow: 0 -1px 0 rgba(212, 168, 85, 0.2);
+  --docsearch-logo-color: #B8923D;
+  --docsearch-icon-color: #6B543F;
+  --docsearch-icon-stroke-width: 1.6;
+}
+
+[data-theme='dark'] {
+  --docsearch-primary-color: #E5C073;
+  --docsearch-text-color: #F5EFE3;
+  --docsearch-highlight-color: #E5C073;
+  --docsearch-muted-color: #C9B99A;
+  --docsearch-container-background: rgba(15, 12, 8, 0.7);
+  --docsearch-modal-background: #2A2419;
+  --docsearch-modal-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+  --docsearch-searchbox-background: #1F1912;
+  --docsearch-searchbox-focus-background: #16120D;
+  --docsearch-searchbox-shadow: inset 0 0 0 2px #D4A855;
+  --docsearch-hit-color: #F5EFE3;
+  --docsearch-hit-active-color: #2A2419;
+  --docsearch-hit-background: #1F1912;
+  --docsearch-hit-shadow: none;
+  --docsearch-key-gradient: linear-gradient(180deg, #2A2419, #1F1912);
+  --docsearch-key-shadow: 0 1px 0 rgba(212, 168, 85, 0.3);
+  --docsearch-footer-background: #1F1912;
+  --docsearch-footer-shadow: 0 -1px 0 rgba(212, 168, 85, 0.15);
+  --docsearch-logo-color: #D4A855;
+  --docsearch-icon-color: #C9B99A;
+}
+
+/* Algolia DocSearch direct overrides (elements that ignore CSS vars) */
+
+/* Footer keyboard shortcut keys */
+.DocSearch-Commands-Key {
+  background: linear-gradient(180deg, #F5EFE3, #FAF6ED) !important;
+  border-color: rgba(61, 40, 23, 0.2) !important;
+  box-shadow: 0 1px 0 rgba(61, 40, 23, 0.3) !important;
+  color: #6B543F !important;
+}
+
+[data-theme='dark'] .DocSearch-Commands-Key {
+  background: linear-gradient(180deg, #3D2817, #2A2419) !important;
+  border-color: rgba(212, 168, 85, 0.2) !important;
+  box-shadow: 0 1px 0 rgba(212, 168, 85, 0.3) !important;
+  color: #C9B99A !important;
+}
+
+/* Search bar bottom border */
+.DocSearch-Form {
+  border-bottom: 1px solid rgba(212, 168, 85, 0.3) !important;
+  box-shadow: none !important;
+}
+
+[data-theme='dark'] .DocSearch-Form {
+  border-bottom-color: rgba(212, 168, 85, 0.25) !important;
+}
+
+/* Footer top border */
+.DocSearch-Footer {
+  border-top: 1px solid rgba(212, 168, 85, 0.2) !important;
+  box-shadow: none !important;
+}
+
+[data-theme='dark'] .DocSearch-Footer {
+  border-top-color: rgba(212, 168, 85, 0.15) !important;
+}
+
+/* Hit breadcrumb path (the blue "Maintaining Wrapper Packages" text) */
+.DocSearch-Hit-path {
+  color: #B8923D !important;
+}
+
+[data-theme='dark'] .DocSearch-Hit-path {
+  color: #C9B99A !important;
+}
+
+/* Footer labels text */
+.DocSearch-Commands-Key + span,
+.DocSearch-Label {
+  color: #6B543F !important;
+}
+
+[data-theme='dark'] .DocSearch-Commands-Key + span,
+[data-theme='dark'] .DocSearch-Label {
+  color: #C9B99A !important;
+}
+
+/* Active/selected hit item */
+.DocSearch-Hit[aria-selected='true'] a {
+  background: rgba(212, 168, 85, 0.2) !important;
+}
+
+[data-theme='dark'] .DocSearch-Hit[aria-selected='true'] a {
+  background: rgba(212, 168, 85, 0.25) !important;
+}
+
+/* Navbar search button */
+.DocSearch-Button {
+  background: rgba(212, 168, 85, 0.12) !important;
+  border: 1px solid rgba(212, 168, 85, 0.25) !important;
+  color: #6B543F !important;
+}
+
+.DocSearch-Button:hover {
+  background: rgba(212, 168, 85, 0.2) !important;
+  box-shadow: none !important;
+  color: #3D2817 !important;
+}
+
+[data-theme='dark'] .DocSearch-Button {
+  background: rgba(212, 168, 85, 0.1) !important;
+  border-color: rgba(212, 168, 85, 0.2) !important;
+  color: #C9B99A !important;
+}
+
+[data-theme='dark'] .DocSearch-Button:hover {
+  background: rgba(212, 168, 85, 0.18) !important;
+  box-shadow: none !important;
+  color: #F5EFE3 !important;
+}
+
+/* Search button keyboard shortcut badge */
+.DocSearch-Button-Key {
+  background: rgba(212, 168, 85, 0.15) !important;
+  border-color: rgba(212, 168, 85, 0.3) !important;
+  box-shadow: none !important;
+  color: #6B543F !important;
+}
+
+[data-theme='dark'] .DocSearch-Button-Key {
+  background: rgba(212, 168, 85, 0.12) !important;
+  border-color: rgba(212, 168, 85, 0.25) !important;
+  color: #C9B99A !important;
+}
+
+
 /* Additional code block refinements */
 div[class*='codeBlockContainer'] {
   box-shadow: 0 2px 8px rgba(61, 40, 23, 0.1);

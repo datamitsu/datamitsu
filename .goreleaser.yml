@@ -2,6 +2,7 @@ archives:
   - files:
       - LICENSE*
       - README*
+      - completions/*
     format_overrides:
       - formats: [zip]
         goos: windows
@@ -18,7 +19,13 @@ archives:
 
 before:
   hooks:
-    - go mod tidy
+    - go mod download
+    - mkdir -p completions
+    - go build -o completions/gen .
+    - completions/gen completion bash > completions/datamitsu.bash
+    - completions/gen completion zsh > completions/_datamitsu
+    - completions/gen completion fish > completions/datamitsu.fish
+    - rm completions/gen
 
 builds:
   - binary: datamitsu
@@ -66,6 +73,36 @@ changelog:
 checksum:
   algorithm: sha256
   name_template: "checksums.txt"
+
+homebrew_casks:
+  - binaries:
+      - datamitsu
+    commit_author:
+      email: noreply@github.com
+      name: goreleaserbot
+    commit_msg_template: "chore: update {{ .ProjectName }} cask to {{ .Tag }}"
+    completions:
+      bash: completions/datamitsu.bash
+      fish: completions/datamitsu.fish
+      zsh: completions/_datamitsu
+    description: "Configuration management and binary distribution tool."
+    directory: Casks
+    homepage: "https://datamitsu.com/"
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/datamitsu"]
+          end
+    ids:
+      - datamitsu-archive
+    name: datamitsu
+    repository:
+      branch: main
+      name: homebrew-tap
+      owner: datamitsu
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    skip_upload: auto
 
 nfpms:
   - bindir: /usr/local/bin

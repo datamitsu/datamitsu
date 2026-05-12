@@ -1,0 +1,8 @@
+# BEGIN datamitsu managed — regenerated on init
+(?:^|/)(?:package-lock\.json|pnpm-lock\.yaml|yarn\.lock|npm-shrinkwrap\.json|bun\.lockb?|go\.sum|Cargo\.lock|poetry\.lock|uv\.lock|Pipfile\.lock|Gemfile\.lock|composer\.lock|mix\.lock|flake\.lock|pubspec\.lock|Podfile\.lock)$
+(?:^|/)__snapshots__/
+(?:^|/)testdata/
+(?:^|/)fixtures?/
+\.min\.(?:js|css)$
+\.bundle\.(?:js|css)$
+# END datamitsu managed

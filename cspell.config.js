@@ -153,6 +153,10 @@ export default {
     "trixie",
     "gomod",
     "sboms",
-    "manylinux"
+    "manylinux",
+    "tombi",
+    "umami",
+    "goreleaserbot",
+    "xattr",
   ],
 };
