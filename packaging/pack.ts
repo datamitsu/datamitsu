@@ -345,8 +345,13 @@ function preparePythonPackages() {
       OS_NAME: platform.osName,
       PLATFORM: platform.pythonPlatform,
       VERSION: normalizePythonVersion(VERSION),
+      WHEEL_TAG: platform.wheelTag,
     });
     writeFileSync(join(packageDir, "pyproject.toml"), pyprojectToml);
+
+    // Copy hatch_build.py build hook (sets platform-specific wheel tag)
+    const hatchBuildPath = join(PYTHON_DIR, "templates", "hatch_build.py");
+    cpSync(hatchBuildPath, join(packageDir, "hatch_build.py"));
 
     // Create __init__.py
     const initPy = `"""datamitsu binary for ${platform.pythonPlatform}-${platform.pythonArch}."""
@@ -484,7 +489,7 @@ async function publishPyPI(dryRun = true) {
     const packageDir = join(PYTHON_PLATFORM_DIR, packageName);
 
     console.log(`\nBuilding ${packageName}...`);
-    const buildResult = await execSafe("uv build", packageDir);
+    const buildResult = await execSafe("uv build --wheel", packageDir);
 
     if (buildResult.success) {
       console.log(`✓ Built ${packageName}`);
