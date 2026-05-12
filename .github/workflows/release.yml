@@ -419,12 +419,16 @@ jobs:
           fi
 
   publish-pypi:
+    environment: pypi
     if: |
       always() &&
       !cancelled() &&
       needs.build.result == 'success'
     name: Publish to PyPI
     needs: [build, determine-release-type, validate-stable, generate-unstable-version]
+    permissions:
+      contents: read
+      id-token: write
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -487,13 +491,12 @@ jobs:
           echo "Main package that would be published:"
           ls -lh packaging/python/dist/ 2>/dev/null || echo "No main package found"
 
-      - env:
-          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
-        if: needs.determine-release-type.outputs.is_stable == 'true' && !env.ACT
+      - if: needs.determine-release-type.outputs.is_stable == 'true' && !env.ACT
         name: Publish to PyPI (stable)
         run: |
-          # --check-url skips already-published versions without masking real errors
-          PUBLISH_ARGS="--check-url https://pypi.org/simple/"
+          # --trusted-publishing always: use OIDC, fail if unavailable (no API token fallback)
+          # --check-url: skip already-published versions without masking real errors
+          PUBLISH_ARGS="--trusted-publishing always --check-url https://pypi.org/simple/"
 
           # Publish platform packages first (main package depends on them)
           for dir in packaging/python/platform-packages/*/; do
