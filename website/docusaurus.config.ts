@@ -50,7 +50,7 @@ const config: Config = {
   themeConfig: {
     algolia: {
       // Public API key: it is safe to commit it
-      apiKey: "074677e081f2ba8b978c240e37a3ce59", // pragma: allowlist secret
+      apiKey: "074677e081f2ba8b978c240e37a3ce59", // pragma: allowlist secret // trufflehog:ignore
       appId: "252YCJ4OET",
       indexName: "datamitsu documentation website",
     },
