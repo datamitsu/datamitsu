@@ -459,6 +459,74 @@ jobs:
           # --check-url: skip already-published versions without masking real errors
           uv publish --trusted-publishing always --check-url https://pypi.org/simple/
           echo "PyPI publishing completed"
+  publish-rubygems:
+    environment: rubygems
+    if: |
+      always() &&
+      !cancelled() &&
+      needs.build.result == 'success'
+    name: Publish to RubyGems
+    needs:
+      - build
+      - determine-release-type
+      - validate-stable
+      - generate-unstable-version
+    permissions:
+      contents: read
+      id-token: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.determine-release-type.outputs.checkout_ref }}
+      - uses: ./.github/actions/setup-environment
+        with:
+          setup-go: "false"
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+      - if: ${{ !env.ACT }}
+        name: Download build artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: release-artifacts
+          path: .
+      - name: Prepare Ruby gem
+        run: |
+          VERSION_WITH_V="${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}"
+          export VERSION="${VERSION_WITH_V#v}"
+
+          # Restore executable permissions on source binaries
+          # (GitHub Actions artifacts don't preserve Unix permissions)
+          if [ -d "dist/binaries" ]; then
+            find dist/binaries -type f -name "datamitsu*" ! -name "*.exe" -exec chmod +x {} \;
+            echo "Restored executable permissions on dist/binaries"
+          fi
+
+          node packaging/pack.ts prepare-ruby
+      - name: Build gem
+        run: |
+          cd packaging/ruby
+          gem build datamitsu.gemspec
+          echo "Built gem:"
+          ls -lh *.gem
+      - if: needs.determine-release-type.outputs.is_unstable == 'true'
+        name: Dry-run publish (unstable)
+        run: |
+          echo "Unstable release - skipping RubyGems publish (dry-run only)"
+          echo ""
+          echo "Gem that would be published:"
+          ls -lh packaging/ruby/*.gem 2>/dev/null || echo "No gem found"
+      - if: needs.determine-release-type.outputs.is_stable == 'true' && !env.ACT
+        name: Configure RubyGems credentials (OIDC)
+        uses: rubygems/configure-rubygems-credentials@main
+      - if: needs.determine-release-type.outputs.is_stable == 'true' && !env.ACT
+        name: Publish to RubyGems (stable)
+        run: |
+          cd packaging/ruby
+          gem push *.gem
+          echo "RubyGems publishing completed"
   validate-stable:
     if: |
       always() &&

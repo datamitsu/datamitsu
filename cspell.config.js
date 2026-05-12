@@ -60,6 +60,7 @@ export default {
     "klauspost",
     "langium",
     "libcs",
+    "libexec",
     "libjvm",
     "linkdir",
     "llms",

@@ -1,0 +1,48 @@
+#!/usr/bin/env ruby
+
+require "rubygems"
+
+platform = Gem::Platform.new(RUBY_PLATFORM)
+arch =
+  case platform.cpu.sub(/\Auniversal\./, '')
+  when /\Aarm64/  then "arm64"  # Apple reports arm64e on M1 macs
+  when /aarch64/  then "arm64"
+  when "x86_64"   then "x64"
+  when "x64"      then "x64"   # Windows MINGW64 reports "x64-mingw32"
+  else raise "datamitsu: unsupported architecture: #{platform.cpu}"
+  end
+
+os =
+  case platform.os
+  when "linux"   then "linux"
+  when "darwin"  then "darwin"
+  when "windows" then "windows"
+  when "mingw32" then "windows"
+  when "mingw"   then "windows"
+  when "freebsd" then "freebsd"
+  else raise "datamitsu: unsupported OS: #{platform.os}"
+  end
+
+ext = os == "windows" ? ".exe" : ""
+binary = "datamitsu-#{os}-#{arch}/datamitsu#{ext}"
+
+cmd = File.expand_path("#{File.dirname(__FILE__)}/../libexec/#{binary}")
+
+unless File.exist?(cmd)
+  raise "datamitsu: binary not found for #{RUBY_PLATFORM}.\n" \
+        "Expected: #{cmd}\n" \
+        "Please reinstall the gem: gem install datamitsu"
+end
+
+# Pass --binary-command datamitsu unless already present
+args = ARGV.dup
+unless args.include?("--binary-command")
+  args.unshift("--binary-command", "datamitsu")
+end
+
+# Quote arguments containing spaces
+quoted_args = args.map { |x| x.include?(' ') ? "'#{x}'" : x }
+
+pid = spawn("#{cmd} #{quoted_args.join(' ')}")
+Process.wait(pid)
+exit($?.exitstatus)
