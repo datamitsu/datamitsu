@@ -152,6 +152,9 @@ node_modules
 # Generated config files
 config/src/prompts/generated.ts
 
+# GoReleaser generated completions
+completions/
+
 # NPM Packaging artifacts
 packaging/npm/datamitsu-darwin-*/
 packaging/npm/datamitsu-linux-*/
