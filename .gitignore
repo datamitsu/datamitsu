@@ -154,6 +154,9 @@ config/src/prompts/generated.ts
 
 # GoReleaser generated completions
 completions/
+!completions/datamitsu.bash
+!completions/_datamitsu
+!completions/datamitsu.fish
 
 # NPM Packaging artifacts
 packaging/npm/datamitsu-darwin-*/
