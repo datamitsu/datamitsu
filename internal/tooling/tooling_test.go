@@ -737,6 +737,214 @@ func TestExcludeFilesByGlobs(t *testing.T) {
 	}
 }
 
+func TestCollectTasksPerFileWithExcludeGlobs(t *testing.T) {
+	t.Skip("red-phase TDD: collectTasks does not yet honor ExcludeGlobs; Task 4 will remove this skip")
+	root := "/repo"
+	cwd := "/repo"
+
+	tools := config.MapOfTools{
+		"prettier": {
+			Name: "prettier",
+			Operations: map[config.OperationType]config.ToolOperation{
+				config.OpFix: {
+					App:          "prettier",
+					Args:         []string{"--write", "{file}"},
+					Scope:        config.ToolScopePerFile,
+					Priority:     10,
+					Globs:        []string{"**/*.js", "**/*.ts"},
+					ExcludeGlobs: []string{"vendor/**", "**/*.min.js"},
+				},
+			},
+		},
+	}
+
+	planner := &Planner{
+		rootPath:      root,
+		cwdPath:       cwd,
+		detectedTypes: []string{},
+		tools:         tools,
+		cachedFiles: []string{
+			"/repo/src/app.js",
+			"/repo/src/util.ts",
+			"/repo/src/bundle.min.js",
+			"/repo/vendor/lib.js",
+			"/repo/vendor/nested/lib.ts",
+		},
+		cachedProjects:   []project.ProjectLocation{},
+		cacheInitialized: true,
+	}
+
+	tasks := planner.collectTasks(config.OpFix, nil)
+
+	// Only src/app.js and src/util.ts should survive after excludeGlobs filter.
+	if len(tasks) != 2 {
+		t.Fatalf("expected 2 tasks (vendor and min.js excluded), got %d", len(tasks))
+	}
+
+	for _, task := range tasks {
+		if len(task.Files) != 1 {
+			t.Fatalf("expected 1 file per task, got %d", len(task.Files))
+		}
+		file := task.Files[0]
+		if strings.HasPrefix(file, "/repo/vendor/") {
+			t.Errorf("file %q should have been excluded by vendor/** pattern", file)
+		}
+		if strings.HasSuffix(file, ".min.js") {
+			t.Errorf("file %q should have been excluded by **/*.min.js pattern", file)
+		}
+	}
+}
+
+func TestCollectTasksRepositoryWithExcludeGlobs(t *testing.T) {
+	t.Skip("red-phase TDD: collectTasks does not yet honor ExcludeGlobs; Task 4 will remove this skip")
+	root := "/repo"
+	cwd := "/repo"
+
+	tools := config.MapOfTools{
+		"eslint": {
+			Name: "eslint",
+			Operations: map[config.OperationType]config.ToolOperation{
+				config.OpLint: {
+					App:          "eslint",
+					Scope:        config.ToolScopeRepository,
+					Priority:     10,
+					Globs:        []string{"**/*.js"},
+					ExcludeGlobs: []string{"vendor/**"},
+				},
+			},
+		},
+	}
+
+	planner := &Planner{
+		rootPath:      root,
+		cwdPath:       cwd,
+		detectedTypes: []string{},
+		tools:         tools,
+		cachedFiles: []string{
+			"/repo/src/app.js",
+			"/repo/src/lib/helper.js",
+			"/repo/vendor/jquery.js",
+			"/repo/vendor/nested/lib.js",
+		},
+		cachedProjects:   []project.ProjectLocation{},
+		cacheInitialized: true,
+	}
+
+	tasks := planner.collectTasks(config.OpLint, nil)
+
+	if len(tasks) != 1 {
+		t.Fatalf("expected 1 repository-scope task, got %d", len(tasks))
+	}
+
+	if len(tasks[0].Files) != 2 {
+		t.Errorf("expected 2 files after exclusion (vendor/** removed), got %d: %v",
+			len(tasks[0].Files), tasks[0].Files)
+	}
+
+	for _, file := range tasks[0].Files {
+		if strings.HasPrefix(file, "/repo/vendor/") {
+			t.Errorf("file %q should have been excluded by vendor/** pattern", file)
+		}
+	}
+}
+
+func TestCollectTasksPerProjectWithExcludeGlobs(t *testing.T) {
+	t.Skip("red-phase TDD: collectTasks does not yet honor ExcludeGlobs; Task 4 will remove this skip")
+	root := "/repo"
+	cwd := "/repo"
+
+	tools := config.MapOfTools{
+		"go-lint": {
+			Name:         "go-lint",
+			ProjectTypes: []string{"go"},
+			Operations: map[config.OperationType]config.ToolOperation{
+				config.OpLint: {
+					App:          "golangci-lint",
+					Scope:        config.ToolScopePerProject,
+					Priority:     10,
+					Globs:        []string{"**/*.go"},
+					ExcludeGlobs: []string{"**/*_generated.go"},
+				},
+			},
+		},
+	}
+
+	planner := &Planner{
+		rootPath:      root,
+		cwdPath:       cwd,
+		detectedTypes: []string{"go"},
+		tools:         tools,
+		cachedFiles: []string{
+			"/repo/services/api/main.go",
+			"/repo/services/api/api_generated.go",
+			"/repo/services/web/server.go",
+			"/repo/services/web/types_generated.go",
+		},
+		cachedProjects: []project.ProjectLocation{
+			{Type: "go", Path: "/repo/services/api"},
+			{Type: "go", Path: "/repo/services/web"},
+		},
+		cacheInitialized: true,
+	}
+
+	tasks := planner.collectTasks(config.OpLint, nil)
+
+	if len(tasks) == 0 {
+		t.Fatal("expected at least one task, got 0")
+	}
+
+	for _, task := range tasks {
+		for _, f := range task.Files {
+			if strings.HasSuffix(f, "_generated.go") {
+				t.Errorf("file %q should have been excluded by **/*_generated.go pattern", f)
+			}
+		}
+	}
+}
+
+func TestCollectTasksNilGlobsWithExcludeGlobs(t *testing.T) {
+	// Backward compat: when Globs is nil, the task still gets emitted.
+	// ExcludeGlobs has nothing to filter against in scopes that gate on len(Globs)>0,
+	// but the configuration must not crash the planner.
+	root := "/repo"
+	cwd := "/repo"
+
+	tools := config.MapOfTools{
+		"whole-repo-tool": {
+			Name: "whole-repo-tool",
+			Operations: map[config.OperationType]config.ToolOperation{
+				config.OpLint: {
+					App:          "whole-repo-tool",
+					Scope:        config.ToolScopeRepository,
+					Priority:     10,
+					Globs:        nil,
+					ExcludeGlobs: []string{"vendor/**"},
+				},
+			},
+		},
+	}
+
+	planner := &Planner{
+		rootPath:      root,
+		cwdPath:       cwd,
+		detectedTypes: []string{},
+		tools:         tools,
+		cachedFiles: []string{
+			"/repo/src/app.js",
+			"/repo/vendor/jquery.js",
+		},
+		cachedProjects:   []project.ProjectLocation{},
+		cacheInitialized: true,
+	}
+
+	tasks := planner.collectTasks(config.OpLint, nil)
+
+	// Backward compatible: nil Globs still produces the repository-scope task.
+	if len(tasks) != 1 {
+		t.Fatalf("expected 1 task (nil globs still emits repository-scope task), got %d", len(tasks))
+	}
+}
+
 func TestPlan(t *testing.T) {
 	tmpDir := t.TempDir()
 

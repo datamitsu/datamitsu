@@ -60,9 +60,9 @@
 
 ### Task 3: Write integration tests for collectTasks with excludeGlobs (TDD - red phase)
 
-- [ ] add test: `globs + excludeGlobs` together produces correct filtered file set in collectTasks
-- [ ] add test: empty `Globs` (nil) with `ExcludeGlobs` still works (backward compat)
-- [ ] run tests — new integration tests should fail
+- [x] add test: `globs + excludeGlobs` together produces correct filtered file set in collectTasks
+- [x] add test: empty `Globs` (nil) with `ExcludeGlobs` still works (backward compat)
+- [x] run tests — new integration tests should fail
 
 ### Task 4: Integrate excludeFilesByGlobs into collectTasks (TDD - green phase)
 
