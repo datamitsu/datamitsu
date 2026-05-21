@@ -77,9 +77,9 @@
 
 ### Task 5: Update JSON formatter
 
-- [ ] add `ExcludeGlobs []string` to `TaskJSON` struct in `internal/tooling/plan_formatter.go:49`
-- [ ] populate `ExcludeGlobs` in Format method at line 323
-- [ ] run tests — must pass
+- [x] add `ExcludeGlobs []string` to `TaskJSON` struct in `internal/tooling/plan_formatter.go:49`
+- [x] populate `ExcludeGlobs` in Format method at line 323
+- [x] run tests — must pass
 
 ### Task 6: Update TypeScript definition
 

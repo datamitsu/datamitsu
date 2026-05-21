@@ -40,15 +40,16 @@ type ParallelGroupJSON struct {
 
 // TaskJSON represents a task in JSON format
 type TaskJSON struct {
-	ToolName   string   `json:"toolName"`
-	App        string   `json:"app"`
-	Args       []string `json:"args"`
-	Scope      string   `json:"scope"`
-	Batch      bool     `json:"batch"`
-	WorkingDir string   `json:"workingDir"`
-	Globs      []string `json:"globs"`
-	Files      []string `json:"files"`
-	FileCount  int      `json:"fileCount"`
+	ToolName     string   `json:"toolName"`
+	App          string   `json:"app"`
+	Args         []string `json:"args"`
+	Scope        string   `json:"scope"`
+	Batch        bool     `json:"batch"`
+	WorkingDir   string   `json:"workingDir"`
+	Globs        []string `json:"globs"`
+	ExcludeGlobs []string `json:"excludeGlobs,omitempty"`
+	Files        []string `json:"files"`
+	FileCount    int      `json:"fileCount"`
 }
 
 // ========================================
@@ -314,15 +315,16 @@ func (f *JSONFormatter) Format(plan *ExecutionPlan, rootPath, cwdPath string, op
 				}
 
 				taskJSON := TaskJSON{
-					ToolName:   task.ToolName,
-					App:        task.OpConfig.App,
-					Args:       task.OpConfig.Args,
-					Scope:      string(task.OpConfig.Scope),
-					Batch:      *batch,
-					WorkingDir: workingDir,
-					Globs:      task.OpConfig.Globs,
-					Files:      task.Files,
-					FileCount:  len(task.Files),
+					ToolName:     task.ToolName,
+					App:          task.OpConfig.App,
+					Args:         task.OpConfig.Args,
+					Scope:        string(task.OpConfig.Scope),
+					Batch:        *batch,
+					WorkingDir:   workingDir,
+					Globs:        task.OpConfig.Globs,
+					ExcludeGlobs: task.OpConfig.ExcludeGlobs,
+					Files:        task.Files,
+					FileCount:    len(task.Files),
 				}
 				pgJSON.Tasks = append(pgJSON.Tasks, taskJSON)
 			}

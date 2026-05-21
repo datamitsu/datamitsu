@@ -2,6 +2,7 @@ package tooling
 
 import (
 	"context"
+	"encoding/json"
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/env"
@@ -2954,4 +2955,101 @@ func TestToolCachePlaceholderIntegration(t *testing.T) {
 			t.Errorf("eslint cache path mismatch\ngot:  %q\nwant: %q", eslintOutput, eslintCache)
 		}
 	})
+}
+
+func TestJSONFormatterIncludesExcludeGlobs(t *testing.T) {
+	plan := &ExecutionPlan{
+		Groups: []TaskGroup{
+			{
+				Priority: 0,
+				Tasks: []Task{
+					{
+						ToolName: "with-exclude",
+						OpConfig: config.ToolOperation{
+							App:          "linter",
+							Args:         []string{"--check"},
+							Scope:        config.ToolScopeRepository,
+							Globs:        []string{"**/*.go"},
+							ExcludeGlobs: []string{"vendor/**", "**/*_generated.go"},
+						},
+						Files: []string{"/repo/main.go"},
+					},
+					{
+						ToolName: "without-exclude",
+						OpConfig: config.ToolOperation{
+							App:   "linter2",
+							Args:  []string{"--check"},
+							Scope: config.ToolScopeRepository,
+							Globs: []string{"**/*.go"},
+						},
+						Files: []string{"/repo/other.go"},
+					},
+				},
+			},
+		},
+	}
+
+	formatter := NewJSONFormatter()
+	output := formatter.Format(plan, "/repo", "/repo", config.OpLint)
+
+	var parsed PlanJSON
+	if err := json.Unmarshal([]byte(output), &parsed); err != nil {
+		t.Fatalf("failed to unmarshal JSON: %v\noutput: %s", err, output)
+	}
+
+	if len(parsed.Groups) != 1 {
+		t.Fatalf("len(Groups) = %d, want 1", len(parsed.Groups))
+	}
+
+	var tasks []TaskJSON
+	for _, pg := range parsed.Groups[0].ParallelGroups {
+		tasks = append(tasks, pg.Tasks...)
+	}
+	if len(tasks) != 2 {
+		t.Fatalf("len(tasks) = %d, want 2", len(tasks))
+	}
+
+	byName := map[string]TaskJSON{}
+	for _, task := range tasks {
+		byName[task.ToolName] = task
+	}
+
+	withExclude, ok := byName["with-exclude"]
+	if !ok {
+		t.Fatal("missing task 'with-exclude' in JSON output")
+	}
+	wantExcludes := []string{"vendor/**", "**/*_generated.go"}
+	if len(withExclude.ExcludeGlobs) != len(wantExcludes) {
+		t.Fatalf("ExcludeGlobs length = %d, want %d", len(withExclude.ExcludeGlobs), len(wantExcludes))
+	}
+	for i, want := range wantExcludes {
+		if withExclude.ExcludeGlobs[i] != want {
+			t.Errorf("ExcludeGlobs[%d] = %q, want %q", i, withExclude.ExcludeGlobs[i], want)
+		}
+	}
+
+	withoutExclude, ok := byName["without-exclude"]
+	if !ok {
+		t.Fatal("missing task 'without-exclude' in JSON output")
+	}
+	if len(withoutExclude.ExcludeGlobs) != 0 {
+		t.Errorf("ExcludeGlobs should be empty when not set, got %v", withoutExclude.ExcludeGlobs)
+	}
+
+	if !strings.Contains(output, `"excludeGlobs"`) {
+		t.Error("raw JSON output should contain excludeGlobs key when set")
+	}
+	if strings.Contains(output, `"toolName": "without-exclude",`) && strings.Contains(output, `"without-exclude"`) {
+		idx := strings.Index(output, `"without-exclude"`)
+		if idx >= 0 {
+			tail := output[idx:]
+			endIdx := strings.Index(tail, "}")
+			if endIdx > 0 {
+				taskBlob := tail[:endIdx]
+				if strings.Contains(taskBlob, `"excludeGlobs"`) {
+					t.Error("excludeGlobs should be omitted from task without ExcludeGlobs set")
+				}
+			}
+		}
+	}
 }
