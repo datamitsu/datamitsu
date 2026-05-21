@@ -63,8 +63,6 @@
 - [x] add test: `globs + excludeGlobs` together produces correct filtered file set in collectTasks
 - [x] add test: empty `Globs` (nil) with `ExcludeGlobs` still works (backward compat)
 - [x] run tests — new integration tests should fail
-      <!-- cspell:disable-next-line -->
-      или ну типа то можно ли это но наверное это можно сделать одним и тем же но как будто бы кажется вот что-то мне кажется что нужно делать типы вайки у ямал формате формат яму дату вайки у формат джессон уайки у формат h7 ну типа что-то в таком духе кажется нужно делать чтобы иметь возможность тюнить это под каждый конкретный формат соответствии с тем как там нужны и что нужно подтянуть
 
 ### Task 4: Integrate excludeFilesByGlobs into collectTasks (TDD - green phase)
 

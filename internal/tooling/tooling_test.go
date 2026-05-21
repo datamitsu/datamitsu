@@ -536,6 +536,28 @@ func TestHasOverlap(t *testing.T) {
 			},
 			expected: false,
 		},
+		{
+			// ExcludeGlobs is intentionally ignored by HasOverlap (see planner.go
+			// comment). Two tasks with identical Globs but disjoint ExcludeGlobs
+			// must still be reported as overlapping — conservative, since exclude
+			// patterns can resolve to overlapping concrete file sets.
+			name: "excludeGlobs ignored for overlap (conservative)",
+			task1: Task{
+				OpConfig: config.ToolOperation{
+					Scope:        config.ToolScopePerFile,
+					Globs:        []string{"*.go"},
+					ExcludeGlobs: []string{"vendor/**"},
+				},
+			},
+			task2: Task{
+				OpConfig: config.ToolOperation{
+					Scope:        config.ToolScopePerFile,
+					Globs:        []string{"*.go"},
+					ExcludeGlobs: []string{"src/**"},
+				},
+			},
+			expected: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -679,63 +701,76 @@ func TestExcludeFilesByGlobs(t *testing.T) {
 		rootPath: tmpDir,
 	}
 
-	file1 := filepath.Join(tmpDir, "test.js")
-	file2 := filepath.Join(tmpDir, "test.ts")
-	file3 := filepath.Join(tmpDir, "test.go")
-	file4 := filepath.Join(tmpDir, "vendor", "lib.go")
+	fileJS := filepath.Join(tmpDir, "test.js")
+	fileTS := filepath.Join(tmpDir, "test.ts")
+	fileGO := filepath.Join(tmpDir, "test.go")
+	fileVendor := filepath.Join(tmpDir, "vendor", "lib.go")
+	fileVendorDeep := filepath.Join(tmpDir, "vendor", "nested", "deep", "lib.go")
 
-	files := []string{file1, file2, file3, file4}
+	files := []string{fileJS, fileTS, fileGO, fileVendor, fileVendorDeep}
 
 	tests := []struct {
 		name         string
 		excludeGlobs []string
-		expected     int
+		want         []string
 	}{
 		{
 			name:         "nil excludes is a no-op",
 			excludeGlobs: nil,
-			expected:     4,
+			want:         files,
 		},
 		{
 			name:         "empty excludes is a no-op",
 			excludeGlobs: []string{},
-			expected:     4,
+			want:         files,
 		},
 		{
 			name:         "single pattern excludes matching files",
 			excludeGlobs: []string{"*.js"},
-			expected:     3,
+			want:         []string{fileTS, fileGO, fileVendor, fileVendorDeep},
 		},
 		{
 			name:         "multiple patterns exclude their union",
 			excludeGlobs: []string{"*.js", "*.ts"},
-			expected:     2,
+			want:         []string{fileGO, fileVendor, fileVendorDeep},
 		},
 		{
-			name:         "doublestar pattern excludes nested files",
+			name:         "doublestar pattern excludes nested files at any depth",
 			excludeGlobs: []string{"vendor/**"},
-			expected:     3,
+			want:         []string{fileJS, fileTS, fileGO},
 		},
 		{
 			name:         "exclude all files",
 			excludeGlobs: []string{"**"},
-			expected:     0,
+			want:         []string{},
 		},
 		{
 			name:         "non-matching pattern excludes nothing",
 			excludeGlobs: []string{"*.py"},
-			expected:     4,
+			want:         files,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := planner.excludeFilesByGlobs(files, tt.excludeGlobs)
-			if len(result) != tt.expected {
-				t.Errorf("len(result) = %d, want %d", len(result), tt.expected)
+			if !equalStringSlices(result, tt.want) {
+				t.Errorf("result = %v, want %v", result, tt.want)
 			}
 		})
 	}
+}
+
+func equalStringSlices(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func TestCollectTasksPerFileWithExcludeGlobs(t *testing.T) {
@@ -887,23 +922,42 @@ func TestCollectTasksPerProjectWithExcludeGlobs(t *testing.T) {
 
 	tasks := planner.collectTasks(config.OpLint, nil)
 
-	if len(tasks) == 0 {
-		t.Fatal("expected at least one task, got 0")
+	if len(tasks) != 2 {
+		t.Fatalf("expected 2 tasks (one per detected go project), got %d", len(tasks))
 	}
 
+	byProject := map[string][]string{}
 	for _, task := range tasks {
+		byProject[task.ProjectPath] = task.Files
 		for _, f := range task.Files {
 			if strings.HasSuffix(f, "_generated.go") {
 				t.Errorf("file %q should have been excluded by **/*_generated.go pattern", f)
 			}
 		}
 	}
+
+	wantPerProject := map[string]string{
+		"/repo/services/api": "/repo/services/api/main.go",
+		"/repo/services/web": "/repo/services/web/server.go",
+	}
+	for projectPath, wantFile := range wantPerProject {
+		files, ok := byProject[projectPath]
+		if !ok {
+			t.Errorf("no task emitted for project %q", projectPath)
+			continue
+		}
+		if len(files) != 1 || files[0] != wantFile {
+			t.Errorf("project %q files = %v, want [%q]", projectPath, files, wantFile)
+		}
+	}
 }
 
 func TestCollectTasksNilGlobsWithExcludeGlobs(t *testing.T) {
-	// Backward compat: when Globs is nil, the task still gets emitted.
-	// ExcludeGlobs has nothing to filter against in scopes that gate on len(Globs)>0,
-	// but the configuration must not crash the planner.
+	// When Globs is nil, datamitsu does not enumerate files for the task — the
+	// tool handles its own file discovery. ExcludeGlobs therefore has no effect
+	// in this case (documented in website/docs/guides/tooling-system.md). This
+	// test pins that behavior: task is emitted with Files == nil regardless of
+	// ExcludeGlobs.
 	root := "/repo"
 	cwd := "/repo"
 
@@ -937,9 +991,11 @@ func TestCollectTasksNilGlobsWithExcludeGlobs(t *testing.T) {
 
 	tasks := planner.collectTasks(config.OpLint, nil)
 
-	// Backward compatible: nil Globs still produces the repository-scope task.
 	if len(tasks) != 1 {
 		t.Fatalf("expected 1 task (nil globs still emits repository-scope task), got %d", len(tasks))
+	}
+	if len(tasks[0].Files) != 0 {
+		t.Errorf("expected empty Files when Globs is nil (tool handles its own discovery), got %v", tasks[0].Files)
 	}
 }
 
@@ -3036,20 +3092,9 @@ func TestJSONFormatterIncludesExcludeGlobs(t *testing.T) {
 		t.Errorf("ExcludeGlobs should be empty when not set, got %v", withoutExclude.ExcludeGlobs)
 	}
 
-	if !strings.Contains(output, `"excludeGlobs"`) {
-		t.Error("raw JSON output should contain excludeGlobs key when set")
-	}
-	if strings.Contains(output, `"toolName": "without-exclude",`) && strings.Contains(output, `"without-exclude"`) {
-		idx := strings.Index(output, `"without-exclude"`)
-		if idx >= 0 {
-			tail := output[idx:]
-			endIdx := strings.Index(tail, "}")
-			if endIdx > 0 {
-				taskBlob := tail[:endIdx]
-				if strings.Contains(taskBlob, `"excludeGlobs"`) {
-					t.Error("excludeGlobs should be omitted from task without ExcludeGlobs set")
-				}
-			}
-		}
+	// Verify omitempty by counting raw occurrences: only the with-exclude task
+	// should produce an "excludeGlobs" key in the JSON output.
+	if got := strings.Count(output, `"excludeGlobs"`); got != 1 {
+		t.Errorf(`count of "excludeGlobs" in output = %d, want 1 (omitempty must drop it from without-exclude)`, got)
 	}
 }

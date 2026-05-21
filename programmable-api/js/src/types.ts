@@ -29,7 +29,7 @@ export interface TaskJSON {
   excludeGlobs?: string[];
   fileCount: number;
   files: string[];
-  globs: string[];
+  globs?: string[];
   scope: string;
   toolName: string;
   workingDir: string;

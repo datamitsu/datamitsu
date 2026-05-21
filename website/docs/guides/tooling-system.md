@@ -153,7 +153,7 @@ prettier: {
 
 Filtering order: `globs` (include) → `excludeGlobs` (exclude) → subdirectory scope restriction → `.datamitsuignore` (per-tool disable).
 
-`globs` is optional — omit it (or pass an empty array) to match every discovered file, then narrow with `excludeGlobs` if needed.
+`globs` is optional. Omit it for tools that handle their own file discovery (e.g. `golangci-lint run`, `eslint .`) — the tool runs without a file list. `excludeGlobs` only narrows the set of files datamitsu matches via `globs`; it has no effect when `globs` is empty, because the tool, not datamitsu, decides which files to read.
 
 ## Template Placeholders
 

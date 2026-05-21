@@ -46,7 +46,7 @@ type TaskJSON struct {
 	Scope        string   `json:"scope"`
 	Batch        bool     `json:"batch"`
 	WorkingDir   string   `json:"workingDir"`
-	Globs        []string `json:"globs"`
+	Globs        []string `json:"globs,omitempty"`
 	ExcludeGlobs []string `json:"excludeGlobs,omitempty"`
 	Files        []string `json:"files"`
 	FileCount    int      `json:"fileCount"`
