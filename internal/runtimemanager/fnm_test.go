@@ -927,6 +927,15 @@ func TestInstallFNMAppAlreadyInstalled(t *testing.T) {
 	if err := os.WriteFile(appBinPath, []byte("#!/bin/sh\necho ok"), 0755); err != nil {
 		t.Fatalf("failed to write fake binary: %v", err)
 	}
+
+	// Also create the module package.json so the integrity check passes
+	appModuleDir := filepath.Join(appEnvPath, "node_modules", appConfig.PackageName)
+	if err := os.MkdirAll(appModuleDir, 0755); err != nil {
+		t.Fatalf("failed to create module dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(appModuleDir, "package.json"), []byte(`{"name":"`+appConfig.PackageName+`"}`), 0644); err != nil {
+		t.Fatalf("failed to write module package.json: %v", err)
+	}
 	defer func() { _ = os.RemoveAll(appEnvPath) }()
 
 	err = rm.InstallFNMApp("mmdc", appConfig, nil, nil)
