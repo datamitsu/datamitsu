@@ -738,7 +738,6 @@ func TestExcludeFilesByGlobs(t *testing.T) {
 }
 
 func TestCollectTasksPerFileWithExcludeGlobs(t *testing.T) {
-	t.Skip("red-phase TDD: collectTasks does not yet honor ExcludeGlobs; Task 4 will remove this skip")
 	root := "/repo"
 	cwd := "/repo"
 
@@ -796,7 +795,6 @@ func TestCollectTasksPerFileWithExcludeGlobs(t *testing.T) {
 }
 
 func TestCollectTasksRepositoryWithExcludeGlobs(t *testing.T) {
-	t.Skip("red-phase TDD: collectTasks does not yet honor ExcludeGlobs; Task 4 will remove this skip")
 	root := "/repo"
 	cwd := "/repo"
 
@@ -849,7 +847,6 @@ func TestCollectTasksRepositoryWithExcludeGlobs(t *testing.T) {
 }
 
 func TestCollectTasksPerProjectWithExcludeGlobs(t *testing.T) {
-	t.Skip("red-phase TDD: collectTasks does not yet honor ExcludeGlobs; Task 4 will remove this skip")
 	root := "/repo"
 	cwd := "/repo"
 

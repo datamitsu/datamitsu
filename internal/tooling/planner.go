@@ -292,6 +292,7 @@ func (p *Planner) collectTasks(operation config.OperationType, files []string) [
 					matchedFiles = p.filterFilesByGlobs(files, opConfig.Globs)
 				}
 			}
+			matchedFiles = p.excludeFilesByGlobs(matchedFiles, opConfig.ExcludeGlobs)
 			if len(matchedFiles) > 0 || len(opConfig.Globs) == 0 {
 				task.Files = matchedFiles
 				task.ProjectPath = p.rootPath
@@ -307,6 +308,7 @@ func (p *Planner) collectTasks(operation config.OperationType, files []string) [
 				} else {
 					matchedFiles = p.filterFilesByGlobs(files, opConfig.Globs)
 				}
+				matchedFiles = p.excludeFilesByGlobs(matchedFiles, opConfig.ExcludeGlobs)
 				matchedFiles = p.filterFilesToCwd(matchedFiles)
 			}
 
@@ -323,6 +325,7 @@ func (p *Planner) collectTasks(operation config.OperationType, files []string) [
 			} else {
 				matchedFiles = p.filterFilesByGlobs(files, opConfig.Globs)
 			}
+			matchedFiles = p.excludeFilesByGlobs(matchedFiles, opConfig.ExcludeGlobs)
 			matchedFiles = p.filterFilesToCwd(matchedFiles)
 
 			for _, file := range matchedFiles {
@@ -344,6 +347,7 @@ func (p *Planner) collectTasks(operation config.OperationType, files []string) [
 				} else {
 					matchedFiles = p.filterFilesByGlobs(files, opConfig.Globs)
 				}
+				matchedFiles = p.excludeFilesByGlobs(matchedFiles, opConfig.ExcludeGlobs)
 				matchedFiles = p.filterFilesToCwd(matchedFiles)
 			}
 
@@ -772,7 +776,11 @@ func HasOverlap(task1, task2 Task) bool {
 		}
 	}
 
-	// Check if glob patterns overlap
+	// Check if glob patterns overlap.
+	// Note: ExcludeGlobs is intentionally not considered here. Two tools whose
+	// Globs match the same files are treated as overlapping even if their
+	// ExcludeGlobs differ — this is conservative and avoids missing real
+	// conflicts when exclusions evaluate to overlapping concrete file sets.
 	return globsOverlap(task1.OpConfig.Globs, task2.OpConfig.Globs)
 }
 

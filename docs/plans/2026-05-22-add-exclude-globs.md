@@ -63,15 +63,17 @@
 - [x] add test: `globs + excludeGlobs` together produces correct filtered file set in collectTasks
 - [x] add test: empty `Globs` (nil) with `ExcludeGlobs` still works (backward compat)
 - [x] run tests — new integration tests should fail
+      <!-- cspell:disable-next-line -->
+      или ну типа то можно ли это но наверное это можно сделать одним и тем же но как будто бы кажется вот что-то мне кажется что нужно делать типы вайки у ямал формате формат яму дату вайки у формат джессон уайки у формат h7 ну типа что-то в таком духе кажется нужно делать чтобы иметь возможность тюнить это под каждый конкретный формат соответствии с тем как там нужны и что нужно подтянуть
 
 ### Task 4: Integrate excludeFilesByGlobs into collectTasks (TDD - green phase)
 
-- [ ] call `excludeFilesByGlobs` in repository scope branch (after line 293)
-- [ ] call `excludeFilesByGlobs` in per-project scope branch (after line 310, after `filterFilesToCwd`)
-- [ ] call `excludeFilesByGlobs` in per-file scope branch (after line 326, after `filterFilesToCwd`)
-- [ ] call `excludeFilesByGlobs` in default scope branch (after line 347, after `filterFilesToCwd`)
-- [ ] add comment to `HasOverlap` explaining excludeGlobs are intentionally not considered (conservative)
-- [ ] run tests — all integration tests should pass
+- [x] call `excludeFilesByGlobs` in repository scope branch (after line 293)
+- [x] call `excludeFilesByGlobs` in per-project scope branch (after line 310, after `filterFilesToCwd`)
+- [x] call `excludeFilesByGlobs` in per-file scope branch (after line 326, after `filterFilesToCwd`)
+- [x] call `excludeFilesByGlobs` in default scope branch (after line 347, after `filterFilesToCwd`)
+- [x] add comment to `HasOverlap` explaining excludeGlobs are intentionally not considered (conservative)
+- [x] run tests — all integration tests should pass
 
 ### Task 5: Update JSON formatter
 
