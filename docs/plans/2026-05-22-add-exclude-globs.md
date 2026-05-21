@@ -90,11 +90,11 @@
 
 ### Task 7: Verify acceptance criteria
 
-- [ ] verify all requirements from Overview are implemented
-- [ ] verify edge cases: nil globs, nil excludeGlobs, overlapping patterns
-- [ ] run full test suite (`go test ./...`)
-- [ ] run linter if configured
-- [ ] verify existing tests unchanged and passing
+- [x] verify all requirements from Overview are implemented
+- [x] verify edge cases: nil globs, nil excludeGlobs, overlapping patterns
+- [x] run full test suite (`go test ./...`)
+- [x] run linter if configured
+- [x] verify existing tests unchanged and passing
 
 ### Task 8: [Final] Update documentation
 
