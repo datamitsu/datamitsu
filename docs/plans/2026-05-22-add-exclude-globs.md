@@ -83,10 +83,10 @@
 
 ### Task 6: Update TypeScript definition
 
-- [ ] fix JSDoc for `globs`: replace "gitignore-style patterns" with "doublestar glob syntax", note `!` not supported
-- [ ] make `globs` optional: `globs?: string[]`
-- [ ] add `excludeGlobs?: string[]` field with JSDoc (after `globs`, before `invalidateOn`)
-- [ ] update scope examples in JSDoc to show `excludeGlobs` usage
+- [x] fix JSDoc for `globs`: replace "gitignore-style patterns" with "doublestar glob syntax", note `!` not supported
+- [x] make `globs` optional: `globs?: string[]`
+- [x] add `excludeGlobs?: string[]` field with JSDoc (after `globs`, before `invalidateOn`)
+- [x] update scope examples in JSDoc to show `excludeGlobs` usage
 
 ### Task 7: Verify acceptance criteria
 
