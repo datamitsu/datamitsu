@@ -98,8 +98,8 @@
 
 ### Task 8: [Final] Update documentation
 
-- [ ] add "Exclude Patterns" section in `website/docs/guides/tooling-system.md` with example
-- [ ] update glob description to say "doublestar syntax" instead of "gitignore-style"
+- [x] add "Exclude Patterns" section in `website/docs/guides/tooling-system.md` with example
+- [x] update glob description to say "doublestar syntax" instead of "gitignore-style"
 
 ## Technical Details
 

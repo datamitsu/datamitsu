@@ -435,7 +435,8 @@ interface Tool {
 interface ToolOperation {
   app: string; // App name from apps
   args: string[]; // Supports template placeholders
-  globs: string[]; // File patterns (gitignore-style)
+  globs?: string[]; // File patterns (doublestar syntax; `!` negation not supported). Omit to match all discovered files.
+  excludeGlobs?: string[]; // Patterns removed from the matched set (doublestar syntax)
   scope: "repository" | "per-project" | "per-file";
   batch?: boolean; // Batch files into single execution (default: true)
   priority?: number; // Execution order (lower = first, default: 0)
