@@ -671,6 +671,72 @@ func TestFilterFilesByGlobs(t *testing.T) {
 	}
 }
 
+func TestExcludeFilesByGlobs(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	planner := &Planner{
+		rootPath: tmpDir,
+	}
+
+	file1 := filepath.Join(tmpDir, "test.js")
+	file2 := filepath.Join(tmpDir, "test.ts")
+	file3 := filepath.Join(tmpDir, "test.go")
+	file4 := filepath.Join(tmpDir, "vendor", "lib.go")
+
+	files := []string{file1, file2, file3, file4}
+
+	tests := []struct {
+		name         string
+		excludeGlobs []string
+		expected     int
+	}{
+		{
+			name:         "nil excludes is a no-op",
+			excludeGlobs: nil,
+			expected:     4,
+		},
+		{
+			name:         "empty excludes is a no-op",
+			excludeGlobs: []string{},
+			expected:     4,
+		},
+		{
+			name:         "single pattern excludes matching files",
+			excludeGlobs: []string{"*.js"},
+			expected:     3,
+		},
+		{
+			name:         "multiple patterns exclude their union",
+			excludeGlobs: []string{"*.js", "*.ts"},
+			expected:     2,
+		},
+		{
+			name:         "doublestar pattern excludes nested files",
+			excludeGlobs: []string{"vendor/**"},
+			expected:     3,
+		},
+		{
+			name:         "exclude all files",
+			excludeGlobs: []string{"**"},
+			expected:     0,
+		},
+		{
+			name:         "non-matching pattern excludes nothing",
+			excludeGlobs: []string{"*.py"},
+			expected:     4,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := planner.excludeFilesByGlobs(files, tt.excludeGlobs)
+			if len(result) != tt.expected {
+				t.Errorf("len(result) = %d, want %d", len(result), tt.expected)
+			}
+		})
+	}
+}
+
 func TestPlan(t *testing.T) {
 	tmpDir := t.TempDir()
 

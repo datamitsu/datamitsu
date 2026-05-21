@@ -722,6 +722,36 @@ func (p *Planner) filterFilesByGlobs(files []string, globs []string) []string {
 	return matched
 }
 
+// excludeFilesByGlobs removes files matching any of the given exclude glob patterns.
+// Nil or empty excludeGlobs is a no-op and returns the input slice unchanged.
+func (p *Planner) excludeFilesByGlobs(files []string, excludeGlobs []string) []string {
+	if len(excludeGlobs) == 0 {
+		return files
+	}
+
+	kept := make([]string, 0, len(files))
+	for _, file := range files {
+		relPath, err := filepath.Rel(p.rootPath, file)
+		if err != nil {
+			relPath = file
+		}
+
+		excluded := false
+		for _, glob := range excludeGlobs {
+			match, err := doublestar.Match(glob, relPath)
+			if err == nil && match {
+				excluded = true
+				break
+			}
+		}
+		if !excluded {
+			kept = append(kept, file)
+		}
+	}
+
+	return kept
+}
+
 // HasOverlap checks if two tasks have overlapping file sets
 func HasOverlap(task1, task2 Task) bool {
 	// Repository-scoped tasks always overlap with everything (they operate on the entire repository,

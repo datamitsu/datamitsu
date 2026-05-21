@@ -52,7 +52,8 @@ type ToolOperation struct {
 	Args         []string          `json:"args"`
 	Scope        ToolScope         `json:"scope"`
 	Batch        *bool             `json:"batch,omitempty"`        // Batch mode (default: true for per-project and repository, false for per-file)
-	Globs        []string          `json:"globs"`
+	Globs        []string          `json:"globs,omitempty"`
+	ExcludeGlobs []string          `json:"excludeGlobs,omitempty"`
 	Priority     int               `json:"priority,omitempty"`
 	Cache        *bool             `json:"cache,omitempty"`        // Enable caching (default: true)
 	InvalidateOn []string          `json:"invalidateOn,omitempty"` // Config files that invalidate cache
