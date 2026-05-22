@@ -8,6 +8,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/pnpmdefaults"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -350,7 +351,7 @@ func (rm *RuntimeManager) resolveFNMAppEnvPath(appName string, appConfig *binman
 
 	// Hash the actual merged pnpm-workspace.yaml content (defaults + user
 	// override) rather than only the user's raw override. This way the cache
-	// key invalidates when defaultPNPMWorkspaceConfig() is tightened, so the
+	// key invalidates when pnpmdefaults.Defaults() is tightened, so the
 	// new defaults propagate to existing installs.
 	filesForHash, err := filesWithMergedWorkspaceYAML(files)
 	if err != nil {
@@ -582,19 +583,12 @@ func buildPNPMInstallArgs(pnpmCjsPath string, hasLockFile bool) []string {
 }
 
 // defaultPNPMWorkspaceConfig returns the recommended pnpm 11 workspace
-// security defaults applied to every FNM app environment. Mirrors the
-// JS-side defaults published via sharedStorage["pnpm-workspace-defaults"].
+// security defaults applied to every FNM app environment. Delegates to
+// internal/pnpmdefaults — the single source shared with the JS engine that
+// injects the same map as a global so config.js can publish it via
+// sharedStorage["pnpm-workspace-defaults"].
 func defaultPNPMWorkspaceConfig() map[string]any {
-	return map[string]any{
-		"strictDepBuilds":           true,
-		"blockExoticSubdeps":        true,
-		"enablePrePostScripts":      false,
-		"dangerouslyAllowAllBuilds": false,
-		"minimumReleaseAge":         10080,
-		"trustPolicy":               "no-downgrade",
-		"lockfile":                  true,
-		"preferFrozenLockfile":      true,
-	}
+	return pnpmdefaults.Defaults()
 }
 
 // mergePNPMWorkspaceConfig shallow-merges parsed user YAML on top of the
