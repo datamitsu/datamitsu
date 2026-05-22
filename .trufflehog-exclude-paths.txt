@@ -6,3 +6,6 @@
 \.min\.(?:js|css)$
 \.bundle\.(?:js|css)$
 # END datamitsu managed
+
+# Algolia DocSearch search-only API key (public, safe to commit)
+website/docusaurus\.config\.ts

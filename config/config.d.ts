@@ -556,12 +556,23 @@ declare global {
       env?: Record<string, string>;
 
       /**
+       * Glob patterns to exclude from the matched file set
+       * Applied after `globs` — files matching ANY pattern are removed
+       * Uses doublestar glob syntax (same as `globs`)
+       * @example ["**\/*.generated.ts", "**\/vendor/**"]
+       * @example ["**\/node_modules/**"]
+       */
+      excludeGlobs?: string[];
+
+      /**
        * File glob patterns this tool operates on
-       * Uses gitignore-style patterns
+       * Uses doublestar glob syntax: `*`, `**`, `?`, `[...]`, `{alt1,alt2}`
+       * Note: `!` negation is NOT supported — use `excludeGlobs` for exclusions
+       * Optional: omit/empty to match all discovered files
        * @example ["**\/*.ts", "**\/*.tsx"]
        * @example ["**\/*.md"]
        */
-      globs: string[];
+      globs?: string[];
 
       /**
        * Files that should invalidate the cache when changed
@@ -587,12 +598,13 @@ declare global {
        * - "per-file": run for each file in its directory
        * @default "per-project"
        * @example
-       * // ESLint - runs in each project
+       * // ESLint - runs in each project, skips generated files
        * {
        *   scope: "per-project",
        *   app: "eslint",
        *   args: ["--quiet", "{files}"],
-       *   globs: ["**\/*.ts", "**\/*.js"]
+       *   globs: ["**\/*.ts", "**\/*.js"],
+       *   excludeGlobs: ["**\/*.generated.ts"]
        * }
        * @example
        * // syncpack - runs once for the entire monorepo
@@ -600,7 +612,8 @@ declare global {
        *   scope: "repository",
        *   app: "syncpack",
        *   args: ["lint"],
-       *   globs: ["**\/package.json"]
+       *   globs: ["**\/package.json"],
+       *   excludeGlobs: ["**\/fixtures/**"]
        * }
        * @example
        * // shfmt - formats each shell file separately

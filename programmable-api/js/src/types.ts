@@ -26,9 +26,10 @@ export interface TaskJSON {
   app: string;
   args: string[];
   batch: boolean;
+  excludeGlobs?: string[];
   fileCount: number;
   files: string[];
-  globs: string[];
+  globs?: string[];
   scope: string;
   toolName: string;
   workingDir: string;

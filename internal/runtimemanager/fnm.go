@@ -392,12 +392,20 @@ func (rm *RuntimeManager) installFNMAppOnce(appName string, appConfig *binmanage
 		return fmt.Errorf("app %q: unsafe binPath: %w", appName, err)
 	}
 	appBinPath := filepath.Join(appEnvPath, appConfig.BinPath)
+	appModulePkg := filepath.Join(appEnvPath, "node_modules", appConfig.PackageName, "package.json")
 	if _, err := os.Stat(appBinPath); err == nil {
-		log.Debug("FNM app already installed",
+		if _, err := os.Stat(appModulePkg); err == nil {
+			log.Debug("FNM app already installed",
+				zap.String("app", appName),
+				zap.String("path", appBinPath),
+			)
+			return nil
+		}
+		log.Warn("FNM app bin shim exists but module is missing, reinstalling",
 			zap.String("app", appName),
-			zap.String("path", appBinPath),
+			zap.String("module", appModulePkg),
 		)
-		return nil
+		_ = os.RemoveAll(appEnvPath)
 	}
 
 	fnmPath, err := rm.GetRuntimePath(runtimeName)
