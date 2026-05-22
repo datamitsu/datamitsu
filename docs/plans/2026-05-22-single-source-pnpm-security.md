@@ -88,10 +88,12 @@ The core change: Go injects defaults into the goja VM, JS reads the global inste
 
 The agreement test exists only because there were two independent copies. With a single source, it's unnecessary.
 
-- [ ] Remove `TestPNPMWorkspaceDefaults_JSGoAgreement` from `internal/runtimemanager/fnm_test.go`
-- [ ] Remove `pnpmWorkspaceValueEqual` helper if no other tests use it
-- [ ] Verify no other tests depend on these functions
-- [ ] Run tests — must pass before next task
+- [x] Remove `TestPNPMWorkspaceDefaults_JSGoAgreement` from `internal/runtimemanager/fnm_test.go`
+- [x] Remove `pnpmWorkspaceValueEqual` helper if no other tests use it
+  - **Kept** — helper is still used by 21 other pnpm-workspace assertions in the same file; removing it would be unrelated churn.
+- [x] Verify no other tests depend on these functions
+  - Confirmed via grep: only `pnpmWorkspaceValueEqual` is referenced elsewhere (kept); the `goja` import (only used by the removed test) was removed too.
+- [x] Run tests — must pass before next task
 
 ### Task 4: Consolidate documentation — canonical page stays, others link
 

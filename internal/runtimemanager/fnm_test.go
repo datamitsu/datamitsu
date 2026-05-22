@@ -13,7 +13,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/dop251/goja"
 	"github.com/goccy/go-yaml"
 	"io"
 	"net/http"
@@ -1161,96 +1160,6 @@ func TestDefaultPNPMWorkspaceConfig(t *testing.T) {
 		}
 		if !pnpmWorkspaceValueEqual(got, want) {
 			t.Errorf("key %q = %v (%T), want %v (%T)", key, got, got, want, want)
-		}
-	}
-}
-
-// TestPNPMWorkspaceDefaults_JSGoAgreement pins the Go-side
-// defaultPNPMWorkspaceConfig() against the JS-side
-// sharedStorage["pnpm-workspace-defaults"] published by the default
-// config.js. They are advertised to users as the same set of recommended
-// defaults; this test fails if either side drifts.
-func TestPNPMWorkspaceDefaults_JSGoAgreement(t *testing.T) {
-	configScript, err := config.GetDefaultConfig()
-	if err != nil {
-		t.Fatalf("config.GetDefaultConfig() error = %v", err)
-	}
-
-	vm := goja.New()
-	vm.SetFieldNameMapper(goja.TagFieldNameMapper("json", true))
-
-	yamlNamespace := map[string]any{
-		"stringify": func(call goja.FunctionCall) goja.Value {
-			if len(call.Arguments) == 0 {
-				panic(vm.NewTypeError("YAML.stringify requires at least 1 argument"))
-			}
-			bytes, err := yaml.Marshal(call.Argument(0).Export())
-			if err != nil {
-				panic(vm.NewGoError(fmt.Errorf("YAML.stringify error: %w", err)))
-			}
-			return vm.ToValue(string(bytes))
-		},
-	}
-	if err := vm.Set("YAML", yamlNamespace); err != nil {
-		t.Fatalf("vm.Set YAML error: %v", err)
-	}
-
-	// Mirror what internal/engine does: inject the pnpm defaults global so the
-	// compiled config.js (which no longer hardcodes its own copy) can read it.
-	if err := vm.Set("pnpmWorkspaceDefaults", defaultPNPMWorkspaceConfig()); err != nil {
-		t.Fatalf("vm.Set pnpmWorkspaceDefaults error: %v", err)
-	}
-
-	if _, err := vm.RunString(configScript); err != nil {
-		t.Fatalf("RunString(configScript) error = %v", err)
-	}
-
-	getConfigFn, ok := goja.AssertFunction(vm.Get("getConfig"))
-	if !ok {
-		t.Fatal("getConfig is not a function")
-	}
-	result, err := getConfigFn(goja.Undefined(), vm.NewObject())
-	if err != nil {
-		t.Fatalf("getConfig() error = %v", err)
-	}
-
-	var cfg struct {
-		SharedStorage map[string]string `json:"sharedStorage"`
-	}
-	if err := vm.ExportTo(result, &cfg); err != nil {
-		t.Fatalf("ExportTo error = %v", err)
-	}
-
-	rawYAML, ok := cfg.SharedStorage["pnpm-workspace-defaults"]
-	if !ok {
-		t.Fatal(`sharedStorage["pnpm-workspace-defaults"] missing`)
-	}
-
-	var jsDefaults map[string]any
-	if err := yaml.Unmarshal([]byte(rawYAML), &jsDefaults); err != nil {
-		t.Fatalf("yaml.Unmarshal error = %v", err)
-	}
-
-	goDefaults := defaultPNPMWorkspaceConfig()
-
-	if len(jsDefaults) != len(goDefaults) {
-		t.Errorf("JS has %d keys, Go has %d keys; they must match exactly\nJS: %#v\nGo: %#v",
-			len(jsDefaults), len(goDefaults), jsDefaults, goDefaults)
-	}
-	for key, goVal := range goDefaults {
-		jsVal, present := jsDefaults[key]
-		if !present {
-			t.Errorf("key %q present in Go defaults but missing from JS-side sharedStorage", key)
-			continue
-		}
-		if !pnpmWorkspaceValueEqual(jsVal, goVal) {
-			t.Errorf("key %q: JS-side = %#v (%T), Go-side = %#v (%T) — values must be identical",
-				key, jsVal, jsVal, goVal, goVal)
-		}
-	}
-	for key := range jsDefaults {
-		if _, present := goDefaults[key]; !present {
-			t.Errorf("key %q present in JS-side sharedStorage but missing from Go defaults", key)
 		}
 	}
 }
