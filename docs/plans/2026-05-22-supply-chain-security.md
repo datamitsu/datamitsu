@@ -168,9 +168,9 @@
 
 ### Task 9: [Final] Update documentation references
 
-- [ ] verify `docs/architecture.md` doesn't need updates
-- [ ] verify `config/config.d.ts` JSDoc for `App.files` mentions pnpm-workspace.yaml merge behavior
-- [ ] add JSDoc comment for `sharedStorage["pnpm-workspace-defaults"]` key in config.d.ts
+- [x] verify `docs/architecture.md` doesn't need updates — required updates: added pnpm-workspace.yaml auto-merge bullet to the FNM runtime section (covers `writeFNMAppWorkspaceFile()`, `buildPNPMWorkspaceForApp()`, `defaultPNPMWorkspaceConfig()`, and the files-map filtering that prevents double-write), and added a "Well-known keys" sub-list to the Shared Storage section documenting `"datamitsu-agent-prompt"` and `"pnpm-workspace-defaults"` (with cross-reference to the per-app auto-merge so the two mechanisms are not confused)
+- [x] verify `config/config.d.ts` JSDoc for `App.files` mentions pnpm-workspace.yaml merge behavior — added JSDoc describing the shallow-merge with security defaults, user-key precedence, and an `allowBuilds: {puppeteer: true}` example; also synced the change into the embedded copy at `internal/config/config.d.ts` (the build task `build:lib` does `cp ./config/config.d.ts ./internal/config/config.d.ts`, so both files must stay in sync — direct copy used here since `build:lib` also rebuilds `config.js`)
+- [x] add JSDoc comment for `sharedStorage["pnpm-workspace-defaults"]` key in config.d.ts — added a "Well-known keys" subsection to the `Config.sharedStorage` JSDoc covering both `"datamitsu-agent-prompt"` and `"pnpm-workspace-defaults"`, with an `@example` showing how to parse the YAML and extend it for a project repo bundle (clarifies the distinction from the per-FNM-app `files["pnpm-workspace.yaml"]` auto-merge)
 
 ## Technical Details
 
