@@ -157,5 +157,10 @@ export default {
     "umami",
     "goreleaserbot",
     "xattr",
+    "debugimage",
+    "jmods",
+    "govulncheck",
+    "sumdb",
+    "GOFLAGS",
   ],
 };
