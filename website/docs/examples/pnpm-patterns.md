@@ -122,6 +122,64 @@ To generate lock file content:
 1. Run `datamitsu config lockfile <appName>` to generate compressed lock file content
 2. Add the output to your config's `lockFile` field
 
+## Workspace Overrides for Packages with Build Scripts
+
+pnpm 11 blocks lifecycle scripts by default (`strictDepBuilds: true`). When a package
+legitimately needs to run a build script — common offenders include `puppeteer`,
+`sharp`, `esbuild`, and native modules — installs fail with `ERR_PNPM_IGNORED_BUILDS`.
+
+Allowlist the package via `App.files["pnpm-workspace.yaml"]`. datamitsu shallow-merges
+your overrides on top of its secure defaults, so unspecified keys (like `strictDepBuilds`,
+`minimumReleaseAge`, `enablePrePostScripts`) keep their hardened values.
+
+```typescript
+const mapOfApps: BinManager.MapOfApps = {
+  mmdc: {
+    files: {
+      "pnpm-workspace.yaml": YAML.stringify({
+        allowBuilds: { puppeteer: true },
+      }),
+    },
+    fnm: {
+      packageName: "@mermaid-js/mermaid-cli",
+      binPath: "node_modules/.bin/mmdc",
+      version: "11.15.0",
+      lockFile: "br:...",
+    },
+  },
+};
+```
+
+The merged `pnpm-workspace.yaml` written to the app environment combines both:
+
+```yaml
+# From datamitsu defaults
+strictDepBuilds: true
+blockExoticSubdeps: true
+enablePrePostScripts: false
+dangerouslyAllowAllBuilds: false
+minimumReleaseAge: 10080
+trustPolicy: no-downgrade
+lockfile: true
+preferFrozenLockfile: true
+
+# From your override
+allowBuilds:
+  puppeteer: true
+```
+
+After adding `allowBuilds`, regenerate the lock file so pnpm records the approval:
+
+```bash
+pnpm exec datamitsu config lockfile mmdc
+```
+
+User-supplied keys always win on conflicts. Setting `strictDepBuilds: false` would
+override the default — only do this if you fully trust every transitive dependency.
+
+For the full list of baseline settings and the rationale behind each, see the
+[Supply Chain Security guide](../guides/supply-chain-security.md).
+
 ## PNPM Store Isolation
 
 Each app environment has isolated PNPM store paths:

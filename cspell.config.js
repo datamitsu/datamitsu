@@ -164,5 +164,6 @@ export default {
     "GOFLAGS",
     "sdist",
     "sdists",
+    "typosquats",
   ],
 };

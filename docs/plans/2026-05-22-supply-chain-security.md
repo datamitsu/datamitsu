@@ -158,13 +158,13 @@
 
 ### Task 8: Document supply chain best practices
 
-- [ ] create `website/docs/guides/supply-chain-security.md` with sections:
+- [x] create `website/docs/guides/supply-chain-security.md` with sections:
   - **pnpm (FNM apps)**: how datamitsu auto-generates secure `pnpm-workspace.yaml`, how to use `sharedStorage["pnpm-workspace-defaults"]`, how to override via `App.files`, `allowBuilds` configuration, pnpm 11 `strictDepBuilds` / `blockExoticSubdeps` / `minimumReleaseAge`, lockfile enforcement
   - **UV apps**: `--locked` / `--frozen` / `--no-build`, hash verification, `exclude-newer`
   - **Go**: `go.sum` verification, `go mod verify`, `-mod=readonly`, `govulncheck`, sumdb
   - Common patterns: how datamitsu enforces hash verification for all downloads (CLAUDE.md policy)
-- [ ] update `website/docs/how-to/maintain-wrapper.md` with pnpm-workspace.yaml override example for FNM apps with build-requiring dependencies (puppeteer, sharp, etc.)
-- [ ] add workspace override example to `website/docs/examples/pnpm-patterns.md`
+- [x] update `website/docs/how-to/maintain-wrapper.md` with pnpm-workspace.yaml override example for FNM apps with build-requiring dependencies (puppeteer, sharp, etc.)
+- [x] add workspace override example to `website/docs/examples/pnpm-patterns.md`
 
 ### Task 9: [Final] Update documentation references
 
