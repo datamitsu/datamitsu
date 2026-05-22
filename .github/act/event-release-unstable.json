@@ -1,7 +1,7 @@
 {
   "event_name": "workflow_dispatch",
   "inputs": {
-    "release_type": "unstable",
-    "ref": "feat/setup-ci-release"
+    "ref": "feat/setup-ci-release",
+    "release_type": "unstable"
   }
 }

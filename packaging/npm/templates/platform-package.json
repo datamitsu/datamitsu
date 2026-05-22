@@ -1,18 +1,18 @@
 {
-  "name": "@datamitsu/datamitsu-{{PLATFORM}}-{{ARCH}}",
-  "version": "{{VERSION}}",
+  "author": "Alexander Svinarev <shibanet0@gmail.com> (shibanet0.com)",
+  "bugs": {
+    "url": "https://github.com/datamitsu/datamitsu/issues"
+  },
+  "cpu": ["{{ARCH}}"],
   "description": "The {{OS_NAME}} {{ARCH_NAME}} binary for datamitsu, configuration management and binary distribution tool",
+  "homepage": "https://github.com/datamitsu/datamitsu#readme",
+  "keywords": ["datamitsu", "config", "binary", "tools", "linter"],
+  "license": "MIT",
+  "name": "@datamitsu/datamitsu-{{PLATFORM}}-{{ARCH}}",
+  "os": ["{{PLATFORM}}"],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/datamitsu/datamitsu.git"
   },
-  "keywords": ["datamitsu", "config", "binary", "tools", "linter"],
-  "author": "Alexander Svinarev <shibanet0@gmail.com> (shibanet0.com)",
-  "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/datamitsu/datamitsu/issues"
-  },
-  "homepage": "https://github.com/datamitsu/datamitsu#readme",
-  "os": ["{{PLATFORM}}"],
-  "cpu": ["{{ARCH}}"]
+  "version": "{{VERSION}}"
 }

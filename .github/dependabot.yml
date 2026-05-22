@@ -11,7 +11,6 @@ updates:
     schedule:
       day: "monday"
       interval: "weekly"
-
   # npm dependencies - root workspace
   - commit-message:
       prefix: "build(deps)"
@@ -24,7 +23,6 @@ updates:
     schedule:
       day: "monday"
       interval: "weekly"
-
   # npm dependencies - programmable API
   - commit-message:
       prefix: "build(deps)"
@@ -37,7 +35,6 @@ updates:
     schedule:
       day: "monday"
       interval: "weekly"
-
   # npm dependencies - website
   - commit-message:
       prefix: "build(deps)"
@@ -50,7 +47,6 @@ updates:
     schedule:
       day: "monday"
       interval: "weekly"
-
   # GitHub Actions
   - commit-message:
       prefix: "ci(deps)"
@@ -63,7 +59,6 @@ updates:
     schedule:
       day: "monday"
       interval: "weekly"
-
   # Docker base images
   - commit-message:
       prefix: "build(deps)"
@@ -76,5 +71,4 @@ updates:
     schedule:
       day: "monday"
       interval: "weekly"
-
 version: 2

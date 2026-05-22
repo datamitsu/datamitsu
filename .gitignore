@@ -26,7 +26,6 @@
 # Claude Code project files
 .claude/*
 !.claude/skills/
-.claude/
 
 # Codex CLI project files
 .codex/*

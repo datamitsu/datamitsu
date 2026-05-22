@@ -10,6 +10,7 @@ autoInstallPeers: true
 enableGlobalVirtualStore: true
 enablePrePostScripts: false
 hoistPattern: []
+ignorePatchFailures: false
 optimisticRepeatInstall: true
 packageExtensions:
   langium:
