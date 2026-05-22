@@ -109,12 +109,18 @@ The agreement test exists only because there were two independent copies. With a
 
 ### Task 5: Verify acceptance criteria
 
-- [ ] Verify `defaultPNPMWorkspaceConfig()` in `fnm.go` is the ONLY place the 8 defaults are defined as code
-- [ ] Verify `config.js` no longer contains a hardcoded copy
-- [ ] Verify `sharedStorage["pnpm-workspace-defaults"]` still works for downstream configs
-- [ ] Verify FNM app install applies defaults correctly (existing fnm tests should cover this)
-- [ ] Run full test suite (`go test ./...`)
-- [ ] Run linter — all issues must be fixed
+- [x] Verify `defaultPNPMWorkspaceConfig()` in `fnm.go` is the ONLY place the 8 defaults are defined as code
+  - Actual single source is `internal/pnpmdefaults/pnpmdefaults.go::Defaults()`; `fnm.go::defaultPNPMWorkspaceConfig` delegates to it. No other production code defines the 8 values. Test files assert expected values (acceptable).
+- [x] Verify `config.js` no longer contains a hardcoded copy
+  - `grep` for any of the 8 keys in `internal/config/config.js` returns zero matches.
+- [x] Verify `sharedStorage["pnpm-workspace-defaults"]` still works for downstream configs
+  - Covered by `internal/config/config_test.go::TestDefaultConfigPNPMWorkspaceDefaults` and `cmd/config_loader_test.go::TestSharedStoragePNPMWorkspaceDefaultsRoundTrip`; both pass.
+- [x] Verify FNM app install applies defaults correctly (existing fnm tests should cover this)
+  - `internal/runtimemanager` test package passes (2.2s); covers merge, override, lockfile, and pre-existing-file scenarios.
+- [x] Run full test suite (`go test ./...`)
+  - All packages green.
+- [x] Run linter — all issues must be fixed
+  - `pnpm exec datamitsu lint` green across all 16 tools (gitleaks, golangci-lint, eslint, tsc, prettier, etc.). Required `pnpm exec datamitsu init` first to repair broken `.datamitsu/` symlinks.
 
 ### Task 6: [Final] Update documentation
 
