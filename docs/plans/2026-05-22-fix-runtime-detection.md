@@ -81,7 +81,7 @@
 
 ### Task 6: [Final] Update documentation
 
-- [ ] no documentation changes expected unless implementation diverges
+- [x] no documentation changes needed — implementation matched plan (added internal IsExplicit tiebreaker is an internal scoring detail with no user-facing impact)
 
 ## Technical Details
 
