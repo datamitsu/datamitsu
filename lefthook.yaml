@@ -13,9 +13,12 @@ post-checkout:
 pre-commit:
   commands:
     datamitsu-check:
-      priority: 1
+      priority: 2
       run: pnpm datamitsu check --file-scoped
       stage_fixed: true
+    datamitsu-init:
+      priority: 1
+      run: pnpm datamitsu init
     test:
       priority: 2
       run: pnpm test

@@ -8,82 +8,82 @@
   },
   "binaries": {
     "task": {
-      "configHash": "9e43a5259e94839aa525f29049a648f2",
-      "description": "A fast, cross-platform build tool inspired by Make, designed for modern workflows.",
       "binaries": {
         "darwin": {
           "amd64": {
             "unknown": {
-              "url": "https://github.com/go-task/task/releases/download/v3.51.1/task_darwin_amd64.tar.gz",
-              "hash": "08b0a2107c56940e1fc7be15ebd5999f28a867925cfcd619393f8075fef67409",
+              "binaryPath": "task",
               "contentType": "tar.gz",
-              "binaryPath": "task"
+              "hash": "08b0a2107c56940e1fc7be15ebd5999f28a867925cfcd619393f8075fef67409",
+              "url": "https://github.com/go-task/task/releases/download/v3.51.1/task_darwin_amd64.tar.gz"
             }
           },
           "arm64": {
             "unknown": {
-              "url": "https://github.com/go-task/task/releases/download/v3.51.1/task_darwin_arm64.tar.gz",
-              "hash": "a0330f0df20dd1187e323f284a7f365c0ea1f2f271c1e154811e9fc4724bed13",
+              "binaryPath": "task",
               "contentType": "tar.gz",
-              "binaryPath": "task"
+              "hash": "a0330f0df20dd1187e323f284a7f365c0ea1f2f271c1e154811e9fc4724bed13",
+              "url": "https://github.com/go-task/task/releases/download/v3.51.1/task_darwin_arm64.tar.gz"
             }
           }
         },
         "freebsd": {
           "amd64": {
             "unknown": {
-              "url": "https://github.com/go-task/task/releases/download/v3.51.1/task_freebsd_amd64.tar.gz",
-              "hash": "15ea7cea02b85f25f372c51a0e9fc611babd3b6094c1a88bc916c3541aa6c04d",
+              "binaryPath": "task",
               "contentType": "tar.gz",
-              "binaryPath": "task"
+              "hash": "15ea7cea02b85f25f372c51a0e9fc611babd3b6094c1a88bc916c3541aa6c04d",
+              "url": "https://github.com/go-task/task/releases/download/v3.51.1/task_freebsd_amd64.tar.gz"
             }
           },
           "arm64": {
             "unknown": {
-              "url": "https://github.com/go-task/task/releases/download/v3.51.1/task_freebsd_arm64.tar.gz",
-              "hash": "1af91f093fb934c69ded43de46120f1d3ef948522688291bea541a764811840b",
+              "binaryPath": "task",
               "contentType": "tar.gz",
-              "binaryPath": "task"
+              "hash": "1af91f093fb934c69ded43de46120f1d3ef948522688291bea541a764811840b",
+              "url": "https://github.com/go-task/task/releases/download/v3.51.1/task_freebsd_arm64.tar.gz"
             }
           }
         },
         "linux": {
           "amd64": {
             "glibc": {
-              "url": "https://github.com/go-task/task/releases/download/v3.51.1/task_linux_amd64.tar.gz",
-              "hash": "da7e92f0ff961ef2aae7cfecbad8d1fd2a08d7b09ba968673adf7ff389b243b5",
+              "binaryPath": "task",
               "contentType": "tar.gz",
-              "binaryPath": "task"
+              "hash": "da7e92f0ff961ef2aae7cfecbad8d1fd2a08d7b09ba968673adf7ff389b243b5",
+              "url": "https://github.com/go-task/task/releases/download/v3.51.1/task_linux_amd64.tar.gz"
             }
           },
           "arm64": {
             "glibc": {
-              "url": "https://github.com/go-task/task/releases/download/v3.51.1/task_linux_arm64.tar.gz",
-              "hash": "49c58bb00eff2449a5553f3b3e694fc424e0dc04d5c669d8831126daee1000f8",
+              "binaryPath": "task",
               "contentType": "tar.gz",
-              "binaryPath": "task"
+              "hash": "49c58bb00eff2449a5553f3b3e694fc424e0dc04d5c669d8831126daee1000f8",
+              "url": "https://github.com/go-task/task/releases/download/v3.51.1/task_linux_arm64.tar.gz"
             }
           }
         },
         "windows": {
           "amd64": {
             "unknown": {
-              "url": "https://github.com/go-task/task/releases/download/v3.51.1/task_windows_amd64.zip",
-              "hash": "422d79dff5afd5a55fb46ae1cfacc7350ec96d4ef27a63a3ec77a5c30a7b0f03",
+              "binaryPath": "task.exe",
               "contentType": "zip",
-              "binaryPath": "task.exe"
+              "hash": "422d79dff5afd5a55fb46ae1cfacc7350ec96d4ef27a63a3ec77a5c30a7b0f03",
+              "url": "https://github.com/go-task/task/releases/download/v3.51.1/task_windows_amd64.zip"
             }
           },
           "arm64": {
             "unknown": {
-              "url": "https://github.com/go-task/task/releases/download/v3.51.1/task_windows_arm64.zip",
-              "hash": "d92bf9561a8a1db591487995eb76a08951de15134c40299a98d77460be4e4e1d",
+              "binaryPath": "task.exe",
               "contentType": "zip",
-              "binaryPath": "task.exe"
+              "hash": "d92bf9561a8a1db591487995eb76a08951de15134c40299a98d77460be4e4e1d",
+              "url": "https://github.com/go-task/task/releases/download/v3.51.1/task_windows_arm64.zip"
             }
           }
         }
-      }
+      },
+      "configHash": "9e43a5259e94839aa525f29049a648f2",
+      "description": "A fast, cross-platform build tool inspired by Make, designed for modern workflows."
     }
   }
 }

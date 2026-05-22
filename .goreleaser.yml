@@ -4,19 +4,21 @@ archives:
       - README*
       - completions/*
     format_overrides:
-      - formats: [zip]
+      - formats:
+          - zip
         goos: windows
-    formats: [tar.gz]
+    formats:
+      - tar.gz
     id: datamitsu-archive
     ids:
       - datamitsu
     name_template: "datamitsu_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-  - formats: [binary]
+  - formats:
+      - binary
     id: datamitsu-binary
     ids:
       - datamitsu
     name_template: "datamitsu_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-
 before:
   hooks:
     - go mod download
@@ -26,7 +28,6 @@ before:
     - completions/gen completion zsh > completions/_datamitsu
     - completions/gen completion fish > completions/datamitsu.fish
     - rm completions/gen
-
 builds:
   - binary: datamitsu
     env:
@@ -45,7 +46,6 @@ builds:
     ldflags:
       - -s -w -X github.com/datamitsu/datamitsu/internal/ldflags.Version={{ .Version }}
     main: .
-
 changelog:
   filters:
     exclude:
@@ -57,23 +57,21 @@ changelog:
       - Merge branch
   groups:
     - order: 0
-      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      regexp: "^.*?feat(\\([[:word:]]+\\))??!?:.+$"
       title: Features
     - order: 1
-      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      regexp: "^.*?fix(\\([[:word:]]+\\))??!?:.+$"
       title: Bug Fixes
     - order: 2
-      regexp: '^.*?perf(\([[:word:]]+\))??!?:.+$'
+      regexp: "^.*?perf(\\([[:word:]]+\\))??!?:.+$"
       title: Performance Improvements
     - order: 999
       title: Others
   sort: asc
   use: github
-
 checksum:
   algorithm: sha256
   name_template: "checksums.txt"
-
 homebrew_casks:
   - binaries:
       - datamitsu
@@ -103,7 +101,6 @@ homebrew_casks:
       owner: datamitsu
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     skip_upload: auto
-
 nfpms:
   - bindir: /usr/local/bin
     description: |-
@@ -124,17 +121,14 @@ nfpms:
     priority: optional
     section: utils
     vendor: datamitsu
-
 release:
   draft: false
   github:
     name: datamitsu
     owner: datamitsu
   prerelease: auto
-
 sboms:
   - artifacts: archive
     documents:
       - "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}.sbom"
-
 version: 2

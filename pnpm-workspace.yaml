@@ -10,6 +10,11 @@ autoInstallPeers: true
 enableGlobalVirtualStore: true
 enablePrePostScripts: false
 hoistPattern: []
+ignorePatchFailures: false
+minimumReleaseAgeExclude:
+  - "@datamitsu/*"
+  - "@ovineko/*"
+  - "@shibanet0/*"
 optimisticRepeatInstall: true
 packageExtensions:
   langium:

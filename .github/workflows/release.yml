@@ -5,7 +5,10 @@ jobs:
       !cancelled() &&
       (needs.validate-stable.result == 'success' || needs.generate-unstable-version.result == 'success')
     name: Build Release
-    needs: [determine-release-type, validate-stable, generate-unstable-version]
+    needs:
+      - determine-release-type
+      - validate-stable
+      - generate-unstable-version
     permissions:
       actions: read
       attestations: write
@@ -18,17 +21,13 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ needs.determine-release-type.outputs.checkout_ref }}
-
       - uses: ./.github/actions/setup-environment
-
       - name: Check Go modules are tidy
         run: |
           go mod tidy
           git diff --exit-code -- go.mod go.sum
-
       - name: Install syft
         uses: anchore/sbom-action/download-syft@v0.24.0
-
       # 2. Build Binaries (GoReleaser)
       - env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -40,18 +39,15 @@ jobs:
           args: release ${{ needs.determine-release-type.outputs.is_unstable == 'true' && '--snapshot' || '' }} --clean
           distribution: goreleaser
           version: "~> v2"
-
       # 3. Attest build artifacts
       - if: ${{ !env.ACT }}
         name: Attest build artifacts
         uses: actions/attest@v4
         with:
           subject-checksums: ./dist/checksums.txt
-
       # 4. Normalize binaries
       - name: Normalize binaries
         run: .github/scripts/normalize-binaries.sh "${{ needs.determine-release-type.outputs.is_unstable }}"
-
       # 5. Build Programmable API
       - name: Build programmable API
         run: |
@@ -62,14 +58,12 @@ jobs:
           cp -r programmable-api/js/dist/* packaging/npm/datamitsu/lib/
           echo "✓ Copied programmable API to lib/"
           ls -lh packaging/npm/datamitsu/lib/
-
       # 6. Prepare npm Packages
       - name: Prepare npm packages
         run: |
           VERSION_WITH_V="${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}"
           export VERSION="${VERSION_WITH_V#v}"
           pnpm pack:prepare
-
       # 7. Prepare Docker Binaries
       - name: Prepare Docker binaries
         run: |
@@ -81,23 +75,19 @@ jobs:
 
           chmod +x dist/datamitsu-linux-*/datamitsu
           ls -lh dist/datamitsu-linux-*/
-
       # 8. Test Docker Build (dry-run, no push)
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
         with:
           platforms: linux/amd64,linux/arm64
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
-
       - id: version
         name: Normalize version (remove v prefix for labels)
         run: |
           VERSION_WITH_V="${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}"
           VERSION="${VERSION_WITH_V#v}"
           echo "normalized=$VERSION" >> $GITHUB_OUTPUT
-
       # Generate metadata for test builds
       - id: meta-debian
         name: Generate Docker metadata (Debian)
@@ -108,7 +98,6 @@ jobs:
             docker.io/datamitsu/datamitsu
           labels: |
             org.opencontainers.image.version=${{ steps.version.outputs.normalized }}
-
           tags: |
             type=raw,value=test-debian
       - id: meta-alpine
@@ -122,7 +111,6 @@ jobs:
             docker.io/datamitsu/datamitsu
           labels: |
             org.opencontainers.image.version=${{ steps.version.outputs.normalized }}
-
           tags: |
             type=raw,value=test-alpine
       - name: Test Docker build (Debian)
@@ -130,7 +118,6 @@ jobs:
         with:
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
           context: .
           file: ./docker/Dockerfile
           labels: ${{ steps.meta-debian.outputs.labels }}
@@ -142,7 +129,6 @@ jobs:
         with:
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
           context: .
           file: ./docker/Dockerfile.alpine
           labels: ${{ steps.meta-alpine.outputs.labels }}
@@ -159,7 +145,6 @@ jobs:
             dist/
             packaging/npm/
           retention-days: 1
-
   determine-release-type:
     name: Determine Release Type
     outputs:
@@ -176,26 +161,25 @@ jobs:
             echo "is_stable=true" >> $GITHUB_OUTPUT
             echo "is_unstable=false" >> $GITHUB_OUTPUT
             echo "checkout_ref=${{ github.ref }}" >> $GITHUB_OUTPUT
-            echo "📦 Detected: Stable release (tag push)"
+            echo "Detected: Stable release (tag push)"
           elif [[ "${{ github.event.inputs.release_type }}" == "stable" ]]; then
             # Manual stable release
             VERSION_TAG="${{ github.event.inputs.version }}"
             if [[ -z "$VERSION_TAG" ]]; then
-              echo "❌ Error: version input required for manual stable release"
+              echo "Error: version input required for manual stable release"
               exit 1
             fi
             echo "is_stable=true" >> $GITHUB_OUTPUT
             echo "is_unstable=false" >> $GITHUB_OUTPUT
             echo "checkout_ref=$VERSION_TAG" >> $GITHUB_OUTPUT
-            echo "📦 Detected: Manual stable release ($VERSION_TAG)"
+            echo "Detected: Manual stable release ($VERSION_TAG)"
           else
             # Manual unstable release
             echo "is_stable=false" >> $GITHUB_OUTPUT
             echo "is_unstable=true" >> $GITHUB_OUTPUT
             echo "checkout_ref=${{ github.event.inputs.ref }}" >> $GITHUB_OUTPUT
-            echo "📦 Detected: Unstable release"
+            echo "Detected: Unstable release"
           fi
-
   generate-unstable-version:
     if: |
       always() &&
@@ -212,7 +196,6 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ needs.determine-release-type.outputs.checkout_ref }}
-
       - id: version
         name: Generate unstable version
         run: |
@@ -223,16 +206,19 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
           echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
-          echo "📦 npm version: $VERSION"
-          echo "🏷️  git tag: $TAG_NAME"
-
+          echo "npm version: $VERSION"
+          echo "git tag: $TAG_NAME"
   publish-docker:
     if: |
       always() &&
       !cancelled() &&
       needs.build.result == 'success'
     name: Publish Docker Images
-    needs: [build, determine-release-type, validate-stable, generate-unstable-version]
+    needs:
+      - build
+      - determine-release-type
+      - validate-stable
+      - generate-unstable-version
     permissions:
       contents: read
       packages: write
@@ -241,35 +227,29 @@ jobs:
       - uses: actions/checkout@v6
         with:
           ref: ${{ needs.determine-release-type.outputs.checkout_ref }}
-
       - if: ${{ !env.ACT }}
         name: Download build artifacts
         uses: actions/download-artifact@v8
         with:
           name: release-artifacts
           path: .
-
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
         with:
           platforms: linux/amd64,linux/arm64
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
-
       - id: version
         name: Normalize version (remove v prefix for labels)
         run: |
           VERSION_WITH_V="${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}"
           VERSION="${VERSION_WITH_V#v}"
           echo "normalized=$VERSION" >> $GITHUB_OUTPUT
-
       - if: ${{ !env.ACT && matrix.registry == 'ghcr' }}
         name: Login to GHCR
         uses: docker/login-action@v4
         with:
           password: ${{ secrets.GITHUB_TOKEN }}
-
           registry: ghcr.io
           username: ${{ github.actor }}
       - if: ${{ !env.ACT && matrix.registry == 'dockerhub' }}
@@ -277,10 +257,8 @@ jobs:
         uses: docker/login-action@v4
         with:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-
           registry: docker.io
           username: ${{ secrets.DOCKERHUB_USERNAME }}
-
       # Generate metadata for production builds
       - id: meta
         name: Generate Docker metadata
@@ -292,7 +270,6 @@ jobs:
             ${{ matrix.registry == 'ghcr' && format('ghcr.io/datamitsu/{0}', needs.determine-release-type.outputs.is_stable == 'true' && 'datamitsu' || 'datamitsu-unstable') || 'docker.io/datamitsu/datamitsu' }}
           labels: |
             org.opencontainers.image.version=${{ steps.version.outputs.normalized }}
-
           tags: |
             type=semver,pattern={{version}},enable=${{ needs.determine-release-type.outputs.is_stable == 'true' }}
             type=semver,pattern={{major}}.{{minor}},enable=${{ needs.determine-release-type.outputs.is_stable == 'true' }}
@@ -301,7 +278,6 @@ jobs:
             type=raw,value=latest,enable=${{ needs.determine-release-type.outputs.is_stable == 'true' && !contains(needs.validate-stable.outputs.version, '-rc.') }}
             type=raw,value=unstable,enable=${{ needs.determine-release-type.outputs.is_unstable == 'true' && matrix.registry == 'dockerhub' }}
             type=raw,value=${{ needs.generate-unstable-version.outputs.tag_name }},enable=${{ needs.determine-release-type.outputs.is_unstable == 'true' }}
-
       - if: |
           matrix.registry == 'ghcr' ||
           (matrix.registry == 'dockerhub' && needs.determine-release-type.outputs.is_stable == 'true')
@@ -318,14 +294,21 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
     strategy:
       matrix:
-        registry: [ghcr, dockerhub]
-        variant: [debian, alpine]
+        registry:
+          - ghcr
+          - dockerhub
+        variant:
+          - debian
+          - alpine
   publish-github:
     if: |
       needs.determine-release-type.outputs.is_unstable == 'true' &&
       github.event.inputs.create_github_prerelease == 'true'
     name: Publish to GitHub Releases
-    needs: [build, determine-release-type, generate-unstable-version]
+    needs:
+      - build
+      - determine-release-type
+      - generate-unstable-version
     permissions:
       contents: write
     runs-on: ubuntu-latest
@@ -333,14 +316,12 @@ jobs:
       - uses: actions/checkout@v6
         with:
           ref: ${{ needs.determine-release-type.outputs.checkout_ref }}
-
       - if: ${{ !env.ACT }}
         name: Download build artifacts
         uses: actions/download-artifact@v8
         with:
           name: release-artifacts
           path: .
-
       - env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         if: ${{ !env.ACT }}
@@ -355,14 +336,17 @@ jobs:
           name: Unstable Build ${{ needs.generate-unstable-version.outputs.short_sha }}
           prerelease: true
           tag_name: ${{ needs.generate-unstable-version.outputs.tag_name }}
-
   publish-npm:
     if: |
       always() &&
       !cancelled() &&
       needs.build.result == 'success'
     name: Publish to npm
-    needs: [build, determine-release-type, validate-stable, generate-unstable-version]
+    needs:
+      - build
+      - determine-release-type
+      - validate-stable
+      - generate-unstable-version
     permissions:
       contents: read
       id-token: write
@@ -371,18 +355,15 @@ jobs:
       - uses: actions/checkout@v6
         with:
           ref: ${{ needs.determine-release-type.outputs.checkout_ref }}
-
       - uses: ./.github/actions/setup-environment
         with:
           registry-url: "https://registry.npmjs.org"
-
       - if: ${{ !env.ACT }}
         name: Download build artifacts
         uses: actions/download-artifact@v8
         with:
           name: release-artifacts
           path: .
-
       - if: ${{ !env.ACT }}
         name: Restore executable permissions for npm packages
         run: |
@@ -390,7 +371,6 @@ jobs:
           # Restore them for all platform-specific binaries
           find packaging/npm/datamitsu-* -type f \( -name "datamitsu" -o -name "datamitsu.exe" \) -exec chmod +x {} \;
           echo "✓ Restored executable permissions for npm package binaries"
-
       - env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         name: Publish to npm
@@ -401,7 +381,7 @@ jobs:
           DRY_RUN=""
           if [[ -n "$ACT" ]]; then
             DRY_RUN="--dry-run"
-            echo "🏃 Running in act mode - using --dry-run for npm publish"
+            echo "Running in act mode - using --dry-run for npm publish"
           fi
 
           cd packaging/npm
@@ -413,12 +393,11 @@ jobs:
             # Unstable: hardcoded unstable tag
             for dir in datamitsu-*/ datamitsu/; do
               cd "$dir"
-              echo "📦 Publishing $dir..."
+              echo "Publishing $dir..."
               npm publish --access public --tag unstable $DRY_RUN
               cd ..
             done
           fi
-
   validate-stable:
     if: |
       always() &&
@@ -433,27 +412,23 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ needs.determine-release-type.outputs.checkout_ref }}
-
       - name: Verify tag is on main branch
         run: |
           TAG_REF="${{ needs.determine-release-type.outputs.checkout_ref }}"
           TAG_COMMIT=$(git rev-parse $TAG_REF)
           if ! git branch -r --contains $TAG_COMMIT | grep -q 'origin/main'; then
-            echo "❌ Error: Tag $TAG_REF is not on main branch"
+            echo "Error: Tag $TAG_REF is not on main branch"
             exit 1
           fi
-          echo "✅ Tag is on main branch"
-
+          echo "Tag is on main branch"
       - id: version
         name: Extract version from tag
         run: |
           TAG_REF="${{ needs.determine-release-type.outputs.checkout_ref }}"
           VERSION="${TAG_REF#refs/tags/}"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "📦 Stable version: $VERSION"
-
+          echo "Stable version: $VERSION"
 name: Release
-
 on:
   push:
     tags:
