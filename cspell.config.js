@@ -159,5 +159,8 @@ export default {
     "xattr",
     "debugimage",
     "jmods",
+    "govulncheck",
+    "sumdb",
+    "GOFLAGS",
   ],
 };
