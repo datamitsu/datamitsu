@@ -73,11 +73,11 @@
 
 ### Task 5: Verify acceptance criteria
 
-- [ ] verify FNM: `fnm-macos.zip` matches both darwin/amd64 AND darwin/arm64
-- [ ] verify JVM: only `-jdk_` assets are selected for all platforms
-- [ ] verify no regressions for UV runtime detection (uses same `detectRuntimeBinaries`)
-- [ ] run full test suite (`go test ./...`)
-- [ ] run linter if configured
+- [x] verify FNM: `fnm-macos.zip` matches both darwin/amd64 AND darwin/arm64
+- [x] verify JVM: only `-jdk_` assets are selected for all platforms
+- [x] verify no regressions for UV runtime detection (uses same `detectRuntimeBinaries`)
+- [x] run full test suite (`go test ./...`)
+- [x] run linter if configured
 
 ### Task 6: [Final] Update documentation
 
