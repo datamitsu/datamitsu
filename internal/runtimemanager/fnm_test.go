@@ -13,6 +13,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/dop251/goja"
 	"github.com/goccy/go-yaml"
 	"io"
 	"net/http"
@@ -1164,6 +1165,90 @@ func TestDefaultPNPMWorkspaceConfig(t *testing.T) {
 	}
 }
 
+// TestPNPMWorkspaceDefaults_JSGoAgreement pins the Go-side
+// defaultPNPMWorkspaceConfig() against the JS-side
+// sharedStorage["pnpm-workspace-defaults"] published by the default
+// config.js. They are advertised to users as the same set of recommended
+// defaults; this test fails if either side drifts.
+func TestPNPMWorkspaceDefaults_JSGoAgreement(t *testing.T) {
+	configScript, err := config.GetDefaultConfig()
+	if err != nil {
+		t.Fatalf("config.GetDefaultConfig() error = %v", err)
+	}
+
+	vm := goja.New()
+	vm.SetFieldNameMapper(goja.TagFieldNameMapper("json", true))
+
+	yamlNamespace := map[string]any{
+		"stringify": func(call goja.FunctionCall) goja.Value {
+			if len(call.Arguments) == 0 {
+				panic(vm.NewTypeError("YAML.stringify requires at least 1 argument"))
+			}
+			bytes, err := yaml.Marshal(call.Argument(0).Export())
+			if err != nil {
+				panic(vm.NewGoError(fmt.Errorf("YAML.stringify error: %w", err)))
+			}
+			return vm.ToValue(string(bytes))
+		},
+	}
+	if err := vm.Set("YAML", yamlNamespace); err != nil {
+		t.Fatalf("vm.Set YAML error: %v", err)
+	}
+
+	if _, err := vm.RunString(configScript); err != nil {
+		t.Fatalf("RunString(configScript) error = %v", err)
+	}
+
+	getConfigFn, ok := goja.AssertFunction(vm.Get("getConfig"))
+	if !ok {
+		t.Fatal("getConfig is not a function")
+	}
+	result, err := getConfigFn(goja.Undefined(), vm.NewObject())
+	if err != nil {
+		t.Fatalf("getConfig() error = %v", err)
+	}
+
+	var cfg struct {
+		SharedStorage map[string]string `json:"sharedStorage"`
+	}
+	if err := vm.ExportTo(result, &cfg); err != nil {
+		t.Fatalf("ExportTo error = %v", err)
+	}
+
+	rawYAML, ok := cfg.SharedStorage["pnpm-workspace-defaults"]
+	if !ok {
+		t.Fatal(`sharedStorage["pnpm-workspace-defaults"] missing`)
+	}
+
+	var jsDefaults map[string]any
+	if err := yaml.Unmarshal([]byte(rawYAML), &jsDefaults); err != nil {
+		t.Fatalf("yaml.Unmarshal error = %v", err)
+	}
+
+	goDefaults := defaultPNPMWorkspaceConfig()
+
+	if len(jsDefaults) != len(goDefaults) {
+		t.Errorf("JS has %d keys, Go has %d keys; they must match exactly\nJS: %#v\nGo: %#v",
+			len(jsDefaults), len(goDefaults), jsDefaults, goDefaults)
+	}
+	for key, goVal := range goDefaults {
+		jsVal, present := jsDefaults[key]
+		if !present {
+			t.Errorf("key %q present in Go defaults but missing from JS-side sharedStorage", key)
+			continue
+		}
+		if !pnpmWorkspaceValueEqual(jsVal, goVal) {
+			t.Errorf("key %q: JS-side = %#v (%T), Go-side = %#v (%T) — values must be identical",
+				key, jsVal, jsVal, goVal, goVal)
+		}
+	}
+	for key := range jsDefaults {
+		if _, present := goDefaults[key]; !present {
+			t.Errorf("key %q present in JS-side sharedStorage but missing from Go defaults", key)
+		}
+	}
+}
+
 func pnpmWorkspaceValueEqual(got, want any) bool {
 	if g, ok := got.(int); ok {
 		if w, ok := want.(int); ok {
@@ -1397,14 +1482,23 @@ func TestBuildPNPMWorkspaceForApp(t *testing.T) {
 	})
 }
 
+func prepareAndWriteFNMWorkspace(t *testing.T, appEnvPath string, files map[string]string) map[string]string {
+	t.Helper()
+	mergedYAML, filtered, err := preparePNPMWorkspaceForApp(files)
+	if err != nil {
+		t.Fatalf("preparePNPMWorkspaceForApp() error = %v", err)
+	}
+	if err := writeFNMAppWorkspaceFile(appEnvPath, mergedYAML); err != nil {
+		t.Fatalf("writeFNMAppWorkspaceFile() error = %v", err)
+	}
+	return filtered
+}
+
 func TestWriteFNMAppWorkspaceFile(t *testing.T) {
 	t.Run("nil files writes defaults to disk", func(t *testing.T) {
 		appEnvPath := t.TempDir()
 
-		filtered, err := writeFNMAppWorkspaceFile(appEnvPath, nil)
-		if err != nil {
-			t.Fatalf("writeFNMAppWorkspaceFile() error = %v", err)
-		}
+		filtered := prepareAndWriteFNMWorkspace(t, appEnvPath, nil)
 		if filtered != nil {
 			t.Errorf("filtered files = %v, want nil for nil input", filtered)
 		}
@@ -1433,10 +1527,7 @@ func TestWriteFNMAppWorkspaceFile(t *testing.T) {
 			".npmrc": "registry=https://registry.npmjs.org/\n",
 		}
 
-		filtered, err := writeFNMAppWorkspaceFile(appEnvPath, files)
-		if err != nil {
-			t.Fatalf("writeFNMAppWorkspaceFile() error = %v", err)
-		}
+		filtered := prepareAndWriteFNMWorkspace(t, appEnvPath, files)
 		if len(filtered) != 1 || filtered[".npmrc"] != files[".npmrc"] {
 			t.Errorf("filtered = %v, want same map with .npmrc preserved", filtered)
 		}
@@ -1466,10 +1557,7 @@ func TestWriteFNMAppWorkspaceFile(t *testing.T) {
 			".npmrc":              "registry=https://registry.npmjs.org/\n",
 		}
 
-		filtered, err := writeFNMAppWorkspaceFile(appEnvPath, files)
-		if err != nil {
-			t.Fatalf("writeFNMAppWorkspaceFile() error = %v", err)
-		}
+		filtered := prepareAndWriteFNMWorkspace(t, appEnvPath, files)
 
 		if _, has := filtered["pnpm-workspace.yaml"]; has {
 			t.Error("filtered files should not contain pnpm-workspace.yaml (consumed by merge)")
@@ -1521,9 +1609,7 @@ func TestWriteFNMAppWorkspaceFile(t *testing.T) {
 		baseDir := t.TempDir()
 		appEnvPath := filepath.Join(baseDir, "nested", "app-env")
 
-		if _, err := writeFNMAppWorkspaceFile(appEnvPath, nil); err != nil {
-			t.Fatalf("writeFNMAppWorkspaceFile() error = %v", err)
-		}
+		prepareAndWriteFNMWorkspace(t, appEnvPath, nil)
 
 		if _, err := os.Stat(filepath.Join(appEnvPath, "pnpm-workspace.yaml")); err != nil {
 			t.Errorf("workspace file not created: %v", err)
@@ -1531,14 +1617,39 @@ func TestWriteFNMAppWorkspaceFile(t *testing.T) {
 	})
 
 	t.Run("invalid user YAML returns error", func(t *testing.T) {
-		appEnvPath := t.TempDir()
 		files := map[string]string{
 			"pnpm-workspace.yaml": "not: valid: yaml: at: all: [",
 		}
 
-		_, err := writeFNMAppWorkspaceFile(appEnvPath, files)
+		_, _, err := preparePNPMWorkspaceForApp(files)
 		if err == nil {
 			t.Error("expected error for invalid user YAML, got nil")
+		}
+	})
+
+	t.Run("post-write overwrites pre-existing file (archive ordering invariant)", func(t *testing.T) {
+		appEnvPath := t.TempDir()
+
+		archiveContent := "strictDepBuilds: false\nallowBuilds:\n  malicious: true\n"
+		if err := os.WriteFile(filepath.Join(appEnvPath, "pnpm-workspace.yaml"), []byte(archiveContent), 0644); err != nil {
+			t.Fatalf("failed to seed pre-existing workspace file: %v", err)
+		}
+
+		prepareAndWriteFNMWorkspace(t, appEnvPath, nil)
+
+		content, err := os.ReadFile(filepath.Join(appEnvPath, "pnpm-workspace.yaml"))
+		if err != nil {
+			t.Fatalf("failed to read workspace file: %v", err)
+		}
+		var parsed map[string]any
+		if err := yaml.Unmarshal(content, &parsed); err != nil {
+			t.Fatalf("failed to parse: %v", err)
+		}
+		if !pnpmWorkspaceValueEqual(parsed["strictDepBuilds"], true) {
+			t.Errorf("strictDepBuilds = %v, want true (secure default must overwrite pre-existing file)", parsed["strictDepBuilds"])
+		}
+		if _, has := parsed["allowBuilds"]; has {
+			t.Error("allowBuilds from pre-existing file leaked through; archive content must not survive the post-write")
 		}
 	})
 }
@@ -1571,10 +1682,7 @@ func TestWriteFNMAppWorkspaceFile_LockfileRegenerationScenario(t *testing.T) {
 		t.Fatalf("resolveFNMAppEnvPath() error = %v", err)
 	}
 
-	filtered, err := writeFNMAppWorkspaceFile(appEnvPath, files)
-	if err != nil {
-		t.Fatalf("writeFNMAppWorkspaceFile() error = %v", err)
-	}
+	filtered := prepareAndWriteFNMWorkspace(t, appEnvPath, files)
 
 	if _, has := filtered["pnpm-workspace.yaml"]; has {
 		t.Error("filtered files must not include pnpm-workspace.yaml; the merge consumes it")
@@ -1636,10 +1744,7 @@ func TestInstallFNMAppOnceWritesWorkspaceFile(t *testing.T) {
 			t.Fatalf("resolveFNMAppEnvPath() error = %v", err)
 		}
 
-		filtered, err := writeFNMAppWorkspaceFile(appEnvPath, nil)
-		if err != nil {
-			t.Fatalf("writeFNMAppWorkspaceFile() error = %v", err)
-		}
+		filtered := prepareAndWriteFNMWorkspace(t, appEnvPath, nil)
 
 		if filtered != nil {
 			t.Errorf("filtered = %v, want nil", filtered)
@@ -1683,10 +1788,7 @@ func TestInstallFNMAppOnceWritesWorkspaceFile(t *testing.T) {
 			t.Fatalf("resolveFNMAppEnvPath() error = %v", err)
 		}
 
-		filtered, err := writeFNMAppWorkspaceFile(appEnvPath, files)
-		if err != nil {
-			t.Fatalf("writeFNMAppWorkspaceFile() error = %v", err)
-		}
+		filtered := prepareAndWriteFNMWorkspace(t, appEnvPath, files)
 
 		if _, has := filtered["pnpm-workspace.yaml"]; has {
 			t.Error("filtered files should not include pnpm-workspace.yaml")

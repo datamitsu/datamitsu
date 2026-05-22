@@ -1077,12 +1077,11 @@ function getConfig(input) {
 	}
 }
 
-func TestSharedStorageEmptyByDefault(t *testing.T) {
+func TestSharedStorageDefaultEntries(t *testing.T) {
 	cfg, _, _, err := loadConfigWithPaths(nil, true, nil)
 	if err != nil {
 		t.Fatalf("loadConfigWithPaths error: %v", err)
 	}
-	// Default config includes datamitsu-agent-prompt and pnpm-workspace-defaults in SharedStorage
 	if len(cfg.SharedStorage) != 2 {
 		t.Errorf("SharedStorage should have 2 entries by default, got %d: %v", len(cfg.SharedStorage), cfg.SharedStorage)
 	}
