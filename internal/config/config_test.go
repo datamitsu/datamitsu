@@ -2,8 +2,12 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/dop251/goja"
+	"github.com/goccy/go-yaml"
 )
 
 func TestGetDefaultConfig(t *testing.T) {
@@ -22,6 +26,112 @@ func TestGetDefaultConfigDTS(t *testing.T) {
 
 	if dts == "" {
 		t.Error("GetDefaultConfigDTS() returned empty string")
+	}
+}
+
+func TestDefaultConfigPNPMWorkspaceDefaults(t *testing.T) {
+	configScript, err := GetDefaultConfig()
+	if err != nil {
+		t.Fatalf("GetDefaultConfig() error = %v", err)
+	}
+
+	vm := goja.New()
+	vm.SetFieldNameMapper(goja.TagFieldNameMapper("json", true))
+
+	yamlNamespace := map[string]any{
+		"stringify": func(call goja.FunctionCall) goja.Value {
+			if len(call.Arguments) == 0 {
+				panic(vm.NewTypeError("YAML.stringify requires at least 1 argument"))
+			}
+			exported := call.Argument(0).Export()
+			bytes, err := yaml.Marshal(exported)
+			if err != nil {
+				panic(vm.NewGoError(fmt.Errorf("YAML.stringify error: %w", err)))
+			}
+			return vm.ToValue(string(bytes))
+		},
+	}
+	if err := vm.Set("YAML", yamlNamespace); err != nil {
+		t.Fatalf("vm.Set YAML error: %v", err)
+	}
+
+	if _, err := vm.RunString(configScript); err != nil {
+		t.Fatalf("RunString(configScript) error = %v", err)
+	}
+
+	getConfigVal := vm.Get("getConfig")
+	getConfigFn, ok := goja.AssertFunction(getConfigVal)
+	if !ok {
+		t.Fatal("getConfig is not a function")
+	}
+
+	result, err := getConfigFn(goja.Undefined(), vm.NewObject())
+	if err != nil {
+		t.Fatalf("getConfig() error = %v", err)
+	}
+
+	type configShape struct {
+		SharedStorage map[string]string `json:"sharedStorage"`
+	}
+	var cfg configShape
+	if err := vm.ExportTo(result, &cfg); err != nil {
+		t.Fatalf("ExportTo error = %v", err)
+	}
+
+	rawYAML, ok := cfg.SharedStorage["pnpm-workspace-defaults"]
+	if !ok {
+		t.Fatal(`sharedStorage["pnpm-workspace-defaults"] missing`)
+	}
+	if rawYAML == "" {
+		t.Fatal(`sharedStorage["pnpm-workspace-defaults"] is empty`)
+	}
+
+	var parsed map[string]any
+	if err := yaml.Unmarshal([]byte(rawYAML), &parsed); err != nil {
+		t.Fatalf("yaml.Unmarshal error = %v\nyaml: %s", err, rawYAML)
+	}
+
+	expected := map[string]any{
+		"strictDepBuilds":           true,
+		"blockExoticSubdeps":        true,
+		"enablePrePostScripts":      false,
+		"dangerouslyAllowAllBuilds": false,
+		"minimumReleaseAge":         uint64(10080),
+		"trustPolicy":               "no-downgrade",
+		"lockfile":                  true,
+		"preferFrozenLockfile":      true,
+	}
+	for key, want := range expected {
+		got, present := parsed[key]
+		if !present {
+			t.Errorf("key %q missing from pnpm-workspace-defaults YAML; got: %#v", key, parsed)
+			continue
+		}
+		if !equalAny(got, want) {
+			t.Errorf("key %q: got %#v (%T), want %#v (%T)", key, got, got, want, want)
+		}
+	}
+	if len(parsed) != len(expected) {
+		t.Errorf("parsed has %d keys, want %d; parsed: %#v", len(parsed), len(expected), parsed)
+	}
+}
+
+func equalAny(got, want any) bool {
+	switch w := want.(type) {
+	case uint64:
+		switch g := got.(type) {
+		case uint64:
+			return g == w
+		case int64:
+			return g >= 0 && uint64(g) == w
+		case int:
+			return g >= 0 && uint64(g) == w
+		case float64:
+			return uint64(g) == w
+		}
+		return false
+	default:
+		return got == want
 	}
 }
 

@@ -83,7 +83,7 @@
 
 ### Task 1: Add pnpm-workspace-defaults to sharedStorage in default config
 
-- [ ] define the recommended pnpm workspace config as a JS object in `internal/config/config.js` (or its source):
+- [x] define the recommended pnpm workspace config as a JS object in `internal/config/config.js` (or its source):
   ```javascript
   const pnpmWorkspaceDefaults = {
     strictDepBuilds: true,
@@ -96,9 +96,9 @@
     preferFrozenLockfile: true,
   };
   ```
-- [ ] add `"pnpm-workspace-defaults": YAML.stringify(pnpmWorkspaceDefaults)` to the sharedStorage in `getConfig()`
-- [ ] write test: verify default config output contains `sharedStorage["pnpm-workspace-defaults"]` with expected YAML (all 8 keys)
-- [ ] run tests — must pass
+- [x] add `"pnpm-workspace-defaults": YAML.stringify(pnpmWorkspaceDefaults)` to the sharedStorage in `getConfig()`
+- [x] write test: verify default config output contains `sharedStorage["pnpm-workspace-defaults"]` with expected YAML (all 8 keys)
+- [x] run tests — must pass
 
 ### Task 2: Write failing tests for Go-side workspace merge (TDD red)
 
