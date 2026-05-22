@@ -92,6 +92,7 @@ export default {
     "otherapp",
     "overpromises",
     "pgid",
+    "pnpmdefaults",
     "pnpmhash",
     "pnpmx",
     "precomputation",
