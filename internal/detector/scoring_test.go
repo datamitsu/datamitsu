@@ -211,6 +211,7 @@ func TestSelectBestAsset_ArchiveBeatsPlainBinary(t *testing.T) {
 }
 
 func TestScoreAsset_FNMMacOSImplicitArm64(t *testing.T) {
+	implicitTotal := scoreOS + scoreArch + scoreLibcNeutral + scoreArchivePrefer
 	tests := []struct {
 		name        string
 		asset       string
@@ -218,19 +219,37 @@ func TestScoreAsset_FNMMacOSImplicitArm64(t *testing.T) {
 		archType    syslist.ArchType
 		wantOSMatch bool
 		wantArch    bool
-		wantPos     bool
+		wantTotal   int
 	}{
 		{
 			"fnm-macos.zip matches darwin/arm64 implicitly",
 			"fnm-macos.zip",
 			syslist.OsTypeDarwin, syslist.ArchTypeArm64,
-			true, true, true,
+			true, true, implicitTotal,
 		},
 		{
 			"fnm-macos.zip still matches darwin/amd64 implicitly (regression)",
 			"fnm-macos.zip",
 			syslist.OsTypeDarwin, syslist.ArchTypeAmd64,
-			true, true, true,
+			true, true, implicitTotal,
+		},
+		{
+			"linux asset without arch indicator does NOT match linux/arm64",
+			"tool-linux.tar.gz",
+			syslist.OsTypeLinux, syslist.ArchTypeArm64,
+			true, false, 0,
+		},
+		{
+			"windows asset without arch indicator does NOT match windows/arm64",
+			"tool-windows.zip",
+			syslist.OsTypeWindows, syslist.ArchTypeArm64,
+			true, false, 0,
+		},
+		{
+			"fnm-macos.zip does NOT match windows/arm64",
+			"fnm-macos.zip",
+			syslist.OsTypeWindows, syslist.ArchTypeArm64,
+			false, false, 0,
 		},
 	}
 
@@ -243,8 +262,64 @@ func TestScoreAsset_FNMMacOSImplicitArm64(t *testing.T) {
 			if s.ArchMatch != tt.wantArch {
 				t.Errorf("ArchMatch = %v, want %v", s.ArchMatch, tt.wantArch)
 			}
-			if (s.Total > 0) != tt.wantPos {
-				t.Errorf("Total > 0 = %v (got %d), want %v", s.Total > 0, s.Total, tt.wantPos)
+			if s.Total != tt.wantTotal {
+				t.Errorf("Total = %d, want %d", s.Total, tt.wantTotal)
+			}
+		})
+	}
+}
+
+func TestScoreAsset_IsExplicit(t *testing.T) {
+	tests := []struct {
+		name        string
+		asset       string
+		osType      syslist.OsType
+		archType    syslist.ArchType
+		wantExplicit bool
+	}{
+		{
+			"explicit darwin/arm64 match",
+			"tool-darwin-arm64.tar.gz",
+			syslist.OsTypeDarwin, syslist.ArchTypeArm64,
+			true,
+		},
+		{
+			"explicit linux/amd64 match",
+			"tool-linux-amd64.tar.gz",
+			syslist.OsTypeLinux, syslist.ArchTypeAmd64,
+			true,
+		},
+		{
+			"implicit darwin/arm64 (no arch indicator)",
+			"fnm-macos.zip",
+			syslist.OsTypeDarwin, syslist.ArchTypeArm64,
+			false,
+		},
+		{
+			"implicit darwin/amd64 (no arch indicator)",
+			"fnm-macos.zip",
+			syslist.OsTypeDarwin, syslist.ArchTypeAmd64,
+			false,
+		},
+		{
+			"implicit linux/amd64 (arch only, no OS)",
+			"tool-amd64.tar.gz",
+			syslist.OsTypeLinux, syslist.ArchTypeAmd64,
+			false,
+		},
+		{
+			"no match leaves IsExplicit false",
+			"tool-darwin-arm64.tar.gz",
+			syslist.OsTypeLinux, syslist.ArchTypeAmd64,
+			false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := ScoreAsset(makeAsset(tt.asset), tt.osType, tt.archType, "")
+			if s.IsExplicit != tt.wantExplicit {
+				t.Errorf("IsExplicit = %v, want %v", s.IsExplicit, tt.wantExplicit)
 			}
 		})
 	}
