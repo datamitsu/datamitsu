@@ -148,13 +148,13 @@
 
 ### Task 7: Verify acceptance criteria
 
-- [ ] verify FNM: app with `files["pnpm-workspace.yaml"]` containing `allowBuilds: {puppeteer: true}` installs successfully
-- [ ] verify FNM: app without any workspace config installs (backward compat, packages without build scripts)
-- [ ] verify FNM: user's overrides are merged correctly with defaults
-- [ ] verify sharedStorage: JS config can read `config.sharedStorage["pnpm-workspace-defaults"]` and parse it
-- [ ] verify UV: `--no-build` flag is passed when lockfile is present
-- [ ] run full test suite (`go test ./...`)
-- [ ] run linter if configured
+- [x] verify FNM: app with `files["pnpm-workspace.yaml"]` containing `allowBuilds: {puppeteer: true}` installs successfully — manual test (skipped - requires real node/pnpm/chromium runtime; helper-level coverage in `TestWriteFNMAppWorkspaceFile/user_workspace_entry_produces_merged_file_and_is_filtered_out` and `TestWriteFNMAppWorkspaceFile_LockfileRegenerationScenario`; documented under Post-Completion manual verification)
+- [x] verify FNM: app without any workspace config installs (backward compat, packages without build scripts) — manual test (skipped - requires real node/pnpm; helper-level coverage in `TestWriteFNMAppWorkspaceFile/nil_files_writes_defaults_to_disk` and `files_without_workspace_entry_returns_same_map_untouched`)
+- [x] verify FNM: user's overrides are merged correctly with defaults — covered by `TestMergePNPMWorkspaceConfig` (empty / additive / override / invalid YAML cases) and `TestBuildPNPMWorkspaceForApp` (no override, empty files, missing entry, additive merge, security-key override)
+- [x] verify sharedStorage: JS config can read `config.sharedStorage["pnpm-workspace-defaults"]` and parse it — covered by `TestDefaultConfigPNPMWorkspaceDefaults` (loads `internal/config/config.js` via goja, calls `getConfig()`, reads `sharedStorage["pnpm-workspace-defaults"]`, parses the YAML, verifies all 8 keys with exact types) and `TestSharedStorageFlowsThroughConfigChain`
+- [x] verify UV: `--no-build` flag is passed when lockfile is present — covered by `TestBuildUVInstallArgs` (lockfile→`--no-build` present, no-lockfile→`--no-build` absent, python-version interactions)
+- [x] run full test suite (`go test ./...`) — all packages pass
+- [x] run linter if configured — `golangci-lint run ./...` reports 0 issues
 
 ### Task 8: Document supply chain best practices
 
