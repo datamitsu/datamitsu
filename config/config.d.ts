@@ -309,13 +309,12 @@ declare global {
        * Well-known keys published by the default config:
        * - `"datamitsu-agent-prompt"`: Markdown guide for AI agents working in
        *   datamitsu-managed repos.
-       * - `"pnpm-workspace-defaults"`: YAML string with recommended pnpm 11
-       *   security defaults (strictDepBuilds, blockExoticSubdeps, minimumReleaseAge,
-       *   trustPolicy, lockfile, preferFrozenLockfile, etc.). Parse with
-       *   `YAML.parse()`, extend with org/repo-specific settings, and write into
-       *   a project repo via a Bundle to produce a secure pnpm-workspace.yaml.
-       *   This is separate from the auto-merge applied to `App.files["pnpm-workspace.yaml"]`
-       *   for FNM apps — see `App.files` JSDoc.
+       * - `"pnpm-workspace-defaults"`: YAML string of the recommended pnpm 11
+       *   workspace security defaults. Parse with `YAML.parse()`, extend with
+       *   org/repo-specific settings, and write into a project repo via a Bundle
+       *   to produce a secure `pnpm-workspace.yaml`. Separate from the auto-merge
+       *   applied to `App.files["pnpm-workspace.yaml"]` for FNM apps. See the
+       *   Supply Chain Security guide for the full key list and rationale.
        *
        * @example
        * return { ...input, sharedStorage: { ...input.sharedStorage, "my-key": "my-value" } };
@@ -683,11 +682,11 @@ declare global {
        *
        * Special handling for `pnpm-workspace.yaml` on FNM apps: the entry is
        * NOT written verbatim. Instead, the installer parses it and shallow-merges
-       * it on top of the recommended pnpm 11 security defaults (strictDepBuilds,
-       * blockExoticSubdeps, minimumReleaseAge, trustPolicy, etc.), then writes
-       * the merged result. User keys override defaults for the same top-level key.
-       * Use this to add `allowBuilds` for packages that need build scripts
-       * (e.g., puppeteer) without losing the security defaults.
+       * it on top of the recommended pnpm 11 workspace security defaults, then
+       * writes the merged result. User keys override defaults for the same
+       * top-level key. Use this to add `allowBuilds` for packages that need build
+       * scripts (e.g., puppeteer) without losing the security defaults. See the
+       * Supply Chain Security guide for the full default key list and rationale.
        *
        * @example
        * // Allow puppeteer build scripts; defaults still apply

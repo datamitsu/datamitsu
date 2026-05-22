@@ -124,13 +124,12 @@ To generate lock file content:
 
 ## Workspace Overrides for Packages with Build Scripts
 
-pnpm 11 blocks lifecycle scripts by default (`strictDepBuilds: true`). When a package
-legitimately needs to run a build script — common offenders include `puppeteer`,
-`sharp`, `esbuild`, and native modules — installs fail with `ERR_PNPM_IGNORED_BUILDS`.
-
-Allowlist the package via `App.files["pnpm-workspace.yaml"]`. datamitsu shallow-merges
-your overrides on top of its secure defaults, so unspecified keys (like `strictDepBuilds`,
-`minimumReleaseAge`, `enablePrePostScripts`) keep their hardened values.
+datamitsu writes a secure `pnpm-workspace.yaml` automatically before every FNM
+install. When a package legitimately needs to run a build script — common
+offenders include `puppeteer`, `sharp`, `esbuild`, and native modules — installs
+fail with `ERR_PNPM_IGNORED_BUILDS`. Allowlist the package via
+`App.files["pnpm-workspace.yaml"]`; your overrides are shallow-merged on top of
+the secure baseline, so unspecified keys keep their hardened values.
 
 ```typescript
 const mapOfApps: BinManager.MapOfApps = {
@@ -150,24 +149,6 @@ const mapOfApps: BinManager.MapOfApps = {
 };
 ```
 
-The merged `pnpm-workspace.yaml` written to the app environment combines both:
-
-```yaml
-# From datamitsu defaults
-strictDepBuilds: true
-blockExoticSubdeps: true
-enablePrePostScripts: false
-dangerouslyAllowAllBuilds: false
-minimumReleaseAge: 10080
-trustPolicy: no-downgrade
-lockfile: true
-preferFrozenLockfile: true
-
-# From your override
-allowBuilds:
-  puppeteer: true
-```
-
 After adding `allowBuilds`, regenerate the lock file so pnpm records the approval:
 
 ```bash
@@ -177,8 +158,9 @@ pnpm exec datamitsu config lockfile mmdc
 User-supplied keys always win on conflicts. Setting `strictDepBuilds: false` would
 override the default — only do this if you fully trust every transitive dependency.
 
-For the full list of baseline settings and the rationale behind each, see the
-[Supply Chain Security guide](../guides/supply-chain-security.md).
+For the full list of baseline settings, the rationale behind each, and the
+merged YAML format, see the
+[Supply Chain Security guide](../guides/supply-chain-security.md#pnpm-fnm-apps).
 
 ## PNPM Store Isolation
 

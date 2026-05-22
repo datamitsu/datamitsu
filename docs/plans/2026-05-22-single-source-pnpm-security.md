@@ -97,13 +97,15 @@ The agreement test exists only because there were two independent copies. With a
 
 ### Task 4: Consolidate documentation — canonical page stays, others link
 
-- [ ] `website/docs/guides/supply-chain-security.md` — **keep as-is** (canonical reference with full table and YAML block)
-- [ ] `website/docs/examples/pnpm-patterns.md` — remove the full YAML block showing all 8 defaults; replace with a short note saying "datamitsu applies secure defaults automatically" + link to supply-chain-security.md; keep the `allowBuilds` example (that's the useful part)
-- [ ] `docs/architecture.md` — replace the inline parenthetical listing all 8 keys with a shorter reference: mention that defaults are defined in `defaultPNPMWorkspaceConfig()` in `fnm.go` and link to supply-chain-security.md for the full list
-- [ ] `website/docs/how-to/maintain-wrapper.md` — already references supply-chain-security.md; verify no inline duplication of the 8 keys remains; clean up if needed
-- [ ] `config/config.d.ts` — simplify the JSDoc on `sharedStorage` and `files` to not enumerate all 8 keys; reference the guide page instead
-- [ ] Review changes for broken links or missing context
-- [ ] Run website build if applicable to verify no markdown errors
+- [x] `website/docs/guides/supply-chain-security.md` — **keep as-is** (canonical reference with full table and YAML block)
+- [x] `website/docs/examples/pnpm-patterns.md` — remove the full YAML block showing all 8 defaults; replace with a short note saying "datamitsu applies secure defaults automatically" + link to supply-chain-security.md; keep the `allowBuilds` example (that's the useful part)
+- [x] `docs/architecture.md` — replace the inline parenthetical listing all 8 keys with a shorter reference: mention that defaults are defined in `defaultPNPMWorkspaceConfig()` in `fnm.go` and link to supply-chain-security.md for the full list
+  - Also updated the sharedStorage `"pnpm-workspace-defaults"` entry to point at `pnpmdefaults.Defaults()` (single source of truth) and link to the canonical guide
+- [x] `website/docs/how-to/maintain-wrapper.md` — already references supply-chain-security.md; verify no inline duplication of the 8 keys remains; clean up if needed
+  - Confirmed: only two keys mentioned as examples (`strictDepBuilds: true`, `minimumReleaseAge: 10080`) in a "for example" context — left as is.
+- [x] `config/config.d.ts` — simplify the JSDoc on `sharedStorage` and `files` to not enumerate all 8 keys; reference the guide page instead
+- [x] Review changes for broken links or missing context
+- [x] Run website build if applicable to verify no markdown errors
 
 ### Task 5: Verify acceptance criteria
 
