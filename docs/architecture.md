@@ -9,6 +9,8 @@
 - Exposes console API, format utilities (YAML, TOML, INI), and tools API to JS runtime
 - Allows dynamic configuration through JavaScript with type definitions in config.d.ts
 - Every config file must export `getMinVersion()` returning a semver string; the loader validates the current datamitsu version meets this minimum before proceeding
+- **VM globals injected from Go** (set in `engine.New()` via per-domain `initX()` methods): `console`, `colors`, `formats` (YAML/TOML/INI), `tools` (Ignores/Path/Config), `facts()` (function returning host/git/env info), and `pnpmWorkspaceDefaults` (plain object — recommended pnpm 11 workspace security defaults sourced from `internal/pnpmdefaults.Defaults()`). Plain-object globals (like `pnpmWorkspaceDefaults`) avoid the function-call indirection used for `facts()` so config.js can read them as ordinary JS values
+- **Single source of truth for pnpm defaults** (`internal/pnpmdefaults`): Go is the only place the 8 pnpm workspace security keys are defined. The FNM app installer reads them via `defaultPNPMWorkspaceConfig()` (which delegates to `pnpmdefaults.Defaults()`), and `config.js` reads the same map through the `pnpmWorkspaceDefaults` VM global to publish it as `sharedStorage["pnpm-workspace-defaults"]`. Changing a value in `pnpmdefaults.go` updates both code paths atomically; the full key list and rationale live in [supply-chain-security](../website/docs/guides/supply-chain-security.md#pnpm-fnm-apps)
 
 **Target Resolution** ([internal/target/](internal/target/))
 

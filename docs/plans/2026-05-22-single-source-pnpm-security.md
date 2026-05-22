@@ -124,8 +124,11 @@ The agreement test exists only because there were two independent copies. With a
 
 ### Task 6: [Final] Update documentation
 
-- [ ] Update `docs/architecture.md` if the injection mechanism needs documenting (how pnpmWorkspaceDefaults flows from Go → JS)
-- [ ] Update CLAUDE.md if any new patterns emerged
+- [x] Update `docs/architecture.md` if the injection mechanism needs documenting (how pnpmWorkspaceDefaults flows from Go → JS)
+  - Added a "VM globals injected from Go" bullet to the JavaScript Configuration Engine section enumerating all goja globals (`console`, `colors`, `formats`, `tools`, `facts()`, `pnpmWorkspaceDefaults`) and noting the plain-object-vs-function-call distinction
+  - Added a "Single source of truth for pnpm defaults" bullet explaining the `internal/pnpmdefaults` package and how both Go (FNM installer) and JS (config.js via the injected global) read from it
+- [x] Update CLAUDE.md if any new patterns emerged
+  - Added a "JS↔Go Shared Constants Policy" section codifying the pattern: shared constants live in a small Go package, are injected into the goja VM as plain-object globals via per-domain `initX()` methods on `Engine`, declared in `config/config.d.ts` for TS autocomplete, and do NOT need a JS↔Go agreement test. Rationale and pointer to this plan included for future readers
 
 ## Technical Details
 
