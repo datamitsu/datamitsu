@@ -89,15 +89,20 @@
     strictDepBuilds: true,
     blockExoticSubdeps: true,
     enablePrePostScripts: false,
+    dangerouslyAllowAllBuilds: false,
+    minimumReleaseAge: 10080, // 7 days in minutes
+    trustPolicy: "no-downgrade",
+    lockfile: true,
+    preferFrozenLockfile: true,
   };
   ```
 - [ ] add `"pnpm-workspace-defaults": YAML.stringify(pnpmWorkspaceDefaults)` to the sharedStorage in `getConfig()`
-- [ ] write test: verify default config output contains `sharedStorage["pnpm-workspace-defaults"]` with expected YAML
+- [ ] write test: verify default config output contains `sharedStorage["pnpm-workspace-defaults"]` with expected YAML (all 8 keys)
 - [ ] run tests — must pass
 
 ### Task 2: Write failing tests for Go-side workspace merge (TDD red)
 
-- [ ] add test in `internal/runtimemanager/fnm_test.go`: `defaultPNPMWorkspaceConfig()` returns map with `strictDepBuilds: true`, `blockExoticSubdeps: true`, `enablePrePostScripts: false`
+- [ ] add test in `internal/runtimemanager/fnm_test.go`: `defaultPNPMWorkspaceConfig()` returns map with all 8 keys: `strictDepBuilds: true`, `blockExoticSubdeps: true`, `enablePrePostScripts: false`, `dangerouslyAllowAllBuilds: false`, `minimumReleaseAge: 10080`, `trustPolicy: "no-downgrade"`, `lockfile: true`, `preferFrozenLockfile: true`
 - [ ] add test: `mergePNPMWorkspaceConfig(defaults, "")` → returns defaults unchanged
 - [ ] add test: `mergePNPMWorkspaceConfig(defaults, userYAML)` with user `allowBuilds: {puppeteer: true}` → merged result has both defaults and user's allowBuilds
 - [ ] add test: user sets `strictDepBuilds: false` → merged result has `strictDepBuilds: false` (user wins)
@@ -168,6 +173,11 @@ const pnpmWorkspaceDefaults = {
   strictDepBuilds: true,
   blockExoticSubdeps: true,
   enablePrePostScripts: false,
+  dangerouslyAllowAllBuilds: false,
+  minimumReleaseAge: 10080, // 7 days in minutes
+  trustPolicy: "no-downgrade",
+  lockfile: true,
+  preferFrozenLockfile: true,
 };
 
 function getConfig(config) {
@@ -188,26 +198,37 @@ function getConfig(config) {
 ```go
 func defaultPNPMWorkspaceConfig() map[string]any {
     return map[string]any{
-        "strictDepBuilds":      true,
-        "blockExoticSubdeps":   true,
-        "enablePrePostScripts": false,
+        "strictDepBuilds":            true,
+        "blockExoticSubdeps":         true,
+        "enablePrePostScripts":       false,
+        "dangerouslyAllowAllBuilds":  false,
+        "minimumReleaseAge":          10080, // 7 days in minutes
+        "trustPolicy":               "no-downgrade",
+        "lockfile":                   true,
+        "preferFrozenLockfile":       true,
     }
 }
 ```
 
 ### Merge behavior
 
-```
-Go defaults:                   User's App.files["pnpm-workspace.yaml"]:
-  strictDepBuilds: true          allowBuilds:
-  blockExoticSubdeps: true         puppeteer: true
-  enablePrePostScripts: false    strictDepBuilds: false  ← user override
+```yaml
+# Go defaults:                        User's App.files["pnpm-workspace.yaml"]:
+  strictDepBuilds: true              #   allowBuilds:
+  blockExoticSubdeps: true           #     puppeteer: true
+  enablePrePostScripts: false        #   strictDepBuilds: false  ← user override
+  dangerouslyAllowAllBuilds: false   #
+  minimumReleaseAge: 10080           #
+  trustPolicy: "no-downgrade"        #
 
-Merged result (written to app environment):
-  strictDepBuilds: false         ← user wins
-  blockExoticSubdeps: true       ← default preserved
-  enablePrePostScripts: false    ← default preserved
-  allowBuilds:                   ← user addition
+# Merged result (written to app environment):
+  strictDepBuilds: false             # ← user wins
+  blockExoticSubdeps: true           # ← default preserved
+  enablePrePostScripts: false        # ← default preserved
+  dangerouslyAllowAllBuilds: false   # ← default preserved
+  minimumReleaseAge: 10080           # ← default preserved
+  trustPolicy: "no-downgrade"        # ← default preserved
+  allowBuilds:                       # ← user addition
     puppeteer: true
 ```
 
