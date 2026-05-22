@@ -21,6 +21,8 @@
     "pull:github": "./datamitsu devtools pull-github ./config/src/githubApps.json",
     "pull:github:update": "./datamitsu devtools pull-github ./config/src/githubApps.json --update",
     "pull:runtimes": "./datamitsu devtools pull-runtimes ./config/src/runtimes.json --update",
+    "pull:uv": "./datamitsu devtools pull-uv ./config/src/uvApps.json",
+    "pull:uv:update": "./datamitsu devtools pull-uv ./config/src/uvApps.json --update",
     "temp:d:w": "act push -W .github/workflows/deploy-website.yml",
     "temp:r:u": "act workflow_dispatch -e .github/act/event-release-unstable.json -j build",
     "test": "go test ./...",
