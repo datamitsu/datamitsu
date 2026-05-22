@@ -59,15 +59,17 @@
 
 ### Task 3: Write failing test for JVM asset pre-filtering (TDD red)
 
-- [ ] add test in `cmd/devtools_pull_runtimes_test.go` (or appropriate location): given a list of Temurin assets (jdk, debugimage, static-libs-glibc, jre, sbom), `detectJVMBinaries()` must select the `-jdk_` asset for each platform
-- [ ] verify test FAILS with current code (proves wrong asset selected)
+- [x] add test in `cmd/devtools_pull_runtimes_test.go` (or appropriate location): given a list of Temurin assets (jdk, debugimage, static-libs-glibc, jre, sbom), `detectJVMBinaries()` must select the `-jdk_` asset for each platform
+- [x] verify test FAILS with current code (proves wrong asset selected)
 
 ### Task 4: Pre-filter JVM assets to only JDK type
 
-- [ ] in `cmd/devtools_pull_runtimes.go` `detectJVMBinaries()`: before the platform loop, filter `release.Assets` to only include assets containing `-jdk_` in their name (case-insensitive)
-- [ ] add helper function `filterJDKAssets(assets []github.Asset) []github.Asset` for clarity
-- [ ] write unit test for `filterJDKAssets` with representative Temurin asset names
-- [ ] run tests — all tests must pass
+- [x] in `cmd/devtools_pull_runtimes.go` `detectJVMBinaries()`: before the platform loop, filter `release.Assets` to only include assets containing `-jdk_` in their name (case-insensitive)
+- [x] add helper function `filterJDKAssets(assets []github.Asset) []github.Asset` for clarity
+- [x] write unit test for `filterJDKAssets` with representative Temurin asset names
+- [x] run tests — all tests must pass
+
+➕ Discovered: Tasks 3 and 4 must be committed together because the pre-commit hook runs `go test ./...` and refuses to commit while the new failing test in Task 3 is unfixed. Same bundling pattern was used for Tasks 1+2.
 
 ### Task 5: Verify acceptance criteria
 

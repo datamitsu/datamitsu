@@ -539,11 +539,28 @@ func jvmBinaryPath(tagName string, osType syslist.OsType) string {
 	return tagName + "/bin/java"
 }
 
+// filterJDKAssets returns only assets that are JDK product type, identified
+// by the "-jdk_" pattern in Temurin's naming convention:
+// OpenJDK{ver}U-{type}_{arch}_{os}_hotspot_{version}.{ext}
+// This rejects jre, debugimage, static-libs, static-libs-glibc, jmods, sbom,
+// sources, and other non-runtime asset types.
+func filterJDKAssets(assets []github.Asset) []github.Asset {
+	filtered := make([]github.Asset, 0, len(assets))
+	for _, asset := range assets {
+		if strings.Contains(strings.ToLower(asset.Name), "-jdk_") {
+			filtered = append(filtered, asset)
+		}
+	}
+	return filtered
+}
+
 // detectJVMBinaries detects JDK binaries from a Temurin release.
 // Sets ExtractDir=true and computes OS-specific binaryPath for each entry.
 func detectJVMBinaries(release *github.Release) (binmanager.MapOfBinaries, error) {
 	platforms := buildPlatformTuples()
 	binaries := make(binmanager.MapOfBinaries)
+
+	jdkAssets := filterJDKAssets(release.Assets)
 
 	type seenAsset struct {
 		url  string
@@ -555,7 +572,7 @@ func detectJVMBinaries(release *github.Release) (binmanager.MapOfBinaries, error
 	deduplicatedCount := 0
 
 	for _, platform := range platforms {
-		asset, err := detector.DetectBinary(release.Assets, platform.os, platform.arch, platform.libc)
+		asset, err := detector.DetectBinary(jdkAssets, platform.os, platform.arch, platform.libc)
 		if err != nil {
 			continue
 		}
