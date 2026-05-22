@@ -1492,6 +1492,79 @@ func TestWriteFNMAppWorkspaceFile(t *testing.T) {
 	})
 }
 
+// TestWriteFNMAppWorkspaceFile_LockfileRegenerationScenario simulates the
+// `datamitsu config lockfile <app>` flow where the install runs with an
+// empty LockFile but the user's files["pnpm-workspace.yaml"] is still
+// expected to be merged with the secure defaults. This guards against
+// regressions where lockfile regeneration would skip the workspace merge
+// (e.g., if defaults were only written when a lockfile was already present).
+func TestWriteFNMAppWorkspaceFile_LockfileRegenerationScenario(t *testing.T) {
+	runtimes := makeFNMTestRuntimes()
+	rm := New(runtimes)
+
+	appConfig := &binmanager.AppConfigFNM{
+		PackageName: "@mermaid-js/mermaid-cli",
+		Version:     "11.4.2",
+		BinPath:     "node_modules/.bin/mmdc",
+		Runtime:     "fnm",
+	}
+
+	files := map[string]string{
+		"pnpm-workspace.yaml": "allowBuilds:\n  puppeteer: true\n",
+	}
+
+	appEnvPath, _, _, err := rm.resolveFNMAppEnvPath("mmdc-lockfile-regeneration", appConfig, files, nil)
+	if err != nil {
+		t.Fatalf("resolveFNMAppEnvPath() error = %v", err)
+	}
+	defer func() { _ = os.RemoveAll(appEnvPath) }()
+
+	filtered, err := writeFNMAppWorkspaceFile(appEnvPath, files)
+	if err != nil {
+		t.Fatalf("writeFNMAppWorkspaceFile() error = %v", err)
+	}
+
+	if _, has := filtered["pnpm-workspace.yaml"]; has {
+		t.Error("filtered files must not include pnpm-workspace.yaml; the merge consumes it")
+	}
+
+	content, err := os.ReadFile(filepath.Join(appEnvPath, "pnpm-workspace.yaml"))
+	if err != nil {
+		t.Fatalf("workspace file not written during lockfile regeneration: %v", err)
+	}
+	var parsed map[string]any
+	if err := yaml.Unmarshal(content, &parsed); err != nil {
+		t.Fatalf("failed to parse workspace yaml: %v", err)
+	}
+
+	if !pnpmWorkspaceValueEqual(parsed["strictDepBuilds"], true) {
+		t.Errorf("strictDepBuilds = %v, want true (secure default must still apply during lockfile regeneration)", parsed["strictDepBuilds"])
+	}
+	if !pnpmWorkspaceValueEqual(parsed["blockExoticSubdeps"], true) {
+		t.Errorf("blockExoticSubdeps = %v, want true (secure default must still apply during lockfile regeneration)", parsed["blockExoticSubdeps"])
+	}
+	if !pnpmWorkspaceValueEqual(parsed["minimumReleaseAge"], 10080) {
+		t.Errorf("minimumReleaseAge = %v, want 10080 (secure default must still apply during lockfile regeneration)", parsed["minimumReleaseAge"])
+	}
+
+	allowBuilds, ok := parsed["allowBuilds"]
+	if !ok {
+		t.Fatal("merged workspace yaml missing user's allowBuilds entry; lockfile regeneration would fail for packages with build scripts")
+	}
+	switch ab := allowBuilds.(type) {
+	case map[string]any:
+		if v, ok := ab["puppeteer"]; !ok || v != true {
+			t.Errorf("allowBuilds.puppeteer = %v, want true", v)
+		}
+	case map[any]any:
+		if v, ok := ab["puppeteer"]; !ok || v != true {
+			t.Errorf("allowBuilds.puppeteer = %v, want true", v)
+		}
+	default:
+		t.Errorf("allowBuilds has unexpected type %T", allowBuilds)
+	}
+}
+
 func TestInstallFNMAppOnceWritesWorkspaceFile(t *testing.T) {
 	t.Run("writes defaults when no user override", func(t *testing.T) {
 		runtimes := makeFNMTestRuntimes()

@@ -130,10 +130,12 @@
 
 ### Task 5: Update config lockfile command for pnpm 11
 
-- [ ] in `cmd/config_lockfile.go`: when regenerating lockfiles, also generate `pnpm-workspace.yaml` using `buildPNPMWorkspaceForApp(files)` before running `pnpm install`
-- [ ] ensure lockfile regeneration works with packages that have build scripts (user must have `allowBuilds` in their `files["pnpm-workspace.yaml"]`)
-- [ ] write test for lockfile regeneration with workspace yaml
-- [ ] run tests — must pass
+- [x] in `cmd/config_lockfile.go`: when regenerating lockfiles, also generate `pnpm-workspace.yaml` using `buildPNPMWorkspaceForApp(files)` before running `pnpm install`
+- [x] ensure lockfile regeneration works with packages that have build scripts (user must have `allowBuilds` in their `files["pnpm-workspace.yaml"]`)
+- [x] write test for lockfile regeneration with workspace yaml
+- [x] run tests — must pass
+
+⚠️ Implementation note: pnpm-workspace.yaml generation during lockfile regeneration is already wired in transitively — `runConfigLockfile` clears `appConfig.LockFile`, then calls `freshBinMgr.GetCommandInfo(appName)` → `InstallFNMApp` → `installFNMAppOnce` → `writeFNMAppWorkspaceFile`, which merges the user's `files["pnpm-workspace.yaml"]` with secure defaults before pnpm runs. To make this guarantee testable without invoking real pnpm/node, extracted the lockfile-clearing logic from `runConfigLockfile` into a `clearAppLockFile(apps, appName)` helper that preserves `App.Files` (and `App.Archives`), and added tests covering: (1) FNM lockfile cleared while `files["pnpm-workspace.yaml"]` and `.npmrc` survive; (2) UV lockfile cleared with files preserved; (3) other apps untouched; (4) missing app name returns a clean copy; (5) `TestWriteFNMAppWorkspaceFile_LockfileRegenerationScenario` confirms the merged workspace yaml (secure defaults + user `allowBuilds`) is written when the install runs with no lockfile — the exact runtime state during lockfile regeneration.
 
 ### Task 6: Harden UV app installs
 
