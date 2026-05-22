@@ -102,19 +102,21 @@
 
 ### Task 2: Write failing tests for Go-side workspace merge (TDD red)
 
-- [ ] add test in `internal/runtimemanager/fnm_test.go`: `defaultPNPMWorkspaceConfig()` returns map with all 8 keys: `strictDepBuilds: true`, `blockExoticSubdeps: true`, `enablePrePostScripts: false`, `dangerouslyAllowAllBuilds: false`, `minimumReleaseAge: 10080`, `trustPolicy: "no-downgrade"`, `lockfile: true`, `preferFrozenLockfile: true`
-- [ ] add test: `mergePNPMWorkspaceConfig(defaults, "")` → returns defaults unchanged
-- [ ] add test: `mergePNPMWorkspaceConfig(defaults, userYAML)` with user `allowBuilds: {puppeteer: true}` → merged result has both defaults and user's allowBuilds
-- [ ] add test: user sets `strictDepBuilds: false` → merged result has `strictDepBuilds: false` (user wins)
-- [ ] add test: `buildPNPMWorkspaceForApp(files)` extracts `pnpm-workspace.yaml` from files, merges with defaults, returns final YAML string
-- [ ] run tests — new tests must FAIL
+- [x] add test in `internal/runtimemanager/fnm_test.go`: `defaultPNPMWorkspaceConfig()` returns map with all 8 keys: `strictDepBuilds: true`, `blockExoticSubdeps: true`, `enablePrePostScripts: false`, `dangerouslyAllowAllBuilds: false`, `minimumReleaseAge: 10080`, `trustPolicy: "no-downgrade"`, `lockfile: true`, `preferFrozenLockfile: true`
+- [x] add test: `mergePNPMWorkspaceConfig(defaults, "")` → returns defaults unchanged
+- [x] add test: `mergePNPMWorkspaceConfig(defaults, userYAML)` with user `allowBuilds: {puppeteer: true}` → merged result has both defaults and user's allowBuilds
+- [x] add test: user sets `strictDepBuilds: false` → merged result has `strictDepBuilds: false` (user wins)
+- [x] add test: `buildPNPMWorkspaceForApp(files)` extracts `pnpm-workspace.yaml` from files, merges with defaults, returns final YAML string
+- [x] run tests — new tests must FAIL (confirmed: build fails with `undefined: defaultPNPMWorkspaceConfig`, `mergePNPMWorkspaceConfig`, `buildPNPMWorkspaceForApp` — to be implemented in Task 3)
 
 ### Task 3: Implement Go-side workspace merge
 
-- [ ] in `internal/runtimemanager/fnm.go`: add `defaultPNPMWorkspaceConfig() map[string]any` — returns recommended defaults map (same values as JS-side)
-- [ ] add `mergePNPMWorkspaceConfig(base map[string]any, userYAML string) (map[string]any, error)` — parses user YAML and shallow-merges on top of base
-- [ ] add `buildPNPMWorkspaceForApp(files map[string]string) (string, error)` — orchestrates: get defaults → merge with user's `files["pnpm-workspace.yaml"]` entry → marshal to YAML string
-- [ ] run tests — must pass including merge tests from Task 2
+- [x] in `internal/runtimemanager/fnm.go`: add `defaultPNPMWorkspaceConfig() map[string]any` — returns recommended defaults map (same values as JS-side)
+- [x] add `mergePNPMWorkspaceConfig(base map[string]any, userYAML string) (map[string]any, error)` — parses user YAML and shallow-merges on top of base
+- [x] add `buildPNPMWorkspaceForApp(files map[string]string) (string, error)` — orchestrates: get defaults → merge with user's `files["pnpm-workspace.yaml"]` entry → marshal to YAML string
+- [x] run tests — must pass including merge tests from Task 2
+
+⚠️ Implementation note: Task 2 (red) and Task 3 (green) were committed together because the repo's pre-commit hook runs `go test ./...` and `golangci-lint`, which made an isolated TDD-red commit infeasible. Tests were authored first (red), then implementation added to reach green within the same commit.
 
 ### Task 4: Integrate workspace generation into FNM app installer
 

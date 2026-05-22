@@ -13,6 +13,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/goccy/go-yaml"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -1080,4 +1081,267 @@ func downloadPNPMFromRegistryWithURL(registryURL string, version string, destDir
 	}
 
 	return nil
+}
+
+func TestDefaultPNPMWorkspaceConfig(t *testing.T) {
+	cfg := defaultPNPMWorkspaceConfig()
+
+	expected := map[string]any{
+		"strictDepBuilds":           true,
+		"blockExoticSubdeps":        true,
+		"enablePrePostScripts":      false,
+		"dangerouslyAllowAllBuilds": false,
+		"minimumReleaseAge":         10080,
+		"trustPolicy":               "no-downgrade",
+		"lockfile":                  true,
+		"preferFrozenLockfile":      true,
+	}
+
+	if len(cfg) != len(expected) {
+		t.Errorf("config has %d keys, want %d (got %v)", len(cfg), len(expected), cfg)
+	}
+
+	for key, want := range expected {
+		got, ok := cfg[key]
+		if !ok {
+			t.Errorf("missing key %q", key)
+			continue
+		}
+		if !pnpmWorkspaceValueEqual(got, want) {
+			t.Errorf("key %q = %v (%T), want %v (%T)", key, got, got, want, want)
+		}
+	}
+}
+
+func pnpmWorkspaceValueEqual(got, want any) bool {
+	if g, ok := got.(int); ok {
+		if w, ok := want.(int); ok {
+			return g == w
+		}
+	}
+	if g, ok := got.(uint64); ok {
+		if w, ok := want.(int); ok {
+			return g == uint64(w)
+		}
+	}
+	if g, ok := got.(int64); ok {
+		if w, ok := want.(int); ok {
+			return g == int64(w)
+		}
+	}
+	return got == want
+}
+
+func TestMergePNPMWorkspaceConfig(t *testing.T) {
+	t.Run("empty user YAML returns defaults unchanged", func(t *testing.T) {
+		defaults := defaultPNPMWorkspaceConfig()
+		merged, err := mergePNPMWorkspaceConfig(defaults, "")
+		if err != nil {
+			t.Fatalf("mergePNPMWorkspaceConfig() error = %v", err)
+		}
+
+		if len(merged) != len(defaults) {
+			t.Errorf("merged has %d keys, want %d (defaults: %v, merged: %v)", len(merged), len(defaults), defaults, merged)
+		}
+		for key, want := range defaults {
+			got, ok := merged[key]
+			if !ok {
+				t.Errorf("missing key %q in merged", key)
+				continue
+			}
+			if !pnpmWorkspaceValueEqual(got, want) {
+				t.Errorf("key %q = %v, want %v", key, got, want)
+			}
+		}
+	})
+
+	t.Run("user adds allowBuilds without touching defaults", func(t *testing.T) {
+		defaults := defaultPNPMWorkspaceConfig()
+		userYAML := "allowBuilds:\n  puppeteer: true\n"
+
+		merged, err := mergePNPMWorkspaceConfig(defaults, userYAML)
+		if err != nil {
+			t.Fatalf("mergePNPMWorkspaceConfig() error = %v", err)
+		}
+
+		allowBuilds, ok := merged["allowBuilds"]
+		if !ok {
+			t.Fatal("merged result missing allowBuilds key")
+		}
+		switch ab := allowBuilds.(type) {
+		case map[string]any:
+			if v, ok := ab["puppeteer"]; !ok || v != true {
+				t.Errorf("allowBuilds.puppeteer = %v, want true", v)
+			}
+		case map[any]any:
+			if v, ok := ab["puppeteer"]; !ok || v != true {
+				t.Errorf("allowBuilds.puppeteer = %v, want true", v)
+			}
+		default:
+			t.Errorf("allowBuilds has unexpected type %T: %v", allowBuilds, allowBuilds)
+		}
+
+		if !pnpmWorkspaceValueEqual(merged["strictDepBuilds"], true) {
+			t.Errorf("strictDepBuilds = %v, want true (default preserved)", merged["strictDepBuilds"])
+		}
+		if !pnpmWorkspaceValueEqual(merged["blockExoticSubdeps"], true) {
+			t.Errorf("blockExoticSubdeps = %v, want true (default preserved)", merged["blockExoticSubdeps"])
+		}
+		if !pnpmWorkspaceValueEqual(merged["minimumReleaseAge"], 10080) {
+			t.Errorf("minimumReleaseAge = %v, want 10080 (default preserved)", merged["minimumReleaseAge"])
+		}
+	})
+
+	t.Run("user overrides strictDepBuilds (user wins)", func(t *testing.T) {
+		defaults := defaultPNPMWorkspaceConfig()
+		userYAML := "strictDepBuilds: false\n"
+
+		merged, err := mergePNPMWorkspaceConfig(defaults, userYAML)
+		if err != nil {
+			t.Fatalf("mergePNPMWorkspaceConfig() error = %v", err)
+		}
+
+		if !pnpmWorkspaceValueEqual(merged["strictDepBuilds"], false) {
+			t.Errorf("strictDepBuilds = %v, want false (user override should win)", merged["strictDepBuilds"])
+		}
+
+		if !pnpmWorkspaceValueEqual(merged["blockExoticSubdeps"], true) {
+			t.Errorf("blockExoticSubdeps = %v, want true (default preserved)", merged["blockExoticSubdeps"])
+		}
+	})
+
+	t.Run("invalid YAML returns error", func(t *testing.T) {
+		defaults := defaultPNPMWorkspaceConfig()
+		_, err := mergePNPMWorkspaceConfig(defaults, "not: valid: yaml: at: all: [")
+		if err == nil {
+			t.Error("expected error for invalid YAML, got nil")
+		}
+	})
+}
+
+func TestBuildPNPMWorkspaceForApp(t *testing.T) {
+	t.Run("no user override returns defaults", func(t *testing.T) {
+		yamlOut, err := buildPNPMWorkspaceForApp(nil)
+		if err != nil {
+			t.Fatalf("buildPNPMWorkspaceForApp() error = %v", err)
+		}
+		if yamlOut == "" {
+			t.Fatal("expected non-empty YAML output")
+		}
+
+		var parsed map[string]any
+		if err := yaml.Unmarshal([]byte(yamlOut), &parsed); err != nil {
+			t.Fatalf("failed to parse output YAML: %v", err)
+		}
+
+		if !pnpmWorkspaceValueEqual(parsed["strictDepBuilds"], true) {
+			t.Errorf("strictDepBuilds = %v, want true", parsed["strictDepBuilds"])
+		}
+		if !pnpmWorkspaceValueEqual(parsed["blockExoticSubdeps"], true) {
+			t.Errorf("blockExoticSubdeps = %v, want true", parsed["blockExoticSubdeps"])
+		}
+		if !pnpmWorkspaceValueEqual(parsed["minimumReleaseAge"], 10080) {
+			t.Errorf("minimumReleaseAge = %v, want 10080", parsed["minimumReleaseAge"])
+		}
+		if !pnpmWorkspaceValueEqual(parsed["trustPolicy"], "no-downgrade") {
+			t.Errorf("trustPolicy = %v, want \"no-downgrade\"", parsed["trustPolicy"])
+		}
+	})
+
+	t.Run("empty files map returns defaults", func(t *testing.T) {
+		yamlOut, err := buildPNPMWorkspaceForApp(map[string]string{})
+		if err != nil {
+			t.Fatalf("buildPNPMWorkspaceForApp() error = %v", err)
+		}
+
+		var parsed map[string]any
+		if err := yaml.Unmarshal([]byte(yamlOut), &parsed); err != nil {
+			t.Fatalf("failed to parse output YAML: %v", err)
+		}
+		if !pnpmWorkspaceValueEqual(parsed["strictDepBuilds"], true) {
+			t.Errorf("strictDepBuilds = %v, want true", parsed["strictDepBuilds"])
+		}
+	})
+
+	t.Run("files without pnpm-workspace.yaml entry returns defaults", func(t *testing.T) {
+		files := map[string]string{
+			".npmrc": "registry=https://registry.npmjs.org/\n",
+		}
+		yamlOut, err := buildPNPMWorkspaceForApp(files)
+		if err != nil {
+			t.Fatalf("buildPNPMWorkspaceForApp() error = %v", err)
+		}
+
+		var parsed map[string]any
+		if err := yaml.Unmarshal([]byte(yamlOut), &parsed); err != nil {
+			t.Fatalf("failed to parse output YAML: %v", err)
+		}
+		if !pnpmWorkspaceValueEqual(parsed["strictDepBuilds"], true) {
+			t.Errorf("strictDepBuilds = %v, want true", parsed["strictDepBuilds"])
+		}
+		if _, hasAllowBuilds := parsed["allowBuilds"]; hasAllowBuilds {
+			t.Error("output should not have allowBuilds when no user override provided")
+		}
+	})
+
+	t.Run("user pnpm-workspace.yaml entry is merged with defaults", func(t *testing.T) {
+		files := map[string]string{
+			"pnpm-workspace.yaml": "allowBuilds:\n  puppeteer: true\n",
+		}
+		yamlOut, err := buildPNPMWorkspaceForApp(files)
+		if err != nil {
+			t.Fatalf("buildPNPMWorkspaceForApp() error = %v", err)
+		}
+
+		var parsed map[string]any
+		if err := yaml.Unmarshal([]byte(yamlOut), &parsed); err != nil {
+			t.Fatalf("failed to parse output YAML: %v", err)
+		}
+
+		if !pnpmWorkspaceValueEqual(parsed["strictDepBuilds"], true) {
+			t.Errorf("strictDepBuilds = %v, want true (default preserved)", parsed["strictDepBuilds"])
+		}
+		if !pnpmWorkspaceValueEqual(parsed["blockExoticSubdeps"], true) {
+			t.Errorf("blockExoticSubdeps = %v, want true (default preserved)", parsed["blockExoticSubdeps"])
+		}
+
+		allowBuilds, ok := parsed["allowBuilds"]
+		if !ok {
+			t.Fatal("merged result missing allowBuilds key")
+		}
+		switch ab := allowBuilds.(type) {
+		case map[string]any:
+			if v, ok := ab["puppeteer"]; !ok || v != true {
+				t.Errorf("allowBuilds.puppeteer = %v, want true", v)
+			}
+		case map[any]any:
+			if v, ok := ab["puppeteer"]; !ok || v != true {
+				t.Errorf("allowBuilds.puppeteer = %v, want true", v)
+			}
+		default:
+			t.Errorf("allowBuilds has unexpected type %T: %v", allowBuilds, allowBuilds)
+		}
+	})
+
+	t.Run("user override of security setting wins", func(t *testing.T) {
+		files := map[string]string{
+			"pnpm-workspace.yaml": "strictDepBuilds: false\n",
+		}
+		yamlOut, err := buildPNPMWorkspaceForApp(files)
+		if err != nil {
+			t.Fatalf("buildPNPMWorkspaceForApp() error = %v", err)
+		}
+
+		var parsed map[string]any
+		if err := yaml.Unmarshal([]byte(yamlOut), &parsed); err != nil {
+			t.Fatalf("failed to parse output YAML: %v", err)
+		}
+
+		if !pnpmWorkspaceValueEqual(parsed["strictDepBuilds"], false) {
+			t.Errorf("strictDepBuilds = %v, want false (user override should win)", parsed["strictDepBuilds"])
+		}
+		if !pnpmWorkspaceValueEqual(parsed["blockExoticSubdeps"], true) {
+			t.Errorf("blockExoticSubdeps = %v, want true (default preserved)", parsed["blockExoticSubdeps"])
+		}
+	})
 }

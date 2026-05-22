@@ -12,6 +12,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/goccy/go-yaml"
 	"io"
 	"net"
 	"net/http"
@@ -540,6 +541,69 @@ func buildPNPMInstallArgs(pnpmCjsPath string, hasLockFile bool) []string {
 		args = append(args, "--frozen-lockfile")
 	}
 	return args
+}
+
+// defaultPNPMWorkspaceConfig returns the recommended pnpm 11 workspace
+// security defaults applied to every FNM app environment. Mirrors the
+// JS-side defaults published via sharedStorage["pnpm-workspace-defaults"].
+func defaultPNPMWorkspaceConfig() map[string]any {
+	return map[string]any{
+		"strictDepBuilds":           true,
+		"blockExoticSubdeps":        true,
+		"enablePrePostScripts":      false,
+		"dangerouslyAllowAllBuilds": false,
+		"minimumReleaseAge":         10080,
+		"trustPolicy":               "no-downgrade",
+		"lockfile":                  true,
+		"preferFrozenLockfile":      true,
+	}
+}
+
+// mergePNPMWorkspaceConfig shallow-merges parsed user YAML on top of the
+// base defaults map. Top-level user keys win; unset keys keep their default.
+// An empty userYAML returns a copy of base unchanged.
+func mergePNPMWorkspaceConfig(base map[string]any, userYAML string) (map[string]any, error) {
+	merged := make(map[string]any, len(base))
+	for k, v := range base {
+		merged[k] = v
+	}
+
+	if strings.TrimSpace(userYAML) == "" {
+		return merged, nil
+	}
+
+	var user map[string]any
+	if err := yaml.Unmarshal([]byte(userYAML), &user); err != nil {
+		return nil, fmt.Errorf("failed to parse user pnpm-workspace.yaml: %w", err)
+	}
+
+	for k, v := range user {
+		merged[k] = v
+	}
+	return merged, nil
+}
+
+// buildPNPMWorkspaceForApp returns the YAML string to write as
+// pnpm-workspace.yaml in the app environment. It starts from the
+// recommended defaults and shallow-merges the user's
+// files["pnpm-workspace.yaml"] entry on top. Returns defaults alone when
+// the user provides no override.
+func buildPNPMWorkspaceForApp(files map[string]string) (string, error) {
+	userYAML := ""
+	if files != nil {
+		userYAML = files["pnpm-workspace.yaml"]
+	}
+
+	merged, err := mergePNPMWorkspaceConfig(defaultPNPMWorkspaceConfig(), userYAML)
+	if err != nil {
+		return "", err
+	}
+
+	out, err := yaml.Marshal(merged)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal pnpm-workspace.yaml: %w", err)
+	}
+	return string(out), nil
 }
 
 func buildPackageJSON(packageName string, version string, deps map[string]string) ([]byte, error) {
