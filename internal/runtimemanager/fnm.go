@@ -348,7 +348,16 @@ func (rm *RuntimeManager) resolveFNMAppEnvPath(appName string, appConfig *binman
 		return "", "", config.RuntimeConfig{}, fmt.Errorf("failed to resolve FNM runtime for %q: %w", appName, err)
 	}
 
-	appEnvPath, err = rm.GetAppPath(appName, config.RuntimeKindFNM, appConfig.Version, appConfig.Dependencies, lockFileHash(appConfig.LockFile), files, archives, runtimeName, FNMAppPathExtra{
+	// Hash the actual merged pnpm-workspace.yaml content (defaults + user
+	// override) rather than only the user's raw override. This way the cache
+	// key invalidates when defaultPNPMWorkspaceConfig() is tightened, so the
+	// new defaults propagate to existing installs.
+	filesForHash, err := filesWithMergedWorkspaceYAML(files)
+	if err != nil {
+		return "", "", config.RuntimeConfig{}, fmt.Errorf("failed to compute pnpm-workspace.yaml for %q: %w", appName, err)
+	}
+
+	appEnvPath, err = rm.GetAppPath(appName, config.RuntimeKindFNM, appConfig.Version, appConfig.Dependencies, lockFileHash(appConfig.LockFile), filesForHash, archives, runtimeName, FNMAppPathExtra{
 		PackageName: appConfig.PackageName,
 		BinPath:     appConfig.BinPath,
 	})
@@ -357,6 +366,24 @@ func (rm *RuntimeManager) resolveFNMAppEnvPath(appName string, appConfig *binman
 	}
 
 	return appEnvPath, runtimeName, rc, nil
+}
+
+// filesWithMergedWorkspaceYAML returns a copy of files where the
+// pnpm-workspace.yaml entry is replaced by the actual merged content
+// (defaults + user override). The original files map is not mutated.
+// This is used only for cache-key computation; the real merge for writing
+// to disk is performed by preparePNPMWorkspaceForApp.
+func filesWithMergedWorkspaceYAML(files map[string]string) (map[string]string, error) {
+	merged, err := buildPNPMWorkspaceForApp(files)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]string, len(files)+1)
+	for k, v := range files {
+		out[k] = v
+	}
+	out["pnpm-workspace.yaml"] = merged
+	return out, nil
 }
 
 // InstallFNMApp installs an FNM-managed app if not already cached.
@@ -436,7 +463,7 @@ func (rm *RuntimeManager) installFNMAppOnce(appName string, appConfig *binmanage
 		}
 	}()
 
-	filesToWrite, err := writeFNMAppWorkspaceFile(appEnvPath, files)
+	mergedWorkspaceYAML, filesToWrite, err := preparePNPMWorkspaceForApp(files)
 	if err != nil {
 		return fmt.Errorf("failed to set up pnpm-workspace.yaml for %q: %w", appName, err)
 	}
@@ -445,6 +472,13 @@ func (rm *RuntimeManager) installFNMAppOnce(appName string, appConfig *binmanage
 		if err := binmanager.WriteAppFiles(appEnvPath, filesToWrite, archives); err != nil {
 			return fmt.Errorf("failed to write app files/archives for %q: %w", appName, err)
 		}
+	}
+
+	// Write pnpm-workspace.yaml AFTER WriteAppFiles so the secure defaults
+	// always win over anything an archive might place at this path.
+	workspacePath := filepath.Join(appEnvPath, "pnpm-workspace.yaml")
+	if err := os.WriteFile(workspacePath, []byte(mergedWorkspaceYAML), 0644); err != nil {
+		return fmt.Errorf("failed to write pnpm-workspace.yaml for %q: %w", appName, err)
 	}
 
 	packageJSON, err := buildPackageJSON(appConfig.PackageName, appConfig.Version, appConfig.Dependencies)
@@ -588,29 +622,21 @@ func mergePNPMWorkspaceConfig(base map[string]any, userYAML string) (map[string]
 	return merged, nil
 }
 
-// writeFNMAppWorkspaceFile builds the merged pnpm-workspace.yaml content
-// for an FNM app environment, writes it to appEnvPath, and returns a files
-// map with the "pnpm-workspace.yaml" entry removed (consumed by the merge).
-// The input files map is not mutated; when it contains the workspace entry
-// a filtered copy is returned. Callers should pass the returned map to
-// binmanager.WriteAppFiles to avoid double-writing pnpm-workspace.yaml.
-func writeFNMAppWorkspaceFile(appEnvPath string, files map[string]string) (map[string]string, error) {
-	yamlOut, err := buildPNPMWorkspaceForApp(files)
+// preparePNPMWorkspaceForApp computes the merged pnpm-workspace.yaml content
+// (defaults + user override) and returns a copy of files with the
+// pnpm-workspace.yaml entry removed (consumed by the merge). Callers MUST
+// write the returned YAML to disk AFTER any archive extraction so that
+// archives cannot overwrite the secure defaults. The input files map is not
+// mutated; when it does not contain the workspace entry the same map is
+// returned.
+func preparePNPMWorkspaceForApp(files map[string]string) (mergedYAML string, filteredFiles map[string]string, err error) {
+	mergedYAML, err = buildPNPMWorkspaceForApp(files)
 	if err != nil {
-		return nil, err
-	}
-
-	if err := os.MkdirAll(appEnvPath, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create app directory: %w", err)
-	}
-
-	workspacePath := filepath.Join(appEnvPath, "pnpm-workspace.yaml")
-	if err := os.WriteFile(workspacePath, []byte(yamlOut), 0644); err != nil {
-		return nil, fmt.Errorf("failed to write pnpm-workspace.yaml: %w", err)
+		return "", nil, err
 	}
 
 	if _, has := files["pnpm-workspace.yaml"]; !has {
-		return files, nil
+		return mergedYAML, files, nil
 	}
 
 	filtered := make(map[string]string, len(files)-1)
@@ -620,6 +646,29 @@ func writeFNMAppWorkspaceFile(appEnvPath string, files map[string]string) (map[s
 		}
 		filtered[k] = v
 	}
+	return mergedYAML, filtered, nil
+}
+
+// writeFNMAppWorkspaceFile is a convenience wrapper around
+// preparePNPMWorkspaceForApp + os.WriteFile. It is only safe when no archives
+// will subsequently be extracted into appEnvPath; for the real install path,
+// installFNMAppOnce uses preparePNPMWorkspaceForApp directly and writes the
+// YAML after binmanager.WriteAppFiles.
+func writeFNMAppWorkspaceFile(appEnvPath string, files map[string]string) (map[string]string, error) {
+	mergedYAML, filtered, err := preparePNPMWorkspaceForApp(files)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := os.MkdirAll(appEnvPath, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create app directory: %w", err)
+	}
+
+	workspacePath := filepath.Join(appEnvPath, "pnpm-workspace.yaml")
+	if err := os.WriteFile(workspacePath, []byte(mergedYAML), 0644); err != nil {
+		return nil, fmt.Errorf("failed to write pnpm-workspace.yaml: %w", err)
+	}
+
 	return filtered, nil
 }
 

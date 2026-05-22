@@ -801,6 +801,57 @@ func TestResolveFNMAppEnvPath(t *testing.T) {
 	})
 }
 
+// TestFilesWithMergedWorkspaceYAML_HashIncludesDefaults pins the invariant
+// that the FNM app cache key incorporates the merged pnpm-workspace.yaml
+// content (defaults + user override), not just the user override. Without
+// this, tightening defaultPNPMWorkspaceConfig in a future release would not
+// invalidate existing installs.
+func TestFilesWithMergedWorkspaceYAML_HashIncludesDefaults(t *testing.T) {
+	t.Run("nil files map gets injected workspace yaml", func(t *testing.T) {
+		out, err := filesWithMergedWorkspaceYAML(nil)
+		if err != nil {
+			t.Fatalf("filesWithMergedWorkspaceYAML() error = %v", err)
+		}
+		got, ok := out["pnpm-workspace.yaml"]
+		if !ok {
+			t.Fatal("output missing pnpm-workspace.yaml entry")
+		}
+		if !strings.Contains(got, "strictDepBuilds") {
+			t.Errorf("injected yaml missing security defaults; got: %q", got)
+		}
+	})
+
+	t.Run("input files map is not mutated", func(t *testing.T) {
+		files := map[string]string{
+			".npmrc": "registry=https://registry.npmjs.org/\n",
+		}
+		_, err := filesWithMergedWorkspaceYAML(files)
+		if err != nil {
+			t.Fatalf("filesWithMergedWorkspaceYAML() error = %v", err)
+		}
+		if _, has := files["pnpm-workspace.yaml"]; has {
+			t.Error("caller's files map was mutated with workspace entry")
+		}
+	})
+
+	t.Run("user override is merged into injected entry", func(t *testing.T) {
+		files := map[string]string{
+			"pnpm-workspace.yaml": "allowBuilds:\n  puppeteer: true\n",
+		}
+		out, err := filesWithMergedWorkspaceYAML(files)
+		if err != nil {
+			t.Fatalf("filesWithMergedWorkspaceYAML() error = %v", err)
+		}
+		got := out["pnpm-workspace.yaml"]
+		if !strings.Contains(got, "strictDepBuilds") {
+			t.Errorf("merged yaml missing security defaults; got: %q", got)
+		}
+		if !strings.Contains(got, "puppeteer") {
+			t.Errorf("merged yaml missing user override; got: %q", got)
+		}
+	})
+}
+
 func TestGetFNMCommandInfo_LockFileAffectsPath(t *testing.T) {
 	runtimes := makeFNMTestRuntimes()
 	rm := New(runtimes)
@@ -1499,6 +1550,8 @@ func TestWriteFNMAppWorkspaceFile(t *testing.T) {
 // regressions where lockfile regeneration would skip the workspace merge
 // (e.g., if defaults were only written when a lockfile was already present).
 func TestWriteFNMAppWorkspaceFile_LockfileRegenerationScenario(t *testing.T) {
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
+
 	runtimes := makeFNMTestRuntimes()
 	rm := New(runtimes)
 
@@ -1517,7 +1570,6 @@ func TestWriteFNMAppWorkspaceFile_LockfileRegenerationScenario(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolveFNMAppEnvPath() error = %v", err)
 	}
-	defer func() { _ = os.RemoveAll(appEnvPath) }()
 
 	filtered, err := writeFNMAppWorkspaceFile(appEnvPath, files)
 	if err != nil {
@@ -1567,6 +1619,8 @@ func TestWriteFNMAppWorkspaceFile_LockfileRegenerationScenario(t *testing.T) {
 
 func TestInstallFNMAppOnceWritesWorkspaceFile(t *testing.T) {
 	t.Run("writes defaults when no user override", func(t *testing.T) {
+		t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
+
 		runtimes := makeFNMTestRuntimes()
 		rm := New(runtimes)
 
@@ -1586,7 +1640,6 @@ func TestInstallFNMAppOnceWritesWorkspaceFile(t *testing.T) {
 		if err != nil {
 			t.Fatalf("writeFNMAppWorkspaceFile() error = %v", err)
 		}
-		defer func() { _ = os.RemoveAll(appEnvPath) }()
 
 		if filtered != nil {
 			t.Errorf("filtered = %v, want nil", filtered)
@@ -1609,6 +1662,8 @@ func TestInstallFNMAppOnceWritesWorkspaceFile(t *testing.T) {
 	})
 
 	t.Run("writes merged result when user provides workspace yaml", func(t *testing.T) {
+		t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
+
 		runtimes := makeFNMTestRuntimes()
 		rm := New(runtimes)
 
@@ -1632,7 +1687,6 @@ func TestInstallFNMAppOnceWritesWorkspaceFile(t *testing.T) {
 		if err != nil {
 			t.Fatalf("writeFNMAppWorkspaceFile() error = %v", err)
 		}
-		defer func() { _ = os.RemoveAll(appEnvPath) }()
 
 		if _, has := filtered["pnpm-workspace.yaml"]; has {
 			t.Error("filtered files should not include pnpm-workspace.yaml")
