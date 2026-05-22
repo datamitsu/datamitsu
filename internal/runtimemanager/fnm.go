@@ -436,8 +436,13 @@ func (rm *RuntimeManager) installFNMAppOnce(appName string, appConfig *binmanage
 		}
 	}()
 
-	if len(files) > 0 || len(archives) > 0 {
-		if err := binmanager.WriteAppFiles(appEnvPath, files, archives); err != nil {
+	filesToWrite, err := writeFNMAppWorkspaceFile(appEnvPath, files)
+	if err != nil {
+		return fmt.Errorf("failed to set up pnpm-workspace.yaml for %q: %w", appName, err)
+	}
+
+	if len(filesToWrite) > 0 || len(archives) > 0 {
+		if err := binmanager.WriteAppFiles(appEnvPath, filesToWrite, archives); err != nil {
 			return fmt.Errorf("failed to write app files/archives for %q: %w", appName, err)
 		}
 	}
@@ -581,6 +586,41 @@ func mergePNPMWorkspaceConfig(base map[string]any, userYAML string) (map[string]
 		merged[k] = v
 	}
 	return merged, nil
+}
+
+// writeFNMAppWorkspaceFile builds the merged pnpm-workspace.yaml content
+// for an FNM app environment, writes it to appEnvPath, and returns a files
+// map with the "pnpm-workspace.yaml" entry removed (consumed by the merge).
+// The input files map is not mutated; when it contains the workspace entry
+// a filtered copy is returned. Callers should pass the returned map to
+// binmanager.WriteAppFiles to avoid double-writing pnpm-workspace.yaml.
+func writeFNMAppWorkspaceFile(appEnvPath string, files map[string]string) (map[string]string, error) {
+	yamlOut, err := buildPNPMWorkspaceForApp(files)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := os.MkdirAll(appEnvPath, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create app directory: %w", err)
+	}
+
+	workspacePath := filepath.Join(appEnvPath, "pnpm-workspace.yaml")
+	if err := os.WriteFile(workspacePath, []byte(yamlOut), 0644); err != nil {
+		return nil, fmt.Errorf("failed to write pnpm-workspace.yaml: %w", err)
+	}
+
+	if _, has := files["pnpm-workspace.yaml"]; !has {
+		return files, nil
+	}
+
+	filtered := make(map[string]string, len(files)-1)
+	for k, v := range files {
+		if k == "pnpm-workspace.yaml" {
+			continue
+		}
+		filtered[k] = v
+	}
+	return filtered, nil
 }
 
 // buildPNPMWorkspaceForApp returns the YAML string to write as

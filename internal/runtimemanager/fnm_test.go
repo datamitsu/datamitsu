@@ -1345,3 +1345,254 @@ func TestBuildPNPMWorkspaceForApp(t *testing.T) {
 		}
 	})
 }
+
+func TestWriteFNMAppWorkspaceFile(t *testing.T) {
+	t.Run("nil files writes defaults to disk", func(t *testing.T) {
+		appEnvPath := t.TempDir()
+
+		filtered, err := writeFNMAppWorkspaceFile(appEnvPath, nil)
+		if err != nil {
+			t.Fatalf("writeFNMAppWorkspaceFile() error = %v", err)
+		}
+		if filtered != nil {
+			t.Errorf("filtered files = %v, want nil for nil input", filtered)
+		}
+
+		workspacePath := filepath.Join(appEnvPath, "pnpm-workspace.yaml")
+		content, err := os.ReadFile(workspacePath)
+		if err != nil {
+			t.Fatalf("failed to read written file: %v", err)
+		}
+
+		var parsed map[string]any
+		if err := yaml.Unmarshal(content, &parsed); err != nil {
+			t.Fatalf("failed to parse written YAML: %v", err)
+		}
+		if !pnpmWorkspaceValueEqual(parsed["strictDepBuilds"], true) {
+			t.Errorf("strictDepBuilds = %v, want true (default)", parsed["strictDepBuilds"])
+		}
+		if !pnpmWorkspaceValueEqual(parsed["minimumReleaseAge"], 10080) {
+			t.Errorf("minimumReleaseAge = %v, want 10080 (default)", parsed["minimumReleaseAge"])
+		}
+	})
+
+	t.Run("files without workspace entry returns same map untouched", func(t *testing.T) {
+		appEnvPath := t.TempDir()
+		files := map[string]string{
+			".npmrc": "registry=https://registry.npmjs.org/\n",
+		}
+
+		filtered, err := writeFNMAppWorkspaceFile(appEnvPath, files)
+		if err != nil {
+			t.Fatalf("writeFNMAppWorkspaceFile() error = %v", err)
+		}
+		if len(filtered) != 1 || filtered[".npmrc"] != files[".npmrc"] {
+			t.Errorf("filtered = %v, want same map with .npmrc preserved", filtered)
+		}
+
+		workspacePath := filepath.Join(appEnvPath, "pnpm-workspace.yaml")
+		content, err := os.ReadFile(workspacePath)
+		if err != nil {
+			t.Fatalf("failed to read written file: %v", err)
+		}
+
+		var parsed map[string]any
+		if err := yaml.Unmarshal(content, &parsed); err != nil {
+			t.Fatalf("failed to parse written YAML: %v", err)
+		}
+		if !pnpmWorkspaceValueEqual(parsed["strictDepBuilds"], true) {
+			t.Errorf("strictDepBuilds = %v, want true (default)", parsed["strictDepBuilds"])
+		}
+		if _, has := parsed["allowBuilds"]; has {
+			t.Error("output should not contain allowBuilds when no user override provided")
+		}
+	})
+
+	t.Run("user workspace entry produces merged file and is filtered out", func(t *testing.T) {
+		appEnvPath := t.TempDir()
+		files := map[string]string{
+			"pnpm-workspace.yaml": "allowBuilds:\n  puppeteer: true\nstrictDepBuilds: false\n",
+			".npmrc":              "registry=https://registry.npmjs.org/\n",
+		}
+
+		filtered, err := writeFNMAppWorkspaceFile(appEnvPath, files)
+		if err != nil {
+			t.Fatalf("writeFNMAppWorkspaceFile() error = %v", err)
+		}
+
+		if _, has := filtered["pnpm-workspace.yaml"]; has {
+			t.Error("filtered files should not contain pnpm-workspace.yaml (consumed by merge)")
+		}
+		if filtered[".npmrc"] != files[".npmrc"] {
+			t.Errorf("filtered[.npmrc] = %q, want unchanged", filtered[".npmrc"])
+		}
+
+		if _, has := files["pnpm-workspace.yaml"]; !has {
+			t.Error("caller's files map should not have been mutated")
+		}
+
+		workspacePath := filepath.Join(appEnvPath, "pnpm-workspace.yaml")
+		content, err := os.ReadFile(workspacePath)
+		if err != nil {
+			t.Fatalf("failed to read written file: %v", err)
+		}
+
+		var parsed map[string]any
+		if err := yaml.Unmarshal(content, &parsed); err != nil {
+			t.Fatalf("failed to parse written YAML: %v", err)
+		}
+
+		if !pnpmWorkspaceValueEqual(parsed["strictDepBuilds"], false) {
+			t.Errorf("strictDepBuilds = %v, want false (user override)", parsed["strictDepBuilds"])
+		}
+		if !pnpmWorkspaceValueEqual(parsed["blockExoticSubdeps"], true) {
+			t.Errorf("blockExoticSubdeps = %v, want true (default preserved)", parsed["blockExoticSubdeps"])
+		}
+		allowBuilds, ok := parsed["allowBuilds"]
+		if !ok {
+			t.Fatal("written YAML missing allowBuilds")
+		}
+		switch ab := allowBuilds.(type) {
+		case map[string]any:
+			if v, ok := ab["puppeteer"]; !ok || v != true {
+				t.Errorf("allowBuilds.puppeteer = %v, want true", v)
+			}
+		case map[any]any:
+			if v, ok := ab["puppeteer"]; !ok || v != true {
+				t.Errorf("allowBuilds.puppeteer = %v, want true", v)
+			}
+		default:
+			t.Errorf("allowBuilds has unexpected type %T", allowBuilds)
+		}
+	})
+
+	t.Run("creates app directory if missing", func(t *testing.T) {
+		baseDir := t.TempDir()
+		appEnvPath := filepath.Join(baseDir, "nested", "app-env")
+
+		if _, err := writeFNMAppWorkspaceFile(appEnvPath, nil); err != nil {
+			t.Fatalf("writeFNMAppWorkspaceFile() error = %v", err)
+		}
+
+		if _, err := os.Stat(filepath.Join(appEnvPath, "pnpm-workspace.yaml")); err != nil {
+			t.Errorf("workspace file not created: %v", err)
+		}
+	})
+
+	t.Run("invalid user YAML returns error", func(t *testing.T) {
+		appEnvPath := t.TempDir()
+		files := map[string]string{
+			"pnpm-workspace.yaml": "not: valid: yaml: at: all: [",
+		}
+
+		_, err := writeFNMAppWorkspaceFile(appEnvPath, files)
+		if err == nil {
+			t.Error("expected error for invalid user YAML, got nil")
+		}
+	})
+}
+
+func TestInstallFNMAppOnceWritesWorkspaceFile(t *testing.T) {
+	t.Run("writes defaults when no user override", func(t *testing.T) {
+		runtimes := makeFNMTestRuntimes()
+		rm := New(runtimes)
+
+		appConfig := &binmanager.AppConfigFNM{
+			PackageName: "@mermaid-js/mermaid-cli",
+			Version:     "11.4.2",
+			BinPath:     "node_modules/.bin/mmdc",
+			Runtime:     "fnm",
+		}
+
+		appEnvPath, _, _, err := rm.resolveFNMAppEnvPath("mmdc-defaults", appConfig, nil, nil)
+		if err != nil {
+			t.Fatalf("resolveFNMAppEnvPath() error = %v", err)
+		}
+
+		filtered, err := writeFNMAppWorkspaceFile(appEnvPath, nil)
+		if err != nil {
+			t.Fatalf("writeFNMAppWorkspaceFile() error = %v", err)
+		}
+		defer func() { _ = os.RemoveAll(appEnvPath) }()
+
+		if filtered != nil {
+			t.Errorf("filtered = %v, want nil", filtered)
+		}
+
+		content, err := os.ReadFile(filepath.Join(appEnvPath, "pnpm-workspace.yaml"))
+		if err != nil {
+			t.Fatalf("workspace file not found: %v", err)
+		}
+		var parsed map[string]any
+		if err := yaml.Unmarshal(content, &parsed); err != nil {
+			t.Fatalf("failed to parse: %v", err)
+		}
+		if !pnpmWorkspaceValueEqual(parsed["strictDepBuilds"], true) {
+			t.Errorf("strictDepBuilds = %v, want true", parsed["strictDepBuilds"])
+		}
+		if !pnpmWorkspaceValueEqual(parsed["blockExoticSubdeps"], true) {
+			t.Errorf("blockExoticSubdeps = %v, want true", parsed["blockExoticSubdeps"])
+		}
+	})
+
+	t.Run("writes merged result when user provides workspace yaml", func(t *testing.T) {
+		runtimes := makeFNMTestRuntimes()
+		rm := New(runtimes)
+
+		appConfig := &binmanager.AppConfigFNM{
+			PackageName: "@mermaid-js/mermaid-cli",
+			Version:     "11.4.2",
+			BinPath:     "node_modules/.bin/mmdc",
+			Runtime:     "fnm",
+		}
+
+		files := map[string]string{
+			"pnpm-workspace.yaml": "allowBuilds:\n  puppeteer: true\n",
+		}
+
+		appEnvPath, _, _, err := rm.resolveFNMAppEnvPath("mmdc-merged", appConfig, files, nil)
+		if err != nil {
+			t.Fatalf("resolveFNMAppEnvPath() error = %v", err)
+		}
+
+		filtered, err := writeFNMAppWorkspaceFile(appEnvPath, files)
+		if err != nil {
+			t.Fatalf("writeFNMAppWorkspaceFile() error = %v", err)
+		}
+		defer func() { _ = os.RemoveAll(appEnvPath) }()
+
+		if _, has := filtered["pnpm-workspace.yaml"]; has {
+			t.Error("filtered files should not include pnpm-workspace.yaml")
+		}
+
+		content, err := os.ReadFile(filepath.Join(appEnvPath, "pnpm-workspace.yaml"))
+		if err != nil {
+			t.Fatalf("workspace file not found: %v", err)
+		}
+		var parsed map[string]any
+		if err := yaml.Unmarshal(content, &parsed); err != nil {
+			t.Fatalf("failed to parse: %v", err)
+		}
+
+		if !pnpmWorkspaceValueEqual(parsed["strictDepBuilds"], true) {
+			t.Errorf("strictDepBuilds = %v, want true (default)", parsed["strictDepBuilds"])
+		}
+
+		allowBuilds, ok := parsed["allowBuilds"]
+		if !ok {
+			t.Fatal("missing allowBuilds in merged output")
+		}
+		switch ab := allowBuilds.(type) {
+		case map[string]any:
+			if v, ok := ab["puppeteer"]; !ok || v != true {
+				t.Errorf("allowBuilds.puppeteer = %v, want true", v)
+			}
+		case map[any]any:
+			if v, ok := ab["puppeteer"]; !ok || v != true {
+				t.Errorf("allowBuilds.puppeteer = %v, want true", v)
+			}
+		default:
+			t.Errorf("allowBuilds has unexpected type %T", allowBuilds)
+		}
+	})
+}

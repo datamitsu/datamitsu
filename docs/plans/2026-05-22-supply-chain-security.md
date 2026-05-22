@@ -120,11 +120,13 @@
 
 ### Task 4: Integrate workspace generation into FNM app installer
 
-- [ ] in `installFNMAppOnce()`: after writing `package.json` and lock file, call `buildPNPMWorkspaceForApp(files)` and write result to `pnpm-workspace.yaml` in the app environment
-- [ ] remove `pnpm-workspace.yaml` from the files map before calling `WriteAppFiles()` to avoid double-write (the merge consumes it)
-- [ ] write integration test: install with no user workspace config → defaults are written
-- [ ] write integration test: install with user workspace config → merged result is written
-- [ ] run tests — must pass
+- [x] in `installFNMAppOnce()`: after writing `package.json` and lock file, call `buildPNPMWorkspaceForApp(files)` and write result to `pnpm-workspace.yaml` in the app environment
+- [x] remove `pnpm-workspace.yaml` from the files map before calling `WriteAppFiles()` to avoid double-write (the merge consumes it)
+- [x] write integration test: install with no user workspace config → defaults are written
+- [x] write integration test: install with user workspace config → merged result is written
+- [x] run tests — must pass
+
+⚠️ Implementation note: Extracted file-writing logic into `writeFNMAppWorkspaceFile(appEnvPath, files) (filtered map, error)` helper. The helper builds the merged YAML via `buildPNPMWorkspaceForApp`, writes it to `pnpm-workspace.yaml` in the app environment, and returns a filtered copy of the files map (without `pnpm-workspace.yaml`) for passing to `WriteAppFiles`. The caller's files map is never mutated. Integration tests use `resolveFNMAppEnvPath` + the helper directly (full `installFNMAppOnce` requires real node/pnpm binaries, which unit tests cannot provide).
 
 ### Task 5: Update config lockfile command for pnpm 11
 
