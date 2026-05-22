@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/datamitsu/datamitsu/internal/pnpmdefaults"
 	"github.com/dop251/goja"
 	"github.com/goccy/go-yaml"
 )
@@ -53,6 +54,12 @@ func TestDefaultConfigPNPMWorkspaceDefaults(t *testing.T) {
 	}
 	if err := vm.Set("YAML", yamlNamespace); err != nil {
 		t.Fatalf("vm.Set YAML error: %v", err)
+	}
+
+	// Mirror what internal/engine does: inject the pnpm defaults global so the
+	// compiled config.js can read it instead of hardcoding its own copy.
+	if err := vm.Set("pnpmWorkspaceDefaults", pnpmdefaults.Defaults()); err != nil {
+		t.Fatalf("vm.Set pnpmWorkspaceDefaults error: %v", err)
 	}
 
 	if _, err := vm.RunString(configScript); err != nil {

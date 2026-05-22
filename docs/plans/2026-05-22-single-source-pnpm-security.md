@@ -73,12 +73,16 @@ The core change: Go injects defaults into the goja VM, JS reads the global inste
 
 ### Task 2: Update JS config to use injected global instead of hardcoded object
 
-- [ ] In `config/src/main.ts`: remove the `const pnpmWorkspaceDefaults = { ... }` object (lines 4-13)
-- [ ] In `config/src/main.ts`: update `getConfig()` to use the global `pnpmWorkspaceDefaults` directly — it's already available via `vm.Set()` from Task 1
+- [x] In `config/src/main.ts`: remove the `const pnpmWorkspaceDefaults = { ... }` object (lines 4-13)
+- [x] In `config/src/main.ts`: update `getConfig()` to use the global `pnpmWorkspaceDefaults` directly — it's already available via `vm.Set()` from Task 1
   - The line `"pnpm-workspace-defaults": YAML.stringify(pnpmWorkspaceDefaults)` stays as-is syntactically — it just reads from the injected global now
-- [ ] Rebuild `internal/config/config.js` (run the build/compile step that generates it from `config/src/`)
-- [ ] Write test: load the default config via full config chain, verify `sharedStorage["pnpm-workspace-defaults"]` contains all 8 keys with correct values
-- [ ] Run tests — must pass before next task
+  - Also added a `const pnpmWorkspaceDefaults: Record<string, unknown>` declaration to `config/config.d.ts` so TS understands the global
+- [x] Rebuild `internal/config/config.js` (run the build/compile step that generates it from `config/src/`)
+- [x] Write test: load the default config via full config chain, verify `sharedStorage["pnpm-workspace-defaults"]` contains all 8 keys with correct values
+  - Added `TestSharedStoragePNPMWorkspaceDefaultsRoundTrip` in `cmd/config_loader_test.go` that goes through `loadConfigWithPaths` and parses the YAML against `pnpmdefaults.Defaults()`
+  - Updated `internal/config/config_test.go::TestDefaultConfigPNPMWorkspaceDefaults` to inject the global (script no longer self-defines it)
+  - Updated `internal/runtimemanager/fnm_test.go::TestPNPMWorkspaceDefaults_JSGoAgreement` to inject the global (kept passing for now; Task 3 removes it entirely)
+- [x] Run tests — must pass before next task
 
 ### Task 3: Remove the JS↔Go agreement test
 

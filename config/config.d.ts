@@ -61,6 +61,13 @@ declare global {
   function getConfig(config: config.Config): config.Config;
 
   /**
+   * Recommended pnpm 11 workspace security defaults, injected by the Go engine.
+   * Read this object to publish or extend the defaults — see
+   * `sharedStorage["pnpm-workspace-defaults"]` for the canonical YAML output.
+   */
+  const pnpmWorkspaceDefaults: Record<string, unknown>;
+
+  /**
    * Returns the minimum datamitsu version required by this config (semver format).
    * The tool validates this version during config loading and fails early with
    * upgrade instructions if the current version is too old.

@@ -1195,6 +1195,12 @@ func TestPNPMWorkspaceDefaults_JSGoAgreement(t *testing.T) {
 		t.Fatalf("vm.Set YAML error: %v", err)
 	}
 
+	// Mirror what internal/engine does: inject the pnpm defaults global so the
+	// compiled config.js (which no longer hardcodes its own copy) can read it.
+	if err := vm.Set("pnpmWorkspaceDefaults", defaultPNPMWorkspaceConfig()); err != nil {
+		t.Fatalf("vm.Set pnpmWorkspaceDefaults error: %v", err)
+	}
+
 	if _, err := vm.RunString(configScript); err != nil {
 		t.Fatalf("RunString(configScript) error = %v", err)
 	}
