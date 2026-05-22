@@ -139,10 +139,12 @@
 
 ### Task 6: Harden UV app installs
 
-- [ ] in `internal/runtimemanager/uv.go` `installUVAppOnce()`: add `--no-build` flag when lockfile is present (wheels only, no arbitrary code execution during install)
-- [ ] document trade-off: `--no-build` prevents sdist builds; if a package has no wheel for the platform, install fails (this is intentional for security)
-- [ ] write test for UV install args with and without lockfile
-- [ ] run tests — must pass
+- [x] in `internal/runtimemanager/uv.go` `installUVAppOnce()`: add `--no-build` flag when lockfile is present (wheels only, no arbitrary code execution during install)
+- [x] document trade-off: `--no-build` prevents sdist builds; if a package has no wheel for the platform, install fails (this is intentional for security)
+- [x] write test for UV install args with and without lockfile
+- [x] run tests — must pass
+
+⚠️ Implementation note: Extracted argument construction into a pure helper `buildUVInstallArgs(lockFile, *config.RuntimeConfigUV) []string` for testability. The helper adds `--locked --no-build` together when a lockfile is present (paired intentionally — the security guarantee depends on resolved versions having wheels for the platform). Without a lockfile, `--no-build` is NOT added, since sdists are the only way to install when wheel availability is unknown. Trade-off documented in the helper's doc comment.
 
 ### Task 7: Verify acceptance criteria
 

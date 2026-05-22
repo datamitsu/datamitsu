@@ -162,5 +162,7 @@ export default {
     "govulncheck",
     "sumdb",
     "GOFLAGS",
+    "sdist",
+    "sdists",
   ],
 };
