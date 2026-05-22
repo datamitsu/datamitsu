@@ -210,6 +210,61 @@ func TestSelectBestAsset_ArchiveBeatsPlainBinary(t *testing.T) {
 	}
 }
 
+func TestScoreAsset_FNMMacOSImplicitArm64(t *testing.T) {
+	tests := []struct {
+		name        string
+		asset       string
+		osType      syslist.OsType
+		archType    syslist.ArchType
+		wantOSMatch bool
+		wantArch    bool
+		wantPos     bool
+	}{
+		{
+			"fnm-macos.zip matches darwin/arm64 implicitly",
+			"fnm-macos.zip",
+			syslist.OsTypeDarwin, syslist.ArchTypeArm64,
+			true, true, true,
+		},
+		{
+			"fnm-macos.zip still matches darwin/amd64 implicitly (regression)",
+			"fnm-macos.zip",
+			syslist.OsTypeDarwin, syslist.ArchTypeAmd64,
+			true, true, true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := ScoreAsset(makeAsset(tt.asset), tt.osType, tt.archType, "")
+			if s.OSMatch != tt.wantOSMatch {
+				t.Errorf("OSMatch = %v, want %v", s.OSMatch, tt.wantOSMatch)
+			}
+			if s.ArchMatch != tt.wantArch {
+				t.Errorf("ArchMatch = %v, want %v", s.ArchMatch, tt.wantArch)
+			}
+			if (s.Total > 0) != tt.wantPos {
+				t.Errorf("Total > 0 = %v (got %d), want %v", s.Total > 0, s.Total, tt.wantPos)
+			}
+		})
+	}
+}
+
+func TestSelectBestAsset_ExplicitArm64PreferredOverImplicit(t *testing.T) {
+	assets := []github.Asset{
+		makeAsset("fnm-macos.zip"),
+		makeAsset("tool-darwin-arm64.tar.gz"),
+	}
+
+	best := selectBestAsset(assets, syslist.OsTypeDarwin, syslist.ArchTypeArm64, "")
+	if best == nil {
+		t.Fatal("expected a result")
+	}
+	if best.Asset.Name != "tool-darwin-arm64.tar.gz" {
+		t.Errorf("expected explicit arm64 asset to win, got %q", best.Asset.Name)
+	}
+}
+
 func TestDetectBinary_FiltersVsix(t *testing.T) {
 	assets := []github.Asset{
 		makeAsset("tombi-vscode-0.1.0-linux-x64.vsix"),
