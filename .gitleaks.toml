@@ -3,8 +3,7 @@ title = "Custom Gitleaks configuration"
 [extend]
 path = ".datamitsu/gitleaks-managed.toml"
 
-# Algolia search-only API key (public, intended for frontend)
 [allowlist]
+paths = ['\.cache/act/']
 regexTarget = "match"
-regexes = ['''074677e081f2ba8b978c240e37a3ce59''']
-paths = ['''\.cache/act/''']
+regexes = ["074677e081f2ba8b978c240e37a3ce59"]

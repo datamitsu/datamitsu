@@ -1,8 +1,7 @@
 # Build outputs
-**/dist/
-!dist/datamitsu-linux-*/
 **/.next/
 **/build/
+**/dist/
 **/out/
 **/.turbo/
 **/.vercel/
@@ -28,7 +27,6 @@
 # Claude Code project files
 .claude/*
 !.claude/skills/
-.claude/
 
 # Codex CLI project files
 .codex/*

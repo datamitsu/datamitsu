@@ -6,21 +6,17 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-
       - uses: ./.github/actions/setup-environment
         with:
           setup-go: "false"
-
       - env:
           NODE_ENV: production
         name: Build website
         run: pnpm --filter website build
-
       - name: Upload build artifact
         uses: actions/upload-pages-artifact@v5
         with:
           path: ./website/build
-
   deploy:
     environment:
       name: github-pages
@@ -35,9 +31,7 @@ jobs:
       - id: deployment
         name: Deploy to GitHub Pages
         uses: actions/deploy-pages@v5
-
 name: Deploy Website
-
 on:
   push:
     branches:

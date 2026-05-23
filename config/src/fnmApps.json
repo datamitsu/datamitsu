@@ -1,7 +1,7 @@
 {
   "jscowsay": {
+    "description": "cowsay is a configurable talking cow",
     "packageName": "cowsay",
-    "version": "1.6.0",
-    "description": "cowsay is a configurable talking cow"
+    "version": "1.6.0"
   }
 }
