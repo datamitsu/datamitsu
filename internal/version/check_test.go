@@ -20,9 +20,12 @@ func TestCompareVersions_ValidSemver(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := CompareVersions(tt.current, tt.required)
+			skipped, err := CompareVersions(tt.current, tt.required)
 			if err != nil {
 				t.Errorf("CompareVersions(%q, %q) returned unexpected error: %v", tt.current, tt.required, err)
+			}
+			if skipped {
+				t.Errorf("CompareVersions(%q, %q) unexpectedly reported skipped=true for stable current", tt.current, tt.required)
 			}
 		})
 	}
@@ -44,10 +47,13 @@ func TestCompareVersions_InvalidSemver(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := CompareVersions(tt.current, tt.required)
+			skipped, err := CompareVersions(tt.current, tt.required)
 			if err == nil {
 				t.Errorf("CompareVersions(%q, %q) expected error, got nil", tt.current, tt.required)
 				return
+			}
+			if skipped {
+				t.Errorf("CompareVersions(%q, %q) reported skipped=true alongside an error", tt.current, tt.required)
 			}
 			if !strings.Contains(err.Error(), tt.wantMsg) {
 				t.Errorf("CompareVersions(%q, %q) error = %q, want containing %q", tt.current, tt.required, err.Error(), tt.wantMsg)
@@ -69,9 +75,12 @@ func TestCompareVersions_CurrentGreaterThanRequired(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := CompareVersions(tt.current, tt.required)
+			skipped, err := CompareVersions(tt.current, tt.required)
 			if err != nil {
 				t.Errorf("CompareVersions(%q, %q) returned unexpected error: %v", tt.current, tt.required, err)
+			}
+			if skipped {
+				t.Errorf("CompareVersions(%q, %q) unexpectedly reported skipped=true for stable current", tt.current, tt.required)
 			}
 		})
 	}
@@ -90,9 +99,12 @@ func TestCompareVersions_CurrentEqualsRequired(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := CompareVersions(tt.current, tt.required)
+			skipped, err := CompareVersions(tt.current, tt.required)
 			if err != nil {
 				t.Errorf("CompareVersions(%q, %q) returned unexpected error: %v", tt.current, tt.required, err)
+			}
+			if skipped {
+				t.Errorf("CompareVersions(%q, %q) unexpectedly reported skipped=true for stable current", tt.current, tt.required)
 			}
 		})
 	}
@@ -111,16 +123,19 @@ func TestCompareVersions_CurrentLessThanRequired(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := CompareVersions(tt.current, tt.required)
+			skipped, err := CompareVersions(tt.current, tt.required)
 			if err == nil {
 				t.Errorf("CompareVersions(%q, %q) expected error for older version, got nil", tt.current, tt.required)
+			}
+			if skipped {
+				t.Errorf("CompareVersions(%q, %q) reported skipped=true for stable current", tt.current, tt.required)
 			}
 		})
 	}
 }
 
 func TestCompareVersions_ErrorMessageFormat(t *testing.T) {
-	err := CompareVersions("1.0.0", "2.0.0")
+	_, err := CompareVersions("1.0.0", "2.0.0")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -144,12 +159,12 @@ func TestCompareVersions_ErrorMessageFormat(t *testing.T) {
 }
 
 func TestCompareVersions_DevVersion(t *testing.T) {
-	err := CompareVersions("dev", "99.99.99")
+	_, err := CompareVersions("dev", "99.99.99")
 	if err == nil {
 		t.Error("CompareVersions(dev, 99.99.99) should fail since dev normalizes to v0.0.0")
 	}
 
-	err = CompareVersions("dev", "0.0.0")
+	_, err = CompareVersions("dev", "0.0.0")
 	if err != nil {
 		t.Errorf("CompareVersions(dev, 0.0.0) returned unexpected error: %v", err)
 	}

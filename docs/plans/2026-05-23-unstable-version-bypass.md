@@ -54,10 +54,10 @@
 
 ### Task 2: Implement unstable bypass in CompareVersions
 
-- [ ] Modify `CompareVersions` in `internal/version/check.go`: if `current` contains `-unstable`, return a signal (not error) indicating the check was bypassed
-- [ ] Design decision: either (a) add a second return value `(error, bool)` where `bool` = skipped, or (b) return a sentinel type `VersionSkipped` that the caller can type-assert
-- [ ] Ensure `normalizeVersion` is unchanged — the bypass happens in `CompareVersions` logic, not normalization
-- [ ] Run tests — must pass before next task
+- [x] Modify `CompareVersions` in `internal/version/check.go`: if `current` contains `-unstable`, return a signal (not error) indicating the check was bypassed
+- [x] Design decision: chose Option A — `(skipped bool, err error)` signature. The bullet calls for "a signal (not error)", which matches the bool flag more naturally than a sentinel error type, and avoids `errors.As` boilerplate at the call site.
+- [x] Ensure `normalizeVersion` is unchanged — the bypass happens in `CompareVersions` logic, not normalization
+- [x] Run tests — must pass before next task
 
 ### Task 3: Update config_loader.go to log warning on unstable bypass
 

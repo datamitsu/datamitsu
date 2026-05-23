@@ -245,7 +245,7 @@ func processConfigSource(input *config.Config, source configSource, resolved map
 			return nil, nil, fmt.Errorf("config %s: getMinVersion() must return non-empty string", sourceLabel)
 		}
 
-		if err := version.CompareVersions(ldflags.Version, minVersionStr); err != nil {
+		if _, err := version.CompareVersions(ldflags.Version, minVersionStr); err != nil {
 			return nil, nil, fmt.Errorf("config %s: %w", sourceLabel, err)
 		}
 	}

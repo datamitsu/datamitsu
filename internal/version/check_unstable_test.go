@@ -44,23 +44,31 @@ func TestCompareVersions_UnstableCurrent_BypassesCheck(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := CompareVersions(tt.current, tt.required)
+			skipped, err := CompareVersions(tt.current, tt.required)
 			if err != nil {
 				t.Errorf("CompareVersions(%q, %q) returned unexpected error: %v (unstable current should bypass)", tt.current, tt.required, err)
+			}
+			if !skipped {
+				t.Errorf("CompareVersions(%q, %q) skipped=false; expected true so caller can warn", tt.current, tt.required)
 			}
 		})
 	}
 }
 
 func TestCompareVersions_StableCurrent_StillEnforced(t *testing.T) {
-	// Regression guard: stable versions still get the normal comparison.
-	err := CompareVersions("1.0.0", "2.0.0")
+	skipped, err := CompareVersions("1.0.0", "2.0.0")
 	if err == nil {
 		t.Error("CompareVersions(1.0.0, 2.0.0) expected error for older stable current, got nil")
 	}
+	if skipped {
+		t.Error("CompareVersions(1.0.0, 2.0.0) reported skipped=true for stable current")
+	}
 
-	err = CompareVersions("2.0.0", "1.0.0")
+	skipped, err = CompareVersions("2.0.0", "1.0.0")
 	if err != nil {
 		t.Errorf("CompareVersions(2.0.0, 1.0.0) returned unexpected error: %v", err)
+	}
+	if skipped {
+		t.Error("CompareVersions(2.0.0, 1.0.0) reported skipped=true for stable current")
 	}
 }
