@@ -310,49 +310,71 @@ When making breaking changes (removing tools, changing configuration structure),
 
 ### Configuring pnpm Settings for FNM Apps
 
-FNM apps run `pnpm install` in an isolated directory managed by datamitsu. You can include a `pnpm-workspace.yaml` file via `App.files` to control per-app pnpm behavior — supply chain security settings, script policies, and more. The file is written before `pnpm install` runs, so pnpm picks it up automatically.
+FNM apps run `pnpm install` in an isolated directory managed by datamitsu. datamitsu always writes a `pnpm-workspace.yaml` containing secure supply chain defaults before `pnpm install` runs. You can override or extend those defaults by supplying your own `pnpm-workspace.yaml` via `App.files` — datamitsu shallow-merges your keys on top of the baseline.
+
+See the [Supply Chain Security](../guides/supply-chain-security.md) guide for the full list of baseline settings and what each one does.
 
 :::caution Files are written only on initial install
-`App.files` (including `pnpm-workspace.yaml`) are written to the install directory only when the app is first installed. If you add or change files after the app is already cached, run `datamitsu store clear` (or delete the app's subdirectory under `.apps/fnm/`) to force a reinstall.
+`App.files` (including `pnpm-workspace.yaml`) are read on every install, but the install directory is only rebuilt when the app's config hash changes. If you change `files` after an app is already cached, run `datamitsu store clear` (or delete the app's subdirectory under `.apps/fnm/`) to force a reinstall.
 :::
 
-Minimal example (marks the install directory as a workspace root with no sub-packages):
+#### Apps without build scripts (zero config)
+
+No `App.files["pnpm-workspace.yaml"]` is required. datamitsu writes the secure defaults automatically:
 
 ```js
-const myApp = {
-  files: {
-    "pnpm-workspace.yaml": YAML.stringify({ packages: [] }),
-  },
+const eslint = {
   fnm: {
-    // ... FNM config
+    packageName: "eslint",
+    binPath: "node_modules/.bin/eslint",
+    version: "9.17.0",
+    lockFile: "br:...",
   },
 };
 ```
 
-Extended example with pnpm supply chain security settings:
+#### Apps that need build scripts (puppeteer, sharp, esbuild, etc.)
+
+pnpm 11 blocks lifecycle scripts by default. If install fails with `ERR_PNPM_IGNORED_BUILDS`, allowlist the package via `allowBuilds`:
 
 ```js
-const myApp = {
+const mmdc = {
   files: {
     "pnpm-workspace.yaml": YAML.stringify({
-      packages: [],
-      enablePrePostScripts: false,
-      onlyBuiltDependencies: [],
+      allowBuilds: { puppeteer: true },
     }),
   },
   fnm: {
-    // ... FNM config
+    packageName: "@mermaid-js/mermaid-cli",
+    binPath: "node_modules/.bin/mmdc",
+    version: "11.15.0",
+    lockFile: "br:...",
   },
 };
 ```
 
-Key pnpm settings available via `pnpm-workspace.yaml`:
+The merged result written to the app environment keeps all secure defaults (`strictDepBuilds: true`, `minimumReleaseAge: 10080`, etc.) **plus** the user's `allowBuilds` entry. Only the keys you explicitly set are overridden.
 
-- `enablePrePostScripts: false` — disables `pre*`/`post*` lifecycle scripts for all packages
-- `onlyBuiltDependencies: []` — allowlist of packages permitted to run build scripts; an empty list blocks all build scripts (requires pnpm v9+; silently ignored on older versions)
+After adding `allowBuilds`, regenerate the lock file so pnpm can record the approved builds:
+
+```bash
+pnpm exec datamitsu config lockfile mmdc
+```
+
+#### Overriding a security key
+
+User intent wins on every key. Setting `strictDepBuilds: false` disables strict build approval — use only when you understand the risk:
+
+```js
+files: {
+  "pnpm-workspace.yaml": YAML.stringify({
+    strictDepBuilds: false,
+  }),
+}
+```
 
 :::note FNM and UV apps
-For FNM apps, any `package.json` included in `App.files` will be overwritten by the datamitsu core when it writes the managed `package.json`. Use `pnpm-workspace.yaml` for customization instead — the core never writes that file.
+For FNM apps, any `package.json` included in `App.files` will be overwritten by the datamitsu core when it writes the managed `package.json`. Use `pnpm-workspace.yaml` for customization — the core merges that file with secure defaults rather than overwriting it.
 
 For UV apps, project-level settings are configured via `pyproject.toml`. However, any `pyproject.toml` included in `App.files` will be overwritten by the datamitsu core when it writes the managed `pyproject.toml`. This customization path is not available for UV apps.
 :::

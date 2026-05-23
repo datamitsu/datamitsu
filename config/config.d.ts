@@ -61,6 +61,13 @@ declare global {
   function getConfig(config: config.Config): config.Config;
 
   /**
+   * Recommended pnpm 11 workspace security defaults, injected by the Go engine.
+   * Read this object to publish or extend the defaults — see
+   * `sharedStorage["pnpm-workspace-defaults"]` for the canonical YAML output.
+   */
+  const pnpmWorkspaceDefaults: Record<string, unknown>;
+
+  /**
    * Returns the minimum datamitsu version required by this config (semver format).
    * The tool validates this version during config loading and fails early with
    * upgrade instructions if the current version is too old.
@@ -298,8 +305,24 @@ declare global {
        * Any config layer can read/write values via input.sharedStorage.
        * Useful for passing data between config layers that doesn't fit
        * the typed config structure.
+       *
+       * Well-known keys published by the default config:
+       * - `"datamitsu-agent-prompt"`: Markdown guide for AI agents working in
+       *   datamitsu-managed repos.
+       * - `"pnpm-workspace-defaults"`: YAML string of the recommended pnpm 11
+       *   workspace security defaults. Parse with `YAML.parse()`, extend with
+       *   org/repo-specific settings, and write into a project repo via a Bundle
+       *   to produce a secure `pnpm-workspace.yaml`. Separate from the auto-merge
+       *   applied to `App.files["pnpm-workspace.yaml"]` for FNM apps. See the
+       *   Supply Chain Security guide for the full key list and rationale.
+       *
        * @example
        * return { ...input, sharedStorage: { ...input.sharedStorage, "my-key": "my-value" } };
+       *
+       * @example
+       * // Read pnpm-workspace-defaults and extend for a repo bundle
+       * const defaults = YAML.parse(input.sharedStorage?.["pnpm-workspace-defaults"] ?? "{}");
+       * const repoConfig = { ...defaults, packages: ["packages/*"], allowBuilds: { esbuild: true } };
        */
       sharedStorage?: Record<string, string>;
 
@@ -653,6 +676,24 @@ declare global {
        * Human-readable description of the app, shown in exec listing.
        */
       description?: string;
+      /**
+       * Static file contents to write into the app's install directory before
+       * the package manager runs. Keys are filenames; values are file contents.
+       *
+       * Special handling for `pnpm-workspace.yaml` on FNM apps: the entry is
+       * NOT written verbatim. Instead, the installer parses it and shallow-merges
+       * it on top of the recommended pnpm 11 workspace security defaults, then
+       * writes the merged result. User keys override defaults for the same
+       * top-level key. Use this to add `allowBuilds` for packages that need build
+       * scripts (e.g., puppeteer) without losing the security defaults. See the
+       * Supply Chain Security guide for the full default key list and rationale.
+       *
+       * @example
+       * // Allow puppeteer build scripts; defaults still apply
+       * files: {
+       *   "pnpm-workspace.yaml": YAML.stringify({ allowBuilds: { puppeteer: true } }),
+       * }
+       */
       files?: Record<string, string>;
       fnm?: AppConfigFNM;
       jvm?: AppConfigJVM;

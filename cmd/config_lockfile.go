@@ -67,24 +67,7 @@ func runConfigLockfile(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("app %q has no valid runtime configuration", appName)
 	}
 
-	// Clear lock fields so the reinstall generates a fresh lock file
-	// instead of reusing the existing one with --locked mode.
-	freshApps := make(binmanager.MapOfApps, len(cfg.Apps))
-	for k, v := range cfg.Apps {
-		freshApps[k] = v
-	}
-	appCopy := freshApps[appName]
-	if appCopy.Fnm != nil {
-		fnmCopy := *appCopy.Fnm
-		fnmCopy.LockFile = ""
-		appCopy.Fnm = &fnmCopy
-	}
-	if appCopy.Uv != nil {
-		uvCopy := *appCopy.Uv
-		uvCopy.LockFile = ""
-		appCopy.Uv = &uvCopy
-	}
-	freshApps[appName] = appCopy
+	freshApps := clearAppLockFile(cfg.Apps, appName)
 
 	// Delete old cache (computed from original config with lock fields)
 	rm := runtimemanager.New(cfg.Runtimes)
@@ -132,6 +115,34 @@ func runConfigLockfile(cmd *cobra.Command, args []string) error {
 	fmt.Println(string(jsonBytes))
 
 	return nil
+}
+
+// clearAppLockFile returns a shallow copy of apps where the named app has its
+// FNM/UV LockFile field cleared. The original map and runtime configs are not
+// mutated. App.Files (including any "pnpm-workspace.yaml" entry used to
+// configure allowBuilds) and App.Archives are preserved so the reinstall can
+// generate a fresh lock file under the same workspace policy as a normal run.
+func clearAppLockFile(apps binmanager.MapOfApps, appName string) binmanager.MapOfApps {
+	fresh := make(binmanager.MapOfApps, len(apps))
+	for k, v := range apps {
+		fresh[k] = v
+	}
+	appCopy, ok := fresh[appName]
+	if !ok {
+		return fresh
+	}
+	if appCopy.Fnm != nil {
+		fnmCopy := *appCopy.Fnm
+		fnmCopy.LockFile = ""
+		appCopy.Fnm = &fnmCopy
+	}
+	if appCopy.Uv != nil {
+		uvCopy := *appCopy.Uv
+		uvCopy.LockFile = ""
+		appCopy.Uv = &uvCopy
+	}
+	fresh[appName] = appCopy
+	return fresh
 }
 
 func printAppInfo(appName string, app binmanager.App) {

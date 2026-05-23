@@ -5,6 +5,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/engine"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
+	"github.com/datamitsu/datamitsu/internal/pnpmdefaults"
 	"encoding/hex"
 	"fmt"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 	"testing"
 
 	"github.com/dop251/goja"
+	"github.com/goccy/go-yaml"
 )
 
 func TestLoadConfig(t *testing.T) {
@@ -1077,18 +1079,98 @@ function getConfig(input) {
 	}
 }
 
-func TestSharedStorageEmptyByDefault(t *testing.T) {
+func TestSharedStorageDefaultEntries(t *testing.T) {
 	cfg, _, _, err := loadConfigWithPaths(nil, true, nil)
 	if err != nil {
 		t.Fatalf("loadConfigWithPaths error: %v", err)
 	}
-	// Default config now includes datamitsu-agent-prompt in SharedStorage
-	if len(cfg.SharedStorage) != 1 {
-		t.Errorf("SharedStorage should have 1 entry by default, got %d: %v", len(cfg.SharedStorage), cfg.SharedStorage)
+	if len(cfg.SharedStorage) != 2 {
+		t.Errorf("SharedStorage should have 2 entries by default, got %d: %v", len(cfg.SharedStorage), cfg.SharedStorage)
 	}
 	if _, ok := cfg.SharedStorage["datamitsu-agent-prompt"]; !ok {
 		t.Errorf("SharedStorage should contain datamitsu-agent-prompt by default")
 	}
+	if _, ok := cfg.SharedStorage["pnpm-workspace-defaults"]; !ok {
+		t.Errorf("SharedStorage should contain pnpm-workspace-defaults by default")
+	}
+}
+
+// TestSharedStoragePNPMWorkspaceDefaultsRoundTrip verifies that the full config
+// chain (Go engine injection → bundled config.js → YAML.stringify → sharedStorage)
+// produces a "pnpm-workspace-defaults" entry whose parsed YAML matches the
+// single Go-side source in pnpmdefaults.Defaults(). This pins the contract
+// removed in Task 2 (the hardcoded JS copy is gone, so the JS now reads the
+// injected global).
+func TestSharedStoragePNPMWorkspaceDefaultsRoundTrip(t *testing.T) {
+	cfg, _, _, err := loadConfigWithPaths(nil, true, nil)
+	if err != nil {
+		t.Fatalf("loadConfigWithPaths error: %v", err)
+	}
+
+	rawYAML, ok := cfg.SharedStorage["pnpm-workspace-defaults"]
+	if !ok {
+		t.Fatal(`sharedStorage["pnpm-workspace-defaults"] missing`)
+	}
+	if rawYAML == "" {
+		t.Fatal(`sharedStorage["pnpm-workspace-defaults"] is empty`)
+	}
+
+	var parsed map[string]any
+	if err := yaml.Unmarshal([]byte(rawYAML), &parsed); err != nil {
+		t.Fatalf("yaml.Unmarshal error = %v\nyaml: %s", err, rawYAML)
+	}
+
+	want := pnpmdefaults.Defaults()
+	if len(parsed) != len(want) {
+		t.Errorf("parsed has %d keys, want %d (parsed: %#v)", len(parsed), len(want), parsed)
+	}
+	for key, wantVal := range want {
+		gotVal, present := parsed[key]
+		if !present {
+			t.Errorf("key %q missing from round-tripped YAML; parsed: %#v", key, parsed)
+			continue
+		}
+		if !sharedStorageYAMLEqual(gotVal, wantVal) {
+			t.Errorf("key %q: got %#v (%T), want %#v (%T)", key, gotVal, gotVal, wantVal, wantVal)
+		}
+	}
+}
+
+// sharedStorageYAMLEqual compares values after YAML round-trip, where integer
+// literals may come back as uint64/int64/float64 depending on go-yaml's parser
+// path. The Go-side source uses `int`, so we normalize to int64 for compares.
+func sharedStorageYAMLEqual(got, want any) bool {
+	if got == want {
+		return true
+	}
+	gi, gok := yamlToInt64(got)
+	wi, wok := yamlToInt64(want)
+	if gok && wok {
+		return gi == wi
+	}
+	return false
+}
+
+func yamlToInt64(v any) (int64, bool) {
+	switch x := v.(type) {
+	case int:
+		return int64(x), true
+	case int32:
+		return int64(x), true
+	case int64:
+		return x, true
+	case uint:
+		return int64(x), true
+	case uint32:
+		return int64(x), true
+	case uint64:
+		return int64(x), true
+	case float64:
+		if float64(int64(x)) == x {
+			return int64(x), true
+		}
+	}
+	return 0, false
 }
 
 func TestAcceptanceRemoteConfigCachesOnDisk(t *testing.T) {

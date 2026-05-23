@@ -32,6 +32,7 @@ const sidebars: SidebarsConfig = {
         "guides/managed-content",
         "guides/tooling-system",
         "guides/using-wrappers",
+        "guides/supply-chain-security",
         {
           items: [
             "guides/architecture/planner",

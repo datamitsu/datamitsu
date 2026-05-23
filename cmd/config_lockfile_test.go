@@ -338,3 +338,108 @@ func TestReadLockFile_UnsupportedType(t *testing.T) {
 	}
 }
 
+func TestClearAppLockFile_FNMClearsLockFilePreservesFiles(t *testing.T) {
+	originalWorkspace := "allowBuilds:\n  puppeteer: true\n"
+	apps := binmanager.MapOfApps{
+		"mmdc": {
+			Fnm: &binmanager.AppConfigFNM{
+				PackageName: "@mermaid-js/mermaid-cli",
+				Version:     "11.4.2",
+				BinPath:     "node_modules/.bin/mmdc",
+				LockFile:    "lockfileVersion: '9.0'\n",
+			},
+			Files: map[string]string{
+				"pnpm-workspace.yaml": originalWorkspace,
+				".npmrc":              "registry=https://registry.npmjs.org/\n",
+			},
+		},
+	}
+
+	fresh := clearAppLockFile(apps, "mmdc")
+
+	if fresh["mmdc"].Fnm.LockFile != "" {
+		t.Errorf("LockFile = %q, want empty after clearing", fresh["mmdc"].Fnm.LockFile)
+	}
+	if got := fresh["mmdc"].Files["pnpm-workspace.yaml"]; got != originalWorkspace {
+		t.Errorf("Files[pnpm-workspace.yaml] lost or mutated: got %q, want %q", got, originalWorkspace)
+	}
+	if fresh["mmdc"].Files[".npmrc"] == "" {
+		t.Error("Files[.npmrc] should be preserved")
+	}
+	if apps["mmdc"].Fnm.LockFile == "" {
+		t.Error("original apps map was mutated: LockFile should still be set on the source")
+	}
+}
+
+func TestClearAppLockFile_UVClearsLockFilePreservesFiles(t *testing.T) {
+	apps := binmanager.MapOfApps{
+		"yamllint": {
+			Uv: &binmanager.AppConfigUV{
+				PackageName: "yamllint",
+				Version:     "1.38.0",
+				LockFile:    "version = 1\n",
+			},
+			Files: map[string]string{
+				"pyproject.toml": "[project]\nname = \"yamllint-wrapper\"\n",
+			},
+		},
+	}
+
+	fresh := clearAppLockFile(apps, "yamllint")
+
+	if fresh["yamllint"].Uv.LockFile != "" {
+		t.Errorf("UV LockFile = %q, want empty after clearing", fresh["yamllint"].Uv.LockFile)
+	}
+	if fresh["yamllint"].Files["pyproject.toml"] == "" {
+		t.Error("Files[pyproject.toml] should be preserved")
+	}
+	if apps["yamllint"].Uv.LockFile == "" {
+		t.Error("original UV LockFile was mutated; clearAppLockFile must be non-destructive")
+	}
+}
+
+func TestClearAppLockFile_OtherAppsUntouched(t *testing.T) {
+	apps := binmanager.MapOfApps{
+		"mmdc": {
+			Fnm: &binmanager.AppConfigFNM{
+				PackageName: "@mermaid-js/mermaid-cli",
+				Version:     "11.4.2",
+				LockFile:    "lockfile-1",
+			},
+		},
+		"eslint": {
+			Fnm: &binmanager.AppConfigFNM{
+				PackageName: "eslint",
+				Version:     "9.0.0",
+				LockFile:    "lockfile-2",
+			},
+		},
+	}
+
+	fresh := clearAppLockFile(apps, "mmdc")
+
+	if fresh["eslint"].Fnm.LockFile != "lockfile-2" {
+		t.Errorf("eslint.LockFile = %q, want %q (untouched)", fresh["eslint"].Fnm.LockFile, "lockfile-2")
+	}
+	if fresh["mmdc"].Fnm.LockFile != "" {
+		t.Errorf("mmdc.LockFile should be cleared, got %q", fresh["mmdc"].Fnm.LockFile)
+	}
+}
+
+func TestClearAppLockFile_MissingAppReturnsCopy(t *testing.T) {
+	apps := binmanager.MapOfApps{
+		"mmdc": {
+			Fnm: &binmanager.AppConfigFNM{PackageName: "@mermaid-js/mermaid-cli", LockFile: "x"},
+		},
+	}
+
+	fresh := clearAppLockFile(apps, "nonexistent")
+
+	if len(fresh) != len(apps) {
+		t.Errorf("fresh len = %d, want %d", len(fresh), len(apps))
+	}
+	if fresh["mmdc"].Fnm.LockFile != "x" {
+		t.Errorf("unrelated app.LockFile = %q, want %q", fresh["mmdc"].Fnm.LockFile, "x")
+	}
+}
+

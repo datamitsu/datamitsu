@@ -92,6 +92,18 @@ envVars["PATH"] = binDir + string(os.PathListSeparator) + os.Getenv("PATH")
 token := os.Getenv("GITHUB_TOKEN")
 ```
 
+## JS↔Go Shared Constants Policy
+
+**When a constant or default value must be read by both Go code and the JS config layer (`internal/config/config.js` or user `datamitsu.config.{js,mjs,ts}`), Go is the single source of truth. Do NOT duplicate the value in JS.**
+
+- Define the value in a small dedicated Go package (e.g., `internal/pnpmdefaults`)
+- Inject it into the goja VM as a global via a per-domain `initX()` method on `Engine` (see `internal/engine/pnpm.go::initPNPMWorkspaceDefaults`), called from `engine.New()`
+- Prefer plain-object globals (`vm.Set("name", value)`) over function-call globals when the JS side only needs to read the value — reserve function globals for things that genuinely need to be evaluated on demand (e.g., `facts()`)
+- Add a TypeScript ambient declaration in `config/config.d.ts` so user configs get IDE autocomplete for the injected global
+- Do NOT write a JS↔Go agreement test: with a single source there are no copies to keep in sync. Direct unit tests on the Go package plus an end-to-end test that exercises the injection are sufficient
+
+**Rationale:** Previously the pnpm workspace defaults lived in both Go (`fnm.go`) and JS (`main.ts`), with a brittle agreement test keeping them aligned. Any change required edits in 6+ places (Go, JS, compiled `config.js`, 4 docs pages). Consolidating on Go-as-source eliminated that burden — see `docs/plans/2026-05-22-single-source-pnpm-security.md` for the migration.
+
 ## Product Stage
 
 - Project is in `alpha`.
