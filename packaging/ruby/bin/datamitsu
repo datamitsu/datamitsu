@@ -40,9 +40,4 @@ unless args.include?("--binary-command")
   args.unshift("--binary-command", "datamitsu")
 end
 
-# Quote arguments containing spaces
-quoted_args = args.map { |x| x.include?(' ') ? "'#{x}'" : x }
-
-pid = spawn("#{cmd} #{quoted_args.join(' ')}")
-Process.wait(pid)
-exit($?.exitstatus)
+exec(cmd, *args)
