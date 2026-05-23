@@ -76,8 +76,8 @@
 
 ### Task 5: Update documentation
 
-- [ ] Update `docs/architecture.md` version requirement section (~line 357) to mention unstable version bypass behavior
-- [ ] Update error message in `CompareVersions` if it still references upgrade instructions — unstable users shouldn't see "run go install @latest"
+- [x] Update `docs/architecture.md` version requirement section (~line 357) to mention unstable version bypass behavior
+- [x] Update error message in `CompareVersions` if it still references upgrade instructions — unstable users shouldn't see "run go install @latest". No change needed: the `IsUnstable(current)` early return at `internal/version/check.go:25` short-circuits before the error path, so unstable builds never reach the `go install @latest` message; only stable users below the required version see it, where the guidance is appropriate.
 
 ## Technical Details
 
