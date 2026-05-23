@@ -398,6 +398,67 @@ jobs:
               cd ..
             done
           fi
+  publish-pypi:
+    environment: pypi
+    if: |
+      always() &&
+      !cancelled() &&
+      needs.build.result == 'success'
+    name: Publish to PyPI
+    needs:
+      - build
+      - determine-release-type
+      - validate-stable
+      - generate-unstable-version
+    permissions:
+      contents: read
+      id-token: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.determine-release-type.outputs.checkout_ref }}
+      - uses: ./.github/actions/setup-environment
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - if: ${{ !env.ACT }}
+        name: Download build artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: release-artifacts
+          path: .
+      - name: Prepare Python package
+        run: |
+          VERSION_WITH_V="${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}"
+          export VERSION="${VERSION_WITH_V#v}"
+
+          # Restore executable permissions on source binaries before prepare
+          # (GitHub Actions artifacts don't preserve Unix permissions)
+          if [ -d "dist/binaries" ]; then
+            find dist/binaries -type f -name "datamitsu*" ! -name "*.exe" -exec chmod +x {} \;
+            echo "✓ Restored executable permissions on dist/binaries"
+          fi
+
+          node packaging/pack.ts prepare-python
+      - name: Build Python wheels
+        run: node packaging/pack.ts build-python
+      - if: needs.determine-release-type.outputs.is_unstable == 'true'
+        name: Dry-run publish (unstable)
+        run: |
+          echo "Unstable release - skipping PyPI publish (dry-run only)"
+          echo ""
+          echo "Wheels that would be published:"
+          ls -lh packaging/python/dist/ 2>/dev/null || echo "No wheels found"
+      - if: needs.determine-release-type.outputs.is_stable == 'true' && !env.ACT
+        name: Publish to PyPI (stable)
+        run: |
+          cd packaging/python
+          # --trusted-publishing always: use OIDC, fail if unavailable (no API token fallback)
+          # --check-url: skip already-published versions without masking real errors
+          uv publish --trusted-publishing always --check-url https://pypi.org/simple/
+          echo "PyPI publishing completed"
   validate-stable:
     if: |
       always() &&

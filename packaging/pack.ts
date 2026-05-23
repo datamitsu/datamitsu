@@ -13,7 +13,15 @@
 // The `lib/` directory (programmable API) is built by CI workflow, not by this script.
 
 import { execSync, spawn } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 
 // Track active child processes for cleanup on Ctrl+C
@@ -48,6 +56,8 @@ const VERSION = process.env.VERSION || "0.0.0";
 const ROOT_DIR = join(import.meta.dirname, "..");
 const PACKAGING_DIR = import.meta.dirname;
 const NPM_DIR = join(PACKAGING_DIR, "npm");
+const PYTHON_DIR = join(PACKAGING_DIR, "python");
+const PYTHON_BIN_DIR = join(PYTHON_DIR, "datamitsu", "bin");
 const DIST_DIR = join(ROOT_DIR, "dist");
 
 interface PlatformConfig {
@@ -57,6 +67,9 @@ interface PlatformConfig {
   npmArch: string;
   npmPlatform: string;
   osName: string;
+  // Python-specific fields (empty string = platform not supported, e.g. FreeBSD)
+  pythonArch: string;
+  pythonPlatform: string;
 }
 
 const PLATFORMS: PlatformConfig[] = [
@@ -67,6 +80,8 @@ const PLATFORMS: PlatformConfig[] = [
     npmArch: "x64",
     npmPlatform: "darwin",
     osName: "macOS",
+    pythonArch: "x86_64",
+    pythonPlatform: "darwin",
   },
   {
     archName: "ARM64",
@@ -75,6 +90,8 @@ const PLATFORMS: PlatformConfig[] = [
     npmArch: "arm64",
     npmPlatform: "darwin",
     osName: "macOS",
+    pythonArch: "arm64",
+    pythonPlatform: "darwin",
   },
   {
     archName: "x64",
@@ -83,6 +100,8 @@ const PLATFORMS: PlatformConfig[] = [
     npmArch: "x64",
     npmPlatform: "linux",
     osName: "Linux",
+    pythonArch: "x86_64",
+    pythonPlatform: "linux",
   },
   {
     archName: "ARM64",
@@ -91,6 +110,8 @@ const PLATFORMS: PlatformConfig[] = [
     npmArch: "arm64",
     npmPlatform: "linux",
     osName: "Linux",
+    pythonArch: "arm64",
+    pythonPlatform: "linux",
   },
   {
     archName: "x64",
@@ -99,6 +120,8 @@ const PLATFORMS: PlatformConfig[] = [
     npmArch: "x64",
     npmPlatform: "win32",
     osName: "Windows",
+    pythonArch: "x86_64",
+    pythonPlatform: "windows",
   },
   {
     archName: "ARM64",
@@ -107,6 +130,8 @@ const PLATFORMS: PlatformConfig[] = [
     npmArch: "arm64",
     npmPlatform: "win32",
     osName: "Windows",
+    pythonArch: "arm64",
+    pythonPlatform: "windows",
   },
   {
     archName: "x64",
@@ -115,6 +140,8 @@ const PLATFORMS: PlatformConfig[] = [
     npmArch: "x64",
     npmPlatform: "freebsd",
     osName: "FreeBSD",
+    pythonArch: "",
+    pythonPlatform: "",
   },
   {
     archName: "ARM64",
@@ -123,8 +150,40 @@ const PLATFORMS: PlatformConfig[] = [
     npmArch: "arm64",
     npmPlatform: "freebsd",
     osName: "FreeBSD",
+    pythonArch: "",
+    pythonPlatform: "",
   },
 ];
+
+async function buildPythonWheels() {
+  console.log("\n📦 Building platform wheels...");
+
+  // Clean dist/ to avoid publishing stale wheels from previous runs
+  const pythonDistDir = join(PYTHON_DIR, "dist");
+  if (existsSync(pythonDistDir)) {
+    rmSync(pythonDistDir, { force: true, recursive: true });
+  }
+
+  const pythonPlatforms = PLATFORMS.filter((p) => p.pythonPlatform !== "");
+
+  for (const platform of pythonPlatforms) {
+    const target = `${platform.pythonPlatform}-${platform.pythonArch}`;
+
+    console.log(`\nBuilding wheel for ${target}...`);
+    const buildResult = await execSafe("uv build --wheel", PYTHON_DIR, {
+      DATAMITSU_TARGET_ARCH: platform.pythonArch,
+      DATAMITSU_TARGET_PLATFORM: platform.pythonPlatform,
+    });
+
+    if (buildResult.success) {
+      console.log(`✓ Built wheel for ${target}`);
+    } else {
+      throw new Error(`Build failed for ${target}`);
+    }
+  }
+
+  console.log("\n✅ All platform wheels built!");
+}
 
 function clean() {
   console.log("\n📦 Cleaning npm packages...");
@@ -138,16 +197,45 @@ function clean() {
   }
 }
 
+function cleanPython() {
+  console.log("\n📦 Cleaning Python bin/ directory...");
+
+  if (existsSync(PYTHON_BIN_DIR)) {
+    // Remove all subdirectories in bin/ (keep .keep)
+    for (const entry of readdirSync(PYTHON_BIN_DIR)) {
+      if (entry === ".keep") {
+        continue;
+      }
+      const entryPath = join(PYTHON_BIN_DIR, entry);
+      rmSync(entryPath, { force: true, recursive: true });
+    }
+    console.log("✓ Cleaned datamitsu/bin/");
+  }
+
+  // Clean build artifacts
+  for (const dir of ["dist", "build"]) {
+    const dirPath = join(PYTHON_DIR, dir);
+    if (existsSync(dirPath)) {
+      rmSync(dirPath, { force: true, recursive: true });
+    }
+  }
+}
+
 function exec(command: string, cwd?: string): void {
   console.log(`$ ${command}`);
   execSync(command, { cwd, stdio: "inherit" });
 }
 
-function execSafe(command: string, cwd?: string): Promise<{ error?: any; success: boolean }> {
+function execSafe(
+  command: string,
+  cwd?: string,
+  env?: Record<string, string>,
+): Promise<{ error?: any; success: boolean }> {
   console.log(`$ ${command}`);
 
   const child = spawn(command, {
     cwd,
+    env: env ? { ...process.env, ...env } : undefined,
     shell: true,
     stdio: "inherit",
   });
@@ -170,6 +258,26 @@ function execSafe(command: string, cwd?: string): Promise<{ error?: any; success
     });
   });
 }
+
+function normalizePythonVersion(version: string): string {
+  // Strip 'v' prefix
+  let normalized = version.replace(/^v/, "");
+
+  // Convert -rc.N to rcN (PEP 440)
+  normalized = normalized.replace(/-rc\.(\d+)/, "rc$1");
+
+  // Convert -alpha.N to aN
+  normalized = normalized.replace(/-alpha\.(\d+)/, "a$1");
+
+  // Convert -beta.N to bN
+  normalized = normalized.replace(/-beta\.(\d+)/, "b$1");
+
+  return normalized;
+}
+
+// ============================================================================
+// Python Packaging
+// ============================================================================
 
 function preparePlatformPackages() {
   console.log("\n📦 Preparing platform-specific npm packages...");
@@ -224,7 +332,44 @@ function preparePlatformPackages() {
   }
 }
 
-async function publishNpm(dryRun: boolean = true) {
+function preparePythonPackages() {
+  console.log("\n📦 Preparing Python package (single package, multi-platform wheels)...");
+
+  // Filter platforms: only process those with pythonPlatform defined (skip FreeBSD)
+  const pythonPlatforms = PLATFORMS.filter((p) => p.pythonPlatform !== "");
+
+  // Copy all platform binaries into datamitsu/bin/datamitsu-{os}-{arch}/
+  for (const platform of pythonPlatforms) {
+    const binaryName = platform.goos === "windows" ? "datamitsu.exe" : "datamitsu";
+    const releaseBinaryName =
+      platform.goos === "windows"
+        ? `datamitsu-${platform.goos}_${platform.goarch}.exe`
+        : `datamitsu-${platform.goos}_${platform.goarch}`;
+
+    const sourceBinary = join(DIST_DIR, "binaries", releaseBinaryName);
+
+    // Verify binary exists
+    if (!existsSync(sourceBinary)) {
+      throw new Error(
+        `Binary not found: ${sourceBinary}\n` +
+          `Did GoReleaser build complete successfully for ${platform.goos}/${platform.goarch}?`,
+      );
+    }
+
+    const targetDir = join(
+      PYTHON_BIN_DIR,
+      `datamitsu-${platform.pythonPlatform}-${platform.pythonArch}`,
+    );
+    mkdirSync(targetDir, { recursive: true });
+    cpSync(sourceBinary, join(targetDir, binaryName));
+    console.log(`✓ Copied binary for ${platform.pythonPlatform}-${platform.pythonArch}`);
+  }
+
+  // Update version in pyproject.toml
+  updateMainPythonPackage();
+}
+
+async function publishNpm(dryRun = true) {
   console.log(`\n🚀 Publishing to npm (dry-run: ${dryRun})...`);
 
   // Read version from main package.json if VERSION env var is not set
@@ -308,6 +453,33 @@ async function publishNpm(dryRun: boolean = true) {
   }
 }
 
+async function publishPyPI(dryRun = true) {
+  console.log(`\n🚀 Publishing to PyPI (dry-run: ${dryRun})...`);
+
+  const normalizedVersion = normalizePythonVersion(VERSION);
+  console.log(`Version: ${normalizedVersion}`);
+
+  // Build all wheels
+  await buildPythonWheels();
+
+  // Publish all wheels
+  if (dryRun) {
+    console.log("\n[DRY RUN] Would publish datamitsu wheels");
+  } else {
+    console.log("\n📤 Publishing wheels...");
+    const result = await execSafe("uv publish", PYTHON_DIR);
+
+    if (result.success) {
+      console.log("✓ Published all wheels");
+    } else {
+      console.error("✗ Failed to publish");
+      throw new Error("Publishing failed");
+    }
+  }
+
+  console.log(dryRun ? "\n✅ Dry-run completed!" : "\n✅ All Python wheels published!");
+}
+
 function replaceVariables(content: string, vars: Record<string, string>): string {
   let result = content;
   for (const [key, value] of Object.entries(vars)) {
@@ -328,11 +500,28 @@ function updateMainPackage() {
 
   // Update optional dependencies versions
   for (const dep in packageJson.optionalDependencies) {
-    packageJson.optionalDependencies[dep] = VERSION;
+    if (Object.hasOwn(packageJson.optionalDependencies, dep)) {
+      packageJson.optionalDependencies[dep] = VERSION;
+    }
   }
 
   writeFileSync(mainPackagePath, JSON.stringify(packageJson, null, 2) + "\n");
   console.log(`✓ Updated main package to version ${VERSION}`);
+}
+
+function updateMainPythonPackage() {
+  console.log("\n📝 Updating Python package version...");
+
+  const pyprojectPath = join(PYTHON_DIR, "pyproject.toml");
+  let content = readFileSync(pyprojectPath, "utf8");
+
+  const normalizedVersion = normalizePythonVersion(VERSION);
+
+  // Replace version in pyproject.toml
+  content = content.replace(/version = "[^"]*"/, `version = "${normalizedVersion}"`);
+  writeFileSync(pyprojectPath, content);
+
+  console.log(`✓ Updated Python package to version ${normalizedVersion}`);
 }
 
 // CLI
@@ -340,6 +529,31 @@ const command = process.argv[2];
 
 async function main() {
   switch (command) {
+    case "all": {
+      // Full packaging workflow for both npm and Python
+      console.log("\n🎯 Running full packaging workflow...");
+
+      // npm
+      clean();
+      preparePlatformPackages();
+      updateMainPackage();
+
+      // Python
+      cleanPython();
+      preparePythonPackages();
+
+      console.log("\n✅ All packages prepared!");
+      console.log("\nTo publish:");
+      console.log("  npm:    tsx pack.ts publish [--dry-run]");
+      console.log("  Python: tsx pack.ts publish-python [--dry-run]");
+      break;
+    }
+
+    case "build-python": {
+      await buildPythonWheels();
+      break;
+    }
+
     case "clean": {
       clean();
       break;
@@ -352,31 +566,48 @@ async function main() {
       break;
     }
 
+    case "prepare-python": {
+      cleanPython();
+      preparePythonPackages();
+      break;
+    }
+
     case "publish": {
       const dryRun = process.argv.includes("--dry-run");
       await publishNpm(dryRun);
       break;
     }
 
+    case "publish-python": {
+      const dryRun = process.argv.includes("--dry-run");
+      await publishPyPI(dryRun);
+      break;
+    }
+
     default: {
-      {
-        console.log(`
+      console.log(`
 Usage: tsx pack.ts <command>
 
 Commands:
-	clean       Clean npm packages
-	prepare     Prepare npm packages from GoReleaser binaries
-	publish     Publish to npm (use --dry-run for testing)
+  clean              Clean npm packages
+  prepare            Prepare npm packages from GoReleaser binaries
+  publish            Publish to npm (use --dry-run for testing)
+  prepare-python     Prepare Python packages from GoReleaser binaries
+  build-python       Build Python wheels for all platforms
+  publish-python     Build and publish to PyPI (use --dry-run for testing)
+  all                Prepare both npm and Python packages
 
 Examples:
-	tsx pack.ts prepare
-	tsx pack.ts publish --dry-run
-	VERSION=1.0.0 tsx pack.ts prepare
+  tsx pack.ts prepare
+  tsx pack.ts publish --dry-run
+  tsx pack.ts prepare-python
+  tsx pack.ts build-python
+  tsx pack.ts publish-python --dry-run
+  VERSION=1.0.0 tsx pack.ts all
 
-Note: Binaries are built by GoReleaser. This script only handles npm packaging.
+Note: Binaries are built by GoReleaser. This script only handles packaging.
       The lib/ directory (programmable API) is built by Taskfile (pack:build-api).
 `);
-      }
       process.exit(1);
     }
   }

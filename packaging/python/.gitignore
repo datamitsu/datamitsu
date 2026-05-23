@@ -1,0 +1,10 @@
+dist/
+build/
+*.egg-info/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Platform binaries (populated by CI, not checked in)
+datamitsu/bin/*
+!datamitsu/bin/.keep

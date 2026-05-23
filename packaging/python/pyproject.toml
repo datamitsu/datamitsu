@@ -1,0 +1,64 @@
+[project]
+name = "datamitsu"
+version = "0.0.0"
+description = "Configuration management and binary distribution tool. JavaScript-configurable tool orchestration written in Go."
+readme = "README.md"
+requires-python = ">=3.9"
+keywords = [
+  "binary",
+  "config",
+  "datamitsu",
+  "golangci-lint",
+  "lefthook",
+  "linter",
+  "tools"
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development :: Quality Assurance"
+]
+
+[[project.authors]]
+name = "Alexander Svinarev"
+email = "shibanet0@gmail.com"
+
+[project.license]
+text = "MIT"
+
+[project.scripts]
+datamitsu = "datamitsu.main:main"
+dm = "datamitsu.main:main"
+
+[project.urls]
+Documentation = "https://datamitsu.com"
+Homepage = "https://github.com/datamitsu/datamitsu"
+Issues = "https://github.com/datamitsu/datamitsu/issues"
+Repository = "https://github.com/datamitsu/datamitsu"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool]
+[tool.hatch]
+[tool.hatch.build]
+[tool.hatch.build.hooks]
+[tool.hatch.build.hooks.custom]
+path = "hatch_build.py"
+
+[tool.hatch.build.targets]
+[tool.hatch.build.targets.sdist]
+include = ["datamitsu/"]
+
+[tool.hatch.build.targets.wheel]
+artifacts = ["datamitsu"]
+packages = ["datamitsu"]
