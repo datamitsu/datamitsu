@@ -158,3 +158,5 @@ on:
       - synchronize
       - reopened
   push:
+    branches:
+      - main
