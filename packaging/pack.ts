@@ -58,6 +58,7 @@ const PACKAGING_DIR = import.meta.dirname;
 const NPM_DIR = join(PACKAGING_DIR, "npm");
 const PYTHON_DIR = join(PACKAGING_DIR, "python");
 const PYTHON_BIN_DIR = join(PYTHON_DIR, "datamitsu", "bin");
+const RUBY_DIR = join(PACKAGING_DIR, "ruby");
 const DIST_DIR = join(ROOT_DIR, "dist");
 
 interface PlatformConfig {
@@ -70,6 +71,9 @@ interface PlatformConfig {
   // Python-specific fields (empty string = platform not supported, e.g. FreeBSD)
   pythonArch: string;
   pythonPlatform: string;
+  // Ruby-specific fields
+  rubyArch: string;
+  rubyOs: string;
 }
 
 const PLATFORMS: PlatformConfig[] = [
@@ -82,6 +86,8 @@ const PLATFORMS: PlatformConfig[] = [
     osName: "macOS",
     pythonArch: "x86_64",
     pythonPlatform: "darwin",
+    rubyArch: "x64",
+    rubyOs: "darwin",
   },
   {
     archName: "ARM64",
@@ -92,6 +98,8 @@ const PLATFORMS: PlatformConfig[] = [
     osName: "macOS",
     pythonArch: "arm64",
     pythonPlatform: "darwin",
+    rubyArch: "arm64",
+    rubyOs: "darwin",
   },
   {
     archName: "x64",
@@ -102,6 +110,8 @@ const PLATFORMS: PlatformConfig[] = [
     osName: "Linux",
     pythonArch: "x86_64",
     pythonPlatform: "linux",
+    rubyArch: "x64",
+    rubyOs: "linux",
   },
   {
     archName: "ARM64",
@@ -112,6 +122,8 @@ const PLATFORMS: PlatformConfig[] = [
     osName: "Linux",
     pythonArch: "arm64",
     pythonPlatform: "linux",
+    rubyArch: "arm64",
+    rubyOs: "linux",
   },
   {
     archName: "x64",
@@ -122,6 +134,8 @@ const PLATFORMS: PlatformConfig[] = [
     osName: "Windows",
     pythonArch: "x86_64",
     pythonPlatform: "windows",
+    rubyArch: "x64",
+    rubyOs: "windows",
   },
   {
     archName: "ARM64",
@@ -132,6 +146,8 @@ const PLATFORMS: PlatformConfig[] = [
     osName: "Windows",
     pythonArch: "arm64",
     pythonPlatform: "windows",
+    rubyArch: "arm64",
+    rubyOs: "windows",
   },
   {
     archName: "x64",
@@ -142,6 +158,8 @@ const PLATFORMS: PlatformConfig[] = [
     osName: "FreeBSD",
     pythonArch: "",
     pythonPlatform: "",
+    rubyArch: "x64",
+    rubyOs: "freebsd",
   },
   {
     archName: "ARM64",
@@ -152,6 +170,8 @@ const PLATFORMS: PlatformConfig[] = [
     osName: "FreeBSD",
     pythonArch: "",
     pythonPlatform: "",
+    rubyArch: "arm64",
+    rubyOs: "freebsd",
   },
 ];
 
@@ -221,6 +241,38 @@ function cleanPython() {
   }
 }
 
+function cleanRuby() {
+  console.log("\n📦 Cleaning Ruby gem...");
+
+  for (const platform of PLATFORMS) {
+    const libexecSubdir = join(
+      RUBY_DIR,
+      "libexec",
+      `datamitsu-${platform.rubyOs}-${platform.rubyArch}`,
+    );
+    if (existsSync(libexecSubdir)) {
+      rmSync(libexecSubdir, { force: true, recursive: true });
+      console.log(`✓ Cleaned libexec/datamitsu-${platform.rubyOs}-${platform.rubyArch}/`);
+    }
+  }
+
+  const pkgDir = join(RUBY_DIR, "pkg");
+  if (existsSync(pkgDir)) {
+    rmSync(pkgDir, { force: true, recursive: true });
+    console.log("✓ Cleaned pkg/");
+  }
+
+  // Clean any .gem files in the ruby dir
+  if (existsSync(RUBY_DIR)) {
+    for (const entry of readdirSync(RUBY_DIR)) {
+      if (entry.endsWith(".gem")) {
+        rmSync(join(RUBY_DIR, entry), { force: true });
+        console.log(`✓ Cleaned ${entry}`);
+      }
+    }
+  }
+}
+
 function exec(command: string, cwd?: string): void {
   console.log(`$ ${command}`);
   execSync(command, { cwd, stdio: "inherit" });
@@ -278,6 +330,25 @@ function normalizePythonVersion(version: string): string {
 // ============================================================================
 // Python Packaging
 // ============================================================================
+
+function normalizeRubyVersion(version: string): string {
+  // Strip 'v' prefix
+  let normalized = version.replace(/^v/, "");
+
+  // Convert -rc.N to .rc.N (RubyGems pre-release convention)
+  normalized = normalized.replace(/-rc\.(\d+)/, ".rc.$1");
+
+  // Convert -alpha.N to .alpha.N
+  normalized = normalized.replace(/-alpha\.(\d+)/, ".alpha.$1");
+
+  // Convert -beta.N to .beta.N
+  normalized = normalized.replace(/-beta\.(\d+)/, ".beta.$1");
+
+  // Convert any remaining - to . for pre-release segments
+  normalized = normalized.replace(/-/, ".");
+
+  return normalized;
+}
 
 function preparePlatformPackages() {
   console.log("\n📦 Preparing platform-specific npm packages...");
@@ -367,6 +438,50 @@ function preparePythonPackages() {
 
   // Update version in pyproject.toml
   updateMainPythonPackage();
+}
+
+// ============================================================================
+// Ruby Packaging
+// ============================================================================
+
+function prepareRubyPackage() {
+  console.log("\n📦 Preparing Ruby gem...");
+
+  for (const platform of PLATFORMS) {
+    const binaryName = platform.goos === "windows" ? "datamitsu.exe" : "datamitsu";
+    const releaseBinaryName =
+      platform.goos === "windows"
+        ? `datamitsu-${platform.goos}_${platform.goarch}.exe`
+        : `datamitsu-${platform.goos}_${platform.goarch}`;
+    const sourceBinary = join(DIST_DIR, "binaries", releaseBinaryName);
+
+    if (!existsSync(sourceBinary)) {
+      throw new Error(
+        `Binary not found: ${sourceBinary}\n` +
+          `Did GoReleaser build complete successfully for ${platform.goos}/${platform.goarch}?`,
+      );
+    }
+
+    const targetDir = join(
+      RUBY_DIR,
+      "libexec",
+      `datamitsu-${platform.rubyOs}-${platform.rubyArch}`,
+    );
+    mkdirSync(targetDir, { recursive: true });
+    cpSync(sourceBinary, join(targetDir, binaryName));
+    console.log(`✓ Copied ${platform.rubyOs}-${platform.rubyArch} binary`);
+  }
+
+  // Update gemspec version
+  updateRubyGemspec();
+
+  // Copy README
+  const readmeSrc = join(PACKAGING_DIR, "PACKAGE_README.md");
+  if (existsSync(readmeSrc)) {
+    cpSync(readmeSrc, join(RUBY_DIR, "README.md"));
+  }
+
+  console.log("✓ Ruby gem prepared");
 }
 
 async function publishNpm(dryRun = true) {
@@ -480,6 +595,46 @@ async function publishPyPI(dryRun = true) {
   console.log(dryRun ? "\n✅ Dry-run completed!" : "\n✅ All Python wheels published!");
 }
 
+async function publishRubyGems(dryRun = true) {
+  console.log(`\n🚀 Publishing to RubyGems (dry-run: ${dryRun})...`);
+
+  const rubyVersion = normalizeRubyVersion(VERSION);
+  console.log(`Version: ${rubyVersion}`);
+
+  // Build gem
+  console.log("\n📦 Building gem...");
+  const buildResult = await execSafe("gem build datamitsu.gemspec", RUBY_DIR);
+
+  if (!buildResult.success) {
+    throw new Error("Failed to build gem");
+  }
+  console.log("✓ Gem built");
+
+  const gemFile = `datamitsu-${rubyVersion}.gem`;
+  const gemPath = join(RUBY_DIR, gemFile);
+
+  if (!existsSync(gemPath)) {
+    throw new Error(`Built gem not found: ${gemPath}`);
+  }
+
+  if (dryRun) {
+    console.log(`\n[DRY RUN] Would publish ${gemFile}`);
+    console.log("\n✅ Dry-run completed!");
+    return;
+  }
+
+  console.log(`\nPublishing ${gemFile}...`);
+  const publishResult = await execSafe(`gem push ${gemFile}`, RUBY_DIR);
+
+  if (publishResult.success) {
+    console.log("✓ Published to RubyGems");
+  } else {
+    throw new Error("Failed to publish gem");
+  }
+
+  console.log("\n✅ RubyGems publishing completed!");
+}
+
 function replaceVariables(content: string, vars: Record<string, string>): string {
   let result = content;
   for (const [key, value] of Object.entries(vars)) {
@@ -524,13 +679,26 @@ function updateMainPythonPackage() {
   console.log(`✓ Updated Python package to version ${normalizedVersion}`);
 }
 
+function updateRubyGemspec() {
+  console.log("\n📝 Updating Ruby gemspec version...");
+
+  const gemspecPath = join(RUBY_DIR, "datamitsu.gemspec");
+  let content = readFileSync(gemspecPath, "utf8");
+
+  const rubyVersion = normalizeRubyVersion(VERSION);
+  content = content.replace(/spec\.version\s*=\s*"[^"]*"/, `spec.version       = "${rubyVersion}"`);
+
+  writeFileSync(gemspecPath, content);
+  console.log(`✓ Updated gemspec to version ${rubyVersion}`);
+}
+
 // CLI
 const command = process.argv[2];
 
 async function main() {
   switch (command) {
     case "all": {
-      // Full packaging workflow for both npm and Python
+      // Full packaging workflow for npm, Python, and Ruby
       console.log("\n🎯 Running full packaging workflow...");
 
       // npm
@@ -542,10 +710,15 @@ async function main() {
       cleanPython();
       preparePythonPackages();
 
+      // Ruby
+      cleanRuby();
+      prepareRubyPackage();
+
       console.log("\n✅ All packages prepared!");
       console.log("\nTo publish:");
       console.log("  npm:    tsx pack.ts publish [--dry-run]");
       console.log("  Python: tsx pack.ts publish-python [--dry-run]");
+      console.log("  Ruby:   tsx pack.ts publish-ruby [--dry-run]");
       break;
     }
 
@@ -572,6 +745,12 @@ async function main() {
       break;
     }
 
+    case "prepare-ruby": {
+      cleanRuby();
+      prepareRubyPackage();
+      break;
+    }
+
     case "publish": {
       const dryRun = process.argv.includes("--dry-run");
       await publishNpm(dryRun);
@@ -581,6 +760,12 @@ async function main() {
     case "publish-python": {
       const dryRun = process.argv.includes("--dry-run");
       await publishPyPI(dryRun);
+      break;
+    }
+
+    case "publish-ruby": {
+      const dryRun = process.argv.includes("--dry-run");
+      await publishRubyGems(dryRun);
       break;
     }
 
@@ -595,7 +780,9 @@ Commands:
   prepare-python     Prepare Python packages from GoReleaser binaries
   build-python       Build Python wheels for all platforms
   publish-python     Build and publish to PyPI (use --dry-run for testing)
-  all                Prepare both npm and Python packages
+  prepare-ruby       Prepare Ruby gem from GoReleaser binaries
+  publish-ruby       Publish to RubyGems (use --dry-run for testing)
+  all                Prepare npm, Python, and Ruby packages
 
 Examples:
   tsx pack.ts prepare
@@ -603,6 +790,8 @@ Examples:
   tsx pack.ts prepare-python
   tsx pack.ts build-python
   tsx pack.ts publish-python --dry-run
+  tsx pack.ts prepare-ruby
+  tsx pack.ts publish-ruby --dry-run
   VERSION=1.0.0 tsx pack.ts all
 
 Note: Binaries are built by GoReleaser. This script only handles packaging.

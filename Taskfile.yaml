@@ -77,6 +77,10 @@ tasks:
     cmds:
       - node packaging/pack.ts prepare-python
     desc: Prepare Python packages from normalized binaries
+  pack:prepare-ruby:
+    cmds:
+      - node packaging/pack.ts prepare-ruby
+    desc: Prepare Ruby gem from normalized binaries
   pack:publish:
     cmds:
       - node packaging/pack.ts publish
@@ -89,6 +93,14 @@ tasks:
     cmds:
       - node packaging/pack.ts publish-python --dry-run
     desc: Dry-run PyPI publish
+  pack:publish-ruby:
+    cmds:
+      - node packaging/pack.ts publish-ruby
+    desc: Publish to RubyGems
+  pack:publish-ruby:dry:
+    cmds:
+      - node packaging/pack.ts publish-ruby --dry-run
+    desc: Dry-run RubyGems publish
   pack:publish:dry:
     cmds:
       - node packaging/pack.ts publish --dry-run
