@@ -34,4 +34,8 @@ def main():
         result = subprocess.run([executable] + sys.argv[1:])
         sys.exit(result.returncode)
     else:
-        os.execvp(executable, [executable] + sys.argv[1:])
+        try:
+            os.execvp(executable, [executable] + sys.argv[1:])
+        except OSError as e:
+            print(f"Failed to execute {executable}: {e}", file=sys.stderr)
+            return 1

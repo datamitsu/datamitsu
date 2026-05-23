@@ -196,11 +196,16 @@ function exec(command: string, cwd?: string): void {
   execSync(command, { cwd, stdio: "inherit" });
 }
 
-function execSafe(command: string, cwd?: string): Promise<{ error?: any; success: boolean }> {
+function execSafe(
+  command: string,
+  cwd?: string,
+  env?: Record<string, string>,
+): Promise<{ error?: any; success: boolean }> {
   console.log(`$ ${command}`);
 
   const child = spawn(command, {
     cwd,
+    env: env ? { ...process.env, ...env } : undefined,
     shell: true,
     stdio: "inherit",
   });
@@ -424,6 +429,12 @@ async function publishPyPI(dryRun = true) {
   const normalizedVersion = normalizePythonVersion(VERSION);
   console.log(`Version: ${normalizedVersion}`);
 
+  // Clean dist/ to avoid publishing stale wheels from previous runs
+  const pythonDistDir = join(PYTHON_DIR, "dist");
+  if (existsSync(pythonDistDir)) {
+    rmSync(pythonDistDir, { force: true, recursive: true });
+  }
+
   let hasErrors = false;
 
   // Build one wheel per platform (env vars control which platform binary is included)
@@ -435,10 +446,10 @@ async function publishPyPI(dryRun = true) {
     const target = `${platform.pythonPlatform}-${platform.pythonArch}`;
 
     console.log(`\nBuilding wheel for ${target}...`);
-    const buildResult = await execSafe(
-      `DATAMITSU_TARGET_PLATFORM=${platform.pythonPlatform} DATAMITSU_TARGET_ARCH=${platform.pythonArch} uv build --wheel`,
-      PYTHON_DIR,
-    );
+    const buildResult = await execSafe("uv build --wheel", PYTHON_DIR, {
+      DATAMITSU_TARGET_ARCH: platform.pythonArch,
+      DATAMITSU_TARGET_PLATFORM: platform.pythonPlatform,
+    });
 
     if (buildResult.success) {
       console.log(`✓ Built wheel for ${target}`);

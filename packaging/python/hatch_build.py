@@ -97,6 +97,7 @@ class CustomBuildHook(BuildHookInterface):
 
     def finalize(self, version, build_data, artifact_path) -> None:
         self._restore_binaries()
+        atexit.unregister(self._restore_binaries)
 
     def _prune_binaries(self):
         if not self.target_platform or not self.target_arch:

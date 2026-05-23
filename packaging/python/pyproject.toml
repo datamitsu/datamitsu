@@ -62,9 +62,3 @@ include = ["datamitsu/"]
 [tool.hatch.build.targets.wheel]
 artifacts = ["datamitsu"]
 packages = ["datamitsu"]
-
-[tool.uv]
-[[tool.uv.index]]
-default = true
-name = "pypi"
-url = "https://pypi.org/simple/"
