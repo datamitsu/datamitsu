@@ -132,6 +132,7 @@ export default {
     "ulikunitz",
     "unhackable",
     "unmarshalable",
+    "Unmarshal",
     "uvapp",
     "uvhash",
     "vbauerster",
@@ -166,5 +167,8 @@ export default {
     "sdist",
     "sdists",
     "typosquats",
+    "runtimeconfig",
+    "configinputs",
+    "fname",
   ],
 };
