@@ -13,7 +13,7 @@ require (
 	github.com/klauspost/compress v1.18.6
 	github.com/mattn/go-isatty v0.0.22
 	github.com/pelletier/go-toml/v2 v2.3.1
-	github.com/shamaton/msgpack/v2 v2.4.0
+	github.com/shamaton/msgpack/v2 v2.4.1
 	github.com/spf13/cobra v1.10.2
 	github.com/ulikunitz/xz v0.5.15
 	github.com/vbauerster/mpb/v8 v8.12.0
