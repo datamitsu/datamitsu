@@ -169,5 +169,8 @@ export default {
     "typosquats",
     "amannn",
     "sarif",
+    "codecov",
+    "coveralls",
+    "coverallsapp",
   ],
 };

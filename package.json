@@ -25,7 +25,7 @@
     "pull:uv:update": "./datamitsu devtools pull-uv ./config/src/uvApps.json --update",
     "temp:d:w": "act push -W .github/workflows/deploy-website.yml",
     "temp:r:u": "act workflow_dispatch -e .github/act/event-release-unstable.json -j build",
-    "test": "go test ./...",
+    "test": "go test -coverprofile=coverage.out ./...",
     "test:coverage": "go test -coverprofile=coverage.out ./... && go tool cover -func=coverage.out | grep total",
     "test:release": "act workflow_dispatch -W .github/workflows/release.yml --input release_type=unstable --input ref=main",
     "test:release:stable": "act workflow_dispatch -W .github/workflows/release.yml --input release_type=stable --input version=v99.99.99",
