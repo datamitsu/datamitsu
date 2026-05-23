@@ -1894,3 +1894,64 @@ function getConfig(input) {
 		t.Errorf("expected nil generated content for failed content(), got %q", *lastContent)
 	}
 }
+
+// Tests for unstable version bypass in config loader (Task 3)
+
+func TestLoadConfigUnstableVersionBypassesHighMinVersion(t *testing.T) {
+	// When the binary is built as an unstable release, the version check
+	// must be skipped rather than blocking config loading.
+	original := ldflags.Version
+	ldflags.Version = "0.0.0-unstable.20260523.abcdef0"
+	t.Cleanup(func() { ldflags.Version = original })
+
+	configDir := t.TempDir()
+	configPath := filepath.Join(configDir, "high-version.js")
+	if err := os.WriteFile(configPath, []byte(
+		`function getMinVersion() { return "99.0.0"; }
+function getConfig(input) { return { ignoreRules: ["unstable-bypass: eslint"] }; }`,
+	), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, _, _, err := loadConfigWithPaths(nil, true, []string{configPath})
+	if err != nil {
+		t.Fatalf("expected unstable bypass to succeed against high minVersion, got: %v", err)
+	}
+	if cfg == nil {
+		t.Fatal("config should not be nil after unstable bypass")
+	}
+
+	hasRule := false
+	for _, r := range cfg.IgnoreRules {
+		if r == "unstable-bypass: eslint" {
+			hasRule = true
+		}
+	}
+	if !hasRule {
+		t.Errorf("expected ignoreRule from config to load after bypass, got %v", cfg.IgnoreRules)
+	}
+}
+
+func TestLoadConfigStableVersionStillFailsHighMinVersion(t *testing.T) {
+	// Sanity-check: a stable build below required version must still error.
+	original := ldflags.Version
+	ldflags.Version = "0.0.1"
+	t.Cleanup(func() { ldflags.Version = original })
+
+	configDir := t.TempDir()
+	configPath := filepath.Join(configDir, "stable-high-version.js")
+	if err := os.WriteFile(configPath, []byte(
+		`function getMinVersion() { return "99.0.0"; }
+function getConfig(input) { return {}; }`,
+	), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, _, err := loadConfigWithPaths(nil, true, []string{configPath})
+	if err == nil {
+		t.Fatal("expected stable version below required to fail")
+	}
+	if !strings.Contains(err.Error(), "upgrade") {
+		t.Errorf("error should retain upgrade instructions for stable builds, got: %v", err)
+	}
+}

@@ -61,11 +61,11 @@
 
 ### Task 3: Update config_loader.go to log warning on unstable bypass
 
-- [ ] Update call site at `cmd/config_loader.go:248` to handle the new bypass signal
-- [ ] Log warning via `logger.Logger.Warn()` with message like: "version check skipped: current version is unstable (0.0.0-unstable.xxx), config requires 0.0.1 — proceeding at your own risk"
-- [ ] Write test in `cmd/config_loader_test.go`: unstable ldflags.Version + config with getMinVersion > "0.0.0" should succeed (no error returned)
-- [ ] Write test: stable ldflags.Version + config with getMinVersion > current should still fail
-- [ ] Run tests — must pass before next task
+- [x] Update call site at `cmd/config_loader.go:248` to handle the new bypass signal
+- [x] Log warning via `logger.Logger.Warn()` with message like: "version check skipped: current version is unstable (0.0.0-unstable.xxx), config requires 0.0.1 — proceeding at your own risk"
+- [x] Write test in `cmd/config_loader_test.go`: unstable ldflags.Version + config with getMinVersion > "0.0.0" should succeed (no error returned)
+- [x] Write test: stable ldflags.Version + config with getMinVersion > current should still fail
+- [x] Run tests — must pass before next task
 
 ### Task 4: Clean up check_unstable_test.go
 
