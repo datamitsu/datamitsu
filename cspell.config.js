@@ -168,5 +168,6 @@ export default {
     "sdists",
     "typosquats",
     "amannn",
+    "sarif",
   ],
 };
