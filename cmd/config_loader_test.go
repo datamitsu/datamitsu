@@ -5,6 +5,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/engine"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
+	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/pnpmdefaults"
 	"encoding/hex"
 	"fmt"
@@ -17,7 +18,22 @@ import (
 
 	"github.com/dop251/goja"
 	"github.com/goccy/go-yaml"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 )
+
+// swapLoggerWithObserver replaces logger.Logger with a zap observer for the
+// duration of the test so warnings emitted by the config loader can be
+// asserted. The observer captures entries at the given level and above.
+func swapLoggerWithObserver(t *testing.T, level zapcore.LevelEnabler) *observer.ObservedLogs {
+	t.Helper()
+	core, observed := observer.New(level)
+	original := logger.Logger
+	logger.Logger = zap.New(core)
+	t.Cleanup(func() { logger.Logger = original })
+	return observed
+}
 
 func TestLoadConfig(t *testing.T) {
 	cfg, _, vm, err := loadConfig()
@@ -1899,10 +1915,15 @@ function getConfig(input) {
 
 func TestLoadConfigUnstableVersionBypassesHighMinVersion(t *testing.T) {
 	// When the binary is built as an unstable release, the version check
-	// must be skipped rather than blocking config loading.
+	// must be skipped rather than blocking config loading. The bypass is
+	// advisory, so the loader is expected to emit a warning identifying
+	// the bypassed source.
+	unstableVersion := "0.0.0-unstable.20260523.abcdef0"
 	original := ldflags.Version
-	ldflags.Version = "0.0.0-unstable.20260523.abcdef0"
+	ldflags.Version = unstableVersion
 	t.Cleanup(func() { ldflags.Version = original })
+
+	observed := swapLoggerWithObserver(t, zapcore.WarnLevel)
 
 	configDir := t.TempDir()
 	configPath := filepath.Join(configDir, "high-version.js")
@@ -1930,13 +1951,31 @@ function getConfig(input) { return { ignoreRules: ["unstable-bypass: eslint"] };
 	if !hasRule {
 		t.Errorf("expected ignoreRule from config to load after bypass, got %v", cfg.IgnoreRules)
 	}
+
+	entries := observed.FilterMessageSnippet("version check skipped").All()
+	if len(entries) != 1 {
+		t.Fatalf("expected exactly 1 'version check skipped' warning, got %d (all=%v)", len(entries), observed.All())
+	}
+	fields := entries[0].ContextMap()
+	if fields["current"] != unstableVersion {
+		t.Errorf("warning 'current' field = %v, want %q", fields["current"], unstableVersion)
+	}
+	if fields["required"] != "99.0.0" {
+		t.Errorf("warning 'required' field = %v, want %q", fields["required"], "99.0.0")
+	}
+	if _, ok := fields["source"]; !ok {
+		t.Errorf("warning is missing 'source' field, got fields: %v", fields)
+	}
 }
 
 func TestLoadConfigStableVersionStillFailsHighMinVersion(t *testing.T) {
-	// Sanity-check: a stable build below required version must still error.
+	// Sanity-check: a stable build below required version must still error,
+	// and must NOT emit the unstable-bypass warning.
 	original := ldflags.Version
 	ldflags.Version = "0.0.1"
 	t.Cleanup(func() { ldflags.Version = original })
+
+	observed := swapLoggerWithObserver(t, zapcore.WarnLevel)
 
 	configDir := t.TempDir()
 	configPath := filepath.Join(configDir, "stable-high-version.js")
@@ -1953,5 +1992,8 @@ function getConfig(input) { return {}; }`,
 	}
 	if !strings.Contains(err.Error(), "upgrade") {
 		t.Errorf("error should retain upgrade instructions for stable builds, got: %v", err)
+	}
+	if n := observed.FilterMessageSnippet("version check skipped").Len(); n != 0 {
+		t.Errorf("stable failure path emitted %d unexpected unstable-bypass warnings", n)
 	}
 }
