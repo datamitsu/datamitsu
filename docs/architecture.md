@@ -355,6 +355,7 @@ export function getMinVersion() {
 - Version must be valid semver (e.g., "1.2.3" or "v1.2.3")
 - When the current version is below the requirement, error includes both versions and upgrade instructions
 - The special version "dev" (used when running from source) is treated as v0.0.0, so it passes version checks only when the required version is also v0.0.0 or lower
+- Unstable builds (`0.0.0-unstable.<date>.<sha>`, produced from non-tagged commits) bypass the version check entirely — `CompareVersions` returns `skipped=true` with no error and the config loader logs an advisory warning. Without this bypass, semver prerelease ordering would treat every unstable build as below `v0.0.0` and block every config; unstable users have already opted into a non-released build, so the gate is advisory rather than blocking
 - Each config layer (default, before-config, auto, explicit) is checked independently; failure is fail-fast
 
 ## Important Implementation Details
