@@ -67,10 +67,9 @@ interface PlatformConfig {
   npmArch: string;
   npmPlatform: string;
   osName: string;
+  // Python-specific fields (empty string = platform not supported, e.g. FreeBSD)
   pythonArch: string;
-  // Python-specific fields
   pythonPlatform: string;
-  wheelTag: string;
 }
 
 const PLATFORMS: PlatformConfig[] = [
@@ -83,7 +82,6 @@ const PLATFORMS: PlatformConfig[] = [
     osName: "macOS",
     pythonArch: "x86_64",
     pythonPlatform: "darwin",
-    wheelTag: "macosx_11_0_x86_64",
   },
   {
     archName: "ARM64",
@@ -94,7 +92,6 @@ const PLATFORMS: PlatformConfig[] = [
     osName: "macOS",
     pythonArch: "arm64",
     pythonPlatform: "darwin",
-    wheelTag: "macosx_11_0_arm64",
   },
   {
     archName: "x64",
@@ -105,7 +102,6 @@ const PLATFORMS: PlatformConfig[] = [
     osName: "Linux",
     pythonArch: "x86_64",
     pythonPlatform: "linux",
-    wheelTag: "manylinux2014_x86_64",
   },
   {
     archName: "ARM64",
@@ -116,7 +112,6 @@ const PLATFORMS: PlatformConfig[] = [
     osName: "Linux",
     pythonArch: "arm64",
     pythonPlatform: "linux",
-    wheelTag: "manylinux2014_aarch64",
   },
   {
     archName: "x64",
@@ -127,7 +122,6 @@ const PLATFORMS: PlatformConfig[] = [
     osName: "Windows",
     pythonArch: "x86_64",
     pythonPlatform: "windows",
-    wheelTag: "win_amd64",
   },
   {
     archName: "ARM64",
@@ -138,7 +132,6 @@ const PLATFORMS: PlatformConfig[] = [
     osName: "Windows",
     pythonArch: "arm64",
     pythonPlatform: "windows",
-    wheelTag: "win_arm64",
   },
   {
     archName: "x64",
@@ -149,7 +142,6 @@ const PLATFORMS: PlatformConfig[] = [
     osName: "FreeBSD",
     pythonArch: "",
     pythonPlatform: "",
-    wheelTag: "",
   },
   {
     archName: "ARM64",
@@ -160,7 +152,6 @@ const PLATFORMS: PlatformConfig[] = [
     osName: "FreeBSD",
     pythonArch: "",
     pythonPlatform: "",
-    wheelTag: "",
   },
 ];
 
@@ -231,23 +222,6 @@ function execSafe(command: string, cwd?: string): Promise<{ error?: any; success
       resolve({ error, success: false });
     });
   });
-}
-
-function getOsClassifier(goos: string): string {
-  switch (goos) {
-    case "darwin": {
-      return "MacOS";
-    }
-    case "linux": {
-      return "POSIX :: Linux";
-    }
-    case "windows": {
-      return "Microsoft :: Windows";
-    }
-    default: {
-      return "OS Independent";
-    }
-  }
 }
 
 function normalizePythonVersion(version: string): string {

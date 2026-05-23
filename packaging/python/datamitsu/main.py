@@ -1,12 +1,13 @@
 import os
-import sys
 import platform
-import subprocess
+import sys
 
 ISSUE_URL = "https://github.com/datamitsu/datamitsu/issues/new"
 ARCH_MAPPING = {
     "amd64": "x86_64",
+    "x86_64": "x86_64",
     "aarch64": "arm64",
+    "arm64": "arm64",
 }
 
 
@@ -27,5 +28,10 @@ def main():
         )
         return 1
 
-    result = subprocess.run([executable] + sys.argv[1:])
-    return result.returncode
+    if os_name == "windows":
+        import subprocess
+
+        result = subprocess.run([executable] + sys.argv[1:])
+        sys.exit(result.returncode)
+    else:
+        os.execvp(executable, [executable] + sys.argv[1:])
