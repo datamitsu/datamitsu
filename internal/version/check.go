@@ -7,7 +7,22 @@ import (
 	"golang.org/x/mod/semver"
 )
 
+// IsUnstable reports whether the given version string is an unstable build
+// (release pipeline format: "0.0.0-unstable.<date>.<sha>"). Unstable builds
+// are produced from non-tagged commits and are not subject to the config
+// version check — callers that gate on version should warn rather than block.
+func IsUnstable(v string) bool {
+	return strings.Contains(v, "-unstable")
+}
+
 func CompareVersions(current, required string) error {
+	if IsUnstable(current) {
+		// Unstable builds sort below v0.0.0 under semver prerelease rules, so
+		// any required version would fail the check. Skip enforcement; the
+		// caller is expected to log an advisory warning.
+		return nil
+	}
+
 	current = normalizeVersion(current)
 	required = normalizeVersion(required)
 
