@@ -69,10 +69,10 @@
 
 ### Task 4: Clean up check_unstable_test.go
 
-- [ ] Remove or update diagnostic tests that were documenting the bug (they now test the fix)
-- [ ] Ensure test names clearly describe expected behavior, not the bug
-- [ ] Run full test suite (`go test ./...`)
-- [ ] Run linter if configured
+- [x] Remove or update diagnostic tests that were documenting the bug (they now test the fix) — tests were already rewritten in Tasks 1–3 to assert expected post-fix behavior; no bug-documenting tests remained.
+- [x] Ensure test names clearly describe expected behavior, not the bug (`TestCompareVersions_UnstableCurrent_BypassesCheck`, `TestCompareVersions_StableCurrent_StillEnforced` — already behavior-oriented).
+- [x] Run full test suite (`go test ./...`) — all packages pass.
+- [x] Run linter if configured — `golangci-lint run ./internal/version/... ./cmd/...` reports 0 issues; `go vet ./...` clean.
 
 ### Task 5: Update documentation
 
