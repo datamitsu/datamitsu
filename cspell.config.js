@@ -169,6 +169,7 @@ export default {
     "sdists",
     "typosquats",
     "amannn",
+    "autobuild",
     "sarif",
     "codecov",
     "coveralls",
