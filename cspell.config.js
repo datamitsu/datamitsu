@@ -167,5 +167,6 @@ export default {
     "sdist",
     "sdists",
     "typosquats",
+    "amannn",
   ],
 };
