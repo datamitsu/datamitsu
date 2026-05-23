@@ -443,19 +443,7 @@ jobs:
 
           node packaging/pack.ts prepare-python
       - name: Build Python wheels
-        run: |
-          cd packaging/python
-
-          # Build one wheel per platform (hatch_build.py prunes binaries per target)
-          for platform in linux darwin windows; do
-            for arch in x86_64 arm64; do
-              echo "Building wheel for ${platform}-${arch}..."
-              DATAMITSU_TARGET_PLATFORM=$platform DATAMITSU_TARGET_ARCH=$arch uv build --wheel
-            done
-          done
-
-          echo "✓ Built all platform wheels"
-          ls -lh dist/
+        run: node packaging/pack.ts build-python
       - if: needs.determine-release-type.outputs.is_unstable == 'true'
         name: Dry-run publish (unstable)
         run: |

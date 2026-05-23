@@ -155,6 +155,36 @@ const PLATFORMS: PlatformConfig[] = [
   },
 ];
 
+async function buildPythonWheels() {
+  console.log("\n📦 Building platform wheels...");
+
+  // Clean dist/ to avoid publishing stale wheels from previous runs
+  const pythonDistDir = join(PYTHON_DIR, "dist");
+  if (existsSync(pythonDistDir)) {
+    rmSync(pythonDistDir, { force: true, recursive: true });
+  }
+
+  const pythonPlatforms = PLATFORMS.filter((p) => p.pythonPlatform !== "");
+
+  for (const platform of pythonPlatforms) {
+    const target = `${platform.pythonPlatform}-${platform.pythonArch}`;
+
+    console.log(`\nBuilding wheel for ${target}...`);
+    const buildResult = await execSafe("uv build --wheel", PYTHON_DIR, {
+      DATAMITSU_TARGET_ARCH: platform.pythonArch,
+      DATAMITSU_TARGET_PLATFORM: platform.pythonPlatform,
+    });
+
+    if (buildResult.success) {
+      console.log(`✓ Built wheel for ${target}`);
+    } else {
+      throw new Error(`Build failed for ${target}`);
+    }
+  }
+
+  console.log("\n✅ All platform wheels built!");
+}
+
 function clean() {
   console.log("\n📦 Cleaning npm packages...");
 
@@ -245,6 +275,10 @@ function normalizePythonVersion(version: string): string {
   return normalized;
 }
 
+// ============================================================================
+// Python Packaging
+// ============================================================================
+
 function preparePlatformPackages() {
   console.log("\n📦 Preparing platform-specific npm packages...");
 
@@ -297,10 +331,6 @@ function preparePlatformPackages() {
     }
   }
 }
-
-// ============================================================================
-// Python Packaging
-// ============================================================================
 
 function preparePythonPackages() {
   console.log("\n📦 Preparing Python package (single package, multi-platform wheels)...");
@@ -429,43 +459,8 @@ async function publishPyPI(dryRun = true) {
   const normalizedVersion = normalizePythonVersion(VERSION);
   console.log(`Version: ${normalizedVersion}`);
 
-  // Clean dist/ to avoid publishing stale wheels from previous runs
-  const pythonDistDir = join(PYTHON_DIR, "dist");
-  if (existsSync(pythonDistDir)) {
-    rmSync(pythonDistDir, { force: true, recursive: true });
-  }
-
-  let hasErrors = false;
-
-  // Build one wheel per platform (env vars control which platform binary is included)
-  console.log("\n📦 Building platform wheels...");
-
-  const pythonPlatforms = PLATFORMS.filter((p) => p.pythonPlatform !== "");
-
-  for (const platform of pythonPlatforms) {
-    const target = `${platform.pythonPlatform}-${platform.pythonArch}`;
-
-    console.log(`\nBuilding wheel for ${target}...`);
-    const buildResult = await execSafe("uv build --wheel", PYTHON_DIR, {
-      DATAMITSU_TARGET_ARCH: platform.pythonArch,
-      DATAMITSU_TARGET_PLATFORM: platform.pythonPlatform,
-    });
-
-    if (buildResult.success) {
-      console.log(`✓ Built wheel for ${target}`);
-    } else {
-      console.error(`✗ Failed to build wheel for ${target}`);
-      hasErrors = true;
-      if (!dryRun) {
-        throw new Error(`Build failed for ${target}`);
-      }
-    }
-  }
-
-  if (hasErrors && dryRun) {
-    console.log("\n⚠️  Some wheels had build errors during dry-run");
-    return;
-  }
+  // Build all wheels
+  await buildPythonWheels();
 
   // Publish all wheels
   if (dryRun) {
@@ -554,6 +549,11 @@ async function main() {
       break;
     }
 
+    case "build-python": {
+      await buildPythonWheels();
+      break;
+    }
+
     case "clean": {
       clean();
       break;
@@ -593,13 +593,15 @@ Commands:
   prepare            Prepare npm packages from GoReleaser binaries
   publish            Publish to npm (use --dry-run for testing)
   prepare-python     Prepare Python packages from GoReleaser binaries
-  publish-python     Publish to PyPI (use --dry-run for testing)
+  build-python       Build Python wheels for all platforms
+  publish-python     Build and publish to PyPI (use --dry-run for testing)
   all                Prepare both npm and Python packages
 
 Examples:
   tsx pack.ts prepare
   tsx pack.ts publish --dry-run
   tsx pack.ts prepare-python
+  tsx pack.ts build-python
   tsx pack.ts publish-python --dry-run
   VERSION=1.0.0 tsx pack.ts all
 

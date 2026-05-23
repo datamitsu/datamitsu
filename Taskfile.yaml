@@ -58,6 +58,10 @@ tasks:
       - rm -rf packaging/npm/datamitsu/lib
       - cp -r programmable-api/js/dist packaging/npm/datamitsu/lib
     desc: Build programmable API and copy to wrapper
+  pack:build-python:
+    cmds:
+      - node packaging/pack.ts build-python
+    desc: Build Python wheels for all platforms
   pack:clean:
     cmds:
       - node packaging/pack.ts clean
