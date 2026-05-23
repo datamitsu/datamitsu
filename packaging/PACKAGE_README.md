@@ -7,6 +7,7 @@
 <p align="center">
   <a href="https://www.npmjs.com/package/@datamitsu/datamitsu"><img src="https://img.shields.io/npm/v/@datamitsu/datamitsu" alt="npm"></a>
   <a href="https://pypi.org/project/datamitsu/"><img src="https://img.shields.io/pypi/v/datamitsu" alt="PyPI"></a>
+  <a href="https://rubygems.org/gems/datamitsu"><img src="https://img.shields.io/gem/v/datamitsu" alt="Gem"></a>
   <a href="https://github.com/datamitsu/datamitsu/actions/workflows/pr-checks.yml"><img src="https://github.com/datamitsu/datamitsu/actions/workflows/pr-checks.yml/badge.svg" alt="CI"></a>
   <a href="https://codecov.io/gh/datamitsu/datamitsu"><img src="https://codecov.io/gh/datamitsu/datamitsu/graph/badge.svg" alt="codecov"></a>
   <a href="https://coveralls.io/github/datamitsu/datamitsu?branch=main"><img src="https://coveralls.io/repos/github/datamitsu/datamitsu/badge.svg?branch=main" alt="Coverage Status"></a>
