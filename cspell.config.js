@@ -173,5 +173,12 @@ export default {
     "codecov",
     "coveralls",
     "coverallsapp",
+    "GOBIN",
+    "GOMODCACHE",
+    "GONOSUMCHECK",
+    "GONOSUMDB",
+    "GOPATH",
+    "gomodcache",
+    "gopath",
   ],
 };
