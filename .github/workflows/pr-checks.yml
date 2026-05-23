@@ -1,6 +1,9 @@
 jobs:
   build-verify:
     name: Build Verification
+    needs:
+      - lint
+      - test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -23,6 +26,9 @@ jobs:
           pnpm pack:prepare
   docker-build:
     name: Docker Build Test
+    needs:
+      - lint
+      - test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6

@@ -132,6 +132,29 @@ The tool runs once from the git root, regardless of monorepo structure:
 }
 ```
 
+## Exclude Patterns
+
+Use `excludeGlobs` to remove files from a tool's matched set. The patterns use doublestar syntax (`*`, `**`, `?`, `[...]`, `{alt1,alt2}`) — the same as `globs`. The `!` negation prefix is not supported; use `excludeGlobs` instead.
+
+```javascript
+prettier: {
+  name: "Prettier",
+  operations: {
+    fix: {
+      app: "prettier",
+      args: ["--write", "{files}"],
+      scope: "per-project",
+      globs: ["**/*.{js,ts,css,md}"],
+      excludeGlobs: ["**/*.generated.*", "**/vendor/**"],
+    },
+  },
+}
+```
+
+Filtering order: `globs` (include) → `excludeGlobs` (exclude) → subdirectory scope restriction → `.datamitsuignore` (per-tool disable).
+
+`globs` is optional. Omit it for tools that handle their own file discovery (e.g. `golangci-lint run`, `eslint .`) — the tool runs without a file list. `excludeGlobs` only narrows the set of files datamitsu matches via `globs`; it has no effect when `globs` is empty, because the tool, not datamitsu, decides which files to read.
+
 ## Template Placeholders
 
 Tool operation arguments support placeholders that datamitsu resolves before execution:

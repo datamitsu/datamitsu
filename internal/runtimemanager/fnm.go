@@ -8,10 +8,12 @@ import (
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/pnpmdefaults"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/goccy/go-yaml"
 	"io"
 	"net"
 	"net/http"
@@ -347,7 +349,16 @@ func (rm *RuntimeManager) resolveFNMAppEnvPath(appName string, appConfig *binman
 		return "", "", config.RuntimeConfig{}, fmt.Errorf("failed to resolve FNM runtime for %q: %w", appName, err)
 	}
 
-	appEnvPath, err = rm.GetAppPath(appName, config.RuntimeKindFNM, appConfig.Version, appConfig.Dependencies, lockFileHash(appConfig.LockFile), files, archives, runtimeName, FNMAppPathExtra{
+	// Hash the actual merged pnpm-workspace.yaml content (defaults + user
+	// override) rather than only the user's raw override. This way the cache
+	// key invalidates when pnpmdefaults.Defaults() is tightened, so the
+	// new defaults propagate to existing installs.
+	filesForHash, err := filesWithMergedWorkspaceYAML(files)
+	if err != nil {
+		return "", "", config.RuntimeConfig{}, fmt.Errorf("failed to compute pnpm-workspace.yaml for %q: %w", appName, err)
+	}
+
+	appEnvPath, err = rm.GetAppPath(appName, config.RuntimeKindFNM, appConfig.Version, appConfig.Dependencies, lockFileHash(appConfig.LockFile), filesForHash, archives, runtimeName, FNMAppPathExtra{
 		PackageName: appConfig.PackageName,
 		BinPath:     appConfig.BinPath,
 	})
@@ -356,6 +367,24 @@ func (rm *RuntimeManager) resolveFNMAppEnvPath(appName string, appConfig *binman
 	}
 
 	return appEnvPath, runtimeName, rc, nil
+}
+
+// filesWithMergedWorkspaceYAML returns a copy of files where the
+// pnpm-workspace.yaml entry is replaced by the actual merged content
+// (defaults + user override). The original files map is not mutated.
+// This is used only for cache-key computation; the real merge for writing
+// to disk is performed by preparePNPMWorkspaceForApp.
+func filesWithMergedWorkspaceYAML(files map[string]string) (map[string]string, error) {
+	merged, err := buildPNPMWorkspaceForApp(files)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]string, len(files)+1)
+	for k, v := range files {
+		out[k] = v
+	}
+	out["pnpm-workspace.yaml"] = merged
+	return out, nil
 }
 
 // InstallFNMApp installs an FNM-managed app if not already cached.
@@ -392,12 +421,20 @@ func (rm *RuntimeManager) installFNMAppOnce(appName string, appConfig *binmanage
 		return fmt.Errorf("app %q: unsafe binPath: %w", appName, err)
 	}
 	appBinPath := filepath.Join(appEnvPath, appConfig.BinPath)
+	appModulePkg := filepath.Join(appEnvPath, "node_modules", appConfig.PackageName, "package.json")
 	if _, err := os.Stat(appBinPath); err == nil {
-		log.Debug("FNM app already installed",
+		if _, err := os.Stat(appModulePkg); err == nil {
+			log.Debug("FNM app already installed",
+				zap.String("app", appName),
+				zap.String("path", appBinPath),
+			)
+			return nil
+		}
+		log.Warn("FNM app bin shim exists but module is missing, reinstalling",
 			zap.String("app", appName),
-			zap.String("path", appBinPath),
+			zap.String("module", appModulePkg),
 		)
-		return nil
+		_ = os.RemoveAll(appEnvPath)
 	}
 
 	fnmPath, err := rm.GetRuntimePath(runtimeName)
@@ -427,10 +464,21 @@ func (rm *RuntimeManager) installFNMAppOnce(appName string, appConfig *binmanage
 		}
 	}()
 
-	if len(files) > 0 || len(archives) > 0 {
-		if err := binmanager.WriteAppFiles(appEnvPath, files, archives); err != nil {
+	mergedWorkspaceYAML, filesToWrite, err := preparePNPMWorkspaceForApp(files)
+	if err != nil {
+		return fmt.Errorf("failed to set up pnpm-workspace.yaml for %q: %w", appName, err)
+	}
+
+	if len(filesToWrite) > 0 || len(archives) > 0 {
+		if err := binmanager.WriteAppFiles(appEnvPath, filesToWrite, archives); err != nil {
 			return fmt.Errorf("failed to write app files/archives for %q: %w", appName, err)
 		}
+	}
+
+	// Write pnpm-workspace.yaml AFTER WriteAppFiles so the secure defaults
+	// always win over anything an archive might place at this path.
+	if err := writeFNMAppWorkspaceFile(appEnvPath, mergedWorkspaceYAML); err != nil {
+		return fmt.Errorf("failed to write pnpm-workspace.yaml for %q: %w", appName, err)
 	}
 
 	packageJSON, err := buildPackageJSON(appConfig.PackageName, appConfig.Version, appConfig.Dependencies)
@@ -532,6 +580,103 @@ func buildPNPMInstallArgs(pnpmCjsPath string, hasLockFile bool) []string {
 		args = append(args, "--frozen-lockfile")
 	}
 	return args
+}
+
+// defaultPNPMWorkspaceConfig returns the recommended pnpm 11 workspace
+// security defaults applied to every FNM app environment. Delegates to
+// internal/pnpmdefaults — the single source shared with the JS engine that
+// injects the same map as a global so config.js can publish it via
+// sharedStorage["pnpm-workspace-defaults"].
+func defaultPNPMWorkspaceConfig() map[string]any {
+	return pnpmdefaults.Defaults()
+}
+
+// mergePNPMWorkspaceConfig shallow-merges parsed user YAML on top of the
+// base defaults map. Top-level user keys win; unset keys keep their default.
+// An empty userYAML returns a copy of base unchanged.
+func mergePNPMWorkspaceConfig(base map[string]any, userYAML string) (map[string]any, error) {
+	merged := make(map[string]any, len(base))
+	for k, v := range base {
+		merged[k] = v
+	}
+
+	if strings.TrimSpace(userYAML) == "" {
+		return merged, nil
+	}
+
+	var user map[string]any
+	if err := yaml.Unmarshal([]byte(userYAML), &user); err != nil {
+		return nil, fmt.Errorf("failed to parse user pnpm-workspace.yaml: %w", err)
+	}
+
+	for k, v := range user {
+		merged[k] = v
+	}
+	return merged, nil
+}
+
+// preparePNPMWorkspaceForApp computes the merged pnpm-workspace.yaml content
+// (defaults + user override) and returns a copy of files with the
+// pnpm-workspace.yaml entry removed (consumed by the merge). Callers MUST
+// write the returned YAML to disk AFTER any archive extraction so that
+// archives cannot overwrite the secure defaults. The input files map is not
+// mutated; when it does not contain the workspace entry the same map is
+// returned.
+func preparePNPMWorkspaceForApp(files map[string]string) (mergedYAML string, filteredFiles map[string]string, err error) {
+	mergedYAML, err = buildPNPMWorkspaceForApp(files)
+	if err != nil {
+		return "", nil, err
+	}
+
+	if _, has := files["pnpm-workspace.yaml"]; !has {
+		return mergedYAML, files, nil
+	}
+
+	filtered := make(map[string]string, len(files)-1)
+	for k, v := range files {
+		if k == "pnpm-workspace.yaml" {
+			continue
+		}
+		filtered[k] = v
+	}
+	return mergedYAML, filtered, nil
+}
+
+// writeFNMAppWorkspaceFile writes mergedYAML to {appEnvPath}/pnpm-workspace.yaml.
+// Callers MUST invoke this AFTER any archive extraction so archives cannot
+// overwrite the secure defaults.
+func writeFNMAppWorkspaceFile(appEnvPath, mergedYAML string) error {
+	if err := os.MkdirAll(appEnvPath, 0755); err != nil {
+		return fmt.Errorf("failed to create app directory: %w", err)
+	}
+	workspacePath := filepath.Join(appEnvPath, "pnpm-workspace.yaml")
+	if err := os.WriteFile(workspacePath, []byte(mergedYAML), 0644); err != nil {
+		return fmt.Errorf("failed to write pnpm-workspace.yaml: %w", err)
+	}
+	return nil
+}
+
+// buildPNPMWorkspaceForApp returns the YAML string to write as
+// pnpm-workspace.yaml in the app environment. It starts from the
+// recommended defaults and shallow-merges the user's
+// files["pnpm-workspace.yaml"] entry on top. Returns defaults alone when
+// the user provides no override.
+func buildPNPMWorkspaceForApp(files map[string]string) (string, error) {
+	userYAML := ""
+	if files != nil {
+		userYAML = files["pnpm-workspace.yaml"]
+	}
+
+	merged, err := mergePNPMWorkspaceConfig(defaultPNPMWorkspaceConfig(), userYAML)
+	if err != nil {
+		return "", err
+	}
+
+	out, err := yaml.Marshal(merged)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal pnpm-workspace.yaml: %w", err)
+	}
+	return string(out), nil
 }
 
 func buildPackageJSON(packageName string, version string, deps map[string]string) ([]byte, error) {

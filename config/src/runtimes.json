@@ -1,9 +1,9 @@
 {
   "fnm": {
     "fnm": {
-      "nodeVersion": "24.14.0",
-      "pnpmHash": "9b943b94bc8f55efb993aad8e44b538e6b091e60a9e4a944dcde869855f233e3",
-      "pnpmVersion": "10.32.1"
+      "nodeVersion": "26.2.0",
+      "pnpmHash": "99c4be831ed231829895142d96793dbe75afc53795933aed8366e68dcce1e1b8",
+      "pnpmVersion": "11.2.2"
     },
     "kind": "fnm",
     "managed": {
@@ -52,7 +52,7 @@
   },
   "jvm": {
     "jvm": {
-      "javaVersion": "25"
+      "javaVersion": "26"
     },
     "kind": "jvm",
     "managed": {
@@ -60,65 +60,65 @@
         "darwin": {
           "amd64": {
             "unknown": {
-              "binaryPath": "jdk-25.0.2+10/Contents/Home/bin/java",
+              "binaryPath": "jdk-26.0.1+8/Contents/Home/bin/java",
               "contentType": "tar.gz",
               "extractDir": true,
-              "hash": "7caddeb2d1d06a21487fdf55198349f122ba7b24bfc613b8923a42a133a92dc5",
-              "url": "https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.2%2B10/OpenJDK25U-jdk_x64_mac_hotspot_25.0.2_10.tar.gz"
+              "hash": "d3d2d58701b941acaa819cafd89c2a7d7225a502df95446b152216d9dd04ede8",
+              "url": "https://github.com/adoptium/temurin26-binaries/releases/download/jdk-26.0.1%2B8/OpenJDK26U-debugimage_x64_mac_hotspot_26.0.1_8.tar.gz"
             }
           },
           "arm64": {
             "unknown": {
-              "binaryPath": "jdk-25.0.2+10/Contents/Home/bin/java",
+              "binaryPath": "jdk-26.0.1+8/Contents/Home/bin/java",
               "contentType": "tar.gz",
               "extractDir": true,
-              "hash": "74ff6e892924a49767c35eb61251b1969c03213819d51065d9b8f9e0238c4f97",
-              "url": "https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.2%2B10/OpenJDK25U-jdk_aarch64_mac_hotspot_25.0.2_10.tar.gz"
+              "hash": "2c2e22a45c191593c58b4713a487e1b7ef15c2c6057b321059d61f716c28a53a",
+              "url": "https://github.com/adoptium/temurin26-binaries/releases/download/jdk-26.0.1%2B8/OpenJDK26U-debugimage_aarch64_mac_hotspot_26.0.1_8.tar.gz"
             }
           }
         },
         "linux": {
           "amd64": {
             "glibc": {
-              "binaryPath": "jdk-25.0.2+10/bin/java",
+              "binaryPath": "jdk-26.0.1+8/bin/java",
               "contentType": "tar.gz",
               "extractDir": true,
-              "hash": "987387933b64b9833846dee373b640440d3e1fd48a04804ec01a6dbf718e8ab8",
-              "url": "https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.2%2B10/OpenJDK25U-jdk_x64_linux_hotspot_25.0.2_10.tar.gz"
+              "hash": "eb82e54d2aca31f20f84daf9869743e2d06979ba7f462f449041c0514f0e0bec",
+              "url": "https://github.com/adoptium/temurin26-binaries/releases/download/jdk-26.0.1%2B8/OpenJDK26U-static-libs-glibc_x64_linux_hotspot_26.0.1_8.tar.gz"
             },
             "musl": {
-              "binaryPath": "jdk-25.0.2+10/bin/java",
+              "binaryPath": "jdk-26.0.1+8/bin/java",
               "contentType": "tar.gz",
               "extractDir": true,
-              "hash": "961f13ba0ee1e18c41c50ab642361e4283dee5e7947a48ed6a72c8a661d0cca0",
-              "url": "https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.2%2B10/OpenJDK25U-jdk_x64_alpine-linux_hotspot_25.0.2_10.tar.gz"
+              "hash": "a50ba3463fb61a89d78f6f6186fd86c977cc337cab5f0aefdfc631c6f4924fb0",
+              "url": "https://github.com/adoptium/temurin26-binaries/releases/download/jdk-26.0.1%2B8/OpenJDK26U-debugimage_x64_alpine-linux_hotspot_26.0.1_8.tar.gz"
             }
           },
           "arm64": {
             "glibc": {
-              "binaryPath": "jdk-25.0.2+10/bin/java",
+              "binaryPath": "jdk-26.0.1+8/bin/java",
               "contentType": "tar.gz",
               "extractDir": true,
-              "hash": "a9d73e711d967dc44896d4f430f73a68fd33590dabc29a7f2fb9f593425b854c",
-              "url": "https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.2%2B10/OpenJDK25U-jdk_aarch64_linux_hotspot_25.0.2_10.tar.gz"
+              "hash": "959f9a601d71a38386a6d0a64e33e964b52fb1fd03cdaa7d7a1ae49092e19581",
+              "url": "https://github.com/adoptium/temurin26-binaries/releases/download/jdk-26.0.1%2B8/OpenJDK26U-static-libs-glibc_aarch64_linux_hotspot_26.0.1_8.tar.gz"
             },
             "musl": {
-              "binaryPath": "jdk-25.0.2+10/bin/java",
+              "binaryPath": "jdk-26.0.1+8/bin/java",
               "contentType": "tar.gz",
               "extractDir": true,
-              "hash": "e8d928fb018eabb31a148ebadaa5a5ec69273e6562afede21c426960a6a67143",
-              "url": "https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.2%2B10/OpenJDK25U-jdk_aarch64_alpine-linux_hotspot_25.0.2_10.tar.gz"
+              "hash": "1eed4c2b428e372d23c84e2224e0b1def463c6fb034b53410c1340ef57deb8da",
+              "url": "https://github.com/adoptium/temurin26-binaries/releases/download/jdk-26.0.1%2B8/OpenJDK26U-debugimage_aarch64_alpine-linux_hotspot_26.0.1_8.tar.gz"
             }
           }
         },
         "windows": {
           "amd64": {
             "unknown": {
-              "binaryPath": "jdk-25.0.2+10/bin/java.exe",
+              "binaryPath": "jdk-26.0.1+8/bin/java.exe",
               "contentType": "zip",
               "extractDir": true,
-              "hash": "06ac5f5444a1269dd11d11cbb7ab6ebaecedc60dc1caca82cdb56f29100b7b8c",
-              "url": "https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.2%2B10/OpenJDK25U-jdk_x64_windows_hotspot_25.0.2_10.zip"
+              "hash": "caf521ff23a4acd7d14094acac9d13f63a3f0fcee88e6bc8efb675ce246f0162",
+              "url": "https://github.com/adoptium/temurin26-binaries/releases/download/jdk-26.0.1%2B8/OpenJDK26U-debugimage_x64_windows_hotspot_26.0.1_8.zip"
             }
           }
         }
@@ -135,16 +135,16 @@
             "unknown": {
               "binaryPath": "uv",
               "contentType": "tar.gz",
-              "hash": "ff90020b554cf02ef8008535c9aab6ef27bb7be6b075359300dec79c361df897",
-              "url": "https://github.com/astral-sh/uv/releases/download/0.10.11/uv-x86_64-apple-darwin.tar.gz"
+              "hash": "6b91ae3de155f51bd1f5b74814821c79f016a176561f252cd9ddfb976939af2e",
+              "url": "https://github.com/astral-sh/uv/releases/download/0.11.16/uv-x86_64-apple-darwin.tar.gz"
             }
           },
           "arm64": {
             "unknown": {
               "binaryPath": "uv",
               "contentType": "tar.gz",
-              "hash": "437a7d498dd6564d5bf986074249ba1fc600e73da55ae04d7bd4c24d5f149b95",
-              "url": "https://github.com/astral-sh/uv/releases/download/0.10.11/uv-aarch64-apple-darwin.tar.gz"
+              "hash": "2b25be1af546be330b340b0a76b99f989daa6d92678fdffb87438e661e9d88fb",
+              "url": "https://github.com/astral-sh/uv/releases/download/0.11.16/uv-aarch64-apple-darwin.tar.gz"
             }
           }
         },
@@ -153,28 +153,28 @@
             "glibc": {
               "binaryPath": "uv",
               "contentType": "tar.gz",
-              "hash": "5a360b0de092ddf4131f5313d0411b48c4e95e8107e40c3f8f2e9fcb636b3583",
-              "url": "https://github.com/astral-sh/uv/releases/download/0.10.11/uv-x86_64-unknown-linux-gnu.tar.gz"
+              "hash": "74947fe2c03315cf07e82ab3acc703eddef01aba4d5232a98e4c6825ec116131",
+              "url": "https://github.com/astral-sh/uv/releases/download/0.11.16/uv-x86_64-unknown-linux-gnu.tar.gz"
             },
             "musl": {
               "binaryPath": "uv",
               "contentType": "tar.gz",
-              "hash": "d78246139dc6cf3ed6d03c84da762686bced7ad1de67977ee372a45b95a1f6d0",
-              "url": "https://github.com/astral-sh/uv/releases/download/0.10.11/uv-x86_64-unknown-linux-musl.tar.gz"
+              "hash": "1bc4be1be0a000f893b0d1db97906cf392b63fa22fda9a0ecf33d0d4bbb4bc9a",
+              "url": "https://github.com/astral-sh/uv/releases/download/0.11.16/uv-x86_64-unknown-linux-musl.tar.gz"
             }
           },
           "arm64": {
             "glibc": {
               "binaryPath": "uv",
               "contentType": "tar.gz",
-              "hash": "23003df007937dd607409c8ddf010baa82bad2673e60e254632ca5b04edcce13",
-              "url": "https://github.com/astral-sh/uv/releases/download/0.10.11/uv-aarch64-unknown-linux-gnu.tar.gz"
+              "hash": "8c9d0f0ee98166ae6ab198747519ba6f25db29d185bd2ae5960ecebc91a5c22a",
+              "url": "https://github.com/astral-sh/uv/releases/download/0.11.16/uv-aarch64-unknown-linux-gnu.tar.gz"
             },
             "musl": {
               "binaryPath": "uv",
               "contentType": "tar.gz",
-              "hash": "5d80a7f6343d2676dfde1e5126582070a2bbc62df6f60d5527a169be3788532a",
-              "url": "https://github.com/astral-sh/uv/releases/download/0.10.11/uv-aarch64-unknown-linux-musl.tar.gz"
+              "hash": "ac022d96411143b9a2dd75ea711fa8dd4cd14538bf248f2e5df3c10a80f7f6a4",
+              "url": "https://github.com/astral-sh/uv/releases/download/0.11.16/uv-aarch64-unknown-linux-musl.tar.gz"
             }
           }
         },
@@ -183,16 +183,16 @@
             "unknown": {
               "binaryPath": "uv.exe",
               "contentType": "zip",
-              "hash": "9ee74df98582f37fdd6069e1caac80d2616f9a489f5dbb2b1c152f30be69c58e",
-              "url": "https://github.com/astral-sh/uv/releases/download/0.10.11/uv-x86_64-pc-windows-msvc.zip"
+              "hash": "dd9d6d6554bfab265bfa98aa8e8a406c5c3a7b97582f93de1f4d48d9154a0395",
+              "url": "https://github.com/astral-sh/uv/releases/download/0.11.16/uv-x86_64-pc-windows-msvc.zip"
             }
           },
           "arm64": {
             "unknown": {
               "binaryPath": "uv.exe",
               "contentType": "zip",
-              "hash": "6a3eec4105c775dd87c11ef8ec41564648273751ff807c8955c24ddbcc636d03",
-              "url": "https://github.com/astral-sh/uv/releases/download/0.10.11/uv-aarch64-pc-windows-msvc.zip"
+              "hash": "e4f8e70eb21f0f4efd2eeb159ab289f9a16057d59881a4475758be4ce39bc8c5",
+              "url": "https://github.com/astral-sh/uv/releases/download/0.11.16/uv-aarch64-pc-windows-msvc.zip"
             }
           }
         }
@@ -200,7 +200,7 @@
     },
     "mode": "managed",
     "uv": {
-      "pythonVersion": "3.14.3"
+      "pythonVersion": "3.14.5"
     }
   }
 }

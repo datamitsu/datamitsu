@@ -495,7 +495,8 @@ interface TaskJSON {
   scope: string; // Execution scope
   batch: boolean; // Whether files are batched
   workingDir: string; // Task working directory
-  globs: string[]; // File glob patterns
+  globs?: string[]; // File glob patterns (omitted when empty)
+  excludeGlobs?: string[]; // Patterns removed from the matched set (omitted when empty)
   files: string[]; // Matched file paths
   fileCount: number; // Number of matched files
 }

@@ -17,6 +17,7 @@ function getConfig(config: config.Config): config.Config {
     sharedStorage: {
       ...config.sharedStorage,
       "datamitsu-agent-prompt": DATAMITSU_AGENT_GUIDE,
+      "pnpm-workspace-defaults": YAML.stringify(pnpmWorkspaceDefaults),
     },
   };
 

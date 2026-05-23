@@ -478,6 +478,137 @@ func TestDetectJVMBinaries_NoMatchingAssetsReturnsError(t *testing.T) {
 	}
 }
 
+func TestDetectJVMBinaries_OnlyJDKAssetsSelected(t *testing.T) {
+	// Temurin releases ship many asset types: jdk, jre, debugimage,
+	// static-libs, static-libs-glibc, jmods, sbom, sources.
+	// Only -jdk_ assets are actual JDK runtimes; the others would break
+	// at install/exec time. detectJVMBinaries() must pre-filter to JDK assets.
+	//
+	// Without filtering, alphabetical tiebreaker picks "debugimage" over "jdk"
+	// since their score ties (both have same OS, arch, content type).
+	assets := []github.Asset{
+		// macOS amd64 variants
+		{Name: "OpenJDK25U-debugimage_x64_mac_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/debugimage-mac-amd64", Digest: "sha256:" + testHash1},
+		{Name: "OpenJDK25U-jdk_x64_mac_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/jdk-mac-amd64", Digest: "sha256:" + testHash2},
+		{Name: "OpenJDK25U-jre_x64_mac_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/jre-mac-amd64", Digest: "sha256:" + testHash3},
+		// macOS arm64 variants
+		{Name: "OpenJDK25U-debugimage_aarch64_mac_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/debugimage-mac-arm64", Digest: "sha256:" + testHash4},
+		{Name: "OpenJDK25U-jdk_aarch64_mac_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/jdk-mac-arm64", Digest: "sha256:" + testHash5},
+		// linux amd64 variants
+		{Name: "OpenJDK25U-debugimage_x64_linux_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/debugimage-linux-amd64", Digest: "sha256:" + testHash1},
+		{Name: "OpenJDK25U-jdk_x64_linux_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/jdk-linux-amd64", Digest: "sha256:" + testHash2},
+		{Name: "OpenJDK25U-jre_x64_linux_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/jre-linux-amd64", Digest: "sha256:" + testHash3},
+		{Name: "OpenJDK25U-static-libs-glibc_x64_linux_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/static-libs-glibc-linux-amd64", Digest: "sha256:" + testHash4},
+		{Name: "OpenJDK25U-static-libs_x64_linux_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/static-libs-linux-amd64", Digest: "sha256:" + testHash5},
+		{Name: "OpenJDK25U-sbom_x64_linux_hotspot_25.0.2_10.json", BrowserDownloadURL: "https://example.com/sbom-linux-amd64", Digest: "sha256:" + testHash1},
+		// linux arm64 variants
+		{Name: "OpenJDK25U-debugimage_aarch64_linux_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/debugimage-linux-arm64", Digest: "sha256:" + testHash2},
+		{Name: "OpenJDK25U-jdk_aarch64_linux_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/jdk-linux-arm64", Digest: "sha256:" + testHash3},
+		{Name: "OpenJDK25U-static-libs-glibc_aarch64_linux_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/static-libs-glibc-linux-arm64", Digest: "sha256:" + testHash4},
+	}
+
+	release := &github.Release{
+		TagName: "jdk-25.0.2+10",
+		Assets:  assets,
+	}
+
+	binaries, err := detectJVMBinaries(release)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	tests := []struct {
+		label   string
+		os      syslist.OsType
+		arch    syslist.ArchType
+		libc    string
+		wantURL string
+	}{
+		{"darwin/amd64", syslist.OsTypeDarwin, syslist.ArchTypeAmd64, "unknown", "https://example.com/jdk-mac-amd64"},
+		{"darwin/arm64", syslist.OsTypeDarwin, syslist.ArchTypeArm64, "unknown", "https://example.com/jdk-mac-arm64"},
+		{"linux/amd64/glibc", syslist.OsTypeLinux, syslist.ArchTypeAmd64, "glibc", "https://example.com/jdk-linux-amd64"},
+		{"linux/arm64/glibc", syslist.OsTypeLinux, syslist.ArchTypeArm64, "glibc", "https://example.com/jdk-linux-arm64"},
+	}
+
+	for _, tt := range tests {
+		archMap, ok := binaries[tt.os]
+		if !ok {
+			t.Errorf("%s: missing OS entry", tt.label)
+			continue
+		}
+		libcMap, ok := archMap[tt.arch]
+		if !ok {
+			t.Errorf("%s: missing arch entry", tt.label)
+			continue
+		}
+		info, ok := libcMap[tt.libc]
+		if !ok {
+			t.Errorf("%s: missing libc entry %q", tt.label, tt.libc)
+			continue
+		}
+		if info.URL != tt.wantURL {
+			t.Errorf("%s: URL = %q, want %q (must be -jdk_ asset)", tt.label, info.URL, tt.wantURL)
+		}
+	}
+}
+
+func TestFilterJDKAssets(t *testing.T) {
+	assets := []github.Asset{
+		{Name: "OpenJDK25U-jdk_x64_linux_hotspot_25.0.2_10.tar.gz"},
+		{Name: "OpenJDK25U-jdk_aarch64_mac_hotspot_25.0.2_10.tar.gz"},
+		{Name: "OpenJDK25U-jdk_x64_windows_hotspot_25.0.2_10.zip"},
+		{Name: "OpenJDK25U-jre_x64_linux_hotspot_25.0.2_10.tar.gz"},
+		{Name: "OpenJDK25U-debugimage_x64_linux_hotspot_25.0.2_10.tar.gz"},
+		{Name: "OpenJDK25U-static-libs_x64_linux_hotspot_25.0.2_10.tar.gz"},
+		{Name: "OpenJDK25U-static-libs-glibc_x64_linux_hotspot_25.0.2_10.tar.gz"},
+		{Name: "OpenJDK25U-jmods_x64_linux_hotspot_25.0.2_10.tar.gz"},
+		{Name: "OpenJDK25U-sbom_x64_linux_hotspot_25.0.2_10.json"},
+		{Name: "OpenJDK25U-sources_x64_linux_hotspot_25.0.2_10.tar.gz"},
+		{Name: "unrelated-file.txt"},
+	}
+
+	filtered := filterJDKAssets(assets)
+
+	if len(filtered) != 3 {
+		t.Fatalf("expected 3 JDK assets, got %d: %+v", len(filtered), filtered)
+	}
+
+	for _, a := range filtered {
+		if !strings.Contains(a.Name, "-jdk_") {
+			t.Errorf("filtered asset %q does not contain -jdk_", a.Name)
+		}
+	}
+}
+
+func TestFilterJDKAssets_EmptyInput(t *testing.T) {
+	filtered := filterJDKAssets(nil)
+	if len(filtered) != 0 {
+		t.Errorf("expected 0 assets, got %d", len(filtered))
+	}
+}
+
+func TestFilterJDKAssets_NoJDKAssets(t *testing.T) {
+	assets := []github.Asset{
+		{Name: "OpenJDK25U-jre_x64_linux_hotspot_25.0.2_10.tar.gz"},
+		{Name: "OpenJDK25U-debugimage_x64_linux_hotspot_25.0.2_10.tar.gz"},
+	}
+	filtered := filterJDKAssets(assets)
+	if len(filtered) != 0 {
+		t.Errorf("expected 0 JDK assets, got %d", len(filtered))
+	}
+}
+
+func TestFilterJDKAssets_CaseInsensitive(t *testing.T) {
+	assets := []github.Asset{
+		{Name: "OpenJDK25U-JDK_x64_linux_hotspot_25.0.2_10.tar.gz"},
+		{Name: "OpenJDK25U-Jdk_aarch64_mac_hotspot_25.0.2_10.tar.gz"},
+	}
+	filtered := filterJDKAssets(assets)
+	if len(filtered) != 2 {
+		t.Errorf("expected 2 JDK assets (case-insensitive), got %d", len(filtered))
+	}
+}
+
 func TestJvmBinaryPath(t *testing.T) {
 	tests := []struct {
 		tag    string

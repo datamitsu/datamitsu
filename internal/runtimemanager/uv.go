@@ -110,15 +110,7 @@ func (rm *RuntimeManager) installUVAppOnce(appName string, appConfig *binmanager
 		}
 	}
 
-	args := []string{"sync", "--no-install-project"}
-
-	if appConfig.LockFile != "" {
-		args = append(args, "--locked")
-	}
-
-	if rc.UV != nil && rc.UV.PythonVersion != "" {
-		args = append(args, "--python", rc.UV.PythonVersion)
-	}
+	args := buildUVInstallArgs(appConfig.LockFile, rc.UV)
 
 	cmd := exec.Command(uvPath, args...)
 	cmd.Dir = appEnvPath
@@ -147,6 +139,28 @@ func (rm *RuntimeManager) installUVAppOnce(appName string, appConfig *binmanager
 
 	cleanupOnError = false
 	return nil
+}
+
+// buildUVInstallArgs constructs the arguments for `uv sync` invocations.
+//
+// When a lockfile is present, --no-build is added so uv only installs
+// pre-built wheels. This eliminates arbitrary code execution from setup.py
+// or PEP 517 build backends during install. Trade-off: if a dependency has
+// no wheel for the current platform, install fails — intentional for supply
+// chain security; users must pre-resolve to wheel-available versions in
+// their lockfile.
+func buildUVInstallArgs(lockFile string, uvRC *config.RuntimeConfigUV) []string {
+	args := []string{"sync", "--no-install-project"}
+
+	if lockFile != "" {
+		args = append(args, "--locked", "--no-build")
+	}
+
+	if uvRC != nil && uvRC.PythonVersion != "" {
+		args = append(args, "--python", uvRC.PythonVersion)
+	}
+
+	return args
 }
 
 func escapeTOMLString(s string) string {

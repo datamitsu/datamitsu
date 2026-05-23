@@ -214,6 +214,11 @@ jobs:
       !cancelled() &&
       needs.build.result == 'success'
     name: Publish Docker Images
+    needs:
+      - build
+      - determine-release-type
+      - validate-stable
+      - generate-unstable-version
     permissions:
       contents: read
       packages: write

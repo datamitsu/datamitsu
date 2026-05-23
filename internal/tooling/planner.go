@@ -292,6 +292,7 @@ func (p *Planner) collectTasks(operation config.OperationType, files []string) [
 					matchedFiles = p.filterFilesByGlobs(files, opConfig.Globs)
 				}
 			}
+			matchedFiles = p.excludeFilesByGlobs(matchedFiles, opConfig.ExcludeGlobs)
 			if len(matchedFiles) > 0 || len(opConfig.Globs) == 0 {
 				task.Files = matchedFiles
 				task.ProjectPath = p.rootPath
@@ -307,6 +308,7 @@ func (p *Planner) collectTasks(operation config.OperationType, files []string) [
 				} else {
 					matchedFiles = p.filterFilesByGlobs(files, opConfig.Globs)
 				}
+				matchedFiles = p.excludeFilesByGlobs(matchedFiles, opConfig.ExcludeGlobs)
 				matchedFiles = p.filterFilesToCwd(matchedFiles)
 			}
 
@@ -323,6 +325,7 @@ func (p *Planner) collectTasks(operation config.OperationType, files []string) [
 			} else {
 				matchedFiles = p.filterFilesByGlobs(files, opConfig.Globs)
 			}
+			matchedFiles = p.excludeFilesByGlobs(matchedFiles, opConfig.ExcludeGlobs)
 			matchedFiles = p.filterFilesToCwd(matchedFiles)
 
 			for _, file := range matchedFiles {
@@ -344,6 +347,7 @@ func (p *Planner) collectTasks(operation config.OperationType, files []string) [
 				} else {
 					matchedFiles = p.filterFilesByGlobs(files, opConfig.Globs)
 				}
+				matchedFiles = p.excludeFilesByGlobs(matchedFiles, opConfig.ExcludeGlobs)
 				matchedFiles = p.filterFilesToCwd(matchedFiles)
 			}
 
@@ -722,6 +726,36 @@ func (p *Planner) filterFilesByGlobs(files []string, globs []string) []string {
 	return matched
 }
 
+// excludeFilesByGlobs removes files matching any of the given exclude glob patterns.
+// Nil or empty excludeGlobs is a no-op and returns the input slice unchanged.
+func (p *Planner) excludeFilesByGlobs(files []string, excludeGlobs []string) []string {
+	if len(excludeGlobs) == 0 {
+		return files
+	}
+
+	kept := make([]string, 0, len(files))
+	for _, file := range files {
+		relPath, err := filepath.Rel(p.rootPath, file)
+		if err != nil {
+			relPath = file
+		}
+
+		excluded := false
+		for _, glob := range excludeGlobs {
+			match, err := doublestar.Match(glob, relPath)
+			if err == nil && match {
+				excluded = true
+				break
+			}
+		}
+		if !excluded {
+			kept = append(kept, file)
+		}
+	}
+
+	return kept
+}
+
 // HasOverlap checks if two tasks have overlapping file sets
 func HasOverlap(task1, task2 Task) bool {
 	// Repository-scoped tasks always overlap with everything (they operate on the entire repository,
@@ -742,7 +776,11 @@ func HasOverlap(task1, task2 Task) bool {
 		}
 	}
 
-	// Check if glob patterns overlap
+	// Check if glob patterns overlap.
+	// Note: ExcludeGlobs is intentionally not considered here. Two tools whose
+	// Globs match the same files are treated as overlapping even if their
+	// ExcludeGlobs differ — this is conservative and avoids missing real
+	// conflicts when exclusions evaluate to overlapping concrete file sets.
 	return globsOverlap(task1.OpConfig.Globs, task2.OpConfig.Globs)
 }
 

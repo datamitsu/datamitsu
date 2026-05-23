@@ -13,7 +13,8 @@ type AssetScore struct {
 	Total        int
 	OSMatch      bool
 	ArchMatch    bool
-	LibcMatch    int // 0=mismatch, 1=neutral (no indicator), 2=exact
+	IsExplicit   bool // true when both OS and arch were matched explicitly (no implicit rule)
+	LibcMatch    int  // 0=mismatch, 1=neutral (no indicator), 2=exact
 	HasPriority  bool
 	ArchiveBonus int
 }
@@ -44,6 +45,12 @@ func ScoreAsset(asset github.Asset, osType syslist.OsType, archType syslist.Arch
 	if osMatch && !hasArchIndicator && archType == syslist.ArchTypeAmd64 {
 		s.OSMatch = true
 		s.ArchMatch = true
+	} else if osMatch && !hasArchIndicator && osType == syslist.OsTypeDarwin && archType == syslist.ArchTypeArm64 {
+		// Implicit darwin/arm64: OS matches darwin, no arch indicators, requesting arm64.
+		// Many macOS-only assets (e.g. fnm-macos.zip) ship universal binaries that
+		// run on both Intel and Apple Silicon without declaring arch in the filename.
+		s.OSMatch = true
+		s.ArchMatch = true
 	} else if archMatch && !hasOSIndicator && osType == syslist.OsTypeLinux {
 		// Implicit Linux: Arch matches, no OS indicators, requesting Linux
 		s.OSMatch = true
@@ -52,6 +59,9 @@ func ScoreAsset(asset github.Asset, osType syslist.OsType, archType syslist.Arch
 		// Standard explicit matching
 		s.OSMatch = osMatch
 		s.ArchMatch = archMatch
+		if osMatch && archMatch {
+			s.IsExplicit = true
+		}
 	}
 
 	if !s.OSMatch || !s.ArchMatch {
@@ -115,6 +125,9 @@ func selectBestAsset(assets []github.Asset, osType syslist.OsType, archType sysl
 	sort.Slice(scores, func(i, j int) bool {
 		if scores[i].Total != scores[j].Total {
 			return scores[i].Total > scores[j].Total
+		}
+		if scores[i].IsExplicit != scores[j].IsExplicit {
+			return scores[i].IsExplicit
 		}
 		return scores[i].Asset.Name < scores[j].Asset.Name
 	})

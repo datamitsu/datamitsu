@@ -394,6 +394,83 @@ func TestUVVersionForHash(t *testing.T) {
 	})
 }
 
+func TestBuildUVInstallArgs(t *testing.T) {
+	t.Run("no lockfile: no --locked and no --no-build", func(t *testing.T) {
+		args := buildUVInstallArgs("", nil)
+		want := []string{"sync", "--no-install-project"}
+		if !equalStringSlices(args, want) {
+			t.Errorf("args = %v, want %v", args, want)
+		}
+	})
+
+	t.Run("with lockfile: adds --locked and --no-build", func(t *testing.T) {
+		args := buildUVInstallArgs("version = 1\n", nil)
+		want := []string{"sync", "--no-install-project", "--locked", "--no-build"}
+		if !equalStringSlices(args, want) {
+			t.Errorf("args = %v, want %v", args, want)
+		}
+	})
+
+	t.Run("lockfile + python version: appends --python", func(t *testing.T) {
+		args := buildUVInstallArgs("version = 1\n", &config.RuntimeConfigUV{PythonVersion: "3.12.1"})
+		want := []string{"sync", "--no-install-project", "--locked", "--no-build", "--python", "3.12.1"}
+		if !equalStringSlices(args, want) {
+			t.Errorf("args = %v, want %v", args, want)
+		}
+	})
+
+	t.Run("no lockfile + python version: --python without --no-build", func(t *testing.T) {
+		args := buildUVInstallArgs("", &config.RuntimeConfigUV{PythonVersion: "3.12.1"})
+		want := []string{"sync", "--no-install-project", "--python", "3.12.1"}
+		if !equalStringSlices(args, want) {
+			t.Errorf("args = %v, want %v", args, want)
+		}
+	})
+
+	t.Run("empty python version: no --python flag", func(t *testing.T) {
+		args := buildUVInstallArgs("version = 1\n", &config.RuntimeConfigUV{PythonVersion: ""})
+		want := []string{"sync", "--no-install-project", "--locked", "--no-build"}
+		if !equalStringSlices(args, want) {
+			t.Errorf("args = %v, want %v", args, want)
+		}
+	})
+
+	t.Run("no lockfile: --no-build must NOT be present", func(t *testing.T) {
+		args := buildUVInstallArgs("", nil)
+		for _, a := range args {
+			if a == "--no-build" {
+				t.Error("--no-build should not be present without a lockfile (would block all sdist builds without security justification)")
+			}
+		}
+	})
+
+	t.Run("with lockfile: --no-build must be present", func(t *testing.T) {
+		args := buildUVInstallArgs("version = 1\n", nil)
+		found := false
+		for _, a := range args {
+			if a == "--no-build" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Error("--no-build must be present when a lockfile is supplied (supply chain hardening)")
+		}
+	})
+}
+
+func equalStringSlices(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func TestBuildPyprojectTOML(t *testing.T) {
 	t.Run("with version", func(t *testing.T) {
 		result := buildPyprojectTOML("yamllint", "yamllint", "1.38.0", ">=3.12")
