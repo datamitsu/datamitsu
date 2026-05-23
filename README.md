@@ -7,9 +7,15 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/datamitsu/datamitsu/actions/workflows/pr-checks.yml"><img src="https://github.com/datamitsu/datamitsu/actions/workflows/pr-checks.yml/badge.svg" alt="build"></a>
+  <a href="https://github.com/datamitsu/datamitsu/releases/latest"><img src="https://img.shields.io/github/v/release/datamitsu/datamitsu" alt="GitHub Release"></a>
+  <a href="https://www.npmjs.com/package/@datamitsu/datamitsu"><img src="https://img.shields.io/npm/v/@datamitsu/datamitsu" alt="npm"></a>
+  <a href="https://pypi.org/project/datamitsu/"><img src="https://img.shields.io/pypi/v/datamitsu" alt="PyPI"></a>
+  <a href="https://github.com/datamitsu/datamitsu/actions/workflows/pr-checks.yml"><img src="https://github.com/datamitsu/datamitsu/actions/workflows/pr-checks.yml/badge.svg" alt="CI"></a>
+  <a href="https://codecov.io/gh/datamitsu/datamitsu"><img src="https://codecov.io/gh/datamitsu/datamitsu/graph/badge.svg" alt="codecov"></a>
+  <a href="https://coveralls.io/github/datamitsu/datamitsu?branch=main"><img src="https://coveralls.io/repos/github/datamitsu/datamitsu/badge.svg?branch=main" alt="Coverage Status"></a>
   <a href="https://goreportcard.com/report/github.com/datamitsu/datamitsu"><img src="https://goreportcard.com/badge/github.com/datamitsu/datamitsu?v=2" alt="Go Report Card"></a>
-  <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT">
+  <a href="https://scorecard.dev/viewer/?uri=github.com/datamitsu/datamitsu"><img src="https://api.securityscorecards.dev/projects/github.com/datamitsu/datamitsu/badge" alt="OpenSSF Scorecard"></a>
+  <a href="https://github.com/datamitsu/datamitsu/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
 </p>
 
 > Your toolchain deserves a home.

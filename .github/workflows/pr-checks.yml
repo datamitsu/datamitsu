@@ -1,5 +1,6 @@
 jobs:
   build-verify:
+    if: github.event_name == 'pull_request'
     name: Build Verification
     needs:
       - lint
@@ -25,6 +26,7 @@ jobs:
           export VERSION=0.0.0-pr.${{ github.event.pull_request.number }}
           pnpm pack:prepare
   docker-build:
+    if: github.event_name == 'pull_request'
     name: Docker Build Test
     needs:
       - lint
@@ -100,6 +102,7 @@ jobs:
       - name: Run datamitsu lint
         run: pnpm dm lint
   pr-title:
+    if: github.event_name == 'pull_request'
     name: PR Title
     permissions:
       pull-requests: read
@@ -130,11 +133,21 @@ jobs:
       - uses: ./.github/actions/setup-environment
       - name: Run Go tests
         run: pnpm test
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v6
+        with:
+          files: coverage.out
+          token: ${{ secrets.CODECOV_TOKEN }}
+      - name: Upload coverage to Coveralls
+        uses: coverallsapp/github-action@v2
+        with:
+          file: coverage.out
+          format: golang
       - name: Build datamitsu binary
         run: go build -o datamitsu .
       - name: Run JavaScript tests
         run: pnpm --filter @datamitsu/programmable-api-js test
-name: PR Checks
+name: CI
 on:
   pull_request:
     branches:
@@ -144,3 +157,6 @@ on:
       - edited
       - synchronize
       - reopened
+  push:
+    branches:
+      - main
