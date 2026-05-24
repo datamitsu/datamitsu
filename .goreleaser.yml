@@ -155,12 +155,10 @@ signs:
       - "sign-blob"
       - "--yes"
       - "${artifact}"
-      - "--output-certificate=${certificate}"
-      - "--output-signature=${signature}"
+      - "--bundle=${signature}"
     artifacts: checksum
-    certificate: "${artifact}.pem"
     cmd: cosign
-    signature: "${artifact}.sig"
+    signature: "${artifact}.sigstore.json"
 version: 2
 winget:
   - commit_author:
