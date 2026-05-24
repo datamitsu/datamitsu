@@ -183,7 +183,7 @@ winget:
     release_notes: "{{.Changelog}}"
     release_notes_url: "https://github.com/datamitsu/datamitsu/releases/tag/{{ .Tag }}"
     repository:
-      branch: main
+      branch: "datamitsu-{{ .Tag }}"
       name: winget-pkgs
       owner: datamitsu
       pull_request:
