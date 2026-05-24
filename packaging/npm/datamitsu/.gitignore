@@ -1,4 +1,2 @@
 # Generated from programmable-api/js build output
 lib/
-
-# Note: README.md is a symlink to ../../PACKAGE_README.md (committed intentionally)

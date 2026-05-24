@@ -28,4 +28,10 @@ Gem::Specification.new do |spec|
   ) + Dir.glob("libexec/**/datamitsu{,.exe}")
 
   spec.required_ruby_version = ">= 2.6.0"
+
+  spec.post_install_message = <<~MSG
+    datamitsu installed!
+    Run 'datamitsu init' in your project to get started.
+    Documentation: https://datamitsu.com
+  MSG
 end
