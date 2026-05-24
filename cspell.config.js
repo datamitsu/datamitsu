@@ -176,5 +176,7 @@ export default {
     "cosign",
     "coveralls",
     "coverallsapp",
+    "pkgs",
+    "winget",
   ],
 };

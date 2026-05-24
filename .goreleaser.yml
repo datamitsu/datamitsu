@@ -143,3 +143,42 @@ signs:
     cmd: cosign
     signature: "${artifact}.sig"
 version: 2
+winget:
+  - commit_author:
+      email: noreply@github.com
+      name: goreleaserbot
+    commit_msg_template: "{{ .PackageIdentifier }}: {{ .Tag }}"
+    copyright: "datamitsu contributors"
+    copyright_url: https://github.com/datamitsu/datamitsu/blob/main/LICENSE
+    description: |-
+      Configuration management and binary distribution tool.
+      JavaScript-configurable tool orchestration for linting and development workflows.
+    homepage: https://datamitsu.com/
+    ids:
+      - datamitsu-archive
+    license: mit
+    license_url: https://github.com/datamitsu/datamitsu/blob/main/LICENSE
+    name: datamitsu
+    package_identifier: datamitsu.datamitsu
+    publisher: datamitsu
+    publisher_support_url: https://github.com/datamitsu/datamitsu/issues/new
+    publisher_url: https://datamitsu.com/
+    release_notes: "{{.Changelog}}"
+    release_notes_url: "https://github.com/datamitsu/datamitsu/releases/tag/{{ .Tag }}"
+    repository:
+      branch: main
+      name: winget-pkgs
+      owner: datamitsu
+      pull_request:
+        base:
+          branch: master
+          name: winget-pkgs
+          owner: microsoft
+        enabled: true
+      token: "{{ .Env.WINGET_TOKEN }}"
+    short_description: "Configuration management and binary distribution tool."
+    skip_upload: auto
+    tags:
+      - golang
+      - cli
+      - devtools
