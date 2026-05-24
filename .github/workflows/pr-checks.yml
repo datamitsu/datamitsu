@@ -16,7 +16,7 @@ jobs:
         name: Build binaries with GoReleaser
         uses: goreleaser/goreleaser-action@5daf1e915a5f0af01ddbcd89a43b8061ff4f1a89 # v7.2.2
         with:
-          args: release --snapshot --clean
+          args: release --snapshot --clean --skip=sign
           distribution: goreleaser
           version: "~> v2"
       - name: Normalize binaries
@@ -42,7 +42,7 @@ jobs:
         name: Build binaries with GoReleaser
         uses: goreleaser/goreleaser-action@5daf1e915a5f0af01ddbcd89a43b8061ff4f1a89 # v7.2.2
         with:
-          args: release --snapshot --clean
+          args: release --snapshot --clean --skip=sign
           distribution: goreleaser
           version: "~> v2"
       - name: Prepare binaries for Docker
