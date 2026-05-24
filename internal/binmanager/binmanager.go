@@ -177,7 +177,7 @@ func (bm *BinManager) getBinaryInfo(name string) (*target.ResolvedTarget, Binary
 	if resolved.Source == target.ResolutionFallback && resolved.FallbackInfo != nil {
 		warning := target.FallbackWarning(name, *resolved)
 		if warning != "" {
-			log.Warn(warning)
+			log.Debug(warning)
 		}
 	}
 
