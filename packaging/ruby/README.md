@@ -1,11 +1,7 @@
 # datamitsu
 
 <p align="center">
-  <img src="https://datamitsu.com/img/logo.png" alt="datamitsu" width="400" />
-</p>
-
-<p align="center">
-  <a href="https://www.npmjs.com/package/@datamitsu/datamitsu"><img src="https://img.shields.io/npm/v/@datamitsu/datamitsu" alt="npm"></a>
+  <a href="https://rubygems.org/gems/datamitsu"><img src="https://img.shields.io/gem/v/datamitsu" alt="Gem"></a>
   <a href="https://github.com/datamitsu/datamitsu/actions/workflows/pr-checks.yml"><img src="https://github.com/datamitsu/datamitsu/actions/workflows/pr-checks.yml/badge.svg" alt="CI"></a>
   <a href="https://codecov.io/gh/datamitsu/datamitsu"><img src="https://codecov.io/gh/datamitsu/datamitsu/graph/badge.svg" alt="codecov"></a>
   <a href="https://scorecard.dev/viewer/?uri=github.com/datamitsu/datamitsu"><img src="https://api.securityscorecards.dev/projects/github.com/datamitsu/datamitsu/badge" alt="OpenSSF Scorecard"></a>
@@ -16,60 +12,51 @@ Configuration management and binary distribution tool. JavaScript-configurable t
 
 ## Installation
 
+Add to your Gemfile:
+
+```ruby
+gem "datamitsu"
+```
+
+Or install directly:
+
 ```bash
-# pnpm (recommended)
-pnpm add -D @datamitsu/datamitsu
-
-# npm
-npm install --save-dev @datamitsu/datamitsu
-
-# yarn
-yarn add -D @datamitsu/datamitsu
-
-# bun
-bun add -D @datamitsu/datamitsu
+gem install datamitsu
 ```
 
 ## Usage
 
+After installation, the `datamitsu` command is available:
+
 ```bash
 # Initialize datamitsu in your project
-npx datamitsu init
+datamitsu init
 
 # Run checks (fix + lint)
-npx datamitsu check
+datamitsu check
 
 # Fix issues automatically
-npx datamitsu fix
+datamitsu fix
 
 # Lint without fixing
-npx datamitsu lint
+datamitsu lint
 
-# Execute a managed binary
-npx datamitsu exec shellcheck script.sh
+# Get version
+datamitsu version
 ```
 
-## Programmatic API
+## Documentation
 
-```javascript
-import { fix, lint } from "@datamitsu/datamitsu";
-
-await fix({ files: ["src/generated.ts"] });
-const result = await lint({ explain: "json" });
-```
+For full documentation, visit: https://datamitsu.com
 
 ## Platform Support
 
-This package automatically installs the correct binary for your platform via optional dependencies:
+This gem includes pre-compiled binaries for:
 
 - Linux (x86_64, ARM64)
 - macOS (x86_64, ARM64)
 - Windows (x86_64, ARM64)
 - FreeBSD (x86_64, ARM64)
-
-## Documentation
-
-For full documentation, visit: https://datamitsu.com
 
 ## License
 
