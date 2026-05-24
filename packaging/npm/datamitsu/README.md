@@ -1,4 +1,4 @@
-# datamitsu
+# @datamitsu/datamitsu
 
 <p align="center">
   <img src="https://datamitsu.com/img/logo.png" alt="datamitsu" width="400" />
