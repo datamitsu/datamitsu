@@ -131,6 +131,25 @@ sboms:
   - artifacts: archive
     documents:
       - "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}.sbom"
+scoops:
+  - commit_author:
+      email: noreply@github.com
+      name: goreleaserbot
+    commit_msg_template: "Scoop update for {{ .ProjectName }} version {{ .Tag }}"
+    description: |-
+      Configuration management and binary distribution tool.
+      JavaScript-configurable tool orchestration for linting and development workflows.
+    homepage: https://datamitsu.com/
+    ids:
+      - datamitsu-archive
+    license: MIT
+    name: datamitsu
+    repository:
+      branch: main
+      name: scoop-bucket
+      owner: datamitsu
+      token: "{{ .Env.SCOOP_TOKEN }}"
+    skip_upload: auto
 signs:
   - args:
       - "sign-blob"

@@ -177,6 +177,7 @@ export default {
     "coveralls",
     "coverallsapp",
     "pkgs",
+    "scoop",
     "winget",
   ],
 };

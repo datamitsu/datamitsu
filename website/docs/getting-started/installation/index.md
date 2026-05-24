@@ -14,6 +14,7 @@ description: How to install datamitsu on your system
 
 - [Homebrew](./homebrew.md) — macOS and Linux
 - [Winget](./winget.md) — Windows
+- [Scoop](./scoop.md) — Windows
 - [npm](./npm.md) — any platform with Node.js
 - [PyPI](./pypi.md) — any platform with Python
 - [RubyGems](./rubygems.md) — any platform with Ruby
