@@ -131,4 +131,15 @@ sboms:
   - artifacts: archive
     documents:
       - "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}.sbom"
+signs:
+  - args:
+      - "sign-blob"
+      - "--yes"
+      - "${artifact}"
+      - "--output-certificate=${certificate}"
+      - "--output-signature=${signature}"
+    artifacts: checksum
+    certificate: "${artifact}.pem"
+    cmd: cosign
+    signature: "${artifact}.sig"
 version: 2
