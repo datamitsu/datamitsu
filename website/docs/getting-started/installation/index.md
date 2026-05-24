@@ -8,11 +8,12 @@ description: How to install datamitsu on your system
 ## Prerequisites
 
 - **Git** — datamitsu uses your git root to locate configuration files and manage project-scoped caches
-- **Platform support**: Linux (amd64, arm64), macOS (amd64, arm64). Windows support is available but requires Developer Mode for symlinks.
+- **Platform support**: Linux (amd64, arm64), macOS (amd64, arm64), Windows (amd64, arm64). Windows requires Developer Mode for symlinks.
 
 ## Install Methods
 
 - [Homebrew](./homebrew.md) — macOS and Linux
+- [Winget](./winget.md) — Windows
 - [npm](./npm.md) — any platform with Node.js
 - [PyPI](./pypi.md) — any platform with Python
 - [RubyGems](./rubygems.md) — any platform with Ruby
