@@ -394,12 +394,6 @@ function preparePlatformPackages() {
     // Copy binary
     cpSync(sourceBinary, join(packageDir, binaryName));
     console.log(`✓ Created ${packageName}`);
-
-    // Copy README
-    const readmePath = join(PACKAGING_DIR, "PACKAGE_README.md");
-    if (existsSync(readmePath)) {
-      cpSync(readmePath, join(packageDir, "README.md"));
-    }
   }
 }
 
@@ -474,12 +468,6 @@ function prepareRubyPackage() {
 
   // Update gemspec version
   updateRubyGemspec();
-
-  // Copy README
-  const readmeSrc = join(PACKAGING_DIR, "PACKAGE_README.md");
-  if (existsSync(readmeSrc)) {
-    cpSync(readmeSrc, join(RUBY_DIR, "README.md"));
-  }
 
   console.log("✓ Ruby gem prepared");
 }
