@@ -187,8 +187,11 @@
 
 ### Task 12: [Final] Update documentation
 
-- [ ] update README.md if needed
-- [ ] update project knowledge docs if new patterns discovered
+- [x] update README.md if needed
+- [x] update project knowledge docs if new patterns discovered
+- - README.md needs no change: it is intentionally minimal (states so on line 1), delegates all detail to `website/docs/`, and does not enumerate runtime kinds (fnm/uv/jvm), so adding Go there would be inconsistent with its scope.
+- - Updated `docs/architecture.md` (the project knowledge doc) to add Go across: App Types (now 6 types — `go`), Runtime Manager intro + RuntimeConfig structs + mandatory-lockfile line + musl-fallback system binaries, two new bullets documenting the new patterns (the Go runtime build-from-source flow with GONOSUMCHECK/GONOSUMDB force-clear and `go build -trimpath -mod=readonly`; the `{"mod","sum"}` JSON lockfile wrapper distinct from FNM/UV single-artifact lockfiles), key files (`go.go`), `config lockfile` command (FNM/UV/Go + the separate `go mod init`+`go get` generation path), Key Data Flow (go dispatch branch), and Configuration Structure (`mapOfRuntimes` now UV/FNM/JVM/Go).
+- - website docs (`supply-chain-security.md`, architecture diagrams) are explicitly deferred to a separate PR per Post-Completion — out of scope for this task.
 
 ## Technical Details
 
