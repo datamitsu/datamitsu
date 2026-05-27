@@ -24,9 +24,9 @@ before:
     - go mod download
     - mkdir -p completions
     - go build -o completions/gen .
-    - completions/gen completion bash > completions/datamitsu.bash
-    - completions/gen completion zsh > completions/_datamitsu
-    - completions/gen completion fish > completions/datamitsu.fish
+    - sh -c "completions/gen completion bash > completions/datamitsu.bash"
+    - sh -c "completions/gen completion zsh > completions/_datamitsu"
+    - sh -c "completions/gen completion fish > completions/datamitsu.fish"
     - rm completions/gen
 builds:
   - binary: datamitsu
@@ -155,12 +155,10 @@ signs:
       - "sign-blob"
       - "--yes"
       - "${artifact}"
-      - "--output-certificate=${certificate}"
-      - "--output-signature=${signature}"
+      - "--bundle=${signature}"
     artifacts: checksum
-    certificate: "${artifact}.pem"
     cmd: cosign
-    signature: "${artifact}.sig"
+    signature: "${artifact}.sigstore.json"
 version: 2
 winget:
   - commit_author:
@@ -185,7 +183,7 @@ winget:
     release_notes: "{{.Changelog}}"
     release_notes_url: "https://github.com/datamitsu/datamitsu/releases/tag/{{ .Tag }}"
     repository:
-      branch: main
+      branch: "datamitsu-{{ .Tag }}"
       name: winget-pkgs
       owner: datamitsu
       pull_request:

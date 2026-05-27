@@ -540,29 +540,6 @@ jobs:
           cd packaging/ruby
           gem push *.gem
           echo "RubyGems publishing completed"
-  sync-dockerhub-readme:
-    if: |
-      always() &&
-      !cancelled() &&
-      needs.publish-docker.result == 'success' &&
-      needs.determine-release-type.outputs.is_stable == 'true'
-    name: Sync Docker Hub README
-    needs:
-      - publish-docker
-      - determine-release-type
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          ref: ${{ needs.determine-release-type.outputs.checkout_ref }}
-      - name: Update Docker Hub description
-        uses: peter-evans/dockerhub-description@1b9a80c056b620d92cedb9d9b5a223409c68ddfa # v5.0.0
-        with:
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-          readme-filepath: ./docker/README.md
-          repository: datamitsu/datamitsu
-          short-description: "Configuration management and binary distribution tool"
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
   validate-stable:
     if: |
       always() &&
