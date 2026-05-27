@@ -15,26 +15,26 @@ import (
 	"runtime"
 	"sort"
 	"strings"
-	"sync"
 
 	"go.uber.org/zap"
+	"golang.org/x/sync/singleflight"
 )
 
 var log = logger.Logger.With(zap.Namespace("runtimemanager"))
 
-type installOnce struct {
-	once sync.Once
-	err  error
-}
-
 type RuntimeManager struct {
-	mapOfRuntimes  config.MapOfRuntimes
-	hostTarget     target.Target
-	lookPathFunc   func(string) (string, error)
-	runtimeInstall sync.Map // key: runtimeName -> *installOnce
-	appInstall     sync.Map // key: "kind/appName" -> *installOnce
-	nodeInstall    sync.Map // key: nodeVersion -> *installOnce
-	pnpmInstall    sync.Map // key: "pnpmVersion\x00pnpmHash" -> *installOnce
+	mapOfRuntimes config.MapOfRuntimes
+	hostTarget    target.Target
+	lookPathFunc  func(string) (string, error)
+	// singleflight groups deduplicate concurrent installs by key: only one call
+	// per key runs at a time and all waiters share its result. Unlike the prior
+	// sync.Once + sync.Map + CompareAndDelete pattern, a failed call does not
+	// orphan in-flight readers, and the next Do after completion starts fresh
+	// (so retry-after-error works naturally).
+	runtimeInstall singleflight.Group // key: runtimeName
+	appInstall     singleflight.Group // key: "kind/appName"
+	nodeInstall    singleflight.Group // key: nodeVersion
+	pnpmInstall    singleflight.Group // key: "pnpmVersion\x00pnpmHash"
 }
 
 func New(mapOfRuntimes config.MapOfRuntimes) *RuntimeManager {
@@ -212,14 +212,11 @@ func (rm *RuntimeManager) GetRuntimePath(runtimeName string) (string, error) {
 		return binPath, nil
 	}
 
-	entry, _ := rm.runtimeInstall.LoadOrStore(runtimeName, &installOnce{})
-	once := entry.(*installOnce)
-	once.once.Do(func() {
-		once.err = rm.downloadRuntime(runtimeName, rc, configHash, info.BinaryPath)
+	_, err, _ = rm.runtimeInstall.Do(runtimeName, func() (any, error) {
+		return nil, rm.downloadRuntime(runtimeName, rc, configHash, info.BinaryPath)
 	})
-	if once.err != nil {
-		rm.runtimeInstall.CompareAndDelete(runtimeName, entry)
-		return "", once.err
+	if err != nil {
+		return "", err
 	}
 
 	if _, err := os.Stat(binPath); err != nil {

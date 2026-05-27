@@ -148,16 +148,10 @@ func (rm *RuntimeManager) GetGoAppPath(appName string, appConfig *binmanager.App
 // Safe for concurrent use from multiple goroutines.
 func (rm *RuntimeManager) InstallGoApp(appName string, appConfig *binmanager.AppConfigGo, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
 	key := "go/" + appName
-	entry, _ := rm.appInstall.LoadOrStore(key, &installOnce{})
-	once := entry.(*installOnce)
-	once.once.Do(func() {
-		once.err = rm.installGoAppOnce(appName, appConfig, files, archives)
+	_, err, _ := rm.appInstall.Do(key, func() (any, error) {
+		return nil, rm.installGoAppOnce(appName, appConfig, files, archives)
 	})
-	if once.err != nil {
-		rm.appInstall.CompareAndDelete(key, entry)
-		return once.err
-	}
-	return nil
+	return err
 }
 
 func (rm *RuntimeManager) installGoAppOnce(appName string, appConfig *binmanager.AppConfigGo, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {

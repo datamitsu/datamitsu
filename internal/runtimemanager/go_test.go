@@ -1,12 +1,16 @@
 package runtimemanager
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
@@ -410,6 +414,81 @@ func TestInstallGoApp_RetriesAfterError(t *testing.T) {
 	}
 	if err := rm.InstallGoApp("govulncheck", appConfig, nil, nil); err == nil {
 		t.Fatal("expected retry to error again (once entry should have been deleted)")
+	}
+}
+
+// TestInstallGoApp_ConcurrentSameKeyNoRace launches many goroutines installing
+// the same failing app simultaneously. Every goroutine must observe an error
+// and the run must be free of data races (verified under -race). The prior
+// sync.Once + CompareAndDelete pattern could orphan an in-flight reader when a
+// deletion overlapped a concurrent LoadOrStore; singleflight has no deletion
+// step, so that race cannot occur.
+func TestInstallGoApp_ConcurrentSameKeyNoRace(t *testing.T) {
+	rm := New(makeTestGoRuntimes())
+
+	appConfig := &binmanager.AppConfigGo{
+		PackageName: "golang.org/x/vuln/cmd/govulncheck",
+		Version:     "v1.1.4",
+		Runtime:     "nonexistent", // fails fast at ResolveRuntime
+		LockFile:    "x",
+	}
+
+	const n = 32
+	var wg sync.WaitGroup
+	errsObserved := make([]error, n)
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			errsObserved[idx] = rm.InstallGoApp("govulncheck", appConfig, nil, nil)
+		}(i)
+	}
+	wg.Wait()
+
+	for i, err := range errsObserved {
+		if err == nil {
+			t.Errorf("goroutine %d: expected error, got nil", i)
+		}
+	}
+}
+
+// TestSingleflightDeduplicatesConcurrentInstalls verifies the dedup contract the
+// install sites rely on: while one call for a key is in flight, concurrent calls
+// for the same key do not run the function again and all share the same result.
+func TestSingleflightDeduplicatesConcurrentInstalls(t *testing.T) {
+	rm := New(makeTestGoRuntimes())
+
+	var calls int32
+	start := make(chan struct{})
+	sentinel := errors.New("install failed")
+
+	const n = 20
+	var wg sync.WaitGroup
+	results := make([]error, n)
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			<-start
+			_, err, _ := rm.appInstall.Do("go/concurrent", func() (any, error) {
+				atomic.AddInt32(&calls, 1)
+				// Hold the call in flight so the other goroutines coalesce onto it.
+				time.Sleep(50 * time.Millisecond)
+				return nil, sentinel
+			})
+			results[idx] = err
+		}(i)
+	}
+	close(start)
+	wg.Wait()
+
+	if got := atomic.LoadInt32(&calls); got != 1 {
+		t.Errorf("expected exactly 1 execution for the shared key, got %d", got)
+	}
+	for i, err := range results {
+		if !errors.Is(err, sentinel) {
+			t.Errorf("goroutine %d: expected shared sentinel error, got %v", i, err)
+		}
 	}
 }
 

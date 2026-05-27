@@ -100,15 +100,15 @@ Address code-review findings on the `feat/go-runtime` branch (Go runtime kind fo
 
 ### Task 3: Replace `installOnce` with `singleflight.Group` across all runtimes (#6)
 
-- [ ] in [internal/runtimemanager/runtimemanager.go](internal/runtimemanager/runtimemanager.go): remove `installOnce` struct; replace `runtimeInstall`/`appInstall`/`nodeInstall`/`pnpmInstall` `sync.Map` fields with `singleflight.Group` fields; import `golang.org/x/sync/singleflight`
-- [ ] convert `GetRuntimePath` install site (currently lines 215-223) to `runtimeInstall.Do(key, func() (any, error) { return nil, rm.downloadRuntime(...) })`
-- [ ] in [internal/runtimemanager/fnm.go](internal/runtimemanager/fnm.go): convert 3 install sites (pnpmInstall, nodeInstall, appInstall — currently lines ~70, ~281, ~395)
-- [ ] in [internal/runtimemanager/uv.go](internal/runtimemanager/uv.go): convert appInstall site (currently lines ~34)
-- [ ] in [internal/runtimemanager/jvm.go](internal/runtimemanager/jvm.go): convert appInstall site (currently lines ~48)
-- [ ] in [internal/runtimemanager/go.go](internal/runtimemanager/go.go): convert appInstall site (currently lines ~149-161)
-- [ ] verify `TestInstallGoApp_RetriesAfterError` (and any equivalent in other runtimes) still passes — singleflight retries after error naturally
-- [ ] add a concurrent-install test in [internal/runtimemanager/go_test.go](internal/runtimemanager/go_test.go): N goroutines call `InstallGoApp` with the same key simultaneously, only one should run, all should observe the same error (no race when a deletion overlaps a reader)
-- [ ] run `go test -race ./internal/runtimemanager/...` — must pass
+- [x] in [internal/runtimemanager/runtimemanager.go](internal/runtimemanager/runtimemanager.go): remove `installOnce` struct; replace `runtimeInstall`/`appInstall`/`nodeInstall`/`pnpmInstall` `sync.Map` fields with `singleflight.Group` fields; import `golang.org/x/sync/singleflight`
+- [x] convert `GetRuntimePath` install site (currently lines 215-223) to `runtimeInstall.Do(key, func() (any, error) { return nil, rm.downloadRuntime(...) })`
+- [x] in [internal/runtimemanager/fnm.go](internal/runtimemanager/fnm.go): convert 3 install sites (pnpmInstall, nodeInstall, appInstall — currently lines ~70, ~281, ~395)
+- [x] in [internal/runtimemanager/uv.go](internal/runtimemanager/uv.go): convert appInstall site (currently lines ~34)
+- [x] in [internal/runtimemanager/jvm.go](internal/runtimemanager/jvm.go): convert appInstall site (currently lines ~48)
+- [x] in [internal/runtimemanager/go.go](internal/runtimemanager/go.go): convert appInstall site (currently lines ~149-161)
+- [x] verify `TestInstallGoApp_RetriesAfterError` (and any equivalent in other runtimes) still passes — singleflight retries after error naturally
+- [x] add a concurrent-install test in [internal/runtimemanager/go_test.go](internal/runtimemanager/go_test.go): N goroutines call `InstallGoApp` with the same key simultaneously, only one should run, all should observe the same error (no race when a deletion overlaps a reader)
+- [x] run `go test -race ./internal/runtimemanager/...` — must pass
 
 ### Task 4: Use temp workdir for Go lockfile generation (#3, #9, #11)
 

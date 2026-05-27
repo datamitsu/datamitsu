@@ -67,16 +67,10 @@ type npmVersionMeta struct {
 
 func (rm *RuntimeManager) installPNPM(version string, destDir string, pnpmHash string) error {
 	key := version + "\x00" + pnpmHash
-	entry, _ := rm.pnpmInstall.LoadOrStore(key, &installOnce{})
-	once := entry.(*installOnce)
-	once.once.Do(func() {
-		once.err = rm.downloadPNPMFromRegistry(version, destDir, pnpmHash)
+	_, err, _ := rm.pnpmInstall.Do(key, func() (any, error) {
+		return nil, rm.downloadPNPMFromRegistry(version, destDir, pnpmHash)
 	})
-	if once.err != nil {
-		rm.pnpmInstall.CompareAndDelete(key, entry)
-		return once.err
-	}
-	return nil
+	return err
 }
 
 func (rm *RuntimeManager) downloadPNPMFromRegistry(version string, destDir string, pnpmHash string) error {
@@ -278,16 +272,10 @@ func verifyPNPMIntegrity(meta npmVersionMeta, sha512Sum []byte) error {
 }
 
 func (rm *RuntimeManager) installNodeVersion(fnmPath, nodeVersion, cacheRoot string) error {
-	entry, _ := rm.nodeInstall.LoadOrStore(nodeVersion, &installOnce{})
-	once := entry.(*installOnce)
-	once.once.Do(func() {
-		once.err = rm.installNodeVersionOnce(fnmPath, nodeVersion, cacheRoot)
+	_, err, _ := rm.nodeInstall.Do(nodeVersion, func() (any, error) {
+		return nil, rm.installNodeVersionOnce(fnmPath, nodeVersion, cacheRoot)
 	})
-	if once.err != nil {
-		rm.nodeInstall.CompareAndDelete(nodeVersion, entry)
-		return once.err
-	}
-	return nil
+	return err
 }
 
 func (rm *RuntimeManager) installNodeVersionOnce(fnmPath, nodeVersion, cacheRoot string) error {
@@ -392,16 +380,10 @@ func filesWithMergedWorkspaceYAML(files map[string]string) (map[string]string, e
 // Safe for concurrent use from multiple goroutines.
 func (rm *RuntimeManager) InstallFNMApp(appName string, appConfig *binmanager.AppConfigFNM, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
 	key := "fnm/" + appName
-	entry, _ := rm.appInstall.LoadOrStore(key, &installOnce{})
-	once := entry.(*installOnce)
-	once.once.Do(func() {
-		once.err = rm.installFNMAppOnce(appName, appConfig, files, archives)
+	_, err, _ := rm.appInstall.Do(key, func() (any, error) {
+		return nil, rm.installFNMAppOnce(appName, appConfig, files, archives)
 	})
-	if once.err != nil {
-		rm.appInstall.CompareAndDelete(key, entry)
-		return once.err
-	}
-	return nil
+	return err
 }
 
 func (rm *RuntimeManager) installFNMAppOnce(appName string, appConfig *binmanager.AppConfigFNM, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
