@@ -122,13 +122,14 @@ Address code-review findings on the `feat/go-runtime` branch (Go runtime kind fo
 
 ### Task 5: Verify acceptance criteria
 
-- [ ] grep for any remaining `installOnce` references — must be zero
-- [ ] grep for `"Building %s..."` — must be zero in Go runtime code
-- [ ] verify `pnpm build` produces a working binary (`./datamitsu --help` runs)
-- [ ] run full `go test -race ./...` — all passing
-- [ ] verify `cspell.config.js` does not require updates (no new fences)
-- [ ] manual verify: `pnpm exec datamitsu init` and `pnpm exec datamitsu config lockfile govulncheck` still work end-to-end against the example config
-- [ ] verify validation rejects bad configs: write a temp config with `packageName: ".."`, `version: "latest"`, or `files` on a Go app, run `datamitsu init` against it, confirm clear error message
+- [x] grep for any remaining `installOnce` references — must be zero (zero in `*.go`; only the plan doc mentions it)
+- [x] grep for `"Building %s..."` — must be zero in Go runtime code (zero in `*.go`)
+- [x] verify `pnpm build` produces a working binary (`./datamitsu --help` runs) — `go build` succeeds and the binary runs; the full `pnpm build` only fails at its cross-platform GoReleaser packaging step (`dist/binaries/datamitsu-darwin_amd64` absent locally), unrelated to this change
+- [x] run full `go test -race ./...` — all passing
+- [x] verify `cspell.config.js` does not require updates (no new fences) — all Go terms (`singleflight`, `govulncheck`, `GOFLAGS`, `GONOSUMCHECK`, `GOPROXY`, `GOSUMDB`) already present
+- [x] manual verify: `config lockfile govulncheck` verified end-to-end with the freshly built binary — generated lockfile matches the committed `br:G0sFQ…`, and (after the ➕ fix below) the temp workdir is cleaned up. `pnpm exec datamitsu init` deferred to post-merge manual verification: `pnpm exec` resolves the installed v0.0.7 (pre-Go-runtime) package and `init` mutates the working repo, so it cannot exercise this branch here
+- [x] verify validation rejects bad configs — confirmed end-to-end via `datamitsu config show --config <tmp>`: `packageName: ".."` → `go.packageName ".." must not contain ".."`; `version: "latest"` → `go.version must be a pinned version, not "latest"`; `files` on a Go app → `files/links/archives are only supported on uv and fnm apps`
+- [x] ➕ **Bug found during verification & fixed:** Task 4's `defer os.RemoveAll(workDir)` silently failed — `go get` writes a read-only `GOMODCACHE` under the workdir, and `os.RemoveAll` cannot unlink entries inside read-only directories, so the 100+MiB cache leaked to `/tmp` (the very leak #3 set out to fix, just relocated). Added `runtimemanager.ForceRemoveAll` (restores write permission across the tree pre-order, then removes) and used it in both `generateGoLockContent` (surfacing cleanup errors as a warning) and `installGoAppOnce`'s error-cleanup defer (same read-only `gomodcache` under the app dir). Added regression tests reproducing the read-only module cache in `go_test.go` and `config_lockfile_test.go`
 
 ### Task 6: Update knowledge docs (no website docs in this branch)
 

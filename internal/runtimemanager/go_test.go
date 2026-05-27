@@ -643,6 +643,46 @@ func TestRemoveStaleGoModFiles_PropagatesNonNotExistError(t *testing.T) {
 	}
 }
 
+func TestForceRemoveAll_RemovesReadOnlyModuleCache(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root bypasses permission checks")
+	}
+
+	root := t.TempDir()
+	// Mirror the layout `go get` leaves under GOMODCACHE: a read-only module
+	// directory containing read-only files. A plain os.RemoveAll cannot unlink
+	// entries inside a read-only directory and would leak the tree.
+	modDir := filepath.Join(root, "gomodcache", "golang.org", "x", "sys@v0.1.0")
+	if err := os.MkdirAll(modDir, 0o755); err != nil {
+		t.Fatalf("mkdir module dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(modDir, "LICENSE"), []byte("license"), 0o444); err != nil {
+		t.Fatalf("seed read-only file: %v", err)
+	}
+	if err := os.Chmod(modDir, 0o555); err != nil {
+		t.Fatalf("chmod module dir read-only: %v", err)
+	}
+
+	// Sanity check: the read-only layout actually defeats a plain os.RemoveAll,
+	// so this test would catch a regression back to it.
+	if err := os.RemoveAll(modDir); err == nil {
+		t.Skip("platform allows removing read-only-dir contents; ForceRemoveAll guard not exercised")
+	}
+
+	if err := ForceRemoveAll(root); err != nil {
+		t.Fatalf("ForceRemoveAll() error = %v", err)
+	}
+	if _, err := os.Stat(root); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("root %q should have been removed, stat err = %v", root, err)
+	}
+}
+
+func TestForceRemoveAll_NonexistentPathIsNoError(t *testing.T) {
+	if err := ForceRemoveAll(filepath.Join(t.TempDir(), "does-not-exist")); err != nil {
+		t.Errorf("ForceRemoveAll on a missing path should be a no-op, got: %v", err)
+	}
+}
+
 func TestGetGoCommandInfo(t *testing.T) {
 	rm := New(makeTestGoRuntimes())
 

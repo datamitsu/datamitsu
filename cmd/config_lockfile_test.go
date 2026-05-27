@@ -476,6 +476,48 @@ func TestGenerateGoLockContent_RemovesTempWorkDirOnSuccess(t *testing.T) {
 	}
 }
 
+func TestGenerateGoLockContent_RemovesReadOnlyModuleCache(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root bypasses permission checks")
+	}
+
+	app := binmanager.App{
+		Go: &binmanager.AppConfigGo{PackageName: "golang.org/x/vuln/cmd/govulncheck", Version: "v1.1.4"},
+	}
+	goMod := "module datamitsu-govulncheck\n\ngo 1.22\n"
+	goSum := "golang.org/x/vuln v1.1.4 h1:abc=\n"
+
+	var capturedWorkDir string
+	_, err := generateGoLockContent("govulncheck", app, func(workDir string) error {
+		capturedWorkDir = workDir
+		// Reproduce the read-only GOMODCACHE that `go get` writes under workDir;
+		// a plain os.RemoveAll cleanup would leak this multi-hundred-MiB tree.
+		modDir := filepath.Join(workDir, "gomodcache", "golang.org", "x", "sys@v0.1.0")
+		if err := os.MkdirAll(modDir, 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(modDir, "LICENSE"), []byte("license"), 0o444); err != nil {
+			return err
+		}
+		if err := os.Chmod(modDir, 0o555); err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(workDir, "go.mod"), []byte(goMod), 0o644); err != nil {
+			return err
+		}
+		return os.WriteFile(filepath.Join(workDir, "go.sum"), []byte(goSum), 0o644)
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if capturedWorkDir == "" {
+		t.Fatal("generate callback was not invoked with a workDir")
+	}
+	if _, statErr := os.Stat(capturedWorkDir); !errors.Is(statErr, os.ErrNotExist) {
+		t.Errorf("temp workDir %q with a read-only module cache should have been removed, stat err = %v", capturedWorkDir, statErr)
+	}
+}
+
 func TestGenerateGoLockContent_RemovesTempWorkDirOnError(t *testing.T) {
 	app := binmanager.App{
 		Go: &binmanager.AppConfigGo{PackageName: "golang.org/x/vuln/cmd/govulncheck", Version: "v1.1.4"},

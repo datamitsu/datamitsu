@@ -195,7 +195,15 @@ func (rm *RuntimeManager) installGoAppOnce(appName string, appConfig *binmanager
 	cleanupOnError := true
 	defer func() {
 		if cleanupOnError {
-			_ = os.RemoveAll(appEnvPath)
+			// appEnvPath holds a read-only GOMODCACHE once `go build` runs, so a
+			// plain os.RemoveAll would leak it; ForceRemoveAll restores write bits.
+			if err := ForceRemoveAll(appEnvPath); err != nil {
+				log.Warn("failed to clean up Go app directory after error",
+					zap.String("app", appName),
+					zap.String("path", appEnvPath),
+					zap.Error(err),
+				)
+			}
 		}
 	}()
 
@@ -251,6 +259,29 @@ func (rm *RuntimeManager) installGoAppOnce(appName string, appConfig *binmanager
 
 	cleanupOnError = false
 	return nil
+}
+
+// ForceRemoveAll removes root and everything under it, restoring write
+// permission on every entry first. `go get`/`go build` populate GOMODCACHE
+// (a subdirectory of the install/work dir) with files and directories marked
+// read-only (0444/0555); a plain os.RemoveAll then fails with EACCES because a
+// read-only directory's entries cannot be unlinked, leaking 100+MiB of module
+// cache. WalkDir runs pre-order, so each directory is made writable before
+// RemoveAll descends into it. Chmod errors are best-effort — the final
+// os.RemoveAll reports any failure that actually blocks removal.
+func ForceRemoveAll(root string) error {
+	_ = filepath.WalkDir(root, func(p string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return nil
+		}
+		mode := os.FileMode(0o600)
+		if d.IsDir() {
+			mode = 0o700
+		}
+		_ = os.Chmod(p, mode)
+		return nil
+	})
+	return os.RemoveAll(root)
 }
 
 // removeStaleGoModFiles deletes any leftover go.mod/go.sum in workDir so a

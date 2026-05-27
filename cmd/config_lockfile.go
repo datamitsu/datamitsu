@@ -140,7 +140,14 @@ func generateGoLockContent(appName string, app binmanager.App, generate func(wor
 	if err != nil {
 		return "", fmt.Errorf("failed to allocate temp workdir: %w", err)
 	}
-	defer func() { _ = os.RemoveAll(workDir) }()
+	// Generation sets GOMODCACHE under workDir, which `go get` fills with
+	// read-only files; a plain os.RemoveAll fails on those, so use
+	// ForceRemoveAll and surface (rather than swallow) any cleanup failure.
+	defer func() {
+		if err := runtimemanager.ForceRemoveAll(workDir); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: failed to remove temp workdir %s: %v\n", workDir, err)
+		}
+	}()
 
 	fmt.Fprintf(os.Stderr, "Generating lock file for %s...\n", appName)
 	if err := generate(workDir); err != nil {
