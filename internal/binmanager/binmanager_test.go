@@ -940,6 +940,174 @@ func TestAppConfigGo_JSONOmitsEmpty(t *testing.T) {
 	}
 }
 
+func TestGetCommandInfo_GoApp_DelegatesToRuntimeManager(t *testing.T) {
+	expectedInfo := &CommandInfo{
+		Type:    "go",
+		Command: "/cache/apps/go/govulncheck/abc123/bin/govulncheck",
+		Env: map[string]string{
+			"GOFLAGS": "-mod=readonly -trimpath",
+		},
+	}
+
+	mock := &mockRuntimeAppManager{
+		getCommandInfoFunc: func(appName string, app App) (*CommandInfo, error) {
+			if appName != "govulncheck" {
+				t.Errorf("expected appName 'govulncheck', got %q", appName)
+			}
+			if app.Go == nil {
+				t.Error("expected app.Go to be non-nil")
+			}
+			if app.Go.PackageName != "golang.org/x/vuln/cmd/govulncheck" {
+				t.Errorf("expected packageName 'golang.org/x/vuln/cmd/govulncheck', got %q", app.Go.PackageName)
+			}
+			return expectedInfo, nil
+		},
+	}
+
+	bm := New(MapOfApps{
+		"govulncheck": App{
+			Go: &AppConfigGo{
+				PackageName: "golang.org/x/vuln/cmd/govulncheck",
+				Version:     "v1.1.4",
+			},
+		},
+	}, nil, mock)
+
+	info, err := bm.GetCommandInfo("govulncheck")
+	if err != nil {
+		t.Fatalf("GetCommandInfo() error = %v", err)
+	}
+	if info != expectedInfo {
+		t.Errorf("expected info to be delegated result, got %+v", info)
+	}
+}
+
+func TestGetCommandInfo_GoApp_NoRuntimeManager(t *testing.T) {
+	bm := New(MapOfApps{
+		"govulncheck": App{
+			Go: &AppConfigGo{
+				PackageName: "golang.org/x/vuln/cmd/govulncheck",
+				Version:     "v1.1.4",
+			},
+		},
+	}, nil, nil)
+
+	_, err := bm.GetCommandInfo("govulncheck")
+	if err == nil {
+		t.Fatal("expected error when no runtime manager configured")
+	}
+}
+
+func TestComputeInstallPath_GoApp(t *testing.T) {
+	mock := &mockRuntimeAppManager{
+		computeAppPathFunc: func(appName string, app App) (string, error) {
+			if app.Go == nil {
+				t.Error("expected app.Go to be non-nil")
+			}
+			return "/mock/apps/go/govulncheck/hash123", nil
+		},
+	}
+
+	bm := New(MapOfApps{
+		"govulncheck": App{
+			Go: &AppConfigGo{
+				PackageName: "golang.org/x/vuln/cmd/govulncheck",
+				Version:     "v1.1.4",
+			},
+		},
+	}, nil, mock)
+
+	path, err := bm.ComputeInstallPath("govulncheck")
+	if err != nil {
+		t.Fatalf("ComputeInstallPath() error = %v", err)
+	}
+	if path != "/mock/apps/go/govulncheck/hash123" {
+		t.Errorf("ComputeInstallPath() = %q, want %q", path, "/mock/apps/go/govulncheck/hash123")
+	}
+}
+
+func TestComputeInstallPath_GoApp_NoRuntimeManager(t *testing.T) {
+	bm := New(MapOfApps{
+		"govulncheck": App{
+			Go: &AppConfigGo{
+				PackageName: "golang.org/x/vuln/cmd/govulncheck",
+				Version:     "v1.1.4",
+			},
+		},
+	}, nil, nil)
+
+	_, err := bm.ComputeInstallPath("govulncheck")
+	if err == nil {
+		t.Fatal("expected error when no runtime manager configured")
+	}
+}
+
+func TestGetAppsList_GoApp(t *testing.T) {
+	bm := New(MapOfApps{
+		"govulncheck": App{
+			Description: "Go vulnerability scanner",
+			Go: &AppConfigGo{
+				PackageName: "golang.org/x/vuln/cmd/govulncheck",
+				Version:     "v1.1.4",
+			},
+		},
+	}, nil, nil)
+
+	apps := bm.GetAppsList()
+	if len(apps) != 1 {
+		t.Fatalf("expected 1 app, got %d", len(apps))
+	}
+	if apps[0].Type != "go" {
+		t.Errorf("expected type 'go', got %q", apps[0].Type)
+	}
+	if apps[0].Name != "govulncheck" {
+		t.Errorf("expected name 'govulncheck', got %q", apps[0].Name)
+	}
+	if apps[0].Version != "v1.1.4" {
+		t.Errorf("expected version 'v1.1.4', got %q", apps[0].Version)
+	}
+	if apps[0].PackageName != "golang.org/x/vuln/cmd/govulncheck" {
+		t.Errorf("expected packageName 'golang.org/x/vuln/cmd/govulncheck', got %q", apps[0].PackageName)
+	}
+	if apps[0].Description != "Go vulnerability scanner" {
+		t.Errorf("expected description 'Go vulnerability scanner', got %q", apps[0].Description)
+	}
+}
+
+func TestGetAppsList_AllTypesWithGo(t *testing.T) {
+	bm := New(MapOfApps{
+		"golangci-lint": App{
+			Binary: &AppConfigBinary{Version: "v2.7.2"},
+		},
+		"yamllint": App{
+			Uv: &AppConfigUV{PackageName: "yamllint", Version: "1.38.0"},
+		},
+		"govulncheck": App{
+			Go: &AppConfigGo{
+				PackageName: "golang.org/x/vuln/cmd/govulncheck",
+				Version:     "v1.1.4",
+			},
+		},
+	}, nil, nil)
+
+	apps := bm.GetAppsList()
+	if len(apps) != 3 {
+		t.Fatalf("expected 3 apps, got %d", len(apps))
+	}
+
+	byName := make(map[string]AppInfo)
+	for _, app := range apps {
+		byName[app.Name] = app
+	}
+
+	if byName["govulncheck"].Type != "go" {
+		t.Errorf("govulncheck type = %q, want 'go'", byName["govulncheck"].Type)
+	}
+	if byName["govulncheck"].PackageName != "golang.org/x/vuln/cmd/govulncheck" {
+		t.Errorf("govulncheck packageName = %q, want 'golang.org/x/vuln/cmd/govulncheck'", byName["govulncheck"].PackageName)
+	}
+}
+
 func TestGetCommandInfo_AppNotFound(t *testing.T) {
 	bm := New(MapOfApps{}, nil, nil)
 	_, err := bm.GetCommandInfo("nonexistent")

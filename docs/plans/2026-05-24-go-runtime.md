@@ -123,13 +123,13 @@
 
 ### Task 7: Wire Go into BinManager dispatch
 
-- [ ] write tests for `GetCommandInfo` delegating Go apps to runtime manager
-- [ ] write tests for `ComputeInstallPath` with Go app
-- [ ] write tests for `GetAppsList` including Go apps
-- [ ] update `GetCommandInfo` in `internal/binmanager/binmanager.go` (line 463): add `app.Go` to runtime manager delegation
-- [ ] update `ComputeInstallPath` in `internal/binmanager/binmanager.go` (line 484): add `app.Go`
-- [ ] update `GetAppsList` in `internal/binmanager/binmanager.go` (line 694): add Go case
-- [ ] run tests - must pass before next task
+- [x] write tests for `GetCommandInfo` delegating Go apps to runtime manager
+- [x] write tests for `ComputeInstallPath` with Go app
+- [x] write tests for `GetAppsList` including Go apps
+- [x] update `GetCommandInfo` in `internal/binmanager/binmanager.go` (line 463): add `app.Go` to runtime manager delegation
+- [x] update `ComputeInstallPath` in `internal/binmanager/binmanager.go` (line 484): add `app.Go`
+- [x] update `GetAppsList` in `internal/binmanager/binmanager.go` (line 694): add Go case
+- [x] run tests - must pass before next task
 
 ### Task 8: Add Go support to config lockfile command
 
