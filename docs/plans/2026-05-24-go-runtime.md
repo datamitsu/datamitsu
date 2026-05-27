@@ -89,13 +89,13 @@
 
 ### Task 4: Implement Go lockfile JSON wrapper
 
-- [ ] write tests for `parseGoLockFile`: valid JSON -> go.mod + go.sum extraction
-- [ ] write tests for `parseGoLockFile`: invalid JSON, missing fields, malformed input
-- [ ] write tests for `buildGoLockFileJSON`: go.mod + go.sum -> JSON string
-- [ ] write tests for roundtrip: build -> compress -> decompress -> parse
-- [ ] implement `parseGoLockFile(lockFile string) (goMod, goSum string, err error)` in new file `internal/runtimemanager/go.go`
-- [ ] implement `buildGoLockFileJSON(goMod, goSum string) (string, error)` in `internal/runtimemanager/go.go`
-- [ ] run tests - must pass before next task
+- [x] write tests for `parseGoLockFile`: valid JSON -> go.mod + go.sum extraction
+- [x] write tests for `parseGoLockFile`: invalid JSON, missing fields, malformed input
+- [x] write tests for `buildGoLockFileJSON`: go.mod + go.sum -> JSON string
+- [x] write tests for roundtrip: build -> compress -> decompress -> parse
+- [x] implement `parseGoLockFile(lockFile string) (goMod, goSum string, err error)` in new file `internal/runtimemanager/go.go`
+- [x] implement `buildGoLockFileJSON(goMod, goSum string) (string, error)` in `internal/runtimemanager/go.go`
+- [x] run tests - must pass before next task
 
 ### Task 5: Implement Go app installation
 
