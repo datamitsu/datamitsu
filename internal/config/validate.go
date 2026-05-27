@@ -5,6 +5,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/target"
 	"encoding/hex"
 	"fmt"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -37,8 +38,8 @@ func doValidateApps(apps binmanager.MapOfApps, runtimes MapOfRuntimes, skipLockf
 	for _, appName := range appNames {
 		app := apps[appName]
 
-		if (app.Binary != nil || app.Shell != nil || app.Jvm != nil) && (len(app.Files) > 0 || len(app.Links) > 0 || len(app.Archives) > 0) {
-			errs = append(errs, fmt.Sprintf("app %q: files/links/archives are only supported on uv, fnm, and go apps", appName))
+		if (app.Binary != nil || app.Shell != nil || app.Jvm != nil || app.Go != nil) && (len(app.Files) > 0 || len(app.Links) > 0 || len(app.Archives) > 0) {
+			errs = append(errs, fmt.Sprintf("app %q: files/links/archives are only supported on uv and fnm apps", appName))
 			continue
 		}
 
@@ -90,6 +91,33 @@ func doValidateApps(apps binmanager.MapOfApps, runtimes MapOfRuntimes, skipLockf
 				errs = append(errs, fmt.Sprintf("app %q: fnm.binPath is required", appName))
 			} else if err := validateSafeRelativePath(app.Fnm.BinPath, "binPath"); err != nil {
 				errs = append(errs, fmt.Sprintf("app %q: %v", appName, err))
+			}
+		}
+
+		if app.Go != nil {
+			// packageName goes verbatim into `go get pkg@version`, so reject
+			// path traversal and any character outside the safe set.
+			switch {
+			case app.Go.PackageName == "":
+				errs = append(errs, fmt.Sprintf("app %q: go.packageName is required", appName))
+			case strings.Contains(app.Go.PackageName, ".."):
+				errs = append(errs, fmt.Sprintf("app %q: go.packageName %q must not contain %q", appName, app.Go.PackageName, ".."))
+			case !safeGoPackagePattern.MatchString(app.Go.PackageName):
+				errs = append(errs, fmt.Sprintf("app %q: go.packageName %q contains invalid characters (must be alphanumeric, dots, slashes, hyphens, or underscores)", appName, app.Go.PackageName))
+			default:
+				if base := path.Base(app.Go.PackageName); base == "." || base == ".." {
+					errs = append(errs, fmt.Sprintf("app %q: go.packageName %q must end in a valid path element", appName, app.Go.PackageName))
+				}
+			}
+			// version is the pinned `go get` query; a floating "latest" defeats
+			// reproducible lockfile generation, so require a concrete version.
+			switch {
+			case app.Go.Version == "":
+				errs = append(errs, fmt.Sprintf("app %q: go.version is required", appName))
+			case strings.EqualFold(app.Go.Version, "latest"):
+				errs = append(errs, fmt.Sprintf("app %q: go.version must be a pinned version, not %q", appName, app.Go.Version))
+			case !isValidVersionString(app.Go.Version):
+				errs = append(errs, fmt.Sprintf("app %q: go.version %q contains invalid characters (must be alphanumeric, dots, hyphens, underscores, or plus signs)", appName, app.Go.Version))
 			}
 		}
 
@@ -262,6 +290,12 @@ func validateAppRuntimeRef(ref string, expectedKind RuntimeKind, appName string,
 }
 
 var safeVersionPattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._+-]*$`)
+
+// safeGoPackagePattern matches a Go import path: it must start with an
+// alphanumeric character and may contain dots, slashes, hyphens, and
+// underscores. It deliberately excludes characters that could be used for
+// shell or argument injection when the package path is passed to `go get`.
+var safeGoPackagePattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9./_-]*$`)
 
 func isValidVersionString(s string) bool {
 	if s == "" {

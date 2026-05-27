@@ -364,7 +364,7 @@ func TestValidateApps_BinaryAppWithFilesRejected(t *testing.T) {
 	if err == nil {
 		t.Fatal("ValidateApps() expected error for binary app with files/links, got nil")
 	}
-	if !strings.Contains(err.Error(), "files/links/archives are only supported on uv, fnm, and go apps") {
+	if !strings.Contains(err.Error(), "files/links/archives are only supported on uv and fnm apps") {
 		t.Errorf("unexpected error message: %v", err)
 	}
 }
@@ -383,7 +383,7 @@ func TestValidateApps_ShellAppWithFilesRejected(t *testing.T) {
 	if err == nil {
 		t.Fatal("ValidateApps() expected error for shell app with files, got nil")
 	}
-	if !strings.Contains(err.Error(), "files/links/archives are only supported on uv, fnm, and go apps") {
+	if !strings.Contains(err.Error(), "files/links/archives are only supported on uv and fnm apps") {
 		t.Errorf("unexpected error message: %v", err)
 	}
 }
@@ -968,7 +968,7 @@ func TestValidateApps_JVM_FilesLinksRejected(t *testing.T) {
 	if err == nil {
 		t.Fatal("ValidateApps() expected error for JVM app with files, got nil")
 	}
-	if !strings.Contains(err.Error(), "files/links/archives are only supported on uv, fnm, and go apps") {
+	if !strings.Contains(err.Error(), "files/links/archives are only supported on uv and fnm apps") {
 		t.Errorf("unexpected error message: %v", err)
 	}
 }
@@ -1657,7 +1657,7 @@ func TestValidateApps_ValidGoRuntimeRef(t *testing.T) {
 	}
 }
 
-func TestValidateApps_Go_FilesLinksArchivesAllowed(t *testing.T) {
+func TestValidateApps_Go_FilesLinksArchivesRejected(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"go": {
 			Kind: RuntimeKindGo,
@@ -1681,8 +1681,119 @@ func TestValidateApps_Go_FilesLinksArchivesAllowed(t *testing.T) {
 		},
 	}
 
-	if _, err := ValidateApps(apps, runtimes); err != nil {
-		t.Errorf("ValidateApps() unexpected error for Go app with files/links: %v", err)
+	_, err := ValidateApps(apps, runtimes)
+	if err == nil {
+		t.Fatal("ValidateApps() expected error for Go app with files/links, got nil")
+	}
+	if !strings.Contains(err.Error(), "files/links/archives are only supported on uv and fnm apps") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestValidateApps_Go_PackageNameAndVersion(t *testing.T) {
+	runtimes := MapOfRuntimes{
+		"go": {
+			Kind: RuntimeKindGo,
+			Mode: RuntimeModeManaged,
+			Go:   &RuntimeConfigGo{GoVersion: "1.22.0"},
+		},
+	}
+
+	tests := []struct {
+		name        string
+		packageName string
+		version     string
+		wantErr     string // empty means expect success
+	}{
+		{
+			name:        "valid",
+			packageName: "golang.org/x/vuln/cmd/govulncheck",
+			version:     "v1.1.4",
+			wantErr:     "",
+		},
+		{
+			name:        "empty packageName",
+			packageName: "",
+			version:     "v1.1.4",
+			wantErr:     "go.packageName is required",
+		},
+		{
+			name:        "packageName is dotdot",
+			packageName: "..",
+			version:     "v1.1.4",
+			wantErr:     `go.packageName ".." must not contain`,
+		},
+		{
+			name:        "packageName escapes parent",
+			packageName: "../escape",
+			version:     "v1.1.4",
+			wantErr:     "must not contain",
+		},
+		{
+			name:        "packageName embeds traversal",
+			packageName: "golang.org/x/../escape",
+			version:     "v1.1.4",
+			wantErr:     "must not contain",
+		},
+		{
+			name:        "packageName invalid chars",
+			packageName: "golang.org/x/vuln cmd",
+			version:     "v1.1.4",
+			wantErr:     "contains invalid characters",
+		},
+		{
+			name:        "empty version",
+			packageName: "golang.org/x/vuln/cmd/govulncheck",
+			version:     "",
+			wantErr:     "go.version is required",
+		},
+		{
+			name:        "version latest",
+			packageName: "golang.org/x/vuln/cmd/govulncheck",
+			version:     "latest",
+			wantErr:     "must be a pinned version",
+		},
+		{
+			name:        "version with space",
+			packageName: "golang.org/x/vuln/cmd/govulncheck",
+			version:     "v1.1.4 5",
+			wantErr:     "go.version",
+		},
+		{
+			name:        "version with at sign",
+			packageName: "golang.org/x/vuln/cmd/govulncheck",
+			version:     "v1.1.4@",
+			wantErr:     "go.version",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			apps := binmanager.MapOfApps{
+				"govulncheck": {
+					Go: &binmanager.AppConfigGo{
+						PackageName: tt.packageName,
+						Version:     tt.version,
+						Runtime:     "go",
+						LockFile:    "br:fakeLockFileContent",
+					},
+				},
+			}
+
+			_, err := ValidateApps(apps, runtimes)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("ValidateApps() unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("ValidateApps() expected error containing %q, got nil", tt.wantErr)
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("error = %v, want substring %q", err, tt.wantErr)
+			}
+		})
 	}
 }
 
@@ -2111,7 +2222,7 @@ func TestValidateApps_Archives_BinaryAppRejected(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for binary app with archives")
 	}
-	if !strings.Contains(err.Error(), "files/links/archives are only supported on uv, fnm, and go apps") {
+	if !strings.Contains(err.Error(), "files/links/archives are only supported on uv and fnm apps") {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
