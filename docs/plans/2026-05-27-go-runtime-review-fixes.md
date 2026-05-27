@@ -133,8 +133,8 @@ Address code-review findings on the `feat/go-runtime` branch (Go runtime kind fo
 
 ### Task 6: Update knowledge docs (no website docs in this branch)
 
-- [ ] update [docs/architecture.md](docs/architecture.md) only if singleflight refactor changes the architecture description (likely yes — the "install once per runtime/app" pattern is documented there)
-- [ ] DO NOT add website docs (user explicitly tracking that separately)
+- [x] update [docs/architecture.md](docs/architecture.md) only if singleflight refactor changes the architecture description — the concurrency-dedup pattern was NOT previously documented in the Runtime Manager section; added a bullet describing the new `singleflight.Group` deduplication (keyed by runtime/`kind/appName`/version) that replaced the `sync.Once` + `sync.Map` + `CompareAndDelete` pattern
+- [x] DO NOT add website docs (user explicitly tracking that separately) — complied: only `docs/architecture.md` touched, no `website/docs/` changes
 
 ## Technical Details
 

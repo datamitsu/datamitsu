@@ -59,6 +59,7 @@ Six types of applications are supported:
 - Runtime resolution: app-level override -> global default by kind
 - Uses `RuntimeAppManager` interface to avoid circular dependency with BinManager
 - Cache keys use XXH3-128 hash of runtime config + app config + OS + arch
+- Concurrent installs are deduplicated via `golang.org/x/sync/singleflight` groups (`runtimeInstall`, `appInstall`, `nodeInstall`, `pnpmInstall`) keyed by runtime name / `kind/appName` / version: only one install per key runs at a time and all waiters share its result. A failed call does not orphan in-flight readers, and the next call after completion starts fresh — so retry-after-error works without explicit cleanup (replaced the prior `sync.Once` + `sync.Map` + `CompareAndDelete` pattern, which could orphan a reader when a deletion overlapped an in-flight call)
 - `RuntimeConfigFNM` (NodeVersion, PNPMVersion), `RuntimeConfigUV` (PythonVersion), `RuntimeConfigJVM` (JavaVersion), and `RuntimeConfigGo` (GoVersion) on `RuntimeConfig` hold version info per runtime kind
 - Lockfiles are mandatory for all UV/FNM/Go apps; `ValidateApps` enforces that all UV/FNM/Go apps have a `LockFile` configured
 - FNM runtime: downloads FNM binary, uses it to install Node.js versions, downloads PNPM from npm registry, runs pnpm install in isolated app environments (stdout and stderr streamed to stderr so errors are visible)
