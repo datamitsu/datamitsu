@@ -629,6 +629,109 @@ func TestCalculateSystemRuntimeHash_JVM(t *testing.T) {
 	})
 }
 
+func TestCalculateRuntimeHash_Go(t *testing.T) {
+	t.Run("Go goVersion affects runtime hash", func(t *testing.T) {
+		rc1 := makeTestManagedRuntime("https://example.com/go.tar.gz", "go123")
+		rc1.Kind = config.RuntimeKindGo
+		rc1.Go = &config.RuntimeConfigGo{GoVersion: "1.22.0"}
+
+		rc2 := makeTestManagedRuntime("https://example.com/go.tar.gz", "go123")
+		rc2.Kind = config.RuntimeKindGo
+		rc2.Go = &config.RuntimeConfigGo{GoVersion: "1.21.0"}
+
+		hash1, _ := calculateRuntimeHash(rc1, syslist.OsTypeDarwin, syslist.ArchTypeAmd64, "unknown")
+		hash2, _ := calculateRuntimeHash(rc2, syslist.OsTypeDarwin, syslist.ArchTypeAmd64, "unknown")
+
+		if hash1 == hash2 {
+			t.Error("different go versions should produce different runtime hashes")
+		}
+	})
+
+	t.Run("Go runtime hash is deterministic", func(t *testing.T) {
+		rc := makeTestManagedRuntime("https://example.com/go.tar.gz", "go123")
+		rc.Kind = config.RuntimeKindGo
+		rc.Go = &config.RuntimeConfigGo{GoVersion: "1.22.0"}
+
+		hash1, err := calculateRuntimeHash(rc, syslist.OsTypeDarwin, syslist.ArchTypeAmd64, "unknown")
+		if err != nil {
+			t.Fatalf("first call error = %v", err)
+		}
+		hash2, err := calculateRuntimeHash(rc, syslist.OsTypeDarwin, syslist.ArchTypeAmd64, "unknown")
+		if err != nil {
+			t.Fatalf("second call error = %v", err)
+		}
+		if hash1 != hash2 {
+			t.Errorf("hash not deterministic: %q != %q", hash1, hash2)
+		}
+	})
+}
+
+func TestCalculateSystemRuntimeHash_Go(t *testing.T) {
+	t.Run("different Go goVersion produces different hash", func(t *testing.T) {
+		rc1 := config.RuntimeConfig{
+			Kind:   config.RuntimeKindGo,
+			Mode:   config.RuntimeModeSystem,
+			System: &config.RuntimeConfigSystem{Command: "/usr/bin/go"},
+			Go:     &config.RuntimeConfigGo{GoVersion: "1.22.0"},
+		}
+		rc2 := config.RuntimeConfig{
+			Kind:   config.RuntimeKindGo,
+			Mode:   config.RuntimeModeSystem,
+			System: &config.RuntimeConfigSystem{Command: "/usr/bin/go"},
+			Go:     &config.RuntimeConfigGo{GoVersion: "1.21.0"},
+		}
+
+		hash1 := calculateSystemRuntimeHash(rc1)
+		hash2 := calculateSystemRuntimeHash(rc2)
+		if hash1 == hash2 {
+			t.Error("different goVersion should produce different hashes")
+		}
+	})
+
+	t.Run("same Go goVersion produces same hash", func(t *testing.T) {
+		rc := config.RuntimeConfig{
+			Kind:   config.RuntimeKindGo,
+			Mode:   config.RuntimeModeSystem,
+			System: &config.RuntimeConfigSystem{Command: "/usr/bin/go"},
+			Go:     &config.RuntimeConfigGo{GoVersion: "1.22.0"},
+		}
+
+		hash1 := calculateSystemRuntimeHash(rc)
+		hash2 := calculateSystemRuntimeHash(rc)
+		if hash1 != hash2 {
+			t.Errorf("same goVersion should produce same hash: %q != %q", hash1, hash2)
+		}
+	})
+}
+
+func TestCalculateAppHash_Go(t *testing.T) {
+	t.Run("Go app package params produce valid hash", func(t *testing.T) {
+		hash := calculateAppHash("govulncheck", "v1.1.4", nil, "rthash", "lockhash", "")
+		if hash == "" {
+			t.Error("hash is empty")
+		}
+		if len(hash) != 32 {
+			t.Errorf("hash length = %d, want 32 (xxh3-128)", len(hash))
+		}
+	})
+
+	t.Run("Go lockfile hash affects app hash", func(t *testing.T) {
+		hash1 := calculateAppHash("govulncheck", "v1.1.4", nil, "rthash", "lockhash1", "")
+		hash2 := calculateAppHash("govulncheck", "v1.1.4", nil, "rthash", "lockhash2", "")
+		if hash1 == hash2 {
+			t.Error("different lockfile hashes should produce different app hashes")
+		}
+	})
+
+	t.Run("Go version affects app hash", func(t *testing.T) {
+		hash1 := calculateAppHash("govulncheck", "v1.1.4", nil, "rthash", "lockhash", "")
+		hash2 := calculateAppHash("govulncheck", "v1.1.3", nil, "rthash", "lockhash", "")
+		if hash1 == hash2 {
+			t.Error("different versions should produce different app hashes")
+		}
+	})
+}
+
 func TestCalculateSystemRuntimeHash_SystemVersion(t *testing.T) {
 	t.Run("different systemVersion produces different hash", func(t *testing.T) {
 		rc1 := config.RuntimeConfig{

@@ -80,12 +80,12 @@
 
 ### Task 3: Add Go hash computation
 
-- [ ] write tests for `calculateRuntimeHash` with Go runtime config
-- [ ] write tests for `calculateSystemRuntimeHash` with Go runtime config
-- [ ] write tests for `calculateAppHash` with Go app parameters
-- [ ] add Go case to `calculateRuntimeHash` in `internal/runtimemanager/hash.go` (append GoVersion to parts)
-- [ ] add Go case to `calculateSystemRuntimeHash` in `internal/runtimemanager/hash.go`
-- [ ] run tests - must pass before next task
+- [x] write tests for `calculateRuntimeHash` with Go runtime config
+- [x] write tests for `calculateSystemRuntimeHash` with Go runtime config
+- [x] write tests for `calculateAppHash` with Go app parameters
+- [x] add Go case to `calculateRuntimeHash` in `internal/runtimemanager/hash.go` (append GoVersion to parts)
+- [x] add Go case to `calculateSystemRuntimeHash` in `internal/runtimemanager/hash.go`
+- [x] run tests - must pass before next task
 
 ### Task 4: Implement Go lockfile JSON wrapper
 

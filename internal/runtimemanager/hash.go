@@ -66,6 +66,9 @@ func calculateRuntimeHash(rc config.RuntimeConfig, osType syslist.OsType, archTy
 	if rc.Kind == config.RuntimeKindJVM && rc.JVM != nil {
 		parts = append(parts, []byte(rc.JVM.JavaVersion))
 	}
+	if rc.Kind == config.RuntimeKindGo && rc.Go != nil {
+		parts = append(parts, []byte(rc.Go.GoVersion))
+	}
 
 	return hashutil.XXH3Multi(parts...), nil
 }
@@ -92,6 +95,9 @@ func calculateSystemRuntimeHash(rc config.RuntimeConfig) string {
 	}
 	if rc.Kind == config.RuntimeKindJVM && rc.JVM != nil {
 		parts = append(parts, []byte(rc.JVM.JavaVersion))
+	}
+	if rc.Kind == config.RuntimeKindGo && rc.Go != nil {
+		parts = append(parts, []byte(rc.Go.GoVersion))
 	}
 
 	return hashutil.XXH3Multi(parts...)
