@@ -401,20 +401,29 @@ func TestInstallGoApp_MissingLockFileIsRejected(t *testing.T) {
 func TestInstallGoApp_RetriesAfterError(t *testing.T) {
 	rm := New(makeTestGoRuntimes())
 
-	appConfig := &binmanager.AppConfigGo{
-		PackageName: "golang.org/x/vuln/cmd/govulncheck",
-		Version:     "v1.1.4",
-		Runtime:     "nonexistent",
-		LockFile:    "x",
+	// singleflight must not memoize a completed call: once an in-flight Do
+	// returns (success or error), the next Do for the same key must re-run the
+	// function. Counting executions proves the failed install is actually
+	// retried rather than returning a stale cached result — two identical
+	// errors alone would not distinguish a re-run from a cached error.
+	var calls int32
+	sentinel := errors.New("install failed")
+	run := func() error {
+		_, err, _ := rm.appInstall.Do("go/retry", func() (any, error) {
+			atomic.AddInt32(&calls, 1)
+			return nil, sentinel
+		})
+		return err
 	}
 
-	// First failure should be cleared from the once-map so a subsequent call
-	// re-runs (rather than returning a cached success/no-op).
-	if err := rm.InstallGoApp("govulncheck", appConfig, nil, nil); err == nil {
-		t.Fatal("expected first call to error")
+	if err := run(); !errors.Is(err, sentinel) {
+		t.Fatalf("first call: expected sentinel error, got %v", err)
 	}
-	if err := rm.InstallGoApp("govulncheck", appConfig, nil, nil); err == nil {
-		t.Fatal("expected retry to error again (once entry should have been deleted)")
+	if err := run(); !errors.Is(err, sentinel) {
+		t.Fatalf("retry: expected sentinel error, got %v", err)
+	}
+	if got := atomic.LoadInt32(&calls); got != 2 {
+		t.Errorf("expected function to run twice (retry after error), ran %d time(s)", got)
 	}
 }
 

@@ -1397,17 +1397,18 @@ func TestGetCommandInfoGo(t *testing.T) {
 			Go: &binmanager.AppConfigGo{
 				PackageName: "golang.org/x/vuln/cmd/govulncheck",
 				Version:     "v1.1.4",
-				Runtime:     "go",
+				Runtime:     "nonexistent", // forces a deterministic error from the Go install path
 				LockFile:    "x",
 			},
 		}
 
-		// InstallGoApp will fail because there's no actual Go binary to download,
-		// but we can verify the dispatch works: the error must come from the Go
-		// install path, not from "not a runtime-managed app".
+		// The dispatch must route a Go app to InstallGoApp/GetGoCommandInfo: the
+		// error must originate there (failing to resolve "nonexistent"), not from
+		// the fall-through "not a runtime-managed app". Using an unresolvable
+		// runtime keeps this deterministic regardless of the host environment.
 		_, err := rm.GetCommandInfo("govulncheck", app)
 		if err == nil {
-			t.Skip("unexpected success - Go binary not available in test env")
+			t.Fatal("expected error resolving nonexistent Go runtime, got nil")
 		}
 		if err.Error() == `app "govulncheck" is not a runtime-managed app` {
 			t.Error("Go app should be recognized as runtime-managed")
