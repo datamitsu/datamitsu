@@ -207,12 +207,15 @@ func TestGetGoEnvVars(t *testing.T) {
 	vars := getGoEnvVars(appEnvPath)
 
 	expected := map[string]string{
-		"GOPATH":       filepath.Join(appEnvPath, "gopath"),
-		"GOMODCACHE":   filepath.Join(appEnvPath, "gomodcache"),
-		"GOBIN":        filepath.Join(appEnvPath, "bin"),
-		"GONOSUMCHECK": "",
-		"GONOSUMDB":    "",
-		"GOFLAGS":      "-mod=readonly -trimpath",
+		"GOPATH":      filepath.Join(appEnvPath, "gopath"),
+		"GOMODCACHE":  filepath.Join(appEnvPath, "gomodcache"),
+		"GOBIN":       filepath.Join(appEnvPath, "bin"),
+		"GOTOOLCHAIN": "local",
+		"GOSUMDB":     "sum.golang.org",
+		"GOPRIVATE":   "",
+		"GONOPROXY":   "",
+		"GOINSECURE":  "",
+		"GOFLAGS":     "-mod=readonly -trimpath",
 	}
 
 	for key, want := range expected {
@@ -234,6 +237,16 @@ func TestGetGoEnvVars(t *testing.T) {
 	// go.sum mismatch fails the build instead of silently rewriting go.sum.
 	if !strings.Contains(vars["GOFLAGS"], "-mod=readonly") {
 		t.Errorf("GOFLAGS must contain -mod=readonly, got %q", vars["GOFLAGS"])
+	}
+	// GOTOOLCHAIN=local prevents auto-downloading an unverified toolchain that
+	// would bypass the SHA-256-pinned managed SDK.
+	if vars["GOTOOLCHAIN"] != "local" {
+		t.Errorf("GOTOOLCHAIN must be forced to local, got %q", vars["GOTOOLCHAIN"])
+	}
+	// GOSUMDB must stay on so checksum-DB verification cannot be disabled via an
+	// inherited GOSUMDB=off.
+	if vars["GOSUMDB"] != "sum.golang.org" {
+		t.Errorf("GOSUMDB must be forced on, got %q", vars["GOSUMDB"])
 	}
 }
 
@@ -399,12 +412,15 @@ func TestGetGoGenEnvVars(t *testing.T) {
 	vars := getGoGenEnvVars(workDir)
 
 	expected := map[string]string{
-		"GOPATH":       filepath.Join(workDir, "gopath"),
-		"GOMODCACHE":   filepath.Join(workDir, "gomodcache"),
-		"GOBIN":        filepath.Join(workDir, "bin"),
-		"GONOSUMCHECK": "",
-		"GONOSUMDB":    "",
-		"GOFLAGS":      "",
+		"GOPATH":      filepath.Join(workDir, "gopath"),
+		"GOMODCACHE":  filepath.Join(workDir, "gomodcache"),
+		"GOBIN":       filepath.Join(workDir, "bin"),
+		"GOTOOLCHAIN": "local",
+		"GOSUMDB":     "sum.golang.org",
+		"GOPRIVATE":   "",
+		"GONOPROXY":   "",
+		"GOINSECURE":  "",
+		"GOFLAGS":     "",
 	}
 
 	for key, want := range expected {
@@ -418,14 +434,25 @@ func TestGetGoGenEnvVars(t *testing.T) {
 		}
 	}
 
+	if len(vars) != len(expected) {
+		t.Errorf("vars has %d entries, want %d", len(vars), len(expected))
+	}
+
 	// Generation must be allowed to write go.mod/go.sum, so -mod=readonly must
 	// NOT be set here (it would make `go get` fail).
 	if strings.Contains(vars["GOFLAGS"], "-mod=readonly") {
 		t.Errorf("generation GOFLAGS must not contain -mod=readonly, got %q", vars["GOFLAGS"])
 	}
-	// Checksum DB verification must stay enabled during resolution.
-	if vars["GONOSUMCHECK"] != "" {
-		t.Errorf("GONOSUMCHECK must be force-cleared, got %q", vars["GONOSUMCHECK"])
+	// Checksum DB verification must stay enabled during dependency resolution:
+	// this is exactly when go.sum entries are first recorded, so an inherited
+	// GOSUMDB=off must not be able to disable it.
+	if vars["GOSUMDB"] != "sum.golang.org" {
+		t.Errorf("GOSUMDB must be forced on during generation, got %q", vars["GOSUMDB"])
+	}
+	// Generation must also pin the toolchain so resolving a dependency that
+	// requires a newer Go fails fast rather than fetching an unverified toolchain.
+	if vars["GOTOOLCHAIN"] != "local" {
+		t.Errorf("GOTOOLCHAIN must be forced to local during generation, got %q", vars["GOTOOLCHAIN"])
 	}
 }
 
@@ -557,6 +584,27 @@ func TestGetGoCommandInfo(t *testing.T) {
 			t.Error("different lockFile contents should produce different paths")
 		}
 	})
+
+	t.Run("same lockfile but different packageName produces different paths", func(t *testing.T) {
+		// Two commands from the same module share a byte-identical lockfile
+		// (go.mod/go.sum). The package path is part of the build identity, so
+		// their cache directories must not collide.
+		lock := "shared-lock"
+		config1 := &binmanager.AppConfigGo{PackageName: "golang.org/x/tools/cmd/goimports", Version: "v0.1.0", Runtime: "go", LockFile: lock}
+		config2 := &binmanager.AppConfigGo{PackageName: "golang.org/x/tools/cmd/stringer", Version: "v0.1.0", Runtime: "go", LockFile: lock}
+
+		path1, err := rm.GetGoAppPath("tool", config1, nil, nil, "go")
+		if err != nil {
+			t.Fatalf("first GetGoAppPath error = %v", err)
+		}
+		path2, err := rm.GetGoAppPath("tool", config2, nil, nil, "go")
+		if err != nil {
+			t.Fatalf("second GetGoAppPath error = %v", err)
+		}
+		if path1 == path2 {
+			t.Error("different packageName with the same lockFile should produce different cache paths")
+		}
+	})
 }
 
 // TestGoBuildReadonlyFailsOnGoSumMismatch is the supply-chain guarantee in
@@ -606,8 +654,8 @@ func TestGoBuildReadonlyFailsOnGoSumMismatch(t *testing.T) {
 
 	cmd := exec.Command(goBin, args...)
 	cmd.Dir = dir
-	// getGoEnvVars keeps checksum verification enabled (GONOSUMCHECK/GONOSUMDB
-	// cleared); GOPROXY=off makes the test hermetic.
+	// getGoEnvVars keeps checksum verification enabled (GOSUMDB forced on) and
+	// pins the toolchain (GOTOOLCHAIN=local); GOPROXY=off makes the test hermetic.
 	cmd.Env = buildEnvWithOverrides(os.Environ(), getGoEnvVars(dir))
 	cmd.Env = append(cmd.Env, "GOPROXY=off")
 

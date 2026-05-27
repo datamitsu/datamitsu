@@ -756,7 +756,7 @@ declare global {
       runtime?: string;
       /**
        * Module version to pin (Go module query).
-       * @example "v1.1.4"
+       * @example "v1.3.0"
        */
       version: string;
     }

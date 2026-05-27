@@ -54,37 +54,56 @@ func BuildGoLockFileJSON(goMod, goSum string) (string, error) {
 	return string(data), nil
 }
 
-// getGoEnvVars returns the isolated build environment for a Go app. Each app
-// gets its own GOPATH/GOMODCACHE/GOBIN so installs never touch the user's Go
-// environment. GONOSUMCHECK and GONOSUMDB are force-cleared so a user value
-// disabling checksum verification cannot weaken the build, and GOFLAGS pins
-// -mod=readonly so any go.sum mismatch fails the build.
-func getGoEnvVars(appEnvPath string) map[string]string {
+// goBaseEnvVars returns the per-app isolation and supply-chain hardening shared
+// by the build and generation flows. baseDir is the directory under which the
+// per-app GOPATH/GOMODCACHE/GOBIN live so neither flow ever touches the user's
+// Go environment.
+//
+// The verification controls are forced to safe values (not merely cleared) so a
+// value inherited from the user's environment cannot weaken the supply chain:
+//   - GOTOOLCHAIN=local pins execution to the managed, SHA-256-verified SDK and
+//     prevents Go from auto-downloading an unverified toolchain over the network
+//     when a module requires a newer Go version (the default GOTOOLCHAIN=auto
+//     would do so, bypassing the hash policy — fail fast instead).
+//   - GOSUMDB=sum.golang.org keeps checksum-database verification enabled; a
+//     user GOSUMDB=off would otherwise let unverified checksums be recorded.
+//   - GOPRIVATE/GONOPROXY/GOINSECURE are cleared so no path pattern inherited
+//     from the user can opt modules out of proxy + checksum verification or
+//     allow insecure (http) fetches.
+//
+// These must stay identical across both flows, which is why they live here
+// rather than being duplicated in the build and generation env builders.
+func goBaseEnvVars(baseDir string) map[string]string {
 	return map[string]string{
-		"GOPATH":       filepath.Join(appEnvPath, "gopath"),
-		"GOMODCACHE":   filepath.Join(appEnvPath, "gomodcache"),
-		"GOBIN":        filepath.Join(appEnvPath, "bin"),
-		"GONOSUMCHECK": "",
-		"GONOSUMDB":    "",
-		"GOFLAGS":      "-mod=readonly -trimpath",
+		"GOPATH":      filepath.Join(baseDir, "gopath"),
+		"GOMODCACHE":  filepath.Join(baseDir, "gomodcache"),
+		"GOBIN":       filepath.Join(baseDir, "bin"),
+		"GOTOOLCHAIN": "local",
+		"GOSUMDB":     "sum.golang.org",
+		"GOPRIVATE":   "",
+		"GONOPROXY":   "",
+		"GOINSECURE":  "",
 	}
 }
 
+// getGoEnvVars returns the isolated build environment for a Go app. It pins
+// GOFLAGS=-mod=readonly so any go.sum mismatch fails the build instead of
+// silently rewriting go.sum, on top of the shared hardening in goBaseEnvVars.
+func getGoEnvVars(appEnvPath string) map[string]string {
+	env := goBaseEnvVars(appEnvPath)
+	env["GOFLAGS"] = "-mod=readonly -trimpath"
+	return env
+}
+
 // getGoGenEnvVars returns the isolated environment for generating a Go app's
-// lockfile (`go mod init` + `go get`). It mirrors getGoEnvVars' isolation
-// (per-app GOPATH/GOMODCACHE/GOBIN) and still force-clears GONOSUMCHECK and
-// GONOSUMDB so checksum DB verification cannot be disabled while resolving
-// dependencies. Unlike the build env it omits -mod=readonly: generation must be
-// allowed to write go.mod and go.sum, which -mod=readonly would forbid.
+// lockfile (`go mod init` + `go get`). It shares goBaseEnvVars' isolation and
+// verification hardening but, unlike the build env, omits -mod=readonly:
+// generation must be allowed to write go.mod and go.sum, which -mod=readonly
+// would forbid.
 func getGoGenEnvVars(workDir string) map[string]string {
-	return map[string]string{
-		"GOPATH":       filepath.Join(workDir, "gopath"),
-		"GOMODCACHE":   filepath.Join(workDir, "gomodcache"),
-		"GOBIN":        filepath.Join(workDir, "bin"),
-		"GONOSUMCHECK": "",
-		"GONOSUMDB":    "",
-		"GOFLAGS":      "",
-	}
+	env := goBaseEnvVars(workDir)
+	env["GOFLAGS"] = ""
+	return env
 }
 
 // goBinaryName derives the built binary's filename from the Go package path.
@@ -115,7 +134,7 @@ func buildGoBuildArgs(packageName, outputPath string) []string {
 
 // GetGoAppPath returns the cache path for an installed Go app environment.
 func (rm *RuntimeManager) GetGoAppPath(appName string, appConfig *binmanager.AppConfigGo, files map[string]string, archives map[string]*binmanager.ArchiveSpec, runtimeName string) (string, error) {
-	return rm.GetAppPath(appName, config.RuntimeKindGo, appConfig.Version, nil, lockFileHash(appConfig.LockFile), files, archives, runtimeName)
+	return rm.GetAppPath(appName, config.RuntimeKindGo, appConfig.Version, nil, goAppLockHash(appConfig.PackageName, appConfig.LockFile), files, archives, runtimeName)
 }
 
 // InstallGoApp builds a Go app from source if not already cached.
