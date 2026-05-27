@@ -696,6 +696,7 @@ declare global {
        */
       files?: Record<string, string>;
       fnm?: AppConfigFNM;
+      go?: AppConfigGo;
       jvm?: AppConfigJVM;
       /**
        * Symlinks to create in .datamitsu/ directory, mapping link name to relative path in install directory.
@@ -734,6 +735,29 @@ declare global {
       lockFile: string;
       packageName: string;
       runtime?: string;
+      version: string;
+    }
+
+    interface AppConfigGo {
+      /**
+       * Lock file content for reproducible installs.
+       * Required for all Go apps. Validation fails if omitted.
+       * Stores a JSON wrapper `{"mod":"<go.mod>","sum":"<go.sum>"}` so that
+       * `go build -mod=readonly` fails on any go.sum mismatch (supply chain protection).
+       * When prefixed with "br:", the content is brotli-compressed and base64-encoded.
+       * Generate via: datamitsu config lockfile <appName>
+       */
+      lockFile: string;
+      /**
+       * Go package import path to build.
+       * @example "golang.org/x/vuln/cmd/govulncheck"
+       */
+      packageName: string;
+      runtime?: string;
+      /**
+       * Module version to pin (Go module query).
+       * @example "v1.1.4"
+       */
       version: string;
     }
 
@@ -891,6 +915,11 @@ declare global {
        */
       fnm?: RuntimeConfigFNM;
       /**
+       * Go-specific runtime configuration (goVersion).
+       * Required when kind is "go".
+       */
+      go?: RuntimeConfigGo;
+      /**
        * JVM-specific runtime configuration (javaVersion).
        * Required when kind is "jvm".
        */
@@ -916,6 +945,14 @@ declare global {
       pnpmVersion: string;
     }
 
+    interface RuntimeConfigGo {
+      /**
+       * Go SDK version to build with.
+       * @example "1.22.3"
+       */
+      goVersion: string;
+    }
+
     interface RuntimeConfigJVM {
       javaVersion: string;
     }
@@ -936,7 +973,7 @@ declare global {
       pythonVersion?: string;
     }
 
-    type RuntimeKind = "fnm" | "jvm" | "uv";
+    type RuntimeKind = "fnm" | "go" | "jvm" | "uv";
 
     type RuntimeMode = "managed" | "system";
   }

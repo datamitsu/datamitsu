@@ -149,12 +149,13 @@
 
 ### Task 9: Update TypeScript declarations
 
-- [ ] add `AppConfigGo` interface to `internal/config/config.d.ts` with lockFile, packageName, runtime?, version
-- [ ] add `go?: AppConfigGo` to `interface App` in `internal/config/config.d.ts`
-- [ ] add `RuntimeConfigGo` interface with goVersion field
-- [ ] add `go?: RuntimeConfigGo` to `interface RuntimeConfig`
-- [ ] update `type RuntimeKind` to `"fnm" | "go" | "jvm" | "uv"`
-- [ ] run `go build` to verify embedded TS compiles correctly
+- [x] add `AppConfigGo` interface to `internal/config/config.d.ts` with lockFile, packageName, runtime?, version
+- [x] add `go?: AppConfigGo` to `interface App` in `internal/config/config.d.ts`
+- [x] add `RuntimeConfigGo` interface with goVersion field
+- [x] add `go?: RuntimeConfigGo` to `interface RuntimeConfig`
+- [x] update `type RuntimeKind` to `"fnm" | "go" | "jvm" | "uv"`
+- [x] run `go build` to verify embedded TS compiles correctly
+- - scope note: `config/config.d.ts` is the canonical git-tracked source; `internal/config/config.d.ts` is a generated copy (`Taskfile.yaml`: `cp ./config/config.d.ts ./internal/config/config.d.ts`) embedded via go:embed. Applied identical edits to BOTH so the build copy isn't reverted. Verified declarations are valid TS via local `tsc --noEmit --strict` (exit 0).
 
 ### Task 10: Add govulncheck as default example Go app
 
