@@ -67,9 +67,14 @@ func BuildGoLockFileJSON(goMod, goSum string) (string, error) {
 //     would do so, bypassing the hash policy — fail fast instead).
 //   - GOSUMDB=sum.golang.org keeps checksum-database verification enabled; a
 //     user GOSUMDB=off would otherwise let unverified checksums be recorded.
-//   - GOPRIVATE/GONOPROXY/GOINSECURE are cleared so no path pattern inherited
-//     from the user can opt modules out of proxy + checksum verification or
-//     allow insecure (http) fetches.
+//   - GOPRIVATE/GONOPROXY/GONOSUMDB/GOINSECURE are cleared so no path pattern
+//     inherited from the user can opt modules out of proxy + checksum
+//     verification or allow insecure (http) fetches. GONOSUMDB must be cleared
+//     explicitly: per `go help environment`, it disables checksum-database
+//     validation on its own ("GOPRIVATE or GONOSUMDB may be used to achieve
+//     that"), and an explicit GONOSUMDB overrides the GOPRIVATE-derived default,
+//     so clearing GOPRIVATE alone leaves an inherited GONOSUMDB=* able to skip
+//     verification while `go get` records go.sum entries during generation.
 //
 // These must stay identical across both flows, which is why they live here
 // rather than being duplicated in the build and generation env builders.
@@ -82,6 +87,7 @@ func goBaseEnvVars(baseDir string) map[string]string {
 		"GOSUMDB":     "sum.golang.org",
 		"GOPRIVATE":   "",
 		"GONOPROXY":   "",
+		"GONOSUMDB":   "",
 		"GOINSECURE":  "",
 	}
 }

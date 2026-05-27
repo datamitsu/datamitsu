@@ -214,6 +214,7 @@ func TestGetGoEnvVars(t *testing.T) {
 		"GOSUMDB":     "sum.golang.org",
 		"GOPRIVATE":   "",
 		"GONOPROXY":   "",
+		"GONOSUMDB":   "",
 		"GOINSECURE":  "",
 		"GOFLAGS":     "-mod=readonly -trimpath",
 	}
@@ -247,6 +248,11 @@ func TestGetGoEnvVars(t *testing.T) {
 	// inherited GOSUMDB=off.
 	if vars["GOSUMDB"] != "sum.golang.org" {
 		t.Errorf("GOSUMDB must be forced on, got %q", vars["GOSUMDB"])
+	}
+	// GONOSUMDB must be cleared: it can disable checksum-DB verification on its
+	// own, independent of GOSUMDB, so an inherited GONOSUMDB=* must not survive.
+	if vars["GONOSUMDB"] != "" {
+		t.Errorf("GONOSUMDB must be cleared, got %q", vars["GONOSUMDB"])
 	}
 }
 
@@ -419,6 +425,7 @@ func TestGetGoGenEnvVars(t *testing.T) {
 		"GOSUMDB":     "sum.golang.org",
 		"GOPRIVATE":   "",
 		"GONOPROXY":   "",
+		"GONOSUMDB":   "",
 		"GOINSECURE":  "",
 		"GOFLAGS":     "",
 	}
@@ -448,6 +455,12 @@ func TestGetGoGenEnvVars(t *testing.T) {
 	// GOSUMDB=off must not be able to disable it.
 	if vars["GOSUMDB"] != "sum.golang.org" {
 		t.Errorf("GOSUMDB must be forced on during generation, got %q", vars["GOSUMDB"])
+	}
+	// GONOSUMDB independently disables checksum-DB validation, so it must also be
+	// cleared during generation — this is precisely when go.sum is written, and
+	// an inherited GONOSUMDB=* would let unverified checksums be recorded.
+	if vars["GONOSUMDB"] != "" {
+		t.Errorf("GONOSUMDB must be cleared during generation, got %q", vars["GONOSUMDB"])
 	}
 	// Generation must also pin the toolchain so resolving a dependency that
 	// requires a newer Go fails fast rather than fetching an unverified toolchain.
