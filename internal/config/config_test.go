@@ -216,6 +216,73 @@ func TestRuntimeKindConstants(t *testing.T) {
 	if RuntimeKindFNM != "fnm" {
 		t.Errorf("RuntimeKindFNM = %q, want %q", RuntimeKindFNM, "fnm")
 	}
+	if RuntimeKindJVM != "jvm" {
+		t.Errorf("RuntimeKindJVM = %q, want %q", RuntimeKindJVM, "jvm")
+	}
+	if RuntimeKindGo != "go" {
+		t.Errorf("RuntimeKindGo = %q, want %q", RuntimeKindGo, "go")
+	}
+}
+
+func TestRuntimeConfigGo_Fields(t *testing.T) {
+	cfg := RuntimeConfigGo{
+		GoVersion: "1.24.3",
+	}
+
+	if cfg.GoVersion != "1.24.3" {
+		t.Errorf("GoVersion = %q, want %q", cfg.GoVersion, "1.24.3")
+	}
+}
+
+func TestRuntimeConfig_GoField_JSONRoundTrip(t *testing.T) {
+	original := RuntimeConfig{
+		Kind: RuntimeKindGo,
+		Mode: RuntimeModeManaged,
+		Go: &RuntimeConfigGo{
+			GoVersion: "1.24.3",
+		},
+	}
+
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("json.Marshal error: %v", err)
+	}
+
+	dataStr := string(data)
+	if !strings.Contains(dataStr, `"goVersion"`) {
+		t.Errorf("JSON should contain 'goVersion' field, got: %s", dataStr)
+	}
+
+	var decoded RuntimeConfig
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("json.Unmarshal error: %v", err)
+	}
+
+	if decoded.Kind != RuntimeKindGo {
+		t.Errorf("Kind = %q, want %q", decoded.Kind, RuntimeKindGo)
+	}
+	if decoded.Go == nil {
+		t.Fatal("decoded.Go is nil after round-trip")
+	}
+	if decoded.Go.GoVersion != "1.24.3" {
+		t.Errorf("GoVersion = %q, want %q", decoded.Go.GoVersion, "1.24.3")
+	}
+}
+
+func TestRuntimeConfig_GoField_OmittedWhenNil(t *testing.T) {
+	rc := RuntimeConfig{
+		Kind: RuntimeKindUV,
+		Mode: RuntimeModeManaged,
+	}
+
+	data, err := json.Marshal(rc)
+	if err != nil {
+		t.Fatalf("json.Marshal error: %v", err)
+	}
+
+	if strings.Contains(string(data), `"go"`) {
+		t.Errorf("JSON should omit nil go field, got: %s", string(data))
+	}
 }
 
 // TestWorkingDirConstants removed - WorkingDir type no longer exists

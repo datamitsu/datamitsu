@@ -55,6 +55,13 @@ type AppConfigJVM struct {
 	MainClass string `json:"mainClass,omitempty"`
 }
 
+type AppConfigGo struct {
+	PackageName string `json:"packageName"`
+	Version     string `json:"version"`
+	Runtime     string `json:"runtime,omitempty"`
+	LockFile    string `json:"lockFile,omitempty"`
+}
+
 type AppConfigShell struct {
 	Name string            `json:"name"`
 	Args []string          `json:"args,omitempty"`
@@ -78,6 +85,7 @@ type App struct {
 	Uv     *AppConfigUV     `json:"uv,omitempty"`
 	Fnm    *AppConfigFNM    `json:"fnm,omitempty"`
 	Jvm    *AppConfigJVM    `json:"jvm,omitempty"`
+	Go     *AppConfigGo     `json:"go,omitempty"`
 	Shell  *AppConfigShell  `json:"shell,omitempty"`
 
 	Files    map[string]string       `json:"files,omitempty"`

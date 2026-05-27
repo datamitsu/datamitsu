@@ -57,14 +57,14 @@
 
 ### Task 1: Add Go config types and constants
 
-- [ ] write tests for RuntimeKindGo constant and RuntimeConfigGo struct serialization
-- [ ] write tests for AppConfigGo struct serialization (JSON round-trip)
-- [ ] add `RuntimeKindGo RuntimeKind = "go"` to `internal/config/config.go`
-- [ ] add `RuntimeConfigGo` struct with `GoVersion string` field to `internal/config/config.go`
-- [ ] add `Go *RuntimeConfigGo` field to `RuntimeConfig` struct in `internal/config/config.go`
-- [ ] add `AppConfigGo` struct to `internal/binmanager/binmanager.go` with fields: PackageName, Version, Runtime, LockFile
-- [ ] add `Go *AppConfigGo` field to `App` struct in `internal/binmanager/binmanager.go`
-- [ ] run tests - must pass before next task
+- [x] write tests for RuntimeKindGo constant and RuntimeConfigGo struct serialization
+- [x] write tests for AppConfigGo struct serialization (JSON round-trip)
+- [x] add `RuntimeKindGo RuntimeKind = "go"` to `internal/config/config.go`
+- [x] add `RuntimeConfigGo` struct with `GoVersion string` field to `internal/config/config.go`
+- [x] add `Go *RuntimeConfigGo` field to `RuntimeConfig` struct in `internal/config/config.go`
+- [x] add `AppConfigGo` struct to `internal/binmanager/binmanager.go` with fields: PackageName, Version, Runtime, LockFile
+- [x] add `Go *AppConfigGo` field to `App` struct in `internal/binmanager/binmanager.go`
+- [x] run tests - must pass before next task
 
 ### Task 2: Add Go validation rules
 
