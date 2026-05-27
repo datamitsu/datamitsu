@@ -99,15 +99,15 @@
 
 ### Task 5: Implement Go app installation
 
-- [ ] write tests for `getGoEnvVars`: verify GOPATH, GOMODCACHE, GONOSUMCHECK, GONOSUMDB, GOFLAGS
-- [ ] write tests for `getGoBinaryPath`: Linux vs Windows, path construction
-- [ ] write tests for `InstallGoApp` concurrency wrapper: sync.Once behavior, error cleanup
-- [ ] implement `getGoEnvVars(appEnvPath string) map[string]string` in `internal/runtimemanager/go.go`
-- [ ] implement `getGoBinaryPath(appEnvPath, packageName string) string` in `internal/runtimemanager/go.go`
-- [ ] implement `InstallGoApp` concurrency wrapper (following UV pattern from uv.go:32-44)
-- [ ] implement `installGoAppOnce`: resolve runtime, compute app path, check cache, create env, write go.mod+go.sum from lockfile, run `go build -trimpath -mod=readonly`, cleanup on error
-- [ ] implement `GetGoCommandInfo`: return CommandInfo with binary path
-- [ ] run tests - must pass before next task
+- [x] write tests for `getGoEnvVars`: verify GOPATH, GOMODCACHE, GONOSUMCHECK, GONOSUMDB, GOFLAGS
+- [x] write tests for `getGoBinaryPath`: Linux vs Windows, path construction
+- [x] write tests for `InstallGoApp` concurrency wrapper: sync.Once behavior, error cleanup
+- [x] implement `getGoEnvVars(appEnvPath string) map[string]string` in `internal/runtimemanager/go.go`
+- [x] implement `getGoBinaryPath(appEnvPath, packageName string) string` in `internal/runtimemanager/go.go`
+- [x] implement `InstallGoApp` concurrency wrapper (following UV pattern from uv.go:32-44)
+- [x] implement `installGoAppOnce`: resolve runtime, compute app path, check cache, create env, write go.mod+go.sum from lockfile, run `go build -trimpath -mod=readonly`, cleanup on error
+- [x] implement `GetGoCommandInfo`: return CommandInfo with binary path
+- [x] run tests - must pass before next task
 
 ### Task 6: Wire Go into RuntimeManager dispatch
 
