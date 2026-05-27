@@ -38,7 +38,7 @@ func doValidateApps(apps binmanager.MapOfApps, runtimes MapOfRuntimes, skipLockf
 		app := apps[appName]
 
 		if (app.Binary != nil || app.Shell != nil || app.Jvm != nil) && (len(app.Files) > 0 || len(app.Links) > 0 || len(app.Archives) > 0) {
-			errs = append(errs, fmt.Sprintf("app %q: files/links/archives are only supported on uv and fnm apps", appName))
+			errs = append(errs, fmt.Sprintf("app %q: files/links/archives are only supported on uv, fnm, and go apps", appName))
 			continue
 		}
 
@@ -99,6 +99,9 @@ func doValidateApps(apps binmanager.MapOfApps, runtimes MapOfRuntimes, skipLockf
 		if !skipLockfileCheck && app.Fnm != nil && app.Fnm.LockFile == "" {
 			errs = append(errs, fmt.Sprintf("app %q: lockFile is required (run: datamitsu config lockfile %s)", appName, appName))
 		}
+		if !skipLockfileCheck && app.Go != nil && app.Go.LockFile == "" {
+			errs = append(errs, fmt.Sprintf("app %q: lockFile is required (run: datamitsu config lockfile %s)", appName, appName))
+		}
 
 		if runtimes != nil {
 			if app.Uv != nil {
@@ -113,6 +116,11 @@ func doValidateApps(apps binmanager.MapOfApps, runtimes MapOfRuntimes, skipLockf
 			}
 			if app.Jvm != nil {
 				if refErr := validateAppRuntimeRef(app.Jvm.Runtime, RuntimeKindJVM, appName, runtimes); refErr != nil {
+					errs = append(errs, refErr.Error())
+				}
+			}
+			if app.Go != nil {
+				if refErr := validateAppRuntimeRef(app.Go.Runtime, RuntimeKindGo, appName, runtimes); refErr != nil {
 					errs = append(errs, refErr.Error())
 				}
 			}
@@ -521,6 +529,17 @@ func ValidateRuntimes(runtimes MapOfRuntimes) error {
 					errs = append(errs, fmt.Sprintf("runtime %q: jvm.javaVersion is required", name))
 				} else if !isValidVersionString(rc.JVM.JavaVersion) {
 					errs = append(errs, fmt.Sprintf("runtime %q: jvm.javaVersion %q contains invalid characters (must be alphanumeric, dots, hyphens, underscores, or plus signs)", name, rc.JVM.JavaVersion))
+				}
+			}
+		}
+		if rc.Kind == RuntimeKindGo {
+			if rc.Go == nil {
+				errs = append(errs, fmt.Sprintf("runtime %q: Go runtime requires go config with goVersion", name))
+			} else {
+				if rc.Go.GoVersion == "" {
+					errs = append(errs, fmt.Sprintf("runtime %q: go.goVersion is required", name))
+				} else if !isValidVersionString(rc.Go.GoVersion) {
+					errs = append(errs, fmt.Sprintf("runtime %q: go.goVersion %q contains invalid characters (must be alphanumeric, dots, hyphens, underscores, or plus signs)", name, rc.Go.GoVersion))
 				}
 			}
 		}

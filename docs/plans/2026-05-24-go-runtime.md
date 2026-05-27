@@ -68,15 +68,15 @@
 
 ### Task 2: Add Go validation rules
 
-- [ ] write tests for Go app lockfile mandatory check (skip when flag set)
-- [ ] write tests for Go app runtime ref validation
-- [ ] write tests for Go runtime config validation (goVersion required, format valid)
-- [ ] write tests for files/links/archives allowed on Go apps
-- [ ] update `doValidateApps` in `internal/config/validate.go`: allow files/links/archives on Go apps (line 40-43 condition)
-- [ ] add mandatory lockFile check for Go apps (after line 101)
-- [ ] add runtime ref validation for Go apps (after line 118)
-- [ ] update `ValidateRuntimes` to validate Go runtime (goVersion required, valid format)
-- [ ] run tests - must pass before next task
+- [x] write tests for Go app lockfile mandatory check (skip when flag set)
+- [x] write tests for Go app runtime ref validation
+- [x] write tests for Go runtime config validation (goVersion required, format valid)
+- [x] write tests for files/links/archives allowed on Go apps
+- [x] update `doValidateApps` in `internal/config/validate.go`: allow files/links/archives on Go apps (line 40-43 condition)
+- [x] add mandatory lockFile check for Go apps (after line 101)
+- [x] add runtime ref validation for Go apps (after line 118)
+- [x] update `ValidateRuntimes` to validate Go runtime (goVersion required, valid format)
+- [x] run tests - must pass before next task
 
 ### Task 3: Add Go hash computation
 

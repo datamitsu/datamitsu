@@ -364,7 +364,7 @@ func TestValidateApps_BinaryAppWithFilesRejected(t *testing.T) {
 	if err == nil {
 		t.Fatal("ValidateApps() expected error for binary app with files/links, got nil")
 	}
-	if !strings.Contains(err.Error(), "files/links/archives are only supported on uv and fnm apps") {
+	if !strings.Contains(err.Error(), "files/links/archives are only supported on uv, fnm, and go apps") {
 		t.Errorf("unexpected error message: %v", err)
 	}
 }
@@ -383,7 +383,7 @@ func TestValidateApps_ShellAppWithFilesRejected(t *testing.T) {
 	if err == nil {
 		t.Fatal("ValidateApps() expected error for shell app with files, got nil")
 	}
-	if !strings.Contains(err.Error(), "files/links/archives are only supported on uv and fnm apps") {
+	if !strings.Contains(err.Error(), "files/links/archives are only supported on uv, fnm, and go apps") {
 		t.Errorf("unexpected error message: %v", err)
 	}
 }
@@ -968,7 +968,7 @@ func TestValidateApps_JVM_FilesLinksRejected(t *testing.T) {
 	if err == nil {
 		t.Fatal("ValidateApps() expected error for JVM app with files, got nil")
 	}
-	if !strings.Contains(err.Error(), "files/links/archives are only supported on uv and fnm apps") {
+	if !strings.Contains(err.Error(), "files/links/archives are only supported on uv, fnm, and go apps") {
 		t.Errorf("unexpected error message: %v", err)
 	}
 }
@@ -1502,6 +1502,307 @@ func TestValidateApps_FNMSystemModeNoWarning(t *testing.T) {
 	}
 }
 
+// ==============================
+// Go runtime/app validation tests
+// ==============================
+
+func TestValidateApps_Lockfile_Go_Missing(t *testing.T) {
+	runtimes := MapOfRuntimes{
+		"go": {
+			Kind: RuntimeKindGo,
+			Mode: RuntimeModeManaged,
+			Go:   &RuntimeConfigGo{GoVersion: "1.22.0"},
+		},
+	}
+	apps := binmanager.MapOfApps{
+		"govulncheck": {
+			Go: &binmanager.AppConfigGo{
+				PackageName: "golang.org/x/vuln/cmd/govulncheck",
+				Version:     "v1.1.4",
+			},
+		},
+	}
+
+	_, err := ValidateApps(apps, runtimes)
+	if err == nil {
+		t.Fatal("ValidateApps() expected error for missing lockFile, got nil")
+	}
+	if !strings.Contains(err.Error(), `app "govulncheck": lockFile is required`) {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestValidateApps_Lockfile_Go_Present(t *testing.T) {
+	runtimes := MapOfRuntimes{
+		"go": {
+			Kind: RuntimeKindGo,
+			Mode: RuntimeModeManaged,
+			Go:   &RuntimeConfigGo{GoVersion: "1.22.0"},
+		},
+	}
+	apps := binmanager.MapOfApps{
+		"govulncheck": {
+			Go: &binmanager.AppConfigGo{
+				PackageName: "golang.org/x/vuln/cmd/govulncheck",
+				Version:     "v1.1.4",
+				LockFile:    "br:some-compressed-content",
+			},
+		},
+	}
+
+	if _, err := ValidateApps(apps, runtimes); err != nil {
+		t.Errorf("ValidateApps() unexpected error: %v", err)
+	}
+}
+
+func TestValidateAppsSkipLockfile_AllowsMissingLockfile_Go(t *testing.T) {
+	runtimes := MapOfRuntimes{
+		"go": {
+			Kind: RuntimeKindGo,
+			Mode: RuntimeModeManaged,
+			Go:   &RuntimeConfigGo{GoVersion: "1.22.0"},
+		},
+	}
+	apps := binmanager.MapOfApps{
+		"govulncheck": {
+			Go: &binmanager.AppConfigGo{
+				PackageName: "golang.org/x/vuln/cmd/govulncheck",
+				Version:     "v1.1.4",
+			},
+		},
+	}
+
+	if _, err := ValidateAppsSkipLockfile(apps, runtimes); err != nil {
+		t.Errorf("ValidateAppsSkipLockfile() unexpected error: %v", err)
+	}
+}
+
+func TestValidateApps_UnknownRuntimeRef_Go(t *testing.T) {
+	runtimes := MapOfRuntimes{
+		"go": {
+			Kind: RuntimeKindGo,
+			Mode: RuntimeModeManaged,
+			Go:   &RuntimeConfigGo{GoVersion: "1.22.0"},
+		},
+	}
+	apps := binmanager.MapOfApps{
+		"govulncheck": {
+			Go: &binmanager.AppConfigGo{
+				PackageName: "golang.org/x/vuln/cmd/govulncheck",
+				Version:     "v1.1.4",
+				Runtime:     "nonexistent-go",
+				LockFile:    "br:some-compressed-content",
+			},
+		},
+	}
+
+	_, err := ValidateApps(apps, runtimes)
+	if err == nil {
+		t.Fatal("ValidateApps() expected error for unknown Go runtime ref, got nil")
+	}
+	if !strings.Contains(err.Error(), `references unknown runtime "nonexistent-go"`) {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestValidateApps_WrongKindRuntimeRef_Go(t *testing.T) {
+	runtimes := MapOfRuntimes{
+		"uv": {
+			Kind: RuntimeKindUV,
+			Mode: RuntimeModeManaged,
+		},
+	}
+	apps := binmanager.MapOfApps{
+		"govulncheck": {
+			Go: &binmanager.AppConfigGo{
+				PackageName: "golang.org/x/vuln/cmd/govulncheck",
+				Version:     "v1.1.4",
+				Runtime:     "uv",
+				LockFile:    "br:some-compressed-content",
+			},
+		},
+	}
+
+	_, err := ValidateApps(apps, runtimes)
+	if err == nil {
+		t.Fatal("ValidateApps() expected error for wrong-kind Go runtime ref, got nil")
+	}
+	if !strings.Contains(err.Error(), `runtime "uv" is kind "uv", expected "go"`) {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestValidateApps_ValidGoRuntimeRef(t *testing.T) {
+	runtimes := MapOfRuntimes{
+		"go": {
+			Kind:    RuntimeKindGo,
+			Mode:    RuntimeModeManaged,
+			Managed: testManagedConfig(),
+			Go:      &RuntimeConfigGo{GoVersion: "1.22.0"},
+		},
+	}
+	apps := binmanager.MapOfApps{
+		"govulncheck": {
+			Go: &binmanager.AppConfigGo{
+				PackageName: "golang.org/x/vuln/cmd/govulncheck",
+				Version:     "v1.1.4",
+				Runtime:     "go",
+				LockFile:    "br:fakeLockFileContent",
+			},
+		},
+	}
+
+	if _, err := ValidateApps(apps, runtimes); err != nil {
+		t.Errorf("ValidateApps() unexpected error: %v", err)
+	}
+}
+
+func TestValidateApps_Go_FilesLinksArchivesAllowed(t *testing.T) {
+	runtimes := MapOfRuntimes{
+		"go": {
+			Kind: RuntimeKindGo,
+			Mode: RuntimeModeManaged,
+			Go:   &RuntimeConfigGo{GoVersion: "1.22.0"},
+		},
+	}
+	apps := binmanager.MapOfApps{
+		"govulncheck": {
+			Go: &binmanager.AppConfigGo{
+				PackageName: "golang.org/x/vuln/cmd/govulncheck",
+				Version:     "v1.1.4",
+				LockFile:    "br:fakeLockFileContent",
+			},
+			Files: map[string]string{
+				"config.yaml": "content",
+			},
+			Links: map[string]string{
+				"govulncheck-config": "config.yaml",
+			},
+		},
+	}
+
+	if _, err := ValidateApps(apps, runtimes); err != nil {
+		t.Errorf("ValidateApps() unexpected error for Go app with files/links: %v", err)
+	}
+}
+
+func TestValidateRuntimes_Go_Valid(t *testing.T) {
+	runtimes := MapOfRuntimes{
+		"go": {
+			Kind:    RuntimeKindGo,
+			Mode:    RuntimeModeManaged,
+			Managed: testManagedConfig(),
+			Go: &RuntimeConfigGo{
+				GoVersion: "1.22.0",
+			},
+		},
+	}
+
+	if err := ValidateRuntimes(runtimes); err != nil {
+		t.Errorf("ValidateRuntimes() unexpected error: %v", err)
+	}
+}
+
+func TestValidateRuntimes_Go_MissingConfig(t *testing.T) {
+	runtimes := MapOfRuntimes{
+		"go": {
+			Kind: RuntimeKindGo,
+			Mode: RuntimeModeManaged,
+		},
+	}
+
+	err := ValidateRuntimes(runtimes)
+	if err == nil {
+		t.Fatal("ValidateRuntimes() expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "Go runtime requires go config with goVersion") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestValidateRuntimes_Go_MissingGoVersion(t *testing.T) {
+	runtimes := MapOfRuntimes{
+		"go": {
+			Kind: RuntimeKindGo,
+			Mode: RuntimeModeManaged,
+			Go:   &RuntimeConfigGo{},
+		},
+	}
+
+	err := ValidateRuntimes(runtimes)
+	if err == nil {
+		t.Fatal("ValidateRuntimes() expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "go.goVersion is required") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestValidateRuntimes_Go_InvalidGoVersion(t *testing.T) {
+	tests := []struct {
+		name      string
+		goVersion string
+	}{
+		{"path traversal", "../../evil"},
+		{"contains slash", "1.22.0/evil"},
+		{"contains backslash", "1.22.0\\evil"},
+		{"starts with dot", ".1.22.0"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runtimes := MapOfRuntimes{
+				"go": {
+					Kind: RuntimeKindGo,
+					Mode: RuntimeModeManaged,
+					Go: &RuntimeConfigGo{
+						GoVersion: tt.goVersion,
+					},
+				},
+			}
+
+			err := ValidateRuntimes(runtimes)
+			if err == nil {
+				t.Fatalf("ValidateRuntimes() expected error for goVersion %q, got nil", tt.goVersion)
+			}
+			if !strings.Contains(err.Error(), "go.goVersion") || !strings.Contains(err.Error(), "invalid characters") {
+				t.Errorf("unexpected error message: %v", err)
+			}
+		})
+	}
+}
+
+func TestValidateRuntimes_Go_ValidVersionFormats(t *testing.T) {
+	tests := []struct {
+		name      string
+		goVersion string
+	}{
+		{"semver", "1.22.0"},
+		{"with pre-release", "1.22.0-rc.1"},
+		{"major only", "1"},
+		{"go-prefixed", "go1.22.0"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runtimes := MapOfRuntimes{
+				"go": {
+					Kind:    RuntimeKindGo,
+					Mode:    RuntimeModeManaged,
+					Managed: testManagedConfig(),
+					Go: &RuntimeConfigGo{
+						GoVersion: tt.goVersion,
+					},
+				},
+			}
+
+			if err := ValidateRuntimes(runtimes); err != nil {
+				t.Errorf("ValidateRuntimes() unexpected error: %v", err)
+			}
+		})
+	}
+}
+
 func makeTestInlineArchive(t *testing.T) string {
 	t.Helper()
 	var buf bytes.Buffer
@@ -1810,7 +2111,7 @@ func TestValidateApps_Archives_BinaryAppRejected(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for binary app with archives")
 	}
-	if !strings.Contains(err.Error(), "files/links/archives are only supported on uv and fnm apps") {
+	if !strings.Contains(err.Error(), "files/links/archives are only supported on uv, fnm, and go apps") {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
