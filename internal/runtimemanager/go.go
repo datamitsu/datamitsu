@@ -2,9 +2,11 @@ package runtimemanager
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path"
@@ -239,7 +241,7 @@ func (rm *RuntimeManager) installGoAppOnce(appName string, appConfig *binmanager
 		zap.String("go_path", goPath),
 	)
 
-	fmt.Fprintf(os.Stderr, "Building %s...\n", appName)
+	fmt.Fprintf(os.Stderr, "Installing %s...\n", appName)
 
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to build Go app %q: %w", appName, err)
@@ -248,6 +250,19 @@ func (rm *RuntimeManager) installGoAppOnce(appName string, appConfig *binmanager
 	fmt.Fprintf(os.Stderr, "Installed %s\n", appName)
 
 	cleanupOnError = false
+	return nil
+}
+
+// removeStaleGoModFiles deletes any leftover go.mod/go.sum in workDir so a
+// fresh `go mod init` does not fail on a pre-existing module. A missing file is
+// expected and ignored; any other failure (e.g. permission denied) is reported
+// so generation does not silently proceed on a workdir it could not clean.
+func removeStaleGoModFiles(workDir string) error {
+	for _, name := range []string{"go.mod", "go.sum"} {
+		if err := os.Remove(filepath.Join(workDir, name)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("failed to clean stale %s in workDir: %w", name, err)
+		}
+	}
 	return nil
 }
 
@@ -282,8 +297,9 @@ func (rm *RuntimeManager) GenerateGoLockFiles(appName string, appConfig *binmana
 	}
 
 	// Start from a clean module: a leftover go.mod would make `go mod init` fail.
-	_ = os.Remove(filepath.Join(workDir, "go.mod"))
-	_ = os.Remove(filepath.Join(workDir, "go.sum"))
+	if err := removeStaleGoModFiles(workDir); err != nil {
+		return err
+	}
 
 	envVars := getGoGenEnvVars(workDir)
 	for _, key := range []string{"GOPATH", "GOMODCACHE", "GOBIN"} {

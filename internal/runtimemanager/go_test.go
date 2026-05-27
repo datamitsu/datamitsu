@@ -2,6 +2,7 @@ package runtimemanager
 
 import (
 	"errors"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -585,6 +586,60 @@ func TestGenerateGoLockFiles_InvalidRuntime(t *testing.T) {
 	err := rm.GenerateGoLockFiles("govulncheck", appConfig, t.TempDir())
 	if err == nil {
 		t.Fatal("expected error for nonexistent runtime")
+	}
+}
+
+func TestRemoveStaleGoModFiles_CleanWorkDir(t *testing.T) {
+	// No go.mod/go.sum present: a missing file must not be treated as an error.
+	if err := removeStaleGoModFiles(t.TempDir()); err != nil {
+		t.Errorf("expected nil error on a clean workdir, got: %v", err)
+	}
+}
+
+func TestRemoveStaleGoModFiles_RemovesExisting(t *testing.T) {
+	workDir := t.TempDir()
+	for _, name := range []string{"go.mod", "go.sum"} {
+		if err := os.WriteFile(filepath.Join(workDir, name), []byte("stale"), 0644); err != nil {
+			t.Fatalf("seed %s: %v", name, err)
+		}
+	}
+
+	if err := removeStaleGoModFiles(workDir); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	for _, name := range []string{"go.mod", "go.sum"} {
+		if _, err := os.Stat(filepath.Join(workDir, name)); !errors.Is(err, fs.ErrNotExist) {
+			t.Errorf("%s should have been removed, stat err = %v", name, err)
+		}
+	}
+}
+
+func TestRemoveStaleGoModFiles_PropagatesNonNotExistError(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root bypasses directory permission checks")
+	}
+
+	workDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workDir, "go.mod"), []byte("stale"), 0644); err != nil {
+		t.Fatalf("seed go.mod: %v", err)
+	}
+	// A read-only parent directory makes os.Remove fail with EACCES rather than
+	// ErrNotExist, so the error must be propagated instead of swallowed.
+	if err := os.Chmod(workDir, 0o555); err != nil {
+		t.Fatalf("chmod workDir: %v", err)
+	}
+	defer func() { _ = os.Chmod(workDir, 0o755) }()
+
+	err := removeStaleGoModFiles(workDir)
+	if err == nil {
+		t.Fatal("expected error when go.mod cannot be removed")
+	}
+	if errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("error should not be a NotExist error, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "go.mod") {
+		t.Errorf("error should name the file it failed to clean, got: %v", err)
 	}
 }
 

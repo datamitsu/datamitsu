@@ -3,6 +3,7 @@ package cmd
 import (
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/runtimemanager"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -432,6 +433,73 @@ func TestReadLockFile_UnsupportedType(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "unsupported app type") {
 		t.Errorf("error should mention unsupported type, got: %v", err)
+	}
+}
+
+func TestGenerateGoLockContent_RemovesTempWorkDirOnSuccess(t *testing.T) {
+	app := binmanager.App{
+		Go: &binmanager.AppConfigGo{
+			PackageName: "golang.org/x/vuln/cmd/govulncheck",
+			Version:     "v1.1.4",
+		},
+	}
+
+	goMod := "module datamitsu-govulncheck\n\ngo 1.22\n\nrequire golang.org/x/vuln v1.1.4\n"
+	goSum := "golang.org/x/vuln v1.1.4 h1:abc=\ngolang.org/x/vuln v1.1.4/go.mod h1:def=\n"
+
+	var capturedWorkDir string
+	content, err := generateGoLockContent("govulncheck", app, func(workDir string) error {
+		capturedWorkDir = workDir
+		if err := os.WriteFile(filepath.Join(workDir, "go.mod"), []byte(goMod), 0644); err != nil {
+			return err
+		}
+		return os.WriteFile(filepath.Join(workDir, "go.sum"), []byte(goSum), 0644)
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// The content must be the JSON wrapper assembled from the generated files.
+	want, err := runtimemanager.BuildGoLockFileJSON(goMod, goSum)
+	if err != nil {
+		t.Fatalf("BuildGoLockFileJSON() error = %v", err)
+	}
+	if content != want {
+		t.Errorf("content = %q, want %q", content, want)
+	}
+
+	if capturedWorkDir == "" {
+		t.Fatal("generate callback was not invoked with a workDir")
+	}
+	if _, err := os.Stat(capturedWorkDir); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("temp workDir %q should have been removed, stat err = %v", capturedWorkDir, err)
+	}
+}
+
+func TestGenerateGoLockContent_RemovesTempWorkDirOnError(t *testing.T) {
+	app := binmanager.App{
+		Go: &binmanager.AppConfigGo{PackageName: "golang.org/x/vuln/cmd/govulncheck", Version: "v1.1.4"},
+	}
+
+	var capturedWorkDir string
+	sentinel := errors.New("generation failed")
+	_, err := generateGoLockContent("govulncheck", app, func(workDir string) error {
+		capturedWorkDir = workDir
+		return sentinel
+	})
+	if err == nil {
+		t.Fatal("expected error from generate callback")
+	}
+	if !errors.Is(err, sentinel) {
+		t.Errorf("expected wrapped sentinel error, got: %v", err)
+	}
+	if capturedWorkDir == "" {
+		t.Fatal("generate callback was not invoked with a workDir")
+	}
+	// Cleanup must still run on the failure path so a failed generation does not
+	// leak the multi-hundred-MiB module cache.
+	if _, statErr := os.Stat(capturedWorkDir); !errors.Is(statErr, os.ErrNotExist) {
+		t.Errorf("temp workDir %q should have been removed on error, stat err = %v", capturedWorkDir, statErr)
 	}
 }
 

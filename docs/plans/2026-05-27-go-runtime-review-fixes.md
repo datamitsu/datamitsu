@@ -112,13 +112,13 @@ Address code-review findings on the `feat/go-runtime` branch (Go runtime kind fo
 
 ### Task 4: Use temp workdir for Go lockfile generation (#3, #9, #11)
 
-- [ ] in [internal/runtimemanager/go.go](internal/runtimemanager/go.go) `GenerateGoLockFiles`: replace `_ = os.Remove(...)` with explicit `errors.Is(err, fs.ErrNotExist)` check; propagate other errors as wrapped errors (uses `errors`, `io/fs` imports)
-- [ ] in [internal/runtimemanager/go.go](internal/runtimemanager/go.go) `installGoAppOnce` log: change `"Building %s..."` to `"Installing %s..."` (line 248) to match sibling runtimes
-- [ ] in [cmd/config_lockfile.go](cmd/config_lockfile.go) Go branch (lines ~93-101): allocate workdir via `os.MkdirTemp("", "datamitsu-go-lockfile-*")`; `defer os.RemoveAll(workDir)`; pass workDir to `GenerateGoLockFiles`; pass workDir to `readLockFile` so it picks up the `go.mod`/`go.sum` from the temp dir
-- [ ] keep the `freshInstallPath` removal step (still need to clean up any pre-existing cache from a previous incomplete run), but do NOT use `freshInstallPath` as the generation workdir
-- [ ] add test in [cmd/config_lockfile_test.go](cmd/config_lockfile_test.go) that the temp workdir is removed after `runConfigLockfile` for a Go app (or, if `runConfigLockfile` is hard to exercise in test, exercise the temp-dir logic by extracting it into a helper)
-- [ ] update [internal/runtimemanager/go_test.go](internal/runtimemanager/go_test.go) for the os.Remove fix: positive case (clean workdir, files don't exist), error case (workdir has permission denied — may need to skip on root)
-- [ ] run `go test ./...` — must pass
+- [x] in [internal/runtimemanager/go.go](internal/runtimemanager/go.go) `GenerateGoLockFiles`: replace `_ = os.Remove(...)` with explicit `errors.Is(err, fs.ErrNotExist)` check; propagate other errors as wrapped errors (uses `errors`, `io/fs` imports) — extracted into `removeStaleGoModFiles` helper for direct testability
+- [x] in [internal/runtimemanager/go.go](internal/runtimemanager/go.go) `installGoAppOnce` log: change `"Building %s..."` to `"Installing %s..."` (line 248) to match sibling runtimes
+- [x] in [cmd/config_lockfile.go](cmd/config_lockfile.go) Go branch (lines ~93-101): allocate workdir via `os.MkdirTemp("", "datamitsu-go-lockfile-*")`; `defer os.RemoveAll(workDir)`; pass workDir to `GenerateGoLockFiles`; pass workDir to `readLockFile` so it picks up the `go.mod`/`go.sum` from the temp dir — implemented via extracted `generateGoLockContent` helper
+- [x] keep the `freshInstallPath` removal step (still need to clean up any pre-existing cache from a previous incomplete run), but do NOT use `freshInstallPath` as the generation workdir
+- [x] add test in [cmd/config_lockfile_test.go](cmd/config_lockfile_test.go) that the temp workdir is removed after `runConfigLockfile` for a Go app (or, if `runConfigLockfile` is hard to exercise in test, exercise the temp-dir logic by extracting it into a helper) — `generateGoLockContent` helper extracted; tests assert workdir removed on both success and error paths
+- [x] update [internal/runtimemanager/go_test.go](internal/runtimemanager/go_test.go) for the os.Remove fix: positive case (clean workdir, files don't exist), error case (workdir has permission denied — may need to skip on root)
+- [x] run `go test ./...` — must pass
 
 ### Task 5: Verify acceptance criteria
 

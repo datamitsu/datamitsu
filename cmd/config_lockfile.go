@@ -90,25 +90,28 @@ func runConfigLockfile(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to remove cache directory: %w", err)
 	}
 
+	var lockContent string
 	if app.Go != nil {
 		// Go apps cannot regenerate a lockfile via reinstall: the build is
-		// mandatory-lockfile and refuses without one. Resolve dependencies
-		// directly with `go mod init` + `go get`, leaving go.mod + go.sum in the
-		// install path for readLockFile to pick up.
-		fmt.Fprintf(os.Stderr, "Generating lock file for %s...\n", appName)
-		if err := freshRM.GenerateGoLockFiles(appName, freshApps[appName].Go, freshInstallPath); err != nil {
-			return fmt.Errorf("failed to generate lock file for %q: %w", appName, err)
+		// mandatory-lockfile and refuses without one. Resolve dependencies with
+		// `go mod init` + `go get` in an isolated temp workdir — generation pulls
+		// 100+MiB of module cache we must not leave behind in the install path —
+		// then read go.mod + go.sum back from there.
+		lockContent, err = generateGoLockContent(appName, app, func(workDir string) error {
+			return freshRM.GenerateGoLockFiles(appName, freshApps[appName].Go, workDir)
+		})
+		if err != nil {
+			return err
 		}
 	} else {
 		fmt.Fprintf(os.Stderr, "Reinstalling %s...\n", appName)
 		if _, err := freshBinMgr.GetCommandInfo(appName); err != nil {
 			return fmt.Errorf("failed to reinstall %q: %w", appName, err)
 		}
-	}
-
-	lockContent, err := readLockFile(freshInstallPath, app)
-	if err != nil {
-		return err
+		lockContent, err = readLockFile(freshInstallPath, app)
+		if err != nil {
+			return err
+		}
 	}
 
 	compressed, err := runtimemanager.CompressLockFile(lockContent)
@@ -125,6 +128,26 @@ func runConfigLockfile(cmd *cobra.Command, args []string) error {
 	fmt.Println(string(jsonBytes))
 
 	return nil
+}
+
+// generateGoLockContent resolves a Go app's dependencies in an isolated temp
+// workdir via the supplied generate function, reads the produced go.mod + go.sum
+// back as a lockfile, and removes the workdir before returning. Generation pulls
+// a large module cache into the workdir, so the cleanup runs on both the success
+// and failure paths (via defer) rather than leaking it into the cache directory.
+func generateGoLockContent(appName string, app binmanager.App, generate func(workDir string) error) (string, error) {
+	workDir, err := os.MkdirTemp("", "datamitsu-go-lockfile-*")
+	if err != nil {
+		return "", fmt.Errorf("failed to allocate temp workdir: %w", err)
+	}
+	defer func() { _ = os.RemoveAll(workDir) }()
+
+	fmt.Fprintf(os.Stderr, "Generating lock file for %s...\n", appName)
+	if err := generate(workDir); err != nil {
+		return "", fmt.Errorf("failed to generate lock file for %q: %w", appName, err)
+	}
+
+	return readLockFile(workDir, app)
 }
 
 // clearAppLockFile returns a shallow copy of apps where the named app has its
