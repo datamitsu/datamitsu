@@ -265,6 +265,9 @@ func doValidateApps(apps binmanager.MapOfApps, runtimes MapOfRuntimes, skipLockf
 			if rc.Kind == RuntimeKindUV && rc.Mode == RuntimeModeSystem && (rc.UV == nil || rc.UV.PythonVersion == "") {
 				warnings = append(warnings, fmt.Sprintf("runtime %q: UV system mode without pythonVersion set; system Python version changes won't invalidate cache. Consider setting system.systemVersion for manual cache invalidation", name))
 			}
+			if rc.Kind == RuntimeKindGo && rc.Mode == RuntimeModeSystem && (rc.Go == nil || rc.Go.GoVersion == "") {
+				warnings = append(warnings, fmt.Sprintf("runtime %q: Go system mode without goVersion set; system Go version changes won't invalidate cache. Consider setting system.systemVersion for manual cache invalidation", name))
+			}
 		}
 	}
 
@@ -567,14 +570,21 @@ func ValidateRuntimes(runtimes MapOfRuntimes) error {
 			}
 		}
 		if rc.Kind == RuntimeKindGo {
-			if rc.Go == nil {
-				errs = append(errs, fmt.Sprintf("runtime %q: Go runtime requires go config with goVersion", name))
-			} else {
-				if rc.Go.GoVersion == "" {
-					errs = append(errs, fmt.Sprintf("runtime %q: go.goVersion is required", name))
-				} else if !isValidVersionString(rc.Go.GoVersion) {
+			switch {
+			case rc.Mode == RuntimeModeSystem:
+				// goVersion is optional in system mode; it only feeds cache
+				// invalidation (mirrors UV's pythonVersion). Validate it only
+				// when explicitly set. A missing-version warning is emitted in
+				// doValidateApps, matching the UV pattern.
+				if rc.Go != nil && rc.Go.GoVersion != "" && !isValidVersionString(rc.Go.GoVersion) {
 					errs = append(errs, fmt.Sprintf("runtime %q: go.goVersion %q contains invalid characters (must be alphanumeric, dots, hyphens, underscores, or plus signs)", name, rc.Go.GoVersion))
 				}
+			case rc.Go == nil:
+				errs = append(errs, fmt.Sprintf("runtime %q: Go runtime requires go config with goVersion", name))
+			case rc.Go.GoVersion == "":
+				errs = append(errs, fmt.Sprintf("runtime %q: go.goVersion is required", name))
+			case !isValidVersionString(rc.Go.GoVersion):
+				errs = append(errs, fmt.Sprintf("runtime %q: go.goVersion %q contains invalid characters (must be alphanumeric, dots, hyphens, underscores, or plus signs)", name, rc.Go.GoVersion))
 			}
 		}
 		if rc.Mode == RuntimeModeManaged {

@@ -1914,6 +1914,141 @@ func TestValidateRuntimes_Go_ValidVersionFormats(t *testing.T) {
 	}
 }
 
+func TestValidateRuntimes_Go_SystemModeWithoutGoVersion(t *testing.T) {
+	// In system mode goVersion is optional (mirrors UV); a missing config or
+	// empty version must not be a validation error.
+	tests := []struct {
+		name string
+		go_  *RuntimeConfigGo
+	}{
+		{"nil go config", nil},
+		{"empty goVersion", &RuntimeConfigGo{}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runtimes := MapOfRuntimes{
+				"go": {
+					Kind:   RuntimeKindGo,
+					Mode:   RuntimeModeSystem,
+					System: &RuntimeConfigSystem{Command: "/usr/bin/go"},
+					Go:     tt.go_,
+				},
+			}
+
+			if err := ValidateRuntimes(runtimes); err != nil {
+				t.Errorf("ValidateRuntimes() unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestValidateRuntimes_Go_SystemModeInvalidGoVersion(t *testing.T) {
+	// When goVersion IS provided in system mode it must still be valid.
+	runtimes := MapOfRuntimes{
+		"go": {
+			Kind:   RuntimeKindGo,
+			Mode:   RuntimeModeSystem,
+			System: &RuntimeConfigSystem{Command: "/usr/bin/go"},
+			Go:     &RuntimeConfigGo{GoVersion: "../../evil"},
+		},
+	}
+
+	err := ValidateRuntimes(runtimes)
+	if err == nil {
+		t.Fatal("ValidateRuntimes() expected error for invalid goVersion in system mode, got nil")
+	}
+	if !strings.Contains(err.Error(), "go.goVersion") || !strings.Contains(err.Error(), "invalid characters") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestValidateApps_GoSystemModeWarning_NoGoConfig(t *testing.T) {
+	runtimes := MapOfRuntimes{
+		"go": {
+			Kind:   RuntimeKindGo,
+			Mode:   RuntimeModeSystem,
+			System: &RuntimeConfigSystem{Command: "/usr/bin/go"},
+		},
+	}
+	apps := binmanager.MapOfApps{}
+
+	warnings, err := ValidateApps(apps, runtimes)
+	if err != nil {
+		t.Fatalf("ValidateApps() unexpected error: %v", err)
+	}
+	found := false
+	for _, w := range warnings {
+		if strings.Contains(w, "Go system mode without goVersion") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected warning about Go system mode without goVersion, got: %v", warnings)
+	}
+}
+
+func TestValidateApps_GoSystemModeWarning_EmptyGoVersion(t *testing.T) {
+	runtimes := MapOfRuntimes{
+		"go": {
+			Kind:   RuntimeKindGo,
+			Mode:   RuntimeModeSystem,
+			System: &RuntimeConfigSystem{Command: "/usr/bin/go"},
+			Go:     &RuntimeConfigGo{GoVersion: ""},
+		},
+	}
+	apps := binmanager.MapOfApps{}
+
+	warnings, err := ValidateApps(apps, runtimes)
+	if err != nil {
+		t.Fatalf("ValidateApps() unexpected error: %v", err)
+	}
+	if len(warnings) == 0 {
+		t.Fatal("expected warning for Go system mode with empty goVersion, got none")
+	}
+}
+
+func TestValidateApps_GoSystemModeNoWarning_WithGoVersion(t *testing.T) {
+	runtimes := MapOfRuntimes{
+		"go": {
+			Kind:   RuntimeKindGo,
+			Mode:   RuntimeModeSystem,
+			System: &RuntimeConfigSystem{Command: "/usr/bin/go"},
+			Go:     &RuntimeConfigGo{GoVersion: "1.22.0"},
+		},
+	}
+	apps := binmanager.MapOfApps{}
+
+	warnings, err := ValidateApps(apps, runtimes)
+	if err != nil {
+		t.Fatalf("ValidateApps() unexpected error: %v", err)
+	}
+	if len(warnings) > 0 {
+		t.Errorf("expected no warnings with goVersion set, got: %v", warnings)
+	}
+}
+
+func TestValidateApps_GoManagedModeNoWarning(t *testing.T) {
+	runtimes := MapOfRuntimes{
+		"go": {
+			Kind:    RuntimeKindGo,
+			Mode:    RuntimeModeManaged,
+			Managed: testManagedConfig(),
+			Go:      &RuntimeConfigGo{GoVersion: "1.22.0"},
+		},
+	}
+	apps := binmanager.MapOfApps{}
+
+	warnings, err := ValidateApps(apps, runtimes)
+	if err != nil {
+		t.Fatalf("ValidateApps() unexpected error: %v", err)
+	}
+	if len(warnings) > 0 {
+		t.Errorf("expected no warnings for Go managed mode, got: %v", warnings)
+	}
+}
+
 func makeTestInlineArchive(t *testing.T) string {
 	t.Helper()
 	var buf bytes.Buffer

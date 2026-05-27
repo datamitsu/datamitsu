@@ -91,12 +91,12 @@ Address code-review findings on the `feat/go-runtime` branch (Go runtime kind fo
 
 ### Task 2: Make `goVersion` optional in system mode (#7)
 
-- [ ] in [internal/config/validate.go](internal/config/validate.go) `ValidateRuntimes` Go block: skip the `rc.Go == nil` and `rc.Go.GoVersion == ""` errors when `rc.Mode == RuntimeModeSystem`
-- [ ] mirror UV's pattern in `doValidateApps` (lines ~237): emit a warning when Go is in system mode without `goVersion` set (cache-invalidation hint)
-- [ ] keep `isValidVersionString` check when `goVersion` IS provided (managed or system mode)
-- [ ] update [internal/config/validate_test.go](internal/config/validate_test.go): managed-mode tests unchanged; add test that system mode without `goVersion` produces a warning, not an error
-- [ ] add note in commit message: FNM/JVM still require version even in system mode (pre-existing; out of scope here)
-- [ ] run `go test ./internal/config/...` — must pass
+- [x] in [internal/config/validate.go](internal/config/validate.go) `ValidateRuntimes` Go block: skip the `rc.Go == nil` and `rc.Go.GoVersion == ""` errors when `rc.Mode == RuntimeModeSystem`
+- [x] mirror UV's pattern in `doValidateApps` (lines ~237): emit a warning when Go is in system mode without `goVersion` set (cache-invalidation hint)
+- [x] keep `isValidVersionString` check when `goVersion` IS provided (managed or system mode)
+- [x] update [internal/config/validate_test.go](internal/config/validate_test.go): managed-mode tests unchanged; add test that system mode without `goVersion` produces a warning, not an error
+- [x] add note in commit message: FNM/JVM still require version even in system mode (pre-existing; out of scope here)
+- [x] run `go test ./internal/config/...` — must pass
 
 ### Task 3: Replace `installOnce` with `singleflight.Group` across all runtimes (#6)
 
