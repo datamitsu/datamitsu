@@ -111,15 +111,15 @@
 
 ### Task 6: Wire Go into RuntimeManager dispatch
 
-- [ ] write tests for `systemCommandForKind` returning "go" for RuntimeKindGo
-- [ ] write tests for `ComputeAppPath` with Go app
-- [ ] write tests for `GetCommandInfo` dispatch with Go app
-- [ ] write tests for `CollectRequiredRuntimes` collecting Go app runtime refs
-- [ ] add `RuntimeKindGo` case to `systemCommandForKind` in `internal/runtimemanager/runtimemanager.go`
-- [ ] add `app.Go != nil` branch to `ComputeAppPath` in `internal/runtimemanager/runtimemanager.go`
-- [ ] add `app.Go != nil` branch to `GetCommandInfo` in `internal/runtimemanager/runtimemanager.go`
-- [ ] add `app.Go != nil` collection to `CollectRequiredRuntimes` in `internal/runtimemanager/runtimemanager.go`
-- [ ] run tests - must pass before next task
+- [x] write tests for `systemCommandForKind` returning "go" for RuntimeKindGo
+- [x] write tests for `ComputeAppPath` with Go app
+- [x] write tests for `GetCommandInfo` dispatch with Go app
+- [x] write tests for `CollectRequiredRuntimes` collecting Go app runtime refs
+- [x] add `RuntimeKindGo` case to `systemCommandForKind` in `internal/runtimemanager/runtimemanager.go`
+- [x] add `app.Go != nil` branch to `ComputeAppPath` in `internal/runtimemanager/runtimemanager.go`
+- [x] add `app.Go != nil` branch to `GetCommandInfo` in `internal/runtimemanager/runtimemanager.go`
+- [x] add `app.Go != nil` collection to `CollectRequiredRuntimes` in `internal/runtimemanager/runtimemanager.go`
+- [x] run tests - must pass before next task
 
 ### Task 7: Wire Go into BinManager dispatch
 

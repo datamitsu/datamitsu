@@ -1167,6 +1167,254 @@ func TestResolveRuntimeFNM(t *testing.T) {
 	})
 }
 
+func TestCollectRequiredRuntimesGo(t *testing.T) {
+	runtimes := config.MapOfRuntimes{
+		"uv": {
+			Kind: config.RuntimeKindUV,
+			Mode: config.RuntimeModeManaged,
+		},
+		"go": {
+			Kind: config.RuntimeKindGo,
+			Mode: config.RuntimeModeManaged,
+			Go:   &config.RuntimeConfigGo{GoVersion: "1.22.0"},
+		},
+	}
+
+	t.Run("required go app collects default go runtime", func(t *testing.T) {
+		apps := binmanager.MapOfApps{
+			"govulncheck": {
+				Required: true,
+				Go: &binmanager.AppConfigGo{
+					PackageName: "golang.org/x/vuln/cmd/govulncheck",
+					Version:     "v1.1.4",
+					LockFile:    "x",
+				},
+			},
+		}
+		result := CollectRequiredRuntimes(apps, runtimes, false)
+		if len(result) != 1 {
+			t.Fatalf("expected 1 runtime, got %d: %v", len(result), result)
+		}
+		if result[0] != "go" {
+			t.Errorf("expected go, got %q", result[0])
+		}
+	})
+
+	t.Run("go app with explicit runtime ref", func(t *testing.T) {
+		apps := binmanager.MapOfApps{
+			"govulncheck": {
+				Required: true,
+				Go: &binmanager.AppConfigGo{
+					PackageName: "golang.org/x/vuln/cmd/govulncheck",
+					Version:     "v1.1.4",
+					Runtime:     "go",
+					LockFile:    "x",
+				},
+			},
+		}
+		result := CollectRequiredRuntimes(apps, runtimes, false)
+		if len(result) != 1 {
+			t.Fatalf("expected 1 runtime, got %d: %v", len(result), result)
+		}
+		if result[0] != "go" {
+			t.Errorf("expected go, got %q", result[0])
+		}
+	})
+
+	t.Run("optional go app excluded", func(t *testing.T) {
+		apps := binmanager.MapOfApps{
+			"govulncheck": {
+				Required: false,
+				Go: &binmanager.AppConfigGo{
+					PackageName: "golang.org/x/vuln/cmd/govulncheck",
+					Version:     "v1.1.4",
+					LockFile:    "x",
+				},
+			},
+		}
+		result := CollectRequiredRuntimes(apps, runtimes, false)
+		if len(result) != 0 {
+			t.Errorf("expected 0 runtimes for optional go app, got %d: %v", len(result), result)
+		}
+	})
+
+	t.Run("go app with nonexistent runtime ref ignored", func(t *testing.T) {
+		apps := binmanager.MapOfApps{
+			"govulncheck": {
+				Required: true,
+				Go: &binmanager.AppConfigGo{
+					PackageName: "golang.org/x/vuln/cmd/govulncheck",
+					Version:     "v1.1.4",
+					Runtime:     "nonexistent",
+					LockFile:    "x",
+				},
+			},
+		}
+		result := CollectRequiredRuntimes(apps, runtimes, false)
+		if len(result) != 0 {
+			t.Errorf("expected 0 runtimes for nonexistent ref, got %d: %v", len(result), result)
+		}
+	})
+
+	t.Run("mixed uv and go apps", func(t *testing.T) {
+		apps := binmanager.MapOfApps{
+			"yamllint": {
+				Required: true,
+				Uv: &binmanager.AppConfigUV{
+					PackageName: "yamllint",
+					Version:     "1.37.0",
+					Runtime:     "uv",
+				},
+			},
+			"govulncheck": {
+				Required: true,
+				Go: &binmanager.AppConfigGo{
+					PackageName: "golang.org/x/vuln/cmd/govulncheck",
+					Version:     "v1.1.4",
+					Runtime:     "go",
+					LockFile:    "x",
+				},
+			},
+		}
+		result := CollectRequiredRuntimes(apps, runtimes, false)
+		if len(result) != 2 {
+			t.Fatalf("expected 2 runtimes, got %d: %v", len(result), result)
+		}
+		if result[0] != "go" || result[1] != "uv" {
+			t.Errorf("expected sorted [go uv], got %v", result)
+		}
+	})
+
+	t.Run("go deduplication across multiple apps", func(t *testing.T) {
+		apps := binmanager.MapOfApps{
+			"govulncheck": {
+				Required: true,
+				Go: &binmanager.AppConfigGo{
+					PackageName: "golang.org/x/vuln/cmd/govulncheck",
+					Version:     "v1.1.4",
+					Runtime:     "go",
+					LockFile:    "x",
+				},
+			},
+			"staticcheck": {
+				Required: true,
+				Go: &binmanager.AppConfigGo{
+					PackageName: "honnef.co/go/tools/cmd/staticcheck",
+					Version:     "2024.1.1",
+					Runtime:     "go",
+					LockFile:    "x",
+				},
+			},
+		}
+		result := CollectRequiredRuntimes(apps, runtimes, false)
+		if len(result) != 1 {
+			t.Fatalf("expected 1 deduplicated runtime, got %d: %v", len(result), result)
+		}
+		if result[0] != "go" {
+			t.Errorf("expected go, got %q", result[0])
+		}
+	})
+}
+
+func TestComputeAppPathGo(t *testing.T) {
+	rm := New(makeTestGoRuntimes())
+
+	t.Run("go app computes path", func(t *testing.T) {
+		app := binmanager.App{
+			Go: &binmanager.AppConfigGo{
+				PackageName: "golang.org/x/vuln/cmd/govulncheck",
+				Version:     "v1.1.4",
+				Runtime:     "go",
+				LockFile:    "x",
+			},
+		}
+
+		path, err := rm.ComputeAppPath("govulncheck", app)
+		if err != nil {
+			t.Fatalf("ComputeAppPath() error = %v", err)
+		}
+		if path == "" {
+			t.Error("path is empty")
+		}
+	})
+
+	t.Run("go app path is deterministic", func(t *testing.T) {
+		app := binmanager.App{
+			Go: &binmanager.AppConfigGo{
+				PackageName: "golang.org/x/vuln/cmd/govulncheck",
+				Version:     "v1.1.4",
+				Runtime:     "go",
+				LockFile:    "x",
+			},
+		}
+
+		path1, _ := rm.ComputeAppPath("govulncheck", app)
+		path2, _ := rm.ComputeAppPath("govulncheck", app)
+		if path1 != path2 {
+			t.Errorf("path not deterministic: %q != %q", path1, path2)
+		}
+	})
+
+	t.Run("different versions produce different paths", func(t *testing.T) {
+		app1 := binmanager.App{
+			Go: &binmanager.AppConfigGo{
+				PackageName: "golang.org/x/vuln/cmd/govulncheck", Version: "v1.1.4", Runtime: "go", LockFile: "x",
+			},
+		}
+		app2 := binmanager.App{
+			Go: &binmanager.AppConfigGo{
+				PackageName: "golang.org/x/vuln/cmd/govulncheck", Version: "v1.1.5", Runtime: "go", LockFile: "x",
+			},
+		}
+
+		path1, _ := rm.ComputeAppPath("govulncheck", app1)
+		path2, _ := rm.ComputeAppPath("govulncheck", app2)
+		if path1 == path2 {
+			t.Error("different versions should produce different paths")
+		}
+	})
+
+	t.Run("nonexistent runtime returns error", func(t *testing.T) {
+		app := binmanager.App{
+			Go: &binmanager.AppConfigGo{
+				PackageName: "golang.org/x/vuln/cmd/govulncheck",
+				Version:     "v1.1.4",
+				Runtime:     "nonexistent",
+				LockFile:    "x",
+			},
+		}
+		if _, err := rm.ComputeAppPath("govulncheck", app); err == nil {
+			t.Error("expected error for nonexistent runtime, got nil")
+		}
+	})
+}
+
+func TestGetCommandInfoGo(t *testing.T) {
+	rm := New(makeTestGoRuntimes())
+
+	t.Run("go app delegates to Go methods", func(t *testing.T) {
+		app := binmanager.App{
+			Go: &binmanager.AppConfigGo{
+				PackageName: "golang.org/x/vuln/cmd/govulncheck",
+				Version:     "v1.1.4",
+				Runtime:     "go",
+				LockFile:    "x",
+			},
+		}
+
+		// InstallGoApp will fail because there's no actual Go binary to download,
+		// but we can verify the dispatch works: the error must come from the Go
+		// install path, not from "not a runtime-managed app".
+		_, err := rm.GetCommandInfo("govulncheck", app)
+		if err == nil {
+			t.Skip("unexpected success - Go binary not available in test env")
+		}
+		if err.Error() == `app "govulncheck" is not a runtime-managed app` {
+			t.Error("Go app should be recognized as runtime-managed")
+		}
+	})
+}
+
 func newTestRMWithTarget(runtimes config.MapOfRuntimes, hostTarget target.Target) *RuntimeManager {
 	return &RuntimeManager{
 		mapOfRuntimes: runtimes,
@@ -1506,6 +1754,7 @@ func TestSystemCommandForKind(t *testing.T) {
 		{config.RuntimeKindFNM, "fnm"},
 		{config.RuntimeKindUV, "uv"},
 		{config.RuntimeKindJVM, "java"},
+		{config.RuntimeKindGo, "go"},
 		{config.RuntimeKind("unknown"), ""},
 		{config.RuntimeKind(""), ""},
 	}

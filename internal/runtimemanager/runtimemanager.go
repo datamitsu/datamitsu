@@ -55,6 +55,8 @@ func systemCommandForKind(kind config.RuntimeKind) string {
 		return "uv"
 	case config.RuntimeKindJVM:
 		return "java"
+	case config.RuntimeKindGo:
+		return "go"
 	default:
 		return ""
 	}
@@ -387,6 +389,13 @@ func (rm *RuntimeManager) ComputeAppPath(appName string, app binmanager.App) (st
 		}
 		return rm.GetJVMAppPath(appName, app.Jvm, app.Files, app.Archives, runtimeName)
 	}
+	if app.Go != nil {
+		runtimeName, _, err := rm.ResolveRuntime(app.Go.Runtime, config.RuntimeKindGo)
+		if err != nil {
+			return "", fmt.Errorf("failed to resolve Go runtime for %q: %w", appName, err)
+		}
+		return rm.GetGoAppPath(appName, app.Go, app.Files, app.Archives, runtimeName)
+	}
 	return "", fmt.Errorf("app %q is not a runtime-managed app", appName)
 }
 
@@ -410,6 +419,12 @@ func (rm *RuntimeManager) GetCommandInfo(appName string, app binmanager.App) (*b
 			return nil, err
 		}
 		return rm.GetJVMCommandInfo(appName, app.Jvm, app.Files, app.Archives)
+	}
+	if app.Go != nil {
+		if err := rm.InstallGoApp(appName, app.Go, app.Files, app.Archives); err != nil {
+			return nil, err
+		}
+		return rm.GetGoCommandInfo(appName, app.Go, app.Files, app.Archives)
 	}
 	return nil, fmt.Errorf("app %q is not a runtime-managed app", appName)
 }
@@ -489,6 +504,21 @@ func CollectRequiredRuntimes(apps binmanager.MapOfApps, runtimes config.MapOfRun
 			} else {
 				for _, name := range sortedRuntimeNames {
 					if runtimes[name].Kind == config.RuntimeKindJVM {
+						needed[name] = true
+						break
+					}
+				}
+			}
+		}
+
+		if app.Go != nil {
+			if app.Go.Runtime != "" {
+				if _, ok := runtimes[app.Go.Runtime]; ok {
+					needed[app.Go.Runtime] = true
+				}
+			} else {
+				for _, name := range sortedRuntimeNames {
+					if runtimes[name].Kind == config.RuntimeKindGo {
 						needed[name] = true
 						break
 					}
