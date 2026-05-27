@@ -2,6 +2,7 @@ package runtimemanager
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -556,4 +557,65 @@ func TestGetGoCommandInfo(t *testing.T) {
 			t.Error("different lockFile contents should produce different paths")
 		}
 	})
+}
+
+// TestGoBuildReadonlyFailsOnGoSumMismatch is the supply-chain guarantee in
+// action: it drives a real `go build` using the exact flags datamitsu emits
+// (buildGoBuildArgs) and the verification-preserving env (getGoEnvVars) against
+// a module whose go.sum is missing the required checksum. With -mod=readonly the
+// build must fail rather than silently rewrite go.sum, and with GOPROXY=off the
+// test stays hermetic (no network). This is what makes a tampered/stale go.sum
+// in a Go app's lockFile fail the build instead of installing unverified code.
+func TestGoBuildReadonlyFailsOnGoSumMismatch(t *testing.T) {
+	goBin, err := exec.LookPath("go")
+	if err != nil {
+		t.Skip("go toolchain not available; skipping supply-chain build test")
+	}
+
+	dir := t.TempDir()
+	goMod := "module testmod\n\ngo 1.21\n\nrequire rsc.io/quote v1.5.2\n"
+	mainGo := "package main\n\nimport _ \"rsc.io/quote\"\n\nfunc main() {}\n"
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(goMod), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(mainGo), 0644); err != nil {
+		t.Fatalf("write main.go: %v", err)
+	}
+	// Empty go.sum: the required checksum entry is absent, modelling a tampered
+	// or stale lockfile. -mod=readonly must refuse to add it.
+	if err := os.WriteFile(filepath.Join(dir, "go.sum"), nil, 0644); err != nil {
+		t.Fatalf("write go.sum: %v", err)
+	}
+
+	// Reuse datamitsu's canonical build flags so the test stays tied to the real
+	// implementation. Strip the -o/output and trailing package, build the local
+	// module instead.
+	canonical := buildGoBuildArgs("rsc.io/quote", filepath.Join(dir, "out"))
+	var args []string
+	for i := 0; i < len(canonical); i++ {
+		if canonical[i] == "-o" {
+			i++ // skip the output path too
+			continue
+		}
+		if canonical[i] == "rsc.io/quote" {
+			continue
+		}
+		args = append(args, canonical[i])
+	}
+	args = append(args, "./...")
+
+	cmd := exec.Command(goBin, args...)
+	cmd.Dir = dir
+	// getGoEnvVars keeps checksum verification enabled (GONOSUMCHECK/GONOSUMDB
+	// cleared); GOPROXY=off makes the test hermetic.
+	cmd.Env = buildEnvWithOverrides(os.Environ(), getGoEnvVars(dir))
+	cmd.Env = append(cmd.Env, "GOPROXY=off")
+
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected build to fail on missing go.sum entry, but it succeeded; output:\n%s", out)
+	}
+	if !strings.Contains(string(out), "go.sum") {
+		t.Errorf("expected go.sum verification failure, got:\n%s", out)
+	}
 }

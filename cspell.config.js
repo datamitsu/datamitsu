@@ -181,6 +181,7 @@ export default {
     "GONOSUMCHECK",
     "GONOSUMDB",
     "GOPATH",
+    "GOPROXY",
     "gomodcache",
     "gopath",
     "pkgs",

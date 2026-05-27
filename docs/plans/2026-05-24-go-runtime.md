@@ -171,13 +171,19 @@
 
 ### Task 11: Verify acceptance criteria
 
-- [ ] verify all Go runtime requirements implemented: managed/system mode, lockfile, hash verification
-- [ ] verify `config lockfile` generates valid JSON wrapper lockfile for Go apps
-- [ ] verify `go build -mod=readonly` fails when go.sum doesn't match (supply chain protection)
-- [ ] verify `GONOSUMCHECK` and `GONOSUMDB` are force-cleared in build env
-- [ ] run full test suite (`go test ./...`)
-- [ ] run linter - all issues must be fixed
-- [ ] verify test coverage meets project standard
+- [x] verify all Go runtime requirements implemented: managed/system mode, lockfile, hash verification
+- [x] verify `config lockfile` generates valid JSON wrapper lockfile for Go apps
+- [x] verify `go build -mod=readonly` fails when go.sum doesn't match (supply chain protection)
+- [x] verify `GONOSUMCHECK` and `GONOSUMDB` are force-cleared in build env
+- [x] run full test suite (`go test ./...`)
+- [x] run linter - all issues must be fixed
+- [x] verify test coverage meets project standard
+- - managed/system mode: both supported via the shared runtime machinery — `systemCommandForKind` returns "go" (runtimemanager.go:58), `resolveEffectiveRuntimeConfig` handles musl→system fallback, and `GetRuntimePath` serves both system (PATH) and managed (download) modes. Hash verification: managed Go SDK downloads reuse `BinManager.Install` (mandatory SHA-256), and config validation rejects missing hashes. Lockfile: mandatory in both `validate.go` and `installGoAppOnce` (rejects empty before any build).
+- - `config lockfile` JSON wrapper: covered by `cmd/config_lockfile_test.go` (`TestReadLockFile_Go`, `TestReadLockFile_GoMissingGoMod`, `TestPrintAppInfo_Go`, `TestListLockfileApps`) and exercised end-to-end in Task 10 by running the real `./datamitsu config lockfile govulncheck` (emitted the `br:` wrapper now embedded in config).
+- - supply-chain protection: added automated hermetic test `TestGoBuildReadonlyFailsOnGoSumMismatch` in `internal/runtimemanager/go_test.go` — drives a real `go build` with datamitsu's own flags (`buildGoBuildArgs`) and env (`getGoEnvVars`) against a module with a missing/tampered go.sum and `GOPROXY=off`; the build fails with a `go.sum` error instead of silently rewriting. Mechanism also unit-tested (`TestBuildGoBuildArgs`).
+- - `GONOSUMCHECK`/`GONOSUMDB` force-clear: `TestGetGoEnvVars` (build env) and `TestGetGoGenEnvVars` (generation env) assert both are set to "".
+- - full suite `go test ./...`: ALL PASS. linter `golangci-lint run ./...`: 0 issues.
+- - coverage: pure helpers in `go.go` are 75–100% (`parseGoLockFile`, `BuildGoLockFileJSON`, `getGoEnvVars`, `buildGoBuildArgs`, `getGoBinaryPath`, `GetGoAppPath`, `InstallGoApp`, `GetGoCommandInfo`). The lower-coverage `installGoAppOnce`/`GenerateGoLockFiles` are the network+SDK build/resolve paths (validated end-to-end in Task 10); package coverage (52.8%) is consistent with sibling runtimes whose download paths are likewise network-bound.
 
 ### Task 12: [Final] Update documentation
 
