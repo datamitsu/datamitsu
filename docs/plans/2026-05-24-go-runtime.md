@@ -133,17 +133,19 @@
 
 ### Task 8: Add Go support to config lockfile command
 
-- [ ] write tests for `clearAppLockFile` with Go app
-- [ ] write tests for `readLockFile` with Go app (reads go.mod + go.sum, produces JSON)
-- [ ] write tests for `listLockfileApps` including Go apps
-- [ ] write tests for `printAppInfo` with Go app
-- [ ] update command description in `cmd/config_lockfile.go` to mention Go
-- [ ] update `runConfigLockfile` (line 56-67): allow Go apps, add `app.Go != nil` check
-- [ ] update `clearAppLockFile` (line 125): add Go case to clear LockFile
-- [ ] update `printAppInfo` (line 148): add Go case
-- [ ] update `listLockfileApps` (line 183): add Go apps group
-- [ ] update `readLockFile` (line 221): add Go case -- read go.mod + go.sum, call `buildGoLockFileJSON`
-- [ ] run tests - must pass before next task
+- [x] write tests for `clearAppLockFile` with Go app
+- [x] write tests for `readLockFile` with Go app (reads go.mod + go.sum, produces JSON)
+- [x] write tests for `listLockfileApps` including Go apps
+- [x] write tests for `printAppInfo` with Go app
+- [x] update command description in `cmd/config_lockfile.go` to mention Go
+- [x] update `runConfigLockfile` (line 56-67): allow Go apps, add `app.Go != nil` check
+- [x] update `clearAppLockFile` (line 125): add Go case to clear LockFile
+- [x] update `printAppInfo` (line 148): add Go case
+- [x] update `listLockfileApps` (line 183): add Go apps group
+- [x] update `readLockFile` (line 221): add Go case -- read go.mod + go.sum, call `BuildGoLockFileJSON`
+- [x] run tests - must pass before next task
+- - scope addition: exported `buildGoLockFileJSON` -> `BuildGoLockFileJSON` so the `cmd` package can call it (was unexported); updated go_test.go refs
+- - scope addition: added `RuntimeManager.GenerateGoLockFiles` (+ `getGoGenEnvVars`) in `internal/runtimemanager/go.go`. Reinstall cannot regenerate a Go lockfile because the build refuses without one (mandatory-lockfile); generation runs `go mod init` + `go get pkg@version` with `-mod=readonly` omitted (so deps can be written) while still force-clearing GONOSUMCHECK/GONOSUMDB. `runConfigLockfile` branches to this for Go apps instead of the reinstall path. Unit tests cover input/runtime validation; the network-dependent resolution is exercised by Task 10 / manual verification.
 
 ### Task 9: Update TypeScript declarations
 

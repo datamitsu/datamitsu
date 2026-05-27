@@ -42,10 +42,11 @@ func parseGoLockFile(lockFile string) (goMod, goSum string, err error) {
 	return lf.Mod, lf.Sum, nil
 }
 
-// buildGoLockFileJSON marshals go.mod and go.sum into the JSON wrapper. The
+// BuildGoLockFileJSON marshals go.mod and go.sum into the JSON wrapper. The
 // result is intended to be passed to CompressLockFile before being stored in
-// config.
-func buildGoLockFileJSON(goMod, goSum string) (string, error) {
+// config. Exported so the config lockfile command can assemble the wrapper from
+// a freshly generated go.mod + go.sum.
+func BuildGoLockFileJSON(goMod, goSum string) (string, error) {
 	data, err := json.Marshal(goLockFile{Mod: goMod, Sum: goSum})
 	if err != nil {
 		return "", fmt.Errorf("build go lock file JSON: %w", err)
@@ -66,6 +67,23 @@ func getGoEnvVars(appEnvPath string) map[string]string {
 		"GONOSUMCHECK": "",
 		"GONOSUMDB":    "",
 		"GOFLAGS":      "-mod=readonly -trimpath",
+	}
+}
+
+// getGoGenEnvVars returns the isolated environment for generating a Go app's
+// lockfile (`go mod init` + `go get`). It mirrors getGoEnvVars' isolation
+// (per-app GOPATH/GOMODCACHE/GOBIN) and still force-clears GONOSUMCHECK and
+// GONOSUMDB so checksum DB verification cannot be disabled while resolving
+// dependencies. Unlike the build env it omits -mod=readonly: generation must be
+// allowed to write go.mod and go.sum, which -mod=readonly would forbid.
+func getGoGenEnvVars(workDir string) map[string]string {
+	return map[string]string{
+		"GOPATH":       filepath.Join(workDir, "gopath"),
+		"GOMODCACHE":   filepath.Join(workDir, "gomodcache"),
+		"GOBIN":        filepath.Join(workDir, "bin"),
+		"GONOSUMCHECK": "",
+		"GONOSUMDB":    "",
+		"GOFLAGS":      "",
 	}
 }
 
@@ -211,6 +229,75 @@ func (rm *RuntimeManager) installGoAppOnce(appName string, appConfig *binmanager
 	fmt.Fprintf(os.Stderr, "Installed %s\n", appName)
 
 	cleanupOnError = false
+	return nil
+}
+
+// GenerateGoLockFiles produces a fresh go.mod + go.sum for a Go app in
+// workDir by running `go mod init` followed by `go get packageName@version`.
+//
+// This is the generation counterpart to installGoAppOnce: installs require a
+// lockfile (it is mandatory and the build refuses without it), so the lockfile
+// itself cannot be produced by a normal reinstall. The config lockfile command
+// calls this to resolve transitive dependencies and write the checksums, then
+// reads the resulting files back. The files are left in workDir for the caller.
+func (rm *RuntimeManager) GenerateGoLockFiles(appName string, appConfig *binmanager.AppConfigGo, workDir string) error {
+	if appConfig.PackageName == "" {
+		return fmt.Errorf("app %q has no packageName; cannot generate lock file", appName)
+	}
+	if appConfig.Version == "" {
+		return fmt.Errorf("app %q has no version; cannot generate lock file", appName)
+	}
+
+	runtimeName, _, err := rm.ResolveRuntime(appConfig.Runtime, config.RuntimeKindGo)
+	if err != nil {
+		return fmt.Errorf("failed to resolve runtime for %q: %w", appName, err)
+	}
+
+	goPath, err := rm.GetRuntimePath(runtimeName)
+	if err != nil {
+		return fmt.Errorf("failed to get Go runtime path: %w", err)
+	}
+
+	if err := os.MkdirAll(workDir, 0755); err != nil {
+		return fmt.Errorf("failed to create work directory: %w", err)
+	}
+
+	// Start from a clean module: a leftover go.mod would make `go mod init` fail.
+	_ = os.Remove(filepath.Join(workDir, "go.mod"))
+	_ = os.Remove(filepath.Join(workDir, "go.sum"))
+
+	envVars := getGoGenEnvVars(workDir)
+	for _, key := range []string{"GOPATH", "GOMODCACHE", "GOBIN"} {
+		if err := os.MkdirAll(envVars[key], 0755); err != nil {
+			return fmt.Errorf("failed to create directory %q: %w", envVars[key], err)
+		}
+	}
+	fullEnv := buildEnvWithOverrides(os.Environ(), envVars)
+
+	runGo := func(args ...string) error {
+		cmd := exec.Command(goPath, args...)
+		cmd.Dir = workDir
+		cmd.Env = fullEnv
+		cmd.Stdout = os.Stderr
+		cmd.Stderr = os.Stderr
+		return cmd.Run()
+	}
+
+	log.Debug("generating Go lock file",
+		zap.String("app", appName),
+		zap.String("package", appConfig.PackageName),
+		zap.String("version", appConfig.Version),
+		zap.String("go_path", goPath),
+	)
+
+	if err := runGo("mod", "init", "datamitsu-"+appName); err != nil {
+		return fmt.Errorf("failed to init go module for %q: %w", appName, err)
+	}
+
+	if err := runGo("get", appConfig.PackageName+"@"+appConfig.Version); err != nil {
+		return fmt.Errorf("failed to resolve %s@%s for %q: %w", appConfig.PackageName, appConfig.Version, appName, err)
+	}
+
 	return nil
 }
 

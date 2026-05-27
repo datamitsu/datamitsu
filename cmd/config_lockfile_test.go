@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 	"os"
 	"path/filepath"
 	"strings"
@@ -110,6 +111,38 @@ func TestPrintAppInfo_UV(t *testing.T) {
 	}
 }
 
+func TestPrintAppInfo_Go(t *testing.T) {
+	app := binmanager.App{
+		Go: &binmanager.AppConfigGo{
+			PackageName: "golang.org/x/vuln/cmd/govulncheck",
+			Version:     "v1.1.4",
+		},
+	}
+
+	oldStderr := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stderr = w
+
+	printAppInfo("govulncheck", app)
+
+	_ = w.Close()
+	os.Stderr = oldStderr
+
+	buf := make([]byte, 4096)
+	n, _ := r.Read(buf)
+	output := string(buf[:n])
+
+	if !strings.Contains(output, "Runtime:      go") {
+		t.Errorf("missing runtime in output: %s", output)
+	}
+	if !strings.Contains(output, "Package:      golang.org/x/vuln/cmd/govulncheck") {
+		t.Errorf("missing package name in output: %s", output)
+	}
+	if !strings.Contains(output, "Version:      v1.1.4") {
+		t.Errorf("missing version in output: %s", output)
+	}
+}
+
 func TestPrintAppInfo_Binary(t *testing.T) {
 	app := binmanager.App{
 		Binary: &binmanager.AppConfigBinary{},
@@ -182,6 +215,12 @@ func TestListLockfileApps(t *testing.T) {
 				Version:     "1.38.0",
 			},
 		},
+		"govulncheck": {
+			Go: &binmanager.AppConfigGo{
+				PackageName: "golang.org/x/vuln/cmd/govulncheck",
+				Version:     "v1.1.4",
+			},
+		},
 		"golangci-lint": {
 			Binary: &binmanager.AppConfigBinary{},
 		},
@@ -208,6 +247,12 @@ func TestListLockfileApps(t *testing.T) {
 	}
 	if !strings.Contains(output, "uv:") {
 		t.Errorf("missing uv group header in output: %s", output)
+	}
+	if !strings.Contains(output, "go:") {
+		t.Errorf("missing go group header in output: %s", output)
+	}
+	if !strings.Contains(output, "govulncheck") {
+		t.Errorf("missing govulncheck in output: %s", output)
 	}
 	if !strings.Contains(output, "eslint") {
 		t.Errorf("missing eslint in output: %s", output)
@@ -306,6 +351,58 @@ func TestReadLockFile_UV(t *testing.T) {
 	}
 }
 
+func TestReadLockFile_Go(t *testing.T) {
+	tmpDir := t.TempDir()
+	goMod := "module datamitsu-govulncheck\n\ngo 1.22\n\nrequire golang.org/x/vuln v1.1.4\n"
+	goSum := "golang.org/x/vuln v1.1.4 h1:abc=\ngolang.org/x/vuln v1.1.4/go.mod h1:def=\n"
+
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.sum"), []byte(goSum), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	app := binmanager.App{
+		Go: &binmanager.AppConfigGo{
+			PackageName: "golang.org/x/vuln/cmd/govulncheck",
+			Version:     "v1.1.4",
+		},
+	}
+
+	content, err := readLockFile(tmpDir, app)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// readLockFile must assemble the JSON wrapper from go.mod + go.sum.
+	want, err := runtimemanager.BuildGoLockFileJSON(goMod, goSum)
+	if err != nil {
+		t.Fatalf("BuildGoLockFileJSON() error = %v", err)
+	}
+	if content != want {
+		t.Errorf("content = %q, want %q", content, want)
+	}
+}
+
+func TestReadLockFile_GoMissingGoMod(t *testing.T) {
+	tmpDir := t.TempDir()
+	// Only go.sum present; go.mod is missing.
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.sum"), []byte("x"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	app := binmanager.App{Go: &binmanager.AppConfigGo{PackageName: "golang.org/x/vuln/cmd/govulncheck"}}
+
+	_, err := readLockFile(tmpDir, app)
+	if err == nil {
+		t.Fatal("expected error when go.mod is missing")
+	}
+	if !strings.Contains(err.Error(), "go.mod") {
+		t.Errorf("error should mention go.mod, got: %v", err)
+	}
+}
+
 func TestReadLockFile_MissingFile(t *testing.T) {
 	tmpDir := t.TempDir()
 
@@ -395,6 +492,38 @@ func TestClearAppLockFile_UVClearsLockFilePreservesFiles(t *testing.T) {
 	}
 	if apps["yamllint"].Uv.LockFile == "" {
 		t.Error("original UV LockFile was mutated; clearAppLockFile must be non-destructive")
+	}
+}
+
+func TestClearAppLockFile_GoClearsLockFilePreservesFields(t *testing.T) {
+	apps := binmanager.MapOfApps{
+		"govulncheck": {
+			Go: &binmanager.AppConfigGo{
+				PackageName: "golang.org/x/vuln/cmd/govulncheck",
+				Version:     "v1.1.4",
+				Runtime:     "go",
+				LockFile:    "br:compressed-lock-file",
+			},
+		},
+	}
+
+	fresh := clearAppLockFile(apps, "govulncheck")
+
+	if fresh["govulncheck"].Go.LockFile != "" {
+		t.Errorf("Go LockFile = %q, want empty after clearing", fresh["govulncheck"].Go.LockFile)
+	}
+	// packageName/version/runtime must survive: generation needs them.
+	if fresh["govulncheck"].Go.PackageName != "golang.org/x/vuln/cmd/govulncheck" {
+		t.Errorf("Go PackageName lost: %q", fresh["govulncheck"].Go.PackageName)
+	}
+	if fresh["govulncheck"].Go.Version != "v1.1.4" {
+		t.Errorf("Go Version lost: %q", fresh["govulncheck"].Go.Version)
+	}
+	if fresh["govulncheck"].Go.Runtime != "go" {
+		t.Errorf("Go Runtime lost: %q", fresh["govulncheck"].Go.Runtime)
+	}
+	if apps["govulncheck"].Go.LockFile == "" {
+		t.Error("original Go LockFile was mutated; clearAppLockFile must be non-destructive")
 	}
 }
 

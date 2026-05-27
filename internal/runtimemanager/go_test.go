@@ -51,9 +51,9 @@ func TestParseGoLockFile_Valid(t *testing.T) {
 	goMod := "module datamitsu-govulncheck\n\ngo 1.22\n\nrequire golang.org/x/vuln v1.1.4\n"
 	goSum := "golang.org/x/vuln v1.1.4 h1:abc=\ngolang.org/x/vuln v1.1.4/go.mod h1:def=\n"
 
-	jsonStr, err := buildGoLockFileJSON(goMod, goSum)
+	jsonStr, err := BuildGoLockFileJSON(goMod, goSum)
 	if err != nil {
-		t.Fatalf("buildGoLockFileJSON() error = %v", err)
+		t.Fatalf("BuildGoLockFileJSON() error = %v", err)
 	}
 
 	gotMod, gotSum, err := parseGoLockFile(jsonStr)
@@ -121,9 +121,9 @@ func TestBuildGoLockFileJSON_ValidJSON(t *testing.T) {
 	goMod := "module datamitsu-x\n\ngo 1.22\n"
 	goSum := "golang.org/x/vuln v1.1.4 h1:abc=\n"
 
-	jsonStr, err := buildGoLockFileJSON(goMod, goSum)
+	jsonStr, err := BuildGoLockFileJSON(goMod, goSum)
 	if err != nil {
-		t.Fatalf("buildGoLockFileJSON() error = %v", err)
+		t.Fatalf("BuildGoLockFileJSON() error = %v", err)
 	}
 
 	if !strings.Contains(jsonStr, `"mod"`) {
@@ -149,9 +149,9 @@ func TestBuildGoLockFileJSON_PreservesSpecialChars(t *testing.T) {
 	goMod := "module example.com/x\n\ngo 1.22\n\nrequire (\n\tgolang.org/x/tools v0.1.0\n)\n"
 	goSum := "golang.org/x/tools v0.1.0 h1:abc/def+ghi=\ngolang.org/x/tools v0.1.0/go.mod h1:xyz=\n"
 
-	jsonStr, err := buildGoLockFileJSON(goMod, goSum)
+	jsonStr, err := BuildGoLockFileJSON(goMod, goSum)
 	if err != nil {
-		t.Fatalf("buildGoLockFileJSON() error = %v", err)
+		t.Fatalf("BuildGoLockFileJSON() error = %v", err)
 	}
 
 	gotMod, gotSum, err := parseGoLockFile(jsonStr)
@@ -170,9 +170,9 @@ func TestGoLockFile_BuildCompressDecompressParseRoundTrip(t *testing.T) {
 	goMod := "module datamitsu-govulncheck\n\ngo 1.22\n\nrequire golang.org/x/vuln v1.1.4\n"
 	goSum := strings.Repeat("golang.org/x/vuln v1.1.4 h1:AAAA=\ngolang.org/x/vuln v1.1.4/go.mod h1:BBBB=\n", 50)
 
-	jsonStr, err := buildGoLockFileJSON(goMod, goSum)
+	jsonStr, err := BuildGoLockFileJSON(goMod, goSum)
 	if err != nil {
-		t.Fatalf("buildGoLockFileJSON() error = %v", err)
+		t.Fatalf("BuildGoLockFileJSON() error = %v", err)
 	}
 
 	compressed, err := CompressLockFile(jsonStr)
@@ -390,6 +390,81 @@ func TestInstallGoApp_RetriesAfterError(t *testing.T) {
 	}
 	if err := rm.InstallGoApp("govulncheck", appConfig, nil, nil); err == nil {
 		t.Fatal("expected retry to error again (once entry should have been deleted)")
+	}
+}
+
+func TestGetGoGenEnvVars(t *testing.T) {
+	workDir := "/cache/.apps/go/govulncheck/abc123"
+	vars := getGoGenEnvVars(workDir)
+
+	expected := map[string]string{
+		"GOPATH":       filepath.Join(workDir, "gopath"),
+		"GOMODCACHE":   filepath.Join(workDir, "gomodcache"),
+		"GOBIN":        filepath.Join(workDir, "bin"),
+		"GONOSUMCHECK": "",
+		"GONOSUMDB":    "",
+		"GOFLAGS":      "",
+	}
+
+	for key, want := range expected {
+		got, ok := vars[key]
+		if !ok {
+			t.Errorf("missing key %q", key)
+			continue
+		}
+		if got != want {
+			t.Errorf("vars[%q] = %q, want %q", key, got, want)
+		}
+	}
+
+	// Generation must be allowed to write go.mod/go.sum, so -mod=readonly must
+	// NOT be set here (it would make `go get` fail).
+	if strings.Contains(vars["GOFLAGS"], "-mod=readonly") {
+		t.Errorf("generation GOFLAGS must not contain -mod=readonly, got %q", vars["GOFLAGS"])
+	}
+	// Checksum DB verification must stay enabled during resolution.
+	if vars["GONOSUMCHECK"] != "" {
+		t.Errorf("GONOSUMCHECK must be force-cleared, got %q", vars["GONOSUMCHECK"])
+	}
+}
+
+func TestGenerateGoLockFiles_MissingPackageName(t *testing.T) {
+	rm := New(makeTestGoRuntimes())
+	appConfig := &binmanager.AppConfigGo{Version: "v1.1.4", Runtime: "go"}
+
+	err := rm.GenerateGoLockFiles("govulncheck", appConfig, t.TempDir())
+	if err == nil {
+		t.Fatal("expected error when packageName is empty")
+	}
+	if !strings.Contains(err.Error(), "packageName") {
+		t.Errorf("error should mention packageName, got: %v", err)
+	}
+}
+
+func TestGenerateGoLockFiles_MissingVersion(t *testing.T) {
+	rm := New(makeTestGoRuntimes())
+	appConfig := &binmanager.AppConfigGo{PackageName: "golang.org/x/vuln/cmd/govulncheck", Runtime: "go"}
+
+	err := rm.GenerateGoLockFiles("govulncheck", appConfig, t.TempDir())
+	if err == nil {
+		t.Fatal("expected error when version is empty")
+	}
+	if !strings.Contains(err.Error(), "version") {
+		t.Errorf("error should mention version, got: %v", err)
+	}
+}
+
+func TestGenerateGoLockFiles_InvalidRuntime(t *testing.T) {
+	rm := New(makeTestGoRuntimes())
+	appConfig := &binmanager.AppConfigGo{
+		PackageName: "golang.org/x/vuln/cmd/govulncheck",
+		Version:     "v1.1.4",
+		Runtime:     "nonexistent",
+	}
+
+	err := rm.GenerateGoLockFiles("govulncheck", appConfig, t.TempDir())
+	if err == nil {
+		t.Fatal("expected error for nonexistent runtime")
 	}
 }
 
