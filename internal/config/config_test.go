@@ -1,12 +1,17 @@
 package config
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
 	"testing"
 
+	"github.com/andybalholm/brotli"
 	"github.com/datamitsu/datamitsu/internal/pnpmdefaults"
+	"github.com/datamitsu/datamitsu/internal/syslist"
 	"github.com/dop251/goja"
 	"github.com/goccy/go-yaml"
 )
@@ -120,6 +125,190 @@ func TestDefaultConfigPNPMWorkspaceDefaults(t *testing.T) {
 	}
 	if len(parsed) != len(expected) {
 		t.Errorf("parsed has %d keys, want %d; parsed: %#v", len(parsed), len(expected), parsed)
+	}
+}
+
+// runDefaultConfigForTest executes the embedded default config.js in a goja VM
+// (mirroring the globals internal/engine injects) and returns the parsed Config
+// produced by getConfig({}). It is the end-to-end harness for asserting the
+// embedded defaults the way they are actually evaluated at runtime.
+func runDefaultConfigForTest(t *testing.T) *Config {
+	t.Helper()
+
+	configScript, err := GetDefaultConfig()
+	if err != nil {
+		t.Fatalf("GetDefaultConfig() error = %v", err)
+	}
+
+	vm := goja.New()
+	vm.SetFieldNameMapper(goja.TagFieldNameMapper("json", true))
+
+	yamlNamespace := map[string]any{
+		"stringify": func(call goja.FunctionCall) goja.Value {
+			if len(call.Arguments) == 0 {
+				panic(vm.NewTypeError("YAML.stringify requires at least 1 argument"))
+			}
+			b, err := yaml.Marshal(call.Argument(0).Export())
+			if err != nil {
+				panic(vm.NewGoError(fmt.Errorf("YAML.stringify error: %w", err)))
+			}
+			return vm.ToValue(string(b))
+		},
+	}
+	if err := vm.Set("YAML", yamlNamespace); err != nil {
+		t.Fatalf("vm.Set YAML error: %v", err)
+	}
+	if err := vm.Set("pnpmWorkspaceDefaults", pnpmdefaults.Defaults()); err != nil {
+		t.Fatalf("vm.Set pnpmWorkspaceDefaults error: %v", err)
+	}
+
+	if _, err := vm.RunString(configScript); err != nil {
+		t.Fatalf("RunString(configScript) error = %v", err)
+	}
+
+	getConfigFn, ok := goja.AssertFunction(vm.Get("getConfig"))
+	if !ok {
+		t.Fatal("getConfig is not a function")
+	}
+	result, err := getConfigFn(goja.Undefined(), vm.NewObject())
+	if err != nil {
+		t.Fatalf("getConfig() error = %v", err)
+	}
+
+	cfg := &Config{}
+	if err := vm.ExportTo(result, cfg); err != nil {
+		t.Fatalf("ExportTo error = %v", err)
+	}
+	return cfg
+}
+
+// decompressLockFileForTest mirrors runtimemanager.DecompressLockFile without
+// importing that package (which would create an import cycle: runtimemanager
+// imports config). It strips the "br:" prefix, base64-decodes, then brotli
+// decompresses.
+func decompressLockFileForTest(t *testing.T, data string) string {
+	t.Helper()
+	const prefix = "br:"
+	if !strings.HasPrefix(data, prefix) {
+		t.Fatalf("lock file missing %q prefix", prefix)
+	}
+	compressed, err := base64.StdEncoding.DecodeString(data[len(prefix):])
+	if err != nil {
+		t.Fatalf("base64 decode error: %v", err)
+	}
+	decompressed, err := io.ReadAll(brotli.NewReader(bytes.NewReader(compressed)))
+	if err != nil {
+		t.Fatalf("brotli decompress error: %v", err)
+	}
+	return string(decompressed)
+}
+
+func TestDefaultConfigGoRuntime(t *testing.T) {
+	cfg := runDefaultConfigForTest(t)
+
+	rt, ok := cfg.Runtimes["go"]
+	if !ok {
+		t.Fatal(`runtimes["go"] missing from default config`)
+	}
+	if rt.Kind != RuntimeKindGo {
+		t.Errorf("go runtime kind = %q, want %q", rt.Kind, RuntimeKindGo)
+	}
+	if rt.Mode != RuntimeModeManaged {
+		t.Errorf("go runtime mode = %q, want %q", rt.Mode, RuntimeModeManaged)
+	}
+	if rt.Go == nil || rt.Go.GoVersion == "" {
+		t.Fatal("go runtime missing goVersion")
+	}
+	if rt.Managed == nil || rt.Managed.Binaries == nil {
+		t.Fatal("go runtime missing managed binaries")
+	}
+
+	// Every managed binary MUST carry a SHA-256 hash and URL: the project's
+	// security policy forbids hash-less downloads. Verify across all platforms.
+	binaryCount := 0
+	for osType, archMap := range rt.Managed.Binaries {
+		for archType, libcMap := range archMap {
+			for libc, info := range libcMap {
+				binaryCount++
+				if info.Hash == "" {
+					t.Errorf("go SDK binary %s/%s/%s missing mandatory hash", osType, archType, libc)
+				}
+				if info.URL == "" {
+					t.Errorf("go SDK binary %s/%s/%s missing url", osType, archType, libc)
+				}
+				if info.BinaryPath == nil || *info.BinaryPath == "" {
+					t.Errorf("go SDK binary %s/%s/%s missing binaryPath", osType, archType, libc)
+				}
+			}
+		}
+	}
+	if binaryCount == 0 {
+		t.Fatal("go runtime has no managed binaries")
+	}
+
+	// The plan requires linux/darwin on amd64/arm64.
+	required := []struct {
+		os   syslist.OsType
+		arch syslist.ArchType
+	}{
+		{syslist.OsTypeLinux, syslist.ArchTypeAmd64},
+		{syslist.OsTypeLinux, syslist.ArchTypeArm64},
+		{syslist.OsTypeDarwin, syslist.ArchTypeAmd64},
+		{syslist.OsTypeDarwin, syslist.ArchTypeArm64},
+	}
+	for _, r := range required {
+		archMap, ok := rt.Managed.Binaries[r.os]
+		if !ok {
+			t.Errorf("go runtime missing OS %q", r.os)
+			continue
+		}
+		if _, ok := archMap[r.arch]; !ok {
+			t.Errorf("go runtime missing %s/%s", r.os, r.arch)
+		}
+	}
+}
+
+func TestDefaultConfigGovulncheckApp(t *testing.T) {
+	cfg := runDefaultConfigForTest(t)
+
+	app, ok := cfg.Apps["govulncheck"]
+	if !ok {
+		t.Fatal(`apps["govulncheck"] missing from default config`)
+	}
+	if app.Go == nil {
+		t.Fatal("govulncheck app has no go config")
+	}
+	if app.Go.PackageName != "golang.org/x/vuln/cmd/govulncheck" {
+		t.Errorf("govulncheck packageName = %q, want %q", app.Go.PackageName, "golang.org/x/vuln/cmd/govulncheck")
+	}
+	if app.Go.Version == "" {
+		t.Error("govulncheck app missing version")
+	}
+	// Lock file is mandatory for Go apps and must be the brotli-compressed wrapper.
+	if app.Go.LockFile == "" {
+		t.Fatal("govulncheck app has empty lockFile (mandatory for Go apps)")
+	}
+
+	wrapper := decompressLockFileForTest(t, app.Go.LockFile)
+
+	var lf struct {
+		Mod string `json:"mod"`
+		Sum string `json:"sum"`
+	}
+	if err := json.Unmarshal([]byte(wrapper), &lf); err != nil {
+		t.Fatalf("lock file is not valid JSON wrapper: %v\ncontent: %s", err, wrapper)
+	}
+	if lf.Mod == "" {
+		t.Error("lock file wrapper missing go.mod content")
+	}
+	if lf.Sum == "" {
+		t.Error("lock file wrapper missing go.sum content")
+	}
+	if !strings.Contains(lf.Mod, "golang.org/x/vuln") {
+		t.Errorf("go.mod should require golang.org/x/vuln, got:\n%s", lf.Mod)
+	}
+	if !strings.Contains(lf.Sum, "golang.org/x/vuln") {
+		t.Errorf("go.sum should contain golang.org/x/vuln checksums, got:\n%s", lf.Sum)
 	}
 }
 
