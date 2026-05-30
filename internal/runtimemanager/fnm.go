@@ -290,6 +290,25 @@ func (rm *RuntimeManager) installNodeVersion(fnmPath, nodeVersion, cacheRoot str
 	return nil
 }
 
+// fnmMuslNodeDistMirror is the unofficial-builds mirror that publishes
+// musl-linked Node.js binaries. The default fnm mirror (nodejs.org) only ships
+// glibc builds, which cannot execute on musl hosts (Alpine Linux).
+const fnmMuslNodeDistMirror = "https://unofficial-builds.nodejs.org/download/release"
+
+// muslFNMArch maps a Go architecture (GOARCH) to the FNM_ARCH token used by the
+// unofficial-builds musl mirror. It returns "" for architectures that have no
+// published musl build, signaling that fnm should stay on its default mirror.
+func muslFNMArch(goarch string) string {
+	switch goarch {
+	case "amd64":
+		return "x64-musl"
+	case "arm64":
+		return "arm64-musl"
+	default:
+		return ""
+	}
+}
+
 func (rm *RuntimeManager) installNodeVersionOnce(fnmPath, nodeVersion, cacheRoot string) error {
 	nodeBinPath := env.GetNodeBinaryPath(cacheRoot, nodeVersion)
 

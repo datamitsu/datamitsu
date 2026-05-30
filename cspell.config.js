@@ -179,5 +179,9 @@ export default {
     "pkgs",
     "scoop",
     "winget",
+    "libstdc",
+    "libgcc",
+    "remirrored",
+    "SHASUMS",
   ],
 };

@@ -72,6 +72,36 @@ func makeFNMTestRuntimes() config.MapOfRuntimes {
 	}
 }
 
+func TestMuslFNMArch(t *testing.T) {
+	tests := []struct {
+		name   string
+		goarch string
+		want   string
+	}{
+		{name: "amd64 maps to x64-musl", goarch: "amd64", want: "x64-musl"},
+		{name: "arm64 maps to arm64-musl", goarch: "arm64", want: "arm64-musl"},
+		{name: "arm has no musl build", goarch: "arm", want: ""},
+		{name: "386 has no musl build", goarch: "386", want: ""},
+		{name: "ppc64le has no musl build", goarch: "ppc64le", want: ""},
+		{name: "empty arch maps to empty", goarch: "", want: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := muslFNMArch(tt.goarch); got != tt.want {
+				t.Errorf("muslFNMArch(%q) = %q, want %q", tt.goarch, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestFNMMuslNodeDistMirror(t *testing.T) {
+	const want = "https://unofficial-builds.nodejs.org/download/release"
+	if fnmMuslNodeDistMirror != want {
+		t.Errorf("fnmMuslNodeDistMirror = %q, want %q", fnmMuslNodeDistMirror, want)
+	}
+}
+
 func TestGetFNMEnvVars(t *testing.T) {
 	appEnvPath := "/cache/.apps/fnm/mmdc/abc123"
 	vars := getFNMEnvVars(appEnvPath)
