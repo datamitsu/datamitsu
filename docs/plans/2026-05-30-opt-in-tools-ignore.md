@@ -135,16 +135,16 @@ list (or adding `!**/*: <tool>` lines).
 
 ### Task 3: Wire `--opt-in-tools` into `runSetup`
 
-- [ ] add `setupOptInTools bool` var and register
+- [x] add `setupOptInTools bool` var and register
       `setupCmd.Flags().BoolVar(&setupOptInTools, "opt-in-tools", false, ...)` in `init()`
-- [ ] add early clobber guard in `runSetup` right after `rootPath` is resolved:
+- [x] add early clobber guard in `runSetup` right after `rootPath` is resolved:
       `if setupOptInTools { if err := ensureNoExistingIgnore(rootPath); err != nil { return err } }`
       (fail fast before any installs)
-- [ ] call `writeOptInIgnore(rootPath, cfg.Tools, setupDryRun)` after the config
+- [x] call `writeOptInIgnore(rootPath, cfg.Tools, setupDryRun)` after the config
       install loop / `installErrors` check and **before** the post-setup fix block
-- [ ] write/extend a test asserting the flag default is `false` and the command
+- [x] write/extend a test asserting the flag default is `false` and the command
       registers the flag (table/registration-style, matching existing patterns)
-- [ ] run `go build` and `go test ./...` — must pass before Task 4
+- [x] run `go build` and `go test ./...` — must pass before Task 4
 
 ### Task 4: Documentation
 

@@ -316,6 +316,43 @@ func TestWriteOptInIgnore(t *testing.T) {
 	})
 }
 
+func TestSetupCommandRegistered(t *testing.T) {
+	found := false
+	for _, cmd := range rootCmd.Commands() {
+		if cmd.Use == "setup" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("setup command not registered with rootCmd")
+	}
+}
+
+func TestSetupCommandFlags(t *testing.T) {
+	flags := setupCmd.Flags()
+
+	tests := []struct {
+		name         string
+		defaultValue string
+	}{
+		{"dry-run", "false"},
+		{"skip-fix", "false"},
+		{"opt-in-tools", "false"},
+	}
+
+	for _, tt := range tests {
+		f := flags.Lookup(tt.name)
+		if f == nil {
+			t.Errorf("flag %q not found on setup command", tt.name)
+			continue
+		}
+		if f.DefValue != tt.defaultValue {
+			t.Errorf("flag %q default = %q, want %q", tt.name, f.DefValue, tt.defaultValue)
+		}
+	}
+}
+
 func TestSetupLoadConfigReturns4Tuple(t *testing.T) {
 	cfg, layerMap, vm, err := loadConfig()
 	if err != nil {
