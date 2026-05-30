@@ -148,14 +148,14 @@ list (or adding `!**/*: <tool>` lines).
 
 ### Task 4: Documentation
 
-- [ ] `website/docs/reference/cli-commands.md`: add `--opt-in-tools` row to the
+- [x] `website/docs/reference/cli-commands.md`: add `--opt-in-tools` row to the
       `setup` flag table
-- [ ] `website/docs/getting-started/quick-start.md`: in step 5, add an
+- [x] `website/docs/getting-started/quick-start.md`: in step 5, add an
       "Opt-in to tools one at a time" note with the `datamitsu setup --opt-in-tools`
       command and a sample generated `.datamitsuignore`
-- [ ] `website/docs/reference/ignore-rules.md`: add a short "Generating an
+- [x] `website/docs/reference/ignore-rules.md`: add a short "Generating an
       all-disabled file" subsection pointing at the flag
-- [ ] run `go test ./...` — must still pass (no code change here)
+- [x] run `go test ./...` — must still pass (no code change here)
 
 ### Task 5: Verify acceptance criteria
 
