@@ -159,17 +159,17 @@ unofficial-builds dynamically links `libstdc++` (and `libgcc`), which base
 `alpine` lacks — without it the build fails at the next step even after the
 mirror fix.
 
-- [ ] add `libstdc++` to the existing `apk add --no-cache` block in
+- [x] add `libstdc++` to the existing `apk add --no-cache` block in
       `docker/Dockerfile.alpine` (L22-24)
-- [ ] **keep `git`** — it is NOT redundant despite go-git/v6: datamitsu shells out
+- [x] **keep `git`** — it is NOT redundant despite go-git/v6: datamitsu shells out
       to the `git` binary for git-root detection (`internal/traverser/git.go`
       `GetGitRoot`, `internal/facts/facts.go`) and `git diff --cached`
       (`internal/runner/runner.go`); go-git/v6 is used only in
       `internal/traverser/q.go` + `cmd/exec_todo.go`. The wrapper's `RUN git init`
       also needs the binary.
-- [ ] `libgcc` is pulled transitively by `libstdc++` — no separate entry needed
-- [ ] glibc image `docker/Dockerfile` is unaffected (glibc Node is not remirrored)
-- [ ] (no Go unit test applies) acceptance is the Alpine image build in Task 6
+- [x] `libgcc` is pulled transitively by `libstdc++` — no separate entry needed
+- [x] glibc image `docker/Dockerfile` is unaffected (glibc Node is not remirrored)
+- [x] (no Go unit test applies) acceptance is the Alpine image build in Task 6
 
 ### Task 5: Document the musl behavior + escape hatch (datamitsu docs)
 
