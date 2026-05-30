@@ -9,6 +9,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/pnpmdefaults"
+	"github.com/datamitsu/datamitsu/internal/target"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -307,6 +308,35 @@ func muslFNMArch(goarch string) string {
 	default:
 		return ""
 	}
+}
+
+// buildFNMInstallEnv builds the environment overrides applied to the `fnm
+// install` child process. It always sets FNM_DIR. On musl hosts with a
+// supported architecture it additionally points fnm at the unofficial-builds
+// musl mirror (FNM_NODE_DIST_MIRROR) and selects the musl arch token
+// (FNM_ARCH) so the downloaded Node.js binary can actually execute. Each of
+// those two vars is injected only when the user has not already set it (checked
+// via os.LookupEnv), so an explicit override always wins. glibc hosts,
+// unsupported arches, and LibcUnknown hosts get FNM_DIR alone, leaving fnm on
+// its default mirror.
+func buildFNMInstallEnv(host target.Target, fnmDir string) map[string]string {
+	envOverrides := map[string]string{"FNM_DIR": fnmDir}
+
+	if host.Libc != target.LibcMusl {
+		return envOverrides
+	}
+	muslArch := muslFNMArch(host.Arch)
+	if muslArch == "" {
+		return envOverrides
+	}
+
+	if _, ok := os.LookupEnv("FNM_NODE_DIST_MIRROR"); !ok {
+		envOverrides["FNM_NODE_DIST_MIRROR"] = fnmMuslNodeDistMirror
+	}
+	if _, ok := os.LookupEnv("FNM_ARCH"); !ok {
+		envOverrides["FNM_ARCH"] = muslArch
+	}
+	return envOverrides
 }
 
 func (rm *RuntimeManager) installNodeVersionOnce(fnmPath, nodeVersion, cacheRoot string) error {

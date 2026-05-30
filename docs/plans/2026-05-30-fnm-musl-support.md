@@ -120,7 +120,7 @@ mirrors). The user always wins: an explicitly set `FNM_NODE_DIST_MIRROR` /
 
 ### Task 2: Add musl env-builder with user-env precedence (pure)
 
-- [ ] write test `TestBuildFNMInstallEnv` (uses `t.Setenv`):
+- [x] write test `TestBuildFNMInstallEnv` (uses `t.Setenv`):
   - glibc host → map contains only `FNM_DIR`
   - musl + `amd64` → adds `FNM_NODE_DIST_MIRROR` + `FNM_ARCH=x64-musl`
   - musl + `arm64` → adds `FNM_ARCH=arm64-musl`
@@ -128,12 +128,12 @@ mirrors). The user always wins: an explicitly set `FNM_NODE_DIST_MIRROR` /
   - `LibcUnknown` host → only `FNM_DIR`
   - musl + user-set `FNM_NODE_DIST_MIRROR` → value preserved, not overridden
   - musl + user-set `FNM_ARCH` → value preserved, not overridden
-- [ ] run test — confirm it FAILS
-- [ ] implement `func buildFNMInstallEnv(host target.Target, fnmDir string) map[string]string`
+- [x] run test — confirm it FAILS
+- [x] implement `func buildFNMInstallEnv(host target.Target, fnmDir string) map[string]string`
       in `fnm.go`: starts from `{"FNM_DIR": fnmDir}`, and when `host.Libc == target.LibcMusl`
       and `muslFNMArch(host.Arch) != ""`, sets each var only if absent via `os.LookupEnv`
-- [ ] add `"github.com/datamitsu/datamitsu/internal/target"` import to `fnm.go`
-- [ ] run `go test ./internal/runtimemanager/...` — must pass before Task 3
+- [x] add `"github.com/datamitsu/datamitsu/internal/target"` import to `fnm.go`
+- [x] run `go test ./internal/runtimemanager/...` — must pass before Task 3
 
 ### Task 3: Wire env-builder into `installNodeVersionOnce` + observability
 

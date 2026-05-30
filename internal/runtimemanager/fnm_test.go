@@ -9,6 +9,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/syslist"
+	"github.com/datamitsu/datamitsu/internal/target"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -100,6 +101,105 @@ func TestFNMMuslNodeDistMirror(t *testing.T) {
 	if fnmMuslNodeDistMirror != want {
 		t.Errorf("fnmMuslNodeDistMirror = %q, want %q", fnmMuslNodeDistMirror, want)
 	}
+}
+
+func TestBuildFNMInstallEnv(t *testing.T) {
+	const fnmDir = "/cache/.runtimes/fnm-nodes"
+
+	// ensureUnset guarantees an env var is absent for the duration of the test,
+	// restoring its original value (or unset state) on cleanup. t.Setenv records
+	// the prior value, then os.Unsetenv removes it so os.LookupEnv reports absent.
+	ensureUnset := func(t *testing.T, key string) {
+		t.Helper()
+		t.Setenv(key, "")
+		_ = os.Unsetenv(key)
+	}
+
+	assertOnlyFNMDir := func(t *testing.T, got map[string]string) {
+		t.Helper()
+		if got["FNM_DIR"] != fnmDir {
+			t.Errorf("FNM_DIR = %q, want %q", got["FNM_DIR"], fnmDir)
+		}
+		if len(got) != 1 {
+			t.Errorf("expected only FNM_DIR, got %d entries: %v", len(got), got)
+		}
+	}
+
+	t.Run("glibc host sets only FNM_DIR", func(t *testing.T) {
+		ensureUnset(t, "FNM_NODE_DIST_MIRROR")
+		ensureUnset(t, "FNM_ARCH")
+		host := target.Target{OS: "linux", Arch: "amd64", Libc: target.LibcGlibc}
+		assertOnlyFNMDir(t, buildFNMInstallEnv(host, fnmDir))
+	})
+
+	t.Run("musl amd64 adds mirror and x64-musl arch", func(t *testing.T) {
+		ensureUnset(t, "FNM_NODE_DIST_MIRROR")
+		ensureUnset(t, "FNM_ARCH")
+		host := target.Target{OS: "linux", Arch: "amd64", Libc: target.LibcMusl}
+		got := buildFNMInstallEnv(host, fnmDir)
+		if got["FNM_DIR"] != fnmDir {
+			t.Errorf("FNM_DIR = %q, want %q", got["FNM_DIR"], fnmDir)
+		}
+		if got["FNM_NODE_DIST_MIRROR"] != fnmMuslNodeDistMirror {
+			t.Errorf("FNM_NODE_DIST_MIRROR = %q, want %q", got["FNM_NODE_DIST_MIRROR"], fnmMuslNodeDistMirror)
+		}
+		if got["FNM_ARCH"] != "x64-musl" {
+			t.Errorf("FNM_ARCH = %q, want %q", got["FNM_ARCH"], "x64-musl")
+		}
+	})
+
+	t.Run("musl arm64 adds arm64-musl arch", func(t *testing.T) {
+		ensureUnset(t, "FNM_NODE_DIST_MIRROR")
+		ensureUnset(t, "FNM_ARCH")
+		host := target.Target{OS: "linux", Arch: "arm64", Libc: target.LibcMusl}
+		got := buildFNMInstallEnv(host, fnmDir)
+		if got["FNM_NODE_DIST_MIRROR"] != fnmMuslNodeDistMirror {
+			t.Errorf("FNM_NODE_DIST_MIRROR = %q, want %q", got["FNM_NODE_DIST_MIRROR"], fnmMuslNodeDistMirror)
+		}
+		if got["FNM_ARCH"] != "arm64-musl" {
+			t.Errorf("FNM_ARCH = %q, want %q", got["FNM_ARCH"], "arm64-musl")
+		}
+	})
+
+	t.Run("musl unsupported arch sets only FNM_DIR", func(t *testing.T) {
+		ensureUnset(t, "FNM_NODE_DIST_MIRROR")
+		ensureUnset(t, "FNM_ARCH")
+		host := target.Target{OS: "linux", Arch: "arm", Libc: target.LibcMusl}
+		assertOnlyFNMDir(t, buildFNMInstallEnv(host, fnmDir))
+	})
+
+	t.Run("unknown libc sets only FNM_DIR", func(t *testing.T) {
+		ensureUnset(t, "FNM_NODE_DIST_MIRROR")
+		ensureUnset(t, "FNM_ARCH")
+		host := target.Target{OS: "linux", Arch: "amd64", Libc: target.LibcUnknown}
+		assertOnlyFNMDir(t, buildFNMInstallEnv(host, fnmDir))
+	})
+
+	t.Run("user-set FNM_NODE_DIST_MIRROR is preserved", func(t *testing.T) {
+		t.Setenv("FNM_NODE_DIST_MIRROR", "https://custom.example.com/node")
+		ensureUnset(t, "FNM_ARCH")
+		host := target.Target{OS: "linux", Arch: "amd64", Libc: target.LibcMusl}
+		got := buildFNMInstallEnv(host, fnmDir)
+		if v, ok := got["FNM_NODE_DIST_MIRROR"]; ok {
+			t.Errorf("FNM_NODE_DIST_MIRROR should not be overridden when user set it; got %q", v)
+		}
+		if got["FNM_ARCH"] != "x64-musl" {
+			t.Errorf("FNM_ARCH = %q, want %q", got["FNM_ARCH"], "x64-musl")
+		}
+	})
+
+	t.Run("user-set FNM_ARCH is preserved", func(t *testing.T) {
+		ensureUnset(t, "FNM_NODE_DIST_MIRROR")
+		t.Setenv("FNM_ARCH", "x64")
+		host := target.Target{OS: "linux", Arch: "amd64", Libc: target.LibcMusl}
+		got := buildFNMInstallEnv(host, fnmDir)
+		if v, ok := got["FNM_ARCH"]; ok {
+			t.Errorf("FNM_ARCH should not be overridden when user set it; got %q", v)
+		}
+		if got["FNM_NODE_DIST_MIRROR"] != fnmMuslNodeDistMirror {
+			t.Errorf("FNM_NODE_DIST_MIRROR = %q, want %q", got["FNM_NODE_DIST_MIRROR"], fnmMuslNodeDistMirror)
+		}
+	})
 }
 
 func TestGetFNMEnvVars(t *testing.T) {
