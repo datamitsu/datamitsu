@@ -173,14 +173,16 @@ mirror fix.
 
 ### Task 5: Document the musl behavior + escape hatch (datamitsu docs)
 
-- [ ] search `website/docs` for existing musl/Alpine runtime docs
+- [x] search `website/docs` for existing musl/Alpine runtime docs
       (`grep -ri "musl\|alpine" website/docs`); pick the closest runtime/FNM page
-- [ ] document: on musl hosts datamitsu auto-selects unofficial musl Node builds;
+      → `website/docs/how-to/use-in-alpine.md` (primary) + `website/docs/guides/runtime-management.md`
+- [x] document: on musl hosts datamitsu auto-selects unofficial musl Node builds;
       override via `FNM_NODE_DIST_MIRROR` / `FNM_ARCH` (escape hatch for custom or
       air-gapped mirrors); note these env vars always take precedence
-- [ ] add the **Alpine `libstdc++` requirement** note (musl Node dynamically links
+- [x] add the **Alpine `libstdc++` requirement** note (musl Node dynamically links
       `libstdc++`; `apk add libstdc++`) so users don't hit the next failure
-- [ ] run docs build/lint if the project has one (e.g. `pnpm` docs script); fix issues
+- [x] run docs build/lint if the project has one (e.g. `pnpm` docs script); fix issues
+      → `pnpm build` (docusaurus, onBrokenAnchors/onBrokenLinks=throw) green; `pnpm exec dm check` all 16 tools green
 
 ### Task 6: Verify acceptance criteria
 
