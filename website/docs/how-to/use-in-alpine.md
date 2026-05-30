@@ -155,7 +155,7 @@ export FNM_NODE_DIST_MIRROR=https://mirror.internal.example.com/nodejs/release
 export FNM_ARCH=x64-musl
 ```
 
-Each variable is honored independently: set only `FNM_NODE_DIST_MIRROR` to redirect downloads while keeping datamitsu's auto-selected `FNM_ARCH`, or set only `FNM_ARCH` to override the arch token while keeping the default mirror.
+Each variable is honored independently: set only `FNM_NODE_DIST_MIRROR` to redirect downloads while keeping datamitsu's auto-selected `FNM_ARCH`, or set only `FNM_ARCH` to override the arch token while datamitsu still auto-selects the unofficial musl mirror. To keep fnm on a different (e.g. the default `nodejs.org`) mirror you must set `FNM_NODE_DIST_MIRROR` yourself.
 
 ### Automatic Fallback
 
