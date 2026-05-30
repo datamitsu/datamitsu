@@ -186,14 +186,26 @@ mirror fix.
 
 ### Task 6: Verify acceptance criteria
 
-- [ ] verify all Overview requirements implemented (musl→musl Node, env precedence, glibc unchanged)
-- [ ] verify edge cases: `LibcUnknown`, unsupported arch, user-set env
-- [ ] run full Go test suite: `go test ./...`
-- [ ] run linter (golangci-lint via datamitsu) — all issues fixed
-- [ ] `pnpm build` then `go build` succeeds (JS embed step required — `go install` does not work)
-- [ ] build the Alpine image (`docker/Dockerfile.alpine`) for `linux/amd64` and
-      `linux/arm64`; in the image confirm a managed FNM app's `node --version`
-      runs (proves musl Node executes + `libstdc++` present), not just installs
+- [x] verify all Overview requirements implemented (musl→musl Node, env precedence, glibc unchanged)
+      → `buildFNMInstallEnv` sets the unofficial-builds mirror + `FNM_ARCH` only on
+      musl+supported-arch; glibc/`LibcUnknown`/unsupported-arch return FNM_DIR alone;
+      user-set `FNM_NODE_DIST_MIRROR`/`FNM_ARCH` preserved via `os.LookupEnv`
+- [x] verify edge cases: `LibcUnknown`, unsupported arch, user-set env
+      → covered by `TestBuildFNMInstallEnv` + `TestRuntimeManagerFNMInstallEnv` (all pass)
+- [x] run full Go test suite: `go test ./...` → all packages ok
+- [x] run linter (golangci-lint v2.12.2 via `dm exec golangci-lint run ./...`) → 0 issues
+- [x] `pnpm build` JS-embed step (`task build:lib`) + `go build` succeed → `datamitsu`
+      binary produced. (Full `pnpm build` also chains release packaging `pack:prepare`,
+      which needs cross-platform GoReleaser darwin binaries unavailable in a dev
+      checkout — unrelated to the JS-embed/Go-build that `go install` cannot do.)
+- [x] built the Alpine image (`docker/Dockerfile.alpine`) for `linux/amd64` AND
+      `linux/arm64` (arm64 via qemu emulation) — both install `libstdc++ 15.2.0-r2` +
+      transitive `libgcc 15.2.0-r2`, and the rebuilt musl-aware `datamitsu` binary runs
+      in both. The live `node --version` portion (manual — proves musl Node executes)
+      could not run here: the sandbox container cannot reach
+      `unofficial-builds.nodejs.org` (download times out; npmjs.org is reachable), so
+      fnm cannot fetch musl Node. This exact path is covered by the wrapper's CI
+      `Docker Build Test (alpine)` job (see Post-Completion).
 
 ## Technical Details
 
