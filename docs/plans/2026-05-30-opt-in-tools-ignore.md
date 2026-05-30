@@ -120,18 +120,18 @@ list (or adding `!**/*: <tool>` lines).
 
 ### Task 2: Clobber guard + file writer
 
-- [ ] write failing test `TestEnsureNoExistingIgnore`: returns error when
+- [x] write failing test `TestEnsureNoExistingIgnore`: returns error when
       `.datamitsuignore` exists in a `t.TempDir()`, nil when absent
-- [ ] write failing test `TestWriteOptInIgnore`: real mode writes the file with
+- [x] write failing test `TestWriteOptInIgnore`: real mode writes the file with
       expected content; dry-run mode does NOT create the file; zero-tools case
       writes nothing
-- [ ] implement `ensureNoExistingIgnore(rootPath string) error` (use `os.Stat`;
+- [x] implement `ensureNoExistingIgnore(rootPath string) error` (use `os.Stat`;
       distinguish exists vs `os.IsNotExist` vs other stat error)
-- [ ] implement `writeOptInIgnore(rootPath string, tools config.MapOfTools, dryRun bool) error`
+- [x] implement `writeOptInIgnore(rootPath string, tools config.MapOfTools, dryRun bool) error`
       (skip on zero tools with an info line; dry-run prints "Would create";
       real mode `os.WriteFile` 0o644 + "✨ Created" line)
-- [ ] add an `optInIgnoreFilename = ".datamitsuignore"` const
-- [ ] run `go test ./cmd/...` — must pass before Task 3
+- [x] add an `optInIgnoreFilename = ".datamitsuignore"` const
+- [x] run `go test ./cmd/...` — must pass before Task 3
 
 ### Task 3: Wire `--opt-in-tools` into `runSetup`
 

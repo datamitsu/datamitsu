@@ -5,6 +5,8 @@ import (
 	"github.com/datamitsu/datamitsu/internal/datamitsuignore"
 	"github.com/datamitsu/datamitsu/internal/install"
 	"fmt"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -247,6 +249,71 @@ func TestBuildOptInIgnoreContentParses(t *testing.T) {
 	if !reflect.DeepEqual(rule.Tools, wantTools) {
 		t.Errorf("rule.Tools = %v, want %v", rule.Tools, wantTools)
 	}
+}
+
+func TestEnsureNoExistingIgnore(t *testing.T) {
+	t.Run("absent returns nil", func(t *testing.T) {
+		dir := t.TempDir()
+		if err := ensureNoExistingIgnore(dir); err != nil {
+			t.Errorf("ensureNoExistingIgnore() error = %v, want nil", err)
+		}
+	})
+
+	t.Run("present returns error", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, optInIgnoreFilename)
+		if err := os.WriteFile(path, []byte("**/*: eslint\n"), 0o644); err != nil {
+			t.Fatalf("setup: WriteFile() error = %v", err)
+		}
+		if err := ensureNoExistingIgnore(dir); err == nil {
+			t.Error("ensureNoExistingIgnore() error = nil, want non-nil when file exists")
+		}
+	})
+}
+
+func TestWriteOptInIgnore(t *testing.T) {
+	tools := config.MapOfTools{
+		"prettier": {Name: "prettier"},
+		"eslint":   {Name: "eslint"},
+	}
+
+	t.Run("real mode writes file with expected content", func(t *testing.T) {
+		dir := t.TempDir()
+		if err := writeOptInIgnore(dir, tools, false); err != nil {
+			t.Fatalf("writeOptInIgnore() error = %v", err)
+		}
+		path := filepath.Join(dir, optInIgnoreFilename)
+		got, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("ReadFile() error = %v", err)
+		}
+		want, _ := buildOptInIgnoreContent(tools)
+		if string(got) != want {
+			t.Errorf("file content = %q, want %q", string(got), want)
+		}
+	})
+
+	t.Run("dry-run does not create file", func(t *testing.T) {
+		dir := t.TempDir()
+		if err := writeOptInIgnore(dir, tools, true); err != nil {
+			t.Fatalf("writeOptInIgnore() error = %v", err)
+		}
+		path := filepath.Join(dir, optInIgnoreFilename)
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Errorf("dry-run should not create file; stat err = %v", err)
+		}
+	})
+
+	t.Run("zero tools writes nothing", func(t *testing.T) {
+		dir := t.TempDir()
+		if err := writeOptInIgnore(dir, config.MapOfTools{}, false); err != nil {
+			t.Fatalf("writeOptInIgnore() error = %v", err)
+		}
+		path := filepath.Join(dir, optInIgnoreFilename)
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Errorf("zero-tools case should not create file; stat err = %v", err)
+		}
+	})
 }
 
 func TestSetupLoadConfigReturns4Tuple(t *testing.T) {
