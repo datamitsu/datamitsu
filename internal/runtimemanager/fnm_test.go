@@ -202,6 +202,66 @@ func TestBuildFNMInstallEnv(t *testing.T) {
 	})
 }
 
+func TestRuntimeManagerFNMInstallEnv(t *testing.T) {
+	const fnmDir = "/cache/.runtimes/fnm-nodes"
+
+	// ensureUnset guarantees an env var is absent for the duration of the test,
+	// so os.LookupEnv inside buildFNMInstallEnv reports it as user-unset.
+	ensureUnset := func(t *testing.T, key string) {
+		t.Helper()
+		t.Setenv(key, "")
+		_ = os.Unsetenv(key)
+	}
+
+	t.Run("musl host install env carries mirror and arch", func(t *testing.T) {
+		ensureUnset(t, "FNM_NODE_DIST_MIRROR")
+		ensureUnset(t, "FNM_ARCH")
+		rm := newTestRMWithTarget(makeFNMTestRuntimes(), target.Target{
+			OS: "linux", Arch: "amd64", Libc: target.LibcMusl,
+		})
+		got := rm.fnmInstallEnv(fnmDir)
+		if got["FNM_DIR"] != fnmDir {
+			t.Errorf("FNM_DIR = %q, want %q", got["FNM_DIR"], fnmDir)
+		}
+		if got["FNM_NODE_DIST_MIRROR"] != fnmMuslNodeDistMirror {
+			t.Errorf("FNM_NODE_DIST_MIRROR = %q, want %q", got["FNM_NODE_DIST_MIRROR"], fnmMuslNodeDistMirror)
+		}
+		if got["FNM_ARCH"] != "x64-musl" {
+			t.Errorf("FNM_ARCH = %q, want %q", got["FNM_ARCH"], "x64-musl")
+		}
+	})
+
+	t.Run("glibc host install env carries only FNM_DIR", func(t *testing.T) {
+		ensureUnset(t, "FNM_NODE_DIST_MIRROR")
+		ensureUnset(t, "FNM_ARCH")
+		rm := newTestRMWithTarget(makeFNMTestRuntimes(), target.Target{
+			OS: "linux", Arch: "amd64", Libc: target.LibcGlibc,
+		})
+		got := rm.fnmInstallEnv(fnmDir)
+		if got["FNM_DIR"] != fnmDir {
+			t.Errorf("FNM_DIR = %q, want %q", got["FNM_DIR"], fnmDir)
+		}
+		if len(got) != 1 {
+			t.Errorf("expected only FNM_DIR, got %d entries: %v", len(got), got)
+		}
+	})
+
+	t.Run("user-set env preserved on musl host", func(t *testing.T) {
+		t.Setenv("FNM_NODE_DIST_MIRROR", "https://custom.example.com/node")
+		t.Setenv("FNM_ARCH", "x64")
+		rm := newTestRMWithTarget(makeFNMTestRuntimes(), target.Target{
+			OS: "linux", Arch: "amd64", Libc: target.LibcMusl,
+		})
+		got := rm.fnmInstallEnv(fnmDir)
+		if _, ok := got["FNM_NODE_DIST_MIRROR"]; ok {
+			t.Error("FNM_NODE_DIST_MIRROR should not be injected when user set it")
+		}
+		if _, ok := got["FNM_ARCH"]; ok {
+			t.Error("FNM_ARCH should not be injected when user set it")
+		}
+	})
+}
+
 func TestGetFNMEnvVars(t *testing.T) {
 	appEnvPath := "/cache/.apps/fnm/mmdc/abc123"
 	vars := getFNMEnvVars(appEnvPath)

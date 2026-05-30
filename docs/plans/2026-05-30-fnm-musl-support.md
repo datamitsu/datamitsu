@@ -137,19 +137,19 @@ mirrors). The user always wins: an explicitly set `FNM_NODE_DIST_MIRROR` /
 
 ### Task 3: Wire env-builder into `installNodeVersionOnce` + observability
 
-- [ ] write/extend test asserting the install path uses `buildFNMInstallEnv` for
+- [x] write/extend test asserting the install path uses `buildFNMInstallEnv` for
       a musl `rm.hostTarget` (construct via `newTestRMWithTarget`; assert the
       resulting env map carries the musl mirror/arch). Keep the assertion at the
       env-map level — do NOT spawn real `fnm`.
-- [ ] run test — confirm it FAILS / reflects new behavior
-- [ ] in `installNodeVersionOnce`, replace the inline
+- [x] run test — confirm it FAILS / reflects new behavior
+- [x] in `installNodeVersionOnce`, replace the inline
       `buildEnvWithOverrides(os.Environ(), map[string]string{"FNM_DIR": fnmDir})`
       with `buildEnvWithOverrides(os.Environ(), buildFNMInstallEnv(rm.hostTarget, fnmDir))`
-- [ ] add a one-time `log.Info` (zap) when the musl override is applied:
+- [x] add a one-time `log.Info` (zap) when the musl override is applied:
       message e.g. `"configuring fnm for musl Node.js builds"` with
       `zap.String("mirror", …)` and `zap.String("arch", …)`; skip the log when the
       user supplied the env vars themselves
-- [ ] run `go test ./internal/runtimemanager/...` — must pass before Task 4
+- [x] run `go test ./internal/runtimemanager/...` — must pass before Task 4
 
 ### Task 4: Add `libstdc++` to datamitsu's Alpine image (`docker/Dockerfile.alpine`)
 
