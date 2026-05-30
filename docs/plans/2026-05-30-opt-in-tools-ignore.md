@@ -159,12 +159,20 @@ list (or adding `!**/*: <tool>` lines).
 
 ### Task 5: Verify acceptance criteria
 
-- [ ] verify Overview requirements: flag exists, no-flag behavior unchanged,
+- [x] verify Overview requirements: flag exists, no-flag behavior unchanged,
       file written before fix, clobber-guarded, dry-run safe, content parses
-- [ ] verify edge cases handled: zero tools, existing file, dry-run
-- [ ] run full `go test ./...`
-- [ ] run the repo's linter (`datamitsu check` / `datamitsu lint`) — fix any issues
-- [ ] confirm generated `.datamitsuignore` is canonical (stable under `datamitsu fix`)
+      (flag registered `setup.go:43`/`TestSetupCommandFlags`; all opt-in logic
+      gated on `setupOptInTools` `setup.go:64,200`; write at `:200` precedes the
+      fix block `:206`; `ensureNoExistingIgnore` fail-fast `:64`; dry-run honored
+      `:339`; parse round-trip `TestBuildOptInIgnoreContentParses`)
+- [x] verify edge cases handled: zero tools, existing file, dry-run
+      (`TestBuildOptInIgnoreContentEmpty`, `TestWriteOptInIgnore` zero-tools +
+      dry-run subtests, `TestEnsureNoExistingIgnore` present case)
+- [x] run full `go test ./...` — all packages pass
+- [x] run the repo's linter (`datamitsu lint`) — 16 tools green; golangci-lint 0 issues
+- [x] confirm generated `.datamitsuignore` is canonical (stable under `datamitsu fix`)
+      — added `TestBuildOptInIgnoreContentCanonical`: content round-trips through
+      `bundled.RunFix` byte-for-byte unchanged
 
 ## Technical Details
 

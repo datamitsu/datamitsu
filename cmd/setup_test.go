@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"github.com/datamitsu/datamitsu/internal/bundled"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/datamitsuignore"
 	"github.com/datamitsu/datamitsu/internal/install"
@@ -248,6 +249,39 @@ func TestBuildOptInIgnoreContentParses(t *testing.T) {
 	wantTools := []string{"eslint", "hadolint", "prettier"}
 	if !reflect.DeepEqual(rule.Tools, wantTools) {
 		t.Errorf("rule.Tools = %v, want %v", rule.Tools, wantTools)
+	}
+}
+
+func TestBuildOptInIgnoreContentCanonical(t *testing.T) {
+	// The generated file must already be in canonical form so that a subsequent
+	// `datamitsu fix` is a no-op (does not rewrite it). Round-trip the content
+	// through the bundled fixer and assert it is byte-for-byte unchanged.
+	tools := config.MapOfTools{
+		"prettier":      {Name: "prettier"},
+		"eslint":        {Name: "eslint"},
+		"golangci-lint": {Name: "golangci-lint"},
+		"hadolint":      {Name: "hadolint"},
+		"shellcheck":    {Name: "shellcheck"},
+	}
+
+	content, _ := buildOptInIgnoreContent(tools)
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, optInIgnoreFilename)
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("setup: WriteFile() error = %v", err)
+	}
+
+	if err := bundled.RunFix(dir); err != nil {
+		t.Fatalf("RunFix() error = %v", err)
+	}
+
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	if string(got) != content {
+		t.Errorf("fix rewrote the generated file; not canonical\nbefore:\n%q\nafter:\n%q", content, string(got))
 	}
 }
 
