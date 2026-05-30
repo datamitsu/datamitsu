@@ -340,8 +340,8 @@ func buildFNMInstallEnv(host target.Target, fnmDir string) map[string]string {
 }
 
 // fnmInstallEnv computes the env overrides for the `fnm install` child process
-// for this host and logs once, at Info level, when datamitsu auto-configures
-// the musl Node.js mirror. The log fires only when datamitsu injected BOTH the
+// for this host and emits an Info log when datamitsu auto-configures the musl
+// Node.js mirror. The log fires only when datamitsu injected BOTH the
 // mirror and the arch (i.e. the user supplied neither) so the message never
 // reports a value the user already controls; whenever the user has set either
 // FNM_NODE_DIST_MIRROR or FNM_ARCH themselves the override is left to them and

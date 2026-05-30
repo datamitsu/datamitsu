@@ -20,6 +20,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -73,6 +74,16 @@ func makeFNMTestRuntimes() config.MapOfRuntimes {
 	}
 }
 
+// ensureEnvUnset guarantees an env var is absent for the duration of the test,
+// restoring its original value (or unset state) on cleanup. t.Setenv records the
+// prior value, then os.Unsetenv removes it so os.LookupEnv reports absent. The
+// t.Setenv call also means tests using this helper must not call t.Parallel.
+func ensureEnvUnset(t *testing.T, key string) {
+	t.Helper()
+	t.Setenv(key, "")
+	_ = os.Unsetenv(key)
+}
+
 func TestMuslFNMArch(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -106,15 +117,6 @@ func TestFNMMuslNodeDistMirror(t *testing.T) {
 func TestBuildFNMInstallEnv(t *testing.T) {
 	const fnmDir = "/cache/.runtimes/fnm-nodes"
 
-	// ensureUnset guarantees an env var is absent for the duration of the test,
-	// restoring its original value (or unset state) on cleanup. t.Setenv records
-	// the prior value, then os.Unsetenv removes it so os.LookupEnv reports absent.
-	ensureUnset := func(t *testing.T, key string) {
-		t.Helper()
-		t.Setenv(key, "")
-		_ = os.Unsetenv(key)
-	}
-
 	assertOnlyFNMDir := func(t *testing.T, got map[string]string) {
 		t.Helper()
 		if got["FNM_DIR"] != fnmDir {
@@ -126,15 +128,15 @@ func TestBuildFNMInstallEnv(t *testing.T) {
 	}
 
 	t.Run("glibc host sets only FNM_DIR", func(t *testing.T) {
-		ensureUnset(t, "FNM_NODE_DIST_MIRROR")
-		ensureUnset(t, "FNM_ARCH")
+		ensureEnvUnset(t, "FNM_NODE_DIST_MIRROR")
+		ensureEnvUnset(t, "FNM_ARCH")
 		host := target.Target{OS: "linux", Arch: "amd64", Libc: target.LibcGlibc}
 		assertOnlyFNMDir(t, buildFNMInstallEnv(host, fnmDir))
 	})
 
 	t.Run("musl amd64 adds mirror and x64-musl arch", func(t *testing.T) {
-		ensureUnset(t, "FNM_NODE_DIST_MIRROR")
-		ensureUnset(t, "FNM_ARCH")
+		ensureEnvUnset(t, "FNM_NODE_DIST_MIRROR")
+		ensureEnvUnset(t, "FNM_ARCH")
 		host := target.Target{OS: "linux", Arch: "amd64", Libc: target.LibcMusl}
 		got := buildFNMInstallEnv(host, fnmDir)
 		if got["FNM_DIR"] != fnmDir {
@@ -149,8 +151,8 @@ func TestBuildFNMInstallEnv(t *testing.T) {
 	})
 
 	t.Run("musl arm64 adds arm64-musl arch", func(t *testing.T) {
-		ensureUnset(t, "FNM_NODE_DIST_MIRROR")
-		ensureUnset(t, "FNM_ARCH")
+		ensureEnvUnset(t, "FNM_NODE_DIST_MIRROR")
+		ensureEnvUnset(t, "FNM_ARCH")
 		host := target.Target{OS: "linux", Arch: "arm64", Libc: target.LibcMusl}
 		got := buildFNMInstallEnv(host, fnmDir)
 		if got["FNM_NODE_DIST_MIRROR"] != fnmMuslNodeDistMirror {
@@ -162,22 +164,22 @@ func TestBuildFNMInstallEnv(t *testing.T) {
 	})
 
 	t.Run("musl unsupported arch sets only FNM_DIR", func(t *testing.T) {
-		ensureUnset(t, "FNM_NODE_DIST_MIRROR")
-		ensureUnset(t, "FNM_ARCH")
+		ensureEnvUnset(t, "FNM_NODE_DIST_MIRROR")
+		ensureEnvUnset(t, "FNM_ARCH")
 		host := target.Target{OS: "linux", Arch: "arm", Libc: target.LibcMusl}
 		assertOnlyFNMDir(t, buildFNMInstallEnv(host, fnmDir))
 	})
 
 	t.Run("unknown libc sets only FNM_DIR", func(t *testing.T) {
-		ensureUnset(t, "FNM_NODE_DIST_MIRROR")
-		ensureUnset(t, "FNM_ARCH")
+		ensureEnvUnset(t, "FNM_NODE_DIST_MIRROR")
+		ensureEnvUnset(t, "FNM_ARCH")
 		host := target.Target{OS: "linux", Arch: "amd64", Libc: target.LibcUnknown}
 		assertOnlyFNMDir(t, buildFNMInstallEnv(host, fnmDir))
 	})
 
 	t.Run("user-set FNM_NODE_DIST_MIRROR is preserved", func(t *testing.T) {
 		t.Setenv("FNM_NODE_DIST_MIRROR", "https://custom.example.com/node")
-		ensureUnset(t, "FNM_ARCH")
+		ensureEnvUnset(t, "FNM_ARCH")
 		host := target.Target{OS: "linux", Arch: "amd64", Libc: target.LibcMusl}
 		got := buildFNMInstallEnv(host, fnmDir)
 		if v, ok := got["FNM_NODE_DIST_MIRROR"]; ok {
@@ -189,7 +191,7 @@ func TestBuildFNMInstallEnv(t *testing.T) {
 	})
 
 	t.Run("user-set FNM_ARCH is preserved", func(t *testing.T) {
-		ensureUnset(t, "FNM_NODE_DIST_MIRROR")
+		ensureEnvUnset(t, "FNM_NODE_DIST_MIRROR")
 		t.Setenv("FNM_ARCH", "x64")
 		host := target.Target{OS: "linux", Arch: "amd64", Libc: target.LibcMusl}
 		got := buildFNMInstallEnv(host, fnmDir)
@@ -205,17 +207,9 @@ func TestBuildFNMInstallEnv(t *testing.T) {
 func TestRuntimeManagerFNMInstallEnv(t *testing.T) {
 	const fnmDir = "/cache/.runtimes/fnm-nodes"
 
-	// ensureUnset guarantees an env var is absent for the duration of the test,
-	// so os.LookupEnv inside buildFNMInstallEnv reports it as user-unset.
-	ensureUnset := func(t *testing.T, key string) {
-		t.Helper()
-		t.Setenv(key, "")
-		_ = os.Unsetenv(key)
-	}
-
 	t.Run("musl host install env carries mirror and arch", func(t *testing.T) {
-		ensureUnset(t, "FNM_NODE_DIST_MIRROR")
-		ensureUnset(t, "FNM_ARCH")
+		ensureEnvUnset(t, "FNM_NODE_DIST_MIRROR")
+		ensureEnvUnset(t, "FNM_ARCH")
 		rm := newTestRMWithTarget(makeFNMTestRuntimes(), target.Target{
 			OS: "linux", Arch: "amd64", Libc: target.LibcMusl,
 		})
@@ -232,8 +226,8 @@ func TestRuntimeManagerFNMInstallEnv(t *testing.T) {
 	})
 
 	t.Run("glibc host install env carries only FNM_DIR", func(t *testing.T) {
-		ensureUnset(t, "FNM_NODE_DIST_MIRROR")
-		ensureUnset(t, "FNM_ARCH")
+		ensureEnvUnset(t, "FNM_NODE_DIST_MIRROR")
+		ensureEnvUnset(t, "FNM_ARCH")
 		rm := newTestRMWithTarget(makeFNMTestRuntimes(), target.Target{
 			OS: "linux", Arch: "amd64", Libc: target.LibcGlibc,
 		})
@@ -258,6 +252,87 @@ func TestRuntimeManagerFNMInstallEnv(t *testing.T) {
 		}
 		if _, ok := got["FNM_ARCH"]; ok {
 			t.Error("FNM_ARCH should not be injected when user set it")
+		}
+	})
+}
+
+// TestInstallNodeVersionMuslEnvWiring drives the real installNodeVersionOnce
+// subprocess path with a fake fnm to prove the env overrides built for the host
+// actually reach the `fnm install` child environment. The pure-helper tests above
+// stop at the env map; this covers the one line that wires that map into cmd.Env
+// (and the buildEnvWithOverrides composition that lets a user-set value win),
+// which a regression could otherwise drop with every test still green.
+func TestInstallNodeVersionMuslEnvWiring(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake fnm is a /bin/sh script; skip on Windows")
+	}
+
+	const nodeVersion = "20.11.1"
+
+	// writeFakeFNM returns the path to a fnm stand-in that records its environment
+	// to {FNM_DIR}/captured-env and lays down the installation tree that
+	// installNodeVersionOnce renames and stats, so the install reports success.
+	writeFakeFNM := func(t *testing.T) string {
+		t.Helper()
+		path := filepath.Join(t.TempDir(), "fnm")
+		script := "#!/bin/sh\n" +
+			"set -e\n" +
+			"env > \"$FNM_DIR/captured-env\"\n" +
+			"mkdir -p \"$FNM_DIR/node-versions/v$2/installation/bin\"\n" +
+			"touch \"$FNM_DIR/node-versions/v$2/installation/bin/node\"\n"
+		if err := os.WriteFile(path, []byte(script), 0755); err != nil {
+			t.Fatalf("write fake fnm: %v", err)
+		}
+		return path
+	}
+
+	readCapturedEnv := func(t *testing.T, cacheRoot string) string {
+		t.Helper()
+		data, err := os.ReadFile(filepath.Join(cacheRoot, ".runtimes", "fnm-nodes", "captured-env"))
+		if err != nil {
+			t.Fatalf("read captured env: %v", err)
+		}
+		return string(data)
+	}
+
+	t.Run("musl host injects mirror and arch into the fnm child env", func(t *testing.T) {
+		ensureEnvUnset(t, "FNM_NODE_DIST_MIRROR")
+		ensureEnvUnset(t, "FNM_ARCH")
+		cacheRoot := t.TempDir()
+		rm := newTestRMWithTarget(makeFNMTestRuntimes(), target.Target{
+			OS: "linux", Arch: "amd64", Libc: target.LibcMusl,
+		})
+		if err := rm.installNodeVersion(writeFakeFNM(t), nodeVersion, cacheRoot); err != nil {
+			t.Fatalf("installNodeVersion() error = %v", err)
+		}
+		capturedEnv := readCapturedEnv(t, cacheRoot)
+		if !strings.Contains(capturedEnv, "FNM_NODE_DIST_MIRROR="+fnmMuslNodeDistMirror) {
+			t.Errorf("child env missing musl mirror; got:\n%s", capturedEnv)
+		}
+		if !strings.Contains(capturedEnv, "FNM_ARCH=x64-musl") {
+			t.Errorf("child env missing FNM_ARCH=x64-musl; got:\n%s", capturedEnv)
+		}
+	})
+
+	t.Run("user-set mirror reaches the fnm child env unchanged", func(t *testing.T) {
+		t.Setenv("FNM_NODE_DIST_MIRROR", "https://custom.example.com/node")
+		ensureEnvUnset(t, "FNM_ARCH")
+		cacheRoot := t.TempDir()
+		rm := newTestRMWithTarget(makeFNMTestRuntimes(), target.Target{
+			OS: "linux", Arch: "amd64", Libc: target.LibcMusl,
+		})
+		if err := rm.installNodeVersion(writeFakeFNM(t), nodeVersion, cacheRoot); err != nil {
+			t.Fatalf("installNodeVersion() error = %v", err)
+		}
+		capturedEnv := readCapturedEnv(t, cacheRoot)
+		if !strings.Contains(capturedEnv, "FNM_NODE_DIST_MIRROR=https://custom.example.com/node") {
+			t.Errorf("user-set mirror did not reach child env; got:\n%s", capturedEnv)
+		}
+		if strings.Contains(capturedEnv, fnmMuslNodeDistMirror) {
+			t.Errorf("unofficial mirror leaked despite user override; got:\n%s", capturedEnv)
+		}
+		if !strings.Contains(capturedEnv, "FNM_ARCH=x64-musl") {
+			t.Errorf("child env missing auto-selected FNM_ARCH; got:\n%s", capturedEnv)
 		}
 	})
 }
