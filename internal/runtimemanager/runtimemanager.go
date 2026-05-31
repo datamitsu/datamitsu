@@ -741,7 +741,7 @@ func validateRelativePath(p string) error {
 		return fmt.Errorf("path %q must be relative", p)
 	}
 	cleaned := filepath.Clean(p)
-	if strings.HasPrefix(cleaned, "..") {
+	if cleaned == ".." || strings.HasPrefix(cleaned, ".."+string(filepath.Separator)) {
 		return fmt.Errorf("path %q escapes parent directory", p)
 	}
 	return nil

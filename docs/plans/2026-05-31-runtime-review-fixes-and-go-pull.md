@@ -120,13 +120,13 @@ Dependencies identified: `go-crypto/openpgp`, `goccy/go-yaml`, internal `hashuti
 
 ### Task 3: Align `validateRelativePath` with `validateSafeRelativePath` (review #2)
 
-- [ ] write failing tests in `internal/runtimemanager/runtimemanager_test.go`:
+- [x] write failing tests in `internal/runtimemanager/runtimemanager_test.go`:
       `..config/bin/tool` is ACCEPTED, `../escape` and `..` are REJECTED, and the
       result matches `config.validateSafeRelativePath` for the same inputs
-- [ ] replace `strings.HasPrefix(cleaned, "..")` (`runtimemanager.go:744`) with
+- [x] replace `strings.HasPrefix(cleaned, "..")` (`runtimemanager.go:744`) with
       `cleaned == ".." || strings.HasPrefix(cleaned, ".."+string(filepath.Separator))`
-- [ ] add error-case tests (absolute path, embedded `../`)
-- [ ] run `go test ./internal/runtimemanager/... ./internal/config/...` — must pass
+- [x] add error-case tests (absolute path, embedded `../`)
+- [x] run `go test ./internal/runtimemanager/... ./internal/config/...` — must pass
 
 ### Task 4: Fail loudly when Node LTS lookup errors during pull (review #4)
 

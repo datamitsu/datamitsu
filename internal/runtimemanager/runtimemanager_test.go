@@ -1601,3 +1601,42 @@ func TestInstallRuntimes_MuslAutoFallback(t *testing.T) {
 		t.Errorf("expected 0 downloads (system fallback should skip), got %d", len(stats.Downloaded))
 	}
 }
+
+// TestValidateRelativePath pins the path-escape contract for validateRelativePath
+// and keeps it aligned with config.validateSafeRelativePath: only ".." or a path
+// whose first cleaned segment is ".." (e.g. "../escape") escapes. A directory name
+// that merely starts with the literal ".." (e.g. "..config/bin/tool") is a valid
+// relative path and must be accepted.
+func TestValidateRelativePath(t *testing.T) {
+	tests := []struct {
+		name    string
+		path    string
+		wantErr bool
+	}{
+		// Accepted: a plain relative path under the runtime cache.
+		{name: "simple relative", path: "bin/tool", wantErr: false},
+		// Accepted: leading ".." is part of a directory name, not a parent ref.
+		{name: "dotdot prefix in name", path: "..config/bin/tool", wantErr: false},
+		{name: "dotdot prefix single segment", path: "..hidden", wantErr: false},
+		// Rejected: bare parent reference.
+		{name: "bare dotdot", path: "..", wantErr: true},
+		// Rejected: leading parent escape.
+		{name: "leading escape", path: "../escape", wantErr: true},
+		// Rejected: embedded parent escape that cleans to an escape.
+		{name: "embedded escape", path: "bin/../../escape", wantErr: true},
+		// Rejected: absolute path.
+		{name: "absolute path", path: "/etc/passwd", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateRelativePath(tt.path)
+			if tt.wantErr && err == nil {
+				t.Errorf("validateRelativePath(%q) = nil, want error", tt.path)
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("validateRelativePath(%q) = %v, want nil", tt.path, err)
+			}
+		})
+	}
+}
