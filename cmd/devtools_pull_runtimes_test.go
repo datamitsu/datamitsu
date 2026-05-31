@@ -999,10 +999,10 @@ func TestIsValidRuntime(t *testing.T) {
 		{"uv", true},
 		{"jvm", true},
 		{"node", true},
-		{"fnm", false},
+		{"npm", false},
 		{"invalid", false},
 		{"", false},
-		{"FNM", false},
+		{"NODE", false},
 	}
 
 	for _, tt := range tests {

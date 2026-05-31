@@ -126,18 +126,18 @@ their own files; comment edits leave code unchanged.
 
 ### Task 3: Neutralize the clean-break regression tests
 
-- [ ] in [internal/config/validate_test.go](../../internal/config/validate_test.go#L788)
+- [x] in [internal/config/validate_test.go](../../internal/config/validate_test.go#L788)
       rename `TestValidateRuntimes_FNMKindUnrecognized` →
       `TestValidateRuntimes_UnrecognizedKindSkipped`; change `Kind: "fnm"` to a
       neutral unknown kind (e.g. `Kind: "legacy-removed"`); reword the comment to
       "an unrecognized runtime kind gets none of the node.\* validation" (no fnm).
       Same assertion, same regression guarantee, generically stated
-- [ ] in [cmd/devtools_pull_runtimes_test.go:1002,1005](../../cmd/devtools_pull_runtimes_test.go#L1002)
+- [x] in [cmd/devtools_pull_runtimes_test.go:1002,1005](../../cmd/devtools_pull_runtimes_test.go#L1002)
       replace `{"fnm", false}` with a plausible-but-invalid name (e.g.
       `{"npm", false}`) and `{"FNM", false}` with an uppercase-of-valid name to
       keep the case-sensitivity check (e.g. `{"NODE", false}`)
-- [ ] run `go test ./internal/config/... ./cmd/...` — must pass
-- [ ] run `rg -i fnm internal/config cmd` — must return nothing
+- [x] run `go test ./internal/config/... ./cmd/...` — must pass
+- [x] run `rg -i fnm internal/config cmd` — must return nothing
       _(tests: renamed/reworked tests still assert unrecognized-kind-skipped and
       invalid-runtime-name-rejected — success + the negative/error cases)_
 

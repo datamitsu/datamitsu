@@ -785,23 +785,23 @@ func TestValidateRuntimes_Node_ValidVersionFormats(t *testing.T) {
 	}
 }
 
-// TestValidateRuntimes_FNMKindUnrecognized verifies the clean break: the
-// legacy "fnm" runtime kind is no longer recognized. A runtime entry whose
-// Kind is the raw string "fnm" (the RuntimeKindFNM constant no longer exists)
-// is treated as an unrecognized kind, so ValidateRuntimes applies none of the
-// node.* field validation to it — even with no node config present, it must
-// not produce node.nodeVersion / node.pnpmVersion / node.pnpmHash errors.
-func TestValidateRuntimes_FNMKindUnrecognized(t *testing.T) {
+// TestValidateRuntimes_UnrecognizedKindSkipped verifies that an unrecognized
+// runtime kind gets none of the node.* validation. A runtime entry whose Kind
+// does not match any known RuntimeKind* constant is treated as an unrecognized
+// kind, so ValidateRuntimes applies none of the node.* field validation to it —
+// even with no node config present, it must not produce node.nodeVersion /
+// node.pnpmVersion / node.pnpmHash errors.
+func TestValidateRuntimes_UnrecognizedKindSkipped(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"legacy": {
-			Kind:    "fnm",
+			Kind:    "legacy-removed",
 			Mode:    RuntimeModeManaged,
 			Managed: testManagedConfig(),
 		},
 	}
 
 	if err := ValidateRuntimes(runtimes); err != nil {
-		t.Errorf("ValidateRuntimes() should not apply node validation to unrecognized \"fnm\" kind, got: %v", err)
+		t.Errorf("ValidateRuntimes() should not apply node validation to unrecognized kind, got: %v", err)
 	}
 }
 
