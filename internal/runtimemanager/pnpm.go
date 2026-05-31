@@ -66,6 +66,15 @@ func (rm *RuntimeManager) installPNPM(version string, destDir string, pnpmHash s
 }
 
 func (rm *RuntimeManager) downloadPNPMFromRegistry(version string, destDir string, pnpmHash string) error {
+	return rm.downloadPNPMFromRegistryURL("https://registry.npmjs.org", version, destDir, pnpmHash)
+}
+
+// downloadPNPMFromRegistryURL downloads, verifies, and extracts pnpm from the
+// given npm registry base URL. The base URL is a parameter purely so tests can
+// point it at a mock registry and exercise the real download/verify/extract
+// path (pinned SHA-256 + registry SHA-512); production always passes the public
+// npm registry via downloadPNPMFromRegistry.
+func (rm *RuntimeManager) downloadPNPMFromRegistryURL(registryBaseURL, version, destDir, pnpmHash string) error {
 	if pnpmHash == "" {
 		return fmt.Errorf("PNPM hash is required but not provided for pnpm@%s", version)
 	}
@@ -75,7 +84,7 @@ func (rm *RuntimeManager) downloadPNPMFromRegistry(version string, destDir strin
 		return nil
 	}
 
-	url := fmt.Sprintf("https://registry.npmjs.org/pnpm/%s", version)
+	url := fmt.Sprintf("%s/pnpm/%s", registryBaseURL, version)
 	resp, err := pnpmHTTPClient.Get(url)
 	if err != nil {
 		return fmt.Errorf("failed to fetch PNPM metadata: %w", err)

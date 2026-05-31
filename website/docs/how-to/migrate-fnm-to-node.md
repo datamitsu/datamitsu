@@ -89,7 +89,7 @@ datamitsu devtools pull-runtimes config/src/runtimes.json --update --runtime nod
 This writes a `node` entry with a pinned `{ url, hash, contentType, binaryPath,
 extractDir }` per platform and a `node: { nodeVersion, pnpmVersion, pnpmHash }`
 block. See
-[Maintaining Wrapper Packages → Bumping the Node.js runtime](./maintain-wrapper.md#node-apps-npm-devtools-pull-node)
+[Maintaining Wrapper Packages → Bumping the Node.js runtime](./maintain-wrapper.md#bumping-the-nodejs-runtime)
 for how the hashes are verified (glibc/darwin/windows GPG-verified against
 nodejs.org's signed `SHASUMS256.txt.asc`; musl pinned from unofficial-builds).
 

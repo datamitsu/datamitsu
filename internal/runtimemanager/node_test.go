@@ -207,7 +207,7 @@ func TestGetCommandInfoNode(t *testing.T) {
 
 	_, err := rm.GetCommandInfo("eslint", app)
 	if err == nil {
-		t.Skip("unexpected success - node archive not available in test env")
+		t.Fatal("expected an error (node archive is not reachable at the fake URL), got nil")
 	}
 	if err.Error() == `app "eslint" is not a runtime-managed app` {
 		t.Error("node app should be recognized as runtime-managed")
@@ -348,6 +348,11 @@ func TestInstallNode_SHA256Mismatch(t *testing.T) {
 	nodeBin, err := rm.installNode("node")
 	if err == nil {
 		t.Fatalf("installNode() expected hash-mismatch error, got nil (path %q)", nodeBin)
+	}
+	// The archive must actually be fetched and hashed before being rejected —
+	// the mismatch is detected on the downloaded bytes, not short-circuited.
+	if atomic.LoadInt32(&hits) == 0 {
+		t.Error("expected the archive to be downloaded before the hash check rejected it")
 	}
 }
 

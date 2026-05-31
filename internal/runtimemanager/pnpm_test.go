@@ -8,8 +8,6 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -111,43 +109,59 @@ func TestExtractFullTgz(t *testing.T) {
 	})
 }
 
+// pnpmRegistryServers spins up a mock npm registry: a tarball server that
+// serves tgzData and a metadata server whose /pnpm/<version> response points at
+// the tarball with the given integrity string. It returns the metadata base URL
+// and the real SHA-256 of tgzData (the value a correct pnpmHash must equal).
+func pnpmRegistryServers(t *testing.T, tgzData []byte, integrity string) (registryURL, pinnedHash string) {
+	t.Helper()
+
+	tarballServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/octet-stream")
+		_, _ = w.Write(tgzData)
+	}))
+	t.Cleanup(tarballServer.Close)
+
+	metaServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		meta := map[string]any{
+			"dist": map[string]any{
+				"tarball":   tarballServer.URL + "/pnpm.tgz",
+				"integrity": integrity,
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(meta)
+	}))
+	t.Cleanup(metaServer.Close)
+
+	sha256Sum := sha256.Sum256(tgzData)
+	return metaServer.URL, hex.EncodeToString(sha256Sum[:])
+}
+
 func TestDownloadPNPMFromRegistry(t *testing.T) {
-	t.Run("downloads and extracts tarball", func(t *testing.T) {
-		tgzPath := createTestTgz(t, map[string]string{
+	tgzData := func(t *testing.T) []byte {
+		t.Helper()
+		path := createTestTgz(t, map[string]string{
 			"package/bin/pnpm.cjs": "#!/usr/bin/env node\nconsole.log('pnpm');",
 			"package/package.json": `{"name":"pnpm","version":"9.15.0"}`,
 		})
-
-		tgzData, err := os.ReadFile(tgzPath)
+		data, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatalf("failed to read tgz: %v", err)
 		}
+		return data
+	}
 
-		sha512Sum := sha512.Sum512(tgzData)
+	t.Run("downloads and extracts tarball", func(t *testing.T) {
+		data := tgzData(t)
+		sha512Sum := sha512.Sum512(data)
 		integrity := "sha512-" + base64.StdEncoding.EncodeToString(sha512Sum[:])
-
-		tarballServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/octet-stream")
-			_, _ = w.Write(tgzData)
-		}))
-		defer tarballServer.Close()
-
-		metaServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			meta := map[string]any{
-				"dist": map[string]any{
-					"tarball":   tarballServer.URL + "/pnpm-9.15.0.tgz",
-					"integrity": integrity,
-				},
-			}
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(meta)
-		}))
-		defer metaServer.Close()
+		registryURL, pinnedHash := pnpmRegistryServers(t, data, integrity)
 
 		destDir := t.TempDir()
-		err = downloadPNPMFromRegistryWithURL(metaServer.URL, "9.15.0", destDir)
-		if err != nil {
-			t.Fatalf("downloadPNPMFromRegistry() error = %v", err)
+		rm := New(config.MapOfRuntimes{})
+		if err := rm.downloadPNPMFromRegistryURL(registryURL, "9.15.0", destDir, pinnedHash); err != nil {
+			t.Fatalf("downloadPNPMFromRegistryURL() error = %v", err)
 		}
 
 		pnpmPath := filepath.Join(destDir, "package", "bin", "pnpm.cjs")
@@ -173,54 +187,47 @@ func TestDownloadPNPMFromRegistry(t *testing.T) {
 		}
 	})
 
-	t.Run("hash mismatch returns error", func(t *testing.T) {
-		tgzPath := createTestTgz(t, map[string]string{
-			"package/bin/pnpm.cjs": "content",
-		})
+	t.Run("pinned SHA-256 mismatch returns error", func(t *testing.T) {
+		data := tgzData(t)
+		sha512Sum := sha512.Sum512(data)
+		integrity := "sha512-" + base64.StdEncoding.EncodeToString(sha512Sum[:])
+		registryURL, _ := pnpmRegistryServers(t, data, integrity)
 
-		tgzData, err := os.ReadFile(tgzPath)
-		if err != nil {
-			t.Fatalf("failed to read tgz: %v", err)
+		wrongPinned := "0000000000000000000000000000000000000000000000000000000000000000"
+		destDir := t.TempDir()
+		rm := New(config.MapOfRuntimes{})
+		err := rm.downloadPNPMFromRegistryURL(registryURL, "9.15.0", destDir, wrongPinned)
+		if err == nil {
+			t.Fatal("expected error for pinned SHA-256 mismatch")
 		}
+		if !strings.Contains(err.Error(), "SHA-256 hash mismatch") {
+			t.Errorf("error should mention SHA-256 hash mismatch, got: %v", err)
+		}
+	})
 
-		wrongHash := make([]byte, 64)
-		wrongIntegrity := "sha512-" + base64.StdEncoding.EncodeToString(wrongHash)
-
-		tarballServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			_, _ = w.Write(tgzData)
-		}))
-		defer tarballServer.Close()
-
-		metaServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			meta := map[string]any{
-				"dist": map[string]any{
-					"tarball":   tarballServer.URL + "/pnpm.tgz",
-					"integrity": wrongIntegrity,
-				},
-			}
-			_ = json.NewEncoder(w).Encode(meta)
-		}))
-		defer metaServer.Close()
+	t.Run("SHA-512 integrity mismatch returns error", func(t *testing.T) {
+		data := tgzData(t)
+		wrongIntegrity := "sha512-" + base64.StdEncoding.EncodeToString(make([]byte, 64))
+		registryURL, pinnedHash := pnpmRegistryServers(t, data, wrongIntegrity)
 
 		destDir := t.TempDir()
-		err = downloadPNPMFromRegistryWithURL(metaServer.URL, "9.15.0", destDir)
+		rm := New(config.MapOfRuntimes{})
+		err := rm.downloadPNPMFromRegistryURL(registryURL, "9.15.0", destDir, pinnedHash)
 		if err == nil {
-			t.Error("expected error for hash mismatch")
+			t.Fatal("expected error for SHA-512 integrity mismatch")
+		}
+		if !strings.Contains(err.Error(), "SHA-512 integrity mismatch") {
+			t.Errorf("error should mention SHA-512 integrity mismatch, got: %v", err)
 		}
 	})
 
 	t.Run("sha1-only metadata rejected", func(t *testing.T) {
-		tgzPath := createTestTgz(t, map[string]string{
-			"package/bin/pnpm.cjs": "content",
-		})
-
-		tgzData, err := os.ReadFile(tgzPath)
-		if err != nil {
-			t.Fatalf("failed to read tgz: %v", err)
-		}
+		data := tgzData(t)
+		sha256Sum := sha256.Sum256(data)
+		pinnedHash := hex.EncodeToString(sha256Sum[:])
 
 		tarballServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			_, _ = w.Write(tgzData)
+			_, _ = w.Write(data)
 		}))
 		defer tarballServer.Close()
 
@@ -236,9 +243,10 @@ func TestDownloadPNPMFromRegistry(t *testing.T) {
 		defer metaServer.Close()
 
 		destDir := t.TempDir()
-		err = downloadPNPMFromRegistryWithURL(metaServer.URL, "9.15.0", destDir)
+		rm := New(config.MapOfRuntimes{})
+		err := rm.downloadPNPMFromRegistryURL(metaServer.URL, "9.15.0", destDir, pinnedHash)
 		if err == nil {
-			t.Error("expected error when only SHA-1 shasum is available")
+			t.Fatal("expected error when only SHA-1 shasum is available")
 		}
 		if !strings.Contains(err.Error(), "SHA-512 integrity required") {
 			t.Errorf("error should mention SHA-512 requirement, got: %v", err)
@@ -252,7 +260,8 @@ func TestDownloadPNPMFromRegistry(t *testing.T) {
 		defer server.Close()
 
 		destDir := t.TempDir()
-		err := downloadPNPMFromRegistryWithURL(server.URL, "0.0.0-nonexistent", destDir)
+		rm := New(config.MapOfRuntimes{})
+		err := rm.downloadPNPMFromRegistryURL(server.URL, "0.0.0-nonexistent", destDir, "irrelevant-hash")
 		if err == nil {
 			t.Error("expected error for registry error")
 		}
@@ -352,116 +361,18 @@ func TestDownloadPNPMWithIntegrity(t *testing.T) {
 
 	sha512Sum := sha512.Sum512(tgzData)
 	integrity := "sha512-" + base64.StdEncoding.EncodeToString(sha512Sum[:])
-
-	tarballServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/octet-stream")
-		_, _ = w.Write(tgzData)
-	}))
-	defer tarballServer.Close()
-
-	metaServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		meta := map[string]any{
-			"dist": map[string]any{
-				"tarball":   tarballServer.URL + "/pnpm-9.15.0.tgz",
-				"shasum":    "irrelevant-sha1",
-				"integrity": integrity,
-			},
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(meta)
-	}))
-	defer metaServer.Close()
+	registryURL, pinnedHash := pnpmRegistryServers(t, tgzData, integrity)
 
 	destDir := t.TempDir()
-	err = downloadPNPMFromRegistryWithURL(metaServer.URL, "9.15.0", destDir)
-	if err != nil {
-		t.Fatalf("downloadPNPMFromRegistry() with integrity error = %v", err)
+	rm := New(config.MapOfRuntimes{})
+	if err := rm.downloadPNPMFromRegistryURL(registryURL, "9.15.0", destDir, pinnedHash); err != nil {
+		t.Fatalf("downloadPNPMFromRegistryURL() with integrity error = %v", err)
 	}
 
 	pnpmPath := filepath.Join(destDir, "package", "bin", "pnpm.cjs")
 	if _, err := os.Stat(pnpmPath); err != nil {
 		t.Errorf("pnpm.cjs not found after download: %v", err)
 	}
-}
-
-// downloadPNPMFromRegistryWithURL is a test helper that allows injecting a custom registry URL.
-// It computes the SHA-256 hash of the tarball data from the server and passes it as the pinned hash,
-// simulating a correctly configured pnpmHash in the config.
-func downloadPNPMFromRegistryWithURL(registryURL string, version string, destDir string) error {
-	pnpmCjsPath := filepath.Join(destDir, "package", "bin", "pnpm.cjs")
-	if _, err := os.Stat(pnpmCjsPath); err == nil {
-		return nil
-	}
-
-	url := fmt.Sprintf("%s/pnpm/%s", registryURL, version)
-	resp, err := http.Get(url)
-	if err != nil {
-		return fmt.Errorf("failed to fetch PNPM metadata: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("npm registry returned status %d for pnpm@%s", resp.StatusCode, version)
-	}
-
-	var meta npmVersionMeta
-	if err := json.NewDecoder(resp.Body).Decode(&meta); err != nil {
-		return fmt.Errorf("failed to decode PNPM metadata: %w", err)
-	}
-
-	if meta.Dist.Tarball == "" {
-		return fmt.Errorf("no tarball URL found for pnpm@%s", version)
-	}
-
-	if meta.Dist.Integrity == "" || !strings.HasPrefix(meta.Dist.Integrity, "sha512-") {
-		return fmt.Errorf("pnpm@%s: SHA-512 integrity required but not found in registry metadata", version)
-	}
-
-	tarResp, err := http.Get(meta.Dist.Tarball)
-	if err != nil {
-		return fmt.Errorf("failed to download PNPM tarball: %w", err)
-	}
-	defer func() { _ = tarResp.Body.Close() }()
-
-	if tarResp.StatusCode != http.StatusOK {
-		return fmt.Errorf("pnpm tarball download returned status %d", tarResp.StatusCode)
-	}
-
-	tmpFile, err := os.CreateTemp("", "pnpm-*.tgz")
-	if err != nil {
-		return fmt.Errorf("failed to create temp file: %w", err)
-	}
-	tmpPath := tmpFile.Name()
-	defer func() { _ = os.Remove(tmpPath) }()
-
-	sha256Hasher := sha256.New()
-	sha512Hasher := sha512.New()
-	writer := io.MultiWriter(tmpFile, sha256Hasher, sha512Hasher)
-
-	if _, err := io.Copy(writer, tarResp.Body); err != nil {
-		_ = tmpFile.Close()
-		return fmt.Errorf("failed to download PNPM tarball: %w", err)
-	}
-	_ = tmpFile.Close()
-
-	pnpmHash := hex.EncodeToString(sha256Hasher.Sum(nil))
-	if err := verifyPNPMPinnedHash(pnpmHash, sha256Hasher.Sum(nil)); err != nil {
-		return err
-	}
-
-	if err := verifyPNPMIntegrity(meta, sha512Hasher.Sum(nil)); err != nil {
-		return err
-	}
-
-	if err := os.MkdirAll(destDir, 0755); err != nil {
-		return fmt.Errorf("failed to create PNPM directory: %w", err)
-	}
-
-	if err := extractFullTgz(tmpPath, destDir); err != nil {
-		return fmt.Errorf("failed to extract PNPM tarball: %w", err)
-	}
-
-	return nil
 }
 
 func TestNpmVersionMeta(t *testing.T) {
