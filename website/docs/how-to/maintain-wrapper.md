@@ -44,14 +44,14 @@ The `--verify-extraction` flag additionally downloads each binary and verifies i
 Some tools publish VS Code extensions (`.vsix`), Linux packages (`.deb`, `.rpm`), NuGet packages (`.nupkg`), Python wheels (`.whl`), Windows installers (`.msi`), or macOS installer packages (`.pkg`) alongside binary archives in the same GitHub release. datamitsu automatically excludes these non-executable formats before scoring, so only actual binaries compete for selection. No configuration is needed — the filtering is automatic.
 :::
 
-### FNM Apps (npm): `devtools pull-fnm`
+### Node Apps (npm): `devtools pull-node`
 
-FNM apps are Node.js packages managed via pnpm. Use `pull-fnm` to check for updates on the npm registry.
+Node apps are npm packages managed via pnpm. Use `pull-node` to check for updates on the npm registry.
 
 **Preview available updates:**
 
 ```bash
-datamitsu devtools pull-fnm apps/fnmApps.json --update --dry-run
+datamitsu devtools pull-node apps/nodeApps.json --update --dry-run
 ```
 
 The `--update --dry-run` combination fetches the latest versions and shows what would change without writing to the file.
@@ -59,14 +59,14 @@ The `--update --dry-run` combination fetches the latest versions and shows what 
 **Apply updates:**
 
 ```bash
-datamitsu devtools pull-fnm apps/fnmApps.json --update
+datamitsu devtools pull-node apps/nodeApps.json --update
 ```
 
 This queries the npm registry for each configured package, compares versions, and updates the JSON file with new versions and descriptions.
 
 **Regenerate lock files after updating:**
 
-After updating FNM app versions, regenerate their lock files to ensure reproducible installs:
+After updating node app versions, regenerate their lock files to ensure reproducible installs:
 
 ```bash
 datamitsu config lockfile prettier
@@ -101,7 +101,7 @@ datamitsu config lockfile yamllint
 
 ### Runtimes: `devtools pull-runtimes`
 
-Runtimes (FNM/Node.js, UV/Python, JVM/Temurin) need periodic updates too. Use `pull-runtimes` to fetch the latest runtime versions.
+Runtimes (Node.js, UV/Python, JVM/Temurin) need periodic updates too. Use `pull-runtimes` to fetch the latest runtime versions.
 
 **Update all runtimes:**
 
@@ -114,7 +114,7 @@ The `--update` flag is required as a safety guard — the command refuses to run
 **Update a specific runtime only:**
 
 ```bash
-datamitsu devtools pull-runtimes runtimes/runtimes.json --update --runtime fnm
+datamitsu devtools pull-runtimes runtimes/runtimes.json --update --runtime node
 datamitsu devtools pull-runtimes runtimes/runtimes.json --update --runtime uv
 datamitsu devtools pull-runtimes runtimes/runtimes.json --update --runtime jvm
 ```
@@ -134,6 +134,26 @@ The command fetches versions from upstream sources:
 
 It then downloads runtime binaries for all platform tuples, computes SHA-256 hashes, and deduplicates musl entries that are identical to glibc.
 
+#### Bumping the Node.js runtime
+
+The Node.js runtime is a direct, hash-pinned archive (like the JVM runtime), so bumping it means refreshing the pinned version and the per-platform hashes in `runtimes.json`:
+
+```bash
+datamitsu devtools pull-runtimes runtimes/runtimes.json --update --runtime node
+```
+
+This resolves the latest Node.js LTS, builds the archive URLs for every os/arch/libc combination, and records a SHA-256 hash for each:
+
+- **glibc, macOS, and Windows** hashes are taken from nodejs.org's clearsigned `SHASUMS256.txt.asc` and GPG-verified against the embedded official Node.js release public keys. An invalid or untrusted signature aborts the pull, giving a strong supply-chain anchor.
+- **musl** hashes come from unofficial-builds.nodejs.org's unsigned `SHASUMS256.txt` (Node publishes no signature for musl builds) and are pinned in git — the same trust model as the official `node:alpine` image.
+
+After a Node.js or pnpm version bump, regenerate the lock files for your node apps so they resolve against the new runtime, then commit the refreshed `runtimes.json`:
+
+```bash
+datamitsu config lockfile eslint
+datamitsu config lockfile prettier
+```
+
 ## Testing After Updates
 
 ### Verify cross-platform integrity
@@ -148,7 +168,7 @@ This command:
 
 1. Downloads and hash-verifies all binary apps for every configured platform
 2. Downloads and hash-verifies all managed runtime binaries
-3. Installs runtime-managed apps (FNM, UV, JVM) on the current platform
+3. Installs runtime-managed apps (node, UV, JVM) on the current platform
 4. Runs version checks to confirm tools execute correctly
 
 **Useful flags:**
@@ -216,8 +236,8 @@ jobs:
       # Note: pull-github does not support --dry-run.
       # Use pull-github --update in the automated update PR workflow instead.
 
-      - name: Check FNM app updates
-        run: ./datamitsu devtools pull-fnm apps/fnmApps.json --update --dry-run
+      - name: Check node app updates
+        run: ./datamitsu devtools pull-node apps/nodeApps.json --update --dry-run
 
       - name: Check UV app updates
         run: ./datamitsu devtools pull-uv apps/uvApps.json --update --dry-run
@@ -250,8 +270,8 @@ jobs:
       - name: Update binary apps
         run: ./datamitsu devtools pull-github apps/githubApps.json --update
 
-      - name: Update FNM apps
-        run: ./datamitsu devtools pull-fnm apps/fnmApps.json --update
+      - name: Update node apps
+        run: ./datamitsu devtools pull-node apps/nodeApps.json --update
 
       - name: Update UV apps
         run: ./datamitsu devtools pull-uv apps/uvApps.json --update
@@ -295,7 +315,7 @@ Keep a changelog documenting what changed in each release:
 A typical update cycle looks like this:
 
 1. Run `devtools pull-*` commands to detect and apply updates
-2. Regenerate lock files for any updated FNM/UV apps
+2. Regenerate lock files for any updated node/UV apps
 3. Run `devtools verify-all` to check cross-platform integrity
 4. Run `datamitsu init && datamitsu check` locally
 5. Commit, push, and create a release
@@ -308,14 +328,14 @@ When making breaking changes (removing tools, changing configuration structure),
 - Step-by-step instructions to update
 - The new minimum datamitsu version if changed
 
-### Configuring pnpm Settings for FNM Apps
+### Configuring pnpm Settings for Node Apps
 
-FNM apps run `pnpm install` in an isolated directory managed by datamitsu. datamitsu always writes a `pnpm-workspace.yaml` containing secure supply chain defaults before `pnpm install` runs. You can override or extend those defaults by supplying your own `pnpm-workspace.yaml` via `App.files` — datamitsu shallow-merges your keys on top of the baseline.
+Node apps run `pnpm install` in an isolated directory managed by datamitsu. datamitsu always writes a `pnpm-workspace.yaml` containing secure supply chain defaults before `pnpm install` runs. You can override or extend those defaults by supplying your own `pnpm-workspace.yaml` via `App.files` — datamitsu shallow-merges your keys on top of the baseline.
 
 See the [Supply Chain Security](../guides/supply-chain-security.md) guide for the full list of baseline settings and what each one does.
 
 :::caution Files are written only on initial install
-`App.files` (including `pnpm-workspace.yaml`) are read on every install, but the install directory is only rebuilt when the app's config hash changes. If you change `files` after an app is already cached, run `datamitsu store clear` (or delete the app's subdirectory under `.apps/fnm/`) to force a reinstall.
+`App.files` (including `pnpm-workspace.yaml`) are read on every install, but the install directory is only rebuilt when the app's config hash changes. If you change `files` after an app is already cached, run `datamitsu store clear` (or delete the app's subdirectory under `.apps/node/`) to force a reinstall.
 :::
 
 #### Apps without build scripts (zero config)
@@ -324,7 +344,7 @@ No `App.files["pnpm-workspace.yaml"]` is required. datamitsu writes the secure d
 
 ```js
 const eslint = {
-  fnm: {
+  node: {
     packageName: "eslint",
     binPath: "node_modules/.bin/eslint",
     version: "9.17.0",
@@ -344,7 +364,7 @@ const mmdc = {
       allowBuilds: { puppeteer: true },
     }),
   },
-  fnm: {
+  node: {
     packageName: "@mermaid-js/mermaid-cli",
     binPath: "node_modules/.bin/mmdc",
     version: "11.15.0",
@@ -373,8 +393,8 @@ files: {
 }
 ```
 
-:::note FNM and UV apps
-For FNM apps, any `package.json` included in `App.files` will be overwritten by the datamitsu core when it writes the managed `package.json`. Use `pnpm-workspace.yaml` for customization — the core merges that file with secure defaults rather than overwriting it.
+:::note Node and UV apps
+For node apps, any `package.json` included in `App.files` will be overwritten by the datamitsu core when it writes the managed `package.json`. Use `pnpm-workspace.yaml` for customization — the core merges that file with secure defaults rather than overwriting it.
 
 For UV apps, project-level settings are configured via `pyproject.toml`. However, any `pyproject.toml` included in `App.files` will be overwritten by the datamitsu core when it writes the managed `pyproject.toml`. This customization path is not available for UV apps.
 :::

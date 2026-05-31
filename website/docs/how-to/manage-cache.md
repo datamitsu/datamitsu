@@ -44,13 +44,13 @@ The global store holds all downloaded artifacts:
 ├── .bin/                    # Binary apps
 │   └── lefthook/{hash}/
 ├── .runtimes/               # Runtime binaries
-│   ├── fnm/{hash}/
-│   ├── fnm-nodes/v22.14.0/
-│   ├── fnm-pnpm/10.5.2/{hash}/
+│   ├── node/{hash}/
+│   ├── node/{configHash}/
+│   ├── pnpm/11.5.0/{hash}/
 │   └── jvm/{hash}/
 ├── .apps/                   # Runtime-managed app environments
 │   ├── uv/yamllint/{hash}/
-│   └── fnm/eslint/{hash}/
+│   └── node/eslint/{hash}/
 ├── .remote-configs/         # Cached remote configs
 └── .pnpm-store/             # Shared pnpm content-addressable store
 ```

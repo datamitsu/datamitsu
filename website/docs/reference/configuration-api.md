@@ -64,17 +64,17 @@ final Config
 
 ## Apps (`apps`)
 
-Apps define the tools datamitsu manages. The app kind is determined by which sub-object is present (`binary`, `uv`, `fnm`, `jvm`, or `shell`).
+Apps define the tools datamitsu manages. The app kind is determined by which sub-object is present (`binary`, `uv`, `node`, `jvm`, or `shell`).
 
 ### App Kinds
 
-| Kind     | Sub-object | Description                                           |
-| -------- | ---------- | ----------------------------------------------------- |
-| `binary` | `binary`   | Self-managed binaries downloaded from URLs            |
-| `uv`     | `uv`       | Python packages installed via managed UV runtime      |
-| `fnm`    | `fnm`      | npm packages installed via FNM-managed Node.js + PNPM |
-| `jvm`    | `jvm`      | Java applications executed via managed JDK            |
-| `shell`  | `shell`    | Shell commands with custom environment                |
+| Kind     | Sub-object | Description                                       |
+| -------- | ---------- | ------------------------------------------------- |
+| `binary` | `binary`   | Self-managed binaries downloaded from URLs        |
+| `uv`     | `uv`       | Python packages installed via managed UV runtime  |
+| `node`   | `node`     | npm packages installed via managed Node.js + pnpm |
+| `jvm`    | `jvm`      | Java applications executed via managed JDK        |
+| `shell`  | `shell`    | Shell commands with custom environment            |
 
 ### Common App Fields
 
@@ -184,14 +184,14 @@ interface AppConfigUV {
 }
 ```
 
-### FNM Apps (Node.js/npm)
+### Node Apps (Node.js/npm)
 
-FNM apps install npm packages using FNM-managed Node.js and PNPM.
+Node apps install npm packages using the managed Node.js runtime and pnpm.
 
 ```javascript
 const apps = {
   eslint: {
-    fnm: {
+    node: {
       packageName: "eslint",
       version: "9.27.0",
       binPath: "node_modules/.bin/eslint",
@@ -200,7 +200,7 @@ const apps = {
         "@eslint/js": "^9.27.0",
       },
       lockFile: "br:...", // brotli-compressed lock file (required)
-      runtime: "fnm-default", // optional runtime override
+      runtime: "node-default", // optional runtime override
     },
     links: {
       "eslint-config": "dist/eslint.config.js",
@@ -209,15 +209,15 @@ const apps = {
 };
 ```
 
-**FNM-specific fields:**
+**Node-specific fields:**
 
 ```typescript
-interface AppConfigFNM {
+interface AppConfigNode {
+  binPath: string; // Path to binary (e.g., "node_modules/.bin/eslint")
   packageName: string;
   version: string;
-  binPath: string; // Path to binary (e.g., "node_modules/.bin/eslint")
-  dependencies?: Record<string, string>;
   lockFile: string; // Brotli-compressed with "br:" prefix (required)
+  dependencies?: Record<string, string>;
   runtime?: string; // Runtime name override
 }
 ```
@@ -330,11 +330,11 @@ Runtimes define how language-specific package managers are provisioned.
 
 ```typescript
 interface RuntimeConfig {
-  kind: "fnm" | "uv" | "jvm";
+  kind: "node" | "uv" | "jvm";
   mode: "managed" | "system";
   managed?: RuntimeConfigManaged; // Required for managed mode
   system?: RuntimeConfigSystem; // For system mode
-  fnm?: RuntimeConfigFNM; // Required when kind is "fnm"
+  node?: RuntimeConfigNode; // Required when kind is "node"
   uv?: RuntimeConfigUV; // When kind is "uv"
   jvm?: RuntimeConfigJVM; // Required when kind is "jvm"
 }
@@ -346,28 +346,29 @@ In managed mode, datamitsu downloads the runtime binary itself:
 
 ```javascript
 const runtimes = {
-  "fnm-default": {
-    kind: "fnm",
+  "node-default": {
+    kind: "node",
     mode: "managed",
     managed: {
       binaries: {
         linux: {
           amd64: {
             glibc: {
-              url: "https://github.com/Schniz/fnm/releases/download/v1.38.1/fnm-linux.zip",
-              hash: "abc123...",
-              contentType: "zip",
-              binaryPath: "fnm",
+              url: "https://nodejs.org/dist/v26.2.0/node-v26.2.0-linux-x64.tar.xz",
+              hash: "abc123...", // SHA-256 (mandatory)
+              contentType: "tar.xz",
+              binaryPath: "node-v26.2.0-linux-x64/bin/node",
+              extractDir: true,
             },
           },
         },
         // ... other platforms
       },
     },
-    fnm: {
-      nodeVersion: "24.14.0",
-      pnpmVersion: "10.31.0",
-      pnpmHash: "def456...", // SHA-256 of PNPM tarball
+    node: {
+      nodeVersion: "26.2.0",
+      pnpmVersion: "11.5.0",
+      pnpmHash: "def456...", // SHA-256 of pnpm package
     },
   },
 };
@@ -395,13 +396,13 @@ const runtimes = {
 
 ### Runtime Kind Configuration
 
-**FNM Runtime:**
+**Node Runtime:**
 
 ```typescript
-interface RuntimeConfigFNM {
-  nodeVersion: string; // e.g., "24.14.0"
-  pnpmVersion: string; // e.g., "10.31.0"
-  pnpmHash: string; // SHA-256 of PNPM package (mandatory)
+interface RuntimeConfigNode {
+  nodeVersion: string; // e.g., "26.2.0"
+  pnpmVersion: string; // e.g., "11.5.0"
+  pnpmHash: string; // SHA-256 of pnpm package (mandatory)
 }
 ```
 
@@ -583,7 +584,7 @@ interface ArchiveSpec {
 
 **Extraction order:** Archives extracted first (sorted alphabetically), then `files` written (files overwrite archive contents). Package manager runs after both.
 
-Archives are supported on UV apps, FNM apps, and bundles.
+Archives are supported on UV apps, node apps, and bundles.
 
 ## Ignore Rules
 
@@ -702,6 +703,6 @@ All artifacts downloaded from the internet must have a SHA-256 hash specified:
 - Binary apps: `hash` field on each platform entry
 - JVM apps: `jarHash` field
 - External archives: `hash` field
-- PNPM runtime: `pnpmHash` field
+- Node runtime (pnpm): `pnpmHash` field
 
 Missing or empty hashes are treated as configuration errors.

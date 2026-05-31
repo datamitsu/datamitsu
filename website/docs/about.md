@@ -210,7 +210,7 @@ Manage tools from different ecosystems in one place:
 
 - **Binary apps** — Download native binaries with hash verification
 - **UV apps** — Python tools via managed UV runtime (e.g., yamllint)
-- **FNM apps** — npm packages via FNM-managed Node.js + PNPM (e.g., eslint, prettier)
+- **Node apps** — npm packages via managed Node.js + pnpm (e.g., eslint, prettier)
 - **JVM apps** — Java applications via managed JDK runtime (e.g., openapi-generator-cli)
 - **Shell apps** — Custom shell commands with environment variables
 
