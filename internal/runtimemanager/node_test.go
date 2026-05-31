@@ -125,7 +125,7 @@ func nodeArchiveServer(t *testing.T, body []byte, allowPath string, hits *int32)
 
 // TestSystemCommandForKindNode verifies the node kind reports "node" as its
 // system fallback command (used by resolveEffectiveRuntimeConfig when a musl
-// host lacks a musl archive). Additive alongside the existing fnm/uv/jvm/go arms.
+// host lacks a musl archive). Additive alongside the existing uv/jvm/go arms.
 func TestSystemCommandForKindNode(t *testing.T) {
 	if got := systemCommandForKind(config.RuntimeKindNode); got != "node" {
 		t.Errorf("systemCommandForKind(node) = %q, want %q", got, "node")

@@ -146,10 +146,10 @@ Replace the two-hop Node.js runtime acquisition (download the **fnm** manager bi
 
 ### Task 8: Migrate and clean the test suite
 
-- [ ] rename `internal/runtimemanager/fnm_test.go` → `node_test.go`; convert fnm-install tests to node-archive tests (fake `.tar.xz` served over httptest); **delete obsolete musl-mirror-wiring tests** (`fnm_test.go:118-325`)
-- [ ] update `runtimemanager_test.go`, `hash_test.go`, `multiversion_test.go`, `cmd/devtools_pull_runtimes_test.go`, `cmd/devtools_fnm_test.go` for the `node` kind / `nodeApps.json`
-- [ ] add coverage for the new edge cases: xz extract, musl-entry selection, sha256 mismatch, pull-node signature handling
-- [ ] run `go test ./...` — must pass before next task
+- [x] rename `internal/runtimemanager/fnm_test.go` → `node_test.go`; convert fnm-install tests to node-archive tests (fake `.tar.xz` served over httptest); **delete obsolete musl-mirror-wiring tests** (`fnm_test.go:118-325`) — done in Task 7: `fnm_test.go` is gone, `node_test.go` exercises the full node-archive flow via `httptest` servers streaming synthetic `.tar.xz` (`TestInstallNode_DownloadVerifyExtract`/`_SHA256Mismatch`/`_CacheHitNoRefetch`); no `muslFNMArch`/`FNM_NODE_DIST_MIRROR`/`FNM_ARCH`/`buildFNMInstallEnv` references remain in any `*_test.go`
+- [x] update `runtimemanager_test.go`, `hash_test.go`, `multiversion_test.go`, `cmd/devtools_pull_runtimes_test.go`, `cmd/devtools_fnm_test.go` for the `node` kind / `nodeApps.json` — all carry node coverage: `runtimemanager_test.go` (`RuntimeKindNode` fixtures, `NodeAppPathExtra`, `TestGetAppPathNode`, mixed uv+node CollectRequiredRuntimes), `hash_test.go` (`RuntimeConfigNode` runtime-hash subtests + `TestCalculateNodeAppHash`), `multiversion_test.go` (`binmanager.AppConfigNode` multi-version eslint, `/node/` path assertions), `cmd/devtools_pull_runtimes_test.go` (`buildNodeRuntimeJSON`/`NodeRuntimeData`, node entry in registry assertions); `cmd/devtools_fnm_test.go` → `cmd/devtools_node_test.go` (renamed in Task 6). Fixed a stale `fnm/uv/jvm/go arms` comment in `node_test.go`
+- [x] add coverage for the new edge cases: xz extract, musl-entry selection, sha256 mismatch, pull-node signature handling — all present and passing: xz extract (`TestExtractTarXz`/`_NodeArchive`/`_RejectsPathTraversal`/`_MalformedStream` in `internal/binmanager/extract_test.go`), musl-entry selection + glibc fallback (`TestNodeLibcSelection`, `TestInstallNode_GlibcFallbackWhenNoMusl`), sha256 mismatch (`TestInstallNode_SHA256Mismatch`), pull-node signature handling (`TestDetectNodeBinaries_MockServers`/`_BadSignature`, `internal/nodekeys` `TestVerifyClearsigned_*`)
+- [x] run `go test ./...` — passes (all packages ok; `golangci-lint run ./...` 0 issues; `go build ./...` clean)
 
 ### Task 9: Verify acceptance criteria
 
