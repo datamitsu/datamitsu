@@ -162,12 +162,14 @@ their own files; comment edits leave code unchanged.
 
 ### Task 5: Delete the completed migration plan
 
-- [ ] `git rm docs/plans/completed/2026-05-31-migrate-node-fnm-to-archive.md`
+- [x] `git rm docs/plans/completed/2026-05-31-migrate-node-fnm-to-archive.md`
       (the migration is recorded in the git commit history; the file is no longer
       needed)
-- [ ] run `rg -i fnm docs/` — must return nothing (this plan file itself uses
+- [x] run `rg -i fnm docs/` — must return nothing (this plan file itself uses
       `fnm` in prose; confirm whether the verify step needs to exclude it — see
-      ⚠️ note below)
+      ⚠️ note below). _Resolved: with `-g '!**/*cleanup-fnm-leftovers.md'` the
+      `docs/` tree returns zero matches; per the ⚠️ note the active cleanup plan
+      is the documented exclusion._
 
 > ⚠️ **This plan file uses `fnm` in its own prose.** A literal repo-wide
 > `rg -i fnm` will match THIS file. Options: (a) accept that the active plan
