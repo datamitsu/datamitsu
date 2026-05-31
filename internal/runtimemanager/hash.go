@@ -16,6 +16,15 @@ func lockFileHash(lockFile string) string {
 	return hashutil.XXH3Hex([]byte(lockFile))
 }
 
+// goAppLockHash binds the built package path into a Go app's lock hash. A Go
+// app's build identity is (packageName, go.mod, go.sum): two apps that share a
+// lockfile but build different packages from the same module must not collide
+// on the same cache directory. The NUL separator keeps the two fields
+// unambiguous.
+func goAppLockHash(packageName, lockFile string) string {
+	return hashutil.XXH3Hex([]byte(packageName + "\x00" + lockFile))
+}
+
 func calculateRuntimeHash(rc config.RuntimeConfig, osType syslist.OsType, archType syslist.ArchType, libc string) (string, error) {
 	if rc.Mode != config.RuntimeModeManaged || rc.Managed == nil {
 		return "", fmt.Errorf("cannot calculate hash for non-managed runtime")
@@ -66,6 +75,9 @@ func calculateRuntimeHash(rc config.RuntimeConfig, osType syslist.OsType, archTy
 	if rc.Kind == config.RuntimeKindJVM && rc.JVM != nil {
 		parts = append(parts, []byte(rc.JVM.JavaVersion))
 	}
+	if rc.Kind == config.RuntimeKindGo && rc.Go != nil {
+		parts = append(parts, []byte(rc.Go.GoVersion))
+	}
 
 	return hashutil.XXH3Multi(parts...), nil
 }
@@ -92,6 +104,9 @@ func calculateSystemRuntimeHash(rc config.RuntimeConfig) string {
 	}
 	if rc.Kind == config.RuntimeKindJVM && rc.JVM != nil {
 		parts = append(parts, []byte(rc.JVM.JavaVersion))
+	}
+	if rc.Kind == config.RuntimeKindGo && rc.Go != nil {
+		parts = append(parts, []byte(rc.Go.GoVersion))
 	}
 
 	return hashutil.XXH3Multi(parts...)

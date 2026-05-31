@@ -15,26 +15,26 @@ import (
 	"runtime"
 	"sort"
 	"strings"
-	"sync"
 
 	"go.uber.org/zap"
+	"golang.org/x/sync/singleflight"
 )
 
 var log = logger.Logger.With(zap.Namespace("runtimemanager"))
 
-type installOnce struct {
-	once sync.Once
-	err  error
-}
-
 type RuntimeManager struct {
-	mapOfRuntimes  config.MapOfRuntimes
-	hostTarget     target.Target
-	lookPathFunc   func(string) (string, error)
-	runtimeInstall sync.Map // key: runtimeName -> *installOnce
-	appInstall     sync.Map // key: "kind/appName" -> *installOnce
-	nodeInstall    sync.Map // key: nodeVersion -> *installOnce
-	pnpmInstall    sync.Map // key: "pnpmVersion\x00pnpmHash" -> *installOnce
+	mapOfRuntimes config.MapOfRuntimes
+	hostTarget    target.Target
+	lookPathFunc  func(string) (string, error)
+	// singleflight groups deduplicate concurrent installs by key: only one call
+	// per key runs at a time and all waiters share its result. Unlike the prior
+	// sync.Once + sync.Map + CompareAndDelete pattern, a failed call does not
+	// orphan in-flight readers, and the next Do after completion starts fresh
+	// (so retry-after-error works naturally).
+	runtimeInstall singleflight.Group // key: runtimeName
+	appInstall     singleflight.Group // key: "kind/appName"
+	nodeInstall    singleflight.Group // key: nodeVersion
+	pnpmInstall    singleflight.Group // key: "pnpmVersion\x00pnpmHash"
 }
 
 func New(mapOfRuntimes config.MapOfRuntimes) *RuntimeManager {
@@ -55,6 +55,8 @@ func systemCommandForKind(kind config.RuntimeKind) string {
 		return "uv"
 	case config.RuntimeKindJVM:
 		return "java"
+	case config.RuntimeKindGo:
+		return "go"
 	default:
 		return ""
 	}
@@ -210,14 +212,11 @@ func (rm *RuntimeManager) GetRuntimePath(runtimeName string) (string, error) {
 		return binPath, nil
 	}
 
-	entry, _ := rm.runtimeInstall.LoadOrStore(runtimeName, &installOnce{})
-	once := entry.(*installOnce)
-	once.once.Do(func() {
-		once.err = rm.downloadRuntime(runtimeName, rc, configHash, info.BinaryPath)
+	_, err, _ = rm.runtimeInstall.Do(runtimeName, func() (any, error) {
+		return nil, rm.downloadRuntime(runtimeName, rc, configHash, info.BinaryPath)
 	})
-	if once.err != nil {
-		rm.runtimeInstall.CompareAndDelete(runtimeName, entry)
-		return "", once.err
+	if err != nil {
+		return "", err
 	}
 
 	if _, err := os.Stat(binPath); err != nil {
@@ -387,6 +386,13 @@ func (rm *RuntimeManager) ComputeAppPath(appName string, app binmanager.App) (st
 		}
 		return rm.GetJVMAppPath(appName, app.Jvm, app.Files, app.Archives, runtimeName)
 	}
+	if app.Go != nil {
+		runtimeName, _, err := rm.ResolveRuntime(app.Go.Runtime, config.RuntimeKindGo)
+		if err != nil {
+			return "", fmt.Errorf("failed to resolve Go runtime for %q: %w", appName, err)
+		}
+		return rm.GetGoAppPath(appName, app.Go, app.Files, app.Archives, runtimeName)
+	}
 	return "", fmt.Errorf("app %q is not a runtime-managed app", appName)
 }
 
@@ -410,6 +416,12 @@ func (rm *RuntimeManager) GetCommandInfo(appName string, app binmanager.App) (*b
 			return nil, err
 		}
 		return rm.GetJVMCommandInfo(appName, app.Jvm, app.Files, app.Archives)
+	}
+	if app.Go != nil {
+		if err := rm.InstallGoApp(appName, app.Go, app.Files, app.Archives); err != nil {
+			return nil, err
+		}
+		return rm.GetGoCommandInfo(appName, app.Go, app.Files, app.Archives)
 	}
 	return nil, fmt.Errorf("app %q is not a runtime-managed app", appName)
 }
@@ -489,6 +501,21 @@ func CollectRequiredRuntimes(apps binmanager.MapOfApps, runtimes config.MapOfRun
 			} else {
 				for _, name := range sortedRuntimeNames {
 					if runtimes[name].Kind == config.RuntimeKindJVM {
+						needed[name] = true
+						break
+					}
+				}
+			}
+		}
+
+		if app.Go != nil {
+			if app.Go.Runtime != "" {
+				if _, ok := runtimes[app.Go.Runtime]; ok {
+					needed[app.Go.Runtime] = true
+				}
+			} else {
+				for _, name := range sortedRuntimeNames {
+					if runtimes[name].Kind == config.RuntimeKindGo {
 						needed[name] = true
 						break
 					}

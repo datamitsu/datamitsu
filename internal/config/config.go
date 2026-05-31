@@ -129,6 +129,7 @@ const (
 	RuntimeKindUV  RuntimeKind = "uv"
 	RuntimeKindFNM RuntimeKind = "fnm"
 	RuntimeKindJVM RuntimeKind = "jvm"
+	RuntimeKindGo  RuntimeKind = "go"
 )
 
 type RuntimeConfigManaged struct {
@@ -154,6 +155,10 @@ type RuntimeConfigJVM struct {
 	JavaVersion string `json:"javaVersion"`
 }
 
+type RuntimeConfigGo struct {
+	GoVersion string `json:"goVersion"`
+}
+
 type RuntimeConfig struct {
 	Kind            RuntimeKind           `json:"kind"`
 	Mode            RuntimeMode           `json:"mode"`
@@ -162,6 +167,7 @@ type RuntimeConfig struct {
 	FNM             *RuntimeConfigFNM     `json:"fnm,omitempty"`
 	UV              *RuntimeConfigUV      `json:"uv,omitempty"`
 	JVM             *RuntimeConfigJVM     `json:"jvm,omitempty"`
+	Go              *RuntimeConfigGo      `json:"go,omitempty"`
 }
 
 type MapOfRuntimes map[string]RuntimeConfig
