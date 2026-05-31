@@ -283,6 +283,13 @@ func (p *Planner) collectTasks(operation config.OperationType, files []string) [
 			if p.cwdPath != p.rootPath {
 				continue
 			}
+			// Respect .datamitsuignore: skip when this tool is disabled for the
+			// repository root. Mirrors the per-file and per-project branches so a
+			// catch-all rule like "**/*: <tool>" disables repository-scoped tools
+			// too (e.g. the opt-in-tools generated ignore file).
+			if p.isToolDisabledForProject(toolName, p.rootPath) {
+				continue
+			}
 			// Skip when globs are configured but no files match (consistent with per-project behavior).
 			var matchedFiles []string
 			if len(opConfig.Globs) > 0 {
