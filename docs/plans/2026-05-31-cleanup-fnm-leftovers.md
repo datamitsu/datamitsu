@@ -181,17 +181,17 @@ their own files; comment edits leave code unchanged.
 
 ### Task 6: Verify acceptance criteria
 
-- [ ] run the repo-wide zero-occurrence check (excludes documented false positives + this plan file):
+- [x] run the repo-wide zero-occurrence check (excludes documented false positives + this plan file):
       `rg -i fnm -g '!pnpm-lock.yaml' -g '!go.sum' -g '!**/*.asc' -g '!website/build/**' -g '!docs/plans/**cleanup-fnm-leftovers.md'`
-      — must return **nothing**
-- [ ] confirm git-ignored embedded artifacts are clean too (regenerated, not
+      — must return **nothing** _(verified: exit 1, no matches)_
+- [x] confirm git-ignored embedded artifacts are clean too (regenerated, not
       committed): `rg -i fnm internal/config/config.js internal/config/config.d.ts`
-      returns nothing (regenerate via the JS build if any hit appears)
-- [ ] `go build ./...` — green
-- [ ] `go test ./...` — all green
-- [ ] run the linter (`golangci-lint run`) — all issues fixed
-- [ ] `cd website && pnpm build` — website builds with no broken references
-- [ ] verify each Overview requirement: guide deleted, sidebar entry gone,
+      returns nothing (regenerate via the JS build if any hit appears) _(verified: no matches)_
+- [x] `go build ./...` — green
+- [x] `go test ./...` — all green
+- [x] run the linter (`golangci-lint run`) — all issues fixed _(0 issues)_
+- [x] `cd website && pnpm build` — website builds with no broken references _([SUCCESS])_
+- [x] verify each Overview requirement: guide deleted, sidebar entry gone,
       comments reworded, clean-break tests neutralized, scoring example replaced,
       completed plan deleted
 
