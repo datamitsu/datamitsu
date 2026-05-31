@@ -839,10 +839,11 @@ func TestBuildPNPMWorkspaceForApp(t *testing.T) {
 
 func prepareAndWriteWorkspace(t *testing.T, appEnvPath string, files map[string]string) map[string]string {
 	t.Helper()
-	mergedYAML, filtered, err := preparePNPMWorkspaceForApp(files)
+	mergedYAML, err := buildPNPMWorkspaceForApp(files)
 	if err != nil {
-		t.Fatalf("preparePNPMWorkspaceForApp() error = %v", err)
+		t.Fatalf("buildPNPMWorkspaceForApp() error = %v", err)
 	}
+	filtered := filesWithoutWorkspaceYAML(files)
 	if err := writeAppWorkspaceFile(appEnvPath, mergedYAML); err != nil {
 		t.Fatalf("writeAppWorkspaceFile() error = %v", err)
 	}
@@ -976,8 +977,7 @@ func TestWriteAppWorkspaceFile(t *testing.T) {
 			"pnpm-workspace.yaml": "not: valid: yaml: at: all: [",
 		}
 
-		_, _, err := preparePNPMWorkspaceForApp(files)
-		if err == nil {
+		if _, err := buildPNPMWorkspaceForApp(files); err == nil {
 			t.Error("expected error for invalid user YAML, got nil")
 		}
 	})

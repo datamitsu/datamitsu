@@ -283,22 +283,31 @@ func verifyPNPMIntegrity(meta npmVersionMeta, sha512Sum []byte) error {
 	return nil
 }
 
-// filesWithMergedWorkspaceYAML returns a copy of files where the
-// pnpm-workspace.yaml entry is replaced by the actual merged content
-// (defaults + user override). The original files map is not mutated.
-// This is used only for cache-key computation; the real merge for writing
-// to disk is performed by preparePNPMWorkspaceForApp.
+// filesWithMergedWorkspaceYAML returns a copy of files with the
+// pnpm-workspace.yaml entry replaced by freshly merged content (defaults + user
+// override), recomputing the merge each call. The original files map is not
+// mutated. Production threads a once-per-exec merge through filesWithWorkspaceYAML
+// instead; this single-shot form is retained as the reference the cache-key
+// regression test pins resolveNodeAppEnvPath against.
 func filesWithMergedWorkspaceYAML(files map[string]string) (map[string]string, error) {
 	merged, err := buildPNPMWorkspaceForApp(files)
 	if err != nil {
 		return nil, err
 	}
+	return filesWithWorkspaceYAML(files, merged), nil
+}
+
+// filesWithWorkspaceYAML returns a copy of files with the pnpm-workspace.yaml
+// entry set to the already-merged content. Unlike filesWithMergedWorkspaceYAML it
+// does not recompute the merge, so a caller that merged once per exec can reuse
+// the result for the cache key. The original files map is not mutated.
+func filesWithWorkspaceYAML(files map[string]string, mergedYAML string) map[string]string {
 	out := make(map[string]string, len(files)+1)
 	for k, v := range files {
 		out[k] = v
 	}
-	out["pnpm-workspace.yaml"] = merged
-	return out, nil
+	out["pnpm-workspace.yaml"] = mergedYAML
+	return out
 }
 
 func buildPNPMInstallArgs(pnpmCjsPath string, hasLockFile bool) []string {
@@ -333,21 +342,15 @@ func mergePNPMWorkspaceConfig(base map[string]any, userYAML string) (map[string]
 	return merged, nil
 }
 
-// preparePNPMWorkspaceForApp computes the merged pnpm-workspace.yaml content
-// (defaults + user override) and returns a copy of files with the
-// pnpm-workspace.yaml entry removed (consumed by the merge). Callers MUST
-// write the returned YAML to disk AFTER any archive extraction so that
-// archives cannot overwrite the secure defaults. The input files map is not
-// mutated; when it does not contain the workspace entry the same map is
+// filesWithoutWorkspaceYAML returns a copy of files with the pnpm-workspace.yaml
+// entry removed: that entry is consumed by the merge and written separately via
+// writeAppWorkspaceFile (which the caller MUST invoke AFTER any archive
+// extraction so archives cannot overwrite the secure defaults). The input map is
+// not mutated; when it does not contain the workspace entry the same map is
 // returned.
-func preparePNPMWorkspaceForApp(files map[string]string) (mergedYAML string, filteredFiles map[string]string, err error) {
-	mergedYAML, err = buildPNPMWorkspaceForApp(files)
-	if err != nil {
-		return "", nil, err
-	}
-
+func filesWithoutWorkspaceYAML(files map[string]string) map[string]string {
 	if _, has := files["pnpm-workspace.yaml"]; !has {
-		return mergedYAML, files, nil
+		return files
 	}
 
 	filtered := make(map[string]string, len(files)-1)
@@ -357,7 +360,7 @@ func preparePNPMWorkspaceForApp(files map[string]string) (mergedYAML string, fil
 		}
 		filtered[k] = v
 	}
-	return mergedYAML, filtered, nil
+	return filtered
 }
 
 // writeAppWorkspaceFile writes mergedYAML to {appEnvPath}/pnpm-workspace.yaml.
@@ -373,6 +376,13 @@ func writeAppWorkspaceFile(appEnvPath, mergedYAML string) error {
 	}
 	return nil
 }
+
+// buildPNPMWorkspace is the workspace merge+marshal entry point, routed
+// through a var so the (relatively expensive) merge runs once per exec: it is
+// invoked a single time by GetCommandInfo/ComputeAppPath and the result is
+// threaded into the install and command-info passes rather than recomputed in
+// each. Tests swap it to count invocations.
+var buildPNPMWorkspace = buildPNPMWorkspaceForApp
 
 // buildPNPMWorkspaceForApp returns the YAML string to write as
 // pnpm-workspace.yaml in the app environment. It starts from the recommended

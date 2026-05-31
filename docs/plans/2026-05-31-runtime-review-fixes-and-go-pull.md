@@ -184,14 +184,14 @@ Dependencies identified: `go-crypto/openpgp`, `goccy/go-yaml`, internal `hashuti
 
 ### Task 9: Compute merged `pnpm-workspace.yaml` once per exec (review #8)
 
-- [ ] write a test asserting the workspace YAML merge/marshal runs once (not twice)
+- [x] write a test asserting the workspace YAML merge/marshal runs once (not twice)
       per `GetCommandInfo` call on a cache hit (inject a counter or assert via a seam)
-- [ ] refactor so `appEnvPath` + merged YAML are computed once and threaded into both
+- [x] refactor so `appEnvPath` + merged YAML are computed once and threaded into both
       `InstallNodeApp` and `GetNodeCommandInfo` (touch `GetCommandInfo` dispatch in
       `runtimemanager.go:401` and `resolveNodeAppEnvPath`)
-- [ ] add a test confirming the cache key (appEnvPath) is identical to before (no
+- [x] add a test confirming the cache key (appEnvPath) is identical to before (no
       behavior change, only fewer recomputations)
-- [ ] run `go test ./internal/runtimemanager/...` — must pass
+- [x] run `go test ./internal/runtimemanager/...` — must pass
 
 ### Task 10: Shared hardened HTTP client helper (review #7)
 

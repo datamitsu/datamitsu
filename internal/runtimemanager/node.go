@@ -57,18 +57,30 @@ func (rm *RuntimeManager) installNode(runtimeName string) (string, error) {
 	return nodeBinPath, nil
 }
 
+// resolveNodeAppEnvPath resolves the node runtime and the app's cache path,
+// computing the merged pnpm-workspace.yaml once for the call. Hot paths that
+// already merged once per exec should call resolveNodeAppEnvPathWith with the
+// shared merged content instead.
 func (rm *RuntimeManager) resolveNodeAppEnvPath(appName string, appConfig *binmanager.AppConfigNode, files map[string]string, archives map[string]*binmanager.ArchiveSpec) (appEnvPath string, runtimeName string, rc config.RuntimeConfig, err error) {
+	mergedWorkspaceYAML, err := buildPNPMWorkspace(files)
+	if err != nil {
+		return "", "", config.RuntimeConfig{}, fmt.Errorf("failed to compute pnpm-workspace.yaml for %q: %w", appName, err)
+	}
+	return rm.resolveNodeAppEnvPathWith(appName, appConfig, files, archives, mergedWorkspaceYAML)
+}
+
+// resolveNodeAppEnvPathWith is resolveNodeAppEnvPath with the merged
+// pnpm-workspace.yaml supplied by the caller (computed once per exec). The merged
+// content is folded into the cache key so the path invalidates when the secure
+// defaults are tightened — exactly as recomputing it here would, but without the
+// repeated merge/marshal across the install and command-info passes.
+func (rm *RuntimeManager) resolveNodeAppEnvPathWith(appName string, appConfig *binmanager.AppConfigNode, files map[string]string, archives map[string]*binmanager.ArchiveSpec, mergedWorkspaceYAML string) (appEnvPath string, runtimeName string, rc config.RuntimeConfig, err error) {
 	runtimeName, rc, err = rm.ResolveRuntime(appConfig.Runtime, config.RuntimeKindNode)
 	if err != nil {
 		return "", "", config.RuntimeConfig{}, fmt.Errorf("failed to resolve node runtime for %q: %w", appName, err)
 	}
 
-	// Hash the merged pnpm-workspace.yaml content (defaults + user override) so
-	// the cache key invalidates when the secure defaults are tightened.
-	filesForHash, err := filesWithMergedWorkspaceYAML(files)
-	if err != nil {
-		return "", "", config.RuntimeConfig{}, fmt.Errorf("failed to compute pnpm-workspace.yaml for %q: %w", appName, err)
-	}
+	filesForHash := filesWithWorkspaceYAML(files, mergedWorkspaceYAML)
 
 	appEnvPath, err = rm.GetAppPath(appName, config.RuntimeKindNode, appConfig.Version, appConfig.Dependencies, lockFileHash(appConfig.LockFile), filesForHash, archives, runtimeName, NodeAppPathExtra{
 		PackageName: appConfig.PackageName,
@@ -85,15 +97,25 @@ func (rm *RuntimeManager) resolveNodeAppEnvPath(appName string, appConfig *binma
 // If files is non-empty, writes them to the app directory before running pnpm.
 // Safe for concurrent use from multiple goroutines.
 func (rm *RuntimeManager) InstallNodeApp(appName string, appConfig *binmanager.AppConfigNode, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
+	mergedWorkspaceYAML, err := buildPNPMWorkspace(files)
+	if err != nil {
+		return fmt.Errorf("failed to compute pnpm-workspace.yaml for %q: %w", appName, err)
+	}
+	return rm.installNodeApp(appName, appConfig, files, archives, mergedWorkspaceYAML)
+}
+
+// installNodeApp installs a node app using a pre-merged pnpm-workspace.yaml so the
+// merge is computed once per exec and shared with the command-info pass.
+func (rm *RuntimeManager) installNodeApp(appName string, appConfig *binmanager.AppConfigNode, files map[string]string, archives map[string]*binmanager.ArchiveSpec, mergedWorkspaceYAML string) error {
 	key := "node/" + appName
 	_, err, _ := rm.appInstall.Do(key, func() (any, error) {
-		return nil, rm.installNodeAppOnce(appName, appConfig, files, archives)
+		return nil, rm.installNodeAppOnce(appName, appConfig, files, archives, mergedWorkspaceYAML)
 	})
 	return err
 }
 
-func (rm *RuntimeManager) installNodeAppOnce(appName string, appConfig *binmanager.AppConfigNode, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
-	appEnvPath, runtimeName, rc, err := rm.resolveNodeAppEnvPath(appName, appConfig, files, archives)
+func (rm *RuntimeManager) installNodeAppOnce(appName string, appConfig *binmanager.AppConfigNode, files map[string]string, archives map[string]*binmanager.ArchiveSpec, mergedWorkspaceYAML string) error {
+	appEnvPath, runtimeName, rc, err := rm.resolveNodeAppEnvPathWith(appName, appConfig, files, archives, mergedWorkspaceYAML)
 	if err != nil {
 		return err
 	}
@@ -149,10 +171,7 @@ func (rm *RuntimeManager) installNodeAppOnce(appName string, appConfig *binmanag
 		}
 	}()
 
-	mergedWorkspaceYAML, filesToWrite, err := preparePNPMWorkspaceForApp(files)
-	if err != nil {
-		return fmt.Errorf("failed to set up pnpm-workspace.yaml for %q: %w", appName, err)
-	}
+	filesToWrite := filesWithoutWorkspaceYAML(files)
 
 	if len(filesToWrite) > 0 || len(archives) > 0 {
 		if err := binmanager.WriteAppFiles(appEnvPath, filesToWrite, archives); err != nil {
@@ -233,7 +252,17 @@ func (rm *RuntimeManager) installNodeAppOnce(appName string, appConfig *binmanag
 // so the shim's `#!/usr/bin/env node` (or node's own resolution) finds the
 // managed node.
 func (rm *RuntimeManager) GetNodeCommandInfo(appName string, appConfig *binmanager.AppConfigNode, files map[string]string, archives map[string]*binmanager.ArchiveSpec) (*binmanager.CommandInfo, error) {
-	appEnvPath, runtimeName, rc, err := rm.resolveNodeAppEnvPath(appName, appConfig, files, archives)
+	mergedWorkspaceYAML, err := buildPNPMWorkspace(files)
+	if err != nil {
+		return nil, fmt.Errorf("failed to compute pnpm-workspace.yaml for %q: %w", appName, err)
+	}
+	return rm.getNodeCommandInfo(appName, appConfig, files, archives, mergedWorkspaceYAML)
+}
+
+// getNodeCommandInfo is GetNodeCommandInfo with the merged pnpm-workspace.yaml
+// supplied by the caller (computed once per exec).
+func (rm *RuntimeManager) getNodeCommandInfo(appName string, appConfig *binmanager.AppConfigNode, files map[string]string, archives map[string]*binmanager.ArchiveSpec, mergedWorkspaceYAML string) (*binmanager.CommandInfo, error) {
+	appEnvPath, runtimeName, rc, err := rm.resolveNodeAppEnvPathWith(appName, appConfig, files, archives, mergedWorkspaceYAML)
 	if err != nil {
 		return nil, err
 	}

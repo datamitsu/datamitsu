@@ -728,3 +728,120 @@ func TestInstallNodeApp_RemoveAllSuccessProceeds(t *testing.T) {
 		t.Errorf("stale bin shim should have been removed, stat err = %v", statErr)
 	}
 }
+
+// seedInstalledNodeApp creates BOTH the bin shim and the installed module's
+// package.json — the "already installed" state that makes installNodeAppOnce
+// short-circuit and lets GetNodeCommandInfo return command info.
+func seedInstalledNodeApp(t *testing.T, appEnvPath, packageName, binPath string) {
+	t.Helper()
+	appBinPath := filepath.Join(appEnvPath, binPath)
+	if err := os.MkdirAll(filepath.Dir(appBinPath), 0755); err != nil {
+		t.Fatalf("mkdir bin dir: %v", err)
+	}
+	if err := os.WriteFile(appBinPath, []byte("#!/bin/sh\n"), 0755); err != nil {
+		t.Fatalf("write bin shim: %v", err)
+	}
+	modulePkg := filepath.Join(appEnvPath, "node_modules", packageName, "package.json")
+	if err := os.MkdirAll(filepath.Dir(modulePkg), 0755); err != nil {
+		t.Fatalf("mkdir module dir: %v", err)
+	}
+	if err := os.WriteFile(modulePkg, []byte("{}"), 0644); err != nil {
+		t.Fatalf("write module package.json: %v", err)
+	}
+}
+
+// TestGetCommandInfoNode_MergesWorkspaceOnceOnCacheHit pins Task 9 (review #8): a
+// single GetCommandInfo call on an already-installed node app must merge+marshal
+// the pnpm-workspace.yaml exactly once, not once per resolveNodeAppEnvPath pass
+// (install + command-info). A system-mode node runtime lets the command-info pass
+// resolve the node binary without any download.
+func TestGetCommandInfoNode_MergesWorkspaceOnceOnCacheHit(t *testing.T) {
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
+
+	runtimes := config.MapOfRuntimes{
+		"node": {
+			Kind:   config.RuntimeKindNode,
+			Mode:   config.RuntimeModeSystem,
+			Node:   &config.RuntimeConfigNode{NodeVersion: "26.2.0", PNPMVersion: "11.0.0", PNPMHash: "deadbeef"},
+			System: &config.RuntimeConfigSystem{Command: filepath.Join(t.TempDir(), "bin", "node")},
+		},
+	}
+	rm := New(runtimes)
+
+	appConfig := &binmanager.AppConfigNode{
+		PackageName: "eslint",
+		Version:     "9.0.0",
+		BinPath:     "node_modules/.bin/eslint",
+		Runtime:     "node",
+	}
+	app := binmanager.App{Node: appConfig}
+
+	appEnvPath, _, _, err := rm.resolveNodeAppEnvPath("eslint", appConfig, app.Files, app.Archives)
+	if err != nil {
+		t.Fatalf("resolveNodeAppEnvPath() error = %v", err)
+	}
+	seedInstalledNodeApp(t, appEnvPath, appConfig.PackageName, appConfig.BinPath)
+	defer func() { _ = os.RemoveAll(appEnvPath) }()
+
+	// Count merge invocations across the whole GetCommandInfo exec.
+	var merges int32
+	orig := buildPNPMWorkspace
+	buildPNPMWorkspace = func(files map[string]string) (string, error) {
+		atomic.AddInt32(&merges, 1)
+		return orig(files)
+	}
+	defer func() { buildPNPMWorkspace = orig }()
+
+	if _, err := rm.GetCommandInfo("eslint", app); err != nil {
+		t.Fatalf("GetCommandInfo() error = %v", err)
+	}
+	if got := atomic.LoadInt32(&merges); got != 1 {
+		t.Errorf("pnpm-workspace.yaml merge ran %d times per GetCommandInfo, want 1", got)
+	}
+}
+
+// TestResolveNodeAppEnvPath_CacheKeyUnchanged proves the once-per-exec refactor
+// does not move the app cache key: resolveNodeAppEnvPath must yield the exact path
+// the previous logic produced (merge folded into the hash via
+// filesWithMergedWorkspaceYAML), for nil, override, and unrelated-files inputs.
+func TestResolveNodeAppEnvPath_CacheKeyUnchanged(t *testing.T) {
+	runtimes := nodeRuntimeWith(t, "https://example.com/node.tar.xz", "abc", testLibc)
+	rm := New(runtimes)
+	appConfig := &binmanager.AppConfigNode{
+		PackageName: "eslint",
+		Version:     "9.0.0",
+		BinPath:     "node_modules/.bin/eslint",
+		Runtime:     "node",
+	}
+
+	cases := []struct {
+		name  string
+		files map[string]string
+	}{
+		{"nil files", nil},
+		{"user workspace override", map[string]string{"pnpm-workspace.yaml": "allowBuilds:\n  puppeteer: true\n"}},
+		{"unrelated files", map[string]string{".npmrc": "registry=https://registry.npmjs.org/\n"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Old computation: merge folded into the hash by filesWithMergedWorkspaceYAML.
+			oldFilesForHash, err := filesWithMergedWorkspaceYAML(tc.files)
+			if err != nil {
+				t.Fatalf("filesWithMergedWorkspaceYAML() error = %v", err)
+			}
+			wantPath, err := rm.GetAppPath("eslint", config.RuntimeKindNode, appConfig.Version, appConfig.Dependencies, lockFileHash(appConfig.LockFile), oldFilesForHash, nil, "node", NodeAppPathExtra{PackageName: appConfig.PackageName, BinPath: appConfig.BinPath})
+			if err != nil {
+				t.Fatalf("GetAppPath() error = %v", err)
+			}
+
+			gotPath, _, _, err := rm.resolveNodeAppEnvPath("eslint", appConfig, tc.files, nil)
+			if err != nil {
+				t.Fatalf("resolveNodeAppEnvPath() error = %v", err)
+			}
+
+			if gotPath != wantPath {
+				t.Errorf("cache key changed: resolveNodeAppEnvPath = %q, want %q", gotPath, wantPath)
+			}
+		})
+	}
+}

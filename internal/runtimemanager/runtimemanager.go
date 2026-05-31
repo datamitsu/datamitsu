@@ -421,10 +421,16 @@ func (rm *RuntimeManager) GetCommandInfo(appName string, app binmanager.App) (*b
 		return rm.GetUVCommandInfo(appName, app.Uv, app.Files, app.Archives)
 	}
 	if app.Node != nil {
-		if err := rm.InstallNodeApp(appName, app.Node, app.Files, app.Archives); err != nil {
+		// Compute the merged pnpm-workspace.yaml once and thread it into both the
+		// install and command-info passes instead of recomputing it in each.
+		mergedWorkspaceYAML, err := buildPNPMWorkspace(app.Files)
+		if err != nil {
+			return nil, fmt.Errorf("failed to compute pnpm-workspace.yaml for %q: %w", appName, err)
+		}
+		if err := rm.installNodeApp(appName, app.Node, app.Files, app.Archives, mergedWorkspaceYAML); err != nil {
 			return nil, err
 		}
-		return rm.GetNodeCommandInfo(appName, app.Node, app.Files, app.Archives)
+		return rm.getNodeCommandInfo(appName, app.Node, app.Files, app.Archives, mergedWorkspaceYAML)
 	}
 	if app.Jvm != nil {
 		if err := rm.InstallJVMApp(appName, app.Jvm, app.Files, app.Archives); err != nil {
