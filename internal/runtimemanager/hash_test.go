@@ -1,6 +1,7 @@
 package runtimemanager
 
 import (
+	"runtime"
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
@@ -429,6 +430,139 @@ func TestCalculateFNMAppHash(t *testing.T) {
 
 		if fnmHash == appHash {
 			t.Error("FNM hash should differ from app hash due to packageName and binPath inputs")
+		}
+	})
+}
+
+func TestCalculateNodeAppHash(t *testing.T) {
+	t.Run("basic hash has xxh3-128 length", func(t *testing.T) {
+		hash := calculateNodeAppHash("eslint", "eslint", "9.0.0", "node_modules/.bin/eslint", nil, "rthash", "", "")
+		if hash == "" {
+			t.Error("hash is empty")
+		}
+		if len(hash) != 32 {
+			t.Errorf("hash length = %d, want 32 (xxh3-128)", len(hash))
+		}
+	})
+
+	t.Run("stable / deterministic", func(t *testing.T) {
+		hash1 := calculateNodeAppHash("eslint", "eslint", "9.0.0", "node_modules/.bin/eslint", nil, "rthash", "", "")
+		hash2 := calculateNodeAppHash("eslint", "eslint", "9.0.0", "node_modules/.bin/eslint", nil, "rthash", "", "")
+		if hash1 != hash2 {
+			t.Errorf("hash not deterministic: %q != %q", hash1, hash2)
+		}
+	})
+
+	t.Run("package name affects hash", func(t *testing.T) {
+		hash1 := calculateNodeAppHash("myapp", "pkg-a", "1.0.0", "node_modules/.bin/myapp", nil, "rthash", "", "")
+		hash2 := calculateNodeAppHash("myapp", "pkg-b", "1.0.0", "node_modules/.bin/myapp", nil, "rthash", "", "")
+		if hash1 == hash2 {
+			t.Error("different package names produced same hash")
+		}
+	})
+
+	t.Run("runtime hash affects hash", func(t *testing.T) {
+		hash1 := calculateNodeAppHash("eslint", "eslint", "9.0.0", "node_modules/.bin/eslint", nil, "rthash1", "", "")
+		hash2 := calculateNodeAppHash("eslint", "eslint", "9.0.0", "node_modules/.bin/eslint", nil, "rthash2", "", "")
+		if hash1 == hash2 {
+			t.Error("different runtime hashes produced same hash")
+		}
+	})
+
+	t.Run("differs from calculateAppHash (the uv/jvm app hasher) with same base inputs", func(t *testing.T) {
+		nodeHash := calculateNodeAppHash("eslint", "eslint", "9.0.0", "node_modules/.bin/eslint", nil, "rthash", "", "")
+		appHash := calculateAppHash("eslint", "9.0.0", nil, "rthash", "", "")
+		if nodeHash == appHash {
+			t.Error("node app hash should differ from plain app hash due to packageName and binPath inputs")
+		}
+	})
+}
+
+// TestCalculateRuntimeHashNodeDistinct verifies the managed node runtime hash is
+// stable, sensitive to the node config fields (nodeVersion/pnpmVersion/pnpmHash),
+// and distinct from jvm/uv runtimes that share the same binaries entry.
+func TestCalculateRuntimeHashNodeDistinct(t *testing.T) {
+	osType, err := syslist.GetOsTypeFromString(runtime.GOOS)
+	if err != nil {
+		t.Fatalf("detect os type: %v", err)
+	}
+	archType, err := syslist.GetArchTypeFromString(runtime.GOARCH)
+	if err != nil {
+		t.Fatalf("detect arch type: %v", err)
+	}
+
+	sharedBin := binmanager.BinaryOsArchInfo{
+		URL:         "https://example.com/runtime.tar.xz",
+		Hash:        "abc123",
+		ContentType: binmanager.BinContentTypeTarXz,
+	}
+	managed := func(kind config.RuntimeKind, mutate func(*config.RuntimeConfig)) config.RuntimeConfig {
+		rc := config.RuntimeConfig{
+			Kind: kind,
+			Mode: config.RuntimeModeManaged,
+			Managed: &config.RuntimeConfigManaged{
+				Binaries: binmanager.MapOfBinaries{osType: {archType: {testLibc: sharedBin}}},
+			},
+		}
+		mutate(&rc)
+		return rc
+	}
+
+	nodeRC := managed(config.RuntimeKindNode, func(rc *config.RuntimeConfig) {
+		rc.Node = &config.RuntimeConfigNode{NodeVersion: "26.2.0", PNPMVersion: "11.0.0", PNPMHash: "pnpmhash"}
+	})
+	jvmRC := managed(config.RuntimeKindJVM, func(rc *config.RuntimeConfig) {
+		rc.JVM = &config.RuntimeConfigJVM{JavaVersion: "21"}
+	})
+	uvRC := managed(config.RuntimeKindUV, func(rc *config.RuntimeConfig) {
+		rc.UV = &config.RuntimeConfigUV{PythonVersion: "3.12"}
+	})
+
+	nodeHash, err := calculateRuntimeHash(nodeRC, osType, archType, testLibc)
+	if err != nil {
+		t.Fatalf("node runtime hash error: %v", err)
+	}
+
+	t.Run("stable", func(t *testing.T) {
+		again, err := calculateRuntimeHash(nodeRC, osType, archType, testLibc)
+		if err != nil {
+			t.Fatalf("node runtime hash error: %v", err)
+		}
+		if nodeHash != again {
+			t.Errorf("node runtime hash not stable: %q != %q", nodeHash, again)
+		}
+	})
+
+	t.Run("distinct from jvm", func(t *testing.T) {
+		jvmHash, err := calculateRuntimeHash(jvmRC, osType, archType, testLibc)
+		if err != nil {
+			t.Fatalf("jvm runtime hash error: %v", err)
+		}
+		if nodeHash == jvmHash {
+			t.Error("node runtime hash should differ from jvm")
+		}
+	})
+
+	t.Run("distinct from uv", func(t *testing.T) {
+		uvHash, err := calculateRuntimeHash(uvRC, osType, archType, testLibc)
+		if err != nil {
+			t.Fatalf("uv runtime hash error: %v", err)
+		}
+		if nodeHash == uvHash {
+			t.Error("node runtime hash should differ from uv")
+		}
+	})
+
+	t.Run("node version affects hash", func(t *testing.T) {
+		other := managed(config.RuntimeKindNode, func(rc *config.RuntimeConfig) {
+			rc.Node = &config.RuntimeConfigNode{NodeVersion: "24.0.0", PNPMVersion: "11.0.0", PNPMHash: "pnpmhash"}
+		})
+		otherHash, err := calculateRuntimeHash(other, osType, archType, testLibc)
+		if err != nil {
+			t.Fatalf("node runtime hash error: %v", err)
+		}
+		if nodeHash == otherHash {
+			t.Error("different node version should produce a different runtime hash")
 		}
 	})
 }

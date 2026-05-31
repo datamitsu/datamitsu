@@ -112,11 +112,11 @@ Replace the two-hop Node.js runtime acquisition (download the **fnm** manager bi
 
 ### Task 4: Route runtimemanager + hash to the `node` kind
 
-- [ ] in `internal/runtimemanager/runtimemanager.go` add `node`-kind arms to app-path (`ComputeAppPath`), command info (`GetCommandInfo`), required-runtime collection (`CollectRequiredRuntimes`), and `systemCommandForKind` (returns `node`) — additive, alongside existing fnm arms
-- [ ] in `internal/runtimemanager/hash.go` add node config parts to runtime/system hashes and a `calculateNodeAppHash` (mirror `calculateFNMAppHash`)
-- [ ] add `node` to `cmd/exec.go:71` `typeOrder`
-- [ ] write tests: `GetCommandInfo`/`ComputeAppPath` resolve correctly for a `node` runtime; node hash is stable + distinct from jvm/uv
-- [ ] run `go test ./...` — must pass before next task
+- [x] in `internal/runtimemanager/runtimemanager.go` add `node`-kind arms to app-path (`ComputeAppPath`), command info (`GetCommandInfo`), required-runtime collection (`CollectRequiredRuntimes`), and `systemCommandForKind` (returns `node`) — additive, alongside existing fnm arms. Also added `Node *AppConfigNode` to `binmanager.App`, the `app.Node != nil` dispatch in `GetCommandInfo`/`ComputeInstallPath`, and the `"node"` type in `GetAppsList`.
+- [x] in `internal/runtimemanager/hash.go` add node config parts to runtime/system hashes and a `calculateNodeAppHash` (mirror `calculateFNMAppHash`) — runtime/system hash node parts were already added in Task 3; `calculateNodeAppHash` added now and wired into `GetAppPath` for `RuntimeKindNode`
+- [x] add `node` to `cmd/exec.go:71` `typeOrder` (`{"binary", "uv", "fnm", "node", "jvm", "go", "shell"}`)
+- [x] write tests: `GetCommandInfo`/`ComputeAppPath` resolve correctly for a `node` runtime; node hash is stable + distinct from jvm/uv — `TestComputeAppPathNode`, `TestGetCommandInfoNode`, `TestCollectRequiredRuntimesNode`, `TestSystemCommandForKindNode`, `TestCalculateNodeAppHash`, `TestCalculateRuntimeHashNodeDistinct`, `binmanager.TestGetAppsList_NodeApp`. Updated `TestInstallNode_GlibcFallbackWhenNoMusl` to inject a no-system-node lookPath (node now has a system fallback command).
+- [x] run `go test ./...` — passes (`go build ./...` clean, `golangci-lint` 0 issues on changed packages)
 
 ### Task 5: devtools — `pull-node` registry generator
 

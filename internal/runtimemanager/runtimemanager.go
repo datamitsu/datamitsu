@@ -51,6 +51,8 @@ func systemCommandForKind(kind config.RuntimeKind) string {
 	switch kind {
 	case config.RuntimeKindFNM:
 		return "fnm"
+	case config.RuntimeKindNode:
+		return "node"
 	case config.RuntimeKindUV:
 		return "uv"
 	case config.RuntimeKindJVM:
@@ -354,7 +356,12 @@ func (rm *RuntimeManager) GetAppPath(appName string, kind config.RuntimeKind, ve
 		if extra.BinPath == "" {
 			return "", fmt.Errorf("FNMAppPathExtra.BinPath is required for npm-based apps")
 		}
-		appHash = calculateFNMAppHash(appName, extra.PackageName, version, extra.BinPath, deps, runtimeHash, lockHash, binmanager.HashFilesAndArchives(files, archives))
+		filesHash := binmanager.HashFilesAndArchives(files, archives)
+		if kind == config.RuntimeKindNode {
+			appHash = calculateNodeAppHash(appName, extra.PackageName, version, extra.BinPath, deps, runtimeHash, lockHash, filesHash)
+		} else {
+			appHash = calculateFNMAppHash(appName, extra.PackageName, version, extra.BinPath, deps, runtimeHash, lockHash, filesHash)
+		}
 	} else {
 		appHash = calculateAppHash(appName, version, deps, runtimeHash, lockHash, binmanager.HashFilesAndArchives(files, archives))
 	}
@@ -374,6 +381,13 @@ func (rm *RuntimeManager) ComputeAppPath(appName string, app binmanager.App) (st
 	}
 	if app.Fnm != nil {
 		appEnvPath, _, _, err := rm.resolveFNMAppEnvPath(appName, app.Fnm, app.Files, app.Archives)
+		if err != nil {
+			return "", err
+		}
+		return appEnvPath, nil
+	}
+	if app.Node != nil {
+		appEnvPath, _, _, err := rm.resolveNodeAppEnvPath(appName, app.Node, app.Files, app.Archives)
 		if err != nil {
 			return "", err
 		}
@@ -410,6 +424,12 @@ func (rm *RuntimeManager) GetCommandInfo(appName string, app binmanager.App) (*b
 			return nil, err
 		}
 		return rm.GetFNMCommandInfo(appName, app.Fnm, app.Files, app.Archives)
+	}
+	if app.Node != nil {
+		if err := rm.InstallNodeApp(appName, app.Node, app.Files, app.Archives); err != nil {
+			return nil, err
+		}
+		return rm.GetNodeCommandInfo(appName, app.Node, app.Files, app.Archives)
 	}
 	if app.Jvm != nil {
 		if err := rm.InstallJVMApp(appName, app.Jvm, app.Files, app.Archives); err != nil {
@@ -486,6 +506,21 @@ func CollectRequiredRuntimes(apps binmanager.MapOfApps, runtimes config.MapOfRun
 			} else {
 				for _, name := range sortedRuntimeNames {
 					if runtimes[name].Kind == config.RuntimeKindFNM {
+						needed[name] = true
+						break
+					}
+				}
+			}
+		}
+
+		if app.Node != nil {
+			if app.Node.Runtime != "" {
+				if _, ok := runtimes[app.Node.Runtime]; ok {
+					needed[app.Node.Runtime] = true
+				}
+			} else {
+				for _, name := range sortedRuntimeNames {
+					if runtimes[name].Kind == config.RuntimeKindNode {
 						needed[name] = true
 						break
 					}

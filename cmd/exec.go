@@ -68,7 +68,7 @@ func listTools() error {
 		byType[app.Type] = append(byType[app.Type], app)
 	}
 
-	typeOrder := []string{"binary", "uv", "fnm", "jvm", "go", "shell"}
+	typeOrder := []string{"binary", "uv", "fnm", "node", "jvm", "go", "shell"}
 	for _, appType := range typeOrder {
 		appInfos, ok := byType[appType]
 		if !ok || len(appInfos) == 0 {

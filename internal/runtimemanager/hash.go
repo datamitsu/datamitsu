@@ -165,3 +165,35 @@ func calculateFNMAppHash(appName string, packageName string, pkgVersion string, 
 
 	return hashutil.XXH3Multi(parts...)
 }
+
+// calculateNodeAppHash hashes a node-kind npm app's identity. It mirrors
+// calculateFNMAppHash field-for-field (node apps are still pnpm-installed npm
+// packages — only the node runtime acquisition changed from the fnm manager
+// binary to a direct, hash-pinned archive). The cache key folds in the runtime
+// hash, which already includes the node kind's {url, hash, nodeVersion, ...}, so
+// node and fnm apps with the same package never collide; the app-env path is
+// additionally prefixed by kind ("node" vs "fnm").
+func calculateNodeAppHash(appName string, packageName string, pkgVersion string, binPath string, deps map[string]string, runtimeHash string, lockHash string, filesHash string) string {
+	parts := [][]byte{
+		[]byte(appName),
+		[]byte(packageName),
+		[]byte(pkgVersion),
+		[]byte(binPath),
+		[]byte(runtimeHash),
+		[]byte(lockHash),
+		[]byte(filesHash),
+	}
+
+	if len(deps) > 0 {
+		keys := make([]string, 0, len(deps))
+		for k := range deps {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			parts = append(parts, []byte(k), []byte(deps[k]))
+		}
+	}
+
+	return hashutil.XXH3Multi(parts...)
+}

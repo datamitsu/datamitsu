@@ -8,8 +8,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -119,6 +121,164 @@ func nodeArchiveServer(t *testing.T, body []byte, allowPath string, hits *int32)
 		w.Header().Set("Content-Type", "application/x-xz")
 		_, _ = w.Write(body)
 	}))
+}
+
+// TestSystemCommandForKindNode verifies the node kind reports "node" as its
+// system fallback command (used by resolveEffectiveRuntimeConfig when a musl
+// host lacks a musl archive). Additive alongside the existing fnm/uv/jvm/go arms.
+func TestSystemCommandForKindNode(t *testing.T) {
+	if got := systemCommandForKind(config.RuntimeKindNode); got != "node" {
+		t.Errorf("systemCommandForKind(node) = %q, want %q", got, "node")
+	}
+}
+
+// TestComputeAppPathNode exercises the node arm of ComputeAppPath: a node app
+// resolves to a deterministic, version-sensitive cache path under the "node"
+// kind directory without installing anything.
+func TestComputeAppPathNode(t *testing.T) {
+	runtimes := nodeRuntimeWith(t, "https://example.com/node.tar.xz", "abc", testLibc)
+	rm := New(runtimes)
+
+	nodeApp := func(version string) binmanager.App {
+		return binmanager.App{
+			Node: &binmanager.AppConfigNode{
+				PackageName: "eslint",
+				Version:     version,
+				BinPath:     "node_modules/.bin/eslint",
+				Runtime:     "node",
+			},
+		}
+	}
+
+	t.Run("node app computes path", func(t *testing.T) {
+		path, err := rm.ComputeAppPath("eslint", nodeApp("9.0.0"))
+		if err != nil {
+			t.Fatalf("ComputeAppPath() error = %v", err)
+		}
+		if path == "" {
+			t.Error("path is empty")
+		}
+	})
+
+	t.Run("node app path is deterministic", func(t *testing.T) {
+		p1, _ := rm.ComputeAppPath("eslint", nodeApp("9.0.0"))
+		p2, _ := rm.ComputeAppPath("eslint", nodeApp("9.0.0"))
+		if p1 != p2 {
+			t.Errorf("path not deterministic: %q != %q", p1, p2)
+		}
+	})
+
+	t.Run("different versions produce different paths", func(t *testing.T) {
+		p1, _ := rm.ComputeAppPath("eslint", nodeApp("9.0.0"))
+		p2, _ := rm.ComputeAppPath("eslint", nodeApp("9.1.0"))
+		if p1 == p2 {
+			t.Error("different versions should produce different paths")
+		}
+	})
+
+	t.Run("path lives under the node kind directory", func(t *testing.T) {
+		path, err := rm.ComputeAppPath("eslint", nodeApp("9.0.0"))
+		if err != nil {
+			t.Fatalf("ComputeAppPath() error = %v", err)
+		}
+		if !strings.Contains(path, filepath.Join("node", "eslint")) {
+			t.Errorf("node app path %q should live under node/eslint", path)
+		}
+	})
+}
+
+// TestGetCommandInfoNode verifies the node arm of GetCommandInfo dispatches to
+// the node install/command flow. The install fails (no real archive at the fake
+// URL), but the dispatch must recognize the node app as runtime-managed rather
+// than rejecting it as having no valid configuration.
+func TestGetCommandInfoNode(t *testing.T) {
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
+	runtimes := nodeRuntimeWith(t, "https://example.com/node.tar.xz", "abc", testLibc)
+	rm := New(runtimes)
+
+	app := binmanager.App{
+		Node: &binmanager.AppConfigNode{
+			PackageName: "eslint",
+			Version:     "9.0.0",
+			BinPath:     "node_modules/.bin/eslint",
+			Runtime:     "node",
+		},
+	}
+
+	_, err := rm.GetCommandInfo("eslint", app)
+	if err == nil {
+		t.Skip("unexpected success - node archive not available in test env")
+	}
+	if err.Error() == `app "eslint" is not a runtime-managed app` {
+		t.Error("node app should be recognized as runtime-managed")
+	}
+}
+
+// TestCollectRequiredRuntimesNode verifies the node arm of CollectRequiredRuntimes:
+// required node apps pull in their node runtime (explicit ref or default-by-kind),
+// optional apps are excluded, and node sorts alongside other kinds.
+func TestCollectRequiredRuntimesNode(t *testing.T) {
+	runtimes := config.MapOfRuntimes{
+		"uv": {
+			Kind: config.RuntimeKindUV,
+			Mode: config.RuntimeModeManaged,
+		},
+		"node": {
+			Kind: config.RuntimeKindNode,
+			Mode: config.RuntimeModeManaged,
+			Node: &config.RuntimeConfigNode{NodeVersion: "26.2.0", PNPMVersion: "11.0.0", PNPMHash: "h"},
+		},
+	}
+
+	nodeApp := func(required bool, runtimeRef string) binmanager.App {
+		return binmanager.App{
+			Required: required,
+			Node: &binmanager.AppConfigNode{
+				PackageName: "eslint",
+				Version:     "9.0.0",
+				BinPath:     "node_modules/.bin/eslint",
+				Runtime:     runtimeRef,
+			},
+		}
+	}
+
+	t.Run("required node app collects default node runtime", func(t *testing.T) {
+		apps := binmanager.MapOfApps{"eslint": nodeApp(true, "")}
+		result := CollectRequiredRuntimes(apps, runtimes, false)
+		if len(result) != 1 || result[0] != "node" {
+			t.Fatalf("expected [node], got %v", result)
+		}
+	})
+
+	t.Run("node app with explicit runtime ref", func(t *testing.T) {
+		apps := binmanager.MapOfApps{"eslint": nodeApp(true, "node")}
+		result := CollectRequiredRuntimes(apps, runtimes, false)
+		if len(result) != 1 || result[0] != "node" {
+			t.Fatalf("expected [node], got %v", result)
+		}
+	})
+
+	t.Run("optional node app excluded", func(t *testing.T) {
+		apps := binmanager.MapOfApps{"eslint": nodeApp(false, "")}
+		result := CollectRequiredRuntimes(apps, runtimes, false)
+		if len(result) != 0 {
+			t.Errorf("expected 0 runtimes for optional node app, got %v", result)
+		}
+	})
+
+	t.Run("mixed uv and node apps", func(t *testing.T) {
+		apps := binmanager.MapOfApps{
+			"yamllint": {Required: true, Uv: &binmanager.AppConfigUV{PackageName: "yamllint", Version: "1.37.0", Runtime: "uv"}},
+			"eslint":   nodeApp(true, "node"),
+		}
+		result := CollectRequiredRuntimes(apps, runtimes, false)
+		if len(result) != 2 {
+			t.Fatalf("expected 2 runtimes, got %v", result)
+		}
+		if result[0] != "node" || result[1] != "uv" {
+			t.Errorf("expected sorted [node uv], got %v", result)
+		}
+	})
 }
 
 func TestGetNodeEnvVars(t *testing.T) {
@@ -269,11 +429,14 @@ func TestInstallNode_GlibcFallbackWhenNoMusl(t *testing.T) {
 	server := nodeArchiveServer(t, body, "/glibc.tar.xz", &hits)
 	defer server.Close()
 
-	// Only a glibc entry exists; on a musl host with no musl entry and no system
-	// node fallback (kind "node" has no system command yet), resolveLibcKey must
-	// fall back to the glibc archive.
+	// Only a glibc entry exists. node now reports "node" as its system fallback
+	// command, but if no system node is on PATH, resolveEffectiveRuntimeConfig
+	// keeps managed mode and resolveLibcKey must fall back to the glibc archive.
+	// Inject a lookPath that finds no system node to force the download path
+	// (otherwise a CI host with node on PATH would fall back to system mode).
+	noSystemNode := func(string) (string, error) { return "", exec.ErrNotFound }
 	runtimes := nodeRuntimeWith(t, server.URL+"/glibc.tar.xz", hash, "glibc")
-	rm := newTestRMWithTarget(runtimes, target.Target{OS: runtime.GOOS, Arch: runtime.GOARCH, Libc: target.LibcMusl})
+	rm := newTestRMWithLookPath(runtimes, target.Target{OS: runtime.GOOS, Arch: runtime.GOARCH, Libc: target.LibcMusl}, noSystemNode)
 
 	nodeBin, err := rm.installNode("node")
 	if err != nil {

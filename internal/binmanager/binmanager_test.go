@@ -424,6 +424,35 @@ func TestGetAppsList_FNMApp(t *testing.T) {
 	}
 }
 
+func TestGetAppsList_NodeApp(t *testing.T) {
+	bm := New(MapOfApps{
+		"eslint": App{
+			Node: &AppConfigNode{
+				PackageName: "eslint",
+				Version:     "9.0.0",
+				BinPath:     "node_modules/.bin/eslint",
+			},
+		},
+	}, nil, nil)
+
+	apps := bm.GetAppsList()
+	if len(apps) != 1 {
+		t.Fatalf("expected 1 app, got %d", len(apps))
+	}
+	if apps[0].Type != "node" {
+		t.Errorf("expected type 'node', got %q", apps[0].Type)
+	}
+	if apps[0].Name != "eslint" {
+		t.Errorf("expected name 'eslint', got %q", apps[0].Name)
+	}
+	if apps[0].Version != "9.0.0" {
+		t.Errorf("expected version '9.0.0', got %q", apps[0].Version)
+	}
+	if apps[0].PackageName != "eslint" {
+		t.Errorf("expected packageName 'eslint', got %q", apps[0].PackageName)
+	}
+}
+
 func TestGetAppsList_BinaryApp(t *testing.T) {
 	bm := New(MapOfApps{
 		"golangci-lint": App{
