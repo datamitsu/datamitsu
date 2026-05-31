@@ -23,16 +23,14 @@ import (
 // cap and no FNM_NODE_DIST_MIRROR/FNM_ARCH logic: the git-pinned hash is the
 // single source of trust.
 //
-// Everything after node is on PATH is reused from the fnm flow (pnpm is still
+// Everything after node is on PATH reuses the pnpm flow (pnpm is still
 // downloaded directly from the npm registry with a pinned SHA-256 + the
 // registry's SHA-512 integrity, and npm tools are installed with
-// `node <pnpm.cjs> install`). The shared pnpm/npm helpers still live in fnm.go
-// for now and move here when fnm is removed.
+// `node <pnpm.cjs> install`). The shared pnpm/npm helpers live in pnpm.go.
 
-// getNodeEnvVars returns the per-app npm/pnpm environment for a node app. It
-// mirrors getFNMEnvVars: the npm package layout is identical because node apps
-// are still pnpm-installed npm packages — only the node binary acquisition
-// changed.
+// getNodeEnvVars returns the per-app npm/pnpm environment for a node app: node
+// apps are pnpm-installed npm packages, so this points pnpm at the shared store
+// and the per-app virtual store / global dirs.
 func getNodeEnvVars(appEnvPath string) map[string]string {
 	storePath := env.GetPNPMStorePath()
 	return map[string]string{
@@ -72,7 +70,7 @@ func (rm *RuntimeManager) resolveNodeAppEnvPath(appName string, appConfig *binma
 		return "", "", config.RuntimeConfig{}, fmt.Errorf("failed to compute pnpm-workspace.yaml for %q: %w", appName, err)
 	}
 
-	appEnvPath, err = rm.GetAppPath(appName, config.RuntimeKindNode, appConfig.Version, appConfig.Dependencies, lockFileHash(appConfig.LockFile), filesForHash, archives, runtimeName, FNMAppPathExtra{
+	appEnvPath, err = rm.GetAppPath(appName, config.RuntimeKindNode, appConfig.Version, appConfig.Dependencies, lockFileHash(appConfig.LockFile), filesForHash, archives, runtimeName, NodeAppPathExtra{
 		PackageName: appConfig.PackageName,
 		BinPath:     appConfig.BinPath,
 	})
@@ -134,7 +132,7 @@ func (rm *RuntimeManager) installNodeAppOnce(appName string, appConfig *binmanag
 
 	storeRoot := env.GetStorePath()
 
-	pnpmDir := filepath.Join(storeRoot, ".runtimes", "fnm-pnpm", pnpmVersion, pnpmHash)
+	pnpmDir := filepath.Join(storeRoot, ".runtimes", "pnpm", pnpmVersion, pnpmHash)
 	if err := rm.installPNPM(pnpmVersion, pnpmDir, pnpmHash); err != nil {
 		return fmt.Errorf("failed to download PNPM: %w", err)
 	}
@@ -163,7 +161,7 @@ func (rm *RuntimeManager) installNodeAppOnce(appName string, appConfig *binmanag
 
 	// Write pnpm-workspace.yaml AFTER WriteAppFiles so the secure defaults always
 	// win over anything an archive might place at this path.
-	if err := writeFNMAppWorkspaceFile(appEnvPath, mergedWorkspaceYAML); err != nil {
+	if err := writeAppWorkspaceFile(appEnvPath, mergedWorkspaceYAML); err != nil {
 		return fmt.Errorf("failed to write pnpm-workspace.yaml for %q: %w", appName, err)
 	}
 

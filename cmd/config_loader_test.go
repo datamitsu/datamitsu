@@ -92,26 +92,6 @@ func TestLoadConfigRuntimes(t *testing.T) {
 		t.Error("uv runtime missing darwin binaries")
 	}
 
-	fnmRuntime, ok := cfg.Runtimes["fnm"]
-	if !ok {
-		t.Fatal("fnm runtime not found in config")
-	}
-	if fnmRuntime.Kind != config.RuntimeKindFNM {
-		t.Errorf("fnm runtime kind = %q, want %q", fnmRuntime.Kind, config.RuntimeKindFNM)
-	}
-	if fnmRuntime.Mode != config.RuntimeModeManaged {
-		t.Errorf("fnm runtime mode = %q, want %q", fnmRuntime.Mode, config.RuntimeModeManaged)
-	}
-	if fnmRuntime.Managed == nil {
-		t.Fatal("fnm runtime managed config is nil")
-	}
-	if _, ok := fnmRuntime.Managed.Binaries["linux"]; !ok {
-		t.Error("fnm runtime missing linux binaries")
-	}
-	if _, ok := fnmRuntime.Managed.Binaries["darwin"]; !ok {
-		t.Error("fnm runtime missing darwin binaries")
-	}
-
 	nodeRuntime, ok := cfg.Runtimes["node"]
 	if !ok {
 		t.Fatal("node runtime not found in config")

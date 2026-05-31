@@ -173,7 +173,7 @@ func runPullGithub(cmd *cobra.Command, args []string) error {
 			continue
 		}
 
-		// Fetch repository description (matches FNM/UV pattern: use fetched if non-empty, else preserve existing)
+		// Fetch repository description (matches node/UV pattern: use fetched if non-empty, else preserve existing)
 		desc := ""
 		repoInfo, err := client.GetRepository(metadata.Owner, metadata.Repo)
 		if err != nil {

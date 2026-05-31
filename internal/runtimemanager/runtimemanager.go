@@ -33,7 +33,6 @@ type RuntimeManager struct {
 	// (so retry-after-error works naturally).
 	runtimeInstall singleflight.Group // key: runtimeName
 	appInstall     singleflight.Group // key: "kind/appName"
-	nodeInstall    singleflight.Group // key: nodeVersion
 	pnpmInstall    singleflight.Group // key: "pnpmVersion\x00pnpmHash"
 }
 
@@ -49,8 +48,6 @@ func New(mapOfRuntimes config.MapOfRuntimes) *RuntimeManager {
 // Used when automatically falling back to system mode on musl.
 func systemCommandForKind(kind config.RuntimeKind) string {
 	switch kind {
-	case config.RuntimeKindFNM:
-		return "fnm"
 	case config.RuntimeKindNode:
 		return "node"
 	case config.RuntimeKindUV:
@@ -312,15 +309,15 @@ func (rm *RuntimeManager) ResolveRuntime(appRuntimeRef string, kind config.Runti
 	return "", config.RuntimeConfig{}, fmt.Errorf("no runtime of kind %q found", kind)
 }
 
-// FNMAppPathExtra holds FNM-specific parameters for app hash calculation.
-type FNMAppPathExtra struct {
+// NodeAppPathExtra holds npm-app-specific parameters for app hash calculation.
+type NodeAppPathExtra struct {
 	PackageName string
 	BinPath     string
 }
 
 // GetAppPath returns the cache path for an installed app environment.
-// For FNM apps, pass FNMAppPathExtra to include package-specific fields in the hash.
-func (rm *RuntimeManager) GetAppPath(appName string, kind config.RuntimeKind, version string, deps map[string]string, lockHash string, files map[string]string, archives map[string]*binmanager.ArchiveSpec, runtimeName string, fnmExtra ...FNMAppPathExtra) (string, error) {
+// For node apps, pass NodeAppPathExtra to include package-specific fields in the hash.
+func (rm *RuntimeManager) GetAppPath(appName string, kind config.RuntimeKind, version string, deps map[string]string, lockHash string, files map[string]string, archives map[string]*binmanager.ArchiveSpec, runtimeName string, nodeExtra ...NodeAppPathExtra) (string, error) {
 	rc, ok := rm.mapOfRuntimes[runtimeName]
 	if !ok {
 		return "", fmt.Errorf("runtime %q not found", runtimeName)
@@ -348,20 +345,16 @@ func (rm *RuntimeManager) GetAppPath(appName string, kind config.RuntimeKind, ve
 	}
 
 	var appHash string
-	if (kind == config.RuntimeKindFNM || kind == config.RuntimeKindNode) && len(fnmExtra) > 0 {
-		extra := fnmExtra[0]
+	if kind == config.RuntimeKindNode && len(nodeExtra) > 0 {
+		extra := nodeExtra[0]
 		if extra.PackageName == "" {
-			return "", fmt.Errorf("FNMAppPathExtra.PackageName is required for npm-based apps")
+			return "", fmt.Errorf("NodeAppPathExtra.PackageName is required for npm-based apps")
 		}
 		if extra.BinPath == "" {
-			return "", fmt.Errorf("FNMAppPathExtra.BinPath is required for npm-based apps")
+			return "", fmt.Errorf("NodeAppPathExtra.BinPath is required for npm-based apps")
 		}
 		filesHash := binmanager.HashFilesAndArchives(files, archives)
-		if kind == config.RuntimeKindNode {
-			appHash = calculateNodeAppHash(appName, extra.PackageName, version, extra.BinPath, deps, runtimeHash, lockHash, filesHash)
-		} else {
-			appHash = calculateFNMAppHash(appName, extra.PackageName, version, extra.BinPath, deps, runtimeHash, lockHash, filesHash)
-		}
+		appHash = calculateNodeAppHash(appName, extra.PackageName, version, extra.BinPath, deps, runtimeHash, lockHash, filesHash)
 	} else {
 		appHash = calculateAppHash(appName, version, deps, runtimeHash, lockHash, binmanager.HashFilesAndArchives(files, archives))
 	}
@@ -378,13 +371,6 @@ func (rm *RuntimeManager) ComputeAppPath(appName string, app binmanager.App) (st
 			return "", fmt.Errorf("failed to resolve UV runtime for %q: %w", appName, err)
 		}
 		return rm.GetAppPath(appName, config.RuntimeKindUV, uvVersionForHash(app.Uv.Version, app.Uv.RequiresPython), nil, lockFileHash(app.Uv.LockFile), app.Files, app.Archives, runtimeName)
-	}
-	if app.Fnm != nil {
-		appEnvPath, _, _, err := rm.resolveFNMAppEnvPath(appName, app.Fnm, app.Files, app.Archives)
-		if err != nil {
-			return "", err
-		}
-		return appEnvPath, nil
 	}
 	if app.Node != nil {
 		appEnvPath, _, _, err := rm.resolveNodeAppEnvPath(appName, app.Node, app.Files, app.Archives)
@@ -418,12 +404,6 @@ func (rm *RuntimeManager) GetCommandInfo(appName string, app binmanager.App) (*b
 			return nil, err
 		}
 		return rm.GetUVCommandInfo(appName, app.Uv, app.Files, app.Archives)
-	}
-	if app.Fnm != nil {
-		if err := rm.InstallFNMApp(appName, app.Fnm, app.Files, app.Archives); err != nil {
-			return nil, err
-		}
-		return rm.GetFNMCommandInfo(appName, app.Fnm, app.Files, app.Archives)
 	}
 	if app.Node != nil {
 		if err := rm.InstallNodeApp(appName, app.Node, app.Files, app.Archives); err != nil {
@@ -491,21 +471,6 @@ func CollectRequiredRuntimes(apps binmanager.MapOfApps, runtimes config.MapOfRun
 			} else {
 				for _, name := range sortedRuntimeNames {
 					if runtimes[name].Kind == config.RuntimeKindUV {
-						needed[name] = true
-						break
-					}
-				}
-			}
-		}
-
-		if app.Fnm != nil {
-			if app.Fnm.Runtime != "" {
-				if _, ok := runtimes[app.Fnm.Runtime]; ok {
-					needed[app.Fnm.Runtime] = true
-				}
-			} else {
-				for _, name := range sortedRuntimeNames {
-					if runtimes[name].Kind == config.RuntimeKindFNM {
 						needed[name] = true
 						break
 					}

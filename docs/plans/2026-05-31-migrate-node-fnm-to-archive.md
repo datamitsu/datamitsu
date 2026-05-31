@@ -138,11 +138,11 @@ Replace the two-hop Node.js runtime acquisition (download the **fnm** manager bi
 
 ### Task 7: Remove fnm entirely (clean break)
 
-- [ ] delete `internal/runtimemanager/fnm.go` and all fnm-only code (mirror hack, `muslFNMArch`, `FNM_NODE_DIST_MIRROR`/`FNM_ARCH`, 30s timeout, fnm-binary download, `fnm install` shell-out + the move/rename step)
-- [ ] remove `RuntimeKindFNM`, `RuntimeConfigFNM`, the `RuntimeConfig.FNM` field, and every fnm switch/case/hash branch left in `runtimemanager.go`/`hash.go`/`cmd/exec.go`
-- [ ] remove the `fnm` entry from `config/src/runtimes.json` and any `fnm` leftovers in `config/src/*` and devtools
-- [ ] write/adjust tests: a config with kind `"fnm"` is now rejected/unknown (clean-break behavior)
-- [ ] run `go build ./...` + `go test ./...` — must pass before next task
+- [x] delete `internal/runtimemanager/fnm.go` and all fnm-only code (mirror hack, `muslFNMArch`, `FNM_NODE_DIST_MIRROR`/`FNM_ARCH`, 30s timeout, fnm-binary download, `fnm install` shell-out + the move/rename step) — `fnm.go` deleted; the shared pnpm/npm-install helpers it held (`installPNPM`/`downloadPNPMFromRegistry`/`extractFullTgz`/`verifyPNPM*`/workspace+package.json builders) moved to new `internal/runtimemanager/pnpm.go` (`fnmHTTPClient`→`pnpmHTTPClient`, `writeFNMAppWorkspaceFile`→`writeAppWorkspaceFile`); all fnm-only funcs (`getFNMEnvVars`, `installNodeVersion*`, `muslFNMArch`, `buildFNMInstallEnv`, `fnmInstallEnv`, `resolveFNMAppEnvPath`, `InstallFNMApp`, `installFNMAppOnce`, `GetFNMCommandInfo`) removed. Also removed `env.GetNodeBinaryPath` (fnm-only) and renamed the pnpm cache path segment `fnm-pnpm`→`pnpm`
+- [x] remove `RuntimeKindFNM`, `RuntimeConfigFNM`, the `RuntimeConfig.FNM` field, and every fnm switch/case/hash branch left in `runtimemanager.go`/`hash.go`/`cmd/exec.go` — done; also removed `binmanager.AppConfigFNM`/`App.Fnm`, `calculateFNMAppHash`, `FNMAppPathExtra`→`NodeAppPathExtra`, the `nodeInstall` singleflight, and the fnm arms in `validate.go`/`config_lockfile.go`/`devtools_verify.go`/`devtools_pull_runtimes.go`/`tooling/executor.go`
+- [x] remove the `fnm` entry from `config/src/runtimes.json` and any `fnm` leftovers in `config/src/*` and devtools — fnm runtime entry deleted from `runtimes.json`; `AppConfigFNM`/`RuntimeConfigFNM`/`fnm?` fields + `"fnm"` `RuntimeKind` removed from `config/config.d.ts`; embedded `internal/config/config.js`/`config.d.ts` (git-ignored build artifacts) regenerated via `tsdown` (0 fnm refs); `pull-fnm`-runtime generator (`pullFNMRuntime`/`FNMRuntimeData`/`FNMConfigJSON`/`buildFNMRuntimeJSON`/`RuntimeJSON.FNM`) removed and `validRuntimeNames` → `{uv, jvm, node}`
+- [x] write/adjust tests: a config with kind `"fnm"` is now rejected/unknown (clean-break behavior) — `TestValidateRuntimes_FNMKindUnrecognized` (config) asserts a raw `Kind:"fnm"` runtime gets no node validation; `cmd` `TestIsValidRuntime`/`TestValidRuntimeNames` assert `"fnm"`/`"FNM"` are no longer valid. fnm test suites converted/pruned across config/cmd/binmanager/env/runtimemanager (fnm_test.go → pnpm_test.go, fnm-only tests dropped, generic samples converted to node)
+- [x] run `go build ./...` + `go test ./...` — must pass before next task — `go build ./...` clean, `go test ./...` all packages ok, `golangci-lint run ./...` 0 issues
 
 ### Task 8: Migrate and clean the test suite
 

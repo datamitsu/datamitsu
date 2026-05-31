@@ -151,7 +151,7 @@ func TestFilterAppsForSmartInit(t *testing.T) {
 				Links: map[string]string{"config": "dist/config.js"},
 			},
 			"app-with-links-not-referenced": {
-				Fnm:   &binmanager.AppConfigFNM{PackageName: "pkg2"},
+				Node:  &binmanager.AppConfigNode{PackageName: "pkg2"},
 				Links: map[string]string{"other": "dist/other.js"},
 			},
 			"app-no-links-referenced": {
@@ -226,7 +226,7 @@ func TestSmartInitIntegration(t *testing.T) {
 		cfg := &config.Config{
 			Apps: binmanager.MapOfApps{
 				"app-a": {
-					Fnm:   &binmanager.AppConfigFNM{PackageName: "pkg-a"},
+					Node:  &binmanager.AppConfigNode{PackageName: "pkg-a"},
 					Links: map[string]string{"config-a": "dist/a.js"},
 				},
 				"app-b": {
@@ -234,7 +234,7 @@ func TestSmartInitIntegration(t *testing.T) {
 					Links: map[string]string{"config-b": "dist/b.py"},
 				},
 				"app-c": {
-					Fnm:   &binmanager.AppConfigFNM{PackageName: "pkg-c"},
+					Node:  &binmanager.AppConfigNode{PackageName: "pkg-c"},
 					Links: map[string]string{"config-c": "dist/c.js"},
 				},
 				"app-d": {
@@ -281,7 +281,7 @@ func TestSmartInitIntegration(t *testing.T) {
 		toInstall := filterAppsForSmartInit(cfg.Apps, referenced)
 		sort.Strings(toInstall)
 
-		// Only app-a (fnm with links, referenced) and app-c (fnm with links, referenced) should be installed
+		// Only app-a (node with links, referenced) and app-c (node with links, referenced) should be installed
 		// app-b has links but not referenced, app-d is binary, app-e has no links
 		expectedInstall := []string{"app-a", "app-c"}
 		if len(toInstall) != len(expectedInstall) {
@@ -374,7 +374,7 @@ func TestInstallRuntimeAppsWithLinksUsesSmartInit(t *testing.T) {
 	cfg := &config.Config{
 		Apps: binmanager.MapOfApps{
 			"app-a": {
-				Fnm:   &binmanager.AppConfigFNM{PackageName: "pkg-a"},
+				Node:  &binmanager.AppConfigNode{PackageName: "pkg-a"},
 				Links: map[string]string{"config-a": "dist/a.js"},
 			},
 			"app-b": {
@@ -407,16 +407,16 @@ func TestInstallRuntimeAppsWithLinksUsesSmartInit(t *testing.T) {
 func TestAllRuntimeAppsWithLinks(t *testing.T) {
 	t.Run("returns only runtime-managed apps with links", func(t *testing.T) {
 		apps := binmanager.MapOfApps{
-			"fnm-with-links": {
-				Fnm:   &binmanager.AppConfigFNM{PackageName: "pkg1"},
+			"node-with-links": {
+				Node:  &binmanager.AppConfigNode{PackageName: "pkg1"},
 				Links: map[string]string{"config": "dist/config.js"},
 			},
 			"uv-with-links": {
 				Uv:    &binmanager.AppConfigUV{PackageName: "pkg2"},
 				Links: map[string]string{"other": "dist/other.py"},
 			},
-			"fnm-no-links": {
-				Fnm: &binmanager.AppConfigFNM{PackageName: "pkg3"},
+			"node-no-links": {
+				Node: &binmanager.AppConfigNode{PackageName: "pkg3"},
 			},
 			"binary-with-links": {
 				Binary: &binmanager.AppConfigBinary{},
@@ -430,7 +430,7 @@ func TestAllRuntimeAppsWithLinks(t *testing.T) {
 
 		result := allRuntimeAppsWithLinks(apps)
 
-		expected := []string{"fnm-with-links", "uv-with-links"}
+		expected := []string{"node-with-links", "uv-with-links"}
 		if len(result) != len(expected) {
 			t.Fatalf("got %v, want %v", result, expected)
 		}
@@ -443,7 +443,7 @@ func TestAllRuntimeAppsWithLinks(t *testing.T) {
 
 	t.Run("returns empty when no apps have links", func(t *testing.T) {
 		apps := binmanager.MapOfApps{
-			"app1": {Fnm: &binmanager.AppConfigFNM{PackageName: "pkg1"}},
+			"app1": {Node: &binmanager.AppConfigNode{PackageName: "pkg1"}},
 		}
 		result := allRuntimeAppsWithLinks(apps)
 		if len(result) != 0 {
@@ -480,7 +480,7 @@ func TestSmartInitIncludesAllAppsWithLinks(t *testing.T) {
 	cfg := &config.Config{
 		Apps: binmanager.MapOfApps{
 			"tool-referenced": {
-				Fnm:   &binmanager.AppConfigFNM{PackageName: "pkg-a"},
+				Node:  &binmanager.AppConfigNode{PackageName: "pkg-a"},
 				Links: map[string]string{"config-a": "dist/a.js"},
 			},
 			"linkpath-only": {
@@ -488,7 +488,7 @@ func TestSmartInitIncludesAllAppsWithLinks(t *testing.T) {
 				Links: map[string]string{"config-b": "dist/b.py"},
 			},
 			"no-links": {
-				Fnm: &binmanager.AppConfigFNM{PackageName: "pkg-c"},
+				Node: &binmanager.AppConfigNode{PackageName: "pkg-c"},
 			},
 		},
 		Tools: config.MapOfTools{

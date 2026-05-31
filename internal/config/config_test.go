@@ -402,9 +402,6 @@ func TestRuntimeKindConstants(t *testing.T) {
 	if RuntimeKindUV != "uv" {
 		t.Errorf("RuntimeKindUV = %q, want %q", RuntimeKindUV, "uv")
 	}
-	if RuntimeKindFNM != "fnm" {
-		t.Errorf("RuntimeKindFNM = %q, want %q", RuntimeKindFNM, "fnm")
-	}
 	if RuntimeKindNode != "node" {
 		t.Errorf("RuntimeKindNode = %q, want %q", RuntimeKindNode, "node")
 	}

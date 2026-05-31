@@ -370,7 +370,7 @@ func TestBuildNodeRuntimeJSON(t *testing.T) {
 	if result.Node.PNPMVersion != "11.2.2" {
 		t.Errorf("PNPMVersion = %q", result.Node.PNPMVersion)
 	}
-	if result.FNM != nil || result.UV != nil || result.JVM != nil {
+	if result.UV != nil || result.JVM != nil {
 		t.Error("only Node config should be set for a node runtime")
 	}
 }

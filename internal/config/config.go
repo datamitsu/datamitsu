@@ -128,7 +128,6 @@ type RuntimeKind string
 
 const (
 	RuntimeKindUV   RuntimeKind = "uv"
-	RuntimeKindFNM  RuntimeKind = "fnm"
 	RuntimeKindNode RuntimeKind = "node"
 	RuntimeKindJVM  RuntimeKind = "jvm"
 	RuntimeKindGo   RuntimeKind = "go"
@@ -143,16 +142,9 @@ type RuntimeConfigSystem struct {
 	SystemVersion string `json:"systemVersion,omitempty"`
 }
 
-type RuntimeConfigFNM struct {
-	NodeVersion string `json:"nodeVersion"`
-	PNPMVersion string `json:"pnpmVersion"`
-	PNPMHash    string `json:"pnpmHash"`
-}
-
 // RuntimeConfigNode holds node-specific config for the archive-based node
-// runtime (kind "node"). It mirrors RuntimeConfigFNM's node fields but drops
-// the fnm-manager specifics: node is fetched as a direct archive (url + hash),
-// jvm-style, instead of via the fnm manager binary.
+// runtime (kind "node"). Node is fetched as a direct archive (url + hash),
+// jvm-style.
 type RuntimeConfigNode struct {
 	NodeVersion string `json:"nodeVersion"`
 	PNPMVersion string `json:"pnpmVersion"`
@@ -176,7 +168,6 @@ type RuntimeConfig struct {
 	Mode    RuntimeMode           `json:"mode"`
 	Managed *RuntimeConfigManaged `json:"managed,omitempty"`
 	System  *RuntimeConfigSystem  `json:"system,omitempty"`
-	FNM     *RuntimeConfigFNM     `json:"fnm,omitempty"`
 	Node    *RuntimeConfigNode    `json:"node,omitempty"`
 	UV      *RuntimeConfigUV      `json:"uv,omitempty"`
 	JVM     *RuntimeConfigJVM     `json:"jvm,omitempty"`

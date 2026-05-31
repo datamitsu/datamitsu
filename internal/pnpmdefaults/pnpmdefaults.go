@@ -1,5 +1,5 @@
 // Package pnpmdefaults is the single source of truth for the recommended
-// pnpm 11 workspace security defaults applied by datamitsu. Both the FNM app
+// pnpm 11 workspace security defaults applied by datamitsu. Both the node app
 // installer (internal/runtimemanager) and the JS config engine
 // (internal/engine, which injects the map as a JS global so config.js can
 // publish it via sharedStorage) read from this package.

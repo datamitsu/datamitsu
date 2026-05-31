@@ -34,7 +34,7 @@ var verifyAllCmd = &cobra.Command{
 	Use:   "verify-all",
 	Short: "Verify all apps and runtimes across all configured platforms",
 	Long: `Downloads and hash-verifies binary apps and managed runtimes for all
-configured platforms. Installs runtime-managed apps (UV/FNM/JVM/Go) on the
+configured platforms. Installs runtime-managed apps (UV/Node/JVM/Go) on the
 current platform. Optionally runs each app's version command and compares
 output against the configured version.
 
@@ -93,7 +93,7 @@ type runtimeVerifyResult struct {
 
 type runtimeAppResult struct {
 	AppName  string
-	Kind     string // "uv", "fnm", "jvm", "go"
+	Kind     string // "uv", "node", "jvm", "go"
 	Version  string
 	Status   string // "ok", "failed"
 	ErrorMsg string
@@ -270,10 +270,10 @@ func runtimeAppKeyAndFP(e runtimeAppEntry, runtimes config.MapOfRuntimes, curren
 			appJSON, _ = json.Marshal(e.app.Uv)
 			runtimeName = e.app.Uv.Runtime
 		}
-	case "fnm":
-		if e.app.Fnm != nil {
-			appJSON, _ = json.Marshal(e.app.Fnm)
-			runtimeName = e.app.Fnm.Runtime
+	case "node":
+		if e.app.Node != nil {
+			appJSON, _ = json.Marshal(e.app.Node)
+			runtimeName = e.app.Node.Runtime
 		}
 	case "jvm":
 		if e.app.Jvm != nil {
@@ -312,8 +312,8 @@ func resolveDefaultRuntimeName(runtimes config.MapOfRuntimes, kind string) strin
 	switch kind {
 	case "uv":
 		runtimeKind = config.RuntimeKindUV
-	case "fnm":
-		runtimeKind = config.RuntimeKindFNM
+	case "node":
+		runtimeKind = config.RuntimeKindNode
 	case "jvm":
 		runtimeKind = config.RuntimeKindJVM
 	case "go":
@@ -916,8 +916,8 @@ func runPhase3RuntimeApps(cfg *config.Config, currentOs, currentArch string, sho
 	for name, app := range cfg.Apps {
 		if app.Uv != nil {
 			entries = append(entries, runtimeAppEntry{name: name, app: app, kind: "uv"})
-		} else if app.Fnm != nil {
-			entries = append(entries, runtimeAppEntry{name: name, app: app, kind: "fnm"})
+		} else if app.Node != nil {
+			entries = append(entries, runtimeAppEntry{name: name, app: app, kind: "node"})
 		} else if app.Jvm != nil {
 			entries = append(entries, runtimeAppEntry{name: name, app: app, kind: "jvm"})
 		} else if app.Go != nil {
@@ -940,8 +940,8 @@ func runPhase3RuntimeApps(cfg *config.Config, currentOs, currentArch string, sho
 			switch entry.kind {
 			case "uv":
 				version = entry.app.Uv.Version
-			case "fnm":
-				version = entry.app.Fnm.Version
+			case "node":
+				version = entry.app.Node.Version
 			case "jvm":
 				version = entry.app.Jvm.Version
 			case "go":
@@ -965,8 +965,8 @@ func runPhase3RuntimeApps(cfg *config.Config, currentOs, currentArch string, sho
 		switch entry.kind {
 		case "uv":
 			version = entry.app.Uv.Version
-		case "fnm":
-			version = entry.app.Fnm.Version
+		case "node":
+			version = entry.app.Node.Version
 		case "jvm":
 			version = entry.app.Jvm.Version
 		case "go":
@@ -1328,8 +1328,8 @@ func getAppVersion(app binmanager.App) string {
 	if app.Uv != nil {
 		return app.Uv.Version
 	}
-	if app.Fnm != nil {
-		return app.Fnm.Version
+	if app.Node != nil {
+		return app.Node.Version
 	}
 	if app.Jvm != nil {
 		return app.Jvm.Version

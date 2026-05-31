@@ -30,7 +30,7 @@ var (
 	pullRuntimesRuntimeFlag string
 )
 
-var validRuntimeNames = []string{"fnm", "uv", "jvm", "node"}
+var validRuntimeNames = []string{"uv", "jvm", "node"}
 
 func init() {
 	devtoolsCmd.AddCommand(pullRuntimesCmd)
@@ -39,13 +39,13 @@ func init() {
 	pullRuntimesCmd.Flags().BoolVar(&pullRuntimesDryRunFlag, "dry-run", false,
 		"Show what would be updated without writing files")
 	pullRuntimesCmd.Flags().StringVar(&pullRuntimesRuntimeFlag, "runtime", "",
-		"Update only the specified runtime (fnm, uv, jvm, or node)")
+		"Update only the specified runtime (uv, jvm, or node)")
 }
 
 var pullRuntimesCmd = &cobra.Command{
 	Use:   "pull-runtimes <file>",
 	Short: "Pull runtime configurations from upstream releases",
-	Long: `Pull runtime configurations (FNM, UV, JVM, Node) with latest versions from upstream.
+	Long: `Pull runtime configurations (UV, JVM, Node) with latest versions from upstream.
 
 Fetches latest releases from GitHub, computes SHA-256 hashes, and writes
 the result to the specified file. The Node runtime is pulled as a direct
@@ -53,7 +53,7 @@ archive (url + hash) from nodejs.org (glibc/darwin/windows, GPG-verified) and
 unofficial-builds.nodejs.org (musl, unsigned).
 
 Requires --update flag to fetch releases (safety guard).
-With --runtime: updates only the specified runtime (fnm, uv, jvm, or node)
+With --runtime: updates only the specified runtime (uv, jvm, or node)
 With --dry-run: shows what would be updated without writing
 
 Example:
@@ -114,13 +114,6 @@ func runPullRuntimes(cmd *cobra.Command, args []string) error {
 		var updateErr error
 
 		switch name {
-		case "fnm":
-			var data *FNMRuntimeData
-			var binaries binmanager.MapOfBinaries
-			data, binaries, updateErr = pullFNMRuntime()
-			if updateErr == nil {
-				runtimeJSON = buildFNMRuntimeJSON(data, binaries)
-			}
 		case "uv":
 			var data *UVRuntimeData
 			var binaries binmanager.MapOfBinaries
@@ -199,9 +192,6 @@ func runtimeVersion(r *RuntimeJSON) string {
 		return ""
 	}
 	var parts []string
-	if r.FNM != nil {
-		parts = append(parts, fmt.Sprintf("node=%s,pnpm=%s", r.FNM.NodeVersion, r.FNM.PNPMVersion))
-	}
 	if r.UV != nil {
 		parts = append(parts, fmt.Sprintf("python=%s", r.UV.PythonVersion))
 	}
@@ -257,7 +247,6 @@ type RuntimeJSON struct {
 	Kind    string              `json:"kind"`
 	Mode    string              `json:"mode"`
 	Managed *RuntimeManagedJSON `json:"managed,omitempty"`
-	FNM     *FNMConfigJSON      `json:"fnm,omitempty"`
 	UV      *UVConfigJSON       `json:"uv,omitempty"`
 	JVM     *JVMConfigJSON      `json:"jvm,omitempty"`
 	Node    *NodeConfigJSON     `json:"node,omitempty"`
@@ -266,13 +255,6 @@ type RuntimeJSON struct {
 // RuntimeManagedJSON holds the managed binary configuration for a runtime.
 type RuntimeManagedJSON struct {
 	Binaries binmanager.MapOfBinaries `json:"binaries"`
-}
-
-// FNMConfigJSON holds FNM-specific configuration in the JSON output.
-type FNMConfigJSON struct {
-	NodeVersion string `json:"nodeVersion"`
-	PNPMVersion string `json:"pnpmVersion"`
-	PNPMHash    string `json:"pnpmHash"`
 }
 
 // UVConfigJSON holds UV-specific configuration in the JSON output.
@@ -330,22 +312,6 @@ func writeRuntimesJSON(path string, runtimes RuntimesJSON) error {
 	return nil
 }
 
-// buildFNMRuntimeJSON constructs a RuntimeJSON from FNM updater results.
-func buildFNMRuntimeJSON(data *FNMRuntimeData, binaries binmanager.MapOfBinaries) *RuntimeJSON {
-	return &RuntimeJSON{
-		Kind: "fnm",
-		Mode: "managed",
-		Managed: &RuntimeManagedJSON{
-			Binaries: binaries,
-		},
-		FNM: &FNMConfigJSON{
-			NodeVersion: data.NodeVersion,
-			PNPMVersion: data.PNPMVersion,
-			PNPMHash:    data.PNPMHash,
-		},
-	}
-}
-
 // buildUVRuntimeJSON constructs a RuntimeJSON from UV updater results.
 func buildUVRuntimeJSON(data *UVRuntimeData, binaries binmanager.MapOfBinaries) *RuntimeJSON {
 	return &RuntimeJSON{
@@ -390,13 +356,6 @@ func buildNodeRuntimeJSON(data *NodeRuntimeData, binaries binmanager.MapOfBinari
 	}
 }
 
-// FNMRuntimeData holds the FNM-specific runtime configuration data.
-type FNMRuntimeData struct {
-	NodeVersion string
-	PNPMVersion string
-	PNPMHash    string
-}
-
 var pnpmHTTPClient = &http.Client{
 	Timeout: 2 * time.Minute,
 	CheckRedirect: func(req *http.Request, via []*http.Request) error {
@@ -414,44 +373,6 @@ type npmVersionMetaForPull struct {
 	Dist struct {
 		Tarball string `json:"tarball"`
 	} `json:"dist"`
-}
-
-func pullFNMRuntime() (*FNMRuntimeData, binmanager.MapOfBinaries, error) {
-	data := &FNMRuntimeData{}
-
-	nodeVersion, err := registry.GetLatestNodeLTSVersion()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: %v (using fallback)\n", err)
-	}
-	data.NodeVersion = nodeVersion
-
-	pnpmInfo, err := registry.GetNPMPackageInfo("pnpm")
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to fetch PNPM version: %w", err)
-	}
-	data.PNPMVersion = pnpmInfo.Version
-
-	pnpmHash, err := fetchPNPMTarballHash(pnpmInfo.Version)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to compute PNPM hash: %w", err)
-	}
-	data.PNPMHash = pnpmHash
-
-	client := github.NewClient()
-	release, err := client.GetLatestRelease("Schniz", "fnm")
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to fetch FNM release: %w", err)
-	}
-
-	fmt.Printf("FNM release: %s (%d assets)\n", release.TagName, len(release.Assets))
-
-	// Detect binaries using same deduplication logic as pull-github
-	binaries, err := detectRuntimeBinaries("fnm", release)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to detect FNM binaries: %w", err)
-	}
-
-	return data, binaries, nil
 }
 
 // fetchPNPMTarballHash downloads the PNPM tarball for the given version and
@@ -686,7 +607,7 @@ func detectJVMBinaries(release *github.Release) (binmanager.MapOfBinaries, error
 }
 
 // Node archive registry sources. Node is acquired as a direct, hash-pinned
-// archive (jvm-style), not via the fnm manager:
+// archive (jvm-style):
 //   - glibc / darwin / windows archives live on nodejs.org, whose
 //     SHASUMS256.txt manifest is GPG-signed by the Node release team.
 //   - musl archives live on unofficial-builds.nodejs.org, whose SHASUMS256.txt

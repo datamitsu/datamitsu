@@ -66,9 +66,6 @@ func calculateRuntimeHash(rc config.RuntimeConfig, osType syslist.OsType, archTy
 		[]byte(libc),
 	}
 
-	if rc.Kind == config.RuntimeKindFNM && rc.FNM != nil {
-		parts = append(parts, []byte(rc.FNM.NodeVersion), []byte(rc.FNM.PNPMVersion), []byte(rc.FNM.PNPMHash))
-	}
 	if rc.Kind == config.RuntimeKindNode && rc.Node != nil {
 		parts = append(parts, []byte(rc.Node.NodeVersion), []byte(rc.Node.PNPMVersion), []byte(rc.Node.PNPMHash))
 	}
@@ -99,9 +96,6 @@ func calculateSystemRuntimeHash(rc config.RuntimeConfig) string {
 		[]byte(systemVersion),
 	}
 
-	if rc.Kind == config.RuntimeKindFNM && rc.FNM != nil {
-		parts = append(parts, []byte(rc.FNM.NodeVersion), []byte(rc.FNM.PNPMVersion), []byte(rc.FNM.PNPMHash))
-	}
 	if rc.Kind == config.RuntimeKindNode && rc.Node != nil {
 		parts = append(parts, []byte(rc.Node.NodeVersion), []byte(rc.Node.PNPMVersion), []byte(rc.Node.PNPMHash))
 	}
@@ -141,38 +135,11 @@ func calculateAppHash(appName string, version string, deps map[string]string, ru
 	return hashutil.XXH3Multi(parts...)
 }
 
-func calculateFNMAppHash(appName string, packageName string, pkgVersion string, binPath string, deps map[string]string, runtimeHash string, lockHash string, filesHash string) string {
-	parts := [][]byte{
-		[]byte(appName),
-		[]byte(packageName),
-		[]byte(pkgVersion),
-		[]byte(binPath),
-		[]byte(runtimeHash),
-		[]byte(lockHash),
-		[]byte(filesHash),
-	}
-
-	if len(deps) > 0 {
-		keys := make([]string, 0, len(deps))
-		for k := range deps {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, k := range keys {
-			parts = append(parts, []byte(k), []byte(deps[k]))
-		}
-	}
-
-	return hashutil.XXH3Multi(parts...)
-}
-
-// calculateNodeAppHash hashes a node-kind npm app's identity. It mirrors
-// calculateFNMAppHash field-for-field (node apps are still pnpm-installed npm
-// packages — only the node runtime acquisition changed from the fnm manager
-// binary to a direct, hash-pinned archive). The cache key folds in the runtime
-// hash, which already includes the node kind's {url, hash, nodeVersion, ...}, so
-// node and fnm apps with the same package never collide; the app-env path is
-// additionally prefixed by kind ("node" vs "fnm").
+// calculateNodeAppHash hashes a node-kind npm app's identity. Node apps are
+// pnpm-installed npm packages, so the cache key folds in the package name,
+// version, binPath, dependencies, lockfile, files, and the runtime hash (which
+// already includes the node kind's {url, hash, nodeVersion, ...}). The app-env
+// path is additionally prefixed by kind ("node").
 func calculateNodeAppHash(appName string, packageName string, pkgVersion string, binPath string, deps map[string]string, runtimeHash string, lockHash string, filesHash string) string {
 	parts := [][]byte{
 		[]byte(appName),
