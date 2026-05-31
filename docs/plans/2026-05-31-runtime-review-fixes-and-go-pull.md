@@ -109,14 +109,14 @@ Dependencies identified: `go-crypto/openpgp`, `goccy/go-yaml`, internal `hashuti
 
 ### Task 2: Normalize SHA-256 hex case so pull output stays config-loadable (review #1)
 
-- [ ] write a failing test: a SHASUMS manifest with UPPERCASE hex flows through
+- [x] write a failing test: a SHASUMS manifest with UPPERCASE hex flows through
       `buildNodeBinaries` and the resulting hash is accepted by
       `config.ValidateRuntimes` (currently rejected — `isValidSHA256Hex` requires lowercase)
-- [ ] lowercase the hash (`strings.ToLower`) when recording it in `buildNodeBinaries`
+- [x] lowercase the hash (`strings.ToLower`) when recording it in `buildNodeBinaries`
       (`cmd/devtools_pull_runtimes.go:768`), keeping the `isSHA256Hex` length/hex guard
-- [ ] add a test asserting the stored hash equals the lowercase form
-- [ ] add a test that an invalid (non-hex / wrong-length) hash still hard-errors
-- [ ] run `go test ./cmd/... ./internal/config/...` — must pass before next task
+- [x] add a test asserting the stored hash equals the lowercase form
+- [x] add a test that an invalid (non-hex / wrong-length) hash still hard-errors
+- [x] run `go test ./cmd/... ./internal/config/...` — must pass before next task
 
 ### Task 3: Align `validateRelativePath` with `validateSafeRelativePath` (review #2)
 

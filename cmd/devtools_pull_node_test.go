@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/syslist"
 
 	"github.com/ProtonMail/go-crypto/openpgp"
@@ -256,6 +257,86 @@ func TestBuildNodeBinaries_InvalidHash(t *testing.T) {
 	cfg := nodePullConfig{version: nodeTestVersion, distBaseURL: nodeDistBaseURL, muslBaseURL: nodeMuslBaseURL}
 	if _, err := buildNodeBinaries(cfg, dist, musl); err == nil {
 		t.Fatal("expected error for malformed SHA-256 hash")
+	}
+}
+
+// buildUppercaseNodeShasums assigns each Node archive tuple an UPPERCASE hex
+// SHA-256-shaped hash containing letters (A–F), so the value differs from its
+// lowercase form and exercises the case-normalization path. Split into the
+// dist/musl manifests like the real sources.
+func buildUppercaseNodeShasums(v string) (dist, musl map[string]string) {
+	dist = map[string]string{}
+	musl = map[string]string{}
+	const hexLetters = "ABCDEF"
+	for i, spec := range nodeArchiveSpecs(v) {
+		h := strings.Repeat(string(hexLetters[i%len(hexLetters)]), 64)
+		if spec.musl {
+			musl[spec.filename] = h
+		} else {
+			dist[spec.filename] = h
+		}
+	}
+	return dist, musl
+}
+
+// TestBuildNodeBinaries_UppercaseHashNormalizedAndValid pins review finding #1:
+// a SHASUMS manifest with UPPERCASE hex must flow through buildNodeBinaries and
+// the recorded hash must be accepted by config.ValidateRuntimes (which requires
+// 64 lowercase hex characters). Without normalization the generated config is
+// unloadable.
+func TestBuildNodeBinaries_UppercaseHashNormalizedAndValid(t *testing.T) {
+	dist, musl := buildUppercaseNodeShasums(nodeTestVersion)
+	all := mergeShasums(dist, musl)
+
+	cfg := nodePullConfig{version: nodeTestVersion, distBaseURL: nodeDistBaseURL, muslBaseURL: nodeMuslBaseURL}
+	binaries, err := buildNodeBinaries(cfg, dist, musl)
+	if err != nil {
+		t.Fatalf("buildNodeBinaries: %v", err)
+	}
+
+	// Stored hash must equal the lowercase form of the upstream (uppercase) hash.
+	for _, spec := range nodeArchiveSpecs(nodeTestVersion) {
+		info, ok := binaries[spec.os][spec.arch][spec.libc]
+		if !ok {
+			t.Errorf("%s/%s/%s: missing entry", spec.os, spec.arch, spec.libc)
+			continue
+		}
+		want := strings.ToLower(all[spec.filename])
+		if info.Hash != want {
+			t.Errorf("%s: Hash = %q, want lowercase %q", spec.filename, info.Hash, want)
+		}
+		if info.Hash != strings.ToLower(info.Hash) {
+			t.Errorf("%s: Hash %q is not all-lowercase", spec.filename, info.Hash)
+		}
+	}
+
+	// The whole runtime entry must pass config validation (no "must be 64
+	// lowercase hex" errors).
+	rt := config.RuntimeConfig{
+		Kind: config.RuntimeKindNode,
+		Mode: config.RuntimeModeManaged,
+		Node: &config.RuntimeConfigNode{
+			NodeVersion: nodeTestVersion,
+			PNPMVersion: "11.2.2",
+			PNPMHash:    strings.Repeat("a", 64),
+		},
+		Managed: &config.RuntimeConfigManaged{Binaries: binaries},
+	}
+	if err := config.ValidateRuntimes(config.MapOfRuntimes{"node": rt}); err != nil {
+		t.Fatalf("ValidateRuntimes rejected normalized hashes: %v", err)
+	}
+}
+
+// TestBuildNodeBinaries_InvalidUppercaseHashRejected ensures normalization does
+// not paper over a genuinely malformed hash: a 64-char non-hex value (uppercase
+// "G") must still hard-error.
+func TestBuildNodeBinaries_InvalidUppercaseHashRejected(t *testing.T) {
+	dist, musl := buildNodeTestShasums(nodeTestVersion)
+	dist["node-v"+nodeTestVersion+"-linux-x64.tar.xz"] = strings.Repeat("G", 64)
+
+	cfg := nodePullConfig{version: nodeTestVersion, distBaseURL: nodeDistBaseURL, muslBaseURL: nodeMuslBaseURL}
+	if _, err := buildNodeBinaries(cfg, dist, musl); err == nil {
+		t.Fatal("expected error for 64-char non-hex hash even after lowercasing")
 	}
 }
 

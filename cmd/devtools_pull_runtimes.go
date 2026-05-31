@@ -779,6 +779,10 @@ func buildNodeBinaries(cfg nodePullConfig, distShasums, muslShasums map[string]s
 			return nil, fmt.Errorf("node %s: SHA-256 hash not found for %s in %s SHASUMS",
 				cfg.version, spec.filename, libcLabel(spec))
 		}
+		// Normalize to lowercase so the recorded hash passes config validation
+		// (config.isValidSHA256Hex requires 64 lowercase hex chars). The hex/length
+		// guard below still rejects malformed values regardless of case.
+		hash = strings.ToLower(hash)
 		if !isSHA256Hex(hash) {
 			return nil, fmt.Errorf("node %s: invalid SHA-256 hash %q for %s", cfg.version, hash, spec.filename)
 		}
