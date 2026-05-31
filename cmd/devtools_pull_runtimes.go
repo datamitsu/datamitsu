@@ -16,6 +16,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/detector"
 	"github.com/datamitsu/datamitsu/internal/github"
+	"github.com/datamitsu/datamitsu/internal/httpx"
 	"github.com/datamitsu/datamitsu/internal/nodekeys"
 	"github.com/datamitsu/datamitsu/internal/registry"
 	"github.com/datamitsu/datamitsu/internal/syslist"
@@ -365,18 +366,10 @@ func buildNodeRuntimeJSON(data *NodeRuntimeData, binaries binmanager.MapOfBinari
 	}
 }
 
-var pnpmHTTPClient = &http.Client{
-	Timeout: 2 * time.Minute,
-	CheckRedirect: func(req *http.Request, via []*http.Request) error {
-		if len(via) >= 10 {
-			return fmt.Errorf("stopped after 10 redirects")
-		}
-		if len(via) > 0 && via[len(via)-1].URL.Scheme == "https" && req.URL.Scheme == "http" {
-			return fmt.Errorf("HTTPS to HTTP redirect rejected: %s", req.URL)
-		}
-		return nil
-	},
-}
+// pnpmHTTPClient fetches pnpm metadata/tarballs during the pull-runtimes
+// devtools flow over the shared hardened transport. The 2-minute budget is
+// shorter than the runtime-install clients because this only computes hashes.
+var pnpmHTTPClient = httpx.NewHardenedClient(2 * time.Minute)
 
 type npmVersionMetaForPull struct {
 	Dist struct {

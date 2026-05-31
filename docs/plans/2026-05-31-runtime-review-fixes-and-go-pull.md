@@ -195,14 +195,25 @@ Dependencies identified: `go-crypto/openpgp`, `goccy/go-yaml`, internal `hashuti
 
 ### Task 10: Shared hardened HTTP client helper (review #7)
 
-- [ ] write a test for the shared client's redirect policy (HTTPS→HTTP rejected, >10 redirects rejected) in the helper's package
-- [ ] add `newHardenedHTTPClient(timeout time.Duration) *http.Client` (proxy, dialer,
+- [x] write a test for the shared client's redirect policy (HTTPS→HTTP rejected, >10 redirects rejected) in the helper's package
+      (`internal/httpx/httpx_test.go`: unit tests on `hardenedRedirect` + an end-to-end
+      downgrade-rejection test through a real client/server, plus transport-defaults asserts)
+- [x] add `newHardenedHTTPClient(timeout time.Duration) *http.Client` (proxy, dialer,
       TLS/response-header timeouts, redirect guard) in a shared spot (e.g.
       `internal/binmanager` exported or a small `internal/httpx`)
-- [ ] replace the duplicated clients in `pnpm.go:28`, `cmd/devtools_pull_runtimes.go:359`,
+      — implemented as exported `httpx.NewHardenedClient` in the new `internal/httpx`
+      package (exported so cross-package call sites can use it)
+- [x] replace the duplicated clients in `pnpm.go:28`, `cmd/devtools_pull_runtimes.go:359`,
       and the jvm/remotecfg copies with the helper (preserving each call site's timeout)
-- [ ] add a test confirming each replaced client keeps its original timeout
-- [ ] run `go test ./...` — must pass
+      — note: `cmd/devtools_pull_runtimes.go` gains the hardened transport it previously
+      lacked; remotecfg's dialer/response-header sub-timeouts standardize to the shared
+      defaults (bounded by its unchanged 30s overall budget). binmanager's own client is
+      left as-is (not in the listed call sites; its redirect test still references it).
+- [x] add a test confirming each replaced client keeps its original timeout
+      (`internal/runtimemanager/http_clients_test.go` pins pnpm/jvm at 5m,
+      `internal/remotecfg/http_client_test.go` pins 30s,
+      `cmd/devtools_pull_runtimes_http_client_test.go` pins 2m)
+- [x] run `go test ./...` — must pass
 
 ### Task 11: Reuse binmanager's hardened tar extractor for pnpm (review #6)
 

@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"crypto/sha256"
 	"crypto/sha512"
+	"github.com/datamitsu/datamitsu/internal/httpx"
 	"github.com/datamitsu/datamitsu/internal/pnpmdefaults"
 	"encoding/base64"
 	"encoding/hex"
@@ -12,7 +13,6 @@ import (
 	"fmt"
 	"github.com/goccy/go-yaml"
 	"io"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -25,24 +25,7 @@ import (
 // pinned SHA-256 + the registry's SHA-512 integrity, and npm tools are installed
 // with `node <pnpm.cjs> install`.
 
-var pnpmHTTPClient = &http.Client{
-	Timeout: 5 * time.Minute,
-	Transport: &http.Transport{
-		Proxy:                 http.ProxyFromEnvironment,
-		DialContext:           (&net.Dialer{Timeout: 30 * time.Second}).DialContext,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ResponseHeaderTimeout: 30 * time.Second,
-	},
-	CheckRedirect: func(req *http.Request, via []*http.Request) error {
-		if len(via) >= 10 {
-			return fmt.Errorf("stopped after 10 redirects")
-		}
-		if len(via) > 0 && via[len(via)-1].URL.Scheme == "https" && req.URL.Scheme == "http" {
-			return fmt.Errorf("HTTPS to HTTP redirect rejected: %s", req.URL)
-		}
-		return nil
-	},
-}
+var pnpmHTTPClient = httpx.NewHardenedClient(5 * time.Minute)
 
 const maxPNPMDownloadSize = 100 * 1024 * 1024   // 100 MiB
 const maxTotalExtractedSize = 500 * 1024 * 1024 // 500 MiB
