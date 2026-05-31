@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/env"
@@ -9,8 +11,6 @@ import (
 	"github.com/datamitsu/datamitsu/internal/syslist"
 	"github.com/datamitsu/datamitsu/internal/target"
 	"github.com/datamitsu/datamitsu/internal/verifycache"
-	"encoding/json"
-	"fmt"
 	"os"
 	"regexp"
 	"runtime"
@@ -134,8 +134,8 @@ type jsonPlatform struct {
 }
 
 type jsonBinaryApp struct {
-	Name      string             `json:"name"`
-	Version   string             `json:"version"`
+	Name      string               `json:"name"`
+	Version   string               `json:"version"`
 	Platforms []jsonPlatformResult `json:"platforms"`
 }
 
@@ -148,7 +148,7 @@ type jsonPlatformResult struct {
 }
 
 type jsonManagedRuntime struct {
-	Name      string             `json:"name"`
+	Name      string               `json:"name"`
 	Platforms []jsonPlatformResult `json:"platforms"`
 }
 
@@ -263,36 +263,14 @@ func runtimeAppKeyAndFP(e runtimeAppEntry, runtimes config.MapOfRuntimes, curren
 	key := verifycache.RuntimeAppEntryKey(e.name, currentOs, currentArch)
 
 	var appJSON, rtJSON []byte
-	var runtimeName string
-	switch e.kind {
-	case "uv":
-		if e.app.Uv != nil {
-			appJSON, _ = json.Marshal(e.app.Uv)
-			runtimeName = e.app.Uv.Runtime
+	if kind, _, runtimeRef, subConfig, ok := runtimeAppInfo(e.app); ok {
+		appJSON, _ = json.Marshal(subConfig)
+		if runtimeRef == "" {
+			runtimeRef = resolveDefaultRuntimeName(runtimes, kind)
 		}
-	case "node":
-		if e.app.Node != nil {
-			appJSON, _ = json.Marshal(e.app.Node)
-			runtimeName = e.app.Node.Runtime
+		if rt, ok := runtimes[runtimeRef]; ok {
+			rtJSON, _ = json.Marshal(rt)
 		}
-	case "jvm":
-		if e.app.Jvm != nil {
-			appJSON, _ = json.Marshal(e.app.Jvm)
-			runtimeName = e.app.Jvm.Runtime
-		}
-	case "go":
-		if e.app.Go != nil {
-			appJSON, _ = json.Marshal(e.app.Go)
-			runtimeName = e.app.Go.Runtime
-		}
-	}
-
-	if runtimeName == "" {
-		runtimeName = resolveDefaultRuntimeName(runtimes, e.kind)
-	}
-
-	if rt, ok := runtimes[runtimeName]; ok {
-		rtJSON, _ = json.Marshal(rt)
 	}
 
 	var filesJSON, archivesJSON []byte
@@ -308,17 +286,9 @@ func runtimeAppKeyAndFP(e runtimeAppEntry, runtimes config.MapOfRuntimes, curren
 }
 
 func resolveDefaultRuntimeName(runtimes config.MapOfRuntimes, kind string) string {
-	var runtimeKind config.RuntimeKind
-	switch kind {
-	case "uv":
-		runtimeKind = config.RuntimeKindUV
-	case "node":
-		runtimeKind = config.RuntimeKindNode
-	case "jvm":
-		runtimeKind = config.RuntimeKindJVM
-	case "go":
-		runtimeKind = config.RuntimeKindGo
-	default:
+	runtimeKind := config.RuntimeKind(kind)
+	// An unknown kind has no registry entry and therefore no default runtime.
+	if _, ok := config.LookupRuntimeKind(runtimeKind); !ok {
 		return ""
 	}
 	names := make([]string, 0, len(runtimes))
@@ -914,14 +884,8 @@ func runPhase3RuntimeApps(cfg *config.Config, currentOs, currentArch string, sho
 
 	var entries []runtimeAppEntry
 	for name, app := range cfg.Apps {
-		if app.Uv != nil {
-			entries = append(entries, runtimeAppEntry{name: name, app: app, kind: "uv"})
-		} else if app.Node != nil {
-			entries = append(entries, runtimeAppEntry{name: name, app: app, kind: "node"})
-		} else if app.Jvm != nil {
-			entries = append(entries, runtimeAppEntry{name: name, app: app, kind: "jvm"})
-		} else if app.Go != nil {
-			entries = append(entries, runtimeAppEntry{name: name, app: app, kind: "go"})
+		if kind, _, _, _, ok := runtimeAppInfo(app); ok {
+			entries = append(entries, runtimeAppEntry{name: name, app: app, kind: kind})
 		}
 	}
 
@@ -936,17 +900,7 @@ func runPhase3RuntimeApps(cfg *config.Config, currentOs, currentArch string, sho
 		var skippedEntries []runtimeAppEntry
 		entriesToRun, skippedEntries = filterSkippedRuntimeAppEntries(entries, sm, cfg.Runtimes, currentOs, currentArch)
 		for _, entry := range skippedEntries {
-			version := ""
-			switch entry.kind {
-			case "uv":
-				version = entry.app.Uv.Version
-			case "node":
-				version = entry.app.Node.Version
-			case "jvm":
-				version = entry.app.Jvm.Version
-			case "go":
-				version = entry.app.Go.Version
-			}
+			version := runtimeAppVersion(entry.app)
 			r := runtimeAppResult{
 				AppName: entry.name,
 				Kind:    entry.kind,
@@ -961,17 +915,7 @@ func runPhase3RuntimeApps(cfg *config.Config, currentOs, currentArch string, sho
 	}
 
 	for _, entry := range entriesToRun {
-		version := ""
-		switch entry.kind {
-		case "uv":
-			version = entry.app.Uv.Version
-		case "node":
-			version = entry.app.Node.Version
-		case "jvm":
-			version = entry.app.Jvm.Version
-		case "go":
-			version = entry.app.Go.Version
-		}
+		version := runtimeAppVersion(entry.app)
 
 		key, fp := runtimeAppKeyAndFP(entry, cfg.Runtimes, currentOs, currentArch)
 
@@ -1321,23 +1265,40 @@ func normalizeVersion(version string) string {
 	return v
 }
 
+// runtimeAppInfo is the single dispatch point the verify phases share for
+// runtime-managed apps. It returns the canonical kind string, the configured
+// version, the explicit runtime reference, and the typed sub-config (as any, for
+// JSON fingerprinting), selecting on the App.* sub-config precedence
+// (uv → node → jvm → go). It replaces the per-kind switch chains that previously
+// lived in runtimeAppKeyAndFP, the phase-3 entry loop, version extraction, and
+// getAppVersion. ok is false for non-runtime apps (binary/shell/empty).
+func runtimeAppInfo(app binmanager.App) (kind, version, runtimeRef string, subConfig any, ok bool) {
+	switch {
+	case app.Uv != nil:
+		return string(config.RuntimeKindUV), app.Uv.Version, app.Uv.Runtime, app.Uv, true
+	case app.Node != nil:
+		return string(config.RuntimeKindNode), app.Node.Version, app.Node.Runtime, app.Node, true
+	case app.Jvm != nil:
+		return string(config.RuntimeKindJVM), app.Jvm.Version, app.Jvm.Runtime, app.Jvm, true
+	case app.Go != nil:
+		return string(config.RuntimeKindGo), app.Go.Version, app.Go.Runtime, app.Go, true
+	default:
+		return "", "", "", nil, false
+	}
+}
+
+// runtimeAppVersion returns the configured version of a runtime-managed app, or
+// "" for a non-runtime app.
+func runtimeAppVersion(app binmanager.App) string {
+	_, version, _, _, _ := runtimeAppInfo(app)
+	return version
+}
+
 func getAppVersion(app binmanager.App) string {
 	if app.Binary != nil {
 		return app.Binary.Version
 	}
-	if app.Uv != nil {
-		return app.Uv.Version
-	}
-	if app.Node != nil {
-		return app.Node.Version
-	}
-	if app.Jvm != nil {
-		return app.Jvm.Version
-	}
-	if app.Go != nil {
-		return app.Go.Version
-	}
-	return ""
+	return runtimeAppVersion(app)
 }
 
 // --- Summary ---

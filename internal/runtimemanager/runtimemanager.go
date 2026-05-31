@@ -371,50 +371,72 @@ func (rm *RuntimeManager) GetAppPath(appName string, kind config.RuntimeKind, ve
 	return env.GetAppEnvPath(string(kind), appName, appHash), nil
 }
 
+// runtimeAppRef reports a runtime-managed app's kind and its explicit runtime
+// reference (the app's `runtime` field, empty when it relies on the default
+// runtime of its kind). It is the single place that encodes the App.* sub-config
+// precedence (uv → node → jvm → go) shared by all three dispatch chains:
+// CollectRequiredRuntimes routes through it directly, and the typed dispatchers
+// (ComputeAppPath/GetCommandInfo) mirror the same ordering — each keeps its own
+// switch only because the kind's install/path method takes a differently-typed
+// AppConfig*. ok is false for non-runtime apps (binary/shell/empty).
+func runtimeAppRef(app binmanager.App) (kind config.RuntimeKind, runtimeRef string, ok bool) {
+	switch {
+	case app.Uv != nil:
+		return config.RuntimeKindUV, app.Uv.Runtime, true
+	case app.Node != nil:
+		return config.RuntimeKindNode, app.Node.Runtime, true
+	case app.Jvm != nil:
+		return config.RuntimeKindJVM, app.Jvm.Runtime, true
+	case app.Go != nil:
+		return config.RuntimeKindGo, app.Go.Runtime, true
+	default:
+		return "", "", false
+	}
+}
+
 // ComputeAppPath returns the install directory path for a runtime-managed app without installing it.
 // Satisfies binmanager.RuntimeAppManager interface.
 func (rm *RuntimeManager) ComputeAppPath(appName string, app binmanager.App) (string, error) {
-	if app.Uv != nil {
+	switch {
+	case app.Uv != nil:
 		runtimeName, _, err := rm.ResolveRuntime(app.Uv.Runtime, config.RuntimeKindUV)
 		if err != nil {
 			return "", fmt.Errorf("failed to resolve UV runtime for %q: %w", appName, err)
 		}
 		return rm.GetAppPath(appName, config.RuntimeKindUV, uvVersionForHash(app.Uv.Version, app.Uv.RequiresPython), nil, lockFileHash(app.Uv.LockFile), app.Files, app.Archives, runtimeName)
-	}
-	if app.Node != nil {
+	case app.Node != nil:
 		appEnvPath, _, _, err := rm.resolveNodeAppEnvPath(appName, app.Node, app.Files, app.Archives)
 		if err != nil {
 			return "", err
 		}
 		return appEnvPath, nil
-	}
-	if app.Jvm != nil {
+	case app.Jvm != nil:
 		runtimeName, _, err := rm.ResolveRuntime(app.Jvm.Runtime, config.RuntimeKindJVM)
 		if err != nil {
 			return "", fmt.Errorf("failed to resolve JVM runtime for %q: %w", appName, err)
 		}
 		return rm.GetJVMAppPath(appName, app.Jvm, app.Files, app.Archives, runtimeName)
-	}
-	if app.Go != nil {
+	case app.Go != nil:
 		runtimeName, _, err := rm.ResolveRuntime(app.Go.Runtime, config.RuntimeKindGo)
 		if err != nil {
 			return "", fmt.Errorf("failed to resolve Go runtime for %q: %w", appName, err)
 		}
 		return rm.GetGoAppPath(appName, app.Go, app.Files, app.Archives, runtimeName)
+	default:
+		return "", fmt.Errorf("app %q is not a runtime-managed app", appName)
 	}
-	return "", fmt.Errorf("app %q is not a runtime-managed app", appName)
 }
 
 // GetCommandInfo installs (if needed) and returns command info for runtime-managed apps.
 // Satisfies binmanager.RuntimeAppManager interface.
 func (rm *RuntimeManager) GetCommandInfo(appName string, app binmanager.App) (*binmanager.CommandInfo, error) {
-	if app.Uv != nil {
+	switch {
+	case app.Uv != nil:
 		if err := rm.InstallUVApp(appName, app.Uv, app.Files, app.Archives); err != nil {
 			return nil, err
 		}
 		return rm.GetUVCommandInfo(appName, app.Uv, app.Files, app.Archives)
-	}
-	if app.Node != nil {
+	case app.Node != nil:
 		// Compute the merged pnpm-workspace.yaml once and thread it into both the
 		// install and command-info passes instead of recomputing it in each.
 		mergedWorkspaceYAML, err := buildPNPMWorkspace(app.Files)
@@ -425,20 +447,19 @@ func (rm *RuntimeManager) GetCommandInfo(appName string, app binmanager.App) (*b
 			return nil, err
 		}
 		return rm.getNodeCommandInfo(appName, app.Node, app.Files, app.Archives, mergedWorkspaceYAML)
-	}
-	if app.Jvm != nil {
+	case app.Jvm != nil:
 		if err := rm.InstallJVMApp(appName, app.Jvm, app.Files, app.Archives); err != nil {
 			return nil, err
 		}
 		return rm.GetJVMCommandInfo(appName, app.Jvm, app.Files, app.Archives)
-	}
-	if app.Go != nil {
+	case app.Go != nil:
 		if err := rm.InstallGoApp(appName, app.Go, app.Files, app.Archives); err != nil {
 			return nil, err
 		}
 		return rm.GetGoCommandInfo(appName, app.Go, app.Files, app.Archives)
+	default:
+		return nil, fmt.Errorf("app %q is not a runtime-managed app", appName)
 	}
-	return nil, fmt.Errorf("app %q is not a runtime-managed app", appName)
 }
 
 type RuntimeInstallResult struct {
@@ -478,63 +499,25 @@ func CollectRequiredRuntimes(apps binmanager.MapOfApps, runtimes config.MapOfRun
 			continue
 		}
 
-		if app.Uv != nil {
-			if app.Uv.Runtime != "" {
-				if _, ok := runtimes[app.Uv.Runtime]; ok {
-					needed[app.Uv.Runtime] = true
-				}
-			} else {
-				for _, name := range sortedRuntimeNames {
-					if runtimes[name].Kind == config.RuntimeKindUV {
-						needed[name] = true
-						break
-					}
-				}
-			}
+		kind, ref, ok := runtimeAppRef(app)
+		if !ok {
+			continue
 		}
 
-		if app.Node != nil {
-			if app.Node.Runtime != "" {
-				if _, ok := runtimes[app.Node.Runtime]; ok {
-					needed[app.Node.Runtime] = true
-				}
-			} else {
-				for _, name := range sortedRuntimeNames {
-					if runtimes[name].Kind == config.RuntimeKindNode {
-						needed[name] = true
-						break
-					}
-				}
+		// An explicit runtime reference is honored only when it exists in the
+		// config; a dangling ref contributes nothing (and never falls back to the
+		// default of its kind), matching the prior per-kind blocks.
+		if ref != "" {
+			if _, exists := runtimes[ref]; exists {
+				needed[ref] = true
 			}
+			continue
 		}
 
-		if app.Jvm != nil {
-			if app.Jvm.Runtime != "" {
-				if _, ok := runtimes[app.Jvm.Runtime]; ok {
-					needed[app.Jvm.Runtime] = true
-				}
-			} else {
-				for _, name := range sortedRuntimeNames {
-					if runtimes[name].Kind == config.RuntimeKindJVM {
-						needed[name] = true
-						break
-					}
-				}
-			}
-		}
-
-		if app.Go != nil {
-			if app.Go.Runtime != "" {
-				if _, ok := runtimes[app.Go.Runtime]; ok {
-					needed[app.Go.Runtime] = true
-				}
-			} else {
-				for _, name := range sortedRuntimeNames {
-					if runtimes[name].Kind == config.RuntimeKindGo {
-						needed[name] = true
-						break
-					}
-				}
+		for _, name := range sortedRuntimeNames {
+			if runtimes[name].Kind == kind {
+				needed[name] = true
+				break
 			}
 		}
 	}

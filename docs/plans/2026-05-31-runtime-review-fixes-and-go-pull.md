@@ -276,15 +276,35 @@ Dependencies identified: `go-crypto/openpgp`, `goccy/go-yaml`, internal `hashuti
 
 ### Task 13: RuntimeKind registry — consolidate dispatch (review #5, part 2)
 
-- [ ] write tests asserting `GetCommandInfo`/`ComputeAppPath`/`CollectRequiredRuntimes`
+- [x] write tests asserting `GetCommandInfo`/`ComputeAppPath`/`CollectRequiredRuntimes`
       route every kind correctly, including an unknown/empty kind error path
-- [ ] consolidate the three dispatch chains in `runtimemanager.go` into one helper that
+      (`internal/runtimemanager/runtimekind_dispatch_test.go`: `TestRuntimeAppRef`,
+      `TestComputeAppPath_RoutesEveryKind`, `TestGetCommandInfo_RoutesEveryKind`,
+      `TestCollectRequiredRuntimes_EveryKind` — each covers uv/node/jvm/go plus the
+      empty/binary/shell non-runtime error path)
+- [x] consolidate the three dispatch chains in `runtimemanager.go` into one helper that
       selects the set `App.*` sub-config and calls the matching install/command-info path
-- [ ] consolidate the per-kind `if/switch` chains in `cmd/devtools_verify.go`
+      — added `runtimeAppRef(app) (kind, runtimeRef, ok)` as the single point encoding the
+      `App.*` precedence (uv→node→jvm→go); `CollectRequiredRuntimes` now routes through it
+      (its 4× duplicated per-kind block collapses to one loop). `ComputeAppPath` and
+      `GetCommandInfo` are converted to mirror-image `switch` statements that keep typed
+      dispatch (each kind's install/path method takes a differently-typed `AppConfig*`,
+      per the plan's Technical Details), so the precedence is now defined once and the two
+      typed dispatchers mirror it.
+- [x] consolidate the per-kind `if/switch` chains in `cmd/devtools_verify.go`
       (`runtimeAppKeyAndFP`, `resolveDefaultRuntimeName`, version extraction, `getAppVersion`)
       to use the registry's kind⇄name and sub-config accessors
-- [ ] write tests covering devtools_verify fingerprint/version extraction per kind
-- [ ] run `go test ./...` — must pass
+      — added `runtimeAppInfo(app) (kind, version, runtimeRef, subConfig, ok)` (+ thin
+      `runtimeAppVersion`) as the shared verify-phase dispatch point; `runtimeAppKeyAndFP`,
+      the phase-3 entry loop, both version-extraction switches, and `getAppVersion` now use
+      it. `resolveDefaultRuntimeName` is now registry-driven via `config.LookupRuntimeKind`
+      (unknown/empty kind → "") instead of a string→`RuntimeKind` switch.
+- [x] write tests covering devtools_verify fingerprint/version extraction per kind
+      (`cmd/devtools_verify_dispatch_test.go`: `TestRuntimeAppInfo`,
+      `TestRuntimeAppInfo_SubConfigMarshalsLikeTypedField`,
+      `TestRuntimeAppKeyAndFP_EveryKind`, `TestRuntimeAppKeyAndFP_DefaultRuntimeFold`,
+      `TestResolveDefaultRuntimeName_AllKinds`)
+- [x] run `go test ./...` — must pass
 
 ### Task 14: Full Go support in pull-runtimes (review #3 + reported-bug capstone)
 
