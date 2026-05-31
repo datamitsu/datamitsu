@@ -62,7 +62,7 @@ describe("integration: exec without args", () => {
     assert.ok(typeof tool.name === "string");
     assert.ok(typeof tool.type === "string");
     assert.ok(
-      ["binary", "fnm", "jvm", "shell", "uv"].includes(tool.type),
+      ["binary", "go", "jvm", "node", "shell", "uv"].includes(tool.type),
       `unexpected tool type: ${tool.type}`,
     );
   });

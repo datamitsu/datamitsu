@@ -42,7 +42,6 @@ export default {
     "fatih",
     "fatihcolor",
     "filesz",
-    "fnmhash",
     "frontmatter",
     "gctx",
     "getwd",

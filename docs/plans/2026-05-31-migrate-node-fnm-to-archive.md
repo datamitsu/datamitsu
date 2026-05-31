@@ -153,11 +153,11 @@ Replace the two-hop Node.js runtime acquisition (download the **fnm** manager bi
 
 ### Task 9: Verify acceptance criteria
 
-- [ ] verify all Overview requirements implemented (direct archive, pinned hash, musl static entries, no fnm, no 30s timeout)
-- [ ] run full `go test ./...`; run the linter (`golangci-lint` / project lint task) — all issues fixed
-- [ ] verify test coverage meets project standard (check `coverage.out` / project threshold)
-- [ ] grep the repo for residual `fnm` references (code, config, docs) — none remain except intentional changelog/history
-- [ ] run `go build ./...` clean
+- [x] verify all Overview requirements implemented (direct archive, pinned hash, musl static entries, no fnm, no 30s timeout) — verified against `config/src/runtimes.json`: `node` entry (`kind: node`, managed mode, per-tuple `extractDir: true` + 64-hex sha256, glibc=`nodejs.org/dist` + musl=`unofficial-builds.nodejs.org`, `tar.xz`/`zip`); **no** `fnm` registry key; no `FNM_NODE_DIST_MIRROR`/`FNM_ARCH`/`muslFNMArch` anywhere in `internal/`; node download reuses binmanager's 5-minute client (`internal/binmanager/download.go:21`) — 30s applies only to dial/`ResponseHeaderTimeout`, the old 30s **total** cap is gone
+- [x] run full `go test ./...`; run the linter (`golangci-lint` / project lint task) — all green: `go test ./...` all packages ok, `go build ./...` clean, `golangci-lint run ./...` 0 issues, and `datamitsu check` passes all 16 tools (cspell, eslint, prettier, tsc, oxlint, golangci-lint, gitleaks, editorconfig-checker, shellcheck, hadolint, …). Programmable-api JS unit tests (`parseToolList`) pass (15/15)
+- [x] verify test coverage meets project standard (check `coverage.out` / project threshold) — no enforced threshold gate (CI uploads to Codecov/Coveralls only, no minimum). Node-migration code matches the existing jvm/uv coverage pattern: pure logic 93–100% (`nodeArchiveSpecs`, `nodeBinaryPath`, `parseSHASUMS`, `buildNodeBinaries`, `buildNodeRuntimeJSON` 100%; `detectNodeBinaries` 93.8%), `extractTarXz`/`extractTarXzToDir` 73%/90%; only the live-network CLI wrappers (`runPullNode`, `pullNodeRuntime`) sit at 0% — identical to `pullJVMRuntime`/`pullUVRuntime`. Total 61.8%
+- [x] grep the repo for residual `fnm` references (code, config, docs) — code/config now clean: fixed stale `config/config.d.ts` comment (`FNM apps`→`node apps`), removed the now-dead fnm-hash word from the `cspell.config.js` dictionary, and updated the programmable-api type lists/tests (`exec.ts` typePattern + `exec.test.ts` + `integration.test.ts`: `fnm`→`node`/`go`). Remaining matches are **intentional** — `node.go`/`pnpm.go` design-rationale comments, clean-break test assertions (`validate_test.go`, `devtools_pull_runtimes_test.go`'s `{"fnm", false}`), the `fnm-macos.zip` detector asset-naming example (`scoring.go`/`scoring_test.go`) — or **false positives** (base64 substrings in `go.sum`/`pnpm-lock.yaml` integrity hashes and `node_release_keys.asc`). Website prose docs (`website/docs/*`, `AGENTS.md`, `docs/architecture.md`) still describe fnm and are the explicit subject of Task 10
+- [x] run `go build ./...` clean — clean (no output, exit 0)
 
 ### Task 10: [Final] Update documentation
 

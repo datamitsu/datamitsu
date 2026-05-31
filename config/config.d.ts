@@ -313,7 +313,7 @@ declare global {
        *   workspace security defaults. Parse with `YAML.parse()`, extend with
        *   org/repo-specific settings, and write into a project repo via a Bundle
        *   to produce a secure `pnpm-workspace.yaml`. Separate from the auto-merge
-       *   applied to `App.files["pnpm-workspace.yaml"]` for FNM apps. See the
+       *   applied to `App.files["pnpm-workspace.yaml"]` for node apps. See the
        *   Supply Chain Security guide for the full key list and rationale.
        *
        * @example
