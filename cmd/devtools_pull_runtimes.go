@@ -847,14 +847,31 @@ func detectNodeBinaries(cfg nodePullConfig) (binmanager.MapOfBinaries, error) {
 	return binaries, nil
 }
 
+// getLatestNodeLTSVersion is the injectable seam for resolving the latest Node
+// LTS version; tests override it to exercise the failure path without network.
+var getLatestNodeLTSVersion = registry.GetLatestNodeLTSVersion
+
+// resolveLatestNodeLTS returns the latest Node LTS version, failing loudly on a
+// lookup error. registry.GetLatestNodeLTSVersion returns a hardcoded fallback
+// version alongside the error so the runtime stays resilient at exec time, but
+// silently pinning that stale fallback into a generated config is worse than
+// aborting the pull — so here we discard the fallback and surface the error.
+func resolveLatestNodeLTS() (string, error) {
+	version, err := getLatestNodeLTSVersion()
+	if err != nil {
+		return "", fmt.Errorf("failed to look up latest Node LTS version: %w", err)
+	}
+	return version, nil
+}
+
 // pullNodeRuntime resolves the latest Node version + pnpm, then fetches and
 // verifies the Node release manifests to build the archive registry entry.
 func pullNodeRuntime() (*NodeRuntimeData, binmanager.MapOfBinaries, error) {
 	data := &NodeRuntimeData{}
 
-	nodeVersion, err := registry.GetLatestNodeLTSVersion()
+	nodeVersion, err := resolveLatestNodeLTS()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: %v (using fallback)\n", err)
+		return nil, nil, err
 	}
 	data.NodeVersion = nodeVersion
 

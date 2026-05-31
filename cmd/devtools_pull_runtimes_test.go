@@ -5,6 +5,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/github"
 	"github.com/datamitsu/datamitsu/internal/syslist"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1323,6 +1324,110 @@ func TestPullRuntimesCommand_RejectsMultipleArgs(t *testing.T) {
 	err := pullRuntimesCmd.Args(pullRuntimesCmd, []string{"file1.json", "file2.json"})
 	if err == nil {
 		t.Fatal("expected error when multiple file arguments provided")
+	}
+}
+
+// === Task 4: fail loudly when the Node LTS lookup errors ===
+
+// TestResolveLatestNodeLTS_FailsLoudly pins review finding #4: a failed LTS
+// lookup must surface the error, NOT silently pin the hardcoded fallback that
+// registry.GetLatestNodeLTSVersion returns alongside its error.
+func TestResolveLatestNodeLTS_FailsLoudly(t *testing.T) {
+	orig := getLatestNodeLTSVersion
+	defer func() { getLatestNodeLTSVersion = orig }()
+
+	// Mimic the real registry: it returns the fallback version AND an error.
+	getLatestNodeLTSVersion = func() (string, error) {
+		return "24.14.0", errors.New("simulated lookup failure")
+	}
+
+	version, err := resolveLatestNodeLTS()
+	if err == nil {
+		t.Fatal("expected error when LTS lookup fails")
+	}
+	if version == "24.14.0" {
+		t.Error("must not return the stale fallback version on lookup failure")
+	}
+	if version != "" {
+		t.Errorf("expected empty version on failure, got %q", version)
+	}
+}
+
+// TestResolveLatestNodeLTS_Success is the success-path guard: a successful
+// lookup returns the resolved version unchanged with no error.
+func TestResolveLatestNodeLTS_Success(t *testing.T) {
+	orig := getLatestNodeLTSVersion
+	defer func() { getLatestNodeLTSVersion = orig }()
+
+	getLatestNodeLTSVersion = func() (string, error) {
+		return "26.2.0", nil
+	}
+
+	version, err := resolveLatestNodeLTS()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if version != "26.2.0" {
+		t.Errorf("version = %q, want 26.2.0", version)
+	}
+}
+
+// TestPullNodeRuntime_LTSLookupError verifies the failure propagates through
+// pullNodeRuntime itself: an LTS lookup error aborts before any network fetch
+// (the lookup is the first step), so no fallback config is produced.
+func TestPullNodeRuntime_LTSLookupError(t *testing.T) {
+	orig := getLatestNodeLTSVersion
+	defer func() { getLatestNodeLTSVersion = orig }()
+
+	getLatestNodeLTSVersion = func() (string, error) {
+		return "24.14.0", errors.New("simulated lookup failure")
+	}
+
+	data, binaries, err := pullNodeRuntime()
+	if err == nil {
+		t.Fatal("expected pullNodeRuntime to return an error on LTS lookup failure")
+	}
+	if data != nil || binaries != nil {
+		t.Error("expected nil data and binaries when the LTS lookup fails")
+	}
+}
+
+// TestRunPullRuntimes_NodeLookupFailureNonZeroExit confirms runPullRuntimes
+// surfaces a node pull failure as a non-zero exit (returns an error), rather
+// than writing a config built on the stale fallback version.
+func TestRunPullRuntimes_NodeLookupFailureNonZeroExit(t *testing.T) {
+	oldUpdate := pullRuntimesUpdateFlag
+	oldRuntime := pullRuntimesRuntimeFlag
+	oldDryRun := pullRuntimesDryRunFlag
+	origLTS := getLatestNodeLTSVersion
+	defer func() {
+		pullRuntimesUpdateFlag = oldUpdate
+		pullRuntimesRuntimeFlag = oldRuntime
+		pullRuntimesDryRunFlag = oldDryRun
+		getLatestNodeLTSVersion = origLTS
+	}()
+
+	pullRuntimesUpdateFlag = true
+	pullRuntimesRuntimeFlag = "node"
+	pullRuntimesDryRunFlag = true
+	getLatestNodeLTSVersion = func() (string, error) {
+		return "24.14.0", errors.New("simulated lookup failure")
+	}
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "runtimes.json")
+
+	err := runPullRuntimes(nil, []string{path})
+	if err == nil {
+		t.Fatal("expected non-zero exit (error) when the node LTS lookup fails")
+	}
+	if !strings.Contains(err.Error(), "some runtimes failed to update") {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	// dry-run + failure: nothing should have been written.
+	if _, statErr := os.Stat(path); !errors.Is(statErr, os.ErrNotExist) {
+		t.Error("no file should be written when the pull fails")
 	}
 }
 

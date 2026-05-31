@@ -130,13 +130,13 @@ Dependencies identified: `go-crypto/openpgp`, `goccy/go-yaml`, internal `hashuti
 
 ### Task 4: Fail loudly when Node LTS lookup errors during pull (review #4)
 
-- [ ] write a failing test: `pullNodeRuntime` (or its injectable seam) returns an
+- [x] write a failing test: `pullNodeRuntime` (or its injectable seam) returns an
       error when the LTS lookup fails, instead of warning + pinning the fallback
-- [ ] change `pullNodeRuntime` (`cmd/devtools_pull_runtimes.go:842`) to return the
+- [x] change `pullNodeRuntime` (`cmd/devtools_pull_runtimes.go:842`) to return the
       error from `GetLatestNodeLTSVersion` rather than `Warning: ... (using fallback)`
-- [ ] ensure `runPullRuntimes` surfaces it as a non-zero exit (already aggregates `r.err`)
-- [ ] add a success-path test (lookup ok → version used)
-- [ ] run `go test ./cmd/...` — must pass
+- [x] ensure `runPullRuntimes` surfaces it as a non-zero exit (already aggregates `r.err`)
+- [x] add a success-path test (lookup ok → version used)
+- [x] run `go test ./cmd/...` — must pass
 
 ### Task 5: Enforce HTTPS on the pnpm tarball URL in the runtime download (review #9)
 
