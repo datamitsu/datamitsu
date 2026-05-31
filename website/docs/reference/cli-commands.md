@@ -171,12 +171,20 @@ Set up configuration files for detected project types.
 datamitsu setup
 ```
 
-| Flag         | Description                                    |
-| ------------ | ---------------------------------------------- |
-| `--dry-run`  | Show what would be done without making changes |
-| `--skip-fix` | Skip running fix after setup                   |
+| Flag             | Description                                                                                                        |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `--dry-run`      | Show what would be done without making changes                                                                     |
+| `--skip-fix`     | Skip running fix after setup                                                                                       |
+| `--opt-in-tools` | Also generate an all-disabled `.datamitsuignore` so tools are opt-in (enable them by removing names from the list) |
 
 Setup detects project types, generates configuration files, and optionally runs fix afterward.
+
+With `--opt-in-tools`, setup runs the normal flow and then writes a
+`.datamitsuignore` at the git root that disables **every** configured tool via a
+single `**/*: <tool names>` rule. You then enable tools one at a time by removing
+their names from that list. The file is written before the post-setup fix (so fix
+respects the opt-in state), and setup refuses to overwrite an existing
+`.datamitsuignore`. See [Generating an all-disabled file](./ignore-rules.md#generating-an-all-disabled-file).
 
 **Examples:**
 
@@ -186,6 +194,9 @@ datamitsu setup
 
 # Preview changes
 datamitsu setup --dry-run
+
+# Set up configs and start with all tools disabled (opt-in model)
+datamitsu setup --opt-in-tools
 ```
 
 ## config
