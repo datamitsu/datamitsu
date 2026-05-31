@@ -64,7 +64,7 @@ final Config
 
 ## Apps (`apps`)
 
-Apps define the tools datamitsu manages. The app kind is determined by which sub-object is present (`binary`, `uv`, `node`, `jvm`, or `shell`).
+Apps define the tools datamitsu manages. The app kind is determined by which sub-object is present (`binary`, `uv`, `node`, `jvm`, `go`, or `shell`).
 
 ### App Kinds
 
@@ -74,6 +74,7 @@ Apps define the tools datamitsu manages. The app kind is determined by which sub
 | `uv`     | `uv`       | Python packages installed via managed UV runtime  |
 | `node`   | `node`     | npm packages installed via managed Node.js + pnpm |
 | `jvm`    | `jvm`      | Java applications executed via managed JDK        |
+| `go`     | `go`       | Go tools built from source via managed Go SDK     |
 | `shell`  | `shell`    | Shell commands with custom environment            |
 
 ### Common App Fields
@@ -252,6 +253,36 @@ interface AppConfigJVM {
 }
 ```
 
+### Go Apps
+
+Go apps build a command-line tool from source using the managed Go SDK. The lock file carries both `go.mod` and `go.sum` so the build is reproducible and hash-verified.
+
+```javascript
+const apps = {
+  govulncheck: {
+    go: {
+      packageName: "golang.org/x/vuln/cmd/govulncheck",
+      version: "v1.3.0",
+      lockFile: "br:...", // brotli-compressed lock file (required)
+      runtime: "go-default", // optional runtime override
+    },
+  },
+};
+```
+
+**Go-specific fields:**
+
+```typescript
+interface AppConfigGo {
+  packageName: string; // Go import path, e.g. "golang.org/x/vuln/cmd/govulncheck"
+  version: string; // Module version query, e.g. "v1.3.0"
+  lockFile: string; // Brotli-compressed JSON {"mod","sum"} with "br:" prefix (required)
+  runtime?: string; // Runtime name override
+}
+```
+
+The tool is built with `go build -trimpath -mod=readonly` in an isolated, hardened environment. See the [Supply Chain Security](../guides/supply-chain-security.md#go-go-apps) guide for the full defense model.
+
 ### Shell Apps
 
 Shell apps wrap system commands with custom environment variables.
@@ -330,13 +361,14 @@ Runtimes define how language-specific package managers are provisioned.
 
 ```typescript
 interface RuntimeConfig {
-  kind: "node" | "uv" | "jvm";
+  kind: "node" | "uv" | "jvm" | "go";
   mode: "managed" | "system";
   managed?: RuntimeConfigManaged; // Required for managed mode
   system?: RuntimeConfigSystem; // For system mode
   node?: RuntimeConfigNode; // Required when kind is "node"
   uv?: RuntimeConfigUV; // When kind is "uv"
   jvm?: RuntimeConfigJVM; // Required when kind is "jvm"
+  go?: RuntimeConfigGo; // Required when kind is "go"
 }
 ```
 
@@ -419,6 +451,14 @@ interface RuntimeConfigUV {
 ```typescript
 interface RuntimeConfigJVM {
   javaVersion: string; // e.g., "25"
+}
+```
+
+**Go Runtime:**
+
+```typescript
+interface RuntimeConfigGo {
+  goVersion: string; // Go SDK version to build with, e.g., "1.26.3"
 }
 ```
 

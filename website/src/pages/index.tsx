@@ -77,7 +77,7 @@ const FeatureList: FeatureItem[] = [
   },
   {
     description:
-      "Manage binaries, Python (UV), Node.js, and JVM tools in isolated environments with reproducible installs.",
+      "Manage binaries, Python (UV), Node.js, JVM, and Go tools in isolated environments with reproducible installs.",
     icon: (
       <svg
         fill="none"
@@ -188,10 +188,11 @@ function getConfig(input) {
     ...input,
     apps: {
       ...input.apps,
-      lefthook: { type: "binary", required: true },
-      eslint:   { type: "node" },
-      yamllint: { type: "uv" },
-      ktlint:   { type: "jvm" },
+      lefthook:    { type: "binary", required: true },
+      eslint:      { type: "node" },
+      yamllint:    { type: "uv" },
+      ktlint:      { type: "jvm" },
+      govulncheck: { type: "go" },
     },
   };
 }

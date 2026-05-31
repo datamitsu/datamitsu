@@ -212,6 +212,7 @@ Manage tools from different ecosystems in one place:
 - **UV apps** — Python tools via managed UV runtime (e.g., yamllint)
 - **Node apps** — npm packages via managed Node.js + pnpm (e.g., eslint, prettier)
 - **JVM apps** — Java applications via managed JDK runtime (e.g., openapi-generator-cli)
+- **Go apps** — Go tools built from source via managed Go SDK (e.g., govulncheck)
 - **Shell apps** — Custom shell commands with environment variables
 
 All managed with the same config API, all with hash verification.

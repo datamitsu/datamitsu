@@ -1,21 +1,22 @@
 ---
 title: Runtime Management
-description: Managing UV (Python), Node.js, and JVM runtimes with datamitsu
+description: Managing UV (Python), Node.js, JVM, and Go runtimes with datamitsu
 ---
 
 # Runtime Management
 
-datamitsu manages language runtimes alongside your tools. Instead of requiring team members to install specific versions of Python, Node.js, or Java, datamitsu downloads and manages these runtimes automatically, creating isolated environments for each tool.
+datamitsu manages language runtimes alongside your tools. Instead of requiring team members to install specific versions of Python, Node.js, Java, or Go, datamitsu downloads and manages these runtimes automatically, creating isolated environments for each tool.
 
 ## Runtime Types
 
-datamitsu supports three runtime types:
+datamitsu supports four runtime types:
 
-| Runtime  | Language | Package Manager | Use Case                               |
-| -------- | -------- | --------------- | -------------------------------------- |
-| **UV**   | Python   | uv              | Python tools like yamllint, ruff       |
-| **Node** | Node.js  | pnpm            | npm packages like ESLint, Prettier     |
-| **JVM**  | Java     | -               | JAR-based tools like openapi-generator |
+| Runtime  | Language | Package Manager | Use Case                                    |
+| -------- | -------- | --------------- | ------------------------------------------- |
+| **UV**   | Python   | uv              | Python tools like yamllint, ruff            |
+| **Node** | Node.js  | pnpm            | npm packages like ESLint, Prettier          |
+| **JVM**  | Java     | -               | JAR-based tools like openapi-generator      |
+| **Go**   | Go       | go modules      | Go tools built from source like govulncheck |
 
 :::tip Updating Runtimes
 To update runtime versions using devtools workflows, see [Maintaining Wrapper Packages](../how-to/maintain-wrapper.md).
@@ -186,6 +187,43 @@ jvm: {
   javaVersion: "21",
 }
 ```
+
+## Go Runtime
+
+Go apps build a command-line tool from source using a managed Go SDK, producing a single self-contained binary.
+
+### How Go Apps Work
+
+1. datamitsu downloads and verifies (SHA-256) the pinned Go SDK and extracts it
+2. Writes the app's `go.mod` and `go.sum` (from its lock file) into an isolated build directory
+3. Builds with `go build -trimpath -mod=readonly` in a hardened environment (`GOTOOLCHAIN=local`, `GOSUMDB` enabled, `GOPRIVATE`/`GONOPROXY`/`GONOSUMDB`/`GOINSECURE` cleared)
+4. Executes the built binary directly
+
+### Defining a Go App
+
+```javascript
+apps: {
+  govulncheck: {
+    go: {
+      packageName: "golang.org/x/vuln/cmd/govulncheck",
+      version: "v1.3.0",
+      lockFile: "br:...", // carries go.mod + go.sum (required)
+    },
+  },
+}
+```
+
+### Go SDK Version
+
+Configured on the runtime definition:
+
+```javascript
+go: {
+  goVersion: "1.26.3",
+}
+```
+
+A Go app's lock file is a JSON wrapper carrying both `go.mod` and `go.sum`. Because the build runs with `-mod=readonly`, any drift from the pinned `go.sum` fails the build instead of silently rewriting it. Regenerate it after a version bump with `datamitsu config lockfile <appName>`. See [Supply Chain Security](./supply-chain-security.md#go-go-apps) for the full defense model.
 
 ## Lock Files
 

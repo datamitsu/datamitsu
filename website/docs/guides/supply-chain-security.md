@@ -151,9 +151,37 @@ const mapOfApps: BinManager.MapOfApps = {
 
 UV's lock file format embeds hashes for every resolved artifact. Combined with `--locked`, this gives end-to-end integrity for the dependency tree.
 
-## Go
+## Go (Go Apps)
 
-datamitsu does not manage Go dependencies directly — `go` itself does. The relevant defenses live in standard Go tooling and should be enforced in CI:
+Go apps build a command-line tool from source with the managed Go SDK. Three layers of defense apply before the resulting binary runs.
+
+### Hash-Pinned Go SDK
+
+The Go toolchain itself is downloaded as a SHA-256-pinned archive (like the Node.js and JVM runtimes), so the compiler building your tool is integrity-verified before any source is fetched. `GOTOOLCHAIN=local` is forced, so the pinned SDK can never silently swap itself for a different toolchain version.
+
+### Mandatory Lock File (`go.mod` + `go.sum`)
+
+Go apps require a `lockFile` field. datamitsu stores it as a JSON wrapper carrying both `go.mod` and `go.sum`, writes both files into an isolated build directory, and builds with `-mod=readonly`. Any drift between the resolved modules and the pinned `go.sum` fails the build instead of silently rewriting it. The checksum database ([sum.golang.org](https://sum.golang.org/)) is consulted via `GOSUMDB`, and `GOPRIVATE`/`GONOPROXY`/`GONOSUMDB`/`GOINSECURE` are explicitly cleared so no module can opt out of verification.
+
+```typescript
+const mapOfApps: BinManager.MapOfApps = {
+  govulncheck: {
+    go: {
+      packageName: "golang.org/x/vuln/cmd/govulncheck",
+      version: "v1.3.0",
+      lockFile: "br:...", // mandatory; carries go.mod + go.sum
+    },
+  },
+};
+```
+
+### Reproducible Builds
+
+The build runs `go build -trimpath -mod=readonly`. `-trimpath` strips local filesystem paths so the output is reproducible, and `-mod=readonly` forbids any `go.mod`/`go.sum` mutation. Regenerate the lock file after a version bump via `datamitsu config lockfile <appName>`.
+
+### Securing Your Own Repository's Go Code
+
+datamitsu manages Go _apps_ (tools it builds for you); your repository's own Go modules are still managed by `go` itself. Enforce the standard defenses in CI:
 
 ```bash
 # Verify go.sum checksums against the local module cache
@@ -168,8 +196,6 @@ GOFLAGS=-mod=readonly go build ./...
 # Scan for known vulnerabilities in dependencies and stdlib
 govulncheck ./...
 ```
-
-Go's checksum database ([sum.golang.org](https://sum.golang.org/)) is consulted by default during `go mod download`, providing transparency-log-backed verification on top of `go.sum`.
 
 ## Common Patterns
 
