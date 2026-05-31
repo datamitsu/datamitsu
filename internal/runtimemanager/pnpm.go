@@ -21,11 +21,9 @@ import (
 )
 
 // pnpm.go holds the pnpm download + npm-app-install helpers shared by the node
-// runtime (node.go). These were originally part of the fnm runtime; node still
-// installs npm tools the same way (pnpm is downloaded directly from the npm
-// registry with a pinned SHA-256 + the registry's SHA-512 integrity, and tools
-// are installed with `node <pnpm.cjs> install`). Only node's acquisition changed
-// from the fnm manager binary to a direct, hash-pinned archive — see node.go.
+// runtime (node.go). pnpm is downloaded directly from the npm registry with a
+// pinned SHA-256 + the registry's SHA-512 integrity, and npm tools are installed
+// with `node <pnpm.cjs> install`.
 
 var pnpmHTTPClient = &http.Client{
 	Timeout: 5 * time.Minute,

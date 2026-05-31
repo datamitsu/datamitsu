@@ -106,21 +106,21 @@ their own files; comment edits leave code unchanged.
 
 ### Task 2: Reword the fnm history out of Go source comments
 
-- [ ] in [internal/runtimemanager/node.go](../../internal/runtimemanager/node.go)
+- [x] in [internal/runtimemanager/node.go](../../internal/runtimemanager/node.go)
       rewrite the package doc comment (lines ~15-29): describe `node` as a direct,
       SHA-256-pinned archive (jvm/go-style, generic managed-runtime path, shared
       5-minute download client, no 30s total cap) **without** the
       "Unlike the fnm runtime…" comparison or `FNM_NODE_DIST_MIRROR`/`FNM_ARCH`
       mention; keep the pnpm-flow sentence but drop the fnm reference
-- [ ] in node.go fix the `resolveNodeAppEnvPath` comment (line ~67):
+- [x] in node.go fix the `resolveNodeAppEnvPath` comment (line ~67):
       `"exactly like the fnm flow."` → describe the cache-key invalidation on its
       own terms (no fnm)
-- [ ] in [internal/runtimemanager/pnpm.go](../../internal/runtimemanager/pnpm.go)
+- [x] in [internal/runtimemanager/pnpm.go](../../internal/runtimemanager/pnpm.go)
       rewrite the package doc comment (lines ~23-28): "shared pnpm + npm-app-install
       helpers used by the node runtime" without "originally part of the fnm
       runtime" / "from the fnm manager binary"
-- [ ] run `go build ./...` (comments only — must stay green)
-- [ ] run `rg -i fnm internal/runtimemanager` — must return nothing
+- [x] run `go build ./...` (comments only — must stay green)
+- [x] run `rg -i fnm internal/runtimemanager` — must return nothing
       _(test: behavior unchanged; the package still compiles and existing
       runtimemanager tests pass — verified in Task 6's full run)_
 

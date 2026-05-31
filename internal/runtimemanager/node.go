@@ -12,21 +12,17 @@ import (
 	"go.uber.org/zap"
 )
 
-// node.go implements the archive-based Node.js runtime (kind "node"). Unlike the
-// fnm runtime — which downloads the fnm manager binary and shells out to
-// `fnm install <version>` (a two-hop acquisition with a hard-coded 30s download
-// timeout and a dynamic musl-mirror hack) — node is acquired as a direct,
-// SHA-256-pinned archive, exactly like the jvm/go runtimes: the registry holds a
-// per os/arch/libc {url, hash} entry that the generic managed-runtime path
-// (rm.GetRuntimePath -> binmanager) downloads, verifies, and extracts
-// (extractDir) using the shared 5-minute download client. There is no 30s total
-// cap and no FNM_NODE_DIST_MIRROR/FNM_ARCH logic: the git-pinned hash is the
-// single source of trust.
+// node.go implements the archive-based Node.js runtime (kind "node"). Node is
+// acquired as a direct, SHA-256-pinned archive, exactly like the jvm/go runtimes:
+// the registry holds a per os/arch/libc {url, hash} entry that the generic
+// managed-runtime path (rm.GetRuntimePath -> binmanager) downloads, verifies, and
+// extracts (extractDir) using the shared 5-minute download client. The git-pinned
+// hash is the single source of trust.
 //
-// Everything after node is on PATH reuses the pnpm flow (pnpm is still
-// downloaded directly from the npm registry with a pinned SHA-256 + the
-// registry's SHA-512 integrity, and npm tools are installed with
-// `node <pnpm.cjs> install`). The shared pnpm/npm helpers live in pnpm.go.
+// Everything after node is on PATH reuses the pnpm flow (pnpm is downloaded
+// directly from the npm registry with a pinned SHA-256 + the registry's SHA-512
+// integrity, and npm tools are installed with `node <pnpm.cjs> install`). The
+// shared pnpm/npm helpers live in pnpm.go.
 
 // getNodeEnvVars returns the per-app npm/pnpm environment for a node app: node
 // apps are pnpm-installed npm packages, so this points pnpm at the shared store
@@ -63,8 +59,7 @@ func (rm *RuntimeManager) resolveNodeAppEnvPath(appName string, appConfig *binma
 	}
 
 	// Hash the merged pnpm-workspace.yaml content (defaults + user override) so
-	// the cache key invalidates when the secure defaults are tightened, exactly
-	// like the fnm flow.
+	// the cache key invalidates when the secure defaults are tightened.
 	filesForHash, err := filesWithMergedWorkspaceYAML(files)
 	if err != nil {
 		return "", "", config.RuntimeConfig{}, fmt.Errorf("failed to compute pnpm-workspace.yaml for %q: %w", appName, err)
