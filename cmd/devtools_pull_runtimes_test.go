@@ -1040,6 +1040,16 @@ func TestRuntimeVersion_Nil(t *testing.T) {
 	}
 }
 
+func TestRuntimeVersion_Go(t *testing.T) {
+	r := &RuntimeJSON{
+		Go: &GoConfigJSON{GoVersion: "1.26.3"},
+	}
+	v := runtimeVersion(r)
+	if !strings.Contains(v, "go=1.26.3") {
+		t.Errorf("expected go version, got %q", v)
+	}
+}
+
 func TestReadRuntimesJSON_ValidFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "runtimes.json")
@@ -1123,6 +1133,138 @@ func TestReadWriteRuntimesJSON_Roundtrip(t *testing.T) {
 
 	if string(origJSON) != string(readJSON) {
 		t.Error("roundtrip mismatch: written and read JSON differ")
+	}
+}
+
+// TestReadWriteRuntimesJSON_PreservesGoEntry is the regression guard for the
+// reported bug: pull:runtimes silently dropped the `go` runtime's goVersion
+// because RuntimeJSON had no Go field, so the read→merge→write round-trip lost
+// the `go: { goVersion }` block. Here go is carried over (not actively pulled),
+// mirroring runPullRuntimes' map copy when the runtime filter is "node".
+func TestReadWriteRuntimesJSON_PreservesGoEntry(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "runtimes.json")
+
+	fixture := `{
+  "go": {
+    "kind": "go",
+    "mode": "managed",
+    "go": { "goVersion": "1.26.3" },
+    "managed": {
+      "binaries": {
+        "linux": {
+          "amd64": {
+            "glibc": {
+              "url": "https://go.dev/dl/go1.26.3.linux-amd64.tar.gz",
+              "hash": "` + testHash1 + `",
+              "contentType": "tar.gz",
+              "binaryPath": "go/bin/go",
+              "extractDir": true
+            }
+          }
+        }
+      }
+    }
+  },
+  "node": {
+    "kind": "node",
+    "mode": "managed",
+    "node": { "nodeVersion": "24.14.0", "pnpmVersion": "10.31.0", "pnpmHash": "` + testHash2 + `" },
+    "managed": { "binaries": {} }
+  }
+}`
+	if err := os.WriteFile(path, []byte(fixture), 0644); err != nil {
+		t.Fatalf("seeding fixture: %v", err)
+	}
+
+	// read → merge (copy map, as runPullRuntimes does when go is not in the
+	// runtime filter) → write
+	existing, err := readRuntimesJSON(path)
+	if err != nil {
+		t.Fatalf("readRuntimesJSON: %v", err)
+	}
+	if existing["go"] == nil || existing["go"].Go == nil {
+		t.Fatal("go entry's go config was dropped on read")
+	}
+	if existing["go"].Go.GoVersion != "1.26.3" {
+		t.Errorf("read goVersion = %q, want 1.26.3", existing["go"].Go.GoVersion)
+	}
+
+	merged := make(RuntimesJSON)
+	for k, v := range existing {
+		merged[k] = v
+	}
+	if err := writeRuntimesJSON(path, merged); err != nil {
+		t.Fatalf("writeRuntimesJSON: %v", err)
+	}
+
+	// the written file must still contain go.goVersion
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading written file: %v", err)
+	}
+	var parsed map[string]json.RawMessage
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("written file not valid JSON: %v", err)
+	}
+	var goEntry struct {
+		Go *GoConfigJSON `json:"go"`
+	}
+	if err := json.Unmarshal(parsed["go"], &goEntry); err != nil {
+		t.Fatalf("parsing written go entry: %v", err)
+	}
+	if goEntry.Go == nil {
+		t.Fatal("go.goVersion block was dropped through read→merge→write cycle")
+	}
+	if goEntry.Go.GoVersion != "1.26.3" {
+		t.Errorf("written goVersion = %q, want 1.26.3", goEntry.Go.GoVersion)
+	}
+}
+
+// TestReadWriteRuntimesJSON_RoundtripPreservesCarriedOverKind is the general
+// round-trip guard (not just go): a kind that is carried over verbatim — not
+// actively pulled — must survive read→write byte-for-byte alongside the others.
+func TestReadWriteRuntimesJSON_RoundtripPreservesCarriedOverKind(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "runtimes.json")
+
+	gbp := "go/bin/go"
+	original := buildTestRuntimes()
+	original["go"] = &RuntimeJSON{
+		Kind: "go",
+		Mode: "managed",
+		Go:   &GoConfigJSON{GoVersion: "1.26.3"},
+		Managed: &RuntimeManagedJSON{
+			Binaries: binmanager.MapOfBinaries{
+				syslist.OsTypeLinux: {
+					syslist.ArchTypeAmd64: {
+						"glibc": binmanager.BinaryOsArchInfo{
+							URL: "https://go.dev/dl/go1.26.3.linux-amd64.tar.gz", Hash: testHash4,
+							ContentType: binmanager.BinContentTypeTarGz, BinaryPath: &gbp,
+							ExtractDir: true,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	if err := writeRuntimesJSON(path, original); err != nil {
+		t.Fatalf("write failed: %v", err)
+	}
+	read, err := readRuntimesJSON(path)
+	if err != nil {
+		t.Fatalf("read failed: %v", err)
+	}
+
+	origJSON, _ := json.Marshal(original)
+	readJSON, _ := json.Marshal(read)
+	if string(origJSON) != string(readJSON) {
+		t.Errorf("roundtrip mismatch:\n orig: %s\n read: %s", origJSON, readJSON)
+	}
+
+	if read["go"].Go == nil || read["go"].Go.GoVersion != "1.26.3" {
+		t.Error("go.goVersion not preserved through roundtrip")
 	}
 }
 

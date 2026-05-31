@@ -204,5 +204,9 @@ export default {
     "libgcc",
     "remirrored",
     "SHASUMS",
+    "unmarshal",
+    "unloadable",
+    "recomputations",
+    "runtimekind",
   ],
 };

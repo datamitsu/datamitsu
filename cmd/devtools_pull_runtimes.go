@@ -201,6 +201,9 @@ func runtimeVersion(r *RuntimeJSON) string {
 	if r.Node != nil {
 		parts = append(parts, fmt.Sprintf("node=%s,pnpm=%s", r.Node.NodeVersion, r.Node.PNPMVersion))
 	}
+	if r.Go != nil {
+		parts = append(parts, fmt.Sprintf("go=%s", r.Go.GoVersion))
+	}
 	if r.Managed != nil {
 		binCount := 0
 		for _, archMap := range r.Managed.Binaries {
@@ -250,6 +253,7 @@ type RuntimeJSON struct {
 	UV      *UVConfigJSON       `json:"uv,omitempty"`
 	JVM     *JVMConfigJSON      `json:"jvm,omitempty"`
 	Node    *NodeConfigJSON     `json:"node,omitempty"`
+	Go      *GoConfigJSON       `json:"go,omitempty"`
 }
 
 // RuntimeManagedJSON holds the managed binary configuration for a runtime.
@@ -272,6 +276,11 @@ type NodeConfigJSON struct {
 	NodeVersion string `json:"nodeVersion"`
 	PNPMVersion string `json:"pnpmVersion"`
 	PNPMHash    string `json:"pnpmHash"`
+}
+
+// GoConfigJSON holds Go-specific configuration in the JSON output.
+type GoConfigJSON struct {
+	GoVersion string `json:"goVersion"`
 }
 
 // RuntimesJSON is the top-level structure for runtimes.json.
