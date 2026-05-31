@@ -59,7 +59,6 @@ const sidebars: SidebarsConfig = {
         "how-to/manage-cache",
         "how-to/maintain-wrapper",
         "how-to/use-in-alpine",
-        "how-to/migrate-fnm-to-node",
       ],
       label: "How-To",
       link: { type: "generated-index" },
