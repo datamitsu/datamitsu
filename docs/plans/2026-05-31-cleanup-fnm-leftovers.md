@@ -143,22 +143,22 @@ their own files; comment edits leave code unchanged.
 
 ### Task 4: Replace the detector `fnm-macos.zip` scoring example
 
-- [ ] in [internal/detector/scoring.go:50](../../internal/detector/scoring.go#L50)
+- [x] in [internal/detector/scoring.go:50](../../internal/detector/scoring.go#L50)
       reword the comment: "Many macOS-only assets (e.g. a `*-macos.zip`) ship
       universal binaries…" — drop the `fnm-macos.zip` name (the OS indicator
       `macos`, not the tool name, is what drives the match)
-- [ ] in [internal/detector/scoring_test.go:213](../../internal/detector/scoring_test.go#L213)
+- [x] in [internal/detector/scoring_test.go:213](../../internal/detector/scoring_test.go#L213)
       rename `TestScoreAsset_FNMMacOSImplicitArm64` →
       `TestScoreAsset_MacOSImplicitArm64`
-- [ ] replace every `"fnm-macos.zip"` fixture in scoring_test.go (in the renamed
+- [x] replace every `"fnm-macos.zip"` fixture in scoring_test.go (in the renamed
       test, `TestScoreAsset_IsExplicit`, and
       `TestSelectBestAsset_ExplicitArm64PreferredOverImplicit`) with a neutral
       `"tool-macos.zip"` matching the file's existing `tool-*` fixture convention;
       update the in-test case-description strings accordingly
-- [ ] run `go test ./internal/detector/...` — must pass with identical
+- [x] run `go test ./internal/detector/...` — must pass with identical
       OSMatch/ArchMatch/Total/IsExplicit assertions (the `macos` OS indicator
       makes `tool-macos.zip` behave exactly like the old fixture)
-- [ ] run `rg -i fnm internal/detector` — must return nothing
+- [x] run `rg -i fnm internal/detector` — must return nothing
 
 ### Task 5: Delete the completed migration plan
 

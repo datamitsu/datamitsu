@@ -210,7 +210,7 @@ func TestSelectBestAsset_ArchiveBeatsPlainBinary(t *testing.T) {
 	}
 }
 
-func TestScoreAsset_FNMMacOSImplicitArm64(t *testing.T) {
+func TestScoreAsset_MacOSImplicitArm64(t *testing.T) {
 	implicitTotal := scoreOS + scoreArch + scoreLibcNeutral + scoreArchivePrefer
 	tests := []struct {
 		name        string
@@ -222,14 +222,14 @@ func TestScoreAsset_FNMMacOSImplicitArm64(t *testing.T) {
 		wantTotal   int
 	}{
 		{
-			"fnm-macos.zip matches darwin/arm64 implicitly",
-			"fnm-macos.zip",
+			"tool-macos.zip matches darwin/arm64 implicitly",
+			"tool-macos.zip",
 			syslist.OsTypeDarwin, syslist.ArchTypeArm64,
 			true, true, implicitTotal,
 		},
 		{
-			"fnm-macos.zip still matches darwin/amd64 implicitly (regression)",
-			"fnm-macos.zip",
+			"tool-macos.zip still matches darwin/amd64 implicitly (regression)",
+			"tool-macos.zip",
 			syslist.OsTypeDarwin, syslist.ArchTypeAmd64,
 			true, true, implicitTotal,
 		},
@@ -246,8 +246,8 @@ func TestScoreAsset_FNMMacOSImplicitArm64(t *testing.T) {
 			true, false, 0,
 		},
 		{
-			"fnm-macos.zip does NOT match windows/arm64",
-			"fnm-macos.zip",
+			"tool-macos.zip does NOT match windows/arm64",
+			"tool-macos.zip",
 			syslist.OsTypeWindows, syslist.ArchTypeArm64,
 			false, false, 0,
 		},
@@ -291,13 +291,13 @@ func TestScoreAsset_IsExplicit(t *testing.T) {
 		},
 		{
 			"implicit darwin/arm64 (no arch indicator)",
-			"fnm-macos.zip",
+			"tool-macos.zip",
 			syslist.OsTypeDarwin, syslist.ArchTypeArm64,
 			false,
 		},
 		{
 			"implicit darwin/amd64 (no arch indicator)",
-			"fnm-macos.zip",
+			"tool-macos.zip",
 			syslist.OsTypeDarwin, syslist.ArchTypeAmd64,
 			false,
 		},
@@ -327,7 +327,7 @@ func TestScoreAsset_IsExplicit(t *testing.T) {
 
 func TestSelectBestAsset_ExplicitArm64PreferredOverImplicit(t *testing.T) {
 	assets := []github.Asset{
-		makeAsset("fnm-macos.zip"),
+		makeAsset("tool-macos.zip"),
 		makeAsset("tool-darwin-arm64.tar.gz"),
 	}
 
