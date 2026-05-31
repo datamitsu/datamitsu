@@ -98,6 +98,31 @@ func TestVerifyClearsigned_TamperedContent(t *testing.T) {
 	}
 }
 
+// TestVerifyClearsigned_AppendedContentExcluded refutes the "appended unsigned
+// lines verify" concern (review #12): content tacked on AFTER the clearsign
+// block's "-----END PGP SIGNATURE-----" footer is outside the signed region, so
+// the signature still verifies but the returned plaintext must NOT include the
+// appended bytes — otherwise an attacker could graft extra archive lines onto a
+// genuinely signed manifest.
+func TestVerifyClearsigned_AppendedContentExcluded(t *testing.T) {
+	manifest := "abc123  node-v1.2.3-linux-x64.tar.xz\n"
+	signed, ring := newSignedManifest(t, manifest)
+
+	const appended = "deadbeef  malware-payload.tar.xz\n"
+	tampered := append(append([]byte{}, signed...), []byte(appended)...)
+
+	plain, err := VerifyClearsigned(tampered, ring)
+	if err != nil {
+		t.Fatalf("VerifyClearsigned with appended trailer: %v", err)
+	}
+	if strings.Contains(string(plain), "malware-payload.tar.xz") {
+		t.Errorf("verified plaintext leaked content appended after the signature: %q", string(plain))
+	}
+	if !strings.Contains(string(plain), "node-v1.2.3-linux-x64.tar.xz") {
+		t.Errorf("verified plaintext lost the genuinely signed manifest line: %q", string(plain))
+	}
+}
+
 func TestVerifyClearsigned_NotClearsigned(t *testing.T) {
 	_, ring := newSignedManifest(t, "x")
 	if _, err := VerifyClearsigned([]byte("just some plain text, not a PGP message"), ring); err == nil {

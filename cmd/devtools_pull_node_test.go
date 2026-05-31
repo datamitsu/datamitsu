@@ -250,6 +250,40 @@ func TestBuildNodeBinaries_MissingMuslAsset(t *testing.T) {
 	}
 }
 
+// TestBuildNodeBinaries_FailsClosedOnDroppedHash pins the fail-closed contract
+// (review #11): parseSHASUMS silently drops malformed lines, so a required
+// archive whose hash never made it into the parsed map MUST abort
+// buildNodeBinaries with an error rather than emit a hash-less binary entry
+// (security policy: no hash, no entry).
+func TestBuildNodeBinaries_FailsClosedOnDroppedHash(t *testing.T) {
+	dist, musl := buildNodeTestShasums(nodeTestVersion)
+
+	// Render the dist manifest with one required archive's line malformed (the
+	// filename field missing) so parseSHASUMS drops it on the floor.
+	dropped := "node-v" + nodeTestVersion + "-linux-x64.tar.xz"
+	var b strings.Builder
+	for name, hash := range dist {
+		if name == dropped {
+			fmt.Fprintf(&b, "%s\n", hash) // malformed: single field → dropped
+			continue
+		}
+		fmt.Fprintf(&b, "%s  %s\n", hash, name)
+	}
+	parsedDist := parseSHASUMS(b.String())
+	if _, present := parsedDist[dropped]; present {
+		t.Fatalf("test setup: expected %s to be dropped by parseSHASUMS", dropped)
+	}
+
+	cfg := nodePullConfig{version: nodeTestVersion, distBaseURL: nodeDistBaseURL, muslBaseURL: nodeMuslBaseURL}
+	_, err := buildNodeBinaries(cfg, parsedDist, musl)
+	if err == nil {
+		t.Fatal("expected hard error when a required archive hash is absent from the SHASUMS map")
+	}
+	if !strings.Contains(err.Error(), dropped) {
+		t.Errorf("error should name the missing archive %q, got: %v", dropped, err)
+	}
+}
+
 func TestBuildNodeBinaries_InvalidHash(t *testing.T) {
 	dist, musl := buildNodeTestShasums(nodeTestVersion)
 	dist["node-v"+nodeTestVersion+"-linux-x64.tar.xz"] = "not-a-valid-sha256"

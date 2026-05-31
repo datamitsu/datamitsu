@@ -84,7 +84,19 @@ func readArmoredKeyRings(data []byte) (openpgp.EntityList, error) {
 // returns the verified plaintext (the bytes covered by the signature).
 //
 // Callers MUST use the returned bytes as the source of truth; reading a
-// separately fetched copy of the manifest would defeat the verification.
+// separately fetched copy of the manifest would defeat the verification. Only
+// the bytes inside the clearsign block are returned, so any content appended
+// after the "-----END PGP SIGNATURE-----" footer is excluded by construction —
+// unsigned trailing lines can never ride along as "verified".
+//
+// Trust model (devtools pull-time only): this establishes signature VALIDITY —
+// that some key in the supplied keyring signed exactly these bytes. It
+// deliberately does NOT enforce key revocation, key expiry, or
+// trust-level/web-of-trust policy, and a successful verification is not by
+// itself the runtime security anchor. The authority for what datamitsu actually
+// downloads at runtime is the git-pinned SHA-256 recorded in runtimes.json; this
+// GPG check only strengthens the supply-chain provenance story at the moment
+// those hashes are first generated.
 func VerifyClearsigned(data []byte, keyring openpgp.KeyRing) ([]byte, error) {
 	if keyring == nil {
 		return nil, fmt.Errorf("nil keyring")

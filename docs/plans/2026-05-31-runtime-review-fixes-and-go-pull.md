@@ -159,15 +159,15 @@ Dependencies identified: `go-crypto/openpgp`, `goccy/go-yaml`, internal `hashuti
 
 ### Task 7: Lock in SHASUMS fail-closed behavior + document provenance trust model (review #11, #12)
 
-- [ ] write a test asserting `buildNodeBinaries` hard-errors when an archive's hash
+- [x] write a test asserting `buildNodeBinaries` hard-errors when an archive's hash
       is absent from the SHASUMS map (fail-closed contract for `parseSHASUMS` drops)
-- [ ] write a test for `VerifyClearsigned` confirming content appended AFTER the
+- [x] write a test for `VerifyClearsigned` confirming content appended AFTER the
       clearsign block is NOT included in the returned plaintext (refutes the
       "appended unsigned lines verify" concern)
-- [ ] add/clarify a comment on `VerifyClearsigned` (`nodekeys.go:88`) documenting the
+- [x] add/clarify a comment on `VerifyClearsigned` (`nodekeys.go:88`) documenting the
       trust model: signature-validity only, no revocation/expiry enforcement, git-pinned
       hash is the runtime anchor (no behavior change)
-- [ ] run `go test ./cmd/... ./internal/nodekeys/...` — must pass
+- [x] run `go test ./cmd/... ./internal/nodekeys/...` — must pass
 
 ### Task 8: Minor simplifications in the node/pnpm flow (review #13)
 
