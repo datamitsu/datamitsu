@@ -15,6 +15,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/pnpmdefaults"
 	"github.com/goccy/go-yaml"
@@ -56,7 +57,11 @@ func createTestTgz(t *testing.T, files map[string]string) string {
 	return tmpFile.Name()
 }
 
-func TestExtractFullTgz(t *testing.T) {
+// TestPNPMExtractionViaSharedExtractor pins that pnpm now extracts through
+// binmanager's shared hardened tar path (binmanager.ExtractArchiveToDir) rather
+// than a runtimemanager-local copy: a normal package layout extracts into
+// destDir, traversal entries are skipped, and a missing archive errors.
+func TestPNPMExtractionViaSharedExtractor(t *testing.T) {
 	t.Run("extracts files correctly", func(t *testing.T) {
 		archivePath := createTestTgz(t, map[string]string{
 			"package/bin/pnpm.cjs":  "#!/usr/bin/env node\nconsole.log('pnpm');",
@@ -65,8 +70,8 @@ func TestExtractFullTgz(t *testing.T) {
 		})
 
 		destDir := t.TempDir()
-		if err := extractFullTgz(archivePath, destDir); err != nil {
-			t.Fatalf("extractFullTgz() error = %v", err)
+		if err := binmanager.ExtractArchiveToDir(archivePath, binmanager.BinContentTypeTarGz, destDir); err != nil {
+			t.Fatalf("ExtractArchiveToDir() error = %v", err)
 		}
 
 		pnpmPath := filepath.Join(destDir, "package", "bin", "pnpm.cjs")
@@ -87,8 +92,8 @@ func TestExtractFullTgz(t *testing.T) {
 		})
 
 		destDir := t.TempDir()
-		if err := extractFullTgz(archivePath, destDir); err != nil {
-			t.Fatalf("extractFullTgz() error = %v", err)
+		if err := binmanager.ExtractArchiveToDir(archivePath, binmanager.BinContentTypeTarGz, destDir); err != nil {
+			t.Fatalf("ExtractArchiveToDir() error = %v", err)
 		}
 
 		evilPath := filepath.Join(destDir, "..", "evil", "file.txt")
@@ -103,7 +108,7 @@ func TestExtractFullTgz(t *testing.T) {
 	})
 
 	t.Run("nonexistent archive", func(t *testing.T) {
-		err := extractFullTgz("/nonexistent/archive.tgz", t.TempDir())
+		err := binmanager.ExtractArchiveToDir("/nonexistent/archive.tgz", binmanager.BinContentTypeTarGz, t.TempDir())
 		if err == nil {
 			t.Error("expected error for nonexistent archive")
 		}

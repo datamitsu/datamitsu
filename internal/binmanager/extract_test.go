@@ -1356,6 +1356,129 @@ func makeTestTar(t *testing.T, files map[string]string) []byte {
 	return buf.Bytes()
 }
 
+// writeTgz gzips the given tar bytes into a .tgz file on disk and returns its
+// path, exercising the BinContentTypeTarGz decompressor path.
+func writeTgz(t *testing.T, tarData []byte) string {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "archive.tgz")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("create tgz: %v", err)
+	}
+	gw := gzip.NewWriter(f)
+	if _, err := gw.Write(tarData); err != nil {
+		t.Fatalf("write tgz: %v", err)
+	}
+	if err := gw.Close(); err != nil {
+		t.Fatalf("close gzip: %v", err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatalf("close tgz: %v", err)
+	}
+	return path
+}
+
+// TestExtractArchiveToDir is the exported entry point pnpm uses to extract its
+// tarball through binmanager's single hardened tar walker. It must extract a
+// normal package layout directly into destDir while skipping path-traversal
+// entries, absolute symlinks, and symlinks that escape destDir.
+func TestExtractArchiveToDir(t *testing.T) {
+	t.Run("extracts a normal package layout into destDir", func(t *testing.T) {
+		tgz := writeTgz(t, makeTestTar(t, map[string]string{
+			"package/bin/pnpm.cjs": "#!/usr/bin/env node\nconsole.log('pnpm');",
+			"package/package.json": `{"name":"pnpm","version":"9.0.0"}`,
+		}))
+
+		destDir := t.TempDir()
+		if err := ExtractArchiveToDir(tgz, BinContentTypeTarGz, destDir); err != nil {
+			t.Fatalf("ExtractArchiveToDir() error = %v", err)
+		}
+
+		if _, err := os.Stat(filepath.Join(destDir, "package", "bin", "pnpm.cjs")); err != nil {
+			t.Errorf("package/bin/pnpm.cjs not extracted: %v", err)
+		}
+		if _, err := os.Stat(filepath.Join(destDir, "package", "package.json")); err != nil {
+			t.Errorf("package/package.json not extracted: %v", err)
+		}
+	})
+
+	t.Run("creates destDir if missing", func(t *testing.T) {
+		tgz := writeTgz(t, makeTestTar(t, map[string]string{
+			"package/bin/pnpm.cjs": "x",
+		}))
+
+		destDir := filepath.Join(t.TempDir(), "nested", "pnpm-store")
+		if err := ExtractArchiveToDir(tgz, BinContentTypeTarGz, destDir); err != nil {
+			t.Fatalf("ExtractArchiveToDir() error = %v", err)
+		}
+		if _, err := os.Stat(filepath.Join(destDir, "package", "bin", "pnpm.cjs")); err != nil {
+			t.Errorf("file not extracted into freshly created destDir: %v", err)
+		}
+	})
+
+	t.Run("skips path traversal entries", func(t *testing.T) {
+		var buf bytes.Buffer
+		tw := tar.NewWriter(&buf)
+		_ = tw.WriteHeader(&tar.Header{Name: "../escape.txt", Mode: 0644, Size: 4})
+		_, _ = tw.Write([]byte("evil"))
+		_ = tw.WriteHeader(&tar.Header{Name: "safe/file.txt", Mode: 0644, Size: 4})
+		_, _ = tw.Write([]byte("safe"))
+		_ = tw.Close()
+		tgz := writeTgz(t, buf.Bytes())
+
+		destDir := t.TempDir()
+		if err := ExtractArchiveToDir(tgz, BinContentTypeTarGz, destDir); err != nil {
+			t.Fatalf("ExtractArchiveToDir() error = %v (expected skip, not error)", err)
+		}
+
+		if _, err := os.Stat(filepath.Join(filepath.Dir(destDir), "escape.txt")); !os.IsNotExist(err) {
+			t.Error("path traversal entry should have been skipped")
+		}
+		if _, err := os.Stat(filepath.Join(destDir, "safe", "file.txt")); err != nil {
+			t.Errorf("safe entry should still be extracted: %v", err)
+		}
+	})
+
+	t.Run("skips absolute symlink", func(t *testing.T) {
+		var buf bytes.Buffer
+		tw := tar.NewWriter(&buf)
+		_ = tw.WriteHeader(&tar.Header{Name: "abslink", Typeflag: tar.TypeSymlink, Linkname: "/etc/passwd"})
+		_ = tw.Close()
+		tgz := writeTgz(t, buf.Bytes())
+
+		destDir := t.TempDir()
+		if err := ExtractArchiveToDir(tgz, BinContentTypeTarGz, destDir); err != nil {
+			t.Fatalf("ExtractArchiveToDir() error = %v (expected skip, not error)", err)
+		}
+		if _, err := os.Lstat(filepath.Join(destDir, "abslink")); !os.IsNotExist(err) {
+			t.Error("absolute symlink should have been skipped")
+		}
+	})
+
+	t.Run("skips symlink escaping destDir", func(t *testing.T) {
+		var buf bytes.Buffer
+		tw := tar.NewWriter(&buf)
+		_ = tw.WriteHeader(&tar.Header{Name: "link", Typeflag: tar.TypeSymlink, Linkname: "../../etc/passwd"})
+		_ = tw.Close()
+		tgz := writeTgz(t, buf.Bytes())
+
+		destDir := t.TempDir()
+		if err := ExtractArchiveToDir(tgz, BinContentTypeTarGz, destDir); err != nil {
+			t.Fatalf("ExtractArchiveToDir() error = %v (expected skip, not error)", err)
+		}
+		if _, err := os.Lstat(filepath.Join(destDir, "link")); !os.IsNotExist(err) {
+			t.Error("escaping symlink should have been skipped")
+		}
+	})
+
+	t.Run("nonexistent archive errors", func(t *testing.T) {
+		if err := ExtractArchiveToDir("/nonexistent/archive.tgz", BinContentTypeTarGz, t.TempDir()); err == nil {
+			t.Error("expected error for nonexistent archive")
+		}
+	})
+}
+
 func TestExtractArchiveToPath_InlineBasic(t *testing.T) {
 	destDir := t.TempDir()
 

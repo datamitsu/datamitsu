@@ -217,16 +217,29 @@ Dependencies identified: `go-crypto/openpgp`, `goccy/go-yaml`, internal `hashuti
 
 ### Task 11: Reuse binmanager's hardened tar extractor for pnpm (review #6)
 
-- [ ] write tests for the chosen binmanager entry point covering path-traversal
+- [x] write tests for the chosen binmanager entry point covering path-traversal
       (`../escape`), absolute symlink, and escaping symlink are skipped, and a normal
       `package/bin/pnpm.cjs` extracts correctly
-- [ ] expose/reuse a binmanager dir-extractor for `.tgz` (extend
-      `ExtractDirForVerify`/`extractTarGzToDir`, `extract.go:564`) so pnpm extracts via
-      the single hardened path; delete `extractFullTgz` (`pnpm.go:161`)
-- [ ] verify the pnpm size limits are preserved or consciously unified with binmanager's
-      (note the chosen limits in this plan if changed)
-- [ ] update `pnpm_test.go` extraction tests to target the shared extractor
-- [ ] run `go test ./internal/runtimemanager/... ./internal/binmanager/...` — must pass
+      (`TestExtractArchiveToDir` in `internal/binmanager/extract_test.go`)
+- [x] expose/reuse a binmanager dir-extractor for `.tgz` so pnpm extracts via
+      the single hardened path; delete `extractFullTgz` (`pnpm.go`)
+      — added exported `binmanager.ExtractArchiveToDir(archivePath, format, destDir)`
+      wrapping the existing hardened `extractArchiveToPath` (writes directly into
+      destDir, unlike `ExtractDirForVerify`/`extractTarGzToDir` which return a temp
+      subdir — the path semantics pnpm requires). `pnpm.go` now calls it with
+      `BinContentTypeTarGz`; the redundant pre-extract `os.MkdirAll(destDir)` was
+      dropped (the extractor creates the dir).
+- [x] verify the pnpm size limits are preserved or consciously unified with binmanager's
+      — **consciously unified** onto binmanager's limits: per-file cap moves from the
+      pnpm-local `maxPNPMDownloadSize` (100 MiB) to `MaxBinarySize` (500 MiB) and the
+      total cap from `maxTotalExtractedSize` (500 MiB) to binmanager's 2 GiB. The pnpm
+      _download_ cap stays 100 MiB (`maxPNPMDownloadSize` still guards the tarball
+      fetch); only the extraction limits unify. The now-unused
+      `maxTotalExtractedSize` const was removed from `pnpm.go`.
+- [x] update `pnpm_test.go` extraction tests to target the shared extractor
+      (`TestExtractFullTgz` → `TestPNPMExtractionViaSharedExtractor`, now calling
+      `binmanager.ExtractArchiveToDir`)
+- [x] run `go test ./internal/runtimemanager/... ./internal/binmanager/...` — must pass
 
 ### Task 12: RuntimeKind registry — table-driven facts (review #5, part 1)
 

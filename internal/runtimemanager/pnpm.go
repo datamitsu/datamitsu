@@ -1,16 +1,15 @@
 package runtimemanager
 
 import (
-	"archive/tar"
-	"compress/gzip"
 	"crypto/sha256"
 	"crypto/sha512"
-	"github.com/datamitsu/datamitsu/internal/httpx"
-	"github.com/datamitsu/datamitsu/internal/pnpmdefaults"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/httpx"
+	"github.com/datamitsu/datamitsu/internal/pnpmdefaults"
 	"github.com/goccy/go-yaml"
 	"io"
 	"net/http"
@@ -27,8 +26,7 @@ import (
 
 var pnpmHTTPClient = httpx.NewHardenedClient(5 * time.Minute)
 
-const maxPNPMDownloadSize = 100 * 1024 * 1024   // 100 MiB
-const maxTotalExtractedSize = 500 * 1024 * 1024 // 500 MiB
+const maxPNPMDownloadSize = 100 * 1024 * 1024 // 100 MiB
 
 type npmVersionMeta struct {
 	Dist struct {
@@ -135,92 +133,15 @@ func (rm *RuntimeManager) downloadPNPMFromRegistryURL(registryBaseURL, version, 
 		return err
 	}
 
-	if err := os.MkdirAll(destDir, 0755); err != nil {
-		return fmt.Errorf("failed to create PNPM directory: %w", err)
-	}
-
-	if err := extractFullTgz(tmpPath, destDir); err != nil {
+	// Extract through binmanager's single hardened tar path (the same walker
+	// used for managed-binary installs): traversal entries, absolute symlinks,
+	// and escaping symlinks are skipped, and size limits are enforced. It writes
+	// directly into destDir, so {destDir}/package/bin/pnpm.cjs lands as expected.
+	if err := binmanager.ExtractArchiveToDir(tmpPath, binmanager.BinContentTypeTarGz, destDir); err != nil {
 		_ = os.RemoveAll(destDir)
 		return fmt.Errorf("failed to extract PNPM tarball: %w", err)
 	}
 
-	return nil
-}
-
-func extractFullTgz(archivePath, destDir string) error {
-	f, err := os.Open(archivePath)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = f.Close() }()
-
-	gzr, err := gzip.NewReader(f)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = gzr.Close() }()
-
-	tr := tar.NewReader(gzr)
-	var totalExtracted int64
-	for {
-		hdr, err := tr.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return err
-		}
-
-		target := filepath.Join(destDir, hdr.Name)
-
-		cleanDest := filepath.Clean(destDir) + string(filepath.Separator)
-		cleanTarget := filepath.Clean(target)
-		if cleanTarget != filepath.Clean(destDir) && !strings.HasPrefix(cleanTarget, cleanDest) {
-			continue
-		}
-
-		switch hdr.Typeflag {
-		case tar.TypeDir:
-			if err := os.MkdirAll(target, 0755); err != nil {
-				return err
-			}
-		case tar.TypeReg:
-			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
-				return err
-			}
-			outFile, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(hdr.Mode)&0777)
-			if err != nil {
-				return err
-			}
-			written, copyErr := io.Copy(outFile, io.LimitReader(tr, maxPNPMDownloadSize+1))
-			_ = outFile.Close()
-			if copyErr != nil {
-				return copyErr
-			}
-			if written > maxPNPMDownloadSize {
-				return fmt.Errorf("tar entry %q exceeds maximum size of %d bytes", hdr.Name, maxPNPMDownloadSize)
-			}
-			totalExtracted += written
-			if totalExtracted > maxTotalExtractedSize {
-				return fmt.Errorf("total extracted size exceeds maximum of %d bytes", maxTotalExtractedSize)
-			}
-		case tar.TypeSymlink:
-			linkTarget := hdr.Linkname
-			if filepath.IsAbs(linkTarget) {
-				continue
-			}
-			resolvedTarget := filepath.Clean(filepath.Join(filepath.Dir(cleanTarget), linkTarget))
-			if resolvedTarget != filepath.Clean(destDir) && !strings.HasPrefix(resolvedTarget, cleanDest) {
-				continue
-			}
-			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
-				return err
-			}
-			if err := os.Symlink(linkTarget, target); err != nil {
-				return err
-			}
-		}
-	}
 	return nil
 }
 
