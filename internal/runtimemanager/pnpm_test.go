@@ -109,33 +109,49 @@ func TestExtractFullTgz(t *testing.T) {
 	})
 }
 
-// pnpmRegistryServers spins up a mock npm registry: a tarball server that
-// serves tgzData and a metadata server whose /pnpm/<version> response points at
-// the tarball with the given integrity string. It returns the metadata base URL
-// and the real SHA-256 of tgzData (the value a correct pnpmHash must equal).
+// pnpmRegistryServers spins up a mock npm registry over TLS: one server serves
+// the tarball at /tarball/pnpm.tgz and the version metadata on every other path,
+// returning a dist.tarball that points at its own https URL. It also swaps
+// pnpmHTTPClient for a client trusting the server's cert for the test's
+// duration, because the download path now requires an https tarball URL. It
+// returns the metadata base URL and the real SHA-256 of tgzData (the value a
+// correct pnpmHash must equal).
 func pnpmRegistryServers(t *testing.T, tgzData []byte, integrity string) (registryURL, pinnedHash string) {
 	t.Helper()
 
-	tarballServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux := http.NewServeMux()
+	var srv *httptest.Server
+	mux.HandleFunc("/tarball/pnpm.tgz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/octet-stream")
 		_, _ = w.Write(tgzData)
-	}))
-	t.Cleanup(tarballServer.Close)
-
-	metaServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		meta := map[string]any{
 			"dist": map[string]any{
-				"tarball":   tarballServer.URL + "/pnpm.tgz",
+				"tarball":   srv.URL + "/tarball/pnpm.tgz",
 				"integrity": integrity,
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(meta)
-	}))
-	t.Cleanup(metaServer.Close)
+	})
+	srv = httptest.NewTLSServer(mux)
+	t.Cleanup(srv.Close)
+	useTrustingPNPMClient(t, srv)
 
 	sha256Sum := sha256.Sum256(tgzData)
-	return metaServer.URL, hex.EncodeToString(sha256Sum[:])
+	return srv.URL, hex.EncodeToString(sha256Sum[:])
+}
+
+// useTrustingPNPMClient swaps the package-level pnpmHTTPClient for a client that
+// trusts srv's self-signed cert for the duration of the test, restoring the
+// original afterwards. Needed because the https-only tarball guard requires the
+// mock registry to speak over a secure transport.
+func useTrustingPNPMClient(t *testing.T, srv *httptest.Server) {
+	t.Helper()
+	orig := pnpmHTTPClient
+	pnpmHTTPClient = srv.Client()
+	t.Cleanup(func() { pnpmHTTPClient = orig })
 }
 
 func TestDownloadPNPMFromRegistry(t *testing.T) {
@@ -226,25 +242,27 @@ func TestDownloadPNPMFromRegistry(t *testing.T) {
 		sha256Sum := sha256.Sum256(data)
 		pinnedHash := hex.EncodeToString(sha256Sum[:])
 
-		tarballServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mux := http.NewServeMux()
+		var srv *httptest.Server
+		mux.HandleFunc("/tarball/pnpm.tgz", func(w http.ResponseWriter, r *http.Request) {
 			_, _ = w.Write(data)
-		}))
-		defer tarballServer.Close()
-
-		metaServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		})
+		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 			meta := map[string]any{
 				"dist": map[string]any{
-					"tarball": tarballServer.URL + "/pnpm.tgz",
+					"tarball": srv.URL + "/tarball/pnpm.tgz",
 					"shasum":  "0000000000000000000000000000000000000000",
 				},
 			}
 			_ = json.NewEncoder(w).Encode(meta)
-		}))
-		defer metaServer.Close()
+		})
+		srv = httptest.NewTLSServer(mux)
+		defer srv.Close()
+		useTrustingPNPMClient(t, srv)
 
 		destDir := t.TempDir()
 		rm := New(config.MapOfRuntimes{})
-		err := rm.downloadPNPMFromRegistryURL(metaServer.URL, "9.15.0", destDir, pinnedHash)
+		err := rm.downloadPNPMFromRegistryURL(srv.URL, "9.15.0", destDir, pinnedHash)
 		if err == nil {
 			t.Fatal("expected error when only SHA-1 shasum is available")
 		}
@@ -372,6 +390,56 @@ func TestDownloadPNPMWithIntegrity(t *testing.T) {
 	pnpmPath := filepath.Join(destDir, "package", "bin", "pnpm.cjs")
 	if _, err := os.Stat(pnpmPath); err != nil {
 		t.Errorf("pnpm.cjs not found after download: %v", err)
+	}
+}
+
+// TestDownloadPNPMFromRegistryURL_RejectsHTTPTarball pins review #9: even with a
+// valid pinned hash supplied, a registry response whose dist.tarball is a
+// plaintext http:// URL must be refused (no transport downgrade).
+func TestDownloadPNPMFromRegistryURL_RejectsHTTPTarball(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"dist":{"tarball":"http://insecure.example/pnpm.tgz","integrity":"sha512-AAAA"}}`))
+	})
+	srv := httptest.NewTLSServer(mux)
+	defer srv.Close()
+	useTrustingPNPMClient(t, srv)
+
+	destDir := t.TempDir()
+	rm := New(config.MapOfRuntimes{})
+	pinned := "0000000000000000000000000000000000000000000000000000000000000000"
+	err := rm.downloadPNPMFromRegistryURL(srv.URL, "9.15.0", destDir, pinned)
+	if err == nil {
+		t.Fatal("expected error for http (non-https) tarball URL")
+	}
+	if !strings.Contains(err.Error(), "tarball URL is not https") {
+		t.Errorf("error should mention non-https tarball, got: %v", err)
+	}
+}
+
+// TestDownloadPNPMFromRegistryURL_HTTPSTarballSucceeds is the success-path
+// counterpart: an https tarball still downloads, verifies, and extracts
+// end-to-end via the mock registry.
+func TestDownloadPNPMFromRegistryURL_HTTPSTarballSucceeds(t *testing.T) {
+	path := createTestTgz(t, map[string]string{
+		"package/bin/pnpm.cjs": "#!/usr/bin/env node\nconsole.log('pnpm');",
+		"package/package.json": `{"name":"pnpm","version":"9.15.0"}`,
+	})
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read tgz: %v", err)
+	}
+	sha512Sum := sha512.Sum512(data)
+	integrity := "sha512-" + base64.StdEncoding.EncodeToString(sha512Sum[:])
+	registryURL, pinnedHash := pnpmRegistryServers(t, data, integrity)
+
+	destDir := t.TempDir()
+	rm := New(config.MapOfRuntimes{})
+	if err := rm.downloadPNPMFromRegistryURL(registryURL, "9.15.0", destDir, pinnedHash); err != nil {
+		t.Fatalf("downloadPNPMFromRegistryURL() over https error = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(destDir, "package", "bin", "pnpm.cjs")); err != nil {
+		t.Errorf("pnpm.cjs not found after https download: %v", err)
 	}
 }
 

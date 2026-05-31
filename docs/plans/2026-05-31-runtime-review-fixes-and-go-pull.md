@@ -140,12 +140,12 @@ Dependencies identified: `go-crypto/openpgp`, `goccy/go-yaml`, internal `hashuti
 
 ### Task 5: Enforce HTTPS on the pnpm tarball URL in the runtime download (review #9)
 
-- [ ] write a failing test in `internal/runtimemanager/pnpm_test.go`: a mock registry
+- [x] write a failing test in `internal/runtimemanager/pnpm_test.go`: a mock registry
       whose `dist.tarball` is `http://...` makes `downloadPNPMFromRegistryURL` error
-- [ ] add `if !strings.HasPrefix(meta.Dist.Tarball, "https://") { return err }` in
+- [x] add `if !strings.HasPrefix(meta.Dist.Tarball, "https://") { return err }` in
       `downloadPNPMFromRegistryURL` (`pnpm.go:101`), mirroring `fetchPNPMTarballHash`
-- [ ] add a success-path test (https tarball still works end-to-end via mock)
-- [ ] run `go test ./internal/runtimemanager/...` — must pass
+- [x] add a success-path test (https tarball still works end-to-end via mock)
+- [x] run `go test ./internal/runtimemanager/...` — must pass
 
 ### Task 6: Propagate `os.RemoveAll` failure on node app reinstall (review #10)
 

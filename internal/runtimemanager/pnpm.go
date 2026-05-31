@@ -101,6 +101,12 @@ func (rm *RuntimeManager) downloadPNPMFromRegistryURL(registryBaseURL, version, 
 	if meta.Dist.Tarball == "" {
 		return fmt.Errorf("no tarball URL found for pnpm@%s", version)
 	}
+	// The pinned SHA-256 is the integrity anchor, but the tarball must still be
+	// fetched over TLS so the registry response cannot downgrade us to a
+	// plaintext URL (mirrors fetchPNPMTarballHash on the pull side).
+	if !strings.HasPrefix(meta.Dist.Tarball, "https://") {
+		return fmt.Errorf("pnpm@%s: tarball URL is not https: %s", version, meta.Dist.Tarball)
+	}
 	if meta.Dist.Integrity == "" || !strings.HasPrefix(meta.Dist.Integrity, "sha512-") {
 		return fmt.Errorf("pnpm@%s: SHA-512 integrity required but not found in registry metadata", version)
 	}
