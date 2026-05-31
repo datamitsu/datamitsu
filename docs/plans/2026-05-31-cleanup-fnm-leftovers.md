@@ -197,9 +197,10 @@ their own files; comment edits leave code unchanged.
 
 ### Task 7: Final documentation sweep
 
-- [ ] confirm README.md / AGENTS.md / CLAUDE.md / `docs/architecture.md` have no
+- [x] confirm README.md / AGENTS.md / CLAUDE.md / `docs/architecture.md` have no
       `fnm` (was already clean in discovery — re-run `rg -i fnm` on them)
-- [ ] no new patterns to document; this task is a confirmation pass only
+      _(verified: 0 matches across all four; CLAUDE.md is a symlink to AGENTS.md)_
+- [x] no new patterns to document; this task is a confirmation pass only
 
 ## Technical Details
 
