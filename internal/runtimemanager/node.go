@@ -116,7 +116,9 @@ func (rm *RuntimeManager) installNodeAppOnce(appName string, appConfig *binmanag
 			zap.String("app", appName),
 			zap.String("module", appModulePkg),
 		)
-		_ = os.RemoveAll(appEnvPath)
+		if err := rm.removeAll(appEnvPath); err != nil {
+			return fmt.Errorf("app %q: failed to remove stale install at %q before reinstall: %w", appName, appEnvPath, err)
+		}
 	}
 
 	// Acquire the node binary directly from the pinned archive (jvm/go-style).

@@ -149,13 +149,13 @@ Dependencies identified: `go-crypto/openpgp`, `goccy/go-yaml`, internal `hashuti
 
 ### Task 6: Propagate `os.RemoveAll` failure on node app reinstall (review #10)
 
-- [ ] write a failing test exercising the "bin shim exists but module missing"
+- [x] write a failing test exercising the "bin shim exists but module missing"
       reinstall branch and asserting a removal failure aborts with an error
       (inject via a read-only/locked path or a small seam)
-- [ ] change `_ = os.RemoveAll(appEnvPath)` (`node.go:119`) to check the error and
+- [x] change `_ = os.RemoveAll(appEnvPath)` (`node.go:119`) to check the error and
       return a wrapped failure instead of proceeding over a dirty tree
-- [ ] add a success-path test (removal succeeds → reinstall proceeds)
-- [ ] run `go test ./internal/runtimemanager/...` — must pass
+- [x] add a success-path test (removal succeeds → reinstall proceeds)
+- [x] run `go test ./internal/runtimemanager/...` — must pass
 
 ### Task 7: Lock in SHASUMS fail-closed behavior + document provenance trust model (review #11, #12)
 

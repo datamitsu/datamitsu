@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -583,5 +584,147 @@ func TestInstallNodeApp_AlreadyInstalled(t *testing.T) {
 
 	if err := rm.InstallNodeApp("eslint", appConfig, nil, nil); err != nil {
 		t.Errorf("InstallNodeApp() error = %v, expected nil for already-installed app", err)
+	}
+}
+
+// nodeReinstallRuntimes builds a node runtime config pointing its archive at url.
+// It is shared by the reinstall-branch tests, which only need the runtime to
+// resolve and the app env path to compute; the archive is never expected to be a
+// real, downloadable node release.
+func nodeReinstallRuntimes(t *testing.T, url, hash string) config.MapOfRuntimes {
+	t.Helper()
+	osType, _ := syslist.GetOsTypeFromString(runtime.GOOS)
+	archType, _ := syslist.GetArchTypeFromString(runtime.GOARCH)
+	return config.MapOfRuntimes{
+		"node": {
+			Kind: config.RuntimeKindNode,
+			Mode: config.RuntimeModeManaged,
+			Node: &config.RuntimeConfigNode{NodeVersion: "26.2.0", PNPMVersion: "11.0.0", PNPMHash: "deadbeef"},
+			Managed: &config.RuntimeConfigManaged{
+				Binaries: binmanager.MapOfBinaries{
+					osType: {
+						archType: {testLibc: binmanager.BinaryOsArchInfo{
+							URL:         url,
+							Hash:        hash,
+							ContentType: binmanager.BinContentTypeTarXz,
+							BinaryPath:  nodeStrPtr(nodeArchiveBinaryPath),
+							ExtractDir:  true,
+						}},
+					},
+				},
+			},
+		},
+	}
+}
+
+// seedStaleNodeApp creates the bin shim but NOT the installed module's
+// package.json, which is exactly the "bin shim exists but module missing" state
+// that drives installNodeAppOnce into its reinstall (stale-tree removal) branch.
+func seedStaleNodeApp(t *testing.T, appEnvPath, binPath string) string {
+	t.Helper()
+	appBinPath := filepath.Join(appEnvPath, binPath)
+	if err := os.MkdirAll(filepath.Dir(appBinPath), 0755); err != nil {
+		t.Fatalf("mkdir bin dir: %v", err)
+	}
+	if err := os.WriteFile(appBinPath, []byte("#!/bin/sh\n"), 0755); err != nil {
+		t.Fatalf("write bin shim: %v", err)
+	}
+	return appBinPath
+}
+
+// TestInstallNodeApp_RemoveAllFailureAborts pins the review #10 fix: when the
+// stale-tree removal in the reinstall branch fails, the install must abort with a
+// wrapped error rather than press on over a half-deleted directory.
+func TestInstallNodeApp_RemoveAllFailureAborts(t *testing.T) {
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
+
+	rm := New(nodeReinstallRuntimes(t, "https://example.com/node.tar.xz", "abc"))
+	appConfig := &binmanager.AppConfigNode{
+		PackageName: "eslint",
+		Version:     "9.0.0",
+		BinPath:     "node_modules/.bin/eslint",
+		Runtime:     "node",
+	}
+
+	appEnvPath, _, _, err := rm.resolveNodeAppEnvPath("eslint", appConfig, nil, nil)
+	if err != nil {
+		t.Fatalf("resolveNodeAppEnvPath() error = %v", err)
+	}
+	appBinPath := seedStaleNodeApp(t, appEnvPath, appConfig.BinPath)
+	defer func() { _ = os.RemoveAll(appEnvPath) }()
+
+	sentinel := errors.New("injected removeAll failure")
+	var calls int32
+	rm.removeAllFunc = func(string) error {
+		atomic.AddInt32(&calls, 1)
+		return sentinel
+	}
+
+	err = rm.InstallNodeApp("eslint", appConfig, nil, nil)
+	if err == nil {
+		t.Fatal("expected an error when stale-tree removal fails, got nil")
+	}
+	if !errors.Is(err, sentinel) {
+		t.Errorf("error %v should wrap the injected removal failure", err)
+	}
+	if got := atomic.LoadInt32(&calls); got != 1 {
+		t.Errorf("removeAll called %d times, want 1", got)
+	}
+	// Aborted before reinstalling: no network/runtime work happened past the
+	// failed removal, so the stale bin shim is still present.
+	if _, statErr := os.Stat(appBinPath); statErr != nil {
+		t.Errorf("stale bin shim should remain after an aborted removal: %v", statErr)
+	}
+}
+
+// TestInstallNodeApp_RemoveAllSuccessProceeds is the success-path counterpart:
+// when the stale-tree removal succeeds, the reinstall proceeds past it (into the
+// runtime download, which then fails on the unreachable archive). The point is
+// that removal ran exactly once and the install moved on rather than aborting.
+func TestInstallNodeApp_RemoveAllSuccessProceeds(t *testing.T) {
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
+
+	// A localhost server that 404s every request: the reinstall proceeds into
+	// installNode, which fails fast on the missing archive — no flaky external
+	// network and no real pnpm run required.
+	var hits int32
+	server := nodeArchiveServer(t, []byte("unused"), "/never-matches", &hits)
+	defer server.Close()
+
+	rm := New(nodeReinstallRuntimes(t, server.URL+"/node.tar.xz", strings.Repeat("a", 64)))
+	appConfig := &binmanager.AppConfigNode{
+		PackageName: "eslint",
+		Version:     "9.0.0",
+		BinPath:     "node_modules/.bin/eslint",
+		Runtime:     "node",
+	}
+
+	appEnvPath, _, _, err := rm.resolveNodeAppEnvPath("eslint", appConfig, nil, nil)
+	if err != nil {
+		t.Fatalf("resolveNodeAppEnvPath() error = %v", err)
+	}
+	appBinPath := seedStaleNodeApp(t, appEnvPath, appConfig.BinPath)
+	defer func() { _ = os.RemoveAll(appEnvPath) }()
+
+	var calls int32
+	rm.removeAllFunc = func(p string) error {
+		atomic.AddInt32(&calls, 1)
+		return os.RemoveAll(p)
+	}
+
+	err = rm.InstallNodeApp("eslint", appConfig, nil, nil)
+	if err == nil {
+		t.Fatal("expected a download error after the (successful) stale-tree removal, got nil")
+	}
+	// The error is from the runtime download, NOT the removal: we proceeded.
+	if errors.Is(err, os.ErrPermission) {
+		t.Errorf("unexpected removal-style error after a successful removal: %v", err)
+	}
+	if got := atomic.LoadInt32(&calls); got != 1 {
+		t.Errorf("removeAll called %d times, want 1", got)
+	}
+	// Removal succeeded and the failed reinstall never recreated the tree.
+	if _, statErr := os.Stat(appBinPath); !os.IsNotExist(statErr) {
+		t.Errorf("stale bin shim should have been removed, stat err = %v", statErr)
 	}
 }

@@ -26,6 +26,10 @@ type RuntimeManager struct {
 	mapOfRuntimes config.MapOfRuntimes
 	hostTarget    target.Target
 	lookPathFunc  func(string) (string, error)
+	// removeAllFunc is an injectable seam for os.RemoveAll so tests can force a
+	// removal failure deterministically (a read-only path is unreliable when the
+	// test runs as root). A nil value falls back to os.RemoveAll.
+	removeAllFunc func(string) error
 	// singleflight groups deduplicate concurrent installs by key: only one call
 	// per key runs at a time and all waiters share its result. Unlike the prior
 	// sync.Once + sync.Map + CompareAndDelete pattern, a failed call does not
@@ -41,7 +45,18 @@ func New(mapOfRuntimes config.MapOfRuntimes) *RuntimeManager {
 		mapOfRuntimes: mapOfRuntimes,
 		hostTarget:    target.DetectHost(),
 		lookPathFunc:  exec.LookPath,
+		removeAllFunc: os.RemoveAll,
 	}
+}
+
+// removeAll deletes path and any children via the injectable removeAllFunc seam.
+// A nil seam (e.g. a RuntimeManager built directly in a test) falls back to
+// os.RemoveAll.
+func (rm *RuntimeManager) removeAll(path string) error {
+	if rm.removeAllFunc != nil {
+		return rm.removeAllFunc(path)
+	}
+	return os.RemoveAll(path)
 }
 
 // systemCommandForKind returns the system binary command name for a runtime kind.
