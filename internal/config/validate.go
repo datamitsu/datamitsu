@@ -3,13 +3,14 @@ package config
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/datamitsu/datamitsu/internal/binmanager"
-	"github.com/datamitsu/datamitsu/internal/target"
 	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/target"
 )
 
 // ValidateApps validates app configurations including mandatory lockfile checks.

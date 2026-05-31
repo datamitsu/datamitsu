@@ -3,9 +3,10 @@ package config
 import (
 	_ "embed"
 	"fmt"
+	"time"
+
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/logger"
-	"time"
 
 	"github.com/evanw/esbuild/pkg/api"
 	"go.uber.org/zap"

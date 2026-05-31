@@ -1,10 +1,6 @@
 package binmanager
 
 import (
-	"github.com/datamitsu/datamitsu/internal/env"
-	"github.com/datamitsu/datamitsu/internal/logger"
-	"github.com/datamitsu/datamitsu/internal/syslist"
-	"github.com/datamitsu/datamitsu/internal/target"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,6 +10,11 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/logger"
+	"github.com/datamitsu/datamitsu/internal/syslist"
+	"github.com/datamitsu/datamitsu/internal/target"
 
 	"github.com/vbauerster/mpb/v8"
 	"go.uber.org/zap"
@@ -61,10 +62,10 @@ type AppConfigNode struct {
 }
 
 type AppConfigJVM struct {
-	JarURL  string `json:"jarUrl"`
-	JarHash string `json:"jarHash"`
-	Version string `json:"version"`
-	Runtime string `json:"runtime,omitempty"`
+	JarURL    string `json:"jarUrl"`
+	JarHash   string `json:"jarHash"`
+	Version   string `json:"version"`
+	Runtime   string `json:"runtime,omitempty"`
 	MainClass string `json:"mainClass,omitempty"`
 }
 
@@ -694,7 +695,6 @@ func downloadFileSimple(url, destPath string) error {
 
 	return nil
 }
-
 
 type AppInfo struct {
 	Name        string
