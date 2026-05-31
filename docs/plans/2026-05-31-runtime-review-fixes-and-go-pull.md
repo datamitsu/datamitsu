@@ -171,16 +171,16 @@ Dependencies identified: `go-crypto/openpgp`, `goccy/go-yaml`, internal `hashuti
 
 ### Task 8: Minor simplifications in the node/pnpm flow (review #13)
 
-- [ ] remove the redundant `os.MkdirAll(appEnvPath, 0755)` at `node.go:135`
+- [x] remove the redundant `os.MkdirAll(appEnvPath, 0755)` at `node.go:135`
       (`writeAppWorkspaceFile` already creates it) — confirm via test that install still works
-- [ ] replace `defaultPNPMWorkspaceConfig()` indirection with a direct
+- [x] replace `defaultPNPMWorkspaceConfig()` indirection with a direct
       `pnpmdefaults.Defaults()` call at its single use site (`pnpm.go:384`)
-- [ ] extract a `hasSHA512Prefix(integrity string) bool` helper and use it in both the
+- [x] extract a `hasSHA512Prefix(integrity string) bool` helper and use it in both the
       early check (`pnpm.go:104`) and `verifyPNPMIntegrity` (`pnpm.go:256`) to remove
       the duplicated literal
-- [ ] inline `installNode` or document why it differs from jvm/uv (which call
+- [x] inline `installNode` or document why it differs from jvm/uv (which call
       `GetRuntimePath` directly) — pick one and apply consistently
-- [ ] run `go test ./internal/runtimemanager/...` — must pass
+- [x] run `go test ./internal/runtimemanager/...` — must pass
 
 ### Task 9: Compute merged `pnpm-workspace.yaml` once per exec (review #8)
 
