@@ -75,6 +75,8 @@ export default {
     "mgmt",
     "mitsu",
     "msvc",
+    "metacharacter",
+    "multiversion",
     "myapp",
     "mybundle",
     "myconfig",

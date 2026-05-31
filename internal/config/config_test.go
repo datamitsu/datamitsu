@@ -405,6 +405,9 @@ func TestRuntimeKindConstants(t *testing.T) {
 	if RuntimeKindFNM != "fnm" {
 		t.Errorf("RuntimeKindFNM = %q, want %q", RuntimeKindFNM, "fnm")
 	}
+	if RuntimeKindNode != "node" {
+		t.Errorf("RuntimeKindNode = %q, want %q", RuntimeKindNode, "node")
+	}
 	if RuntimeKindJVM != "jvm" {
 		t.Errorf("RuntimeKindJVM = %q, want %q", RuntimeKindJVM, "jvm")
 	}
@@ -471,6 +474,82 @@ func TestRuntimeConfig_GoField_OmittedWhenNil(t *testing.T) {
 
 	if strings.Contains(string(data), `"go"`) {
 		t.Errorf("JSON should omit nil go field, got: %s", string(data))
+	}
+}
+
+func TestRuntimeConfigNode_Fields(t *testing.T) {
+	cfg := RuntimeConfigNode{
+		NodeVersion: "26.2.0",
+		PNPMVersion: "11.0.0",
+		PNPMHash:    "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+	}
+
+	if cfg.NodeVersion != "26.2.0" {
+		t.Errorf("NodeVersion = %q, want %q", cfg.NodeVersion, "26.2.0")
+	}
+	if cfg.PNPMVersion != "11.0.0" {
+		t.Errorf("PNPMVersion = %q, want %q", cfg.PNPMVersion, "11.0.0")
+	}
+	if cfg.PNPMHash != "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2" {
+		t.Errorf("PNPMHash = %q, unexpected", cfg.PNPMHash)
+	}
+}
+
+func TestRuntimeConfig_NodeField_JSONRoundTrip(t *testing.T) {
+	jsonStr := `{
+		"kind": "node",
+		"mode": "managed",
+		"node": {
+			"nodeVersion": "26.2.0",
+			"pnpmVersion": "11.0.0",
+			"pnpmHash": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+		}
+	}`
+
+	var decoded RuntimeConfig
+	if err := json.Unmarshal([]byte(jsonStr), &decoded); err != nil {
+		t.Fatalf("json.Unmarshal error: %v", err)
+	}
+
+	if decoded.Kind != RuntimeKindNode {
+		t.Errorf("Kind = %q, want %q", decoded.Kind, RuntimeKindNode)
+	}
+	if decoded.Node == nil {
+		t.Fatal("decoded.Node is nil after parsing")
+	}
+	if decoded.Node.NodeVersion != "26.2.0" {
+		t.Errorf("NodeVersion = %q, want %q", decoded.Node.NodeVersion, "26.2.0")
+	}
+	if decoded.Node.PNPMVersion != "11.0.0" {
+		t.Errorf("PNPMVersion = %q, want %q", decoded.Node.PNPMVersion, "11.0.0")
+	}
+	if decoded.Node.PNPMHash != "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2" {
+		t.Errorf("PNPMHash = %q, unexpected", decoded.Node.PNPMHash)
+	}
+
+	// Re-marshal and ensure the node field is emitted.
+	data, err := json.Marshal(decoded)
+	if err != nil {
+		t.Fatalf("json.Marshal error: %v", err)
+	}
+	if !strings.Contains(string(data), `"node"`) {
+		t.Errorf("JSON should contain 'node' field, got: %s", string(data))
+	}
+}
+
+func TestRuntimeConfig_NodeField_OmittedWhenNil(t *testing.T) {
+	rc := RuntimeConfig{
+		Kind: RuntimeKindUV,
+		Mode: RuntimeModeManaged,
+	}
+
+	data, err := json.Marshal(rc)
+	if err != nil {
+		t.Fatalf("json.Marshal error: %v", err)
+	}
+
+	if strings.Contains(string(data), `"node"`) {
+		t.Errorf("JSON should omit nil node field, got: %s", string(data))
 	}
 }
 

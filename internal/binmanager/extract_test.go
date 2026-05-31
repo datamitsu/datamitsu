@@ -682,6 +682,154 @@ func TestExtractTarXzToDir(t *testing.T) {
 	})
 }
 
+// makeNodeTarXz writes a tar.xz mirroring a real node release layout:
+// node-vX-os-arch/bin/node (executable) plus its parent directories.
+func makeNodeTarXz(t *testing.T, path string) {
+	t.Helper()
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("failed to create tar.xz file: %v", err)
+	}
+	xzWriter, err := xz.NewWriter(file)
+	if err != nil {
+		t.Fatalf("failed to create xz writer: %v", err)
+	}
+	tarWriter := tar.NewWriter(xzWriter)
+
+	_ = tarWriter.WriteHeader(&tar.Header{Name: "node-v26.2.0-linux-x64/", Typeflag: tar.TypeDir, Mode: 0755})
+	_ = tarWriter.WriteHeader(&tar.Header{Name: "node-v26.2.0-linux-x64/bin/", Typeflag: tar.TypeDir, Mode: 0755})
+
+	nodeContent := []byte("#!/bin/sh\necho node")
+	_ = tarWriter.WriteHeader(&tar.Header{Name: "node-v26.2.0-linux-x64/bin/node", Typeflag: tar.TypeReg, Mode: 0755, Size: int64(len(nodeContent))})
+	_, _ = tarWriter.Write(nodeContent)
+
+	_ = tarWriter.Close()
+	_ = xzWriter.Close()
+	_ = file.Close()
+}
+
+func TestExtractTarXz_NodeArchive(t *testing.T) {
+	t.Run("extractDir preserves bin/node with executable perms", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		tarXzPath := filepath.Join(tmpDir, "node.tar.xz")
+		makeNodeTarXz(t, tarXzPath)
+
+		destDir := t.TempDir()
+		extractedDir, err := extractTarXzToDir(tarXzPath, destDir)
+		if err != nil {
+			t.Fatalf("extractTarXzToDir() error = %v", err)
+		}
+
+		nodePath := filepath.Join(extractedDir, "node-v26.2.0-linux-x64/bin/node")
+		info, err := os.Stat(nodePath)
+		if err != nil {
+			t.Fatalf("expected bin/node to exist: %v", err)
+		}
+		if info.Mode()&0100 == 0 {
+			t.Error("bin/node should be executable (perms not preserved)")
+		}
+	})
+
+	t.Run("single-file binaryPath resolves node binary", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		tarXzPath := filepath.Join(tmpDir, "node.tar.xz")
+		makeNodeTarXz(t, tarXzPath)
+
+		targetPath := "node-v26.2.0-linux-x64/bin/node"
+		extractedPath, err := extractTarXz(tarXzPath, &targetPath, tmpDir)
+		if err != nil {
+			t.Fatalf("extractTarXz() error = %v", err)
+		}
+		content, err := os.ReadFile(extractedPath)
+		if err != nil {
+			t.Fatalf("failed to read extracted file: %v", err)
+		}
+		if !strings.Contains(string(content), "echo node") {
+			t.Errorf("unexpected node content: %q", string(content))
+		}
+	})
+}
+
+func TestExtractTarXzToDir_RejectsPathTraversal(t *testing.T) {
+	tmpDir := t.TempDir()
+	tarXzPath := filepath.Join(tmpDir, "traversal.tar.xz")
+	file, _ := os.Create(tarXzPath)
+	xzWriter, _ := xz.NewWriter(file)
+	tarWriter := tar.NewWriter(xzWriter)
+
+	content := []byte("malicious")
+	_ = tarWriter.WriteHeader(&tar.Header{Name: "../../../etc/passwd", Typeflag: tar.TypeReg, Mode: 0644, Size: int64(len(content))})
+	_, _ = tarWriter.Write(content)
+	_ = tarWriter.Close()
+	_ = xzWriter.Close()
+	_ = file.Close()
+
+	destDir := t.TempDir()
+	extractedDir, err := extractTarXzToDir(tarXzPath, destDir)
+	if err != nil {
+		t.Fatalf("extractTarXzToDir() error = %v (expected skip, not error)", err)
+	}
+
+	// The traversal entry should have been skipped entirely.
+	passwdPath := filepath.Join(extractedDir, "../../../etc/passwd")
+	if _, err := os.Stat(passwdPath); err == nil {
+		t.Error("path traversal entry should have been skipped")
+	}
+}
+
+func TestExtractTarXz_MalformedStream(t *testing.T) {
+	t.Run("garbage data fails", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		tarXzPath := filepath.Join(tmpDir, "garbage.tar.xz")
+		if err := os.WriteFile(tarXzPath, []byte("this is not xz data at all"), 0644); err != nil {
+			t.Fatalf("failed to write file: %v", err)
+		}
+		targetPath := "bin/node"
+		if _, err := extractTarXz(tarXzPath, &targetPath, tmpDir); err == nil {
+			t.Error("expected error for malformed xz stream, got nil")
+		}
+	})
+
+	t.Run("truncated stream fails", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		var buf bytes.Buffer
+		xzWriter, err := xz.NewWriter(&buf)
+		if err != nil {
+			t.Fatalf("failed to create xz writer: %v", err)
+		}
+		tarWriter := tar.NewWriter(xzWriter)
+		content := bytes.Repeat([]byte{0xAB}, 64*1024)
+		_ = tarWriter.WriteHeader(&tar.Header{Name: "bin/node", Typeflag: tar.TypeReg, Mode: 0755, Size: int64(len(content))})
+		_, _ = tarWriter.Write(content)
+		_ = tarWriter.Close()
+		_ = xzWriter.Close()
+
+		full := buf.Bytes()
+		truncated := full[:len(full)/2]
+		tarXzPath := filepath.Join(tmpDir, "truncated.tar.xz")
+		if err := os.WriteFile(tarXzPath, truncated, 0644); err != nil {
+			t.Fatalf("failed to write file: %v", err)
+		}
+
+		targetPath := "bin/node"
+		if _, err := extractTarXz(tarXzPath, &targetPath, tmpDir); err == nil {
+			t.Error("expected error for truncated xz stream, got nil")
+		}
+	})
+}
+
+func TestExtractTarXzToDir_MalformedStream(t *testing.T) {
+	tmpDir := t.TempDir()
+	tarXzPath := filepath.Join(tmpDir, "garbage.tar.xz")
+	if err := os.WriteFile(tarXzPath, []byte("not xz at all"), 0644); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+	if _, err := extractTarXzToDir(tarXzPath, t.TempDir()); err == nil {
+		t.Error("expected error for malformed xz stream, got nil")
+	}
+}
+
 func TestExtractBinaryToDir(t *testing.T) {
 	t.Run("tar.gz dispatches correctly", func(t *testing.T) {
 		tmpDir := t.TempDir()

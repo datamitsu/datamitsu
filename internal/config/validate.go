@@ -1,10 +1,10 @@
 package config
 
 import (
-	"github.com/datamitsu/datamitsu/internal/binmanager"
-	"github.com/datamitsu/datamitsu/internal/target"
 	"encoding/hex"
 	"fmt"
+	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/target"
 	"path"
 	"path/filepath"
 	"regexp"
@@ -555,6 +555,27 @@ func ValidateRuntimes(runtimes MapOfRuntimes) error {
 					errs = append(errs, fmt.Sprintf("runtime %q: fnm.pnpmHash is required (SHA-256 hash of PNPM tarball)", name))
 				} else if !isValidSHA256Hex(rc.FNM.PNPMHash) {
 					errs = append(errs, fmt.Sprintf("runtime %q: fnm.pnpmHash must be a valid SHA-256 hex string (64 lowercase hex characters)", name))
+				}
+			}
+		}
+		if rc.Kind == RuntimeKindNode {
+			if rc.Node == nil {
+				errs = append(errs, fmt.Sprintf("runtime %q: Node runtime requires node config with nodeVersion, pnpmVersion, and pnpmHash", name))
+			} else {
+				if rc.Node.NodeVersion == "" {
+					errs = append(errs, fmt.Sprintf("runtime %q: node.nodeVersion is required", name))
+				} else if !isValidVersionString(rc.Node.NodeVersion) {
+					errs = append(errs, fmt.Sprintf("runtime %q: node.nodeVersion %q contains invalid characters (must be alphanumeric, dots, hyphens, underscores, or plus signs)", name, rc.Node.NodeVersion))
+				}
+				if rc.Node.PNPMVersion == "" {
+					errs = append(errs, fmt.Sprintf("runtime %q: node.pnpmVersion is required", name))
+				} else if !isValidVersionString(rc.Node.PNPMVersion) {
+					errs = append(errs, fmt.Sprintf("runtime %q: node.pnpmVersion %q contains invalid characters (must be alphanumeric, dots, hyphens, underscores, or plus signs)", name, rc.Node.PNPMVersion))
+				}
+				if rc.Node.PNPMHash == "" {
+					errs = append(errs, fmt.Sprintf("runtime %q: node.pnpmHash is required (SHA-256 hash of PNPM tarball)", name))
+				} else if !isValidSHA256Hex(rc.Node.PNPMHash) {
+					errs = append(errs, fmt.Sprintf("runtime %q: node.pnpmHash must be a valid SHA-256 hex string (64 lowercase hex characters)", name))
 				}
 			}
 		}
