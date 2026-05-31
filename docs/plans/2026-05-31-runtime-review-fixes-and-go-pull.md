@@ -243,19 +243,36 @@ Dependencies identified: `go-crypto/openpgp`, `goccy/go-yaml`, internal `hashuti
 
 ### Task 12: RuntimeKind registry — table-driven facts (review #5, part 1)
 
-- [ ] write tests for a `runtimekind` registry: lookup by kind returns system-command
+- [x] write tests for a `runtimekind` registry: lookup by kind returns system-command
       name, the hash-fold version fields, and the validation rule; unknown kind errors
-- [ ] introduce a registry (map keyed by `config.RuntimeKind`) describing per-kind:
+      (`internal/config/runtimekind_test.go`: `TestLookupRuntimeKind_KnownKinds`,
+      `TestLookupRuntimeKind_UnknownKind`, `TestRuntimeKindHashFields`,
+      `TestRuntimeKindValidate`, `TestAllRuntimeKinds`)
+- [x] introduce a registry (map keyed by `config.RuntimeKind`) describing per-kind:
       system binary name, cache-affecting version field(s), validation requirements,
       and kind⇄name string mapping
-- [ ] replace `systemCommandForKind` (`runtimemanager.go:49`) and the duplicated
+      — added `internal/config/runtimekind.go` with `RuntimeKindInfo`
+      (`Name`/`SystemCommand`/`HashFields`/`Validate`), the `runtimeKinds` map, and
+      `LookupRuntimeKind`/`AllRuntimeKinds`. Lives in `config` (not a new package) to
+      avoid a `config`↔registry import cycle, since `Validate`/`HashFields` reference
+      `config.RuntimeConfig` and `ValidateRuntimes` consumes the registry.
+- [x] replace `systemCommandForKind` (`runtimemanager.go:49`) and the duplicated
       hash-fold blocks in `calculateRuntimeHash`/`calculateSystemRuntimeHash`
       (`hash.go`) with registry lookups
-- [ ] replace the per-kind blocks in `ValidateRuntimes` (`validate.go:541`) with
-      registry-driven validation
-- [ ] write tests asserting managed-mode and system-mode hashes fold the SAME fields
+      — `systemCommandForKind` now delegates to `config.LookupRuntimeKind`; both hash functions
+      route their version-field fold through a single `appendKindVersionFields` helper
+      backed by `RuntimeKindInfo.HashFields` (byte-identical field order preserved, so
+      existing cache keys are unchanged).
+- [x] replace the per-kind blocks in `ValidateRuntimes` (`validate.go:541`) with
+      registry-driven validation (kind-agnostic mode/managed/system checks stay inline;
+      unknown/legacy kinds with no registry entry are skipped as before)
+- [x] write tests asserting managed-mode and system-mode hashes fold the SAME fields
       for every kind (guards the lock-step drift risk)
-- [ ] run `go test ./internal/runtimemanager/... ./internal/config/...` — must pass
+      — `TestRuntimeHashFoldsSameFieldsForEveryKind` in
+      `internal/runtimemanager/hash_test.go`: per kind/field it mutates the field and
+      asserts BOTH `calculateRuntimeHash` and `calculateSystemRuntimeHash` change, and
+      cross-checks the enumerated field count against the registry's `HashFields`.
+- [x] run `go test ./internal/runtimemanager/... ./internal/config/...` — must pass
 
 ### Task 13: RuntimeKind registry — consolidate dispatch (review #5, part 2)
 

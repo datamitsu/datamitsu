@@ -66,20 +66,24 @@ func calculateRuntimeHash(rc config.RuntimeConfig, osType syslist.OsType, archTy
 		[]byte(libc),
 	}
 
-	if rc.Kind == config.RuntimeKindNode && rc.Node != nil {
-		parts = append(parts, []byte(rc.Node.NodeVersion), []byte(rc.Node.PNPMVersion), []byte(rc.Node.PNPMHash))
-	}
-	if rc.Kind == config.RuntimeKindUV && rc.UV != nil {
-		parts = append(parts, []byte(rc.UV.PythonVersion))
-	}
-	if rc.Kind == config.RuntimeKindJVM && rc.JVM != nil {
-		parts = append(parts, []byte(rc.JVM.JavaVersion))
-	}
-	if rc.Kind == config.RuntimeKindGo && rc.Go != nil {
-		parts = append(parts, []byte(rc.Go.GoVersion))
-	}
+	parts = appendKindVersionFields(parts, rc)
 
 	return hashutil.XXH3Multi(parts...), nil
+}
+
+// appendKindVersionFields folds the cache-affecting version field(s) for rc's
+// kind into parts. Both the managed and system hash functions route through this single
+// helper (backed by the kind registry) so the two can never fold a different set
+// of fields — the lock-step drift the registry was introduced to eliminate.
+func appendKindVersionFields(parts [][]byte, rc config.RuntimeConfig) [][]byte {
+	info, ok := config.LookupRuntimeKind(rc.Kind)
+	if !ok || info.HashFields == nil {
+		return parts
+	}
+	for _, field := range info.HashFields(rc) {
+		parts = append(parts, []byte(field))
+	}
+	return parts
 }
 
 func calculateSystemRuntimeHash(rc config.RuntimeConfig) string {
@@ -96,18 +100,7 @@ func calculateSystemRuntimeHash(rc config.RuntimeConfig) string {
 		[]byte(systemVersion),
 	}
 
-	if rc.Kind == config.RuntimeKindNode && rc.Node != nil {
-		parts = append(parts, []byte(rc.Node.NodeVersion), []byte(rc.Node.PNPMVersion), []byte(rc.Node.PNPMHash))
-	}
-	if rc.Kind == config.RuntimeKindUV && rc.UV != nil {
-		parts = append(parts, []byte(rc.UV.PythonVersion))
-	}
-	if rc.Kind == config.RuntimeKindJVM && rc.JVM != nil {
-		parts = append(parts, []byte(rc.JVM.JavaVersion))
-	}
-	if rc.Kind == config.RuntimeKindGo && rc.Go != nil {
-		parts = append(parts, []byte(rc.Go.GoVersion))
-	}
+	parts = appendKindVersionFields(parts, rc)
 
 	return hashutil.XXH3Multi(parts...)
 }

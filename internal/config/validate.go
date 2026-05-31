@@ -538,55 +538,11 @@ func ValidateRuntimes(runtimes MapOfRuntimes) error {
 
 	for _, name := range names {
 		rc := runtimes[name]
-		if rc.Kind == RuntimeKindNode {
-			if rc.Node == nil {
-				errs = append(errs, fmt.Sprintf("runtime %q: Node runtime requires node config with nodeVersion, pnpmVersion, and pnpmHash", name))
-			} else {
-				if rc.Node.NodeVersion == "" {
-					errs = append(errs, fmt.Sprintf("runtime %q: node.nodeVersion is required", name))
-				} else if !isValidVersionString(rc.Node.NodeVersion) {
-					errs = append(errs, fmt.Sprintf("runtime %q: node.nodeVersion %q contains invalid characters (must be alphanumeric, dots, hyphens, underscores, or plus signs)", name, rc.Node.NodeVersion))
-				}
-				if rc.Node.PNPMVersion == "" {
-					errs = append(errs, fmt.Sprintf("runtime %q: node.pnpmVersion is required", name))
-				} else if !isValidVersionString(rc.Node.PNPMVersion) {
-					errs = append(errs, fmt.Sprintf("runtime %q: node.pnpmVersion %q contains invalid characters (must be alphanumeric, dots, hyphens, underscores, or plus signs)", name, rc.Node.PNPMVersion))
-				}
-				if rc.Node.PNPMHash == "" {
-					errs = append(errs, fmt.Sprintf("runtime %q: node.pnpmHash is required (SHA-256 hash of PNPM tarball)", name))
-				} else if !isValidSHA256Hex(rc.Node.PNPMHash) {
-					errs = append(errs, fmt.Sprintf("runtime %q: node.pnpmHash must be a valid SHA-256 hex string (64 lowercase hex characters)", name))
-				}
-			}
-		}
-		if rc.Kind == RuntimeKindJVM {
-			if rc.JVM == nil {
-				errs = append(errs, fmt.Sprintf("runtime %q: JVM runtime requires jvm config with javaVersion", name))
-			} else {
-				if rc.JVM.JavaVersion == "" {
-					errs = append(errs, fmt.Sprintf("runtime %q: jvm.javaVersion is required", name))
-				} else if !isValidVersionString(rc.JVM.JavaVersion) {
-					errs = append(errs, fmt.Sprintf("runtime %q: jvm.javaVersion %q contains invalid characters (must be alphanumeric, dots, hyphens, underscores, or plus signs)", name, rc.JVM.JavaVersion))
-				}
-			}
-		}
-		if rc.Kind == RuntimeKindGo {
-			switch {
-			case rc.Mode == RuntimeModeSystem:
-				// goVersion is optional in system mode; it only feeds cache
-				// invalidation (mirrors UV's pythonVersion). Validate it only
-				// when explicitly set. A missing-version warning is emitted in
-				// doValidateApps, matching the UV pattern.
-				if rc.Go != nil && rc.Go.GoVersion != "" && !isValidVersionString(rc.Go.GoVersion) {
-					errs = append(errs, fmt.Sprintf("runtime %q: go.goVersion %q contains invalid characters (must be alphanumeric, dots, hyphens, underscores, or plus signs)", name, rc.Go.GoVersion))
-				}
-			case rc.Go == nil:
-				errs = append(errs, fmt.Sprintf("runtime %q: Go runtime requires go config with goVersion", name))
-			case rc.Go.GoVersion == "":
-				errs = append(errs, fmt.Sprintf("runtime %q: go.goVersion is required", name))
-			case !isValidVersionString(rc.Go.GoVersion):
-				errs = append(errs, fmt.Sprintf("runtime %q: go.goVersion %q contains invalid characters (must be alphanumeric, dots, hyphens, underscores, or plus signs)", name, rc.Go.GoVersion))
-			}
+		// Kind-specific sub-config validation is registry-driven so the rules live
+		// next to the kind they describe (see runtimekind.go). Unknown/legacy kinds
+		// have no registry entry and are skipped here (mode checks below still run).
+		if info, ok := LookupRuntimeKind(rc.Kind); ok && info.Validate != nil {
+			errs = append(errs, info.Validate(name, rc)...)
 		}
 		if rc.Mode == RuntimeModeManaged {
 			if rc.Managed == nil {

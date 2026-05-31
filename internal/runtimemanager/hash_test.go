@@ -228,6 +228,142 @@ func TestCalculateRuntimeHash(t *testing.T) {
 	})
 }
 
+// TestRuntimeHashFoldsSameFieldsForEveryKind guards the lock-step contract the
+// RuntimeKind registry exists to enforce: for every kind, each cache-affecting
+// version field must be folded into BOTH the managed-mode hash
+// (calculateRuntimeHash) and the system-mode hash (calculateSystemRuntimeHash).
+// If a future field is added to one hasher but not the other (the historical
+// drift risk), the corresponding sub-test changes only one hash and fails.
+func TestRuntimeHashFoldsSameFieldsForEveryKind(t *testing.T) {
+	osType, err := syslist.GetOsTypeFromString(runtime.GOOS)
+	if err != nil {
+		t.Fatalf("detect os type: %v", err)
+	}
+	archType, err := syslist.GetArchTypeFromString(runtime.GOARCH)
+	if err != nil {
+		t.Fatalf("detect arch type: %v", err)
+	}
+
+	// Key the binaries by the host os/arch so calculateRuntimeHash resolves on any
+	// platform the suite runs on (makeTestManagedRuntime is hard-keyed to
+	// darwin/linux-amd64 and would miss e.g. linux/arm64).
+	sharedBin := binmanager.BinaryOsArchInfo{
+		URL:         "https://example.com/runtime.tar.gz",
+		Hash:        "rt123",
+		ContentType: binmanager.BinContentTypeTarGz,
+	}
+	managedBase := func(kind config.RuntimeKind) config.RuntimeConfig {
+		return config.RuntimeConfig{
+			Kind: kind,
+			Mode: config.RuntimeModeManaged,
+			Managed: &config.RuntimeConfigManaged{
+				Binaries: binmanager.MapOfBinaries{osType: {archType: {testLibc: sharedBin}}},
+			},
+		}
+	}
+	systemBase := func(kind config.RuntimeKind) config.RuntimeConfig {
+		return config.RuntimeConfig{
+			Kind:   kind,
+			Mode:   config.RuntimeModeSystem,
+			System: &config.RuntimeConfigSystem{Command: "/usr/bin/" + string(kind)},
+		}
+	}
+
+	// Each field case applies the "a"/"b" variant to a runtime config so we can
+	// assert the change propagates into both hash functions. The setter is kind-aware and
+	// initializes the typed sub-config.
+	type fieldCase struct {
+		field string
+		set   func(rc *config.RuntimeConfig, v string)
+	}
+	kindCases := []struct {
+		kind   config.RuntimeKind
+		fields []fieldCase
+	}{
+		{
+			kind: config.RuntimeKindUV,
+			fields: []fieldCase{
+				{"pythonVersion", func(rc *config.RuntimeConfig, v string) { rc.UV = &config.RuntimeConfigUV{PythonVersion: v} }},
+			},
+		},
+		{
+			kind: config.RuntimeKindNode,
+			fields: []fieldCase{
+				{"nodeVersion", func(rc *config.RuntimeConfig, v string) {
+					rc.Node = &config.RuntimeConfigNode{NodeVersion: v, PNPMVersion: "10.0.0", PNPMHash: "h"}
+				}},
+				{"pnpmVersion", func(rc *config.RuntimeConfig, v string) {
+					rc.Node = &config.RuntimeConfigNode{NodeVersion: "22.0.0", PNPMVersion: v, PNPMHash: "h"}
+				}},
+				{"pnpmHash", func(rc *config.RuntimeConfig, v string) {
+					rc.Node = &config.RuntimeConfigNode{NodeVersion: "22.0.0", PNPMVersion: "10.0.0", PNPMHash: v}
+				}},
+			},
+		},
+		{
+			kind: config.RuntimeKindJVM,
+			fields: []fieldCase{
+				{"javaVersion", func(rc *config.RuntimeConfig, v string) { rc.JVM = &config.RuntimeConfigJVM{JavaVersion: v} }},
+			},
+		},
+		{
+			kind: config.RuntimeKindGo,
+			fields: []fieldCase{
+				{"goVersion", func(rc *config.RuntimeConfig, v string) { rc.Go = &config.RuntimeConfigGo{GoVersion: v} }},
+			},
+		},
+	}
+
+	// Cross-check: the fields enumerated here must match the registry's HashFields
+	// count for each kind, so this test can't silently fall out of sync if a new
+	// field is added to a kind's HashFields.
+	for _, kc := range kindCases {
+		info, ok := config.LookupRuntimeKind(kc.kind)
+		if !ok {
+			t.Fatalf("kind %q missing from registry", kc.kind)
+		}
+		rc := managedBase(kc.kind)
+		for _, fc := range kc.fields {
+			fc.set(&rc, "x")
+		}
+		if got := len(info.HashFields(rc)); got != len(kc.fields) {
+			t.Fatalf("kind %q: registry folds %d fields but test enumerates %d; update the test", kc.kind, got, len(kc.fields))
+		}
+	}
+
+	for _, kc := range kindCases {
+		for _, fc := range kc.fields {
+			t.Run(string(kc.kind)+"/"+fc.field, func(t *testing.T) {
+				mA := managedBase(kc.kind)
+				mB := managedBase(kc.kind)
+				fc.set(&mA, "version-a")
+				fc.set(&mB, "version-b")
+				mHashA, err := calculateRuntimeHash(mA, osType, archType, testLibc)
+				if err != nil {
+					t.Fatalf("managed hash A: %v", err)
+				}
+				mHashB, err := calculateRuntimeHash(mB, osType, archType, testLibc)
+				if err != nil {
+					t.Fatalf("managed hash B: %v", err)
+				}
+				if mHashA == mHashB {
+					t.Errorf("managed hash does not fold %s for kind %s", fc.field, kc.kind)
+				}
+
+				sA := systemBase(kc.kind)
+				sB := systemBase(kc.kind)
+				fc.set(&sA, "version-a")
+				fc.set(&sB, "version-b")
+				sHashA := calculateSystemRuntimeHash(sA)
+				sHashB := calculateSystemRuntimeHash(sB)
+				if sHashA == sHashB {
+					t.Errorf("system hash does not fold %s for kind %s", fc.field, kc.kind)
+				}
+			})
+		}
+	}
+}
+
 func TestCalculateAppHash(t *testing.T) {
 	t.Run("basic hash", func(t *testing.T) {
 		hash := calculateAppHash("yamllint", "1.37.0", nil, "runtimehash123", "", "")

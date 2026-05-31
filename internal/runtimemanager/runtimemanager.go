@@ -1,13 +1,13 @@
 package runtimemanager
 
 import (
+	"fmt"
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/syslist"
 	"github.com/datamitsu/datamitsu/internal/target"
-	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -60,20 +60,14 @@ func (rm *RuntimeManager) removeAll(path string) error {
 }
 
 // systemCommandForKind returns the system binary command name for a runtime kind.
-// Used when automatically falling back to system mode on musl.
+// Used when automatically falling back to system mode on musl. The mapping lives
+// in the kind registry (config.LookupRuntimeKind) so it stays in lock-step with
+// the hash-fold fields and validation rules; an unknown kind yields "".
 func systemCommandForKind(kind config.RuntimeKind) string {
-	switch kind {
-	case config.RuntimeKindNode:
-		return "node"
-	case config.RuntimeKindUV:
-		return "uv"
-	case config.RuntimeKindJVM:
-		return "java"
-	case config.RuntimeKindGo:
-		return "go"
-	default:
-		return ""
+	if info, ok := config.LookupRuntimeKind(kind); ok {
+		return info.SystemCommand
 	}
+	return ""
 }
 
 // resolveEffectiveRuntimeConfig automatically overrides managed mode to system mode
