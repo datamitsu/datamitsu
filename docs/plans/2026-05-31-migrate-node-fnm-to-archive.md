@@ -120,13 +120,13 @@ Replace the two-hop Node.js runtime acquisition (download the **fnm** manager bi
 
 ### Task 5: devtools — `pull-node` registry generator
 
-- [ ] in `cmd/devtools_pull_runtimes.go` add `pullNodeRuntime()`: build the os/arch/libc tuples and resolve node archive URLs + sha256:
-  - glibc → `https://nodejs.org/dist/v<ver>/` (`node-v<ver>-linux-{x64,arm64}.tar.xz`, `darwin-{x64,arm64}.tar.xz`, `win-{x64,arm64}.zip`), hashes from `SHASUMS256.txt`
-  - musl → `https://unofficial-builds.nodejs.org/download/release/v<ver>/` (`linux-{x64,arm64}-musl.tar.xz`), hashes from its `SHASUMS256.txt`
-- [ ] **provenance at pull time:** verify the glibc `SHASUMS256.txt.asc` GPG signature against Node release keys before recording hashes; musl has no Node signature → record from unofficial-builds SHASUMS and log that it is unsigned (matches `node:alpine`)
-- [ ] emit a `node` entry (`kind: "node"`, `contentType: "tar.xz"`/`"zip"`, `extractDir: true`, computed `binaryPath`, node config `{nodeVersion, pnpmVersion, pnpmHash}`); wire `pull-node` into the `pull-runtimes` command + `--runtime node`
-- [ ] write tests (mirror `devtools_pull_runtimes_test.go`): mock `nodejs.org`/`unofficial-builds` SHASUMS + asc → generated `node` entry has correct URLs/hashes/binaryPaths for every tuple
-- [ ] write tests: missing musl asset / bad signature handled (error cases); run `go test ./cmd/...` — must pass before next task
+- [x] in `cmd/devtools_pull_runtimes.go` add `pullNodeRuntime()`: builds the os/arch/libc tuples (`nodeArchiveSpecs`) and resolves node archive URLs + sha256 via `detectNodeBinaries`/`buildNodeBinaries`:
+  - glibc/darwin/windows → `https://nodejs.org/dist/v<ver>/` (`node-v<ver>-linux-{x64,arm64}.tar.xz`, `darwin-{x64,arm64}.tar.xz`, `win-{x64,arm64}.zip`), hashes parsed from the GPG-verified `SHASUMS256.txt.asc` (`parseSHASUMS`)
+  - musl → `https://unofficial-builds.nodejs.org/download/release/v<ver>/` (`linux-{x64,arm64}-musl.tar.xz`), hashes from its unsigned `SHASUMS256.txt`
+- [x] **provenance at pull time:** new `internal/nodekeys` package embeds the 28 official Node.js release public keys (from `github.com/nodejs/release-keys`) and exposes `ReleaseKeyring()` + `VerifyClearsigned()`; `fetchVerifiedShasums` downloads `SHASUMS256.txt.asc`, verifies the clearsign signature against the keyring, and parses the **verified plaintext** (validated end-to-end against the real `nodejs.org` v26.2.0 signature). musl has no Node signature → recorded from unofficial-builds SHASUMS with a logged "unsigned (matches node:alpine)" notice (`detectNodeBinaries`). `ProtonMail/go-crypto/openpgp` added to `go.mod`
+- [x] emit a `node` entry (`kind: "node"`, `contentType: "tar.xz"`/`"zip"`, `extractDir: true`, computed `binaryPath`, node config `{nodeVersion, pnpmVersion, pnpmHash}`) via `buildNodeRuntimeJSON`/`NodeConfigJSON`; wired `pull-node` into the `pull-runtimes` switch, `validRuntimeNames`, `runtimeVersion`, and the `--runtime node` flag/help. Hashes are mandatory: missing or non-64-hex sha256 → hard error (`buildNodeBinaries`)
+- [x] write tests (mirror `devtools_pull_runtimes_test.go`): `TestDetectNodeBinaries_MockServers` (two httptest servers serving a clearsigned dist `SHASUMS256.txt.asc` + plain musl `SHASUMS256.txt`, test keyring → correct URLs/hashes/binaryPaths for every tuple), plus pure `TestBuildNodeBinaries_AllTuples`, `TestNodeArchiveSpecs_FilenamesAndPaths`, `TestNodeBinaryPath`, `TestParseSHASUMS`, `TestBuildNodeRuntimeJSON`, `TestRuntimeVersion_Node`, and `internal/nodekeys` tests (`TestReleaseKeyring_LoadsEmbeddedKeys`, `TestVerifyClearsigned_{ValidSignature,WrongKey,TamperedContent,NotClearsigned,NilKeyring}`)
+- [x] write tests: missing musl asset (`TestBuildNodeBinaries_MissingMuslAsset`, `TestDetectNodeBinaries_MissingMuslAssetFromServer`) / bad signature (`TestDetectNodeBinaries_BadSignature`, signed by an untrusted key → error) handled; `go test ./cmd/...` + `./internal/nodekeys/...` pass; `golangci-lint`/cspell/gitleaks green
 
 ### Task 6: Generate the `node` registry entry + point apps at `node`
 

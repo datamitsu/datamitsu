@@ -2,8 +2,15 @@ import { config } from "./.datamitsu/cspell.config.js";
 
 export default {
   ...config,
+  ignorePaths: [...(config.ignorePaths ?? []), "**/*.asc"],
   words: [
     ...config.words,
+    "clearsign",
+    "clearsigned",
+    "keyring",
+    "nodekeys",
+    "openpgp",
+    "pgp",
     "abslink",
     "acmr",
     "adoptium",

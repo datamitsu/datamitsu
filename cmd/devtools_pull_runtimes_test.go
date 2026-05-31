@@ -1029,6 +1029,7 @@ func TestIsValidRuntime(t *testing.T) {
 		{"fnm", true},
 		{"uv", true},
 		{"jvm", true},
+		{"node", true},
 		{"invalid", false},
 		{"", false},
 		{"FNM", false},
@@ -1207,14 +1208,14 @@ func TestWriteRuntimesJSON_SingleFile(t *testing.T) {
 }
 
 func TestValidRuntimeNames(t *testing.T) {
-	expected := map[string]bool{"fnm": true, "uv": true, "jvm": true}
+	expected := map[string]bool{"fnm": true, "uv": true, "jvm": true, "node": true}
 	for _, name := range validRuntimeNames {
 		if !expected[name] {
 			t.Errorf("unexpected runtime name: %s", name)
 		}
 	}
-	if len(validRuntimeNames) != 3 {
-		t.Errorf("expected 3 valid runtime names, got %d", len(validRuntimeNames))
+	if len(validRuntimeNames) != 4 {
+		t.Errorf("expected 4 valid runtime names, got %d", len(validRuntimeNames))
 	}
 }
 
