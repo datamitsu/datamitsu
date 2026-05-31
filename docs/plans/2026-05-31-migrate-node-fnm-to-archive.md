@@ -103,12 +103,12 @@ Replace the two-hop Node.js runtime acquisition (download the **fnm** manager bi
 
 ### Task 3: Implement node archive install — `internal/runtimemanager/node.go`
 
-- [ ] create `node.go`: `installNode(runtime, cacheRoot)` modeled on `jvm.go:115-168` — select `binaries[os][arch][libc]` (reuse `resolveLibcKey`), download URL, stream + verify sha256, extract (`extractDir: true`), resolve `bin/node` (`node.exe` on windows) via `binaryPath`
-- [ ] reuse pnpm install + npm-app-install by moving `installPNPM`/`downloadPNPMFromRegistry` + the `node <pnpm.cjs> install` app flow into shared/node code (rename `fnm`→`node`); keep pnpm pinned-hash + npm SHA-512 verification
-- [ ] update `internal/env/runtime.go` `GetNodeBinaryPath()` to the extracted-archive layout (e.g. `<cacheRoot>/.runtimes/node/<configHash>/node-v<ver>-<os>-<arch>[-musl]/bin/node`)
-- [ ] **no** 30s total timeout, **no** mirror/`FNM_ARCH` logic; reuse jvm-style download client
-- [ ] write tests (mirror `jvm`-style): download+verify+extract success; **sha256 mismatch → error**; already-installed → cache hit (no second fetch); musl entry selected on musl host, glibc fallback when no musl entry
-- [ ] run `go test ./internal/runtimemanager/...` (node tests only) — must pass before next task
+- [x] create `node.go`: node archive acquisition via `installNode(runtimeName)` → `rm.GetRuntimePath` (the same generic managed-runtime path jvm/go use): selects `binaries[os][arch][libc]` (reuse `resolveLibcKey`), downloads, streams + SHA-256-verifies, extracts (`extractDir: true`), resolves `bin/node` (`node.exe` on windows) via `binaryPath`. (A self-contained jvm-`downloadAndVerifyJAR`-style downloader is not feasible — the binmanager extract helpers are package-private and a JAR needs no extraction, whereas node needs full-tree `extractDir`; `GetRuntimePath`/binmanager is the correct mirror and reuses tested infra. `AppConfigNode` added to binmanager; node arm added to `GetAppPath`.)
+- [x] reuse pnpm install + npm-app-install: `node.go` adds the full node app flow (`InstallNodeApp`/`installNodeAppOnce`/`GetNodeCommandInfo`/`resolveNodeAppEnvPath`) reusing `installPNPM`/`downloadPNPMFromRegistry` + `buildPackageJSON`/`buildPNPMInstallArgs` + the workspace helpers from fnm.go (same package; the physical move/rename happens in Task 7 when fnm.go is deleted); keeps pnpm pinned-SHA-256 + npm SHA-512 verification
+- [x] node binary path resolved via the generic `GetRuntimeBinaryPath("node", configHash)/<binaryPath>` extracted-archive layout (jvm/go-style, returned by `GetRuntimePath`); the fnm-specific `env.GetNodeBinaryPath` is left untouched (still used by fnm.go) and removed with fnm in Task 7 — no separate node env helper needed
+- [x] **no** 30s total timeout, **no** mirror/`FNM_ARCH` logic: reuses binmanager's 5-minute download client (30s is only time-to-first-byte / dial, not a total cap), single source of truth is the git-pinned `{url, hash}`
+- [x] write tests: `TestInstallNode_DownloadVerifyExtract` (download+verify+extract success, perms, content), `TestInstallNode_SHA256Mismatch` (**hash mismatch → error**), `TestInstallNode_CacheHitNoRefetch` (already-installed → cache hit, server hit count unchanged), `TestNodeLibcSelection` (musl entry selected / glibc fallback via `resolveLibcKey` — host-independent), `TestInstallNode_GlibcFallbackWhenNoMusl` (end-to-end glibc fallback download on musl host), plus `TestGetNodeEnvVars`, `TestInstallNodeApp_{InvalidRuntime,AlreadyInstalled}`, `TestGetNodeCommandInfo_{InvalidRuntime,MissingNodeConfig}`
+- [x] run `go test ./internal/runtimemanager/...` — passes (also `go test ./...` green, `golangci-lint` 0 issues)
 
 ### Task 4: Route runtimemanager + hash to the `node` kind
 

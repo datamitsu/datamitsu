@@ -69,6 +69,9 @@ func calculateRuntimeHash(rc config.RuntimeConfig, osType syslist.OsType, archTy
 	if rc.Kind == config.RuntimeKindFNM && rc.FNM != nil {
 		parts = append(parts, []byte(rc.FNM.NodeVersion), []byte(rc.FNM.PNPMVersion), []byte(rc.FNM.PNPMHash))
 	}
+	if rc.Kind == config.RuntimeKindNode && rc.Node != nil {
+		parts = append(parts, []byte(rc.Node.NodeVersion), []byte(rc.Node.PNPMVersion), []byte(rc.Node.PNPMHash))
+	}
 	if rc.Kind == config.RuntimeKindUV && rc.UV != nil {
 		parts = append(parts, []byte(rc.UV.PythonVersion))
 	}
@@ -98,6 +101,9 @@ func calculateSystemRuntimeHash(rc config.RuntimeConfig) string {
 
 	if rc.Kind == config.RuntimeKindFNM && rc.FNM != nil {
 		parts = append(parts, []byte(rc.FNM.NodeVersion), []byte(rc.FNM.PNPMVersion), []byte(rc.FNM.PNPMHash))
+	}
+	if rc.Kind == config.RuntimeKindNode && rc.Node != nil {
+		parts = append(parts, []byte(rc.Node.NodeVersion), []byte(rc.Node.PNPMVersion), []byte(rc.Node.PNPMHash))
 	}
 	if rc.Kind == config.RuntimeKindUV && rc.UV != nil {
 		parts = append(parts, []byte(rc.UV.PythonVersion))

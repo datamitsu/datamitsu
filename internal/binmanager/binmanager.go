@@ -47,6 +47,19 @@ type AppConfigFNM struct {
 	Dependencies map[string]string `json:"dependencies,omitempty"`
 }
 
+// AppConfigNode configures an npm tool installed under the archive-based node
+// runtime (kind "node"). It mirrors AppConfigFNM field-for-field: node apps are
+// still pnpm-installed npm packages — only the node runtime acquisition changed
+// from the fnm manager binary to a direct, hash-pinned archive.
+type AppConfigNode struct {
+	PackageName  string            `json:"packageName"`
+	Version      string            `json:"version"`
+	BinPath      string            `json:"binPath"`
+	Runtime      string            `json:"runtime,omitempty"`
+	LockFile     string            `json:"lockFile,omitempty"`
+	Dependencies map[string]string `json:"dependencies,omitempty"`
+}
+
 type AppConfigJVM struct {
 	JarURL  string `json:"jarUrl"`
 	JarHash string `json:"jarHash"`

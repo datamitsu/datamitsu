@@ -346,13 +346,13 @@ func (rm *RuntimeManager) GetAppPath(appName string, kind config.RuntimeKind, ve
 	}
 
 	var appHash string
-	if kind == config.RuntimeKindFNM && len(fnmExtra) > 0 {
+	if (kind == config.RuntimeKindFNM || kind == config.RuntimeKindNode) && len(fnmExtra) > 0 {
 		extra := fnmExtra[0]
 		if extra.PackageName == "" {
-			return "", fmt.Errorf("FNMAppPathExtra.PackageName is required for FNM apps")
+			return "", fmt.Errorf("FNMAppPathExtra.PackageName is required for npm-based apps")
 		}
 		if extra.BinPath == "" {
-			return "", fmt.Errorf("FNMAppPathExtra.BinPath is required for FNM apps")
+			return "", fmt.Errorf("FNMAppPathExtra.BinPath is required for npm-based apps")
 		}
 		appHash = calculateFNMAppHash(appName, extra.PackageName, version, extra.BinPath, deps, runtimeHash, lockHash, binmanager.HashFilesAndArchives(files, archives))
 	} else {
