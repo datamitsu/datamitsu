@@ -31,16 +31,10 @@ func getUVBinaryPath(appEnvPath string, packageName string) string {
 // Safe for concurrent use from multiple goroutines.
 func (rm *RuntimeManager) InstallUVApp(appName string, appConfig *binmanager.AppConfigUV, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
 	key := "uv/" + appName
-	entry, _ := rm.appInstall.LoadOrStore(key, &installOnce{})
-	once := entry.(*installOnce)
-	once.once.Do(func() {
-		once.err = rm.installUVAppOnce(appName, appConfig, files, archives)
+	_, err, _ := rm.appInstall.Do(key, func() (any, error) {
+		return nil, rm.installUVAppOnce(appName, appConfig, files, archives)
 	})
-	if once.err != nil {
-		rm.appInstall.CompareAndDelete(key, entry)
-		return once.err
-	}
-	return nil
+	return err
 }
 
 func (rm *RuntimeManager) installUVAppOnce(appName string, appConfig *binmanager.AppConfigUV, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {

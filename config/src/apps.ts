@@ -16,6 +16,15 @@ export const mapOfApps: BinManager.MapOfApps = {
       name: "echo",
     },
   },
+  govulncheck: {
+    // https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck
+    go: {
+      lockFile:
+        "br:G0sFQBwHbuzETnD8ym6qTez1zeTVDhHEWieOau3QEAK7iF/qsPSFyNFNziF8hK45cEzhtcQjLNBANlGggWz417NnsEgNFpGvlIvpIv9XMNl6JUD/YPXqu2H/hONQAkf6f4Pf4Ak32AGnD0SlXz3YB7N/wg0lYzFmPlYw2YzogaAO6OZ43LxAYIpHht0C4oyGo0KXUEhC6f97bvbtMp5owv4LcBYoiWMYTeEUtSc+4WEWRnRGoqmUDWE5KR4Sdqh7M2IH5w738TfY1g3Vlj2vHPvsTtiFJpiU1p5IEOFi62YP3QYPPNEN6aQvXF+3xzwMhVT+9htoBccnPHSA5JbIfXoZOc+DGztpFUJy0KIl9MZhusuFCaHKiWXMZH/zS5vykIDYk05Rzaojpi5U9s71VocnOl34IXVy/VIePJRkLjE81nyvkmTdu9JPc6tMiZTNZPEWI2UMP91qiR6vCpOO4EoSiqIIOi7dCAQlewygPFmjDJ+414c3a66xT5PJyl4pTNYIc5ZrbTpd4XLr5OVsKbxWtkxJ3iXsSvF2juS9qNpXNXxlWd5yabN0mXN/1Rd/5U4NOFcT7Zw8mOxPU72nQjAynTdFyI0RcxbET6OAMMGRLke+oiIvh1QN4dF9k13enu9HYc2XK+AG+qiUn8rLey3c2kCiSszm9GUM5qXs5IhBn1fKbwOoPXlbI8PiofHxIBcWdm/Wi2uUYWlfoY8MKwxEkKtFxGsXPCbr4JWKHMplzrU1k9kI+E51XnU0Eq2eO54FSpu2c3F+JFiXXniyVxDsyeaBvxrsYOR+fjE9lk0QErXcSOSciTnxo+FWON32V8AWk1bWppR5H9dCA1sovOvXQCaGxymCNpc4wmg6ckkBjVD1dtLDK8Z2",
+      packageName: "golang.org/x/vuln/cmd/govulncheck",
+      version: "v1.3.0",
+    },
+  },
   jscowsay: {
     // https://www.npmjs.com/package/cowsay
     description: fnmApps.jscowsay.description,

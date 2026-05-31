@@ -9,6 +9,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/pnpmdefaults"
+	"github.com/datamitsu/datamitsu/internal/target"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -67,16 +68,10 @@ type npmVersionMeta struct {
 
 func (rm *RuntimeManager) installPNPM(version string, destDir string, pnpmHash string) error {
 	key := version + "\x00" + pnpmHash
-	entry, _ := rm.pnpmInstall.LoadOrStore(key, &installOnce{})
-	once := entry.(*installOnce)
-	once.once.Do(func() {
-		once.err = rm.downloadPNPMFromRegistry(version, destDir, pnpmHash)
+	_, err, _ := rm.pnpmInstall.Do(key, func() (any, error) {
+		return nil, rm.downloadPNPMFromRegistry(version, destDir, pnpmHash)
 	})
-	if once.err != nil {
-		rm.pnpmInstall.CompareAndDelete(key, entry)
-		return once.err
-	}
-	return nil
+	return err
 }
 
 func (rm *RuntimeManager) downloadPNPMFromRegistry(version string, destDir string, pnpmHash string) error {
@@ -278,16 +273,78 @@ func verifyPNPMIntegrity(meta npmVersionMeta, sha512Sum []byte) error {
 }
 
 func (rm *RuntimeManager) installNodeVersion(fnmPath, nodeVersion, cacheRoot string) error {
-	entry, _ := rm.nodeInstall.LoadOrStore(nodeVersion, &installOnce{})
-	once := entry.(*installOnce)
-	once.once.Do(func() {
-		once.err = rm.installNodeVersionOnce(fnmPath, nodeVersion, cacheRoot)
+	_, err, _ := rm.nodeInstall.Do(nodeVersion, func() (any, error) {
+		return nil, rm.installNodeVersionOnce(fnmPath, nodeVersion, cacheRoot)
 	})
-	if once.err != nil {
-		rm.nodeInstall.CompareAndDelete(nodeVersion, entry)
-		return once.err
+	return err
+}
+
+// fnmMuslNodeDistMirror is the unofficial-builds mirror that publishes
+// musl-linked Node.js binaries. The default fnm mirror (nodejs.org) only ships
+// glibc builds, which cannot execute on musl hosts (Alpine Linux).
+const fnmMuslNodeDistMirror = "https://unofficial-builds.nodejs.org/download/release"
+
+// muslFNMArch maps a Go architecture (GOARCH) to the FNM_ARCH token used by the
+// unofficial-builds musl mirror. It returns "" for architectures that have no
+// published musl build, signaling that fnm should stay on its default mirror.
+func muslFNMArch(goarch string) string {
+	switch goarch {
+	case "amd64":
+		return "x64-musl"
+	case "arm64":
+		return "arm64-musl"
+	default:
+		return ""
 	}
-	return nil
+}
+
+// buildFNMInstallEnv builds the environment overrides applied to the `fnm
+// install` child process. It always sets FNM_DIR. On musl hosts with a
+// supported architecture it additionally points fnm at the unofficial-builds
+// musl mirror (FNM_NODE_DIST_MIRROR) and selects the musl arch token
+// (FNM_ARCH) so the downloaded Node.js binary can actually execute. Each of
+// those two vars is injected only when the user has not already set it (checked
+// via os.LookupEnv), so an explicit override always wins. glibc hosts,
+// unsupported arches, and LibcUnknown hosts get FNM_DIR alone, leaving fnm on
+// its default mirror.
+func buildFNMInstallEnv(host target.Target, fnmDir string) map[string]string {
+	envOverrides := map[string]string{"FNM_DIR": fnmDir}
+
+	if host.Libc != target.LibcMusl {
+		return envOverrides
+	}
+	muslArch := muslFNMArch(host.Arch)
+	if muslArch == "" {
+		return envOverrides
+	}
+
+	if _, ok := os.LookupEnv("FNM_NODE_DIST_MIRROR"); !ok {
+		envOverrides["FNM_NODE_DIST_MIRROR"] = fnmMuslNodeDistMirror
+	}
+	if _, ok := os.LookupEnv("FNM_ARCH"); !ok {
+		envOverrides["FNM_ARCH"] = muslArch
+	}
+	return envOverrides
+}
+
+// fnmInstallEnv computes the env overrides for the `fnm install` child process
+// for this host and emits an Info log when datamitsu auto-configures the musl
+// Node.js mirror. The log fires only when datamitsu injected BOTH the
+// mirror and the arch (i.e. the user supplied neither) so the message never
+// reports a value the user already controls; whenever the user has set either
+// FNM_NODE_DIST_MIRROR or FNM_ARCH themselves the override is left to them and
+// no log is emitted.
+func (rm *RuntimeManager) fnmInstallEnv(fnmDir string) map[string]string {
+	overrides := buildFNMInstallEnv(rm.hostTarget, fnmDir)
+	mirror, hasMirror := overrides["FNM_NODE_DIST_MIRROR"]
+	arch, hasArch := overrides["FNM_ARCH"]
+	if hasMirror && hasArch {
+		log.Info("configuring fnm for musl Node.js builds",
+			zap.String("mirror", mirror),
+			zap.String("arch", arch),
+		)
+	}
+	return overrides
 }
 
 func (rm *RuntimeManager) installNodeVersionOnce(fnmPath, nodeVersion, cacheRoot string) error {
@@ -309,9 +366,7 @@ func (rm *RuntimeManager) installNodeVersionOnce(fnmPath, nodeVersion, cacheRoot
 	fmt.Fprintf(os.Stderr, "Installing Node.js %s...\n", nodeVersion)
 
 	cmd := exec.Command(fnmPath, "install", nodeVersion)
-	cmd.Env = buildEnvWithOverrides(os.Environ(), map[string]string{
-		"FNM_DIR": fnmDir,
-	})
+	cmd.Env = buildEnvWithOverrides(os.Environ(), rm.fnmInstallEnv(fnmDir))
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
 
@@ -392,16 +447,10 @@ func filesWithMergedWorkspaceYAML(files map[string]string) (map[string]string, e
 // Safe for concurrent use from multiple goroutines.
 func (rm *RuntimeManager) InstallFNMApp(appName string, appConfig *binmanager.AppConfigFNM, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
 	key := "fnm/" + appName
-	entry, _ := rm.appInstall.LoadOrStore(key, &installOnce{})
-	once := entry.(*installOnce)
-	once.once.Do(func() {
-		once.err = rm.installFNMAppOnce(appName, appConfig, files, archives)
+	_, err, _ := rm.appInstall.Do(key, func() (any, error) {
+		return nil, rm.installFNMAppOnce(appName, appConfig, files, archives)
 	})
-	if once.err != nil {
-		rm.appInstall.CompareAndDelete(key, entry)
-		return once.err
-	}
-	return nil
+	return err
 }
 
 func (rm *RuntimeManager) installFNMAppOnce(appName string, appConfig *binmanager.AppConfigFNM, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {

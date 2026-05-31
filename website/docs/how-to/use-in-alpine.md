@@ -110,7 +110,52 @@ This prevents cache conflicts when switching between container environments or t
 
 ## Managed Runtimes (FNM, UV, JVM)
 
-Managed runtimes do not have musl-native binaries available. Upstream projects (Node.js via FNM, Python via UV, JDK via Temurin) do not provide musl-native binaries through the channels datamitsu uses.
+datamitsu applies two distinct musl-specific mechanisms to managed runtimes:
+
+- **The Node.js builds that FNM downloads** — datamitsu directs fnm at musl-linked Node.js builds automatically (see [Node.js (FNM): automatic musl builds](#nodejs-fnm-automatic-musl-builds)).
+- **A runtime's own binary** (`fnm`, `uv`, `java`) — when the managed config has no musl variant for that executable, datamitsu falls back to the system binary on PATH (see [Automatic Fallback](#automatic-fallback)).
+
+### Node.js (FNM): automatic musl builds
+
+The default fnm mirror (`nodejs.org`) ships **glibc-only** Node.js binaries. They install on Alpine but cannot execute — their ELF interpreter (`/lib64/ld-linux-x86-64.so.2`) does not exist on musl — which surfaces as a misleading `no such file or directory` the first time a tool runs `node`.
+
+On a musl host, datamitsu fixes this by pointing fnm at the [unofficial-builds mirror](https://unofficial-builds.nodejs.org/download/release), which publishes musl-linked Node.js. It injects two environment variables into the `fnm install` child process:
+
+| Variable               | amd64                                                   | arm64        |
+| ---------------------- | ------------------------------------------------------- | ------------ |
+| `FNM_NODE_DIST_MIRROR` | `https://unofficial-builds.nodejs.org/download/release` | (same)       |
+| `FNM_ARCH`             | `x64-musl`                                              | `arm64-musl` |
+
+When the override is applied you will see a log line:
+
+```
+INFO: configuring fnm for musl Node.js builds  mirror=https://unofficial-builds.nodejs.org/download/release  arch=x64-musl
+```
+
+**Supported architectures:** `amd64` (`x64-musl`) and `arm64` (`arm64-musl`). The unofficial mirror publishes no musl builds for other architectures (arm/armv7l, 386, ppc64le, …), so on those datamitsu leaves fnm on its default mirror.
+
+**Integrity is preserved.** datamitsu does not download Node.js itself — fnm does, and fnm verifies the downloaded tarball against the mirror's `SHASUMS256.txt`. Switching the mirror keeps fnm's own integrity check intact.
+
+#### libstdc++ is required on Alpine
+
+musl Node.js from the unofficial mirror is **dynamically linked** against `libstdc++` (and `libgcc`), which the base `alpine` image does not include. Without it `node` fails to start. Install it:
+
+```sh
+apk add --no-cache libstdc++
+```
+
+`libgcc` is pulled in transitively, so no separate entry is needed. datamitsu's own `*-alpine` Docker image already bundles `libstdc++`, so wrappers building `FROM ghcr.io/datamitsu/datamitsu:<version>-alpine` inherit it with no Dockerfile change.
+
+#### Overriding the mirror (escape hatch)
+
+If you set `FNM_NODE_DIST_MIRROR` or `FNM_ARCH` yourself, **datamitsu never overrides your value** — an explicitly set variable always wins. Use this for a custom or air-gapped mirror:
+
+```sh
+export FNM_NODE_DIST_MIRROR=https://mirror.internal.example.com/nodejs/release
+export FNM_ARCH=x64-musl
+```
+
+Each variable is honored independently: set only `FNM_NODE_DIST_MIRROR` to redirect downloads while keeping datamitsu's auto-selected `FNM_ARCH`, or set only `FNM_ARCH` to override the arch token while datamitsu still auto-selects the unofficial musl mirror. To keep fnm on a different (e.g. the default `nodejs.org`) mirror you must set `FNM_NODE_DIST_MIRROR` yourself.
 
 ### Automatic Fallback
 

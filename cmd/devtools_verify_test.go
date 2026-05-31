@@ -132,6 +132,11 @@ func TestGetAppVersion(t *testing.T) {
 			expected: "7.20.0",
 		},
 		{
+			name:     "go app",
+			app:      binmanager.App{Go: &binmanager.AppConfigGo{Version: "v1.3.0"}},
+			expected: "v1.3.0",
+		},
+		{
 			name:     "shell app",
 			app:      binmanager.App{Shell: &binmanager.AppConfigShell{Name: "echo"}},
 			expected: "",
@@ -485,6 +490,50 @@ func TestFilterSkippedRuntimeAppEntries(t *testing.T) {
 			t.Errorf("expected 0 skipped after version change, got %d", len(skipped))
 		}
 	})
+}
+
+func TestRuntimeAppKeyAndFP_Go(t *testing.T) {
+	runtimes := config.MapOfRuntimes{
+		"go-rt": {Kind: config.RuntimeKindGo},
+	}
+
+	// Explicit runtime ref: fingerprint must reflect the Go app config and
+	// resolve to the referenced runtime (kind "go" branch must be wired).
+	entry := runtimeAppEntry{
+		name: "govulncheck",
+		app:  binmanager.App{Go: &binmanager.AppConfigGo{PackageName: "golang.org/x/vuln/cmd/govulncheck", Version: "v1.3.0", Runtime: "go-rt"}},
+		kind: "go",
+	}
+	key, fp := runtimeAppKeyAndFP(entry, runtimes, "linux", "amd64")
+	if key == "" {
+		t.Fatal("expected non-empty key")
+	}
+	if fp == "" {
+		t.Fatal("expected non-empty fingerprint (Go app config must be marshaled into the fingerprint)")
+	}
+
+	// Changing the Go version must change the fingerprint, proving the Go
+	// config is actually folded into it.
+	entry2 := entry
+	entry2.app = binmanager.App{Go: &binmanager.AppConfigGo{PackageName: "golang.org/x/vuln/cmd/govulncheck", Version: "v1.4.0", Runtime: "go-rt"}}
+	_, fp2 := runtimeAppKeyAndFP(entry2, runtimes, "linux", "amd64")
+	if fp == fp2 {
+		t.Error("expected different fingerprint when Go version changes")
+	}
+
+	// Empty runtime ref must resolve to the default Go runtime, so the
+	// runtime config still contributes to the fingerprint.
+	entryNoRef := runtimeAppEntry{
+		name: "govulncheck",
+		app:  binmanager.App{Go: &binmanager.AppConfigGo{PackageName: "golang.org/x/vuln/cmd/govulncheck", Version: "v1.3.0"}},
+		kind: "go",
+	}
+	if got := resolveDefaultRuntimeName(runtimes, "go"); got != "go-rt" {
+		t.Errorf("resolveDefaultRuntimeName(go) = %q, want %q", got, "go-rt")
+	}
+	if _, fpNoRef := runtimeAppKeyAndFP(entryNoRef, runtimes, "linux", "amd64"); fpNoRef == "" {
+		t.Error("expected non-empty fingerprint for Go app with default runtime resolution")
+	}
 }
 
 func TestFilterSkippedVersionCheckEntries(t *testing.T) {

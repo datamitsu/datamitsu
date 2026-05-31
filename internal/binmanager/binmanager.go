@@ -55,6 +55,13 @@ type AppConfigJVM struct {
 	MainClass string `json:"mainClass,omitempty"`
 }
 
+type AppConfigGo struct {
+	PackageName string `json:"packageName"`
+	Version     string `json:"version"`
+	Runtime     string `json:"runtime,omitempty"`
+	LockFile    string `json:"lockFile,omitempty"`
+}
+
 type AppConfigShell struct {
 	Name string            `json:"name"`
 	Args []string          `json:"args,omitempty"`
@@ -78,6 +85,7 @@ type App struct {
 	Uv     *AppConfigUV     `json:"uv,omitempty"`
 	Fnm    *AppConfigFNM    `json:"fnm,omitempty"`
 	Jvm    *AppConfigJVM    `json:"jvm,omitempty"`
+	Go     *AppConfigGo     `json:"go,omitempty"`
 	Shell  *AppConfigShell  `json:"shell,omitempty"`
 
 	Files    map[string]string       `json:"files,omitempty"`
@@ -460,7 +468,7 @@ func (bm *BinManager) GetCommandInfo(appName string) (*CommandInfo, error) {
 		}, nil
 	}
 
-	if app.Uv != nil || app.Fnm != nil || app.Jvm != nil {
+	if app.Uv != nil || app.Fnm != nil || app.Jvm != nil || app.Go != nil {
 		if bm.runtimeManager == nil {
 			return nil, fmt.Errorf("no runtime manager configured for runtime-managed app %q", appName)
 		}
@@ -481,7 +489,7 @@ func (bm *BinManager) ComputeInstallPath(appName string) (string, error) {
 		return bm.getBinaryPath(appName)
 	}
 
-	if app.Uv != nil || app.Fnm != nil || app.Jvm != nil {
+	if app.Uv != nil || app.Fnm != nil || app.Jvm != nil || app.Go != nil {
 		if bm.runtimeManager == nil {
 			return "", fmt.Errorf("no runtime manager configured for runtime-managed app %q", appName)
 		}
@@ -716,6 +724,10 @@ func (bm *BinManager) GetAppsList() []AppInfo {
 		} else if app.Jvm != nil {
 			info.Type = "jvm"
 			info.Version = app.Jvm.Version
+		} else if app.Go != nil {
+			info.Type = "go"
+			info.Version = app.Go.Version
+			info.PackageName = app.Go.PackageName
 		} else if app.Shell != nil {
 			info.Type = "shell"
 			info.Command = app.Shell.Name
