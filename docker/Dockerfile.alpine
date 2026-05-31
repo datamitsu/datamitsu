@@ -18,10 +18,15 @@ LABEL org.opencontainers.image.title="datamitsu" \
       org.opencontainers.image.documentation="https://datamitsu.com"
 
 # Install runtime dependencies
+# git: datamitsu shells out to the git binary for git-root detection and
+#   `git diff --cached` (go-git/v6 covers only a subset of operations).
+# libstdc++: musl Node.js builds from unofficial-builds.nodejs.org dynamically
+#   link libstdc++ (and libgcc, pulled in transitively); base alpine lacks it.
 # hadolint ignore=DL3018
 RUN apk add --no-cache \
     ca-certificates \
-    git
+    git \
+    libstdc++
 
 # Copy binary
 COPY --from=binary /datamitsu /usr/local/bin/datamitsu

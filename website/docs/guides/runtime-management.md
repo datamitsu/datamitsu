@@ -252,9 +252,9 @@ This allows you to have multiple runtimes of the same kind (e.g., different Node
 
 datamitsu detects the host libc at startup using a multi-stage process (ldd output, ELF interpreter, loader paths). This detection feeds into binary app resolution, where musl-specific binaries are preferred on musl systems.
 
-Managed runtimes (FNM, UV, JVM) do **not** have musl-native binaries available through automatic binary management. Upstream projects do not provide musl-native runtime binaries through the channels datamitsu uses:
+Managed runtimes need extra handling on musl because their upstreams' default channels are glibc-oriented:
 
-- **Node.js** (FNM): Official builds are glibc-only
+- **Node.js** (FNM): the default `nodejs.org` mirror ships glibc-only builds. On musl hosts datamitsu automatically points fnm at the [unofficial-builds mirror](https://unofficial-builds.nodejs.org/download/release) so the Node.js it installs is musl-linked (`amd64`→`x64-musl`, `arm64`→`arm64-musl`; other architectures stay on the default mirror). An explicitly set `FNM_NODE_DIST_MIRROR` or `FNM_ARCH` always wins, and musl Node additionally requires `libstdc++` (`apk add libstdc++`). See [Use in Alpine Linux](../how-to/use-in-alpine#nodejs-fnm-automatic-musl-builds) for the full behavior and escape hatch.
 - **Python** (UV): uv downloads glibc Python builds
 - **JDK** (JVM): Temurin JDK releases are glibc-only
 
