@@ -111,6 +111,58 @@ func TestLoadConfigRuntimes(t *testing.T) {
 	if _, ok := fnmRuntime.Managed.Binaries["darwin"]; !ok {
 		t.Error("fnm runtime missing darwin binaries")
 	}
+
+	nodeRuntime, ok := cfg.Runtimes["node"]
+	if !ok {
+		t.Fatal("node runtime not found in config")
+	}
+	if nodeRuntime.Kind != config.RuntimeKindNode {
+		t.Errorf("node runtime kind = %q, want %q", nodeRuntime.Kind, config.RuntimeKindNode)
+	}
+	if nodeRuntime.Mode != config.RuntimeModeManaged {
+		t.Errorf("node runtime mode = %q, want %q", nodeRuntime.Mode, config.RuntimeModeManaged)
+	}
+	if nodeRuntime.Node == nil {
+		t.Fatal("node runtime node config is nil")
+	}
+	if nodeRuntime.Node.NodeVersion == "" {
+		t.Error("node runtime nodeVersion is empty")
+	}
+	if nodeRuntime.Node.PNPMVersion == "" {
+		t.Error("node runtime pnpmVersion is empty")
+	}
+	if nodeRuntime.Node.PNPMHash == "" {
+		t.Error("node runtime pnpmHash is empty")
+	}
+	if nodeRuntime.Managed == nil {
+		t.Fatal("node runtime managed config is nil")
+	}
+	// Node is acquired as a direct archive (jvm-style): linux must carry both a
+	// glibc and a musl entry, plus a darwin entry, all extracted to a directory.
+	linuxNode, ok := nodeRuntime.Managed.Binaries["linux"]
+	if !ok {
+		t.Fatal("node runtime missing linux binaries")
+	}
+	amd64Node, ok := linuxNode["amd64"]
+	if !ok {
+		t.Fatal("node runtime missing linux/amd64 binaries")
+	}
+	glibcNode, ok := amd64Node["glibc"]
+	if !ok {
+		t.Fatal("node runtime missing linux/amd64/glibc entry")
+	}
+	if !glibcNode.ExtractDir {
+		t.Error("node runtime linux/amd64/glibc should set extractDir")
+	}
+	if glibcNode.Hash == "" {
+		t.Error("node runtime linux/amd64/glibc hash is empty (hash pinning is mandatory)")
+	}
+	if _, ok := amd64Node["musl"]; !ok {
+		t.Error("node runtime missing linux/amd64/musl entry (static musl archive)")
+	}
+	if _, ok := nodeRuntime.Managed.Binaries["darwin"]; !ok {
+		t.Error("node runtime missing darwin binaries")
+	}
 }
 
 func TestLoadConfigRuntimeApps(t *testing.T) {
@@ -134,19 +186,19 @@ func TestLoadConfigRuntimeApps(t *testing.T) {
 		t.Errorf("pycowsay version = %q, want %q", pycowsay.Uv.Version, "0.0.0.2")
 	}
 
-	// Test FNM app
+	// Test Node app
 	jscowsay, ok := cfg.Apps["jscowsay"]
 	if !ok {
 		t.Fatal("jscowsay app not found")
 	}
-	if jscowsay.Fnm == nil {
-		t.Fatal("jscowsay.Fnm is nil")
+	if jscowsay.Node == nil {
+		t.Fatal("jscowsay.Node is nil")
 	}
-	if jscowsay.Fnm.PackageName != "cowsay" {
-		t.Errorf("jscowsay packageName = %q, want %q", jscowsay.Fnm.PackageName, "cowsay")
+	if jscowsay.Node.PackageName != "cowsay" {
+		t.Errorf("jscowsay packageName = %q, want %q", jscowsay.Node.PackageName, "cowsay")
 	}
-	if jscowsay.Fnm.BinPath == "" {
-		t.Error("jscowsay.Fnm.BinPath is empty")
+	if jscowsay.Node.BinPath == "" {
+		t.Error("jscowsay.Node.BinPath is empty")
 	}
 
 	// Test JVM app

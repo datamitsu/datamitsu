@@ -130,11 +130,11 @@ Replace the two-hop Node.js runtime acquisition (download the **fnm** manager bi
 
 ### Task 6: Generate the `node` registry entry + point apps at `node`
 
-- [ ] run `pull-node` to regenerate `config/src/runtimes.json` with the real `node` entry (node `26.2.0` + pnpm, all os/arch/libc incl. musl) alongside the existing `fnm` entry
-- [ ] rename `config/src/fnmApps.json` → `config/src/nodeApps.json` and switch each npm tool's runtime reference from `fnm` → `node`; update `config/src/runtimes.ts` embed if needed
-- [ ] rename `cmd/devtools_fnm.go` `pull-fnm` → `pull-node` (npm package versions) targeting `nodeApps.json`
-- [ ] write/update tests: registry loads the `node` entry; apps resolve to the `node` runtime; `pull-node` (apps) updates `nodeApps.json`
-- [ ] run `go test ./...` — must pass before next task
+- [x] run `pull-node` to regenerate `config/src/runtimes.json` with the real `node` entry (node `26.2.0` + pnpm `11.5.0`, all 8 os/arch/libc tuples incl. musl) alongside the existing `fnm` entry — ran `devtools pull-runtimes --update --runtime node`; glibc/darwin/windows hashes GPG-verified, musl from unofficial-builds; spot-checked linux-x64 glibc+musl sha256 against upstream SHASUMS (exact match)
+- [x] rename `config/src/fnmApps.json` → `config/src/nodeApps.json` (`git mv`) and switch `jscowsay`'s runtime reference from `fnm:` → `node:` in `config/src/apps.ts`; `runtimes.ts` embed unchanged (uses `as unknown as` cast). Added `node?: AppConfigNode` + `interface AppConfigNode`, `node?: RuntimeConfigNode` + `interface RuntimeConfigNode`, and `"node"` to `RuntimeKind` in `config/config.d.ts`; regenerated `internal/config/config.js`. Added `Node` branches to `internal/config/validate.go` (binPath/lockFile/runtime-ref) and `cmd/config_lockfile.go` (list/print/clear/readLockFile → pnpm-lock.yaml). Updated `package.json` `pull:fnm*` → `pull:node*`
+- [x] rename `cmd/devtools_fnm.go` → `cmd/devtools_node.go`: `pull-fnm` → `pull-node` (npm package versions) targeting `nodeApps.json`; all symbols renamed (`pullNodeCmd`/`runPullNode`/`readNodeAppsJSON`/… ) — no collision with the Task 5 `pullNodeRuntime` registry generator (distinct command `pull-node` vs `pull-runtimes`)
+- [x] write/update tests: `TestLoadConfigRuntimes` now asserts the embedded registry loads the `node` entry (kind node, managed mode, extractDir+hash on linux/amd64/glibc, musl entry present, darwin present, node config populated); `TestLoadConfigRuntimeApps` asserts `jscowsay` resolves to `.Node`; `cmd/devtools_node_test.go` (renamed) covers `pull-node` (apps) updating `nodeApps.json`; updated the 5 `validate_test.go` message assertions to "uv, fnm, and node apps"
+- [x] run `go test ./...` — passes (36 packages ok); `go build ./...` clean; `golangci-lint` 0 issues; `datamitsu check` green (cspell, eslint, prettier, tsc, oxlint, gitleaks, syncpack, sort-package-json, editorconfig-checker all pass)
 
 ### Task 7: Remove fnm entirely (clean break)
 

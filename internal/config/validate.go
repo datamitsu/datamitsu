@@ -40,7 +40,7 @@ func doValidateApps(apps binmanager.MapOfApps, runtimes MapOfRuntimes, skipLockf
 		app := apps[appName]
 
 		if (app.Binary != nil || app.Shell != nil || app.Jvm != nil || app.Go != nil) && (len(app.Files) > 0 || len(app.Links) > 0 || len(app.Archives) > 0) {
-			errs = append(errs, fmt.Sprintf("app %q: files/links/archives are only supported on uv and fnm apps", appName))
+			errs = append(errs, fmt.Sprintf("app %q: files/links/archives are only supported on uv, fnm, and node apps", appName))
 			continue
 		}
 
@@ -95,6 +95,14 @@ func doValidateApps(apps binmanager.MapOfApps, runtimes MapOfRuntimes, skipLockf
 			}
 		}
 
+		if app.Node != nil {
+			if app.Node.BinPath == "" {
+				errs = append(errs, fmt.Sprintf("app %q: node.binPath is required", appName))
+			} else if err := validateSafeRelativePath(app.Node.BinPath, "binPath"); err != nil {
+				errs = append(errs, fmt.Sprintf("app %q: %v", appName, err))
+			}
+		}
+
 		if app.Go != nil {
 			// packageName goes verbatim into `go get pkg@version`, so reject
 			// path traversal and any character outside the safe set.
@@ -128,6 +136,9 @@ func doValidateApps(apps binmanager.MapOfApps, runtimes MapOfRuntimes, skipLockf
 		if !skipLockfileCheck && app.Fnm != nil && app.Fnm.LockFile == "" {
 			errs = append(errs, fmt.Sprintf("app %q: lockFile is required (run: datamitsu config lockfile %s)", appName, appName))
 		}
+		if !skipLockfileCheck && app.Node != nil && app.Node.LockFile == "" {
+			errs = append(errs, fmt.Sprintf("app %q: lockFile is required (run: datamitsu config lockfile %s)", appName, appName))
+		}
 		if !skipLockfileCheck && app.Go != nil && app.Go.LockFile == "" {
 			errs = append(errs, fmt.Sprintf("app %q: lockFile is required (run: datamitsu config lockfile %s)", appName, appName))
 		}
@@ -140,6 +151,11 @@ func doValidateApps(apps binmanager.MapOfApps, runtimes MapOfRuntimes, skipLockf
 			}
 			if app.Fnm != nil {
 				if refErr := validateAppRuntimeRef(app.Fnm.Runtime, RuntimeKindFNM, appName, runtimes); refErr != nil {
+					errs = append(errs, refErr.Error())
+				}
+			}
+			if app.Node != nil {
+				if refErr := validateAppRuntimeRef(app.Node.Runtime, RuntimeKindNode, appName, runtimes); refErr != nil {
 					errs = append(errs, refErr.Error())
 				}
 			}

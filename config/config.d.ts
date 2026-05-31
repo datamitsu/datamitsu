@@ -702,6 +702,7 @@ declare global {
        * Symlinks to create in .datamitsu/ directory, mapping link name to relative path in install directory.
        */
       links?: Record<string, string>;
+      node?: AppConfigNode;
       required?: boolean;
       shell?: AppConfigShell;
       uv?: AppConfigUV;
@@ -768,6 +769,22 @@ declare global {
        * Optional main class for JARs that aren't executable.
        */
       mainClass?: string;
+      runtime?: string;
+      version: string;
+    }
+
+    interface AppConfigNode {
+      binPath: string;
+      dependencies?: Record<string, string>;
+      /**
+       * Lock file content for reproducible installs.
+       * Required for all node apps. Validation fails if omitted.
+       * When prefixed with "br:", the content is brotli-compressed and base64-encoded.
+       * Plain text is also accepted for backward compatibility.
+       * Generate via: datamitsu config lockfile <appName>
+       */
+      lockFile: string;
+      packageName: string;
       runtime?: string;
       version: string;
     }
@@ -927,6 +944,12 @@ declare global {
       kind: RuntimeKind;
       managed?: RuntimeConfigManaged;
       mode: RuntimeMode;
+      /**
+       * Node-specific runtime configuration (nodeVersion, pnpmVersion, pnpmHash).
+       * Required when kind is "node". Node is acquired as a direct, hash-pinned
+       * archive (url + hash), like the jvm runtime.
+       */
+      node?: RuntimeConfigNode;
       system?: RuntimeConfigSystem;
       /**
        * UV-specific runtime configuration (pythonVersion).
@@ -961,6 +984,16 @@ declare global {
       binaries: MapOfBinaries;
     }
 
+    interface RuntimeConfigNode {
+      nodeVersion: string;
+      /**
+       * SHA-256 hash of the PNPM tarball for integrity verification.
+       * Required per security policy: all downloads must have a pinned hash.
+       */
+      pnpmHash: string;
+      pnpmVersion: string;
+    }
+
     interface RuntimeConfigSystem {
       command: string;
       /**
@@ -973,7 +1006,7 @@ declare global {
       pythonVersion?: string;
     }
 
-    type RuntimeKind = "fnm" | "go" | "jvm" | "uv";
+    type RuntimeKind = "fnm" | "go" | "jvm" | "node" | "uv";
 
     type RuntimeMode = "managed" | "system";
   }
