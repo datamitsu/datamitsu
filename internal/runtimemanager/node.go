@@ -44,6 +44,11 @@ func getNodeEnvVars(appEnvPath string) map[string]string {
 // extracts the full directory tree (extractDir), and resolves the binary via the
 // entry's binaryPath. Concurrent callers are deduplicated by GetRuntimePath's
 // singleflight, and an already-installed runtime is a cache hit with no refetch.
+//
+// Unlike jvm/uv/go — which wrap GetRuntimePath inline at their single call site —
+// node acquires its binary from two paths (installNodeAppOnce and
+// GetNodeCommandInfo), so the error wrapping is centralized in this named helper
+// rather than duplicated. It is intentionally retained, not inlined.
 func (rm *RuntimeManager) installNode(runtimeName string) (string, error) {
 	nodeBinPath, err := rm.GetRuntimePath(runtimeName)
 	if err != nil {
@@ -134,10 +139,9 @@ func (rm *RuntimeManager) installNodeAppOnce(appName string, appConfig *binmanag
 		return fmt.Errorf("failed to download PNPM: %w", err)
 	}
 
-	if err := os.MkdirAll(appEnvPath, 0755); err != nil {
-		return fmt.Errorf("failed to create app directory: %w", err)
-	}
-
+	// appEnvPath is created by WriteAppFiles (when there are files/archives) and
+	// always by writeAppWorkspaceFile below, both before package.json is written,
+	// so no explicit MkdirAll is needed here.
 	cleanupOnError := true
 	defer func() {
 		if cleanupOnError {

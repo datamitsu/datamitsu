@@ -107,7 +107,7 @@ func (rm *RuntimeManager) downloadPNPMFromRegistryURL(registryBaseURL, version, 
 	if !strings.HasPrefix(meta.Dist.Tarball, "https://") {
 		return fmt.Errorf("pnpm@%s: tarball URL is not https: %s", version, meta.Dist.Tarball)
 	}
-	if meta.Dist.Integrity == "" || !strings.HasPrefix(meta.Dist.Integrity, "sha512-") {
+	if !hasSHA512Prefix(meta.Dist.Integrity) {
 		return fmt.Errorf("pnpm@%s: SHA-512 integrity required but not found in registry metadata", version)
 	}
 
@@ -256,10 +256,17 @@ func verifyPNPMPinnedHash(expectedHash string, actualSHA256 []byte) error {
 	return nil
 }
 
+// hasSHA512Prefix reports whether an npm SRI integrity string carries the
+// required "sha512-" prefix. An empty string returns false, so callers reject
+// both missing and non-sha512 integrity with a single !hasSHA512Prefix(s) check.
+func hasSHA512Prefix(integrity string) bool {
+	return strings.HasPrefix(integrity, "sha512-")
+}
+
 // verifyPNPMIntegrity checks the downloaded tarball against the npm registry
 // SHA-512 integrity metadata (SRI format). SHA-1 fallback is not supported.
 func verifyPNPMIntegrity(meta npmVersionMeta, sha512Sum []byte) error {
-	if meta.Dist.Integrity == "" || !strings.HasPrefix(meta.Dist.Integrity, "sha512-") {
+	if !hasSHA512Prefix(meta.Dist.Integrity) {
 		return fmt.Errorf("SHA-512 integrity required but not found in registry metadata")
 	}
 
@@ -300,15 +307,6 @@ func buildPNPMInstallArgs(pnpmCjsPath string, hasLockFile bool) []string {
 		args = append(args, "--frozen-lockfile")
 	}
 	return args
-}
-
-// defaultPNPMWorkspaceConfig returns the recommended pnpm 11 workspace
-// security defaults applied to every node app environment. Delegates to
-// internal/pnpmdefaults — the single source shared with the JS engine that
-// injects the same map as a global so config.js can publish it via
-// sharedStorage["pnpm-workspace-defaults"].
-func defaultPNPMWorkspaceConfig() map[string]any {
-	return pnpmdefaults.Defaults()
 }
 
 // mergePNPMWorkspaceConfig shallow-merges parsed user YAML on top of the
@@ -377,17 +375,19 @@ func writeAppWorkspaceFile(appEnvPath, mergedYAML string) error {
 }
 
 // buildPNPMWorkspaceForApp returns the YAML string to write as
-// pnpm-workspace.yaml in the app environment. It starts from the
-// recommended defaults and shallow-merges the user's
-// files["pnpm-workspace.yaml"] entry on top. Returns defaults alone when
-// the user provides no override.
+// pnpm-workspace.yaml in the app environment. It starts from the recommended
+// defaults (internal/pnpmdefaults — the single source shared with the JS engine
+// that injects the same map as a global so config.js can publish it via
+// sharedStorage["pnpm-workspace-defaults"]) and shallow-merges the user's
+// files["pnpm-workspace.yaml"] entry on top. Returns defaults alone when the
+// user provides no override.
 func buildPNPMWorkspaceForApp(files map[string]string) (string, error) {
 	userYAML := ""
 	if files != nil {
 		userYAML = files["pnpm-workspace.yaml"]
 	}
 
-	merged, err := mergePNPMWorkspaceConfig(defaultPNPMWorkspaceConfig(), userYAML)
+	merged, err := mergePNPMWorkspaceConfig(pnpmdefaults.Defaults(), userYAML)
 	if err != nil {
 		return "", err
 	}

@@ -16,6 +16,7 @@ import (
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/pnpmdefaults"
 	"github.com/goccy/go-yaml"
 )
 
@@ -286,6 +287,27 @@ func TestDownloadPNPMFromRegistry(t *testing.T) {
 	})
 }
 
+func TestHasSHA512Prefix(t *testing.T) {
+	cases := []struct {
+		name      string
+		integrity string
+		want      bool
+	}{
+		{"valid sha512", "sha512-AAAA", true},
+		{"empty", "", false},
+		{"wrong algo sha1", "sha1-AAAA", false},
+		{"no prefix", "AAAA", false},
+		{"prefix only", "sha512-", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := hasSHA512Prefix(tc.integrity); got != tc.want {
+				t.Errorf("hasSHA512Prefix(%q) = %v, want %v", tc.integrity, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestVerifyPNPMIntegrity(t *testing.T) {
 	testData := []byte("test tarball content")
 	sha512Sum := sha512.Sum512(testData)
@@ -504,7 +526,7 @@ func TestBuildPNPMInstallArgs(t *testing.T) {
 // TestFilesWithMergedWorkspaceYAML_HashIncludesDefaults pins the invariant
 // that the node app cache key incorporates the merged pnpm-workspace.yaml
 // content (defaults + user override), not just the user override. Without
-// this, tightening defaultPNPMWorkspaceConfig in a future release would not
+// this, tightening pnpmdefaults.Defaults in a future release would not
 // invalidate existing installs.
 func TestFilesWithMergedWorkspaceYAML_HashIncludesDefaults(t *testing.T) {
 	t.Run("nil files map gets injected workspace yaml", func(t *testing.T) {
@@ -553,7 +575,7 @@ func TestFilesWithMergedWorkspaceYAML_HashIncludesDefaults(t *testing.T) {
 }
 
 func TestDefaultPNPMWorkspaceConfig(t *testing.T) {
-	cfg := defaultPNPMWorkspaceConfig()
+	cfg := pnpmdefaults.Defaults()
 
 	expected := map[string]any{
 		"strictDepBuilds":           true,
@@ -603,7 +625,7 @@ func pnpmWorkspaceValueEqual(got, want any) bool {
 
 func TestMergePNPMWorkspaceConfig(t *testing.T) {
 	t.Run("empty user YAML returns defaults unchanged", func(t *testing.T) {
-		defaults := defaultPNPMWorkspaceConfig()
+		defaults := pnpmdefaults.Defaults()
 		merged, err := mergePNPMWorkspaceConfig(defaults, "")
 		if err != nil {
 			t.Fatalf("mergePNPMWorkspaceConfig() error = %v", err)
@@ -625,7 +647,7 @@ func TestMergePNPMWorkspaceConfig(t *testing.T) {
 	})
 
 	t.Run("user adds allowBuilds without touching defaults", func(t *testing.T) {
-		defaults := defaultPNPMWorkspaceConfig()
+		defaults := pnpmdefaults.Defaults()
 		userYAML := "allowBuilds:\n  puppeteer: true\n"
 
 		merged, err := mergePNPMWorkspaceConfig(defaults, userYAML)
@@ -662,7 +684,7 @@ func TestMergePNPMWorkspaceConfig(t *testing.T) {
 	})
 
 	t.Run("user overrides strictDepBuilds (user wins)", func(t *testing.T) {
-		defaults := defaultPNPMWorkspaceConfig()
+		defaults := pnpmdefaults.Defaults()
 		userYAML := "strictDepBuilds: false\n"
 
 		merged, err := mergePNPMWorkspaceConfig(defaults, userYAML)
@@ -680,7 +702,7 @@ func TestMergePNPMWorkspaceConfig(t *testing.T) {
 	})
 
 	t.Run("invalid YAML returns error", func(t *testing.T) {
-		defaults := defaultPNPMWorkspaceConfig()
+		defaults := pnpmdefaults.Defaults()
 		_, err := mergePNPMWorkspaceConfig(defaults, "not: valid: yaml: at: all: [")
 		if err == nil {
 			t.Error("expected error for invalid YAML, got nil")
@@ -983,6 +1005,25 @@ func TestWriteAppWorkspaceFile(t *testing.T) {
 		}
 		if _, has := parsed["allowBuilds"]; has {
 			t.Error("allowBuilds from pre-existing file leaked through; archive content must not survive the post-write")
+		}
+	})
+
+	// Mirrors the node install ordering after the redundant os.MkdirAll was
+	// removed from installNodeAppOnce: writeAppWorkspaceFile must create a
+	// missing app dir so a subsequent package.json write into the same dir
+	// succeeds without any prior MkdirAll.
+	t.Run("creates missing app dir so a following package.json write succeeds", func(t *testing.T) {
+		appEnvPath := filepath.Join(t.TempDir(), "nested", "app")
+
+		if err := writeAppWorkspaceFile(appEnvPath, "key: value\n"); err != nil {
+			t.Fatalf("writeAppWorkspaceFile() error = %v", err)
+		}
+		if _, err := os.Stat(appEnvPath); err != nil {
+			t.Fatalf("app dir not created: %v", err)
+		}
+		pkgPath := filepath.Join(appEnvPath, "package.json")
+		if err := os.WriteFile(pkgPath, []byte("{}"), 0644); err != nil {
+			t.Fatalf("writing package.json after writeAppWorkspaceFile failed: %v", err)
 		}
 	})
 }
