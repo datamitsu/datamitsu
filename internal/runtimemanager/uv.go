@@ -3,6 +3,7 @@ package runtimemanager
 import (
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/env"
 	"fmt"
 	"os"
 	"os/exec"
@@ -16,6 +17,10 @@ import (
 func getUVEnvVars(appEnvPath string) map[string]string {
 	return map[string]string{
 		"UV_CACHE_DIR": filepath.Join(appEnvPath, "cache"),
+		// Redirect uv's managed CPython into the cached store (shared per-version,
+		// not per-app) so the store cache is self-contained and venv interpreter
+		// symlinks resolve after a cache restore onto a fresh runner.
+		"UV_PYTHON_INSTALL_DIR": filepath.Join(env.GetStorePath(), ".uv", "python"),
 	}
 }
 

@@ -3,6 +3,7 @@ package runtimemanager
 import (
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/env"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -15,7 +16,8 @@ func TestGetUVEnvVars(t *testing.T) {
 	vars := getUVEnvVars(appEnvPath)
 
 	expected := map[string]string{
-		"UV_CACHE_DIR": filepath.Join(appEnvPath, "cache"),
+		"UV_CACHE_DIR":          filepath.Join(appEnvPath, "cache"),
+		"UV_PYTHON_INSTALL_DIR": filepath.Join(env.GetStorePath(), ".uv", "python"),
 	}
 
 	for key, want := range expected {
@@ -31,6 +33,33 @@ func TestGetUVEnvVars(t *testing.T) {
 
 	if len(vars) != len(expected) {
 		t.Errorf("vars has %d entries, want %d", len(vars), len(expected))
+	}
+
+	// UV_PYTHON_INSTALL_DIR must live under the store (shared), not the per-app dir.
+	pyDir := vars["UV_PYTHON_INSTALL_DIR"]
+	if !strings.HasPrefix(pyDir, env.GetStorePath()) {
+		t.Errorf("UV_PYTHON_INSTALL_DIR = %q, want prefix %q", pyDir, env.GetStorePath())
+	}
+	if strings.HasPrefix(pyDir, appEnvPath) {
+		t.Errorf("UV_PYTHON_INSTALL_DIR = %q should be shared, not under appEnvPath %q", pyDir, appEnvPath)
+	}
+}
+
+func TestInstallTimeEnvIncludesPythonInstallDir(t *testing.T) {
+	appEnvPath := "/cache/.apps/uv/yamllint/abc123"
+	envVars := getUVEnvVars(appEnvPath)
+	result := buildEnvWithOverrides(os.Environ(), envVars)
+
+	wantPrefix := "UV_PYTHON_INSTALL_DIR=" + filepath.Join(env.GetStorePath(), ".uv", "python")
+	found := false
+	for _, e := range result {
+		if e == wantPrefix {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("install-time env missing %q", wantPrefix)
 	}
 }
 
@@ -171,8 +200,11 @@ func TestGetUVCommandInfo(t *testing.T) {
 		if _, ok := info.Env["UV_CACHE_DIR"]; !ok {
 			t.Error("missing env key UV_CACHE_DIR")
 		}
-		if len(info.Env) != 1 {
-			t.Errorf("expected 1 env key, got %d", len(info.Env))
+		if _, ok := info.Env["UV_PYTHON_INSTALL_DIR"]; !ok {
+			t.Error("missing env key UV_PYTHON_INSTALL_DIR")
+		}
+		if len(info.Env) != 2 {
+			t.Errorf("expected 2 env keys, got %d", len(info.Env))
 		}
 	})
 
