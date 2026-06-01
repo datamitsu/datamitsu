@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/datamitsu/datamitsu/internal/httpx"
 	"golang.org/x/mod/semver"
 )
 
@@ -35,7 +36,10 @@ type goDevRelease struct {
 	Files   []goDevFile `json:"files"`
 }
 
-var goDevHTTPClient = &http.Client{Timeout: 15 * time.Second}
+// goDevHTTPClient shares datamitsu's hardened transport (redirect cap +
+// HTTPS→HTTP downgrade rejection) with every other network path, so the go.dev
+// manifest fetch cannot be silently downgraded to plaintext (see internal/httpx).
+var goDevHTTPClient = httpx.NewHardenedClient(15 * time.Second)
 
 // GetLatestGoRelease fetches the latest stable Go release (version + per-file
 // SHA-256 hashes) from go.dev over HTTPS. Unlike the Node dist manifest there is
