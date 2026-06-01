@@ -209,5 +209,9 @@ export default {
     "unloadable",
     "recomputations",
     "runtimekind",
+    "GoConfigJSON",
+    "RuntimeKindInfo",
+    "getLatestGoRelease",
+    "goVersionLess",
   ],
 };

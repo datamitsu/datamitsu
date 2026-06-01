@@ -365,11 +365,17 @@ Dependencies identified: `go-crypto/openpgp`, `goccy/go-yaml`, internal `hashuti
 
 ### Task 16: Update documentation
 
-- [ ] document `pull-runtimes --runtime go` in `website/docs/how-to/maintain-wrapper.md`
-- [ ] note the RuntimeKind registry in the architecture knowledge doc
+- [x] document `pull-runtimes --runtime go` in `website/docs/how-to/maintain-wrapper.md`
+- [x] note the RuntimeKind registry in the architecture knowledge doc
       (`website/docs/guides/architecture/` and/or `docs/architecture.md`)
-- [ ] update `config/config.d.ts` / config reference if the Go pull surface changed
-- [ ] add any new identifiers (e.g. fetcher names) to `cspell.config.js` if flagged
+      (added to `docs/architecture.md`; the `website/docs/guides/architecture/`
+      pages cover the tooling-execution model, not runtime management — no change
+      needed there)
+- [x] update `config/config.d.ts` / config reference if the Go pull surface changed
+      (no change needed — `config/src/runtimes.json` already ships the `go` runtime
+      kind/`goVersion`, and pull-runtimes is a devtools/maintainer command, not part
+      of the user config type surface)
+- [x] add any new identifiers (e.g. fetcher names) to `cspell.config.js` if flagged
 
 ## Technical Details
 

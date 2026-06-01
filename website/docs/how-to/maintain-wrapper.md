@@ -154,6 +154,14 @@ datamitsu config lockfile eslint
 datamitsu config lockfile prettier
 ```
 
+#### Bumping the Go runtime
+
+```bash
+datamitsu devtools pull-runtimes runtimes.json --update --runtime go
+```
+
+The Go SDK archives and their per-file SHA-256 come from go.dev (`https://go.dev/dl/?mode=json`): HTTPS plus published SHA-256, no GPG — the same trust posture as the musl Node path. The pull preserves (or sets) `go.goVersion` in the runtime entry.
+
 ## Testing After Updates
 
 ### Verify cross-platform integrity
