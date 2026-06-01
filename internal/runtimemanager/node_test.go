@@ -210,8 +210,12 @@ func TestGetCommandInfoNode(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected an error (node archive is not reachable at the fake URL), got nil")
 	}
-	if err.Error() == `app "eslint" is not a runtime-managed app` {
-		t.Error("node app should be recognized as runtime-managed")
+	// Recognized as runtime-managed AND routed to the node install path: the
+	// failure originates from installNode wrapping the unreachable archive fetch
+	// ("failed to acquire node runtime"). Dispatch to the wrong kind (jvm/uv) or
+	// a fall-through to "not a runtime-managed app" would not mention the node runtime.
+	if !strings.Contains(err.Error(), "node runtime") {
+		t.Errorf("expected node-dispatch error from the node runtime install path, got: %v", err)
 	}
 }
 
@@ -716,9 +720,11 @@ func TestInstallNodeApp_RemoveAllSuccessProceeds(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected a download error after the (successful) stale-tree removal, got nil")
 	}
-	// The error is from the runtime download, NOT the removal: we proceeded.
-	if errors.Is(err, os.ErrPermission) {
-		t.Errorf("unexpected removal-style error after a successful removal: %v", err)
+	// The error is from the runtime download, NOT the removal: we proceeded past
+	// the (successful) removal into installNode, which wraps the failed archive
+	// fetch from the 404ing server as "failed to acquire node runtime".
+	if !strings.Contains(err.Error(), "node runtime") {
+		t.Errorf("expected the post-removal error to come from the node runtime download, got: %v", err)
 	}
 	if got := atomic.LoadInt32(&calls); got != 1 {
 		t.Errorf("removeAll called %d times, want 1", got)

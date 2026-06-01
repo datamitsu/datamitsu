@@ -528,6 +528,72 @@ func TestBuildPNPMInstallArgs(t *testing.T) {
 	})
 }
 
+// TestBuildPackageJSON pins the package.json that drives `pnpm install`: the
+// project name sanitizer (scoped npm names must become a valid npm `name`), the
+// package self-dependency, the merged extra dependencies, and the fixed
+// private/type/version fields.
+func TestBuildPackageJSON(t *testing.T) {
+	parse := func(t *testing.T, raw []byte) map[string]any {
+		t.Helper()
+		var pkg map[string]any
+		if err := json.Unmarshal(raw, &pkg); err != nil {
+			t.Fatalf("buildPackageJSON produced invalid JSON: %v\n%s", err, raw)
+		}
+		return pkg
+	}
+
+	t.Run("scoped package name is sanitized into a valid npm name", func(t *testing.T) {
+		raw, err := buildPackageJSON("@scope/pkg", "1.2.3", nil)
+		if err != nil {
+			t.Fatalf("buildPackageJSON() error = %v", err)
+		}
+		pkg := parse(t, raw)
+		// "@" stripped, "/" → "-": @scope/pkg -> scope-pkg.
+		if got := pkg["name"]; got != "datamitsu-app-scope-pkg" {
+			t.Errorf("name = %v, want %q", got, "datamitsu-app-scope-pkg")
+		}
+		deps, ok := pkg["dependencies"].(map[string]any)
+		if !ok {
+			t.Fatalf("dependencies missing or wrong type: %T", pkg["dependencies"])
+		}
+		if got := deps["@scope/pkg"]; got != "1.2.3" {
+			t.Errorf("self-dependency @scope/pkg = %v, want %q", got, "1.2.3")
+		}
+		if pkg["private"] != true {
+			t.Errorf("private = %v, want true", pkg["private"])
+		}
+		if pkg["type"] != "module" {
+			t.Errorf("type = %v, want %q", pkg["type"], "module")
+		}
+		if pkg["version"] != "0.0.0" {
+			t.Errorf("version = %v, want %q", pkg["version"], "0.0.0")
+		}
+	})
+
+	t.Run("extra dependencies are merged alongside the package itself", func(t *testing.T) {
+		raw, err := buildPackageJSON("eslint", "9.0.0", map[string]string{
+			"eslint-plugin-import": "2.29.0",
+		})
+		if err != nil {
+			t.Fatalf("buildPackageJSON() error = %v", err)
+		}
+		pkg := parse(t, raw)
+		if got := pkg["name"]; got != "datamitsu-app-eslint" {
+			t.Errorf("name = %v, want %q", got, "datamitsu-app-eslint")
+		}
+		deps, ok := pkg["dependencies"].(map[string]any)
+		if !ok {
+			t.Fatalf("dependencies missing or wrong type: %T", pkg["dependencies"])
+		}
+		if got := deps["eslint"]; got != "9.0.0" {
+			t.Errorf("eslint dep = %v, want %q", got, "9.0.0")
+		}
+		if got := deps["eslint-plugin-import"]; got != "2.29.0" {
+			t.Errorf("eslint-plugin-import dep = %v, want %q", got, "2.29.0")
+		}
+	})
+}
+
 // TestFilesWithMergedWorkspaceYAML_HashIncludesDefaults pins the invariant
 // that the node app cache key incorporates the merged pnpm-workspace.yaml
 // content (defaults + user override), not just the user override. Without

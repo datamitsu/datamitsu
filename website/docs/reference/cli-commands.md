@@ -24,7 +24,7 @@ Execute a managed binary with all environment variables passed through.
 datamitsu exec <appName> [args...]
 ```
 
-When called without arguments, lists all available tools grouped by type (binary, uv, node, jvm, shell).
+When called without arguments, lists all available tools grouped by type (binary, uv, node, jvm, go, shell).
 
 **Examples:**
 
@@ -366,17 +366,17 @@ For the full UV app update workflow including lock file regeneration, see [Maint
 
 ### devtools pull-runtimes
 
-Pull runtime configurations (node, UV, JVM) with latest versions from upstream releases. Fetches latest releases from GitHub, computes SHA-256 hashes, and writes the result to `<file>`.
+Pull runtime configurations (Node, UV, JVM, Go) with latest versions from upstream releases. Fetches latest releases from upstream, computes SHA-256 hashes, and writes the result to `<file>`.
 
 ```bash
 datamitsu devtools pull-runtimes --update <file>
 ```
 
-| Flag               | Description                                                   |
-| ------------------ | ------------------------------------------------------------- |
-| `--update`         | Required. Fetch latest versions from upstream before updating |
-| `--dry-run`        | Show what would be updated without writing files              |
-| `--runtime <name>` | Update only the specified runtime (`node`, `uv`, or `jvm`)    |
+| Flag               | Description                                                      |
+| ------------------ | ---------------------------------------------------------------- |
+| `--update`         | Required. Fetch latest versions from upstream before updating    |
+| `--dry-run`        | Show what would be updated without writing files                 |
+| `--runtime <name>` | Update only the specified runtime (`node`, `uv`, `jvm`, or `go`) |
 
 The command detects binaries for all platform combinations (OS/Arch/Libc). For Linux, both glibc and musl variants are detected when upstream provides separate binaries. If a musl binary is identical to the glibc variant (same URL and hash), the musl entry is deduplicated.
 
@@ -385,6 +385,7 @@ The command detects binaries for all platform combinations (OS/Arch/Libc). For L
 - **node**: latest Node.js LTS resolved automatically; archives + SHA-256 from nodejs.org/dist (glibc/darwin/windows, GPG-verified via SHASUMS256.txt.asc) and unofficial-builds.nodejs.org (musl); pnpm from the npm registry
 - **UV**: Python stable from endoflife.date, UV binary from GitHub
 - **JVM**: Java version from Adoptium API, Temurin JDK from GitHub
+- **go**: latest stable Go release + per-file SHA-256 from go.dev (`https://go.dev/dl/?mode=json`); HTTPS with published SHA-256, no GPG (the git-pinned hash is the integrity anchor, same trust model as the musl Node path)
 
 **Examples:**
 
@@ -394,6 +395,9 @@ datamitsu devtools pull-runtimes --update config/src/runtimes.json
 
 # Update only UV runtime
 datamitsu devtools pull-runtimes --update --runtime uv config/src/runtimes.json
+
+# Update only Go runtime
+datamitsu devtools pull-runtimes --update --runtime go config/src/runtimes.json
 
 # Preview changes without writing
 datamitsu devtools pull-runtimes --update --dry-run config/src/runtimes.json

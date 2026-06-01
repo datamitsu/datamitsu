@@ -450,7 +450,7 @@ Uses uber-go/zap structured logging throughout. Logger initialization in [intern
 
 - **Cache/Store separation**: `getBasePath()` resolves the base directory (`DATAMITSU_CACHE_DIR` → `XDG_CACHE_HOME` → `~/.cache/datamitsu`). `GetCachePath()` returns `{base}/cache` (project execution state). `GetStorePath()` returns `{base}/store` (downloaded binaries, runtimes, apps)
 - Cache path and bin path utilities in [internal/env/](internal/env/)
-- Runtime path helpers in [internal/env/runtime.go](internal/env/runtime.go): `GetRuntimesPath()`, `GetRuntimeBinaryPath()`, `GetAppsPath()`, `GetAppEnvPath()`, `GetPNPMStorePath()`, `GetNodeBinaryPath()`, `GetPNPMPath()`, `GetProjectCachePath()`
+- Runtime path helpers in [internal/env/runtime.go](internal/env/runtime.go): `GetRuntimesPath()`, `GetRuntimeBinaryPath()`, `GetAppsPath()`, `GetAppEnvPath()`, `GetPNPMStorePath()`, `GetPNPMPath()`, `GetProjectCachePath()`
 - Store-related paths (`GetBinPath`, `GetRuntimesPath`, `GetAppsPath`, `GetPNPMStorePath`) use `GetStorePath()`
 - Cache-related paths (`GetProjectCachePath`) use `GetCachePath()`
 - Binary caching uses stable hash-based paths for reproducibility

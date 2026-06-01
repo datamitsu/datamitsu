@@ -44,7 +44,6 @@ The global store holds all downloaded artifacts:
 ├── .bin/                    # Binary apps
 │   └── lefthook/{hash}/
 ├── .runtimes/               # Runtime binaries
-│   ├── node/{hash}/
 │   ├── node/{configHash}/
 │   ├── pnpm/11.5.0/{hash}/
 │   └── jvm/{hash}/
