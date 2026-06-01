@@ -342,13 +342,22 @@ Dependencies identified: `go-crypto/openpgp`, `goccy/go-yaml`, internal `hashuti
 
 ### Task 15: Verify acceptance criteria
 
-- [ ] verify the reported bug is gone: a `pull:runtimes` (dry-run or mock) preserves
-      `go.goVersion`
-- [ ] verify all review findings 1,2,4,6,9,10 are fixed and 3,5,7,8,11–13 addressed
-- [ ] run full `go test ./...`
-- [ ] `pnpm build` then `go build` succeed (embedded TS rebuilt)
-- [ ] run the project linter (`golangci-lint run` / `go vet ./...`) — fix all issues
-- [ ] verify test coverage of changed packages meets the project standard
+- [x] verify the reported bug is gone: a `pull:runtimes` (dry-run or mock) preserves
+      `go.goVersion` — `TestRunPullRuntimes_Go_GeneratesEntryWithGoVersion` (full pull run
+      twice, `go.goVersion` preserved both times) plus `TestReadWriteRuntimesJSON_PreservesGoEntry`
+      and `..._RoundtripPreservesCarriedOverKind` all pass
+- [x] verify all review findings 1,2,4,6,9,10 are fixed and 3,5,7,8,11–13 addressed —
+      Tasks 1–14 each landed the corresponding fix + regression test (see commits
+      e609a32..b5a856a); finding #3 (full Go pull support) is exercised by the
+      `internal/registry` Go fetcher tests and the `pull --runtime go` mock-host test
+- [x] run full `go test ./...` — all packages pass (no FAIL)
+- [x] `pnpm build` then `go build` succeed (embedded TS rebuilt) — `pnpm build`
+      (tsdown + go build) completes; a standalone `go build -o` produces a valid ELF binary
+- [x] run the project linter (`golangci-lint run` / `go vet ./...`) — fix all issues —
+      `go vet ./...` clean; `golangci-lint run ./...` (via `datamitsu exec`) exits 0
+- [x] verify test coverage of changed packages meets the project standard — runtimemanager
+      60.3%, httpx 95.7%, nodekeys 86.4%, binmanager 70.9%, remotecfg 60.3%, registry 50.0%,
+      cmd 38.4%, config 30.7% (in line with the levels recorded across iterations)
 
 ### Task 16: Update documentation
 
