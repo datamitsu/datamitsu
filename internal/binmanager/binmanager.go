@@ -1,6 +1,8 @@
 package binmanager
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -462,6 +464,76 @@ func (bm *BinManager) GetBinaryPath(name string) (string, error) {
 	}
 
 	return binPath, nil
+}
+
+// ensureToolsConcurrency bounds how many distinct tools EnsureTools installs in
+// parallel. Same-tool concurrency cannot occur (names are deduped), and each
+// install path is itself single-flighted, so this is purely a throughput knob.
+const ensureToolsConcurrency = 4
+
+// EnsureTools installs every distinct tool named in names before the caller
+// runs them, so that subsequent parallel execution never triggers a lazy,
+// racy install. Names are deduplicated; each distinct tool is resolved once via
+// GetCommandInfo, which installs binaries (through GetBinaryPath) and uv/node/
+// go/jvm runtime apps (through the single-flighted runtime manager). Shell apps
+// need no install and resolve cheaply.
+//
+// Errors are aggregated: a non-fatal failure on one tool does not abort the
+// rest of the set. An unknown tool name surfaces as a clear error. An empty
+// list is a no-op.
+func (bm *BinManager) EnsureTools(ctx context.Context, names []string) error {
+	// Deduplicate while preserving determinism.
+	seen := make(map[string]struct{}, len(names))
+	distinct := make([]string, 0, len(names))
+	for _, name := range names {
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		seen[name] = struct{}{}
+		distinct = append(distinct, name)
+	}
+	sort.Strings(distinct)
+
+	if len(distinct) == 0 {
+		return nil
+	}
+
+	concurrency := ensureToolsConcurrency
+	if len(distinct) < concurrency {
+		concurrency = len(distinct)
+	}
+
+	jobs := make(chan string)
+	errs := make([]error, len(distinct))
+	idxOf := make(map[string]int, len(distinct))
+	for i, name := range distinct {
+		idxOf[name] = i
+	}
+
+	var wg sync.WaitGroup
+	for i := 0; i < concurrency; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for name := range jobs {
+				if err := ctx.Err(); err != nil {
+					errs[idxOf[name]] = err
+					continue
+				}
+				if _, err := bm.GetCommandInfo(name); err != nil {
+					errs[idxOf[name]] = fmt.Errorf("failed to ensure tool %q: %w", name, err)
+				}
+			}
+		}()
+	}
+
+	for _, name := range distinct {
+		jobs <- name
+	}
+	close(jobs)
+	wg.Wait()
+
+	return errors.Join(errs...)
 }
 
 // GetCommandInfo returns command information for executing an application

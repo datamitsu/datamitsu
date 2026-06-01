@@ -136,11 +136,11 @@ Dependencies identified:
 
 ### Task 5: Add `BinManager.EnsureTools(ctx, names []string)`
 
-- [ ] write test: `EnsureTools` installs every distinct tool once across mixed kinds (binary + uv/runtime), dedups repeated names, and aggregates errors without aborting the whole set on a single non-fatal failure (match house behavior in `InstallWithConcurrency`)
-- [ ] implement in `internal/binmanager/binmanager.go`: `EnsureTools` resolves each distinct name and triggers install once via `GetCommandInfo(name)` (covers binary through `GetBinaryPath`, and uv/node/go/jvm through `runtimeManager.GetCommandInfo` → `InstallXApp`); optional bounded worker pool over **distinct** names (safe — no same-tool concurrency), reusing the `InstallWithConcurrency` pattern
-- [ ] write test: unknown tool name surfaces a clear error; empty list is a no-op
-- [ ] add `EnsureTools` to the executor's `BinaryManager` interface if the runner accesses it through that abstraction (`internal/tooling/executor.go` L44-45) — keep the interface minimal
-- [ ] run `go test -race ./internal/binmanager/...` — must pass before Task 6
+- [x] write test: `EnsureTools` installs every distinct tool once across mixed kinds (binary + uv/runtime), dedups repeated names, and aggregates errors without aborting the whole set on a single non-fatal failure (match house behavior in `InstallWithConcurrency`)
+- [x] implement in `internal/binmanager/binmanager.go`: `EnsureTools` resolves each distinct name and triggers install once via `GetCommandInfo(name)` (covers binary through `GetBinaryPath`, and uv/node/go/jvm through `runtimeManager.GetCommandInfo` → `InstallXApp`); optional bounded worker pool over **distinct** names (safe — no same-tool concurrency), reusing the `InstallWithConcurrency` pattern
+- [x] write test: unknown tool name surfaces a clear error; empty list is a no-op
+- [x] add `EnsureTools` to the executor's `BinaryManager` interface if the runner accesses it through that abstraction (`internal/tooling/executor.go` L44-45) — keep the interface minimal (N/A: runner accesses the concrete `*binmanager.BinManager` directly, not via the executor's `AppManager` interface, so no interface change needed)
+- [x] run `go test -race ./internal/binmanager/...` — must pass before Task 6
 
 ### Task 6: Wire the pre-install phase into the runner (before `Execute`)
 
