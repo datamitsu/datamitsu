@@ -112,11 +112,11 @@ Dependencies identified:
 
 ### Task 2: Validate venv interpreter at install time (self-heal dangling Python)
 
-- [ ] write test: `installUVAppOnce` treats a venv whose `.venv/bin/python` does not resolve (dangling symlink) as NOT installed and rebuilds it; a healthy venv is skipped (no `uv sync`)
-- [ ] implement in `internal/runtimemanager/uv.go`: extend the `os.Stat(binPath)` gate (L53) to also resolve the interpreter (`.venv/bin/python` via `os.Stat`/`filepath.EvalSymlinks`); if it dangles, fall through to the existing cleanup + `uv sync` reinstall path — **install path only**, not on every exec
-- [ ] write test: healthy venv path returns early without invoking uv (use a fake/stubbed uv or assert no rebuild side effects)
-- [ ] write test: error case — interpreter present but `binPath` missing still triggers reinstall
-- [ ] run `go test ./internal/runtimemanager/...` — must pass before Task 3
+- [x] write test: `installUVAppOnce` treats a venv whose `.venv/bin/python` does not resolve (dangling symlink) as NOT installed and rebuilds it; a healthy venv is skipped (no `uv sync`)
+- [x] implement in `internal/runtimemanager/uv.go`: extend the `os.Stat(binPath)` gate (L53) to also resolve the interpreter (`.venv/bin/python` via `os.Stat`/`filepath.EvalSymlinks`); if it dangles, fall through to the existing cleanup + `uv sync` reinstall path — **install path only**, not on every exec
+- [x] write test: healthy venv path returns early without invoking uv (use a fake/stubbed uv or assert no rebuild side effects)
+- [x] write test: error case — interpreter present but `binPath` missing still triggers reinstall
+- [x] run `go test ./internal/runtimemanager/...` — must pass before Task 3
 
 ### Task 3: Make `moveFile`/`moveDir` atomic (close the ENOENT window)
 

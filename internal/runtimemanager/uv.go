@@ -31,6 +31,30 @@ func getUVBinaryPath(appEnvPath string, packageName string) string {
 	return filepath.Join(appEnvPath, ".venv", "bin", packageName)
 }
 
+// getUVInterpreterPath returns the path to the venv's Python interpreter.
+func getUVInterpreterPath(appEnvPath string) string {
+	if runtime.GOOS == "windows" {
+		return filepath.Join(appEnvPath, ".venv", "Scripts", "python.exe")
+	}
+	return filepath.Join(appEnvPath, ".venv", "bin", "python")
+}
+
+// uvVenvHealthy reports whether a UV app is fully installed: both the wrapper
+// binary and the venv's Python interpreter must resolve. The interpreter is a
+// symlink into UV_PYTHON_INSTALL_DIR; after a store cache restore onto a fresh
+// runner it can dangle even though the wrapper script still exists. os.Stat
+// follows symlinks, so a dangling interpreter symlink returns an error here and
+// the app is treated as not installed (triggering a rebuild).
+func uvVenvHealthy(appEnvPath, binPath string) bool {
+	if _, err := os.Stat(binPath); err != nil {
+		return false
+	}
+	if _, err := os.Stat(getUVInterpreterPath(appEnvPath)); err != nil {
+		return false
+	}
+	return true
+}
+
 // InstallUVApp installs a UV app if not already cached.
 // If files is non-empty, writes them to the app directory before running uv.
 // Safe for concurrent use from multiple goroutines.
@@ -55,12 +79,25 @@ func (rm *RuntimeManager) installUVAppOnce(appName string, appConfig *binmanager
 
 	binPath := getUVBinaryPath(appEnvPath, appConfig.PackageName)
 
-	if _, err := os.Stat(binPath); err == nil {
+	if uvVenvHealthy(appEnvPath, binPath) {
 		log.Debug("UV app already installed",
 			zap.String("app", appName),
 			zap.String("path", binPath),
 		)
 		return nil
+	}
+
+	// The app dir may exist but be broken (e.g. a dangling venv interpreter
+	// symlink after a cache restore). Remove the stale dir so uv rebuilds from
+	// a clean slate instead of syncing on top of a half-installed venv.
+	if _, err := os.Stat(appEnvPath); err == nil {
+		log.Debug("UV app present but venv unresolved, rebuilding",
+			zap.String("app", appName),
+			zap.String("path", appEnvPath),
+		)
+		if err := os.RemoveAll(appEnvPath); err != nil {
+			return fmt.Errorf("failed to remove stale app directory for %q: %w", appName, err)
+		}
 	}
 
 	uvPath, err := rm.GetRuntimePath(runtimeName)
