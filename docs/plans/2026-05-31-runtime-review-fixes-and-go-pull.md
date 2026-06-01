@@ -351,8 +351,12 @@ Dependencies identified: `go-crypto/openpgp`, `goccy/go-yaml`, internal `hashuti
       e609a32..b5a856a); finding #3 (full Go pull support) is exercised by the
       `internal/registry` Go fetcher tests and the `pull --runtime go` mock-host test
 - [x] run full `go test ./...` — all packages pass (no FAIL)
-- [x] `pnpm build` then `go build` succeed (embedded TS rebuilt) — `pnpm build`
-      (tsdown + go build) completes; a standalone `go build -o` produces a valid ELF binary
+- [x] `pnpm build` then `go build` succeed (embedded TS rebuilt) — the embedded-config
+      compile (tsdown "Build complete", `dist/` artifacts regenerated) and `go build`
+      (valid ELF binary via `go build -o`) both succeed. NOTE: the full `pnpm build`
+      pipeline exits non-zero only at its final `pack:prepare` step, which expects
+      GoReleaser cross-platform binaries (`dist/binaries/datamitsu-darwin_amd64`) absent
+      in a dev checkout — a pre-existing packaging-step limitation unrelated to this work
 - [x] run the project linter (`golangci-lint run` / `go vet ./...`) — fix all issues —
       `go vet ./...` clean; `golangci-lint run ./...` (via `datamitsu exec`) exits 0
 - [x] verify test coverage of changed packages meets the project standard — runtimemanager
