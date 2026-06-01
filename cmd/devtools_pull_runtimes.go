@@ -966,6 +966,7 @@ func goArchiveSpecs(version string) []goArchiveSpec {
 		{syslist.OsTypeLinux, syslist.ArchTypeAmd64, "glibc", base + ".linux-" + amd64 + ".tar.gz", binmanager.BinContentTypeTarGz},
 		{syslist.OsTypeLinux, syslist.ArchTypeArm64, "glibc", base + ".linux-" + arm64 + ".tar.gz", binmanager.BinContentTypeTarGz},
 		{syslist.OsTypeWindows, syslist.ArchTypeAmd64, "unknown", base + ".windows-" + amd64 + ".zip", binmanager.BinContentTypeZip},
+		{syslist.OsTypeWindows, syslist.ArchTypeArm64, "unknown", base + ".windows-" + arm64 + ".zip", binmanager.BinContentTypeZip},
 	}
 }
 

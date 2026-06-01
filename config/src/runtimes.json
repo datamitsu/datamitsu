@@ -55,6 +55,15 @@
               "hash": "20d2ceafb4ed41b96b879010927b28bc92a5be57a7c1801ce365a9ca51d3224a",
               "url": "https://go.dev/dl/go1.26.3.windows-amd64.zip"
             }
+          },
+          "arm64": {
+            "unknown": {
+              "binaryPath": "go/bin/go.exe",
+              "contentType": "zip",
+              "extractDir": true,
+              "hash": "95cd63bc6b0da77409ba819215afea9ddf5702c55a3b20af3dd90ea95c7b130c",
+              "url": "https://go.dev/dl/go1.26.3.windows-arm64.zip"
+            }
           }
         }
       }

@@ -29,8 +29,8 @@ func buildGoTestFiles(v string) map[string]string {
 
 func TestGoArchiveSpecs_FilenamesAndPaths(t *testing.T) {
 	specs := goArchiveSpecs(goTestVersion)
-	if len(specs) != 5 {
-		t.Fatalf("expected 5 specs, got %d", len(specs))
+	if len(specs) != 6 {
+		t.Fatalf("expected 6 specs, got %d", len(specs))
 	}
 
 	type want struct {
@@ -44,6 +44,7 @@ func TestGoArchiveSpecs_FilenamesAndPaths(t *testing.T) {
 		"linux/amd64/glibc":     {"go1.26.3.linux-amd64.tar.gz", "go/bin/go", binmanager.BinContentTypeTarGz},
 		"linux/arm64/glibc":     {"go1.26.3.linux-arm64.tar.gz", "go/bin/go", binmanager.BinContentTypeTarGz},
 		"windows/amd64/unknown": {"go1.26.3.windows-amd64.zip", "go/bin/go.exe", binmanager.BinContentTypeZip},
+		"windows/arm64/unknown": {"go1.26.3.windows-arm64.zip", "go/bin/go.exe", binmanager.BinContentTypeZip},
 	}
 
 	for _, spec := range specs {
