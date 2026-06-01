@@ -159,9 +159,9 @@ Dependencies identified:
 
 ### Task 8: Update documentation
 
-- [ ] update any runtime/store-layout doc (e.g. supply-chain / runtimes guide) to note uv Python now lives under `<store>/.uv/python` so the store cache is self-contained
-- [ ] note the new install-phase invariant ("all plan tools are installed before parallel execution") wherever the run lifecycle is documented
-- [ ] if a CHANGELOG exists, add entries for both fixes
+- [x] update any runtime/store-layout doc (e.g. supply-chain / runtimes guide) to note uv Python now lives under `<store>/.uv/python` so the store cache is self-contained (website/docs/guides/runtime-management.md, new "Store Layout and the Managed Python Interpreter" section)
+- [x] note the new install-phase invariant ("all plan tools are installed before parallel execution") wherever the run lifecycle is documented (website/docs/guides/architecture/execution.md, new "Pre-Install Phase" section)
+- [x] if a CHANGELOG exists, add entries for both fixes (N/A — no project CHANGELOG file exists)
 
 _Note: ralphex automatically moves completed plans to `docs/plans/completed/`._
 

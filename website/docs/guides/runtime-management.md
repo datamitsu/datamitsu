@@ -114,6 +114,12 @@ uv: {
 
 If using system mode without specifying `pythonVersion`, datamitsu will warn you since the Python version becomes implicit.
 
+### Store Layout and the Managed Python Interpreter
+
+In managed mode, uv downloads a CPython interpreter and reuses it across uv apps. datamitsu redirects that interpreter into the store at `<store>/.uv/python/` (via `UV_PYTHON_INSTALL_DIR`), one CPython per version shared across apps, alongside uv's per-app cache. This keeps the store **self-contained**: when the store is cached (e.g. in CI) and restored onto a fresh runner, each app's `.venv/bin/python` symlink still resolves, because the interpreter it points at travels with the store rather than living in uv's default data dir (`~/.local/share/uv/python`).
+
+datamitsu also validates the venv interpreter at install time. If `.venv/bin/python` dangles (for example, after restoring a partial or stale cache), the venv is treated as not installed and rebuilt, so a broken interpreter self-heals instead of being trusted forever.
+
 ## Node Runtime (Node.js)
 
 Node apps use a managed Node.js runtime — downloaded as a pinned, SHA-256-verified archive (exactly like the JVM runtime downloads a JDK) — together with [pnpm](https://pnpm.io/) as the package manager.
