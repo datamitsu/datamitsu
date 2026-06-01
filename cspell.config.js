@@ -215,5 +215,6 @@ export default {
     "goVersionLess",
     "cpython",
     "dedups",
+    "libatomic",
   ],
 };
