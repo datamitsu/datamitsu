@@ -120,12 +120,12 @@ Dependencies identified:
 
 ### Task 3: Make `moveFile`/`moveDir` atomic (close the ENOENT window)
 
-- [ ] write test in `internal/binmanager/download_test.go`: concurrent `moveFile` of distinct temp sources to the same `dst` (with a reader stat-looping) never observes a missing `dst`; run under `-race`
-- [ ] write test: `moveFile` is a no-op (returns nil, leaves dst intact) when `dst` already exists (content-addressed path)
-- [ ] implement in `internal/binmanager/download.go`: in `moveFile` (L153-179) drop the pre-`os.Remove(dst)`; rely on atomic `os.Rename` to replace; add early `if Stat(dst)==nil { return nil }`
-- [ ] implement: in `moveDir` (L181-202) replace `RemoveAll(dst)`-then-`Rename` with skip-if-exists OR rename-aside→rename-new→remove-old (never leave dst absent)
-- [ ] write test for `moveDir` skip-if-exists and atomic-swap behavior
-- [ ] run `go test -race ./internal/binmanager/...` — must pass before Task 4
+- [x] write test in `internal/binmanager/download_test.go`: concurrent `moveFile` of distinct temp sources to the same `dst` (with a reader stat-looping) never observes a missing `dst`; run under `-race`
+- [x] write test: `moveFile` is a no-op (returns nil, leaves dst intact) when `dst` already exists (content-addressed path)
+- [x] implement in `internal/binmanager/download.go`: in `moveFile` (L153-179) drop the pre-`os.Remove(dst)`; rely on atomic `os.Rename` to replace; add early `if Stat(dst)==nil { return nil }`
+- [x] implement: in `moveDir` (L181-202) replace `RemoveAll(dst)`-then-`Rename` with skip-if-exists OR rename-aside→rename-new→remove-old (never leave dst absent)
+- [x] write test for `moveDir` skip-if-exists and atomic-swap behavior
+- [x] run `go test -race ./internal/binmanager/...` — must pass before Task 4
 
 ### Task 4: Single-flight `GetBinaryPath`
 
