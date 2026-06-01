@@ -458,9 +458,12 @@ type UVRuntimeData struct {
 func pullUVRuntime() (*UVRuntimeData, binmanager.MapOfBinaries, error) {
 	data := &UVRuntimeData{}
 
+	// Fail loud on a lookup error rather than baking the registry's hardcoded
+	// fallback into the generated config: a stale-but-fresh-looking pin is worse
+	// than aborting the pull (same rationale as resolveLatestNodeLTS).
 	pythonVersion, err := registry.GetLatestPythonStableVersion()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: %v (using fallback)\n", err)
+		return nil, nil, fmt.Errorf("failed to look up latest Python version: %w", err)
 	}
 	data.PythonVersion = pythonVersion
 
@@ -488,9 +491,15 @@ type JVMRuntimeData struct {
 func pullJVMRuntime() (*JVMRuntimeData, binmanager.MapOfBinaries, error) {
 	data := &JVMRuntimeData{}
 
+	// Fail loud on a lookup error rather than baking the registry's hardcoded
+	// fallback into the generated config. This matters most for JVM: the resolved
+	// major version is interpolated into the upstream repo name
+	// ("temurin<ver>-binaries") below, so a silent stale fallback would pin the
+	// generated config to an outdated JDK major (same rationale as
+	// resolveLatestNodeLTS).
 	javaVersion, err := registry.GetLatestTemurinMajorVersion()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: %v (using fallback)\n", err)
+		return nil, nil, fmt.Errorf("failed to look up latest Temurin (Java) version: %w", err)
 	}
 	data.JavaVersion = javaVersion
 
