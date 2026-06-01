@@ -472,6 +472,58 @@ func TestMoveFile(t *testing.T) {
 	})
 }
 
+func TestCopyFileAtomic(t *testing.T) {
+	t.Run("copies content and marks executable", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		srcPath := filepath.Join(tmpDir, "source.bin")
+		payload := []byte("binary payload")
+		if err := os.WriteFile(srcPath, payload, 0644); err != nil {
+			t.Fatalf("failed to create source file: %v", err)
+		}
+
+		dstPath := filepath.Join(tmpDir, "dest.bin")
+		if err := copyFileAtomic(srcPath, dstPath); err != nil {
+			t.Fatalf("copyFileAtomic() error = %v", err)
+		}
+
+		content, err := os.ReadFile(dstPath)
+		if err != nil {
+			t.Fatalf("failed to read destination file: %v", err)
+		}
+		if string(content) != string(payload) {
+			t.Errorf("content mismatch: got %q, want %q", string(content), string(payload))
+		}
+
+		info, err := os.Stat(dstPath)
+		if err != nil {
+			t.Fatalf("failed to stat destination file: %v", err)
+		}
+		if info.Mode().Perm() != 0755 {
+			t.Errorf("incorrect permissions: got %o, want %o", info.Mode().Perm(), 0755)
+		}
+	})
+
+	t.Run("leaves no temp file behind on source error", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		srcPath := filepath.Join(tmpDir, "nonexistent.bin")
+		dstPath := filepath.Join(tmpDir, "dest.bin")
+
+		if err := copyFileAtomic(srcPath, dstPath); err == nil {
+			t.Fatal("expected error for nonexistent source, got nil")
+		}
+
+		entries, err := os.ReadDir(tmpDir)
+		if err != nil {
+			t.Fatalf("failed to read temp dir: %v", err)
+		}
+		for _, e := range entries {
+			if strings.HasPrefix(e.Name(), "move-") {
+				t.Errorf("leftover temp file: %s", e.Name())
+			}
+		}
+	})
+}
+
 func TestMoveDir(t *testing.T) {
 	writeDir := func(t *testing.T, dir, marker string) {
 		t.Helper()

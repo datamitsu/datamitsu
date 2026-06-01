@@ -172,7 +172,11 @@ func moveFile(src, dst string) error {
 	// os.Rename is atomic on POSIX and replaces an existing dst in place, so a
 	// concurrent move that won the race is never observed as a missing dst.
 	if err := os.Rename(src, dst); err != nil {
-		if copyErr := copyFile(src, dst); copyErr != nil {
+		// Cross-device fallback: copy into a temp file in the destination
+		// directory, then atomically rename it into place. Copying directly onto
+		// dst would expose a partial, non-executable file to concurrent readers —
+		// the exact ENOENT/exec-format window this move is meant to close.
+		if copyErr := copyFileAtomic(src, dst); copyErr != nil {
 			return fmt.Errorf("rename failed: %w, and copy fallback failed: %w", err, copyErr)
 		}
 		_ = os.Remove(src)
@@ -276,4 +280,33 @@ func copyFile(src, dst string) (retErr error) {
 
 	_, err = io.Copy(dstFile, srcFile)
 	return err
+}
+
+// copyFileAtomic copies src into a temp file in dst's directory, marks it
+// executable, then atomically renames it onto dst. Unlike copyFile, dst is
+// never observed in a partial state: concurrent readers see either the old
+// (absent) dst or the fully-written, executable one.
+func copyFileAtomic(src, dst string) (retErr error) {
+	tmp, err := os.CreateTemp(filepath.Dir(dst), "move-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	defer func() {
+		if retErr != nil {
+			_ = os.Remove(tmpName)
+		}
+	}()
+
+	if err := copyFile(src, tmpName); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmpName, 0755); err != nil {
+		return err
+	}
+	return os.Rename(tmpName, dst)
 }
