@@ -1097,4 +1097,62 @@ func TestWriteAppWorkspaceFile(t *testing.T) {
 			t.Fatalf("writing package.json after writeAppWorkspaceFile failed: %v", err)
 		}
 	})
+
+	// MkdirAll fails when a path component is an existing regular file: seed a
+	// plain file at the app dir's parent so os.MkdirAll cannot create the app
+	// dir, exercising the "failed to create app directory" wrap.
+	t.Run("MkdirAll failure returns wrapped create-directory error", func(t *testing.T) {
+		base := t.TempDir()
+		parentFile := filepath.Join(base, "not-a-dir")
+		if err := os.WriteFile(parentFile, []byte("regular file"), 0644); err != nil {
+			t.Fatalf("failed to seed regular file: %v", err)
+		}
+		// appEnvPath's parent (parentFile) is a regular file, so MkdirAll errors.
+		appEnvPath := filepath.Join(parentFile, "app-env")
+
+		err := writeAppWorkspaceFile(appEnvPath, "key: value\n")
+		if err == nil {
+			t.Fatal("expected error when app dir's parent is a regular file, got nil")
+		}
+		if !strings.Contains(err.Error(), "failed to create app directory") {
+			t.Errorf("error should mention failed to create app directory, got: %v", err)
+		}
+	})
+}
+
+// TestVerifyPNPMIntegrity_DecodeError pins the base64 decode-error branch: an
+// integrity string with the required sha512- prefix but a non-base64 payload
+// must be rejected with a "failed to decode integrity hash" error rather than
+// silently treated as a mismatch.
+func TestVerifyPNPMIntegrity_DecodeError(t *testing.T) {
+	testData := []byte("test tarball content")
+	sha512Sum := sha512.Sum512(testData)
+
+	meta := npmVersionMeta{}
+	// "@" is outside the base64 alphabet, so StdEncoding.DecodeString errors.
+	meta.Dist.Integrity = "sha512-@@@@@@@@@@@@"
+	err := verifyPNPMIntegrity(meta, sha512Sum[:])
+	if err == nil {
+		t.Fatal("expected error for non-base64 integrity payload, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to decode integrity hash") {
+		t.Errorf("error should mention failed to decode integrity hash, got: %v", err)
+	}
+}
+
+// TestFilesWithMergedWorkspaceYAML_InvalidUserYAML pins the error path of
+// filesWithMergedWorkspaceYAML: an invalid user pnpm-workspace.yaml must
+// propagate the merge error (from buildPNPMWorkspaceForApp) rather than
+// returning a partially-built files map.
+func TestFilesWithMergedWorkspaceYAML_InvalidUserYAML(t *testing.T) {
+	files := map[string]string{
+		"pnpm-workspace.yaml": "not: valid: yaml: at: all: [",
+	}
+	out, err := filesWithMergedWorkspaceYAML(files)
+	if err == nil {
+		t.Fatal("expected error for invalid user pnpm-workspace.yaml, got nil")
+	}
+	if out != nil {
+		t.Errorf("expected nil files map on error, got %v", out)
+	}
 }

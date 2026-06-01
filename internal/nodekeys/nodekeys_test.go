@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/ProtonMail/go-crypto/openpgp"
+	"github.com/ProtonMail/go-crypto/openpgp/armor"
 	"github.com/ProtonMail/go-crypto/openpgp/clearsign"
 )
 
@@ -56,6 +57,68 @@ func newSignedManifest(t *testing.T, msg string) (signed []byte, signerRing open
 		t.Fatalf("close clearsign writer: %v", err)
 	}
 	return buf.Bytes(), openpgp.EntityList{entity}
+}
+
+func TestReadArmoredKeyRings_MissingFooter(t *testing.T) {
+	// A buffer that opens a PGP block but never closes it must be rejected: the
+	// split loop finds the "-----BEGIN PGP" header, then fails to locate the
+	// terminating footer and errors out instead of silently dropping the block.
+	data := []byte("-----BEGIN PGP PUBLIC KEY BLOCK-----\nbody bytes without a closing footer line\n")
+	if _, err := readArmoredKeyRings(data); err == nil {
+		t.Fatal("expected error for key block missing terminating footer")
+	} else if !strings.Contains(err.Error(), "missing terminating footer") {
+		t.Errorf("error = %v, want it to mention missing terminating footer", err)
+	}
+}
+
+func TestReadArmoredKeyRings_MalformedBlock(t *testing.T) {
+	// A complete begin/end envelope wrapping garbage (not valid armored key
+	// bytes) reaches openpgp.ReadArmoredKeyRing, which must surface a parse
+	// error rather than accepting the bogus block.
+	data := []byte("-----BEGIN PGP PUBLIC KEY BLOCK-----\nthis is not valid armored key material\n-----END PGP PUBLIC KEY BLOCK-----\n")
+	if _, err := readArmoredKeyRings(data); err == nil {
+		t.Fatal("expected error for malformed armored key block")
+	} else if !strings.Contains(err.Error(), "reading armored key block") {
+		t.Errorf("error = %v, want it to mention reading armored key block", err)
+	}
+}
+
+func TestReadArmoredKeyRings_ConcatenatedKeys(t *testing.T) {
+	// Two freshly generated public keys, serialized as armored blocks and
+	// concatenated, must parse into both entities — the whole reason this helper
+	// exists (openpgp.ReadArmoredKeyRing alone would consume only the first).
+	e1, err := openpgp.NewEntity("Key One", "", "one@example.com", nil)
+	if err != nil {
+		t.Fatalf("NewEntity one: %v", err)
+	}
+	e2, err := openpgp.NewEntity("Key Two", "", "two@example.com", nil)
+	if err != nil {
+		t.Fatalf("NewEntity two: %v", err)
+	}
+
+	armorKey := func(e *openpgp.Entity) []byte {
+		var buf bytes.Buffer
+		w, err := armor.Encode(&buf, openpgp.PublicKeyType, nil)
+		if err != nil {
+			t.Fatalf("armor.Encode: %v", err)
+		}
+		if err := e.Serialize(w); err != nil {
+			t.Fatalf("Serialize: %v", err)
+		}
+		if err := w.Close(); err != nil {
+			t.Fatalf("close armor writer: %v", err)
+		}
+		return buf.Bytes()
+	}
+
+	concatenated := append(append([]byte{}, armorKey(e1)...), append([]byte("\n"), armorKey(e2)...)...)
+	entities, err := readArmoredKeyRings(concatenated)
+	if err != nil {
+		t.Fatalf("readArmoredKeyRings concatenated: %v", err)
+	}
+	if len(entities) != 2 {
+		t.Fatalf("expected 2 entities from concatenated keys, got %d", len(entities))
+	}
 }
 
 func TestVerifyClearsigned_ValidSignature(t *testing.T) {

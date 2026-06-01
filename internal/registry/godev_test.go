@@ -145,6 +145,27 @@ func TestGetLatestGoRelease(t *testing.T) {
 		}
 	})
 
+	t.Run("stable release with empty version errors", func(t *testing.T) {
+		// Version is literally "go": after TrimPrefix("go", "go") the version
+		// is the empty string, which must be rejected rather than yielding a
+		// release with a blank Version field.
+		releases := []goDevRelease{
+			{Version: "go", Stable: true, Files: []goDevFile{{Filename: "go.src.tar.gz", SHA256: "1111111111111111111111111111111111111111111111111111111111111111"}}},
+		}
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(goDevBody(releases)))
+		}))
+		defer server.Close()
+
+		orig := goDevHTTPClient
+		goDevHTTPClient = server.Client()
+		defer func() { goDevHTTPClient = orig }()
+
+		if _, err := getLatestGoReleaseFromURL(server.URL); err == nil {
+			t.Fatal("expected error when the stable release version is empty after stripping the go prefix")
+		}
+	})
+
 	t.Run("empty body errors", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			_, _ = w.Write([]byte("[]"))
@@ -208,6 +229,14 @@ func TestGoVersionLess(t *testing.T) {
 		{"go1.25.0", "go1.26.0", true},
 		{"go1.26.3", "go1.26.3", false},
 		{"go1.26", "go1.26.1", true},
+		// Non-semver inputs fall through to a plain string comparison
+		// (semver.IsValid is false for these), exercising the `return a < b`
+		// fallback rather than semver.Compare.
+		{"garbage", "go-weird", "garbage" < "go-weird"},
+		{"go-weird", "garbage", "go-weird" < "garbage"},
+		{"go1.26.3", "garbage", "go1.26.3" < "garbage"},
+		{"garbage", "go1.26.3", "garbage" < "go1.26.3"},
+		{"garbage", "garbage", false},
 	}
 	for _, tt := range tests {
 		if got := goVersionLess(tt.a, tt.b); got != tt.want {

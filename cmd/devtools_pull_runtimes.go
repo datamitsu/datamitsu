@@ -455,13 +455,19 @@ type UVRuntimeData struct {
 	PythonVersion string
 }
 
+// getLatestPythonStableVersion is the injectable seam for resolving the latest
+// stable Python version; tests override it to exercise the failure path without
+// network. registry.GetLatestPythonStableVersion returns a hardcoded fallback
+// alongside the error, which pullUVRuntime deliberately discards (see below).
+var getLatestPythonStableVersion = registry.GetLatestPythonStableVersion
+
 func pullUVRuntime() (*UVRuntimeData, binmanager.MapOfBinaries, error) {
 	data := &UVRuntimeData{}
 
 	// Fail loud on a lookup error rather than baking the registry's hardcoded
 	// fallback into the generated config: a stale-but-fresh-looking pin is worse
 	// than aborting the pull (same rationale as resolveLatestNodeLTS).
-	pythonVersion, err := registry.GetLatestPythonStableVersion()
+	pythonVersion, err := getLatestPythonStableVersion()
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to look up latest Python version: %w", err)
 	}
@@ -488,6 +494,12 @@ type JVMRuntimeData struct {
 	JavaVersion string
 }
 
+// getLatestTemurinMajorVersion is the injectable seam for resolving the latest
+// Temurin (Java) major version; tests override it to exercise the failure path
+// without network. registry.GetLatestTemurinMajorVersion returns a hardcoded
+// fallback alongside the error, which pullJVMRuntime deliberately discards.
+var getLatestTemurinMajorVersion = registry.GetLatestTemurinMajorVersion
+
 func pullJVMRuntime() (*JVMRuntimeData, binmanager.MapOfBinaries, error) {
 	data := &JVMRuntimeData{}
 
@@ -497,7 +509,7 @@ func pullJVMRuntime() (*JVMRuntimeData, binmanager.MapOfBinaries, error) {
 	// ("temurin<ver>-binaries") below, so a silent stale fallback would pin the
 	// generated config to an outdated JDK major (same rationale as
 	// resolveLatestNodeLTS).
-	javaVersion, err := registry.GetLatestTemurinMajorVersion()
+	javaVersion, err := getLatestTemurinMajorVersion()
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to look up latest Temurin (Java) version: %w", err)
 	}

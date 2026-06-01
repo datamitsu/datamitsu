@@ -806,6 +806,77 @@ func TestGetCommandInfoNode_MergesWorkspaceOnceOnCacheHit(t *testing.T) {
 	}
 }
 
+// invalidWorkspaceFiles is the canonical invalid-user-YAML input that drives
+// buildPNPMWorkspace (buildPNPMWorkspaceForApp) into a parse error before any
+// runtime resolution or network work. Shared by the workspace-error tests.
+func invalidWorkspaceFiles() map[string]string {
+	return map[string]string{"pnpm-workspace.yaml": "not: valid: yaml: at: all: ["}
+}
+
+// TestResolveNodeAppEnvPath_WorkspaceYAMLError pins the buildPNPMWorkspace
+// error branch of resolveNodeAppEnvPath: an invalid user pnpm-workspace.yaml
+// must surface as the wrapped "failed to compute pnpm-workspace.yaml" error
+// before the runtime is resolved, even with an otherwise-valid node runtime.
+func TestResolveNodeAppEnvPath_WorkspaceYAMLError(t *testing.T) {
+	rm := New(nodeRuntimeWith(t, "https://example.com/node.tar.xz", "abc", testLibc))
+	appConfig := &binmanager.AppConfigNode{
+		PackageName: "eslint",
+		Version:     "9.0.0",
+		BinPath:     "node_modules/.bin/eslint",
+		Runtime:     "node",
+	}
+
+	_, _, _, err := rm.resolveNodeAppEnvPath("eslint", appConfig, invalidWorkspaceFiles(), nil)
+	if err == nil {
+		t.Fatal("expected error for invalid pnpm-workspace.yaml, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to compute pnpm-workspace.yaml") {
+		t.Errorf("error should mention failed to compute pnpm-workspace.yaml, got: %v", err)
+	}
+}
+
+// TestInstallNodeApp_WorkspaceYAMLError is the InstallNodeApp counterpart:
+// the merge runs at the public entry point, so an invalid user
+// pnpm-workspace.yaml aborts before any install/network work.
+func TestInstallNodeApp_WorkspaceYAMLError(t *testing.T) {
+	rm := New(nodeRuntimeWith(t, "https://example.com/node.tar.xz", "abc", testLibc))
+	appConfig := &binmanager.AppConfigNode{
+		PackageName: "eslint",
+		Version:     "9.0.0",
+		BinPath:     "node_modules/.bin/eslint",
+		Runtime:     "node",
+	}
+
+	err := rm.InstallNodeApp("eslint", appConfig, invalidWorkspaceFiles(), nil)
+	if err == nil {
+		t.Fatal("expected error for invalid pnpm-workspace.yaml, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to compute pnpm-workspace.yaml") {
+		t.Errorf("error should mention failed to compute pnpm-workspace.yaml, got: %v", err)
+	}
+}
+
+// TestGetNodeCommandInfo_WorkspaceYAMLError is the GetNodeCommandInfo
+// counterpart: an invalid user pnpm-workspace.yaml fails the once-per-exec
+// merge before the runtime/command info is resolved.
+func TestGetNodeCommandInfo_WorkspaceYAMLError(t *testing.T) {
+	rm := New(nodeRuntimeWith(t, "https://example.com/node.tar.xz", "abc", testLibc))
+	appConfig := &binmanager.AppConfigNode{
+		PackageName: "eslint",
+		Version:     "9.0.0",
+		BinPath:     "node_modules/.bin/eslint",
+		Runtime:     "node",
+	}
+
+	_, err := rm.GetNodeCommandInfo("eslint", appConfig, invalidWorkspaceFiles(), nil)
+	if err == nil {
+		t.Fatal("expected error for invalid pnpm-workspace.yaml, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to compute pnpm-workspace.yaml") {
+		t.Errorf("error should mention failed to compute pnpm-workspace.yaml, got: %v", err)
+	}
+}
+
 // TestResolveNodeAppEnvPath_CacheKeyUnchanged proves the once-per-exec refactor
 // does not move the app cache key: resolveNodeAppEnvPath must yield the exact path
 // the previous logic produced (merge folded into the hash via
