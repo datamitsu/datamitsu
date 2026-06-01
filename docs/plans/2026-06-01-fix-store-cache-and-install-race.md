@@ -144,10 +144,10 @@ Dependencies identified:
 
 ### Task 6: Wire the pre-install phase into the runner (before `Execute`)
 
-- [ ] write test in `internal/runner/`: after `planner.Plan(...)`, `EnsureTools(plan.GetToolNames())` is invoked before `executor.Execute(...)` (use a fake binmanager/executor recording call order)
-- [ ] implement in `internal/runner/runner.go`: immediately before `sc.executor.Execute(ctx, plan)` (L411), call `sc.binMgr.EnsureTools(ctx, plan.GetToolNames())` and return its error early (respect dry-run: skip actual installs when planning/dry-run)
-- [ ] write test: dry-run does NOT install; a failing `EnsureTools` aborts before execution with a clear message
-- [ ] run `go test -race ./internal/runner/...` — must pass before Task 7
+- [x] write test in `internal/runner/`: after `planner.Plan(...)`, `EnsureTools(plan.GetToolNames())` is invoked before `executor.Execute(...)` (use a fake binmanager/executor recording call order)
+- [x] implement in `internal/runner/runner.go`: immediately before `sc.executor.Execute(ctx, plan)` (L411), call `sc.binMgr.EnsureTools(ctx, plan.GetToolNames())` and return its error early (respect dry-run: skip actual installs when planning/dry-run)
+- [x] write test: dry-run does NOT install; a failing `EnsureTools` aborts before execution with a clear message
+- [x] run `go test -race ./internal/runner/...` — must pass before Task 7
 
 ### Task 7: Verify acceptance criteria
 

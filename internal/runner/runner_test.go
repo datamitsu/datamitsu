@@ -1,8 +1,10 @@
 package runner
 
 import (
+	"context"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/timing"
 	"github.com/datamitsu/datamitsu/internal/tooling"
 	"fmt"
 	"io"
@@ -1586,6 +1588,145 @@ func TestRunDelegatesToRunSequential(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "test error from Run") {
 		t.Errorf("expected error to contain 'test error from Run', got %q", err.Error())
+	}
+}
+
+// fakePlanner returns a fixed plan and detected project types.
+type fakePlanner struct {
+	plan *tooling.ExecutionPlan
+}
+
+func (f *fakePlanner) Plan(_ context.Context, _ config.OperationType, _ []string, _ []string) (*tooling.ExecutionPlan, error) {
+	return f.plan, nil
+}
+func (f *fakePlanner) GetDetectedProjectTypes() []string { return []string{"go"} }
+func (f *fakePlanner) GetTimings() *timing.Timings       { return timing.New() }
+
+// fakeExecutor records when Execute is called (relative to EnsureTools).
+type fakeExecutor struct {
+	order   *[]string
+	called  bool
+	results []tooling.GroupExecutionResult
+}
+
+func (f *fakeExecutor) SetResultCallback(tooling.ResultCallback)             {}
+func (f *fakeExecutor) SetTaskStartCallback(tooling.TaskStartCallback)       {}
+func (f *fakeExecutor) SetFileProgressCallback(tooling.FileProgressCallback) {}
+func (f *fakeExecutor) Execute(_ context.Context, _ *tooling.ExecutionPlan) ([]tooling.GroupExecutionResult, error) {
+	f.called = true
+	*f.order = append(*f.order, "execute")
+	return f.results, nil
+}
+
+// fakeEnsurer records the names passed and optionally returns an error.
+type fakeEnsurer struct {
+	order  *[]string
+	names  []string
+	called bool
+	err    error
+}
+
+func (f *fakeEnsurer) EnsureTools(_ context.Context, names []string) error {
+	f.called = true
+	f.names = names
+	*f.order = append(*f.order, "ensure")
+	return f.err
+}
+
+func planWithTools(tools ...string) *tooling.ExecutionPlan {
+	var tasks []tooling.Task
+	for _, name := range tools {
+		tasks = append(tasks, tooling.Task{
+			ToolName: name,
+			OpConfig: config.ToolOperation{Scope: config.ToolScopeRepository},
+		})
+	}
+	return &tooling.ExecutionPlan{
+		Groups: []tooling.TaskGroup{{Tasks: tasks}},
+	}
+}
+
+func TestRunSingleOperationEnsuresToolsBeforeExecute(t *testing.T) {
+	originalCI := os.Getenv("CI")
+	defer func() { _ = os.Setenv("CI", originalCI) }()
+	_ = os.Setenv("CI", "true")
+
+	var order []string
+	ensurer := &fakeEnsurer{order: &order}
+	executor := &fakeExecutor{order: &order}
+	sc := &sharedContext{
+		planner:  &fakePlanner{plan: planWithTools("yq", "lefthook")},
+		executor: executor,
+		binMgr:   ensurer,
+		timings:  timing.New(),
+	}
+
+	if err := runSingleOperation(context.Background(), sc, config.OpLint); err != nil {
+		t.Fatalf("runSingleOperation error: %v", err)
+	}
+
+	if !ensurer.called {
+		t.Fatal("expected EnsureTools to be called")
+	}
+	if !executor.called {
+		t.Fatal("expected Execute to be called")
+	}
+	if len(order) != 2 || order[0] != "ensure" || order[1] != "execute" {
+		t.Fatalf("expected EnsureTools before Execute, got order %v", order)
+	}
+	want := []string{"lefthook", "yq"} // sorted+deduped by GetToolNames
+	if strings.Join(ensurer.names, ",") != strings.Join(want, ",") {
+		t.Errorf("EnsureTools names = %v, want %v", ensurer.names, want)
+	}
+}
+
+func TestRunSingleOperationEnsureToolsFailureAbortsExecute(t *testing.T) {
+	originalCI := os.Getenv("CI")
+	defer func() { _ = os.Setenv("CI", originalCI) }()
+	_ = os.Setenv("CI", "true")
+
+	var order []string
+	ensurer := &fakeEnsurer{order: &order, err: fmt.Errorf("download boom")}
+	executor := &fakeExecutor{order: &order}
+	sc := &sharedContext{
+		planner:  &fakePlanner{plan: planWithTools("yq")},
+		executor: executor,
+		binMgr:   ensurer,
+		timings:  timing.New(),
+	}
+
+	err := runSingleOperation(context.Background(), sc, config.OpLint)
+	if err == nil {
+		t.Fatal("expected error when EnsureTools fails")
+	}
+	if !strings.Contains(err.Error(), "pre-install tools") {
+		t.Errorf("expected error to mention pre-install tools, got %q", err.Error())
+	}
+	if executor.called {
+		t.Error("Execute must not run when EnsureTools fails")
+	}
+}
+
+func TestRunSingleOperationExplainModeSkipsEnsureTools(t *testing.T) {
+	var order []string
+	ensurer := &fakeEnsurer{order: &order}
+	executor := &fakeExecutor{order: &order}
+	sc := &sharedContext{
+		planner:      &fakePlanner{plan: planWithTools("yq")},
+		executor:     executor,
+		binMgr:       ensurer,
+		explainLevel: "summary",
+		timings:      timing.New(),
+	}
+
+	if err := runSingleOperation(context.Background(), sc, config.OpLint); err != nil {
+		t.Fatalf("runSingleOperation error: %v", err)
+	}
+	if ensurer.called {
+		t.Error("explain/dry-run mode must not pre-install tools")
+	}
+	if executor.called {
+		t.Error("explain mode must not execute")
 	}
 }
 
