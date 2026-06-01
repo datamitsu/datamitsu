@@ -43,15 +43,15 @@ type ExecutionResult struct {
 	Success       bool
 	Output        string
 	Error         error
-	Duration      int64              // milliseconds
-	Command       string             // Full command that was executed
-	ExitCode      int                // Exit code of the command (0 if success, -1 if not available)
-	WorkingDir    string             // Working directory where command was executed
-	RelativeDir   string             // Working directory relative to git root (for display)
-	Scope         config.ToolScope   // Tool scope (repository, per-project, per-file)
-	Batch         bool               // Whether files were processed in batch mode
-	Cancelled     bool               // Whether this task was cancelled by fail-fast
-	FailureReason FailureReason      // Why the task failed (independent error vs cascading cancellation)
+	Duration      int64            // milliseconds
+	Command       string           // Full command that was executed
+	ExitCode      int              // Exit code of the command (0 if success, -1 if not available)
+	WorkingDir    string           // Working directory where command was executed
+	RelativeDir   string           // Working directory relative to git root (for display)
+	Scope         config.ToolScope // Tool scope (repository, per-project, per-file)
+	Batch         bool             // Whether files were processed in batch mode
+	Cancelled     bool             // Whether this task was cancelled by fail-fast
+	FailureReason FailureReason    // Why the task failed (independent error vs cascading cancellation)
 }
 
 // GroupExecutionResult represents the result of a task group execution

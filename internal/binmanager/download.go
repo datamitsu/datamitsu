@@ -210,13 +210,47 @@ func moveDir(src, dst string) error {
 			log.Debug("destination directory created concurrently, skipping move", zap.String("dst", dst))
 			return nil
 		}
-		if copyErr := copyDir(src, dst); copyErr != nil {
+		// Cross-device fallback: copy into a temp dir in the destination parent,
+		// then atomically rename it into place. Copying directly onto dst would
+		// expose a partially-populated directory to concurrent readers — the
+		// exact window this move is meant to close.
+		if copyErr := copyDirAtomic(src, dst); copyErr != nil {
 			return fmt.Errorf("rename failed: %w, and copy fallback failed: %w", err, copyErr)
 		}
 		_ = os.RemoveAll(src)
 	}
 
 	log.Debug("directory moved", zap.String("dst", dst))
+	return nil
+}
+
+// copyDirAtomic copies src into a temp directory in dst's parent, then
+// atomically renames it onto dst. Unlike copyDir, dst is never observed in a
+// partially-populated state: concurrent readers see either the absent dst or
+// the fully-copied one. If a concurrent move created dst first, the rename
+// fails but dst is already complete, so it is treated as success.
+func copyDirAtomic(src, dst string) (retErr error) {
+	tmpDir, err := os.MkdirTemp(filepath.Dir(dst), "move-*")
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if retErr != nil {
+			_ = os.RemoveAll(tmpDir)
+		}
+	}()
+
+	// copyDir creates dst itself, so copy into a fresh child of the temp dir.
+	staged := filepath.Join(tmpDir, "staged")
+	if err := copyDir(src, staged); err != nil {
+		return err
+	}
+	if err := os.Rename(staged, dst); err != nil {
+		if _, statErr := os.Stat(dst); statErr == nil {
+			return nil
+		}
+		return err
+	}
 	return nil
 }
 

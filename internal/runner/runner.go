@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"fmt"
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/bundled"
 	"github.com/datamitsu/datamitsu/internal/cache"
@@ -13,7 +14,6 @@ import (
 	"github.com/datamitsu/datamitsu/internal/timing"
 	"github.com/datamitsu/datamitsu/internal/tooling"
 	"github.com/datamitsu/datamitsu/internal/traverser"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -58,7 +58,7 @@ var (
 	progressMu            sync.Mutex
 	currentProgress       *mpb.Progress
 	currentProgressBar    *mpb.Bar
-	currentBarDesc        atomic.Value      // string - accessed without lock to avoid deadlock with mpb
+	currentBarDesc        atomic.Value               // string - accessed without lock to avoid deadlock with mpb
 	activeTools           map[string]map[string]bool // Track currently running tools (tool -> set of active dirs)
 )
 

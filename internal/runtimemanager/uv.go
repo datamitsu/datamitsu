@@ -1,10 +1,10 @@
 package runtimemanager
 
 import (
+	"fmt"
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/env"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
