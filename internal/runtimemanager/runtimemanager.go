@@ -1,13 +1,13 @@
 package runtimemanager
 
 import (
+	"fmt"
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/syslist"
 	"github.com/datamitsu/datamitsu/internal/target"
-	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -26,6 +26,10 @@ type RuntimeManager struct {
 	mapOfRuntimes config.MapOfRuntimes
 	hostTarget    target.Target
 	lookPathFunc  func(string) (string, error)
+	// removeAllFunc is an injectable seam for os.RemoveAll so tests can force a
+	// removal failure deterministically (a read-only path is unreliable when the
+	// test runs as root). A nil value falls back to os.RemoveAll.
+	removeAllFunc func(string) error
 	// singleflight groups deduplicate concurrent installs by key: only one call
 	// per key runs at a time and all waiters share its result. Unlike the prior
 	// sync.Once + sync.Map + CompareAndDelete pattern, a failed call does not
@@ -33,7 +37,6 @@ type RuntimeManager struct {
 	// (so retry-after-error works naturally).
 	runtimeInstall singleflight.Group // key: runtimeName
 	appInstall     singleflight.Group // key: "kind/appName"
-	nodeInstall    singleflight.Group // key: nodeVersion
 	pnpmInstall    singleflight.Group // key: "pnpmVersion\x00pnpmHash"
 }
 
@@ -42,24 +45,29 @@ func New(mapOfRuntimes config.MapOfRuntimes) *RuntimeManager {
 		mapOfRuntimes: mapOfRuntimes,
 		hostTarget:    target.DetectHost(),
 		lookPathFunc:  exec.LookPath,
+		removeAllFunc: os.RemoveAll,
 	}
 }
 
-// systemCommandForKind returns the system binary command name for a runtime kind.
-// Used when automatically falling back to system mode on musl.
-func systemCommandForKind(kind config.RuntimeKind) string {
-	switch kind {
-	case config.RuntimeKindFNM:
-		return "fnm"
-	case config.RuntimeKindUV:
-		return "uv"
-	case config.RuntimeKindJVM:
-		return "java"
-	case config.RuntimeKindGo:
-		return "go"
-	default:
-		return ""
+// removeAll deletes path and any children via the injectable removeAllFunc seam.
+// A nil seam (e.g. a RuntimeManager built directly in a test) falls back to
+// os.RemoveAll.
+func (rm *RuntimeManager) removeAll(path string) error {
+	if rm.removeAllFunc != nil {
+		return rm.removeAllFunc(path)
 	}
+	return os.RemoveAll(path)
+}
+
+// systemCommandForKind returns the system binary command name for a runtime kind.
+// Used when automatically falling back to system mode on musl. The mapping lives
+// in the kind registry (config.LookupRuntimeKind) so it stays in lock-step with
+// the hash-fold fields and validation rules; an unknown kind yields "".
+func systemCommandForKind(kind config.RuntimeKind) string {
+	if info, ok := config.LookupRuntimeKind(kind); ok {
+		return info.SystemCommand
+	}
+	return ""
 }
 
 // resolveEffectiveRuntimeConfig automatically overrides managed mode to system mode
@@ -310,15 +318,15 @@ func (rm *RuntimeManager) ResolveRuntime(appRuntimeRef string, kind config.Runti
 	return "", config.RuntimeConfig{}, fmt.Errorf("no runtime of kind %q found", kind)
 }
 
-// FNMAppPathExtra holds FNM-specific parameters for app hash calculation.
-type FNMAppPathExtra struct {
+// NodeAppPathExtra holds npm-app-specific parameters for app hash calculation.
+type NodeAppPathExtra struct {
 	PackageName string
 	BinPath     string
 }
 
 // GetAppPath returns the cache path for an installed app environment.
-// For FNM apps, pass FNMAppPathExtra to include package-specific fields in the hash.
-func (rm *RuntimeManager) GetAppPath(appName string, kind config.RuntimeKind, version string, deps map[string]string, lockHash string, files map[string]string, archives map[string]*binmanager.ArchiveSpec, runtimeName string, fnmExtra ...FNMAppPathExtra) (string, error) {
+// For node apps, pass NodeAppPathExtra to include package-specific fields in the hash.
+func (rm *RuntimeManager) GetAppPath(appName string, kind config.RuntimeKind, version string, deps map[string]string, lockHash string, files map[string]string, archives map[string]*binmanager.ArchiveSpec, runtimeName string, nodeExtra ...NodeAppPathExtra) (string, error) {
 	rc, ok := rm.mapOfRuntimes[runtimeName]
 	if !ok {
 		return "", fmt.Errorf("runtime %q not found", runtimeName)
@@ -346,15 +354,16 @@ func (rm *RuntimeManager) GetAppPath(appName string, kind config.RuntimeKind, ve
 	}
 
 	var appHash string
-	if kind == config.RuntimeKindFNM && len(fnmExtra) > 0 {
-		extra := fnmExtra[0]
+	if kind == config.RuntimeKindNode && len(nodeExtra) > 0 {
+		extra := nodeExtra[0]
 		if extra.PackageName == "" {
-			return "", fmt.Errorf("FNMAppPathExtra.PackageName is required for FNM apps")
+			return "", fmt.Errorf("NodeAppPathExtra.PackageName is required for npm-based apps")
 		}
 		if extra.BinPath == "" {
-			return "", fmt.Errorf("FNMAppPathExtra.BinPath is required for FNM apps")
+			return "", fmt.Errorf("NodeAppPathExtra.BinPath is required for npm-based apps")
 		}
-		appHash = calculateFNMAppHash(appName, extra.PackageName, version, extra.BinPath, deps, runtimeHash, lockHash, binmanager.HashFilesAndArchives(files, archives))
+		filesHash := binmanager.HashFilesAndArchives(files, archives)
+		appHash = calculateNodeAppHash(appName, extra.PackageName, version, extra.BinPath, deps, runtimeHash, lockHash, filesHash)
 	} else {
 		appHash = calculateAppHash(appName, version, deps, runtimeHash, lockHash, binmanager.HashFilesAndArchives(files, archives))
 	}
@@ -362,68 +371,95 @@ func (rm *RuntimeManager) GetAppPath(appName string, kind config.RuntimeKind, ve
 	return env.GetAppEnvPath(string(kind), appName, appHash), nil
 }
 
+// runtimeAppRef reports a runtime-managed app's kind and its explicit runtime
+// reference (the app's `runtime` field, empty when it relies on the default
+// runtime of its kind). It is the single place that encodes the App.* sub-config
+// precedence (uv → node → jvm → go) shared by all three dispatch chains:
+// CollectRequiredRuntimes routes through it directly, and the typed dispatchers
+// (ComputeAppPath/GetCommandInfo) mirror the same ordering — each keeps its own
+// switch only because the kind's install/path method takes a differently-typed
+// AppConfig*. ok is false for non-runtime apps (binary/shell/empty).
+func runtimeAppRef(app binmanager.App) (kind config.RuntimeKind, runtimeRef string, ok bool) {
+	switch {
+	case app.Uv != nil:
+		return config.RuntimeKindUV, app.Uv.Runtime, true
+	case app.Node != nil:
+		return config.RuntimeKindNode, app.Node.Runtime, true
+	case app.Jvm != nil:
+		return config.RuntimeKindJVM, app.Jvm.Runtime, true
+	case app.Go != nil:
+		return config.RuntimeKindGo, app.Go.Runtime, true
+	default:
+		return "", "", false
+	}
+}
+
 // ComputeAppPath returns the install directory path for a runtime-managed app without installing it.
 // Satisfies binmanager.RuntimeAppManager interface.
 func (rm *RuntimeManager) ComputeAppPath(appName string, app binmanager.App) (string, error) {
-	if app.Uv != nil {
+	switch {
+	case app.Uv != nil:
 		runtimeName, _, err := rm.ResolveRuntime(app.Uv.Runtime, config.RuntimeKindUV)
 		if err != nil {
 			return "", fmt.Errorf("failed to resolve UV runtime for %q: %w", appName, err)
 		}
 		return rm.GetAppPath(appName, config.RuntimeKindUV, uvVersionForHash(app.Uv.Version, app.Uv.RequiresPython), nil, lockFileHash(app.Uv.LockFile), app.Files, app.Archives, runtimeName)
-	}
-	if app.Fnm != nil {
-		appEnvPath, _, _, err := rm.resolveFNMAppEnvPath(appName, app.Fnm, app.Files, app.Archives)
+	case app.Node != nil:
+		appEnvPath, _, _, err := rm.resolveNodeAppEnvPath(appName, app.Node, app.Files, app.Archives)
 		if err != nil {
 			return "", err
 		}
 		return appEnvPath, nil
-	}
-	if app.Jvm != nil {
+	case app.Jvm != nil:
 		runtimeName, _, err := rm.ResolveRuntime(app.Jvm.Runtime, config.RuntimeKindJVM)
 		if err != nil {
 			return "", fmt.Errorf("failed to resolve JVM runtime for %q: %w", appName, err)
 		}
 		return rm.GetJVMAppPath(appName, app.Jvm, app.Files, app.Archives, runtimeName)
-	}
-	if app.Go != nil {
+	case app.Go != nil:
 		runtimeName, _, err := rm.ResolveRuntime(app.Go.Runtime, config.RuntimeKindGo)
 		if err != nil {
 			return "", fmt.Errorf("failed to resolve Go runtime for %q: %w", appName, err)
 		}
 		return rm.GetGoAppPath(appName, app.Go, app.Files, app.Archives, runtimeName)
+	default:
+		return "", fmt.Errorf("app %q is not a runtime-managed app", appName)
 	}
-	return "", fmt.Errorf("app %q is not a runtime-managed app", appName)
 }
 
 // GetCommandInfo installs (if needed) and returns command info for runtime-managed apps.
 // Satisfies binmanager.RuntimeAppManager interface.
 func (rm *RuntimeManager) GetCommandInfo(appName string, app binmanager.App) (*binmanager.CommandInfo, error) {
-	if app.Uv != nil {
+	switch {
+	case app.Uv != nil:
 		if err := rm.InstallUVApp(appName, app.Uv, app.Files, app.Archives); err != nil {
 			return nil, err
 		}
 		return rm.GetUVCommandInfo(appName, app.Uv, app.Files, app.Archives)
-	}
-	if app.Fnm != nil {
-		if err := rm.InstallFNMApp(appName, app.Fnm, app.Files, app.Archives); err != nil {
+	case app.Node != nil:
+		// Compute the merged pnpm-workspace.yaml once and thread it into both the
+		// install and command-info passes instead of recomputing it in each.
+		mergedWorkspaceYAML, err := buildPNPMWorkspace(app.Files)
+		if err != nil {
+			return nil, fmt.Errorf("failed to compute pnpm-workspace.yaml for %q: %w", appName, err)
+		}
+		if err := rm.installNodeApp(appName, app.Node, app.Files, app.Archives, mergedWorkspaceYAML); err != nil {
 			return nil, err
 		}
-		return rm.GetFNMCommandInfo(appName, app.Fnm, app.Files, app.Archives)
-	}
-	if app.Jvm != nil {
+		return rm.getNodeCommandInfo(appName, app.Node, app.Files, app.Archives, mergedWorkspaceYAML)
+	case app.Jvm != nil:
 		if err := rm.InstallJVMApp(appName, app.Jvm, app.Files, app.Archives); err != nil {
 			return nil, err
 		}
 		return rm.GetJVMCommandInfo(appName, app.Jvm, app.Files, app.Archives)
-	}
-	if app.Go != nil {
+	case app.Go != nil:
 		if err := rm.InstallGoApp(appName, app.Go, app.Files, app.Archives); err != nil {
 			return nil, err
 		}
 		return rm.GetGoCommandInfo(appName, app.Go, app.Files, app.Archives)
+	default:
+		return nil, fmt.Errorf("app %q is not a runtime-managed app", appName)
 	}
-	return nil, fmt.Errorf("app %q is not a runtime-managed app", appName)
 }
 
 type RuntimeInstallResult struct {
@@ -463,63 +499,25 @@ func CollectRequiredRuntimes(apps binmanager.MapOfApps, runtimes config.MapOfRun
 			continue
 		}
 
-		if app.Uv != nil {
-			if app.Uv.Runtime != "" {
-				if _, ok := runtimes[app.Uv.Runtime]; ok {
-					needed[app.Uv.Runtime] = true
-				}
-			} else {
-				for _, name := range sortedRuntimeNames {
-					if runtimes[name].Kind == config.RuntimeKindUV {
-						needed[name] = true
-						break
-					}
-				}
-			}
+		kind, ref, ok := runtimeAppRef(app)
+		if !ok {
+			continue
 		}
 
-		if app.Fnm != nil {
-			if app.Fnm.Runtime != "" {
-				if _, ok := runtimes[app.Fnm.Runtime]; ok {
-					needed[app.Fnm.Runtime] = true
-				}
-			} else {
-				for _, name := range sortedRuntimeNames {
-					if runtimes[name].Kind == config.RuntimeKindFNM {
-						needed[name] = true
-						break
-					}
-				}
+		// An explicit runtime reference is honored only when it exists in the
+		// config; a dangling ref contributes nothing (and never falls back to the
+		// default of its kind), matching the prior per-kind blocks.
+		if ref != "" {
+			if _, exists := runtimes[ref]; exists {
+				needed[ref] = true
 			}
+			continue
 		}
 
-		if app.Jvm != nil {
-			if app.Jvm.Runtime != "" {
-				if _, ok := runtimes[app.Jvm.Runtime]; ok {
-					needed[app.Jvm.Runtime] = true
-				}
-			} else {
-				for _, name := range sortedRuntimeNames {
-					if runtimes[name].Kind == config.RuntimeKindJVM {
-						needed[name] = true
-						break
-					}
-				}
-			}
-		}
-
-		if app.Go != nil {
-			if app.Go.Runtime != "" {
-				if _, ok := runtimes[app.Go.Runtime]; ok {
-					needed[app.Go.Runtime] = true
-				}
-			} else {
-				for _, name := range sortedRuntimeNames {
-					if runtimes[name].Kind == config.RuntimeKindGo {
-						needed[name] = true
-						break
-					}
-				}
+		for _, name := range sortedRuntimeNames {
+			if runtimes[name].Kind == kind {
+				needed[name] = true
+				break
 			}
 		}
 	}
@@ -741,7 +739,7 @@ func validateRelativePath(p string) error {
 		return fmt.Errorf("path %q must be relative", p)
 	}
 	cleaned := filepath.Clean(p)
-	if strings.HasPrefix(cleaned, "..") {
+	if cleaned == ".." || strings.HasPrefix(cleaned, ".."+string(filepath.Separator)) {
 		return fmt.Errorf("path %q escapes parent directory", p)
 	}
 	return nil

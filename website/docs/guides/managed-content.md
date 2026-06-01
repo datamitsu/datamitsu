@@ -170,7 +170,7 @@ Bundles and apps serve different purposes:
 | Feature       | Bundle                      | App                                |
 | ------------- | --------------------------- | ---------------------------------- |
 | Executable    | No                          | Yes (`datamitsu exec`)             |
-| Runtime       | None                        | binary, uv, fnm, jvm, shell        |
+| Runtime       | None                        | binary, uv, node, jvm, shell       |
 | Content       | Files + archives            | Files + archives + package manager |
 | Links         | Yes (`.datamitsu/`)         | Yes (`.datamitsu/`)                |
 | Version check | No                          | Optional (`versionCheck`)          |

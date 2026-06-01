@@ -1,10 +1,6 @@
 package binmanager
 
 import (
-	"github.com/datamitsu/datamitsu/internal/env"
-	"github.com/datamitsu/datamitsu/internal/logger"
-	"github.com/datamitsu/datamitsu/internal/syslist"
-	"github.com/datamitsu/datamitsu/internal/target"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,6 +10,11 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/logger"
+	"github.com/datamitsu/datamitsu/internal/syslist"
+	"github.com/datamitsu/datamitsu/internal/target"
 
 	"github.com/vbauerster/mpb/v8"
 	"go.uber.org/zap"
@@ -38,7 +39,10 @@ type AppConfigUV struct {
 	RequiresPython string `json:"requiresPython,omitempty"`
 }
 
-type AppConfigFNM struct {
+// AppConfigNode configures an npm tool installed under the archive-based node
+// runtime (kind "node"). Node apps are pnpm-installed npm packages; node itself
+// is acquired as a direct, hash-pinned archive (see runtimemanager/node.go).
+type AppConfigNode struct {
 	PackageName  string            `json:"packageName"`
 	Version      string            `json:"version"`
 	BinPath      string            `json:"binPath"`
@@ -48,10 +52,10 @@ type AppConfigFNM struct {
 }
 
 type AppConfigJVM struct {
-	JarURL  string `json:"jarUrl"`
-	JarHash string `json:"jarHash"`
-	Version string `json:"version"`
-	Runtime string `json:"runtime,omitempty"`
+	JarURL    string `json:"jarUrl"`
+	JarHash   string `json:"jarHash"`
+	Version   string `json:"version"`
+	Runtime   string `json:"runtime,omitempty"`
 	MainClass string `json:"mainClass,omitempty"`
 }
 
@@ -83,7 +87,7 @@ type App struct {
 
 	Binary *AppConfigBinary `json:"binary,omitempty"`
 	Uv     *AppConfigUV     `json:"uv,omitempty"`
-	Fnm    *AppConfigFNM    `json:"fnm,omitempty"`
+	Node   *AppConfigNode   `json:"node,omitempty"`
 	Jvm    *AppConfigJVM    `json:"jvm,omitempty"`
 	Go     *AppConfigGo     `json:"go,omitempty"`
 	Shell  *AppConfigShell  `json:"shell,omitempty"`
@@ -110,7 +114,7 @@ func (a *ArchiveSpec) IsExternal() bool {
 	return a.URL != "" && a.Inline == ""
 }
 
-// RuntimeAppManager handles runtime-managed applications (uv, fnm).
+// RuntimeAppManager handles runtime-managed applications (uv, node, jvm, go).
 // Implemented by runtimemanager.RuntimeManager to avoid circular imports.
 type RuntimeAppManager interface {
 	GetCommandInfo(appName string, app App) (*CommandInfo, error)
@@ -441,7 +445,7 @@ func (bm *BinManager) GetBinaryPath(name string) (string, error) {
 }
 
 // GetCommandInfo returns command information for executing an application
-// Works with all application types: binary, shell, uv, fnm
+// Works with all application types: binary, shell, uv, node, jvm, go
 func (bm *BinManager) GetCommandInfo(appName string) (*CommandInfo, error) {
 	app, ok := bm.mapOfApps[appName]
 	if !ok {
@@ -468,7 +472,7 @@ func (bm *BinManager) GetCommandInfo(appName string) (*CommandInfo, error) {
 		}, nil
 	}
 
-	if app.Uv != nil || app.Fnm != nil || app.Jvm != nil || app.Go != nil {
+	if app.Uv != nil || app.Node != nil || app.Jvm != nil || app.Go != nil {
 		if bm.runtimeManager == nil {
 			return nil, fmt.Errorf("no runtime manager configured for runtime-managed app %q", appName)
 		}
@@ -489,7 +493,7 @@ func (bm *BinManager) ComputeInstallPath(appName string) (string, error) {
 		return bm.getBinaryPath(appName)
 	}
 
-	if app.Uv != nil || app.Fnm != nil || app.Jvm != nil || app.Go != nil {
+	if app.Uv != nil || app.Node != nil || app.Jvm != nil || app.Go != nil {
 		if bm.runtimeManager == nil {
 			return "", fmt.Errorf("no runtime manager configured for runtime-managed app %q", appName)
 		}
@@ -681,7 +685,6 @@ func downloadFileSimple(url, destPath string) error {
 	return nil
 }
 
-
 type AppInfo struct {
 	Name        string
 	Type        string
@@ -693,7 +696,7 @@ type AppInfo struct {
 
 // CommandInfo contains information about command for executing an application
 type CommandInfo struct {
-	Type    string            // "binary", "shell", "uv", "fnm"
+	Type    string            // "binary", "shell", "uv", "node", "jvm", "go"
 	Command string            // Path to binary or command name
 	Args    []string          // Additional arguments (for shell)
 	Env     map[string]string // Additional env variables (for shell)
@@ -717,10 +720,10 @@ func (bm *BinManager) GetAppsList() []AppInfo {
 			info.Type = "uv"
 			info.Version = app.Uv.Version
 			info.PackageName = app.Uv.PackageName
-		} else if app.Fnm != nil {
-			info.Type = "fnm"
-			info.Version = app.Fnm.Version
-			info.PackageName = app.Fnm.PackageName
+		} else if app.Node != nil {
+			info.Type = "node"
+			info.Version = app.Node.Version
+			info.PackageName = app.Node.PackageName
 		} else if app.Jvm != nil {
 			info.Type = "jvm"
 			info.Version = app.Jvm.Version

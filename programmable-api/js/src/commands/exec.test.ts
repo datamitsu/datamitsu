@@ -218,7 +218,7 @@ describe("parseToolList", () => {
       "[uv]",
       "  yamllint  1.35.0  YAML linter",
       "",
-      "[fnm]",
+      "[node]",
       "  slidev  0.50.0  Presentation slides",
       "",
     ].join("\n");
@@ -232,7 +232,7 @@ describe("parseToolList", () => {
     assert.equal(tools[2].name, "yamllint");
     assert.equal(tools[2].type, "uv");
     assert.equal(tools[3].name, "slidev");
-    assert.equal(tools[3].type, "fnm");
+    assert.equal(tools[3].type, "node");
   });
 
   it("handles empty output", () => {
@@ -286,7 +286,7 @@ describe("parseToolList", () => {
       "  b1  v1",
       "[uv]",
       "  u1  v2",
-      "[fnm]",
+      "[node]",
       "  f1  v3",
       "[jvm]",
       "  j1  v4",
@@ -298,7 +298,7 @@ describe("parseToolList", () => {
     assert.equal(tools.length, 5);
     assert.equal(tools[0].type, "binary");
     assert.equal(tools[1].type, "uv");
-    assert.equal(tools[2].type, "fnm");
+    assert.equal(tools[2].type, "node");
     assert.equal(tools[3].type, "jvm");
     assert.equal(tools[4].type, "shell");
   });

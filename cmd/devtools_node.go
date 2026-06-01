@@ -12,14 +12,14 @@ import (
 )
 
 var (
-	fnmUpdateFlag bool
-	fnmDryRunFlag bool
+	nodeUpdateFlag bool
+	nodeDryRunFlag bool
 )
 
-var pullFNMCmd = &cobra.Command{
-	Use:   "pull-fnm <file>",
+var pullNodeCmd = &cobra.Command{
+	Use:   "pull-node <file>",
 	Short: "Pull latest versions for npm packages from the registry",
-	Long: `Query the npm registry for latest versions of all FNM apps in a JSON file.
+	Long: `Query the npm registry for latest versions of all node apps in a JSON file.
 
 Reads the specified JSON file directly, fetches latest versions and descriptions
 from the npm registry, and prints a summary.
@@ -27,17 +27,17 @@ With --update: updates the JSON file with latest versions and descriptions.
 If the file does not exist, an empty JSON file is created.
 
 Example:
-  datamitsu devtools pull-fnm config/src/fnmApps.json
-  datamitsu devtools pull-fnm config/src/fnmApps.json --update`,
+  datamitsu devtools pull-node config/src/nodeApps.json
+  datamitsu devtools pull-node config/src/nodeApps.json --update`,
 	Args: cobra.ExactArgs(1),
-	RunE: runPullFNM,
+	RunE: runPullNode,
 }
 
 func init() {
-	devtoolsCmd.AddCommand(pullFNMCmd)
-	pullFNMCmd.Flags().BoolVar(&fnmUpdateFlag, "update", false,
+	devtoolsCmd.AddCommand(pullNodeCmd)
+	pullNodeCmd.Flags().BoolVar(&nodeUpdateFlag, "update", false,
 		"Update versions in the JSON file with latest from npm")
-	pullFNMCmd.Flags().BoolVar(&fnmDryRunFlag, "dry-run", false,
+	pullNodeCmd.Flags().BoolVar(&nodeDryRunFlag, "dry-run", false,
 		"Show results without writing to file")
 }
 
@@ -51,20 +51,20 @@ type npmVersionResult struct {
 	Error          string `json:"error,omitempty"`
 }
 
-func runPullFNM(cmd *cobra.Command, args []string) error {
+func runPullNode(cmd *cobra.Command, args []string) error {
 	file := args[0]
 
-	if err := ensureFNMAppsJSONExists(file); err != nil {
+	if err := ensureNodeAppsJSONExists(file); err != nil {
 		return fmt.Errorf("failed to ensure file exists: %w", err)
 	}
 
-	apps, err := readFNMAppsJSON(file)
+	apps, err := readNodeAppsJSON(file)
 	if err != nil {
 		return fmt.Errorf("failed to read %s: %w", file, err)
 	}
 
 	if len(apps) == 0 {
-		fmt.Println("No FNM (npm) apps found in JSON file.")
+		fmt.Println("No node (npm) apps found in JSON file.")
 		return nil
 	}
 
@@ -115,13 +115,13 @@ func runPullFNM(cmd *cobra.Command, args []string) error {
 		results = append(results, result)
 	}
 
-	if fnmUpdateFlag && !fnmDryRunFlag {
-		if err := updateFNMAppsJSON(file, results); err != nil {
+	if nodeUpdateFlag && !nodeDryRunFlag {
+		if err := updateNodeAppsJSON(file, results); err != nil {
 			return fmt.Errorf("error updating %s: %w", file, err)
 		}
 	}
 
-	printFNMSummary(results)
+	printNodeSummary(results)
 
 	for _, r := range results {
 		if r.Error != "" {
@@ -131,7 +131,7 @@ func runPullFNM(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func printFNMSummary(results []npmVersionResult) {
+func printNodeSummary(results []npmVersionResult) {
 	updated := 0
 	errors := 0
 	for _, r := range results {
@@ -145,15 +145,15 @@ func printFNMSummary(results []npmVersionResult) {
 		len(results), updated, errors)
 }
 
-type fnmAppsJSON = map[string]fnmAppEntry
+type nodeAppsJSON = map[string]nodeAppEntry
 
-type fnmAppEntry struct {
+type nodeAppEntry struct {
 	PackageName string `json:"packageName"`
 	Version     string `json:"version"`
 	Description string `json:"description,omitempty"`
 }
 
-func ensureFNMAppsJSONExists(path string) error {
+func ensureNodeAppsJSONExists(path string) error {
 	_, err := os.Stat(path)
 	if err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("checking file: %w", err)
@@ -186,19 +186,19 @@ func ensureFNMAppsJSONExists(path string) error {
 	return nil
 }
 
-func readFNMAppsJSON(path string) (fnmAppsJSON, error) {
+func readNodeAppsJSON(path string) (nodeAppsJSON, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("reading %s: %w", path, err)
 	}
-	var apps fnmAppsJSON
+	var apps nodeAppsJSON
 	if err := json.Unmarshal(data, &apps); err != nil {
 		return nil, fmt.Errorf("parsing %s: %w", path, err)
 	}
 	return apps, nil
 }
 
-func writeFNMAppsJSON(path string, apps fnmAppsJSON) error {
+func writeNodeAppsJSON(path string, apps nodeAppsJSON) error {
 	data, err := json.MarshalIndent(apps, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshaling: %w", err)
@@ -229,12 +229,12 @@ func writeFNMAppsJSON(path string, apps fnmAppsJSON) error {
 	return nil
 }
 
-func updateFNMAppsJSON(path string, results []npmVersionResult) error {
-	existing, err := readFNMAppsJSON(path)
+func updateNodeAppsJSON(path string, results []npmVersionResult) error {
+	existing, err := readNodeAppsJSON(path)
 	if err != nil {
 		return fmt.Errorf("failed to read existing %s: %w", path, err)
 	}
-	apps := make(fnmAppsJSON, len(results))
+	apps := make(nodeAppsJSON, len(results))
 	updatedCount := 0
 	for _, r := range results {
 		version := r.CurrentVersion
@@ -248,14 +248,14 @@ func updateFNMAppsJSON(path string, results []npmVersionResult) error {
 				desc = e.Description
 			}
 		}
-		apps[r.Name] = fnmAppEntry{
+		apps[r.Name] = nodeAppEntry{
 			PackageName: r.PackageName,
 			Version:     version,
 			Description: desc,
 		}
 	}
 
-	if err := writeFNMAppsJSON(path, apps); err != nil {
+	if err := writeNodeAppsJSON(path, apps); err != nil {
 		return err
 	}
 	if updatedCount > 0 {
