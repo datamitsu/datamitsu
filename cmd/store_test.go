@@ -40,6 +40,36 @@ func TestStoreClearRemovesDirectory(t *testing.T) {
 	}
 }
 
+func TestStoreClearRemovesReadOnlyModuleCache(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("DATAMITSU_CACHE_DIR", tmpDir)
+
+	// Mimic Go module cache layout: read-only files inside read-only dirs.
+	// A plain os.RemoveAll fails here with EACCES; ForceRemoveAll must succeed.
+	storeDir := filepath.Join(tmpDir, "store")
+	modDir := filepath.Join(storeDir, ".apps", "go", "tool", "gomodcache", "example.com", "mod@v1.0.0")
+	if err := os.MkdirAll(modDir, 0o755); err != nil {
+		t.Fatalf("failed to create test dir: %v", err)
+	}
+	roFile := filepath.Join(modDir, "source.go")
+	if err := os.WriteFile(roFile, []byte("package mod"), 0o444); err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
+	if err := os.Chmod(modDir, 0o555); err != nil {
+		t.Fatalf("failed to chmod dir: %v", err)
+	}
+	// Restore writability on failure so t.TempDir() cleanup can proceed.
+	t.Cleanup(func() { _ = os.Chmod(modDir, 0o755) })
+
+	if err := runStoreClear(nil, nil); err != nil {
+		t.Fatalf("runStoreClear returned error: %v", err)
+	}
+
+	if _, err := os.Stat(storeDir); !os.IsNotExist(err) {
+		t.Errorf("store directory should be removed, but still exists")
+	}
+}
+
 func TestStoreClearNonExistentDirectory(t *testing.T) {
 	tmpDir := filepath.Join(t.TempDir(), "nonexistent")
 	t.Setenv("DATAMITSU_CACHE_DIR", tmpDir)
