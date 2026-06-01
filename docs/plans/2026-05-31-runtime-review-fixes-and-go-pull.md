@@ -308,20 +308,37 @@ Dependencies identified: `go-crypto/openpgp`, `goccy/go-yaml`, internal `hashuti
 
 ### Task 14: Full Go support in pull-runtimes (review #3 + reported-bug capstone)
 
-- [ ] write tests for a new `internal/registry` Go release fetcher against a mock
+- [x] write tests for a new `internal/registry` Go release fetcher against a mock
       `go.dev/dl/?mode=json` body: returns latest stable version + per-file SHA-256;
       error/empty-body cases handled
-- [ ] add the Go release fetcher in `internal/registry` (HTTPS + published SHA-256,
+      (`internal/registry/godev_test.go`: `TestGetLatestGoRelease` covers
+      highest-stable selection, order-independence, unstable-skip, no-stable error,
+      no-hashed-files error, empty body, server error, invalid JSON, connection error;
+      `TestGoVersionLess` pins the version ordering)
+- [x] add the Go release fetcher in `internal/registry` (HTTPS + published SHA-256,
       no GPG — document the trust model, parallel to musl)
-- [ ] add `buildGoRuntimeJSON` + `pullGoRuntime` building the os/arch archive map from
+      — added `internal/registry/godev.go` with `GetLatestGoRelease`/`GoRelease`
+      (version + filename→SHA-256 map), `highestStableGoRelease`, and `goVersionLess`
+      (semver-based, falls back to string compare). The fetcher's doc comment records
+      the no-GPG / published-SHA-256 trust model (same as the musl node path).
+- [x] add `buildGoRuntimeJSON` + `pullGoRuntime` building the os/arch archive map from
       go.dev with the published SHA-256 (lowercased; mandatory-hash enforced)
-- [ ] add `"go"` to `validRuntimeNames` (`cmd/devtools_pull_runtimes.go:33`) and a `go`
+      — `goArchiveSpecs`/`goBinaryPath`/`goPullConfig`/`buildGoBinaries`/`pullGoRuntime`/
+      `buildGoRuntimeJSON` in `cmd/devtools_pull_runtimes.go`; missing hash and non-hex
+      hash are hard errors, hashes are lowercased before recording (mirrors node).
+- [x] add `"go"` to `validRuntimeNames` (`cmd/devtools_pull_runtimes.go:34`) and a `go`
       case in the `runPullRuntimes` switch, leaning on the Task 12 registry so the
-      addition is localized
-- [ ] write a `cmd/devtools_pull_node_test.go`-style mock-host test for `pull --runtime go`
+      addition is localized (validation/cache for go flow through the registry entry).
+      Help text + `--runtime` flag description updated to list `go`.
+- [x] write a `cmd/devtools_pull_node_test.go`-style mock-host test for `pull --runtime go`
       that asserts a generated entry with `go.goVersion` + verified hashes, and that a
       subsequent pull does NOT drop `goVersion`
-- [ ] run `go test ./cmd/... ./internal/registry/...` — must pass
+      (`cmd/devtools_pull_go_test.go`: `TestRunPullRuntimes_Go_GeneratesEntryWithGoVersion`
+      injects the `getLatestGoRelease` seam, runs the full pull twice, and after each
+      run decodes the written file into `config.MapOfRuntimes` + `ValidateRuntimes`;
+      plus spec/path, all-tuples, missing/invalid/uppercase-hash, builder, and
+      `pullGoRuntime` success/lookup-error tests)
+- [x] run `go test ./cmd/... ./internal/registry/...` — must pass
 
 ### Task 15: Verify acceptance criteria
 

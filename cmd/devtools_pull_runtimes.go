@@ -31,7 +31,7 @@ var (
 	pullRuntimesRuntimeFlag string
 )
 
-var validRuntimeNames = []string{"uv", "jvm", "node"}
+var validRuntimeNames = []string{"uv", "jvm", "node", "go"}
 
 func init() {
 	devtoolsCmd.AddCommand(pullRuntimesCmd)
@@ -40,27 +40,29 @@ func init() {
 	pullRuntimesCmd.Flags().BoolVar(&pullRuntimesDryRunFlag, "dry-run", false,
 		"Show what would be updated without writing files")
 	pullRuntimesCmd.Flags().StringVar(&pullRuntimesRuntimeFlag, "runtime", "",
-		"Update only the specified runtime (uv, jvm, or node)")
+		"Update only the specified runtime (uv, jvm, node, or go)")
 }
 
 var pullRuntimesCmd = &cobra.Command{
 	Use:   "pull-runtimes <file>",
 	Short: "Pull runtime configurations from upstream releases",
-	Long: `Pull runtime configurations (UV, JVM, Node) with latest versions from upstream.
+	Long: `Pull runtime configurations (UV, JVM, Node, Go) with latest versions from upstream.
 
 Fetches latest releases from GitHub, computes SHA-256 hashes, and writes
 the result to the specified file. The Node runtime is pulled as a direct
 archive (url + hash) from nodejs.org (glibc/darwin/windows, GPG-verified) and
-unofficial-builds.nodejs.org (musl, unsigned).
+unofficial-builds.nodejs.org (musl, unsigned). The Go runtime is pulled as a
+direct archive from go.dev/dl with its published SHA-256 (HTTPS, no GPG).
 
 Requires --update flag to fetch releases (safety guard).
-With --runtime: updates only the specified runtime (uv, jvm, or node)
+With --runtime: updates only the specified runtime (uv, jvm, node, or go)
 With --dry-run: shows what would be updated without writing
 
 Example:
   datamitsu devtools pull-runtimes --update config/src/runtimes.json
   datamitsu devtools pull-runtimes --update --runtime uv config/src/runtimes.json
   datamitsu devtools pull-runtimes --update --runtime node config/src/runtimes.json
+  datamitsu devtools pull-runtimes --update --runtime go config/src/runtimes.json
   datamitsu devtools pull-runtimes --update --dry-run config/src/runtimes.json`,
 	Args: cobra.ExactArgs(1),
 	RunE: runPullRuntimes,
@@ -135,6 +137,13 @@ func runPullRuntimes(cmd *cobra.Command, args []string) error {
 			data, binaries, updateErr = pullNodeRuntime()
 			if updateErr == nil {
 				runtimeJSON = buildNodeRuntimeJSON(data, binaries)
+			}
+		case "go":
+			var data *GoRuntimeData
+			var binaries binmanager.MapOfBinaries
+			data, binaries, updateErr = pullGoRuntime()
+			if updateErr == nil {
+				runtimeJSON = buildGoRuntimeJSON(data, binaries)
 			}
 		}
 
@@ -362,6 +371,20 @@ func buildNodeRuntimeJSON(data *NodeRuntimeData, binaries binmanager.MapOfBinari
 			NodeVersion: data.NodeVersion,
 			PNPMVersion: data.PNPMVersion,
 			PNPMHash:    data.PNPMHash,
+		},
+	}
+}
+
+// buildGoRuntimeJSON constructs a RuntimeJSON from Go updater results.
+func buildGoRuntimeJSON(data *GoRuntimeData, binaries binmanager.MapOfBinaries) *RuntimeJSON {
+	return &RuntimeJSON{
+		Kind: "go",
+		Mode: "managed",
+		Managed: &RuntimeManagedJSON{
+			Binaries: binaries,
+		},
+		Go: &GoConfigJSON{
+			GoVersion: data.GoVersion,
 		},
 	}
 }
@@ -899,6 +922,138 @@ func pullNodeRuntime() (*NodeRuntimeData, binmanager.MapOfBinaries, error) {
 	}
 
 	return data, binaries, nil
+}
+
+// Go archive registry source. Go is acquired as a direct, hash-pinned archive
+// (jvm/node-style) from go.dev/dl, whose per-file SHA-256 hashes are published
+// over HTTPS without a GPG signature. The published SHA-256, pinned by hash in
+// git, is the integrity anchor — the same trust model as the musl Node path.
+const goDistBaseURL = "https://go.dev/dl"
+
+// GoRuntimeData holds the Go-specific runtime configuration data.
+type GoRuntimeData struct {
+	GoVersion string
+}
+
+// goArchiveSpec describes one os/arch Go archive tuple.
+type goArchiveSpec struct {
+	os          syslist.OsType
+	arch        syslist.ArchType
+	libc        string
+	filename    string
+	contentType binmanager.BinContentType
+}
+
+// goArchiveSpecs enumerates the os/arch tuples datamitsu ships Go for, with the
+// upstream go.dev archive filename for each. Go binaries are statically linked,
+// so the libc key matches the committed config and the runtime resolver's
+// lookup (glibc on linux, unknown elsewhere) rather than a per-libc archive.
+func goArchiveSpecs(version string) []goArchiveSpec {
+	base := "go" + version
+	amd64, arm64 := string(syslist.ArchTypeAmd64), string(syslist.ArchTypeArm64)
+	return []goArchiveSpec{
+		{syslist.OsTypeDarwin, syslist.ArchTypeAmd64, "unknown", base + ".darwin-" + amd64 + ".tar.gz", binmanager.BinContentTypeTarGz},
+		{syslist.OsTypeDarwin, syslist.ArchTypeArm64, "unknown", base + ".darwin-" + arm64 + ".tar.gz", binmanager.BinContentTypeTarGz},
+		{syslist.OsTypeLinux, syslist.ArchTypeAmd64, "glibc", base + ".linux-" + amd64 + ".tar.gz", binmanager.BinContentTypeTarGz},
+		{syslist.OsTypeLinux, syslist.ArchTypeArm64, "glibc", base + ".linux-" + arm64 + ".tar.gz", binmanager.BinContentTypeTarGz},
+		{syslist.OsTypeWindows, syslist.ArchTypeAmd64, "unknown", base + ".windows-" + amd64 + ".zip", binmanager.BinContentTypeZip},
+	}
+}
+
+// goBinaryPath returns the path to the go executable within the extracted
+// archive tree (extractDir layout): "go/bin/go" for tar.gz archives,
+// "go/bin/go.exe" for the windows zip.
+func goBinaryPath(spec goArchiveSpec) string {
+	if spec.contentType == binmanager.BinContentTypeZip {
+		return "go/bin/go.exe"
+	}
+	return "go/bin/go"
+}
+
+// goPullConfig configures Go binary detection so tests can inject a mock host
+// and a synthetic file→hash map instead of reaching go.dev.
+type goPullConfig struct {
+	version string
+	baseURL string
+	files   map[string]string // filename → SHA-256, from go.dev/dl?mode=json
+}
+
+// buildGoBinaries assembles the MapOfBinaries for every Go archive tuple,
+// looking each archive's SHA-256 up in the published go.dev file map and
+// recording extractDir entries with computed binaryPaths. A missing or
+// malformed hash is a hard error (security policy: no hash, no entry).
+func buildGoBinaries(cfg goPullConfig) (binmanager.MapOfBinaries, error) {
+	binaries := make(binmanager.MapOfBinaries)
+	for _, spec := range goArchiveSpecs(cfg.version) {
+		hash, ok := cfg.files[spec.filename]
+		if !ok {
+			return nil, fmt.Errorf("go %s: SHA-256 hash not found for %s in go.dev release files",
+				cfg.version, spec.filename)
+		}
+		// Normalize to lowercase so the recorded hash passes config validation
+		// (config.isValidSHA256Hex requires 64 lowercase hex chars). The hex/length
+		// guard below still rejects malformed values regardless of case.
+		hash = strings.ToLower(hash)
+		if !isSHA256Hex(hash) {
+			return nil, fmt.Errorf("go %s: invalid SHA-256 hash %q for %s", cfg.version, hash, spec.filename)
+		}
+
+		bp := goBinaryPath(spec)
+		binInfo := binmanager.BinaryOsArchInfo{
+			URL:         fmt.Sprintf("%s/%s", cfg.baseURL, spec.filename),
+			Hash:        hash,
+			ContentType: spec.contentType,
+			BinaryPath:  &bp,
+			ExtractDir:  true,
+		}
+
+		if binaries[spec.os] == nil {
+			binaries[spec.os] = make(map[syslist.ArchType]map[string]binmanager.BinaryOsArchInfo)
+		}
+		if binaries[spec.os][spec.arch] == nil {
+			binaries[spec.os][spec.arch] = make(map[string]binmanager.BinaryOsArchInfo)
+		}
+		binaries[spec.os][spec.arch][spec.libc] = binInfo
+	}
+	return binaries, nil
+}
+
+// getLatestGoRelease is the injectable seam for resolving the latest stable Go
+// release; tests override it to exercise success/failure paths without network.
+var getLatestGoRelease = registry.GetLatestGoRelease
+
+// pullGoRuntime resolves the latest stable Go release from go.dev and builds the
+// per-tuple archive map using the published SHA-256 hashes. Unlike node there is
+// no GPG signature: the published SHA-256, pinned in git, is the integrity
+// anchor (same documented trust posture as the musl node path).
+func pullGoRuntime() (*GoRuntimeData, binmanager.MapOfBinaries, error) {
+	release, err := getLatestGoRelease()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to look up latest Go release: %w", err)
+	}
+
+	fmt.Printf("Go version: %s\n", release.Version)
+	fmt.Printf("  go: SHASUMS from go.dev are HTTPS-published without a GPG signature " +
+		"(pinned by sha256 in git, matching the musl node trust model)\n")
+
+	binaries, err := buildGoBinaries(goPullConfig{
+		version: release.Version,
+		baseURL: goDistBaseURL,
+		files:   release.Files,
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to build Go binaries: %w", err)
+	}
+
+	count := 0
+	for _, archMap := range binaries {
+		for _, libcMap := range archMap {
+			count += len(libcMap)
+		}
+	}
+	fmt.Printf("  go: %d archives detected (sha256-verified via go.dev)\n", count)
+
+	return &GoRuntimeData{GoVersion: release.Version}, binaries, nil
 }
 
 // detectRuntimeBinaries detects binaries from a GitHub release for a runtime,

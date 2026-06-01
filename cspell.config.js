@@ -49,6 +49,7 @@ export default {
     "goarch",
     "goamd",
     "goccy",
+    "godev",
     "godoc",
     "gofmt",
     "goja",
