@@ -58,7 +58,7 @@ func TestStoreClearRemovesReadOnlyModuleCache(t *testing.T) {
 	if err := os.Chmod(modDir, 0o555); err != nil {
 		t.Fatalf("failed to chmod dir: %v", err)
 	}
-	// Restore writability on failure so t.TempDir() cleanup can proceed.
+	// Restore write permission on failure so t.TempDir() cleanup can proceed.
 	t.Cleanup(func() { _ = os.Chmod(modDir, 0o755) })
 
 	if err := runStoreClear(nil, nil); err != nil {

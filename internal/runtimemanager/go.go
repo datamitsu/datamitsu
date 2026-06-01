@@ -268,15 +268,15 @@ func (rm *RuntimeManager) installGoAppOnce(appName string, appConfig *binmanager
 // leaking 100+MiB of module cache. WalkDir runs pre-order, so each directory is
 // made traversable before RemoveAll descends into it.
 //
-// Every entry is chmodded to 0o700 unconditionally — NOT 0o600-for-files —
-// because the file/dir distinction cannot be trusted here. ReadDir may return a
-// dirent with type DT_UNKNOWN (filesystem-dependent), in which case
+// Every entry gets mode 0o700 unconditionally — NOT 0o600-for-files — because
+// the file/dir distinction cannot be trusted here. ReadDir may return a dirent
+// with type DT_UNKNOWN (filesystem-dependent), in which case
 // fs.DirEntry.IsDir() falls back to an lstat that can fail and report a real
 // directory as a non-dir. Giving such a directory a file mode (0o600) strips its
-// execute bit, leaving it untraversable so RemoveAll later fails with EACCES on
-// openat. The execute bit on a regular file is harmless — it is about to be
-// deleted. Chmod errors are best-effort; the final os.RemoveAll reports any
-// failure that actually blocks removal.
+// execute bit, so it can no longer be entered and RemoveAll later fails with
+// EACCES on openat. The execute bit on a regular file is harmless — it is about
+// to be deleted. Chmod errors are best-effort; the final os.RemoveAll reports
+// any failure that actually blocks removal.
 func ForceRemoveAll(root string) error {
 	_ = filepath.WalkDir(root, func(p string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
