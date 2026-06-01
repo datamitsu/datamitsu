@@ -635,3 +635,57 @@ func TestMoveDir(t *testing.T) {
 		}
 	})
 }
+
+func TestCopyDirAtomic(t *testing.T) {
+	t.Run("copies tree into fresh dst", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		srcDir := filepath.Join(tmpDir, "src")
+		if err := os.MkdirAll(filepath.Join(srcDir, "sub"), 0755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(srcDir, "sub", "f.txt"), []byte("payload"), 0644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+
+		dstDir := filepath.Join(tmpDir, "dst")
+		if err := copyDirAtomic(srcDir, dstDir); err != nil {
+			t.Fatalf("copyDirAtomic() error = %v", err)
+		}
+		content, err := os.ReadFile(filepath.Join(dstDir, "sub", "f.txt"))
+		if err != nil {
+			t.Fatalf("read dst: %v", err)
+		}
+		if string(content) != "payload" {
+			t.Errorf("content = %q, want payload", content)
+		}
+	})
+
+	t.Run("treats pre-existing dst as success", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		srcDir := filepath.Join(tmpDir, "src")
+		if err := os.MkdirAll(srcDir, 0755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(srcDir, "f.txt"), []byte("new"), 0644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+		dstDir := filepath.Join(tmpDir, "dst")
+		if err := os.MkdirAll(dstDir, 0755); err != nil {
+			t.Fatalf("mkdir dst: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(dstDir, "f.txt"), []byte("existing"), 0644); err != nil {
+			t.Fatalf("write dst: %v", err)
+		}
+
+		if err := copyDirAtomic(srcDir, dstDir); err != nil {
+			t.Fatalf("copyDirAtomic() error = %v", err)
+		}
+		content, err := os.ReadFile(filepath.Join(dstDir, "f.txt"))
+		if err != nil {
+			t.Fatalf("read dst: %v", err)
+		}
+		if string(content) != "existing" {
+			t.Errorf("existing dst modified: got %q, want existing", content)
+		}
+	})
+}
