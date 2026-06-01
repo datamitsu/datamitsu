@@ -1,11 +1,12 @@
 package config
 
 import (
-	"github.com/datamitsu/datamitsu/internal/binmanager"
-	"github.com/datamitsu/datamitsu/internal/logger"
 	_ "embed"
 	"fmt"
 	"time"
+
+	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/logger"
 
 	"github.com/evanw/esbuild/pkg/api"
 	"go.uber.org/zap"
@@ -51,7 +52,7 @@ type ToolOperation struct {
 	App          string            `json:"app"`
 	Args         []string          `json:"args"`
 	Scope        ToolScope         `json:"scope"`
-	Batch        *bool             `json:"batch,omitempty"`        // Batch mode (default: true for per-project and repository, false for per-file)
+	Batch        *bool             `json:"batch,omitempty"` // Batch mode (default: true for per-project and repository, false for per-file)
 	Globs        []string          `json:"globs,omitempty"`
 	ExcludeGlobs []string          `json:"excludeGlobs,omitempty"`
 	Priority     int               `json:"priority,omitempty"`
@@ -126,10 +127,10 @@ const (
 type RuntimeKind string
 
 const (
-	RuntimeKindUV  RuntimeKind = "uv"
-	RuntimeKindFNM RuntimeKind = "fnm"
-	RuntimeKindJVM RuntimeKind = "jvm"
-	RuntimeKindGo  RuntimeKind = "go"
+	RuntimeKindUV   RuntimeKind = "uv"
+	RuntimeKindNode RuntimeKind = "node"
+	RuntimeKindJVM  RuntimeKind = "jvm"
+	RuntimeKindGo   RuntimeKind = "go"
 )
 
 type RuntimeConfigManaged struct {
@@ -141,7 +142,10 @@ type RuntimeConfigSystem struct {
 	SystemVersion string `json:"systemVersion,omitempty"`
 }
 
-type RuntimeConfigFNM struct {
+// RuntimeConfigNode holds node-specific config for the archive-based node
+// runtime (kind "node"). Node is fetched as a direct archive (url + hash),
+// jvm-style.
+type RuntimeConfigNode struct {
 	NodeVersion string `json:"nodeVersion"`
 	PNPMVersion string `json:"pnpmVersion"`
 	PNPMHash    string `json:"pnpmHash"`
@@ -160,14 +164,14 @@ type RuntimeConfigGo struct {
 }
 
 type RuntimeConfig struct {
-	Kind            RuntimeKind           `json:"kind"`
-	Mode            RuntimeMode           `json:"mode"`
-	Managed         *RuntimeConfigManaged `json:"managed,omitempty"`
-	System          *RuntimeConfigSystem  `json:"system,omitempty"`
-	FNM             *RuntimeConfigFNM     `json:"fnm,omitempty"`
-	UV              *RuntimeConfigUV      `json:"uv,omitempty"`
-	JVM             *RuntimeConfigJVM     `json:"jvm,omitempty"`
-	Go              *RuntimeConfigGo      `json:"go,omitempty"`
+	Kind    RuntimeKind           `json:"kind"`
+	Mode    RuntimeMode           `json:"mode"`
+	Managed *RuntimeConfigManaged `json:"managed,omitempty"`
+	System  *RuntimeConfigSystem  `json:"system,omitempty"`
+	Node    *RuntimeConfigNode    `json:"node,omitempty"`
+	UV      *RuntimeConfigUV      `json:"uv,omitempty"`
+	JVM     *RuntimeConfigJVM     `json:"jvm,omitempty"`
+	Go      *RuntimeConfigGo      `json:"go,omitempty"`
 }
 
 type MapOfRuntimes map[string]RuntimeConfig

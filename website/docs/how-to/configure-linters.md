@@ -65,9 +65,9 @@ Key points:
 - `{toolCache}` gives golangci-lint an isolated cache directory
 - Only a `lint` operation is defined since golangci-lint doesn't auto-fix
 
-## Setting Up ESLint via FNM
+## Setting Up ESLint via the Node Runtime
 
-ESLint is a JavaScript/TypeScript linter managed through the FNM runtime.
+ESLint is a JavaScript/TypeScript linter managed through the Node runtime.
 
 ### 1. Define the app
 
@@ -75,7 +75,7 @@ ESLint is a JavaScript/TypeScript linter managed through the FNM runtime.
 apps: {
   ...config.apps,
   eslint: {
-    fnm: {
+    node: {
       packageName: "eslint",
       version: "9.0.0",
       binPath: "node_modules/.bin/eslint",

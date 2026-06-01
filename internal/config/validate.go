@@ -1,8 +1,6 @@
 package config
 
 import (
-	"github.com/datamitsu/datamitsu/internal/binmanager"
-	"github.com/datamitsu/datamitsu/internal/target"
 	"encoding/hex"
 	"fmt"
 	"path"
@@ -10,6 +8,9 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/target"
 )
 
 // ValidateApps validates app configurations including mandatory lockfile checks.
@@ -39,7 +40,7 @@ func doValidateApps(apps binmanager.MapOfApps, runtimes MapOfRuntimes, skipLockf
 		app := apps[appName]
 
 		if (app.Binary != nil || app.Shell != nil || app.Jvm != nil || app.Go != nil) && (len(app.Files) > 0 || len(app.Links) > 0 || len(app.Archives) > 0) {
-			errs = append(errs, fmt.Sprintf("app %q: files/links/archives are only supported on uv and fnm apps", appName))
+			errs = append(errs, fmt.Sprintf("app %q: files/links/archives are only supported on uv and node apps", appName))
 			continue
 		}
 
@@ -86,10 +87,10 @@ func doValidateApps(apps binmanager.MapOfApps, runtimes MapOfRuntimes, skipLockf
 			}
 		}
 
-		if app.Fnm != nil {
-			if app.Fnm.BinPath == "" {
-				errs = append(errs, fmt.Sprintf("app %q: fnm.binPath is required", appName))
-			} else if err := validateSafeRelativePath(app.Fnm.BinPath, "binPath"); err != nil {
+		if app.Node != nil {
+			if app.Node.BinPath == "" {
+				errs = append(errs, fmt.Sprintf("app %q: node.binPath is required", appName))
+			} else if err := validateSafeRelativePath(app.Node.BinPath, "binPath"); err != nil {
 				errs = append(errs, fmt.Sprintf("app %q: %v", appName, err))
 			}
 		}
@@ -124,7 +125,7 @@ func doValidateApps(apps binmanager.MapOfApps, runtimes MapOfRuntimes, skipLockf
 		if !skipLockfileCheck && app.Uv != nil && app.Uv.LockFile == "" {
 			errs = append(errs, fmt.Sprintf("app %q: lockFile is required (run: datamitsu config lockfile %s)", appName, appName))
 		}
-		if !skipLockfileCheck && app.Fnm != nil && app.Fnm.LockFile == "" {
+		if !skipLockfileCheck && app.Node != nil && app.Node.LockFile == "" {
 			errs = append(errs, fmt.Sprintf("app %q: lockFile is required (run: datamitsu config lockfile %s)", appName, appName))
 		}
 		if !skipLockfileCheck && app.Go != nil && app.Go.LockFile == "" {
@@ -137,8 +138,8 @@ func doValidateApps(apps binmanager.MapOfApps, runtimes MapOfRuntimes, skipLockf
 					errs = append(errs, refErr.Error())
 				}
 			}
-			if app.Fnm != nil {
-				if refErr := validateAppRuntimeRef(app.Fnm.Runtime, RuntimeKindFNM, appName, runtimes); refErr != nil {
+			if app.Node != nil {
+				if refErr := validateAppRuntimeRef(app.Node.Runtime, RuntimeKindNode, appName, runtimes); refErr != nil {
 					errs = append(errs, refErr.Error())
 				}
 			}
@@ -537,55 +538,11 @@ func ValidateRuntimes(runtimes MapOfRuntimes) error {
 
 	for _, name := range names {
 		rc := runtimes[name]
-		if rc.Kind == RuntimeKindFNM {
-			if rc.FNM == nil {
-				errs = append(errs, fmt.Sprintf("runtime %q: FNM runtime requires fnm config with nodeVersion, pnpmVersion, and pnpmHash", name))
-			} else {
-				if rc.FNM.NodeVersion == "" {
-					errs = append(errs, fmt.Sprintf("runtime %q: fnm.nodeVersion is required", name))
-				} else if !isValidVersionString(rc.FNM.NodeVersion) {
-					errs = append(errs, fmt.Sprintf("runtime %q: fnm.nodeVersion %q contains invalid characters (must be alphanumeric, dots, hyphens, underscores, or plus signs)", name, rc.FNM.NodeVersion))
-				}
-				if rc.FNM.PNPMVersion == "" {
-					errs = append(errs, fmt.Sprintf("runtime %q: fnm.pnpmVersion is required", name))
-				} else if !isValidVersionString(rc.FNM.PNPMVersion) {
-					errs = append(errs, fmt.Sprintf("runtime %q: fnm.pnpmVersion %q contains invalid characters (must be alphanumeric, dots, hyphens, underscores, or plus signs)", name, rc.FNM.PNPMVersion))
-				}
-				if rc.FNM.PNPMHash == "" {
-					errs = append(errs, fmt.Sprintf("runtime %q: fnm.pnpmHash is required (SHA-256 hash of PNPM tarball)", name))
-				} else if !isValidSHA256Hex(rc.FNM.PNPMHash) {
-					errs = append(errs, fmt.Sprintf("runtime %q: fnm.pnpmHash must be a valid SHA-256 hex string (64 lowercase hex characters)", name))
-				}
-			}
-		}
-		if rc.Kind == RuntimeKindJVM {
-			if rc.JVM == nil {
-				errs = append(errs, fmt.Sprintf("runtime %q: JVM runtime requires jvm config with javaVersion", name))
-			} else {
-				if rc.JVM.JavaVersion == "" {
-					errs = append(errs, fmt.Sprintf("runtime %q: jvm.javaVersion is required", name))
-				} else if !isValidVersionString(rc.JVM.JavaVersion) {
-					errs = append(errs, fmt.Sprintf("runtime %q: jvm.javaVersion %q contains invalid characters (must be alphanumeric, dots, hyphens, underscores, or plus signs)", name, rc.JVM.JavaVersion))
-				}
-			}
-		}
-		if rc.Kind == RuntimeKindGo {
-			switch {
-			case rc.Mode == RuntimeModeSystem:
-				// goVersion is optional in system mode; it only feeds cache
-				// invalidation (mirrors UV's pythonVersion). Validate it only
-				// when explicitly set. A missing-version warning is emitted in
-				// doValidateApps, matching the UV pattern.
-				if rc.Go != nil && rc.Go.GoVersion != "" && !isValidVersionString(rc.Go.GoVersion) {
-					errs = append(errs, fmt.Sprintf("runtime %q: go.goVersion %q contains invalid characters (must be alphanumeric, dots, hyphens, underscores, or plus signs)", name, rc.Go.GoVersion))
-				}
-			case rc.Go == nil:
-				errs = append(errs, fmt.Sprintf("runtime %q: Go runtime requires go config with goVersion", name))
-			case rc.Go.GoVersion == "":
-				errs = append(errs, fmt.Sprintf("runtime %q: go.goVersion is required", name))
-			case !isValidVersionString(rc.Go.GoVersion):
-				errs = append(errs, fmt.Sprintf("runtime %q: go.goVersion %q contains invalid characters (must be alphanumeric, dots, hyphens, underscores, or plus signs)", name, rc.Go.GoVersion))
-			}
+		// Kind-specific sub-config validation is registry-driven so the rules live
+		// next to the kind they describe (see runtimekind.go). Unknown/legacy kinds
+		// have no registry entry and are skipped here (mode checks below still run).
+		if info, ok := LookupRuntimeKind(rc.Kind); ok && info.Validate != nil {
+			errs = append(errs, info.Validate(name, rc)...)
 		}
 		if rc.Mode == RuntimeModeManaged {
 			if rc.Managed == nil {

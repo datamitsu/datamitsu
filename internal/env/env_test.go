@@ -328,8 +328,8 @@ func TestGetAppEnvPath(t *testing.T) {
 		t.Fatalf("failed to set env: %v", err)
 	}
 
-	got := GetAppEnvPath("fnm", "eslint", "def456")
-	want := filepath.Join("/tmp/test-cache", "store", ".apps", "fnm", "eslint", "def456")
+	got := GetAppEnvPath("node", "eslint", "def456")
+	want := filepath.Join("/tmp/test-cache", "store", ".apps", "node", "eslint", "def456")
 	if got != want {
 		t.Errorf("GetAppEnvPath() = %q, want %q", got, want)
 	}
@@ -354,44 +354,6 @@ func TestGetPNPMStorePath(t *testing.T) {
 	}
 }
 
-func TestGetNodeBinaryPath(t *testing.T) {
-	tests := []struct {
-		name        string
-		storeRoot   string
-		nodeVersion string
-		wantUnix    string
-		wantWindows string
-	}{
-		{
-			name:        "standard version",
-			storeRoot:   "/tmp/test-cache",
-			nodeVersion: "20.11.1",
-			wantUnix:    filepath.Join("/tmp/test-cache", ".runtimes", "fnm-nodes", "v20.11.1", "installation", "bin", "node"),
-			wantWindows: filepath.Join("/tmp/test-cache", ".runtimes", "fnm-nodes", "v20.11.1", "installation", "node.exe"),
-		},
-		{
-			name:        "different version",
-			storeRoot:   "/home/user/.cache/datamitsu",
-			nodeVersion: "22.0.0",
-			wantUnix:    filepath.Join("/home/user/.cache/datamitsu", ".runtimes", "fnm-nodes", "v22.0.0", "installation", "bin", "node"),
-			wantWindows: filepath.Join("/home/user/.cache/datamitsu", ".runtimes", "fnm-nodes", "v22.0.0", "installation", "node.exe"),
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := GetNodeBinaryPath(tt.storeRoot, tt.nodeVersion)
-			want := tt.wantUnix
-			if runtime.GOOS == "windows" {
-				want = tt.wantWindows
-			}
-			if got != want {
-				t.Errorf("GetNodeBinaryPath() = %q, want %q", got, want)
-			}
-		})
-	}
-}
-
 func TestGetPNPMPath(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -405,21 +367,21 @@ func TestGetPNPMPath(t *testing.T) {
 			storeRoot:   "/tmp/test-cache",
 			pnpmVersion: "9.15.4",
 			pnpmHash:    "abc123",
-			want:        filepath.Join("/tmp/test-cache", ".runtimes", "fnm-pnpm", "9.15.4", "abc123", "package", "bin", "pnpm.cjs"),
+			want:        filepath.Join("/tmp/test-cache", ".runtimes", "pnpm", "9.15.4", "abc123", "package", "bin", "pnpm.cjs"),
 		},
 		{
 			name:        "different version",
 			storeRoot:   "/home/user/.cache/datamitsu",
 			pnpmVersion: "10.0.0",
 			pnpmHash:    "def456",
-			want:        filepath.Join("/home/user/.cache/datamitsu", ".runtimes", "fnm-pnpm", "10.0.0", "def456", "package", "bin", "pnpm.cjs"),
+			want:        filepath.Join("/home/user/.cache/datamitsu", ".runtimes", "pnpm", "10.0.0", "def456", "package", "bin", "pnpm.cjs"),
 		},
 		{
 			name:        "different hash same version gets different path",
 			storeRoot:   "/tmp/test-cache",
 			pnpmVersion: "9.15.4",
 			pnpmHash:    "different789",
-			want:        filepath.Join("/tmp/test-cache", ".runtimes", "fnm-pnpm", "9.15.4", "different789", "package", "bin", "pnpm.cjs"),
+			want:        filepath.Join("/tmp/test-cache", ".runtimes", "pnpm", "9.15.4", "different789", "package", "bin", "pnpm.cjs"),
 		},
 	}
 

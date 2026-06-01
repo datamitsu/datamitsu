@@ -259,12 +259,12 @@ func TestGetCommandInfo_UVApp_NoRuntimeManager(t *testing.T) {
 	}
 }
 
-func TestAppConfigFNM_Fields(t *testing.T) {
-	cfg := AppConfigFNM{
+func TestAppConfigNode_Fields(t *testing.T) {
+	cfg := AppConfigNode{
 		PackageName:  "@mermaid-js/mermaid-cli",
 		Version:      "11.12.0",
 		BinPath:      "node_modules/.bin/mmdc",
-		Runtime:      "fnm",
+		Runtime:      "node",
 		LockFile:     "lockfile: content",
 		Dependencies: map[string]string{"playwright": "1.52.0"},
 	}
@@ -278,8 +278,8 @@ func TestAppConfigFNM_Fields(t *testing.T) {
 	if cfg.BinPath != "node_modules/.bin/mmdc" {
 		t.Errorf("BinPath = %q, want %q", cfg.BinPath, "node_modules/.bin/mmdc")
 	}
-	if cfg.Runtime != "fnm" {
-		t.Errorf("Runtime = %q, want %q", cfg.Runtime, "fnm")
+	if cfg.Runtime != "node" {
+		t.Errorf("Runtime = %q, want %q", cfg.Runtime, "node")
 	}
 	if cfg.LockFile != "lockfile: content" {
 		t.Errorf("LockFile = %q, want %q", cfg.LockFile, "lockfile: content")
@@ -289,8 +289,8 @@ func TestAppConfigFNM_Fields(t *testing.T) {
 	}
 }
 
-func TestAppConfigFNM_OptionalFields(t *testing.T) {
-	cfg := AppConfigFNM{
+func TestAppConfigNode_OptionalFields(t *testing.T) {
+	cfg := AppConfigNode{
 		PackageName: "eslint",
 		Version:     "9.0.0",
 		BinPath:     "node_modules/.bin/eslint",
@@ -307,18 +307,18 @@ func TestAppConfigFNM_OptionalFields(t *testing.T) {
 	}
 }
 
-func TestApp_FnmField(t *testing.T) {
+func TestApp_NodeField(t *testing.T) {
 	app := App{
 		Required: true,
-		Fnm: &AppConfigFNM{
+		Node: &AppConfigNode{
 			PackageName: "@mermaid-js/mermaid-cli",
 			Version:     "11.12.0",
 			BinPath:     "node_modules/.bin/mmdc",
 		},
 	}
 
-	if app.Fnm == nil {
-		t.Fatal("expected Fnm to be non-nil")
+	if app.Node == nil {
+		t.Fatal("expected Node to be non-nil")
 	}
 	if app.Binary != nil {
 		t.Error("expected Binary to be nil")
@@ -331,13 +331,13 @@ func TestApp_FnmField(t *testing.T) {
 	}
 }
 
-func TestGetCommandInfo_FNMApp_DelegatesToRuntimeManager(t *testing.T) {
+func TestGetCommandInfo_NodeApp_DelegatesToRuntimeManager(t *testing.T) {
 	expectedInfo := &CommandInfo{
-		Type:    "fnm",
-		Command: "/cache/runtimes/fnm-nodes/v22.14.0/installation/bin/node",
-		Args:    []string{"/cache/apps/fnm/mmdc/xyz789/node_modules/.bin/mmdc"},
+		Type:    "node",
+		Command: "/cache/runtimes/node/v22.14.0/installation/bin/node",
+		Args:    []string{"/cache/apps/node/mmdc/xyz789/node_modules/.bin/mmdc"},
 		Env: map[string]string{
-			"npm_config_store_dir": "/cache/apps/fnm/mmdc/xyz789/.pnpm-store",
+			"npm_config_store_dir": "/cache/apps/node/mmdc/xyz789/.pnpm-store",
 		},
 	}
 
@@ -346,11 +346,11 @@ func TestGetCommandInfo_FNMApp_DelegatesToRuntimeManager(t *testing.T) {
 			if appName != "mmdc" {
 				t.Errorf("expected appName 'mmdc', got %q", appName)
 			}
-			if app.Fnm == nil {
-				t.Error("expected app.Fnm to be non-nil")
+			if app.Node == nil {
+				t.Error("expected app.Node to be non-nil")
 			}
-			if app.Fnm.PackageName != "@mermaid-js/mermaid-cli" {
-				t.Errorf("expected packageName '@mermaid-js/mermaid-cli', got %q", app.Fnm.PackageName)
+			if app.Node.PackageName != "@mermaid-js/mermaid-cli" {
+				t.Errorf("expected packageName '@mermaid-js/mermaid-cli', got %q", app.Node.PackageName)
 			}
 			return expectedInfo, nil
 		},
@@ -358,7 +358,7 @@ func TestGetCommandInfo_FNMApp_DelegatesToRuntimeManager(t *testing.T) {
 
 	bm := New(MapOfApps{
 		"mmdc": App{
-			Fnm: &AppConfigFNM{
+			Node: &AppConfigNode{
 				PackageName: "@mermaid-js/mermaid-cli",
 				Version:     "11.12.0",
 
@@ -376,10 +376,10 @@ func TestGetCommandInfo_FNMApp_DelegatesToRuntimeManager(t *testing.T) {
 	}
 }
 
-func TestGetCommandInfo_FNMApp_NoRuntimeManager(t *testing.T) {
+func TestGetCommandInfo_NodeApp_NoRuntimeManager(t *testing.T) {
 	bm := New(MapOfApps{
 		"mmdc": App{
-			Fnm: &AppConfigFNM{
+			Node: &AppConfigNode{
 				PackageName: "@mermaid-js/mermaid-cli",
 				Version:     "11.12.0",
 
@@ -394,14 +394,13 @@ func TestGetCommandInfo_FNMApp_NoRuntimeManager(t *testing.T) {
 	}
 }
 
-func TestGetAppsList_FNMApp(t *testing.T) {
+func TestGetAppsList_NodeApp(t *testing.T) {
 	bm := New(MapOfApps{
-		"mmdc": App{
-			Fnm: &AppConfigFNM{
-				PackageName: "@mermaid-js/mermaid-cli",
-				Version:     "11.12.0",
-
-				BinPath:     "node_modules/.bin/mmdc",
+		"eslint": App{
+			Node: &AppConfigNode{
+				PackageName: "eslint",
+				Version:     "9.0.0",
+				BinPath:     "node_modules/.bin/eslint",
 			},
 		},
 	}, nil, nil)
@@ -410,17 +409,17 @@ func TestGetAppsList_FNMApp(t *testing.T) {
 	if len(apps) != 1 {
 		t.Fatalf("expected 1 app, got %d", len(apps))
 	}
-	if apps[0].Type != "fnm" {
-		t.Errorf("expected type 'fnm', got %q", apps[0].Type)
+	if apps[0].Type != "node" {
+		t.Errorf("expected type 'node', got %q", apps[0].Type)
 	}
-	if apps[0].Name != "mmdc" {
-		t.Errorf("expected name 'mmdc', got %q", apps[0].Name)
+	if apps[0].Name != "eslint" {
+		t.Errorf("expected name 'eslint', got %q", apps[0].Name)
 	}
-	if apps[0].Version != "11.12.0" {
-		t.Errorf("expected version '11.12.0', got %q", apps[0].Version)
+	if apps[0].Version != "9.0.0" {
+		t.Errorf("expected version '9.0.0', got %q", apps[0].Version)
 	}
-	if apps[0].PackageName != "@mermaid-js/mermaid-cli" {
-		t.Errorf("expected packageName '@mermaid-js/mermaid-cli', got %q", apps[0].PackageName)
+	if apps[0].PackageName != "eslint" {
+		t.Errorf("expected packageName 'eslint', got %q", apps[0].PackageName)
 	}
 }
 
@@ -507,7 +506,7 @@ func TestGetAppsList_AllTypes(t *testing.T) {
 			Uv: &AppConfigUV{PackageName: "yamllint", Version: "1.38.0"},
 		},
 		"mmdc": App{
-			Fnm: &AppConfigFNM{
+			Node: &AppConfigNode{
 				PackageName: "@mermaid-js/mermaid-cli",
 				Version:     "11.12.0",
 				BinPath:     "node_modules/.bin/mmdc",
@@ -542,15 +541,15 @@ func TestGetAppsList_AllTypes(t *testing.T) {
 	}
 }
 
-func TestAppConfigFNM_JSONRoundTrip(t *testing.T) {
+func TestAppConfigNode_JSONRoundTrip(t *testing.T) {
 	original := App{
 		Required: true,
-		Fnm: &AppConfigFNM{
+		Node: &AppConfigNode{
 			PackageName:  "@mermaid-js/mermaid-cli",
 			Version:      "11.12.0",
 
 			BinPath:      "node_modules/.bin/mmdc",
-			Runtime:      "fnm",
+			Runtime:      "node",
 			LockFile:     "lockfile: content",
 			Dependencies: map[string]string{"playwright": "1.52.0"},
 		},
@@ -566,26 +565,26 @@ func TestAppConfigFNM_JSONRoundTrip(t *testing.T) {
 		t.Fatalf("Unmarshal error: %v", err)
 	}
 
-	if decoded.Fnm == nil {
-		t.Fatal("decoded.Fnm is nil after round-trip")
+	if decoded.Node == nil {
+		t.Fatal("decoded.Node is nil after round-trip")
 	}
-	if decoded.Fnm.PackageName != original.Fnm.PackageName {
-		t.Errorf("PackageName = %q, want %q", decoded.Fnm.PackageName, original.Fnm.PackageName)
+	if decoded.Node.PackageName != original.Node.PackageName {
+		t.Errorf("PackageName = %q, want %q", decoded.Node.PackageName, original.Node.PackageName)
 	}
-	if decoded.Fnm.BinPath != original.Fnm.BinPath {
-		t.Errorf("BinPath = %q, want %q", decoded.Fnm.BinPath, original.Fnm.BinPath)
+	if decoded.Node.BinPath != original.Node.BinPath {
+		t.Errorf("BinPath = %q, want %q", decoded.Node.BinPath, original.Node.BinPath)
 	}
-	if decoded.Fnm.Dependencies["playwright"] != "1.52.0" {
-		t.Errorf("Dependencies[playwright] = %q, want %q", decoded.Fnm.Dependencies["playwright"], "1.52.0")
+	if decoded.Node.Dependencies["playwright"] != "1.52.0" {
+		t.Errorf("Dependencies[playwright] = %q, want %q", decoded.Node.Dependencies["playwright"], "1.52.0")
 	}
 	if decoded.Binary != nil || decoded.Uv != nil || decoded.Shell != nil {
-		t.Error("expected other config fields to be nil after FNM-only round-trip")
+		t.Error("expected other config fields to be nil after Node-only round-trip")
 	}
 }
 
-func TestAppConfigFNM_JSONOmitsEmpty(t *testing.T) {
+func TestAppConfigNode_JSONOmitsEmpty(t *testing.T) {
 	app := App{
-		Fnm: &AppConfigFNM{
+		Node: &AppConfigNode{
 			PackageName: "eslint",
 			Version:     "9.0.0",
 
@@ -612,15 +611,15 @@ func TestAppConfigFNM_JSONOmitsEmpty(t *testing.T) {
 	if _, ok := raw["shell"]; ok {
 		t.Error("expected shell to be omitted")
 	}
-	if _, ok := raw["fnm"]; !ok {
-		t.Error("expected fnm to be present")
+	if _, ok := raw["node"]; !ok {
+		t.Error("expected node to be present")
 	}
 }
 
 func TestApp_FilesAndLinks_JSONRoundTrip(t *testing.T) {
 	original := App{
 		Required: true,
-		Fnm: &AppConfigFNM{
+		Node: &AppConfigNode{
 			PackageName: "eslint",
 			Version:     "9.0.0",
 
@@ -669,7 +668,7 @@ func TestApp_FilesAndLinks_JSONRoundTrip(t *testing.T) {
 
 func TestApp_FilesAndLinks_OmittedWhenEmpty(t *testing.T) {
 	app := App{
-		Fnm: &AppConfigFNM{
+		Node: &AppConfigNode{
 			PackageName: "eslint",
 			Version:     "9.0.0",
 
@@ -697,7 +696,7 @@ func TestApp_FilesAndLinks_OmittedWhenEmpty(t *testing.T) {
 
 func TestApp_FilesWithoutLinks_JSONRoundTrip(t *testing.T) {
 	original := App{
-		Fnm: &AppConfigFNM{
+		Node: &AppConfigNode{
 			PackageName: "eslint",
 			Version:     "9.0.0",
 
@@ -726,9 +725,9 @@ func TestApp_FilesWithoutLinks_JSONRoundTrip(t *testing.T) {
 	}
 }
 
-func TestAppConfigFNM_LockFile_JSONRoundTrip(t *testing.T) {
+func TestAppConfigNode_LockFile_JSONRoundTrip(t *testing.T) {
 	original := App{
-		Fnm: &AppConfigFNM{
+		Node: &AppConfigNode{
 			PackageName: "eslint",
 			Version:     "9.0.0",
 
@@ -747,8 +746,8 @@ func TestAppConfigFNM_LockFile_JSONRoundTrip(t *testing.T) {
 		t.Fatalf("Unmarshal error: %v", err)
 	}
 
-	if decoded.Fnm.LockFile != original.Fnm.LockFile {
-		t.Errorf("LockFile = %q, want %q", decoded.Fnm.LockFile, original.Fnm.LockFile)
+	if decoded.Node.LockFile != original.Node.LockFile {
+		t.Errorf("LockFile = %q, want %q", decoded.Node.LockFile, original.Node.LockFile)
 	}
 }
 
@@ -778,7 +777,7 @@ func TestAppConfigUV_LockFile_JSONRoundTrip(t *testing.T) {
 
 func TestAppConfigLockFile_OmittedWhenEmpty(t *testing.T) {
 	app := App{
-		Fnm: &AppConfigFNM{
+		Node: &AppConfigNode{
 			PackageName: "eslint",
 			Version:     "9.0.0",
 
@@ -855,8 +854,8 @@ func TestApp_GoField(t *testing.T) {
 	if app.Uv != nil {
 		t.Error("expected Uv to be nil")
 	}
-	if app.Fnm != nil {
-		t.Error("expected Fnm to be nil")
+	if app.Node != nil {
+		t.Error("expected Node to be nil")
 	}
 	if app.Shell != nil {
 		t.Error("expected Shell to be nil")
@@ -899,7 +898,7 @@ func TestAppConfigGo_JSONRoundTrip(t *testing.T) {
 	if decoded.Go.LockFile != original.Go.LockFile {
 		t.Errorf("LockFile = %q, want %q", decoded.Go.LockFile, original.Go.LockFile)
 	}
-	if decoded.Binary != nil || decoded.Uv != nil || decoded.Fnm != nil || decoded.Shell != nil {
+	if decoded.Binary != nil || decoded.Uv != nil || decoded.Node != nil || decoded.Shell != nil {
 		t.Error("expected other config fields to be nil after Go-only round-trip")
 	}
 }
@@ -928,8 +927,8 @@ func TestAppConfigGo_JSONOmitsEmpty(t *testing.T) {
 	if _, ok := raw["uv"]; ok {
 		t.Error("expected uv to be omitted")
 	}
-	if _, ok := raw["fnm"]; ok {
-		t.Error("expected fnm to be omitted")
+	if _, ok := raw["node"]; ok {
+		t.Error("expected node to be omitted")
 	}
 
 	if strings.Contains(string(data), "lockFile") {

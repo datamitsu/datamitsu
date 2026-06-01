@@ -134,7 +134,7 @@ func TestCountFilesEmpty(t *testing.T) {
 func TestAppsInspect_ShowsDescription(t *testing.T) {
 	app := binmanager.App{
 		Description: "A spell checker for code",
-		Fnm:         &binmanager.AppConfigFNM{PackageName: "cspell", Version: "9.8.0"},
+		Node:        &binmanager.AppConfigNode{PackageName: "cspell", Version: "9.8.0"},
 	}
 
 	output := formatInspectHeader("/path/to/app", &app)
