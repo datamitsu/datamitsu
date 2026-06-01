@@ -17,15 +17,16 @@ Supported archive formats include: `tar.gz`, `tar.xz`, `tar.bz2`, `tar.zst`, `zi
 
 ### App Types
 
-datamitsu supports five types of applications:
+datamitsu supports six types of applications:
 
-| Type     | Description                                 | Example Tools                       |
-| -------- | ------------------------------------------- | ----------------------------------- |
-| `binary` | Self-managed binaries with URLs and hashes  | golangci-lint, hadolint, shellcheck |
-| `uv`     | Python packages via managed UV runtime      | yamllint, ruff                      |
-| `fnm`    | npm packages via FNM-managed Node.js + PNPM | eslint, prettier, spectral          |
-| `jvm`    | JVM applications via managed JDK            | openapi-generator-cli               |
-| `shell`  | Shell commands with custom environment      | custom scripts                      |
+| Type     | Description                                | Example Tools                       |
+| -------- | ------------------------------------------ | ----------------------------------- |
+| `binary` | Self-managed binaries with URLs and hashes | golangci-lint, hadolint, shellcheck |
+| `uv`     | Python packages via managed UV runtime     | yamllint, ruff                      |
+| `node`   | npm packages via managed Node.js + pnpm    | eslint, prettier, spectral          |
+| `jvm`    | JVM applications via managed JDK           | openapi-generator-cli               |
+| `go`     | Go tools built from source via managed SDK | govulncheck                         |
+| `shell`  | Shell commands with custom environment     | custom scripts                      |
 
 ## Runtime Management
 
@@ -33,7 +34,7 @@ For tools that need a language runtime (Python, Node.js, Java), datamitsu manage
 
 ### How Runtimes Work
 
-1. **Managed mode** — datamitsu downloads the runtime binary (UV, FNM, or JDK) with hash verification
+1. **Managed mode** — datamitsu downloads the runtime binary (UV, Node.js, JDK, or Go SDK) with hash verification
 2. **System mode** — Uses a runtime already installed on your system
 
 Each runtime-managed app gets an isolated directory at `~/.cache/datamitsu/store/.apps/{runtime}/{app}/{hash}/`. The hash includes the runtime config, app config, OS, and architecture, so any change produces a fresh environment.
@@ -41,12 +42,13 @@ Each runtime-managed app gets an isolated directory at `~/.cache/datamitsu/store
 ### Runtime Types
 
 - **UV** (Python) — Downloads UV, optionally pins a Python version, creates an isolated project environment with `pyproject.toml` + `uv sync`
-- **FNM** (Node.js) — Downloads FNM, installs a specific Node.js version, downloads PNPM from npm registry, runs `pnpm install` in isolated app directories
+- **Node** (Node.js) — Downloads and verifies (SHA-256) a pinned Node.js archive and extracts it, downloads pnpm from the npm registry, runs `pnpm install` in isolated app directories
 - **JVM** (Java) — Downloads Temurin JDK, extracts the full JDK tree, downloads JAR files with hash verification, executes via `java -jar`
+- **Go** — Downloads and verifies (SHA-256) a pinned Go SDK, builds tools from source with `go build -trimpath -mod=readonly` against a `go.mod` + `go.sum` lock file
 
 ### Lock Files
 
-FNM and UV apps support lock files (`pnpm-lock.yaml` and `uv.lock`) for reproducible installations. Lock file content can be embedded in config using brotli compression.
+Node and UV apps support lock files (`pnpm-lock.yaml` and `uv.lock`) for reproducible installations. Lock file content can be embedded in config using brotli compression.
 
 Generate a lock file:
 
@@ -62,7 +64,7 @@ Apps declare what files they expose through `Links`:
 
 ```typescript
 "eslint-config": {
-  fnm: {
+  node: {
     packageName: "@company/eslint-config",
     binPath: "node_modules/.bin/eslint",
     version: "1.0.0",
@@ -201,4 +203,4 @@ When running from a subdirectory, datamitsu restricts its scope to projects with
 
 - [Configuration Guide](../guides/configuration.md) — Deep dive into config files and options
 - [Binary Management Guide](../guides/binary-management.md) — Managing tool binaries in detail
-- [Runtime Management Guide](../guides/runtime-management.md) — UV, FNM, and JVM runtimes
+- [Runtime Management Guide](../guides/runtime-management.md) — UV, Node, JVM, and Go runtimes

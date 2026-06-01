@@ -43,9 +43,9 @@ func TestConfigLockfileAcceptsZeroOrOneArgs(t *testing.T) {
 	}
 }
 
-func TestPrintAppInfo_FNM(t *testing.T) {
+func TestPrintAppInfo_Node(t *testing.T) {
 	app := binmanager.App{
-		Fnm: &binmanager.AppConfigFNM{
+		Node: &binmanager.AppConfigNode{
 			PackageName: "@mermaid-js/mermaid-cli",
 			Version:     "11.4.2",
 			BinPath:     "node_modules/.bin/mmdc",
@@ -72,7 +72,7 @@ func TestPrintAppInfo_FNM(t *testing.T) {
 	if !strings.Contains(output, "App: mermaid") {
 		t.Errorf("missing app name in output: %s", output)
 	}
-	if !strings.Contains(output, "Runtime:      fnm") {
+	if !strings.Contains(output, "Runtime:      node") {
 		t.Errorf("missing runtime in output: %s", output)
 	}
 	if !strings.Contains(output, "Version:      11.4.2") {
@@ -199,13 +199,13 @@ func TestPrintAppInfo_Shell(t *testing.T) {
 func TestListLockfileApps(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"mermaid": {
-			Fnm: &binmanager.AppConfigFNM{
+			Node: &binmanager.AppConfigNode{
 				PackageName: "@mermaid-js/mermaid-cli",
 				Version:     "11.4.2",
 			},
 		},
 		"eslint": {
-			Fnm: &binmanager.AppConfigFNM{
+			Node: &binmanager.AppConfigNode{
 				PackageName: "eslint",
 				Version:     "9.0.0",
 			},
@@ -243,8 +243,8 @@ func TestListLockfileApps(t *testing.T) {
 	n, _ := r.Read(buf)
 	output := string(buf[:n])
 
-	if !strings.Contains(output, "fnm:") {
-		t.Errorf("missing fnm group header in output: %s", output)
+	if !strings.Contains(output, "node:") {
+		t.Errorf("missing node group header in output: %s", output)
 	}
 	if !strings.Contains(output, "uv:") {
 		t.Errorf("missing uv group header in output: %s", output)
@@ -271,11 +271,11 @@ func TestListLockfileApps(t *testing.T) {
 		t.Errorf("shell app should not be listed: %s", output)
 	}
 
-	// Verify sorted order: eslint before mermaid in fnm section
+	// Verify sorted order: eslint before mermaid in node section
 	eslintIdx := strings.Index(output, "eslint")
 	mermaidIdx := strings.Index(output, "mermaid")
 	if eslintIdx > mermaidIdx {
-		t.Errorf("fnm apps should be sorted alphabetically, eslint at %d, mermaid at %d", eslintIdx, mermaidIdx)
+		t.Errorf("node apps should be sorted alphabetically, eslint at %d, mermaid at %d", eslintIdx, mermaidIdx)
 	}
 }
 
@@ -304,7 +304,7 @@ func TestListLockfileApps_Empty(t *testing.T) {
 	}
 }
 
-func TestReadLockFile_FNM(t *testing.T) {
+func TestReadLockFile_Node(t *testing.T) {
 	tmpDir := t.TempDir()
 	lockContent := "lockfileVersion: '9.0'\n"
 
@@ -313,7 +313,7 @@ func TestReadLockFile_FNM(t *testing.T) {
 	}
 
 	app := binmanager.App{
-		Fnm: &binmanager.AppConfigFNM{
+		Node: &binmanager.AppConfigNode{
 			PackageName: "eslint",
 			Version:     "9.0.0",
 		},
@@ -408,7 +408,7 @@ func TestReadLockFile_MissingFile(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	app := binmanager.App{
-		Fnm: &binmanager.AppConfigFNM{
+		Node: &binmanager.AppConfigNode{
 			PackageName: "eslint",
 		},
 	}
@@ -545,11 +545,11 @@ func TestGenerateGoLockContent_RemovesTempWorkDirOnError(t *testing.T) {
 	}
 }
 
-func TestClearAppLockFile_FNMClearsLockFilePreservesFiles(t *testing.T) {
+func TestClearAppLockFile_NodeClearsLockFilePreservesFiles(t *testing.T) {
 	originalWorkspace := "allowBuilds:\n  puppeteer: true\n"
 	apps := binmanager.MapOfApps{
 		"mmdc": {
-			Fnm: &binmanager.AppConfigFNM{
+			Node: &binmanager.AppConfigNode{
 				PackageName: "@mermaid-js/mermaid-cli",
 				Version:     "11.4.2",
 				BinPath:     "node_modules/.bin/mmdc",
@@ -564,8 +564,8 @@ func TestClearAppLockFile_FNMClearsLockFilePreservesFiles(t *testing.T) {
 
 	fresh := clearAppLockFile(apps, "mmdc")
 
-	if fresh["mmdc"].Fnm.LockFile != "" {
-		t.Errorf("LockFile = %q, want empty after clearing", fresh["mmdc"].Fnm.LockFile)
+	if fresh["mmdc"].Node.LockFile != "" {
+		t.Errorf("LockFile = %q, want empty after clearing", fresh["mmdc"].Node.LockFile)
 	}
 	if got := fresh["mmdc"].Files["pnpm-workspace.yaml"]; got != originalWorkspace {
 		t.Errorf("Files[pnpm-workspace.yaml] lost or mutated: got %q, want %q", got, originalWorkspace)
@@ -573,7 +573,7 @@ func TestClearAppLockFile_FNMClearsLockFilePreservesFiles(t *testing.T) {
 	if fresh["mmdc"].Files[".npmrc"] == "" {
 		t.Error("Files[.npmrc] should be preserved")
 	}
-	if apps["mmdc"].Fnm.LockFile == "" {
+	if apps["mmdc"].Node.LockFile == "" {
 		t.Error("original apps map was mutated: LockFile should still be set on the source")
 	}
 }
@@ -640,14 +640,14 @@ func TestClearAppLockFile_GoClearsLockFilePreservesFields(t *testing.T) {
 func TestClearAppLockFile_OtherAppsUntouched(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"mmdc": {
-			Fnm: &binmanager.AppConfigFNM{
+			Node: &binmanager.AppConfigNode{
 				PackageName: "@mermaid-js/mermaid-cli",
 				Version:     "11.4.2",
 				LockFile:    "lockfile-1",
 			},
 		},
 		"eslint": {
-			Fnm: &binmanager.AppConfigFNM{
+			Node: &binmanager.AppConfigNode{
 				PackageName: "eslint",
 				Version:     "9.0.0",
 				LockFile:    "lockfile-2",
@@ -657,18 +657,18 @@ func TestClearAppLockFile_OtherAppsUntouched(t *testing.T) {
 
 	fresh := clearAppLockFile(apps, "mmdc")
 
-	if fresh["eslint"].Fnm.LockFile != "lockfile-2" {
-		t.Errorf("eslint.LockFile = %q, want %q (untouched)", fresh["eslint"].Fnm.LockFile, "lockfile-2")
+	if fresh["eslint"].Node.LockFile != "lockfile-2" {
+		t.Errorf("eslint.LockFile = %q, want %q (untouched)", fresh["eslint"].Node.LockFile, "lockfile-2")
 	}
-	if fresh["mmdc"].Fnm.LockFile != "" {
-		t.Errorf("mmdc.LockFile should be cleared, got %q", fresh["mmdc"].Fnm.LockFile)
+	if fresh["mmdc"].Node.LockFile != "" {
+		t.Errorf("mmdc.LockFile should be cleared, got %q", fresh["mmdc"].Node.LockFile)
 	}
 }
 
 func TestClearAppLockFile_MissingAppReturnsCopy(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"mmdc": {
-			Fnm: &binmanager.AppConfigFNM{PackageName: "@mermaid-js/mermaid-cli", LockFile: "x"},
+			Node: &binmanager.AppConfigNode{PackageName: "@mermaid-js/mermaid-cli", LockFile: "x"},
 		},
 	}
 
@@ -677,8 +677,8 @@ func TestClearAppLockFile_MissingAppReturnsCopy(t *testing.T) {
 	if len(fresh) != len(apps) {
 		t.Errorf("fresh len = %d, want %d", len(fresh), len(apps))
 	}
-	if fresh["mmdc"].Fnm.LockFile != "x" {
-		t.Errorf("unrelated app.LockFile = %q, want %q", fresh["mmdc"].Fnm.LockFile, "x")
+	if fresh["mmdc"].Node.LockFile != "x" {
+		t.Errorf("unrelated app.LockFile = %q, want %q", fresh["mmdc"].Node.LockFile, "x")
 	}
 }
 

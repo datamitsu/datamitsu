@@ -99,7 +99,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	// Install runtime-managed apps that have links, then set up config links.
-	// downloadBinaries only handles binary-type apps, so FNM/UV apps with links
+	// downloadBinaries only handles binary-type apps, so node/UV apps with links
 	// must be installed separately before CreateDatamitsuLinks can resolve their
 	// install roots.
 	if !initSkipDownload && !initDryRun {
@@ -424,7 +424,7 @@ func filterAppsForSmartInit(apps binmanager.MapOfApps, referencedApps []string) 
 	return result
 }
 
-// allRuntimeAppsWithLinks returns names of all runtime-managed (UV/FNM) apps
+// allRuntimeAppsWithLinks returns names of all runtime-managed (UV/node) apps
 // that have Links defined. These apps provide config files for symlinking
 // and should always be installed during init.
 func allRuntimeAppsWithLinks(apps binmanager.MapOfApps) []string {

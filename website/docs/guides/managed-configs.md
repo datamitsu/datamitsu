@@ -5,7 +5,7 @@ description: Using managed configuration files, symlinks, and the .datamitsu/ di
 
 # Managed Configs
 
-datamitsu can distribute configuration files from runtime-managed apps (FNM/UV) to your project via symlinks. This lets you share tool configurations like ESLint configs, Prettier configs, or any other files that tools need to find at your project root.
+datamitsu can distribute configuration files from runtime-managed apps (node/UV) to your project via symlinks. This lets you share tool configurations like ESLint configs, Prettier configs, or any other files that tools need to find at your project root.
 
 ## The .datamitsu/ Directory
 
@@ -15,8 +15,8 @@ When you run `datamitsu init`, it creates a `.datamitsu/` directory at your git 
 project-root/
 ├── .datamitsu/
 │   ├── datamitsu.config.d.ts  # auto-generated type definitions
-│   ├── eslint-config → ../.apps/fnm/my-eslint-config/{hash}/dist/eslint.config.js
-│   └── prettier-config → ../.apps/fnm/my-prettier-config/{hash}/.prettierrc.json
+│   ├── eslint-config → ../.apps/node/my-eslint-config/{hash}/dist/eslint.config.js
+│   └── prettier-config → ../.apps/node/my-prettier-config/{hash}/.prettierrc.json
 ├── eslint.config.js          # imports from .datamitsu/eslint-config
 └── .prettierrc.json          # symlink via ConfigInit
 ```
@@ -36,7 +36,7 @@ Apps declare links using the `links` field, which maps link names to relative pa
 ```javascript
 apps: {
   "my-eslint-config": {
-    fnm: {
+    node: {
       packageName: "@myorg/eslint-config",
       version: "2.0.0",
       binPath: "node_modules/.bin/eslint",
@@ -66,7 +66,7 @@ Apps can also include static file content that gets written to the install direc
 ```javascript
 apps: {
   "my-tool": {
-    fnm: {
+    node: {
       packageName: "my-tool",
       version: "1.0.0",
       binPath: "node_modules/.bin/my-tool",

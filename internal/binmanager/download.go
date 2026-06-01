@@ -3,12 +3,12 @@ package binmanager
 import (
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"time"
 
+	"github.com/datamitsu/datamitsu/internal/httpx"
 	"github.com/vbauerster/mpb/v8"
 	"github.com/vbauerster/mpb/v8/decor"
 	"go.uber.org/zap"
@@ -17,24 +17,10 @@ import (
 // MaxBinarySize is the maximum allowed download size (500 MiB).
 const MaxBinarySize = 500 * 1024 * 1024
 
-var httpClient = &http.Client{
-	Timeout: 5 * time.Minute,
-	Transport: &http.Transport{
-		Proxy:                 http.ProxyFromEnvironment,
-		DialContext:           (&net.Dialer{Timeout: 30 * time.Second}).DialContext,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ResponseHeaderTimeout: 30 * time.Second,
-	},
-	CheckRedirect: func(req *http.Request, via []*http.Request) error {
-		if len(via) >= 10 {
-			return fmt.Errorf("stopped after 10 redirects")
-		}
-		if len(via) > 0 && via[len(via)-1].URL.Scheme == "https" && req.URL.Scheme == "http" {
-			return fmt.Errorf("HTTPS to HTTP redirect rejected: %s", req.URL)
-		}
-		return nil
-	},
-}
+// httpClient downloads binaries on the shared hardened transport (proxy, dialer,
+// TLS/response-header timeouts, and the HTTPS→HTTP downgrade-rejecting redirect
+// guard). The 5-minute budget accommodates large archive downloads.
+var httpClient = httpx.NewHardenedClient(5 * time.Minute)
 
 func downloadFileInternal(url string, destDir string, name string, progress *mpb.Progress) (string, error) {
 	if name != "" {
