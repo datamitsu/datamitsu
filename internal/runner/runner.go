@@ -439,7 +439,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	// modes return earlier and never reach this point, so no installs happen
 	// during planning-only runs.
 	if sc.binMgr != nil {
-		if err := sc.binMgr.EnsureTools(ctx, toolNames); err != nil {
+		if err := sc.binMgr.EnsureTools(ctx, plan.GetAppNames()); err != nil {
 			return fmt.Errorf("failed to pre-install tools: %w", err)
 		}
 	}

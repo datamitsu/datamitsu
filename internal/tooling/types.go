@@ -79,3 +79,27 @@ func (p *ExecutionPlan) GetToolNames() []string {
 	sort.Strings(names)
 	return names
 }
+
+// GetAppNames returns a sorted list of unique app names referenced by the
+// execution plan. Apps are the units that actually get installed/resolved by
+// the BinManager (via GetCommandInfo), so this is what pre-install must use —
+// a tool's name is a registry key and may differ from the app it executes.
+// Empty app references are skipped.
+func (p *ExecutionPlan) GetAppNames() []string {
+	seen := make(map[string]bool)
+	var names []string
+
+	for _, group := range p.Groups {
+		for _, task := range group.Tasks {
+			app := task.OpConfig.App
+			if app == "" || seen[app] {
+				continue
+			}
+			seen[app] = true
+			names = append(names, app)
+		}
+	}
+
+	sort.Strings(names)
+	return names
+}

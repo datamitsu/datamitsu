@@ -1638,7 +1638,7 @@ func planWithTools(tools ...string) *tooling.ExecutionPlan {
 	for _, name := range tools {
 		tasks = append(tasks, tooling.Task{
 			ToolName: name,
-			OpConfig: config.ToolOperation{Scope: config.ToolScopeRepository},
+			OpConfig: config.ToolOperation{App: name, Scope: config.ToolScopeRepository},
 		})
 	}
 	return &tooling.ExecutionPlan{
@@ -1674,9 +1674,42 @@ func TestRunSingleOperationEnsuresToolsBeforeExecute(t *testing.T) {
 	if len(order) != 2 || order[0] != "ensure" || order[1] != "execute" {
 		t.Fatalf("expected EnsureTools before Execute, got order %v", order)
 	}
-	want := []string{"lefthook", "yq"} // sorted+deduped by GetToolNames
+	want := []string{"lefthook", "yq"} // sorted+deduped app names from GetAppNames
 	if strings.Join(ensurer.names, ",") != strings.Join(want, ",") {
 		t.Errorf("EnsureTools names = %v, want %v", ensurer.names, want)
+	}
+}
+
+func TestRunSingleOperationEnsuresAppNamesNotToolNames(t *testing.T) {
+	originalCI := os.Getenv("CI")
+	defer func() { _ = os.Setenv("CI", originalCI) }()
+	_ = os.Setenv("CI", "true")
+
+	var order []string
+	ensurer := &fakeEnsurer{order: &order}
+	executor := &fakeExecutor{order: &order}
+	// Tool names differ from the apps they execute. Pre-install must resolve the
+	// apps (what BinManager installs), not the tool registry keys.
+	plan := &tooling.ExecutionPlan{
+		Groups: []tooling.TaskGroup{{Tasks: []tooling.Task{
+			{ToolName: "lint-yaml", OpConfig: config.ToolOperation{App: "yq", Scope: config.ToolScopeRepository}},
+			{ToolName: "format", OpConfig: config.ToolOperation{App: "prettier", Scope: config.ToolScopeRepository}},
+		}}},
+	}
+	sc := &sharedContext{
+		planner:  &fakePlanner{plan: plan},
+		executor: executor,
+		binMgr:   ensurer,
+		timings:  timing.New(),
+	}
+
+	if err := runSingleOperation(context.Background(), sc, config.OpLint); err != nil {
+		t.Fatalf("runSingleOperation error: %v", err)
+	}
+
+	want := []string{"prettier", "yq"} // app names, sorted
+	if strings.Join(ensurer.names, ",") != strings.Join(want, ",") {
+		t.Errorf("EnsureTools names = %v, want app names %v", ensurer.names, want)
 	}
 }
 
