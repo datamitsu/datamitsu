@@ -18,6 +18,7 @@ import (
 
 	"github.com/vbauerster/mpb/v8"
 	"go.uber.org/zap"
+	"golang.org/x/sync/singleflight"
 )
 
 var log = logger.Logger.With(zap.Namespace("binmanager"))
@@ -126,6 +127,11 @@ type BinManager struct {
 	mapOfBundles   MapOfBundles
 	runtimeManager RuntimeAppManager
 	resolver       *target.Resolver
+
+	// downloadGroup coalesces concurrent downloads of the same binary so that
+	// N parallel GetBinaryPath calls for one uninstalled binary trigger exactly
+	// one download (keyed by binary name).
+	downloadGroup singleflight.Group
 }
 
 func New(mapOfApps MapOfApps, mapOfBundles MapOfBundles, runtimeManager RuntimeAppManager) *BinManager {
@@ -433,13 +439,27 @@ func (bm *BinManager) GetBinaryPath(name string) (string, error) {
 
 	log.Debug("binary not found in cache, downloading", zap.String("name", name))
 
-	fmt.Fprintf(os.Stderr, "⬇️  Downloading %s...\n", name)
+	// Coalesce concurrent downloads of the same binary: only one goroutine
+	// performs the download, the rest wait and share its result. Re-check the
+	// cache inside the critical section so a download that completed while we
+	// were blocked is a no-op.
+	_, err, _ = bm.downloadGroup.Do(name, func() (interface{}, error) {
+		if _, statErr := os.Stat(binPath); statErr == nil {
+			return nil, nil
+		}
 
-	if err := bm.download(name); err != nil {
-		return "", fmt.Errorf("failed to download %s: %w", name, err)
+		fmt.Fprintf(os.Stderr, "⬇️  Downloading %s...\n", name)
+
+		if err := bm.download(name); err != nil {
+			return nil, fmt.Errorf("failed to download %s: %w", name, err)
+		}
+
+		fmt.Fprintf(os.Stderr, "✅ Downloaded %s\n", name)
+		return nil, nil
+	})
+	if err != nil {
+		return "", err
 	}
-
-	fmt.Fprintf(os.Stderr, "✅ Downloaded %s\n", name)
 
 	return binPath, nil
 }

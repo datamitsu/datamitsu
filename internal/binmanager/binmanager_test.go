@@ -14,7 +14,9 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/datamitsu/datamitsu/internal/syslist"
 	"github.com/datamitsu/datamitsu/internal/target"
@@ -111,6 +113,144 @@ func TestConcurrentDownloadSameBinary(t *testing.T) {
 
 	if _, err := os.Stat(binPath); os.IsNotExist(err) {
 		t.Error("binary not found at expected path after concurrent downloads")
+	}
+}
+
+// TestGetBinaryPath_SingleFlight verifies that N concurrent GetBinaryPath
+// calls for the same uninstalled binary trigger exactly one download.
+func TestGetBinaryPath_SingleFlight(t *testing.T) {
+	testContent := []byte("#!/bin/sh\necho hello\n")
+	hash := sha256.Sum256(testContent)
+	expectedHash := hex.EncodeToString(hash[:])
+
+	var hits int64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt64(&hits, 1)
+		// Hold the connection briefly so concurrent callers overlap inside
+		// the single-flight critical section.
+		time.Sleep(50 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(testContent)
+	}))
+	defer server.Close()
+
+	tmpDir := t.TempDir()
+	t.Setenv("DATAMITSU_CACHE_DIR", tmpDir)
+
+	osType, err := syslist.GetOsTypeFromString(runtime.GOOS)
+	if err != nil {
+		t.Fatalf("failed to get OS type: %v", err)
+	}
+	archType, err := syslist.GetArchTypeFromString(runtime.GOARCH)
+	if err != nil {
+		t.Fatalf("failed to get arch type: %v", err)
+	}
+
+	bm := New(MapOfApps{
+		"testbin": App{
+			Required: true,
+			Binary: &AppConfigBinary{
+				Binaries: MapOfBinaries{
+					osType: {
+						archType: {"unknown": BinaryOsArchInfo{
+							URL:         server.URL,
+							Hash:        expectedHash,
+							ContentType: BinContentTypeBinary,
+						}},
+					},
+				},
+			},
+		},
+	}, nil, nil)
+
+	const goroutines = 8
+	paths := make([]string, goroutines)
+	errs := make([]error, goroutines)
+	var wg sync.WaitGroup
+	for i := 0; i < goroutines; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			paths[idx], errs[idx] = bm.GetBinaryPath("testbin")
+		}(i)
+	}
+	wg.Wait()
+
+	for i, err := range errs {
+		if err != nil {
+			t.Errorf("goroutine %d: GetBinaryPath() error = %v", i, err)
+		}
+	}
+
+	if got := atomic.LoadInt64(&hits); got != 1 {
+		t.Errorf("expected exactly 1 download, got %d", got)
+	}
+
+	for i, p := range paths {
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("goroutine %d: binary not present at %s: %v", i, p, err)
+		}
+	}
+}
+
+// TestGetBinaryPath_AlreadyInstalled verifies that an already-cached binary
+// returns immediately without performing a download.
+func TestGetBinaryPath_AlreadyInstalled(t *testing.T) {
+	testContent := []byte("#!/bin/sh\necho hello\n")
+	hash := sha256.Sum256(testContent)
+	expectedHash := hex.EncodeToString(hash[:])
+
+	var hits int64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt64(&hits, 1)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(testContent)
+	}))
+	defer server.Close()
+
+	tmpDir := t.TempDir()
+	t.Setenv("DATAMITSU_CACHE_DIR", tmpDir)
+
+	osType, err := syslist.GetOsTypeFromString(runtime.GOOS)
+	if err != nil {
+		t.Fatalf("failed to get OS type: %v", err)
+	}
+	archType, err := syslist.GetArchTypeFromString(runtime.GOARCH)
+	if err != nil {
+		t.Fatalf("failed to get arch type: %v", err)
+	}
+
+	bm := New(MapOfApps{
+		"testbin": App{
+			Required: true,
+			Binary: &AppConfigBinary{
+				Binaries: MapOfBinaries{
+					osType: {
+						archType: {"unknown": BinaryOsArchInfo{
+							URL:         server.URL,
+							Hash:        expectedHash,
+							ContentType: BinContentTypeBinary,
+						}},
+					},
+				},
+			},
+		},
+	}, nil, nil)
+
+	// First call downloads.
+	if _, err := bm.GetBinaryPath("testbin"); err != nil {
+		t.Fatalf("first GetBinaryPath() error = %v", err)
+	}
+	if got := atomic.LoadInt64(&hits); got != 1 {
+		t.Fatalf("expected 1 download after first call, got %d", got)
+	}
+
+	// Second call must hit the cache without downloading.
+	if _, err := bm.GetBinaryPath("testbin"); err != nil {
+		t.Fatalf("second GetBinaryPath() error = %v", err)
+	}
+	if got := atomic.LoadInt64(&hits); got != 1 {
+		t.Errorf("expected no additional download on cache hit, got %d total", got)
 	}
 }
 

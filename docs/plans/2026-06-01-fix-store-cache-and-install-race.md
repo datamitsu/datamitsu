@@ -129,10 +129,10 @@ Dependencies identified:
 
 ### Task 4: Single-flight `GetBinaryPath`
 
-- [ ] write test: N concurrent `GetBinaryPath` calls for the same uninstalled binary result in exactly one `download` (count via injected/stubbed downloader); run under `-race`
-- [ ] implement in `internal/binmanager/binmanager.go`: add a `singleflight.Group` field to `BinManager`; in `GetBinaryPath` (L423) wrap the `download(name)` call in `group.Do(name, ...)`, re-checking `os.Stat(binPath)` inside the critical section
-- [ ] write test: already-installed binary returns immediately without entering the group
-- [ ] run `go test -race ./internal/binmanager/...` — must pass before Task 5
+- [x] write test: N concurrent `GetBinaryPath` calls for the same uninstalled binary result in exactly one `download` (count via injected/stubbed downloader); run under `-race`
+- [x] implement in `internal/binmanager/binmanager.go`: add a `singleflight.Group` field to `BinManager`; in `GetBinaryPath` (L423) wrap the `download(name)` call in `group.Do(name, ...)`, re-checking `os.Stat(binPath)` inside the critical section
+- [x] write test: already-installed binary returns immediately without entering the group
+- [x] run `go test -race ./internal/binmanager/...` — must pass before Task 5
 
 ### Task 5: Add `BinManager.EnsureTools(ctx, names []string)`
 
