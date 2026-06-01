@@ -229,15 +229,15 @@ func moveDir(src, dst string) error {
 // partially-populated state: concurrent readers see either the absent dst or
 // the fully-copied one. If a concurrent move created dst first, the rename
 // fails but dst is already complete, so it is treated as success.
-func copyDirAtomic(src, dst string) (retErr error) {
+func copyDirAtomic(src, dst string) error {
 	tmpDir, err := os.MkdirTemp(filepath.Dir(dst), "move-*")
 	if err != nil {
 		return err
 	}
+	// Always clean up the temp dir: on success it is empty (staged was renamed
+	// out), and on the concurrent-dst path it still holds the staged copy.
 	defer func() {
-		if retErr != nil {
-			_ = os.RemoveAll(tmpDir)
-		}
+		_ = os.RemoveAll(tmpDir)
 	}()
 
 	// copyDir creates dst itself, so copy into a fresh child of the temp dir.
