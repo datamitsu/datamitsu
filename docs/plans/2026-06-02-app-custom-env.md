@@ -142,7 +142,7 @@ run time**, with placeholder expansion for datamitsu-managed paths.
 
 ### Task 7: [Final] Documentation
 
-- [ ] document `App.Env` + placeholders + precedence where app config options are
+- [x] document `App.Env` + placeholders + precedence where app config options are
       described; note the `shell.env` → `App.Env` migration (alpha breaking change)
 
 ## Technical Details
