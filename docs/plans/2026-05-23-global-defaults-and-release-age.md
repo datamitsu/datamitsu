@@ -162,17 +162,17 @@ Three-layer API: pure computation + idempotent lifecycle + cached getter. Thread
 
 ### Task 7: Add `GetPyPIPackageInfoWithMinAge`
 
-- [ ] add `pypiFullResponse` and `pypiReleaseFile` types in `internal/registry/pypi.go`
-- [ ] add `GetPyPIPackageInfoWithMinAge(packageName string, minAgeMinutes int)` — parse `releases` with `upload_time_iso_8601` (preferred) or `upload_time`, skip yanked and PEP 440 pre-release versions
-- [ ] implement PEP 440 pre-release detection via conservative regex `(?i)(a|b|rc)\d+|\.dev\d+` — matches `1.0.0a1`, `1.0.0b2`, `1.0.0rc1`, `1.0.0.dev3`
-- [ ] for versions with multiple files: version is yanked only if ALL files are yanked; use earliest `upload_time` among non-yanked files
-- [ ] write test: selects older version when latest is too fresh
-- [ ] write test: skips PEP 440 pre-release versions (`rc`, `a`, `b`, `dev`)
-- [ ] write test: skips fully yanked releases
-- [ ] write test: version with mixed yanked/non-yanked files is NOT skipped
-- [ ] write test: `minAgeMinutes=0` returns latest
-- [ ] write test: returns `(nil, nil)` when no version is old enough
-- [ ] run `go test ./internal/registry/...` — must pass before next task
+- [x] add `pypiFullResponse` and `pypiReleaseFile` types in `internal/registry/pypi.go`
+- [x] add `GetPyPIPackageInfoWithMinAge(packageName string, minAgeMinutes int)` — parse `releases` with `upload_time_iso_8601` (preferred) or `upload_time`, skip yanked and PEP 440 pre-release versions
+- [x] implement PEP 440 pre-release detection via conservative regex `(?i)(a|b|rc)\d+|\.dev\d+` — matches `1.0.0a1`, `1.0.0b2`, `1.0.0rc1`, `1.0.0.dev3`
+- [x] for versions with multiple files: version is yanked only if ALL files are yanked; use earliest `upload_time` among non-yanked files
+- [x] write test: selects older version when latest is too fresh
+- [x] write test: skips PEP 440 pre-release versions (`rc`, `a`, `b`, `dev`)
+- [x] write test: skips fully yanked releases
+- [x] write test: version with mixed yanked/non-yanked files is NOT skipped
+- [x] write test: `minAgeMinutes=0` returns latest
+- [x] write test: returns `(nil, nil)` when no version is old enough
+- [x] run `go test ./internal/registry/...` — must pass before next task
 
 ### Task 8: Create shared `--min-age` flag infrastructure
 
