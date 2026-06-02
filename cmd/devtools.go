@@ -5,6 +5,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/detector"
 	"github.com/datamitsu/datamitsu/internal/github"
+	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"github.com/datamitsu/datamitsu/internal/syslist"
 	"encoding/hex"
 	"fmt"
@@ -18,6 +19,7 @@ import (
 var (
 	updateFlag           bool
 	verifyExtractionFlag bool
+	pullGithubMinAge     *int
 )
 
 var devtoolsCmd = &cobra.Command{
@@ -52,6 +54,7 @@ func init() {
 		"Fetch latest release tags before updating binaries")
 	pullGithubCmd.Flags().BoolVar(&verifyExtractionFlag, "verify-extraction", false,
 		"Download and verify binary extraction for all platforms before saving")
+	pullGithubMinAge = addMinAgeFlag(pullGithubCmd)
 }
 
 func ensureGitHubAppsJSONExists(path string) error {
@@ -91,6 +94,13 @@ func runPullGithub(cmd *cobra.Command, args []string) error {
 	// Get file path from positional argument
 	githubAppsPath := args[0]
 
+	// Resolve the effective minimum release age from runtime config + flag.
+	eff, err := runtimeconfig.Get()
+	if err != nil {
+		return fmt.Errorf("failed to read runtime config: %w", err)
+	}
+	minAge := resolveMinAge(*pullGithubMinAge, eff)
+
 	// Create file if it doesn't exist
 	if err := ensureGitHubAppsJSONExists(githubAppsPath); err != nil {
 		return fmt.Errorf("failed to ensure file exists: %w", err)
@@ -107,6 +117,8 @@ func runPullGithub(cmd *cobra.Command, args []string) error {
 		fmt.Printf("No apps found in %s\n", githubAppsPath)
 		return nil
 	}
+
+	fmt.Printf("Minimum release age: %s\n", minAgeBanner(minAge))
 
 	// Create GitHub client
 	client := github.NewClient()
@@ -128,13 +140,30 @@ func runPullGithub(cmd *cobra.Command, args []string) error {
 		var release *github.Release
 		effectiveTag := metadata.Tag
 		if updateFlag {
-			fmt.Printf("Fetching latest release...\n")
-			release, err = client.GetLatestRelease(metadata.Owner, metadata.Repo)
+			if minAge > 0 {
+				fmt.Printf("Fetching latest release at least %d minutes old...\n", minAge)
+			} else {
+				fmt.Printf("Fetching latest release...\n")
+			}
+			// GetLatestReleaseWithMinAge falls through to GetLatestRelease when
+			// minAge <= 0, so a nil release only happens under an active cutoff.
+			release, err = client.GetLatestReleaseWithMinAge(metadata.Owner, metadata.Repo, minAge)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error fetching latest release: %v\n", err)
 				continue
 			}
-			if release.TagName != metadata.Tag {
+			if release == nil {
+				// No release is old enough under the active min-age cutoff.
+				if state.Binaries[appName] != nil {
+					// Existing app: warn and keep the current tag.
+					fmt.Fprintf(os.Stderr,
+						"Warning: no release for %s is at least %d minutes old; keeping current tag %s\n",
+						appName, minAge, metadata.Tag)
+				} else {
+					// New app: nothing safe to install — hard error.
+					return noReleaseOldEnoughErr(appName, minAge)
+				}
+			} else if release.TagName != metadata.Tag {
 				fmt.Printf("Latest release: %s (updating from %s)\n", release.TagName, metadata.Tag)
 				effectiveTag = release.TagName
 			} else {

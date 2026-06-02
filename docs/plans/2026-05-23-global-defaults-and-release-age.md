@@ -182,12 +182,12 @@ Three-layer API: pure computation + idempotent lifecycle + cached getter. Thread
 
 ### Task 9: Integrate `--min-age` into `pull-github`
 
-- [ ] register `--min-age` flag on `pullGithubCmd` in `cmd/devtools.go`
-- [ ] get `runtimeconfig.Get()` at command start, pass `eff` to `resolveMinAge`
-- [ ] modify `runPullGithub`: use `GetLatestReleaseWithMinAge` when resolved min age > 0
-- [ ] handle nil return: existing app = warn + keep tag; new app = hard error
-- [ ] print min age in status banner
-- [ ] run `go test ./cmd/...` — must pass before next task
+- [x] register `--min-age` flag on `pullGithubCmd` in `cmd/devtools.go`
+- [x] get `runtimeconfig.Get()` at command start, pass `eff` to `resolveMinAge`
+- [x] modify `runPullGithub`: use `GetLatestReleaseWithMinAge` when resolved min age > 0
+- [x] handle nil return: existing app = warn + keep tag; new app = hard error
+- [x] print min age in status banner
+- [x] run `go test ./cmd/...` — must pass before next task
 
 ### Task 10: Integrate `--min-age` into `pull-fnm`
 

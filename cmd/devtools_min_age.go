@@ -38,3 +38,23 @@ func minAgeDescription() string {
 		runtimeconfig.MinimumReleaseAgeMinutes,
 	)
 }
+
+// minAgeBanner returns a human-readable description of the effective minimum
+// release age for the status output of pull-* commands. A value <= 0 means age
+// filtering is disabled.
+func minAgeBanner(minAge int) string {
+	if minAge <= 0 {
+		return "disabled"
+	}
+	return fmt.Sprintf("%d minutes", minAge)
+}
+
+// noReleaseOldEnoughErr builds the hard error returned when no release/version
+// for name satisfies the minAge cutoff and there is nothing safe to fall back
+// to (e.g. a brand-new app). It points the user at the --min-age 0 bypass.
+func noReleaseOldEnoughErr(name string, minAge int) error {
+	return fmt.Errorf(
+		"no release for %s is at least %d minutes old; use --min-age 0 to bypass age filtering",
+		name, minAge,
+	)
+}
