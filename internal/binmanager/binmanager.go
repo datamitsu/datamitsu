@@ -70,9 +70,8 @@ type AppConfigGo struct {
 }
 
 type AppConfigShell struct {
-	Name string            `json:"name"`
-	Args []string          `json:"args,omitempty"`
-	Env  map[string]string `json:"env,omitempty"`
+	Name string   `json:"name"`
+	Args []string `json:"args,omitempty"`
 }
 
 type AppVersionCheck struct {
@@ -94,6 +93,11 @@ type App struct {
 	Jvm    *AppConfigJVM    `json:"jvm,omitempty"`
 	Go     *AppConfigGo     `json:"go,omitempty"`
 	Shell  *AppConfigShell  `json:"shell,omitempty"`
+
+	// Env holds user-defined environment variables applied to all app kinds, both
+	// at install time (uv/node/go) and run time. Values support ${STORE} and
+	// ${APP_DIR} placeholders. Keys already set by datamitsu/the runtime win.
+	Env map[string]string `json:"env,omitempty"`
 
 	Files    map[string]string       `json:"files,omitempty"`
 	Links    map[string]string       `json:"links,omitempty"`
@@ -544,34 +548,67 @@ func (bm *BinManager) GetCommandInfo(appName string) (*CommandInfo, error) {
 		return nil, fmt.Errorf("app '%s' not found in registry", appName)
 	}
 
-	if app.Shell != nil {
-		return &CommandInfo{
+	var cmdInfo *CommandInfo
+
+	switch {
+	case app.Shell != nil:
+		cmdInfo = &CommandInfo{
 			Type:    "shell",
 			Command: app.Shell.Name,
 			Args:    app.Shell.Args,
-			Env:     app.Shell.Env,
-		}, nil
-	}
+		}
 
-	if app.Binary != nil {
+	case app.Binary != nil:
 		binPath, err := bm.GetBinaryPath(appName)
 		if err != nil {
 			return nil, err
 		}
-		return &CommandInfo{
+		cmdInfo = &CommandInfo{
 			Type:    "binary",
 			Command: binPath,
-		}, nil
-	}
+		}
 
-	if app.Uv != nil || app.Node != nil || app.Jvm != nil || app.Go != nil {
+	case app.Uv != nil || app.Node != nil || app.Jvm != nil || app.Go != nil:
 		if bm.runtimeManager == nil {
 			return nil, fmt.Errorf("no runtime manager configured for runtime-managed app %q", appName)
 		}
-		return bm.runtimeManager.GetCommandInfo(appName, app)
+		ci, err := bm.runtimeManager.GetCommandInfo(appName, app)
+		if err != nil {
+			return nil, err
+		}
+		cmdInfo = ci
+
+	default:
+		return nil, fmt.Errorf("app '%s' has no valid configuration", appName)
 	}
 
-	return nil, fmt.Errorf("app '%s' has no valid configuration", appName)
+	bm.mergeAppEnv(appName, app, cmdInfo)
+
+	return cmdInfo, nil
+}
+
+// mergeAppEnv merges the app's user-defined Env into cmdInfo.Env, expanding
+// ${STORE}/${APP_DIR} placeholders. Keys already set by datamitsu/the runtime
+// take precedence — a user config can never override a reserved runtime key.
+func (bm *BinManager) mergeAppEnv(appName string, app App, cmdInfo *CommandInfo) {
+	if len(app.Env) == 0 {
+		return
+	}
+
+	// ${APP_DIR} is best-effort: if the install path can't be computed, appDir
+	// is empty and ${APP_DIR} expands to "" rather than failing the command.
+	appDir, _ := bm.ComputeInstallPath(appName)
+
+	if cmdInfo.Env == nil {
+		cmdInfo.Env = make(map[string]string, len(app.Env))
+	}
+
+	for k, v := range app.Env {
+		if _, exists := cmdInfo.Env[k]; exists {
+			continue
+		}
+		cmdInfo.Env[k] = env.ExpandPlaceholders(v, appDir)
+	}
 }
 
 // ComputeInstallPath returns the install directory path for an app without checking existence.

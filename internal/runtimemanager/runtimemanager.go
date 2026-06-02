@@ -432,7 +432,7 @@ func (rm *RuntimeManager) ComputeAppPath(appName string, app binmanager.App) (st
 func (rm *RuntimeManager) GetCommandInfo(appName string, app binmanager.App) (*binmanager.CommandInfo, error) {
 	switch {
 	case app.Uv != nil:
-		if err := rm.InstallUVApp(appName, app.Uv, app.Files, app.Archives); err != nil {
+		if err := rm.InstallUVApp(appName, app.Uv, app.Env, app.Files, app.Archives); err != nil {
 			return nil, err
 		}
 		return rm.GetUVCommandInfo(appName, app.Uv, app.Files, app.Archives)
@@ -443,7 +443,7 @@ func (rm *RuntimeManager) GetCommandInfo(appName string, app binmanager.App) (*b
 		if err != nil {
 			return nil, fmt.Errorf("failed to compute pnpm-workspace.yaml for %q: %w", appName, err)
 		}
-		if err := rm.installNodeApp(appName, app.Node, app.Files, app.Archives, mergedWorkspaceYAML); err != nil {
+		if err := rm.installNodeApp(appName, app.Node, app.Env, app.Files, app.Archives, mergedWorkspaceYAML); err != nil {
 			return nil, err
 		}
 		return rm.getNodeCommandInfo(appName, app.Node, app.Files, app.Archives, mergedWorkspaceYAML)
@@ -453,7 +453,7 @@ func (rm *RuntimeManager) GetCommandInfo(appName string, app binmanager.App) (*b
 		}
 		return rm.GetJVMCommandInfo(appName, app.Jvm, app.Files, app.Archives)
 	case app.Go != nil:
-		if err := rm.InstallGoApp(appName, app.Go, app.Files, app.Archives); err != nil {
+		if err := rm.InstallGoApp(appName, app.Go, app.Env, app.Files, app.Archives); err != nil {
 			return nil, err
 		}
 		return rm.GetGoCommandInfo(appName, app.Go, app.Files, app.Archives)

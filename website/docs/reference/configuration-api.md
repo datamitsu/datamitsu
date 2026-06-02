@@ -87,12 +87,46 @@ interface AppCommon {
   files?: Record<string, string>; // filename → static content
   links?: Record<string, string>; // linkName → relativePath in install dir
   archives?: Record<string, ArchiveSpec>; // name → archive specification
+  env?: Record<string, string>; // Custom environment variables (all app kinds)
   versionCheck?: {
     disabled?: boolean; // Skip version check in verify-all
     args?: string[]; // Override default ["--version"] args
   };
 }
 ```
+
+#### Custom environment variables (`env`)
+
+The optional `env` field applies to **every** app kind (binary, uv, node, jvm,
+go, shell). It is injected both at **install time** (for the uv/node/go
+dependency-install phase) and at **run time** (every app type).
+
+Values support placeholder expansion, performed in Go and never written into the
+committed config:
+
+- `${STORE}` → the shared datamitsu store path (cleaned by `datamitsu store clear`).
+- `${APP_DIR}` → this app's install directory (per-app, config-hashed).
+
+**Precedence:** any key already set by datamitsu or the runtime wins. A user
+config can never relocate the pnpm store, uv cache, `GOPATH`, etc.
+
+```javascript
+const apps = {
+  slidev: {
+    node: {
+      packageName: "@slidev/cli",
+      // ...
+    },
+    // Redirect playwright to download browsers into the datamitsu store
+    env: { PLAYWRIGHT_BROWSERS_PATH: "${STORE}/.playwright/browsers" },
+  },
+};
+```
+
+> **Migration (alpha breaking change):** `env` was previously a field on
+> `AppConfigShell` (`shell.env`). It has moved to the top-level `env` field
+> shared by all app kinds. Move any `shell: { env: {...} }` up one level to
+> `env: {...}` on the app.
 
 ### Binary Apps
 
@@ -285,7 +319,8 @@ The tool is built with `go build -trimpath -mod=readonly` in an isolated, harden
 
 ### Shell Apps
 
-Shell apps wrap system commands with custom environment variables.
+Shell apps wrap system commands. Set environment variables through the shared
+top-level [`env` field](#custom-environment-variables-env).
 
 ```javascript
 const apps = {
@@ -293,8 +328,8 @@ const apps = {
     shell: {
       name: "bash",
       args: ["-c", "echo hello"],
-      env: { MY_VAR: "value" },
     },
+    env: { MY_VAR: "value" },
   },
 };
 ```
@@ -305,7 +340,6 @@ const apps = {
 interface AppConfigShell {
   name: string; // Command name
   args?: string[]; // Default arguments
-  env?: Record<string, string>;
 }
 ```
 

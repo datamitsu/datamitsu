@@ -101,25 +101,25 @@ func (rm *RuntimeManager) resolveNodeAppEnvPathWith(appName string, appConfig *b
 // InstallNodeApp installs a node-managed npm app if not already cached.
 // If files is non-empty, writes them to the app directory before running pnpm.
 // Safe for concurrent use from multiple goroutines.
-func (rm *RuntimeManager) InstallNodeApp(appName string, appConfig *binmanager.AppConfigNode, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
+func (rm *RuntimeManager) InstallNodeApp(appName string, appConfig *binmanager.AppConfigNode, customEnv map[string]string, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
 	mergedWorkspaceYAML, err := buildPNPMWorkspace(files)
 	if err != nil {
 		return fmt.Errorf("failed to compute pnpm-workspace.yaml for %q: %w", appName, err)
 	}
-	return rm.installNodeApp(appName, appConfig, files, archives, mergedWorkspaceYAML)
+	return rm.installNodeApp(appName, appConfig, customEnv, files, archives, mergedWorkspaceYAML)
 }
 
 // installNodeApp installs a node app using a pre-merged pnpm-workspace.yaml so the
 // merge is computed once per exec and shared with the command-info pass.
-func (rm *RuntimeManager) installNodeApp(appName string, appConfig *binmanager.AppConfigNode, files map[string]string, archives map[string]*binmanager.ArchiveSpec, mergedWorkspaceYAML string) error {
+func (rm *RuntimeManager) installNodeApp(appName string, appConfig *binmanager.AppConfigNode, customEnv map[string]string, files map[string]string, archives map[string]*binmanager.ArchiveSpec, mergedWorkspaceYAML string) error {
 	key := "node/" + appName
 	_, err, _ := rm.appInstall.Do(key, func() (any, error) {
-		return nil, rm.installNodeAppOnce(appName, appConfig, files, archives, mergedWorkspaceYAML)
+		return nil, rm.installNodeAppOnce(appName, appConfig, customEnv, files, archives, mergedWorkspaceYAML)
 	})
 	return err
 }
 
-func (rm *RuntimeManager) installNodeAppOnce(appName string, appConfig *binmanager.AppConfigNode, files map[string]string, archives map[string]*binmanager.ArchiveSpec, mergedWorkspaceYAML string) error {
+func (rm *RuntimeManager) installNodeAppOnce(appName string, appConfig *binmanager.AppConfigNode, customEnv map[string]string, files map[string]string, archives map[string]*binmanager.ArchiveSpec, mergedWorkspaceYAML string) error {
 	appEnvPath, runtimeName, rc, err := rm.resolveNodeAppEnvPathWith(appName, appConfig, files, archives, mergedWorkspaceYAML)
 	if err != nil {
 		return err
@@ -225,6 +225,7 @@ func (rm *RuntimeManager) installNodeAppOnce(appName string, appConfig *binmanag
 
 	nodeBinDir := filepath.Dir(nodeBinPath)
 	envVars["PATH"] = nodeBinDir + string(os.PathListSeparator) + os.Getenv("PATH")
+	envVars = mergeInstallEnv(envVars, customEnv, appEnvPath)
 	cmdEnv := buildEnvWithOverrides(os.Environ(), envVars)
 
 	cmd := exec.Command(nodeBinPath, args...)

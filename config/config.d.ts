@@ -677,6 +677,25 @@ declare global {
        */
       description?: string;
       /**
+       * Custom environment variables for this app, applied to all app kinds
+       * (binary, uv, node, jvm, go, shell). Injected both at install time
+       * (uv/node/go dependency install) and at run time (every app type).
+       *
+       * Values support placeholder expansion (done in Go, never written into
+       * the committed config):
+       * - `${STORE}` → the shared datamitsu store path (cleaned by
+       *   `datamitsu store clear`).
+       * - `${APP_DIR}` → this app's install directory (per-app, config-hashed).
+       *
+       * Precedence: any key already set by datamitsu or the runtime wins, so a
+       * user config can never relocate the pnpm store, uv cache, GOPATH, etc.
+       *
+       * @example
+       * // Redirect playwright to download browsers into the datamitsu store
+       * env: { PLAYWRIGHT_BROWSERS_PATH: "${STORE}/.playwright/browsers" }
+       */
+      env?: Record<string, string>;
+      /**
        * Static file contents to write into the app's install directory before
        * the package manager runs. Keys are filenames; values are file contents.
        *
@@ -774,7 +793,6 @@ declare global {
 
     interface AppConfigShell {
       args?: string[];
-      env?: Record<string, string>;
       name: string;
     }
 
