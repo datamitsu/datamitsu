@@ -132,13 +132,13 @@ run time**, with placeholder expansion for datamitsu-managed paths.
 
 ### Task 6: Verify acceptance criteria
 
-- [ ] custom env injected at install AND run for uv/node/go; at run for
-      binary/jvm/shell
-- [ ] placeholders expand; runtime/reserved keys protected; nil `Env` backward
-      compatible; shell migration complete
-- [ ] `go test ./...` passes
-- [ ] `go vet ./...` / linter clean
-- [ ] `go build` succeeds
+- [x] custom env injected at install AND run for uv/node/go; at run for
+      binary/jvm/shell (covered by binmanager/runtimemanager tests)
+- [x] placeholders expand; runtime/reserved keys protected; nil `Env` backward
+      compatible; shell migration complete (covered by tests)
+- [x] `go test ./...` passes
+- [x] `go vet ./...` / linter clean
+- [x] `go build` succeeds
 
 ### Task 7: [Final] Documentation
 
