@@ -223,15 +223,17 @@ Three-layer API: pure computation + idempotent lifecycle + cached getter. Thread
 
 ### Task 13: Thread install timeout through binmanager
 
-- [ ] modify `InstallWithConcurrency` in `internal/binmanager/binmanager.go`: wrap each per-app goroutine with `context.WithTimeout` using `env.InstallTimeoutSeconds()`. If timeout == 0, use parent context without deadline (disabled)
-- [ ] always call `cancel()` via `defer cancel()` after `context.WithTimeout`
-- [ ] add `context.Context` parameter to `installApp()` (or equivalent internal download function)
-- [ ] modify `downloadFile()` in `internal/binmanager/download.go` to create HTTP requests via `http.NewRequestWithContext(ctx, ...)`
-- [ ] on timeout: clean up partial downloads and temp dirs before returning error
-- [ ] produce clear timeout error message: distinguish `context.DeadlineExceeded` ("installation timed out after Xs") from other install errors
-- [ ] write test: verify timeout=0 means no deadline (context has no deadline set)
-- [ ] write test: timeout path exits correctly, cleans up partial files, and does not leak resources
-- [ ] run `go test ./internal/binmanager/...` — must pass before next task
+! Scope note: the plan referenced `installApp()`; the actual internal download chain is `downloadInternal`/`downloadWithProgress` → `downloadAndVerify*` → `downloadFileInternal`. `context.Context` was threaded through all of these. Two install-layer helpers were added in `binmanager.go`: `newInstallContext(parent)` (reads `env.InstallTimeoutSeconds()`; 0 → cancelable context with no deadline; returns `timeoutSec` for messaging) and `wrapInstallTimeout(err, timeoutSec)` (turns `context.DeadlineExceeded` into "installation timed out after Ns"). A small `downloadWithTimeout(name, progress)` method wraps both with `defer cancel()` and is used at every per-app install site (`InstallWithConcurrency` worker, `installInternal`, lazy `GetBinaryPath`), so the now-redundant `download(name)` method was removed.
+
+- [x] modify `InstallWithConcurrency` in `internal/binmanager/binmanager.go`: wrap each per-app goroutine with `context.WithTimeout` using `env.InstallTimeoutSeconds()`. If timeout == 0, use parent context without deadline (disabled)
+- [x] always call `cancel()` via `defer cancel()` after `context.WithTimeout`
+- [x] add `context.Context` parameter to `installApp()` (or equivalent internal download function)
+- [x] modify `downloadFile()` in `internal/binmanager/download.go` to create HTTP requests via `http.NewRequestWithContext(ctx, ...)`
+- [x] on timeout: clean up partial downloads and temp dirs before returning error
+- [x] produce clear timeout error message: distinguish `context.DeadlineExceeded` ("installation timed out after Xs") from other install errors
+- [x] write test: verify timeout=0 means no deadline (context has no deadline set)
+- [x] write test: timeout path exits correctly, cleans up partial files, and does not leak resources
+- [x] run `go test ./internal/binmanager/...` — must pass before next task
 
 ### Task 14: Thread install timeout through runtimemanager
 

@@ -1,6 +1,7 @@
 package binmanager
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -22,7 +23,7 @@ const MaxBinarySize = 500 * 1024 * 1024
 // guard). The 5-minute budget accommodates large archive downloads.
 var httpClient = httpx.NewHardenedClient(5 * time.Minute)
 
-func downloadFileInternal(url string, destDir string, name string, progress *mpb.Progress) (string, error) {
+func downloadFileInternal(ctx context.Context, url string, destDir string, name string, progress *mpb.Progress) (string, error) {
 	if name != "" {
 		log.Debug("downloading file", zap.String("url", url), zap.String("name", name))
 	} else {
@@ -44,7 +45,15 @@ func downloadFileInternal(url string, destDir string, name string, progress *mpb
 		}
 	}()
 
-	resp, err := httpClient.Get(url)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		if removeErr := os.Remove(tmpPath); removeErr != nil {
+			log.Warn("failed to remove temp file after request build error", zap.String("path", tmpPath), zap.Error(removeErr))
+		}
+		return "", fmt.Errorf("failed to build download request: %w", err)
+	}
+
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		if removeErr := os.Remove(tmpPath); removeErr != nil {
 			log.Warn("failed to remove temp file after download error", zap.String("path", tmpPath), zap.Error(removeErr))
@@ -120,12 +129,12 @@ func downloadFileInternal(url string, destDir string, name string, progress *mpb
 	return tmpPath, nil
 }
 
-func downloadFile(url string, destDir string) (string, error) {
-	return downloadFileInternal(url, destDir, "", nil)
+func downloadFile(ctx context.Context, url string, destDir string) (string, error) {
+	return downloadFileInternal(ctx, url, destDir, "", nil)
 }
 
-func downloadAndVerifyInternal(url string, expectedHash string, hashType BinHashType, destDir string, name string, progress *mpb.Progress) (string, error) {
-	tmpPath, err := downloadFileInternal(url, destDir, name, progress)
+func downloadAndVerifyInternal(ctx context.Context, url string, expectedHash string, hashType BinHashType, destDir string, name string, progress *mpb.Progress) (string, error) {
+	tmpPath, err := downloadFileInternal(ctx, url, destDir, name, progress)
 	if err != nil {
 		return "", err
 	}
@@ -142,12 +151,12 @@ func downloadAndVerifyInternal(url string, expectedHash string, hashType BinHash
 	return tmpPath, nil
 }
 
-func downloadAndVerify(url string, expectedHash string, hashType BinHashType, destDir string) (string, error) {
-	return downloadAndVerifyInternal(url, expectedHash, hashType, destDir, "", nil)
+func downloadAndVerify(ctx context.Context, url string, expectedHash string, hashType BinHashType, destDir string) (string, error) {
+	return downloadAndVerifyInternal(ctx, url, expectedHash, hashType, destDir, "", nil)
 }
 
-func downloadAndVerifyWithProgress(url string, expectedHash string, hashType BinHashType, destDir string, name string, progress *mpb.Progress) (string, error) {
-	return downloadAndVerifyInternal(url, expectedHash, hashType, destDir, name, progress)
+func downloadAndVerifyWithProgress(ctx context.Context, url string, expectedHash string, hashType BinHashType, destDir string, name string, progress *mpb.Progress) (string, error) {
+	return downloadAndVerifyInternal(ctx, url, expectedHash, hashType, destDir, name, progress)
 }
 
 func moveFile(src, dst string) error {

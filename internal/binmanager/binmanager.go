@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/logger"
@@ -220,7 +221,7 @@ func (bm *BinManager) getBinaryPath(name string) (string, error) {
 	return binPath, nil
 }
 
-func (bm *BinManager) downloadInternal(name string, progress *mpb.Progress) error {
+func (bm *BinManager) downloadInternal(ctx context.Context, name string, progress *mpb.Progress) error {
 	resolved, binaryInfo, err := bm.getBinaryInfo(name)
 	if err != nil {
 		return err
@@ -246,9 +247,9 @@ func (bm *BinManager) downloadInternal(name string, progress *mpb.Progress) erro
 
 	var downloadedPath string
 	if progress != nil {
-		downloadedPath, err = downloadAndVerifyWithProgress(binaryInfo.URL, binaryInfo.Hash, hashType, tmpDir, name, progress)
+		downloadedPath, err = downloadAndVerifyWithProgress(ctx, binaryInfo.URL, binaryInfo.Hash, hashType, tmpDir, name, progress)
 	} else {
-		downloadedPath, err = downloadAndVerify(binaryInfo.URL, binaryInfo.Hash, hashType, tmpDir)
+		downloadedPath, err = downloadAndVerify(ctx, binaryInfo.URL, binaryInfo.Hash, hashType, tmpDir)
 	}
 	if err != nil {
 		return fmt.Errorf("failed to download and verify: %w", err)
@@ -288,12 +289,44 @@ func (bm *BinManager) downloadInternal(name string, progress *mpb.Progress) erro
 	return nil
 }
 
-func (bm *BinManager) download(name string) error {
-	return bm.downloadInternal(name, nil)
+func (bm *BinManager) downloadWithProgress(ctx context.Context, name string, progress *mpb.Progress) error {
+	return bm.downloadInternal(ctx, name, progress)
 }
 
-func (bm *BinManager) downloadWithProgress(name string, progress *mpb.Progress) error {
-	return bm.downloadInternal(name, progress)
+// newInstallContext derives a context carrying the per-app install timeout from
+// env.InstallTimeoutSeconds(). A configured value of 0 disables the deadline:
+// the returned context is cancelable but never expires. timeoutSec is returned
+// so callers can render a precise "timed out after Ns" message. Callers MUST
+// always call cancel (defer cancel()).
+func newInstallContext(parent context.Context) (ctx context.Context, cancel context.CancelFunc, timeoutSec int) {
+	timeoutSec = env.InstallTimeoutSeconds()
+	if timeoutSec <= 0 {
+		ctx, cancel = context.WithCancel(parent)
+		return ctx, cancel, 0
+	}
+	ctx, cancel = context.WithTimeout(parent, time.Duration(timeoutSec)*time.Second)
+	return ctx, cancel, timeoutSec
+}
+
+// wrapInstallTimeout turns a context-deadline failure from an install download
+// into a clear, user-facing timeout message. Non-timeout errors (and nil) pass
+// through unchanged.
+func wrapInstallTimeout(err error, timeoutSec int) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return fmt.Errorf("installation timed out after %ds: %w", timeoutSec, err)
+	}
+	return err
+}
+
+// downloadWithTimeout installs one app under a per-app install timeout context,
+// translating a deadline into a clear timeout error.
+func (bm *BinManager) downloadWithTimeout(name string, progress *mpb.Progress) error {
+	ctx, cancel, timeoutSec := newInstallContext(context.Background())
+	defer cancel()
+	return wrapInstallTimeout(bm.downloadWithProgress(ctx, name, progress), timeoutSec)
 }
 
 type DownloadResult struct {
@@ -330,7 +363,7 @@ func (bm *BinManager) installInternal(includeOptional bool) error {
 			continue
 		}
 
-		if err := bm.download(name); err != nil {
+		if err := bm.downloadWithTimeout(name, nil); err != nil {
 			return fmt.Errorf("failed to install %s: %w", name, err)
 		}
 	}
@@ -389,7 +422,7 @@ func (bm *BinManager) InstallWithConcurrency(includeOptional bool, concurrency i
 		go func() {
 			defer wg.Done()
 			for name := range jobs {
-				err := bm.downloadWithProgress(name, progress)
+				err := bm.downloadWithTimeout(name, progress)
 				results <- DownloadResult{
 					Name:  name,
 					Error: err,
@@ -456,7 +489,7 @@ func (bm *BinManager) GetBinaryPath(name string) (string, error) {
 
 		fmt.Fprintf(os.Stderr, "⬇️  Downloading %s...\n", name)
 
-		if err := bm.download(name); err != nil {
+		if err := bm.downloadWithTimeout(name, nil); err != nil {
 			return nil, fmt.Errorf("failed to download %s: %w", name, err)
 		}
 

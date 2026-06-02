@@ -1,6 +1,7 @@
 package binmanager
 
 import (
+	"context"
 	"fmt"
 	"os"
 )
@@ -22,7 +23,7 @@ func VerifyBinaryExtraction(
 		_ = os.RemoveAll(tempDir)
 	}()
 
-	downloadedPath, err := downloadFile(url, tempDir)
+	downloadedPath, err := downloadFile(context.Background(), url, tempDir)
 	if err != nil {
 		return fmt.Errorf("download failed: %w", err)
 	}
@@ -53,7 +54,7 @@ func VerifyBinaryExtraction(
 
 // DownloadFileForVerify downloads a file to destDir. Public wrapper around downloadFile for verify-all.
 func DownloadFileForVerify(url string, destDir string) (string, error) {
-	return downloadFile(url, destDir)
+	return downloadFile(context.Background(), url, destDir)
 }
 
 // VerifyFileHashPublic verifies a file's hash. Public wrapper around verifyFileHash for verify-all.
