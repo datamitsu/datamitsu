@@ -48,7 +48,7 @@
     "tinyexec": "^1.0.4"
   },
   "devDependencies": {
-    "@shibanet0/datamitsu-config": "0.0.6"
+    "@shibanet0/datamitsu-config": "0.0.7"
   },
   "optionalDependencies": {
     "@datamitsu/datamitsu-darwin-arm64": "0.0.0",
