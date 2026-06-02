@@ -450,8 +450,8 @@ func TestGetCommandInfo_ShellApp(t *testing.T) {
 			Shell: &AppConfigShell{
 				Name: "bash",
 				Args: []string{"-c", "echo hello"},
-				Env:  map[string]string{"FOO": "bar"},
 			},
+			Env: map[string]string{"FOO": "bar"},
 		},
 	}, nil, nil)
 
@@ -470,6 +470,38 @@ func TestGetCommandInfo_ShellApp(t *testing.T) {
 	}
 	if info.Env["FOO"] != "bar" {
 		t.Errorf("expected env FOO=bar, got %v", info.Env)
+	}
+}
+
+func TestApp_EnvJSONRoundTrip(t *testing.T) {
+	app := App{
+		Shell: &AppConfigShell{Name: "bash"},
+		Env:   map[string]string{"FOO": "bar", "BAZ": "${STORE}/x"},
+	}
+	data, err := json.Marshal(app)
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+	if !strings.Contains(string(data), `"env":`) {
+		t.Errorf("expected json key \"env\" in %s", data)
+	}
+
+	var decoded App
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if decoded.Env["FOO"] != "bar" || decoded.Env["BAZ"] != "${STORE}/x" {
+		t.Errorf("env did not round-trip: %v", decoded.Env)
+	}
+}
+
+func TestApp_EnvOmittedWhenNil(t *testing.T) {
+	data, err := json.Marshal(App{Shell: &AppConfigShell{Name: "bash"}})
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+	if strings.Contains(string(data), `"env"`) {
+		t.Errorf("expected no \"env\" key for nil Env, got %s", data)
 	}
 }
 

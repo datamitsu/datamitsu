@@ -15,7 +15,7 @@ run time**, with placeholder expansion for datamitsu-managed paths.
   so playwright downloads browsers into the datamitsu store — analogous to how uv
   pins `UV_PYTHON_INSTALL_DIR = {store}/.uv/python`
   ([internal/runtimemanager/uv.go:23](../../internal/runtimemanager/uv.go#L23)).
-- **Integration / chokepoints (verified):**
+- **Integration / choke points (verified):**
   - **Run-time, ALL types:** `BinManager.GetCommandInfo` is the single dispatch
     both run paths (`GetExecCmd` ~840, `Exec` ~866) call before
     `mergeExecEnv(os.Environ(), cmdInfo.Env)`. Merging `App.Env` into the returned
@@ -75,12 +75,13 @@ run time**, with placeholder expansion for datamitsu-managed paths.
 ## What Goes Where
 
 - **Implementation Steps** — Go patch, Go tests, TS type. All in this repo.
-- **Post-Completion** — slidev config in the *datamitsu-config* repo (`src/**`),
+- **Post-Completion** — slidev config in the _datamitsu-config_ repo (`src/**`),
   applied only with explicit user confirmation.
 
 ## Implementation Steps
 
 ### Task 1: Placeholder expansion helper in `internal/env`
+
 - [x] write tests for `env.ExpandPlaceholders(value, appDir)`: `${STORE}` →
       `GetStorePath()`, `${APP_DIR}` → `appDir`, both in one string, repeated
       tokens, no-placeholder passthrough, empty string
@@ -88,16 +89,18 @@ run time**, with placeholder expansion for datamitsu-managed paths.
 - [x] run `go test ./internal/env/...` — must pass before Task 2
 
 ### Task 2: Add `App.Env`, remove `AppConfigShell.Env`
-- [ ] write/adjust tests: `App.Env` round-trips JSON (`env`); shell apps read env
+
+- [x] write/adjust tests: `App.Env` round-trips JSON (`env`); shell apps read env
       from `App.Env`; struct compiles without `AppConfigShell.Env`
-- [ ] add `Env map[string]string \`json:"env,omitempty"\`` to `App`
-- [ ] remove `Env` from `AppConfigShell`; update shell `CommandInfo` construction
+- [x] add `Env map[string]string \`json:"env,omitempty"\``to`App`
+- [x] remove `Env` from `AppConfigShell`; update shell `CommandInfo` construction
       (~552) to use `App.Env`
-- [ ] update any in-repo shell app definitions / fixtures that set `shell.env`
-      (➕/⚠️ if found during impl)
-- [ ] run `go test ./internal/binmanager/...` — must pass before Task 3
+- [x] update any in-repo shell app definitions / fixtures that set `shell.env`
+      (none found — only test fixture updated)
+- [x] run `go test ./internal/binmanager/...` — must pass before Task 3
 
 ### Task 3: Run-time merge in `GetCommandInfo` (all app types)
+
 - [ ] write tests: for binary, node, uv, go, jvm and shell apps, a custom
       `App.Env` entry (with `${STORE}`/`${APP_DIR}`) appears expanded in the
       returned `CommandInfo.Env`; a custom key that collides with a
@@ -110,6 +113,7 @@ run time**, with placeholder expansion for datamitsu-managed paths.
 - [ ] run `go test ./internal/binmanager/...` — must pass before Task 4
 
 ### Task 4: Install-time merge for uv / node / go
+
 - [ ] write tests mirroring `TestInstallTimeEnvIncludesPythonInstallDir` for
       node, uv and go: the install command env (`buildEnvWithOverrides` output)
       contains the expanded custom var; reserved runtime keys still win
@@ -118,6 +122,7 @@ run time**, with placeholder expansion for datamitsu-managed paths.
 - [ ] run `go test ./internal/runtimemanager/...` — must pass before Task 5
 
 ### Task 5: TypeScript type
+
 - [ ] add `env?: Record<string, string>;` to `interface App` (~667) in
       `config/config.d.ts`, with JSDoc documenting `${STORE}`/`${APP_DIR}` and the
       reserved-key precedence
@@ -125,6 +130,7 @@ run time**, with placeholder expansion for datamitsu-managed paths.
 - [ ] run `pnpm build` — must succeed before Task 6
 
 ### Task 6: Verify acceptance criteria
+
 - [ ] custom env injected at install AND run for uv/node/go; at run for
       binary/jvm/shell
 - [ ] placeholders expand; runtime/reserved keys protected; nil `Env` backward
@@ -134,6 +140,7 @@ run time**, with placeholder expansion for datamitsu-managed paths.
 - [ ] `go build` succeeds
 
 ### Task 7: [Final] Documentation
+
 - [ ] document `App.Env` + placeholders + precedence where app config options are
       described; note the `shell.env` → `App.Env` migration (alpha breaking change)
 
@@ -151,9 +158,10 @@ run time**, with placeholder expansion for datamitsu-managed paths.
 
 ## Post-Completion
 
-*Manual / external — no checkboxes.*
+_Manual / external — no checkboxes._
 
-**datamitsu-config (`src/**`) — apply only with user confirmation:**
+**datamitsu-config (`src/**`) — apply only with user confirmation:\*\*
+
 - slidev `node` block: `env: { PLAYWRIGHT_BROWSERS_PATH: "${STORE}/.playwright/browsers" }`,
   add `playwright-chromium` to `dependencies`.
 - slidev `pnpm-workspace.yaml`: `allowBuilds: { "playwright-chromium": true }` so
@@ -165,6 +173,7 @@ run time**, with placeholder expansion for datamitsu-managed paths.
 - Regenerate the slidev lockfile (`datamitsu config lockfile slidev`).
 
 **Manual verification:**
+
 - `datamitsu exec slidev export slides.md --output deck.pdf` yields a valid PDF
   with the browser resolved from `{store}/.playwright/browsers`.
 - `datamitsu store clear` removes the downloaded browser.

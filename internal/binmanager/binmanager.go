@@ -70,9 +70,8 @@ type AppConfigGo struct {
 }
 
 type AppConfigShell struct {
-	Name string            `json:"name"`
-	Args []string          `json:"args,omitempty"`
-	Env  map[string]string `json:"env,omitempty"`
+	Name string   `json:"name"`
+	Args []string `json:"args,omitempty"`
 }
 
 type AppVersionCheck struct {
@@ -94,6 +93,11 @@ type App struct {
 	Jvm    *AppConfigJVM    `json:"jvm,omitempty"`
 	Go     *AppConfigGo     `json:"go,omitempty"`
 	Shell  *AppConfigShell  `json:"shell,omitempty"`
+
+	// Env holds user-defined environment variables applied to all app kinds, both
+	// at install time (uv/node/go) and run time. Values support ${STORE} and
+	// ${APP_DIR} placeholders. Keys already set by datamitsu/the runtime win.
+	Env map[string]string `json:"env,omitempty"`
 
 	Files    map[string]string       `json:"files,omitempty"`
 	Links    map[string]string       `json:"links,omitempty"`
@@ -549,7 +553,7 @@ func (bm *BinManager) GetCommandInfo(appName string) (*CommandInfo, error) {
 			Type:    "shell",
 			Command: app.Shell.Name,
 			Args:    app.Shell.Args,
-			Env:     app.Shell.Env,
+			Env:     app.Env,
 		}, nil
 	}
 
