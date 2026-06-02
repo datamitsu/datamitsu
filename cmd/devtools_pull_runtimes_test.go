@@ -5,6 +5,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/github"
 	"github.com/datamitsu/datamitsu/internal/syslist"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -631,14 +632,14 @@ func TestJvmBinaryPath(t *testing.T) {
 }
 
 func buildTestRuntimes() RuntimesJSON {
-	bp := "fnm"
+	bp := "node"
 	uvBP := "uv-x86_64-apple-darwin/uv"
 	jdkBP := "jdk-25.0.2+10/bin/java"
 	jdkMacBP := "jdk-25.0.2+10/Contents/Home/bin/java"
 
 	return RuntimesJSON{
-		"fnm": buildFNMRuntimeJSON(
-			&FNMRuntimeData{
+		"node": buildNodeRuntimeJSON(
+			&NodeRuntimeData{
 				NodeVersion: "24.14.0",
 				PNPMVersion: "10.31.0",
 				PNPMHash:    testHash1,
@@ -647,7 +648,7 @@ func buildTestRuntimes() RuntimesJSON {
 				syslist.OsTypeDarwin: {
 					syslist.ArchTypeAmd64: {
 						"unknown": binmanager.BinaryOsArchInfo{
-							URL: "https://example.com/fnm-macos.zip", Hash: testHash2,
+							URL: "https://example.com/node-macos.zip", Hash: testHash2,
 							ContentType: binmanager.BinContentTypeZip, BinaryPath: &bp,
 						},
 					},
@@ -655,7 +656,7 @@ func buildTestRuntimes() RuntimesJSON {
 				syslist.OsTypeLinux: {
 					syslist.ArchTypeAmd64: {
 						"glibc": binmanager.BinaryOsArchInfo{
-							URL: "https://example.com/fnm-linux.zip", Hash: testHash3,
+							URL: "https://example.com/node-linux.zip", Hash: testHash3,
 							ContentType: binmanager.BinContentTypeZip, BinaryPath: &bp,
 						},
 					},
@@ -739,14 +740,14 @@ func TestWriteRuntimesJSON_StructureValidity(t *testing.T) {
 	}
 
 	// Must have all three runtime keys
-	for _, key := range []string{"fnm", "uv", "jvm"} {
+	for _, key := range []string{"node", "uv", "jvm"} {
 		if _, ok := parsed[key]; !ok {
 			t.Errorf("missing top-level key %q", key)
 		}
 	}
 
 	// Verify each runtime has kind and mode
-	for _, key := range []string{"fnm", "uv", "jvm"} {
+	for _, key := range []string{"node", "uv", "jvm"} {
 		var entry map[string]json.RawMessage
 		if err := json.Unmarshal(parsed[key], &entry); err != nil {
 			t.Fatalf("parsing %s: %v", key, err)
@@ -763,10 +764,10 @@ func TestWriteRuntimesJSON_StructureValidity(t *testing.T) {
 	}
 
 	// Verify runtime-specific config keys
-	var fnmEntry map[string]json.RawMessage
-	_ = json.Unmarshal(parsed["fnm"], &fnmEntry)
-	if _, ok := fnmEntry["fnm"]; !ok {
-		t.Error("fnm runtime missing 'fnm' config key")
+	var nodeEntry map[string]json.RawMessage
+	_ = json.Unmarshal(parsed["node"], &nodeEntry)
+	if _, ok := nodeEntry["node"]; !ok {
+		t.Error("node runtime missing 'node' config key")
 	}
 
 	var uvEntry map[string]json.RawMessage
@@ -802,13 +803,13 @@ func TestWriteRuntimesJSON_NestedLibcStructure(t *testing.T) {
 		t.Fatalf("unmarshal failed: %v", err)
 	}
 
-	// FNM: linux should have only glibc (no musl)
-	fnmLinux := parsed["fnm"].Managed.Binaries[syslist.OsTypeLinux][syslist.ArchTypeAmd64]
-	if _, ok := fnmLinux["glibc"]; !ok {
-		t.Error("fnm: expected linux/amd64/glibc")
+	// Node: linux should have only glibc (no musl)
+	nodeLinux := parsed["node"].Managed.Binaries[syslist.OsTypeLinux][syslist.ArchTypeAmd64]
+	if _, ok := nodeLinux["glibc"]; !ok {
+		t.Error("node: expected linux/amd64/glibc")
 	}
-	if _, ok := fnmLinux["musl"]; ok {
-		t.Error("fnm: unexpected linux/amd64/musl")
+	if _, ok := nodeLinux["musl"]; ok {
+		t.Error("node: unexpected linux/amd64/musl")
 	}
 
 	// UV: linux should have both glibc and musl
@@ -830,7 +831,7 @@ func TestWriteRuntimesJSON_NestedLibcStructure(t *testing.T) {
 	}
 
 	// Darwin should use "unknown" libc
-	for _, name := range []string{"fnm", "uv", "jvm"} {
+	for _, name := range []string{"node", "uv", "jvm"} {
 		darwinAmd64 := parsed[name].Managed.Binaries[syslist.OsTypeDarwin][syslist.ArchTypeAmd64]
 		if _, ok := darwinAmd64["unknown"]; !ok {
 			t.Errorf("%s: expected darwin/amd64/unknown", name)
@@ -911,7 +912,7 @@ func TestWriteRuntimesJSON_AtomicWrite(t *testing.T) {
 	}
 
 	// Overwrite with different content
-	runtimes["fnm"].FNM.NodeVersion = "22.0.0"
+	runtimes["node"].Node.NodeVersion = "22.0.0"
 	if err := writeRuntimesJSON(path, runtimes); err != nil {
 		t.Fatalf("second write failed: %v", err)
 	}
@@ -935,36 +936,6 @@ func TestWriteRuntimesJSON_AtomicWrite(t *testing.T) {
 	}
 }
 
-func TestBuildFNMRuntimeJSON(t *testing.T) {
-	data := &FNMRuntimeData{
-		NodeVersion: "24.14.0",
-		PNPMVersion: "10.31.0",
-		PNPMHash:    testHash1,
-	}
-	binaries := make(binmanager.MapOfBinaries)
-
-	result := buildFNMRuntimeJSON(data, binaries)
-
-	if result.Kind != "fnm" {
-		t.Errorf("Kind = %q, want %q", result.Kind, "fnm")
-	}
-	if result.Mode != "managed" {
-		t.Errorf("Mode = %q, want %q", result.Mode, "managed")
-	}
-	if result.FNM == nil {
-		t.Fatal("FNM config should not be nil")
-	}
-	if result.FNM.NodeVersion != "24.14.0" {
-		t.Errorf("NodeVersion = %q, want %q", result.FNM.NodeVersion, "24.14.0")
-	}
-	if result.UV != nil {
-		t.Error("UV config should be nil for FNM runtime")
-	}
-	if result.JVM != nil {
-		t.Error("JVM config should be nil for FNM runtime")
-	}
-}
-
 func TestBuildUVRuntimeJSON(t *testing.T) {
 	data := &UVRuntimeData{PythonVersion: "3.14.3"}
 	binaries := make(binmanager.MapOfBinaries)
@@ -980,8 +951,8 @@ func TestBuildUVRuntimeJSON(t *testing.T) {
 	if result.UV.PythonVersion != "3.14.3" {
 		t.Errorf("PythonVersion = %q, want %q", result.UV.PythonVersion, "3.14.3")
 	}
-	if result.FNM != nil {
-		t.Error("FNM config should be nil for UV runtime")
+	if result.Node != nil {
+		t.Error("Node config should be nil for UV runtime")
 	}
 }
 
@@ -1000,8 +971,8 @@ func TestBuildJVMRuntimeJSON(t *testing.T) {
 	if result.JVM.JavaVersion != "25" {
 		t.Errorf("JavaVersion = %q, want %q", result.JVM.JavaVersion, "25")
 	}
-	if result.FNM != nil {
-		t.Error("FNM config should be nil for JVM runtime")
+	if result.Node != nil {
+		t.Error("Node config should be nil for JVM runtime")
 	}
 }
 
@@ -1026,12 +997,14 @@ func TestIsValidRuntime(t *testing.T) {
 		name string
 		want bool
 	}{
-		{"fnm", true},
 		{"uv", true},
 		{"jvm", true},
+		{"node", true},
+		{"go", true},
+		{"npm", false},
 		{"invalid", false},
 		{"", false},
-		{"FNM", false},
+		{"NODE", false},
 	}
 
 	for _, tt := range tests {
@@ -1039,35 +1012,6 @@ func TestIsValidRuntime(t *testing.T) {
 		if got != tt.want {
 			t.Errorf("isValidRuntime(%q) = %v, want %v", tt.name, got, tt.want)
 		}
-	}
-}
-
-func TestRuntimeVersion_FNM(t *testing.T) {
-	r := &RuntimeJSON{
-		FNM: &FNMConfigJSON{
-			NodeVersion: "24.14.0",
-			PNPMVersion: "10.31.0",
-		},
-		Managed: &RuntimeManagedJSON{
-			Binaries: binmanager.MapOfBinaries{
-				syslist.OsTypeDarwin: {
-					syslist.ArchTypeAmd64: {
-						"unknown": binmanager.BinaryOsArchInfo{URL: "x", Hash: "y"},
-					},
-				},
-			},
-		},
-	}
-
-	v := runtimeVersion(r)
-	if !strings.Contains(v, "node=24.14.0") {
-		t.Errorf("expected node version in output, got %q", v)
-	}
-	if !strings.Contains(v, "pnpm=10.31.0") {
-		t.Errorf("expected pnpm version in output, got %q", v)
-	}
-	if !strings.Contains(v, "binaries=1") {
-		t.Errorf("expected binaries count in output, got %q", v)
 	}
 }
 
@@ -1098,6 +1042,16 @@ func TestRuntimeVersion_Nil(t *testing.T) {
 	}
 }
 
+func TestRuntimeVersion_Go(t *testing.T) {
+	r := &RuntimeJSON{
+		Go: &GoConfigJSON{GoVersion: "1.26.3"},
+	}
+	v := runtimeVersion(r)
+	if !strings.Contains(v, "go=1.26.3") {
+		t.Errorf("expected go version, got %q", v)
+	}
+}
+
 func TestReadRuntimesJSON_ValidFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "runtimes.json")
@@ -1115,7 +1069,7 @@ func TestReadRuntimesJSON_ValidFile(t *testing.T) {
 	if len(read) != 3 {
 		t.Errorf("expected 3 runtimes, got %d", len(read))
 	}
-	for _, key := range []string{"fnm", "uv", "jvm"} {
+	for _, key := range []string{"node", "uv", "jvm"} {
 		if _, ok := read[key]; !ok {
 			t.Errorf("missing runtime key %q", key)
 		}
@@ -1184,6 +1138,138 @@ func TestReadWriteRuntimesJSON_Roundtrip(t *testing.T) {
 	}
 }
 
+// TestReadWriteRuntimesJSON_PreservesGoEntry is the regression guard for the
+// reported bug: pull:runtimes silently dropped the `go` runtime's goVersion
+// because RuntimeJSON had no Go field, so the read→merge→write round-trip lost
+// the `go: { goVersion }` block. Here go is carried over (not actively pulled),
+// mirroring runPullRuntimes' map copy when the runtime filter is "node".
+func TestReadWriteRuntimesJSON_PreservesGoEntry(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "runtimes.json")
+
+	fixture := `{
+  "go": {
+    "kind": "go",
+    "mode": "managed",
+    "go": { "goVersion": "1.26.3" },
+    "managed": {
+      "binaries": {
+        "linux": {
+          "amd64": {
+            "glibc": {
+              "url": "https://go.dev/dl/go1.26.3.linux-amd64.tar.gz",
+              "hash": "` + testHash1 + `",
+              "contentType": "tar.gz",
+              "binaryPath": "go/bin/go",
+              "extractDir": true
+            }
+          }
+        }
+      }
+    }
+  },
+  "node": {
+    "kind": "node",
+    "mode": "managed",
+    "node": { "nodeVersion": "24.14.0", "pnpmVersion": "10.31.0", "pnpmHash": "` + testHash2 + `" },
+    "managed": { "binaries": {} }
+  }
+}`
+	if err := os.WriteFile(path, []byte(fixture), 0644); err != nil {
+		t.Fatalf("seeding fixture: %v", err)
+	}
+
+	// read → merge (copy map, as runPullRuntimes does when go is not in the
+	// runtime filter) → write
+	existing, err := readRuntimesJSON(path)
+	if err != nil {
+		t.Fatalf("readRuntimesJSON: %v", err)
+	}
+	if existing["go"] == nil || existing["go"].Go == nil {
+		t.Fatal("go entry's go config was dropped on read")
+	}
+	if existing["go"].Go.GoVersion != "1.26.3" {
+		t.Errorf("read goVersion = %q, want 1.26.3", existing["go"].Go.GoVersion)
+	}
+
+	merged := make(RuntimesJSON)
+	for k, v := range existing {
+		merged[k] = v
+	}
+	if err := writeRuntimesJSON(path, merged); err != nil {
+		t.Fatalf("writeRuntimesJSON: %v", err)
+	}
+
+	// the written file must still contain go.goVersion
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading written file: %v", err)
+	}
+	var parsed map[string]json.RawMessage
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("written file not valid JSON: %v", err)
+	}
+	var goEntry struct {
+		Go *GoConfigJSON `json:"go"`
+	}
+	if err := json.Unmarshal(parsed["go"], &goEntry); err != nil {
+		t.Fatalf("parsing written go entry: %v", err)
+	}
+	if goEntry.Go == nil {
+		t.Fatal("go.goVersion block was dropped through read→merge→write cycle")
+	}
+	if goEntry.Go.GoVersion != "1.26.3" {
+		t.Errorf("written goVersion = %q, want 1.26.3", goEntry.Go.GoVersion)
+	}
+}
+
+// TestReadWriteRuntimesJSON_RoundtripPreservesCarriedOverKind is the general
+// round-trip guard (not just go): a kind that is carried over verbatim — not
+// actively pulled — must survive read→write byte-for-byte alongside the others.
+func TestReadWriteRuntimesJSON_RoundtripPreservesCarriedOverKind(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "runtimes.json")
+
+	gbp := "go/bin/go"
+	original := buildTestRuntimes()
+	original["go"] = &RuntimeJSON{
+		Kind: "go",
+		Mode: "managed",
+		Go:   &GoConfigJSON{GoVersion: "1.26.3"},
+		Managed: &RuntimeManagedJSON{
+			Binaries: binmanager.MapOfBinaries{
+				syslist.OsTypeLinux: {
+					syslist.ArchTypeAmd64: {
+						"glibc": binmanager.BinaryOsArchInfo{
+							URL: "https://go.dev/dl/go1.26.3.linux-amd64.tar.gz", Hash: testHash4,
+							ContentType: binmanager.BinContentTypeTarGz, BinaryPath: &gbp,
+							ExtractDir: true,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	if err := writeRuntimesJSON(path, original); err != nil {
+		t.Fatalf("write failed: %v", err)
+	}
+	read, err := readRuntimesJSON(path)
+	if err != nil {
+		t.Fatalf("read failed: %v", err)
+	}
+
+	origJSON, _ := json.Marshal(original)
+	readJSON, _ := json.Marshal(read)
+	if string(origJSON) != string(readJSON) {
+		t.Errorf("roundtrip mismatch:\n orig: %s\n read: %s", origJSON, readJSON)
+	}
+
+	if read["go"].Go == nil || read["go"].Go.GoVersion != "1.26.3" {
+		t.Error("go.goVersion not preserved through roundtrip")
+	}
+}
+
 func TestWriteRuntimesJSON_SingleFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "runtimes.json")
@@ -1207,14 +1293,14 @@ func TestWriteRuntimesJSON_SingleFile(t *testing.T) {
 }
 
 func TestValidRuntimeNames(t *testing.T) {
-	expected := map[string]bool{"fnm": true, "uv": true, "jvm": true}
+	expected := map[string]bool{"uv": true, "jvm": true, "node": true, "go": true}
 	for _, name := range validRuntimeNames {
 		if !expected[name] {
 			t.Errorf("unexpected runtime name: %s", name)
 		}
 	}
-	if len(validRuntimeNames) != 3 {
-		t.Errorf("expected 3 valid runtime names, got %d", len(validRuntimeNames))
+	if len(validRuntimeNames) != 4 {
+		t.Errorf("expected 4 valid runtime names, got %d", len(validRuntimeNames))
 	}
 }
 
@@ -1242,6 +1328,110 @@ func TestPullRuntimesCommand_RejectsMultipleArgs(t *testing.T) {
 	}
 }
 
+// === Task 4: fail loudly when the Node LTS lookup errors ===
+
+// TestResolveLatestNodeLTS_FailsLoudly pins review finding #4: a failed LTS
+// lookup must surface the error, NOT silently pin the hardcoded fallback that
+// registry.GetLatestNodeLTSVersion returns alongside its error.
+func TestResolveLatestNodeLTS_FailsLoudly(t *testing.T) {
+	orig := getLatestNodeLTSVersion
+	defer func() { getLatestNodeLTSVersion = orig }()
+
+	// Mimic the real registry: it returns the fallback version AND an error.
+	getLatestNodeLTSVersion = func() (string, error) {
+		return "24.14.0", errors.New("simulated lookup failure")
+	}
+
+	version, err := resolveLatestNodeLTS()
+	if err == nil {
+		t.Fatal("expected error when LTS lookup fails")
+	}
+	if version == "24.14.0" {
+		t.Error("must not return the stale fallback version on lookup failure")
+	}
+	if version != "" {
+		t.Errorf("expected empty version on failure, got %q", version)
+	}
+}
+
+// TestResolveLatestNodeLTS_Success is the success-path guard: a successful
+// lookup returns the resolved version unchanged with no error.
+func TestResolveLatestNodeLTS_Success(t *testing.T) {
+	orig := getLatestNodeLTSVersion
+	defer func() { getLatestNodeLTSVersion = orig }()
+
+	getLatestNodeLTSVersion = func() (string, error) {
+		return "26.2.0", nil
+	}
+
+	version, err := resolveLatestNodeLTS()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if version != "26.2.0" {
+		t.Errorf("version = %q, want 26.2.0", version)
+	}
+}
+
+// TestPullNodeRuntime_LTSLookupError verifies the failure propagates through
+// pullNodeRuntime itself: an LTS lookup error aborts before any network fetch
+// (the lookup is the first step), so no fallback config is produced.
+func TestPullNodeRuntime_LTSLookupError(t *testing.T) {
+	orig := getLatestNodeLTSVersion
+	defer func() { getLatestNodeLTSVersion = orig }()
+
+	getLatestNodeLTSVersion = func() (string, error) {
+		return "24.14.0", errors.New("simulated lookup failure")
+	}
+
+	data, binaries, err := pullNodeRuntime()
+	if err == nil {
+		t.Fatal("expected pullNodeRuntime to return an error on LTS lookup failure")
+	}
+	if data != nil || binaries != nil {
+		t.Error("expected nil data and binaries when the LTS lookup fails")
+	}
+}
+
+// TestRunPullRuntimes_NodeLookupFailureNonZeroExit confirms runPullRuntimes
+// surfaces a node pull failure as a non-zero exit (returns an error), rather
+// than writing a config built on the stale fallback version.
+func TestRunPullRuntimes_NodeLookupFailureNonZeroExit(t *testing.T) {
+	oldUpdate := pullRuntimesUpdateFlag
+	oldRuntime := pullRuntimesRuntimeFlag
+	oldDryRun := pullRuntimesDryRunFlag
+	origLTS := getLatestNodeLTSVersion
+	defer func() {
+		pullRuntimesUpdateFlag = oldUpdate
+		pullRuntimesRuntimeFlag = oldRuntime
+		pullRuntimesDryRunFlag = oldDryRun
+		getLatestNodeLTSVersion = origLTS
+	}()
+
+	pullRuntimesUpdateFlag = true
+	pullRuntimesRuntimeFlag = "node"
+	pullRuntimesDryRunFlag = true
+	getLatestNodeLTSVersion = func() (string, error) {
+		return "24.14.0", errors.New("simulated lookup failure")
+	}
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "runtimes.json")
+
+	err := runPullRuntimes(nil, []string{path})
+	if err == nil {
+		t.Fatal("expected non-zero exit (error) when the node LTS lookup fails")
+	}
+	if !strings.Contains(err.Error(), "some runtimes failed to update") {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	// dry-run + failure: nothing should have been written.
+	if _, statErr := os.Stat(path); !errors.Is(statErr, os.ErrNotExist) {
+		t.Error("no file should be written when the pull fails")
+	}
+}
+
 
 // === Integration Tests (Task 10) ===
 
@@ -1251,22 +1441,22 @@ func TestIntegration_FullPullFlow(t *testing.T) {
 	dir := t.TempDir()
 	outputPath := filepath.Join(dir, "runtimes.json")
 
-	// Simulate FNM release (single Linux binary per arch → only glibc)
-	fnmRelease := &github.Release{
-		TagName: "v1.40.0",
+	// Simulate Node release (single Linux binary per arch → only glibc)
+	nodeRelease := &github.Release{
+		TagName: "v24.14.0",
 		Assets: []github.Asset{
-			{Name: "fnm-darwin-amd64.zip", BrowserDownloadURL: "https://example.com/fnm-darwin-amd64.zip", Digest: "sha256:" + testHash1},
-			{Name: "fnm-darwin-arm64.zip", BrowserDownloadURL: "https://example.com/fnm-darwin-arm64.zip", Digest: "sha256:" + testHash2},
-			{Name: "fnm-linux-amd64.zip", BrowserDownloadURL: "https://example.com/fnm-linux-amd64.zip", Digest: "sha256:" + testHash3},
-			{Name: "fnm-linux-arm64.zip", BrowserDownloadURL: "https://example.com/fnm-linux-arm64.zip", Digest: "sha256:" + testHash4},
+			{Name: "node-darwin-amd64.zip", BrowserDownloadURL: "https://example.com/node-darwin-amd64.zip", Digest: "sha256:" + testHash1},
+			{Name: "node-darwin-arm64.zip", BrowserDownloadURL: "https://example.com/node-darwin-arm64.zip", Digest: "sha256:" + testHash2},
+			{Name: "node-linux-amd64.zip", BrowserDownloadURL: "https://example.com/node-linux-amd64.zip", Digest: "sha256:" + testHash3},
+			{Name: "node-linux-arm64.zip", BrowserDownloadURL: "https://example.com/node-linux-arm64.zip", Digest: "sha256:" + testHash4},
 		},
 	}
-	fnmBinaries, err := detectRuntimeBinaries("fnm", fnmRelease)
+	nodeBinaries, err := detectRuntimeBinaries("node", nodeRelease)
 	if err != nil {
-		t.Fatalf("detectRuntimeBinaries(fnm): %v", err)
+		t.Fatalf("detectRuntimeBinaries(node): %v", err)
 	}
-	fnmData := &FNMRuntimeData{NodeVersion: "24.14.0", PNPMVersion: "10.31.0", PNPMHash: testHash5}
-	fnmJSON := buildFNMRuntimeJSON(fnmData, fnmBinaries)
+	nodeData := &NodeRuntimeData{NodeVersion: "24.14.0", PNPMVersion: "10.31.0", PNPMHash: testHash5}
+	nodeJSON := buildNodeRuntimeJSON(nodeData, nodeBinaries)
 
 	// Simulate UV release (separate gnu + musl → both keys)
 	uvRelease := &github.Release{
@@ -1302,9 +1492,9 @@ func TestIntegration_FullPullFlow(t *testing.T) {
 
 	// Assemble and write
 	runtimes := RuntimesJSON{
-		"fnm": fnmJSON,
-		"uv":  uvJSON,
-		"jvm": jvmJSON,
+		"node": nodeJSON,
+		"uv":   uvJSON,
+		"jvm":  jvmJSON,
 	}
 
 	if err := writeRuntimesJSON(outputPath, runtimes); err != nil {
@@ -1318,15 +1508,15 @@ func TestIntegration_FullPullFlow(t *testing.T) {
 	}
 
 	// Verify all three runtimes present
-	for _, key := range []string{"fnm", "uv", "jvm"} {
+	for _, key := range []string{"node", "uv", "jvm"} {
 		if _, ok := read[key]; !ok {
 			t.Errorf("missing runtime %q after roundtrip", key)
 		}
 	}
 
 	// Verify kinds
-	if read["fnm"].Kind != "fnm" {
-		t.Errorf("fnm kind = %q", read["fnm"].Kind)
+	if read["node"].Kind != "node" {
+		t.Errorf("node kind = %q", read["node"].Kind)
 	}
 	if read["uv"].Kind != "uv" {
 		t.Errorf("uv kind = %q", read["uv"].Kind)
@@ -1336,8 +1526,8 @@ func TestIntegration_FullPullFlow(t *testing.T) {
 	}
 
 	// Verify config sections
-	if read["fnm"].FNM == nil || read["fnm"].FNM.NodeVersion != "24.14.0" {
-		t.Error("fnm config missing or wrong NodeVersion")
+	if read["node"].Node == nil || read["node"].Node.NodeVersion != "24.14.0" {
+		t.Error("node config missing or wrong NodeVersion")
 	}
 	if read["uv"].UV == nil || read["uv"].UV.PythonVersion != "3.14.3" {
 		t.Error("uv config missing or wrong PythonVersion")
@@ -1347,7 +1537,7 @@ func TestIntegration_FullPullFlow(t *testing.T) {
 	}
 
 	// Verify all runtimes have managed binaries
-	for _, key := range []string{"fnm", "uv", "jvm"} {
+	for _, key := range []string{"node", "uv", "jvm"} {
 		if read[key].Managed == nil || len(read[key].Managed.Binaries) == 0 {
 			t.Errorf("%s: missing managed binaries", key)
 		}
@@ -1417,25 +1607,25 @@ func TestIntegration_GracefulFallbackNoMusl(t *testing.T) {
 	dir := t.TempDir()
 	outputPath := filepath.Join(dir, "runtimes.json")
 
-	// FNM: single Linux binary per arch (no musl variant)
-	fnmRelease := &github.Release{
-		TagName: "v1.40.0",
+	// Node: single Linux binary per arch (no musl variant)
+	nodeRelease := &github.Release{
+		TagName: "v24.14.0",
 		Assets: []github.Asset{
-			{Name: "fnm-darwin-amd64.zip", BrowserDownloadURL: "https://example.com/fnm-darwin-amd64.zip", Digest: "sha256:" + testHash1},
-			{Name: "fnm-linux-amd64.zip", BrowserDownloadURL: "https://example.com/fnm-linux-amd64.zip", Digest: "sha256:" + testHash2},
-			{Name: "fnm-linux-arm64.zip", BrowserDownloadURL: "https://example.com/fnm-linux-arm64.zip", Digest: "sha256:" + testHash3},
+			{Name: "node-darwin-amd64.zip", BrowserDownloadURL: "https://example.com/node-darwin-amd64.zip", Digest: "sha256:" + testHash1},
+			{Name: "node-linux-amd64.zip", BrowserDownloadURL: "https://example.com/node-linux-amd64.zip", Digest: "sha256:" + testHash2},
+			{Name: "node-linux-arm64.zip", BrowserDownloadURL: "https://example.com/node-linux-arm64.zip", Digest: "sha256:" + testHash3},
 		},
 	}
-	fnmBinaries, err := detectRuntimeBinaries("fnm", fnmRelease)
+	nodeBinaries, err := detectRuntimeBinaries("node", nodeRelease)
 	if err != nil {
-		t.Fatalf("detectRuntimeBinaries(fnm): %v", err)
+		t.Fatalf("detectRuntimeBinaries(node): %v", err)
 	}
 
-	fnmJSON := buildFNMRuntimeJSON(
-		&FNMRuntimeData{NodeVersion: "24.14.0", PNPMVersion: "10.31.0", PNPMHash: testHash4},
-		fnmBinaries,
+	nodeJSON := buildNodeRuntimeJSON(
+		&NodeRuntimeData{NodeVersion: "24.14.0", PNPMVersion: "10.31.0", PNPMHash: testHash4},
+		nodeBinaries,
 	)
-	runtimes := RuntimesJSON{"fnm": fnmJSON}
+	runtimes := RuntimesJSON{"node": nodeJSON}
 
 	if err := writeRuntimesJSON(outputPath, runtimes); err != nil {
 		t.Fatalf("writeRuntimesJSON: %v", err)
@@ -1446,16 +1636,16 @@ func TestIntegration_GracefulFallbackNoMusl(t *testing.T) {
 		t.Fatalf("readRuntimesJSON: %v", err)
 	}
 
-	fnm := read["fnm"]
-	linuxBins := fnm.Managed.Binaries[syslist.OsTypeLinux]
+	node := read["node"]
+	linuxBins := node.Managed.Binaries[syslist.OsTypeLinux]
 
 	// Check all Linux arch entries: should only have glibc, never musl
 	for arch, libcMap := range linuxBins {
 		if _, ok := libcMap["glibc"]; !ok {
-			t.Errorf("fnm linux/%s: expected glibc entry", arch)
+			t.Errorf("node linux/%s: expected glibc entry", arch)
 		}
 		if _, ok := libcMap["musl"]; ok {
-			t.Errorf("fnm linux/%s: musl entry should NOT exist (single binary, deduplicated)", arch)
+			t.Errorf("node linux/%s: musl entry should NOT exist (single binary, deduplicated)", arch)
 		}
 	}
 }
@@ -1464,8 +1654,8 @@ func TestIntegration_VersionDetectionWithFallback(t *testing.T) {
 	// Test that runtimeVersion() correctly extracts version info from
 	// the built JSON structures, and that version strings appear in output.
 
-	fnmJSON := buildFNMRuntimeJSON(
-		&FNMRuntimeData{NodeVersion: "24.14.0", PNPMVersion: "10.31.0", PNPMHash: testHash1},
+	nodeJSON := buildNodeRuntimeJSON(
+		&NodeRuntimeData{NodeVersion: "24.14.0", PNPMVersion: "10.31.0", PNPMHash: testHash1},
 		binmanager.MapOfBinaries{
 			syslist.OsTypeDarwin: {
 				syslist.ArchTypeAmd64: {"unknown": binmanager.BinaryOsArchInfo{URL: "x", Hash: testHash1}},
@@ -1491,13 +1681,13 @@ func TestIntegration_VersionDetectionWithFallback(t *testing.T) {
 		},
 	)
 
-	// FNM: should include node and pnpm versions
-	fnmVer := runtimeVersion(fnmJSON)
-	if !strings.Contains(fnmVer, "node=24.14.0") {
-		t.Errorf("FNM version should contain node version, got %q", fnmVer)
+	// Node: should include node and pnpm versions
+	nodeVer := runtimeVersion(nodeJSON)
+	if !strings.Contains(nodeVer, "node=24.14.0") {
+		t.Errorf("Node version should contain node version, got %q", nodeVer)
 	}
-	if !strings.Contains(fnmVer, "pnpm=10.31.0") {
-		t.Errorf("FNM version should contain pnpm version, got %q", fnmVer)
+	if !strings.Contains(nodeVer, "pnpm=10.31.0") {
+		t.Errorf("Node version should contain pnpm version, got %q", nodeVer)
 	}
 
 	// UV: should include python version
@@ -1520,7 +1710,7 @@ func TestIntegration_VersionDetectionWithFallback(t *testing.T) {
 	// Write and read back, verify versions survive roundtrip
 	dir := t.TempDir()
 	path := filepath.Join(dir, "runtimes.json")
-	runtimes := RuntimesJSON{"fnm": fnmJSON, "uv": uvJSON, "jvm": jvmJSON}
+	runtimes := RuntimesJSON{"node": nodeJSON, "uv": uvJSON, "jvm": jvmJSON}
 
 	if err := writeRuntimesJSON(path, runtimes); err != nil {
 		t.Fatalf("writeRuntimesJSON: %v", err)
@@ -1530,9 +1720,9 @@ func TestIntegration_VersionDetectionWithFallback(t *testing.T) {
 		t.Fatalf("readRuntimesJSON: %v", err)
 	}
 
-	readFNMVer := runtimeVersion(read["fnm"])
-	if readFNMVer != fnmVer {
-		t.Errorf("FNM version mismatch after roundtrip: %q vs %q", readFNMVer, fnmVer)
+	readNodeVer := runtimeVersion(read["node"])
+	if readNodeVer != nodeVer {
+		t.Errorf("Node version mismatch after roundtrip: %q vs %q", readNodeVer, nodeVer)
 	}
 	readUVVer := runtimeVersion(read["uv"])
 	if readUVVer != uvVer {
@@ -1573,7 +1763,7 @@ func TestIntegration_JSONGeneration(t *testing.T) {
 	}
 
 	// Each runtime must have required fields
-	for _, name := range []string{"fnm", "uv", "jvm"} {
+	for _, name := range []string{"node", "uv", "jvm"} {
 		var entry map[string]json.RawMessage
 		if err := json.Unmarshal(raw[name], &entry); err != nil {
 			t.Fatalf("parsing %s: %v", name, err)
@@ -1605,21 +1795,21 @@ func TestIntegration_JSONGeneration(t *testing.T) {
 		}
 	}
 
-	// FNM must have fnm config section with nodeVersion, pnpmVersion, pnpmHash
-	var fnmEntry map[string]json.RawMessage
-	_ = json.Unmarshal(raw["fnm"], &fnmEntry)
-	var fnmConfig FNMConfigJSON
-	if err := json.Unmarshal(fnmEntry["fnm"], &fnmConfig); err != nil {
-		t.Fatalf("parsing fnm config: %v", err)
+	// Node must have node config section with nodeVersion, pnpmVersion, pnpmHash
+	var nodeEntry map[string]json.RawMessage
+	_ = json.Unmarshal(raw["node"], &nodeEntry)
+	var nodeConfig NodeConfigJSON
+	if err := json.Unmarshal(nodeEntry["node"], &nodeConfig); err != nil {
+		t.Fatalf("parsing node config: %v", err)
 	}
-	if fnmConfig.NodeVersion == "" {
-		t.Error("fnm: nodeVersion is empty")
+	if nodeConfig.NodeVersion == "" {
+		t.Error("node: nodeVersion is empty")
 	}
-	if fnmConfig.PNPMVersion == "" {
-		t.Error("fnm: pnpmVersion is empty")
+	if nodeConfig.PNPMVersion == "" {
+		t.Error("node: pnpmVersion is empty")
 	}
-	if fnmConfig.PNPMHash == "" {
-		t.Error("fnm: pnpmHash is empty")
+	if nodeConfig.PNPMHash == "" {
+		t.Error("node: pnpmHash is empty")
 	}
 
 	// UV must have uv config section with pythonVersion
@@ -1676,13 +1866,13 @@ func TestIntegration_JSONGeneration(t *testing.T) {
 		t.Error("JVM JSON: missing linux/amd64/musl")
 	}
 
-	// FNM linux should have only glibc (no musl in buildTestRuntimes)
-	fnmLinux := read["fnm"].Managed.Binaries[syslist.OsTypeLinux][syslist.ArchTypeAmd64]
-	if _, ok := fnmLinux["glibc"]; !ok {
-		t.Error("FNM JSON: missing linux/amd64/glibc")
+	// Node linux should have only glibc (no musl in buildTestRuntimes)
+	nodeLinux := read["node"].Managed.Binaries[syslist.OsTypeLinux][syslist.ArchTypeAmd64]
+	if _, ok := nodeLinux["glibc"]; !ok {
+		t.Error("Node JSON: missing linux/amd64/glibc")
 	}
-	if _, ok := fnmLinux["musl"]; ok {
-		t.Error("FNM JSON: unexpected linux/amd64/musl")
+	if _, ok := nodeLinux["musl"]; ok {
+		t.Error("Node JSON: unexpected linux/amd64/musl")
 	}
 
 	// JVM entries should have ExtractDir=true

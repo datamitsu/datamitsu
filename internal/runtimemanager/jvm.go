@@ -4,10 +4,10 @@ import (
 	"crypto/sha256"
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/httpx"
 	"encoding/hex"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -16,24 +16,7 @@ import (
 	"go.uber.org/zap"
 )
 
-var jvmHTTPClient = &http.Client{
-	Timeout: 5 * time.Minute,
-	Transport: &http.Transport{
-		Proxy:                 http.ProxyFromEnvironment,
-		DialContext:           (&net.Dialer{Timeout: 30 * time.Second}).DialContext,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ResponseHeaderTimeout: 30 * time.Second,
-	},
-	CheckRedirect: func(req *http.Request, via []*http.Request) error {
-		if len(via) >= 10 {
-			return fmt.Errorf("stopped after 10 redirects")
-		}
-		if len(via) > 0 && via[len(via)-1].URL.Scheme == "https" && req.URL.Scheme == "http" {
-			return fmt.Errorf("HTTPS to HTTP redirect rejected: %s", req.URL)
-		}
-		return nil
-	},
-}
+var jvmHTTPClient = httpx.NewHardenedClient(5 * time.Minute)
 
 const maxJARDownloadSize = 200 * 1024 * 1024 // 200 MiB
 

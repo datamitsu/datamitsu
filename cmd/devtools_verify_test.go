@@ -122,8 +122,8 @@ func TestGetAppVersion(t *testing.T) {
 			expected: "2.0.0",
 		},
 		{
-			name:     "fnm app",
-			app:      binmanager.App{Fnm: &binmanager.AppConfigFNM{Version: "3.1.0"}},
+			name:     "node app",
+			app:      binmanager.App{Node: &binmanager.AppConfigNode{Version: "3.1.0"}},
 			expected: "3.1.0",
 		},
 		{
@@ -393,10 +393,10 @@ func TestFilterSkippedRuntimeJobs(t *testing.T) {
 			info:        binmanager.BinaryOsArchInfo{URL: "https://example.com/uv", Hash: "uvhash", ContentType: "tar.gz", BinaryPath: &binaryPath},
 		},
 		{
-			runtimeName: "fnm",
+			runtimeName: "node",
 			os:          syslist.OsTypeLinux,
 			arch:        syslist.ArchTypeAmd64,
-			info:        binmanager.BinaryOsArchInfo{URL: "https://example.com/fnm", Hash: "fnmhash", ContentType: "tar.gz", BinaryPath: &binaryPath},
+			info:        binmanager.BinaryOsArchInfo{URL: "https://example.com/node", Hash: "node-hash", ContentType: "tar.gz", BinaryPath: &binaryPath},
 		},
 	}
 
@@ -417,8 +417,8 @@ func TestFilterSkippedRuntimeJobs(t *testing.T) {
 		if len(skipped) != 1 {
 			t.Fatalf("expected 1 skipped, got %d", len(skipped))
 		}
-		if toRun[0].runtimeName != "fnm" {
-			t.Errorf("expected toRun[0] to be fnm, got %s", toRun[0].runtimeName)
+		if toRun[0].runtimeName != "node" {
+			t.Errorf("expected toRun[0] to be node, got %s", toRun[0].runtimeName)
 		}
 		if skipped[0].runtimeName != "uv" {
 			t.Errorf("expected skipped[0] to be uv, got %s", skipped[0].runtimeName)
@@ -635,7 +635,7 @@ func TestComputeSummaryWithCachedEntries(t *testing.T) {
 			},
 			runtimeResults: []runtimeVerifyResult{
 				{RuntimeName: "uv", Status: "ok"},
-				{RuntimeName: "fnm", Status: "cached"},
+				{RuntimeName: "node", Status: "cached"},
 			},
 			runtimeAppResults: []runtimeAppResult{
 				{AppName: "d", Status: "cached"},
