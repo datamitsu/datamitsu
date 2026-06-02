@@ -673,6 +673,126 @@ func TestListReleases(t *testing.T) {
 	})
 }
 
+func TestGetLatestReleaseWithMinAge(t *testing.T) {
+	// newClientReturning serves the given JSON array body for ListReleases.
+	newClientReturning := func(body string) *Client {
+		client := NewClient()
+		client.httpClient = &http.Client{
+			Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(strings.NewReader(body)),
+				}, nil
+			}),
+		}
+		return client
+	}
+
+	iso := func(t time.Time) string { return t.UTC().Format(time.RFC3339) }
+	now := time.Now()
+	old := iso(now.Add(-48 * time.Hour))   // 2 days old
+	fresh := iso(now.Add(-1 * time.Minute)) // very fresh
+
+	t.Run("selects older release when latest is too fresh", func(t *testing.T) {
+		body := `[` +
+			`{"tag_name":"v2.0.0","published_at":"` + fresh + `","assets":[]},` +
+			`{"tag_name":"v1.0.0","published_at":"` + old + `","assets":[]}]`
+		client := newClientReturning(body)
+
+		r, err := client.GetLatestReleaseWithMinAge("o", "r", 60)
+		if err != nil {
+			t.Fatalf("error = %v", err)
+		}
+		if r == nil || r.TagName != "v1.0.0" {
+			t.Fatalf("expected v1.0.0, got %v", r)
+		}
+	})
+
+	t.Run("skips prerelease even if old enough", func(t *testing.T) {
+		body := `[` +
+			`{"tag_name":"v2.0.0","published_at":"` + old + `","prerelease":true,"assets":[]},` +
+			`{"tag_name":"v1.0.0","published_at":"` + old + `","assets":[]}]`
+		client := newClientReturning(body)
+
+		r, err := client.GetLatestReleaseWithMinAge("o", "r", 60)
+		if err != nil {
+			t.Fatalf("error = %v", err)
+		}
+		if r == nil || r.TagName != "v1.0.0" {
+			t.Fatalf("expected v1.0.0, got %v", r)
+		}
+	})
+
+	t.Run("skips draft releases", func(t *testing.T) {
+		body := `[` +
+			`{"tag_name":"v2.0.0","published_at":"` + old + `","draft":true,"assets":[]},` +
+			`{"tag_name":"v1.0.0","published_at":"` + old + `","assets":[]}]`
+		client := newClientReturning(body)
+
+		r, err := client.GetLatestReleaseWithMinAge("o", "r", 60)
+		if err != nil {
+			t.Fatalf("error = %v", err)
+		}
+		if r == nil || r.TagName != "v1.0.0" {
+			t.Fatalf("expected v1.0.0, got %v", r)
+		}
+	})
+
+	t.Run("skips releases with zero PublishedAt", func(t *testing.T) {
+		body := `[` +
+			`{"tag_name":"v2.0.0","assets":[]},` +
+			`{"tag_name":"v1.0.0","published_at":"` + old + `","assets":[]}]`
+		client := newClientReturning(body)
+
+		r, err := client.GetLatestReleaseWithMinAge("o", "r", 60)
+		if err != nil {
+			t.Fatalf("error = %v", err)
+		}
+		if r == nil || r.TagName != "v1.0.0" {
+			t.Fatalf("expected v1.0.0, got %v", r)
+		}
+	})
+
+	t.Run("minAgeMinutes=0 falls through to GetLatestRelease", func(t *testing.T) {
+		var capturedURL string
+		client := NewClient()
+		client.httpClient = &http.Client{
+			Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				capturedURL = req.URL.String()
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(strings.NewReader(`{"tag_name":"v9.9.9","assets":[]}`)),
+				}, nil
+			}),
+		}
+
+		r, err := client.GetLatestReleaseWithMinAge("o", "r", 0)
+		if err != nil {
+			t.Fatalf("error = %v", err)
+		}
+		if r == nil || r.TagName != "v9.9.9" {
+			t.Fatalf("expected v9.9.9, got %v", r)
+		}
+		if !strings.HasSuffix(capturedURL, "/releases/latest") {
+			t.Errorf("expected latest endpoint, got %q", capturedURL)
+		}
+	})
+
+	t.Run("returns nil,nil when no release is old enough", func(t *testing.T) {
+		body := `[` +
+			`{"tag_name":"v2.0.0","published_at":"` + fresh + `","assets":[]}]`
+		client := newClientReturning(body)
+
+		r, err := client.GetLatestReleaseWithMinAge("o", "r", 60)
+		if err != nil {
+			t.Fatalf("error = %v", err)
+		}
+		if r != nil {
+			t.Fatalf("expected nil release, got %v", r)
+		}
+	})
+}
+
 type genericError struct{}
 
 func (e *genericError) Error() string {

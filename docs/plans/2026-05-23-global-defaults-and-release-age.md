@@ -134,14 +134,14 @@ Three-layer API: pure computation + idempotent lifecycle + cached getter. Thread
 
 ### Task 5: Add `GetLatestReleaseWithMinAge` to GitHub client
 
-- [ ] add `GetLatestReleaseWithMinAge(owner, repo string, minAgeMinutes int) (*Release, error)` — fetches 30 releases, filters by age, prerelease, and draft; skips releases with zero `PublishedAt`; returns `(nil, nil)` if none qualifies
-- [ ] write test: selects older release when latest is too fresh
-- [ ] write test: skips prerelease even if old enough
-- [ ] write test: skips draft releases
-- [ ] write test: skips releases with zero `PublishedAt`
-- [ ] write test: `minAgeMinutes=0` falls through to `GetLatestRelease`
-- [ ] write test: returns `(nil, nil)` when no release is old enough
-- [ ] run `go test ./internal/github/...` — must pass before next task
+- [x] add `GetLatestReleaseWithMinAge(owner, repo string, minAgeMinutes int) (*Release, error)` — fetches 30 releases, filters by age, prerelease, and draft; skips releases with zero `PublishedAt`; returns `(nil, nil)` if none qualifies
+- [x] write test: selects older release when latest is too fresh
+- [x] write test: skips prerelease even if old enough
+- [x] write test: skips draft releases
+- [x] write test: skips releases with zero `PublishedAt`
+- [x] write test: `minAgeMinutes=0` falls through to `GetLatestRelease`
+- [x] write test: returns `(nil, nil)` when no release is old enough
+- [x] run `go test ./internal/github/...` — must pass before next task
 
 ### Task 6: Add `GetNPMPackageInfoWithMinAge` (two-step strategy)
 

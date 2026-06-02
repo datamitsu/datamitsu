@@ -167,6 +167,38 @@ func (c *Client) ListReleases(owner, repo string, perPage int) ([]Release, error
 	return nil, lastErr
 }
 
+// GetLatestReleaseWithMinAge returns the most recent release at least minAgeMinutes old.
+// It fetches up to 30 releases and skips prereleases, drafts, and releases with a
+// zero PublishedAt. When minAgeMinutes <= 0 it falls through to GetLatestRelease.
+// Returns (nil, nil) when no release qualifies.
+func (c *Client) GetLatestReleaseWithMinAge(owner, repo string, minAgeMinutes int) (*Release, error) {
+	if minAgeMinutes <= 0 {
+		return c.GetLatestRelease(owner, repo)
+	}
+
+	releases, err := c.ListReleases(owner, repo, 30)
+	if err != nil {
+		return nil, err
+	}
+
+	cutoff := time.Now().Add(-time.Duration(minAgeMinutes) * time.Minute)
+	for i := range releases {
+		r := releases[i]
+		if r.Prerelease || r.Draft {
+			continue
+		}
+		if r.PublishedAt.IsZero() {
+			continue
+		}
+		if r.PublishedAt.After(cutoff) {
+			continue
+		}
+		return &r, nil
+	}
+
+	return nil, nil
+}
+
 // NotFoundError is returned when a release is not found
 type NotFoundError struct {
 	URL string
