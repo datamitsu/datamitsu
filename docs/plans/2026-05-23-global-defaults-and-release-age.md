@@ -145,20 +145,20 @@ Three-layer API: pure computation + idempotent lifecycle + cached getter. Thread
 
 ### Task 6: Add `GetNPMPackageInfoWithMinAge` (two-step strategy)
 
-- [ ] add `npmFullResponse` type with `DistTags` and `Time` maps in `internal/registry/npm.go`
-- [ ] add `GetNPMPackageInfoWithMinAge(packageName string, minAgeMinutes int)` — step 1: fetch `/latest`, check age; step 2: if too fresh, fetch full `/{package}` metadata, sort versions by time, return latest old enough
-- [ ] handle version string normalization: npm versions don't have `v` prefix, use string-based pre-release detection (contains `-`), not `golang.org/x/mod/semver` which requires `v` prefix. Build metadata (`+`) is NOT pre-release per SemVer spec
-- [ ] skip non-version keys in `Time` map (`created`, `modified`)
-- [ ] handle scoped package URL encoding (`@scope/name` → `@scope%2fname`)
-- [ ] write test: latest is old enough — fast path, no full metadata fetch
-- [ ] write test: latest is too fresh — falls back to older version from full metadata
-- [ ] write test: skips pre-release versions (`1.2.3-beta.1`, `2.0.0-rc.0`)
-- [ ] write test: `1.2.3+build.1` is NOT skipped (build metadata is not pre-release)
-- [ ] write test: handles missing `time[version]` gracefully (skip version)
-- [ ] write test: handles latest dist-tag pointing to pre-release
-- [ ] write test: `minAgeMinutes=0` returns latest (no filtering)
-- [ ] write test: returns `(nil, nil)` when no version is old enough
-- [ ] run `go test ./internal/registry/...` — must pass before next task
+- [x] add `npmFullResponse` type with `DistTags` and `Time` maps in `internal/registry/npm.go`
+- [x] add `GetNPMPackageInfoWithMinAge(packageName string, minAgeMinutes int)` — step 1: fetch `/latest`, check age; step 2: if too fresh, fetch full `/{package}` metadata, sort versions by time, return latest old enough
+- [x] handle version string normalization: npm versions don't have `v` prefix, use string-based pre-release detection (contains `-`), not `golang.org/x/mod/semver` which requires `v` prefix. Build metadata (`+`) is NOT pre-release per SemVer spec
+- [x] skip non-version keys in `Time` map (`created`, `modified`)
+- [x] handle scoped package URL encoding (`@scope/name` → `@scope%2fname`)
+- [x] write test: latest is old enough — fast path, no full metadata fetch
+- [x] write test: latest is too fresh — falls back to older version from full metadata
+- [x] write test: skips pre-release versions (`1.2.3-beta.1`, `2.0.0-rc.0`)
+- [x] write test: `1.2.3+build.1` is NOT skipped (build metadata is not pre-release)
+- [x] write test: handles missing `time[version]` gracefully (skip version)
+- [x] write test: handles latest dist-tag pointing to pre-release
+- [x] write test: `minAgeMinutes=0` returns latest (no filtering)
+- [x] write test: returns `(nil, nil)` when no version is old enough
+- [x] run `go test ./internal/registry/...` — must pass before next task
 
 ### Task 7: Add `GetPyPIPackageInfoWithMinAge`
 

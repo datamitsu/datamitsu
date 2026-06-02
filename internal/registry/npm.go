@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -20,11 +21,142 @@ type npmLatestResponse struct {
 	Description string `json:"description"`
 }
 
+// npmFullResponse is the full package metadata document returned by
+// registry.npmjs.org/{package} — used to walk historical versions by upload time.
+type npmFullResponse struct {
+	Name        string                    `json:"name"`
+	Description string                    `json:"description"`
+	DistTags    map[string]string         `json:"dist-tags"`
+	Versions    map[string]npmVersionMeta `json:"versions"`
+	Time        map[string]string         `json:"time"`
+}
+
+type npmVersionMeta struct {
+	Description string `json:"description"`
+}
+
 var npmHTTPClient = &http.Client{Timeout: 15 * time.Second}
 
+// npmRegistryBaseURL is the registry root; overridable in tests.
+var npmRegistryBaseURL = "https://registry.npmjs.org"
+
 func GetNPMPackageInfo(packageName string) (*NPMPackageInfo, error) {
-	url := fmt.Sprintf("https://registry.npmjs.org/%s/latest", packageName)
+	url := fmt.Sprintf("%s/%s/latest", npmRegistryBaseURL, npmPackagePath(packageName))
 	return getNPMPackageInfoFromURL(url, packageName)
+}
+
+// npmPackagePath encodes a package name for use in a registry URL path.
+// Scoped names (@scope/name) need the slash percent-encoded.
+func npmPackagePath(packageName string) string {
+	if strings.HasPrefix(packageName, "@") {
+		return strings.Replace(packageName, "/", "%2f", 1)
+	}
+	return packageName
+}
+
+// isNPMPreRelease reports whether a semver string is a pre-release.
+// Per SemVer, a pre-release is anything after a "-"; build metadata after "+"
+// (e.g. 1.2.3+build.1) is NOT a pre-release. golang.org/x/mod/semver is not
+// used here because npm versions lack the required "v" prefix.
+func isNPMPreRelease(version string) bool {
+	if i := strings.IndexByte(version, '+'); i >= 0 {
+		version = version[:i]
+	}
+	return strings.Contains(version, "-")
+}
+
+// GetNPMPackageInfoWithMinAge returns the newest version that is at least
+// minAgeMinutes old, skipping pre-release versions. It uses a two-step strategy:
+// fetch the lightweight /latest first; only if that version is too fresh does it
+// fetch the full package metadata to walk older versions. When minAgeMinutes <= 0
+// it returns the latest version (no filtering). Returns (nil, nil) when no
+// version qualifies.
+func GetNPMPackageInfoWithMinAge(packageName string, minAgeMinutes int) (*NPMPackageInfo, error) {
+	latest, err := GetNPMPackageInfo(packageName)
+	if err != nil {
+		return nil, err
+	}
+	if minAgeMinutes <= 0 {
+		return latest, nil
+	}
+
+	cutoff := time.Now().Add(-time.Duration(minAgeMinutes) * time.Minute)
+
+	full, err := getNPMFullResponse(packageName)
+	if err != nil {
+		return nil, err
+	}
+
+	// Step 1: fast path — if the latest version is non-prerelease and old enough,
+	// return it without further work.
+	if !isNPMPreRelease(latest.Version) {
+		if ts, ok := full.Time[latest.Version]; ok {
+			if t, parseErr := time.Parse(time.RFC3339, ts); parseErr == nil && !t.After(cutoff) {
+				return latest, nil
+			}
+		}
+	}
+
+	// Step 2: walk all versions, pick the newest non-prerelease old enough.
+	var bestVersion string
+	var bestTime time.Time
+	for version := range full.Versions {
+		if isNPMPreRelease(version) {
+			continue
+		}
+		ts, ok := full.Time[version]
+		if !ok {
+			continue
+		}
+		t, parseErr := time.Parse(time.RFC3339, ts)
+		if parseErr != nil {
+			continue
+		}
+		if t.After(cutoff) {
+			continue
+		}
+		if bestVersion == "" || t.After(bestTime) {
+			bestVersion = version
+			bestTime = t
+		}
+	}
+
+	if bestVersion == "" {
+		return nil, nil
+	}
+
+	desc := full.Description
+	if vm, ok := full.Versions[bestVersion]; ok && vm.Description != "" {
+		desc = vm.Description
+	}
+	return &NPMPackageInfo{
+		Name:        full.Name,
+		Version:     bestVersion,
+		Description: desc,
+	}, nil
+}
+
+func getNPMFullResponse(packageName string) (*npmFullResponse, error) {
+	url := fmt.Sprintf("%s/%s", npmRegistryBaseURL, npmPackagePath(packageName))
+	resp, err := npmHTTPClient.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch npm package %s: %w", packageName, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("npm package %q not found", packageName)
+	}
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+		return nil, fmt.Errorf("npm registry returned status %d for %s: %s", resp.StatusCode, packageName, string(body))
+	}
+
+	var result npmFullResponse
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 100<<20)).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode npm response for %s: %w", packageName, err)
+	}
+	return &result, nil
 }
 
 func getNPMPackageInfoFromURL(url, packageName string) (*NPMPackageInfo, error) {
