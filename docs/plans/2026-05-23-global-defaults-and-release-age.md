@@ -123,14 +123,14 @@ Three-layer API: pure computation + idempotent lifecycle + cached getter. Thread
 
 ### Task 4: Add `PublishedAt`/`Prerelease`/`Draft` to GitHub Release and `ListReleases`
 
-- [ ] add `PublishedAt time.Time`, `Prerelease bool`, and `Draft bool` fields to `Release` struct in `internal/github/client.go`
-- [ ] add `doJSONRequest(url string, target any) error` generic helper, refactor `doRequest` to use it
-- [ ] add `ListReleases(owner, repo string, perPage int) ([]Release, error)` with retry logic
-- [ ] write test: `PublishedAt` parsing from ISO 8601 JSON
-- [ ] write test: `PublishedAt` zero value (missing `published_at` in JSON) is handled gracefully
-- [ ] write test: `Draft` field is parsed correctly
-- [ ] write test: `ListReleases` URL construction and result decoding
-- [ ] run `go test ./internal/github/...` — must pass before next task
+- [x] add `PublishedAt time.Time`, `Prerelease bool`, and `Draft bool` fields to `Release` struct in `internal/github/client.go`
+- [x] add `doJSONRequest(url string, target any) error` generic helper, refactor `doRequest` to use it
+- [x] add `ListReleases(owner, repo string, perPage int) ([]Release, error)` with retry logic
+- [x] write test: `PublishedAt` parsing from ISO 8601 JSON
+- [x] write test: `PublishedAt` zero value (missing `published_at` in JSON) is handled gracefully
+- [x] write test: `Draft` field is parsed correctly
+- [x] write test: `ListReleases` URL construction and result decoding
+- [x] run `go test ./internal/github/...` — must pass before next task
 
 ### Task 5: Add `GetLatestReleaseWithMinAge` to GitHub client
 

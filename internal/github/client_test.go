@@ -523,6 +523,156 @@ func TestIsNonRetryableError(t *testing.T) {
 	}
 }
 
+func TestReleaseFieldParsing(t *testing.T) {
+	t.Run("parses PublishedAt from ISO 8601", func(t *testing.T) {
+		body := `{"tag_name":"v1.0.0","published_at":"2026-01-02T03:04:05Z","prerelease":true,"draft":false,"assets":[]}`
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(body))
+		}))
+		defer server.Close()
+
+		client := NewClient()
+		client.httpClient = server.Client()
+
+		result, err := client.doRequest(server.URL)
+		if err != nil {
+			t.Fatalf("doRequest() error = %v", err)
+		}
+
+		want := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+		if !result.PublishedAt.Equal(want) {
+			t.Errorf("expected PublishedAt %v, got %v", want, result.PublishedAt)
+		}
+		if !result.Prerelease {
+			t.Error("expected Prerelease=true")
+		}
+		if result.Draft {
+			t.Error("expected Draft=false")
+		}
+	})
+
+	t.Run("missing published_at yields zero time", func(t *testing.T) {
+		body := `{"tag_name":"v1.0.0","assets":[]}`
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(body))
+		}))
+		defer server.Close()
+
+		client := NewClient()
+		client.httpClient = server.Client()
+
+		result, err := client.doRequest(server.URL)
+		if err != nil {
+			t.Fatalf("doRequest() error = %v", err)
+		}
+
+		if !result.PublishedAt.IsZero() {
+			t.Errorf("expected zero PublishedAt, got %v", result.PublishedAt)
+		}
+	})
+
+	t.Run("parses Draft field", func(t *testing.T) {
+		body := `{"tag_name":"v1.0.0","draft":true,"assets":[]}`
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(body))
+		}))
+		defer server.Close()
+
+		client := NewClient()
+		client.httpClient = server.Client()
+
+		result, err := client.doRequest(server.URL)
+		if err != nil {
+			t.Fatalf("doRequest() error = %v", err)
+		}
+
+		if !result.Draft {
+			t.Error("expected Draft=true")
+		}
+	})
+}
+
+func TestListReleases(t *testing.T) {
+	t.Run("constructs URL and decodes results", func(t *testing.T) {
+		var capturedURL string
+		client := NewClient()
+		client.httpClient = &http.Client{
+			Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				capturedURL = req.URL.String()
+				body := `[{"tag_name":"v2.0.0","assets":[]},{"tag_name":"v1.0.0","assets":[]}]`
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(strings.NewReader(body)),
+				}, nil
+			}),
+		}
+
+		releases, err := client.ListReleases("myowner", "myrepo", 30)
+		if err != nil {
+			t.Fatalf("ListReleases() error = %v", err)
+		}
+
+		expected := "https://api.github.com/repos/myowner/myrepo/releases?per_page=30"
+		if capturedURL != expected {
+			t.Errorf("expected URL %q, got %q", expected, capturedURL)
+		}
+
+		if len(releases) != 2 {
+			t.Fatalf("expected 2 releases, got %d", len(releases))
+		}
+		if releases[0].TagName != "v2.0.0" {
+			t.Errorf("expected first tag 'v2.0.0', got '%s'", releases[0].TagName)
+		}
+	})
+
+	t.Run("defaults perPage when non-positive", func(t *testing.T) {
+		var capturedURL string
+		client := NewClient()
+		client.httpClient = &http.Client{
+			Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				capturedURL = req.URL.String()
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(strings.NewReader(`[]`)),
+				}, nil
+			}),
+		}
+
+		_, err := client.ListReleases("o", "r", 0)
+		if err != nil {
+			t.Fatalf("ListReleases() error = %v", err)
+		}
+		if !strings.Contains(capturedURL, "per_page=30") {
+			t.Errorf("expected default per_page=30, got %q", capturedURL)
+		}
+	})
+
+	t.Run("does not retry on 404", func(t *testing.T) {
+		attempts := 0
+		client := NewClient()
+		client.httpClient = &http.Client{
+			Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				attempts++
+				return &http.Response{
+					StatusCode: http.StatusNotFound,
+					Body:       io.NopCloser(strings.NewReader("")),
+				}, nil
+			}),
+		}
+
+		_, err := client.ListReleases("o", "r", 30)
+		if err == nil {
+			t.Error("expected error for 404")
+		}
+		if attempts != 1 {
+			t.Errorf("expected 1 attempt for 404, got %d", attempts)
+		}
+	})
+}
+
 type genericError struct{}
 
 func (e *genericError) Error() string {
