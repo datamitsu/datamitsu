@@ -176,9 +176,9 @@ Three-layer API: pure computation + idempotent lifecycle + cached getter. Thread
 
 ### Task 8: Create shared `--min-age` flag infrastructure
 
-- [ ] create `cmd/devtools_min_age.go` with `addMinAgeFlag(cmd) *int`, `resolveMinAge(flagValue int, eff runtimeconfig.Effective) int` (reads from `eff.MinimumReleaseAgeMinutes`, not `env` directly), and `minAgeDescription() string`
-- [ ] `resolveMinAge`: `-1` = use `eff.MinimumReleaseAgeMinutes`, `0+` = as-is
-- [ ] run `go build` — must compile before next task
+- [x] create `cmd/devtools_min_age.go` with `addMinAgeFlag(cmd) *int`, `resolveMinAge(flagValue int, eff runtimeconfig.Effective) int` (reads from `eff.MinimumReleaseAgeMinutes`, not `env` directly), and `minAgeDescription() string`
+- [x] `resolveMinAge`: `-1` = use `eff.MinimumReleaseAgeMinutes`, `0+` = as-is
+- [x] run `go build` — must compile before next task
 
 ### Task 9: Integrate `--min-age` into `pull-github`
 
