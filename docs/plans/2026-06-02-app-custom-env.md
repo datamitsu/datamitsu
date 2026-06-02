@@ -101,16 +101,16 @@ run time**, with placeholder expansion for datamitsu-managed paths.
 
 ### Task 3: Run-time merge in `GetCommandInfo` (all app types)
 
-- [ ] write tests: for binary, node, uv, go, jvm and shell apps, a custom
+- [x] write tests: for binary, node, uv, go, jvm and shell apps, a custom
       `App.Env` entry (with `${STORE}`/`${APP_DIR}`) appears expanded in the
       returned `CommandInfo.Env`; a custom key that collides with a
       datamitsu/runtime-set key does **not** override it (runtime wins); nil
       `Env` leaves `CommandInfo.Env` unchanged
-- [ ] in `GetCommandInfo`, after building the per-type `CommandInfo`, merge
+- [x] in `GetCommandInfo`, after building the per-type `CommandInfo`, merge
       expanded `App.Env` into `CommandInfo.Env` with runtime keys taking
       precedence (only add keys not already set). Use the app's computed install
       path for `${APP_DIR}`
-- [ ] run `go test ./internal/binmanager/...` — must pass before Task 4
+- [x] run `go test ./internal/binmanager/...` — must pass before Task 4
 
 ### Task 4: Install-time merge for uv / node / go
 

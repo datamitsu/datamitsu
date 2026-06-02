@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"runtime"
 	"slices"
 	"strings"
@@ -470,6 +471,138 @@ func TestGetCommandInfo_ShellApp(t *testing.T) {
 	}
 	if info.Env["FOO"] != "bar" {
 		t.Errorf("expected env FOO=bar, got %v", info.Env)
+	}
+}
+
+func TestGetCommandInfo_MergesAppEnv_ShellExpandsStore(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("DATAMITSU_CACHE_DIR", tmpDir)
+
+	bm := New(MapOfApps{
+		"myshell": App{
+			Shell: &AppConfigShell{Name: "bash"},
+			Env:   map[string]string{"BROWSERS": "${STORE}/.playwright"},
+		},
+	}, nil, nil)
+
+	info, err := bm.GetCommandInfo("myshell")
+	if err != nil {
+		t.Fatalf("GetCommandInfo() error = %v", err)
+	}
+	want := filepath.Join(tmpDir, "store", ".playwright")
+	if info.Env["BROWSERS"] != want {
+		t.Errorf("expected BROWSERS=%q, got %q", want, info.Env["BROWSERS"])
+	}
+}
+
+func TestGetCommandInfo_MergesAppEnv_RuntimeKeyWins(t *testing.T) {
+	mock := &mockRuntimeAppManager{
+		getCommandInfoFunc: func(appName string, app App) (*CommandInfo, error) {
+			return &CommandInfo{
+				Type:    "uv",
+				Command: "/bin/yamllint",
+				Env:     map[string]string{"UV_PYTHON_INSTALL_DIR": "/runtime/python"},
+			}, nil
+		},
+		computeAppPathFunc: func(appName string, app App) (string, error) {
+			return "/apps/yamllint/abc", nil
+		},
+	}
+
+	bm := New(MapOfApps{
+		"yamllint": App{
+			Uv: &AppConfigUV{PackageName: "yamllint", Version: "1.0.0"},
+			Env: map[string]string{
+				"UV_PYTHON_INSTALL_DIR": "/user/override",
+				"CUSTOM":                "${APP_DIR}/data",
+			},
+		},
+	}, nil, mock)
+
+	info, err := bm.GetCommandInfo("yamllint")
+	if err != nil {
+		t.Fatalf("GetCommandInfo() error = %v", err)
+	}
+	if info.Env["UV_PYTHON_INSTALL_DIR"] != "/runtime/python" {
+		t.Errorf("runtime key must win, got %q", info.Env["UV_PYTHON_INSTALL_DIR"])
+	}
+	if info.Env["CUSTOM"] != "/apps/yamllint/abc/data" {
+		t.Errorf("expected CUSTOM expanded with APP_DIR, got %q", info.Env["CUSTOM"])
+	}
+}
+
+func TestGetCommandInfo_MergesAppEnv_NilEnvUnchanged(t *testing.T) {
+	expectedInfo := &CommandInfo{
+		Type:    "go",
+		Command: "/bin/govulncheck",
+	}
+	mock := &mockRuntimeAppManager{
+		getCommandInfoFunc: func(appName string, app App) (*CommandInfo, error) {
+			return expectedInfo, nil
+		},
+	}
+
+	bm := New(MapOfApps{
+		"govulncheck": App{
+			Go: &AppConfigGo{PackageName: "golang.org/x/vuln/cmd/govulncheck", Version: "latest"},
+		},
+	}, nil, mock)
+
+	info, err := bm.GetCommandInfo("govulncheck")
+	if err != nil {
+		t.Fatalf("GetCommandInfo() error = %v", err)
+	}
+	if info.Env != nil {
+		t.Errorf("expected nil Env to remain nil, got %v", info.Env)
+	}
+}
+
+func TestGetCommandInfo_MergesAppEnv_Binary(t *testing.T) {
+	testContent := []byte("#!/bin/sh\necho hi\n")
+	hash := sha256.Sum256(testContent)
+	expectedHash := hex.EncodeToString(hash[:])
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(testContent)
+	}))
+	defer server.Close()
+
+	tmpDir := t.TempDir()
+	t.Setenv("DATAMITSU_CACHE_DIR", tmpDir)
+
+	osType, err := syslist.GetOsTypeFromString(runtime.GOOS)
+	if err != nil {
+		t.Fatalf("failed to get OS type: %v", err)
+	}
+	archType, err := syslist.GetArchTypeFromString(runtime.GOARCH)
+	if err != nil {
+		t.Fatalf("failed to get arch type: %v", err)
+	}
+
+	bm := New(MapOfApps{
+		"testbin": App{
+			Required: true,
+			Binary: &AppConfigBinary{
+				Binaries: MapOfBinaries{
+					osType: {archType: {"unknown": BinaryOsArchInfo{
+						URL:         server.URL,
+						Hash:        expectedHash,
+						ContentType: BinContentTypeBinary,
+					}}},
+				},
+			},
+			Env: map[string]string{"CONFIG": "${STORE}/cfg"},
+		},
+	}, nil, nil)
+
+	info, err := bm.GetCommandInfo("testbin")
+	if err != nil {
+		t.Fatalf("GetCommandInfo() error = %v", err)
+	}
+	want := filepath.Join(tmpDir, "store", "cfg")
+	if info.Env["CONFIG"] != want {
+		t.Errorf("expected CONFIG=%q, got %q", want, info.Env["CONFIG"])
 	}
 }
 
