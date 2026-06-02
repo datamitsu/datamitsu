@@ -189,14 +189,16 @@ Three-layer API: pure computation + idempotent lifecycle + cached getter. Thread
 - [x] print min age in status banner
 - [x] run `go test ./cmd/...` — must pass before next task
 
-### Task 10: Integrate `--min-age` into `pull-fnm`
+### Task 10: Integrate `--min-age` into `pull-node`
 
-- [ ] register `--min-age` flag on `pullFNMCmd` in `cmd/devtools_fnm.go`
-- [ ] get `runtimeconfig.Get()` at command start, pass `eff` to `resolveMinAge`
-- [ ] modify `runPullFNM`: use `GetNPMPackageInfoWithMinAge` with resolved min age
-- [ ] handle nil return: skip package with warning
-- [ ] print min age in status banner
-- [ ] run `go test ./cmd/...` — must pass before next task
+! Scope note: the plan originally named this command `pull-fnm`/`pullFNMCmd`/`runPullFNM` in `cmd/devtools_fnm.go`, but no such command exists. The actual npm-package puller is `pull-node` (`pullNodeCmd`/`runPullNode` in `cmd/devtools_node.go`) — that is the command that fetches npm versions, so the integration was applied there.
+
+- [x] register `--min-age` flag on `pullNodeCmd` in `cmd/devtools_node.go`
+- [x] get `runtimeconfig.Get()` at command start, pass `eff` to `resolveMinAge`
+- [x] modify `runPullNode`: use `GetNPMPackageInfoWithMinAge` with resolved min age
+- [x] handle nil return: skip package with warning (keep current version, no error)
+- [x] print min age in status banner
+- [x] run `go test ./cmd/...` — must pass before next task
 
 ### Task 11: Integrate `--min-age` into `pull-uv`
 
