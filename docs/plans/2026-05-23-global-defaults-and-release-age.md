@@ -90,11 +90,11 @@
 
 ### Task 1: Create `internal/runtimeconfig` package with compile-time constants and `Effective` struct
 
-- [ ] create `internal/runtimeconfig/runtimeconfig.go` with `MinimumReleaseAgeMinutes = 10080` and `InstallTimeoutSeconds = 600` constants
-- [ ] define `Effective` struct with typed fields and `json` tags: `Concurrency int`, `InstallTimeoutSeconds int`, `LogLevel string`, `MaxCmdLength int`, `MaxErrorCmdDisplay int`, `MaxParallelWorkers int`, `MinimumReleaseAgeMinutes int`, `Timings bool`
-- [ ] NO `ToMap()` method — the struct is the public API. `map[string]any` conversion is internal to engine via `json.Marshal`/`json.Unmarshal`
-- [ ] write tests: pin constant values (10080, 600), `Effective` struct JSON round-trip stability (required keys present in serialized output)
-- [ ] run `go test ./internal/runtimeconfig/...` — must pass before next task
+- [x] create `internal/runtimeconfig/runtimeconfig.go` with `MinimumReleaseAgeMinutes = 10080` and `InstallTimeoutSeconds = 600` constants
+- [x] define `Effective` struct with typed fields and `json` tags: `Concurrency int`, `InstallTimeoutSeconds int`, `LogLevel string`, `MaxCmdLength int`, `MaxErrorCmdDisplay int`, `MaxParallelWorkers int`, `MinimumReleaseAgeMinutes int`, `Timings bool`
+- [x] NO `ToMap()` method — the struct is the public API. `map[string]any` conversion is internal to engine via `json.Marshal`/`json.Unmarshal`
+- [x] write tests: pin constant values (10080, 600), `Effective` struct JSON round-trip stability (required keys present in serialized output)
+- [x] run `go test ./internal/runtimeconfig/...` — must pass before next task
 
 ### Task 2: Add env var definitions and getters for new defaults
 
