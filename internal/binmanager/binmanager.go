@@ -1,6 +1,8 @@
 package binmanager
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -18,6 +20,7 @@ import (
 
 	"github.com/vbauerster/mpb/v8"
 	"go.uber.org/zap"
+	"golang.org/x/sync/singleflight"
 )
 
 var log = logger.Logger.With(zap.Namespace("binmanager"))
@@ -126,6 +129,11 @@ type BinManager struct {
 	mapOfBundles   MapOfBundles
 	runtimeManager RuntimeAppManager
 	resolver       *target.Resolver
+
+	// downloadGroup coalesces concurrent downloads of the same binary so that
+	// N parallel GetBinaryPath calls for one uninstalled binary trigger exactly
+	// one download (keyed by binary name).
+	downloadGroup singleflight.Group
 }
 
 func New(mapOfApps MapOfApps, mapOfBundles MapOfBundles, runtimeManager RuntimeAppManager) *BinManager {
@@ -433,15 +441,99 @@ func (bm *BinManager) GetBinaryPath(name string) (string, error) {
 
 	log.Debug("binary not found in cache, downloading", zap.String("name", name))
 
-	fmt.Fprintf(os.Stderr, "⬇️  Downloading %s...\n", name)
+	// Coalesce concurrent downloads of the same binary: only one goroutine
+	// performs the download, the rest wait and share its result. Re-check the
+	// cache inside the critical section so a download that completed while we
+	// were blocked is a no-op.
+	_, err, _ = bm.downloadGroup.Do(name, func() (interface{}, error) {
+		if _, statErr := os.Stat(binPath); statErr == nil {
+			return nil, nil
+		}
 
-	if err := bm.download(name); err != nil {
-		return "", fmt.Errorf("failed to download %s: %w", name, err)
+		fmt.Fprintf(os.Stderr, "⬇️  Downloading %s...\n", name)
+
+		if err := bm.download(name); err != nil {
+			return nil, fmt.Errorf("failed to download %s: %w", name, err)
+		}
+
+		fmt.Fprintf(os.Stderr, "✅ Downloaded %s\n", name)
+		return nil, nil
+	})
+	if err != nil {
+		return "", err
 	}
 
-	fmt.Fprintf(os.Stderr, "✅ Downloaded %s\n", name)
-
 	return binPath, nil
+}
+
+// ensureToolsConcurrency bounds how many distinct tools EnsureTools installs in
+// parallel. Same-tool concurrency cannot occur (names are deduped), and each
+// install path is itself single-flighted, so this is purely a throughput knob.
+const ensureToolsConcurrency = 4
+
+// EnsureTools installs every distinct tool named in names before the caller
+// runs them, so that subsequent parallel execution never triggers a lazy,
+// racy install. Names are deduplicated; each distinct tool is resolved once via
+// GetCommandInfo, which installs binaries (through GetBinaryPath) and uv/node/
+// go/jvm runtime apps (through the single-flighted runtime manager). Shell apps
+// need no install and resolve cheaply.
+//
+// Errors are aggregated: a non-fatal failure on one tool does not abort the
+// rest of the set. An unknown tool name surfaces as a clear error. An empty
+// list is a no-op.
+func (bm *BinManager) EnsureTools(ctx context.Context, names []string) error {
+	// Deduplicate while preserving determinism.
+	seen := make(map[string]struct{}, len(names))
+	distinct := make([]string, 0, len(names))
+	for _, name := range names {
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		seen[name] = struct{}{}
+		distinct = append(distinct, name)
+	}
+	sort.Strings(distinct)
+
+	if len(distinct) == 0 {
+		return nil
+	}
+
+	concurrency := ensureToolsConcurrency
+	if len(distinct) < concurrency {
+		concurrency = len(distinct)
+	}
+
+	jobs := make(chan string)
+	errs := make([]error, len(distinct))
+	idxOf := make(map[string]int, len(distinct))
+	for i, name := range distinct {
+		idxOf[name] = i
+	}
+
+	var wg sync.WaitGroup
+	for i := 0; i < concurrency; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for name := range jobs {
+				if err := ctx.Err(); err != nil {
+					errs[idxOf[name]] = err
+					continue
+				}
+				if _, err := bm.GetCommandInfo(name); err != nil {
+					errs[idxOf[name]] = fmt.Errorf("failed to ensure tool %q: %w", name, err)
+				}
+			}
+		}()
+	}
+
+	for _, name := range distinct {
+		jobs <- name
+	}
+	close(jobs)
+	wg.Wait()
+
+	return errors.Join(errs...)
 }
 
 // GetCommandInfo returns command information for executing an application

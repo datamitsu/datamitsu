@@ -7,6 +7,12 @@ description: How datamitsu runs task groups sequentially while parallelizing tas
 
 The executor is the third stage of datamitsu's execution pipeline. It takes the ordered task groups from the [planner](./planner.md) and runs them — sequentially between groups, in parallel within groups — while enforcing fail-fast behavior so errors surface immediately.
 
+## Pre-Install Phase
+
+Before any task runs, the runner installs **every tool the plan needs** up front. Immediately after planning and before the executor starts, it calls `EnsureTools` with the plan's deduped tool set, installing each distinct tool exactly once.
+
+This is a hard invariant: **all plan tools are installed before parallel execution begins.** Installing ahead of time means no task ever triggers a lazy, on-demand install while sharing a tool with another task running concurrently. Same-tool concurrent installs cannot occur, so there is no race where one task observes a half-written or briefly-absent binary. Distinct tools may still install in parallel (that is safe — they touch different paths). Dry-run planning skips the installs entirely. A failure here aborts before any task runs, surfacing a clear install error instead of a confusing mid-execution failure.
+
 ## Two-Layer Execution Model
 
 Execution follows a two-layer structure:

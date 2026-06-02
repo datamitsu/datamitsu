@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/httpx"
 	"github.com/datamitsu/datamitsu/internal/pnpmdefaults"
 	"github.com/goccy/go-yaml"
@@ -305,6 +306,13 @@ func buildPNPMWorkspaceForApp(files map[string]string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
+	// Pin the content-addressable store inside the datamitsu store so it lives
+	// under GetStorePath() (and `datamitsu store clear` actually removes it).
+	// pnpm 11 ignores npm_config_store_dir / .npmrc store-dir; the workspace
+	// storeDir key is the mechanism it honors. Forced after the user merge —
+	// datamitsu owns the store location, a user config must not relocate it.
+	merged["storeDir"] = env.GetPNPMStorePath()
 
 	out, err := yaml.Marshal(merged)
 	if err != nil {

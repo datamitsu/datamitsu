@@ -213,5 +213,8 @@ export default {
     "RuntimeKindInfo",
     "getLatestGoRelease",
     "goVersionLess",
+    "cpython",
+    "dedups",
+    "libatomic",
   ],
 };
