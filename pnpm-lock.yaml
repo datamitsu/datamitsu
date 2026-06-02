@@ -18,7 +18,7 @@ importers:
         version: 25.9.1
       tsdown:
         specifier: 0.22.1
-        version: 0.22.1(tsx@4.22.3)(typescript@6.0.3)
+        version: 0.22.1(tsx@4.22.4)(typescript@6.0.3)
 
   programmable-api/js:
     dependencies:
@@ -37,10 +37,10 @@ importers:
         version: 25.9.1
       tsdown:
         specifier: 0.22.1
-        version: 0.22.1(tsx@4.22.3)(typescript@6.0.3)
+        version: 0.22.1(tsx@4.22.4)(typescript@6.0.3)
       tsx:
-        specifier: 4.22.3
-        version: 4.22.3
+        specifier: 4.22.4
+        version: 4.22.4
 
   website:
     dependencies:
@@ -6394,6 +6394,11 @@ packages:
 
   tsx@4.22.3:
     resolution: {integrity: sha512-mdoNxBC/cSQObGGVQ5Bpn5i+yv7j68gk3Nfm3wFjcJg3Z0Mix9jzAFfP12prmm5eVGmDKtp0yyArrs0Q+8gZHg==}
+    engines: {node: '>=18.0.0'}
+    hasBin: true
+
+  tsx@4.22.4:
+    resolution: {integrity: sha512-X8EX+XV4QR5xCsrgxaED954zTDfY8KqlDtskKEL0cHhyS/P8b4IFOvGDQpsC9Q1XnLq915wEfwwY/zzskCtmhg==}
     engines: {node: '>=18.0.0'}
     hasBin: true
 
@@ -14489,7 +14494,7 @@ snapshots:
 
   ts-dedent@2.2.0: {}
 
-  tsdown@0.22.1(tsx@4.22.3)(typescript@6.0.3):
+  tsdown@0.22.1(tsx@4.22.4)(typescript@6.0.3):
     dependencies:
       ansis: 4.3.0
       cac: 7.0.0
@@ -14507,7 +14512,7 @@ snapshots:
       tree-kill: 1.2.2
       unconfig-core: 7.5.0
     optionalDependencies:
-      tsx: 4.22.3
+      tsx: 4.22.4
       typescript: 6.0.3
     transitivePeerDependencies:
       - '@ts-macro/tsc'
@@ -14520,6 +14525,12 @@ snapshots:
   tslib@2.8.1: {}
 
   tsx@4.22.3:
+    dependencies:
+      esbuild: 0.28.0
+    optionalDependencies:
+      fsevents: 2.3.3
+
+  tsx@4.22.4:
     dependencies:
       esbuild: 0.28.0
     optionalDependencies:
