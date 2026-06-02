@@ -16,6 +16,15 @@ func lockFileHash(lockFile string) string {
 	return hashutil.XXH3Hex([]byte(lockFile))
 }
 
+// goAppLockHash binds the built package path into a Go app's lock hash. A Go
+// app's build identity is (packageName, go.mod, go.sum): two apps that share a
+// lockfile but build different packages from the same module must not collide
+// on the same cache directory. The NUL separator keeps the two fields
+// unambiguous.
+func goAppLockHash(packageName, lockFile string) string {
+	return hashutil.XXH3Hex([]byte(packageName + "\x00" + lockFile))
+}
+
 func calculateRuntimeHash(rc config.RuntimeConfig, osType syslist.OsType, archType syslist.ArchType, libc string) (string, error) {
 	if rc.Mode != config.RuntimeModeManaged || rc.Managed == nil {
 		return "", fmt.Errorf("cannot calculate hash for non-managed runtime")
@@ -57,17 +66,24 @@ func calculateRuntimeHash(rc config.RuntimeConfig, osType syslist.OsType, archTy
 		[]byte(libc),
 	}
 
-	if rc.Kind == config.RuntimeKindFNM && rc.FNM != nil {
-		parts = append(parts, []byte(rc.FNM.NodeVersion), []byte(rc.FNM.PNPMVersion), []byte(rc.FNM.PNPMHash))
-	}
-	if rc.Kind == config.RuntimeKindUV && rc.UV != nil {
-		parts = append(parts, []byte(rc.UV.PythonVersion))
-	}
-	if rc.Kind == config.RuntimeKindJVM && rc.JVM != nil {
-		parts = append(parts, []byte(rc.JVM.JavaVersion))
-	}
+	parts = appendKindVersionFields(parts, rc)
 
 	return hashutil.XXH3Multi(parts...), nil
+}
+
+// appendKindVersionFields folds the cache-affecting version field(s) for rc's
+// kind into parts. Both the managed and system hash functions route through this single
+// helper (backed by the kind registry) so the two can never fold a different set
+// of fields — the lock-step drift the registry was introduced to eliminate.
+func appendKindVersionFields(parts [][]byte, rc config.RuntimeConfig) [][]byte {
+	info, ok := config.LookupRuntimeKind(rc.Kind)
+	if !ok || info.HashFields == nil {
+		return parts
+	}
+	for _, field := range info.HashFields(rc) {
+		parts = append(parts, []byte(field))
+	}
+	return parts
 }
 
 func calculateSystemRuntimeHash(rc config.RuntimeConfig) string {
@@ -84,15 +100,7 @@ func calculateSystemRuntimeHash(rc config.RuntimeConfig) string {
 		[]byte(systemVersion),
 	}
 
-	if rc.Kind == config.RuntimeKindFNM && rc.FNM != nil {
-		parts = append(parts, []byte(rc.FNM.NodeVersion), []byte(rc.FNM.PNPMVersion), []byte(rc.FNM.PNPMHash))
-	}
-	if rc.Kind == config.RuntimeKindUV && rc.UV != nil {
-		parts = append(parts, []byte(rc.UV.PythonVersion))
-	}
-	if rc.Kind == config.RuntimeKindJVM && rc.JVM != nil {
-		parts = append(parts, []byte(rc.JVM.JavaVersion))
-	}
+	parts = appendKindVersionFields(parts, rc)
 
 	return hashutil.XXH3Multi(parts...)
 }
@@ -120,7 +128,12 @@ func calculateAppHash(appName string, version string, deps map[string]string, ru
 	return hashutil.XXH3Multi(parts...)
 }
 
-func calculateFNMAppHash(appName string, packageName string, pkgVersion string, binPath string, deps map[string]string, runtimeHash string, lockHash string, filesHash string) string {
+// calculateNodeAppHash hashes a node-kind npm app's identity. Node apps are
+// pnpm-installed npm packages, so the cache key folds in the package name,
+// version, binPath, dependencies, lockfile, files, and the runtime hash (which
+// already includes the node kind's {url, hash, nodeVersion, ...}). The app-env
+// path is additionally prefixed by kind ("node").
+func calculateNodeAppHash(appName string, packageName string, pkgVersion string, binPath string, deps map[string]string, runtimeHash string, lockHash string, filesHash string) string {
 	parts := [][]byte{
 		[]byte(appName),
 		[]byte(packageName),

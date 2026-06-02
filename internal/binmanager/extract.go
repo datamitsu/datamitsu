@@ -985,6 +985,22 @@ func extractArchiveToPath(destPath string, tarData []byte, archivePath string, f
 	return destPath, nil
 }
 
+// ExtractArchiveToDir extracts the archive at archivePath into destDir using the
+// hardened tar walker shared with binmanager's own installs: path-traversal
+// entries, absolute symlinks, and symlinks escaping destDir are skipped, and the
+// per-file (MaxBinarySize) and total (2 GiB) size limits are enforced. format
+// selects the decompressor (e.g. BinContentTypeTarGz for a .tgz).
+//
+// Unlike ExtractDirForVerify, which extracts into a temp subdirectory and returns
+// its path, this writes directly into destDir, so callers that expect a fixed
+// layout (e.g. the pnpm runtime needing {destDir}/package/bin/pnpm.cjs) get it
+// without an extra move. destDir is created if missing; on error the partially
+// written tree is left in place for the caller to clean up.
+func ExtractArchiveToDir(archivePath string, format BinContentType, destDir string) error {
+	_, err := extractArchiveToPath(destDir, nil, archivePath, format)
+	return err
+}
+
 // validateArchivePath ensures archive path doesn't escape destination directory
 func validateArchivePath(archivePath string) error {
 	cleaned := filepath.Clean(archivePath)

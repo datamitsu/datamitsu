@@ -6,7 +6,7 @@ ARG TARGETARCH
 COPY dist/datamitsu-linux-${TARGETARCH}/datamitsu /datamitsu
 
 # Stage 2: Runtime
-FROM debian:trixie-slim
+FROM debian:trixie-slim@sha256:b6e2a152f22a40ff69d92cb397223c906017e1391a73c952b588e51af8883bf8
 
 # Static OCI labels (dynamic labels injected via docker/metadata-action in CI)
 LABEL org.opencontainers.image.title="datamitsu" \
@@ -22,6 +22,7 @@ LABEL org.opencontainers.image.title="datamitsu" \
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     git \
+    libatomic1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy binary

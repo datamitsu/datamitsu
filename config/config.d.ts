@@ -313,7 +313,7 @@ declare global {
        *   workspace security defaults. Parse with `YAML.parse()`, extend with
        *   org/repo-specific settings, and write into a project repo via a Bundle
        *   to produce a secure `pnpm-workspace.yaml`. Separate from the auto-merge
-       *   applied to `App.files["pnpm-workspace.yaml"]` for FNM apps. See the
+       *   applied to `App.files["pnpm-workspace.yaml"]` for node apps. See the
        *   Supply Chain Security guide for the full key list and rationale.
        *
        * @example
@@ -677,10 +677,29 @@ declare global {
        */
       description?: string;
       /**
+       * Custom environment variables for this app, applied to all app kinds
+       * (binary, uv, node, jvm, go, shell). Injected both at install time
+       * (uv/node/go dependency install) and at run time (every app type).
+       *
+       * Values support placeholder expansion (done in Go, never written into
+       * the committed config):
+       * - `${STORE}` → the shared datamitsu store path (cleaned by
+       *   `datamitsu store clear`).
+       * - `${APP_DIR}` → this app's install directory (per-app, config-hashed).
+       *
+       * Precedence: any key already set by datamitsu or the runtime wins, so a
+       * user config can never relocate the pnpm store, uv cache, GOPATH, etc.
+       *
+       * @example
+       * // Redirect playwright to download browsers into the datamitsu store
+       * env: { PLAYWRIGHT_BROWSERS_PATH: "${STORE}/.playwright/browsers" }
+       */
+      env?: Record<string, string>;
+      /**
        * Static file contents to write into the app's install directory before
        * the package manager runs. Keys are filenames; values are file contents.
        *
-       * Special handling for `pnpm-workspace.yaml` on FNM apps: the entry is
+       * Special handling for `pnpm-workspace.yaml` on node apps: the entry is
        * NOT written verbatim. Instead, the installer parses it and shallow-merges
        * it on top of the recommended pnpm 11 workspace security defaults, then
        * writes the merged result. User keys override defaults for the same
@@ -695,12 +714,13 @@ declare global {
        * }
        */
       files?: Record<string, string>;
-      fnm?: AppConfigFNM;
+      go?: AppConfigGo;
       jvm?: AppConfigJVM;
       /**
        * Symlinks to create in .datamitsu/ directory, mapping link name to relative path in install directory.
        */
       links?: Record<string, string>;
+      node?: AppConfigNode;
       required?: boolean;
       shell?: AppConfigShell;
       uv?: AppConfigUV;
@@ -721,19 +741,26 @@ declare global {
       version?: string;
     }
 
-    interface AppConfigFNM {
-      binPath: string;
-      dependencies?: Record<string, string>;
+    interface AppConfigGo {
       /**
        * Lock file content for reproducible installs.
-       * Required for all FNM apps. Validation fails if omitted.
+       * Required for all Go apps. Validation fails if omitted.
+       * Stores a JSON wrapper `{"mod":"<go.mod>","sum":"<go.sum>"}` so that
+       * `go build -mod=readonly` fails on any go.sum mismatch (supply chain protection).
        * When prefixed with "br:", the content is brotli-compressed and base64-encoded.
-       * Plain text is also accepted for backward compatibility.
        * Generate via: datamitsu config lockfile <appName>
        */
       lockFile: string;
+      /**
+       * Go package import path to build.
+       * @example "golang.org/x/vuln/cmd/govulncheck"
+       */
       packageName: string;
       runtime?: string;
+      /**
+       * Module version to pin (Go module query).
+       * @example "v1.3.0"
+       */
       version: string;
     }
 
@@ -748,9 +775,24 @@ declare global {
       version: string;
     }
 
+    interface AppConfigNode {
+      binPath: string;
+      dependencies?: Record<string, string>;
+      /**
+       * Lock file content for reproducible installs.
+       * Required for all node apps. Validation fails if omitted.
+       * When prefixed with "br:", the content is brotli-compressed and base64-encoded.
+       * Plain text is also accepted for backward compatibility.
+       * Generate via: datamitsu config lockfile <appName>
+       */
+      lockFile: string;
+      packageName: string;
+      runtime?: string;
+      version: string;
+    }
+
     interface AppConfigShell {
       args?: string[];
-      env?: Record<string, string>;
       name: string;
     }
 
@@ -886,10 +928,10 @@ declare global {
 
     interface RuntimeConfig {
       /**
-       * FNM-specific runtime configuration (nodeVersion, pnpmVersion).
-       * Required when kind is "fnm".
+       * Go-specific runtime configuration (goVersion).
+       * Required when kind is "go".
        */
-      fnm?: RuntimeConfigFNM;
+      go?: RuntimeConfigGo;
       /**
        * JVM-specific runtime configuration (javaVersion).
        * Required when kind is "jvm".
@@ -898,6 +940,12 @@ declare global {
       kind: RuntimeKind;
       managed?: RuntimeConfigManaged;
       mode: RuntimeMode;
+      /**
+       * Node-specific runtime configuration (nodeVersion, pnpmVersion, pnpmHash).
+       * Required when kind is "node". Node is acquired as a direct, hash-pinned
+       * archive (url + hash), like the jvm runtime.
+       */
+      node?: RuntimeConfigNode;
       system?: RuntimeConfigSystem;
       /**
        * UV-specific runtime configuration (pythonVersion).
@@ -906,14 +954,12 @@ declare global {
       uv?: RuntimeConfigUV;
     }
 
-    interface RuntimeConfigFNM {
-      nodeVersion: string;
+    interface RuntimeConfigGo {
       /**
-       * SHA-256 hash of the PNPM tarball for integrity verification.
-       * Required per security policy: all downloads must have a pinned hash.
+       * Go SDK version to build with.
+       * @example "1.22.3"
        */
-      pnpmHash: string;
-      pnpmVersion: string;
+      goVersion: string;
     }
 
     interface RuntimeConfigJVM {
@@ -922,6 +968,16 @@ declare global {
 
     interface RuntimeConfigManaged {
       binaries: MapOfBinaries;
+    }
+
+    interface RuntimeConfigNode {
+      nodeVersion: string;
+      /**
+       * SHA-256 hash of the PNPM tarball for integrity verification.
+       * Required per security policy: all downloads must have a pinned hash.
+       */
+      pnpmHash: string;
+      pnpmVersion: string;
     }
 
     interface RuntimeConfigSystem {
@@ -936,7 +992,7 @@ declare global {
       pythonVersion?: string;
     }
 
-    type RuntimeKind = "fnm" | "jvm" | "uv";
+    type RuntimeKind = "go" | "jvm" | "node" | "uv";
 
     type RuntimeMode = "managed" | "system";
   }

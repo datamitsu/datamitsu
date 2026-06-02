@@ -108,9 +108,38 @@ Cache paths include the resolved target, so glibc and musl binaries are cached s
 
 This prevents cache conflicts when switching between container environments or testing with different libc variants.
 
-## Managed Runtimes (FNM, UV, JVM)
+## Managed Runtimes (Node, UV, JVM)
 
-Managed runtimes do not have musl-native binaries available. Upstream projects (Node.js via FNM, Python via UV, JDK via Temurin) do not provide musl-native binaries through the channels datamitsu uses.
+datamitsu applies two distinct musl-specific mechanisms to managed runtimes:
+
+- **The Node.js archive that datamitsu downloads** — the registry pins musl-linked Node.js archives directly, selected automatically on a musl host (see [Node.js (musl): static archive entries](#nodejs-musl-static-archive-entries)).
+- **A runtime's own binary** (`node`, `uv`, `java`) — when the managed config has no musl variant for that executable, datamitsu falls back to the system binary on PATH (see [Automatic Fallback](#automatic-fallback)).
+
+### Node.js (musl): static archive entries
+
+datamitsu acquires Node.js as a direct, hash-pinned archive — it downloads the archive named in the registry, verifies its SHA-256 hash, and extracts it itself (exactly like the JVM runtime downloads a JDK). There is no version-manager binary to shell out to, no `node install` step, and no dynamic mirror logic.
+
+The registry (`runtimes.json`) carries explicit musl entries for Node.js. On Linux they are the `node-v<ver>-linux-{x64,arm64}-musl.tar.xz` archives published by [unofficial-builds.nodejs.org](https://unofficial-builds.nodejs.org/download/release); glibc, macOS, and Windows entries come from `nodejs.org/dist`. Every entry — musl included — is pinned with a SHA-256 hash that datamitsu verifies before extraction.
+
+On a musl host datamitsu selects the `musl` libc entry automatically via libc detection. There is **nothing to configure and no environment variables to set** — musl support works out of the box in managed mode.
+
+**Supported musl architectures:** `amd64` (`x64`) and `arm64` — the only architectures unofficial-builds publishes. Other architectures (arm/armv7l, 386, ppc64le, …) have no musl entry; on those datamitsu falls back to a system `node` on PATH if one is present.
+
+**Integrity does not depend on the mirror.** The hashes are pinned in git and refreshed by maintainers via `devtools pull-runtimes --runtime node`, so an archive is rejected unless it matches the recorded SHA-256 — the mirror being trustworthy at download time is not required.
+
+#### libstdc++ is required on Alpine
+
+musl Node.js from the unofficial mirror is **dynamically linked** against `libstdc++` (and `libgcc`), which the base `alpine` image does not include. Without it `node` fails to start. Install it:
+
+```sh
+apk add --no-cache libstdc++
+```
+
+`libgcc` is pulled in transitively, so no separate entry is needed. datamitsu's own `*-alpine` Docker image already bundles `libstdc++`, so wrappers building `FROM ghcr.io/datamitsu/datamitsu:<version>-alpine` inherit it with no Dockerfile change.
+
+#### No configuration needed for musl
+
+Musl support requires no setup: the registry already pins the musl archives, and datamitsu selects them automatically on a musl host. There are no mirror or arch environment variables to set.
 
 ### Automatic Fallback
 
@@ -120,12 +149,12 @@ The system binaries checked for each runtime:
 
 | Runtime | System binary looked up | Alpine package                          |
 | ------- | ----------------------- | --------------------------------------- |
-| FNM     | `fnm`                   | Not in default repos (install manually) |
+| Node    | `node`                  | Managed musl archive — no apk needed    |
 | UV      | `uv`                    | Not in default repos (install manually) |
 | JVM     | `java`                  | `openjdk17`                             |
 
 :::note
-FNM and UV are not available in Alpine's default package repositories. For these runtimes on Alpine, use the [manual system mode override](#manual-system-mode-override) to configure system mode explicitly, or install the runtime binary from its upstream release.
+Node runs in managed mode on Alpine via the static musl archive (the registry pins musl-linked Node.js), so no system fallback or apk package is needed. UV is not available in Alpine's default package repositories — for UV on Alpine, use the [manual system mode override](#manual-system-mode-override) to configure system mode explicitly, or install the `uv` binary from its upstream release.
 :::
 
 When a system binary is found, you will see a log message like:
@@ -148,8 +177,8 @@ function getConfig(config) {
     ...config,
     runtimes: {
       ...config.runtimes,
-      fnm: {
-        ...config.runtimes.fnm,
+      node: {
+        ...config.runtimes.node,
         mode: "system",
       },
       uv: {
@@ -170,7 +199,7 @@ Manual system mode configuration takes precedence over automatic fallback since 
 
 ## Dockerfile Example
 
-A typical Alpine-based CI Dockerfile using manual system mode for FNM:
+A typical Alpine-based CI Dockerfile using manual system mode for UV:
 
 ```dockerfile
 FROM alpine:3.20
@@ -182,12 +211,13 @@ COPY . /workspace
 WORKDIR /workspace
 RUN go build -o /usr/local/bin/datamitsu
 
-# Initialize - binary apps auto-detect musl, JVM auto-fallbacks to system mode
-# FNM and UV require manual system mode config (see manual override section above)
+# Initialize - binary apps auto-detect musl, Node uses its managed musl archive,
+# JVM auto-fallbacks to system mode
+# UV requires manual system mode config (see manual override section above)
 RUN datamitsu init
 ```
 
-Binary apps automatically detect musl and select the appropriate variant. For JVM, datamitsu auto-detects the system `java` binary. For FNM and UV, configure system mode in your wrapper config (see [manual system mode override](#manual-system-mode-override) above).
+Binary apps automatically detect musl and select the appropriate variant. Node runs in managed mode via its static musl archive. For JVM, datamitsu auto-detects the system `java` binary. For UV, configure system mode in your wrapper config (see [manual system mode override](#manual-system-mode-override) above).
 
 ## Checking Detection Results
 
@@ -204,7 +234,7 @@ The `devtools apps list` command shows which binary variant was resolved for eac
 
 ### `fcntl64: symbol not found` or similar errors
 
-This means a glibc binary is running on a musl system. For binary apps, check if a musl variant is available for the tool and add it to the config. For managed runtimes, the JVM runtime auto-falls back to system `java` if installed (`apk add openjdk17`). For FNM and UV, configure system mode manually in your wrapper config since these binaries are not available in Alpine's default repositories. If no musl variant or system binary exists, the tool cannot run on Alpine without a glibc compatibility layer.
+This means a glibc binary is running on a musl system. For binary apps, check if a musl variant is available for the tool and add it to the config. For managed runtimes, the Node runtime uses its pinned musl archive automatically, and the JVM runtime auto-falls back to system `java` if installed (`apk add openjdk17`). For UV, configure system mode manually in your wrapper config since the `uv` binary is not available in Alpine's default repositories. If no musl variant or system binary exists, the tool cannot run on Alpine without a glibc compatibility layer.
 
 ### Detection returns `unknown`
 

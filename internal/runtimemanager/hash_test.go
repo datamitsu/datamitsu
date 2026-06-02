@@ -1,6 +1,7 @@
 package runtimemanager
 
 import (
+	"runtime"
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
@@ -158,14 +159,14 @@ func TestCalculateRuntimeHash(t *testing.T) {
 		}
 	})
 
-	t.Run("FNM node version affects runtime hash", func(t *testing.T) {
-		rc1 := makeTestManagedRuntime("https://example.com/fnm.tar.gz", "fnm123")
-		rc1.Kind = config.RuntimeKindFNM
-		rc1.FNM = &config.RuntimeConfigFNM{NodeVersion: "22.14.0", PNPMVersion: "10.7.0", PNPMHash: "pnpmhash1"}
+	t.Run("Node node version affects runtime hash", func(t *testing.T) {
+		rc1 := makeTestManagedRuntime("https://example.com/node.tar.gz", "node123")
+		rc1.Kind = config.RuntimeKindNode
+		rc1.Node = &config.RuntimeConfigNode{NodeVersion: "22.14.0", PNPMVersion: "10.7.0", PNPMHash: "pnpmhash1"}
 
-		rc2 := makeTestManagedRuntime("https://example.com/fnm.tar.gz", "fnm123")
-		rc2.Kind = config.RuntimeKindFNM
-		rc2.FNM = &config.RuntimeConfigFNM{NodeVersion: "20.11.1", PNPMVersion: "10.7.0", PNPMHash: "pnpmhash1"}
+		rc2 := makeTestManagedRuntime("https://example.com/node.tar.gz", "node123")
+		rc2.Kind = config.RuntimeKindNode
+		rc2.Node = &config.RuntimeConfigNode{NodeVersion: "20.11.1", PNPMVersion: "10.7.0", PNPMHash: "pnpmhash1"}
 
 		hash1, _ := calculateRuntimeHash(rc1, syslist.OsTypeDarwin, syslist.ArchTypeAmd64, "unknown")
 		hash2, _ := calculateRuntimeHash(rc2, syslist.OsTypeDarwin, syslist.ArchTypeAmd64, "unknown")
@@ -175,14 +176,14 @@ func TestCalculateRuntimeHash(t *testing.T) {
 		}
 	})
 
-	t.Run("FNM pnpm version affects runtime hash", func(t *testing.T) {
-		rc1 := makeTestManagedRuntime("https://example.com/fnm.tar.gz", "fnm123")
-		rc1.Kind = config.RuntimeKindFNM
-		rc1.FNM = &config.RuntimeConfigFNM{NodeVersion: "22.14.0", PNPMVersion: "10.7.0", PNPMHash: "pnpmhash1"}
+	t.Run("Node pnpm version affects runtime hash", func(t *testing.T) {
+		rc1 := makeTestManagedRuntime("https://example.com/node.tar.gz", "node123")
+		rc1.Kind = config.RuntimeKindNode
+		rc1.Node = &config.RuntimeConfigNode{NodeVersion: "22.14.0", PNPMVersion: "10.7.0", PNPMHash: "pnpmhash1"}
 
-		rc2 := makeTestManagedRuntime("https://example.com/fnm.tar.gz", "fnm123")
-		rc2.Kind = config.RuntimeKindFNM
-		rc2.FNM = &config.RuntimeConfigFNM{NodeVersion: "22.14.0", PNPMVersion: "9.15.0", PNPMHash: "pnpmhash1"}
+		rc2 := makeTestManagedRuntime("https://example.com/node.tar.gz", "node123")
+		rc2.Kind = config.RuntimeKindNode
+		rc2.Node = &config.RuntimeConfigNode{NodeVersion: "22.14.0", PNPMVersion: "9.15.0", PNPMHash: "pnpmhash1"}
 
 		hash1, _ := calculateRuntimeHash(rc1, syslist.OsTypeDarwin, syslist.ArchTypeAmd64, "unknown")
 		hash2, _ := calculateRuntimeHash(rc2, syslist.OsTypeDarwin, syslist.ArchTypeAmd64, "unknown")
@@ -192,14 +193,14 @@ func TestCalculateRuntimeHash(t *testing.T) {
 		}
 	})
 
-	t.Run("FNM pnpm hash affects runtime hash", func(t *testing.T) {
-		rc1 := makeTestManagedRuntime("https://example.com/fnm.tar.gz", "fnm123")
-		rc1.Kind = config.RuntimeKindFNM
-		rc1.FNM = &config.RuntimeConfigFNM{NodeVersion: "22.14.0", PNPMVersion: "10.7.0", PNPMHash: "pnpmhash1"}
+	t.Run("Node pnpm hash affects runtime hash", func(t *testing.T) {
+		rc1 := makeTestManagedRuntime("https://example.com/node.tar.gz", "node123")
+		rc1.Kind = config.RuntimeKindNode
+		rc1.Node = &config.RuntimeConfigNode{NodeVersion: "22.14.0", PNPMVersion: "10.7.0", PNPMHash: "pnpmhash1"}
 
-		rc2 := makeTestManagedRuntime("https://example.com/fnm.tar.gz", "fnm123")
-		rc2.Kind = config.RuntimeKindFNM
-		rc2.FNM = &config.RuntimeConfigFNM{NodeVersion: "22.14.0", PNPMVersion: "10.7.0", PNPMHash: "pnpmhash2"}
+		rc2 := makeTestManagedRuntime("https://example.com/node.tar.gz", "node123")
+		rc2.Kind = config.RuntimeKindNode
+		rc2.Node = &config.RuntimeConfigNode{NodeVersion: "22.14.0", PNPMVersion: "10.7.0", PNPMHash: "pnpmhash2"}
 
 		hash1, _ := calculateRuntimeHash(rc1, syslist.OsTypeDarwin, syslist.ArchTypeAmd64, "unknown")
 		hash2, _ := calculateRuntimeHash(rc2, syslist.OsTypeDarwin, syslist.ArchTypeAmd64, "unknown")
@@ -225,6 +226,142 @@ func TestCalculateRuntimeHash(t *testing.T) {
 			t.Error("different python versions should produce different runtime hashes")
 		}
 	})
+}
+
+// TestRuntimeHashFoldsSameFieldsForEveryKind guards the lock-step contract the
+// RuntimeKind registry exists to enforce: for every kind, each cache-affecting
+// version field must be folded into BOTH the managed-mode hash
+// (calculateRuntimeHash) and the system-mode hash (calculateSystemRuntimeHash).
+// If a future field is added to one hasher but not the other (the historical
+// drift risk), the corresponding sub-test changes only one hash and fails.
+func TestRuntimeHashFoldsSameFieldsForEveryKind(t *testing.T) {
+	osType, err := syslist.GetOsTypeFromString(runtime.GOOS)
+	if err != nil {
+		t.Fatalf("detect os type: %v", err)
+	}
+	archType, err := syslist.GetArchTypeFromString(runtime.GOARCH)
+	if err != nil {
+		t.Fatalf("detect arch type: %v", err)
+	}
+
+	// Key the binaries by the host os/arch so calculateRuntimeHash resolves on any
+	// platform the suite runs on (makeTestManagedRuntime is hard-keyed to
+	// darwin/linux-amd64 and would miss e.g. linux/arm64).
+	sharedBin := binmanager.BinaryOsArchInfo{
+		URL:         "https://example.com/runtime.tar.gz",
+		Hash:        "rt123",
+		ContentType: binmanager.BinContentTypeTarGz,
+	}
+	managedBase := func(kind config.RuntimeKind) config.RuntimeConfig {
+		return config.RuntimeConfig{
+			Kind: kind,
+			Mode: config.RuntimeModeManaged,
+			Managed: &config.RuntimeConfigManaged{
+				Binaries: binmanager.MapOfBinaries{osType: {archType: {testLibc: sharedBin}}},
+			},
+		}
+	}
+	systemBase := func(kind config.RuntimeKind) config.RuntimeConfig {
+		return config.RuntimeConfig{
+			Kind:   kind,
+			Mode:   config.RuntimeModeSystem,
+			System: &config.RuntimeConfigSystem{Command: "/usr/bin/" + string(kind)},
+		}
+	}
+
+	// Each field case applies the "a"/"b" variant to a runtime config so we can
+	// assert the change propagates into both hash functions. The setter is kind-aware and
+	// initializes the typed sub-config.
+	type fieldCase struct {
+		field string
+		set   func(rc *config.RuntimeConfig, v string)
+	}
+	kindCases := []struct {
+		kind   config.RuntimeKind
+		fields []fieldCase
+	}{
+		{
+			kind: config.RuntimeKindUV,
+			fields: []fieldCase{
+				{"pythonVersion", func(rc *config.RuntimeConfig, v string) { rc.UV = &config.RuntimeConfigUV{PythonVersion: v} }},
+			},
+		},
+		{
+			kind: config.RuntimeKindNode,
+			fields: []fieldCase{
+				{"nodeVersion", func(rc *config.RuntimeConfig, v string) {
+					rc.Node = &config.RuntimeConfigNode{NodeVersion: v, PNPMVersion: "10.0.0", PNPMHash: "h"}
+				}},
+				{"pnpmVersion", func(rc *config.RuntimeConfig, v string) {
+					rc.Node = &config.RuntimeConfigNode{NodeVersion: "22.0.0", PNPMVersion: v, PNPMHash: "h"}
+				}},
+				{"pnpmHash", func(rc *config.RuntimeConfig, v string) {
+					rc.Node = &config.RuntimeConfigNode{NodeVersion: "22.0.0", PNPMVersion: "10.0.0", PNPMHash: v}
+				}},
+			},
+		},
+		{
+			kind: config.RuntimeKindJVM,
+			fields: []fieldCase{
+				{"javaVersion", func(rc *config.RuntimeConfig, v string) { rc.JVM = &config.RuntimeConfigJVM{JavaVersion: v} }},
+			},
+		},
+		{
+			kind: config.RuntimeKindGo,
+			fields: []fieldCase{
+				{"goVersion", func(rc *config.RuntimeConfig, v string) { rc.Go = &config.RuntimeConfigGo{GoVersion: v} }},
+			},
+		},
+	}
+
+	// Cross-check: the fields enumerated here must match the registry's HashFields
+	// count for each kind, so this test can't silently fall out of sync if a new
+	// field is added to a kind's HashFields.
+	for _, kc := range kindCases {
+		info, ok := config.LookupRuntimeKind(kc.kind)
+		if !ok {
+			t.Fatalf("kind %q missing from registry", kc.kind)
+		}
+		rc := managedBase(kc.kind)
+		for _, fc := range kc.fields {
+			fc.set(&rc, "x")
+		}
+		if got := len(info.HashFields(rc)); got != len(kc.fields) {
+			t.Fatalf("kind %q: registry folds %d fields but test enumerates %d; update the test", kc.kind, got, len(kc.fields))
+		}
+	}
+
+	for _, kc := range kindCases {
+		for _, fc := range kc.fields {
+			t.Run(string(kc.kind)+"/"+fc.field, func(t *testing.T) {
+				mA := managedBase(kc.kind)
+				mB := managedBase(kc.kind)
+				fc.set(&mA, "version-a")
+				fc.set(&mB, "version-b")
+				mHashA, err := calculateRuntimeHash(mA, osType, archType, testLibc)
+				if err != nil {
+					t.Fatalf("managed hash A: %v", err)
+				}
+				mHashB, err := calculateRuntimeHash(mB, osType, archType, testLibc)
+				if err != nil {
+					t.Fatalf("managed hash B: %v", err)
+				}
+				if mHashA == mHashB {
+					t.Errorf("managed hash does not fold %s for kind %s", fc.field, kc.kind)
+				}
+
+				sA := systemBase(kc.kind)
+				sB := systemBase(kc.kind)
+				fc.set(&sA, "version-a")
+				fc.set(&sB, "version-b")
+				sHashA := calculateSystemRuntimeHash(sA)
+				sHashB := calculateSystemRuntimeHash(sB)
+				if sHashA == sHashB {
+					t.Errorf("system hash does not fold %s for kind %s", fc.field, kc.kind)
+				}
+			})
+		}
+	}
 }
 
 func TestCalculateAppHash(t *testing.T) {
@@ -327,9 +464,9 @@ func TestCalculateAppHash(t *testing.T) {
 	})
 }
 
-func TestCalculateFNMAppHash(t *testing.T) {
-	t.Run("basic hash", func(t *testing.T) {
-		hash := calculateFNMAppHash("mmdc", "@mermaid-js/mermaid-cli", "11.4.1", "node_modules/.bin/mmdc", nil, "rthash", "", "")
+func TestCalculateNodeAppHash(t *testing.T) {
+	t.Run("basic hash has xxh3-128 length", func(t *testing.T) {
+		hash := calculateNodeAppHash("eslint", "eslint", "9.0.0", "node_modules/.bin/eslint", nil, "rthash", "", "")
 		if hash == "" {
 			t.Error("hash is empty")
 		}
@@ -338,97 +475,124 @@ func TestCalculateFNMAppHash(t *testing.T) {
 		}
 	})
 
-	t.Run("deterministic", func(t *testing.T) {
-		hash1 := calculateFNMAppHash("mmdc", "@mermaid-js/mermaid-cli", "11.4.1", "node_modules/.bin/mmdc", nil, "rthash", "", "")
-		hash2 := calculateFNMAppHash("mmdc", "@mermaid-js/mermaid-cli", "11.4.1", "node_modules/.bin/mmdc", nil, "rthash", "", "")
-
+	t.Run("stable / deterministic", func(t *testing.T) {
+		hash1 := calculateNodeAppHash("eslint", "eslint", "9.0.0", "node_modules/.bin/eslint", nil, "rthash", "", "")
+		hash2 := calculateNodeAppHash("eslint", "eslint", "9.0.0", "node_modules/.bin/eslint", nil, "rthash", "", "")
 		if hash1 != hash2 {
 			t.Errorf("hash not deterministic: %q != %q", hash1, hash2)
 		}
 	})
 
-	t.Run("different app names produce different hashes", func(t *testing.T) {
-		hash1 := calculateFNMAppHash("mmdc", "@mermaid-js/mermaid-cli", "1.0.0", "node_modules/.bin/mmdc", nil, "rthash", "", "")
-		hash2 := calculateFNMAppHash("slidev", "@slidev/cli", "1.0.0", "node_modules/.bin/slidev", nil, "rthash", "", "")
-
-		if hash1 == hash2 {
-			t.Error("different app names produced same hash")
-		}
-	})
-
-	t.Run("different package names produce different hashes", func(t *testing.T) {
-		hash1 := calculateFNMAppHash("myapp", "pkg-a", "1.0.0", "node_modules/.bin/myapp", nil, "rthash", "", "")
-		hash2 := calculateFNMAppHash("myapp", "pkg-b", "1.0.0", "node_modules/.bin/myapp", nil, "rthash", "", "")
-
+	t.Run("package name affects hash", func(t *testing.T) {
+		hash1 := calculateNodeAppHash("myapp", "pkg-a", "1.0.0", "node_modules/.bin/myapp", nil, "rthash", "", "")
+		hash2 := calculateNodeAppHash("myapp", "pkg-b", "1.0.0", "node_modules/.bin/myapp", nil, "rthash", "", "")
 		if hash1 == hash2 {
 			t.Error("different package names produced same hash")
 		}
 	})
 
-	t.Run("different bin paths produce different hashes", func(t *testing.T) {
-		hash1 := calculateFNMAppHash("myapp", "pkg-a", "1.0.0", "node_modules/.bin/myapp", nil, "rthash", "", "")
-		hash2 := calculateFNMAppHash("myapp", "pkg-a", "1.0.0", "node_modules/.bin/other", nil, "rthash", "", "")
-
-		if hash1 == hash2 {
-			t.Error("different bin paths produced same hash")
-		}
-	})
-
-	t.Run("different pkg versions produce different hashes", func(t *testing.T) {
-		hash1 := calculateFNMAppHash("mmdc", "@mermaid-js/mermaid-cli", "11.4.0", "node_modules/.bin/mmdc", nil, "rthash", "", "")
-		hash2 := calculateFNMAppHash("mmdc", "@mermaid-js/mermaid-cli", "11.4.1", "node_modules/.bin/mmdc", nil, "rthash", "", "")
-
-		if hash1 == hash2 {
-			t.Error("different pkg versions produced same hash")
-		}
-	})
-
-	t.Run("different runtime hashes produce different hashes", func(t *testing.T) {
-		hash1 := calculateFNMAppHash("mmdc", "@mermaid-js/mermaid-cli", "11.4.1", "node_modules/.bin/mmdc", nil, "rthash1", "", "")
-		hash2 := calculateFNMAppHash("mmdc", "@mermaid-js/mermaid-cli", "11.4.1", "node_modules/.bin/mmdc", nil, "rthash2", "", "")
-
+	t.Run("runtime hash affects hash", func(t *testing.T) {
+		hash1 := calculateNodeAppHash("eslint", "eslint", "9.0.0", "node_modules/.bin/eslint", nil, "rthash1", "", "")
+		hash2 := calculateNodeAppHash("eslint", "eslint", "9.0.0", "node_modules/.bin/eslint", nil, "rthash2", "", "")
 		if hash1 == hash2 {
 			t.Error("different runtime hashes produced same hash")
 		}
 	})
 
-	t.Run("dependencies affect hash", func(t *testing.T) {
-		deps := map[string]string{"@mermaid-js/mermaid-cli": "11.4.1"}
-		hash1 := calculateFNMAppHash("mmdc", "@mermaid-js/mermaid-cli", "11.4.1", "node_modules/.bin/mmdc", nil, "rthash", "", "")
-		hash2 := calculateFNMAppHash("mmdc", "@mermaid-js/mermaid-cli", "11.4.1", "node_modules/.bin/mmdc", deps, "rthash", "", "")
+	t.Run("differs from calculateAppHash (the uv/jvm app hasher) with same base inputs", func(t *testing.T) {
+		nodeHash := calculateNodeAppHash("eslint", "eslint", "9.0.0", "node_modules/.bin/eslint", nil, "rthash", "", "")
+		appHash := calculateAppHash("eslint", "9.0.0", nil, "rthash", "", "")
+		if nodeHash == appHash {
+			t.Error("node app hash should differ from plain app hash due to packageName and binPath inputs")
+		}
+	})
+}
 
-		if hash1 == hash2 {
-			t.Error("deps should affect hash")
+// TestCalculateRuntimeHashNodeDistinct verifies the managed node runtime hash is
+// stable, sensitive to the node config fields (nodeVersion/pnpmVersion/pnpmHash),
+// and distinct from jvm/uv runtimes that share the same binaries entry.
+func TestCalculateRuntimeHashNodeDistinct(t *testing.T) {
+	osType, err := syslist.GetOsTypeFromString(runtime.GOOS)
+	if err != nil {
+		t.Fatalf("detect os type: %v", err)
+	}
+	archType, err := syslist.GetArchTypeFromString(runtime.GOARCH)
+	if err != nil {
+		t.Fatalf("detect arch type: %v", err)
+	}
+
+	sharedBin := binmanager.BinaryOsArchInfo{
+		URL:         "https://example.com/runtime.tar.xz",
+		Hash:        "abc123",
+		ContentType: binmanager.BinContentTypeTarXz,
+	}
+	managed := func(kind config.RuntimeKind, mutate func(*config.RuntimeConfig)) config.RuntimeConfig {
+		rc := config.RuntimeConfig{
+			Kind: kind,
+			Mode: config.RuntimeModeManaged,
+			Managed: &config.RuntimeConfigManaged{
+				Binaries: binmanager.MapOfBinaries{osType: {archType: {testLibc: sharedBin}}},
+			},
+		}
+		mutate(&rc)
+		return rc
+	}
+
+	nodeRC := managed(config.RuntimeKindNode, func(rc *config.RuntimeConfig) {
+		rc.Node = &config.RuntimeConfigNode{NodeVersion: "26.2.0", PNPMVersion: "11.0.0", PNPMHash: "pnpmhash"}
+	})
+	jvmRC := managed(config.RuntimeKindJVM, func(rc *config.RuntimeConfig) {
+		rc.JVM = &config.RuntimeConfigJVM{JavaVersion: "21"}
+	})
+	uvRC := managed(config.RuntimeKindUV, func(rc *config.RuntimeConfig) {
+		rc.UV = &config.RuntimeConfigUV{PythonVersion: "3.12"}
+	})
+
+	nodeHash, err := calculateRuntimeHash(nodeRC, osType, archType, testLibc)
+	if err != nil {
+		t.Fatalf("node runtime hash error: %v", err)
+	}
+
+	t.Run("stable", func(t *testing.T) {
+		again, err := calculateRuntimeHash(nodeRC, osType, archType, testLibc)
+		if err != nil {
+			t.Fatalf("node runtime hash error: %v", err)
+		}
+		if nodeHash != again {
+			t.Errorf("node runtime hash not stable: %q != %q", nodeHash, again)
 		}
 	})
 
-	t.Run("dependency order does not affect hash", func(t *testing.T) {
-		deps1 := map[string]string{"a": "1.0", "b": "2.0", "c": "3.0"}
-		deps2 := map[string]string{"c": "3.0", "a": "1.0", "b": "2.0"}
-
-		hash1 := calculateFNMAppHash("mmdc", "@mermaid-js/mermaid-cli", "11.4.1", "node_modules/.bin/mmdc", deps1, "rthash", "", "")
-		hash2 := calculateFNMAppHash("mmdc", "@mermaid-js/mermaid-cli", "11.4.1", "node_modules/.bin/mmdc", deps2, "rthash", "", "")
-
-		if hash1 != hash2 {
-			t.Error("dependency order should not affect hash")
+	t.Run("distinct from jvm", func(t *testing.T) {
+		jvmHash, err := calculateRuntimeHash(jvmRC, osType, archType, testLibc)
+		if err != nil {
+			t.Fatalf("jvm runtime hash error: %v", err)
+		}
+		if nodeHash == jvmHash {
+			t.Error("node runtime hash should differ from jvm")
 		}
 	})
 
-	t.Run("lock file hash affects hash", func(t *testing.T) {
-		hash1 := calculateFNMAppHash("mmdc", "@mermaid-js/mermaid-cli", "11.4.1", "node_modules/.bin/mmdc", nil, "rthash", "", "")
-		hash2 := calculateFNMAppHash("mmdc", "@mermaid-js/mermaid-cli", "11.4.1", "node_modules/.bin/mmdc", nil, "rthash", "lockhash123", "")
-
-		if hash1 == hash2 {
-			t.Error("lock file hash should affect hash")
+	t.Run("distinct from uv", func(t *testing.T) {
+		uvHash, err := calculateRuntimeHash(uvRC, osType, archType, testLibc)
+		if err != nil {
+			t.Fatalf("uv runtime hash error: %v", err)
+		}
+		if nodeHash == uvHash {
+			t.Error("node runtime hash should differ from uv")
 		}
 	})
 
-	t.Run("differs from calculateAppHash with same base inputs", func(t *testing.T) {
-		fnmHash := calculateFNMAppHash("mmdc", "@mermaid-js/mermaid-cli", "11.4.1", "node_modules/.bin/mmdc", nil, "rthash", "", "")
-		appHash := calculateAppHash("mmdc", "11.4.1", nil, "rthash", "", "")
-
-		if fnmHash == appHash {
-			t.Error("FNM hash should differ from app hash due to packageName and binPath inputs")
+	t.Run("node version affects hash", func(t *testing.T) {
+		other := managed(config.RuntimeKindNode, func(rc *config.RuntimeConfig) {
+			rc.Node = &config.RuntimeConfigNode{NodeVersion: "24.0.0", PNPMVersion: "11.0.0", PNPMHash: "pnpmhash"}
+		})
+		otherHash, err := calculateRuntimeHash(other, osType, archType, testLibc)
+		if err != nil {
+			t.Fatalf("node runtime hash error: %v", err)
+		}
+		if nodeHash == otherHash {
+			t.Error("different node version should produce a different runtime hash")
 		}
 	})
 }
@@ -484,18 +648,18 @@ func TestCalculateSystemRuntimeHash(t *testing.T) {
 		}
 	})
 
-	t.Run("different FNM nodeVersion produces different hash", func(t *testing.T) {
+	t.Run("different Node nodeVersion produces different hash", func(t *testing.T) {
 		rc1 := config.RuntimeConfig{
-			Kind:   config.RuntimeKindFNM,
+			Kind:   config.RuntimeKindNode,
 			Mode:   config.RuntimeModeSystem,
-			System: &config.RuntimeConfigSystem{Command: "/usr/bin/fnm"},
-			FNM:    &config.RuntimeConfigFNM{NodeVersion: "20.11.1", PNPMVersion: "9.15.0", PNPMHash: "pnpmhash1"},
+			System: &config.RuntimeConfigSystem{Command: "/usr/bin/node"},
+			Node:   &config.RuntimeConfigNode{NodeVersion: "20.11.1", PNPMVersion: "9.15.0", PNPMHash: "pnpmhash1"},
 		}
 		rc2 := config.RuntimeConfig{
-			Kind:   config.RuntimeKindFNM,
+			Kind:   config.RuntimeKindNode,
 			Mode:   config.RuntimeModeSystem,
-			System: &config.RuntimeConfigSystem{Command: "/usr/bin/fnm"},
-			FNM:    &config.RuntimeConfigFNM{NodeVersion: "22.0.0", PNPMVersion: "9.15.0", PNPMHash: "pnpmhash1"},
+			System: &config.RuntimeConfigSystem{Command: "/usr/bin/node"},
+			Node:   &config.RuntimeConfigNode{NodeVersion: "22.0.0", PNPMVersion: "9.15.0", PNPMHash: "pnpmhash1"},
 		}
 
 		hash1 := calculateSystemRuntimeHash(rc1)
@@ -505,18 +669,18 @@ func TestCalculateSystemRuntimeHash(t *testing.T) {
 		}
 	})
 
-	t.Run("different FNM pnpmVersion produces different hash", func(t *testing.T) {
+	t.Run("different Node pnpmVersion produces different hash", func(t *testing.T) {
 		rc1 := config.RuntimeConfig{
-			Kind:   config.RuntimeKindFNM,
+			Kind:   config.RuntimeKindNode,
 			Mode:   config.RuntimeModeSystem,
-			System: &config.RuntimeConfigSystem{Command: "/usr/bin/fnm"},
-			FNM:    &config.RuntimeConfigFNM{NodeVersion: "20.11.1", PNPMVersion: "9.15.0", PNPMHash: "pnpmhash1"},
+			System: &config.RuntimeConfigSystem{Command: "/usr/bin/node"},
+			Node:   &config.RuntimeConfigNode{NodeVersion: "20.11.1", PNPMVersion: "9.15.0", PNPMHash: "pnpmhash1"},
 		}
 		rc2 := config.RuntimeConfig{
-			Kind:   config.RuntimeKindFNM,
+			Kind:   config.RuntimeKindNode,
 			Mode:   config.RuntimeModeSystem,
-			System: &config.RuntimeConfigSystem{Command: "/usr/bin/fnm"},
-			FNM:    &config.RuntimeConfigFNM{NodeVersion: "20.11.1", PNPMVersion: "10.0.0", PNPMHash: "pnpmhash1"},
+			System: &config.RuntimeConfigSystem{Command: "/usr/bin/node"},
+			Node:   &config.RuntimeConfigNode{NodeVersion: "20.11.1", PNPMVersion: "10.0.0", PNPMHash: "pnpmhash1"},
 		}
 
 		hash1 := calculateSystemRuntimeHash(rc1)
@@ -526,18 +690,18 @@ func TestCalculateSystemRuntimeHash(t *testing.T) {
 		}
 	})
 
-	t.Run("different FNM pnpmHash produces different hash", func(t *testing.T) {
+	t.Run("different Node pnpmHash produces different hash", func(t *testing.T) {
 		rc1 := config.RuntimeConfig{
-			Kind:   config.RuntimeKindFNM,
+			Kind:   config.RuntimeKindNode,
 			Mode:   config.RuntimeModeSystem,
-			System: &config.RuntimeConfigSystem{Command: "/usr/bin/fnm"},
-			FNM:    &config.RuntimeConfigFNM{NodeVersion: "20.11.1", PNPMVersion: "9.15.0", PNPMHash: "pnpmhash1"},
+			System: &config.RuntimeConfigSystem{Command: "/usr/bin/node"},
+			Node:   &config.RuntimeConfigNode{NodeVersion: "20.11.1", PNPMVersion: "9.15.0", PNPMHash: "pnpmhash1"},
 		}
 		rc2 := config.RuntimeConfig{
-			Kind:   config.RuntimeKindFNM,
+			Kind:   config.RuntimeKindNode,
 			Mode:   config.RuntimeModeSystem,
-			System: &config.RuntimeConfigSystem{Command: "/usr/bin/fnm"},
-			FNM:    &config.RuntimeConfigFNM{NodeVersion: "20.11.1", PNPMVersion: "9.15.0", PNPMHash: "pnpmhash2"},
+			System: &config.RuntimeConfigSystem{Command: "/usr/bin/node"},
+			Node:   &config.RuntimeConfigNode{NodeVersion: "20.11.1", PNPMVersion: "9.15.0", PNPMHash: "pnpmhash2"},
 		}
 
 		hash1 := calculateSystemRuntimeHash(rc1)
@@ -625,6 +789,109 @@ func TestCalculateSystemRuntimeHash_JVM(t *testing.T) {
 		hash2 := calculateSystemRuntimeHash(rc2)
 		if hash1 == hash2 {
 			t.Error("different javaVersion should produce different hashes")
+		}
+	})
+}
+
+func TestCalculateRuntimeHash_Go(t *testing.T) {
+	t.Run("Go goVersion affects runtime hash", func(t *testing.T) {
+		rc1 := makeTestManagedRuntime("https://example.com/go.tar.gz", "go123")
+		rc1.Kind = config.RuntimeKindGo
+		rc1.Go = &config.RuntimeConfigGo{GoVersion: "1.22.0"}
+
+		rc2 := makeTestManagedRuntime("https://example.com/go.tar.gz", "go123")
+		rc2.Kind = config.RuntimeKindGo
+		rc2.Go = &config.RuntimeConfigGo{GoVersion: "1.21.0"}
+
+		hash1, _ := calculateRuntimeHash(rc1, syslist.OsTypeDarwin, syslist.ArchTypeAmd64, "unknown")
+		hash2, _ := calculateRuntimeHash(rc2, syslist.OsTypeDarwin, syslist.ArchTypeAmd64, "unknown")
+
+		if hash1 == hash2 {
+			t.Error("different go versions should produce different runtime hashes")
+		}
+	})
+
+	t.Run("Go runtime hash is deterministic", func(t *testing.T) {
+		rc := makeTestManagedRuntime("https://example.com/go.tar.gz", "go123")
+		rc.Kind = config.RuntimeKindGo
+		rc.Go = &config.RuntimeConfigGo{GoVersion: "1.22.0"}
+
+		hash1, err := calculateRuntimeHash(rc, syslist.OsTypeDarwin, syslist.ArchTypeAmd64, "unknown")
+		if err != nil {
+			t.Fatalf("first call error = %v", err)
+		}
+		hash2, err := calculateRuntimeHash(rc, syslist.OsTypeDarwin, syslist.ArchTypeAmd64, "unknown")
+		if err != nil {
+			t.Fatalf("second call error = %v", err)
+		}
+		if hash1 != hash2 {
+			t.Errorf("hash not deterministic: %q != %q", hash1, hash2)
+		}
+	})
+}
+
+func TestCalculateSystemRuntimeHash_Go(t *testing.T) {
+	t.Run("different Go goVersion produces different hash", func(t *testing.T) {
+		rc1 := config.RuntimeConfig{
+			Kind:   config.RuntimeKindGo,
+			Mode:   config.RuntimeModeSystem,
+			System: &config.RuntimeConfigSystem{Command: "/usr/bin/go"},
+			Go:     &config.RuntimeConfigGo{GoVersion: "1.22.0"},
+		}
+		rc2 := config.RuntimeConfig{
+			Kind:   config.RuntimeKindGo,
+			Mode:   config.RuntimeModeSystem,
+			System: &config.RuntimeConfigSystem{Command: "/usr/bin/go"},
+			Go:     &config.RuntimeConfigGo{GoVersion: "1.21.0"},
+		}
+
+		hash1 := calculateSystemRuntimeHash(rc1)
+		hash2 := calculateSystemRuntimeHash(rc2)
+		if hash1 == hash2 {
+			t.Error("different goVersion should produce different hashes")
+		}
+	})
+
+	t.Run("same Go goVersion produces same hash", func(t *testing.T) {
+		rc := config.RuntimeConfig{
+			Kind:   config.RuntimeKindGo,
+			Mode:   config.RuntimeModeSystem,
+			System: &config.RuntimeConfigSystem{Command: "/usr/bin/go"},
+			Go:     &config.RuntimeConfigGo{GoVersion: "1.22.0"},
+		}
+
+		hash1 := calculateSystemRuntimeHash(rc)
+		hash2 := calculateSystemRuntimeHash(rc)
+		if hash1 != hash2 {
+			t.Errorf("same goVersion should produce same hash: %q != %q", hash1, hash2)
+		}
+	})
+}
+
+func TestCalculateAppHash_Go(t *testing.T) {
+	t.Run("Go app package params produce valid hash", func(t *testing.T) {
+		hash := calculateAppHash("govulncheck", "v1.1.4", nil, "rthash", "lockhash", "")
+		if hash == "" {
+			t.Error("hash is empty")
+		}
+		if len(hash) != 32 {
+			t.Errorf("hash length = %d, want 32 (xxh3-128)", len(hash))
+		}
+	})
+
+	t.Run("Go lockfile hash affects app hash", func(t *testing.T) {
+		hash1 := calculateAppHash("govulncheck", "v1.1.4", nil, "rthash", "lockhash1", "")
+		hash2 := calculateAppHash("govulncheck", "v1.1.4", nil, "rthash", "lockhash2", "")
+		if hash1 == hash2 {
+			t.Error("different lockfile hashes should produce different app hashes")
+		}
+	})
+
+	t.Run("Go version affects app hash", func(t *testing.T) {
+		hash1 := calculateAppHash("govulncheck", "v1.1.4", nil, "rthash", "lockhash", "")
+		hash2 := calculateAppHash("govulncheck", "v1.1.3", nil, "rthash", "lockhash", "")
+		if hash1 == hash2 {
+			t.Error("different versions should produce different app hashes")
 		}
 	})
 }

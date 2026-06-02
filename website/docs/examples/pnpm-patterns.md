@@ -14,7 +14,7 @@ A simple Node.js tool with no extra dependencies:
 ```typescript
 const mapOfApps: BinManager.MapOfApps = {
   mmdc: {
-    fnm: {
+    node: {
       packageName: "@mermaid-js/mermaid-cli",
       binPath: "node_modules/.bin/mmdc",
       version: "11.12.0",
@@ -41,7 +41,7 @@ Use the `dependencies` field to install them together:
 ```typescript
 const mapOfApps: BinManager.MapOfApps = {
   eslint: {
-    fnm: {
+    node: {
       packageName: "eslint",
       binPath: "node_modules/.bin/eslint",
       version: "9.17.0",
@@ -80,7 +80,7 @@ Spectral (OpenAPI linter) often needs custom ruleset packages:
 ```typescript
 const mapOfApps: BinManager.MapOfApps = {
   spectral: {
-    fnm: {
+    node: {
       packageName: "@stoplight/spectral-cli",
       binPath: "node_modules/.bin/spectral",
       version: "6.14.2",
@@ -99,7 +99,7 @@ Pin the exact dependency tree with a lock file:
 ```typescript
 const mapOfApps: BinManager.MapOfApps = {
   eslint: {
-    fnm: {
+    node: {
       packageName: "eslint",
       binPath: "node_modules/.bin/eslint",
       version: "10.0.0",
@@ -124,7 +124,7 @@ To generate lock file content:
 
 ## Workspace Overrides for Packages with Build Scripts
 
-datamitsu writes a secure `pnpm-workspace.yaml` automatically before every FNM
+datamitsu writes a secure `pnpm-workspace.yaml` automatically before every node-app
 install. When a package legitimately needs to run a build script — common
 offenders include `puppeteer`, `sharp`, `esbuild`, and native modules — installs
 fail with `ERR_PNPM_IGNORED_BUILDS`. Allowlist the package via
@@ -139,7 +139,7 @@ const mapOfApps: BinManager.MapOfApps = {
         allowBuilds: { puppeteer: true },
       }),
     },
-    fnm: {
+    node: {
       packageName: "@mermaid-js/mermaid-cli",
       binPath: "node_modules/.bin/mmdc",
       version: "11.15.0",
@@ -160,14 +160,14 @@ override the default — only do this if you fully trust every transitive depend
 
 For the full list of baseline settings, the rationale behind each, and the
 merged YAML format, see the
-[Supply Chain Security guide](../guides/supply-chain-security.md#pnpm-fnm-apps).
+[Supply Chain Security guide](../guides/supply-chain-security.md#pnpm-node-apps).
 
 ## PNPM Store Isolation
 
 Each app environment has isolated PNPM store paths:
 
 ```
-~/.cache/datamitsu/.apps/fnm/eslint/{hash}/
+~/.cache/datamitsu/.apps/node/eslint/{hash}/
   package.json
   pnpm-lock.yaml
   node_modules/

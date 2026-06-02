@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/runtimemanager"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -41,9 +43,9 @@ func TestConfigLockfileAcceptsZeroOrOneArgs(t *testing.T) {
 	}
 }
 
-func TestPrintAppInfo_FNM(t *testing.T) {
+func TestPrintAppInfo_Node(t *testing.T) {
 	app := binmanager.App{
-		Fnm: &binmanager.AppConfigFNM{
+		Node: &binmanager.AppConfigNode{
 			PackageName: "@mermaid-js/mermaid-cli",
 			Version:     "11.4.2",
 			BinPath:     "node_modules/.bin/mmdc",
@@ -70,7 +72,7 @@ func TestPrintAppInfo_FNM(t *testing.T) {
 	if !strings.Contains(output, "App: mermaid") {
 		t.Errorf("missing app name in output: %s", output)
 	}
-	if !strings.Contains(output, "Runtime:      fnm") {
+	if !strings.Contains(output, "Runtime:      node") {
 		t.Errorf("missing runtime in output: %s", output)
 	}
 	if !strings.Contains(output, "Version:      11.4.2") {
@@ -107,6 +109,38 @@ func TestPrintAppInfo_UV(t *testing.T) {
 	}
 	if !strings.Contains(output, "Package:      yamllint") {
 		t.Errorf("missing package name in output: %s", output)
+	}
+}
+
+func TestPrintAppInfo_Go(t *testing.T) {
+	app := binmanager.App{
+		Go: &binmanager.AppConfigGo{
+			PackageName: "golang.org/x/vuln/cmd/govulncheck",
+			Version:     "v1.1.4",
+		},
+	}
+
+	oldStderr := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stderr = w
+
+	printAppInfo("govulncheck", app)
+
+	_ = w.Close()
+	os.Stderr = oldStderr
+
+	buf := make([]byte, 4096)
+	n, _ := r.Read(buf)
+	output := string(buf[:n])
+
+	if !strings.Contains(output, "Runtime:      go") {
+		t.Errorf("missing runtime in output: %s", output)
+	}
+	if !strings.Contains(output, "Package:      golang.org/x/vuln/cmd/govulncheck") {
+		t.Errorf("missing package name in output: %s", output)
+	}
+	if !strings.Contains(output, "Version:      v1.1.4") {
+		t.Errorf("missing version in output: %s", output)
 	}
 }
 
@@ -165,13 +199,13 @@ func TestPrintAppInfo_Shell(t *testing.T) {
 func TestListLockfileApps(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"mermaid": {
-			Fnm: &binmanager.AppConfigFNM{
+			Node: &binmanager.AppConfigNode{
 				PackageName: "@mermaid-js/mermaid-cli",
 				Version:     "11.4.2",
 			},
 		},
 		"eslint": {
-			Fnm: &binmanager.AppConfigFNM{
+			Node: &binmanager.AppConfigNode{
 				PackageName: "eslint",
 				Version:     "9.0.0",
 			},
@@ -180,6 +214,12 @@ func TestListLockfileApps(t *testing.T) {
 			Uv: &binmanager.AppConfigUV{
 				PackageName: "yamllint",
 				Version:     "1.38.0",
+			},
+		},
+		"govulncheck": {
+			Go: &binmanager.AppConfigGo{
+				PackageName: "golang.org/x/vuln/cmd/govulncheck",
+				Version:     "v1.1.4",
 			},
 		},
 		"golangci-lint": {
@@ -203,11 +243,17 @@ func TestListLockfileApps(t *testing.T) {
 	n, _ := r.Read(buf)
 	output := string(buf[:n])
 
-	if !strings.Contains(output, "fnm:") {
-		t.Errorf("missing fnm group header in output: %s", output)
+	if !strings.Contains(output, "node:") {
+		t.Errorf("missing node group header in output: %s", output)
 	}
 	if !strings.Contains(output, "uv:") {
 		t.Errorf("missing uv group header in output: %s", output)
+	}
+	if !strings.Contains(output, "go:") {
+		t.Errorf("missing go group header in output: %s", output)
+	}
+	if !strings.Contains(output, "govulncheck") {
+		t.Errorf("missing govulncheck in output: %s", output)
 	}
 	if !strings.Contains(output, "eslint") {
 		t.Errorf("missing eslint in output: %s", output)
@@ -225,11 +271,11 @@ func TestListLockfileApps(t *testing.T) {
 		t.Errorf("shell app should not be listed: %s", output)
 	}
 
-	// Verify sorted order: eslint before mermaid in fnm section
+	// Verify sorted order: eslint before mermaid in node section
 	eslintIdx := strings.Index(output, "eslint")
 	mermaidIdx := strings.Index(output, "mermaid")
 	if eslintIdx > mermaidIdx {
-		t.Errorf("fnm apps should be sorted alphabetically, eslint at %d, mermaid at %d", eslintIdx, mermaidIdx)
+		t.Errorf("node apps should be sorted alphabetically, eslint at %d, mermaid at %d", eslintIdx, mermaidIdx)
 	}
 }
 
@@ -258,7 +304,7 @@ func TestListLockfileApps_Empty(t *testing.T) {
 	}
 }
 
-func TestReadLockFile_FNM(t *testing.T) {
+func TestReadLockFile_Node(t *testing.T) {
 	tmpDir := t.TempDir()
 	lockContent := "lockfileVersion: '9.0'\n"
 
@@ -267,7 +313,7 @@ func TestReadLockFile_FNM(t *testing.T) {
 	}
 
 	app := binmanager.App{
-		Fnm: &binmanager.AppConfigFNM{
+		Node: &binmanager.AppConfigNode{
 			PackageName: "eslint",
 			Version:     "9.0.0",
 		},
@@ -306,11 +352,63 @@ func TestReadLockFile_UV(t *testing.T) {
 	}
 }
 
+func TestReadLockFile_Go(t *testing.T) {
+	tmpDir := t.TempDir()
+	goMod := "module datamitsu-govulncheck\n\ngo 1.22\n\nrequire golang.org/x/vuln v1.1.4\n"
+	goSum := "golang.org/x/vuln v1.1.4 h1:abc=\ngolang.org/x/vuln v1.1.4/go.mod h1:def=\n"
+
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.sum"), []byte(goSum), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	app := binmanager.App{
+		Go: &binmanager.AppConfigGo{
+			PackageName: "golang.org/x/vuln/cmd/govulncheck",
+			Version:     "v1.1.4",
+		},
+	}
+
+	content, err := readLockFile(tmpDir, app)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// readLockFile must assemble the JSON wrapper from go.mod + go.sum.
+	want, err := runtimemanager.BuildGoLockFileJSON(goMod, goSum)
+	if err != nil {
+		t.Fatalf("BuildGoLockFileJSON() error = %v", err)
+	}
+	if content != want {
+		t.Errorf("content = %q, want %q", content, want)
+	}
+}
+
+func TestReadLockFile_GoMissingGoMod(t *testing.T) {
+	tmpDir := t.TempDir()
+	// Only go.sum present; go.mod is missing.
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.sum"), []byte("x"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	app := binmanager.App{Go: &binmanager.AppConfigGo{PackageName: "golang.org/x/vuln/cmd/govulncheck"}}
+
+	_, err := readLockFile(tmpDir, app)
+	if err == nil {
+		t.Fatal("expected error when go.mod is missing")
+	}
+	if !strings.Contains(err.Error(), "go.mod") {
+		t.Errorf("error should mention go.mod, got: %v", err)
+	}
+}
+
 func TestReadLockFile_MissingFile(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	app := binmanager.App{
-		Fnm: &binmanager.AppConfigFNM{
+		Node: &binmanager.AppConfigNode{
 			PackageName: "eslint",
 		},
 	}
@@ -338,11 +436,120 @@ func TestReadLockFile_UnsupportedType(t *testing.T) {
 	}
 }
 
-func TestClearAppLockFile_FNMClearsLockFilePreservesFiles(t *testing.T) {
+func TestGenerateGoLockContent_RemovesTempWorkDirOnSuccess(t *testing.T) {
+	app := binmanager.App{
+		Go: &binmanager.AppConfigGo{
+			PackageName: "golang.org/x/vuln/cmd/govulncheck",
+			Version:     "v1.1.4",
+		},
+	}
+
+	goMod := "module datamitsu-govulncheck\n\ngo 1.22\n\nrequire golang.org/x/vuln v1.1.4\n"
+	goSum := "golang.org/x/vuln v1.1.4 h1:abc=\ngolang.org/x/vuln v1.1.4/go.mod h1:def=\n"
+
+	var capturedWorkDir string
+	content, err := generateGoLockContent("govulncheck", app, func(workDir string) error {
+		capturedWorkDir = workDir
+		if err := os.WriteFile(filepath.Join(workDir, "go.mod"), []byte(goMod), 0644); err != nil {
+			return err
+		}
+		return os.WriteFile(filepath.Join(workDir, "go.sum"), []byte(goSum), 0644)
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// The content must be the JSON wrapper assembled from the generated files.
+	want, err := runtimemanager.BuildGoLockFileJSON(goMod, goSum)
+	if err != nil {
+		t.Fatalf("BuildGoLockFileJSON() error = %v", err)
+	}
+	if content != want {
+		t.Errorf("content = %q, want %q", content, want)
+	}
+
+	if capturedWorkDir == "" {
+		t.Fatal("generate callback was not invoked with a workDir")
+	}
+	if _, err := os.Stat(capturedWorkDir); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("temp workDir %q should have been removed, stat err = %v", capturedWorkDir, err)
+	}
+}
+
+func TestGenerateGoLockContent_RemovesReadOnlyModuleCache(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root bypasses permission checks")
+	}
+
+	app := binmanager.App{
+		Go: &binmanager.AppConfigGo{PackageName: "golang.org/x/vuln/cmd/govulncheck", Version: "v1.1.4"},
+	}
+	goMod := "module datamitsu-govulncheck\n\ngo 1.22\n"
+	goSum := "golang.org/x/vuln v1.1.4 h1:abc=\n"
+
+	var capturedWorkDir string
+	_, err := generateGoLockContent("govulncheck", app, func(workDir string) error {
+		capturedWorkDir = workDir
+		// Reproduce the read-only GOMODCACHE that `go get` writes under workDir;
+		// a plain os.RemoveAll cleanup would leak this multi-hundred-MiB tree.
+		modDir := filepath.Join(workDir, "gomodcache", "golang.org", "x", "sys@v0.1.0")
+		if err := os.MkdirAll(modDir, 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(modDir, "LICENSE"), []byte("license"), 0o444); err != nil {
+			return err
+		}
+		if err := os.Chmod(modDir, 0o555); err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(workDir, "go.mod"), []byte(goMod), 0o644); err != nil {
+			return err
+		}
+		return os.WriteFile(filepath.Join(workDir, "go.sum"), []byte(goSum), 0o644)
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if capturedWorkDir == "" {
+		t.Fatal("generate callback was not invoked with a workDir")
+	}
+	if _, statErr := os.Stat(capturedWorkDir); !errors.Is(statErr, os.ErrNotExist) {
+		t.Errorf("temp workDir %q with a read-only module cache should have been removed, stat err = %v", capturedWorkDir, statErr)
+	}
+}
+
+func TestGenerateGoLockContent_RemovesTempWorkDirOnError(t *testing.T) {
+	app := binmanager.App{
+		Go: &binmanager.AppConfigGo{PackageName: "golang.org/x/vuln/cmd/govulncheck", Version: "v1.1.4"},
+	}
+
+	var capturedWorkDir string
+	sentinel := errors.New("generation failed")
+	_, err := generateGoLockContent("govulncheck", app, func(workDir string) error {
+		capturedWorkDir = workDir
+		return sentinel
+	})
+	if err == nil {
+		t.Fatal("expected error from generate callback")
+	}
+	if !errors.Is(err, sentinel) {
+		t.Errorf("expected wrapped sentinel error, got: %v", err)
+	}
+	if capturedWorkDir == "" {
+		t.Fatal("generate callback was not invoked with a workDir")
+	}
+	// Cleanup must still run on the failure path so a failed generation does not
+	// leak the multi-hundred-MiB module cache.
+	if _, statErr := os.Stat(capturedWorkDir); !errors.Is(statErr, os.ErrNotExist) {
+		t.Errorf("temp workDir %q should have been removed on error, stat err = %v", capturedWorkDir, statErr)
+	}
+}
+
+func TestClearAppLockFile_NodeClearsLockFilePreservesFiles(t *testing.T) {
 	originalWorkspace := "allowBuilds:\n  puppeteer: true\n"
 	apps := binmanager.MapOfApps{
 		"mmdc": {
-			Fnm: &binmanager.AppConfigFNM{
+			Node: &binmanager.AppConfigNode{
 				PackageName: "@mermaid-js/mermaid-cli",
 				Version:     "11.4.2",
 				BinPath:     "node_modules/.bin/mmdc",
@@ -357,8 +564,8 @@ func TestClearAppLockFile_FNMClearsLockFilePreservesFiles(t *testing.T) {
 
 	fresh := clearAppLockFile(apps, "mmdc")
 
-	if fresh["mmdc"].Fnm.LockFile != "" {
-		t.Errorf("LockFile = %q, want empty after clearing", fresh["mmdc"].Fnm.LockFile)
+	if fresh["mmdc"].Node.LockFile != "" {
+		t.Errorf("LockFile = %q, want empty after clearing", fresh["mmdc"].Node.LockFile)
 	}
 	if got := fresh["mmdc"].Files["pnpm-workspace.yaml"]; got != originalWorkspace {
 		t.Errorf("Files[pnpm-workspace.yaml] lost or mutated: got %q, want %q", got, originalWorkspace)
@@ -366,7 +573,7 @@ func TestClearAppLockFile_FNMClearsLockFilePreservesFiles(t *testing.T) {
 	if fresh["mmdc"].Files[".npmrc"] == "" {
 		t.Error("Files[.npmrc] should be preserved")
 	}
-	if apps["mmdc"].Fnm.LockFile == "" {
+	if apps["mmdc"].Node.LockFile == "" {
 		t.Error("original apps map was mutated: LockFile should still be set on the source")
 	}
 }
@@ -398,17 +605,49 @@ func TestClearAppLockFile_UVClearsLockFilePreservesFiles(t *testing.T) {
 	}
 }
 
+func TestClearAppLockFile_GoClearsLockFilePreservesFields(t *testing.T) {
+	apps := binmanager.MapOfApps{
+		"govulncheck": {
+			Go: &binmanager.AppConfigGo{
+				PackageName: "golang.org/x/vuln/cmd/govulncheck",
+				Version:     "v1.1.4",
+				Runtime:     "go",
+				LockFile:    "br:compressed-lock-file",
+			},
+		},
+	}
+
+	fresh := clearAppLockFile(apps, "govulncheck")
+
+	if fresh["govulncheck"].Go.LockFile != "" {
+		t.Errorf("Go LockFile = %q, want empty after clearing", fresh["govulncheck"].Go.LockFile)
+	}
+	// packageName/version/runtime must survive: generation needs them.
+	if fresh["govulncheck"].Go.PackageName != "golang.org/x/vuln/cmd/govulncheck" {
+		t.Errorf("Go PackageName lost: %q", fresh["govulncheck"].Go.PackageName)
+	}
+	if fresh["govulncheck"].Go.Version != "v1.1.4" {
+		t.Errorf("Go Version lost: %q", fresh["govulncheck"].Go.Version)
+	}
+	if fresh["govulncheck"].Go.Runtime != "go" {
+		t.Errorf("Go Runtime lost: %q", fresh["govulncheck"].Go.Runtime)
+	}
+	if apps["govulncheck"].Go.LockFile == "" {
+		t.Error("original Go LockFile was mutated; clearAppLockFile must be non-destructive")
+	}
+}
+
 func TestClearAppLockFile_OtherAppsUntouched(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"mmdc": {
-			Fnm: &binmanager.AppConfigFNM{
+			Node: &binmanager.AppConfigNode{
 				PackageName: "@mermaid-js/mermaid-cli",
 				Version:     "11.4.2",
 				LockFile:    "lockfile-1",
 			},
 		},
 		"eslint": {
-			Fnm: &binmanager.AppConfigFNM{
+			Node: &binmanager.AppConfigNode{
 				PackageName: "eslint",
 				Version:     "9.0.0",
 				LockFile:    "lockfile-2",
@@ -418,18 +657,18 @@ func TestClearAppLockFile_OtherAppsUntouched(t *testing.T) {
 
 	fresh := clearAppLockFile(apps, "mmdc")
 
-	if fresh["eslint"].Fnm.LockFile != "lockfile-2" {
-		t.Errorf("eslint.LockFile = %q, want %q (untouched)", fresh["eslint"].Fnm.LockFile, "lockfile-2")
+	if fresh["eslint"].Node.LockFile != "lockfile-2" {
+		t.Errorf("eslint.LockFile = %q, want %q (untouched)", fresh["eslint"].Node.LockFile, "lockfile-2")
 	}
-	if fresh["mmdc"].Fnm.LockFile != "" {
-		t.Errorf("mmdc.LockFile should be cleared, got %q", fresh["mmdc"].Fnm.LockFile)
+	if fresh["mmdc"].Node.LockFile != "" {
+		t.Errorf("mmdc.LockFile should be cleared, got %q", fresh["mmdc"].Node.LockFile)
 	}
 }
 
 func TestClearAppLockFile_MissingAppReturnsCopy(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"mmdc": {
-			Fnm: &binmanager.AppConfigFNM{PackageName: "@mermaid-js/mermaid-cli", LockFile: "x"},
+			Node: &binmanager.AppConfigNode{PackageName: "@mermaid-js/mermaid-cli", LockFile: "x"},
 		},
 	}
 
@@ -438,8 +677,8 @@ func TestClearAppLockFile_MissingAppReturnsCopy(t *testing.T) {
 	if len(fresh) != len(apps) {
 		t.Errorf("fresh len = %d, want %d", len(fresh), len(apps))
 	}
-	if fresh["mmdc"].Fnm.LockFile != "x" {
-		t.Errorf("unrelated app.LockFile = %q, want %q", fresh["mmdc"].Fnm.LockFile, "x")
+	if fresh["mmdc"].Node.LockFile != "x" {
+		t.Errorf("unrelated app.LockFile = %q, want %q", fresh["mmdc"].Node.LockFile, "x")
 	}
 }
 

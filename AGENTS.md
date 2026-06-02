@@ -9,7 +9,7 @@
 - Any binary, archive, JAR file, or remote config loaded from a URL must include a `hash` field (SHA-256).
 - If a hash is missing or empty, **refuse to process and return an error immediately**. Do not download, do not fall back to "hash-less" mode.
 - This applies equally to: binary apps, managed runtimes, JVM JAR files, and remote config files (`getRemoteConfigs()`).
-- Lock files are mandatory for all UV and FNM apps. Hashes are always mandatory regardless of any flag.
+- Lock files are mandatory for all UV and node apps. Hashes are always mandatory regardless of any flag.
 - When designing new features that download anything from the internet, always require a hash field in the data structure. Treat the absence of a hash as a configuration error, not a warning.
 
 ## Hashing Policy
@@ -102,7 +102,7 @@ token := os.Getenv("GITHUB_TOKEN")
 - Add a TypeScript ambient declaration in `config/config.d.ts` so user configs get IDE autocomplete for the injected global
 - Do NOT write a JS↔Go agreement test: with a single source there are no copies to keep in sync. Direct unit tests on the Go package plus an end-to-end test that exercises the injection are sufficient
 
-**Rationale:** Previously the pnpm workspace defaults lived in both Go (`fnm.go`) and JS (`main.ts`), with a brittle agreement test keeping them aligned. Any change required edits in 6+ places (Go, JS, compiled `config.js`, 4 docs pages). Consolidating on Go-as-source eliminated that burden — see `docs/plans/2026-05-22-single-source-pnpm-security.md` for the migration.
+**Rationale:** Previously the pnpm workspace defaults lived in both Go (the runtime manager, now `pnpm.go`) and JS (`main.ts`), with a brittle agreement test keeping them aligned. Any change required edits in 6+ places (Go, JS, compiled `config.js`, 4 docs pages). Consolidating on Go-as-source eliminated that burden — see `docs/plans/2026-05-22-single-source-pnpm-security.md` for the migration.
 
 ## Product Stage
 
@@ -115,6 +115,10 @@ token := os.Getenv("GITHUB_TOKEN")
 ## Project Overview
 
 datamitsu is a configuration management and binary distribution tool written in Go. It downloads, verifies, and manages binaries for linting and development tools (like lefthook, golangci-lint, hadolint, shellcheck, etc.) across multiple platforms. The tool uses JavaScript configuration files powered by the goja JavaScript runtime to define binary sources and configurations.
+
+## Build Constraints
+
+- **`go install` does NOT work** for this project. The build requires a preliminary JS compilation step (`pnpm build` compiles TypeScript which is then embedded via Go embed). Always use `go build` or `pnpm build` after the JS artifacts are generated.
 
 ## Build and Development Commands
 
@@ -170,11 +174,11 @@ Architecture docs use conceptual explanations with Mermaid diagrams — no Go co
 
 ### Wrapper Maintenance Documentation
 
-`website/docs/how-to/maintain-wrapper.md` covers devtools workflows for wrapper maintainers: pull-github, pull-fnm, pull-uv, pull-runtimes commands with practical examples, CI/CD automation, and best practices.
+`website/docs/how-to/maintain-wrapper.md` covers devtools workflows for wrapper maintainers: pull-github, pull-node, pull-uv, pull-runtimes commands with practical examples, CI/CD automation, and best practices.
 
 ### npm Package Installation Examples
 
-When documenting npm package installations (FNM apps like slidev, mermaid-cli, spectral), use Docusaurus Tabs to show multiple package managers. This does NOT apply to datamitsu binary installation (which is a Go binary).
+When documenting npm package installations (node apps like slidev, mermaid-cli, spectral), use Docusaurus Tabs to show multiple package managers. This does NOT apply to datamitsu binary installation (which is a Go binary).
 
 **Required tab order:** pnpm (default), npm, yarn, bun, deno
 
@@ -223,4 +227,4 @@ import TabItem from "@theme/TabItem";
 </Tabs>
 ````
 
-**When to use:** Any documentation page that shows how to install an npm package managed by datamitsu's FNM runtime. This includes packages listed as FNM apps in the configuration.
+**When to use:** Any documentation page that shows how to install an npm package managed by datamitsu's Node runtime. This includes packages listed as node apps in the configuration.

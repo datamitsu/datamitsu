@@ -4,32 +4,19 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"github.com/datamitsu/datamitsu/internal/httpx"
 	"io"
-	"net"
 	"net/http"
 	"time"
 )
 
 const maxConfigSize = 10 * 1024 * 1024 // 10 MiB
 
-var httpClient = &http.Client{
-	Timeout: 30 * time.Second,
-	Transport: &http.Transport{
-		Proxy:                 http.ProxyFromEnvironment,
-		DialContext:           (&net.Dialer{Timeout: 10 * time.Second}).DialContext,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ResponseHeaderTimeout: 15 * time.Second,
-	},
-	CheckRedirect: func(req *http.Request, via []*http.Request) error {
-		if len(via) >= 10 {
-			return fmt.Errorf("stopped after 10 redirects")
-		}
-		if len(via) > 0 && via[len(via)-1].URL.Scheme == "https" && req.URL.Scheme == "http" {
-			return fmt.Errorf("HTTPS to HTTP redirect rejected: %s", req.URL)
-		}
-		return nil
-	},
-}
+// httpClient fetches remote config over the shared hardened transport. The
+// overall 30s budget stays tighter than the artifact-download clients because
+// configs are small; the dialer/TLS/response-header sub-timeouts come from the
+// shared defaults and are bounded by this overall budget anyway.
+var httpClient = httpx.NewHardenedClient(30 * time.Second)
 
 // FetchRemoteConfig downloads a remote config file and verifies its SHA-256 hash.
 // The expectedHash must be in the format "sha256:hexdigest" or plain hex digest.

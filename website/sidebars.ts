@@ -10,6 +10,8 @@ const sidebars: SidebarsConfig = {
           items: [
             "getting-started/installation/homebrew",
             "getting-started/installation/npm",
+            "getting-started/installation/pypi",
+            "getting-started/installation/rubygems",
             "getting-started/installation/source",
           ],
           label: "Installation",

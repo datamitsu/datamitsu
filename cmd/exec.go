@@ -1,12 +1,13 @@
 package cmd
 
 import (
-	"github.com/datamitsu/datamitsu/internal/binmanager"
-	clr "github.com/datamitsu/datamitsu/internal/color"
-	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 	"fmt"
 	"os"
 	"sort"
+
+	"github.com/datamitsu/datamitsu/internal/binmanager"
+	clr "github.com/datamitsu/datamitsu/internal/color"
+	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 
 	"github.com/spf13/cobra"
 )
@@ -68,7 +69,7 @@ func listTools() error {
 		byType[app.Type] = append(byType[app.Type], app)
 	}
 
-	typeOrder := []string{"binary", "uv", "fnm", "jvm", "shell"}
+	typeOrder := []string{"binary", "uv", "node", "jvm", "go", "shell"}
 	for _, appType := range typeOrder {
 		appInfos, ok := byType[appType]
 		if !ok || len(appInfos) == 0 {

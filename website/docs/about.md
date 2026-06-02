@@ -210,11 +210,14 @@ Manage tools from different ecosystems in one place:
 
 - **Binary apps** — Download native binaries with hash verification
 - **UV apps** — Python tools via managed UV runtime (e.g., yamllint)
-- **FNM apps** — npm packages via FNM-managed Node.js + PNPM (e.g., eslint, prettier)
+- **Node apps** — npm packages via managed Node.js + pnpm (e.g., eslint, prettier)
 - **JVM apps** — Java applications via managed JDK runtime (e.g., openapi-generator-cli)
-- **Shell apps** — Custom shell commands with environment variables
+- **Go apps** — Go tools built from source via managed Go SDK (e.g., govulncheck)
+- **Shell apps** — Wrap arbitrary system commands
 
-All managed with the same config API, all with hash verification.
+All managed with the same config API, all with hash verification. Any app kind
+can set custom environment variables (with `${STORE}`/`${APP_DIR}` expansion)
+via the shared `env` field.
 
 ## Where does datamitsu fit?
 

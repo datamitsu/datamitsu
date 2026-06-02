@@ -294,7 +294,7 @@ Returned when calling `exec()` without an app name:
 ```typescript
 interface ToolInfo {
   name: string; // Tool name (e.g., "golangci-lint")
-  type: string; // Tool type: "binary" | "uv" | "fnm" | "jvm" | "shell"
+  type: string; // Tool type: "binary" | "uv" | "node" | "jvm" | "go" | "shell"
   details: string; // Description or version info
 }
 ```

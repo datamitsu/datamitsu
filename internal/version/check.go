@@ -42,7 +42,7 @@ func CompareVersions(current, required string) (skipped bool, err error) {
 		return false, fmt.Errorf(
 			"this config requires datamitsu %s or higher. "+
 				"Current version: %s. "+
-				"Run 'go install github.com/datamitsu/datamitsu@latest' to upgrade",
+				"Visit https://datamitsu.com/docs/getting-started/installation for upgrade instructions",
 			normalizedRequired, normalizedCurrent,
 		)
 	}

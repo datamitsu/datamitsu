@@ -64,17 +64,18 @@ final Config
 
 ## Apps (`apps`)
 
-Apps define the tools datamitsu manages. The app kind is determined by which sub-object is present (`binary`, `uv`, `fnm`, `jvm`, or `shell`).
+Apps define the tools datamitsu manages. The app kind is determined by which sub-object is present (`binary`, `uv`, `node`, `jvm`, `go`, or `shell`).
 
 ### App Kinds
 
-| Kind     | Sub-object | Description                                           |
-| -------- | ---------- | ----------------------------------------------------- |
-| `binary` | `binary`   | Self-managed binaries downloaded from URLs            |
-| `uv`     | `uv`       | Python packages installed via managed UV runtime      |
-| `fnm`    | `fnm`      | npm packages installed via FNM-managed Node.js + PNPM |
-| `jvm`    | `jvm`      | Java applications executed via managed JDK            |
-| `shell`  | `shell`    | Shell commands with custom environment                |
+| Kind     | Sub-object | Description                                       |
+| -------- | ---------- | ------------------------------------------------- |
+| `binary` | `binary`   | Self-managed binaries downloaded from URLs        |
+| `uv`     | `uv`       | Python packages installed via managed UV runtime  |
+| `node`   | `node`     | npm packages installed via managed Node.js + pnpm |
+| `jvm`    | `jvm`      | Java applications executed via managed JDK        |
+| `go`     | `go`       | Go tools built from source via managed Go SDK     |
+| `shell`  | `shell`    | Shell commands with custom environment            |
 
 ### Common App Fields
 
@@ -86,12 +87,46 @@ interface AppCommon {
   files?: Record<string, string>; // filename → static content
   links?: Record<string, string>; // linkName → relativePath in install dir
   archives?: Record<string, ArchiveSpec>; // name → archive specification
+  env?: Record<string, string>; // Custom environment variables (all app kinds)
   versionCheck?: {
     disabled?: boolean; // Skip version check in verify-all
     args?: string[]; // Override default ["--version"] args
   };
 }
 ```
+
+#### Custom environment variables (`env`)
+
+The optional `env` field applies to **every** app kind (binary, uv, node, jvm,
+go, shell). It is injected both at **install time** (for the uv/node/go
+dependency-install phase) and at **run time** (every app type).
+
+Values support placeholder expansion, performed in Go and never written into the
+committed config:
+
+- `${STORE}` → the shared datamitsu store path (cleaned by `datamitsu store clear`).
+- `${APP_DIR}` → this app's install directory (per-app, config-hashed).
+
+**Precedence:** any key already set by datamitsu or the runtime wins. A user
+config can never relocate the pnpm store, uv cache, `GOPATH`, etc.
+
+```javascript
+const apps = {
+  slidev: {
+    node: {
+      packageName: "@slidev/cli",
+      // ...
+    },
+    // Redirect playwright to download browsers into the datamitsu store
+    env: { PLAYWRIGHT_BROWSERS_PATH: "${STORE}/.playwright/browsers" },
+  },
+};
+```
+
+> **Migration (alpha breaking change):** `env` was previously a field on
+> `AppConfigShell` (`shell.env`). It has moved to the top-level `env` field
+> shared by all app kinds. Move any `shell: { env: {...} }` up one level to
+> `env: {...}` on the app.
 
 ### Binary Apps
 
@@ -184,14 +219,14 @@ interface AppConfigUV {
 }
 ```
 
-### FNM Apps (Node.js/npm)
+### Node Apps (Node.js/npm)
 
-FNM apps install npm packages using FNM-managed Node.js and PNPM.
+Node apps install npm packages using the managed Node.js runtime and pnpm.
 
 ```javascript
 const apps = {
   eslint: {
-    fnm: {
+    node: {
       packageName: "eslint",
       version: "9.27.0",
       binPath: "node_modules/.bin/eslint",
@@ -200,7 +235,7 @@ const apps = {
         "@eslint/js": "^9.27.0",
       },
       lockFile: "br:...", // brotli-compressed lock file (required)
-      runtime: "fnm-default", // optional runtime override
+      runtime: "node-default", // optional runtime override
     },
     links: {
       "eslint-config": "dist/eslint.config.js",
@@ -209,15 +244,15 @@ const apps = {
 };
 ```
 
-**FNM-specific fields:**
+**Node-specific fields:**
 
 ```typescript
-interface AppConfigFNM {
+interface AppConfigNode {
+  binPath: string; // Path to binary (e.g., "node_modules/.bin/eslint")
   packageName: string;
   version: string;
-  binPath: string; // Path to binary (e.g., "node_modules/.bin/eslint")
-  dependencies?: Record<string, string>;
   lockFile: string; // Brotli-compressed with "br:" prefix (required)
+  dependencies?: Record<string, string>;
   runtime?: string; // Runtime name override
 }
 ```
@@ -252,9 +287,40 @@ interface AppConfigJVM {
 }
 ```
 
+### Go Apps
+
+Go apps build a command-line tool from source using the managed Go SDK. The lock file carries both `go.mod` and `go.sum` so the build is reproducible and hash-verified.
+
+```javascript
+const apps = {
+  govulncheck: {
+    go: {
+      packageName: "golang.org/x/vuln/cmd/govulncheck",
+      version: "v1.3.0",
+      lockFile: "br:...", // brotli-compressed lock file (required)
+      runtime: "go-default", // optional runtime override
+    },
+  },
+};
+```
+
+**Go-specific fields:**
+
+```typescript
+interface AppConfigGo {
+  packageName: string; // Go import path, e.g. "golang.org/x/vuln/cmd/govulncheck"
+  version: string; // Module version query, e.g. "v1.3.0"
+  lockFile: string; // Brotli-compressed JSON {"mod","sum"} with "br:" prefix (required)
+  runtime?: string; // Runtime name override
+}
+```
+
+The tool is built with `go build -trimpath -mod=readonly` in an isolated, hardened environment. See the [Supply Chain Security](../guides/supply-chain-security.md#go-go-apps) guide for the full defense model.
+
 ### Shell Apps
 
-Shell apps wrap system commands with custom environment variables.
+Shell apps wrap system commands. Set environment variables through the shared
+top-level [`env` field](#custom-environment-variables-env).
 
 ```javascript
 const apps = {
@@ -262,8 +328,8 @@ const apps = {
     shell: {
       name: "bash",
       args: ["-c", "echo hello"],
-      env: { MY_VAR: "value" },
     },
+    env: { MY_VAR: "value" },
   },
 };
 ```
@@ -274,7 +340,6 @@ const apps = {
 interface AppConfigShell {
   name: string; // Command name
   args?: string[]; // Default arguments
-  env?: Record<string, string>;
 }
 ```
 
@@ -330,13 +395,14 @@ Runtimes define how language-specific package managers are provisioned.
 
 ```typescript
 interface RuntimeConfig {
-  kind: "fnm" | "uv" | "jvm";
+  kind: "node" | "uv" | "jvm" | "go";
   mode: "managed" | "system";
   managed?: RuntimeConfigManaged; // Required for managed mode
   system?: RuntimeConfigSystem; // For system mode
-  fnm?: RuntimeConfigFNM; // Required when kind is "fnm"
+  node?: RuntimeConfigNode; // Required when kind is "node"
   uv?: RuntimeConfigUV; // When kind is "uv"
   jvm?: RuntimeConfigJVM; // Required when kind is "jvm"
+  go?: RuntimeConfigGo; // Required when kind is "go"
 }
 ```
 
@@ -346,28 +412,29 @@ In managed mode, datamitsu downloads the runtime binary itself:
 
 ```javascript
 const runtimes = {
-  "fnm-default": {
-    kind: "fnm",
+  "node-default": {
+    kind: "node",
     mode: "managed",
     managed: {
       binaries: {
         linux: {
           amd64: {
             glibc: {
-              url: "https://github.com/Schniz/fnm/releases/download/v1.38.1/fnm-linux.zip",
-              hash: "abc123...",
-              contentType: "zip",
-              binaryPath: "fnm",
+              url: "https://nodejs.org/dist/v26.2.0/node-v26.2.0-linux-x64.tar.xz",
+              hash: "abc123...", // SHA-256 (mandatory)
+              contentType: "tar.xz",
+              binaryPath: "node-v26.2.0-linux-x64/bin/node",
+              extractDir: true,
             },
           },
         },
         // ... other platforms
       },
     },
-    fnm: {
-      nodeVersion: "24.14.0",
-      pnpmVersion: "10.31.0",
-      pnpmHash: "def456...", // SHA-256 of PNPM tarball
+    node: {
+      nodeVersion: "26.2.0",
+      pnpmVersion: "11.5.0",
+      pnpmHash: "def456...", // SHA-256 of pnpm package
     },
   },
 };
@@ -395,13 +462,13 @@ const runtimes = {
 
 ### Runtime Kind Configuration
 
-**FNM Runtime:**
+**Node Runtime:**
 
 ```typescript
-interface RuntimeConfigFNM {
-  nodeVersion: string; // e.g., "24.14.0"
-  pnpmVersion: string; // e.g., "10.31.0"
-  pnpmHash: string; // SHA-256 of PNPM package (mandatory)
+interface RuntimeConfigNode {
+  nodeVersion: string; // e.g., "26.2.0"
+  pnpmVersion: string; // e.g., "11.5.0"
+  pnpmHash: string; // SHA-256 of pnpm package (mandatory)
 }
 ```
 
@@ -418,6 +485,14 @@ interface RuntimeConfigUV {
 ```typescript
 interface RuntimeConfigJVM {
   javaVersion: string; // e.g., "25"
+}
+```
+
+**Go Runtime:**
+
+```typescript
+interface RuntimeConfigGo {
+  goVersion: string; // Go SDK version to build with, e.g., "1.26.3"
 }
 ```
 
@@ -583,7 +658,7 @@ interface ArchiveSpec {
 
 **Extraction order:** Archives extracted first (sorted alphabetically), then `files` written (files overwrite archive contents). Package manager runs after both.
 
-Archives are supported on UV apps, FNM apps, and bundles.
+Archives are supported on UV apps, node apps, and bundles.
 
 ## Ignore Rules
 
@@ -702,6 +777,6 @@ All artifacts downloaded from the internet must have a SHA-256 hash specified:
 - Binary apps: `hash` field on each platform entry
 - JVM apps: `jarHash` field
 - External archives: `hash` field
-- PNPM runtime: `pnpmHash` field
+- Node runtime (pnpm): `pnpmHash` field
 
 Missing or empty hashes are treated as configuration errors.

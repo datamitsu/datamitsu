@@ -10,7 +10,7 @@
 - Allows dynamic configuration through JavaScript with type definitions in config.d.ts
 - Every config file must export `getMinVersion()` returning a semver string; the loader validates the current datamitsu version meets this minimum before proceeding
 - **VM globals injected from Go** (set in `engine.New()` via per-domain `initX()` methods): `console`, `colors`, `YAML` / `TOML` / `INI` (separate format parser namespaces, each exposing `parse` / `stringify`), `tools` (sub-namespaces `Path`, `Ignore`, `Config`), `facts()` (function returning host/git/env info), and `pnpmWorkspaceDefaults` (frozen plain object — recommended pnpm 11 workspace security defaults sourced from `internal/pnpmdefaults.Defaults()`, injected with sorted keys so `YAML.stringify` output is deterministic). Plain-object globals (like `pnpmWorkspaceDefaults`) avoid the function-call indirection used for `facts()` so config.js can read them as ordinary JS values; the freeze is load-bearing — without it goja exposes the underlying Go map by reference and JS writes would propagate back, letting a user config silently downgrade the published security defaults
-- **Single source of truth for pnpm defaults** (`internal/pnpmdefaults`): Go is the only place the 8 pnpm workspace security keys are defined. The FNM app installer reads them via `defaultPNPMWorkspaceConfig()` (which delegates to `pnpmdefaults.Defaults()`), and `config.js` reads the same map through the `pnpmWorkspaceDefaults` VM global to publish it as `sharedStorage["pnpm-workspace-defaults"]`. Changing a value in `pnpmdefaults.go` updates both code paths atomically; the full key list and rationale live in [supply-chain-security](../website/docs/guides/supply-chain-security.md#pnpm-fnm-apps)
+- **Single source of truth for pnpm defaults** (`internal/pnpmdefaults`): Go is the only place the 8 pnpm workspace security keys are defined. The node app installer reads them via `buildPNPMWorkspaceForApp()` (which merges `pnpmdefaults.Defaults()` with any user override), and `config.js` reads the same map through the `pnpmWorkspaceDefaults` VM global to publish it as `sharedStorage["pnpm-workspace-defaults"]`. Changing a value in `pnpmdefaults.go` updates both code paths atomically; the full key list and rationale live in [supply-chain-security](../website/docs/guides/supply-chain-security.md#pnpm-node-apps)
 
 **Target Resolution** ([internal/target/](internal/target/))
 
@@ -41,38 +41,43 @@
 - Shows progress bars during downloads using github.com/schollz/progressbar
 
 **App Types**
-Five types of applications are supported:
+Six types of applications are supported:
 
 1. `binary` - Self-managed binaries with URLs, hashes, and archive formats
 2. `uv` - Python packages via managed UV runtime (e.g., yamllint)
-3. `fnm` - npm packages via FNM-managed Node.js + PNPM (e.g., @mermaid-js/mermaid-cli, slidev, spectral)
+3. `node` - npm packages via managed Node.js + pnpm (e.g., @mermaid-js/mermaid-cli, slidev, spectral)
 4. `jvm` - JVM applications via managed JDK runtime (e.g., openapi-generator-cli). Downloads JAR files with hash verification and executes via `java -jar`
-5. `shell` - Shell commands with custom env
+5. `go` - Go tools built from source via managed Go SDK (e.g., govulncheck). Pins the SDK with SHA-256, stores go.mod+go.sum in a mandatory lockfile, and builds with `go build -trimpath -mod=readonly` so any go.sum mismatch fails the build
+6. `shell` - Shell commands with custom env
 
 **Runtime Manager** ([internal/runtimemanager/](internal/runtimemanager/))
 
-- Manages runtime binaries (UV, FNM, JVM) with hash verification and caching
+- Manages runtime binaries (UV, Node, JVM, Go) with hash verification and caching
 - Supports `managed` mode (download runtime binary) and `system` mode (use system-installed)
-- Automatic musl fallback: `resolveEffectiveRuntimeConfig()` detects when host is musl and managed config lacks a musl binary; if the system binary (`fnm`, `uv`, or `java`) is found via `lookPathFunc`, automatically overrides to system mode. Called by `GetRuntimePath`, `InstallRuntimes`, `ResolveRuntime`, and `GetAppPath`. `lookPathFunc` field on `RuntimeManager` enables test injection
+- Automatic musl fallback: `resolveEffectiveRuntimeConfig()` detects when host is musl and managed config lacks a musl binary; if the system binary (`node`, `uv`, `java`, or `go`) is found via `lookPathFunc`, automatically overrides to system mode. Called by `GetRuntimePath`, `InstallRuntimes`, `ResolveRuntime`, and `GetAppPath`. `lookPathFunc` field on `RuntimeManager` enables test injection
 - Creates isolated per-app environments: `.apps/{runtime}/{app}/{hash}/`
 - Runtime resolution: app-level override -> global default by kind
 - Uses `RuntimeAppManager` interface to avoid circular dependency with BinManager
+- **RuntimeKind registry** (`internal/config/runtimekind.go`): a table-driven map keyed by `config.RuntimeKind` describing per-kind facts — system command name, cache-affecting version field(s), and validation rules (`RuntimeKindInfo`, `LookupRuntimeKind`, `AllRuntimeKinds`). Replaces the hand-written per-kind `if/switch` chains previously duplicated across `systemCommandForKind`, the hash-fold blocks in `hash.go`, `ValidateRuntimes`, and the verify dispatch in `cmd/devtools_verify.go`, so adding a runtime kind is a single registry entry instead of a whole-repo edit fan-out. The app-level install/command-info dispatch keeps a typed `switch` (each kind's method takes a differently-typed `AppConfig*`), but the precedence is defined once via `runtimeAppRef`. Lives in `config` (not a separate package) to avoid a `config`↔registry import cycle
 - Cache keys use XXH3-128 hash of runtime config + app config + OS + arch
-- `RuntimeConfigFNM` (NodeVersion, PNPMVersion), `RuntimeConfigUV` (PythonVersion), and `RuntimeConfigJVM` (JavaVersion) on `RuntimeConfig` hold version info per runtime kind
-- Lockfiles are mandatory for all UV/FNM apps; `ValidateApps` enforces that all UV/FNM apps have a `LockFile` configured
-- FNM runtime: downloads FNM binary, uses it to install Node.js versions, downloads PNPM from npm registry, runs pnpm install in isolated app environments (stdout and stderr streamed to stderr so errors are visible)
-- **pnpm-workspace.yaml auto-merge** (FNM apps, `fnm.go`): before `pnpm install`, the installer always writes `pnpm-workspace.yaml` to the app environment. `preparePNPMWorkspaceForApp(files)` builds the merged content via `buildPNPMWorkspaceForApp` — starting from `defaultPNPMWorkspaceConfig()` (which returns the pnpm 11 security defaults from the shared `internal/pnpmdefaults` package; see [supply-chain-security](../website/docs/guides/supply-chain-security.md#pnpm-fnm-apps) for the full key list and rationale) and shallow-merging the user's `App.files["pnpm-workspace.yaml"]` entry on top (user wins per top-level key) — and returns a filtered files map (without `pnpm-workspace.yaml`) for `WriteAppFiles()`. The merged YAML is then written by `writeFNMAppWorkspaceFile()` AFTER `WriteAppFiles()` so archives cannot overwrite the secure defaults. The merged content is also injected into the hash inputs for `resolveFNMAppEnvPath`, so tightening defaults invalidates existing app caches. Defaults are written when no user entry is present (backward-compatible)
+- Concurrent installs are deduplicated via `golang.org/x/sync/singleflight` groups (`runtimeInstall`, `appInstall`, `pnpmInstall`) keyed by runtime name / `kind/appName` / `pnpmVersion\x00pnpmHash`: only one install per key runs at a time and all waiters share its result. Node apps reuse `appInstall` with key `node/appName` (there is no separate `nodeInstall` group). A failed call does not orphan in-flight readers, and the next call after completion starts fresh — so retry-after-error works without explicit cleanup (replaced the prior `sync.Once` + `sync.Map` + `CompareAndDelete` pattern, which could orphan a reader when a deletion overlapped an in-flight call)
+- `RuntimeConfigNode` (NodeVersion, PNPMVersion, PNPMHash), `RuntimeConfigUV` (PythonVersion), `RuntimeConfigJVM` (JavaVersion), and `RuntimeConfigGo` (GoVersion) on `RuntimeConfig` hold version info per runtime kind
+- Lockfiles are mandatory for all UV/node/Go apps; `ValidateApps` enforces that all UV/node/Go apps have a `LockFile` configured
+- Node runtime: downloads a pinned Node.js archive (`.tar.xz` on linux/darwin, `.zip` on windows) from `{url, hash}`, SHA-256-verifies it, and extracts it itself via the binmanager extract helpers (`ExtractDir: true`) — exactly like the JVM runtime; then downloads pnpm directly from the npm registry (pinned with SHA-256 + SHA-512) and runs `node <pnpm.cjs> install` in isolated app environments (stdout and stderr streamed to stderr so errors are visible). musl hosts are served by static `musl` libc registry entries (from unofficial-builds.nodejs.org) selected by libc detection — there is no separate version-manager binary, no `exec.Command(...install...)` shell-out to an installer, no dynamic mirror hack, and no 30-second response-header timeout
+- **pnpm-workspace.yaml auto-merge** (node apps, `pnpm.go`): before `pnpm install`, the installer always writes `pnpm-workspace.yaml` to the app environment. `buildPNPMWorkspaceForApp(files)` (routed through the `buildPNPMWorkspace` var so the merge runs once per exec) builds the merged content via `mergePNPMWorkspaceConfig` — starting from `pnpmdefaults.Defaults()` (the pnpm 11 security defaults from the shared `internal/pnpmdefaults` package; see [supply-chain-security](../website/docs/guides/supply-chain-security.md#pnpm-node-apps) for the full key list and rationale) and shallow-merging the user's `App.files["pnpm-workspace.yaml"]` entry on top (user wins per top-level key). The filtered files map (without `pnpm-workspace.yaml`) is produced separately by `filesWithoutWorkspaceYAML(files)` for `WriteAppFiles()`. The merged YAML is then written by `writeAppWorkspaceFile()` AFTER `WriteAppFiles()` so archives cannot overwrite the secure defaults. The merged content is also injected into the hash inputs for `resolveNodeAppEnvPath`, so tightening defaults invalidates existing app caches. Defaults are written when no user entry is present (backward-compatible)
 - UV runtime: uses project-based workflow (writes pyproject.toml + `uv sync`) instead of `uv tool install`; supports optional `--python {pythonVersion}` via `RuntimeConfigUV.PythonVersion`; `requires-python` in pyproject.toml resolved from app `RequiresPython` -> fallback `>=3.12` (decoupled from pythonVersion)
 - JVM runtime: downloads Temurin JDK archives per platform with `ExtractDir: true`, extracts full JDK tree to `.runtimes/jvm/{hash}/`; apps download JAR files with SHA256 verification to `.apps/jvm/{app}/{hash}/`; executes via `java -jar`
+- Go runtime (`go.go`): downloads the Go SDK archive per platform with `ExtractDir: true` (managed mode) or uses system `go`; apps are built from source into `.apps/go/{app}/{hash}/bin/`. Three-layer supply chain: pinned SDK (SHA-256), a mandatory lockfile carrying go.mod+go.sum, and `go build -trimpath -mod=readonly` which fails on any go.sum mismatch. The shared `goBaseEnvVars()` returns a fully isolated env (per-app `GOPATH`/`GOMODCACHE`/`GOBIN`) and forces the verification controls to safe values so an inherited user value cannot weaken the supply chain: `GOTOOLCHAIN=local` (never auto-download an unverified toolchain — fail fast if a module needs newer Go than the pinned SDK), `GOSUMDB=sum.golang.org` (checksum-DB verification stays on; a user `GOSUMDB=off` cannot disable it), and `GOPRIVATE`/`GONOPROXY`/`GONOSUMDB`/`GOINSECURE` cleared (no path pattern can opt out of proxy + checksum verification or allow insecure fetches). `GONOSUMDB` is cleared explicitly because it disables checksum-DB validation on its own (per `go help environment`) and an explicit value overrides the `GOPRIVATE`-derived default — clearing `GOPRIVATE` alone would leave an inherited `GONOSUMDB=*` able to skip verification while generation records go.sum. The Go app cache key folds in the package path (`goAppLockHash`), so two commands sharing one lockfile but building different packages do not collide. The built binary is self-contained, so `GetGoCommandInfo` returns no env overrides. Lockfile generation (`GenerateGoLockFiles`, used by `config lockfile`) is a separate path from install: a normal reinstall cannot produce the lockfile because the build refuses without one, so generation (`getGoGenEnvVars`) shares the same hardening but omits `-mod=readonly` so go.mod/go.sum can be written — this is exactly when checksums are first recorded, so keeping `GOSUMDB` on here is what makes generation trustworthy
+- **Go lockfile JSON wrapper** (`go.go`): unlike node/UV (which store a single lockfile artifact), a Go app's `LockFile` is a JSON object `{"mod":"<go.mod>","sum":"<go.sum>"}` (`buildGoLockFileJSON`/`parseGoLockFile`), then brotli-compressed + base64 with the `br:` prefix via the shared `lockfileenc.go`. Both fields are mandatory — a missing `mod` or `sum` is a configuration error, never a silent build-without-verification. `BuildGoLockFileJSON` is exported so the `cmd` package can assemble the wrapper from a freshly generated go.mod+go.sum
 - `RuntimeConfigSystem.SystemVersion`: optional string for manual cache invalidation when using system-mode runtimes; included in system runtime hash calculation
-- Node.js versions cached at `.runtimes/fnm-nodes/v{version}/`, PNPM versions at `.runtimes/fnm-pnpm/{version}/{pnpmHash}/`
-- Shared PNPM content-addressable store at `.pnpm-store/` for deduplication
+- Extracted Node.js archives cached at `.runtimes/node/{configHash}/`, pnpm versions at `.runtimes/pnpm/{version}/{pnpmHash}/`; per-app node environments at `.apps/node/{appName}/{hash}/`
+- Shared pnpm content-addressable store at `.pnpm-store/` for deduplication
 - Lock file compression: `lockfileenc.go` provides `CompressLockFile` (brotli level 11 + base64 with `br:` prefix) and `DecompressLockFile` for lock file storage in config
-- Key files: `runtimemanager.go`, `hash.go`, `uv.go`, `fnm.go`, `jvm.go`, `lockfileenc.go`, `archiveenc.go`
+- Key files: `runtimemanager.go`, `hash.go`, `uv.go`, `node.go`, `pnpm.go`, `jvm.go`, `go.go`, `lockfileenc.go`, `archiveenc.go`
 
 **Managed Config Files** ([internal/managedconfig/](internal/managedconfig/))
 
-- Distributes configuration files from runtime-managed apps (FNM/UV) to monorepo projects via symlinks in `.datamitsu/` at git root
+- Distributes configuration files from runtime-managed apps (node/UV) to monorepo projects via symlinks in `.datamitsu/` at git root
 - Apps declare `Files map[string]string` (filename -> static content) and `Links map[string]string` (linkName -> relativePath) on the `App` struct
 - Links map link names to relative paths within the app's install directory (e.g., `"eslint-config": "dist/eslint.config.js"`)
 - Links do not require `required: true` — apps are installed during init based on tool usage scanning (smart init)
@@ -93,7 +98,7 @@ Apps can bundle full directory trees via the `Archives map[string]*ArchiveSpec` 
 - **External archives**: Downloaded from URLs with mandatory SHA-256 hash verification (formats: tar, tar.gz, tar.xz, tar.bz2, tar.zst)
 - **Extraction order**: Archives extracted first (sorted alphabetically by name — later archives overwrite earlier ones for overlapping paths), then Files written (Files always overwrite archive contents). Runtime package manager runs after both (pnpm install / uv sync)
 - **Symlinking**: Any relative path within the install directory can be referenced in `Links` (e.g., `links: {"my-config": "dist/eslint.config.js"}`)
-- **Restriction**: Archives only supported on UV/FNM apps (same constraint as Files/Links)
+- **Restriction**: Archives only supported on UV/node apps (same constraint as Files/Links)
 - **Validation**: Enforced in `ValidateApps()` - inline must have `tar.br:` prefix and valid content; external requires URL, SHA-256 hash (64 lowercase hex), and format
 - **Security**: Path traversal protection via `validateArchivePath`, symlink escape prevention, per-file and total size limits (2 GiB total)
 - **Cache invalidation**: Archive content (inline data or url+hash+format) included in XXH3-128 cache key via `hashFilesAndArchives()`
@@ -120,7 +125,7 @@ Apps can bundle full directory trees via the `Archives map[string]*ArchiveSpec` 
 - No Go-level merge semantics — relies on JS to spread correctly (a config that replaces `sharedStorage` without spreading will drop previous keys)
 - Well-known keys published by the embedded default config (`internal/config/config.js`):
   - `"datamitsu-agent-prompt"` — markdown guide for AI agents working in datamitsu-managed repos
-  - `"pnpm-workspace-defaults"` — YAML string of the pnpm 11 security defaults sourced from `pnpmdefaults.Defaults()` (the single source of truth shared with the FNM app auto-merge; Go injects the map as a JS global so `config.js` can stringify it). Intended for downstream configs that want to write a hardened `pnpm-workspace.yaml` into a project repo (e.g., via a Bundle) — distinct from the auto-merge applied to per-FNM-app `files["pnpm-workspace.yaml"]`. See [supply-chain-security](../website/docs/guides/supply-chain-security.md#pnpm-fnm-apps) for the full key list
+  - `"pnpm-workspace-defaults"` — YAML string of the pnpm 11 security defaults sourced from `pnpmdefaults.Defaults()` (the single source of truth shared with the node app auto-merge; Go injects the map as a JS global so `config.js` can stringify it). Intended for downstream configs that want to write a hardened `pnpm-workspace.yaml` into a project repo (e.g., via a Bundle) — distinct from the auto-merge applied to per-node-app `files["pnpm-workspace.yaml"]`. See [supply-chain-security](../website/docs/guides/supply-chain-security.md#pnpm-node-apps) for the full key list
 
 **Config Links JS API** ([internal/engine/tools/config.go](internal/engine/tools/config.go))
 
@@ -190,7 +195,8 @@ Tool operation arguments support template placeholders that the executor resolve
 - `nodejs.go`: Fetches latest Node.js LTS version from endoflife.date API; falls back to hardcoded version on failure
 - `python.go`: Fetches latest stable Python version from endoflife.date API; filters out EOL releases; falls back to hardcoded version on failure
 - `temurin.go`: Fetches latest Temurin JDK major version from Adoptium API (`api.adoptium.net`); falls back to hardcoded version on failure
-- Used by devtools pull-fnm, pull-uv, and pull-runtimes commands
+- `godev.go`: Fetches the latest stable Go release version and per-file SHA-256 from go.dev (`https://go.dev/dl/?mode=json`) via `GetLatestGoRelease`; HTTPS + published SHA-256, no GPG — same trust model as the musl node path
+- Used by devtools pull-node, pull-uv, and pull-runtimes commands
 
 **Verify Cache** ([internal/verifycache/](internal/verifycache/))
 
@@ -252,16 +258,16 @@ Tool operation arguments support template placeholders that the executor resolve
   - Supports `--dry-run` flag to preview actions without making changes
   - Concurrency controlled via `DATAMITSU_CONCURRENCY` env var (default: 3)
 - `config` - Parent command for configuration management subcommands (see [cmd/config.go](cmd/config.go))
-  - `config lockfile [appName]` - Generates lock file content for FNM/UV apps (see [cmd/config_lockfile.go](cmd/config_lockfile.go))
-    - Without args: lists available FNM/UV apps grouped by kind
-    - With appName: deletes app cache, reinstalls, reads generated lock file (pnpm-lock.yaml or uv.lock)
+  - `config lockfile [appName]` - Generates lock file content for node/UV/Go apps (see [cmd/config_lockfile.go](cmd/config_lockfile.go))
+    - Without args: lists available node/UV/Go apps grouped by kind
+    - With appName: deletes app cache, reinstalls, reads generated lock file (pnpm-lock.yaml or uv.lock); for Go apps, instead resolves deps via `go mod init` + `go get pkg@version` (`GenerateGoLockFiles`) and assembles the `{"mod","sum"}` JSON wrapper (`BuildGoLockFileJSON`) — a reinstall can't produce it because the build requires the lockfile to already exist
     - Output is brotli-compressed + base64-encoded (br: prefix) for config embedding
     - Errors for binary/shell/jvm apps (no dependency manifest)
 - `devtools` - Developer utility commands for config maintenance (see [cmd/devtools.go](cmd/devtools.go))
   - `devtools pull-github <file>` - Pull latest GitHub release versions for binary apps; requires file argument (path to githubApps.json); fetches repository description from GitHub API; supports `--update`, `--verify-extraction`; creates empty appstate if file doesn't exist; works directly with JSON file (no config loading); uses os/arch/libc target tuples for platform iteration; creates nested storage structure (os → arch → libc → BinaryInfo)
-  - `devtools pull-fnm <file>` - Pull latest npm package versions for FNM apps (see [cmd/devtools_fnm.go](cmd/devtools_fnm.go)); requires file argument (path to fnmApps.json); always fetches descriptions from npm registry; supports `--dry-run`, `--update`; works directly with JSON file (no config loading); creates empty `{}` if file doesn't exist
+  - `devtools pull-node <file>` - Pull latest npm package versions for node apps (see [cmd/devtools_node.go](cmd/devtools_node.go)); requires file argument (path to nodeApps.json); always fetches descriptions from npm registry; supports `--dry-run`, `--update`; works directly with JSON file (no config loading); creates empty `{}` if file doesn't exist
   - `devtools pull-uv <file>` - Pull latest PyPI package versions for UV apps (see [cmd/devtools_uv.go](cmd/devtools_uv.go)); requires file argument (path to uvApps.json); always fetches descriptions from PyPI registry; supports `--dry-run`, `--update`; works directly with JSON file (no config loading); creates empty `{}` if file doesn't exist
-  - `devtools pull-runtimes <file>` - Pull runtime configurations (FNM, UV, JVM) from upstream releases (see [cmd/devtools_pull_runtimes.go](cmd/devtools_pull_runtimes.go)); requires file argument (path to runtimes.json); fetches latest releases from GitHub, computes SHA-256 hashes, writes to `<file>`; supports `--update` (required), `--dry-run`, `--runtime <name>` (fnm, uv, or jvm); version sources: Node.js LTS from endoflife.date, PNPM from npm registry, Python stable from endoflife.date, Java from Adoptium API; deduplicates musl binaries identical to glibc
+  - `devtools pull-runtimes <file>` - Pull runtime configurations (Node, UV, JVM, Go) from upstream releases (see [cmd/devtools_pull_runtimes.go](cmd/devtools_pull_runtimes.go)); requires file argument (path to runtimes.json); fetches latest releases from upstream, computes SHA-256 hashes, writes to `<file>`; supports `--update` (required), `--dry-run`, `--runtime <name>` (uv, jvm, node, or go); version sources: Node.js LTS from endoflife.date, pnpm from npm registry, Python stable from endoflife.date, Java from Adoptium API, Go stable from go.dev (`https://go.dev/dl/?mode=json`). The node entry resolves the latest Node LTS, builds os/arch/libc archive URLs and records SHA-256: glibc/darwin/windows hashes are GPG-verified against nodejs.org's clearsigned `SHASUMS256.txt.asc` (28 embedded official Node.js release keys, `internal/nodekeys` package), while musl hashes come from unofficial-builds.nodejs.org's unsigned `SHASUMS256.txt` (git-pinned, node:alpine trust model); deduplicates musl binaries identical to glibc. The go entry builds the os/arch archive map from go.dev with the published SHA-256 (mandatory, lowercased) and preserves `go.goVersion` across pulls via the `Go *GoConfigJSON` round-trip field on `RuntimeJSON`
   - `devtools pack-inline-archive <dir>` - Pack a directory into an inline archive (`tar.br:` format) for use in config. Warns at 10 MiB, errors at 50 MiB decompressed size. Output to stdout
   - `devtools apps list` - List all configured apps with type, version, description, and install status
   - `devtools apps inspect <name>` - Show install path and file tree for an app (collapses node_modules/.venv)
@@ -323,17 +329,18 @@ final Config
 2. `getConfig()` function returns a Config struct with apps and runtimes definitions
 3. BinManager is initialized with MapOfApps; RuntimeManager is initialized with MapOfRuntimes
 4. When `exec <appName>` is called:
-   - BinManager delegates to RuntimeManager for uv/fnm/jvm apps
+   - BinManager delegates to RuntimeManager for uv/node/jvm/go apps
    - For binary apps: checks cache, downloads/verifies hash, extracts, executes
    - For uv apps: resolves UV runtime, downloads if needed, installs app in isolated env, executes
-   - For fnm apps: resolves FNM runtime, installs Node.js via FNM, downloads PNPM from npm registry, installs app dependencies, executes via node
+   - For node apps: resolves the Node runtime, downloads+verifies+extracts the pinned Node.js archive, downloads pnpm from the npm registry, installs app dependencies, executes via node
    - For jvm apps: resolves JVM runtime (Temurin JDK), downloads JAR with hash verification, executes via `java -jar`
+   - For go apps: resolves Go runtime (downloads SDK with hash verification if managed), writes go.mod+go.sum from the lockfile, builds from source with `go build -trimpath -mod=readonly`, executes the built binary
 
 ## Configuration Structure
 
 The [internal/config/config.js](internal/config/config.js) file defines:
 
-- `mapOfRuntimes`: Runtime definitions (UV, FNM, JVM) with managed binary URLs and hashes per platform
+- `mapOfRuntimes`: Runtime definitions (UV, Node, JVM, Go) with managed binary URLs and hashes per platform
 - `mapOfApps`: All available binaries/tools with URLs, hashes, and platform support
 - `ignoreGroups`: Categorized ignore patterns (Dependencies, Build outputs, Cache, Testing, Logs, Environment, Security, IDE & OS, Golang specific)
 - `init`: Configuration for initializing tool configs like lefthook.yml
@@ -443,7 +450,7 @@ Uses uber-go/zap structured logging throughout. Logger initialization in [intern
 
 - **Cache/Store separation**: `getBasePath()` resolves the base directory (`DATAMITSU_CACHE_DIR` → `XDG_CACHE_HOME` → `~/.cache/datamitsu`). `GetCachePath()` returns `{base}/cache` (project execution state). `GetStorePath()` returns `{base}/store` (downloaded binaries, runtimes, apps)
 - Cache path and bin path utilities in [internal/env/](internal/env/)
-- Runtime path helpers in [internal/env/runtime.go](internal/env/runtime.go): `GetRuntimesPath()`, `GetRuntimeBinaryPath()`, `GetAppsPath()`, `GetAppEnvPath()`, `GetPNPMStorePath()`, `GetNodeBinaryPath()`, `GetPNPMPath()`, `GetProjectCachePath()`
+- Runtime path helpers in [internal/env/runtime.go](internal/env/runtime.go): `GetRuntimesPath()`, `GetRuntimeBinaryPath()`, `GetAppsPath()`, `GetAppEnvPath()`, `GetPNPMStorePath()`, `GetPNPMPath()`, `GetProjectCachePath()`
 - Store-related paths (`GetBinPath`, `GetRuntimesPath`, `GetAppsPath`, `GetPNPMStorePath`) use `GetStorePath()`
 - Cache-related paths (`GetProjectCachePath`) use `GetCachePath()`
 - Binary caching uses stable hash-based paths for reproducibility
@@ -476,7 +483,7 @@ Uses uber-go/zap structured logging throughout. Logger initialization in [intern
 - **`.datamitsu/` directory**: Recreated atomically on each `init` run (remove + recreate). Listed in `.gitignore`. A `.gitignore` file containing `*` is automatically created inside `.datamitsu/` as a defensive measure — prevents accidental commits if users forget to add `.datamitsu/` to their root `.gitignore`. A `datamitsu.config.d.ts` file is written with embedded TypeScript type definitions (from `internal/config/config.d.ts` via `config.GetDefaultConfigDTS()`) to provide IDE autocomplete for config files. After creation, all symlinks are verified (existence, correct target, target file exists) — verification failure is a hard error
 - **Strict app installation**: Uninstalled apps with links cause `CreateDatamitsuLinks()` to return an error immediately (no silent skipping)
 - **ConfigInit.LinkTarget**: When set on a `ConfigInit` entry, the installer creates a symlink instead of writing content. Target is resolved relative to the symlink's directory
-- **Lock files**: FNM apps support `LockFile` field (written as `pnpm-lock.yaml` with `--frozen-lockfile`); UV apps support `LockFile` (written as `uv.lock` with `--locked` flag). Lock file content can be brotli-compressed with `br:` prefix (see `lockfileenc.go`)
+- **Lock files**: Node apps support `LockFile` field (written as `pnpm-lock.yaml` with `--frozen-lockfile`); UV apps support `LockFile` (written as `uv.lock` with `--locked` flag). Lock file content can be brotli-compressed with `br:` prefix (see `lockfileenc.go`)
 - **Validation-first**: `ValidateApps()` returns `([]string, error)` -- warnings and validation errors. Runs immediately after config load in `loadConfigWithPaths`, catching link path traversal errors and lockfile requirements before execution. Warns when UV runtime is in system mode without pythonVersion set
 - **Links independence**: Links do not require `required: true`. Smart init installs apps based on tool usage, not Required flag
 - **Windows**: Symlinks only, no fallback. Requires Developer Mode

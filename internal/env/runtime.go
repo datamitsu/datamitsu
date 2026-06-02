@@ -3,7 +3,6 @@ package env
 import (
 	"fmt"
 	"path/filepath"
-	"runtime"
 	"strings"
 
 	"github.com/datamitsu/datamitsu/internal/hashutil"
@@ -29,15 +28,8 @@ func GetPNPMStorePath() string {
 	return filepath.Join(GetStorePath(), ".pnpm-store")
 }
 
-func GetNodeBinaryPath(storeRoot string, nodeVersion string) string {
-	if runtime.GOOS == "windows" {
-		return filepath.Join(storeRoot, ".runtimes", "fnm-nodes", "v"+nodeVersion, "installation", "node.exe")
-	}
-	return filepath.Join(storeRoot, ".runtimes", "fnm-nodes", "v"+nodeVersion, "installation", "bin", "node")
-}
-
 func GetPNPMPath(storeRoot string, pnpmVersion string, pnpmHash string) string {
-	return filepath.Join(storeRoot, ".runtimes", "fnm-pnpm", pnpmVersion, pnpmHash, "package", "bin", "pnpm.cjs")
+	return filepath.Join(storeRoot, ".runtimes", "pnpm", pnpmVersion, pnpmHash, "package", "bin", "pnpm.cjs")
 }
 
 // HashProjectPath computes the XXH3-128 hash of a project path.

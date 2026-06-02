@@ -122,14 +122,19 @@ func TestGetAppVersion(t *testing.T) {
 			expected: "2.0.0",
 		},
 		{
-			name:     "fnm app",
-			app:      binmanager.App{Fnm: &binmanager.AppConfigFNM{Version: "3.1.0"}},
+			name:     "node app",
+			app:      binmanager.App{Node: &binmanager.AppConfigNode{Version: "3.1.0"}},
 			expected: "3.1.0",
 		},
 		{
 			name:     "jvm app",
 			app:      binmanager.App{Jvm: &binmanager.AppConfigJVM{Version: "7.20.0"}},
 			expected: "7.20.0",
+		},
+		{
+			name:     "go app",
+			app:      binmanager.App{Go: &binmanager.AppConfigGo{Version: "v1.3.0"}},
+			expected: "v1.3.0",
 		},
 		{
 			name:     "shell app",
@@ -388,10 +393,10 @@ func TestFilterSkippedRuntimeJobs(t *testing.T) {
 			info:        binmanager.BinaryOsArchInfo{URL: "https://example.com/uv", Hash: "uvhash", ContentType: "tar.gz", BinaryPath: &binaryPath},
 		},
 		{
-			runtimeName: "fnm",
+			runtimeName: "node",
 			os:          syslist.OsTypeLinux,
 			arch:        syslist.ArchTypeAmd64,
-			info:        binmanager.BinaryOsArchInfo{URL: "https://example.com/fnm", Hash: "fnmhash", ContentType: "tar.gz", BinaryPath: &binaryPath},
+			info:        binmanager.BinaryOsArchInfo{URL: "https://example.com/node", Hash: "node-hash", ContentType: "tar.gz", BinaryPath: &binaryPath},
 		},
 	}
 
@@ -412,8 +417,8 @@ func TestFilterSkippedRuntimeJobs(t *testing.T) {
 		if len(skipped) != 1 {
 			t.Fatalf("expected 1 skipped, got %d", len(skipped))
 		}
-		if toRun[0].runtimeName != "fnm" {
-			t.Errorf("expected toRun[0] to be fnm, got %s", toRun[0].runtimeName)
+		if toRun[0].runtimeName != "node" {
+			t.Errorf("expected toRun[0] to be node, got %s", toRun[0].runtimeName)
 		}
 		if skipped[0].runtimeName != "uv" {
 			t.Errorf("expected skipped[0] to be uv, got %s", skipped[0].runtimeName)
@@ -485,6 +490,50 @@ func TestFilterSkippedRuntimeAppEntries(t *testing.T) {
 			t.Errorf("expected 0 skipped after version change, got %d", len(skipped))
 		}
 	})
+}
+
+func TestRuntimeAppKeyAndFP_Go(t *testing.T) {
+	runtimes := config.MapOfRuntimes{
+		"go-rt": {Kind: config.RuntimeKindGo},
+	}
+
+	// Explicit runtime ref: fingerprint must reflect the Go app config and
+	// resolve to the referenced runtime (kind "go" branch must be wired).
+	entry := runtimeAppEntry{
+		name: "govulncheck",
+		app:  binmanager.App{Go: &binmanager.AppConfigGo{PackageName: "golang.org/x/vuln/cmd/govulncheck", Version: "v1.3.0", Runtime: "go-rt"}},
+		kind: "go",
+	}
+	key, fp := runtimeAppKeyAndFP(entry, runtimes, "linux", "amd64")
+	if key == "" {
+		t.Fatal("expected non-empty key")
+	}
+	if fp == "" {
+		t.Fatal("expected non-empty fingerprint (Go app config must be marshaled into the fingerprint)")
+	}
+
+	// Changing the Go version must change the fingerprint, proving the Go
+	// config is actually folded into it.
+	entry2 := entry
+	entry2.app = binmanager.App{Go: &binmanager.AppConfigGo{PackageName: "golang.org/x/vuln/cmd/govulncheck", Version: "v1.4.0", Runtime: "go-rt"}}
+	_, fp2 := runtimeAppKeyAndFP(entry2, runtimes, "linux", "amd64")
+	if fp == fp2 {
+		t.Error("expected different fingerprint when Go version changes")
+	}
+
+	// Empty runtime ref must resolve to the default Go runtime, so the
+	// runtime config still contributes to the fingerprint.
+	entryNoRef := runtimeAppEntry{
+		name: "govulncheck",
+		app:  binmanager.App{Go: &binmanager.AppConfigGo{PackageName: "golang.org/x/vuln/cmd/govulncheck", Version: "v1.3.0"}},
+		kind: "go",
+	}
+	if got := resolveDefaultRuntimeName(runtimes, "go"); got != "go-rt" {
+		t.Errorf("resolveDefaultRuntimeName(go) = %q, want %q", got, "go-rt")
+	}
+	if _, fpNoRef := runtimeAppKeyAndFP(entryNoRef, runtimes, "linux", "amd64"); fpNoRef == "" {
+		t.Error("expected non-empty fingerprint for Go app with default runtime resolution")
+	}
 }
 
 func TestFilterSkippedVersionCheckEntries(t *testing.T) {
@@ -586,7 +635,7 @@ func TestComputeSummaryWithCachedEntries(t *testing.T) {
 			},
 			runtimeResults: []runtimeVerifyResult{
 				{RuntimeName: "uv", Status: "ok"},
-				{RuntimeName: "fnm", Status: "cached"},
+				{RuntimeName: "node", Status: "cached"},
 			},
 			runtimeAppResults: []runtimeAppResult{
 				{AppName: "d", Status: "cached"},

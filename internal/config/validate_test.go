@@ -364,7 +364,7 @@ func TestValidateApps_BinaryAppWithFilesRejected(t *testing.T) {
 	if err == nil {
 		t.Fatal("ValidateApps() expected error for binary app with files/links, got nil")
 	}
-	if !strings.Contains(err.Error(), "files/links/archives are only supported on uv and fnm apps") {
+	if !strings.Contains(err.Error(), "files/links/archives are only supported on uv and node apps") {
 		t.Errorf("unexpected error message: %v", err)
 	}
 }
@@ -383,7 +383,7 @@ func TestValidateApps_ShellAppWithFilesRejected(t *testing.T) {
 	if err == nil {
 		t.Fatal("ValidateApps() expected error for shell app with files, got nil")
 	}
-	if !strings.Contains(err.Error(), "files/links/archives are only supported on uv and fnm apps") {
+	if !strings.Contains(err.Error(), "files/links/archives are only supported on uv and node apps") {
 		t.Errorf("unexpected error message: %v", err)
 	}
 }
@@ -531,11 +531,11 @@ func testManagedConfig() *RuntimeConfigManaged {
 
 func TestValidateRuntimes_Valid(t *testing.T) {
 	runtimes := MapOfRuntimes{
-		"fnm": {
-			Kind:    RuntimeKindFNM,
+		"node": {
+			Kind:    RuntimeKindNode,
 			Mode:    RuntimeModeManaged,
 			Managed: testManagedConfig(),
-			FNM: &RuntimeConfigFNM{
+			Node: &RuntimeConfigNode{
 				NodeVersion: "22.14.0",
 				PNPMVersion: "10.7.0",
 				PNPMHash:    "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
@@ -553,10 +553,29 @@ func TestValidateRuntimes_Valid(t *testing.T) {
 	}
 }
 
-func TestValidateRuntimes_FNM_MissingConfig(t *testing.T) {
+func TestValidateRuntimes_Node_Valid(t *testing.T) {
 	runtimes := MapOfRuntimes{
-		"fnm": {
-			Kind: RuntimeKindFNM,
+		"node": {
+			Kind:    RuntimeKindNode,
+			Mode:    RuntimeModeManaged,
+			Managed: testManagedConfig(),
+			Node: &RuntimeConfigNode{
+				NodeVersion: "26.2.0",
+				PNPMVersion: "11.0.0",
+				PNPMHash:    "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+			},
+		},
+	}
+
+	if err := ValidateRuntimes(runtimes); err != nil {
+		t.Errorf("ValidateRuntimes() unexpected error: %v", err)
+	}
+}
+
+func TestValidateRuntimes_Node_MissingConfig(t *testing.T) {
+	runtimes := MapOfRuntimes{
+		"node": {
+			Kind: RuntimeKindNode,
 			Mode: RuntimeModeManaged,
 		},
 	}
@@ -565,18 +584,18 @@ func TestValidateRuntimes_FNM_MissingConfig(t *testing.T) {
 	if err == nil {
 		t.Fatal("ValidateRuntimes() expected error, got nil")
 	}
-	if !strings.Contains(err.Error(), "FNM runtime requires fnm config with nodeVersion, pnpmVersion, and pnpmHash") {
+	if !strings.Contains(err.Error(), "Node runtime requires node config with nodeVersion, pnpmVersion, and pnpmHash") {
 		t.Errorf("unexpected error message: %v", err)
 	}
 }
 
-func TestValidateRuntimes_FNM_MissingNodeVersion(t *testing.T) {
+func TestValidateRuntimes_Node_MissingNodeVersion(t *testing.T) {
 	runtimes := MapOfRuntimes{
-		"fnm": {
-			Kind: RuntimeKindFNM,
+		"node": {
+			Kind: RuntimeKindNode,
 			Mode: RuntimeModeManaged,
-			FNM: &RuntimeConfigFNM{
-				PNPMVersion: "10.7.0",
+			Node: &RuntimeConfigNode{
+				PNPMVersion: "11.0.0",
 				PNPMHash:    "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
 			},
 		},
@@ -586,18 +605,18 @@ func TestValidateRuntimes_FNM_MissingNodeVersion(t *testing.T) {
 	if err == nil {
 		t.Fatal("ValidateRuntimes() expected error, got nil")
 	}
-	if !strings.Contains(err.Error(), "fnm.nodeVersion is required") {
+	if !strings.Contains(err.Error(), "node.nodeVersion is required") {
 		t.Errorf("unexpected error message: %v", err)
 	}
 }
 
-func TestValidateRuntimes_FNM_MissingPNPMVersion(t *testing.T) {
+func TestValidateRuntimes_Node_MissingPNPMVersion(t *testing.T) {
 	runtimes := MapOfRuntimes{
-		"fnm": {
-			Kind: RuntimeKindFNM,
+		"node": {
+			Kind: RuntimeKindNode,
 			Mode: RuntimeModeManaged,
-			FNM: &RuntimeConfigFNM{
-				NodeVersion: "22.14.0",
+			Node: &RuntimeConfigNode{
+				NodeVersion: "26.2.0",
 				PNPMHash:    "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
 			},
 		},
@@ -607,19 +626,19 @@ func TestValidateRuntimes_FNM_MissingPNPMVersion(t *testing.T) {
 	if err == nil {
 		t.Fatal("ValidateRuntimes() expected error, got nil")
 	}
-	if !strings.Contains(err.Error(), "fnm.pnpmVersion is required") {
+	if !strings.Contains(err.Error(), "node.pnpmVersion is required") {
 		t.Errorf("unexpected error message: %v", err)
 	}
 }
 
-func TestValidateRuntimes_FNM_MissingPNPMHash(t *testing.T) {
+func TestValidateRuntimes_Node_MissingPNPMHash(t *testing.T) {
 	runtimes := MapOfRuntimes{
-		"fnm": {
-			Kind: RuntimeKindFNM,
+		"node": {
+			Kind: RuntimeKindNode,
 			Mode: RuntimeModeManaged,
-			FNM: &RuntimeConfigFNM{
-				NodeVersion: "22.14.0",
-				PNPMVersion: "10.7.0",
+			Node: &RuntimeConfigNode{
+				NodeVersion: "26.2.0",
+				PNPMVersion: "11.0.0",
 			},
 		},
 	}
@@ -628,12 +647,12 @@ func TestValidateRuntimes_FNM_MissingPNPMHash(t *testing.T) {
 	if err == nil {
 		t.Fatal("ValidateRuntimes() expected error, got nil")
 	}
-	if !strings.Contains(err.Error(), "fnm.pnpmHash is required") {
+	if !strings.Contains(err.Error(), "node.pnpmHash is required") {
 		t.Errorf("unexpected error message: %v", err)
 	}
 }
 
-func TestValidateRuntimes_FNM_InvalidPNPMHashFormat(t *testing.T) {
+func TestValidateRuntimes_Node_InvalidPNPMHashFormat(t *testing.T) {
 	tests := []struct {
 		name     string
 		pnpmHash string
@@ -643,17 +662,18 @@ func TestValidateRuntimes_FNM_InvalidPNPMHashFormat(t *testing.T) {
 		{"contains slash", "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6/xx"},
 		{"non-hex chars", "g1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"},
 		{"too long", "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b200"},
+		{"uppercase", "A1B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4E5F6A1B2"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			runtimes := MapOfRuntimes{
-				"fnm": {
-					Kind: RuntimeKindFNM,
+				"node": {
+					Kind: RuntimeKindNode,
 					Mode: RuntimeModeManaged,
-					FNM: &RuntimeConfigFNM{
-						NodeVersion: "22.14.0",
-						PNPMVersion: "10.7.0",
+					Node: &RuntimeConfigNode{
+						NodeVersion: "26.2.0",
+						PNPMVersion: "11.0.0",
 						PNPMHash:    tt.pnpmHash,
 					},
 				},
@@ -663,10 +683,125 @@ func TestValidateRuntimes_FNM_InvalidPNPMHashFormat(t *testing.T) {
 			if err == nil {
 				t.Fatalf("ValidateRuntimes() expected error for pnpmHash %q, got nil", tt.pnpmHash)
 			}
-			if !strings.Contains(err.Error(), "fnm.pnpmHash must be a valid SHA-256 hex string") {
+			if !strings.Contains(err.Error(), "node.pnpmHash must be a valid SHA-256 hex string") {
 				t.Errorf("unexpected error message: %v", err)
 			}
 		})
+	}
+}
+
+func TestValidateRuntimes_Node_InvalidNodeVersion(t *testing.T) {
+	tests := []struct {
+		name        string
+		nodeVersion string
+	}{
+		{"path traversal", "../../etc/passwd"},
+		{"contains slash", "26/2/0"},
+		{"shell metacharacter", "26.2.0; rm -rf /"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runtimes := MapOfRuntimes{
+				"node": {
+					Kind: RuntimeKindNode,
+					Mode: RuntimeModeManaged,
+					Node: &RuntimeConfigNode{
+						NodeVersion: tt.nodeVersion,
+						PNPMVersion: "11.0.0",
+						PNPMHash:    "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+					},
+				},
+			}
+
+			err := ValidateRuntimes(runtimes)
+			if err == nil {
+				t.Fatalf("ValidateRuntimes() expected error for nodeVersion %q, got nil", tt.nodeVersion)
+			}
+			if !strings.Contains(err.Error(), "node.nodeVersion") {
+				t.Errorf("unexpected error message: %v", err)
+			}
+		})
+	}
+}
+
+func TestValidateRuntimes_Node_InvalidPNPMVersion(t *testing.T) {
+	tests := []struct {
+		name        string
+		pnpmVersion string
+	}{
+		{"path traversal", "../../etc/passwd"},
+		{"contains slash", "11/0/0"},
+		{"shell metacharacter", "11.0.0 && curl evil"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runtimes := MapOfRuntimes{
+				"node": {
+					Kind: RuntimeKindNode,
+					Mode: RuntimeModeManaged,
+					Node: &RuntimeConfigNode{
+						NodeVersion: "26.2.0",
+						PNPMVersion: tt.pnpmVersion,
+						PNPMHash:    "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+					},
+				},
+			}
+
+			err := ValidateRuntimes(runtimes)
+			if err == nil {
+				t.Fatalf("ValidateRuntimes() expected error for pnpmVersion %q, got nil", tt.pnpmVersion)
+			}
+			if !strings.Contains(err.Error(), "node.pnpmVersion") {
+				t.Errorf("unexpected error message: %v", err)
+			}
+		})
+	}
+}
+
+func TestValidateRuntimes_Node_ValidVersionFormats(t *testing.T) {
+	versions := []string{"26.2.0", "26.2.0-nightly", "22.14.0", "v1_test"}
+
+	for _, v := range versions {
+		t.Run(v, func(t *testing.T) {
+			runtimes := MapOfRuntimes{
+				"node": {
+					Kind:    RuntimeKindNode,
+					Mode:    RuntimeModeManaged,
+					Managed: testManagedConfig(),
+					Node: &RuntimeConfigNode{
+						NodeVersion: v,
+						PNPMVersion: v,
+						PNPMHash:    "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+					},
+				},
+			}
+
+			if err := ValidateRuntimes(runtimes); err != nil {
+				t.Errorf("ValidateRuntimes() unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+// TestValidateRuntimes_UnrecognizedKindSkipped verifies that an unrecognized
+// runtime kind gets none of the node.* validation. A runtime entry whose Kind
+// does not match any known RuntimeKind* constant is treated as an unrecognized
+// kind, so ValidateRuntimes applies none of the node.* field validation to it —
+// even with no node config present, it must not produce node.nodeVersion /
+// node.pnpmVersion / node.pnpmHash errors.
+func TestValidateRuntimes_UnrecognizedKindSkipped(t *testing.T) {
+	runtimes := MapOfRuntimes{
+		"legacy": {
+			Kind:    "legacy-removed",
+			Mode:    RuntimeModeManaged,
+			Managed: testManagedConfig(),
+		},
+	}
+
+	if err := ValidateRuntimes(runtimes); err != nil {
+		t.Errorf("ValidateRuntimes() should not apply node validation to unrecognized kind, got: %v", err)
 	}
 }
 
@@ -764,12 +899,12 @@ func TestValidateAppsSkipLockfile_AllowsMissingLockfile(t *testing.T) {
 	}
 }
 
-func TestValidateAppsSkipLockfile_AllowsMissingLockfile_FNM(t *testing.T) {
+func TestValidateAppsSkipLockfile_AllowsMissingLockfile_Node(t *testing.T) {
 	runtimes := MapOfRuntimes{
-		"fnm": {
-			Kind: RuntimeKindFNM,
+		"node": {
+			Kind: RuntimeKindNode,
 			Mode: RuntimeModeManaged,
-			FNM: &RuntimeConfigFNM{
+			Node: &RuntimeConfigNode{
 				NodeVersion: "22.14.0",
 				PNPMVersion: "10.7.0",
 				PNPMHash:    "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
@@ -778,7 +913,7 @@ func TestValidateAppsSkipLockfile_AllowsMissingLockfile_FNM(t *testing.T) {
 	}
 	apps := binmanager.MapOfApps{
 		"eslint": {
-			Fnm: &binmanager.AppConfigFNM{
+			Node: &binmanager.AppConfigNode{
 				PackageName: "eslint",
 				Version:     "9.0.0",
 				BinPath:     "node_modules/.bin/eslint",
@@ -791,12 +926,12 @@ func TestValidateAppsSkipLockfile_AllowsMissingLockfile_FNM(t *testing.T) {
 	}
 }
 
-func TestValidateApps_Lockfile_FNM_Missing(t *testing.T) {
+func TestValidateApps_Lockfile_Node_Missing(t *testing.T) {
 	runtimes := MapOfRuntimes{
-		"fnm": {
-			Kind: RuntimeKindFNM,
+		"node": {
+			Kind: RuntimeKindNode,
 			Mode: RuntimeModeManaged,
-			FNM: &RuntimeConfigFNM{
+			Node: &RuntimeConfigNode{
 				NodeVersion: "22.14.0",
 				PNPMVersion: "10.7.0",
 				PNPMHash:    "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
@@ -805,7 +940,7 @@ func TestValidateApps_Lockfile_FNM_Missing(t *testing.T) {
 	}
 	apps := binmanager.MapOfApps{
 		"eslint": {
-			Fnm: &binmanager.AppConfigFNM{
+			Node: &binmanager.AppConfigNode{
 				PackageName: "eslint",
 				Version:     "9.0.0",
 				BinPath:     "node_modules/.bin/eslint",
@@ -822,12 +957,12 @@ func TestValidateApps_Lockfile_FNM_Missing(t *testing.T) {
 	}
 }
 
-func TestValidateApps_Lockfile_FNM_Present(t *testing.T) {
+func TestValidateApps_Lockfile_Node_Present(t *testing.T) {
 	runtimes := MapOfRuntimes{
-		"fnm": {
-			Kind: RuntimeKindFNM,
+		"node": {
+			Kind: RuntimeKindNode,
 			Mode: RuntimeModeManaged,
-			FNM: &RuntimeConfigFNM{
+			Node: &RuntimeConfigNode{
 				NodeVersion: "22.14.0",
 				PNPMVersion: "10.7.0",
 				PNPMHash:    "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
@@ -836,7 +971,7 @@ func TestValidateApps_Lockfile_FNM_Present(t *testing.T) {
 	}
 	apps := binmanager.MapOfApps{
 		"eslint": {
-			Fnm: &binmanager.AppConfigFNM{
+			Node: &binmanager.AppConfigNode{
 				PackageName: "eslint",
 				Version:     "9.0.0",
 				BinPath:     "node_modules/.bin/eslint",
@@ -875,7 +1010,6 @@ func TestValidateApps_Lockfile_ExplicitRuntime(t *testing.T) {
 		t.Errorf("unexpected error message: %v", err)
 	}
 }
-
 
 func TestValidateApps_JVM_Valid(t *testing.T) {
 	apps := binmanager.MapOfApps{
@@ -968,7 +1102,7 @@ func TestValidateApps_JVM_FilesLinksRejected(t *testing.T) {
 	if err == nil {
 		t.Fatal("ValidateApps() expected error for JVM app with files, got nil")
 	}
-	if !strings.Contains(err.Error(), "files/links/archives are only supported on uv and fnm apps") {
+	if !strings.Contains(err.Error(), "files/links/archives are only supported on uv and node apps") {
 		t.Errorf("unexpected error message: %v", err)
 	}
 }
@@ -1035,10 +1169,10 @@ func TestValidateApps_UnknownRuntimeRef_UV(t *testing.T) {
 
 func TestValidateApps_WrongKindRuntimeRef_UV(t *testing.T) {
 	runtimes := MapOfRuntimes{
-		"fnm": {
-			Kind: RuntimeKindFNM,
+		"node": {
+			Kind: RuntimeKindNode,
 			Mode: RuntimeModeManaged,
-			FNM: &RuntimeConfigFNM{
+			Node: &RuntimeConfigNode{
 				NodeVersion: "22.14.0",
 				PNPMVersion: "10.7.0",
 				PNPMHash:    "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
@@ -1050,7 +1184,7 @@ func TestValidateApps_WrongKindRuntimeRef_UV(t *testing.T) {
 			Uv: &binmanager.AppConfigUV{
 				PackageName: "yamllint",
 				Version:     "1.35.1",
-				Runtime:     "fnm",
+				Runtime:     "node",
 			},
 		},
 	}
@@ -1059,17 +1193,17 @@ func TestValidateApps_WrongKindRuntimeRef_UV(t *testing.T) {
 	if err == nil {
 		t.Fatal("ValidateApps() expected error for wrong-kind runtime ref, got nil")
 	}
-	if !strings.Contains(err.Error(), `runtime "fnm" is kind "fnm", expected "uv"`) {
+	if !strings.Contains(err.Error(), `runtime "node" is kind "node", expected "uv"`) {
 		t.Errorf("unexpected error message: %v", err)
 	}
 }
 
-func TestValidateApps_UnknownRuntimeRef_FNM(t *testing.T) {
+func TestValidateApps_UnknownRuntimeRef_Node(t *testing.T) {
 	runtimes := MapOfRuntimes{
-		"fnm": {
-			Kind: RuntimeKindFNM,
+		"node": {
+			Kind: RuntimeKindNode,
 			Mode: RuntimeModeManaged,
-			FNM: &RuntimeConfigFNM{
+			Node: &RuntimeConfigNode{
 				NodeVersion: "22.14.0",
 				PNPMVersion: "10.7.0",
 				PNPMHash:    "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
@@ -1078,7 +1212,7 @@ func TestValidateApps_UnknownRuntimeRef_FNM(t *testing.T) {
 	}
 	apps := binmanager.MapOfApps{
 		"eslint": {
-			Fnm: &binmanager.AppConfigFNM{
+			Node: &binmanager.AppConfigNode{
 				PackageName: "eslint",
 				Version:     "9.0.0",
 				BinPath:     "node_modules/.bin/eslint",
@@ -1159,10 +1293,10 @@ func TestValidateApps_ValidExplicitRuntimeRef(t *testing.T) {
 			Kind: RuntimeKindUV,
 			Mode: RuntimeModeManaged,
 		},
-		"fnm": {
-			Kind: RuntimeKindFNM,
+		"node": {
+			Kind: RuntimeKindNode,
 			Mode: RuntimeModeManaged,
-			FNM: &RuntimeConfigFNM{
+			Node: &RuntimeConfigNode{
 				NodeVersion: "22.14.0",
 				PNPMVersion: "10.7.0",
 				PNPMHash:    "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
@@ -1186,11 +1320,11 @@ func TestValidateApps_ValidExplicitRuntimeRef(t *testing.T) {
 			},
 		},
 		"eslint": {
-			Fnm: &binmanager.AppConfigFNM{
+			Node: &binmanager.AppConfigNode{
 				PackageName: "eslint",
 				Version:     "9.0.0",
 				BinPath:     "node_modules/.bin/eslint",
-				Runtime:     "fnm",
+				Runtime:     "node",
 				LockFile:    "br:fakeLockFileContent",
 			},
 		},
@@ -1322,100 +1456,6 @@ func TestValidateApps_UVManagedModeNoWarning(t *testing.T) {
 	}
 }
 
-func TestValidateRuntimes_FNM_InvalidNodeVersion(t *testing.T) {
-	tests := []struct {
-		name        string
-		nodeVersion string
-	}{
-		{"path traversal", "../../evil"},
-		{"contains slash", "22.14.0/evil"},
-		{"contains backslash", "22.14.0\\evil"},
-		{"starts with dot", ".22.14.0"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			runtimes := MapOfRuntimes{
-				"fnm": {
-					Kind: RuntimeKindFNM,
-					Mode: RuntimeModeManaged,
-					FNM: &RuntimeConfigFNM{
-						NodeVersion: tt.nodeVersion,
-						PNPMVersion: "10.7.0",
-						PNPMHash:    "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
-					},
-				},
-			}
-
-			err := ValidateRuntimes(runtimes)
-			if err == nil {
-				t.Fatalf("ValidateRuntimes() expected error for nodeVersion %q, got nil", tt.nodeVersion)
-			}
-			if !strings.Contains(err.Error(), "fnm.nodeVersion") || !strings.Contains(err.Error(), "invalid characters") {
-				t.Errorf("unexpected error message: %v", err)
-			}
-		})
-	}
-}
-
-func TestValidateRuntimes_FNM_InvalidPNPMVersion(t *testing.T) {
-	tests := []struct {
-		name        string
-		pnpmVersion string
-	}{
-		{"path traversal", "../../evil"},
-		{"contains slash", "10.7.0/evil"},
-		{"contains backslash", "10.7.0\\evil"},
-		{"starts with dot", ".10.7.0"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			runtimes := MapOfRuntimes{
-				"fnm": {
-					Kind: RuntimeKindFNM,
-					Mode: RuntimeModeManaged,
-					FNM: &RuntimeConfigFNM{
-						NodeVersion: "22.14.0",
-						PNPMVersion: tt.pnpmVersion,
-						PNPMHash:    "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
-					},
-				},
-			}
-
-			err := ValidateRuntimes(runtimes)
-			if err == nil {
-				t.Fatalf("ValidateRuntimes() expected error for pnpmVersion %q, got nil", tt.pnpmVersion)
-			}
-			if !strings.Contains(err.Error(), "fnm.pnpmVersion") || !strings.Contains(err.Error(), "invalid characters") {
-				t.Errorf("unexpected error message: %v", err)
-			}
-		})
-	}
-}
-
-func TestValidateRuntimes_FNM_UppercasePNPMHash(t *testing.T) {
-	runtimes := MapOfRuntimes{
-		"fnm": {
-			Kind: RuntimeKindFNM,
-			Mode: RuntimeModeManaged,
-			FNM: &RuntimeConfigFNM{
-				NodeVersion: "22.14.0",
-				PNPMVersion: "10.7.0",
-				PNPMHash:    "A1B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4E5F6A1B2",
-			},
-		},
-	}
-
-	err := ValidateRuntimes(runtimes)
-	if err == nil {
-		t.Fatal("ValidateRuntimes() expected error for uppercase pnpmHash, got nil")
-	}
-	if !strings.Contains(err.Error(), "fnm.pnpmHash must be a valid SHA-256 hex string") {
-		t.Errorf("unexpected error message: %v", err)
-	}
-}
-
 func TestValidateRuntimes_JVM_InvalidJavaVersion(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -1448,29 +1488,427 @@ func TestValidateRuntimes_JVM_InvalidJavaVersion(t *testing.T) {
 	}
 }
 
-func TestValidateRuntimes_FNM_ValidVersionFormats(t *testing.T) {
+func TestValidateApps_NodeSystemModeNoWarning(t *testing.T) {
+	runtimes := MapOfRuntimes{
+		"node": {
+			Kind:   RuntimeKindNode,
+			Mode:   RuntimeModeSystem,
+			System: &RuntimeConfigSystem{Command: "/usr/bin/node"},
+			Node:   &RuntimeConfigNode{NodeVersion: "22.14.0", PNPMVersion: "10.7.0", PNPMHash: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"},
+		},
+	}
+	apps := binmanager.MapOfApps{}
+
+	warnings, err := ValidateApps(apps, runtimes)
+	if err != nil {
+		t.Fatalf("ValidateApps() unexpected error: %v", err)
+	}
+	if len(warnings) > 0 {
+		t.Errorf("expected no warnings for Node system mode, got: %v", warnings)
+	}
+}
+
+// ==============================
+// Go runtime/app validation tests
+// ==============================
+
+func TestValidateApps_Lockfile_Go_Missing(t *testing.T) {
+	runtimes := MapOfRuntimes{
+		"go": {
+			Kind: RuntimeKindGo,
+			Mode: RuntimeModeManaged,
+			Go:   &RuntimeConfigGo{GoVersion: "1.22.0"},
+		},
+	}
+	apps := binmanager.MapOfApps{
+		"govulncheck": {
+			Go: &binmanager.AppConfigGo{
+				PackageName: "golang.org/x/vuln/cmd/govulncheck",
+				Version:     "v1.1.4",
+			},
+		},
+	}
+
+	_, err := ValidateApps(apps, runtimes)
+	if err == nil {
+		t.Fatal("ValidateApps() expected error for missing lockFile, got nil")
+	}
+	if !strings.Contains(err.Error(), `app "govulncheck": lockFile is required`) {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestValidateApps_Lockfile_Go_Present(t *testing.T) {
+	runtimes := MapOfRuntimes{
+		"go": {
+			Kind: RuntimeKindGo,
+			Mode: RuntimeModeManaged,
+			Go:   &RuntimeConfigGo{GoVersion: "1.22.0"},
+		},
+	}
+	apps := binmanager.MapOfApps{
+		"govulncheck": {
+			Go: &binmanager.AppConfigGo{
+				PackageName: "golang.org/x/vuln/cmd/govulncheck",
+				Version:     "v1.1.4",
+				LockFile:    "br:some-compressed-content",
+			},
+		},
+	}
+
+	if _, err := ValidateApps(apps, runtimes); err != nil {
+		t.Errorf("ValidateApps() unexpected error: %v", err)
+	}
+}
+
+func TestValidateAppsSkipLockfile_AllowsMissingLockfile_Go(t *testing.T) {
+	runtimes := MapOfRuntimes{
+		"go": {
+			Kind: RuntimeKindGo,
+			Mode: RuntimeModeManaged,
+			Go:   &RuntimeConfigGo{GoVersion: "1.22.0"},
+		},
+	}
+	apps := binmanager.MapOfApps{
+		"govulncheck": {
+			Go: &binmanager.AppConfigGo{
+				PackageName: "golang.org/x/vuln/cmd/govulncheck",
+				Version:     "v1.1.4",
+			},
+		},
+	}
+
+	if _, err := ValidateAppsSkipLockfile(apps, runtimes); err != nil {
+		t.Errorf("ValidateAppsSkipLockfile() unexpected error: %v", err)
+	}
+}
+
+func TestValidateApps_UnknownRuntimeRef_Go(t *testing.T) {
+	runtimes := MapOfRuntimes{
+		"go": {
+			Kind: RuntimeKindGo,
+			Mode: RuntimeModeManaged,
+			Go:   &RuntimeConfigGo{GoVersion: "1.22.0"},
+		},
+	}
+	apps := binmanager.MapOfApps{
+		"govulncheck": {
+			Go: &binmanager.AppConfigGo{
+				PackageName: "golang.org/x/vuln/cmd/govulncheck",
+				Version:     "v1.1.4",
+				Runtime:     "nonexistent-go",
+				LockFile:    "br:some-compressed-content",
+			},
+		},
+	}
+
+	_, err := ValidateApps(apps, runtimes)
+	if err == nil {
+		t.Fatal("ValidateApps() expected error for unknown Go runtime ref, got nil")
+	}
+	if !strings.Contains(err.Error(), `references unknown runtime "nonexistent-go"`) {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestValidateApps_WrongKindRuntimeRef_Go(t *testing.T) {
+	runtimes := MapOfRuntimes{
+		"uv": {
+			Kind: RuntimeKindUV,
+			Mode: RuntimeModeManaged,
+		},
+	}
+	apps := binmanager.MapOfApps{
+		"govulncheck": {
+			Go: &binmanager.AppConfigGo{
+				PackageName: "golang.org/x/vuln/cmd/govulncheck",
+				Version:     "v1.1.4",
+				Runtime:     "uv",
+				LockFile:    "br:some-compressed-content",
+			},
+		},
+	}
+
+	_, err := ValidateApps(apps, runtimes)
+	if err == nil {
+		t.Fatal("ValidateApps() expected error for wrong-kind Go runtime ref, got nil")
+	}
+	if !strings.Contains(err.Error(), `runtime "uv" is kind "uv", expected "go"`) {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestValidateApps_ValidGoRuntimeRef(t *testing.T) {
+	runtimes := MapOfRuntimes{
+		"go": {
+			Kind:    RuntimeKindGo,
+			Mode:    RuntimeModeManaged,
+			Managed: testManagedConfig(),
+			Go:      &RuntimeConfigGo{GoVersion: "1.22.0"},
+		},
+	}
+	apps := binmanager.MapOfApps{
+		"govulncheck": {
+			Go: &binmanager.AppConfigGo{
+				PackageName: "golang.org/x/vuln/cmd/govulncheck",
+				Version:     "v1.1.4",
+				Runtime:     "go",
+				LockFile:    "br:fakeLockFileContent",
+			},
+		},
+	}
+
+	if _, err := ValidateApps(apps, runtimes); err != nil {
+		t.Errorf("ValidateApps() unexpected error: %v", err)
+	}
+}
+
+func TestValidateApps_Go_FilesLinksArchivesRejected(t *testing.T) {
+	runtimes := MapOfRuntimes{
+		"go": {
+			Kind: RuntimeKindGo,
+			Mode: RuntimeModeManaged,
+			Go:   &RuntimeConfigGo{GoVersion: "1.22.0"},
+		},
+	}
+	apps := binmanager.MapOfApps{
+		"govulncheck": {
+			Go: &binmanager.AppConfigGo{
+				PackageName: "golang.org/x/vuln/cmd/govulncheck",
+				Version:     "v1.1.4",
+				LockFile:    "br:fakeLockFileContent",
+			},
+			Files: map[string]string{
+				"config.yaml": "content",
+			},
+			Links: map[string]string{
+				"govulncheck-config": "config.yaml",
+			},
+		},
+	}
+
+	_, err := ValidateApps(apps, runtimes)
+	if err == nil {
+		t.Fatal("ValidateApps() expected error for Go app with files/links, got nil")
+	}
+	if !strings.Contains(err.Error(), "files/links/archives are only supported on uv and node apps") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestValidateApps_Go_PackageNameAndVersion(t *testing.T) {
+	runtimes := MapOfRuntimes{
+		"go": {
+			Kind: RuntimeKindGo,
+			Mode: RuntimeModeManaged,
+			Go:   &RuntimeConfigGo{GoVersion: "1.22.0"},
+		},
+	}
+
 	tests := []struct {
 		name        string
-		nodeVersion string
-		pnpmVersion string
+		packageName string
+		version     string
+		wantErr     string // empty means expect success
 	}{
-		{"semver", "22.14.0", "10.7.0"},
-		{"with pre-release", "22.14.0-rc.1", "10.7.0-beta.1"},
-		{"major only", "22", "10"},
-		{"with plus", "22.14.0+build123", "10.7.0+build456"},
+		{
+			name:        "valid",
+			packageName: "golang.org/x/vuln/cmd/govulncheck",
+			version:     "v1.1.4",
+			wantErr:     "",
+		},
+		{
+			name:        "empty packageName",
+			packageName: "",
+			version:     "v1.1.4",
+			wantErr:     "go.packageName is required",
+		},
+		{
+			name:        "packageName is dotdot",
+			packageName: "..",
+			version:     "v1.1.4",
+			wantErr:     `go.packageName ".." must not contain`,
+		},
+		{
+			name:        "packageName escapes parent",
+			packageName: "../escape",
+			version:     "v1.1.4",
+			wantErr:     "must not contain",
+		},
+		{
+			name:        "packageName embeds traversal",
+			packageName: "golang.org/x/../escape",
+			version:     "v1.1.4",
+			wantErr:     "must not contain",
+		},
+		{
+			name:        "packageName invalid chars",
+			packageName: "golang.org/x/vuln cmd",
+			version:     "v1.1.4",
+			wantErr:     "contains invalid characters",
+		},
+		{
+			name:        "empty version",
+			packageName: "golang.org/x/vuln/cmd/govulncheck",
+			version:     "",
+			wantErr:     "go.version is required",
+		},
+		{
+			name:        "version latest",
+			packageName: "golang.org/x/vuln/cmd/govulncheck",
+			version:     "latest",
+			wantErr:     "must be a pinned version",
+		},
+		{
+			name:        "version with space",
+			packageName: "golang.org/x/vuln/cmd/govulncheck",
+			version:     "v1.1.4 5",
+			wantErr:     "go.version",
+		},
+		{
+			name:        "version with at sign",
+			packageName: "golang.org/x/vuln/cmd/govulncheck",
+			version:     "v1.1.4@",
+			wantErr:     "go.version",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			apps := binmanager.MapOfApps{
+				"govulncheck": {
+					Go: &binmanager.AppConfigGo{
+						PackageName: tt.packageName,
+						Version:     tt.version,
+						Runtime:     "go",
+						LockFile:    "br:fakeLockFileContent",
+					},
+				},
+			}
+
+			_, err := ValidateApps(apps, runtimes)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("ValidateApps() unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("ValidateApps() expected error containing %q, got nil", tt.wantErr)
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("error = %v, want substring %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateRuntimes_Go_Valid(t *testing.T) {
+	runtimes := MapOfRuntimes{
+		"go": {
+			Kind:    RuntimeKindGo,
+			Mode:    RuntimeModeManaged,
+			Managed: testManagedConfig(),
+			Go: &RuntimeConfigGo{
+				GoVersion: "1.22.0",
+			},
+		},
+	}
+
+	if err := ValidateRuntimes(runtimes); err != nil {
+		t.Errorf("ValidateRuntimes() unexpected error: %v", err)
+	}
+}
+
+func TestValidateRuntimes_Go_MissingConfig(t *testing.T) {
+	runtimes := MapOfRuntimes{
+		"go": {
+			Kind: RuntimeKindGo,
+			Mode: RuntimeModeManaged,
+		},
+	}
+
+	err := ValidateRuntimes(runtimes)
+	if err == nil {
+		t.Fatal("ValidateRuntimes() expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "Go runtime requires go config with goVersion") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestValidateRuntimes_Go_MissingGoVersion(t *testing.T) {
+	runtimes := MapOfRuntimes{
+		"go": {
+			Kind: RuntimeKindGo,
+			Mode: RuntimeModeManaged,
+			Go:   &RuntimeConfigGo{},
+		},
+	}
+
+	err := ValidateRuntimes(runtimes)
+	if err == nil {
+		t.Fatal("ValidateRuntimes() expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "go.goVersion is required") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestValidateRuntimes_Go_InvalidGoVersion(t *testing.T) {
+	tests := []struct {
+		name      string
+		goVersion string
+	}{
+		{"path traversal", "../../evil"},
+		{"contains slash", "1.22.0/evil"},
+		{"contains backslash", "1.22.0\\evil"},
+		{"starts with dot", ".1.22.0"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			runtimes := MapOfRuntimes{
-				"fnm": {
-					Kind:    RuntimeKindFNM,
+				"go": {
+					Kind: RuntimeKindGo,
+					Mode: RuntimeModeManaged,
+					Go: &RuntimeConfigGo{
+						GoVersion: tt.goVersion,
+					},
+				},
+			}
+
+			err := ValidateRuntimes(runtimes)
+			if err == nil {
+				t.Fatalf("ValidateRuntimes() expected error for goVersion %q, got nil", tt.goVersion)
+			}
+			if !strings.Contains(err.Error(), "go.goVersion") || !strings.Contains(err.Error(), "invalid characters") {
+				t.Errorf("unexpected error message: %v", err)
+			}
+		})
+	}
+}
+
+func TestValidateRuntimes_Go_ValidVersionFormats(t *testing.T) {
+	tests := []struct {
+		name      string
+		goVersion string
+	}{
+		{"semver", "1.22.0"},
+		{"with pre-release", "1.22.0-rc.1"},
+		{"major only", "1"},
+		{"go-prefixed", "go1.22.0"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runtimes := MapOfRuntimes{
+				"go": {
+					Kind:    RuntimeKindGo,
 					Mode:    RuntimeModeManaged,
 					Managed: testManagedConfig(),
-					FNM: &RuntimeConfigFNM{
-						NodeVersion: tt.nodeVersion,
-						PNPMVersion: tt.pnpmVersion,
-						PNPMHash:    "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+					Go: &RuntimeConfigGo{
+						GoVersion: tt.goVersion,
 					},
 				},
 			}
@@ -1482,13 +1920,108 @@ func TestValidateRuntimes_FNM_ValidVersionFormats(t *testing.T) {
 	}
 }
 
-func TestValidateApps_FNMSystemModeNoWarning(t *testing.T) {
+func TestValidateRuntimes_Go_SystemModeWithoutGoVersion(t *testing.T) {
+	// In system mode goVersion is optional (mirrors UV); a missing config or
+	// empty version must not be a validation error.
+	tests := []struct {
+		name string
+		go_  *RuntimeConfigGo
+	}{
+		{"nil go config", nil},
+		{"empty goVersion", &RuntimeConfigGo{}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runtimes := MapOfRuntimes{
+				"go": {
+					Kind:   RuntimeKindGo,
+					Mode:   RuntimeModeSystem,
+					System: &RuntimeConfigSystem{Command: "/usr/bin/go"},
+					Go:     tt.go_,
+				},
+			}
+
+			if err := ValidateRuntimes(runtimes); err != nil {
+				t.Errorf("ValidateRuntimes() unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestValidateRuntimes_Go_SystemModeInvalidGoVersion(t *testing.T) {
+	// When goVersion IS provided in system mode it must still be valid.
 	runtimes := MapOfRuntimes{
-		"fnm": {
-			Kind:   RuntimeKindFNM,
+		"go": {
+			Kind:   RuntimeKindGo,
 			Mode:   RuntimeModeSystem,
-			System: &RuntimeConfigSystem{Command: "/usr/bin/fnm"},
-			FNM:    &RuntimeConfigFNM{NodeVersion: "22.14.0", PNPMVersion: "10.7.0", PNPMHash: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"},
+			System: &RuntimeConfigSystem{Command: "/usr/bin/go"},
+			Go:     &RuntimeConfigGo{GoVersion: "../../evil"},
+		},
+	}
+
+	err := ValidateRuntimes(runtimes)
+	if err == nil {
+		t.Fatal("ValidateRuntimes() expected error for invalid goVersion in system mode, got nil")
+	}
+	if !strings.Contains(err.Error(), "go.goVersion") || !strings.Contains(err.Error(), "invalid characters") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestValidateApps_GoSystemModeWarning_NoGoConfig(t *testing.T) {
+	runtimes := MapOfRuntimes{
+		"go": {
+			Kind:   RuntimeKindGo,
+			Mode:   RuntimeModeSystem,
+			System: &RuntimeConfigSystem{Command: "/usr/bin/go"},
+		},
+	}
+	apps := binmanager.MapOfApps{}
+
+	warnings, err := ValidateApps(apps, runtimes)
+	if err != nil {
+		t.Fatalf("ValidateApps() unexpected error: %v", err)
+	}
+	found := false
+	for _, w := range warnings {
+		if strings.Contains(w, "Go system mode without goVersion") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected warning about Go system mode without goVersion, got: %v", warnings)
+	}
+}
+
+func TestValidateApps_GoSystemModeWarning_EmptyGoVersion(t *testing.T) {
+	runtimes := MapOfRuntimes{
+		"go": {
+			Kind:   RuntimeKindGo,
+			Mode:   RuntimeModeSystem,
+			System: &RuntimeConfigSystem{Command: "/usr/bin/go"},
+			Go:     &RuntimeConfigGo{GoVersion: ""},
+		},
+	}
+	apps := binmanager.MapOfApps{}
+
+	warnings, err := ValidateApps(apps, runtimes)
+	if err != nil {
+		t.Fatalf("ValidateApps() unexpected error: %v", err)
+	}
+	if len(warnings) == 0 {
+		t.Fatal("expected warning for Go system mode with empty goVersion, got none")
+	}
+}
+
+func TestValidateApps_GoSystemModeNoWarning_WithGoVersion(t *testing.T) {
+	runtimes := MapOfRuntimes{
+		"go": {
+			Kind:   RuntimeKindGo,
+			Mode:   RuntimeModeSystem,
+			System: &RuntimeConfigSystem{Command: "/usr/bin/go"},
+			Go:     &RuntimeConfigGo{GoVersion: "1.22.0"},
 		},
 	}
 	apps := binmanager.MapOfApps{}
@@ -1498,7 +2031,27 @@ func TestValidateApps_FNMSystemModeNoWarning(t *testing.T) {
 		t.Fatalf("ValidateApps() unexpected error: %v", err)
 	}
 	if len(warnings) > 0 {
-		t.Errorf("expected no warnings for FNM system mode, got: %v", warnings)
+		t.Errorf("expected no warnings with goVersion set, got: %v", warnings)
+	}
+}
+
+func TestValidateApps_GoManagedModeNoWarning(t *testing.T) {
+	runtimes := MapOfRuntimes{
+		"go": {
+			Kind:    RuntimeKindGo,
+			Mode:    RuntimeModeManaged,
+			Managed: testManagedConfig(),
+			Go:      &RuntimeConfigGo{GoVersion: "1.22.0"},
+		},
+	}
+	apps := binmanager.MapOfApps{}
+
+	warnings, err := ValidateApps(apps, runtimes)
+	if err != nil {
+		t.Fatalf("ValidateApps() unexpected error: %v", err)
+	}
+	if len(warnings) > 0 {
+		t.Errorf("expected no warnings for Go managed mode, got: %v", warnings)
 	}
 }
 
@@ -1810,7 +2363,7 @@ func TestValidateApps_Archives_BinaryAppRejected(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for binary app with archives")
 	}
-	if !strings.Contains(err.Error(), "files/links/archives are only supported on uv and fnm apps") {
+	if !strings.Contains(err.Error(), "files/links/archives are only supported on uv and node apps") {
 		t.Errorf("unexpected error: %v", err)
 	}
 }

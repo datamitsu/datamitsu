@@ -138,6 +138,7 @@
 datamitsu
 !packaging/npm/datamitsu
 !packaging/npm/datamitsu/bin/*
+!packaging/python/datamitsu
 vendor
 node_modules
 **/dist/

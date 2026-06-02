@@ -1,14 +1,16 @@
 package config
 
 import (
-	"github.com/datamitsu/datamitsu/internal/binmanager"
-	"github.com/datamitsu/datamitsu/internal/target"
 	"encoding/hex"
 	"fmt"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/target"
 )
 
 // ValidateApps validates app configurations including mandatory lockfile checks.
@@ -37,8 +39,8 @@ func doValidateApps(apps binmanager.MapOfApps, runtimes MapOfRuntimes, skipLockf
 	for _, appName := range appNames {
 		app := apps[appName]
 
-		if (app.Binary != nil || app.Shell != nil || app.Jvm != nil) && (len(app.Files) > 0 || len(app.Links) > 0 || len(app.Archives) > 0) {
-			errs = append(errs, fmt.Sprintf("app %q: files/links/archives are only supported on uv and fnm apps", appName))
+		if (app.Binary != nil || app.Shell != nil || app.Jvm != nil || app.Go != nil) && (len(app.Files) > 0 || len(app.Links) > 0 || len(app.Archives) > 0) {
+			errs = append(errs, fmt.Sprintf("app %q: files/links/archives are only supported on uv and node apps", appName))
 			continue
 		}
 
@@ -85,18 +87,48 @@ func doValidateApps(apps binmanager.MapOfApps, runtimes MapOfRuntimes, skipLockf
 			}
 		}
 
-		if app.Fnm != nil {
-			if app.Fnm.BinPath == "" {
-				errs = append(errs, fmt.Sprintf("app %q: fnm.binPath is required", appName))
-			} else if err := validateSafeRelativePath(app.Fnm.BinPath, "binPath"); err != nil {
+		if app.Node != nil {
+			if app.Node.BinPath == "" {
+				errs = append(errs, fmt.Sprintf("app %q: node.binPath is required", appName))
+			} else if err := validateSafeRelativePath(app.Node.BinPath, "binPath"); err != nil {
 				errs = append(errs, fmt.Sprintf("app %q: %v", appName, err))
+			}
+		}
+
+		if app.Go != nil {
+			// packageName goes verbatim into `go get pkg@version`, so reject
+			// path traversal and any character outside the safe set.
+			switch {
+			case app.Go.PackageName == "":
+				errs = append(errs, fmt.Sprintf("app %q: go.packageName is required", appName))
+			case strings.Contains(app.Go.PackageName, ".."):
+				errs = append(errs, fmt.Sprintf("app %q: go.packageName %q must not contain %q", appName, app.Go.PackageName, ".."))
+			case !safeGoPackagePattern.MatchString(app.Go.PackageName):
+				errs = append(errs, fmt.Sprintf("app %q: go.packageName %q contains invalid characters (must be alphanumeric, dots, slashes, hyphens, or underscores)", appName, app.Go.PackageName))
+			default:
+				if base := path.Base(app.Go.PackageName); base == "." || base == ".." {
+					errs = append(errs, fmt.Sprintf("app %q: go.packageName %q must end in a valid path element", appName, app.Go.PackageName))
+				}
+			}
+			// version is the pinned `go get` query; a floating "latest" defeats
+			// reproducible lockfile generation, so require a concrete version.
+			switch {
+			case app.Go.Version == "":
+				errs = append(errs, fmt.Sprintf("app %q: go.version is required", appName))
+			case strings.EqualFold(app.Go.Version, "latest"):
+				errs = append(errs, fmt.Sprintf("app %q: go.version must be a pinned version, not %q", appName, app.Go.Version))
+			case !isValidVersionString(app.Go.Version):
+				errs = append(errs, fmt.Sprintf("app %q: go.version %q contains invalid characters (must be alphanumeric, dots, hyphens, underscores, or plus signs)", appName, app.Go.Version))
 			}
 		}
 
 		if !skipLockfileCheck && app.Uv != nil && app.Uv.LockFile == "" {
 			errs = append(errs, fmt.Sprintf("app %q: lockFile is required (run: datamitsu config lockfile %s)", appName, appName))
 		}
-		if !skipLockfileCheck && app.Fnm != nil && app.Fnm.LockFile == "" {
+		if !skipLockfileCheck && app.Node != nil && app.Node.LockFile == "" {
+			errs = append(errs, fmt.Sprintf("app %q: lockFile is required (run: datamitsu config lockfile %s)", appName, appName))
+		}
+		if !skipLockfileCheck && app.Go != nil && app.Go.LockFile == "" {
 			errs = append(errs, fmt.Sprintf("app %q: lockFile is required (run: datamitsu config lockfile %s)", appName, appName))
 		}
 
@@ -106,13 +138,18 @@ func doValidateApps(apps binmanager.MapOfApps, runtimes MapOfRuntimes, skipLockf
 					errs = append(errs, refErr.Error())
 				}
 			}
-			if app.Fnm != nil {
-				if refErr := validateAppRuntimeRef(app.Fnm.Runtime, RuntimeKindFNM, appName, runtimes); refErr != nil {
+			if app.Node != nil {
+				if refErr := validateAppRuntimeRef(app.Node.Runtime, RuntimeKindNode, appName, runtimes); refErr != nil {
 					errs = append(errs, refErr.Error())
 				}
 			}
 			if app.Jvm != nil {
 				if refErr := validateAppRuntimeRef(app.Jvm.Runtime, RuntimeKindJVM, appName, runtimes); refErr != nil {
+					errs = append(errs, refErr.Error())
+				}
+			}
+			if app.Go != nil {
+				if refErr := validateAppRuntimeRef(app.Go.Runtime, RuntimeKindGo, appName, runtimes); refErr != nil {
 					errs = append(errs, refErr.Error())
 				}
 			}
@@ -229,6 +266,9 @@ func doValidateApps(apps binmanager.MapOfApps, runtimes MapOfRuntimes, skipLockf
 			if rc.Kind == RuntimeKindUV && rc.Mode == RuntimeModeSystem && (rc.UV == nil || rc.UV.PythonVersion == "") {
 				warnings = append(warnings, fmt.Sprintf("runtime %q: UV system mode without pythonVersion set; system Python version changes won't invalidate cache. Consider setting system.systemVersion for manual cache invalidation", name))
 			}
+			if rc.Kind == RuntimeKindGo && rc.Mode == RuntimeModeSystem && (rc.Go == nil || rc.Go.GoVersion == "") {
+				warnings = append(warnings, fmt.Sprintf("runtime %q: Go system mode without goVersion set; system Go version changes won't invalidate cache. Consider setting system.systemVersion for manual cache invalidation", name))
+			}
 		}
 	}
 
@@ -254,6 +294,12 @@ func validateAppRuntimeRef(ref string, expectedKind RuntimeKind, appName string,
 }
 
 var safeVersionPattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._+-]*$`)
+
+// safeGoPackagePattern matches a Go import path: it must start with an
+// alphanumeric character and may contain dots, slashes, hyphens, and
+// underscores. It deliberately excludes characters that could be used for
+// shell or argument injection when the package path is passed to `go get`.
+var safeGoPackagePattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9./_-]*$`)
 
 func isValidVersionString(s string) bool {
 	if s == "" {
@@ -492,37 +538,11 @@ func ValidateRuntimes(runtimes MapOfRuntimes) error {
 
 	for _, name := range names {
 		rc := runtimes[name]
-		if rc.Kind == RuntimeKindFNM {
-			if rc.FNM == nil {
-				errs = append(errs, fmt.Sprintf("runtime %q: FNM runtime requires fnm config with nodeVersion, pnpmVersion, and pnpmHash", name))
-			} else {
-				if rc.FNM.NodeVersion == "" {
-					errs = append(errs, fmt.Sprintf("runtime %q: fnm.nodeVersion is required", name))
-				} else if !isValidVersionString(rc.FNM.NodeVersion) {
-					errs = append(errs, fmt.Sprintf("runtime %q: fnm.nodeVersion %q contains invalid characters (must be alphanumeric, dots, hyphens, underscores, or plus signs)", name, rc.FNM.NodeVersion))
-				}
-				if rc.FNM.PNPMVersion == "" {
-					errs = append(errs, fmt.Sprintf("runtime %q: fnm.pnpmVersion is required", name))
-				} else if !isValidVersionString(rc.FNM.PNPMVersion) {
-					errs = append(errs, fmt.Sprintf("runtime %q: fnm.pnpmVersion %q contains invalid characters (must be alphanumeric, dots, hyphens, underscores, or plus signs)", name, rc.FNM.PNPMVersion))
-				}
-				if rc.FNM.PNPMHash == "" {
-					errs = append(errs, fmt.Sprintf("runtime %q: fnm.pnpmHash is required (SHA-256 hash of PNPM tarball)", name))
-				} else if !isValidSHA256Hex(rc.FNM.PNPMHash) {
-					errs = append(errs, fmt.Sprintf("runtime %q: fnm.pnpmHash must be a valid SHA-256 hex string (64 lowercase hex characters)", name))
-				}
-			}
-		}
-		if rc.Kind == RuntimeKindJVM {
-			if rc.JVM == nil {
-				errs = append(errs, fmt.Sprintf("runtime %q: JVM runtime requires jvm config with javaVersion", name))
-			} else {
-				if rc.JVM.JavaVersion == "" {
-					errs = append(errs, fmt.Sprintf("runtime %q: jvm.javaVersion is required", name))
-				} else if !isValidVersionString(rc.JVM.JavaVersion) {
-					errs = append(errs, fmt.Sprintf("runtime %q: jvm.javaVersion %q contains invalid characters (must be alphanumeric, dots, hyphens, underscores, or plus signs)", name, rc.JVM.JavaVersion))
-				}
-			}
+		// Kind-specific sub-config validation is registry-driven so the rules live
+		// next to the kind they describe (see runtimekind.go). Unknown/legacy kinds
+		// have no registry entry and are skipped here (mode checks below still run).
+		if info, ok := LookupRuntimeKind(rc.Kind); ok && info.Validate != nil {
+			errs = append(errs, info.Validate(name, rc)...)
 		}
 		if rc.Mode == RuntimeModeManaged {
 			if rc.Managed == nil {

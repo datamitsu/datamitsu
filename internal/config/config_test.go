@@ -1,12 +1,17 @@
 package config
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
 	"testing"
 
+	"github.com/andybalholm/brotli"
 	"github.com/datamitsu/datamitsu/internal/pnpmdefaults"
+	"github.com/datamitsu/datamitsu/internal/syslist"
 	"github.com/dop251/goja"
 	"github.com/goccy/go-yaml"
 )
@@ -123,6 +128,190 @@ func TestDefaultConfigPNPMWorkspaceDefaults(t *testing.T) {
 	}
 }
 
+// runDefaultConfigForTest executes the embedded default config.js in a goja VM
+// (mirroring the globals internal/engine injects) and returns the parsed Config
+// produced by getConfig({}). It is the end-to-end harness for asserting the
+// embedded defaults the way they are actually evaluated at runtime.
+func runDefaultConfigForTest(t *testing.T) *Config {
+	t.Helper()
+
+	configScript, err := GetDefaultConfig()
+	if err != nil {
+		t.Fatalf("GetDefaultConfig() error = %v", err)
+	}
+
+	vm := goja.New()
+	vm.SetFieldNameMapper(goja.TagFieldNameMapper("json", true))
+
+	yamlNamespace := map[string]any{
+		"stringify": func(call goja.FunctionCall) goja.Value {
+			if len(call.Arguments) == 0 {
+				panic(vm.NewTypeError("YAML.stringify requires at least 1 argument"))
+			}
+			b, err := yaml.Marshal(call.Argument(0).Export())
+			if err != nil {
+				panic(vm.NewGoError(fmt.Errorf("YAML.stringify error: %w", err)))
+			}
+			return vm.ToValue(string(b))
+		},
+	}
+	if err := vm.Set("YAML", yamlNamespace); err != nil {
+		t.Fatalf("vm.Set YAML error: %v", err)
+	}
+	if err := vm.Set("pnpmWorkspaceDefaults", pnpmdefaults.Defaults()); err != nil {
+		t.Fatalf("vm.Set pnpmWorkspaceDefaults error: %v", err)
+	}
+
+	if _, err := vm.RunString(configScript); err != nil {
+		t.Fatalf("RunString(configScript) error = %v", err)
+	}
+
+	getConfigFn, ok := goja.AssertFunction(vm.Get("getConfig"))
+	if !ok {
+		t.Fatal("getConfig is not a function")
+	}
+	result, err := getConfigFn(goja.Undefined(), vm.NewObject())
+	if err != nil {
+		t.Fatalf("getConfig() error = %v", err)
+	}
+
+	cfg := &Config{}
+	if err := vm.ExportTo(result, cfg); err != nil {
+		t.Fatalf("ExportTo error = %v", err)
+	}
+	return cfg
+}
+
+// decompressLockFileForTest mirrors runtimemanager.DecompressLockFile without
+// importing that package (which would create an import cycle: runtimemanager
+// imports config). It strips the "br:" prefix, base64-decodes, then brotli
+// decompresses.
+func decompressLockFileForTest(t *testing.T, data string) string {
+	t.Helper()
+	const prefix = "br:"
+	if !strings.HasPrefix(data, prefix) {
+		t.Fatalf("lock file missing %q prefix", prefix)
+	}
+	compressed, err := base64.StdEncoding.DecodeString(data[len(prefix):])
+	if err != nil {
+		t.Fatalf("base64 decode error: %v", err)
+	}
+	decompressed, err := io.ReadAll(brotli.NewReader(bytes.NewReader(compressed)))
+	if err != nil {
+		t.Fatalf("brotli decompress error: %v", err)
+	}
+	return string(decompressed)
+}
+
+func TestDefaultConfigGoRuntime(t *testing.T) {
+	cfg := runDefaultConfigForTest(t)
+
+	rt, ok := cfg.Runtimes["go"]
+	if !ok {
+		t.Fatal(`runtimes["go"] missing from default config`)
+	}
+	if rt.Kind != RuntimeKindGo {
+		t.Errorf("go runtime kind = %q, want %q", rt.Kind, RuntimeKindGo)
+	}
+	if rt.Mode != RuntimeModeManaged {
+		t.Errorf("go runtime mode = %q, want %q", rt.Mode, RuntimeModeManaged)
+	}
+	if rt.Go == nil || rt.Go.GoVersion == "" {
+		t.Fatal("go runtime missing goVersion")
+	}
+	if rt.Managed == nil || rt.Managed.Binaries == nil {
+		t.Fatal("go runtime missing managed binaries")
+	}
+
+	// Every managed binary MUST carry a SHA-256 hash and URL: the project's
+	// security policy forbids hash-less downloads. Verify across all platforms.
+	binaryCount := 0
+	for osType, archMap := range rt.Managed.Binaries {
+		for archType, libcMap := range archMap {
+			for libc, info := range libcMap {
+				binaryCount++
+				if info.Hash == "" {
+					t.Errorf("go SDK binary %s/%s/%s missing mandatory hash", osType, archType, libc)
+				}
+				if info.URL == "" {
+					t.Errorf("go SDK binary %s/%s/%s missing url", osType, archType, libc)
+				}
+				if info.BinaryPath == nil || *info.BinaryPath == "" {
+					t.Errorf("go SDK binary %s/%s/%s missing binaryPath", osType, archType, libc)
+				}
+			}
+		}
+	}
+	if binaryCount == 0 {
+		t.Fatal("go runtime has no managed binaries")
+	}
+
+	// The plan requires linux/darwin on amd64/arm64.
+	required := []struct {
+		os   syslist.OsType
+		arch syslist.ArchType
+	}{
+		{syslist.OsTypeLinux, syslist.ArchTypeAmd64},
+		{syslist.OsTypeLinux, syslist.ArchTypeArm64},
+		{syslist.OsTypeDarwin, syslist.ArchTypeAmd64},
+		{syslist.OsTypeDarwin, syslist.ArchTypeArm64},
+	}
+	for _, r := range required {
+		archMap, ok := rt.Managed.Binaries[r.os]
+		if !ok {
+			t.Errorf("go runtime missing OS %q", r.os)
+			continue
+		}
+		if _, ok := archMap[r.arch]; !ok {
+			t.Errorf("go runtime missing %s/%s", r.os, r.arch)
+		}
+	}
+}
+
+func TestDefaultConfigGovulncheckApp(t *testing.T) {
+	cfg := runDefaultConfigForTest(t)
+
+	app, ok := cfg.Apps["govulncheck"]
+	if !ok {
+		t.Fatal(`apps["govulncheck"] missing from default config`)
+	}
+	if app.Go == nil {
+		t.Fatal("govulncheck app has no go config")
+	}
+	if app.Go.PackageName != "golang.org/x/vuln/cmd/govulncheck" {
+		t.Errorf("govulncheck packageName = %q, want %q", app.Go.PackageName, "golang.org/x/vuln/cmd/govulncheck")
+	}
+	if app.Go.Version == "" {
+		t.Error("govulncheck app missing version")
+	}
+	// Lock file is mandatory for Go apps and must be the brotli-compressed wrapper.
+	if app.Go.LockFile == "" {
+		t.Fatal("govulncheck app has empty lockFile (mandatory for Go apps)")
+	}
+
+	wrapper := decompressLockFileForTest(t, app.Go.LockFile)
+
+	var lf struct {
+		Mod string `json:"mod"`
+		Sum string `json:"sum"`
+	}
+	if err := json.Unmarshal([]byte(wrapper), &lf); err != nil {
+		t.Fatalf("lock file is not valid JSON wrapper: %v\ncontent: %s", err, wrapper)
+	}
+	if lf.Mod == "" {
+		t.Error("lock file wrapper missing go.mod content")
+	}
+	if lf.Sum == "" {
+		t.Error("lock file wrapper missing go.sum content")
+	}
+	if !strings.Contains(lf.Mod, "golang.org/x/vuln") {
+		t.Errorf("go.mod should require golang.org/x/vuln, got:\n%s", lf.Mod)
+	}
+	if !strings.Contains(lf.Sum, "golang.org/x/vuln") {
+		t.Errorf("go.sum should contain golang.org/x/vuln checksums, got:\n%s", lf.Sum)
+	}
+}
+
 func equalAny(got, want any) bool {
 	switch w := want.(type) {
 	case uint64:
@@ -213,8 +402,151 @@ func TestRuntimeKindConstants(t *testing.T) {
 	if RuntimeKindUV != "uv" {
 		t.Errorf("RuntimeKindUV = %q, want %q", RuntimeKindUV, "uv")
 	}
-	if RuntimeKindFNM != "fnm" {
-		t.Errorf("RuntimeKindFNM = %q, want %q", RuntimeKindFNM, "fnm")
+	if RuntimeKindNode != "node" {
+		t.Errorf("RuntimeKindNode = %q, want %q", RuntimeKindNode, "node")
+	}
+	if RuntimeKindJVM != "jvm" {
+		t.Errorf("RuntimeKindJVM = %q, want %q", RuntimeKindJVM, "jvm")
+	}
+	if RuntimeKindGo != "go" {
+		t.Errorf("RuntimeKindGo = %q, want %q", RuntimeKindGo, "go")
+	}
+}
+
+func TestRuntimeConfigGo_Fields(t *testing.T) {
+	cfg := RuntimeConfigGo{
+		GoVersion: "1.24.3",
+	}
+
+	if cfg.GoVersion != "1.24.3" {
+		t.Errorf("GoVersion = %q, want %q", cfg.GoVersion, "1.24.3")
+	}
+}
+
+func TestRuntimeConfig_GoField_JSONRoundTrip(t *testing.T) {
+	original := RuntimeConfig{
+		Kind: RuntimeKindGo,
+		Mode: RuntimeModeManaged,
+		Go: &RuntimeConfigGo{
+			GoVersion: "1.24.3",
+		},
+	}
+
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("json.Marshal error: %v", err)
+	}
+
+	dataStr := string(data)
+	if !strings.Contains(dataStr, `"goVersion"`) {
+		t.Errorf("JSON should contain 'goVersion' field, got: %s", dataStr)
+	}
+
+	var decoded RuntimeConfig
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("json.Unmarshal error: %v", err)
+	}
+
+	if decoded.Kind != RuntimeKindGo {
+		t.Errorf("Kind = %q, want %q", decoded.Kind, RuntimeKindGo)
+	}
+	if decoded.Go == nil {
+		t.Fatal("decoded.Go is nil after round-trip")
+	}
+	if decoded.Go.GoVersion != "1.24.3" {
+		t.Errorf("GoVersion = %q, want %q", decoded.Go.GoVersion, "1.24.3")
+	}
+}
+
+func TestRuntimeConfig_GoField_OmittedWhenNil(t *testing.T) {
+	rc := RuntimeConfig{
+		Kind: RuntimeKindUV,
+		Mode: RuntimeModeManaged,
+	}
+
+	data, err := json.Marshal(rc)
+	if err != nil {
+		t.Fatalf("json.Marshal error: %v", err)
+	}
+
+	if strings.Contains(string(data), `"go"`) {
+		t.Errorf("JSON should omit nil go field, got: %s", string(data))
+	}
+}
+
+func TestRuntimeConfigNode_Fields(t *testing.T) {
+	cfg := RuntimeConfigNode{
+		NodeVersion: "26.2.0",
+		PNPMVersion: "11.0.0",
+		PNPMHash:    "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+	}
+
+	if cfg.NodeVersion != "26.2.0" {
+		t.Errorf("NodeVersion = %q, want %q", cfg.NodeVersion, "26.2.0")
+	}
+	if cfg.PNPMVersion != "11.0.0" {
+		t.Errorf("PNPMVersion = %q, want %q", cfg.PNPMVersion, "11.0.0")
+	}
+	if cfg.PNPMHash != "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2" {
+		t.Errorf("PNPMHash = %q, unexpected", cfg.PNPMHash)
+	}
+}
+
+func TestRuntimeConfig_NodeField_JSONRoundTrip(t *testing.T) {
+	jsonStr := `{
+		"kind": "node",
+		"mode": "managed",
+		"node": {
+			"nodeVersion": "26.2.0",
+			"pnpmVersion": "11.0.0",
+			"pnpmHash": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+		}
+	}`
+
+	var decoded RuntimeConfig
+	if err := json.Unmarshal([]byte(jsonStr), &decoded); err != nil {
+		t.Fatalf("json.Unmarshal error: %v", err)
+	}
+
+	if decoded.Kind != RuntimeKindNode {
+		t.Errorf("Kind = %q, want %q", decoded.Kind, RuntimeKindNode)
+	}
+	if decoded.Node == nil {
+		t.Fatal("decoded.Node is nil after parsing")
+	}
+	if decoded.Node.NodeVersion != "26.2.0" {
+		t.Errorf("NodeVersion = %q, want %q", decoded.Node.NodeVersion, "26.2.0")
+	}
+	if decoded.Node.PNPMVersion != "11.0.0" {
+		t.Errorf("PNPMVersion = %q, want %q", decoded.Node.PNPMVersion, "11.0.0")
+	}
+	if decoded.Node.PNPMHash != "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2" {
+		t.Errorf("PNPMHash = %q, unexpected", decoded.Node.PNPMHash)
+	}
+
+	// Re-marshal and ensure the node field is emitted.
+	data, err := json.Marshal(decoded)
+	if err != nil {
+		t.Fatalf("json.Marshal error: %v", err)
+	}
+	if !strings.Contains(string(data), `"node"`) {
+		t.Errorf("JSON should contain 'node' field, got: %s", string(data))
+	}
+}
+
+func TestRuntimeConfig_NodeField_OmittedWhenNil(t *testing.T) {
+	rc := RuntimeConfig{
+		Kind: RuntimeKindUV,
+		Mode: RuntimeModeManaged,
+	}
+
+	data, err := json.Marshal(rc)
+	if err != nil {
+		t.Fatalf("json.Marshal error: %v", err)
+	}
+
+	if strings.Contains(string(data), `"node"`) {
+		t.Errorf("JSON should omit nil node field, got: %s", string(data))
 	}
 }
 

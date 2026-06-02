@@ -43,8 +43,8 @@
     "@docusaurus/module-type-aliases": "3.10.1",
     "@docusaurus/tsconfig": "3.10.1",
     "@docusaurus/types": "3.10.1",
-    "@shibanet0/datamitsu-config": "0.0.6",
-    "@types/react": "19.2.14",
+    "@shibanet0/datamitsu-config": "0.0.7",
+    "@types/react": "19.2.15",
     "@types/react-dom": "19.2.3"
   }
 }

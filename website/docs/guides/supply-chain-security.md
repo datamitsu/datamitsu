@@ -5,23 +5,25 @@ description: How datamitsu enforces supply chain integrity for pnpm, UV, and Go 
 
 # Supply Chain Security
 
-datamitsu treats supply chain integrity as a non-negotiable property of every install. This guide explains the defenses applied to pnpm (FNM apps), UV (Python apps), and Go dependencies, and how to configure overrides when a real workload requires them.
+datamitsu treats supply chain integrity as a non-negotiable property of every install. This guide explains the defenses applied to pnpm (node apps), UV (Python apps), and Go dependencies, and how to configure overrides when a real workload requires them.
 
 ## Hash Verification (All Downloads)
 
 Every artifact downloaded from the internet must have a SHA-256 hash. This applies to binary apps, managed runtimes, JVM JAR files, and remote config files. If a hash is missing, datamitsu refuses to download — there is no permissive fallback mode.
 
-The hash is verified before the artifact is unpacked or executed. Lock files are mandatory for all UV and FNM apps; the lock file content itself is hash-verified as part of the app config.
+The hash is verified before the artifact is unpacked or executed. Lock files are mandatory for all UV and node apps; the lock file content itself is hash-verified as part of the app config.
 
 See the [Binary Management](./binary-management.md) guide for the verification pipeline applied to binary apps.
 
-## pnpm (FNM Apps)
+## pnpm (Node Apps)
 
-pnpm 11 introduces strict supply chain defaults that block lifecycle scripts for unapproved packages. datamitsu integrates with these defaults rather than disabling them: when an FNM app is installed, datamitsu writes a `pnpm-workspace.yaml` containing a secure baseline. Any per-app overrides supplied via `App.files["pnpm-workspace.yaml"]` are shallow-merged on top.
+The Node.js runtime itself is acquired as a direct, SHA-256-pinned archive download (like the JVM runtime), and pnpm is pinned by SHA-256 as well — so the toolchain executing your installs is integrity-verified before any package is fetched.
+
+pnpm 11 introduces strict supply chain defaults that block lifecycle scripts for unapproved packages. datamitsu integrates with these defaults rather than disabling them: when a node app is installed, datamitsu writes a `pnpm-workspace.yaml` containing a secure baseline. Any per-app overrides supplied via `App.files["pnpm-workspace.yaml"]` are shallow-merged on top.
 
 ### Recommended Defaults
 
-The baseline `pnpm-workspace.yaml` that datamitsu writes for every FNM app:
+The baseline `pnpm-workspace.yaml` that datamitsu writes for every node app:
 
 ```yaml
 strictDepBuilds: true
@@ -59,7 +61,7 @@ const mapOfApps: BinManager.MapOfApps = {
         allowBuilds: { puppeteer: true },
       }),
     },
-    fnm: {
+    node: {
       packageName: "@mermaid-js/mermaid-cli",
       binPath: "node_modules/.bin/mmdc",
       version: "11.15.0",
@@ -85,7 +87,7 @@ files: {
 
 ### Reusing Defaults in Project Repos via `sharedStorage`
 
-For users who want to write a secure `pnpm-workspace.yaml` into a project repository (not into a datamitsu-managed FNM app environment), the default `config.js` publishes the recommended defaults via `sharedStorage["pnpm-workspace-defaults"]`. Your config can read, extend, and write them.
+For users who want to write a secure `pnpm-workspace.yaml` into a project repository (not into a datamitsu-managed node app environment), the default `config.js` publishes the recommended defaults via `sharedStorage["pnpm-workspace-defaults"]`. Your config can read, extend, and write them.
 
 ```typescript
 function getConfig(config: BinManager.Config): BinManager.Config {
@@ -111,11 +113,11 @@ function getConfig(config: BinManager.Config): BinManager.Config {
 }
 ```
 
-This pattern is for **repo-level** configuration — a project's own `pnpm-workspace.yaml`. It is separate from the per-app FNM merge above, which is fully automatic.
+This pattern is for **repo-level** configuration — a project's own `pnpm-workspace.yaml`. It is separate from the per-app node merge above, which is fully automatic.
 
 ### Lockfile Enforcement
 
-FNM apps require a `lockFile` field. datamitsu runs `pnpm install --frozen-lockfile`, so any drift between the lock file and `package.json` fails the install. Regenerate lock files after version bumps via `datamitsu config lockfile <appName>`.
+Node apps require a `lockFile` field. datamitsu runs `pnpm install --frozen-lockfile`, so any drift between the lock file and `package.json` fails the install. Regenerate lock files after version bumps via `datamitsu config lockfile <appName>`.
 
 ## UV (Python Apps)
 
@@ -149,9 +151,37 @@ const mapOfApps: BinManager.MapOfApps = {
 
 UV's lock file format embeds hashes for every resolved artifact. Combined with `--locked`, this gives end-to-end integrity for the dependency tree.
 
-## Go
+## Go (Go Apps)
 
-datamitsu does not manage Go dependencies directly — `go` itself does. The relevant defenses live in standard Go tooling and should be enforced in CI:
+Go apps build a command-line tool from source with the managed Go SDK. Three layers of defense apply before the resulting binary runs.
+
+### Hash-Pinned Go SDK
+
+The Go toolchain itself is downloaded as a SHA-256-pinned archive (like the Node.js and JVM runtimes), so the compiler building your tool is integrity-verified before any source is fetched. `GOTOOLCHAIN=local` is forced, so the pinned SDK can never silently swap itself for a different toolchain version.
+
+### Mandatory Lock File (`go.mod` + `go.sum`)
+
+Go apps require a `lockFile` field. datamitsu stores it as a JSON wrapper carrying both `go.mod` and `go.sum`, writes both files into an isolated build directory, and builds with `-mod=readonly`. Any drift between the resolved modules and the pinned `go.sum` fails the build instead of silently rewriting it. The checksum database ([sum.golang.org](https://sum.golang.org/)) is consulted via `GOSUMDB`, and `GOPRIVATE`/`GONOPROXY`/`GONOSUMDB`/`GOINSECURE` are explicitly cleared so no module can opt out of verification.
+
+```typescript
+const mapOfApps: BinManager.MapOfApps = {
+  govulncheck: {
+    go: {
+      packageName: "golang.org/x/vuln/cmd/govulncheck",
+      version: "v1.3.0",
+      lockFile: "br:...", // mandatory; carries go.mod + go.sum
+    },
+  },
+};
+```
+
+### Reproducible Builds
+
+The build runs `go build -trimpath -mod=readonly`. `-trimpath` strips local filesystem paths so the output is reproducible, and `-mod=readonly` forbids any `go.mod`/`go.sum` mutation. Regenerate the lock file after a version bump via `datamitsu config lockfile <appName>`.
+
+### Securing Your Own Repository's Go Code
+
+datamitsu manages Go _apps_ (tools it builds for you); your repository's own Go modules are still managed by `go` itself. Enforce the standard defenses in CI:
 
 ```bash
 # Verify go.sum checksums against the local module cache
@@ -166,8 +196,6 @@ GOFLAGS=-mod=readonly go build ./...
 # Scan for known vulnerabilities in dependencies and stdlib
 govulncheck ./...
 ```
-
-Go's checksum database ([sum.golang.org](https://sum.golang.org/)) is consulted by default during `go mod download`, providing transparency-log-backed verification on top of `go.sum`.
 
 ## Common Patterns
 
@@ -206,6 +234,6 @@ For wrapper packages, also run `datamitsu devtools verify-all` to confirm every 
 ## Related
 
 - [Maintaining Wrapper Packages](../how-to/maintain-wrapper.md) — keeping tool versions, hashes, and lock files current
-- [PNPM Patterns](../examples/pnpm-patterns.md) — workspace and dependency examples for FNM apps
+- [PNPM Patterns](../examples/pnpm-patterns.md) — workspace and dependency examples for node apps
 - [UV Isolation](../examples/uv-isolation.md) — Python app isolation patterns
 - [Binary Management](./binary-management.md) — hash verification for binary apps and runtimes

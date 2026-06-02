@@ -6,7 +6,7 @@ ARG TARGETARCH
 COPY dist/datamitsu-linux-${TARGETARCH}/datamitsu /datamitsu
 
 # Stage 2: Runtime
-FROM alpine:3.23
+FROM alpine:3.23@sha256:5b10f432ef3da1b8d4c7eb6c487f2f5a8f096bc91145e68878dd4a5019afde11
 
 # Static OCI labels (dynamic labels injected via docker/metadata-action in CI)
 LABEL org.opencontainers.image.title="datamitsu" \
@@ -18,10 +18,17 @@ LABEL org.opencontainers.image.title="datamitsu" \
       org.opencontainers.image.documentation="https://datamitsu.com"
 
 # Install runtime dependencies
+# git: datamitsu shells out to the git binary for git-root detection and
+#   `git diff --cached` (go-git/v6 covers only a subset of operations).
+# libstdc++: musl Node.js builds from unofficial-builds.nodejs.org dynamically
+#   link libstdc++ (and libgcc, pulled in transitively); base alpine lacks it.
+# libatomic: Node.js v26+ dynamically links libatomic.so.1; base alpine lacks it.
 # hadolint ignore=DL3018
 RUN apk add --no-cache \
     ca-certificates \
-    git
+    git \
+    libstdc++ \
+    libatomic
 
 # Copy binary
 COPY --from=binary /datamitsu /usr/local/bin/datamitsu

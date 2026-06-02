@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/datamitsuignore"
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/project"
 	"fmt"
@@ -1107,6 +1108,64 @@ func TestCollectTasksRepositoryScope(t *testing.T) {
 
 		if len(tasks) != 0 {
 			t.Errorf("len(tasks) = %d, want 0 (repository scope skipped when cwd != root)", len(tasks))
+		}
+	})
+}
+
+// TestCollectTasksRepositoryScopeRespectsDatamitsuignore pins that a catch-all
+// .datamitsuignore rule (e.g. the opt-in-tools generated file) disables
+// repository-scoped tools too — not just per-file and per-project tools. This is
+// the disabling guarantee the opt-in-tools feature depends on for tools like
+// golangci-lint.
+func TestCollectTasksRepositoryScopeRespectsDatamitsuignore(t *testing.T) {
+	root := "/repo"
+	cwd := "/repo"
+
+	tools := config.MapOfTools{
+		"golangci-lint": {
+			Name: "golangci-lint",
+			Operations: map[config.OperationType]config.ToolOperation{
+				config.OpLint: {
+					App:   "golangci-lint",
+					Scope: config.ToolScopeRepository,
+				},
+			},
+		},
+	}
+
+	newPlanner := func(rule string) *Planner {
+		m := datamitsuignore.NewMatcher()
+		if err := m.AddFile("", rule); err != nil {
+			t.Fatalf("AddFile(%q) error = %v", rule, err)
+		}
+		return &Planner{
+			rootPath:         root,
+			cwdPath:          cwd,
+			detectedTypes:    []string{},
+			tools:            tools,
+			cachedFiles:      []string{"/repo/main.go"},
+			cachedProjects:   []project.ProjectLocation{},
+			cacheInitialized: true,
+			ignoreMatcher:    m,
+		}
+	}
+
+	t.Run("catch-all rule disables repository-scoped tool", func(t *testing.T) {
+		p := newPlanner("**/*: golangci-lint\n")
+		tasks := p.collectTasks(config.OpLint, nil)
+		if len(tasks) != 0 {
+			t.Errorf("repository-scoped tool should be disabled by '**/*: golangci-lint', got %d task(s)", len(tasks))
+		}
+	})
+
+	t.Run("non-matching rule leaves repository-scoped tool enabled", func(t *testing.T) {
+		p := newPlanner("**/*: other-tool\n")
+		tasks := p.collectTasks(config.OpLint, nil)
+		if len(tasks) != 1 {
+			t.Fatalf("repository-scoped tool should run when no rule matches, got %d task(s)", len(tasks))
+		}
+		if tasks[0].ToolName != "golangci-lint" {
+			t.Errorf("ToolName = %q, want %q", tasks[0].ToolName, "golangci-lint")
 		}
 	})
 }

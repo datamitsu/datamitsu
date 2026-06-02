@@ -65,30 +65,30 @@ func makeTestRuntimes() config.MapOfRuntimes {
 				Command: "/usr/local/bin/uv",
 			},
 		},
-		"fnm": {
-			Kind: config.RuntimeKindFNM,
+		"node": {
+			Kind: config.RuntimeKindNode,
 			Mode: config.RuntimeModeManaged,
-			FNM: &config.RuntimeConfigFNM{
+			Node: &config.RuntimeConfigNode{
 				PNPMHash: "test-pnpm-sha256-hash",
 			},
 			Managed: &config.RuntimeConfigManaged{
 				Binaries: binmanager.MapOfBinaries{
 					syslist.OsTypeDarwin: {
 						syslist.ArchTypeAmd64: {"unknown": binmanager.BinaryOsArchInfo{
-							URL:         "https://example.com/fnm-darwin-amd64.tar.gz",
-							Hash:        "fnm123",
+							URL:         "https://example.com/node-darwin-amd64.tar.gz",
+							Hash:        "node123",
 							ContentType: binmanager.BinContentTypeTarGz,
 						}},
 						syslist.ArchTypeArm64: {"unknown": binmanager.BinaryOsArchInfo{
-							URL:         "https://example.com/fnm-darwin-arm64.tar.gz",
-							Hash:        "fnm123arm",
+							URL:         "https://example.com/node-darwin-arm64.tar.gz",
+							Hash:        "node123arm",
 							ContentType: binmanager.BinContentTypeTarGz,
 						}},
 					},
 					syslist.OsTypeLinux: {
 						syslist.ArchTypeAmd64: {testLibc: binmanager.BinaryOsArchInfo{
-							URL:         "https://example.com/fnm-linux-amd64.tar.gz",
-							Hash:        "fnm456",
+							URL:         "https://example.com/node-linux-amd64.tar.gz",
+							Hash:        "node456",
 							ContentType: binmanager.BinContentTypeTarGz,
 						}},
 					},
@@ -136,7 +136,7 @@ func TestResolveRuntime(t *testing.T) {
 	})
 
 	t.Run("explicit runtime ref kind mismatch", func(t *testing.T) {
-		_, _, err := rm.ResolveRuntime("uv", config.RuntimeKindFNM)
+		_, _, err := rm.ResolveRuntime("uv", config.RuntimeKindNode)
 		if err == nil {
 			t.Error("expected error for kind mismatch, got nil")
 		}
@@ -159,7 +159,7 @@ func TestResolveRuntime(t *testing.T) {
 		rm2 := New(config.MapOfRuntimes{
 			"uv": {Kind: config.RuntimeKindUV, Mode: config.RuntimeModeManaged},
 		})
-		_, _, err := rm2.ResolveRuntime("", config.RuntimeKindFNM)
+		_, _, err := rm2.ResolveRuntime("", config.RuntimeKindNode)
 		if err == nil {
 			t.Error("expected error when no runtime of kind exists, got nil")
 		}
@@ -219,9 +219,9 @@ func TestGetAppPath(t *testing.T) {
 
 	t.Run("deps affect path", func(t *testing.T) {
 		deps := map[string]string{"plugin": "1.0.0"}
-		extra := FNMAppPathExtra{PackageName: "eslint", BinPath: "node_modules/.bin/eslint"}
-		path1, _ := rm.GetAppPath("eslint", config.RuntimeKindFNM, "9.0.0", nil, "", nil, nil, "fnm", extra)
-		path2, _ := rm.GetAppPath("eslint", config.RuntimeKindFNM, "9.0.0", deps, "", nil, nil, "fnm", extra)
+		extra := NodeAppPathExtra{PackageName: "eslint", BinPath: "node_modules/.bin/eslint"}
+		path1, _ := rm.GetAppPath("eslint", config.RuntimeKindNode, "9.0.0", nil, "", nil, nil, "node", extra)
+		path2, _ := rm.GetAppPath("eslint", config.RuntimeKindNode, "9.0.0", deps, "", nil, nil, "node", extra)
 
 		if path1 == path2 {
 			t.Error("dependencies should affect path")
@@ -257,8 +257,8 @@ func TestCollectRequiredRuntimes(t *testing.T) {
 			Kind: config.RuntimeKindUV,
 			Mode: config.RuntimeModeManaged,
 		},
-		"fnm": {
-			Kind: config.RuntimeKindFNM,
+		"node": {
+			Kind: config.RuntimeKindNode,
 			Mode: config.RuntimeModeManaged,
 		},
 		"system-uv": {
@@ -273,8 +273,8 @@ func TestCollectRequiredRuntimes(t *testing.T) {
 		if len(result) != 3 {
 			t.Fatalf("expected 3 runtimes, got %d", len(result))
 		}
-		if result[0] != "fnm" || result[1] != "system-uv" || result[2] != "uv" {
-			t.Errorf("expected sorted [fnm system-uv uv], got %v", result)
+		if result[0] != "node" || result[1] != "system-uv" || result[2] != "uv" {
+			t.Errorf("expected sorted [node system-uv uv], got %v", result)
 		}
 	})
 
@@ -298,15 +298,15 @@ func TestCollectRequiredRuntimes(t *testing.T) {
 		}
 	})
 
-	t.Run("required fnm app collects default fnm runtime", func(t *testing.T) {
+	t.Run("required node app collects default node runtime", func(t *testing.T) {
 		apps := binmanager.MapOfApps{
 			"eslint": {
 				Required: true,
-				Fnm: &binmanager.AppConfigFNM{
+				Node: &binmanager.AppConfigNode{
 					PackageName: "eslint",
 					Version:     "9.0.0",
 
-					BinPath:     "node_modules/.bin/eslint",
+					BinPath: "node_modules/.bin/eslint",
 				},
 			},
 		}
@@ -314,8 +314,8 @@ func TestCollectRequiredRuntimes(t *testing.T) {
 		if len(result) != 1 {
 			t.Fatalf("expected 1 runtime, got %d: %v", len(result), result)
 		}
-		if result[0] != "fnm" {
-			t.Errorf("expected fnm, got %q", result[0])
+		if result[0] != "node" {
+			t.Errorf("expected node, got %q", result[0])
 		}
 	})
 
@@ -398,7 +398,7 @@ func TestCollectRequiredRuntimes(t *testing.T) {
 		}
 	})
 
-	t.Run("mixed uv and fnm apps", func(t *testing.T) {
+	t.Run("mixed uv and node apps", func(t *testing.T) {
 		apps := binmanager.MapOfApps{
 			"yamllint": {
 				Required: true,
@@ -410,12 +410,12 @@ func TestCollectRequiredRuntimes(t *testing.T) {
 			},
 			"eslint": {
 				Required: true,
-				Fnm: &binmanager.AppConfigFNM{
+				Node: &binmanager.AppConfigNode{
 					PackageName: "eslint",
 					Version:     "9.0.0",
 
-					BinPath:     "node_modules/.bin/eslint",
-					Runtime:     "fnm",
+					BinPath: "node_modules/.bin/eslint",
+					Runtime: "node",
 				},
 			},
 		}
@@ -423,8 +423,8 @@ func TestCollectRequiredRuntimes(t *testing.T) {
 		if len(result) != 2 {
 			t.Fatalf("expected 2 runtimes, got %d: %v", len(result), result)
 		}
-		if result[0] != "fnm" || result[1] != "uv" {
-			t.Errorf("expected sorted [fnm uv], got %v", result)
+		if result[0] != "node" || result[1] != "uv" {
+			t.Errorf("expected sorted [node uv], got %v", result)
 		}
 	})
 
@@ -542,214 +542,12 @@ func TestInstallRuntimes(t *testing.T) {
 	})
 }
 
-func TestGetCommandInfoFNM(t *testing.T) {
+func TestGetAppPathNode(t *testing.T) {
 	runtimes := makeTestRuntimes()
 	rm := New(runtimes)
 
-	t.Run("fnm app is not a runtime-managed app without fnm config", func(t *testing.T) {
-		app := binmanager.App{}
-		_, err := rm.GetCommandInfo("test", app)
-		if err == nil {
-			t.Error("expected error for app with no config, got nil")
-		}
-	})
-
-	t.Run("fnm app delegates to FNM methods", func(t *testing.T) {
-		app := binmanager.App{
-			Fnm: &binmanager.AppConfigFNM{
-				PackageName: "@mermaid-js/mermaid-cli",
-				Version:     "11.4.2",
-
-				BinPath:     "node_modules/.bin/mmdc",
-				Runtime:     "fnm",
-			},
-		}
-
-		// InstallFNMApp will fail because there's no actual FNM binary to download,
-		// but we can verify the dispatch works by checking that it attempts FNM installation
-		_, err := rm.GetCommandInfo("mmdc", app)
-		// The error should be from InstallFNMApp, not from "not a runtime-managed app"
-		if err == nil {
-			t.Skip("unexpected success - FNM binary not available in test env")
-		}
-		if err.Error() == `app "mmdc" is not a runtime-managed app` {
-			t.Error("FNM app should be recognized as runtime-managed")
-		}
-	})
-}
-
-func TestCollectRequiredRuntimesFNM(t *testing.T) {
-	runtimes := config.MapOfRuntimes{
-		"uv": {
-			Kind: config.RuntimeKindUV,
-			Mode: config.RuntimeModeManaged,
-		},
-		"fnm": {
-			Kind: config.RuntimeKindFNM,
-			Mode: config.RuntimeModeManaged,
-		},
-	}
-
-	t.Run("required fnm app collects default fnm runtime", func(t *testing.T) {
-		apps := binmanager.MapOfApps{
-			"mmdc": {
-				Required: true,
-				Fnm: &binmanager.AppConfigFNM{
-					PackageName: "@mermaid-js/mermaid-cli",
-					Version:     "11.4.2",
-
-					BinPath:     "node_modules/.bin/mmdc",
-				},
-			},
-		}
-		result := CollectRequiredRuntimes(apps, runtimes, false)
-		if len(result) != 1 {
-			t.Fatalf("expected 1 runtime, got %d: %v", len(result), result)
-		}
-		if result[0] != "fnm" {
-			t.Errorf("expected fnm, got %q", result[0])
-		}
-	})
-
-	t.Run("fnm app with explicit runtime ref", func(t *testing.T) {
-		apps := binmanager.MapOfApps{
-			"mmdc": {
-				Required: true,
-				Fnm: &binmanager.AppConfigFNM{
-					PackageName: "@mermaid-js/mermaid-cli",
-					Version:     "11.4.2",
-
-					BinPath:     "node_modules/.bin/mmdc",
-					Runtime:     "fnm",
-				},
-			},
-		}
-		result := CollectRequiredRuntimes(apps, runtimes, false)
-		if len(result) != 1 {
-			t.Fatalf("expected 1 runtime, got %d: %v", len(result), result)
-		}
-		if result[0] != "fnm" {
-			t.Errorf("expected fnm, got %q", result[0])
-		}
-	})
-
-	t.Run("optional fnm app excluded", func(t *testing.T) {
-		apps := binmanager.MapOfApps{
-			"mmdc": {
-				Required: false,
-				Fnm: &binmanager.AppConfigFNM{
-					PackageName: "@mermaid-js/mermaid-cli",
-					Version:     "11.4.2",
-
-					BinPath:     "node_modules/.bin/mmdc",
-				},
-			},
-		}
-		result := CollectRequiredRuntimes(apps, runtimes, false)
-		if len(result) != 0 {
-			t.Errorf("expected 0 runtimes for optional fnm app, got %d: %v", len(result), result)
-		}
-	})
-
-	t.Run("fnm app with nonexistent runtime ref ignored", func(t *testing.T) {
-		apps := binmanager.MapOfApps{
-			"mmdc": {
-				Required: true,
-				Fnm: &binmanager.AppConfigFNM{
-					PackageName: "@mermaid-js/mermaid-cli",
-					Version:     "11.4.2",
-
-					BinPath:     "node_modules/.bin/mmdc",
-					Runtime:     "nonexistent",
-				},
-			},
-		}
-		result := CollectRequiredRuntimes(apps, runtimes, false)
-		if len(result) != 0 {
-			t.Errorf("expected 0 runtimes for nonexistent ref, got %d: %v", len(result), result)
-		}
-	})
-
-	t.Run("mixed uv and fnm apps", func(t *testing.T) {
-		apps := binmanager.MapOfApps{
-			"yamllint": {
-				Required: true,
-				Uv: &binmanager.AppConfigUV{
-					PackageName: "yamllint",
-					Version:     "1.37.0",
-					Runtime:     "uv",
-				},
-			},
-			"mmdc": {
-				Required: true,
-				Fnm: &binmanager.AppConfigFNM{
-					PackageName: "@mermaid-js/mermaid-cli",
-					Version:     "11.4.2",
-
-					BinPath:     "node_modules/.bin/mmdc",
-					Runtime:     "fnm",
-				},
-			},
-		}
-		result := CollectRequiredRuntimes(apps, runtimes, false)
-		if len(result) != 2 {
-			t.Fatalf("expected 2 runtimes, got %d: %v", len(result), result)
-		}
-		if result[0] != "fnm" || result[1] != "uv" {
-			t.Errorf("expected sorted [fnm uv], got %v", result)
-		}
-	})
-
-	t.Run("fnm deduplication across multiple apps", func(t *testing.T) {
-		apps := binmanager.MapOfApps{
-			"mmdc": {
-				Required: true,
-				Fnm: &binmanager.AppConfigFNM{
-					PackageName: "@mermaid-js/mermaid-cli",
-					Version:     "11.4.2",
-
-					BinPath:     "node_modules/.bin/mmdc",
-					Runtime:     "fnm",
-				},
-			},
-			"slidev": {
-				Required: true,
-				Fnm: &binmanager.AppConfigFNM{
-					PackageName: "@slidev/cli",
-					Version:     "0.50.0",
-
-					BinPath:     "node_modules/.bin/slidev",
-					Runtime:     "fnm",
-				},
-			},
-		}
-		result := CollectRequiredRuntimes(apps, runtimes, false)
-		if len(result) != 1 {
-			t.Fatalf("expected 1 deduplicated runtime, got %d: %v", len(result), result)
-		}
-		if result[0] != "fnm" {
-			t.Errorf("expected fnm, got %q", result[0])
-		}
-	})
-
-	t.Run("includeAll returns all runtimes including fnm", func(t *testing.T) {
-		apps := binmanager.MapOfApps{}
-		result := CollectRequiredRuntimes(apps, runtimes, true)
-		if len(result) != 2 {
-			t.Fatalf("expected 2 runtimes, got %d: %v", len(result), result)
-		}
-		if result[0] != "fnm" || result[1] != "uv" {
-			t.Errorf("expected sorted [fnm uv], got %v", result)
-		}
-	})
-}
-
-func TestGetAppPathFNM(t *testing.T) {
-	runtimes := makeTestRuntimes()
-	rm := New(runtimes)
-
-	t.Run("fnm app path with FNMAppPathExtra", func(t *testing.T) {
-		path, err := rm.GetAppPath("mmdc", config.RuntimeKindFNM, "11.4.2", nil, "", nil, nil, "fnm", FNMAppPathExtra{
+	t.Run("node app path with NodeAppPathExtra", func(t *testing.T) {
+		path, err := rm.GetAppPath("mmdc", config.RuntimeKindNode, "11.4.2", nil, "", nil, nil, "node", NodeAppPathExtra{
 			PackageName: "@mermaid-js/mermaid-cli",
 			BinPath:     "node_modules/.bin/mmdc",
 		})
@@ -761,10 +559,10 @@ func TestGetAppPathFNM(t *testing.T) {
 		}
 	})
 
-	t.Run("fnm app path is deterministic", func(t *testing.T) {
-		extra := FNMAppPathExtra{PackageName: "@mermaid-js/mermaid-cli", BinPath: "node_modules/.bin/mmdc"}
-		path1, _ := rm.GetAppPath("mmdc", config.RuntimeKindFNM, "11.4.2", nil, "", nil, nil, "fnm", extra)
-		path2, _ := rm.GetAppPath("mmdc", config.RuntimeKindFNM, "11.4.2", nil, "", nil, nil, "fnm", extra)
+	t.Run("node app path is deterministic", func(t *testing.T) {
+		extra := NodeAppPathExtra{PackageName: "@mermaid-js/mermaid-cli", BinPath: "node_modules/.bin/mmdc"}
+		path1, _ := rm.GetAppPath("mmdc", config.RuntimeKindNode, "11.4.2", nil, "", nil, nil, "node", extra)
+		path2, _ := rm.GetAppPath("mmdc", config.RuntimeKindNode, "11.4.2", nil, "", nil, nil, "node", extra)
 
 		if path1 != path2 {
 			t.Errorf("path not deterministic: %q != %q", path1, path2)
@@ -774,20 +572,20 @@ func TestGetAppPathFNM(t *testing.T) {
 	t.Run("different node versions produce different paths", func(t *testing.T) {
 		// Node version is now on the runtime config, so we need different runtimes
 		runtimesWithDiffNode := makeTestRuntimes()
-		runtimesWithDiffNode["fnm-alt-node"] = config.RuntimeConfig{
-			Kind: config.RuntimeKindFNM,
+		runtimesWithDiffNode["node-alt"] = config.RuntimeConfig{
+			Kind: config.RuntimeKindNode,
 			Mode: config.RuntimeModeManaged,
-			FNM: &config.RuntimeConfigFNM{
+			Node: &config.RuntimeConfigNode{
 				NodeVersion: "20.11.1",
 				PNPMVersion: "10.7.0",
 				PNPMHash:    "test-pnpm-sha256-hash",
 			},
-			Managed: runtimesWithDiffNode["fnm"].Managed,
+			Managed: runtimesWithDiffNode["node"].Managed,
 		}
 		rmDiffNode := New(runtimesWithDiffNode)
-		extra := FNMAppPathExtra{PackageName: "@mermaid-js/mermaid-cli", BinPath: "node_modules/.bin/mmdc"}
-		path1, _ := rmDiffNode.GetAppPath("mmdc", config.RuntimeKindFNM, "11.4.2", nil, "", nil, nil, "fnm", extra)
-		path2, _ := rmDiffNode.GetAppPath("mmdc", config.RuntimeKindFNM, "11.4.2", nil, "", nil, nil, "fnm-alt-node", extra)
+		extra := NodeAppPathExtra{PackageName: "@mermaid-js/mermaid-cli", BinPath: "node_modules/.bin/mmdc"}
+		path1, _ := rmDiffNode.GetAppPath("mmdc", config.RuntimeKindNode, "11.4.2", nil, "", nil, nil, "node", extra)
+		path2, _ := rmDiffNode.GetAppPath("mmdc", config.RuntimeKindNode, "11.4.2", nil, "", nil, nil, "node-alt", extra)
 
 		if path1 == path2 {
 			t.Error("different node versions should produce different paths")
@@ -796,46 +594,46 @@ func TestGetAppPathFNM(t *testing.T) {
 
 	t.Run("different pnpm versions produce different paths", func(t *testing.T) {
 		runtimesWithDiffPNPM := makeTestRuntimes()
-		runtimesWithDiffPNPM["fnm-alt-pnpm"] = config.RuntimeConfig{
-			Kind: config.RuntimeKindFNM,
+		runtimesWithDiffPNPM["node-alt-pnpm"] = config.RuntimeConfig{
+			Kind: config.RuntimeKindNode,
 			Mode: config.RuntimeModeManaged,
-			FNM: &config.RuntimeConfigFNM{
+			Node: &config.RuntimeConfigNode{
 				NodeVersion: "22.14.0",
 				PNPMVersion: "9.15.0",
 				PNPMHash:    "test-pnpm-sha256-hash",
 			},
-			Managed: runtimesWithDiffPNPM["fnm"].Managed,
+			Managed: runtimesWithDiffPNPM["node"].Managed,
 		}
 		rmDiffPNPM := New(runtimesWithDiffPNPM)
-		extra := FNMAppPathExtra{PackageName: "@mermaid-js/mermaid-cli", BinPath: "node_modules/.bin/mmdc"}
-		path1, _ := rmDiffPNPM.GetAppPath("mmdc", config.RuntimeKindFNM, "11.4.2", nil, "", nil, nil, "fnm", extra)
-		path2, _ := rmDiffPNPM.GetAppPath("mmdc", config.RuntimeKindFNM, "11.4.2", nil, "", nil, nil, "fnm-alt-pnpm", extra)
+		extra := NodeAppPathExtra{PackageName: "@mermaid-js/mermaid-cli", BinPath: "node_modules/.bin/mmdc"}
+		path1, _ := rmDiffPNPM.GetAppPath("mmdc", config.RuntimeKindNode, "11.4.2", nil, "", nil, nil, "node", extra)
+		path2, _ := rmDiffPNPM.GetAppPath("mmdc", config.RuntimeKindNode, "11.4.2", nil, "", nil, nil, "node-alt-pnpm", extra)
 
 		if path1 == path2 {
 			t.Error("different pnpm versions should produce different paths")
 		}
 	})
 
-	t.Run("fnm without FNMAppPathExtra uses standard hash", func(t *testing.T) {
-		pathWithExtra, _ := rm.GetAppPath("mmdc", config.RuntimeKindFNM, "11.4.2", nil, "", nil, nil, "fnm", FNMAppPathExtra{
+	t.Run("node without NodeAppPathExtra uses standard hash", func(t *testing.T) {
+		pathWithExtra, _ := rm.GetAppPath("mmdc", config.RuntimeKindNode, "11.4.2", nil, "", nil, nil, "node", NodeAppPathExtra{
 			PackageName: "@mermaid-js/mermaid-cli",
 			BinPath:     "node_modules/.bin/mmdc",
 		})
-		pathWithoutExtra, _ := rm.GetAppPath("mmdc", config.RuntimeKindFNM, "11.4.2", nil, "", nil, nil, "fnm")
+		pathWithoutExtra, _ := rm.GetAppPath("mmdc", config.RuntimeKindNode, "11.4.2", nil, "", nil, nil, "node")
 
 		if pathWithExtra == pathWithoutExtra {
-			t.Error("FNM path with extra should differ from path without extra (different hash functions)")
+			t.Error("node path with extra should differ from path without extra (different hash functions)")
 		}
 	})
 
-	t.Run("fnm deps affect path", func(t *testing.T) {
-		extra := FNMAppPathExtra{PackageName: "@mermaid-js/mermaid-cli", BinPath: "node_modules/.bin/mmdc"}
+	t.Run("node deps affect path", func(t *testing.T) {
+		extra := NodeAppPathExtra{PackageName: "@mermaid-js/mermaid-cli", BinPath: "node_modules/.bin/mmdc"}
 		deps := map[string]string{"puppeteer": "21.0.0"}
-		path1, _ := rm.GetAppPath("mmdc", config.RuntimeKindFNM, "11.4.2", nil, "", nil, nil, "fnm", extra)
-		path2, _ := rm.GetAppPath("mmdc", config.RuntimeKindFNM, "11.4.2", deps, "", nil, nil, "fnm", extra)
+		path1, _ := rm.GetAppPath("mmdc", config.RuntimeKindNode, "11.4.2", nil, "", nil, nil, "node", extra)
+		path2, _ := rm.GetAppPath("mmdc", config.RuntimeKindNode, "11.4.2", deps, "", nil, nil, "node", extra)
 
 		if path1 == path2 {
-			t.Error("dependencies should affect FNM app path")
+			t.Error("dependencies should affect node app path")
 		}
 	})
 }
@@ -1129,40 +927,289 @@ func TestResolveRuntimeJVM(t *testing.T) {
 	})
 }
 
-func TestResolveRuntimeFNM(t *testing.T) {
+func TestResolveRuntimeNode(t *testing.T) {
 	runtimes := makeTestRuntimes()
 	rm := New(runtimes)
 
-	t.Run("explicit fnm runtime ref", func(t *testing.T) {
-		name, rc, err := rm.ResolveRuntime("fnm", config.RuntimeKindFNM)
+	t.Run("explicit node runtime ref", func(t *testing.T) {
+		name, rc, err := rm.ResolveRuntime("node", config.RuntimeKindNode)
 		if err != nil {
 			t.Fatalf("ResolveRuntime() error = %v", err)
 		}
-		if name != "fnm" {
-			t.Errorf("name = %q, want %q", name, "fnm")
+		if name != "node" {
+			t.Errorf("name = %q, want %q", name, "node")
 		}
-		if rc.Kind != config.RuntimeKindFNM {
-			t.Errorf("kind = %q, want %q", rc.Kind, config.RuntimeKindFNM)
+		if rc.Kind != config.RuntimeKindNode {
+			t.Errorf("kind = %q, want %q", rc.Kind, config.RuntimeKindNode)
 		}
 	})
 
-	t.Run("default fallback for fnm kind", func(t *testing.T) {
-		name, rc, err := rm.ResolveRuntime("", config.RuntimeKindFNM)
+	t.Run("default fallback for node kind", func(t *testing.T) {
+		name, rc, err := rm.ResolveRuntime("", config.RuntimeKindNode)
 		if err != nil {
 			t.Fatalf("ResolveRuntime() error = %v", err)
 		}
-		if name != "fnm" {
-			t.Errorf("name = %q, want %q", name, "fnm")
+		if name != "node" {
+			t.Errorf("name = %q, want %q", name, "node")
 		}
-		if rc.Kind != config.RuntimeKindFNM {
-			t.Errorf("kind = %q, want %q", rc.Kind, config.RuntimeKindFNM)
+		if rc.Kind != config.RuntimeKindNode {
+			t.Errorf("kind = %q, want %q", rc.Kind, config.RuntimeKindNode)
 		}
 	})
 
-	t.Run("fnm kind mismatch with uv runtime", func(t *testing.T) {
-		_, _, err := rm.ResolveRuntime("uv", config.RuntimeKindFNM)
+	t.Run("node kind mismatch with uv runtime", func(t *testing.T) {
+		_, _, err := rm.ResolveRuntime("uv", config.RuntimeKindNode)
 		if err == nil {
 			t.Error("expected error for kind mismatch, got nil")
+		}
+	})
+}
+
+func TestCollectRequiredRuntimesGo(t *testing.T) {
+	runtimes := config.MapOfRuntimes{
+		"uv": {
+			Kind: config.RuntimeKindUV,
+			Mode: config.RuntimeModeManaged,
+		},
+		"go": {
+			Kind: config.RuntimeKindGo,
+			Mode: config.RuntimeModeManaged,
+			Go:   &config.RuntimeConfigGo{GoVersion: "1.22.0"},
+		},
+	}
+
+	t.Run("required go app collects default go runtime", func(t *testing.T) {
+		apps := binmanager.MapOfApps{
+			"govulncheck": {
+				Required: true,
+				Go: &binmanager.AppConfigGo{
+					PackageName: "golang.org/x/vuln/cmd/govulncheck",
+					Version:     "v1.1.4",
+					LockFile:    "x",
+				},
+			},
+		}
+		result := CollectRequiredRuntimes(apps, runtimes, false)
+		if len(result) != 1 {
+			t.Fatalf("expected 1 runtime, got %d: %v", len(result), result)
+		}
+		if result[0] != "go" {
+			t.Errorf("expected go, got %q", result[0])
+		}
+	})
+
+	t.Run("go app with explicit runtime ref", func(t *testing.T) {
+		apps := binmanager.MapOfApps{
+			"govulncheck": {
+				Required: true,
+				Go: &binmanager.AppConfigGo{
+					PackageName: "golang.org/x/vuln/cmd/govulncheck",
+					Version:     "v1.1.4",
+					Runtime:     "go",
+					LockFile:    "x",
+				},
+			},
+		}
+		result := CollectRequiredRuntimes(apps, runtimes, false)
+		if len(result) != 1 {
+			t.Fatalf("expected 1 runtime, got %d: %v", len(result), result)
+		}
+		if result[0] != "go" {
+			t.Errorf("expected go, got %q", result[0])
+		}
+	})
+
+	t.Run("optional go app excluded", func(t *testing.T) {
+		apps := binmanager.MapOfApps{
+			"govulncheck": {
+				Required: false,
+				Go: &binmanager.AppConfigGo{
+					PackageName: "golang.org/x/vuln/cmd/govulncheck",
+					Version:     "v1.1.4",
+					LockFile:    "x",
+				},
+			},
+		}
+		result := CollectRequiredRuntimes(apps, runtimes, false)
+		if len(result) != 0 {
+			t.Errorf("expected 0 runtimes for optional go app, got %d: %v", len(result), result)
+		}
+	})
+
+	t.Run("go app with nonexistent runtime ref ignored", func(t *testing.T) {
+		apps := binmanager.MapOfApps{
+			"govulncheck": {
+				Required: true,
+				Go: &binmanager.AppConfigGo{
+					PackageName: "golang.org/x/vuln/cmd/govulncheck",
+					Version:     "v1.1.4",
+					Runtime:     "nonexistent",
+					LockFile:    "x",
+				},
+			},
+		}
+		result := CollectRequiredRuntimes(apps, runtimes, false)
+		if len(result) != 0 {
+			t.Errorf("expected 0 runtimes for nonexistent ref, got %d: %v", len(result), result)
+		}
+	})
+
+	t.Run("mixed uv and go apps", func(t *testing.T) {
+		apps := binmanager.MapOfApps{
+			"yamllint": {
+				Required: true,
+				Uv: &binmanager.AppConfigUV{
+					PackageName: "yamllint",
+					Version:     "1.37.0",
+					Runtime:     "uv",
+				},
+			},
+			"govulncheck": {
+				Required: true,
+				Go: &binmanager.AppConfigGo{
+					PackageName: "golang.org/x/vuln/cmd/govulncheck",
+					Version:     "v1.1.4",
+					Runtime:     "go",
+					LockFile:    "x",
+				},
+			},
+		}
+		result := CollectRequiredRuntimes(apps, runtimes, false)
+		if len(result) != 2 {
+			t.Fatalf("expected 2 runtimes, got %d: %v", len(result), result)
+		}
+		if result[0] != "go" || result[1] != "uv" {
+			t.Errorf("expected sorted [go uv], got %v", result)
+		}
+	})
+
+	t.Run("go deduplication across multiple apps", func(t *testing.T) {
+		apps := binmanager.MapOfApps{
+			"govulncheck": {
+				Required: true,
+				Go: &binmanager.AppConfigGo{
+					PackageName: "golang.org/x/vuln/cmd/govulncheck",
+					Version:     "v1.1.4",
+					Runtime:     "go",
+					LockFile:    "x",
+				},
+			},
+			"staticcheck": {
+				Required: true,
+				Go: &binmanager.AppConfigGo{
+					PackageName: "honnef.co/go/tools/cmd/staticcheck",
+					Version:     "2024.1.1",
+					Runtime:     "go",
+					LockFile:    "x",
+				},
+			},
+		}
+		result := CollectRequiredRuntimes(apps, runtimes, false)
+		if len(result) != 1 {
+			t.Fatalf("expected 1 deduplicated runtime, got %d: %v", len(result), result)
+		}
+		if result[0] != "go" {
+			t.Errorf("expected go, got %q", result[0])
+		}
+	})
+}
+
+func TestComputeAppPathGo(t *testing.T) {
+	rm := New(makeTestGoRuntimes())
+
+	t.Run("go app computes path", func(t *testing.T) {
+		app := binmanager.App{
+			Go: &binmanager.AppConfigGo{
+				PackageName: "golang.org/x/vuln/cmd/govulncheck",
+				Version:     "v1.1.4",
+				Runtime:     "go",
+				LockFile:    "x",
+			},
+		}
+
+		path, err := rm.ComputeAppPath("govulncheck", app)
+		if err != nil {
+			t.Fatalf("ComputeAppPath() error = %v", err)
+		}
+		if path == "" {
+			t.Error("path is empty")
+		}
+	})
+
+	t.Run("go app path is deterministic", func(t *testing.T) {
+		app := binmanager.App{
+			Go: &binmanager.AppConfigGo{
+				PackageName: "golang.org/x/vuln/cmd/govulncheck",
+				Version:     "v1.1.4",
+				Runtime:     "go",
+				LockFile:    "x",
+			},
+		}
+
+		path1, _ := rm.ComputeAppPath("govulncheck", app)
+		path2, _ := rm.ComputeAppPath("govulncheck", app)
+		if path1 != path2 {
+			t.Errorf("path not deterministic: %q != %q", path1, path2)
+		}
+	})
+
+	t.Run("different versions produce different paths", func(t *testing.T) {
+		app1 := binmanager.App{
+			Go: &binmanager.AppConfigGo{
+				PackageName: "golang.org/x/vuln/cmd/govulncheck", Version: "v1.1.4", Runtime: "go", LockFile: "x",
+			},
+		}
+		app2 := binmanager.App{
+			Go: &binmanager.AppConfigGo{
+				PackageName: "golang.org/x/vuln/cmd/govulncheck", Version: "v1.1.5", Runtime: "go", LockFile: "x",
+			},
+		}
+
+		path1, _ := rm.ComputeAppPath("govulncheck", app1)
+		path2, _ := rm.ComputeAppPath("govulncheck", app2)
+		if path1 == path2 {
+			t.Error("different versions should produce different paths")
+		}
+	})
+
+	t.Run("nonexistent runtime returns error", func(t *testing.T) {
+		app := binmanager.App{
+			Go: &binmanager.AppConfigGo{
+				PackageName: "golang.org/x/vuln/cmd/govulncheck",
+				Version:     "v1.1.4",
+				Runtime:     "nonexistent",
+				LockFile:    "x",
+			},
+		}
+		if _, err := rm.ComputeAppPath("govulncheck", app); err == nil {
+			t.Error("expected error for nonexistent runtime, got nil")
+		}
+	})
+}
+
+func TestGetCommandInfoGo(t *testing.T) {
+	rm := New(makeTestGoRuntimes())
+
+	t.Run("go app delegates to Go methods", func(t *testing.T) {
+		app := binmanager.App{
+			Go: &binmanager.AppConfigGo{
+				PackageName: "golang.org/x/vuln/cmd/govulncheck",
+				Version:     "v1.1.4",
+				Runtime:     "nonexistent", // forces a deterministic error from the Go install path
+				LockFile:    "x",
+			},
+		}
+
+		// The dispatch must route a Go app to InstallGoApp/GetGoCommandInfo: the
+		// error must originate there (failing to resolve "nonexistent"), not from
+		// the fall-through "not a runtime-managed app". Using an unresolvable
+		// runtime keeps this deterministic regardless of the host environment.
+		_, err := rm.GetCommandInfo("govulncheck", app)
+		if err == nil {
+			t.Fatal("expected error resolving nonexistent Go runtime, got nil")
+		}
+		if err.Error() == `app "govulncheck" is not a runtime-managed app` {
+			t.Error("Go app should be recognized as runtime-managed")
 		}
 	})
 }
@@ -1197,33 +1244,33 @@ func glibcOnlyBinaries() binmanager.MapOfBinaries {
 
 func TestResolveEffectiveRuntimeConfig_MuslFallbackToSystem(t *testing.T) {
 	rc := config.RuntimeConfig{
-		Kind: config.RuntimeKindFNM,
+		Kind: config.RuntimeKindNode,
 		Mode: config.RuntimeModeManaged,
 		Managed: &config.RuntimeConfigManaged{
 			Binaries: glibcOnlyBinaries(),
 		},
 	}
 
-	rm := newTestRMWithLookPath(config.MapOfRuntimes{"fnm": rc}, target.Target{
+	rm := newTestRMWithLookPath(config.MapOfRuntimes{"node": rc}, target.Target{
 		OS:   "linux",
 		Arch: "amd64",
 		Libc: target.LibcMusl,
 	}, func(file string) (string, error) {
-		if file == "fnm" {
-			return "/usr/bin/fnm", nil
+		if file == "node" {
+			return "/usr/bin/node", nil
 		}
 		return "", &exec.Error{Name: file, Err: exec.ErrNotFound}
 	})
 
-	result := rm.resolveEffectiveRuntimeConfig("fnm", rc)
+	result := rm.resolveEffectiveRuntimeConfig("node", rc)
 	if result.Mode != config.RuntimeModeSystem {
 		t.Errorf("Mode = %q, want %q", result.Mode, config.RuntimeModeSystem)
 	}
 	if result.System == nil {
 		t.Fatal("System config is nil")
 	}
-	if result.System.Command != "/usr/bin/fnm" {
-		t.Errorf("System.Command = %q, want %q", result.System.Command, "/usr/bin/fnm")
+	if result.System.Command != "/usr/bin/node" {
+		t.Errorf("System.Command = %q, want %q", result.System.Command, "/usr/bin/node")
 	}
 }
 
@@ -1293,14 +1340,14 @@ func TestResolveEffectiveRuntimeConfig_JVMFallbackToSystem(t *testing.T) {
 
 func TestResolveEffectiveRuntimeConfig_MuslNoSystemBinary(t *testing.T) {
 	rc := config.RuntimeConfig{
-		Kind: config.RuntimeKindFNM,
+		Kind: config.RuntimeKindNode,
 		Mode: config.RuntimeModeManaged,
 		Managed: &config.RuntimeConfigManaged{
 			Binaries: glibcOnlyBinaries(),
 		},
 	}
 
-	rm := newTestRMWithLookPath(config.MapOfRuntimes{"fnm": rc}, target.Target{
+	rm := newTestRMWithLookPath(config.MapOfRuntimes{"node": rc}, target.Target{
 		OS:   "linux",
 		Arch: "amd64",
 		Libc: target.LibcMusl,
@@ -1308,7 +1355,7 @@ func TestResolveEffectiveRuntimeConfig_MuslNoSystemBinary(t *testing.T) {
 		return "", &exec.Error{Name: file, Err: exec.ErrNotFound}
 	})
 
-	result := rm.resolveEffectiveRuntimeConfig("fnm", rc)
+	result := rm.resolveEffectiveRuntimeConfig("node", rc)
 	if result.Mode != config.RuntimeModeManaged {
 		t.Errorf("Mode = %q, want %q (should remain managed when no system binary)", result.Mode, config.RuntimeModeManaged)
 	}
@@ -1319,7 +1366,7 @@ func TestResolveEffectiveRuntimeConfig_MuslNoSystemBinary(t *testing.T) {
 
 func TestResolveEffectiveRuntimeConfig_GlibcHost(t *testing.T) {
 	rc := config.RuntimeConfig{
-		Kind: config.RuntimeKindFNM,
+		Kind: config.RuntimeKindNode,
 		Mode: config.RuntimeModeManaged,
 		Managed: &config.RuntimeConfigManaged{
 			Binaries: glibcOnlyBinaries(),
@@ -1327,7 +1374,7 @@ func TestResolveEffectiveRuntimeConfig_GlibcHost(t *testing.T) {
 	}
 
 	// Mock lookPath to succeed -- glibc guard must prevent fallback even when system binary exists
-	rm := newTestRMWithLookPath(config.MapOfRuntimes{"fnm": rc}, target.Target{
+	rm := newTestRMWithLookPath(config.MapOfRuntimes{"node": rc}, target.Target{
 		OS:   "linux",
 		Arch: "amd64",
 		Libc: target.LibcGlibc,
@@ -1335,7 +1382,7 @@ func TestResolveEffectiveRuntimeConfig_GlibcHost(t *testing.T) {
 		return "/usr/bin/" + file, nil
 	})
 
-	result := rm.resolveEffectiveRuntimeConfig("fnm", rc)
+	result := rm.resolveEffectiveRuntimeConfig("node", rc)
 	if result.Mode != config.RuntimeModeManaged {
 		t.Errorf("Mode = %q, want %q (glibc host should not trigger fallback)", result.Mode, config.RuntimeModeManaged)
 	}
@@ -1343,43 +1390,43 @@ func TestResolveEffectiveRuntimeConfig_GlibcHost(t *testing.T) {
 
 func TestResolveEffectiveRuntimeConfig_SystemMode(t *testing.T) {
 	rc := config.RuntimeConfig{
-		Kind: config.RuntimeKindFNM,
+		Kind: config.RuntimeKindNode,
 		Mode: config.RuntimeModeSystem,
 		System: &config.RuntimeConfigSystem{
-			Command: "/usr/local/bin/fnm",
+			Command: "/usr/local/bin/node",
 		},
 	}
 
-	rm := newTestRMWithTarget(config.MapOfRuntimes{"fnm": rc}, target.Target{
+	rm := newTestRMWithTarget(config.MapOfRuntimes{"node": rc}, target.Target{
 		OS:   "linux",
 		Arch: "amd64",
 		Libc: target.LibcMusl,
 	})
 
-	result := rm.resolveEffectiveRuntimeConfig("fnm", rc)
+	result := rm.resolveEffectiveRuntimeConfig("node", rc)
 	if result.Mode != config.RuntimeModeSystem {
 		t.Errorf("Mode = %q, want %q (already system mode should not change)", result.Mode, config.RuntimeModeSystem)
 	}
-	if result.System.Command != "/usr/local/bin/fnm" {
-		t.Errorf("System.Command = %q, want %q (should keep original command)", result.System.Command, "/usr/local/bin/fnm")
+	if result.System.Command != "/usr/local/bin/node" {
+		t.Errorf("System.Command = %q, want %q (should keep original command)", result.System.Command, "/usr/local/bin/node")
 	}
 }
 
 func TestResolveEffectiveRuntimeConfig_MuslBinaryPresent(t *testing.T) {
 	rc := config.RuntimeConfig{
-		Kind: config.RuntimeKindFNM,
+		Kind: config.RuntimeKindNode,
 		Mode: config.RuntimeModeManaged,
 		Managed: &config.RuntimeConfigManaged{
 			Binaries: binmanager.MapOfBinaries{
 				syslist.OsTypeLinux: {
 					syslist.ArchTypeAmd64: {
 						"glibc": binmanager.BinaryOsArchInfo{
-							URL:         "https://example.com/fnm-linux-amd64.tar.gz",
+							URL:         "https://example.com/node-linux-amd64.tar.gz",
 							Hash:        "abc123",
 							ContentType: binmanager.BinContentTypeTarGz,
 						},
 						"musl": binmanager.BinaryOsArchInfo{
-							URL:         "https://example.com/fnm-linux-amd64-musl.tar.gz",
+							URL:         "https://example.com/node-linux-amd64-musl.tar.gz",
 							Hash:        "def456",
 							ContentType: binmanager.BinContentTypeTarGz,
 						},
@@ -1390,7 +1437,7 @@ func TestResolveEffectiveRuntimeConfig_MuslBinaryPresent(t *testing.T) {
 	}
 
 	// Mock lookPath to succeed -- musl binary exists so no fallback should occur
-	rm := newTestRMWithLookPath(config.MapOfRuntimes{"fnm": rc}, target.Target{
+	rm := newTestRMWithLookPath(config.MapOfRuntimes{"node": rc}, target.Target{
 		OS:   "linux",
 		Arch: "amd64",
 		Libc: target.LibcMusl,
@@ -1398,7 +1445,7 @@ func TestResolveEffectiveRuntimeConfig_MuslBinaryPresent(t *testing.T) {
 		return "/usr/bin/" + file, nil
 	})
 
-	result := rm.resolveEffectiveRuntimeConfig("fnm", rc)
+	result := rm.resolveEffectiveRuntimeConfig("node", rc)
 	if result.Mode != config.RuntimeModeManaged {
 		t.Errorf("Mode = %q, want %q (musl binary available, no fallback needed)", result.Mode, config.RuntimeModeManaged)
 	}
@@ -1406,14 +1453,14 @@ func TestResolveEffectiveRuntimeConfig_MuslBinaryPresent(t *testing.T) {
 
 func TestResolveEffectiveRuntimeConfig_ArchMismatch(t *testing.T) {
 	rc := config.RuntimeConfig{
-		Kind: config.RuntimeKindFNM,
+		Kind: config.RuntimeKindNode,
 		Mode: config.RuntimeModeManaged,
 		Managed: &config.RuntimeConfigManaged{
 			Binaries: glibcOnlyBinaries(), // only has amd64
 		},
 	}
 
-	rm := newTestRMWithLookPath(config.MapOfRuntimes{"fnm": rc}, target.Target{
+	rm := newTestRMWithLookPath(config.MapOfRuntimes{"node": rc}, target.Target{
 		OS:   "linux",
 		Arch: "arm64", // host is arm64 but binaries only have amd64
 		Libc: target.LibcMusl,
@@ -1421,7 +1468,7 @@ func TestResolveEffectiveRuntimeConfig_ArchMismatch(t *testing.T) {
 		return "/usr/bin/" + file, nil
 	})
 
-	result := rm.resolveEffectiveRuntimeConfig("fnm", rc)
+	result := rm.resolveEffectiveRuntimeConfig("node", rc)
 	if result.Mode != config.RuntimeModeManaged {
 		t.Errorf("Mode = %q, want %q (arch mismatch, no fallback)", result.Mode, config.RuntimeModeManaged)
 	}
@@ -1429,37 +1476,37 @@ func TestResolveEffectiveRuntimeConfig_ArchMismatch(t *testing.T) {
 
 func TestResolveEffectiveRuntimeConfig_PreservesSystemVersion(t *testing.T) {
 	rc := config.RuntimeConfig{
-		Kind: config.RuntimeKindFNM,
+		Kind: config.RuntimeKindNode,
 		Mode: config.RuntimeModeManaged,
 		Managed: &config.RuntimeConfigManaged{
 			Binaries: glibcOnlyBinaries(),
 		},
 		System: &config.RuntimeConfigSystem{
-			Command:       "/old/path/fnm",
+			Command:       "/old/path/node",
 			SystemVersion: "1.2.3",
 		},
 	}
 
-	rm := newTestRMWithLookPath(config.MapOfRuntimes{"fnm": rc}, target.Target{
+	rm := newTestRMWithLookPath(config.MapOfRuntimes{"node": rc}, target.Target{
 		OS:   "linux",
 		Arch: "amd64",
 		Libc: target.LibcMusl,
 	}, func(file string) (string, error) {
-		if file == "fnm" {
-			return "/usr/bin/fnm", nil
+		if file == "node" {
+			return "/usr/bin/node", nil
 		}
 		return "", &exec.Error{Name: file, Err: exec.ErrNotFound}
 	})
 
-	result := rm.resolveEffectiveRuntimeConfig("fnm", rc)
+	result := rm.resolveEffectiveRuntimeConfig("node", rc)
 	if result.Mode != config.RuntimeModeSystem {
 		t.Errorf("Mode = %q, want %q", result.Mode, config.RuntimeModeSystem)
 	}
 	if result.System == nil {
 		t.Fatal("System config is nil")
 	}
-	if result.System.Command != "/usr/bin/fnm" {
-		t.Errorf("System.Command = %q, want %q", result.System.Command, "/usr/bin/fnm")
+	if result.System.Command != "/usr/bin/node" {
+		t.Errorf("System.Command = %q, want %q", result.System.Command, "/usr/bin/node")
 	}
 	if result.System.SystemVersion != "1.2.3" {
 		t.Errorf("System.SystemVersion = %q, want %q (should be preserved from original config)", result.System.SystemVersion, "1.2.3")
@@ -1468,9 +1515,9 @@ func TestResolveEffectiveRuntimeConfig_PreservesSystemVersion(t *testing.T) {
 
 func TestGetRuntimePath_MuslAutoFallback(t *testing.T) {
 	rc := config.RuntimeConfig{
-		Kind: config.RuntimeKindFNM,
+		Kind: config.RuntimeKindNode,
 		Mode: config.RuntimeModeManaged,
-		FNM: &config.RuntimeConfigFNM{
+		Node: &config.RuntimeConfigNode{
 			PNPMHash: "test-pnpm-sha256-hash",
 		},
 		Managed: &config.RuntimeConfigManaged{
@@ -1478,23 +1525,23 @@ func TestGetRuntimePath_MuslAutoFallback(t *testing.T) {
 		},
 	}
 
-	rm := newTestRMWithLookPath(config.MapOfRuntimes{"fnm": rc}, target.Target{
+	rm := newTestRMWithLookPath(config.MapOfRuntimes{"node": rc}, target.Target{
 		OS:   "linux",
 		Arch: "amd64",
 		Libc: target.LibcMusl,
 	}, func(file string) (string, error) {
-		if file == "fnm" {
-			return "/usr/bin/fnm", nil
+		if file == "node" {
+			return "/usr/bin/node", nil
 		}
 		return "", &exec.Error{Name: file, Err: exec.ErrNotFound}
 	})
 
-	path, err := rm.GetRuntimePath("fnm")
+	path, err := rm.GetRuntimePath("node")
 	if err != nil {
 		t.Fatalf("GetRuntimePath() error = %v", err)
 	}
-	if path != "/usr/bin/fnm" {
-		t.Errorf("GetRuntimePath() = %q, want %q (should fallback to system fnm)", path, "/usr/bin/fnm")
+	if path != "/usr/bin/node" {
+		t.Errorf("GetRuntimePath() = %q, want %q (should fallback to system node)", path, "/usr/bin/node")
 	}
 }
 
@@ -1503,9 +1550,9 @@ func TestSystemCommandForKind(t *testing.T) {
 		kind config.RuntimeKind
 		want string
 	}{
-		{config.RuntimeKindFNM, "fnm"},
 		{config.RuntimeKindUV, "uv"},
 		{config.RuntimeKindJVM, "java"},
+		{config.RuntimeKindGo, "go"},
 		{config.RuntimeKind("unknown"), ""},
 		{config.RuntimeKind(""), ""},
 	}
@@ -1522,35 +1569,74 @@ func TestSystemCommandForKind(t *testing.T) {
 
 func TestInstallRuntimes_MuslAutoFallback(t *testing.T) {
 	rc := config.RuntimeConfig{
-		Kind: config.RuntimeKindFNM,
+		Kind: config.RuntimeKindNode,
 		Mode: config.RuntimeModeManaged,
 		Managed: &config.RuntimeConfigManaged{
 			Binaries: glibcOnlyBinaries(),
 		},
 	}
 
-	rm := newTestRMWithLookPath(config.MapOfRuntimes{"fnm": rc}, target.Target{
+	rm := newTestRMWithLookPath(config.MapOfRuntimes{"node": rc}, target.Target{
 		OS:   "linux",
 		Arch: "amd64",
 		Libc: target.LibcMusl,
 	}, func(file string) (string, error) {
-		if file == "fnm" {
-			return "/usr/bin/fnm", nil
+		if file == "node" {
+			return "/usr/bin/node", nil
 		}
 		return "", &exec.Error{Name: file, Err: exec.ErrNotFound}
 	})
 
-	stats, err := rm.InstallRuntimes([]string{"fnm"}, 3)
+	stats, err := rm.InstallRuntimes([]string{"node"}, 3)
 	if err != nil {
 		t.Fatalf("InstallRuntimes() error = %v", err)
 	}
 	if len(stats.AlreadyCached) != 1 {
 		t.Errorf("expected 1 already cached (system mode skip), got %d", len(stats.AlreadyCached))
 	}
-	if len(stats.AlreadyCached) > 0 && stats.AlreadyCached[0] != "fnm" {
-		t.Errorf("expected fnm in already cached, got %q", stats.AlreadyCached[0])
+	if len(stats.AlreadyCached) > 0 && stats.AlreadyCached[0] != "node" {
+		t.Errorf("expected node in already cached, got %q", stats.AlreadyCached[0])
 	}
 	if len(stats.Downloaded) != 0 {
 		t.Errorf("expected 0 downloads (system fallback should skip), got %d", len(stats.Downloaded))
+	}
+}
+
+// TestValidateRelativePath pins the path-escape contract for validateRelativePath
+// and keeps it aligned with config.validateSafeRelativePath: only ".." or a path
+// whose first cleaned segment is ".." (e.g. "../escape") escapes. A directory name
+// that merely starts with the literal ".." (e.g. "..config/bin/tool") is a valid
+// relative path and must be accepted.
+func TestValidateRelativePath(t *testing.T) {
+	tests := []struct {
+		name    string
+		path    string
+		wantErr bool
+	}{
+		// Accepted: a plain relative path under the runtime cache.
+		{name: "simple relative", path: "bin/tool", wantErr: false},
+		// Accepted: leading ".." is part of a directory name, not a parent ref.
+		{name: "dotdot prefix in name", path: "..config/bin/tool", wantErr: false},
+		{name: "dotdot prefix single segment", path: "..hidden", wantErr: false},
+		// Rejected: bare parent reference.
+		{name: "bare dotdot", path: "..", wantErr: true},
+		// Rejected: leading parent escape.
+		{name: "leading escape", path: "../escape", wantErr: true},
+		// Rejected: embedded parent escape that cleans to an escape.
+		{name: "embedded escape", path: "bin/../../escape", wantErr: true},
+		// Rejected: absolute path.
+		{name: "absolute path", path: "/etc/passwd", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateRelativePath(tt.path)
+			if tt.wantErr && err == nil {
+				t.Errorf("validateRelativePath(%q) = nil, want error", tt.path)
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("validateRelativePath(%q) = %v, want nil", tt.path, err)
+			}
+		})
 	}
 }
