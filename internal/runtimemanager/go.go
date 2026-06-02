@@ -148,15 +148,15 @@ func (rm *RuntimeManager) GetGoAppPath(appName string, appConfig *binmanager.App
 // InstallGoApp builds a Go app from source if not already cached.
 // If files/archives are non-empty, writes them to the app directory before building.
 // Safe for concurrent use from multiple goroutines.
-func (rm *RuntimeManager) InstallGoApp(appName string, appConfig *binmanager.AppConfigGo, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
+func (rm *RuntimeManager) InstallGoApp(appName string, appConfig *binmanager.AppConfigGo, customEnv map[string]string, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
 	key := "go/" + appName
 	_, err, _ := rm.appInstall.Do(key, func() (any, error) {
-		return nil, rm.installGoAppOnce(appName, appConfig, files, archives)
+		return nil, rm.installGoAppOnce(appName, appConfig, customEnv, files, archives)
 	})
 	return err
 }
 
-func (rm *RuntimeManager) installGoAppOnce(appName string, appConfig *binmanager.AppConfigGo, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
+func (rm *RuntimeManager) installGoAppOnce(appName string, appConfig *binmanager.AppConfigGo, customEnv map[string]string, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
 	runtimeName, _, err := rm.ResolveRuntime(appConfig.Runtime, config.RuntimeKindGo)
 	if err != nil {
 		return fmt.Errorf("failed to resolve runtime for %q: %w", appName, err)
@@ -207,9 +207,10 @@ func (rm *RuntimeManager) installGoAppOnce(appName string, appConfig *binmanager
 		}
 	}()
 
-	envVars := getGoEnvVars(appEnvPath)
+	reservedEnv := getGoEnvVars(appEnvPath)
+	envVars := mergeInstallEnv(reservedEnv, customEnv, appEnvPath)
 	for _, key := range []string{"GOPATH", "GOMODCACHE", "GOBIN"} {
-		if err := os.MkdirAll(envVars[key], 0755); err != nil {
+		if err := os.MkdirAll(reservedEnv[key], 0755); err != nil {
 			return fmt.Errorf("failed to create directory %q: %w", envVars[key], err)
 		}
 	}

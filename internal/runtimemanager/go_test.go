@@ -359,7 +359,7 @@ func TestInstallGoApp_AlreadyInstalled(t *testing.T) {
 	}
 	defer func() { _ = os.RemoveAll(appEnvPath) }()
 
-	if err := rm.InstallGoApp("govulncheck", appConfig, nil, nil); err != nil {
+	if err := rm.InstallGoApp("govulncheck", appConfig, nil, nil, nil); err != nil {
 		t.Errorf("InstallGoApp() error = %v, expected nil for already installed app", err)
 	}
 }
@@ -374,7 +374,7 @@ func TestInstallGoApp_InvalidRuntime(t *testing.T) {
 		LockFile:    "x",
 	}
 
-	if err := rm.InstallGoApp("govulncheck", appConfig, nil, nil); err == nil {
+	if err := rm.InstallGoApp("govulncheck", appConfig, nil, nil, nil); err == nil {
 		t.Error("expected error for nonexistent runtime, got nil")
 	}
 }
@@ -389,7 +389,7 @@ func TestInstallGoApp_MissingLockFileIsRejected(t *testing.T) {
 		// no LockFile: must be rejected before any download/build
 	}
 
-	err := rm.InstallGoApp("govulncheck", appConfig, nil, nil)
+	err := rm.InstallGoApp("govulncheck", appConfig, nil, nil, nil)
 	if err == nil {
 		t.Fatal("expected error when lockFile is missing, got nil")
 	}
@@ -450,7 +450,7 @@ func TestInstallGoApp_ConcurrentSameKeyNoRace(t *testing.T) {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			errsObserved[idx] = rm.InstallGoApp("govulncheck", appConfig, nil, nil)
+			errsObserved[idx] = rm.InstallGoApp("govulncheck", appConfig, nil, nil, nil)
 		}(i)
 	}
 	wg.Wait()

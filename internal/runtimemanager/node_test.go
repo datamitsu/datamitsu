@@ -475,7 +475,7 @@ func TestInstallNodeApp_InvalidRuntime(t *testing.T) {
 		BinPath:     "node_modules/.bin/eslint",
 		Runtime:     "nonexistent",
 	}
-	if err := rm.InstallNodeApp("eslint", appConfig, nil, nil); err == nil {
+	if err := rm.InstallNodeApp("eslint", appConfig, nil, nil, nil); err == nil {
 		t.Error("expected error for nonexistent runtime, got nil")
 	}
 }
@@ -586,7 +586,7 @@ func TestInstallNodeApp_AlreadyInstalled(t *testing.T) {
 	}
 	defer func() { _ = os.RemoveAll(appEnvPath) }()
 
-	if err := rm.InstallNodeApp("eslint", appConfig, nil, nil); err != nil {
+	if err := rm.InstallNodeApp("eslint", appConfig, nil, nil, nil); err != nil {
 		t.Errorf("InstallNodeApp() error = %v, expected nil for already-installed app", err)
 	}
 }
@@ -664,7 +664,7 @@ func TestInstallNodeApp_RemoveAllFailureAborts(t *testing.T) {
 		return sentinel
 	}
 
-	err = rm.InstallNodeApp("eslint", appConfig, nil, nil)
+	err = rm.InstallNodeApp("eslint", appConfig, nil, nil, nil)
 	if err == nil {
 		t.Fatal("expected an error when stale-tree removal fails, got nil")
 	}
@@ -716,7 +716,7 @@ func TestInstallNodeApp_RemoveAllSuccessProceeds(t *testing.T) {
 		return os.RemoveAll(p)
 	}
 
-	err = rm.InstallNodeApp("eslint", appConfig, nil, nil)
+	err = rm.InstallNodeApp("eslint", appConfig, nil, nil, nil)
 	if err == nil {
 		t.Fatal("expected a download error after the (successful) stale-tree removal, got nil")
 	}
@@ -847,7 +847,7 @@ func TestInstallNodeApp_WorkspaceYAMLError(t *testing.T) {
 		Runtime:     "node",
 	}
 
-	err := rm.InstallNodeApp("eslint", appConfig, invalidWorkspaceFiles(), nil)
+	err := rm.InstallNodeApp("eslint", appConfig, nil, invalidWorkspaceFiles(), nil)
 	if err == nil {
 		t.Fatal("expected error for invalid pnpm-workspace.yaml, got nil")
 	}

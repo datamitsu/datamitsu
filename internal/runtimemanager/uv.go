@@ -58,15 +58,15 @@ func uvVenvHealthy(appEnvPath, binPath string) bool {
 // InstallUVApp installs a UV app if not already cached.
 // If files is non-empty, writes them to the app directory before running uv.
 // Safe for concurrent use from multiple goroutines.
-func (rm *RuntimeManager) InstallUVApp(appName string, appConfig *binmanager.AppConfigUV, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
+func (rm *RuntimeManager) InstallUVApp(appName string, appConfig *binmanager.AppConfigUV, customEnv map[string]string, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
 	key := "uv/" + appName
 	_, err, _ := rm.appInstall.Do(key, func() (any, error) {
-		return nil, rm.installUVAppOnce(appName, appConfig, files, archives)
+		return nil, rm.installUVAppOnce(appName, appConfig, customEnv, files, archives)
 	})
 	return err
 }
 
-func (rm *RuntimeManager) installUVAppOnce(appName string, appConfig *binmanager.AppConfigUV, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
+func (rm *RuntimeManager) installUVAppOnce(appName string, appConfig *binmanager.AppConfigUV, customEnv map[string]string, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
 	runtimeName, rc, err := rm.ResolveRuntime(appConfig.Runtime, config.RuntimeKindUV)
 	if err != nil {
 		return fmt.Errorf("failed to resolve runtime for %q: %w", appName, err)
@@ -116,8 +116,8 @@ func (rm *RuntimeManager) installUVAppOnce(appName string, appConfig *binmanager
 		}
 	}()
 
-	envVars := getUVEnvVars(appEnvPath)
-	for _, dir := range envVars {
+	envVars := mergeInstallEnv(getUVEnvVars(appEnvPath), customEnv, appEnvPath)
+	for _, dir := range getUVEnvVars(appEnvPath) {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return fmt.Errorf("failed to create directory %q: %w", dir, err)
 		}
@@ -253,6 +253,24 @@ func (rm *RuntimeManager) GetUVCommandInfo(appName string, appConfig *binmanager
 		Command: binPath,
 		Env:     envVars,
 	}, nil
+}
+
+// mergeInstallEnv merges the app's user-defined env into the runtime's reserved
+// env vars, expanding ${STORE}/${APP_DIR} placeholders in custom values against
+// appDir. Reserved runtime keys take precedence — a user config can never
+// override a key datamitsu sets (e.g. GOPATH, UV_CACHE_DIR, npm_config_*).
+func mergeInstallEnv(reserved, custom map[string]string, appDir string) map[string]string {
+	if len(custom) == 0 {
+		return reserved
+	}
+	merged := make(map[string]string, len(reserved)+len(custom))
+	for k, v := range custom {
+		merged[k] = env.ExpandPlaceholders(v, appDir)
+	}
+	for k, v := range reserved {
+		merged[k] = v
+	}
+	return merged
 }
 
 func buildEnvWithOverrides(base []string, overrides map[string]string) []string {

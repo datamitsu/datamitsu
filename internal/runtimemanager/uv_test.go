@@ -376,7 +376,7 @@ func TestInstallUVAppAlreadyInstalled(t *testing.T) {
 	}
 	defer func() { _ = os.RemoveAll(appEnvPath) }()
 
-	err = rm.InstallUVApp("yamllint", appConfig, nil, nil)
+	err = rm.InstallUVApp("yamllint", appConfig, nil, nil, nil)
 	if err != nil {
 		t.Errorf("InstallUVApp() error = %v, expected nil for already installed app", err)
 	}
@@ -464,7 +464,7 @@ func TestInstallUVAppHealthyVenvSkips(t *testing.T) {
 		t.Fatalf("failed to write fake interpreter: %v", err)
 	}
 
-	if err := rm.InstallUVApp("yamllint", appConfig, nil, nil); err != nil {
+	if err := rm.InstallUVApp("yamllint", appConfig, nil, nil, nil); err != nil {
 		t.Errorf("InstallUVApp() error = %v, expected nil for healthy venv", err)
 	}
 
@@ -509,7 +509,7 @@ func TestInstallUVAppDanglingVenvRebuilds(t *testing.T) {
 	// fails here because the test uv runtime is not actually downloaded. The key
 	// assertion is that it did not return nil (i.e. it did not treat the broken
 	// venv as installed).
-	err = rm.InstallUVApp("yamllint", appConfig, nil, nil)
+	err = rm.InstallUVApp("yamllint", appConfig, nil, nil, nil)
 	if err == nil {
 		t.Error("expected dangling venv to trigger a rebuild attempt, got nil (treated as installed)")
 	}

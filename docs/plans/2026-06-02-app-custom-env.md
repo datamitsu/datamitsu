@@ -114,12 +114,12 @@ run time**, with placeholder expansion for datamitsu-managed paths.
 
 ### Task 4: Install-time merge for uv / node / go
 
-- [ ] write tests mirroring `TestInstallTimeEnvIncludesPythonInstallDir` for
+- [x] write tests mirroring `TestInstallTimeEnvIncludesPythonInstallDir` for
       node, uv and go: the install command env (`buildEnvWithOverrides` output)
       contains the expanded custom var; reserved runtime keys still win
-- [ ] thread `app.Env` into each install path and merge expanded values into the
+- [x] thread `app.Env` into each install path and merge expanded values into the
       install env (node ~228, uv ~153, go ~242/345), reserved keys override
-- [ ] run `go test ./internal/runtimemanager/...` — must pass before Task 5
+- [x] run `go test ./internal/runtimemanager/...` — must pass before Task 5
 
 ### Task 5: TypeScript type
 
