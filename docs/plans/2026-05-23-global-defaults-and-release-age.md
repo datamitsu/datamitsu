@@ -202,12 +202,12 @@ Three-layer API: pure computation + idempotent lifecycle + cached getter. Thread
 
 ### Task 11: Integrate `--min-age` into `pull-uv`
 
-- [ ] register `--min-age` flag on `pullUVCmd` in `cmd/devtools_uv.go`
-- [ ] get `runtimeconfig.Get()` at command start, pass `eff` to `resolveMinAge`
-- [ ] modify `runPullUV`: use `GetPyPIPackageInfoWithMinAge` with resolved min age
-- [ ] handle nil return: skip package with warning
-- [ ] print min age in status banner
-- [ ] run `go test ./cmd/...` — must pass before next task
+- [x] register `--min-age` flag on `pullUVCmd` in `cmd/devtools_uv.go`
+- [x] get `runtimeconfig.Get()` at command start, pass `eff` to `resolveMinAge`
+- [x] modify `runPullUV`: use `GetPyPIPackageInfoWithMinAge` with resolved min age
+- [x] handle nil return: skip package with warning
+- [x] print min age in status banner
+- [x] run `go test ./cmd/...` — must pass before next task
 
 ### Task 12: Integrate `--min-age` into `pull-runtimes`
 
