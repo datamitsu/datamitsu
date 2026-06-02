@@ -250,11 +250,11 @@ Three-layer API: pure computation + idempotent lifecycle + cached getter. Thread
 
 ### Task 15: Add `datamitsu config runtime` CLI command
 
-- [ ] add `configRuntimeCmd` in `cmd/config.go` — calls `runtimeconfig.Get()`, handles error, then `json.MarshalIndent(eff, "", "  ")`
-- [ ] register in `init()` alongside existing `config show` and `config types`
-- [ ] write test: command produces valid JSON, required keys present (`concurrency`, `installTimeoutSeconds`, etc.)
-- [ ] write test: env override is reflected in output
-- [ ] run `go test ./cmd/...` — must pass before next task
+- [x] add `configRuntimeCmd` in `cmd/config.go` — calls `runtimeconfig.Get()`, handles error, then `json.MarshalIndent(eff, "", "  ")`
+- [x] register in `init()` alongside existing `config show` and `config types`
+- [x] write test: command produces valid JSON, required keys present (`concurrency`, `installTimeoutSeconds`, etc.)
+- [x] write test: env override is reflected in output
+- [x] run `go test ./cmd/...` — must pass before next task
 
 ### Task 16: Inject minimal `datamitsuConfigInputs` into JS VM
 
