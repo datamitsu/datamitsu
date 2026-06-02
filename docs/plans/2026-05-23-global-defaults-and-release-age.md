@@ -98,11 +98,11 @@
 
 ### Task 2: Add env var definitions and getters for new defaults
 
-- [ ] add `installTimeout` and `minimumReleaseAge` envVar definitions in `internal/env/e.go` with literal defaults `"600"` and `"10080"`
-- [ ] add `InstallTimeoutSeconds() int` getter in `internal/env/env.go` (0 = disable, negative = fallback to default)
-- [ ] add `MinimumReleaseAgeMinutes() int` getter in `internal/env/env.go` (0 = disable, negative = fallback to default)
-- [ ] write tests for both getters: default value, env override, invalid value handling, zero = valid (means disabled)
-- [ ] run `go test ./internal/env/...` — must pass before next task
+- [x] add `installTimeout` and `minimumReleaseAge` envVar definitions in `internal/env/e.go` with literal defaults `"600"` and `"10080"`
+- [x] add `InstallTimeoutSeconds() int` getter in `internal/env/env.go` (0 = disable, negative = fallback to default)
+- [x] add `MinimumReleaseAgeMinutes() int` getter in `internal/env/env.go` (0 = disable, negative = fallback to default)
+- [x] write tests for both getters: default value, env override, invalid value handling, zero = valid (means disabled)
+- [x] run `go test ./internal/env/...` — must pass before next task
 
 ### Task 3: Add `Compute()` / `Init()` / `Get()` and wire pnpmdefaults
 

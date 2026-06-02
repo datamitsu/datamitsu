@@ -135,6 +135,40 @@ func GetConcurrency() int {
 	return value
 }
 
+// InstallTimeoutSeconds returns the per-app install timeout in seconds.
+// 0 is a valid value meaning "disabled" (no deadline).
+// Negative or invalid values fall back to the default.
+func InstallTimeoutSeconds() int {
+	valueStr := installTimeout.DefaultValue
+	if envValue := os.Getenv(installTimeout.Name); envValue != "" {
+		valueStr = envValue
+	}
+
+	value, err := strconv.Atoi(valueStr)
+	if err != nil || value < 0 {
+		defaultValue, _ := strconv.Atoi(installTimeout.DefaultValue)
+		return defaultValue
+	}
+	return value
+}
+
+// MinimumReleaseAgeMinutes returns the minimum release age in minutes.
+// 0 is a valid value meaning "disabled" (no age filtering).
+// Negative or invalid values fall back to the default.
+func MinimumReleaseAgeMinutes() int {
+	valueStr := minimumReleaseAge.DefaultValue
+	if envValue := os.Getenv(minimumReleaseAge.Name); envValue != "" {
+		valueStr = envValue
+	}
+
+	value, err := strconv.Atoi(valueStr)
+	if err != nil || value < 0 {
+		defaultValue, _ := strconv.Atoi(minimumReleaseAge.DefaultValue)
+		return defaultValue
+	}
+	return value
+}
+
 // NoSponsor returns true if sponsor messages should be suppressed
 func NoSponsor() bool {
 	return os.Getenv(noSponsor.Name) != ""
