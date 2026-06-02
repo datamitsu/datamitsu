@@ -1,6 +1,7 @@
 package runtimemanager
 
 import (
+	"context"
 	"fmt"
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
@@ -54,8 +55,8 @@ func getNodeEnvVars(appEnvPath string) map[string]string {
 // node acquires its binary from two paths (installNodeAppOnce and
 // GetNodeCommandInfo), so the error wrapping is centralized in this named helper
 // rather than duplicated. It is intentionally retained, not inlined.
-func (rm *RuntimeManager) installNode(runtimeName string) (string, error) {
-	nodeBinPath, err := rm.GetRuntimePath(runtimeName)
+func (rm *RuntimeManager) installNode(ctx context.Context, runtimeName string) (string, error) {
+	nodeBinPath, err := rm.getRuntimePath(ctx, runtimeName)
 	if err != nil {
 		return "", fmt.Errorf("failed to acquire node runtime %q: %w", runtimeName, err)
 	}
@@ -112,14 +113,16 @@ func (rm *RuntimeManager) InstallNodeApp(appName string, appConfig *binmanager.A
 // installNodeApp installs a node app using a pre-merged pnpm-workspace.yaml so the
 // merge is computed once per exec and shared with the command-info pass.
 func (rm *RuntimeManager) installNodeApp(appName string, appConfig *binmanager.AppConfigNode, customEnv map[string]string, files map[string]string, archives map[string]*binmanager.ArchiveSpec, mergedWorkspaceYAML string) error {
+	ctx, cancel, timeoutSec := newInstallContext(context.Background())
+	defer cancel()
 	key := "node/" + appName
 	_, err, _ := rm.appInstall.Do(key, func() (any, error) {
-		return nil, rm.installNodeAppOnce(appName, appConfig, customEnv, files, archives, mergedWorkspaceYAML)
+		return nil, rm.installNodeAppOnce(ctx, appName, appConfig, customEnv, files, archives, mergedWorkspaceYAML)
 	})
-	return err
+	return wrapInstallTimeout(err, timeoutSec)
 }
 
-func (rm *RuntimeManager) installNodeAppOnce(appName string, appConfig *binmanager.AppConfigNode, customEnv map[string]string, files map[string]string, archives map[string]*binmanager.ArchiveSpec, mergedWorkspaceYAML string) error {
+func (rm *RuntimeManager) installNodeAppOnce(ctx context.Context, appName string, appConfig *binmanager.AppConfigNode, customEnv map[string]string, files map[string]string, archives map[string]*binmanager.ArchiveSpec, mergedWorkspaceYAML string) error {
 	appEnvPath, runtimeName, rc, err := rm.resolveNodeAppEnvPathWith(appName, appConfig, files, archives, mergedWorkspaceYAML)
 	if err != nil {
 		return err
@@ -154,7 +157,7 @@ func (rm *RuntimeManager) installNodeAppOnce(appName string, appConfig *binmanag
 	}
 
 	// Acquire the node binary directly from the pinned archive (jvm/go-style).
-	nodeBinPath, err := rm.installNode(runtimeName)
+	nodeBinPath, err := rm.installNode(ctx, runtimeName)
 	if err != nil {
 		return err
 	}
@@ -162,7 +165,7 @@ func (rm *RuntimeManager) installNodeAppOnce(appName string, appConfig *binmanag
 	storeRoot := env.GetStorePath()
 
 	pnpmDir := filepath.Join(storeRoot, ".runtimes", "pnpm", pnpmVersion, pnpmHash)
-	if err := rm.installPNPM(pnpmVersion, pnpmDir, pnpmHash); err != nil {
+	if err := rm.installPNPM(ctx, pnpmVersion, pnpmDir, pnpmHash); err != nil {
 		return fmt.Errorf("failed to download PNPM: %w", err)
 	}
 
@@ -228,7 +231,7 @@ func (rm *RuntimeManager) installNodeAppOnce(appName string, appConfig *binmanag
 	envVars = mergeInstallEnv(envVars, customEnv, appEnvPath)
 	cmdEnv := buildEnvWithOverrides(os.Environ(), envVars)
 
-	cmd := exec.Command(nodeBinPath, args...)
+	cmd := exec.CommandContext(ctx, nodeBinPath, args...)
 	cmd.Dir = appEnvPath
 	cmd.Env = cmdEnv
 	cmd.Stdout = os.Stderr
@@ -243,7 +246,7 @@ func (rm *RuntimeManager) installNodeAppOnce(appName string, appConfig *binmanag
 
 	fmt.Fprintf(os.Stderr, "Installing %s...\n", appName)
 
-	if err := cmd.Run(); err != nil {
+	if err := runInstallCmd(ctx, cmd); err != nil {
 		return fmt.Errorf("failed to install node app %q: %w", appName, err)
 	}
 
@@ -281,7 +284,10 @@ func (rm *RuntimeManager) getNodeCommandInfo(appName string, appConfig *binmanag
 		return nil, fmt.Errorf("app %q: unsafe binPath: %w", appName, err)
 	}
 
-	nodeBinPath, err := rm.installNode(runtimeName)
+	// Command-info resolution only ever touches an already-installed runtime
+	// (the install pass ran first), so the timeout-agnostic background context
+	// is correct here — there is no fresh download to bound.
+	nodeBinPath, err := rm.installNode(context.Background(), runtimeName)
 	if err != nil {
 		return nil, err
 	}

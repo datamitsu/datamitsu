@@ -3,6 +3,7 @@ package runtimemanager
 import (
 	"archive/tar"
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -314,7 +315,7 @@ func TestInstallNode_DownloadVerifyExtract(t *testing.T) {
 
 	rm := New(nodeRuntimeWith(t, server.URL+"/node.tar.xz", hash, testLibc))
 
-	nodeBin, err := rm.installNode("node")
+	nodeBin, err := rm.installNode(context.Background(), "node")
 	if err != nil {
 		t.Fatalf("installNode() error = %v", err)
 	}
@@ -350,7 +351,7 @@ func TestInstallNode_SHA256Mismatch(t *testing.T) {
 	const wrongHash = "1111111111111111111111111111111111111111111111111111111111111111"
 	rm := New(nodeRuntimeWith(t, server.URL+"/node.tar.xz", wrongHash, testLibc))
 
-	nodeBin, err := rm.installNode("node")
+	nodeBin, err := rm.installNode(context.Background(), "node")
 	if err == nil {
 		t.Fatalf("installNode() expected hash-mismatch error, got nil (path %q)", nodeBin)
 	}
@@ -374,7 +375,7 @@ func TestInstallNode_CacheHitNoRefetch(t *testing.T) {
 
 	rm := New(nodeRuntimeWith(t, server.URL+"/node.tar.xz", hash, testLibc))
 
-	if _, err := rm.installNode("node"); err != nil {
+	if _, err := rm.installNode(context.Background(), "node"); err != nil {
 		t.Fatalf("first installNode() error = %v", err)
 	}
 	first := atomic.LoadInt32(&hits)
@@ -382,7 +383,7 @@ func TestInstallNode_CacheHitNoRefetch(t *testing.T) {
 		t.Fatal("expected the archive to be downloaded at least once")
 	}
 
-	if _, err := rm.installNode("node"); err != nil {
+	if _, err := rm.installNode(context.Background(), "node"); err != nil {
 		t.Fatalf("second installNode() error = %v", err)
 	}
 	if got := atomic.LoadInt32(&hits); got != first {
@@ -448,7 +449,7 @@ func TestInstallNode_GlibcFallbackWhenNoMusl(t *testing.T) {
 	runtimes := nodeRuntimeWith(t, server.URL+"/glibc.tar.xz", hash, "glibc")
 	rm := newTestRMWithLookPath(runtimes, target.Target{OS: runtime.GOOS, Arch: runtime.GOARCH, Libc: target.LibcMusl}, noSystemNode)
 
-	nodeBin, err := rm.installNode("node")
+	nodeBin, err := rm.installNode(context.Background(), "node")
 	if err != nil {
 		t.Fatalf("installNode() error = %v (glibc fallback expected)", err)
 	}
@@ -462,7 +463,7 @@ func TestInstallNode_GlibcFallbackWhenNoMusl(t *testing.T) {
 
 func TestInstallNode_UnknownRuntime(t *testing.T) {
 	rm := New(config.MapOfRuntimes{})
-	if _, err := rm.installNode("node"); err == nil {
+	if _, err := rm.installNode(context.Background(), "node"); err == nil {
 		t.Error("expected error for unknown runtime, got nil")
 	}
 }

@@ -237,14 +237,16 @@ Three-layer API: pure computation + idempotent lifecycle + cached getter. Thread
 
 ### Task 14: Thread install timeout through runtimemanager
 
-- [ ] modify runtime install methods in `internal/runtimemanager/runtimemanager.go` to accept `context.Context`
-- [ ] thread context through `internal/runtimemanager/fnm.go`: `installFNMAppOnce` uses `exec.CommandContext` for subprocess calls. Note: `exec.CommandContext` kills the direct process but may not kill grandchildren; consider Unix process-group cleanup later if tools spawn subprocess trees
-- [ ] thread context through `internal/runtimemanager/uv.go`: UV app installation uses context for downloads and subprocesses
-- [ ] thread context through `internal/runtimemanager/jvm.go`: JVM installation uses context for downloads
-- [ ] on timeout: clean up partial extractions and temp dirs
-- [ ] write test: verify context is propagated to download calls
-- [ ] write test: subprocess uses `exec.CommandContext` (timeout kills child process)
-- [ ] run `go test ./internal/runtimemanager/...` — must pass before next task
+! Scope note: the plan named `fnm.go`/`installFNMAppOnce`, but (as in Tasks 10/12) no such file/function exists — the npm-package install path lives in `node.go` (`installNodeApp`/`installNodeAppOnce`, which runs `node <pnpm.cjs> install`) with the pnpm download in `pnpm.go`. The subprocess + download threading was applied there instead. A shared `internal/runtimemanager/install_timeout.go` was added mirroring binmanager's Task 13 helpers: `newInstallContext(parent)` (reads `env.InstallTimeoutSeconds()`; 0 → cancelable context with no deadline), `wrapInstallTimeout(err, timeoutSec)` (turns `context.DeadlineExceeded` into "installation timed out after Ns"), and `runInstallCmd(ctx, cmd)` (surfaces `ctx.Err()` because `exec.CommandContext` reports a SIGKILL as a generic "signal: killed" that does NOT wrap the context error). Each per-app install boundary (`InstallUVApp`, `InstallJVMApp`, `installNodeApp`, `InstallGoApp`) creates the timeout context with `defer cancel()` and wraps the singleflight result. `GetRuntimePath(name)` stays as the timeout-agnostic public entry; an internal `getRuntimePath(ctx, name)` threads the install context (the runtime binary download itself remains bounded by binmanager's own Task 13 timeout). `GenerateGoLockFiles` is intentionally NOT timeout-bounded — it is a devtools/config-lockfile operation, not an app install. Cleanup-on-timeout is provided by the pre-existing `cleanupOnError` defers, which now also fire on the timeout error path.
+
+- [x] modify runtime install methods in `internal/runtimemanager/runtimemanager.go` to accept `context.Context` (added `getRuntimePath(ctx, name)` + `downloadRuntime(ctx, ...)`; `GetRuntimePath` kept as background-context wrapper)
+- [x] thread context through the node install path (`node.go`/`pnpm.go`, formerly named `fnm.go`): `installNodeAppOnce` uses `exec.CommandContext` for the pnpm subprocess. Note: `exec.CommandContext` kills the direct process but may not kill grandchildren; consider Unix process-group cleanup later if tools spawn subprocess trees
+- [x] thread context through `internal/runtimemanager/uv.go`: UV app installation uses context for downloads (runtime acquisition) and the `uv sync` subprocess via `exec.CommandContext`
+- [x] thread context through `internal/runtimemanager/jvm.go`: JVM installation uses context for the JAR download via `http.NewRequestWithContext`
+- [x] on timeout: clean up partial extractions and temp dirs (existing `cleanupOnError` defers fire on the timeout error path; pnpm/JAR temp files are removed by their own defers)
+- [x] write test: verify context is propagated to download calls (`TestDownloadPNPMFromRegistry_ContextPropagated`, `TestDownloadAndVerifyJAR_ContextPropagated`)
+- [x] write test: subprocess uses `exec.CommandContext` (timeout kills child process) (`TestRunInstallCmd_TimeoutKillsChild`, plus success/failure pass-through cases)
+- [x] run `go test ./internal/runtimemanager/...` — must pass before next task
 
 ### Task 15: Add `datamitsu config runtime` CLI command
 

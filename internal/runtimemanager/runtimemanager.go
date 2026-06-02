@@ -1,6 +1,7 @@
 package runtimemanager
 
 import (
+	"context"
 	"fmt"
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
@@ -139,7 +140,16 @@ func (rm *RuntimeManager) resolveEffectiveRuntimeConfig(runtimeName string, rc c
 // For managed runtimes, this downloads and caches the binary using BinManager patterns.
 // For system runtimes, this returns the system command path as-is.
 // Safe for concurrent use from multiple goroutines.
+//
+// This is the timeout-agnostic entry point used by the command-info paths (which
+// only resolve already-installed runtimes). The app-install paths call
+// getRuntimePath with their per-app install-timeout context so a stalled runtime
+// acquisition is bounded by the same deadline as the install itself.
 func (rm *RuntimeManager) GetRuntimePath(runtimeName string) (string, error) {
+	return rm.getRuntimePath(context.Background(), runtimeName)
+}
+
+func (rm *RuntimeManager) getRuntimePath(ctx context.Context, runtimeName string) (string, error) {
 	rc, ok := rm.mapOfRuntimes[runtimeName]
 	if !ok {
 		return "", fmt.Errorf("runtime %q not found in registry", runtimeName)
@@ -221,7 +231,7 @@ func (rm *RuntimeManager) GetRuntimePath(runtimeName string) (string, error) {
 	}
 
 	_, err, _ = rm.runtimeInstall.Do(runtimeName, func() (any, error) {
-		return nil, rm.downloadRuntime(runtimeName, rc, configHash, info.BinaryPath)
+		return nil, rm.downloadRuntime(ctx, runtimeName, rc, configHash, info.BinaryPath)
 	})
 	if err != nil {
 		return "", err
@@ -249,7 +259,15 @@ func resolveLibcKey(libcMap map[string]binmanager.BinaryOsArchInfo, libc string)
 	return nil, ""
 }
 
-func (rm *RuntimeManager) downloadRuntime(runtimeName string, rc config.RuntimeConfig, configHash string, binaryPath *string) error {
+func (rm *RuntimeManager) downloadRuntime(ctx context.Context, runtimeName string, rc config.RuntimeConfig, configHash string, binaryPath *string) error {
+	// Bail out early if the per-app install deadline already elapsed before we
+	// even started acquiring the runtime. The binary download itself runs through
+	// binmanager, which applies its own per-app install timeout, so the heavy
+	// fetch stays bounded regardless of this context.
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	log.Debug("runtime not found in cache, downloading",
 		zap.String("name", runtimeName),
 	)

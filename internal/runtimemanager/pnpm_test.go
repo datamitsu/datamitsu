@@ -3,6 +3,7 @@ package runtimemanager
 import (
 	"archive/tar"
 	"compress/gzip"
+	"context"
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/base64"
@@ -183,7 +184,7 @@ func TestDownloadPNPMFromRegistry(t *testing.T) {
 
 		destDir := t.TempDir()
 		rm := New(config.MapOfRuntimes{})
-		if err := rm.downloadPNPMFromRegistryURL(registryURL, "9.15.0", destDir, pinnedHash); err != nil {
+		if err := rm.downloadPNPMFromRegistryURL(context.Background(), registryURL, "9.15.0", destDir, pinnedHash); err != nil {
 			t.Fatalf("downloadPNPMFromRegistryURL() error = %v", err)
 		}
 
@@ -204,7 +205,7 @@ func TestDownloadPNPMFromRegistry(t *testing.T) {
 		}
 
 		rm := New(config.MapOfRuntimes{})
-		err := rm.downloadPNPMFromRegistry("9.15.0", destDir, "test-pnpm-sha256-hash")
+		err := rm.downloadPNPMFromRegistry(context.Background(), "9.15.0", destDir, "test-pnpm-sha256-hash")
 		if err != nil {
 			t.Errorf("expected nil error for already downloaded, got %v", err)
 		}
@@ -219,7 +220,7 @@ func TestDownloadPNPMFromRegistry(t *testing.T) {
 		wrongPinned := "0000000000000000000000000000000000000000000000000000000000000000"
 		destDir := t.TempDir()
 		rm := New(config.MapOfRuntimes{})
-		err := rm.downloadPNPMFromRegistryURL(registryURL, "9.15.0", destDir, wrongPinned)
+		err := rm.downloadPNPMFromRegistryURL(context.Background(), registryURL, "9.15.0", destDir, wrongPinned)
 		if err == nil {
 			t.Fatal("expected error for pinned SHA-256 mismatch")
 		}
@@ -235,7 +236,7 @@ func TestDownloadPNPMFromRegistry(t *testing.T) {
 
 		destDir := t.TempDir()
 		rm := New(config.MapOfRuntimes{})
-		err := rm.downloadPNPMFromRegistryURL(registryURL, "9.15.0", destDir, pinnedHash)
+		err := rm.downloadPNPMFromRegistryURL(context.Background(), registryURL, "9.15.0", destDir, pinnedHash)
 		if err == nil {
 			t.Fatal("expected error for SHA-512 integrity mismatch")
 		}
@@ -269,7 +270,7 @@ func TestDownloadPNPMFromRegistry(t *testing.T) {
 
 		destDir := t.TempDir()
 		rm := New(config.MapOfRuntimes{})
-		err := rm.downloadPNPMFromRegistryURL(srv.URL, "9.15.0", destDir, pinnedHash)
+		err := rm.downloadPNPMFromRegistryURL(context.Background(), srv.URL, "9.15.0", destDir, pinnedHash)
 		if err == nil {
 			t.Fatal("expected error when only SHA-1 shasum is available")
 		}
@@ -286,7 +287,7 @@ func TestDownloadPNPMFromRegistry(t *testing.T) {
 
 		destDir := t.TempDir()
 		rm := New(config.MapOfRuntimes{})
-		err := rm.downloadPNPMFromRegistryURL(server.URL, "0.0.0-nonexistent", destDir, "irrelevant-hash")
+		err := rm.downloadPNPMFromRegistryURL(context.Background(), server.URL, "0.0.0-nonexistent", destDir, "irrelevant-hash")
 		if err == nil {
 			t.Error("expected error for registry error")
 		}
@@ -411,7 +412,7 @@ func TestDownloadPNPMWithIntegrity(t *testing.T) {
 
 	destDir := t.TempDir()
 	rm := New(config.MapOfRuntimes{})
-	if err := rm.downloadPNPMFromRegistryURL(registryURL, "9.15.0", destDir, pinnedHash); err != nil {
+	if err := rm.downloadPNPMFromRegistryURL(context.Background(), registryURL, "9.15.0", destDir, pinnedHash); err != nil {
 		t.Fatalf("downloadPNPMFromRegistryURL() with integrity error = %v", err)
 	}
 
@@ -436,7 +437,7 @@ func TestDownloadPNPMFromRegistryURL_RejectsHTTPTarball(t *testing.T) {
 	destDir := t.TempDir()
 	rm := New(config.MapOfRuntimes{})
 	pinned := "0000000000000000000000000000000000000000000000000000000000000000"
-	err := rm.downloadPNPMFromRegistryURL(srv.URL, "9.15.0", destDir, pinned)
+	err := rm.downloadPNPMFromRegistryURL(context.Background(), srv.URL, "9.15.0", destDir, pinned)
 	if err == nil {
 		t.Fatal("expected error for http (non-https) tarball URL")
 	}
@@ -463,7 +464,7 @@ func TestDownloadPNPMFromRegistryURL_HTTPSTarballSucceeds(t *testing.T) {
 
 	destDir := t.TempDir()
 	rm := New(config.MapOfRuntimes{})
-	if err := rm.downloadPNPMFromRegistryURL(registryURL, "9.15.0", destDir, pinnedHash); err != nil {
+	if err := rm.downloadPNPMFromRegistryURL(context.Background(), registryURL, "9.15.0", destDir, pinnedHash); err != nil {
 		t.Fatalf("downloadPNPMFromRegistryURL() over https error = %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(destDir, "package", "bin", "pnpm.cjs")); err != nil {
