@@ -3,6 +3,7 @@ package binmanager
 import (
 	"archive/tar"
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -14,7 +15,9 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/datamitsu/datamitsu/internal/syslist"
 	"github.com/datamitsu/datamitsu/internal/target"
@@ -111,6 +114,275 @@ func TestConcurrentDownloadSameBinary(t *testing.T) {
 
 	if _, err := os.Stat(binPath); os.IsNotExist(err) {
 		t.Error("binary not found at expected path after concurrent downloads")
+	}
+}
+
+// TestGetBinaryPath_SingleFlight verifies that N concurrent GetBinaryPath
+// calls for the same uninstalled binary trigger exactly one download.
+func TestGetBinaryPath_SingleFlight(t *testing.T) {
+	testContent := []byte("#!/bin/sh\necho hello\n")
+	hash := sha256.Sum256(testContent)
+	expectedHash := hex.EncodeToString(hash[:])
+
+	var hits int64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt64(&hits, 1)
+		// Hold the connection briefly so concurrent callers overlap inside
+		// the single-flight critical section.
+		time.Sleep(50 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(testContent)
+	}))
+	defer server.Close()
+
+	tmpDir := t.TempDir()
+	t.Setenv("DATAMITSU_CACHE_DIR", tmpDir)
+
+	osType, err := syslist.GetOsTypeFromString(runtime.GOOS)
+	if err != nil {
+		t.Fatalf("failed to get OS type: %v", err)
+	}
+	archType, err := syslist.GetArchTypeFromString(runtime.GOARCH)
+	if err != nil {
+		t.Fatalf("failed to get arch type: %v", err)
+	}
+
+	bm := New(MapOfApps{
+		"testbin": App{
+			Required: true,
+			Binary: &AppConfigBinary{
+				Binaries: MapOfBinaries{
+					osType: {
+						archType: {"unknown": BinaryOsArchInfo{
+							URL:         server.URL,
+							Hash:        expectedHash,
+							ContentType: BinContentTypeBinary,
+						}},
+					},
+				},
+			},
+		},
+	}, nil, nil)
+
+	const goroutines = 8
+	paths := make([]string, goroutines)
+	errs := make([]error, goroutines)
+	var wg sync.WaitGroup
+	for i := 0; i < goroutines; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			paths[idx], errs[idx] = bm.GetBinaryPath("testbin")
+		}(i)
+	}
+	wg.Wait()
+
+	for i, err := range errs {
+		if err != nil {
+			t.Errorf("goroutine %d: GetBinaryPath() error = %v", i, err)
+		}
+	}
+
+	if got := atomic.LoadInt64(&hits); got != 1 {
+		t.Errorf("expected exactly 1 download, got %d", got)
+	}
+
+	for i, p := range paths {
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("goroutine %d: binary not present at %s: %v", i, p, err)
+		}
+	}
+}
+
+// TestGetBinaryPath_AlreadyInstalled verifies that an already-cached binary
+// returns immediately without performing a download.
+func TestGetBinaryPath_AlreadyInstalled(t *testing.T) {
+	testContent := []byte("#!/bin/sh\necho hello\n")
+	hash := sha256.Sum256(testContent)
+	expectedHash := hex.EncodeToString(hash[:])
+
+	var hits int64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt64(&hits, 1)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(testContent)
+	}))
+	defer server.Close()
+
+	tmpDir := t.TempDir()
+	t.Setenv("DATAMITSU_CACHE_DIR", tmpDir)
+
+	osType, err := syslist.GetOsTypeFromString(runtime.GOOS)
+	if err != nil {
+		t.Fatalf("failed to get OS type: %v", err)
+	}
+	archType, err := syslist.GetArchTypeFromString(runtime.GOARCH)
+	if err != nil {
+		t.Fatalf("failed to get arch type: %v", err)
+	}
+
+	bm := New(MapOfApps{
+		"testbin": App{
+			Required: true,
+			Binary: &AppConfigBinary{
+				Binaries: MapOfBinaries{
+					osType: {
+						archType: {"unknown": BinaryOsArchInfo{
+							URL:         server.URL,
+							Hash:        expectedHash,
+							ContentType: BinContentTypeBinary,
+						}},
+					},
+				},
+			},
+		},
+	}, nil, nil)
+
+	// First call downloads.
+	if _, err := bm.GetBinaryPath("testbin"); err != nil {
+		t.Fatalf("first GetBinaryPath() error = %v", err)
+	}
+	if got := atomic.LoadInt64(&hits); got != 1 {
+		t.Fatalf("expected 1 download after first call, got %d", got)
+	}
+
+	// Second call must hit the cache without downloading.
+	if _, err := bm.GetBinaryPath("testbin"); err != nil {
+		t.Fatalf("second GetBinaryPath() error = %v", err)
+	}
+	if got := atomic.LoadInt64(&hits); got != 1 {
+		t.Errorf("expected no additional download on cache hit, got %d total", got)
+	}
+}
+
+// TestEnsureTools_InstallsDistinctOnceMixedKinds verifies EnsureTools installs
+// every distinct tool exactly once across mixed kinds (binary + uv runtime),
+// deduplicating repeated names.
+func TestEnsureTools_InstallsDistinctOnceMixedKinds(t *testing.T) {
+	testContent := []byte("#!/bin/sh\necho hello\n")
+	hash := sha256.Sum256(testContent)
+	expectedHash := hex.EncodeToString(hash[:])
+
+	var hits int64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt64(&hits, 1)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(testContent)
+	}))
+	defer server.Close()
+
+	tmpDir := t.TempDir()
+	t.Setenv("DATAMITSU_CACHE_DIR", tmpDir)
+
+	osType, err := syslist.GetOsTypeFromString(runtime.GOOS)
+	if err != nil {
+		t.Fatalf("failed to get OS type: %v", err)
+	}
+	archType, err := syslist.GetArchTypeFromString(runtime.GOARCH)
+	if err != nil {
+		t.Fatalf("failed to get arch type: %v", err)
+	}
+
+	var uvCalls int64
+	mock := &mockRuntimeAppManager{
+		getCommandInfoFunc: func(appName string, app App) (*CommandInfo, error) {
+			atomic.AddInt64(&uvCalls, 1)
+			return &CommandInfo{Type: "uv", Command: "/cache/uv/" + appName}, nil
+		},
+	}
+
+	bm := New(MapOfApps{
+		"testbin": App{
+			Required: true,
+			Binary: &AppConfigBinary{
+				Binaries: MapOfBinaries{
+					osType: {
+						archType: {"unknown": BinaryOsArchInfo{
+							URL:         server.URL,
+							Hash:        expectedHash,
+							ContentType: BinContentTypeBinary,
+						}},
+					},
+				},
+			},
+		},
+		"yamllint": App{
+			Uv: &AppConfigUV{PackageName: "yamllint", Version: "1.38.0"},
+		},
+	}, nil, mock)
+
+	// Repeated names must dedup.
+	if err := bm.EnsureTools(context.Background(), []string{"testbin", "yamllint", "testbin", "yamllint"}); err != nil {
+		t.Fatalf("EnsureTools() error = %v", err)
+	}
+
+	if got := atomic.LoadInt64(&hits); got != 1 {
+		t.Errorf("expected exactly 1 binary download, got %d", got)
+	}
+	if got := atomic.LoadInt64(&uvCalls); got != 1 {
+		t.Errorf("expected exactly 1 uv install, got %d", got)
+	}
+
+	binPath, err := bm.getBinaryPath("testbin")
+	if err != nil {
+		t.Fatalf("getBinaryPath() error = %v", err)
+	}
+	if _, err := os.Stat(binPath); err != nil {
+		t.Errorf("binary not present after EnsureTools: %v", err)
+	}
+}
+
+// TestEnsureTools_AggregatesErrors verifies a single failing tool does not abort
+// the whole set and that the error is surfaced.
+func TestEnsureTools_AggregatesErrors(t *testing.T) {
+	var goodCalls int64
+	mock := &mockRuntimeAppManager{
+		getCommandInfoFunc: func(appName string, app App) (*CommandInfo, error) {
+			if appName == "bad" {
+				return nil, fmt.Errorf("boom")
+			}
+			atomic.AddInt64(&goodCalls, 1)
+			return &CommandInfo{Type: "uv", Command: "/cache/uv/" + appName}, nil
+		},
+	}
+
+	bm := New(MapOfApps{
+		"good": App{Uv: &AppConfigUV{PackageName: "good", Version: "1.0.0"}},
+		"bad":  App{Uv: &AppConfigUV{PackageName: "bad", Version: "1.0.0"}},
+	}, nil, mock)
+
+	err := bm.EnsureTools(context.Background(), []string{"good", "bad"})
+	if err == nil {
+		t.Fatal("expected aggregated error, got nil")
+	}
+	if !strings.Contains(err.Error(), "bad") {
+		t.Errorf("expected error to mention 'bad', got %v", err)
+	}
+	if got := atomic.LoadInt64(&goodCalls); got != 1 {
+		t.Errorf("expected 'good' to still install despite 'bad' failing, got %d calls", got)
+	}
+}
+
+// TestEnsureTools_UnknownTool verifies an unknown tool name surfaces a clear error.
+func TestEnsureTools_UnknownTool(t *testing.T) {
+	bm := New(MapOfApps{}, nil, nil)
+	err := bm.EnsureTools(context.Background(), []string{"nonexistent"})
+	if err == nil {
+		t.Fatal("expected error for unknown tool")
+	}
+	if !strings.Contains(err.Error(), "nonexistent") {
+		t.Errorf("expected error to mention tool name, got %v", err)
+	}
+}
+
+// TestEnsureTools_EmptyList verifies an empty list is a no-op.
+func TestEnsureTools_EmptyList(t *testing.T) {
+	bm := New(MapOfApps{}, nil, nil)
+	if err := bm.EnsureTools(context.Background(), nil); err != nil {
+		t.Fatalf("EnsureTools(nil) error = %v", err)
+	}
+	if err := bm.EnsureTools(context.Background(), []string{}); err != nil {
+		t.Fatalf("EnsureTools([]) error = %v", err)
 	}
 }
 

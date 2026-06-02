@@ -261,24 +261,28 @@ func (rm *RuntimeManager) installGoAppOnce(appName string, appConfig *binmanager
 	return nil
 }
 
-// ForceRemoveAll removes root and everything under it, restoring write
-// permission on every entry first. `go get`/`go build` populate GOMODCACHE
-// (a subdirectory of the install/work dir) with files and directories marked
-// read-only (0444/0555); a plain os.RemoveAll then fails with EACCES because a
-// read-only directory's entries cannot be unlinked, leaking 100+MiB of module
-// cache. WalkDir runs pre-order, so each directory is made writable before
-// RemoveAll descends into it. Chmod errors are best-effort — the final
-// os.RemoveAll reports any failure that actually blocks removal.
+// ForceRemoveAll removes root and everything under it, restoring owner rwx on
+// every entry first. `go get`/`go build` and pnpm populate the store with files
+// and directories marked read-only (0444/0555); a plain os.RemoveAll then fails
+// with EACCES because a read-only directory's entries cannot be unlinked,
+// leaking 100+MiB of module cache. WalkDir runs pre-order, so each directory is
+// made traversable before RemoveAll descends into it.
+//
+// Every entry gets mode 0o700 unconditionally — NOT 0o600-for-files — because
+// the file/dir distinction cannot be trusted here. ReadDir may return a dirent
+// with type DT_UNKNOWN (filesystem-dependent), in which case
+// fs.DirEntry.IsDir() falls back to an lstat that can fail and report a real
+// directory as a non-dir. Giving such a directory a file mode (0o600) strips its
+// execute bit, so it can no longer be entered and RemoveAll later fails with
+// EACCES on openat. The execute bit on a regular file is harmless — it is about
+// to be deleted. Chmod errors are best-effort; the final os.RemoveAll reports
+// any failure that actually blocks removal.
 func ForceRemoveAll(root string) error {
 	_ = filepath.WalkDir(root, func(p string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return nil
 		}
-		mode := os.FileMode(0o600)
-		if d.IsDir() {
-			mode = 0o700
-		}
-		_ = os.Chmod(p, mode)
+		_ = os.Chmod(p, 0o700)
 		return nil
 	})
 	return os.RemoveAll(root)

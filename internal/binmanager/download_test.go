@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 )
 
@@ -370,18 +372,17 @@ func TestMoveFile(t *testing.T) {
 		}
 	})
 
-	t.Run("overwrites existing file", func(t *testing.T) {
+	t.Run("skips when destination exists (content-addressed no-op)", func(t *testing.T) {
 		tmpDir := t.TempDir()
 
 		srcPath := filepath.Join(tmpDir, "source.txt")
-		newContent := []byte("new content")
-		if err := os.WriteFile(srcPath, newContent, 0644); err != nil {
+		if err := os.WriteFile(srcPath, []byte("new content"), 0644); err != nil {
 			t.Fatalf("failed to create source file: %v", err)
 		}
 
 		dstPath := filepath.Join(tmpDir, "dest.txt")
-		oldContent := []byte("old content")
-		if err := os.WriteFile(dstPath, oldContent, 0644); err != nil {
+		existing := []byte("existing content")
+		if err := os.WriteFile(dstPath, existing, 0644); err != nil {
 			t.Fatalf("failed to create destination file: %v", err)
 		}
 
@@ -389,12 +390,72 @@ func TestMoveFile(t *testing.T) {
 			t.Fatalf("moveFile() error = %v", err)
 		}
 
+		// dst must be left intact (never removed); src cleaned up.
 		content, err := os.ReadFile(dstPath)
 		if err != nil {
 			t.Fatalf("failed to read destination file: %v", err)
 		}
-		if string(content) != string(newContent) {
-			t.Errorf("content not overwritten: got %q, want %q", string(content), string(newContent))
+		if string(content) != string(existing) {
+			t.Errorf("existing dst was modified: got %q, want %q", string(content), string(existing))
+		}
+		if _, err := os.Stat(srcPath); !os.IsNotExist(err) {
+			t.Error("source file still exists after skip")
+		}
+	})
+
+	t.Run("concurrent moves to same dst never expose missing dst", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		dstPath := filepath.Join(tmpDir, "dest.bin")
+
+		const movers = 8
+		var wg sync.WaitGroup
+
+		// Reader loops, asserting dst is never observed missing once it first appears.
+		stop := make(chan struct{})
+		var appeared atomic.Bool
+		readErr := make(chan error, 1)
+		go func() {
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				if _, err := os.Stat(dstPath); err == nil {
+					appeared.Store(true)
+				} else if appeared.Load() && os.IsNotExist(err) {
+					select {
+					case readErr <- fmt.Errorf("dst disappeared after appearing"):
+					default:
+					}
+					return
+				}
+			}
+		}()
+
+		wg.Add(movers)
+		for i := 0; i < movers; i++ {
+			go func(i int) {
+				defer wg.Done()
+				srcPath := filepath.Join(tmpDir, fmt.Sprintf("src-%d.bin", i))
+				if err := os.WriteFile(srcPath, []byte("payload"), 0644); err != nil {
+					return
+				}
+				_ = moveFile(srcPath, dstPath)
+			}(i)
+		}
+
+		wg.Wait()
+		close(stop)
+
+		select {
+		case err := <-readErr:
+			t.Fatal(err)
+		default:
+		}
+
+		if _, err := os.Stat(dstPath); err != nil {
+			t.Fatalf("dst missing after concurrent moves: %v", err)
 		}
 	})
 
@@ -407,6 +468,224 @@ func TestMoveFile(t *testing.T) {
 		err := moveFile(srcPath, dstPath)
 		if err == nil {
 			t.Error("expected error for nonexistent source file, got nil")
+		}
+	})
+}
+
+func TestCopyFileAtomic(t *testing.T) {
+	t.Run("copies content and marks executable", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		srcPath := filepath.Join(tmpDir, "source.bin")
+		payload := []byte("binary payload")
+		if err := os.WriteFile(srcPath, payload, 0644); err != nil {
+			t.Fatalf("failed to create source file: %v", err)
+		}
+
+		dstPath := filepath.Join(tmpDir, "dest.bin")
+		if err := copyFileAtomic(srcPath, dstPath); err != nil {
+			t.Fatalf("copyFileAtomic() error = %v", err)
+		}
+
+		content, err := os.ReadFile(dstPath)
+		if err != nil {
+			t.Fatalf("failed to read destination file: %v", err)
+		}
+		if string(content) != string(payload) {
+			t.Errorf("content mismatch: got %q, want %q", string(content), string(payload))
+		}
+
+		info, err := os.Stat(dstPath)
+		if err != nil {
+			t.Fatalf("failed to stat destination file: %v", err)
+		}
+		if info.Mode().Perm() != 0755 {
+			t.Errorf("incorrect permissions: got %o, want %o", info.Mode().Perm(), 0755)
+		}
+	})
+
+	t.Run("leaves no temp file behind on source error", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		srcPath := filepath.Join(tmpDir, "nonexistent.bin")
+		dstPath := filepath.Join(tmpDir, "dest.bin")
+
+		if err := copyFileAtomic(srcPath, dstPath); err == nil {
+			t.Fatal("expected error for nonexistent source, got nil")
+		}
+
+		entries, err := os.ReadDir(tmpDir)
+		if err != nil {
+			t.Fatalf("failed to read temp dir: %v", err)
+		}
+		for _, e := range entries {
+			if strings.HasPrefix(e.Name(), "move-") {
+				t.Errorf("leftover temp file: %s", e.Name())
+			}
+		}
+	})
+}
+
+func TestMoveDir(t *testing.T) {
+	writeDir := func(t *testing.T, dir, marker string) {
+		t.Helper()
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "f.txt"), []byte(marker), 0644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+	}
+
+	t.Run("successful move", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		srcDir := filepath.Join(tmpDir, "src")
+		writeDir(t, srcDir, "hello")
+
+		dstDir := filepath.Join(tmpDir, "out", "dst")
+		if err := moveDir(srcDir, dstDir); err != nil {
+			t.Fatalf("moveDir() error = %v", err)
+		}
+		content, err := os.ReadFile(filepath.Join(dstDir, "f.txt"))
+		if err != nil {
+			t.Fatalf("read dst: %v", err)
+		}
+		if string(content) != "hello" {
+			t.Errorf("content = %q, want hello", content)
+		}
+		if _, err := os.Stat(srcDir); !os.IsNotExist(err) {
+			t.Error("src still exists after move")
+		}
+	})
+
+	t.Run("skips when destination exists (content-addressed no-op)", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		srcDir := filepath.Join(tmpDir, "src")
+		writeDir(t, srcDir, "new")
+		dstDir := filepath.Join(tmpDir, "dst")
+		writeDir(t, dstDir, "existing")
+
+		if err := moveDir(srcDir, dstDir); err != nil {
+			t.Fatalf("moveDir() error = %v", err)
+		}
+		content, err := os.ReadFile(filepath.Join(dstDir, "f.txt"))
+		if err != nil {
+			t.Fatalf("read dst: %v", err)
+		}
+		if string(content) != "existing" {
+			t.Errorf("existing dst modified: got %q, want existing", content)
+		}
+		if _, err := os.Stat(srcDir); !os.IsNotExist(err) {
+			t.Error("src still exists after skip")
+		}
+	})
+
+	t.Run("concurrent moves to same dst never expose missing dst", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		dstDir := filepath.Join(tmpDir, "dst")
+
+		const movers = 8
+		var wg sync.WaitGroup
+
+		stop := make(chan struct{})
+		var appeared atomic.Bool
+		readErr := make(chan error, 1)
+		go func() {
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				if _, err := os.Stat(dstDir); err == nil {
+					appeared.Store(true)
+				} else if appeared.Load() && os.IsNotExist(err) {
+					select {
+					case readErr <- fmt.Errorf("dst disappeared after appearing"):
+					default:
+					}
+					return
+				}
+			}
+		}()
+
+		wg.Add(movers)
+		for i := 0; i < movers; i++ {
+			go func(i int) {
+				defer wg.Done()
+				srcDir := filepath.Join(tmpDir, fmt.Sprintf("src-%d", i))
+				if err := os.MkdirAll(srcDir, 0755); err != nil {
+					return
+				}
+				if err := os.WriteFile(filepath.Join(srcDir, "f.txt"), []byte("payload"), 0644); err != nil {
+					return
+				}
+				_ = moveDir(srcDir, dstDir)
+			}(i)
+		}
+
+		wg.Wait()
+		close(stop)
+
+		select {
+		case err := <-readErr:
+			t.Fatal(err)
+		default:
+		}
+		if _, err := os.Stat(dstDir); err != nil {
+			t.Fatalf("dst missing after concurrent moves: %v", err)
+		}
+	})
+}
+
+func TestCopyDirAtomic(t *testing.T) {
+	t.Run("copies tree into fresh dst", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		srcDir := filepath.Join(tmpDir, "src")
+		if err := os.MkdirAll(filepath.Join(srcDir, "sub"), 0755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(srcDir, "sub", "f.txt"), []byte("payload"), 0644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+
+		dstDir := filepath.Join(tmpDir, "dst")
+		if err := copyDirAtomic(srcDir, dstDir); err != nil {
+			t.Fatalf("copyDirAtomic() error = %v", err)
+		}
+		content, err := os.ReadFile(filepath.Join(dstDir, "sub", "f.txt"))
+		if err != nil {
+			t.Fatalf("read dst: %v", err)
+		}
+		if string(content) != "payload" {
+			t.Errorf("content = %q, want payload", content)
+		}
+	})
+
+	t.Run("treats pre-existing dst as success", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		srcDir := filepath.Join(tmpDir, "src")
+		if err := os.MkdirAll(srcDir, 0755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(srcDir, "f.txt"), []byte("new"), 0644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+		dstDir := filepath.Join(tmpDir, "dst")
+		if err := os.MkdirAll(dstDir, 0755); err != nil {
+			t.Fatalf("mkdir dst: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(dstDir, "f.txt"), []byte("existing"), 0644); err != nil {
+			t.Fatalf("write dst: %v", err)
+		}
+
+		if err := copyDirAtomic(srcDir, dstDir); err != nil {
+			t.Fatalf("copyDirAtomic() error = %v", err)
+		}
+		content, err := os.ReadFile(filepath.Join(dstDir, "f.txt"))
+		if err != nil {
+			t.Fatalf("read dst: %v", err)
+		}
+		if string(content) != "existing" {
+			t.Errorf("existing dst modified: got %q, want existing", content)
 		}
 	})
 }

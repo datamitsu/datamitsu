@@ -1,10 +1,10 @@
 package runtimemanager
 
 import (
+	"fmt"
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/env"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -24,9 +24,14 @@ import (
 // integrity, and npm tools are installed with `node <pnpm.cjs> install`). The
 // shared pnpm/npm helpers live in pnpm.go.
 
-// getNodeEnvVars returns the per-app npm/pnpm environment for a node app: node
-// apps are pnpm-installed npm packages, so this points pnpm at the shared store
-// and the per-app virtual store / global dirs.
+// getNodeEnvVars returns the per-app npm/pnpm environment for a node app.
+//
+// NOTE: pnpm 11 does NOT read store-dir / virtual-store-dir from these
+// npm_config_* env vars (nor from .npmrc) — it only honors the workspace
+// storeDir key, which buildPNPMWorkspaceForApp pins to GetPNPMStorePath(). The
+// store_dir entry here is retained only so the installer can pre-create that
+// directory; virtual_store_dir already matches pnpm's default (node_modules/
+// .pnpm under the cwd, which is appEnvPath).
 func getNodeEnvVars(appEnvPath string) map[string]string {
 	storePath := env.GetPNPMStorePath()
 	return map[string]string{

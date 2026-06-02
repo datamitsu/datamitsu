@@ -686,6 +686,42 @@ func TestForceRemoveAll_RemovesReadOnlyModuleCache(t *testing.T) {
 	}
 }
 
+// TestForceRemoveAll_RemovesNoExecuteDirectory pins the fix for the pnpm/
+// half-deleted-store failure: a directory left with a file-like mode (0o600 —
+// readable and writable but NOT traversable) must still be removed. A directory
+// without its execute bit cannot be opened to unlink its entries, so a plain
+// os.RemoveAll fails with EACCES on openat. ForceRemoveAll must restore the
+// execute bit regardless of the dirent's reported type.
+func TestForceRemoveAll_RemovesNoExecuteDirectory(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root bypasses permission checks")
+	}
+
+	root := t.TempDir()
+	inner := filepath.Join(root, "pkg", "node_modules", "commander")
+	if err := os.MkdirAll(inner, 0o755); err != nil {
+		t.Fatalf("mkdir inner dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(inner, "LICENSE"), []byte("license"), 0o444); err != nil {
+		t.Fatalf("seed read-only file: %v", err)
+	}
+	// Strip the execute bit from the leaf directory (mode 0o600, "drw-------").
+	if err := os.Chmod(inner, 0o600); err != nil {
+		t.Fatalf("chmod no-execute dir: %v", err)
+	}
+
+	if err := os.RemoveAll(inner); err == nil {
+		t.Skip("platform allows removing a no-execute directory; guard not exercised")
+	}
+
+	if err := ForceRemoveAll(root); err != nil {
+		t.Fatalf("ForceRemoveAll() error = %v", err)
+	}
+	if _, err := os.Stat(root); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("root %q should have been removed, stat err = %v", root, err)
+	}
+}
+
 func TestForceRemoveAll_NonexistentPathIsNoError(t *testing.T) {
 	if err := ForceRemoveAll(filepath.Join(t.TempDir(), "does-not-exist")); err != nil {
 		t.Errorf("ForceRemoveAll on a missing path should be a no-op, got: %v", err)

@@ -22,6 +22,7 @@ LABEL org.opencontainers.image.title="datamitsu" \
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     git \
+    libatomic1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy binary

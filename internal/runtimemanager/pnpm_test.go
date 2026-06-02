@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"github.com/datamitsu/datamitsu/internal/env"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -904,6 +905,29 @@ func TestBuildPNPMWorkspaceForApp(t *testing.T) {
 		}
 		if !pnpmWorkspaceValueEqual(parsed["blockExoticSubdeps"], true) {
 			t.Errorf("blockExoticSubdeps = %v, want true (default preserved)", parsed["blockExoticSubdeps"])
+		}
+	})
+
+	t.Run("storeDir pins the pnpm store inside the datamitsu store", func(t *testing.T) {
+		// pnpm 11 ignores npm_config_store_dir; the workspace storeDir key is the
+		// only mechanism that keeps the pnpm store under GetStorePath() so that
+		// `datamitsu store clear` removes it. datamitsu owns this path, so a user
+		// pnpm-workspace.yaml must not be able to relocate the store elsewhere.
+		t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
+		files := map[string]string{
+			"pnpm-workspace.yaml": "storeDir: /tmp/attacker-controlled-store\n",
+		}
+		yamlOut, err := buildPNPMWorkspaceForApp(files)
+		if err != nil {
+			t.Fatalf("buildPNPMWorkspaceForApp() error = %v", err)
+		}
+
+		var parsed map[string]any
+		if err := yaml.Unmarshal([]byte(yamlOut), &parsed); err != nil {
+			t.Fatalf("failed to parse output YAML: %v", err)
+		}
+		if !pnpmWorkspaceValueEqual(parsed["storeDir"], env.GetPNPMStorePath()) {
+			t.Errorf("storeDir = %v, want %q (user override must not win)", parsed["storeDir"], env.GetPNPMStorePath())
 		}
 	})
 }
