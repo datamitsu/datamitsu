@@ -8,6 +8,13 @@
 // literal fallback values and must NOT import runtimeconfig.
 package runtimeconfig
 
+import (
+	"fmt"
+	"sync"
+
+	"github.com/datamitsu/datamitsu/internal/env"
+)
+
 // Compile-time defaults. These are the canonical default values; env getters
 // fall back to them when the corresponding env var is unset or invalid.
 const (
@@ -32,4 +39,60 @@ type Effective struct {
 	MaxParallelWorkers       int    `json:"maxParallelWorkers"`
 	MinimumReleaseAgeMinutes int    `json:"minimumReleaseAgeMinutes"`
 	Timings                  bool   `json:"timings"`
+}
+
+// Compute reads env getters and returns a fresh Effective. Pure function — no
+// global state, no side effects. Tests use this directly.
+func Compute() Effective {
+	return Effective{
+		Concurrency:              env.GetConcurrency(),
+		InstallTimeoutSeconds:    env.InstallTimeoutSeconds(),
+		LogLevel:                 env.GetLogLevel().String(),
+		MaxCmdLength:             env.GetMaxCommandLength(),
+		MaxErrorCmdDisplay:       env.GetMaxErrorCommandDisplay(),
+		MaxParallelWorkers:       env.GetMaxParallelWorkers(),
+		MinimumReleaseAgeMinutes: env.MinimumReleaseAgeMinutes(),
+		Timings:                  env.IsTimingsEnabled(),
+	}
+}
+
+var (
+	mu          sync.RWMutex
+	effective   Effective
+	initialized bool
+)
+
+// Init caches the Compute() result. It is idempotent — repeated calls are
+// no-ops (not errors), which is safe for repeated Cobra command execution in
+// tests and for embedded/daemon/watch workflows that may re-initialize.
+func Init() error {
+	mu.Lock()
+	defer mu.Unlock()
+	if initialized {
+		return nil
+	}
+	effective = Compute()
+	initialized = true
+	return nil
+}
+
+// Get returns a copy of the cached Effective. It returns an error if Init() was
+// not called. Caller mutation is safe — the returned struct is a copy and
+// internal state is immutable after Init.
+func Get() (Effective, error) {
+	mu.RLock()
+	defer mu.RUnlock()
+	if !initialized {
+		return Effective{}, fmt.Errorf("runtimeconfig: Get called before Init")
+	}
+	return effective, nil
+}
+
+// resetForTesting resets the cached state so tests can exercise the
+// before-Init error path and re-run the Init lifecycle.
+func resetForTesting() {
+	mu.Lock()
+	defer mu.Unlock()
+	effective = Effective{}
+	initialized = false
 }

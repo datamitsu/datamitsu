@@ -3,6 +3,8 @@ package runtimeconfig
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/env"
 )
 
 func TestConstants(t *testing.T) {
@@ -59,5 +61,54 @@ func TestEffectiveJSONRoundTrip(t *testing.T) {
 	}
 	if out != in {
 		t.Errorf("round-trip mismatch: got %+v, want %+v", out, in)
+	}
+}
+
+func TestComputeDefaults(t *testing.T) {
+	eff := Compute()
+	if eff.MinimumReleaseAgeMinutes != MinimumReleaseAgeMinutes {
+		t.Errorf("MinimumReleaseAgeMinutes = %d, want %d", eff.MinimumReleaseAgeMinutes, MinimumReleaseAgeMinutes)
+	}
+	if eff.InstallTimeoutSeconds != InstallTimeoutSeconds {
+		t.Errorf("InstallTimeoutSeconds = %d, want %d", eff.InstallTimeoutSeconds, InstallTimeoutSeconds)
+	}
+}
+
+func TestComputeEnvOverride(t *testing.T) {
+	t.Setenv("DATAMITSU_MIN_RELEASE_AGE", "1440")
+	t.Setenv("DATAMITSU_INSTALL_TIMEOUT", "1200")
+
+	eff := Compute()
+	if eff.MinimumReleaseAgeMinutes != 1440 {
+		t.Errorf("MinimumReleaseAgeMinutes = %d, want 1440", eff.MinimumReleaseAgeMinutes)
+	}
+	if eff.InstallTimeoutSeconds != 1200 {
+		t.Errorf("InstallTimeoutSeconds = %d, want 1200", eff.InstallTimeoutSeconds)
+	}
+}
+
+func TestGetBeforeInit(t *testing.T) {
+	resetForTesting()
+	if _, err := Get(); err == nil {
+		t.Error("Get() before Init() should return an error")
+	}
+}
+
+func TestInitIdempotent(t *testing.T) {
+	resetForTesting()
+	if err := Init(); err != nil {
+		t.Fatalf("first Init: %v", err)
+	}
+	if err := Init(); err != nil {
+		t.Errorf("second Init should be no-op, got error: %v", err)
+	}
+	if _, err := Get(); err != nil {
+		t.Errorf("Get() after Init: %v", err)
+	}
+}
+
+func TestInstallTimeoutMatchesConstant(t *testing.T) {
+	if env.InstallTimeoutSeconds() != InstallTimeoutSeconds {
+		t.Errorf("env.InstallTimeoutSeconds() = %d, want %d", env.InstallTimeoutSeconds(), InstallTimeoutSeconds)
 	}
 }

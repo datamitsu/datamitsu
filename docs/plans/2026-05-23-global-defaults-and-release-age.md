@@ -108,18 +108,18 @@
 
 Three-layer API: pure computation + idempotent lifecycle + cached getter. Thread-safe via `sync.RWMutex`.
 
-- [ ] add `Compute() Effective` — pure function, reads `env` getters, returns struct. No global state, no side effects. Tests use this directly
-- [ ] add package-level `var effective Effective`, `var initialized bool`, `var mu sync.RWMutex`
-- [ ] add `Init() error` — idempotent: if already initialized, return nil (no-op). Lock with `mu.Lock()`, compute, set `initialized = true`, unlock. Safe for repeated Cobra command execution and embedded usage
-- [ ] add `Get() (Effective, error)` — `mu.RLock()`, returns error if `!initialized` (zero-value struct has `MinimumReleaseAgeMinutes=0` = security filtering disabled); returns cached copy
-- [ ] add `resetForTesting()` unexported helper — resets `initialized` for testing `Get` before-Init error path
-- [ ] add `cobra.OnInitialize` callback in `cmd/root.go` that calls `runtimeconfig.Init()` and exits on error
-- [ ] modify `internal/pnpmdefaults/pnpmdefaults.go`: import `internal/runtimeconfig`, replace hardcoded `10080` with `runtimeconfig.MinimumReleaseAgeMinutes`
-- [ ] write tests via `Compute()`: returns expected default values; set env → override reflected in struct fields
-- [ ] write test: `Get()` without `Init()` returns error
-- [ ] write test: double `Init()` returns nil (idempotent, not error)
-- [ ] write test: `env.InstallTimeoutSeconds()` == `runtimeconfig.InstallTimeoutSeconds` (no env override)
-- [ ] run `go test ./internal/runtimeconfig/... ./internal/pnpmdefaults/... ./internal/engine/...` — must pass before next task
+- [x] add `Compute() Effective` — pure function, reads `env` getters, returns struct. No global state, no side effects. Tests use this directly
+- [x] add package-level `var effective Effective`, `var initialized bool`, `var mu sync.RWMutex`
+- [x] add `Init() error` — idempotent: if already initialized, return nil (no-op). Lock with `mu.Lock()`, compute, set `initialized = true`, unlock. Safe for repeated Cobra command execution and embedded usage
+- [x] add `Get() (Effective, error)` — `mu.RLock()`, returns error if `!initialized` (zero-value struct has `MinimumReleaseAgeMinutes=0` = security filtering disabled); returns cached copy
+- [x] add `resetForTesting()` unexported helper — resets `initialized` for testing `Get` before-Init error path
+- [x] add `cobra.OnInitialize` callback in `cmd/root.go` that calls `runtimeconfig.Init()` and exits on error
+- [x] modify `internal/pnpmdefaults/pnpmdefaults.go`: import `internal/runtimeconfig`, replace hardcoded `10080` with `runtimeconfig.MinimumReleaseAgeMinutes`
+- [x] write tests via `Compute()`: returns expected default values; set env → override reflected in struct fields
+- [x] write test: `Get()` without `Init()` returns error
+- [x] write test: double `Init()` returns nil (idempotent, not error)
+- [x] write test: `env.InstallTimeoutSeconds()` == `runtimeconfig.InstallTimeoutSeconds` (no env override)
+- [x] run `go test ./internal/runtimeconfig/... ./internal/pnpmdefaults/... ./internal/engine/...` — must pass before next task
 
 ### Task 4: Add `PublishedAt`/`Prerelease`/`Draft` to GitHub Release and `ListReleases`
 

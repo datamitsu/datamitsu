@@ -3,6 +3,7 @@ package cmd
 import (
 	clr "github.com/datamitsu/datamitsu/internal/color"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
+	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"github.com/datamitsu/datamitsu/internal/sponsor"
 	"fmt"
 	"os"
@@ -30,6 +31,13 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
+	cobra.OnInitialize(func() {
+		if err := runtimeconfig.Init(); err != nil {
+			fmt.Fprintf(os.Stderr, "%s %s\n", clr.Red("error:"), err)
+			os.Exit(1)
+		}
+	})
+
 	rootCmd.PersistentFlags().StringVar(&BinaryCommandOverride, "binary-command", "",
 		"Override the binary command (for npm package wrappers, etc). Can also be set via DATAMITSU_BINARY_COMMAND env var")
 	rootCmd.PersistentFlags().StringSliceVar(&BeforeConfigPaths, "before-config", []string{},
