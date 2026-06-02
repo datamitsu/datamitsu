@@ -595,8 +595,8 @@ func (bm *BinManager) mergeAppEnv(appName string, app App, cmdInfo *CommandInfo)
 		return
 	}
 
-	// ${APP_DIR} is best-effort: if the install path can't be computed, the
-	// placeholder is left as-is rather than failing the whole command.
+	// ${APP_DIR} is best-effort: if the install path can't be computed, appDir
+	// is empty and ${APP_DIR} expands to "" rather than failing the command.
 	appDir, _ := bm.ComputeInstallPath(appName)
 
 	if cmdInfo.Env == nil {

@@ -116,8 +116,9 @@ func (rm *RuntimeManager) installUVAppOnce(appName string, appConfig *binmanager
 		}
 	}()
 
-	envVars := mergeInstallEnv(getUVEnvVars(appEnvPath), customEnv, appEnvPath)
-	for _, dir := range getUVEnvVars(appEnvPath) {
+	reservedEnv := getUVEnvVars(appEnvPath)
+	envVars := mergeInstallEnv(reservedEnv, customEnv, appEnvPath)
+	for _, dir := range reservedEnv {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return fmt.Errorf("failed to create directory %q: %w", dir, err)
 		}

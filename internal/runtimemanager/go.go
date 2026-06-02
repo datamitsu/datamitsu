@@ -211,7 +211,7 @@ func (rm *RuntimeManager) installGoAppOnce(appName string, appConfig *binmanager
 	envVars := mergeInstallEnv(reservedEnv, customEnv, appEnvPath)
 	for _, key := range []string{"GOPATH", "GOMODCACHE", "GOBIN"} {
 		if err := os.MkdirAll(reservedEnv[key], 0755); err != nil {
-			return fmt.Errorf("failed to create directory %q: %w", envVars[key], err)
+			return fmt.Errorf("failed to create directory %q: %w", reservedEnv[key], err)
 		}
 	}
 
