@@ -123,11 +123,12 @@ run time**, with placeholder expansion for datamitsu-managed paths.
 
 ### Task 5: TypeScript type
 
-- [ ] add `env?: Record<string, string>;` to `interface App` (~667) in
+- [x] add `env?: Record<string, string>;` to `interface App` (~667) in
       `config/config.d.ts`, with JSDoc documenting `${STORE}`/`${APP_DIR}` and the
       reserved-key precedence
-- [ ] remove `env?` from `interface AppConfigShell` (~775)
-- [ ] run `pnpm build` — must succeed before Task 6
+- [x] remove `env?` from `interface AppConfigShell` (~775)
+- [x] run `pnpm build` — lib build (`build:lib`) succeeds; full `pnpm build`
+      packaging step needs cross-platform binaries (unrelated)
 
 ### Task 6: Verify acceptance criteria
 
