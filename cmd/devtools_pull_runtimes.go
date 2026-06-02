@@ -19,6 +19,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/httpx"
 	"github.com/datamitsu/datamitsu/internal/nodekeys"
 	"github.com/datamitsu/datamitsu/internal/registry"
+	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"github.com/datamitsu/datamitsu/internal/syslist"
 
 	"github.com/ProtonMail/go-crypto/openpgp"
@@ -29,6 +30,7 @@ var (
 	pullRuntimesUpdateFlag  bool
 	pullRuntimesDryRunFlag  bool
 	pullRuntimesRuntimeFlag string
+	pullRuntimesMinAge      *int
 )
 
 var validRuntimeNames = []string{"uv", "jvm", "node", "go"}
@@ -41,6 +43,7 @@ func init() {
 		"Show what would be updated without writing files")
 	pullRuntimesCmd.Flags().StringVar(&pullRuntimesRuntimeFlag, "runtime", "",
 		"Update only the specified runtime (uv, jvm, node, or go)")
+	pullRuntimesMinAge = addMinAgeFlag(pullRuntimesCmd)
 }
 
 var pullRuntimesCmd = &cobra.Command{
@@ -90,6 +93,16 @@ func runPullRuntimes(cmd *cobra.Command, args []string) error {
 
 	outputPath := args[0]
 
+	// Resolve the effective minimum release age from runtime config + flag.
+	// Age filtering applies to specific-version sources (GitHub binary releases,
+	// npm pnpm) but NOT to major-version-line lookups (endoflife.date, adoptium).
+	eff, err := runtimeconfig.Get()
+	if err != nil {
+		return fmt.Errorf("failed to read runtime config: %w", err)
+	}
+	minAge := resolveMinAge(*pullRuntimesMinAge, eff)
+	fmt.Printf("Minimum release age: %s\n", minAgeBanner(minAge))
+
 	existing, err := readRuntimesJSON(outputPath)
 	if err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
@@ -120,21 +133,21 @@ func runPullRuntimes(cmd *cobra.Command, args []string) error {
 		case "uv":
 			var data *UVRuntimeData
 			var binaries binmanager.MapOfBinaries
-			data, binaries, updateErr = pullUVRuntime()
+			data, binaries, updateErr = pullUVRuntime(minAge)
 			if updateErr == nil {
 				runtimeJSON = buildUVRuntimeJSON(data, binaries)
 			}
 		case "jvm":
 			var data *JVMRuntimeData
 			var binaries binmanager.MapOfBinaries
-			data, binaries, updateErr = pullJVMRuntime()
+			data, binaries, updateErr = pullJVMRuntime(minAge)
 			if updateErr == nil {
 				runtimeJSON = buildJVMRuntimeJSON(data, binaries)
 			}
 		case "node":
 			var data *NodeRuntimeData
 			var binaries binmanager.MapOfBinaries
-			data, binaries, updateErr = pullNodeRuntime()
+			data, binaries, updateErr = pullNodeRuntime(minAge)
 			if updateErr == nil {
 				runtimeJSON = buildNodeRuntimeJSON(data, binaries)
 			}
@@ -461,9 +474,11 @@ type UVRuntimeData struct {
 // alongside the error, which pullUVRuntime deliberately discards (see below).
 var getLatestPythonStableVersion = registry.GetLatestPythonStableVersion
 
-func pullUVRuntime() (*UVRuntimeData, binmanager.MapOfBinaries, error) {
+func pullUVRuntime(minAge int) (*UVRuntimeData, binmanager.MapOfBinaries, error) {
 	data := &UVRuntimeData{}
 
+	// The Python version is a major-version-line selection from endoflife.date,
+	// so it is NOT subject to age filtering (see the plan's age-filtering table).
 	// Fail loud on a lookup error rather than baking the registry's hardcoded
 	// fallback into the generated config: a stale-but-fresh-looking pin is worse
 	// than aborting the pull (same rationale as resolveLatestNodeLTS).
@@ -473,10 +488,14 @@ func pullUVRuntime() (*UVRuntimeData, binmanager.MapOfBinaries, error) {
 	}
 	data.PythonVersion = pythonVersion
 
+	// The UV binary is a specific GitHub release, so age filtering applies.
 	client := github.NewClient()
-	release, err := client.GetLatestRelease("astral-sh", "uv")
+	release, err := client.GetLatestReleaseWithMinAge("astral-sh", "uv", minAge)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to fetch UV release: %w", err)
+	}
+	if release == nil {
+		return nil, nil, noReleaseOldEnoughErr("astral-sh/uv", minAge)
 	}
 
 	fmt.Printf("UV release: %s (%d assets)\n", release.TagName, len(release.Assets))
@@ -500,9 +519,11 @@ type JVMRuntimeData struct {
 // fallback alongside the error, which pullJVMRuntime deliberately discards.
 var getLatestTemurinMajorVersion = registry.GetLatestTemurinMajorVersion
 
-func pullJVMRuntime() (*JVMRuntimeData, binmanager.MapOfBinaries, error) {
+func pullJVMRuntime(minAge int) (*JVMRuntimeData, binmanager.MapOfBinaries, error) {
 	data := &JVMRuntimeData{}
 
+	// The Java major version is a major-version selection from the adoptium API,
+	// so it is NOT subject to age filtering (see the plan's age-filtering table).
 	// Fail loud on a lookup error rather than baking the registry's hardcoded
 	// fallback into the generated config. This matters most for JVM: the resolved
 	// major version is interpolated into the upstream repo name
@@ -515,12 +536,16 @@ func pullJVMRuntime() (*JVMRuntimeData, binmanager.MapOfBinaries, error) {
 	}
 	data.JavaVersion = javaVersion
 
+	// The JDK binary is a specific GitHub release, so age filtering applies.
 	client := github.NewClient()
 
 	repo := fmt.Sprintf("temurin%s-binaries", data.JavaVersion)
-	release, err := client.GetLatestRelease("adoptium", repo)
+	release, err := client.GetLatestReleaseWithMinAge("adoptium", repo, minAge)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to fetch JVM release from adoptium/%s: %w", repo, err)
+	}
+	if release == nil {
+		return nil, nil, noReleaseOldEnoughErr("adoptium/"+repo, minAge)
 	}
 
 	fmt.Printf("JVM release: %s (%d assets)\n", release.TagName, len(release.Assets))
@@ -903,18 +928,24 @@ func resolveLatestNodeLTS() (string, error) {
 
 // pullNodeRuntime resolves the latest Node version + pnpm, then fetches and
 // verifies the Node release manifests to build the archive registry entry.
-func pullNodeRuntime() (*NodeRuntimeData, binmanager.MapOfBinaries, error) {
+func pullNodeRuntime(minAge int) (*NodeRuntimeData, binmanager.MapOfBinaries, error) {
 	data := &NodeRuntimeData{}
 
+	// The Node LTS version is a major-version-line selection from endoflife.date,
+	// so it is NOT subject to age filtering (see the plan's age-filtering table).
 	nodeVersion, err := resolveLatestNodeLTS()
 	if err != nil {
 		return nil, nil, err
 	}
 	data.NodeVersion = nodeVersion
 
-	pnpmInfo, err := registry.GetNPMPackageInfo("pnpm")
+	// pnpm is a specific npm package version, so age filtering applies.
+	pnpmInfo, err := registry.GetNPMPackageInfoWithMinAge("pnpm", minAge)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to fetch PNPM version: %w", err)
+	}
+	if pnpmInfo == nil {
+		return nil, nil, noReleaseOldEnoughErr("pnpm", minAge)
 	}
 	data.PNPMVersion = pnpmInfo.Version
 

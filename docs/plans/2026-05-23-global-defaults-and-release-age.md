@@ -211,13 +211,15 @@ Three-layer API: pure computation + idempotent lifecycle + cached getter. Thread
 
 ### Task 12: Integrate `--min-age` into `pull-runtimes`
 
-- [ ] register `--min-age` flag on `pullRuntimesCmd` in `cmd/devtools_pull_runtimes.go`
-- [ ] get `runtimeconfig.Get()` at command start, pass `eff` to `resolveMinAge`
-- [ ] change `pullFNMRuntime`, `pullUVRuntime`, `pullJVMRuntime` signatures to accept `minAge int`
-- [ ] apply age-aware calls inside each function (GitHub + npm), NOT to endoflife.date calls
-- [ ] handle nil returns with clear error messages
-- [ ] update call sites in `runPullRuntimes` to pass resolved min age
-- [ ] run `go test ./cmd/...` — must pass before next task
+! Scope note: the plan named `pullFNMRuntime`, but (as in Task 10) that command no longer exists — Node is pulled via `pullNodeRuntime` in `cmd/devtools_pull_runtimes.go`, whose only age-relevant external version is the pnpm npm package. The minAge signature change and npm age-aware call were applied to `pullNodeRuntime`. `pullGoRuntime` is intentionally NOT age-filtered: go.dev's release listing is a major-version-line selection not covered by the plan's age-filtering table.
+
+- [x] register `--min-age` flag on `pullRuntimesCmd` in `cmd/devtools_pull_runtimes.go`
+- [x] get `runtimeconfig.Get()` at command start, pass `eff` to `resolveMinAge`
+- [x] change `pullNodeRuntime` (formerly `pullFNMRuntime`), `pullUVRuntime`, `pullJVMRuntime` signatures to accept `minAge int`
+- [x] apply age-aware calls inside each function (GitHub releases for uv/jvm, npm pnpm for node), NOT to endoflife.date/adoptium major-version calls
+- [x] handle nil returns with clear error messages (hard error via `noReleaseOldEnoughErr`)
+- [x] update call sites in `runPullRuntimes` to pass resolved min age
+- [x] run `go test ./cmd/...` — must pass before next task
 
 ### Task 13: Thread install timeout through binmanager
 

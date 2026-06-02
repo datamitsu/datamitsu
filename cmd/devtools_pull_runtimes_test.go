@@ -3,6 +3,7 @@ package cmd
 import (
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/github"
+	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"github.com/datamitsu/datamitsu/internal/syslist"
 	"encoding/json"
 	"errors"
@@ -1384,7 +1385,8 @@ func TestPullNodeRuntime_LTSLookupError(t *testing.T) {
 		return "24.14.0", errors.New("simulated lookup failure")
 	}
 
-	data, binaries, err := pullNodeRuntime()
+	// minAge is irrelevant here: the LTS lookup fails before any network call.
+	data, binaries, err := pullNodeRuntime(0)
 	if err == nil {
 		t.Fatal("expected pullNodeRuntime to return an error on LTS lookup failure")
 	}
@@ -1407,6 +1409,10 @@ func TestRunPullRuntimes_NodeLookupFailureNonZeroExit(t *testing.T) {
 		pullRuntimesDryRunFlag = oldDryRun
 		getLatestNodeLTSVersion = origLTS
 	}()
+
+	if err := runtimeconfig.Init(); err != nil {
+		t.Fatalf("runtimeconfig.Init: %v", err)
+	}
 
 	pullRuntimesUpdateFlag = true
 	pullRuntimesRuntimeFlag = "node"

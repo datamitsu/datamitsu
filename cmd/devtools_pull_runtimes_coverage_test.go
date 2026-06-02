@@ -131,7 +131,8 @@ func TestPullUVRuntime_PythonLookupError(t *testing.T) {
 		return "3.14.3", errors.New("simulated lookup failure")
 	}
 
-	data, binaries, err := pullUVRuntime()
+	// minAge is irrelevant here: the Python lookup fails before any network call.
+	data, binaries, err := pullUVRuntime(0)
 	if err == nil {
 		t.Fatal("expected pullUVRuntime to return an error on Python lookup failure")
 	}
@@ -155,7 +156,8 @@ func TestPullJVMRuntime_TemurinLookupError(t *testing.T) {
 		return "25", errors.New("simulated lookup failure")
 	}
 
-	data, binaries, err := pullJVMRuntime()
+	// minAge is irrelevant here: the Temurin lookup fails before any network call.
+	data, binaries, err := pullJVMRuntime(0)
 	if err == nil {
 		t.Fatal("expected pullJVMRuntime to return an error on Temurin lookup failure")
 	}

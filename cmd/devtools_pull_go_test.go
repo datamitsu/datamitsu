@@ -12,6 +12,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/registry"
+	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 )
 
 const goTestVersion = "1.26.3"
@@ -265,6 +266,10 @@ func TestRunPullRuntimes_Go_GeneratesEntryWithGoVersion(t *testing.T) {
 		pullRuntimesDryRunFlag = oldDryRun
 		getLatestGoRelease = origGo
 	}()
+
+	if err := runtimeconfig.Init(); err != nil {
+		t.Fatalf("runtimeconfig.Init: %v", err)
+	}
 
 	pullRuntimesUpdateFlag = true
 	pullRuntimesRuntimeFlag = "go"
