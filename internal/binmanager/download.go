@@ -3,12 +3,12 @@ package binmanager
 import (
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"time"
 
+	"github.com/datamitsu/datamitsu/internal/httpx"
 	"github.com/vbauerster/mpb/v8"
 	"github.com/vbauerster/mpb/v8/decor"
 	"go.uber.org/zap"
@@ -17,24 +17,10 @@ import (
 // MaxBinarySize is the maximum allowed download size (500 MiB).
 const MaxBinarySize = 500 * 1024 * 1024
 
-var httpClient = &http.Client{
-	Timeout: 5 * time.Minute,
-	Transport: &http.Transport{
-		Proxy:                 http.ProxyFromEnvironment,
-		DialContext:           (&net.Dialer{Timeout: 30 * time.Second}).DialContext,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ResponseHeaderTimeout: 30 * time.Second,
-	},
-	CheckRedirect: func(req *http.Request, via []*http.Request) error {
-		if len(via) >= 10 {
-			return fmt.Errorf("stopped after 10 redirects")
-		}
-		if len(via) > 0 && via[len(via)-1].URL.Scheme == "https" && req.URL.Scheme == "http" {
-			return fmt.Errorf("HTTPS to HTTP redirect rejected: %s", req.URL)
-		}
-		return nil
-	},
-}
+// httpClient downloads binaries on the shared hardened transport (proxy, dialer,
+// TLS/response-header timeouts, and the HTTPS→HTTP downgrade-rejecting redirect
+// guard). The 5-minute budget accommodates large archive downloads.
+var httpClient = httpx.NewHardenedClient(5 * time.Minute)
 
 func downloadFileInternal(url string, destDir string, name string, progress *mpb.Progress) (string, error) {
 	if name != "" {
@@ -170,18 +156,27 @@ func moveFile(src, dst string) error {
 		return fmt.Errorf("failed to create destination directory: %w", err)
 	}
 
+	// Content-addressed dst: if it already exists, the content is identical, so
+	// skip the move entirely. This avoids ever removing a live dst (closes the
+	// ENOENT window under concurrent installs of the same binary).
 	if _, err := os.Stat(dst); err == nil {
-		if err := os.Remove(dst); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("failed to remove existing file: %w", err)
-		}
+		_ = os.Remove(src)
+		log.Debug("destination already exists, skipping move", zap.String("dst", dst))
+		return nil
 	}
 
 	if err := os.Chmod(src, 0755); err != nil {
 		return fmt.Errorf("failed to set executable permissions: %w", err)
 	}
 
+	// os.Rename is atomic on POSIX and replaces an existing dst in place, so a
+	// concurrent move that won the race is never observed as a missing dst.
 	if err := os.Rename(src, dst); err != nil {
-		if copyErr := copyFile(src, dst); copyErr != nil {
+		// Cross-device fallback: copy into a temp file in the destination
+		// directory, then atomically rename it into place. Copying directly onto
+		// dst would expose a partial, non-executable file to concurrent readers —
+		// the exact ENOENT/exec-format window this move is meant to close.
+		if copyErr := copyFileAtomic(src, dst); copyErr != nil {
 			return fmt.Errorf("rename failed: %w, and copy fallback failed: %w", err, copyErr)
 		}
 		_ = os.Remove(src)
@@ -198,20 +193,64 @@ func moveDir(src, dst string) error {
 		return fmt.Errorf("failed to create destination parent directory: %w", err)
 	}
 
+	// Content-addressed dst: if it already exists, another install already placed
+	// identical content there. Skip rather than RemoveAll-then-Rename, which would
+	// briefly expose a missing dst to a concurrent reader.
 	if _, err := os.Stat(dst); err == nil {
-		if err := os.RemoveAll(dst); err != nil {
-			return fmt.Errorf("failed to remove existing directory: %w", err)
-		}
+		_ = os.RemoveAll(src)
+		log.Debug("destination directory already exists, skipping move", zap.String("dst", dst))
+		return nil
 	}
 
 	if err := os.Rename(src, dst); err != nil {
-		if copyErr := copyDir(src, dst); copyErr != nil {
+		// A concurrent move may have created dst between our Stat and Rename. If so,
+		// treat it as success (content-addressed, identical content).
+		if _, statErr := os.Stat(dst); statErr == nil {
+			_ = os.RemoveAll(src)
+			log.Debug("destination directory created concurrently, skipping move", zap.String("dst", dst))
+			return nil
+		}
+		// Cross-device fallback: copy into a temp dir in the destination parent,
+		// then atomically rename it into place. Copying directly onto dst would
+		// expose a partially-populated directory to concurrent readers — the
+		// exact window this move is meant to close.
+		if copyErr := copyDirAtomic(src, dst); copyErr != nil {
 			return fmt.Errorf("rename failed: %w, and copy fallback failed: %w", err, copyErr)
 		}
 		_ = os.RemoveAll(src)
 	}
 
 	log.Debug("directory moved", zap.String("dst", dst))
+	return nil
+}
+
+// copyDirAtomic copies src into a temp directory in dst's parent, then
+// atomically renames it onto dst. Unlike copyDir, dst is never observed in a
+// partially-populated state: concurrent readers see either the absent dst or
+// the fully-copied one. If a concurrent move created dst first, the rename
+// fails but dst is already complete, so it is treated as success.
+func copyDirAtomic(src, dst string) error {
+	tmpDir, err := os.MkdirTemp(filepath.Dir(dst), "move-*")
+	if err != nil {
+		return err
+	}
+	// Always clean up the temp dir: on success it is empty (staged was renamed
+	// out), and on the concurrent-dst path it still holds the staged copy.
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+	}()
+
+	// copyDir creates dst itself, so copy into a fresh child of the temp dir.
+	staged := filepath.Join(tmpDir, "staged")
+	if err := copyDir(src, staged); err != nil {
+		return err
+	}
+	if err := os.Rename(staged, dst); err != nil {
+		if _, statErr := os.Stat(dst); statErr == nil {
+			return nil
+		}
+		return err
+	}
 	return nil
 }
 
@@ -275,4 +314,33 @@ func copyFile(src, dst string) (retErr error) {
 
 	_, err = io.Copy(dstFile, srcFile)
 	return err
+}
+
+// copyFileAtomic copies src into a temp file in dst's directory, marks it
+// executable, then atomically renames it onto dst. Unlike copyFile, dst is
+// never observed in a partial state: concurrent readers see either the old
+// (absent) dst or the fully-written, executable one.
+func copyFileAtomic(src, dst string) (retErr error) {
+	tmp, err := os.CreateTemp(filepath.Dir(dst), "move-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	defer func() {
+		if retErr != nil {
+			_ = os.Remove(tmpName)
+		}
+	}()
+
+	if err := copyFile(src, tmpName); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmpName, 0755); err != nil {
+		return err
+	}
+	return os.Rename(tmpName, dst)
 }

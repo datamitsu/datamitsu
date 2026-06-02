@@ -1,8 +1,9 @@
 package cmd
 
 import (
-	"github.com/datamitsu/datamitsu/internal/env"
 	"fmt"
+	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 	"os"
 	"path/filepath"
 	"strings"
@@ -57,7 +58,9 @@ func runStoreClear(cmd *cobra.Command, args []string) error {
 		(home != "" && strings.HasPrefix(strings.ToLower(home), strings.ToLower(storePath+sep))) {
 		return fmt.Errorf("refusing to clear dangerous path: %s", storePath)
 	}
-	if err := os.RemoveAll(storePath); err != nil {
+	// Go module cache populates the store with read-only dirs (0555); a plain
+	// os.RemoveAll then fails with EACCES. ForceRemoveAll restores write bits first.
+	if err := runtimemanager.ForceRemoveAll(storePath); err != nil {
 		return fmt.Errorf("failed to clear store: %w", err)
 	}
 	fmt.Printf("Cleared store: %s\n", storePath)

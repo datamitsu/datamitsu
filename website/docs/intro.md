@@ -21,7 +21,7 @@ datamitsu is in alpha. The configuration API is not yet stabilized and may chang
 - **Security-first binary management** — SHA-256 hash verification for every binary
 - **Programmable JavaScript configuration** — Full programmatic control via the goja runtime
 - **Config chaining and inheritance** — Layer configs from base → company → team → project
-- **Multi-runtime support** — Python (UV), Node.js (FNM/PNPM), JVM, and native binaries
+- **Multi-runtime support** — Python (UV), Node.js (pnpm), JVM, and native binaries
 - **Monorepo-aware** — Per-project isolation for caches and tool execution
 - **Docker-optimized** — Pre-cache all tools in a Docker layer for fast CI builds
 

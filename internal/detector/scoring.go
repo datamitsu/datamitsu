@@ -47,7 +47,7 @@ func ScoreAsset(asset github.Asset, osType syslist.OsType, archType syslist.Arch
 		s.ArchMatch = true
 	} else if osMatch && !hasArchIndicator && osType == syslist.OsTypeDarwin && archType == syslist.ArchTypeArm64 {
 		// Implicit darwin/arm64: OS matches darwin, no arch indicators, requesting arm64.
-		// Many macOS-only assets (e.g. fnm-macos.zip) ship universal binaries that
+		// Many macOS-only assets (e.g. a *-macos.zip) ship universal binaries that
 		// run on both Intel and Apple Silicon without declaring arch in the filename.
 		s.OSMatch = true
 		s.ArchMatch = true

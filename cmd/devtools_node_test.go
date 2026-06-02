@@ -6,9 +6,9 @@ import (
 	"testing"
 )
 
-func TestReadFNMAppsJSON(t *testing.T) {
+func TestReadNodeAppsJSON(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "fnmApps.json")
+	path := filepath.Join(dir, "nodeApps.json")
 
 	content := `{
   "cspell": {
@@ -25,9 +25,9 @@ func TestReadFNMAppsJSON(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	apps, err := readFNMAppsJSON(path)
+	apps, err := readNodeAppsJSON(path)
 	if err != nil {
-		t.Fatalf("readFNMAppsJSON failed: %v", err)
+		t.Fatalf("readNodeAppsJSON failed: %v", err)
 	}
 
 	if len(apps) != 2 {
@@ -45,42 +45,42 @@ func TestReadFNMAppsJSON(t *testing.T) {
 	}
 }
 
-func TestReadFNMAppsJSON_FileNotFound(t *testing.T) {
-	_, err := readFNMAppsJSON("/nonexistent/path.json")
+func TestReadNodeAppsJSON_FileNotFound(t *testing.T) {
+	_, err := readNodeAppsJSON("/nonexistent/path.json")
 	if err == nil {
 		t.Fatal("expected error for nonexistent file")
 	}
 }
 
-func TestReadFNMAppsJSON_InvalidJSON(t *testing.T) {
+func TestReadNodeAppsJSON_InvalidJSON(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "bad.json")
 	if err := os.WriteFile(path, []byte("not json"), 0644); err != nil {
 		t.Fatal(err)
 	}
 
-	_, err := readFNMAppsJSON(path)
+	_, err := readNodeAppsJSON(path)
 	if err == nil {
 		t.Fatal("expected error for invalid JSON")
 	}
 }
 
-func TestWriteFNMAppsJSON(t *testing.T) {
+func TestWriteNodeAppsJSON(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "fnmApps.json")
+	path := filepath.Join(dir, "nodeApps.json")
 
-	apps := fnmAppsJSON{
+	apps := nodeAppsJSON{
 		"cspell": {PackageName: "cspell", Version: "9.8.0"},
 		"mmdc":   {PackageName: "@mermaid-js/mermaid-cli", Version: "12.0.0"},
 	}
 
-	if err := writeFNMAppsJSON(path, apps); err != nil {
-		t.Fatalf("writeFNMAppsJSON failed: %v", err)
+	if err := writeNodeAppsJSON(path, apps); err != nil {
+		t.Fatalf("writeNodeAppsJSON failed: %v", err)
 	}
 
-	readBack, err := readFNMAppsJSON(path)
+	readBack, err := readNodeAppsJSON(path)
 	if err != nil {
-		t.Fatalf("readFNMAppsJSON failed: %v", err)
+		t.Fatalf("readNodeAppsJSON failed: %v", err)
 	}
 
 	if readBack["cspell"].Version != "9.8.0" {
@@ -91,15 +91,15 @@ func TestWriteFNMAppsJSON(t *testing.T) {
 	}
 }
 
-func TestUpdateFNMAppsJSON(t *testing.T) {
+func TestUpdateNodeAppsJSON(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "fnmApps.json")
+	path := filepath.Join(dir, "nodeApps.json")
 
-	initial := fnmAppsJSON{
+	initial := nodeAppsJSON{
 		"cspell": {PackageName: "cspell", Version: "9.7.0"},
 		"mmdc":   {PackageName: "@mermaid-js/mermaid-cli", Version: "11.12.0"},
 	}
-	if err := writeFNMAppsJSON(path, initial); err != nil {
+	if err := writeNodeAppsJSON(path, initial); err != nil {
 		t.Fatal(err)
 	}
 
@@ -108,11 +108,11 @@ func TestUpdateFNMAppsJSON(t *testing.T) {
 		{Name: "mmdc", PackageName: "@mermaid-js/mermaid-cli", CurrentVersion: "11.12.0", LatestVersion: "11.12.0", UpdateNeeded: false},
 	}
 
-	if err := updateFNMAppsJSON(path, results); err != nil {
-		t.Fatalf("updateFNMAppsJSON failed: %v", err)
+	if err := updateNodeAppsJSON(path, results); err != nil {
+		t.Fatalf("updateNodeAppsJSON failed: %v", err)
 	}
 
-	updated, err := readFNMAppsJSON(path)
+	updated, err := readNodeAppsJSON(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,26 +125,26 @@ func TestUpdateFNMAppsJSON(t *testing.T) {
 	}
 }
 
-func TestPullFNMCommand_RequiresExactlyOneArg(t *testing.T) {
-	if pullFNMCmd.Args == nil {
+func TestPullNodeCommand_RequiresExactlyOneArg(t *testing.T) {
+	if pullNodeCmd.Args == nil {
 		t.Fatal("expected Args validator to be set (cobra.ExactArgs(1))")
 	}
-	err := pullFNMCmd.Args(pullFNMCmd, []string{})
+	err := pullNodeCmd.Args(pullNodeCmd, []string{})
 	if err == nil {
 		t.Fatal("expected error when no file argument provided")
 	}
-	err = pullFNMCmd.Args(pullFNMCmd, []string{"file.json"})
+	err = pullNodeCmd.Args(pullNodeCmd, []string{"file.json"})
 	if err != nil {
 		t.Fatalf("expected no error with one argument, got: %v", err)
 	}
 }
 
-func TestPullFNMCommand_FileDoesNotExist(t *testing.T) {
+func TestPullNodeCommand_FileDoesNotExist(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "nonexistent.json")
 
-	if err := ensureFNMAppsJSONExists(path); err != nil {
-		t.Fatalf("ensureFNMAppsJSONExists failed: %v", err)
+	if err := ensureNodeAppsJSONExists(path); err != nil {
+		t.Fatalf("ensureNodeAppsJSONExists failed: %v", err)
 	}
 
 	data, err := os.ReadFile(path)
@@ -156,12 +156,12 @@ func TestPullFNMCommand_FileDoesNotExist(t *testing.T) {
 	}
 }
 
-func TestPullFNMCommand_AlwaysFetchDescriptions(t *testing.T) {
+func TestPullNodeCommand_AlwaysFetchDescriptions(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "fnmApps.json")
+	path := filepath.Join(dir, "nodeApps.json")
 
-	if err := ensureFNMAppsJSONExists(path); err != nil {
-		t.Fatalf("ensureFNMAppsJSONExists failed: %v", err)
+	if err := ensureNodeAppsJSONExists(path); err != nil {
+		t.Fatalf("ensureNodeAppsJSONExists failed: %v", err)
 	}
 
 	results := []npmVersionResult{
@@ -175,13 +175,13 @@ func TestPullFNMCommand_AlwaysFetchDescriptions(t *testing.T) {
 		},
 	}
 
-	if err := updateFNMAppsJSON(path, results); err != nil {
-		t.Fatalf("updateFNMAppsJSON failed: %v", err)
+	if err := updateNodeAppsJSON(path, results); err != nil {
+		t.Fatalf("updateNodeAppsJSON failed: %v", err)
 	}
 
-	apps, err := readFNMAppsJSON(path)
+	apps, err := readNodeAppsJSON(path)
 	if err != nil {
-		t.Fatalf("readFNMAppsJSON failed: %v", err)
+		t.Fatalf("readNodeAppsJSON failed: %v", err)
 	}
 
 	if apps["cspell"].Description != "A spell checker for code" {
@@ -189,14 +189,14 @@ func TestPullFNMCommand_AlwaysFetchDescriptions(t *testing.T) {
 	}
 }
 
-func TestUpdateFNMAppsJSON_NoUpdates(t *testing.T) {
+func TestUpdateNodeAppsJSON_NoUpdates(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "fnmApps.json")
+	path := filepath.Join(dir, "nodeApps.json")
 
-	initial := fnmAppsJSON{
+	initial := nodeAppsJSON{
 		"cspell": {PackageName: "cspell", Version: "9.7.0"},
 	}
-	if err := writeFNMAppsJSON(path, initial); err != nil {
+	if err := writeNodeAppsJSON(path, initial); err != nil {
 		t.Fatal(err)
 	}
 
@@ -204,11 +204,11 @@ func TestUpdateFNMAppsJSON_NoUpdates(t *testing.T) {
 		{Name: "cspell", PackageName: "cspell", CurrentVersion: "9.7.0", LatestVersion: "9.7.0", UpdateNeeded: false},
 	}
 
-	if err := updateFNMAppsJSON(path, results); err != nil {
-		t.Fatalf("updateFNMAppsJSON failed: %v", err)
+	if err := updateNodeAppsJSON(path, results); err != nil {
+		t.Fatalf("updateNodeAppsJSON failed: %v", err)
 	}
 
-	updated, err := readFNMAppsJSON(path)
+	updated, err := readNodeAppsJSON(path)
 	if err != nil {
 		t.Fatal(err)
 	}

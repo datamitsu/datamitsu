@@ -74,7 +74,7 @@ export function parseToolList(output: string): ToolInfo[] {
 
   const tools: ToolInfo[] = [];
   let currentType: null | string = null;
-  const typePattern = /^\[(binary|uv|fnm|jvm|shell)\]$/;
+  const typePattern = /^\[(binary|uv|node|jvm|go|shell)\]$/;
   const toolPattern = /^ {2}(\S+)(?:\s{2,}(.+))?$/;
 
   for (const line of output.split("\n").map((l) => l.replace(ANSI_PATTERN, ""))) {

@@ -1,6 +1,6 @@
 ---
 title: Add a New Tool
-description: Step-by-step guide to adding binary, UV, FNM, and JVM tools to datamitsu
+description: Step-by-step guide to adding binary, UV, Node, and JVM tools to datamitsu
 ---
 
 # Add a New Tool
@@ -141,9 +141,9 @@ datamitsu init
 datamitsu exec yamllint --version
 ```
 
-## Adding an FNM App (Node.js)
+## Adding a Node App (Node.js)
 
-FNM apps are npm packages managed with pnpm in isolated Node.js environments.
+Node apps are npm packages managed with pnpm in isolated Node.js environments.
 
 ### 1. Find the package on npm
 
@@ -160,7 +160,7 @@ function getConfig(config) {
     apps: {
       ...config.apps,
       prettier: {
-        fnm: {
+        node: {
           packageName: "prettier",
           version: "3.2.0",
           binPath: "node_modules/.bin/prettier",
@@ -186,7 +186,7 @@ If the app provides configuration files that your projects need, add `links`:
 
 ```javascript
 prettier: {
-  fnm: {
+  node: {
     packageName: "prettier",
     version: "3.2.0",
     binPath: "node_modules/.bin/prettier",

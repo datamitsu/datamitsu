@@ -18,41 +18,57 @@ ESLint v10. You need both versions to coexist without interference.
 
 ### Runtimes
 
-Define a managed FNM runtime. Both ESLint versions will share the same
+Define a managed Node runtime. Both ESLint versions will share the same
 runtime binary but get completely isolated `node_modules` directories.
 
 ```typescript
 const mapOfRuntimes: BinManager.MapOfRuntimes = {
-  fnm: {
-    kind: "fnm",
+  node: {
+    kind: "node",
     mode: "managed",
-    fnm: {
-      nodeVersion: "22.14.0",
-      pnpmVersion: "10.5.2",
+    node: {
+      nodeVersion: "26.2.0",
+      pnpmVersion: "11.5.0",
       pnpmHash: "<sha256>",
     },
     managed: {
       binaries: {
         darwin: {
           amd64: {
-            contentType: "zip",
-            hash: "<sha256>",
-            url: "https://github.com/Schniz/fnm/releases/download/v1.39.0/fnm-macos.zip",
-            binaryPath: "fnm",
+            unknown: {
+              contentType: "tar.xz",
+              hash: "<sha256>",
+              url: "https://nodejs.org/dist/v26.2.0/node-v26.2.0-darwin-x64.tar.xz",
+              binaryPath: "node-v26.2.0-darwin-x64/bin/node",
+              extractDir: true,
+            },
           },
           arm64: {
-            contentType: "zip",
-            hash: "<sha256>",
-            url: "https://github.com/Schniz/fnm/releases/download/v1.39.0/fnm-macos.zip",
-            binaryPath: "fnm",
+            unknown: {
+              contentType: "tar.xz",
+              hash: "<sha256>",
+              url: "https://nodejs.org/dist/v26.2.0/node-v26.2.0-darwin-arm64.tar.xz",
+              binaryPath: "node-v26.2.0-darwin-arm64/bin/node",
+              extractDir: true,
+            },
           },
         },
         linux: {
           amd64: {
-            contentType: "zip",
-            hash: "<sha256>",
-            url: "https://github.com/Schniz/fnm/releases/download/v1.39.0/fnm-linux.zip",
-            binaryPath: "fnm",
+            glibc: {
+              contentType: "tar.xz",
+              hash: "<sha256>",
+              url: "https://nodejs.org/dist/v26.2.0/node-v26.2.0-linux-x64.tar.xz",
+              binaryPath: "node-v26.2.0-linux-x64/bin/node",
+              extractDir: true,
+            },
+            musl: {
+              contentType: "tar.xz",
+              hash: "<sha256>",
+              url: "https://unofficial-builds.nodejs.org/download/release/v26.2.0/node-v26.2.0-linux-x64-musl.tar.xz",
+              binaryPath: "node-v26.2.0-linux-x64-musl/bin/node",
+              extractDir: true,
+            },
           },
         },
       },
@@ -71,7 +87,7 @@ different cache hashes.
 const mapOfApps: BinManager.MapOfApps = {
   // Modern ESLint v10 - no extra plugins needed
   eslint: {
-    fnm: {
+    node: {
       packageName: "eslint",
       binPath: "node_modules/.bin/eslint",
       version: "10.0.0",
@@ -80,7 +96,7 @@ const mapOfApps: BinManager.MapOfApps = {
 
   // Legacy ESLint v9 with plugins that don't support v10 yet
   "eslint-legacy": {
-    fnm: {
+    node: {
       packageName: "eslint",
       binPath: "node_modules/.bin/eslint",
       version: "9.17.0",
@@ -149,7 +165,7 @@ const toolsConfig: config.MapOfTools = {
 Each app's environment is stored under a hash-based path:
 
 ```
-~/.cache/datamitsu/.apps/fnm/
+~/.cache/datamitsu/.apps/node/
   eslint/{hash-for-v10}/
     package.json          # {"dependencies": {"eslint": "10.0.0"}}
     node_modules/
@@ -188,8 +204,8 @@ After running `datamitsu init --all`:
 
 ```bash
 # Both versions are installed in separate directories
-ls ~/.cache/datamitsu/.apps/fnm/eslint/
-ls ~/.cache/datamitsu/.apps/fnm/eslint-legacy/
+ls ~/.cache/datamitsu/.apps/node/eslint/
+ls ~/.cache/datamitsu/.apps/node/eslint-legacy/
 
 # Each has its own node_modules with the correct version
 datamitsu exec eslint -- --version
@@ -206,31 +222,31 @@ multiple runtimes:
 
 ```typescript
 const mapOfRuntimes: BinManager.MapOfRuntimes = {
-  "fnm-node20": {
-    kind: "fnm",
+  "node-20": {
+    kind: "node",
     mode: "managed",
-    fnm: {
+    node: {
       nodeVersion: "20.18.0",
-      pnpmVersion: "10.5.2",
+      pnpmVersion: "11.5.0",
       pnpmHash: "abc123def456789012345678901234567890123456789012345678901234",
     },
     managed: {
       binaries: {
-        // FNM binaries...
+        // node archive binaries...
       },
     },
   },
-  "fnm-node22": {
-    kind: "fnm",
+  "node-22": {
+    kind: "node",
     mode: "managed",
-    fnm: {
+    node: {
       nodeVersion: "22.12.0",
-      pnpmVersion: "10.5.2",
+      pnpmVersion: "11.5.0",
       pnpmHash: "abc123def456789012345678901234567890123456789012345678901234",
     },
     managed: {
       binaries: {
-        // FNM binaries...
+        // node archive binaries...
       },
     },
   },
@@ -238,24 +254,24 @@ const mapOfRuntimes: BinManager.MapOfRuntimes = {
 
 const mapOfApps: BinManager.MapOfApps = {
   eslint: {
-    fnm: {
+    node: {
       packageName: "eslint",
       binPath: "node_modules/.bin/eslint",
       version: "10.0.0",
-      runtime: "fnm-node22", // Explicit runtime reference
+      runtime: "node-22", // Explicit runtime reference
     },
   },
   "eslint-legacy": {
-    fnm: {
+    node: {
       packageName: "eslint",
       binPath: "node_modules/.bin/eslint",
       version: "9.17.0",
-      runtime: "fnm-node20", // Uses the older Node.js
+      runtime: "node-20", // Uses the older Node.js
     },
   },
 };
 ```
 
 When `runtime` is omitted, datamitsu uses the default runtime of the matching
-kind (the first `fnm`-kind runtime it finds). Use explicit `runtime` references
+kind (the first `node`-kind runtime it finds). Use explicit `runtime` references
 when you need a specific version.

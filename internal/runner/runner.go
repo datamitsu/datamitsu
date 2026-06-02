@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"fmt"
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/bundled"
 	"github.com/datamitsu/datamitsu/internal/cache"
@@ -13,7 +14,6 @@ import (
 	"github.com/datamitsu/datamitsu/internal/timing"
 	"github.com/datamitsu/datamitsu/internal/tooling"
 	"github.com/datamitsu/datamitsu/internal/traverser"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -58,9 +58,31 @@ var (
 	progressMu            sync.Mutex
 	currentProgress       *mpb.Progress
 	currentProgressBar    *mpb.Bar
-	currentBarDesc        atomic.Value      // string - accessed without lock to avoid deadlock with mpb
+	currentBarDesc        atomic.Value               // string - accessed without lock to avoid deadlock with mpb
 	activeTools           map[string]map[string]bool // Track currently running tools (tool -> set of active dirs)
 )
+
+// toolPlanner is the planning surface used by runSingleOperation (satisfied by *tooling.Planner).
+type toolPlanner interface {
+	Plan(ctx context.Context, operation config.OperationType, files []string, selectedTools []string) (*tooling.ExecutionPlan, error)
+	GetDetectedProjectTypes() []string
+	GetTimings() *timing.Timings
+}
+
+// planExecutor is the execution surface used by runSingleOperation (satisfied by *tooling.Executor).
+type planExecutor interface {
+	SetResultCallback(tooling.ResultCallback)
+	SetTaskStartCallback(tooling.TaskStartCallback)
+	SetFileProgressCallback(tooling.FileProgressCallback)
+	Execute(ctx context.Context, plan *tooling.ExecutionPlan) ([]tooling.GroupExecutionResult, error)
+}
+
+// toolEnsurer pre-installs every tool a plan needs before parallel execution
+// (satisfied by *binmanager.BinManager). Installing up front closes the
+// check-then-download race that surfaces under per-file parallelism.
+type toolEnsurer interface {
+	EnsureTools(ctx context.Context, names []string) error
+}
 
 // sharedContext holds state shared across multiple sequential operations
 type sharedContext struct {
@@ -70,9 +92,10 @@ type sharedContext struct {
 	files         []string
 	selectedTools []string
 	explainLevel  string
-	planner       *tooling.Planner
+	planner       toolPlanner
 	projectCache  *cache.Cache
-	executor      *tooling.Executor
+	executor      planExecutor
+	binMgr        toolEnsurer
 	timings       *timing.Timings
 }
 
@@ -170,6 +193,7 @@ func initSharedContext(
 	// Create executor
 	rm := runtimemanager.New(sc.cfg.Runtimes)
 	binMgr := binmanager.New(sc.cfg.Apps, sc.cfg.Bundles, rm)
+	sc.binMgr = binMgr
 	sc.executor = tooling.NewExecutor(sc.rootPath, false, true, binMgr, sc.projectCache)
 
 	return sc, nil
@@ -408,6 +432,18 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	if env.IsCI() {
 		fmt.Println()
 	}
+
+	// Pre-install every tool the plan needs once, before parallel per-file
+	// execution. This closes the check-then-download install race (multiple
+	// per-file tasks installing the same binary concurrently). Explain/dry-run
+	// modes return earlier and never reach this point, so no installs happen
+	// during planning-only runs.
+	if sc.binMgr != nil {
+		if err := sc.binMgr.EnsureTools(ctx, plan.GetAppNames()); err != nil {
+			return fmt.Errorf("failed to pre-install tools: %w", err)
+		}
+	}
+
 	results, execErr := sc.executor.Execute(ctx, plan)
 	// Finalize progress before printing any summaries/errors to avoid interleaved output.
 	finalizeProgress()

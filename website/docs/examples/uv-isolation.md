@@ -30,9 +30,8 @@ This creates an isolated UV tool environment at:
 
 UV environment variables are set automatically:
 
-- `UV_TOOL_DIR` - where UV stores installed tools
-- `UV_TOOL_BIN_DIR` - where UV places tool binaries
-- `UV_CACHE_DIR` - UV's download cache
+- `UV_CACHE_DIR` - UV's download cache (per-app, under the app dir)
+- `UV_PYTHON_INSTALL_DIR` - the managed CPython location, redirected into the store at `<store>/.uv/python/` (shared per-version) so the cached store is self-contained and each app's `.venv/bin/python` symlink resolves after a cache restore
 
 ## Lock File for Reproducibility
 
