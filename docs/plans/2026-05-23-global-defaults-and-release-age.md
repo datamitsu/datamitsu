@@ -299,16 +299,18 @@ Three-layer API: pure computation + idempotent lifecycle + cached getter. Thread
 
 ### Task 18: Update CLAUDE.md with Runtime Config Policy and Introspectable by Design
 
-- [ ] add "Runtime Config Policy" section after "JS<>Go Shared Constants Policy" in `CLAUDE.md`
-- [ ] document: `internal/runtimeconfig` as single source of truth, typed `Effective` struct as contract, `Get()` for CLI, env override pattern, checklist for adding new defaults
-- [ ] add "Runtime Config vs Config Inputs Policy":
+! Scope note: `CLAUDE.md` is a symlink to `AGENTS.md`; the edits were written to the real target `AGENTS.md` (the Write/Edit tools refuse to write through symlinks).
+
+- [x] add "Runtime Config Policy" section after "JS<>Go Shared Constants Policy" in `CLAUDE.md`
+- [x] document: `internal/runtimeconfig` as single source of truth, typed `Effective` struct as contract, `Get()` for CLI, env override pattern, checklist for adding new defaults
+- [x] add "Runtime Config vs Config Inputs Policy":
   - `runtimeconfig.Effective` is the full effective runtime snapshot, exposed via `datamitsu config runtime`
   - It must NOT be injected wholesale into config JS VM
   - JS config VM receives only explicit allowlisted config inputs via `datamitsuConfigInputs`
   - Current allowlist: `minimumReleaseAgeMinutes`
   - Adding a new config input requires updating: fingerprinting, cache invalidation, explain/debug output, tests, TS declarations, documentation
   - Current status: config JS evaluation is not cached (re-evaluated fresh every invocation). Branching on `datamitsuConfigInputs` is safe today. When config evaluation caching is implemented, values MUST be in the cache fingerprint
-- [ ] add "Introspectable by Design" policy: all runtime parameters must be programmatically queryable via CLI; use typed structs for public API surfaces, not `map[string]any`
+- [x] add "Introspectable by Design" policy: all runtime parameters must be programmatically queryable via CLI; use typed structs for public API surfaces, not `map[string]any`
 
 ### Task 19: Verify acceptance criteria
 

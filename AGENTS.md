@@ -104,6 +104,47 @@ token := os.Getenv("GITHUB_TOKEN")
 
 **Rationale:** Previously the pnpm workspace defaults lived in both Go (the runtime manager, now `pnpm.go`) and JS (`main.ts`), with a brittle agreement test keeping them aligned. Any change required edits in 6+ places (Go, JS, compiled `config.js`, 4 docs pages). Consolidating on Go-as-source eliminated that burden — see `docs/plans/2026-05-22-single-source-pnpm-security.md` for the migration.
 
+## Runtime Config Policy
+
+**`internal/runtimeconfig` is the single source of truth for datamitsu's effective runtime configuration** — env-resolved execution limits, install timeout, minimum release age, and the runtime policy surface. The typed `runtimeconfig.Effective` struct is the public contract.
+
+- **Typed struct, not `map[string]any`.** `Effective` has explicit `json`-tagged fields. This provides compile-time guarantees and prevents accidental key-name breakage. There is intentionally **no `ToMap()`** — the struct is the API; map conversion (for the JS VM) is internal to the engine layer via `json.Marshal`/`json.Unmarshal`.
+- **Three-layer API:** `Compute()` (pure, reads `env` getters, no global state — tests use this directly), `Init()` (idempotent lifecycle, caches `Compute()` under `sync.RWMutex` — repeated calls are no-ops, not errors), and `Get()` (returns a copy of the cached value, errors if `Init()` was not called).
+- **`Init()` is wired into `cobra.OnInitialize` in `cmd/root.go`** — runs once after flag parsing, before any command handler. Idempotency makes it safe for repeated Cobra command execution in tests and for embedded/daemon/watch workflows.
+- **Effective values, not compile-time constants.** The CLI shows what the program runs with _right now_, including env overrides. Compile-time defaults (`MinimumReleaseAgeMinutes = 10080`, `InstallTimeoutSeconds = 600`) are the canonical fallbacks the `env` getters return when a var is unset or invalid.
+- **Dependency direction is one-way: `runtimeconfig` → `env`.** The `env` package uses literal fallback values and must NOT import `runtimeconfig` (no cycle).
+- **Consume effective values through `runtimeconfig.Get()`, not `env` directly.** Single source of truth — e.g. `resolveMinAge()` reads `eff.MinimumReleaseAgeMinutes`, not `env.MinimumReleaseAgeMinutes()`.
+
+**Checklist for adding a new runtime default:**
+
+1. Add the compile-time constant to `internal/runtimeconfig/runtimeconfig.go` (if it has a canonical default)
+2. Add the `envVar` definition in `internal/env/e.go` and getter in `internal/env/env.go` (per the Environment Variable Usage Policy)
+3. Add a typed field with a `json` tag to `runtimeconfig.Effective` and wire it in `Compute()`
+4. Add tests: `internal/env/env_test.go` (getter) and `internal/runtimeconfig/runtimeconfig_test.go` (`Compute()` default + env override). **Do NOT add key-count guards** — test "required keys present" and "stable JSON serialization", not total field count, so adding a default never breaks count assertions
+5. The new field appears automatically in `datamitsu config runtime` — no extra wiring
+
+## Runtime Config vs Config Inputs Policy
+
+**The full `runtimeconfig.Effective` snapshot is CLI-only. The JS config VM receives only a minimal allowlisted subset via `datamitsuConfigInputs`.** These are two distinct surfaces and must not be conflated.
+
+- **`runtimeconfig.Effective`** — the full effective snapshot, exposed for introspection/debug via `datamitsu config runtime` (`json.MarshalIndent` of the struct). It must **NOT** be injected wholesale into the config JS VM.
+- **`datamitsuConfigInputs`** — a tiny frozen JS global holding only fields config JS is explicitly allowed to branch on. Built engine-internally in `internal/engine/configinputs.go` (`initConfigInputs()`), it extracts allowlisted fields into the `configInputs` struct, round-trips through JSON, injects with sorted keys, and `Object.freeze()`s the result. **Current allowlist: `minimumReleaseAgeMinutes` only.**
+- **Why minimal, not the full object:** policy "don't branch on this" is unenforceable if the full snapshot is available. A minimal allowlist enforces the boundary _structurally_. Exposing every runtime parameter would create hidden config inputs that silently affect fingerprinting/cache/explain/provenance once those exist.
+- **Adding a new config input is heavyweight.** Any field in `datamitsuConfigInputs` IS a config evaluation input. Adding one requires updating: config fingerprinting, cache invalidation, explain/debug metadata, future provenance metadata, the TS declarations in `config/config.d.ts` (and the embedded `internal/config/config.d.ts` copy), this policy, and the engine tests that pin the exposed key set.
+- **Forward contract on caching:** config JS evaluation is **not cached today** — `cmd/config_loader.go` re-evaluates the VM fresh every invocation, so branching on `datamitsuConfigInputs` is safe now (no stale-cache risk). When config evaluation caching is implemented, every field exposed here MUST be folded into the cache fingerprint key. This contract is documented in `initConfigInputs()`.
+
+## Introspectable by Design
+
+**All runtime parameters MUST be programmatically queryable via the CLI.** `datamitsu config runtime` emits the full `runtimeconfig.Effective` snapshot as JSON, so users and security engineers can mechanically verify effective values and env overrides:
+
+```bash
+datamitsu config runtime | jq .minimumReleaseAgeMinutes
+DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeconds  # -> 1200
+```
+
+- Use **typed structs with `json` tags** for public runtime-config surfaces, not `map[string]any` — compile-time checking, stable serialization, no accidental key drift.
+- New runtime parameters must surface in `datamitsu config runtime` automatically (a new `Effective` field does this for free), never as a hidden value readable only from Go.
+
 ## Product Stage
 
 - Project is in `alpha`.
