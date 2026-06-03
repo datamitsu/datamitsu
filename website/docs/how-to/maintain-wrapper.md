@@ -20,6 +20,59 @@ datamitsu provides `devtools` commands to automate these tasks.
 
 ## Updating Tool Versions
 
+### Minimum release age (`--min-age`)
+
+All `pull-*` commands refuse to select a release younger than the **minimum release age** (7 days / 10080 minutes by default). This soak time lets the ecosystem catch typosquats and compromised or broken publishes before you pin them. Every command accepts the shared `--min-age <minutes>` flag and prints the effective cutoff in its banner:
+
+- `--min-age -1` (default) — use the global effective minimum release age
+- `--min-age 0` — disable filtering and take the newest release
+- `--min-age 43200` — custom cutoff (30 days)
+
+```bash
+# Default 7-day filter
+datamitsu devtools pull-github apps/githubApps.json --update
+
+# Require 30 days of soak time
+datamitsu devtools pull-node apps/nodeApps.json --update --min-age 43200
+
+# Bypass the filter (e.g. to adopt a same-day security release)
+datamitsu devtools pull-github apps/githubApps.json --update --min-age 0
+```
+
+Set `DATAMITSU_MIN_RELEASE_AGE` (minutes) to change the default for every command. When no release is old enough, `pull-github` keeps an existing app's current tag (with a warning) but hard-errors on a brand-new app; `pull-node`/`pull-uv` skip the package with a warning; `pull-runtimes` hard-errors. See [Supply Chain Security → Minimum Release Age](../guides/supply-chain-security.md#minimum-release-age-version-selection) for the full behavior table and the registries it covers.
+
+### Inspecting the effective runtime config (`datamitsu config runtime`)
+
+`datamitsu config runtime` prints the full effective runtime configuration as JSON — the env-resolved view of execution limits, the per-app install timeout, and the minimum release age. Use it to mechanically confirm what the tool will actually run with, including any `DATAMITSU_*` overrides, before kicking off a pull or an install:
+
+```bash
+# Inspect the full snapshot
+datamitsu config runtime
+
+# Confirm the effective minimum release age (minutes)
+datamitsu config runtime | jq .minimumReleaseAgeMinutes                                   # -> 10080
+
+# Confirm an env override took effect
+DATAMITSU_MIN_RELEASE_AGE=20160 datamitsu config runtime | jq .minimumReleaseAgeMinutes   # -> 20160
+
+# Verify the per-app install timeout (seconds; 0 = disabled)
+DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeconds       # -> 1200
+```
+
+The snapshot is introspection-only — it is **not** injected into the config JS VM. Wrapper config authors who need to branch on the effective minimum release age inside their `config.js` read the bounded, frozen `datamitsuConfigInputs` global instead:
+
+```js
+function getConfig(config) {
+  // Only `minimumReleaseAgeMinutes` is exposed today, and the object is frozen.
+  if (datamitsuConfigInputs.minimumReleaseAgeMinutes === 0) {
+    // age filtering is disabled — branch accordingly
+  }
+  return config;
+}
+```
+
+`datamitsuConfigInputs` is a deliberately minimal allowlist: it carries only the runtime values config evaluation is permitted to depend on (currently just `minimumReleaseAgeMinutes`). The full `config runtime` snapshot is **never** exposed to config JS — that boundary keeps hidden config inputs from leaking into fingerprinting and caching.
+
 ### Binary Apps: `devtools pull-github`
 
 Binary apps are downloaded directly from GitHub releases. Use `pull-github` to fetch the latest release versions and compute hashes automatically.

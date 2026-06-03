@@ -178,6 +178,7 @@ export default {
     "sdist",
     "sdists",
     "sigstore",
+    "typosquat",
     "typosquats",
     "runtimeconfig",
     "configinputs",

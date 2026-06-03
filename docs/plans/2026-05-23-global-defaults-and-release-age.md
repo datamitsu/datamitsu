@@ -325,8 +325,8 @@ Three-layer API: pure computation + idempotent lifecycle + cached getter. Thread
 
 ### Task 20: [Final] Update documentation
 
-- [ ] update `website/docs/guides/supply-chain-security.md` — document global minimum release age, `--min-age` flag
-- [ ] update `website/docs/how-to/maintain-wrapper.md` — mention `--min-age`, `datamitsu config runtime`, `datamitsuConfigInputs` JS global
+- [x] update `website/docs/guides/supply-chain-security.md` — document global minimum release age, `--min-age` flag
+- [x] update `website/docs/how-to/maintain-wrapper.md` — mention `--min-age`, `datamitsu config runtime`, `datamitsuConfigInputs` JS global
 
 ## Technical Details
 
