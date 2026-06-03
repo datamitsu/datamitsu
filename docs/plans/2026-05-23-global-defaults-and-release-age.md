@@ -314,14 +314,14 @@ Three-layer API: pure computation + idempotent lifecycle + cached getter. Thread
 
 ### Task 19: Verify acceptance criteria
 
-- [ ] verify all goals from Overview are implemented
-- [ ] verify edge cases: no release old enough (existing app = warn, new app = error), `--min-age 0` bypass, `DATAMITSU_INSTALL_TIMEOUT=0` disables timeout (no deadline), timeout cleanup removes partial files
-- [ ] run full test suite (`go test ./...`)
-- [ ] run `go test -race ./internal/runtimeconfig/... ./internal/engine/... ./cmd/...`
-- [ ] run linter — all issues must be fixed
-- [ ] manual verification: `go build && ./datamitsu config runtime` outputs expected keys
-- [ ] manual verification: `DATAMITSU_INSTALL_TIMEOUT=1200 ./datamitsu config runtime | jq .installTimeoutSeconds` returns 1200
-- [ ] manual verification: JS VM has `datamitsuConfigInputs.minimumReleaseAgeMinutes` but NOT `datamitsuConfigInputs.logLevel`
+- [x] verify all goals from Overview are implemented — all 6 Overview goals confirmed: global min-age filtering (Tasks 9-12), install timeout w/ env override (Tasks 13-14), `datamitsu config runtime` (Task 15), `datamitsuConfigInputs` allowlist (Task 16), `jq` introspection works, Runtime Config Policy in CLAUDE.md (Task 18)
+- [x] verify edge cases: no release old enough (existing app = warn, new app = error), `--min-age 0` bypass, `DATAMITSU_INSTALL_TIMEOUT=0` disables timeout (no deadline), timeout cleanup removes partial files — covered by passing tests: `GetLatestReleaseWithMinAge/returns_nil,nil_when_no_release_is_old_enough` + `TestRunPullNode_MinAgeNoVersionOldEnoughSkips`; `minAgeMinutes=0_falls_through`/`zero_disables_filtering`/`MinAgeZeroTakesLatest`; `TestNewInstallContext/timeout_disabled_means_no_deadline`; `TestDownloadFileContextTimeout`
+- [x] run full test suite (`go test ./...`) — 0 failures, all packages ok
+- [x] run `go test -race ./internal/runtimeconfig/... ./internal/engine/... ./cmd/...` — all ok, no data races
+- [x] run linter — `golangci-lint run ./...` → 0 issues
+- [x] manual verification: `go build && ./datamitsu config runtime` outputs expected keys — all 8 keys present (concurrency, installTimeoutSeconds, logLevel, maxCmdLength, maxErrorCmdDisplay, maxParallelWorkers, minimumReleaseAgeMinutes, timings)
+- [x] manual verification: `DATAMITSU_INSTALL_TIMEOUT=1200 ./datamitsu config runtime | jq .installTimeoutSeconds` returns 1200 — confirmed
+- [x] manual verification: JS VM has `datamitsuConfigInputs.minimumReleaseAgeMinutes` but NOT `datamitsuConfigInputs.logLevel` — confirmed via `TestConfigInputsOnlyAllowlistedFieldsExposed` (asserts `minimumReleaseAgeMinutes` present, `installTimeoutSeconds`/`logLevel`/`timings`/`concurrency`/`maxCmdLength`/`maxErrorCmdDisplay`/`maxParallelWorkers` absent)
 
 ### Task 20: [Final] Update documentation
 
