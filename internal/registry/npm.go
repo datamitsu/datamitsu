@@ -65,39 +65,37 @@ func isNPMPreRelease(version string) bool {
 	return strings.Contains(version, "-")
 }
 
-// GetNPMPackageInfoWithMinAge returns the newest version that is at least
-// minAgeMinutes old, skipping pre-release versions. It uses a two-step strategy:
-// fetch the lightweight /latest first; only if that version is too fresh does it
-// fetch the full package metadata to walk older versions. When minAgeMinutes <= 0
-// it returns the latest version (no filtering). Returns (nil, nil) when no
-// version qualifies.
+// GetNPMPackageInfoWithMinAge returns the newest non-prerelease version that is
+// at least minAgeMinutes old. When minAgeMinutes <= 0 it returns the latest
+// version via the lightweight /latest endpoint (no filtering, no full fetch).
+// Otherwise it fetches the full package metadata once — /latest carries no
+// upload timestamp, so the full document is required to judge age — and either
+// returns the "latest" dist-tag (when it is non-prerelease and old enough) or
+// walks all versions for the newest non-prerelease old enough. Returns
+// (nil, nil) when no version qualifies.
 func GetNPMPackageInfoWithMinAge(packageName string, minAgeMinutes int) (*NPMPackageInfo, error) {
-	latest, err := GetNPMPackageInfo(packageName)
-	if err != nil {
-		return nil, err
-	}
 	if minAgeMinutes <= 0 {
-		return latest, nil
+		return GetNPMPackageInfo(packageName)
 	}
-
-	cutoff := time.Now().Add(-time.Duration(minAgeMinutes) * time.Minute)
 
 	full, err := getNPMFullResponse(packageName)
 	if err != nil {
 		return nil, err
 	}
 
-	// Step 1: fast path — if the latest version is non-prerelease and old enough,
-	// return it without further work.
-	if !isNPMPreRelease(latest.Version) {
-		if ts, ok := full.Time[latest.Version]; ok {
+	cutoff := time.Now().Add(-time.Duration(minAgeMinutes) * time.Minute)
+
+	// Fast path: if the "latest" dist-tag is non-prerelease and old enough,
+	// return it without walking every version.
+	if latest := full.DistTags["latest"]; latest != "" && !isNPMPreRelease(latest) {
+		if ts, ok := full.Time[latest]; ok {
 			if t, parseErr := time.Parse(time.RFC3339, ts); parseErr == nil && !t.After(cutoff) {
-				return latest, nil
+				return npmInfoFromFull(full, latest), nil
 			}
 		}
 	}
 
-	// Step 2: walk all versions, pick the newest non-prerelease old enough.
+	// Walk all versions, pick the newest non-prerelease old enough.
 	var bestVersion string
 	var bestTime time.Time
 	for version := range full.Versions {
@@ -125,15 +123,21 @@ func GetNPMPackageInfoWithMinAge(packageName string, minAgeMinutes int) (*NPMPac
 		return nil, nil
 	}
 
+	return npmInfoFromFull(full, bestVersion), nil
+}
+
+// npmInfoFromFull builds an NPMPackageInfo for version from a full metadata
+// document, preferring the per-version description over the package-level one.
+func npmInfoFromFull(full *npmFullResponse, version string) *NPMPackageInfo {
 	desc := full.Description
-	if vm, ok := full.Versions[bestVersion]; ok && vm.Description != "" {
+	if vm, ok := full.Versions[version]; ok && vm.Description != "" {
 		desc = vm.Description
 	}
 	return &NPMPackageInfo{
 		Name:        full.Name,
-		Version:     bestVersion,
+		Version:     version,
 		Description: desc,
-	}, nil
+	}
 }
 
 func getNPMFullResponse(packageName string) (*npmFullResponse, error) {

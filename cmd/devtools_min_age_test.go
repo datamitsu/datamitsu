@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -48,5 +50,14 @@ func TestMinAgeDescriptionMentionsGlobalDefault(t *testing.T) {
 	desc := minAgeDescription()
 	if desc == "" {
 		t.Fatal("minAgeDescription returned empty string")
+	}
+	// The help text must surface the actual global default and the sentinel
+	// semantics it documents, not just be non-empty.
+	wantDefault := strconv.Itoa(runtimeconfig.MinimumReleaseAgeMinutes)
+	if !strings.Contains(desc, wantDefault) {
+		t.Errorf("description should mention the global default %s, got %q", wantDefault, desc)
+	}
+	if !strings.Contains(desc, "disable") {
+		t.Errorf("description should document the 0 = disable behavior, got %q", desc)
 	}
 }

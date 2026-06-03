@@ -129,9 +129,14 @@ func TestGetNPMPackageInfo(t *testing.T) {
 func rfc3339(t time.Time) string { return t.Format(time.RFC3339) }
 
 // minAgeServer mounts /{pkg}/latest and /{pkg} for a package, and records
-// whether the full-metadata endpoint was hit.
+// whether the full-metadata endpoint was hit. When the full response has no
+// dist-tags, "latest" is defaulted to latestVersion so the served metadata
+// matches what npm returns in practice (a "latest" dist-tag always exists).
 func minAgeServer(t *testing.T, pkg, latestVersion string, full npmFullResponse) (*httptest.Server, *bool) {
 	t.Helper()
+	if full.DistTags == nil {
+		full.DistTags = map[string]string{"latest": latestVersion}
+	}
 	fullHit := false
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		// Match on the (decoded) path suffix to support scoped package encoding.

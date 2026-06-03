@@ -251,6 +251,26 @@ func TestGetPyPIPackageInfoWithMinAge(t *testing.T) {
 		}
 	})
 
+	t.Run("version with no parsable upload time is skipped", func(t *testing.T) {
+		setup(t, pypiFullResponse{
+			Info: pypiInfo{Name: "pkg", Version: "2.0.0"},
+			Releases: map[string][]pypiReleaseFile{
+				// 2.0.0 has neither upload_time_iso_8601 nor a parsable
+				// upload_time, so pypiVersionReleaseTime returns ok=false.
+				"2.0.0": {{}},
+				"1.0.0": {isoFile(old, false)},
+			},
+		})
+
+		info, err := GetPyPIPackageInfoWithMinAge("pkg", minAge)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if info == nil || info.Version != "1.0.0" {
+			t.Errorf("expected 1.0.0 (2.0.0 has no parsable time), got %+v", info)
+		}
+	})
+
 	t.Run("no version old enough returns nil", func(t *testing.T) {
 		setup(t, pypiFullResponse{
 			Info: pypiInfo{Name: "pkg", Version: "2.0.0"},
