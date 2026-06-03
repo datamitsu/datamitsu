@@ -258,24 +258,24 @@ Three-layer API: pure computation + idempotent lifecycle + cached getter. Thread
 
 ### Task 16: Inject minimal `datamitsuConfigInputs` into JS VM
 
-- [ ] create `internal/engine/configinputs.go` with `initConfigInputs()` method
-- [ ] define engine-internal struct for the allowlisted input surface:
+- [x] create `internal/engine/configinputs.go` with `initConfigInputs()` method
+- [x] define engine-internal struct for the allowlisted input surface:
   ```go
   type configInputs struct {
       MinimumReleaseAgeMinutes int `json:"minimumReleaseAgeMinutes"`
   }
   ```
-- [ ] compute from `runtimeconfig.Get()` — extract only allowlisted fields
-- [ ] inject as frozen JS global named `datamitsuConfigInputs` with sorted keys, `Object.freeze()`
-- [ ] do NOT inject full `runtimeconfig.Effective` into JS VM
-- [ ] add `e.initConfigInputs()` call in `engine.New()` after `initPNPMWorkspaceDefaults()`
-- [ ] write test: initialize runtimeconfig via `resetForTesting()` + `Init()`, verify injected `minimumReleaseAgeMinutes` matches `runtimeconfig.Get().MinimumReleaseAgeMinutes`
-- [ ] write test: object is plain (not function/array)
-- [ ] write test: object is frozen (mutation attempts blocked)
-- [ ] write test: keys are in sorted order
-- [ ] write test: only `minimumReleaseAgeMinutes` is exposed — `installTimeoutSeconds`, `logLevel`, `timings`, `concurrency`, `maxCmdLength`, `maxErrorCmdDisplay`, `maxParallelWorkers` are NOT present
-- [ ] document fingerprinting status: config JS evaluation is NOT cached (re-evaluated fresh every invocation via `cmd/config_loader.go`), so branching on `datamitsuConfigInputs` is safe today — no stale cache risk. When config evaluation caching is implemented, `datamitsuConfigInputs` values MUST be included in the cache fingerprint key. Add a code comment in `initConfigInputs()` noting this forward contract
-- [ ] run `go test ./internal/engine/...` — must pass before next task
+- [x] compute from `runtimeconfig.Get()` — extract only allowlisted fields (falls back to `runtimeconfig.Compute()` when Init was not called, e.g. unit tests constructing an Engine directly)
+- [x] inject as frozen JS global named `datamitsuConfigInputs` with sorted keys, `Object.freeze()`
+- [x] do NOT inject full `runtimeconfig.Effective` into JS VM
+- [x] add `e.initConfigInputs()` call in `engine.New()` after `initPNPMWorkspaceDefaults()`
+- [x] write test: verify injected `minimumReleaseAgeMinutes` matches `runtimeconfig.Get().MinimumReleaseAgeMinutes` (uses idempotent `Init()` rather than the unexported `resetForTesting()`, which is not reachable from the engine package)
+- [x] write test: object is plain (not function/array)
+- [x] write test: object is frozen (mutation attempts blocked)
+- [x] write test: keys are in sorted order
+- [x] write test: only `minimumReleaseAgeMinutes` is exposed — `installTimeoutSeconds`, `logLevel`, `timings`, `concurrency`, `maxCmdLength`, `maxErrorCmdDisplay`, `maxParallelWorkers` are NOT present
+- [x] document fingerprinting status: config JS evaluation is NOT cached (re-evaluated fresh every invocation via `cmd/config_loader.go`), so branching on `datamitsuConfigInputs` is safe today — no stale cache risk. When config evaluation caching is implemented, `datamitsuConfigInputs` values MUST be included in the cache fingerprint key. Add a code comment in `initConfigInputs()` noting this forward contract
+- [x] run `go test ./internal/engine/...` — must pass before next task
 
 ### Task 17: Add TypeScript declarations for `datamitsuConfigInputs`
 

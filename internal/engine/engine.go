@@ -53,6 +53,7 @@ func New(binaryCommandOverride string) (e *Engine, err error) {
 	e.initTools()
 	e.initFacts()
 	e.initPNPMWorkspaceDefaults()
+	e.initConfigInputs()
 
 	if testInitHook != nil {
 		testInitHook(e)
