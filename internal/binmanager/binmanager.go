@@ -16,6 +16,7 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/logger"
+	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"github.com/datamitsu/datamitsu/internal/syslist"
 	"github.com/datamitsu/datamitsu/internal/target"
 
@@ -293,13 +294,26 @@ func (bm *BinManager) downloadWithProgress(ctx context.Context, name string, pro
 	return bm.downloadInternal(ctx, name, progress)
 }
 
-// newInstallContext derives a context carrying the per-app install timeout from
-// env.InstallTimeoutSeconds(). A configured value of 0 disables the deadline:
-// the returned context is cancelable but never expires. timeoutSec is returned
-// so callers can render a precise "timed out after Ns" message. Callers MUST
-// always call cancel (defer cancel()).
+// resolveInstallTimeoutSeconds returns the effective per-app install timeout in
+// seconds, read through runtimeconfig (the single source of truth) rather than
+// env directly. It falls back to a fresh Compute() when runtimeconfig.Init() has
+// not run (e.g. unit tests constructing a BinManager directly), mirroring the
+// engine's configinputs fallback.
+func resolveInstallTimeoutSeconds() int {
+	eff, err := runtimeconfig.Get()
+	if err != nil {
+		eff = runtimeconfig.Compute()
+	}
+	return eff.InstallTimeoutSeconds
+}
+
+// newInstallContext derives a context carrying the effective per-app install
+// timeout. A configured value of 0 disables the deadline: the returned context
+// is cancelable but never expires. timeoutSec is returned so callers can render
+// a precise "timed out after Ns" message. Callers MUST always call cancel
+// (defer cancel()).
 func newInstallContext(parent context.Context) (ctx context.Context, cancel context.CancelFunc, timeoutSec int) {
-	timeoutSec = env.InstallTimeoutSeconds()
+	timeoutSec = resolveInstallTimeoutSeconds()
 	if timeoutSec <= 0 {
 		ctx, cancel = context.WithCancel(parent)
 		return ctx, cancel, 0
