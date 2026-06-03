@@ -279,7 +279,7 @@ Three-layer API: pure computation + idempotent lifecycle + cached getter. Thread
 
 ### Task 17: Add TypeScript declarations for `datamitsuConfigInputs`
 
-- [ ] add `datamitsuConfigInputs` declaration in `config/config.d.ts`:
+- [x] add `datamitsuConfigInputs` declaration in `config/config.d.ts`:
   ```typescript
   /**
    * Bounded config-evaluation input surface.
@@ -291,8 +291,11 @@ Three-layer API: pure computation + idempotent lifecycle + cached getter. Thread
     minimumReleaseAgeMinutes: number;
   }>;
   ```
-- [ ] add identical declaration in `internal/config/config.d.ts` (both files kept identical)
-- [ ] run `go test ./internal/config/...` — must pass before next task
+- [x] add identical declaration in `internal/config/config.d.ts` (both files kept identical)
+
+! Scope note: `internal/config/config.d.ts` is generated from `config/config.d.ts` via `cp` (Taskfile `build:lib`) and is gitignored / `//go:embed`-ed. The source-of-truth edit went into `config/config.d.ts` and was synced to the embedded copy so `go test ./internal/config/...` (which embeds the file) passes. Inside the `declare global {}` block the declaration uses `const` (not top-level `declare const`).
+
+- [x] run `go test ./internal/config/...` — must pass before next task
 
 ### Task 18: Update CLAUDE.md with Runtime Config Policy and Introspectable by Design
 
