@@ -1170,6 +1170,124 @@ func TestCollectTasksRepositoryScopeRespectsDatamitsuignore(t *testing.T) {
 	})
 }
 
+// TestCollectTasksPerProjectScopeRespectsDatamitsuignore pins that a catch-all
+// .datamitsuignore rule disables per-project tools even when every project of the
+// tool's type is filtered out. Without the guard, the per-project planner's
+// fallback resurrects the tool with the full file list, bypassing
+// .datamitsuignore — the bug this fix targets (Site B, len(tasks) == 0).
+func TestCollectTasksPerProjectScopeRespectsDatamitsuignore(t *testing.T) {
+	root := "/repo"
+	cwd := "/repo"
+
+	tools := config.MapOfTools{
+		"prettier": {
+			Name: "prettier",
+			Operations: map[config.OperationType]config.ToolOperation{
+				config.OpLint: {
+					App:   "prettier",
+					Scope: config.ToolScopePerProject,
+					Globs: []string{"**/*.js"},
+				},
+			},
+		},
+	}
+
+	newPlanner := func(rule string) *Planner {
+		m := datamitsuignore.NewMatcher()
+		if err := m.AddFile("", rule); err != nil {
+			t.Fatalf("AddFile(%q) error = %v", rule, err)
+		}
+		return &Planner{
+			rootPath:         root,
+			cwdPath:          cwd,
+			detectedTypes:    []string{},
+			tools:            tools,
+			cachedFiles:      []string{"/repo/src/index.js"},
+			cachedProjects:   []project.ProjectLocation{{Path: "/repo", Type: "node"}},
+			cacheInitialized: true,
+			ignoreMatcher:    m,
+		}
+	}
+
+	t.Run("catch-all disables per-project tool", func(t *testing.T) {
+		p := newPlanner("**/*: prettier\n")
+		tasks := p.collectTasks(config.OpLint, nil)
+		if len(tasks) != 0 {
+			t.Errorf("per-project tool should be disabled by '**/*: prettier', got %d task(s)", len(tasks))
+		}
+	})
+
+	t.Run("non-matching rule keeps per-project tool", func(t *testing.T) {
+		p := newPlanner("**/*: other-tool\n")
+		tasks := p.collectTasks(config.OpLint, nil)
+		if len(tasks) != 1 {
+			t.Fatalf("per-project tool should run when no rule matches, got %d task(s)", len(tasks))
+		}
+		if tasks[0].ToolName != "prettier" {
+			t.Errorf("ToolName = %q, want %q", tasks[0].ToolName, "prettier")
+		}
+	})
+}
+
+// TestCollectTasksPerProjectScopeNoProjectsRespectsDatamitsuignore pins that a
+// catch-all .datamitsuignore rule disables a per-project tool even when NO
+// projects are detected (cachedProjects empty → filteredLocations empty).
+// Without the guard, the empty-locations fallback resurrects the tool with the
+// full file list, bypassing .datamitsuignore — Site A (len(filteredLocations) == 0).
+func TestCollectTasksPerProjectScopeNoProjectsRespectsDatamitsuignore(t *testing.T) {
+	root := "/repo"
+	cwd := "/repo"
+
+	tools := config.MapOfTools{
+		"prettier": {
+			Name: "prettier",
+			Operations: map[config.OperationType]config.ToolOperation{
+				config.OpLint: {
+					App:   "prettier",
+					Scope: config.ToolScopePerProject,
+					Globs: []string{"**/*.js"},
+				},
+			},
+		},
+	}
+
+	newPlanner := func(rule string) *Planner {
+		m := datamitsuignore.NewMatcher()
+		if err := m.AddFile("", rule); err != nil {
+			t.Fatalf("AddFile(%q) error = %v", rule, err)
+		}
+		return &Planner{
+			rootPath:         root,
+			cwdPath:          cwd,
+			detectedTypes:    []string{},
+			tools:            tools,
+			cachedFiles:      []string{"/repo/src/index.js"},
+			cachedProjects:   []project.ProjectLocation{},
+			cacheInitialized: true,
+			ignoreMatcher:    m,
+		}
+	}
+
+	t.Run("catch-all disables tool when no projects detected", func(t *testing.T) {
+		p := newPlanner("**/*: prettier\n")
+		tasks := p.collectTasks(config.OpLint, nil)
+		if len(tasks) != 0 {
+			t.Errorf("per-project tool should be disabled by '**/*: prettier', got %d task(s)", len(tasks))
+		}
+	})
+
+	t.Run("non-matching rule keeps tool when no projects detected", func(t *testing.T) {
+		p := newPlanner("**/*: other-tool\n")
+		tasks := p.collectTasks(config.OpLint, nil)
+		if len(tasks) != 1 {
+			t.Fatalf("per-project tool should run when no rule matches, got %d task(s)", len(tasks))
+		}
+		if tasks[0].ToolName != "prettier" {
+			t.Errorf("ToolName = %q, want %q", tasks[0].ToolName, "prettier")
+		}
+	})
+}
+
 func TestGroupByPriority(t *testing.T) {
 	planner := &Planner{}
 

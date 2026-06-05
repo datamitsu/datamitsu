@@ -145,6 +145,11 @@ For tools with `scope: "per-project"`, ignore rules are evaluated by checking if
 - Extension-specific patterns like `**/*.md: eslint` do not disable `eslint` for an entire project
 - Catch-all patterns like `**/*: eslint` or `vendor/**/*: *` do disable tools for entire projects
 
+A catch-all rule fully disables a per-project tool even when it is the tool's
+**only** project (or when no project of the tool's type is detected). The tool is
+omitted from the plan entirely rather than resurrected with the full file list —
+this is what makes the [opt-in model](#generating-an-all-disabled-file) reliable.
+
 ## Generating an all-disabled file
 
 For incremental adoption, you can start with **every tool disabled** and enable

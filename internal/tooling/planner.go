@@ -626,6 +626,10 @@ func (p *Planner) createPerProjectTasksWithFiles(baseTask Task, files []string) 
 		if p.cwdPath != p.rootPath {
 			return nil
 		}
+		// Don't resurrect a tool that .datamitsuignore disabled for the root.
+		if p.isToolDisabledForProject(baseTask.ToolName, p.rootPath) {
+			return nil
+		}
 		baseTask.Files = files
 		return []Task{baseTask}
 	}
@@ -684,6 +688,10 @@ func (p *Planner) createPerProjectTasksWithFiles(baseTask Task, files []string) 
 	// If no tasks created, return single task with all files
 	if len(tasks) == 0 {
 		if p.cwdPath != p.rootPath {
+			return nil
+		}
+		// Don't resurrect a tool that .datamitsuignore disabled for the root.
+		if p.isToolDisabledForProject(baseTask.ToolName, p.rootPath) {
 			return nil
 		}
 		baseTask.Files = files
