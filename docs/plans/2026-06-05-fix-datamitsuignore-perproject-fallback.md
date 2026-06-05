@@ -134,14 +134,14 @@ tasks.
 
 ### Task 3: Verify acceptance criteria
 
-- [ ] re-read both fallback sites; confirm both now guard with
+- [x] re-read both fallback sites; confirm both now guard with
       `isToolDisabledForProject(baseTask.ToolName, p.rootPath)` and the
       `cwdPath != rootPath` early-return is preserved (guard goes AFTER it)
-- [ ] confirm repository-scope, per-file, and no-files per-project branches are
+- [x] confirm repository-scope, per-file, and no-files per-project branches are
       unchanged (no accidental edits)
-- [ ] run full suite: `go test ./...` — all green
-- [ ] run `golangci-lint run` — no new findings on touched files
-- [ ] confirm existing ignore tests still pass:
+- [x] run full suite: `go test ./...` — all green
+- [x] run `golangci-lint run` — no new findings on touched files
+- [x] confirm existing ignore tests still pass:
       `go test ./internal/tooling/ -run Datamitsuignore -v`
 
 ### Task 4: [Final] Update changelog / docs
