@@ -221,5 +221,7 @@ export default {
     "cpython",
     "dedups",
     "libatomic",
+    "perproject",
+    "Fatalf",
   ],
 };
