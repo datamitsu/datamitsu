@@ -146,10 +146,17 @@ tasks.
 
 ### Task 4: [Final] Update changelog / docs
 
-- [ ] add a CHANGELOG / release-notes entry if the repo keeps one
+- [x] add a CHANGELOG / release-notes entry if the repo keeps one
       (search for `CHANGELOG*`); describe the fix as
       "respect catch-all `.datamitsuignore` for per-project and no-location tools"
-- [ ] if opt-in-tools docs assert full-disable works, add a regression note/link
+      — no manual CHANGELOG exists; goreleaser auto-generates release notes from
+      conventional commits (`.goreleaser.yml` `changelog.use: github`), and the
+      `fix:` commits land under "Bug Fixes" automatically. No file to edit.
+- [x] if opt-in-tools docs assert full-disable works, add a regression note/link
+      — added a note to the "Per-Project Scope" section of
+      `website/docs/reference/ignore-rules.md` linking the opt-in model and
+      stating a catch-all rule omits a per-project tool even when it is the only
+      project / no project of its type is detected (the resurrection-bug case)
 
 _Note: ralphex automatically moves completed plans to `docs/plans/completed/`._
 
