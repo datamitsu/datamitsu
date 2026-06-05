@@ -83,4 +83,16 @@ var (
 		DefaultValue: "",
 		Description:  "Override binary command path (used in facts collection)",
 	}
+
+	installTimeout = envVar{
+		Name:         fmt.Sprintf("%s_INSTALL_TIMEOUT", strings.ToUpper(ldflags.PackageName)),
+		DefaultValue: "600",
+		Description:  "Per-app install timeout in seconds (0=disabled)",
+	}
+
+	minimumReleaseAge = envVar{
+		Name:         fmt.Sprintf("%s_MIN_RELEASE_AGE", strings.ToUpper(ldflags.PackageName)),
+		DefaultValue: "10080",
+		Description:  "Minimum release age in minutes for supply-chain filtering (0=disabled)",
+	}
 )

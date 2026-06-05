@@ -1,6 +1,7 @@
 package runtimemanager
 
 import (
+	"context"
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/base64"
@@ -37,16 +38,16 @@ type npmVersionMeta struct {
 	} `json:"dist"`
 }
 
-func (rm *RuntimeManager) installPNPM(version string, destDir string, pnpmHash string) error {
+func (rm *RuntimeManager) installPNPM(ctx context.Context, version string, destDir string, pnpmHash string) error {
 	key := version + "\x00" + pnpmHash
 	_, err, _ := rm.pnpmInstall.Do(key, func() (any, error) {
-		return nil, rm.downloadPNPMFromRegistry(version, destDir, pnpmHash)
+		return nil, rm.downloadPNPMFromRegistry(ctx, version, destDir, pnpmHash)
 	})
 	return err
 }
 
-func (rm *RuntimeManager) downloadPNPMFromRegistry(version string, destDir string, pnpmHash string) error {
-	return rm.downloadPNPMFromRegistryURL("https://registry.npmjs.org", version, destDir, pnpmHash)
+func (rm *RuntimeManager) downloadPNPMFromRegistry(ctx context.Context, version string, destDir string, pnpmHash string) error {
+	return rm.downloadPNPMFromRegistryURL(ctx, "https://registry.npmjs.org", version, destDir, pnpmHash)
 }
 
 // downloadPNPMFromRegistryURL downloads, verifies, and extracts pnpm from the
@@ -54,7 +55,7 @@ func (rm *RuntimeManager) downloadPNPMFromRegistry(version string, destDir strin
 // point it at a mock registry and exercise the real download/verify/extract
 // path (pinned SHA-256 + registry SHA-512); production always passes the public
 // npm registry via downloadPNPMFromRegistry.
-func (rm *RuntimeManager) downloadPNPMFromRegistryURL(registryBaseURL, version, destDir, pnpmHash string) error {
+func (rm *RuntimeManager) downloadPNPMFromRegistryURL(ctx context.Context, registryBaseURL, version, destDir, pnpmHash string) error {
 	if pnpmHash == "" {
 		return fmt.Errorf("PNPM hash is required but not provided for pnpm@%s", version)
 	}
@@ -65,7 +66,11 @@ func (rm *RuntimeManager) downloadPNPMFromRegistryURL(registryBaseURL, version, 
 	}
 
 	url := fmt.Sprintf("%s/pnpm/%s", registryBaseURL, version)
-	resp, err := pnpmHTTPClient.Get(url)
+	metaReq, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to build PNPM metadata request: %w", err)
+	}
+	resp, err := pnpmHTTPClient.Do(metaReq)
 	if err != nil {
 		return fmt.Errorf("failed to fetch PNPM metadata: %w", err)
 	}
@@ -93,7 +98,11 @@ func (rm *RuntimeManager) downloadPNPMFromRegistryURL(registryBaseURL, version, 
 		return fmt.Errorf("pnpm@%s: SHA-512 integrity required but not found in registry metadata", version)
 	}
 
-	tarResp, err := pnpmHTTPClient.Get(meta.Dist.Tarball)
+	tarReq, err := http.NewRequestWithContext(ctx, http.MethodGet, meta.Dist.Tarball, nil)
+	if err != nil {
+		return fmt.Errorf("failed to build PNPM tarball request: %w", err)
+	}
+	tarResp, err := pnpmHTTPClient.Do(tarReq)
 	if err != nil {
 		return fmt.Errorf("failed to download PNPM tarball: %w", err)
 	}

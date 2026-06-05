@@ -15,6 +15,72 @@ The hash is verified before the artifact is unpacked or executed. Lock files are
 
 See the [Binary Management](./binary-management.md) guide for the verification pipeline applied to binary apps.
 
+## Minimum Release Age (Version Selection)
+
+When you pin a tool or runtime version with the `devtools pull-*` commands, datamitsu refuses to select a release that is too fresh. A brand-new release is the most likely to be a typosquat, a compromised publish, or an accidental break that gets yanked within hours. A short soak time lets the ecosystem catch and pull bad releases before you adopt them.
+
+The global default is **10080 minutes (7 days)**. It applies to every command that selects a concrete version from a registry:
+
+| Command         | Age-filtered registries                         |
+| --------------- | ----------------------------------------------- |
+| `pull-github`   | GitHub releases                                 |
+| `pull-node`     | npm                                             |
+| `pull-uv`       | PyPI                                            |
+| `pull-runtimes` | npm (pnpm), GitHub (uv and JVM binary releases) |
+
+Major-version-line lookups are **not** age-filtered, because they select a release _line_ rather than a specific build: the Node.js LTS line and Python stable line (endoflife.date), the Temurin major version (Adoptium API), and the Go release listing (go.dev). Only the concrete binary release or package version chosen within those lines passes through the age filter.
+
+### The `--min-age` flag
+
+Every `pull-*` command accepts `--min-age <minutes>`:
+
+- `--min-age -1` (the default) — use the global effective minimum release age
+- `--min-age 0` — disable age filtering and take the latest release
+- `--min-age 43200` — a custom cutoff (here, 30 days)
+
+```bash
+# Pin only releases at least 7 days old (the default)
+datamitsu devtools pull-github apps/githubApps.json --update
+
+# Require 30 days of soak time
+datamitsu devtools pull-node apps/nodeApps.json --update --min-age 43200
+
+# Bypass the filter and take the newest release
+datamitsu devtools pull-github apps/githubApps.json --update --min-age 0
+```
+
+Each command prints the effective cutoff in its status banner (`Minimum release age: 10080 minutes`, or `disabled` when set to 0).
+
+### When no release is old enough
+
+If every available release is younger than the cutoff, datamitsu's behavior depends on whether a safe fallback exists:
+
+- **`pull-github`** — an _existing_ app keeps its current tag with a warning; a _new_ app (no prior binary) is a **hard error**, since there is nothing safe to pin.
+- **`pull-node` / `pull-uv`** — the package is skipped with a warning and keeps its current version.
+- **`pull-runtimes`** — a hard error, since runtimes must resolve to a concrete version.
+
+The error message always points at the `--min-age 0` escape hatch.
+
+### Overriding the global default
+
+Set `DATAMITSU_MIN_RELEASE_AGE` (in minutes) to change the effective default for all commands without passing `--min-age` each time. `0` disables filtering globally.
+
+```bash
+# Require 14 days globally
+DATAMITSU_MIN_RELEASE_AGE=20160 datamitsu devtools pull-uv apps/uvApps.json --update
+```
+
+Verify the effective value mechanically with `datamitsu config runtime`:
+
+```bash
+datamitsu config runtime | jq .minimumReleaseAgeMinutes                                   # -> 10080
+DATAMITSU_MIN_RELEASE_AGE=20160 datamitsu config runtime | jq .minimumReleaseAgeMinutes   # -> 20160
+```
+
+:::note Distinct from the pnpm `minimumReleaseAge` setting
+This version-selection filter — applied when _you_ pin versions with `pull-*` — is separate from the `minimumReleaseAge` key in `pnpm-workspace.yaml`, which pnpm applies when it resolves a node app's _transitive_ dependencies at install time. Both default to 7 days; see [pnpm (Node Apps)](#pnpm-node-apps) for the install-time setting.
+:::
+
 ## pnpm (Node Apps)
 
 The Node.js runtime itself is acquired as a direct, SHA-256-pinned archive download (like the JVM runtime), and pnpm is pinned by SHA-256 as well — so the toolchain executing your installs is integrity-verified before any package is fetched.

@@ -1,6 +1,7 @@
 package runtimemanager
 
 import (
+	"context"
 	"crypto/sha256"
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
@@ -27,14 +28,16 @@ func getJVMBinaryPath(appEnvPath string, appName string) string {
 // InstallJVMApp downloads a JAR file and installs it in the app environment.
 // Safe for concurrent use from multiple goroutines.
 func (rm *RuntimeManager) InstallJVMApp(appName string, appConfig *binmanager.AppConfigJVM, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
+	ctx, cancel, timeoutSec := newInstallContext(context.Background())
+	defer cancel()
 	key := "jvm/" + appName
 	_, err, _ := rm.appInstall.Do(key, func() (any, error) {
-		return nil, rm.installJVMAppOnce(appName, appConfig, files, archives)
+		return nil, rm.installJVMAppOnce(ctx, appName, appConfig, files, archives)
 	})
-	return err
+	return wrapInstallTimeout(err, timeoutSec)
 }
 
-func (rm *RuntimeManager) installJVMAppOnce(appName string, appConfig *binmanager.AppConfigJVM, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
+func (rm *RuntimeManager) installJVMAppOnce(ctx context.Context, appName string, appConfig *binmanager.AppConfigJVM, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
 	runtimeName, _, err := rm.ResolveRuntime(appConfig.Runtime, config.RuntimeKindJVM)
 	if err != nil {
 		return fmt.Errorf("failed to resolve runtime for %q: %w", appName, err)
@@ -56,7 +59,7 @@ func (rm *RuntimeManager) installJVMAppOnce(appName string, appConfig *binmanage
 	}
 
 	// Ensure the JVM runtime binary is available
-	if _, err := rm.GetRuntimePath(runtimeName); err != nil {
+	if _, err := rm.getRuntimePath(ctx, runtimeName); err != nil {
 		return fmt.Errorf("failed to get JVM runtime path: %w", err)
 	}
 
@@ -79,7 +82,7 @@ func (rm *RuntimeManager) installJVMAppOnce(appName string, appConfig *binmanage
 
 	fmt.Fprintf(os.Stderr, "Downloading %s JAR...\n", appName)
 
-	if err := downloadAndVerifyJAR(appConfig.JarURL, appConfig.JarHash, jarPath); err != nil {
+	if err := downloadAndVerifyJAR(ctx, appConfig.JarURL, appConfig.JarHash, jarPath); err != nil {
 		return fmt.Errorf("failed to download JAR for %q: %w", appName, err)
 	}
 
@@ -89,12 +92,17 @@ func (rm *RuntimeManager) installJVMAppOnce(appName string, appConfig *binmanage
 	return nil
 }
 
-func downloadAndVerifyJAR(url, expectedHash, destPath string) error {
+func downloadAndVerifyJAR(ctx context.Context, url, expectedHash, destPath string) error {
 	if expectedHash == "" {
 		return fmt.Errorf("JAR hash is required but not provided for %s", url)
 	}
 
-	resp, err := jvmHTTPClient.Get(url)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to build JAR download request: %w", err)
+	}
+
+	resp, err := jvmHTTPClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to download JAR: %w", err)
 	}

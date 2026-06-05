@@ -760,3 +760,65 @@ func TestGetBinaryCommandOverride(t *testing.T) {
 		}
 	})
 }
+
+func TestInstallTimeoutSeconds(t *testing.T) {
+	original := os.Getenv(installTimeout.Name)
+	defer func() { _ = os.Setenv(installTimeout.Name, original) }()
+
+	tests := []struct {
+		name  string
+		set   bool
+		value string
+		want  int
+	}{
+		{"default when unset", false, "", 600},
+		{"override", true, "1200", 1200},
+		{"zero is valid (disabled)", true, "0", 0},
+		{"negative falls back", true, "-5", 600},
+		{"invalid falls back", true, "abc", 600},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.set {
+				_ = os.Setenv(installTimeout.Name, tt.value)
+			} else {
+				_ = os.Unsetenv(installTimeout.Name)
+			}
+			if got := InstallTimeoutSeconds(); got != tt.want {
+				t.Errorf("InstallTimeoutSeconds() = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestMinimumReleaseAgeMinutes(t *testing.T) {
+	original := os.Getenv(minimumReleaseAge.Name)
+	defer func() { _ = os.Setenv(minimumReleaseAge.Name, original) }()
+
+	tests := []struct {
+		name  string
+		set   bool
+		value string
+		want  int
+	}{
+		{"default when unset", false, "", 10080},
+		{"override", true, "1440", 1440},
+		{"zero is valid (disabled)", true, "0", 0},
+		{"negative falls back", true, "-1", 10080},
+		{"invalid falls back", true, "xyz", 10080},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.set {
+				_ = os.Setenv(minimumReleaseAge.Name, tt.value)
+			} else {
+				_ = os.Unsetenv(minimumReleaseAge.Name)
+			}
+			if got := MinimumReleaseAgeMinutes(); got != tt.want {
+				t.Errorf("MinimumReleaseAgeMinutes() = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}

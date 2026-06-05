@@ -219,6 +219,25 @@ Display the TypeScript type definitions file (`config.d.ts`).
 datamitsu config types
 ```
 
+### config runtime
+
+Display the full effective runtime configuration snapshot as JSON — env-resolved execution limits, the per-app install timeout, and the minimum release age. This is the introspection/debug surface: it reflects what the program runs with right now, including environment overrides. It is **not** the surface injected into the config JS VM (config JS receives only the minimal allowlisted `datamitsuConfigInputs`).
+
+```bash
+datamitsu config runtime
+```
+
+**Examples:**
+
+```bash
+# Inspect the full effective runtime config
+datamitsu config runtime
+
+# Mechanically verify a single value (and that env overrides apply)
+datamitsu config runtime | jq .minimumReleaseAgeMinutes
+DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeconds  # -> 1200
+```
+
 ### config lockfile
 
 Generate lock file content for a runtime-managed app (node/UV).
@@ -253,10 +272,11 @@ datamitsu devtools pull-github config/src/githubApps.json
 datamitsu devtools pull-github config/src/githubApps.json --update
 ```
 
-| Flag                  | Description                                       |
-| --------------------- | ------------------------------------------------- |
-| `--update`            | Fetch latest release tags before updating         |
-| `--verify-extraction` | Verify that downloaded archives extract correctly |
+| Flag                  | Description                                                                                                                                                                                                                |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--update`            | Fetch latest release tags before updating                                                                                                                                                                                  |
+| `--verify-extraction` | Verify that downloaded archives extract correctly                                                                                                                                                                          |
+| `--min-age <minutes>` | Minimum release age before a version is eligible (`-1` = global default of `10080`, `0` = disable, positive = custom). See [Minimum Release Age](/docs/guides/supply-chain-security#minimum-release-age-version-selection) |
 
 The command scans releases for all platform combinations using OS/Arch/Libc target tuples. For Linux, both glibc and musl variants are detected separately. The output JSON uses a nested three-level storage structure:
 
@@ -309,10 +329,11 @@ datamitsu devtools pull-node config/src/nodeApps.json
 datamitsu devtools pull-node config/src/nodeApps.json --update
 ```
 
-| Flag        | Description                                           |
-| ----------- | ----------------------------------------------------- |
-| `--update`  | Update versions in the JSON file with latest from npm |
-| `--dry-run` | Show results without writing to file                  |
+| Flag                  | Description                                                                                                                                                                                                                |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--update`            | Update versions in the JSON file with latest from npm                                                                                                                                                                      |
+| `--dry-run`           | Show results without writing to file                                                                                                                                                                                       |
+| `--min-age <minutes>` | Minimum release age before a version is eligible (`-1` = global default of `10080`, `0` = disable, positive = custom). See [Minimum Release Age](/docs/guides/supply-chain-security#minimum-release-age-version-selection) |
 
 **Examples:**
 
@@ -342,10 +363,11 @@ datamitsu devtools pull-uv config/src/uvApps.json
 datamitsu devtools pull-uv config/src/uvApps.json --update
 ```
 
-| Flag        | Description                                            |
-| ----------- | ------------------------------------------------------ |
-| `--update`  | Update versions in the JSON file with latest from PyPI |
-| `--dry-run` | Show results without writing to file                   |
+| Flag                  | Description                                                                                                                                                                                                                |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--update`            | Update versions in the JSON file with latest from PyPI                                                                                                                                                                     |
+| `--dry-run`           | Show results without writing to file                                                                                                                                                                                       |
+| `--min-age <minutes>` | Minimum release age before a version is eligible (`-1` = global default of `10080`, `0` = disable, positive = custom). See [Minimum Release Age](/docs/guides/supply-chain-security#minimum-release-age-version-selection) |
 
 **Examples:**
 
@@ -372,11 +394,12 @@ Pull runtime configurations (Node, UV, JVM, Go) with latest versions from upstre
 datamitsu devtools pull-runtimes --update <file>
 ```
 
-| Flag               | Description                                                      |
-| ------------------ | ---------------------------------------------------------------- |
-| `--update`         | Required. Fetch latest versions from upstream before updating    |
-| `--dry-run`        | Show what would be updated without writing files                 |
-| `--runtime <name>` | Update only the specified runtime (`node`, `uv`, `jvm`, or `go`) |
+| Flag                  | Description                                                                                                                                                                                                                                                                                                                 |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--update`            | Required. Fetch latest versions from upstream before updating                                                                                                                                                                                                                                                               |
+| `--dry-run`           | Show what would be updated without writing files                                                                                                                                                                                                                                                                            |
+| `--runtime <name>`    | Update only the specified runtime (`node`, `uv`, `jvm`, or `go`)                                                                                                                                                                                                                                                            |
+| `--min-age <minutes>` | Minimum release age before a version is eligible (`-1` = global default of `10080`, `0` = disable, positive = custom). Applies to specific-version sources (GitHub releases, npm pnpm), not major-version-line lookups. See [Minimum Release Age](/docs/guides/supply-chain-security#minimum-release-age-version-selection) |
 
 The command detects binaries for all platform combinations (OS/Arch/Libc). For Linux, both glibc and musl variants are detected when upstream provides separate binaries. If a musl binary is identical to the glibc variant (same URL and hash), the musl entry is deduplicated.
 
@@ -576,14 +599,16 @@ datamitsu version
 
 ## Environment Variables
 
-| Variable                         | Description                                           | Default                                             |
-| -------------------------------- | ----------------------------------------------------- | --------------------------------------------------- |
-| `DATAMITSU_CACHE_DIR`            | Custom base directory for cache and store paths       | `$XDG_CACHE_HOME/datamitsu` or `~/.cache/datamitsu` |
-| `DATAMITSU_CONCURRENCY`          | Number of concurrent download workers                 | `3`                                                 |
-| `DATAMITSU_MAX_PARALLEL_WORKERS` | Max parallel tool execution workers                   | `max(4, floor(NumCPU * 0.75))`, capped at 16        |
-| `DATAMITSU_LOG_LEVEL`            | Log level (debug, info, warn, error)                  | `info`                                              |
-| `DATAMITSU_TIMINGS`              | Enable detailed timing output (1=enabled, 0=disabled) | `0`                                                 |
-| `DATAMITSU_BINARY_COMMAND`       | Override binary command path                          | -                                                   |
-| `DATAMITSU_NO_SPONSOR`           | Suppress sponsor messages in CLI output               | -                                                   |
-| `NO_COLOR`                       | Disable color output                                  | -                                                   |
-| `FORCE_COLOR`                    | Force color output                                    | -                                                   |
+| Variable                         | Description                                                                    | Default                                             |
+| -------------------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------- |
+| `DATAMITSU_CACHE_DIR`            | Custom base directory for cache and store paths                                | `$XDG_CACHE_HOME/datamitsu` or `~/.cache/datamitsu` |
+| `DATAMITSU_CONCURRENCY`          | Number of concurrent download workers                                          | `3`                                                 |
+| `DATAMITSU_INSTALL_TIMEOUT`      | Per-app install timeout in seconds (`0` = disabled)                            | `600`                                               |
+| `DATAMITSU_MIN_RELEASE_AGE`      | Minimum release age in minutes for `pull-*` version selection (`0` = disabled) | `10080`                                             |
+| `DATAMITSU_MAX_PARALLEL_WORKERS` | Max parallel tool execution workers                                            | `max(4, floor(NumCPU * 0.75))`, capped at 16        |
+| `DATAMITSU_LOG_LEVEL`            | Log level (debug, info, warn, error)                                           | `info`                                              |
+| `DATAMITSU_TIMINGS`              | Enable detailed timing output (1=enabled, 0=disabled)                          | `0`                                                 |
+| `DATAMITSU_BINARY_COMMAND`       | Override binary command path                                                   | -                                                   |
+| `DATAMITSU_NO_SPONSOR`           | Suppress sponsor messages in CLI output                                        | -                                                   |
+| `NO_COLOR`                       | Disable color output                                                           | -                                                   |
+| `FORCE_COLOR`                    | Force color output                                                             | -                                                   |

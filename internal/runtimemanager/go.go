@@ -1,6 +1,7 @@
 package runtimemanager
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -149,14 +150,16 @@ func (rm *RuntimeManager) GetGoAppPath(appName string, appConfig *binmanager.App
 // If files/archives are non-empty, writes them to the app directory before building.
 // Safe for concurrent use from multiple goroutines.
 func (rm *RuntimeManager) InstallGoApp(appName string, appConfig *binmanager.AppConfigGo, customEnv map[string]string, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
+	ctx, cancel, timeoutSec := newInstallContext(context.Background())
+	defer cancel()
 	key := "go/" + appName
 	_, err, _ := rm.appInstall.Do(key, func() (any, error) {
-		return nil, rm.installGoAppOnce(appName, appConfig, customEnv, files, archives)
+		return nil, rm.installGoAppOnce(ctx, appName, appConfig, customEnv, files, archives)
 	})
-	return err
+	return wrapInstallTimeout(err, timeoutSec)
 }
 
-func (rm *RuntimeManager) installGoAppOnce(appName string, appConfig *binmanager.AppConfigGo, customEnv map[string]string, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
+func (rm *RuntimeManager) installGoAppOnce(ctx context.Context, appName string, appConfig *binmanager.AppConfigGo, customEnv map[string]string, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
 	runtimeName, _, err := rm.ResolveRuntime(appConfig.Runtime, config.RuntimeKindGo)
 	if err != nil {
 		return fmt.Errorf("failed to resolve runtime for %q: %w", appName, err)
@@ -183,7 +186,7 @@ func (rm *RuntimeManager) installGoAppOnce(appName string, appConfig *binmanager
 		return fmt.Errorf("app %q has no lockFile; a lockFile (go.mod + go.sum) is mandatory for Go apps", appName)
 	}
 
-	goPath, err := rm.GetRuntimePath(runtimeName)
+	goPath, err := rm.getRuntimePath(ctx, runtimeName)
 	if err != nil {
 		return fmt.Errorf("failed to get Go runtime path: %w", err)
 	}
@@ -238,7 +241,7 @@ func (rm *RuntimeManager) installGoAppOnce(appName string, appConfig *binmanager
 
 	args := buildGoBuildArgs(appConfig.PackageName, binPath)
 
-	cmd := exec.Command(goPath, args...)
+	cmd := exec.CommandContext(ctx, goPath, args...)
 	cmd.Dir = appEnvPath
 	cmd.Env = buildEnvWithOverrides(os.Environ(), envVars)
 	cmd.Stdout = os.Stderr
@@ -252,7 +255,7 @@ func (rm *RuntimeManager) installGoAppOnce(appName string, appConfig *binmanager
 
 	fmt.Fprintf(os.Stderr, "Installing %s...\n", appName)
 
-	if err := cmd.Run(); err != nil {
+	if err := runInstallCmd(ctx, cmd); err != nil {
 		return fmt.Errorf("failed to build Go app %q: %w", appName, err)
 	}
 

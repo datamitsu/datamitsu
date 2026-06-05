@@ -68,6 +68,17 @@ declare global {
   const pnpmWorkspaceDefaults: Record<string, unknown>;
 
   /**
+   * Bounded config-evaluation input surface, injected (frozen) by the Go engine.
+   * Only fields explicitly allowlisted here may be used in config JS decisions.
+   * Unlike `pnpmWorkspaceDefaults` (a published recommendation), every field here
+   * is a genuine config evaluation input. Adding a field requires updating
+   * fingerprinting, cache invalidation, explain/debug output, and documentation.
+   */
+  const datamitsuConfigInputs: Readonly<{
+    minimumReleaseAgeMinutes: number;
+  }>;
+
+  /**
    * Returns the minimum datamitsu version required by this config (semver format).
    * The tool validates this version during config loading and fails early with
    * upgrade instructions if the current version is too old.

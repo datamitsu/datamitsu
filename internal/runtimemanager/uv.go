@@ -1,6 +1,7 @@
 package runtimemanager
 
 import (
+	"context"
 	"fmt"
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
@@ -59,14 +60,16 @@ func uvVenvHealthy(appEnvPath, binPath string) bool {
 // If files is non-empty, writes them to the app directory before running uv.
 // Safe for concurrent use from multiple goroutines.
 func (rm *RuntimeManager) InstallUVApp(appName string, appConfig *binmanager.AppConfigUV, customEnv map[string]string, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
+	ctx, cancel, timeoutSec := newInstallContext(context.Background())
+	defer cancel()
 	key := "uv/" + appName
 	_, err, _ := rm.appInstall.Do(key, func() (any, error) {
-		return nil, rm.installUVAppOnce(appName, appConfig, customEnv, files, archives)
+		return nil, rm.installUVAppOnce(ctx, appName, appConfig, customEnv, files, archives)
 	})
-	return err
+	return wrapInstallTimeout(err, timeoutSec)
 }
 
-func (rm *RuntimeManager) installUVAppOnce(appName string, appConfig *binmanager.AppConfigUV, customEnv map[string]string, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
+func (rm *RuntimeManager) installUVAppOnce(ctx context.Context, appName string, appConfig *binmanager.AppConfigUV, customEnv map[string]string, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
 	runtimeName, rc, err := rm.ResolveRuntime(appConfig.Runtime, config.RuntimeKindUV)
 	if err != nil {
 		return fmt.Errorf("failed to resolve runtime for %q: %w", appName, err)
@@ -100,7 +103,7 @@ func (rm *RuntimeManager) installUVAppOnce(appName string, appConfig *binmanager
 		}
 	}
 
-	uvPath, err := rm.GetRuntimePath(runtimeName)
+	uvPath, err := rm.getRuntimePath(ctx, runtimeName)
 	if err != nil {
 		return fmt.Errorf("failed to get runtime path: %w", err)
 	}
@@ -149,7 +152,7 @@ func (rm *RuntimeManager) installUVAppOnce(appName string, appConfig *binmanager
 
 	args := buildUVInstallArgs(appConfig.LockFile, rc.UV)
 
-	cmd := exec.Command(uvPath, args...)
+	cmd := exec.CommandContext(ctx, uvPath, args...)
 	cmd.Dir = appEnvPath
 	cmd.Env = buildEnvWithOverrides(os.Environ(), envVars)
 	cmd.Stdout = os.Stderr
@@ -168,7 +171,7 @@ func (rm *RuntimeManager) installUVAppOnce(appName string, appConfig *binmanager
 
 	fmt.Fprintf(os.Stderr, "Installing %s...\n", appName)
 
-	if err := cmd.Run(); err != nil {
+	if err := runInstallCmd(ctx, cmd); err != nil {
 		return fmt.Errorf("failed to install UV app %q: %w", appName, err)
 	}
 

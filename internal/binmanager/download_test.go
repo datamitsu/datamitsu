@@ -1,8 +1,10 @@
 package binmanager
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +14,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestDownloadFile(t *testing.T) {
@@ -26,7 +29,7 @@ func TestDownloadFile(t *testing.T) {
 
 		tmpDir := t.TempDir()
 
-		filePath, err := downloadFile(server.URL, tmpDir)
+		filePath, err := downloadFile(context.Background(), server.URL, tmpDir)
 		if err != nil {
 			t.Fatalf("downloadFile() error = %v", err)
 		}
@@ -56,7 +59,7 @@ func TestDownloadFile(t *testing.T) {
 
 		tmpDir := t.TempDir()
 
-		_, err := downloadFile(server.URL, tmpDir)
+		_, err := downloadFile(context.Background(), server.URL, tmpDir)
 		if err == nil {
 			t.Error("expected error for 404 status, got nil")
 		}
@@ -70,7 +73,7 @@ func TestDownloadFile(t *testing.T) {
 
 		tmpDir := t.TempDir()
 
-		_, err := downloadFile(server.URL, tmpDir)
+		_, err := downloadFile(context.Background(), server.URL, tmpDir)
 		if err == nil {
 			t.Error("expected error for 500 status, got nil")
 		}
@@ -81,7 +84,7 @@ func TestDownloadFile(t *testing.T) {
 		server.Close()
 
 		tmpDir := t.TempDir()
-		_, err := downloadFile(server.URL, tmpDir)
+		_, err := downloadFile(context.Background(), server.URL, tmpDir)
 		if err == nil {
 			t.Error("expected error for refused connection, got nil")
 		}
@@ -97,7 +100,7 @@ func TestDownloadFile(t *testing.T) {
 		tmpDir := t.TempDir()
 		nestedDir := filepath.Join(tmpDir, "nested", "dir")
 
-		filePath, err := downloadFile(server.URL, nestedDir)
+		filePath, err := downloadFile(context.Background(), server.URL, nestedDir)
 		if err != nil {
 			t.Fatalf("downloadFile() error = %v", err)
 		}
@@ -123,7 +126,7 @@ func TestDownloadFileSizeLimit(t *testing.T) {
 
 		tmpDir := t.TempDir()
 
-		_, err := downloadFile(server.URL, tmpDir)
+		_, err := downloadFile(context.Background(), server.URL, tmpDir)
 		if err == nil {
 			t.Fatal("expected error for oversized Content-Length, got nil")
 		}
@@ -148,7 +151,7 @@ func TestDownloadFileSizeLimit(t *testing.T) {
 
 		tmpDir := t.TempDir()
 
-		_, err := downloadFile(server.URL, tmpDir)
+		_, err := downloadFile(context.Background(), server.URL, tmpDir)
 		if err != nil {
 			t.Fatalf("expected no error for Content-Length below MaxBinarySize, got: %v", err)
 		}
@@ -168,7 +171,7 @@ func TestDownloadFileSizeLimit(t *testing.T) {
 
 		tmpDir := t.TempDir()
 
-		_, err := downloadFile(server.URL, tmpDir)
+		_, err := downloadFile(context.Background(), server.URL, tmpDir)
 		if err == nil {
 			t.Fatal("expected error for oversized download without Content-Length, got nil")
 		}
@@ -199,7 +202,7 @@ func TestDownloadAndVerify(t *testing.T) {
 
 		tmpDir := t.TempDir()
 
-		filePath, err := downloadAndVerify(server.URL, expectedHash, BinHashTypeSHA256, tmpDir)
+		filePath, err := downloadAndVerify(context.Background(), server.URL, expectedHash, BinHashTypeSHA256, tmpDir)
 		if err != nil {
 			t.Fatalf("downloadAndVerify() error = %v", err)
 		}
@@ -220,7 +223,7 @@ func TestDownloadAndVerify(t *testing.T) {
 
 		tmpDir := t.TempDir()
 
-		_, err := downloadAndVerify(server.URL, expectedHash, BinHashTypeSHA256, tmpDir)
+		_, err := downloadAndVerify(context.Background(), server.URL, expectedHash, BinHashTypeSHA256, tmpDir)
 		if err == nil {
 			t.Error("expected hash verification error, got nil")
 		}
@@ -236,7 +239,7 @@ func TestDownloadAndVerify(t *testing.T) {
 		server.Close()
 
 		tmpDir := t.TempDir()
-		_, err := downloadAndVerify(server.URL, expectedHash, BinHashTypeSHA256, tmpDir)
+		_, err := downloadAndVerify(context.Background(), server.URL, expectedHash, BinHashTypeSHA256, tmpDir)
 		if err == nil {
 			t.Error("expected download error, got nil")
 		}
@@ -285,7 +288,7 @@ func TestRedirectPolicy(t *testing.T) {
 		defer server.Close()
 
 		tmpDir := t.TempDir()
-		_, err := downloadFile(server.URL, tmpDir)
+		_, err := downloadFile(context.Background(), server.URL, tmpDir)
 		if err == nil {
 			t.Fatal("expected error after too many redirects, got nil")
 		}
@@ -307,7 +310,7 @@ func TestRedirectPolicy(t *testing.T) {
 		defer redirectServer.Close()
 
 		tmpDir := t.TempDir()
-		_, err := downloadFile(redirectServer.URL, tmpDir)
+		_, err := downloadFile(context.Background(), redirectServer.URL, tmpDir)
 		if err != nil {
 			t.Fatalf("expected success for HTTP to HTTP redirect, got: %v", err)
 		}
@@ -688,4 +691,92 @@ func TestCopyDirAtomic(t *testing.T) {
 			t.Errorf("existing dst modified: got %q, want existing", content)
 		}
 	})
+}
+
+func TestNewInstallContext(t *testing.T) {
+	t.Run("timeout disabled means no deadline", func(t *testing.T) {
+		t.Setenv("DATAMITSU_INSTALL_TIMEOUT", "0")
+
+		ctx, cancel, sec := newInstallContext(context.Background())
+		defer cancel()
+
+		if _, ok := ctx.Deadline(); ok {
+			t.Error("expected no deadline when install timeout is disabled (0)")
+		}
+		if sec != 0 {
+			t.Errorf("timeoutSec = %d, want 0", sec)
+		}
+	})
+
+	t.Run("positive timeout sets a deadline", func(t *testing.T) {
+		t.Setenv("DATAMITSU_INSTALL_TIMEOUT", "120")
+
+		ctx, cancel, sec := newInstallContext(context.Background())
+		defer cancel()
+
+		dl, ok := ctx.Deadline()
+		if !ok {
+			t.Fatal("expected a deadline for a positive install timeout")
+		}
+		if sec != 120 {
+			t.Errorf("timeoutSec = %d, want 120", sec)
+		}
+		if remaining := time.Until(dl); remaining <= 0 || remaining > 120*time.Second {
+			t.Errorf("unexpected deadline remaining: %v", remaining)
+		}
+	})
+}
+
+func TestWrapInstallTimeout(t *testing.T) {
+	if got := wrapInstallTimeout(nil, 600); got != nil {
+		t.Errorf("nil error should pass through, got %v", got)
+	}
+
+	other := errors.New("boom")
+	if got := wrapInstallTimeout(other, 600); got != other {
+		t.Errorf("non-timeout error should pass through unchanged, got %v", got)
+	}
+
+	timeoutErr := fmt.Errorf("download stalled: %w", context.DeadlineExceeded)
+	got := wrapInstallTimeout(timeoutErr, 5)
+	if got == nil || !strings.Contains(got.Error(), "installation timed out after 5s") {
+		t.Errorf("expected a timeout message, got %v", got)
+	}
+	if !errors.Is(got, context.DeadlineExceeded) {
+		t.Errorf("wrapped timeout should still match DeadlineExceeded, got %v", got)
+	}
+}
+
+func TestDownloadFileContextTimeout(t *testing.T) {
+	// The handler sends headers plus a partial chunk, then blocks until the
+	// client's context is canceled — forcing the body read to time out
+	// mid-download so we can assert the partial file is cleaned up.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("partial-payload"))
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+		<-r.Context().Done()
+	}))
+	defer server.Close()
+
+	tmpDir := t.TempDir()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	_, err := downloadFile(ctx, server.URL, tmpDir)
+	if err == nil {
+		t.Fatal("expected a timeout error, got nil")
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("expected context.DeadlineExceeded, got %v", err)
+	}
+
+	// The partial download must be removed — no leftover temp files leak.
+	files, _ := os.ReadDir(tmpDir)
+	if len(files) > 0 {
+		t.Errorf("temp file not cleaned up after timeout: %v", files)
+	}
 }

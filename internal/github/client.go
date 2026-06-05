@@ -20,8 +20,11 @@ type Asset struct {
 
 // Release represents a GitHub release
 type Release struct {
-	TagName string  `json:"tag_name"`
-	Assets  []Asset `json:"assets"`
+	TagName     string    `json:"tag_name"`
+	Assets      []Asset   `json:"assets"`
+	PublishedAt time.Time `json:"published_at"`
+	Prerelease  bool      `json:"prerelease"`
+	Draft       bool      `json:"draft"`
 }
 
 // Client is a GitHub API client
@@ -80,11 +83,20 @@ func (c *Client) fetchRelease(url string) (*Release, error) {
 	return nil, lastErr
 }
 
-// doRequest performs the actual HTTP request
+// doRequest performs the actual HTTP request for a single release
 func (c *Client) doRequest(url string) (*Release, error) {
+	var release Release
+	if err := c.doJSONRequest(url, &release); err != nil {
+		return nil, err
+	}
+	return &release, nil
+}
+
+// doJSONRequest performs a GET request and decodes the JSON response into target.
+func (c *Client) doJSONRequest(url string, target any) error {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return fmt.Errorf("failed to create request: %w", err)
 	}
 
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
@@ -94,7 +106,7 @@ func (c *Client) doRequest(url string) (*Release, error) {
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
+		return fmt.Errorf("request failed: %w", err)
 	}
 	defer func() {
 		if closeErr := resp.Body.Close(); closeErr != nil {
@@ -104,24 +116,87 @@ func (c *Client) doRequest(url string) (*Release, error) {
 	}()
 
 	if resp.StatusCode == http.StatusNotFound {
-		return nil, &NotFoundError{URL: url}
+		return &NotFoundError{URL: url}
 	}
 
 	if resp.StatusCode == http.StatusForbidden {
-		return nil, &RateLimitError{}
+		return &RateLimitError{}
 	}
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-		return nil, fmt.Errorf("unexpected status code %d: %s", resp.StatusCode, string(body))
+		return fmt.Errorf("unexpected status code %d: %s", resp.StatusCode, string(body))
 	}
 
-	var release Release
-	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+	if err := json.NewDecoder(resp.Body).Decode(target); err != nil {
+		return fmt.Errorf("failed to decode response: %w", err)
 	}
 
-	return &release, nil
+	return nil
+}
+
+// ListReleases fetches up to perPage releases for a repo, with retry logic.
+func (c *Client) ListReleases(owner, repo string, perPage int) ([]Release, error) {
+	if perPage <= 0 {
+		perPage = 30
+	}
+	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases?per_page=%d", owner, repo, perPage)
+
+	var lastErr error
+	maxRetries := 3
+	backoff := time.Second
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if attempt > 0 {
+			time.Sleep(backoff)
+			backoff *= 2
+		}
+
+		var releases []Release
+		err := c.doJSONRequest(url, &releases)
+		if err == nil {
+			return releases, nil
+		}
+
+		lastErr = err
+		if isNonRetryableError(err) {
+			break
+		}
+	}
+
+	return nil, lastErr
+}
+
+// GetLatestReleaseWithMinAge returns the most recent release at least minAgeMinutes old.
+// It fetches up to 30 releases and skips prereleases, drafts, and releases with a
+// zero PublishedAt. When minAgeMinutes <= 0 it falls through to GetLatestRelease.
+// Returns (nil, nil) when no release qualifies.
+func (c *Client) GetLatestReleaseWithMinAge(owner, repo string, minAgeMinutes int) (*Release, error) {
+	if minAgeMinutes <= 0 {
+		return c.GetLatestRelease(owner, repo)
+	}
+
+	releases, err := c.ListReleases(owner, repo, 30)
+	if err != nil {
+		return nil, err
+	}
+
+	cutoff := time.Now().Add(-time.Duration(minAgeMinutes) * time.Minute)
+	for i := range releases {
+		r := releases[i]
+		if r.Prerelease || r.Draft {
+			continue
+		}
+		if r.PublishedAt.IsZero() {
+			continue
+		}
+		if r.PublishedAt.After(cutoff) {
+			continue
+		}
+		return &r, nil
+	}
+
+	return nil, nil
 }
 
 // NotFoundError is returned when a release is not found

@@ -9,6 +9,8 @@
 // without any further synchronization.
 package pnpmdefaults
 
+import "github.com/datamitsu/datamitsu/internal/runtimeconfig"
+
 // Defaults returns a fresh copy of the recommended pnpm 11 workspace security
 // defaults. A new map is returned on each call so callers can mutate it
 // (e.g. merge user overrides on top) without affecting other callers.
@@ -18,7 +20,7 @@ func Defaults() map[string]any {
 		"blockExoticSubdeps":        true,
 		"enablePrePostScripts":      false,
 		"dangerouslyAllowAllBuilds": false,
-		"minimumReleaseAge":         10080,
+		"minimumReleaseAge":         runtimeconfig.MinimumReleaseAgeMinutes,
 		"trustPolicy":               "no-downgrade",
 		"lockfile":                  true,
 		"preferFrozenLockfile":      true,

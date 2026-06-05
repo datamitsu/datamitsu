@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"github.com/datamitsu/datamitsu/internal/registry"
+	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -14,6 +15,7 @@ import (
 var (
 	uvUpdateFlag bool
 	uvDryRunFlag bool
+	pullUVMinAge *int
 )
 
 var pullUVCmd = &cobra.Command{
@@ -39,6 +41,7 @@ func init() {
 		"Update versions in the JSON file with latest from PyPI")
 	pullUVCmd.Flags().BoolVar(&uvDryRunFlag, "dry-run", false,
 		"Show results without writing to file")
+	pullUVMinAge = addMinAgeFlag(pullUVCmd)
 }
 
 type pypiVersionResult struct {
@@ -53,6 +56,13 @@ type pypiVersionResult struct {
 
 func runPullUV(cmd *cobra.Command, args []string) error {
 	file := args[0]
+
+	// Resolve the effective minimum release age from runtime config + flag.
+	eff, err := runtimeconfig.Get()
+	if err != nil {
+		return fmt.Errorf("failed to read runtime config: %w", err)
+	}
+	minAge := resolveMinAge(*pullUVMinAge, eff)
 
 	if err := ensureUVAppsJSONExists(file); err != nil {
 		return fmt.Errorf("failed to ensure file exists: %w", err)
@@ -74,6 +84,7 @@ func runPullUV(cmd *cobra.Command, args []string) error {
 	}
 	sort.Strings(names)
 
+	fmt.Printf("Minimum release age: %s\n", minAgeBanner(minAge))
 	fmt.Printf("Checking %d PyPI packages...\n\n", len(names))
 
 	var results []pypiVersionResult
@@ -92,11 +103,18 @@ func runPullUV(cmd *cobra.Command, args []string) error {
 			CurrentVersion: entry.Version,
 		}
 
-		info, err := registry.GetPyPIPackageInfo(entry.PackageName)
-		if err != nil {
+		info, err := registry.GetPyPIPackageInfoWithMinAge(entry.PackageName, minAge)
+		switch {
+		case err != nil:
 			result.Error = err.Error()
 			fmt.Printf("  %-*s  %s  -> error: %v\n", maxNameLen, name, result.CurrentVersion, err)
-		} else {
+		case info == nil:
+			// No version is old enough under the active min-age cutoff: skip with
+			// a warning and keep the current version (no error, no update).
+			fmt.Fprintf(os.Stderr,
+				"  %-*s  %s  -> warning: no version at least %d minutes old; keeping current\n",
+				maxNameLen, name, result.CurrentVersion, minAge)
+		default:
 			result.LatestVersion = info.Version
 			result.UpdateNeeded = info.Version != entry.Version
 			result.Description = info.Description
