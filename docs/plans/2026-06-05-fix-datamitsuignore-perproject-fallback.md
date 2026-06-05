@@ -99,38 +99,38 @@ tasks.
 
 ### Task 1: Regression test + fix — per-project fallback (Site B, `len(tasks) == 0`)
 
-- [ ] in `internal/tooling/tooling_test.go`, add
+- [x] in `internal/tooling/tooling_test.go`, add
       `TestCollectTasksPerProjectScopeRespectsDatamitsuignore` with a `newPlanner(rule)`
       helper modeled on `TestCollectTasksRepositoryScopeRespectsDatamitsuignore`:
       a per-project tool (e.g. `prettier`, `Scope: config.ToolScopePerProject`,
       `Globs: []string{"**/*.js"}`), `cachedFiles: []string{"/repo/src/index.js"}`,
       `cachedProjects: []project.ProjectLocation{{Path: "/repo", Type: "node"}}`,
       `cacheInitialized: true`, `ignoreMatcher: m`
-- [ ] subtest "catch-all disables per-project tool": rule `**/*: prettier` →
+- [x] subtest "catch-all disables per-project tool": rule `**/*: prettier` →
       `collectTasks(config.OpLint, nil)` must return **0** tasks
-- [ ] run `go test ./internal/tooling/ -run TestCollectTasksPerProjectScopeRespectsDatamitsuignore -v`
+- [x] run `go test ./internal/tooling/ -run TestCollectTasksPerProjectScopeRespectsDatamitsuignore -v`
       and confirm the catch-all subtest **FAILS** against current code (documents the bug)
-- [ ] apply the guard at Site B in `createPerProjectTasksWithFiles`
+- [x] apply the guard at Site B in `createPerProjectTasksWithFiles`
       (planner.go ~684), immediately before `baseTask.Files = files`:
       `if p.isToolDisabledForProject(baseTask.ToolName, p.rootPath) { return nil }`
-- [ ] add subtest "non-matching rule keeps per-project tool" (rule `**/*: other-tool`
+- [x] add subtest "non-matching rule keeps per-project tool" (rule `**/*: other-tool`
       → exactly 1 task, `ToolName == "prettier"`) to lock in no-regression
-- [ ] run the same test — both subtests must PASS before Task 2
+- [x] run the same test — both subtests must PASS before Task 2
 
 ### Task 2: Regression test + fix — no-locations fallback (Site A, `len(filteredLocations) == 0`)
 
-- [ ] extend the test (or add a sibling) for the empty-locations path: same
+- [x] extend the test (or add a sibling) for the empty-locations path: same
       per-project tool with **no** `ProjectTypes`, `cachedProjects: []` (empty),
       `cachedFiles: []string{"/repo/src/index.js"}` so `findFilesByGlobs` yields a
       match but `filteredLocations` is empty → Site A fallback
-- [ ] subtest "catch-all disables tool when no projects detected": rule
+- [x] subtest "catch-all disables tool when no projects detected": rule
       `**/*: prettier` → `collectTasks` returns **0** tasks
-- [ ] run the test, confirm this new subtest **FAILS** against current code
-- [ ] apply the same guard at Site A (planner.go ~624), before
+- [x] run the test, confirm this new subtest **FAILS** against current code
+- [x] apply the same guard at Site A (planner.go ~624), before
       `baseTask.Files = files`:
       `if p.isToolDisabledForProject(baseTask.ToolName, p.rootPath) { return nil }`
-- [ ] add negative subtest (rule `**/*: other-tool` → 1 task) for Site A
-- [ ] run the test — all subtests PASS before Task 3
+- [x] add negative subtest (rule `**/*: other-tool` → 1 task) for Site A
+- [x] run the test — all subtests PASS before Task 3
 
 ### Task 3: Verify acceptance criteria
 
