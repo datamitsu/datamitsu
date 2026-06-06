@@ -71,7 +71,7 @@ func runInstallCmd(ctx context.Context, cmd *exec.Cmd) error {
 	err := cmd.Run()
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
-			return fmt.Errorf("%w: %v", ctxErr, err)
+			return fmt.Errorf("%w: %w", ctxErr, err)
 		}
 	}
 	return err

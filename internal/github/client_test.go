@@ -2,6 +2,7 @@ package github
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -103,7 +104,8 @@ func TestGetRelease(t *testing.T) {
 			t.Error("expected error for 404, got nil")
 		}
 
-		if _, ok := err.(*NotFoundError); !ok {
+		notFoundError := &NotFoundError{}
+		if !errors.As(err, &notFoundError) {
 			t.Errorf("expected NotFoundError, got %T", err)
 		}
 	})
@@ -268,7 +270,8 @@ func TestFetchReleaseRetry(t *testing.T) {
 			t.Error("expected error for 403")
 		}
 
-		if _, ok := err.(*RateLimitError); !ok {
+		rateLimitError := &RateLimitError{}
+		if !errors.As(err, &rateLimitError) {
 			t.Errorf("expected RateLimitError, got %T", err)
 		}
 
@@ -428,7 +431,8 @@ func TestGetRepository(t *testing.T) {
 		if err == nil {
 			t.Error("expected error for 404, got nil")
 		}
-		if _, ok := err.(*NotFoundError); !ok {
+		notFoundError := &NotFoundError{}
+		if !errors.As(err, &notFoundError) {
 			t.Errorf("expected NotFoundError, got %T", err)
 		}
 	})
@@ -446,7 +450,8 @@ func TestGetRepository(t *testing.T) {
 		if err == nil {
 			t.Error("expected error for 403, got nil")
 		}
-		if _, ok := err.(*RateLimitError); !ok {
+		rateLimitError := &RateLimitError{}
+		if !errors.As(err, &rateLimitError) {
 			t.Errorf("expected RateLimitError, got %T", err)
 		}
 	})

@@ -2,6 +2,7 @@ package github
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -271,10 +272,14 @@ func (c *Client) fetchRepository(url string) (*Repository, error) {
 
 // isNonRetryableError checks if an error should not be retried
 func isNonRetryableError(err error) bool {
-	switch err.(type) {
-	case *NotFoundError, *RateLimitError:
-		return true
-	default:
-		return false
+	{
+		var errCase0 *NotFoundError
+		var errCase1 *RateLimitError
+		switch {
+		case errors.As(err, &errCase0), errors.As(err, &errCase1):
+			return true
+		default:
+			return false
+		}
 	}
 }

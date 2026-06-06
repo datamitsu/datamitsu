@@ -55,7 +55,7 @@ func TestWrapInstallTimeout(t *testing.T) {
 	}
 
 	other := errors.New("boom")
-	if got := wrapInstallTimeout(other, 600); got != other {
+	if got := wrapInstallTimeout(other, 600); !errors.Is(got, other) {
 		t.Errorf("non-timeout error should pass through unchanged, got %v", got)
 	}
 

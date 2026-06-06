@@ -46,7 +46,7 @@ linters:
     # - gocyclo
     # - gosec
     # - errname
-    # - errorlint
+    - errorlint
     # - exhaustive
     # - copyloopvar
     # - dupl

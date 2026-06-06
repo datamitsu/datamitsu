@@ -242,7 +242,7 @@ func CreateDatamitsuLinks(gitRoot string, apps binmanager.MapOfApps, resolver In
 	if err := os.Rename(tmpDir, datamitsuDir); err != nil {
 		if hasExisting {
 			if restoreErr := os.Rename(backupDir, datamitsuDir); restoreErr != nil {
-				return nil, fmt.Errorf("failed to rename temp directory to .datamitsu: %w (also failed to restore backup: %v)", err, restoreErr)
+				return nil, fmt.Errorf("failed to rename temp directory to .datamitsu: %w (also failed to restore backup: %w)", err, restoreErr)
 			}
 		}
 		return nil, fmt.Errorf("failed to rename temp directory to .datamitsu: %w", err)
@@ -258,7 +258,7 @@ func CreateDatamitsuLinks(gitRoot string, apps binmanager.MapOfApps, resolver In
 				restoreErr = os.Rename(backupDir, datamitsuDir)
 			}
 			if cleanupErr != nil || restoreErr != nil {
-				return nil, fmt.Errorf("link verification failed for %q: %w (also failed to restore previous state: remove=%v, restore=%v)", linkName, err, cleanupErr, restoreErr)
+				return nil, fmt.Errorf("link verification failed for %q: %w (also failed to restore previous state: remove=%w, restore=%w)", linkName, err, cleanupErr, restoreErr)
 			}
 			return nil, fmt.Errorf("link verification failed for %q: %w", linkName, err)
 		}
@@ -315,7 +315,7 @@ func CreateDatamitsuTypeDefinitions(gitRoot string, dryRun bool) error {
 	if err := os.Rename(tmpDir, datamitsuDir); err != nil {
 		if hasExisting {
 			if restoreErr := os.Rename(backupDir, datamitsuDir); restoreErr != nil {
-				return fmt.Errorf("failed to rename temp directory to .datamitsu: %w (also failed to restore backup: %v)", err, restoreErr)
+				return fmt.Errorf("failed to rename temp directory to .datamitsu: %w (also failed to restore backup: %w)", err, restoreErr)
 			}
 		}
 		return fmt.Errorf("failed to rename temp directory to .datamitsu: %w", err)

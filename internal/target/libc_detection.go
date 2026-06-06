@@ -2,6 +2,7 @@ package target
 
 import (
 	"debug/elf"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,7 +23,8 @@ func runLddVersion() string {
 	cmd := exec.Command("ldd", "--version")
 	stdout, err := cmd.Output()
 	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok && len(exitErr.Stderr) > 0 {
+		exitErr := &exec.ExitError{}
+		if errors.As(err, &exitErr) {
 			return string(exitErr.Stderr)
 		}
 		if len(stdout) > 0 {
