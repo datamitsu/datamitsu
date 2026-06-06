@@ -199,13 +199,23 @@ equivalent `--before-config` invocation, and that nesting is ignored.
 
 ### Task 5: Verify acceptance criteria
 
-- [ ] verify all Overview requirements implemented (global == wrapper for config
+- [x] verify all Overview requirements implemented (global == wrapper for config
       loading; root-only; flag overrides; relative+absolute; no hash)
-- [ ] verify edge cases: missing file errors clearly; empty/absent
+      → parity (`TestBeforeConfigsDeclaredParityWithFlag`: same `default → shared
+→ auto` chain as the flag), root-only (`TestBeforeConfigsRootOnlyNoChaining`),
+      flag precedence (`TestBeforeConfigsFlagOverridesDeclared`), relative+absolute
+      (`TestDiscoverBeforeConfigs{Relative,Absolute}Path`), no hash (`beforeConfigEntry`
+      has only a `Path` field — local paths are not network downloads)
+- [x] verify edge cases: missing file errors clearly; empty/absent
       `getBeforeConfigs`; multiple declared paths; dedup
-- [ ] run full test suite `go test ./...`
-- [ ] run linter (`golangci-lint run` per repo config) — fix all issues
-- [ ] verify coverage of new code meets project standard
+      → `TestDiscoverBeforeConfigs{NonExistentFileErrors,Absent,EmptyArray,
+EmptyPathErrors,Dedup}` + `TestBuildConfigSourcesDeclaredBeforeConfigs`
+- [x] run full test suite `go test ./...` — all packages pass
+- [x] run linter (`golangci-lint run` per repo config) — fix all issues —
+      managed golangci-lint v2.12.2, `run ./...` reports 0 issues
+- [x] verify coverage of new code meets project standard — `buildConfigSources`
+      93.3%, `discoverBeforeConfigs` 87.5%; uncovered lines are defensive
+      engine/goja error branches, consistent with existing untested branches
 
 ### Task 6: Documentation
 
