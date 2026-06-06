@@ -45,7 +45,7 @@ linters:
     # - gocritic
     # - gocyclo
     # - gosec
-    # - errname
+    - errname
     - errorlint
     # - exhaustive
     # - copyloopvar
