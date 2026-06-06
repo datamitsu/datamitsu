@@ -63,7 +63,7 @@ func (i *Installer) InstallAll(ctx context.Context, dryRun bool) ([]InstallResul
 	}
 	sort.Strings(names)
 
-	var results []InstallResult
+	results := make([]InstallResult, 0, len(names))
 	for _, name := range names {
 		result := i.installConfig(ctx, name, i.configs[name], dryRun)
 		results = append(results, result)

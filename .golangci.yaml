@@ -32,7 +32,7 @@ linters:
     # - unparam
     - usestdlibvars
     - perfsprint
-    # - prealloc
+    - prealloc
     # - revive
     # - nestif
     # - nilerr

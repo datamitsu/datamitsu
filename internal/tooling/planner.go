@@ -453,14 +453,14 @@ func (p *Planner) groupByPriority(tasks []Task) []TaskGroup {
 	}
 
 	// Get sorted priority levels
-	var priorities []int
+	priorities := make([]int, 0, len(priorityMap))
 	for priority := range priorityMap {
 		priorities = append(priorities, priority)
 	}
 	sort.Ints(priorities)
 
 	// Create task groups
-	var groups []TaskGroup
+	groups := make([]TaskGroup, 0, len(priorities))
 	for _, priority := range priorities {
 		tasks := priorityMap[priority]
 
@@ -509,7 +509,7 @@ func (p *Planner) filterTasksBySelectedTools(tasks []Task, selectedTools []strin
 	}
 
 	if len(notFound) > 0 {
-		var availableList []string
+		availableList := make([]string, 0, len(p.tools))
 		for name := range p.tools {
 			availableList = append(availableList, name)
 		}

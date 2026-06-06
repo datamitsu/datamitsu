@@ -55,10 +55,11 @@ func detectBinaryPathHeuristic(appName string, filename string, osType syslist.O
 
 	// Try to extract version from filename and add version-based patterns
 	if version := extractVersion(filename); version != "" {
-		versionedPatterns := []string{
-			appName + "-" + version + "/" + appName, // "appName-v1.2.3/appName"
-			appName + "_" + version + "/" + appName, // "appName_v1.2.3/appName"
-		}
+		versionedPatterns := make([]string, 0, 2+len(patterns))
+		versionedPatterns = append(versionedPatterns,
+			appName+"-"+version+"/"+appName, // "appName-v1.2.3/appName"
+			appName+"_"+version+"/"+appName, // "appName_v1.2.3/appName"
+		)
 		if osType == syslist.OsTypeWindows {
 			for i := range versionedPatterns {
 				versionedPatterns[i] += ".exe"

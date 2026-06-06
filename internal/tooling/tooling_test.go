@@ -1751,7 +1751,7 @@ func TestFailFastContextCancelsRunningPerFileLoop(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create many test files
-	var files []string
+	files := make([]string, 0, 20)
 	for i := range 20 {
 		f := filepath.Join(tmpDir, fmt.Sprintf("file%d.txt", i))
 		if err := os.WriteFile(f, []byte("test"), 0o644); err != nil {

@@ -68,7 +68,8 @@ func getWorkingDirForTask(task Task, rootPath string) string {
 
 // buildCommandTemplate builds a command string with placeholders (not expanded)
 func buildCommandTemplate(task Task) string {
-	parts := []string{task.OpConfig.App}
+	parts := make([]string, 0, 1+len(task.OpConfig.Args))
+	parts = append(parts, task.OpConfig.App)
 	parts = append(parts, task.OpConfig.Args...)
 	return strings.Join(parts, " ")
 }

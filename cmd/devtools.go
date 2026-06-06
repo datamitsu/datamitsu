@@ -248,7 +248,7 @@ func buildPlatformTuples() []platformTuple {
 	nonLinuxOSes := []syslist.OsType{syslist.OsTypeDarwin, syslist.OsTypeWindows, syslist.OsTypeFreebsd, syslist.OsTypeOpenbsd}
 	linuxLibcs := []string{"glibc", "musl"}
 
-	var tuples []platformTuple
+	tuples := make([]platformTuple, 0, len(nonLinuxOSes)*len(baseArches)+len(baseArches)*len(linuxLibcs))
 
 	for _, osType := range nonLinuxOSes {
 		for _, arch := range baseArches {

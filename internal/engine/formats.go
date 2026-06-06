@@ -242,7 +242,7 @@ func (e *Engine) initFormats() {
 		}
 
 		// Convert INI to array of section entries preserving order
-		sections := make([]any, 0)
+		sections := make([]any, 0, len(cfg.Sections()))
 		for _, section := range cfg.Sections() {
 			sectionObj := e.vm.NewObject()
 			propsObj := e.vm.NewObject()

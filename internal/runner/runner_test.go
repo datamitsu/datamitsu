@@ -1635,7 +1635,7 @@ func (f *fakeEnsurer) EnsureTools(_ context.Context, names []string) error {
 }
 
 func planWithTools(tools ...string) *tooling.ExecutionPlan {
-	var tasks []tooling.Task
+	tasks := make([]tooling.Task, 0, len(tools))
 	for _, name := range tools {
 		tasks = append(tasks, tooling.Task{
 			ToolName: name,

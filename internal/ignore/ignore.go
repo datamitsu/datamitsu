@@ -33,12 +33,11 @@ type PatternDuplicate struct {
 }
 
 func buildGroups(specificGroups []IgnoreGroup) []IgnoreGroup {
-	groups := []IgnoreGroup{
-		{
-			Name:     ldflags.PackageName + " >>>",
-			Elements: []string{},
-		},
-	}
+	groups := make([]IgnoreGroup, 0, 2+len(specificGroups)+1)
+	groups = append(groups, IgnoreGroup{
+		Name:     ldflags.PackageName + " >>>",
+		Elements: []string{},
+	})
 
 	groups = append(groups, IgnoreGroup{
 		Name:     ldflags.PackageName + " common <<<",
@@ -229,7 +228,7 @@ func debugCheck() error {
 	}
 
 	if len(duplicates) > 0 {
-		var errorMessages []string
+		errorMessages := make([]string, 0, 1+len(duplicates))
 		errorMessages = append(errorMessages, fmt.Sprintf("Found %d duplicate pattern(s):", len(duplicates)))
 
 		for _, dup := range duplicates {

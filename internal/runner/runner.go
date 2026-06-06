@@ -630,7 +630,7 @@ func groupResultsByTool(groupResults []tooling.GroupExecutionResult) []toolExecu
 	}
 
 	// Sort by first seen index to preserve execution order
-	var groups []toolExecutionGroup
+	groups := make([]toolExecutionGroup, 0, len(toolMap))
 	for _, group := range toolMap {
 		groups = append(groups, *group)
 	}
