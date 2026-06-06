@@ -9,7 +9,7 @@
 package runtimeconfig
 
 import (
-	"fmt"
+	"errors"
 	"sync"
 
 	"github.com/datamitsu/datamitsu/internal/env"
@@ -83,7 +83,7 @@ func Get() (Effective, error) {
 	mu.RLock()
 	defer mu.RUnlock()
 	if !initialized {
-		return Effective{}, fmt.Errorf("runtimeconfig: Get called before Init")
+		return Effective{}, errors.New("runtimeconfig: Get called before Init")
 	}
 	return effective, nil
 }

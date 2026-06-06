@@ -1,6 +1,7 @@
 package managedconfig
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -20,7 +21,7 @@ type InstallRootResolver interface {
 // It rejects absolute paths, parent traversal, and symlinks that escape.
 func validateLinkPath(path, installRoot string) error {
 	if path == "" {
-		return fmt.Errorf("link path must not be empty")
+		return errors.New("link path must not be empty")
 	}
 
 	cleaned := filepath.Clean(path)

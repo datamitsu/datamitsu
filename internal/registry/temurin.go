@@ -2,6 +2,7 @@ package registry
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -41,7 +42,7 @@ func getLatestTemurinMajorVersionFromURL(url string) (string, error) {
 
 	version := extractMajorVersion(releases)
 	if version == "" {
-		return temurinFallbackMajorVersion, fmt.Errorf("no major version found in Temurin releases")
+		return temurinFallbackMajorVersion, errors.New("no major version found in Temurin releases")
 	}
 
 	return version, nil

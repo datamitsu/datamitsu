@@ -2,6 +2,7 @@ package verifycache
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/datamitsu/datamitsu/internal/hashutil"
 )
@@ -15,11 +16,11 @@ func fingerprintFields(fields ...string) string {
 }
 
 func FingerprintBinary(url, hash, hashType, contentType, binaryPath string, extractDir bool, os, arch, libc string) string {
-	return fingerprintFields("binary", url, hash, hashType, contentType, binaryPath, fmt.Sprintf("%t", extractDir), os, arch, libc)
+	return fingerprintFields("binary", url, hash, hashType, contentType, binaryPath, strconv.FormatBool(extractDir), os, arch, libc)
 }
 
 func FingerprintRuntime(url, hash, hashType, contentType, binaryPath string, extractDir bool, os, arch, libc string) string {
-	return fingerprintFields("runtime", url, hash, hashType, contentType, binaryPath, fmt.Sprintf("%t", extractDir), os, arch, libc)
+	return fingerprintFields("runtime", url, hash, hashType, contentType, binaryPath, strconv.FormatBool(extractDir), os, arch, libc)
 }
 
 func FingerprintRuntimeApp(appConfigJSON, runtimeConfigJSON, filesJSON, archivesJSON, os, arch string) string {
@@ -51,5 +52,5 @@ func FingerprintBundle(version, filesJSON, archivesJSON string) string {
 }
 
 func BundleEntryKey(bundleName string) string {
-	return fmt.Sprintf("bundle:%s", bundleName)
+	return "bundle:" + bundleName
 }

@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 
@@ -48,7 +49,7 @@ func RegisterConfigLinksInVM(vm *goja.Runtime, registry map[string]string, gitRo
 
 	toolsGoja, ok := toolsObj.(*goja.Object)
 	if !ok {
-		return fmt.Errorf("tools global is not an object")
+		return errors.New("tools global is not an object")
 	}
 	if err := toolsGoja.Set("Config", configObj); err != nil {
 		return fmt.Errorf("failed to set tools.Config: %w", err)

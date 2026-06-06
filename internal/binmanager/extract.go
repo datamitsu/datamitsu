@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"compress/bzip2"
 	"compress/gzip"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -154,7 +155,7 @@ func extractGz(gzPath string, binaryPath *string, destDir string) (string, error
 
 func extractTarGz(tarGzPath string, binaryPath *string, destDir string) (string, error) {
 	if binaryPath == nil {
-		return "", fmt.Errorf("binaryPath is required for tar.gz archives")
+		return "", errors.New("binaryPath is required for tar.gz archives")
 	}
 
 	file, err := os.Open(tarGzPath)
@@ -226,7 +227,7 @@ func extractTarGz(tarGzPath string, binaryPath *string, destDir string) (string,
 
 func extractTarXz(tarXzPath string, binaryPath *string, destDir string) (string, error) {
 	if binaryPath == nil {
-		return "", fmt.Errorf("binaryPath is required for tar.xz archives")
+		return "", errors.New("binaryPath is required for tar.xz archives")
 	}
 
 	file, err := os.Open(tarXzPath)
@@ -293,7 +294,7 @@ func extractTarXz(tarXzPath string, binaryPath *string, destDir string) (string,
 
 func extractZip(zipPath string, binaryPath *string, destDir string) (string, error) {
 	if binaryPath == nil {
-		return "", fmt.Errorf("binaryPath is required for zip archives")
+		return "", errors.New("binaryPath is required for zip archives")
 	}
 
 	reader, err := zip.OpenReader(zipPath)
@@ -356,7 +357,7 @@ func extractZip(zipPath string, binaryPath *string, destDir string) (string, err
 
 func extractTarBz2(tarBz2Path string, binaryPath *string, destDir string) (string, error) {
 	if binaryPath == nil {
-		return "", fmt.Errorf("binaryPath is required for tar.bz2 archives")
+		return "", errors.New("binaryPath is required for tar.bz2 archives")
 	}
 
 	file, err := os.Open(tarBz2Path)
@@ -375,7 +376,7 @@ func extractTarBz2(tarBz2Path string, binaryPath *string, destDir string) (strin
 
 func extractTarZst(tarZstPath string, binaryPath *string, destDir string) (string, error) {
 	if binaryPath == nil {
-		return "", fmt.Errorf("binaryPath is required for tar.zst archives")
+		return "", errors.New("binaryPath is required for tar.zst archives")
 	}
 
 	file, err := os.Open(tarZstPath)
@@ -399,7 +400,7 @@ func extractTarZst(tarZstPath string, binaryPath *string, destDir string) (strin
 
 func extractTar(tarPath string, binaryPath *string, destDir string) (string, error) {
 	if binaryPath == nil {
-		return "", fmt.Errorf("binaryPath is required for tar archives")
+		return "", errors.New("binaryPath is required for tar archives")
 	}
 
 	file, err := os.Open(tarPath)
@@ -898,7 +899,7 @@ func extractArchiveToPath(destPath string, tarData []byte, archivePath string, f
 			return "", fmt.Errorf("unsupported archive format: %s (expected tar, tar.gz, tar.xz, tar.bz2, or tar.zst)", format)
 		}
 	} else {
-		return "", fmt.Errorf("either tarData or archivePath must be provided")
+		return "", errors.New("either tarData or archivePath must be provided")
 	}
 
 	const maxTotalExtractedSize int64 = 2 * 1024 * 1024 * 1024

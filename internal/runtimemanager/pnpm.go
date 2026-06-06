@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -162,7 +163,7 @@ func (rm *RuntimeManager) downloadPNPMFromRegistryURL(ctx context.Context, regis
 // a pinned hash, not against untrusted registry-provided metadata.
 func verifyPNPMPinnedHash(expectedHash string, actualSHA256 []byte) error {
 	if expectedHash == "" {
-		return fmt.Errorf("pnpm tarball SHA-256 hash is required but not configured")
+		return errors.New("pnpm tarball SHA-256 hash is required but not configured")
 	}
 	actualHex := hex.EncodeToString(actualSHA256)
 	if actualHex != expectedHash {
@@ -182,7 +183,7 @@ func hasSHA512Prefix(integrity string) bool {
 // SHA-512 integrity metadata (SRI format). SHA-1 fallback is not supported.
 func verifyPNPMIntegrity(meta npmVersionMeta, sha512Sum []byte) error {
 	if !hasSHA512Prefix(meta.Dist.Integrity) {
-		return fmt.Errorf("SHA-512 integrity required but not found in registry metadata")
+		return errors.New("SHA-512 integrity required but not found in registry metadata")
 	}
 
 	expectedB64 := strings.TrimPrefix(meta.Dist.Integrity, "sha512-")

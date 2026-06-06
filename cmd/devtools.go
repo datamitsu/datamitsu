@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -454,7 +455,7 @@ func buildBinariesForApp(appName string, release *github.Release, configHash str
 	printDetectionResults(results, verifyExtractionFlag)
 
 	if successCount == 0 {
-		return nil, fmt.Errorf("no binaries were detected")
+		return nil, errors.New("no binaries were detected")
 	}
 
 	if noHashCount > 0 {
@@ -564,7 +565,7 @@ func printDetectionResults(results []detectionResult, verifyMode bool) {
 // Only accepts "sha256:<64 hex chars>" format. Returns error for invalid formats.
 func extractHashFromDigest(digest string) (string, error) {
 	if digest == "" {
-		return "", fmt.Errorf("empty digest")
+		return "", errors.New("empty digest")
 	}
 
 	parts := strings.SplitN(digest, ":", 2)

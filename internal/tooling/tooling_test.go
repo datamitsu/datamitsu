@@ -3,6 +3,7 @@ package tooling
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -425,7 +426,7 @@ func TestExecuteDryRun(t *testing.T) {
 
 func TestExecuteBinaryNotFound(t *testing.T) {
 	appManager := &mockAppManager{
-		err: fmt.Errorf("binary not found"),
+		err: errors.New("binary not found"),
 	}
 
 	executor := NewExecutor("/root", false, false, appManager, nil)

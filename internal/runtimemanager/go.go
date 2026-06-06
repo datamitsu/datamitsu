@@ -38,10 +38,10 @@ func parseGoLockFile(lockFile string) (goMod, goSum string, err error) {
 		return "", "", fmt.Errorf("parse go lock file: %w", err)
 	}
 	if lf.Mod == "" {
-		return "", "", fmt.Errorf("go lock file missing mod (go.mod) content")
+		return "", "", errors.New("go lock file missing mod (go.mod) content")
 	}
 	if lf.Sum == "" {
-		return "", "", fmt.Errorf("go lock file missing sum (go.sum) content")
+		return "", "", errors.New("go lock file missing sum (go.sum) content")
 	}
 	return lf.Mod, lf.Sum, nil
 }

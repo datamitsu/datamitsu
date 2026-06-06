@@ -2,6 +2,7 @@ package registry
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -42,7 +43,7 @@ func getLatestNodeLTSVersionFromURL(url string) (string, error) {
 
 	version := filterLatestLTS(releases)
 	if version == "" {
-		return nodejsFallbackLTSVersion, fmt.Errorf("no LTS version found in Node.js releases")
+		return nodejsFallbackLTSVersion, errors.New("no LTS version found in Node.js releases")
 	}
 
 	return version, nil

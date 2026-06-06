@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	clr "github.com/datamitsu/datamitsu/internal/color"
@@ -115,9 +116,11 @@ func buildAppDetail(app binmanager.AppInfo) string {
 	}
 
 	result := parts[0]
+	var resultSb118 strings.Builder
 	for _, p := range parts[1:] {
-		result += "  " + p
+		resultSb118.WriteString("  " + p)
 	}
+	result += resultSb118.String()
 	return result
 }
 

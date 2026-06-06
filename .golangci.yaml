@@ -31,7 +31,7 @@ linters:
     # - wrapcheck
     # - unparam
     - usestdlibvars
-    # - perfsprint
+    - perfsprint
     # - prealloc
     # - revive
     # - nestif

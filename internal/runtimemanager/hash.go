@@ -1,6 +1,7 @@
 package runtimemanager
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 
@@ -27,7 +28,7 @@ func goAppLockHash(packageName, lockFile string) string {
 
 func calculateRuntimeHash(rc config.RuntimeConfig, osType syslist.OsType, archType syslist.ArchType, libc string) (string, error) {
 	if rc.Mode != config.RuntimeModeManaged || rc.Managed == nil {
-		return "", fmt.Errorf("cannot calculate hash for non-managed runtime")
+		return "", errors.New("cannot calculate hash for non-managed runtime")
 	}
 
 	archMap, ok := rc.Managed.Binaries[osType]

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -122,11 +123,11 @@ func runPullNode(cmd *cobra.Command, args []string) error {
 
 			status := "up-to-date"
 			if result.UpdateNeeded {
-				status = fmt.Sprintf("-> %s", info.Version)
+				status = "-> " + info.Version
 			}
 			line := fmt.Sprintf("  %-*s  %s  %s", maxNameLen, name, result.CurrentVersion, status)
 			if info.Description != "" {
-				line += fmt.Sprintf("  %s", info.Description)
+				line += "  " + info.Description
 			}
 			fmt.Println(line)
 		}
@@ -144,7 +145,7 @@ func runPullNode(cmd *cobra.Command, args []string) error {
 
 	for _, r := range results {
 		if r.Error != "" {
-			return fmt.Errorf("some packages failed to fetch from registry")
+			return errors.New("some packages failed to fetch from registry")
 		}
 	}
 	return nil

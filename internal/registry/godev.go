@@ -2,6 +2,7 @@ package registry
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -69,12 +70,12 @@ func getLatestGoReleaseFromURL(url string) (*GoRelease, error) {
 
 	rel := highestStableGoRelease(releases)
 	if rel == nil {
-		return nil, fmt.Errorf("no stable version found in Go releases")
+		return nil, errors.New("no stable version found in Go releases")
 	}
 
 	version := strings.TrimPrefix(rel.Version, "go")
 	if version == "" {
-		return nil, fmt.Errorf("go.dev release has empty version")
+		return nil, errors.New("go.dev release has empty version")
 	}
 
 	files := make(map[string]string, len(rel.Files))

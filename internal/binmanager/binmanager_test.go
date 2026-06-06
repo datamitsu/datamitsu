@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -33,14 +34,14 @@ func (m *mockRuntimeAppManager) GetCommandInfo(appName string, app App) (*Comman
 	if m.getCommandInfoFunc != nil {
 		return m.getCommandInfoFunc(appName, app)
 	}
-	return nil, fmt.Errorf("mock: not implemented")
+	return nil, errors.New("mock: not implemented")
 }
 
 func (m *mockRuntimeAppManager) ComputeAppPath(appName string, app App) (string, error) {
 	if m.computeAppPathFunc != nil {
 		return m.computeAppPathFunc(appName, app)
 	}
-	return "", fmt.Errorf("mock: ComputeAppPath not implemented")
+	return "", errors.New("mock: ComputeAppPath not implemented")
 }
 
 // TestConcurrentDownloadSameBinary verifies concurrent downloads of the same
@@ -340,7 +341,7 @@ func TestEnsureTools_AggregatesErrors(t *testing.T) {
 	mock := &mockRuntimeAppManager{
 		getCommandInfoFunc: func(appName string, app App) (*CommandInfo, error) {
 			if appName == "bad" {
-				return nil, fmt.Errorf("boom")
+				return nil, errors.New("boom")
 			}
 			atomic.AddInt64(&goodCalls, 1)
 			return &CommandInfo{Type: "uv", Command: "/cache/uv/" + appName}, nil
@@ -1555,7 +1556,7 @@ func TestGetCommandInfo_AppNotFound(t *testing.T) {
 func TestGetCommandInfo_RuntimeManagerError(t *testing.T) {
 	mock := &mockRuntimeAppManager{
 		getCommandInfoFunc: func(appName string, app App) (*CommandInfo, error) {
-			return nil, fmt.Errorf("runtime not found")
+			return nil, errors.New("runtime not found")
 		},
 	}
 
@@ -1907,7 +1908,7 @@ func TestGetExecCmd_AppNotFound(t *testing.T) {
 
 func TestWriteAppFiles_Basic(t *testing.T) {
 	tmpDir := t.TempDir()
-	installPath := fmt.Sprintf("%s/app-install", tmpDir)
+	installPath := tmpDir + "/app-install"
 
 	files := map[string]string{
 		"config.js": "module.exports = { rules: {} };",
@@ -1932,7 +1933,7 @@ func TestWriteAppFiles_Basic(t *testing.T) {
 
 func TestWriteAppFiles_EmptyMap(t *testing.T) {
 	tmpDir := t.TempDir()
-	installPath := fmt.Sprintf("%s/app-install", tmpDir)
+	installPath := tmpDir + "/app-install"
 
 	err := WriteAppFiles(installPath, map[string]string{}, nil)
 	if err != nil {
@@ -1946,12 +1947,12 @@ func TestWriteAppFiles_EmptyMap(t *testing.T) {
 
 func TestWriteAppFiles_OverwritesExisting(t *testing.T) {
 	tmpDir := t.TempDir()
-	installPath := fmt.Sprintf("%s/app-install", tmpDir)
+	installPath := tmpDir + "/app-install"
 	if err := os.MkdirAll(installPath, 0o755); err != nil {
 		t.Fatalf("failed to create dir: %v", err)
 	}
 
-	filePath := fmt.Sprintf("%s/config.js", installPath)
+	filePath := installPath + "/config.js"
 	if err := os.WriteFile(filePath, []byte("old content"), 0o644); err != nil {
 		t.Fatalf("failed to write initial file: %v", err)
 	}
@@ -1974,7 +1975,7 @@ func TestWriteAppFiles_OverwritesExisting(t *testing.T) {
 
 func TestWriteAppFiles_CreatesParentDirs(t *testing.T) {
 	tmpDir := t.TempDir()
-	installPath := fmt.Sprintf("%s/deep/nested/app-install", tmpDir)
+	installPath := tmpDir + "/deep/nested/app-install"
 
 	err := WriteAppFiles(installPath, map[string]string{
 		"config.js": "content",
@@ -1983,7 +1984,7 @@ func TestWriteAppFiles_CreatesParentDirs(t *testing.T) {
 		t.Fatalf("WriteAppFiles() error = %v", err)
 	}
 
-	content, err := os.ReadFile(fmt.Sprintf("%s/config.js", installPath))
+	content, err := os.ReadFile(installPath + "/config.js")
 	if err != nil {
 		t.Fatalf("failed to read file: %v", err)
 	}
@@ -1994,7 +1995,7 @@ func TestWriteAppFiles_CreatesParentDirs(t *testing.T) {
 
 func TestWriteAppFiles_WithInlineArchive(t *testing.T) {
 	tmpDir := t.TempDir()
-	installPath := fmt.Sprintf("%s/app-install", tmpDir)
+	installPath := tmpDir + "/app-install"
 
 	tarData := createTestTarData(t, map[string]string{
 		"config.js":     "module.exports = {};",
@@ -2014,7 +2015,7 @@ func TestWriteAppFiles_WithInlineArchive(t *testing.T) {
 		t.Fatalf("WriteAppFiles() error = %v", err)
 	}
 
-	content, err := os.ReadFile(fmt.Sprintf("%s/config.js", installPath))
+	content, err := os.ReadFile(installPath + "/config.js")
 	if err != nil {
 		t.Fatalf("failed to read config.js: %v", err)
 	}
@@ -2022,7 +2023,7 @@ func TestWriteAppFiles_WithInlineArchive(t *testing.T) {
 		t.Errorf("config.js content = %q, want %q", string(content), "module.exports = {};")
 	}
 
-	content, err = os.ReadFile(fmt.Sprintf("%s/sub/nested.js", installPath))
+	content, err = os.ReadFile(installPath + "/sub/nested.js")
 	if err != nil {
 		t.Fatalf("failed to read sub/nested.js: %v", err)
 	}
@@ -2033,7 +2034,7 @@ func TestWriteAppFiles_WithInlineArchive(t *testing.T) {
 
 func TestWriteAppFiles_FilesOverwriteArchives(t *testing.T) {
 	tmpDir := t.TempDir()
-	installPath := fmt.Sprintf("%s/app-install", tmpDir)
+	installPath := tmpDir + "/app-install"
 
 	tarData := createTestTarData(t, map[string]string{
 		"config.js": "from archive",
@@ -2055,7 +2056,7 @@ func TestWriteAppFiles_FilesOverwriteArchives(t *testing.T) {
 		t.Fatalf("WriteAppFiles() error = %v", err)
 	}
 
-	content, err := os.ReadFile(fmt.Sprintf("%s/config.js", installPath))
+	content, err := os.ReadFile(installPath + "/config.js")
 	if err != nil {
 		t.Fatalf("failed to read config.js: %v", err)
 	}
@@ -2066,7 +2067,7 @@ func TestWriteAppFiles_FilesOverwriteArchives(t *testing.T) {
 
 func TestWriteAppFiles_ArchivesExtractedAlphabetically(t *testing.T) {
 	tmpDir := t.TempDir()
-	installPath := fmt.Sprintf("%s/app-install", tmpDir)
+	installPath := tmpDir + "/app-install"
 
 	// Archive "alpha" contains config.js with "from alpha"
 	tarDataAlpha := createTestTarData(t, map[string]string{
@@ -2099,7 +2100,7 @@ func TestWriteAppFiles_ArchivesExtractedAlphabetically(t *testing.T) {
 	}
 
 	// config.js should have "from beta" because beta sorts after alpha
-	content, err := os.ReadFile(fmt.Sprintf("%s/config.js", installPath))
+	content, err := os.ReadFile(installPath + "/config.js")
 	if err != nil {
 		t.Fatalf("failed to read config.js: %v", err)
 	}
@@ -2108,7 +2109,7 @@ func TestWriteAppFiles_ArchivesExtractedAlphabetically(t *testing.T) {
 	}
 
 	// Both unique files should exist
-	content, err = os.ReadFile(fmt.Sprintf("%s/alpha.txt", installPath))
+	content, err = os.ReadFile(installPath + "/alpha.txt")
 	if err != nil {
 		t.Fatalf("failed to read alpha.txt: %v", err)
 	}
@@ -2116,7 +2117,7 @@ func TestWriteAppFiles_ArchivesExtractedAlphabetically(t *testing.T) {
 		t.Errorf("alpha.txt content = %q, want %q", string(content), "only in alpha")
 	}
 
-	content, err = os.ReadFile(fmt.Sprintf("%s/beta.txt", installPath))
+	content, err = os.ReadFile(installPath + "/beta.txt")
 	if err != nil {
 		t.Fatalf("failed to read beta.txt: %v", err)
 	}
@@ -2127,7 +2128,7 @@ func TestWriteAppFiles_ArchivesExtractedAlphabetically(t *testing.T) {
 
 func TestWriteAppFiles_ArchivesBeforeFiles(t *testing.T) {
 	tmpDir := t.TempDir()
-	installPath := fmt.Sprintf("%s/app-install", tmpDir)
+	installPath := tmpDir + "/app-install"
 
 	// Archive contains two files
 	tarData := createTestTarData(t, map[string]string{
@@ -2153,7 +2154,7 @@ func TestWriteAppFiles_ArchivesBeforeFiles(t *testing.T) {
 	}
 
 	// shared.js should have "from files" (files applied after archives)
-	content, err := os.ReadFile(fmt.Sprintf("%s/shared.js", installPath))
+	content, err := os.ReadFile(installPath + "/shared.js")
 	if err != nil {
 		t.Fatalf("failed to read shared.js: %v", err)
 	}
@@ -2162,7 +2163,7 @@ func TestWriteAppFiles_ArchivesBeforeFiles(t *testing.T) {
 	}
 
 	// archive-only.js should exist from archive
-	content, err = os.ReadFile(fmt.Sprintf("%s/archive-only.js", installPath))
+	content, err = os.ReadFile(installPath + "/archive-only.js")
 	if err != nil {
 		t.Fatalf("failed to read archive-only.js: %v", err)
 	}
@@ -2171,7 +2172,7 @@ func TestWriteAppFiles_ArchivesBeforeFiles(t *testing.T) {
 	}
 
 	// files-only.js should exist from files
-	content, err = os.ReadFile(fmt.Sprintf("%s/files-only.js", installPath))
+	content, err = os.ReadFile(installPath + "/files-only.js")
 	if err != nil {
 		t.Fatalf("failed to read files-only.js: %v", err)
 	}
@@ -2182,7 +2183,7 @@ func TestWriteAppFiles_ArchivesBeforeFiles(t *testing.T) {
 
 func TestWriteAppFiles_ExternalArchiveWithServer(t *testing.T) {
 	tmpDir := t.TempDir()
-	installPath := fmt.Sprintf("%s/app-install", tmpDir)
+	installPath := tmpDir + "/app-install"
 
 	tarData := createTestTarData(t, map[string]string{
 		"hello.txt": "hello world",
@@ -2209,7 +2210,7 @@ func TestWriteAppFiles_ExternalArchiveWithServer(t *testing.T) {
 		t.Fatalf("WriteAppFiles() error = %v", err)
 	}
 
-	content, err := os.ReadFile(fmt.Sprintf("%s/hello.txt", installPath))
+	content, err := os.ReadFile(installPath + "/hello.txt")
 	if err != nil {
 		t.Fatalf("failed to read hello.txt: %v", err)
 	}
@@ -2220,7 +2221,7 @@ func TestWriteAppFiles_ExternalArchiveWithServer(t *testing.T) {
 
 func TestWriteAppFiles_ExternalArchiveBadHash(t *testing.T) {
 	tmpDir := t.TempDir()
-	installPath := fmt.Sprintf("%s/app-install", tmpDir)
+	installPath := tmpDir + "/app-install"
 
 	tarData := createTestTarData(t, map[string]string{
 		"hello.txt": "hello world",
@@ -2250,7 +2251,7 @@ func TestWriteAppFiles_ExternalArchiveBadHash(t *testing.T) {
 
 func TestWriteAppFiles_InvalidArchiveSpec(t *testing.T) {
 	tmpDir := t.TempDir()
-	installPath := fmt.Sprintf("%s/app-install", tmpDir)
+	installPath := tmpDir + "/app-install"
 
 	archives := map[string]*ArchiveSpec{
 		"bad": {},

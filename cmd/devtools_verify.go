@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"regexp"
@@ -685,7 +686,7 @@ func verifyExtractDir(url, hash string, hashType binmanager.BinHashType, content
 	}
 
 	if hash == "" {
-		return fmt.Errorf("hash is empty: verification requires a non-empty hash")
+		return errors.New("hash is empty: verification requires a non-empty hash")
 	}
 	if err := binmanager.VerifyFileHashPublic(downloadedPath, hash, hashType); err != nil {
 		return fmt.Errorf("hash verification failed: %w", err)
@@ -701,7 +702,7 @@ func verifyExtractDir(url, hash string, hashType binmanager.BinHashType, content
 		return fmt.Errorf("failed to read extracted directory: %w", err)
 	}
 	if len(entries) == 0 {
-		return fmt.Errorf("extracted directory is empty")
+		return errors.New("extracted directory is empty")
 	}
 
 	return nil

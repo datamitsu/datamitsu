@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"fmt"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -124,7 +124,7 @@ func TestDeduplicateGitRootResults(t *testing.T) {
 			name: "dedup prefers error result over success",
 			input: []install.InstallResult{
 				{ConfigName: "lefthook.yml", FilePath: "/repo/lefthook.yml", Scope: config.ScopeGitRoot, Action: "created"},
-				{ConfigName: "lefthook.yml", FilePath: "/repo/lefthook.yml", Scope: config.ScopeGitRoot, Action: "created", Error: fmt.Errorf("content generation failed")},
+				{ConfigName: "lefthook.yml", FilePath: "/repo/lefthook.yml", Scope: config.ScopeGitRoot, Action: "created", Error: errors.New("content generation failed")},
 				{ConfigName: "lefthook.yml", FilePath: "/repo/lefthook.yml", Scope: config.ScopeGitRoot, Action: "created"},
 			},
 			expected: 1,

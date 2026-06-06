@@ -2,6 +2,7 @@ package install
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -303,13 +304,13 @@ func (i *Installer) generateContent(ctx context.Context, cfg config.ConfigInit, 
 	// Content field should be a goja.Value representing a function
 	contentValue, ok := cfg.Content.(goja.Value)
 	if !ok {
-		return "", fmt.Errorf("content is not a goja.Value")
+		return "", errors.New("content is not a goja.Value")
 	}
 
 	// Get the callable
 	contentFunc, ok := goja.AssertFunction(contentValue)
 	if !ok {
-		return "", fmt.Errorf("content is not a callable function")
+		return "", errors.New("content is not a callable function")
 	}
 
 	// Prepare context object
@@ -342,7 +343,7 @@ func (i *Installer) generateContent(ctx context.Context, cfg config.ConfigInit, 
 	}
 
 	if result == nil || goja.IsUndefined(result) || goja.IsNull(result) {
-		return "", fmt.Errorf("content function returned nil/undefined")
+		return "", errors.New("content function returned nil/undefined")
 	}
 
 	return result.String(), nil

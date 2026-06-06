@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"fmt"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -62,7 +62,7 @@ func (g *GitIgnore) Compile() error {
 
 func (g *GitIgnore) CountPatterns() (int, error) {
 	if !g.isCompiled {
-		return 0, fmt.Errorf("is not compiled")
+		return 0, errors.New("is not compiled")
 	}
 
 	return len(g.patterns), nil

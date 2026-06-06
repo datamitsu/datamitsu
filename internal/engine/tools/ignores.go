@@ -3,6 +3,7 @@ package tools
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/datamitsu/datamitsu/internal/ldflags"
@@ -206,7 +207,7 @@ func RegisterIgnoreToolsInVM(vm *goja.Runtime) error {
 						length := int(lengthVal.ToInteger())
 						strArr := make([]string, length)
 						for i := 0; i < length; i++ {
-							itemVal := arr.Get(fmt.Sprint(i))
+							itemVal := arr.Get(strconv.Itoa(i))
 							if itemVal != nil && !goja.IsUndefined(itemVal) && !goja.IsNull(itemVal) {
 								strArr[i] = itemVal.String()
 							}
@@ -240,7 +241,7 @@ func RegisterIgnoreToolsInVM(vm *goja.Runtime) error {
 						length := int(lengthVal.ToInteger())
 						groupOrder = make([]string, length)
 						for i := 0; i < length; i++ {
-							itemVal := arr.Get(fmt.Sprint(i))
+							itemVal := arr.Get(strconv.Itoa(i))
 							if itemVal != nil && !goja.IsUndefined(itemVal) && !goja.IsNull(itemVal) {
 								groupOrder[i] = itemVal.String()
 							}

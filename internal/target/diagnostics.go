@@ -25,7 +25,7 @@ func (d DiagnosticInfo) String() string {
 	)
 
 	if d.CachePath != "" {
-		s += fmt.Sprintf(" cache=%s", d.CachePath)
+		s += " cache=" + d.CachePath
 	}
 
 	if d.ResolvedTarget.Source == ResolutionFallback && d.ResolvedTarget.FallbackInfo != nil {

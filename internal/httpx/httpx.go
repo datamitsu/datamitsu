@@ -12,6 +12,7 @@
 package httpx
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -40,7 +41,7 @@ func NewHardenedClient(timeout time.Duration) *http.Client {
 // downgrade, so a redirect cannot silently drop the connection to plaintext.
 func hardenedRedirect(req *http.Request, via []*http.Request) error {
 	if len(via) >= 10 {
-		return fmt.Errorf("stopped after 10 redirects")
+		return errors.New("stopped after 10 redirects")
 	}
 	if len(via) > 0 && via[len(via)-1].URL.Scheme == "https" && req.URL.Scheme == "http" {
 		return fmt.Errorf("HTTPS to HTTP redirect rejected: %s", req.URL)

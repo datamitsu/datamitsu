@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -118,7 +119,7 @@ func TestDownloadFile(t *testing.T) {
 func TestDownloadFileSizeLimit(t *testing.T) {
 	t.Run("rejects oversized Content-Length before download", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Length", fmt.Sprintf("%d", MaxBinarySize+1))
+			w.Header().Set("Content-Length", strconv.Itoa(MaxBinarySize+1))
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte("small body"))
 		}))
@@ -143,7 +144,7 @@ func TestDownloadFileSizeLimit(t *testing.T) {
 	t.Run("accepts file with Content-Length below MaxBinarySize", func(t *testing.T) {
 		body := []byte("small file content")
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Length", fmt.Sprintf("%d", len(body)))
+			w.Header().Set("Content-Length", strconv.Itoa(len(body)))
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write(body)
 		}))
@@ -428,7 +429,7 @@ func TestMoveFile(t *testing.T) {
 					appeared.Store(true)
 				} else if appeared.Load() && os.IsNotExist(err) {
 					select {
-					case readErr <- fmt.Errorf("dst disappeared after appearing"):
+					case readErr <- errors.New("dst disappeared after appearing"):
 					default:
 					}
 					return
@@ -602,7 +603,7 @@ func TestMoveDir(t *testing.T) {
 					appeared.Store(true)
 				} else if appeared.Load() && os.IsNotExist(err) {
 					select {
-					case readErr <- fmt.Errorf("dst disappeared after appearing"):
+					case readErr <- errors.New("dst disappeared after appearing"):
 					default:
 					}
 					return

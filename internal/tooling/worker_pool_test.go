@@ -1,8 +1,8 @@
 package tooling
 
 import (
-	"fmt"
 	"os"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -116,7 +116,7 @@ func TestWorkerPoolWithDifferentSizes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_ = os.Setenv("DATAMITSU_MAX_PARALLEL_WORKERS", fmt.Sprintf("%d", tt.maxWorkers))
+			_ = os.Setenv("DATAMITSU_MAX_PARALLEL_WORKERS", strconv.Itoa(tt.maxWorkers))
 			defer func() { _ = os.Unsetenv("DATAMITSU_MAX_PARALLEL_WORKERS") }()
 
 			var concurrentCount int32

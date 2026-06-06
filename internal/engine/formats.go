@@ -3,6 +3,7 @@ package engine
 import (
 	"bytes"
 	"fmt"
+	"strconv"
 
 	"github.com/dop251/goja"
 	"github.com/goccy/go-yaml"
@@ -125,7 +126,7 @@ func (e *Engine) convertGojaValueToOrderedStructureWithVisited(val goja.Value, v
 			length := int(lengthVal.ToInteger())
 			result := make([]interface{}, length)
 			for i := 0; i < length; i++ {
-				itemVal := obj.Get(fmt.Sprint(i))
+				itemVal := obj.Get(strconv.Itoa(i))
 				result[i] = e.convertGojaValueToOrderedStructureWithVisited(itemVal, visited)
 			}
 			return result
@@ -281,7 +282,7 @@ func (e *Engine) initFormats() {
 
 		// Process each section entry, merging properties for sections with the same name
 		for i := 0; i < length; i++ {
-			sectionEntryVal := sectionsObj.Get(fmt.Sprint(i))
+			sectionEntryVal := sectionsObj.Get(strconv.Itoa(i))
 			sectionEntryObj := sectionEntryVal.ToObject(e.vm)
 			if sectionEntryObj == nil {
 				continue
@@ -343,7 +344,7 @@ func (e *Engine) initFormats() {
 
 		// Process each section entry
 		for i := 0; i < length; i++ {
-			sectionEntryVal := sectionsObj.Get(fmt.Sprint(i))
+			sectionEntryVal := sectionsObj.Get(strconv.Itoa(i))
 			sectionEntryObj := sectionEntryVal.ToObject(e.vm)
 			if sectionEntryObj == nil {
 				continue

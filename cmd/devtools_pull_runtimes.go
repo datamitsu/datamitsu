@@ -81,7 +81,7 @@ type runtimePullResult struct {
 
 func runPullRuntimes(cmd *cobra.Command, args []string) error {
 	if !pullRuntimesUpdateFlag {
-		return fmt.Errorf("--update flag is required to fetch releases from upstream")
+		return errors.New("--update flag is required to fetch releases from upstream")
 	}
 
 	runtimeFilter := pullRuntimesRuntimeFlag
@@ -185,7 +185,7 @@ func runPullRuntimes(cmd *cobra.Command, args []string) error {
 
 	for _, r := range results {
 		if r.err != nil {
-			return fmt.Errorf("some runtimes failed to update")
+			return errors.New("some runtimes failed to update")
 		}
 	}
 
@@ -216,16 +216,16 @@ func runtimeVersion(r *RuntimeJSON) string {
 	}
 	var parts []string
 	if r.UV != nil {
-		parts = append(parts, fmt.Sprintf("python=%s", r.UV.PythonVersion))
+		parts = append(parts, "python="+r.UV.PythonVersion)
 	}
 	if r.JVM != nil {
-		parts = append(parts, fmt.Sprintf("java=%s", r.JVM.JavaVersion))
+		parts = append(parts, "java="+r.JVM.JavaVersion)
 	}
 	if r.Node != nil {
 		parts = append(parts, fmt.Sprintf("node=%s,pnpm=%s", r.Node.NodeVersion, r.Node.PNPMVersion))
 	}
 	if r.Go != nil {
-		parts = append(parts, fmt.Sprintf("go=%s", r.Go.GoVersion))
+		parts = append(parts, "go="+r.Go.GoVersion)
 	}
 	if r.Managed != nil {
 		binCount := 0
@@ -416,7 +416,7 @@ type npmVersionMetaForPull struct {
 // fetchPNPMTarballHash downloads the PNPM tarball for the given version and
 // computes its SHA-256 hash without writing to permanent storage.
 func fetchPNPMTarballHash(version string) (string, error) {
-	metaURL := fmt.Sprintf("https://registry.npmjs.org/pnpm/%s", version)
+	metaURL := "https://registry.npmjs.org/pnpm/" + version
 	resp, err := pnpmHTTPClient.Get(metaURL)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch PNPM metadata: %w", err)
@@ -665,7 +665,7 @@ func detectJVMBinaries(release *github.Release) (binmanager.MapOfBinaries, error
 	}
 
 	if successCount == 0 {
-		return nil, fmt.Errorf("no JDK binaries were detected")
+		return nil, errors.New("no JDK binaries were detected")
 	}
 
 	if deduplicatedCount > 0 {

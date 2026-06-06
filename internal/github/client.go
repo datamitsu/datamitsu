@@ -205,7 +205,7 @@ type NotFoundError struct {
 }
 
 func (e *NotFoundError) Error() string {
-	return fmt.Sprintf("release not found: %s", e.URL)
+	return "release not found: " + e.URL
 }
 
 // RateLimitError is returned when rate limit is exceeded

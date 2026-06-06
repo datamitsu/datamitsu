@@ -1,6 +1,7 @@
 package detector
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -15,12 +16,12 @@ import (
 // Ties are broken alphabetically by asset name for determinism.
 func DetectBinary(assets []github.Asset, osType syslist.OsType, archType syslist.ArchType, libcType string) (*github.Asset, error) {
 	if len(assets) == 0 {
-		return nil, fmt.Errorf("no assets available")
+		return nil, errors.New("no assets available")
 	}
 
 	validAssets := filterValidAssets(assets)
 	if len(validAssets) == 0 {
-		return nil, fmt.Errorf("no valid assets found (all were checksum or non-executable package files)")
+		return nil, errors.New("no valid assets found (all were checksum or non-executable package files)")
 	}
 
 	best := selectBestAsset(validAssets, osType, archType, libcType)

@@ -2,6 +2,7 @@ package registry
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -41,7 +42,7 @@ func getLatestPythonStableVersionFromURL(url string) (string, error) {
 
 	version := filterLatestStablePython(releases)
 	if version == "" {
-		return pythonFallbackStableVersion, fmt.Errorf("no stable version found in Python releases")
+		return pythonFallbackStableVersion, errors.New("no stable version found in Python releases")
 	}
 
 	return version, nil

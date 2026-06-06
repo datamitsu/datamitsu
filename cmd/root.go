@@ -25,7 +25,7 @@ var (
 
 var rootCmd = &cobra.Command{
 	Use:           ldflags.PackageName,
-	Short:         fmt.Sprintf("%s - configuration management tool", ldflags.PackageName),
+	Short:         ldflags.PackageName + " - configuration management tool",
 	Long:          "A tool for managing configuration and binaries\n\n" + sponsor.StaticLine(),
 	SilenceUsage:  true,
 	SilenceErrors: true,

@@ -75,12 +75,12 @@ func runAppsList(cmd *cobra.Command, args []string) error {
 
 		line := fmt.Sprintf("%s (%s)", info.Name, info.Type)
 		if info.Version != "" {
-			line += fmt.Sprintf(" %s", info.Version)
+			line += " " + info.Version
 		}
 		if info.Description != "" {
-			line += fmt.Sprintf(" - %s", info.Description)
+			line += " - " + info.Description
 		}
-		line += fmt.Sprintf(" - %s", status)
+		line += " - " + status
 
 		fmt.Println(line)
 	}

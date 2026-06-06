@@ -2,6 +2,7 @@ package binmanager
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 )
@@ -29,7 +30,7 @@ func VerifyBinaryExtraction(
 	}
 
 	if hash == "" {
-		return fmt.Errorf("hash is empty: verification requires a non-empty hash")
+		return errors.New("hash is empty: verification requires a non-empty hash")
 	}
 	if err := verifyFileHash(downloadedPath, hash, hashType); err != nil {
 		return fmt.Errorf("hash verification failed: %w", err)
@@ -46,7 +47,7 @@ func VerifyBinaryExtraction(
 	}
 
 	if info.Size() == 0 {
-		return fmt.Errorf("extracted file is empty")
+		return errors.New("extracted file is empty")
 	}
 
 	return nil

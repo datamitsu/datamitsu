@@ -2,6 +2,7 @@ package timing
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -149,9 +150,11 @@ func (c *ChildTimings) End() {
 // printStage recursively prints a stage and its children
 func printStage(stage Stage, indent int) {
 	prefix := ""
+	var prefixSb152 strings.Builder
 	for i := 0; i < indent; i++ {
-		prefix += "  "
+		prefixSb152.WriteString("  ")
 	}
+	prefix += prefixSb152.String()
 
 	// Format the stage name and duration
 	fmt.Printf("%s%s: %s\n", prefix, stage.Name, formatDuration(stage.Duration))

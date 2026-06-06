@@ -2,6 +2,7 @@ package cache
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -201,7 +202,7 @@ func (c *Cache) Save() error {
 	c.mu.RLock()
 	if c.data == nil {
 		c.mu.RUnlock()
-		return fmt.Errorf("cache data is nil")
+		return errors.New("cache data is nil")
 	}
 
 	// Ensure directory exists
@@ -357,7 +358,7 @@ func (c *Cache) AfterFix(file, tool string, toolCacheEnabled bool) error {
 	defer c.mu.Unlock()
 
 	if c.data == nil {
-		return fmt.Errorf("cache data is nil")
+		return errors.New("cache data is nil")
 	}
 
 	relPath, err := filepath.Rel(c.projectPath, file)
@@ -407,7 +408,7 @@ func (c *Cache) markPassed(file, tool string, op Operation) error {
 	defer c.mu.Unlock()
 
 	if c.data == nil {
-		return fmt.Errorf("cache data is nil")
+		return errors.New("cache data is nil")
 	}
 
 	relPath, err := filepath.Rel(c.projectPath, file)

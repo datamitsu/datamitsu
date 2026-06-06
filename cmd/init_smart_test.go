@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"fmt"
+	"errors"
 	"sort"
 	"testing"
 
@@ -332,7 +332,7 @@ func TestInstallSmartInitApps(t *testing.T) {
 	})
 
 	t.Run("returns error on install failure", func(t *testing.T) {
-		mock := &mockCommandInfoGetter{err: fmt.Errorf("install failed")}
+		mock := &mockCommandInfoGetter{err: errors.New("install failed")}
 
 		err := installSmartInitApps(mock, []string{"broken-app"})
 		if err == nil {

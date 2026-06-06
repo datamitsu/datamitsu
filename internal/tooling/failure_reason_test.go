@@ -2,7 +2,7 @@ package tooling
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,7 +15,7 @@ import (
 
 func TestFailureReasonIndependent_GetCommandInfoError(t *testing.T) {
 	appManager := &mockAppManager{
-		err: fmt.Errorf("binary not found"),
+		err: errors.New("binary not found"),
 	}
 	executor := NewExecutor("/root", false, false, appManager, nil)
 

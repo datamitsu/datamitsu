@@ -674,7 +674,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 
 		if e.dryRun {
 			log.Debug("dry-run mode", zap.String("file", file), zap.Strings("args", args))
-			outputs = append(outputs, fmt.Sprintf("[DRY-RUN] %s", cmdString))
+			outputs = append(outputs, "[DRY-RUN] "+cmdString)
 			processedFiles = append(processedFiles, file)
 
 			// Call progress callback for dry-run files (offset by cached count)
@@ -857,7 +857,7 @@ func (e *Executor) executeBatchChunk(ctx context.Context, task Task, cmdInfo *bi
 
 	if e.dryRun {
 		log.Debug("dry-run mode", zap.Strings("args", args))
-		result.Output = fmt.Sprintf("[DRY-RUN] %s", cmdString)
+		result.Output = "[DRY-RUN] " + cmdString
 		result.Duration = time.Since(startTime).Milliseconds()
 		return result
 	}

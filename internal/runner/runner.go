@@ -2,12 +2,14 @@ package runner
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -367,7 +369,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		if env.IsCI() {
 			dirInfo := ""
 			if relativeDir != "" {
-				dirInfo = fmt.Sprintf(" in %s", relativeDir)
+				dirInfo = " in " + relativeDir
 			}
 			fmt.Printf("⏳ Starting %s%s\n", toolName, dirInfo)
 		}
@@ -490,7 +492,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	}
 
 	if hasFailures {
-		return fmt.Errorf("operation failed")
+		return errors.New("operation failed")
 	}
 
 	fmt.Println()
@@ -563,7 +565,7 @@ func formatToolWithDir(toolName, relativeDir string) string {
 	if relativeDir != "" {
 		return fmt.Sprintf("⏳ %s (%s)", toolName, relativeDir)
 	}
-	return fmt.Sprintf("⏳ %s", toolName)
+	return "⏳ " + toolName
 }
 
 // activeToolDir returns any active directory for a tool (for progress display).
@@ -662,7 +664,7 @@ func printGroupedResults(toolGroups []toolExecutionGroup) {
 		// Print tool summary line with scope and min/max
 		scopeInfo := ""
 		if group.scope != "" {
-			scopeInfo = fmt.Sprintf(" %s", clr.Faint("["+string(group.scope)+"]"))
+			scopeInfo = " " + clr.Faint("["+string(group.scope)+"]")
 		}
 		toolDisplay := clr.Bold(group.toolName)
 		if group.failedRuns > 0 {
@@ -719,9 +721,9 @@ func printFailedExecution(runNum int, exec executionInstance) {
 	result := exec.result
 
 	// Build header with tool name and scope
-	header := fmt.Sprintf("─ %s", clr.Red(result.ToolName))
+	header := "─ " + clr.Red(result.ToolName)
 	if result.Scope != "" {
-		header += fmt.Sprintf(" %s", clr.Faint("["+string(result.Scope)+"]"))
+		header += " " + clr.Faint("["+string(result.Scope)+"]")
 	}
 	header += fmt.Sprintf(" (run #%d) ", runNum)
 
@@ -744,7 +746,7 @@ func printFailedExecution(runNum int, exec executionInstance) {
 	}
 
 	// Exit info
-	fmt.Printf("  %s  %s %s\n", border("│"), label("Exit code:"), clr.Red(fmt.Sprintf("%d", result.ExitCode)))
+	fmt.Printf("  %s  %s %s\n", border("│"), label("Exit code:"), clr.Red(strconv.Itoa(result.ExitCode)))
 	fmt.Printf("  %s  %s %s\n", border("│"), label("Duration: "), formatDuration(result.Duration))
 
 	// Tool output

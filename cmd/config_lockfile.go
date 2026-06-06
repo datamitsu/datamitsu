@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -305,7 +306,7 @@ func readLockFile(installPath string, app binmanager.App) (string, error) {
 	} else if app.Uv != nil {
 		lockFilePath = filepath.Join(installPath, "uv.lock")
 	} else {
-		return "", fmt.Errorf("unsupported app type for lock file generation")
+		return "", errors.New("unsupported app type for lock file generation")
 	}
 
 	fmt.Fprintf(os.Stderr, "Lock file: %s\n", lockFilePath)

@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -1527,7 +1528,7 @@ func TestRunSequentialConfigLoadError(t *testing.T) {
 		[]config.OperationType{config.OpFix},
 		nil, "", false, "",
 		func() (*config.Config, string, error) {
-			return nil, "", fmt.Errorf("config load failed")
+			return nil, "", errors.New("config load failed")
 		},
 	)
 	if err == nil {
@@ -1580,7 +1581,7 @@ func TestRunDelegatesToRunSequential(t *testing.T) {
 		config.OpFix,
 		nil, "", false, "",
 		func() (*config.Config, string, error) {
-			return nil, "", fmt.Errorf("test error from Run")
+			return nil, "", errors.New("test error from Run")
 		},
 	)
 	if err == nil {
@@ -1719,7 +1720,7 @@ func TestRunSingleOperationEnsureToolsFailureAbortsExecute(t *testing.T) {
 	_ = os.Setenv("CI", "true")
 
 	var order []string
-	ensurer := &fakeEnsurer{order: &order, err: fmt.Errorf("download boom")}
+	ensurer := &fakeEnsurer{order: &order, err: errors.New("download boom")}
 	executor := &fakeExecutor{order: &order}
 	sc := &sharedContext{
 		planner:  &fakePlanner{plan: planWithTools("yq")},

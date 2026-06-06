@@ -2,6 +2,7 @@ package runtimemanager
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -376,10 +377,10 @@ func (rm *RuntimeManager) GetAppPath(appName string, kind config.RuntimeKind, ve
 	if kind == config.RuntimeKindNode && len(nodeExtra) > 0 {
 		extra := nodeExtra[0]
 		if extra.PackageName == "" {
-			return "", fmt.Errorf("NodeAppPathExtra.PackageName is required for npm-based apps")
+			return "", errors.New("NodeAppPathExtra.PackageName is required for npm-based apps")
 		}
 		if extra.BinPath == "" {
-			return "", fmt.Errorf("NodeAppPathExtra.BinPath is required for npm-based apps")
+			return "", errors.New("NodeAppPathExtra.BinPath is required for npm-based apps")
 		}
 		filesHash := binmanager.HashFilesAndArchives(files, archives)
 		appHash = calculateNodeAppHash(appName, extra.PackageName, version, extra.BinPath, deps, runtimeHash, lockHash, filesHash)
