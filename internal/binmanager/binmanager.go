@@ -975,8 +975,8 @@ func (bm *BinManager) Exec(appName string, args []string) error {
 // mergeExecEnv merges base environment variables with app-specific overrides.
 // Uses a map index for O(1) key lookups instead of O(n) linear scans.
 func mergeExecEnv(base []string, appEnv map[string]string) []string {
-	env := make([]string, len(base))
-	copy(env, base)
+	env := make([]string, 0, len(base)+len(appEnv))
+	env = append(env, base...)
 
 	keyToIdx := make(map[string]int, len(env))
 	for i, e := range env {

@@ -501,8 +501,12 @@ func (e *Executor) buildCommand(ctx context.Context, cmdInfo *binmanager.Command
 // mergeEnvLayers merges environment variable layers with later layers overriding earlier ones.
 // Order: base (OS env) -> layers[0] (app env) -> layers[1] (tool operation env) -> ...
 func mergeEnvLayers(base []string, layers ...map[string]string) []string {
-	env := make([]string, len(base))
-	copy(env, base)
+	extra := 0
+	for _, layer := range layers {
+		extra += len(layer)
+	}
+	env := make([]string, 0, len(base)+extra)
+	env = append(env, base...)
 
 	keyToIdx := make(map[string]int, len(env))
 	for i, e := range env {

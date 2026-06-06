@@ -278,8 +278,8 @@ func mergeInstallEnv(reserved, custom map[string]string, appDir string) map[stri
 }
 
 func buildEnvWithOverrides(base []string, overrides map[string]string) []string {
-	env := make([]string, len(base))
-	copy(env, base)
+	env := make([]string, 0, len(base)+len(overrides))
+	env = append(env, base...)
 
 	keyToIdx := make(map[string]int, len(env))
 	for i, e := range env {
