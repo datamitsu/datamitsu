@@ -108,7 +108,7 @@ type ConfigInit struct {
 	DeleteOnly        bool     `json:"deleteOnly,omitempty"`
 	LinkTarget        string   `json:"linkTarget,omitempty"`
 	// Content function will be called from JavaScript
-	Content interface{} `json:"-"`
+	Content any `json:"-"`
 }
 
 type MapOfConfigInit map[string]ConfigInit

@@ -54,8 +54,8 @@ func ParseIgnoreFile(content string) ParseIgnoreResult {
 			continue
 		}
 
-		if strings.HasPrefix(trimmed, "#") {
-			groupName := strings.TrimSpace(strings.TrimPrefix(trimmed, "#"))
+		if after, ok := strings.CutPrefix(trimmed, "#"); ok {
+			groupName := strings.TrimSpace(after)
 			if groupName != "" {
 				currentGroup = groupName
 				groupJustSet = true
@@ -190,7 +190,7 @@ func RegisterIgnoreToolsInVM(vm *goja.Runtime) error {
 			exported := val.Export()
 
 			switch v := exported.(type) {
-			case []interface{}:
+			case []any:
 				strArr := make([]string, len(v))
 				for i, item := range v {
 					strArr[i] = fmt.Sprint(item)
@@ -227,7 +227,7 @@ func RegisterIgnoreToolsInVM(vm *goja.Runtime) error {
 			orderExported := orderArg.Export()
 
 			switch v := orderExported.(type) {
-			case []interface{}:
+			case []any:
 				groupOrder = make([]string, len(v))
 				for i, item := range v {
 					groupOrder[i] = fmt.Sprint(item)

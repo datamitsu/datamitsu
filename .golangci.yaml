@@ -40,7 +40,7 @@ linters:
     # - noctx
     - intrange
     # - makezero
-    # - modernize
+    - modernize
     # - gochecknoinits
     - gocritic
     # - gocyclo

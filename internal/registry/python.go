@@ -12,9 +12,9 @@ import (
 const pythonFallbackStableVersion = "3.14.3"
 
 type pythonRelease struct {
-	Cycle  string      `json:"cycle"`
-	Latest string      `json:"latest"`
-	EOL    interface{} `json:"eol"`
+	Cycle  string `json:"cycle"`
+	Latest string `json:"latest"`
+	EOL    any    `json:"eol"`
 }
 
 var pythonHTTPClient = &http.Client{Timeout: 15 * time.Second}

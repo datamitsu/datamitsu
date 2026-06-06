@@ -1,7 +1,7 @@
 package config
 
 import (
-	"sort"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -134,9 +134,9 @@ func TestRuntimeKindValidate(t *testing.T) {
 
 func TestAllRuntimeKinds(t *testing.T) {
 	got := AllRuntimeKinds()
-	sort.Slice(got, func(i, j int) bool { return got[i] < got[j] })
+	slices.Sort(got)
 	want := []RuntimeKind{RuntimeKindGo, RuntimeKindJVM, RuntimeKindNode, RuntimeKindUV}
-	sort.Slice(want, func(i, j int) bool { return want[i] < want[j] })
+	slices.Sort(want)
 	if len(got) != len(want) {
 		t.Fatalf("AllRuntimeKinds() = %v, want %v", got, want)
 	}

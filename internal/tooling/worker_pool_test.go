@@ -17,7 +17,7 @@ func TestWorkerPoolLimiting(t *testing.T) {
 	defer func() { _ = os.Unsetenv("DATAMITSU_MAX_PARALLEL_WORKERS") }()
 
 	// Track concurrent execution
-	var concurrentCount int32
+	var concurrentCount atomic.Int32
 	var maxConcurrent int32
 	var mu sync.Mutex
 
@@ -37,7 +37,7 @@ func TestWorkerPoolLimiting(t *testing.T) {
 	// Override executeTask to track concurrency
 	originalExecuteTask := func(task Task) ExecutionResult {
 		// Increment concurrent count
-		current := atomic.AddInt32(&concurrentCount, 1)
+		current := concurrentCount.Add(1)
 
 		// Update max if needed
 		mu.Lock()
@@ -50,7 +50,7 @@ func TestWorkerPoolLimiting(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 
 		// Decrement concurrent count
-		atomic.AddInt32(&concurrentCount, -1)
+		concurrentCount.Add(-1)
 
 		return ExecutionResult{
 			ToolName: task.ToolName,
@@ -119,7 +119,7 @@ func TestWorkerPoolWithDifferentSizes(t *testing.T) {
 			_ = os.Setenv("DATAMITSU_MAX_PARALLEL_WORKERS", strconv.Itoa(tt.maxWorkers))
 			defer func() { _ = os.Unsetenv("DATAMITSU_MAX_PARALLEL_WORKERS") }()
 
-			var concurrentCount int32
+			var concurrentCount atomic.Int32
 			var maxConcurrent int32
 			var mu sync.Mutex
 
@@ -136,7 +136,7 @@ func TestWorkerPoolWithDifferentSizes(t *testing.T) {
 			}
 
 			originalExecuteTask := func(task Task) ExecutionResult {
-				current := atomic.AddInt32(&concurrentCount, 1)
+				current := concurrentCount.Add(1)
 
 				mu.Lock()
 				if current > maxConcurrent {
@@ -145,7 +145,7 @@ func TestWorkerPoolWithDifferentSizes(t *testing.T) {
 				mu.Unlock()
 
 				time.Sleep(5 * time.Millisecond)
-				atomic.AddInt32(&concurrentCount, -1)
+				concurrentCount.Add(-1)
 
 				return ExecutionResult{
 					ToolName: task.ToolName,
@@ -170,10 +170,7 @@ func TestWorkerPoolWithDifferentSizes(t *testing.T) {
 
 			wg.Wait()
 
-			expectedMax := tt.maxWorkers
-			if tt.taskCount < tt.maxWorkers {
-				expectedMax = tt.taskCount
-			}
+			expectedMax := min(tt.taskCount, tt.maxWorkers)
 
 			if maxConcurrent > int32(expectedMax) {
 				t.Errorf("maxConcurrent = %d, want <= %d", maxConcurrent, expectedMax)

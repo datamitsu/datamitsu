@@ -7,9 +7,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -112,9 +114,7 @@ func runPullRuntimes(cmd *cobra.Command, args []string) error {
 	}
 
 	runtimes := make(RuntimesJSON)
-	for k, v := range existing {
-		runtimes[k] = v
-	}
+	maps.Copy(runtimes, existing)
 
 	runtimesToUpdate := validRuntimeNames
 	if runtimeFilter != "" {
@@ -202,12 +202,7 @@ func runPullRuntimes(cmd *cobra.Command, args []string) error {
 }
 
 func isValidRuntime(name string) bool {
-	for _, v := range validRuntimeNames {
-		if v == name {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(validRuntimeNames, name)
 }
 
 func runtimeVersion(r *RuntimeJSON) string {
@@ -759,7 +754,7 @@ func nodeBinaryPath(spec nodeArchiveSpec) string {
 // filename→hash map.
 func parseSHASUMS(content string) map[string]string {
 	out := make(map[string]string)
-	for _, line := range strings.Split(content, "\n") {
+	for line := range strings.SplitSeq(content, "\n") {
 		fields := strings.Fields(line)
 		if len(fields) != 2 {
 			continue

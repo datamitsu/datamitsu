@@ -602,9 +602,7 @@ func runPhase1BinaryApps(cfg *config.Config, concurrency int, showProgress bool,
 
 	var wg sync.WaitGroup
 	for range concurrency {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for item := range jobCh {
 				j := item.job
 				err := verifyBinaryOrDir(j.info)
@@ -625,7 +623,7 @@ func runPhase1BinaryApps(cfg *config.Config, concurrency int, showProgress bool,
 					result binaryVerifyResult
 				}{idx: item.idx, result: r}
 			}
-		}()
+		})
 	}
 
 	for i, j := range jobsToRun {
@@ -801,9 +799,7 @@ func runPhase2ManagedRuntimes(cfg *config.Config, concurrency int, showProgress 
 
 	var wg sync.WaitGroup
 	for range concurrency {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for item := range jobCh {
 				j := item.job
 				err := verifyBinaryOrDir(j.info)
@@ -823,7 +819,7 @@ func runPhase2ManagedRuntimes(cfg *config.Config, concurrency int, showProgress 
 					result runtimeVerifyResult
 				}{idx: item.idx, result: r}
 			}
-		}()
+		})
 	}
 
 	for i, j := range jobsToRun {

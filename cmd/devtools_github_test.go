@@ -35,7 +35,7 @@ func TestPullGitHubCommand_FileDoesNotExist(t *testing.T) {
 	}
 
 	// Should be a valid appstate structure
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	if err := json.Unmarshal(data, &parsed); err != nil {
 		t.Fatalf("created file is not valid JSON: %v", err)
 	}

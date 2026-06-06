@@ -20,13 +20,7 @@ func (e envVar) String() string {
 }
 
 func getDefaultMaxWorkers() string {
-	n := runtime.NumCPU() * 3 / 4
-	if n < 4 {
-		n = 4
-	}
-	if n > 16 {
-		n = 16
-	}
+	n := min(max(runtime.NumCPU()*3/4, 4), 16)
 	return strconv.Itoa(n)
 }
 

@@ -14,10 +14,10 @@ import (
 // convertMapSliceToMap recursively converts yaml.MapSlice to map[string]interface{}
 // This is used for TOML encoding, which doesn't preserve order from maps,
 // but we convert it anyway and then encode field by field to maintain order
-func convertMapSliceToMap(val interface{}) interface{} {
+func convertMapSliceToMap(val any) any {
 	switch v := val.(type) {
 	case yaml.MapSlice:
-		result := make(map[string]interface{})
+		result := make(map[string]any)
 		for _, item := range v {
 			key, ok := item.Key.(string)
 			if !ok {
@@ -26,8 +26,8 @@ func convertMapSliceToMap(val interface{}) interface{} {
 			result[key] = convertMapSliceToMap(item.Value)
 		}
 		return result
-	case []interface{}:
-		result := make([]interface{}, len(v))
+	case []any:
+		result := make([]any, len(v))
 		for i, item := range v {
 			result[i] = convertMapSliceToMap(item)
 		}
@@ -53,14 +53,14 @@ func tomlStringifyOrdered(slice yaml.MapSlice) (string, error) {
 		value := convertMapSliceToMap(item.Value)
 
 		// Check if this is a table (map) or a primitive value
-		if _, isMap := value.(map[string]interface{}); isMap {
+		if _, isMap := value.(map[string]any); isMap {
 			// Defer tables to second pass
 			tables = append(tables, item)
 			continue
 		}
 
 		// Encode primitive value
-		singleItem := map[string]interface{}{key: value}
+		singleItem := map[string]any{key: value}
 		itemBytes, err := toml.Marshal(singleItem)
 		if err != nil {
 			return "", fmt.Errorf("failed to marshal TOML item %s: %w", key, err)
@@ -74,7 +74,7 @@ func tomlStringifyOrdered(slice yaml.MapSlice) (string, error) {
 		key := item.Key.(string)
 		value := convertMapSliceToMap(item.Value)
 
-		singleItem := map[string]interface{}{key: value}
+		singleItem := map[string]any{key: value}
 		itemBytes, err := toml.Marshal(singleItem)
 		if err != nil {
 			return "", fmt.Errorf("failed to marshal TOML table %s: %w", key, err)
@@ -88,11 +88,11 @@ func tomlStringifyOrdered(slice yaml.MapSlice) (string, error) {
 
 // convertGojaValueToOrderedStructure converts a goja.Value to Go structures while preserving key order
 // Uses yaml.MapSlice for objects to maintain insertion order
-func (e *Engine) convertGojaValueToOrderedStructure(val goja.Value) interface{} {
+func (e *Engine) convertGojaValueToOrderedStructure(val goja.Value) any {
 	return e.convertGojaValueToOrderedStructureWithVisited(val, make(map[*goja.Object]bool))
 }
 
-func (e *Engine) convertGojaValueToOrderedStructureWithVisited(val goja.Value, visited map[*goja.Object]bool) interface{} {
+func (e *Engine) convertGojaValueToOrderedStructureWithVisited(val goja.Value, visited map[*goja.Object]bool) any {
 	if goja.IsNull(val) || goja.IsUndefined(val) {
 		return nil
 	}
@@ -124,7 +124,7 @@ func (e *Engine) convertGojaValueToOrderedStructureWithVisited(val goja.Value, v
 		lengthVal := obj.Get("length")
 		if lengthVal != nil && !goja.IsUndefined(lengthVal) && !goja.IsNull(lengthVal) {
 			length := int(lengthVal.ToInteger())
-			result := make([]interface{}, length)
+			result := make([]any, length)
 			for i := range length {
 				itemVal := obj.Get(strconv.Itoa(i))
 				result[i] = e.convertGojaValueToOrderedStructureWithVisited(itemVal, visited)
@@ -148,14 +148,14 @@ func (e *Engine) convertGojaValueToOrderedStructureWithVisited(val goja.Value, v
 
 func (e *Engine) initFormats() {
 	// YAML
-	_ = e.vm.Set("YAML", map[string]interface{}{
+	_ = e.vm.Set("YAML", map[string]any{
 		"parse": func(call goja.FunctionCall) goja.Value {
 			if len(call.Arguments) == 0 {
 				panic(e.vm.NewTypeError("YAML.parse requires at least 1 argument"))
 			}
 
 			yamlStr := call.Argument(0).String()
-			var result interface{}
+			var result any
 
 			if err := yaml.Unmarshal([]byte(yamlStr), &result); err != nil {
 				panic(e.vm.NewGoError(fmt.Errorf("YAML.parse error: %w", err)))
@@ -180,14 +180,14 @@ func (e *Engine) initFormats() {
 	})
 
 	// TOML
-	_ = e.vm.Set("TOML", map[string]interface{}{
+	_ = e.vm.Set("TOML", map[string]any{
 		"parse": func(call goja.FunctionCall) goja.Value {
 			if len(call.Arguments) == 0 {
 				panic(e.vm.NewTypeError("TOML.parse requires at least 1 argument"))
 			}
 
 			tomlStr := call.Argument(0).String()
-			var result interface{}
+			var result any
 
 			if err := toml.Unmarshal([]byte(tomlStr), &result); err != nil {
 				panic(e.vm.NewGoError(fmt.Errorf("TOML.parse error: %w", err)))
@@ -242,7 +242,7 @@ func (e *Engine) initFormats() {
 		}
 
 		// Convert INI to array of section entries preserving order
-		sections := make([]interface{}, 0)
+		sections := make([]any, 0)
 		for _, section := range cfg.Sections() {
 			sectionObj := e.vm.NewObject()
 			propsObj := e.vm.NewObject()

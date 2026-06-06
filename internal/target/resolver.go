@@ -8,7 +8,7 @@ import (
 // Candidate pairs a Target with arbitrary binary info for resolution.
 type Candidate struct {
 	Target Target
-	Info   interface{}
+	Info   any
 }
 
 // Resolver selects the best candidate for a host target using scoring.
@@ -28,7 +28,7 @@ func (r *Resolver) Host() Target {
 
 // Resolve selects the best candidate for the given app name.
 // Returns nil ResolvedTarget and nil info if no candidates match OS+Arch.
-func (r *Resolver) Resolve(name string, candidates []Candidate) (*ResolvedTarget, interface{}) {
+func (r *Resolver) Resolve(name string, candidates []Candidate) (*ResolvedTarget, any) {
 	if len(candidates) == 0 {
 		return nil, nil
 	}

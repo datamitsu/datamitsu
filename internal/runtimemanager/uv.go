@@ -3,6 +3,7 @@ package runtimemanager
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -272,9 +273,7 @@ func mergeInstallEnv(reserved, custom map[string]string, appDir string) map[stri
 	for k, v := range custom {
 		merged[k] = env.ExpandPlaceholders(v, appDir)
 	}
-	for k, v := range reserved {
-		merged[k] = v
-	}
+	maps.Copy(merged, reserved)
 	return merged
 }
 

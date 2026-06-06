@@ -365,8 +365,8 @@ func TestWalkSkipsSymlinks(t *testing.T) {
 
 	for _, file := range files {
 		rel, _ := filepath.Rel(tmpDir, file)
-		parts := strings.Split(filepath.ToSlash(rel), "/")
-		for _, p := range parts {
+		parts := strings.SplitSeq(filepath.ToSlash(rel), "/")
+		for p := range parts {
 			if p == "linkdir" {
 				t.Errorf("files under symlinked directory should be skipped: %s", file)
 			}

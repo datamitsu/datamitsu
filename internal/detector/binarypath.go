@@ -148,8 +148,8 @@ func findCommonPattern(paths []string, appName string, newFilename string) *stri
 // extractVersionFromPath extracts version string from a path
 // Returns both the version and the part it was found in
 func extractVersionFromPath(path string) (string, string) {
-	parts := strings.Split(path, "/")
-	for _, part := range parts {
+	parts := strings.SplitSeq(path, "/")
+	for part := range parts {
 		if version := extractVersionFromString(part); version != "" {
 			return version, part
 		}

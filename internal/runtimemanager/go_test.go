@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -323,13 +324,7 @@ func TestBuildGoBuildArgs(t *testing.T) {
 
 	// -mod=readonly must always be present so a stale/tampered go.sum fails
 	// the build rather than being silently rewritten.
-	found := false
-	for _, a := range args {
-		if a == "-mod=readonly" {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(args, "-mod=readonly")
 	if !found {
 		t.Error("-mod=readonly must be present in go build args (supply chain hardening)")
 	}
@@ -406,11 +401,11 @@ func TestInstallGoApp_RetriesAfterError(t *testing.T) {
 	// function. Counting executions proves the failed install is actually
 	// retried rather than returning a stale cached result — two identical
 	// errors alone would not distinguish a re-run from a cached error.
-	var calls int32
+	var calls atomic.Int32
 	sentinel := errors.New("install failed")
 	run := func() error {
 		_, err, _ := rm.appInstall.Do("go/retry", func() (any, error) {
-			atomic.AddInt32(&calls, 1)
+			calls.Add(1)
 			return nil, sentinel
 		})
 		return err
@@ -422,7 +417,7 @@ func TestInstallGoApp_RetriesAfterError(t *testing.T) {
 	if err := run(); !errors.Is(err, sentinel) {
 		t.Fatalf("retry: expected sentinel error, got %v", err)
 	}
-	if got := atomic.LoadInt32(&calls); got != 2 {
+	if got := calls.Load(); got != 2 {
 		t.Errorf("expected function to run twice (retry after error), ran %d time(s)", got)
 	}
 }
@@ -468,7 +463,7 @@ func TestInstallGoApp_ConcurrentSameKeyNoRace(t *testing.T) {
 func TestSingleflightDeduplicatesConcurrentInstalls(t *testing.T) {
 	rm := New(makeTestGoRuntimes())
 
-	var calls int32
+	var calls atomic.Int32
 	start := make(chan struct{})
 	sentinel := errors.New("install failed")
 
@@ -481,7 +476,7 @@ func TestSingleflightDeduplicatesConcurrentInstalls(t *testing.T) {
 			defer wg.Done()
 			<-start
 			_, err, _ := rm.appInstall.Do("go/concurrent", func() (any, error) {
-				atomic.AddInt32(&calls, 1)
+				calls.Add(1)
 				// Hold the call in flight so the other goroutines coalesce onto it.
 				time.Sleep(50 * time.Millisecond)
 				return nil, sentinel
@@ -492,7 +487,7 @@ func TestSingleflightDeduplicatesConcurrentInstalls(t *testing.T) {
 	close(start)
 	wg.Wait()
 
-	if got := atomic.LoadInt32(&calls); got != 1 {
+	if got := calls.Load(); got != 1 {
 		t.Errorf("expected exactly 1 execution for the shared key, got %d", got)
 	}
 	for i, err := range results {

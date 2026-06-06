@@ -24,9 +24,6 @@ import (
 	"github.com/ulikunitz/xz"
 )
 
-// nodeStrPtr returns a pointer to s (BinaryOsArchInfo.BinaryPath is *string).
-func nodeStrPtr(s string) *string { return &s }
-
 // the archive's single top-level directory; binaryPath into it resolves node.
 const (
 	nodeArchiveTopDir     = "node-v26.2.0-linux-x64"
@@ -90,7 +87,7 @@ func nodeRuntimeWith(t *testing.T, url, hash string, libcKeys ...string) config.
 			URL:         url,
 			Hash:        hash,
 			ContentType: binmanager.BinContentTypeTarXz,
-			BinaryPath:  nodeStrPtr(nodeArchiveBinaryPath),
+			BinaryPath:  new(nodeArchiveBinaryPath),
 			ExtractDir:  true,
 		}
 	}
@@ -401,11 +398,11 @@ func TestInstallNode_CacheHitNoRefetch(t *testing.T) {
 func TestNodeLibcSelection(t *testing.T) {
 	musl := binmanager.BinaryOsArchInfo{
 		URL: "https://unofficial-builds.nodejs.org/node-musl.tar.xz", Hash: "musl",
-		ContentType: binmanager.BinContentTypeTarXz, BinaryPath: nodeStrPtr(nodeArchiveBinaryPath), ExtractDir: true,
+		ContentType: binmanager.BinContentTypeTarXz, BinaryPath: new(nodeArchiveBinaryPath), ExtractDir: true,
 	}
 	glibc := binmanager.BinaryOsArchInfo{
 		URL: "https://nodejs.org/dist/node.tar.xz", Hash: "glibc",
-		ContentType: binmanager.BinContentTypeTarXz, BinaryPath: nodeStrPtr(nodeArchiveBinaryPath), ExtractDir: true,
+		ContentType: binmanager.BinContentTypeTarXz, BinaryPath: new(nodeArchiveBinaryPath), ExtractDir: true,
 	}
 
 	t.Run("musl host selects musl entry", func(t *testing.T) {
@@ -512,7 +509,7 @@ func TestGetNodeCommandInfo_MissingNodeConfig(t *testing.T) {
 							URL:         "https://example.com/node.tar.xz",
 							Hash:        "abc",
 							ContentType: binmanager.BinContentTypeTarXz,
-							BinaryPath:  nodeStrPtr(nodeArchiveBinaryPath),
+							BinaryPath:  new(nodeArchiveBinaryPath),
 							ExtractDir:  true,
 						}},
 					},
@@ -549,7 +546,7 @@ func TestInstallNodeApp_AlreadyInstalled(t *testing.T) {
 							URL:         "https://example.com/node.tar.xz",
 							Hash:        "abc",
 							ContentType: binmanager.BinContentTypeTarXz,
-							BinaryPath:  nodeStrPtr(nodeArchiveBinaryPath),
+							BinaryPath:  new(nodeArchiveBinaryPath),
 							ExtractDir:  true,
 						}},
 					},
@@ -614,7 +611,7 @@ func nodeReinstallRuntimes(t *testing.T, url, hash string) config.MapOfRuntimes 
 							URL:         url,
 							Hash:        hash,
 							ContentType: binmanager.BinContentTypeTarXz,
-							BinaryPath:  nodeStrPtr(nodeArchiveBinaryPath),
+							BinaryPath:  new(nodeArchiveBinaryPath),
 							ExtractDir:  true,
 						}},
 					},
@@ -661,9 +658,9 @@ func TestInstallNodeApp_RemoveAllFailureAborts(t *testing.T) {
 	defer func() { _ = os.RemoveAll(appEnvPath) }()
 
 	sentinel := errors.New("injected removeAll failure")
-	var calls int32
+	var calls atomic.Int32
 	rm.removeAllFunc = func(string) error {
-		atomic.AddInt32(&calls, 1)
+		calls.Add(1)
 		return sentinel
 	}
 
@@ -674,7 +671,7 @@ func TestInstallNodeApp_RemoveAllFailureAborts(t *testing.T) {
 	if !errors.Is(err, sentinel) {
 		t.Errorf("error %v should wrap the injected removal failure", err)
 	}
-	if got := atomic.LoadInt32(&calls); got != 1 {
+	if got := calls.Load(); got != 1 {
 		t.Errorf("removeAll called %d times, want 1", got)
 	}
 	// Aborted before reinstalling: no network/runtime work happened past the
@@ -713,9 +710,9 @@ func TestInstallNodeApp_RemoveAllSuccessProceeds(t *testing.T) {
 	appBinPath := seedStaleNodeApp(t, appEnvPath, appConfig.BinPath)
 	defer func() { _ = os.RemoveAll(appEnvPath) }()
 
-	var calls int32
+	var calls atomic.Int32
 	rm.removeAllFunc = func(p string) error {
-		atomic.AddInt32(&calls, 1)
+		calls.Add(1)
 		return os.RemoveAll(p)
 	}
 
@@ -729,7 +726,7 @@ func TestInstallNodeApp_RemoveAllSuccessProceeds(t *testing.T) {
 	if !strings.Contains(err.Error(), "node runtime") {
 		t.Errorf("expected the post-removal error to come from the node runtime download, got: %v", err)
 	}
-	if got := atomic.LoadInt32(&calls); got != 1 {
+	if got := calls.Load(); got != 1 {
 		t.Errorf("removeAll called %d times, want 1", got)
 	}
 	// Removal succeeded and the failed reinstall never recreated the tree.
@@ -793,10 +790,10 @@ func TestGetCommandInfoNode_MergesWorkspaceOnceOnCacheHit(t *testing.T) {
 	defer func() { _ = os.RemoveAll(appEnvPath) }()
 
 	// Count merge invocations across the whole GetCommandInfo exec.
-	var merges int32
+	var merges atomic.Int32
 	orig := buildPNPMWorkspace
 	buildPNPMWorkspace = func(files map[string]string) (string, error) {
-		atomic.AddInt32(&merges, 1)
+		merges.Add(1)
 		return orig(files)
 	}
 	defer func() { buildPNPMWorkspace = orig }()
@@ -804,7 +801,7 @@ func TestGetCommandInfoNode_MergesWorkspaceOnceOnCacheHit(t *testing.T) {
 	if _, err := rm.GetCommandInfo("eslint", app); err != nil {
 		t.Fatalf("GetCommandInfo() error = %v", err)
 	}
-	if got := atomic.LoadInt32(&merges); got != 1 {
+	if got := merges.Load(); got != 1 {
 		t.Errorf("pnpm-workspace.yaml merge ran %d times per GetCommandInfo, want 1", got)
 	}
 }

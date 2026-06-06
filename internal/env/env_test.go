@@ -246,13 +246,7 @@ func TestGetDefaultMaxWorkers(t *testing.T) {
 		t.Errorf("getDefaultMaxWorkers() = %d, want <= 16", n)
 	}
 
-	expected := runtime.NumCPU() * 3 / 4
-	if expected < 4 {
-		expected = 4
-	}
-	if expected > 16 {
-		expected = 16
-	}
+	expected := min(max(runtime.NumCPU()*3/4, 4), 16)
 	if n != expected {
 		t.Errorf("getDefaultMaxWorkers() = %d, want %d for NumCPU=%d", n, expected, runtime.NumCPU())
 	}

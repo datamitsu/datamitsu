@@ -243,7 +243,7 @@ func TestFilterLatestLTS(t *testing.T) {
 func TestIsLTS(t *testing.T) {
 	tests := []struct {
 		name string
-		lts  interface{}
+		lts  any
 		want bool
 	}{
 		{"bool true", true, true},

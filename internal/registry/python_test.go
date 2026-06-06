@@ -211,7 +211,7 @@ func TestFilterLatestStablePython(t *testing.T) {
 func TestIsEOL(t *testing.T) {
 	tests := []struct {
 		name string
-		eol  interface{}
+		eol  any
 		want bool
 	}{
 		{"bool true", true, true},

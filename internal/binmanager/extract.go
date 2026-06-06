@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/klauspost/compress/zstd"
@@ -1035,12 +1036,10 @@ func matchPath(archivePath, targetPath string) bool {
 	// validateArchivePath checks the cleaned path, but "bin/../evil/tool" cleans to
 	// "evil/tool" and passes. Check each path component individually to reject ".."
 	// traversal segments without false-positives on benign names like "my..lib.so".
-	for _, part := range strings.Split(filepath.ToSlash(archivePath), "/") {
-		if part == ".." {
-			log.Warn("rejecting archive path with traversal component",
-				zap.String("path", archivePath))
-			return false
-		}
+	if slices.Contains(strings.Split(filepath.ToSlash(archivePath), "/"), "..") {
+		log.Warn("rejecting archive path with traversal component",
+			zap.String("path", archivePath))
+		return false
 	}
 
 	archivePath = filepath.ToSlash(archivePath)

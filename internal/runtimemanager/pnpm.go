@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -219,9 +220,7 @@ func filesWithMergedWorkspaceYAML(files map[string]string) (map[string]string, e
 // the result for the cache key. The original files map is not mutated.
 func filesWithWorkspaceYAML(files map[string]string, mergedYAML string) map[string]string {
 	out := make(map[string]string, len(files)+1)
-	for k, v := range files {
-		out[k] = v
-	}
+	maps.Copy(out, files)
 	out["pnpm-workspace.yaml"] = mergedYAML
 	return out
 }
@@ -239,9 +238,7 @@ func buildPNPMInstallArgs(pnpmCjsPath string, hasLockFile bool) []string {
 // An empty userYAML returns a copy of base unchanged.
 func mergePNPMWorkspaceConfig(base map[string]any, userYAML string) (map[string]any, error) {
 	merged := make(map[string]any, len(base))
-	for k, v := range base {
-		merged[k] = v
-	}
+	maps.Copy(merged, base)
 
 	if strings.TrimSpace(userYAML) == "" {
 		return merged, nil
@@ -252,9 +249,7 @@ func mergePNPMWorkspaceConfig(base map[string]any, userYAML string) (map[string]
 		return nil, fmt.Errorf("failed to parse user pnpm-workspace.yaml: %w", err)
 	}
 
-	for k, v := range user {
-		merged[k] = v
-	}
+	maps.Copy(merged, user)
 	return merged, nil
 }
 
@@ -335,9 +330,7 @@ func buildPNPMWorkspaceForApp(files map[string]string) (string, error) {
 func buildPackageJSON(packageName string, version string, deps map[string]string) ([]byte, error) {
 	allDeps := make(map[string]string, len(deps)+1)
 	allDeps[packageName] = version
-	for k, v := range deps {
-		allDeps[k] = v
-	}
+	maps.Copy(allDeps, deps)
 
 	pkg := map[string]any{
 		"name":         "datamitsu-app-" + strings.NewReplacer("@", "", "/", "-").Replace(packageName),

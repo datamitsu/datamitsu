@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -1050,11 +1051,8 @@ function getConfig(input) {
 	urlsCopy := make([]string, len(resolvedRemoteURLs))
 	copy(urlsCopy, resolvedRemoteURLs)
 	resolvedRemoteURLsMu.Unlock()
-	for _, url := range urlsCopy {
-		if url == expectedURL {
-			found = true
-			break
-		}
+	if slices.Contains(urlsCopy, expectedURL) {
+		found = true
 	}
 	if !found {
 		t.Errorf("resolvedRemoteURLs = %v, expected to contain %q", urlsCopy, expectedURL)

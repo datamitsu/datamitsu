@@ -12,10 +12,10 @@ import (
 const nodejsFallbackLTSVersion = "24.14.0"
 
 type nodejsRelease struct {
-	Cycle  string      `json:"cycle"`
-	Latest string      `json:"latest"`
-	LTS    interface{} `json:"lts"`
-	EOL    interface{} `json:"eol"`
+	Cycle  string `json:"cycle"`
+	Latest string `json:"latest"`
+	LTS    any    `json:"lts"`
+	EOL    any    `json:"eol"`
 }
 
 var nodejsHTTPClient = &http.Client{Timeout: 15 * time.Second}

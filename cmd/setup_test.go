@@ -200,7 +200,7 @@ func TestBuildOptInIgnoreContent(t *testing.T) {
 
 	// Exactly one non-comment, non-blank line.
 	ruleLines := 0
-	for _, line := range strings.Split(content, "\n") {
+	for line := range strings.SplitSeq(content, "\n") {
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
 			continue

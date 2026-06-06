@@ -20,7 +20,7 @@ func argsToString(args []goja.Value) string {
 }
 
 func (e *Engine) initConsole() {
-	_ = e.vm.Set("console", map[string]interface{}{
+	_ = e.vm.Set("console", map[string]any{
 		"log": func(call goja.FunctionCall) goja.Value {
 			fmt.Println(argsToString(call.Arguments))
 			return goja.Undefined()

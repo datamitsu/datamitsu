@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"sort"
@@ -166,9 +167,7 @@ func generateGoLockContent(appName string, app binmanager.App, generate func(wor
 // generate a fresh lock file under the same workspace policy as a normal run.
 func clearAppLockFile(apps binmanager.MapOfApps, appName string) binmanager.MapOfApps {
 	fresh := make(binmanager.MapOfApps, len(apps))
-	for k, v := range apps {
-		fresh[k] = v
-	}
+	maps.Copy(fresh, apps)
 	appCopy, ok := fresh[appName]
 	if !ok {
 		return fresh

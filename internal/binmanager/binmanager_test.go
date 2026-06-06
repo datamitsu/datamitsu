@@ -126,9 +126,9 @@ func TestGetBinaryPath_SingleFlight(t *testing.T) {
 	hash := sha256.Sum256(testContent)
 	expectedHash := hex.EncodeToString(hash[:])
 
-	var hits int64
+	var hits atomic.Int64
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt64(&hits, 1)
+		hits.Add(1)
 		// Hold the connection briefly so concurrent callers overlap inside
 		// the single-flight critical section.
 		time.Sleep(50 * time.Millisecond)
@@ -185,7 +185,7 @@ func TestGetBinaryPath_SingleFlight(t *testing.T) {
 		}
 	}
 
-	if got := atomic.LoadInt64(&hits); got != 1 {
+	if got := hits.Load(); got != 1 {
 		t.Errorf("expected exactly 1 download, got %d", got)
 	}
 
@@ -203,9 +203,9 @@ func TestGetBinaryPath_AlreadyInstalled(t *testing.T) {
 	hash := sha256.Sum256(testContent)
 	expectedHash := hex.EncodeToString(hash[:])
 
-	var hits int64
+	var hits atomic.Int64
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt64(&hits, 1)
+		hits.Add(1)
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(testContent)
 	}))
@@ -244,7 +244,7 @@ func TestGetBinaryPath_AlreadyInstalled(t *testing.T) {
 	if _, err := bm.GetBinaryPath("testbin"); err != nil {
 		t.Fatalf("first GetBinaryPath() error = %v", err)
 	}
-	if got := atomic.LoadInt64(&hits); got != 1 {
+	if got := hits.Load(); got != 1 {
 		t.Fatalf("expected 1 download after first call, got %d", got)
 	}
 
@@ -252,7 +252,7 @@ func TestGetBinaryPath_AlreadyInstalled(t *testing.T) {
 	if _, err := bm.GetBinaryPath("testbin"); err != nil {
 		t.Fatalf("second GetBinaryPath() error = %v", err)
 	}
-	if got := atomic.LoadInt64(&hits); got != 1 {
+	if got := hits.Load(); got != 1 {
 		t.Errorf("expected no additional download on cache hit, got %d total", got)
 	}
 }
@@ -265,9 +265,9 @@ func TestEnsureTools_InstallsDistinctOnceMixedKinds(t *testing.T) {
 	hash := sha256.Sum256(testContent)
 	expectedHash := hex.EncodeToString(hash[:])
 
-	var hits int64
+	var hits atomic.Int64
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt64(&hits, 1)
+		hits.Add(1)
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(testContent)
 	}))
@@ -285,10 +285,10 @@ func TestEnsureTools_InstallsDistinctOnceMixedKinds(t *testing.T) {
 		t.Fatalf("failed to get arch type: %v", err)
 	}
 
-	var uvCalls int64
+	var uvCalls atomic.Int64
 	mock := &mockRuntimeAppManager{
 		getCommandInfoFunc: func(appName string, app App) (*CommandInfo, error) {
-			atomic.AddInt64(&uvCalls, 1)
+			uvCalls.Add(1)
 			return &CommandInfo{Type: "uv", Command: "/cache/uv/" + appName}, nil
 		},
 	}
@@ -318,10 +318,10 @@ func TestEnsureTools_InstallsDistinctOnceMixedKinds(t *testing.T) {
 		t.Fatalf("EnsureTools() error = %v", err)
 	}
 
-	if got := atomic.LoadInt64(&hits); got != 1 {
+	if got := hits.Load(); got != 1 {
 		t.Errorf("expected exactly 1 binary download, got %d", got)
 	}
-	if got := atomic.LoadInt64(&uvCalls); got != 1 {
+	if got := uvCalls.Load(); got != 1 {
 		t.Errorf("expected exactly 1 uv install, got %d", got)
 	}
 
@@ -337,13 +337,13 @@ func TestEnsureTools_InstallsDistinctOnceMixedKinds(t *testing.T) {
 // TestEnsureTools_AggregatesErrors verifies a single failing tool does not abort
 // the whole set and that the error is surfaced.
 func TestEnsureTools_AggregatesErrors(t *testing.T) {
-	var goodCalls int64
+	var goodCalls atomic.Int64
 	mock := &mockRuntimeAppManager{
 		getCommandInfoFunc: func(appName string, app App) (*CommandInfo, error) {
 			if appName == "bad" {
 				return nil, errors.New("boom")
 			}
-			atomic.AddInt64(&goodCalls, 1)
+			goodCalls.Add(1)
 			return &CommandInfo{Type: "uv", Command: "/cache/uv/" + appName}, nil
 		},
 	}
@@ -360,7 +360,7 @@ func TestEnsureTools_AggregatesErrors(t *testing.T) {
 	if !strings.Contains(err.Error(), "bad") {
 		t.Errorf("expected error to mention 'bad', got %v", err)
 	}
-	if got := atomic.LoadInt64(&goodCalls); got != 1 {
+	if got := goodCalls.Load(); got != 1 {
 		t.Errorf("expected 'good' to still install despite 'bad' failing, got %d calls", got)
 	}
 }

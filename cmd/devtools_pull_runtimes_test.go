@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"errors"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1191,9 +1192,7 @@ func TestReadWriteRuntimesJSON_PreservesGoEntry(t *testing.T) {
 	}
 
 	merged := make(RuntimesJSON)
-	for k, v := range existing {
-		merged[k] = v
-	}
+	maps.Copy(merged, existing)
 	if err := writeRuntimesJSON(path, merged); err != nil {
 		t.Fatalf("writeRuntimesJSON: %v", err)
 	}

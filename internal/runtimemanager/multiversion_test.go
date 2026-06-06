@@ -2,6 +2,7 @@ package runtimemanager
 
 import (
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -266,13 +267,7 @@ func TestMultiVersionRuntimeCollectsForBothApps(t *testing.T) {
 
 	collected := CollectRequiredRuntimes(apps, runtimes, false)
 
-	found := false
-	for _, name := range collected {
-		if name == "node" {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(collected, "node")
 	if !found {
 		t.Errorf("expected node runtime to be collected, got %v", collected)
 	}

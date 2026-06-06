@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
@@ -52,13 +53,7 @@ func TestInstallTimeEnvIncludesPythonInstallDir(t *testing.T) {
 	result := buildEnvWithOverrides(os.Environ(), envVars)
 
 	wantPrefix := "UV_PYTHON_INSTALL_DIR=" + filepath.Join(env.GetStorePath(), ".uv", "python")
-	found := false
-	for _, e := range result {
-		if e == wantPrefix {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(result, wantPrefix)
 	if !found {
 		t.Errorf("install-time env missing %q", wantPrefix)
 	}
@@ -97,13 +92,7 @@ func TestBuildEnvWithOverrides(t *testing.T) {
 
 		result := buildEnvWithOverrides(base, overrides)
 
-		found := false
-		for _, e := range result {
-			if e == "UV_TOOL_DIR=/tmp/tools" {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(result, "UV_TOOL_DIR=/tmp/tools")
 		if !found {
 			t.Error("UV_TOOL_DIR not found in result")
 		}
@@ -621,13 +610,7 @@ func TestBuildUVInstallArgs(t *testing.T) {
 
 	t.Run("with lockfile: --no-build must be present", func(t *testing.T) {
 		args := buildUVInstallArgs("version = 1\n", nil)
-		found := false
-		for _, a := range args {
-			if a == "--no-build" {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(args, "--no-build")
 		if !found {
 			t.Error("--no-build must be present when a lockfile is supplied (supply chain hardening)")
 		}

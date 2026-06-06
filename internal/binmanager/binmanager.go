@@ -431,9 +431,7 @@ func (bm *BinManager) InstallWithConcurrency(includeOptional bool, concurrency i
 	var wg sync.WaitGroup
 
 	for range concurrency {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for name := range jobs {
 				err := bm.downloadWithTimeout(name, progress)
 				results <- DownloadResult{
@@ -445,7 +443,7 @@ func (bm *BinManager) InstallWithConcurrency(includeOptional bool, concurrency i
 					return
 				}
 			}
-		}()
+		})
 	}
 
 	for _, name := range toDownload {
@@ -495,7 +493,7 @@ func (bm *BinManager) GetBinaryPath(name string) (string, error) {
 	// performs the download, the rest wait and share its result. Re-check the
 	// cache inside the critical section so a download that completed while we
 	// were blocked is a no-op.
-	_, err, _ = bm.downloadGroup.Do(name, func() (interface{}, error) {
+	_, err, _ = bm.downloadGroup.Do(name, func() (any, error) {
 		if _, statErr := os.Stat(binPath); statErr == nil {
 			return struct{}{}, nil
 		}
@@ -548,10 +546,7 @@ func (bm *BinManager) EnsureTools(ctx context.Context, names []string) error {
 		return nil
 	}
 
-	concurrency := ensureToolsConcurrency
-	if len(distinct) < concurrency {
-		concurrency = len(distinct)
-	}
+	concurrency := min(len(distinct), ensureToolsConcurrency)
 
 	jobs := make(chan string)
 	errs := make([]error, len(distinct))
@@ -562,9 +557,7 @@ func (bm *BinManager) EnsureTools(ctx context.Context, names []string) error {
 
 	var wg sync.WaitGroup
 	for range concurrency {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for name := range jobs {
 				if err := ctx.Err(); err != nil {
 					errs[idxOf[name]] = err
@@ -574,7 +567,7 @@ func (bm *BinManager) EnsureTools(ctx context.Context, names []string) error {
 					errs[idxOf[name]] = fmt.Errorf("failed to ensure tool %q: %w", name, err)
 				}
 			}
-		}()
+		})
 	}
 
 	for _, name := range distinct {

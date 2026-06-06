@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	maps0 "maps"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -40,9 +41,7 @@ func buildNodeTestShasums(v string) (dist, musl map[string]string) {
 func mergeShasums(maps ...map[string]string) map[string]string {
 	out := map[string]string{}
 	for _, m := range maps {
-		for k, v := range m {
-			out[k] = v
-		}
+		maps0.Copy(out, m)
 	}
 	return out
 }

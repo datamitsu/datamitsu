@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -289,10 +290,8 @@ func (i *Installer) isApplicable(cfg config.ConfigInit) bool {
 
 	// Check if any project type matches
 	for _, cfgType := range cfg.ProjectTypes {
-		for _, detectedType := range i.projectTypes {
-			if cfgType == detectedType {
-				return true
-			}
+		if slices.Contains(i.projectTypes, cfgType) {
+			return true
 		}
 	}
 

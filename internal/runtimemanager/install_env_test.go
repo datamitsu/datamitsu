@@ -2,6 +2,7 @@ package runtimemanager
 
 import (
 	"os"
+	"slices"
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/env"
@@ -11,12 +12,7 @@ import (
 // is present in the install-time environment slice.
 func envContains(t *testing.T, result []string, want string) bool {
 	t.Helper()
-	for _, e := range result {
-		if e == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(result, want)
 }
 
 func TestMergeInstallEnv(t *testing.T) {

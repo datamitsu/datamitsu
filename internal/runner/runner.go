@@ -752,8 +752,8 @@ func printFailedExecution(runNum int, exec executionInstance) {
 	// Tool output
 	if result.Output != "" {
 		fmt.Printf("  %s\n", border("│"))
-		lines := strings.Split(strings.TrimRight(result.Output, "\n"), "\n")
-		for _, line := range lines {
+		lines := strings.SplitSeq(strings.TrimRight(result.Output, "\n"), "\n")
+		for line := range lines {
 			fmt.Printf("  %s  %s\n", border("│"), line)
 		}
 	} else if result.Error != nil {

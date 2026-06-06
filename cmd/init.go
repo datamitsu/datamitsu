@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
@@ -544,10 +545,8 @@ func isApplicableInitCommand(initCmd config.InitCommand, projectTypes []string) 
 
 	// Check if any project type matches
 	for _, cmdType := range initCmd.ProjectTypes {
-		for _, detectedType := range projectTypes {
-			if cmdType == detectedType {
-				return true
-			}
+		if slices.Contains(projectTypes, cmdType) {
+			return true
 		}
 	}
 

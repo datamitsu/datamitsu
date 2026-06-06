@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -487,10 +488,8 @@ func (p *Planner) isApplicableTool(tool config.Tool) bool {
 
 	// Check if any project type matches
 	for _, toolType := range tool.ProjectTypes {
-		for _, detectedType := range detectedTypes {
-			if toolType == detectedType {
-				return true
-			}
+		if slices.Contains(detectedTypes, toolType) {
+			return true
 		}
 	}
 
@@ -610,11 +609,8 @@ func (p *Planner) createPerProjectTasksWithFiles(baseTask Task, files []string) 
 	} else {
 		// Filter by tool's projectTypes
 		for _, loc := range locations {
-			for _, toolType := range baseTask.Tool.ProjectTypes {
-				if loc.Type == toolType {
-					filteredLocations = append(filteredLocations, loc)
-					break
-				}
+			if slices.Contains(baseTask.Tool.ProjectTypes, loc.Type) {
+				filteredLocations = append(filteredLocations, loc)
 			}
 		}
 	}

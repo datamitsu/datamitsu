@@ -497,12 +497,12 @@ func TestConvertGojaValueToOrderedStructure(t *testing.T) {
 	tests := []struct {
 		name     string
 		script   string
-		validate func(t *testing.T, result interface{})
+		validate func(t *testing.T, result any)
 	}{
 		{
 			name:   "primitive string",
 			script: `"hello"`,
-			validate: func(t *testing.T, result interface{}) {
+			validate: func(t *testing.T, result any) {
 				if str, ok := result.(string); !ok || str != "hello" {
 					t.Errorf("expected string 'hello', got %v", result)
 				}
@@ -511,7 +511,7 @@ func TestConvertGojaValueToOrderedStructure(t *testing.T) {
 		{
 			name:   "primitive number",
 			script: `42`,
-			validate: func(t *testing.T, result interface{}) {
+			validate: func(t *testing.T, result any) {
 				if _, ok := result.(int64); !ok {
 					t.Errorf("expected int64, got %T", result)
 				}
@@ -520,7 +520,7 @@ func TestConvertGojaValueToOrderedStructure(t *testing.T) {
 		{
 			name:   "primitive boolean",
 			script: `true`,
-			validate: func(t *testing.T, result interface{}) {
+			validate: func(t *testing.T, result any) {
 				if b, ok := result.(bool); !ok || !b {
 					t.Errorf("expected bool true, got %v", result)
 				}
@@ -529,7 +529,7 @@ func TestConvertGojaValueToOrderedStructure(t *testing.T) {
 		{
 			name:   "null",
 			script: `null`,
-			validate: func(t *testing.T, result interface{}) {
+			validate: func(t *testing.T, result any) {
 				if result != nil {
 					t.Errorf("expected nil, got %v", result)
 				}
@@ -538,7 +538,7 @@ func TestConvertGojaValueToOrderedStructure(t *testing.T) {
 		{
 			name:   "undefined",
 			script: `undefined`,
-			validate: func(t *testing.T, result interface{}) {
+			validate: func(t *testing.T, result any) {
 				if result != nil {
 					t.Errorf("expected nil for undefined, got %v", result)
 				}
@@ -547,8 +547,8 @@ func TestConvertGojaValueToOrderedStructure(t *testing.T) {
 		{
 			name:   "array",
 			script: `[1, 2, 3]`,
-			validate: func(t *testing.T, result interface{}) {
-				arr, ok := result.([]interface{})
+			validate: func(t *testing.T, result any) {
+				arr, ok := result.([]any)
 				if !ok {
 					t.Errorf("expected []interface{}, got %T", result)
 					return
