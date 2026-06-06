@@ -29,6 +29,7 @@ linters:
     - wastedassign
     - whitespace
     - tagalign
+    - gocheckcompilerdirectives
     # - wrapcheck
     # - unparam
     - usestdlibvars
