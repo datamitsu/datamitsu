@@ -1,5 +1,3 @@
-import { config } from "./.datamitsu/knip.config.js";
+import { defineConfig } from "./.datamitsu/knip.config.js";
 
-const internalConfig = { ...config, ignoreBinaries: ["go"] };
-
-export default internalConfig;
+export default defineConfig((config) => ({ ...config, ignoreBinaries: ["go"] }));
