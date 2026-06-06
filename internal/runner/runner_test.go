@@ -986,14 +986,14 @@ func TestUpdateCIProgressConcurrency(t *testing.T) {
 	done := make(chan bool)
 	iterations := 50
 
-	for i := 0; i < iterations; i++ {
+	for i := range iterations {
 		go func(n int) {
 			updateCIProgress(n, 100, "✅", fmt.Sprintf("tool%d", n%5))
 			done <- true
 		}(i)
 	}
 
-	for i := 0; i < iterations; i++ {
+	for range iterations {
 		<-done
 	}
 }
@@ -1028,12 +1028,12 @@ func TestConcurrentProgressBarAccess(t *testing.T) {
 		done <- true
 	}
 
-	for i := 0; i < iterations/2; i++ {
+	for i := range iterations / 2 {
 		go readFunc()
 		go writeFunc(fmt.Sprintf("tool%d", i%5), i%2 == 0)
 	}
 
-	for i := 0; i < iterations; i++ {
+	for range iterations {
 		<-done
 	}
 
@@ -1443,7 +1443,7 @@ func TestConcurrentProgressUpdates(t *testing.T) {
 	numTasks := 10
 	done := make(chan bool, numTasks)
 
-	for i := 0; i < numTasks; i++ {
+	for i := range numTasks {
 		go func(n int) {
 			toolName := fmt.Sprintf("tool-%d", n)
 			tracker.onTaskStart(toolName)
@@ -1458,7 +1458,7 @@ func TestConcurrentProgressUpdates(t *testing.T) {
 		}(i)
 	}
 
-	for i := 0; i < numTasks; i++ {
+	for range numTasks {
 		<-done
 	}
 

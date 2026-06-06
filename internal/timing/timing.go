@@ -151,7 +151,7 @@ func (c *ChildTimings) End() {
 func printStage(stage Stage, indent int) {
 	prefix := ""
 	var prefixSb152 strings.Builder
-	for i := 0; i < indent; i++ {
+	for range indent {
 		prefixSb152.WriteString("  ")
 	}
 	prefix += prefixSb152.String()

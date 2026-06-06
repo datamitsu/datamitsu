@@ -93,7 +93,7 @@ func TestConcurrentDownloadSameBinary(t *testing.T) {
 	errs := make([]error, goroutines)
 	var wg sync.WaitGroup
 
-	for i := 0; i < goroutines; i++ {
+	for i := range goroutines {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
@@ -170,7 +170,7 @@ func TestGetBinaryPath_SingleFlight(t *testing.T) {
 	paths := make([]string, goroutines)
 	errs := make([]error, goroutines)
 	var wg sync.WaitGroup
-	for i := 0; i < goroutines; i++ {
+	for i := range goroutines {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()

@@ -38,7 +38,7 @@ linters:
     # - nilerr
     # - nilnil
     # - noctx
-    # - intrange
+    - intrange
     # - makezero
     # - modernize
     # - gochecknoinits

@@ -430,7 +430,7 @@ func (bm *BinManager) InstallWithConcurrency(includeOptional bool, concurrency i
 
 	var wg sync.WaitGroup
 
-	for i := 0; i < concurrency; i++ {
+	for range concurrency {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -561,7 +561,7 @@ func (bm *BinManager) EnsureTools(ctx context.Context, names []string) error {
 	}
 
 	var wg sync.WaitGroup
-	for i := 0; i < concurrency; i++ {
+	for range concurrency {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

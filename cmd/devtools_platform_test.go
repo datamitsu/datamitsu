@@ -546,7 +546,7 @@ func TestBuildBinariesForApp_NoDuplicateURLHashPairs(t *testing.T) {
 	}
 
 	for key, pairs := range seen {
-		for i := 0; i < len(pairs); i++ {
+		for i := range pairs {
 			for j := i + 1; j < len(pairs); j++ {
 				if pairs[i].url == pairs[j].url && pairs[i].hash == pairs[j].hash {
 					t.Errorf("%s has duplicate URL+hash: %s", key, pairs[i].url)

@@ -104,7 +104,7 @@ func TestConfigInputsIsFrozen(t *testing.T) {
 func TestConfigInputsKeysAreInjectedInSortedOrder(t *testing.T) {
 	wantOrder := "minimumReleaseAgeMinutes"
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		e, err := New("")
 		if err != nil {
 			t.Fatalf("iter %d: New() error = %v", i, err)

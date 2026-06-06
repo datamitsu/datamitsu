@@ -446,7 +446,7 @@ func TestInstallGoApp_ConcurrentSameKeyNoRace(t *testing.T) {
 	const n = 32
 	var wg sync.WaitGroup
 	errsObserved := make([]error, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
@@ -475,7 +475,7 @@ func TestSingleflightDeduplicatesConcurrentInstalls(t *testing.T) {
 	const n = 20
 	var wg sync.WaitGroup
 	results := make([]error, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()

@@ -287,10 +287,10 @@ func TestWalkEmptyDirectory(t *testing.T) {
 func TestWalkContextCancellation(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		subdir := filepath.Join(tmpDir, fmt.Sprintf("dir%d", i))
 		_ = os.MkdirAll(subdir, 0o755)
-		for j := 0; j < 10; j++ {
+		for j := range 10 {
 			_ = os.WriteFile(filepath.Join(subdir, fmt.Sprintf("file%d.txt", j)), []byte(""), 0o644)
 		}
 	}
@@ -378,7 +378,7 @@ func TestWalkDeepNesting(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	deep := tmpDir
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		deep = filepath.Join(deep, "level")
 		_ = os.MkdirAll(deep, 0o755)
 		_ = os.WriteFile(filepath.Join(deep, "file.txt"), []byte(""), 0o644)

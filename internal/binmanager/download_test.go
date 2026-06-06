@@ -438,7 +438,7 @@ func TestMoveFile(t *testing.T) {
 		}()
 
 		wg.Add(movers)
-		for i := 0; i < movers; i++ {
+		for i := range movers {
 			go func(i int) {
 				defer wg.Done()
 				srcPath := filepath.Join(tmpDir, fmt.Sprintf("src-%d.bin", i))
@@ -612,7 +612,7 @@ func TestMoveDir(t *testing.T) {
 		}()
 
 		wg.Add(movers)
-		for i := 0; i < movers; i++ {
+		for i := range movers {
 			go func(i int) {
 				defer wg.Done()
 				srcDir := filepath.Join(tmpDir, fmt.Sprintf("src-%d", i))

@@ -598,7 +598,7 @@ func runPhase1BinaryApps(cfg *config.Config, concurrency int, showProgress bool,
 	}, len(jobsToRun))
 
 	var wg sync.WaitGroup
-	for i := 0; i < concurrency; i++ {
+	for range concurrency {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -797,7 +797,7 @@ func runPhase2ManagedRuntimes(cfg *config.Config, concurrency int, showProgress 
 	}, len(jobsToRun))
 
 	var wg sync.WaitGroup
-	for i := 0; i < concurrency; i++ {
+	for range concurrency {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

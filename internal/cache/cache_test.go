@@ -53,10 +53,10 @@ func TestCacheConcurrentAccess(t *testing.T) {
 	wg.Add(numGoroutines * 3) // 3 types of operations
 
 	// Concurrent ShouldRun checks
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		go func(id int) {
 			defer wg.Done()
-			for j := 0; j < numOperations; j++ {
+			for j := range numOperations {
 				file := filepath.Join(projectPath, testFiles[j%len(testFiles)])
 				cache.ShouldRun(file, "test-tool", OperationLint, true)
 			}
@@ -64,10 +64,10 @@ func TestCacheConcurrentAccess(t *testing.T) {
 	}
 
 	// Concurrent AfterLint updates
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		go func(id int) {
 			defer wg.Done()
-			for j := 0; j < numOperations; j++ {
+			for j := range numOperations {
 				file := filepath.Join(projectPath, testFiles[j%len(testFiles)])
 				_ = cache.AfterLint(file, "test-tool", true)
 			}
@@ -75,10 +75,10 @@ func TestCacheConcurrentAccess(t *testing.T) {
 	}
 
 	// Concurrent AfterFix updates
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		go func(id int) {
 			defer wg.Done()
-			for j := 0; j < numOperations; j++ {
+			for j := range numOperations {
 				file := filepath.Join(projectPath, testFiles[j%len(testFiles)])
 				_ = cache.AfterFix(file, "test-tool", true)
 			}
@@ -136,7 +136,7 @@ func TestCacheConcurrentSave(t *testing.T) {
 
 	saveErrors := make(chan error, numGoroutines)
 
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		go func(id int) {
 			defer wg.Done()
 

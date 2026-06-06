@@ -202,7 +202,7 @@ func isValidVersion(s string) bool {
 			return false
 		}
 		// Check if all characters are digits
-		for i := 0; i < len(part); i++ {
+		for i := range len(part) {
 			if !isDigit(part[i]) {
 				return false
 			}

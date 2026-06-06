@@ -40,7 +40,7 @@ func TestSelectRandomMessageContainsURL(t *testing.T) {
 func TestSelectRandomMessageVariety(t *testing.T) {
 	rnd := rand.New(rand.NewSource(99))
 	seen := make(map[string]bool)
-	for i := 0; i < 200; i++ {
+	for range 200 {
 		msg := selectRandomMessage(rnd)
 		seen[msg] = true
 	}
@@ -51,7 +51,7 @@ func TestSelectRandomMessageVariety(t *testing.T) {
 
 func TestAllMessagesSelectable(t *testing.T) {
 	seen := make(map[string]bool)
-	for seed := int64(0); seed < 1000; seed++ {
+	for seed := range int64(1000) {
 		rnd := rand.New(rand.NewSource(seed))
 		msg := selectRandomMessage(rnd)
 		seen[msg] = true

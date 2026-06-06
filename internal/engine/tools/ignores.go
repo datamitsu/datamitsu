@@ -206,7 +206,7 @@ func RegisterIgnoreToolsInVM(vm *goja.Runtime) error {
 					if lengthVal != nil && !goja.IsUndefined(lengthVal) && !goja.IsNull(lengthVal) {
 						length := int(lengthVal.ToInteger())
 						strArr := make([]string, length)
-						for i := 0; i < length; i++ {
+						for i := range length {
 							itemVal := arr.Get(strconv.Itoa(i))
 							if itemVal != nil && !goja.IsUndefined(itemVal) && !goja.IsNull(itemVal) {
 								strArr[i] = itemVal.String()
@@ -240,7 +240,7 @@ func RegisterIgnoreToolsInVM(vm *goja.Runtime) error {
 					if lengthVal != nil && !goja.IsUndefined(lengthVal) && !goja.IsNull(lengthVal) {
 						length := int(lengthVal.ToInteger())
 						groupOrder = make([]string, length)
-						for i := 0; i < length; i++ {
+						for i := range length {
 							itemVal := arr.Get(strconv.Itoa(i))
 							if itemVal != nil && !goja.IsUndefined(itemVal) && !goja.IsNull(itemVal) {
 								groupOrder[i] = itemVal.String()

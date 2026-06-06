@@ -125,7 +125,7 @@ func (e *Engine) convertGojaValueToOrderedStructureWithVisited(val goja.Value, v
 		if lengthVal != nil && !goja.IsUndefined(lengthVal) && !goja.IsNull(lengthVal) {
 			length := int(lengthVal.ToInteger())
 			result := make([]interface{}, length)
-			for i := 0; i < length; i++ {
+			for i := range length {
 				itemVal := obj.Get(strconv.Itoa(i))
 				result[i] = e.convertGojaValueToOrderedStructureWithVisited(itemVal, visited)
 			}
@@ -281,7 +281,7 @@ func (e *Engine) initFormats() {
 		result := e.vm.NewObject()
 
 		// Process each section entry, merging properties for sections with the same name
-		for i := 0; i < length; i++ {
+		for i := range length {
 			sectionEntryVal := sectionsObj.Get(strconv.Itoa(i))
 			sectionEntryObj := sectionEntryVal.ToObject(e.vm)
 			if sectionEntryObj == nil {
@@ -343,7 +343,7 @@ func (e *Engine) initFormats() {
 		cfg := ini.Empty()
 
 		// Process each section entry
-		for i := 0; i < length; i++ {
+		for i := range length {
 			sectionEntryVal := sectionsObj.Get(strconv.Itoa(i))
 			sectionEntryObj := sectionEntryVal.ToObject(e.vm)
 			if sectionEntryObj == nil {

@@ -23,7 +23,7 @@ func TestWorkerPoolLimiting(t *testing.T) {
 
 	// Create tasks that will track concurrency
 	tasks := make([]Task, 10)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		tasks[i] = Task{
 			ToolName:  "test",
 			Operation: config.OpLint,
@@ -124,7 +124,7 @@ func TestWorkerPoolWithDifferentSizes(t *testing.T) {
 			var mu sync.Mutex
 
 			tasks := make([]Task, tt.taskCount)
-			for i := 0; i < tt.taskCount; i++ {
+			for i := range tt.taskCount {
 				tasks[i] = Task{
 					ToolName:  "test",
 					Operation: config.OpLint,

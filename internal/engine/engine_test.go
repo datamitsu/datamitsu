@@ -280,7 +280,7 @@ func TestYAMLStringifyFieldOrder(t *testing.T) {
 
 	// Run multiple times to ensure deterministic order
 	var firstResult string
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		engine, err := New("")
 		if err != nil {
 			t.Fatalf("New() error = %v", err)
@@ -329,7 +329,7 @@ func TestTOMLStringifyFieldOrder(t *testing.T) {
 
 	// Run multiple times to ensure deterministic order
 	var firstResult string
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		engine, err := New("")
 		if err != nil {
 			t.Fatalf("New() error = %v", err)

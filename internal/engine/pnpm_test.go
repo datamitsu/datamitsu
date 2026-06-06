@@ -77,7 +77,7 @@ func TestPNPMWorkspaceDefaultsKeysAreInjectedInSortedOrder(t *testing.T) {
 	// Run multiple times: a non-deterministic injector would produce
 	// different orders across engines because each engine constructs its
 	// own map and Go map iteration is randomized.
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		e, err := New("")
 		if err != nil {
 			t.Fatalf("iter %d: New() error = %v", i, err)

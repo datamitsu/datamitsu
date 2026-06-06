@@ -1752,7 +1752,7 @@ func TestFailFastContextCancelsRunningPerFileLoop(t *testing.T) {
 
 	// Create many test files
 	var files []string
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		f := filepath.Join(tmpDir, fmt.Sprintf("file%d.txt", i))
 		if err := os.WriteFile(f, []byte("test"), 0o644); err != nil {
 			t.Fatal(err)

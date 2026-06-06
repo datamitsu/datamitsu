@@ -538,7 +538,7 @@ func TestStateManagerRecord(t *testing.T) {
 		var wg sync.WaitGroup
 		wg.Add(n)
 
-		for i := 0; i < n; i++ {
+		for i := range n {
 			go func(idx int) {
 				defer wg.Done()
 				key := fmt.Sprintf("binary:app%d:linux:amd64", idx)

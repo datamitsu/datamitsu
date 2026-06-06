@@ -647,7 +647,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 	// Report progress for cached files using total file count for consistent display
 	totalFiles := len(task.Files)
 	if e.fileProgressCallback != nil && cachedCount > 0 {
-		for i := 0; i < cachedCount; i++ {
+		for i := range cachedCount {
 			e.fileProgressCallback(task.ToolName, i+1, totalFiles, true)
 		}
 	}

@@ -399,7 +399,7 @@ func ExampleTimings_StartWithChildren() {
 	child := timings.StartWithChildren("parent operation")
 	defer child.End()
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		defer child.StartChild(fmt.Sprintf("sub-operation %d", i))()
 		time.Sleep(5 * time.Millisecond)
 	}

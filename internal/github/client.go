@@ -61,7 +61,7 @@ func (c *Client) fetchRelease(url string) (*Release, error) {
 	maxRetries := 3
 	backoff := time.Second
 
-	for attempt := 0; attempt < maxRetries; attempt++ {
+	for attempt := range maxRetries {
 		if attempt > 0 {
 			time.Sleep(backoff)
 			backoff *= 2
@@ -146,7 +146,7 @@ func (c *Client) ListReleases(owner, repo string, perPage int) ([]Release, error
 	maxRetries := 3
 	backoff := time.Second
 
-	for attempt := 0; attempt < maxRetries; attempt++ {
+	for attempt := range maxRetries {
 		if attempt > 0 {
 			time.Sleep(backoff)
 			backoff *= 2
