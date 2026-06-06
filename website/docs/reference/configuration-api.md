@@ -14,11 +14,13 @@ Every config file must export:
 - **`getMinVersion()`** — Returns a semver string specifying the minimum datamitsu version required. Checked before `getConfig()` is called. Configs without this function fail to load.
 - **`getConfig(config)`** — Receives the previous layer's config and returns a new `Config` object.
 - **`getRemoteConfigs()`** _(optional)_ — Returns remote parent configs to load before this config.
+- **`getBeforeConfigs()`** _(optional)_ — Returns local config files to load as under-layers, the config-declared equivalent of the `--before-config` flag. Honoured **only** in the auto-discovered git-root config, and **not evaluated** when a `--before-config` flag is passed (the flag wins).
 
 ```typescript
 function getMinVersion(): string;
 function getConfig(config: Config): Config;
 function getRemoteConfigs(): Array<{ url: string; hash: string }>;
+function getBeforeConfigs(): Array<{ path: string }>;
 ```
 
 The special version `"dev"` (used when running from source) is treated as `v0.0.0`.
@@ -50,6 +52,8 @@ default (embedded config.js)
   ↓ [getRemoteConfigs() resolved depth-first, if exported]
 --before-config flags  (for wrappers/libraries)
   ↓ [getRemoteConfigs() resolved depth-first]
+declared before-configs  (auto config's getBeforeConfigs(), only when no --before-config flag)
+  ↓ [getRemoteConfigs() resolved depth-first]
 auto (datamitsu.config.{js,mjs,ts} at git root)
   ↓ [getRemoteConfigs() resolved depth-first]
 --config flags  (for CI/testing overrides)
@@ -59,6 +63,7 @@ final Config
 
 - Each source must export `getMinVersion()` — version is checked before `getConfig()` runs (fail-fast)
 - Each source can export `getRemoteConfigs()` returning `Array<{url: string, hash: string}>` for recursive parent resolution
+- The auto git-root config can export `getBeforeConfigs()` returning `Array<{path: string}>` to load local files as under-layers (parity with `--before-config`). It is honoured only at the git-root layer and skipped entirely when a `--before-config` flag is present; relative paths resolve against the git-root config's directory, no hash is required (local files are not downloads)
 - `ignoreRules` use append semantics across config layers
 - Circular remote config dependencies are detected and produce an error
 

@@ -219,12 +219,31 @@ EmptyPathErrors,Dedup}` + `TestBuildConfigSourcesDeclaredBeforeConfigs`
 
 ### Task 6: Documentation
 
-- [ ] document `getBeforeConfigs()` in the config-loading / architecture docs
-      under `website/docs/guides/architecture/` (loading order: default →
-      before-config → declared before-config → auto → config → remote)
-- [ ] add a short how-to note (wrapper maintenance / global-install usage)
+- [x] document `getBeforeConfigs()` in the config-loading / architecture docs
+      (loading order: default → before-config → declared before-config → auto →
+      config → remote) → config-loading docs live in `guides/configuration.md`
+      and `reference/configuration-api.md` (not `guides/architecture/`, which
+      covers the execution pipeline): updated both loading-order diagrams to add
+      the "declared before-configs" layer, added a "Declared Before-Configs
+      (getBeforeConfigs())" section to `configuration.md`, added the export to
+      `configuration-api.md` (required-exports list, TS signature, loading-order
+      bullets), and updated the Mermaid layer diagram + a pointer note in
+      `getting-started/core-concepts.md`
+- [x] add a short how-to note (wrapper maintenance / global-install usage)
       explaining when to declare `getBeforeConfigs()` vs rely on the wrapper
-- [ ] note the precedence rule (CLI `--before-config` overrides the declaration)
+      → new "Global-install parity: declaring getBeforeConfigs()" section in
+      `how-to/maintain-wrapper.md` with a when-to-use-which table
+- [x] note the precedence rule (CLI `--before-config` overrides the declaration)
+      → stated in `configuration.md`, `configuration-api.md`,
+      `core-concepts.md`, and `maintain-wrapper.md` (flag wins; declaration not
+      evaluated at all when the flag is present)
+
+  ⚠️ Docusaurus `pnpm build` could not run to mechanically check links: the
+  workspace's pnpm store is missing the `micromatch` transitive dep of
+  `@docusaurus/utils` (pre-existing env breakage — unmodified docs fail
+  identically). Validated the only edit-introduced failure surface instead:
+  all new cross-links/anchors resolve to real headings with correct relative
+  paths (config sets `onBrokenLinks`/`onBrokenAnchors` to `throw`).
 
 ## Technical Details
 

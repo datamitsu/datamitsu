@@ -154,8 +154,13 @@ graph TD
 
     D --> E{getRemoteConfigs<br/>exported?}
     E -->|yes| F[resolve remote configs<br/>depth-first]
-    E -->|no| G[datamitsu.config.ts<br/>at git root]
-    F --> G
+    E -->|no| BC[declared before-configs<br/>auto config's getBeforeConfigs<br/>skipped if --before-config flag set]
+    F --> BC
+
+    BC --> BCE{getRemoteConfigs<br/>exported?}
+    BCE -->|yes| BCF[resolve remote configs<br/>depth-first]
+    BCE -->|no| G[datamitsu.config.ts<br/>at git root]
+    BCF --> G
 
     G --> H{getRemoteConfigs<br/>exported?}
     H -->|yes| I[resolve remote configs<br/>depth-first]
@@ -166,6 +171,8 @@ graph TD
 ```
 
 Each config file must export `getMinVersion()` (minimum datamitsu version, checked before loading) and `getConfig(prev)` (receives the previous layer and returns a new config). This enables inheritance and progressive customization while ensuring version compatibility.
+
+Your git-root config can also export `getBeforeConfigs()` to declare local under-layers — the config-declared equivalent of `--before-config`. This lets a globally installed datamitsu load a shared wrapper config without the flag. It is skipped when `--before-config` is passed (the flag wins). See [Configuration → Declared Before-Configs](../guides/configuration.md#declared-before-configs-getbeforeconfigs).
 
 ### Remote Configs
 
