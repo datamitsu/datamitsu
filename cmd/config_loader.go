@@ -167,6 +167,13 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 	if err := config.ValidateInit(currentConfig.Init); err != nil {
 		return nil, nil, nil, err
 	}
+	for _, w := range config.ValidateInitToolRefs(currentConfig.Init, currentConfig.Tools) {
+		logger.Logger.Warn(w, zap.String("source", "config"))
+	}
+
+	if err := config.ValidateTools(currentConfig.Tools); err != nil {
+		return nil, nil, nil, err
+	}
 
 	if len(currentConfig.IgnoreRules) > 0 {
 		if _, parseErr := datamitsuignore.ParseRules(currentConfig.IgnoreRules); parseErr != nil {

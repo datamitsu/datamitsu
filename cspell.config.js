@@ -235,5 +235,7 @@ export default {
     "usetesting",
     "contextcheck",
     "transpiles",
+    "ztool",
+    "atool",
   ],
 };

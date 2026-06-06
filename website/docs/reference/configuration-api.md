@@ -514,14 +514,14 @@ interface Tool {
 
 interface ToolOperation {
   app: string; // App name from apps
-  args: string[]; // Supports template placeholders
+  args: string[]; // Supports template placeholders ({file}, {files}, {root}, {cwd}, {toolCache})
   globs?: string[]; // File patterns (doublestar syntax; `!` negation not supported). Omit to match all discovered files.
   excludeGlobs?: string[]; // Patterns removed from the matched set (doublestar syntax)
   scope: "repository" | "per-project" | "per-file";
   batch?: boolean; // Batch files into single execution (default: true)
   priority?: number; // Execution order (lower = first, default: 0)
   invalidateOn?: string[]; // Files that invalidate cache
-  env?: Record<string, string>; // Extra environment variables
+  env?: Record<string, string>; // Extra environment variables; values support {root}, {cwd}, {toolCache}
 }
 ```
 
@@ -558,7 +558,7 @@ const toolsConfig = {
 | `per-project` | Runs once per detected project      | Project root      |
 | `per-file`    | Runs once per matched file          | Project root      |
 
-See [Template Placeholders](./template-placeholders.md) for the `{file}`, `{files}`, `{root}`, `{cwd}`, and `{toolCache}` placeholders available in `args`.
+See [Template Placeholders](./template-placeholders.md) for the `{file}`, `{files}`, `{root}`, `{cwd}`, and `{toolCache}` placeholders available in `args` (and `{root}`, `{cwd}`, `{toolCache}` in `env`). Unknown placeholders fail config loading rather than being passed through to the tool.
 
 ## Project Types (`projectTypes`)
 
@@ -590,8 +590,16 @@ interface ConfigInit {
   otherFileNameList?: string[]; // Conflicting files to delete
   projectTypes?: string[]; // Restrict to project types
   scope?: "project" | "git-root"; // Where to create: "project" (default) or "git-root" (once at root)
+  tools?: string[]; // Tool name(s) this config belongs to; enables `setup --tools` scoping
 }
 ```
+
+The optional `tools` field associates a config file with one or more tools (by
+name, matching keys in [`tools`](#tools-tools)). `datamitsu setup --tools <names>`
+then regenerates only the config files whose `tools` intersect the selected set —
+every other config, including unassociated infrastructure files, is left
+untouched. Omit `tools` for files not tied to a single tool (`.gitignore`,
+`lefthook.yaml`); those are skipped whenever `--tools` is passed.
 
 The `content` function receives a context object:
 
@@ -614,6 +622,7 @@ interface ConfigContext {
 const init = {
   "eslint.config.js": {
     projectTypes: ["typescript", "javascript"],
+    tools: ["eslint"], // scope `setup --tools eslint` to this file
     content: (context) => {
       const configPath = tools.Path.forImport(
         tools.Path.join(context.datamitsuDir, "eslint.config.js"),

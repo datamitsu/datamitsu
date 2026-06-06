@@ -761,3 +761,76 @@ func TestConfigInitLinkTargetJSONOmitEmpty(t *testing.T) {
 		t.Errorf("JSON should omit empty linkTarget, got: %s", dataStr)
 	}
 }
+
+func TestConfigInitTools(t *testing.T) {
+	ci := ConfigInit{
+		Tools: []string{"golangci-lint"},
+	}
+
+	if len(ci.Tools) != 1 {
+		t.Fatalf("len(Tools) = %d, want 1", len(ci.Tools))
+	}
+	if ci.Tools[0] != "golangci-lint" {
+		t.Errorf("Tools[0] = %q, want %q", ci.Tools[0], "golangci-lint")
+	}
+}
+
+func TestConfigInitToolsJSON(t *testing.T) {
+	ci := ConfigInit{
+		Tools: []string{"golangci-lint", "prettier"},
+	}
+
+	data, err := json.Marshal(ci)
+	if err != nil {
+		t.Fatalf("json.Marshal error: %v", err)
+	}
+
+	var parsed ConfigInit
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("json.Unmarshal error: %v", err)
+	}
+
+	if len(parsed.Tools) != 2 || parsed.Tools[0] != "golangci-lint" || parsed.Tools[1] != "prettier" {
+		t.Errorf("parsed Tools = %v, want [golangci-lint prettier]", parsed.Tools)
+	}
+}
+
+func TestConfigInitToolsJSONOmitEmpty(t *testing.T) {
+	ci := ConfigInit{
+		Scope: ScopeGitRoot,
+	}
+
+	data, err := json.Marshal(ci)
+	if err != nil {
+		t.Fatalf("json.Marshal error: %v", err)
+	}
+
+	if strings.Contains(string(data), "tools") {
+		t.Errorf("JSON should omit empty tools, got: %s", string(data))
+	}
+}
+
+// TestConfigInitToolsFromJS guards the real data flow: a JS `init` entry's
+// `tools` array must populate ConfigInit.Tools via the same goja json field
+// mapper + ExportTo path the config loader uses (no special-case extraction).
+func TestConfigInitToolsFromJS(t *testing.T) {
+	vm := goja.New()
+	vm.SetFieldNameMapper(goja.TagFieldNameMapper("json", true))
+
+	val, err := vm.RunString(`({ projectTypes: ["go"], tools: ["golangci-lint"] })`)
+	if err != nil {
+		t.Fatalf("RunString error: %v", err)
+	}
+
+	var ci ConfigInit
+	if err := vm.ExportTo(val, &ci); err != nil {
+		t.Fatalf("ExportTo error: %v", err)
+	}
+
+	if len(ci.Tools) != 1 || ci.Tools[0] != "golangci-lint" {
+		t.Errorf("Tools = %v, want [golangci-lint]", ci.Tools)
+	}
+	if len(ci.ProjectTypes) != 1 || ci.ProjectTypes[0] != "go" {
+		t.Errorf("ProjectTypes = %v, want [go]", ci.ProjectTypes)
+	}
+}

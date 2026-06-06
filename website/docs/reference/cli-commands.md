@@ -176,8 +176,18 @@ datamitsu setup
 | `--dry-run`      | Show what would be done without making changes                                                                     |
 | `--skip-fix`     | Skip running fix after setup                                                                                       |
 | `--opt-in-tools` | Also generate an all-disabled `.datamitsuignore` so tools are opt-in (enable them by removing names from the list) |
+| `--tools`        | Comma-separated list of tools to scope setup to (only their config files are written)                              |
 
 Setup detects project types, generates configuration files, and optionally runs fix afterward.
+
+With `--tools`, setup is scoped to the named tools: it (re)generates only the
+config files associated with them (via each init entry's [`tools`](./configuration-api.md#config-init-init) field)
+and leaves everything else untouched — other tools' configs and unassociated
+infrastructure files (`.gitignore`, `lefthook.yaml`, `pnpm-workspace.yaml`, …)
+are skipped. The post-setup fix is scoped to the same tools. This is the
+recommended way to iterate on a single tool's config without rewriting your whole
+project. Unknown tool names fail fast before anything is written; a selected tool
+that owns no config file is reported and skipped (not an error).
 
 With `--opt-in-tools`, setup runs the normal flow and then writes a
 `.datamitsuignore` at the git root that disables **every** configured tool via a
@@ -197,6 +207,15 @@ datamitsu setup --dry-run
 
 # Set up configs and start with all tools disabled (opt-in model)
 datamitsu setup --opt-in-tools
+
+# Regenerate only golangci-lint's config (e.g. .golangci.yml); nothing else is touched
+datamitsu setup --tools golangci-lint
+
+# Preview a tool-scoped setup
+datamitsu setup --tools golangci-lint --dry-run
+
+# Scope to several tools at once
+datamitsu setup --tools golangci-lint,prettier
 ```
 
 ## config

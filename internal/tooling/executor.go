@@ -699,7 +699,8 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 			zap.String("file", file),
 			zap.Strings("args", args))
 
-		cmd := e.buildCommand(ctx, cmdInfo, args, workingDir, task.OpConfig.Env)
+		opEnv := e.replaceEnvPlaceholders(task.OpConfig.Env, task.ProjectPath, task.ToolName)
+		cmd := e.buildCommand(ctx, cmdInfo, args, workingDir, opEnv)
 		output, err := e.runCommandWithOutput(cmd)
 		outputs = append(outputs, string(output))
 
@@ -870,7 +871,8 @@ func (e *Executor) executeBatchChunk(ctx context.Context, task Task, cmdInfo *bi
 	}
 
 	log.Debug("executing batch command", zap.Strings("args", args), zap.String("workingDir", workingDir))
-	cmd := e.buildCommand(ctx, cmdInfo, args, workingDir, task.OpConfig.Env)
+	opEnv := e.replaceEnvPlaceholders(task.OpConfig.Env, task.ProjectPath, task.ToolName)
+	cmd := e.buildCommand(ctx, cmdInfo, args, workingDir, opEnv)
 	output, err := e.runCommandWithOutput(cmd)
 	result.Output = string(output)
 
@@ -1059,40 +1061,63 @@ func (e *Executor) replacePlaceholders(args []string, file string, files []strin
 			arg = strings.ReplaceAll(arg, "{file}", file)
 		}
 
-		// {root} is the git repository root; {cwd} is the task's per-project working directory
-		// {toolCache} is the project-specific cache directory
-		arg = strings.ReplaceAll(arg, "{root}", e.rootPath)
-		cwdValue := projectPath
-		if cwdValue == "" {
-			cwdValue = e.rootPath
-		}
-		arg = strings.ReplaceAll(arg, "{cwd}", cwdValue)
-		if strings.Contains(arg, "{toolCache}") {
-			relativeProjectPath := ""
-			if projectPath != "" {
-				rel, err := filepath.Rel(e.rootPath, projectPath)
-				if err != nil {
-					log.Warn("failed to compute relative project path",
-						zap.String("projectPath", projectPath),
-						zap.String("rootPath", e.rootPath),
-						zap.Error(err))
-				} else if rel != "." {
-					relativeProjectPath = rel
-				}
-			}
-			cachePath, err := env.GetProjectCachePath(e.rootPath, relativeProjectPath, toolName)
-			if err != nil {
-				log.Warn("failed to compute project cache path", zap.Error(err))
-			} else {
-				arg = strings.ReplaceAll(arg, "{toolCache}", cachePath)
-			}
-		}
+		// {root}, {cwd} and {toolCache} are shared with environment-value expansion.
+		arg = e.expandPathPlaceholders(arg, projectPath, toolName)
 
 		result = append(result, arg)
 	}
 
 	log.Debug("replacePlaceholders result", zap.Strings("outputArgs", result))
 	return result
+}
+
+// expandPathPlaceholders replaces the path placeholders shared by argument and
+// environment-value expansion: {root} (git root), {cwd} (per-project working
+// directory) and {toolCache} (per-project tool cache directory, always absolute).
+func (e *Executor) expandPathPlaceholders(s string, projectPath, toolName string) string {
+	s = strings.ReplaceAll(s, "{root}", e.rootPath)
+	cwdValue := projectPath
+	if cwdValue == "" {
+		cwdValue = e.rootPath
+	}
+	s = strings.ReplaceAll(s, "{cwd}", cwdValue)
+	if strings.Contains(s, "{toolCache}") {
+		relativeProjectPath := ""
+		if projectPath != "" {
+			rel, err := filepath.Rel(e.rootPath, projectPath)
+			if err != nil {
+				log.Warn("failed to compute relative project path",
+					zap.String("projectPath", projectPath),
+					zap.String("rootPath", e.rootPath),
+					zap.Error(err))
+			} else if rel != "." {
+				relativeProjectPath = rel
+			}
+		}
+		cachePath, err := env.GetProjectCachePath(e.rootPath, relativeProjectPath, toolName)
+		if err != nil {
+			log.Warn("failed to compute project cache path", zap.Error(err))
+		} else {
+			s = strings.ReplaceAll(s, "{toolCache}", cachePath)
+		}
+	}
+	return s
+}
+
+// replaceEnvPlaceholders expands path placeholders ({root}, {cwd}, {toolCache}) in
+// tool-operation environment-variable values, mirroring argument expansion so that
+// e.g. GOLANGCI_LINT_CACHE: "{toolCache}" resolves to an absolute path rather than
+// reaching the tool as the literal "{toolCache}". Returns the input unchanged when
+// there are no env vars.
+func (e *Executor) replaceEnvPlaceholders(envMap map[string]string, projectPath, toolName string) map[string]string {
+	if len(envMap) == 0 {
+		return envMap
+	}
+	expanded := make(map[string]string, len(envMap))
+	for key, value := range envMap {
+		expanded[key] = e.expandPathPlaceholders(value, projectPath, toolName)
+	}
+	return expanded
 }
 
 // getWorkingDir determines the working directory for execution

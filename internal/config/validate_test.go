@@ -2741,3 +2741,121 @@ func TestValidateInit_UnknownScope(t *testing.T) {
 		t.Errorf("expected 'scope must be' in error, got: %v", err)
 	}
 }
+
+func TestValidateInitToolRefs(t *testing.T) {
+	tools := MapOfTools{
+		"golangci-lint": {Name: "golangci-lint"},
+		"prettier":      {Name: "prettier"},
+	}
+
+	t.Run("known tool refs produce no warnings", func(t *testing.T) {
+		initConfigs := MapOfConfigInit{
+			".golangci.yml": {Tools: []string{"golangci-lint"}},
+			".prettierrc":   {Tools: []string{"prettier"}},
+			".gitignore":    {}, // no tools is fine
+		}
+		if w := ValidateInitToolRefs(initConfigs, tools); len(w) != 0 {
+			t.Errorf("expected no warnings, got %v", w)
+		}
+	})
+
+	t.Run("unknown tool ref produces a warning", func(t *testing.T) {
+		initConfigs := MapOfConfigInit{
+			".golangci.yml": {Tools: []string{"golangci"}}, // typo
+		}
+		w := ValidateInitToolRefs(initConfigs, tools)
+		if len(w) != 1 {
+			t.Fatalf("expected 1 warning, got %d: %v", len(w), w)
+		}
+		if !strings.Contains(w[0], "golangci") || !strings.Contains(w[0], ".golangci.yml") {
+			t.Errorf("warning should name the file and unknown tool, got: %q", w[0])
+		}
+	})
+
+	t.Run("multiple unknown refs are reported deterministically", func(t *testing.T) {
+		initConfigs := MapOfConfigInit{
+			"b.yml": {Tools: []string{"nope"}},
+			"a.yml": {Tools: []string{"bogus"}},
+		}
+		w := ValidateInitToolRefs(initConfigs, tools)
+		if len(w) != 2 {
+			t.Fatalf("expected 2 warnings, got %d: %v", len(w), w)
+		}
+		// Sorted by config name: a.yml before b.yml.
+		if !strings.Contains(w[0], "a.yml") || !strings.Contains(w[1], "b.yml") {
+			t.Errorf("warnings should be sorted by config name, got: %v", w)
+		}
+	})
+}
+
+func TestValidateTools(t *testing.T) {
+	t.Run("supported placeholders pass", func(t *testing.T) {
+		tools := MapOfTools{
+			"golangci-lint": {
+				Name: "golangci-lint",
+				Operations: map[OperationType]ToolOperation{
+					OpFix: {
+						Args: []string{"run", "--fix", "{cwd}/x", "{files}", "{file}", "{root}"},
+						Env:  map[string]string{"GOLANGCI_LINT_CACHE": "{toolCache}"},
+					},
+				},
+			},
+		}
+		if err := ValidateTools(tools); err != nil {
+			t.Errorf("ValidateTools() = %v, want nil", err)
+		}
+	})
+
+	t.Run("unsupported placeholder in args fails", func(t *testing.T) {
+		tools := MapOfTools{
+			"t": {Operations: map[OperationType]ToolOperation{
+				OpLint: {Args: []string{"--cache={toolcache}"}}, // wrong case
+			}},
+		}
+		err := ValidateTools(tools)
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if !strings.Contains(err.Error(), "{toolcache}") || !strings.Contains(err.Error(), "args") {
+			t.Errorf("error should name the bad placeholder and 'args', got: %v", err)
+		}
+	})
+
+	t.Run("unsupported placeholder in env fails", func(t *testing.T) {
+		tools := MapOfTools{
+			"t": {Operations: map[OperationType]ToolOperation{
+				OpFix: {Env: map[string]string{"CACHE": "{cache}"}},
+			}},
+		}
+		err := ValidateTools(tools)
+		if err == nil || !strings.Contains(err.Error(), "{cache}") {
+			t.Errorf("expected error naming {cache}, got: %v", err)
+		}
+	})
+
+	t.Run("args-only placeholder rejected in env", func(t *testing.T) {
+		tools := MapOfTools{
+			"t": {Operations: map[OperationType]ToolOperation{
+				OpFix: {Env: map[string]string{"F": "{file}"}},
+			}},
+		}
+		err := ValidateTools(tools)
+		if err == nil || !strings.Contains(err.Error(), "{file}") {
+			t.Errorf("expected {file} rejected in env, got: %v", err)
+		}
+	})
+
+	t.Run("shell globs and go templates are not flagged", func(t *testing.T) {
+		tools := MapOfTools{
+			"t": {Operations: map[OperationType]ToolOperation{
+				OpLint: {
+					Args: []string{"**/*.{js,ts}", "--format={{.Path}}", "{{Field}}"},
+					Env:  map[string]string{"GLOB": "a.{go,mod}"},
+				},
+			}},
+		}
+		if err := ValidateTools(tools); err != nil {
+			t.Errorf("globs/templates should not be flagged, got: %v", err)
+		}
+	})
+}
