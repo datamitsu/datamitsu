@@ -1,21 +1,36 @@
 ---
 title: Template Placeholders
-description: Reference for template placeholders in tool operation arguments
+description: Reference for template placeholders in tool operation arguments and environment values
 ---
 
 # Template Placeholders
 
-Tool operation arguments support template placeholders that datamitsu resolves before executing the tool. These allow you to reference file paths, project directories, and cache locations dynamically.
+Tool operation **arguments** (`args`) and **environment-variable values** (`env`) support template placeholders that datamitsu resolves before executing the tool. These let you reference file paths, project directories, and cache locations dynamically.
 
 ## Available Placeholders
 
-| Placeholder   | Resolves To                           | Typical Use Case            |
-| ------------- | ------------------------------------- | --------------------------- |
-| `{file}`      | Single file path (per-file scope)     | `"{file}"`                  |
-| `{files}`     | Separate arguments per file           | `"{files}"`                 |
-| `{root}`      | Git repository root                   | `"{root}/.config"`          |
-| `{cwd}`       | Per-project working directory         | `"{cwd}/src"`               |
-| `{toolCache}` | Per-project, per-tool cache directory | `"{toolCache}/tsbuildinfo"` |
+| Placeholder   | Resolves To                           | `args` | `env` | Typical Use Case            |
+| ------------- | ------------------------------------- | :----: | :---: | --------------------------- |
+| `{file}`      | Single file path (per-file scope)     |   ✅   |  ❌   | `"{file}"`                  |
+| `{files}`     | Separate arguments per file           |   ✅   |  ❌   | `"{files}"`                 |
+| `{root}`      | Git repository root                   |   ✅   |  ✅   | `"{root}/.config"`          |
+| `{cwd}`       | Per-project working directory         |   ✅   |  ✅   | `"{cwd}/src"`               |
+| `{toolCache}` | Per-project, per-tool cache directory |   ✅   |  ✅   | `"{toolCache}/tsbuildinfo"` |
+
+`{file}` and `{files}` are per-file/per-batch argument concepts and are **not**
+available in `env` values (an environment variable holds a single string, not an
+argument list). The path placeholders `{root}`, `{cwd}` and `{toolCache}` work in
+both `args` and `env`.
+
+:::warning Unknown placeholders are a hard error
+datamitsu validates every `{placeholder}` in tool `args` and `env` at config-load
+time. If you use a token that datamitsu does not substitute (a typo like
+`{toolcache}`, an unsupported name like `{cache}`, or an `args`-only placeholder
+such as `{file}` inside `env`), config loading **fails immediately** with a clear
+message naming the tool, operation, and offending token — datamitsu never passes an
+unsubstituted placeholder through to the tool. Shell brace groups (`{js,ts}`) and
+Go templates (`{{.Path}}`) are not treated as placeholders and are left untouched.
+:::
 
 ## `{file}`
 
@@ -98,6 +113,31 @@ args: ["--cache-dir", "{toolCache}"];
 Each tool and each project gets its own cache directory, preventing conflicts in monorepos.
 
 If the cache path computation fails, the literal string `{toolCache}` is preserved unchanged.
+
+## Usage in environment values
+
+The path placeholders also expand in `env` values, which is the correct way to
+point a tool at its datamitsu-managed cache:
+
+```javascript
+const toolsConfig = {
+  "golangci-lint": {
+    name: "golangci-lint",
+    operations: {
+      lint: {
+        app: "golangci-lint",
+        args: ["run", "--allow-parallel-runners"],
+        scope: "per-project",
+        env: {
+          // Resolves to an absolute, per-project cache path.
+          GOLANGCI_LINT_CACHE: "{toolCache}",
+        },
+      },
+    },
+    projectTypes: ["golang-package"],
+  },
+};
+```
 
 ## Usage in Tool Configuration
 

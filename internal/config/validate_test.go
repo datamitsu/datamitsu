@@ -2787,3 +2787,75 @@ func TestValidateInitToolRefs(t *testing.T) {
 		}
 	})
 }
+
+func TestValidateTools(t *testing.T) {
+	t.Run("supported placeholders pass", func(t *testing.T) {
+		tools := MapOfTools{
+			"golangci-lint": {
+				Name: "golangci-lint",
+				Operations: map[OperationType]ToolOperation{
+					OpFix: {
+						Args: []string{"run", "--fix", "{cwd}/x", "{files}", "{file}", "{root}"},
+						Env:  map[string]string{"GOLANGCI_LINT_CACHE": "{toolCache}"},
+					},
+				},
+			},
+		}
+		if err := ValidateTools(tools); err != nil {
+			t.Errorf("ValidateTools() = %v, want nil", err)
+		}
+	})
+
+	t.Run("unsupported placeholder in args fails", func(t *testing.T) {
+		tools := MapOfTools{
+			"t": {Operations: map[OperationType]ToolOperation{
+				OpLint: {Args: []string{"--cache={toolcache}"}}, // wrong case
+			}},
+		}
+		err := ValidateTools(tools)
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if !strings.Contains(err.Error(), "{toolcache}") || !strings.Contains(err.Error(), "args") {
+			t.Errorf("error should name the bad placeholder and 'args', got: %v", err)
+		}
+	})
+
+	t.Run("unsupported placeholder in env fails", func(t *testing.T) {
+		tools := MapOfTools{
+			"t": {Operations: map[OperationType]ToolOperation{
+				OpFix: {Env: map[string]string{"CACHE": "{cache}"}},
+			}},
+		}
+		err := ValidateTools(tools)
+		if err == nil || !strings.Contains(err.Error(), "{cache}") {
+			t.Errorf("expected error naming {cache}, got: %v", err)
+		}
+	})
+
+	t.Run("args-only placeholder rejected in env", func(t *testing.T) {
+		tools := MapOfTools{
+			"t": {Operations: map[OperationType]ToolOperation{
+				OpFix: {Env: map[string]string{"F": "{file}"}},
+			}},
+		}
+		err := ValidateTools(tools)
+		if err == nil || !strings.Contains(err.Error(), "{file}") {
+			t.Errorf("expected {file} rejected in env, got: %v", err)
+		}
+	})
+
+	t.Run("shell globs and go templates are not flagged", func(t *testing.T) {
+		tools := MapOfTools{
+			"t": {Operations: map[OperationType]ToolOperation{
+				OpLint: {
+					Args: []string{"**/*.{js,ts}", "--format={{.Path}}", "{{Field}}"},
+					Env:  map[string]string{"GLOB": "a.{go,mod}"},
+				},
+			}},
+		}
+		if err := ValidateTools(tools); err != nil {
+			t.Errorf("globs/templates should not be flagged, got: %v", err)
+		}
+	})
+}

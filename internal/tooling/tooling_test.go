@@ -232,6 +232,88 @@ func TestReplacePlaceholders(t *testing.T) {
 	}
 }
 
+func TestReplaceEnvPlaceholders(t *testing.T) {
+	executor := NewExecutor("/root", false, false, &mockAppManager{}, nil)
+
+	rootCachePath, err := env.GetProjectCachePath("/root", "", "golangci-lint")
+	if err != nil {
+		t.Fatalf("failed to compute project cache path: %v", err)
+	}
+	projectCachePath, err := env.GetProjectCachePath("/root", "services/api", "golangci-lint")
+	if err != nil {
+		t.Fatalf("failed to compute project cache path: %v", err)
+	}
+
+	t.Run("nil env returned unchanged", func(t *testing.T) {
+		if got := executor.replaceEnvPlaceholders(nil, "", "golangci-lint"); got != nil {
+			t.Errorf("replaceEnvPlaceholders(nil) = %v, want nil", got)
+		}
+	})
+
+	t.Run("toolCache resolves to the absolute per-project cache path", func(t *testing.T) {
+		got := executor.replaceEnvPlaceholders(
+			map[string]string{"GOLANGCI_LINT_CACHE": "{toolCache}"}, "", "golangci-lint",
+		)
+		if got["GOLANGCI_LINT_CACHE"] != rootCachePath {
+			t.Errorf("GOLANGCI_LINT_CACHE = %q, want %q", got["GOLANGCI_LINT_CACHE"], rootCachePath)
+		}
+	})
+
+	t.Run("toolCache uses per-project isolation", func(t *testing.T) {
+		got := executor.replaceEnvPlaceholders(
+			map[string]string{"GOLANGCI_LINT_CACHE": "{toolCache}"}, "/root/services/api", "golangci-lint",
+		)
+		if got["GOLANGCI_LINT_CACHE"] != projectCachePath {
+			t.Errorf("GOLANGCI_LINT_CACHE = %q, want %q", got["GOLANGCI_LINT_CACHE"], projectCachePath)
+		}
+	})
+
+	t.Run("root and cwd expand in values", func(t *testing.T) {
+		got := executor.replaceEnvPlaceholders(
+			map[string]string{"ROOT": "{root}", "CWD": "{cwd}/x"}, "/root/services/api", "",
+		)
+		if got["ROOT"] != "/root" {
+			t.Errorf("ROOT = %q, want %q", got["ROOT"], "/root")
+		}
+		if got["CWD"] != "/root/services/api/x" {
+			t.Errorf("CWD = %q, want %q", got["CWD"], "/root/services/api/x")
+		}
+	})
+
+	t.Run("values without placeholders are unchanged", func(t *testing.T) {
+		got := executor.replaceEnvPlaceholders(map[string]string{"FOO": "bar"}, "", "golangci-lint")
+		if got["FOO"] != "bar" {
+			t.Errorf("FOO = %q, want %q", got["FOO"], "bar")
+		}
+	})
+}
+
+// TestPlaceholderSetsMatchExecutor guards against drift between the placeholder
+// names the config validator (config.ValidateTools) accepts and the ones the
+// executor actually substitutes: every allowed placeholder must expand, otherwise
+// the validator would pass a token the tool then receives as a broken literal.
+func TestPlaceholderSetsMatchExecutor(t *testing.T) {
+	executor := NewExecutor("/root", false, false, &mockAppManager{}, nil)
+
+	for _, name := range config.ToolArgPlaceholders {
+		token := "{" + name + "}"
+		got := executor.replacePlaceholders([]string{token}, "f.go", []string{"f.go"}, "/root/p", "tool")
+		for _, g := range got {
+			if strings.Contains(g, token) {
+				t.Errorf("arg placeholder %s is validator-allowed but not substituted by the executor", token)
+			}
+		}
+	}
+
+	for _, name := range config.ToolEnvPlaceholders {
+		token := "{" + name + "}"
+		got := executor.replaceEnvPlaceholders(map[string]string{"V": token}, "/root/p", "tool")
+		if strings.Contains(got["V"], token) {
+			t.Errorf("env placeholder %s is validator-allowed but not substituted by the executor", token)
+		}
+	}
+}
+
 func TestReplacePlaceholders_ToolCacheComputedPerCall(t *testing.T) {
 	executor := NewExecutor("/root", false, false, &mockAppManager{}, nil)
 

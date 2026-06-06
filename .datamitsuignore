@@ -1,2 +1,3 @@
 # tsgo (TS 7 native) rejects baseUrl from @docusaurus/tsconfig; tsc handles it
 website/**/*: tsgo
+**/*: harper-cli, vale, oxfmt

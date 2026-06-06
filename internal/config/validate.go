@@ -399,6 +399,115 @@ func ValidateInitToolRefs(initConfigs MapOfConfigInit, tools MapOfTools) []strin
 	return warnings
 }
 
+// ToolArgPlaceholders and ToolEnvPlaceholders are the substitution placeholders
+// datamitsu expands in tool-operation arguments and environment-variable values
+// respectively (the actual expansion lives in internal/tooling's executor). They
+// are the single source of truth for which {placeholder} tokens are valid;
+// ValidateTools rejects any other token instead of passing it through unsubstituted.
+var (
+	ToolArgPlaceholders = []string{"file", "files", "root", "cwd", "toolCache"}
+	ToolEnvPlaceholders = []string{"root", "cwd", "toolCache"}
+)
+
+// toolPlaceholderPattern matches a datamitsu-style placeholder: a brace-wrapped
+// identifier. Brace groups containing commas/dots/spaces (shell globs like
+// {js,ts}, Go templates like {{.X}}) don't match, and doubled braces are skipped
+// by findUnknownPlaceholders, so only genuine placeholder-shaped tokens validate.
+var toolPlaceholderPattern = regexp.MustCompile(`\{[A-Za-z][A-Za-z0-9_]*\}`)
+
+func findUnknownPlaceholders(value string, allowed map[string]bool) []string {
+	var unknown []string
+	for _, loc := range toolPlaceholderPattern.FindAllStringIndex(value, -1) {
+		start, end := loc[0], loc[1]
+		// Skip doubled braces ({{...}}) — Go templates / shell brace groups.
+		if start > 0 && value[start-1] == '{' {
+			continue
+		}
+		if end < len(value) && value[end] == '}' {
+			continue
+		}
+		name := value[start+1 : end-1]
+		if !allowed[name] {
+			unknown = append(unknown, "{"+name+"}")
+		}
+	}
+	return unknown
+}
+
+func placeholderSet(names []string) map[string]bool {
+	set := make(map[string]bool, len(names))
+	for _, n := range names {
+		set[n] = true
+	}
+	return set
+}
+
+func placeholderList(names []string) string {
+	quoted := make([]string, len(names))
+	for i, n := range names {
+		quoted[i] = "{" + n + "}"
+	}
+	return strings.Join(quoted, ", ")
+}
+
+// ValidateTools fails fast when a tool argument or environment value uses a
+// {placeholder} datamitsu does not substitute. Passing an unknown placeholder
+// through unchanged silently breaks the tool (e.g. GOLANGCI_LINT_CACHE={toolcache}
+// reaching golangci-lint as a literal non-absolute path), so it is a config error.
+func ValidateTools(tools MapOfTools) error {
+	argAllowed := placeholderSet(ToolArgPlaceholders)
+	envAllowed := placeholderSet(ToolEnvPlaceholders)
+
+	toolNames := make([]string, 0, len(tools))
+	for name := range tools {
+		toolNames = append(toolNames, name)
+	}
+	sort.Strings(toolNames)
+
+	var errs []string
+	for _, toolName := range toolNames {
+		tool := tools[toolName]
+
+		opTypes := make([]string, 0, len(tool.Operations))
+		for opType := range tool.Operations {
+			opTypes = append(opTypes, string(opType))
+		}
+		sort.Strings(opTypes)
+
+		for _, opType := range opTypes {
+			op := tool.Operations[OperationType(opType)]
+
+			for _, arg := range op.Args {
+				for _, ph := range findUnknownPlaceholders(arg, argAllowed) {
+					errs = append(errs, fmt.Sprintf(
+						"tool %q operation %q: unsupported placeholder %s in args (supported: %s)",
+						toolName, opType, ph, placeholderList(ToolArgPlaceholders),
+					))
+				}
+			}
+
+			envKeys := make([]string, 0, len(op.Env))
+			for key := range op.Env {
+				envKeys = append(envKeys, key)
+			}
+			sort.Strings(envKeys)
+			for _, key := range envKeys {
+				for _, ph := range findUnknownPlaceholders(op.Env[key], envAllowed) {
+					errs = append(errs, fmt.Sprintf(
+						"tool %q operation %q: unsupported placeholder %s in env %q (supported: %s)",
+						toolName, opType, ph, key, placeholderList(ToolEnvPlaceholders),
+					))
+				}
+			}
+		}
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("config validation failed:\n  %s", strings.Join(errs, "\n  "))
+	}
+	return nil
+}
+
 // ValidateBundles validates bundle configurations.
 // It checks that each bundle has content (files or archives), link paths are safe,
 // and link names are unique across both apps and bundles.
