@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -93,6 +94,8 @@ func ensureGitHubAppsJSONExists(path string) error {
 }
 
 func runPullGithub(cmd *cobra.Command, args []string) error {
+	ctx := commandContext(cmd)
+
 	// Get file path from positional argument
 	githubAppsPath := args[0]
 
@@ -149,7 +152,7 @@ func runPullGithub(cmd *cobra.Command, args []string) error {
 			}
 			// GetLatestReleaseWithMinAge falls through to GetLatestRelease when
 			// minAge <= 0, so a nil release only happens under an active cutoff.
-			release, err = client.GetLatestReleaseWithMinAge(metadata.Owner, metadata.Repo, minAge)
+			release, err = client.GetLatestReleaseWithMinAge(ctx, metadata.Owner, metadata.Repo, minAge)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error fetching latest release: %v\n", err)
 				continue
@@ -191,7 +194,7 @@ func runPullGithub(cmd *cobra.Command, args []string) error {
 		// Fetch release if not already fetched
 		if release == nil {
 			fmt.Printf("Fetching release %s...\n", effectiveTag)
-			release, err = client.GetRelease(metadata.Owner, metadata.Repo, effectiveTag)
+			release, err = client.GetRelease(ctx, metadata.Owner, metadata.Repo, effectiveTag)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error fetching release: %v\n", err)
 				continue
@@ -199,7 +202,7 @@ func runPullGithub(cmd *cobra.Command, args []string) error {
 		}
 
 		// Build binaries into a temporary entry to avoid mutating shared state on failure
-		binariesEntry, err := buildBinariesForApp(appName, release, currentHash, state)
+		binariesEntry, err := buildBinariesForApp(ctx, appName, release, currentHash, state)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error updating binaries for %s: %v\n", appName, err)
 			continue
@@ -207,7 +210,7 @@ func runPullGithub(cmd *cobra.Command, args []string) error {
 
 		// Fetch repository description (matches node/UV pattern: use fetched if non-empty, else preserve existing)
 		desc := ""
-		repoInfo, err := client.GetRepository(metadata.Owner, metadata.Repo)
+		repoInfo, err := client.GetRepository(ctx, metadata.Owner, metadata.Repo)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to fetch repository description for %s: %v\n", appName, err)
 		} else if repoInfo != nil {
@@ -276,7 +279,7 @@ type detectionResult struct {
 	err         error
 }
 
-func buildBinariesForApp(appName string, release *github.Release, configHash string, state *appstate.State) (*appstate.BinariesEntry, error) {
+func buildBinariesForApp(ctx context.Context, appName string, release *github.Release, configHash string, state *appstate.State) (*appstate.BinariesEntry, error) {
 	fmt.Printf("\nDetecting binaries:\n")
 
 	// Build into a fresh entry to avoid mutating shared state on failure
@@ -391,6 +394,7 @@ func buildBinariesForApp(appName string, release *github.Release, configHash str
 		if verifyExtractionFlag {
 			hashType := binmanager.BinHashTypeSHA256
 			if err := binmanager.VerifyBinaryExtraction(
+				ctx,
 				asset.BrowserDownloadURL,
 				hash,
 				hashType,

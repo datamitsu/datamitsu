@@ -1,6 +1,7 @@
 package github
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -76,7 +77,7 @@ func TestGetRelease(t *testing.T) {
 		client := NewClient()
 		client.httpClient = server.Client()
 
-		result, err := client.fetchRelease(server.URL)
+		result, err := client.fetchRelease(context.Background(), server.URL)
 		if err != nil {
 			t.Fatalf("fetchRelease() error = %v", err)
 		}
@@ -99,7 +100,7 @@ func TestGetRelease(t *testing.T) {
 		client := NewClient()
 		client.httpClient = server.Client()
 
-		_, err := client.fetchRelease(server.URL)
+		_, err := client.fetchRelease(context.Background(), server.URL)
 		if err == nil {
 			t.Error("expected error for 404, got nil")
 		}
@@ -128,7 +129,7 @@ func TestGetRelease(t *testing.T) {
 		client.token = expectedToken
 		client.httpClient = server.Client()
 
-		_, err := client.doRequest(server.URL)
+		_, err := client.doRequest(context.Background(), server.URL)
 		if err != nil {
 			t.Fatalf("doRequest() error = %v", err)
 		}
@@ -154,7 +155,7 @@ func TestGetLatestRelease(t *testing.T) {
 			}),
 		}
 
-		release, err := client.GetLatestRelease("myowner", "myrepo")
+		release, err := client.GetLatestRelease(context.Background(), "myowner", "myrepo")
 		if err != nil {
 			t.Fatalf("GetLatestRelease() error = %v", err)
 		}
@@ -185,7 +186,7 @@ func TestGetReleaseByTag(t *testing.T) {
 			}),
 		}
 
-		release, err := client.GetRelease("myowner", "myrepo", "v2.0.0")
+		release, err := client.GetRelease(context.Background(), "myowner", "myrepo", "v2.0.0")
 		if err != nil {
 			t.Fatalf("GetRelease() error = %v", err)
 		}
@@ -219,7 +220,7 @@ func TestFetchReleaseRetry(t *testing.T) {
 		client := NewClient()
 		client.httpClient = server.Client()
 
-		release, err := client.fetchRelease(server.URL)
+		release, err := client.fetchRelease(context.Background(), server.URL)
 		if err != nil {
 			t.Fatalf("fetchRelease() error = %v", err)
 		}
@@ -244,7 +245,7 @@ func TestFetchReleaseRetry(t *testing.T) {
 		client := NewClient()
 		client.httpClient = server.Client()
 
-		_, err := client.fetchRelease(server.URL)
+		_, err := client.fetchRelease(context.Background(), server.URL)
 		if err == nil {
 			t.Error("expected error for 404")
 		}
@@ -265,7 +266,7 @@ func TestFetchReleaseRetry(t *testing.T) {
 		client := NewClient()
 		client.httpClient = server.Client()
 
-		_, err := client.fetchRelease(server.URL)
+		_, err := client.fetchRelease(context.Background(), server.URL)
 		if err == nil {
 			t.Error("expected error for 403")
 		}
@@ -291,7 +292,7 @@ func TestFetchReleaseRetry(t *testing.T) {
 		client := NewClient()
 		client.httpClient = server.Client()
 
-		_, err := client.fetchRelease(server.URL)
+		_, err := client.fetchRelease(context.Background(), server.URL)
 		if err == nil {
 			t.Error("expected error after max retries")
 		}
@@ -318,7 +319,7 @@ func TestDoRequest(t *testing.T) {
 		client := NewClient()
 		client.httpClient = server.Client()
 
-		result, err := client.doRequest(server.URL)
+		result, err := client.doRequest(context.Background(), server.URL)
 		if err != nil {
 			t.Fatalf("doRequest() error = %v", err)
 		}
@@ -338,7 +339,7 @@ func TestDoRequest(t *testing.T) {
 		client := NewClient()
 		client.httpClient = server.Client()
 
-		_, err := client.doRequest(server.URL)
+		_, err := client.doRequest(context.Background(), server.URL)
 		if err == nil {
 			t.Error("expected error for invalid JSON")
 		}
@@ -354,7 +355,7 @@ func TestDoRequest(t *testing.T) {
 		client := NewClient()
 		client.httpClient = server.Client()
 
-		_, err := client.doRequest(server.URL)
+		_, err := client.doRequest(context.Background(), server.URL)
 		if err == nil {
 			t.Error("expected error for 400 status")
 		}
@@ -405,7 +406,7 @@ func TestGetRepository(t *testing.T) {
 		client := NewClient()
 		client.httpClient = server.Client()
 
-		result, err := client.fetchRepository(server.URL)
+		result, err := client.fetchRepository(context.Background(), server.URL)
 		if err != nil {
 			t.Fatalf("fetchRepository() error = %v", err)
 		}
@@ -427,7 +428,7 @@ func TestGetRepository(t *testing.T) {
 		client := NewClient()
 		client.httpClient = server.Client()
 
-		_, err := client.fetchRepository(server.URL)
+		_, err := client.fetchRepository(context.Background(), server.URL)
 		if err == nil {
 			t.Error("expected error for 404, got nil")
 		}
@@ -446,7 +447,7 @@ func TestGetRepository(t *testing.T) {
 		client := NewClient()
 		client.httpClient = server.Client()
 
-		_, err := client.fetchRepository(server.URL)
+		_, err := client.fetchRepository(context.Background(), server.URL)
 		if err == nil {
 			t.Error("expected error for 403, got nil")
 		}
@@ -472,7 +473,7 @@ func TestGetRepository(t *testing.T) {
 		client.token = expectedToken
 		client.httpClient = server.Client()
 
-		_, err := client.fetchRepository(server.URL)
+		_, err := client.fetchRepository(context.Background(), server.URL)
 		if err != nil {
 			t.Fatalf("fetchRepository() error = %v", err)
 		}
@@ -488,7 +489,7 @@ func TestGetRepository(t *testing.T) {
 		client := NewClient()
 		client.httpClient = server.Client()
 
-		_, err := client.fetchRepository(server.URL)
+		_, err := client.fetchRepository(context.Background(), server.URL)
 		if err == nil {
 			t.Error("expected error for invalid JSON, got nil")
 		}
@@ -540,7 +541,7 @@ func TestReleaseFieldParsing(t *testing.T) {
 		client := NewClient()
 		client.httpClient = server.Client()
 
-		result, err := client.doRequest(server.URL)
+		result, err := client.doRequest(context.Background(), server.URL)
 		if err != nil {
 			t.Fatalf("doRequest() error = %v", err)
 		}
@@ -568,7 +569,7 @@ func TestReleaseFieldParsing(t *testing.T) {
 		client := NewClient()
 		client.httpClient = server.Client()
 
-		result, err := client.doRequest(server.URL)
+		result, err := client.doRequest(context.Background(), server.URL)
 		if err != nil {
 			t.Fatalf("doRequest() error = %v", err)
 		}
@@ -589,7 +590,7 @@ func TestReleaseFieldParsing(t *testing.T) {
 		client := NewClient()
 		client.httpClient = server.Client()
 
-		result, err := client.doRequest(server.URL)
+		result, err := client.doRequest(context.Background(), server.URL)
 		if err != nil {
 			t.Fatalf("doRequest() error = %v", err)
 		}
@@ -615,7 +616,7 @@ func TestListReleases(t *testing.T) {
 			}),
 		}
 
-		releases, err := client.ListReleases("myowner", "myrepo", 30)
+		releases, err := client.ListReleases(context.Background(), "myowner", "myrepo", 30)
 		if err != nil {
 			t.Fatalf("ListReleases() error = %v", err)
 		}
@@ -646,7 +647,7 @@ func TestListReleases(t *testing.T) {
 			}),
 		}
 
-		_, err := client.ListReleases("o", "r", 0)
+		_, err := client.ListReleases(context.Background(), "o", "r", 0)
 		if err != nil {
 			t.Fatalf("ListReleases() error = %v", err)
 		}
@@ -668,7 +669,7 @@ func TestListReleases(t *testing.T) {
 			}),
 		}
 
-		_, err := client.ListReleases("o", "r", 30)
+		_, err := client.ListReleases(context.Background(), "o", "r", 30)
 		if err == nil {
 			t.Error("expected error for 404")
 		}
@@ -704,7 +705,7 @@ func TestGetLatestReleaseWithMinAge(t *testing.T) {
 			`{"tag_name":"v1.0.0","published_at":"` + old + `","assets":[]}]`
 		client := newClientReturning(body)
 
-		r, err := client.GetLatestReleaseWithMinAge("o", "r", 60)
+		r, err := client.GetLatestReleaseWithMinAge(context.Background(), "o", "r", 60)
 		if err != nil {
 			t.Fatalf("error = %v", err)
 		}
@@ -719,7 +720,7 @@ func TestGetLatestReleaseWithMinAge(t *testing.T) {
 			`{"tag_name":"v1.0.0","published_at":"` + old + `","assets":[]}]`
 		client := newClientReturning(body)
 
-		r, err := client.GetLatestReleaseWithMinAge("o", "r", 60)
+		r, err := client.GetLatestReleaseWithMinAge(context.Background(), "o", "r", 60)
 		if err != nil {
 			t.Fatalf("error = %v", err)
 		}
@@ -734,7 +735,7 @@ func TestGetLatestReleaseWithMinAge(t *testing.T) {
 			`{"tag_name":"v1.0.0","published_at":"` + old + `","assets":[]}]`
 		client := newClientReturning(body)
 
-		r, err := client.GetLatestReleaseWithMinAge("o", "r", 60)
+		r, err := client.GetLatestReleaseWithMinAge(context.Background(), "o", "r", 60)
 		if err != nil {
 			t.Fatalf("error = %v", err)
 		}
@@ -749,7 +750,7 @@ func TestGetLatestReleaseWithMinAge(t *testing.T) {
 			`{"tag_name":"v1.0.0","published_at":"` + old + `","assets":[]}]`
 		client := newClientReturning(body)
 
-		r, err := client.GetLatestReleaseWithMinAge("o", "r", 60)
+		r, err := client.GetLatestReleaseWithMinAge(context.Background(), "o", "r", 60)
 		if err != nil {
 			t.Fatalf("error = %v", err)
 		}
@@ -771,7 +772,7 @@ func TestGetLatestReleaseWithMinAge(t *testing.T) {
 			}),
 		}
 
-		r, err := client.GetLatestReleaseWithMinAge("o", "r", 0)
+		r, err := client.GetLatestReleaseWithMinAge(context.Background(), "o", "r", 0)
 		if err != nil {
 			t.Fatalf("error = %v", err)
 		}
@@ -788,7 +789,7 @@ func TestGetLatestReleaseWithMinAge(t *testing.T) {
 			`{"tag_name":"v2.0.0","published_at":"` + fresh + `","assets":[]}]`
 		client := newClientReturning(body)
 
-		r, err := client.GetLatestReleaseWithMinAge("o", "r", 60)
+		r, err := client.GetLatestReleaseWithMinAge(context.Background(), "o", "r", 60)
 		if err != nil {
 			t.Fatalf("error = %v", err)
 		}

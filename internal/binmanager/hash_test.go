@@ -360,6 +360,10 @@ func TestComputeBundlePath(t *testing.T) {
 }
 
 func TestGetBundleRoot(t *testing.T) {
+	// Isolate the store: subtests below MkdirAll/RemoveAll real bundle paths,
+	// and without this they wipe the shared ~/.cache/datamitsu/store/.bundles.
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
+
 	t.Run("error when bundle not installed", func(t *testing.T) {
 		bundles := MapOfBundles{
 			"test-bundle": {

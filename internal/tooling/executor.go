@@ -42,8 +42,8 @@ type Executor struct {
 
 // AppManager interface for getting application command information
 type AppManager interface {
-	GetBinaryPath(appName string) (string, error)
-	GetCommandInfo(appName string) (*binmanager.CommandInfo, error)
+	GetBinaryPath(ctx context.Context, appName string) (string, error)
+	GetCommandInfo(ctx context.Context, appName string) (*binmanager.CommandInfo, error)
 }
 
 // ResultCallback is called when a task completes
@@ -396,7 +396,7 @@ func (e *Executor) executeTask(ctx context.Context, task Task) ExecutionResult {
 	}
 
 	// Get command info
-	cmdInfo, err := e.appManager.GetCommandInfo(task.OpConfig.App)
+	cmdInfo, err := e.appManager.GetCommandInfo(ctx, task.OpConfig.App)
 	if err != nil {
 		log.Debug("failed to get command info",
 			zap.String("app", task.OpConfig.App),

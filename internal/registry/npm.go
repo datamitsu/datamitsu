@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -40,9 +41,9 @@ var npmHTTPClient = &http.Client{Timeout: 15 * time.Second}
 // npmRegistryBaseURL is the registry root; overridable in tests.
 var npmRegistryBaseURL = "https://registry.npmjs.org"
 
-func GetNPMPackageInfo(packageName string) (*NPMPackageInfo, error) {
+func GetNPMPackageInfo(ctx context.Context, packageName string) (*NPMPackageInfo, error) {
 	url := fmt.Sprintf("%s/%s/latest", npmRegistryBaseURL, npmPackagePath(packageName))
-	return getNPMPackageInfoFromURL(url, packageName)
+	return getNPMPackageInfoFromURL(ctx, url, packageName)
 }
 
 // npmPackagePath encodes a package name for use in a registry URL path.
@@ -73,12 +74,12 @@ func isNPMPreRelease(version string) bool {
 // returns the "latest" dist-tag (when it is non-prerelease and old enough) or
 // walks all versions for the newest non-prerelease old enough. Returns
 // (nil, nil) when no version qualifies.
-func GetNPMPackageInfoWithMinAge(packageName string, minAgeMinutes int) (*NPMPackageInfo, error) {
+func GetNPMPackageInfoWithMinAge(ctx context.Context, packageName string, minAgeMinutes int) (*NPMPackageInfo, error) {
 	if minAgeMinutes <= 0 {
-		return GetNPMPackageInfo(packageName)
+		return GetNPMPackageInfo(ctx, packageName)
 	}
 
-	full, err := getNPMFullResponse(packageName)
+	full, err := getNPMFullResponse(ctx, packageName)
 	if err != nil {
 		return nil, err
 	}
@@ -142,9 +143,13 @@ func npmInfoFromFull(full *npmFullResponse, version string) *NPMPackageInfo {
 	}
 }
 
-func getNPMFullResponse(packageName string) (*npmFullResponse, error) {
+func getNPMFullResponse(ctx context.Context, packageName string) (*npmFullResponse, error) {
 	url := fmt.Sprintf("%s/%s", npmRegistryBaseURL, npmPackagePath(packageName))
-	resp, err := npmHTTPClient.Get(url)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build request: %w", err)
+	}
+	resp, err := npmHTTPClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch npm package %s: %w", packageName, err)
 	}
@@ -165,8 +170,12 @@ func getNPMFullResponse(packageName string) (*npmFullResponse, error) {
 	return &result, nil
 }
 
-func getNPMPackageInfoFromURL(url, packageName string) (*NPMPackageInfo, error) {
-	resp, err := npmHTTPClient.Get(url)
+func getNPMPackageInfoFromURL(ctx context.Context, url, packageName string) (*NPMPackageInfo, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build request: %w", err)
+	}
+	resp, err := npmHTTPClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch npm package %s: %w", packageName, err)
 	}

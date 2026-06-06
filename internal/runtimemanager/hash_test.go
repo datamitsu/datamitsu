@@ -1,6 +1,7 @@
 package runtimemanager
 
 import (
+	"context"
 	"runtime"
 	"testing"
 
@@ -11,7 +12,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/target"
 )
 
-var testLibc = string(target.DetectHost().Libc)
+var testLibc = string(target.DetectHost(context.Background()).Libc)
 
 func makeTestManagedRuntime(url, hash string) config.RuntimeConfig {
 	return config.RuntimeConfig{

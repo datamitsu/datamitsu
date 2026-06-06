@@ -10,6 +10,7 @@ import (
 // VerifyBinaryExtraction downloads and verifies that a binary can be extracted successfully
 // Returns nil if verification succeeds, error otherwise
 func VerifyBinaryExtraction(
+	ctx context.Context,
 	url string,
 	hash string,
 	hashType BinHashType,
@@ -24,7 +25,7 @@ func VerifyBinaryExtraction(
 		_ = os.RemoveAll(tempDir)
 	}()
 
-	downloadedPath, err := downloadFile(context.Background(), url, tempDir)
+	downloadedPath, err := downloadFile(ctx, url, tempDir)
 	if err != nil {
 		return fmt.Errorf("download failed: %w", err)
 	}
@@ -54,8 +55,8 @@ func VerifyBinaryExtraction(
 }
 
 // DownloadFileForVerify downloads a file to destDir. Public wrapper around downloadFile for verify-all.
-func DownloadFileForVerify(url string, destDir string) (string, error) {
-	return downloadFile(context.Background(), url, destDir)
+func DownloadFileForVerify(ctx context.Context, url string, destDir string) (string, error) {
+	return downloadFile(ctx, url, destDir)
 }
 
 // VerifyFileHashPublic verifies a file's hash. Public wrapper around verifyFileHash for verify-all.

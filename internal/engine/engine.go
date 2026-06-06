@@ -21,7 +21,7 @@ type Engine struct {
 // It must be nil in production; tests set it to simulate failure scenarios.
 var testInitHook func(*Engine)
 
-func New(binaryCommandOverride string) (e *Engine, err error) {
+func New(ctx context.Context, binaryCommandOverride string) (e *Engine, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("engine initialization panic: %v", r)
@@ -29,7 +29,7 @@ func New(binaryCommandOverride string) (e *Engine, err error) {
 	}()
 
 	// Collect facts about the environment
-	projectFacts, gitRoot, err := facts.Collect(context.Background(), binaryCommandOverride)
+	projectFacts, gitRoot, err := facts.Collect(ctx, binaryCommandOverride)
 	if err != nil {
 		return nil, err
 	}

@@ -1,6 +1,7 @@
 package runtimemanager
 
 import (
+	"context"
 	"os/exec"
 	"testing"
 
@@ -473,7 +474,7 @@ func TestCollectRequiredRuntimes(t *testing.T) {
 func TestInstallRuntimes(t *testing.T) {
 	t.Run("empty names returns empty stats", func(t *testing.T) {
 		rm := New(makeTestRuntimes())
-		stats, err := rm.InstallRuntimes([]string{}, 3)
+		stats, err := rm.InstallRuntimes(context.Background(), []string{}, 3)
 		if err != nil {
 			t.Fatalf("InstallRuntimes() error = %v", err)
 		}
@@ -484,7 +485,7 @@ func TestInstallRuntimes(t *testing.T) {
 
 	t.Run("system runtimes reported as already cached", func(t *testing.T) {
 		rm := New(makeTestRuntimes())
-		stats, err := rm.InstallRuntimes([]string{"system-uv"}, 3)
+		stats, err := rm.InstallRuntimes(context.Background(), []string{"system-uv"}, 3)
 		if err != nil {
 			t.Fatalf("InstallRuntimes() error = %v", err)
 		}
@@ -498,7 +499,7 @@ func TestInstallRuntimes(t *testing.T) {
 
 	t.Run("unknown runtime is skipped", func(t *testing.T) {
 		rm := New(makeTestRuntimes())
-		stats, err := rm.InstallRuntimes([]string{"nonexistent"}, 3)
+		stats, err := rm.InstallRuntimes(context.Background(), []string{"nonexistent"}, 3)
 		if err != nil {
 			t.Fatalf("InstallRuntimes() error = %v", err)
 		}
@@ -519,7 +520,7 @@ func TestInstallRuntimes(t *testing.T) {
 			},
 		}
 		rm := New(runtimes)
-		stats, err := rm.InstallRuntimes([]string{"broken"}, 3)
+		stats, err := rm.InstallRuntimes(context.Background(), []string{"broken"}, 3)
 		if err != nil {
 			t.Fatalf("InstallRuntimes() error = %v", err)
 		}
@@ -530,7 +531,7 @@ func TestInstallRuntimes(t *testing.T) {
 
 	t.Run("mixed system and unknown runtimes", func(t *testing.T) {
 		rm := New(makeTestRuntimes())
-		stats, err := rm.InstallRuntimes([]string{"system-uv", "nonexistent"}, 3)
+		stats, err := rm.InstallRuntimes(context.Background(), []string{"system-uv", "nonexistent"}, 3)
 		if err != nil {
 			t.Fatalf("InstallRuntimes() error = %v", err)
 		}
@@ -784,7 +785,7 @@ func TestGetCommandInfoJVM(t *testing.T) {
 
 		// InstallJVMApp will fail because there's no actual JDK binary to download,
 		// but we can verify the dispatch works by checking that it attempts JVM installation
-		_, err := rm.GetCommandInfo("openapi-generator", app)
+		_, err := rm.GetCommandInfo(context.Background(), "openapi-generator", app)
 		if err == nil {
 			t.Skip("unexpected success - JDK binary not available in test env")
 		}
@@ -1205,7 +1206,7 @@ func TestGetCommandInfoGo(t *testing.T) {
 		// error must originate there (failing to resolve "nonexistent"), not from
 		// the fall-through "not a runtime-managed app". Using an unresolvable
 		// runtime keeps this deterministic regardless of the host environment.
-		_, err := rm.GetCommandInfo("govulncheck", app)
+		_, err := rm.GetCommandInfo(context.Background(), "govulncheck", app)
 		if err == nil {
 			t.Fatal("expected error resolving nonexistent Go runtime, got nil")
 		}
@@ -1588,7 +1589,7 @@ func TestInstallRuntimes_MuslAutoFallback(t *testing.T) {
 		return "", &exec.Error{Name: file, Err: exec.ErrNotFound}
 	})
 
-	stats, err := rm.InstallRuntimes([]string{"node"}, 3)
+	stats, err := rm.InstallRuntimes(context.Background(), []string{"node"}, 3)
 	if err != nil {
 		t.Fatalf("InstallRuntimes() error = %v", err)
 	}

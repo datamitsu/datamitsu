@@ -57,6 +57,8 @@ type npmVersionResult struct {
 }
 
 func runPullNode(cmd *cobra.Command, args []string) error {
+	ctx := commandContext(cmd)
+
 	file := args[0]
 
 	// Resolve the effective minimum release age from runtime config + flag.
@@ -105,7 +107,7 @@ func runPullNode(cmd *cobra.Command, args []string) error {
 			CurrentVersion: entry.Version,
 		}
 
-		info, err := registry.GetNPMPackageInfoWithMinAge(entry.PackageName, minAge)
+		info, err := registry.GetNPMPackageInfoWithMinAge(ctx, entry.PackageName, minAge)
 		switch {
 		case err != nil:
 			result.Error = err.Error()

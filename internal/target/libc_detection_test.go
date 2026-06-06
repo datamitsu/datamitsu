@@ -1,6 +1,7 @@
 package target
 
 import (
+	"context"
 	"os"
 	"runtime"
 	"testing"
@@ -243,7 +244,7 @@ func TestDetectLibcNonLinux(t *testing.T) {
 	if runtime.GOOS == "linux" {
 		t.Skip("this test only runs on non-Linux platforms")
 	}
-	result := DetectLibc()
+	result := DetectLibc(context.Background())
 	if result != LibcUnknown {
 		t.Errorf("DetectLibc() on non-Linux = %q, want %q", result, LibcUnknown)
 	}
@@ -253,7 +254,7 @@ func TestDetectLibcOnLinux(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("this test only runs on Linux")
 	}
-	result := DetectLibc()
+	result := DetectLibc(context.Background())
 	if result != LibcGlibc && result != LibcMusl && result != LibcUnknown {
 		t.Errorf("DetectLibc() = %q, want one of glibc/musl/unknown", result)
 	}
@@ -263,7 +264,7 @@ func TestDetectViaLddNonLinux(t *testing.T) {
 	if runtime.GOOS == "linux" {
 		t.Skip("only runs on non-Linux")
 	}
-	if result := detectViaLdd(); result != LibcUnknown {
+	if result := detectViaLdd(context.Background()); result != LibcUnknown {
 		t.Errorf("detectViaLdd() on non-Linux = %q, want unknown", result)
 	}
 }

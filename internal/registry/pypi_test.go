@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -29,7 +30,7 @@ func TestGetPyPIPackageInfo(t *testing.T) {
 		pypiHTTPClient = server.Client()
 		defer func() { pypiHTTPClient = origClient }()
 
-		info, err := getPyPIPackageInfoFromURL(server.URL+"/pypi/yamllint/json", "yamllint")
+		info, err := getPyPIPackageInfoFromURL(context.Background(), server.URL+"/pypi/yamllint/json", "yamllint")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -55,7 +56,7 @@ func TestGetPyPIPackageInfo(t *testing.T) {
 		pypiHTTPClient = server.Client()
 		defer func() { pypiHTTPClient = origClient }()
 
-		_, err := getPyPIPackageInfoFromURL(server.URL+"/pypi/nonexistent/json", "nonexistent")
+		_, err := getPyPIPackageInfoFromURL(context.Background(), server.URL+"/pypi/nonexistent/json", "nonexistent")
 		if err == nil {
 			t.Fatal("expected error for 404, got nil")
 		}
@@ -72,7 +73,7 @@ func TestGetPyPIPackageInfo(t *testing.T) {
 		pypiHTTPClient = server.Client()
 		defer func() { pypiHTTPClient = origClient }()
 
-		_, err := getPyPIPackageInfoFromURL(server.URL+"/pypi/pkg/json", "pkg")
+		_, err := getPyPIPackageInfoFromURL(context.Background(), server.URL+"/pypi/pkg/json", "pkg")
 		if err == nil {
 			t.Fatal("expected error for 500, got nil")
 		}
@@ -89,7 +90,7 @@ func TestGetPyPIPackageInfo(t *testing.T) {
 		pypiHTTPClient = server.Client()
 		defer func() { pypiHTTPClient = origClient }()
 
-		_, err := getPyPIPackageInfoFromURL(server.URL+"/pypi/pkg/json", "pkg")
+		_, err := getPyPIPackageInfoFromURL(context.Background(), server.URL+"/pypi/pkg/json", "pkg")
 		if err == nil {
 			t.Fatal("expected error for invalid JSON, got nil")
 		}
@@ -131,7 +132,7 @@ func TestGetPyPIPackageInfoWithMinAge(t *testing.T) {
 			},
 		})
 
-		info, err := GetPyPIPackageInfoWithMinAge("pkg", 0)
+		info, err := GetPyPIPackageInfoWithMinAge(context.Background(), "pkg", 0)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -149,7 +150,7 @@ func TestGetPyPIPackageInfoWithMinAge(t *testing.T) {
 			},
 		})
 
-		info, err := GetPyPIPackageInfoWithMinAge("pkg", minAge)
+		info, err := GetPyPIPackageInfoWithMinAge(context.Background(), "pkg", minAge)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -170,7 +171,7 @@ func TestGetPyPIPackageInfoWithMinAge(t *testing.T) {
 			},
 		})
 
-		info, err := GetPyPIPackageInfoWithMinAge("pkg", minAge)
+		info, err := GetPyPIPackageInfoWithMinAge(context.Background(), "pkg", minAge)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -188,7 +189,7 @@ func TestGetPyPIPackageInfoWithMinAge(t *testing.T) {
 			},
 		})
 
-		info, err := GetPyPIPackageInfoWithMinAge("pkg", minAge)
+		info, err := GetPyPIPackageInfoWithMinAge(context.Background(), "pkg", minAge)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -206,7 +207,7 @@ func TestGetPyPIPackageInfoWithMinAge(t *testing.T) {
 			},
 		})
 
-		info, err := GetPyPIPackageInfoWithMinAge("pkg", minAge)
+		info, err := GetPyPIPackageInfoWithMinAge(context.Background(), "pkg", minAge)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -224,7 +225,7 @@ func TestGetPyPIPackageInfoWithMinAge(t *testing.T) {
 			},
 		})
 
-		info, err := GetPyPIPackageInfoWithMinAge("pkg", minAge)
+		info, err := GetPyPIPackageInfoWithMinAge(context.Background(), "pkg", minAge)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -242,7 +243,7 @@ func TestGetPyPIPackageInfoWithMinAge(t *testing.T) {
 			},
 		})
 
-		info, err := GetPyPIPackageInfoWithMinAge("pkg", minAge)
+		info, err := GetPyPIPackageInfoWithMinAge(context.Background(), "pkg", minAge)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -262,7 +263,7 @@ func TestGetPyPIPackageInfoWithMinAge(t *testing.T) {
 			},
 		})
 
-		info, err := GetPyPIPackageInfoWithMinAge("pkg", minAge)
+		info, err := GetPyPIPackageInfoWithMinAge(context.Background(), "pkg", minAge)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -280,7 +281,7 @@ func TestGetPyPIPackageInfoWithMinAge(t *testing.T) {
 			},
 		})
 
-		info, err := GetPyPIPackageInfoWithMinAge("pkg", minAge)
+		info, err := GetPyPIPackageInfoWithMinAge(context.Background(), "pkg", minAge)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}

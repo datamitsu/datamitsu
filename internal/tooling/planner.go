@@ -115,7 +115,7 @@ func (p *Planner) Plan(ctx context.Context, operation config.OperationType, file
 	var tasks []Task
 	func() {
 		defer p.timings.Start("Collect tasks")()
-		tasks = p.collectTasks(operation, files)
+		tasks = p.collectTasks(ctx, operation, files)
 	}()
 
 	// Filter by selectedTools if specified
@@ -146,7 +146,7 @@ func (p *Planner) Plan(ctx context.Context, operation config.OperationType, file
 }
 
 // collectTasks collects all tasks for the given operation
-func (p *Planner) collectTasks(operation config.OperationType, files []string) []Task {
+func (p *Planner) collectTasks(ctx context.Context, operation config.OperationType, files []string) []Task {
 	var tasks []Task
 
 	toolNames := make([]string, 0, len(p.tools))
@@ -193,7 +193,7 @@ func (p *Planner) collectTasks(operation config.OperationType, files []string) [
 			var matchedFiles []string
 			if len(opConfig.Globs) > 0 {
 				if len(files) == 0 {
-					matchedFiles = p.findFilesByGlobs(opConfig.Globs)
+					matchedFiles = p.findFilesByGlobs(ctx, opConfig.Globs)
 				} else {
 					matchedFiles = p.filterFilesByGlobs(files, opConfig.Globs)
 				}
@@ -210,7 +210,7 @@ func (p *Planner) collectTasks(operation config.OperationType, files []string) [
 			var matchedFiles []string
 			if len(opConfig.Globs) > 0 {
 				if len(files) == 0 {
-					matchedFiles = p.findFilesByGlobs(opConfig.Globs)
+					matchedFiles = p.findFilesByGlobs(ctx, opConfig.Globs)
 				} else {
 					matchedFiles = p.filterFilesByGlobs(files, opConfig.Globs)
 				}
@@ -219,7 +219,7 @@ func (p *Planner) collectTasks(operation config.OperationType, files []string) [
 			}
 
 			if len(matchedFiles) > 0 || len(opConfig.Globs) == 0 {
-				projectTasks := p.createPerProjectTasksWithFiles(task, matchedFiles)
+				projectTasks := p.createPerProjectTasksWithFiles(ctx, task, matchedFiles)
 				tasks = append(tasks, projectTasks...)
 			}
 
@@ -227,7 +227,7 @@ func (p *Planner) collectTasks(operation config.OperationType, files []string) [
 			// Per-file scope: run for each file in its directory
 			var matchedFiles []string
 			if len(files) == 0 {
-				matchedFiles = p.findFilesByGlobs(opConfig.Globs)
+				matchedFiles = p.findFilesByGlobs(ctx, opConfig.Globs)
 			} else {
 				matchedFiles = p.filterFilesByGlobs(files, opConfig.Globs)
 			}
@@ -249,7 +249,7 @@ func (p *Planner) collectTasks(operation config.OperationType, files []string) [
 			var matchedFiles []string
 			if len(opConfig.Globs) > 0 {
 				if len(files) == 0 {
-					matchedFiles = p.findFilesByGlobs(opConfig.Globs)
+					matchedFiles = p.findFilesByGlobs(ctx, opConfig.Globs)
 				} else {
 					matchedFiles = p.filterFilesByGlobs(files, opConfig.Globs)
 				}
@@ -258,7 +258,7 @@ func (p *Planner) collectTasks(operation config.OperationType, files []string) [
 			}
 
 			if len(matchedFiles) > 0 || len(opConfig.Globs) == 0 {
-				projectTasks := p.createPerProjectTasksWithFiles(task, matchedFiles)
+				projectTasks := p.createPerProjectTasksWithFiles(ctx, task, matchedFiles)
 				tasks = append(tasks, projectTasks...)
 			}
 		}
@@ -480,7 +480,7 @@ func (p *Planner) groupFilesByProject(files []string, projectLocations []project
 
 // createPerProjectTasksWithFiles creates tasks per project, grouping files by project
 // Now uses cached project locations instead of detecting every time
-func (p *Planner) createPerProjectTasksWithFiles(baseTask Task, files []string) []Task {
+func (p *Planner) createPerProjectTasksWithFiles(ctx context.Context, baseTask Task, files []string) []Task {
 	// Use cached projects instead of detecting again
 	var locations []project.ProjectLocation
 
@@ -488,7 +488,6 @@ func (p *Planner) createPerProjectTasksWithFiles(baseTask Task, files []string) 
 		locations = p.cachedProjects
 	} else {
 		// Fallback to old behavior if cache not initialized
-		ctx := context.Background()
 		detector := project.NewDetector(p.rootPath, p.projectTypesConfig)
 		locs, err := detector.DetectAllWithLocations(ctx)
 		if err != nil {
@@ -597,11 +596,11 @@ func (p *Planner) createPerProjectTasksWithFiles(baseTask Task, files []string) 
 
 // findFilesByGlobs finds all files in the repository matching the given glob patterns
 // Now uses cached file list instead of scanning every time
-func (p *Planner) findFilesByGlobs(globs []string) []string {
+func (p *Planner) findFilesByGlobs(ctx context.Context, globs []string) []string {
 	// Use cached files instead of scanning again
 	if !p.cacheInitialized {
 		// Fallback to old behavior if cache not initialized
-		allFiles, err := traverser.FindFilesFromPath(context.Background(), p.rootPath, p.rootPath)
+		allFiles, err := traverser.FindFilesFromPath(ctx, p.rootPath, p.rootPath)
 		if err != nil {
 			return []string{}
 		}

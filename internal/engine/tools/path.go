@@ -1,6 +1,8 @@
 package tools
 
 import (
+	"errors"
+	"fmt"
 	"path/filepath"
 
 	"github.com/dop251/goja"
@@ -93,7 +95,13 @@ func RegisterPathToolsInVM(vm *goja.Runtime, rootPath string) error {
 		return vm.ToValue("./" + cleaned)
 	})
 
-	_ = toolsObj.(*goja.Object).Set("Path", pathObj)
+	toolsGoja, ok := toolsObj.(*goja.Object)
+	if !ok {
+		return errors.New("tools global is not an object")
+	}
+	if err := toolsGoja.Set("Path", pathObj); err != nil {
+		return fmt.Errorf("failed to set tools.Path: %w", err)
+	}
 
 	return nil
 }

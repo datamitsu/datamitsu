@@ -1,6 +1,7 @@
 package runtimemanager
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -339,6 +340,7 @@ func TestGetUVCommandInfo_DifferentLockFilesProduceDifferentPaths(t *testing.T) 
 }
 
 func TestInstallUVAppAlreadyInstalled(t *testing.T) {
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 	runtimes := makeTestRuntimes()
 	rm := New(runtimes)
 
@@ -366,7 +368,7 @@ func TestInstallUVAppAlreadyInstalled(t *testing.T) {
 	}
 	defer func() { _ = os.RemoveAll(appEnvPath) }()
 
-	err = rm.InstallUVApp("yamllint", appConfig, nil, nil, nil)
+	err = rm.InstallUVApp(context.Background(), "yamllint", appConfig, nil, nil, nil)
 	if err != nil {
 		t.Errorf("InstallUVApp() error = %v, expected nil for already installed app", err)
 	}
@@ -427,6 +429,7 @@ func TestUVVenvHealthy(t *testing.T) {
 }
 
 func TestInstallUVAppHealthyVenvSkips(t *testing.T) {
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 	runtimes := makeTestRuntimes()
 	rm := New(runtimes)
 
@@ -454,7 +457,7 @@ func TestInstallUVAppHealthyVenvSkips(t *testing.T) {
 		t.Fatalf("failed to write fake interpreter: %v", err)
 	}
 
-	if err := rm.InstallUVApp("yamllint", appConfig, nil, nil, nil); err != nil {
+	if err := rm.InstallUVApp(context.Background(), "yamllint", appConfig, nil, nil, nil); err != nil {
 		t.Errorf("InstallUVApp() error = %v, expected nil for healthy venv", err)
 	}
 
@@ -468,6 +471,7 @@ func TestInstallUVAppDanglingVenvRebuilds(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink semantics differ on windows")
 	}
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 	runtimes := makeTestRuntimes()
 	rm := New(runtimes)
 
@@ -499,7 +503,7 @@ func TestInstallUVAppDanglingVenvRebuilds(t *testing.T) {
 	// fails here because the test uv runtime is not actually downloaded. The key
 	// assertion is that it did not return nil (i.e. it did not treat the broken
 	// venv as installed).
-	err = rm.InstallUVApp("yamllint", appConfig, nil, nil, nil)
+	err = rm.InstallUVApp(context.Background(), "yamllint", appConfig, nil, nil, nil)
 	if err == nil {
 		t.Error("expected dangling venv to trigger a rebuild attempt, got nil (treated as installed)")
 	}

@@ -26,13 +26,13 @@ import (
 )
 
 type mockRuntimeAppManager struct {
-	getCommandInfoFunc func(appName string, app App) (*CommandInfo, error)
+	getCommandInfoFunc func(ctx context.Context, appName string, app App) (*CommandInfo, error)
 	computeAppPathFunc func(appName string, app App) (string, error)
 }
 
-func (m *mockRuntimeAppManager) GetCommandInfo(appName string, app App) (*CommandInfo, error) {
+func (m *mockRuntimeAppManager) GetCommandInfo(ctx context.Context, appName string, app App) (*CommandInfo, error) {
 	if m.getCommandInfoFunc != nil {
-		return m.getCommandInfoFunc(appName, app)
+		return m.getCommandInfoFunc(ctx, appName, app)
 	}
 	return nil, errors.New("mock: not implemented")
 }
@@ -174,7 +174,7 @@ func TestGetBinaryPath_SingleFlight(t *testing.T) {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			paths[idx], errs[idx] = bm.GetBinaryPath("testbin")
+			paths[idx], errs[idx] = bm.GetBinaryPath(context.Background(), "testbin")
 		}(i)
 	}
 	wg.Wait()
@@ -241,7 +241,7 @@ func TestGetBinaryPath_AlreadyInstalled(t *testing.T) {
 	}, nil, nil)
 
 	// First call downloads.
-	if _, err := bm.GetBinaryPath("testbin"); err != nil {
+	if _, err := bm.GetBinaryPath(context.Background(), "testbin"); err != nil {
 		t.Fatalf("first GetBinaryPath() error = %v", err)
 	}
 	if got := hits.Load(); got != 1 {
@@ -249,7 +249,7 @@ func TestGetBinaryPath_AlreadyInstalled(t *testing.T) {
 	}
 
 	// Second call must hit the cache without downloading.
-	if _, err := bm.GetBinaryPath("testbin"); err != nil {
+	if _, err := bm.GetBinaryPath(context.Background(), "testbin"); err != nil {
 		t.Fatalf("second GetBinaryPath() error = %v", err)
 	}
 	if got := hits.Load(); got != 1 {
@@ -287,7 +287,7 @@ func TestEnsureTools_InstallsDistinctOnceMixedKinds(t *testing.T) {
 
 	var uvCalls atomic.Int64
 	mock := &mockRuntimeAppManager{
-		getCommandInfoFunc: func(appName string, app App) (*CommandInfo, error) {
+		getCommandInfoFunc: func(_ context.Context, appName string, app App) (*CommandInfo, error) {
 			uvCalls.Add(1)
 			return &CommandInfo{Type: "uv", Command: "/cache/uv/" + appName}, nil
 		},
@@ -339,7 +339,7 @@ func TestEnsureTools_InstallsDistinctOnceMixedKinds(t *testing.T) {
 func TestEnsureTools_AggregatesErrors(t *testing.T) {
 	var goodCalls atomic.Int64
 	mock := &mockRuntimeAppManager{
-		getCommandInfoFunc: func(appName string, app App) (*CommandInfo, error) {
+		getCommandInfoFunc: func(_ context.Context, appName string, app App) (*CommandInfo, error) {
 			if appName == "bad" {
 				return nil, errors.New("boom")
 			}
@@ -457,7 +457,7 @@ func TestGetCommandInfo_ShellApp(t *testing.T) {
 		},
 	}, nil, nil)
 
-	info, err := bm.GetCommandInfo("myshell")
+	info, err := bm.GetCommandInfo(context.Background(), "myshell")
 	if err != nil {
 		t.Fatalf("GetCommandInfo() error = %v", err)
 	}
@@ -486,7 +486,7 @@ func TestGetCommandInfo_MergesAppEnv_ShellExpandsStore(t *testing.T) {
 		},
 	}, nil, nil)
 
-	info, err := bm.GetCommandInfo("myshell")
+	info, err := bm.GetCommandInfo(context.Background(), "myshell")
 	if err != nil {
 		t.Fatalf("GetCommandInfo() error = %v", err)
 	}
@@ -498,7 +498,7 @@ func TestGetCommandInfo_MergesAppEnv_ShellExpandsStore(t *testing.T) {
 
 func TestGetCommandInfo_MergesAppEnv_RuntimeKeyWins(t *testing.T) {
 	mock := &mockRuntimeAppManager{
-		getCommandInfoFunc: func(appName string, app App) (*CommandInfo, error) {
+		getCommandInfoFunc: func(_ context.Context, appName string, app App) (*CommandInfo, error) {
 			return &CommandInfo{
 				Type:    "uv",
 				Command: "/bin/yamllint",
@@ -520,7 +520,7 @@ func TestGetCommandInfo_MergesAppEnv_RuntimeKeyWins(t *testing.T) {
 		},
 	}, nil, mock)
 
-	info, err := bm.GetCommandInfo("yamllint")
+	info, err := bm.GetCommandInfo(context.Background(), "yamllint")
 	if err != nil {
 		t.Fatalf("GetCommandInfo() error = %v", err)
 	}
@@ -538,7 +538,7 @@ func TestGetCommandInfo_MergesAppEnv_NilEnvUnchanged(t *testing.T) {
 		Command: "/bin/govulncheck",
 	}
 	mock := &mockRuntimeAppManager{
-		getCommandInfoFunc: func(appName string, app App) (*CommandInfo, error) {
+		getCommandInfoFunc: func(_ context.Context, appName string, app App) (*CommandInfo, error) {
 			return expectedInfo, nil
 		},
 	}
@@ -549,7 +549,7 @@ func TestGetCommandInfo_MergesAppEnv_NilEnvUnchanged(t *testing.T) {
 		},
 	}, nil, mock)
 
-	info, err := bm.GetCommandInfo("govulncheck")
+	info, err := bm.GetCommandInfo(context.Background(), "govulncheck")
 	if err != nil {
 		t.Fatalf("GetCommandInfo() error = %v", err)
 	}
@@ -597,7 +597,7 @@ func TestGetCommandInfo_MergesAppEnv_Binary(t *testing.T) {
 		},
 	}, nil, nil)
 
-	info, err := bm.GetCommandInfo("testbin")
+	info, err := bm.GetCommandInfo(context.Background(), "testbin")
 	if err != nil {
 		t.Fatalf("GetCommandInfo() error = %v", err)
 	}
@@ -649,7 +649,7 @@ func TestGetCommandInfo_UVApp_DelegatesToRuntimeManager(t *testing.T) {
 	}
 
 	mock := &mockRuntimeAppManager{
-		getCommandInfoFunc: func(appName string, app App) (*CommandInfo, error) {
+		getCommandInfoFunc: func(_ context.Context, appName string, app App) (*CommandInfo, error) {
 			if appName != "yamllint" {
 				t.Errorf("expected appName 'yamllint', got %q", appName)
 			}
@@ -672,7 +672,7 @@ func TestGetCommandInfo_UVApp_DelegatesToRuntimeManager(t *testing.T) {
 		},
 	}, nil, mock)
 
-	info, err := bm.GetCommandInfo("yamllint")
+	info, err := bm.GetCommandInfo(context.Background(), "yamllint")
 	if err != nil {
 		t.Fatalf("GetCommandInfo() error = %v", err)
 	}
@@ -691,7 +691,7 @@ func TestGetCommandInfo_UVApp_NoRuntimeManager(t *testing.T) {
 		},
 	}, nil, nil)
 
-	_, err := bm.GetCommandInfo("yamllint")
+	_, err := bm.GetCommandInfo(context.Background(), "yamllint")
 	if err == nil {
 		t.Fatal("expected error when no runtime manager configured")
 	}
@@ -780,7 +780,7 @@ func TestGetCommandInfo_NodeApp_DelegatesToRuntimeManager(t *testing.T) {
 	}
 
 	mock := &mockRuntimeAppManager{
-		getCommandInfoFunc: func(appName string, app App) (*CommandInfo, error) {
+		getCommandInfoFunc: func(_ context.Context, appName string, app App) (*CommandInfo, error) {
 			if appName != "mmdc" {
 				t.Errorf("expected appName 'mmdc', got %q", appName)
 			}
@@ -805,7 +805,7 @@ func TestGetCommandInfo_NodeApp_DelegatesToRuntimeManager(t *testing.T) {
 		},
 	}, nil, mock)
 
-	info, err := bm.GetCommandInfo("mmdc")
+	info, err := bm.GetCommandInfo(context.Background(), "mmdc")
 	if err != nil {
 		t.Fatalf("GetCommandInfo() error = %v", err)
 	}
@@ -826,7 +826,7 @@ func TestGetCommandInfo_NodeApp_NoRuntimeManager(t *testing.T) {
 		},
 	}, nil, nil)
 
-	_, err := bm.GetCommandInfo("mmdc")
+	_, err := bm.GetCommandInfo(context.Background(), "mmdc")
 	if err == nil {
 		t.Fatal("expected error when no runtime manager configured")
 	}
@@ -1387,7 +1387,7 @@ func TestGetCommandInfo_GoApp_DelegatesToRuntimeManager(t *testing.T) {
 	}
 
 	mock := &mockRuntimeAppManager{
-		getCommandInfoFunc: func(appName string, app App) (*CommandInfo, error) {
+		getCommandInfoFunc: func(_ context.Context, appName string, app App) (*CommandInfo, error) {
 			if appName != "govulncheck" {
 				t.Errorf("expected appName 'govulncheck', got %q", appName)
 			}
@@ -1410,7 +1410,7 @@ func TestGetCommandInfo_GoApp_DelegatesToRuntimeManager(t *testing.T) {
 		},
 	}, nil, mock)
 
-	info, err := bm.GetCommandInfo("govulncheck")
+	info, err := bm.GetCommandInfo(context.Background(), "govulncheck")
 	if err != nil {
 		t.Fatalf("GetCommandInfo() error = %v", err)
 	}
@@ -1429,7 +1429,7 @@ func TestGetCommandInfo_GoApp_NoRuntimeManager(t *testing.T) {
 		},
 	}, nil, nil)
 
-	_, err := bm.GetCommandInfo("govulncheck")
+	_, err := bm.GetCommandInfo(context.Background(), "govulncheck")
 	if err == nil {
 		t.Fatal("expected error when no runtime manager configured")
 	}
@@ -1547,7 +1547,7 @@ func TestGetAppsList_AllTypesWithGo(t *testing.T) {
 
 func TestGetCommandInfo_AppNotFound(t *testing.T) {
 	bm := New(MapOfApps{}, nil, nil)
-	_, err := bm.GetCommandInfo("nonexistent")
+	_, err := bm.GetCommandInfo(context.Background(), "nonexistent")
 	if err == nil {
 		t.Fatal("expected error for nonexistent app")
 	}
@@ -1555,7 +1555,7 @@ func TestGetCommandInfo_AppNotFound(t *testing.T) {
 
 func TestGetCommandInfo_RuntimeManagerError(t *testing.T) {
 	mock := &mockRuntimeAppManager{
-		getCommandInfoFunc: func(appName string, app App) (*CommandInfo, error) {
+		getCommandInfoFunc: func(_ context.Context, appName string, app App) (*CommandInfo, error) {
 			return nil, errors.New("runtime not found")
 		},
 	}
@@ -1569,7 +1569,7 @@ func TestGetCommandInfo_RuntimeManagerError(t *testing.T) {
 		},
 	}, nil, mock)
 
-	_, err := bm.GetCommandInfo("yamllint")
+	_, err := bm.GetCommandInfo(context.Background(), "yamllint")
 	if err == nil {
 		t.Fatal("expected error from runtime manager")
 	}
@@ -1580,7 +1580,7 @@ func TestGetCommandInfo_NoValidConfig(t *testing.T) {
 		"empty": App{},
 	}, nil, nil)
 
-	_, err := bm.GetCommandInfo("empty")
+	_, err := bm.GetCommandInfo(context.Background(), "empty")
 	if err == nil {
 		t.Fatal("expected error for app with no valid configuration")
 	}
@@ -1598,7 +1598,7 @@ func TestComputeInstallPath_BinaryApp(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get arch type: %v", err)
 	}
-	libc := string(target.DetectHost().Libc)
+	libc := string(target.DetectHost(context.Background()).Libc)
 
 	bm := New(MapOfApps{
 		"testbin": App{
@@ -1707,7 +1707,7 @@ func TestGetInstallRoot_Exists(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get arch type: %v", err)
 	}
-	libc := string(target.DetectHost().Libc)
+	libc := string(target.DetectHost(context.Background()).Libc)
 
 	bm := New(MapOfApps{
 		"testbin": App{
@@ -1752,7 +1752,7 @@ func TestGetInstallRoot_NotInstalled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get arch type: %v", err)
 	}
-	libc := string(target.DetectHost().Libc)
+	libc := string(target.DetectHost(context.Background()).Libc)
 
 	bm := New(MapOfApps{
 		"testbin": App{
@@ -1799,7 +1799,7 @@ func TestGetExecCmd_BinaryApp(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get arch type: %v", err)
 	}
-	libc := string(target.DetectHost().Libc)
+	libc := string(target.DetectHost(context.Background()).Libc)
 
 	bm := New(MapOfApps{
 		"testbin": App{
@@ -1818,7 +1818,7 @@ func TestGetExecCmd_BinaryApp(t *testing.T) {
 		},
 	}, nil, nil)
 
-	cmd, err := bm.GetExecCmd("testbin", []string{"--version"})
+	cmd, err := bm.GetExecCmd(context.Background(), "testbin", []string{"--version"})
 	if err != nil {
 		t.Fatalf("GetExecCmd() error = %v", err)
 	}
@@ -1854,7 +1854,7 @@ func TestGetExecCmd_ShellApp_ReturnsNil(t *testing.T) {
 		},
 	}, nil, nil)
 
-	cmd, err := bm.GetExecCmd("myshell", []string{"--version"})
+	cmd, err := bm.GetExecCmd(context.Background(), "myshell", []string{"--version"})
 	if err != nil {
 		t.Fatalf("GetExecCmd() error = %v", err)
 	}
@@ -1865,7 +1865,7 @@ func TestGetExecCmd_ShellApp_ReturnsNil(t *testing.T) {
 
 func TestGetExecCmd_RuntimeApp(t *testing.T) {
 	mock := &mockRuntimeAppManager{
-		getCommandInfoFunc: func(appName string, app App) (*CommandInfo, error) {
+		getCommandInfoFunc: func(_ context.Context, appName string, app App) (*CommandInfo, error) {
 			return &CommandInfo{
 				Type:    "uv",
 				Command: "/mock/bin/yamllint",
@@ -1883,7 +1883,7 @@ func TestGetExecCmd_RuntimeApp(t *testing.T) {
 		},
 	}, nil, mock)
 
-	cmd, err := bm.GetExecCmd("yamllint", []string{"--version"})
+	cmd, err := bm.GetExecCmd(context.Background(), "yamllint", []string{"--version"})
 	if err != nil {
 		t.Fatalf("GetExecCmd() error = %v", err)
 	}
@@ -1900,7 +1900,7 @@ func TestGetExecCmd_RuntimeApp(t *testing.T) {
 
 func TestGetExecCmd_AppNotFound(t *testing.T) {
 	bm := New(MapOfApps{}, nil, nil)
-	_, err := bm.GetExecCmd("nonexistent", []string{"--version"})
+	_, err := bm.GetExecCmd(context.Background(), "nonexistent", []string{"--version"})
 	if err == nil {
 		t.Fatal("expected error for nonexistent app")
 	}
@@ -1915,7 +1915,7 @@ func TestWriteAppFiles_Basic(t *testing.T) {
 		"base.json": `{"extends": "recommended"}`,
 	}
 
-	err := WriteAppFiles(installPath, files, nil)
+	err := WriteAppFiles(context.Background(), installPath, files, nil)
 	if err != nil {
 		t.Fatalf("WriteAppFiles() error = %v", err)
 	}
@@ -1935,7 +1935,7 @@ func TestWriteAppFiles_EmptyMap(t *testing.T) {
 	tmpDir := t.TempDir()
 	installPath := tmpDir + "/app-install"
 
-	err := WriteAppFiles(installPath, map[string]string{}, nil)
+	err := WriteAppFiles(context.Background(), installPath, map[string]string{}, nil)
 	if err != nil {
 		t.Fatalf("WriteAppFiles() error = %v", err)
 	}
@@ -1957,7 +1957,7 @@ func TestWriteAppFiles_OverwritesExisting(t *testing.T) {
 		t.Fatalf("failed to write initial file: %v", err)
 	}
 
-	err := WriteAppFiles(installPath, map[string]string{
+	err := WriteAppFiles(context.Background(), installPath, map[string]string{
 		"config.js": "new content",
 	}, nil)
 	if err != nil {
@@ -1977,7 +1977,7 @@ func TestWriteAppFiles_CreatesParentDirs(t *testing.T) {
 	tmpDir := t.TempDir()
 	installPath := tmpDir + "/deep/nested/app-install"
 
-	err := WriteAppFiles(installPath, map[string]string{
+	err := WriteAppFiles(context.Background(), installPath, map[string]string{
 		"config.js": "content",
 	}, nil)
 	if err != nil {
@@ -2010,7 +2010,7 @@ func TestWriteAppFiles_WithInlineArchive(t *testing.T) {
 		"configs": {Inline: compressed},
 	}
 
-	err = WriteAppFiles(installPath, nil, archives)
+	err = WriteAppFiles(context.Background(), installPath, nil, archives)
 	if err != nil {
 		t.Fatalf("WriteAppFiles() error = %v", err)
 	}
@@ -2051,7 +2051,7 @@ func TestWriteAppFiles_FilesOverwriteArchives(t *testing.T) {
 		"config.js": "from files",
 	}
 
-	err = WriteAppFiles(installPath, files, archives)
+	err = WriteAppFiles(context.Background(), installPath, files, archives)
 	if err != nil {
 		t.Fatalf("WriteAppFiles() error = %v", err)
 	}
@@ -2094,7 +2094,7 @@ func TestWriteAppFiles_ArchivesExtractedAlphabetically(t *testing.T) {
 		"alpha": {Inline: compressedAlpha},
 	}
 
-	err = WriteAppFiles(installPath, nil, archives)
+	err = WriteAppFiles(context.Background(), installPath, nil, archives)
 	if err != nil {
 		t.Fatalf("WriteAppFiles() error = %v", err)
 	}
@@ -2148,7 +2148,7 @@ func TestWriteAppFiles_ArchivesBeforeFiles(t *testing.T) {
 		"files-only.js": "files content",
 	}
 
-	err = WriteAppFiles(installPath, files, archives)
+	err = WriteAppFiles(context.Background(), installPath, files, archives)
 	if err != nil {
 		t.Fatalf("WriteAppFiles() error = %v", err)
 	}
@@ -2205,7 +2205,7 @@ func TestWriteAppFiles_ExternalArchiveWithServer(t *testing.T) {
 		},
 	}
 
-	err := WriteAppFiles(installPath, nil, archives)
+	err := WriteAppFiles(context.Background(), installPath, nil, archives)
 	if err != nil {
 		t.Fatalf("WriteAppFiles() error = %v", err)
 	}
@@ -2240,7 +2240,7 @@ func TestWriteAppFiles_ExternalArchiveBadHash(t *testing.T) {
 		},
 	}
 
-	err := WriteAppFiles(installPath, nil, archives)
+	err := WriteAppFiles(context.Background(), installPath, nil, archives)
 	if err == nil {
 		t.Fatal("expected error for hash mismatch, got nil")
 	}
@@ -2257,7 +2257,7 @@ func TestWriteAppFiles_InvalidArchiveSpec(t *testing.T) {
 		"bad": {},
 	}
 
-	err := WriteAppFiles(installPath, nil, archives)
+	err := WriteAppFiles(context.Background(), installPath, nil, archives)
 	if err == nil {
 		t.Fatal("expected error for empty archive spec, got nil")
 	}

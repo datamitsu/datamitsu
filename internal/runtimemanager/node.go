@@ -103,18 +103,18 @@ func (rm *RuntimeManager) resolveNodeAppEnvPathWith(appName string, appConfig *b
 // InstallNodeApp installs a node-managed npm app if not already cached.
 // If files is non-empty, writes them to the app directory before running pnpm.
 // Safe for concurrent use from multiple goroutines.
-func (rm *RuntimeManager) InstallNodeApp(appName string, appConfig *binmanager.AppConfigNode, customEnv map[string]string, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
+func (rm *RuntimeManager) InstallNodeApp(ctx context.Context, appName string, appConfig *binmanager.AppConfigNode, customEnv map[string]string, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
 	mergedWorkspaceYAML, err := buildPNPMWorkspace(files)
 	if err != nil {
 		return fmt.Errorf("failed to compute pnpm-workspace.yaml for %q: %w", appName, err)
 	}
-	return rm.installNodeApp(appName, appConfig, customEnv, files, archives, mergedWorkspaceYAML)
+	return rm.installNodeApp(ctx, appName, appConfig, customEnv, files, archives, mergedWorkspaceYAML)
 }
 
 // installNodeApp installs a node app using a pre-merged pnpm-workspace.yaml so the
 // merge is computed once per exec and shared with the command-info pass.
-func (rm *RuntimeManager) installNodeApp(appName string, appConfig *binmanager.AppConfigNode, customEnv map[string]string, files map[string]string, archives map[string]*binmanager.ArchiveSpec, mergedWorkspaceYAML string) error {
-	ctx, cancel, timeoutSec := newInstallContext(context.Background())
+func (rm *RuntimeManager) installNodeApp(ctx context.Context, appName string, appConfig *binmanager.AppConfigNode, customEnv map[string]string, files map[string]string, archives map[string]*binmanager.ArchiveSpec, mergedWorkspaceYAML string) error {
+	ctx, cancel, timeoutSec := newInstallContext(ctx)
 	defer cancel()
 	key := "node/" + appName
 	_, err, _ := rm.appInstall.Do(key, func() (any, error) {
@@ -183,7 +183,7 @@ func (rm *RuntimeManager) installNodeAppOnce(ctx context.Context, appName string
 	filesToWrite := filesWithoutWorkspaceYAML(files)
 
 	if len(filesToWrite) > 0 || len(archives) > 0 {
-		if err := binmanager.WriteAppFiles(appEnvPath, filesToWrite, archives); err != nil {
+		if err := binmanager.WriteAppFiles(ctx, appEnvPath, filesToWrite, archives); err != nil {
 			return fmt.Errorf("failed to write app files/archives for %q: %w", appName, err)
 		}
 	}
@@ -261,17 +261,17 @@ func (rm *RuntimeManager) installNodeAppOnce(ctx context.Context, appName string
 // shim is executed directly with the node binary's directory prepended to PATH
 // so the shim's `#!/usr/bin/env node` (or node's own resolution) finds the
 // managed node.
-func (rm *RuntimeManager) GetNodeCommandInfo(appName string, appConfig *binmanager.AppConfigNode, files map[string]string, archives map[string]*binmanager.ArchiveSpec) (*binmanager.CommandInfo, error) {
+func (rm *RuntimeManager) GetNodeCommandInfo(ctx context.Context, appName string, appConfig *binmanager.AppConfigNode, files map[string]string, archives map[string]*binmanager.ArchiveSpec) (*binmanager.CommandInfo, error) {
 	mergedWorkspaceYAML, err := buildPNPMWorkspace(files)
 	if err != nil {
 		return nil, fmt.Errorf("failed to compute pnpm-workspace.yaml for %q: %w", appName, err)
 	}
-	return rm.getNodeCommandInfo(appName, appConfig, files, archives, mergedWorkspaceYAML)
+	return rm.getNodeCommandInfo(ctx, appName, appConfig, files, archives, mergedWorkspaceYAML)
 }
 
 // getNodeCommandInfo is GetNodeCommandInfo with the merged pnpm-workspace.yaml
 // supplied by the caller (computed once per exec).
-func (rm *RuntimeManager) getNodeCommandInfo(appName string, appConfig *binmanager.AppConfigNode, files map[string]string, archives map[string]*binmanager.ArchiveSpec, mergedWorkspaceYAML string) (*binmanager.CommandInfo, error) {
+func (rm *RuntimeManager) getNodeCommandInfo(ctx context.Context, appName string, appConfig *binmanager.AppConfigNode, files map[string]string, archives map[string]*binmanager.ArchiveSpec, mergedWorkspaceYAML string) (*binmanager.CommandInfo, error) {
 	appEnvPath, runtimeName, rc, err := rm.resolveNodeAppEnvPathWith(appName, appConfig, files, archives, mergedWorkspaceYAML)
 	if err != nil {
 		return nil, err
@@ -286,9 +286,9 @@ func (rm *RuntimeManager) getNodeCommandInfo(appName string, appConfig *binmanag
 	}
 
 	// Command-info resolution only ever touches an already-installed runtime
-	// (the install pass ran first), so the timeout-agnostic background context
-	// is correct here — there is no fresh download to bound.
-	nodeBinPath, err := rm.installNode(context.Background(), runtimeName)
+	// (the install pass ran first), so there is no fresh download to bound; the
+	// caller's context is still propagated for cancellation.
+	nodeBinPath, err := rm.installNode(ctx, runtimeName)
 	if err != nil {
 		return nil, err
 	}

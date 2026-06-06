@@ -261,26 +261,37 @@ func runtimeJobKeyAndFP(j runtimeVerifyJob) (string, string) {
 	return key, fp
 }
 
+// marshalFP marshals a value for cache fingerprinting. Config values are always
+// JSON round-trippable, so a marshal error is a programming bug — surface it
+// rather than silently emitting an empty (colliding) fingerprint.
+func marshalFP(v any) []byte {
+	b, err := json.Marshal(v)
+	if err != nil {
+		panic(fmt.Errorf("fingerprint marshal: %w", err))
+	}
+	return b
+}
+
 func runtimeAppKeyAndFP(e runtimeAppEntry, runtimes config.MapOfRuntimes, currentOs, currentArch string) (string, string) {
 	key := verifycache.RuntimeAppEntryKey(e.name, currentOs, currentArch)
 
 	var appJSON, rtJSON []byte
 	if kind, _, runtimeRef, subConfig, ok := runtimeAppInfo(e.app); ok {
-		appJSON, _ = json.Marshal(subConfig)
+		appJSON = marshalFP(subConfig)
 		if runtimeRef == "" {
 			runtimeRef = resolveDefaultRuntimeName(runtimes, kind)
 		}
 		if rt, ok := runtimes[runtimeRef]; ok {
-			rtJSON, _ = json.Marshal(rt)
+			rtJSON = marshalFP(rt)
 		}
 	}
 
 	var filesJSON, archivesJSON []byte
 	if len(e.app.Files) > 0 {
-		filesJSON, _ = json.Marshal(e.app.Files)
+		filesJSON = marshalFP(e.app.Files)
 	}
 	if len(e.app.Archives) > 0 {
-		archivesJSON, _ = json.Marshal(e.app.Archives)
+		archivesJSON = marshalFP(e.app.Archives)
 	}
 
 	fp := verifycache.FingerprintRuntimeApp(string(appJSON), string(rtJSON), string(filesJSON), string(archivesJSON), currentOs, currentArch)
@@ -316,12 +327,10 @@ func bundleKeyAndFP(e bundleVerifyEntry) (string, string) {
 
 	var filesJSON, archivesJSON string
 	if len(e.bundle.Files) > 0 {
-		data, _ := json.Marshal(e.bundle.Files)
-		filesJSON = string(data)
+		filesJSON = string(marshalFP(e.bundle.Files))
 	}
 	if len(e.bundle.Archives) > 0 {
-		data, _ := json.Marshal(e.bundle.Archives)
-		archivesJSON = string(data)
+		archivesJSON = string(marshalFP(e.bundle.Archives))
 	}
 
 	fp := verifycache.FingerprintBundle(e.bundle.Version, filesJSON, archivesJSON)
@@ -408,6 +417,8 @@ func filterSkippedVersionCheckEntries(entries []versionCheckEntry, sm *verifycac
 }
 
 func runVerifyAll(cmd *cobra.Command, args []string) error {
+	ctx := commandContext(cmd)
+
 	SkipRemoteConfig = verifyNoRemoteFlag
 	defer func() { SkipRemoteConfig = false }()
 	cfg, _, _, err := loadConfig()
@@ -422,7 +433,7 @@ func runVerifyAll(cmd *cobra.Command, args []string) error {
 
 	currentOs := runtime.GOOS
 	currentArch := runtime.GOARCH
-	currentLibc := string(target.DetectHost().Libc)
+	currentLibc := string(target.DetectHost(ctx).Libc)
 
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -475,13 +486,13 @@ func runVerifyAll(cmd *cobra.Command, args []string) error {
 	}
 
 	// Phase 1: Binary apps — all platforms
-	binaryResults := runPhase1BinaryApps(cfg, concurrency, !verifyJSONFlag, sm, verifySkipPassedFlag)
+	binaryResults := runPhase1BinaryApps(ctx, cfg, concurrency, !verifyJSONFlag, sm, verifySkipPassedFlag)
 
 	// Phase 2: Managed runtimes — all platforms
-	runtimeResults := runPhase2ManagedRuntimes(cfg, concurrency, !verifyJSONFlag, sm, verifySkipPassedFlag)
+	runtimeResults := runPhase2ManagedRuntimes(ctx, cfg, concurrency, !verifyJSONFlag, sm, verifySkipPassedFlag)
 
 	// Phase 3: Runtime-managed apps — current platform
-	runtimeAppResults := runPhase3RuntimeApps(cfg, currentOs, currentArch, !verifyJSONFlag, sm, verifySkipPassedFlag)
+	runtimeAppResults := runPhase3RuntimeApps(ctx, cfg, currentOs, currentArch, !verifyJSONFlag, sm, verifySkipPassedFlag)
 
 	// Phase 4: Bundle installs — platform-independent
 	bundleResults := runPhaseBundleInstalls(cfg, !verifyJSONFlag, sm, verifySkipPassedFlag)
@@ -491,7 +502,7 @@ func runVerifyAll(cmd *cobra.Command, args []string) error {
 	if !verifyNoVersionCheckFlag {
 		rm := runtimemanager.New(cfg.Runtimes)
 		bm := binmanager.New(cfg.Apps, cfg.Bundles, rm)
-		versionResults = runPhase5VersionChecks(cfg, bm, currentOs, currentArch, currentLibc, !verifyJSONFlag, sm, verifySkipPassedFlag)
+		versionResults = runPhase5VersionChecks(ctx, cfg, bm, currentOs, currentArch, currentLibc, !verifyJSONFlag, sm, verifySkipPassedFlag)
 	}
 
 	// Compute summary
@@ -528,7 +539,7 @@ var errVerificationFailed = errors.New("verification failed")
 
 // --- Phase 1: Binary apps ---
 
-func runPhase1BinaryApps(cfg *config.Config, concurrency int, showProgress bool, sm *verifycache.StateManager, skipPassed bool) []binaryVerifyResult {
+func runPhase1BinaryApps(ctx context.Context, cfg *config.Config, concurrency int, showProgress bool, sm *verifycache.StateManager, skipPassed bool) []binaryVerifyResult {
 	var allJobs []binaryVerifyJob
 	for name, app := range cfg.Apps {
 		if app.Binary == nil {
@@ -605,7 +616,7 @@ func runPhase1BinaryApps(cfg *config.Config, concurrency int, showProgress bool,
 		wg.Go(func() {
 			for item := range jobCh {
 				j := item.job
-				err := verifyBinaryOrDir(j.info)
+				err := verifyBinaryOrDir(ctx, j.info)
 				r := binaryVerifyResult{
 					AppName: j.appName,
 					Version: j.version,
@@ -661,27 +672,27 @@ func runPhase1BinaryApps(cfg *config.Config, concurrency int, showProgress bool,
 	return results
 }
 
-func verifyBinaryOrDir(info binmanager.BinaryOsArchInfo) error {
+func verifyBinaryOrDir(ctx context.Context, info binmanager.BinaryOsArchInfo) error {
 	hashType := binmanager.BinHashTypeSHA256
 	if info.HashType != nil {
 		hashType = *info.HashType
 	}
 
 	if info.ExtractDir {
-		return verifyExtractDir(info.URL, info.Hash, hashType, info.ContentType)
+		return verifyExtractDir(ctx, info.URL, info.Hash, hashType, info.ContentType)
 	}
 
-	return binmanager.VerifyBinaryExtraction(info.URL, info.Hash, hashType, info.ContentType, info.BinaryPath)
+	return binmanager.VerifyBinaryExtraction(ctx, info.URL, info.Hash, hashType, info.ContentType, info.BinaryPath)
 }
 
-func verifyExtractDir(url, hash string, hashType binmanager.BinHashType, contentType binmanager.BinContentType) error {
+func verifyExtractDir(ctx context.Context, url, hash string, hashType binmanager.BinHashType, contentType binmanager.BinContentType) error {
 	tempDir, err := os.MkdirTemp("", "datamitsu-verify-dir-*")
 	if err != nil {
 		return fmt.Errorf("failed to create temp directory: %w", err)
 	}
 	defer func() { _ = os.RemoveAll(tempDir) }()
 
-	downloadedPath, err := binmanager.DownloadFileForVerify(url, tempDir)
+	downloadedPath, err := binmanager.DownloadFileForVerify(ctx, url, tempDir)
 	if err != nil {
 		return fmt.Errorf("download failed: %w", err)
 	}
@@ -727,7 +738,7 @@ func printBinaryResult(r binaryVerifyResult) {
 
 // --- Phase 2: Managed runtimes ---
 
-func runPhase2ManagedRuntimes(cfg *config.Config, concurrency int, showProgress bool, sm *verifycache.StateManager, skipPassed bool) []runtimeVerifyResult {
+func runPhase2ManagedRuntimes(ctx context.Context, cfg *config.Config, concurrency int, showProgress bool, sm *verifycache.StateManager, skipPassed bool) []runtimeVerifyResult {
 	var allJobs []runtimeVerifyJob
 	for name, rt := range cfg.Runtimes {
 		if rt.Mode != config.RuntimeModeManaged || rt.Managed == nil {
@@ -802,7 +813,7 @@ func runPhase2ManagedRuntimes(cfg *config.Config, concurrency int, showProgress 
 		wg.Go(func() {
 			for item := range jobCh {
 				j := item.job
-				err := verifyBinaryOrDir(j.info)
+				err := verifyBinaryOrDir(ctx, j.info)
 				r := runtimeVerifyResult{
 					RuntimeName: j.runtimeName,
 					Os:          j.os,
@@ -875,7 +886,7 @@ func printRuntimeResult(r runtimeVerifyResult) {
 
 // --- Phase 3: Runtime-managed apps ---
 
-func runPhase3RuntimeApps(cfg *config.Config, currentOs, currentArch string, showProgress bool, sm *verifycache.StateManager, skipPassed bool) []runtimeAppResult {
+func runPhase3RuntimeApps(ctx context.Context, cfg *config.Config, currentOs, currentArch string, showProgress bool, sm *verifycache.StateManager, skipPassed bool) []runtimeAppResult {
 	if showProgress {
 		fmt.Printf("%s (%s/%s)\n", clrBold("Runtime app installs — current platform"), currentOs, currentArch)
 	}
@@ -920,7 +931,7 @@ func runPhase3RuntimeApps(cfg *config.Config, currentOs, currentArch string, sho
 
 		key, fp := runtimeAppKeyAndFP(entry, cfg.Runtimes, currentOs, currentArch)
 
-		_, err := bm.GetCommandInfo(entry.name)
+		_, err := bm.GetCommandInfo(ctx, entry.name)
 		r := runtimeAppResult{
 			AppName: entry.name,
 			Kind:    entry.kind,
@@ -1058,7 +1069,7 @@ var (
 	normalizeVersionRegex = regexp.MustCompile(`-(?:rc|alpha|beta)\d*$`)
 )
 
-func runPhase5VersionChecks(cfg *config.Config, bm *binmanager.BinManager, currentOs, currentArch, currentLibc string, showProgress bool, sm *verifycache.StateManager, skipPassed bool) []versionCheckResult {
+func runPhase5VersionChecks(ctx context.Context, cfg *config.Config, bm *binmanager.BinManager, currentOs, currentArch, currentLibc string, showProgress bool, sm *verifycache.StateManager, skipPassed bool) []versionCheckResult {
 	if showProgress {
 		fmt.Printf("%s (%s/%s)\n", clrBold("Version checks — current platform"), currentOs, currentArch)
 	}
@@ -1150,7 +1161,7 @@ func runPhase5VersionChecks(cfg *config.Config, bm *binmanager.BinManager, curre
 
 		expectedVersion := getAppVersion(entry.app)
 
-		execCmd, err := bm.GetExecCmd(entry.name, versionArgs)
+		execCmd, err := bm.GetExecCmd(ctx, entry.name, versionArgs)
 		if err != nil || execCmd == nil {
 			r := versionCheckResult{
 				AppName:  entry.name,
@@ -1291,8 +1302,18 @@ func runtimeAppInfo(app binmanager.App) (kind, version, runtimeRef string, subCo
 // runtimeAppVersion returns the configured version of a runtime-managed app, or
 // "" for a non-runtime app.
 func runtimeAppVersion(app binmanager.App) string {
-	_, version, _, _, _ := runtimeAppInfo(app)
-	return version
+	switch {
+	case app.Uv != nil:
+		return app.Uv.Version
+	case app.Node != nil:
+		return app.Node.Version
+	case app.Jvm != nil:
+		return app.Jvm.Version
+	case app.Go != nil:
+		return app.Go.Version
+	default:
+		return ""
+	}
 }
 
 func getAppVersion(app binmanager.App) string {

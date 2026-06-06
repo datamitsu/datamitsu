@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -44,9 +45,9 @@ var pypiHTTPClient = &http.Client{Timeout: 15 * time.Second}
 // pypiBaseURL is the registry root; overridable in tests.
 var pypiBaseURL = "https://pypi.org"
 
-func GetPyPIPackageInfo(packageName string) (*PyPIPackageInfo, error) {
+func GetPyPIPackageInfo(ctx context.Context, packageName string) (*PyPIPackageInfo, error) {
 	url := fmt.Sprintf("%s/pypi/%s/json", pypiBaseURL, packageName)
-	return getPyPIPackageInfoFromURL(url, packageName)
+	return getPyPIPackageInfoFromURL(ctx, url, packageName)
 }
 
 // pypiPreReleaseRe conservatively matches PEP 440 pre-release / dev markers:
@@ -64,8 +65,8 @@ func isPyPIPreRelease(version string) bool {
 // non-yanked files; a version is only treated as yanked when ALL its files are
 // yanked. When minAgeMinutes <= 0 it returns the latest version (no filtering).
 // Returns (nil, nil) when no version qualifies.
-func GetPyPIPackageInfoWithMinAge(packageName string, minAgeMinutes int) (*PyPIPackageInfo, error) {
-	full, err := getPyPIFullResponse(packageName)
+func GetPyPIPackageInfoWithMinAge(ctx context.Context, packageName string, minAgeMinutes int) (*PyPIPackageInfo, error) {
+	full, err := getPyPIFullResponse(ctx, packageName)
 	if err != nil {
 		return nil, err
 	}
@@ -151,9 +152,13 @@ func parsePyPIUploadTime(f pypiReleaseFile) (time.Time, bool) {
 	return time.Time{}, false
 }
 
-func getPyPIFullResponse(packageName string) (*pypiFullResponse, error) {
+func getPyPIFullResponse(ctx context.Context, packageName string) (*pypiFullResponse, error) {
 	url := fmt.Sprintf("%s/pypi/%s/json", pypiBaseURL, packageName)
-	resp, err := pypiHTTPClient.Get(url)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build request: %w", err)
+	}
+	resp, err := pypiHTTPClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch PyPI package %s: %w", packageName, err)
 	}
@@ -174,8 +179,12 @@ func getPyPIFullResponse(packageName string) (*pypiFullResponse, error) {
 	return &result, nil
 }
 
-func getPyPIPackageInfoFromURL(url, packageName string) (*PyPIPackageInfo, error) {
-	resp, err := pypiHTTPClient.Get(url)
+func getPyPIPackageInfoFromURL(ctx context.Context, url, packageName string) (*PyPIPackageInfo, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build request: %w", err)
+	}
+	resp, err := pypiHTTPClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch PyPI package %s: %w", packageName, err)
 	}

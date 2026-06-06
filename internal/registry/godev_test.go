@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -44,7 +45,7 @@ func TestGetLatestGoRelease(t *testing.T) {
 		goDevHTTPClient = server.Client()
 		defer func() { goDevHTTPClient = orig }()
 
-		rel, err := getLatestGoReleaseFromURL(server.URL)
+		rel, err := getLatestGoReleaseFromURL(context.Background(), server.URL)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -77,7 +78,7 @@ func TestGetLatestGoRelease(t *testing.T) {
 		goDevHTTPClient = server.Client()
 		defer func() { goDevHTTPClient = orig }()
 
-		rel, err := getLatestGoReleaseFromURL(server.URL)
+		rel, err := getLatestGoReleaseFromURL(context.Background(), server.URL)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -100,7 +101,7 @@ func TestGetLatestGoRelease(t *testing.T) {
 		goDevHTTPClient = server.Client()
 		defer func() { goDevHTTPClient = orig }()
 
-		rel, err := getLatestGoReleaseFromURL(server.URL)
+		rel, err := getLatestGoReleaseFromURL(context.Background(), server.URL)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -122,7 +123,7 @@ func TestGetLatestGoRelease(t *testing.T) {
 		goDevHTTPClient = server.Client()
 		defer func() { goDevHTTPClient = orig }()
 
-		if _, err := getLatestGoReleaseFromURL(server.URL); err == nil {
+		if _, err := getLatestGoReleaseFromURL(context.Background(), server.URL); err == nil {
 			t.Fatal("expected error when no stable release is present")
 		}
 	})
@@ -140,7 +141,7 @@ func TestGetLatestGoRelease(t *testing.T) {
 		goDevHTTPClient = server.Client()
 		defer func() { goDevHTTPClient = orig }()
 
-		if _, err := getLatestGoReleaseFromURL(server.URL); err == nil {
+		if _, err := getLatestGoReleaseFromURL(context.Background(), server.URL); err == nil {
 			t.Fatal("expected error when the stable release has no files with hashes")
 		}
 	})
@@ -161,7 +162,7 @@ func TestGetLatestGoRelease(t *testing.T) {
 		goDevHTTPClient = server.Client()
 		defer func() { goDevHTTPClient = orig }()
 
-		if _, err := getLatestGoReleaseFromURL(server.URL); err == nil {
+		if _, err := getLatestGoReleaseFromURL(context.Background(), server.URL); err == nil {
 			t.Fatal("expected error when the stable release version is empty after stripping the go prefix")
 		}
 	})
@@ -176,7 +177,7 @@ func TestGetLatestGoRelease(t *testing.T) {
 		goDevHTTPClient = server.Client()
 		defer func() { goDevHTTPClient = orig }()
 
-		if _, err := getLatestGoReleaseFromURL(server.URL); err == nil {
+		if _, err := getLatestGoReleaseFromURL(context.Background(), server.URL); err == nil {
 			t.Fatal("expected error for empty release list")
 		}
 	})
@@ -192,7 +193,7 @@ func TestGetLatestGoRelease(t *testing.T) {
 		goDevHTTPClient = server.Client()
 		defer func() { goDevHTTPClient = orig }()
 
-		if _, err := getLatestGoReleaseFromURL(server.URL); err == nil {
+		if _, err := getLatestGoReleaseFromURL(context.Background(), server.URL); err == nil {
 			t.Fatal("expected error for non-200 status")
 		}
 	})
@@ -207,13 +208,13 @@ func TestGetLatestGoRelease(t *testing.T) {
 		goDevHTTPClient = server.Client()
 		defer func() { goDevHTTPClient = orig }()
 
-		if _, err := getLatestGoReleaseFromURL(server.URL); err == nil {
+		if _, err := getLatestGoReleaseFromURL(context.Background(), server.URL); err == nil {
 			t.Fatal("expected error for invalid JSON")
 		}
 	})
 
 	t.Run("connection error", func(t *testing.T) {
-		if _, err := getLatestGoReleaseFromURL("http://127.0.0.1:1"); err == nil {
+		if _, err := getLatestGoReleaseFromURL(context.Background(), "http://127.0.0.1:1"); err == nil {
 			t.Fatal("expected error for unreachable host")
 		}
 	})

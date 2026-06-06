@@ -57,6 +57,8 @@ type pypiVersionResult struct {
 }
 
 func runPullUV(cmd *cobra.Command, args []string) error {
+	ctx := commandContext(cmd)
+
 	file := args[0]
 
 	// Resolve the effective minimum release age from runtime config + flag.
@@ -105,7 +107,7 @@ func runPullUV(cmd *cobra.Command, args []string) error {
 			CurrentVersion: entry.Version,
 		}
 
-		info, err := registry.GetPyPIPackageInfoWithMinAge(entry.PackageName, minAge)
+		info, err := registry.GetPyPIPackageInfoWithMinAge(ctx, entry.PackageName, minAge)
 		switch {
 		case err != nil:
 			result.Error = err.Error()

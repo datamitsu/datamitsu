@@ -44,6 +44,7 @@ func TestDeduplicateGitRootResults(t *testing.T) {
 			},
 			expected: 1,
 			check: func(t *testing.T, results []install.InstallResult) {
+				t.Helper()
 				if results[0].ConfigName != "lefthook.yml" {
 					t.Errorf("kept result ConfigName = %q, want %q", results[0].ConfigName, "lefthook.yml")
 				}
@@ -84,6 +85,7 @@ func TestDeduplicateGitRootResults(t *testing.T) {
 			},
 			expected: 3,
 			check: func(t *testing.T, results []install.InstallResult) {
+				t.Helper()
 				gitRootCount := 0
 				for _, r := range results {
 					if r.FilePath == "/repo/lefthook.yml" {
@@ -112,6 +114,7 @@ func TestDeduplicateGitRootResults(t *testing.T) {
 			},
 			expected: 2,
 			check: func(t *testing.T, results []install.InstallResult) {
+				t.Helper()
 				if results[0].FilePath != "/repo/a.yml" {
 					t.Errorf("first result FilePath = %q, want %q", results[0].FilePath, "/repo/a.yml")
 				}
@@ -129,6 +132,7 @@ func TestDeduplicateGitRootResults(t *testing.T) {
 			},
 			expected: 1,
 			check: func(t *testing.T, results []install.InstallResult) {
+				t.Helper()
 				if results[0].Error == nil {
 					t.Error("dedup should prefer the result with an error")
 				}
@@ -142,6 +146,7 @@ func TestDeduplicateGitRootResults(t *testing.T) {
 			},
 			expected: 1,
 			check: func(t *testing.T, results []install.InstallResult) {
+				t.Helper()
 				if results[0].Action != "created" {
 					t.Errorf("Action = %q, want %q (should keep first)", results[0].Action, "created")
 				}

@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -23,7 +24,7 @@ func TestGetLatestTemurinMajorVersion(t *testing.T) {
 		temurinHTTPClient = server.Client()
 		defer func() { temurinHTTPClient = origClient }()
 
-		version, err := getLatestTemurinMajorVersionFromURL(server.URL)
+		version, err := getLatestTemurinMajorVersionFromURL(context.Background(), server.URL)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -47,7 +48,7 @@ func TestGetLatestTemurinMajorVersion(t *testing.T) {
 		temurinHTTPClient = server.Client()
 		defer func() { temurinHTTPClient = origClient }()
 
-		version, err := getLatestTemurinMajorVersionFromURL(server.URL)
+		version, err := getLatestTemurinMajorVersionFromURL(context.Background(), server.URL)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -68,7 +69,7 @@ func TestGetLatestTemurinMajorVersion(t *testing.T) {
 		temurinHTTPClient = server.Client()
 		defer func() { temurinHTTPClient = origClient }()
 
-		version, err := getLatestTemurinMajorVersionFromURL(server.URL)
+		version, err := getLatestTemurinMajorVersionFromURL(context.Background(), server.URL)
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
@@ -88,7 +89,7 @@ func TestGetLatestTemurinMajorVersion(t *testing.T) {
 		temurinHTTPClient = server.Client()
 		defer func() { temurinHTTPClient = origClient }()
 
-		version, err := getLatestTemurinMajorVersionFromURL(server.URL)
+		version, err := getLatestTemurinMajorVersionFromURL(context.Background(), server.URL)
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
@@ -108,7 +109,7 @@ func TestGetLatestTemurinMajorVersion(t *testing.T) {
 		temurinHTTPClient = server.Client()
 		defer func() { temurinHTTPClient = origClient }()
 
-		version, err := getLatestTemurinMajorVersionFromURL(server.URL)
+		version, err := getLatestTemurinMajorVersionFromURL(context.Background(), server.URL)
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
@@ -118,7 +119,7 @@ func TestGetLatestTemurinMajorVersion(t *testing.T) {
 	})
 
 	t.Run("connection error returns fallback", func(t *testing.T) {
-		version, err := getLatestTemurinMajorVersionFromURL("http://127.0.0.1:1")
+		version, err := getLatestTemurinMajorVersionFromURL(context.Background(), "http://127.0.0.1:1")
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}

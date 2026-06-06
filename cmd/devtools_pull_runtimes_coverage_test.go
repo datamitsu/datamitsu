@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -59,7 +60,7 @@ func TestHTTPGetLimited_Success(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	got, err := httpGetLimited(srv.Client(), srv.URL, 1024)
+	got, err := httpGetLimited(context.Background(), srv.Client(), srv.URL, 1024)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -74,7 +75,7 @@ func TestHTTPGetLimited_NonOKStatus(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, err := httpGetLimited(srv.Client(), srv.URL, 1024)
+	_, err := httpGetLimited(context.Background(), srv.Client(), srv.URL, 1024)
 	if err == nil {
 		t.Fatal("expected error for non-200 status")
 	}
@@ -91,7 +92,7 @@ func TestHTTPGetLimited_ExceedsMaxSize(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, err := httpGetLimited(srv.Client(), srv.URL, maxSize)
+	_, err := httpGetLimited(context.Background(), srv.Client(), srv.URL, maxSize)
 	if err == nil {
 		t.Fatal("expected error when the body exceeds maxSize")
 	}
@@ -108,7 +109,7 @@ func TestHTTPGetLimited_TransportError(t *testing.T) {
 	url := srv.URL
 	srv.Close()
 
-	_, err := httpGetLimited(client, url, 1024)
+	_, err := httpGetLimited(context.Background(), client, url, 1024)
 	if err == nil {
 		t.Fatal("expected transport error when the server is closed")
 	}
@@ -127,12 +128,12 @@ func TestPullUVRuntime_PythonLookupError(t *testing.T) {
 	defer func() { getLatestPythonStableVersion = orig }()
 
 	// Mimic the real registry: it returns the fallback version AND an error.
-	getLatestPythonStableVersion = func() (string, error) {
+	getLatestPythonStableVersion = func(_ context.Context) (string, error) {
 		return "3.14.3", errors.New("simulated lookup failure")
 	}
 
 	// minAge is irrelevant here: the Python lookup fails before any network call.
-	data, binaries, err := pullUVRuntime(0)
+	data, binaries, err := pullUVRuntime(context.Background(), 0)
 	if err == nil {
 		t.Fatal("expected pullUVRuntime to return an error on Python lookup failure")
 	}
@@ -152,12 +153,12 @@ func TestPullJVMRuntime_TemurinLookupError(t *testing.T) {
 	orig := getLatestTemurinMajorVersion
 	defer func() { getLatestTemurinMajorVersion = orig }()
 
-	getLatestTemurinMajorVersion = func() (string, error) {
+	getLatestTemurinMajorVersion = func(_ context.Context) (string, error) {
 		return "25", errors.New("simulated lookup failure")
 	}
 
 	// minAge is irrelevant here: the Temurin lookup fails before any network call.
-	data, binaries, err := pullJVMRuntime(0)
+	data, binaries, err := pullJVMRuntime(context.Background(), 0)
 	if err == nil {
 		t.Fatal("expected pullJVMRuntime to return an error on Temurin lookup failure")
 	}

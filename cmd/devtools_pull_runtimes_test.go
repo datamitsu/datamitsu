@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"maps"
@@ -1335,11 +1336,11 @@ func TestResolveLatestNodeLTS_FailsLoudly(t *testing.T) {
 	defer func() { getLatestNodeLTSVersion = orig }()
 
 	// Mimic the real registry: it returns the fallback version AND an error.
-	getLatestNodeLTSVersion = func() (string, error) {
+	getLatestNodeLTSVersion = func(_ context.Context) (string, error) {
 		return "24.14.0", errors.New("simulated lookup failure")
 	}
 
-	version, err := resolveLatestNodeLTS()
+	version, err := resolveLatestNodeLTS(context.Background())
 	if err == nil {
 		t.Fatal("expected error when LTS lookup fails")
 	}
@@ -1357,11 +1358,11 @@ func TestResolveLatestNodeLTS_Success(t *testing.T) {
 	orig := getLatestNodeLTSVersion
 	defer func() { getLatestNodeLTSVersion = orig }()
 
-	getLatestNodeLTSVersion = func() (string, error) {
+	getLatestNodeLTSVersion = func(_ context.Context) (string, error) {
 		return "26.2.0", nil
 	}
 
-	version, err := resolveLatestNodeLTS()
+	version, err := resolveLatestNodeLTS(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1377,12 +1378,12 @@ func TestPullNodeRuntime_LTSLookupError(t *testing.T) {
 	orig := getLatestNodeLTSVersion
 	defer func() { getLatestNodeLTSVersion = orig }()
 
-	getLatestNodeLTSVersion = func() (string, error) {
+	getLatestNodeLTSVersion = func(_ context.Context) (string, error) {
 		return "24.14.0", errors.New("simulated lookup failure")
 	}
 
 	// minAge is irrelevant here: the LTS lookup fails before any network call.
-	data, binaries, err := pullNodeRuntime(0)
+	data, binaries, err := pullNodeRuntime(context.Background(), 0)
 	if err == nil {
 		t.Fatal("expected pullNodeRuntime to return an error on LTS lookup failure")
 	}
@@ -1413,7 +1414,7 @@ func TestRunPullRuntimes_NodeLookupFailureNonZeroExit(t *testing.T) {
 	pullRuntimesUpdateFlag = true
 	pullRuntimesRuntimeFlag = "node"
 	pullRuntimesDryRunFlag = true
-	getLatestNodeLTSVersion = func() (string, error) {
+	getLatestNodeLTSVersion = func(_ context.Context) (string, error) {
 		return "24.14.0", errors.New("simulated lookup failure")
 	}
 

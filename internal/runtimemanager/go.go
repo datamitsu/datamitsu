@@ -150,8 +150,8 @@ func (rm *RuntimeManager) GetGoAppPath(appName string, appConfig *binmanager.App
 // InstallGoApp builds a Go app from source if not already cached.
 // If files/archives are non-empty, writes them to the app directory before building.
 // Safe for concurrent use from multiple goroutines.
-func (rm *RuntimeManager) InstallGoApp(appName string, appConfig *binmanager.AppConfigGo, customEnv map[string]string, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
-	ctx, cancel, timeoutSec := newInstallContext(context.Background())
+func (rm *RuntimeManager) InstallGoApp(ctx context.Context, appName string, appConfig *binmanager.AppConfigGo, customEnv map[string]string, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
+	ctx, cancel, timeoutSec := newInstallContext(ctx)
 	defer cancel()
 	key := "go/" + appName
 	_, err, _ := rm.appInstall.Do(key, func() (any, error) {
@@ -220,7 +220,7 @@ func (rm *RuntimeManager) installGoAppOnce(ctx context.Context, appName string, 
 	}
 
 	if len(files) > 0 || len(archives) > 0 {
-		if err := binmanager.WriteAppFiles(appEnvPath, files, archives); err != nil {
+		if err := binmanager.WriteAppFiles(ctx, appEnvPath, files, archives); err != nil {
 			return fmt.Errorf("failed to write app files/archives for %q: %w", appName, err)
 		}
 	}
@@ -314,7 +314,7 @@ func removeStaleGoModFiles(workDir string) error {
 // itself cannot be produced by a normal reinstall. The config lockfile command
 // calls this to resolve transitive dependencies and write the checksums, then
 // reads the resulting files back. The files are left in workDir for the caller.
-func (rm *RuntimeManager) GenerateGoLockFiles(appName string, appConfig *binmanager.AppConfigGo, workDir string) error {
+func (rm *RuntimeManager) GenerateGoLockFiles(ctx context.Context, appName string, appConfig *binmanager.AppConfigGo, workDir string) error {
 	if appConfig.PackageName == "" {
 		return fmt.Errorf("app %q has no packageName; cannot generate lock file", appName)
 	}
@@ -327,7 +327,7 @@ func (rm *RuntimeManager) GenerateGoLockFiles(appName string, appConfig *binmana
 		return fmt.Errorf("failed to resolve runtime for %q: %w", appName, err)
 	}
 
-	goPath, err := rm.GetRuntimePath(runtimeName)
+	goPath, err := rm.getRuntimePath(ctx, runtimeName)
 	if err != nil {
 		return fmt.Errorf("failed to get Go runtime path: %w", err)
 	}
@@ -350,7 +350,7 @@ func (rm *RuntimeManager) GenerateGoLockFiles(appName string, appConfig *binmana
 	fullEnv := buildEnvWithOverrides(os.Environ(), envVars)
 
 	runGo := func(args ...string) error {
-		cmd := exec.Command(goPath, args...)
+		cmd := exec.CommandContext(ctx, goPath, args...)
 		cmd.Dir = workDir
 		cmd.Env = fullEnv
 		cmd.Stdout = os.Stderr

@@ -34,7 +34,7 @@ type BundleInstallStats struct {
 	Failed        []DownloadResult
 }
 
-func (bm *BinManager) installBundle(_ context.Context, name string) error {
+func (bm *BinManager) installBundle(ctx context.Context, name string) error {
 	bundle, ok := bm.mapOfBundles[name]
 	if !ok {
 		return fmt.Errorf("bundle %q not found", name)
@@ -50,7 +50,7 @@ func (bm *BinManager) installBundle(_ context.Context, name string) error {
 		return nil
 	}
 
-	if err := WriteAppFiles(path, bundle.Files, bundle.Archives); err != nil {
+	if err := WriteAppFiles(ctx, path, bundle.Files, bundle.Archives); err != nil {
 		if removeErr := os.RemoveAll(path); removeErr != nil {
 			log.Warn("failed to clean up bundle dir after error", zap.String("name", name), zap.String("path", path), zap.Error(removeErr))
 		}

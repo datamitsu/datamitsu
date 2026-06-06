@@ -110,16 +110,15 @@ linters:
     - protogetter
     - unqueryvet
     - zerologlint
+    - testableexamples
+    - thelper
+    - inamedparam
+    - dogsled
+    - forcetypeassert
+    - contextcheck
+    - errchkjson
+    - noctx
     # --- candidates to enable, in recommended order ---
-    # stage 1 — quick wins (low risk, mostly autofixable)
-    # - testableexamples  # ~2   add // Output: to example tests
-    # - thelper           # ~3   t.Helper() in test helpers
-    # - inamedparam       # ~3   name interface params
-    # - dogsled           # ~4   drop excess blank identifiers
-    # - forcetypeassert   # ~5   guard type assertions (safety)
-    # - contextcheck      # ~5   propagate ctx correctly
-    # - errchkjson        # ~7   check json.Marshal errors
-    # - noctx             # ~8   http requests with context
     # stage 2 — moderate
     # - gocyclo           # ~15  single complexity linter
     # - unparam           # ~18  remove unused params
@@ -139,6 +138,16 @@ linters:
       # poke os.Getenv for environment save/restore isolation.
       - linters:
           - forbidigo
+        path: _test\.go
+      # These linters target production code. In tests the patterns are benign:
+      # exec.Command/http.Get against local fixtures (noctx), marshalling test
+      # data (errchkjson), asserting known types (forcetypeassert), and throwaway
+      # multi-return calls (dogsled). Keep them production-only.
+      - linters:
+          - noctx
+          - errchkjson
+          - forcetypeassert
+          - dogsled
         path: _test\.go
   settings:
     depguard:

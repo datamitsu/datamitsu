@@ -48,26 +48,28 @@ type remoteConfigEntry struct {
 	Hash string `json:"hash"`
 }
 
-// loadConfig loads and parses the JavaScript configuration
+// loadConfig loads and parses the JavaScript configuration. It is the
+// context-free entry point used by command handlers that do not thread a
+// context; callers that hold one should use loadConfigWithPaths.
 func loadConfig() (*config.Config, *config.InitLayerMap, *goja.Runtime, error) {
-	return loadConfigWithPaths(BeforeConfigPaths, NoAutoConfig, ConfigPaths)
+	return loadConfigWithPaths(context.Background(), BeforeConfigPaths, NoAutoConfig, ConfigPaths)
 }
 
 // loadConfigForLockfileGen loads config without enforcing lockfile constraints.
 // Used by config lockfile to allow bootstrapping lockfiles for apps that don't have one yet.
 func loadConfigForLockfileGen() (*config.Config, *config.InitLayerMap, *goja.Runtime, error) {
-	return loadConfigImpl(BeforeConfigPaths, NoAutoConfig, ConfigPaths, true)
+	return loadConfigImpl(context.Background(), BeforeConfigPaths, NoAutoConfig, ConfigPaths, true)
 }
 
 // loadConfigWithPaths loads the default config and then sequentially loads
 // additional configuration files, merging them together.
 // Each config file is loaded in a separate VM and receives the previous config as input.
 // Remote configs declared via getRemoteConfigs() are resolved depth-first.
-func loadConfigWithPaths(beforeConfigPaths []string, noAutoConfig bool, configPaths []string) (cfg *config.Config, layerMap *config.InitLayerMap, vm *goja.Runtime, err error) {
-	return loadConfigImpl(beforeConfigPaths, noAutoConfig, configPaths, false)
+func loadConfigWithPaths(ctx context.Context, beforeConfigPaths []string, noAutoConfig bool, configPaths []string) (cfg *config.Config, layerMap *config.InitLayerMap, vm *goja.Runtime, err error) {
+	return loadConfigImpl(ctx, beforeConfigPaths, noAutoConfig, configPaths, false)
 }
 
-func loadConfigImpl(beforeConfigPaths []string, noAutoConfig bool, configPaths []string, skipLockfileValidation bool) (cfg *config.Config, lm *config.InitLayerMap, vm *goja.Runtime, err error) {
+func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfig bool, configPaths []string, skipLockfileValidation bool) (cfg *config.Config, lm *config.InitLayerMap, vm *goja.Runtime, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("config loading panic: %v", r)
@@ -91,7 +93,7 @@ func loadConfigImpl(beforeConfigPaths []string, noAutoConfig bool, configPaths [
 
 	// Add auto-loaded config from git root if it exists (unless --no-auto-config)
 	if !noAutoConfig {
-		gitRoot, gitErr := facts.GetGitRoot(context.Background())
+		gitRoot, gitErr := facts.GetGitRoot(ctx)
 		if gitErr != nil {
 			if traverser.HasGitDir(cwdPath) {
 				return nil, nil, nil, fmt.Errorf("failed to determine git root: %w", gitErr)
@@ -123,7 +125,7 @@ func loadConfigImpl(beforeConfigPaths []string, noAutoConfig bool, configPaths [
 	resolved := make(map[string]bool)
 	stack := make(map[string]bool)
 	for _, source := range sources {
-		result, resultVM, processErr := processConfigSource(currentConfig, source, resolved, stack)
+		result, resultVM, processErr := processConfigSource(ctx, currentConfig, source, resolved, stack)
 		if processErr != nil {
 			return nil, nil, nil, processErr
 		}
@@ -186,8 +188,8 @@ func loadConfigImpl(beforeConfigPaths []string, noAutoConfig bool, configPaths [
 // The stack map tracks URLs in the current recursion path for cycle detection;
 // URLs are added before recursing and removed after, so shared (diamond)
 // dependencies are allowed while true cycles are still caught.
-func processConfigSource(input *config.Config, source configSource, resolved map[string]bool, stack map[string]bool) (*config.Config, *goja.Runtime, error) {
-	e, err := engine.New(BinaryCommandOverride)
+func processConfigSource(ctx context.Context, input *config.Config, source configSource, resolved map[string]bool, stack map[string]bool) (*config.Config, *goja.Runtime, error) {
+	e, err := engine.New(ctx, BinaryCommandOverride)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create engine: %w", err)
 	}
@@ -287,13 +289,13 @@ func processConfigSource(input *config.Config, source configSource, resolved map
 				stack[entry.URL] = true
 				resolved[entry.URL] = true
 
-				content, resolveErr := remotecfg.Resolve(entry.URL, entry.Hash, env.GetStorePath())
+				content, resolveErr := remotecfg.Resolve(ctx, entry.URL, entry.Hash, env.GetStorePath())
 				if resolveErr != nil {
 					delete(stack, entry.URL)
 					return nil, nil, resolveErr
 				}
 
-				remoteResult, _, remoteErr := processConfigSource(chainedInput, configSource{
+				remoteResult, _, remoteErr := processConfigSource(ctx, chainedInput, configSource{
 					name:     entry.URL,
 					content:  content,
 					isRemote: true,

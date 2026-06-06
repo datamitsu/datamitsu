@@ -37,6 +37,8 @@ func init() {
 }
 
 func runConfigLockfile(cmd *cobra.Command, args []string) error {
+	ctx := commandContext(cmd)
+
 	cfg, _, _, err := loadConfigForLockfileGen()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
@@ -101,14 +103,14 @@ func runConfigLockfile(cmd *cobra.Command, args []string) error {
 		// 100+MiB of module cache we must not leave behind in the install path —
 		// then read go.mod + go.sum back from there.
 		lockContent, err = generateGoLockContent(appName, app, func(workDir string) error {
-			return freshRM.GenerateGoLockFiles(appName, freshApps[appName].Go, workDir)
+			return freshRM.GenerateGoLockFiles(ctx, appName, freshApps[appName].Go, workDir)
 		})
 		if err != nil {
 			return err
 		}
 	} else {
 		fmt.Fprintf(os.Stderr, "Reinstalling %s...\n", appName)
-		if _, err := freshBinMgr.GetCommandInfo(appName); err != nil {
+		if _, err := freshBinMgr.GetCommandInfo(ctx, appName); err != nil {
 			return fmt.Errorf("failed to reinstall %q: %w", appName, err)
 		}
 		lockContent, err = readLockFile(freshInstallPath, app)

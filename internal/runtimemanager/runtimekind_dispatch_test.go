@@ -1,6 +1,7 @@
 package runtimemanager
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -168,7 +169,7 @@ func TestGetCommandInfo_RoutesEveryKind(t *testing.T) {
 			// The install path fails (unresolvable runtime), but the error must
 			// originate from the kind-specific branch, never from the fall-through
 			// "not a runtime-managed app".
-			_, err := rm.GetCommandInfo("app", tc.app)
+			_, err := rm.GetCommandInfo(context.Background(), "app", tc.app)
 			if err == nil {
 				t.Skipf("GetCommandInfo(%s) unexpectedly succeeded in this environment", tc.kind)
 			}
@@ -179,7 +180,7 @@ func TestGetCommandInfo_RoutesEveryKind(t *testing.T) {
 	}
 
 	t.Run("empty app errors as non-runtime", func(t *testing.T) {
-		_, err := rm.GetCommandInfo("app", binmanager.App{})
+		_, err := rm.GetCommandInfo(context.Background(), "app", binmanager.App{})
 		if err == nil || !strings.Contains(err.Error(), "is not a runtime-managed app") {
 			t.Fatalf("GetCommandInfo(empty) error = %v, want \"is not a runtime-managed app\"", err)
 		}
@@ -187,7 +188,7 @@ func TestGetCommandInfo_RoutesEveryKind(t *testing.T) {
 
 	t.Run("shell app errors as non-runtime", func(t *testing.T) {
 		app := binmanager.App{Shell: &binmanager.AppConfigShell{Name: "echo"}}
-		_, err := rm.GetCommandInfo("app", app)
+		_, err := rm.GetCommandInfo(context.Background(), "app", app)
 		if err == nil || !strings.Contains(err.Error(), "is not a runtime-managed app") {
 			t.Fatalf("GetCommandInfo(shell) error = %v, want \"is not a runtime-managed app\"", err)
 		}

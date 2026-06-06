@@ -61,8 +61,8 @@ func uvVenvHealthy(appEnvPath, binPath string) bool {
 // InstallUVApp installs a UV app if not already cached.
 // If files is non-empty, writes them to the app directory before running uv.
 // Safe for concurrent use from multiple goroutines.
-func (rm *RuntimeManager) InstallUVApp(appName string, appConfig *binmanager.AppConfigUV, customEnv map[string]string, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
-	ctx, cancel, timeoutSec := newInstallContext(context.Background())
+func (rm *RuntimeManager) InstallUVApp(ctx context.Context, appName string, appConfig *binmanager.AppConfigUV, customEnv map[string]string, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
+	ctx, cancel, timeoutSec := newInstallContext(ctx)
 	defer cancel()
 	key := "uv/" + appName
 	_, err, _ := rm.appInstall.Do(key, func() (any, error) {
@@ -130,7 +130,7 @@ func (rm *RuntimeManager) installUVAppOnce(ctx context.Context, appName string, 
 	}
 
 	if len(files) > 0 || len(archives) > 0 {
-		if err := binmanager.WriteAppFiles(appEnvPath, files, archives); err != nil {
+		if err := binmanager.WriteAppFiles(ctx, appEnvPath, files, archives); err != nil {
 			return fmt.Errorf("failed to write app files/archives for %q: %w", appName, err)
 		}
 	}

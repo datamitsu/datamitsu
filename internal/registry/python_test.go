@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -25,7 +26,7 @@ func TestGetLatestPythonStableVersion(t *testing.T) {
 		pythonHTTPClient = server.Client()
 		defer func() { pythonHTTPClient = origClient }()
 
-		version, err := getLatestPythonStableVersionFromURL(server.URL)
+		version, err := getLatestPythonStableVersionFromURL(context.Background(), server.URL)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -49,7 +50,7 @@ func TestGetLatestPythonStableVersion(t *testing.T) {
 		pythonHTTPClient = server.Client()
 		defer func() { pythonHTTPClient = origClient }()
 
-		version, err := getLatestPythonStableVersionFromURL(server.URL)
+		version, err := getLatestPythonStableVersionFromURL(context.Background(), server.URL)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -73,7 +74,7 @@ func TestGetLatestPythonStableVersion(t *testing.T) {
 		pythonHTTPClient = server.Client()
 		defer func() { pythonHTTPClient = origClient }()
 
-		version, err := getLatestPythonStableVersionFromURL(server.URL)
+		version, err := getLatestPythonStableVersionFromURL(context.Background(), server.URL)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -97,7 +98,7 @@ func TestGetLatestPythonStableVersion(t *testing.T) {
 		pythonHTTPClient = server.Client()
 		defer func() { pythonHTTPClient = origClient }()
 
-		version, err := getLatestPythonStableVersionFromURL(server.URL)
+		version, err := getLatestPythonStableVersionFromURL(context.Background(), server.URL)
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
@@ -117,7 +118,7 @@ func TestGetLatestPythonStableVersion(t *testing.T) {
 		pythonHTTPClient = server.Client()
 		defer func() { pythonHTTPClient = origClient }()
 
-		version, err := getLatestPythonStableVersionFromURL(server.URL)
+		version, err := getLatestPythonStableVersionFromURL(context.Background(), server.URL)
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
@@ -137,7 +138,7 @@ func TestGetLatestPythonStableVersion(t *testing.T) {
 		pythonHTTPClient = server.Client()
 		defer func() { pythonHTTPClient = origClient }()
 
-		version, err := getLatestPythonStableVersionFromURL(server.URL)
+		version, err := getLatestPythonStableVersionFromURL(context.Background(), server.URL)
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
@@ -147,7 +148,7 @@ func TestGetLatestPythonStableVersion(t *testing.T) {
 	})
 
 	t.Run("connection error returns fallback", func(t *testing.T) {
-		version, err := getLatestPythonStableVersionFromURL("http://127.0.0.1:1")
+		version, err := getLatestPythonStableVersionFromURL(context.Background(), "http://127.0.0.1:1")
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
@@ -167,7 +168,7 @@ func TestGetLatestPythonStableVersion(t *testing.T) {
 		pythonHTTPClient = server.Client()
 		defer func() { pythonHTTPClient = origClient }()
 
-		version, err := getLatestPythonStableVersionFromURL(server.URL)
+		version, err := getLatestPythonStableVersionFromURL(context.Background(), server.URL)
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}

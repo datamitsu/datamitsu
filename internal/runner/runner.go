@@ -74,9 +74,9 @@ type toolPlanner interface {
 
 // planExecutor is the execution surface used by runSingleOperation (satisfied by *tooling.Executor).
 type planExecutor interface {
-	SetResultCallback(tooling.ResultCallback)
-	SetTaskStartCallback(tooling.TaskStartCallback)
-	SetFileProgressCallback(tooling.FileProgressCallback)
+	SetResultCallback(cb tooling.ResultCallback)
+	SetTaskStartCallback(cb tooling.TaskStartCallback)
+	SetFileProgressCallback(cb tooling.FileProgressCallback)
 	Execute(ctx context.Context, plan *tooling.ExecutionPlan) ([]tooling.GroupExecutionResult, error)
 }
 
@@ -309,8 +309,8 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 				decor.Any(func(s decor.Statistics) string {
 					// Read currentBarDesc without lock to avoid deadlock
 					// mpb may call this from its own goroutine while we hold progressMu
-					if desc := currentBarDesc.Load(); desc != nil {
-						return desc.(string)
+					if desc, ok := currentBarDesc.Load().(string); ok {
+						return desc
 					}
 					return ""
 				}, decor.WC{W: 40, C: decor.DSyncWidthR}),

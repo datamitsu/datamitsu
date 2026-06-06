@@ -380,6 +380,10 @@ func TestChildTimingsEnd(t *testing.T) {
 	})
 }
 
+// Illustrative only: timing output is non-deterministic (durations), so no
+// // Output: comment can validate it.
+//
+//nolint:testableexamples // non-deterministic timing output; doc example only
 func ExampleTimings_Start() {
 	_ = os.Setenv("DATAMITSU_TIMINGS", "1")
 	defer func() { _ = os.Unsetenv("DATAMITSU_TIMINGS") }()
@@ -391,6 +395,10 @@ func ExampleTimings_Start() {
 	fmt.Println("Operation complete")
 }
 
+// Illustrative only: timing output is non-deterministic (durations), so no
+// // Output: comment can validate it.
+//
+//nolint:testableexamples // non-deterministic timing output; doc example only
 func ExampleTimings_StartWithChildren() {
 	_ = os.Setenv("DATAMITSU_TIMINGS", "1")
 	defer func() { _ = os.Unsetenv("DATAMITSU_TIMINGS") }()

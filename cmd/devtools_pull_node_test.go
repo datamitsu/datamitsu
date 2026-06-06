@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	maps0 "maps"
@@ -389,7 +390,7 @@ func TestDetectNodeBinaries_MockServers(t *testing.T) {
 		client:      &http.Client{},
 	}
 
-	binaries, err := detectNodeBinaries(cfg)
+	binaries, err := detectNodeBinaries(context.Background(), cfg)
 	if err != nil {
 		t.Fatalf("detectNodeBinaries: %v", err)
 	}
@@ -435,7 +436,7 @@ func TestDetectNodeBinaries_BadSignature(t *testing.T) {
 		client:      &http.Client{},
 	}
 
-	if _, err := detectNodeBinaries(cfg); err == nil {
+	if _, err := detectNodeBinaries(context.Background(), cfg); err == nil {
 		t.Fatal("expected error when dist SHASUMS signature is from an untrusted key")
 	}
 }
@@ -456,7 +457,7 @@ func TestDetectNodeBinaries_MissingMuslAssetFromServer(t *testing.T) {
 		client:      &http.Client{},
 	}
 
-	if _, err := detectNodeBinaries(cfg); err == nil {
+	if _, err := detectNodeBinaries(context.Background(), cfg); err == nil {
 		t.Fatal("expected error when an expected musl asset is absent from the manifest")
 	}
 }

@@ -206,7 +206,7 @@ func TestGetCommandInfoNode(t *testing.T) {
 		},
 	}
 
-	_, err := rm.GetCommandInfo("eslint", app)
+	_, err := rm.GetCommandInfo(context.Background(), "eslint", app)
 	if err == nil {
 		t.Fatal("expected an error (node archive is not reachable at the fake URL), got nil")
 	}
@@ -475,7 +475,7 @@ func TestInstallNodeApp_InvalidRuntime(t *testing.T) {
 		BinPath:     "node_modules/.bin/eslint",
 		Runtime:     "nonexistent",
 	}
-	if err := rm.InstallNodeApp("eslint", appConfig, nil, nil, nil); err == nil {
+	if err := rm.InstallNodeApp(context.Background(), "eslint", appConfig, nil, nil, nil); err == nil {
 		t.Error("expected error for nonexistent runtime, got nil")
 	}
 }
@@ -488,7 +488,7 @@ func TestGetNodeCommandInfo_InvalidRuntime(t *testing.T) {
 		BinPath:     "node_modules/.bin/eslint",
 		Runtime:     "nonexistent",
 	}
-	if _, err := rm.GetNodeCommandInfo("eslint", appConfig, nil, nil); err == nil {
+	if _, err := rm.GetNodeCommandInfo(context.Background(), "eslint", appConfig, nil, nil); err == nil {
 		t.Error("expected error for nonexistent runtime, got nil")
 	}
 }
@@ -524,7 +524,7 @@ func TestGetNodeCommandInfo_MissingNodeConfig(t *testing.T) {
 		BinPath:     "node_modules/.bin/eslint",
 		Runtime:     "node",
 	}
-	if _, err := rm.GetNodeCommandInfo("eslint", appConfig, nil, nil); err == nil {
+	if _, err := rm.GetNodeCommandInfo(context.Background(), "eslint", appConfig, nil, nil); err == nil {
 		t.Error("expected error when runtime has no node config, got nil")
 	}
 }
@@ -586,7 +586,7 @@ func TestInstallNodeApp_AlreadyInstalled(t *testing.T) {
 	}
 	defer func() { _ = os.RemoveAll(appEnvPath) }()
 
-	if err := rm.InstallNodeApp("eslint", appConfig, nil, nil, nil); err != nil {
+	if err := rm.InstallNodeApp(context.Background(), "eslint", appConfig, nil, nil, nil); err != nil {
 		t.Errorf("InstallNodeApp() error = %v, expected nil for already-installed app", err)
 	}
 }
@@ -664,7 +664,7 @@ func TestInstallNodeApp_RemoveAllFailureAborts(t *testing.T) {
 		return sentinel
 	}
 
-	err = rm.InstallNodeApp("eslint", appConfig, nil, nil, nil)
+	err = rm.InstallNodeApp(context.Background(), "eslint", appConfig, nil, nil, nil)
 	if err == nil {
 		t.Fatal("expected an error when stale-tree removal fails, got nil")
 	}
@@ -716,7 +716,7 @@ func TestInstallNodeApp_RemoveAllSuccessProceeds(t *testing.T) {
 		return os.RemoveAll(p)
 	}
 
-	err = rm.InstallNodeApp("eslint", appConfig, nil, nil, nil)
+	err = rm.InstallNodeApp(context.Background(), "eslint", appConfig, nil, nil, nil)
 	if err == nil {
 		t.Fatal("expected a download error after the (successful) stale-tree removal, got nil")
 	}
@@ -798,7 +798,7 @@ func TestGetCommandInfoNode_MergesWorkspaceOnceOnCacheHit(t *testing.T) {
 	}
 	defer func() { buildPNPMWorkspace = orig }()
 
-	if _, err := rm.GetCommandInfo("eslint", app); err != nil {
+	if _, err := rm.GetCommandInfo(context.Background(), "eslint", app); err != nil {
 		t.Fatalf("GetCommandInfo() error = %v", err)
 	}
 	if got := merges.Load(); got != 1 {
@@ -847,7 +847,7 @@ func TestInstallNodeApp_WorkspaceYAMLError(t *testing.T) {
 		Runtime:     "node",
 	}
 
-	err := rm.InstallNodeApp("eslint", appConfig, nil, invalidWorkspaceFiles(), nil)
+	err := rm.InstallNodeApp(context.Background(), "eslint", appConfig, nil, invalidWorkspaceFiles(), nil)
 	if err == nil {
 		t.Fatal("expected error for invalid pnpm-workspace.yaml, got nil")
 	}
@@ -868,7 +868,7 @@ func TestGetNodeCommandInfo_WorkspaceYAMLError(t *testing.T) {
 		Runtime:     "node",
 	}
 
-	_, err := rm.GetNodeCommandInfo("eslint", appConfig, invalidWorkspaceFiles(), nil)
+	_, err := rm.GetNodeCommandInfo(context.Background(), "eslint", appConfig, invalidWorkspaceFiles(), nil)
 	if err == nil {
 		t.Fatal("expected error for invalid pnpm-workspace.yaml, got nil")
 	}

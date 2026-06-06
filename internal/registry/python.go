@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,12 +20,16 @@ type pythonRelease struct {
 
 var pythonHTTPClient = &http.Client{Timeout: 15 * time.Second}
 
-func GetLatestPythonStableVersion() (string, error) {
-	return getLatestPythonStableVersionFromURL("https://endoflife.date/api/python.json")
+func GetLatestPythonStableVersion(ctx context.Context) (string, error) {
+	return getLatestPythonStableVersionFromURL(ctx, "https://endoflife.date/api/python.json")
 }
 
-func getLatestPythonStableVersionFromURL(url string) (string, error) {
-	resp, err := pythonHTTPClient.Get(url)
+func getLatestPythonStableVersionFromURL(ctx context.Context, url string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return pythonFallbackStableVersion, fmt.Errorf("failed to build request: %w", err)
+	}
+	resp, err := pythonHTTPClient.Do(req)
 	if err != nil {
 		return pythonFallbackStableVersion, fmt.Errorf("failed to fetch Python releases: %w", err)
 	}

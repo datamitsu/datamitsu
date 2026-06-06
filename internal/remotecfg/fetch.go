@@ -1,6 +1,7 @@
 package remotecfg
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -21,7 +22,7 @@ var httpClient = httpx.NewHardenedClient(30 * time.Second)
 
 // FetchRemoteConfig downloads a remote config file and verifies its SHA-256 hash.
 // The expectedHash must be in the format "sha256:hexdigest" or plain hex digest.
-func FetchRemoteConfig(url, expectedHash string) (string, error) {
+func FetchRemoteConfig(ctx context.Context, url, expectedHash string) (string, error) {
 	if expectedHash == "" {
 		return "", fmt.Errorf("remote config %s: hash is required", url)
 	}
@@ -30,7 +31,11 @@ func FetchRemoteConfig(url, expectedHash string) (string, error) {
 		return "", fmt.Errorf("remote config %s: %w", url, err)
 	}
 
-	resp, err := httpClient.Get(url)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to build request: %w", err)
+	}
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch remote config %s: %w", url, err)
 	}

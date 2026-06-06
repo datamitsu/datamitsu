@@ -48,7 +48,7 @@ type Facts struct {
 func Collect(ctx context.Context, binaryCommandOverride string) (*Facts, string, error) {
 	libc := target.LibcUnknown
 	if runtime.GOOS == "linux" {
-		libc = target.DetectLibc()
+		libc = target.DetectLibc(ctx)
 	}
 
 	facts := &Facts{

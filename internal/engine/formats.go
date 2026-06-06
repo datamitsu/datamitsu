@@ -71,7 +71,12 @@ func tomlStringifyOrdered(slice yaml.MapSlice) (string, error) {
 
 	// Second pass: write all tables in order
 	for _, item := range tables {
-		key := item.Key.(string)
+		// Keys are guaranteed string here: only string-keyed items from the
+		// first pass are deferred into tables.
+		key, ok := item.Key.(string)
+		if !ok {
+			continue
+		}
 		value := convertMapSliceToMap(item.Value)
 
 		singleItem := map[string]any{key: value}

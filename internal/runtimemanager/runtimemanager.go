@@ -46,7 +46,7 @@ type RuntimeManager struct {
 func New(mapOfRuntimes config.MapOfRuntimes) *RuntimeManager {
 	return &RuntimeManager{
 		mapOfRuntimes: mapOfRuntimes,
-		hostTarget:    target.DetectHost(),
+		hostTarget:    target.HostTarget(),
 		lookPathFunc:  exec.LookPath,
 		removeAllFunc: os.RemoveAll,
 	}
@@ -233,10 +233,10 @@ func (rm *RuntimeManager) ComputeAppPath(appName string, app binmanager.App) (st
 
 // GetCommandInfo installs (if needed) and returns command info for runtime-managed apps.
 // Satisfies binmanager.RuntimeAppManager interface.
-func (rm *RuntimeManager) GetCommandInfo(appName string, app binmanager.App) (*binmanager.CommandInfo, error) {
+func (rm *RuntimeManager) GetCommandInfo(ctx context.Context, appName string, app binmanager.App) (*binmanager.CommandInfo, error) {
 	switch {
 	case app.Uv != nil:
-		if err := rm.InstallUVApp(appName, app.Uv, app.Env, app.Files, app.Archives); err != nil {
+		if err := rm.InstallUVApp(ctx, appName, app.Uv, app.Env, app.Files, app.Archives); err != nil {
 			return nil, err
 		}
 		return rm.GetUVCommandInfo(appName, app.Uv, app.Files, app.Archives)
@@ -247,17 +247,17 @@ func (rm *RuntimeManager) GetCommandInfo(appName string, app binmanager.App) (*b
 		if err != nil {
 			return nil, fmt.Errorf("failed to compute pnpm-workspace.yaml for %q: %w", appName, err)
 		}
-		if err := rm.installNodeApp(appName, app.Node, app.Env, app.Files, app.Archives, mergedWorkspaceYAML); err != nil {
+		if err := rm.installNodeApp(ctx, appName, app.Node, app.Env, app.Files, app.Archives, mergedWorkspaceYAML); err != nil {
 			return nil, err
 		}
-		return rm.getNodeCommandInfo(appName, app.Node, app.Files, app.Archives, mergedWorkspaceYAML)
+		return rm.getNodeCommandInfo(ctx, appName, app.Node, app.Files, app.Archives, mergedWorkspaceYAML)
 	case app.Jvm != nil:
-		if err := rm.InstallJVMApp(appName, app.Jvm, app.Files, app.Archives); err != nil {
+		if err := rm.InstallJVMApp(ctx, appName, app.Jvm, app.Files, app.Archives); err != nil {
 			return nil, err
 		}
-		return rm.GetJVMCommandInfo(appName, app.Jvm, app.Files, app.Archives)
+		return rm.GetJVMCommandInfo(ctx, appName, app.Jvm, app.Files, app.Archives)
 	case app.Go != nil:
-		if err := rm.InstallGoApp(appName, app.Go, app.Env, app.Files, app.Archives); err != nil {
+		if err := rm.InstallGoApp(ctx, appName, app.Go, app.Env, app.Files, app.Archives); err != nil {
 			return nil, err
 		}
 		return rm.GetGoCommandInfo(appName, app.Go, app.Files, app.Archives)
@@ -336,7 +336,7 @@ func CollectRequiredRuntimes(apps binmanager.MapOfApps, runtimes config.MapOfRun
 
 // InstallRuntimes downloads and caches managed runtimes with progress bars.
 // System runtimes are reported as already cached. Returns installation statistics.
-func (rm *RuntimeManager) InstallRuntimes(names []string, concurrency int) (RuntimeInstallStats, error) {
+func (rm *RuntimeManager) InstallRuntimes(ctx context.Context, names []string, concurrency int) (RuntimeInstallStats, error) {
 	stats := RuntimeInstallStats{
 		Downloaded:    []string{},
 		AlreadyCached: []string{},
@@ -435,7 +435,7 @@ func (rm *RuntimeManager) InstallRuntimes(names []string, concurrency int) (Runt
 	}
 
 	tmpBm := binmanager.New(toDownload, nil, nil)
-	dlStats, dlErr := tmpBm.InstallWithConcurrency(true, concurrency, false)
+	dlStats, dlErr := tmpBm.InstallWithConcurrency(ctx, true, concurrency, false)
 	if dlErr != nil {
 		return stats, dlErr
 	}
@@ -443,7 +443,7 @@ func (rm *RuntimeManager) InstallRuntimes(names []string, concurrency int) (Runt
 	for _, name := range dlStats.Downloaded {
 		meta := metaMap[name]
 
-		binCachePath, pathErr := tmpBm.GetBinaryPath(name)
+		binCachePath, pathErr := tmpBm.GetBinaryPath(ctx, name)
 		if pathErr != nil {
 			stats.Failed = append(stats.Failed, RuntimeInstallResult{Name: name, Error: pathErr})
 			continue
@@ -463,7 +463,7 @@ func (rm *RuntimeManager) InstallRuntimes(names []string, concurrency int) (Runt
 	for _, name := range dlStats.AlreadyCached {
 		meta := metaMap[name]
 
-		binCachePath, pathErr := tmpBm.GetBinaryPath(name)
+		binCachePath, pathErr := tmpBm.GetBinaryPath(ctx, name)
 		if pathErr != nil {
 			stats.Failed = append(stats.Failed, RuntimeInstallResult{Name: name, Error: pathErr})
 			continue
@@ -833,13 +833,13 @@ func (rm *RuntimeManager) downloadRuntime(ctx context.Context, runtimeName strin
 		runtimeName: runtimeApp,
 	}, nil, nil)
 
-	if err := tmpBinManager.Install(); err != nil {
+	if err := tmpBinManager.Install(ctx); err != nil {
 		return fmt.Errorf("failed to download runtime %q: %w", runtimeName, err)
 	}
 
 	runtimeCachePath := env.GetRuntimeBinaryPath(runtimeName, configHash)
 
-	binCachePath, err := tmpBinManager.GetBinaryPath(runtimeName)
+	binCachePath, err := tmpBinManager.GetBinaryPath(ctx, runtimeName)
 	if err != nil {
 		return fmt.Errorf("failed to get binary path for runtime %q: %w", runtimeName, err)
 	}

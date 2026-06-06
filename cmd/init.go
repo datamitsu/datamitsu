@@ -91,11 +91,11 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	// Install runtimes and download binaries if not skipped
 	if !initSkipDownload && !initDryRun {
-		if err := installRequiredRuntimes(rm, cfg, initAll); err != nil {
+		if err := installRequiredRuntimes(ctx, rm, cfg, initAll); err != nil {
 			return fmt.Errorf("failed to install runtimes: %w", err)
 		}
 
-		if err := downloadBinaries(binMgr); err != nil {
+		if err := downloadBinaries(ctx, binMgr); err != nil {
 			return fmt.Errorf("failed to download binaries: %w", err)
 		}
 	}
@@ -105,7 +105,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	// must be installed separately before CreateDatamitsuLinks can resolve their
 	// install roots.
 	if !initSkipDownload && !initDryRun {
-		if err := installRuntimeAppsWithLinks(binMgr, cfg, initAll); err != nil {
+		if err := installRuntimeAppsWithLinks(ctx, binMgr, cfg, initAll); err != nil {
 			return fmt.Errorf("failed to install runtime apps with links: %w", err)
 		}
 	}
@@ -138,7 +138,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func installRequiredRuntimes(rm *runtimemanager.RuntimeManager, cfg *config.Config, includeAll bool) error {
+func installRequiredRuntimes(ctx context.Context, rm *runtimemanager.RuntimeManager, cfg *config.Config, includeAll bool) error {
 	runtimeNames := runtimemanager.CollectRequiredRuntimes(cfg.Apps, cfg.Runtimes, includeAll)
 	if len(runtimeNames) == 0 {
 		return nil
@@ -149,7 +149,7 @@ func installRequiredRuntimes(rm *runtimemanager.RuntimeManager, cfg *config.Conf
 
 	concurrency := env.GetConcurrency()
 
-	stats, err := rm.InstallRuntimes(runtimeNames, concurrency)
+	stats, err := rm.InstallRuntimes(ctx, runtimeNames, concurrency)
 	if err != nil {
 		return err
 	}
@@ -202,10 +202,10 @@ func installRequiredRuntimes(rm *runtimemanager.RuntimeManager, cfg *config.Conf
 	return nil
 }
 
-func downloadBinaries(binMgr *binmanager.BinManager) error {
+func downloadBinaries(ctx context.Context, binMgr *binmanager.BinManager) error {
 	concurrency := env.GetConcurrency()
 
-	stats, err := binMgr.InstallWithConcurrency(initAll, concurrency, initFailOnDownloadErr)
+	stats, err := binMgr.InstallWithConcurrency(ctx, initAll, concurrency, initFailOnDownloadErr)
 	if err != nil {
 		return err
 	}
@@ -341,7 +341,7 @@ func runInitCommands(ctx context.Context, rootPath, cwdPath string, projectTypes
 		}
 
 		// Execute the command
-		if err := binMgr.Exec(initCmd.Command, initCmd.Args); err != nil {
+		if err := binMgr.Exec(ctx, initCmd.Command, initCmd.Args); err != nil {
 			return fmt.Errorf("failed to run %s: %w", name, err)
 		}
 	}
@@ -351,10 +351,10 @@ func runInitCommands(ctx context.Context, rootPath, cwdPath string, projectTypes
 
 // commandInfoGetter abstracts GetCommandInfo for testability.
 type commandInfoGetter interface {
-	GetCommandInfo(appName string) (*binmanager.CommandInfo, error)
+	GetCommandInfo(ctx context.Context, appName string) (*binmanager.CommandInfo, error)
 }
 
-func installRuntimeAppsWithLinks(binMgr *binmanager.BinManager, cfg *config.Config, installAll bool) error {
+func installRuntimeAppsWithLinks(ctx context.Context, binMgr *binmanager.BinManager, cfg *config.Config, installAll bool) error {
 	var appsToInstall []string
 	if installAll {
 		appsToInstall = filterAppsForSmartInit(cfg.Apps, allAppNames(cfg.Apps))
@@ -369,7 +369,7 @@ func installRuntimeAppsWithLinks(binMgr *binmanager.BinManager, cfg *config.Conf
 		linkApps := allRuntimeAppsWithLinks(cfg.Apps)
 		appsToInstall = mergeUnique(appsToInstall, linkApps)
 	}
-	return installSmartInitApps(binMgr, appsToInstall)
+	return installSmartInitApps(ctx, binMgr, appsToInstall)
 }
 
 // allAppNames returns all app names from the config (for --all mode).
@@ -461,11 +461,11 @@ func mergeUnique(a, b []string) []string {
 }
 
 // installSmartInitApps installs the given list of runtime-managed apps.
-func installSmartInitApps(getter commandInfoGetter, appsToInstall []string) error {
+func installSmartInitApps(ctx context.Context, getter commandInfoGetter, appsToInstall []string) error {
 	sort.Strings(appsToInstall)
 	for _, name := range appsToInstall {
 		fmt.Printf("📦 Installing %s (referenced by tools, has config links)...\n", name)
-		if _, err := getter.GetCommandInfo(name); err != nil {
+		if _, err := getter.GetCommandInfo(ctx, name); err != nil {
 			return fmt.Errorf("failed to install %s: %w", name, err)
 		}
 	}

@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,12 +21,16 @@ type nodejsRelease struct {
 
 var nodejsHTTPClient = &http.Client{Timeout: 15 * time.Second}
 
-func GetLatestNodeLTSVersion() (string, error) {
-	return getLatestNodeLTSVersionFromURL("https://endoflife.date/api/nodejs.json")
+func GetLatestNodeLTSVersion(ctx context.Context) (string, error) {
+	return getLatestNodeLTSVersionFromURL(ctx, "https://endoflife.date/api/nodejs.json")
 }
 
-func getLatestNodeLTSVersionFromURL(url string) (string, error) {
-	resp, err := nodejsHTTPClient.Get(url)
+func getLatestNodeLTSVersionFromURL(ctx context.Context, url string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nodejsFallbackLTSVersion, fmt.Errorf("failed to build request: %w", err)
+	}
+	resp, err := nodejsHTTPClient.Do(req)
 	if err != nil {
 		return nodejsFallbackLTSVersion, fmt.Errorf("failed to fetch Node.js releases: %w", err)
 	}

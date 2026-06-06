@@ -126,7 +126,7 @@ func (a *ArchiveSpec) IsExternal() bool {
 // RuntimeAppManager handles runtime-managed applications (uv, node, jvm, go).
 // Implemented by runtimemanager.RuntimeManager to avoid circular imports.
 type RuntimeAppManager interface {
-	GetCommandInfo(appName string, app App) (*CommandInfo, error)
+	GetCommandInfo(ctx context.Context, appName string, app App) (*CommandInfo, error)
 	ComputeAppPath(appName string, app App) (string, error)
 }
 
@@ -147,7 +147,7 @@ func New(mapOfApps MapOfApps, mapOfBundles MapOfBundles, runtimeManager RuntimeA
 		mapOfApps:      mapOfApps,
 		mapOfBundles:   mapOfBundles,
 		runtimeManager: runtimeManager,
-		resolver:       target.NewResolver(target.DetectHost()),
+		resolver:       target.NewResolver(target.HostTarget()),
 	}
 }
 
@@ -238,7 +238,7 @@ type InstallStats struct {
 
 // InstallWithConcurrency installs binaries with specified concurrency level
 // Returns installation statistics
-func (bm *BinManager) InstallWithConcurrency(includeOptional bool, concurrency int, failOnError bool) (InstallStats, error) {
+func (bm *BinManager) InstallWithConcurrency(ctx context.Context, includeOptional bool, concurrency int, failOnError bool) (InstallStats, error) {
 	stats := InstallStats{
 		Skipped:       []string{},
 		AlreadyCached: []string{},
@@ -285,7 +285,7 @@ func (bm *BinManager) InstallWithConcurrency(includeOptional bool, concurrency i
 	for range concurrency {
 		wg.Go(func() {
 			for name := range jobs {
-				err := bm.downloadWithTimeout(name, progress)
+				err := bm.downloadWithTimeout(ctx, name, progress)
 				results <- DownloadResult{
 					Name:  name,
 					Error: err,
@@ -323,12 +323,12 @@ func (bm *BinManager) InstallWithConcurrency(includeOptional bool, concurrency i
 }
 
 // Install downloads and caches only required binaries (Required: true)
-func (bm *BinManager) Install() error {
-	return bm.installInternal(false)
+func (bm *BinManager) Install(ctx context.Context) error {
+	return bm.installInternal(ctx, false)
 }
 
 // GetBinaryPath returns the path to a binary, downloading it if necessary (lazy loading)
-func (bm *BinManager) GetBinaryPath(name string) (string, error) {
+func (bm *BinManager) GetBinaryPath(ctx context.Context, name string) (string, error) {
 	binPath, err := bm.getBinaryPath(name)
 	if err != nil {
 		return "", err
@@ -352,7 +352,7 @@ func (bm *BinManager) GetBinaryPath(name string) (string, error) {
 
 		fmt.Fprintf(os.Stderr, "⬇️  Downloading %s...\n", name)
 
-		if err := bm.downloadWithTimeout(name, nil); err != nil {
+		if err := bm.downloadWithTimeout(ctx, name, nil); err != nil {
 			return nil, fmt.Errorf("failed to download %s: %w", name, err)
 		}
 
@@ -415,7 +415,7 @@ func (bm *BinManager) EnsureTools(ctx context.Context, names []string) error {
 					errs[idxOf[name]] = err
 					continue
 				}
-				if _, err := bm.GetCommandInfo(name); err != nil {
+				if _, err := bm.GetCommandInfo(ctx, name); err != nil {
 					errs[idxOf[name]] = fmt.Errorf("failed to ensure tool %q: %w", name, err)
 				}
 			}
@@ -433,7 +433,7 @@ func (bm *BinManager) EnsureTools(ctx context.Context, names []string) error {
 
 // GetCommandInfo returns command information for executing an application
 // Works with all application types: binary, shell, uv, node, jvm, go
-func (bm *BinManager) GetCommandInfo(appName string) (*CommandInfo, error) {
+func (bm *BinManager) GetCommandInfo(ctx context.Context, appName string) (*CommandInfo, error) {
 	app, ok := bm.mapOfApps[appName]
 	if !ok {
 		return nil, fmt.Errorf("app '%s' not found in registry", appName)
@@ -450,7 +450,7 @@ func (bm *BinManager) GetCommandInfo(appName string) (*CommandInfo, error) {
 		}
 
 	case app.Binary != nil:
-		binPath, err := bm.GetBinaryPath(appName)
+		binPath, err := bm.GetBinaryPath(ctx, appName)
 		if err != nil {
 			return nil, err
 		}
@@ -463,7 +463,7 @@ func (bm *BinManager) GetCommandInfo(appName string) (*CommandInfo, error) {
 		if bm.runtimeManager == nil {
 			return nil, fmt.Errorf("no runtime manager configured for runtime-managed app %q", appName)
 		}
-		ci, err := bm.runtimeManager.GetCommandInfo(appName, app)
+		ci, err := bm.runtimeManager.GetCommandInfo(ctx, appName, app)
 		if err != nil {
 			return nil, err
 		}
@@ -522,13 +522,13 @@ func (bm *BinManager) GetInstallRoot(appName string) (string, error) {
 //
 // This ordering means Files always take precedence over Archives, and among Archives,
 // later names (alphabetically) take precedence over earlier ones for overlapping paths.
-func WriteAppFiles(installPath string, files map[string]string, archives map[string]*ArchiveSpec) error {
+func WriteAppFiles(ctx context.Context, installPath string, files map[string]string, archives map[string]*ArchiveSpec) error {
 	if err := os.MkdirAll(installPath, 0o755); err != nil {
 		return fmt.Errorf("failed to create install directory: %w", err)
 	}
 
 	if len(archives) > 0 {
-		if err := extractArchives(installPath, archives); err != nil {
+		if err := extractArchives(ctx, installPath, archives); err != nil {
 			return fmt.Errorf("failed to extract archives: %w", err)
 		}
 	}
@@ -545,7 +545,7 @@ func WriteAppFiles(installPath string, files map[string]string, archives map[str
 // extractArchives extracts all archives into installPath in alphabetical order by name.
 // When multiple archives contain files at the same path, later archives (alphabetically)
 // overwrite earlier ones.
-func extractArchives(installPath string, archives map[string]*ArchiveSpec) error {
+func extractArchives(ctx context.Context, installPath string, archives map[string]*ArchiveSpec) error {
 	names := make([]string, 0, len(archives))
 	for name := range archives {
 		names = append(names, name)
@@ -571,7 +571,7 @@ func extractArchives(installPath string, archives map[string]*ArchiveSpec) error
 
 			log.Debug("extracted inline archive", zap.String("name", name), zap.String("dest", installPath))
 		case spec.IsExternal():
-			if err := downloadAndExtractExternalArchive(name, spec, installPath); err != nil {
+			if err := downloadAndExtractExternalArchive(ctx, name, spec, installPath); err != nil {
 				return err
 			}
 		default:
@@ -582,7 +582,7 @@ func extractArchives(installPath string, archives map[string]*ArchiveSpec) error
 	return nil
 }
 
-func downloadAndExtractExternalArchive(name string, spec *ArchiveSpec, installPath string) error {
+func downloadAndExtractExternalArchive(ctx context.Context, name string, spec *ArchiveSpec, installPath string) error {
 	if spec.Hash == "" {
 		return fmt.Errorf("archive %q: external archive must have hash field (SHA-256)", name)
 	}
@@ -604,7 +604,7 @@ func downloadAndExtractExternalArchive(name string, spec *ArchiveSpec, installPa
 		}
 	}()
 
-	if err := downloadFileSimple(spec.URL, tmpPath); err != nil {
+	if err := downloadFileSimple(ctx, spec.URL, tmpPath); err != nil {
 		return fmt.Errorf("archive %q: download failed: %w", name, err)
 	}
 
@@ -644,8 +644,12 @@ func writeFiles(installPath string, files map[string]string) error {
 	return nil
 }
 
-func downloadFileSimple(url, destPath string) error {
-	resp, err := httpClient.Get(url)
+func downloadFileSimple(ctx context.Context, url, destPath string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to build request: %w", err)
+	}
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("HTTP GET failed: %w", err)
 	}
@@ -742,7 +746,7 @@ func (bm *BinManager) GetAppsList() []AppInfo {
 // For binary apps: ensures binary is cached (downloads if needed).
 // For runtime apps: delegates to runtimeManager.GetCommandInfo.
 // Returns (nil, nil) for shell apps — callers must handle nil.
-func (bm *BinManager) GetExecCmd(name string, args []string) (*exec.Cmd, error) {
+func (bm *BinManager) GetExecCmd(ctx context.Context, name string, args []string) (*exec.Cmd, error) {
 	app, ok := bm.mapOfApps[name]
 	if !ok {
 		return nil, fmt.Errorf("app '%s' not found in registry", name)
@@ -753,7 +757,7 @@ func (bm *BinManager) GetExecCmd(name string, args []string) (*exec.Cmd, error) 
 		return nil, nil //nolint:nilnil
 	}
 
-	cmdInfo, err := bm.GetCommandInfo(name)
+	cmdInfo, err := bm.GetCommandInfo(ctx, name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get command info for %s: %w", name, err)
 	}
@@ -762,15 +766,15 @@ func (bm *BinManager) GetExecCmd(name string, args []string) (*exec.Cmd, error) 
 	allArgs = append(allArgs, cmdInfo.Args...)
 	allArgs = append(allArgs, args...)
 
-	cmd := exec.Command(cmdInfo.Command, allArgs...)
+	cmd := exec.CommandContext(ctx, cmdInfo.Command, allArgs...)
 	cmd.Env = mergeExecEnv(os.Environ(), cmdInfo.Env)
 
 	return cmd, nil
 }
 
 // Exec runs application as child process with environment variables passed through
-func (bm *BinManager) Exec(appName string, args []string) error {
-	cmdInfo, err := bm.GetCommandInfo(appName)
+func (bm *BinManager) Exec(ctx context.Context, appName string, args []string) error {
+	cmdInfo, err := bm.GetCommandInfo(ctx, appName)
 	if err != nil {
 		return fmt.Errorf("failed to get command info for %s: %w", appName, err)
 	}
@@ -779,7 +783,7 @@ func (bm *BinManager) Exec(appName string, args []string) error {
 	allArgs = append(allArgs, cmdInfo.Args...)
 	allArgs = append(allArgs, args...)
 
-	cmd := exec.Command(cmdInfo.Command, allArgs...)
+	cmd := exec.CommandContext(ctx, cmdInfo.Command, allArgs...)
 
 	log.Debug("executing app",
 		zap.String("name", appName),
@@ -824,7 +828,12 @@ func (bm *BinManager) getBinaryInfo(name string) (*target.ResolvedTarget, Binary
 		}
 	}
 
-	return resolved, *info.(*BinaryOsArchInfo), nil
+	binInfo, ok := info.(*BinaryOsArchInfo)
+	if !ok {
+		return nil, BinaryOsArchInfo{}, fmt.Errorf("binary '%s' resolved to unexpected info type %T", name, info)
+	}
+
+	return resolved, *binInfo, nil
 }
 
 func (bm *BinManager) getBinaryPath(name string) (string, error) {
@@ -913,13 +922,13 @@ func (bm *BinManager) downloadWithProgress(ctx context.Context, name string, pro
 
 // downloadWithTimeout installs one app under a per-app install timeout context,
 // translating a deadline into a clear timeout error.
-func (bm *BinManager) downloadWithTimeout(name string, progress *mpb.Progress) error {
-	ctx, cancel, timeoutSec := newInstallContext(context.Background())
+func (bm *BinManager) downloadWithTimeout(ctx context.Context, name string, progress *mpb.Progress) error {
+	ctx, cancel, timeoutSec := newInstallContext(ctx)
 	defer cancel()
 	return wrapInstallTimeout(bm.downloadWithProgress(ctx, name, progress), timeoutSec)
 }
 
-func (bm *BinManager) installInternal(includeOptional bool) error {
+func (bm *BinManager) installInternal(ctx context.Context, includeOptional bool) error {
 	for name := range bm.mapOfApps {
 		if bm.mapOfApps[name].Binary == nil {
 			continue
@@ -940,7 +949,7 @@ func (bm *BinManager) installInternal(includeOptional bool) error {
 			continue
 		}
 
-		if err := bm.downloadWithTimeout(name, nil); err != nil {
+		if err := bm.downloadWithTimeout(ctx, name, nil); err != nil {
 			return fmt.Errorf("failed to install %s: %w", name, err)
 		}
 	}

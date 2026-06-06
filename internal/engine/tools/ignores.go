@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -259,7 +260,13 @@ func RegisterIgnoreToolsInVM(vm *goja.Runtime) error {
 		return vm.ToValue(result)
 	})
 
-	_ = toolsObj.(*goja.Object).Set("Ignore", ignoreObj)
+	toolsGoja, ok := toolsObj.(*goja.Object)
+	if !ok {
+		return errors.New("tools global is not an object")
+	}
+	if err := toolsGoja.Set("Ignore", ignoreObj); err != nil {
+		return fmt.Errorf("failed to set tools.Ignore: %w", err)
+	}
 
 	return nil
 }

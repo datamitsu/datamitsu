@@ -1,6 +1,7 @@
 package github
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -45,19 +46,19 @@ func NewClient() *Client {
 }
 
 // GetRelease fetches a specific release by tag
-func (c *Client) GetRelease(owner, repo, tag string) (*Release, error) {
+func (c *Client) GetRelease(ctx context.Context, owner, repo, tag string) (*Release, error) {
 	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/tags/%s", owner, repo, tag)
-	return c.fetchRelease(url)
+	return c.fetchRelease(ctx, url)
 }
 
 // GetLatestRelease fetches the latest release
-func (c *Client) GetLatestRelease(owner, repo string) (*Release, error) {
+func (c *Client) GetLatestRelease(ctx context.Context, owner, repo string) (*Release, error) {
 	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", owner, repo)
-	return c.fetchRelease(url)
+	return c.fetchRelease(ctx, url)
 }
 
 // ListReleases fetches up to perPage releases for a repo, with retry logic.
-func (c *Client) ListReleases(owner, repo string, perPage int) ([]Release, error) {
+func (c *Client) ListReleases(ctx context.Context, owner, repo string, perPage int) ([]Release, error) {
 	if perPage <= 0 {
 		perPage = 30
 	}
@@ -74,7 +75,7 @@ func (c *Client) ListReleases(owner, repo string, perPage int) ([]Release, error
 		}
 
 		var releases []Release
-		err := c.doJSONRequest(url, &releases)
+		err := c.doJSONRequest(ctx, url, &releases)
 		if err == nil {
 			return releases, nil
 		}
@@ -92,12 +93,12 @@ func (c *Client) ListReleases(owner, repo string, perPage int) ([]Release, error
 // It fetches up to 30 releases and skips prereleases, drafts, and releases with a
 // zero PublishedAt. When minAgeMinutes <= 0 it falls through to GetLatestRelease.
 // Returns (nil, nil) when no release qualifies.
-func (c *Client) GetLatestReleaseWithMinAge(owner, repo string, minAgeMinutes int) (*Release, error) {
+func (c *Client) GetLatestReleaseWithMinAge(ctx context.Context, owner, repo string, minAgeMinutes int) (*Release, error) {
 	if minAgeMinutes <= 0 {
-		return c.GetLatestRelease(owner, repo)
+		return c.GetLatestRelease(ctx, owner, repo)
 	}
 
-	releases, err := c.ListReleases(owner, repo, 30)
+	releases, err := c.ListReleases(ctx, owner, repo, 30)
 	if err != nil {
 		return nil, err
 	}
@@ -145,13 +146,13 @@ type Repository struct {
 }
 
 // GetRepository fetches repository metadata
-func (c *Client) GetRepository(owner, repo string) (*Repository, error) {
+func (c *Client) GetRepository(ctx context.Context, owner, repo string) (*Repository, error) {
 	url := fmt.Sprintf("https://api.github.com/repos/%s/%s", owner, repo)
-	return c.fetchRepository(url)
+	return c.fetchRepository(ctx, url)
 }
 
-func (c *Client) fetchRepository(url string) (*Repository, error) {
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+func (c *Client) fetchRepository(ctx context.Context, url string) (*Repository, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -207,7 +208,7 @@ func isNonRetryableError(err error) bool {
 }
 
 // fetchRelease fetches a release from the given URL with retry logic
-func (c *Client) fetchRelease(url string) (*Release, error) {
+func (c *Client) fetchRelease(ctx context.Context, url string) (*Release, error) {
 	var lastErr error
 	maxRetries := 3
 	backoff := time.Second
@@ -218,7 +219,7 @@ func (c *Client) fetchRelease(url string) (*Release, error) {
 			backoff *= 2
 		}
 
-		release, err := c.doRequest(url)
+		release, err := c.doRequest(ctx, url)
 		if err == nil {
 			return release, nil
 		}
@@ -235,17 +236,17 @@ func (c *Client) fetchRelease(url string) (*Release, error) {
 }
 
 // doRequest performs the actual HTTP request for a single release
-func (c *Client) doRequest(url string) (*Release, error) {
+func (c *Client) doRequest(ctx context.Context, url string) (*Release, error) {
 	var release Release
-	if err := c.doJSONRequest(url, &release); err != nil {
+	if err := c.doJSONRequest(ctx, url, &release); err != nil {
 		return nil, err
 	}
 	return &release, nil
 }
 
 // doJSONRequest performs a GET request and decodes the JSON response into target.
-func (c *Client) doJSONRequest(url string, target any) error {
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+func (c *Client) doJSONRequest(ctx context.Context, url string, target any) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}

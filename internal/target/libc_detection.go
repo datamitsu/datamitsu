@@ -1,6 +1,7 @@
 package target
 
 import (
+	"context"
 	"debug/elf"
 	"errors"
 	"os"
@@ -12,15 +13,15 @@ import (
 
 // detectViaLdd attempts to detect libc by parsing "ldd --version" output.
 // glibc prints version info to stdout; musl prints to stderr.
-func detectViaLdd() LibcType {
+func detectViaLdd(ctx context.Context) LibcType {
 	if runtime.GOOS != "linux" {
 		return LibcUnknown
 	}
-	return detectViaLddOutput(runLddVersion())
+	return detectViaLddOutput(runLddVersion(ctx))
 }
 
-func runLddVersion() string {
-	cmd := exec.Command("ldd", "--version")
+func runLddVersion(ctx context.Context) string {
+	cmd := exec.CommandContext(ctx, "ldd", "--version")
 	stdout, err := cmd.Output()
 	if err != nil {
 		exitErr := &exec.ExitError{}

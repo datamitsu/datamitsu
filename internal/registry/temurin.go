@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,12 +20,16 @@ type temurinReleaseVersions struct {
 
 var temurinHTTPClient = &http.Client{Timeout: 15 * time.Second}
 
-func GetLatestTemurinMajorVersion() (string, error) {
-	return getLatestTemurinMajorVersionFromURL("https://api.adoptium.net/v3/info/available_releases")
+func GetLatestTemurinMajorVersion(ctx context.Context) (string, error) {
+	return getLatestTemurinMajorVersionFromURL(ctx, "https://api.adoptium.net/v3/info/available_releases")
 }
 
-func getLatestTemurinMajorVersionFromURL(url string) (string, error) {
-	resp, err := temurinHTTPClient.Get(url)
+func getLatestTemurinMajorVersionFromURL(ctx context.Context, url string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return temurinFallbackMajorVersion, fmt.Errorf("failed to build request: %w", err)
+	}
+	resp, err := temurinHTTPClient.Do(req)
 	if err != nil {
 		return temurinFallbackMajorVersion, fmt.Errorf("failed to fetch Temurin releases: %w", err)
 	}
