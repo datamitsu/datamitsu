@@ -167,16 +167,22 @@ and have it insert declared before-configs before the auto source (only when no
 Validate that a declared before-config produces the same effective config as the
 equivalent `--before-config` invocation, and that nesting is ignored.
 
-- [ ] write integration test (temp-dir harness like `TestBeforeConfigOrdering`):
+- [x] write integration test (temp-dir harness like `TestBeforeConfigOrdering`):
       auto config declares a before-config that defines apps + `init`; assert the
       merged result equals an equivalent `loadConfigWithPaths([before], true, nil)`
       run (apps overridable by auto, init layered identically)
-- [ ] write root-only test: a declared before-config that itself exports
+      → `TestBeforeConfigsDeclaredParityWithFlag` (git-root harness; compares
+      ignoreRules, app keys, jvm versions, layered `.editorconfig` content)
+- [x] write root-only test: a declared before-config that itself exports
       `getBeforeConfigs()` → the nested declaration is ignored (no chaining)
-- [ ] write precedence integration test: same auto config run with an explicit
+      → `TestBeforeConfigsRootOnlyNoChaining`
+- [x] write precedence integration test: same auto config run with an explicit
       `--before-config` path → declared before-config is skipped (no double-load)
-- [ ] fix any parity gaps surfaced by the above (e.g. init-layer merge, ordering)
-- [ ] run `go test ./cmd/...` — must pass before Task 4
+      → `TestBeforeConfigsFlagOverridesDeclared`
+- [x] fix any parity gaps surfaced by the above (e.g. init-layer merge, ordering)
+      — none surfaced; the Task 2 pre-pass already yields exact parity (same
+      `default → shared → auto` source chain, layer name does not affect content)
+- [x] run `go test ./cmd/...` — must pass before Task 4
 
 ### Task 4: TypeScript ambient declarations
 

@@ -5,9 +5,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -882,6 +884,264 @@ func TestBuildConfigSourcesFlagSkipsDeclared(t *testing.T) {
 func computeHash(content string) string {
 	h := sha256.Sum256([]byte(content))
 	return "sha256:" + hex.EncodeToString(h[:])
+}
+
+// ===========================================================================
+// Integration tests: getBeforeConfigs() end-to-end parity, root-only scope,
+// and --before-config flag precedence (Task 3).
+//
+// These exercise the real auto-discovery path through loadConfigWithPaths,
+// which resolves the git root from the working directory. Each test therefore
+// runs in a freshly git-initialized temp dir and changes into it, so they must
+// not run in parallel.
+// ===========================================================================
+
+func gitAvailable() bool {
+	return exec.Command("git", "--version").Run() == nil
+}
+
+// setupGitRoot creates a git-initialized temp dir, changes into it, and returns
+// its symlink-resolved path. The resolution matters because
+// `git rev-parse --show-toplevel` (used by facts.GetGitRoot) returns the
+// canonical path; writing config files under the resolved path keeps them
+// discoverable as the auto config.
+func setupGitRoot(t *testing.T) string {
+	t.Helper()
+	if !gitAvailable() {
+		t.Skip("git is not available")
+	}
+	dir := t.TempDir()
+	resolved, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatalf("EvalSymlinks: %v", err)
+	}
+	cmd := exec.Command("git", "init")
+	cmd.Dir = resolved
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("git init: %v", err)
+	}
+	t.Chdir(resolved)
+	return resolved
+}
+
+func writeFile(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// jvmApp renders a valid jvm app literal (jarHash is a 64-char lowercase hex
+// string so it passes config validation; jvm apps need no lockfile).
+func jvmApp(hashChar string, version string) string {
+	return fmt.Sprintf(
+		`{ jvm: { jarUrl: "https://example.com/x.jar", jarHash: %q, version: %q } }`,
+		strings.Repeat(hashChar, 64), version,
+	)
+}
+
+// effectiveSnapshot captures the observable, source-name-independent result of
+// a config load so two runs can be compared for parity.
+type effectiveSnapshot struct {
+	ignoreRules  []string
+	appKeys      []string
+	jvmVersions  map[string]string
+	editorconfig string
+}
+
+func snapshotEffective(t *testing.T, cfg *config.Config, layerMap *config.InitLayerMap) effectiveSnapshot {
+	t.Helper()
+	snap := effectiveSnapshot{
+		ignoreRules: cfg.IgnoreRules,
+		jvmVersions: make(map[string]string),
+	}
+	for name, app := range cfg.Apps {
+		snap.appKeys = append(snap.appKeys, name)
+		if app.Jvm != nil {
+			snap.jvmVersions[name] = app.Jvm.Version
+		}
+	}
+	slices.Sort(snap.appKeys)
+	if layerMap != nil {
+		if history, ok := (*layerMap)[".editorconfig"]; ok {
+			if c := config.GetLastGeneratedContent(history); c != nil {
+				snap.editorconfig = *c
+			}
+		}
+	}
+	return snap
+}
+
+// TestBeforeConfigsDeclaredParityWithFlag asserts that an auto config which
+// declares a before-config via getBeforeConfigs() produces the same effective
+// config (apps overridable by the auto layer, init layered identically,
+// ignoreRules ordered identically) as the equivalent explicit invocation that
+// passes the same shared file via --before-config and the auto file via
+// --config. Both resolve to: default -> shared -> auto.
+func TestBeforeConfigsDeclaredParityWithFlag(t *testing.T) {
+	root := setupGitRoot(t)
+
+	mergeHelper := `function _merge(base, extra) { var out = {}; var k; for (k in base) { out[k] = base[k]; } for (k in extra) { out[k] = extra[k]; } return out; }`
+
+	sharedPath := filepath.Join(root, "shared.js")
+	writeFile(t, sharedPath, fmt.Sprintf(`
+function getMinVersion() { return "0.0.0"; }
+%s
+function getConfig(input) {
+    var apps = _merge(input && input.apps ? input.apps : {}, { "shared-tool": %s });
+    return {
+        apps: apps,
+        ignoreRules: ["from-shared: eslint"],
+        init: { ".editorconfig": { scope: "git-root", content: function(ctx) { return "from-shared"; } } }
+    };
+}`, mergeHelper, jvmApp("a", "1.0.0")))
+
+	autoPath := filepath.Join(root, ldflags.PackageName+".config.js")
+	writeFile(t, autoPath, fmt.Sprintf(`
+function getBeforeConfigs() { return [{ path: "./shared.js" }]; }
+function getMinVersion() { return "0.0.0"; }
+%s
+function getConfig(input) {
+    var apps = _merge(input && input.apps ? input.apps : {}, {
+        "shared-tool": %s,
+        "auto-tool": %s
+    });
+    return {
+        apps: apps,
+        ignoreRules: ["from-auto: prettier"],
+        init: { ".editorconfig": { scope: "git-root", content: function(ctx) { return (ctx.existingContent || "") + "\nfrom-auto"; } } }
+    };
+}`, mergeHelper, jvmApp("a", "2.0.0"), jvmApp("b", "1.0.0")))
+
+	// Run A: declared before-config via auto discovery.
+	cfgA, lmA, _, errA := loadConfigWithPaths(context.Background(), nil, false, nil)
+	if errA != nil {
+		t.Fatalf("declared run error: %v", errA)
+	}
+	// Run B: explicit --before-config (shared) + --config (auto), auto-discovery off.
+	cfgB, lmB, _, errB := loadConfigWithPaths(context.Background(), []string{sharedPath}, true, []string{autoPath})
+	if errB != nil {
+		t.Fatalf("flag run error: %v", errB)
+	}
+
+	snapA := snapshotEffective(t, cfgA, lmA)
+	snapB := snapshotEffective(t, cfgB, lmB)
+
+	if !slices.Equal(snapA.ignoreRules, snapB.ignoreRules) {
+		t.Errorf("ignoreRules differ:\n declared=%v\n flag=%v", snapA.ignoreRules, snapB.ignoreRules)
+	}
+	if !slices.Equal(snapA.appKeys, snapB.appKeys) {
+		t.Errorf("app keys differ:\n declared=%v\n flag=%v", snapA.appKeys, snapB.appKeys)
+	}
+	if !maps.Equal(snapA.jvmVersions, snapB.jvmVersions) {
+		t.Errorf("jvm versions differ:\n declared=%v\n flag=%v", snapA.jvmVersions, snapB.jvmVersions)
+	}
+	if snapA.editorconfig != snapB.editorconfig {
+		t.Errorf("init content differs:\n declared=%q\n flag=%q", snapA.editorconfig, snapB.editorconfig)
+	}
+
+	// Sanity-anchor the parity (so equality is not trivially true): the auto
+	// layer overrode shared-tool's version, added auto-tool, layered init, and
+	// shared's ignoreRule precedes auto's.
+	if got := snapA.jvmVersions["shared-tool"]; got != "2.0.0" {
+		t.Errorf("shared-tool version = %q, want %q (auto layer should override shared)", got, "2.0.0")
+	}
+	if _, ok := snapA.jvmVersions["auto-tool"]; !ok {
+		t.Errorf("auto-tool app missing; jvmVersions=%v", snapA.jvmVersions)
+	}
+	if snapA.editorconfig != "from-shared\nfrom-auto" {
+		t.Errorf("editorconfig = %q, want %q", snapA.editorconfig, "from-shared\nfrom-auto")
+	}
+	sharedIdx := slices.Index(snapA.ignoreRules, "from-shared: eslint")
+	autoIdx := slices.Index(snapA.ignoreRules, "from-auto: prettier")
+	if sharedIdx < 0 || autoIdx < 0 {
+		t.Fatalf("missing expected ignoreRules: %v", snapA.ignoreRules)
+	}
+	if sharedIdx >= autoIdx {
+		t.Errorf("shared rule (idx=%d) should precede auto rule (idx=%d)", sharedIdx, autoIdx)
+	}
+}
+
+// TestBeforeConfigsRootOnlyNoChaining verifies that getBeforeConfigs() is read
+// only from the auto-discovered git-root config. A declared before-config that
+// itself exports getBeforeConfigs() must NOT have its nested declaration
+// honoured (no chaining), so the nested file's contribution is absent.
+func TestBeforeConfigsRootOnlyNoChaining(t *testing.T) {
+	root := setupGitRoot(t)
+
+	nestedPath := filepath.Join(root, "nested.js")
+	writeFile(t, nestedPath, `
+function getMinVersion() { return "0.0.0"; }
+function getConfig(input) { return { ignoreRules: ["from-nested: hadolint"] }; }`)
+
+	sharedPath := filepath.Join(root, "shared.js")
+	// shared declares getBeforeConfigs -> nested; this must be ignored.
+	writeFile(t, sharedPath, `
+function getBeforeConfigs() { return [{ path: "./nested.js" }]; }
+function getMinVersion() { return "0.0.0"; }
+function getConfig(input) { return { ignoreRules: ["from-shared: eslint"] }; }`)
+
+	autoPath := filepath.Join(root, ldflags.PackageName+".config.js")
+	writeFile(t, autoPath, `
+function getBeforeConfigs() { return [{ path: "./shared.js" }]; }
+function getMinVersion() { return "0.0.0"; }
+function getConfig(input) { return { ignoreRules: ["from-auto: prettier"] }; }`)
+
+	cfg, _, _, err := loadConfigWithPaths(context.Background(), nil, false, nil)
+	if err != nil {
+		t.Fatalf("loadConfigWithPaths error: %v", err)
+	}
+
+	if !slices.Contains(cfg.IgnoreRules, "from-shared: eslint") {
+		t.Errorf("declared before-config (shared) should be loaded; rules=%v", cfg.IgnoreRules)
+	}
+	if !slices.Contains(cfg.IgnoreRules, "from-auto: prettier") {
+		t.Errorf("auto config should be loaded; rules=%v", cfg.IgnoreRules)
+	}
+	if slices.Contains(cfg.IgnoreRules, "from-nested: hadolint") {
+		t.Errorf("nested getBeforeConfigs() must NOT be honoured (no chaining); rules=%v", cfg.IgnoreRules)
+	}
+}
+
+// TestBeforeConfigsFlagOverridesDeclared verifies the precedence rule: when an
+// explicit --before-config path is passed, the auto config's getBeforeConfigs()
+// declaration is not consulted at all (the flag wins, avoiding a double-load of
+// the shared config when the pnpm wrapper supplies --before-config).
+func TestBeforeConfigsFlagOverridesDeclared(t *testing.T) {
+	root := setupGitRoot(t)
+
+	declaredPath := filepath.Join(root, "declared.js")
+	writeFile(t, declaredPath, `
+function getMinVersion() { return "0.0.0"; }
+function getConfig(input) { return { ignoreRules: ["from-declared: eslint"] }; }`)
+
+	autoPath := filepath.Join(root, ldflags.PackageName+".config.js")
+	writeFile(t, autoPath, `
+function getBeforeConfigs() { return [{ path: "./declared.js" }]; }
+function getMinVersion() { return "0.0.0"; }
+function getConfig(input) { return { ignoreRules: ["from-auto: prettier"] }; }`)
+
+	flagDir := t.TempDir()
+	flagPath := filepath.Join(flagDir, "flag.js")
+	writeFile(t, flagPath, `
+function getMinVersion() { return "0.0.0"; }
+function getConfig(input) { return { ignoreRules: ["from-flag: shellcheck"] }; }`)
+
+	// --before-config flag set -> getBeforeConfigs() must be skipped entirely.
+	cfg, _, _, err := loadConfigWithPaths(context.Background(), []string{flagPath}, false, nil)
+	if err != nil {
+		t.Fatalf("loadConfigWithPaths error: %v", err)
+	}
+
+	if !slices.Contains(cfg.IgnoreRules, "from-flag: shellcheck") {
+		t.Errorf("--before-config flag config should be loaded; rules=%v", cfg.IgnoreRules)
+	}
+	if !slices.Contains(cfg.IgnoreRules, "from-auto: prettier") {
+		t.Errorf("auto config should still be loaded; rules=%v", cfg.IgnoreRules)
+	}
+	if slices.Contains(cfg.IgnoreRules, "from-declared: eslint") {
+		t.Errorf("declared before-config must be skipped when --before-config flag is set (no double-load); rules=%v", cfg.IgnoreRules)
+	}
 }
 
 func TestProcessConfigSourceRemoteConfig(t *testing.T) {
