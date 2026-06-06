@@ -139,8 +139,6 @@ func (g *GitIgnore) CollectRules(ctx context.Context, target string) error {
 	gr, gctx := errgroup.WithContext(ctx)
 
 	for i, path := range paths {
-		i, path := i, path
-
 		gr.Go(func() error {
 			if err := gctx.Err(); err != nil {
 				return err

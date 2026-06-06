@@ -48,6 +48,6 @@ linters:
     - errname
     - errorlint
     # - exhaustive
-    # - copyloopvar
+    - copyloopvar
     # - dupl
 version: 2

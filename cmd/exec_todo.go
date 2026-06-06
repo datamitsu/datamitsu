@@ -108,8 +108,6 @@ func CollectGitignoreRules(ctx context.Context, root, target string) (*Gitignore
 	g, gctx := errgroup.WithContext(ctx)
 
 	for i, path := range paths {
-		i, path := i, path
-
 		g.Go(func() error {
 			if err := gctx.Err(); err != nil {
 				return err
