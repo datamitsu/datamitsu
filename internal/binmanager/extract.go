@@ -684,10 +684,10 @@ func extractZipToDir(zipPath, destDir string) (string, error) {
 			continue
 		}
 
-		target := filepath.Join(tmpDir, file.Name) //nolint:gosec // G305: file.Name is validated by validateArchivePath above and cleanTarget is checked against tmpDir below
-
-		cleanTarget := filepath.Clean(target)
-		if !strings.HasPrefix(cleanTarget, tmpDir+string(filepath.Separator)) && cleanTarget != tmpDir {
+		// filepath.Join cleans the result, so target is already normalized; guard it
+		// directly so the value used in every file op below is the one checked here.
+		target := filepath.Join(tmpDir, file.Name) //nolint:gosec // G305: file.Name is validated by validateArchivePath above and target is checked to stay within tmpDir below
+		if !strings.HasPrefix(target, tmpDir+string(filepath.Separator)) && target != tmpDir {
 			log.Warn("skipping archive entry that escapes destination", zap.String("path", file.Name))
 			continue
 		}
@@ -767,10 +767,10 @@ func extractTarToDir(tarReader *tar.Reader, destDir string) (string, error) {
 			continue
 		}
 
-		target := filepath.Join(tmpDir, header.Name) //nolint:gosec // G305: header.Name is validated by validateArchivePath above and cleanTarget is checked against tmpDir below
-
-		cleanTarget := filepath.Clean(target)
-		if !strings.HasPrefix(cleanTarget, tmpDir+string(filepath.Separator)) && cleanTarget != tmpDir {
+		// filepath.Join cleans the result, so target is already normalized; guard it
+		// directly so the value used in every file op below is the one checked here.
+		target := filepath.Join(tmpDir, header.Name) //nolint:gosec // G305: header.Name is validated by validateArchivePath above and target is checked to stay within tmpDir below
+		if !strings.HasPrefix(target, tmpDir+string(filepath.Separator)) && target != tmpDir {
 			log.Warn("skipping archive entry that escapes destination", zap.String("path", header.Name))
 			continue
 		}
@@ -928,10 +928,10 @@ func extractArchiveToPath(destPath string, tarData []byte, archivePath string, f
 			continue
 		}
 
-		target := filepath.Join(destPath, header.Name) //nolint:gosec // G305: header.Name is validated by validateArchivePath above and cleanTarget is checked against destPath below
-
-		cleanTarget := filepath.Clean(target)
-		if !strings.HasPrefix(cleanTarget, destPath+string(filepath.Separator)) && cleanTarget != destPath {
+		// filepath.Join cleans the result, so target is already normalized; guard it
+		// directly so the value used in every file op below is the one checked here.
+		target := filepath.Join(destPath, header.Name) //nolint:gosec // G305: header.Name is validated by validateArchivePath above and target is checked to stay within destPath below
+		if !strings.HasPrefix(target, destPath+string(filepath.Separator)) && target != destPath {
 			log.Warn("skipping archive entry that escapes destination", zap.String("path", header.Name))
 			continue
 		}
