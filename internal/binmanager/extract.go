@@ -558,6 +558,8 @@ func extractBinaryToDir(archivePath string, contentType BinContentType, destDir 
 		return extractTarPlainToDir(archivePath, destDir)
 	case BinContentTypeZip:
 		return extractZipToDir(archivePath, destDir)
+	case BinContentTypeBinary, BinContentTypeGz, BinContentTypeBz2, BinContentTypeXz, BinContentTypeZst:
+		return "", fmt.Errorf("unsupported content type for directory extraction: %s", contentType)
 	default:
 		return "", fmt.Errorf("unsupported content type for directory extraction: %s", contentType)
 	}
@@ -896,6 +898,9 @@ func extractArchiveToPath(destPath string, tarData []byte, archivePath string, f
 
 		case BinContentTypeTar:
 			tarReader = tar.NewReader(file)
+
+		case BinContentTypeBinary, BinContentTypeZip, BinContentTypeGz, BinContentTypeBz2, BinContentTypeXz, BinContentTypeZst:
+			return "", fmt.Errorf("unsupported archive format: %s (expected tar, tar.gz, tar.xz, tar.bz2, or tar.zst)", format)
 
 		default:
 			return "", fmt.Errorf("unsupported archive format: %s (expected tar, tar.gz, tar.xz, tar.bz2, or tar.zst)", format)

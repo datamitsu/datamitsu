@@ -50,9 +50,4 @@ linters:
     - exhaustive
     - copyloopvar
     # - dupl
-  settings:
-    exhaustive:
-      # A `default:` case that handles remaining enum values counts as exhaustive,
-      # so switches with an explicit fallback need not list every constant.
-      default-signifies-exhaustive: true
 version: 2
