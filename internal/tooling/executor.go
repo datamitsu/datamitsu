@@ -1,3 +1,6 @@
+// Package tooling plans and executes managed tool operations: it groups tasks
+// by priority, runs them through a bounded worker pool, and classifies their
+// results for fail-fast reporting.
 package tooling
 
 import (
@@ -305,7 +308,7 @@ func (e *Executor) executeTasksParallel(ctx context.Context, tasks []Task, cance
 	for i := range taskIndices {
 		taskIndices[i] = i
 	}
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	rng := rand.New(rand.NewSource(time.Now().UnixNano())) //nolint:gosec // G404: non-cryptographic use (task shuffling for load balancing); math/rand is intentional
 	rng.Shuffle(len(taskIndices), func(i, j int) {
 		taskIndices[i], taskIndices[j] = taskIndices[j], taskIndices[i]
 	})
@@ -479,9 +482,9 @@ func (e *Executor) buildCommand(ctx context.Context, cmdInfo *binmanager.Command
 		allArgs := make([]string, 0, len(cmdInfo.Args)+len(args))
 		allArgs = append(allArgs, cmdInfo.Args...)
 		allArgs = append(allArgs, args...)
-		cmd = exec.CommandContext(ctx, cmdInfo.Command, allArgs...)
+		cmd = exec.CommandContext(ctx, cmdInfo.Command, allArgs...) //nolint:gosec // G204: command path comes from the trusted managed store (binmanager.CommandInfo) and args come from validated config
 	default:
-		cmd = exec.CommandContext(ctx, cmdInfo.Command, args...)
+		cmd = exec.CommandContext(ctx, cmdInfo.Command, args...) //nolint:gosec // G204: command path comes from the trusted managed store (binmanager.CommandInfo) and args come from validated config
 	}
 
 	cmd.Dir = workingDir
@@ -1208,7 +1211,7 @@ func (e *Executor) runCommandWithOutput(cmd *exec.Cmd) ([]byte, error) {
 	setupProcessGroupCleanup(cmd)
 
 	if err := cmd.Start(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("start command: %w", err)
 	}
 
 	err := cmd.Wait()

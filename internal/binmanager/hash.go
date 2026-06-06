@@ -1,8 +1,8 @@
 package binmanager
 
 import (
-	"crypto/md5"
-	"crypto/sha1"
+	"crypto/md5"  //nolint:gosec // G501,G505: weak hashes supported only for verifying upstream-published checksums
+	"crypto/sha1" //nolint:gosec // G501,G505: weak hashes supported only for verifying upstream-published checksums
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/hex"
@@ -80,14 +80,14 @@ func verifyFileHash(filePath string, expectedHash string, hashType BinHashType) 
 		actualHash = hex.EncodeToString(h.Sum(nil))
 
 	case BinHashTypeSHA1:
-		h := sha1.New()
+		h := sha1.New() //nolint:gosec // G401: SHA1 used only to verify upstream-published checksums
 		if _, err := io.Copy(h, file); err != nil {
 			return fmt.Errorf("failed to calculate sha1: %w", err)
 		}
 		actualHash = hex.EncodeToString(h.Sum(nil))
 
 	case BinHashTypeMD5:
-		h := md5.New()
+		h := md5.New() //nolint:gosec // G401: MD5 used only to verify upstream-published checksums
 		if _, err := io.Copy(h, file); err != nil {
 			return fmt.Errorf("failed to calculate md5: %w", err)
 		}

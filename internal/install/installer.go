@@ -1,3 +1,5 @@
+// Package install writes and patches managed configuration files into a
+// project, creating, replacing or symlinking each config entry.
 package install
 
 import (
@@ -45,7 +47,7 @@ func NewInstaller(
 }
 
 // InstallResult represents the result of a single config file installation
-type InstallResult struct {
+type InstallResult struct { //nolint:revive // exported: name kept explicit; install.InstallResult reads clearer than install.Result at its cross-package call sites
 	ConfigName   string
 	FilePath     string
 	Action       string // "created", "patched", "replaced"
@@ -235,20 +237,20 @@ func (i *Installer) installSymlink(mainPath string, linkTarget string, dryRun bo
 		dir := resolvedTarget
 		for dir != filepath.Dir(dir) {
 			dir = filepath.Dir(dir)
-			if realDir, dirErr := filepath.EvalSymlinks(dir); dirErr == nil {
+			realDir, dirErr := filepath.EvalSymlinks(dir)
+			if dirErr == nil {
 				dirRel, relErr := filepath.Rel(realRoot, realDir)
 				if relErr != nil || dirRel == ".." || strings.HasPrefix(dirRel, ".."+string(filepath.Separator)) {
 					result.Error = fmt.Errorf("linkTarget %q resolves to path outside repository root", linkTarget)
 					return result
 				}
 				break
-			} else {
-				// EvalSymlinks failed — if this path is itself a symlink (broken),
-				// reject because we cannot verify where it points
-				if info, statErr := os.Lstat(dir); statErr == nil && info.Mode()&os.ModeSymlink != 0 {
-					result.Error = fmt.Errorf("linkTarget %q traverses unresolvable symlink at %q", linkTarget, dir)
-					return result
-				}
+			}
+			// EvalSymlinks failed — if this path is itself a symlink (broken),
+			// reject because we cannot verify where it points
+			if info, statErr := os.Lstat(dir); statErr == nil && info.Mode()&os.ModeSymlink != 0 {
+				result.Error = fmt.Errorf("linkTarget %q traverses unresolvable symlink at %q", linkTarget, dir)
+				return result
 			}
 		}
 	}

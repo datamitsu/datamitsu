@@ -1,3 +1,5 @@
+// Package github provides a minimal GitHub API client for fetching release
+// metadata and assets used by datamitsu's binary distribution.
 package github
 
 import (

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// Facts holds JSON-serializable facts exposed to the config layer.
 type Facts struct {
 	Value int `json:"value"`
 }
@@ -23,7 +25,7 @@ func GetGitRoot(ctx context.Context) (string, error) {
 
 	ex, err := os.Getwd()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("getwd: %w", err)
 	}
 
 	for {
@@ -43,7 +45,7 @@ func GetGitRoot(ctx context.Context) (string, error) {
 
 			out, err := cmd.Output()
 			if err != nil {
-				return err
+				return fmt.Errorf("git rev-parse --show-toplevel: %w", err)
 			}
 			root = strings.TrimSpace(string(out))
 			return nil
@@ -67,7 +69,7 @@ func GetGitRoot(ctx context.Context) (string, error) {
 		})
 
 		if err := g.Wait(); err != nil {
-			return "", err
+			return "", fmt.Errorf("resolving git root: %w", err)
 		}
 
 		if parent == "" {
@@ -110,7 +112,7 @@ func CollectGitignoreRules(ctx context.Context, root, target string) (*Gitignore
 	for i, path := range paths {
 		g.Go(func() error {
 			if err := gctx.Err(); err != nil {
-				return err
+				return fmt.Errorf("context canceled: %w", err)
 			}
 
 			content, err := os.ReadFile(path)
@@ -146,7 +148,7 @@ func CollectGitignoreRules(ctx context.Context, root, target string) (*Gitignore
 	}
 
 	if err := g.Wait(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("collecting gitignore rules: %w", err)
 	}
 	close(resultCh)
 
@@ -224,6 +226,8 @@ func collectGitignorePaths(root, target string) []string {
 	return paths
 }
 
+// GetGitignoreMatcher builds a matcher from the .gitignore rules between the
+// git root and the current working directory.
 func GetGitignoreMatcher(ctx context.Context) (*GitignoreMatcher, error) {
 	root, err := GetGitRoot(ctx)
 	if err != nil {
@@ -232,7 +236,7 @@ func GetGitignoreMatcher(ctx context.Context) (*GitignoreMatcher, error) {
 
 	cwd, err := os.Getwd()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("getwd: %w", err)
 	}
 
 	return CollectGitignoreRules(ctx, root, cwd)

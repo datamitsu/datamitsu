@@ -86,7 +86,10 @@ func (lw *limitedWriter) Write(p []byte) (int, error) {
 	}
 	n, err := lw.w.Write(p)
 	lw.n += int64(n)
-	return n, err
+	if err != nil {
+		return n, fmt.Errorf("writing to underlying writer: %w", err)
+	}
+	return n, nil
 }
 
 type fileEntry struct {
@@ -130,7 +133,7 @@ func collectFiles(dirPath string) ([]fileEntry, error) {
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("walking %s: %w", dirPath, err)
 	}
 
 	slices.SortFunc(entries, func(a, b fileEntry) int {

@@ -140,11 +140,10 @@ func TestDetectViaELFInterpreterInvalidPath(t *testing.T) {
 }
 
 func TestDetectViaELFInterpreterNonELF(t *testing.T) {
-	tmpFile, err := os.CreateTemp("", "not-elf-*")
+	tmpFile, err := os.CreateTemp(t.TempDir(), "not-elf-*")
 	if err != nil {
 		t.Fatalf("CreateTemp failed: %v", err)
 	}
-	defer func() { _ = os.Remove(tmpFile.Name()) }()
 	if _, err := tmpFile.WriteString("not an ELF file"); err != nil {
 		t.Fatalf("WriteString failed: %v", err)
 	}

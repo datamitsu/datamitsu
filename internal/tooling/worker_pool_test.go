@@ -1,7 +1,6 @@
 package tooling
 
 import (
-	"os"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -13,8 +12,7 @@ import (
 
 func TestWorkerPoolLimiting(t *testing.T) {
 	// Set max workers to 2 for testing
-	_ = os.Setenv("DATAMITSU_MAX_PARALLEL_WORKERS", "2")
-	defer func() { _ = os.Unsetenv("DATAMITSU_MAX_PARALLEL_WORKERS") }()
+	t.Setenv("DATAMITSU_MAX_PARALLEL_WORKERS", "2")
 
 	// Track concurrent execution
 	var concurrentCount atomic.Int32
@@ -116,8 +114,7 @@ func TestWorkerPoolWithDifferentSizes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_ = os.Setenv("DATAMITSU_MAX_PARALLEL_WORKERS", strconv.Itoa(tt.maxWorkers))
-			defer func() { _ = os.Unsetenv("DATAMITSU_MAX_PARALLEL_WORKERS") }()
+			t.Setenv("DATAMITSU_MAX_PARALLEL_WORKERS", strconv.Itoa(tt.maxWorkers))
 
 			var concurrentCount atomic.Int32
 			var maxConcurrent int32

@@ -233,7 +233,7 @@ func (rm *RuntimeManager) installNodeAppOnce(ctx context.Context, appName string
 	envVars = mergeInstallEnv(envVars, customEnv, appEnvPath)
 	cmdEnv := buildEnvWithOverrides(os.Environ(), envVars)
 
-	cmd := exec.CommandContext(ctx, nodeBinPath, args...)
+	cmd := exec.CommandContext(ctx, nodeBinPath, args...) //nolint:gosec // G204: nodeBinPath comes from the trusted managed runtime store and args are built from validated config
 	cmd.Dir = appEnvPath
 	cmd.Env = cmdEnv
 	cmd.Stdout = os.Stderr

@@ -1,9 +1,11 @@
 package binmanager
 
+// BinHashType identifies the cryptographic hash algorithm used to verify a download.
 type BinHashType string
 
 const defaultBinHashType BinHashType = "sha256"
 
+// Supported hash algorithms for verifying downloaded artifacts.
 const (
 	BinHashTypeSHA1   BinHashType = "sha1"
 	BinHashTypeSHA256 BinHashType = "sha256"
@@ -18,8 +20,10 @@ func IsAllowedDownloadHashType(ht BinHashType) bool {
 	return ht == BinHashTypeSHA256
 }
 
+// BinContentType identifies the on-disk format of a downloaded artifact.
 type BinContentType string
 
+// Supported content/archive formats for downloaded artifacts.
 const (
 	BinContentTypeBinary BinContentType = "binary"
 	BinContentTypeTarGz  BinContentType = "tar.gz"
@@ -34,6 +38,8 @@ const (
 	BinContentTypeZst    BinContentType = "zst"
 )
 
+// BinaryOsArchInfo describes a downloadable binary for one OS/arch, including its
+// source URL, verification hash and extraction details.
 type BinaryOsArchInfo struct {
 	URL      string       `json:"url"`
 	Hash     string       `json:"hash"`

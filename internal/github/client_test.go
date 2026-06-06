@@ -33,8 +33,7 @@ func TestNewClient(t *testing.T) {
 
 	t.Run("creates client with token from env", func(t *testing.T) {
 		expectedToken := "test-token-123"
-		_ = os.Setenv("GITHUB_TOKEN", expectedToken)
-		defer func() { _ = os.Unsetenv("GITHUB_TOKEN") }()
+		t.Setenv("GITHUB_TOKEN", expectedToken)
 
 		client := NewClient()
 		if client.token != expectedToken {

@@ -161,13 +161,14 @@ func TestXXH3Reader(t *testing.T) {
 	})
 
 	t.Run("error propagation", func(t *testing.T) {
-		errReader := &failingReader{err: errors.New("read failed")}
+		sentinel := errors.New("read failed")
+		errReader := &failingReader{err: sentinel}
 		_, err := XXH3Reader(errReader)
 		if err == nil {
 			t.Error("expected error from failing reader")
 		}
-		if err.Error() != "read failed" {
-			t.Errorf("expected 'read failed', got %q", err.Error())
+		if !errors.Is(err, sentinel) {
+			t.Errorf("expected wrapped 'read failed', got %v", err)
 		}
 	})
 

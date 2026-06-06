@@ -1,3 +1,4 @@
+// Package cache stores per-file lint/fix results so unchanged files can skip re-running tools.
 package cache
 
 import (
@@ -24,6 +25,8 @@ import (
 // Operation represents the type of operation (lint or fix)
 type Operation string
 
+// OperationLint and OperationFix identify whether a cached tool result came from
+// a lint run or a fix run.
 const (
 	OperationLint Operation = "lint"
 	OperationFix  Operation = "fix"
@@ -38,16 +41,16 @@ type FileEntry struct {
 	Fix         []string // tools that successfully passed fix
 }
 
-// CacheFile represents the entire cache for a project
-type CacheFile struct {
+// File represents the entire cache for a project
+type File struct {
 	InvalidationKey string               // hash(datamitsuVersion + fullConfigHash + invalidateOnFiles)
 	ProjectPath     string               // for debugging
 	LastPruned      time.Time            // when we last cleaned up deleted files
 	Entries         map[string]FileEntry // relativePath -> entry
 }
 
-// CacheStats holds statistics about cache hits and misses
-type CacheStats struct {
+// Stats holds statistics about cache hits and misses
+type Stats struct {
 	Hits   int64
 	Misses int64
 }
@@ -57,7 +60,7 @@ type Cache struct {
 	path            string
 	projectPath     string
 	invalidationKey string
-	data            *CacheFile
+	data            *File
 	hits            atomic.Int64 // Cache hits counter
 	misses          atomic.Int64 // Cache misses counter
 	logger          *zap.Logger
@@ -120,7 +123,7 @@ func NewCache(
 	// Load existing cache or create new one
 	if err := c.Load(); err != nil {
 		c.logger.Warn("failed to load cache, creating new", zap.Error(err))
-		c.data = &CacheFile{
+		c.data = &File{
 			InvalidationKey: invalidationKey,
 			ProjectPath:     projectPath,
 			LastPruned:      time.Now(),
@@ -137,7 +140,7 @@ func (c *Cache) Load() error {
 	if err != nil {
 		if os.IsNotExist(err) {
 			// Cache doesn't exist yet, create new
-			c.data = &CacheFile{
+			c.data = &File{
 				InvalidationKey: c.invalidationKey,
 				ProjectPath:     c.projectPath,
 				LastPruned:      time.Now(),
@@ -159,7 +162,7 @@ func (c *Cache) Load() error {
 		return fmt.Errorf("failed to read cache file: %w", err)
 	}
 
-	var data CacheFile
+	var data File
 	if err := msgpack.Unmarshal(fileData, &data); err != nil {
 		return fmt.Errorf("failed to decode cache: %w", err)
 	}
@@ -169,7 +172,7 @@ func (c *Cache) Load() error {
 		c.logger.Info("invalidation key mismatch, resetting cache",
 			zap.String("old", data.InvalidationKey),
 			zap.String("new", c.invalidationKey))
-		c.data = &CacheFile{
+		c.data = &File{
 			InvalidationKey: c.invalidationKey,
 			ProjectPath:     c.projectPath,
 			LastPruned:      time.Now(),
@@ -403,8 +406,8 @@ func (c *Cache) AfterFix(file, tool string, toolCacheEnabled bool) error {
 }
 
 // GetStats returns cache statistics
-func (c *Cache) GetStats() CacheStats {
-	return CacheStats{
+func (c *Cache) GetStats() Stats {
+	return Stats{
 		Hits:   c.hits.Load(),
 		Misses: c.misses.Load(),
 	}
@@ -413,7 +416,7 @@ func (c *Cache) GetStats() CacheStats {
 // Clear removes all cache entries
 func (c *Cache) Clear() error {
 	c.mu.Lock()
-	c.data = &CacheFile{
+	c.data = &File{
 		InvalidationKey: c.invalidationKey,
 		ProjectPath:     c.projectPath,
 		LastPruned:      time.Now(),
@@ -490,7 +493,7 @@ func calculateInvalidationKey(
 func hashFile(path string) (string, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("open file for hashing: %w", err)
 	}
 	defer func() {
 		_ = f.Close()

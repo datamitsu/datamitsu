@@ -12,8 +12,7 @@ import (
 
 func TestNew(t *testing.T) {
 	t.Run("enabled when env variable is set", func(t *testing.T) {
-		_ = os.Setenv("DATAMITSU_TIMINGS", "1")
-		defer func() { _ = os.Unsetenv("DATAMITSU_TIMINGS") }()
+		t.Setenv("DATAMITSU_TIMINGS", "1")
 
 		timings := New()
 		if !timings.IsEnabled() {
@@ -40,8 +39,7 @@ func TestNew(t *testing.T) {
 
 func TestIsEnabled(t *testing.T) {
 	t.Run("returns enabled state", func(t *testing.T) {
-		_ = os.Setenv("DATAMITSU_TIMINGS", "1")
-		defer func() { _ = os.Unsetenv("DATAMITSU_TIMINGS") }()
+		t.Setenv("DATAMITSU_TIMINGS", "1")
 
 		timings := New()
 		if !timings.IsEnabled() {
@@ -58,8 +56,7 @@ func TestIsEnabled(t *testing.T) {
 
 func TestStart(t *testing.T) {
 	t.Run("records duration when enabled", func(t *testing.T) {
-		_ = os.Setenv("DATAMITSU_TIMINGS", "1")
-		defer func() { _ = os.Unsetenv("DATAMITSU_TIMINGS") }()
+		t.Setenv("DATAMITSU_TIMINGS", "1")
 
 		timings := New()
 		end := timings.Start("test stage")
@@ -93,8 +90,7 @@ func TestStart(t *testing.T) {
 	})
 
 	t.Run("defer pattern works", func(t *testing.T) {
-		_ = os.Setenv("DATAMITSU_TIMINGS", "1")
-		defer func() { _ = os.Unsetenv("DATAMITSU_TIMINGS") }()
+		t.Setenv("DATAMITSU_TIMINGS", "1")
 
 		timings := New()
 
@@ -111,8 +107,7 @@ func TestStart(t *testing.T) {
 
 func TestStartWithChildren(t *testing.T) {
 	t.Run("records parent and children when enabled", func(t *testing.T) {
-		_ = os.Setenv("DATAMITSU_TIMINGS", "1")
-		defer func() { _ = os.Unsetenv("DATAMITSU_TIMINGS") }()
+		t.Setenv("DATAMITSU_TIMINGS", "1")
 
 		timings := New()
 		child := timings.StartWithChildren("parent stage")
@@ -168,8 +163,7 @@ func TestStartWithChildren(t *testing.T) {
 
 func TestPrint(t *testing.T) {
 	t.Run("prints timing statistics when enabled", func(t *testing.T) {
-		_ = os.Setenv("DATAMITSU_TIMINGS", "1")
-		defer func() { _ = os.Unsetenv("DATAMITSU_TIMINGS") }()
+		t.Setenv("DATAMITSU_TIMINGS", "1")
 
 		old := os.Stdout
 		r, w, _ := os.Pipe()
@@ -225,8 +219,7 @@ func TestPrint(t *testing.T) {
 	})
 
 	t.Run("does not print when no stages", func(t *testing.T) {
-		_ = os.Setenv("DATAMITSU_TIMINGS", "1")
-		defer func() { _ = os.Unsetenv("DATAMITSU_TIMINGS") }()
+		t.Setenv("DATAMITSU_TIMINGS", "1")
 
 		old := os.Stdout
 		r, w, _ := os.Pipe()
@@ -248,8 +241,7 @@ func TestPrint(t *testing.T) {
 	})
 
 	t.Run("prints hierarchical output with children", func(t *testing.T) {
-		_ = os.Setenv("DATAMITSU_TIMINGS", "1")
-		defer func() { _ = os.Unsetenv("DATAMITSU_TIMINGS") }()
+		t.Setenv("DATAMITSU_TIMINGS", "1")
 
 		old := os.Stdout
 		r, w, _ := os.Pipe()
@@ -322,8 +314,7 @@ func TestFormatDuration(t *testing.T) {
 
 func TestChildTimingsStartChild(t *testing.T) {
 	t.Run("records child duration", func(t *testing.T) {
-		_ = os.Setenv("DATAMITSU_TIMINGS", "1")
-		defer func() { _ = os.Unsetenv("DATAMITSU_TIMINGS") }()
+		t.Setenv("DATAMITSU_TIMINGS", "1")
 
 		timings := New()
 		child := timings.StartWithChildren("parent")
@@ -359,8 +350,7 @@ func TestChildTimingsStartChild(t *testing.T) {
 
 func TestChildTimingsEnd(t *testing.T) {
 	t.Run("adds parent to timings with children", func(t *testing.T) {
-		_ = os.Setenv("DATAMITSU_TIMINGS", "1")
-		defer func() { _ = os.Unsetenv("DATAMITSU_TIMINGS") }()
+		t.Setenv("DATAMITSU_TIMINGS", "1")
 
 		timings := New()
 		child := timings.StartWithChildren("parent")

@@ -21,6 +21,8 @@ type nodejsRelease struct {
 
 var nodejsHTTPClient = &http.Client{Timeout: 15 * time.Second}
 
+// GetLatestNodeLTSVersion returns the latest non-EOL Node.js LTS version from
+// endoflife.date, falling back to a pinned version on failure.
 func GetLatestNodeLTSVersion(ctx context.Context) (string, error) {
 	return getLatestNodeLTSVersionFromURL(ctx, "https://endoflife.date/api/nodejs.json")
 }

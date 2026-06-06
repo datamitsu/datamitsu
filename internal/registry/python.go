@@ -20,6 +20,8 @@ type pythonRelease struct {
 
 var pythonHTTPClient = &http.Client{Timeout: 15 * time.Second}
 
+// GetLatestPythonStableVersion returns the latest non-EOL stable Python version
+// from endoflife.date, falling back to a pinned version on failure.
 func GetLatestPythonStableVersion(ctx context.Context) (string, error) {
 	return getLatestPythonStableVersionFromURL(ctx, "https://endoflife.date/api/python.json")
 }

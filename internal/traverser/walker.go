@@ -2,6 +2,7 @@ package traverser
 
 import (
 	"context"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -11,12 +12,15 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// Walker recursively collects non-ignored file paths under a directory,
+// applying .gitignore rules relative to the repository root.
 type Walker struct {
 	rootPath string
 	path     string
 	git      *GitIgnore
 }
 
+// Walk returns all non-ignored file paths discovered under the walker's path.
 func (w *Walker) Walk(ctx context.Context) ([]string, error) {
 	results := make([]string, 0, 10000)
 	mu := &sync.Mutex{}
@@ -27,7 +31,7 @@ func (w *Walker) Walk(ctx context.Context) ([]string, error) {
 
 func (w *Walker) walk(ctx context.Context, results *[]string, mu *sync.Mutex) error {
 	if err := ctx.Err(); err != nil {
-		return err
+		return fmt.Errorf("walk %q: %w", w.path, err)
 	}
 
 	git := w.git
@@ -43,7 +47,7 @@ func (w *Walker) walk(ctx context.Context, results *[]string, mu *sync.Mutex) er
 
 	entries, err := os.ReadDir(w.path)
 	if err != nil {
-		return err
+		return fmt.Errorf("read dir %q: %w", w.path, err)
 	}
 
 	var localFiles []string
@@ -55,7 +59,7 @@ func (w *Walker) walk(ctx context.Context, results *[]string, mu *sync.Mutex) er
 	for _, d := range entries {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return fmt.Errorf("walk %q: %w", w.path, ctx.Err())
 		default:
 		}
 
@@ -106,7 +110,10 @@ func (w *Walker) walk(ctx context.Context, results *[]string, mu *sync.Mutex) er
 		})
 	}
 
-	return gg.Wait()
+	if err := gg.Wait(); err != nil {
+		return fmt.Errorf("walk subdirectories of %q: %w", w.path, err)
+	}
+	return nil
 }
 
 // FindFiles finds all files in the repository starting from rootPath, respecting .gitignore
@@ -129,6 +136,7 @@ func FindFilesFromPath(ctx context.Context, rootPath string, scanPath string) ([
 	return w.Walk(ctx)
 }
 
+// SortAscending returns a sorted copy of arr without mutating the input.
 func SortAscending(arr []string) []string {
 	result := make([]string, len(arr))
 	copy(result, arr)
@@ -136,6 +144,7 @@ func SortAscending(arr []string) []string {
 	return result
 }
 
+// Diff returns the elements of slice1 that are not present in slice2.
 func Diff(slice1, slice2 []string) []string {
 	map2 := make(map[string]bool)
 	for _, item := range slice2 {

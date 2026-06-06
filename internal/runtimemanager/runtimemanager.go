@@ -1,3 +1,5 @@
+// Package runtimemanager resolves, installs and caches managed language
+// runtimes (uv, node, jvm, go) and the apps that run on top of them.
 package runtimemanager
 
 import (
@@ -25,6 +27,8 @@ import (
 
 var log = logger.Logger.With(zap.Namespace("runtimemanager"))
 
+// RuntimeManager resolves, installs and caches managed language runtimes
+// (uv/node/jvm/go) and the apps that run on top of them.
 type RuntimeManager struct {
 	mapOfRuntimes config.MapOfRuntimes
 	hostTarget    target.Target
@@ -43,6 +47,7 @@ type RuntimeManager struct {
 	pnpmInstall    singleflight.Group // key: "pnpmVersion\x00pnpmHash"
 }
 
+// New creates a RuntimeManager for the given runtime configuration map.
 func New(mapOfRuntimes config.MapOfRuntimes) *RuntimeManager {
 	return &RuntimeManager{
 		mapOfRuntimes: mapOfRuntimes,
@@ -266,11 +271,14 @@ func (rm *RuntimeManager) GetCommandInfo(ctx context.Context, appName string, ap
 	}
 }
 
+// RuntimeInstallResult reports the outcome of installing a single runtime.
 type RuntimeInstallResult struct {
 	Name  string
 	Error error
 }
 
+// RuntimeInstallStats summarizes a batch runtime installation: which runtimes
+// were downloaded, already cached, skipped, or failed.
 type RuntimeInstallStats struct {
 	Downloaded    []string
 	AlreadyCached []string
@@ -501,12 +509,12 @@ func moveRuntimeFiles(binCachePath, runtimeCachePath string, binaryPath *string)
 		if binaryPath != nil {
 			dst := filepath.Join(runtimeCachePath, *binaryPath)
 			if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-				return err
+				return fmt.Errorf("failed to create runtime cache dir %q: %w", filepath.Dir(dst), err)
 			}
 			return moveFile(binCachePath, dst)
 		}
 		if err := os.MkdirAll(filepath.Dir(runtimeCachePath), 0o755); err != nil {
-			return err
+			return fmt.Errorf("failed to create runtime cache dir %q: %w", filepath.Dir(runtimeCachePath), err)
 		}
 		return moveFile(binCachePath, runtimeCachePath)
 	}
@@ -525,7 +533,7 @@ func moveRuntimeFiles(binCachePath, runtimeCachePath string, binaryPath *string)
 		return fmt.Errorf("failed to clean stale runtime cache %q: %w", runtimeCachePath, err)
 	}
 	if err := os.MkdirAll(runtimeCachePath, 0o755); err != nil {
-		return err
+		return fmt.Errorf("failed to create runtime cache dir %q: %w", runtimeCachePath, err)
 	}
 	for _, entry := range entries {
 		src := filepath.Join(binCachePath, entry.Name())
@@ -576,11 +584,11 @@ func moveFile(src, dst string) error {
 
 func copyDir(src, dst string) error {
 	if err := os.MkdirAll(dst, 0o755); err != nil {
-		return err
+		return fmt.Errorf("failed to create dir %q: %w", dst, err)
 	}
 	entries, err := os.ReadDir(src)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to read dir %q: %w", src, err)
 	}
 	for _, entry := range entries {
 		srcPath := filepath.Join(src, entry.Name())
@@ -589,10 +597,10 @@ func copyDir(src, dst string) error {
 		case entry.Type()&os.ModeSymlink != 0:
 			target, err := os.Readlink(srcPath)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to read symlink %q: %w", srcPath, err)
 			}
 			if err := os.Symlink(target, dstPath); err != nil {
-				return err
+				return fmt.Errorf("failed to create symlink %q: %w", dstPath, err)
 			}
 		case entry.IsDir():
 			if err := copyDir(srcPath, dstPath); err != nil {
@@ -610,12 +618,12 @@ func copyDir(src, dst string) error {
 func copyFile(src, dst string) (retErr error) {
 	srcInfo, err := os.Stat(src)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to stat %q: %w", src, err)
 	}
 
 	srcFile, err := os.Open(src)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to open %q: %w", src, err)
 	}
 	defer func() {
 		if cErr := srcFile.Close(); cErr != nil && retErr == nil {
@@ -625,7 +633,7 @@ func copyFile(src, dst string) (retErr error) {
 
 	dstFile, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, srcInfo.Mode())
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to open %q for writing: %w", dst, err)
 	}
 	defer func() {
 		if cErr := dstFile.Close(); cErr != nil && retErr == nil {
@@ -633,8 +641,10 @@ func copyFile(src, dst string) (retErr error) {
 		}
 	}()
 
-	_, err = io.Copy(dstFile, srcFile)
-	return err
+	if _, err = io.Copy(dstFile, srcFile); err != nil {
+		return fmt.Errorf("failed to copy %q to %q: %w", src, dst, err)
+	}
+	return nil
 }
 
 // removeAll deletes path and any children via the injectable removeAllFunc seam.
@@ -644,7 +654,10 @@ func (rm *RuntimeManager) removeAll(path string) error {
 	if rm.removeAllFunc != nil {
 		return rm.removeAllFunc(path)
 	}
-	return os.RemoveAll(path)
+	if err := os.RemoveAll(path); err != nil {
+		return fmt.Errorf("failed to remove %q: %w", path, err)
+	}
+	return nil
 }
 
 // resolveEffectiveRuntimeConfig automatically overrides managed mode to system mode
@@ -797,7 +810,7 @@ func (rm *RuntimeManager) getRuntimePath(ctx context.Context, runtimeName string
 		return nil, rm.downloadRuntime(ctx, runtimeName, rc, configHash, info.BinaryPath)
 	})
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to install runtime %q: %w", runtimeName, err)
 	}
 
 	if _, err := os.Stat(binPath); err != nil {
@@ -813,7 +826,7 @@ func (rm *RuntimeManager) downloadRuntime(ctx context.Context, runtimeName strin
 	// binmanager, which applies its own per-app install timeout, so the heavy
 	// fetch stays bounded regardless of this context.
 	if err := ctx.Err(); err != nil {
-		return err
+		return fmt.Errorf("runtime install context canceled before downloading %q: %w", runtimeName, err)
 	}
 
 	log.Debug("runtime not found in cache, downloading",

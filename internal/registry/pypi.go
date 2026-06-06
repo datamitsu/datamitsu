@@ -10,6 +10,7 @@ import (
 	"time"
 )
 
+// PyPIPackageInfo holds the resolved name, version and description of a PyPI package.
 type PyPIPackageInfo struct {
 	Name        string
 	Version     string
@@ -45,6 +46,8 @@ var pypiHTTPClient = &http.Client{Timeout: 15 * time.Second}
 // pypiBaseURL is the registry root; overridable in tests.
 var pypiBaseURL = "https://pypi.org"
 
+// GetPyPIPackageInfo returns the latest version info for a PyPI package from the
+// JSON metadata endpoint.
 func GetPyPIPackageInfo(ctx context.Context, packageName string) (*PyPIPackageInfo, error) {
 	url := fmt.Sprintf("%s/pypi/%s/json", pypiBaseURL, packageName)
 	return getPyPIPackageInfoFromURL(ctx, url, packageName)

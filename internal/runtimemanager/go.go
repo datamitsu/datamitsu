@@ -242,7 +242,7 @@ func (rm *RuntimeManager) installGoAppOnce(ctx context.Context, appName string, 
 
 	args := buildGoBuildArgs(appConfig.PackageName, binPath)
 
-	cmd := exec.CommandContext(ctx, goPath, args...)
+	cmd := exec.CommandContext(ctx, goPath, args...) //nolint:gosec // G204: goPath comes from the trusted managed runtime store and args are built from validated config
 	cmd.Dir = appEnvPath
 	cmd.Env = buildEnvWithOverrides(os.Environ(), envVars)
 	cmd.Stdout = os.Stderr
@@ -287,10 +287,13 @@ func ForceRemoveAll(root string) error {
 		if walkErr != nil {
 			return nil //nolint:nilerr // best-effort chmod: skip on walk error, RemoveAll reports real failures
 		}
-		_ = os.Chmod(p, 0o700)
+		_ = os.Chmod(p, 0o700) //nolint:gosec // G122: best-effort chmod on a datamitsu-owned store path before RemoveAll; failures are ignored and the final RemoveAll reports any real blocker
 		return nil
 	})
-	return os.RemoveAll(root)
+	if err := os.RemoveAll(root); err != nil {
+		return fmt.Errorf("failed to remove %q: %w", root, err)
+	}
+	return nil
 }
 
 // removeStaleGoModFiles deletes any leftover go.mod/go.sum in workDir so a
@@ -350,7 +353,7 @@ func (rm *RuntimeManager) GenerateGoLockFiles(ctx context.Context, appName strin
 	fullEnv := buildEnvWithOverrides(os.Environ(), envVars)
 
 	runGo := func(args ...string) error {
-		cmd := exec.CommandContext(ctx, goPath, args...)
+		cmd := exec.CommandContext(ctx, goPath, args...) //nolint:gosec // G204: goPath comes from the trusted managed runtime store and args are built from validated config
 		cmd.Dir = workDir
 		cmd.Env = fullEnv
 		cmd.Stdout = os.Stderr

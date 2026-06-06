@@ -1,3 +1,5 @@
+// Package env centralizes typed access to datamitsu's environment variables and
+// derived cache, store, and runtime paths.
 package env
 
 import (
@@ -31,14 +33,17 @@ func getBasePath() string {
 	return filepath.Join(os.TempDir(), ldflags.PackageName+"-cache")
 }
 
+// GetCachePath returns the cache directory ({base}/cache) for ephemeral data.
 func GetCachePath() string {
 	return filepath.Join(getBasePath(), "cache")
 }
 
+// GetStorePath returns the store directory ({base}/store) for downloaded artifacts.
 func GetStorePath() string {
 	return filepath.Join(getBasePath(), "store")
 }
 
+// GetBinPath returns the directory holding managed binary symlinks ({store}/.bin).
 func GetBinPath() string {
 	return filepath.Join(GetStorePath(), ".bin")
 }

@@ -12,11 +12,15 @@ import (
 	"github.com/dop251/goja"
 )
 
+// ParseIgnoreResult holds the parsed groups of an ignore file together with
+// the order in which those groups first appeared.
 type ParseIgnoreResult struct {
 	Groups     map[string][]string `json:"groups"`
 	GroupOrder []string            `json:"groupOrder"`
 }
 
+// ParseIgnoreFile parses ignore-file content into grouped rules, skipping the
+// datamitsu-managed section and preserving group order.
 func ParseIgnoreFile(content string) ParseIgnoreResult {
 	groups := make(map[string][]string)
 	groupOrder := make([]string, 0)
@@ -93,6 +97,9 @@ func ParseIgnoreFile(content string) ParseIgnoreResult {
 	}
 }
 
+// FormatIgnoreFile renders grouped ignore rules back into ignore-file text,
+// emitting groups in groupOrder first and remaining groups sorted by name,
+// deduplicating rules within each group.
 func FormatIgnoreFile(groups map[string][]string, groupOrder []string) string {
 	var result strings.Builder
 
@@ -154,6 +161,8 @@ func deduplicateSlice(items []string) []string {
 	return result
 }
 
+// RegisterIgnoreToolsInVM exposes tools.Ignore.parse and tools.Ignore.stringify
+// to the VM, backed by ParseIgnoreFile and FormatIgnoreFile.
 func RegisterIgnoreToolsInVM(vm *goja.Runtime) error {
 	toolsObj := vm.Get("tools")
 	if toolsObj == nil || goja.IsUndefined(toolsObj) || goja.IsNull(toolsObj) {

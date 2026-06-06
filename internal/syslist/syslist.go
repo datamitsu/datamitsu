@@ -1,9 +1,13 @@
+// Package syslist enumerates the operating systems and architectures Go
+// supports and parses their string names into typed values.
 package syslist
 
 import "fmt"
 
+// OsType is a validated operating-system name (as used by GOOS).
 type OsType string
 
+// Known operating-system values, mirroring Go's GOOS list.
 const (
 	OsTypeAix       OsType = "aix"
 	OsTypeAndroid   OsType = "android"
@@ -25,8 +29,10 @@ const (
 	OsTypeZos       OsType = "zos"
 )
 
+// ArchType is a validated CPU architecture name (as used by GOARCH).
 type ArchType string
 
+// Known CPU-architecture values, mirroring Go's GOARCH list.
 const (
 	ArchType386         ArchType = "386"
 	ArchTypeAmd64       ArchType = "amd64"
@@ -54,6 +60,8 @@ const (
 	ArchTypeWasm        ArchType = "wasm"
 )
 
+// GetOsTypeFromString validates osType and returns the matching OsType,
+// or an error if it is not a recognized operating system.
 func GetOsTypeFromString(osType string) (OsType, error) {
 	switch OsType(osType) {
 	case OsTypeAix, OsTypeAndroid, OsTypeDarwin, OsTypeDragonfly,
@@ -67,6 +75,8 @@ func GetOsTypeFromString(osType string) (OsType, error) {
 	}
 }
 
+// GetArchTypeFromString validates archType and returns the matching ArchType,
+// or an error if it is not a recognized CPU architecture.
 func GetArchTypeFromString(archType string) (ArchType, error) {
 	switch ArchType(archType) {
 	case ArchType386, ArchTypeAmd64, ArchTypeAmd64p32, ArchTypeArm,

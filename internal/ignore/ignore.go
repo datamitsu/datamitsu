@@ -1,3 +1,5 @@
+// Package ignore provides the built-in ignore patterns and groups used to
+// generate .gitignore and .dockerignore files.
 package ignore
 
 import (
@@ -8,23 +10,28 @@ import (
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 )
 
+// Ignore type identifiers selecting which target file a pattern applies to.
 const (
 	IgnoreTypeGit    = "git"
 	IgnoreTypeDocker = "docker"
 )
 
-type IgnoreGroup struct {
+// Group is a named, ordered collection of ignore patterns.
+type Group struct {
 	Name     string   `json:"name"`
 	Elements []string `json:"elements"`
 }
 
-type IgnoreGroupItem struct {
+// GroupItem holds the patterns of a group and the targets (git, docker)
+// they should be emitted to.
+type GroupItem struct {
 	Pattern []string
 	Git     bool
 	Docker  bool
 }
 
-type IgnoreGroupMap map[string]IgnoreGroupItem
+// GroupMap maps a group name to its patterns and target flags.
+type GroupMap map[string]GroupItem
 
 // PatternDuplicate contains information about a duplicate pattern
 type PatternDuplicate struct {
@@ -32,21 +39,21 @@ type PatternDuplicate struct {
 	Groups  []string
 }
 
-func buildGroups(specificGroups []IgnoreGroup) []IgnoreGroup {
-	groups := make([]IgnoreGroup, 0, 2+len(specificGroups)+1)
-	groups = append(groups, IgnoreGroup{
+func buildGroups(specificGroups []Group) []Group {
+	groups := make([]Group, 0, 2+len(specificGroups)+1)
+	groups = append(groups, Group{
 		Name:     ldflags.PackageName + " >>>",
 		Elements: []string{},
 	})
 
-	groups = append(groups, IgnoreGroup{
+	groups = append(groups, Group{
 		Name:     ldflags.PackageName + " common <<<",
 		Elements: []string{},
 	})
 
 	groups = append(groups, specificGroups...)
 
-	groups = append(groups, IgnoreGroup{
+	groups = append(groups, Group{
 		Name:     ldflags.PackageName + " <<<",
 		Elements: []string{},
 	})
@@ -55,8 +62,8 @@ func buildGroups(specificGroups []IgnoreGroup) []IgnoreGroup {
 }
 
 // GetDockerignoreGroups returns ignore groups for .dockerignore
-func GetDockerignoreGroups() []IgnoreGroup {
-	specificGroups := []IgnoreGroup{
+func GetDockerignoreGroups() []Group {
+	specificGroups := []Group{
 		{
 			Name: "source",
 			Elements: []string{
@@ -73,8 +80,8 @@ func GetDockerignoreGroups() []IgnoreGroup {
 }
 
 // GetGitignoreGroups returns ignore groups for .gitignore
-func GetGitignoreGroups() []IgnoreGroup {
-	specificGroups := []IgnoreGroup{
+func GetGitignoreGroups() []Group {
+	specificGroups := []Group{
 		{
 			Name: "local env files",
 			Elements: []string{
@@ -85,7 +92,7 @@ func GetGitignoreGroups() []IgnoreGroup {
 	return buildGroups(specificGroups)
 }
 
-var ignoreGroupMap = IgnoreGroupMap{
+var ignoreGroupMap = GroupMap{
 	"node": {
 		Pattern: []string{
 			"**/node_modules",
@@ -187,6 +194,8 @@ var ignoreGroupMap = IgnoreGroupMap{
 	},
 }
 
+// GetPatternsByType returns all ignore patterns enabled for the given ignore
+// type (IgnoreTypeGit or IgnoreTypeDocker).
 func GetPatternsByType(ignoreType string) []string {
 	var patterns []string
 

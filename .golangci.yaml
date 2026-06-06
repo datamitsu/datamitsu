@@ -120,12 +120,10 @@ linters:
     - noctx
     - gocyclo
     - unparam
-    # --- candidates to enable, in recommended order ---
-    # stage 3 — enable + configure / decide
-    # - usetesting        # ~118 os.Setenv->t.Setenv etc; review env tests first
-    # - wrapcheck         # ~109 needs config (ignoreSigs / package scope)
-    # - gosec             # ~740 tune G301/G302/G306 noise; review G101/G204/G404/G115
-    # - revive            # ~389 pick a rule set
+    - usetesting
+    - wrapcheck
+    - gosec
+    - revive
   exclusions:
     rules:
       # internal/env is the sanctioned abstraction layer — it is allowed to call
@@ -155,6 +153,19 @@ linters:
           - gocyclo
           - unparam
         path: _test\.go
+      # gosec targets production code. In tests its findings are overwhelmingly
+      # benign: weak RNG for fixtures (G404), int conversions on known-small values
+      # (G115), subprocesses against test binaries (G204), hardcoded "credentials"
+      # in fixture data (G101), and file ops on t.TempDir paths. Production-only.
+      - linters:
+          - gosec
+        path: _test\.go
+      # wrapcheck enforces wrapping errors from external packages so the call site
+      # is identifiable. Tests assert on errors directly and don't propagate them
+      # up a call stack, so wrapping adds noise without value. Production-only.
+      - linters:
+          - wrapcheck
+        path: _test\.go
   settings:
     depguard:
       rules:
@@ -182,4 +193,53 @@ linters:
       # worst offender (doValidateApps); anything more complex than today's code
       # is flagged. Lower this over time as hotspots are split up.
       min-complexity: 100
+    gosec:
+      # datamitsu is a binary/file manager: it creates directories, writes files,
+      # chmods executables and opens files at paths derived from config and the
+      # store layout. The file-permission and file-path-from-variable rules below
+      # therefore fire pervasively (hundreds of sites) on inherent, by-design
+      # behaviour. Permissions are set deliberately at each call site; paths come
+      # from the trusted store/config layer. Excluding these keeps gosec focused
+      # on the findings that actually warrant review (G204, G305, G401, etc.).
+      excludes:
+        - G301 # mkdir permissions — set intentionally per call site
+        - G302 # chmod permissions — executables need 0o755 by design
+        - G304 # file path from variable — inherent to a file manager
+        - G306 # WriteFile permissions — set intentionally per call site
+    revive:
+      # Standard revive rule set minus unused-parameter: that rule overlaps with
+      # the already-enabled unparam linter and fires noisily on interface-conformant
+      # methods and callbacks whose signature is fixed. Everything else is revive's
+      # conventional default selection.
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: empty-block
+        - name: error-naming
+        - name: error-return
+        - name: error-strings
+        - name: errorf
+        - name: exported
+        - name: increment-decrement
+        - name: indent-error-flow
+        - name: package-comments
+        - name: range
+        - name: receiver-naming
+        - name: redefines-builtin-id
+        - name: superfluous-else
+        - name: time-naming
+        - name: unexported-return
+        - name: unreachable-code
+        - name: var-declaration
+        - name: var-naming
+    wrapcheck:
+      # Errors returned from datamitsu's own internal packages are already
+      # well-formed (each internal layer wraps with its own context), so wrapping
+      # them again at the call site adds noise without value. wrapcheck treats
+      # sibling packages in the same module as "external"; this scopes it to
+      # genuinely third-party/stdlib errors, where naming the failing call helps.
+      ignore-package-globs:
+        - github.com/datamitsu/datamitsu/*
 version: 2

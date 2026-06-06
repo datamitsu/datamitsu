@@ -154,7 +154,7 @@ func (rm *RuntimeManager) installUVAppOnce(ctx context.Context, appName string, 
 
 	args := buildUVInstallArgs(appConfig.LockFile, rc.UV)
 
-	cmd := exec.CommandContext(ctx, uvPath, args...)
+	cmd := exec.CommandContext(ctx, uvPath, args...) //nolint:gosec // G204: uvPath comes from the trusted managed runtime store and args are built from validated config
 	cmd.Dir = appEnvPath
 	cmd.Env = buildEnvWithOverrides(os.Environ(), envVars)
 	cmd.Stdout = os.Stderr
@@ -240,6 +240,7 @@ dependencies = [
 `, escapeTOMLString(safeName), escapeTOMLString(requiresPython), escapeTOMLString(dep))
 }
 
+// GetUVCommandInfo returns command info for running a uv-managed app.
 func (rm *RuntimeManager) GetUVCommandInfo(appName string, appConfig *binmanager.AppConfigUV, files map[string]string, archives map[string]*binmanager.ArchiveSpec) (*binmanager.CommandInfo, error) {
 	runtimeName, _, err := rm.ResolveRuntime(appConfig.Runtime, config.RuntimeKindUV)
 	if err != nil {

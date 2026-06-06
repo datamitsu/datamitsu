@@ -1925,8 +1925,8 @@ func TestValidateRuntimes_Go_SystemModeWithoutGoVersion(t *testing.T) {
 	// In system mode goVersion is optional (mirrors UV); a missing config or
 	// empty version must not be a validation error.
 	tests := []struct {
-		name string
-		go_  *RuntimeConfigGo
+		name  string
+		goCfg *RuntimeConfigGo
 	}{
 		{"nil go config", nil},
 		{"empty goVersion", &RuntimeConfigGo{}},
@@ -1939,7 +1939,7 @@ func TestValidateRuntimes_Go_SystemModeWithoutGoVersion(t *testing.T) {
 					Kind:   RuntimeKindGo,
 					Mode:   RuntimeModeSystem,
 					System: &RuntimeConfigSystem{Command: "/usr/bin/go"},
-					Go:     tt.go_,
+					Go:     tt.goCfg,
 				},
 			}
 

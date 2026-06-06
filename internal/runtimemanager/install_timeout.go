@@ -73,6 +73,7 @@ func runInstallCmd(ctx context.Context, cmd *exec.Cmd) error {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return fmt.Errorf("%w: %w", ctxErr, err)
 		}
+		return fmt.Errorf("install command failed: %w", err)
 	}
-	return err
+	return nil
 }

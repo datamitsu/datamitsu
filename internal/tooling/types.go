@@ -31,6 +31,7 @@ type ExecutionPlan struct {
 // independent tool failures from cascading terminations caused by fail-fast.
 type FailureReason int
 
+// Failure reason classifications for a task result.
 const (
 	FailureReasonNone        FailureReason = iota // Task succeeded or not yet classified
 	FailureReasonIndependent                      // Tool failed on its own

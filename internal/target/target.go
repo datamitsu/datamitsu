@@ -9,6 +9,7 @@ import (
 // LibcType represents the libc implementation on the host system.
 type LibcType string
 
+// Supported libc implementations; LibcUnknown means detection failed or N/A.
 const (
 	LibcGlibc   LibcType = "glibc"
 	LibcMusl    LibcType = "musl"
@@ -18,6 +19,8 @@ const (
 // ResolutionSource indicates how a target was resolved.
 type ResolutionSource int
 
+// Resolution outcomes: ResolutionExact for an exact match, ResolutionFallback
+// when a substitute target was used.
 const (
 	ResolutionExact ResolutionSource = iota
 	ResolutionFallback

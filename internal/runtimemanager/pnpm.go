@@ -46,7 +46,10 @@ func (rm *RuntimeManager) installPNPM(ctx context.Context, version string, destD
 	_, err, _ := rm.pnpmInstall.Do(key, func() (any, error) {
 		return nil, rm.downloadPNPMFromRegistry(ctx, version, destDir, pnpmHash)
 	})
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to install pnpm %q: %w", version, err)
+	}
+	return nil
 }
 
 func (rm *RuntimeManager) downloadPNPMFromRegistry(ctx context.Context, version string, destDir string, pnpmHash string) error {
@@ -340,5 +343,9 @@ func buildPackageJSON(packageName string, version string, deps map[string]string
 		"type":         "module",
 	}
 
-	return json.MarshalIndent(pkg, "", "  ")
+	out, err := json.MarshalIndent(pkg, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal package.json: %w", err)
+	}
+	return out, nil
 }

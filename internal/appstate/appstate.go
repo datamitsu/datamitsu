@@ -1,3 +1,5 @@
+// Package appstate loads, validates and persists the githubApps.json state
+// that tracks managed GitHub app metadata and their installed binaries.
 package appstate
 
 import (

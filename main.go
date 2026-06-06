@@ -1,3 +1,4 @@
+// Package main is the datamitsu CLI entry point, delegating to the cmd package.
 package main
 
 import (

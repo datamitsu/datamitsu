@@ -9,8 +9,10 @@ import (
 	"go.uber.org/zap"
 )
 
+// MapOfBundles maps a bundle name to its Bundle definition.
 type MapOfBundles = map[string]*Bundle
 
+// Bundle is a named collection of files, archives and links installed together.
 type Bundle struct {
 	Version  string                  `json:"version,omitempty"`
 	Files    map[string]string       `json:"files,omitempty"`
@@ -18,6 +20,7 @@ type Bundle struct {
 	Links    map[string]string       `json:"links,omitempty"`
 }
 
+// HasExternalArchives reports whether the bundle contains any URL-fetched archives.
 func (b *Bundle) HasExternalArchives() bool {
 	for _, a := range b.Archives {
 		if a != nil && a.IsExternal() {
@@ -27,6 +30,7 @@ func (b *Bundle) HasExternalArchives() bool {
 	return false
 }
 
+// BundleInstallStats summarizes the results of installing bundles.
 type BundleInstallStats struct {
 	AlreadyCached []string
 	Installed     []string
@@ -65,6 +69,7 @@ func (bm *BinManager) InstallBundleByName(ctx context.Context, name string) erro
 	return bm.installBundle(ctx, name)
 }
 
+// InstallBundles installs all registered bundles, optionally skipping those with external archives.
 func (bm *BinManager) InstallBundles(ctx context.Context, skipExternalArchives bool) (BundleInstallStats, error) {
 	stats := BundleInstallStats{}
 
@@ -80,7 +85,7 @@ func (bm *BinManager) InstallBundles(ctx context.Context, skipExternalArchives b
 
 	for _, name := range names {
 		if ctx.Err() != nil {
-			return stats, ctx.Err()
+			return stats, fmt.Errorf("install bundles canceled: %w", ctx.Err())
 		}
 
 		bundle := bm.mapOfBundles[name]

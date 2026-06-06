@@ -19,15 +19,15 @@ func TestCollectAllEnv(t *testing.T) {
 		for _, env := range originalEnv {
 			parts := strings.SplitN(env, "=", 2)
 			if len(parts) == 2 {
-				_ = os.Setenv(parts[0], parts[1])
+				_ = os.Setenv(parts[0], parts[1]) //nolint:usetesting // restoring the full pre-cleared environment; t.Setenv cannot rebuild it
 			}
 		}
 	}()
 
 	os.Clearenv()
-	_ = os.Setenv("TEST_VAR1", "value1")
-	_ = os.Setenv("TEST_VAR2", "value2")
-	_ = os.Setenv("OTHER_VAR", "other")
+	_ = os.Setenv("TEST_VAR1", "value1") //nolint:usetesting // env is cleared first to assert exact count; t.Setenv cannot clear/restore the full env
+	_ = os.Setenv("TEST_VAR2", "value2") //nolint:usetesting // env is cleared first to assert exact count; t.Setenv cannot clear/restore the full env
+	_ = os.Setenv("OTHER_VAR", "other")  //nolint:usetesting // env is cleared first to assert exact count; t.Setenv cannot clear/restore the full env
 
 	envMap := collectAllEnv()
 
@@ -141,10 +141,7 @@ func TestCollectInGitRepo(t *testing.T) {
 		t.Fatalf("failed to initialize git repo: %v", err)
 	}
 
-	originalCwd, _ := os.Getwd()
-	defer func() { _ = os.Chdir(originalCwd) }()
-
-	_ = os.Chdir(tmpDir)
+	t.Chdir(tmpDir)
 
 	ctx := context.Background()
 	facts, _, err := Collect(ctx, "")
@@ -177,10 +174,7 @@ func TestCollectInMonorepo(t *testing.T) {
 	subdir := filepath.Join(tmpDir, "packages", "app")
 	_ = os.MkdirAll(subdir, 0o755)
 
-	originalCwd, _ := os.Getwd()
-	defer func() { _ = os.Chdir(originalCwd) }()
-
-	_ = os.Chdir(subdir)
+	t.Chdir(subdir)
 
 	ctx := context.Background()
 	facts, _, err := Collect(ctx, "")
@@ -200,10 +194,7 @@ func TestCollectInMonorepo(t *testing.T) {
 func TestCollectNotInGitRepo(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	originalCwd, _ := os.Getwd()
-	defer func() { _ = os.Chdir(originalCwd) }()
-
-	_ = os.Chdir(tmpDir)
+	t.Chdir(tmpDir)
 
 	ctx := context.Background()
 	facts, _, err := Collect(ctx, "")
@@ -229,10 +220,7 @@ func TestGetGitRoot(t *testing.T) {
 		t.Fatalf("failed to initialize git repo: %v", err)
 	}
 
-	originalCwd, _ := os.Getwd()
-	defer func() { _ = os.Chdir(originalCwd) }()
-
-	_ = os.Chdir(tmpDir)
+	t.Chdir(tmpDir)
 
 	ctx := context.Background()
 
@@ -260,10 +248,7 @@ func TestGetGitRootNotGitRepo(t *testing.T) {
 
 	tmpDir := t.TempDir()
 
-	originalCwd, _ := os.Getwd()
-	defer func() { _ = os.Chdir(originalCwd) }()
-
-	_ = os.Chdir(tmpDir)
+	t.Chdir(tmpDir)
 
 	ctx := context.Background()
 

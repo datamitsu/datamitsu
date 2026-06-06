@@ -1,3 +1,5 @@
+// Package detector selects the best-matching release asset and binary path for
+// a target OS, architecture, and libc using scoring and filename heuristics.
 package detector
 
 import (

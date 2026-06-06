@@ -94,7 +94,7 @@ func (r *Resolver) scoreCandidate(t Target) int {
 	case t.Libc == LibcUnknown || r.host.Libc == LibcUnknown:
 		score += 5
 	default:
-		score += 1
+		score++
 	}
 
 	return score

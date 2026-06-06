@@ -684,7 +684,7 @@ func extractZipToDir(zipPath, destDir string) (string, error) {
 			continue
 		}
 
-		target := filepath.Join(tmpDir, file.Name)
+		target := filepath.Join(tmpDir, file.Name) //nolint:gosec // G305: file.Name is validated by validateArchivePath above and cleanTarget is checked against tmpDir below
 
 		cleanTarget := filepath.Clean(target)
 		if !strings.HasPrefix(cleanTarget, tmpDir+string(filepath.Separator)) && cleanTarget != tmpDir {
@@ -767,7 +767,7 @@ func extractTarToDir(tarReader *tar.Reader, destDir string) (string, error) {
 			continue
 		}
 
-		target := filepath.Join(tmpDir, header.Name)
+		target := filepath.Join(tmpDir, header.Name) //nolint:gosec // G305: header.Name is validated by validateArchivePath above and cleanTarget is checked against tmpDir below
 
 		cleanTarget := filepath.Clean(target)
 		if !strings.HasPrefix(cleanTarget, tmpDir+string(filepath.Separator)) && cleanTarget != tmpDir {
@@ -777,7 +777,7 @@ func extractTarToDir(tarReader *tar.Reader, destDir string) (string, error) {
 
 		switch header.Typeflag {
 		case tar.TypeDir:
-			if err := os.MkdirAll(target, os.FileMode(header.Mode)&0o777|0o755); err != nil {
+			if err := os.MkdirAll(target, os.FileMode(header.Mode)&0o777|0o755); err != nil { //nolint:gosec // G115: header.Mode is masked with &0o777, bounding it to 0-511
 				_ = os.RemoveAll(tmpDir)
 				return "", fmt.Errorf("failed to create directory %q: %w", header.Name, err)
 			}
@@ -788,7 +788,7 @@ func extractTarToDir(tarReader *tar.Reader, destDir string) (string, error) {
 				return "", fmt.Errorf("failed to create parent directory for %q: %w", header.Name, err)
 			}
 
-			outFile, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(header.Mode)&0o777)
+			outFile, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(header.Mode)&0o777) //nolint:gosec // G115: header.Mode is masked with &0o777, bounding it to 0-511
 			if err != nil {
 				_ = os.RemoveAll(tmpDir)
 				return "", fmt.Errorf("failed to create file %q: %w", header.Name, err)
@@ -820,7 +820,7 @@ func extractTarToDir(tarReader *tar.Reader, destDir string) (string, error) {
 				log.Warn("skipping absolute symlink", zap.String("path", header.Name), zap.String("target", linkTarget))
 				continue
 			}
-			resolvedTarget := filepath.Clean(filepath.Join(filepath.Dir(target), linkTarget))
+			resolvedTarget := filepath.Clean(filepath.Join(filepath.Dir(target), linkTarget)) //nolint:gosec // G305: resolvedTarget is checked against tmpDir on the next line before any symlink is created
 			if !strings.HasPrefix(resolvedTarget, tmpDir+string(filepath.Separator)) && resolvedTarget != tmpDir {
 				log.Warn("skipping symlink that escapes destination", zap.String("path", header.Name), zap.String("target", linkTarget))
 				continue
@@ -928,7 +928,7 @@ func extractArchiveToPath(destPath string, tarData []byte, archivePath string, f
 			continue
 		}
 
-		target := filepath.Join(destPath, header.Name)
+		target := filepath.Join(destPath, header.Name) //nolint:gosec // G305: header.Name is validated by validateArchivePath above and cleanTarget is checked against destPath below
 
 		cleanTarget := filepath.Clean(target)
 		if !strings.HasPrefix(cleanTarget, destPath+string(filepath.Separator)) && cleanTarget != destPath {
@@ -938,7 +938,7 @@ func extractArchiveToPath(destPath string, tarData []byte, archivePath string, f
 
 		switch header.Typeflag {
 		case tar.TypeDir:
-			if err := os.MkdirAll(target, os.FileMode(header.Mode)&0o777|0o755); err != nil {
+			if err := os.MkdirAll(target, os.FileMode(header.Mode)&0o777|0o755); err != nil { //nolint:gosec // G115: header.Mode is masked with &0o777, bounding it to 0-511
 				return "", fmt.Errorf("failed to create directory %q: %w", header.Name, err)
 			}
 
@@ -947,7 +947,7 @@ func extractArchiveToPath(destPath string, tarData []byte, archivePath string, f
 				return "", fmt.Errorf("failed to create parent directory for %q: %w", header.Name, err)
 			}
 
-			outFile, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(header.Mode)&0o777)
+			outFile, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(header.Mode)&0o777) //nolint:gosec // G115: header.Mode is masked with &0o777, bounding it to 0-511
 			if err != nil {
 				return "", fmt.Errorf("failed to create file %q: %w", header.Name, err)
 			}
@@ -975,7 +975,7 @@ func extractArchiveToPath(destPath string, tarData []byte, archivePath string, f
 				log.Warn("skipping absolute symlink", zap.String("path", header.Name), zap.String("target", linkTarget))
 				continue
 			}
-			resolvedTarget := filepath.Clean(filepath.Join(filepath.Dir(target), linkTarget))
+			resolvedTarget := filepath.Clean(filepath.Join(filepath.Dir(target), linkTarget)) //nolint:gosec // G305: resolvedTarget is checked against destPath on the next line before any symlink is created
 			if !strings.HasPrefix(resolvedTarget, destPath+string(filepath.Separator)) && resolvedTarget != destPath {
 				log.Warn("skipping symlink that escapes destination", zap.String("path", header.Name), zap.String("target", linkTarget))
 				continue

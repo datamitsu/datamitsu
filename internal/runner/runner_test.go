@@ -47,12 +47,12 @@ func TestIsCI(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			originalCI := os.Getenv("CI")
-			defer func() { _ = os.Setenv("CI", originalCI) }()
+			defer func() { _ = os.Setenv("CI", originalCI) }() //nolint:usetesting // explicit unset required
 
 			if tt.ciValue == "" {
 				_ = os.Unsetenv("CI")
 			} else {
-				_ = os.Setenv("CI", tt.ciValue)
+				_ = os.Setenv("CI", tt.ciValue) //nolint:usetesting // explicit unset required
 			}
 
 			result := env.IsCI()
@@ -101,9 +101,7 @@ func TestFormatToolWithDir(t *testing.T) {
 }
 
 func TestCIProgressOutputFormat(t *testing.T) {
-	originalCI := os.Getenv("CI")
-	defer func() { _ = os.Setenv("CI", originalCI) }()
-	_ = os.Setenv("CI", "true")
+	t.Setenv("CI", "true")
 
 	t.Run("CI progress line format", func(t *testing.T) {
 		progressMu.Lock()
@@ -397,9 +395,7 @@ func TestGroupResultsByTool(t *testing.T) {
 }
 
 func TestUpdateCIProgress(t *testing.T) {
-	originalCI := os.Getenv("CI")
-	defer func() { _ = os.Setenv("CI", originalCI) }()
-	_ = os.Setenv("CI", "true")
+	t.Setenv("CI", "true")
 
 	lastCIProgressPercent = 0
 
@@ -975,9 +971,7 @@ func TestPrintOverallSummary(t *testing.T) {
 }
 
 func TestUpdateCIProgressConcurrency(t *testing.T) {
-	originalCI := os.Getenv("CI")
-	defer func() { _ = os.Setenv("CI", originalCI) }()
-	_ = os.Setenv("CI", "true")
+	t.Setenv("CI", "true")
 
 	progressMu.Lock()
 	lastCIProgressPercent = 0
@@ -1648,9 +1642,7 @@ func planWithTools(tools ...string) *tooling.ExecutionPlan {
 }
 
 func TestRunSingleOperationEnsuresToolsBeforeExecute(t *testing.T) {
-	originalCI := os.Getenv("CI")
-	defer func() { _ = os.Setenv("CI", originalCI) }()
-	_ = os.Setenv("CI", "true")
+	t.Setenv("CI", "true")
 
 	var order []string
 	ensurer := &fakeEnsurer{order: &order}
@@ -1682,9 +1674,7 @@ func TestRunSingleOperationEnsuresToolsBeforeExecute(t *testing.T) {
 }
 
 func TestRunSingleOperationEnsuresAppNamesNotToolNames(t *testing.T) {
-	originalCI := os.Getenv("CI")
-	defer func() { _ = os.Setenv("CI", originalCI) }()
-	_ = os.Setenv("CI", "true")
+	t.Setenv("CI", "true")
 
 	var order []string
 	ensurer := &fakeEnsurer{order: &order}
@@ -1715,9 +1705,7 @@ func TestRunSingleOperationEnsuresAppNamesNotToolNames(t *testing.T) {
 }
 
 func TestRunSingleOperationEnsureToolsFailureAbortsExecute(t *testing.T) {
-	originalCI := os.Getenv("CI")
-	defer func() { _ = os.Setenv("CI", originalCI) }()
-	_ = os.Setenv("CI", "true")
+	t.Setenv("CI", "true")
 
 	var order []string
 	ensurer := &fakeEnsurer{order: &order, err: errors.New("download boom")}

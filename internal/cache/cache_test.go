@@ -14,13 +14,7 @@ import (
 
 func TestCacheConcurrentAccess(t *testing.T) {
 	// Create temporary directory for cache
-	tmpDir, err := os.MkdirTemp("", "cache-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer func() {
-		_ = os.RemoveAll(tmpDir)
-	}()
+	tmpDir := t.TempDir()
 
 	// Create a test project path
 	projectPath := filepath.Join(tmpDir, "project")
@@ -101,13 +95,7 @@ func TestCacheConcurrentAccess(t *testing.T) {
 
 func TestCacheConcurrentSave(t *testing.T) {
 	// Create temporary directory for cache
-	tmpDir, err := os.MkdirTemp("", "cache-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer func() {
-		_ = os.RemoveAll(tmpDir)
-	}()
+	tmpDir := t.TempDir()
 
 	// Create a test project path
 	projectPath := filepath.Join(tmpDir, "project")
@@ -175,13 +163,7 @@ func TestCacheConcurrentSave(t *testing.T) {
 }
 
 func TestInvalidationKeyFormat(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "cache-invalidation-key-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer func() {
-		_ = os.RemoveAll(tmpDir)
-	}()
+	tmpDir := t.TempDir()
 
 	projectPath := filepath.Join(tmpDir, "project")
 	if err := os.MkdirAll(projectPath, 0o755); err != nil {
@@ -224,13 +206,7 @@ func TestInvalidationKeyFormat(t *testing.T) {
 }
 
 func TestContentHashFormat(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "cache-hash-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer func() {
-		_ = os.RemoveAll(tmpDir)
-	}()
+	tmpDir := t.TempDir()
 
 	testFile := filepath.Join(tmpDir, "test.txt")
 	if err := os.WriteFile(testFile, []byte("hello world\n"), 0o644); err != nil {

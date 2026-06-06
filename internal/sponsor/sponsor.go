@@ -1,3 +1,4 @@
+// Package sponsor shows occasional, throttled sponsorship messages to users.
 package sponsor
 
 import (
@@ -15,32 +16,39 @@ const (
 	minDaysBetweenShows        = 7
 )
 
+// Manager tracks per-user state and decides when to print a sponsor message.
 type Manager struct {
 	cacheDir string
 	clock    Clock
 	rnd      *rand.Rand
 }
 
+// New returns a Manager that persists its state under cacheDir and uses the real clock.
 func New(cacheDir string) *Manager {
 	return &Manager{
 		cacheDir: cacheDir,
 		clock:    realClock{},
-		rnd:      rand.New(rand.NewSource(time.Now().UnixNano())),
+		//nolint:gosec // G404: non-cryptographic use (selecting a rotating sponsor message); math/rand is intentional
+		rnd: rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 }
 
+// NewWithClock returns a Manager backed by the supplied clock, for deterministic tests.
 func NewWithClock(cacheDir string, clock Clock) *Manager {
 	return &Manager{
 		cacheDir: cacheDir,
 		clock:    clock,
-		rnd:      rand.New(rand.NewSource(clock.Now().UnixNano())),
+		//nolint:gosec // G404: non-cryptographic use (selecting a rotating sponsor message); math/rand is intentional
+		rnd: rand.New(rand.NewSource(clock.Now().UnixNano())),
 	}
 }
 
+// StaticLine returns a single, always-shown sponsorship line for non-throttled contexts.
 func StaticLine() string {
 	return "Support datamitsu development: " + sponsorURL
 }
 
+// MaybePrint prints a sponsor message if activation thresholds and throttling allow it.
 func (m *Manager) MaybePrint(isJSONOutput bool) {
 	defer func() { _ = recover() }()
 

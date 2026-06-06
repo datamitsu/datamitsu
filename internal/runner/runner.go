@@ -1,3 +1,5 @@
+// Package runner plans and executes lint/format operations across discovered
+// projects, tracking progress and emitting CI-friendly output.
 package runner
 
 import (
@@ -273,7 +275,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 				totalFileProcessing += len(task.Files)
 			} else {
 				// Batch mode or whole-project mode (no files): count as 1 unit
-				totalFileProcessing += 1
+				totalFileProcessing++
 			}
 		}
 	}

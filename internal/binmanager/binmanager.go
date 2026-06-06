@@ -1,3 +1,5 @@
+// Package binmanager downloads, verifies, installs and executes managed
+// binaries, bundles and runtime apps across platforms.
 package binmanager
 
 import (
@@ -27,15 +29,19 @@ import (
 
 var log = logger.Logger.With(zap.Namespace("binmanager"))
 
+// MapOfBinaries maps OS and architecture to the binaries available for it.
 type MapOfBinaries = map[syslist.OsType]map[syslist.ArchType]map[string]BinaryOsArchInfo
 
+// MapOfApps maps an app name to its App definition.
 type MapOfApps = map[string]App
 
+// AppConfigBinary configures an app distributed as a per-platform downloadable binary.
 type AppConfigBinary struct {
 	Binaries MapOfBinaries `json:"binaries"`
 	Version  string        `json:"version,omitempty"`
 }
 
+// AppConfigUV configures a Python tool installed under the uv-managed runtime.
 type AppConfigUV struct {
 	PackageName    string `json:"packageName"`
 	Version        string `json:"version"`
@@ -56,6 +62,7 @@ type AppConfigNode struct {
 	Dependencies map[string]string `json:"dependencies,omitempty"`
 }
 
+// AppConfigJVM configures a JAR-based tool run under the managed JVM runtime.
 type AppConfigJVM struct {
 	JarURL    string `json:"jarUrl"`
 	JarHash   string `json:"jarHash"`
@@ -64,6 +71,7 @@ type AppConfigJVM struct {
 	MainClass string `json:"mainClass,omitempty"`
 }
 
+// AppConfigGo configures a Go tool installed under the managed Go runtime.
 type AppConfigGo struct {
 	PackageName string `json:"packageName"`
 	Version     string `json:"version"`
@@ -71,16 +79,19 @@ type AppConfigGo struct {
 	LockFile    string `json:"lockFile,omitempty"`
 }
 
+// AppConfigShell configures an app that resolves to a shell command on PATH.
 type AppConfigShell struct {
 	Name string   `json:"name"`
 	Args []string `json:"args,omitempty"`
 }
 
+// AppVersionCheck configures how an app's version is verified, or disables the check.
 type AppVersionCheck struct {
 	Disabled bool     `json:"disabled,omitempty"`
 	Args     []string `json:"args,omitempty"`
 }
 
+// App is the registry definition of a managed application across its supported kinds.
 type App struct {
 	// Required binary (downloaded during Install())
 	// Optional binaries are downloaded only on first access via GetBinaryPath()
@@ -115,10 +126,12 @@ type ArchiveSpec struct {
 	Format BinContentType `json:"format,omitempty"`
 }
 
+// IsInline reports whether the archive is supplied inline rather than by URL.
 func (a *ArchiveSpec) IsInline() bool {
 	return a.Inline != "" && a.URL == ""
 }
 
+// IsExternal reports whether the archive is fetched from an external URL.
 func (a *ArchiveSpec) IsExternal() bool {
 	return a.URL != "" && a.Inline == ""
 }
@@ -130,6 +143,7 @@ type RuntimeAppManager interface {
 	ComputeAppPath(appName string, app App) (string, error)
 }
 
+// BinManager downloads, verifies, installs and runs managed apps and bundles.
 type BinManager struct {
 	mapOfApps      MapOfApps
 	mapOfBundles   MapOfBundles
@@ -142,6 +156,7 @@ type BinManager struct {
 	downloadGroup singleflight.Group
 }
 
+// New creates a BinManager for the given apps and bundles using the host target resolver.
 func New(mapOfApps MapOfApps, mapOfBundles MapOfBundles, runtimeManager RuntimeAppManager) *BinManager {
 	return &BinManager{
 		mapOfApps:      mapOfApps,
@@ -224,11 +239,13 @@ func wrapInstallTimeout(err error, timeoutSec int) error {
 	return err
 }
 
+// DownloadResult records the outcome of downloading a single named binary.
 type DownloadResult struct {
 	Name  string
 	Error error
 }
 
+// InstallStats summarizes the results of an install run across all binaries.
 type InstallStats struct {
 	Skipped       []string
 	AlreadyCached []string
@@ -360,7 +377,7 @@ func (bm *BinManager) GetBinaryPath(ctx context.Context, name string) (string, e
 		return struct{}{}, nil
 	})
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("download %s: %w", name, err)
 	}
 
 	return binPath, nil
@@ -684,6 +701,7 @@ func downloadFileSimple(ctx context.Context, url, destPath string) error {
 	return nil
 }
 
+// AppInfo describes a registered app for listing and introspection.
 type AppInfo struct {
 	Name        string
 	Type        string
@@ -766,7 +784,7 @@ func (bm *BinManager) GetExecCmd(ctx context.Context, name string, args []string
 	allArgs = append(allArgs, cmdInfo.Args...)
 	allArgs = append(allArgs, args...)
 
-	cmd := exec.CommandContext(ctx, cmdInfo.Command, allArgs...)
+	cmd := exec.CommandContext(ctx, cmdInfo.Command, allArgs...) //nolint:gosec // G204: command path comes from the trusted managed store and args from validated config
 	cmd.Env = mergeExecEnv(os.Environ(), cmdInfo.Env)
 
 	return cmd, nil
@@ -783,7 +801,7 @@ func (bm *BinManager) Exec(ctx context.Context, appName string, args []string) e
 	allArgs = append(allArgs, cmdInfo.Args...)
 	allArgs = append(allArgs, args...)
 
-	cmd := exec.CommandContext(ctx, cmdInfo.Command, allArgs...)
+	cmd := exec.CommandContext(ctx, cmdInfo.Command, allArgs...) //nolint:gosec // G204: command path comes from the trusted managed store and args from validated config
 
 	log.Debug("executing app",
 		zap.String("name", appName),

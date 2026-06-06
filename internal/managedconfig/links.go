@@ -1,3 +1,6 @@
+// Package managedconfig sets up the project-local .datamitsu directory,
+// creating symlinks to managed binaries and writing supporting files such
+// as the .gitignore and TypeScript type definitions.
 package managedconfig
 
 import (
@@ -327,7 +330,10 @@ func CreateDatamitsuTypeDefinitions(gitRoot string, dryRun bool) error {
 }
 
 func createDatamitsuGitignore(dir string) error {
-	return os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("*\n"), 0o644)
+	if err := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("*\n"), 0o644); err != nil {
+		return fmt.Errorf("write .gitignore in %q: %w", dir, err)
+	}
+	return nil
 }
 
 // writeTypeDefinitions writes the embedded TypeScript type definitions
@@ -335,5 +341,8 @@ func createDatamitsuGitignore(dir string) error {
 // when editing datamitsu configuration files.
 func writeTypeDefinitions(dir string) error {
 	content := config.GetDefaultConfigDTS()
-	return os.WriteFile(filepath.Join(dir, "datamitsu.config.d.ts"), []byte(content), 0o644)
+	if err := os.WriteFile(filepath.Join(dir, "datamitsu.config.d.ts"), []byte(content), 0o644); err != nil {
+		return fmt.Errorf("write datamitsu.config.d.ts in %q: %w", dir, err)
+	}
+	return nil
 }

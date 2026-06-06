@@ -17,6 +17,8 @@ const (
 	maxDecompressedLockFileSize = constants.MaxInlineArchiveSize
 )
 
+// CompressLockFile brotli-compresses content and returns it base64-encoded with
+// a "br:" prefix so DecompressLockFile can detect the encoding.
 func CompressLockFile(content string) (string, error) {
 	var buf bytes.Buffer
 	w := brotli.NewWriterLevel(&buf, 11)
@@ -29,6 +31,9 @@ func CompressLockFile(content string) (string, error) {
 	return brotliPrefix + base64.StdEncoding.EncodeToString(buf.Bytes()), nil
 }
 
+// DecompressLockFile reverses CompressLockFile: data with the "br:" prefix is
+// base64-decoded and brotli-decompressed (bounded to the max lock file size),
+// while data without the prefix is returned unchanged.
 func DecompressLockFile(data string) (string, error) {
 	if !strings.HasPrefix(data, brotliPrefix) {
 		return data, nil

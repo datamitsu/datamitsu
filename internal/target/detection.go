@@ -1,3 +1,5 @@
+// Package target detects the host platform (OS, arch, libc) and resolves
+// requested targets to available ones, applying fallbacks when needed.
 package target
 
 import "context"

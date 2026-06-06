@@ -8,28 +8,8 @@ import (
 )
 
 func TestToolCacheIsolation_DifferentToolsGetIsolatedDirs(t *testing.T) {
-	originalEnv, wasSet := os.LookupEnv(cacheDir.Name)
-	defer func() {
-		if wasSet {
-			if err := os.Setenv(cacheDir.Name, originalEnv); err != nil {
-				t.Errorf("failed to restore env: %v", err)
-			}
-		} else {
-			if err := os.Unsetenv(cacheDir.Name); err != nil {
-				t.Errorf("failed to unset env: %v", err)
-			}
-		}
-	}()
-
-	tmpDir, err := os.MkdirTemp("", "toolcache-isolation-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer func() { _ = os.RemoveAll(tmpDir) }()
-
-	if err := os.Setenv(cacheDir.Name, tmpDir); err != nil {
-		t.Fatalf("failed to set env: %v", err)
-	}
+	tmpDir := t.TempDir()
+	t.Setenv(cacheDir.Name, tmpDir)
 
 	gitRoot := "/home/user/myproject"
 
@@ -93,28 +73,8 @@ func TestToolCacheIsolation_DifferentToolsGetIsolatedDirs(t *testing.T) {
 }
 
 func TestToolCacheIsolation_MonorepoSameToolDifferentProjects(t *testing.T) {
-	originalEnv, wasSet := os.LookupEnv(cacheDir.Name)
-	defer func() {
-		if wasSet {
-			if err := os.Setenv(cacheDir.Name, originalEnv); err != nil {
-				t.Errorf("failed to restore env: %v", err)
-			}
-		} else {
-			if err := os.Unsetenv(cacheDir.Name); err != nil {
-				t.Errorf("failed to unset env: %v", err)
-			}
-		}
-	}()
-
-	tmpDir, err := os.MkdirTemp("", "toolcache-monorepo-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer func() { _ = os.RemoveAll(tmpDir) }()
-
-	if err := os.Setenv(cacheDir.Name, tmpDir); err != nil {
-		t.Fatalf("failed to set env: %v", err)
-	}
+	tmpDir := t.TempDir()
+	t.Setenv(cacheDir.Name, tmpDir)
 
 	gitRoot := "/home/user/monorepo"
 
@@ -185,28 +145,8 @@ func TestToolCacheIsolation_MonorepoSameToolDifferentProjects(t *testing.T) {
 }
 
 func TestToolCacheIsolation_CacheClearingWithNewStructure(t *testing.T) {
-	originalEnv, wasSet := os.LookupEnv(cacheDir.Name)
-	defer func() {
-		if wasSet {
-			if err := os.Setenv(cacheDir.Name, originalEnv); err != nil {
-				t.Errorf("failed to restore env: %v", err)
-			}
-		} else {
-			if err := os.Unsetenv(cacheDir.Name); err != nil {
-				t.Errorf("failed to unset env: %v", err)
-			}
-		}
-	}()
-
-	tmpDir, err := os.MkdirTemp("", "toolcache-clear-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer func() { _ = os.RemoveAll(tmpDir) }()
-
-	if err := os.Setenv(cacheDir.Name, tmpDir); err != nil {
-		t.Fatalf("failed to set env: %v", err)
-	}
+	tmpDir := t.TempDir()
+	t.Setenv(cacheDir.Name, tmpDir)
 
 	gitRoot := "/home/user/monorepo"
 
@@ -278,7 +218,7 @@ func TestToolCacheIsolation_CacheClearingWithNewStructure(t *testing.T) {
 	projectHash := HashProjectPath(gitRoot)
 	cacheBase := filepath.Join(tmpDir, "cache", "projects", projectHash, "cache")
 
-	err = filepath.Walk(cacheBase, func(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk(cacheBase, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}

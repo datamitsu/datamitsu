@@ -8,6 +8,8 @@ import (
 	"go.uber.org/zap"
 )
 
+// MonorepoTraverser walks a repository from a working directory, applying the
+// repository's compiled .gitignore rules.
 type MonorepoTraverser struct {
 	cwdPath  string
 	rootPath string
@@ -16,6 +18,8 @@ type MonorepoTraverser struct {
 	git *GitIgnore
 }
 
+// New builds a MonorepoTraverser for cwd, resolving the git root and collecting
+// and compiling the applicable .gitignore rules.
 func New(ctx context.Context, cwd string) (MonorepoTraverser, error) {
 	log := logger.Logger.With(zap.Namespace("traverser"), zap.String("cwd", cwd))
 
@@ -40,6 +44,8 @@ func New(ctx context.Context, cwd string) (MonorepoTraverser, error) {
 	}, nil
 }
 
+// Walk traverses the working directory subtree, skipping ignored paths, and
+// logs the number of discovered files.
 func (t *MonorepoTraverser) Walk(ctx context.Context) error {
 	// err := fastwalk.Walk(&conf, t.cwdPath, func(path string, d os.DirEntry, err error) error {
 	// 	log := t.log.With(zap.Namespace("walk"))

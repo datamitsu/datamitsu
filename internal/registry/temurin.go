@@ -20,6 +20,8 @@ type temurinReleaseVersions struct {
 
 var temurinHTTPClient = &http.Client{Timeout: 15 * time.Second}
 
+// GetLatestTemurinMajorVersion returns the most recent Temurin (Eclipse Adoptium)
+// feature-release major version, falling back to a pinned version on failure.
 func GetLatestTemurinMajorVersion(ctx context.Context) (string, error) {
 	return getLatestTemurinMajorVersionFromURL(ctx, "https://api.adoptium.net/v3/info/available_releases")
 }

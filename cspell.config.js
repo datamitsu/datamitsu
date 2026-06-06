@@ -231,5 +231,8 @@ export default {
     "trippable",
     "unparam",
     "testableexamples",
+    "gosec",
+    "usetesting",
+    "transpiles",
   ],
 };

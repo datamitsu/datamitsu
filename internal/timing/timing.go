@@ -1,3 +1,5 @@
+// Package timing measures and reports execution times for hierarchical
+// stages, gated behind the DATAMITSU_TIMINGS environment variable.
 package timing
 
 import (

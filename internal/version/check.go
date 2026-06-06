@@ -1,3 +1,5 @@
+// Package version compares the running datamitsu version against the minimum
+// version a config requires, treating unstable builds as an advisory skip.
 package version
 
 import (

@@ -1,3 +1,4 @@
+// Package cmd implements datamitsu's Cobra command tree and CLI entrypoint.
 package cmd
 
 import (
@@ -64,6 +65,7 @@ func init() {
 		"Additional configuration file(s) to load and merge (can be specified multiple times)")
 }
 
+// Execute runs the root command and exits the process on error.
 func Execute() {
 	clr.Init()
 	if err := rootCmd.Execute(); err != nil {

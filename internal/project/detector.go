@@ -1,3 +1,5 @@
+// Package project detects project types within a repository by matching
+// marker files against configured project-type patterns.
 package project
 
 import (
@@ -49,7 +51,7 @@ func (d *Detector) IsType(ctx context.Context, typeName string) (bool, error) {
 }
 
 // ProjectLocation represents a detected project with its type and path
-type ProjectLocation struct {
+type ProjectLocation struct { //nolint:revive // exported: name kept explicit; project.ProjectLocation reads clearer than project.Location at its cross-package call sites
 	Type string // Project type name (e.g., "npm-package", "golang-package")
 	Path string // Absolute path to the project directory
 }

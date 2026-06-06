@@ -10,6 +10,7 @@ import (
 	"time"
 )
 
+// NPMPackageInfo holds the resolved name, version and description of an npm package.
 type NPMPackageInfo struct {
 	Name        string
 	Version     string
@@ -41,6 +42,8 @@ var npmHTTPClient = &http.Client{Timeout: 15 * time.Second}
 // npmRegistryBaseURL is the registry root; overridable in tests.
 var npmRegistryBaseURL = "https://registry.npmjs.org"
 
+// GetNPMPackageInfo returns the latest version info for an npm package from the
+// registry's /latest endpoint.
 func GetNPMPackageInfo(ctx context.Context, packageName string) (*NPMPackageInfo, error) {
 	url := fmt.Sprintf("%s/%s/latest", npmRegistryBaseURL, npmPackagePath(packageName))
 	return getNPMPackageInfoFromURL(ctx, url, packageName)

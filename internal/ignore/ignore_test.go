@@ -7,7 +7,7 @@ import (
 )
 
 func TestBuildGroups(t *testing.T) {
-	specificGroups := []IgnoreGroup{
+	specificGroups := []Group{
 		{
 			Name:     "test-group",
 			Elements: []string{"*.test"},
@@ -145,7 +145,7 @@ func TestDebugCheck(t *testing.T) {
 func TestDebugCheckWithDuplicates(t *testing.T) {
 	originalMap := ignoreGroupMap
 
-	duplicateMap := IgnoreGroupMap{
+	duplicateMap := GroupMap{
 		"group1": {
 			Pattern: []string{"**/node_modules", "**/.next"},
 			Git:     true,

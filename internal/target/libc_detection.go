@@ -4,6 +4,7 @@ import (
 	"context"
 	"debug/elf"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -104,7 +105,11 @@ func detectViaLoaderPaths() LibcType {
 }
 
 func defaultLoaderGlob(pattern string) ([]string, error) {
-	return filepath.Glob(pattern)
+	matches, err := filepath.Glob(pattern)
+	if err != nil {
+		return nil, fmt.Errorf("glob loader pattern %q: %w", pattern, err)
+	}
+	return matches, nil
 }
 
 func detectViaLoaderGlob(globFn func(string) ([]string, error)) LibcType {

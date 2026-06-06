@@ -1,3 +1,6 @@
+// Package registry queries upstream package and runtime registries (npm, PyPI,
+// endoflife.date, Adoptium) to resolve the latest available versions of managed
+// runtimes and packages.
 package registry
 
 import "time"

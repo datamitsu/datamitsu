@@ -826,7 +826,7 @@ func (p *Planner) initializeCache(ctx context.Context) error {
 
 	// Wait for both to complete
 	if err := g.Wait(); err != nil {
-		return err
+		return fmt.Errorf("failed to initialize cache: %w", err)
 	}
 
 	// Build .datamitsuignore matcher from scanned files

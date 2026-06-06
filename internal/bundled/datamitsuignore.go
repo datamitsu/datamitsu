@@ -1,3 +1,5 @@
+// Package bundled implements discovery, linting and normalization of
+// .datamitsuignore files across a project tree.
 package bundled
 
 import (
@@ -32,7 +34,10 @@ func FindIgnoreFiles(rootPath string) ([]string, error) {
 		}
 		return nil
 	})
-	return files, err
+	if err != nil {
+		return nil, fmt.Errorf("walking %s: %w", rootPath, err)
+	}
+	return files, nil
 }
 
 // normalizeRule formats a parsed rule into canonical form: "{!}{glob}: {tool1}, {tool2}"

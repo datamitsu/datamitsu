@@ -10,6 +10,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/utils"
 )
 
+// State is the persisted sponsor tracking data: activation status, run count, and last-shown time.
 type State struct {
 	Activated      bool      `json:"activated"`
 	SuccessfulRuns int       `json:"successful_runs"`

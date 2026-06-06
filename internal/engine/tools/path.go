@@ -8,6 +8,8 @@ import (
 	"github.com/dop251/goja"
 )
 
+// RegisterPathToolsInVM exposes tools.path helpers, resolved relative to
+// rootPath, into the VM for use by config scripts.
 func RegisterPathToolsInVM(vm *goja.Runtime, rootPath string) error {
 	toolsObj := vm.Get("tools")
 	if toolsObj == nil || goja.IsUndefined(toolsObj) || goja.IsNull(toolsObj) {
