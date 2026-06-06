@@ -323,7 +323,7 @@ func TestMoveFile(t *testing.T) {
 
 		srcPath := filepath.Join(tmpDir, "source.txt")
 		testContent := []byte("test content")
-		if err := os.WriteFile(srcPath, testContent, 0644); err != nil {
+		if err := os.WriteFile(srcPath, testContent, 0o644); err != nil {
 			t.Fatalf("failed to create source file: %v", err)
 		}
 
@@ -348,8 +348,8 @@ func TestMoveFile(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to stat destination file: %v", err)
 		}
-		if info.Mode().Perm() != 0755 {
-			t.Errorf("incorrect permissions: got %o, want %o", info.Mode().Perm(), 0755)
+		if info.Mode().Perm() != 0o755 {
+			t.Errorf("incorrect permissions: got %o, want %o", info.Mode().Perm(), 0o755)
 		}
 	})
 
@@ -357,7 +357,7 @@ func TestMoveFile(t *testing.T) {
 		tmpDir := t.TempDir()
 
 		srcPath := filepath.Join(tmpDir, "source.txt")
-		if err := os.WriteFile(srcPath, []byte("test"), 0644); err != nil {
+		if err := os.WriteFile(srcPath, []byte("test"), 0o644); err != nil {
 			t.Fatalf("failed to create source file: %v", err)
 		}
 
@@ -379,13 +379,13 @@ func TestMoveFile(t *testing.T) {
 		tmpDir := t.TempDir()
 
 		srcPath := filepath.Join(tmpDir, "source.txt")
-		if err := os.WriteFile(srcPath, []byte("new content"), 0644); err != nil {
+		if err := os.WriteFile(srcPath, []byte("new content"), 0o644); err != nil {
 			t.Fatalf("failed to create source file: %v", err)
 		}
 
 		dstPath := filepath.Join(tmpDir, "dest.txt")
 		existing := []byte("existing content")
-		if err := os.WriteFile(dstPath, existing, 0644); err != nil {
+		if err := os.WriteFile(dstPath, existing, 0o644); err != nil {
 			t.Fatalf("failed to create destination file: %v", err)
 		}
 
@@ -441,7 +441,7 @@ func TestMoveFile(t *testing.T) {
 			go func(i int) {
 				defer wg.Done()
 				srcPath := filepath.Join(tmpDir, fmt.Sprintf("src-%d.bin", i))
-				if err := os.WriteFile(srcPath, []byte("payload"), 0644); err != nil {
+				if err := os.WriteFile(srcPath, []byte("payload"), 0o644); err != nil {
 					return
 				}
 				_ = moveFile(srcPath, dstPath)
@@ -480,7 +480,7 @@ func TestCopyFileAtomic(t *testing.T) {
 		tmpDir := t.TempDir()
 		srcPath := filepath.Join(tmpDir, "source.bin")
 		payload := []byte("binary payload")
-		if err := os.WriteFile(srcPath, payload, 0644); err != nil {
+		if err := os.WriteFile(srcPath, payload, 0o644); err != nil {
 			t.Fatalf("failed to create source file: %v", err)
 		}
 
@@ -501,8 +501,8 @@ func TestCopyFileAtomic(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to stat destination file: %v", err)
 		}
-		if info.Mode().Perm() != 0755 {
-			t.Errorf("incorrect permissions: got %o, want %o", info.Mode().Perm(), 0755)
+		if info.Mode().Perm() != 0o755 {
+			t.Errorf("incorrect permissions: got %o, want %o", info.Mode().Perm(), 0o755)
 		}
 	})
 
@@ -530,10 +530,10 @@ func TestCopyFileAtomic(t *testing.T) {
 func TestMoveDir(t *testing.T) {
 	writeDir := func(t *testing.T, dir, marker string) {
 		t.Helper()
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatalf("mkdir: %v", err)
 		}
-		if err := os.WriteFile(filepath.Join(dir, "f.txt"), []byte(marker), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "f.txt"), []byte(marker), 0o644); err != nil {
 			t.Fatalf("write: %v", err)
 		}
 	}
@@ -615,10 +615,10 @@ func TestMoveDir(t *testing.T) {
 			go func(i int) {
 				defer wg.Done()
 				srcDir := filepath.Join(tmpDir, fmt.Sprintf("src-%d", i))
-				if err := os.MkdirAll(srcDir, 0755); err != nil {
+				if err := os.MkdirAll(srcDir, 0o755); err != nil {
 					return
 				}
-				if err := os.WriteFile(filepath.Join(srcDir, "f.txt"), []byte("payload"), 0644); err != nil {
+				if err := os.WriteFile(filepath.Join(srcDir, "f.txt"), []byte("payload"), 0o644); err != nil {
 					return
 				}
 				_ = moveDir(srcDir, dstDir)
@@ -643,10 +643,10 @@ func TestCopyDirAtomic(t *testing.T) {
 	t.Run("copies tree into fresh dst", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		srcDir := filepath.Join(tmpDir, "src")
-		if err := os.MkdirAll(filepath.Join(srcDir, "sub"), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Join(srcDir, "sub"), 0o755); err != nil {
 			t.Fatalf("mkdir: %v", err)
 		}
-		if err := os.WriteFile(filepath.Join(srcDir, "sub", "f.txt"), []byte("payload"), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(srcDir, "sub", "f.txt"), []byte("payload"), 0o644); err != nil {
 			t.Fatalf("write: %v", err)
 		}
 
@@ -666,17 +666,17 @@ func TestCopyDirAtomic(t *testing.T) {
 	t.Run("treats pre-existing dst as success", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		srcDir := filepath.Join(tmpDir, "src")
-		if err := os.MkdirAll(srcDir, 0755); err != nil {
+		if err := os.MkdirAll(srcDir, 0o755); err != nil {
 			t.Fatalf("mkdir: %v", err)
 		}
-		if err := os.WriteFile(filepath.Join(srcDir, "f.txt"), []byte("new"), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(srcDir, "f.txt"), []byte("new"), 0o644); err != nil {
 			t.Fatalf("write: %v", err)
 		}
 		dstDir := filepath.Join(tmpDir, "dst")
-		if err := os.MkdirAll(dstDir, 0755); err != nil {
+		if err := os.MkdirAll(dstDir, 0o755); err != nil {
 			t.Fatalf("mkdir dst: %v", err)
 		}
-		if err := os.WriteFile(filepath.Join(dstDir, "f.txt"), []byte("existing"), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(dstDir, "f.txt"), []byte("existing"), 0o644); err != nil {
 			t.Fatalf("write dst: %v", err)
 		}
 

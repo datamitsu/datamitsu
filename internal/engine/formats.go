@@ -170,7 +170,6 @@ func (e *Engine) initFormats() {
 			// Convert goja value to ordered structure preserving key order
 			orderedValue := e.convertGojaValueToOrderedStructure(call.Argument(0))
 			yamlBytes, err := yaml.Marshal(orderedValue)
-
 			if err != nil {
 				panic(e.vm.NewGoError(fmt.Errorf("YAML.stringify error: %w", err)))
 			}
@@ -237,7 +236,6 @@ func (e *Engine) initFormats() {
 
 		iniStr := call.Argument(0).String()
 		cfg, err := ini.Load([]byte(iniStr))
-
 		if err != nil {
 			panic(e.vm.NewGoError(fmt.Errorf("INI.parse error: %w", err)))
 		}

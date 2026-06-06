@@ -2,6 +2,12 @@ package cmd
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
 	enginetools "github.com/datamitsu/datamitsu/internal/engine/tools"
@@ -9,11 +15,6 @@ import (
 	"github.com/datamitsu/datamitsu/internal/project"
 	"github.com/datamitsu/datamitsu/internal/runner"
 	"github.com/datamitsu/datamitsu/internal/traverser"
-	"fmt"
-	"os"
-	"path/filepath"
-	"sort"
-	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -231,8 +232,8 @@ func runSetup(cmd *cobra.Command, args []string) error {
 // error, the first error result is preferred so errors are never silently dropped.
 func deduplicateGitRootResults(results []install.InstallResult) []install.InstallResult {
 	type group struct {
-		indices      []int
-		allGitRoot   bool
+		indices    []int
+		allGitRoot bool
 	}
 
 	groups := make(map[string]*group)

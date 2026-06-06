@@ -36,7 +36,7 @@ func TestWriteRuntimesJSON_CreateTempFails(t *testing.T) {
 func TestWriteRuntimesJSON_CreateTempFailsParentIsFile(t *testing.T) {
 	dir := t.TempDir()
 	notADir := filepath.Join(dir, "iam-a-file")
-	if err := os.WriteFile(notADir, []byte("x"), 0644); err != nil {
+	if err := os.WriteFile(notADir, []byte("x"), 0o644); err != nil {
 		t.Fatalf("seeding regular file: %v", err)
 	}
 	path := filepath.Join(notADir, "runtimes.json")

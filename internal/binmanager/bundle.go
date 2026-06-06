@@ -12,10 +12,10 @@ import (
 type MapOfBundles = map[string]*Bundle
 
 type Bundle struct {
-	Version  string                 `json:"version,omitempty"`
-	Files    map[string]string      `json:"files,omitempty"`
+	Version  string                  `json:"version,omitempty"`
+	Files    map[string]string       `json:"files,omitempty"`
 	Archives map[string]*ArchiveSpec `json:"archives,omitempty"`
-	Links    map[string]string      `json:"links,omitempty"`
+	Links    map[string]string       `json:"links,omitempty"`
 }
 
 func (b *Bundle) HasExternalArchives() bool {

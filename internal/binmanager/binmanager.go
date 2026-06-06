@@ -228,7 +228,7 @@ func (bm *BinManager) downloadInternal(ctx context.Context, name string, progres
 		return err
 	}
 
-	var hashType = defaultBinHashType
+	hashType := defaultBinHashType
 	if binaryInfo.HashType != nil {
 		hashType = *binaryInfo.HashType
 	}
@@ -242,7 +242,7 @@ func (bm *BinManager) downloadInternal(ctx context.Context, name string, progres
 	binPath := filepath.Join(env.GetBinPath(), name, configHash)
 
 	tmpDir := filepath.Join(env.GetStorePath(), "tmp")
-	if err := os.MkdirAll(tmpDir, 0755); err != nil {
+	if err := os.MkdirAll(tmpDir, 0o755); err != nil {
 		return fmt.Errorf("failed to create temp directory: %w", err)
 	}
 
@@ -703,7 +703,7 @@ func (bm *BinManager) GetInstallRoot(appName string) (string, error) {
 // This ordering means Files always take precedence over Archives, and among Archives,
 // later names (alphabetically) take precedence over earlier ones for overlapping paths.
 func WriteAppFiles(installPath string, files map[string]string, archives map[string]*ArchiveSpec) error {
-	if err := os.MkdirAll(installPath, 0755); err != nil {
+	if err := os.MkdirAll(installPath, 0o755); err != nil {
 		return fmt.Errorf("failed to create install directory: %w", err)
 	}
 
@@ -754,7 +754,6 @@ func extractArchives(installPath string, archives map[string]*ArchiveSpec) error
 			if err := downloadAndExtractExternalArchive(name, spec, installPath); err != nil {
 				return err
 			}
-
 		} else {
 			return fmt.Errorf("archive %q: must have either inline or url field set", name)
 		}
@@ -814,11 +813,11 @@ func writeFiles(installPath string, files map[string]string) error {
 			return fmt.Errorf("file %q escapes install directory", filename)
 		}
 		if dir := filepath.Dir(filePath); dir != installPath {
-			if err := os.MkdirAll(dir, 0755); err != nil {
+			if err := os.MkdirAll(dir, 0o755); err != nil {
 				return fmt.Errorf("failed to create directory for file %q: %w", filename, err)
 			}
 		}
-		if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
+		if err := os.WriteFile(filePath, []byte(content), 0o644); err != nil {
 			return fmt.Errorf("failed to write file %q: %w", filename, err)
 		}
 	}

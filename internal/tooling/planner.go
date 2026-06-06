@@ -2,16 +2,17 @@ package tooling
 
 import (
 	"context"
-	"github.com/datamitsu/datamitsu/internal/config"
-	"github.com/datamitsu/datamitsu/internal/datamitsuignore"
-	"github.com/datamitsu/datamitsu/internal/project"
-	"github.com/datamitsu/datamitsu/internal/timing"
-	"github.com/datamitsu/datamitsu/internal/traverser"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/datamitsuignore"
+	"github.com/datamitsu/datamitsu/internal/project"
+	"github.com/datamitsu/datamitsu/internal/timing"
+	"github.com/datamitsu/datamitsu/internal/traverser"
 
 	"github.com/bmatcuk/doublestar/v4"
 	"go.uber.org/zap"

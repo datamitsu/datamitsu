@@ -15,7 +15,7 @@ const (
 type ResolutionSource int
 
 const (
-	ResolutionExact    ResolutionSource = iota
+	ResolutionExact ResolutionSource = iota
 	ResolutionFallback
 )
 

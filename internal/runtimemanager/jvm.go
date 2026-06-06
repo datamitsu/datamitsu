@@ -3,9 +3,6 @@ package runtimemanager
 import (
 	"context"
 	"crypto/sha256"
-	"github.com/datamitsu/datamitsu/internal/binmanager"
-	"github.com/datamitsu/datamitsu/internal/config"
-	"github.com/datamitsu/datamitsu/internal/httpx"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -13,6 +10,10 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/httpx"
 
 	"go.uber.org/zap"
 )
@@ -63,7 +64,7 @@ func (rm *RuntimeManager) installJVMAppOnce(ctx context.Context, appName string,
 		return fmt.Errorf("failed to get JVM runtime path: %w", err)
 	}
 
-	if err := os.MkdirAll(appEnvPath, 0755); err != nil {
+	if err := os.MkdirAll(appEnvPath, 0o755); err != nil {
 		return fmt.Errorf("failed to create app directory: %w", err)
 	}
 

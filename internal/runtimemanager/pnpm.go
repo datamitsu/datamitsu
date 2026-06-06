@@ -8,17 +8,18 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/datamitsu/datamitsu/internal/binmanager"
-	"github.com/datamitsu/datamitsu/internal/env"
-	"github.com/datamitsu/datamitsu/internal/httpx"
-	"github.com/datamitsu/datamitsu/internal/pnpmdefaults"
-	"github.com/goccy/go-yaml"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/httpx"
+	"github.com/datamitsu/datamitsu/internal/pnpmdefaults"
+	"github.com/goccy/go-yaml"
 )
 
 // pnpm.go holds the pnpm download + npm-app-install helpers shared by the node
@@ -281,11 +282,11 @@ func filesWithoutWorkspaceYAML(files map[string]string) map[string]string {
 // Callers MUST invoke this AFTER any archive extraction so archives cannot
 // overwrite the secure defaults.
 func writeAppWorkspaceFile(appEnvPath, mergedYAML string) error {
-	if err := os.MkdirAll(appEnvPath, 0755); err != nil {
+	if err := os.MkdirAll(appEnvPath, 0o755); err != nil {
 		return fmt.Errorf("failed to create app directory: %w", err)
 	}
 	workspacePath := filepath.Join(appEnvPath, "pnpm-workspace.yaml")
-	if err := os.WriteFile(workspacePath, []byte(mergedYAML), 0644); err != nil {
+	if err := os.WriteFile(workspacePath, []byte(mergedYAML), 0o644); err != nil {
 		return fmt.Errorf("failed to write pnpm-workspace.yaml: %w", err)
 	}
 	return nil

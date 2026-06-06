@@ -1,14 +1,15 @@
 package cmd
 
 import (
-	"github.com/datamitsu/datamitsu/internal/registry"
-	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/datamitsu/datamitsu/internal/registry"
+	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 )
 
 func TestPullUVCmd_HasMinAgeFlag(t *testing.T) {

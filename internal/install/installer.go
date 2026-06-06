@@ -2,12 +2,13 @@ package install
 
 import (
 	"context"
-	"github.com/datamitsu/datamitsu/internal/config"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/datamitsu/datamitsu/internal/config"
 
 	"github.com/dop251/goja"
 )
@@ -175,12 +176,12 @@ func (i *Installer) installConfig(ctx context.Context, name string, cfg config.C
 	if !dryRun {
 		// Create all parent directories for the file (handles nested paths like .vscode/settings.json)
 		fileDir := filepath.Dir(mainPath)
-		if err := os.MkdirAll(fileDir, 0755); err != nil {
+		if err := os.MkdirAll(fileDir, 0o755); err != nil {
 			result.Error = fmt.Errorf("failed to create directory: %w", err)
 			return result
 		}
 
-		if err := os.WriteFile(mainPath, []byte(newContent), 0644); err != nil {
+		if err := os.WriteFile(mainPath, []byte(newContent), 0o644); err != nil {
 			result.Error = fmt.Errorf("failed to write file: %w", err)
 			return result
 		}
@@ -265,7 +266,7 @@ func (i *Installer) installSymlink(mainPath string, linkTarget string, dryRun bo
 		}
 	}
 
-	if err := os.MkdirAll(filepath.Dir(mainPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(mainPath), 0o755); err != nil {
 		result.Error = fmt.Errorf("failed to create directory: %w", err)
 		return result
 	}

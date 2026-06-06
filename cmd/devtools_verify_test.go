@@ -2,15 +2,16 @@ package cmd
 
 import (
 	"bytes"
-	"github.com/datamitsu/datamitsu/internal/binmanager"
-	"github.com/datamitsu/datamitsu/internal/config"
-	"github.com/datamitsu/datamitsu/internal/syslist"
-	"github.com/datamitsu/datamitsu/internal/verifycache"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/syslist"
+	"github.com/datamitsu/datamitsu/internal/verifycache"
 )
 
 func TestNormalizeVersion(t *testing.T) {
@@ -260,7 +261,7 @@ func TestBuildJSONOutput(t *testing.T) {
 	}
 	summary := computeSummary(binaryResults, runtimeResults, runtimeAppResults, nil, versionResults)
 
-	output := buildJSONOutput("linux", "amd64", binaryResults, runtimeResults, runtimeAppResults, nil, versionResults, summary,"failed")
+	output := buildJSONOutput("linux", "amd64", binaryResults, runtimeResults, runtimeAppResults, nil, versionResults, summary, "failed")
 
 	if output.CurrentPlatform.Os != "linux" || output.CurrentPlatform.Arch != "amd64" {
 		t.Errorf("unexpected platform: %+v", output.CurrentPlatform)
@@ -822,7 +823,7 @@ func TestBuildJSONOutputWithCached(t *testing.T) {
 	}
 	summary := computeSummary(binaryResults, runtimeResults, runtimeAppResults, nil, versionResults)
 
-	output := buildJSONOutput("linux", "amd64", binaryResults, runtimeResults, runtimeAppResults, nil, versionResults, summary,"ok")
+	output := buildJSONOutput("linux", "amd64", binaryResults, runtimeResults, runtimeAppResults, nil, versionResults, summary, "ok")
 
 	if output.Summary.BinaryDownloads.Cached != 1 {
 		t.Errorf("expected BinaryDownloads.Cached=1, got %d", output.Summary.BinaryDownloads.Cached)

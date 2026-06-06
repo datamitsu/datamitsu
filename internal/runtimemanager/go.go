@@ -5,14 +5,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/datamitsu/datamitsu/internal/binmanager"
-	"github.com/datamitsu/datamitsu/internal/config"
 	"io/fs"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
 	"runtime"
+
+	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/config"
 
 	"go.uber.org/zap"
 )
@@ -191,7 +192,7 @@ func (rm *RuntimeManager) installGoAppOnce(ctx context.Context, appName string, 
 		return fmt.Errorf("failed to get Go runtime path: %w", err)
 	}
 
-	if err := os.MkdirAll(appEnvPath, 0755); err != nil {
+	if err := os.MkdirAll(appEnvPath, 0o755); err != nil {
 		return fmt.Errorf("failed to create app directory: %w", err)
 	}
 
@@ -213,7 +214,7 @@ func (rm *RuntimeManager) installGoAppOnce(ctx context.Context, appName string, 
 	reservedEnv := getGoEnvVars(appEnvPath)
 	envVars := mergeInstallEnv(reservedEnv, customEnv, appEnvPath)
 	for _, key := range []string{"GOPATH", "GOMODCACHE", "GOBIN"} {
-		if err := os.MkdirAll(reservedEnv[key], 0755); err != nil {
+		if err := os.MkdirAll(reservedEnv[key], 0o755); err != nil {
 			return fmt.Errorf("failed to create directory %q: %w", reservedEnv[key], err)
 		}
 	}
@@ -232,10 +233,10 @@ func (rm *RuntimeManager) installGoAppOnce(ctx context.Context, appName string, 
 	if err != nil {
 		return fmt.Errorf("invalid lock file for %q: %w", appName, err)
 	}
-	if err := os.WriteFile(filepath.Join(appEnvPath, "go.mod"), []byte(goMod), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(appEnvPath, "go.mod"), []byte(goMod), 0o644); err != nil {
 		return fmt.Errorf("failed to write go.mod for %q: %w", appName, err)
 	}
-	if err := os.WriteFile(filepath.Join(appEnvPath, "go.sum"), []byte(goSum), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(appEnvPath, "go.sum"), []byte(goSum), 0o644); err != nil {
 		return fmt.Errorf("failed to write go.sum for %q: %w", appName, err)
 	}
 
@@ -331,7 +332,7 @@ func (rm *RuntimeManager) GenerateGoLockFiles(appName string, appConfig *binmana
 		return fmt.Errorf("failed to get Go runtime path: %w", err)
 	}
 
-	if err := os.MkdirAll(workDir, 0755); err != nil {
+	if err := os.MkdirAll(workDir, 0o755); err != nil {
 		return fmt.Errorf("failed to create work directory: %w", err)
 	}
 
@@ -342,7 +343,7 @@ func (rm *RuntimeManager) GenerateGoLockFiles(appName string, appConfig *binmana
 
 	envVars := getGoGenEnvVars(workDir)
 	for _, key := range []string{"GOPATH", "GOMODCACHE", "GOBIN"} {
-		if err := os.MkdirAll(envVars[key], 0755); err != nil {
+		if err := os.MkdirAll(envVars[key], 0o755); err != nil {
 			return fmt.Errorf("failed to create directory %q: %w", envVars[key], err)
 		}
 	}

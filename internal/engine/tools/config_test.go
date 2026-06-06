@@ -42,7 +42,7 @@ func TestConfigLinkPathCorrectPath(t *testing.T) {
 
 	gitRoot := "/repo"
 	registry := map[string]string{
-		"eslint-base.js": "eslint",
+		"eslint-base.js":  "eslint",
 		"prettier.config": "prettier",
 	}
 

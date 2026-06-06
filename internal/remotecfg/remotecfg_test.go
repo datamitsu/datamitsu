@@ -67,7 +67,7 @@ func TestLoadCached_Missing(t *testing.T) {
 func TestLoadCached_Success(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "test.ts")
-	if err := os.WriteFile(path, []byte("content"), 0644); err != nil {
+	if err := os.WriteFile(path, []byte("content"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

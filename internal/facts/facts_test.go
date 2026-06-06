@@ -2,13 +2,14 @@ package facts
 
 import (
 	"context"
-	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/ldflags"
 )
 
 func TestCollectAllEnv(t *testing.T) {
@@ -183,7 +184,7 @@ func TestCollectInMonorepo(t *testing.T) {
 	}
 
 	subdir := filepath.Join(tmpDir, "packages", "app")
-	_ = os.MkdirAll(subdir, 0755)
+	_ = os.MkdirAll(subdir, 0o755)
 
 	originalCwd, _ := os.Getwd()
 	defer func() { _ = os.Chdir(originalCwd) }()
@@ -280,7 +281,6 @@ func TestGetGitRootNotGitRepo(t *testing.T) {
 		t.Error("GetGitRoot() should return error for non-git directory")
 	}
 }
-
 
 func isGitAvailable() bool {
 	cmd := exec.Command("git", "--version")

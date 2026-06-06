@@ -1,13 +1,14 @@
 package tooling
 
 import (
-	"github.com/datamitsu/datamitsu/internal/config"
 	"fmt"
 	"os"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/datamitsu/datamitsu/internal/config"
 )
 
 func TestWorkerPoolLimiting(t *testing.T) {
@@ -27,8 +28,8 @@ func TestWorkerPoolLimiting(t *testing.T) {
 			ToolName:  "test",
 			Operation: config.OpLint,
 			OpConfig: config.ToolOperation{
-				App: "test",
-				Scope:   config.ToolScopeRepository,
+				App:   "test",
+				Scope: config.ToolScopeRepository,
 			},
 		}
 	}
@@ -128,8 +129,8 @@ func TestWorkerPoolWithDifferentSizes(t *testing.T) {
 					ToolName:  "test",
 					Operation: config.OpLint,
 					OpConfig: config.ToolOperation{
-						App: "test",
-						Scope:   config.ToolScopeRepository,
+						App:   "test",
+						Scope: config.ToolScopeRepository,
 					},
 				}
 			}

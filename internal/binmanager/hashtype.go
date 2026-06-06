@@ -5,11 +5,11 @@ type BinHashType string
 const defaultBinHashType BinHashType = "sha256"
 
 const (
-	BinHashTypeSHA1    BinHashType = "sha1"
-	BinHashTypeSHA256  BinHashType = "sha256"
-	BinHashTypeSHA384  BinHashType = "sha384"
-	BinHashTypeSHA512  BinHashType = "sha512"
-	BinHashTypeMD5 BinHashType = "md5"
+	BinHashTypeSHA1   BinHashType = "sha1"
+	BinHashTypeSHA256 BinHashType = "sha256"
+	BinHashTypeSHA384 BinHashType = "sha384"
+	BinHashTypeSHA512 BinHashType = "sha512"
+	BinHashTypeMD5    BinHashType = "md5"
 )
 
 // IsAllowedDownloadHashType returns true if the hash type is allowed for download verification.
@@ -21,17 +21,17 @@ func IsAllowedDownloadHashType(ht BinHashType) bool {
 type BinContentType string
 
 const (
-	BinContentTypeBinary  BinContentType = "binary"
-	BinContentTypeTarGz   BinContentType = "tar.gz"
-	BinContentTypeTarBz2  BinContentType = "tar.bz2"
-	BinContentTypeTarXz   BinContentType = "tar.xz"
-	BinContentTypeTarZst  BinContentType = "tar.zst"
-	BinContentTypeTar     BinContentType = "tar"
-	BinContentTypeZip     BinContentType = "zip"
-	BinContentTypeGz      BinContentType = "gz"
-	BinContentTypeBz2     BinContentType = "bz2"
-	BinContentTypeXz      BinContentType = "xz"
-	BinContentTypeZst     BinContentType = "zst"
+	BinContentTypeBinary BinContentType = "binary"
+	BinContentTypeTarGz  BinContentType = "tar.gz"
+	BinContentTypeTarBz2 BinContentType = "tar.bz2"
+	BinContentTypeTarXz  BinContentType = "tar.xz"
+	BinContentTypeTarZst BinContentType = "tar.zst"
+	BinContentTypeTar    BinContentType = "tar"
+	BinContentTypeZip    BinContentType = "zip"
+	BinContentTypeGz     BinContentType = "gz"
+	BinContentTypeBz2    BinContentType = "bz2"
+	BinContentTypeXz     BinContentType = "xz"
+	BinContentTypeZst    BinContentType = "zst"
 )
 
 type BinaryOsArchInfo struct {

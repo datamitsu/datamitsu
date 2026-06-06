@@ -1,11 +1,12 @@
 package env
 
 import (
-	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"fmt"
 	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/datamitsu/datamitsu/internal/ldflags"
 )
 
 // envVar represents environment variable with its metadata

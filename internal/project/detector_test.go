@@ -2,10 +2,11 @@ package project
 
 import (
 	"context"
-	"github.com/datamitsu/datamitsu/internal/config"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/config"
 )
 
 func TestNewDetector(t *testing.T) {
@@ -34,8 +35,8 @@ func TestNewDetector(t *testing.T) {
 func TestDetectAll(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	_ = os.WriteFile(filepath.Join(tmpDir, "package.json"), []byte("{}"), 0644)
-	_ = os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(""), 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "package.json"), []byte("{}"), 0o644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(""), 0o644)
 
 	types := config.MapOfProjectTypes{
 		"node": config.ProjectType{
@@ -104,7 +105,7 @@ func TestDetectAllNoMatches(t *testing.T) {
 
 func TestIsType(t *testing.T) {
 	tmpDir := t.TempDir()
-	_ = os.WriteFile(filepath.Join(tmpDir, "package.json"), []byte("{}"), 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "package.json"), []byte("{}"), 0o644)
 
 	types := config.MapOfProjectTypes{
 		"node": config.ProjectType{
@@ -152,8 +153,8 @@ func TestIsType(t *testing.T) {
 func TestMatchesTypeWithGlob(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	_ = os.WriteFile(filepath.Join(tmpDir, "test1.txt"), []byte(""), 0644)
-	_ = os.WriteFile(filepath.Join(tmpDir, "test2.txt"), []byte(""), 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "test1.txt"), []byte(""), 0o644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "test2.txt"), []byte(""), 0o644)
 
 	types := config.MapOfProjectTypes{
 		"test": config.ProjectType{
@@ -177,7 +178,7 @@ func TestMatchesTypeWithGlob(t *testing.T) {
 func TestMatchesTypeMultipleMarkers(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	_ = os.WriteFile(filepath.Join(tmpDir, "marker2.txt"), []byte(""), 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "marker2.txt"), []byte(""), 0o644)
 
 	types := config.MapOfProjectTypes{
 		"test": config.ProjectType{
@@ -203,10 +204,10 @@ func TestMatchesTypeWithDoublestar(t *testing.T) {
 
 	// Create nested directory structure
 	subDir := filepath.Join(tmpDir, "subdir", "nested")
-	_ = os.MkdirAll(subDir, 0755)
+	_ = os.MkdirAll(subDir, 0o755)
 
 	// Create package.json in nested directory
-	_ = os.WriteFile(filepath.Join(subDir, "package.json"), []byte("{}"), 0644)
+	_ = os.WriteFile(filepath.Join(subDir, "package.json"), []byte("{}"), 0o644)
 
 	types := config.MapOfProjectTypes{
 		"npm-package": config.ProjectType{
@@ -232,15 +233,15 @@ func TestMatchesTypeWithDoublestarMultipleLevels(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create files at different levels
-	_ = os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(""), 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(""), 0o644)
 
 	subDir1 := filepath.Join(tmpDir, "pkg1")
-	_ = os.MkdirAll(subDir1, 0755)
-	_ = os.WriteFile(filepath.Join(subDir1, "go.mod"), []byte(""), 0644)
+	_ = os.MkdirAll(subDir1, 0o755)
+	_ = os.WriteFile(filepath.Join(subDir1, "go.mod"), []byte(""), 0o644)
 
 	subDir2 := filepath.Join(tmpDir, "pkg2", "nested")
-	_ = os.MkdirAll(subDir2, 0755)
-	_ = os.WriteFile(filepath.Join(subDir2, "go.mod"), []byte(""), 0644)
+	_ = os.MkdirAll(subDir2, 0o755)
+	_ = os.WriteFile(filepath.Join(subDir2, "go.mod"), []byte(""), 0o644)
 
 	types := config.MapOfProjectTypes{
 		"golang-package": config.ProjectType{
@@ -266,16 +267,16 @@ func TestDetectAllWithLocations(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create monorepo structure
-	_ = os.WriteFile(filepath.Join(tmpDir, "package.json"), []byte("{}"), 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "package.json"), []byte("{}"), 0o644)
 
 	pkg1 := filepath.Join(tmpDir, "packages", "frontend")
-	_ = os.MkdirAll(pkg1, 0755)
-	_ = os.WriteFile(filepath.Join(pkg1, "package.json"), []byte("{}"), 0644)
+	_ = os.MkdirAll(pkg1, 0o755)
+	_ = os.WriteFile(filepath.Join(pkg1, "package.json"), []byte("{}"), 0o644)
 
 	pkg2 := filepath.Join(tmpDir, "packages", "backend")
-	_ = os.MkdirAll(pkg2, 0755)
-	_ = os.WriteFile(filepath.Join(pkg2, "package.json"), []byte("{}"), 0644)
-	_ = os.WriteFile(filepath.Join(pkg2, "go.mod"), []byte(""), 0644)
+	_ = os.MkdirAll(pkg2, 0o755)
+	_ = os.WriteFile(filepath.Join(pkg2, "package.json"), []byte("{}"), 0o644)
+	_ = os.WriteFile(filepath.Join(pkg2, "go.mod"), []byte(""), 0o644)
 
 	types := config.MapOfProjectTypes{
 		"npm-package": config.ProjectType{
@@ -340,24 +341,24 @@ func TestDetectAllWithLocationsRespectsGitignore(t *testing.T) {
 	gitignoreContent := `node_modules/
 dist/
 `
-	_ = os.WriteFile(filepath.Join(tmpDir, ".gitignore"), []byte(gitignoreContent), 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, ".gitignore"), []byte(gitignoreContent), 0o644)
 
 	// Create package.json files in various locations
-	_ = os.WriteFile(filepath.Join(tmpDir, "package.json"), []byte("{}"), 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "package.json"), []byte("{}"), 0o644)
 
 	// Valid location (not gitignored)
 	validPkg := filepath.Join(tmpDir, "packages", "frontend")
-	_ = os.MkdirAll(validPkg, 0755)
-	_ = os.WriteFile(filepath.Join(validPkg, "package.json"), []byte("{}"), 0644)
+	_ = os.MkdirAll(validPkg, 0o755)
+	_ = os.WriteFile(filepath.Join(validPkg, "package.json"), []byte("{}"), 0o644)
 
 	// Ignored locations
 	nodeModules := filepath.Join(tmpDir, "node_modules", "some-package")
-	_ = os.MkdirAll(nodeModules, 0755)
-	_ = os.WriteFile(filepath.Join(nodeModules, "package.json"), []byte("{}"), 0644)
+	_ = os.MkdirAll(nodeModules, 0o755)
+	_ = os.WriteFile(filepath.Join(nodeModules, "package.json"), []byte("{}"), 0o644)
 
 	distDir := filepath.Join(tmpDir, "dist", "build")
-	_ = os.MkdirAll(distDir, 0755)
-	_ = os.WriteFile(filepath.Join(distDir, "package.json"), []byte("{}"), 0644)
+	_ = os.MkdirAll(distDir, 0o755)
+	_ = os.WriteFile(filepath.Join(distDir, "package.json"), []byte("{}"), 0o644)
 
 	types := config.MapOfProjectTypes{
 		"npm-package": config.ProjectType{

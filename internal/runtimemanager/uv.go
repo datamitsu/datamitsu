@@ -3,14 +3,15 @@ package runtimemanager
 import (
 	"context"
 	"fmt"
-	"github.com/datamitsu/datamitsu/internal/binmanager"
-	"github.com/datamitsu/datamitsu/internal/config"
-	"github.com/datamitsu/datamitsu/internal/env"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/env"
 
 	"go.uber.org/zap"
 )
@@ -108,7 +109,7 @@ func (rm *RuntimeManager) installUVAppOnce(ctx context.Context, appName string, 
 		return fmt.Errorf("failed to get runtime path: %w", err)
 	}
 
-	if err := os.MkdirAll(appEnvPath, 0755); err != nil {
+	if err := os.MkdirAll(appEnvPath, 0o755); err != nil {
 		return fmt.Errorf("failed to create app directory: %w", err)
 	}
 
@@ -122,7 +123,7 @@ func (rm *RuntimeManager) installUVAppOnce(ctx context.Context, appName string, 
 	reservedEnv := getUVEnvVars(appEnvPath)
 	envVars := mergeInstallEnv(reservedEnv, customEnv, appEnvPath)
 	for _, dir := range reservedEnv {
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return fmt.Errorf("failed to create directory %q: %w", dir, err)
 		}
 	}
@@ -135,7 +136,7 @@ func (rm *RuntimeManager) installUVAppOnce(ctx context.Context, appName string, 
 
 	reqPython := resolveRequiresPython(appConfig.RequiresPython)
 	pyprojectTOML := buildPyprojectTOML(appName, appConfig.PackageName, appConfig.Version, reqPython)
-	if err := os.WriteFile(filepath.Join(appEnvPath, "pyproject.toml"), []byte(pyprojectTOML), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(appEnvPath, "pyproject.toml"), []byte(pyprojectTOML), 0o644); err != nil {
 		return fmt.Errorf("failed to write pyproject.toml for %q: %w", appName, err)
 	}
 
@@ -145,7 +146,7 @@ func (rm *RuntimeManager) installUVAppOnce(ctx context.Context, appName string, 
 			return fmt.Errorf("failed to decompress lock file for %q: %w", appName, decErr)
 		}
 		lockFilePath := filepath.Join(appEnvPath, "uv.lock")
-		if err := os.WriteFile(lockFilePath, []byte(lockContent), 0644); err != nil {
+		if err := os.WriteFile(lockFilePath, []byte(lockContent), 0o644); err != nil {
 			return fmt.Errorf("failed to write uv.lock for %q: %w", appName, err)
 		}
 	}

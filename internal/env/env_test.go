@@ -1,12 +1,13 @@
 package env
 
 import (
-	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/ldflags"
 
 	"go.uber.org/zap/zapcore"
 )

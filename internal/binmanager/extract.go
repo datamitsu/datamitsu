@@ -687,14 +687,14 @@ func extractZipToDir(zipPath, destDir string) (string, error) {
 		}
 
 		if file.FileInfo().IsDir() {
-			if err := os.MkdirAll(target, 0755); err != nil {
+			if err := os.MkdirAll(target, 0o755); err != nil {
 				_ = os.RemoveAll(tmpDir)
 				return "", fmt.Errorf("failed to create directory %q: %w", file.Name, err)
 			}
 			continue
 		}
 
-		if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 			_ = os.RemoveAll(tmpDir)
 			return "", fmt.Errorf("failed to create parent directory for %q: %w", file.Name, err)
 		}
@@ -705,7 +705,7 @@ func extractZipToDir(zipPath, destDir string) (string, error) {
 			return "", fmt.Errorf("failed to open file from zip: %w", err)
 		}
 
-		outFile, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, file.Mode()&0777)
+		outFile, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, file.Mode()&0o777)
 		if err != nil {
 			_ = rc.Close()
 			_ = os.RemoveAll(tmpDir)
@@ -771,18 +771,18 @@ func extractTarToDir(tarReader *tar.Reader, destDir string) (string, error) {
 
 		switch header.Typeflag {
 		case tar.TypeDir:
-			if err := os.MkdirAll(target, os.FileMode(header.Mode)&0777|0755); err != nil {
+			if err := os.MkdirAll(target, os.FileMode(header.Mode)&0o777|0o755); err != nil {
 				_ = os.RemoveAll(tmpDir)
 				return "", fmt.Errorf("failed to create directory %q: %w", header.Name, err)
 			}
 
 		case tar.TypeReg:
-			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 				_ = os.RemoveAll(tmpDir)
 				return "", fmt.Errorf("failed to create parent directory for %q: %w", header.Name, err)
 			}
 
-			outFile, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(header.Mode)&0777)
+			outFile, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(header.Mode)&0o777)
 			if err != nil {
 				_ = os.RemoveAll(tmpDir)
 				return "", fmt.Errorf("failed to create file %q: %w", header.Name, err)
@@ -820,7 +820,7 @@ func extractTarToDir(tarReader *tar.Reader, destDir string) (string, error) {
 				continue
 			}
 
-			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 				_ = os.RemoveAll(tmpDir)
 				return "", fmt.Errorf("failed to create parent directory for symlink %q: %w", header.Name, err)
 			}
@@ -840,7 +840,7 @@ func extractTarToDir(tarReader *tar.Reader, destDir string) (string, error) {
 // For inline archives (tar data in memory), pass tarData. For external archives (file on disk), pass archivePath.
 // Returns the destination path on success.
 func extractArchiveToPath(destPath string, tarData []byte, archivePath string, format BinContentType) (string, error) {
-	if err := os.MkdirAll(destPath, 0755); err != nil {
+	if err := os.MkdirAll(destPath, 0o755); err != nil {
 		return "", fmt.Errorf("failed to create destination directory: %w", err)
 	}
 
@@ -928,16 +928,16 @@ func extractArchiveToPath(destPath string, tarData []byte, archivePath string, f
 
 		switch header.Typeflag {
 		case tar.TypeDir:
-			if err := os.MkdirAll(target, os.FileMode(header.Mode)&0777|0755); err != nil {
+			if err := os.MkdirAll(target, os.FileMode(header.Mode)&0o777|0o755); err != nil {
 				return "", fmt.Errorf("failed to create directory %q: %w", header.Name, err)
 			}
 
 		case tar.TypeReg:
-			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 				return "", fmt.Errorf("failed to create parent directory for %q: %w", header.Name, err)
 			}
 
-			outFile, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(header.Mode)&0777)
+			outFile, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(header.Mode)&0o777)
 			if err != nil {
 				return "", fmt.Errorf("failed to create file %q: %w", header.Name, err)
 			}
@@ -971,7 +971,7 @@ func extractArchiveToPath(destPath string, tarData []byte, archivePath string, f
 				continue
 			}
 
-			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 				return "", fmt.Errorf("failed to create parent directory for symlink %q: %w", header.Name, err)
 			}
 

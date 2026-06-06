@@ -1,13 +1,14 @@
 package cmd
 
 import (
-	"github.com/datamitsu/datamitsu/internal/registry"
-	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
+
+	"github.com/datamitsu/datamitsu/internal/registry"
+	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 
 	"github.com/spf13/cobra"
 )
@@ -192,7 +193,7 @@ func ensureNodeAppsJSONExists(path string) error {
 			_ = os.Remove(tmpPath)
 			return fmt.Errorf("failed to close temp file: %w", err)
 		}
-		if err := os.Chmod(tmpPath, 0644); err != nil {
+		if err := os.Chmod(tmpPath, 0o644); err != nil {
 			_ = os.Remove(tmpPath)
 			return fmt.Errorf("failed to chmod temp file: %w", err)
 		}
@@ -236,7 +237,7 @@ func writeNodeAppsJSON(path string, apps nodeAppsJSON) error {
 		_ = os.Remove(tmpPath)
 		return fmt.Errorf("closing temp file: %w", err)
 	}
-	if err := os.Chmod(tmpPath, 0644); err != nil {
+	if err := os.Chmod(tmpPath, 0o644); err != nil {
 		_ = os.Remove(tmpPath)
 		return fmt.Errorf("chmod temp file: %w", err)
 	}

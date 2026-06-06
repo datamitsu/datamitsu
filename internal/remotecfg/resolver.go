@@ -1,8 +1,9 @@
 package remotecfg
 
 import (
-	"github.com/datamitsu/datamitsu/internal/logger"
 	"fmt"
+
+	"github.com/datamitsu/datamitsu/internal/logger"
 
 	"go.uber.org/zap"
 )

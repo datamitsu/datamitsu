@@ -33,7 +33,7 @@ func IsFile(path string) bool {
 // EnsureDir creates a directory if it doesn't exist
 func EnsureDir(path string) error {
 	if !Exists(path) {
-		return os.MkdirAll(path, 0755)
+		return os.MkdirAll(path, 0o755)
 	}
 	return nil
 }
@@ -102,5 +102,5 @@ func WriteFile(path string, data []byte) error {
 	if err := EnsureDir(dir); err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0644)
+	return os.WriteFile(path, data, 0o644)
 }

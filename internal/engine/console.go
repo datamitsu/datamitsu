@@ -5,9 +5,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/dop251/goja"
 	clr "github.com/datamitsu/datamitsu/internal/color"
 	"github.com/datamitsu/datamitsu/internal/logger"
+	"github.com/dop251/goja"
 	"go.uber.org/zap"
 )
 

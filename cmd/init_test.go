@@ -2,14 +2,15 @@ package cmd
 
 import (
 	"context"
-	"github.com/datamitsu/datamitsu/internal/binmanager"
-	"github.com/datamitsu/datamitsu/internal/config"
-	"github.com/datamitsu/datamitsu/internal/managedconfig"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/managedconfig"
 )
 
 func TestCheckInitGitRoot(t *testing.T) {
@@ -60,7 +61,7 @@ func TestHasAnyLinks(t *testing.T) {
 
 	t.Run("apps without links", func(t *testing.T) {
 		apps := binmanager.MapOfApps{
-			"eslint": {Files: map[string]string{"a.js": "content"}},
+			"eslint":   {Files: map[string]string{"a.js": "content"}},
 			"prettier": {},
 		}
 		if hasAnyLinks(apps, nil) {
@@ -123,10 +124,10 @@ func TestSetupConfigLinks_CreatesSymlinks(t *testing.T) {
 	gitRoot := filepath.Join(tmpDir, "repo")
 	installDir := filepath.Join(tmpDir, "cache", "eslint", "abc123")
 
-	if err := os.MkdirAll(installDir, 0755); err != nil {
+	if err := os.MkdirAll(installDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(installDir, "eslint-base.js"), []byte("module.exports = {};"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(installDir, "eslint-base.js"), []byte("module.exports = {};"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -205,10 +206,10 @@ func TestSetupConfigLinks_BundleLinksAppearInDatamitsu(t *testing.T) {
 	gitRoot := filepath.Join(tmpDir, "repo")
 	bundleDir := filepath.Join(tmpDir, "bundles", "skills", "hash123")
 
-	if err := os.MkdirAll(bundleDir, 0755); err != nil {
+	if err := os.MkdirAll(bundleDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(bundleDir, "agents.md"), []byte("# Agents"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(bundleDir, "agents.md"), []byte("# Agents"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -326,10 +327,10 @@ func TestInitCreatesConfigTypeDefinitions(t *testing.T) {
 		gitRoot := filepath.Join(tmpDir, "repo")
 		installDir := filepath.Join(tmpDir, "cache", "myapp", "abc123")
 
-		if err := os.MkdirAll(installDir, 0755); err != nil {
+		if err := os.MkdirAll(installDir, 0o755); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(installDir, "config.js"), []byte("// config"), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(installDir, "config.js"), []byte("// config"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 
@@ -366,10 +367,10 @@ func TestInitCreatesConfigTypeDefinitions(t *testing.T) {
 		gitRoot := filepath.Join(tmpDir, "repo")
 		installDir := filepath.Join(tmpDir, "cache", "myapp", "abc123")
 
-		if err := os.MkdirAll(installDir, 0755); err != nil {
+		if err := os.MkdirAll(installDir, 0o755); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(installDir, "config.js"), []byte("// config"), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(installDir, "config.js"), []byte("// config"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 
@@ -392,7 +393,7 @@ func TestInitCreatesConfigTypeDefinitions(t *testing.T) {
 
 		// Tamper with the file to simulate stale content
 		dtsPath := filepath.Join(gitRoot, ".datamitsu", "datamitsu.config.d.ts")
-		if err := os.WriteFile(dtsPath, []byte("// stale content"), 0644); err != nil {
+		if err := os.WriteFile(dtsPath, []byte("// stale content"), 0o644); err != nil {
 			t.Fatalf("failed to write stale content: %v", err)
 		}
 

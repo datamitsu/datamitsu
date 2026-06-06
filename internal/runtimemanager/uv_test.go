@@ -1,14 +1,15 @@
 package runtimemanager
 
 import (
-	"github.com/datamitsu/datamitsu/internal/binmanager"
-	"github.com/datamitsu/datamitsu/internal/config"
-	"github.com/datamitsu/datamitsu/internal/env"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/env"
 )
 
 func TestGetUVEnvVars(t *testing.T) {
@@ -364,14 +365,14 @@ func TestInstallUVAppAlreadyInstalled(t *testing.T) {
 	}
 
 	binPath := getUVBinaryPath(appEnvPath, "yamllint")
-	if err := os.MkdirAll(filepath.Dir(binPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(binPath), 0o755); err != nil {
 		t.Fatalf("failed to create dir: %v", err)
 	}
-	if err := os.WriteFile(binPath, []byte("#!/bin/sh\necho ok"), 0755); err != nil {
+	if err := os.WriteFile(binPath, []byte("#!/bin/sh\necho ok"), 0o755); err != nil {
 		t.Fatalf("failed to write fake binary: %v", err)
 	}
 	// A resolvable interpreter makes the venv healthy so the install gate skips.
-	if err := os.WriteFile(getUVInterpreterPath(appEnvPath), []byte("python"), 0755); err != nil {
+	if err := os.WriteFile(getUVInterpreterPath(appEnvPath), []byte("python"), 0o755); err != nil {
 		t.Fatalf("failed to write fake interpreter: %v", err)
 	}
 	defer func() { _ = os.RemoveAll(appEnvPath) }()
@@ -386,13 +387,13 @@ func TestUVVenvHealthy(t *testing.T) {
 	t.Run("healthy: binary and interpreter both resolve", func(t *testing.T) {
 		dir := t.TempDir()
 		binPath := getUVBinaryPath(dir, "yamllint")
-		if err := os.MkdirAll(filepath.Dir(binPath), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(binPath), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(binPath, []byte("#!/bin/sh\n"), 0755); err != nil {
+		if err := os.WriteFile(binPath, []byte("#!/bin/sh\n"), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(getUVInterpreterPath(dir), []byte("python"), 0755); err != nil {
+		if err := os.WriteFile(getUVInterpreterPath(dir), []byte("python"), 0o755); err != nil {
 			t.Fatal(err)
 		}
 		if !uvVenvHealthy(dir, binPath) {
@@ -406,10 +407,10 @@ func TestUVVenvHealthy(t *testing.T) {
 		}
 		dir := t.TempDir()
 		binPath := getUVBinaryPath(dir, "yamllint")
-		if err := os.MkdirAll(filepath.Dir(binPath), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(binPath), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(binPath, []byte("#!/bin/sh\n"), 0755); err != nil {
+		if err := os.WriteFile(binPath, []byte("#!/bin/sh\n"), 0o755); err != nil {
 			t.Fatal(err)
 		}
 		// Symlink pointing at a non-existent interpreter (cache restored onto fresh runner).
@@ -423,10 +424,10 @@ func TestUVVenvHealthy(t *testing.T) {
 
 	t.Run("missing binary is unhealthy even if interpreter resolves", func(t *testing.T) {
 		dir := t.TempDir()
-		if err := os.MkdirAll(filepath.Join(dir, ".venv", "bin"), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Join(dir, ".venv", "bin"), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(getUVInterpreterPath(dir), []byte("python"), 0755); err != nil {
+		if err := os.WriteFile(getUVInterpreterPath(dir), []byte("python"), 0o755); err != nil {
 			t.Fatal(err)
 		}
 		binPath := getUVBinaryPath(dir, "yamllint")
@@ -453,14 +454,14 @@ func TestInstallUVAppHealthyVenvSkips(t *testing.T) {
 	defer func() { _ = os.RemoveAll(appEnvPath) }()
 
 	binPath := getUVBinaryPath(appEnvPath, "yamllint")
-	if err := os.MkdirAll(filepath.Dir(binPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(binPath), 0o755); err != nil {
 		t.Fatalf("failed to create dir: %v", err)
 	}
-	if err := os.WriteFile(binPath, []byte("#!/bin/sh\necho ok"), 0755); err != nil {
+	if err := os.WriteFile(binPath, []byte("#!/bin/sh\necho ok"), 0o755); err != nil {
 		t.Fatalf("failed to write fake binary: %v", err)
 	}
 	// A resolvable interpreter → healthy venv → install must be a no-op (no uv invocation).
-	if err := os.WriteFile(getUVInterpreterPath(appEnvPath), []byte("python"), 0755); err != nil {
+	if err := os.WriteFile(getUVInterpreterPath(appEnvPath), []byte("python"), 0o755); err != nil {
 		t.Fatalf("failed to write fake interpreter: %v", err)
 	}
 
@@ -494,10 +495,10 @@ func TestInstallUVAppDanglingVenvRebuilds(t *testing.T) {
 	defer func() { _ = os.RemoveAll(appEnvPath) }()
 
 	binPath := getUVBinaryPath(appEnvPath, "yamllint")
-	if err := os.MkdirAll(filepath.Dir(binPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(binPath), 0o755); err != nil {
 		t.Fatalf("failed to create dir: %v", err)
 	}
-	if err := os.WriteFile(binPath, []byte("#!/bin/sh\necho ok"), 0755); err != nil {
+	if err := os.WriteFile(binPath, []byte("#!/bin/sh\necho ok"), 0o755); err != nil {
 		t.Fatalf("failed to write fake binary: %v", err)
 	}
 	// Dangling interpreter symlink: the wrapper exists but the venv is broken.

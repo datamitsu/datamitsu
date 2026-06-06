@@ -54,7 +54,7 @@ func TestPullGitHubCommand_FileAlreadyExists(t *testing.T) {
 	path := filepath.Join(dir, "existing.json")
 
 	original := `{"apps":{"test":{"owner":"foo","repo":"bar","tag":"v1.0"}},"binaries":{}}` + "\n"
-	if err := os.WriteFile(path, []byte(original), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -72,4 +72,3 @@ func TestPullGitHubCommand_FileAlreadyExists(t *testing.T) {
 		t.Errorf("expected file to remain unchanged, got %q", string(data))
 	}
 }
-

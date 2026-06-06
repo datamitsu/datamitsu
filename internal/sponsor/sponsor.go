@@ -77,4 +77,3 @@ func (m *Manager) MaybePrint(isJSONOutput bool) {
 
 	_ = saveState(path, state)
 }
-

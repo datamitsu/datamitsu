@@ -2,6 +2,11 @@ package cmd
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/env"
@@ -9,10 +14,6 @@ import (
 	"github.com/datamitsu/datamitsu/internal/project"
 	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 	"github.com/datamitsu/datamitsu/internal/traverser"
-	"fmt"
-	"os"
-	"path/filepath"
-	"sort"
 
 	"github.com/spf13/cobra"
 )
@@ -204,7 +205,6 @@ func downloadBinaries(binMgr *binmanager.BinManager) error {
 	concurrency := env.GetConcurrency()
 
 	stats, err := binMgr.InstallWithConcurrency(initAll, concurrency, initFailOnDownloadErr)
-
 	if err != nil {
 		return err
 	}
@@ -522,7 +522,6 @@ func hasAnyLinks(apps binmanager.MapOfApps, bundles binmanager.MapOfBundles) boo
 	}
 	return false
 }
-
 
 func checkInitGitRoot(cwdPath, rootPath string) error {
 	resolvedCwd, errCwd := filepath.EvalSymlinks(cwdPath)

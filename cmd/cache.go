@@ -1,12 +1,13 @@
 package cmd
 
 import (
-	"github.com/datamitsu/datamitsu/internal/cache"
-	"github.com/datamitsu/datamitsu/internal/env"
-	"github.com/datamitsu/datamitsu/internal/traverser"
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/datamitsu/datamitsu/internal/cache"
+	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/traverser"
 
 	"github.com/spf13/cobra"
 )

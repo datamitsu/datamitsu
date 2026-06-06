@@ -2,17 +2,20 @@ package runtimemanager
 
 import (
 	"bytes"
-	"github.com/datamitsu/datamitsu/internal/constants"
 	"encoding/base64"
 	"fmt"
 	"io"
 	"strings"
 
+	"github.com/datamitsu/datamitsu/internal/constants"
+
 	"github.com/andybalholm/brotli"
 )
 
-const brotliPrefix = "br:"
-const maxDecompressedLockFileSize = constants.MaxInlineArchiveSize
+const (
+	brotliPrefix                = "br:"
+	maxDecompressedLockFileSize = constants.MaxInlineArchiveSize
+)
 
 func CompressLockFile(content string) (string, error) {
 	var buf bytes.Buffer

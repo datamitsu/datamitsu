@@ -159,9 +159,9 @@ func TestDetectViaELFInterpreterNonELF(t *testing.T) {
 
 func TestDetectViaLoaderGlob(t *testing.T) {
 	tests := []struct {
-		name    string
-		globFn  func(string) ([]string, error)
-		want    LibcType
+		name   string
+		globFn func(string) ([]string, error)
+		want   LibcType
 	}{
 		{
 			name: "musl loader found",

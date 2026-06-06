@@ -1,1 +1,53 @@
-version: "2"
+formatters:
+  enable:
+    - gofmt
+    - gofumpt
+    - goimports
+    - swaggo
+linters:
+  enable:
+    - asciicheck
+    - bidichk
+    - bodyclose
+    - durationcheck
+    - errcheck
+    - fatcontext
+    - godoclint
+    - govet
+    - ineffassign
+    - misspell
+    - nakedret
+    - nolintlint
+    - predeclared
+    - reassign
+    - sqlclosecheck
+    - staticcheck
+    - testifylint
+    - tparallel
+    - unconvert
+    - unused
+    - wastedassign
+    # - whitespace
+    # - wrapcheck
+    # - unparam
+    # - usestdlibvars
+    # - perfsprint
+    # - prealloc
+    # - revive
+    # - nestif
+    # - nilerr
+    # - nilnil
+    # - noctx
+    # - intrange
+    # - makezero
+    # - modernize
+    # - gochecknoinits
+    # - gocritic
+    # - gocyclo
+    # - gosec
+    # - errname
+    # - errorlint
+    # - exhaustive
+    # - copyloopvar
+    # - dupl
+version: 2

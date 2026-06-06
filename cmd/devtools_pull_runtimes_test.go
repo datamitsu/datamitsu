@@ -1,16 +1,17 @@
 package cmd
 
 import (
-	"github.com/datamitsu/datamitsu/internal/binmanager"
-	"github.com/datamitsu/datamitsu/internal/github"
-	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
-	"github.com/datamitsu/datamitsu/internal/syslist"
 	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/github"
+	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
+	"github.com/datamitsu/datamitsu/internal/syslist"
 )
 
 func TestDetectRuntimeBinaries_BasicDetection(t *testing.T) {
@@ -227,8 +228,6 @@ func TestDetectRuntimeBinaries_ContentTypeDetection(t *testing.T) {
 	}
 }
 
-
-
 func TestDetectRuntimeBinaries_UVSeparateMuslBinaries(t *testing.T) {
 	// UV has separate gnu and musl tarballs — both should be kept
 	assets := []github.Asset{
@@ -324,8 +323,6 @@ func TestDetectRuntimeBinaries_UVLibcMismatchRejection(t *testing.T) {
 		}
 	}
 }
-
-
 
 func TestDetectJVMBinaries_AlpineLinuxDetectedAsMusl(t *testing.T) {
 	assets := []github.Asset{
@@ -897,7 +894,7 @@ func TestWriteRuntimesJSON_Formatting(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stat failed: %v", err)
 	}
-	if info.Mode().Perm() != 0644 {
+	if info.Mode().Perm() != 0o644 {
 		t.Errorf("file permissions = %o, want 0644", info.Mode().Perm())
 	}
 }
@@ -1087,7 +1084,7 @@ func TestReadRuntimesJSON_MissingFile(t *testing.T) {
 func TestReadRuntimesJSON_InvalidJSON(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "runtimes.json")
-	if err := os.WriteFile(path, []byte("not json"), 0644); err != nil {
+	if err := os.WriteFile(path, []byte("not json"), 0o644); err != nil {
 		t.Fatalf("failed to write test file: %v", err)
 	}
 
@@ -1176,7 +1173,7 @@ func TestReadWriteRuntimesJSON_PreservesGoEntry(t *testing.T) {
     "managed": { "binaries": {} }
   }
 }`
-	if err := os.WriteFile(path, []byte(fixture), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(fixture), 0o644); err != nil {
 		t.Fatalf("seeding fixture: %v", err)
 	}
 
@@ -1437,7 +1434,6 @@ func TestRunPullRuntimes_NodeLookupFailureNonZeroExit(t *testing.T) {
 		t.Error("no file should be written when the pull fails")
 	}
 }
-
 
 // === Integration Tests (Task 10) ===
 

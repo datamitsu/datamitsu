@@ -2,11 +2,6 @@ package cmd
 
 import (
 	"crypto/sha256"
-	"github.com/datamitsu/datamitsu/internal/config"
-	"github.com/datamitsu/datamitsu/internal/engine"
-	"github.com/datamitsu/datamitsu/internal/ldflags"
-	"github.com/datamitsu/datamitsu/internal/logger"
-	"github.com/datamitsu/datamitsu/internal/pnpmdefaults"
 	"encoding/hex"
 	"fmt"
 	"net/http"
@@ -15,6 +10,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/engine"
+	"github.com/datamitsu/datamitsu/internal/ldflags"
+	"github.com/datamitsu/datamitsu/internal/logger"
+	"github.com/datamitsu/datamitsu/internal/pnpmdefaults"
 
 	"github.com/dop251/goja"
 	"github.com/goccy/go-yaml"
@@ -533,7 +534,7 @@ func TestIgnoreRulesMergeWithEmptyPrevious(t *testing.T) {
 func TestDiscoverAutoConfigOnlyTS(t *testing.T) {
 	dir := t.TempDir()
 	tsPath := filepath.Join(dir, ldflags.PackageName+".config.ts")
-	if err := os.WriteFile(tsPath, []byte("// ts config"), 0644); err != nil {
+	if err := os.WriteFile(tsPath, []byte("// ts config"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -549,7 +550,7 @@ func TestDiscoverAutoConfigOnlyTS(t *testing.T) {
 func TestDiscoverAutoConfigOnlyJS(t *testing.T) {
 	dir := t.TempDir()
 	jsPath := filepath.Join(dir, ldflags.PackageName+".config.js")
-	if err := os.WriteFile(jsPath, []byte("// js config"), 0644); err != nil {
+	if err := os.WriteFile(jsPath, []byte("// js config"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -565,7 +566,7 @@ func TestDiscoverAutoConfigOnlyJS(t *testing.T) {
 func TestDiscoverAutoConfigOnlyMJS(t *testing.T) {
 	dir := t.TempDir()
 	mjsPath := filepath.Join(dir, ldflags.PackageName+".config.mjs")
-	if err := os.WriteFile(mjsPath, []byte("// mjs config"), 0644); err != nil {
+	if err := os.WriteFile(mjsPath, []byte("// mjs config"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -580,10 +581,10 @@ func TestDiscoverAutoConfigOnlyMJS(t *testing.T) {
 
 func TestDiscoverAutoConfigBothExist(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, ldflags.PackageName+".config.ts"), []byte("// ts"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, ldflags.PackageName+".config.ts"), []byte("// ts"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, ldflags.PackageName+".config.js"), []byte("// js"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, ldflags.PackageName+".config.js"), []byte("// js"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -865,7 +866,7 @@ func TestBeforeConfigOrdering(t *testing.T) {
 	if err := os.WriteFile(beforePath, []byte(
 		`function getMinVersion() { return "0.0.0"; }
 function getConfig(input) { return { ignoreRules: ["from-before: eslint"] }; }`,
-	), 0644); err != nil {
+	), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -874,7 +875,7 @@ function getConfig(input) { return { ignoreRules: ["from-before: eslint"] }; }`,
 	if err := os.WriteFile(configPath, []byte(
 		`function getMinVersion() { return "0.0.0"; }
 function getConfig(input) { return { ignoreRules: ["from-override: prettier"] }; }`,
-	), 0644); err != nil {
+	), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1029,7 +1030,7 @@ function getRemoteConfigs() {
 function getConfig(input) {
     return { ignoreRules: ["from-local: prettier"] };
 }`, server.URL, remoteHash)
-	if err := os.WriteFile(beforePath, []byte(beforeContent), 0644); err != nil {
+	if err := os.WriteFile(beforePath, []byte(beforeContent), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1088,7 +1089,7 @@ func TestSharedStorageFlowsThroughConfigChain(t *testing.T) {
 function getConfig(input) {
 			return { sharedStorage: { "my-key": "root-value", "other": "data" } };
 		}`,
-	), 0644); err != nil {
+	), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1100,7 +1101,7 @@ function getConfig(input) {
 			ss["child-key"] = "child-value";
 			return { sharedStorage: ss };
 		}`,
-	), 0644); err != nil {
+	), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1535,7 +1536,7 @@ func TestLoadConfigWithLowMinVersion(t *testing.T) {
 	if err := os.WriteFile(configPath, []byte(
 		`function getMinVersion() { return "0.0.0"; }
 function getConfig(input) { return { ignoreRules: ["low-version: eslint"] }; }`,
-	), 0644); err != nil {
+	), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1563,7 +1564,7 @@ func TestLoadConfigWithHighMinVersionFails(t *testing.T) {
 	if err := os.WriteFile(configPath, []byte(
 		`function getMinVersion() { return "99.0.0"; }
 function getConfig(input) { return {}; }`,
-	), 0644); err != nil {
+	), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1587,7 +1588,7 @@ func TestLoadConfigWithDevVersionAlwaysPasses(t *testing.T) {
 	if err := os.WriteFile(configPath, []byte(
 		`function getMinVersion() { return "0.0.0"; }
 function getConfig(input) { return { ignoreRules: ["dev-version: eslint"] }; }`,
-	), 0644); err != nil {
+	), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1609,7 +1610,7 @@ func TestLoadConfigMultiLayerVersionCheck(t *testing.T) {
 	if err := os.WriteFile(beforePath, []byte(
 		`function getMinVersion() { return "0.0.0"; }
 function getConfig(input) { return { ignoreRules: ["from-before: eslint"] }; }`,
-	), 0644); err != nil {
+	), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1618,7 +1619,7 @@ function getConfig(input) { return { ignoreRules: ["from-before: eslint"] }; }`,
 	if err := os.WriteFile(configPath, []byte(
 		`function getMinVersion() { return "0.0.0"; }
 function getConfig(input) { return { ignoreRules: ["from-config: prettier"] }; }`,
-	), 0644); err != nil {
+	), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1653,7 +1654,7 @@ func TestLoadConfigMultiLayerVersionCheckFailsOnSecondLayer(t *testing.T) {
 	if err := os.WriteFile(beforePath, []byte(
 		`function getMinVersion() { return "0.0.0"; }
 function getConfig(input) { return { ignoreRules: ["from-before: eslint"] }; }`,
-	), 0644); err != nil {
+	), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1662,7 +1663,7 @@ function getConfig(input) { return { ignoreRules: ["from-before: eslint"] }; }`,
 	if err := os.WriteFile(configPath, []byte(
 		`function getMinVersion() { return "99.0.0"; }
 function getConfig(input) { return {}; }`,
-	), 0644); err != nil {
+	), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1686,7 +1687,7 @@ func TestLoadConfigVersionCheckShowsConfigFile(t *testing.T) {
 	if err := os.WriteFile(configPath, []byte(
 		`function getMinVersion() { return "99.0.0"; }
 function getConfig(input) { return {}; }`,
-	), 0644); err != nil {
+	), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1821,7 +1822,7 @@ function getConfig(input) {
         }
     };
 }
-`), 0644); err != nil {
+`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1863,7 +1864,7 @@ function getConfig(input) {
         }
     };
 }
-`), 0644); err != nil {
+`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1886,7 +1887,7 @@ function getConfig(input) {
         }
     };
 }
-`), 0644); err != nil {
+`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1924,7 +1925,7 @@ function getConfig(input) {
         }
     };
 }
-`), 0644); err != nil {
+`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1962,7 +1963,7 @@ func TestLoadConfigUnstableVersionBypassesHighMinVersion(t *testing.T) {
 	if err := os.WriteFile(configPath, []byte(
 		`function getMinVersion() { return "99.0.0"; }
 function getConfig(input) { return { ignoreRules: ["unstable-bypass: eslint"] }; }`,
-	), 0644); err != nil {
+	), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -2014,7 +2015,7 @@ func TestLoadConfigStableVersionStillFailsHighMinVersion(t *testing.T) {
 	if err := os.WriteFile(configPath, []byte(
 		`function getMinVersion() { return "99.0.0"; }
 function getConfig(input) { return {}; }`,
-	), 0644); err != nil {
+	), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

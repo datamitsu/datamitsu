@@ -1,10 +1,11 @@
 package cmd
 
 import (
-	"github.com/datamitsu/datamitsu/internal/binmanager"
-	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 	"fmt"
 	"sort"
+
+	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"

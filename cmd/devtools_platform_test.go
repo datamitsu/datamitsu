@@ -1,11 +1,12 @@
 package cmd
 
 import (
+	"testing"
+
 	"github.com/datamitsu/datamitsu/internal/appstate"
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/github"
 	"github.com/datamitsu/datamitsu/internal/syslist"
-	"testing"
 )
 
 // valid 64-char hex hashes for test assets

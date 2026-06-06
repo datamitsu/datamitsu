@@ -2,10 +2,11 @@ package engine
 
 import (
 	"context"
-	"github.com/datamitsu/datamitsu/internal/facts"
 	"fmt"
 	"os"
 	"time"
+
+	"github.com/datamitsu/datamitsu/internal/facts"
 
 	"github.com/dop251/goja"
 )

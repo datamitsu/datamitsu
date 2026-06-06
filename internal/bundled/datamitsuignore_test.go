@@ -1,11 +1,12 @@
 package bundled
 
 import (
-	"github.com/datamitsu/datamitsu/internal/config"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/config"
 )
 
 func writeTestFile(t *testing.T, path, content string) {

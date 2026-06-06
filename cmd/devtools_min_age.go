@@ -1,8 +1,9 @@
 package cmd
 
 import (
-	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"fmt"
+
+	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 
 	"github.com/spf13/cobra"
 )

@@ -281,10 +281,10 @@ func TestMaybePrint_CorruptStateRecovers(t *testing.T) {
 
 	// Write corrupt state
 	path := statePath(cacheDir)
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, []byte("not json"), 0644); err != nil {
+	if err := os.WriteFile(path, []byte("not json"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -296,7 +296,6 @@ func TestMaybePrint_CorruptStateRecovers(t *testing.T) {
 		t.Errorf("SuccessfulRuns = %d, want 1 (should recover from corrupt state)", state.SuccessfulRuns)
 	}
 }
-
 
 func TestPrintMessage(t *testing.T) {
 	now := time.Date(2026, 4, 5, 12, 0, 0, 0, time.UTC)

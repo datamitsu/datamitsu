@@ -87,17 +87,17 @@ func NewCache(
 ) (*Cache, error) {
 	// Create projects subdirectory
 	projectsDir := filepath.Join(cacheDir, "projects")
-	if err := os.MkdirAll(projectsDir, 0755); err != nil {
+	if err := os.MkdirAll(projectsDir, 0o755); err != nil {
 		return nil, fmt.Errorf("failed to create projects cache directory: %w", err)
 	}
 
 	// Hash the project path to get cache directory name
 	projectHash := env.HashProjectPath(projectPath)
 	projectDir := filepath.Join(projectsDir, projectHash)
-	if err := os.MkdirAll(projectDir, 0755); err != nil {
+	if err := os.MkdirAll(projectDir, 0o755); err != nil {
 		return nil, fmt.Errorf("failed to create project cache directory: %w", err)
 	}
-	if err := os.MkdirAll(filepath.Join(projectDir, "cache"), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(projectDir, "cache"), 0o755); err != nil {
 		return nil, fmt.Errorf("failed to create project tool cache directory: %w", err)
 	}
 	cachePath := filepath.Join(projectDir, cacheFileName)
@@ -205,7 +205,7 @@ func (c *Cache) Save() error {
 	}
 
 	// Ensure directory exists
-	if err := os.MkdirAll(filepath.Dir(c.path), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(c.path), 0o755); err != nil {
 		c.mu.RUnlock()
 		return fmt.Errorf("failed to create cache directory: %w", err)
 	}
@@ -540,7 +540,6 @@ func hashFile(path string) (string, error) {
 
 	return hashutil.XXH3Reader(f)
 }
-
 
 func pathEqualFold(a, b string) bool {
 	return strings.EqualFold(a, b)

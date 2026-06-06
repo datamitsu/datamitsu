@@ -4,7 +4,7 @@ import "fmt"
 
 // DiagnosticInfo captures the full resolution chain for debugging and user feedback.
 type DiagnosticInfo struct {
-	HostTarget     Target
+	HostTarget      Target
 	RequestedTarget Target
 	ResolvedTarget  ResolvedTarget
 	CachePath       string

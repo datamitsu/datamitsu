@@ -1,11 +1,12 @@
 package cmd
 
 import (
+	"encoding/json"
+	"fmt"
+
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
-	"encoding/json"
-	"fmt"
 
 	"github.com/spf13/cobra"
 )

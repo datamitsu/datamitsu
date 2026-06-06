@@ -4,10 +4,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"github.com/datamitsu/datamitsu/internal/httpx"
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/datamitsu/datamitsu/internal/httpx"
 )
 
 const maxConfigSize = 10 * 1024 * 1024 // 10 MiB

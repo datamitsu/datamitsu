@@ -30,7 +30,7 @@ func downloadFileInternal(ctx context.Context, url string, destDir string, name 
 		log.Debug("downloading file", zap.String("url", url))
 	}
 
-	if err := os.MkdirAll(destDir, 0755); err != nil {
+	if err := os.MkdirAll(destDir, 0o755); err != nil {
 		return "", fmt.Errorf("failed to create temp directory: %w", err)
 	}
 
@@ -84,7 +84,7 @@ func downloadFileInternal(ctx context.Context, url string, destDir string, name 
 	// exactly MaxBinarySize (written == MaxBinarySize, allowed) from one that
 	// exceeds it (written > MaxBinarySize, rejected).
 	limitedReader := io.LimitReader(resp.Body, MaxBinarySize+1)
-	var reader = limitedReader
+	reader := limitedReader
 	if progress != nil {
 		bar := progress.AddBar(resp.ContentLength,
 			mpb.PrependDecorators(
@@ -161,7 +161,7 @@ func downloadAndVerifyWithProgress(ctx context.Context, url string, expectedHash
 
 func moveFile(src, dst string) error {
 	dstDir := filepath.Dir(dst)
-	if err := os.MkdirAll(dstDir, 0755); err != nil {
+	if err := os.MkdirAll(dstDir, 0o755); err != nil {
 		return fmt.Errorf("failed to create destination directory: %w", err)
 	}
 
@@ -174,7 +174,7 @@ func moveFile(src, dst string) error {
 		return nil
 	}
 
-	if err := os.Chmod(src, 0755); err != nil {
+	if err := os.Chmod(src, 0o755); err != nil {
 		return fmt.Errorf("failed to set executable permissions: %w", err)
 	}
 
@@ -198,7 +198,7 @@ func moveFile(src, dst string) error {
 
 func moveDir(src, dst string) error {
 	dstDir := filepath.Dir(dst)
-	if err := os.MkdirAll(dstDir, 0755); err != nil {
+	if err := os.MkdirAll(dstDir, 0o755); err != nil {
 		return fmt.Errorf("failed to create destination parent directory: %w", err)
 	}
 
@@ -264,7 +264,7 @@ func copyDirAtomic(src, dst string) error {
 }
 
 func copyDir(src, dst string) error {
-	if err := os.MkdirAll(dst, 0755); err != nil {
+	if err := os.MkdirAll(dst, 0o755); err != nil {
 		return err
 	}
 	entries, err := os.ReadDir(src)
@@ -348,7 +348,7 @@ func copyFileAtomic(src, dst string) (retErr error) {
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	if err := os.Chmod(tmpName, 0755); err != nil {
+	if err := os.Chmod(tmpName, 0o755); err != nil {
 		return err
 	}
 	return os.Rename(tmpName, dst)

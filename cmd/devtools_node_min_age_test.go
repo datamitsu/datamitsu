@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"github.com/datamitsu/datamitsu/internal/registry"
-	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +8,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/datamitsu/datamitsu/internal/registry"
+	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 )
 
 func TestPullNodeCmd_HasMinAgeFlag(t *testing.T) {

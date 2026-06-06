@@ -1,17 +1,18 @@
 package cmd
 
 import (
+	"encoding/hex"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
 	"github.com/datamitsu/datamitsu/internal/appstate"
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/detector"
 	"github.com/datamitsu/datamitsu/internal/github"
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"github.com/datamitsu/datamitsu/internal/syslist"
-	"encoding/hex"
-	"fmt"
-	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -78,7 +79,7 @@ func ensureGitHubAppsJSONExists(path string) error {
 			_ = os.Remove(tmpPath)
 			return fmt.Errorf("failed to close temp file: %w", err)
 		}
-		if err := os.Chmod(tmpPath, 0644); err != nil {
+		if err := os.Chmod(tmpPath, 0o644); err != nil {
 			_ = os.Remove(tmpPath)
 			return fmt.Errorf("failed to chmod temp file: %w", err)
 		}

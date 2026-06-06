@@ -1,10 +1,11 @@
 package cmd
 
 import (
-	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 )
 
 func TestPullRuntimesCmd_HasMinAgeFlag(t *testing.T) {

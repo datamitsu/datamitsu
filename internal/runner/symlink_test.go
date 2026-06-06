@@ -14,10 +14,10 @@ func TestFilterSymlinkPaths(t *testing.T) {
 		regular2 := filepath.Join(dir, "file2.go")
 		symlink1 := filepath.Join(dir, "link1.go")
 
-		if err := os.WriteFile(regular1, []byte("package main"), 0644); err != nil {
+		if err := os.WriteFile(regular1, []byte("package main"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(regular2, []byte("package main"), 0644); err != nil {
+		if err := os.WriteFile(regular2, []byte("package main"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 		if err := os.Symlink(regular1, symlink1); err != nil {
@@ -70,7 +70,7 @@ func TestFilterSymlinkPaths(t *testing.T) {
 		dir := t.TempDir()
 
 		target := filepath.Join(dir, "target.go")
-		if err := os.WriteFile(target, []byte("package main"), 0644); err != nil {
+		if err := os.WriteFile(target, []byte("package main"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 
@@ -94,10 +94,10 @@ func TestFilterSymlinkPaths(t *testing.T) {
 
 		file1 := filepath.Join(dir, "file1.go")
 		file2 := filepath.Join(dir, "file2.go")
-		if err := os.WriteFile(file1, []byte("a"), 0644); err != nil {
+		if err := os.WriteFile(file1, []byte("a"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(file2, []byte("b"), 0644); err != nil {
+		if err := os.WriteFile(file2, []byte("b"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 

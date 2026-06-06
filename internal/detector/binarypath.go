@@ -1,9 +1,10 @@
 package detector
 
 import (
+	"strings"
+
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/syslist"
-	"strings"
 )
 
 // DetectBinaryPath attempts to determine the binary path within an archive
@@ -38,9 +39,9 @@ func DetectBinaryPathWithHistory(
 func detectBinaryPathHeuristic(appName string, filename string, osType syslist.OsType) *string {
 	// Common patterns to try (in order of likelihood)
 	patterns := []string{
-		appName,                    // Direct: "appName"
-		"bin/" + appName,           // In bin directory: "bin/appName"
-		appName + "/" + appName,    // Nested: "appName/appName"
+		appName,                 // Direct: "appName"
+		"bin/" + appName,        // In bin directory: "bin/appName"
+		appName + "/" + appName, // Nested: "appName/appName"
 	}
 
 	// Add .exe extension for Windows
@@ -55,8 +56,8 @@ func detectBinaryPathHeuristic(appName string, filename string, osType syslist.O
 	// Try to extract version from filename and add version-based patterns
 	if version := extractVersion(filename); version != "" {
 		versionedPatterns := []string{
-			appName + "-" + version + "/" + appName,  // "appName-v1.2.3/appName"
-			appName + "_" + version + "/" + appName,  // "appName_v1.2.3/appName"
+			appName + "-" + version + "/" + appName, // "appName-v1.2.3/appName"
+			appName + "_" + version + "/" + appName, // "appName_v1.2.3/appName"
 		}
 		if osType == syslist.OsTypeWindows {
 			for i := range versionedPatterns {

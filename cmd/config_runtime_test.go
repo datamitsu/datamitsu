@@ -1,10 +1,11 @@
 package cmd
 
 import (
-	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"bytes"
 	"encoding/json"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 )
 
 // TestConfigRuntimeCmd_ValidJSONWithRequiredKeys runs the command and asserts

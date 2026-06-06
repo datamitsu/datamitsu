@@ -10,7 +10,7 @@ func TestExists(t *testing.T) {
 	t.Run("file exists", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		filePath := filepath.Join(tmpDir, "testfile")
-		_ = os.WriteFile(filePath, []byte("test"), 0644)
+		_ = os.WriteFile(filePath, []byte("test"), 0o644)
 
 		if !Exists(filePath) {
 			t.Error("Exists() returned false for existing file")
@@ -20,7 +20,7 @@ func TestExists(t *testing.T) {
 	t.Run("directory exists", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		dirPath := filepath.Join(tmpDir, "testdir")
-		_ = os.Mkdir(dirPath, 0755)
+		_ = os.Mkdir(dirPath, 0o755)
 
 		if !Exists(dirPath) {
 			t.Error("Exists() returned false for existing directory")
@@ -49,7 +49,7 @@ func TestIsDir(t *testing.T) {
 	t.Run("is file", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		filePath := filepath.Join(tmpDir, "testfile")
-		_ = os.WriteFile(filePath, []byte("test"), 0644)
+		_ = os.WriteFile(filePath, []byte("test"), 0o644)
 
 		if IsDir(filePath) {
 			t.Error("IsDir() returned true for file")
@@ -70,7 +70,7 @@ func TestIsFile(t *testing.T) {
 	t.Run("is file", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		filePath := filepath.Join(tmpDir, "testfile")
-		_ = os.WriteFile(filePath, []byte("test"), 0644)
+		_ = os.WriteFile(filePath, []byte("test"), 0o644)
 
 		if !IsFile(filePath) {
 			t.Error("IsFile() returned false for file")
@@ -194,7 +194,7 @@ func TestReadFileIfExists(t *testing.T) {
 		tmpDir := t.TempDir()
 		filePath := filepath.Join(tmpDir, "testfile")
 		testContent := []byte("test content")
-		_ = os.WriteFile(filePath, testContent, 0644)
+		_ = os.WriteFile(filePath, testContent, 0o644)
 
 		content, err := ReadFileIfExists(filePath)
 		if err != nil {
@@ -226,7 +226,7 @@ func TestRenameReplace(t *testing.T) {
 		tmpDir := t.TempDir()
 		src := filepath.Join(tmpDir, "src")
 		dst := filepath.Join(tmpDir, "dst")
-		_ = os.WriteFile(src, []byte("content"), 0644)
+		_ = os.WriteFile(src, []byte("content"), 0o644)
 
 		err := RenameReplace(src, dst)
 		if err != nil {
@@ -249,8 +249,8 @@ func TestRenameReplace(t *testing.T) {
 		tmpDir := t.TempDir()
 		src := filepath.Join(tmpDir, "src")
 		dst := filepath.Join(tmpDir, "dst")
-		_ = os.WriteFile(dst, []byte("old"), 0644)
-		_ = os.WriteFile(src, []byte("new"), 0644)
+		_ = os.WriteFile(dst, []byte("old"), 0o644)
+		_ = os.WriteFile(src, []byte("new"), 0o644)
 
 		err := RenameReplace(src, dst)
 		if err != nil {
@@ -311,7 +311,7 @@ func TestWriteFile(t *testing.T) {
 		tmpDir := t.TempDir()
 		filePath := filepath.Join(tmpDir, "testfile")
 
-		_ = os.WriteFile(filePath, []byte("old content"), 0644)
+		_ = os.WriteFile(filePath, []byte("old content"), 0o644)
 
 		newContent := []byte("new content")
 		err := WriteFile(filePath, newContent)

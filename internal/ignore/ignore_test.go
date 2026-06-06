@@ -1,8 +1,9 @@
 package ignore
 
 import (
-	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/ldflags"
 )
 
 func TestBuildGroups(t *testing.T) {

@@ -1,10 +1,11 @@
 package detector
 
 import (
+	"sort"
+
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/github"
 	"github.com/datamitsu/datamitsu/internal/syslist"
-	"sort"
 )
 
 // AssetScore holds the breakdown of an asset's score

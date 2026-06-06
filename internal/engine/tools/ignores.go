@@ -1,10 +1,11 @@
 package tools
 
 import (
-	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/datamitsu/datamitsu/internal/ldflags"
 
 	"github.com/dop251/goja"
 )

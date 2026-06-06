@@ -58,4 +58,3 @@ func filterLatestStablePython(releases []pythonRelease) string {
 	}
 	return ""
 }
-

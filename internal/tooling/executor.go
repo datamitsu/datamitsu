@@ -3,12 +3,6 @@ package tooling
 import (
 	"bytes"
 	"context"
-	"github.com/datamitsu/datamitsu/internal/binmanager"
-	"github.com/datamitsu/datamitsu/internal/cache"
-	clr "github.com/datamitsu/datamitsu/internal/color"
-	"github.com/datamitsu/datamitsu/internal/config"
-	"github.com/datamitsu/datamitsu/internal/env"
-	"github.com/datamitsu/datamitsu/internal/logger"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -18,6 +12,13 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/cache"
+	clr "github.com/datamitsu/datamitsu/internal/color"
+	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/logger"
 
 	"go.uber.org/zap"
 )
@@ -32,11 +33,11 @@ type Executor struct {
 	rootPath             string
 	dryRun               bool
 	failFast             bool
-	appManager           AppManager             // Interface to get binary paths
-	resultCallback       ResultCallback         // Optional callback for real-time results
-	taskStartCallback    TaskStartCallback      // Optional callback when task starts
-	fileProgressCallback FileProgressCallback   // Optional callback for per-file progress
-	cache                *cache.Cache           // Cache for storing execution results
+	appManager           AppManager           // Interface to get binary paths
+	resultCallback       ResultCallback       // Optional callback for real-time results
+	taskStartCallback    TaskStartCallback    // Optional callback when task starts
+	fileProgressCallback FileProgressCallback // Optional callback for per-file progress
+	cache                *cache.Cache         // Cache for storing execution results
 }
 
 // AppManager interface for getting application command information
@@ -326,9 +327,9 @@ func (e *Executor) executeTasksParallel(ctx context.Context, tasks []Task, cance
 				log.Debug("parallel task skipped due to cancellation",
 					zap.Int("index", idx), zap.String("toolName", t.ToolName))
 				results[idx] = ExecutionResult{
-					ToolName:  t.ToolName,
-					Success:   false,
-					Error:     errCancelled,
+					ToolName:      t.ToolName,
+					Success:       false,
+					Error:         errCancelled,
 					Cancelled:     true,
 					FailureReason: FailureReasonCancelled,
 				}
@@ -343,9 +344,9 @@ func (e *Executor) executeTasksParallel(ctx context.Context, tasks []Task, cance
 				log.Debug("parallel task skipped after semaphore due to cancellation",
 					zap.Int("index", idx), zap.String("toolName", t.ToolName))
 				results[idx] = ExecutionResult{
-					ToolName:  t.ToolName,
-					Success:   false,
-					Error:     errCancelled,
+					ToolName:      t.ToolName,
+					Success:       false,
+					Error:         errCancelled,
 					Cancelled:     true,
 					FailureReason: FailureReasonCancelled,
 				}
@@ -929,9 +930,9 @@ func (e *Executor) executeBatchChunksParallel(ctx context.Context, task Task, cm
 			case <-ctx.Done():
 				log.Debug("chunk execution skipped due to cancellation", zap.Int("chunkIndex", idx))
 				chunkResults[idx] = ExecutionResult{
-					ToolName:  task.ToolName,
-					Success:   false,
-					Error:     errCancelled,
+					ToolName:      task.ToolName,
+					Success:       false,
+					Error:         errCancelled,
 					Cancelled:     true,
 					FailureReason: FailureReasonCancelled,
 				}
@@ -948,9 +949,9 @@ func (e *Executor) executeBatchChunksParallel(ctx context.Context, task Task, cm
 			if ctx.Err() != nil {
 				log.Debug("chunk execution skipped after semaphore due to cancellation", zap.Int("chunkIndex", idx))
 				chunkResults[idx] = ExecutionResult{
-					ToolName:  task.ToolName,
-					Success:   false,
-					Error:     errCancelled,
+					ToolName:      task.ToolName,
+					Success:       false,
+					Error:         errCancelled,
 					Cancelled:     true,
 					FailureReason: FailureReasonCancelled,
 				}
@@ -1209,4 +1210,3 @@ func (e *Executor) runCommandWithOutput(cmd *exec.Cmd) ([]byte, error) {
 	err := cmd.Wait()
 	return combined.Bytes(), err
 }
-

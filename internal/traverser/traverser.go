@@ -2,6 +2,7 @@ package traverser
 
 import (
 	"context"
+
 	"github.com/datamitsu/datamitsu/internal/logger"
 
 	"go.uber.org/zap"
@@ -40,7 +41,6 @@ func New(ctx context.Context, cwd string) (MonorepoTraverser, error) {
 }
 
 func (t *MonorepoTraverser) Walk(ctx context.Context) error {
-
 	// err := fastwalk.Walk(&conf, t.cwdPath, func(path string, d os.DirEntry, err error) error {
 	// 	log := t.log.With(zap.Namespace("walk"))
 

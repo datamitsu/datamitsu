@@ -1,12 +1,13 @@
 package cmd
 
 import (
+	"fmt"
+	"os"
+
 	clr "github.com/datamitsu/datamitsu/internal/color"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"github.com/datamitsu/datamitsu/internal/sponsor"
-	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 )

@@ -690,7 +690,7 @@ func TestGetLatestReleaseWithMinAge(t *testing.T) {
 
 	iso := func(t time.Time) string { return t.UTC().Format(time.RFC3339) }
 	now := time.Now()
-	old := iso(now.Add(-48 * time.Hour))   // 2 days old
+	old := iso(now.Add(-48 * time.Hour))    // 2 days old
 	fresh := iso(now.Add(-1 * time.Minute)) // very fresh
 
 	t.Run("selects older release when latest is too fresh", func(t *testing.T) {

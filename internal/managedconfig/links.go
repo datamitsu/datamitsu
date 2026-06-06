@@ -1,13 +1,14 @@
 package managedconfig
 
 import (
-	"github.com/datamitsu/datamitsu/internal/binmanager"
-	"github.com/datamitsu/datamitsu/internal/config"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/config"
 )
 
 // InstallRootResolver resolves install root paths for apps.
@@ -164,7 +165,7 @@ func CreateDatamitsuLinks(gitRoot string, apps binmanager.MapOfApps, resolver In
 
 	datamitsuDir := filepath.Join(gitRoot, ".datamitsu")
 
-	if err := os.MkdirAll(gitRoot, 0755); err != nil {
+	if err := os.MkdirAll(gitRoot, 0o755); err != nil {
 		return nil, fmt.Errorf("failed to create git root directory: %w", err)
 	}
 
@@ -210,7 +211,7 @@ func CreateDatamitsuLinks(gitRoot string, apps binmanager.MapOfApps, resolver In
 		}
 		linkPath := filepath.Join(tmpDir, cleanedLinkName)
 
-		if err := os.MkdirAll(filepath.Dir(linkPath), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(linkPath), 0o755); err != nil {
 			return nil, fmt.Errorf("failed to create parent directory for link %s: %w", e.linkName, err)
 		}
 
@@ -280,7 +281,7 @@ func CreateDatamitsuTypeDefinitions(gitRoot string, dryRun bool) error {
 
 	datamitsuDir := filepath.Join(gitRoot, ".datamitsu")
 
-	if err := os.MkdirAll(gitRoot, 0755); err != nil {
+	if err := os.MkdirAll(gitRoot, 0o755); err != nil {
 		return fmt.Errorf("failed to create git root directory: %w", err)
 	}
 
@@ -325,7 +326,7 @@ func CreateDatamitsuTypeDefinitions(gitRoot string, dryRun bool) error {
 }
 
 func createDatamitsuGitignore(dir string) error {
-	return os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("*\n"), 0644)
+	return os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("*\n"), 0o644)
 }
 
 // writeTypeDefinitions writes the embedded TypeScript type definitions
@@ -333,5 +334,5 @@ func createDatamitsuGitignore(dir string) error {
 // when editing datamitsu configuration files.
 func writeTypeDefinitions(dir string) error {
 	content := config.GetDefaultConfigDTS()
-	return os.WriteFile(filepath.Join(dir, "datamitsu.config.d.ts"), []byte(content), 0644)
+	return os.WriteFile(filepath.Join(dir, "datamitsu.config.d.ts"), []byte(content), 0o644)
 }

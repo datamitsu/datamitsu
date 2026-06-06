@@ -1,10 +1,11 @@
 package ignore
 
 import (
-	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/datamitsu/datamitsu/internal/ldflags"
 )
 
 const (

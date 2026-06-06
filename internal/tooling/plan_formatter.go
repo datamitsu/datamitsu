@@ -1,12 +1,13 @@
 package tooling
 
 import (
-	"github.com/datamitsu/datamitsu/internal/config"
-	"github.com/datamitsu/datamitsu/internal/env"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
+
+	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/env"
 )
 
 // PlanFormatter defines interface for formatting execution plans

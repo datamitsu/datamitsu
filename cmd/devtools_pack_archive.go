@@ -3,8 +3,6 @@ package cmd
 import (
 	"archive/tar"
 	"bytes"
-	"github.com/datamitsu/datamitsu/internal/binmanager"
-	"github.com/datamitsu/datamitsu/internal/constants"
 	"fmt"
 	"io"
 	"os"
@@ -12,6 +10,9 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/constants"
 
 	"github.com/spf13/cobra"
 )
@@ -128,7 +129,6 @@ func collectFiles(dirPath string) ([]fileEntry, error) {
 
 		return nil
 	})
-
 	if err != nil {
 		return nil, err
 	}

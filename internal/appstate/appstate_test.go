@@ -36,7 +36,7 @@ func TestLoad(t *testing.T) {
 			t.Fatalf("failed to marshal test state: %v", err)
 		}
 
-		if err := os.WriteFile(path, data, 0644); err != nil {
+		if err := os.WriteFile(path, data, 0o644); err != nil {
 			t.Fatalf("failed to write test file: %v", err)
 		}
 
@@ -58,7 +58,7 @@ func TestLoad(t *testing.T) {
 		tmpDir := t.TempDir()
 		path := filepath.Join(tmpDir, "invalid.json")
 
-		if err := os.WriteFile(path, []byte("{invalid json}"), 0644); err != nil {
+		if err := os.WriteFile(path, []byte("{invalid json}"), 0o644); err != nil {
 			t.Fatalf("failed to write test file: %v", err)
 		}
 
@@ -82,7 +82,7 @@ func TestLoad(t *testing.T) {
 		tmpDir := t.TempDir()
 		path := filepath.Join(tmpDir, "empty.json")
 
-		if err := os.WriteFile(path, []byte(""), 0644); err != nil {
+		if err := os.WriteFile(path, []byte(""), 0o644); err != nil {
 			t.Fatalf("failed to write test file: %v", err)
 		}
 
@@ -96,7 +96,7 @@ func TestLoad(t *testing.T) {
 		tmpDir := t.TempDir()
 		path := filepath.Join(tmpDir, "empty-maps.json")
 
-		if err := os.WriteFile(path, []byte("{}"), 0644); err != nil {
+		if err := os.WriteFile(path, []byte("{}"), 0o644); err != nil {
 			t.Fatalf("failed to write test file: %v", err)
 		}
 
@@ -420,7 +420,7 @@ func TestBinariesEntryDescription(t *testing.T) {
   }
 }
 `
-		if err := os.WriteFile(path, []byte(oldJSON), 0644); err != nil {
+		if err := os.WriteFile(path, []byte(oldJSON), 0o644); err != nil {
 			t.Fatalf("failed to write test file: %v", err)
 		}
 
@@ -495,4 +495,3 @@ func TestComputeConfigHash(t *testing.T) {
 		}
 	})
 }
-

@@ -2,16 +2,17 @@ package facts
 
 import (
 	"context"
-	"github.com/datamitsu/datamitsu/internal/env"
-	"github.com/datamitsu/datamitsu/internal/ldflags"
-	"github.com/datamitsu/datamitsu/internal/target"
-	"github.com/datamitsu/datamitsu/internal/traverser"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/ldflags"
+	"github.com/datamitsu/datamitsu/internal/target"
+	"github.com/datamitsu/datamitsu/internal/traverser"
 
 	"golang.org/x/sync/errgroup"
 )

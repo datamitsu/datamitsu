@@ -38,7 +38,7 @@ func loadState(path string) (*State, error) {
 
 func saveState(path string, state *State) error {
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("failed to create sponsor state directory: %w", err)
 	}
 

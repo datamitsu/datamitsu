@@ -799,7 +799,7 @@ func TestGetCommandInfo_NodeApp_DelegatesToRuntimeManager(t *testing.T) {
 				PackageName: "@mermaid-js/mermaid-cli",
 				Version:     "11.12.0",
 
-				BinPath:     "node_modules/.bin/mmdc",
+				BinPath: "node_modules/.bin/mmdc",
 			},
 		},
 	}, nil, mock)
@@ -820,7 +820,7 @@ func TestGetCommandInfo_NodeApp_NoRuntimeManager(t *testing.T) {
 				PackageName: "@mermaid-js/mermaid-cli",
 				Version:     "11.12.0",
 
-				BinPath:     "node_modules/.bin/mmdc",
+				BinPath: "node_modules/.bin/mmdc",
 			},
 		},
 	}, nil, nil)
@@ -982,8 +982,8 @@ func TestAppConfigNode_JSONRoundTrip(t *testing.T) {
 	original := App{
 		Required: true,
 		Node: &AppConfigNode{
-			PackageName:  "@mermaid-js/mermaid-cli",
-			Version:      "11.12.0",
+			PackageName: "@mermaid-js/mermaid-cli",
+			Version:     "11.12.0",
 
 			BinPath:      "node_modules/.bin/mmdc",
 			Runtime:      "node",
@@ -1025,7 +1025,7 @@ func TestAppConfigNode_JSONOmitsEmpty(t *testing.T) {
 			PackageName: "eslint",
 			Version:     "9.0.0",
 
-			BinPath:     "node_modules/.bin/eslint",
+			BinPath: "node_modules/.bin/eslint",
 		},
 	}
 
@@ -1060,11 +1060,11 @@ func TestApp_FilesAndLinks_JSONRoundTrip(t *testing.T) {
 			PackageName: "eslint",
 			Version:     "9.0.0",
 
-			BinPath:     "node_modules/.bin/eslint",
+			BinPath: "node_modules/.bin/eslint",
 		},
 		Files: map[string]string{
-			"eslint-base.js":    "module.exports = { rules: {} };",
-			"prettier-base.js":  "module.exports = {};",
+			"eslint-base.js":   "module.exports = { rules: {} };",
+			"prettier-base.js": "module.exports = {};",
 		},
 		Links: map[string]string{
 			"eslint-base.js":   "eslint-base.js",
@@ -1109,7 +1109,7 @@ func TestApp_FilesAndLinks_OmittedWhenEmpty(t *testing.T) {
 			PackageName: "eslint",
 			Version:     "9.0.0",
 
-			BinPath:     "node_modules/.bin/eslint",
+			BinPath: "node_modules/.bin/eslint",
 		},
 	}
 
@@ -1137,7 +1137,7 @@ func TestApp_FilesWithoutLinks_JSONRoundTrip(t *testing.T) {
 			PackageName: "eslint",
 			Version:     "9.0.0",
 
-			BinPath:     "node_modules/.bin/eslint",
+			BinPath: "node_modules/.bin/eslint",
 		},
 		Files: map[string]string{
 			"config.js": "module.exports = {};",
@@ -1168,8 +1168,8 @@ func TestAppConfigNode_LockFile_JSONRoundTrip(t *testing.T) {
 			PackageName: "eslint",
 			Version:     "9.0.0",
 
-			BinPath:     "node_modules/.bin/eslint",
-			LockFile:    "lockfileVersion: '9.0'\npackages:\n  eslint@9.0.0:\n    resolution: {integrity: sha512-abc}",
+			BinPath:  "node_modules/.bin/eslint",
+			LockFile: "lockfileVersion: '9.0'\npackages:\n  eslint@9.0.0:\n    resolution: {integrity: sha512-abc}",
 		},
 	}
 
@@ -1218,7 +1218,7 @@ func TestAppConfigLockFile_OmittedWhenEmpty(t *testing.T) {
 			PackageName: "eslint",
 			Version:     "9.0.0",
 
-			BinPath:     "node_modules/.bin/eslint",
+			BinPath: "node_modules/.bin/eslint",
 		},
 		Uv: &AppConfigUV{
 			PackageName: "yamllint",
@@ -1726,7 +1726,7 @@ func TestGetInstallRoot_Exists(t *testing.T) {
 	}, nil, nil)
 
 	expectedPath, _ := bm.ComputeInstallPath("testbin")
-	if err := os.MkdirAll(expectedPath, 0755); err != nil {
+	if err := os.MkdirAll(expectedPath, 0o755); err != nil {
 		t.Fatalf("failed to create dir: %v", err)
 	}
 
@@ -1910,8 +1910,8 @@ func TestWriteAppFiles_Basic(t *testing.T) {
 	installPath := fmt.Sprintf("%s/app-install", tmpDir)
 
 	files := map[string]string{
-		"config.js":  "module.exports = { rules: {} };",
-		"base.json":  `{"extends": "recommended"}`,
+		"config.js": "module.exports = { rules: {} };",
+		"base.json": `{"extends": "recommended"}`,
 	}
 
 	err := WriteAppFiles(installPath, files, nil)
@@ -1947,12 +1947,12 @@ func TestWriteAppFiles_EmptyMap(t *testing.T) {
 func TestWriteAppFiles_OverwritesExisting(t *testing.T) {
 	tmpDir := t.TempDir()
 	installPath := fmt.Sprintf("%s/app-install", tmpDir)
-	if err := os.MkdirAll(installPath, 0755); err != nil {
+	if err := os.MkdirAll(installPath, 0o755); err != nil {
 		t.Fatalf("failed to create dir: %v", err)
 	}
 
 	filePath := fmt.Sprintf("%s/config.js", installPath)
-	if err := os.WriteFile(filePath, []byte("old content"), 0644); err != nil {
+	if err := os.WriteFile(filePath, []byte("old content"), 0o644); err != nil {
 		t.Fatalf("failed to write initial file: %v", err)
 	}
 
@@ -2272,7 +2272,7 @@ func createTestTarData(t *testing.T, files map[string]string) []byte {
 	for name, content := range files {
 		hdr := &tar.Header{
 			Name: name,
-			Mode: 0644,
+			Mode: 0o644,
 			Size: int64(len(content)),
 		}
 		if err := tw.WriteHeader(hdr); err != nil {

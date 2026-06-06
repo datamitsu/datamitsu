@@ -2,10 +2,11 @@ package project
 
 import (
 	"context"
-	"github.com/datamitsu/datamitsu/internal/config"
-	"github.com/datamitsu/datamitsu/internal/traverser"
 	"fmt"
 	"path/filepath"
+
+	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/traverser"
 
 	"github.com/bmatcuk/doublestar/v4"
 )

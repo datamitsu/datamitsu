@@ -222,12 +222,12 @@ func TestCollectRules(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	rootGitignore := filepath.Join(tmpDir, ".gitignore")
-	_ = os.WriteFile(rootGitignore, []byte("*.log\n"), 0644)
+	_ = os.WriteFile(rootGitignore, []byte("*.log\n"), 0o644)
 
 	subdir := filepath.Join(tmpDir, "subdir")
-	_ = os.MkdirAll(subdir, 0755)
+	_ = os.MkdirAll(subdir, 0o755)
 	subdirGitignore := filepath.Join(subdir, ".gitignore")
-	_ = os.WriteFile(subdirGitignore, []byte("*.tmp\n"), 0644)
+	_ = os.WriteFile(subdirGitignore, []byte("*.tmp\n"), 0o644)
 
 	gi := NewGitIgnore(tmpDir)
 	ctx := context.Background()
@@ -285,7 +285,7 @@ func TestIsIgnoredEmptyPatterns(t *testing.T) {
 func TestCompileWithSubdirectoryGitignore(t *testing.T) {
 	tmpDir := t.TempDir()
 	subdir := filepath.Join(tmpDir, "a", "b")
-	_ = os.MkdirAll(subdir, 0755)
+	_ = os.MkdirAll(subdir, 0o755)
 
 	gi := NewGitIgnore(tmpDir)
 

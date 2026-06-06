@@ -266,7 +266,7 @@ func TestInstallBundle_AlreadyCached(t *testing.T) {
 	path, _ := bm.ComputeBundlePath("cached-bundle")
 
 	// Overwrite file to detect if second install overwrites
-	if err := os.WriteFile(filepath.Join(path, "a.txt"), []byte("modified"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(path, "a.txt"), []byte("modified"), 0o644); err != nil {
 		t.Fatalf("failed to modify file: %v", err)
 	}
 

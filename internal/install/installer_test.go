@@ -2,10 +2,11 @@ package install
 
 import (
 	"context"
-	"github.com/datamitsu/datamitsu/internal/config"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/config"
 
 	"github.com/dop251/goja"
 )
@@ -90,7 +91,7 @@ func TestFileExists(t *testing.T) {
 
 	t.Run("file exists", func(t *testing.T) {
 		filePath := filepath.Join(tmpDir, "test.txt")
-		if err := os.WriteFile(filePath, []byte("test"), 0644); err != nil {
+		if err := os.WriteFile(filePath, []byte("test"), 0o644); err != nil {
 			t.Fatalf("failed to create test file: %v", err)
 		}
 
@@ -131,7 +132,7 @@ func TestInstallConfigDeleteOnly(t *testing.T) {
 	vm := goja.New()
 
 	altFile := filepath.Join(tmpDir, "alt.yml")
-	if err := os.WriteFile(altFile, []byte("old"), 0644); err != nil {
+	if err := os.WriteFile(altFile, []byte("old"), 0o644); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
@@ -232,7 +233,7 @@ func TestInstallConfigDryRun(t *testing.T) {
 func TestInstallConfigScopeGitRootSkipsWhenNotAtRoot(t *testing.T) {
 	tmpDir := t.TempDir()
 	cwdDir := filepath.Join(tmpDir, "subdir")
-	_ = os.MkdirAll(cwdDir, 0755)
+	_ = os.MkdirAll(cwdDir, 0o755)
 
 	vm := goja.New()
 
@@ -330,10 +331,10 @@ func TestInstallConfigDeletesAlternatives(t *testing.T) {
 
 	alt1 := filepath.Join(tmpDir, "alt1.yml")
 	alt2 := filepath.Join(tmpDir, "alt2.yml")
-	if err := os.WriteFile(alt1, []byte("old"), 0644); err != nil {
+	if err := os.WriteFile(alt1, []byte("old"), 0o644); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
-	if err := os.WriteFile(alt2, []byte("old"), 0644); err != nil {
+	if err := os.WriteFile(alt2, []byte("old"), 0o644); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
@@ -389,7 +390,6 @@ func TestInstallAll(t *testing.T) {
 
 	ctx := context.Background()
 	results, err := installer.InstallAll(ctx, false)
-
 	if err != nil {
 		t.Fatalf("InstallAll() error = %v", err)
 	}
@@ -409,7 +409,7 @@ func TestInstallSymlinkSetsLinkTarget(t *testing.T) {
 	tmpDir := t.TempDir()
 	vm := goja.New()
 
-	if err := os.WriteFile(filepath.Join(tmpDir, "AGENTS.md"), []byte("target"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "AGENTS.md"), []byte("target"), 0o644); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
@@ -446,7 +446,7 @@ func TestInstallSymlinkSetsLinkTarget(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := config.ConfigInit{
-				Scope: config.ScopeGitRoot,
+				Scope:      config.ScopeGitRoot,
 				LinkTarget: tt.linkTarget,
 			}
 
@@ -474,14 +474,14 @@ func TestInstallConfigLinkTargetCreatesSymlink(t *testing.T) {
 
 	// Create the target file that the symlink will point to
 	targetPath := filepath.Join(tmpDir, "AGENTS.md")
-	if err := os.WriteFile(targetPath, []byte("# Agents"), 0644); err != nil {
+	if err := os.WriteFile(targetPath, []byte("# Agents"), 0o644); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
 	installer := NewInstaller(tmpDir, tmpDir, []string{}, config.MapOfConfigInit{}, vm, nil)
 
 	cfg := config.ConfigInit{
-		Scope: config.ScopeGitRoot,
+		Scope:      config.ScopeGitRoot,
 		LinkTarget: "AGENTS.md",
 	}
 
@@ -512,10 +512,10 @@ func TestInstallConfigLinkTargetUpdatesStaleSymlink(t *testing.T) {
 	vm := goja.New()
 
 	// Create old target and new target
-	if err := os.WriteFile(filepath.Join(tmpDir, "OLD.md"), []byte("old"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "OLD.md"), []byte("old"), 0o644); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(tmpDir, "AGENTS.md"), []byte("new"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "AGENTS.md"), []byte("new"), 0o644); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
@@ -526,7 +526,7 @@ func TestInstallConfigLinkTargetUpdatesStaleSymlink(t *testing.T) {
 	installer := NewInstaller(tmpDir, tmpDir, []string{}, config.MapOfConfigInit{}, vm, nil)
 
 	cfg := config.ConfigInit{
-		Scope: config.ScopeGitRoot,
+		Scope:      config.ScopeGitRoot,
 		LinkTarget: "AGENTS.md",
 	}
 
@@ -557,17 +557,17 @@ func TestInstallConfigLinkTargetReplacesRegularFile(t *testing.T) {
 
 	// Create a regular file that will be replaced by symlink
 	symlinkPath := filepath.Join(tmpDir, "CLAUDE.md")
-	if err := os.WriteFile(symlinkPath, []byte("regular file"), 0644); err != nil {
+	if err := os.WriteFile(symlinkPath, []byte("regular file"), 0o644); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(tmpDir, "AGENTS.md"), []byte("target"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "AGENTS.md"), []byte("target"), 0o644); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
 	installer := NewInstaller(tmpDir, tmpDir, []string{}, config.MapOfConfigInit{}, vm, nil)
 
 	cfg := config.ConfigInit{
-		Scope: config.ScopeGitRoot,
+		Scope:      config.ScopeGitRoot,
 		LinkTarget: "AGENTS.md",
 	}
 
@@ -596,14 +596,14 @@ func TestInstallConfigLinkTargetIdempotent(t *testing.T) {
 	tmpDir := t.TempDir()
 	vm := goja.New()
 
-	if err := os.WriteFile(filepath.Join(tmpDir, "AGENTS.md"), []byte("target"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "AGENTS.md"), []byte("target"), 0o644); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
 	installer := NewInstaller(tmpDir, tmpDir, []string{}, config.MapOfConfigInit{}, vm, nil)
 
 	cfg := config.ConfigInit{
-		Scope: config.ScopeGitRoot,
+		Scope:      config.ScopeGitRoot,
 		LinkTarget: "AGENTS.md",
 	}
 
@@ -642,7 +642,7 @@ func TestInstallConfigLinkTargetDryRun(t *testing.T) {
 	installer := NewInstaller(tmpDir, tmpDir, []string{}, config.MapOfConfigInit{}, vm, nil)
 
 	cfg := config.ConfigInit{
-		Scope: config.ScopeGitRoot,
+		Scope:      config.ScopeGitRoot,
 		LinkTarget: "AGENTS.md",
 	}
 
@@ -667,7 +667,7 @@ func TestInstallConfigLinkTargetNestedPath(t *testing.T) {
 	tmpDir := t.TempDir()
 	vm := goja.New()
 
-	if err := os.WriteFile(filepath.Join(tmpDir, "AGENTS.md"), []byte("target"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "AGENTS.md"), []byte("target"), 0o644); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
@@ -675,7 +675,7 @@ func TestInstallConfigLinkTargetNestedPath(t *testing.T) {
 
 	// Symlink in a subdirectory pointing to parent
 	cfg := config.ConfigInit{
-		Scope: config.ScopeGitRoot,
+		Scope:      config.ScopeGitRoot,
 		LinkTarget: "../AGENTS.md",
 	}
 
@@ -705,7 +705,7 @@ func TestInstallConfigLinkTargetIgnoresContentAndDeleteOnly(t *testing.T) {
 	tmpDir := t.TempDir()
 	vm := goja.New()
 
-	if err := os.WriteFile(filepath.Join(tmpDir, "AGENTS.md"), []byte("target"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "AGENTS.md"), []byte("target"), 0o644); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
@@ -718,7 +718,7 @@ func TestInstallConfigLinkTargetIgnoresContentAndDeleteOnly(t *testing.T) {
 	installer := NewInstaller(tmpDir, tmpDir, []string{}, config.MapOfConfigInit{}, vm, nil)
 
 	cfg := config.ConfigInit{
-		Scope: config.ScopeGitRoot,
+		Scope:      config.ScopeGitRoot,
 		LinkTarget: "AGENTS.md",
 		Content:    contentFunc,
 		DeleteOnly: true,
@@ -763,32 +763,32 @@ func TestInstallAllAgentsMDAndSymlinks(t *testing.T) {
 
 	configs := config.MapOfConfigInit{
 		"AGENTS.md": {
-			Content:  agentsContentFunc,
-			Scope: config.ScopeGitRoot,
+			Content: agentsContentFunc,
+			Scope:   config.ScopeGitRoot,
 		},
 		"CLAUDE.md": {
 			LinkTarget: "AGENTS.md",
-			Scope: config.ScopeGitRoot,
+			Scope:      config.ScopeGitRoot,
 		},
 		"GEMINI.md": {
 			LinkTarget: "AGENTS.md",
-			Scope: config.ScopeGitRoot,
+			Scope:      config.ScopeGitRoot,
 		},
 		".cursorrules": {
 			LinkTarget: "AGENTS.md",
-			Scope: config.ScopeGitRoot,
+			Scope:      config.ScopeGitRoot,
 		},
 		".cursor/rules": {
 			LinkTarget: "../AGENTS.md",
-			Scope: config.ScopeGitRoot,
+			Scope:      config.ScopeGitRoot,
 		},
 		".windsurfrules": {
 			LinkTarget: "AGENTS.md",
-			Scope: config.ScopeGitRoot,
+			Scope:      config.ScopeGitRoot,
 		},
 		".github/copilot-instructions.md": {
 			LinkTarget: "../AGENTS.md",
-			Scope: config.ScopeGitRoot,
+			Scope:      config.ScopeGitRoot,
 		},
 	}
 
@@ -857,7 +857,7 @@ func TestInstallAgentsMDPreservesExistingContent(t *testing.T) {
 
 	// Create an existing AGENTS.md with user content
 	existingAgentsContent := "# My Custom Agents Config\n\nCustom instructions here.\n"
-	if err := os.WriteFile(filepath.Join(tmpDir, "AGENTS.md"), []byte(existingAgentsContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "AGENTS.md"), []byte(existingAgentsContent), 0o644); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
@@ -873,8 +873,8 @@ func TestInstallAgentsMDPreservesExistingContent(t *testing.T) {
 
 	configs := config.MapOfConfigInit{
 		"AGENTS.md": {
-			Content:  agentsContentFunc,
-			Scope: config.ScopeGitRoot,
+			Content: agentsContentFunc,
+			Scope:   config.ScopeGitRoot,
 		},
 	}
 
@@ -955,7 +955,7 @@ func TestInstallConfigSetsScope(t *testing.T) {
 func TestGenerateContentWithContext(t *testing.T) {
 	tmpDir := t.TempDir()
 	cwdDir := filepath.Join(tmpDir, "project")
-	_ = os.MkdirAll(cwdDir, 0755)
+	_ = os.MkdirAll(cwdDir, 0o755)
 
 	vm := goja.New()
 
@@ -1036,7 +1036,7 @@ func TestInstallConfigLinkTargetRejectsTraversal(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := config.ConfigInit{
-				Scope: config.ScopeGitRoot,
+				Scope:      config.ScopeGitRoot,
 				LinkTarget: tt.linkTarget,
 			}
 
@@ -1059,7 +1059,7 @@ func TestInstallConfigLinkTargetRejectsSymlinkEscape(t *testing.T) {
 
 	// Create a symlink inside the repo that points outside
 	outsideDir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(outsideDir, "secret.txt"), []byte("secret"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(outsideDir, "secret.txt"), []byte("secret"), 0o644); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 	if err := os.Symlink(outsideDir, filepath.Join(tmpDir, "escape")); err != nil {
@@ -1069,7 +1069,7 @@ func TestInstallConfigLinkTargetRejectsSymlinkEscape(t *testing.T) {
 	installer := NewInstaller(tmpDir, tmpDir, []string{}, config.MapOfConfigInit{}, vm, nil)
 
 	cfg := config.ConfigInit{
-		Scope: config.ScopeGitRoot,
+		Scope:      config.ScopeGitRoot,
 		LinkTarget: "escape/secret.txt",
 	}
 
@@ -1096,7 +1096,7 @@ func TestInstallConfigLinkTargetRejectsSymlinkEscapeNonExistentTarget(t *testing
 	// Target file does NOT exist in outsideDir — EvalSymlinks on the full path will fail,
 	// but the ancestor check should still catch the escape
 	cfg := config.ConfigInit{
-		Scope: config.ScopeGitRoot,
+		Scope:      config.ScopeGitRoot,
 		LinkTarget: "escape/new.txt",
 	}
 
@@ -1122,7 +1122,7 @@ func TestInstallConfigLinkTargetRejectsBrokenSymlinkEscape(t *testing.T) {
 	installer := NewInstaller(tmpDir, tmpDir, []string{}, config.MapOfConfigInit{}, vm, nil)
 
 	cfg := config.ConfigInit{
-		Scope: config.ScopeGitRoot,
+		Scope:      config.ScopeGitRoot,
 		LinkTarget: "escape/new.txt",
 	}
 
@@ -1148,7 +1148,7 @@ func TestInstallConfigLinkTargetRejectsBrokenLeafSymlink(t *testing.T) {
 	installer := NewInstaller(tmpDir, tmpDir, []string{}, config.MapOfConfigInit{}, vm, nil)
 
 	cfg := config.ConfigInit{
-		Scope: config.ScopeGitRoot,
+		Scope:      config.ScopeGitRoot,
 		LinkTarget: "escape",
 	}
 
@@ -1166,7 +1166,7 @@ func TestInstallConfigOtherFileNameListSkipsMainFile(t *testing.T) {
 
 	// Create the main file
 	mainFile := filepath.Join(tmpDir, "main.yml")
-	if err := os.WriteFile(mainFile, []byte("original content"), 0644); err != nil {
+	if err := os.WriteFile(mainFile, []byte("original content"), 0o644); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
@@ -1237,7 +1237,7 @@ func TestGenerateContentDatamitsuDir(t *testing.T) {
 			cwdDir := tmpDir
 			if tt.cwdRelPath != "" {
 				cwdDir = filepath.Join(tmpDir, tt.cwdRelPath)
-				_ = os.MkdirAll(cwdDir, 0755)
+				_ = os.MkdirAll(cwdDir, 0o755)
 			}
 
 			vm := goja.New()
@@ -1306,7 +1306,6 @@ func TestInstallConfigUsesLayerHistoryWhenPresent(t *testing.T) {
 				{
 					LayerName:        "default",
 					GeneratedContent: &layerContent,
-
 				},
 			},
 			FinalConfig: config.ConfigInit{
@@ -1453,12 +1452,10 @@ func TestInstallConfigUsesGetLastGeneratedContent(t *testing.T) {
 				{
 					LayerName:        "default",
 					GeneratedContent: &firstContent,
-
 				},
 				{
 					LayerName:        "auto",
 					GeneratedContent: &secondContent,
-
 				},
 			},
 			FinalConfig: config.ConfigInit{

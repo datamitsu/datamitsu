@@ -26,14 +26,12 @@ type GitIgnore struct {
 }
 
 func NewGitIgnore(root string) *GitIgnore {
-
 	return &GitIgnore{
 		root: filepath.Clean(root),
 	}
 }
 
 func (g *GitIgnore) Compile() error {
-
 	for _, res := range g.list {
 
 		relPath, err := filepath.Rel(g.root, filepath.Dir(res.absPath))
@@ -61,7 +59,6 @@ func (g *GitIgnore) Compile() error {
 	g.isCompiled = true
 
 	return nil
-
 }
 
 func (g *GitIgnore) CountPatterns() (int, error) {
@@ -88,7 +85,6 @@ func (g *GitIgnore) AddGitIgnoreFile(absPath string, content []byte) {
 		absPath: absPath,
 		content: content,
 	})
-
 }
 
 func (g *GitIgnore) IsIgnored(path string, isDir bool) bool {

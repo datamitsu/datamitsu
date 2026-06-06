@@ -28,9 +28,11 @@ import (
 func nodeStrPtr(s string) *string { return &s }
 
 // the archive's single top-level directory; binaryPath into it resolves node.
-const nodeArchiveTopDir = "node-v26.2.0-linux-x64"
-const nodeArchiveBinaryPath = nodeArchiveTopDir + "/bin/node"
-const nodeStubContent = "#!/bin/sh\necho node-archive\n"
+const (
+	nodeArchiveTopDir     = "node-v26.2.0-linux-x64"
+	nodeArchiveBinaryPath = nodeArchiveTopDir + "/bin/node"
+	nodeStubContent       = "#!/bin/sh\necho node-archive\n"
+)
 
 // makeNodeTarXzBytes builds an in-memory .tar.xz mirroring a real node release
 // layout (node-vX-os-arch/bin/node) and returns the bytes plus their SHA-256
@@ -44,14 +46,14 @@ func makeNodeTarXzBytes(t *testing.T) ([]byte, string) {
 	}
 	tarWriter := tar.NewWriter(xzWriter)
 
-	if err := tarWriter.WriteHeader(&tar.Header{Name: nodeArchiveTopDir + "/", Typeflag: tar.TypeDir, Mode: 0755}); err != nil {
+	if err := tarWriter.WriteHeader(&tar.Header{Name: nodeArchiveTopDir + "/", Typeflag: tar.TypeDir, Mode: 0o755}); err != nil {
 		t.Fatalf("write dir header: %v", err)
 	}
-	if err := tarWriter.WriteHeader(&tar.Header{Name: nodeArchiveTopDir + "/bin/", Typeflag: tar.TypeDir, Mode: 0755}); err != nil {
+	if err := tarWriter.WriteHeader(&tar.Header{Name: nodeArchiveTopDir + "/bin/", Typeflag: tar.TypeDir, Mode: 0o755}); err != nil {
 		t.Fatalf("write bin dir header: %v", err)
 	}
 	content := []byte(nodeStubContent)
-	if err := tarWriter.WriteHeader(&tar.Header{Name: nodeArchiveBinaryPath, Typeflag: tar.TypeReg, Mode: 0755, Size: int64(len(content))}); err != nil {
+	if err := tarWriter.WriteHeader(&tar.Header{Name: nodeArchiveBinaryPath, Typeflag: tar.TypeReg, Mode: 0o755, Size: int64(len(content))}); err != nil {
 		t.Fatalf("write node header: %v", err)
 	}
 	if _, err := tarWriter.Write(content); err != nil {
@@ -326,7 +328,7 @@ func TestInstallNode_DownloadVerifyExtract(t *testing.T) {
 	if err != nil {
 		t.Fatalf("node binary missing after install: %v", err)
 	}
-	if info.Mode()&0100 == 0 {
+	if info.Mode()&0o100 == 0 {
 		t.Error("node binary should be executable")
 	}
 	got, err := os.ReadFile(nodeBin)
@@ -572,17 +574,17 @@ func TestInstallNodeApp_AlreadyInstalled(t *testing.T) {
 	// Pre-create the bin shim and the installed module's package.json so the
 	// install short-circuits without touching the network/runtime.
 	appBinPath := filepath.Join(appEnvPath, appConfig.BinPath)
-	if err := os.MkdirAll(filepath.Dir(appBinPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(appBinPath), 0o755); err != nil {
 		t.Fatalf("mkdir bin dir: %v", err)
 	}
-	if err := os.WriteFile(appBinPath, []byte("#!/bin/sh\n"), 0755); err != nil {
+	if err := os.WriteFile(appBinPath, []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatalf("write bin shim: %v", err)
 	}
 	modulePkg := filepath.Join(appEnvPath, "node_modules", appConfig.PackageName, "package.json")
-	if err := os.MkdirAll(filepath.Dir(modulePkg), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(modulePkg), 0o755); err != nil {
 		t.Fatalf("mkdir module dir: %v", err)
 	}
-	if err := os.WriteFile(modulePkg, []byte("{}"), 0644); err != nil {
+	if err := os.WriteFile(modulePkg, []byte("{}"), 0o644); err != nil {
 		t.Fatalf("write module package.json: %v", err)
 	}
 	defer func() { _ = os.RemoveAll(appEnvPath) }()
@@ -628,10 +630,10 @@ func nodeReinstallRuntimes(t *testing.T, url, hash string) config.MapOfRuntimes 
 func seedStaleNodeApp(t *testing.T, appEnvPath, binPath string) string {
 	t.Helper()
 	appBinPath := filepath.Join(appEnvPath, binPath)
-	if err := os.MkdirAll(filepath.Dir(appBinPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(appBinPath), 0o755); err != nil {
 		t.Fatalf("mkdir bin dir: %v", err)
 	}
-	if err := os.WriteFile(appBinPath, []byte("#!/bin/sh\n"), 0755); err != nil {
+	if err := os.WriteFile(appBinPath, []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatalf("write bin shim: %v", err)
 	}
 	return appBinPath
@@ -742,17 +744,17 @@ func TestInstallNodeApp_RemoveAllSuccessProceeds(t *testing.T) {
 func seedInstalledNodeApp(t *testing.T, appEnvPath, packageName, binPath string) {
 	t.Helper()
 	appBinPath := filepath.Join(appEnvPath, binPath)
-	if err := os.MkdirAll(filepath.Dir(appBinPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(appBinPath), 0o755); err != nil {
 		t.Fatalf("mkdir bin dir: %v", err)
 	}
-	if err := os.WriteFile(appBinPath, []byte("#!/bin/sh\n"), 0755); err != nil {
+	if err := os.WriteFile(appBinPath, []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatalf("write bin shim: %v", err)
 	}
 	modulePkg := filepath.Join(appEnvPath, "node_modules", packageName, "package.json")
-	if err := os.MkdirAll(filepath.Dir(modulePkg), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(modulePkg), 0o755); err != nil {
 		t.Fatalf("mkdir module dir: %v", err)
 	}
-	if err := os.WriteFile(modulePkg, []byte("{}"), 0644); err != nil {
+	if err := os.WriteFile(modulePkg, []byte("{}"), 0o644); err != nil {
 		t.Fatalf("write module package.json: %v", err)
 	}
 }

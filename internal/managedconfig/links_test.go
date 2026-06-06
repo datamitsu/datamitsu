@@ -1,23 +1,24 @@
 package managedconfig
 
 import (
-	"github.com/datamitsu/datamitsu/internal/binmanager"
-	"github.com/datamitsu/datamitsu/internal/config"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/config"
 )
 
 func TestValidateLinkPath_ValidPaths(t *testing.T) {
 	installRoot := t.TempDir()
 
 	// Create files/dirs to resolve against
-	_ = os.MkdirAll(filepath.Join(installRoot, "dist", "nested"), 0755)
-	_ = os.WriteFile(filepath.Join(installRoot, "config.js"), []byte("x"), 0644)
-	_ = os.WriteFile(filepath.Join(installRoot, "dist", "eslint.config.js"), []byte("x"), 0644)
-	_ = os.WriteFile(filepath.Join(installRoot, "dist", "nested", "deep.js"), []byte("x"), 0644)
+	_ = os.MkdirAll(filepath.Join(installRoot, "dist", "nested"), 0o755)
+	_ = os.WriteFile(filepath.Join(installRoot, "config.js"), []byte("x"), 0o644)
+	_ = os.WriteFile(filepath.Join(installRoot, "dist", "eslint.config.js"), []byte("x"), 0o644)
+	_ = os.WriteFile(filepath.Join(installRoot, "dist", "nested", "deep.js"), []byte("x"), 0o644)
 
 	validPaths := []string{
 		"config.js",
@@ -86,7 +87,7 @@ func TestValidateLinkPath_BlocksSymlinkEscape(t *testing.T) {
 	outsideDir := t.TempDir()
 
 	// Create a symlink inside installRoot that points outside
-	_ = os.WriteFile(filepath.Join(outsideDir, "secret.txt"), []byte("secret"), 0644)
+	_ = os.WriteFile(filepath.Join(outsideDir, "secret.txt"), []byte("secret"), 0o644)
 	_ = os.Symlink(outsideDir, filepath.Join(installRoot, "escape-link"))
 
 	err := validateLinkPath("escape-link/secret.txt", installRoot)
@@ -121,8 +122,8 @@ func TestCreateDatamitsuLinks_BlocksPathTraversal(t *testing.T) {
 	gitRoot := filepath.Join(tmpDir, "repo")
 	installDir := filepath.Join(tmpDir, "install", "app", "hash")
 
-	_ = os.MkdirAll(installDir, 0755)
-	_ = os.WriteFile(filepath.Join(installDir, "config.js"), []byte("ok"), 0644)
+	_ = os.MkdirAll(installDir, 0o755)
+	_ = os.WriteFile(filepath.Join(installDir, "config.js"), []byte("ok"), 0o644)
 
 	apps := binmanager.MapOfApps{
 		"evil-app": {
@@ -152,7 +153,7 @@ func TestCreateDatamitsuLinks_BlocksAbsolutePathInLinks(t *testing.T) {
 	gitRoot := filepath.Join(tmpDir, "repo")
 	installDir := filepath.Join(tmpDir, "install", "app", "hash")
 
-	_ = os.MkdirAll(installDir, 0755)
+	_ = os.MkdirAll(installDir, 0o755)
 
 	apps := binmanager.MapOfApps{
 		"evil-app": {
@@ -182,8 +183,8 @@ func TestCreateDatamitsuLinks_BlocksPathTraversalInLinkName(t *testing.T) {
 	gitRoot := filepath.Join(tmpDir, "repo")
 	installDir := filepath.Join(tmpDir, "install", "app", "hash")
 
-	_ = os.MkdirAll(installDir, 0755)
-	_ = os.WriteFile(filepath.Join(installDir, "config.js"), []byte("ok"), 0644)
+	_ = os.MkdirAll(installDir, 0o755)
+	_ = os.WriteFile(filepath.Join(installDir, "config.js"), []byte("ok"), 0o644)
 
 	tests := []struct {
 		name     string
@@ -238,13 +239,13 @@ func TestCreateDatamitsuLinks_CreatesSymlinks(t *testing.T) {
 	gitRoot := filepath.Join(tmpDir, "repo")
 	installDir := filepath.Join(tmpDir, "install", "eslint", "abc123")
 
-	if err := os.MkdirAll(installDir, 0755); err != nil {
+	if err := os.MkdirAll(installDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
 	// Write the file that the symlink will point to
 	configContent := "module.exports = {};"
-	if err := os.WriteFile(filepath.Join(installDir, "eslint-base.js"), []byte(configContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(installDir, "eslint-base.js"), []byte(configContent), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -310,11 +311,11 @@ func TestCreateDatamitsuLinks_NestedRelativePath(t *testing.T) {
 	gitRoot := filepath.Join(tmpDir, "repo")
 	installDir := filepath.Join(tmpDir, "install", "eslint-config", "abc123")
 
-	if err := os.MkdirAll(filepath.Join(installDir, "dist"), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(installDir, "dist"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	configContent := "module.exports = {};"
-	if err := os.WriteFile(filepath.Join(installDir, "dist", "eslint.config.js"), []byte(configContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(installDir, "dist", "eslint.config.js"), []byte(configContent), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -364,7 +365,7 @@ func TestCreateDatamitsuLinks_ErrorWhenTargetNotExist(t *testing.T) {
 	gitRoot := filepath.Join(tmpDir, "repo")
 	installDir := filepath.Join(tmpDir, "install", "app", "hash")
 
-	if err := os.MkdirAll(installDir, 0755); err != nil {
+	if err := os.MkdirAll(installDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -398,15 +399,15 @@ func TestCreateDatamitsuLinks_MultipleApps(t *testing.T) {
 	prettierDir := filepath.Join(tmpDir, "install", "prettier", "def")
 
 	for _, dir := range []string{eslintDir, prettierDir} {
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	if err := os.WriteFile(filepath.Join(eslintDir, "eslint.js"), []byte("eslint"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(eslintDir, "eslint.js"), []byte("eslint"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(prettierDir, "prettier.js"), []byte("prettier"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(prettierDir, "prettier.js"), []byte("prettier"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -446,10 +447,10 @@ func TestCreateDatamitsuLinks_DryRunDoesNotTouchFilesystem(t *testing.T) {
 	gitRoot := filepath.Join(tmpDir, "repo")
 	installDir := filepath.Join(tmpDir, "install", "eslint", "hash")
 
-	if err := os.MkdirAll(installDir, 0755); err != nil {
+	if err := os.MkdirAll(installDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(installDir, "eslint.js"), []byte("content"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(installDir, "eslint.js"), []byte("content"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -532,10 +533,10 @@ func TestCreateDatamitsuLinks_ErrorsOnPartiallyInstalledApps(t *testing.T) {
 	gitRoot := filepath.Join(tmpDir, "repo")
 	eslintDir := filepath.Join(tmpDir, "install", "eslint", "abc")
 
-	if err := os.MkdirAll(eslintDir, 0755); err != nil {
+	if err := os.MkdirAll(eslintDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(eslintDir, "eslint.js"), []byte("eslint"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(eslintDir, "eslint.js"), []byte("eslint"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -573,19 +574,19 @@ func TestCreateDatamitsuLinks_RemovesExistingDirectory(t *testing.T) {
 	gitRoot := filepath.Join(tmpDir, "repo")
 	installDir := filepath.Join(tmpDir, "install", "app1", "hash")
 
-	if err := os.MkdirAll(installDir, 0755); err != nil {
+	if err := os.MkdirAll(installDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(installDir, "config.js"), []byte("new"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(installDir, "config.js"), []byte("new"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
 	// Create pre-existing .datamitsu with stale content
 	datamitsuDir := filepath.Join(gitRoot, ".datamitsu")
-	if err := os.MkdirAll(datamitsuDir, 0755); err != nil {
+	if err := os.MkdirAll(datamitsuDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(datamitsuDir, "stale-file.txt"), []byte("stale"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(datamitsuDir, "stale-file.txt"), []byte("stale"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -657,7 +658,7 @@ func TestVerifySymlink_CorrectTarget(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	targetFile := filepath.Join(tmpDir, "target.js")
-	if err := os.WriteFile(targetFile, []byte("content"), 0644); err != nil {
+	if err := os.WriteFile(targetFile, []byte("content"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -692,7 +693,7 @@ func TestVerifySymlink_WrongTarget(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	targetFile := filepath.Join(tmpDir, "target.js")
-	if err := os.WriteFile(targetFile, []byte("content"), 0644); err != nil {
+	if err := os.WriteFile(targetFile, []byte("content"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -731,7 +732,7 @@ func TestVerifySymlink_NotASymlink(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	regularFile := filepath.Join(tmpDir, "regular.js")
-	if err := os.WriteFile(regularFile, []byte("content"), 0644); err != nil {
+	if err := os.WriteFile(regularFile, []byte("content"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -751,15 +752,15 @@ func TestCreateDatamitsuLinks_VerifiesAllLinks(t *testing.T) {
 	prettierDir := filepath.Join(tmpDir, "install", "prettier", "def")
 
 	for _, dir := range []string{eslintDir, prettierDir} {
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	if err := os.WriteFile(filepath.Join(eslintDir, "eslint.js"), []byte("eslint"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(eslintDir, "eslint.js"), []byte("eslint"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(prettierDir, "prettier.js"), []byte("prettier"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(prettierDir, "prettier.js"), []byte("prettier"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -815,12 +816,12 @@ func TestCreateDatamitsuLinks_BrokenTargetAfterCreation(t *testing.T) {
 	gitRoot := filepath.Join(tmpDir, "repo")
 	appDir := filepath.Join(tmpDir, "install", "myapp", "hash")
 
-	if err := os.MkdirAll(appDir, 0755); err != nil {
+	if err := os.MkdirAll(appDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
 	targetFile := filepath.Join(appDir, "config.js")
-	if err := os.WriteFile(targetFile, []byte("config"), 0644); err != nil {
+	if err := os.WriteFile(targetFile, []byte("config"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -863,16 +864,16 @@ func TestCreateDatamitsuLinks_DetectsStaleBrokenLinks(t *testing.T) {
 	gitRoot := filepath.Join(tmpDir, "repo")
 	appDir := filepath.Join(tmpDir, "install", "newapp", "hash")
 
-	if err := os.MkdirAll(appDir, 0755); err != nil {
+	if err := os.MkdirAll(appDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(appDir, "config.js"), []byte("new config"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(appDir, "config.js"), []byte("new config"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
 	// Create pre-existing .datamitsu/ with a broken symlink from a previous run
 	datamitsuDir := filepath.Join(gitRoot, ".datamitsu")
-	if err := os.MkdirAll(datamitsuDir, 0755); err != nil {
+	if err := os.MkdirAll(datamitsuDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	brokenLink := filepath.Join(datamitsuDir, "old-stale-link.js")
@@ -933,7 +934,7 @@ func TestVerifySymlink_DirectoryTarget(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	targetDir := filepath.Join(tmpDir, "target-dir")
-	if err := os.MkdirAll(targetDir, 0755); err != nil {
+	if err := os.MkdirAll(targetDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -956,10 +957,10 @@ func TestCreateDatamitsuLinks_AcceptsDirectoryTarget(t *testing.T) {
 	gitRoot := filepath.Join(tmpDir, "repo")
 	installDir := filepath.Join(tmpDir, "install", "app", "hash")
 
-	if err := os.MkdirAll(filepath.Join(installDir, "dist"), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(installDir, "dist"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(installDir, "dist", "file.js"), []byte("content"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(installDir, "dist", "file.js"), []byte("content"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1000,7 +1001,7 @@ func TestCreateDatamitsuLinks_DryRunValidatesLinkPaths(t *testing.T) {
 	gitRoot := filepath.Join(tmpDir, "repo")
 	installDir := filepath.Join(tmpDir, "install", "app", "hash")
 
-	if err := os.MkdirAll(installDir, 0755); err != nil {
+	if err := os.MkdirAll(installDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1032,10 +1033,10 @@ func TestCreateDatamitsuLinks_DryRunValidatesLinkNames(t *testing.T) {
 	gitRoot := filepath.Join(tmpDir, "repo")
 	installDir := filepath.Join(tmpDir, "install", "app", "hash")
 
-	if err := os.MkdirAll(installDir, 0755); err != nil {
+	if err := os.MkdirAll(installDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(installDir, "config.js"), []byte("ok"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(installDir, "config.js"), []byte("ok"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1067,7 +1068,7 @@ func TestCreateDatamitsuLinks_DryRunAcceptsDirectoryTarget(t *testing.T) {
 	gitRoot := filepath.Join(tmpDir, "repo")
 	installDir := filepath.Join(tmpDir, "install", "app", "hash")
 
-	if err := os.MkdirAll(filepath.Join(installDir, "dist"), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(installDir, "dist"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1097,13 +1098,13 @@ func TestCreateDatamitsuLinks_DirectorySubdirEndToEnd(t *testing.T) {
 	installDir := filepath.Join(tmpDir, "install", "skills-bundle", "hash123")
 
 	skillsDir := filepath.Join(installDir, "skills")
-	if err := os.MkdirAll(skillsDir, 0755); err != nil {
+	if err := os.MkdirAll(skillsDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(skillsDir, "search.md"), []byte("# Search"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(skillsDir, "search.md"), []byte("# Search"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(skillsDir, "code.md"), []byte("# Code"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(skillsDir, "code.md"), []byte("# Code"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1160,10 +1161,10 @@ func TestCreateDatamitsuLinks_BundleLinks(t *testing.T) {
 	gitRoot := filepath.Join(tmpDir, "repo")
 	bundleDir := filepath.Join(tmpDir, "bundles", "my-bundle", "hash")
 
-	if err := os.MkdirAll(bundleDir, 0755); err != nil {
+	if err := os.MkdirAll(bundleDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(bundleDir, "agents.md"), []byte("# Agents"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(bundleDir, "agents.md"), []byte("# Agents"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1205,14 +1206,14 @@ func TestCreateDatamitsuLinks_MixedAppAndBundleLinks(t *testing.T) {
 	bundleDir := filepath.Join(tmpDir, "bundles", "skills", "def")
 
 	for _, dir := range []string{appDir, bundleDir} {
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := os.WriteFile(filepath.Join(appDir, "eslint.js"), []byte("eslint"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(appDir, "eslint.js"), []byte("eslint"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(bundleDir, "skills.md"), []byte("# Skills"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(bundleDir, "skills.md"), []byte("# Skills"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1255,10 +1256,10 @@ func TestCreateDatamitsuLinks_BundleDirectoryLink(t *testing.T) {
 	bundleDir := filepath.Join(tmpDir, "bundles", "agent-skills", "hash")
 
 	skillsDir := filepath.Join(bundleDir, "skills")
-	if err := os.MkdirAll(skillsDir, 0755); err != nil {
+	if err := os.MkdirAll(skillsDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(skillsDir, "search.md"), []byte("# Search"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(skillsDir, "search.md"), []byte("# Search"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1305,10 +1306,10 @@ func TestCreateDatamitsuLinks_GitignoreCreated(t *testing.T) {
 	gitRoot := filepath.Join(tmpDir, "repo")
 	installDir := filepath.Join(tmpDir, "install", "eslint", "abc123")
 
-	if err := os.MkdirAll(installDir, 0755); err != nil {
+	if err := os.MkdirAll(installDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(installDir, "eslint.js"), []byte("module.exports = {};"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(installDir, "eslint.js"), []byte("module.exports = {};"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1345,10 +1346,10 @@ func TestCreateDatamitsuLinks_DryRunNoGitignore(t *testing.T) {
 	gitRoot := filepath.Join(tmpDir, "repo")
 	installDir := filepath.Join(tmpDir, "install", "eslint", "hash")
 
-	if err := os.MkdirAll(installDir, 0755); err != nil {
+	if err := os.MkdirAll(installDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(installDir, "eslint.js"), []byte("content"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(installDir, "eslint.js"), []byte("content"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1400,8 +1401,8 @@ func TestCreateDatamitsuLinks_RejectsGitignoreLinkName(t *testing.T) {
 	gitRoot := filepath.Join(tmpDir, "repo")
 	installDir := filepath.Join(tmpDir, "install", "app", "hash")
 
-	_ = os.MkdirAll(installDir, 0755)
-	_ = os.WriteFile(filepath.Join(installDir, "config.js"), []byte("content"), 0644)
+	_ = os.MkdirAll(installDir, 0o755)
+	_ = os.WriteFile(filepath.Join(installDir, "config.js"), []byte("content"), 0o644)
 
 	apps := binmanager.MapOfApps{
 		"myapp": {
@@ -1431,8 +1432,8 @@ func TestCreateDatamitsuLinks_RejectsGitignoreLinkNameDryRun(t *testing.T) {
 	gitRoot := filepath.Join(tmpDir, "repo")
 	installDir := filepath.Join(tmpDir, "install", "app", "hash")
 
-	_ = os.MkdirAll(installDir, 0755)
-	_ = os.WriteFile(filepath.Join(installDir, "config.js"), []byte("content"), 0644)
+	_ = os.MkdirAll(installDir, 0o755)
+	_ = os.WriteFile(filepath.Join(installDir, "config.js"), []byte("content"), 0o644)
 
 	apps := binmanager.MapOfApps{
 		"myapp": {
@@ -1500,7 +1501,7 @@ func TestWriteTypeDefinitions_FilePermissions(t *testing.T) {
 	}
 
 	perm := info.Mode().Perm()
-	if perm != 0644 {
+	if perm != 0o644 {
 		t.Errorf("file permissions = %o, want 0644", perm)
 	}
 }
@@ -1508,15 +1509,15 @@ func TestWriteTypeDefinitions_FilePermissions(t *testing.T) {
 func TestCreateDatamitsuLinks_WritesTypeDefinitions(t *testing.T) {
 	tmpDir := t.TempDir()
 	gitRoot := filepath.Join(tmpDir, "repo")
-	if err := os.MkdirAll(gitRoot, 0755); err != nil {
+	if err := os.MkdirAll(gitRoot, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
 	appDir := filepath.Join(tmpDir, "apps", "eslint")
-	if err := os.MkdirAll(appDir, 0755); err != nil {
+	if err := os.MkdirAll(appDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(appDir, "config.js"), []byte("x"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(appDir, "config.js"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1546,15 +1547,15 @@ func TestCreateDatamitsuLinks_WritesTypeDefinitions(t *testing.T) {
 func TestCreateDatamitsuLinks_RejectsReservedTypeDefinitionsName(t *testing.T) {
 	tmpDir := t.TempDir()
 	gitRoot := filepath.Join(tmpDir, "repo")
-	if err := os.MkdirAll(gitRoot, 0755); err != nil {
+	if err := os.MkdirAll(gitRoot, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
 	appDir := filepath.Join(tmpDir, "apps", "myapp")
-	if err := os.MkdirAll(appDir, 0755); err != nil {
+	if err := os.MkdirAll(appDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(appDir, "file.js"), []byte("x"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(appDir, "file.js"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1577,15 +1578,15 @@ func TestCreateDatamitsuLinks_RejectsReservedTypeDefinitionsName(t *testing.T) {
 func TestCreateDatamitsuLinks_RejectsReservedTypeDefinitionsNameDryRun(t *testing.T) {
 	tmpDir := t.TempDir()
 	gitRoot := filepath.Join(tmpDir, "repo")
-	if err := os.MkdirAll(gitRoot, 0755); err != nil {
+	if err := os.MkdirAll(gitRoot, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
 	appDir := filepath.Join(tmpDir, "apps", "myapp")
-	if err := os.MkdirAll(appDir, 0755); err != nil {
+	if err := os.MkdirAll(appDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(appDir, "file.js"), []byte("x"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(appDir, "file.js"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1607,7 +1608,7 @@ func TestCreateDatamitsuLinks_RejectsReservedTypeDefinitionsNameDryRun(t *testin
 
 func TestCreateDatamitsuTypeDefinitions(t *testing.T) {
 	gitRoot := filepath.Join(t.TempDir(), "repo")
-	if err := os.MkdirAll(gitRoot, 0755); err != nil {
+	if err := os.MkdirAll(gitRoot, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1638,19 +1639,19 @@ func TestCreateDatamitsuTypeDefinitions(t *testing.T) {
 
 func TestCreateDatamitsuTypeDefinitions_ReplacesExisting(t *testing.T) {
 	gitRoot := filepath.Join(t.TempDir(), "repo")
-	if err := os.MkdirAll(gitRoot, 0755); err != nil {
+	if err := os.MkdirAll(gitRoot, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
 	// Create an existing .datamitsu with stale content
 	datamitsuDir := filepath.Join(gitRoot, ".datamitsu")
-	if err := os.MkdirAll(datamitsuDir, 0755); err != nil {
+	if err := os.MkdirAll(datamitsuDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(datamitsuDir, "datamitsu.config.d.ts"), []byte("old"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(datamitsuDir, "datamitsu.config.d.ts"), []byte("old"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(datamitsuDir, "stale-symlink"), []byte("x"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(datamitsuDir, "stale-symlink"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1676,7 +1677,7 @@ func TestCreateDatamitsuTypeDefinitions_ReplacesExisting(t *testing.T) {
 
 func TestCreateDatamitsuTypeDefinitions_DryRun(t *testing.T) {
 	gitRoot := filepath.Join(t.TempDir(), "repo")
-	if err := os.MkdirAll(gitRoot, 0755); err != nil {
+	if err := os.MkdirAll(gitRoot, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1690,4 +1691,3 @@ func TestCreateDatamitsuTypeDefinitions_DryRun(t *testing.T) {
 		t.Error(".datamitsu directory should not be created in dry-run mode")
 	}
 }
-

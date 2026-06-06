@@ -1,12 +1,13 @@
 package runtimemanager
 
 import (
+	"os/exec"
+	"testing"
+
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/syslist"
 	"github.com/datamitsu/datamitsu/internal/target"
-	"os/exec"
-	"testing"
 )
 
 func makeTestRuntimes() config.MapOfRuntimes {

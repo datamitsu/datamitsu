@@ -55,7 +55,7 @@ func LoadState(path string) (*VerifyState, error) {
 
 func SaveState(path string, state *VerifyState) error {
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("failed to create state directory: %w", err)
 	}
 

@@ -351,10 +351,10 @@ func TestInstallGoApp_AlreadyInstalled(t *testing.T) {
 	}
 
 	binPath := getGoBinaryPath(appEnvPath, appConfig.PackageName)
-	if err := os.MkdirAll(filepath.Dir(binPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(binPath), 0o755); err != nil {
 		t.Fatalf("failed to create dir: %v", err)
 	}
-	if err := os.WriteFile(binPath, []byte("#!/bin/sh\necho ok"), 0755); err != nil {
+	if err := os.WriteFile(binPath, []byte("#!/bin/sh\necho ok"), 0o755); err != nil {
 		t.Fatalf("failed to write fake binary: %v", err)
 	}
 	defer func() { _ = os.RemoveAll(appEnvPath) }()
@@ -608,7 +608,7 @@ func TestRemoveStaleGoModFiles_CleanWorkDir(t *testing.T) {
 func TestRemoveStaleGoModFiles_RemovesExisting(t *testing.T) {
 	workDir := t.TempDir()
 	for _, name := range []string{"go.mod", "go.sum"} {
-		if err := os.WriteFile(filepath.Join(workDir, name), []byte("stale"), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(workDir, name), []byte("stale"), 0o644); err != nil {
 			t.Fatalf("seed %s: %v", name, err)
 		}
 	}
@@ -630,7 +630,7 @@ func TestRemoveStaleGoModFiles_PropagatesNonNotExistError(t *testing.T) {
 	}
 
 	workDir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(workDir, "go.mod"), []byte("stale"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(workDir, "go.mod"), []byte("stale"), 0o644); err != nil {
 		t.Fatalf("seed go.mod: %v", err)
 	}
 	// A read-only parent directory makes os.Remove fail with EACCES rather than
@@ -855,15 +855,15 @@ func TestGoBuildReadonlyFailsOnGoSumMismatch(t *testing.T) {
 	dir := t.TempDir()
 	goMod := "module testmod\n\ngo 1.21\n\nrequire rsc.io/quote v1.5.2\n"
 	mainGo := "package main\n\nimport _ \"rsc.io/quote\"\n\nfunc main() {}\n"
-	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(goMod), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(goMod), 0o644); err != nil {
 		t.Fatalf("write go.mod: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(mainGo), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(mainGo), 0o644); err != nil {
 		t.Fatalf("write main.go: %v", err)
 	}
 	// Empty go.sum: the required checksum entry is absent, modelling a tampered
 	// or stale lockfile. -mod=readonly must refuse to add it.
-	if err := os.WriteFile(filepath.Join(dir, "go.sum"), nil, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "go.sum"), nil, 0o644); err != nil {
 		t.Fatalf("write go.sum: %v", err)
 	}
 

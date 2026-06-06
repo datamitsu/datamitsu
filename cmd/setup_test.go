@@ -1,16 +1,17 @@
 package cmd
 
 import (
-	"github.com/datamitsu/datamitsu/internal/bundled"
-	"github.com/datamitsu/datamitsu/internal/config"
-	"github.com/datamitsu/datamitsu/internal/datamitsuignore"
-	"github.com/datamitsu/datamitsu/internal/install"
 	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/bundled"
+	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/datamitsuignore"
+	"github.com/datamitsu/datamitsu/internal/install"
 
 	"github.com/dop251/goja"
 )
@@ -418,7 +419,6 @@ func TestSetupPassesLayerMapToNewInstaller(t *testing.T) {
 				{
 					LayerName:        "default",
 					GeneratedContent: &content,
-
 				},
 			},
 			FinalConfig: config.ConfigInit{},
@@ -451,7 +451,6 @@ func TestDryRunModeLayerHistoryStillBuilt(t *testing.T) {
 				{
 					LayerName:        "default",
 					GeneratedContent: &content,
-
 				},
 			},
 			FinalConfig: config.ConfigInit{Scope: config.ScopeGitRoot},

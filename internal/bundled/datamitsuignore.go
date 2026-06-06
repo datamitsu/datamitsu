@@ -1,15 +1,16 @@
 package bundled
 
 import (
-	"github.com/datamitsu/datamitsu/internal/color"
-	"github.com/datamitsu/datamitsu/internal/config"
-	"github.com/datamitsu/datamitsu/internal/datamitsuignore"
-	"github.com/datamitsu/datamitsu/internal/utils"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/datamitsu/datamitsu/internal/color"
+	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/datamitsuignore"
+	"github.com/datamitsu/datamitsu/internal/utils"
 )
 
 // FindIgnoreFiles walks rootPath and returns paths to all .datamitsuignore files,

@@ -3,12 +3,13 @@ package runtimemanager
 import (
 	"context"
 	"fmt"
-	"github.com/datamitsu/datamitsu/internal/binmanager"
-	"github.com/datamitsu/datamitsu/internal/config"
-	"github.com/datamitsu/datamitsu/internal/env"
 	"os"
 	"os/exec"
 	"path/filepath"
+
+	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/env"
 
 	"go.uber.org/zap"
 )
@@ -199,7 +200,7 @@ func (rm *RuntimeManager) installNodeAppOnce(ctx context.Context, appName string
 	}
 
 	packageJSONPath := filepath.Join(appEnvPath, "package.json")
-	if err := os.WriteFile(packageJSONPath, packageJSON, 0644); err != nil {
+	if err := os.WriteFile(packageJSONPath, packageJSON, 0o644); err != nil {
 		return fmt.Errorf("failed to write package.json: %w", err)
 	}
 
@@ -209,7 +210,7 @@ func (rm *RuntimeManager) installNodeAppOnce(ctx context.Context, appName string
 			return fmt.Errorf("failed to decompress lock file for %q: %w", appName, decErr)
 		}
 		lockFilePath := filepath.Join(appEnvPath, "pnpm-lock.yaml")
-		if err := os.WriteFile(lockFilePath, []byte(lockContent), 0644); err != nil {
+		if err := os.WriteFile(lockFilePath, []byte(lockContent), 0o644); err != nil {
 			return fmt.Errorf("failed to write pnpm-lock.yaml for %q: %w", appName, err)
 		}
 	}
@@ -217,7 +218,7 @@ func (rm *RuntimeManager) installNodeAppOnce(ctx context.Context, appName string
 	envVars := getNodeEnvVars(appEnvPath)
 
 	for _, dir := range []string{envVars["npm_config_store_dir"], envVars["npm_config_global_dir"]} {
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return fmt.Errorf("failed to create directory %q: %w", dir, err)
 		}
 	}

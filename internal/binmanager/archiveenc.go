@@ -2,11 +2,12 @@ package binmanager
 
 import (
 	"bytes"
-	"github.com/datamitsu/datamitsu/internal/constants"
 	"encoding/base64"
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/datamitsu/datamitsu/internal/constants"
 
 	"github.com/andybalholm/brotli"
 )

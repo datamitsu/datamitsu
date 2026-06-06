@@ -2,6 +2,14 @@ package cmd
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/datamitsuignore"
 	"github.com/datamitsu/datamitsu/internal/engine"
@@ -12,13 +20,6 @@ import (
 	"github.com/datamitsu/datamitsu/internal/remotecfg"
 	"github.com/datamitsu/datamitsu/internal/traverser"
 	"github.com/datamitsu/datamitsu/internal/version"
-	"fmt"
-	"os"
-	"path/filepath"
-	"sort"
-	"strings"
-	"sync"
-	"time"
 
 	"github.com/dop251/goja"
 	"go.uber.org/zap"

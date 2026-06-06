@@ -3,12 +3,6 @@ package runtimemanager
 import (
 	"context"
 	"fmt"
-	"github.com/datamitsu/datamitsu/internal/binmanager"
-	"github.com/datamitsu/datamitsu/internal/config"
-	"github.com/datamitsu/datamitsu/internal/env"
-	"github.com/datamitsu/datamitsu/internal/logger"
-	"github.com/datamitsu/datamitsu/internal/syslist"
-	"github.com/datamitsu/datamitsu/internal/target"
 	"io"
 	"os"
 	"os/exec"
@@ -16,6 +10,13 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+
+	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/logger"
+	"github.com/datamitsu/datamitsu/internal/syslist"
+	"github.com/datamitsu/datamitsu/internal/target"
 
 	"go.uber.org/zap"
 	"golang.org/x/sync/singleflight"
@@ -714,12 +715,12 @@ func moveRuntimeFiles(binCachePath, runtimeCachePath string, binaryPath *string)
 	if !info.IsDir() {
 		if binaryPath != nil {
 			dst := filepath.Join(runtimeCachePath, *binaryPath)
-			if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+			if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 				return err
 			}
 			return moveFile(binCachePath, dst)
 		}
-		if err := os.MkdirAll(filepath.Dir(runtimeCachePath), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(runtimeCachePath), 0o755); err != nil {
 			return err
 		}
 		return moveFile(binCachePath, runtimeCachePath)
@@ -738,7 +739,7 @@ func moveRuntimeFiles(binCachePath, runtimeCachePath string, binaryPath *string)
 	if err := os.RemoveAll(runtimeCachePath); err != nil {
 		return fmt.Errorf("failed to clean stale runtime cache %q: %w", runtimeCachePath, err)
 	}
-	if err := os.MkdirAll(runtimeCachePath, 0755); err != nil {
+	if err := os.MkdirAll(runtimeCachePath, 0o755); err != nil {
 		return err
 	}
 	for _, entry := range entries {
@@ -781,7 +782,7 @@ func moveFile(src, dst string) error {
 		_ = os.RemoveAll(src)
 	}
 	if info, err := os.Stat(dst); err == nil && !info.IsDir() {
-		if err := os.Chmod(dst, 0755); err != nil {
+		if err := os.Chmod(dst, 0o755); err != nil {
 			return fmt.Errorf("failed to set executable permissions: %w", err)
 		}
 	}
@@ -789,7 +790,7 @@ func moveFile(src, dst string) error {
 }
 
 func copyDir(src, dst string) error {
-	if err := os.MkdirAll(dst, 0755); err != nil {
+	if err := os.MkdirAll(dst, 0o755); err != nil {
 		return err
 	}
 	entries, err := os.ReadDir(src)

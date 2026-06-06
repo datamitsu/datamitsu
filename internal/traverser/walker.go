@@ -102,7 +102,6 @@ func (w *Walker) walk(ctx context.Context, results *[]string, mu *sync.Mutex) er
 }
 
 func (w *Walker) Walk(ctx context.Context) ([]string, error) {
-
 	results := make([]string, 0, 10000)
 	mu := &sync.Mutex{}
 

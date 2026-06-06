@@ -1,10 +1,11 @@
 package timing
 
 import (
-	"github.com/datamitsu/datamitsu/internal/env"
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/datamitsu/datamitsu/internal/env"
 )
 
 // Timings tracks execution times for different stages

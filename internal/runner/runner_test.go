@@ -2,16 +2,17 @@ package runner
 
 import (
 	"context"
-	"github.com/datamitsu/datamitsu/internal/config"
-	"github.com/datamitsu/datamitsu/internal/env"
-	"github.com/datamitsu/datamitsu/internal/timing"
-	"github.com/datamitsu/datamitsu/internal/tooling"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/timing"
+	"github.com/datamitsu/datamitsu/internal/tooling"
 )
 
 func TestIsCI(t *testing.T) {
@@ -174,7 +175,6 @@ func TestNonCIProgressDescriptionWithDir(t *testing.T) {
 			t.Errorf("non-CI progress description should include tool name, got: %q", result)
 		}
 	})
-
 }
 
 func TestFormatDuration(t *testing.T) {
@@ -1781,7 +1781,7 @@ func TestRunSequentialFixThenLintOrdering(t *testing.T) {
 							config.OpLint: {
 								App:   "echo",
 								Args:  []string{"lint"},
-								Scope:   config.ToolScopeRepository,
+								Scope: config.ToolScopeRepository,
 							},
 						},
 					},

@@ -394,7 +394,7 @@ func TestGetBundleRoot(t *testing.T) {
 		bm := New(MapOfApps{}, bundles, nil)
 
 		bundlePath, _ := bm.ComputeBundlePath("test-bundle")
-		if err := os.MkdirAll(bundlePath, 0755); err != nil {
+		if err := os.MkdirAll(bundlePath, 0o755); err != nil {
 			t.Fatalf("failed to create bundle dir: %v", err)
 		}
 		defer func() { _ = os.RemoveAll(filepath.Dir(filepath.Dir(bundlePath))) }()
@@ -464,7 +464,7 @@ func TestVerifyFileHash(t *testing.T) {
 			tmpDir := t.TempDir()
 			filePath := filepath.Join(tmpDir, "testfile")
 
-			if err := os.WriteFile(filePath, []byte(testContent), 0644); err != nil {
+			if err := os.WriteFile(filePath, []byte(testContent), 0o644); err != nil {
 				t.Fatalf("failed to create test file: %v", err)
 			}
 
@@ -479,7 +479,7 @@ func TestVerifyFileHash(t *testing.T) {
 		tmpDir := t.TempDir()
 		filePath := filepath.Join(tmpDir, "testfile")
 
-		if err := os.WriteFile(filePath, []byte(testContent), 0644); err != nil {
+		if err := os.WriteFile(filePath, []byte(testContent), 0o644); err != nil {
 			t.Fatalf("failed to create test file: %v", err)
 		}
 
@@ -504,7 +504,7 @@ func TestVerifyFileHash(t *testing.T) {
 		tmpDir := t.TempDir()
 		filePath := filepath.Join(tmpDir, "testfile")
 
-		if err := os.WriteFile(filePath, []byte(testContent), 0644); err != nil {
+		if err := os.WriteFile(filePath, []byte(testContent), 0o644); err != nil {
 			t.Fatalf("failed to create test file: %v", err)
 		}
 
@@ -518,7 +518,7 @@ func TestVerifyFileHash(t *testing.T) {
 		tmpDir := t.TempDir()
 		filePath := filepath.Join(tmpDir, "empty")
 
-		if err := os.WriteFile(filePath, []byte(""), 0644); err != nil {
+		if err := os.WriteFile(filePath, []byte(""), 0o644); err != nil {
 			t.Fatalf("failed to create test file: %v", err)
 		}
 

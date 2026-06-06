@@ -1,13 +1,14 @@
 package cmd
 
 import (
-	"github.com/datamitsu/datamitsu/internal/binmanager"
-	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
+
+	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 
 	"github.com/spf13/cobra"
 )

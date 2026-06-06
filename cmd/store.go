@@ -2,11 +2,12 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/datamitsu/datamitsu/internal/env"
-	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 
 	"github.com/spf13/cobra"
 )
