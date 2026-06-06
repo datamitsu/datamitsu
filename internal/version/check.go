@@ -23,12 +23,22 @@ func IsUnstable(v string) bool {
 // of enforcing required. Unstable builds sort below v0.0.0 under semver
 // prerelease rules, so enforcing the check would block every config.
 //
-// required is validated as semver even on the unstable path so config authors
-// see a typo immediately rather than only when stable users run their config.
+// The local-build default "dev" (a plain `go build` with no -ldflags) is an
+// unversioned source build: it satisfies any requirement silently (skipped=false,
+// nil err), so developers can run a `go build` binary against real configs
+// without the v99.99.99 ldflags dance used by `task build`.
+//
+// required is validated as semver even on the unstable/dev paths so config
+// authors see a typo immediately rather than only when stable users run their
+// config.
 func CompareVersions(current, required string) (skipped bool, err error) {
 	normalizedRequired := normalizeVersion(required)
 	if !semver.IsValid(normalizedRequired) {
 		return false, fmt.Errorf("invalid required version format: %s", normalizedRequired)
+	}
+
+	if current == "dev" {
+		return false, nil
 	}
 
 	if IsUnstable(current) {

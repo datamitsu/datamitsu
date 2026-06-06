@@ -41,7 +41,9 @@ func swapLoggerWithObserver(t *testing.T, level zapcore.LevelEnabler) *observer.
 }
 
 func TestLoadConfig(t *testing.T) {
-	cfg, _, vm, err := loadConfig()
+	// Load only the embedded default config (noAutoConfig) so the assertions are
+	// hermetic — independent of any datamitsu.config.* at this repo's git root.
+	cfg, _, vm, err := loadConfigWithPaths(context.Background(), nil, true, nil)
 	if err != nil {
 		t.Fatalf("loadConfig() error = %v", err)
 	}
@@ -68,7 +70,8 @@ func TestLoadConfig(t *testing.T) {
 }
 
 func TestLoadConfigRuntimes(t *testing.T) {
-	cfg, _, _, err := loadConfig()
+	// Hermetic: assert the embedded default config, ignoring any git-root config.
+	cfg, _, _, err := loadConfigWithPaths(context.Background(), nil, true, nil)
 	if err != nil {
 		t.Fatalf("loadConfig() error = %v", err)
 	}
@@ -151,7 +154,9 @@ func TestLoadConfigRuntimes(t *testing.T) {
 }
 
 func TestLoadConfigRuntimeApps(t *testing.T) {
-	cfg, _, _, err := loadConfig()
+	// Hermetic: assert the embedded default config's demo apps, ignoring any
+	// datamitsu.config.* at this repo's git root (which overlays its own apps).
+	cfg, _, _, err := loadConfigWithPaths(context.Background(), nil, true, nil)
 	if err != nil {
 		t.Fatalf("loadConfig() error = %v", err)
 	}
@@ -2136,9 +2141,20 @@ function getConfig(input) { return { ignoreRules: ["low-version: eslint"] }; }`,
 	}
 }
 
+// withTestVersion overrides the build version for the duration of a test so
+// version-check enforcement can be exercised. The default "dev" build satisfies
+// any minVersion, so failure-path tests must pin a concrete stable version.
+func withTestVersion(t *testing.T, v string) {
+	t.Helper()
+	orig := ldflags.Version
+	ldflags.Version = v
+	t.Cleanup(func() { ldflags.Version = orig })
+}
+
 func TestLoadConfigWithHighMinVersionFails(t *testing.T) {
-	// Config with getMinVersion="99.0.0" should fail because current version
-	// ("dev" -> v0.0.0) is less than required.
+	// Config with getMinVersion="99.0.0" must fail because the pinned current
+	// version (v1.0.0) is less than required.
+	withTestVersion(t, "1.0.0")
 	configDir := t.TempDir()
 	configPath := filepath.Join(configDir, "high-version.js")
 	if err := os.WriteFile(configPath, []byte(
@@ -2229,6 +2245,7 @@ function getConfig(input) { return { ignoreRules: ["from-config: prettier"] }; }
 func TestLoadConfigMultiLayerVersionCheckFailsOnSecondLayer(t *testing.T) {
 	// First config layer passes, second layer has high version requirement -> fails.
 	// Error message should identify which config file failed.
+	withTestVersion(t, "1.0.0")
 	beforeDir := t.TempDir()
 	beforePath := filepath.Join(beforeDir, "before.js")
 	if err := os.WriteFile(beforePath, []byte(
@@ -2262,6 +2279,7 @@ function getConfig(input) { return {}; }`,
 
 func TestLoadConfigVersionCheckShowsConfigFile(t *testing.T) {
 	// Verify that version check failure error message includes the config file name.
+	withTestVersion(t, "1.0.0")
 	configDir := t.TempDir()
 	configPath := filepath.Join(configDir, "my-special-config.js")
 	if err := os.WriteFile(configPath, []byte(
