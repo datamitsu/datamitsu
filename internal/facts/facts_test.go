@@ -114,18 +114,9 @@ func TestCollectWithBinaryCommandOverride(t *testing.T) {
 }
 
 func TestCollectWithEnvOverride(t *testing.T) {
-	originalEnv := os.Getenv("DATAMITSU_BINARY_COMMAND")
-	defer func() {
-		if originalEnv != "" {
-			_ = os.Setenv("DATAMITSU_BINARY_COMMAND", originalEnv)
-		} else {
-			_ = os.Unsetenv("DATAMITSU_BINARY_COMMAND")
-		}
-	}()
-
 	ctx := context.Background()
 	envOverride := "/env/binary/path"
-	_ = os.Setenv("DATAMITSU_BINARY_COMMAND", envOverride)
+	t.Setenv("DATAMITSU_BINARY_COMMAND", envOverride)
 
 	facts, _, err := Collect(ctx, "")
 	if err != nil {

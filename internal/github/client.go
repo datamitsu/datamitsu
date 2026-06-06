@@ -40,7 +40,7 @@ func NewClient() *Client {
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
-		token: os.Getenv("GITHUB_TOKEN"),
+		token: os.Getenv("GITHUB_TOKEN"), //nolint:forbidigo // third-party token, not a datamitsu env var
 	}
 }
 

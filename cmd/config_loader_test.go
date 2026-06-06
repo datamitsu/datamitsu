@@ -791,7 +791,7 @@ func TestProcessConfigSourceDiamondDependency(t *testing.T) {
 	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 
 	// Diamond: local -> [A, B], A -> D, B -> D
-	// D is a shared dependency — should be processed twice (not a cycle).
+	// Node D is a shared dependency — should be processed twice (not a cycle).
 	remoteDContent := `function getConfig(input) { return { ignoreRules: ["from-D: eslint"] }; }`
 	remoteDHash := computeHash(remoteDContent)
 

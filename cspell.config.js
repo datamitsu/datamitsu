@@ -225,5 +225,6 @@ export default {
     "Fatalf",
     "nolint",
     "nilnil",
+    "forbidigo",
   ],
 };

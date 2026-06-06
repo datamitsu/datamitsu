@@ -228,7 +228,7 @@ func (rm *RuntimeManager) installNodeAppOnce(ctx context.Context, appName string
 	args := buildPNPMInstallArgs(pnpmCjsPath, appConfig.LockFile != "")
 
 	nodeBinDir := filepath.Dir(nodeBinPath)
-	envVars["PATH"] = nodeBinDir + string(os.PathListSeparator) + os.Getenv("PATH")
+	envVars["PATH"] = nodeBinDir + string(os.PathListSeparator) + os.Getenv("PATH") //nolint:forbidigo // standard PATH for child process env, not a datamitsu env var
 	envVars = mergeInstallEnv(envVars, customEnv, appEnvPath)
 	cmdEnv := buildEnvWithOverrides(os.Environ(), envVars)
 
@@ -296,7 +296,7 @@ func (rm *RuntimeManager) getNodeCommandInfo(appName string, appConfig *binmanag
 	appBinPath := filepath.Join(appEnvPath, appConfig.BinPath)
 
 	envVars := getNodeEnvVars(appEnvPath)
-	envVars["PATH"] = nodeBinDir + string(os.PathListSeparator) + os.Getenv("PATH")
+	envVars["PATH"] = nodeBinDir + string(os.PathListSeparator) + os.Getenv("PATH") //nolint:forbidigo // standard PATH for child process env, not a datamitsu env var
 
 	return &binmanager.CommandInfo{
 		Type:    "node",

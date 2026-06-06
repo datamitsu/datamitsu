@@ -5,6 +5,20 @@ formatters:
     - goimports
     - swaggo
 linters:
+  disable:
+    - noinlineerr
+    - gochecknoglobals
+    - godox
+    - nonamedreturns
+    - wsl_v5
+    - nlreturn
+    - varnamelen
+    - testpackage
+    - ireturn
+    - godot
+    - goheader
+    - lll
+    - gosmopolitan
   enable:
     - asciicheck
     - bidichk
@@ -31,27 +45,114 @@ linters:
     - iotamixing
     - tagalign
     - gocheckcompilerdirectives
-    # - wrapcheck
-    # - unparam
     - usestdlibvars
     - perfsprint
     - prealloc
     - mirror
-    # - revive
-    # - nestif
-    # - nilerr
     - nilnil
-    # - noctx
     - intrange
     - makezero
     - modernize
-    # - gochecknoinits
     - gocritic
-    # - gocyclo
-    # - gosec
     - errname
     - errorlint
     - exhaustive
     - copyloopvar
+    - asasalint
+    - dupword
+    - forbidigo
+    - depguard
+    # - exhaustruct
+    # - maintidx
+    # - promlinter
+    # - rowserrcheck
+    # - sloglint
+    # - spancheck
+    # - gocyclo
+    # - gosec
     # - dupl
+    # - goconst
+    # - mnd
+    # - revive
+    # - nilerr
+    # - noctx
+    # - gochecknoinits
+    # - tagliatelle
+    # - forcetypeassert
+    # - loggercheck
+    # - thelper
+    # - contextcheck
+    # - errchkjson
+    # - nilnesserr
+    # - recvcheck
+    # - usetesting
+    # - wrapcheck
+    # - unparam
+    # - canonicalheader
+    # - embeddedstructfieldcheck
+    # - exptostd
+    # - funcorder
+  # - cyclop
+  # - nestif
+  # - funlen
+  # - gocognit
+  # - arangodb
+  # - clickhouselint
+
+  # - musttag
+  # - gochecksumtype
+  # - ginkgolinter
+  # - goprintffuncname
+  # - ginkgolinter
+  # - err113
+  # - dogsled
+  # - decorder
+  # - containedctx
+  # - gomoddirectives
+  # - gomodguard_v2
+
+  # - grouper
+  # - iface
+  # - importas
+  # - inamedparam
+  # - interfacebloat
+  # - nosprintfhostport
+  # - paralleltest
+  # - protogetter
+  # - testableexamples
+  # - unqueryvet
+  # - zerologlint
+  exclusions:
+    rules:
+      # internal/env is the sanctioned abstraction layer — it is allowed to call
+      # os.Getenv directly (that is its whole purpose).
+      - linters:
+          - forbidigo
+        path: internal/env/
+      # The os.Getenv architectural rule targets production code. Tests legitimately
+      # poke os.Getenv for environment save/restore isolation.
+      - linters:
+          - forbidigo
+        path: _test\.go
+  settings:
+    depguard:
+      rules:
+        # XXH3 hashing must go through internal/hashutil; importing zeebo/xxh3
+        # anywhere else is forbidden. See CLAUDE.md "Hashing Policy".
+        no-direct-xxh3:
+          deny:
+            - desc: use internal/hashutil for XXH3 hashing; do not import zeebo/xxh3 directly
+              pkg: github.com/zeebo/xxh3
+          files:
+            - $all
+            - "!**/internal/hashutil/*.go"
+    forbidigo:
+      forbid:
+        # Datamitsu env vars must go through internal/env (typed getters), never
+        # raw os.Getenv. forbidigo cannot match the call argument, so this forbids
+        # os.Getenv outright; internal/env and tests are excluded above, and the
+        # few legitimate standard-env/token reads carry a //nolint:forbidigo with
+        # a reason. See CLAUDE.md "Environment Variable Usage Policy".
+        - msg: Access datamitsu env vars via internal/env (add a getter in env.go), not os.Getenv directly.
+          pattern: os\.Getenv
 version: 2
