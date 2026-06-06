@@ -1,12 +1,13 @@
 package engine
 
 import (
+	"context"
 	"strings"
 	"testing"
 )
 
 func TestTOMLStringifyOrder(t *testing.T) {
-	e, err := New("")
+	e, err := New(context.Background(), "")
 	if err != nil {
 		t.Fatalf("Failed to create engine: %v", err)
 	}
@@ -61,7 +62,7 @@ func TestTOMLStringifyOrder(t *testing.T) {
 }
 
 func TestTOMLStringifyMultiplePrimitives(t *testing.T) {
-	e, err := New("")
+	e, err := New(context.Background(), "")
 	if err != nil {
 		t.Fatalf("Failed to create engine: %v", err)
 	}

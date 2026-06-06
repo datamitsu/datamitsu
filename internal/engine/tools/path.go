@@ -1,11 +1,15 @@
 package tools
 
 import (
+	"errors"
+	"fmt"
 	"path/filepath"
 
 	"github.com/dop251/goja"
 )
 
+// RegisterPathToolsInVM exposes tools.path helpers, resolved relative to
+// rootPath, into the VM for use by config scripts.
 func RegisterPathToolsInVM(vm *goja.Runtime, rootPath string) error {
 	toolsObj := vm.Get("tools")
 	if toolsObj == nil || goja.IsUndefined(toolsObj) || goja.IsNull(toolsObj) {
@@ -93,7 +97,13 @@ func RegisterPathToolsInVM(vm *goja.Runtime, rootPath string) error {
 		return vm.ToValue("./" + cleaned)
 	})
 
-	_ = toolsObj.(*goja.Object).Set("Path", pathObj)
+	toolsGoja, ok := toolsObj.(*goja.Object)
+	if !ok {
+		return errors.New("tools global is not an object")
+	}
+	if err := toolsGoja.Set("Path", pathObj); err != nil {
+		return fmt.Errorf("failed to set tools.Path: %w", err)
+	}
 
 	return nil
 }

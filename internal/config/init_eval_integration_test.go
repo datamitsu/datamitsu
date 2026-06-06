@@ -192,8 +192,8 @@ func TestMultiLayerChainDefaultRemoteAutoExplicit(t *testing.T) {
 		content string
 	}{
 		{"default", "base"},
-		{"remote", ""},  // will read existingContent
-		{"auto", ""},    // will read existingContent
+		{"remote", ""},   // will read existingContent
+		{"auto", ""},     // will read existingContent
 		{"explicit", ""}, // will read existingContent
 	}
 

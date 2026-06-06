@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
@@ -12,7 +13,7 @@ import (
 // pnpmWorkspaceDefaults with identical values. This is the contract config.js
 // relies on to publish sharedStorage["pnpm-workspace-defaults"].
 func TestPNPMWorkspaceDefaultsInjected(t *testing.T) {
-	e, err := New("")
+	e, err := New(context.Background(), "")
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -50,7 +51,7 @@ func TestPNPMWorkspaceDefaultsInjected(t *testing.T) {
 // so JS code can read it directly and pass it through YAML.stringify without
 // invoking it.
 func TestPNPMWorkspaceDefaultsIsPlainObject(t *testing.T) {
-	e, err := New("")
+	e, err := New(context.Background(), "")
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -77,8 +78,8 @@ func TestPNPMWorkspaceDefaultsKeysAreInjectedInSortedOrder(t *testing.T) {
 	// Run multiple times: a non-deterministic injector would produce
 	// different orders across engines because each engine constructs its
 	// own map and Go map iteration is randomized.
-	for i := 0; i < 5; i++ {
-		e, err := New("")
+	for i := range 5 {
+		e, err := New(context.Background(), "")
 		if err != nil {
 			t.Fatalf("iter %d: New() error = %v", i, err)
 		}
@@ -98,7 +99,7 @@ func TestPNPMWorkspaceDefaultsKeysAreInjectedInSortedOrder(t *testing.T) {
 // config silently downgrade the published security defaults — exactly what
 // this consolidation is meant to prevent.
 func TestPNPMWorkspaceDefaultsIsFrozen(t *testing.T) {
-	e, err := New("")
+	e, err := New(context.Background(), "")
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -144,7 +145,7 @@ func TestPNPMWorkspaceDefaultsIsFrozen(t *testing.T) {
 // injected global survives YAML.stringify (the actual call config.js makes)
 // and that the resulting YAML still parses back to the same key/value set.
 func TestPNPMWorkspaceDefaultsRoundTripsThroughYAMLStringify(t *testing.T) {
-	e, err := New("")
+	e, err := New(context.Background(), "")
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}

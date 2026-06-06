@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -213,11 +214,11 @@ func TestPullGoRuntime_Success(t *testing.T) {
 	orig := getLatestGoRelease
 	defer func() { getLatestGoRelease = orig }()
 
-	getLatestGoRelease = func() (*registry.GoRelease, error) {
+	getLatestGoRelease = func(_ context.Context) (*registry.GoRelease, error) {
 		return &registry.GoRelease{Version: goTestVersion, Files: buildGoTestFiles(goTestVersion)}, nil
 	}
 
-	data, binaries, err := pullGoRuntime()
+	data, binaries, err := pullGoRuntime(context.Background())
 	if err != nil {
 		t.Fatalf("pullGoRuntime: %v", err)
 	}
@@ -237,11 +238,11 @@ func TestPullGoRuntime_LookupError(t *testing.T) {
 	orig := getLatestGoRelease
 	defer func() { getLatestGoRelease = orig }()
 
-	getLatestGoRelease = func() (*registry.GoRelease, error) {
+	getLatestGoRelease = func(_ context.Context) (*registry.GoRelease, error) {
 		return nil, errors.New("simulated lookup failure")
 	}
 
-	data, binaries, err := pullGoRuntime()
+	data, binaries, err := pullGoRuntime(context.Background())
 	if err == nil {
 		t.Fatal("expected pullGoRuntime to return an error on lookup failure")
 	}
@@ -274,7 +275,7 @@ func TestRunPullRuntimes_Go_GeneratesEntryWithGoVersion(t *testing.T) {
 	pullRuntimesUpdateFlag = true
 	pullRuntimesRuntimeFlag = "go"
 	pullRuntimesDryRunFlag = false
-	getLatestGoRelease = func() (*registry.GoRelease, error) {
+	getLatestGoRelease = func(_ context.Context) (*registry.GoRelease, error) {
 		return &registry.GoRelease{Version: goTestVersion, Files: buildGoTestFiles(goTestVersion)}, nil
 	}
 

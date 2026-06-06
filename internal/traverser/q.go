@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -18,6 +19,8 @@ type gitIgnoreFile struct {
 	absPath string
 }
 
+// GitIgnore accumulates .gitignore files for a repository and compiles them
+// into matchable patterns to decide whether a path is ignored.
 type GitIgnore struct {
 	root       string
 	list       []gitIgnoreFile
@@ -25,17 +28,16 @@ type GitIgnore struct {
 	isCompiled bool
 }
 
+// NewGitIgnore returns a GitIgnore rooted at the given repository root path.
 func NewGitIgnore(root string) *GitIgnore {
-
 	return &GitIgnore{
 		root: filepath.Clean(root),
 	}
 }
 
+// Compile parses all collected .gitignore files into gitignore patterns.
 func (g *GitIgnore) Compile() error {
-
 	for _, res := range g.list {
-
 		relPath, err := filepath.Rel(g.root, filepath.Dir(res.absPath))
 		if err != nil {
 			continue
@@ -61,17 +63,20 @@ func (g *GitIgnore) Compile() error {
 	g.isCompiled = true
 
 	return nil
-
 }
 
+// CountPatterns returns the number of compiled patterns, or an error if the
+// GitIgnore has not been compiled yet.
 func (g *GitIgnore) CountPatterns() (int, error) {
 	if !g.isCompiled {
-		return 0, fmt.Errorf("is not compiled")
+		return 0, errors.New("is not compiled")
 	}
 
 	return len(g.patterns), nil
 }
 
+// Clone returns a copy of the GitIgnore with its collected files but without
+// compiled patterns, so additional files can be added before compiling.
 func (g *GitIgnore) Clone() *GitIgnore {
 	return &GitIgnore{
 		root: g.root,
@@ -79,6 +84,8 @@ func (g *GitIgnore) Clone() *GitIgnore {
 	}
 }
 
+// AddGitIgnoreFile registers a .gitignore file's content for later compilation.
+// It panics if the GitIgnore has already been compiled.
 func (g *GitIgnore) AddGitIgnoreFile(absPath string, content []byte) {
 	if g.isCompiled {
 		panic("already compiled")
@@ -88,9 +95,10 @@ func (g *GitIgnore) AddGitIgnoreFile(absPath string, content []byte) {
 		absPath: absPath,
 		content: content,
 	})
-
 }
 
+// IsIgnored reports whether the given path is ignored by the compiled patterns.
+// It panics if the GitIgnore has not been compiled.
 func (g *GitIgnore) IsIgnored(path string, isDir bool) bool {
 	if !g.isCompiled {
 		panic("is not compiled")
@@ -119,6 +127,8 @@ func (g *GitIgnore) IsIgnored(path string, isDir bool) bool {
 	return matcher.Match(parts, isDir)
 }
 
+// CollectRules reads all .gitignore files from the root down to target and
+// adds them to the GitIgnore. Targets outside the root are ignored.
 func (g *GitIgnore) CollectRules(ctx context.Context, target string) error {
 	if g.isCompiled {
 		panic("already compiled")
@@ -129,7 +139,7 @@ func (g *GitIgnore) CollectRules(ctx context.Context, target string) error {
 	if target != g.root {
 		rel, err := filepath.Rel(g.root, target)
 		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-			return nil
+			return nil //nolint:nilerr // target outside root: no rules to collect
 		}
 	}
 
@@ -144,16 +154,14 @@ func (g *GitIgnore) CollectRules(ctx context.Context, target string) error {
 	gr, gctx := errgroup.WithContext(ctx)
 
 	for i, path := range paths {
-		i, path := i, path
-
 		gr.Go(func() error {
 			if err := gctx.Err(); err != nil {
-				return err
+				return fmt.Errorf("collect gitignore rules: %w", err)
 			}
 
 			content, err := os.ReadFile(path)
 			if err != nil {
-				return nil
+				return nil //nolint:nilerr // skip unreadable gitignore, keep collecting the rest
 			}
 
 			// relPath, err := filepath.Rel(root, filepath.Dir(path))
@@ -192,7 +200,7 @@ func (g *GitIgnore) CollectRules(ctx context.Context, target string) error {
 	}
 
 	if err := gr.Wait(); err != nil {
-		return err
+		return fmt.Errorf("read gitignore files: %w", err)
 	}
 	close(resultCh)
 

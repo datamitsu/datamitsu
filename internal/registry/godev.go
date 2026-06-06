@@ -1,7 +1,9 @@
 package registry
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -46,12 +48,16 @@ var goDevHTTPClient = httpx.NewHardenedClient(15 * time.Second)
 // no GPG signature here; the published SHA-256, pinned in git, is the integrity
 // anchor — the same trust model as the musl Node path (see
 // cmd/devtools_pull_runtimes.go).
-func GetLatestGoRelease() (*GoRelease, error) {
-	return getLatestGoReleaseFromURL(goDevReleasesURL)
+func GetLatestGoRelease(ctx context.Context) (*GoRelease, error) {
+	return getLatestGoReleaseFromURL(ctx, goDevReleasesURL)
 }
 
-func getLatestGoReleaseFromURL(url string) (*GoRelease, error) {
-	resp, err := goDevHTTPClient.Get(url)
+func getLatestGoReleaseFromURL(ctx context.Context, url string) (*GoRelease, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build request: %w", err)
+	}
+	resp, err := goDevHTTPClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch Go releases: %w", err)
 	}
@@ -69,12 +75,12 @@ func getLatestGoReleaseFromURL(url string) (*GoRelease, error) {
 
 	rel := highestStableGoRelease(releases)
 	if rel == nil {
-		return nil, fmt.Errorf("no stable version found in Go releases")
+		return nil, errors.New("no stable version found in Go releases")
 	}
 
 	version := strings.TrimPrefix(rel.Version, "go")
 	if version == "" {
-		return nil, fmt.Errorf("go.dev release has empty version")
+		return nil, errors.New("go.dev release has empty version")
 	}
 
 	files := make(map[string]string, len(rel.Files))

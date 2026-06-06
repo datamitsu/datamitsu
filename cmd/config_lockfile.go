@@ -1,13 +1,16 @@
 package cmd
 
 import (
-	"github.com/datamitsu/datamitsu/internal/binmanager"
-	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"sort"
+
+	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 
 	"github.com/spf13/cobra"
 )
@@ -34,6 +37,8 @@ func init() {
 }
 
 func runConfigLockfile(cmd *cobra.Command, args []string) error {
+	ctx := commandContext(cmd)
+
 	cfg, _, _, err := loadConfigForLockfileGen()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
@@ -98,14 +103,14 @@ func runConfigLockfile(cmd *cobra.Command, args []string) error {
 		// 100+MiB of module cache we must not leave behind in the install path —
 		// then read go.mod + go.sum back from there.
 		lockContent, err = generateGoLockContent(appName, app, func(workDir string) error {
-			return freshRM.GenerateGoLockFiles(appName, freshApps[appName].Go, workDir)
+			return freshRM.GenerateGoLockFiles(ctx, appName, freshApps[appName].Go, workDir)
 		})
 		if err != nil {
 			return err
 		}
 	} else {
 		fmt.Fprintf(os.Stderr, "Reinstalling %s...\n", appName)
-		if _, err := freshBinMgr.GetCommandInfo(appName); err != nil {
+		if _, err := freshBinMgr.GetCommandInfo(ctx, appName); err != nil {
 			return fmt.Errorf("failed to reinstall %q: %w", appName, err)
 		}
 		lockContent, err = readLockFile(freshInstallPath, app)
@@ -164,9 +169,7 @@ func generateGoLockContent(appName string, app binmanager.App, generate func(wor
 // generate a fresh lock file under the same workspace policy as a normal run.
 func clearAppLockFile(apps binmanager.MapOfApps, appName string) binmanager.MapOfApps {
 	fresh := make(binmanager.MapOfApps, len(apps))
-	for k, v := range apps {
-		fresh[k] = v
-	}
+	maps.Copy(fresh, apps)
 	appCopy, ok := fresh[appName]
 	if !ok {
 		return fresh
@@ -193,7 +196,8 @@ func clearAppLockFile(apps binmanager.MapOfApps, appName string) binmanager.MapO
 func printAppInfo(appName string, app binmanager.App) {
 	fmt.Fprintf(os.Stderr, "App: %s\n", appName)
 
-	if app.Node != nil {
+	switch {
+	case app.Node != nil:
 		fmt.Fprintf(os.Stderr, "  Runtime:      node\n")
 		fmt.Fprintf(os.Stderr, "  Package:      %s\n", app.Node.PackageName)
 		fmt.Fprintf(os.Stderr, "  Version:      %s\n", app.Node.Version)
@@ -208,20 +212,20 @@ func printAppInfo(appName string, app binmanager.App) {
 				fmt.Fprintf(os.Stderr, "    %s: %s\n", k, app.Node.Dependencies[k])
 			}
 		}
-	} else if app.Uv != nil {
+	case app.Uv != nil:
 		fmt.Fprintf(os.Stderr, "  Runtime:      uv\n")
 		fmt.Fprintf(os.Stderr, "  Package:      %s\n", app.Uv.PackageName)
 		fmt.Fprintf(os.Stderr, "  Version:      %s\n", app.Uv.Version)
-	} else if app.Go != nil {
+	case app.Go != nil:
 		fmt.Fprintf(os.Stderr, "  Runtime:      go\n")
 		fmt.Fprintf(os.Stderr, "  Package:      %s\n", app.Go.PackageName)
 		fmt.Fprintf(os.Stderr, "  Version:      %s\n", app.Go.Version)
-	} else if app.Jvm != nil {
+	case app.Jvm != nil:
 		fmt.Fprintf(os.Stderr, "  Runtime:      jvm\n")
 		fmt.Fprintf(os.Stderr, "  Version:      %s\n", app.Jvm.Version)
-	} else if app.Binary != nil {
+	case app.Binary != nil:
 		fmt.Fprintf(os.Stderr, "  Runtime:      binary\n")
-	} else if app.Shell != nil {
+	case app.Shell != nil:
 		fmt.Fprintf(os.Stderr, "  Runtime:      shell\n")
 		fmt.Fprintf(os.Stderr, "  Command:      %s\n", app.Shell.Name)
 	}
@@ -233,11 +237,12 @@ func listLockfileApps(apps binmanager.MapOfApps) {
 	var nodeApps, uvApps, goApps []string
 
 	for name, app := range apps {
-		if app.Node != nil {
+		switch {
+		case app.Node != nil:
 			nodeApps = append(nodeApps, name)
-		} else if app.Uv != nil {
+		case app.Uv != nil:
 			uvApps = append(uvApps, name)
-		} else if app.Go != nil {
+		case app.Go != nil:
 			goApps = append(goApps, name)
 		}
 	}
@@ -299,12 +304,13 @@ func readLockFile(installPath string, app binmanager.App) (string, error) {
 
 	var lockFilePath string
 
-	if app.Node != nil {
+	switch {
+	case app.Node != nil:
 		lockFilePath = filepath.Join(installPath, "pnpm-lock.yaml")
-	} else if app.Uv != nil {
+	case app.Uv != nil:
 		lockFilePath = filepath.Join(installPath, "uv.lock")
-	} else {
-		return "", fmt.Errorf("unsupported app type for lock file generation")
+	default:
+		return "", errors.New("unsupported app type for lock file generation")
 	}
 
 	fmt.Fprintf(os.Stderr, "Lock file: %s\n", lockFilePath)

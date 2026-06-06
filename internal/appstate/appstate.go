@@ -1,11 +1,14 @@
+// Package appstate loads, validates and persists the githubApps.json state
+// that tracks managed GitHub app metadata and their installed binaries.
 package appstate
 
 import (
-	"github.com/datamitsu/datamitsu/internal/binmanager"
-	"github.com/datamitsu/datamitsu/internal/hashutil"
 	"encoding/json"
 	"fmt"
 	"os"
+
+	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/hashutil"
 )
 
 // AppMetadata represents GitHub app metadata
@@ -17,15 +20,15 @@ type AppMetadata struct {
 
 // BinariesEntry represents binaries for a single app with metadata
 type BinariesEntry struct {
-	ConfigHash  string                       `json:"configHash,omitempty"` // Hash of owner:repo:tag
-	Description string                       `json:"description,omitempty"`
-	Binaries    binmanager.MapOfBinaries     `json:"binaries"`
+	ConfigHash  string                   `json:"configHash,omitempty"` // Hash of owner:repo:tag
+	Description string                   `json:"description,omitempty"`
+	Binaries    binmanager.MapOfBinaries `json:"binaries"`
 }
 
 // State represents the githubApps.json structure
 type State struct {
-	Apps     map[string]*AppMetadata      `json:"apps"`
-	Binaries map[string]*BinariesEntry    `json:"binaries"`
+	Apps     map[string]*AppMetadata   `json:"apps"`
+	Binaries map[string]*BinariesEntry `json:"binaries"`
 }
 
 // Load reads and parses githubApps.json
@@ -61,7 +64,7 @@ func Save(path string, state *State) error {
 	// Add trailing newline
 	data = append(data, '\n')
 
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	if err := os.WriteFile(path, data, 0o644); err != nil {
 		return fmt.Errorf("failed to write githubApps.json: %w", err)
 	}
 

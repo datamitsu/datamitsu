@@ -1,3 +1,4 @@
+// Package remotecfg fetches, hash-verifies and disk-caches remote config files.
 package remotecfg
 
 import (
@@ -21,7 +22,7 @@ func CachedConfigPath(cacheDir, url string) string {
 func LoadCached(path string) (content string, err error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("read cached remote config %q: %w", path, err)
 	}
 
 	return string(data), nil
@@ -30,7 +31,7 @@ func LoadCached(path string) (content string, err error) {
 // SaveCached writes content to the cache path atomically (temp file + rename).
 func SaveCached(path, content string) error {
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("failed to create remote config cache directory: %w", err)
 	}
 

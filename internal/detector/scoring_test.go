@@ -271,10 +271,10 @@ func TestScoreAsset_MacOSImplicitArm64(t *testing.T) {
 
 func TestScoreAsset_IsExplicit(t *testing.T) {
 	tests := []struct {
-		name        string
-		asset       string
-		osType      syslist.OsType
-		archType    syslist.ArchType
+		name         string
+		asset        string
+		osType       syslist.OsType
+		archType     syslist.ArchType
 		wantExplicit bool
 	}{
 		{

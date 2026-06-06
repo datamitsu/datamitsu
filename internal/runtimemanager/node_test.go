@@ -24,13 +24,12 @@ import (
 	"github.com/ulikunitz/xz"
 )
 
-// nodeStrPtr returns a pointer to s (BinaryOsArchInfo.BinaryPath is *string).
-func nodeStrPtr(s string) *string { return &s }
-
 // the archive's single top-level directory; binaryPath into it resolves node.
-const nodeArchiveTopDir = "node-v26.2.0-linux-x64"
-const nodeArchiveBinaryPath = nodeArchiveTopDir + "/bin/node"
-const nodeStubContent = "#!/bin/sh\necho node-archive\n"
+const (
+	nodeArchiveTopDir     = "node-v26.2.0-linux-x64"
+	nodeArchiveBinaryPath = nodeArchiveTopDir + "/bin/node"
+	nodeStubContent       = "#!/bin/sh\necho node-archive\n"
+)
 
 // makeNodeTarXzBytes builds an in-memory .tar.xz mirroring a real node release
 // layout (node-vX-os-arch/bin/node) and returns the bytes plus their SHA-256
@@ -44,14 +43,14 @@ func makeNodeTarXzBytes(t *testing.T) ([]byte, string) {
 	}
 	tarWriter := tar.NewWriter(xzWriter)
 
-	if err := tarWriter.WriteHeader(&tar.Header{Name: nodeArchiveTopDir + "/", Typeflag: tar.TypeDir, Mode: 0755}); err != nil {
+	if err := tarWriter.WriteHeader(&tar.Header{Name: nodeArchiveTopDir + "/", Typeflag: tar.TypeDir, Mode: 0o755}); err != nil {
 		t.Fatalf("write dir header: %v", err)
 	}
-	if err := tarWriter.WriteHeader(&tar.Header{Name: nodeArchiveTopDir + "/bin/", Typeflag: tar.TypeDir, Mode: 0755}); err != nil {
+	if err := tarWriter.WriteHeader(&tar.Header{Name: nodeArchiveTopDir + "/bin/", Typeflag: tar.TypeDir, Mode: 0o755}); err != nil {
 		t.Fatalf("write bin dir header: %v", err)
 	}
 	content := []byte(nodeStubContent)
-	if err := tarWriter.WriteHeader(&tar.Header{Name: nodeArchiveBinaryPath, Typeflag: tar.TypeReg, Mode: 0755, Size: int64(len(content))}); err != nil {
+	if err := tarWriter.WriteHeader(&tar.Header{Name: nodeArchiveBinaryPath, Typeflag: tar.TypeReg, Mode: 0o755, Size: int64(len(content))}); err != nil {
 		t.Fatalf("write node header: %v", err)
 	}
 	if _, err := tarWriter.Write(content); err != nil {
@@ -88,7 +87,7 @@ func nodeRuntimeWith(t *testing.T, url, hash string, libcKeys ...string) config.
 			URL:         url,
 			Hash:        hash,
 			ContentType: binmanager.BinContentTypeTarXz,
-			BinaryPath:  nodeStrPtr(nodeArchiveBinaryPath),
+			BinaryPath:  new(nodeArchiveBinaryPath),
 			ExtractDir:  true,
 		}
 	}
@@ -207,7 +206,7 @@ func TestGetCommandInfoNode(t *testing.T) {
 		},
 	}
 
-	_, err := rm.GetCommandInfo("eslint", app)
+	_, err := rm.GetCommandInfo(context.Background(), "eslint", app)
 	if err == nil {
 		t.Fatal("expected an error (node archive is not reachable at the fake URL), got nil")
 	}
@@ -326,7 +325,7 @@ func TestInstallNode_DownloadVerifyExtract(t *testing.T) {
 	if err != nil {
 		t.Fatalf("node binary missing after install: %v", err)
 	}
-	if info.Mode()&0100 == 0 {
+	if info.Mode()&0o100 == 0 {
 		t.Error("node binary should be executable")
 	}
 	got, err := os.ReadFile(nodeBin)
@@ -399,11 +398,11 @@ func TestInstallNode_CacheHitNoRefetch(t *testing.T) {
 func TestNodeLibcSelection(t *testing.T) {
 	musl := binmanager.BinaryOsArchInfo{
 		URL: "https://unofficial-builds.nodejs.org/node-musl.tar.xz", Hash: "musl",
-		ContentType: binmanager.BinContentTypeTarXz, BinaryPath: nodeStrPtr(nodeArchiveBinaryPath), ExtractDir: true,
+		ContentType: binmanager.BinContentTypeTarXz, BinaryPath: new(nodeArchiveBinaryPath), ExtractDir: true,
 	}
 	glibc := binmanager.BinaryOsArchInfo{
 		URL: "https://nodejs.org/dist/node.tar.xz", Hash: "glibc",
-		ContentType: binmanager.BinContentTypeTarXz, BinaryPath: nodeStrPtr(nodeArchiveBinaryPath), ExtractDir: true,
+		ContentType: binmanager.BinContentTypeTarXz, BinaryPath: new(nodeArchiveBinaryPath), ExtractDir: true,
 	}
 
 	t.Run("musl host selects musl entry", func(t *testing.T) {
@@ -476,7 +475,7 @@ func TestInstallNodeApp_InvalidRuntime(t *testing.T) {
 		BinPath:     "node_modules/.bin/eslint",
 		Runtime:     "nonexistent",
 	}
-	if err := rm.InstallNodeApp("eslint", appConfig, nil, nil, nil); err == nil {
+	if err := rm.InstallNodeApp(context.Background(), "eslint", appConfig, nil, nil, nil); err == nil {
 		t.Error("expected error for nonexistent runtime, got nil")
 	}
 }
@@ -489,7 +488,7 @@ func TestGetNodeCommandInfo_InvalidRuntime(t *testing.T) {
 		BinPath:     "node_modules/.bin/eslint",
 		Runtime:     "nonexistent",
 	}
-	if _, err := rm.GetNodeCommandInfo("eslint", appConfig, nil, nil); err == nil {
+	if _, err := rm.GetNodeCommandInfo(context.Background(), "eslint", appConfig, nil, nil); err == nil {
 		t.Error("expected error for nonexistent runtime, got nil")
 	}
 }
@@ -510,7 +509,7 @@ func TestGetNodeCommandInfo_MissingNodeConfig(t *testing.T) {
 							URL:         "https://example.com/node.tar.xz",
 							Hash:        "abc",
 							ContentType: binmanager.BinContentTypeTarXz,
-							BinaryPath:  nodeStrPtr(nodeArchiveBinaryPath),
+							BinaryPath:  new(nodeArchiveBinaryPath),
 							ExtractDir:  true,
 						}},
 					},
@@ -525,7 +524,7 @@ func TestGetNodeCommandInfo_MissingNodeConfig(t *testing.T) {
 		BinPath:     "node_modules/.bin/eslint",
 		Runtime:     "node",
 	}
-	if _, err := rm.GetNodeCommandInfo("eslint", appConfig, nil, nil); err == nil {
+	if _, err := rm.GetNodeCommandInfo(context.Background(), "eslint", appConfig, nil, nil); err == nil {
 		t.Error("expected error when runtime has no node config, got nil")
 	}
 }
@@ -547,7 +546,7 @@ func TestInstallNodeApp_AlreadyInstalled(t *testing.T) {
 							URL:         "https://example.com/node.tar.xz",
 							Hash:        "abc",
 							ContentType: binmanager.BinContentTypeTarXz,
-							BinaryPath:  nodeStrPtr(nodeArchiveBinaryPath),
+							BinaryPath:  new(nodeArchiveBinaryPath),
 							ExtractDir:  true,
 						}},
 					},
@@ -564,7 +563,7 @@ func TestInstallNodeApp_AlreadyInstalled(t *testing.T) {
 		Runtime:     "node",
 	}
 
-	appEnvPath, _, _, err := rm.resolveNodeAppEnvPath("eslint", appConfig, nil, nil)
+	appEnvPath, err := rm.resolveNodeAppEnvPath("eslint", appConfig, nil, nil)
 	if err != nil {
 		t.Fatalf("resolveNodeAppEnvPath() error = %v", err)
 	}
@@ -572,22 +571,22 @@ func TestInstallNodeApp_AlreadyInstalled(t *testing.T) {
 	// Pre-create the bin shim and the installed module's package.json so the
 	// install short-circuits without touching the network/runtime.
 	appBinPath := filepath.Join(appEnvPath, appConfig.BinPath)
-	if err := os.MkdirAll(filepath.Dir(appBinPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(appBinPath), 0o755); err != nil {
 		t.Fatalf("mkdir bin dir: %v", err)
 	}
-	if err := os.WriteFile(appBinPath, []byte("#!/bin/sh\n"), 0755); err != nil {
+	if err := os.WriteFile(appBinPath, []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatalf("write bin shim: %v", err)
 	}
 	modulePkg := filepath.Join(appEnvPath, "node_modules", appConfig.PackageName, "package.json")
-	if err := os.MkdirAll(filepath.Dir(modulePkg), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(modulePkg), 0o755); err != nil {
 		t.Fatalf("mkdir module dir: %v", err)
 	}
-	if err := os.WriteFile(modulePkg, []byte("{}"), 0644); err != nil {
+	if err := os.WriteFile(modulePkg, []byte("{}"), 0o644); err != nil {
 		t.Fatalf("write module package.json: %v", err)
 	}
 	defer func() { _ = os.RemoveAll(appEnvPath) }()
 
-	if err := rm.InstallNodeApp("eslint", appConfig, nil, nil, nil); err != nil {
+	if err := rm.InstallNodeApp(context.Background(), "eslint", appConfig, nil, nil, nil); err != nil {
 		t.Errorf("InstallNodeApp() error = %v, expected nil for already-installed app", err)
 	}
 }
@@ -612,7 +611,7 @@ func nodeReinstallRuntimes(t *testing.T, url, hash string) config.MapOfRuntimes 
 							URL:         url,
 							Hash:        hash,
 							ContentType: binmanager.BinContentTypeTarXz,
-							BinaryPath:  nodeStrPtr(nodeArchiveBinaryPath),
+							BinaryPath:  new(nodeArchiveBinaryPath),
 							ExtractDir:  true,
 						}},
 					},
@@ -628,10 +627,10 @@ func nodeReinstallRuntimes(t *testing.T, url, hash string) config.MapOfRuntimes 
 func seedStaleNodeApp(t *testing.T, appEnvPath, binPath string) string {
 	t.Helper()
 	appBinPath := filepath.Join(appEnvPath, binPath)
-	if err := os.MkdirAll(filepath.Dir(appBinPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(appBinPath), 0o755); err != nil {
 		t.Fatalf("mkdir bin dir: %v", err)
 	}
-	if err := os.WriteFile(appBinPath, []byte("#!/bin/sh\n"), 0755); err != nil {
+	if err := os.WriteFile(appBinPath, []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatalf("write bin shim: %v", err)
 	}
 	return appBinPath
@@ -651,7 +650,7 @@ func TestInstallNodeApp_RemoveAllFailureAborts(t *testing.T) {
 		Runtime:     "node",
 	}
 
-	appEnvPath, _, _, err := rm.resolveNodeAppEnvPath("eslint", appConfig, nil, nil)
+	appEnvPath, err := rm.resolveNodeAppEnvPath("eslint", appConfig, nil, nil)
 	if err != nil {
 		t.Fatalf("resolveNodeAppEnvPath() error = %v", err)
 	}
@@ -659,20 +658,20 @@ func TestInstallNodeApp_RemoveAllFailureAborts(t *testing.T) {
 	defer func() { _ = os.RemoveAll(appEnvPath) }()
 
 	sentinel := errors.New("injected removeAll failure")
-	var calls int32
+	var calls atomic.Int32
 	rm.removeAllFunc = func(string) error {
-		atomic.AddInt32(&calls, 1)
+		calls.Add(1)
 		return sentinel
 	}
 
-	err = rm.InstallNodeApp("eslint", appConfig, nil, nil, nil)
+	err = rm.InstallNodeApp(context.Background(), "eslint", appConfig, nil, nil, nil)
 	if err == nil {
 		t.Fatal("expected an error when stale-tree removal fails, got nil")
 	}
 	if !errors.Is(err, sentinel) {
 		t.Errorf("error %v should wrap the injected removal failure", err)
 	}
-	if got := atomic.LoadInt32(&calls); got != 1 {
+	if got := calls.Load(); got != 1 {
 		t.Errorf("removeAll called %d times, want 1", got)
 	}
 	// Aborted before reinstalling: no network/runtime work happened past the
@@ -704,20 +703,20 @@ func TestInstallNodeApp_RemoveAllSuccessProceeds(t *testing.T) {
 		Runtime:     "node",
 	}
 
-	appEnvPath, _, _, err := rm.resolveNodeAppEnvPath("eslint", appConfig, nil, nil)
+	appEnvPath, err := rm.resolveNodeAppEnvPath("eslint", appConfig, nil, nil)
 	if err != nil {
 		t.Fatalf("resolveNodeAppEnvPath() error = %v", err)
 	}
 	appBinPath := seedStaleNodeApp(t, appEnvPath, appConfig.BinPath)
 	defer func() { _ = os.RemoveAll(appEnvPath) }()
 
-	var calls int32
+	var calls atomic.Int32
 	rm.removeAllFunc = func(p string) error {
-		atomic.AddInt32(&calls, 1)
+		calls.Add(1)
 		return os.RemoveAll(p)
 	}
 
-	err = rm.InstallNodeApp("eslint", appConfig, nil, nil, nil)
+	err = rm.InstallNodeApp(context.Background(), "eslint", appConfig, nil, nil, nil)
 	if err == nil {
 		t.Fatal("expected a download error after the (successful) stale-tree removal, got nil")
 	}
@@ -727,7 +726,7 @@ func TestInstallNodeApp_RemoveAllSuccessProceeds(t *testing.T) {
 	if !strings.Contains(err.Error(), "node runtime") {
 		t.Errorf("expected the post-removal error to come from the node runtime download, got: %v", err)
 	}
-	if got := atomic.LoadInt32(&calls); got != 1 {
+	if got := calls.Load(); got != 1 {
 		t.Errorf("removeAll called %d times, want 1", got)
 	}
 	// Removal succeeded and the failed reinstall never recreated the tree.
@@ -742,17 +741,17 @@ func TestInstallNodeApp_RemoveAllSuccessProceeds(t *testing.T) {
 func seedInstalledNodeApp(t *testing.T, appEnvPath, packageName, binPath string) {
 	t.Helper()
 	appBinPath := filepath.Join(appEnvPath, binPath)
-	if err := os.MkdirAll(filepath.Dir(appBinPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(appBinPath), 0o755); err != nil {
 		t.Fatalf("mkdir bin dir: %v", err)
 	}
-	if err := os.WriteFile(appBinPath, []byte("#!/bin/sh\n"), 0755); err != nil {
+	if err := os.WriteFile(appBinPath, []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatalf("write bin shim: %v", err)
 	}
 	modulePkg := filepath.Join(appEnvPath, "node_modules", packageName, "package.json")
-	if err := os.MkdirAll(filepath.Dir(modulePkg), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(modulePkg), 0o755); err != nil {
 		t.Fatalf("mkdir module dir: %v", err)
 	}
-	if err := os.WriteFile(modulePkg, []byte("{}"), 0644); err != nil {
+	if err := os.WriteFile(modulePkg, []byte("{}"), 0o644); err != nil {
 		t.Fatalf("write module package.json: %v", err)
 	}
 }
@@ -783,7 +782,7 @@ func TestGetCommandInfoNode_MergesWorkspaceOnceOnCacheHit(t *testing.T) {
 	}
 	app := binmanager.App{Node: appConfig}
 
-	appEnvPath, _, _, err := rm.resolveNodeAppEnvPath("eslint", appConfig, app.Files, app.Archives)
+	appEnvPath, err := rm.resolveNodeAppEnvPath("eslint", appConfig, app.Files, app.Archives)
 	if err != nil {
 		t.Fatalf("resolveNodeAppEnvPath() error = %v", err)
 	}
@@ -791,18 +790,18 @@ func TestGetCommandInfoNode_MergesWorkspaceOnceOnCacheHit(t *testing.T) {
 	defer func() { _ = os.RemoveAll(appEnvPath) }()
 
 	// Count merge invocations across the whole GetCommandInfo exec.
-	var merges int32
+	var merges atomic.Int32
 	orig := buildPNPMWorkspace
 	buildPNPMWorkspace = func(files map[string]string) (string, error) {
-		atomic.AddInt32(&merges, 1)
+		merges.Add(1)
 		return orig(files)
 	}
 	defer func() { buildPNPMWorkspace = orig }()
 
-	if _, err := rm.GetCommandInfo("eslint", app); err != nil {
+	if _, err := rm.GetCommandInfo(context.Background(), "eslint", app); err != nil {
 		t.Fatalf("GetCommandInfo() error = %v", err)
 	}
-	if got := atomic.LoadInt32(&merges); got != 1 {
+	if got := merges.Load(); got != 1 {
 		t.Errorf("pnpm-workspace.yaml merge ran %d times per GetCommandInfo, want 1", got)
 	}
 }
@@ -827,7 +826,7 @@ func TestResolveNodeAppEnvPath_WorkspaceYAMLError(t *testing.T) {
 		Runtime:     "node",
 	}
 
-	_, _, _, err := rm.resolveNodeAppEnvPath("eslint", appConfig, invalidWorkspaceFiles(), nil)
+	_, err := rm.resolveNodeAppEnvPath("eslint", appConfig, invalidWorkspaceFiles(), nil)
 	if err == nil {
 		t.Fatal("expected error for invalid pnpm-workspace.yaml, got nil")
 	}
@@ -848,7 +847,7 @@ func TestInstallNodeApp_WorkspaceYAMLError(t *testing.T) {
 		Runtime:     "node",
 	}
 
-	err := rm.InstallNodeApp("eslint", appConfig, nil, invalidWorkspaceFiles(), nil)
+	err := rm.InstallNodeApp(context.Background(), "eslint", appConfig, nil, invalidWorkspaceFiles(), nil)
 	if err == nil {
 		t.Fatal("expected error for invalid pnpm-workspace.yaml, got nil")
 	}
@@ -869,7 +868,7 @@ func TestGetNodeCommandInfo_WorkspaceYAMLError(t *testing.T) {
 		Runtime:     "node",
 	}
 
-	_, err := rm.GetNodeCommandInfo("eslint", appConfig, invalidWorkspaceFiles(), nil)
+	_, err := rm.GetNodeCommandInfo(context.Background(), "eslint", appConfig, invalidWorkspaceFiles(), nil)
 	if err == nil {
 		t.Fatal("expected error for invalid pnpm-workspace.yaml, got nil")
 	}
@@ -912,7 +911,7 @@ func TestResolveNodeAppEnvPath_CacheKeyUnchanged(t *testing.T) {
 				t.Fatalf("GetAppPath() error = %v", err)
 			}
 
-			gotPath, _, _, err := rm.resolveNodeAppEnvPath("eslint", appConfig, tc.files, nil)
+			gotPath, err := rm.resolveNodeAppEnvPath("eslint", appConfig, tc.files, nil)
 			if err != nil {
 				t.Fatalf("resolveNodeAppEnvPath() error = %v", err)
 			}

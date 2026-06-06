@@ -1,6 +1,7 @@
 package target
 
 import (
+	"context"
 	"runtime"
 	"testing"
 )
@@ -96,7 +97,7 @@ func TestResolvedTargetFallback(t *testing.T) {
 }
 
 func TestDetectHost(t *testing.T) {
-	host := DetectHost()
+	host := DetectHost(context.Background())
 
 	if host.OS != runtime.GOOS {
 		t.Errorf("DetectHost().OS = %q, want %q", host.OS, runtime.GOOS)

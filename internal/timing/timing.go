@@ -1,10 +1,14 @@
+// Package timing measures and reports execution times for hierarchical
+// stages, gated behind the DATAMITSU_TIMINGS environment variable.
 package timing
 
 import (
-	"github.com/datamitsu/datamitsu/internal/env"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/datamitsu/datamitsu/internal/env"
 )
 
 // Timings tracks execution times for different stages
@@ -148,9 +152,11 @@ func (c *ChildTimings) End() {
 // printStage recursively prints a stage and its children
 func printStage(stage Stage, indent int) {
 	prefix := ""
-	for i := 0; i < indent; i++ {
-		prefix += "  "
+	var prefixSb152 strings.Builder
+	for range indent {
+		prefixSb152.WriteString("  ")
 	}
+	prefix += prefixSb152.String()
 
 	// Format the stage name and duration
 	fmt.Printf("%s%s: %s\n", prefix, stage.Name, formatDuration(stage.Duration))

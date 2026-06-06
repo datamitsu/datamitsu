@@ -1,8 +1,21 @@
+// Package runner plans and executes lint/format operations across discovered
+// projects, tracking progress and emitting CI-friendly output.
 package runner
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"slices"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"sync/atomic"
+
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/bundled"
 	"github.com/datamitsu/datamitsu/internal/cache"
@@ -14,14 +27,6 @@ import (
 	"github.com/datamitsu/datamitsu/internal/timing"
 	"github.com/datamitsu/datamitsu/internal/tooling"
 	"github.com/datamitsu/datamitsu/internal/traverser"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"slices"
-	"sort"
-	"strings"
-	"sync"
-	"sync/atomic"
 
 	"github.com/vbauerster/mpb/v8"
 	"github.com/vbauerster/mpb/v8/decor"
@@ -71,9 +76,9 @@ type toolPlanner interface {
 
 // planExecutor is the execution surface used by runSingleOperation (satisfied by *tooling.Executor).
 type planExecutor interface {
-	SetResultCallback(tooling.ResultCallback)
-	SetTaskStartCallback(tooling.TaskStartCallback)
-	SetFileProgressCallback(tooling.FileProgressCallback)
+	SetResultCallback(cb tooling.ResultCallback)
+	SetTaskStartCallback(cb tooling.TaskStartCallback)
+	SetFileProgressCallback(cb tooling.FileProgressCallback)
 	Execute(ctx context.Context, plan *tooling.ExecutionPlan) ([]tooling.GroupExecutionResult, error)
 }
 
@@ -270,7 +275,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 				totalFileProcessing += len(task.Files)
 			} else {
 				// Batch mode or whole-project mode (no files): count as 1 unit
-				totalFileProcessing += 1
+				totalFileProcessing++
 			}
 		}
 	}
@@ -306,8 +311,8 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 				decor.Any(func(s decor.Statistics) string {
 					// Read currentBarDesc without lock to avoid deadlock
 					// mpb may call this from its own goroutine while we hold progressMu
-					if desc := currentBarDesc.Load(); desc != nil {
-						return desc.(string)
+					if desc, ok := currentBarDesc.Load().(string); ok {
+						return desc
 					}
 					return ""
 				}, decor.WC{W: 40, C: decor.DSyncWidthR}),
@@ -366,7 +371,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		if env.IsCI() {
 			dirInfo := ""
 			if relativeDir != "" {
-				dirInfo = fmt.Sprintf(" in %s", relativeDir)
+				dirInfo = " in " + relativeDir
 			}
 			fmt.Printf("⏳ Starting %s%s\n", toolName, dirInfo)
 		}
@@ -489,7 +494,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	}
 
 	if hasFailures {
-		return fmt.Errorf("operation failed")
+		return errors.New("operation failed")
 	}
 
 	fmt.Println()
@@ -562,7 +567,7 @@ func formatToolWithDir(toolName, relativeDir string) string {
 	if relativeDir != "" {
 		return fmt.Sprintf("⏳ %s (%s)", toolName, relativeDir)
 	}
-	return fmt.Sprintf("⏳ %s", toolName)
+	return "⏳ " + toolName
 }
 
 // activeToolDir returns any active directory for a tool (for progress display).
@@ -627,7 +632,7 @@ func groupResultsByTool(groupResults []tooling.GroupExecutionResult) []toolExecu
 	}
 
 	// Sort by first seen index to preserve execution order
-	var groups []toolExecutionGroup
+	groups := make([]toolExecutionGroup, 0, len(toolMap))
 	for _, group := range toolMap {
 		groups = append(groups, *group)
 	}
@@ -661,7 +666,7 @@ func printGroupedResults(toolGroups []toolExecutionGroup) {
 		// Print tool summary line with scope and min/max
 		scopeInfo := ""
 		if group.scope != "" {
-			scopeInfo = fmt.Sprintf(" %s", clr.Faint("["+string(group.scope)+"]"))
+			scopeInfo = " " + clr.Faint("["+string(group.scope)+"]")
 		}
 		toolDisplay := clr.Bold(group.toolName)
 		if group.failedRuns > 0 {
@@ -718,9 +723,9 @@ func printFailedExecution(runNum int, exec executionInstance) {
 	result := exec.result
 
 	// Build header with tool name and scope
-	header := fmt.Sprintf("─ %s", clr.Red(result.ToolName))
+	header := "─ " + clr.Red(result.ToolName)
 	if result.Scope != "" {
-		header += fmt.Sprintf(" %s", clr.Faint("["+string(result.Scope)+"]"))
+		header += " " + clr.Faint("["+string(result.Scope)+"]")
 	}
 	header += fmt.Sprintf(" (run #%d) ", runNum)
 
@@ -743,14 +748,14 @@ func printFailedExecution(runNum int, exec executionInstance) {
 	}
 
 	// Exit info
-	fmt.Printf("  %s  %s %s\n", border("│"), label("Exit code:"), clr.Red(fmt.Sprintf("%d", result.ExitCode)))
+	fmt.Printf("  %s  %s %s\n", border("│"), label("Exit code:"), clr.Red(strconv.Itoa(result.ExitCode)))
 	fmt.Printf("  %s  %s %s\n", border("│"), label("Duration: "), formatDuration(result.Duration))
 
 	// Tool output
 	if result.Output != "" {
 		fmt.Printf("  %s\n", border("│"))
-		lines := strings.Split(strings.TrimRight(result.Output, "\n"), "\n")
-		for _, line := range lines {
+		lines := strings.SplitSeq(strings.TrimRight(result.Output, "\n"), "\n")
+		for line := range lines {
 			fmt.Printf("  %s  %s\n", border("│"), line)
 		}
 	} else if result.Error != nil {

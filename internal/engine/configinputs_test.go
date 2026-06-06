@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -20,7 +21,7 @@ func TestConfigInputsInjected(t *testing.T) {
 		t.Fatalf("runtimeconfig.Get() error = %v", err)
 	}
 
-	e, err := New("")
+	e, err := New(context.Background(), "")
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -37,7 +38,7 @@ func TestConfigInputsInjected(t *testing.T) {
 // TestConfigInputsIsPlainObject verifies datamitsuConfigInputs is a plain object
 // (not a function, array, or null), so config JS can read its fields directly.
 func TestConfigInputsIsPlainObject(t *testing.T) {
-	e, err := New("")
+	e, err := New(context.Background(), "")
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -58,7 +59,7 @@ func TestConfigInputsIsPlainObject(t *testing.T) {
 // frozen surface enforces the "config inputs are bounded and read-only"
 // contract structurally.
 func TestConfigInputsIsFrozen(t *testing.T) {
-	e, err := New("")
+	e, err := New(context.Background(), "")
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -104,8 +105,8 @@ func TestConfigInputsIsFrozen(t *testing.T) {
 func TestConfigInputsKeysAreInjectedInSortedOrder(t *testing.T) {
 	wantOrder := "minimumReleaseAgeMinutes"
 
-	for i := 0; i < 5; i++ {
-		e, err := New("")
+	for i := range 5 {
+		e, err := New(context.Background(), "")
 		if err != nil {
 			t.Fatalf("iter %d: New() error = %v", i, err)
 		}
@@ -125,7 +126,7 @@ func TestConfigInputsKeysAreInjectedInSortedOrder(t *testing.T) {
 // concurrency, maxCmdLength, maxErrorCmdDisplay, maxParallelWorkers) is NOT
 // leaked into the config JS input surface.
 func TestConfigInputsOnlyAllowlistedFieldsExposed(t *testing.T) {
-	e, err := New("")
+	e, err := New(context.Background(), "")
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}

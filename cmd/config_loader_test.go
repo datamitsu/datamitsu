@@ -1,20 +1,23 @@
 package cmd
 
 import (
+	"context"
 	"crypto/sha256"
-	"github.com/datamitsu/datamitsu/internal/config"
-	"github.com/datamitsu/datamitsu/internal/engine"
-	"github.com/datamitsu/datamitsu/internal/ldflags"
-	"github.com/datamitsu/datamitsu/internal/logger"
-	"github.com/datamitsu/datamitsu/internal/pnpmdefaults"
 	"encoding/hex"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/engine"
+	"github.com/datamitsu/datamitsu/internal/ldflags"
+	"github.com/datamitsu/datamitsu/internal/logger"
+	"github.com/datamitsu/datamitsu/internal/pnpmdefaults"
 
 	"github.com/dop251/goja"
 	"github.com/goccy/go-yaml"
@@ -533,7 +536,7 @@ func TestIgnoreRulesMergeWithEmptyPrevious(t *testing.T) {
 func TestDiscoverAutoConfigOnlyTS(t *testing.T) {
 	dir := t.TempDir()
 	tsPath := filepath.Join(dir, ldflags.PackageName+".config.ts")
-	if err := os.WriteFile(tsPath, []byte("// ts config"), 0644); err != nil {
+	if err := os.WriteFile(tsPath, []byte("// ts config"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -549,7 +552,7 @@ func TestDiscoverAutoConfigOnlyTS(t *testing.T) {
 func TestDiscoverAutoConfigOnlyJS(t *testing.T) {
 	dir := t.TempDir()
 	jsPath := filepath.Join(dir, ldflags.PackageName+".config.js")
-	if err := os.WriteFile(jsPath, []byte("// js config"), 0644); err != nil {
+	if err := os.WriteFile(jsPath, []byte("// js config"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -565,7 +568,7 @@ func TestDiscoverAutoConfigOnlyJS(t *testing.T) {
 func TestDiscoverAutoConfigOnlyMJS(t *testing.T) {
 	dir := t.TempDir()
 	mjsPath := filepath.Join(dir, ldflags.PackageName+".config.mjs")
-	if err := os.WriteFile(mjsPath, []byte("// mjs config"), 0644); err != nil {
+	if err := os.WriteFile(mjsPath, []byte("// mjs config"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -580,10 +583,10 @@ func TestDiscoverAutoConfigOnlyMJS(t *testing.T) {
 
 func TestDiscoverAutoConfigBothExist(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, ldflags.PackageName+".config.ts"), []byte("// ts"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, ldflags.PackageName+".config.ts"), []byte("// ts"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, ldflags.PackageName+".config.js"), []byte("// js"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, ldflags.PackageName+".config.js"), []byte("// js"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -635,7 +638,7 @@ function getConfig(input) {
 
 	resolved := make(map[string]bool)
 	stack := make(map[string]bool)
-	result, _, err := processConfigSource(nil, configSource{
+	result, _, err := processConfigSource(context.Background(), nil, configSource{
 		name:    "test-local",
 		content: localContent,
 	}, resolved, stack)
@@ -691,7 +694,7 @@ function getConfig(input) {
 
 	resolved := make(map[string]bool)
 	stack := make(map[string]bool)
-	result, _, err := processConfigSource(nil, configSource{
+	result, _, err := processConfigSource(context.Background(), nil, configSource{
 		name:    "test-local",
 		content: localContent,
 	}, resolved, stack)
@@ -723,7 +726,7 @@ function getConfig(input) {
 
 	resolved := make(map[string]bool)
 	stack := make(map[string]bool)
-	_, _, err := processConfigSource(nil, configSource{
+	_, _, err := processConfigSource(context.Background(), nil, configSource{
 		name:    "test-missing-hash",
 		content: localContent,
 	}, resolved, stack)
@@ -773,7 +776,7 @@ function getConfig(input) { return {}; }`, server.URL, remoteAHash)
 
 	resolved := make(map[string]bool)
 	stack := make(map[string]bool)
-	_, _, err := processConfigSource(nil, configSource{
+	_, _, err := processConfigSource(context.Background(), nil, configSource{
 		name:    "test-circular",
 		content: localContent,
 	}, resolved, stack)
@@ -789,7 +792,7 @@ func TestProcessConfigSourceDiamondDependency(t *testing.T) {
 	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 
 	// Diamond: local -> [A, B], A -> D, B -> D
-	// D is a shared dependency — should be processed twice (not a cycle).
+	// Node D is a shared dependency — should be processed twice (not a cycle).
 	remoteDContent := `function getConfig(input) { return { ignoreRules: ["from-D: eslint"] }; }`
 	remoteDHash := computeHash(remoteDContent)
 
@@ -839,7 +842,7 @@ function getConfig(input) {
 
 	resolved := make(map[string]bool)
 	stack := make(map[string]bool)
-	result, _, err := processConfigSource(nil, configSource{
+	result, _, err := processConfigSource(context.Background(), nil, configSource{
 		name:    "test-diamond",
 		content: localContent,
 	}, resolved, stack)
@@ -865,7 +868,7 @@ func TestBeforeConfigOrdering(t *testing.T) {
 	if err := os.WriteFile(beforePath, []byte(
 		`function getMinVersion() { return "0.0.0"; }
 function getConfig(input) { return { ignoreRules: ["from-before: eslint"] }; }`,
-	), 0644); err != nil {
+	), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -874,11 +877,12 @@ function getConfig(input) { return { ignoreRules: ["from-before: eslint"] }; }`,
 	if err := os.WriteFile(configPath, []byte(
 		`function getMinVersion() { return "0.0.0"; }
 function getConfig(input) { return { ignoreRules: ["from-override: prettier"] }; }`,
-	), 0644); err != nil {
+	), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
 	cfg, _, _, err := loadConfigWithPaths(
+		context.Background(),
 		[]string{beforePath},
 		true, // skip git root auto-discovery
 		[]string{configPath},
@@ -911,7 +915,7 @@ function getConfig(input) { return { ignoreRules: ["from-override: prettier"] };
 }
 
 func TestNoAutoConfig(t *testing.T) {
-	cfg, _, _, err := loadConfigWithPaths(nil, true, nil)
+	cfg, _, _, err := loadConfigWithPaths(context.Background(), nil, true, nil)
 	if err != nil {
 		t.Fatalf("loadConfigWithPaths with noAutoConfig error: %v", err)
 	}
@@ -924,7 +928,7 @@ func TestNoAutoConfig(t *testing.T) {
 }
 
 func TestLoadConfigString(t *testing.T) {
-	e, err := engine.New("")
+	e, err := engine.New(context.Background(), "")
 	if err != nil {
 		t.Fatalf("engine.New error: %v", err)
 	}
@@ -982,7 +986,7 @@ function getConfig(input) {
 
 	resolved := make(map[string]bool)
 	stack := make(map[string]bool)
-	result, _, err := processConfigSource(nil, configSource{
+	result, _, err := processConfigSource(context.Background(), nil, configSource{
 		name:    "test-skip-remote",
 		content: localContent,
 	}, resolved, stack)
@@ -1029,7 +1033,7 @@ function getRemoteConfigs() {
 function getConfig(input) {
     return { ignoreRules: ["from-local: prettier"] };
 }`, server.URL, remoteHash)
-	if err := os.WriteFile(beforePath, []byte(beforeContent), 0644); err != nil {
+	if err := os.WriteFile(beforePath, []byte(beforeContent), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1037,7 +1041,7 @@ function getConfig(input) {
 	SkipRemoteConfig = false
 	defer func() { SkipRemoteConfig = oldSkip }()
 
-	cfg, _, _, err := loadConfigWithPaths([]string{beforePath}, true, nil)
+	cfg, _, _, err := loadConfigWithPaths(context.Background(), []string{beforePath}, true, nil)
 	if err != nil {
 		t.Fatalf("loadConfigWithPaths error: %v", err)
 	}
@@ -1049,11 +1053,8 @@ function getConfig(input) {
 	urlsCopy := make([]string, len(resolvedRemoteURLs))
 	copy(urlsCopy, resolvedRemoteURLs)
 	resolvedRemoteURLsMu.Unlock()
-	for _, url := range urlsCopy {
-		if url == expectedURL {
-			found = true
-			break
-		}
+	if slices.Contains(urlsCopy, expectedURL) {
+		found = true
 	}
 	if !found {
 		t.Errorf("resolvedRemoteURLs = %v, expected to contain %q", urlsCopy, expectedURL)
@@ -1088,7 +1089,7 @@ func TestSharedStorageFlowsThroughConfigChain(t *testing.T) {
 function getConfig(input) {
 			return { sharedStorage: { "my-key": "root-value", "other": "data" } };
 		}`,
-	), 0644); err != nil {
+	), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1100,11 +1101,12 @@ function getConfig(input) {
 			ss["child-key"] = "child-value";
 			return { sharedStorage: ss };
 		}`,
-	), 0644); err != nil {
+	), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
 	cfg, _, _, err := loadConfigWithPaths(
+		context.Background(),
 		[]string{rootPath},
 		true,
 		[]string{childPath},
@@ -1128,7 +1130,7 @@ function getConfig(input) {
 }
 
 func TestSharedStorageDefaultEntries(t *testing.T) {
-	cfg, _, _, err := loadConfigWithPaths(nil, true, nil)
+	cfg, _, _, err := loadConfigWithPaths(context.Background(), nil, true, nil)
 	if err != nil {
 		t.Fatalf("loadConfigWithPaths error: %v", err)
 	}
@@ -1150,7 +1152,7 @@ func TestSharedStorageDefaultEntries(t *testing.T) {
 // removed in Task 2 (the hardcoded JS copy is gone, so the JS now reads the
 // injected global).
 func TestSharedStoragePNPMWorkspaceDefaultsRoundTrip(t *testing.T) {
-	cfg, _, _, err := loadConfigWithPaths(nil, true, nil)
+	cfg, _, _, err := loadConfigWithPaths(context.Background(), nil, true, nil)
 	if err != nil {
 		t.Fatalf("loadConfigWithPaths error: %v", err)
 	}
@@ -1250,7 +1252,7 @@ function getConfig(input) {
 
 	resolved := make(map[string]bool)
 	stack := make(map[string]bool)
-	result, _, err := processConfigSource(nil, configSource{
+	result, _, err := processConfigSource(context.Background(), nil, configSource{
 		name:    "test-cache-on-disk",
 		content: localContent,
 	}, resolved, stack)
@@ -1313,7 +1315,7 @@ function getConfig(input) {
 	// First call — should fetch from server
 	resolved1 := make(map[string]bool)
 	stack1 := make(map[string]bool)
-	_, _, err := processConfigSource(nil, configSource{
+	_, _, err := processConfigSource(context.Background(), nil, configSource{
 		name:    "test-repeat-1",
 		content: localContent,
 	}, resolved1, stack1)
@@ -1327,7 +1329,7 @@ function getConfig(input) {
 	// Second call — should use cache, no additional HTTP request
 	resolved2 := make(map[string]bool)
 	stack2 := make(map[string]bool)
-	result, _, err := processConfigSource(nil, configSource{
+	result, _, err := processConfigSource(context.Background(), nil, configSource{
 		name:    "test-repeat-2",
 		content: localContent,
 	}, resolved2, stack2)
@@ -1383,7 +1385,7 @@ function getConfig(input) {
 	// First call — populate cache
 	resolved1 := make(map[string]bool)
 	stack1 := make(map[string]bool)
-	_, _, err := processConfigSource(nil, configSource{
+	_, _, err := processConfigSource(context.Background(), nil, configSource{
 		name:    "test-cache-1",
 		content: localContent,
 	}, resolved1, stack1)
@@ -1396,7 +1398,7 @@ function getConfig(input) {
 
 	resolved2 := make(map[string]bool)
 	stack2 := make(map[string]bool)
-	result, _, err := processConfigSource(nil, configSource{
+	result, _, err := processConfigSource(context.Background(), nil, configSource{
 		name:    "test-cache-2",
 		content: localContent,
 	}, resolved2, stack2)
@@ -1427,7 +1429,7 @@ function getConfig(input) { return { ignoreRules: ["with-version: eslint"] }; }
 `
 	resolved := make(map[string]bool)
 	stack := make(map[string]bool)
-	result, _, err := processConfigSource(nil, configSource{
+	result, _, err := processConfigSource(context.Background(), nil, configSource{
 		name:    "test-with-min-version",
 		content: content,
 	}, resolved, stack)
@@ -1453,7 +1455,7 @@ function getConfig(input) { return { ignoreRules: ["no-version: eslint"] }; }
 `
 	resolved := make(map[string]bool)
 	stack := make(map[string]bool)
-	_, _, err := processConfigSource(nil, configSource{
+	_, _, err := processConfigSource(context.Background(), nil, configSource{
 		name:    "test-no-min-version",
 		content: content,
 	}, resolved, stack)
@@ -1473,7 +1475,7 @@ function getConfig(input) { return {}; }
 `
 	resolved := make(map[string]bool)
 	stack := make(map[string]bool)
-	_, _, err := processConfigSource(nil, configSource{
+	_, _, err := processConfigSource(context.Background(), nil, configSource{
 		name:    "test-non-string-version",
 		content: content,
 	}, resolved, stack)
@@ -1493,7 +1495,7 @@ function getConfig(input) { return {}; }
 `
 	resolved := make(map[string]bool)
 	stack := make(map[string]bool)
-	_, _, err := processConfigSource(nil, configSource{
+	_, _, err := processConfigSource(context.Background(), nil, configSource{
 		name:    "test-empty-version",
 		content: content,
 	}, resolved, stack)
@@ -1513,7 +1515,7 @@ function getConfig(input) { return {}; }
 `
 	resolved := make(map[string]bool)
 	stack := make(map[string]bool)
-	_, _, err := processConfigSource(nil, configSource{
+	_, _, err := processConfigSource(context.Background(), nil, configSource{
 		name:    "test-invalid-semver",
 		content: content,
 	}, resolved, stack)
@@ -1535,11 +1537,11 @@ func TestLoadConfigWithLowMinVersion(t *testing.T) {
 	if err := os.WriteFile(configPath, []byte(
 		`function getMinVersion() { return "0.0.0"; }
 function getConfig(input) { return { ignoreRules: ["low-version: eslint"] }; }`,
-	), 0644); err != nil {
+	), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	cfg, _, _, err := loadConfigWithPaths(nil, true, []string{configPath})
+	cfg, _, _, err := loadConfigWithPaths(context.Background(), nil, true, []string{configPath})
 	if err != nil {
 		t.Fatalf("expected success with low minVersion, got error: %v", err)
 	}
@@ -1563,11 +1565,11 @@ func TestLoadConfigWithHighMinVersionFails(t *testing.T) {
 	if err := os.WriteFile(configPath, []byte(
 		`function getMinVersion() { return "99.0.0"; }
 function getConfig(input) { return {}; }`,
-	), 0644); err != nil {
+	), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	_, _, _, err := loadConfigWithPaths(nil, true, []string{configPath})
+	_, _, _, err := loadConfigWithPaths(context.Background(), nil, true, []string{configPath})
 	if err == nil {
 		t.Fatal("expected error when minVersion > current version")
 	}
@@ -1587,12 +1589,12 @@ func TestLoadConfigWithDevVersionAlwaysPasses(t *testing.T) {
 	if err := os.WriteFile(configPath, []byte(
 		`function getMinVersion() { return "0.0.0"; }
 function getConfig(input) { return { ignoreRules: ["dev-version: eslint"] }; }`,
-	), 0644); err != nil {
+	), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
 	// ldflags.Version defaults to "dev" which normalizes to v0.0.0
-	cfg, _, _, err := loadConfigWithPaths(nil, true, []string{configPath})
+	cfg, _, _, err := loadConfigWithPaths(context.Background(), nil, true, []string{configPath})
 	if err != nil {
 		t.Fatalf("expected success with dev version, got error: %v", err)
 	}
@@ -1609,7 +1611,7 @@ func TestLoadConfigMultiLayerVersionCheck(t *testing.T) {
 	if err := os.WriteFile(beforePath, []byte(
 		`function getMinVersion() { return "0.0.0"; }
 function getConfig(input) { return { ignoreRules: ["from-before: eslint"] }; }`,
-	), 0644); err != nil {
+	), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1618,11 +1620,11 @@ function getConfig(input) { return { ignoreRules: ["from-before: eslint"] }; }`,
 	if err := os.WriteFile(configPath, []byte(
 		`function getMinVersion() { return "0.0.0"; }
 function getConfig(input) { return { ignoreRules: ["from-config: prettier"] }; }`,
-	), 0644); err != nil {
+	), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	cfg, _, _, err := loadConfigWithPaths([]string{beforePath}, true, []string{configPath})
+	cfg, _, _, err := loadConfigWithPaths(context.Background(), []string{beforePath}, true, []string{configPath})
 	if err != nil {
 		t.Fatalf("expected success with multi-layer version check, got error: %v", err)
 	}
@@ -1653,7 +1655,7 @@ func TestLoadConfigMultiLayerVersionCheckFailsOnSecondLayer(t *testing.T) {
 	if err := os.WriteFile(beforePath, []byte(
 		`function getMinVersion() { return "0.0.0"; }
 function getConfig(input) { return { ignoreRules: ["from-before: eslint"] }; }`,
-	), 0644); err != nil {
+	), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1662,11 +1664,11 @@ function getConfig(input) { return { ignoreRules: ["from-before: eslint"] }; }`,
 	if err := os.WriteFile(configPath, []byte(
 		`function getMinVersion() { return "99.0.0"; }
 function getConfig(input) { return {}; }`,
-	), 0644); err != nil {
+	), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	_, _, _, err := loadConfigWithPaths([]string{beforePath}, true, []string{configPath})
+	_, _, _, err := loadConfigWithPaths(context.Background(), []string{beforePath}, true, []string{configPath})
 	if err == nil {
 		t.Fatal("expected error when second layer has high version requirement")
 	}
@@ -1686,11 +1688,11 @@ func TestLoadConfigVersionCheckShowsConfigFile(t *testing.T) {
 	if err := os.WriteFile(configPath, []byte(
 		`function getMinVersion() { return "99.0.0"; }
 function getConfig(input) { return {}; }`,
-	), 0644); err != nil {
+	), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	_, _, _, err := loadConfigWithPaths(nil, true, []string{configPath})
+	_, _, _, err := loadConfigWithPaths(context.Background(), nil, true, []string{configPath})
 	if err == nil {
 		t.Fatal("expected error for version check failure")
 	}
@@ -1705,7 +1707,7 @@ func TestDefaultConfigHasGetMinVersion(t *testing.T) {
 	// Even though the default config is skipped for version checking (isDefault=true),
 	// it should still define the function so user configs that override it inherit
 	// a consistent contract.
-	e, err := engine.New("")
+	e, err := engine.New(context.Background(), "")
 	if err != nil {
 		t.Fatalf("engine.New error: %v", err)
 	}
@@ -1765,7 +1767,7 @@ function getConfig(input) { return {}; }
 `, tt.version)
 			resolved := make(map[string]bool)
 			stack := make(map[string]bool)
-			_, _, err := processConfigSource(nil, configSource{
+			_, _, err := processConfigSource(context.Background(), nil, configSource{
 				name:    "test-extraction-" + tt.name,
 				content: content,
 			}, resolved, stack)
@@ -1781,7 +1783,7 @@ function getConfig(input) { return {}; }
 // ========================================
 
 func TestLoadConfigImplInitializesLayerMap(t *testing.T) {
-	_, layerMap, _, err := loadConfigWithPaths(nil, true, nil)
+	_, layerMap, _, err := loadConfigWithPaths(context.Background(), nil, true, nil)
 	if err != nil {
 		t.Fatalf("loadConfigWithPaths error: %v", err)
 	}
@@ -1791,7 +1793,7 @@ func TestLoadConfigImplInitializesLayerMap(t *testing.T) {
 }
 
 func TestLoadConfigImplReturns4Tuple(t *testing.T) {
-	cfg, layerMap, vm, err := loadConfigWithPaths(nil, true, nil)
+	cfg, layerMap, vm, err := loadConfigWithPaths(context.Background(), nil, true, nil)
 	if err != nil {
 		t.Fatalf("loadConfigWithPaths error: %v", err)
 	}
@@ -1821,11 +1823,11 @@ function getConfig(input) {
         }
     };
 }
-`), 0644); err != nil {
+`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	_, layerMap, _, err := loadConfigWithPaths(nil, true, []string{configPath})
+	_, layerMap, _, err := loadConfigWithPaths(context.Background(), nil, true, []string{configPath})
 	if err != nil {
 		t.Fatalf("loadConfigWithPaths error: %v", err)
 	}
@@ -1863,7 +1865,7 @@ function getConfig(input) {
         }
     };
 }
-`), 0644); err != nil {
+`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1886,11 +1888,11 @@ function getConfig(input) {
         }
     };
 }
-`), 0644); err != nil {
+`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	_, layerMap, _, err := loadConfigWithPaths([]string{beforePath}, true, []string{configPath})
+	_, layerMap, _, err := loadConfigWithPaths(context.Background(), []string{beforePath}, true, []string{configPath})
 	if err != nil {
 		t.Fatalf("loadConfigWithPaths error: %v", err)
 	}
@@ -1924,11 +1926,11 @@ function getConfig(input) {
         }
     };
 }
-`), 0644); err != nil {
+`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	_, layerMap, _, err := loadConfigWithPaths(nil, true, []string{configPath})
+	_, layerMap, _, err := loadConfigWithPaths(context.Background(), nil, true, []string{configPath})
 	if err != nil {
 		t.Fatalf("loadConfigWithPaths should not error on failed content(): %v", err)
 	}
@@ -1962,11 +1964,11 @@ func TestLoadConfigUnstableVersionBypassesHighMinVersion(t *testing.T) {
 	if err := os.WriteFile(configPath, []byte(
 		`function getMinVersion() { return "99.0.0"; }
 function getConfig(input) { return { ignoreRules: ["unstable-bypass: eslint"] }; }`,
-	), 0644); err != nil {
+	), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	cfg, _, _, err := loadConfigWithPaths(nil, true, []string{configPath})
+	cfg, _, _, err := loadConfigWithPaths(context.Background(), nil, true, []string{configPath})
 	if err != nil {
 		t.Fatalf("expected unstable bypass to succeed against high minVersion, got: %v", err)
 	}
@@ -2014,11 +2016,11 @@ func TestLoadConfigStableVersionStillFailsHighMinVersion(t *testing.T) {
 	if err := os.WriteFile(configPath, []byte(
 		`function getMinVersion() { return "99.0.0"; }
 function getConfig(input) { return {}; }`,
-	), 0644); err != nil {
+	), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	_, _, _, err := loadConfigWithPaths(nil, true, []string{configPath})
+	_, _, _, err := loadConfigWithPaths(context.Background(), nil, true, []string{configPath})
 	if err == nil {
 		t.Fatal("expected stable version below required to fail")
 	}

@@ -32,13 +32,13 @@ func ParseRules(lines []string) ([]Rule, error) {
 			continue
 		}
 
-		colonIdx := strings.Index(line, ":")
-		if colonIdx < 0 {
+		before, after, ok := strings.Cut(line, ":")
+		if !ok {
 			return nil, fmt.Errorf("line %d: missing colon separator: %q", i+1, line)
 		}
 
-		globPart := strings.TrimSpace(line[:colonIdx])
-		toolsPart := strings.TrimSpace(line[colonIdx+1:])
+		globPart := strings.TrimSpace(before)
+		toolsPart := strings.TrimSpace(after)
 
 		if globPart == "" || globPart == "!" {
 			return nil, fmt.Errorf("line %d: empty glob pattern", i+1)
@@ -57,7 +57,7 @@ func ParseRules(lines []string) ([]Rule, error) {
 		}
 
 		var tools []string
-		for _, t := range strings.Split(toolsPart, ",") {
+		for t := range strings.SplitSeq(toolsPart, ",") {
 			t = strings.TrimSpace(t)
 			if t != "" {
 				tools = append(tools, t)

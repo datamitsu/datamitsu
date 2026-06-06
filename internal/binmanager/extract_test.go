@@ -23,7 +23,7 @@ func TestExtractBinaryFile(t *testing.T) {
 
 		srcPath := filepath.Join(tmpDir, "source.bin")
 		testContent := []byte("binary content")
-		if err := os.WriteFile(srcPath, testContent, 0644); err != nil {
+		if err := os.WriteFile(srcPath, testContent, 0o644); err != nil {
 			t.Fatalf("failed to create source file: %v", err)
 		}
 
@@ -100,7 +100,7 @@ func TestExtractGz(t *testing.T) {
 		tmpDir := t.TempDir()
 		gzPath := filepath.Join(tmpDir, "invalid.gz")
 
-		if err := os.WriteFile(gzPath, []byte("not a gz file"), 0644); err != nil {
+		if err := os.WriteFile(gzPath, []byte("not a gz file"), 0o644); err != nil {
 			t.Fatalf("failed to create invalid gz file: %v", err)
 		}
 
@@ -125,7 +125,7 @@ func TestExtractTarGz(t *testing.T) {
 
 		header := &tar.Header{
 			Name: targetPath,
-			Mode: 0755,
+			Mode: 0o755,
 			Size: int64(len(testContent)),
 		}
 		_ = tarWriter.WriteHeader(header)
@@ -169,7 +169,7 @@ func TestExtractTarGz(t *testing.T) {
 		testContent := []byte("content")
 		header := &tar.Header{
 			Name: "other/file",
-			Mode: 0755,
+			Mode: 0o755,
 			Size: int64(len(testContent)),
 		}
 		_ = tarWriter.WriteHeader(header)
@@ -200,7 +200,7 @@ func TestExtractTarXz(t *testing.T) {
 
 		header := &tar.Header{
 			Name: targetPath,
-			Mode: 0755,
+			Mode: 0o755,
 			Size: int64(len(testContent)),
 		}
 		_ = tarWriter.WriteHeader(header)
@@ -318,7 +318,7 @@ func TestExtractBinary(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			archivePath := filepath.Join(tmpDir, "test.bin")
 			if tt.contentType == BinContentTypeBinary {
-				_ = os.WriteFile(archivePath, []byte("test"), 0644)
+				_ = os.WriteFile(archivePath, []byte("test"), 0o644)
 			}
 
 			_, err := extractBinary(archivePath, tt.contentType, nil, tmpDir)
@@ -484,7 +484,7 @@ func TestExtractTarGz_PathTraversalProtection(t *testing.T) {
 	maliciousContent := []byte("malicious content")
 	header := &tar.Header{
 		Name: "../../../etc/passwd",
-		Mode: 0755,
+		Mode: 0o755,
 		Size: int64(len(maliciousContent)),
 	}
 	_ = tarWriter.WriteHeader(header)
@@ -513,15 +513,15 @@ func TestExtractTarGzToDir(t *testing.T) {
 		gzWriter := gzip.NewWriter(file)
 		tarWriter := tar.NewWriter(gzWriter)
 
-		_ = tarWriter.WriteHeader(&tar.Header{Name: "jdk/", Typeflag: tar.TypeDir, Mode: 0755})
-		_ = tarWriter.WriteHeader(&tar.Header{Name: "jdk/bin/", Typeflag: tar.TypeDir, Mode: 0755})
+		_ = tarWriter.WriteHeader(&tar.Header{Name: "jdk/", Typeflag: tar.TypeDir, Mode: 0o755})
+		_ = tarWriter.WriteHeader(&tar.Header{Name: "jdk/bin/", Typeflag: tar.TypeDir, Mode: 0o755})
 
 		javaContent := []byte("#!/bin/sh\necho java")
-		_ = tarWriter.WriteHeader(&tar.Header{Name: "jdk/bin/java", Typeflag: tar.TypeReg, Mode: 0755, Size: int64(len(javaContent))})
+		_ = tarWriter.WriteHeader(&tar.Header{Name: "jdk/bin/java", Typeflag: tar.TypeReg, Mode: 0o755, Size: int64(len(javaContent))})
 		_, _ = tarWriter.Write(javaContent)
 
 		libContent := []byte("library data")
-		_ = tarWriter.WriteHeader(&tar.Header{Name: "jdk/lib/libjvm.so", Typeflag: tar.TypeReg, Mode: 0644, Size: int64(len(libContent))})
+		_ = tarWriter.WriteHeader(&tar.Header{Name: "jdk/lib/libjvm.so", Typeflag: tar.TypeReg, Mode: 0o644, Size: int64(len(libContent))})
 		_, _ = tarWriter.Write(libContent)
 
 		_ = tarWriter.WriteHeader(&tar.Header{Name: "jdk/bin/javac", Typeflag: tar.TypeSymlink, Linkname: "java"})
@@ -549,7 +549,7 @@ func TestExtractTarGzToDir(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to stat java: %v", err)
 		}
-		if info.Mode()&0100 == 0 {
+		if info.Mode()&0o100 == 0 {
 			t.Error("java binary should be executable")
 		}
 
@@ -612,7 +612,7 @@ func TestExtractTarGzToDir(t *testing.T) {
 		tarWriter := tar.NewWriter(gzWriter)
 
 		content := []byte("malicious")
-		_ = tarWriter.WriteHeader(&tar.Header{Name: "../../../etc/passwd", Typeflag: tar.TypeReg, Mode: 0644, Size: int64(len(content))})
+		_ = tarWriter.WriteHeader(&tar.Header{Name: "../../../etc/passwd", Typeflag: tar.TypeReg, Mode: 0o644, Size: int64(len(content))})
 		_, _ = tarWriter.Write(content)
 		_ = tarWriter.Close()
 		_ = gzWriter.Close()
@@ -647,10 +647,10 @@ func TestExtractTarXzToDir(t *testing.T) {
 		}
 		tarWriter := tar.NewWriter(xzWriter)
 
-		_ = tarWriter.WriteHeader(&tar.Header{Name: "app/", Typeflag: tar.TypeDir, Mode: 0755})
+		_ = tarWriter.WriteHeader(&tar.Header{Name: "app/", Typeflag: tar.TypeDir, Mode: 0o755})
 
 		binContent := []byte("binary content")
-		_ = tarWriter.WriteHeader(&tar.Header{Name: "app/bin", Typeflag: tar.TypeReg, Mode: 0755, Size: int64(len(binContent))})
+		_ = tarWriter.WriteHeader(&tar.Header{Name: "app/bin", Typeflag: tar.TypeReg, Mode: 0o755, Size: int64(len(binContent))})
 		_, _ = tarWriter.Write(binContent)
 
 		_ = tarWriter.Close()
@@ -696,11 +696,11 @@ func makeNodeTarXz(t *testing.T, path string) {
 	}
 	tarWriter := tar.NewWriter(xzWriter)
 
-	_ = tarWriter.WriteHeader(&tar.Header{Name: "node-v26.2.0-linux-x64/", Typeflag: tar.TypeDir, Mode: 0755})
-	_ = tarWriter.WriteHeader(&tar.Header{Name: "node-v26.2.0-linux-x64/bin/", Typeflag: tar.TypeDir, Mode: 0755})
+	_ = tarWriter.WriteHeader(&tar.Header{Name: "node-v26.2.0-linux-x64/", Typeflag: tar.TypeDir, Mode: 0o755})
+	_ = tarWriter.WriteHeader(&tar.Header{Name: "node-v26.2.0-linux-x64/bin/", Typeflag: tar.TypeDir, Mode: 0o755})
 
 	nodeContent := []byte("#!/bin/sh\necho node")
-	_ = tarWriter.WriteHeader(&tar.Header{Name: "node-v26.2.0-linux-x64/bin/node", Typeflag: tar.TypeReg, Mode: 0755, Size: int64(len(nodeContent))})
+	_ = tarWriter.WriteHeader(&tar.Header{Name: "node-v26.2.0-linux-x64/bin/node", Typeflag: tar.TypeReg, Mode: 0o755, Size: int64(len(nodeContent))})
 	_, _ = tarWriter.Write(nodeContent)
 
 	_ = tarWriter.Close()
@@ -725,7 +725,7 @@ func TestExtractTarXz_NodeArchive(t *testing.T) {
 		if err != nil {
 			t.Fatalf("expected bin/node to exist: %v", err)
 		}
-		if info.Mode()&0100 == 0 {
+		if info.Mode()&0o100 == 0 {
 			t.Error("bin/node should be executable (perms not preserved)")
 		}
 	})
@@ -758,7 +758,7 @@ func TestExtractTarXzToDir_RejectsPathTraversal(t *testing.T) {
 	tarWriter := tar.NewWriter(xzWriter)
 
 	content := []byte("malicious")
-	_ = tarWriter.WriteHeader(&tar.Header{Name: "../../../etc/passwd", Typeflag: tar.TypeReg, Mode: 0644, Size: int64(len(content))})
+	_ = tarWriter.WriteHeader(&tar.Header{Name: "../../../etc/passwd", Typeflag: tar.TypeReg, Mode: 0o644, Size: int64(len(content))})
 	_, _ = tarWriter.Write(content)
 	_ = tarWriter.Close()
 	_ = xzWriter.Close()
@@ -781,7 +781,7 @@ func TestExtractTarXz_MalformedStream(t *testing.T) {
 	t.Run("garbage data fails", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		tarXzPath := filepath.Join(tmpDir, "garbage.tar.xz")
-		if err := os.WriteFile(tarXzPath, []byte("this is not xz data at all"), 0644); err != nil {
+		if err := os.WriteFile(tarXzPath, []byte("this is not xz data at all"), 0o644); err != nil {
 			t.Fatalf("failed to write file: %v", err)
 		}
 		targetPath := "bin/node"
@@ -800,7 +800,7 @@ func TestExtractTarXz_MalformedStream(t *testing.T) {
 		}
 		tarWriter := tar.NewWriter(xzWriter)
 		content := bytes.Repeat([]byte{0xAB}, 64*1024)
-		_ = tarWriter.WriteHeader(&tar.Header{Name: "bin/node", Typeflag: tar.TypeReg, Mode: 0755, Size: int64(len(content))})
+		_ = tarWriter.WriteHeader(&tar.Header{Name: "bin/node", Typeflag: tar.TypeReg, Mode: 0o755, Size: int64(len(content))})
 		_, _ = tarWriter.Write(content)
 		_ = tarWriter.Close()
 		_ = xzWriter.Close()
@@ -808,7 +808,7 @@ func TestExtractTarXz_MalformedStream(t *testing.T) {
 		full := buf.Bytes()
 		truncated := full[:len(full)/2]
 		tarXzPath := filepath.Join(tmpDir, "truncated.tar.xz")
-		if err := os.WriteFile(tarXzPath, truncated, 0644); err != nil {
+		if err := os.WriteFile(tarXzPath, truncated, 0o644); err != nil {
 			t.Fatalf("failed to write file: %v", err)
 		}
 
@@ -822,7 +822,7 @@ func TestExtractTarXz_MalformedStream(t *testing.T) {
 func TestExtractTarXzToDir_MalformedStream(t *testing.T) {
 	tmpDir := t.TempDir()
 	tarXzPath := filepath.Join(tmpDir, "garbage.tar.xz")
-	if err := os.WriteFile(tarXzPath, []byte("not xz at all"), 0644); err != nil {
+	if err := os.WriteFile(tarXzPath, []byte("not xz at all"), 0o644); err != nil {
 		t.Fatalf("failed to write file: %v", err)
 	}
 	if _, err := extractTarXzToDir(tarXzPath, t.TempDir()); err == nil {
@@ -840,7 +840,7 @@ func TestExtractBinaryToDir(t *testing.T) {
 		tarWriter := tar.NewWriter(gzWriter)
 
 		content := []byte("test")
-		_ = tarWriter.WriteHeader(&tar.Header{Name: "file.txt", Typeflag: tar.TypeReg, Mode: 0644, Size: int64(len(content))})
+		_ = tarWriter.WriteHeader(&tar.Header{Name: "file.txt", Typeflag: tar.TypeReg, Mode: 0o644, Size: int64(len(content))})
 		_, _ = tarWriter.Write(content)
 		_ = tarWriter.Close()
 		_ = gzWriter.Close()
@@ -865,7 +865,7 @@ func TestExtractBinaryToDir(t *testing.T) {
 		tarWriter := tar.NewWriter(xzWriter)
 
 		content := []byte("test")
-		_ = tarWriter.WriteHeader(&tar.Header{Name: "file.txt", Typeflag: tar.TypeReg, Mode: 0644, Size: int64(len(content))})
+		_ = tarWriter.WriteHeader(&tar.Header{Name: "file.txt", Typeflag: tar.TypeReg, Mode: 0o644, Size: int64(len(content))})
 		_, _ = tarWriter.Write(content)
 		_ = tarWriter.Close()
 		_ = xzWriter.Close()
@@ -1095,7 +1095,7 @@ func TestExtractBz2(t *testing.T) {
 	t.Run("invalid bz2 file", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		bz2Path := filepath.Join(tmpDir, "invalid.bz2")
-		if err := os.WriteFile(bz2Path, []byte("not a bz2 file"), 0644); err != nil {
+		if err := os.WriteFile(bz2Path, []byte("not a bz2 file"), 0o644); err != nil {
 			t.Fatalf("failed to create invalid file: %v", err)
 		}
 
@@ -1138,7 +1138,7 @@ func TestExtractXz(t *testing.T) {
 	t.Run("invalid xz file", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		xzPath := filepath.Join(tmpDir, "invalid.xz")
-		if err := os.WriteFile(xzPath, []byte("not an xz file"), 0644); err != nil {
+		if err := os.WriteFile(xzPath, []byte("not an xz file"), 0o644); err != nil {
 			t.Fatalf("failed to create invalid file: %v", err)
 		}
 
@@ -1181,7 +1181,7 @@ func TestExtractZst(t *testing.T) {
 	t.Run("invalid zst file", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		zstPath := filepath.Join(tmpDir, "invalid.zst")
-		if err := os.WriteFile(zstPath, []byte("not a zst file"), 0644); err != nil {
+		if err := os.WriteFile(zstPath, []byte("not a zst file"), 0o644); err != nil {
 			t.Fatalf("failed to create invalid file: %v", err)
 		}
 
@@ -1208,7 +1208,7 @@ func createTarBz2(t *testing.T, path, entryName string, content []byte) {
 	if err != nil {
 		t.Fatalf("bzip2 command failed: %v", err)
 	}
-	if err := os.WriteFile(path, out, 0644); err != nil {
+	if err := os.WriteFile(path, out, 0o644); err != nil {
 		t.Fatalf("failed to write bz2 file: %v", err)
 	}
 	_ = os.Remove(tarPath)
@@ -1238,7 +1238,7 @@ func createTarZst(t *testing.T, path, entryName string, content []byte) {
 
 	header := &tar.Header{
 		Name:     entryName,
-		Mode:     0755,
+		Mode:     0o755,
 		Size:     int64(len(content)),
 		Typeflag: tar.TypeReg,
 	}
@@ -1263,7 +1263,7 @@ func createPlainTar(t *testing.T, path, entryName string, content []byte) {
 
 	header := &tar.Header{
 		Name:     entryName,
-		Mode:     0755,
+		Mode:     0o755,
 		Size:     int64(len(content)),
 		Typeflag: tar.TypeReg,
 	}
@@ -1284,7 +1284,7 @@ func createBz2File(t *testing.T, path string, content []byte) {
 	}
 
 	tmpPath := path + ".tmp"
-	if err := os.WriteFile(tmpPath, content, 0644); err != nil {
+	if err := os.WriteFile(tmpPath, content, 0o644); err != nil {
 		t.Fatalf("failed to write temp file: %v", err)
 	}
 
@@ -1293,7 +1293,7 @@ func createBz2File(t *testing.T, path string, content []byte) {
 	if err != nil {
 		t.Fatalf("bzip2 command failed: %v", err)
 	}
-	if err := os.WriteFile(path, out, 0644); err != nil {
+	if err := os.WriteFile(path, out, 0o644); err != nil {
 		t.Fatalf("failed to write bz2 file: %v", err)
 	}
 	_ = os.Remove(tmpPath)
@@ -1340,7 +1340,7 @@ func makeTestTar(t *testing.T, files map[string]string) []byte {
 	for name, content := range files {
 		hdr := &tar.Header{
 			Name: name,
-			Mode: 0644,
+			Mode: 0o644,
 			Size: int64(len(content)),
 		}
 		if err := tw.WriteHeader(hdr); err != nil {
@@ -1420,9 +1420,9 @@ func TestExtractArchiveToDir(t *testing.T) {
 	t.Run("skips path traversal entries", func(t *testing.T) {
 		var buf bytes.Buffer
 		tw := tar.NewWriter(&buf)
-		_ = tw.WriteHeader(&tar.Header{Name: "../escape.txt", Mode: 0644, Size: 4})
+		_ = tw.WriteHeader(&tar.Header{Name: "../escape.txt", Mode: 0o644, Size: 4})
 		_, _ = tw.Write([]byte("evil"))
-		_ = tw.WriteHeader(&tar.Header{Name: "safe/file.txt", Mode: 0644, Size: 4})
+		_ = tw.WriteHeader(&tar.Header{Name: "safe/file.txt", Mode: 0o644, Size: 4})
 		_, _ = tw.Write([]byte("safe"))
 		_ = tw.Close()
 		tgz := writeTgz(t, buf.Bytes())
@@ -1521,7 +1521,7 @@ func TestExtractArchiveToPath_FromFile(t *testing.T) {
 	})
 
 	tarPath := filepath.Join(srcDir, "test.tar")
-	if err := os.WriteFile(tarPath, tarData, 0644); err != nil {
+	if err := os.WriteFile(tarPath, tarData, 0o644); err != nil {
 		t.Fatalf("failed to write tar file: %v", err)
 	}
 
@@ -1549,7 +1549,7 @@ func TestExtractArchiveToPath_PathTraversal(t *testing.T) {
 	tw := tar.NewWriter(&buf)
 	hdr := &tar.Header{
 		Name: "../escape.txt",
-		Mode: 0644,
+		Mode: 0o644,
 		Size: 4,
 	}
 	_ = tw.WriteHeader(hdr)
@@ -1629,7 +1629,7 @@ func TestExtractArchiveToPath_ValidSymlink(t *testing.T) {
 
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
-	_ = tw.WriteHeader(&tar.Header{Name: "real.txt", Mode: 0644, Size: 5})
+	_ = tw.WriteHeader(&tar.Header{Name: "real.txt", Mode: 0o644, Size: 5})
 	_, _ = tw.Write([]byte("hello"))
 	_ = tw.WriteHeader(&tar.Header{Name: "link.txt", Typeflag: tar.TypeSymlink, Linkname: "real.txt"})
 	_ = tw.Close()

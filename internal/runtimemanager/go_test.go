@@ -1,12 +1,14 @@
 package runtimemanager
 
 import (
+	"context"
 	"errors"
 	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -323,19 +325,14 @@ func TestBuildGoBuildArgs(t *testing.T) {
 
 	// -mod=readonly must always be present so a stale/tampered go.sum fails
 	// the build rather than being silently rewritten.
-	found := false
-	for _, a := range args {
-		if a == "-mod=readonly" {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(args, "-mod=readonly")
 	if !found {
 		t.Error("-mod=readonly must be present in go build args (supply chain hardening)")
 	}
 }
 
 func TestInstallGoApp_AlreadyInstalled(t *testing.T) {
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 	rm := New(makeTestGoRuntimes())
 
 	appConfig := &binmanager.AppConfigGo{
@@ -351,15 +348,15 @@ func TestInstallGoApp_AlreadyInstalled(t *testing.T) {
 	}
 
 	binPath := getGoBinaryPath(appEnvPath, appConfig.PackageName)
-	if err := os.MkdirAll(filepath.Dir(binPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(binPath), 0o755); err != nil {
 		t.Fatalf("failed to create dir: %v", err)
 	}
-	if err := os.WriteFile(binPath, []byte("#!/bin/sh\necho ok"), 0755); err != nil {
+	if err := os.WriteFile(binPath, []byte("#!/bin/sh\necho ok"), 0o755); err != nil {
 		t.Fatalf("failed to write fake binary: %v", err)
 	}
 	defer func() { _ = os.RemoveAll(appEnvPath) }()
 
-	if err := rm.InstallGoApp("govulncheck", appConfig, nil, nil, nil); err != nil {
+	if err := rm.InstallGoApp(context.Background(), "govulncheck", appConfig, nil, nil, nil); err != nil {
 		t.Errorf("InstallGoApp() error = %v, expected nil for already installed app", err)
 	}
 }
@@ -374,7 +371,7 @@ func TestInstallGoApp_InvalidRuntime(t *testing.T) {
 		LockFile:    "x",
 	}
 
-	if err := rm.InstallGoApp("govulncheck", appConfig, nil, nil, nil); err == nil {
+	if err := rm.InstallGoApp(context.Background(), "govulncheck", appConfig, nil, nil, nil); err == nil {
 		t.Error("expected error for nonexistent runtime, got nil")
 	}
 }
@@ -389,7 +386,7 @@ func TestInstallGoApp_MissingLockFileIsRejected(t *testing.T) {
 		// no LockFile: must be rejected before any download/build
 	}
 
-	err := rm.InstallGoApp("govulncheck", appConfig, nil, nil, nil)
+	err := rm.InstallGoApp(context.Background(), "govulncheck", appConfig, nil, nil, nil)
 	if err == nil {
 		t.Fatal("expected error when lockFile is missing, got nil")
 	}
@@ -406,11 +403,11 @@ func TestInstallGoApp_RetriesAfterError(t *testing.T) {
 	// function. Counting executions proves the failed install is actually
 	// retried rather than returning a stale cached result — two identical
 	// errors alone would not distinguish a re-run from a cached error.
-	var calls int32
+	var calls atomic.Int32
 	sentinel := errors.New("install failed")
 	run := func() error {
 		_, err, _ := rm.appInstall.Do("go/retry", func() (any, error) {
-			atomic.AddInt32(&calls, 1)
+			calls.Add(1)
 			return nil, sentinel
 		})
 		return err
@@ -422,7 +419,7 @@ func TestInstallGoApp_RetriesAfterError(t *testing.T) {
 	if err := run(); !errors.Is(err, sentinel) {
 		t.Fatalf("retry: expected sentinel error, got %v", err)
 	}
-	if got := atomic.LoadInt32(&calls); got != 2 {
+	if got := calls.Load(); got != 2 {
 		t.Errorf("expected function to run twice (retry after error), ran %d time(s)", got)
 	}
 }
@@ -446,11 +443,11 @@ func TestInstallGoApp_ConcurrentSameKeyNoRace(t *testing.T) {
 	const n = 32
 	var wg sync.WaitGroup
 	errsObserved := make([]error, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			errsObserved[idx] = rm.InstallGoApp("govulncheck", appConfig, nil, nil, nil)
+			errsObserved[idx] = rm.InstallGoApp(context.Background(), "govulncheck", appConfig, nil, nil, nil)
 		}(i)
 	}
 	wg.Wait()
@@ -468,20 +465,20 @@ func TestInstallGoApp_ConcurrentSameKeyNoRace(t *testing.T) {
 func TestSingleflightDeduplicatesConcurrentInstalls(t *testing.T) {
 	rm := New(makeTestGoRuntimes())
 
-	var calls int32
+	var calls atomic.Int32
 	start := make(chan struct{})
 	sentinel := errors.New("install failed")
 
 	const n = 20
 	var wg sync.WaitGroup
 	results := make([]error, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
 			<-start
 			_, err, _ := rm.appInstall.Do("go/concurrent", func() (any, error) {
-				atomic.AddInt32(&calls, 1)
+				calls.Add(1)
 				// Hold the call in flight so the other goroutines coalesce onto it.
 				time.Sleep(50 * time.Millisecond)
 				return nil, sentinel
@@ -492,7 +489,7 @@ func TestSingleflightDeduplicatesConcurrentInstalls(t *testing.T) {
 	close(start)
 	wg.Wait()
 
-	if got := atomic.LoadInt32(&calls); got != 1 {
+	if got := calls.Load(); got != 1 {
 		t.Errorf("expected exactly 1 execution for the shared key, got %d", got)
 	}
 	for i, err := range results {
@@ -562,7 +559,7 @@ func TestGenerateGoLockFiles_MissingPackageName(t *testing.T) {
 	rm := New(makeTestGoRuntimes())
 	appConfig := &binmanager.AppConfigGo{Version: "v1.1.4", Runtime: "go"}
 
-	err := rm.GenerateGoLockFiles("govulncheck", appConfig, t.TempDir())
+	err := rm.GenerateGoLockFiles(context.Background(), "govulncheck", appConfig, t.TempDir())
 	if err == nil {
 		t.Fatal("expected error when packageName is empty")
 	}
@@ -575,7 +572,7 @@ func TestGenerateGoLockFiles_MissingVersion(t *testing.T) {
 	rm := New(makeTestGoRuntimes())
 	appConfig := &binmanager.AppConfigGo{PackageName: "golang.org/x/vuln/cmd/govulncheck", Runtime: "go"}
 
-	err := rm.GenerateGoLockFiles("govulncheck", appConfig, t.TempDir())
+	err := rm.GenerateGoLockFiles(context.Background(), "govulncheck", appConfig, t.TempDir())
 	if err == nil {
 		t.Fatal("expected error when version is empty")
 	}
@@ -592,7 +589,7 @@ func TestGenerateGoLockFiles_InvalidRuntime(t *testing.T) {
 		Runtime:     "nonexistent",
 	}
 
-	err := rm.GenerateGoLockFiles("govulncheck", appConfig, t.TempDir())
+	err := rm.GenerateGoLockFiles(context.Background(), "govulncheck", appConfig, t.TempDir())
 	if err == nil {
 		t.Fatal("expected error for nonexistent runtime")
 	}
@@ -608,7 +605,7 @@ func TestRemoveStaleGoModFiles_CleanWorkDir(t *testing.T) {
 func TestRemoveStaleGoModFiles_RemovesExisting(t *testing.T) {
 	workDir := t.TempDir()
 	for _, name := range []string{"go.mod", "go.sum"} {
-		if err := os.WriteFile(filepath.Join(workDir, name), []byte("stale"), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(workDir, name), []byte("stale"), 0o644); err != nil {
 			t.Fatalf("seed %s: %v", name, err)
 		}
 	}
@@ -630,7 +627,7 @@ func TestRemoveStaleGoModFiles_PropagatesNonNotExistError(t *testing.T) {
 	}
 
 	workDir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(workDir, "go.mod"), []byte("stale"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(workDir, "go.mod"), []byte("stale"), 0o644); err != nil {
 		t.Fatalf("seed go.mod: %v", err)
 	}
 	// A read-only parent directory makes os.Remove fail with EACCES rather than
@@ -855,15 +852,15 @@ func TestGoBuildReadonlyFailsOnGoSumMismatch(t *testing.T) {
 	dir := t.TempDir()
 	goMod := "module testmod\n\ngo 1.21\n\nrequire rsc.io/quote v1.5.2\n"
 	mainGo := "package main\n\nimport _ \"rsc.io/quote\"\n\nfunc main() {}\n"
-	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(goMod), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(goMod), 0o644); err != nil {
 		t.Fatalf("write go.mod: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(mainGo), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(mainGo), 0o644); err != nil {
 		t.Fatalf("write main.go: %v", err)
 	}
 	// Empty go.sum: the required checksum entry is absent, modelling a tampered
 	// or stale lockfile. -mod=readonly must refuse to add it.
-	if err := os.WriteFile(filepath.Join(dir, "go.sum"), nil, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "go.sum"), nil, 0o644); err != nil {
 		t.Fatalf("write go.sum: %v", err)
 	}
 

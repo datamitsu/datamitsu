@@ -6,10 +6,12 @@ import (
 	"bytes"
 	"compress/bzip2"
 	"compress/gzip"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/klauspost/compress/zstd"
@@ -105,7 +107,9 @@ func extractBinaryFile(srcPath string, destDir string) (string, error) {
 	return tmpPath, nil
 }
 
-func extractGz(gzPath string, binaryPath *string, destDir string) (string, error) {
+// binaryPath is unused here (single-file decompression has no member to select)
+// but kept for the uniform extractBinary dispatch signature.
+func extractGz(gzPath string, _ *string, destDir string) (string, error) {
 	gzFile, err := os.Open(gzPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to open gz file: %w", err)
@@ -154,7 +158,7 @@ func extractGz(gzPath string, binaryPath *string, destDir string) (string, error
 
 func extractTarGz(tarGzPath string, binaryPath *string, destDir string) (string, error) {
 	if binaryPath == nil {
-		return "", fmt.Errorf("binaryPath is required for tar.gz archives")
+		return "", errors.New("binaryPath is required for tar.gz archives")
 	}
 
 	file, err := os.Open(tarGzPath)
@@ -226,7 +230,7 @@ func extractTarGz(tarGzPath string, binaryPath *string, destDir string) (string,
 
 func extractTarXz(tarXzPath string, binaryPath *string, destDir string) (string, error) {
 	if binaryPath == nil {
-		return "", fmt.Errorf("binaryPath is required for tar.xz archives")
+		return "", errors.New("binaryPath is required for tar.xz archives")
 	}
 
 	file, err := os.Open(tarXzPath)
@@ -293,7 +297,7 @@ func extractTarXz(tarXzPath string, binaryPath *string, destDir string) (string,
 
 func extractZip(zipPath string, binaryPath *string, destDir string) (string, error) {
 	if binaryPath == nil {
-		return "", fmt.Errorf("binaryPath is required for zip archives")
+		return "", errors.New("binaryPath is required for zip archives")
 	}
 
 	reader, err := zip.OpenReader(zipPath)
@@ -356,7 +360,7 @@ func extractZip(zipPath string, binaryPath *string, destDir string) (string, err
 
 func extractTarBz2(tarBz2Path string, binaryPath *string, destDir string) (string, error) {
 	if binaryPath == nil {
-		return "", fmt.Errorf("binaryPath is required for tar.bz2 archives")
+		return "", errors.New("binaryPath is required for tar.bz2 archives")
 	}
 
 	file, err := os.Open(tarBz2Path)
@@ -375,7 +379,7 @@ func extractTarBz2(tarBz2Path string, binaryPath *string, destDir string) (strin
 
 func extractTarZst(tarZstPath string, binaryPath *string, destDir string) (string, error) {
 	if binaryPath == nil {
-		return "", fmt.Errorf("binaryPath is required for tar.zst archives")
+		return "", errors.New("binaryPath is required for tar.zst archives")
 	}
 
 	file, err := os.Open(tarZstPath)
@@ -399,7 +403,7 @@ func extractTarZst(tarZstPath string, binaryPath *string, destDir string) (strin
 
 func extractTar(tarPath string, binaryPath *string, destDir string) (string, error) {
 	if binaryPath == nil {
-		return "", fmt.Errorf("binaryPath is required for tar archives")
+		return "", errors.New("binaryPath is required for tar archives")
 	}
 
 	file, err := os.Open(tarPath)
@@ -460,7 +464,7 @@ func extractFromTar(tarReader *tar.Reader, targetPath, archiveType, archivePath,
 	return "", fmt.Errorf("file '%s' not found in %s archive", targetPath, archiveType)
 }
 
-func extractBz2(bz2Path string, binaryPath *string, destDir string) (string, error) {
+func extractBz2(bz2Path string, _ *string, destDir string) (string, error) {
 	file, err := os.Open(bz2Path)
 	if err != nil {
 		return "", fmt.Errorf("failed to open bz2 file: %w", err)
@@ -475,7 +479,7 @@ func extractBz2(bz2Path string, binaryPath *string, destDir string) (string, err
 	return extractSingleFile(bz2Reader, "bz2", destDir)
 }
 
-func extractXz(xzPath string, binaryPath *string, destDir string) (string, error) {
+func extractXz(xzPath string, _ *string, destDir string) (string, error) {
 	file, err := os.Open(xzPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to open xz file: %w", err)
@@ -494,7 +498,7 @@ func extractXz(xzPath string, binaryPath *string, destDir string) (string, error
 	return extractSingleFile(xzReader, "xz", destDir)
 }
 
-func extractZst(zstPath string, binaryPath *string, destDir string) (string, error) {
+func extractZst(zstPath string, _ *string, destDir string) (string, error) {
 	file, err := os.Open(zstPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to open zst file: %w", err)
@@ -556,6 +560,8 @@ func extractBinaryToDir(archivePath string, contentType BinContentType, destDir 
 		return extractTarPlainToDir(archivePath, destDir)
 	case BinContentTypeZip:
 		return extractZipToDir(archivePath, destDir)
+	case BinContentTypeBinary, BinContentTypeGz, BinContentTypeBz2, BinContentTypeXz, BinContentTypeZst:
+		return "", fmt.Errorf("unsupported content type for directory extraction: %s", contentType)
 	default:
 		return "", fmt.Errorf("unsupported content type for directory extraction: %s", contentType)
 	}
@@ -678,23 +684,23 @@ func extractZipToDir(zipPath, destDir string) (string, error) {
 			continue
 		}
 
-		target := filepath.Join(tmpDir, file.Name)
-
-		cleanTarget := filepath.Clean(target)
-		if !strings.HasPrefix(cleanTarget, tmpDir+string(filepath.Separator)) && cleanTarget != tmpDir {
+		// filepath.Join cleans the result, so target is already normalized; guard it
+		// directly so the value used in every file op below is the one checked here.
+		target := filepath.Join(tmpDir, file.Name) //nolint:gosec // G305: file.Name is validated by validateArchivePath above and target is checked to stay within tmpDir below
+		if !strings.HasPrefix(target, tmpDir+string(filepath.Separator)) && target != tmpDir {
 			log.Warn("skipping archive entry that escapes destination", zap.String("path", file.Name))
 			continue
 		}
 
 		if file.FileInfo().IsDir() {
-			if err := os.MkdirAll(target, 0755); err != nil {
+			if err := os.MkdirAll(target, 0o755); err != nil {
 				_ = os.RemoveAll(tmpDir)
 				return "", fmt.Errorf("failed to create directory %q: %w", file.Name, err)
 			}
 			continue
 		}
 
-		if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 			_ = os.RemoveAll(tmpDir)
 			return "", fmt.Errorf("failed to create parent directory for %q: %w", file.Name, err)
 		}
@@ -705,7 +711,7 @@ func extractZipToDir(zipPath, destDir string) (string, error) {
 			return "", fmt.Errorf("failed to open file from zip: %w", err)
 		}
 
-		outFile, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, file.Mode()&0777)
+		outFile, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, file.Mode()&0o777)
 		if err != nil {
 			_ = rc.Close()
 			_ = os.RemoveAll(tmpDir)
@@ -761,28 +767,28 @@ func extractTarToDir(tarReader *tar.Reader, destDir string) (string, error) {
 			continue
 		}
 
-		target := filepath.Join(tmpDir, header.Name)
-
-		cleanTarget := filepath.Clean(target)
-		if !strings.HasPrefix(cleanTarget, tmpDir+string(filepath.Separator)) && cleanTarget != tmpDir {
+		// filepath.Join cleans the result, so target is already normalized; guard it
+		// directly so the value used in every file op below is the one checked here.
+		target := filepath.Join(tmpDir, header.Name) //nolint:gosec // G305: header.Name is validated by validateArchivePath above and target is checked to stay within tmpDir below
+		if !strings.HasPrefix(target, tmpDir+string(filepath.Separator)) && target != tmpDir {
 			log.Warn("skipping archive entry that escapes destination", zap.String("path", header.Name))
 			continue
 		}
 
 		switch header.Typeflag {
 		case tar.TypeDir:
-			if err := os.MkdirAll(target, os.FileMode(header.Mode)&0777|0755); err != nil {
+			if err := os.MkdirAll(target, os.FileMode(header.Mode)&0o777|0o755); err != nil { //nolint:gosec // G115: header.Mode is masked with &0o777, bounding it to 0-511
 				_ = os.RemoveAll(tmpDir)
 				return "", fmt.Errorf("failed to create directory %q: %w", header.Name, err)
 			}
 
 		case tar.TypeReg:
-			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 				_ = os.RemoveAll(tmpDir)
 				return "", fmt.Errorf("failed to create parent directory for %q: %w", header.Name, err)
 			}
 
-			outFile, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(header.Mode)&0777)
+			outFile, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(header.Mode)&0o777) //nolint:gosec // G115: header.Mode is masked with &0o777, bounding it to 0-511
 			if err != nil {
 				_ = os.RemoveAll(tmpDir)
 				return "", fmt.Errorf("failed to create file %q: %w", header.Name, err)
@@ -814,13 +820,13 @@ func extractTarToDir(tarReader *tar.Reader, destDir string) (string, error) {
 				log.Warn("skipping absolute symlink", zap.String("path", header.Name), zap.String("target", linkTarget))
 				continue
 			}
-			resolvedTarget := filepath.Clean(filepath.Join(filepath.Dir(target), linkTarget))
+			resolvedTarget := filepath.Clean(filepath.Join(filepath.Dir(target), linkTarget)) //nolint:gosec // G305: resolvedTarget is checked against tmpDir on the next line before any symlink is created
 			if !strings.HasPrefix(resolvedTarget, tmpDir+string(filepath.Separator)) && resolvedTarget != tmpDir {
 				log.Warn("skipping symlink that escapes destination", zap.String("path", header.Name), zap.String("target", linkTarget))
 				continue
 			}
 
-			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 				_ = os.RemoveAll(tmpDir)
 				return "", fmt.Errorf("failed to create parent directory for symlink %q: %w", header.Name, err)
 			}
@@ -840,15 +846,16 @@ func extractTarToDir(tarReader *tar.Reader, destDir string) (string, error) {
 // For inline archives (tar data in memory), pass tarData. For external archives (file on disk), pass archivePath.
 // Returns the destination path on success.
 func extractArchiveToPath(destPath string, tarData []byte, archivePath string, format BinContentType) (string, error) {
-	if err := os.MkdirAll(destPath, 0755); err != nil {
+	if err := os.MkdirAll(destPath, 0o755); err != nil {
 		return "", fmt.Errorf("failed to create destination directory: %w", err)
 	}
 
 	var tarReader *tar.Reader
 
-	if tarData != nil {
+	switch {
+	case tarData != nil:
 		tarReader = tar.NewReader(bytes.NewReader(tarData))
-	} else if archivePath != "" {
+	case archivePath != "":
 		file, err := os.Open(archivePath)
 		if err != nil {
 			return "", fmt.Errorf("failed to open archive file: %w", err)
@@ -894,11 +901,14 @@ func extractArchiveToPath(destPath string, tarData []byte, archivePath string, f
 		case BinContentTypeTar:
 			tarReader = tar.NewReader(file)
 
+		case BinContentTypeBinary, BinContentTypeZip, BinContentTypeGz, BinContentTypeBz2, BinContentTypeXz, BinContentTypeZst:
+			return "", fmt.Errorf("unsupported archive format: %s (expected tar, tar.gz, tar.xz, tar.bz2, or tar.zst)", format)
+
 		default:
 			return "", fmt.Errorf("unsupported archive format: %s (expected tar, tar.gz, tar.xz, tar.bz2, or tar.zst)", format)
 		}
-	} else {
-		return "", fmt.Errorf("either tarData or archivePath must be provided")
+	default:
+		return "", errors.New("either tarData or archivePath must be provided")
 	}
 
 	const maxTotalExtractedSize int64 = 2 * 1024 * 1024 * 1024
@@ -918,26 +928,26 @@ func extractArchiveToPath(destPath string, tarData []byte, archivePath string, f
 			continue
 		}
 
-		target := filepath.Join(destPath, header.Name)
-
-		cleanTarget := filepath.Clean(target)
-		if !strings.HasPrefix(cleanTarget, destPath+string(filepath.Separator)) && cleanTarget != destPath {
+		// filepath.Join cleans the result, so target is already normalized; guard it
+		// directly so the value used in every file op below is the one checked here.
+		target := filepath.Join(destPath, header.Name) //nolint:gosec // G305: header.Name is validated by validateArchivePath above and target is checked to stay within destPath below
+		if !strings.HasPrefix(target, destPath+string(filepath.Separator)) && target != destPath {
 			log.Warn("skipping archive entry that escapes destination", zap.String("path", header.Name))
 			continue
 		}
 
 		switch header.Typeflag {
 		case tar.TypeDir:
-			if err := os.MkdirAll(target, os.FileMode(header.Mode)&0777|0755); err != nil {
+			if err := os.MkdirAll(target, os.FileMode(header.Mode)&0o777|0o755); err != nil { //nolint:gosec // G115: header.Mode is masked with &0o777, bounding it to 0-511
 				return "", fmt.Errorf("failed to create directory %q: %w", header.Name, err)
 			}
 
 		case tar.TypeReg:
-			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 				return "", fmt.Errorf("failed to create parent directory for %q: %w", header.Name, err)
 			}
 
-			outFile, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(header.Mode)&0777)
+			outFile, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(header.Mode)&0o777) //nolint:gosec // G115: header.Mode is masked with &0o777, bounding it to 0-511
 			if err != nil {
 				return "", fmt.Errorf("failed to create file %q: %w", header.Name, err)
 			}
@@ -965,13 +975,13 @@ func extractArchiveToPath(destPath string, tarData []byte, archivePath string, f
 				log.Warn("skipping absolute symlink", zap.String("path", header.Name), zap.String("target", linkTarget))
 				continue
 			}
-			resolvedTarget := filepath.Clean(filepath.Join(filepath.Dir(target), linkTarget))
+			resolvedTarget := filepath.Clean(filepath.Join(filepath.Dir(target), linkTarget)) //nolint:gosec // G305: resolvedTarget is checked against destPath on the next line before any symlink is created
 			if !strings.HasPrefix(resolvedTarget, destPath+string(filepath.Separator)) && resolvedTarget != destPath {
 				log.Warn("skipping symlink that escapes destination", zap.String("path", header.Name), zap.String("target", linkTarget))
 				continue
 			}
 
-			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 				return "", fmt.Errorf("failed to create parent directory for symlink %q: %w", header.Name, err)
 			}
 
@@ -1033,12 +1043,10 @@ func matchPath(archivePath, targetPath string) bool {
 	// validateArchivePath checks the cleaned path, but "bin/../evil/tool" cleans to
 	// "evil/tool" and passes. Check each path component individually to reject ".."
 	// traversal segments without false-positives on benign names like "my..lib.so".
-	for _, part := range strings.Split(filepath.ToSlash(archivePath), "/") {
-		if part == ".." {
-			log.Warn("rejecting archive path with traversal component",
-				zap.String("path", archivePath))
-			return false
-		}
+	if slices.Contains(strings.Split(filepath.ToSlash(archivePath), "/"), "..") {
+		log.Warn("rejecting archive path with traversal component",
+			zap.String("path", archivePath))
+		return false
 	}
 
 	archivePath = filepath.ToSlash(archivePath)

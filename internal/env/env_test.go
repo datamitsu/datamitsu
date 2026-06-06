@@ -1,29 +1,25 @@
 package env
 
 import (
-	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"testing"
 
+	"github.com/datamitsu/datamitsu/internal/ldflags"
+
 	"go.uber.org/zap/zapcore"
 )
 
 func TestGetCachePath(t *testing.T) {
-	originalEnv := os.Getenv(cacheDir.Name)
-	defer func() {
-		if err := os.Setenv(cacheDir.Name, originalEnv); err != nil {
-			t.Errorf("failed to restore env: %v", err)
-		}
-	}()
+	// t.Setenv registers cleanup that restores cacheDir.Name even though
+	// subtests below os.Unsetenv it mid-test.
+	t.Setenv(cacheDir.Name, os.Getenv(cacheDir.Name))
 
 	t.Run("uses custom cache dir with /cache suffix", func(t *testing.T) {
 		customPath := "/custom/cache/path"
-		if err := os.Setenv(cacheDir.Name, customPath); err != nil {
-			t.Fatalf("failed to set env: %v", err)
-		}
+		t.Setenv(cacheDir.Name, customPath)
 
 		got := GetCachePath()
 		want := filepath.Join(customPath, "cache")
@@ -34,15 +30,13 @@ func TestGetCachePath(t *testing.T) {
 
 	t.Run("XDG_CACHE_HOME with /cache suffix", func(t *testing.T) {
 		_ = os.Unsetenv(cacheDir.Name)
-		_ = os.Setenv("XDG_CACHE_HOME", "/xdg/cache")
+		t.Setenv("XDG_CACHE_HOME", "/xdg/cache")
 
 		got := GetCachePath()
 		want := filepath.Join("/xdg/cache", ldflags.PackageName, "cache")
 		if got != want {
 			t.Errorf("GetCachePath() = %q, want %q", got, want)
 		}
-
-		_ = os.Unsetenv("XDG_CACHE_HOME")
 	})
 
 	t.Run("uses default home dir path with /cache suffix", func(t *testing.T) {
@@ -66,18 +60,13 @@ func TestGetCachePath(t *testing.T) {
 }
 
 func TestGetStorePath(t *testing.T) {
-	originalEnv := os.Getenv(cacheDir.Name)
-	defer func() {
-		if err := os.Setenv(cacheDir.Name, originalEnv); err != nil {
-			t.Errorf("failed to restore env: %v", err)
-		}
-	}()
+	// t.Setenv registers cleanup that restores cacheDir.Name even though
+	// subtests below os.Unsetenv it mid-test.
+	t.Setenv(cacheDir.Name, os.Getenv(cacheDir.Name))
 
 	t.Run("uses custom cache dir with /store suffix", func(t *testing.T) {
 		customPath := "/custom/cache/path"
-		if err := os.Setenv(cacheDir.Name, customPath); err != nil {
-			t.Fatalf("failed to set env: %v", err)
-		}
+		t.Setenv(cacheDir.Name, customPath)
 
 		got := GetStorePath()
 		want := filepath.Join(customPath, "store")
@@ -88,15 +77,13 @@ func TestGetStorePath(t *testing.T) {
 
 	t.Run("XDG_CACHE_HOME with /store suffix", func(t *testing.T) {
 		_ = os.Unsetenv(cacheDir.Name)
-		_ = os.Setenv("XDG_CACHE_HOME", "/xdg/cache")
+		t.Setenv("XDG_CACHE_HOME", "/xdg/cache")
 
 		got := GetStorePath()
 		want := filepath.Join("/xdg/cache", ldflags.PackageName, "store")
 		if got != want {
 			t.Errorf("GetStorePath() = %q, want %q", got, want)
 		}
-
-		_ = os.Unsetenv("XDG_CACHE_HOME")
 	})
 
 	t.Run("fallback to home directory with /store suffix", func(t *testing.T) {
@@ -119,9 +106,7 @@ func TestGetStorePath(t *testing.T) {
 	})
 
 	t.Run("GetStorePath and GetCachePath return different paths", func(t *testing.T) {
-		if err := os.Setenv(cacheDir.Name, "/tmp/test-datamitsu"); err != nil {
-			t.Fatalf("failed to set env: %v", err)
-		}
+		t.Setenv(cacheDir.Name, "/tmp/test-datamitsu")
 
 		cachePath := GetCachePath()
 		storePath := GetStorePath()
@@ -140,16 +125,7 @@ func TestGetStorePath(t *testing.T) {
 }
 
 func TestGetBinPath(t *testing.T) {
-	originalEnv := os.Getenv(cacheDir.Name)
-	defer func() {
-		if err := os.Setenv(cacheDir.Name, originalEnv); err != nil {
-			t.Errorf("failed to restore env: %v", err)
-		}
-	}()
-
-	if err := os.Setenv(cacheDir.Name, "/tmp/test-cache"); err != nil {
-		t.Fatalf("failed to set env: %v", err)
-	}
+	t.Setenv(cacheDir.Name, "/tmp/test-cache")
 
 	binPath := GetBinPath()
 	storePath := GetStorePath()
@@ -170,12 +146,9 @@ func TestGetBinPath(t *testing.T) {
 }
 
 func TestGetLogLevel(t *testing.T) {
-	originalEnv := os.Getenv(logLevel.Name)
-	defer func() {
-		if err := os.Setenv(logLevel.Name, originalEnv); err != nil {
-			t.Errorf("failed to restore env: %v", err)
-		}
-	}()
+	// t.Setenv registers cleanup that restores logLevel.Name even though
+	// subtests below os.Unsetenv it mid-test.
+	t.Setenv(logLevel.Name, os.Getenv(logLevel.Name))
 
 	tests := []struct {
 		name     string
@@ -217,9 +190,7 @@ func TestGetLogLevel(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.envValue != "" {
-				if err := os.Setenv(logLevel.Name, tt.envValue); err != nil {
-					t.Fatalf("failed to set env: %v", err)
-				}
+				t.Setenv(logLevel.Name, tt.envValue)
 			} else {
 				_ = os.Unsetenv(logLevel.Name)
 			}
@@ -245,30 +216,15 @@ func TestGetDefaultMaxWorkers(t *testing.T) {
 		t.Errorf("getDefaultMaxWorkers() = %d, want <= 16", n)
 	}
 
-	expected := runtime.NumCPU() * 3 / 4
-	if expected < 4 {
-		expected = 4
-	}
-	if expected > 16 {
-		expected = 16
-	}
+	expected := min(max(runtime.NumCPU()*3/4, 4), 16)
 	if n != expected {
 		t.Errorf("getDefaultMaxWorkers() = %d, want %d for NumCPU=%d", n, expected, runtime.NumCPU())
 	}
 }
 
 func TestGetRuntimesPath(t *testing.T) {
-	originalEnv := os.Getenv(cacheDir.Name)
-	defer func() {
-		if err := os.Setenv(cacheDir.Name, originalEnv); err != nil {
-			t.Errorf("failed to restore env: %v", err)
-		}
-	}()
-
 	t.Run("returns path under store dir", func(t *testing.T) {
-		if err := os.Setenv(cacheDir.Name, "/tmp/test-cache"); err != nil {
-			t.Fatalf("failed to set env: %v", err)
-		}
+		t.Setenv(cacheDir.Name, "/tmp/test-cache")
 
 		got := GetRuntimesPath()
 		want := filepath.Join("/tmp/test-cache", "store", ".runtimes")
@@ -279,16 +235,7 @@ func TestGetRuntimesPath(t *testing.T) {
 }
 
 func TestGetRuntimeBinaryPath(t *testing.T) {
-	originalEnv := os.Getenv(cacheDir.Name)
-	defer func() {
-		if err := os.Setenv(cacheDir.Name, originalEnv); err != nil {
-			t.Errorf("failed to restore env: %v", err)
-		}
-	}()
-
-	if err := os.Setenv(cacheDir.Name, "/tmp/test-cache"); err != nil {
-		t.Fatalf("failed to set env: %v", err)
-	}
+	t.Setenv(cacheDir.Name, "/tmp/test-cache")
 
 	got := GetRuntimeBinaryPath("uv", "abc123")
 	want := filepath.Join("/tmp/test-cache", "store", ".runtimes", "uv", "abc123")
@@ -298,16 +245,7 @@ func TestGetRuntimeBinaryPath(t *testing.T) {
 }
 
 func TestGetAppsPath(t *testing.T) {
-	originalEnv := os.Getenv(cacheDir.Name)
-	defer func() {
-		if err := os.Setenv(cacheDir.Name, originalEnv); err != nil {
-			t.Errorf("failed to restore env: %v", err)
-		}
-	}()
-
-	if err := os.Setenv(cacheDir.Name, "/tmp/test-cache"); err != nil {
-		t.Fatalf("failed to set env: %v", err)
-	}
+	t.Setenv(cacheDir.Name, "/tmp/test-cache")
 
 	got := GetAppsPath()
 	want := filepath.Join("/tmp/test-cache", "store", ".apps")
@@ -317,16 +255,7 @@ func TestGetAppsPath(t *testing.T) {
 }
 
 func TestGetAppEnvPath(t *testing.T) {
-	originalEnv := os.Getenv(cacheDir.Name)
-	defer func() {
-		if err := os.Setenv(cacheDir.Name, originalEnv); err != nil {
-			t.Errorf("failed to restore env: %v", err)
-		}
-	}()
-
-	if err := os.Setenv(cacheDir.Name, "/tmp/test-cache"); err != nil {
-		t.Fatalf("failed to set env: %v", err)
-	}
+	t.Setenv(cacheDir.Name, "/tmp/test-cache")
 
 	got := GetAppEnvPath("node", "eslint", "def456")
 	want := filepath.Join("/tmp/test-cache", "store", ".apps", "node", "eslint", "def456")
@@ -336,16 +265,7 @@ func TestGetAppEnvPath(t *testing.T) {
 }
 
 func TestGetPNPMStorePath(t *testing.T) {
-	originalEnv := os.Getenv(cacheDir.Name)
-	defer func() {
-		if err := os.Setenv(cacheDir.Name, originalEnv); err != nil {
-			t.Errorf("failed to restore env: %v", err)
-		}
-	}()
-
-	if err := os.Setenv(cacheDir.Name, "/tmp/test-cache"); err != nil {
-		t.Fatalf("failed to set env: %v", err)
-	}
+	t.Setenv(cacheDir.Name, "/tmp/test-cache")
 
 	got := GetPNPMStorePath()
 	want := filepath.Join("/tmp/test-cache", "store", ".pnpm-store")
@@ -396,16 +316,7 @@ func TestGetPNPMPath(t *testing.T) {
 }
 
 func TestGetProjectCachePath(t *testing.T) {
-	originalEnv := os.Getenv(cacheDir.Name)
-	defer func() {
-		if err := os.Setenv(cacheDir.Name, originalEnv); err != nil {
-			t.Errorf("failed to restore env: %v", err)
-		}
-	}()
-
-	if err := os.Setenv(cacheDir.Name, "/tmp/test-cache"); err != nil {
-		t.Fatalf("failed to set env: %v", err)
-	}
+	t.Setenv(cacheDir.Name, "/tmp/test-cache")
 
 	t.Run("basic case with project and tool", func(t *testing.T) {
 		got, err := GetProjectCachePath("/home/user/myproject", "packages/frontend", "tsc")
@@ -605,14 +516,9 @@ func TestGetProjectCachePath(t *testing.T) {
 }
 
 func TestGetMaxParallelWorkers(t *testing.T) {
-	originalEnv := os.Getenv(maxParallelWorkers.Name)
-	defer func() {
-		if originalEnv != "" {
-			_ = os.Setenv(maxParallelWorkers.Name, originalEnv)
-		} else {
-			_ = os.Unsetenv(maxParallelWorkers.Name)
-		}
-	}()
+	// t.Setenv registers cleanup that restores maxParallelWorkers.Name even
+	// though the subtest below os.Unsetenv it mid-test.
+	t.Setenv(maxParallelWorkers.Name, os.Getenv(maxParallelWorkers.Name))
 
 	t.Run("dynamic default without env var", func(t *testing.T) {
 		_ = os.Unsetenv(maxParallelWorkers.Name)
@@ -623,7 +529,7 @@ func TestGetMaxParallelWorkers(t *testing.T) {
 	})
 
 	t.Run("env var override", func(t *testing.T) {
-		_ = os.Setenv(maxParallelWorkers.Name, "8")
+		t.Setenv(maxParallelWorkers.Name, "8")
 		got := GetMaxParallelWorkers()
 		if got != 8 {
 			t.Errorf("GetMaxParallelWorkers() = %d, want 8", got)
@@ -631,7 +537,7 @@ func TestGetMaxParallelWorkers(t *testing.T) {
 	})
 
 	t.Run("parse error fallback to dynamic default", func(t *testing.T) {
-		_ = os.Setenv(maxParallelWorkers.Name, "notanumber")
+		t.Setenv(maxParallelWorkers.Name, "notanumber")
 		got := GetMaxParallelWorkers()
 		dynamicDefault, _ := strconv.Atoi(getDefaultMaxWorkers())
 		if got != dynamicDefault {
@@ -640,7 +546,7 @@ func TestGetMaxParallelWorkers(t *testing.T) {
 	})
 
 	t.Run("zero value fallback to dynamic default", func(t *testing.T) {
-		_ = os.Setenv(maxParallelWorkers.Name, "0")
+		t.Setenv(maxParallelWorkers.Name, "0")
 		got := GetMaxParallelWorkers()
 		dynamicDefault, _ := strconv.Atoi(getDefaultMaxWorkers())
 		if got != dynamicDefault {
@@ -650,14 +556,9 @@ func TestGetMaxParallelWorkers(t *testing.T) {
 }
 
 func TestNoSponsor(t *testing.T) {
-	originalEnv := os.Getenv(noSponsor.Name)
-	defer func() {
-		if originalEnv != "" {
-			_ = os.Setenv(noSponsor.Name, originalEnv)
-		} else {
-			_ = os.Unsetenv(noSponsor.Name)
-		}
-	}()
+	// t.Setenv registers cleanup that restores noSponsor.Name even though
+	// the subtest below os.Unsetenv it mid-test.
+	t.Setenv(noSponsor.Name, os.Getenv(noSponsor.Name))
 
 	t.Run("returns false when unset", func(t *testing.T) {
 		_ = os.Unsetenv(noSponsor.Name)
@@ -667,21 +568,21 @@ func TestNoSponsor(t *testing.T) {
 	})
 
 	t.Run("returns true when set to 1", func(t *testing.T) {
-		_ = os.Setenv(noSponsor.Name, "1")
+		t.Setenv(noSponsor.Name, "1")
 		if !NoSponsor() {
 			t.Error("NoSponsor() = false, want true when env var is '1'")
 		}
 	})
 
 	t.Run("returns true when set to true", func(t *testing.T) {
-		_ = os.Setenv(noSponsor.Name, "true")
+		t.Setenv(noSponsor.Name, "true")
 		if !NoSponsor() {
 			t.Error("NoSponsor() = false, want true when env var is 'true'")
 		}
 	})
 
 	t.Run("returns false when set to empty string", func(t *testing.T) {
-		_ = os.Setenv(noSponsor.Name, "")
+		t.Setenv(noSponsor.Name, "")
 		if NoSponsor() {
 			t.Error("NoSponsor() = true, want false when env var is empty string")
 		}
@@ -689,14 +590,9 @@ func TestNoSponsor(t *testing.T) {
 }
 
 func TestIsCI(t *testing.T) {
-	originalEnv := os.Getenv("CI")
-	defer func() {
-		if originalEnv != "" {
-			_ = os.Setenv("CI", originalEnv)
-		} else {
-			_ = os.Unsetenv("CI")
-		}
-	}()
+	// t.Setenv registers cleanup that restores CI even though the subtest
+	// below os.Unsetenv it mid-test.
+	t.Setenv("CI", os.Getenv("CI"))
 
 	t.Run("returns false when unset", func(t *testing.T) {
 		_ = os.Unsetenv("CI")
@@ -706,28 +602,28 @@ func TestIsCI(t *testing.T) {
 	})
 
 	t.Run("returns true when set to true", func(t *testing.T) {
-		_ = os.Setenv("CI", "true")
+		t.Setenv("CI", "true")
 		if !IsCI() {
 			t.Error("IsCI() = false, want true when CI is 'true'")
 		}
 	})
 
 	t.Run("returns true when set to 1", func(t *testing.T) {
-		_ = os.Setenv("CI", "1")
+		t.Setenv("CI", "1")
 		if !IsCI() {
 			t.Error("IsCI() = false, want true when CI is '1'")
 		}
 	})
 
 	t.Run("returns true when set to yes", func(t *testing.T) {
-		_ = os.Setenv("CI", "yes")
+		t.Setenv("CI", "yes")
 		if !IsCI() {
 			t.Error("IsCI() = false, want true when CI is 'yes'")
 		}
 	})
 
 	t.Run("returns false when set to empty string", func(t *testing.T) {
-		_ = os.Setenv("CI", "")
+		t.Setenv("CI", "")
 		if IsCI() {
 			t.Error("IsCI() = true, want false when CI is empty string")
 		}
@@ -735,14 +631,9 @@ func TestIsCI(t *testing.T) {
 }
 
 func TestGetBinaryCommandOverride(t *testing.T) {
-	originalEnv := os.Getenv(binaryCommandOverride.Name)
-	defer func() {
-		if originalEnv != "" {
-			_ = os.Setenv(binaryCommandOverride.Name, originalEnv)
-		} else {
-			_ = os.Unsetenv(binaryCommandOverride.Name)
-		}
-	}()
+	// t.Setenv registers cleanup that restores binaryCommandOverride.Name even
+	// though the subtest below os.Unsetenv it mid-test.
+	t.Setenv(binaryCommandOverride.Name, os.Getenv(binaryCommandOverride.Name))
 
 	t.Run("returns empty string when unset", func(t *testing.T) {
 		_ = os.Unsetenv(binaryCommandOverride.Name)
@@ -753,7 +644,7 @@ func TestGetBinaryCommandOverride(t *testing.T) {
 	})
 
 	t.Run("returns custom path when set", func(t *testing.T) {
-		_ = os.Setenv(binaryCommandOverride.Name, "/custom/path")
+		t.Setenv(binaryCommandOverride.Name, "/custom/path")
 		got := GetBinaryCommandOverride()
 		if got != "/custom/path" {
 			t.Errorf("GetBinaryCommandOverride() = %q, want '/custom/path'", got)
@@ -762,8 +653,9 @@ func TestGetBinaryCommandOverride(t *testing.T) {
 }
 
 func TestInstallTimeoutSeconds(t *testing.T) {
-	original := os.Getenv(installTimeout.Name)
-	defer func() { _ = os.Setenv(installTimeout.Name, original) }()
+	// t.Setenv registers cleanup that restores installTimeout.Name even though
+	// subtests below os.Unsetenv it mid-test.
+	t.Setenv(installTimeout.Name, os.Getenv(installTimeout.Name))
 
 	tests := []struct {
 		name  string
@@ -781,7 +673,7 @@ func TestInstallTimeoutSeconds(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.set {
-				_ = os.Setenv(installTimeout.Name, tt.value)
+				t.Setenv(installTimeout.Name, tt.value)
 			} else {
 				_ = os.Unsetenv(installTimeout.Name)
 			}
@@ -793,8 +685,9 @@ func TestInstallTimeoutSeconds(t *testing.T) {
 }
 
 func TestMinimumReleaseAgeMinutes(t *testing.T) {
-	original := os.Getenv(minimumReleaseAge.Name)
-	defer func() { _ = os.Setenv(minimumReleaseAge.Name, original) }()
+	// t.Setenv registers cleanup that restores minimumReleaseAge.Name even
+	// though subtests below os.Unsetenv it mid-test.
+	t.Setenv(minimumReleaseAge.Name, os.Getenv(minimumReleaseAge.Name))
 
 	tests := []struct {
 		name  string
@@ -812,7 +705,7 @@ func TestMinimumReleaseAgeMinutes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.set {
-				_ = os.Setenv(minimumReleaseAge.Name, tt.value)
+				t.Setenv(minimumReleaseAge.Name, tt.value)
 			} else {
 				_ = os.Unsetenv(minimumReleaseAge.Name)
 			}

@@ -9,13 +9,14 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"github.com/datamitsu/datamitsu/internal/env"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/env"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
@@ -38,7 +39,7 @@ func createTestTgz(t *testing.T, files map[string]string) string {
 	for name, content := range files {
 		hdr := &tar.Header{
 			Name: name,
-			Mode: 0644,
+			Mode: 0o644,
 			Size: int64(len(content)),
 		}
 		if err := tw.WriteHeader(hdr); err != nil {
@@ -197,10 +198,10 @@ func TestDownloadPNPMFromRegistry(t *testing.T) {
 	t.Run("skips if already downloaded", func(t *testing.T) {
 		destDir := t.TempDir()
 		pnpmDir := filepath.Join(destDir, "package", "bin")
-		if err := os.MkdirAll(pnpmDir, 0755); err != nil {
+		if err := os.MkdirAll(pnpmDir, 0o755); err != nil {
 			t.Fatalf("failed to create dir: %v", err)
 		}
-		if err := os.WriteFile(filepath.Join(pnpmDir, "pnpm.cjs"), []byte("already here"), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(pnpmDir, "pnpm.cjs"), []byte("already here"), 0o644); err != nil {
 			t.Fatalf("failed to write file: %v", err)
 		}
 
@@ -1082,7 +1083,7 @@ func TestWriteAppWorkspaceFile(t *testing.T) {
 		appEnvPath := t.TempDir()
 
 		archiveContent := "strictDepBuilds: false\nallowBuilds:\n  malicious: true\n"
-		if err := os.WriteFile(filepath.Join(appEnvPath, "pnpm-workspace.yaml"), []byte(archiveContent), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(appEnvPath, "pnpm-workspace.yaml"), []byte(archiveContent), 0o644); err != nil {
 			t.Fatalf("failed to seed pre-existing workspace file: %v", err)
 		}
 
@@ -1118,7 +1119,7 @@ func TestWriteAppWorkspaceFile(t *testing.T) {
 			t.Fatalf("app dir not created: %v", err)
 		}
 		pkgPath := filepath.Join(appEnvPath, "package.json")
-		if err := os.WriteFile(pkgPath, []byte("{}"), 0644); err != nil {
+		if err := os.WriteFile(pkgPath, []byte("{}"), 0o644); err != nil {
 			t.Fatalf("writing package.json after writeAppWorkspaceFile failed: %v", err)
 		}
 	})
@@ -1129,7 +1130,7 @@ func TestWriteAppWorkspaceFile(t *testing.T) {
 	t.Run("MkdirAll failure returns wrapped create-directory error", func(t *testing.T) {
 		base := t.TempDir()
 		parentFile := filepath.Join(base, "not-a-dir")
-		if err := os.WriteFile(parentFile, []byte("regular file"), 0644); err != nil {
+		if err := os.WriteFile(parentFile, []byte("regular file"), 0o644); err != nil {
 			t.Fatalf("failed to seed regular file: %v", err)
 		}
 		// appEnvPath's parent (parentFile) is a regular file, so MkdirAll errors.

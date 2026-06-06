@@ -1,7 +1,9 @@
 package registry
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -18,12 +20,18 @@ type temurinReleaseVersions struct {
 
 var temurinHTTPClient = &http.Client{Timeout: 15 * time.Second}
 
-func GetLatestTemurinMajorVersion() (string, error) {
-	return getLatestTemurinMajorVersionFromURL("https://api.adoptium.net/v3/info/available_releases")
+// GetLatestTemurinMajorVersion returns the most recent Temurin (Eclipse Adoptium)
+// feature-release major version, falling back to a pinned version on failure.
+func GetLatestTemurinMajorVersion(ctx context.Context) (string, error) {
+	return getLatestTemurinMajorVersionFromURL(ctx, "https://api.adoptium.net/v3/info/available_releases")
 }
 
-func getLatestTemurinMajorVersionFromURL(url string) (string, error) {
-	resp, err := temurinHTTPClient.Get(url)
+func getLatestTemurinMajorVersionFromURL(ctx context.Context, url string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return temurinFallbackMajorVersion, fmt.Errorf("failed to build request: %w", err)
+	}
+	resp, err := temurinHTTPClient.Do(req)
 	if err != nil {
 		return temurinFallbackMajorVersion, fmt.Errorf("failed to fetch Temurin releases: %w", err)
 	}
@@ -41,7 +49,7 @@ func getLatestTemurinMajorVersionFromURL(url string) (string, error) {
 
 	version := extractMajorVersion(releases)
 	if version == "" {
-		return temurinFallbackMajorVersion, fmt.Errorf("no major version found in Temurin releases")
+		return temurinFallbackMajorVersion, errors.New("no major version found in Temurin releases")
 	}
 
 	return version, nil

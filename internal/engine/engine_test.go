@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -9,7 +10,7 @@ import (
 )
 
 func TestNew(t *testing.T) {
-	engine, err := New("")
+	engine, err := New(context.Background(), "")
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -28,7 +29,7 @@ func TestNew(t *testing.T) {
 }
 
 func TestVM(t *testing.T) {
-	engine, err := New("")
+	engine, err := New(context.Background(), "")
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -40,7 +41,7 @@ func TestVM(t *testing.T) {
 }
 
 func TestFacts(t *testing.T) {
-	engine, err := New("")
+	engine, err := New(context.Background(), "")
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -52,7 +53,7 @@ func TestFacts(t *testing.T) {
 }
 
 func TestConsoleLog(t *testing.T) {
-	engine, err := New("")
+	engine, err := New(context.Background(), "")
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -65,7 +66,7 @@ func TestConsoleLog(t *testing.T) {
 }
 
 func TestConsoleError(t *testing.T) {
-	engine, err := New("")
+	engine, err := New(context.Background(), "")
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -78,7 +79,7 @@ func TestConsoleError(t *testing.T) {
 }
 
 func TestConsoleWarn(t *testing.T) {
-	engine, err := New("")
+	engine, err := New(context.Background(), "")
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -91,7 +92,7 @@ func TestConsoleWarn(t *testing.T) {
 }
 
 func TestConsoleDebug(t *testing.T) {
-	engine, err := New("")
+	engine, err := New(context.Background(), "")
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -104,7 +105,7 @@ func TestConsoleDebug(t *testing.T) {
 }
 
 func TestConsoleInfo(t *testing.T) {
-	engine, err := New("")
+	engine, err := New(context.Background(), "")
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -117,7 +118,7 @@ func TestConsoleInfo(t *testing.T) {
 }
 
 func TestYAMLParse(t *testing.T) {
-	engine, err := New("")
+	engine, err := New(context.Background(), "")
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -145,7 +146,7 @@ func TestYAMLParse(t *testing.T) {
 }
 
 func TestYAMLStringify(t *testing.T) {
-	engine, err := New("")
+	engine, err := New(context.Background(), "")
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -168,7 +169,7 @@ func TestYAMLStringify(t *testing.T) {
 }
 
 func TestYAMLParseNoArguments(t *testing.T) {
-	engine, err := New("")
+	engine, err := New(context.Background(), "")
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -181,7 +182,7 @@ func TestYAMLParseNoArguments(t *testing.T) {
 }
 
 func TestYAMLStringifyNoArguments(t *testing.T) {
-	engine, err := New("")
+	engine, err := New(context.Background(), "")
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -194,7 +195,7 @@ func TestYAMLStringifyNoArguments(t *testing.T) {
 }
 
 func TestTOMLParse(t *testing.T) {
-	engine, err := New("")
+	engine, err := New(context.Background(), "")
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -217,7 +218,7 @@ func TestTOMLParse(t *testing.T) {
 }
 
 func TestTOMLStringify(t *testing.T) {
-	engine, err := New("")
+	engine, err := New(context.Background(), "")
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -240,7 +241,7 @@ func TestTOMLStringify(t *testing.T) {
 }
 
 func TestTOMLParseNoArguments(t *testing.T) {
-	engine, err := New("")
+	engine, err := New(context.Background(), "")
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -253,7 +254,7 @@ func TestTOMLParseNoArguments(t *testing.T) {
 }
 
 func TestTOMLStringifyNoArguments(t *testing.T) {
-	engine, err := New("")
+	engine, err := New(context.Background(), "")
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -280,8 +281,8 @@ func TestYAMLStringifyFieldOrder(t *testing.T) {
 
 	// Run multiple times to ensure deterministic order
 	var firstResult string
-	for i := 0; i < 10; i++ {
-		engine, err := New("")
+	for i := range 10 {
+		engine, err := New(context.Background(), "")
 		if err != nil {
 			t.Fatalf("New() error = %v", err)
 		}
@@ -329,8 +330,8 @@ func TestTOMLStringifyFieldOrder(t *testing.T) {
 
 	// Run multiple times to ensure deterministic order
 	var firstResult string
-	for i := 0; i < 10; i++ {
-		engine, err := New("")
+	for i := range 10 {
+		engine, err := New(context.Background(), "")
 		if err != nil {
 			t.Fatalf("New() error = %v", err)
 		}
@@ -365,7 +366,7 @@ func TestTOMLStringifyFieldOrder(t *testing.T) {
 }
 
 func TestINIParse(t *testing.T) {
-	engine, err := New("")
+	engine, err := New(context.Background(), "")
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -393,7 +394,7 @@ func TestINIParse(t *testing.T) {
 }
 
 func TestINIToRecord(t *testing.T) {
-	engine, err := New("")
+	engine, err := New(context.Background(), "")
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -424,7 +425,7 @@ func TestINIToRecord(t *testing.T) {
 }
 
 func TestINIStringify(t *testing.T) {
-	engine, err := New("")
+	engine, err := New(context.Background(), "")
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -450,7 +451,7 @@ func TestINIStringify(t *testing.T) {
 }
 
 func TestINIParseNoArguments(t *testing.T) {
-	engine, err := New("")
+	engine, err := New(context.Background(), "")
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -463,7 +464,7 @@ func TestINIParseNoArguments(t *testing.T) {
 }
 
 func TestINIToRecordNoArguments(t *testing.T) {
-	engine, err := New("")
+	engine, err := New(context.Background(), "")
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -476,7 +477,7 @@ func TestINIToRecordNoArguments(t *testing.T) {
 }
 
 func TestINIStringifyNoArguments(t *testing.T) {
-	engine, err := New("")
+	engine, err := New(context.Background(), "")
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -489,7 +490,7 @@ func TestINIStringifyNoArguments(t *testing.T) {
 }
 
 func TestConvertGojaValueToOrderedStructure(t *testing.T) {
-	engine, err := New("")
+	engine, err := New(context.Background(), "")
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -497,12 +498,13 @@ func TestConvertGojaValueToOrderedStructure(t *testing.T) {
 	tests := []struct {
 		name     string
 		script   string
-		validate func(t *testing.T, result interface{})
+		validate func(t *testing.T, result any)
 	}{
 		{
 			name:   "primitive string",
 			script: `"hello"`,
-			validate: func(t *testing.T, result interface{}) {
+			validate: func(t *testing.T, result any) {
+				t.Helper()
 				if str, ok := result.(string); !ok || str != "hello" {
 					t.Errorf("expected string 'hello', got %v", result)
 				}
@@ -511,7 +513,8 @@ func TestConvertGojaValueToOrderedStructure(t *testing.T) {
 		{
 			name:   "primitive number",
 			script: `42`,
-			validate: func(t *testing.T, result interface{}) {
+			validate: func(t *testing.T, result any) {
+				t.Helper()
 				if _, ok := result.(int64); !ok {
 					t.Errorf("expected int64, got %T", result)
 				}
@@ -520,7 +523,8 @@ func TestConvertGojaValueToOrderedStructure(t *testing.T) {
 		{
 			name:   "primitive boolean",
 			script: `true`,
-			validate: func(t *testing.T, result interface{}) {
+			validate: func(t *testing.T, result any) {
+				t.Helper()
 				if b, ok := result.(bool); !ok || !b {
 					t.Errorf("expected bool true, got %v", result)
 				}
@@ -529,7 +533,8 @@ func TestConvertGojaValueToOrderedStructure(t *testing.T) {
 		{
 			name:   "null",
 			script: `null`,
-			validate: func(t *testing.T, result interface{}) {
+			validate: func(t *testing.T, result any) {
+				t.Helper()
 				if result != nil {
 					t.Errorf("expected nil, got %v", result)
 				}
@@ -538,7 +543,8 @@ func TestConvertGojaValueToOrderedStructure(t *testing.T) {
 		{
 			name:   "undefined",
 			script: `undefined`,
-			validate: func(t *testing.T, result interface{}) {
+			validate: func(t *testing.T, result any) {
+				t.Helper()
 				if result != nil {
 					t.Errorf("expected nil for undefined, got %v", result)
 				}
@@ -547,8 +553,9 @@ func TestConvertGojaValueToOrderedStructure(t *testing.T) {
 		{
 			name:   "array",
 			script: `[1, 2, 3]`,
-			validate: func(t *testing.T, result interface{}) {
-				arr, ok := result.([]interface{})
+			validate: func(t *testing.T, result any) {
+				t.Helper()
+				arr, ok := result.([]any)
 				if !ok {
 					t.Errorf("expected []interface{}, got %T", result)
 					return
@@ -574,7 +581,7 @@ func TestConvertGojaValueToOrderedStructure(t *testing.T) {
 }
 
 func TestFactsFunction(t *testing.T) {
-	engine, err := New("")
+	engine, err := New(context.Background(), "")
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -595,7 +602,7 @@ func TestFactsFunction(t *testing.T) {
 }
 
 func TestFactsLibcExposed(t *testing.T) {
-	engine, err := New("")
+	engine, err := New(context.Background(), "")
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -618,7 +625,7 @@ func TestFactsLibcExposed(t *testing.T) {
 }
 
 func TestToolsRegistered(t *testing.T) {
-	engine, err := New("")
+	engine, err := New(context.Background(), "")
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -636,7 +643,7 @@ func TestToolsRegistered(t *testing.T) {
 }
 
 func TestINIToRecordInvalidArgument(t *testing.T) {
-	engine, err := New("")
+	engine, err := New(context.Background(), "")
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -649,7 +656,7 @@ func TestINIToRecordInvalidArgument(t *testing.T) {
 }
 
 func TestINIStringifyInvalidArgument(t *testing.T) {
-	engine, err := New("")
+	engine, err := New(context.Background(), "")
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -662,7 +669,7 @@ func TestINIStringifyInvalidArgument(t *testing.T) {
 }
 
 func TestINIToRecordMergesSameSections(t *testing.T) {
-	engine, err := New("")
+	engine, err := New(context.Background(), "")
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -688,7 +695,7 @@ func TestINIToRecordMergesSameSections(t *testing.T) {
 }
 
 func TestRunWithTimeout_InfiniteLoop(t *testing.T) {
-	e, err := New("")
+	e, err := New(context.Background(), "")
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -706,7 +713,7 @@ func TestRunWithTimeout_InfiniteLoop(t *testing.T) {
 }
 
 func TestRunWithTimeout_CompletesBeforeDeadline(t *testing.T) {
-	e, err := New("")
+	e, err := New(context.Background(), "")
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -724,7 +731,7 @@ func TestNewPanicRecovery(t *testing.T) {
 	testInitHook = func(*Engine) { panic("injected test panic") }
 	defer func() { testInitHook = nil }()
 
-	_, err := New("")
+	_, err := New(context.Background(), "")
 	if err == nil {
 		t.Fatal("expected error from panic recovery, got nil")
 	}
@@ -734,7 +741,7 @@ func TestNewPanicRecovery(t *testing.T) {
 }
 
 func TestConvertGojaValueCircularReference(t *testing.T) {
-	engine, err := New("")
+	engine, err := New(context.Background(), "")
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}

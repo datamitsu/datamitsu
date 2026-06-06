@@ -1,10 +1,12 @@
 package cmd
 
 import (
-	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
+	"context"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 )
 
 func TestPullRuntimesCmd_HasMinAgeFlag(t *testing.T) {
@@ -32,7 +34,7 @@ func TestPullNodeRuntime_MinAgePnpmNotOldEnough(t *testing.T) {
 
 	origLTS := getLatestNodeLTSVersion
 	defer func() { getLatestNodeLTSVersion = origLTS }()
-	getLatestNodeLTSVersion = func() (string, error) {
+	getLatestNodeLTSVersion = func(_ context.Context) (string, error) {
 		return "24.14.0", nil
 	}
 
@@ -45,7 +47,7 @@ func TestPullNodeRuntime_MinAgePnpmNotOldEnough(t *testing.T) {
 	srv := newNPMTestRegistry(t, "pnpm", "9.0.0", times)
 
 	withNPMRegistry(t, srv, func() {
-		data, binaries, err := pullNodeRuntime(24 * 60)
+		data, binaries, err := pullNodeRuntime(context.Background(), 24*60)
 		if err == nil {
 			t.Fatal("expected pullNodeRuntime to error when no pnpm version is old enough")
 		}

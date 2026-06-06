@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -28,7 +29,7 @@ func TestGetNPMPackageInfo(t *testing.T) {
 		npmHTTPClient = server.Client()
 		defer func() { npmHTTPClient = origClient }()
 
-		info, err := getNPMPackageInfoFromURL(server.URL+"/cspell/latest", "cspell")
+		info, err := getNPMPackageInfoFromURL(context.Background(), server.URL+"/cspell/latest", "cspell")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -54,7 +55,7 @@ func TestGetNPMPackageInfo(t *testing.T) {
 		npmHTTPClient = server.Client()
 		defer func() { npmHTTPClient = origClient }()
 
-		_, err := getNPMPackageInfoFromURL(server.URL+"/nonexistent/latest", "nonexistent")
+		_, err := getNPMPackageInfoFromURL(context.Background(), server.URL+"/nonexistent/latest", "nonexistent")
 		if err == nil {
 			t.Fatal("expected error for 404, got nil")
 		}
@@ -71,7 +72,7 @@ func TestGetNPMPackageInfo(t *testing.T) {
 		npmHTTPClient = server.Client()
 		defer func() { npmHTTPClient = origClient }()
 
-		_, err := getNPMPackageInfoFromURL(server.URL+"/pkg/latest", "pkg")
+		_, err := getNPMPackageInfoFromURL(context.Background(), server.URL+"/pkg/latest", "pkg")
 		if err == nil {
 			t.Fatal("expected error for 500, got nil")
 		}
@@ -88,7 +89,7 @@ func TestGetNPMPackageInfo(t *testing.T) {
 		npmHTTPClient = server.Client()
 		defer func() { npmHTTPClient = origClient }()
 
-		_, err := getNPMPackageInfoFromURL(server.URL+"/pkg/latest", "pkg")
+		_, err := getNPMPackageInfoFromURL(context.Background(), server.URL+"/pkg/latest", "pkg")
 		if err == nil {
 			t.Fatal("expected error for invalid JSON, got nil")
 		}
@@ -112,7 +113,7 @@ func TestGetNPMPackageInfo(t *testing.T) {
 		npmHTTPClient = server.Client()
 		defer func() { npmHTTPClient = origClient }()
 
-		info, err := getNPMPackageInfoFromURL(server.URL+"/@mermaid-js/mermaid-cli/latest", "@mermaid-js/mermaid-cli")
+		info, err := getNPMPackageInfoFromURL(context.Background(), server.URL+"/@mermaid-js/mermaid-cli/latest", "@mermaid-js/mermaid-cli")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -177,7 +178,7 @@ func TestGetNPMPackageInfoWithMinAge(t *testing.T) {
 		srv, fullHit := minAgeServer(t, "pkg", "2.0.0", npmFullResponse{Name: "pkg"})
 		setup(t, srv)
 
-		info, err := GetNPMPackageInfoWithMinAge("pkg", 0)
+		info, err := GetNPMPackageInfoWithMinAge(context.Background(), "pkg", 0)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -197,7 +198,7 @@ func TestGetNPMPackageInfoWithMinAge(t *testing.T) {
 		})
 		setup(t, srv)
 
-		info, err := GetNPMPackageInfoWithMinAge("pkg", minAge)
+		info, err := GetNPMPackageInfoWithMinAge(context.Background(), "pkg", minAge)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -214,7 +215,7 @@ func TestGetNPMPackageInfoWithMinAge(t *testing.T) {
 		})
 		setup(t, srv)
 
-		info, err := GetNPMPackageInfoWithMinAge("pkg", minAge)
+		info, err := GetNPMPackageInfoWithMinAge(context.Background(), "pkg", minAge)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -235,7 +236,7 @@ func TestGetNPMPackageInfoWithMinAge(t *testing.T) {
 		})
 		setup(t, srv)
 
-		info, err := GetNPMPackageInfoWithMinAge("pkg", minAge)
+		info, err := GetNPMPackageInfoWithMinAge(context.Background(), "pkg", minAge)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -252,7 +253,7 @@ func TestGetNPMPackageInfoWithMinAge(t *testing.T) {
 		})
 		setup(t, srv)
 
-		info, err := GetNPMPackageInfoWithMinAge("pkg", minAge)
+		info, err := GetNPMPackageInfoWithMinAge(context.Background(), "pkg", minAge)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -269,7 +270,7 @@ func TestGetNPMPackageInfoWithMinAge(t *testing.T) {
 		})
 		setup(t, srv)
 
-		info, err := GetNPMPackageInfoWithMinAge("pkg", minAge)
+		info, err := GetNPMPackageInfoWithMinAge(context.Background(), "pkg", minAge)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -287,7 +288,7 @@ func TestGetNPMPackageInfoWithMinAge(t *testing.T) {
 		})
 		setup(t, srv)
 
-		info, err := GetNPMPackageInfoWithMinAge("pkg", minAge)
+		info, err := GetNPMPackageInfoWithMinAge(context.Background(), "pkg", minAge)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -304,7 +305,7 @@ func TestGetNPMPackageInfoWithMinAge(t *testing.T) {
 		})
 		setup(t, srv)
 
-		info, err := GetNPMPackageInfoWithMinAge("pkg", minAge)
+		info, err := GetNPMPackageInfoWithMinAge(context.Background(), "pkg", minAge)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -321,7 +322,7 @@ func TestGetNPMPackageInfoWithMinAge(t *testing.T) {
 		})
 		setup(t, srv)
 
-		info, err := GetNPMPackageInfoWithMinAge("@scope/name", minAge)
+		info, err := GetNPMPackageInfoWithMinAge(context.Background(), "@scope/name", minAge)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}

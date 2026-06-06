@@ -2,19 +2,20 @@ package tooling
 
 import (
 	"context"
-	"github.com/datamitsu/datamitsu/internal/binmanager"
-	"github.com/datamitsu/datamitsu/internal/config"
-	"fmt"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/config"
 )
 
 func TestFailureReasonIndependent_GetCommandInfoError(t *testing.T) {
 	appManager := &mockAppManager{
-		err: fmt.Errorf("binary not found"),
+		err: errors.New("binary not found"),
 	}
 	executor := NewExecutor("/root", false, false, appManager, nil)
 

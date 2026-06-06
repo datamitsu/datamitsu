@@ -1,13 +1,15 @@
 package cmd
 
 import (
-	"github.com/datamitsu/datamitsu/internal/registry"
-	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
+
+	"github.com/datamitsu/datamitsu/internal/registry"
+	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 
 	"github.com/spf13/cobra"
 )
@@ -55,6 +57,8 @@ type npmVersionResult struct {
 }
 
 func runPullNode(cmd *cobra.Command, args []string) error {
+	ctx := commandContext(cmd)
+
 	file := args[0]
 
 	// Resolve the effective minimum release age from runtime config + flag.
@@ -103,7 +107,7 @@ func runPullNode(cmd *cobra.Command, args []string) error {
 			CurrentVersion: entry.Version,
 		}
 
-		info, err := registry.GetNPMPackageInfoWithMinAge(entry.PackageName, minAge)
+		info, err := registry.GetNPMPackageInfoWithMinAge(ctx, entry.PackageName, minAge)
 		switch {
 		case err != nil:
 			result.Error = err.Error()
@@ -121,11 +125,11 @@ func runPullNode(cmd *cobra.Command, args []string) error {
 
 			status := "up-to-date"
 			if result.UpdateNeeded {
-				status = fmt.Sprintf("-> %s", info.Version)
+				status = "-> " + info.Version
 			}
 			line := fmt.Sprintf("  %-*s  %s  %s", maxNameLen, name, result.CurrentVersion, status)
 			if info.Description != "" {
-				line += fmt.Sprintf("  %s", info.Description)
+				line += "  " + info.Description
 			}
 			fmt.Println(line)
 		}
@@ -143,7 +147,7 @@ func runPullNode(cmd *cobra.Command, args []string) error {
 
 	for _, r := range results {
 		if r.Error != "" {
-			return fmt.Errorf("some packages failed to fetch from registry")
+			return errors.New("some packages failed to fetch from registry")
 		}
 	}
 	return nil
@@ -192,7 +196,7 @@ func ensureNodeAppsJSONExists(path string) error {
 			_ = os.Remove(tmpPath)
 			return fmt.Errorf("failed to close temp file: %w", err)
 		}
-		if err := os.Chmod(tmpPath, 0644); err != nil {
+		if err := os.Chmod(tmpPath, 0o644); err != nil {
 			_ = os.Remove(tmpPath)
 			return fmt.Errorf("failed to chmod temp file: %w", err)
 		}
@@ -236,7 +240,7 @@ func writeNodeAppsJSON(path string, apps nodeAppsJSON) error {
 		_ = os.Remove(tmpPath)
 		return fmt.Errorf("closing temp file: %w", err)
 	}
-	if err := os.Chmod(tmpPath, 0644); err != nil {
+	if err := os.Chmod(tmpPath, 0o644); err != nil {
 		_ = os.Remove(tmpPath)
 		return fmt.Errorf("chmod temp file: %w", err)
 	}

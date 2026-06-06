@@ -1,5 +1,7 @@
 package config
 
+import "slices"
+
 // InitLayerEntry represents one layer's contribution to an Init entry.
 type InitLayerEntry struct {
 	LayerName        string
@@ -23,8 +25,8 @@ func GetLastGeneratedContent(history *InitLayerHistory) *string {
 	if history == nil {
 		return nil
 	}
-	for i := len(history.Layers) - 1; i >= 0; i-- {
-		layer := &history.Layers[i]
+	for _, v := range slices.Backward(history.Layers) {
+		layer := &v
 		if layer.GeneratedContent != nil {
 			return layer.GeneratedContent
 		}

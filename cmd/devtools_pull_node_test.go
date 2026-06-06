@@ -2,8 +2,10 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
+	maps0 "maps"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -40,9 +42,7 @@ func buildNodeTestShasums(v string) (dist, musl map[string]string) {
 func mergeShasums(maps ...map[string]string) map[string]string {
 	out := map[string]string{}
 	for _, m := range maps {
-		for k, v := range m {
-			out[k] = v
-		}
+		maps0.Copy(out, m)
 	}
 	return out
 }
@@ -390,7 +390,7 @@ func TestDetectNodeBinaries_MockServers(t *testing.T) {
 		client:      &http.Client{},
 	}
 
-	binaries, err := detectNodeBinaries(cfg)
+	binaries, err := detectNodeBinaries(context.Background(), cfg)
 	if err != nil {
 		t.Fatalf("detectNodeBinaries: %v", err)
 	}
@@ -436,7 +436,7 @@ func TestDetectNodeBinaries_BadSignature(t *testing.T) {
 		client:      &http.Client{},
 	}
 
-	if _, err := detectNodeBinaries(cfg); err == nil {
+	if _, err := detectNodeBinaries(context.Background(), cfg); err == nil {
 		t.Fatal("expected error when dist SHASUMS signature is from an untrusted key")
 	}
 }
@@ -457,7 +457,7 @@ func TestDetectNodeBinaries_MissingMuslAssetFromServer(t *testing.T) {
 		client:      &http.Client{},
 	}
 
-	if _, err := detectNodeBinaries(cfg); err == nil {
+	if _, err := detectNodeBinaries(context.Background(), cfg); err == nil {
 		t.Fatal("expected error when an expected musl asset is absent from the manifest")
 	}
 }

@@ -11,6 +11,7 @@ package nodekeys
 import (
 	"bytes"
 	_ "embed"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -27,21 +28,21 @@ var embeddedReleaseKeys []byte
 var (
 	releaseKeyringOnce sync.Once
 	releaseKeyring     openpgp.EntityList
-	releaseKeyringErr  error
+	errReleaseKeyring  error
 )
 
 // ReleaseKeyring returns the embedded Node.js release signing keys parsed into
 // an openpgp keyring. The keyring is parsed once and cached.
 func ReleaseKeyring() (openpgp.EntityList, error) {
 	releaseKeyringOnce.Do(func() {
-		releaseKeyring, releaseKeyringErr = readArmoredKeyRings(embeddedReleaseKeys)
-		if releaseKeyringErr != nil {
-			releaseKeyringErr = fmt.Errorf("parsing embedded Node.js release keys: %w", releaseKeyringErr)
+		releaseKeyring, errReleaseKeyring = readArmoredKeyRings(embeddedReleaseKeys)
+		if errReleaseKeyring != nil {
+			errReleaseKeyring = fmt.Errorf("parsing embedded Node.js release keys: %w", errReleaseKeyring)
 		} else if len(releaseKeyring) == 0 {
-			releaseKeyringErr = fmt.Errorf("embedded Node.js release keyring is empty")
+			errReleaseKeyring = errors.New("embedded Node.js release keyring is empty")
 		}
 	})
-	return releaseKeyring, releaseKeyringErr
+	return releaseKeyring, errReleaseKeyring
 }
 
 // pgpPublicKeyEnd is the armor footer terminating one ASCII-armored public key
@@ -66,7 +67,7 @@ func readArmoredKeyRings(data []byte) (openpgp.EntityList, error) {
 		rest = rest[begin:]
 		end := bytes.Index(rest, []byte(pgpPublicKeyEnd))
 		if end < 0 {
-			return nil, fmt.Errorf("armored key block missing terminating footer")
+			return nil, errors.New("armored key block missing terminating footer")
 		}
 		blockEnd := end + len(pgpPublicKeyEnd)
 		entities, err := openpgp.ReadArmoredKeyRing(bytes.NewReader(rest[:blockEnd]))
@@ -99,11 +100,11 @@ func readArmoredKeyRings(data []byte) (openpgp.EntityList, error) {
 // those hashes are first generated.
 func VerifyClearsigned(data []byte, keyring openpgp.KeyRing) ([]byte, error) {
 	if keyring == nil {
-		return nil, fmt.Errorf("nil keyring")
+		return nil, errors.New("nil keyring")
 	}
 	block, _ := clearsign.Decode(data)
 	if block == nil {
-		return nil, fmt.Errorf("no clearsigned PGP message found")
+		return nil, errors.New("no clearsigned PGP message found")
 	}
 	if _, err := openpgp.CheckDetachedSignature(
 		keyring,

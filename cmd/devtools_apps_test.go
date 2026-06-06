@@ -1,22 +1,23 @@
 package cmd
 
 import (
-	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/binmanager"
 )
 
 func TestBuildFileTree(t *testing.T) {
 	dir := t.TempDir()
 
 	// Create test file structure
-	_ = os.MkdirAll(filepath.Join(dir, "dist"), 0755)
-	_ = os.WriteFile(filepath.Join(dir, "package.json"), []byte("{}"), 0644)
-	_ = os.WriteFile(filepath.Join(dir, "dist", "index.js"), []byte(""), 0644)
-	_ = os.WriteFile(filepath.Join(dir, "dist", "index.d.ts"), []byte(""), 0644)
+	_ = os.MkdirAll(filepath.Join(dir, "dist"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "package.json"), []byte("{}"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "dist", "index.js"), []byte(""), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "dist", "index.d.ts"), []byte(""), 0o644)
 
 	lines := buildFileTree(dir)
 
@@ -56,11 +57,11 @@ func TestBuildFileTreeNodeModulesCollapsed(t *testing.T) {
 
 	// Create node_modules with many files
 	nmDir := filepath.Join(dir, "node_modules")
-	_ = os.MkdirAll(filepath.Join(nmDir, "pkg-a"), 0755)
-	_ = os.MkdirAll(filepath.Join(nmDir, "pkg-b"), 0755)
-	_ = os.WriteFile(filepath.Join(nmDir, "pkg-a", "index.js"), []byte(""), 0644)
-	_ = os.WriteFile(filepath.Join(nmDir, "pkg-b", "index.js"), []byte(""), 0644)
-	_ = os.WriteFile(filepath.Join(dir, "index.js"), []byte(""), 0644)
+	_ = os.MkdirAll(filepath.Join(nmDir, "pkg-a"), 0o755)
+	_ = os.MkdirAll(filepath.Join(nmDir, "pkg-b"), 0o755)
+	_ = os.WriteFile(filepath.Join(nmDir, "pkg-a", "index.js"), []byte(""), 0o644)
+	_ = os.WriteFile(filepath.Join(nmDir, "pkg-b", "index.js"), []byte(""), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "index.js"), []byte(""), 0o644)
 
 	lines := buildFileTree(dir)
 
@@ -81,9 +82,9 @@ func TestBuildFileTreeVenvCollapsed(t *testing.T) {
 
 	// Create .venv with many files
 	venvDir := filepath.Join(dir, ".venv")
-	_ = os.MkdirAll(filepath.Join(venvDir, "lib"), 0755)
-	_ = os.WriteFile(filepath.Join(venvDir, "lib", "site.py"), []byte(""), 0644)
-	_ = os.WriteFile(filepath.Join(dir, "main.py"), []byte(""), 0644)
+	_ = os.MkdirAll(filepath.Join(venvDir, "lib"), 0o755)
+	_ = os.WriteFile(filepath.Join(venvDir, "lib", "site.py"), []byte(""), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "main.py"), []byte(""), 0o644)
 
 	lines := buildFileTree(dir)
 
@@ -112,10 +113,10 @@ func TestAppsInspectErrorNotInstalled(t *testing.T) {
 func TestCountFiles(t *testing.T) {
 	dir := t.TempDir()
 
-	_ = os.MkdirAll(filepath.Join(dir, "sub"), 0755)
-	_ = os.WriteFile(filepath.Join(dir, "a.txt"), []byte(""), 0644)
-	_ = os.WriteFile(filepath.Join(dir, "b.txt"), []byte(""), 0644)
-	_ = os.WriteFile(filepath.Join(dir, "sub", "c.txt"), []byte(""), 0644)
+	_ = os.MkdirAll(filepath.Join(dir, "sub"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "a.txt"), []byte(""), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "b.txt"), []byte(""), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "sub", "c.txt"), []byte(""), 0o644)
 
 	count := countFiles(dir)
 	if count != 3 {

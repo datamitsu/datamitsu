@@ -7,18 +7,21 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"github.com/datamitsu/datamitsu/internal/binmanager"
-	"github.com/datamitsu/datamitsu/internal/env"
-	"github.com/datamitsu/datamitsu/internal/httpx"
-	"github.com/datamitsu/datamitsu/internal/pnpmdefaults"
-	"github.com/goccy/go-yaml"
 	"io"
+	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/httpx"
+	"github.com/datamitsu/datamitsu/internal/pnpmdefaults"
+	"github.com/goccy/go-yaml"
 )
 
 // pnpm.go holds the pnpm download + npm-app-install helpers shared by the node
@@ -43,7 +46,10 @@ func (rm *RuntimeManager) installPNPM(ctx context.Context, version string, destD
 	_, err, _ := rm.pnpmInstall.Do(key, func() (any, error) {
 		return nil, rm.downloadPNPMFromRegistry(ctx, version, destDir, pnpmHash)
 	})
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to install pnpm %q: %w", version, err)
+	}
+	return nil
 }
 
 func (rm *RuntimeManager) downloadPNPMFromRegistry(ctx context.Context, version string, destDir string, pnpmHash string) error {
@@ -161,7 +167,7 @@ func (rm *RuntimeManager) downloadPNPMFromRegistryURL(ctx context.Context, regis
 // a pinned hash, not against untrusted registry-provided metadata.
 func verifyPNPMPinnedHash(expectedHash string, actualSHA256 []byte) error {
 	if expectedHash == "" {
-		return fmt.Errorf("pnpm tarball SHA-256 hash is required but not configured")
+		return errors.New("pnpm tarball SHA-256 hash is required but not configured")
 	}
 	actualHex := hex.EncodeToString(actualSHA256)
 	if actualHex != expectedHash {
@@ -181,7 +187,7 @@ func hasSHA512Prefix(integrity string) bool {
 // SHA-512 integrity metadata (SRI format). SHA-1 fallback is not supported.
 func verifyPNPMIntegrity(meta npmVersionMeta, sha512Sum []byte) error {
 	if !hasSHA512Prefix(meta.Dist.Integrity) {
-		return fmt.Errorf("SHA-512 integrity required but not found in registry metadata")
+		return errors.New("SHA-512 integrity required but not found in registry metadata")
 	}
 
 	expectedB64 := strings.TrimPrefix(meta.Dist.Integrity, "sha512-")
@@ -217,9 +223,7 @@ func filesWithMergedWorkspaceYAML(files map[string]string) (map[string]string, e
 // the result for the cache key. The original files map is not mutated.
 func filesWithWorkspaceYAML(files map[string]string, mergedYAML string) map[string]string {
 	out := make(map[string]string, len(files)+1)
-	for k, v := range files {
-		out[k] = v
-	}
+	maps.Copy(out, files)
 	out["pnpm-workspace.yaml"] = mergedYAML
 	return out
 }
@@ -237,9 +241,7 @@ func buildPNPMInstallArgs(pnpmCjsPath string, hasLockFile bool) []string {
 // An empty userYAML returns a copy of base unchanged.
 func mergePNPMWorkspaceConfig(base map[string]any, userYAML string) (map[string]any, error) {
 	merged := make(map[string]any, len(base))
-	for k, v := range base {
-		merged[k] = v
-	}
+	maps.Copy(merged, base)
 
 	if strings.TrimSpace(userYAML) == "" {
 		return merged, nil
@@ -250,9 +252,7 @@ func mergePNPMWorkspaceConfig(base map[string]any, userYAML string) (map[string]
 		return nil, fmt.Errorf("failed to parse user pnpm-workspace.yaml: %w", err)
 	}
 
-	for k, v := range user {
-		merged[k] = v
-	}
+	maps.Copy(merged, user)
 	return merged, nil
 }
 
@@ -281,11 +281,11 @@ func filesWithoutWorkspaceYAML(files map[string]string) map[string]string {
 // Callers MUST invoke this AFTER any archive extraction so archives cannot
 // overwrite the secure defaults.
 func writeAppWorkspaceFile(appEnvPath, mergedYAML string) error {
-	if err := os.MkdirAll(appEnvPath, 0755); err != nil {
+	if err := os.MkdirAll(appEnvPath, 0o755); err != nil {
 		return fmt.Errorf("failed to create app directory: %w", err)
 	}
 	workspacePath := filepath.Join(appEnvPath, "pnpm-workspace.yaml")
-	if err := os.WriteFile(workspacePath, []byte(mergedYAML), 0644); err != nil {
+	if err := os.WriteFile(workspacePath, []byte(mergedYAML), 0o644); err != nil {
 		return fmt.Errorf("failed to write pnpm-workspace.yaml: %w", err)
 	}
 	return nil
@@ -333,9 +333,7 @@ func buildPNPMWorkspaceForApp(files map[string]string) (string, error) {
 func buildPackageJSON(packageName string, version string, deps map[string]string) ([]byte, error) {
 	allDeps := make(map[string]string, len(deps)+1)
 	allDeps[packageName] = version
-	for k, v := range deps {
-		allDeps[k] = v
-	}
+	maps.Copy(allDeps, deps)
 
 	pkg := map[string]any{
 		"name":         "datamitsu-app-" + strings.NewReplacer("@", "", "/", "-").Replace(packageName),
@@ -345,5 +343,9 @@ func buildPackageJSON(packageName string, version string, deps map[string]string
 		"type":         "module",
 	}
 
-	return json.MarshalIndent(pkg, "", "  ")
+	out, err := json.MarshalIndent(pkg, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal package.json: %w", err)
+	}
+	return out, nil
 }

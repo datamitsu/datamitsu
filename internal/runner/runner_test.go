@@ -2,16 +2,18 @@ package runner
 
 import (
 	"context"
-	"github.com/datamitsu/datamitsu/internal/config"
-	"github.com/datamitsu/datamitsu/internal/env"
-	"github.com/datamitsu/datamitsu/internal/timing"
-	"github.com/datamitsu/datamitsu/internal/tooling"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/timing"
+	"github.com/datamitsu/datamitsu/internal/tooling"
 )
 
 func TestIsCI(t *testing.T) {
@@ -45,12 +47,12 @@ func TestIsCI(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			originalCI := os.Getenv("CI")
-			defer func() { _ = os.Setenv("CI", originalCI) }()
+			defer func() { _ = os.Setenv("CI", originalCI) }() //nolint:usetesting // explicit unset required
 
 			if tt.ciValue == "" {
 				_ = os.Unsetenv("CI")
 			} else {
-				_ = os.Setenv("CI", tt.ciValue)
+				_ = os.Setenv("CI", tt.ciValue) //nolint:usetesting // explicit unset required
 			}
 
 			result := env.IsCI()
@@ -99,9 +101,7 @@ func TestFormatToolWithDir(t *testing.T) {
 }
 
 func TestCIProgressOutputFormat(t *testing.T) {
-	originalCI := os.Getenv("CI")
-	defer func() { _ = os.Setenv("CI", originalCI) }()
-	_ = os.Setenv("CI", "true")
+	t.Setenv("CI", "true")
 
 	t.Run("CI progress line format", func(t *testing.T) {
 		progressMu.Lock()
@@ -174,7 +174,6 @@ func TestNonCIProgressDescriptionWithDir(t *testing.T) {
 			t.Errorf("non-CI progress description should include tool name, got: %q", result)
 		}
 	})
-
 }
 
 func TestFormatDuration(t *testing.T) {
@@ -396,9 +395,7 @@ func TestGroupResultsByTool(t *testing.T) {
 }
 
 func TestUpdateCIProgress(t *testing.T) {
-	originalCI := os.Getenv("CI")
-	defer func() { _ = os.Setenv("CI", originalCI) }()
-	_ = os.Setenv("CI", "true")
+	t.Setenv("CI", "true")
 
 	lastCIProgressPercent = 0
 
@@ -974,9 +971,7 @@ func TestPrintOverallSummary(t *testing.T) {
 }
 
 func TestUpdateCIProgressConcurrency(t *testing.T) {
-	originalCI := os.Getenv("CI")
-	defer func() { _ = os.Setenv("CI", originalCI) }()
-	_ = os.Setenv("CI", "true")
+	t.Setenv("CI", "true")
 
 	progressMu.Lock()
 	lastCIProgressPercent = 0
@@ -985,14 +980,14 @@ func TestUpdateCIProgressConcurrency(t *testing.T) {
 	done := make(chan bool)
 	iterations := 50
 
-	for i := 0; i < iterations; i++ {
+	for i := range iterations {
 		go func(n int) {
 			updateCIProgress(n, 100, "✅", fmt.Sprintf("tool%d", n%5))
 			done <- true
 		}(i)
 	}
 
-	for i := 0; i < iterations; i++ {
+	for range iterations {
 		<-done
 	}
 }
@@ -1027,12 +1022,12 @@ func TestConcurrentProgressBarAccess(t *testing.T) {
 		done <- true
 	}
 
-	for i := 0; i < iterations/2; i++ {
+	for i := range iterations / 2 {
 		go readFunc()
 		go writeFunc(fmt.Sprintf("tool%d", i%5), i%2 == 0)
 	}
 
-	for i := 0; i < iterations; i++ {
+	for range iterations {
 		<-done
 	}
 
@@ -1442,7 +1437,7 @@ func TestConcurrentProgressUpdates(t *testing.T) {
 	numTasks := 10
 	done := make(chan bool, numTasks)
 
-	for i := 0; i < numTasks; i++ {
+	for i := range numTasks {
 		go func(n int) {
 			toolName := fmt.Sprintf("tool-%d", n)
 			tracker.onTaskStart(toolName)
@@ -1457,7 +1452,7 @@ func TestConcurrentProgressUpdates(t *testing.T) {
 		}(i)
 	}
 
-	for i := 0; i < numTasks; i++ {
+	for range numTasks {
 		<-done
 	}
 
@@ -1527,7 +1522,7 @@ func TestRunSequentialConfigLoadError(t *testing.T) {
 		[]config.OperationType{config.OpFix},
 		nil, "", false, "",
 		func() (*config.Config, string, error) {
-			return nil, "", fmt.Errorf("config load failed")
+			return nil, "", errors.New("config load failed")
 		},
 	)
 	if err == nil {
@@ -1580,7 +1575,7 @@ func TestRunDelegatesToRunSequential(t *testing.T) {
 		config.OpFix,
 		nil, "", false, "",
 		func() (*config.Config, string, error) {
-			return nil, "", fmt.Errorf("test error from Run")
+			return nil, "", errors.New("test error from Run")
 		},
 	)
 	if err == nil {
@@ -1634,7 +1629,7 @@ func (f *fakeEnsurer) EnsureTools(_ context.Context, names []string) error {
 }
 
 func planWithTools(tools ...string) *tooling.ExecutionPlan {
-	var tasks []tooling.Task
+	tasks := make([]tooling.Task, 0, len(tools))
 	for _, name := range tools {
 		tasks = append(tasks, tooling.Task{
 			ToolName: name,
@@ -1647,9 +1642,7 @@ func planWithTools(tools ...string) *tooling.ExecutionPlan {
 }
 
 func TestRunSingleOperationEnsuresToolsBeforeExecute(t *testing.T) {
-	originalCI := os.Getenv("CI")
-	defer func() { _ = os.Setenv("CI", originalCI) }()
-	_ = os.Setenv("CI", "true")
+	t.Setenv("CI", "true")
 
 	var order []string
 	ensurer := &fakeEnsurer{order: &order}
@@ -1681,9 +1674,7 @@ func TestRunSingleOperationEnsuresToolsBeforeExecute(t *testing.T) {
 }
 
 func TestRunSingleOperationEnsuresAppNamesNotToolNames(t *testing.T) {
-	originalCI := os.Getenv("CI")
-	defer func() { _ = os.Setenv("CI", originalCI) }()
-	_ = os.Setenv("CI", "true")
+	t.Setenv("CI", "true")
 
 	var order []string
 	ensurer := &fakeEnsurer{order: &order}
@@ -1714,12 +1705,10 @@ func TestRunSingleOperationEnsuresAppNamesNotToolNames(t *testing.T) {
 }
 
 func TestRunSingleOperationEnsureToolsFailureAbortsExecute(t *testing.T) {
-	originalCI := os.Getenv("CI")
-	defer func() { _ = os.Setenv("CI", originalCI) }()
-	_ = os.Setenv("CI", "true")
+	t.Setenv("CI", "true")
 
 	var order []string
-	ensurer := &fakeEnsurer{order: &order, err: fmt.Errorf("download boom")}
+	ensurer := &fakeEnsurer{order: &order, err: errors.New("download boom")}
 	executor := &fakeExecutor{order: &order}
 	sc := &sharedContext{
 		planner:  &fakePlanner{plan: planWithTools("yq")},
@@ -1781,7 +1770,7 @@ func TestRunSequentialFixThenLintOrdering(t *testing.T) {
 							config.OpLint: {
 								App:   "echo",
 								Args:  []string{"lint"},
-								Scope:   config.ToolScopeRepository,
+								Scope: config.ToolScopeRepository,
 							},
 						},
 					},

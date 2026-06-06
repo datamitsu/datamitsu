@@ -2,20 +2,24 @@ package binmanager
 
 import (
 	"bytes"
-	"github.com/datamitsu/datamitsu/internal/constants"
 	"encoding/base64"
 	"fmt"
 	"io"
 	"strings"
 
+	"github.com/datamitsu/datamitsu/internal/constants"
+
 	"github.com/andybalholm/brotli"
 )
 
 const (
-	TarBrotliPrefix            = "tar.br:"
+	// TarBrotliPrefix marks a string as a brotli-compressed, base64-encoded tar archive.
+	TarBrotliPrefix = "tar.br:"
+	// MaxDecompressedArchiveSize caps the size of a decompressed inline archive.
 	MaxDecompressedArchiveSize = constants.MaxInlineArchiveSize
 )
 
+// CompressArchive brotli-compresses tar data and returns it base64-encoded with the TarBrotliPrefix.
 func CompressArchive(tarData []byte) (string, error) {
 	var buf bytes.Buffer
 	w := brotli.NewWriterLevel(&buf, 11)
@@ -28,6 +32,7 @@ func CompressArchive(tarData []byte) (string, error) {
 	return TarBrotliPrefix + base64.StdEncoding.EncodeToString(buf.Bytes()), nil
 }
 
+// DecompressArchive decodes and brotli-decompresses a TarBrotliPrefix-tagged string back into tar data.
 func DecompressArchive(data string) ([]byte, error) {
 	if !strings.HasPrefix(data, TarBrotliPrefix) {
 		return nil, fmt.Errorf("invalid archive format: expected %q prefix", TarBrotliPrefix)

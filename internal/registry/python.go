@@ -1,7 +1,9 @@
 package registry
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,19 +13,25 @@ import (
 const pythonFallbackStableVersion = "3.14.3"
 
 type pythonRelease struct {
-	Cycle  string      `json:"cycle"`
-	Latest string      `json:"latest"`
-	EOL    interface{} `json:"eol"`
+	Cycle  string `json:"cycle"`
+	Latest string `json:"latest"`
+	EOL    any    `json:"eol"`
 }
 
 var pythonHTTPClient = &http.Client{Timeout: 15 * time.Second}
 
-func GetLatestPythonStableVersion() (string, error) {
-	return getLatestPythonStableVersionFromURL("https://endoflife.date/api/python.json")
+// GetLatestPythonStableVersion returns the latest non-EOL stable Python version
+// from endoflife.date, falling back to a pinned version on failure.
+func GetLatestPythonStableVersion(ctx context.Context) (string, error) {
+	return getLatestPythonStableVersionFromURL(ctx, "https://endoflife.date/api/python.json")
 }
 
-func getLatestPythonStableVersionFromURL(url string) (string, error) {
-	resp, err := pythonHTTPClient.Get(url)
+func getLatestPythonStableVersionFromURL(ctx context.Context, url string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return pythonFallbackStableVersion, fmt.Errorf("failed to build request: %w", err)
+	}
+	resp, err := pythonHTTPClient.Do(req)
 	if err != nil {
 		return pythonFallbackStableVersion, fmt.Errorf("failed to fetch Python releases: %w", err)
 	}
@@ -41,7 +49,7 @@ func getLatestPythonStableVersionFromURL(url string) (string, error) {
 
 	version := filterLatestStablePython(releases)
 	if version == "" {
-		return pythonFallbackStableVersion, fmt.Errorf("no stable version found in Python releases")
+		return pythonFallbackStableVersion, errors.New("no stable version found in Python releases")
 	}
 
 	return version, nil
@@ -58,4 +66,3 @@ func filterLatestStablePython(releases []pythonRelease) string {
 	}
 	return ""
 }
-

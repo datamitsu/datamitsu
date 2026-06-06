@@ -30,7 +30,7 @@ func downloadFileInternal(ctx context.Context, url string, destDir string, name 
 		log.Debug("downloading file", zap.String("url", url))
 	}
 
-	if err := os.MkdirAll(destDir, 0755); err != nil {
+	if err := os.MkdirAll(destDir, 0o755); err != nil {
 		return "", fmt.Errorf("failed to create temp directory: %w", err)
 	}
 
@@ -84,7 +84,7 @@ func downloadFileInternal(ctx context.Context, url string, destDir string, name 
 	// exactly MaxBinarySize (written == MaxBinarySize, allowed) from one that
 	// exceeds it (written > MaxBinarySize, rejected).
 	limitedReader := io.LimitReader(resp.Body, MaxBinarySize+1)
-	var reader = limitedReader
+	reader := limitedReader
 	if progress != nil {
 		bar := progress.AddBar(resp.ContentLength,
 			mpb.PrependDecorators(
@@ -161,7 +161,7 @@ func downloadAndVerifyWithProgress(ctx context.Context, url string, expectedHash
 
 func moveFile(src, dst string) error {
 	dstDir := filepath.Dir(dst)
-	if err := os.MkdirAll(dstDir, 0755); err != nil {
+	if err := os.MkdirAll(dstDir, 0o755); err != nil {
 		return fmt.Errorf("failed to create destination directory: %w", err)
 	}
 
@@ -174,7 +174,7 @@ func moveFile(src, dst string) error {
 		return nil
 	}
 
-	if err := os.Chmod(src, 0755); err != nil {
+	if err := os.Chmod(src, 0o755); err != nil {
 		return fmt.Errorf("failed to set executable permissions: %w", err)
 	}
 
@@ -198,7 +198,7 @@ func moveFile(src, dst string) error {
 
 func moveDir(src, dst string) error {
 	dstDir := filepath.Dir(dst)
-	if err := os.MkdirAll(dstDir, 0755); err != nil {
+	if err := os.MkdirAll(dstDir, 0o755); err != nil {
 		return fmt.Errorf("failed to create destination parent directory: %w", err)
 	}
 
@@ -241,7 +241,7 @@ func moveDir(src, dst string) error {
 func copyDirAtomic(src, dst string) error {
 	tmpDir, err := os.MkdirTemp(filepath.Dir(dst), "move-*")
 	if err != nil {
-		return err
+		return fmt.Errorf("create temp dir for %q: %w", dst, err)
 	}
 	// Always clean up the temp dir: on success it is empty (staged was renamed
 	// out), and on the concurrent-dst path it still holds the staged copy.
@@ -258,35 +258,36 @@ func copyDirAtomic(src, dst string) error {
 		if _, statErr := os.Stat(dst); statErr == nil {
 			return nil
 		}
-		return err
+		return fmt.Errorf("rename %q to %q: %w", staged, dst, err)
 	}
 	return nil
 }
 
 func copyDir(src, dst string) error {
-	if err := os.MkdirAll(dst, 0755); err != nil {
-		return err
+	if err := os.MkdirAll(dst, 0o755); err != nil {
+		return fmt.Errorf("create dir %q: %w", dst, err)
 	}
 	entries, err := os.ReadDir(src)
 	if err != nil {
-		return err
+		return fmt.Errorf("read dir %q: %w", src, err)
 	}
 	for _, entry := range entries {
 		srcPath := filepath.Join(src, entry.Name())
 		dstPath := filepath.Join(dst, entry.Name())
-		if entry.Type()&os.ModeSymlink != 0 {
+		switch {
+		case entry.Type()&os.ModeSymlink != 0:
 			target, err := os.Readlink(srcPath)
 			if err != nil {
-				return err
+				return fmt.Errorf("read symlink %q: %w", srcPath, err)
 			}
 			if err := os.Symlink(target, dstPath); err != nil {
-				return err
+				return fmt.Errorf("create symlink %q: %w", dstPath, err)
 			}
-		} else if entry.IsDir() {
+		case entry.IsDir():
 			if err := copyDir(srcPath, dstPath); err != nil {
 				return err
 			}
-		} else {
+		default:
 			if err := copyFile(srcPath, dstPath); err != nil {
 				return err
 			}
@@ -298,12 +299,12 @@ func copyDir(src, dst string) error {
 func copyFile(src, dst string) (retErr error) {
 	srcInfo, err := os.Stat(src)
 	if err != nil {
-		return err
+		return fmt.Errorf("stat %q: %w", src, err)
 	}
 
 	srcFile, err := os.Open(src)
 	if err != nil {
-		return err
+		return fmt.Errorf("open %q: %w", src, err)
 	}
 	defer func() {
 		if cErr := srcFile.Close(); cErr != nil && retErr == nil {
@@ -313,7 +314,7 @@ func copyFile(src, dst string) (retErr error) {
 
 	dstFile, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, srcInfo.Mode())
 	if err != nil {
-		return err
+		return fmt.Errorf("open %q for writing: %w", dst, err)
 	}
 	defer func() {
 		if cErr := dstFile.Close(); cErr != nil && retErr == nil {
@@ -321,8 +322,10 @@ func copyFile(src, dst string) (retErr error) {
 		}
 	}()
 
-	_, err = io.Copy(dstFile, srcFile)
-	return err
+	if _, err = io.Copy(dstFile, srcFile); err != nil {
+		return fmt.Errorf("copy %q to %q: %w", src, dst, err)
+	}
+	return nil
 }
 
 // copyFileAtomic copies src into a temp file in dst's directory, marks it
@@ -332,7 +335,7 @@ func copyFile(src, dst string) (retErr error) {
 func copyFileAtomic(src, dst string) (retErr error) {
 	tmp, err := os.CreateTemp(filepath.Dir(dst), "move-*")
 	if err != nil {
-		return err
+		return fmt.Errorf("create temp file for %q: %w", dst, err)
 	}
 	tmpName := tmp.Name()
 	defer func() {
@@ -346,10 +349,13 @@ func copyFileAtomic(src, dst string) (retErr error) {
 		return err
 	}
 	if err := tmp.Close(); err != nil {
-		return err
+		return fmt.Errorf("close temp file %q: %w", tmpName, err)
 	}
-	if err := os.Chmod(tmpName, 0755); err != nil {
-		return err
+	if err := os.Chmod(tmpName, 0o755); err != nil {
+		return fmt.Errorf("chmod %q: %w", tmpName, err)
 	}
-	return os.Rename(tmpName, dst)
+	if err := os.Rename(tmpName, dst); err != nil {
+		return fmt.Errorf("rename %q to %q: %w", tmpName, dst, err)
+	}
+	return nil
 }

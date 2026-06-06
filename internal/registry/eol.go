@@ -1,3 +1,6 @@
+// Package registry queries upstream package and runtime registries (npm, PyPI,
+// endoflife.date, Adoptium) to resolve the latest available versions of managed
+// runtimes and packages.
 package registry
 
 import "time"
@@ -5,7 +8,7 @@ import "time"
 // parseEOLField parses the EOL field from endoflife.date API responses.
 // The field can be a bool (true/false), a date string ("2025-04-30"), or "false".
 // Returns true if the release is end-of-life.
-func parseEOLField(eol interface{}) bool {
+func parseEOLField(eol any) bool {
 	switch v := eol.(type) {
 	case bool:
 		return v

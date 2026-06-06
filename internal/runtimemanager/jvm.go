@@ -3,9 +3,6 @@ package runtimemanager
 import (
 	"context"
 	"crypto/sha256"
-	"github.com/datamitsu/datamitsu/internal/binmanager"
-	"github.com/datamitsu/datamitsu/internal/config"
-	"github.com/datamitsu/datamitsu/internal/httpx"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -13,6 +10,10 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/httpx"
 
 	"go.uber.org/zap"
 )
@@ -27,8 +28,8 @@ func getJVMBinaryPath(appEnvPath string, appName string) string {
 
 // InstallJVMApp downloads a JAR file and installs it in the app environment.
 // Safe for concurrent use from multiple goroutines.
-func (rm *RuntimeManager) InstallJVMApp(appName string, appConfig *binmanager.AppConfigJVM, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
-	ctx, cancel, timeoutSec := newInstallContext(context.Background())
+func (rm *RuntimeManager) InstallJVMApp(ctx context.Context, appName string, appConfig *binmanager.AppConfigJVM, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
+	ctx, cancel, timeoutSec := newInstallContext(ctx)
 	defer cancel()
 	key := "jvm/" + appName
 	_, err, _ := rm.appInstall.Do(key, func() (any, error) {
@@ -63,7 +64,7 @@ func (rm *RuntimeManager) installJVMAppOnce(ctx context.Context, appName string,
 		return fmt.Errorf("failed to get JVM runtime path: %w", err)
 	}
 
-	if err := os.MkdirAll(appEnvPath, 0755); err != nil {
+	if err := os.MkdirAll(appEnvPath, 0o755); err != nil {
 		return fmt.Errorf("failed to create app directory: %w", err)
 	}
 
@@ -75,7 +76,7 @@ func (rm *RuntimeManager) installJVMAppOnce(ctx context.Context, appName string,
 	}()
 
 	if len(files) > 0 || len(archives) > 0 {
-		if err := binmanager.WriteAppFiles(appEnvPath, files, archives); err != nil {
+		if err := binmanager.WriteAppFiles(ctx, appEnvPath, files, archives); err != nil {
 			return fmt.Errorf("failed to write app files/archives for %q: %w", appName, err)
 		}
 	}
@@ -158,7 +159,7 @@ func (rm *RuntimeManager) GetJVMAppPath(appName string, appConfig *binmanager.Ap
 }
 
 // GetJVMCommandInfo returns command info for running a JVM app (java -jar <jar>).
-func (rm *RuntimeManager) GetJVMCommandInfo(appName string, appConfig *binmanager.AppConfigJVM, files map[string]string, archives map[string]*binmanager.ArchiveSpec) (*binmanager.CommandInfo, error) {
+func (rm *RuntimeManager) GetJVMCommandInfo(ctx context.Context, appName string, appConfig *binmanager.AppConfigJVM, files map[string]string, archives map[string]*binmanager.ArchiveSpec) (*binmanager.CommandInfo, error) {
 	runtimeName, rc, err := rm.ResolveRuntime(appConfig.Runtime, config.RuntimeKindJVM)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve runtime for %q: %w", appName, err)
@@ -180,7 +181,7 @@ func (rm *RuntimeManager) GetJVMCommandInfo(appName string, appConfig *binmanage
 			javaBin = "java"
 		}
 	} else {
-		runtimePath, err := rm.GetRuntimePath(runtimeName)
+		runtimePath, err := rm.getRuntimePath(ctx, runtimeName)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get JVM runtime path: %w", err)
 		}

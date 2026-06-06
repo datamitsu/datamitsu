@@ -1,15 +1,18 @@
+// Package bundled implements discovery, linting and normalization of
+// .datamitsuignore files across a project tree.
 package bundled
 
 import (
-	"github.com/datamitsu/datamitsu/internal/color"
-	"github.com/datamitsu/datamitsu/internal/config"
-	"github.com/datamitsu/datamitsu/internal/datamitsuignore"
-	"github.com/datamitsu/datamitsu/internal/utils"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/datamitsu/datamitsu/internal/color"
+	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/datamitsuignore"
+	"github.com/datamitsu/datamitsu/internal/utils"
 )
 
 // FindIgnoreFiles walks rootPath and returns paths to all .datamitsuignore files,
@@ -31,7 +34,10 @@ func FindIgnoreFiles(rootPath string) ([]string, error) {
 		}
 		return nil
 	})
-	return files, err
+	if err != nil {
+		return nil, fmt.Errorf("walking %s: %w", rootPath, err)
+	}
+	return files, nil
 }
 
 // normalizeRule formats a parsed rule into canonical form: "{!}{glob}: {tool1}, {tool2}"

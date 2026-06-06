@@ -1,3 +1,5 @@
+// Package verifycache tracks per-CWD verification state so already-verified
+// binaries, runtimes and bundles can be skipped on subsequent runs.
 package verifycache
 
 import (
@@ -12,6 +14,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/utils"
 )
 
+// VerifyEntry records the result of verifying a single keyed item.
 type VerifyEntry struct {
 	Fingerprint string    `json:"fp"`
 	Status      string    `json:"status"`
@@ -19,6 +22,7 @@ type VerifyEntry struct {
 	Error       string    `json:"err,omitempty"`
 }
 
+// VerifyState is the persisted verification state for a single CWD.
 type VerifyState struct {
 	Version int                    `json:"version"`
 	CWD     string                 `json:"cwd"`
@@ -26,11 +30,14 @@ type VerifyState struct {
 	Entries map[string]VerifyEntry `json:"entries"`
 }
 
+// StatePath returns the state file path for the given cache directory and CWD.
 func StatePath(cacheDir, cwd string) string {
 	hash := hashutil.XXH3Hex([]byte(cwd))
 	return filepath.Join(cacheDir, ".verify-state", hash+".json")
 }
 
+// LoadState reads the verification state from path, returning a fresh empty
+// state when the file does not yet exist.
 func LoadState(path string) (*VerifyState, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -53,9 +60,10 @@ func LoadState(path string) (*VerifyState, error) {
 	return &state, nil
 }
 
+// SaveState atomically writes state to path via a temp file and rename.
 func SaveState(path string, state *VerifyState) error {
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("failed to create state directory: %w", err)
 	}
 
@@ -89,12 +97,15 @@ func SaveState(path string, state *VerifyState) error {
 	return nil
 }
 
+// StateManager provides concurrency-safe access to a VerifyState and persists
+// changes to disk.
 type StateManager struct {
 	mu    sync.RWMutex
 	state *VerifyState
 	path  string
 }
 
+// NewStateManager wraps state with a manager that persists to path.
 func NewStateManager(state *VerifyState, path string) *StateManager {
 	return &StateManager{
 		state: state,
@@ -102,6 +113,8 @@ func NewStateManager(state *VerifyState, path string) *StateManager {
 	}
 }
 
+// ShouldSkip reports whether the item for key was already verified ok with a
+// matching fingerprint.
 func (sm *StateManager) ShouldSkip(key, fingerprint string) bool {
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
@@ -113,6 +126,7 @@ func (sm *StateManager) ShouldSkip(key, fingerprint string) bool {
 	return entry.Fingerprint == fingerprint && entry.Status == "ok"
 }
 
+// Record stores the verification result for key and persists the state.
 func (sm *StateManager) Record(key, fingerprint, status, errMsg string) error {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
@@ -132,6 +146,7 @@ func (sm *StateManager) Record(key, fingerprint, status, errMsg string) error {
 	return SaveState(sm.path, sm.state)
 }
 
+// Reset clears all recorded entries and persists the empty state.
 func (sm *StateManager) Reset() error {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()

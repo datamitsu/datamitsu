@@ -43,7 +43,7 @@ func TestLoadState_Success(t *testing.T) {
   "last_shown": "2026-04-05T12:00:00Z"
 }
 `
-	if err := os.WriteFile(path, []byte(data), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -66,7 +66,7 @@ func TestLoadState_CorruptJSON(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "state.json")
 
-	if err := os.WriteFile(path, []byte("not valid json{{{"), 0644); err != nil {
+	if err := os.WriteFile(path, []byte("not valid json{{{"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

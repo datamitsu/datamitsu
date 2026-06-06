@@ -1,17 +1,20 @@
 package cmd
 
 import (
+	"context"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
 	"github.com/datamitsu/datamitsu/internal/appstate"
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/detector"
 	"github.com/datamitsu/datamitsu/internal/github"
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"github.com/datamitsu/datamitsu/internal/syslist"
-	"encoding/hex"
-	"fmt"
-	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -78,7 +81,7 @@ func ensureGitHubAppsJSONExists(path string) error {
 			_ = os.Remove(tmpPath)
 			return fmt.Errorf("failed to close temp file: %w", err)
 		}
-		if err := os.Chmod(tmpPath, 0644); err != nil {
+		if err := os.Chmod(tmpPath, 0o644); err != nil {
 			_ = os.Remove(tmpPath)
 			return fmt.Errorf("failed to chmod temp file: %w", err)
 		}
@@ -91,6 +94,8 @@ func ensureGitHubAppsJSONExists(path string) error {
 }
 
 func runPullGithub(cmd *cobra.Command, args []string) error {
+	ctx := commandContext(cmd)
+
 	// Get file path from positional argument
 	githubAppsPath := args[0]
 
@@ -147,12 +152,13 @@ func runPullGithub(cmd *cobra.Command, args []string) error {
 			}
 			// GetLatestReleaseWithMinAge falls through to GetLatestRelease when
 			// minAge <= 0, so a nil release only happens under an active cutoff.
-			release, err = client.GetLatestReleaseWithMinAge(metadata.Owner, metadata.Repo, minAge)
+			release, err = client.GetLatestReleaseWithMinAge(ctx, metadata.Owner, metadata.Repo, minAge)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error fetching latest release: %v\n", err)
 				continue
 			}
-			if release == nil {
+			switch {
+			case release == nil:
 				// No release is old enough under the active min-age cutoff.
 				if state.Binaries[appName] != nil {
 					// Existing app: warn and keep the current tag.
@@ -163,10 +169,10 @@ func runPullGithub(cmd *cobra.Command, args []string) error {
 					// New app: nothing safe to install — hard error.
 					return noReleaseOldEnoughErr(appName, minAge)
 				}
-			} else if release.TagName != metadata.Tag {
+			case release.TagName != metadata.Tag:
 				fmt.Printf("Latest release: %s (updating from %s)\n", release.TagName, metadata.Tag)
 				effectiveTag = release.TagName
-			} else {
+			default:
 				fmt.Printf("Latest release: %s (already up to date)\n", release.TagName)
 			}
 		}
@@ -188,7 +194,7 @@ func runPullGithub(cmd *cobra.Command, args []string) error {
 		// Fetch release if not already fetched
 		if release == nil {
 			fmt.Printf("Fetching release %s...\n", effectiveTag)
-			release, err = client.GetRelease(metadata.Owner, metadata.Repo, effectiveTag)
+			release, err = client.GetRelease(ctx, metadata.Owner, metadata.Repo, effectiveTag)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error fetching release: %v\n", err)
 				continue
@@ -196,7 +202,7 @@ func runPullGithub(cmd *cobra.Command, args []string) error {
 		}
 
 		// Build binaries into a temporary entry to avoid mutating shared state on failure
-		binariesEntry, err := buildBinariesForApp(appName, release, currentHash, state)
+		binariesEntry, err := buildBinariesForApp(ctx, appName, release, currentHash, state)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error updating binaries for %s: %v\n", appName, err)
 			continue
@@ -204,7 +210,7 @@ func runPullGithub(cmd *cobra.Command, args []string) error {
 
 		// Fetch repository description (matches node/UV pattern: use fetched if non-empty, else preserve existing)
 		desc := ""
-		repoInfo, err := client.GetRepository(metadata.Owner, metadata.Repo)
+		repoInfo, err := client.GetRepository(ctx, metadata.Owner, metadata.Repo)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to fetch repository description for %s: %v\n", appName, err)
 		} else if repoInfo != nil {
@@ -245,7 +251,7 @@ func buildPlatformTuples() []platformTuple {
 	nonLinuxOSes := []syslist.OsType{syslist.OsTypeDarwin, syslist.OsTypeWindows, syslist.OsTypeFreebsd, syslist.OsTypeOpenbsd}
 	linuxLibcs := []string{"glibc", "musl"}
 
-	var tuples []platformTuple
+	tuples := make([]platformTuple, 0, len(nonLinuxOSes)*len(baseArches)+len(baseArches)*len(linuxLibcs))
 
 	for _, osType := range nonLinuxOSes {
 		for _, arch := range baseArches {
@@ -273,7 +279,7 @@ type detectionResult struct {
 	err         error
 }
 
-func buildBinariesForApp(appName string, release *github.Release, configHash string, state *appstate.State) (*appstate.BinariesEntry, error) {
+func buildBinariesForApp(ctx context.Context, appName string, release *github.Release, configHash string, state *appstate.State) (*appstate.BinariesEntry, error) {
 	fmt.Printf("\nDetecting binaries:\n")
 
 	// Build into a fresh entry to avoid mutating shared state on failure
@@ -388,6 +394,7 @@ func buildBinariesForApp(appName string, release *github.Release, configHash str
 		if verifyExtractionFlag {
 			hashType := binmanager.BinHashTypeSHA256
 			if err := binmanager.VerifyBinaryExtraction(
+				ctx,
 				asset.BrowserDownloadURL,
 				hash,
 				hashType,
@@ -453,7 +460,7 @@ func buildBinariesForApp(appName string, release *github.Release, configHash str
 	printDetectionResults(results, verifyExtractionFlag)
 
 	if successCount == 0 {
-		return nil, fmt.Errorf("no binaries were detected")
+		return nil, errors.New("no binaries were detected")
 	}
 
 	if noHashCount > 0 {
@@ -462,13 +469,14 @@ func buildBinariesForApp(appName string, release *github.Release, configHash str
 
 	entry.ConfigHash = configHash
 
-	if verifyExtractionFlag && verificationFailedCount > 0 {
+	switch {
+	case verifyExtractionFlag && verificationFailedCount > 0:
 		fmt.Printf("\nSummary: %d detected, %d not available, %d deduplicated, %d verification failed\n",
 			successCount, notAvailableCount, deduplicatedCount, verificationFailedCount)
-	} else if deduplicatedCount > 0 {
+	case deduplicatedCount > 0:
 		fmt.Printf("\nSummary: %d detected, %d not available, %d deduplicated\n",
 			successCount, notAvailableCount, deduplicatedCount)
-	} else {
+	default:
 		fmt.Printf("\nSummary: %d detected, %d not available\n", successCount, notAvailableCount)
 	}
 	return entry, nil
@@ -563,7 +571,7 @@ func printDetectionResults(results []detectionResult, verifyMode bool) {
 // Only accepts "sha256:<64 hex chars>" format. Returns error for invalid formats.
 func extractHashFromDigest(digest string) (string, error) {
 	if digest == "" {
-		return "", fmt.Errorf("empty digest")
+		return "", errors.New("empty digest")
 	}
 
 	parts := strings.SplitN(digest, ":", 2)

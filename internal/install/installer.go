@@ -1,13 +1,18 @@
+// Package install writes and patches managed configuration files into a
+// project, creating, replacing or symlinking each config entry.
 package install
 
 import (
 	"context"
-	"github.com/datamitsu/datamitsu/internal/config"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
+
+	"github.com/datamitsu/datamitsu/internal/config"
 
 	"github.com/dop251/goja"
 )
@@ -42,7 +47,7 @@ func NewInstaller(
 }
 
 // InstallResult represents the result of a single config file installation
-type InstallResult struct {
+type InstallResult struct { //nolint:revive // exported: name kept explicit; install.InstallResult reads clearer than install.Result at its cross-package call sites
 	ConfigName   string
 	FilePath     string
 	Action       string // "created", "patched", "replaced"
@@ -60,7 +65,7 @@ func (i *Installer) InstallAll(ctx context.Context, dryRun bool) ([]InstallResul
 	}
 	sort.Strings(names)
 
-	var results []InstallResult
+	results := make([]InstallResult, 0, len(names))
 	for _, name := range names {
 		result := i.installConfig(ctx, name, i.configs[name], dryRun)
 		results = append(results, result)
@@ -175,12 +180,12 @@ func (i *Installer) installConfig(ctx context.Context, name string, cfg config.C
 	if !dryRun {
 		// Create all parent directories for the file (handles nested paths like .vscode/settings.json)
 		fileDir := filepath.Dir(mainPath)
-		if err := os.MkdirAll(fileDir, 0755); err != nil {
+		if err := os.MkdirAll(fileDir, 0o755); err != nil {
 			result.Error = fmt.Errorf("failed to create directory: %w", err)
 			return result
 		}
 
-		if err := os.WriteFile(mainPath, []byte(newContent), 0644); err != nil {
+		if err := os.WriteFile(mainPath, []byte(newContent), 0o644); err != nil {
 			result.Error = fmt.Errorf("failed to write file: %w", err)
 			return result
 		}
@@ -232,20 +237,20 @@ func (i *Installer) installSymlink(mainPath string, linkTarget string, dryRun bo
 		dir := resolvedTarget
 		for dir != filepath.Dir(dir) {
 			dir = filepath.Dir(dir)
-			if realDir, dirErr := filepath.EvalSymlinks(dir); dirErr == nil {
+			realDir, dirErr := filepath.EvalSymlinks(dir)
+			if dirErr == nil {
 				dirRel, relErr := filepath.Rel(realRoot, realDir)
 				if relErr != nil || dirRel == ".." || strings.HasPrefix(dirRel, ".."+string(filepath.Separator)) {
 					result.Error = fmt.Errorf("linkTarget %q resolves to path outside repository root", linkTarget)
 					return result
 				}
 				break
-			} else {
-				// EvalSymlinks failed — if this path is itself a symlink (broken),
-				// reject because we cannot verify where it points
-				if info, statErr := os.Lstat(dir); statErr == nil && info.Mode()&os.ModeSymlink != 0 {
-					result.Error = fmt.Errorf("linkTarget %q traverses unresolvable symlink at %q", linkTarget, dir)
-					return result
-				}
+			}
+			// EvalSymlinks failed — if this path is itself a symlink (broken),
+			// reject because we cannot verify where it points
+			if info, statErr := os.Lstat(dir); statErr == nil && info.Mode()&os.ModeSymlink != 0 {
+				result.Error = fmt.Errorf("linkTarget %q traverses unresolvable symlink at %q", linkTarget, dir)
+				return result
 			}
 		}
 	}
@@ -265,7 +270,7 @@ func (i *Installer) installSymlink(mainPath string, linkTarget string, dryRun bo
 		}
 	}
 
-	if err := os.MkdirAll(filepath.Dir(mainPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(mainPath), 0o755); err != nil {
 		result.Error = fmt.Errorf("failed to create directory: %w", err)
 		return result
 	}
@@ -287,28 +292,33 @@ func (i *Installer) isApplicable(cfg config.ConfigInit) bool {
 
 	// Check if any project type matches
 	for _, cfgType := range cfg.ProjectTypes {
-		for _, detectedType := range i.projectTypes {
-			if cfgType == detectedType {
-				return true
-			}
+		if slices.Contains(i.projectTypes, cfgType) {
+			return true
 		}
 	}
 
 	return false
 }
 
-// generateContent calls the JavaScript content function
+// generateContent calls the JavaScript content function.
+//
+// ctx is currently unused here (goja runs the content function under a watchdog
+// timeout, not a context), but it is threaded through the InstallAll ->
+// installConfig -> generateContent chain so the public install API stays
+// cancellation-ready; do not drop it.
+//
+//nolint:unparam // ctx reserved for cancellable JS execution; keeps the install chain uniform
 func (i *Installer) generateContent(ctx context.Context, cfg config.ConfigInit, existingContent, originalContent, existingPath *string) (string, error) {
 	// Content field should be a goja.Value representing a function
 	contentValue, ok := cfg.Content.(goja.Value)
 	if !ok {
-		return "", fmt.Errorf("content is not a goja.Value")
+		return "", errors.New("content is not a goja.Value")
 	}
 
 	// Get the callable
 	contentFunc, ok := goja.AssertFunction(contentValue)
 	if !ok {
-		return "", fmt.Errorf("content is not a callable function")
+		return "", errors.New("content is not a callable function")
 	}
 
 	// Prepare context object
@@ -341,7 +351,7 @@ func (i *Installer) generateContent(ctx context.Context, cfg config.ConfigInit, 
 	}
 
 	if result == nil || goja.IsUndefined(result) || goja.IsNull(result) {
-		return "", fmt.Errorf("content function returned nil/undefined")
+		return "", errors.New("content function returned nil/undefined")
 	}
 
 	return result.String(), nil

@@ -77,7 +77,7 @@ func TestMaybePrint_ActivationThreshold(t *testing.T) {
 	t.Run("29 runs does not activate", func(t *testing.T) {
 		m, cacheDir := setupTestManager(t, clk)
 
-		for i := 0; i < 29; i++ {
+		for range 29 {
 			m.MaybePrint(false)
 		}
 
@@ -93,7 +93,7 @@ func TestMaybePrint_ActivationThreshold(t *testing.T) {
 	t.Run("30th run activates", func(t *testing.T) {
 		m, cacheDir := setupTestManager(t, clk)
 
-		for i := 0; i < 30; i++ {
+		for range 30 {
 			m.MaybePrint(false)
 		}
 
@@ -120,7 +120,7 @@ func TestMaybePrint_ReactivationCycle(t *testing.T) {
 	m, cacheDir := setupTestManager(t, clk)
 
 	// Activate first
-	for i := 0; i < 30; i++ {
+	for range 30 {
 		m.MaybePrint(false)
 	}
 
@@ -159,7 +159,7 @@ func TestMaybePrint_ReactivationCycle(t *testing.T) {
 		// State was reset above. Now accumulate again.
 		clk.Set(now.Add(8 * 24 * time.Hour))
 
-		for i := 0; i < 29; i++ {
+		for range 29 {
 			m.MaybePrint(false)
 		}
 
@@ -190,7 +190,7 @@ func TestMaybePrint_SuppressionJSON(t *testing.T) {
 
 	m, cacheDir := setupTestManager(t, clk)
 
-	for i := 0; i < 35; i++ {
+	for range 35 {
 		m.MaybePrint(true)
 	}
 
@@ -212,7 +212,7 @@ func TestMaybePrint_SuppressionEnvVar(t *testing.T) {
 
 	m, cacheDir := setupTestManager(t, clk)
 
-	for i := 0; i < 35; i++ {
+	for range 35 {
 		m.MaybePrint(false)
 	}
 
@@ -234,7 +234,7 @@ func TestMaybePrint_SuppressionCI(t *testing.T) {
 
 	m, cacheDir := setupTestManager(t, clk)
 
-	for i := 0; i < 35; i++ {
+	for range 35 {
 		m.MaybePrint(false)
 	}
 
@@ -281,10 +281,10 @@ func TestMaybePrint_CorruptStateRecovers(t *testing.T) {
 
 	// Write corrupt state
 	path := statePath(cacheDir)
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, []byte("not json"), 0644); err != nil {
+	if err := os.WriteFile(path, []byte("not json"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -296,7 +296,6 @@ func TestMaybePrint_CorruptStateRecovers(t *testing.T) {
 		t.Errorf("SuccessfulRuns = %d, want 1 (should recover from corrupt state)", state.SuccessfulRuns)
 	}
 }
-
 
 func TestPrintMessage(t *testing.T) {
 	now := time.Date(2026, 4, 5, 12, 0, 0, 0, time.UTC)

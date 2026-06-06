@@ -1,1 +1,245 @@
-version: "2"
+formatters:
+  enable:
+    - gofmt
+    - gofumpt
+    - goimports
+    - swaggo
+linters:
+  disable:
+    - noinlineerr
+    - gochecknoglobals
+    - godox
+    - nonamedreturns
+    - wsl_v5
+    - nlreturn
+    - varnamelen
+    - testpackage
+    - ireturn
+    - godot
+    - goheader
+    - lll
+    - gosmopolitan
+    # --- intentionally off: redundant or high-noise opinionated linters ---
+    # complexity metrics (all overlap; gocyclo is kept as the single candidate)
+    - cyclop
+    - gocognit
+    - nestif
+    - funlen
+    - maintidx
+    # error-style: already covered by errorlint
+    - err113
+    # high-noise / opinionated, not adopted in this codebase
+    - exhaustruct
+    - mnd
+    - goconst
+    - dupl
+    - paralleltest
+    - tagliatelle
+    # consistency with gochecknoglobals being disabled
+    - gochecknoinits
+  enable:
+    - asciicheck
+    - bidichk
+    - bodyclose
+    - durationcheck
+    - errcheck
+    - fatcontext
+    - godoclint
+    - govet
+    - ineffassign
+    - misspell
+    - nakedret
+    - nolintlint
+    - predeclared
+    - reassign
+    - sqlclosecheck
+    - staticcheck
+    - testifylint
+    - tparallel
+    - unconvert
+    - unused
+    - wastedassign
+    - whitespace
+    - iotamixing
+    - tagalign
+    - gocheckcompilerdirectives
+    - usestdlibvars
+    - perfsprint
+    - prealloc
+    - mirror
+    - nilnil
+    - intrange
+    - makezero
+    - modernize
+    - gocritic
+    - errname
+    - errorlint
+    - exhaustive
+    - copyloopvar
+    - asasalint
+    - dupword
+    - forbidigo
+    - depguard
+    - promlinter
+    - sloglint
+    - rowserrcheck
+    - exptostd
+    - nilerr
+    - funcorder
+    - spancheck
+    - loggercheck
+    - nilnesserr
+    - recvcheck
+    - canonicalheader
+    - embeddedstructfieldcheck
+    - arangolint
+    - clickhouselint
+    - musttag
+    - gochecksumtype
+    - ginkgolinter
+    - goprintffuncname
+    - decorder
+    - containedctx
+    - gomoddirectives
+    - gomodguard_v2
+    - grouper
+    - iface
+    - importas
+    - interfacebloat
+    - nosprintfhostport
+    - protogetter
+    - unqueryvet
+    - zerologlint
+    - testableexamples
+    - thelper
+    - inamedparam
+    - dogsled
+    - forcetypeassert
+    - contextcheck
+    - errchkjson
+    - noctx
+    - gocyclo
+    - unparam
+    - usetesting
+    - wrapcheck
+    - gosec
+    - revive
+  exclusions:
+    rules:
+      # internal/env is the sanctioned abstraction layer — it is allowed to call
+      # os.Getenv directly (that is its whole purpose).
+      - linters:
+          - forbidigo
+        path: internal/env/
+      # The os.Getenv architectural rule targets production code. Tests legitimately
+      # poke os.Getenv for environment save/restore isolation.
+      - linters:
+          - forbidigo
+        path: _test\.go
+      # These linters target production code. In tests the patterns are benign:
+      # exec.Command/http.Get against local fixtures (noctx), marshalling test
+      # data (errchkjson), asserting known types (forcetypeassert), and throwaway
+      # multi-return calls (dogsled). Keep them production-only.
+      - linters:
+          - noctx
+          - errchkjson
+          - forcetypeassert
+          - dogsled
+        path: _test\.go
+      # Complexity/param-usage checks are noisy and low-value in tests: table-driven
+      # tests are branchy by nature (gocyclo), and mock callbacks/helpers must keep a
+      # fixed signature even when a param is unused (unparam). Production-only.
+      - linters:
+          - gocyclo
+          - unparam
+        path: _test\.go
+      # gosec targets production code. In tests its findings are overwhelmingly
+      # benign: weak RNG for fixtures (G404), int conversions on known-small values
+      # (G115), subprocesses against test binaries (G204), hardcoded "credentials"
+      # in fixture data (G101), and file ops on t.TempDir paths. Production-only.
+      - linters:
+          - gosec
+        path: _test\.go
+      # wrapcheck enforces wrapping errors from external packages so the call site
+      # is identifiable. Tests assert on errors directly and don't propagate them
+      # up a call stack, so wrapping adds noise without value. Production-only.
+      - linters:
+          - wrapcheck
+        path: _test\.go
+  settings:
+    depguard:
+      rules:
+        # XXH3 hashing must go through internal/hashutil; importing zeebo/xxh3
+        # anywhere else is forbidden. See CLAUDE.md "Hashing Policy".
+        no-direct-xxh3:
+          deny:
+            - desc: use internal/hashutil for XXH3 hashing; do not import zeebo/xxh3 directly
+              pkg: github.com/zeebo/xxh3
+          files:
+            - $all
+            - "!**/internal/hashutil/*.go"
+    forbidigo:
+      forbid:
+        # Datamitsu env vars must go through internal/env (typed getters), never
+        # raw os.Getenv. forbidigo cannot match the call argument, so this forbids
+        # os.Getenv outright; internal/env and tests are excluded above, and the
+        # few legitimate standard-env/token reads carry a //nolint:forbidigo with
+        # a reason. See CLAUDE.md "Environment Variable Usage Policy".
+        - msg: Access datamitsu env vars via internal/env (add a getter in env.go), not os.Getenv directly.
+          pattern: os\.Getenv
+    gocyclo:
+      # Enabled as a guard against future complexity growth, not to force a
+      # refactor of existing code. The threshold sits just above the current
+      # worst offender (doValidateApps); anything more complex than today's code
+      # is flagged. Lower this over time as hotspots are split up.
+      min-complexity: 100
+    gosec:
+      # datamitsu is a binary/file manager: it creates directories, writes files,
+      # chmods executables and opens files at paths derived from config and the
+      # store layout. The file-permission and file-path-from-variable rules below
+      # therefore fire pervasively (hundreds of sites) on inherent, by-design
+      # behaviour. Permissions are set deliberately at each call site; paths come
+      # from the trusted store/config layer. Excluding these keeps gosec focused
+      # on the findings that actually warrant review (G204, G305, G401, etc.).
+      excludes:
+        - G301 # mkdir permissions — set intentionally per call site
+        - G302 # chmod permissions — executables need 0o755 by design
+        - G304 # file path from variable — inherent to a file manager
+        - G306 # WriteFile permissions — set intentionally per call site
+    revive:
+      # Standard revive rule set minus unused-parameter: that rule overlaps with
+      # the already-enabled unparam linter and fires noisily on interface-conformant
+      # methods and callbacks whose signature is fixed. Everything else is revive's
+      # conventional default selection.
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: empty-block
+        - name: error-naming
+        - name: error-return
+        - name: error-strings
+        - name: errorf
+        - name: exported
+        - name: increment-decrement
+        - name: indent-error-flow
+        - name: package-comments
+        - name: range
+        - name: receiver-naming
+        - name: redefines-builtin-id
+        - name: superfluous-else
+        - name: time-naming
+        - name: unexported-return
+        - name: unreachable-code
+        - name: var-declaration
+        - name: var-naming
+    wrapcheck:
+      # Errors returned from datamitsu's own internal packages are already
+      # well-formed (each internal layer wraps with its own context), so wrapping
+      # them again at the call site adds noise without value. wrapcheck treats
+      # sibling packages in the same module as "external"; this scopes it to
+      # genuinely third-party/stdlib errors, where naming the failing call helps.
+      ignore-package-globs:
+        - github.com/datamitsu/datamitsu/*
+version: 2

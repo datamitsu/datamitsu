@@ -1,12 +1,17 @@
+// Package tools registers helper objects (config links, ignore-file parsing,
+// path utilities) into the goja runtime for use by datamitsu config scripts.
 package tools
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 
 	"github.com/dop251/goja"
 )
 
+// RegisterConfigLinksInVM exposes the tools.config link registry, mapping
+// config names to their resolved paths relative to gitRoot, into the VM.
 func RegisterConfigLinksInVM(vm *goja.Runtime, registry map[string]string, gitRoot string) error {
 	toolsObj := vm.Get("tools")
 	if toolsObj == nil || goja.IsUndefined(toolsObj) || goja.IsNull(toolsObj) {
@@ -48,7 +53,7 @@ func RegisterConfigLinksInVM(vm *goja.Runtime, registry map[string]string, gitRo
 
 	toolsGoja, ok := toolsObj.(*goja.Object)
 	if !ok {
-		return fmt.Errorf("tools global is not an object")
+		return errors.New("tools global is not an object")
 	}
 	if err := toolsGoja.Set("Config", configObj); err != nil {
 		return fmt.Errorf("failed to set tools.Config: %w", err)

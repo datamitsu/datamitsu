@@ -2,16 +2,18 @@ package tooling
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"slices"
+	"sort"
+	"strings"
+
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/datamitsuignore"
 	"github.com/datamitsu/datamitsu/internal/project"
 	"github.com/datamitsu/datamitsu/internal/timing"
 	"github.com/datamitsu/datamitsu/internal/traverser"
-	"fmt"
-	"os"
-	"path/filepath"
-	"sort"
-	"strings"
 
 	"github.com/bmatcuk/doublestar/v4"
 	"go.uber.org/zap"
@@ -102,109 +104,6 @@ func (p *Planner) GetDetectedProjectTypes() []string {
 	return types
 }
 
-// initializeCache performs expensive one-time operations:
-// - Scans all files in repository (respecting .gitignore)
-// - Detects all project locations
-// This is called once before planning begins
-func (p *Planner) initializeCache(ctx context.Context) error {
-	if p.cacheInitialized {
-		return nil
-	}
-
-	// Track timing with children for parallel operations
-	cacheTimings := p.timings.StartWithChildren("Cache initialization")
-	defer cacheTimings.End()
-
-	// Create detector once
-	detector := project.NewDetector(p.rootPath, p.projectTypesConfig)
-
-	// Use errgroup for parallel execution
-	g, gctx := errgroup.WithContext(ctx)
-
-	// Goroutine 1: Scan all files
-	g.Go(func() error {
-		defer cacheTimings.StartChild("Scan files")()
-		files, err := traverser.FindFilesFromPath(gctx, p.rootPath, p.rootPath)
-		if err != nil {
-			return fmt.Errorf("failed to scan files: %w", err)
-		}
-		p.cachedFiles = files
-		return nil
-	})
-
-	// Goroutine 2: Detect all projects
-	g.Go(func() error {
-		defer cacheTimings.StartChild("Detect projects")()
-		locations, err := detector.DetectAllWithLocations(gctx)
-		if err != nil {
-			return fmt.Errorf("failed to detect projects: %w", err)
-		}
-		p.cachedProjects = locations
-		return nil
-	})
-
-	// Wait for both to complete
-	if err := g.Wait(); err != nil {
-		return err
-	}
-
-	// Build .datamitsuignore matcher from scanned files
-	func() {
-		defer cacheTimings.StartChild("Build datamitsuignore matcher")()
-		p.ignoreMatcher = p.buildIgnoreMatcher()
-	}()
-
-	p.cacheInitialized = true
-	return nil
-}
-
-// buildIgnoreMatcher scans cached files for .datamitsuignore entries
-// and builds a Matcher. Config-defined ignore rules (extraIgnoreRules)
-// are added as root-level rules.
-func (p *Planner) buildIgnoreMatcher() *datamitsuignore.Matcher {
-	m := datamitsuignore.NewMatcher()
-
-	// Built-in: never run tools on the managed symlinks directory.
-	if err := m.AddFile("", ".datamitsu/**: *"); err != nil {
-		log.Warn("failed to add built-in .datamitsu ignore rule", zap.Error(err))
-	}
-
-	if len(p.extraIgnoreRules) > 0 {
-		if err := m.AddFile("", strings.Join(p.extraIgnoreRules, "\n")); err != nil {
-			log.Warn("failed to parse config-defined ignore rules",
-				zap.Error(err),
-			)
-		}
-	}
-
-	const filename = ".datamitsuignore"
-
-	for _, f := range p.cachedFiles {
-		if filepath.Base(f) != filename {
-			continue
-		}
-		content, err := os.ReadFile(f)
-		if err != nil {
-			continue
-		}
-		relDir, err := filepath.Rel(p.rootPath, filepath.Dir(f))
-		if err != nil {
-			continue
-		}
-		if relDir == "." {
-			relDir = ""
-		}
-		if err := m.AddFile(relDir, string(content)); err != nil {
-			log.Warn("failed to parse .datamitsuignore",
-				zap.String("file", f),
-				zap.Error(err),
-			)
-		}
-	}
-
-	return m
-}
-
 // Plan creates an execution plan for the given operation and files
 func (p *Planner) Plan(ctx context.Context, operation config.OperationType, files []string, selectedTools []string) (*ExecutionPlan, error) {
 	// Initialize cache once before planning
@@ -216,7 +115,7 @@ func (p *Planner) Plan(ctx context.Context, operation config.OperationType, file
 	var tasks []Task
 	func() {
 		defer p.timings.Start("Collect tasks")()
-		tasks = p.collectTasks(operation, files)
+		tasks = p.collectTasks(ctx, operation, files)
 	}()
 
 	// Filter by selectedTools if specified
@@ -247,7 +146,7 @@ func (p *Planner) Plan(ctx context.Context, operation config.OperationType, file
 }
 
 // collectTasks collects all tasks for the given operation
-func (p *Planner) collectTasks(operation config.OperationType, files []string) []Task {
+func (p *Planner) collectTasks(ctx context.Context, operation config.OperationType, files []string) []Task {
 	var tasks []Task
 
 	toolNames := make([]string, 0, len(p.tools))
@@ -294,7 +193,7 @@ func (p *Planner) collectTasks(operation config.OperationType, files []string) [
 			var matchedFiles []string
 			if len(opConfig.Globs) > 0 {
 				if len(files) == 0 {
-					matchedFiles = p.findFilesByGlobs(opConfig.Globs)
+					matchedFiles = p.findFilesByGlobs(ctx, opConfig.Globs)
 				} else {
 					matchedFiles = p.filterFilesByGlobs(files, opConfig.Globs)
 				}
@@ -311,7 +210,7 @@ func (p *Planner) collectTasks(operation config.OperationType, files []string) [
 			var matchedFiles []string
 			if len(opConfig.Globs) > 0 {
 				if len(files) == 0 {
-					matchedFiles = p.findFilesByGlobs(opConfig.Globs)
+					matchedFiles = p.findFilesByGlobs(ctx, opConfig.Globs)
 				} else {
 					matchedFiles = p.filterFilesByGlobs(files, opConfig.Globs)
 				}
@@ -320,7 +219,7 @@ func (p *Planner) collectTasks(operation config.OperationType, files []string) [
 			}
 
 			if len(matchedFiles) > 0 || len(opConfig.Globs) == 0 {
-				projectTasks := p.createPerProjectTasksWithFiles(task, matchedFiles)
+				projectTasks := p.createPerProjectTasksWithFiles(ctx, task, matchedFiles)
 				tasks = append(tasks, projectTasks...)
 			}
 
@@ -328,7 +227,7 @@ func (p *Planner) collectTasks(operation config.OperationType, files []string) [
 			// Per-file scope: run for each file in its directory
 			var matchedFiles []string
 			if len(files) == 0 {
-				matchedFiles = p.findFilesByGlobs(opConfig.Globs)
+				matchedFiles = p.findFilesByGlobs(ctx, opConfig.Globs)
 			} else {
 				matchedFiles = p.filterFilesByGlobs(files, opConfig.Globs)
 			}
@@ -350,7 +249,7 @@ func (p *Planner) collectTasks(operation config.OperationType, files []string) [
 			var matchedFiles []string
 			if len(opConfig.Globs) > 0 {
 				if len(files) == 0 {
-					matchedFiles = p.findFilesByGlobs(opConfig.Globs)
+					matchedFiles = p.findFilesByGlobs(ctx, opConfig.Globs)
 				} else {
 					matchedFiles = p.filterFilesByGlobs(files, opConfig.Globs)
 				}
@@ -359,7 +258,7 @@ func (p *Planner) collectTasks(operation config.OperationType, files []string) [
 			}
 
 			if len(matchedFiles) > 0 || len(opConfig.Globs) == 0 {
-				projectTasks := p.createPerProjectTasksWithFiles(task, matchedFiles)
+				projectTasks := p.createPerProjectTasksWithFiles(ctx, task, matchedFiles)
 				tasks = append(tasks, projectTasks...)
 			}
 		}
@@ -451,14 +350,14 @@ func (p *Planner) groupByPriority(tasks []Task) []TaskGroup {
 	}
 
 	// Get sorted priority levels
-	var priorities []int
+	priorities := make([]int, 0, len(priorityMap))
 	for priority := range priorityMap {
 		priorities = append(priorities, priority)
 	}
 	sort.Ints(priorities)
 
 	// Create task groups
-	var groups []TaskGroup
+	groups := make([]TaskGroup, 0, len(priorities))
 	for _, priority := range priorities {
 		tasks := priorityMap[priority]
 
@@ -486,10 +385,8 @@ func (p *Planner) isApplicableTool(tool config.Tool) bool {
 
 	// Check if any project type matches
 	for _, toolType := range tool.ProjectTypes {
-		for _, detectedType := range detectedTypes {
-			if toolType == detectedType {
-				return true
-			}
+		if slices.Contains(detectedTypes, toolType) {
+			return true
 		}
 	}
 
@@ -509,7 +406,7 @@ func (p *Planner) filterTasksBySelectedTools(tasks []Task, selectedTools []strin
 	}
 
 	if len(notFound) > 0 {
-		var availableList []string
+		availableList := make([]string, 0, len(p.tools))
 		for name := range p.tools {
 			availableList = append(availableList, name)
 		}
@@ -583,7 +480,7 @@ func (p *Planner) groupFilesByProject(files []string, projectLocations []project
 
 // createPerProjectTasksWithFiles creates tasks per project, grouping files by project
 // Now uses cached project locations instead of detecting every time
-func (p *Planner) createPerProjectTasksWithFiles(baseTask Task, files []string) []Task {
+func (p *Planner) createPerProjectTasksWithFiles(ctx context.Context, baseTask Task, files []string) []Task {
 	// Use cached projects instead of detecting again
 	var locations []project.ProjectLocation
 
@@ -591,7 +488,6 @@ func (p *Planner) createPerProjectTasksWithFiles(baseTask Task, files []string) 
 		locations = p.cachedProjects
 	} else {
 		// Fallback to old behavior if cache not initialized
-		ctx := context.Background()
 		detector := project.NewDetector(p.rootPath, p.projectTypesConfig)
 		locs, err := detector.DetectAllWithLocations(ctx)
 		if err != nil {
@@ -609,11 +505,8 @@ func (p *Planner) createPerProjectTasksWithFiles(baseTask Task, files []string) 
 	} else {
 		// Filter by tool's projectTypes
 		for _, loc := range locations {
-			for _, toolType := range baseTask.Tool.ProjectTypes {
-				if loc.Type == toolType {
-					filteredLocations = append(filteredLocations, loc)
-					break
-				}
+			if slices.Contains(baseTask.Tool.ProjectTypes, loc.Type) {
+				filteredLocations = append(filteredLocations, loc)
 			}
 		}
 	}
@@ -703,11 +596,11 @@ func (p *Planner) createPerProjectTasksWithFiles(baseTask Task, files []string) 
 
 // findFilesByGlobs finds all files in the repository matching the given glob patterns
 // Now uses cached file list instead of scanning every time
-func (p *Planner) findFilesByGlobs(globs []string) []string {
+func (p *Planner) findFilesByGlobs(ctx context.Context, globs []string) []string {
 	// Use cached files instead of scanning again
 	if !p.cacheInitialized {
 		// Fallback to old behavior if cache not initialized
-		allFiles, err := traverser.FindFilesFromPath(context.Background(), p.rootPath, p.rootPath)
+		allFiles, err := traverser.FindFilesFromPath(ctx, p.rootPath, p.rootPath)
 		if err != nil {
 			return []string{}
 		}
@@ -888,4 +781,107 @@ func parseGlobExtensions(pattern string) []string {
 	}
 
 	return []string{"." + extPart}
+}
+
+// initializeCache performs expensive one-time operations:
+// - Scans all files in repository (respecting .gitignore)
+// - Detects all project locations
+// This is called once before planning begins
+func (p *Planner) initializeCache(ctx context.Context) error {
+	if p.cacheInitialized {
+		return nil
+	}
+
+	// Track timing with children for parallel operations
+	cacheTimings := p.timings.StartWithChildren("Cache initialization")
+	defer cacheTimings.End()
+
+	// Create detector once
+	detector := project.NewDetector(p.rootPath, p.projectTypesConfig)
+
+	// Use errgroup for parallel execution
+	g, gctx := errgroup.WithContext(ctx)
+
+	// Goroutine 1: Scan all files
+	g.Go(func() error {
+		defer cacheTimings.StartChild("Scan files")()
+		files, err := traverser.FindFilesFromPath(gctx, p.rootPath, p.rootPath)
+		if err != nil {
+			return fmt.Errorf("failed to scan files: %w", err)
+		}
+		p.cachedFiles = files
+		return nil
+	})
+
+	// Goroutine 2: Detect all projects
+	g.Go(func() error {
+		defer cacheTimings.StartChild("Detect projects")()
+		locations, err := detector.DetectAllWithLocations(gctx)
+		if err != nil {
+			return fmt.Errorf("failed to detect projects: %w", err)
+		}
+		p.cachedProjects = locations
+		return nil
+	})
+
+	// Wait for both to complete
+	if err := g.Wait(); err != nil {
+		return fmt.Errorf("failed to initialize cache: %w", err)
+	}
+
+	// Build .datamitsuignore matcher from scanned files
+	func() {
+		defer cacheTimings.StartChild("Build datamitsuignore matcher")()
+		p.ignoreMatcher = p.buildIgnoreMatcher()
+	}()
+
+	p.cacheInitialized = true
+	return nil
+}
+
+// buildIgnoreMatcher scans cached files for .datamitsuignore entries
+// and builds a Matcher. Config-defined ignore rules (extraIgnoreRules)
+// are added as root-level rules.
+func (p *Planner) buildIgnoreMatcher() *datamitsuignore.Matcher {
+	m := datamitsuignore.NewMatcher()
+
+	// Built-in: never run tools on the managed symlinks directory.
+	if err := m.AddFile("", ".datamitsu/**: *"); err != nil {
+		log.Warn("failed to add built-in .datamitsu ignore rule", zap.Error(err))
+	}
+
+	if len(p.extraIgnoreRules) > 0 {
+		if err := m.AddFile("", strings.Join(p.extraIgnoreRules, "\n")); err != nil {
+			log.Warn("failed to parse config-defined ignore rules",
+				zap.Error(err),
+			)
+		}
+	}
+
+	const filename = ".datamitsuignore"
+
+	for _, f := range p.cachedFiles {
+		if filepath.Base(f) != filename {
+			continue
+		}
+		content, err := os.ReadFile(f)
+		if err != nil {
+			continue
+		}
+		relDir, err := filepath.Rel(p.rootPath, filepath.Dir(f))
+		if err != nil {
+			continue
+		}
+		if relDir == "." {
+			relDir = ""
+		}
+		if err := m.AddFile(relDir, string(content)); err != nil {
+			log.Warn("failed to parse .datamitsuignore",
+				zap.String("file", f),
+				zap.Error(err),
+			)
+		}
+	}
+
+	return m
 }

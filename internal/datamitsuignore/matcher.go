@@ -1,3 +1,5 @@
+// Package datamitsuignore parses .datamitsuignore files and matches their
+// per-directory rules against file paths to decide which tools are disabled.
 package datamitsuignore
 
 import (

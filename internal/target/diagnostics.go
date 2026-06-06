@@ -4,7 +4,7 @@ import "fmt"
 
 // DiagnosticInfo captures the full resolution chain for debugging and user feedback.
 type DiagnosticInfo struct {
-	HostTarget     Target
+	HostTarget      Target
 	RequestedTarget Target
 	ResolvedTarget  ResolvedTarget
 	CachePath       string
@@ -25,7 +25,7 @@ func (d DiagnosticInfo) String() string {
 	)
 
 	if d.CachePath != "" {
-		s += fmt.Sprintf(" cache=%s", d.CachePath)
+		s += " cache=" + d.CachePath
 	}
 
 	if d.ResolvedTarget.Source == ResolutionFallback && d.ResolvedTarget.FallbackInfo != nil {

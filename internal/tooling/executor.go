@@ -1,14 +1,11 @@
+// Package tooling plans and executes managed tool operations: it groups tasks
+// by priority, runs them through a bounded worker pool, and classifies their
+// results for fail-fast reporting.
 package tooling
 
 import (
 	"bytes"
 	"context"
-	"github.com/datamitsu/datamitsu/internal/binmanager"
-	"github.com/datamitsu/datamitsu/internal/cache"
-	clr "github.com/datamitsu/datamitsu/internal/color"
-	"github.com/datamitsu/datamitsu/internal/config"
-	"github.com/datamitsu/datamitsu/internal/env"
-	"github.com/datamitsu/datamitsu/internal/logger"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -18,6 +15,13 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/cache"
+	clr "github.com/datamitsu/datamitsu/internal/color"
+	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/logger"
 
 	"go.uber.org/zap"
 )
@@ -32,17 +36,17 @@ type Executor struct {
 	rootPath             string
 	dryRun               bool
 	failFast             bool
-	appManager           AppManager             // Interface to get binary paths
-	resultCallback       ResultCallback         // Optional callback for real-time results
-	taskStartCallback    TaskStartCallback      // Optional callback when task starts
-	fileProgressCallback FileProgressCallback   // Optional callback for per-file progress
-	cache                *cache.Cache           // Cache for storing execution results
+	appManager           AppManager           // Interface to get binary paths
+	resultCallback       ResultCallback       // Optional callback for real-time results
+	taskStartCallback    TaskStartCallback    // Optional callback when task starts
+	fileProgressCallback FileProgressCallback // Optional callback for per-file progress
+	cache                *cache.Cache         // Cache for storing execution results
 }
 
 // AppManager interface for getting application command information
 type AppManager interface {
-	GetBinaryPath(appName string) (string, error)
-	GetCommandInfo(appName string) (*binmanager.CommandInfo, error)
+	GetBinaryPath(ctx context.Context, appName string) (string, error)
+	GetCommandInfo(ctx context.Context, appName string) (*binmanager.CommandInfo, error)
 }
 
 // ResultCallback is called when a task completes
@@ -304,7 +308,7 @@ func (e *Executor) executeTasksParallel(ctx context.Context, tasks []Task, cance
 	for i := range taskIndices {
 		taskIndices[i] = i
 	}
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	rng := rand.New(rand.NewSource(time.Now().UnixNano())) //nolint:gosec // G404: non-cryptographic use (task shuffling for load balancing); math/rand is intentional
 	rng.Shuffle(len(taskIndices), func(i, j int) {
 		taskIndices[i], taskIndices[j] = taskIndices[j], taskIndices[i]
 	})
@@ -326,9 +330,9 @@ func (e *Executor) executeTasksParallel(ctx context.Context, tasks []Task, cance
 				log.Debug("parallel task skipped due to cancellation",
 					zap.Int("index", idx), zap.String("toolName", t.ToolName))
 				results[idx] = ExecutionResult{
-					ToolName:  t.ToolName,
-					Success:   false,
-					Error:     errCancelled,
+					ToolName:      t.ToolName,
+					Success:       false,
+					Error:         errCancelled,
 					Cancelled:     true,
 					FailureReason: FailureReasonCancelled,
 				}
@@ -343,9 +347,9 @@ func (e *Executor) executeTasksParallel(ctx context.Context, tasks []Task, cance
 				log.Debug("parallel task skipped after semaphore due to cancellation",
 					zap.Int("index", idx), zap.String("toolName", t.ToolName))
 				results[idx] = ExecutionResult{
-					ToolName:  t.ToolName,
-					Success:   false,
-					Error:     errCancelled,
+					ToolName:      t.ToolName,
+					Success:       false,
+					Error:         errCancelled,
 					Cancelled:     true,
 					FailureReason: FailureReasonCancelled,
 				}
@@ -395,9 +399,8 @@ func (e *Executor) executeTask(ctx context.Context, task Task) ExecutionResult {
 	}
 
 	// Get command info
-	cmdInfo, err := e.appManager.GetCommandInfo(task.OpConfig.App)
+	cmdInfo, err := e.appManager.GetCommandInfo(ctx, task.OpConfig.App)
 	if err != nil {
-
 		log.Debug("failed to get command info",
 			zap.String("app", task.OpConfig.App),
 			zap.String("workingDir", workingDir),
@@ -479,9 +482,9 @@ func (e *Executor) buildCommand(ctx context.Context, cmdInfo *binmanager.Command
 		allArgs := make([]string, 0, len(cmdInfo.Args)+len(args))
 		allArgs = append(allArgs, cmdInfo.Args...)
 		allArgs = append(allArgs, args...)
-		cmd = exec.CommandContext(ctx, cmdInfo.Command, allArgs...)
+		cmd = exec.CommandContext(ctx, cmdInfo.Command, allArgs...) //nolint:gosec // G204: command path comes from the trusted managed store (binmanager.CommandInfo) and args come from validated config
 	default:
-		cmd = exec.CommandContext(ctx, cmdInfo.Command, args...)
+		cmd = exec.CommandContext(ctx, cmdInfo.Command, args...) //nolint:gosec // G204: command path comes from the trusted managed store (binmanager.CommandInfo) and args come from validated config
 	}
 
 	cmd.Dir = workingDir
@@ -501,8 +504,12 @@ func (e *Executor) buildCommand(ctx context.Context, cmdInfo *binmanager.Command
 // mergeEnvLayers merges environment variable layers with later layers overriding earlier ones.
 // Order: base (OS env) -> layers[0] (app env) -> layers[1] (tool operation env) -> ...
 func mergeEnvLayers(base []string, layers ...map[string]string) []string {
-	env := make([]string, len(base))
-	copy(env, base)
+	extra := 0
+	for _, layer := range layers {
+		extra += len(layer)
+	}
+	env := make([]string, 0, len(base)+extra)
+	env = append(env, base...)
 
 	keyToIdx := make(map[string]int, len(env))
 	for i, e := range env {
@@ -647,7 +654,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 	// Report progress for cached files using total file count for consistent display
 	totalFiles := len(task.Files)
 	if e.fileProgressCallback != nil && cachedCount > 0 {
-		for i := 0; i < cachedCount; i++ {
+		for i := range cachedCount {
 			e.fileProgressCallback(task.ToolName, i+1, totalFiles, true)
 		}
 	}
@@ -674,7 +681,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 
 		if e.dryRun {
 			log.Debug("dry-run mode", zap.String("file", file), zap.Strings("args", args))
-			outputs = append(outputs, fmt.Sprintf("[DRY-RUN] %s", cmdString))
+			outputs = append(outputs, "[DRY-RUN] "+cmdString)
 			processedFiles = append(processedFiles, file)
 
 			// Call progress callback for dry-run files (offset by cached count)
@@ -857,7 +864,7 @@ func (e *Executor) executeBatchChunk(ctx context.Context, task Task, cmdInfo *bi
 
 	if e.dryRun {
 		log.Debug("dry-run mode", zap.Strings("args", args))
-		result.Output = fmt.Sprintf("[DRY-RUN] %s", cmdString)
+		result.Output = "[DRY-RUN] " + cmdString
 		result.Duration = time.Since(startTime).Milliseconds()
 		return result
 	}
@@ -929,9 +936,9 @@ func (e *Executor) executeBatchChunksParallel(ctx context.Context, task Task, cm
 			case <-ctx.Done():
 				log.Debug("chunk execution skipped due to cancellation", zap.Int("chunkIndex", idx))
 				chunkResults[idx] = ExecutionResult{
-					ToolName:  task.ToolName,
-					Success:   false,
-					Error:     errCancelled,
+					ToolName:      task.ToolName,
+					Success:       false,
+					Error:         errCancelled,
 					Cancelled:     true,
 					FailureReason: FailureReasonCancelled,
 				}
@@ -948,9 +955,9 @@ func (e *Executor) executeBatchChunksParallel(ctx context.Context, task Task, cm
 			if ctx.Err() != nil {
 				log.Debug("chunk execution skipped after semaphore due to cancellation", zap.Int("chunkIndex", idx))
 				chunkResults[idx] = ExecutionResult{
-					ToolName:  task.ToolName,
-					Success:   false,
-					Error:     errCancelled,
+					ToolName:      task.ToolName,
+					Success:       false,
+					Error:         errCancelled,
 					Cancelled:     true,
 					FailureReason: FailureReasonCancelled,
 				}
@@ -1185,7 +1192,8 @@ func getExitCode(err error) int {
 		return 0
 	}
 
-	if exitErr, ok := err.(*exec.ExitError); ok {
+	exitErr := &exec.ExitError{}
+	if errors.As(err, &exitErr) {
 		if status, ok := exitErr.Sys().(syscall.WaitStatus); ok {
 			return status.ExitStatus()
 		}
@@ -1203,10 +1211,9 @@ func (e *Executor) runCommandWithOutput(cmd *exec.Cmd) ([]byte, error) {
 	setupProcessGroupCleanup(cmd)
 
 	if err := cmd.Start(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("start command: %w", err)
 	}
 
 	err := cmd.Wait()
 	return combined.Bytes(), err
 }
-

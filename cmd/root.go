@@ -1,15 +1,32 @@
+// Package cmd implements datamitsu's Cobra command tree and CLI entrypoint.
 package cmd
 
 import (
+	"context"
+	"fmt"
+	"os"
+
 	clr "github.com/datamitsu/datamitsu/internal/color"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"github.com/datamitsu/datamitsu/internal/sponsor"
-	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 )
+
+// commandContext returns the command's context, falling back to a background
+// context when none is set. cobra's Command.Context returns nil until Execute
+// installs one, so RunE handlers invoked directly (e.g. in tests) would
+// otherwise propagate a nil context. Execute always sets a real context in
+// production, so this only guards the direct-call path.
+func commandContext(cmd *cobra.Command) context.Context {
+	if cmd != nil {
+		if ctx := cmd.Context(); ctx != nil {
+			return ctx
+		}
+	}
+	return context.Background()
+}
 
 var (
 	// BinaryCommandOverride allows overriding the binary command used in facts
@@ -24,7 +41,7 @@ var (
 
 var rootCmd = &cobra.Command{
 	Use:           ldflags.PackageName,
-	Short:         fmt.Sprintf("%s - configuration management tool", ldflags.PackageName),
+	Short:         ldflags.PackageName + " - configuration management tool",
 	Long:          "A tool for managing configuration and binaries\n\n" + sponsor.StaticLine(),
 	SilenceUsage:  true,
 	SilenceErrors: true,
@@ -48,6 +65,7 @@ func init() {
 		"Additional configuration file(s) to load and merge (can be specified multiple times)")
 }
 
+// Execute runs the root command and exits the process on error.
 func Execute() {
 	clr.Init()
 	if err := rootCmd.Execute(); err != nil {

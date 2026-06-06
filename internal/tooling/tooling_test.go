@@ -3,11 +3,7 @@ package tooling
 import (
 	"context"
 	"encoding/json"
-	"github.com/datamitsu/datamitsu/internal/binmanager"
-	"github.com/datamitsu/datamitsu/internal/config"
-	"github.com/datamitsu/datamitsu/internal/datamitsuignore"
-	"github.com/datamitsu/datamitsu/internal/env"
-	"github.com/datamitsu/datamitsu/internal/project"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,6 +11,12 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/datamitsuignore"
+	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/project"
 )
 
 type mockAppManager struct {
@@ -23,7 +25,7 @@ type mockAppManager struct {
 	commands map[string]*binmanager.CommandInfo // flexible per-app command info
 }
 
-func (m *mockAppManager) GetBinaryPath(appName string) (string, error) {
+func (m *mockAppManager) GetBinaryPath(_ context.Context, appName string) (string, error) {
 	if m.err != nil {
 		return "", m.err
 	}
@@ -33,7 +35,7 @@ func (m *mockAppManager) GetBinaryPath(appName string) (string, error) {
 	return "", fmt.Errorf("binary not found: %s", appName)
 }
 
-func (m *mockAppManager) GetCommandInfo(appName string) (*binmanager.CommandInfo, error) {
+func (m *mockAppManager) GetCommandInfo(_ context.Context, appName string) (*binmanager.CommandInfo, error) {
 	if m.err != nil {
 		return nil, m.err
 	}
@@ -74,7 +76,6 @@ func TestNewExecutor(t *testing.T) {
 	if !executor.failFast {
 		t.Error("failFast should be true")
 	}
-
 }
 
 func TestSetResultCallback(t *testing.T) {
@@ -389,9 +390,9 @@ func TestExecuteDryRun(t *testing.T) {
 						ToolName:  "eslint",
 						Operation: config.OpFix,
 						OpConfig: config.ToolOperation{
-							App: "eslint",
-							Args:    []string{"--fix", "{file}"},
-							Scope:   config.ToolScopePerFile,
+							App:   "eslint",
+							Args:  []string{"--fix", "{file}"},
+							Scope: config.ToolScopePerFile,
 						},
 						Files: []string{"test.js"},
 					},
@@ -425,7 +426,7 @@ func TestExecuteDryRun(t *testing.T) {
 
 func TestExecuteBinaryNotFound(t *testing.T) {
 	appManager := &mockAppManager{
-		err: fmt.Errorf("binary not found"),
+		err: errors.New("binary not found"),
 	}
 
 	executor := NewExecutor("/root", false, false, appManager, nil)
@@ -439,8 +440,8 @@ func TestExecuteBinaryNotFound(t *testing.T) {
 						ToolName:  "missing",
 						Operation: config.OpFix,
 						OpConfig: config.ToolOperation{
-							App: "missing",
-							Scope:   config.ToolScopeRepository,
+							App:   "missing",
+							Scope: config.ToolScopeRepository,
 						},
 					},
 				},
@@ -810,7 +811,7 @@ func TestCollectTasksPerFileWithExcludeGlobs(t *testing.T) {
 		cacheInitialized: true,
 	}
 
-	tasks := planner.collectTasks(config.OpFix, nil)
+	tasks := planner.collectTasks(context.Background(), config.OpFix, nil)
 
 	// Only src/app.js and src/util.ts should survive after excludeGlobs filter.
 	if len(tasks) != 2 {
@@ -865,7 +866,7 @@ func TestCollectTasksRepositoryWithExcludeGlobs(t *testing.T) {
 		cacheInitialized: true,
 	}
 
-	tasks := planner.collectTasks(config.OpLint, nil)
+	tasks := planner.collectTasks(context.Background(), config.OpLint, nil)
 
 	if len(tasks) != 1 {
 		t.Fatalf("expected 1 repository-scope task, got %d", len(tasks))
@@ -921,7 +922,7 @@ func TestCollectTasksPerProjectWithExcludeGlobs(t *testing.T) {
 		cacheInitialized: true,
 	}
 
-	tasks := planner.collectTasks(config.OpLint, nil)
+	tasks := planner.collectTasks(context.Background(), config.OpLint, nil)
 
 	if len(tasks) != 2 {
 		t.Fatalf("expected 2 tasks (one per detected go project), got %d", len(tasks))
@@ -990,7 +991,7 @@ func TestCollectTasksNilGlobsWithExcludeGlobs(t *testing.T) {
 		cacheInitialized: true,
 	}
 
-	tasks := planner.collectTasks(config.OpLint, nil)
+	tasks := planner.collectTasks(context.Background(), config.OpLint, nil)
 
 	if len(tasks) != 1 {
 		t.Fatalf("expected 1 task (nil globs still emits repository-scope task), got %d", len(tasks))
@@ -1008,7 +1009,7 @@ func TestPlan(t *testing.T) {
 			Name: "tool1",
 			Operations: map[config.OperationType]config.ToolOperation{
 				config.OpLint: {
-					App:  "tool1",
+					App:      "tool1",
 					Scope:    config.ToolScopeRepository,
 					Priority: 10,
 				},
@@ -1019,7 +1020,7 @@ func TestPlan(t *testing.T) {
 			ProjectTypes: []string{"rust"},
 			Operations: map[config.OperationType]config.ToolOperation{
 				config.OpLint: {
-					App:  "tool2",
+					App:      "tool2",
 					Scope:    config.ToolScopeRepository,
 					Priority: 20,
 				},
@@ -1055,8 +1056,8 @@ func TestCollectTasks(t *testing.T) {
 			Name: "tool1",
 			Operations: map[config.OperationType]config.ToolOperation{
 				config.OpLint: {
-					App: "tool1",
-					Scope:   config.ToolScopeRepository,
+					App:   "tool1",
+					Scope: config.ToolScopeRepository,
 				},
 			},
 		},
@@ -1064,7 +1065,7 @@ func TestCollectTasks(t *testing.T) {
 
 	planner := NewPlanner(tmpDir, tmpDir, []string{}, tools, config.MapOfProjectTypes{}, nil)
 
-	tasks := planner.collectTasks(config.OpLint, nil)
+	tasks := planner.collectTasks(context.Background(), config.OpLint, nil)
 
 	if len(tasks) != 1 {
 		t.Errorf("len(tasks) = %d, want 1", len(tasks))
@@ -1078,15 +1079,15 @@ func TestCollectTasks(t *testing.T) {
 func TestCollectTasksRepositoryScope(t *testing.T) {
 	tmpDir := t.TempDir()
 	subDir := filepath.Join(tmpDir, "subdir")
-	_ = os.MkdirAll(subDir, 0755)
+	_ = os.MkdirAll(subDir, 0o755)
 
 	tools := config.MapOfTools{
 		"tool1": {
 			Name: "tool1",
 			Operations: map[config.OperationType]config.ToolOperation{
 				config.OpLint: {
-					App: "tool1",
-					Scope:   config.ToolScopeRepository,
+					App:   "tool1",
+					Scope: config.ToolScopeRepository,
 				},
 			},
 		},
@@ -1094,7 +1095,7 @@ func TestCollectTasksRepositoryScope(t *testing.T) {
 
 	t.Run("root path", func(t *testing.T) {
 		planner := NewPlanner(tmpDir, tmpDir, []string{}, tools, config.MapOfProjectTypes{}, nil)
-		tasks := planner.collectTasks(config.OpLint, nil)
+		tasks := planner.collectTasks(context.Background(), config.OpLint, nil)
 
 		if len(tasks) != 1 {
 			t.Errorf("len(tasks) = %d, want 1", len(tasks))
@@ -1104,7 +1105,7 @@ func TestCollectTasksRepositoryScope(t *testing.T) {
 	t.Run("subdirectory path", func(t *testing.T) {
 		// Repository-scoped tools are skipped when cwd is not the git root
 		planner := NewPlanner(tmpDir, subDir, []string{}, tools, config.MapOfProjectTypes{}, nil)
-		tasks := planner.collectTasks(config.OpLint, nil)
+		tasks := planner.collectTasks(context.Background(), config.OpLint, nil)
 
 		if len(tasks) != 0 {
 			t.Errorf("len(tasks) = %d, want 0 (repository scope skipped when cwd != root)", len(tasks))
@@ -1152,7 +1153,7 @@ func TestCollectTasksRepositoryScopeRespectsDatamitsuignore(t *testing.T) {
 
 	t.Run("catch-all rule disables repository-scoped tool", func(t *testing.T) {
 		p := newPlanner("**/*: golangci-lint\n")
-		tasks := p.collectTasks(config.OpLint, nil)
+		tasks := p.collectTasks(context.Background(), config.OpLint, nil)
 		if len(tasks) != 0 {
 			t.Errorf("repository-scoped tool should be disabled by '**/*: golangci-lint', got %d task(s)", len(tasks))
 		}
@@ -1160,7 +1161,7 @@ func TestCollectTasksRepositoryScopeRespectsDatamitsuignore(t *testing.T) {
 
 	t.Run("non-matching rule leaves repository-scoped tool enabled", func(t *testing.T) {
 		p := newPlanner("**/*: other-tool\n")
-		tasks := p.collectTasks(config.OpLint, nil)
+		tasks := p.collectTasks(context.Background(), config.OpLint, nil)
 		if len(tasks) != 1 {
 			t.Fatalf("repository-scoped tool should run when no rule matches, got %d task(s)", len(tasks))
 		}
@@ -1211,7 +1212,7 @@ func TestCollectTasksPerProjectScopeRespectsDatamitsuignore(t *testing.T) {
 
 	t.Run("catch-all disables per-project tool", func(t *testing.T) {
 		p := newPlanner("**/*: prettier\n")
-		tasks := p.collectTasks(config.OpLint, nil)
+		tasks := p.collectTasks(context.Background(), config.OpLint, nil)
 		if len(tasks) != 0 {
 			t.Errorf("per-project tool should be disabled by '**/*: prettier', got %d task(s)", len(tasks))
 		}
@@ -1219,7 +1220,7 @@ func TestCollectTasksPerProjectScopeRespectsDatamitsuignore(t *testing.T) {
 
 	t.Run("non-matching rule keeps per-project tool", func(t *testing.T) {
 		p := newPlanner("**/*: other-tool\n")
-		tasks := p.collectTasks(config.OpLint, nil)
+		tasks := p.collectTasks(context.Background(), config.OpLint, nil)
 		if len(tasks) != 1 {
 			t.Fatalf("per-project tool should run when no rule matches, got %d task(s)", len(tasks))
 		}
@@ -1270,7 +1271,7 @@ func TestCollectTasksPerProjectScopeNoProjectsRespectsDatamitsuignore(t *testing
 
 	t.Run("catch-all disables tool when no projects detected", func(t *testing.T) {
 		p := newPlanner("**/*: prettier\n")
-		tasks := p.collectTasks(config.OpLint, nil)
+		tasks := p.collectTasks(context.Background(), config.OpLint, nil)
 		if len(tasks) != 0 {
 			t.Errorf("per-project tool should be disabled by '**/*: prettier', got %d task(s)", len(tasks))
 		}
@@ -1278,7 +1279,7 @@ func TestCollectTasksPerProjectScopeNoProjectsRespectsDatamitsuignore(t *testing
 
 	t.Run("non-matching rule keeps tool when no projects detected", func(t *testing.T) {
 		p := newPlanner("**/*: other-tool\n")
-		tasks := p.collectTasks(config.OpLint, nil)
+		tasks := p.collectTasks(context.Background(), config.OpLint, nil)
 		if len(tasks) != 1 {
 			t.Fatalf("per-project tool should run when no rule matches, got %d task(s)", len(tasks))
 		}
@@ -1547,7 +1548,7 @@ func TestFailFastStopsNewTasks(t *testing.T) {
 						ToolName:  "failing-tool",
 						Operation: config.OpLint,
 						OpConfig: config.ToolOperation{
-							App:  "failing-tool",
+							App:      "failing-tool",
 							Scope:    config.ToolScopeRepository,
 							Priority: 10,
 						},
@@ -1561,7 +1562,7 @@ func TestFailFastStopsNewTasks(t *testing.T) {
 						ToolName:  "should-not-run",
 						Operation: config.OpLint,
 						OpConfig: config.ToolOperation{
-							App:  "should-not-run",
+							App:      "should-not-run",
 							Scope:    config.ToolScopeRepository,
 							Priority: 20,
 						},
@@ -1601,7 +1602,7 @@ func TestFailFastPerFileSkipsRemainingFiles(t *testing.T) {
 		filepath.Join(tmpDir, "file3.txt"),
 	}
 	for _, f := range files {
-		if err := os.WriteFile(f, []byte("test"), 0644); err != nil {
+		if err := os.WriteFile(f, []byte("test"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -1637,10 +1638,10 @@ func TestFailFastPerFileSkipsRemainingFiles(t *testing.T) {
 						ToolName:  "per-file-tool",
 						Operation: config.OpLint,
 						OpConfig: config.ToolOperation{
-							App: "per-file-tool",
-							Args:    []string{"{file}"},
-							Scope:   config.ToolScopePerFile,
-							Batch:   &batchFalse,
+							App:   "per-file-tool",
+							Args:  []string{"{file}"},
+							Scope: config.ToolScopePerFile,
+							Batch: &batchFalse,
 						},
 						Files: files,
 					},
@@ -1707,7 +1708,7 @@ func TestFailFastCancellationPropagatesParallelTasks(t *testing.T) {
 						ToolName:  "fast-fail",
 						Operation: config.OpLint,
 						OpConfig: config.ToolOperation{
-							App:  "fast-fail",
+							App:      "fast-fail",
 							Scope:    config.ToolScopeRepository,
 							Priority: 10,
 						},
@@ -1721,7 +1722,7 @@ func TestFailFastCancellationPropagatesParallelTasks(t *testing.T) {
 						ToolName:  "slow-tool",
 						Operation: config.OpLint,
 						OpConfig: config.ToolOperation{
-							App:  "slow-tool",
+							App:      "slow-tool",
 							Scope:    config.ToolScopeRepository,
 							Priority: 20,
 						},
@@ -1750,10 +1751,10 @@ func TestFailFastContextCancelsRunningPerFileLoop(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create many test files
-	var files []string
-	for i := 0; i < 20; i++ {
+	files := make([]string, 0, 20)
+	for i := range 20 {
 		f := filepath.Join(tmpDir, fmt.Sprintf("file%d.txt", i))
-		if err := os.WriteFile(f, []byte("test"), 0644); err != nil {
+		if err := os.WriteFile(f, []byte("test"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 		files = append(files, f)
@@ -1790,10 +1791,10 @@ func TestFailFastContextCancelsRunningPerFileLoop(t *testing.T) {
 						ToolName:  "always-fail",
 						Operation: config.OpLint,
 						OpConfig: config.ToolOperation{
-							App: "always-fail",
-							Args:    []string{"{file}"},
-							Scope:   config.ToolScopePerFile,
-							Batch:   &batchFalse,
+							App:   "always-fail",
+							Args:  []string{"{file}"},
+							Scope: config.ToolScopePerFile,
+							Batch: &batchFalse,
 						},
 						Files: files,
 					},
@@ -1833,7 +1834,7 @@ func TestExecutorDoesNotPrintOutputDirectly(t *testing.T) {
 		executor := NewExecutor(tmpDir, false, true, appManager, nil)
 
 		file := filepath.Join(tmpDir, "test.txt")
-		if err := os.WriteFile(file, []byte("test"), 0644); err != nil {
+		if err := os.WriteFile(file, []byte("test"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 
@@ -1847,10 +1848,10 @@ func TestExecutorDoesNotPrintOutputDirectly(t *testing.T) {
 							ToolName:  "failing-tool",
 							Operation: config.OpLint,
 							OpConfig: config.ToolOperation{
-								App: "failing-tool",
-								Args:    []string{"{file}"},
-								Scope:   config.ToolScopePerFile,
-								Batch:   &batchFalse,
+								App:   "failing-tool",
+								Args:  []string{"{file}"},
+								Scope: config.ToolScopePerFile,
+								Batch: &batchFalse,
 							},
 							Files: []string{file},
 						},
@@ -1900,8 +1901,8 @@ func TestExecutorDoesNotPrintOutputDirectly(t *testing.T) {
 							ToolName:  "batch-fail",
 							Operation: config.OpLint,
 							OpConfig: config.ToolOperation{
-								App: "batch-fail",
-								Scope:   config.ToolScopeRepository,
+								App:   "batch-fail",
+								Scope: config.ToolScopeRepository,
 							},
 						},
 					},
@@ -2157,7 +2158,7 @@ func TestCollectTasksPerProjectFromSubdirectory(t *testing.T) {
 			ProjectTypes: []string{"go"},
 			Operations: map[config.OperationType]config.ToolOperation{
 				config.OpLint: {
-					App:  "golangci-lint",
+					App:      "golangci-lint",
 					Scope:    config.ToolScopePerProject,
 					Priority: 10,
 					Globs:    []string{"**/*.go"},
@@ -2185,7 +2186,7 @@ func TestCollectTasksPerProjectFromSubdirectory(t *testing.T) {
 		cacheInitialized: true,
 	}
 
-	tasks := planner.collectTasks(config.OpLint, nil)
+	tasks := planner.collectTasks(context.Background(), config.OpLint, nil)
 
 	// Should only create tasks for /repo/services/api (inside cwd), not web or root
 	if len(tasks) != 1 {
@@ -2214,7 +2215,7 @@ func TestCollectTasksPerProjectExplicitFilesFromSubdirectory(t *testing.T) {
 			ProjectTypes: []string{"go"},
 			Operations: map[config.OperationType]config.ToolOperation{
 				config.OpLint: {
-					App:  "golangci-lint",
+					App:      "golangci-lint",
 					Scope:    config.ToolScopePerProject,
 					Priority: 10,
 					Globs:    []string{"**/*.go"},
@@ -2250,7 +2251,7 @@ func TestCollectTasksPerProjectExplicitFilesFromSubdirectory(t *testing.T) {
 		"/repo/services/shared/util.go",
 		"/repo/lib/helper.go",
 	}
-	tasks := planner.collectTasks(config.OpLint, explicitFiles)
+	tasks := planner.collectTasks(context.Background(), config.OpLint, explicitFiles)
 
 	// Files outside cwd (/repo/lib/helper.go) should be excluded.
 	// Files inside cwd but not matching a cwd-subtree project (/repo/services/shared/util.go)
@@ -2286,7 +2287,7 @@ func TestCollectTasksPerProjectWholeProjectModeFromSubdirectory(t *testing.T) {
 			ProjectTypes: []string{"go"},
 			Operations: map[config.OperationType]config.ToolOperation{
 				config.OpLint: {
-					App:  "go",
+					App:      "go",
 					Args:     []string{"vet", "./..."},
 					Scope:    config.ToolScopePerProject,
 					Priority: 10,
@@ -2310,7 +2311,7 @@ func TestCollectTasksPerProjectWholeProjectModeFromSubdirectory(t *testing.T) {
 		cacheInitialized: true,
 	}
 
-	tasks := planner.collectTasks(config.OpLint, nil)
+	tasks := planner.collectTasks(context.Background(), config.OpLint, nil)
 
 	// Should only create task for api project (inside cwd)
 	if len(tasks) != 1 {
@@ -2331,7 +2332,7 @@ func TestCollectTasksPerProjectFromRootRegression(t *testing.T) {
 			ProjectTypes: []string{"go"},
 			Operations: map[config.OperationType]config.ToolOperation{
 				config.OpLint: {
-					App:  "golangci-lint",
+					App:      "golangci-lint",
 					Scope:    config.ToolScopePerProject,
 					Priority: 10,
 					Globs:    []string{"**/*.go"},
@@ -2356,7 +2357,7 @@ func TestCollectTasksPerProjectFromRootRegression(t *testing.T) {
 		cacheInitialized: true,
 	}
 
-	tasks := planner.collectTasks(config.OpLint, nil)
+	tasks := planner.collectTasks(context.Background(), config.OpLint, nil)
 
 	// From root, should create tasks for both projects
 	if len(tasks) != 2 {
@@ -2387,7 +2388,7 @@ func TestCollectTasksPerFileFromSubdirectory(t *testing.T) {
 			Name: "prettier",
 			Operations: map[config.OperationType]config.ToolOperation{
 				config.OpFix: {
-					App:  "prettier",
+					App:      "prettier",
 					Args:     []string{"--write", "{file}"},
 					Scope:    config.ToolScopePerFile,
 					Priority: 10,
@@ -2412,7 +2413,7 @@ func TestCollectTasksPerFileFromSubdirectory(t *testing.T) {
 		cacheInitialized: true,
 	}
 
-	tasks := planner.collectTasks(config.OpFix, nil)
+	tasks := planner.collectTasks(context.Background(), config.OpFix, nil)
 
 	// Should only create per-file tasks for files inside cwd
 	if len(tasks) != 2 {
@@ -2438,7 +2439,7 @@ func TestCollectTasksPerFileFromRootRegression(t *testing.T) {
 			Name: "prettier",
 			Operations: map[config.OperationType]config.ToolOperation{
 				config.OpFix: {
-					App:  "prettier",
+					App:      "prettier",
 					Args:     []string{"--write", "{file}"},
 					Scope:    config.ToolScopePerFile,
 					Priority: 10,
@@ -2463,7 +2464,7 @@ func TestCollectTasksPerFileFromRootRegression(t *testing.T) {
 		cacheInitialized: true,
 	}
 
-	tasks := planner.collectTasks(config.OpFix, nil)
+	tasks := planner.collectTasks(context.Background(), config.OpFix, nil)
 
 	// From root, should create tasks for all 4 matching files
 	if len(tasks) != 4 {
@@ -2551,22 +2552,22 @@ func TestDatamitsuignorePerFileScope(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create files
-	_ = os.MkdirAll(filepath.Join(tmpDir, "src"), 0755)
-	_ = os.MkdirAll(filepath.Join(tmpDir, "docs"), 0755)
-	_ = os.WriteFile(filepath.Join(tmpDir, "src", "main.js"), []byte("code"), 0644)
-	_ = os.WriteFile(filepath.Join(tmpDir, "src", "utils.js"), []byte("code"), 0644)
-	_ = os.WriteFile(filepath.Join(tmpDir, "docs", "readme.md"), []byte("doc"), 0644)
-	_ = os.WriteFile(filepath.Join(tmpDir, "docs", "guide.md"), []byte("doc"), 0644)
+	_ = os.MkdirAll(filepath.Join(tmpDir, "src"), 0o755)
+	_ = os.MkdirAll(filepath.Join(tmpDir, "docs"), 0o755)
+	_ = os.WriteFile(filepath.Join(tmpDir, "src", "main.js"), []byte("code"), 0o644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "src", "utils.js"), []byte("code"), 0o644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "docs", "readme.md"), []byte("doc"), 0o644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "docs", "guide.md"), []byte("doc"), 0o644)
 
 	// Create .datamitsuignore: disable eslint for all markdown files
-	_ = os.WriteFile(filepath.Join(tmpDir, ".datamitsuignore"), []byte("**/*.md: eslint\n"), 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, ".datamitsuignore"), []byte("**/*.md: eslint\n"), 0o644)
 
 	tools := config.MapOfTools{
 		"eslint": {
 			Name: "eslint",
 			Operations: map[config.OperationType]config.ToolOperation{
 				config.OpLint: {
-					App:  "eslint",
+					App:      "eslint",
 					Scope:    config.ToolScopePerFile,
 					Globs:    []string{"**/*.js", "**/*.md"},
 					Priority: 10,
@@ -2604,22 +2605,22 @@ func TestDatamitsuignorePerFileScope(t *testing.T) {
 func TestDatamitsuignoreInversion(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	_ = os.MkdirAll(filepath.Join(tmpDir, "src"), 0755)
-	_ = os.MkdirAll(filepath.Join(tmpDir, "docs"), 0755)
-	_ = os.WriteFile(filepath.Join(tmpDir, "src", "notes.md"), []byte("notes"), 0644)
-	_ = os.WriteFile(filepath.Join(tmpDir, "docs", "guide.md"), []byte("guide"), 0644)
+	_ = os.MkdirAll(filepath.Join(tmpDir, "src"), 0o755)
+	_ = os.MkdirAll(filepath.Join(tmpDir, "docs"), 0o755)
+	_ = os.WriteFile(filepath.Join(tmpDir, "src", "notes.md"), []byte("notes"), 0o644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "docs", "guide.md"), []byte("guide"), 0o644)
 
 	// Root disables prettier for all .md
-	_ = os.WriteFile(filepath.Join(tmpDir, ".datamitsuignore"), []byte("**/*.md: prettier\n"), 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, ".datamitsuignore"), []byte("**/*.md: prettier\n"), 0o644)
 	// docs/ re-enables prettier
-	_ = os.WriteFile(filepath.Join(tmpDir, "docs", ".datamitsuignore"), []byte("!**/*.md: prettier\n"), 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "docs", ".datamitsuignore"), []byte("!**/*.md: prettier\n"), 0o644)
 
 	tools := config.MapOfTools{
 		"prettier": {
 			Name: "prettier",
 			Operations: map[config.OperationType]config.ToolOperation{
 				config.OpFix: {
-					App:  "prettier",
+					App:      "prettier",
 					Scope:    config.ToolScopePerFile,
 					Globs:    []string{"**/*.md"},
 					Priority: 10,
@@ -2659,18 +2660,18 @@ func TestDatamitsuignoreInversion(t *testing.T) {
 func TestDatamitsuignoreNoEffect(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	_ = os.WriteFile(filepath.Join(tmpDir, "main.js"), []byte("code"), 0644)
-	_ = os.WriteFile(filepath.Join(tmpDir, "test.js"), []byte("test"), 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "main.js"), []byte("code"), 0o644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "test.js"), []byte("test"), 0o644)
 
 	// Disable golangci-lint for .go files - should not affect eslint on .js
-	_ = os.WriteFile(filepath.Join(tmpDir, ".datamitsuignore"), []byte("**/*.go: golangci-lint\n"), 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, ".datamitsuignore"), []byte("**/*.go: golangci-lint\n"), 0o644)
 
 	tools := config.MapOfTools{
 		"eslint": {
 			Name: "eslint",
 			Operations: map[config.OperationType]config.ToolOperation{
 				config.OpLint: {
-					App:  "eslint",
+					App:      "eslint",
 					Scope:    config.ToolScopePerFile,
 					Globs:    []string{"**/*.js"},
 					Priority: 10,
@@ -2698,19 +2699,19 @@ func TestDatamitsuignoreNoEffect(t *testing.T) {
 func TestConfigDefinedIgnoreRules(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	_ = os.MkdirAll(filepath.Join(tmpDir, "src"), 0755)
-	_ = os.MkdirAll(filepath.Join(tmpDir, "docs"), 0755)
-	_ = os.WriteFile(filepath.Join(tmpDir, "src", "main.js"), []byte("code"), 0644)
-	_ = os.WriteFile(filepath.Join(tmpDir, "src", "utils.js"), []byte("code"), 0644)
-	_ = os.WriteFile(filepath.Join(tmpDir, "docs", "readme.md"), []byte("doc"), 0644)
-	_ = os.WriteFile(filepath.Join(tmpDir, "docs", "guide.md"), []byte("doc"), 0644)
+	_ = os.MkdirAll(filepath.Join(tmpDir, "src"), 0o755)
+	_ = os.MkdirAll(filepath.Join(tmpDir, "docs"), 0o755)
+	_ = os.WriteFile(filepath.Join(tmpDir, "src", "main.js"), []byte("code"), 0o644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "src", "utils.js"), []byte("code"), 0o644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "docs", "readme.md"), []byte("doc"), 0o644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "docs", "guide.md"), []byte("doc"), 0o644)
 
 	tools := config.MapOfTools{
 		"eslint": {
 			Name: "eslint",
 			Operations: map[config.OperationType]config.ToolOperation{
 				config.OpLint: {
-					App:  "eslint",
+					App:      "eslint",
 					Scope:    config.ToolScopePerFile,
 					Globs:    []string{"**/*.js", "**/*.md"},
 					Priority: 10,
@@ -2749,16 +2750,16 @@ func TestConfigDefinedIgnoreRules(t *testing.T) {
 func TestConfigDefinedIgnoreRulesWithWildcard(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	_ = os.MkdirAll(filepath.Join(tmpDir, "src"), 0755)
-	_ = os.WriteFile(filepath.Join(tmpDir, "src", "main.js"), []byte("code"), 0644)
-	_ = os.WriteFile(filepath.Join(tmpDir, "src", "test.ts"), []byte("code"), 0644)
+	_ = os.MkdirAll(filepath.Join(tmpDir, "src"), 0o755)
+	_ = os.WriteFile(filepath.Join(tmpDir, "src", "main.js"), []byte("code"), 0o644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "src", "test.ts"), []byte("code"), 0o644)
 
 	tools := config.MapOfTools{
 		"eslint": {
 			Name: "eslint",
 			Operations: map[config.OperationType]config.ToolOperation{
 				config.OpLint: {
-					App:  "eslint",
+					App:      "eslint",
 					Scope:    config.ToolScopePerFile,
 					Globs:    []string{"**/*.js", "**/*.ts"},
 					Priority: 10,
@@ -2835,9 +2836,9 @@ func TestToolCachePlaceholderIntegration(t *testing.T) {
 							ToolName:  "echo-tool",
 							Operation: config.OpLint,
 							OpConfig: config.ToolOperation{
-								App: "echo-tool",
-								Args:    []string{"echo CACHE={toolCache}"},
-								Scope:   config.ToolScopeRepository,
+								App:   "echo-tool",
+								Args:  []string{"echo CACHE={toolCache}"},
+								Scope: config.ToolScopeRepository,
 							},
 						},
 					},
@@ -2892,9 +2893,9 @@ func TestToolCachePlaceholderIntegration(t *testing.T) {
 							ToolName:  "write-tool",
 							Operation: config.OpFix,
 							OpConfig: config.ToolOperation{
-								App: "write-tool",
-								Args:    []string{"mkdir -p {toolCache} && echo ok > {toolCache}/testfile.txt && cat {toolCache}/testfile.txt"},
-								Scope:   config.ToolScopeRepository,
+								App:   "write-tool",
+								Args:  []string{"mkdir -p {toolCache} && echo ok > {toolCache}/testfile.txt && cat {toolCache}/testfile.txt"},
+								Scope: config.ToolScopeRepository,
 							},
 						},
 					},
@@ -2928,7 +2929,7 @@ func TestToolCachePlaceholderIntegration(t *testing.T) {
 
 	t.Run("toolCache combined with cwd placeholder uses project isolation", func(t *testing.T) {
 		projectDir := filepath.Join(tmpDir, "services", "api")
-		if err := os.MkdirAll(projectDir, 0755); err != nil {
+		if err := os.MkdirAll(projectDir, 0o755); err != nil {
 			t.Fatal(err)
 		}
 
@@ -2958,9 +2959,9 @@ func TestToolCachePlaceholderIntegration(t *testing.T) {
 							ToolName:  "combo-tool",
 							Operation: config.OpLint,
 							OpConfig: config.ToolOperation{
-								App: "combo-tool",
-								Args:    []string{"echo CACHE={toolCache} CWD={cwd} ROOT={root}"},
-								Scope:   config.ToolScopePerProject,
+								App:   "combo-tool",
+								Args:  []string{"echo CACHE={toolCache} CWD={cwd} ROOT={root}"},
+								Scope: config.ToolScopePerProject,
 							},
 							ProjectPath: projectDir,
 						},
@@ -2993,7 +2994,7 @@ func TestToolCachePlaceholderIntegration(t *testing.T) {
 
 	t.Run("toolCache in per-file mode with file placeholder", func(t *testing.T) {
 		testFile := filepath.Join(tmpDir, "test.ts")
-		if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+		if err := os.WriteFile(testFile, []byte("test"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 
@@ -3024,10 +3025,10 @@ func TestToolCachePlaceholderIntegration(t *testing.T) {
 							ToolName:  "file-cache-tool",
 							Operation: config.OpLint,
 							OpConfig: config.ToolOperation{
-								App: "file-cache-tool",
-								Args:    []string{"echo --cache-dir={toolCache} --file={file}"},
-								Scope:   config.ToolScopePerFile,
-								Batch:   &batchFalse,
+								App:   "file-cache-tool",
+								Args:  []string{"echo --cache-dir={toolCache} --file={file}"},
+								Scope: config.ToolScopePerFile,
+								Batch: &batchFalse,
 							},
 							Files: []string{testFile},
 						},
@@ -3084,9 +3085,9 @@ func TestToolCachePlaceholderIntegration(t *testing.T) {
 							ToolName:  "nested-tool",
 							Operation: config.OpLint,
 							OpConfig: config.ToolOperation{
-								App: "nested-tool",
-								Args:    []string{"echo {toolCache}/tsbuildinfo {toolCache}/eslint-cache {toolCache}/stylelint-cache"},
-								Scope:   config.ToolScopeRepository,
+								App:   "nested-tool",
+								Args:  []string{"echo {toolCache}/tsbuildinfo {toolCache}/eslint-cache {toolCache}/stylelint-cache"},
+								Scope: config.ToolScopeRepository,
 							},
 						},
 					},
@@ -3147,18 +3148,18 @@ func TestToolCachePlaceholderIntegration(t *testing.T) {
 							ToolName:  "tsc",
 							Operation: config.OpLint,
 							OpConfig: config.ToolOperation{
-								App: "tsc",
-								Args:    []string{"echo {toolCache}"},
-								Scope:   config.ToolScopeRepository,
+								App:   "tsc",
+								Args:  []string{"echo {toolCache}"},
+								Scope: config.ToolScopeRepository,
 							},
 						},
 						{
 							ToolName:  "eslint",
 							Operation: config.OpLint,
 							OpConfig: config.ToolOperation{
-								App: "eslint",
-								Args:    []string{"echo {toolCache}"},
-								Scope:   config.ToolScopeRepository,
+								App:   "eslint",
+								Args:  []string{"echo {toolCache}"},
+								Scope: config.ToolScopeRepository,
 							},
 						},
 					},

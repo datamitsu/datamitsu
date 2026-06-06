@@ -1,14 +1,17 @@
 package runtimemanager
 
 import (
-	"github.com/datamitsu/datamitsu/internal/binmanager"
-	"github.com/datamitsu/datamitsu/internal/config"
-	"github.com/datamitsu/datamitsu/internal/env"
+	"context"
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/env"
 )
 
 func TestGetUVEnvVars(t *testing.T) {
@@ -51,13 +54,7 @@ func TestInstallTimeEnvIncludesPythonInstallDir(t *testing.T) {
 	result := buildEnvWithOverrides(os.Environ(), envVars)
 
 	wantPrefix := "UV_PYTHON_INSTALL_DIR=" + filepath.Join(env.GetStorePath(), ".uv", "python")
-	found := false
-	for _, e := range result {
-		if e == wantPrefix {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(result, wantPrefix)
 	if !found {
 		t.Errorf("install-time env missing %q", wantPrefix)
 	}
@@ -96,13 +93,7 @@ func TestBuildEnvWithOverrides(t *testing.T) {
 
 		result := buildEnvWithOverrides(base, overrides)
 
-		found := false
-		for _, e := range result {
-			if e == "UV_TOOL_DIR=/tmp/tools" {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(result, "UV_TOOL_DIR=/tmp/tools")
 		if !found {
 			t.Error("UV_TOOL_DIR not found in result")
 		}
@@ -349,6 +340,7 @@ func TestGetUVCommandInfo_DifferentLockFilesProduceDifferentPaths(t *testing.T) 
 }
 
 func TestInstallUVAppAlreadyInstalled(t *testing.T) {
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 	runtimes := makeTestRuntimes()
 	rm := New(runtimes)
 
@@ -364,19 +356,19 @@ func TestInstallUVAppAlreadyInstalled(t *testing.T) {
 	}
 
 	binPath := getUVBinaryPath(appEnvPath, "yamllint")
-	if err := os.MkdirAll(filepath.Dir(binPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(binPath), 0o755); err != nil {
 		t.Fatalf("failed to create dir: %v", err)
 	}
-	if err := os.WriteFile(binPath, []byte("#!/bin/sh\necho ok"), 0755); err != nil {
+	if err := os.WriteFile(binPath, []byte("#!/bin/sh\necho ok"), 0o755); err != nil {
 		t.Fatalf("failed to write fake binary: %v", err)
 	}
 	// A resolvable interpreter makes the venv healthy so the install gate skips.
-	if err := os.WriteFile(getUVInterpreterPath(appEnvPath), []byte("python"), 0755); err != nil {
+	if err := os.WriteFile(getUVInterpreterPath(appEnvPath), []byte("python"), 0o755); err != nil {
 		t.Fatalf("failed to write fake interpreter: %v", err)
 	}
 	defer func() { _ = os.RemoveAll(appEnvPath) }()
 
-	err = rm.InstallUVApp("yamllint", appConfig, nil, nil, nil)
+	err = rm.InstallUVApp(context.Background(), "yamllint", appConfig, nil, nil, nil)
 	if err != nil {
 		t.Errorf("InstallUVApp() error = %v, expected nil for already installed app", err)
 	}
@@ -386,13 +378,13 @@ func TestUVVenvHealthy(t *testing.T) {
 	t.Run("healthy: binary and interpreter both resolve", func(t *testing.T) {
 		dir := t.TempDir()
 		binPath := getUVBinaryPath(dir, "yamllint")
-		if err := os.MkdirAll(filepath.Dir(binPath), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(binPath), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(binPath, []byte("#!/bin/sh\n"), 0755); err != nil {
+		if err := os.WriteFile(binPath, []byte("#!/bin/sh\n"), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(getUVInterpreterPath(dir), []byte("python"), 0755); err != nil {
+		if err := os.WriteFile(getUVInterpreterPath(dir), []byte("python"), 0o755); err != nil {
 			t.Fatal(err)
 		}
 		if !uvVenvHealthy(dir, binPath) {
@@ -406,10 +398,10 @@ func TestUVVenvHealthy(t *testing.T) {
 		}
 		dir := t.TempDir()
 		binPath := getUVBinaryPath(dir, "yamllint")
-		if err := os.MkdirAll(filepath.Dir(binPath), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(binPath), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(binPath, []byte("#!/bin/sh\n"), 0755); err != nil {
+		if err := os.WriteFile(binPath, []byte("#!/bin/sh\n"), 0o755); err != nil {
 			t.Fatal(err)
 		}
 		// Symlink pointing at a non-existent interpreter (cache restored onto fresh runner).
@@ -423,10 +415,10 @@ func TestUVVenvHealthy(t *testing.T) {
 
 	t.Run("missing binary is unhealthy even if interpreter resolves", func(t *testing.T) {
 		dir := t.TempDir()
-		if err := os.MkdirAll(filepath.Join(dir, ".venv", "bin"), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Join(dir, ".venv", "bin"), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(getUVInterpreterPath(dir), []byte("python"), 0755); err != nil {
+		if err := os.WriteFile(getUVInterpreterPath(dir), []byte("python"), 0o755); err != nil {
 			t.Fatal(err)
 		}
 		binPath := getUVBinaryPath(dir, "yamllint")
@@ -437,6 +429,7 @@ func TestUVVenvHealthy(t *testing.T) {
 }
 
 func TestInstallUVAppHealthyVenvSkips(t *testing.T) {
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 	runtimes := makeTestRuntimes()
 	rm := New(runtimes)
 
@@ -453,18 +446,18 @@ func TestInstallUVAppHealthyVenvSkips(t *testing.T) {
 	defer func() { _ = os.RemoveAll(appEnvPath) }()
 
 	binPath := getUVBinaryPath(appEnvPath, "yamllint")
-	if err := os.MkdirAll(filepath.Dir(binPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(binPath), 0o755); err != nil {
 		t.Fatalf("failed to create dir: %v", err)
 	}
-	if err := os.WriteFile(binPath, []byte("#!/bin/sh\necho ok"), 0755); err != nil {
+	if err := os.WriteFile(binPath, []byte("#!/bin/sh\necho ok"), 0o755); err != nil {
 		t.Fatalf("failed to write fake binary: %v", err)
 	}
 	// A resolvable interpreter → healthy venv → install must be a no-op (no uv invocation).
-	if err := os.WriteFile(getUVInterpreterPath(appEnvPath), []byte("python"), 0755); err != nil {
+	if err := os.WriteFile(getUVInterpreterPath(appEnvPath), []byte("python"), 0o755); err != nil {
 		t.Fatalf("failed to write fake interpreter: %v", err)
 	}
 
-	if err := rm.InstallUVApp("yamllint", appConfig, nil, nil, nil); err != nil {
+	if err := rm.InstallUVApp(context.Background(), "yamllint", appConfig, nil, nil, nil); err != nil {
 		t.Errorf("InstallUVApp() error = %v, expected nil for healthy venv", err)
 	}
 
@@ -478,6 +471,7 @@ func TestInstallUVAppDanglingVenvRebuilds(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink semantics differ on windows")
 	}
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 	runtimes := makeTestRuntimes()
 	rm := New(runtimes)
 
@@ -494,10 +488,10 @@ func TestInstallUVAppDanglingVenvRebuilds(t *testing.T) {
 	defer func() { _ = os.RemoveAll(appEnvPath) }()
 
 	binPath := getUVBinaryPath(appEnvPath, "yamllint")
-	if err := os.MkdirAll(filepath.Dir(binPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(binPath), 0o755); err != nil {
 		t.Fatalf("failed to create dir: %v", err)
 	}
-	if err := os.WriteFile(binPath, []byte("#!/bin/sh\necho ok"), 0755); err != nil {
+	if err := os.WriteFile(binPath, []byte("#!/bin/sh\necho ok"), 0o755); err != nil {
 		t.Fatalf("failed to write fake binary: %v", err)
 	}
 	// Dangling interpreter symlink: the wrapper exists but the venv is broken.
@@ -509,7 +503,7 @@ func TestInstallUVAppDanglingVenvRebuilds(t *testing.T) {
 	// fails here because the test uv runtime is not actually downloaded. The key
 	// assertion is that it did not return nil (i.e. it did not treat the broken
 	// venv as installed).
-	err = rm.InstallUVApp("yamllint", appConfig, nil, nil, nil)
+	err = rm.InstallUVApp(context.Background(), "yamllint", appConfig, nil, nil, nil)
 	if err == nil {
 		t.Error("expected dangling venv to trigger a rebuild attempt, got nil (treated as installed)")
 	}
@@ -620,13 +614,7 @@ func TestBuildUVInstallArgs(t *testing.T) {
 
 	t.Run("with lockfile: --no-build must be present", func(t *testing.T) {
 		args := buildUVInstallArgs("version = 1\n", nil)
-		found := false
-		for _, a := range args {
-			if a == "--no-build" {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(args, "--no-build")
 		if !found {
 			t.Error("--no-build must be present when a lockfile is supplied (supply chain hardening)")
 		}
@@ -647,7 +635,7 @@ func equalStringSlices(a, b []string) bool {
 
 func TestBuildPyprojectTOML(t *testing.T) {
 	t.Run("with version", func(t *testing.T) {
-		result := buildPyprojectTOML("yamllint", "yamllint", "1.38.0", ">=3.12")
+		result := buildPyprojectTOML("yamllint", "1.38.0", ">=3.12")
 		if !strings.Contains(result, `name = "datamitsu-yamllint"`) {
 			t.Error("missing project name")
 		}
@@ -660,7 +648,7 @@ func TestBuildPyprojectTOML(t *testing.T) {
 	})
 
 	t.Run("without version", func(t *testing.T) {
-		result := buildPyprojectTOML("ruff", "ruff", "", ">=3.12")
+		result := buildPyprojectTOML("ruff", "", ">=3.12")
 		if !strings.Contains(result, `"ruff"`) {
 			t.Error("missing unversioned dependency")
 		}
@@ -670,7 +658,7 @@ func TestBuildPyprojectTOML(t *testing.T) {
 	})
 
 	t.Run("scoped package name", func(t *testing.T) {
-		result := buildPyprojectTOML("myapp", "@scope/pkg", "1.0.0", ">=3.12")
+		result := buildPyprojectTOML("@scope/pkg", "1.0.0", ">=3.12")
 		if !strings.Contains(result, `name = "datamitsu-scope-pkg"`) {
 			t.Errorf("@ should be removed, / replaced with -: got %s", result)
 		}
@@ -680,14 +668,14 @@ func TestBuildPyprojectTOML(t *testing.T) {
 	})
 
 	t.Run("newlines in values are escaped", func(t *testing.T) {
-		result := buildPyprojectTOML("test", "pkg\ninjected", "1.0\r\nevil", ">=3.12")
+		result := buildPyprojectTOML("pkg\ninjected", "1.0\r\nevil", ">=3.12")
 		if strings.Contains(result, "\ninjected") || strings.Contains(result, "\r\nevil") {
 			t.Errorf("newlines should be escaped in TOML output: got %s", result)
 		}
 	})
 
 	t.Run("custom requires-python", func(t *testing.T) {
-		result := buildPyprojectTOML("yamllint", "yamllint", "1.38.0", ">=3.10")
+		result := buildPyprojectTOML("yamllint", "1.38.0", ">=3.10")
 		if !strings.Contains(result, `requires-python = ">=3.10"`) {
 			t.Errorf("expected requires-python = \">=3.10\", got %s", result)
 		}

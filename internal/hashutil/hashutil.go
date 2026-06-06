@@ -1,8 +1,11 @@
+// Package hashutil provides XXH3-128 hashing helpers for internal cache keys,
+// fingerprints and invalidation keys.
 package hashutil
 
 import (
 	"encoding/binary"
 	"encoding/hex"
+	"fmt"
 	"io"
 
 	"github.com/zeebo/xxh3"
@@ -48,7 +51,7 @@ func XXH3Multi(parts ...[]byte) string {
 func XXH3Reader(r io.Reader) (string, error) {
 	h := xxh3.New128()
 	if _, err := io.Copy(h, r); err != nil {
-		return "", err
+		return "", fmt.Errorf("read data for hashing: %w", err)
 	}
 	buf := uint128ToBytes(h.Sum128())
 	return hex.EncodeToString(buf[:]), nil

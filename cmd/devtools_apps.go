@@ -1,13 +1,14 @@
 package cmd
 
 import (
-	"github.com/datamitsu/datamitsu/internal/binmanager"
-	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
+
+	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
@@ -74,12 +75,12 @@ func runAppsList(cmd *cobra.Command, args []string) error {
 
 		line := fmt.Sprintf("%s (%s)", info.Name, info.Type)
 		if info.Version != "" {
-			line += fmt.Sprintf(" %s", info.Version)
+			line += " " + info.Version
 		}
 		if info.Description != "" {
-			line += fmt.Sprintf(" - %s", info.Description)
+			line += " - " + info.Description
 		}
-		line += fmt.Sprintf(" - %s", status)
+		line += " - " + status
 
 		fmt.Println(line)
 	}
@@ -213,7 +214,7 @@ func countFiles(dir string) int {
 	count := 0
 	_ = filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
-			return nil
+			return nil //nolint:nilerr // best-effort count: skip unreadable entries, keep walking
 		}
 		if d.Type()&fs.ModeSymlink != 0 {
 			return nil

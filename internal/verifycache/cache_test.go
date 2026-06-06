@@ -65,7 +65,7 @@ func TestLoadState(t *testing.T) {
 	t.Run("returns error on corrupt JSON", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		path := filepath.Join(tmpDir, "corrupt.json")
-		if err := os.WriteFile(path, []byte("not json{{{"), 0644); err != nil {
+		if err := os.WriteFile(path, []byte("not json{{{"), 0o644); err != nil {
 			t.Fatalf("failed to write test file: %v", err)
 		}
 
@@ -90,7 +90,7 @@ func TestLoadState(t *testing.T) {
 				}
 			}
 		}`
-		if err := os.WriteFile(path, []byte(data), 0644); err != nil {
+		if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
 			t.Fatalf("failed to write test file: %v", err)
 		}
 
@@ -538,7 +538,7 @@ func TestStateManagerRecord(t *testing.T) {
 		var wg sync.WaitGroup
 		wg.Add(n)
 
-		for i := 0; i < n; i++ {
+		for i := range n {
 			go func(idx int) {
 				defer wg.Done()
 				key := fmt.Sprintf("binary:app%d:linux:amd64", idx)

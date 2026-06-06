@@ -1,12 +1,13 @@
 package ignore
 
 import (
-	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/ldflags"
 )
 
 func TestBuildGroups(t *testing.T) {
-	specificGroups := []IgnoreGroup{
+	specificGroups := []Group{
 		{
 			Name:     "test-group",
 			Elements: []string{"*.test"},
@@ -144,7 +145,7 @@ func TestDebugCheck(t *testing.T) {
 func TestDebugCheckWithDuplicates(t *testing.T) {
 	originalMap := ignoreGroupMap
 
-	duplicateMap := IgnoreGroupMap{
+	duplicateMap := GroupMap{
 		"group1": {
 			Pattern: []string{"**/node_modules", "**/.next"},
 			Git:     true,

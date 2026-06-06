@@ -1,13 +1,14 @@
 package cmd
 
 import (
-	"github.com/datamitsu/datamitsu/internal/binmanager"
-	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 )
 
 func TestConfigLockfileCommandRegistered(t *testing.T) {
@@ -308,7 +309,7 @@ func TestReadLockFile_Node(t *testing.T) {
 	tmpDir := t.TempDir()
 	lockContent := "lockfileVersion: '9.0'\n"
 
-	if err := os.WriteFile(filepath.Join(tmpDir, "pnpm-lock.yaml"), []byte(lockContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "pnpm-lock.yaml"), []byte(lockContent), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -332,7 +333,7 @@ func TestReadLockFile_UV(t *testing.T) {
 	tmpDir := t.TempDir()
 	lockContent := "version = 1\n"
 
-	if err := os.WriteFile(filepath.Join(tmpDir, "uv.lock"), []byte(lockContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "uv.lock"), []byte(lockContent), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -357,10 +358,10 @@ func TestReadLockFile_Go(t *testing.T) {
 	goMod := "module datamitsu-govulncheck\n\ngo 1.22\n\nrequire golang.org/x/vuln v1.1.4\n"
 	goSum := "golang.org/x/vuln v1.1.4 h1:abc=\ngolang.org/x/vuln v1.1.4/go.mod h1:def=\n"
 
-	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(tmpDir, "go.sum"), []byte(goSum), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.sum"), []byte(goSum), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -389,7 +390,7 @@ func TestReadLockFile_Go(t *testing.T) {
 func TestReadLockFile_GoMissingGoMod(t *testing.T) {
 	tmpDir := t.TempDir()
 	// Only go.sum present; go.mod is missing.
-	if err := os.WriteFile(filepath.Join(tmpDir, "go.sum"), []byte("x"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.sum"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -450,10 +451,10 @@ func TestGenerateGoLockContent_RemovesTempWorkDirOnSuccess(t *testing.T) {
 	var capturedWorkDir string
 	content, err := generateGoLockContent("govulncheck", app, func(workDir string) error {
 		capturedWorkDir = workDir
-		if err := os.WriteFile(filepath.Join(workDir, "go.mod"), []byte(goMod), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(workDir, "go.mod"), []byte(goMod), 0o644); err != nil {
 			return err
 		}
-		return os.WriteFile(filepath.Join(workDir, "go.sum"), []byte(goSum), 0644)
+		return os.WriteFile(filepath.Join(workDir, "go.sum"), []byte(goSum), 0o644)
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -681,4 +682,3 @@ func TestClearAppLockFile_MissingAppReturnsCopy(t *testing.T) {
 		t.Errorf("unrelated app.LockFile = %q, want %q", fresh["mmdc"].Node.LockFile, "x")
 	}
 }
-

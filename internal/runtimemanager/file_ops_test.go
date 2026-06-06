@@ -12,7 +12,7 @@ func TestMoveFile(t *testing.T) {
 		src := filepath.Join(dir, "src.txt")
 		dst := filepath.Join(dir, "dst.txt")
 
-		if err := os.WriteFile(src, []byte("hello"), 0644); err != nil {
+		if err := os.WriteFile(src, []byte("hello"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 
@@ -38,7 +38,7 @@ func TestMoveFile(t *testing.T) {
 		src := filepath.Join(dir, "exec")
 		dst := filepath.Join(dir, "exec-dst")
 
-		if err := os.WriteFile(src, []byte("#!/bin/sh"), 0755); err != nil {
+		if err := os.WriteFile(src, []byte("#!/bin/sh"), 0o755); err != nil {
 			t.Fatal(err)
 		}
 
@@ -51,7 +51,7 @@ func TestMoveFile(t *testing.T) {
 			t.Fatalf("stat error = %v", err)
 		}
 
-		if info.Mode().Perm()&0100 == 0 {
+		if info.Mode().Perm()&0o100 == 0 {
 			t.Error("dst should be executable")
 		}
 	})
@@ -62,7 +62,7 @@ func TestMoveFile(t *testing.T) {
 		src := filepath.Join(dir1, "file.bin")
 		dst := filepath.Join(dir2, "file.bin")
 
-		if err := os.WriteFile(src, []byte("binary data"), 0644); err != nil {
+		if err := os.WriteFile(src, []byte("binary data"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 
@@ -94,7 +94,7 @@ func TestMoveRuntimeFiles(t *testing.T) {
 		src := filepath.Join(dir, "runtime-binary")
 		dst := filepath.Join(dir, "cache", "pnpm", "abc123")
 
-		if err := os.WriteFile(src, []byte("pnpm-binary"), 0755); err != nil {
+		if err := os.WriteFile(src, []byte("pnpm-binary"), 0o755); err != nil {
 			t.Fatal(err)
 		}
 
@@ -117,7 +117,7 @@ func TestMoveRuntimeFiles(t *testing.T) {
 		dstBase := filepath.Join(dir, "cache", "uv", "abc123")
 		bp := "uv-x86_64-unknown-linux-gnu/uv"
 
-		if err := os.WriteFile(src, []byte("uv-binary"), 0755); err != nil {
+		if err := os.WriteFile(src, []byte("uv-binary"), 0o755); err != nil {
 			t.Fatal(err)
 		}
 
@@ -138,13 +138,13 @@ func TestMoveRuntimeFiles(t *testing.T) {
 	t.Run("directory source", func(t *testing.T) {
 		dir := t.TempDir()
 		srcDir := filepath.Join(dir, "extracted")
-		if err := os.MkdirAll(srcDir, 0755); err != nil {
+		if err := os.MkdirAll(srcDir, 0o755); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(srcDir, "bin1"), []byte("binary1"), 0755); err != nil {
+		if err := os.WriteFile(filepath.Join(srcDir, "bin1"), []byte("binary1"), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(srcDir, "bin2"), []byte("binary2"), 0755); err != nil {
+		if err := os.WriteFile(filepath.Join(srcDir, "bin2"), []byte("binary2"), 0o755); err != nil {
 			t.Fatal(err)
 		}
 

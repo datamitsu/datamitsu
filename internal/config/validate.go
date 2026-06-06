@@ -527,6 +527,8 @@ func ValidateBundles(bundles binmanager.MapOfBundles, apps binmanager.MapOfApps)
 	return nil
 }
 
+// ValidateRuntimes checks each runtime entry's kind-specific and mode-specific
+// configuration, returning a combined error describing all problems found.
 func ValidateRuntimes(runtimes MapOfRuntimes) error {
 	var errs []string
 

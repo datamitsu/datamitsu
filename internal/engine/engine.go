@@ -1,15 +1,21 @@
+// Package engine builds and drives the goja JavaScript runtime used to
+// evaluate datamitsu configuration, exposing facts, console, colors, formats
+// and tool helpers to config scripts.
 package engine
 
 import (
 	"context"
-	"github.com/datamitsu/datamitsu/internal/facts"
 	"fmt"
 	"os"
 	"time"
 
+	"github.com/datamitsu/datamitsu/internal/facts"
+
 	"github.com/dop251/goja"
 )
 
+// Engine wraps a goja runtime together with the collected project facts and
+// the resolved root path used when evaluating config scripts.
 type Engine struct {
 	vm       *goja.Runtime
 	facts    *facts.Facts
@@ -20,7 +26,9 @@ type Engine struct {
 // It must be nil in production; tests set it to simulate failure scenarios.
 var testInitHook func(*Engine)
 
-func New(binaryCommandOverride string) (e *Engine, err error) {
+// New collects environment facts and constructs an Engine with a fully
+// initialized goja runtime ready to evaluate datamitsu config scripts.
+func New(ctx context.Context, binaryCommandOverride string) (e *Engine, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("engine initialization panic: %v", r)
@@ -28,7 +36,7 @@ func New(binaryCommandOverride string) (e *Engine, err error) {
 	}()
 
 	// Collect facts about the environment
-	projectFacts, gitRoot, err := facts.Collect(context.Background(), binaryCommandOverride)
+	projectFacts, gitRoot, err := facts.Collect(ctx, binaryCommandOverride)
 	if err != nil {
 		return nil, err
 	}
@@ -62,12 +70,54 @@ func New(binaryCommandOverride string) (e *Engine, err error) {
 	return e, nil
 }
 
+// VM returns the underlying goja runtime backing the engine.
 func (e *Engine) VM() *goja.Runtime {
 	return e.vm
 }
 
+// Facts returns the project facts collected when the engine was created.
 func (e *Engine) Facts() *facts.Facts {
 	return e.facts
+}
+
+// RunWithTimeout executes a JS script string with a watchdog timeout.
+func (e *Engine) RunWithTimeout(script string, timeout time.Duration) (goja.Value, error) {
+	done := e.withTimeout(timeout)
+	val, err := e.vm.RunString(script)
+	done()
+	e.vm.ClearInterrupt()
+	if err != nil {
+		return val, fmt.Errorf("run script: %w", err)
+	}
+	return val, nil
+}
+
+// CallWithTimeout invokes a goja.Callable with a watchdog timeout.
+func (e *Engine) CallWithTimeout(fn goja.Callable, timeout time.Duration, args ...goja.Value) (goja.Value, error) {
+	done := e.withTimeout(timeout)
+	val, err := fn(goja.Undefined(), args...)
+	done()
+	e.vm.ClearInterrupt()
+	return val, err
+}
+
+// initFacts exposes the facts() function to JavaScript
+func (e *Engine) initFacts() {
+	_ = e.vm.Set("facts", func() goja.Value {
+		return e.vm.ToValue(e.facts)
+	})
+}
+
+// computeRootPath returns git root if non-empty, otherwise cwd.
+func computeRootPath(gitRoot string) (string, error) {
+	if gitRoot != "" {
+		return gitRoot, nil
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("get working directory: %w", err)
+	}
+	return cwd, nil
 }
 
 // withTimeout arms a watchdog goroutine that interrupts the VM after timeout.
@@ -93,37 +143,4 @@ func (e *Engine) withTimeout(timeout time.Duration) (done func()) {
 		close(doneCh)
 		<-exitCh
 	}
-}
-
-// RunWithTimeout executes a JS script string with a watchdog timeout.
-func (e *Engine) RunWithTimeout(script string, timeout time.Duration) (goja.Value, error) {
-	done := e.withTimeout(timeout)
-	val, err := e.vm.RunString(script)
-	done()
-	e.vm.ClearInterrupt()
-	return val, err
-}
-
-// CallWithTimeout invokes a goja.Callable with a watchdog timeout.
-func (e *Engine) CallWithTimeout(fn goja.Callable, timeout time.Duration, args ...goja.Value) (goja.Value, error) {
-	done := e.withTimeout(timeout)
-	val, err := fn(goja.Undefined(), args...)
-	done()
-	e.vm.ClearInterrupt()
-	return val, err
-}
-
-// initFacts exposes the facts() function to JavaScript
-func (e *Engine) initFacts() {
-	_ = e.vm.Set("facts", func() goja.Value {
-		return e.vm.ToValue(e.facts)
-	})
-}
-
-// computeRootPath returns git root if non-empty, otherwise cwd.
-func computeRootPath(gitRoot string) (string, error) {
-	if gitRoot != "" {
-		return gitRoot, nil
-	}
-	return os.Getwd()
 }

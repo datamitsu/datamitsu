@@ -1,8 +1,10 @@
 package remotecfg
 
 import (
-	"github.com/datamitsu/datamitsu/internal/logger"
+	"context"
 	"fmt"
+
+	"github.com/datamitsu/datamitsu/internal/logger"
 
 	"go.uber.org/zap"
 )
@@ -13,7 +15,7 @@ var log = logger.Logger.With(zap.Namespace("remotecfg"))
 // If a cached file exists and its hash matches expectedHash, it returns the
 // cached content without a network request. Otherwise it fetches, verifies
 // the hash, and saves to cache.
-func Resolve(url, expectedHash, cacheDir string) (string, error) {
+func Resolve(ctx context.Context, url, expectedHash, cacheDir string) (string, error) {
 	if expectedHash == "" {
 		return "", fmt.Errorf("remote config %s: hash is required", url)
 	}
@@ -33,7 +35,7 @@ func Resolve(url, expectedHash, cacheDir string) (string, error) {
 		log.Debug("cached remote config hash mismatch, fetching fresh", zap.String("url", url))
 	}
 
-	content, fetchErr := FetchRemoteConfig(url, expectedHash)
+	content, fetchErr := FetchRemoteConfig(ctx, url, expectedHash)
 	if fetchErr != nil {
 		return "", fmt.Errorf("failed to fetch remote config %s: %w", url, fetchErr)
 	}

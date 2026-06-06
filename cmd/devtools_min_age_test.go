@@ -1,10 +1,11 @@
 package cmd
 
 import (
-	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 
 	"github.com/spf13/cobra"
 )

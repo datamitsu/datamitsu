@@ -1,8 +1,9 @@
 package cmd
 
 import (
-	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"fmt"
+
+	"github.com/datamitsu/datamitsu/internal/ldflags"
 
 	"github.com/spf13/cobra"
 )

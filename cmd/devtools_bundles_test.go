@@ -1,9 +1,10 @@
 package cmd
 
 import (
-	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"sort"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/binmanager"
 )
 
 func TestCollectBundleEntries(t *testing.T) {

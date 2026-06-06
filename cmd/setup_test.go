@@ -1,16 +1,17 @@
 package cmd
 
 import (
-	"github.com/datamitsu/datamitsu/internal/bundled"
-	"github.com/datamitsu/datamitsu/internal/config"
-	"github.com/datamitsu/datamitsu/internal/datamitsuignore"
-	"github.com/datamitsu/datamitsu/internal/install"
-	"fmt"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/bundled"
+	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/datamitsuignore"
+	"github.com/datamitsu/datamitsu/internal/install"
 
 	"github.com/dop251/goja"
 )
@@ -43,6 +44,7 @@ func TestDeduplicateGitRootResults(t *testing.T) {
 			},
 			expected: 1,
 			check: func(t *testing.T, results []install.InstallResult) {
+				t.Helper()
 				if results[0].ConfigName != "lefthook.yml" {
 					t.Errorf("kept result ConfigName = %q, want %q", results[0].ConfigName, "lefthook.yml")
 				}
@@ -83,6 +85,7 @@ func TestDeduplicateGitRootResults(t *testing.T) {
 			},
 			expected: 3,
 			check: func(t *testing.T, results []install.InstallResult) {
+				t.Helper()
 				gitRootCount := 0
 				for _, r := range results {
 					if r.FilePath == "/repo/lefthook.yml" {
@@ -111,6 +114,7 @@ func TestDeduplicateGitRootResults(t *testing.T) {
 			},
 			expected: 2,
 			check: func(t *testing.T, results []install.InstallResult) {
+				t.Helper()
 				if results[0].FilePath != "/repo/a.yml" {
 					t.Errorf("first result FilePath = %q, want %q", results[0].FilePath, "/repo/a.yml")
 				}
@@ -123,11 +127,12 @@ func TestDeduplicateGitRootResults(t *testing.T) {
 			name: "dedup prefers error result over success",
 			input: []install.InstallResult{
 				{ConfigName: "lefthook.yml", FilePath: "/repo/lefthook.yml", Scope: config.ScopeGitRoot, Action: "created"},
-				{ConfigName: "lefthook.yml", FilePath: "/repo/lefthook.yml", Scope: config.ScopeGitRoot, Action: "created", Error: fmt.Errorf("content generation failed")},
+				{ConfigName: "lefthook.yml", FilePath: "/repo/lefthook.yml", Scope: config.ScopeGitRoot, Action: "created", Error: errors.New("content generation failed")},
 				{ConfigName: "lefthook.yml", FilePath: "/repo/lefthook.yml", Scope: config.ScopeGitRoot, Action: "created"},
 			},
 			expected: 1,
 			check: func(t *testing.T, results []install.InstallResult) {
+				t.Helper()
 				if results[0].Error == nil {
 					t.Error("dedup should prefer the result with an error")
 				}
@@ -141,6 +146,7 @@ func TestDeduplicateGitRootResults(t *testing.T) {
 			},
 			expected: 1,
 			check: func(t *testing.T, results []install.InstallResult) {
+				t.Helper()
 				if results[0].Action != "created" {
 					t.Errorf("Action = %q, want %q (should keep first)", results[0].Action, "created")
 				}
@@ -199,7 +205,7 @@ func TestBuildOptInIgnoreContent(t *testing.T) {
 
 	// Exactly one non-comment, non-blank line.
 	ruleLines := 0
-	for _, line := range strings.Split(content, "\n") {
+	for line := range strings.SplitSeq(content, "\n") {
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
 			continue
@@ -418,7 +424,6 @@ func TestSetupPassesLayerMapToNewInstaller(t *testing.T) {
 				{
 					LayerName:        "default",
 					GeneratedContent: &content,
-
 				},
 			},
 			FinalConfig: config.ConfigInit{},
@@ -451,7 +456,6 @@ func TestDryRunModeLayerHistoryStillBuilt(t *testing.T) {
 				{
 					LayerName:        "default",
 					GeneratedContent: &content,
-
 				},
 			},
 			FinalConfig: config.ConfigInit{Scope: config.ScopeGitRoot},

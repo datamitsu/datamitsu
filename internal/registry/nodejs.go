@@ -1,7 +1,9 @@
 package registry
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,20 +13,26 @@ import (
 const nodejsFallbackLTSVersion = "24.14.0"
 
 type nodejsRelease struct {
-	Cycle  string      `json:"cycle"`
-	Latest string      `json:"latest"`
-	LTS    interface{} `json:"lts"`
-	EOL    interface{} `json:"eol"`
+	Cycle  string `json:"cycle"`
+	Latest string `json:"latest"`
+	LTS    any    `json:"lts"`
+	EOL    any    `json:"eol"`
 }
 
 var nodejsHTTPClient = &http.Client{Timeout: 15 * time.Second}
 
-func GetLatestNodeLTSVersion() (string, error) {
-	return getLatestNodeLTSVersionFromURL("https://endoflife.date/api/nodejs.json")
+// GetLatestNodeLTSVersion returns the latest non-EOL Node.js LTS version from
+// endoflife.date, falling back to a pinned version on failure.
+func GetLatestNodeLTSVersion(ctx context.Context) (string, error) {
+	return getLatestNodeLTSVersionFromURL(ctx, "https://endoflife.date/api/nodejs.json")
 }
 
-func getLatestNodeLTSVersionFromURL(url string) (string, error) {
-	resp, err := nodejsHTTPClient.Get(url)
+func getLatestNodeLTSVersionFromURL(ctx context.Context, url string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nodejsFallbackLTSVersion, fmt.Errorf("failed to build request: %w", err)
+	}
+	resp, err := nodejsHTTPClient.Do(req)
 	if err != nil {
 		return nodejsFallbackLTSVersion, fmt.Errorf("failed to fetch Node.js releases: %w", err)
 	}
@@ -42,7 +50,7 @@ func getLatestNodeLTSVersionFromURL(url string) (string, error) {
 
 	version := filterLatestLTS(releases)
 	if version == "" {
-		return nodejsFallbackLTSVersion, fmt.Errorf("no LTS version found in Node.js releases")
+		return nodejsFallbackLTSVersion, errors.New("no LTS version found in Node.js releases")
 	}
 
 	return version, nil

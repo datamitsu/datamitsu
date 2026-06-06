@@ -1,12 +1,13 @@
 package tooling
 
 import (
-	"github.com/datamitsu/datamitsu/internal/config"
-	"github.com/datamitsu/datamitsu/internal/env"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
+
+	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/env"
 )
 
 // PlanFormatter defines interface for formatting execution plans
@@ -67,7 +68,8 @@ func getWorkingDirForTask(task Task, rootPath string) string {
 
 // buildCommandTemplate builds a command string with placeholders (not expanded)
 func buildCommandTemplate(task Task) string {
-	parts := []string{task.OpConfig.App}
+	parts := make([]string, 0, 1+len(task.OpConfig.Args))
+	parts = append(parts, task.OpConfig.App)
 	parts = append(parts, task.OpConfig.Args...)
 	return strings.Join(parts, " ")
 }

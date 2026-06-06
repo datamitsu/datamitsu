@@ -83,13 +83,19 @@ func ChildEnvHints() map[string]string {
 	return hints
 }
 
-// Convenience color functions for runner service output
-
+// Convenience color/style functions for runner service output. Each wraps its
+// arguments in the corresponding ANSI sequence (no-op when colors are disabled).
 var (
-	Red    = color.New(color.FgRed).SprintFunc()
-	Green  = color.New(color.FgGreen).SprintFunc()
+	// Red renders its arguments in red.
+	Red = color.New(color.FgRed).SprintFunc()
+	// Green renders its arguments in green.
+	Green = color.New(color.FgGreen).SprintFunc()
+	// Yellow renders its arguments in yellow.
 	Yellow = color.New(color.FgYellow).SprintFunc()
-	Cyan   = color.New(color.FgCyan).SprintFunc()
-	Bold   = color.New(color.Bold).SprintFunc()
-	Faint  = color.New(color.Faint).SprintFunc()
+	// Cyan renders its arguments in cyan.
+	Cyan = color.New(color.FgCyan).SprintFunc()
+	// Bold renders its arguments in bold.
+	Bold = color.New(color.Bold).SprintFunc()
+	// Faint renders its arguments faint (dimmed).
+	Faint = color.New(color.Faint).SprintFunc()
 )

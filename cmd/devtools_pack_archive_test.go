@@ -3,8 +3,6 @@ package cmd
 import (
 	"archive/tar"
 	"bytes"
-	"github.com/datamitsu/datamitsu/internal/binmanager"
-	"github.com/datamitsu/datamitsu/internal/constants"
 	"io"
 	"os"
 	"path/filepath"
@@ -12,6 +10,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/constants"
 )
 
 func TestPackInlineArchiveSingleFile(t *testing.T) {
@@ -273,9 +274,9 @@ func TestPackInlineArchiveDeterminism(t *testing.T) {
 	dir := t.TempDir()
 
 	files := map[string]string{
-		"a.txt":       "content a",
-		"sub/b.txt":   "content b",
-		"z.txt":       "content z",
+		"a.txt":     "content a",
+		"sub/b.txt": "content b",
+		"z.txt":     "content z",
 	}
 
 	for path, content := range files {

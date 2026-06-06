@@ -87,12 +87,12 @@ func TestDiff(t *testing.T) {
 func TestFindFiles(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	_ = os.WriteFile(filepath.Join(tmpDir, "file1.txt"), []byte(""), 0644)
-	_ = os.WriteFile(filepath.Join(tmpDir, "file2.txt"), []byte(""), 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "file1.txt"), []byte(""), 0o644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "file2.txt"), []byte(""), 0o644)
 
 	subdir := filepath.Join(tmpDir, "subdir")
-	_ = os.MkdirAll(subdir, 0755)
-	_ = os.WriteFile(filepath.Join(subdir, "file3.txt"), []byte(""), 0644)
+	_ = os.MkdirAll(subdir, 0o755)
+	_ = os.WriteFile(filepath.Join(subdir, "file3.txt"), []byte(""), 0o644)
 
 	ctx := context.Background()
 	files, err := FindFiles(ctx, tmpDir)
@@ -128,14 +128,14 @@ func TestFindFilesWithGitignore(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	gitignore := filepath.Join(tmpDir, ".gitignore")
-	_ = os.WriteFile(gitignore, []byte("*.log\nignored/\n"), 0644)
+	_ = os.WriteFile(gitignore, []byte("*.log\nignored/\n"), 0o644)
 
-	_ = os.WriteFile(filepath.Join(tmpDir, "file.txt"), []byte(""), 0644)
-	_ = os.WriteFile(filepath.Join(tmpDir, "file.log"), []byte(""), 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "file.txt"), []byte(""), 0o644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "file.log"), []byte(""), 0o644)
 
 	ignoredDir := filepath.Join(tmpDir, "ignored")
-	_ = os.MkdirAll(ignoredDir, 0755)
-	_ = os.WriteFile(filepath.Join(ignoredDir, "file.txt"), []byte(""), 0644)
+	_ = os.MkdirAll(ignoredDir, 0o755)
+	_ = os.WriteFile(filepath.Join(ignoredDir, "file.txt"), []byte(""), 0o644)
 
 	ctx := context.Background()
 	files, err := FindFiles(ctx, tmpDir)
@@ -168,10 +168,10 @@ func TestFindFilesSkipsGitDir(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	gitDir := filepath.Join(tmpDir, ".git")
-	_ = os.MkdirAll(gitDir, 0755)
-	_ = os.WriteFile(filepath.Join(gitDir, "config"), []byte(""), 0644)
+	_ = os.MkdirAll(gitDir, 0o755)
+	_ = os.WriteFile(filepath.Join(gitDir, "config"), []byte(""), 0o644)
 
-	_ = os.WriteFile(filepath.Join(tmpDir, "file.txt"), []byte(""), 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "file.txt"), []byte(""), 0o644)
 
 	ctx := context.Background()
 	files, err := FindFiles(ctx, tmpDir)
@@ -190,17 +190,17 @@ func TestFindFilesNestedGitignore(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	rootGitignore := filepath.Join(tmpDir, ".gitignore")
-	_ = os.WriteFile(rootGitignore, []byte("*.log\n"), 0644)
+	_ = os.WriteFile(rootGitignore, []byte("*.log\n"), 0o644)
 
 	subdir := filepath.Join(tmpDir, "subdir")
-	_ = os.MkdirAll(subdir, 0755)
+	_ = os.MkdirAll(subdir, 0o755)
 	subdirGitignore := filepath.Join(subdir, ".gitignore")
-	_ = os.WriteFile(subdirGitignore, []byte("*.tmp\n"), 0644)
+	_ = os.WriteFile(subdirGitignore, []byte("*.tmp\n"), 0o644)
 
-	_ = os.WriteFile(filepath.Join(tmpDir, "root.txt"), []byte(""), 0644)
-	_ = os.WriteFile(filepath.Join(tmpDir, "root.log"), []byte(""), 0644)
-	_ = os.WriteFile(filepath.Join(subdir, "sub.txt"), []byte(""), 0644)
-	_ = os.WriteFile(filepath.Join(subdir, "sub.tmp"), []byte(""), 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "root.txt"), []byte(""), 0o644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "root.log"), []byte(""), 0o644)
+	_ = os.WriteFile(filepath.Join(subdir, "sub.txt"), []byte(""), 0o644)
+	_ = os.WriteFile(filepath.Join(subdir, "sub.tmp"), []byte(""), 0o644)
 
 	ctx := context.Background()
 	files, err := FindFiles(ctx, tmpDir)
@@ -240,8 +240,8 @@ func TestFindFilesNestedGitignore(t *testing.T) {
 func TestWalk(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	_ = os.WriteFile(filepath.Join(tmpDir, "file1.txt"), []byte(""), 0644)
-	_ = os.WriteFile(filepath.Join(tmpDir, "file2.txt"), []byte(""), 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "file1.txt"), []byte(""), 0o644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "file2.txt"), []byte(""), 0o644)
 
 	git := NewGitIgnore(tmpDir)
 	_ = git.Compile()
@@ -287,11 +287,11 @@ func TestWalkEmptyDirectory(t *testing.T) {
 func TestWalkContextCancellation(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		subdir := filepath.Join(tmpDir, fmt.Sprintf("dir%d", i))
-		_ = os.MkdirAll(subdir, 0755)
-		for j := 0; j < 10; j++ {
-			_ = os.WriteFile(filepath.Join(subdir, fmt.Sprintf("file%d.txt", j)), []byte(""), 0644)
+		_ = os.MkdirAll(subdir, 0o755)
+		for j := range 10 {
+			_ = os.WriteFile(filepath.Join(subdir, fmt.Sprintf("file%d.txt", j)), []byte(""), 0o644)
 		}
 	}
 
@@ -316,7 +316,7 @@ func TestWalkContextCancellation(t *testing.T) {
 func TestWalkSkipsSymlinks(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	_ = os.WriteFile(filepath.Join(tmpDir, "real.txt"), []byte("content"), 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "real.txt"), []byte("content"), 0o644)
 
 	targetFile := filepath.Join(tmpDir, "real.txt")
 	symlinkFile := filepath.Join(tmpDir, "link.txt")
@@ -326,8 +326,8 @@ func TestWalkSkipsSymlinks(t *testing.T) {
 
 	symlinkDir := filepath.Join(tmpDir, "linkdir")
 	subdir := filepath.Join(tmpDir, "subdir")
-	_ = os.MkdirAll(subdir, 0755)
-	_ = os.WriteFile(filepath.Join(subdir, "nested.txt"), []byte("nested"), 0644)
+	_ = os.MkdirAll(subdir, 0o755)
+	_ = os.WriteFile(filepath.Join(subdir, "nested.txt"), []byte("nested"), 0o644)
 	if err := os.Symlink(subdir, symlinkDir); err != nil {
 		t.Skipf("directory symlinks not supported: %v", err)
 	}
@@ -365,8 +365,8 @@ func TestWalkSkipsSymlinks(t *testing.T) {
 
 	for _, file := range files {
 		rel, _ := filepath.Rel(tmpDir, file)
-		parts := strings.Split(filepath.ToSlash(rel), "/")
-		for _, p := range parts {
+		parts := strings.SplitSeq(filepath.ToSlash(rel), "/")
+		for p := range parts {
 			if p == "linkdir" {
 				t.Errorf("files under symlinked directory should be skipped: %s", file)
 			}
@@ -378,10 +378,10 @@ func TestWalkDeepNesting(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	deep := tmpDir
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		deep = filepath.Join(deep, "level")
-		_ = os.MkdirAll(deep, 0755)
-		_ = os.WriteFile(filepath.Join(deep, "file.txt"), []byte(""), 0644)
+		_ = os.MkdirAll(deep, 0o755)
+		_ = os.WriteFile(filepath.Join(deep, "file.txt"), []byte(""), 0o644)
 	}
 
 	ctx := context.Background()

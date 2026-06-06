@@ -14,17 +14,11 @@ import (
 
 func TestCacheConcurrentAccess(t *testing.T) {
 	// Create temporary directory for cache
-	tmpDir, err := os.MkdirTemp("", "cache-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer func() {
-		_ = os.RemoveAll(tmpDir)
-	}()
+	tmpDir := t.TempDir()
 
 	// Create a test project path
 	projectPath := filepath.Join(tmpDir, "project")
-	if err := os.MkdirAll(projectPath, 0755); err != nil {
+	if err := os.MkdirAll(projectPath, 0o755); err != nil {
 		t.Fatalf("failed to create project dir: %v", err)
 	}
 
@@ -32,7 +26,7 @@ func TestCacheConcurrentAccess(t *testing.T) {
 	testFiles := []string{"file1.go", "file2.go", "file3.go"}
 	for _, f := range testFiles {
 		filePath := filepath.Join(projectPath, f)
-		if err := os.WriteFile(filePath, []byte("package main\n"), 0644); err != nil {
+		if err := os.WriteFile(filePath, []byte("package main\n"), 0o644); err != nil {
 			t.Fatalf("failed to create test file: %v", err)
 		}
 	}
@@ -53,10 +47,10 @@ func TestCacheConcurrentAccess(t *testing.T) {
 	wg.Add(numGoroutines * 3) // 3 types of operations
 
 	// Concurrent ShouldRun checks
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		go func(id int) {
 			defer wg.Done()
-			for j := 0; j < numOperations; j++ {
+			for j := range numOperations {
 				file := filepath.Join(projectPath, testFiles[j%len(testFiles)])
 				cache.ShouldRun(file, "test-tool", OperationLint, true)
 			}
@@ -64,10 +58,10 @@ func TestCacheConcurrentAccess(t *testing.T) {
 	}
 
 	// Concurrent AfterLint updates
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		go func(id int) {
 			defer wg.Done()
-			for j := 0; j < numOperations; j++ {
+			for j := range numOperations {
 				file := filepath.Join(projectPath, testFiles[j%len(testFiles)])
 				_ = cache.AfterLint(file, "test-tool", true)
 			}
@@ -75,10 +69,10 @@ func TestCacheConcurrentAccess(t *testing.T) {
 	}
 
 	// Concurrent AfterFix updates
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		go func(id int) {
 			defer wg.Done()
-			for j := 0; j < numOperations; j++ {
+			for j := range numOperations {
 				file := filepath.Join(projectPath, testFiles[j%len(testFiles)])
 				_ = cache.AfterFix(file, "test-tool", true)
 			}
@@ -101,23 +95,17 @@ func TestCacheConcurrentAccess(t *testing.T) {
 
 func TestCacheConcurrentSave(t *testing.T) {
 	// Create temporary directory for cache
-	tmpDir, err := os.MkdirTemp("", "cache-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer func() {
-		_ = os.RemoveAll(tmpDir)
-	}()
+	tmpDir := t.TempDir()
 
 	// Create a test project path
 	projectPath := filepath.Join(tmpDir, "project")
-	if err := os.MkdirAll(projectPath, 0755); err != nil {
+	if err := os.MkdirAll(projectPath, 0o755); err != nil {
 		t.Fatalf("failed to create project dir: %v", err)
 	}
 
 	// Create test file
 	testFile := filepath.Join(projectPath, "test.go")
-	if err := os.WriteFile(testFile, []byte("package main\n"), 0644); err != nil {
+	if err := os.WriteFile(testFile, []byte("package main\n"), 0o644); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
@@ -136,7 +124,7 @@ func TestCacheConcurrentSave(t *testing.T) {
 
 	saveErrors := make(chan error, numGoroutines)
 
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		go func(id int) {
 			defer wg.Done()
 
@@ -175,16 +163,10 @@ func TestCacheConcurrentSave(t *testing.T) {
 }
 
 func TestInvalidationKeyFormat(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "cache-invalidation-key-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer func() {
-		_ = os.RemoveAll(tmpDir)
-	}()
+	tmpDir := t.TempDir()
 
 	projectPath := filepath.Join(tmpDir, "project")
-	if err := os.MkdirAll(projectPath, 0755); err != nil {
+	if err := os.MkdirAll(projectPath, 0o755); err != nil {
 		t.Fatalf("failed to create project dir: %v", err)
 	}
 
@@ -224,16 +206,10 @@ func TestInvalidationKeyFormat(t *testing.T) {
 }
 
 func TestContentHashFormat(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "cache-hash-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer func() {
-		_ = os.RemoveAll(tmpDir)
-	}()
+	tmpDir := t.TempDir()
 
 	testFile := filepath.Join(tmpDir, "test.txt")
-	if err := os.WriteFile(testFile, []byte("hello world\n"), 0644); err != nil {
+	if err := os.WriteFile(testFile, []byte("hello world\n"), 0o644); err != nil {
 		t.Fatalf("failed to write test file: %v", err)
 	}
 
@@ -263,7 +239,7 @@ func TestContentHashFormat(t *testing.T) {
 
 	// Different content produces different hash
 	testFile2 := filepath.Join(tmpDir, "test2.txt")
-	if err := os.WriteFile(testFile2, []byte("different content\n"), 0644); err != nil {
+	if err := os.WriteFile(testFile2, []byte("different content\n"), 0o644); err != nil {
 		t.Fatalf("failed to write test file: %v", err)
 	}
 	hash3, err := hashFile(testFile2)
@@ -274,4 +250,3 @@ func TestContentHashFormat(t *testing.T) {
 		t.Errorf("different file content should produce different hash")
 	}
 }
-

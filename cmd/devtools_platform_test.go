@@ -1,11 +1,13 @@
 package cmd
 
 import (
+	"context"
+	"testing"
+
 	"github.com/datamitsu/datamitsu/internal/appstate"
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/github"
 	"github.com/datamitsu/datamitsu/internal/syslist"
-	"testing"
 )
 
 // valid 64-char hex hashes for test assets
@@ -100,7 +102,7 @@ func TestBuildBinariesForApp_NestedStorageStructure(t *testing.T) {
 		Binaries: map[string]*appstate.BinariesEntry{},
 	}
 
-	entry, err := buildBinariesForApp("tool", release, "hash123", state)
+	entry, err := buildBinariesForApp(context.Background(), "tool", release, "hash123", state)
 	if err != nil {
 		t.Fatalf("buildBinariesForApp failed: %v", err)
 	}
@@ -166,7 +168,7 @@ func TestBuildBinariesForApp_DetectorCalledWithLibcType(t *testing.T) {
 		Binaries: map[string]*appstate.BinariesEntry{},
 	}
 
-	entry, err := buildBinariesForApp("app", release, "hash456", state)
+	entry, err := buildBinariesForApp(context.Background(), "app", release, "hash456", state)
 	if err != nil {
 		t.Fatalf("buildBinariesForApp failed: %v", err)
 	}
@@ -201,7 +203,7 @@ func TestBuildBinariesForApp_InitializesNestedMaps(t *testing.T) {
 		Binaries: map[string]*appstate.BinariesEntry{},
 	}
 
-	entry, err := buildBinariesForApp("tool", release, "hash789", state)
+	entry, err := buildBinariesForApp(context.Background(), "tool", release, "hash789", state)
 	if err != nil {
 		t.Fatalf("buildBinariesForApp failed: %v", err)
 	}
@@ -284,7 +286,7 @@ func TestBuildBinariesForApp_MapsExistBeforeWrite(t *testing.T) {
 		Assets:  assets,
 	}
 
-	entry, err := buildBinariesForApp("mytool", release, "hash", state)
+	entry, err := buildBinariesForApp(context.Background(), "mytool", release, "hash", state)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -328,7 +330,7 @@ func TestBuildBinariesForApp_ConfigHash(t *testing.T) {
 
 	release := &github.Release{TagName: "v1.0.0", Assets: assets}
 
-	entry, err := buildBinariesForApp("tool", release, "myhash", state)
+	entry, err := buildBinariesForApp(context.Background(), "tool", release, "myhash", state)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -350,7 +352,7 @@ func TestBuildBinariesForApp_CorrectContentType(t *testing.T) {
 		Binaries: map[string]*appstate.BinariesEntry{},
 	}
 
-	entry, err := buildBinariesForApp("tool", release, "hash", state)
+	entry, err := buildBinariesForApp(context.Background(), "tool", release, "hash", state)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -375,7 +377,7 @@ func TestBuildBinariesForApp_RejectsLibcMismatch(t *testing.T) {
 		Binaries: map[string]*appstate.BinariesEntry{},
 	}
 
-	entry, err := buildBinariesForApp("tool", release, "hash", state)
+	entry, err := buildBinariesForApp(context.Background(), "tool", release, "hash", state)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -409,7 +411,7 @@ func TestBuildBinariesForApp_DoesNotMutateStateOnFailure(t *testing.T) {
 		Binaries: map[string]*appstate.BinariesEntry{},
 	}
 
-	entry, err := buildBinariesForApp("tool", release, "hash", state)
+	entry, err := buildBinariesForApp(context.Background(), "tool", release, "hash", state)
 	if err == nil {
 		t.Fatal("expected error for no matching binaries")
 	}
@@ -439,7 +441,7 @@ func TestBuildBinariesForApp_DeduplicatesSingleLinuxBinary(t *testing.T) {
 		Binaries: map[string]*appstate.BinariesEntry{},
 	}
 
-	entry, err := buildBinariesForApp("tool", release, "hash", state)
+	entry, err := buildBinariesForApp(context.Background(), "tool", release, "hash", state)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -480,7 +482,7 @@ func TestBuildBinariesForApp_SeparateMuslBinariesNotDeduplicated(t *testing.T) {
 		Binaries: map[string]*appstate.BinariesEntry{},
 	}
 
-	entry, err := buildBinariesForApp("tool", release, "hash", state)
+	entry, err := buildBinariesForApp(context.Background(), "tool", release, "hash", state)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -524,7 +526,7 @@ func TestBuildBinariesForApp_NoDuplicateURLHashPairs(t *testing.T) {
 		Binaries: map[string]*appstate.BinariesEntry{},
 	}
 
-	entry, err := buildBinariesForApp("tool", release, "hash", state)
+	entry, err := buildBinariesForApp(context.Background(), "tool", release, "hash", state)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -545,7 +547,7 @@ func TestBuildBinariesForApp_NoDuplicateURLHashPairs(t *testing.T) {
 	}
 
 	for key, pairs := range seen {
-		for i := 0; i < len(pairs); i++ {
+		for i := range pairs {
 			for j := i + 1; j < len(pairs); j++ {
 				if pairs[i].url == pairs[j].url && pairs[i].hash == pairs[j].hash {
 					t.Errorf("%s has duplicate URL+hash: %s", key, pairs[i].url)

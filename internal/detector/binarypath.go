@@ -1,9 +1,12 @@
+// Package detector selects the best-matching release asset and binary path for
+// a target OS, architecture, and libc using scoring and filename heuristics.
 package detector
 
 import (
+	"strings"
+
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/syslist"
-	"strings"
 )
 
 // DetectBinaryPath attempts to determine the binary path within an archive
@@ -27,7 +30,7 @@ func DetectBinaryPathWithHistory(
 	}
 
 	// Try to learn from historical data first
-	if historicalPattern := extractBinaryPathPattern(historicalBinaries, osType, appName, filename); historicalPattern != nil {
+	if historicalPattern := extractBinaryPathPattern(historicalBinaries, osType, filename); historicalPattern != nil {
 		return historicalPattern
 	}
 
@@ -38,9 +41,9 @@ func DetectBinaryPathWithHistory(
 func detectBinaryPathHeuristic(appName string, filename string, osType syslist.OsType) *string {
 	// Common patterns to try (in order of likelihood)
 	patterns := []string{
-		appName,                    // Direct: "appName"
-		"bin/" + appName,           // In bin directory: "bin/appName"
-		appName + "/" + appName,    // Nested: "appName/appName"
+		appName,                 // Direct: "appName"
+		"bin/" + appName,        // In bin directory: "bin/appName"
+		appName + "/" + appName, // Nested: "appName/appName"
 	}
 
 	// Add .exe extension for Windows
@@ -54,10 +57,11 @@ func detectBinaryPathHeuristic(appName string, filename string, osType syslist.O
 
 	// Try to extract version from filename and add version-based patterns
 	if version := extractVersion(filename); version != "" {
-		versionedPatterns := []string{
-			appName + "-" + version + "/" + appName,  // "appName-v1.2.3/appName"
-			appName + "_" + version + "/" + appName,  // "appName_v1.2.3/appName"
-		}
+		versionedPatterns := make([]string, 0, 2+len(patterns))
+		versionedPatterns = append(versionedPatterns,
+			appName+"-"+version+"/"+appName, // "appName-v1.2.3/appName"
+			appName+"_"+version+"/"+appName, // "appName_v1.2.3/appName"
+		)
 		if osType == syslist.OsTypeWindows {
 			for i := range versionedPatterns {
 				versionedPatterns[i] += ".exe"
@@ -75,7 +79,7 @@ func detectBinaryPathHeuristic(appName string, filename string, osType syslist.O
 
 // extractBinaryPathPattern analyzes historical binaries for the same app
 // and extracts a common pattern to use for new versions
-func extractBinaryPathPattern(historicalBinaries binmanager.MapOfBinaries, osType syslist.OsType, appName string, filename string) *string {
+func extractBinaryPathPattern(historicalBinaries binmanager.MapOfBinaries, osType syslist.OsType, filename string) *string {
 	if len(historicalBinaries) == 0 {
 		return nil
 	}
@@ -106,13 +110,13 @@ func extractBinaryPathPattern(historicalBinaries binmanager.MapOfBinaries, osTyp
 		return nil
 	}
 
-	commonPattern := findCommonPattern(paths, appName, filename)
+	commonPattern := findCommonPattern(paths, filename)
 	return commonPattern
 }
 
 // findCommonPattern finds a common pattern among historical paths
 // and applies it to the new filename
-func findCommonPattern(paths []string, appName string, newFilename string) *string {
+func findCommonPattern(paths []string, newFilename string) *string {
 	if len(paths) == 0 {
 		return nil
 	}
@@ -147,8 +151,8 @@ func findCommonPattern(paths []string, appName string, newFilename string) *stri
 // extractVersionFromPath extracts version string from a path
 // Returns both the version and the part it was found in
 func extractVersionFromPath(path string) (string, string) {
-	parts := strings.Split(path, "/")
-	for _, part := range parts {
+	parts := strings.SplitSeq(path, "/")
+	for part := range parts {
 		if version := extractVersionFromString(part); version != "" {
 			return version, part
 		}
@@ -201,7 +205,7 @@ func isValidVersion(s string) bool {
 			return false
 		}
 		// Check if all characters are digits
-		for i := 0; i < len(part); i++ {
+		for i := range len(part) {
 			if !isDigit(part[i]) {
 				return false
 			}

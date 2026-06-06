@@ -2,7 +2,7 @@ package cmd
 
 import (
 	"bytes"
-	"fmt"
+	"errors"
 	"strings"
 	"testing"
 
@@ -33,7 +33,7 @@ func TestSilenceUsagePreventsUsageOnRuntimeError(t *testing.T) {
 	testRoot.AddCommand(&cobra.Command{
 		Use: "failing-sub",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return fmt.Errorf("runtime error occurred")
+			return errors.New("runtime error occurred")
 		},
 	})
 

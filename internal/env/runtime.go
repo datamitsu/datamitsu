@@ -8,26 +8,32 @@ import (
 	"github.com/datamitsu/datamitsu/internal/hashutil"
 )
 
+// GetRuntimesPath returns the root directory for managed runtimes ({store}/.runtimes).
 func GetRuntimesPath() string {
 	return filepath.Join(GetStorePath(), ".runtimes")
 }
 
+// GetRuntimeBinaryPath returns the install directory for a runtime, keyed by its config hash.
 func GetRuntimeBinaryPath(runtimeName string, configHash string) string {
 	return filepath.Join(GetRuntimesPath(), runtimeName, configHash)
 }
 
+// GetAppsPath returns the root directory for managed app environments ({store}/.apps).
 func GetAppsPath() string {
 	return filepath.Join(GetStorePath(), ".apps")
 }
 
+// GetAppEnvPath returns the per-app environment directory, keyed by runtime kind and config hash.
 func GetAppEnvPath(runtimeKind string, appName string, configHash string) string {
 	return filepath.Join(GetAppsPath(), runtimeKind, appName, configHash)
 }
 
+// GetPNPMStorePath returns the shared pnpm content-addressable store ({store}/.pnpm-store).
 func GetPNPMStorePath() string {
 	return filepath.Join(GetStorePath(), ".pnpm-store")
 }
 
+// GetPNPMPath returns the path to the pnpm CLI entrypoint within the given store root.
 func GetPNPMPath(storeRoot string, pnpmVersion string, pnpmHash string) string {
 	return filepath.Join(storeRoot, ".runtimes", "pnpm", pnpmVersion, pnpmHash, "package", "bin", "pnpm.cjs")
 }
@@ -38,6 +44,8 @@ func HashProjectPath(projectPath string) string {
 	return hashutil.XXH3Hex([]byte(projectPath))
 }
 
+// GetProjectCachePath returns a per-project, per-tool cache directory, rejecting
+// inputs that would escape the cache root.
 func GetProjectCachePath(gitRoot string, relativeProjectPath string, toolName string) (string, error) {
 	projectHash := HashProjectPath(gitRoot)
 

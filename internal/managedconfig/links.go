@@ -1,13 +1,18 @@
+// Package managedconfig sets up the project-local .datamitsu directory,
+// creating symlinks to managed binaries and writing supporting files such
+// as the .gitignore and TypeScript type definitions.
 package managedconfig
 
 import (
-	"github.com/datamitsu/datamitsu/internal/binmanager"
-	"github.com/datamitsu/datamitsu/internal/config"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/config"
 )
 
 // InstallRootResolver resolves install root paths for apps.
@@ -19,7 +24,7 @@ type InstallRootResolver interface {
 // It rejects absolute paths, parent traversal, and symlinks that escape.
 func validateLinkPath(path, installRoot string) error {
 	if path == "" {
-		return fmt.Errorf("link path must not be empty")
+		return errors.New("link path must not be empty")
 	}
 
 	cleaned := filepath.Clean(path)
@@ -164,7 +169,7 @@ func CreateDatamitsuLinks(gitRoot string, apps binmanager.MapOfApps, resolver In
 
 	datamitsuDir := filepath.Join(gitRoot, ".datamitsu")
 
-	if err := os.MkdirAll(gitRoot, 0755); err != nil {
+	if err := os.MkdirAll(gitRoot, 0o755); err != nil {
 		return nil, fmt.Errorf("failed to create git root directory: %w", err)
 	}
 
@@ -210,7 +215,7 @@ func CreateDatamitsuLinks(gitRoot string, apps binmanager.MapOfApps, resolver In
 		}
 		linkPath := filepath.Join(tmpDir, cleanedLinkName)
 
-		if err := os.MkdirAll(filepath.Dir(linkPath), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(linkPath), 0o755); err != nil {
 			return nil, fmt.Errorf("failed to create parent directory for link %s: %w", e.linkName, err)
 		}
 
@@ -240,7 +245,7 @@ func CreateDatamitsuLinks(gitRoot string, apps binmanager.MapOfApps, resolver In
 	if err := os.Rename(tmpDir, datamitsuDir); err != nil {
 		if hasExisting {
 			if restoreErr := os.Rename(backupDir, datamitsuDir); restoreErr != nil {
-				return nil, fmt.Errorf("failed to rename temp directory to .datamitsu: %w (also failed to restore backup: %v)", err, restoreErr)
+				return nil, fmt.Errorf("failed to rename temp directory to .datamitsu: %w (also failed to restore backup: %w)", err, restoreErr)
 			}
 		}
 		return nil, fmt.Errorf("failed to rename temp directory to .datamitsu: %w", err)
@@ -256,7 +261,7 @@ func CreateDatamitsuLinks(gitRoot string, apps binmanager.MapOfApps, resolver In
 				restoreErr = os.Rename(backupDir, datamitsuDir)
 			}
 			if cleanupErr != nil || restoreErr != nil {
-				return nil, fmt.Errorf("link verification failed for %q: %w (also failed to restore previous state: remove=%v, restore=%v)", linkName, err, cleanupErr, restoreErr)
+				return nil, fmt.Errorf("link verification failed for %q: %w (also failed to restore previous state: remove=%w, restore=%w)", linkName, err, cleanupErr, restoreErr)
 			}
 			return nil, fmt.Errorf("link verification failed for %q: %w", linkName, err)
 		}
@@ -280,7 +285,7 @@ func CreateDatamitsuTypeDefinitions(gitRoot string, dryRun bool) error {
 
 	datamitsuDir := filepath.Join(gitRoot, ".datamitsu")
 
-	if err := os.MkdirAll(gitRoot, 0755); err != nil {
+	if err := os.MkdirAll(gitRoot, 0o755); err != nil {
 		return fmt.Errorf("failed to create git root directory: %w", err)
 	}
 
@@ -313,7 +318,7 @@ func CreateDatamitsuTypeDefinitions(gitRoot string, dryRun bool) error {
 	if err := os.Rename(tmpDir, datamitsuDir); err != nil {
 		if hasExisting {
 			if restoreErr := os.Rename(backupDir, datamitsuDir); restoreErr != nil {
-				return fmt.Errorf("failed to rename temp directory to .datamitsu: %w (also failed to restore backup: %v)", err, restoreErr)
+				return fmt.Errorf("failed to rename temp directory to .datamitsu: %w (also failed to restore backup: %w)", err, restoreErr)
 			}
 		}
 		return fmt.Errorf("failed to rename temp directory to .datamitsu: %w", err)
@@ -325,7 +330,10 @@ func CreateDatamitsuTypeDefinitions(gitRoot string, dryRun bool) error {
 }
 
 func createDatamitsuGitignore(dir string) error {
-	return os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("*\n"), 0644)
+	if err := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("*\n"), 0o644); err != nil {
+		return fmt.Errorf("write .gitignore in %q: %w", dir, err)
+	}
+	return nil
 }
 
 // writeTypeDefinitions writes the embedded TypeScript type definitions
@@ -333,5 +341,8 @@ func createDatamitsuGitignore(dir string) error {
 // when editing datamitsu configuration files.
 func writeTypeDefinitions(dir string) error {
 	content := config.GetDefaultConfigDTS()
-	return os.WriteFile(filepath.Join(dir, "datamitsu.config.d.ts"), []byte(content), 0644)
+	if err := os.WriteFile(filepath.Join(dir, "datamitsu.config.d.ts"), []byte(content), 0o644); err != nil {
+		return fmt.Errorf("write datamitsu.config.d.ts in %q: %w", dir, err)
+	}
+	return nil
 }

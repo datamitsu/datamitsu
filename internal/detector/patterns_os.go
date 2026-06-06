@@ -1,8 +1,9 @@
 package detector
 
 import (
-	"github.com/datamitsu/datamitsu/internal/syslist"
 	"regexp"
+
+	"github.com/datamitsu/datamitsu/internal/syslist"
 )
 
 // OSPattern represents OS detection pattern

@@ -1,7 +1,10 @@
 package target
 
 import (
+	"context"
 	"debug/elf"
+	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,18 +14,19 @@ import (
 
 // detectViaLdd attempts to detect libc by parsing "ldd --version" output.
 // glibc prints version info to stdout; musl prints to stderr.
-func detectViaLdd() LibcType {
+func detectViaLdd(ctx context.Context) LibcType {
 	if runtime.GOOS != "linux" {
 		return LibcUnknown
 	}
-	return detectViaLddOutput(runLddVersion())
+	return detectViaLddOutput(runLddVersion(ctx))
 }
 
-func runLddVersion() string {
-	cmd := exec.Command("ldd", "--version")
+func runLddVersion(ctx context.Context) string {
+	cmd := exec.CommandContext(ctx, "ldd", "--version")
 	stdout, err := cmd.Output()
 	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok && len(exitErr.Stderr) > 0 {
+		exitErr := &exec.ExitError{}
+		if errors.As(err, &exitErr) {
 			return string(exitErr.Stderr)
 		}
 		if len(stdout) > 0 {
@@ -101,7 +105,11 @@ func detectViaLoaderPaths() LibcType {
 }
 
 func defaultLoaderGlob(pattern string) ([]string, error) {
-	return filepath.Glob(pattern)
+	matches, err := filepath.Glob(pattern)
+	if err != nil {
+		return nil, fmt.Errorf("glob loader pattern %q: %w", pattern, err)
+	}
+	return matches, nil
 }
 
 func detectViaLoaderGlob(globFn func(string) ([]string, error)) LibcType {

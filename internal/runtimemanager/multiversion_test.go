@@ -1,11 +1,13 @@
 package runtimemanager
 
 import (
-	"github.com/datamitsu/datamitsu/internal/binmanager"
-	"github.com/datamitsu/datamitsu/internal/config"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/config"
 )
 
 // makeMultiVersionConfig creates a realistic config with two ESLint versions
@@ -265,13 +267,7 @@ func TestMultiVersionRuntimeCollectsForBothApps(t *testing.T) {
 
 	collected := CollectRequiredRuntimes(apps, runtimes, false)
 
-	found := false
-	for _, name := range collected {
-		if name == "node" {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(collected, "node")
 	if !found {
 		t.Errorf("expected node runtime to be collected, got %v", collected)
 	}

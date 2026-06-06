@@ -1,8 +1,9 @@
 package detector
 
 import (
-	"github.com/datamitsu/datamitsu/internal/syslist"
 	"regexp"
+
+	"github.com/datamitsu/datamitsu/internal/syslist"
 )
 
 // ArchPattern represents architecture detection pattern

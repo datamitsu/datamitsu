@@ -10,6 +10,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/utils"
 )
 
+// State is the persisted sponsor tracking data: activation status, run count, and last-shown time.
 type State struct {
 	Activated      bool      `json:"activated"`
 	SuccessfulRuns int       `json:"successful_runs"`
@@ -38,7 +39,7 @@ func loadState(path string) (*State, error) {
 
 func saveState(path string, state *State) error {
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("failed to create sponsor state directory: %w", err)
 	}
 

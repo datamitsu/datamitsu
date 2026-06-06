@@ -1,17 +1,21 @@
+// Package facts collects information about the current project environment
+// (OS, arch, libc, git repository layout, environment variables) for use by
+// tool configuration and cache keys.
 package facts
 
 import (
 	"context"
-	"github.com/datamitsu/datamitsu/internal/env"
-	"github.com/datamitsu/datamitsu/internal/ldflags"
-	"github.com/datamitsu/datamitsu/internal/target"
-	"github.com/datamitsu/datamitsu/internal/traverser"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/ldflags"
+	"github.com/datamitsu/datamitsu/internal/target"
+	"github.com/datamitsu/datamitsu/internal/traverser"
 
 	"golang.org/x/sync/errgroup"
 )
@@ -47,7 +51,7 @@ type Facts struct {
 func Collect(ctx context.Context, binaryCommandOverride string) (*Facts, string, error) {
 	libc := target.LibcUnknown
 	if runtime.GOOS == "linux" {
-		libc = target.DetectLibc()
+		libc = target.DetectLibc(ctx)
 	}
 
 	facts := &Facts{
@@ -60,7 +64,7 @@ func Collect(ctx context.Context, binaryCommandOverride string) (*Facts, string,
 	// Get binary path
 	ex, err := os.Executable()
 	if err != nil {
-		return nil, "", err
+		return nil, "", fmt.Errorf("determine executable path: %w", err)
 	}
 	facts.BinaryPath = ex
 
@@ -76,7 +80,7 @@ func Collect(ctx context.Context, binaryCommandOverride string) (*Facts, string,
 	// Get current working directory (needed for monorepo detection)
 	cwd, err := os.Getwd()
 	if err != nil {
-		return nil, "", err
+		return nil, "", fmt.Errorf("determine working directory: %w", err)
 	}
 
 	// Try to get git root (non-fatal if not in git repo)
@@ -131,7 +135,7 @@ func GetGitRoot(ctx context.Context) (string, error) {
 
 	ex, err := os.Getwd()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("determine working directory: %w", err)
 	}
 
 	for {
@@ -151,7 +155,7 @@ func GetGitRoot(ctx context.Context) (string, error) {
 
 			out, err := cmd.Output()
 			if err != nil {
-				return err
+				return fmt.Errorf("run git rev-parse --show-toplevel: %w", err)
 			}
 			root = strings.TrimSpace(string(out))
 			return nil
@@ -175,7 +179,7 @@ func GetGitRoot(ctx context.Context) (string, error) {
 		})
 
 		if err := g.Wait(); err != nil {
-			return "", err
+			return "", fmt.Errorf("resolve git root: %w", err)
 		}
 
 		// If no parent - we're at the top level

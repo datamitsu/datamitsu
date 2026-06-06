@@ -1,15 +1,18 @@
 package cmd
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -80,8 +83,10 @@ type runtimePullResult struct {
 }
 
 func runPullRuntimes(cmd *cobra.Command, args []string) error {
+	ctx := commandContext(cmd)
+
 	if !pullRuntimesUpdateFlag {
-		return fmt.Errorf("--update flag is required to fetch releases from upstream")
+		return errors.New("--update flag is required to fetch releases from upstream")
 	}
 
 	runtimeFilter := pullRuntimesRuntimeFlag
@@ -112,9 +117,7 @@ func runPullRuntimes(cmd *cobra.Command, args []string) error {
 	}
 
 	runtimes := make(RuntimesJSON)
-	for k, v := range existing {
-		runtimes[k] = v
-	}
+	maps.Copy(runtimes, existing)
 
 	runtimesToUpdate := validRuntimeNames
 	if runtimeFilter != "" {
@@ -133,28 +136,28 @@ func runPullRuntimes(cmd *cobra.Command, args []string) error {
 		case "uv":
 			var data *UVRuntimeData
 			var binaries binmanager.MapOfBinaries
-			data, binaries, updateErr = pullUVRuntime(minAge)
+			data, binaries, updateErr = pullUVRuntime(ctx, minAge)
 			if updateErr == nil {
 				runtimeJSON = buildUVRuntimeJSON(data, binaries)
 			}
 		case "jvm":
 			var data *JVMRuntimeData
 			var binaries binmanager.MapOfBinaries
-			data, binaries, updateErr = pullJVMRuntime(minAge)
+			data, binaries, updateErr = pullJVMRuntime(ctx, minAge)
 			if updateErr == nil {
 				runtimeJSON = buildJVMRuntimeJSON(data, binaries)
 			}
 		case "node":
 			var data *NodeRuntimeData
 			var binaries binmanager.MapOfBinaries
-			data, binaries, updateErr = pullNodeRuntime(minAge)
+			data, binaries, updateErr = pullNodeRuntime(ctx, minAge)
 			if updateErr == nil {
 				runtimeJSON = buildNodeRuntimeJSON(data, binaries)
 			}
 		case "go":
 			var data *GoRuntimeData
 			var binaries binmanager.MapOfBinaries
-			data, binaries, updateErr = pullGoRuntime()
+			data, binaries, updateErr = pullGoRuntime(ctx)
 			if updateErr == nil {
 				runtimeJSON = buildGoRuntimeJSON(data, binaries)
 			}
@@ -185,7 +188,7 @@ func runPullRuntimes(cmd *cobra.Command, args []string) error {
 
 	for _, r := range results {
 		if r.err != nil {
-			return fmt.Errorf("some runtimes failed to update")
+			return errors.New("some runtimes failed to update")
 		}
 	}
 
@@ -202,12 +205,7 @@ func runPullRuntimes(cmd *cobra.Command, args []string) error {
 }
 
 func isValidRuntime(name string) bool {
-	for _, v := range validRuntimeNames {
-		if v == name {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(validRuntimeNames, name)
 }
 
 func runtimeVersion(r *RuntimeJSON) string {
@@ -216,16 +214,16 @@ func runtimeVersion(r *RuntimeJSON) string {
 	}
 	var parts []string
 	if r.UV != nil {
-		parts = append(parts, fmt.Sprintf("python=%s", r.UV.PythonVersion))
+		parts = append(parts, "python="+r.UV.PythonVersion)
 	}
 	if r.JVM != nil {
-		parts = append(parts, fmt.Sprintf("java=%s", r.JVM.JavaVersion))
+		parts = append(parts, "java="+r.JVM.JavaVersion)
 	}
 	if r.Node != nil {
 		parts = append(parts, fmt.Sprintf("node=%s,pnpm=%s", r.Node.NodeVersion, r.Node.PNPMVersion))
 	}
 	if r.Go != nil {
-		parts = append(parts, fmt.Sprintf("go=%s", r.Go.GoVersion))
+		parts = append(parts, "go="+r.Go.GoVersion)
 	}
 	if r.Managed != nil {
 		binCount := 0
@@ -242,15 +240,16 @@ func runtimeVersion(r *RuntimeJSON) string {
 func printPullSummary(results []runtimePullResult) {
 	fmt.Printf("\n--- Summary ---\n")
 	for _, r := range results {
-		if r.err != nil {
+		switch {
+		case r.err != nil:
 			fmt.Printf("  %s: FAILED (%v)\n", r.name, r.err)
-		} else if r.updated {
+		case r.updated:
 			if r.oldVersion != "" {
 				fmt.Printf("  %s: updated (%s -> %s)\n", r.name, r.oldVersion, r.newVersion)
 			} else {
 				fmt.Printf("  %s: added (%s)\n", r.name, r.newVersion)
 			}
-		} else {
+		default:
 			fmt.Printf("  %s: unchanged\n", r.name)
 		}
 	}
@@ -333,7 +332,7 @@ func writeRuntimesJSON(path string, runtimes RuntimesJSON) error {
 		_ = os.Remove(tmpPath)
 		return fmt.Errorf("closing temp file: %w", err)
 	}
-	if err := os.Chmod(tmpPath, 0644); err != nil {
+	if err := os.Chmod(tmpPath, 0o644); err != nil {
 		_ = os.Remove(tmpPath)
 		return fmt.Errorf("chmod temp file: %w", err)
 	}
@@ -415,9 +414,13 @@ type npmVersionMetaForPull struct {
 
 // fetchPNPMTarballHash downloads the PNPM tarball for the given version and
 // computes its SHA-256 hash without writing to permanent storage.
-func fetchPNPMTarballHash(version string) (string, error) {
-	metaURL := fmt.Sprintf("https://registry.npmjs.org/pnpm/%s", version)
-	resp, err := pnpmHTTPClient.Get(metaURL)
+func fetchPNPMTarballHash(ctx context.Context, version string) (string, error) {
+	metaURL := "https://registry.npmjs.org/pnpm/" + version
+	metaReq, err := http.NewRequestWithContext(ctx, http.MethodGet, metaURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to build request: %w", err)
+	}
+	resp, err := pnpmHTTPClient.Do(metaReq)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch PNPM metadata: %w", err)
 	}
@@ -440,7 +443,11 @@ func fetchPNPMTarballHash(version string) (string, error) {
 		return "", fmt.Errorf("pnpm tarball URL is not HTTPS: %s", meta.Dist.Tarball)
 	}
 
-	tarResp, err := pnpmHTTPClient.Get(meta.Dist.Tarball)
+	tarReq, err := http.NewRequestWithContext(ctx, http.MethodGet, meta.Dist.Tarball, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to build request: %w", err)
+	}
+	tarResp, err := pnpmHTTPClient.Do(tarReq)
 	if err != nil {
 		return "", fmt.Errorf("failed to download PNPM tarball: %w", err)
 	}
@@ -474,7 +481,7 @@ type UVRuntimeData struct {
 // alongside the error, which pullUVRuntime deliberately discards (see below).
 var getLatestPythonStableVersion = registry.GetLatestPythonStableVersion
 
-func pullUVRuntime(minAge int) (*UVRuntimeData, binmanager.MapOfBinaries, error) {
+func pullUVRuntime(ctx context.Context, minAge int) (*UVRuntimeData, binmanager.MapOfBinaries, error) {
 	data := &UVRuntimeData{}
 
 	// The Python version is a major-version-line selection from endoflife.date,
@@ -482,7 +489,7 @@ func pullUVRuntime(minAge int) (*UVRuntimeData, binmanager.MapOfBinaries, error)
 	// Fail loud on a lookup error rather than baking the registry's hardcoded
 	// fallback into the generated config: a stale-but-fresh-looking pin is worse
 	// than aborting the pull (same rationale as resolveLatestNodeLTS).
-	pythonVersion, err := getLatestPythonStableVersion()
+	pythonVersion, err := getLatestPythonStableVersion(ctx)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to look up latest Python version: %w", err)
 	}
@@ -490,7 +497,7 @@ func pullUVRuntime(minAge int) (*UVRuntimeData, binmanager.MapOfBinaries, error)
 
 	// The UV binary is a specific GitHub release, so age filtering applies.
 	client := github.NewClient()
-	release, err := client.GetLatestReleaseWithMinAge("astral-sh", "uv", minAge)
+	release, err := client.GetLatestReleaseWithMinAge(ctx, "astral-sh", "uv", minAge)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to fetch UV release: %w", err)
 	}
@@ -519,7 +526,7 @@ type JVMRuntimeData struct {
 // fallback alongside the error, which pullJVMRuntime deliberately discards.
 var getLatestTemurinMajorVersion = registry.GetLatestTemurinMajorVersion
 
-func pullJVMRuntime(minAge int) (*JVMRuntimeData, binmanager.MapOfBinaries, error) {
+func pullJVMRuntime(ctx context.Context, minAge int) (*JVMRuntimeData, binmanager.MapOfBinaries, error) {
 	data := &JVMRuntimeData{}
 
 	// The Java major version is a major-version selection from the adoptium API,
@@ -530,7 +537,7 @@ func pullJVMRuntime(minAge int) (*JVMRuntimeData, binmanager.MapOfBinaries, erro
 	// ("temurin<ver>-binaries") below, so a silent stale fallback would pin the
 	// generated config to an outdated JDK major (same rationale as
 	// resolveLatestNodeLTS).
-	javaVersion, err := getLatestTemurinMajorVersion()
+	javaVersion, err := getLatestTemurinMajorVersion(ctx)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to look up latest Temurin (Java) version: %w", err)
 	}
@@ -540,7 +547,7 @@ func pullJVMRuntime(minAge int) (*JVMRuntimeData, binmanager.MapOfBinaries, erro
 	client := github.NewClient()
 
 	repo := fmt.Sprintf("temurin%s-binaries", data.JavaVersion)
-	release, err := client.GetLatestReleaseWithMinAge("adoptium", repo, minAge)
+	release, err := client.GetLatestReleaseWithMinAge(ctx, "adoptium", repo, minAge)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to fetch JVM release from adoptium/%s: %w", repo, err)
 	}
@@ -665,7 +672,7 @@ func detectJVMBinaries(release *github.Release) (binmanager.MapOfBinaries, error
 	}
 
 	if successCount == 0 {
-		return nil, fmt.Errorf("no JDK binaries were detected")
+		return nil, errors.New("no JDK binaries were detected")
 	}
 
 	if deduplicatedCount > 0 {
@@ -758,7 +765,7 @@ func nodeBinaryPath(spec nodeArchiveSpec) string {
 // filename→hash map.
 func parseSHASUMS(content string) map[string]string {
 	out := make(map[string]string)
-	for _, line := range strings.Split(content, "\n") {
+	for line := range strings.SplitSeq(content, "\n") {
 		fields := strings.Fields(line)
 		if len(fields) != 2 {
 			continue
@@ -770,8 +777,12 @@ func parseSHASUMS(content string) map[string]string {
 }
 
 // httpGetLimited GETs url and returns up to maxSize bytes of the body.
-func httpGetLimited(client *http.Client, url string, maxSize int64) ([]byte, error) {
-	resp, err := client.Get(url)
+func httpGetLimited(ctx context.Context, client *http.Client, url string, maxSize int64) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("build request %s: %w", url, err)
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("GET %s: %w", url, err)
 	}
@@ -791,9 +802,9 @@ func httpGetLimited(client *http.Client, url string, maxSize int64) ([]byte, err
 
 // fetchVerifiedShasums downloads the clearsigned SHASUMS256.txt.asc, verifies
 // its GPG signature against keyring, and parses the verified plaintext.
-func fetchVerifiedShasums(client *http.Client, baseURL, version string, keyring openpgp.KeyRing) (map[string]string, error) {
+func fetchVerifiedShasums(ctx context.Context, client *http.Client, baseURL, version string, keyring openpgp.KeyRing) (map[string]string, error) {
 	url := fmt.Sprintf("%s/v%s/SHASUMS256.txt.asc", baseURL, version)
-	body, err := httpGetLimited(client, url, maxShasumsSize)
+	body, err := httpGetLimited(ctx, client, url, maxShasumsSize)
 	if err != nil {
 		return nil, err
 	}
@@ -805,9 +816,9 @@ func fetchVerifiedShasums(client *http.Client, baseURL, version string, keyring 
 }
 
 // fetchPlainShasums downloads an unsigned SHASUMS256.txt and parses it.
-func fetchPlainShasums(client *http.Client, baseURL, version string) (map[string]string, error) {
+func fetchPlainShasums(ctx context.Context, client *http.Client, baseURL, version string) (map[string]string, error) {
 	url := fmt.Sprintf("%s/v%s/SHASUMS256.txt", baseURL, version)
-	body, err := httpGetLimited(client, url, maxShasumsSize)
+	body, err := httpGetLimited(ctx, client, url, maxShasumsSize)
 	if err != nil {
 		return nil, err
 	}
@@ -881,13 +892,13 @@ func libcLabel(spec nodeArchiveSpec) string {
 // the per-tuple archive map. glibc/darwin/windows hashes come from the
 // GPG-verified nodejs.org manifest; musl hashes come from the unsigned
 // unofficial-builds manifest (logged as such).
-func detectNodeBinaries(cfg nodePullConfig) (binmanager.MapOfBinaries, error) {
-	distShasums, err := fetchVerifiedShasums(cfg.client, cfg.distBaseURL, cfg.version, cfg.keyring)
+func detectNodeBinaries(ctx context.Context, cfg nodePullConfig) (binmanager.MapOfBinaries, error) {
+	distShasums, err := fetchVerifiedShasums(ctx, cfg.client, cfg.distBaseURL, cfg.version, cfg.keyring)
 	if err != nil {
 		return nil, fmt.Errorf("nodejs.org dist manifest: %w", err)
 	}
 
-	muslShasums, err := fetchPlainShasums(cfg.client, cfg.muslBaseURL, cfg.version)
+	muslShasums, err := fetchPlainShasums(ctx, cfg.client, cfg.muslBaseURL, cfg.version)
 	if err != nil {
 		return nil, fmt.Errorf("unofficial-builds musl manifest: %w", err)
 	}
@@ -918,8 +929,8 @@ var getLatestNodeLTSVersion = registry.GetLatestNodeLTSVersion
 // version alongside the error so the runtime stays resilient at exec time, but
 // silently pinning that stale fallback into a generated config is worse than
 // aborting the pull — so here we discard the fallback and surface the error.
-func resolveLatestNodeLTS() (string, error) {
-	version, err := getLatestNodeLTSVersion()
+func resolveLatestNodeLTS(ctx context.Context) (string, error) {
+	version, err := getLatestNodeLTSVersion(ctx)
 	if err != nil {
 		return "", fmt.Errorf("failed to look up latest Node LTS version: %w", err)
 	}
@@ -928,19 +939,19 @@ func resolveLatestNodeLTS() (string, error) {
 
 // pullNodeRuntime resolves the latest Node version + pnpm, then fetches and
 // verifies the Node release manifests to build the archive registry entry.
-func pullNodeRuntime(minAge int) (*NodeRuntimeData, binmanager.MapOfBinaries, error) {
+func pullNodeRuntime(ctx context.Context, minAge int) (*NodeRuntimeData, binmanager.MapOfBinaries, error) {
 	data := &NodeRuntimeData{}
 
 	// The Node LTS version is a major-version-line selection from endoflife.date,
 	// so it is NOT subject to age filtering (see the plan's age-filtering table).
-	nodeVersion, err := resolveLatestNodeLTS()
+	nodeVersion, err := resolveLatestNodeLTS(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 	data.NodeVersion = nodeVersion
 
 	// pnpm is a specific npm package version, so age filtering applies.
-	pnpmInfo, err := registry.GetNPMPackageInfoWithMinAge("pnpm", minAge)
+	pnpmInfo, err := registry.GetNPMPackageInfoWithMinAge(ctx, "pnpm", minAge)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to fetch PNPM version: %w", err)
 	}
@@ -949,7 +960,7 @@ func pullNodeRuntime(minAge int) (*NodeRuntimeData, binmanager.MapOfBinaries, er
 	}
 	data.PNPMVersion = pnpmInfo.Version
 
-	pnpmHash, err := fetchPNPMTarballHash(pnpmInfo.Version)
+	pnpmHash, err := fetchPNPMTarballHash(ctx, pnpmInfo.Version)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to compute PNPM hash: %w", err)
 	}
@@ -962,7 +973,7 @@ func pullNodeRuntime(minAge int) (*NodeRuntimeData, binmanager.MapOfBinaries, er
 
 	fmt.Printf("Node version: v%s (pnpm %s)\n", data.NodeVersion, data.PNPMVersion)
 
-	binaries, err := detectNodeBinaries(nodePullConfig{
+	binaries, err := detectNodeBinaries(ctx, nodePullConfig{
 		version:     data.NodeVersion,
 		distBaseURL: nodeDistBaseURL,
 		muslBaseURL: nodeMuslBaseURL,
@@ -1079,8 +1090,8 @@ var getLatestGoRelease = registry.GetLatestGoRelease
 // per-tuple archive map using the published SHA-256 hashes. Unlike node there is
 // no GPG signature: the published SHA-256, pinned in git, is the integrity
 // anchor (same documented trust posture as the musl node path).
-func pullGoRuntime() (*GoRuntimeData, binmanager.MapOfBinaries, error) {
-	release, err := getLatestGoRelease()
+func pullGoRuntime(ctx context.Context) (*GoRuntimeData, binmanager.MapOfBinaries, error) {
+	release, err := getLatestGoRelease(ctx)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to look up latest Go release: %w", err)
 	}

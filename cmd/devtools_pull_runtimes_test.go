@@ -1,16 +1,19 @@
 package cmd
 
 import (
-	"github.com/datamitsu/datamitsu/internal/binmanager"
-	"github.com/datamitsu/datamitsu/internal/github"
-	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
-	"github.com/datamitsu/datamitsu/internal/syslist"
+	"context"
 	"encoding/json"
 	"errors"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/github"
+	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
+	"github.com/datamitsu/datamitsu/internal/syslist"
 )
 
 func TestDetectRuntimeBinaries_BasicDetection(t *testing.T) {
@@ -143,7 +146,7 @@ func TestDetectRuntimeBinaries_NoDuplicateMuslKeys(t *testing.T) {
 	}
 
 	for key, pairs := range seen {
-		for i := 0; i < len(pairs); i++ {
+		for i := range pairs {
 			for j := i + 1; j < len(pairs); j++ {
 				if pairs[i].url == pairs[j].url && pairs[i].hash == pairs[j].hash {
 					t.Errorf("%s has duplicate URL+hash: %s", key, pairs[i].url)
@@ -226,8 +229,6 @@ func TestDetectRuntimeBinaries_ContentTypeDetection(t *testing.T) {
 		t.Errorf("ContentType = %v, want zip", info.ContentType)
 	}
 }
-
-
 
 func TestDetectRuntimeBinaries_UVSeparateMuslBinaries(t *testing.T) {
 	// UV has separate gnu and musl tarballs — both should be kept
@@ -324,8 +325,6 @@ func TestDetectRuntimeBinaries_UVLibcMismatchRejection(t *testing.T) {
 		}
 	}
 }
-
-
 
 func TestDetectJVMBinaries_AlpineLinuxDetectedAsMusl(t *testing.T) {
 	assets := []github.Asset{
@@ -897,7 +896,7 @@ func TestWriteRuntimesJSON_Formatting(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stat failed: %v", err)
 	}
-	if info.Mode().Perm() != 0644 {
+	if info.Mode().Perm() != 0o644 {
 		t.Errorf("file permissions = %o, want 0644", info.Mode().Perm())
 	}
 }
@@ -1087,7 +1086,7 @@ func TestReadRuntimesJSON_MissingFile(t *testing.T) {
 func TestReadRuntimesJSON_InvalidJSON(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "runtimes.json")
-	if err := os.WriteFile(path, []byte("not json"), 0644); err != nil {
+	if err := os.WriteFile(path, []byte("not json"), 0o644); err != nil {
 		t.Fatalf("failed to write test file: %v", err)
 	}
 
@@ -1176,7 +1175,7 @@ func TestReadWriteRuntimesJSON_PreservesGoEntry(t *testing.T) {
     "managed": { "binaries": {} }
   }
 }`
-	if err := os.WriteFile(path, []byte(fixture), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(fixture), 0o644); err != nil {
 		t.Fatalf("seeding fixture: %v", err)
 	}
 
@@ -1194,9 +1193,7 @@ func TestReadWriteRuntimesJSON_PreservesGoEntry(t *testing.T) {
 	}
 
 	merged := make(RuntimesJSON)
-	for k, v := range existing {
-		merged[k] = v
-	}
+	maps.Copy(merged, existing)
 	if err := writeRuntimesJSON(path, merged); err != nil {
 		t.Fatalf("writeRuntimesJSON: %v", err)
 	}
@@ -1339,11 +1336,11 @@ func TestResolveLatestNodeLTS_FailsLoudly(t *testing.T) {
 	defer func() { getLatestNodeLTSVersion = orig }()
 
 	// Mimic the real registry: it returns the fallback version AND an error.
-	getLatestNodeLTSVersion = func() (string, error) {
+	getLatestNodeLTSVersion = func(_ context.Context) (string, error) {
 		return "24.14.0", errors.New("simulated lookup failure")
 	}
 
-	version, err := resolveLatestNodeLTS()
+	version, err := resolveLatestNodeLTS(context.Background())
 	if err == nil {
 		t.Fatal("expected error when LTS lookup fails")
 	}
@@ -1361,11 +1358,11 @@ func TestResolveLatestNodeLTS_Success(t *testing.T) {
 	orig := getLatestNodeLTSVersion
 	defer func() { getLatestNodeLTSVersion = orig }()
 
-	getLatestNodeLTSVersion = func() (string, error) {
+	getLatestNodeLTSVersion = func(_ context.Context) (string, error) {
 		return "26.2.0", nil
 	}
 
-	version, err := resolveLatestNodeLTS()
+	version, err := resolveLatestNodeLTS(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1381,12 +1378,12 @@ func TestPullNodeRuntime_LTSLookupError(t *testing.T) {
 	orig := getLatestNodeLTSVersion
 	defer func() { getLatestNodeLTSVersion = orig }()
 
-	getLatestNodeLTSVersion = func() (string, error) {
+	getLatestNodeLTSVersion = func(_ context.Context) (string, error) {
 		return "24.14.0", errors.New("simulated lookup failure")
 	}
 
 	// minAge is irrelevant here: the LTS lookup fails before any network call.
-	data, binaries, err := pullNodeRuntime(0)
+	data, binaries, err := pullNodeRuntime(context.Background(), 0)
 	if err == nil {
 		t.Fatal("expected pullNodeRuntime to return an error on LTS lookup failure")
 	}
@@ -1417,7 +1414,7 @@ func TestRunPullRuntimes_NodeLookupFailureNonZeroExit(t *testing.T) {
 	pullRuntimesUpdateFlag = true
 	pullRuntimesRuntimeFlag = "node"
 	pullRuntimesDryRunFlag = true
-	getLatestNodeLTSVersion = func() (string, error) {
+	getLatestNodeLTSVersion = func(_ context.Context) (string, error) {
 		return "24.14.0", errors.New("simulated lookup failure")
 	}
 
@@ -1437,7 +1434,6 @@ func TestRunPullRuntimes_NodeLookupFailureNonZeroExit(t *testing.T) {
 		t.Error("no file should be written when the pull fails")
 	}
 }
-
 
 // === Integration Tests (Task 10) ===
 

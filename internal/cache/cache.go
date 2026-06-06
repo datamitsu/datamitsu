@@ -1,7 +1,9 @@
+// Package cache stores per-file lint/fix results so unchanged files can skip re-running tools.
 package cache
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -23,6 +25,8 @@ import (
 // Operation represents the type of operation (lint or fix)
 type Operation string
 
+// OperationLint and OperationFix identify whether a cached tool result came from
+// a lint run or a fix run.
 const (
 	OperationLint Operation = "lint"
 	OperationFix  Operation = "fix"
@@ -37,16 +41,16 @@ type FileEntry struct {
 	Fix         []string // tools that successfully passed fix
 }
 
-// CacheFile represents the entire cache for a project
-type CacheFile struct {
+// File represents the entire cache for a project
+type File struct {
 	InvalidationKey string               // hash(datamitsuVersion + fullConfigHash + invalidateOnFiles)
 	ProjectPath     string               // for debugging
 	LastPruned      time.Time            // when we last cleaned up deleted files
 	Entries         map[string]FileEntry // relativePath -> entry
 }
 
-// CacheStats holds statistics about cache hits and misses
-type CacheStats struct {
+// Stats holds statistics about cache hits and misses
+type Stats struct {
 	Hits   int64
 	Misses int64
 }
@@ -56,7 +60,7 @@ type Cache struct {
 	path            string
 	projectPath     string
 	invalidationKey string
-	data            *CacheFile
+	data            *File
 	hits            atomic.Int64 // Cache hits counter
 	misses          atomic.Int64 // Cache misses counter
 	logger          *zap.Logger
@@ -87,17 +91,17 @@ func NewCache(
 ) (*Cache, error) {
 	// Create projects subdirectory
 	projectsDir := filepath.Join(cacheDir, "projects")
-	if err := os.MkdirAll(projectsDir, 0755); err != nil {
+	if err := os.MkdirAll(projectsDir, 0o755); err != nil {
 		return nil, fmt.Errorf("failed to create projects cache directory: %w", err)
 	}
 
 	// Hash the project path to get cache directory name
 	projectHash := env.HashProjectPath(projectPath)
 	projectDir := filepath.Join(projectsDir, projectHash)
-	if err := os.MkdirAll(projectDir, 0755); err != nil {
+	if err := os.MkdirAll(projectDir, 0o755); err != nil {
 		return nil, fmt.Errorf("failed to create project cache directory: %w", err)
 	}
-	if err := os.MkdirAll(filepath.Join(projectDir, "cache"), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(projectDir, "cache"), 0o755); err != nil {
 		return nil, fmt.Errorf("failed to create project tool cache directory: %w", err)
 	}
 	cachePath := filepath.Join(projectDir, cacheFileName)
@@ -119,7 +123,7 @@ func NewCache(
 	// Load existing cache or create new one
 	if err := c.Load(); err != nil {
 		c.logger.Warn("failed to load cache, creating new", zap.Error(err))
-		c.data = &CacheFile{
+		c.data = &File{
 			InvalidationKey: invalidationKey,
 			ProjectPath:     projectPath,
 			LastPruned:      time.Now(),
@@ -136,7 +140,7 @@ func (c *Cache) Load() error {
 	if err != nil {
 		if os.IsNotExist(err) {
 			// Cache doesn't exist yet, create new
-			c.data = &CacheFile{
+			c.data = &File{
 				InvalidationKey: c.invalidationKey,
 				ProjectPath:     c.projectPath,
 				LastPruned:      time.Now(),
@@ -158,7 +162,7 @@ func (c *Cache) Load() error {
 		return fmt.Errorf("failed to read cache file: %w", err)
 	}
 
-	var data CacheFile
+	var data File
 	if err := msgpack.Unmarshal(fileData, &data); err != nil {
 		return fmt.Errorf("failed to decode cache: %w", err)
 	}
@@ -168,7 +172,7 @@ func (c *Cache) Load() error {
 		c.logger.Info("invalidation key mismatch, resetting cache",
 			zap.String("old", data.InvalidationKey),
 			zap.String("new", c.invalidationKey))
-		c.data = &CacheFile{
+		c.data = &File{
 			InvalidationKey: c.invalidationKey,
 			ProjectPath:     c.projectPath,
 			LastPruned:      time.Now(),
@@ -201,11 +205,11 @@ func (c *Cache) Save() error {
 	c.mu.RLock()
 	if c.data == nil {
 		c.mu.RUnlock()
-		return fmt.Errorf("cache data is nil")
+		return errors.New("cache data is nil")
 	}
 
 	// Ensure directory exists
-	if err := os.MkdirAll(filepath.Dir(c.path), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(c.path), 0o755); err != nil {
 		c.mu.RUnlock()
 		return fmt.Errorf("failed to create cache directory: %w", err)
 	}
@@ -357,7 +361,7 @@ func (c *Cache) AfterFix(file, tool string, toolCacheEnabled bool) error {
 	defer c.mu.Unlock()
 
 	if c.data == nil {
-		return fmt.Errorf("cache data is nil")
+		return errors.New("cache data is nil")
 	}
 
 	relPath, err := filepath.Rel(c.projectPath, file)
@@ -401,52 +405,9 @@ func (c *Cache) AfterFix(file, tool string, toolCacheEnabled bool) error {
 	return nil
 }
 
-// markPassed marks a tool as having passed for a file
-func (c *Cache) markPassed(file, tool string, op Operation) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.data == nil {
-		return fmt.Errorf("cache data is nil")
-	}
-
-	relPath, err := filepath.Rel(c.projectPath, file)
-	if err != nil {
-		return fmt.Errorf("failed to get relative path: %w", err)
-	}
-
-	// Get or create entry
-	entry, exists := c.data.Entries[relPath]
-	if !exists {
-		contentHash, err := hashFile(file)
-		if err != nil {
-			return fmt.Errorf("failed to hash file: %w", err)
-		}
-		entry = FileEntry{
-			ContentHash: contentHash,
-			Lint:        []string{},
-			Fix:         []string{},
-		}
-	}
-
-	// Add tool to appropriate list
-	if op == OperationLint {
-		if !slices.Contains(entry.Lint, tool) {
-			entry.Lint = append(entry.Lint, tool)
-		}
-	} else {
-		if !slices.Contains(entry.Fix, tool) {
-			entry.Fix = append(entry.Fix, tool)
-		}
-	}
-
-	c.data.Entries[relPath] = entry
-	return nil
-}
-
 // GetStats returns cache statistics
-func (c *Cache) GetStats() CacheStats {
-	return CacheStats{
+func (c *Cache) GetStats() Stats {
+	return Stats{
 		Hits:   c.hits.Load(),
 		Misses: c.misses.Load(),
 	}
@@ -455,7 +416,7 @@ func (c *Cache) GetStats() CacheStats {
 // Clear removes all cache entries
 func (c *Cache) Clear() error {
 	c.mu.Lock()
-	c.data = &CacheFile{
+	c.data = &File{
 		InvalidationKey: c.invalidationKey,
 		ProjectPath:     c.projectPath,
 		LastPruned:      time.Now(),
@@ -532,7 +493,7 @@ func calculateInvalidationKey(
 func hashFile(path string) (string, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("open file for hashing: %w", err)
 	}
 	defer func() {
 		_ = f.Close()
@@ -540,7 +501,6 @@ func hashFile(path string) (string, error) {
 
 	return hashutil.XXH3Reader(f)
 }
-
 
 func pathEqualFold(a, b string) bool {
 	return strings.EqualFold(a, b)
@@ -597,24 +557,6 @@ func (c *Cache) MarkDirty() {
 	c.debounceSave()
 }
 
-// debounceSave triggers delayed save (coalesces rapid changes)
-func (c *Cache) debounceSave() {
-	c.saveTimerMu.Lock()
-	defer c.saveTimerMu.Unlock()
-
-	if c.saveTimer != nil {
-		c.saveTimer.Stop()
-	}
-
-	c.saveTimer = time.AfterFunc(100*time.Millisecond, func() {
-		if c.dirty.Swap(false) {
-			if err := c.Save(); err != nil {
-				c.logger.Warn("async save failed", zap.Error(err))
-			}
-		}
-	})
-}
-
 // Shutdown ensures final save before exit
 func (c *Cache) Shutdown() {
 	c.shutdownOnce.Do(func() {
@@ -629,6 +571,67 @@ func (c *Cache) Shutdown() {
 		if c.dirty.Swap(false) {
 			if err := c.Save(); err != nil {
 				c.logger.Warn("final save failed", zap.Error(err))
+			}
+		}
+	})
+}
+
+// markPassed marks a tool as having passed for a file
+func (c *Cache) markPassed(file, tool string, op Operation) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.data == nil {
+		return errors.New("cache data is nil")
+	}
+
+	relPath, err := filepath.Rel(c.projectPath, file)
+	if err != nil {
+		return fmt.Errorf("failed to get relative path: %w", err)
+	}
+
+	// Get or create entry
+	entry, exists := c.data.Entries[relPath]
+	if !exists {
+		contentHash, err := hashFile(file)
+		if err != nil {
+			return fmt.Errorf("failed to hash file: %w", err)
+		}
+		entry = FileEntry{
+			ContentHash: contentHash,
+			Lint:        []string{},
+			Fix:         []string{},
+		}
+	}
+
+	// Add tool to appropriate list
+	if op == OperationLint {
+		if !slices.Contains(entry.Lint, tool) {
+			entry.Lint = append(entry.Lint, tool)
+		}
+	} else {
+		if !slices.Contains(entry.Fix, tool) {
+			entry.Fix = append(entry.Fix, tool)
+		}
+	}
+
+	c.data.Entries[relPath] = entry
+	return nil
+}
+
+// debounceSave triggers delayed save (coalesces rapid changes)
+func (c *Cache) debounceSave() {
+	c.saveTimerMu.Lock()
+	defer c.saveTimerMu.Unlock()
+
+	if c.saveTimer != nil {
+		c.saveTimer.Stop()
+	}
+
+	c.saveTimer = time.AfterFunc(100*time.Millisecond, func() {
+		if c.dirty.Swap(false) {
+			if err := c.Save(); err != nil {
+				c.logger.Warn("async save failed", zap.Error(err))
 			}
 		}
 	})

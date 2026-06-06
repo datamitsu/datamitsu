@@ -1,19 +1,26 @@
 package tools
 
 import (
-	"github.com/datamitsu/datamitsu/internal/ldflags"
+	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
+
+	"github.com/datamitsu/datamitsu/internal/ldflags"
 
 	"github.com/dop251/goja"
 )
 
+// ParseIgnoreResult holds the parsed groups of an ignore file together with
+// the order in which those groups first appeared.
 type ParseIgnoreResult struct {
 	Groups     map[string][]string `json:"groups"`
 	GroupOrder []string            `json:"groupOrder"`
 }
 
+// ParseIgnoreFile parses ignore-file content into grouped rules, skipping the
+// datamitsu-managed section and preserving group order.
 func ParseIgnoreFile(content string) ParseIgnoreResult {
 	groups := make(map[string][]string)
 	groupOrder := make([]string, 0)
@@ -52,8 +59,8 @@ func ParseIgnoreFile(content string) ParseIgnoreResult {
 			continue
 		}
 
-		if strings.HasPrefix(trimmed, "#") {
-			groupName := strings.TrimSpace(strings.TrimPrefix(trimmed, "#"))
+		if after, ok := strings.CutPrefix(trimmed, "#"); ok {
+			groupName := strings.TrimSpace(after)
 			if groupName != "" {
 				currentGroup = groupName
 				groupJustSet = true
@@ -90,6 +97,9 @@ func ParseIgnoreFile(content string) ParseIgnoreResult {
 	}
 }
 
+// FormatIgnoreFile renders grouped ignore rules back into ignore-file text,
+// emitting groups in groupOrder first and remaining groups sorted by name,
+// deduplicating rules within each group.
 func FormatIgnoreFile(groups map[string][]string, groupOrder []string) string {
 	var result strings.Builder
 
@@ -151,6 +161,8 @@ func deduplicateSlice(items []string) []string {
 	return result
 }
 
+// RegisterIgnoreToolsInVM exposes tools.Ignore.parse and tools.Ignore.stringify
+// to the VM, backed by ParseIgnoreFile and FormatIgnoreFile.
 func RegisterIgnoreToolsInVM(vm *goja.Runtime) error {
 	toolsObj := vm.Get("tools")
 	if toolsObj == nil || goja.IsUndefined(toolsObj) || goja.IsNull(toolsObj) {
@@ -188,7 +200,7 @@ func RegisterIgnoreToolsInVM(vm *goja.Runtime) error {
 			exported := val.Export()
 
 			switch v := exported.(type) {
-			case []interface{}:
+			case []any:
 				strArr := make([]string, len(v))
 				for i, item := range v {
 					strArr[i] = fmt.Sprint(item)
@@ -204,8 +216,8 @@ func RegisterIgnoreToolsInVM(vm *goja.Runtime) error {
 					if lengthVal != nil && !goja.IsUndefined(lengthVal) && !goja.IsNull(lengthVal) {
 						length := int(lengthVal.ToInteger())
 						strArr := make([]string, length)
-						for i := 0; i < length; i++ {
-							itemVal := arr.Get(fmt.Sprint(i))
+						for i := range length {
+							itemVal := arr.Get(strconv.Itoa(i))
 							if itemVal != nil && !goja.IsUndefined(itemVal) && !goja.IsNull(itemVal) {
 								strArr[i] = itemVal.String()
 							}
@@ -225,7 +237,7 @@ func RegisterIgnoreToolsInVM(vm *goja.Runtime) error {
 			orderExported := orderArg.Export()
 
 			switch v := orderExported.(type) {
-			case []interface{}:
+			case []any:
 				groupOrder = make([]string, len(v))
 				for i, item := range v {
 					groupOrder[i] = fmt.Sprint(item)
@@ -238,8 +250,8 @@ func RegisterIgnoreToolsInVM(vm *goja.Runtime) error {
 					if lengthVal != nil && !goja.IsUndefined(lengthVal) && !goja.IsNull(lengthVal) {
 						length := int(lengthVal.ToInteger())
 						groupOrder = make([]string, length)
-						for i := 0; i < length; i++ {
-							itemVal := arr.Get(fmt.Sprint(i))
+						for i := range length {
+							itemVal := arr.Get(strconv.Itoa(i))
 							if itemVal != nil && !goja.IsUndefined(itemVal) && !goja.IsNull(itemVal) {
 								groupOrder[i] = itemVal.String()
 							}
@@ -257,7 +269,13 @@ func RegisterIgnoreToolsInVM(vm *goja.Runtime) error {
 		return vm.ToValue(result)
 	})
 
-	_ = toolsObj.(*goja.Object).Set("Ignore", ignoreObj)
+	toolsGoja, ok := toolsObj.(*goja.Object)
+	if !ok {
+		return errors.New("tools global is not an object")
+	}
+	if err := toolsGoja.Set("Ignore", ignoreObj); err != nil {
+		return fmt.Errorf("failed to set tools.Ignore: %w", err)
+	}
 
 	return nil
 }

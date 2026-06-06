@@ -3,9 +3,10 @@ package config
 import (
 	"archive/tar"
 	"bytes"
-	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"strings"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/binmanager"
 )
 
 func TestValidateApps_Valid(t *testing.T) {
@@ -1924,8 +1925,8 @@ func TestValidateRuntimes_Go_SystemModeWithoutGoVersion(t *testing.T) {
 	// In system mode goVersion is optional (mirrors UV); a missing config or
 	// empty version must not be a validation error.
 	tests := []struct {
-		name string
-		go_  *RuntimeConfigGo
+		name  string
+		goCfg *RuntimeConfigGo
 	}{
 		{"nil go config", nil},
 		{"empty goVersion", &RuntimeConfigGo{}},
@@ -1938,7 +1939,7 @@ func TestValidateRuntimes_Go_SystemModeWithoutGoVersion(t *testing.T) {
 					Kind:   RuntimeKindGo,
 					Mode:   RuntimeModeSystem,
 					System: &RuntimeConfigSystem{Command: "/usr/bin/go"},
-					Go:     tt.go_,
+					Go:     tt.goCfg,
 				},
 			}
 
@@ -2060,7 +2061,7 @@ func makeTestInlineArchive(t *testing.T) string {
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
 	content := []byte("module.exports = {};")
-	if err := tw.WriteHeader(&tar.Header{Name: "config.js", Mode: 0644, Size: int64(len(content))}); err != nil {
+	if err := tw.WriteHeader(&tar.Header{Name: "config.js", Mode: 0o644, Size: int64(len(content))}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := tw.Write(content); err != nil {

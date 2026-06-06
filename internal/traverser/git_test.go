@@ -16,11 +16,11 @@ func TestCollectGitignorePaths(t *testing.T) {
 	subdir2 := filepath.Join(tmpDir, "a", "b")
 	target := filepath.Join(tmpDir, "a", "b", "c")
 
-	_ = os.MkdirAll(target, 0755)
+	_ = os.MkdirAll(target, 0o755)
 
-	_ = os.WriteFile(filepath.Join(root, ".gitignore"), []byte(""), 0644)
-	_ = os.WriteFile(filepath.Join(subdir1, ".gitignore"), []byte(""), 0644)
-	_ = os.WriteFile(filepath.Join(subdir2, ".gitignore"), []byte(""), 0644)
+	_ = os.WriteFile(filepath.Join(root, ".gitignore"), []byte(""), 0o644)
+	_ = os.WriteFile(filepath.Join(subdir1, ".gitignore"), []byte(""), 0o644)
+	_ = os.WriteFile(filepath.Join(subdir2, ".gitignore"), []byte(""), 0o644)
 
 	paths := collectGitignorePaths(root, target)
 
@@ -51,7 +51,7 @@ func TestCollectGitignorePathsNoGitignores(t *testing.T) {
 	root := tmpDir
 	target := filepath.Join(tmpDir, "a", "b", "c")
 
-	_ = os.MkdirAll(target, 0755)
+	_ = os.MkdirAll(target, 0o755)
 
 	paths := collectGitignorePaths(root, target)
 
@@ -63,7 +63,7 @@ func TestCollectGitignorePathsNoGitignores(t *testing.T) {
 func TestCollectGitignorePathsSameRootAndTarget(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	_ = os.WriteFile(filepath.Join(tmpDir, ".gitignore"), []byte(""), 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, ".gitignore"), []byte(""), 0o644)
 
 	paths := collectGitignorePaths(tmpDir, tmpDir)
 
@@ -83,9 +83,9 @@ func TestCollectGitignorePathsPartialGitignores(t *testing.T) {
 	root := tmpDir
 	target := filepath.Join(tmpDir, "a", "b")
 
-	_ = os.MkdirAll(target, 0755)
+	_ = os.MkdirAll(target, 0o755)
 
-	_ = os.WriteFile(filepath.Join(root, ".gitignore"), []byte(""), 0644)
+	_ = os.WriteFile(filepath.Join(root, ".gitignore"), []byte(""), 0o644)
 
 	paths := collectGitignorePaths(root, target)
 
@@ -140,7 +140,7 @@ func TestGetGitRootFromSubdir(t *testing.T) {
 	}
 
 	subdir := filepath.Join(tmpDir, "a", "b", "c")
-	_ = os.MkdirAll(subdir, 0755)
+	_ = os.MkdirAll(subdir, 0o755)
 
 	ctx := context.Background()
 

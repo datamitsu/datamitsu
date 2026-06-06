@@ -1,9 +1,11 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	clr "github.com/datamitsu/datamitsu/internal/color"
@@ -29,7 +31,7 @@ var execCmd = &cobra.Command{
 		appName := args[0]
 		appArgs := args[1:]
 
-		if err := execApp(appName, appArgs); err != nil {
+		if err := execApp(commandContext(cmd), appName, appArgs); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
@@ -115,14 +117,16 @@ func buildAppDetail(app binmanager.AppInfo) string {
 	}
 
 	result := parts[0]
+	var resultSb118 strings.Builder
 	for _, p := range parts[1:] {
-		result += "  " + p
+		resultSb118.WriteString("  " + p)
 	}
+	result += resultSb118.String()
 	return result
 }
 
-func execApp(appName string, args []string) error {
-	c, _, _, err := loadConfig()
+func execApp(ctx context.Context, appName string, args []string) error {
+	c, _, _, err := loadConfigWithPaths(ctx, BeforeConfigPaths, NoAutoConfig, ConfigPaths)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
@@ -130,5 +134,5 @@ func execApp(appName string, args []string) error {
 	rm := runtimemanager.New(c.Runtimes)
 	b := binmanager.New(c.Apps, c.Bundles, rm)
 
-	return b.Exec(appName, args)
+	return b.Exec(ctx, appName, args)
 }

@@ -1,6 +1,7 @@
 package target
 
 import (
+	"context"
 	"os"
 	"runtime"
 	"testing"
@@ -139,11 +140,10 @@ func TestDetectViaELFInterpreterInvalidPath(t *testing.T) {
 }
 
 func TestDetectViaELFInterpreterNonELF(t *testing.T) {
-	tmpFile, err := os.CreateTemp("", "not-elf-*")
+	tmpFile, err := os.CreateTemp(t.TempDir(), "not-elf-*")
 	if err != nil {
 		t.Fatalf("CreateTemp failed: %v", err)
 	}
-	defer func() { _ = os.Remove(tmpFile.Name()) }()
 	if _, err := tmpFile.WriteString("not an ELF file"); err != nil {
 		t.Fatalf("WriteString failed: %v", err)
 	}
@@ -159,9 +159,9 @@ func TestDetectViaELFInterpreterNonELF(t *testing.T) {
 
 func TestDetectViaLoaderGlob(t *testing.T) {
 	tests := []struct {
-		name    string
-		globFn  func(string) ([]string, error)
-		want    LibcType
+		name   string
+		globFn func(string) ([]string, error)
+		want   LibcType
 	}{
 		{
 			name: "musl loader found",
@@ -243,7 +243,7 @@ func TestDetectLibcNonLinux(t *testing.T) {
 	if runtime.GOOS == "linux" {
 		t.Skip("this test only runs on non-Linux platforms")
 	}
-	result := DetectLibc()
+	result := DetectLibc(context.Background())
 	if result != LibcUnknown {
 		t.Errorf("DetectLibc() on non-Linux = %q, want %q", result, LibcUnknown)
 	}
@@ -253,7 +253,7 @@ func TestDetectLibcOnLinux(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("this test only runs on Linux")
 	}
-	result := DetectLibc()
+	result := DetectLibc(context.Background())
 	if result != LibcGlibc && result != LibcMusl && result != LibcUnknown {
 		t.Errorf("DetectLibc() = %q, want one of glibc/musl/unknown", result)
 	}
@@ -263,7 +263,7 @@ func TestDetectViaLddNonLinux(t *testing.T) {
 	if runtime.GOOS == "linux" {
 		t.Skip("only runs on non-Linux")
 	}
-	if result := detectViaLdd(); result != LibcUnknown {
+	if result := detectViaLdd(context.Background()); result != LibcUnknown {
 		t.Errorf("detectViaLdd() on non-Linux = %q, want unknown", result)
 	}
 }

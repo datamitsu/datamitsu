@@ -1,7 +1,10 @@
+// Package traverser walks a git repository tree, honoring .gitignore rules,
+// to discover files for downstream linting and tooling.
 package traverser
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,7 +18,6 @@ func GetGitRoot(ctx context.Context, cwd string) (string, error) {
 	current := ""
 
 	for {
-
 		var root, parent string
 
 		g, gctx := errgroup.WithContext(ctx)
@@ -32,7 +34,7 @@ func GetGitRoot(ctx context.Context, cwd string) (string, error) {
 
 			out, err := cmd.Output()
 			if err != nil {
-				return err
+				return fmt.Errorf("git rev-parse --show-toplevel: %w", err)
 			}
 			root = strings.TrimSpace(string(out))
 			return nil
@@ -56,7 +58,7 @@ func GetGitRoot(ctx context.Context, cwd string) (string, error) {
 		})
 
 		if err := g.Wait(); err != nil {
-			return "", err
+			return "", fmt.Errorf("resolve git root: %w", err)
 		}
 
 		if parent == "" {

@@ -1,11 +1,13 @@
 package cmd
 
 import (
-	"github.com/datamitsu/datamitsu/internal/binmanager"
-	"github.com/datamitsu/datamitsu/internal/config"
-	"fmt"
+	"context"
+	"errors"
 	"sort"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/config"
 )
 
 func TestScanReferencedApps(t *testing.T) {
@@ -300,7 +302,7 @@ type mockCommandInfoGetter struct {
 	err   error
 }
 
-func (m *mockCommandInfoGetter) GetCommandInfo(appName string) (*binmanager.CommandInfo, error) {
+func (m *mockCommandInfoGetter) GetCommandInfo(_ context.Context, appName string) (*binmanager.CommandInfo, error) {
 	m.calls = append(m.calls, appName)
 	if m.err != nil {
 		return nil, m.err
@@ -313,7 +315,7 @@ func TestInstallSmartInitApps(t *testing.T) {
 		mock := &mockCommandInfoGetter{}
 		appsToInstall := []string{"app-b", "app-a"}
 
-		err := installSmartInitApps(mock, appsToInstall)
+		err := installSmartInitApps(context.Background(), mock, appsToInstall)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -331,9 +333,9 @@ func TestInstallSmartInitApps(t *testing.T) {
 	})
 
 	t.Run("returns error on install failure", func(t *testing.T) {
-		mock := &mockCommandInfoGetter{err: fmt.Errorf("install failed")}
+		mock := &mockCommandInfoGetter{err: errors.New("install failed")}
 
-		err := installSmartInitApps(mock, []string{"broken-app"})
+		err := installSmartInitApps(context.Background(), mock, []string{"broken-app"})
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -345,7 +347,7 @@ func TestInstallSmartInitApps(t *testing.T) {
 	t.Run("no-op when list is empty", func(t *testing.T) {
 		mock := &mockCommandInfoGetter{}
 
-		err := installSmartInitApps(mock, nil)
+		err := installSmartInitApps(context.Background(), mock, nil)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}

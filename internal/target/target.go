@@ -1,10 +1,15 @@
 package target
 
-import "runtime"
+import (
+	"context"
+	"runtime"
+	"sync"
+)
 
 // LibcType represents the libc implementation on the host system.
 type LibcType string
 
+// Supported libc implementations; LibcUnknown means detection failed or N/A.
 const (
 	LibcGlibc   LibcType = "glibc"
 	LibcMusl    LibcType = "musl"
@@ -14,8 +19,10 @@ const (
 // ResolutionSource indicates how a target was resolved.
 type ResolutionSource int
 
+// Resolution outcomes: ResolutionExact for an exact match, ResolutionFallback
+// when a substitute target was used.
 const (
-	ResolutionExact    ResolutionSource = iota
+	ResolutionExact ResolutionSource = iota
 	ResolutionFallback
 )
 
@@ -46,14 +53,29 @@ type ResolvedTarget struct {
 }
 
 // DetectHost returns the Target for the current system.
-func DetectHost() Target {
+func DetectHost(ctx context.Context) Target {
 	libc := LibcUnknown
 	if runtime.GOOS == "linux" {
-		libc = DetectLibc()
+		libc = DetectLibc(ctx)
 	}
 	return Target{
 		OS:   runtime.GOOS,
 		Arch: runtime.GOARCH,
 		Libc: libc,
 	}
+}
+
+// cachedHost memoizes host detection. The host target is machine-static, so the
+// underlying `ldd` probe runs at most once per process instead of on every
+// BinManager/RuntimeManager construction. The probe is a one-time startup
+// detection with no caller context, so a background context is correct.
+var cachedHost = sync.OnceValue(func() Target {
+	return DetectHost(context.Background())
+})
+
+// HostTarget returns the memoized host Target, running detection once on first
+// call. Use this from constructors and other contextless call sites; callers
+// that already hold a context should call DetectHost/DetectLibc directly.
+func HostTarget() Target {
+	return cachedHost()
 }

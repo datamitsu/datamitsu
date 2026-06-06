@@ -1,8 +1,10 @@
 package remotecfg
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -59,7 +61,7 @@ func TestCachedConfigPath_SameURL(t *testing.T) {
 
 func TestLoadCached_Missing(t *testing.T) {
 	_, err := LoadCached("/nonexistent/path")
-	if !os.IsNotExist(err) {
+	if !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("expected os.ErrNotExist, got %v", err)
 	}
 }
@@ -67,7 +69,7 @@ func TestLoadCached_Missing(t *testing.T) {
 func TestLoadCached_Success(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "test.ts")
-	if err := os.WriteFile(path, []byte("content"), 0644); err != nil {
+	if err := os.WriteFile(path, []byte("content"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -111,7 +113,7 @@ func TestFetchRemoteConfig_Success(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	content, err := FetchRemoteConfig(srv.URL+"/config.ts", hash)
+	content, err := FetchRemoteConfig(context.Background(), srv.URL+"/config.ts", hash)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +131,7 @@ func TestFetchRemoteConfig_Sha256Prefix(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	content, err := FetchRemoteConfig(srv.URL, hash)
+	content, err := FetchRemoteConfig(context.Background(), srv.URL, hash)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,14 +146,14 @@ func TestFetchRemoteConfig_HashMismatch(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, err := FetchRemoteConfig(srv.URL, "0000000000000000000000000000000000000000000000000000000000000000")
+	_, err := FetchRemoteConfig(context.Background(), srv.URL, "0000000000000000000000000000000000000000000000000000000000000000")
 	if err == nil {
 		t.Fatal("expected hash mismatch error")
 	}
 }
 
 func TestFetchRemoteConfig_EmptyHash(t *testing.T) {
-	_, err := FetchRemoteConfig("https://example.com/config.ts", "")
+	_, err := FetchRemoteConfig(context.Background(), "https://example.com/config.ts", "")
 	if err == nil {
 		t.Fatal("expected error for empty hash")
 	}
@@ -163,7 +165,7 @@ func TestFetchRemoteConfig_HTTPError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, err := FetchRemoteConfig(srv.URL, "abc123")
+	_, err := FetchRemoteConfig(context.Background(), srv.URL, "abc123")
 	if err == nil {
 		t.Fatal("expected error for HTTP 404")
 	}
@@ -182,7 +184,7 @@ func TestResolve_CacheHit(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	content, err := Resolve(url, hash, dir)
+	content, err := Resolve(context.Background(), url, hash, dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -201,7 +203,7 @@ func TestResolve_CacheMiss_Fetch(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	content, err := Resolve(srv.URL+"/config.ts", hash, dir)
+	content, err := Resolve(context.Background(), srv.URL+"/config.ts", hash, dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -229,14 +231,14 @@ func TestResolve_FetchError_NoCache(t *testing.T) {
 	closedURL := srv.URL + "/config.ts"
 	srv.Close()
 
-	_, err := Resolve(closedURL, "0000000000000000000000000000000000000000000000000000000000000000", dir)
+	_, err := Resolve(context.Background(), closedURL, "0000000000000000000000000000000000000000000000000000000000000000", dir)
 	if err == nil {
 		t.Fatal("expected error when fetch fails and no cache exists")
 	}
 }
 
 func TestResolve_EmptyHash(t *testing.T) {
-	_, err := Resolve("https://example.com/config.ts", "", "/tmp")
+	_, err := Resolve(context.Background(), "https://example.com/config.ts", "", "/tmp")
 	if err == nil {
 		t.Fatal("expected error for empty hash")
 	}
@@ -260,7 +262,7 @@ func TestResolve_CacheHashMismatch_Refetches(t *testing.T) {
 	}
 
 	// Resolve with new hash — should refetch
-	content, err := Resolve(srv.URL+"/config.ts", newHash, dir)
+	content, err := Resolve(context.Background(), srv.URL+"/config.ts", newHash, dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -285,7 +287,7 @@ func TestResolve_CacheHashMismatch_FetchFails(t *testing.T) {
 	}
 
 	// Resolve with a hash that doesn't match — should fail (no stale fallback)
-	_, err := Resolve(srvURL, "0000000000000000000000000000000000000000000000000000000000000000", dir)
+	_, err := Resolve(context.Background(), srvURL, "0000000000000000000000000000000000000000000000000000000000000000", dir)
 	if err == nil {
 		t.Fatal("expected error when cache hash doesn't match and fetch fails")
 	}

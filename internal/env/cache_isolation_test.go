@@ -8,28 +8,8 @@ import (
 )
 
 func TestToolCacheIsolation_DifferentToolsGetIsolatedDirs(t *testing.T) {
-	originalEnv, wasSet := os.LookupEnv(cacheDir.Name)
-	defer func() {
-		if wasSet {
-			if err := os.Setenv(cacheDir.Name, originalEnv); err != nil {
-				t.Errorf("failed to restore env: %v", err)
-			}
-		} else {
-			if err := os.Unsetenv(cacheDir.Name); err != nil {
-				t.Errorf("failed to unset env: %v", err)
-			}
-		}
-	}()
-
-	tmpDir, err := os.MkdirTemp("", "toolcache-isolation-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer func() { _ = os.RemoveAll(tmpDir) }()
-
-	if err := os.Setenv(cacheDir.Name, tmpDir); err != nil {
-		t.Fatalf("failed to set env: %v", err)
-	}
+	tmpDir := t.TempDir()
+	t.Setenv(cacheDir.Name, tmpDir)
 
 	gitRoot := "/home/user/myproject"
 
@@ -48,10 +28,10 @@ func TestToolCacheIsolation_DifferentToolsGetIsolatedDirs(t *testing.T) {
 	}
 
 	// Create directories and write files to verify no conflicts
-	if err := os.MkdirAll(tscPath, 0755); err != nil {
+	if err := os.MkdirAll(tscPath, 0o755); err != nil {
 		t.Fatalf("failed to create tsc cache dir: %v", err)
 	}
-	if err := os.MkdirAll(eslintPath, 0755); err != nil {
+	if err := os.MkdirAll(eslintPath, 0o755); err != nil {
 		t.Fatalf("failed to create eslint cache dir: %v", err)
 	}
 
@@ -59,10 +39,10 @@ func TestToolCacheIsolation_DifferentToolsGetIsolatedDirs(t *testing.T) {
 	tscFile := filepath.Join(tscPath, "cache.json")
 	eslintFile := filepath.Join(eslintPath, "cache.json")
 
-	if err := os.WriteFile(tscFile, []byte(`{"tool":"tsc"}`), 0644); err != nil {
+	if err := os.WriteFile(tscFile, []byte(`{"tool":"tsc"}`), 0o644); err != nil {
 		t.Fatalf("failed to write tsc cache file: %v", err)
 	}
-	if err := os.WriteFile(eslintFile, []byte(`{"tool":"eslint"}`), 0644); err != nil {
+	if err := os.WriteFile(eslintFile, []byte(`{"tool":"eslint"}`), 0o644); err != nil {
 		t.Fatalf("failed to write eslint cache file: %v", err)
 	}
 
@@ -93,28 +73,8 @@ func TestToolCacheIsolation_DifferentToolsGetIsolatedDirs(t *testing.T) {
 }
 
 func TestToolCacheIsolation_MonorepoSameToolDifferentProjects(t *testing.T) {
-	originalEnv, wasSet := os.LookupEnv(cacheDir.Name)
-	defer func() {
-		if wasSet {
-			if err := os.Setenv(cacheDir.Name, originalEnv); err != nil {
-				t.Errorf("failed to restore env: %v", err)
-			}
-		} else {
-			if err := os.Unsetenv(cacheDir.Name); err != nil {
-				t.Errorf("failed to unset env: %v", err)
-			}
-		}
-	}()
-
-	tmpDir, err := os.MkdirTemp("", "toolcache-monorepo-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer func() { _ = os.RemoveAll(tmpDir) }()
-
-	if err := os.Setenv(cacheDir.Name, tmpDir); err != nil {
-		t.Fatalf("failed to set env: %v", err)
-	}
+	tmpDir := t.TempDir()
+	t.Setenv(cacheDir.Name, tmpDir)
 
 	gitRoot := "/home/user/monorepo"
 
@@ -137,8 +97,8 @@ func TestToolCacheIsolation_MonorepoSameToolDifferentProjects(t *testing.T) {
 
 	// All paths must be unique
 	paths := map[string]string{
-		"frontend/tsc":      frontendPath,
-		"backend/tsc":       backendPath,
+		"frontend/tsc":       frontendPath,
+		"backend/tsc":        backendPath,
 		"root/golangci-lint": rootToolPath,
 	}
 	seen := make(map[string]string)
@@ -151,11 +111,11 @@ func TestToolCacheIsolation_MonorepoSameToolDifferentProjects(t *testing.T) {
 
 	// Create directories and write files
 	for label, p := range paths {
-		if err := os.MkdirAll(p, 0755); err != nil {
+		if err := os.MkdirAll(p, 0o755); err != nil {
 			t.Fatalf("failed to create dir for %s: %v", label, err)
 		}
 		cacheFile := filepath.Join(p, "tsbuildinfo")
-		if err := os.WriteFile(cacheFile, []byte(label), 0644); err != nil {
+		if err := os.WriteFile(cacheFile, []byte(label), 0o644); err != nil {
 			t.Fatalf("failed to write cache file for %s: %v", label, err)
 		}
 	}
@@ -185,28 +145,8 @@ func TestToolCacheIsolation_MonorepoSameToolDifferentProjects(t *testing.T) {
 }
 
 func TestToolCacheIsolation_CacheClearingWithNewStructure(t *testing.T) {
-	originalEnv, wasSet := os.LookupEnv(cacheDir.Name)
-	defer func() {
-		if wasSet {
-			if err := os.Setenv(cacheDir.Name, originalEnv); err != nil {
-				t.Errorf("failed to restore env: %v", err)
-			}
-		} else {
-			if err := os.Unsetenv(cacheDir.Name); err != nil {
-				t.Errorf("failed to unset env: %v", err)
-			}
-		}
-	}()
-
-	tmpDir, err := os.MkdirTemp("", "toolcache-clear-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer func() { _ = os.RemoveAll(tmpDir) }()
-
-	if err := os.Setenv(cacheDir.Name, tmpDir); err != nil {
-		t.Fatalf("failed to set env: %v", err)
-	}
+	tmpDir := t.TempDir()
+	t.Setenv(cacheDir.Name, tmpDir)
 
 	gitRoot := "/home/user/monorepo"
 
@@ -232,11 +172,11 @@ func TestToolCacheIsolation_CacheClearingWithNewStructure(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GetProjectCachePath(%s, %s) error: %v", e.project, e.tool, err)
 		}
-		if err := os.MkdirAll(cachePath, 0755); err != nil {
+		if err := os.MkdirAll(cachePath, 0o755); err != nil {
 			t.Fatalf("failed to create cache dir: %v", err)
 		}
 		filePath := filepath.Join(cachePath, e.filename)
-		if err := os.WriteFile(filePath, []byte(e.content), 0644); err != nil {
+		if err := os.WriteFile(filePath, []byte(e.content), 0o644); err != nil {
 			t.Fatalf("failed to write cache file: %v", err)
 		}
 	}
@@ -278,7 +218,7 @@ func TestToolCacheIsolation_CacheClearingWithNewStructure(t *testing.T) {
 	projectHash := HashProjectPath(gitRoot)
 	cacheBase := filepath.Join(tmpDir, "cache", "projects", projectHash, "cache")
 
-	err = filepath.Walk(cacheBase, func(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk(cacheBase, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}

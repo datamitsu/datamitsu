@@ -3,14 +3,16 @@ package runtimemanager
 import (
 	"context"
 	"fmt"
-	"github.com/datamitsu/datamitsu/internal/binmanager"
-	"github.com/datamitsu/datamitsu/internal/config"
-	"github.com/datamitsu/datamitsu/internal/env"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/env"
 
 	"go.uber.org/zap"
 )
@@ -59,8 +61,8 @@ func uvVenvHealthy(appEnvPath, binPath string) bool {
 // InstallUVApp installs a UV app if not already cached.
 // If files is non-empty, writes them to the app directory before running uv.
 // Safe for concurrent use from multiple goroutines.
-func (rm *RuntimeManager) InstallUVApp(appName string, appConfig *binmanager.AppConfigUV, customEnv map[string]string, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
-	ctx, cancel, timeoutSec := newInstallContext(context.Background())
+func (rm *RuntimeManager) InstallUVApp(ctx context.Context, appName string, appConfig *binmanager.AppConfigUV, customEnv map[string]string, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
+	ctx, cancel, timeoutSec := newInstallContext(ctx)
 	defer cancel()
 	key := "uv/" + appName
 	_, err, _ := rm.appInstall.Do(key, func() (any, error) {
@@ -108,7 +110,7 @@ func (rm *RuntimeManager) installUVAppOnce(ctx context.Context, appName string, 
 		return fmt.Errorf("failed to get runtime path: %w", err)
 	}
 
-	if err := os.MkdirAll(appEnvPath, 0755); err != nil {
+	if err := os.MkdirAll(appEnvPath, 0o755); err != nil {
 		return fmt.Errorf("failed to create app directory: %w", err)
 	}
 
@@ -122,20 +124,20 @@ func (rm *RuntimeManager) installUVAppOnce(ctx context.Context, appName string, 
 	reservedEnv := getUVEnvVars(appEnvPath)
 	envVars := mergeInstallEnv(reservedEnv, customEnv, appEnvPath)
 	for _, dir := range reservedEnv {
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return fmt.Errorf("failed to create directory %q: %w", dir, err)
 		}
 	}
 
 	if len(files) > 0 || len(archives) > 0 {
-		if err := binmanager.WriteAppFiles(appEnvPath, files, archives); err != nil {
+		if err := binmanager.WriteAppFiles(ctx, appEnvPath, files, archives); err != nil {
 			return fmt.Errorf("failed to write app files/archives for %q: %w", appName, err)
 		}
 	}
 
 	reqPython := resolveRequiresPython(appConfig.RequiresPython)
-	pyprojectTOML := buildPyprojectTOML(appName, appConfig.PackageName, appConfig.Version, reqPython)
-	if err := os.WriteFile(filepath.Join(appEnvPath, "pyproject.toml"), []byte(pyprojectTOML), 0644); err != nil {
+	pyprojectTOML := buildPyprojectTOML(appConfig.PackageName, appConfig.Version, reqPython)
+	if err := os.WriteFile(filepath.Join(appEnvPath, "pyproject.toml"), []byte(pyprojectTOML), 0o644); err != nil {
 		return fmt.Errorf("failed to write pyproject.toml for %q: %w", appName, err)
 	}
 
@@ -145,14 +147,14 @@ func (rm *RuntimeManager) installUVAppOnce(ctx context.Context, appName string, 
 			return fmt.Errorf("failed to decompress lock file for %q: %w", appName, decErr)
 		}
 		lockFilePath := filepath.Join(appEnvPath, "uv.lock")
-		if err := os.WriteFile(lockFilePath, []byte(lockContent), 0644); err != nil {
+		if err := os.WriteFile(lockFilePath, []byte(lockContent), 0o644); err != nil {
 			return fmt.Errorf("failed to write uv.lock for %q: %w", appName, err)
 		}
 	}
 
 	args := buildUVInstallArgs(appConfig.LockFile, rc.UV)
 
-	cmd := exec.CommandContext(ctx, uvPath, args...)
+	cmd := exec.CommandContext(ctx, uvPath, args...) //nolint:gosec // G204: uvPath comes from the trusted managed runtime store and args are built from validated config
 	cmd.Dir = appEnvPath
 	cmd.Env = buildEnvWithOverrides(os.Environ(), envVars)
 	cmd.Stdout = os.Stderr
@@ -222,7 +224,7 @@ func uvVersionForHash(version, requiresPython string) string {
 	return version + "\x00" + resolveRequiresPython(requiresPython)
 }
 
-func buildPyprojectTOML(appName string, packageName string, version string, requiresPython string) string {
+func buildPyprojectTOML(packageName string, version string, requiresPython string) string {
 	safeName := strings.NewReplacer("@", "", "/", "-").Replace(packageName)
 	dep := packageName
 	if version != "" {
@@ -238,6 +240,7 @@ dependencies = [
 `, escapeTOMLString(safeName), escapeTOMLString(requiresPython), escapeTOMLString(dep))
 }
 
+// GetUVCommandInfo returns command info for running a uv-managed app.
 func (rm *RuntimeManager) GetUVCommandInfo(appName string, appConfig *binmanager.AppConfigUV, files map[string]string, archives map[string]*binmanager.ArchiveSpec) (*binmanager.CommandInfo, error) {
 	runtimeName, _, err := rm.ResolveRuntime(appConfig.Runtime, config.RuntimeKindUV)
 	if err != nil {
@@ -271,15 +274,13 @@ func mergeInstallEnv(reserved, custom map[string]string, appDir string) map[stri
 	for k, v := range custom {
 		merged[k] = env.ExpandPlaceholders(v, appDir)
 	}
-	for k, v := range reserved {
-		merged[k] = v
-	}
+	maps.Copy(merged, reserved)
 	return merged
 }
 
 func buildEnvWithOverrides(base []string, overrides map[string]string) []string {
-	env := make([]string, len(base))
-	copy(env, base)
+	env := make([]string, 0, len(base)+len(overrides))
+	env = append(env, base...)
 
 	keyToIdx := make(map[string]int, len(env))
 	for i, e := range env {

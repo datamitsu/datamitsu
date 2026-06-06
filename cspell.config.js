@@ -2,7 +2,7 @@ import { config } from "./.datamitsu/cspell.config.js";
 
 export default {
   ...config,
-  ignorePaths: [...(config.ignorePaths ?? []), "**/*.asc"],
+  ignorePaths: [...(config.ignorePaths ?? []), "**/*.asc", "**/*.golangci.yaml"],
   words: [
     ...config.words,
     "clearsign",
@@ -223,5 +223,16 @@ export default {
     "libatomic",
     "perproject",
     "Fatalf",
+    "nolint",
+    "nilnil",
+    "forbidigo",
+    "nilerr",
+    "unrelatable",
+    "trippable",
+    "unparam",
+    "testableexamples",
+    "gosec",
+    "usetesting",
+    "transpiles",
   ],
 };

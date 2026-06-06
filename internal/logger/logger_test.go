@@ -17,7 +17,7 @@ func TestLoggerIsZapLogger(t *testing.T) {
 		t.Fatal("Logger is nil")
 	}
 
-	if _, ok := interface{}(Logger).(*zap.Logger); !ok {
+	if _, ok := any(Logger).(*zap.Logger); !ok {
 		t.Error("Logger is not a *zap.Logger")
 	}
 }

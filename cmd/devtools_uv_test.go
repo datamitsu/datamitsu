@@ -21,7 +21,7 @@ func TestReadUVAppsJSON(t *testing.T) {
   }
 }
 `
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -55,7 +55,7 @@ func TestReadUVAppsJSON_FileNotFound(t *testing.T) {
 func TestReadUVAppsJSON_InvalidJSON(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "bad.json")
-	if err := os.WriteFile(path, []byte("not json"), 0644); err != nil {
+	if err := os.WriteFile(path, []byte("not json"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
