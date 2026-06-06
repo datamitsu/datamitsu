@@ -124,7 +124,7 @@ func (g *GitIgnore) CollectRules(ctx context.Context, target string) error {
 	if target != g.root {
 		rel, err := filepath.Rel(g.root, target)
 		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-			return nil
+			return nil //nolint:nilerr // target outside root: no rules to collect
 		}
 	}
 
@@ -146,7 +146,7 @@ func (g *GitIgnore) CollectRules(ctx context.Context, target string) error {
 
 			content, err := os.ReadFile(path)
 			if err != nil {
-				return nil
+				return nil //nolint:nilerr // skip unreadable gitignore, keep collecting the rest
 			}
 
 			// relPath, err := filepath.Rel(root, filepath.Dir(path))

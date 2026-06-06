@@ -226,5 +226,7 @@ export default {
     "nolint",
     "nilnil",
     "forbidigo",
+    "nilerr",
+    "unrelatable",
   ],
 };

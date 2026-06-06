@@ -62,11 +62,14 @@ linters:
     - dupword
     - forbidigo
     - depguard
+    - promlinter
+    - sloglint
+    - rowserrcheck
+    - exptostd
+    - nilerr
+    # - funcorder
     # - exhaustruct
     # - maintidx
-    # - promlinter
-    # - rowserrcheck
-    # - sloglint
     # - spancheck
     # - gocyclo
     # - gosec
@@ -74,7 +77,6 @@ linters:
     # - goconst
     # - mnd
     # - revive
-    # - nilerr
     # - noctx
     # - gochecknoinits
     # - tagliatelle
@@ -90,8 +92,6 @@ linters:
     # - unparam
     # - canonicalheader
     # - embeddedstructfieldcheck
-    # - exptostd
-    # - funcorder
   # - cyclop
   # - nestif
   # - funlen

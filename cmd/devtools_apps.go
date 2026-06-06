@@ -214,7 +214,7 @@ func countFiles(dir string) int {
 	count := 0
 	_ = filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
-			return nil
+			return nil //nolint:nilerr // best-effort count: skip unreadable entries, keep walking
 		}
 		if d.Type()&fs.ModeSymlink != 0 {
 			return nil

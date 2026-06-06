@@ -285,7 +285,7 @@ func (rm *RuntimeManager) installGoAppOnce(ctx context.Context, appName string, 
 func ForceRemoveAll(root string) error {
 	_ = filepath.WalkDir(root, func(p string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
-			return nil
+			return nil //nolint:nilerr // best-effort chmod: skip on walk error, RemoveAll reports real failures
 		}
 		_ = os.Chmod(p, 0o700)
 		return nil

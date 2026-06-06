@@ -115,12 +115,12 @@ func CollectGitignoreRules(ctx context.Context, root, target string) (*Gitignore
 
 			content, err := os.ReadFile(path)
 			if err != nil {
-				return nil
+				return nil //nolint:nilerr // skip unreadable gitignore, keep collecting the rest
 			}
 
 			relPath, err := filepath.Rel(root, filepath.Dir(path))
 			if err != nil {
-				return nil
+				return nil //nolint:nilerr // unrelatable path: skip this gitignore, keep going
 			}
 
 			domain := []string{}
