@@ -15,7 +15,6 @@ func GetGitRoot(ctx context.Context, cwd string) (string, error) {
 	current := ""
 
 	for {
-
 		var root, parent string
 
 		g, gctx := errgroup.WithContext(ctx)

@@ -357,7 +357,6 @@ type InstallStats struct {
 
 func (bm *BinManager) installInternal(includeOptional bool) error {
 	for name := range bm.mapOfApps {
-
 		if bm.mapOfApps[name].Binary == nil {
 			continue
 		}
@@ -749,7 +748,6 @@ func extractArchives(installPath string, archives map[string]*ArchiveSpec) error
 			}
 
 			log.Debug("extracted inline archive", zap.String("name", name), zap.String("dest", installPath))
-
 		} else if spec.IsExternal() {
 			if err := downloadAndExtractExternalArchive(name, spec, installPath); err != nil {
 				return err

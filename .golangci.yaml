@@ -27,7 +27,7 @@ linters:
     - unconvert
     - unused
     - wastedassign
-    # - whitespace
+    - whitespace
     # - wrapcheck
     # - unparam
     # - usestdlibvars

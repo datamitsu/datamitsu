@@ -398,7 +398,6 @@ func (e *Executor) executeTask(ctx context.Context, task Task) ExecutionResult {
 	// Get command info
 	cmdInfo, err := e.appManager.GetCommandInfo(task.OpConfig.App)
 	if err != nil {
-
 		log.Debug("failed to get command info",
 			zap.String("app", task.OpConfig.App),
 			zap.String("workingDir", workingDir),

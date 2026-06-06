@@ -33,7 +33,6 @@ func NewGitIgnore(root string) *GitIgnore {
 
 func (g *GitIgnore) Compile() error {
 	for _, res := range g.list {
-
 		relPath, err := filepath.Rel(g.root, filepath.Dir(res.absPath))
 		if err != nil {
 			continue
