@@ -68,9 +68,36 @@ linters:
     - exptostd
     - nilerr
     - funcorder
+    - spancheck
+    - loggercheck
+    - nilnesserr
+    - recvcheck
+    - canonicalheader
+    - embeddedstructfieldcheck
+    - arangolint
+    - clickhouselint
+    - musttag
+    - gochecksumtype
+    - ginkgolinter
+    - goprintffuncname
+    - ginkgolinter
+    - decorder
+    - containedctx
+    - gomoddirectives
+    - gomodguard_v2
+    - grouper
+    - iface
+    - importas
+    - interfacebloat
+    - nosprintfhostport
+    - protogetter
+    - unqueryvet
+    - zerologlint
+    # - errchkjson
+    # - thelper
+    # - forcetypeassert
     # - exhaustruct
     # - maintidx
-    # - spancheck
     # - gocyclo
     # - gosec
     # - dupl
@@ -80,48 +107,19 @@ linters:
     # - noctx
     # - gochecknoinits
     # - tagliatelle
-    # - forcetypeassert
-    # - loggercheck
-    # - thelper
     # - contextcheck
-    # - errchkjson
-    # - nilnesserr
-    # - recvcheck
+    # - cyclop
+    # - dogsled
+    # - err113
+    # - funlen
+    # - gocognit
+    # - inamedparam
+    # - nestif
+    # - paralleltest
+    # - testableexamples
+    # - unparam
     # - usetesting
     # - wrapcheck
-    # - unparam
-    # - canonicalheader
-    # - embeddedstructfieldcheck
-  # - cyclop
-  # - nestif
-  # - funlen
-  # - gocognit
-  # - arangodb
-  # - clickhouselint
-
-  # - musttag
-  # - gochecksumtype
-  # - ginkgolinter
-  # - goprintffuncname
-  # - ginkgolinter
-  # - err113
-  # - dogsled
-  # - decorder
-  # - containedctx
-  # - gomoddirectives
-  # - gomodguard_v2
-
-  # - grouper
-  # - iface
-  # - importas
-  # - inamedparam
-  # - interfacebloat
-  # - nosprintfhostport
-  # - paralleltest
-  # - protogetter
-  # - testableexamples
-  # - unqueryvet
-  # - zerologlint
   exclusions:
     rules:
       # internal/env is the sanctioned abstraction layer — it is allowed to call
