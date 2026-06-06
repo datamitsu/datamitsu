@@ -28,6 +28,7 @@ linters:
     - unused
     - wastedassign
     - whitespace
+    - tagalign
     # - wrapcheck
     # - unparam
     - usestdlibvars
