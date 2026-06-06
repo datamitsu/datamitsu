@@ -611,6 +611,160 @@ func TestDiscoverAutoConfigNeitherExists(t *testing.T) {
 	}
 }
 
+// writeBeforeConfigAuto writes an auto-discovery config file at dir's git-root
+// path whose getBeforeConfigs() body is the given JS array literal, and returns
+// the config path. Pass an empty body to omit getBeforeConfigs entirely.
+func writeBeforeConfigAuto(t *testing.T, dir, getBeforeConfigsBody string) string {
+	t.Helper()
+	autoPath := filepath.Join(dir, ldflags.PackageName+".config.js")
+	var src string
+	if getBeforeConfigsBody == "" {
+		src = `function getConfig(input) { return {}; }`
+	} else {
+		src = fmt.Sprintf(
+			"function getBeforeConfigs() { return %s; }\nfunction getConfig(input) { return {}; }",
+			getBeforeConfigsBody,
+		)
+	}
+	if err := os.WriteFile(autoPath, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return autoPath
+}
+
+func writeStubConfig(t *testing.T, path string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(`function getConfig(input) { return {}; }`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDiscoverBeforeConfigsAbsent(t *testing.T) {
+	dir := t.TempDir()
+	autoPath := writeBeforeConfigAuto(t, dir, "")
+
+	got, err := discoverBeforeConfigs(autoPath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != nil {
+		t.Errorf("got %v, want nil when getBeforeConfigs is absent", got)
+	}
+}
+
+func TestDiscoverBeforeConfigsEmptyArray(t *testing.T) {
+	dir := t.TempDir()
+	autoPath := writeBeforeConfigAuto(t, dir, "[]")
+
+	got, err := discoverBeforeConfigs(autoPath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("got %v, want empty for []", got)
+	}
+}
+
+func TestDiscoverBeforeConfigsRelativePath(t *testing.T) {
+	dir := t.TempDir()
+	sharedPath := filepath.Join(dir, "shared.js")
+	writeStubConfig(t, sharedPath)
+	autoPath := writeBeforeConfigAuto(t, dir, `[{ path: "./shared.js" }]`)
+
+	got, err := discoverBeforeConfigs(autoPath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{sharedPath}
+	if !slices.Equal(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+func TestDiscoverBeforeConfigsAbsolutePath(t *testing.T) {
+	dir := t.TempDir()
+	targetDir := t.TempDir()
+	sharedPath := filepath.Join(targetDir, "shared.js")
+	writeStubConfig(t, sharedPath)
+	autoPath := writeBeforeConfigAuto(t, dir, fmt.Sprintf(`[{ path: %q }]`, sharedPath))
+
+	got, err := discoverBeforeConfigs(autoPath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{sharedPath}
+	if !slices.Equal(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+func TestDiscoverBeforeConfigsPreservesOrder(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"a.js", "b.js", "c.js"} {
+		writeStubConfig(t, filepath.Join(dir, name))
+	}
+	autoPath := writeBeforeConfigAuto(t, dir, `[{ path: "./c.js" }, { path: "./a.js" }, { path: "./b.js" }]`)
+
+	got, err := discoverBeforeConfigs(autoPath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{
+		filepath.Join(dir, "c.js"),
+		filepath.Join(dir, "a.js"),
+		filepath.Join(dir, "b.js"),
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+func TestDiscoverBeforeConfigsEmptyPathErrors(t *testing.T) {
+	dir := t.TempDir()
+	autoPath := writeBeforeConfigAuto(t, dir, `[{ path: "" }]`)
+
+	_, err := discoverBeforeConfigs(autoPath)
+	if err == nil {
+		t.Fatal("expected error for empty path")
+	}
+	if !strings.Contains(err.Error(), "path is required") {
+		t.Errorf("error = %q, want it to contain 'path is required'", err.Error())
+	}
+}
+
+func TestDiscoverBeforeConfigsNonExistentFileErrors(t *testing.T) {
+	dir := t.TempDir()
+	autoPath := writeBeforeConfigAuto(t, dir, `[{ path: "./does-not-exist.js" }]`)
+
+	_, err := discoverBeforeConfigs(autoPath)
+	if err == nil {
+		t.Fatal("expected error for non-existent before config file")
+	}
+	if !strings.Contains(err.Error(), "does-not-exist.js") {
+		t.Errorf("error = %q, want it to mention the missing file", err.Error())
+	}
+}
+
+func TestDiscoverBeforeConfigsDedup(t *testing.T) {
+	dir := t.TempDir()
+	sharedPath := filepath.Join(dir, "shared.js")
+	writeStubConfig(t, sharedPath)
+	// Same file declared twice: once relative, once absolute — both resolve to
+	// the same cleaned path and dedup to a single entry.
+	autoPath := writeBeforeConfigAuto(t, dir, fmt.Sprintf(`[{ path: "./shared.js" }, { path: %q }]`, sharedPath))
+
+	got, err := discoverBeforeConfigs(autoPath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("got %d paths, want 1 (deduped): %v", len(got), got)
+	}
+	if got[0] != sharedPath {
+		t.Errorf("got %q, want %q", got[0], sharedPath)
+	}
+}
+
 func computeHash(content string) string {
 	h := sha256.Sum256([]byte(content))
 	return "sha256:" + hex.EncodeToString(h[:])
