@@ -767,6 +767,57 @@ func TestDiscoverBeforeConfigsDedup(t *testing.T) {
 	}
 }
 
+func TestDiscoverBeforeConfigsNonArrayReturnErrors(t *testing.T) {
+	dir := t.TempDir()
+	// getBeforeConfigs() returning a non-array value cannot be exported into
+	// []beforeConfigEntry — a config author typo must surface a clear error.
+	autoPath := writeBeforeConfigAuto(t, dir, `"not-an-array"`)
+
+	_, err := discoverBeforeConfigs(context.Background(), autoPath)
+	if err == nil {
+		t.Fatal("expected error for non-array getBeforeConfigs return")
+	}
+	if !strings.Contains(err.Error(), "failed to parse getBeforeConfigs") {
+		t.Errorf("error = %q, want it to contain 'failed to parse getBeforeConfigs'", err.Error())
+	}
+}
+
+func TestDiscoverBeforeConfigsFunctionThrowsErrors(t *testing.T) {
+	dir := t.TempDir()
+	autoPath := filepath.Join(dir, ldflags.PackageName+".config.js")
+	src := "function getBeforeConfigs() { throw new Error('boom'); }\n" +
+		"function getConfig(input) { return {}; }"
+	if err := os.WriteFile(autoPath, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := discoverBeforeConfigs(context.Background(), autoPath)
+	if err == nil {
+		t.Fatal("expected error when getBeforeConfigs throws")
+	}
+	if !strings.Contains(err.Error(), "failed to call getBeforeConfigs") {
+		t.Errorf("error = %q, want it to contain 'failed to call getBeforeConfigs'", err.Error())
+	}
+	if !strings.Contains(err.Error(), "boom") {
+		t.Errorf("error = %q, want it to propagate the thrown message 'boom'", err.Error())
+	}
+}
+
+func TestBuildConfigSourcesPropagatesDiscoverError(t *testing.T) {
+	dir := t.TempDir()
+	// A malformed getBeforeConfigs() in the auto config must fail the whole
+	// source assembly, not be silently swallowed.
+	autoPath := writeBeforeConfigAuto(t, dir, `"not-an-array"`)
+
+	_, err := buildConfigSources(context.Background(), nil, autoPath, nil)
+	if err == nil {
+		t.Fatal("expected buildConfigSources to propagate the discoverBeforeConfigs error")
+	}
+	if !strings.Contains(err.Error(), "failed to parse getBeforeConfigs") {
+		t.Errorf("error = %q, want it to contain 'failed to parse getBeforeConfigs'", err.Error())
+	}
+}
+
 func sourceNames(sources []configSource) []string {
 	names := make([]string, len(sources))
 	for i, s := range sources {

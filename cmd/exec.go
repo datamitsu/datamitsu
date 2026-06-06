@@ -112,17 +112,7 @@ func buildAppDetail(app binmanager.AppInfo) string {
 		parts = append(parts, app.Description)
 	}
 
-	if len(parts) == 0 {
-		return ""
-	}
-
-	result := parts[0]
-	var resultSb118 strings.Builder
-	for _, p := range parts[1:] {
-		resultSb118.WriteString("  " + p)
-	}
-	result += resultSb118.String()
-	return result
+	return strings.Join(parts, "  ")
 }
 
 func execApp(ctx context.Context, appName string, args []string) error {
