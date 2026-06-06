@@ -18,7 +18,7 @@ func TestNewInstaller(t *testing.T) {
 	configs := config.MapOfConfigInit{}
 	vm := goja.New()
 
-	installer := NewInstaller(rootPath, cwdPath, projectTypes, configs, vm, nil)
+	installer := NewInstaller(rootPath, cwdPath, projectTypes, nil, configs, vm, nil)
 
 	if installer == nil {
 		t.Fatal("NewInstaller() returned nil")
@@ -85,6 +85,177 @@ func TestIsApplicable(t *testing.T) {
 	}
 }
 
+func TestIsToolSelected(t *testing.T) {
+	tests := []struct {
+		name          string
+		selectedTools []string
+		cfg           config.ConfigInit
+		expected      bool
+	}{
+		{
+			name:          "no filter, config without tools",
+			selectedTools: nil,
+			cfg:           config.ConfigInit{},
+			expected:      true,
+		},
+		{
+			name:          "no filter, config with tools",
+			selectedTools: nil,
+			cfg:           config.ConfigInit{Tools: []string{"golangci-lint"}},
+			expected:      true,
+		},
+		{
+			name:          "filter matches",
+			selectedTools: []string{"golangci-lint"},
+			cfg:           config.ConfigInit{Tools: []string{"golangci-lint"}},
+			expected:      true,
+		},
+		{
+			name:          "filter does not match",
+			selectedTools: []string{"golangci-lint"},
+			cfg:           config.ConfigInit{Tools: []string{"prettier"}},
+			expected:      false,
+		},
+		{
+			name:          "filter active, config has no tools (infra)",
+			selectedTools: []string{"golangci-lint"},
+			cfg:           config.ConfigInit{},
+			expected:      false,
+		},
+		{
+			name:          "intersection of multiple",
+			selectedTools: []string{"a", "b"},
+			cfg:           config.ConfigInit{Tools: []string{"b", "c"}},
+			expected:      true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			installer := &Installer{selectedTools: tt.selectedTools}
+			if got := installer.isToolSelected(tt.cfg); got != tt.expected {
+				t.Errorf("isToolSelected() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestInstallAllFiltersBySelectedTools(t *testing.T) {
+	tmpDir := t.TempDir()
+	vm := goja.New()
+
+	_ = vm.Set("contentFunc", func(ctx goja.Value) string {
+		return "content"
+	})
+	contentFunc := vm.Get("contentFunc")
+
+	configs := config.MapOfConfigInit{
+		".golangci.yml": {Tools: []string{"golangci-lint"}, Content: contentFunc},
+		".prettierrc":   {Tools: []string{"prettier"}, Content: contentFunc},
+		".gitignore":    {Content: contentFunc}, // infra, no tools association
+	}
+
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, []string{"golangci-lint"}, configs, vm, nil)
+
+	ctx := context.Background()
+	results, err := installer.InstallAll(ctx, false)
+	if err != nil {
+		t.Fatalf("InstallAll() error = %v", err)
+	}
+
+	for _, r := range results {
+		if r.ConfigName == ".golangci.yml" {
+			if r.Action != "created" {
+				t.Errorf(".golangci.yml Action = %q, want %q", r.Action, "created")
+			}
+		} else if r.Action != "skipped" {
+			t.Errorf("%s Action = %q, want %q (filtered out)", r.ConfigName, r.Action, "skipped")
+		}
+	}
+
+	if !installer.fileExists(filepath.Join(tmpDir, ".golangci.yml")) {
+		t.Error(".golangci.yml should be created")
+	}
+	if installer.fileExists(filepath.Join(tmpDir, ".prettierrc")) {
+		t.Error(".prettierrc should NOT be created under --tools golangci-lint")
+	}
+	if installer.fileExists(filepath.Join(tmpDir, ".gitignore")) {
+		t.Error(".gitignore (infra) should NOT be created under --tools golangci-lint")
+	}
+}
+
+func TestInstallAllNoToolFilterInstallsAll(t *testing.T) {
+	tmpDir := t.TempDir()
+	vm := goja.New()
+
+	_ = vm.Set("contentFunc", func(ctx goja.Value) string {
+		return "content"
+	})
+	contentFunc := vm.Get("contentFunc")
+
+	configs := config.MapOfConfigInit{
+		".golangci.yml": {Tools: []string{"golangci-lint"}, Content: contentFunc},
+		".prettierrc":   {Tools: []string{"prettier"}, Content: contentFunc},
+		".gitignore":    {Content: contentFunc},
+	}
+
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, configs, vm, nil)
+
+	ctx := context.Background()
+	results, err := installer.InstallAll(ctx, false)
+	if err != nil {
+		t.Fatalf("InstallAll() error = %v", err)
+	}
+
+	for _, r := range results {
+		if r.Action != "created" {
+			t.Errorf("%s Action = %q, want %q (no filter installs all)", r.ConfigName, r.Action, "created")
+		}
+	}
+	for _, name := range []string{".golangci.yml", ".prettierrc", ".gitignore"} {
+		if !installer.fileExists(filepath.Join(tmpDir, name)) {
+			t.Errorf("%s should be created with no tool filter", name)
+		}
+	}
+}
+
+func TestInstallAllToolFilterDryRun(t *testing.T) {
+	tmpDir := t.TempDir()
+	vm := goja.New()
+
+	_ = vm.Set("contentFunc", func(ctx goja.Value) string {
+		return "content"
+	})
+	contentFunc := vm.Get("contentFunc")
+
+	configs := config.MapOfConfigInit{
+		".golangci.yml": {Tools: []string{"golangci-lint"}, Content: contentFunc},
+		".prettierrc":   {Tools: []string{"prettier"}, Content: contentFunc},
+	}
+
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, []string{"golangci-lint"}, configs, vm, nil)
+
+	ctx := context.Background()
+	results, err := installer.InstallAll(ctx, true)
+	if err != nil {
+		t.Fatalf("InstallAll() error = %v", err)
+	}
+
+	for _, r := range results {
+		if r.ConfigName == ".golangci.yml" {
+			if r.Action != "created" {
+				t.Errorf(".golangci.yml Action = %q, want %q", r.Action, "created")
+			}
+		} else if r.Action != "skipped" {
+			t.Errorf("%s Action = %q, want %q (filtered out)", r.ConfigName, r.Action, "skipped")
+		}
+	}
+
+	if installer.fileExists(filepath.Join(tmpDir, ".golangci.yml")) {
+		t.Error(".golangci.yml should NOT exist on disk in dry-run mode")
+	}
+}
+
 func TestFileExists(t *testing.T) {
 	tmpDir := t.TempDir()
 	installer := &Installer{}
@@ -113,7 +284,7 @@ func TestInstallConfigSkipped(t *testing.T) {
 	tmpDir := t.TempDir()
 	vm := goja.New()
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{"node"}, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{"node"}, nil, config.MapOfConfigInit{}, vm, nil)
 
 	cfg := config.ConfigInit{
 		ProjectTypes: []string{"rust"},
@@ -136,7 +307,7 @@ func TestInstallConfigDeleteOnly(t *testing.T) {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
 
 	cfg := config.ConfigInit{
 		OtherFileNameList: []string{"alt.yml"},
@@ -169,7 +340,7 @@ func TestInstallConfigCreated(t *testing.T) {
 
 	contentFunc := vm.Get("contentFunc")
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
 
 	cfg := config.ConfigInit{
 		Content: contentFunc,
@@ -207,7 +378,7 @@ func TestInstallConfigDryRun(t *testing.T) {
 
 	contentFunc := vm.Get("contentFunc")
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
 
 	cfg := config.ConfigInit{
 		Content: contentFunc,
@@ -243,7 +414,7 @@ func TestInstallConfigScopeGitRootSkipsWhenNotAtRoot(t *testing.T) {
 
 	contentFunc := vm.Get("contentFunc")
 
-	installer := NewInstaller(tmpDir, cwdDir, []string{}, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, cwdDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
 
 	cfg := config.ConfigInit{
 		Scope:   config.ScopeGitRoot,
@@ -274,7 +445,7 @@ func TestInstallConfigScopeGitRootRunsAtRoot(t *testing.T) {
 
 	contentFunc := vm.Get("contentFunc")
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
 
 	cfg := config.ConfigInit{
 		Scope:   config.ScopeGitRoot,
@@ -309,7 +480,7 @@ func TestInstallConfigScopeGitRootWithProjectTypesSkipsWhenTypeNotMatched(t *tes
 
 	contentFunc := vm.Get("contentFunc")
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{"node"}, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{"node"}, nil, config.MapOfConfigInit{}, vm, nil)
 
 	cfg := config.ConfigInit{
 		Scope:        config.ScopeGitRoot,
@@ -344,7 +515,7 @@ func TestInstallConfigDeletesAlternatives(t *testing.T) {
 
 	contentFunc := vm.Get("contentFunc")
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
 
 	cfg := config.ConfigInit{
 		OtherFileNameList: []string{"alt1.yml", "alt2.yml"},
@@ -386,7 +557,7 @@ func TestInstallAll(t *testing.T) {
 		},
 	}
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, configs, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, configs, vm, nil)
 
 	ctx := context.Background()
 	results, err := installer.InstallAll(ctx, false)
@@ -413,7 +584,7 @@ func TestInstallSymlinkSetsLinkTarget(t *testing.T) {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
 
 	tests := []struct {
 		name           string
@@ -478,7 +649,7 @@ func TestInstallConfigLinkTargetCreatesSymlink(t *testing.T) {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
 
 	cfg := config.ConfigInit{
 		Scope:      config.ScopeGitRoot,
@@ -523,7 +694,7 @@ func TestInstallConfigLinkTargetUpdatesStaleSymlink(t *testing.T) {
 	symlinkPath := filepath.Join(tmpDir, "CLAUDE.md")
 	_ = os.Symlink("OLD.md", symlinkPath)
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
 
 	cfg := config.ConfigInit{
 		Scope:      config.ScopeGitRoot,
@@ -564,7 +735,7 @@ func TestInstallConfigLinkTargetReplacesRegularFile(t *testing.T) {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
 
 	cfg := config.ConfigInit{
 		Scope:      config.ScopeGitRoot,
@@ -600,7 +771,7 @@ func TestInstallConfigLinkTargetIdempotent(t *testing.T) {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
 
 	cfg := config.ConfigInit{
 		Scope:      config.ScopeGitRoot,
@@ -639,7 +810,7 @@ func TestInstallConfigLinkTargetDryRun(t *testing.T) {
 	tmpDir := t.TempDir()
 	vm := goja.New()
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
 
 	cfg := config.ConfigInit{
 		Scope:      config.ScopeGitRoot,
@@ -671,7 +842,7 @@ func TestInstallConfigLinkTargetNestedPath(t *testing.T) {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
 
 	// Symlink in a subdirectory pointing to parent
 	cfg := config.ConfigInit{
@@ -715,7 +886,7 @@ func TestInstallConfigLinkTargetIgnoresContentAndDeleteOnly(t *testing.T) {
 	})
 	contentFunc := vm.Get("contentFunc")
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
 
 	cfg := config.ConfigInit{
 		Scope:      config.ScopeGitRoot,
@@ -792,7 +963,7 @@ func TestInstallAllAgentsMDAndSymlinks(t *testing.T) {
 		},
 	}
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, configs, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, configs, vm, nil)
 
 	ctx := context.Background()
 	results, err := installer.InstallAll(ctx, false)
@@ -878,7 +1049,7 @@ func TestInstallAgentsMDPreservesExistingContent(t *testing.T) {
 		},
 	}
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, configs, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, configs, vm, nil)
 
 	ctx := context.Background()
 	results, err := installer.InstallAll(ctx, false)
@@ -913,7 +1084,7 @@ func TestInstallConfigSetsScope(t *testing.T) {
 	})
 	contentFunc := vm.Get("contentFunc")
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
 	ctx := context.Background()
 
 	t.Run("scope git-root", func(t *testing.T) {
@@ -968,7 +1139,7 @@ func TestGenerateContentWithContext(t *testing.T) {
 
 	contentFunc := vm.Get("contentFunc")
 
-	installer := NewInstaller(tmpDir, cwdDir, []string{}, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, cwdDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
 
 	cfg := config.ConfigInit{
 		Content: contentFunc,
@@ -993,7 +1164,7 @@ func TestInstallConfigLinkTargetRejectsTraversal(t *testing.T) {
 	tmpDir := t.TempDir()
 	vm := goja.New()
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
 
 	tests := []struct {
 		name       string
@@ -1066,7 +1237,7 @@ func TestInstallConfigLinkTargetRejectsSymlinkEscape(t *testing.T) {
 		t.Fatalf("failed to create test symlink: %v", err)
 	}
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
 
 	cfg := config.ConfigInit{
 		Scope:      config.ScopeGitRoot,
@@ -1091,7 +1262,7 @@ func TestInstallConfigLinkTargetRejectsSymlinkEscapeNonExistentTarget(t *testing
 		t.Fatalf("failed to create test symlink: %v", err)
 	}
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
 
 	// Target file does NOT exist in outsideDir — EvalSymlinks on the full path will fail,
 	// but the ancestor check should still catch the escape
@@ -1119,7 +1290,7 @@ func TestInstallConfigLinkTargetRejectsBrokenSymlinkEscape(t *testing.T) {
 		t.Fatalf("failed to create test symlink: %v", err)
 	}
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
 
 	cfg := config.ConfigInit{
 		Scope:      config.ScopeGitRoot,
@@ -1145,7 +1316,7 @@ func TestInstallConfigLinkTargetRejectsBrokenLeafSymlink(t *testing.T) {
 		t.Fatalf("failed to create test symlink: %v", err)
 	}
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
 
 	cfg := config.ConfigInit{
 		Scope:      config.ScopeGitRoot,
@@ -1175,7 +1346,7 @@ func TestInstallConfigOtherFileNameListSkipsMainFile(t *testing.T) {
 	})
 	contentFunc := vm.Get("contentFunc")
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
 
 	// OtherFileNameList includes the main filename — should be skipped
 	cfg := config.ConfigInit{
@@ -1252,7 +1423,7 @@ func TestGenerateContentDatamitsuDir(t *testing.T) {
 			})
 			contentFunc := vm.Get("contentFunc")
 
-			installer := NewInstaller(tmpDir, cwdDir, []string{}, config.MapOfConfigInit{}, vm, nil)
+			installer := NewInstaller(tmpDir, cwdDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
 			cfg := config.ConfigInit{
 				Content: contentFunc,
 			}
@@ -1278,7 +1449,7 @@ func TestNewInstallerWithLayerMap(t *testing.T) {
 
 	layerMap := &config.InitLayerMap{}
 
-	installer := NewInstaller(rootPath, cwdPath, projectTypes, configs, vm, layerMap)
+	installer := NewInstaller(rootPath, cwdPath, projectTypes, nil, configs, vm, layerMap)
 
 	if installer == nil {
 		t.Fatal("NewInstaller() returned nil")
@@ -1318,7 +1489,7 @@ func TestInstallConfigUsesLayerHistoryWhenPresent(t *testing.T) {
 		"test.yml": {Content: contentFunc, Scope: config.ScopeGitRoot},
 	}
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, configs, vm, &layerMap)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, configs, vm, &layerMap)
 
 	ctx := context.Background()
 	result := installer.installConfig(ctx, "test.yml", configs["test.yml"], false)
@@ -1372,7 +1543,7 @@ func TestInstallConfigProjectScopedSkipsLayerHistory(t *testing.T) {
 		"tsconfig.json": {Content: contentFunc, Scope: config.ScopeProject},
 	}
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, configs, vm, &layerMap)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, configs, vm, &layerMap)
 
 	ctx := context.Background()
 	result := installer.installConfig(ctx, "tsconfig.json", configs["tsconfig.json"], false)
@@ -1414,7 +1585,7 @@ func TestInstallConfigFallsToDiskWhenNoLayerHistory(t *testing.T) {
 		"other.yml": {Content: contentFunc},
 	}
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, configs, vm, &layerMap)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, configs, vm, &layerMap)
 
 	ctx := context.Background()
 	result := installer.installConfig(ctx, "other.yml", configs["other.yml"], false)
@@ -1468,7 +1639,7 @@ func TestInstallConfigUsesGetLastGeneratedContent(t *testing.T) {
 		"test.yml": {Content: contentFunc, Scope: config.ScopeGitRoot},
 	}
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, configs, vm, &layerMap)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, configs, vm, &layerMap)
 
 	ctx := context.Background()
 	result := installer.installConfig(ctx, "test.yml", configs["test.yml"], false)

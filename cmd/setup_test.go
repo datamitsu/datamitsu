@@ -12,6 +12,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/datamitsuignore"
 	"github.com/datamitsu/datamitsu/internal/install"
+	"github.com/datamitsu/datamitsu/internal/tooling"
 
 	"github.com/dop251/goja"
 )
@@ -379,6 +380,7 @@ func TestSetupCommandFlags(t *testing.T) {
 		{"dry-run", "false"},
 		{"skip-fix", "false"},
 		{"opt-in-tools", "false"},
+		{"tools", ""},
 	}
 
 	for _, tt := range tests {
@@ -430,13 +432,13 @@ func TestSetupPassesLayerMapToNewInstaller(t *testing.T) {
 		},
 	}
 
-	installer := install.NewInstaller(rootPath, cwdPath, projectTypes, configs, vm, layerMap)
+	installer := install.NewInstaller(rootPath, cwdPath, projectTypes, nil, configs, vm, layerMap)
 	if installer == nil {
 		t.Fatal("NewInstaller() returned nil")
 	}
 
 	// Verify a nil layerMap also works (backward compatibility)
-	installerNil := install.NewInstaller(rootPath, cwdPath, projectTypes, configs, vm, nil)
+	installerNil := install.NewInstaller(rootPath, cwdPath, projectTypes, nil, configs, vm, nil)
 	if installerNil == nil {
 		t.Fatal("NewInstaller() with nil layerMap returned nil")
 	}
@@ -467,7 +469,7 @@ func TestDryRunModeLayerHistoryStillBuilt(t *testing.T) {
 	}
 
 	// In dry-run mode, the installer is still created with the layerMap
-	installer := install.NewInstaller("/tmp/root", "/tmp/root", []string{}, configs, vm, layerMap)
+	installer := install.NewInstaller("/tmp/root", "/tmp/root", []string{}, nil, configs, vm, layerMap)
 	if installer == nil {
 		t.Fatal("NewInstaller() returned nil even with layerMap for dry-run scenario")
 	}
@@ -480,5 +482,128 @@ func TestDryRunModeLayerHistoryStillBuilt(t *testing.T) {
 	lastContent := config.GetLastGeneratedContent(history)
 	if lastContent == nil || *lastContent != "generated in load phase" {
 		t.Error("layerMap content should be preserved for dry-run mode")
+	}
+}
+
+func TestParseSelectedTools(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  []string
+	}{
+		{"empty yields nil", "", nil},
+		{"single", "golangci-lint", []string{"golangci-lint"}},
+		{"multiple", "golangci-lint,prettier", []string{"golangci-lint", "prettier"}},
+		{"trims spaces", " golangci-lint , prettier ", []string{"golangci-lint", "prettier"}},
+		{"dedupes", "a,a,b", []string{"a", "b"}},
+		{"drops empty entries", "a,,b,", []string{"a", "b"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseSelectedTools(tt.input)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("parseSelectedTools(%q) = %v, want %v", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestValidateSelectedTools(t *testing.T) {
+	tools := config.MapOfTools{
+		"golangci-lint": {Name: "golangci-lint"},
+		"prettier":      {Name: "prettier"},
+	}
+
+	t.Run("empty selection is nil", func(t *testing.T) {
+		if err := validateSelectedTools(nil, tools); err != nil {
+			t.Errorf("validateSelectedTools(nil) = %v, want nil", err)
+		}
+	})
+
+	t.Run("known tools pass", func(t *testing.T) {
+		if err := validateSelectedTools([]string{"golangci-lint"}, tools); err != nil {
+			t.Errorf("validateSelectedTools = %v, want nil", err)
+		}
+	})
+
+	t.Run("unknown tool returns ToolNotFoundError", func(t *testing.T) {
+		err := validateSelectedTools([]string{"bogus"}, tools)
+		if err == nil {
+			t.Fatal("validateSelectedTools = nil, want error")
+		}
+		var tnf *tooling.ToolNotFoundError
+		if !errors.As(err, &tnf) {
+			t.Fatalf("error type = %T, want *tooling.ToolNotFoundError", err)
+		}
+		if len(tnf.NotFound) != 1 || tnf.NotFound[0] != "bogus" {
+			t.Errorf("NotFound = %v, want [bogus]", tnf.NotFound)
+		}
+		wantAvail := []string{"golangci-lint", "prettier"}
+		if !reflect.DeepEqual(tnf.Available, wantAvail) {
+			t.Errorf("Available = %v, want %v (sorted)", tnf.Available, wantAvail)
+		}
+	})
+}
+
+func TestToolsWithoutGeneratedConfig(t *testing.T) {
+	configs := config.MapOfConfigInit{
+		".golangci.yml": {Tools: []string{"golangci-lint"}},
+		".prettierrc":   {Tools: []string{"prettier"}},
+		".gitignore":    {}, // infra, no tools
+	}
+
+	created := func(name string) install.InstallResult {
+		return install.InstallResult{ConfigName: name, Action: "created"}
+	}
+	skipped := func(name string) install.InstallResult {
+		return install.InstallResult{ConfigName: name, Action: "skipped"}
+	}
+
+	tests := []struct {
+		name     string
+		selected []string
+		results  []install.InstallResult
+		want     []string
+	}{
+		{
+			name:     "no selection",
+			selected: nil,
+			results:  []install.InstallResult{created(".golangci.yml")},
+			want:     nil,
+		},
+		{
+			name:     "all generated",
+			selected: []string{"golangci-lint", "prettier"},
+			results:  []install.InstallResult{created(".golangci.yml"), created(".prettierrc")},
+			want:     nil,
+		},
+		{
+			// The key finding-1 case: prettier owns a config but it was skipped
+			// (e.g. project-type mismatch), so it must still be surfaced.
+			name:     "config skipped by project type is reported",
+			selected: []string{"golangci-lint", "prettier"},
+			results:  []install.InstallResult{created(".golangci.yml"), skipped(".prettierrc")},
+			want:     []string{"prettier"},
+		},
+		{
+			name:     "tool with no associated config is reported",
+			selected: []string{"golangci-lint", "shellcheck"},
+			results:  []install.InstallResult{created(".golangci.yml")},
+			want:     []string{"shellcheck"},
+		},
+		{
+			name:     "sorted output, nothing generated",
+			selected: []string{"ztool", "atool"},
+			results:  nil,
+			want:     []string{"atool", "ztool"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := toolsWithoutGeneratedConfig(tt.selected, configs, tt.results)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("toolsWithoutGeneratedConfig(%v) = %v, want %v", tt.selected, got, tt.want)
+			}
+		})
 	}
 }

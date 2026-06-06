@@ -369,6 +369,36 @@ func ValidateInit(initConfigs MapOfConfigInit) error {
 	return nil
 }
 
+// ValidateInitToolRefs returns warnings for any ConfigInit.Tools entry that does
+// not reference a configured tool. Such a config can never be selected via
+// `setup --tools` (the name won't intersect any selection), so it would be
+// silently excluded — almost always an authoring typo. This mirrors the
+// unknown-tool warning emitted for .datamitsuignore rules. It warns rather than
+// errors so a config that conditionally omits a tool in some environment still
+// loads.
+func ValidateInitToolRefs(initConfigs MapOfConfigInit, tools MapOfTools) []string {
+	var warnings []string
+
+	names := make([]string, 0, len(initConfigs))
+	for name := range initConfigs {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	for _, name := range names {
+		for _, toolName := range initConfigs[name].Tools {
+			if _, ok := tools[toolName]; !ok {
+				warnings = append(warnings, fmt.Sprintf(
+					"init %q: tools references unknown tool %q (it will never match `setup --tools %s`)",
+					name, toolName, toolName,
+				))
+			}
+		}
+	}
+
+	return warnings
+}
+
 // ValidateBundles validates bundle configurations.
 // It checks that each bundle has content (files or archives), link paths are safe,
 // and link names are unique across both apps and bundles.

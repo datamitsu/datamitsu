@@ -120,7 +120,12 @@ const (
 
 // ConfigInit describes how a managed config file is generated or linked.
 type ConfigInit struct { //nolint:revive // exported: name kept explicit; config.ConfigInit reads clearer than the bare config.Init
-	ProjectTypes      []string `json:"projectTypes,omitempty"`
+	ProjectTypes []string `json:"projectTypes,omitempty"`
+	// Tools associates this config file with one or more tools (names matching
+	// keys in MapOfTools). With `setup --tools`, only configs whose Tools
+	// intersect the selected set are written; empty Tools means unassociated
+	// infra (skipped under --tools, installed normally without it).
+	Tools             []string `json:"tools,omitempty"`
 	Scope             string   `json:"scope,omitempty"`
 	OtherFileNameList []string `json:"otherFileNameList,omitempty"`
 	DeleteOnly        bool     `json:"deleteOnly,omitempty"`

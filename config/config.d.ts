@@ -459,6 +459,16 @@ declare global {
        * - "git-root": creates only at the git repository root (runs once)
        */
       scope?: "git-root" | "project";
+
+      /**
+       * Tool name(s) this config file belongs to (must match keys in `tools`).
+       * `datamitsu setup --tools <names>` regenerates only configs whose `tools`
+       * intersect the selected set; all others are left untouched. Omit for
+       * infrastructure files (.gitignore, lefthook.yaml) not tied to a single
+       * tool — those are skipped whenever `--tools` is passed.
+       * @example ["golangci-lint"]
+       */
+      tools?: string[];
     }
 
     /**

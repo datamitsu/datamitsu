@@ -590,8 +590,16 @@ interface ConfigInit {
   otherFileNameList?: string[]; // Conflicting files to delete
   projectTypes?: string[]; // Restrict to project types
   scope?: "project" | "git-root"; // Where to create: "project" (default) or "git-root" (once at root)
+  tools?: string[]; // Tool name(s) this config belongs to; enables `setup --tools` scoping
 }
 ```
+
+The optional `tools` field associates a config file with one or more tools (by
+name, matching keys in [`tools`](#tools-tools)). `datamitsu setup --tools <names>`
+then regenerates only the config files whose `tools` intersect the selected set —
+every other config, including unassociated infrastructure files, is left
+untouched. Omit `tools` for files not tied to a single tool (`.gitignore`,
+`lefthook.yaml`); those are skipped whenever `--tools` is passed.
 
 The `content` function receives a context object:
 
@@ -614,6 +622,7 @@ interface ConfigContext {
 const init = {
   "eslint.config.js": {
     projectTypes: ["typescript", "javascript"],
+    tools: ["eslint"], // scope `setup --tools eslint` to this file
     content: (context) => {
       const configPath = tools.Path.forImport(
         tools.Path.join(context.datamitsuDir, "eslint.config.js"),

@@ -165,16 +165,26 @@ Beyond `.datamitsu/` links, the `init` configuration creates files and symlinks 
 
 ```javascript
 const init = {
-  // Write file content
+  // Write file content, associated with the eslint tool
   ".eslintrc.js": {
+    tools: ["eslint"],
     content: (context) => `module.exports = { /* ... */ };`,
   },
   // Create a symlink instead of writing content
   ".prettierrc": {
+    tools: ["prettier"],
     linkTarget: ".datamitsu/prettier-config",
   },
 };
 ```
+
+Optionally associate an entry with one or more tools via `tools`. When you run
+[`datamitsu setup --tools <names>`](../reference/cli-commands.md#setup), only the
+config files whose `tools` intersect the selected set are regenerated and
+everything else is left untouched — ideal for iterating on a single tool's config
+without rewriting your whole project. Entries with no `tools` (shared
+infrastructure like `.gitignore` or `lefthook.yaml`) are skipped whenever
+`--tools` is passed.
 
 The `content()` function receives a context object with:
 

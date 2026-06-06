@@ -2741,3 +2741,49 @@ func TestValidateInit_UnknownScope(t *testing.T) {
 		t.Errorf("expected 'scope must be' in error, got: %v", err)
 	}
 }
+
+func TestValidateInitToolRefs(t *testing.T) {
+	tools := MapOfTools{
+		"golangci-lint": {Name: "golangci-lint"},
+		"prettier":      {Name: "prettier"},
+	}
+
+	t.Run("known tool refs produce no warnings", func(t *testing.T) {
+		initConfigs := MapOfConfigInit{
+			".golangci.yml": {Tools: []string{"golangci-lint"}},
+			".prettierrc":   {Tools: []string{"prettier"}},
+			".gitignore":    {}, // no tools is fine
+		}
+		if w := ValidateInitToolRefs(initConfigs, tools); len(w) != 0 {
+			t.Errorf("expected no warnings, got %v", w)
+		}
+	})
+
+	t.Run("unknown tool ref produces a warning", func(t *testing.T) {
+		initConfigs := MapOfConfigInit{
+			".golangci.yml": {Tools: []string{"golangci"}}, // typo
+		}
+		w := ValidateInitToolRefs(initConfigs, tools)
+		if len(w) != 1 {
+			t.Fatalf("expected 1 warning, got %d: %v", len(w), w)
+		}
+		if !strings.Contains(w[0], "golangci") || !strings.Contains(w[0], ".golangci.yml") {
+			t.Errorf("warning should name the file and unknown tool, got: %q", w[0])
+		}
+	})
+
+	t.Run("multiple unknown refs are reported deterministically", func(t *testing.T) {
+		initConfigs := MapOfConfigInit{
+			"b.yml": {Tools: []string{"nope"}},
+			"a.yml": {Tools: []string{"bogus"}},
+		}
+		w := ValidateInitToolRefs(initConfigs, tools)
+		if len(w) != 2 {
+			t.Fatalf("expected 2 warnings, got %d: %v", len(w), w)
+		}
+		// Sorted by config name: a.yml before b.yml.
+		if !strings.Contains(w[0], "a.yml") || !strings.Contains(w[1], "b.yml") {
+			t.Errorf("warnings should be sorted by config name, got: %v", w)
+		}
+	})
+}

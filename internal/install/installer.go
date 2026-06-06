@@ -19,30 +19,35 @@ import (
 
 // Installer handles configuration file installation and patching
 type Installer struct {
-	rootPath     string
-	cwdPath      string
-	projectTypes []string
-	configs      config.MapOfConfigInit
-	vm           *goja.Runtime
-	layerMap     *config.InitLayerMap
+	rootPath      string
+	cwdPath       string
+	projectTypes  []string
+	selectedTools []string // nil/empty = no --tools filter (install all applicable)
+	configs       config.MapOfConfigInit
+	vm            *goja.Runtime
+	layerMap      *config.InitLayerMap
 }
 
-// NewInstaller creates a new configuration installer
+// NewInstaller creates a new configuration installer. selectedTools scopes
+// installation to configs associated with those tools (via ConfigInit.Tools);
+// pass nil to install every applicable config.
 func NewInstaller(
 	rootPath string,
 	cwdPath string,
 	projectTypes []string,
+	selectedTools []string,
 	configs config.MapOfConfigInit,
 	vm *goja.Runtime,
 	layerMap *config.InitLayerMap,
 ) *Installer {
 	return &Installer{
-		rootPath:     rootPath,
-		cwdPath:      cwdPath,
-		projectTypes: projectTypes,
-		configs:      configs,
-		vm:           vm,
-		layerMap:     layerMap,
+		rootPath:      rootPath,
+		cwdPath:       cwdPath,
+		projectTypes:  projectTypes,
+		selectedTools: selectedTools,
+		configs:       configs,
+		vm:            vm,
+		layerMap:      layerMap,
 	}
 }
 
@@ -84,6 +89,12 @@ func (i *Installer) installConfig(ctx context.Context, name string, cfg config.C
 
 	// Check if config applies to current project types
 	if !i.isApplicable(cfg) {
+		result.Action = "skipped"
+		return result
+	}
+
+	// Honor the --tools filter: skip configs not associated with a selected tool.
+	if !i.isToolSelected(cfg) {
 		result.Action = "skipped"
 		return result
 	}
@@ -297,6 +308,22 @@ func (i *Installer) isApplicable(cfg config.ConfigInit) bool {
 		}
 	}
 
+	return false
+}
+
+// isToolSelected reports whether a config should run under the active --tools
+// filter. With no filter (selectedTools empty) every config passes. With a
+// filter, only configs whose Tools intersect the selected set pass; configs
+// with no Tools (unassociated infra) are always skipped.
+func (i *Installer) isToolSelected(cfg config.ConfigInit) bool {
+	if len(i.selectedTools) == 0 {
+		return true
+	}
+	for _, t := range cfg.Tools {
+		if slices.Contains(i.selectedTools, t) {
+			return true
+		}
+	}
 	return false
 }
 
