@@ -186,13 +186,16 @@ equivalent `--before-config` invocation, and that nesting is ignored.
 
 ### Task 4: TypeScript ambient declarations
 
-- [ ] add `getBeforeConfigs(): { path: string }[]` declaration to
+- [x] add `getBeforeConfigs(): { path: string }[]` declaration to
       `config/config.d.ts` (alongside `getRemoteConfigs`)
-- [ ] mirror the change into the embedded copy `internal/config/config.d.ts`
-      (keep both in sync per `CLAUDE.md`)
-- [ ] if a sync test for the embedded `.d.ts` exists, run it; otherwise
-      `go build` to confirm embed still compiles
-- [ ] run `go test ./...`
+- [x] mirror the change into the embedded copy `internal/config/config.d.ts`
+      (keep both in sync per `CLAUDE.md`) — also produced by `Taskfile.yaml:14`
+      `cp ./config/config.d.ts ./internal/config/config.d.ts`; files verified
+      identical via `diff`
+- [x] if a sync test for the embedded `.d.ts` exists, run it; otherwise
+      `go build` to confirm embed still compiles — no diff-based sync test
+      exists; `go build ./...` succeeded
+- [x] run `go test ./...` — all packages pass
 
 ### Task 5: Verify acceptance criteria
 
