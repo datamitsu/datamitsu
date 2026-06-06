@@ -30,7 +30,7 @@ linters:
     - whitespace
     # - wrapcheck
     # - unparam
-    # - usestdlibvars
+    - usestdlibvars
     # - perfsprint
     # - prealloc
     # - revive

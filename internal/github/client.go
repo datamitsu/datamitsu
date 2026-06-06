@@ -94,7 +94,7 @@ func (c *Client) doRequest(url string) (*Release, error) {
 
 // doJSONRequest performs a GET request and decodes the JSON response into target.
 func (c *Client) doJSONRequest(url string, target any) error {
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -228,7 +228,7 @@ func (c *Client) GetRepository(owner, repo string) (*Repository, error) {
 }
 
 func (c *Client) fetchRepository(url string) (*Repository, error) {
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
