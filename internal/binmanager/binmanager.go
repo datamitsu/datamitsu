@@ -497,7 +497,7 @@ func (bm *BinManager) GetBinaryPath(name string) (string, error) {
 	// were blocked is a no-op.
 	_, err, _ = bm.downloadGroup.Do(name, func() (interface{}, error) {
 		if _, statErr := os.Stat(binPath); statErr == nil {
-			return nil, nil
+			return struct{}{}, nil
 		}
 
 		fmt.Fprintf(os.Stderr, "⬇️  Downloading %s...\n", name)
@@ -507,7 +507,7 @@ func (bm *BinManager) GetBinaryPath(name string) (string, error) {
 		}
 
 		fmt.Fprintf(os.Stderr, "✅ Downloaded %s\n", name)
-		return nil, nil
+		return struct{}{}, nil
 	})
 	if err != nil {
 		return "", err
@@ -926,7 +926,8 @@ func (bm *BinManager) GetExecCmd(name string, args []string) (*exec.Cmd, error) 
 	}
 
 	if app.Shell != nil {
-		return nil, nil
+		// Shell apps have no exec.Cmd; callers check for a nil cmd (documented contract).
+		return nil, nil //nolint:nilnil
 	}
 
 	cmdInfo, err := bm.GetCommandInfo(name)

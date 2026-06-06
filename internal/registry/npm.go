@@ -120,7 +120,9 @@ func GetNPMPackageInfoWithMinAge(packageName string, minAgeMinutes int) (*NPMPac
 	}
 
 	if bestVersion == "" {
-		return nil, nil
+		// No version qualifies under the min-age cutoff; callers branch on a nil
+		// result as a normal, non-error outcome (documented contract).
+		return nil, nil //nolint:nilnil
 	}
 
 	return npmInfoFromFull(full, bestVersion), nil

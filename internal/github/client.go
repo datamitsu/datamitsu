@@ -197,7 +197,9 @@ func (c *Client) GetLatestReleaseWithMinAge(owner, repo string, minAgeMinutes in
 		return &r, nil
 	}
 
-	return nil, nil
+	// No release qualifies under the min-age cutoff; callers branch on a nil
+	// release as a normal, non-error outcome (documented contract).
+	return nil, nil //nolint:nilnil
 }
 
 // NotFoundError is returned when a release is not found

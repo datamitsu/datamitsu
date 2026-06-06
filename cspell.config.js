@@ -223,5 +223,7 @@ export default {
     "libatomic",
     "perproject",
     "Fatalf",
+    "nolint",
+    "nilnil",
   ],
 };

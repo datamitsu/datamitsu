@@ -100,7 +100,9 @@ func GetPyPIPackageInfoWithMinAge(packageName string, minAgeMinutes int) (*PyPIP
 	}
 
 	if bestVersion == "" {
-		return nil, nil
+		// No version qualifies under the min-age cutoff; callers branch on a nil
+		// result as a normal, non-error outcome (documented contract).
+		return nil, nil //nolint:nilnil
 	}
 
 	return &PyPIPackageInfo{
