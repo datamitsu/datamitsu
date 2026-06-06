@@ -5,9 +5,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -39,7 +41,9 @@ func swapLoggerWithObserver(t *testing.T, level zapcore.LevelEnabler) *observer.
 }
 
 func TestLoadConfig(t *testing.T) {
-	cfg, _, vm, err := loadConfig()
+	// Load only the embedded default config (noAutoConfig) so the assertions are
+	// hermetic — independent of any datamitsu.config.* at this repo's git root.
+	cfg, _, vm, err := loadConfigWithPaths(context.Background(), nil, true, nil)
 	if err != nil {
 		t.Fatalf("loadConfig() error = %v", err)
 	}
@@ -66,7 +70,8 @@ func TestLoadConfig(t *testing.T) {
 }
 
 func TestLoadConfigRuntimes(t *testing.T) {
-	cfg, _, _, err := loadConfig()
+	// Hermetic: assert the embedded default config, ignoring any git-root config.
+	cfg, _, _, err := loadConfigWithPaths(context.Background(), nil, true, nil)
 	if err != nil {
 		t.Fatalf("loadConfig() error = %v", err)
 	}
@@ -149,7 +154,9 @@ func TestLoadConfigRuntimes(t *testing.T) {
 }
 
 func TestLoadConfigRuntimeApps(t *testing.T) {
-	cfg, _, _, err := loadConfig()
+	// Hermetic: assert the embedded default config's demo apps, ignoring any
+	// datamitsu.config.* at this repo's git root (which overlays its own apps).
+	cfg, _, _, err := loadConfigWithPaths(context.Background(), nil, true, nil)
 	if err != nil {
 		t.Fatalf("loadConfig() error = %v", err)
 	}
@@ -611,9 +618,586 @@ func TestDiscoverAutoConfigNeitherExists(t *testing.T) {
 	}
 }
 
+// writeBeforeConfigAuto writes an auto-discovery config file at dir's git-root
+// path whose getBeforeConfigs() body is the given JS array literal, and returns
+// the config path. Pass an empty body to omit getBeforeConfigs entirely.
+func writeBeforeConfigAuto(t *testing.T, dir, getBeforeConfigsBody string) string {
+	t.Helper()
+	autoPath := filepath.Join(dir, ldflags.PackageName+".config.js")
+	var src string
+	if getBeforeConfigsBody == "" {
+		src = `function getConfig(input) { return {}; }`
+	} else {
+		src = fmt.Sprintf(
+			"function getBeforeConfigs() { return %s; }\nfunction getConfig(input) { return {}; }",
+			getBeforeConfigsBody,
+		)
+	}
+	if err := os.WriteFile(autoPath, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return autoPath
+}
+
+func writeStubConfig(t *testing.T, path string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(`function getConfig(input) { return {}; }`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDiscoverBeforeConfigsAbsent(t *testing.T) {
+	dir := t.TempDir()
+	autoPath := writeBeforeConfigAuto(t, dir, "")
+
+	got, err := discoverBeforeConfigs(context.Background(), autoPath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != nil {
+		t.Errorf("got %v, want nil when getBeforeConfigs is absent", got)
+	}
+}
+
+func TestDiscoverBeforeConfigsEmptyArray(t *testing.T) {
+	dir := t.TempDir()
+	autoPath := writeBeforeConfigAuto(t, dir, "[]")
+
+	got, err := discoverBeforeConfigs(context.Background(), autoPath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("got %v, want empty for []", got)
+	}
+}
+
+func TestDiscoverBeforeConfigsRelativePath(t *testing.T) {
+	dir := t.TempDir()
+	sharedPath := filepath.Join(dir, "shared.js")
+	writeStubConfig(t, sharedPath)
+	autoPath := writeBeforeConfigAuto(t, dir, `[{ path: "./shared.js" }]`)
+
+	got, err := discoverBeforeConfigs(context.Background(), autoPath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{sharedPath}
+	if !slices.Equal(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+func TestDiscoverBeforeConfigsAbsolutePath(t *testing.T) {
+	dir := t.TempDir()
+	targetDir := t.TempDir()
+	sharedPath := filepath.Join(targetDir, "shared.js")
+	writeStubConfig(t, sharedPath)
+	autoPath := writeBeforeConfigAuto(t, dir, fmt.Sprintf(`[{ path: %q }]`, sharedPath))
+
+	got, err := discoverBeforeConfigs(context.Background(), autoPath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{sharedPath}
+	if !slices.Equal(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+func TestDiscoverBeforeConfigsPreservesOrder(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"a.js", "b.js", "c.js"} {
+		writeStubConfig(t, filepath.Join(dir, name))
+	}
+	autoPath := writeBeforeConfigAuto(t, dir, `[{ path: "./c.js" }, { path: "./a.js" }, { path: "./b.js" }]`)
+
+	got, err := discoverBeforeConfigs(context.Background(), autoPath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{
+		filepath.Join(dir, "c.js"),
+		filepath.Join(dir, "a.js"),
+		filepath.Join(dir, "b.js"),
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+func TestDiscoverBeforeConfigsEmptyPathErrors(t *testing.T) {
+	dir := t.TempDir()
+	autoPath := writeBeforeConfigAuto(t, dir, `[{ path: "" }]`)
+
+	_, err := discoverBeforeConfigs(context.Background(), autoPath)
+	if err == nil {
+		t.Fatal("expected error for empty path")
+	}
+	if !strings.Contains(err.Error(), "path is required") {
+		t.Errorf("error = %q, want it to contain 'path is required'", err.Error())
+	}
+}
+
+func TestDiscoverBeforeConfigsNonExistentFileErrors(t *testing.T) {
+	dir := t.TempDir()
+	autoPath := writeBeforeConfigAuto(t, dir, `[{ path: "./does-not-exist.js" }]`)
+
+	_, err := discoverBeforeConfigs(context.Background(), autoPath)
+	if err == nil {
+		t.Fatal("expected error for non-existent before config file")
+	}
+	if !strings.Contains(err.Error(), "does-not-exist.js") {
+		t.Errorf("error = %q, want it to mention the missing file", err.Error())
+	}
+}
+
+func TestDiscoverBeforeConfigsDedup(t *testing.T) {
+	dir := t.TempDir()
+	sharedPath := filepath.Join(dir, "shared.js")
+	writeStubConfig(t, sharedPath)
+	// Same file declared twice: once relative, once absolute — both resolve to
+	// the same cleaned path and dedup to a single entry.
+	autoPath := writeBeforeConfigAuto(t, dir, fmt.Sprintf(`[{ path: "./shared.js" }, { path: %q }]`, sharedPath))
+
+	got, err := discoverBeforeConfigs(context.Background(), autoPath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("got %d paths, want 1 (deduped): %v", len(got), got)
+	}
+	if got[0] != sharedPath {
+		t.Errorf("got %q, want %q", got[0], sharedPath)
+	}
+}
+
+func TestDiscoverBeforeConfigsNonArrayReturnErrors(t *testing.T) {
+	dir := t.TempDir()
+	// getBeforeConfigs() returning a non-array value cannot be exported into
+	// []beforeConfigEntry — a config author typo must surface a clear error.
+	autoPath := writeBeforeConfigAuto(t, dir, `"not-an-array"`)
+
+	_, err := discoverBeforeConfigs(context.Background(), autoPath)
+	if err == nil {
+		t.Fatal("expected error for non-array getBeforeConfigs return")
+	}
+	if !strings.Contains(err.Error(), "failed to parse getBeforeConfigs") {
+		t.Errorf("error = %q, want it to contain 'failed to parse getBeforeConfigs'", err.Error())
+	}
+}
+
+func TestDiscoverBeforeConfigsFunctionThrowsErrors(t *testing.T) {
+	dir := t.TempDir()
+	autoPath := filepath.Join(dir, ldflags.PackageName+".config.js")
+	src := "function getBeforeConfigs() { throw new Error('boom'); }\n" +
+		"function getConfig(input) { return {}; }"
+	if err := os.WriteFile(autoPath, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := discoverBeforeConfigs(context.Background(), autoPath)
+	if err == nil {
+		t.Fatal("expected error when getBeforeConfigs throws")
+	}
+	if !strings.Contains(err.Error(), "failed to call getBeforeConfigs") {
+		t.Errorf("error = %q, want it to contain 'failed to call getBeforeConfigs'", err.Error())
+	}
+	if !strings.Contains(err.Error(), "boom") {
+		t.Errorf("error = %q, want it to propagate the thrown message 'boom'", err.Error())
+	}
+}
+
+func TestBuildConfigSourcesPropagatesDiscoverError(t *testing.T) {
+	dir := t.TempDir()
+	// A malformed getBeforeConfigs() in the auto config must fail the whole
+	// source assembly, not be silently swallowed.
+	autoPath := writeBeforeConfigAuto(t, dir, `"not-an-array"`)
+
+	_, err := buildConfigSources(context.Background(), nil, autoPath, nil)
+	if err == nil {
+		t.Fatal("expected buildConfigSources to propagate the discoverBeforeConfigs error")
+	}
+	if !strings.Contains(err.Error(), "failed to parse getBeforeConfigs") {
+		t.Errorf("error = %q, want it to contain 'failed to parse getBeforeConfigs'", err.Error())
+	}
+}
+
+func sourceNames(sources []configSource) []string {
+	names := make([]string, len(sources))
+	for i, s := range sources {
+		names[i] = s.name
+	}
+	return names
+}
+
+func TestBuildConfigSourcesDefaultOnly(t *testing.T) {
+	sources, err := buildConfigSources(context.Background(), nil, "", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(sources) != 1 {
+		t.Fatalf("got %d sources, want 1: %v", len(sources), sourceNames(sources))
+	}
+	if !sources[0].isDefault || sources[0].name != "default" {
+		t.Errorf("source[0] = %+v, want the default source", sources[0])
+	}
+}
+
+func TestBuildConfigSourcesBeforeConfigFlag(t *testing.T) {
+	sources, err := buildConfigSources(context.Background(), []string{"/before/a.js", "/before/b.js"}, "", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"default", "/before/a.js", "/before/b.js"}
+	if got := sourceNames(sources); !slices.Equal(got, want) {
+		t.Fatalf("source names = %v, want %v", got, want)
+	}
+	// Flag paths carry their path through, unlike the embedded default.
+	if sources[1].path != "/before/a.js" {
+		t.Errorf("source[1].path = %q, want %q", sources[1].path, "/before/a.js")
+	}
+}
+
+func TestBuildConfigSourcesConfigPathsAfterAuto(t *testing.T) {
+	dir := t.TempDir()
+	autoPath := writeBeforeConfigAuto(t, dir, "")
+
+	cfgDir := t.TempDir()
+	cfgPath := filepath.Join(cfgDir, "explicit.js")
+	writeStubConfig(t, cfgPath)
+
+	sources, err := buildConfigSources(context.Background(), nil, autoPath, []string{cfgPath})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// default -> auto -> explicit (no declared before-configs in this auto config)
+	want := []string{"default", "auto", cfgPath}
+	if got := sourceNames(sources); !slices.Equal(got, want) {
+		t.Fatalf("source names = %v, want %v", got, want)
+	}
+}
+
+func TestBuildConfigSourcesDeclaredBeforeConfigs(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"first.js", "second.js"} {
+		writeStubConfig(t, filepath.Join(dir, name))
+	}
+	autoPath := writeBeforeConfigAuto(t, dir, `[{ path: "./first.js" }, { path: "./second.js" }]`)
+
+	cfgDir := t.TempDir()
+	cfgPath := filepath.Join(cfgDir, "explicit.js")
+	writeStubConfig(t, cfgPath)
+
+	sources, err := buildConfigSources(context.Background(), nil, autoPath, []string{cfgPath})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// default -> declared(first, second) -> auto -> explicit
+	want := []string{
+		"default",
+		filepath.Join(dir, "first.js"),
+		filepath.Join(dir, "second.js"),
+		"auto",
+		cfgPath,
+	}
+	if got := sourceNames(sources); !slices.Equal(got, want) {
+		t.Fatalf("source names = %v, want %v", got, want)
+	}
+	if sources[3].path != autoPath {
+		t.Errorf("auto source path = %q, want %q", sources[3].path, autoPath)
+	}
+}
+
+func TestBuildConfigSourcesFlagSkipsDeclared(t *testing.T) {
+	dir := t.TempDir()
+	writeStubConfig(t, filepath.Join(dir, "declared.js"))
+	autoPath := writeBeforeConfigAuto(t, dir, `[{ path: "./declared.js" }]`)
+
+	flagDir := t.TempDir()
+	flagPath := filepath.Join(flagDir, "flag.js")
+	writeStubConfig(t, flagPath)
+
+	sources, err := buildConfigSources(context.Background(), []string{flagPath}, autoPath, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// default -> flag -> auto; declared.js must be absent (flag wins).
+	want := []string{"default", flagPath, "auto"}
+	if got := sourceNames(sources); !slices.Equal(got, want) {
+		t.Fatalf("source names = %v, want %v", got, want)
+	}
+	declaredPath := filepath.Join(dir, "declared.js")
+	for _, s := range sources {
+		if s.name == declaredPath || s.path == declaredPath {
+			t.Errorf("declared before-config %q should be absent when --before-config flag is set", declaredPath)
+		}
+	}
+}
+
 func computeHash(content string) string {
 	h := sha256.Sum256([]byte(content))
 	return "sha256:" + hex.EncodeToString(h[:])
+}
+
+// ===========================================================================
+// Integration tests: getBeforeConfigs() end-to-end parity, root-only scope,
+// and --before-config flag precedence (Task 3).
+//
+// These exercise the real auto-discovery path through loadConfigWithPaths,
+// which resolves the git root from the working directory. Each test therefore
+// runs in a freshly git-initialized temp dir and changes into it, so they must
+// not run in parallel.
+// ===========================================================================
+
+func gitAvailable() bool {
+	return exec.Command("git", "--version").Run() == nil
+}
+
+// setupGitRoot creates a git-initialized temp dir, changes into it, and returns
+// its symlink-resolved path. The resolution matters because
+// `git rev-parse --show-toplevel` (used by facts.GetGitRoot) returns the
+// canonical path; writing config files under the resolved path keeps them
+// discoverable as the auto config.
+func setupGitRoot(t *testing.T) string {
+	t.Helper()
+	if !gitAvailable() {
+		t.Skip("git is not available")
+	}
+	dir := t.TempDir()
+	resolved, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatalf("EvalSymlinks: %v", err)
+	}
+	cmd := exec.Command("git", "init")
+	cmd.Dir = resolved
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("git init: %v", err)
+	}
+	t.Chdir(resolved)
+	return resolved
+}
+
+func writeFile(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// jvmApp renders a valid jvm app literal (jarHash is a 64-char lowercase hex
+// string so it passes config validation; jvm apps need no lockfile).
+func jvmApp(hashChar string, version string) string {
+	return fmt.Sprintf(
+		`{ jvm: { jarUrl: "https://example.com/x.jar", jarHash: %q, version: %q } }`,
+		strings.Repeat(hashChar, 64), version,
+	)
+}
+
+// effectiveSnapshot captures the observable, source-name-independent result of
+// a config load so two runs can be compared for parity.
+type effectiveSnapshot struct {
+	ignoreRules  []string
+	appKeys      []string
+	jvmVersions  map[string]string
+	editorconfig string
+}
+
+func snapshotEffective(t *testing.T, cfg *config.Config, layerMap *config.InitLayerMap) effectiveSnapshot {
+	t.Helper()
+	snap := effectiveSnapshot{
+		ignoreRules: cfg.IgnoreRules,
+		jvmVersions: make(map[string]string),
+	}
+	for name, app := range cfg.Apps {
+		snap.appKeys = append(snap.appKeys, name)
+		if app.Jvm != nil {
+			snap.jvmVersions[name] = app.Jvm.Version
+		}
+	}
+	slices.Sort(snap.appKeys)
+	if layerMap != nil {
+		if history, ok := (*layerMap)[".editorconfig"]; ok {
+			if c := config.GetLastGeneratedContent(history); c != nil {
+				snap.editorconfig = *c
+			}
+		}
+	}
+	return snap
+}
+
+// TestBeforeConfigsDeclaredParityWithFlag asserts that an auto config which
+// declares a before-config via getBeforeConfigs() produces the same effective
+// config (apps overridable by the auto layer, init layered identically,
+// ignoreRules ordered identically) as the equivalent explicit invocation that
+// passes the same shared file via --before-config and the auto file via
+// --config. Both resolve to: default -> shared -> auto.
+func TestBeforeConfigsDeclaredParityWithFlag(t *testing.T) {
+	root := setupGitRoot(t)
+
+	mergeHelper := `function _merge(base, extra) { var out = {}; var k; for (k in base) { out[k] = base[k]; } for (k in extra) { out[k] = extra[k]; } return out; }`
+
+	sharedPath := filepath.Join(root, "shared.js")
+	writeFile(t, sharedPath, fmt.Sprintf(`
+function getMinVersion() { return "0.0.0"; }
+%s
+function getConfig(input) {
+    var apps = _merge(input && input.apps ? input.apps : {}, { "shared-tool": %s });
+    return {
+        apps: apps,
+        ignoreRules: ["from-shared: eslint"],
+        init: { ".editorconfig": { scope: "git-root", content: function(ctx) { return "from-shared"; } } }
+    };
+}`, mergeHelper, jvmApp("a", "1.0.0")))
+
+	autoPath := filepath.Join(root, ldflags.PackageName+".config.js")
+	writeFile(t, autoPath, fmt.Sprintf(`
+function getBeforeConfigs() { return [{ path: "./shared.js" }]; }
+function getMinVersion() { return "0.0.0"; }
+%s
+function getConfig(input) {
+    var apps = _merge(input && input.apps ? input.apps : {}, {
+        "shared-tool": %s,
+        "auto-tool": %s
+    });
+    return {
+        apps: apps,
+        ignoreRules: ["from-auto: prettier"],
+        init: { ".editorconfig": { scope: "git-root", content: function(ctx) { return (ctx.existingContent || "") + "\nfrom-auto"; } } }
+    };
+}`, mergeHelper, jvmApp("a", "2.0.0"), jvmApp("b", "1.0.0")))
+
+	// Run A: declared before-config via auto discovery.
+	cfgA, lmA, _, errA := loadConfigWithPaths(context.Background(), nil, false, nil)
+	if errA != nil {
+		t.Fatalf("declared run error: %v", errA)
+	}
+	// Run B: explicit --before-config (shared) + --config (auto), auto-discovery off.
+	cfgB, lmB, _, errB := loadConfigWithPaths(context.Background(), []string{sharedPath}, true, []string{autoPath})
+	if errB != nil {
+		t.Fatalf("flag run error: %v", errB)
+	}
+
+	snapA := snapshotEffective(t, cfgA, lmA)
+	snapB := snapshotEffective(t, cfgB, lmB)
+
+	if !slices.Equal(snapA.ignoreRules, snapB.ignoreRules) {
+		t.Errorf("ignoreRules differ:\n declared=%v\n flag=%v", snapA.ignoreRules, snapB.ignoreRules)
+	}
+	if !slices.Equal(snapA.appKeys, snapB.appKeys) {
+		t.Errorf("app keys differ:\n declared=%v\n flag=%v", snapA.appKeys, snapB.appKeys)
+	}
+	if !maps.Equal(snapA.jvmVersions, snapB.jvmVersions) {
+		t.Errorf("jvm versions differ:\n declared=%v\n flag=%v", snapA.jvmVersions, snapB.jvmVersions)
+	}
+	if snapA.editorconfig != snapB.editorconfig {
+		t.Errorf("init content differs:\n declared=%q\n flag=%q", snapA.editorconfig, snapB.editorconfig)
+	}
+
+	// Sanity-anchor the parity (so equality is not trivially true): the auto
+	// layer overrode shared-tool's version, added auto-tool, layered init, and
+	// shared's ignoreRule precedes auto's.
+	if got := snapA.jvmVersions["shared-tool"]; got != "2.0.0" {
+		t.Errorf("shared-tool version = %q, want %q (auto layer should override shared)", got, "2.0.0")
+	}
+	if _, ok := snapA.jvmVersions["auto-tool"]; !ok {
+		t.Errorf("auto-tool app missing; jvmVersions=%v", snapA.jvmVersions)
+	}
+	if snapA.editorconfig != "from-shared\nfrom-auto" {
+		t.Errorf("editorconfig = %q, want %q", snapA.editorconfig, "from-shared\nfrom-auto")
+	}
+	sharedIdx := slices.Index(snapA.ignoreRules, "from-shared: eslint")
+	autoIdx := slices.Index(snapA.ignoreRules, "from-auto: prettier")
+	if sharedIdx < 0 || autoIdx < 0 {
+		t.Fatalf("missing expected ignoreRules: %v", snapA.ignoreRules)
+	}
+	if sharedIdx >= autoIdx {
+		t.Errorf("shared rule (idx=%d) should precede auto rule (idx=%d)", sharedIdx, autoIdx)
+	}
+}
+
+// TestBeforeConfigsRootOnlyNoChaining verifies that getBeforeConfigs() is read
+// only from the auto-discovered git-root config. A declared before-config that
+// itself exports getBeforeConfigs() must NOT have its nested declaration
+// honoured (no chaining), so the nested file's contribution is absent.
+func TestBeforeConfigsRootOnlyNoChaining(t *testing.T) {
+	root := setupGitRoot(t)
+
+	nestedPath := filepath.Join(root, "nested.js")
+	writeFile(t, nestedPath, `
+function getMinVersion() { return "0.0.0"; }
+function getConfig(input) { return { ignoreRules: ["from-nested: hadolint"] }; }`)
+
+	sharedPath := filepath.Join(root, "shared.js")
+	// shared declares getBeforeConfigs -> nested; this must be ignored.
+	writeFile(t, sharedPath, `
+function getBeforeConfigs() { return [{ path: "./nested.js" }]; }
+function getMinVersion() { return "0.0.0"; }
+function getConfig(input) { return { ignoreRules: ["from-shared: eslint"] }; }`)
+
+	autoPath := filepath.Join(root, ldflags.PackageName+".config.js")
+	writeFile(t, autoPath, `
+function getBeforeConfigs() { return [{ path: "./shared.js" }]; }
+function getMinVersion() { return "0.0.0"; }
+function getConfig(input) { return { ignoreRules: ["from-auto: prettier"] }; }`)
+
+	cfg, _, _, err := loadConfigWithPaths(context.Background(), nil, false, nil)
+	if err != nil {
+		t.Fatalf("loadConfigWithPaths error: %v", err)
+	}
+
+	if !slices.Contains(cfg.IgnoreRules, "from-shared: eslint") {
+		t.Errorf("declared before-config (shared) should be loaded; rules=%v", cfg.IgnoreRules)
+	}
+	if !slices.Contains(cfg.IgnoreRules, "from-auto: prettier") {
+		t.Errorf("auto config should be loaded; rules=%v", cfg.IgnoreRules)
+	}
+	if slices.Contains(cfg.IgnoreRules, "from-nested: hadolint") {
+		t.Errorf("nested getBeforeConfigs() must NOT be honoured (no chaining); rules=%v", cfg.IgnoreRules)
+	}
+}
+
+// TestBeforeConfigsFlagOverridesDeclared verifies the precedence rule: when an
+// explicit --before-config path is passed, the auto config's getBeforeConfigs()
+// declaration is not consulted at all (the flag wins, avoiding a double-load of
+// the shared config when the pnpm wrapper supplies --before-config).
+func TestBeforeConfigsFlagOverridesDeclared(t *testing.T) {
+	root := setupGitRoot(t)
+
+	declaredPath := filepath.Join(root, "declared.js")
+	writeFile(t, declaredPath, `
+function getMinVersion() { return "0.0.0"; }
+function getConfig(input) { return { ignoreRules: ["from-declared: eslint"] }; }`)
+
+	autoPath := filepath.Join(root, ldflags.PackageName+".config.js")
+	writeFile(t, autoPath, `
+function getBeforeConfigs() { return [{ path: "./declared.js" }]; }
+function getMinVersion() { return "0.0.0"; }
+function getConfig(input) { return { ignoreRules: ["from-auto: prettier"] }; }`)
+
+	flagDir := t.TempDir()
+	flagPath := filepath.Join(flagDir, "flag.js")
+	writeFile(t, flagPath, `
+function getMinVersion() { return "0.0.0"; }
+function getConfig(input) { return { ignoreRules: ["from-flag: shellcheck"] }; }`)
+
+	// --before-config flag set -> getBeforeConfigs() must be skipped entirely.
+	cfg, _, _, err := loadConfigWithPaths(context.Background(), []string{flagPath}, false, nil)
+	if err != nil {
+		t.Fatalf("loadConfigWithPaths error: %v", err)
+	}
+
+	if !slices.Contains(cfg.IgnoreRules, "from-flag: shellcheck") {
+		t.Errorf("--before-config flag config should be loaded; rules=%v", cfg.IgnoreRules)
+	}
+	if !slices.Contains(cfg.IgnoreRules, "from-auto: prettier") {
+		t.Errorf("auto config should still be loaded; rules=%v", cfg.IgnoreRules)
+	}
+	if slices.Contains(cfg.IgnoreRules, "from-declared: eslint") {
+		t.Errorf("declared before-config must be skipped when --before-config flag is set (no double-load); rules=%v", cfg.IgnoreRules)
+	}
 }
 
 func TestProcessConfigSourceRemoteConfig(t *testing.T) {
@@ -1557,9 +2141,20 @@ function getConfig(input) { return { ignoreRules: ["low-version: eslint"] }; }`,
 	}
 }
 
+// withTestVersion overrides the build version for the duration of a test so
+// version-check enforcement can be exercised. The default "dev" build satisfies
+// any minVersion, so failure-path tests must pin a concrete stable version.
+func withTestVersion(t *testing.T, v string) {
+	t.Helper()
+	orig := ldflags.Version
+	ldflags.Version = v
+	t.Cleanup(func() { ldflags.Version = orig })
+}
+
 func TestLoadConfigWithHighMinVersionFails(t *testing.T) {
-	// Config with getMinVersion="99.0.0" should fail because current version
-	// ("dev" -> v0.0.0) is less than required.
+	// Config with getMinVersion="99.0.0" must fail because the pinned current
+	// version (v1.0.0) is less than required.
+	withTestVersion(t, "1.0.0")
 	configDir := t.TempDir()
 	configPath := filepath.Join(configDir, "high-version.js")
 	if err := os.WriteFile(configPath, []byte(
@@ -1650,6 +2245,7 @@ function getConfig(input) { return { ignoreRules: ["from-config: prettier"] }; }
 func TestLoadConfigMultiLayerVersionCheckFailsOnSecondLayer(t *testing.T) {
 	// First config layer passes, second layer has high version requirement -> fails.
 	// Error message should identify which config file failed.
+	withTestVersion(t, "1.0.0")
 	beforeDir := t.TempDir()
 	beforePath := filepath.Join(beforeDir, "before.js")
 	if err := os.WriteFile(beforePath, []byte(
@@ -1683,6 +2279,7 @@ function getConfig(input) { return {}; }`,
 
 func TestLoadConfigVersionCheckShowsConfigFile(t *testing.T) {
 	// Verify that version check failure error message includes the config file name.
+	withTestVersion(t, "1.0.0")
 	configDir := t.TempDir()
 	configPath := filepath.Join(configDir, "my-special-config.js")
 	if err := os.WriteFile(configPath, []byte(

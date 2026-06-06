@@ -295,6 +295,8 @@ default (embedded config.js)
   ↓ [getRemoteConfigs() resolved depth-first, if exported]
 --before-config flags  (for wrappers/libraries)
   ↓ [getRemoteConfigs() resolved depth-first]
+declared before-configs  (auto config's getBeforeConfigs(), only when no --before-config flag)
+  ↓ [getRemoteConfigs() resolved depth-first]
 auto (datamitsu.config.js, datamitsu.config.mjs or datamitsu.config.ts at git root)
   ↓ [getRemoteConfigs() resolved depth-first]
 --config flags  (for CI/testing overrides)
@@ -303,6 +305,7 @@ final Config
 ```
 
 - `--before-config`: config files loaded before auto-discovery, intended for wrapper packages and shared libraries
+- `getBeforeConfigs()`: the auto git-root config can export `getBeforeConfigs()` returning `Array<{path: string}>` to load local files as under-layers — parity with `--before-config` for global installs. Honoured only at the git-root (auto) layer; nested declarations are not chained. Skipped entirely when `--before-config` is passed (the flag wins, avoiding double-loading). Relative paths resolve against the git-root config's directory; no hash required (local files, not network downloads). Read by the `discoverBeforeConfigs` pre-pass and assembled by `buildConfigSources` in [cmd/config_loader.go](cmd/config_loader.go)
 - `--no-auto-config`: disables auto-discovery of `datamitsu.config.js`/`datamitsu.config.mjs`/`datamitsu.config.ts` at git root
 - Auto-discovery: finds `datamitsu.config.js`, `datamitsu.config.mjs` or `datamitsu.config.ts` at git root; if more than one exist → error; if none → no auto-config
 - Each source must export `getMinVersion()` returning a semver string; version is validated against `ldflags.Version` via `version.CompareVersions()` before `getConfig()` is called
@@ -363,7 +366,7 @@ export function getMinVersion() {
 - When the current version is below the requirement, error includes both versions and upgrade instructions
 - The special version "dev" (used when running from source) is treated as v0.0.0, so it passes version checks only when the required version is also v0.0.0 or lower
 - Unstable builds (`0.0.0-unstable.<date>.<sha>`, produced from non-tagged commits) bypass the version check entirely — `CompareVersions` returns `skipped=true` with no error and the config loader logs an advisory warning. Without this bypass, semver prerelease ordering would treat every unstable build as below `v0.0.0` and block every config; unstable users have already opted into a non-released build, so the gate is advisory rather than blocking
-- Each config layer (default, before-config, auto, explicit) is checked independently; failure is fail-fast
+- Each config layer (default, before-config, declared before-config, auto, explicit) is checked independently; failure is fail-fast
 
 ## Important Implementation Details
 

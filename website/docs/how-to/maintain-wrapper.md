@@ -18,6 +18,48 @@ A **wrapper package** is a datamitsu configuration that bundles a curated set of
 
 datamitsu provides `devtools` commands to automate these tasks.
 
+## Global-install parity: declaring `getBeforeConfigs()`
+
+A wrapper package typically ships a `bin/datamitsu` shim that injects `--before-config <shared config>` so the shared configuration loads ahead of the project's own. That shim only fires when datamitsu is invoked **through** it (e.g. via `pnpm exec datamitsu`). A **globally installed** datamitsu run inside the same repo never receives the flag — it skips the shared config, the effective configuration diverges, and the user has to hand-edit the command to reproduce the wrapper's behaviour.
+
+`getBeforeConfigs()` closes that gap. Export it from the project's git-root config to declare the shared config as a local under-layer, so the global binary reproduces the wrapper automatically:
+
+```javascript
+/// <reference path=".datamitsu/datamitsu.config.d.ts" />
+
+function getBeforeConfigs() {
+  return [{ path: "./node_modules/@myorg/datamitsu-config/datamitsu.config.js" }];
+}
+globalThis.getBeforeConfigs = getBeforeConfigs;
+
+function getConfig(config) {
+  // config already includes the shared wrapper config's changes
+  return { ...config };
+}
+globalThis.getConfig = getConfig;
+globalThis.getMinVersion = () => "0.0.1";
+```
+
+The declared path is inserted into the loading order immediately before the auto config — exact parity with the `--before-config` flag (init-layer merging, `getMinVersion()` checks, remote-config resolution all apply identically).
+
+**When to use which:**
+
+| Situation                                          | Mechanism                                                      |
+| -------------------------------------------------- | -------------------------------------------------------------- |
+| Wrapper-managed repo, always run via the shim      | The shim's `--before-config` is enough — declaring is optional |
+| Same repo also run with a **global** `datamitsu`   | Declare `getBeforeConfigs()` so both invocations match         |
+| Debugging — want to run the global binary directly | Declare `getBeforeConfigs()`; no command rewriting needed      |
+
+**Precedence (the flag always wins):** when `--before-config` is passed on the CLI, `getBeforeConfigs()` is **not evaluated at all**. This is deliberate — when the wrapper shim is in use, the flag already loads the shared config, and skipping the declaration avoids loading it twice. So adding `getBeforeConfigs()` is safe even for repos that are sometimes run through the shim and sometimes via the global binary.
+
+A few rules to keep in mind:
+
+- Relative paths resolve against the git-root config's directory; absolute paths are used as-is. A missing file is a hard error.
+- No hash is required — a local path is in the same trust domain as the root config, not a network download (unlike `getRemoteConfigs()`, which mandates a SHA-256 hash).
+- It is honoured **only** in the auto-discovered git-root config. A `getBeforeConfigs()` declared inside the shared config itself (or any other layer) is ignored — there is no chaining.
+
+See [Configuration → Declared Before-Configs](../guides/configuration.md#declared-before-configs-getbeforeconfigs) for the full reference.
+
 ## Updating Tool Versions
 
 ### Minimum release age (`--min-age`)

@@ -54,6 +54,8 @@ default (embedded config.js)
   ↓ [getRemoteConfigs() resolved]
 --before-config flags
   ↓ [getRemoteConfigs() resolved]
+declared before-configs (auto config's getBeforeConfigs(), only if no --before-config flag)
+  ↓ [getRemoteConfigs() resolved]
 auto (datamitsu.config.js at git root)
   ↓ [getRemoteConfigs() resolved]
 --config flags
@@ -74,6 +76,36 @@ Use `--before-config` to load configuration files before auto-discovery. This is
 ```bash
 datamitsu check --before-config ./node_modules/@myorg/datamitsu-config/base.js
 ```
+
+### Declared Before-Configs (getBeforeConfigs())
+
+`getBeforeConfigs()` is the config-declared equivalent of the `--before-config` flag. Export it from your auto-discovered git-root config to load local config files as under-layers — without passing `--before-config` on the command line:
+
+```javascript
+/// <reference path=".datamitsu/datamitsu.config.d.ts" />
+
+function getBeforeConfigs() {
+  return [{ path: "./node_modules/@myorg/datamitsu-config/datamitsu.config.js" }];
+}
+globalThis.getBeforeConfigs = getBeforeConfigs;
+
+function getConfig(config) {
+  // config already includes the declared before-config's changes
+  return { ...config };
+}
+globalThis.getConfig = getConfig;
+globalThis.getMinVersion = () => "0.0.1";
+```
+
+The declared paths are inserted into the loading order **before** the auto config, giving them exact parity with `--before-config` (init-layer merging, `getMinVersion()` checks, remote-config resolution).
+
+Key rules:
+
+- **Why use it:** a wrapper's `bin/datamitsu` shim injects `--before-config` only when datamitsu is invoked through it. A **globally installed** datamitsu run in the same repo never gets that flag and so skips the shared config. Declaring `getBeforeConfigs()` in your git-root config makes the global binary reproduce the wrapper's behaviour automatically — see [Maintaining Wrapper Packages](../how-to/maintain-wrapper.md#global-install-parity-declaring-getbeforeconfigs).
+- **Path resolution:** relative paths resolve against the directory of the git-root config file; absolute paths are used as-is. Duplicate paths are deduplicated, declared order is preserved, and a missing file is an error.
+- **No hash required:** local paths are in the same trust domain as the root config — they are not network downloads, so the mandatory-hash policy (which applies to `getRemoteConfigs()`) does not apply.
+- **Root-only scope:** `getBeforeConfigs()` is honoured **only** in the auto-discovered git-root config. A declaration in any other layer (default, `--before-config`, a remote config, `--config`, or a declared before-config itself) is ignored — there is no chaining.
+- **Precedence:** if `--before-config` is passed on the CLI, `getBeforeConfigs()` is **not evaluated at all**. The flag wins, which avoids double-loading the shared config when the wrapper is used.
 
 ### Auto-Discovery
 

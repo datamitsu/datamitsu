@@ -159,13 +159,22 @@ func TestCompareVersions_ErrorMessageFormat(t *testing.T) {
 }
 
 func TestCompareVersions_DevVersion(t *testing.T) {
-	_, err := CompareVersions("dev", "99.99.99")
-	if err == nil {
-		t.Error("CompareVersions(dev, 99.99.99) should fail since dev normalizes to v0.0.0")
+	// Local "dev" builds are unversioned source builds: they satisfy any
+	// requirement silently, so a plain `go build` works against real configs
+	// without the v99.99.99 ldflags dance used by `task build`.
+	for _, required := range []string{"99.99.99", "0.0.0", "v1.2.3"} {
+		skipped, err := CompareVersions("dev", required)
+		if err != nil {
+			t.Errorf("CompareVersions(dev, %q) returned unexpected error: %v", required, err)
+		}
+		if skipped {
+			t.Errorf("CompareVersions(dev, %q) reported skipped=true; dev should pass silently", required)
+		}
 	}
 
-	_, err = CompareVersions("dev", "0.0.0")
-	if err != nil {
-		t.Errorf("CompareVersions(dev, 0.0.0) returned unexpected error: %v", err)
+	// An invalid required version is still reported even for dev builds, so
+	// config authors catch a typo immediately.
+	if _, err := CompareVersions("dev", "not-a-version"); err == nil {
+		t.Error("CompareVersions(dev, not-a-version) expected error for invalid required, got nil")
 	}
 }

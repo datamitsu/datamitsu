@@ -48,6 +48,10 @@ type remoteConfigEntry struct {
 	Hash string `json:"hash"`
 }
 
+type beforeConfigEntry struct {
+	Path string `json:"path"`
+}
+
 // loadConfig loads and parses the JavaScript configuration. It is the
 // context-free entry point used by command handlers that do not thread a
 // context; callers that hold one should use loadConfigWithPaths.
@@ -76,14 +80,6 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 		}
 	}()
 
-	var sources []configSource
-	sources = append(sources, configSource{name: "default", isDefault: true})
-
-	// Add before-config paths (for wrappers/libraries, inserted before auto-discovery)
-	for _, p := range beforeConfigPaths {
-		sources = append(sources, configSource{name: p, path: p})
-	}
-
 	// Determine rootPath and cwdPath for eager content evaluation
 	cwdPath, cwdErr := os.Getwd()
 	if cwdErr != nil {
@@ -91,7 +87,8 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 	}
 	rootPath := cwdPath
 
-	// Add auto-loaded config from git root if it exists (unless --no-auto-config)
+	// Discover the auto-loaded config from git root (unless --no-auto-config).
+	var autoConfigPath string
 	if !noAutoConfig {
 		gitRoot, gitErr := facts.GetGitRoot(ctx)
 		if gitErr != nil {
@@ -101,19 +98,17 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 		}
 		if gitErr == nil && gitRoot != "" {
 			rootPath = gitRoot
-			autoConfigPath, autoErr := discoverAutoConfig(gitRoot)
+			discovered, autoErr := discoverAutoConfig(gitRoot)
 			if autoErr != nil {
 				return nil, nil, nil, autoErr
 			}
-			if autoConfigPath != "" {
-				sources = append(sources, configSource{name: "auto", path: autoConfigPath})
-			}
+			autoConfigPath = discovered
 		}
 	}
 
-	// Add explicit config paths
-	for _, p := range configPaths {
-		sources = append(sources, configSource{name: p, path: p})
+	sources, srcErr := buildConfigSources(ctx, beforeConfigPaths, autoConfigPath, configPaths)
+	if srcErr != nil {
+		return nil, nil, nil, srcErr
 	}
 
 	// Process all sources sequentially with eager content evaluation.
@@ -180,6 +175,47 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 	}
 
 	return currentConfig, &layerMap, lastVM, nil
+}
+
+// buildConfigSources assembles the ordered list of config sources to process.
+// Order: default → --before-config flag paths → declared before-configs → auto
+// → --config paths. Declared before-configs come from the auto config's
+// getBeforeConfigs() (read via the discoverBeforeConfigs pre-pass) and are
+// honoured only when no --before-config flag was passed — the flag wins, which
+// avoids double-loading the shared config when the pnpm wrapper is used.
+// autoConfigPath is empty when there is no git-root config or --no-auto-config
+// was given.
+func buildConfigSources(ctx context.Context, beforeConfigPaths []string, autoConfigPath string, configPaths []string) ([]configSource, error) {
+	var sources []configSource
+	sources = append(sources, configSource{name: "default", isDefault: true})
+
+	// --before-config flag paths (for wrappers/libraries, before auto-discovery).
+	for _, p := range beforeConfigPaths {
+		sources = append(sources, configSource{name: p, path: p})
+	}
+
+	// Declared before-configs from the auto config — only when no flag overrides.
+	if autoConfigPath != "" && len(beforeConfigPaths) == 0 {
+		declared, err := discoverBeforeConfigs(ctx, autoConfigPath)
+		if err != nil {
+			return nil, err
+		}
+		for _, p := range declared {
+			sources = append(sources, configSource{name: p, path: p})
+		}
+	}
+
+	// Auto-discovered git-root config.
+	if autoConfigPath != "" {
+		sources = append(sources, configSource{name: "auto", path: autoConfigPath})
+	}
+
+	// Explicit --config paths.
+	for _, p := range configPaths {
+		sources = append(sources, configSource{name: p, path: p})
+	}
+
+	return sources, nil
 }
 
 // processConfigSource loads a single config source, resolves any remote configs
@@ -416,6 +452,62 @@ func discoverAutoConfig(gitRoot string) (string, error) {
 		return filepath.Join(gitRoot, found[0]), nil
 	}
 	return "", nil
+}
+
+// discoverBeforeConfigs evaluates the auto-discovered git-root config in an
+// isolated VM and reads its getBeforeConfigs() declaration, returning the
+// resolved absolute paths in declared order (deduped). Relative paths are
+// resolved against the config file's directory; absolute paths are used as-is.
+// Each declared path must exist. An absent getBeforeConfigs function returns
+// (nil, nil) — only the auto config is consulted, so nested declarations in
+// other layers are never read (scope is enforced structurally).
+func discoverBeforeConfigs(ctx context.Context, autoConfigPath string) ([]string, error) {
+	e, err := engine.New(ctx, BinaryCommandOverride)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create engine: %w", err)
+	}
+	if loadErr := loadConfigFile(e, autoConfigPath); loadErr != nil {
+		return nil, fmt.Errorf("failed to load config from %s: %w", autoConfigPath, loadErr)
+	}
+	vm := e.VM()
+
+	fn, ok := goja.AssertFunction(vm.Get("getBeforeConfigs"))
+	if !ok {
+		return nil, nil
+	}
+
+	result, callErr := e.CallWithTimeout(fn, 10*time.Second)
+	if callErr != nil {
+		return nil, fmt.Errorf("failed to call getBeforeConfigs in %s: %w", autoConfigPath, callErr)
+	}
+
+	var entries []beforeConfigEntry
+	if exportErr := vm.ExportTo(result, &entries); exportErr != nil {
+		return nil, fmt.Errorf("failed to parse getBeforeConfigs result in %s: %w", autoConfigPath, exportErr)
+	}
+
+	baseDir := filepath.Dir(autoConfigPath)
+	seen := make(map[string]bool)
+	var paths []string
+	for _, entry := range entries {
+		if entry.Path == "" {
+			return nil, fmt.Errorf("before config entry in %s: path is required", autoConfigPath)
+		}
+		resolved := entry.Path
+		if !filepath.IsAbs(resolved) {
+			resolved = filepath.Join(baseDir, resolved)
+		}
+		resolved = filepath.Clean(resolved)
+		if seen[resolved] {
+			continue
+		}
+		if _, statErr := os.Stat(resolved); statErr != nil {
+			return nil, fmt.Errorf("before config %s: %w", resolved, statErr)
+		}
+		seen[resolved] = true
+		paths = append(paths, resolved)
+	}
+	return paths, nil
 }
 
 // loadConfigFile loads and executes a single configuration file in the given engine.
