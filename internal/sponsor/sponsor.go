@@ -67,12 +67,10 @@ func (m *Manager) MaybePrint(isJSONOutput bool) {
 			state.LastShown = m.clock.Now()
 			m.printMessage()
 		}
-	} else {
-		if m.clock.Now().Sub(state.LastShown) >= time.Duration(minDaysBetweenShows)*24*time.Hour {
-			state.Activated = false
-			state.SuccessfulRuns = 0
-			state.LastShown = time.Time{}
-		}
+	} else if m.clock.Now().Sub(state.LastShown) >= time.Duration(minDaysBetweenShows)*24*time.Hour {
+		state.Activated = false
+		state.SuccessfulRuns = 0
+		state.LastShown = time.Time{}
 	}
 
 	_ = saveState(path, state)

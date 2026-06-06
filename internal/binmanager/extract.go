@@ -847,9 +847,10 @@ func extractArchiveToPath(destPath string, tarData []byte, archivePath string, f
 
 	var tarReader *tar.Reader
 
-	if tarData != nil {
+	switch {
+	case tarData != nil:
 		tarReader = tar.NewReader(bytes.NewReader(tarData))
-	} else if archivePath != "" {
+	case archivePath != "":
 		file, err := os.Open(archivePath)
 		if err != nil {
 			return "", fmt.Errorf("failed to open archive file: %w", err)
@@ -898,7 +899,7 @@ func extractArchiveToPath(destPath string, tarData []byte, archivePath string, f
 		default:
 			return "", fmt.Errorf("unsupported archive format: %s (expected tar, tar.gz, tar.xz, tar.bz2, or tar.zst)", format)
 		}
-	} else {
+	default:
 		return "", errors.New("either tarData or archivePath must be provided")
 	}
 

@@ -274,7 +274,8 @@ func copyDir(src, dst string) error {
 	for _, entry := range entries {
 		srcPath := filepath.Join(src, entry.Name())
 		dstPath := filepath.Join(dst, entry.Name())
-		if entry.Type()&os.ModeSymlink != 0 {
+		switch {
+		case entry.Type()&os.ModeSymlink != 0:
 			target, err := os.Readlink(srcPath)
 			if err != nil {
 				return err
@@ -282,11 +283,11 @@ func copyDir(src, dst string) error {
 			if err := os.Symlink(target, dstPath); err != nil {
 				return err
 			}
-		} else if entry.IsDir() {
+		case entry.IsDir():
 			if err := copyDir(srcPath, dstPath); err != nil {
 				return err
 			}
-		} else {
+		default:
 			if err := copyFile(srcPath, dstPath); err != nil {
 				return err
 			}

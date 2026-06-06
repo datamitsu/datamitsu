@@ -195,7 +195,8 @@ func clearAppLockFile(apps binmanager.MapOfApps, appName string) binmanager.MapO
 func printAppInfo(appName string, app binmanager.App) {
 	fmt.Fprintf(os.Stderr, "App: %s\n", appName)
 
-	if app.Node != nil {
+	switch {
+	case app.Node != nil:
 		fmt.Fprintf(os.Stderr, "  Runtime:      node\n")
 		fmt.Fprintf(os.Stderr, "  Package:      %s\n", app.Node.PackageName)
 		fmt.Fprintf(os.Stderr, "  Version:      %s\n", app.Node.Version)
@@ -210,20 +211,20 @@ func printAppInfo(appName string, app binmanager.App) {
 				fmt.Fprintf(os.Stderr, "    %s: %s\n", k, app.Node.Dependencies[k])
 			}
 		}
-	} else if app.Uv != nil {
+	case app.Uv != nil:
 		fmt.Fprintf(os.Stderr, "  Runtime:      uv\n")
 		fmt.Fprintf(os.Stderr, "  Package:      %s\n", app.Uv.PackageName)
 		fmt.Fprintf(os.Stderr, "  Version:      %s\n", app.Uv.Version)
-	} else if app.Go != nil {
+	case app.Go != nil:
 		fmt.Fprintf(os.Stderr, "  Runtime:      go\n")
 		fmt.Fprintf(os.Stderr, "  Package:      %s\n", app.Go.PackageName)
 		fmt.Fprintf(os.Stderr, "  Version:      %s\n", app.Go.Version)
-	} else if app.Jvm != nil {
+	case app.Jvm != nil:
 		fmt.Fprintf(os.Stderr, "  Runtime:      jvm\n")
 		fmt.Fprintf(os.Stderr, "  Version:      %s\n", app.Jvm.Version)
-	} else if app.Binary != nil {
+	case app.Binary != nil:
 		fmt.Fprintf(os.Stderr, "  Runtime:      binary\n")
-	} else if app.Shell != nil {
+	case app.Shell != nil:
 		fmt.Fprintf(os.Stderr, "  Runtime:      shell\n")
 		fmt.Fprintf(os.Stderr, "  Command:      %s\n", app.Shell.Name)
 	}
@@ -235,11 +236,12 @@ func listLockfileApps(apps binmanager.MapOfApps) {
 	var nodeApps, uvApps, goApps []string
 
 	for name, app := range apps {
-		if app.Node != nil {
+		switch {
+		case app.Node != nil:
 			nodeApps = append(nodeApps, name)
-		} else if app.Uv != nil {
+		case app.Uv != nil:
 			uvApps = append(uvApps, name)
-		} else if app.Go != nil {
+		case app.Go != nil:
 			goApps = append(goApps, name)
 		}
 	}
@@ -301,11 +303,12 @@ func readLockFile(installPath string, app binmanager.App) (string, error) {
 
 	var lockFilePath string
 
-	if app.Node != nil {
+	switch {
+	case app.Node != nil:
 		lockFilePath = filepath.Join(installPath, "pnpm-lock.yaml")
-	} else if app.Uv != nil {
+	case app.Uv != nil:
 		lockFilePath = filepath.Join(installPath, "uv.lock")
-	} else {
+	default:
 		return "", errors.New("unsupported app type for lock file generation")
 	}
 

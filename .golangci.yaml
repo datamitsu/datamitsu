@@ -42,7 +42,7 @@ linters:
     # - makezero
     # - modernize
     # - gochecknoinits
-    # - gocritic
+    - gocritic
     # - gocyclo
     # - gosec
     - errname

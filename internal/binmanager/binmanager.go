@@ -737,7 +737,8 @@ func extractArchives(installPath string, archives map[string]*ArchiveSpec) error
 			return fmt.Errorf("archive %q: spec is nil", name)
 		}
 
-		if spec.IsInline() {
+		switch {
+		case spec.IsInline():
 			tarData, err := DecompressArchive(spec.Inline)
 			if err != nil {
 				return fmt.Errorf("archive %q: failed to decompress inline archive: %w", name, err)
@@ -748,11 +749,11 @@ func extractArchives(installPath string, archives map[string]*ArchiveSpec) error
 			}
 
 			log.Debug("extracted inline archive", zap.String("name", name), zap.String("dest", installPath))
-		} else if spec.IsExternal() {
+		case spec.IsExternal():
 			if err := downloadAndExtractExternalArchive(name, spec, installPath); err != nil {
 				return err
 			}
-		} else {
+		default:
 			return fmt.Errorf("archive %q: must have either inline or url field set", name)
 		}
 	}
@@ -886,25 +887,26 @@ func (bm *BinManager) GetAppsList() []AppInfo {
 			Description: app.Description,
 		}
 
-		if app.Binary != nil {
+		switch {
+		case app.Binary != nil:
 			info.Type = "binary"
 			info.Version = app.Binary.Version
-		} else if app.Uv != nil {
+		case app.Uv != nil:
 			info.Type = "uv"
 			info.Version = app.Uv.Version
 			info.PackageName = app.Uv.PackageName
-		} else if app.Node != nil {
+		case app.Node != nil:
 			info.Type = "node"
 			info.Version = app.Node.Version
 			info.PackageName = app.Node.PackageName
-		} else if app.Jvm != nil {
+		case app.Jvm != nil:
 			info.Type = "jvm"
 			info.Version = app.Jvm.Version
-		} else if app.Go != nil {
+		case app.Go != nil:
 			info.Type = "go"
 			info.Version = app.Go.Version
 			info.PackageName = app.Go.PackageName
-		} else if app.Shell != nil {
+		case app.Shell != nil:
 			info.Type = "shell"
 			info.Command = app.Shell.Name
 		}

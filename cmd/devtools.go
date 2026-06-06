@@ -154,7 +154,8 @@ func runPullGithub(cmd *cobra.Command, args []string) error {
 				fmt.Fprintf(os.Stderr, "Error fetching latest release: %v\n", err)
 				continue
 			}
-			if release == nil {
+			switch {
+			case release == nil:
 				// No release is old enough under the active min-age cutoff.
 				if state.Binaries[appName] != nil {
 					// Existing app: warn and keep the current tag.
@@ -165,10 +166,10 @@ func runPullGithub(cmd *cobra.Command, args []string) error {
 					// New app: nothing safe to install — hard error.
 					return noReleaseOldEnoughErr(appName, minAge)
 				}
-			} else if release.TagName != metadata.Tag {
+			case release.TagName != metadata.Tag:
 				fmt.Printf("Latest release: %s (updating from %s)\n", release.TagName, metadata.Tag)
 				effectiveTag = release.TagName
-			} else {
+			default:
 				fmt.Printf("Latest release: %s (already up to date)\n", release.TagName)
 			}
 		}
@@ -464,13 +465,14 @@ func buildBinariesForApp(appName string, release *github.Release, configHash str
 
 	entry.ConfigHash = configHash
 
-	if verifyExtractionFlag && verificationFailedCount > 0 {
+	switch {
+	case verifyExtractionFlag && verificationFailedCount > 0:
 		fmt.Printf("\nSummary: %d detected, %d not available, %d deduplicated, %d verification failed\n",
 			successCount, notAvailableCount, deduplicatedCount, verificationFailedCount)
-	} else if deduplicatedCount > 0 {
+	case deduplicatedCount > 0:
 		fmt.Printf("\nSummary: %d detected, %d not available, %d deduplicated\n",
 			successCount, notAvailableCount, deduplicatedCount)
-	} else {
+	default:
 		fmt.Printf("\nSummary: %d detected, %d not available\n", successCount, notAvailableCount)
 	}
 	return entry, nil

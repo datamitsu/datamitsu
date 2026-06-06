@@ -42,21 +42,22 @@ func ScoreAsset(asset github.Asset, osType syslist.OsType, archType syslist.Arch
 	hasOSIndicator := HasAnyOSIndicator(asset.Name)
 	hasArchIndicator := HasAnyArchIndicator(asset.Name)
 
+	switch {
 	// Implicit amd64: OS matches, no arch indicators, requesting amd64
-	if osMatch && !hasArchIndicator && archType == syslist.ArchTypeAmd64 {
+	case osMatch && !hasArchIndicator && archType == syslist.ArchTypeAmd64:
 		s.OSMatch = true
 		s.ArchMatch = true
-	} else if osMatch && !hasArchIndicator && osType == syslist.OsTypeDarwin && archType == syslist.ArchTypeArm64 {
+	case osMatch && !hasArchIndicator && osType == syslist.OsTypeDarwin && archType == syslist.ArchTypeArm64:
 		// Implicit darwin/arm64: OS matches darwin, no arch indicators, requesting arm64.
 		// Many macOS-only assets (e.g. a *-macos.zip) ship universal binaries that
 		// run on both Intel and Apple Silicon without declaring arch in the filename.
 		s.OSMatch = true
 		s.ArchMatch = true
-	} else if archMatch && !hasOSIndicator && osType == syslist.OsTypeLinux {
+	case archMatch && !hasOSIndicator && osType == syslist.OsTypeLinux:
 		// Implicit Linux: Arch matches, no OS indicators, requesting Linux
 		s.OSMatch = true
 		s.ArchMatch = true
-	} else {
+	default:
 		// Standard explicit matching
 		s.OSMatch = osMatch
 		s.ArchMatch = archMatch

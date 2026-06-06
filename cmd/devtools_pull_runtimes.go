@@ -242,15 +242,16 @@ func runtimeVersion(r *RuntimeJSON) string {
 func printPullSummary(results []runtimePullResult) {
 	fmt.Printf("\n--- Summary ---\n")
 	for _, r := range results {
-		if r.err != nil {
+		switch {
+		case r.err != nil:
 			fmt.Printf("  %s: FAILED (%v)\n", r.name, r.err)
-		} else if r.updated {
+		case r.updated:
 			if r.oldVersion != "" {
 				fmt.Printf("  %s: updated (%s -> %s)\n", r.name, r.oldVersion, r.newVersion)
 			} else {
 				fmt.Printf("  %s: added (%s)\n", r.name, r.newVersion)
 			}
-		} else {
+		default:
 			fmt.Printf("  %s: unchanged\n", r.name)
 		}
 	}

@@ -46,7 +46,7 @@ whose last status was "ok". Skipped entries appear as "cached" in output.
 
 Data source: the same aggregated config used at runtime (loadConfig()).`,
 	Args: cobra.NoArgs,
-	Run:  runVerifyAll,
+	RunE: runVerifyAll,
 }
 
 func init() {
@@ -407,13 +407,12 @@ func filterSkippedVersionCheckEntries(entries []versionCheckEntry, sm *verifycac
 	return
 }
 
-func runVerifyAll(cmd *cobra.Command, args []string) {
+func runVerifyAll(cmd *cobra.Command, args []string) error {
 	SkipRemoteConfig = verifyNoRemoteFlag
 	defer func() { SkipRemoteConfig = false }()
 	cfg, _, _, err := loadConfig()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("loading config: %w", err)
 	}
 
 	concurrency := verifyConcurrencyFlag
@@ -427,8 +426,7 @@ func runVerifyAll(cmd *cobra.Command, args []string) {
 
 	cwd, err := os.Getwd()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error getting working directory: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("getting working directory: %w", err)
 	}
 	statePath := verifycache.StatePath(env.GetCachePath(), cwd)
 
@@ -511,17 +509,22 @@ func runVerifyAll(cmd *cobra.Command, args []string) {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		if err := enc.Encode(output); err != nil {
-			fmt.Fprintf(os.Stderr, "Error encoding JSON output: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("encoding JSON output: %w", err)
 		}
 	} else {
 		printSummary(summary)
 	}
 
 	if overallStatus == "failed" {
-		os.Exit(1)
+		return errVerificationFailed
 	}
+
+	return nil
 }
+
+// errVerificationFailed signals a non-zero exit when one or more verify checks
+// fail; the summary above carries the detail, so the message stays terse.
+var errVerificationFailed = errors.New("verification failed")
 
 // --- Phase 1: Binary apps ---
 
