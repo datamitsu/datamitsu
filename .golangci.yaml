@@ -28,6 +28,7 @@ linters:
     - unused
     - wastedassign
     - whitespace
+    - iotamixing
     - tagalign
     - gocheckcompilerdirectives
     # - wrapcheck
