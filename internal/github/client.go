@@ -56,86 +56,6 @@ func (c *Client) GetLatestRelease(owner, repo string) (*Release, error) {
 	return c.fetchRelease(url)
 }
 
-// fetchRelease fetches a release from the given URL with retry logic
-func (c *Client) fetchRelease(url string) (*Release, error) {
-	var lastErr error
-	maxRetries := 3
-	backoff := time.Second
-
-	for attempt := range maxRetries {
-		if attempt > 0 {
-			time.Sleep(backoff)
-			backoff *= 2
-		}
-
-		release, err := c.doRequest(url)
-		if err == nil {
-			return release, nil
-		}
-
-		lastErr = err
-
-		// Don't retry on 404 or 403
-		if isNonRetryableError(err) {
-			break
-		}
-	}
-
-	return nil, lastErr
-}
-
-// doRequest performs the actual HTTP request for a single release
-func (c *Client) doRequest(url string) (*Release, error) {
-	var release Release
-	if err := c.doJSONRequest(url, &release); err != nil {
-		return nil, err
-	}
-	return &release, nil
-}
-
-// doJSONRequest performs a GET request and decodes the JSON response into target.
-func (c *Client) doJSONRequest(url string, target any) error {
-	req, err := http.NewRequest(http.MethodGet, url, nil)
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.Header.Set("Accept", "application/vnd.github.v3+json")
-	if c.token != "" {
-		req.Header.Set("Authorization", "Bearer "+c.token)
-	}
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("request failed: %w", err)
-	}
-	defer func() {
-		if closeErr := resp.Body.Close(); closeErr != nil {
-			// Best effort - log but don't fail the request
-			fmt.Fprintf(os.Stderr, "Warning: failed to close response body: %v\n", closeErr)
-		}
-	}()
-
-	if resp.StatusCode == http.StatusNotFound {
-		return &NotFoundError{URL: url}
-	}
-
-	if resp.StatusCode == http.StatusForbidden {
-		return &RateLimitError{}
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-		return fmt.Errorf("unexpected status code %d: %s", resp.StatusCode, string(body))
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(target); err != nil {
-		return fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return nil
-}
-
 // ListReleases fetches up to perPage releases for a repo, with retry logic.
 func (c *Client) ListReleases(owner, repo string, perPage int) ([]Release, error) {
 	if perPage <= 0 {
@@ -284,4 +204,84 @@ func isNonRetryableError(err error) bool {
 			return false
 		}
 	}
+}
+
+// fetchRelease fetches a release from the given URL with retry logic
+func (c *Client) fetchRelease(url string) (*Release, error) {
+	var lastErr error
+	maxRetries := 3
+	backoff := time.Second
+
+	for attempt := range maxRetries {
+		if attempt > 0 {
+			time.Sleep(backoff)
+			backoff *= 2
+		}
+
+		release, err := c.doRequest(url)
+		if err == nil {
+			return release, nil
+		}
+
+		lastErr = err
+
+		// Don't retry on 404 or 403
+		if isNonRetryableError(err) {
+			break
+		}
+	}
+
+	return nil, lastErr
+}
+
+// doRequest performs the actual HTTP request for a single release
+func (c *Client) doRequest(url string) (*Release, error) {
+	var release Release
+	if err := c.doJSONRequest(url, &release); err != nil {
+		return nil, err
+	}
+	return &release, nil
+}
+
+// doJSONRequest performs a GET request and decodes the JSON response into target.
+func (c *Client) doJSONRequest(url string, target any) error {
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Accept", "application/vnd.github.v3+json")
+	if c.token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.token)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("request failed: %w", err)
+	}
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			// Best effort - log but don't fail the request
+			fmt.Fprintf(os.Stderr, "Warning: failed to close response body: %v\n", closeErr)
+		}
+	}()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return &NotFoundError{URL: url}
+	}
+
+	if resp.StatusCode == http.StatusForbidden {
+		return &RateLimitError{}
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+		return fmt.Errorf("unexpected status code %d: %s", resp.StatusCode, string(body))
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(target); err != nil {
+		return fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return nil
 }

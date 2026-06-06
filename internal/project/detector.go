@@ -39,34 +39,6 @@ func (d *Detector) DetectAll(ctx context.Context) ([]string, error) {
 	return detected, nil
 }
 
-// matchesType checks if any marker file exists for the given project type
-func (d *Detector) matchesType(ctx context.Context, ptype config.ProjectType) bool {
-	// Get all files respecting .gitignore
-	files, err := traverser.FindFiles(ctx, d.rootPath)
-	if err != nil {
-		return false
-	}
-
-	// Check each file against marker patterns
-	for _, file := range files {
-		relPath, err := filepath.Rel(d.rootPath, file)
-		if err != nil {
-			continue
-		}
-
-		for _, marker := range ptype.Markers {
-			matched, err := doublestar.Match(marker, relPath)
-			if err != nil {
-				continue
-			}
-			if matched {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 // IsType checks if a specific project type is detected
 func (d *Detector) IsType(ctx context.Context, typeName string) (bool, error) {
 	ptype, exists := d.types[typeName]
@@ -143,4 +115,32 @@ func (d *Detector) DetectAllWithLocations(ctx context.Context) ([]ProjectLocatio
 	}
 
 	return locations, nil
+}
+
+// matchesType checks if any marker file exists for the given project type
+func (d *Detector) matchesType(ctx context.Context, ptype config.ProjectType) bool {
+	// Get all files respecting .gitignore
+	files, err := traverser.FindFiles(ctx, d.rootPath)
+	if err != nil {
+		return false
+	}
+
+	// Check each file against marker patterns
+	for _, file := range files {
+		relPath, err := filepath.Rel(d.rootPath, file)
+		if err != nil {
+			continue
+		}
+
+		for _, marker := range ptype.Markers {
+			matched, err := doublestar.Match(marker, relPath)
+			if err != nil {
+				continue
+			}
+			if matched {
+				return true
+			}
+		}
+	}
+	return false
 }

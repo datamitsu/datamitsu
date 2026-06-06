@@ -183,117 +183,6 @@ func parseBinaryCandidates(binaries MapOfBinaries) []target.Candidate {
 	return candidates
 }
 
-func (bm *BinManager) getBinaryInfo(name string) (*target.ResolvedTarget, BinaryOsArchInfo, error) {
-	app, ok := bm.mapOfApps[name]
-	if !ok {
-		return nil, BinaryOsArchInfo{}, fmt.Errorf("binary '%s' not found in registry", name)
-	}
-
-	if app.Binary == nil {
-		return nil, BinaryOsArchInfo{}, fmt.Errorf("app '%s' is not a binary type", name)
-	}
-
-	candidates := parseBinaryCandidates(app.Binary.Binaries)
-	resolved, info := bm.resolver.Resolve(name, candidates)
-	if resolved == nil {
-		host := bm.resolver.Host()
-		return nil, BinaryOsArchInfo{}, fmt.Errorf("binary '%s' is not available for %s", name, host.String())
-	}
-
-	if resolved.Source == target.ResolutionFallback && resolved.FallbackInfo != nil {
-		warning := target.FallbackWarning(name, *resolved)
-		if warning != "" {
-			log.Debug(warning)
-		}
-	}
-
-	return resolved, *info.(*BinaryOsArchInfo), nil
-}
-
-func (bm *BinManager) getBinaryPath(name string) (string, error) {
-	resolved, binaryInfo, err := bm.getBinaryInfo(name)
-	if err != nil {
-		return "", err
-	}
-
-	configHash := calculateConfigHash(binaryInfo, *resolved)
-
-	binPath := filepath.Join(env.GetBinPath(), name, configHash)
-	return binPath, nil
-}
-
-func (bm *BinManager) downloadInternal(ctx context.Context, name string, progress *mpb.Progress) error {
-	resolved, binaryInfo, err := bm.getBinaryInfo(name)
-	if err != nil {
-		return err
-	}
-
-	hashType := defaultBinHashType
-	if binaryInfo.HashType != nil {
-		hashType = *binaryInfo.HashType
-	}
-
-	log.Debug("downloading binary",
-		zap.String("name", name),
-		zap.String("url", binaryInfo.URL),
-	)
-
-	configHash := calculateConfigHash(binaryInfo, *resolved)
-	binPath := filepath.Join(env.GetBinPath(), name, configHash)
-
-	tmpDir := filepath.Join(env.GetStorePath(), "tmp")
-	if err := os.MkdirAll(tmpDir, 0o755); err != nil {
-		return fmt.Errorf("failed to create temp directory: %w", err)
-	}
-
-	var downloadedPath string
-	if progress != nil {
-		downloadedPath, err = downloadAndVerifyWithProgress(ctx, binaryInfo.URL, binaryInfo.Hash, hashType, tmpDir, name, progress)
-	} else {
-		downloadedPath, err = downloadAndVerify(ctx, binaryInfo.URL, binaryInfo.Hash, hashType, tmpDir)
-	}
-	if err != nil {
-		return fmt.Errorf("failed to download and verify: %w", err)
-	}
-	defer func() {
-		if err := os.Remove(downloadedPath); err != nil {
-			log.Warn("failed to remove downloaded file", zap.String("path", downloadedPath), zap.Error(err))
-		}
-	}()
-
-	if binaryInfo.ExtractDir {
-		extractedDir, err := extractBinaryToDir(downloadedPath, binaryInfo.ContentType, tmpDir)
-		if err != nil {
-			return fmt.Errorf("failed to extract archive to directory: %w", err)
-		}
-
-		if err := moveDir(extractedDir, binPath); err != nil {
-			_ = os.RemoveAll(extractedDir)
-			return fmt.Errorf("failed to move extracted directory to cache: %w", err)
-		}
-	} else {
-		extractedPath, err := extractBinary(downloadedPath, binaryInfo.ContentType, binaryInfo.BinaryPath, tmpDir)
-		if err != nil {
-			return fmt.Errorf("failed to extract binary: %w", err)
-		}
-
-		if err := moveFile(extractedPath, binPath); err != nil {
-			return fmt.Errorf("failed to move binary to cache: %w", err)
-		}
-	}
-
-	log.Debug("binary installed successfully",
-		zap.String("name", name),
-		zap.String("path", binPath),
-	)
-
-	return nil
-}
-
-func (bm *BinManager) downloadWithProgress(ctx context.Context, name string, progress *mpb.Progress) error {
-	return bm.downloadInternal(ctx, name, progress)
-}
-
 // resolveInstallTimeoutSeconds returns the effective per-app install timeout in
 // seconds, read through runtimeconfig (the single source of truth) rather than
 // env directly. It falls back to a fresh Compute() when runtimeconfig.Init() has
@@ -335,14 +224,6 @@ func wrapInstallTimeout(err error, timeoutSec int) error {
 	return err
 }
 
-// downloadWithTimeout installs one app under a per-app install timeout context,
-// translating a deadline into a clear timeout error.
-func (bm *BinManager) downloadWithTimeout(name string, progress *mpb.Progress) error {
-	ctx, cancel, timeoutSec := newInstallContext(context.Background())
-	defer cancel()
-	return wrapInstallTimeout(bm.downloadWithProgress(ctx, name, progress), timeoutSec)
-}
-
 type DownloadResult struct {
 	Name  string
 	Error error
@@ -353,35 +234,6 @@ type InstallStats struct {
 	AlreadyCached []string
 	Downloaded    []string
 	Failed        []DownloadResult
-}
-
-func (bm *BinManager) installInternal(includeOptional bool) error {
-	for name := range bm.mapOfApps {
-		if bm.mapOfApps[name].Binary == nil {
-			continue
-		}
-
-		if !includeOptional && !bm.mapOfApps[name].Required {
-			log.Debug("skipping optional binary", zap.String("name", name))
-			continue
-		}
-
-		binPath, err := bm.getBinaryPath(name)
-		if err != nil {
-			return fmt.Errorf("failed to get binary path for %s: %w", name, err)
-		}
-
-		if _, err := os.Stat(binPath); err == nil {
-			log.Debug("binary already cached, skipping", zap.String("name", name), zap.String("path", binPath))
-			continue
-		}
-
-		if err := bm.downloadWithTimeout(name, nil); err != nil {
-			return fmt.Errorf("failed to install %s: %w", name, err)
-		}
-	}
-
-	return nil
 }
 
 // InstallWithConcurrency installs binaries with specified concurrency level
@@ -624,30 +476,6 @@ func (bm *BinManager) GetCommandInfo(appName string) (*CommandInfo, error) {
 	bm.mergeAppEnv(appName, app, cmdInfo)
 
 	return cmdInfo, nil
-}
-
-// mergeAppEnv merges the app's user-defined Env into cmdInfo.Env, expanding
-// ${STORE}/${APP_DIR} placeholders. Keys already set by datamitsu/the runtime
-// take precedence — a user config can never override a reserved runtime key.
-func (bm *BinManager) mergeAppEnv(appName string, app App, cmdInfo *CommandInfo) {
-	if len(app.Env) == 0 {
-		return
-	}
-
-	// ${APP_DIR} is best-effort: if the install path can't be computed, appDir
-	// is empty and ${APP_DIR} expands to "" rather than failing the command.
-	appDir, _ := bm.ComputeInstallPath(appName)
-
-	if cmdInfo.Env == nil {
-		cmdInfo.Env = make(map[string]string, len(app.Env))
-	}
-
-	for k, v := range app.Env {
-		if _, exists := cmdInfo.Env[k]; exists {
-			continue
-		}
-		cmdInfo.Env[k] = env.ExpandPlaceholders(v, appDir)
-	}
 }
 
 // ComputeInstallPath returns the install directory path for an app without checking existence.
@@ -970,6 +798,178 @@ func (bm *BinManager) Exec(appName string, args []string) error {
 	}
 
 	return nil
+}
+
+func (bm *BinManager) getBinaryInfo(name string) (*target.ResolvedTarget, BinaryOsArchInfo, error) {
+	app, ok := bm.mapOfApps[name]
+	if !ok {
+		return nil, BinaryOsArchInfo{}, fmt.Errorf("binary '%s' not found in registry", name)
+	}
+
+	if app.Binary == nil {
+		return nil, BinaryOsArchInfo{}, fmt.Errorf("app '%s' is not a binary type", name)
+	}
+
+	candidates := parseBinaryCandidates(app.Binary.Binaries)
+	resolved, info := bm.resolver.Resolve(name, candidates)
+	if resolved == nil {
+		host := bm.resolver.Host()
+		return nil, BinaryOsArchInfo{}, fmt.Errorf("binary '%s' is not available for %s", name, host.String())
+	}
+
+	if resolved.Source == target.ResolutionFallback && resolved.FallbackInfo != nil {
+		warning := target.FallbackWarning(name, *resolved)
+		if warning != "" {
+			log.Debug(warning)
+		}
+	}
+
+	return resolved, *info.(*BinaryOsArchInfo), nil
+}
+
+func (bm *BinManager) getBinaryPath(name string) (string, error) {
+	resolved, binaryInfo, err := bm.getBinaryInfo(name)
+	if err != nil {
+		return "", err
+	}
+
+	configHash := calculateConfigHash(binaryInfo, *resolved)
+
+	binPath := filepath.Join(env.GetBinPath(), name, configHash)
+	return binPath, nil
+}
+
+func (bm *BinManager) downloadInternal(ctx context.Context, name string, progress *mpb.Progress) error {
+	resolved, binaryInfo, err := bm.getBinaryInfo(name)
+	if err != nil {
+		return err
+	}
+
+	hashType := defaultBinHashType
+	if binaryInfo.HashType != nil {
+		hashType = *binaryInfo.HashType
+	}
+
+	log.Debug("downloading binary",
+		zap.String("name", name),
+		zap.String("url", binaryInfo.URL),
+	)
+
+	configHash := calculateConfigHash(binaryInfo, *resolved)
+	binPath := filepath.Join(env.GetBinPath(), name, configHash)
+
+	tmpDir := filepath.Join(env.GetStorePath(), "tmp")
+	if err := os.MkdirAll(tmpDir, 0o755); err != nil {
+		return fmt.Errorf("failed to create temp directory: %w", err)
+	}
+
+	var downloadedPath string
+	if progress != nil {
+		downloadedPath, err = downloadAndVerifyWithProgress(ctx, binaryInfo.URL, binaryInfo.Hash, hashType, tmpDir, name, progress)
+	} else {
+		downloadedPath, err = downloadAndVerify(ctx, binaryInfo.URL, binaryInfo.Hash, hashType, tmpDir)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to download and verify: %w", err)
+	}
+	defer func() {
+		if err := os.Remove(downloadedPath); err != nil {
+			log.Warn("failed to remove downloaded file", zap.String("path", downloadedPath), zap.Error(err))
+		}
+	}()
+
+	if binaryInfo.ExtractDir {
+		extractedDir, err := extractBinaryToDir(downloadedPath, binaryInfo.ContentType, tmpDir)
+		if err != nil {
+			return fmt.Errorf("failed to extract archive to directory: %w", err)
+		}
+
+		if err := moveDir(extractedDir, binPath); err != nil {
+			_ = os.RemoveAll(extractedDir)
+			return fmt.Errorf("failed to move extracted directory to cache: %w", err)
+		}
+	} else {
+		extractedPath, err := extractBinary(downloadedPath, binaryInfo.ContentType, binaryInfo.BinaryPath, tmpDir)
+		if err != nil {
+			return fmt.Errorf("failed to extract binary: %w", err)
+		}
+
+		if err := moveFile(extractedPath, binPath); err != nil {
+			return fmt.Errorf("failed to move binary to cache: %w", err)
+		}
+	}
+
+	log.Debug("binary installed successfully",
+		zap.String("name", name),
+		zap.String("path", binPath),
+	)
+
+	return nil
+}
+
+func (bm *BinManager) downloadWithProgress(ctx context.Context, name string, progress *mpb.Progress) error {
+	return bm.downloadInternal(ctx, name, progress)
+}
+
+// downloadWithTimeout installs one app under a per-app install timeout context,
+// translating a deadline into a clear timeout error.
+func (bm *BinManager) downloadWithTimeout(name string, progress *mpb.Progress) error {
+	ctx, cancel, timeoutSec := newInstallContext(context.Background())
+	defer cancel()
+	return wrapInstallTimeout(bm.downloadWithProgress(ctx, name, progress), timeoutSec)
+}
+
+func (bm *BinManager) installInternal(includeOptional bool) error {
+	for name := range bm.mapOfApps {
+		if bm.mapOfApps[name].Binary == nil {
+			continue
+		}
+
+		if !includeOptional && !bm.mapOfApps[name].Required {
+			log.Debug("skipping optional binary", zap.String("name", name))
+			continue
+		}
+
+		binPath, err := bm.getBinaryPath(name)
+		if err != nil {
+			return fmt.Errorf("failed to get binary path for %s: %w", name, err)
+		}
+
+		if _, err := os.Stat(binPath); err == nil {
+			log.Debug("binary already cached, skipping", zap.String("name", name), zap.String("path", binPath))
+			continue
+		}
+
+		if err := bm.downloadWithTimeout(name, nil); err != nil {
+			return fmt.Errorf("failed to install %s: %w", name, err)
+		}
+	}
+
+	return nil
+}
+
+// mergeAppEnv merges the app's user-defined Env into cmdInfo.Env, expanding
+// ${STORE}/${APP_DIR} placeholders. Keys already set by datamitsu/the runtime
+// take precedence — a user config can never override a reserved runtime key.
+func (bm *BinManager) mergeAppEnv(appName string, app App, cmdInfo *CommandInfo) {
+	if len(app.Env) == 0 {
+		return
+	}
+
+	// ${APP_DIR} is best-effort: if the install path can't be computed, appDir
+	// is empty and ${APP_DIR} expands to "" rather than failing the command.
+	appDir, _ := bm.ComputeInstallPath(appName)
+
+	if cmdInfo.Env == nil {
+		cmdInfo.Env = make(map[string]string, len(app.Env))
+	}
+
+	for k, v := range app.Env {
+		if _, exists := cmdInfo.Env[k]; exists {
+			continue
+		}
+		cmdInfo.Env[k] = env.ExpandPlaceholders(v, appDir)
+	}
 }
 
 // mergeExecEnv merges base environment variables with app-specific overrides.

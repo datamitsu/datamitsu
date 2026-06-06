@@ -17,6 +17,14 @@ type Walker struct {
 	git      *GitIgnore
 }
 
+func (w *Walker) Walk(ctx context.Context) ([]string, error) {
+	results := make([]string, 0, 10000)
+	mu := &sync.Mutex{}
+
+	err := w.walk(ctx, &results, mu)
+	return results, err
+}
+
 func (w *Walker) walk(ctx context.Context, results *[]string, mu *sync.Mutex) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -99,14 +107,6 @@ func (w *Walker) walk(ctx context.Context, results *[]string, mu *sync.Mutex) er
 	}
 
 	return gg.Wait()
-}
-
-func (w *Walker) Walk(ctx context.Context) ([]string, error) {
-	results := make([]string, 0, 10000)
-	mu := &sync.Mutex{}
-
-	err := w.walk(ctx, &results, mu)
-	return results, err
 }
 
 // FindFiles finds all files in the repository starting from rootPath, respecting .gitignore

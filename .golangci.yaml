@@ -67,7 +67,7 @@ linters:
     - rowserrcheck
     - exptostd
     - nilerr
-    # - funcorder
+    - funcorder
     # - exhaustruct
     # - maintidx
     # - spancheck

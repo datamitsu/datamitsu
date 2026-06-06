@@ -71,31 +71,6 @@ func (e *Engine) Facts() *facts.Facts {
 	return e.facts
 }
 
-// withTimeout arms a watchdog goroutine that interrupts the VM after timeout.
-// The returned done() function signals the watchdog to stop and blocks until it
-// has exited, so callers can safely call e.vm.ClearInterrupt() after done()
-// returns without a race against a late-firing interrupt.
-// Only vm.Interrupt is called from the goroutine, which goja guarantees is safe
-// to call from a different goroutine.
-func (e *Engine) withTimeout(timeout time.Duration) (done func()) {
-	doneCh := make(chan struct{})
-	exitCh := make(chan struct{})
-	go func() {
-		defer close(exitCh)
-		timer := time.NewTimer(timeout)
-		defer timer.Stop()
-		select {
-		case <-timer.C:
-			e.vm.Interrupt("execution timeout")
-		case <-doneCh:
-		}
-	}()
-	return func() {
-		close(doneCh)
-		<-exitCh
-	}
-}
-
 // RunWithTimeout executes a JS script string with a watchdog timeout.
 func (e *Engine) RunWithTimeout(script string, timeout time.Duration) (goja.Value, error) {
 	done := e.withTimeout(timeout)
@@ -127,4 +102,29 @@ func computeRootPath(gitRoot string) (string, error) {
 		return gitRoot, nil
 	}
 	return os.Getwd()
+}
+
+// withTimeout arms a watchdog goroutine that interrupts the VM after timeout.
+// The returned done() function signals the watchdog to stop and blocks until it
+// has exited, so callers can safely call e.vm.ClearInterrupt() after done()
+// returns without a race against a late-firing interrupt.
+// Only vm.Interrupt is called from the goroutine, which goja guarantees is safe
+// to call from a different goroutine.
+func (e *Engine) withTimeout(timeout time.Duration) (done func()) {
+	doneCh := make(chan struct{})
+	exitCh := make(chan struct{})
+	go func() {
+		defer close(exitCh)
+		timer := time.NewTimer(timeout)
+		defer timer.Stop()
+		select {
+		case <-timer.C:
+			e.vm.Interrupt("execution timeout")
+		case <-doneCh:
+		}
+	}()
+	return func() {
+		close(doneCh)
+		<-exitCh
+	}
 }

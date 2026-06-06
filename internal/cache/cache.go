@@ -402,49 +402,6 @@ func (c *Cache) AfterFix(file, tool string, toolCacheEnabled bool) error {
 	return nil
 }
 
-// markPassed marks a tool as having passed for a file
-func (c *Cache) markPassed(file, tool string, op Operation) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.data == nil {
-		return errors.New("cache data is nil")
-	}
-
-	relPath, err := filepath.Rel(c.projectPath, file)
-	if err != nil {
-		return fmt.Errorf("failed to get relative path: %w", err)
-	}
-
-	// Get or create entry
-	entry, exists := c.data.Entries[relPath]
-	if !exists {
-		contentHash, err := hashFile(file)
-		if err != nil {
-			return fmt.Errorf("failed to hash file: %w", err)
-		}
-		entry = FileEntry{
-			ContentHash: contentHash,
-			Lint:        []string{},
-			Fix:         []string{},
-		}
-	}
-
-	// Add tool to appropriate list
-	if op == OperationLint {
-		if !slices.Contains(entry.Lint, tool) {
-			entry.Lint = append(entry.Lint, tool)
-		}
-	} else {
-		if !slices.Contains(entry.Fix, tool) {
-			entry.Fix = append(entry.Fix, tool)
-		}
-	}
-
-	c.data.Entries[relPath] = entry
-	return nil
-}
-
 // GetStats returns cache statistics
 func (c *Cache) GetStats() CacheStats {
 	return CacheStats{
@@ -597,24 +554,6 @@ func (c *Cache) MarkDirty() {
 	c.debounceSave()
 }
 
-// debounceSave triggers delayed save (coalesces rapid changes)
-func (c *Cache) debounceSave() {
-	c.saveTimerMu.Lock()
-	defer c.saveTimerMu.Unlock()
-
-	if c.saveTimer != nil {
-		c.saveTimer.Stop()
-	}
-
-	c.saveTimer = time.AfterFunc(100*time.Millisecond, func() {
-		if c.dirty.Swap(false) {
-			if err := c.Save(); err != nil {
-				c.logger.Warn("async save failed", zap.Error(err))
-			}
-		}
-	})
-}
-
 // Shutdown ensures final save before exit
 func (c *Cache) Shutdown() {
 	c.shutdownOnce.Do(func() {
@@ -629,6 +568,67 @@ func (c *Cache) Shutdown() {
 		if c.dirty.Swap(false) {
 			if err := c.Save(); err != nil {
 				c.logger.Warn("final save failed", zap.Error(err))
+			}
+		}
+	})
+}
+
+// markPassed marks a tool as having passed for a file
+func (c *Cache) markPassed(file, tool string, op Operation) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.data == nil {
+		return errors.New("cache data is nil")
+	}
+
+	relPath, err := filepath.Rel(c.projectPath, file)
+	if err != nil {
+		return fmt.Errorf("failed to get relative path: %w", err)
+	}
+
+	// Get or create entry
+	entry, exists := c.data.Entries[relPath]
+	if !exists {
+		contentHash, err := hashFile(file)
+		if err != nil {
+			return fmt.Errorf("failed to hash file: %w", err)
+		}
+		entry = FileEntry{
+			ContentHash: contentHash,
+			Lint:        []string{},
+			Fix:         []string{},
+		}
+	}
+
+	// Add tool to appropriate list
+	if op == OperationLint {
+		if !slices.Contains(entry.Lint, tool) {
+			entry.Lint = append(entry.Lint, tool)
+		}
+	} else {
+		if !slices.Contains(entry.Fix, tool) {
+			entry.Fix = append(entry.Fix, tool)
+		}
+	}
+
+	c.data.Entries[relPath] = entry
+	return nil
+}
+
+// debounceSave triggers delayed save (coalesces rapid changes)
+func (c *Cache) debounceSave() {
+	c.saveTimerMu.Lock()
+	defer c.saveTimerMu.Unlock()
+
+	if c.saveTimer != nil {
+		c.saveTimer.Stop()
+	}
+
+	c.saveTimer = time.AfterFunc(100*time.Millisecond, func() {
+		if c.dirty.Swap(false) {
+			if err := c.Save(); err != nil {
+				c.logger.Warn("async save failed", zap.Error(err))
 			}
 		}
 	})

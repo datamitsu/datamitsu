@@ -41,12 +41,6 @@ func StaticLine() string {
 	return "Support datamitsu development: " + sponsorURL
 }
 
-func (m *Manager) printMessage() {
-	msg := selectRandomMessage(m.rnd)
-	coloredMsg := clr.Yellow(msg)
-	fmt.Fprintf(os.Stderr, "\n%s\n", coloredMsg)
-}
-
 func (m *Manager) MaybePrint(isJSONOutput bool) {
 	defer func() { _ = recover() }()
 
@@ -74,4 +68,10 @@ func (m *Manager) MaybePrint(isJSONOutput bool) {
 	}
 
 	_ = saveState(path, state)
+}
+
+func (m *Manager) printMessage() {
+	msg := selectRandomMessage(m.rnd)
+	coloredMsg := clr.Yellow(msg)
+	fmt.Fprintf(os.Stderr, "\n%s\n", coloredMsg)
 }

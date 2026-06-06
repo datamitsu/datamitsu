@@ -104,109 +104,6 @@ func (p *Planner) GetDetectedProjectTypes() []string {
 	return types
 }
 
-// initializeCache performs expensive one-time operations:
-// - Scans all files in repository (respecting .gitignore)
-// - Detects all project locations
-// This is called once before planning begins
-func (p *Planner) initializeCache(ctx context.Context) error {
-	if p.cacheInitialized {
-		return nil
-	}
-
-	// Track timing with children for parallel operations
-	cacheTimings := p.timings.StartWithChildren("Cache initialization")
-	defer cacheTimings.End()
-
-	// Create detector once
-	detector := project.NewDetector(p.rootPath, p.projectTypesConfig)
-
-	// Use errgroup for parallel execution
-	g, gctx := errgroup.WithContext(ctx)
-
-	// Goroutine 1: Scan all files
-	g.Go(func() error {
-		defer cacheTimings.StartChild("Scan files")()
-		files, err := traverser.FindFilesFromPath(gctx, p.rootPath, p.rootPath)
-		if err != nil {
-			return fmt.Errorf("failed to scan files: %w", err)
-		}
-		p.cachedFiles = files
-		return nil
-	})
-
-	// Goroutine 2: Detect all projects
-	g.Go(func() error {
-		defer cacheTimings.StartChild("Detect projects")()
-		locations, err := detector.DetectAllWithLocations(gctx)
-		if err != nil {
-			return fmt.Errorf("failed to detect projects: %w", err)
-		}
-		p.cachedProjects = locations
-		return nil
-	})
-
-	// Wait for both to complete
-	if err := g.Wait(); err != nil {
-		return err
-	}
-
-	// Build .datamitsuignore matcher from scanned files
-	func() {
-		defer cacheTimings.StartChild("Build datamitsuignore matcher")()
-		p.ignoreMatcher = p.buildIgnoreMatcher()
-	}()
-
-	p.cacheInitialized = true
-	return nil
-}
-
-// buildIgnoreMatcher scans cached files for .datamitsuignore entries
-// and builds a Matcher. Config-defined ignore rules (extraIgnoreRules)
-// are added as root-level rules.
-func (p *Planner) buildIgnoreMatcher() *datamitsuignore.Matcher {
-	m := datamitsuignore.NewMatcher()
-
-	// Built-in: never run tools on the managed symlinks directory.
-	if err := m.AddFile("", ".datamitsu/**: *"); err != nil {
-		log.Warn("failed to add built-in .datamitsu ignore rule", zap.Error(err))
-	}
-
-	if len(p.extraIgnoreRules) > 0 {
-		if err := m.AddFile("", strings.Join(p.extraIgnoreRules, "\n")); err != nil {
-			log.Warn("failed to parse config-defined ignore rules",
-				zap.Error(err),
-			)
-		}
-	}
-
-	const filename = ".datamitsuignore"
-
-	for _, f := range p.cachedFiles {
-		if filepath.Base(f) != filename {
-			continue
-		}
-		content, err := os.ReadFile(f)
-		if err != nil {
-			continue
-		}
-		relDir, err := filepath.Rel(p.rootPath, filepath.Dir(f))
-		if err != nil {
-			continue
-		}
-		if relDir == "." {
-			relDir = ""
-		}
-		if err := m.AddFile(relDir, string(content)); err != nil {
-			log.Warn("failed to parse .datamitsuignore",
-				zap.String("file", f),
-				zap.Error(err),
-			)
-		}
-	}
-
-	return m
-}
-
 // Plan creates an execution plan for the given operation and files
 func (p *Planner) Plan(ctx context.Context, operation config.OperationType, files []string, selectedTools []string) (*ExecutionPlan, error) {
 	// Initialize cache once before planning
@@ -885,4 +782,107 @@ func parseGlobExtensions(pattern string) []string {
 	}
 
 	return []string{"." + extPart}
+}
+
+// initializeCache performs expensive one-time operations:
+// - Scans all files in repository (respecting .gitignore)
+// - Detects all project locations
+// This is called once before planning begins
+func (p *Planner) initializeCache(ctx context.Context) error {
+	if p.cacheInitialized {
+		return nil
+	}
+
+	// Track timing with children for parallel operations
+	cacheTimings := p.timings.StartWithChildren("Cache initialization")
+	defer cacheTimings.End()
+
+	// Create detector once
+	detector := project.NewDetector(p.rootPath, p.projectTypesConfig)
+
+	// Use errgroup for parallel execution
+	g, gctx := errgroup.WithContext(ctx)
+
+	// Goroutine 1: Scan all files
+	g.Go(func() error {
+		defer cacheTimings.StartChild("Scan files")()
+		files, err := traverser.FindFilesFromPath(gctx, p.rootPath, p.rootPath)
+		if err != nil {
+			return fmt.Errorf("failed to scan files: %w", err)
+		}
+		p.cachedFiles = files
+		return nil
+	})
+
+	// Goroutine 2: Detect all projects
+	g.Go(func() error {
+		defer cacheTimings.StartChild("Detect projects")()
+		locations, err := detector.DetectAllWithLocations(gctx)
+		if err != nil {
+			return fmt.Errorf("failed to detect projects: %w", err)
+		}
+		p.cachedProjects = locations
+		return nil
+	})
+
+	// Wait for both to complete
+	if err := g.Wait(); err != nil {
+		return err
+	}
+
+	// Build .datamitsuignore matcher from scanned files
+	func() {
+		defer cacheTimings.StartChild("Build datamitsuignore matcher")()
+		p.ignoreMatcher = p.buildIgnoreMatcher()
+	}()
+
+	p.cacheInitialized = true
+	return nil
+}
+
+// buildIgnoreMatcher scans cached files for .datamitsuignore entries
+// and builds a Matcher. Config-defined ignore rules (extraIgnoreRules)
+// are added as root-level rules.
+func (p *Planner) buildIgnoreMatcher() *datamitsuignore.Matcher {
+	m := datamitsuignore.NewMatcher()
+
+	// Built-in: never run tools on the managed symlinks directory.
+	if err := m.AddFile("", ".datamitsu/**: *"); err != nil {
+		log.Warn("failed to add built-in .datamitsu ignore rule", zap.Error(err))
+	}
+
+	if len(p.extraIgnoreRules) > 0 {
+		if err := m.AddFile("", strings.Join(p.extraIgnoreRules, "\n")); err != nil {
+			log.Warn("failed to parse config-defined ignore rules",
+				zap.Error(err),
+			)
+		}
+	}
+
+	const filename = ".datamitsuignore"
+
+	for _, f := range p.cachedFiles {
+		if filepath.Base(f) != filename {
+			continue
+		}
+		content, err := os.ReadFile(f)
+		if err != nil {
+			continue
+		}
+		relDir, err := filepath.Rel(p.rootPath, filepath.Dir(f))
+		if err != nil {
+			continue
+		}
+		if relDir == "." {
+			relDir = ""
+		}
+		if err := m.AddFile(relDir, string(content)); err != nil {
+			log.Warn("failed to parse .datamitsuignore",
+				zap.String("file", f),
+				zap.Error(err),
+			)
+		}
+	}
+
+	return m
 }
