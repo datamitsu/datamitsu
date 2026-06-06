@@ -35,6 +35,7 @@ linters:
     - usestdlibvars
     - perfsprint
     - prealloc
+    - mirror
     # - revive
     # - nestif
     # - nilerr
