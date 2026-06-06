@@ -228,5 +228,8 @@ export default {
     "forbidigo",
     "nilerr",
     "unrelatable",
+    "trippable",
+    "unparam",
+    "testableexamples",
   ],
 };

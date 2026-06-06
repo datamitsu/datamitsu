@@ -136,7 +136,7 @@ func (rm *RuntimeManager) installUVAppOnce(ctx context.Context, appName string, 
 	}
 
 	reqPython := resolveRequiresPython(appConfig.RequiresPython)
-	pyprojectTOML := buildPyprojectTOML(appName, appConfig.PackageName, appConfig.Version, reqPython)
+	pyprojectTOML := buildPyprojectTOML(appConfig.PackageName, appConfig.Version, reqPython)
 	if err := os.WriteFile(filepath.Join(appEnvPath, "pyproject.toml"), []byte(pyprojectTOML), 0o644); err != nil {
 		return fmt.Errorf("failed to write pyproject.toml for %q: %w", appName, err)
 	}
@@ -224,7 +224,7 @@ func uvVersionForHash(version, requiresPython string) string {
 	return version + "\x00" + resolveRequiresPython(requiresPython)
 }
 
-func buildPyprojectTOML(appName string, packageName string, version string, requiresPython string) string {
+func buildPyprojectTOML(packageName string, version string, requiresPython string) string {
 	safeName := strings.NewReplacer("@", "", "/", "-").Replace(packageName)
 	dep := packageName
 	if version != "" {

@@ -68,12 +68,13 @@ func (rm *RuntimeManager) installNode(ctx context.Context, runtimeName string) (
 // computing the merged pnpm-workspace.yaml once for the call. Hot paths that
 // already merged once per exec should call resolveNodeAppEnvPathWith with the
 // shared merged content instead.
-func (rm *RuntimeManager) resolveNodeAppEnvPath(appName string, appConfig *binmanager.AppConfigNode, files map[string]string, archives map[string]*binmanager.ArchiveSpec) (appEnvPath string, runtimeName string, rc config.RuntimeConfig, err error) {
+func (rm *RuntimeManager) resolveNodeAppEnvPath(appName string, appConfig *binmanager.AppConfigNode, files map[string]string, archives map[string]*binmanager.ArchiveSpec) (string, error) {
 	mergedWorkspaceYAML, err := buildPNPMWorkspace(files)
 	if err != nil {
-		return "", "", config.RuntimeConfig{}, fmt.Errorf("failed to compute pnpm-workspace.yaml for %q: %w", appName, err)
+		return "", fmt.Errorf("failed to compute pnpm-workspace.yaml for %q: %w", appName, err)
 	}
-	return rm.resolveNodeAppEnvPathWith(appName, appConfig, files, archives, mergedWorkspaceYAML)
+	appEnvPath, _, _, err := rm.resolveNodeAppEnvPathWith(appName, appConfig, files, archives, mergedWorkspaceYAML)
+	return appEnvPath, err
 }
 
 // resolveNodeAppEnvPathWith is resolveNodeAppEnvPath with the merged

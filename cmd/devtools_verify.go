@@ -1420,6 +1420,11 @@ func printSummary(s jsonSummary) {
 
 // --- JSON output ---
 
+// currentOs/currentArch are injected (rather than read from runtime.GOOS/GOARCH
+// inside) so tests can pin a deterministic platform. unparam sees only "linux"
+// because runtime.GOOS is a per-build constant, not because the value is fixed.
+//
+//nolint:unparam // platform is injected for test determinism; not a constant in practice
 func buildJSONOutput(
 	currentOs, currentArch string,
 	binaryResults []binaryVerifyResult,

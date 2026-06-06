@@ -126,7 +126,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	// Run init commands
-	if err := runInitCommands(ctx, rootPath, cwdPath, projectTypes, cfg, binMgr, initDryRun); err != nil {
+	if err := runInitCommands(ctx, rootPath, projectTypes, cfg, binMgr, initDryRun); err != nil {
 		return fmt.Errorf("failed to run init commands: %w", err)
 	}
 
@@ -305,7 +305,7 @@ func installBundles(ctx context.Context, binMgr *binmanager.BinManager, skipDown
 	return nil
 }
 
-func runInitCommands(ctx context.Context, rootPath, cwdPath string, projectTypes []string, cfg *config.Config, binMgr *binmanager.BinManager, dryRun bool) error {
+func runInitCommands(ctx context.Context, rootPath string, projectTypes []string, cfg *config.Config, binMgr *binmanager.BinManager, dryRun bool) error {
 	initNames := make([]string, 0, len(cfg.InitCommands))
 	for name := range cfg.InitCommands {
 		initNames = append(initNames, name)

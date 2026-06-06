@@ -118,10 +118,9 @@ linters:
     - contextcheck
     - errchkjson
     - noctx
+    - gocyclo
+    - unparam
     # --- candidates to enable, in recommended order ---
-    # stage 2 — moderate
-    # - gocyclo           # ~15  single complexity linter
-    # - unparam           # ~18  remove unused params
     # stage 3 — enable + configure / decide
     # - usetesting        # ~118 os.Setenv->t.Setenv etc; review env tests first
     # - wrapcheck         # ~109 needs config (ignoreSigs / package scope)
@@ -149,6 +148,13 @@ linters:
           - forcetypeassert
           - dogsled
         path: _test\.go
+      # Complexity/param-usage checks are noisy and low-value in tests: table-driven
+      # tests are branchy by nature (gocyclo), and mock callbacks/helpers must keep a
+      # fixed signature even when a param is unused (unparam). Production-only.
+      - linters:
+          - gocyclo
+          - unparam
+        path: _test\.go
   settings:
     depguard:
       rules:
@@ -170,4 +176,10 @@ linters:
         # a reason. See CLAUDE.md "Environment Variable Usage Policy".
         - msg: Access datamitsu env vars via internal/env (add a getter in env.go), not os.Getenv directly.
           pattern: os\.Getenv
+    gocyclo:
+      # Enabled as a guard against future complexity growth, not to force a
+      # refactor of existing code. The threshold sits just above the current
+      # worst offender (doValidateApps); anything more complex than today's code
+      # is flagged. Lower this over time as hotspots are split up.
+      min-complexity: 100
 version: 2

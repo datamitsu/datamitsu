@@ -28,7 +28,7 @@ func DetectBinaryPathWithHistory(
 	}
 
 	// Try to learn from historical data first
-	if historicalPattern := extractBinaryPathPattern(historicalBinaries, osType, appName, filename); historicalPattern != nil {
+	if historicalPattern := extractBinaryPathPattern(historicalBinaries, osType, filename); historicalPattern != nil {
 		return historicalPattern
 	}
 
@@ -77,7 +77,7 @@ func detectBinaryPathHeuristic(appName string, filename string, osType syslist.O
 
 // extractBinaryPathPattern analyzes historical binaries for the same app
 // and extracts a common pattern to use for new versions
-func extractBinaryPathPattern(historicalBinaries binmanager.MapOfBinaries, osType syslist.OsType, appName string, filename string) *string {
+func extractBinaryPathPattern(historicalBinaries binmanager.MapOfBinaries, osType syslist.OsType, filename string) *string {
 	if len(historicalBinaries) == 0 {
 		return nil
 	}
@@ -108,13 +108,13 @@ func extractBinaryPathPattern(historicalBinaries binmanager.MapOfBinaries, osTyp
 		return nil
 	}
 
-	commonPattern := findCommonPattern(paths, appName, filename)
+	commonPattern := findCommonPattern(paths, filename)
 	return commonPattern
 }
 
 // findCommonPattern finds a common pattern among historical paths
 // and applies it to the new filename
-func findCommonPattern(paths []string, appName string, newFilename string) *string {
+func findCommonPattern(paths []string, newFilename string) *string {
 	if len(paths) == 0 {
 		return nil
 	}

@@ -563,7 +563,7 @@ func TestInstallNodeApp_AlreadyInstalled(t *testing.T) {
 		Runtime:     "node",
 	}
 
-	appEnvPath, _, _, err := rm.resolveNodeAppEnvPath("eslint", appConfig, nil, nil)
+	appEnvPath, err := rm.resolveNodeAppEnvPath("eslint", appConfig, nil, nil)
 	if err != nil {
 		t.Fatalf("resolveNodeAppEnvPath() error = %v", err)
 	}
@@ -650,7 +650,7 @@ func TestInstallNodeApp_RemoveAllFailureAborts(t *testing.T) {
 		Runtime:     "node",
 	}
 
-	appEnvPath, _, _, err := rm.resolveNodeAppEnvPath("eslint", appConfig, nil, nil)
+	appEnvPath, err := rm.resolveNodeAppEnvPath("eslint", appConfig, nil, nil)
 	if err != nil {
 		t.Fatalf("resolveNodeAppEnvPath() error = %v", err)
 	}
@@ -703,7 +703,7 @@ func TestInstallNodeApp_RemoveAllSuccessProceeds(t *testing.T) {
 		Runtime:     "node",
 	}
 
-	appEnvPath, _, _, err := rm.resolveNodeAppEnvPath("eslint", appConfig, nil, nil)
+	appEnvPath, err := rm.resolveNodeAppEnvPath("eslint", appConfig, nil, nil)
 	if err != nil {
 		t.Fatalf("resolveNodeAppEnvPath() error = %v", err)
 	}
@@ -782,7 +782,7 @@ func TestGetCommandInfoNode_MergesWorkspaceOnceOnCacheHit(t *testing.T) {
 	}
 	app := binmanager.App{Node: appConfig}
 
-	appEnvPath, _, _, err := rm.resolveNodeAppEnvPath("eslint", appConfig, app.Files, app.Archives)
+	appEnvPath, err := rm.resolveNodeAppEnvPath("eslint", appConfig, app.Files, app.Archives)
 	if err != nil {
 		t.Fatalf("resolveNodeAppEnvPath() error = %v", err)
 	}
@@ -826,7 +826,7 @@ func TestResolveNodeAppEnvPath_WorkspaceYAMLError(t *testing.T) {
 		Runtime:     "node",
 	}
 
-	_, _, _, err := rm.resolveNodeAppEnvPath("eslint", appConfig, invalidWorkspaceFiles(), nil)
+	_, err := rm.resolveNodeAppEnvPath("eslint", appConfig, invalidWorkspaceFiles(), nil)
 	if err == nil {
 		t.Fatal("expected error for invalid pnpm-workspace.yaml, got nil")
 	}
@@ -911,7 +911,7 @@ func TestResolveNodeAppEnvPath_CacheKeyUnchanged(t *testing.T) {
 				t.Fatalf("GetAppPath() error = %v", err)
 			}
 
-			gotPath, _, _, err := rm.resolveNodeAppEnvPath("eslint", appConfig, tc.files, nil)
+			gotPath, err := rm.resolveNodeAppEnvPath("eslint", appConfig, tc.files, nil)
 			if err != nil {
 				t.Fatalf("resolveNodeAppEnvPath() error = %v", err)
 			}

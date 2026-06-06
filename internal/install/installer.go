@@ -298,7 +298,14 @@ func (i *Installer) isApplicable(cfg config.ConfigInit) bool {
 	return false
 }
 
-// generateContent calls the JavaScript content function
+// generateContent calls the JavaScript content function.
+//
+// ctx is currently unused here (goja runs the content function under a watchdog
+// timeout, not a context), but it is threaded through the InstallAll ->
+// installConfig -> generateContent chain so the public install API stays
+// cancellation-ready; do not drop it.
+//
+//nolint:unparam // ctx reserved for cancellable JS execution; keeps the install chain uniform
 func (i *Installer) generateContent(ctx context.Context, cfg config.ConfigInit, existingContent, originalContent, existingPath *string) (string, error) {
 	// Content field should be a goja.Value representing a function
 	contentValue, ok := cfg.Content.(goja.Value)

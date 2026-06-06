@@ -107,7 +107,9 @@ func extractBinaryFile(srcPath string, destDir string) (string, error) {
 	return tmpPath, nil
 }
 
-func extractGz(gzPath string, binaryPath *string, destDir string) (string, error) {
+// binaryPath is unused here (single-file decompression has no member to select)
+// but kept for the uniform extractBinary dispatch signature.
+func extractGz(gzPath string, _ *string, destDir string) (string, error) {
 	gzFile, err := os.Open(gzPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to open gz file: %w", err)
@@ -462,7 +464,7 @@ func extractFromTar(tarReader *tar.Reader, targetPath, archiveType, archivePath,
 	return "", fmt.Errorf("file '%s' not found in %s archive", targetPath, archiveType)
 }
 
-func extractBz2(bz2Path string, binaryPath *string, destDir string) (string, error) {
+func extractBz2(bz2Path string, _ *string, destDir string) (string, error) {
 	file, err := os.Open(bz2Path)
 	if err != nil {
 		return "", fmt.Errorf("failed to open bz2 file: %w", err)
@@ -477,7 +479,7 @@ func extractBz2(bz2Path string, binaryPath *string, destDir string) (string, err
 	return extractSingleFile(bz2Reader, "bz2", destDir)
 }
 
-func extractXz(xzPath string, binaryPath *string, destDir string) (string, error) {
+func extractXz(xzPath string, _ *string, destDir string) (string, error) {
 	file, err := os.Open(xzPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to open xz file: %w", err)
@@ -496,7 +498,7 @@ func extractXz(xzPath string, binaryPath *string, destDir string) (string, error
 	return extractSingleFile(xzReader, "xz", destDir)
 }
 
-func extractZst(zstPath string, binaryPath *string, destDir string) (string, error) {
+func extractZst(zstPath string, _ *string, destDir string) (string, error) {
 	file, err := os.Open(zstPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to open zst file: %w", err)
