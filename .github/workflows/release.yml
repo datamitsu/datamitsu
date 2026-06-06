@@ -416,7 +416,8 @@ jobs:
     if: |
       always() &&
       !cancelled() &&
-      needs.build.result == 'success'
+      needs.build.result == 'success' &&
+      needs.determine-release-type.outputs.is_stable == 'true'
     name: Publish to PyPI
     needs:
       - build
@@ -457,15 +458,8 @@ jobs:
           node packaging/pack.ts prepare-python
       - name: Build Python wheels
         run: node packaging/pack.ts build-python
-      - if: needs.determine-release-type.outputs.is_unstable == 'true'
-        name: Dry-run publish (unstable)
-        run: |
-          echo "Unstable release - skipping PyPI publish (dry-run only)"
-          echo ""
-          echo "Wheels that would be published:"
-          ls -lh packaging/python/dist/ 2>/dev/null || echo "No wheels found"
-      - if: needs.determine-release-type.outputs.is_stable == 'true' && !env.ACT
-        name: Publish to PyPI (stable)
+      - if: ${{ !env.ACT }}
+        name: Publish to PyPI
         run: |
           cd packaging/python
           # --trusted-publishing always: use OIDC, fail if unavailable (no API token fallback)
@@ -477,7 +471,8 @@ jobs:
     if: |
       always() &&
       !cancelled() &&
-      needs.build.result == 'success'
+      needs.build.result == 'success' &&
+      needs.determine-release-type.outputs.is_stable == 'true'
     name: Publish to RubyGems
     needs:
       - build
@@ -524,18 +519,11 @@ jobs:
           gem build datamitsu.gemspec
           echo "Built gem:"
           ls -lh *.gem
-      - if: needs.determine-release-type.outputs.is_unstable == 'true'
-        name: Dry-run publish (unstable)
-        run: |
-          echo "Unstable release - skipping RubyGems publish (dry-run only)"
-          echo ""
-          echo "Gem that would be published:"
-          ls -lh packaging/ruby/*.gem 2>/dev/null || echo "No gem found"
-      - if: needs.determine-release-type.outputs.is_stable == 'true' && !env.ACT
+      - if: ${{ !env.ACT }}
         name: Configure RubyGems credentials (OIDC)
         uses: rubygems/configure-rubygems-credentials@762a4b77c3300434bb57c7ce80b20e36231927aa # v2.0.0
-      - if: needs.determine-release-type.outputs.is_stable == 'true' && !env.ACT
-        name: Publish to RubyGems (stable)
+      - if: ${{ !env.ACT }}
+        name: Publish to RubyGems
         run: |
           cd packaging/ruby
           gem push *.gem
