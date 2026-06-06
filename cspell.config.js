@@ -233,6 +233,7 @@ export default {
     "testableexamples",
     "gosec",
     "usetesting",
+    "contextcheck",
     "transpiles",
   ],
 };

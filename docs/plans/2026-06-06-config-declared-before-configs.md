@@ -145,21 +145,21 @@ Move source-list assembly out of `loadConfigImpl` into a unit-testable function,
 and have it insert declared before-configs before the auto source (only when no
 `--before-config` flag is set).
 
-- [ ] write tests for `buildConfigSources`: default-only; with `beforeConfigPaths`
+- [x] write tests for `buildConfigSources`: default-only; with `beforeConfigPaths`
       (appear after default, before auto); with `autoConfigPath` whose config
       declares before-configs → declared sources appear **before** the `auto`
       source, in declared order; `configPaths` appended after `auto`
-- [ ] write precedence test: when `beforeConfigPaths` is non-empty,
+- [x] write precedence test: when `beforeConfigPaths` is non-empty,
       `getBeforeConfigs()` is **not** consulted (declared before-configs absent
       from the result)
-- [ ] implement
+- [x] implement
       `buildConfigSources(beforeConfigPaths []string, autoConfigPath string, configPaths []string) ([]configSource, error)`
       replicating current ordering (default → before-config flag → [declared
       before-configs, only if `len(beforeConfigPaths)==0`] → auto → config)
-- [ ] refactor `loadConfigImpl` to call `buildConfigSources` after git-root /
+- [x] refactor `loadConfigImpl` to call `buildConfigSources` after git-root /
       `autoConfigPath` discovery (git-root logic stays in `loadConfigImpl`; it
       passes `autoConfigPath=""` when none or `--no-auto-config`)
-- [ ] run `go test ./cmd/...` — existing loader tests must stay green; must pass
+- [x] run `go test ./cmd/...` — existing loader tests must stay green; must pass
       before Task 3
 
 ### Task 3: Integration — parity with `--before-config` and root-only scope
@@ -211,10 +211,12 @@ equivalent `--before-config` invocation, and that nesting is ignored.
 
 - **New type:** `beforeConfigEntry { Path string `json:"path"` }`.
 - **New funcs (in `cmd/config_loader.go`):**
-  - `discoverBeforeConfigs(autoConfigPath string) ([]string, error)` — pre-pass
-    reader; absent function → `(nil, nil)`.
-  - `buildConfigSources(beforeConfigPaths []string, autoConfigPath string, configPaths []string) ([]configSource, error)`
-    — single source of truth for source ordering.
+  - `discoverBeforeConfigs(ctx context.Context, autoConfigPath string) ([]string, error)`
+    — pre-pass reader; absent function → `(nil, nil)`. (Takes `ctx` so the
+    isolated engine VM inherits cancellation; required by the `contextcheck`
+    linter once called from the context-aware loader.)
+  - `buildConfigSources(ctx context.Context, beforeConfigPaths []string, autoConfigPath string, configPaths []string) ([]configSource, error)`
+    — single source of truth for source ordering (threads `ctx` to the pre-pass).
 - **Loading order (effective):**
   `default → [--before-config flag paths] → [declared before-configs, iff no flag] → auto → [--config paths]`,
   with each source's own `getRemoteConfigs()` resolved under it as today.

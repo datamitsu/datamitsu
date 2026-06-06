@@ -643,7 +643,7 @@ func TestDiscoverBeforeConfigsAbsent(t *testing.T) {
 	dir := t.TempDir()
 	autoPath := writeBeforeConfigAuto(t, dir, "")
 
-	got, err := discoverBeforeConfigs(autoPath)
+	got, err := discoverBeforeConfigs(context.Background(), autoPath)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -656,7 +656,7 @@ func TestDiscoverBeforeConfigsEmptyArray(t *testing.T) {
 	dir := t.TempDir()
 	autoPath := writeBeforeConfigAuto(t, dir, "[]")
 
-	got, err := discoverBeforeConfigs(autoPath)
+	got, err := discoverBeforeConfigs(context.Background(), autoPath)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -671,7 +671,7 @@ func TestDiscoverBeforeConfigsRelativePath(t *testing.T) {
 	writeStubConfig(t, sharedPath)
 	autoPath := writeBeforeConfigAuto(t, dir, `[{ path: "./shared.js" }]`)
 
-	got, err := discoverBeforeConfigs(autoPath)
+	got, err := discoverBeforeConfigs(context.Background(), autoPath)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -688,7 +688,7 @@ func TestDiscoverBeforeConfigsAbsolutePath(t *testing.T) {
 	writeStubConfig(t, sharedPath)
 	autoPath := writeBeforeConfigAuto(t, dir, fmt.Sprintf(`[{ path: %q }]`, sharedPath))
 
-	got, err := discoverBeforeConfigs(autoPath)
+	got, err := discoverBeforeConfigs(context.Background(), autoPath)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -705,7 +705,7 @@ func TestDiscoverBeforeConfigsPreservesOrder(t *testing.T) {
 	}
 	autoPath := writeBeforeConfigAuto(t, dir, `[{ path: "./c.js" }, { path: "./a.js" }, { path: "./b.js" }]`)
 
-	got, err := discoverBeforeConfigs(autoPath)
+	got, err := discoverBeforeConfigs(context.Background(), autoPath)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -723,7 +723,7 @@ func TestDiscoverBeforeConfigsEmptyPathErrors(t *testing.T) {
 	dir := t.TempDir()
 	autoPath := writeBeforeConfigAuto(t, dir, `[{ path: "" }]`)
 
-	_, err := discoverBeforeConfigs(autoPath)
+	_, err := discoverBeforeConfigs(context.Background(), autoPath)
 	if err == nil {
 		t.Fatal("expected error for empty path")
 	}
@@ -736,7 +736,7 @@ func TestDiscoverBeforeConfigsNonExistentFileErrors(t *testing.T) {
 	dir := t.TempDir()
 	autoPath := writeBeforeConfigAuto(t, dir, `[{ path: "./does-not-exist.js" }]`)
 
-	_, err := discoverBeforeConfigs(autoPath)
+	_, err := discoverBeforeConfigs(context.Background(), autoPath)
 	if err == nil {
 		t.Fatal("expected error for non-existent before config file")
 	}
@@ -753,7 +753,7 @@ func TestDiscoverBeforeConfigsDedup(t *testing.T) {
 	// the same cleaned path and dedup to a single entry.
 	autoPath := writeBeforeConfigAuto(t, dir, fmt.Sprintf(`[{ path: "./shared.js" }, { path: %q }]`, sharedPath))
 
-	got, err := discoverBeforeConfigs(autoPath)
+	got, err := discoverBeforeConfigs(context.Background(), autoPath)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -762,6 +762,120 @@ func TestDiscoverBeforeConfigsDedup(t *testing.T) {
 	}
 	if got[0] != sharedPath {
 		t.Errorf("got %q, want %q", got[0], sharedPath)
+	}
+}
+
+func sourceNames(sources []configSource) []string {
+	names := make([]string, len(sources))
+	for i, s := range sources {
+		names[i] = s.name
+	}
+	return names
+}
+
+func TestBuildConfigSourcesDefaultOnly(t *testing.T) {
+	sources, err := buildConfigSources(context.Background(), nil, "", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(sources) != 1 {
+		t.Fatalf("got %d sources, want 1: %v", len(sources), sourceNames(sources))
+	}
+	if !sources[0].isDefault || sources[0].name != "default" {
+		t.Errorf("source[0] = %+v, want the default source", sources[0])
+	}
+}
+
+func TestBuildConfigSourcesBeforeConfigFlag(t *testing.T) {
+	sources, err := buildConfigSources(context.Background(), []string{"/before/a.js", "/before/b.js"}, "", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"default", "/before/a.js", "/before/b.js"}
+	if got := sourceNames(sources); !slices.Equal(got, want) {
+		t.Fatalf("source names = %v, want %v", got, want)
+	}
+	// Flag paths carry their path through, unlike the embedded default.
+	if sources[1].path != "/before/a.js" {
+		t.Errorf("source[1].path = %q, want %q", sources[1].path, "/before/a.js")
+	}
+}
+
+func TestBuildConfigSourcesConfigPathsAfterAuto(t *testing.T) {
+	dir := t.TempDir()
+	autoPath := writeBeforeConfigAuto(t, dir, "")
+
+	cfgDir := t.TempDir()
+	cfgPath := filepath.Join(cfgDir, "explicit.js")
+	writeStubConfig(t, cfgPath)
+
+	sources, err := buildConfigSources(context.Background(), nil, autoPath, []string{cfgPath})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// default -> auto -> explicit (no declared before-configs in this auto config)
+	want := []string{"default", "auto", cfgPath}
+	if got := sourceNames(sources); !slices.Equal(got, want) {
+		t.Fatalf("source names = %v, want %v", got, want)
+	}
+}
+
+func TestBuildConfigSourcesDeclaredBeforeConfigs(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"first.js", "second.js"} {
+		writeStubConfig(t, filepath.Join(dir, name))
+	}
+	autoPath := writeBeforeConfigAuto(t, dir, `[{ path: "./first.js" }, { path: "./second.js" }]`)
+
+	cfgDir := t.TempDir()
+	cfgPath := filepath.Join(cfgDir, "explicit.js")
+	writeStubConfig(t, cfgPath)
+
+	sources, err := buildConfigSources(context.Background(), nil, autoPath, []string{cfgPath})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// default -> declared(first, second) -> auto -> explicit
+	want := []string{
+		"default",
+		filepath.Join(dir, "first.js"),
+		filepath.Join(dir, "second.js"),
+		"auto",
+		cfgPath,
+	}
+	if got := sourceNames(sources); !slices.Equal(got, want) {
+		t.Fatalf("source names = %v, want %v", got, want)
+	}
+	if sources[3].path != autoPath {
+		t.Errorf("auto source path = %q, want %q", sources[3].path, autoPath)
+	}
+}
+
+func TestBuildConfigSourcesFlagSkipsDeclared(t *testing.T) {
+	dir := t.TempDir()
+	writeStubConfig(t, filepath.Join(dir, "declared.js"))
+	autoPath := writeBeforeConfigAuto(t, dir, `[{ path: "./declared.js" }]`)
+
+	flagDir := t.TempDir()
+	flagPath := filepath.Join(flagDir, "flag.js")
+	writeStubConfig(t, flagPath)
+
+	sources, err := buildConfigSources(context.Background(), []string{flagPath}, autoPath, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// default -> flag -> auto; declared.js must be absent (flag wins).
+	want := []string{"default", flagPath, "auto"}
+	if got := sourceNames(sources); !slices.Equal(got, want) {
+		t.Fatalf("source names = %v, want %v", got, want)
+	}
+	declaredPath := filepath.Join(dir, "declared.js")
+	for _, s := range sources {
+		if s.name == declaredPath || s.path == declaredPath {
+			t.Errorf("declared before-config %q should be absent when --before-config flag is set", declaredPath)
+		}
 	}
 }
 
