@@ -98,6 +98,13 @@ func (d *Display) Statusf(sym Symbol, format string, a ...any) {
 	d.writeLine(d.out, sym.render()+" "+fmt.Sprintf(format, a...))
 }
 
+// Header prints a prominent phase header (a leading blank line, then a bold
+// title) so distinct phases of a run are easy to tell apart.
+func (d *Display) Header(title string) {
+	d.writeLine(d.out, "")
+	d.writeLine(d.out, clr.Bold(clr.Cyan("▶ "+title)))
+}
+
 // Errorln prints a line to stderr (safe above active bars).
 func (d *Display) Errorln(a ...any) { d.writeLine(d.err, fmt.Sprint(a...)) }
 

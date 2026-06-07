@@ -568,7 +568,7 @@ func TestPrintGroupedResultsShowsScope(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	printGroupedResults(toolGroups)
+	printGroupedResults(toolGroups, 20, false)
 
 	_ = w.Close()
 	os.Stdout = oldStdout
@@ -856,7 +856,7 @@ func TestPrintOverallSummary(t *testing.T) {
 	oldStdout := os.Stdout
 	os.Stdout = w
 
-	printOverallSummary(toolGroups, 5000, 4500)
+	printOperationFooter(toolGroups, 5000, 0, 0)
 
 	_ = w.Close()
 	os.Stdout = oldStdout
@@ -1339,7 +1339,7 @@ func TestPrintGroupedResultsOutputOnce(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	printGroupedResults(toolGroups)
+	printGroupedResults(toolGroups, 20, false)
 
 	_ = w.Close()
 	os.Stdout = oldStdout
