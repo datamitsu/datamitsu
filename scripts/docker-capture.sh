@@ -6,7 +6,7 @@ set -e
 apt-get update -qq
 apt-get install -y -qq git asciinema
 
-npm install -g pnpm --silent
+npm install -g pnpm@11.5.2 --silent
 
 git clone --depth 1 https://github.com/ovineko/ovineko /repo
 
