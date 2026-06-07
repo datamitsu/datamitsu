@@ -470,6 +470,32 @@ func RunSequential(
 	selectedToolsFlag string,
 	loadConfigFunc func() (*config.Config, string, error),
 ) error {
+	return runSequential(operations, args, explainMode, fileScoped, selectedToolsFlag, loadConfigFunc, true)
+}
+
+// RunContinuation runs a single operation as a continuation of another command's
+// output (e.g. setup's post-fix). It reuses the banner already shown by the
+// caller instead of printing a second one.
+func RunContinuation(
+	operation config.OperationType,
+	args []string,
+	explainMode string,
+	fileScoped bool,
+	selectedToolsFlag string,
+	loadConfigFunc func() (*config.Config, string, error),
+) error {
+	return runSequential([]config.OperationType{operation}, args, explainMode, fileScoped, selectedToolsFlag, loadConfigFunc, false)
+}
+
+func runSequential(
+	operations []config.OperationType,
+	args []string,
+	explainMode string,
+	fileScoped bool,
+	selectedToolsFlag string,
+	loadConfigFunc func() (*config.Config, string, error),
+	showBanner bool,
+) error {
 	sc, err := initSharedContext(args, explainMode, fileScoped, selectedToolsFlag, loadConfigFunc)
 	if err != nil {
 		return err
@@ -481,8 +507,8 @@ func RunSequential(
 	}()
 
 	// Branded banner once at the top (skipped in explain/json so that output
-	// stays clean/machine-readable).
-	if sc.explainLevel == "" {
+	// stays clean/machine-readable, and when running as a continuation).
+	if showBanner && sc.explainLevel == "" {
 		ui.Current().Banner(ldflags.PackageName, ldflags.Version)
 	}
 
