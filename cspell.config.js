@@ -31,6 +31,7 @@ export default defineConfig((config) => ({
     "cpuid",
     "cwds",
     "dedup",
+    "dindent",
     "endoflife",
     "enginetools",
     "errgroup",
@@ -239,5 +240,6 @@ export default defineConfig((config) => ({
     "transpiles",
     "ztool",
     "atool",
+    "perr",
   ],
 }));

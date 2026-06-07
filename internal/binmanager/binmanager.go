@@ -21,6 +21,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"github.com/datamitsu/datamitsu/internal/syslist"
 	"github.com/datamitsu/datamitsu/internal/target"
+	"github.com/datamitsu/datamitsu/internal/ui"
 
 	"go.uber.org/zap"
 	"golang.org/x/sync/singleflight"
@@ -895,15 +896,24 @@ func (bm *BinManager) downloadInternal(ctx context.Context, name string) error {
 	}()
 
 	if binaryInfo.ExtractDir {
+		// Directory archives (runtimes like node) are large and slow to unpack —
+		// xz/gzip decompression plus thousands of files — and this happens AFTER
+		// the download bar completes. Show a spinner so the wait is not dead air.
+		sp := ui.Current().Spinner("Extracting " + name + "…")
+
 		extractedDir, err := extractBinaryToDir(downloadedPath, binaryInfo.ContentType, tmpDir)
 		if err != nil {
+			sp.Fail()
 			return fmt.Errorf("failed to extract archive to directory: %w", err)
 		}
 
 		if err := moveDir(extractedDir, binPath); err != nil {
+			sp.Fail()
 			_ = os.RemoveAll(extractedDir)
 			return fmt.Errorf("failed to move extracted directory to cache: %w", err)
 		}
+
+		sp.Done("")
 	} else {
 		extractedPath, err := extractBinary(downloadedPath, binaryInfo.ContentType, binaryInfo.BinaryPath, tmpDir)
 		if err != nil {

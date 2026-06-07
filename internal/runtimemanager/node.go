@@ -1,7 +1,6 @@
 package runtimemanager
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -235,15 +234,9 @@ func (rm *RuntimeManager) installNodeAppOnce(ctx context.Context, appName string
 	envVars = mergeInstallEnv(envVars, customEnv, appEnvPath)
 	cmdEnv := buildEnvWithOverrides(os.Environ(), envVars)
 
-	// Capture pnpm's combined output instead of inheriting the terminal: its
-	// native reporter would otherwise corrupt any active progress bar. The
-	// captured log is surfaced only on failure (the single-print-layer pattern).
-	var out bytes.Buffer
 	cmd := exec.CommandContext(ctx, nodeBinPath, args...) //nolint:gosec // G204: nodeBinPath comes from the trusted managed runtime store and args are built from validated config
 	cmd.Dir = appEnvPath
 	cmd.Env = cmdEnv
-	cmd.Stdout = &out
-	cmd.Stderr = &out
 
 	log.Debug("installing node app",
 		zap.String("app", appName),
@@ -252,14 +245,19 @@ func (rm *RuntimeManager) installNodeAppOnce(ctx context.Context, appName string
 		zap.String("pnpm", pnpmVersion),
 	)
 
-	ui.Current().Statusf(ui.SymStep, "Installing %s…", appName)
-
-	if err := runInstallCmd(ctx, cmd); err != nil {
-		ui.Current().Errorln(out.String())
+	// Stream pnpm's ndjson stdout into a live spinner (resolved/downloaded/added
+	// counters); pnpm reports errors as ndjson too, so they are extracted by the
+	// reporter and surfaced only on failure.
+	sp := ui.Current().Spinner("Installing " + appName)
+	rep := newPNPMReporter(sp)
+	stderr, err := runInstallCmdStreaming(ctx, cmd, rep.line)
+	if err != nil {
+		sp.Fail()
+		ui.Current().Errorln(rep.errorOutput(stderr))
 		return fmt.Errorf("failed to install node app %q: %w", appName, err)
 	}
 
-	ui.Current().Statusf(ui.SymOK, "Installed %s", appName)
+	sp.Done("Installed " + appName)
 
 	cleanupOnError = false
 	return nil

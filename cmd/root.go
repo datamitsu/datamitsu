@@ -11,6 +11,8 @@ import (
 	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"github.com/datamitsu/datamitsu/internal/sponsor"
+	"github.com/datamitsu/datamitsu/internal/term"
+	"github.com/datamitsu/datamitsu/internal/ui"
 
 	"github.com/spf13/cobra"
 	"go.uber.org/zap/zapcore"
@@ -78,7 +80,22 @@ func init() {
 // Execute runs the root command and exits the process on error.
 func Execute() {
 	clr.Init()
-	if err := rootCmd.Execute(); err != nil {
+
+	// Activate the shared display for the whole process so every command —
+	// including `exec`, which does not own a render scope of its own — renders
+	// downloads/installs through one container (animated in a terminal, throttled
+	// lines under CI). Commands that own a scope (runner, init) nest their own
+	// Display via Activate and restore to this one. Closed before any error is
+	// printed (and before os.Exit) so progress output is flushed first.
+	disp := ui.New(term.DetectMode())
+	restore := ui.Activate(disp)
+
+	err := rootCmd.Execute()
+
+	disp.Close()
+	restore()
+
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s %s\n", clr.Red("error:"), err)
 		os.Exit(1)
 	}

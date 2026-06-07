@@ -1,14 +1,16 @@
 package runtimemanager
 
 import (
-	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
@@ -158,12 +160,9 @@ func (rm *RuntimeManager) installUVAppOnce(ctx context.Context, appName string, 
 
 	// Capture uv's combined output instead of inheriting the terminal so its
 	// reporter never corrupts an active progress bar; surface it only on failure.
-	var out bytes.Buffer
 	cmd := exec.CommandContext(ctx, uvPath, args...) //nolint:gosec // G204: uvPath comes from the trusted managed runtime store and args are built from validated config
 	cmd.Dir = appEnvPath
 	cmd.Env = buildEnvWithOverrides(os.Environ(), envVars)
-	cmd.Stdout = &out
-	cmd.Stderr = &out
 
 	packageSpec := appConfig.PackageName
 	if appConfig.Version != "" {
@@ -176,17 +175,83 @@ func (rm *RuntimeManager) installUVAppOnce(ctx context.Context, appName string, 
 		zap.String("uv_path", uvPath),
 	)
 
-	ui.Current().Statusf(ui.SymStep, "Installing %s…", appName)
-
-	if err := runInstallCmd(ctx, cmd); err != nil {
-		ui.Current().Errorln(out.String())
+	// uv has no streaming progress format: its per-phase lines (Resolved/Prepared/
+	// Installed N) go to stderr and feed a live spinner label, while the final
+	// installed-package count is read from the --output-format=json summary on
+	// stdout. On failure stderr (or the stdout summary) carries the error.
+	sp := ui.Current().Spinner("Installing " + appName)
+	rep := &uvReporter{sp: sp}
+	stdout, stderr, err := runInstallCmdStreamingStderr(ctx, cmd, rep.line)
+	if err != nil {
+		sp.Fail()
+		if stderr == "" {
+			stderr = stdout
+		}
+		ui.Current().Errorln(stderr)
 		return fmt.Errorf("failed to install UV app %q: %w", appName, err)
 	}
 
-	ui.Current().Statusf(ui.SymOK, "Installed %s", appName)
+	if n := uvInstalledCount(stdout); n > 0 {
+		sp.Done(fmt.Sprintf("Installed %s (%d packages)", appName, n))
+	} else {
+		sp.Done("Installed " + appName)
+	}
 
 	cleanupOnError = false
 	return nil
+}
+
+// uvReporter turns uv's per-phase stderr lines ("Resolved/Prepared/Installed N
+// packages") into a live spinner label. uv has no streaming machine-readable
+// progress, so these human lines are the only live signal; they are matched
+// defensively (a format change just yields a plain spinner, never an error).
+type uvReporter struct {
+	sp       *ui.Spinner
+	resolved int
+	prepared int
+}
+
+var uvPhaseRe = regexp.MustCompile(`^\s*(Resolved|Prepared|Installed)\s+(\d+)\s+package`)
+
+func (r *uvReporter) line(s string) {
+	m := uvPhaseRe.FindStringSubmatch(s)
+	if m == nil {
+		return
+	}
+	n, err := strconv.Atoi(m[2])
+	if err != nil {
+		return
+	}
+	switch m[1] {
+	case "Resolved":
+		r.resolved = n
+	case "Prepared":
+		r.prepared = n
+	}
+	r.sp.SetDetail(fmt.Sprintf("resolved %4d, prepared %4d", r.resolved, r.prepared))
+}
+
+// uvInstalledCount reads the number of newly installed packages from uv's
+// --output-format=json summary (sync.changes with action "installed"). Returns
+// 0 if the summary is missing or cannot be parsed.
+func uvInstalledCount(stdout string) int {
+	var summary struct {
+		Sync struct {
+			Changes []struct {
+				Action string `json:"action"`
+			} `json:"changes"`
+		} `json:"sync"`
+	}
+	if json.Unmarshal([]byte(stdout), &summary) != nil {
+		return 0
+	}
+	count := 0
+	for _, c := range summary.Sync.Changes {
+		if c.Action == "installed" {
+			count++
+		}
+	}
+	return count
 }
 
 // buildUVInstallArgs constructs the arguments for `uv sync` invocations.
@@ -198,7 +263,10 @@ func (rm *RuntimeManager) installUVAppOnce(ctx context.Context, appName string, 
 // chain security; users must pre-resolve to wheel-available versions in
 // their lockfile.
 func buildUVInstallArgs(lockFile string, uvRC *config.RuntimeConfigUV) []string {
-	args := []string{"sync", "--no-install-project"}
+	// --output-format=json emits a final machine-readable summary on stdout
+	// (parsed for the installed-package count). uv's per-phase progress lines
+	// still go to stderr and are streamed for a live spinner label.
+	args := []string{"sync", "--output-format=json", "--no-install-project"}
 
 	if lockFile != "" {
 		args = append(args, "--locked", "--no-build")

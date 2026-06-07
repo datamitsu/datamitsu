@@ -565,7 +565,7 @@ func TestUVVersionForHash(t *testing.T) {
 func TestBuildUVInstallArgs(t *testing.T) {
 	t.Run("no lockfile: no --locked and no --no-build", func(t *testing.T) {
 		args := buildUVInstallArgs("", nil)
-		want := []string{"sync", "--no-install-project"}
+		want := []string{"sync", "--output-format=json", "--no-install-project"}
 		if !equalStringSlices(args, want) {
 			t.Errorf("args = %v, want %v", args, want)
 		}
@@ -573,7 +573,7 @@ func TestBuildUVInstallArgs(t *testing.T) {
 
 	t.Run("with lockfile: adds --locked and --no-build", func(t *testing.T) {
 		args := buildUVInstallArgs("version = 1\n", nil)
-		want := []string{"sync", "--no-install-project", "--locked", "--no-build"}
+		want := []string{"sync", "--output-format=json", "--no-install-project", "--locked", "--no-build"}
 		if !equalStringSlices(args, want) {
 			t.Errorf("args = %v, want %v", args, want)
 		}
@@ -581,7 +581,7 @@ func TestBuildUVInstallArgs(t *testing.T) {
 
 	t.Run("lockfile + python version: appends --python", func(t *testing.T) {
 		args := buildUVInstallArgs("version = 1\n", &config.RuntimeConfigUV{PythonVersion: "3.12.1"})
-		want := []string{"sync", "--no-install-project", "--locked", "--no-build", "--python", "3.12.1"}
+		want := []string{"sync", "--output-format=json", "--no-install-project", "--locked", "--no-build", "--python", "3.12.1"}
 		if !equalStringSlices(args, want) {
 			t.Errorf("args = %v, want %v", args, want)
 		}
@@ -589,7 +589,7 @@ func TestBuildUVInstallArgs(t *testing.T) {
 
 	t.Run("no lockfile + python version: --python without --no-build", func(t *testing.T) {
 		args := buildUVInstallArgs("", &config.RuntimeConfigUV{PythonVersion: "3.12.1"})
-		want := []string{"sync", "--no-install-project", "--python", "3.12.1"}
+		want := []string{"sync", "--output-format=json", "--no-install-project", "--python", "3.12.1"}
 		if !equalStringSlices(args, want) {
 			t.Errorf("args = %v, want %v", args, want)
 		}
@@ -597,7 +597,7 @@ func TestBuildUVInstallArgs(t *testing.T) {
 
 	t.Run("empty python version: no --python flag", func(t *testing.T) {
 		args := buildUVInstallArgs("version = 1\n", &config.RuntimeConfigUV{PythonVersion: ""})
-		want := []string{"sync", "--no-install-project", "--locked", "--no-build"}
+		want := []string{"sync", "--output-format=json", "--no-install-project", "--locked", "--no-build"}
 		if !equalStringSlices(args, want) {
 			t.Errorf("args = %v, want %v", args, want)
 		}

@@ -259,14 +259,17 @@ func (rm *RuntimeManager) installGoAppOnce(ctx context.Context, appName string, 
 		zap.String("go_path", goPath),
 	)
 
-	ui.Current().Statusf(ui.SymStep, "Installing %s…", appName)
+	// go build has no machine-readable progress stream, so show an animated
+	// spinner for activity; its captured output is surfaced only on failure.
+	sp := ui.Current().Spinner("Installing " + appName)
 
 	if err := runInstallCmd(ctx, cmd); err != nil {
+		sp.Fail()
 		ui.Current().Errorln(out.String())
 		return fmt.Errorf("failed to build Go app %q: %w", appName, err)
 	}
 
-	ui.Current().Statusf(ui.SymOK, "Installed %s", appName)
+	sp.Done("Installed " + appName)
 
 	cleanupOnError = false
 	return nil
