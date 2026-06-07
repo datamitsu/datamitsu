@@ -639,6 +639,14 @@ func groupResultsByTool(groupResults []tooling.GroupExecutionResult) []toolExecu
 func printGroupedResults(toolGroups []toolExecutionGroup, nameWidth int, detailed bool) {
 	fmt.Println(clr.Faint("┃"))
 
+	// Slowest tool in this run anchors the duration heatmap.
+	var maxMs int64
+	for _, group := range toolGroups {
+		if group.totalTime > maxMs {
+			maxMs = group.totalTime
+		}
+	}
+
 	for _, group := range toolGroups {
 		status := clr.Green("✓")
 		nameDisplay := clr.Bold(group.toolName)
@@ -659,7 +667,7 @@ func printGroupedResults(toolGroups []toolExecutionGroup, nameWidth int, detaile
 		if group.totalRuns > 1 || group.failedRuns > 0 || detailed {
 			durStr = fmt.Sprintf("%-*s", durationColWidth, durStr)
 		}
-		line := clr.Faint("┃ ") + status + " " + nameDisplay + strings.Repeat(" ", pad) + clr.Faint(durStr)
+		line := clr.Faint("┃ ") + status + " " + nameDisplay + strings.Repeat(" ", pad) + heatDuration(group.totalTime, maxMs, durStr)
 		if group.totalRuns > 1 {
 			line += " " + clr.Faint(fmt.Sprintf("×%d", group.totalRuns))
 		}
@@ -682,6 +690,28 @@ func printGroupedResults(toolGroups []toolExecutionGroup, nameWidth int, detaile
 			}
 		}
 	}
+}
+
+// heatFloorMs is the duration below which a tool is always shown "cool" (faint):
+// trivial and cached runs never draw attention, only genuinely slow tools warm
+// up. This avoids false alarms on fast runs (e.g. "all 5ms, one 10ms").
+const heatFloorMs = 250
+
+// heatPalette is an xterm-256 ramp from warm (yellow) to hot (red); the slowest
+// tool above the floor is reddest.
+var heatPalette = []int{220, 214, 208, 202, 196}
+
+// heatDuration colors the already-formatted duration text by how slow the tool
+// is relative to the slowest in this run, normalized over the notable range
+// [heatFloorMs, maxMs]. Sub-floor (and trivial) runs stay faint.
+func heatDuration(ms, maxMs int64, text string) string {
+	if ms < heatFloorMs || maxMs <= heatFloorMs {
+		return clr.Faint(text)
+	}
+	ratio := float64(ms-heatFloorMs) / float64(maxMs-heatFloorMs)
+	idx := int(ratio * float64(len(heatPalette)))
+	idx = max(min(idx, len(heatPalette)-1), 0)
+	return clr.Color256(heatPalette[idx])(text)
 }
 
 // toolDetail renders the verbose per-tool timing detail (scope, avg, min/max),

@@ -99,3 +99,10 @@ var (
 	// Faint renders its arguments faint (dimmed).
 	Faint = color.New(color.Faint).SprintFunc()
 )
+
+// Color256 returns a colorizer that renders its arguments in the given xterm
+// 256-color foreground code (the `38;5;N` SGR sequence). Used for the duration
+// heatmap. Like the helpers above it is a no-op when colors are disabled.
+func Color256(code int) func(a ...any) string {
+	return color.New(color.Attribute(38), color.Attribute(5), color.Attribute(code)).SprintFunc()
+}
