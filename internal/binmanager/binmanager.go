@@ -3,6 +3,7 @@
 package binmanager
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -21,8 +22,8 @@ import (
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"github.com/datamitsu/datamitsu/internal/syslist"
 	"github.com/datamitsu/datamitsu/internal/target"
+	"github.com/datamitsu/datamitsu/internal/ui"
 
-	"github.com/vbauerster/mpb/v8"
 	"go.uber.org/zap"
 	"golang.org/x/sync/singleflight"
 )
@@ -292,8 +293,6 @@ func (bm *BinManager) InstallWithConcurrency(ctx context.Context, includeOptiona
 		return stats, nil
 	}
 
-	progress := mpb.New(mpb.WithWidth(60))
-
 	jobs := make(chan string, len(toDownload))
 	results := make(chan DownloadResult, len(toDownload))
 
@@ -302,7 +301,7 @@ func (bm *BinManager) InstallWithConcurrency(ctx context.Context, includeOptiona
 	for range concurrency {
 		wg.Go(func() {
 			for name := range jobs {
-				err := bm.downloadWithTimeout(ctx, name, progress)
+				err := bm.downloadWithTimeout(ctx, name)
 				results <- DownloadResult{
 					Name:  name,
 					Error: err,
@@ -322,8 +321,6 @@ func (bm *BinManager) InstallWithConcurrency(ctx context.Context, includeOptiona
 
 	wg.Wait()
 	close(results)
-
-	progress.Wait()
 
 	for result := range results {
 		if result.Error != nil {
@@ -367,13 +364,12 @@ func (bm *BinManager) GetBinaryPath(ctx context.Context, name string) (string, e
 			return struct{}{}, nil
 		}
 
-		fmt.Fprintf(os.Stderr, "⬇️  Downloading %s...\n", name)
-
-		if err := bm.downloadWithTimeout(ctx, name, nil); err != nil {
+		// Progress (a bar in a terminal, throttled lines in CI) is rendered by
+		// the download layer through the shared ui display.
+		if err := bm.downloadWithTimeout(ctx, name); err != nil {
 			return nil, fmt.Errorf("failed to download %s: %w", name, err)
 		}
 
-		fmt.Fprintf(os.Stderr, "✅ Downloaded %s\n", name)
 		return struct{}{}, nil
 	})
 	if err != nil {
@@ -822,6 +818,33 @@ func (bm *BinManager) Exec(ctx context.Context, appName string, args []string) e
 	return nil
 }
 
+// ExecCaptured runs a managed app like Exec but captures combined stdout+stderr
+// into the returned string instead of streaming to the terminal. Callers use it
+// to keep clean output on success and surface the captured text only on failure.
+func (bm *BinManager) ExecCaptured(ctx context.Context, appName string, args []string) (string, error) {
+	cmdInfo, err := bm.GetCommandInfo(ctx, appName)
+	if err != nil {
+		return "", fmt.Errorf("failed to get command info for %s: %w", appName, err)
+	}
+
+	allArgs := make([]string, 0, len(cmdInfo.Args)+len(args))
+	allArgs = append(allArgs, cmdInfo.Args...)
+	allArgs = append(allArgs, args...)
+
+	cmd := exec.CommandContext(ctx, cmdInfo.Command, allArgs...) //nolint:gosec // G204: command path comes from the trusted managed store and args from validated config
+	cmd.Env = mergeExecEnv(os.Environ(), cmdInfo.Env)
+
+	var buf bytes.Buffer
+	cmd.Stdout = &buf
+	cmd.Stderr = &buf
+
+	if err := cmd.Run(); err != nil {
+		return buf.String(), fmt.Errorf("failed to execute %s: %w", appName, err)
+	}
+
+	return buf.String(), nil
+}
+
 func (bm *BinManager) getBinaryInfo(name string) (*target.ResolvedTarget, BinaryOsArchInfo, error) {
 	app, ok := bm.mapOfApps[name]
 	if !ok {
@@ -866,7 +889,7 @@ func (bm *BinManager) getBinaryPath(name string) (string, error) {
 	return binPath, nil
 }
 
-func (bm *BinManager) downloadInternal(ctx context.Context, name string, progress *mpb.Progress) error {
+func (bm *BinManager) downloadInternal(ctx context.Context, name string) error {
 	resolved, binaryInfo, err := bm.getBinaryInfo(name)
 	if err != nil {
 		return err
@@ -890,12 +913,7 @@ func (bm *BinManager) downloadInternal(ctx context.Context, name string, progres
 		return fmt.Errorf("failed to create temp directory: %w", err)
 	}
 
-	var downloadedPath string
-	if progress != nil {
-		downloadedPath, err = downloadAndVerifyWithProgress(ctx, binaryInfo.URL, binaryInfo.Hash, hashType, tmpDir, name, progress)
-	} else {
-		downloadedPath, err = downloadAndVerify(ctx, binaryInfo.URL, binaryInfo.Hash, hashType, tmpDir)
-	}
+	downloadedPath, err := downloadAndVerifyWithName(ctx, binaryInfo.URL, binaryInfo.Hash, hashType, tmpDir, name)
 	if err != nil {
 		return fmt.Errorf("failed to download and verify: %w", err)
 	}
@@ -906,15 +924,24 @@ func (bm *BinManager) downloadInternal(ctx context.Context, name string, progres
 	}()
 
 	if binaryInfo.ExtractDir {
+		// Directory archives (runtimes like node) are large and slow to unpack —
+		// xz/gzip decompression plus thousands of files — and this happens AFTER
+		// the download bar completes. Show a spinner so the wait is not dead air.
+		sp := ui.Current().Spinner("Extracting " + name + "…")
+
 		extractedDir, err := extractBinaryToDir(downloadedPath, binaryInfo.ContentType, tmpDir)
 		if err != nil {
+			sp.Fail()
 			return fmt.Errorf("failed to extract archive to directory: %w", err)
 		}
 
 		if err := moveDir(extractedDir, binPath); err != nil {
+			sp.Fail()
 			_ = os.RemoveAll(extractedDir)
 			return fmt.Errorf("failed to move extracted directory to cache: %w", err)
 		}
+
+		sp.Done("")
 	} else {
 		extractedPath, err := extractBinary(downloadedPath, binaryInfo.ContentType, binaryInfo.BinaryPath, tmpDir)
 		if err != nil {
@@ -934,16 +961,14 @@ func (bm *BinManager) downloadInternal(ctx context.Context, name string, progres
 	return nil
 }
 
-func (bm *BinManager) downloadWithProgress(ctx context.Context, name string, progress *mpb.Progress) error {
-	return bm.downloadInternal(ctx, name, progress)
-}
-
 // downloadWithTimeout installs one app under a per-app install timeout context,
-// translating a deadline into a clear timeout error.
-func (bm *BinManager) downloadWithTimeout(ctx context.Context, name string, progress *mpb.Progress) error {
+// translating a deadline into a clear timeout error. Progress (a bar in an
+// interactive terminal, throttled lines in CI) is rendered through the shared
+// ui display by the download layer.
+func (bm *BinManager) downloadWithTimeout(ctx context.Context, name string) error {
 	ctx, cancel, timeoutSec := newInstallContext(ctx)
 	defer cancel()
-	return wrapInstallTimeout(bm.downloadWithProgress(ctx, name, progress), timeoutSec)
+	return wrapInstallTimeout(bm.downloadInternal(ctx, name), timeoutSec)
 }
 
 func (bm *BinManager) installInternal(ctx context.Context, includeOptional bool) error {
@@ -967,7 +992,7 @@ func (bm *BinManager) installInternal(ctx context.Context, includeOptional bool)
 			continue
 		}
 
-		if err := bm.downloadWithTimeout(ctx, name, nil); err != nil {
+		if err := bm.downloadWithTimeout(ctx, name); err != nil {
 			return fmt.Errorf("failed to install %s: %w", name, err)
 		}
 	}

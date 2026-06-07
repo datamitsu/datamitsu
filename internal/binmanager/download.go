@@ -7,11 +7,11 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/datamitsu/datamitsu/internal/httpx"
-	"github.com/vbauerster/mpb/v8"
-	"github.com/vbauerster/mpb/v8/decor"
+	"github.com/datamitsu/datamitsu/internal/ui"
 	"go.uber.org/zap"
 )
 
@@ -23,7 +23,19 @@ const MaxBinarySize = 500 * 1024 * 1024
 // guard). The 5-minute budget accommodates large archive downloads.
 var httpClient = httpx.NewHardenedClient(5 * time.Minute)
 
-func downloadFileInternal(ctx context.Context, url string, destDir string, name string, progress *mpb.Progress) (string, error) {
+// displayName returns a human-friendly label for a download, falling back to
+// the URL's last path segment when no explicit name is given.
+func displayName(name, url string) string {
+	if name != "" {
+		return name
+	}
+	if i := strings.LastIndexByte(url, '/'); i >= 0 && i+1 < len(url) {
+		return url[i+1:]
+	}
+	return url
+}
+
+func downloadFileInternal(ctx context.Context, url string, destDir string, name string) (string, error) {
 	if name != "" {
 		log.Debug("downloading file", zap.String("url", url), zap.String("name", name))
 	} else {
@@ -84,27 +96,17 @@ func downloadFileInternal(ctx context.Context, url string, destDir string, name 
 	// exactly MaxBinarySize (written == MaxBinarySize, allowed) from one that
 	// exceeds it (written > MaxBinarySize, rejected).
 	limitedReader := io.LimitReader(resp.Body, MaxBinarySize+1)
-	reader := limitedReader
-	if progress != nil {
-		bar := progress.AddBar(resp.ContentLength,
-			mpb.PrependDecorators(
-				decor.Name(name, decor.WC{W: 20, C: decor.DSyncWidthR}),
-				decor.CountersKibiByte("% .2f / % .2f"),
-			),
-			mpb.AppendDecorators(
-				decor.NewPercentage(" %.0f ", decor.WCSyncSpace),
-				decor.EwmaSpeed(decor.SizeB1024(0), " % .2f", 60),
-			),
-		)
 
-		proxyReader := bar.ProxyReader(limitedReader)
-		defer func() {
-			if err := proxyReader.Close(); err != nil {
-				log.Warn("failed to close proxy reader", zap.Error(err))
-			}
-		}()
-		reader = proxyReader
-	}
+	// Route the transfer through the process-wide display: in an interactive
+	// terminal this renders a progress bar in the shared container, in CI/pipe
+	// it emits throttled percentage lines, and when no display is active it is
+	// a transparent passthrough.
+	reader := ui.Current().Download(displayName(name, url), resp.ContentLength, limitedReader)
+	defer func() {
+		if err := reader.Close(); err != nil {
+			log.Warn("failed to close progress reader", zap.Error(err))
+		}
+	}()
 
 	written, err := io.Copy(tmpFile, reader)
 	if err != nil {
@@ -130,11 +132,11 @@ func downloadFileInternal(ctx context.Context, url string, destDir string, name 
 }
 
 func downloadFile(ctx context.Context, url string, destDir string) (string, error) {
-	return downloadFileInternal(ctx, url, destDir, "", nil)
+	return downloadFileInternal(ctx, url, destDir, "")
 }
 
-func downloadAndVerifyInternal(ctx context.Context, url string, expectedHash string, hashType BinHashType, destDir string, name string, progress *mpb.Progress) (string, error) {
-	tmpPath, err := downloadFileInternal(ctx, url, destDir, name, progress)
+func downloadAndVerifyInternal(ctx context.Context, url string, expectedHash string, hashType BinHashType, destDir string, name string) (string, error) {
+	tmpPath, err := downloadFileInternal(ctx, url, destDir, name)
 	if err != nil {
 		return "", err
 	}
@@ -152,11 +154,11 @@ func downloadAndVerifyInternal(ctx context.Context, url string, expectedHash str
 }
 
 func downloadAndVerify(ctx context.Context, url string, expectedHash string, hashType BinHashType, destDir string) (string, error) {
-	return downloadAndVerifyInternal(ctx, url, expectedHash, hashType, destDir, "", nil)
+	return downloadAndVerifyInternal(ctx, url, expectedHash, hashType, destDir, "")
 }
 
-func downloadAndVerifyWithProgress(ctx context.Context, url string, expectedHash string, hashType BinHashType, destDir string, name string, progress *mpb.Progress) (string, error) {
-	return downloadAndVerifyInternal(ctx, url, expectedHash, hashType, destDir, name, progress)
+func downloadAndVerifyWithName(ctx context.Context, url string, expectedHash string, hashType BinHashType, destDir string, name string) (string, error) {
+	return downloadAndVerifyInternal(ctx, url, expectedHash, hashType, destDir, name)
 }
 
 func moveFile(src, dst string) error {

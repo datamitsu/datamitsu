@@ -1,6 +1,7 @@
 package sponsor
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -156,7 +157,8 @@ func TestMaybePrint_ReactivationCycle(t *testing.T) {
 	})
 
 	t.Run("new accumulation cycle after reactivation", func(t *testing.T) {
-		// State was reset above. Now accumulate again.
+		// State was reset above. Now accumulate again — the message must be earned
+		// by another full threshold of successful runs (the jittered cadence).
 		clk.Set(now.Add(8 * 24 * time.Hour))
 
 		for range 29 {
@@ -244,6 +246,46 @@ func TestMaybePrint_SuppressionCI(t *testing.T) {
 	}
 	if state.Activated {
 		t.Error("should not be activated in CI mode (message display suppressed)")
+	}
+}
+
+func TestMaybePrint_WritesToStderrNotStdout(t *testing.T) {
+	// The sponsor message must go to stderr only — never stdout — so it can't
+	// corrupt output that users pipe into scripts.
+	t.Setenv("CI", "")
+	t.Setenv("DATAMITSU_NO_SPONSOR", "")
+
+	now := time.Date(2026, 4, 5, 12, 0, 0, 0, time.UTC)
+	clk := newTestClock(now)
+	m, cacheDir := setupTestManager(t, clk)
+
+	// Seed to threshold-1 so the next run activates and prints the message.
+	if err := saveState(statePath(cacheDir), &State{SuccessfulRuns: sponsorActivationThreshold - 1}); err != nil {
+		t.Fatal(err)
+	}
+
+	origOut, origErr := os.Stdout, os.Stderr
+	rOut, wOut, _ := os.Pipe()
+	rErr, wErr, _ := os.Pipe()
+	os.Stdout, os.Stderr = wOut, wErr
+
+	m.MaybePrint(false)
+
+	_ = wOut.Close()
+	_ = wErr.Close()
+	os.Stdout, os.Stderr = origOut, origErr
+
+	outBytes, _ := io.ReadAll(rOut)
+	errBytes, _ := io.ReadAll(rErr)
+
+	if !readState(t, cacheDir).Activated {
+		t.Fatal("precondition: state should be activated (the print path must have run)")
+	}
+	if len(outBytes) != 0 {
+		t.Errorf("sponsor message must not be written to stdout, got: %q", outBytes)
+	}
+	if len(errBytes) == 0 {
+		t.Error("sponsor message should have been written to stderr")
 	}
 }
 

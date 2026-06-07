@@ -1,10 +1,14 @@
 package runtimemanager
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os/exec"
+	"sync"
 	"time"
 
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
@@ -76,4 +80,91 @@ func runInstallCmd(ctx context.Context, cmd *exec.Cmd) error {
 		return fmt.Errorf("install command failed: %w", err)
 	}
 	return nil
+}
+
+// runInstallCmdStreaming runs an install subprocess like runInstallCmd, but
+// streams stdout line by line to onLine (for live progress / event parsing)
+// while capturing stderr for error display. It returns the captured stderr and
+// the run error (with the same context-deadline wrapping as runInstallCmd).
+//
+// stdout is read to EOF before Wait is called (the canonical StdoutPipe order),
+// so onLine sees every line and there is no read/Wait race. stderr is the only
+// writer to the returned buffer and is joined by Wait, so a plain buffer is
+// safe.
+func runInstallCmdStreaming(ctx context.Context, cmd *exec.Cmd, onLine func([]byte)) (string, error) {
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return "", fmt.Errorf("install command stdout pipe: %w", err)
+	}
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	if err := cmd.Start(); err != nil {
+		return stderr.String(), fmt.Errorf("install command failed: %w", err)
+	}
+
+	scanner := bufio.NewScanner(stdout)
+	scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+	for scanner.Scan() {
+		if onLine != nil {
+			onLine(scanner.Bytes())
+		}
+	}
+
+	runErr := cmd.Wait()
+	if runErr != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return stderr.String(), fmt.Errorf("%w: %w", ctxErr, runErr)
+		}
+		return stderr.String(), fmt.Errorf("install command failed: %w", runErr)
+	}
+	return stderr.String(), nil
+}
+
+// runInstallCmdStreamingStderr is the mirror of runInstallCmdStreaming for tools
+// (uv) that emit their machine-readable summary on stdout and human progress on
+// stderr: it fully captures stdout (returned for parsing) while streaming stderr
+// line by line to onLine for live progress. Both pipes are drained concurrently
+// to avoid a full-pipe deadlock. The run error carries the same context-deadline
+// wrapping as runInstallCmd.
+func runInstallCmdStreamingStderr(ctx context.Context, cmd *exec.Cmd, onLine func(string)) (stdout, stderr string, err error) {
+	stdoutPipe, perr := cmd.StdoutPipe()
+	if perr != nil {
+		return "", "", fmt.Errorf("install command stdout pipe: %w", perr)
+	}
+	stderrPipe, perr := cmd.StderrPipe()
+	if perr != nil {
+		return "", "", fmt.Errorf("install command stderr pipe: %w", perr)
+	}
+	if perr := cmd.Start(); perr != nil {
+		return "", "", fmt.Errorf("install command failed: %w", perr)
+	}
+
+	var outBuf bytes.Buffer
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		_, _ = io.Copy(&outBuf, stdoutPipe)
+	})
+
+	var errBuf bytes.Buffer
+	scanner := bufio.NewScanner(stderrPipe)
+	scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+	for scanner.Scan() {
+		line := scanner.Text()
+		errBuf.WriteString(line)
+		errBuf.WriteByte('\n')
+		if onLine != nil {
+			onLine(line)
+		}
+	}
+
+	wg.Wait()
+	runErr := cmd.Wait()
+	if runErr != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return outBuf.String(), errBuf.String(), fmt.Errorf("%w: %w", ctxErr, runErr)
+		}
+		return outBuf.String(), errBuf.String(), fmt.Errorf("install command failed: %w", runErr)
+	}
+	return outBuf.String(), errBuf.String(), nil
 }

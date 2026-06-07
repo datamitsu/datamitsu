@@ -49,7 +49,7 @@ func GetBinPath() string {
 }
 
 // GetLogLevel returns log level from environment variable
-// Returns InfoLevel on parse error
+// Returns WarnLevel on parse error (matching the default)
 func GetLogLevel() zapcore.Level {
 	levelStr := logLevel.DefaultValue
 	if envLevel := os.Getenv(logLevel.Name); envLevel != "" {
@@ -58,7 +58,7 @@ func GetLogLevel() zapcore.Level {
 
 	var level zapcore.Level
 	if err := level.UnmarshalText([]byte(levelStr)); err != nil {
-		return zapcore.InfoLevel
+		return zapcore.WarnLevel
 	}
 	return level
 }

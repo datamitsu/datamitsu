@@ -14,7 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
+	"unicode/utf8"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/bundled"
@@ -22,14 +22,15 @@ import (
 	clr "github.com/datamitsu/datamitsu/internal/color"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/runtimemanager"
+	"github.com/datamitsu/datamitsu/internal/term"
 	"github.com/datamitsu/datamitsu/internal/timing"
 	"github.com/datamitsu/datamitsu/internal/tooling"
 	"github.com/datamitsu/datamitsu/internal/traverser"
+	"github.com/datamitsu/datamitsu/internal/ui"
 
-	"github.com/vbauerster/mpb/v8"
-	"github.com/vbauerster/mpb/v8/decor"
 	"go.uber.org/zap"
 )
 
@@ -59,12 +60,9 @@ type executionInstance struct {
 
 // Progress tracking variables
 var (
-	lastCIProgressPercent int
-	progressMu            sync.Mutex
-	currentProgress       *mpb.Progress
-	currentProgressBar    *mpb.Bar
-	currentBarDesc        atomic.Value               // string - accessed without lock to avoid deadlock with mpb
-	activeTools           map[string]map[string]bool // Track currently running tools (tool -> set of active dirs)
+	progressMu  sync.Mutex
+	currentTask *ui.Task                   // shared file-processing task for the active operation
+	activeTools map[string]map[string]bool // currently running tools (tool -> set of active dirs)
 )
 
 // toolPlanner is the planning surface used by runSingleOperation (satisfied by *tooling.Planner).
@@ -102,6 +100,9 @@ type sharedContext struct {
 	executor      planExecutor
 	binMgr        toolEnsurer
 	timings       *timing.Timings
+	// nameWidth is the widest configured tool name, computed once so every
+	// operation's result block (fix, lint, …) aligns on the same columns.
+	nameWidth int
 }
 
 func initSharedContext(
@@ -180,8 +181,8 @@ func initSharedContext(
 
 	log.Debug("files", zap.Strings("list", sc.files))
 
-	if len(sc.files) == 0 && !fileScoped && sc.explainLevel != "json" {
-		fmt.Println("ℹ️  No files specified, running whole-project tools only")
+	if len(sc.files) == 0 && !fileScoped {
+		log.Debug("no files specified, running whole-project tools only")
 	}
 
 	// Create planner
@@ -200,6 +201,14 @@ func initSharedContext(
 	binMgr := binmanager.New(sc.cfg.Apps, sc.cfg.Bundles, rm)
 	sc.binMgr = binMgr
 	sc.executor = tooling.NewExecutor(sc.rootPath, false, true, binMgr, sc.projectCache)
+
+	// All configured tools are known here, so the result column width is fixed
+	// once and shared across every operation (so fix and lint blocks align).
+	for name := range sc.cfg.Tools {
+		if n := utf8.RuneCountInString(name); n > sc.nameWidth {
+			sc.nameWidth = n
+		}
+	}
 
 	return sc, nil
 }
@@ -231,10 +240,6 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		return nil
 	}
 
-	if sc.explainLevel != "json" {
-		fmt.Printf("📦 Detected project types: %v\n", projectTypes)
-	}
-
 	if len(plan.Groups) == 0 {
 		if sc.explainLevel == "json" {
 			// In JSON mode, output empty plan even when no applicable tools
@@ -246,18 +251,22 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		return nil
 	}
 
-	// Show matched tools
-	toolNames := plan.GetToolNames()
-	if len(toolNames) > 0 && sc.explainLevel != "json" {
-		fmt.Printf("🔧 Matched tools: %s\n", strings.Join(toolNames, ", "))
-	}
-
 	// Show plan and exit if explain mode is enabled
 	if sc.explainLevel != "" {
 		output := formatExecutionPlan(plan, sc.rootPath, sc.cwdPath, operation, sc.explainLevel)
 		fmt.Println(output)
 		return nil
 	}
+
+	// Open the operation block: bold bracket header + dimmed project types. The
+	// matched-tool list is omitted — the per-tool results below cover it.
+	shortTypes := make([]string, len(projectTypes))
+	for i, pt := range projectTypes {
+		shortTypes[i] = shortProjectType(pt)
+	}
+	fmt.Println()
+	fmt.Println(phaseTop(string(operation)))
+	fmt.Println(clr.Faint("┃ " + strings.Join(shortTypes, " · ")))
 
 	// Calculate total file processing count for progress bar
 	totalFileProcessing := 0
@@ -282,7 +291,6 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 
 	// Track progress
 	progressTracker := make(map[string]*toolExecutionGroup)
-	completedFileProcessing := 0
 	activeTools = make(map[string]map[string]bool) // Initialize active tools tracker (tool -> set of active dirs)
 
 	// Initialize tracker with all expected tools
@@ -302,28 +310,16 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		}
 	}
 
-	// Create progress bar for non-CI environments
-	if !env.IsCI() && totalFileProcessing > 0 {
-		currentProgress = mpb.New(mpb.WithWidth(60))
-		currentBarDesc.Store("Starting...")
-		currentProgressBar = currentProgress.AddBar(int64(totalFileProcessing),
-			mpb.PrependDecorators(
-				decor.Any(func(s decor.Statistics) string {
-					// Read currentBarDesc without lock to avoid deadlock
-					// mpb may call this from its own goroutine while we hold progressMu
-					if desc, ok := currentBarDesc.Load().(string); ok {
-						return desc
-					}
-					return ""
-				}, decor.WC{W: 40, C: decor.DSyncWidthR}),
-			),
-			mpb.AppendDecorators(
-				decor.CountersNoUnit(" %d / %d", decor.WCSyncSpace),
-			),
-		)
-	}
+	// Activate the process-wide display for this operation. Binary/runtime
+	// downloads during pre-install and the file-processing task all render into
+	// ONE shared container, so nothing fights over the terminal. Interactive
+	// terminals get animated bars; CI/pipes get throttled append-only lines.
+	disp := ui.New(term.DetectMode())
+	restore := ui.Activate(disp)
 
-	// Ensure cleanup on exit
+	// Ensure cleanup on exit. Completing the task and closing the display (which
+	// flushes and tears down the shared bar container) BEFORE any summaries are
+	// printed keeps result output free of progress artifacts.
 	progressFinalized := false
 	finalizeProgress := func() {
 		if progressFinalized {
@@ -331,29 +327,27 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		}
 		progressFinalized = true
 
-		if !env.IsCI() && currentProgress != nil {
-			// Finalize any incomplete progress bars before waiting
-			if currentProgressBar != nil {
-				progressMu.Lock()
-				completed := completedFileProcessing
-				progressMu.Unlock()
-				if completed < totalFileProcessing {
-					currentProgressBar.SetCurrent(int64(totalFileProcessing))
-					currentProgressBar.SetTotal(int64(totalFileProcessing), true)
-				}
-			}
-			currentProgress.Wait()
-		}
-		// Reset progress state for next operation
 		progressMu.Lock()
-		currentProgress = nil
-		currentProgressBar = nil
-		lastCIProgressPercent = 0
+		t := currentTask
+		currentTask = nil
 		progressMu.Unlock()
+		if t != nil {
+			t.Complete()
+		}
+		disp.Close()
+		restore()
 	}
-	defer func() {
-		finalizeProgress()
-	}()
+	defer finalizeProgress()
+
+	// ensureTask lazily creates the file-processing task on first activity, so a
+	// "0 / N" bar never lingers during the install phase (downloads render as
+	// their own bars meanwhile). Caller must hold progressMu.
+	ensureTask := func() *ui.Task {
+		if currentTask == nil && totalFileProcessing > 0 {
+			currentTask = disp.Task("Starting...", int64(totalFileProcessing))
+		}
+		return currentTask
+	}
 
 	// Set up task start callback
 	sc.executor.SetTaskStartCallback(func(toolName string, relativeDir string) {
@@ -362,47 +356,30 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 			activeTools[toolName] = make(map[string]bool)
 		}
 		activeTools[toolName][relativeDir] = true
-
-		if !env.IsCI() && currentProgressBar != nil {
-			currentBarDesc.Store(formatToolWithDir(toolName, relativeDir))
-		}
+		t := ensureTask()
 		progressMu.Unlock()
 
-		if env.IsCI() {
-			dirInfo := ""
-			if relativeDir != "" {
-				dirInfo = " in " + relativeDir
-			}
-			fmt.Printf("⏳ Starting %s%s\n", toolName, dirInfo)
-		}
+		t.SetLabel(formatToolWithDir(toolName, relativeDir))
 	})
 
 	// Set up file progress callback
 	sc.executor.SetFileProgressCallback(func(toolName string, fileIndex, totalFiles int, success bool) {
-		status := "✅"
+		status := "✓"
 		if !success {
-			status = "❌"
+			status = "✗"
 		}
 
 		progressMu.Lock()
-		completedFileProcessing++
-		currentCompleted := completedFileProcessing
-		bar := currentProgressBar
-		if !env.IsCI() && bar != nil {
-			dir := activeToolDir(toolName)
-			if dir != "" {
-				currentBarDesc.Store(fmt.Sprintf("%s %s (%s) [%d/%d]", status, toolName, dir, fileIndex, totalFiles))
-			} else {
-				currentBarDesc.Store(fmt.Sprintf("%s %s [%d/%d]", status, toolName, fileIndex, totalFiles))
-			}
-		}
+		t := ensureTask()
+		dir := activeToolDir(toolName)
 		progressMu.Unlock()
 
-		if env.IsCI() {
-			updateCIProgress(currentCompleted, totalFileProcessing, status, toolName)
-		} else if bar != nil {
-			bar.Increment()
+		if dir != "" {
+			t.SetLabel(fmt.Sprintf("%s %s (%s) [%d/%d]", status, toolName, dir, fileIndex, totalFiles))
+		} else {
+			t.SetLabel(fmt.Sprintf("%s %s [%d/%d]", status, toolName, fileIndex, totalFiles))
 		}
+		t.Increment()
 	})
 
 	// Set up progress tracking callback
@@ -422,21 +399,9 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 					delete(activeTools, result.ToolName)
 				}
 			}
-
-			// Do not update progress bar description here.
-			// FileProgressCallback is the single source of truth for bar updates.
 			progressMu.Unlock()
 		}
 	})
-
-	// Execute plan
-	if !env.IsCI() && currentProgressBar == nil {
-		fmt.Println()
-	}
-	fmt.Printf("🚀 Running %s operation...\n", operation)
-	if env.IsCI() {
-		fmt.Println()
-	}
 
 	// Pre-install every tool the plan needs once, before parallel per-file
 	// execution. This closes the check-then-download install race (multiple
@@ -453,53 +418,45 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	// Finalize progress before printing any summaries/errors to avoid interleaved output.
 	finalizeProgress()
 
-	// Print cache statistics if cache is available
+	// Cache hit/miss feeds the footer.
+	cacheHits, cacheMisses := 0, 0
 	if sc.projectCache != nil {
 		stats := sc.projectCache.GetStats()
-		if stats.Hits > 0 || stats.Misses > 0 {
-			fmt.Println()
-			fmt.Printf("📊 Cache: %d cached, %d checked", stats.Hits, stats.Misses)
-			if stats.Hits+stats.Misses > 0 {
-				percentage := float64(stats.Hits) / float64(stats.Hits+stats.Misses) * 100
-				fmt.Printf(" (%.1f%%)\n", percentage)
-			} else {
-				fmt.Println()
-			}
-		}
+		cacheHits, cacheMisses = int(stats.Hits), int(stats.Misses)
 	}
 
-	// Calculate total wall-clock and CPU time
+	// Calculate total wall-clock time and failure state.
 	hasFailures := execErr != nil
 	var totalWallClockTime int64
-	var totalCPUTime int64
-
 	for _, groupResult := range results {
 		totalWallClockTime += groupResult.WallClockDuration
 		if !groupResult.Success {
 			hasFailures = true
 		}
-
-		for _, taskResult := range groupResult.Results {
-			totalCPUTime += taskResult.Duration
-		}
 	}
 
-	// Progress bar will be finalized in defer
-
-	// Always print grouped results (even partial results from fail-fast)
+	// Close the operation block: per-tool body lines + summary footer (the
+	// footer doubles as the "complete" marker, so no separate line is printed).
 	if len(results) > 0 {
 		toolGroups := groupResultsByTool(results)
-		printGroupedResults(toolGroups)
-		printOverallSummary(toolGroups, totalWallClockTime, totalCPUTime)
+		printGroupedResults(toolGroups, sc.nameWidth, env.IsTimingsEnabled())
+		printOperationFooter(toolGroups, totalWallClockTime, cacheHits, cacheMisses)
 	}
 
 	if hasFailures {
 		return errors.New("operation failed")
 	}
 
-	fmt.Println()
-	fmt.Println("✅ Operation complete")
 	return nil
+}
+
+// shortProjectType trims the redundant "-package"/"-project" suffix from a
+// detected project type for the compact header line (e.g. "golang-package" →
+// "golang").
+func shortProjectType(s string) string {
+	s = strings.TrimSuffix(s, "-package")
+	s = strings.TrimSuffix(s, "-project")
+	return s
 }
 
 // RunSequential runs multiple operations in sequence, reusing shared context
@@ -513,6 +470,32 @@ func RunSequential(
 	selectedToolsFlag string,
 	loadConfigFunc func() (*config.Config, string, error),
 ) error {
+	return runSequential(operations, args, explainMode, fileScoped, selectedToolsFlag, loadConfigFunc, true)
+}
+
+// RunContinuation runs a single operation as a continuation of another command's
+// output (e.g. setup's post-fix). It reuses the banner already shown by the
+// caller instead of printing a second one.
+func RunContinuation(
+	operation config.OperationType,
+	args []string,
+	explainMode string,
+	fileScoped bool,
+	selectedToolsFlag string,
+	loadConfigFunc func() (*config.Config, string, error),
+) error {
+	return runSequential([]config.OperationType{operation}, args, explainMode, fileScoped, selectedToolsFlag, loadConfigFunc, false)
+}
+
+func runSequential(
+	operations []config.OperationType,
+	args []string,
+	explainMode string,
+	fileScoped bool,
+	selectedToolsFlag string,
+	loadConfigFunc func() (*config.Config, string, error),
+	showBanner bool,
+) error {
 	sc, err := initSharedContext(args, explainMode, fileScoped, selectedToolsFlag, loadConfigFunc)
 	if err != nil {
 		return err
@@ -522,6 +505,12 @@ func RunSequential(
 		sc.planner.GetTimings().Print()
 		sc.shutdown()
 	}()
+
+	// Branded banner once at the top (skipped in explain/json so that output
+	// stays clean/machine-readable, and when running as a continuation).
+	if showBanner && sc.explainLevel == "" {
+		ui.Current().Banner(ldflags.PackageName, ldflags.Version)
+	}
 
 	hasFix := slices.Contains(operations, config.OpFix)
 
@@ -643,69 +632,55 @@ func groupResultsByTool(groupResults []tooling.GroupExecutionResult) []toolExecu
 	return groups
 }
 
-// printGroupedResults prints execution results grouped by tool
-func printGroupedResults(toolGroups []toolExecutionGroup) {
-	fmt.Println()
+// printGroupedResults prints per-tool results as bracketed body lines (┃). Each
+// line is compact by default — status, name, total time, run count — with the
+// detailed timings (scope, avg, min/max) appended only when `detailed` is set
+// (DATAMITSU_TIMINGS). Failed tools show a red ✗ and a bordered detail box.
+func printGroupedResults(toolGroups []toolExecutionGroup, nameWidth int, detailed bool) {
+	fmt.Println(clr.Faint("┃"))
+
+	// Slowest tool in this run anchors the duration heatmap.
+	var maxMs int64
+	for _, group := range toolGroups {
+		if group.totalTime > maxMs {
+			maxMs = group.totalTime
+		}
+	}
 
 	for _, group := range toolGroups {
-		avgTime := group.totalTime
-		if group.totalRuns > 0 {
-			avgTime = group.totalTime / int64(group.totalRuns)
+		status := clr.Green("✓")
+		nameDisplay := clr.Bold(group.toolName)
+		if group.failedRuns > 0 {
+			status = clr.Red("✗")
+			nameDisplay = clr.Red(group.toolName)
 		}
 
-		runText := "run"
+		// Align the duration column to nameWidth (the widest tool name across the
+		// whole run, computed once) + a 2-space gap, so every operation block —
+		// fix and lint alike — uses the same columns.
+		pad := max(nameWidth-utf8.RuneCountInString(group.toolName), 0) + 2
+
+		// Reserve a fixed-width slot for the duration so anything after it (the run
+		// count) stays in a stable column instead of floating with the duration
+		// width. Pad only when something follows, to avoid trailing whitespace.
+		durStr := ui.FormatDurationShort(group.totalTime)
+		if group.totalRuns > 1 || group.failedRuns > 0 || detailed {
+			durStr = fmt.Sprintf("%-*s", durationColWidth, durStr)
+		}
+		line := clr.Faint("┃ ") + status + " " + nameDisplay + strings.Repeat(" ", pad) + heatDuration(group.totalTime, maxMs, durStr)
 		if group.totalRuns > 1 {
-			runText = "runs"
+			line += " " + clr.Faint(fmt.Sprintf("×%d", group.totalRuns))
 		}
-
-		status := "✅"
 		if group.failedRuns > 0 {
-			status = "❌"
+			line += "  " + clr.Red(fmt.Sprintf("(%d failed)", group.failedRuns))
 		}
-
-		// Print tool summary line with scope and min/max
-		scopeInfo := ""
-		if group.scope != "" {
-			scopeInfo = " " + clr.Faint("["+string(group.scope)+"]")
+		if detailed {
+			line += "  " + clr.Faint(toolDetail(group))
 		}
-		toolDisplay := clr.Bold(group.toolName)
-		if group.failedRuns > 0 {
-			toolDisplay = clr.Red(group.toolName)
-		}
-		fmt.Printf("%s %s%s (%d %s, %s, avg: %s",
-			status,
-			toolDisplay,
-			scopeInfo,
-			group.totalRuns,
-			runText,
-			formatDuration(group.totalTime),
-			formatDuration(avgTime))
-
-		// Add min/max if there are multiple runs
-		if group.totalRuns > 1 && group.minTime >= 0 && group.maxTime >= 0 {
-			minDirInfo := ""
-			if group.minDir != "" {
-				minDirInfo = fmt.Sprintf(" [%s]", group.minDir)
-			}
-			maxDirInfo := ""
-			if group.maxDir != "" {
-				maxDirInfo = fmt.Sprintf(" [%s]", group.maxDir)
-			}
-			fmt.Printf(", min: %s%s, max: %s%s",
-				formatDuration(group.minTime), minDirInfo,
-				formatDuration(group.maxTime), maxDirInfo)
-		}
-
-		fmt.Printf(")")
-
-		if group.failedRuns > 0 {
-			fmt.Printf(" - %s", clr.Red(fmt.Sprintf("%d failed", group.failedRuns)))
-		}
-		fmt.Println()
+		fmt.Println(line)
 
 		// Show failed runs details
 		if group.failedRuns > 0 {
-			fmt.Println()
 			runNum := 0
 			for _, exec := range group.executions {
 				if !exec.result.Success {
@@ -715,6 +690,46 @@ func printGroupedResults(toolGroups []toolExecutionGroup) {
 			}
 		}
 	}
+}
+
+// heatFloorMs is the duration below which a tool is always shown "cool" (faint):
+// trivial and cached runs never draw attention, only genuinely slow tools warm
+// up. This avoids false alarms on fast runs (e.g. "all 5ms, one 10ms").
+const heatFloorMs = 250
+
+// heatPalette is an xterm-256 ramp from warm (yellow) to hot (red); the slowest
+// tool above the floor is reddest.
+var heatPalette = []int{220, 214, 208, 202, 196}
+
+// heatDuration colors the already-formatted duration text by how slow the tool
+// is relative to the slowest in this run, normalized over the notable range
+// [heatFloorMs, maxMs]. Sub-floor (and trivial) runs stay faint.
+func heatDuration(ms, maxMs int64, text string) string {
+	if ms < heatFloorMs || maxMs <= heatFloorMs {
+		return clr.Faint(text)
+	}
+	ratio := float64(ms-heatFloorMs) / float64(maxMs-heatFloorMs)
+	idx := int(ratio * float64(len(heatPalette)))
+	idx = max(min(idx, len(heatPalette)-1), 0)
+	return clr.Color256(heatPalette[idx])(text)
+}
+
+// toolDetail renders the verbose per-tool timing detail (scope, avg, min/max),
+// shown only in detailed mode.
+func toolDetail(group toolExecutionGroup) string {
+	avg := group.totalTime
+	if group.totalRuns > 0 {
+		avg = group.totalTime / int64(group.totalRuns)
+	}
+	parts := make([]string, 0, 4)
+	if group.scope != "" {
+		parts = append(parts, "["+string(group.scope)+"]")
+	}
+	parts = append(parts, "avg "+formatDuration(avg))
+	if group.totalRuns > 1 && group.minTime >= 0 && group.maxTime >= 0 {
+		parts = append(parts, "min "+formatDuration(group.minTime), "max "+formatDuration(group.maxTime))
+	}
+	return strings.Join(parts, " · ")
 }
 
 // printFailedExecution prints details of a failed execution in a bordered format
@@ -767,63 +782,43 @@ func printFailedExecution(runNum int, exec executionInstance) {
 	fmt.Println()
 }
 
-// printOverallSummary prints the final summary
-func printOverallSummary(toolGroups []toolExecutionGroup, wallClockTime, cpuTime int64) {
-	totalTools := len(toolGroups)
-	successfulTools := 0
-	failedTools := 0
-	totalExecutions := 0
+// durationColWidth reserves a fixed slot for the per-tool duration (covers
+// values like "11.35s"/"120ms"/"1m05s") so the run count after it never floats.
+const durationColWidth = 7
 
+// phaseTop renders the opening bracket rule for an operation.
+func phaseTop(operation string) string {
+	return ui.RuleLine("┏", operation, clr.Bold(operation))
+}
+
+// printOperationFooter renders the closing bracket rule that summarizes the
+// operation (tool/run counts, wall-clock time, failures and cache hit rate).
+func printOperationFooter(toolGroups []toolExecutionGroup, wallClockTime int64, cacheHits, cacheMisses int) {
+	totalTools := len(toolGroups)
+	totalRuns := 0
+	failedTools := 0
 	for _, group := range toolGroups {
-		totalExecutions += group.totalRuns
-		if group.failedRuns == 0 {
-			successfulTools++
-		} else {
+		totalRuns += group.totalRuns
+		if group.failedRuns > 0 {
 			failedTools++
 		}
 	}
 
-	separator := clr.Faint("─────────────────────────────────────────────────────────────")
-	fmt.Println()
-	fmt.Println(separator)
-	fmt.Printf("📊 %s %d tools", clr.Bold("Summary:"), totalTools)
+	dur := ui.FormatDurationShort(wallClockTime)
+	plain := fmt.Sprintf("%d tools · %d runs · done in %s", totalTools, totalRuns, dur)
+	colored := clr.Bold(fmt.Sprintf("%d tools", totalTools)) + fmt.Sprintf(" · %d runs · done in %s", totalRuns, dur)
 	if failedTools > 0 {
-		fmt.Printf(" (%s, %s)", clr.Green(fmt.Sprintf("%d succeeded", successfulTools)), clr.Red(fmt.Sprintf("%d failed", failedTools)))
+		plain += fmt.Sprintf(" · %d failed", failedTools)
+		colored += " · " + clr.Red(fmt.Sprintf("%d failed", failedTools))
 	}
-	fmt.Printf(", %d runs, %s", totalExecutions, formatDuration(wallClockTime))
-	if cpuTime != wallClockTime {
-		fmt.Printf(" (CPU: %s)", formatDuration(cpuTime))
-	}
-	fmt.Println()
-	fmt.Println(separator)
-}
-
-// updateCIProgress prints simple progress for CI environments
-func updateCIProgress(completed, total int, status, toolName string) {
-	progressMu.Lock()
-	defer progressMu.Unlock()
-
-	percent := 0
-	if total > 0 {
-		percent = (completed * 100) / total
+	if cacheHits+cacheMisses > 0 {
+		pct := float64(cacheHits) / float64(cacheHits+cacheMisses) * 100
+		cacheText := fmt.Sprintf(" · cache %.0f%%", pct)
+		plain += cacheText
+		colored += clr.Faint(cacheText)
 	}
 
-	// Print progress every 25% to avoid spam
-	if percent >= lastCIProgressPercent+25 || completed == total {
-		if completed < total {
-			fmt.Printf("  %s %s -- %d/%d (%d%%)\n",
-				status, toolName, completed, total, percent)
-		} else {
-			fmt.Printf("  Progress: %d/%d (%d%%)\n", completed, total, percent)
-		}
-		lastCIProgressPercent = percent
-	}
-
-	// Print completion message
-	if completed == total {
-		fmt.Println("✅ All tasks completed!")
-		fmt.Println()
-	}
+	fmt.Println(ui.RuleLine("┗", plain, colored))
 }
 
 func normalizeFilePaths(files []string, cwdPath string) []string {

@@ -21,8 +21,88 @@ import (
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/httpx"
 	"github.com/datamitsu/datamitsu/internal/pnpmdefaults"
+	"github.com/datamitsu/datamitsu/internal/ui"
 	"github.com/goccy/go-yaml"
 )
+
+// pnpmReporter parses pnpm's --reporter=ndjson stream into live progress for a
+// ui.Spinner and collects human-readable errors. pnpm emits errors as ndjson
+// objects on stdout (level "error" with err.message/hint/code), not on stderr,
+// so the error text must be extracted here rather than read from stderr.
+type pnpmReporter struct {
+	sp *ui.Spinner
+
+	resolved   int
+	downloaded int
+	added      int
+	errs       []string
+}
+
+func newPNPMReporter(sp *ui.Spinner) *pnpmReporter {
+	return &pnpmReporter{sp: sp}
+}
+
+// line consumes one ndjson event. Unknown or malformed lines are ignored so a
+// reporter-format change can never break an install — at worst progress is less
+// detailed.
+func (p *pnpmReporter) line(b []byte) {
+	var ev struct {
+		Name   string `json:"name"`
+		Level  string `json:"level"`
+		Status string `json:"status"`
+		Hint   string `json:"hint"`
+		Code   string `json:"code"`
+		Added  *int   `json:"added"`
+		Err    struct {
+			Message string `json:"message"`
+		} `json:"err"`
+	}
+	if json.Unmarshal(b, &ev) != nil {
+		return
+	}
+
+	if ev.Level == "error" {
+		msg := ev.Err.Message
+		if msg == "" {
+			msg = ev.Code
+		}
+		if ev.Hint != "" {
+			msg = strings.TrimSpace(msg + "\n" + ev.Hint)
+		}
+		if msg != "" {
+			p.errs = append(p.errs, msg)
+		}
+		return
+	}
+
+	switch ev.Name {
+	case "pnpm:progress":
+		switch ev.Status {
+		case "resolved":
+			p.resolved++
+		case "fetched":
+			p.downloaded++
+		}
+	case "pnpm:stats":
+		if ev.Added != nil && *ev.Added > p.added {
+			p.added = *ev.Added
+		}
+	default:
+		return
+	}
+
+	p.sp.SetDetail(fmt.Sprintf("resolved %4d, downloaded %4d, added %4d",
+		p.resolved, p.downloaded, p.added))
+}
+
+// errorOutput returns the best human-readable failure text: pnpm's ndjson error
+// events when present, otherwise the captured stderr.
+func (p *pnpmReporter) errorOutput(stderr string) string {
+	if len(p.errs) > 0 {
+		return strings.Join(p.errs, "\n")
+	}
+	return stderr
+}
 
 // pnpm.go holds the pnpm download + npm-app-install helpers shared by the node
 // runtime (node.go). pnpm is downloaded directly from the npm registry with a
@@ -130,7 +210,12 @@ func (rm *RuntimeManager) downloadPNPMFromRegistryURL(ctx context.Context, regis
 	writer := io.MultiWriter(tmpFile, sha256Hasher, sha512Hasher)
 	limitedBody := io.LimitReader(tarResp.Body, maxPNPMDownloadSize+1)
 
-	written, err := io.Copy(writer, limitedBody)
+	// Render the pnpm tarball download through the shared display, like the node
+	// runtime and managed binaries (a bar in a terminal, throttled lines in CI).
+	tracked := ui.Current().Download("pnpm "+version, tarResp.ContentLength, limitedBody)
+	defer func() { _ = tracked.Close() }()
+
+	written, err := io.Copy(writer, tracked)
 	if err != nil {
 		_ = tmpFile.Close()
 		return fmt.Errorf("failed to download PNPM tarball: %w", err)
@@ -229,7 +314,10 @@ func filesWithWorkspaceYAML(files map[string]string, mergedYAML string) map[stri
 }
 
 func buildPNPMInstallArgs(pnpmCjsPath string, hasLockFile bool) []string {
-	args := []string{pnpmCjsPath, "install"}
+	// --reporter=ndjson emits a machine-readable event stream on stdout that the
+	// installer parses for live progress (and errors) instead of letting pnpm's
+	// human reporter write raw output over the shared progress display.
+	args := []string{pnpmCjsPath, "install", "--reporter=ndjson"}
 	if hasLockFile {
 		args = append(args, "--frozen-lockfile")
 	}

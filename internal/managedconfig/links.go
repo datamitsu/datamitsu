@@ -160,11 +160,13 @@ func CreateDatamitsuLinks(gitRoot string, apps binmanager.MapOfApps, resolver In
 				return nil, fmt.Errorf("link target %q for source %q does not exist: %w", e.relativePath, e.sourceName, err)
 			}
 		}
-		fmt.Println("Would create .datamitsu/ symlinks:")
+		// Return the would-be link names (without touching the filesystem) so the
+		// caller can render them in its own output rather than leaking a raw dump.
+		names := make([]string, 0, len(entries))
 		for _, e := range entries {
-			fmt.Printf("  %s -> %s (from %q)\n", e.linkName, e.relativePath, e.sourceName)
+			names = append(names, e.linkName)
 		}
-		return nil, nil
+		return names, nil
 	}
 
 	datamitsuDir := filepath.Join(gitRoot, ".datamitsu")
@@ -279,7 +281,7 @@ func CreateDatamitsuLinks(gitRoot string, apps binmanager.MapOfApps, resolver In
 // autocomplete in config files.
 func CreateDatamitsuTypeDefinitions(gitRoot string, dryRun bool) error {
 	if dryRun {
-		fmt.Println("Would create .datamitsu/ directory with type definitions only (no links configured)")
+		// No links configured; nothing to report. The caller frames dry-run output.
 		return nil
 	}
 

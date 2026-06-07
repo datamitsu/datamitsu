@@ -97,7 +97,7 @@ func TestConcurrentDownloadSameBinary(t *testing.T) {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			errs[idx] = bm.downloadInternal(context.Background(), "testbin", nil)
+			errs[idx] = bm.downloadInternal(context.Background(), "testbin")
 		}(i)
 	}
 

@@ -506,7 +506,7 @@ func TestNpmVersionMeta(t *testing.T) {
 func TestBuildPNPMInstallArgs(t *testing.T) {
 	t.Run("without lockfile", func(t *testing.T) {
 		args := buildPNPMInstallArgs("/path/to/pnpm.cjs", false)
-		expected := []string{"/path/to/pnpm.cjs", "install"}
+		expected := []string{"/path/to/pnpm.cjs", "install", "--reporter=ndjson"}
 		if len(args) != len(expected) {
 			t.Fatalf("args length = %d, want %d", len(args), len(expected))
 		}
@@ -519,7 +519,7 @@ func TestBuildPNPMInstallArgs(t *testing.T) {
 
 	t.Run("with lockfile includes --frozen-lockfile", func(t *testing.T) {
 		args := buildPNPMInstallArgs("/path/to/pnpm.cjs", true)
-		expected := []string{"/path/to/pnpm.cjs", "install", "--frozen-lockfile"}
+		expected := []string{"/path/to/pnpm.cjs", "install", "--reporter=ndjson", "--frozen-lockfile"}
 		if len(args) != len(expected) {
 			t.Fatalf("args length = %d, want %d", len(args), len(expected))
 		}

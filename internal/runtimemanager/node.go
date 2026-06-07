@@ -10,6 +10,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/ui"
 
 	"go.uber.org/zap"
 )
@@ -236,8 +237,6 @@ func (rm *RuntimeManager) installNodeAppOnce(ctx context.Context, appName string
 	cmd := exec.CommandContext(ctx, nodeBinPath, args...) //nolint:gosec // G204: nodeBinPath comes from the trusted managed runtime store and args are built from validated config
 	cmd.Dir = appEnvPath
 	cmd.Env = cmdEnv
-	cmd.Stdout = os.Stderr
-	cmd.Stderr = os.Stderr
 
 	log.Debug("installing node app",
 		zap.String("app", appName),
@@ -246,13 +245,19 @@ func (rm *RuntimeManager) installNodeAppOnce(ctx context.Context, appName string
 		zap.String("pnpm", pnpmVersion),
 	)
 
-	fmt.Fprintf(os.Stderr, "Installing %s...\n", appName)
-
-	if err := runInstallCmd(ctx, cmd); err != nil {
+	// Stream pnpm's ndjson stdout into a live spinner (resolved/downloaded/added
+	// counters); pnpm reports errors as ndjson too, so they are extracted by the
+	// reporter and surfaced only on failure.
+	sp := ui.Current().Spinner("Installing " + appName)
+	rep := newPNPMReporter(sp)
+	stderr, err := runInstallCmdStreaming(ctx, cmd, rep.line)
+	if err != nil {
+		sp.Fail()
+		ui.Current().Errorln(rep.errorOutput(stderr))
 		return fmt.Errorf("failed to install node app %q: %w", appName, err)
 	}
 
-	fmt.Fprintf(os.Stderr, "Installed %s\n", appName)
+	sp.Done("Installed " + appName)
 
 	cleanupOnError = false
 	return nil

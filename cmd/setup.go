@@ -7,15 +7,20 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
+	clr "github.com/datamitsu/datamitsu/internal/color"
 	"github.com/datamitsu/datamitsu/internal/config"
 	enginetools "github.com/datamitsu/datamitsu/internal/engine/tools"
 	"github.com/datamitsu/datamitsu/internal/install"
+	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"github.com/datamitsu/datamitsu/internal/project"
 	"github.com/datamitsu/datamitsu/internal/runner"
+	"github.com/datamitsu/datamitsu/internal/term"
 	"github.com/datamitsu/datamitsu/internal/tooling"
 	"github.com/datamitsu/datamitsu/internal/traverser"
+	"github.com/datamitsu/datamitsu/internal/ui"
 
 	"github.com/spf13/cobra"
 )
@@ -48,16 +53,15 @@ func init() {
 	rootCmd.AddCommand(setupCmd)
 }
 
-func runSetup(cmd *cobra.Command, args []string) error {
+func runSetup(_ *cobra.Command, _ []string) error {
 	ctx := context.Background()
+	start := time.Now()
 
-	// Get cwd
 	cwdPath, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("failed to get cwd: %w", err)
 	}
 
-	// Get root path
 	rootPath, err := traverser.GetGitRoot(ctx, cwdPath)
 	if err != nil {
 		return fmt.Errorf("failed to get git root: %w", err)
@@ -71,7 +75,6 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Load configuration
 	cfg, layerMap, vm, err := loadConfig()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
@@ -100,7 +103,6 @@ func runSetup(cmd *cobra.Command, args []string) error {
 	for _, loc := range locations {
 		locationMap[loc.Path] = append(locationMap[loc.Path], loc.Type)
 	}
-
 	detectedCount := len(locationMap)
 
 	// Ensure rootPath is always in the map so git-root scoped configs can run
@@ -115,129 +117,235 @@ func runSetup(cmd *cobra.Command, args []string) error {
 	}
 	sort.Strings(sortedPaths)
 
+	// Activate the shared display and frame the whole run as one "setup" bracket.
+	disp := ui.New(term.DetectMode())
+	restore := ui.Activate(disp)
+	closed := false
+	closeSetup := func() {
+		if closed {
+			return
+		}
+		closed = true
+		disp.Close()
+		restore()
+	}
+	defer closeSetup()
+
+	disp.Banner(ldflags.PackageName, ldflags.Version)
+
+	disp.PhaseOpen("setup")
 	if detectedCount == 0 {
-		fmt.Println("⚠️  No project types detected")
+		disp.PhaseBody(clr.Yellow("no project types detected"))
 	} else {
-		fmt.Printf("📦 Found %d project location(s)\n", detectedCount)
+		disp.PhaseBody(fmt.Sprintf("%d %s", detectedCount, pluralWord(detectedCount, "location", "locations")))
+		seen := make(map[string]bool)
+		var unionTypes []string
 		for _, path := range sortedPaths {
-			types := locationMap[path]
-			if len(types) == 0 {
-				continue
+			for _, t := range locationMap[path] {
+				st := shortInitType(t)
+				if !seen[st] {
+					seen[st] = true
+					unionTypes = append(unionTypes, st)
+				}
 			}
-			relPath, _ := filepath.Rel(rootPath, path)
-			if relPath == "" || relPath == "." {
-				relPath = "."
-			}
-			fmt.Printf("   %s: %v\n", relPath, types)
+		}
+		if len(unionTypes) > 0 {
+			disp.PhaseBody(clr.Faint(strings.Join(unionTypes, " · ")))
 		}
 	}
-	fmt.Println()
+	if setupDryRun {
+		disp.PhaseBody("")
+		disp.PhaseBody(clr.Cyan("dry-run") + clr.Faint(" — no changes will be made"))
+	}
 
 	var allResults []install.InstallResult
 	for _, projectPath := range sortedPaths {
 		projectTypes := locationMap[projectPath]
-		// Create installer for this specific location
 		installer := install.NewInstaller(rootPath, projectPath, projectTypes, selectedTools, cfg.Init, vm, layerMap)
-
-		// Install configs
 		results, err := installer.InstallAll(ctx, setupDryRun)
 		if err != nil {
 			return fmt.Errorf("failed to install configs in %s: %w", projectPath, err)
 		}
-
 		allResults = append(allResults, results...)
 	}
-
 	results := deduplicateGitRootResults(allResults)
 
-	// Print results
-	if setupDryRun {
-		fmt.Println("🔍 DRY-RUN MODE - No changes will be made")
-		fmt.Println()
-	}
-
+	// Group results by action for a compact, scannable render. Notable changes
+	// (created/replaced/linked/removed/errors) are always listed; the bulk of
+	// routine patches is collapsed to a count outside dry-run, where the full
+	// list is itself the preview.
+	var created, replaced, linked, patched, removed, failedRows []setupRow
 	var installErrors []error
+	fileCount := 0
 	for _, result := range results {
-		if result.Action == "skipped" {
+		if result.Action == "skipped" || result.Action == "" {
 			continue
 		}
-
 		relPath, _ := filepath.Rel(rootPath, result.FilePath)
-
 		switch result.Action {
 		case "created":
-			fmt.Printf("✨ Created: %s\n", relPath)
+			created = append(created, setupRow{clr.Green("+"), relPath})
+			fileCount++
 		case "patched":
-			fmt.Printf("🔧 Patched: %s\n", relPath)
+			patched = append(patched, setupRow{clr.Faint("~"), relPath})
+			fileCount++
 		case "replaced":
-			fmt.Printf("🔄 Replaced: %s\n", relPath)
+			replaced = append(replaced, setupRow{clr.Yellow("±"), relPath})
+			fileCount++
 		case "linked":
+			text := relPath
 			if result.LinkTarget != "" {
 				linkTargetRel, _ := filepath.Rel(rootPath, filepath.Join(filepath.Dir(result.FilePath), result.LinkTarget))
-				fmt.Printf("🔗 Linked: %s -> %s\n", relPath, linkTargetRel)
-			} else {
-				fmt.Printf("🔗 Linked: %s\n", relPath)
+				text = relPath + clr.Faint(" → "+linkTargetRel)
 			}
-		case "deleted":
-			fmt.Printf("🗑️  Deleted configuration files\n")
+			linked = append(linked, setupRow{clr.Cyan("↳"), text})
+			fileCount++
 		}
-
-		// Only show deleted files if they're different from the created/patched file
-		if len(result.DeletedFiles) > 0 {
-			for _, deleted := range result.DeletedFiles {
-				// Skip showing deletion if it's the same file being created/patched
-				if deleted == result.FilePath {
-					continue
-				}
-				relDeleted, _ := filepath.Rel(rootPath, deleted)
-				fmt.Printf("   ❌ Deleted: %s\n", relDeleted)
+		for _, deleted := range result.DeletedFiles {
+			if deleted == result.FilePath {
+				continue
 			}
+			relDeleted, _ := filepath.Rel(rootPath, deleted)
+			removed = append(removed, setupRow{clr.Red("−"), relDeleted})
 		}
-
 		if result.Error != nil {
-			fmt.Printf("   ⚠️  Error: %v\n", result.Error)
+			failedRows = append(failedRows, setupRow{clr.Red("✗"), relPath + clr.Faint(": "+result.Error.Error())})
 			installErrors = append(installErrors, fmt.Errorf("%s: %w", result.ConfigName, result.Error))
 		}
 	}
 
-	if len(installErrors) > 0 {
-		return fmt.Errorf("setup completed with %d error(s)", len(installErrors))
+	setupSection(disp, "created", created)
+	setupSection(disp, "replaced", replaced)
+	setupSection(disp, "linked", linked)
+	setupSection(disp, "removed", removed)
+	if setupDryRun {
+		setupSection(disp, "patched", patched)
+	} else if len(patched) > 0 {
+		disp.PhaseBody("")
+		disp.PhaseBody(clr.Bold("patched") + clr.Faint(fmt.Sprintf("  %d files", len(patched))))
+	}
+	setupSection(disp, "errors", failedRows)
+
+	// Surface tool-scoped no-ops (a tool may own no config, or its only config
+	// may not apply here). Informational, not an error.
+	for _, t := range toolsWithoutGeneratedConfig(selectedTools, cfg.Init, results) {
+		disp.PhaseBody(clr.Faint("no config generated for " + t))
 	}
 
-	// Under --tools, surface any selected tool for which setup generated nothing
-	// so the user knows it was a no-op. This is not an error: a tool may have no
-	// config at all, or its only config may not apply to this project.
-	reportToolsWithoutGeneratedConfig(selectedTools, cfg.Init, results)
-
 	// Generate the all-disabled opt-in ignore file before the post-setup fix so
-	// that fix already respects the opt-in state (it becomes a no-op when every
-	// tool is disabled).
-	if setupOptInTools {
+	// that fix already respects the opt-in state.
+	if len(installErrors) == 0 && setupOptInTools {
 		if err := writeOptInIgnore(rootPath, cfg.Tools, setupDryRun); err != nil {
 			return err
 		}
 	}
 
-	if !setupDryRun {
-		fmt.Println()
-		fmt.Println("✅ Setup complete")
+	printSetupFooter(disp, setupFooterCounts{
+		files:    fileCount,
+		created:  len(created),
+		replaced: len(replaced),
+		linked:   len(linked),
+		patched:  len(patched),
+		removed:  len(removed),
+		failed:   len(installErrors),
+		dur:      ui.FormatDurationShort(time.Since(start).Milliseconds()),
+		dryRun:   setupDryRun,
+	})
 
-		// Run fix operation after setup unless skipped
-		if !setupSkipFix {
-			fmt.Println()
-			fmt.Println("🔧 Running fix operation...")
-			fmt.Println()
+	if len(installErrors) > 0 {
+		return fmt.Errorf("setup completed with %d error(s)", len(installErrors))
+	}
 
-			if err := runner.Run(config.OpFix, []string{}, "", false, setupSelectedTools, func() (*config.Config, string, error) {
-				cfg, _, _, err := loadConfig()
-				return cfg, "", err
-			}); err != nil {
-				return fmt.Errorf("fix operation failed: %w", err)
-			}
+	// Tear down the setup frame before the post-setup fix renders its own frame
+	// (it reuses the banner already shown above).
+	closeSetup()
+
+	if !setupDryRun && !setupSkipFix {
+		if err := runner.RunContinuation(config.OpFix, []string{}, "", false, setupSelectedTools, func() (*config.Config, string, error) {
+			cfg, _, _, err := loadConfig()
+			return cfg, "", err
+		}); err != nil {
+			return fmt.Errorf("fix operation failed: %w", err)
 		}
 	}
 
 	return nil
+}
+
+// setupRow is one item line in a setup action group.
+type setupRow struct {
+	sym  string // colored glyph
+	text string
+}
+
+// setupSection renders one "┃ <title>" group with "┃   <sym> <text>" item rows.
+// Nothing is printed for an empty group.
+func setupSection(disp *ui.Display, title string, rows []setupRow) {
+	if len(rows) == 0 {
+		return
+	}
+	disp.PhaseBody("")
+	disp.PhaseBody(clr.Bold(title))
+	for _, r := range rows {
+		disp.PhaseBody("  " + r.sym + " " + r.text)
+	}
+}
+
+// pluralWord picks the singular or plural form based on n.
+func pluralWord(n int, singular, plural string) string {
+	if n == 1 {
+		return singular
+	}
+	return plural
+}
+
+// setupFooterCounts carries the tallies shown in the closing bracket rule.
+type setupFooterCounts struct {
+	files, created, replaced, linked, patched, removed, failed int
+	dur                                                        string
+	dryRun                                                     bool
+}
+
+// printSetupFooter renders the closing "┗━ … ━" rule summarizing the run.
+func printSetupFooter(disp *ui.Display, c setupFooterCounts) {
+	add := func(parts []string, n int, label string) []string {
+		if n <= 0 {
+			return parts
+		}
+		return append(parts, fmt.Sprintf("%d %s", n, label))
+	}
+
+	var parts []string
+	parts = add(parts, c.files, "files")
+	parts = add(parts, c.created, "created")
+	parts = add(parts, c.replaced, "replaced")
+	parts = add(parts, c.linked, "linked")
+	parts = add(parts, c.patched, "patched")
+	parts = add(parts, c.removed, "removed")
+	parts = append(parts, c.dur)
+	body := strings.Join(parts, " · ")
+
+	prefix := "ready"
+	switch {
+	case c.failed > 0:
+		prefix = "failed"
+	case c.dryRun:
+		prefix = "dry-run"
+	}
+
+	plain := prefix + " · " + body
+	coloredPrefix := clr.Bold(prefix)
+	if c.failed > 0 {
+		coloredPrefix = clr.Bold(clr.Red(prefix))
+	}
+	colored := coloredPrefix + clr.Faint(" · "+body)
+	if c.failed > 0 {
+		fp := fmt.Sprintf("%d failed", c.failed)
+		plain += " · " + fp
+		colored += clr.Faint(" · ") + clr.Red(fp)
+	}
+
+	disp.PhaseClose(plain, colored)
 }
 
 // parseSelectedTools splits a comma-separated --tools value into a deduplicated,
@@ -315,16 +423,6 @@ func toolsWithoutGeneratedConfig(selected []string, configs config.MapOfConfigIn
 	}
 	sort.Strings(none)
 	return none
-}
-
-// reportToolsWithoutGeneratedConfig prints an info line for each selected tool
-// that setup generated no config for. This keeps tool-scoped setup non-fatal
-// while still surfacing the no-op (a tool may own no config, or its only config
-// may not apply to this project).
-func reportToolsWithoutGeneratedConfig(selected []string, configs config.MapOfConfigInit, results []install.InstallResult) {
-	for _, t := range toolsWithoutGeneratedConfig(selected, configs, results) {
-		fmt.Printf("ℹ️  No config files were generated for tool %q\n", t)
-	}
 }
 
 // deduplicateGitRootResults removes duplicate results for git-root scoped configs.
@@ -432,21 +530,21 @@ func ensureNoExistingIgnore(rootPath string) error {
 func writeOptInIgnore(rootPath string, tools config.MapOfTools, dryRun bool) error {
 	content, count := buildOptInIgnoreContent(tools)
 	if count == 0 {
-		fmt.Println("ℹ️  No configured tools to disable; skipping .datamitsuignore generation")
+		ui.Current().PhaseBody(clr.Faint("no configured tools to disable; skipping .datamitsuignore"))
 		return nil
 	}
 
 	path := filepath.Join(rootPath, optInIgnoreFilename)
 
 	if dryRun {
-		fmt.Printf("🔍 Would create: %s (%d tool(s) disabled)\n", optInIgnoreFilename, count)
+		ui.Current().PhaseBody(clr.Green("+") + " " + optInIgnoreFilename + clr.Faint(fmt.Sprintf(" (would disable %d tools)", count)))
 		return nil
 	}
 
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		return fmt.Errorf("failed to write %s: %w", path, err)
 	}
-	fmt.Printf("✨ Created: %s (%d tool(s) disabled)\n", optInIgnoreFilename, count)
+	ui.Current().PhaseBody(clr.Green("+") + " " + optInIgnoreFilename + clr.Faint(fmt.Sprintf(" (%d tools disabled)", count)))
 	return nil
 }
 

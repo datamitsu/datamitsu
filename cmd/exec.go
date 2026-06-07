@@ -10,6 +10,8 @@ import (
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	clr "github.com/datamitsu/datamitsu/internal/color"
 	"github.com/datamitsu/datamitsu/internal/runtimemanager"
+	"github.com/datamitsu/datamitsu/internal/term"
+	"github.com/datamitsu/datamitsu/internal/ui"
 
 	"github.com/spf13/cobra"
 )
@@ -124,5 +126,30 @@ func execApp(ctx context.Context, appName string, args []string) error {
 	rm := runtimemanager.New(c.Runtimes)
 	b := binmanager.New(c.Apps, c.Bundles, rm)
 
-	return b.Exec(ctx, appName, args)
+	// Render install/download progress on a scoped display, then tear it down
+	// BEFORE handing the terminal to the executed tool. The tool may be
+	// long-running or interactive (a dev server, watch mode), so it must own a
+	// clean terminal with no progress container ticking underneath it.
+	d := ui.New(term.DetectMode())
+	restore := ui.Activate(d)
+	cmd, err := b.GetExecCmd(ctx, appName, args)
+	d.Close()
+	restore()
+	if err != nil {
+		return fmt.Errorf("failed to prepare %s: %w", appName, err)
+	}
+
+	// Shell apps download/install nothing, so there is no progress to show; run
+	// them through the binmanager's shell-aware path.
+	if cmd == nil {
+		return b.Exec(ctx, appName, args)
+	}
+
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to execute %s: %w", appName, err)
+	}
+	return nil
 }

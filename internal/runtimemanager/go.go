@@ -1,6 +1,7 @@
 package runtimemanager
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/ui"
 
 	"go.uber.org/zap"
 )
@@ -242,11 +244,14 @@ func (rm *RuntimeManager) installGoAppOnce(ctx context.Context, appName string, 
 
 	args := buildGoBuildArgs(appConfig.PackageName, binPath)
 
+	// Capture the build's combined output so it never corrupts an active
+	// progress bar; surface it only on failure.
+	var out bytes.Buffer
 	cmd := exec.CommandContext(ctx, goPath, args...) //nolint:gosec // G204: goPath comes from the trusted managed runtime store and args are built from validated config
 	cmd.Dir = appEnvPath
 	cmd.Env = buildEnvWithOverrides(os.Environ(), envVars)
-	cmd.Stdout = os.Stderr
-	cmd.Stderr = os.Stderr
+	cmd.Stdout = &out
+	cmd.Stderr = &out
 
 	log.Debug("building Go app",
 		zap.String("app", appName),
@@ -254,13 +259,17 @@ func (rm *RuntimeManager) installGoAppOnce(ctx context.Context, appName string, 
 		zap.String("go_path", goPath),
 	)
 
-	fmt.Fprintf(os.Stderr, "Installing %s...\n", appName)
+	// go build has no machine-readable progress stream, so show an animated
+	// spinner for activity; its captured output is surfaced only on failure.
+	sp := ui.Current().Spinner("Installing " + appName)
 
 	if err := runInstallCmd(ctx, cmd); err != nil {
+		sp.Fail()
+		ui.Current().Errorln(out.String())
 		return fmt.Errorf("failed to build Go app %q: %w", appName, err)
 	}
 
-	fmt.Fprintf(os.Stderr, "Installed %s\n", appName)
+	sp.Done("Installed " + appName)
 
 	cleanupOnError = false
 	return nil
