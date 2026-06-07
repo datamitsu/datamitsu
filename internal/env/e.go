@@ -32,8 +32,8 @@ var (
 
 	logLevel = envVar{
 		Name:         strings.ToUpper(ldflags.PackageName) + "_LOG_LEVEL",
-		DefaultValue: "info",
-		Description:  "Log level (debug, info, warn, error)",
+		DefaultValue: "warn",
+		Description:  "Log level (debug, info, warn, error); default warn, use --verbose for debug",
 	}
 
 	maxCmdLength = envVar{

@@ -8,10 +8,12 @@ import (
 
 	clr "github.com/datamitsu/datamitsu/internal/color"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
+	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"github.com/datamitsu/datamitsu/internal/sponsor"
 
 	"github.com/spf13/cobra"
+	"go.uber.org/zap/zapcore"
 )
 
 // commandContext returns the command's context, falling back to a background
@@ -37,6 +39,8 @@ var (
 	NoAutoConfig bool
 	// ConfigPaths allows specifying multiple configuration files to be merged
 	ConfigPaths []string
+	// verbose raises the log level to debug for the whole run
+	verbose bool
 )
 
 var rootCmd = &cobra.Command{
@@ -49,12 +53,18 @@ var rootCmd = &cobra.Command{
 
 func init() {
 	cobra.OnInitialize(func() {
+		// Applied after flag parsing so --verbose overrides the env/default level.
+		if verbose {
+			logger.SetLevel(zapcore.DebugLevel)
+		}
 		if err := runtimeconfig.Init(); err != nil {
 			fmt.Fprintf(os.Stderr, "%s %s\n", clr.Red("error:"), err)
 			os.Exit(1)
 		}
 	})
 
+	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false,
+		"Enable debug-level logging (default level is warn)")
 	rootCmd.PersistentFlags().StringVar(&BinaryCommandOverride, "binary-command", "",
 		"Override the binary command (for npm package wrappers, etc). Can also be set via DATAMITSU_BINARY_COMMAND env var")
 	rootCmd.PersistentFlags().StringSliceVar(&BeforeConfigPaths, "before-config", []string{},

@@ -176,14 +176,14 @@ func TestGetLogLevel(t *testing.T) {
 			want:     zapcore.ErrorLevel,
 		},
 		{
-			name:     "invalid level defaults to info",
+			name:     "invalid level defaults to warn",
 			envValue: "invalid",
-			want:     zapcore.InfoLevel,
+			want:     zapcore.WarnLevel,
 		},
 		{
-			name:     "empty env defaults to info",
+			name:     "empty env defaults to warn",
 			envValue: "",
-			want:     zapcore.InfoLevel,
+			want:     zapcore.WarnLevel,
 		},
 	}
 
