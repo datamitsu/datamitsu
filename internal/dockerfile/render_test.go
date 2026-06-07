@@ -66,15 +66,24 @@ func TestRender_ConfigSplitLayering(t *testing.T) {
 	out := Render(samplePlan(), pinnedOpts())
 
 	// The base stage must be config-free: nothing FROM it should be invalidated
-	// by a config edit. The config enters only config-split and final.
+	// by a config edit. The config enters only config-split and final. It also
+	// must not `git init` — slice stages use --no-auto-config, so a git root is
+	// never needed (and COPY --link would make the workdir root-owned, which git
+	// rejects).
 	baseBlock := out[strings.Index(out, "AS dm-base"):strings.Index(out, "AS config-split")]
 	if strings.Contains(baseBlock, "datamitsu.config.js") {
 		t.Errorf("base stage must not COPY the config (it would bust every stage on edit):\n%s", baseBlock)
 	}
+	if strings.Contains(baseBlock, "git init") {
+		t.Errorf("base stage must not git init (COPY --link makes the workdir root-owned, which git rejects):\n%s", baseBlock)
+	}
 
-	// The config-split stage reads the full config and emits per-stage slices.
+	// The config-split stage reads the full config (which may read facts), so it
+	// gets its own git init; its owner-correct workdir keeps git happy.
 	mustContain(t, out, "FROM dm-base AS config-split")
 	mustContain(t, out, "COPY --chown=datamitsu:datamitsu datamitsu.config.js ./")
+	splitBlock := out[strings.Index(out, "AS config-split"):strings.Index(out, "AS rt-")]
+	mustContain(t, splitBlock, "RUN git init -q .")
 	mustContain(t, out, "RUN datamitsu --config /opt/datamitsu-config/datamitsu.config.js devtools split-config --output /slices")
 
 	// Every builder stage COPYs only its own slice from config-split, landing it

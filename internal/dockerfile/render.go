@@ -101,10 +101,12 @@ func writeBaseStage(b *strings.Builder, opts RenderOptions) {
 		opts.StoreRoot, opts.WorkDir, sliceDir, opts.User, opts.User, opts.StoreRoot, opts.WorkDir, sliceDir)
 	fmt.Fprintf(b, "USER %s\n", opts.User)
 	fmt.Fprintf(b, "ENV DATAMITSU_CACHE_DIR=%s\n", opts.StoreRoot)
-	fmt.Fprintf(b, "WORKDIR %s\n", opts.WorkDir)
-	// A git root is required for config discovery during install (matches the
-	// hand-written wrapper's `git init` trick).
-	b.WriteString("RUN git init -q .\n\n")
+	fmt.Fprintf(b, "WORKDIR %s\n\n", opts.WorkDir)
+	// Deliberately NO `git init` here. App/runtime stages COPY --link their slice,
+	// which recreates the workdir root-owned; a `.git` from this base would then be
+	// rejected by git as dubious ownership and hard-fail engine creation. With no
+	// `.git` at all, datamitsu proceeds without a git root (the slices are static,
+	// so facts are irrelevant). The config-split stage gets its own git init.
 }
 
 // writeConfigSplitStage emits the stage that reads the full config once and
@@ -115,10 +117,16 @@ func writeConfigSplitStage(b *strings.Builder, opts RenderOptions) {
 	b.WriteString("# --- Config split: one minimal config slice per stage (build-cache isolation) ---\n")
 	b.WriteString("FROM dm-base AS config-split\n")
 	fmt.Fprintf(b, "COPY --chown=%s:%s %s ./\n", opts.User, opts.User, opts.ConfigSource)
+	// This stage loads the FULL config, which may read facts() (e.g. isInGitRepo),
+	// so it gets a git root. Its workdir is owner-correct (COPY --chown, no
+	// COPY --link), so git accepts it — unlike the COPY --link app stages.
+	b.WriteString("RUN git init -q .\n")
 	fmt.Fprintf(b, "RUN datamitsu --config %s devtools split-config --output %s\n\n", opts.configImagePath(), sliceDir)
 }
 
-// installCmd is the RUN command a builder stage uses to install one target.
+// installCmd is the RUN command a builder stage uses to install one target. The
+// stage has no `.git` (the base omits git init), so datamitsu proceeds without a
+// git root and the COPY --link root-owned workdir never trips git's ownership check.
 func (o RenderOptions) installCmd(args ...string) string {
 	parts := append([]string{"datamitsu", "--config", o.configImagePath(), "install"}, args...)
 	return "RUN " + strings.Join(parts, " ")

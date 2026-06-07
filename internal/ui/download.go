@@ -41,10 +41,18 @@ func (d *Display) Download(name string, total int64, r io.Reader) io.ReadCloser 
 			mpb.BarRemoveOnComplete(),
 			mpb.PrependDecorators(
 				decor.Name(name, decor.WC{W: 24, C: decor.DSyncWidthR}),
-				decor.CountersKibiByte("% .2f / % .2f"),
+				// Reserve a fixed, sync-aligned column for the byte counters.
+				// Without it the bar shifts horizontally whenever the digit count
+				// changes (e.g. 9 → 43 → 103 MiB) or when parallel bars show
+				// values of differing width — producing a jittery staircase.
+				// W fits "1023.99 MiB / 1023.99 MiB"; DSyncWidthR keeps every bar
+				// aligned to the same column.
+				decor.CountersKibiByte("% .2f / % .2f", decor.WC{W: 25, C: decor.DSyncWidthR}),
 			),
 			mpb.AppendDecorators(
-				decor.NewPercentage(" %.0f ", decor.WCSyncSpace),
+				// %3.0f keeps the percentage 3-wide ("  8" / " 83" / "100") so the
+				// trailing speed never shifts as it crosses 10% and 100%.
+				decor.NewPercentage(" %3.0f ", decor.WCSyncSpace),
 				decor.EwmaSpeed(decor.SizeB1024(0), " % .2f", 60),
 			),
 		)
