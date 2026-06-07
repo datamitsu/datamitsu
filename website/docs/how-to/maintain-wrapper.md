@@ -257,6 +257,69 @@ datamitsu devtools pull-runtimes runtimes.json --update --runtime go
 
 The Go SDK archives and their per-file SHA-256 come from go.dev (`https://go.dev/dl/?mode=json`): HTTPS plus published SHA-256, no GPG — the same trust posture as the musl Node path. The pull preserves (or sets) `go.goVersion` in the runtime entry.
 
+## Generating a Docker image: `devtools dockerfile`
+
+If you publish a container image of your wrapper with every tool pre-installed, `devtools dockerfile` generates an optimized multi-stage Dockerfile from your config's tool list — so you never hand-write or hand-tune it.
+
+```bash
+datamitsu devtools dockerfile -o docker/Dockerfile
+```
+
+**What it generates.** One build stage per binary app, one per managed runtime, and one per runtime-managed app (each inheriting its runtime stage). The final stage assembles the populated datamitsu store with `COPY --link`, one layer per app. Because each app is its own layer, bumping a single app re-pulls only that layer instead of the whole image.
+
+**Base image and digest pinning.** The base image is `ghcr.io/datamitsu/datamitsu` at the version of the datamitsu binary you run the command with — _not_ your `package.json`. That tag is resolved to a SHA-256 digest and pinned as `FROM …@sha256:…` so builds are reproducible.
+
+Pinning is best-effort and never fails the command. If the registry is unreachable, you pass `--offline`, or you build against a non-release (`dev`/unstable) datamitsu, the `FROM` line is left unpinned and a warning is written both into the generated file and to stderr:
+
+```bash
+datamitsu devtools dockerfile -o docker/Dockerfile --offline
+```
+
+:::note
+The generated file is **fully overwritten** on every run — there are no managed regions. It is a generated artifact you own: hand-edit it freely, but re-running the command discards those edits. Commit the generated file and protect it with the drift check below.
+:::
+
+**Build-time verification (on by default).** Each app stage runs the app's version check right after installing it, so an app that doesn't actually run fails the Docker build instead of shipping a broken image. This is the safe default; pass `--no-verify` to turn it off (for example, to speed up emulated cross-arch builds):
+
+```bash
+datamitsu devtools dockerfile -o docker/Dockerfile --no-verify
+```
+
+**Alpine variant.** Pass `--alpine` to target the musl base image (`…:<version>-alpine`):
+
+```bash
+datamitsu devtools dockerfile -o docker/Dockerfile.alpine --alpine
+```
+
+**OCI labels.** Supply your image's labels with repeatable `--label` flags. Keep them in the generate invocation (e.g. a `Taskfile` task) so they survive regeneration:
+
+```bash
+datamitsu devtools dockerfile -o docker/Dockerfile \
+  --label org.opencontainers.image.title=my-config \
+  --label org.opencontainers.image.source=https://github.com/me/my-config
+```
+
+**Pulling from a mirror.** To resolve the base-image digest from a registry other than `ghcr.io` (for example a pull-through cache), set `DATAMITSU_OCI_REGISTRY`:
+
+```bash
+DATAMITSU_OCI_REGISTRY=mirror.internal datamitsu devtools dockerfile -o docker/Dockerfile
+```
+
+### Keeping the generated Dockerfile fresh in CI
+
+Because the output is fully generated, add a drift check that fails when the committed Dockerfile is stale. Run the generator with `--offline` so a re-pushed upstream tag (a moving digest) cannot cause false failures — the check then compares structure and version, not the live digest:
+
+```yaml
+- name: Check Dockerfiles are up to date
+  run: |
+    datamitsu devtools dockerfile -o docker/Dockerfile --offline
+    datamitsu devtools dockerfile -o docker/Dockerfile.alpine --alpine --offline
+    git diff --exit-code -- docker/Dockerfile docker/Dockerfile.alpine \
+      || { echo "Dockerfiles are stale; run the generator and commit."; exit 1; }
+```
+
+In your publish workflow, generate with pinning enabled (drop `--offline`) so the pushed image's `FROM` is digest-pinned.
+
 ## Testing After Updates
 
 ### Verify cross-platform integrity

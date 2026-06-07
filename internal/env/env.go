@@ -191,3 +191,12 @@ func IsCI() bool {
 func GetBinaryCommandOverride() string {
 	return os.Getenv(binaryCommandOverride.Name)
 }
+
+// GetOCIRegistry returns the OCI registry host used to resolve base image
+// digests for generated Dockerfiles. Defaults to "ghcr.io" when unset.
+func GetOCIRegistry() string {
+	if value := os.Getenv(ociRegistry.Name); value != "" {
+		return value
+	}
+	return ociRegistry.DefaultValue
+}

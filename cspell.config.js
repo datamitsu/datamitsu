@@ -241,5 +241,10 @@ export default defineConfig((config) => ({
     "ztool",
     "atool",
     "perr",
+    "Dockerfiles",
+    "Pinnable",
+    "noequals",
+    "ocidigest",
+    "localfmt",
   ],
 }));

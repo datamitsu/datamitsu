@@ -25,6 +25,7 @@ func TestEffectiveJSONRoundTrip(t *testing.T) {
 		MaxErrorCmdDisplay:       120,
 		MaxParallelWorkers:       12,
 		MinimumReleaseAgeMinutes: 10080,
+		OCIRegistry:              "ghcr.io",
 		Timings:                  false,
 	}
 
@@ -47,6 +48,7 @@ func TestEffectiveJSONRoundTrip(t *testing.T) {
 		"maxErrorCmdDisplay",
 		"maxParallelWorkers",
 		"minimumReleaseAgeMinutes",
+		"ociRegistry",
 		"timings",
 	}
 	for _, k := range requiredKeys {
@@ -71,6 +73,9 @@ func TestComputeDefaults(t *testing.T) {
 	}
 	if eff.InstallTimeoutSeconds != InstallTimeoutSeconds {
 		t.Errorf("InstallTimeoutSeconds = %d, want %d", eff.InstallTimeoutSeconds, InstallTimeoutSeconds)
+	}
+	if eff.OCIRegistry != "ghcr.io" {
+		t.Errorf("OCIRegistry = %q, want \"ghcr.io\"", eff.OCIRegistry)
 	}
 }
 

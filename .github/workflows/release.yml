@@ -32,6 +32,12 @@ jobs:
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
       # 2. Build Binaries (GoReleaser)
       - env:
+          # Canonical base image ref baked into the binary for `devtools dockerfile`.
+          # Stable and unstable images live in different repos/tags, so the version
+          # string alone cannot identify them. For stable, the tag is left empty so
+          # GoReleaser falls back to {{ .Version }}.
+          DATAMITSU_IMAGE_REPO: ${{ needs.determine-release-type.outputs.is_unstable == 'true' && 'datamitsu/datamitsu-unstable' || 'datamitsu/datamitsu' }}
+          DATAMITSU_IMAGE_TAG: ${{ needs.determine-release-type.outputs.is_unstable == 'true' && needs.generate-unstable-version.outputs.tag_name || '' }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GORELEASER_CURRENT_TAG: ${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}

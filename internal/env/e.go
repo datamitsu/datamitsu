@@ -89,4 +89,10 @@ var (
 		DefaultValue: "10080",
 		Description:  "Minimum release age in minutes for supply-chain filtering (0=disabled)",
 	}
+
+	ociRegistry = envVar{
+		Name:         strings.ToUpper(ldflags.PackageName) + "_OCI_REGISTRY",
+		DefaultValue: "ghcr.io",
+		Description:  "OCI registry host used to resolve the base image digest for generated Dockerfiles",
+	}
 )
