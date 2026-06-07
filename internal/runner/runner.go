@@ -629,7 +629,7 @@ func printGroupedResults(toolGroups []toolExecutionGroup, nameWidth int, detaile
 		// Reserve a fixed-width slot for the duration so anything after it (the run
 		// count) stays in a stable column instead of floating with the duration
 		// width. Pad only when something follows, to avoid trailing whitespace.
-		durStr := formatDurationShort(group.totalTime)
+		durStr := ui.FormatDurationShort(group.totalTime)
 		if group.totalRuns > 1 || group.failedRuns > 0 || detailed {
 			durStr = fmt.Sprintf("%-*s", durationColWidth, durStr)
 		}
@@ -726,26 +726,13 @@ func printFailedExecution(runNum int, exec executionInstance) {
 	fmt.Println()
 }
 
-// phaseRuleWidth is the fixed width of the ┏/┗ bracket rules that frame each
-// operation. Fixed (not terminal-derived) to avoid an extra dependency.
-const phaseRuleWidth = 60
-
 // durationColWidth reserves a fixed slot for the per-tool duration (covers
 // values like "11.35s"/"120ms"/"1m05s") so the run count after it never floats.
 const durationColWidth = 7
 
-// ruleLine builds a bracket rule "<corner>━ <title> ━━━…" padded to
-// phaseRuleWidth. plainTitle drives the width (color codes are zero-width but
-// would corrupt a byte count); coloredTitle is what gets rendered.
-func ruleLine(corner, plainTitle, coloredTitle string) string {
-	consumed := utf8.RuneCountInString(corner + "━ " + plainTitle + "  ")
-	fill := max(phaseRuleWidth-consumed, 3)
-	return clr.Faint(corner+"━ ") + coloredTitle + clr.Faint(" "+strings.Repeat("━", fill))
-}
-
 // phaseTop renders the opening bracket rule for an operation.
 func phaseTop(operation string) string {
-	return ruleLine("┏", operation, clr.Bold(operation))
+	return ui.RuleLine("┏", operation, clr.Bold(operation))
 }
 
 // printOperationFooter renders the closing bracket rule that summarizes the
@@ -761,7 +748,7 @@ func printOperationFooter(toolGroups []toolExecutionGroup, wallClockTime int64, 
 		}
 	}
 
-	dur := formatDurationShort(wallClockTime)
+	dur := ui.FormatDurationShort(wallClockTime)
 	plain := fmt.Sprintf("%d tools · %d runs · done in %s", totalTools, totalRuns, dur)
 	colored := clr.Bold(fmt.Sprintf("%d tools", totalTools)) + fmt.Sprintf(" · %d runs · done in %s", totalRuns, dur)
 	if failedTools > 0 {
@@ -775,20 +762,7 @@ func printOperationFooter(toolGroups []toolExecutionGroup, wallClockTime int64, 
 		colored += clr.Faint(cacheText)
 	}
 
-	fmt.Println(ruleLine("┗", plain, colored))
-}
-
-// formatDurationShort is a compact duration for result/footer lines (no ms tail).
-func formatDurationShort(ms int64) string {
-	if ms < 1000 {
-		return fmt.Sprintf("%dms", ms)
-	}
-	seconds := float64(ms) / 1000.0
-	if seconds < 60 {
-		return fmt.Sprintf("%.2fs", seconds)
-	}
-	minutes := int(seconds) / 60
-	return fmt.Sprintf("%dm%02ds", minutes, int(seconds)%60)
+	fmt.Println(ui.RuleLine("┗", plain, colored))
 }
 
 func normalizeFilePaths(files []string, cwdPath string) []string {

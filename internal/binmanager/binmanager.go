@@ -3,6 +3,7 @@
 package binmanager
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -815,6 +816,33 @@ func (bm *BinManager) Exec(ctx context.Context, appName string, args []string) e
 	}
 
 	return nil
+}
+
+// ExecCaptured runs a managed app like Exec but captures combined stdout+stderr
+// into the returned string instead of streaming to the terminal. Callers use it
+// to keep clean output on success and surface the captured text only on failure.
+func (bm *BinManager) ExecCaptured(ctx context.Context, appName string, args []string) (string, error) {
+	cmdInfo, err := bm.GetCommandInfo(ctx, appName)
+	if err != nil {
+		return "", fmt.Errorf("failed to get command info for %s: %w", appName, err)
+	}
+
+	allArgs := make([]string, 0, len(cmdInfo.Args)+len(args))
+	allArgs = append(allArgs, cmdInfo.Args...)
+	allArgs = append(allArgs, args...)
+
+	cmd := exec.CommandContext(ctx, cmdInfo.Command, allArgs...) //nolint:gosec // G204: command path comes from the trusted managed store and args from validated config
+	cmd.Env = mergeExecEnv(os.Environ(), cmdInfo.Env)
+
+	var buf bytes.Buffer
+	cmd.Stdout = &buf
+	cmd.Stderr = &buf
+
+	if err := cmd.Run(); err != nil {
+		return buf.String(), fmt.Errorf("failed to execute %s: %w", appName, err)
+	}
+
+	return buf.String(), nil
 }
 
 func (bm *BinManager) getBinaryInfo(name string) (*target.ResolvedTarget, BinaryOsArchInfo, error) {

@@ -11,6 +11,8 @@ import (
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/managedconfig"
+	"github.com/datamitsu/datamitsu/internal/term"
+	"github.com/datamitsu/datamitsu/internal/ui"
 )
 
 func TestCheckInitGitRoot(t *testing.T) {
@@ -181,8 +183,8 @@ func TestSetupConfigLinks_NoLinksSkipped(t *testing.T) {
 		},
 	}
 
-	// setupConfigLinks should return nil immediately when no apps have links
-	err := setupConfigLinks(t.TempDir(), cfg, nil, false)
+	// reportConfigLinks should return nil immediately when no apps have links
+	_, err := reportConfigLinks(ui.New(term.Plain), t.TempDir(), cfg, nil, false)
 	if err != nil {
 		t.Fatalf("expected nil error for apps without links, got: %v", err)
 	}
@@ -263,9 +265,9 @@ func TestInstallBundles_InInitFlow(t *testing.T) {
 	bm := binmanager.New(binmanager.MapOfApps{}, bundles, nil)
 	ctx := context.Background()
 
-	err := installBundles(ctx, bm, false)
+	_, _, err := reportBundles(ctx, ui.New(term.Plain), bm, false)
 	if err != nil {
-		t.Fatalf("installBundles failed: %v", err)
+		t.Fatalf("reportBundles failed: %v", err)
 	}
 
 	root, err := bm.GetBundleRoot("test-bundle")
@@ -303,9 +305,9 @@ func TestInstallBundles_SkipDownloadSkipsExternal(t *testing.T) {
 	bm := binmanager.New(binmanager.MapOfApps{}, bundles, nil)
 	ctx := context.Background()
 
-	err := installBundles(ctx, bm, true)
+	_, _, err := reportBundles(ctx, ui.New(term.Plain), bm, true)
 	if err != nil {
-		t.Fatalf("installBundles failed: %v", err)
+		t.Fatalf("reportBundles failed: %v", err)
 	}
 
 	// Inline bundle should be installed
