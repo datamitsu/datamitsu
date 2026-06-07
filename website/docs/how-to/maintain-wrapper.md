@@ -265,7 +265,9 @@ If you publish a container image of your wrapper with every tool pre-installed, 
 datamitsu devtools dockerfile -o docker/Dockerfile
 ```
 
-**What it generates.** One build stage per binary app, one per managed runtime, and one per runtime-managed app (each inheriting its runtime stage). The final stage assembles the populated datamitsu store with `COPY --link`, one layer per app. Because each app is its own layer, bumping a single app re-pulls only that layer instead of the whole image.
+**What it generates.** A config-free shared base, then a `config-split` stage, then one build stage per binary app, per managed runtime, and per runtime-managed app (each inheriting its runtime stage). The final stage assembles the populated datamitsu store with `COPY --link`, one layer per app, and carries the full config for the entrypoint.
+
+**Two layers of cache isolation.** Each app is its own `COPY --link` layer, so bumping a single app re-pulls only that layer instead of the whole image (pull-time, for your users). The generator also isolates the **build**: the base never carries the config, and the `config-split` stage slices the config into one minimal per-stage file (via [`devtools split-config`](../reference/cli-commands.md#devtools-split-config)) that each stage loads on its own. So editing one app — or regenerating/reformatting the whole config — re-runs only the cheap split plus the stages whose slice actually changed, instead of reinstalling every tool from scratch. Changing a runtime rebuilds that runtime and every app under it; changing the base datamitsu image rebuilds everything.
 
 **Base image and digest pinning.** The base image is `ghcr.io/datamitsu/datamitsu` at the version of the datamitsu binary you run the command with — _not_ your `package.json`. That tag is resolved to a SHA-256 digest and pinned as `FROM …@sha256:…` so builds are reproducible.
 

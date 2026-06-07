@@ -62,6 +62,35 @@ func TestRender_PinnedStructure(t *testing.T) {
 	mustContain(t, out, `CMD ["--help"]`)
 }
 
+func TestRender_ConfigSplitLayering(t *testing.T) {
+	out := Render(samplePlan(), pinnedOpts())
+
+	// The base stage must be config-free: nothing FROM it should be invalidated
+	// by a config edit. The config enters only config-split and final.
+	baseBlock := out[strings.Index(out, "AS dm-base"):strings.Index(out, "AS config-split")]
+	if strings.Contains(baseBlock, "datamitsu.config.js") {
+		t.Errorf("base stage must not COPY the config (it would bust every stage on edit):\n%s", baseBlock)
+	}
+
+	// The config-split stage reads the full config and emits per-stage slices.
+	mustContain(t, out, "FROM dm-base AS config-split")
+	mustContain(t, out, "COPY --chown=datamitsu:datamitsu datamitsu.config.js ./")
+	mustContain(t, out, "RUN datamitsu --config /opt/datamitsu-config/datamitsu.config.js devtools split-config --output /slices")
+
+	// Every builder stage COPYs only its own slice from config-split, landing it
+	// at the path install reads.
+	mustContain(t, out, "COPY --link --from=config-split /slices/rt-node.js /opt/datamitsu-config/datamitsu.config.js")
+	mustContain(t, out, "COPY --link --from=config-split /slices/app-prettier.js /opt/datamitsu-config/datamitsu.config.js")
+	mustContain(t, out, "COPY --link --from=config-split /slices/app-shellcheck.js /opt/datamitsu-config/datamitsu.config.js")
+
+	// The final image carries the full config for the entrypoint.
+	finalIdx := strings.Index(out, "AS final")
+	if finalIdx < 0 {
+		t.Fatal("no final stage in output")
+	}
+	mustContain(t, out[finalIdx:], "COPY --chown=datamitsu:datamitsu datamitsu.config.js ./")
+}
+
 func TestRender_UnpinnedEmitsWarning(t *testing.T) {
 	opts := DefaultRenderOptions()
 	opts.BaseImage = "ghcr.io/datamitsu/datamitsu:dev"

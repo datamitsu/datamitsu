@@ -57,6 +57,7 @@ func Render(plan Plan, opts RenderOptions) string {
 
 	writeHeader(&b, opts)
 	writeBaseStage(&b, opts)
+	writeConfigSplitStage(&b, opts)
 	writeRuntimeStages(&b, plan, opts)
 	writeRuntimeAppStages(&b, plan, opts)
 	writeBinaryStages(&b, plan, opts)
@@ -86,18 +87,35 @@ func writeBaseStage(b *strings.Builder, opts RenderOptions) {
 	if opts.Digest != "" {
 		from += "@" + opts.Digest
 	}
-	b.WriteString("# Shared base: datamitsu binary + the wrapper config; writable store dir.\n")
+	// The base is deliberately config-free: nothing here changes when the config
+	// changes, so neither it nor any stage built FROM it is invalidated by an
+	// edit. The full config enters only the config-split stage (below) and the
+	// final image.
+	b.WriteString("# Shared base: datamitsu binary + writable store dir. Config-free, so config\n")
+	b.WriteString("# edits never invalidate it or anything built FROM it.\n")
 	fmt.Fprintf(b, "FROM %s AS dm-base\n", from)
 	b.WriteString("USER root\n")
-	fmt.Fprintf(b, "RUN mkdir -p %s %s && chown -R %s:%s %s %s\n",
-		opts.StoreRoot, opts.WorkDir, opts.User, opts.User, opts.StoreRoot, opts.WorkDir)
+	// sliceDir is created here (root, chowned) because the config-split stage
+	// writes into it as the non-root user; other stages just inherit it empty.
+	fmt.Fprintf(b, "RUN mkdir -p %s %s %s && chown -R %s:%s %s %s %s\n",
+		opts.StoreRoot, opts.WorkDir, sliceDir, opts.User, opts.User, opts.StoreRoot, opts.WorkDir, sliceDir)
 	fmt.Fprintf(b, "USER %s\n", opts.User)
 	fmt.Fprintf(b, "ENV DATAMITSU_CACHE_DIR=%s\n", opts.StoreRoot)
 	fmt.Fprintf(b, "WORKDIR %s\n", opts.WorkDir)
-	fmt.Fprintf(b, "COPY --chown=%s:%s %s ./\n", opts.User, opts.User, opts.ConfigSource)
 	// A git root is required for config discovery during install (matches the
 	// hand-written wrapper's `git init` trick).
 	b.WriteString("RUN git init -q .\n\n")
+}
+
+// writeConfigSplitStage emits the stage that reads the full config once and
+// writes a minimal per-stage config slice into sliceDir. Every builder stage
+// then COPYs only its own slice, so editing one app changes only that app's
+// slice and busts only that app's cache.
+func writeConfigSplitStage(b *strings.Builder, opts RenderOptions) {
+	b.WriteString("# --- Config split: one minimal config slice per stage (build-cache isolation) ---\n")
+	b.WriteString("FROM dm-base AS config-split\n")
+	fmt.Fprintf(b, "COPY --chown=%s:%s %s ./\n", opts.User, opts.User, opts.ConfigSource)
+	fmt.Fprintf(b, "RUN datamitsu --config %s devtools split-config --output %s\n\n", opts.configImagePath(), sliceDir)
 }
 
 // installCmd is the RUN command a builder stage uses to install one target.
@@ -106,13 +124,22 @@ func (o RenderOptions) installCmd(args ...string) string {
 	return "RUN " + strings.Join(parts, " ")
 }
 
+// copySlice emits the COPY that brings one stage's config slice in from the
+// config-split stage, landing it at the path install reads via --config.
+func (o RenderOptions) copySlice(stage string) string {
+	src := path.Join(sliceDir, SliceFileName(stage))
+	return fmt.Sprintf("COPY --link --from=config-split %s %s", src, o.configImagePath())
+}
+
 func writeRuntimeStages(b *strings.Builder, plan Plan, opts RenderOptions) {
 	if len(plan.RuntimeStages) == 0 {
 		return
 	}
 	b.WriteString("# --- Runtime stages (one per managed runtime) ---\n")
 	for _, rt := range plan.RuntimeStages {
-		fmt.Fprintf(b, "FROM dm-base AS %s\n", stageName("rt-", rt.Name))
+		stage := stageName("rt-", rt.Name)
+		fmt.Fprintf(b, "FROM dm-base AS %s\n", stage)
+		fmt.Fprintf(b, "%s\n", opts.copySlice(stage))
 		fmt.Fprintf(b, "%s\n\n", opts.installCmd("--runtime", rt.Name))
 	}
 }
@@ -123,7 +150,9 @@ func writeRuntimeAppStages(b *strings.Builder, plan Plan, opts RenderOptions) {
 	}
 	b.WriteString("# --- App stages (runtime-managed; inherit their runtime stage) ---\n")
 	for _, ts := range plan.RuntimeAppStages {
-		fmt.Fprintf(b, "FROM %s AS %s\n", stageName("rt-", ts.Runtime), stageName("app-", ts.App))
+		stage := stageName("app-", ts.App)
+		fmt.Fprintf(b, "FROM %s AS %s\n", stageName("rt-", ts.Runtime), stage)
+		fmt.Fprintf(b, "%s\n", opts.copySlice(stage))
 		fmt.Fprintf(b, "%s\n\n", opts.installCmd(opts.appInstallArgs(ts.App)...))
 	}
 }
@@ -134,7 +163,9 @@ func writeBinaryStages(b *strings.Builder, plan Plan, opts RenderOptions) {
 	}
 	b.WriteString("# --- Binary stages (one per downloaded binary) ---\n")
 	for _, bs := range plan.BinaryStages {
-		fmt.Fprintf(b, "FROM dm-base AS %s\n", stageName("app-", bs.App))
+		stage := stageName("app-", bs.App)
+		fmt.Fprintf(b, "FROM dm-base AS %s\n", stage)
+		fmt.Fprintf(b, "%s\n", opts.copySlice(stage))
 		fmt.Fprintf(b, "%s\n\n", opts.installCmd(opts.appInstallArgs(bs.App)...))
 	}
 }
@@ -152,6 +183,10 @@ func (o RenderOptions) appInstallArgs(app string) []string {
 func writeFinalStage(b *strings.Builder, plan Plan, opts RenderOptions) {
 	b.WriteString("# --- Final image: assemble per-app store layers ---\n")
 	b.WriteString("FROM dm-base AS final\n")
+	// The full config lives in the final image (the base is config-free) so the
+	// entrypoint can resolve every app at run time. Its own layer, so a config
+	// edit re-pulls only this small layer for end users, not the tool layers.
+	fmt.Fprintf(b, "COPY --chown=%s:%s %s ./\n", opts.User, opts.User, opts.ConfigSource)
 	writeLabels(b, opts.Labels)
 
 	// Runtime store subtrees (skip kinds whose runtime is build-only, e.g. go).

@@ -253,5 +253,6 @@ export default defineConfig((config) => ({
     "armips",
     "unrecognised",
     "recognised",
+    "chowned",
   ],
 }));

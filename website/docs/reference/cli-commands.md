@@ -479,7 +479,7 @@ For the full runtime update workflow and CI automation, see [Maintaining Wrapper
 
 ### devtools dockerfile
 
-Generate an optimized, digest-pinned multi-stage Dockerfile from the loaded config. Emits one build stage per binary app, per managed runtime, and per runtime-managed app (each inheriting its runtime stage), then assembles the populated store with `COPY --link` — one cacheable layer per app, so bumping one app re-pulls only its layer.
+Generate an optimized, digest-pinned multi-stage Dockerfile from the loaded config. Emits a config-free base, a `config-split` stage, then one build stage per binary app, per managed runtime, and per runtime-managed app (each inheriting its runtime stage), then assembles the populated store with `COPY --link` — one cacheable layer per app, so bumping one app re-pulls only its layer. The base never carries the config and each stage loads only its own slice (see [devtools split-config](#devtools-split-config)), so editing or regenerating the config rebuilds only the stages whose slice actually changed instead of every tool.
 
 ```bash
 datamitsu devtools dockerfile -o docker/Dockerfile
@@ -514,6 +514,20 @@ DATAMITSU_OCI_REGISTRY=mirror.internal datamitsu devtools dockerfile -o docker/D
 :::tip See also
 For the full image-publishing workflow and CI drift guard, see [Maintaining Wrapper Packages — Generating a Docker image](/docs/how-to/maintain-wrapper#generating-a-docker-image-devtools-dockerfile).
 :::
+
+### devtools split-config
+
+Write one minimal config slice per app and per runtime into a directory. Each slice is a self-contained config defining exactly one stage's target — a single binary, a single runtime, or a single runtime-managed app plus the runtime it installs under — that `install --config` can load on its own.
+
+```bash
+datamitsu devtools split-config -o ./slices
+```
+
+| Flag                 | Description                                          |
+| -------------------- | ---------------------------------------------------- |
+| `-o, --output <dir>` | **Required.** Output directory for the config slices |
+
+This is the build-cache primitive behind [devtools dockerfile](#devtools-dockerfile): the generated Dockerfile runs it in the `config-split` stage so every other stage loads only its own slice. Editing one app then changes only that app's slice — and so invalidates only that app's build cache — instead of busting the whole image. You rarely run it directly; it is documented because it appears in the generated Dockerfile. The config is read from the usual sources (`--config` / `--before-config` / auto-discovery).
 
 ### devtools verify-all
 
