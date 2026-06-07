@@ -246,5 +246,12 @@ export default defineConfig((config) => ({
     "noequals",
     "ocidigest",
     "localfmt",
+    "recognise",
+    "aarch",
+    "Nbit",
+    "recognises",
+    "armips",
+    "unrecognised",
+    "recognised",
   ],
 }));
