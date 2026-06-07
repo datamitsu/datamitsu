@@ -349,9 +349,21 @@ func TestMatchPath(t *testing.T) {
 			want:        true,
 		},
 		{
-			name:        "basename match",
+			name:        "explicit path target does not match by basename across different dirs",
 			archivePath: "some/path/myapp",
 			targetPath:  "other/path/myapp",
+			want:        false,
+		},
+		{
+			name:        "completion file must not shadow the real binary (buf regression)",
+			archivePath: "buf/etc/bash_completion.d/buf",
+			targetPath:  "buf/bin/buf",
+			want:        false,
+		},
+		{
+			name:        "real binary matches its explicit path",
+			archivePath: "buf/bin/buf",
+			targetPath:  "buf/bin/buf",
 			want:        true,
 		},
 		{

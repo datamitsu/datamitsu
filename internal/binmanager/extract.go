@@ -1060,7 +1060,11 @@ func matchPath(archivePath, targetPath string) bool {
 		return true
 	}
 
-	if filepath.Base(archivePath) == filepath.Base(targetPath) {
+	// Basename-only fallback applies ONLY when the target is a bare filename.
+	// If binaryPath specifies a directory (e.g. "buf/bin/buf"), the user is being
+	// explicit and we must not let an unrelated entry with the same basename
+	// (e.g. "buf/etc/bash_completion.d/buf") shadow it.
+	if !strings.Contains(targetPath, "/") && filepath.Base(archivePath) == targetPath {
 		return true
 	}
 
