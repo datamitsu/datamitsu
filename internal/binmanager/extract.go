@@ -181,51 +181,7 @@ func extractTarGz(tarGzPath string, binaryPath *string, destDir string) (string,
 		}
 	}()
 
-	tarReader := tar.NewReader(gzReader)
-
-	targetPath := *binaryPath
-	for {
-		header, err := tarReader.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return "", fmt.Errorf("failed to read tar header: %w", err)
-		}
-
-		if header.Typeflag == tar.TypeReg && matchPath(header.Name, targetPath) {
-			tmpFile, err := os.CreateTemp(destDir, "extracted-*")
-			if err != nil {
-				return "", fmt.Errorf("failed to create temp file: %w", err)
-			}
-			tmpPath := tmpFile.Name()
-			defer func() {
-				if err := tmpFile.Close(); err != nil {
-					log.Warn("failed to close temp file", zap.String("path", tmpPath), zap.Error(err))
-				}
-			}()
-
-			written, err := io.Copy(tmpFile, io.LimitReader(tarReader, MaxBinarySize+1))
-			if err != nil {
-				_ = os.Remove(tmpPath)
-				return "", fmt.Errorf("failed to extract file from tar: %w", err)
-			}
-			if written > MaxBinarySize {
-				_ = os.Remove(tmpPath)
-				return "", fmt.Errorf("extracted entry exceeds maximum size of %d bytes", MaxBinarySize)
-			}
-
-			log.Debug("file extracted from tar.gz",
-				zap.String("archive", tarGzPath),
-				zap.String("file", header.Name),
-				zap.String("dst", tmpPath),
-			)
-
-			return tmpPath, nil
-		}
-	}
-
-	return "", fmt.Errorf("file '%s' not found in tar.gz archive", targetPath)
+	return extractFromTar(tar.NewReader(gzReader), *binaryPath, "tar.gz", tarGzPath, destDir)
 }
 
 func extractTarXz(tarXzPath string, binaryPath *string, destDir string) (string, error) {
@@ -248,51 +204,7 @@ func extractTarXz(tarXzPath string, binaryPath *string, destDir string) (string,
 		return "", fmt.Errorf("failed to create xz reader: %w", err)
 	}
 
-	tarReader := tar.NewReader(xzReader)
-
-	targetPath := *binaryPath
-	for {
-		header, err := tarReader.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return "", fmt.Errorf("failed to read tar header: %w", err)
-		}
-
-		if header.Typeflag == tar.TypeReg && matchPath(header.Name, targetPath) {
-			tmpFile, err := os.CreateTemp(destDir, "extracted-*")
-			if err != nil {
-				return "", fmt.Errorf("failed to create temp file: %w", err)
-			}
-			tmpPath := tmpFile.Name()
-			defer func() {
-				if err := tmpFile.Close(); err != nil {
-					log.Warn("failed to close temp file", zap.String("path", tmpPath), zap.Error(err))
-				}
-			}()
-
-			written, err := io.Copy(tmpFile, io.LimitReader(tarReader, MaxBinarySize+1))
-			if err != nil {
-				_ = os.Remove(tmpPath)
-				return "", fmt.Errorf("failed to extract file from tar: %w", err)
-			}
-			if written > MaxBinarySize {
-				_ = os.Remove(tmpPath)
-				return "", fmt.Errorf("extracted entry exceeds maximum size of %d bytes", MaxBinarySize)
-			}
-
-			log.Debug("file extracted from tar.xz",
-				zap.String("archive", tarXzPath),
-				zap.String("file", header.Name),
-				zap.String("dst", tmpPath),
-			)
-
-			return tmpPath, nil
-		}
-	}
-
-	return "", fmt.Errorf("file '%s' not found in tar.xz archive", targetPath)
+	return extractFromTar(tar.NewReader(xzReader), *binaryPath, "tar.xz", tarXzPath, destDir)
 }
 
 func extractZip(zipPath string, binaryPath *string, destDir string) (string, error) {
@@ -312,50 +224,65 @@ func extractZip(zipPath string, binaryPath *string, destDir string) (string, err
 
 	targetPath := *binaryPath
 
+	// Pick the strongest match across all entries rather than the first, so an
+	// exact path wins over an unrelated entry that only shares a basename.
+	var best *zip.File
+	bestRank := matchNone
 	for _, file := range reader.File {
-		if matchPath(file.Name, targetPath) {
-			rc, err := file.Open()
-			if err != nil {
-				return "", fmt.Errorf("failed to open file from zip: %w", err)
+		if file.FileInfo().IsDir() {
+			continue
+		}
+		rank := matchRank(file.Name, targetPath)
+		if rank > bestRank {
+			best, bestRank = file, rank
+			if bestRank == matchExact {
+				break
 			}
-			defer func() {
-				if err := rc.Close(); err != nil {
-					log.Warn("failed to close zip file reader", zap.Error(err))
-				}
-			}()
-
-			tmpFile, err := os.CreateTemp(destDir, "extracted-*")
-			if err != nil {
-				return "", fmt.Errorf("failed to create temp file: %w", err)
-			}
-			tmpPath := tmpFile.Name()
-			defer func() {
-				if err := tmpFile.Close(); err != nil {
-					log.Warn("failed to close temp file", zap.String("path", tmpPath), zap.Error(err))
-				}
-			}()
-
-			written, err := io.Copy(tmpFile, io.LimitReader(rc, MaxBinarySize+1))
-			if err != nil {
-				_ = os.Remove(tmpPath)
-				return "", fmt.Errorf("failed to extract file from zip: %w", err)
-			}
-			if written > MaxBinarySize {
-				_ = os.Remove(tmpPath)
-				return "", fmt.Errorf("extracted entry exceeds maximum size of %d bytes", MaxBinarySize)
-			}
-
-			log.Debug("file extracted from zip",
-				zap.String("archive", zipPath),
-				zap.String("file", file.Name),
-				zap.String("dst", tmpPath),
-			)
-
-			return tmpPath, nil
 		}
 	}
 
-	return "", fmt.Errorf("file '%s' not found in zip archive", targetPath)
+	if best == nil {
+		return "", fmt.Errorf("file '%s' not found in zip archive", targetPath)
+	}
+
+	rc, err := best.Open()
+	if err != nil {
+		return "", fmt.Errorf("failed to open file from zip: %w", err)
+	}
+	defer func() {
+		if err := rc.Close(); err != nil {
+			log.Warn("failed to close zip file reader", zap.Error(err))
+		}
+	}()
+
+	tmpFile, err := os.CreateTemp(destDir, "extracted-*")
+	if err != nil {
+		return "", fmt.Errorf("failed to create temp file: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+	defer func() {
+		if err := tmpFile.Close(); err != nil {
+			log.Warn("failed to close temp file", zap.String("path", tmpPath), zap.Error(err))
+		}
+	}()
+
+	written, err := io.Copy(tmpFile, io.LimitReader(rc, MaxBinarySize+1))
+	if err != nil {
+		_ = os.Remove(tmpPath)
+		return "", fmt.Errorf("failed to extract file from zip: %w", err)
+	}
+	if written > MaxBinarySize {
+		_ = os.Remove(tmpPath)
+		return "", fmt.Errorf("extracted entry exceeds maximum size of %d bytes", MaxBinarySize)
+	}
+
+	log.Debug("file extracted from zip",
+		zap.String("archive", zipPath),
+		zap.String("file", best.Name),
+		zap.String("dst", tmpPath),
+	)
+
+	return tmpPath, nil
 }
 
 func extractTarBz2(tarBz2Path string, binaryPath *string, destDir string) (string, error) {
@@ -420,48 +347,89 @@ func extractTar(tarPath string, binaryPath *string, destDir string) (string, err
 }
 
 func extractFromTar(tarReader *tar.Reader, targetPath, archiveType, archivePath, destDir string) (string, error) {
+	bestRank := matchNone
+	bestPath := ""
+	bestName := ""
+
 	for {
 		header, err := tarReader.Next()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {
+			removeTemp(bestPath)
 			return "", fmt.Errorf("failed to read tar header: %w", err)
 		}
 
-		if header.Typeflag == tar.TypeReg && matchPath(header.Name, targetPath) {
-			tmpFile, err := os.CreateTemp(destDir, "extracted-*")
-			if err != nil {
-				return "", fmt.Errorf("failed to create temp file: %w", err)
-			}
-			tmpPath := tmpFile.Name()
-			defer func() {
-				if err := tmpFile.Close(); err != nil {
-					log.Warn("failed to close temp file", zap.String("path", tmpPath), zap.Error(err))
-				}
-			}()
+		if header.Typeflag != tar.TypeReg {
+			continue
+		}
 
-			written, err := io.Copy(tmpFile, io.LimitReader(tarReader, MaxBinarySize+1))
-			if err != nil {
-				_ = os.Remove(tmpPath)
-				return "", fmt.Errorf("failed to extract file from tar: %w", err)
-			}
-			if written > MaxBinarySize {
-				_ = os.Remove(tmpPath)
-				return "", fmt.Errorf("extracted entry exceeds maximum size of %d bytes", MaxBinarySize)
-			}
+		// Only extract an entry if it beats the best match so far; equal ranks
+		// keep the first one seen. tar.Reader.Next() skips the unread body, so
+		// non-improving entries cost nothing to pass over.
+		rank := matchRank(header.Name, targetPath)
+		if rank <= bestRank {
+			continue
+		}
 
-			log.Debug("file extracted from "+archiveType,
-				zap.String("archive", archivePath),
-				zap.String("file", header.Name),
-				zap.String("dst", tmpPath),
-			)
+		tmpPath, err := copyTarEntryToTemp(tarReader, destDir)
+		if err != nil {
+			removeTemp(bestPath)
+			return "", err
+		}
+		removeTemp(bestPath)
+		bestRank, bestPath, bestName = rank, tmpPath, header.Name
 
-			return tmpPath, nil
+		if bestRank == matchExact {
+			break // nothing can beat an exact match
 		}
 	}
 
-	return "", fmt.Errorf("file '%s' not found in %s archive", targetPath, archiveType)
+	if bestRank == matchNone {
+		return "", fmt.Errorf("file '%s' not found in %s archive", targetPath, archiveType)
+	}
+
+	log.Debug("file extracted from "+archiveType,
+		zap.String("archive", archivePath),
+		zap.String("file", bestName),
+		zap.String("dst", bestPath),
+	)
+
+	return bestPath, nil
+}
+
+func removeTemp(path string) {
+	if path != "" {
+		_ = os.Remove(path)
+	}
+}
+
+// copyTarEntryToTemp writes the current tar entry's body to a fresh temp file in
+// destDir, enforcing MaxBinarySize. The caller owns the returned path.
+func copyTarEntryToTemp(tarReader *tar.Reader, destDir string) (string, error) {
+	tmpFile, err := os.CreateTemp(destDir, "extracted-*")
+	if err != nil {
+		return "", fmt.Errorf("failed to create temp file: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+
+	written, err := io.Copy(tmpFile, io.LimitReader(tarReader, MaxBinarySize+1))
+	closeErr := tmpFile.Close()
+	if err != nil {
+		_ = os.Remove(tmpPath)
+		return "", fmt.Errorf("failed to extract file from tar: %w", err)
+	}
+	if closeErr != nil {
+		_ = os.Remove(tmpPath)
+		return "", fmt.Errorf("failed to close temp file: %w", closeErr)
+	}
+	if written > MaxBinarySize {
+		_ = os.Remove(tmpPath)
+		return "", fmt.Errorf("extracted entry exceeds maximum size of %d bytes", MaxBinarySize)
+	}
+
+	return tmpPath, nil
 }
 
 func extractBz2(bz2Path string, _ *string, destDir string) (string, error) {
@@ -1030,14 +998,32 @@ func validateArchivePath(archivePath string) error {
 	return nil
 }
 
-// matchPath checks if archive path matches target path
-// Supports exact match and filename-only match
-func matchPath(archivePath, targetPath string) bool {
+// Match strengths for matchRank, ordered weakest to strongest. A caller scanning
+// an archive must keep the strongest match, not the first one encountered: a real
+// binary that matches exactly can appear *after* an unrelated entry that only
+// matches by basename (e.g. buf ships "buf/etc/bash_completion.d/buf" before
+// "buf/bin/buf"). Returning the first match would extract the wrong file.
+const (
+	matchNone = iota
+	matchBasename
+	matchSuffix
+	matchExact
+)
+
+// matchRank reports how strongly archivePath matches targetPath. Higher is
+// better; matchNone means no match (also returned for unsafe paths).
+//
+// Basename matching is intentionally kept as the weakest tier rather than
+// removed: some registries set binaryPath with a directory prefix that does not
+// exist in the archive (e.g. yq's "yq_linux_amd64/yq_linux_amd64" against an
+// archive that only contains "./yq_linux_amd64"), and basename is the only thing
+// that connects them.
+func matchRank(archivePath, targetPath string) int {
 	if err := validateArchivePath(archivePath); err != nil {
 		log.Warn("rejecting unsafe archive path",
 			zap.String("path", archivePath),
 			zap.Error(err))
-		return false
+		return matchNone
 	}
 
 	// validateArchivePath checks the cleaned path, but "bin/../evil/tool" cleans to
@@ -1046,27 +1032,26 @@ func matchPath(archivePath, targetPath string) bool {
 	if slices.Contains(strings.Split(filepath.ToSlash(archivePath), "/"), "..") {
 		log.Warn("rejecting archive path with traversal component",
 			zap.String("path", archivePath))
-		return false
+		return matchNone
 	}
 
 	archivePath = filepath.ToSlash(archivePath)
 	targetPath = filepath.ToSlash(targetPath)
 
-	if archivePath == targetPath {
-		return true
+	switch {
+	case archivePath == targetPath:
+		return matchExact
+	case strings.HasSuffix(archivePath, "/"+targetPath):
+		return matchSuffix
+	case filepath.Base(archivePath) == filepath.Base(targetPath):
+		return matchBasename
+	default:
+		return matchNone
 	}
+}
 
-	if strings.HasSuffix(archivePath, "/"+targetPath) {
-		return true
-	}
-
-	// Basename-only fallback applies ONLY when the target is a bare filename.
-	// If binaryPath specifies a directory (e.g. "buf/bin/buf"), the user is being
-	// explicit and we must not let an unrelated entry with the same basename
-	// (e.g. "buf/etc/bash_completion.d/buf") shadow it.
-	if !strings.Contains(targetPath, "/") && filepath.Base(archivePath) == targetPath {
-		return true
-	}
-
-	return false
+// matchPath reports whether archivePath matches targetPath at all. Use matchRank
+// when selecting the best of several candidates.
+func matchPath(archivePath, targetPath string) bool {
+	return matchRank(archivePath, targetPath) != matchNone
 }
