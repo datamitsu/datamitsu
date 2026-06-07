@@ -70,6 +70,11 @@ func (m *Manager) MaybePrint(isJSONOutput bool) {
 			m.printMessage()
 		}
 	} else if m.clock.Now().Sub(state.LastShown) >= time.Duration(minDaysBetweenShows)*24*time.Hour {
+		// On the first successful run at least minDaysBetweenShows after the last
+		// show, reset activation and the counter. The message must then be earned
+		// again by re-accumulating sponsorActivationThreshold successful runs, so
+		// the cadence is jittered (≥7 days AND N more successful runs) and stays
+		// unobtrusive — not a fixed weekly reminder, nor every Nth run.
 		state.Activated = false
 		state.SuccessfulRuns = 0
 		state.LastShown = time.Time{}

@@ -22,6 +22,7 @@ import (
 	clr "github.com/datamitsu/datamitsu/internal/color"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 	"github.com/datamitsu/datamitsu/internal/term"
@@ -478,6 +479,12 @@ func RunSequential(
 		sc.planner.GetTimings().Print()
 		sc.shutdown()
 	}()
+
+	// Branded banner once at the top (skipped in explain/json so that output
+	// stays clean/machine-readable).
+	if sc.explainLevel == "" {
+		ui.Current().Banner(ldflags.PackageName, ldflags.Version)
+	}
 
 	hasFix := slices.Contains(operations, config.OpFix)
 

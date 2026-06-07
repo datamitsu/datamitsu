@@ -11,6 +11,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"github.com/datamitsu/datamitsu/internal/managedconfig"
 	"github.com/datamitsu/datamitsu/internal/project"
 	"github.com/datamitsu/datamitsu/internal/runtimemanager"
@@ -56,6 +57,8 @@ func runInit(cmd *cobra.Command, args []string) error {
 		disp.Close()
 		restore()
 	}()
+
+	disp.Banner(ldflags.PackageName, ldflags.Version)
 
 	// Get cwd
 	cwdPath, err := os.Getwd()
