@@ -180,8 +180,8 @@ func initSharedContext(
 
 	log.Debug("files", zap.Strings("list", sc.files))
 
-	if len(sc.files) == 0 && !fileScoped && sc.explainLevel != "json" {
-		fmt.Println("ℹ️  No files specified, running whole-project tools only")
+	if len(sc.files) == 0 && !fileScoped {
+		log.Debug("no files specified, running whole-project tools only")
 	}
 
 	// Create planner
