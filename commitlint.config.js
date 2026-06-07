@@ -1,1 +1,3 @@
-export { config as default } from "./.datamitsu/commitlint.config.js";
+import { defineConfig } from "./.datamitsu/commitlint.config.js";
+
+export default defineConfig();

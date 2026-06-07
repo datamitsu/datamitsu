@@ -1,6 +1,6 @@
-import { config } from "./.datamitsu/cspell.config.js";
+import { defineConfig } from "./.datamitsu/cspell.config.js";
 
-export default {
+export default defineConfig((config) => ({
   ...config,
   ignorePaths: [...(config.ignorePaths ?? []), "**/*.asc", "**/*.golangci.yaml"],
   words: [
@@ -238,4 +238,4 @@ export default {
     "ztool",
     "atool",
   ],
-};
+}));
