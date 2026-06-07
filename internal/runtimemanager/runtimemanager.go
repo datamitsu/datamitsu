@@ -833,8 +833,9 @@ func (rm *RuntimeManager) downloadRuntime(ctx context.Context, runtimeName strin
 		zap.String("name", runtimeName),
 	)
 
-	fmt.Fprintf(os.Stderr, "Downloading runtime %s...\n", runtimeName)
-
+	// The download itself renders progress through the shared ui display (a bar
+	// labelled with the runtime name in a terminal, throttled lines in CI), so
+	// no separate "Downloading runtime …" line is printed here.
 	runtimeApp := binmanager.App{
 		Required: true,
 		Binary: &binmanager.AppConfigBinary{
@@ -860,8 +861,6 @@ func (rm *RuntimeManager) downloadRuntime(ctx context.Context, runtimeName strin
 	if err := moveRuntimeFiles(binCachePath, runtimeCachePath, binaryPath); err != nil {
 		return fmt.Errorf("failed to move runtime files for %q: %w", runtimeName, err)
 	}
-
-	fmt.Fprintf(os.Stderr, "Downloaded runtime %s\n", runtimeName)
 
 	return nil
 }

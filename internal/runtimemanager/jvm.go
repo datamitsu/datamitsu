@@ -14,6 +14,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/httpx"
+	"github.com/datamitsu/datamitsu/internal/ui"
 
 	"go.uber.org/zap"
 )
@@ -81,19 +82,19 @@ func (rm *RuntimeManager) installJVMAppOnce(ctx context.Context, appName string,
 		}
 	}
 
-	fmt.Fprintf(os.Stderr, "Downloading %s JAR...\n", appName)
+	ui.Current().Statusf(ui.SymStep, "Downloading %s JAR…", appName)
 
-	if err := downloadAndVerifyJAR(ctx, appConfig.JarURL, appConfig.JarHash, jarPath); err != nil {
+	if err := downloadAndVerifyJAR(ctx, appName, appConfig.JarURL, appConfig.JarHash, jarPath); err != nil {
 		return fmt.Errorf("failed to download JAR for %q: %w", appName, err)
 	}
 
-	fmt.Fprintf(os.Stderr, "Installed %s\n", appName)
+	ui.Current().Statusf(ui.SymOK, "Installed %s", appName)
 
 	cleanupOnError = false
 	return nil
 }
 
-func downloadAndVerifyJAR(ctx context.Context, url, expectedHash, destPath string) error {
+func downloadAndVerifyJAR(ctx context.Context, name, url, expectedHash, destPath string) error {
 	if expectedHash == "" {
 		return fmt.Errorf("JAR hash is required but not provided for %s", url)
 	}
@@ -127,8 +128,12 @@ func downloadAndVerifyJAR(ctx context.Context, url, expectedHash, destPath strin
 	}()
 
 	hasher := sha256.New()
-	reader := io.LimitReader(resp.Body, maxJARDownloadSize+1)
-	written, err := io.Copy(io.MultiWriter(tmpFile, hasher), reader)
+	limited := io.LimitReader(resp.Body, maxJARDownloadSize+1)
+	// Render a progress bar (or throttled lines in CI) for the JAR transfer,
+	// consistent with binary and runtime downloads.
+	tracked := ui.Current().Download(name, resp.ContentLength, limited)
+	defer func() { _ = tracked.Close() }()
+	written, err := io.Copy(io.MultiWriter(tmpFile, hasher), tracked)
 	if err != nil {
 		return fmt.Errorf("failed to download JAR: %w", err)
 	}

@@ -1,6 +1,7 @@
 package runtimemanager
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/ui"
 
 	"go.uber.org/zap"
 )
@@ -233,11 +235,15 @@ func (rm *RuntimeManager) installNodeAppOnce(ctx context.Context, appName string
 	envVars = mergeInstallEnv(envVars, customEnv, appEnvPath)
 	cmdEnv := buildEnvWithOverrides(os.Environ(), envVars)
 
+	// Capture pnpm's combined output instead of inheriting the terminal: its
+	// native reporter would otherwise corrupt any active progress bar. The
+	// captured log is surfaced only on failure (the single-print-layer pattern).
+	var out bytes.Buffer
 	cmd := exec.CommandContext(ctx, nodeBinPath, args...) //nolint:gosec // G204: nodeBinPath comes from the trusted managed runtime store and args are built from validated config
 	cmd.Dir = appEnvPath
 	cmd.Env = cmdEnv
-	cmd.Stdout = os.Stderr
-	cmd.Stderr = os.Stderr
+	cmd.Stdout = &out
+	cmd.Stderr = &out
 
 	log.Debug("installing node app",
 		zap.String("app", appName),
@@ -246,13 +252,14 @@ func (rm *RuntimeManager) installNodeAppOnce(ctx context.Context, appName string
 		zap.String("pnpm", pnpmVersion),
 	)
 
-	fmt.Fprintf(os.Stderr, "Installing %s...\n", appName)
+	ui.Current().Statusf(ui.SymStep, "Installing %s…", appName)
 
 	if err := runInstallCmd(ctx, cmd); err != nil {
+		ui.Current().Errorln(out.String())
 		return fmt.Errorf("failed to install node app %q: %w", appName, err)
 	}
 
-	fmt.Fprintf(os.Stderr, "Installed %s\n", appName)
+	ui.Current().Statusf(ui.SymOK, "Installed %s", appName)
 
 	cleanupOnError = false
 	return nil

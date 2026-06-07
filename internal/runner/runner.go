@@ -14,7 +14,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/bundled"
@@ -24,12 +23,12 @@ import (
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/runtimemanager"
+	"github.com/datamitsu/datamitsu/internal/term"
 	"github.com/datamitsu/datamitsu/internal/timing"
 	"github.com/datamitsu/datamitsu/internal/tooling"
 	"github.com/datamitsu/datamitsu/internal/traverser"
+	"github.com/datamitsu/datamitsu/internal/ui"
 
-	"github.com/vbauerster/mpb/v8"
-	"github.com/vbauerster/mpb/v8/decor"
 	"go.uber.org/zap"
 )
 
@@ -59,12 +58,9 @@ type executionInstance struct {
 
 // Progress tracking variables
 var (
-	lastCIProgressPercent int
-	progressMu            sync.Mutex
-	currentProgress       *mpb.Progress
-	currentProgressBar    *mpb.Bar
-	currentBarDesc        atomic.Value               // string - accessed without lock to avoid deadlock with mpb
-	activeTools           map[string]map[string]bool // Track currently running tools (tool -> set of active dirs)
+	progressMu  sync.Mutex
+	currentTask *ui.Task                   // shared file-processing task for the active operation
+	activeTools map[string]map[string]bool // currently running tools (tool -> set of active dirs)
 )
 
 // toolPlanner is the planning surface used by runSingleOperation (satisfied by *tooling.Planner).
@@ -282,7 +278,6 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 
 	// Track progress
 	progressTracker := make(map[string]*toolExecutionGroup)
-	completedFileProcessing := 0
 	activeTools = make(map[string]map[string]bool) // Initialize active tools tracker (tool -> set of active dirs)
 
 	// Initialize tracker with all expected tools
@@ -302,28 +297,16 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		}
 	}
 
-	// Create progress bar for non-CI environments
-	if !env.IsCI() && totalFileProcessing > 0 {
-		currentProgress = mpb.New(mpb.WithWidth(60))
-		currentBarDesc.Store("Starting...")
-		currentProgressBar = currentProgress.AddBar(int64(totalFileProcessing),
-			mpb.PrependDecorators(
-				decor.Any(func(s decor.Statistics) string {
-					// Read currentBarDesc without lock to avoid deadlock
-					// mpb may call this from its own goroutine while we hold progressMu
-					if desc, ok := currentBarDesc.Load().(string); ok {
-						return desc
-					}
-					return ""
-				}, decor.WC{W: 40, C: decor.DSyncWidthR}),
-			),
-			mpb.AppendDecorators(
-				decor.CountersNoUnit(" %d / %d", decor.WCSyncSpace),
-			),
-		)
-	}
+	// Activate the process-wide display for this operation. Binary/runtime
+	// downloads during pre-install and the file-processing task all render into
+	// ONE shared container, so nothing fights over the terminal. Interactive
+	// terminals get animated bars; CI/pipes get throttled append-only lines.
+	disp := ui.New(term.DetectMode())
+	restore := ui.Activate(disp)
 
-	// Ensure cleanup on exit
+	// Ensure cleanup on exit. Completing the task and closing the display (which
+	// flushes and tears down the shared bar container) BEFORE any summaries are
+	// printed keeps result output free of progress artifacts.
 	progressFinalized := false
 	finalizeProgress := func() {
 		if progressFinalized {
@@ -331,29 +314,27 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		}
 		progressFinalized = true
 
-		if !env.IsCI() && currentProgress != nil {
-			// Finalize any incomplete progress bars before waiting
-			if currentProgressBar != nil {
-				progressMu.Lock()
-				completed := completedFileProcessing
-				progressMu.Unlock()
-				if completed < totalFileProcessing {
-					currentProgressBar.SetCurrent(int64(totalFileProcessing))
-					currentProgressBar.SetTotal(int64(totalFileProcessing), true)
-				}
-			}
-			currentProgress.Wait()
-		}
-		// Reset progress state for next operation
 		progressMu.Lock()
-		currentProgress = nil
-		currentProgressBar = nil
-		lastCIProgressPercent = 0
+		t := currentTask
+		currentTask = nil
 		progressMu.Unlock()
+		if t != nil {
+			t.Complete()
+		}
+		disp.Close()
+		restore()
 	}
-	defer func() {
-		finalizeProgress()
-	}()
+	defer finalizeProgress()
+
+	// ensureTask lazily creates the file-processing task on first activity, so a
+	// "0 / N" bar never lingers during the install phase (downloads render as
+	// their own bars meanwhile). Caller must hold progressMu.
+	ensureTask := func() *ui.Task {
+		if currentTask == nil && totalFileProcessing > 0 {
+			currentTask = disp.Task("Starting...", int64(totalFileProcessing))
+		}
+		return currentTask
+	}
 
 	// Set up task start callback
 	sc.executor.SetTaskStartCallback(func(toolName string, relativeDir string) {
@@ -362,47 +343,30 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 			activeTools[toolName] = make(map[string]bool)
 		}
 		activeTools[toolName][relativeDir] = true
-
-		if !env.IsCI() && currentProgressBar != nil {
-			currentBarDesc.Store(formatToolWithDir(toolName, relativeDir))
-		}
+		t := ensureTask()
 		progressMu.Unlock()
 
-		if env.IsCI() {
-			dirInfo := ""
-			if relativeDir != "" {
-				dirInfo = " in " + relativeDir
-			}
-			fmt.Printf("⏳ Starting %s%s\n", toolName, dirInfo)
-		}
+		t.SetLabel(formatToolWithDir(toolName, relativeDir))
 	})
 
 	// Set up file progress callback
 	sc.executor.SetFileProgressCallback(func(toolName string, fileIndex, totalFiles int, success bool) {
-		status := "✅"
+		status := "✓"
 		if !success {
-			status = "❌"
+			status = "✗"
 		}
 
 		progressMu.Lock()
-		completedFileProcessing++
-		currentCompleted := completedFileProcessing
-		bar := currentProgressBar
-		if !env.IsCI() && bar != nil {
-			dir := activeToolDir(toolName)
-			if dir != "" {
-				currentBarDesc.Store(fmt.Sprintf("%s %s (%s) [%d/%d]", status, toolName, dir, fileIndex, totalFiles))
-			} else {
-				currentBarDesc.Store(fmt.Sprintf("%s %s [%d/%d]", status, toolName, fileIndex, totalFiles))
-			}
-		}
+		t := ensureTask()
+		dir := activeToolDir(toolName)
 		progressMu.Unlock()
 
-		if env.IsCI() {
-			updateCIProgress(currentCompleted, totalFileProcessing, status, toolName)
-		} else if bar != nil {
-			bar.Increment()
+		if dir != "" {
+			t.SetLabel(fmt.Sprintf("%s %s (%s) [%d/%d]", status, toolName, dir, fileIndex, totalFiles))
+		} else {
+			t.SetLabel(fmt.Sprintf("%s %s [%d/%d]", status, toolName, fileIndex, totalFiles))
 		}
+		t.Increment()
 	})
 
 	// Set up progress tracking callback
@@ -422,21 +386,12 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 					delete(activeTools, result.ToolName)
 				}
 			}
-
-			// Do not update progress bar description here.
-			// FileProgressCallback is the single source of truth for bar updates.
 			progressMu.Unlock()
 		}
 	})
 
 	// Execute plan
-	if !env.IsCI() && currentProgressBar == nil {
-		fmt.Println()
-	}
-	fmt.Printf("🚀 Running %s operation...\n", operation)
-	if env.IsCI() {
-		fmt.Println()
-	}
+	disp.Statusf(ui.SymStep, "Running %s operation...", operation)
 
 	// Pre-install every tool the plan needs once, before parallel per-file
 	// execution. This closes the check-then-download install race (multiple
@@ -796,34 +751,6 @@ func printOverallSummary(toolGroups []toolExecutionGroup, wallClockTime, cpuTime
 	}
 	fmt.Println()
 	fmt.Println(separator)
-}
-
-// updateCIProgress prints simple progress for CI environments
-func updateCIProgress(completed, total int, status, toolName string) {
-	progressMu.Lock()
-	defer progressMu.Unlock()
-
-	percent := 0
-	if total > 0 {
-		percent = (completed * 100) / total
-	}
-
-	// Print progress every 25% to avoid spam
-	if percent >= lastCIProgressPercent+25 || completed == total {
-		if completed < total {
-			fmt.Printf("  %s %s -- %d/%d (%d%%)\n",
-				status, toolName, completed, total, percent)
-		} else {
-			fmt.Printf("  Progress: %d/%d (%d%%)\n", completed, total, percent)
-		}
-		lastCIProgressPercent = percent
-	}
-
-	// Print completion message
-	if completed == total {
-		fmt.Println("✅ All tasks completed!")
-		fmt.Println()
-	}
 }
 
 func normalizeFilePaths(files []string, cwdPath string) []string {

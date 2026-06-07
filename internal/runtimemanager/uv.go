@@ -1,6 +1,7 @@
 package runtimemanager
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"maps"
@@ -13,6 +14,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/ui"
 
 	"go.uber.org/zap"
 )
@@ -154,11 +156,14 @@ func (rm *RuntimeManager) installUVAppOnce(ctx context.Context, appName string, 
 
 	args := buildUVInstallArgs(appConfig.LockFile, rc.UV)
 
+	// Capture uv's combined output instead of inheriting the terminal so its
+	// reporter never corrupts an active progress bar; surface it only on failure.
+	var out bytes.Buffer
 	cmd := exec.CommandContext(ctx, uvPath, args...) //nolint:gosec // G204: uvPath comes from the trusted managed runtime store and args are built from validated config
 	cmd.Dir = appEnvPath
 	cmd.Env = buildEnvWithOverrides(os.Environ(), envVars)
-	cmd.Stdout = os.Stderr
-	cmd.Stderr = os.Stderr
+	cmd.Stdout = &out
+	cmd.Stderr = &out
 
 	packageSpec := appConfig.PackageName
 	if appConfig.Version != "" {
@@ -171,13 +176,14 @@ func (rm *RuntimeManager) installUVAppOnce(ctx context.Context, appName string, 
 		zap.String("uv_path", uvPath),
 	)
 
-	fmt.Fprintf(os.Stderr, "Installing %s...\n", appName)
+	ui.Current().Statusf(ui.SymStep, "Installing %s…", appName)
 
 	if err := runInstallCmd(ctx, cmd); err != nil {
+		ui.Current().Errorln(out.String())
 		return fmt.Errorf("failed to install UV app %q: %w", appName, err)
 	}
 
-	fmt.Fprintf(os.Stderr, "Installed %s\n", appName)
+	ui.Current().Statusf(ui.SymOK, "Installed %s", appName)
 
 	cleanupOnError = false
 	return nil

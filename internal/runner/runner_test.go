@@ -100,63 +100,6 @@ func TestFormatToolWithDir(t *testing.T) {
 	}
 }
 
-func TestCIProgressOutputFormat(t *testing.T) {
-	t.Setenv("CI", "true")
-
-	t.Run("CI progress line format", func(t *testing.T) {
-		progressMu.Lock()
-		lastCIProgressPercent = 0
-		progressMu.Unlock()
-
-		oldStdout := os.Stdout
-		r, w, _ := os.Pipe()
-		os.Stdout = w
-
-		updateCIProgress(25, 100, "✅", "eslint")
-
-		_ = w.Close()
-		os.Stdout = oldStdout
-
-		var buf [4096]byte
-		n, _ := r.Read(buf[:])
-		captured := string(buf[:n])
-
-		if !strings.Contains(captured, "eslint") {
-			t.Errorf("CI progress should contain tool name, got: %q", captured)
-		}
-		if !strings.Contains(captured, "25/100") {
-			t.Errorf("CI progress should contain count, got: %q", captured)
-		}
-		if !strings.Contains(captured, "25%") {
-			t.Errorf("CI progress should contain percentage, got: %q", captured)
-		}
-	})
-
-	t.Run("CI progress no ANSI codes", func(t *testing.T) {
-		progressMu.Lock()
-		lastCIProgressPercent = 0
-		progressMu.Unlock()
-
-		oldStdout := os.Stdout
-		r, w, _ := os.Pipe()
-		os.Stdout = w
-
-		updateCIProgress(50, 100, "✅", "prettier")
-
-		_ = w.Close()
-		os.Stdout = oldStdout
-
-		var buf [4096]byte
-		n, _ := r.Read(buf[:])
-		captured := string(buf[:n])
-
-		// ANSI escape codes start with \033[ or \x1b[
-		if strings.Contains(captured, "\033[") || strings.Contains(captured, "\x1b[") {
-			t.Errorf("CI progress should not contain ANSI escape codes, got: %q", captured)
-		}
-	})
-}
-
 func TestNonCIProgressDescriptionWithDir(t *testing.T) {
 	t.Run("file progress description includes directory", func(t *testing.T) {
 		savedActiveTools := activeTools
@@ -390,44 +333,6 @@ func TestGroupResultsByTool(t *testing.T) {
 
 		if len(groups) != 0 {
 			t.Errorf("expected 0 groups, got %d", len(groups))
-		}
-	})
-}
-
-func TestUpdateCIProgress(t *testing.T) {
-	t.Setenv("CI", "true")
-
-	lastCIProgressPercent = 0
-
-	t.Run("prints at 25% intervals", func(t *testing.T) {
-		updateCIProgress(25, 100, "✅", "eslint")
-		if lastCIProgressPercent != 25 {
-			t.Errorf("expected lastCIProgressPercent 25, got %d", lastCIProgressPercent)
-		}
-	})
-
-	t.Run("skips intermediate percentages", func(t *testing.T) {
-		lastCIProgressPercent = 25
-		oldPercent := lastCIProgressPercent
-		updateCIProgress(30, 100, "✅", "eslint")
-		if lastCIProgressPercent != oldPercent {
-			t.Errorf("expected lastCIProgressPercent to remain %d, got %d", oldPercent, lastCIProgressPercent)
-		}
-	})
-
-	t.Run("prints at completion", func(t *testing.T) {
-		lastCIProgressPercent = 25
-		updateCIProgress(100, 100, "✅", "eslint")
-		if lastCIProgressPercent != 100 {
-			t.Errorf("expected lastCIProgressPercent 100, got %d", lastCIProgressPercent)
-		}
-	})
-
-	t.Run("handles zero total", func(t *testing.T) {
-		lastCIProgressPercent = 0
-		updateCIProgress(0, 0, "✅", "eslint")
-		if lastCIProgressPercent != 0 {
-			t.Errorf("expected lastCIProgressPercent 0 with zero total, got %d", lastCIProgressPercent)
 		}
 	})
 }
@@ -968,74 +873,6 @@ func TestPrintOverallSummary(t *testing.T) {
 	if !strings.Contains(output, "1 failed") {
 		t.Errorf("expected output to contain '1 failed', got: %s", output)
 	}
-}
-
-func TestUpdateCIProgressConcurrency(t *testing.T) {
-	t.Setenv("CI", "true")
-
-	progressMu.Lock()
-	lastCIProgressPercent = 0
-	progressMu.Unlock()
-
-	done := make(chan bool)
-	iterations := 50
-
-	for i := range iterations {
-		go func(n int) {
-			updateCIProgress(n, 100, "✅", fmt.Sprintf("tool%d", n%5))
-			done <- true
-		}(i)
-	}
-
-	for range iterations {
-		<-done
-	}
-}
-
-func TestConcurrentProgressBarAccess(t *testing.T) {
-	activeTools = make(map[string]map[string]bool)
-	currentBarDesc.Store("Starting...")
-
-	done := make(chan bool)
-	iterations := 100
-
-	readFunc := func() {
-		progressMu.Lock()
-		_ = currentBarDesc.Load()
-		progressMu.Unlock()
-		done <- true
-	}
-
-	writeFunc := func(toolName string, active bool) {
-		progressMu.Lock()
-		if active {
-			if activeTools[toolName] == nil {
-				activeTools[toolName] = make(map[string]bool)
-			}
-			activeTools[toolName]["some/dir"] = true
-			currentBarDesc.Store(formatToolWithDir(toolName, "some/dir"))
-		} else {
-			delete(activeTools, toolName)
-			currentBarDesc.Store("⏳ Starting...")
-		}
-		progressMu.Unlock()
-		done <- true
-	}
-
-	for i := range iterations / 2 {
-		go readFunc()
-		go writeFunc(fmt.Sprintf("tool%d", i%5), i%2 == 0)
-	}
-
-	for range iterations {
-		<-done
-	}
-
-	progressMu.Lock()
-	if len(activeTools) > 5 {
-		t.Errorf("expected at most 5 active tools, got %d", len(activeTools))
-	}
-	progressMu.Unlock()
 }
 
 func TestNormalizeFilePaths(t *testing.T) {

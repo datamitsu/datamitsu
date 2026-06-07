@@ -35,6 +35,8 @@ export default defineConfig((config) => ({
     "enginetools",
     "errgroup",
     "errorf",
+    "errorln",
+    "statusf",
     "evanw",
     "ewma",
     "extractdir",

@@ -22,7 +22,6 @@ import (
 	"github.com/datamitsu/datamitsu/internal/syslist"
 	"github.com/datamitsu/datamitsu/internal/target"
 
-	"github.com/vbauerster/mpb/v8"
 	"go.uber.org/zap"
 	"golang.org/x/sync/singleflight"
 )
@@ -292,8 +291,6 @@ func (bm *BinManager) InstallWithConcurrency(ctx context.Context, includeOptiona
 		return stats, nil
 	}
 
-	progress := mpb.New(mpb.WithWidth(60))
-
 	jobs := make(chan string, len(toDownload))
 	results := make(chan DownloadResult, len(toDownload))
 
@@ -302,7 +299,7 @@ func (bm *BinManager) InstallWithConcurrency(ctx context.Context, includeOptiona
 	for range concurrency {
 		wg.Go(func() {
 			for name := range jobs {
-				err := bm.downloadWithTimeout(ctx, name, progress)
+				err := bm.downloadWithTimeout(ctx, name)
 				results <- DownloadResult{
 					Name:  name,
 					Error: err,
@@ -322,8 +319,6 @@ func (bm *BinManager) InstallWithConcurrency(ctx context.Context, includeOptiona
 
 	wg.Wait()
 	close(results)
-
-	progress.Wait()
 
 	for result := range results {
 		if result.Error != nil {
@@ -367,13 +362,12 @@ func (bm *BinManager) GetBinaryPath(ctx context.Context, name string) (string, e
 			return struct{}{}, nil
 		}
 
-		fmt.Fprintf(os.Stderr, "⬇️  Downloading %s...\n", name)
-
-		if err := bm.downloadWithTimeout(ctx, name, nil); err != nil {
+		// Progress (a bar in a terminal, throttled lines in CI) is rendered by
+		// the download layer through the shared ui display.
+		if err := bm.downloadWithTimeout(ctx, name); err != nil {
 			return nil, fmt.Errorf("failed to download %s: %w", name, err)
 		}
 
-		fmt.Fprintf(os.Stderr, "✅ Downloaded %s\n", name)
 		return struct{}{}, nil
 	})
 	if err != nil {
@@ -866,7 +860,7 @@ func (bm *BinManager) getBinaryPath(name string) (string, error) {
 	return binPath, nil
 }
 
-func (bm *BinManager) downloadInternal(ctx context.Context, name string, progress *mpb.Progress) error {
+func (bm *BinManager) downloadInternal(ctx context.Context, name string) error {
 	resolved, binaryInfo, err := bm.getBinaryInfo(name)
 	if err != nil {
 		return err
@@ -890,12 +884,7 @@ func (bm *BinManager) downloadInternal(ctx context.Context, name string, progres
 		return fmt.Errorf("failed to create temp directory: %w", err)
 	}
 
-	var downloadedPath string
-	if progress != nil {
-		downloadedPath, err = downloadAndVerifyWithProgress(ctx, binaryInfo.URL, binaryInfo.Hash, hashType, tmpDir, name, progress)
-	} else {
-		downloadedPath, err = downloadAndVerify(ctx, binaryInfo.URL, binaryInfo.Hash, hashType, tmpDir)
-	}
+	downloadedPath, err := downloadAndVerifyWithName(ctx, binaryInfo.URL, binaryInfo.Hash, hashType, tmpDir, name)
 	if err != nil {
 		return fmt.Errorf("failed to download and verify: %w", err)
 	}
@@ -934,16 +923,14 @@ func (bm *BinManager) downloadInternal(ctx context.Context, name string, progres
 	return nil
 }
 
-func (bm *BinManager) downloadWithProgress(ctx context.Context, name string, progress *mpb.Progress) error {
-	return bm.downloadInternal(ctx, name, progress)
-}
-
 // downloadWithTimeout installs one app under a per-app install timeout context,
-// translating a deadline into a clear timeout error.
-func (bm *BinManager) downloadWithTimeout(ctx context.Context, name string, progress *mpb.Progress) error {
+// translating a deadline into a clear timeout error. Progress (a bar in an
+// interactive terminal, throttled lines in CI) is rendered through the shared
+// ui display by the download layer.
+func (bm *BinManager) downloadWithTimeout(ctx context.Context, name string) error {
 	ctx, cancel, timeoutSec := newInstallContext(ctx)
 	defer cancel()
-	return wrapInstallTimeout(bm.downloadWithProgress(ctx, name, progress), timeoutSec)
+	return wrapInstallTimeout(bm.downloadInternal(ctx, name), timeoutSec)
 }
 
 func (bm *BinManager) installInternal(ctx context.Context, includeOptional bool) error {
@@ -967,7 +954,7 @@ func (bm *BinManager) installInternal(ctx context.Context, includeOptional bool)
 			continue
 		}
 
-		if err := bm.downloadWithTimeout(ctx, name, nil); err != nil {
+		if err := bm.downloadWithTimeout(ctx, name); err != nil {
 			return fmt.Errorf("failed to install %s: %w", name, err)
 		}
 	}

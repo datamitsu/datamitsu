@@ -14,7 +14,9 @@ import (
 	"github.com/datamitsu/datamitsu/internal/managedconfig"
 	"github.com/datamitsu/datamitsu/internal/project"
 	"github.com/datamitsu/datamitsu/internal/runtimemanager"
+	"github.com/datamitsu/datamitsu/internal/term"
 	"github.com/datamitsu/datamitsu/internal/traverser"
+	"github.com/datamitsu/datamitsu/internal/ui"
 
 	"github.com/spf13/cobra"
 )
@@ -44,6 +46,16 @@ func init() {
 
 func runInit(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
+
+	// Activate the shared display so downloads (binaries, runtimes, JARs) render
+	// as bars in one container on a terminal, or throttled lines under CI. Closed
+	// before the function returns so the final summary prints to a clean stream.
+	disp := ui.New(term.DetectMode())
+	restore := ui.Activate(disp)
+	defer func() {
+		disp.Close()
+		restore()
+	}()
 
 	// Get cwd
 	cwdPath, err := os.Getwd()
@@ -463,8 +475,12 @@ func mergeUnique(a, b []string) []string {
 // installSmartInitApps installs the given list of runtime-managed apps.
 func installSmartInitApps(ctx context.Context, getter commandInfoGetter, appsToInstall []string) error {
 	sort.Strings(appsToInstall)
+	if len(appsToInstall) > 0 {
+		fmt.Println("📦 Installing tools referenced by config links...")
+	}
+	// Per-tool "Installing …/Installed …" feedback is emitted by the runtime
+	// installers through the shared ui display, so it is not duplicated here.
 	for _, name := range appsToInstall {
-		fmt.Printf("📦 Installing %s (referenced by tools, has config links)...\n", name)
 		if _, err := getter.GetCommandInfo(ctx, name); err != nil {
 			return fmt.Errorf("failed to install %s: %w", name, err)
 		}
