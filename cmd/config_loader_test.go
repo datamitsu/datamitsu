@@ -212,7 +212,7 @@ func TestParseConfigResultLinkTarget(t *testing.T) {
 
 	_, err := vm.RunString(`
 		var result = {
-			init: {
+			setup: {
 				"CLAUDE.md": {
 					scope: "git-root",
 					linkTarget: "AGENTS.md"
@@ -259,7 +259,7 @@ func TestParseConfigResultLinkTargetWithRelativePath(t *testing.T) {
 
 	_, err := vm.RunString(`
 		var result = {
-			init: {
+			setup: {
 				".cursor/rules": {
 					scope: "git-root",
 					linkTarget: "../AGENTS.md"
@@ -291,7 +291,7 @@ func TestParseConfigResultLinkTargetNotSet(t *testing.T) {
 
 	_, err := vm.RunString(`
 		var result = {
-			init: {
+			setup: {
 				".gitignore": {
 					scope: "git-root",
 					content: function(ctx) { return "node_modules/"; }
@@ -326,7 +326,7 @@ func TestParseConfigResultLinkTargetWithContent(t *testing.T) {
 
 	_, err := vm.RunString(`
 		var result = {
-			init: {
+			setup: {
 				"CLAUDE.md": {
 					scope: "git-root",
 					linkTarget: "AGENTS.md",
@@ -359,7 +359,7 @@ func TestParseConfigResultInitConfigPreservesAllFields(t *testing.T) {
 
 	_, err := vm.RunString(`
 		var result = {
-			init: {
+			setup: {
 				"test.json": {
 					projectTypes: ["node"],
 					scope: "git-root",
@@ -1048,7 +1048,7 @@ function getConfig(input) {
     return {
         apps: apps,
         ignoreRules: ["from-shared: eslint"],
-        init: { ".editorconfig": { scope: "git-root", content: function(ctx) { return "from-shared"; } } }
+        setup: { ".editorconfig": { scope: "git-root", content: function(ctx) { return "from-shared"; } } }
     };
 }`, mergeHelper, jvmApp("a", "1.0.0")))
 
@@ -1065,7 +1065,7 @@ function getConfig(input) {
     return {
         apps: apps,
         ignoreRules: ["from-auto: prettier"],
-        init: { ".editorconfig": { scope: "git-root", content: function(ctx) { return (ctx.existingContent || "") + "\nfrom-auto"; } } }
+        setup: { ".editorconfig": { scope: "git-root", content: function(ctx) { return (ctx.existingContent || "") + "\nfrom-auto"; } } }
     };
 }`, mergeHelper, jvmApp("a", "2.0.0"), jvmApp("b", "1.0.0")))
 
@@ -2412,7 +2412,7 @@ func TestLoadConfigImplEvaluatesInitContent(t *testing.T) {
 function getMinVersion() { return "0.0.0"; }
 function getConfig(input) {
     return {
-        init: {
+        setup: {
             ".editorconfig": {
                 scope: "git-root",
                 content: function(context) { return "root = true"; }
@@ -2454,7 +2454,7 @@ func TestLoadConfigImplMergesLayersAcrossSources(t *testing.T) {
 function getMinVersion() { return "0.0.0"; }
 function getConfig(input) {
     return {
-        init: {
+        setup: {
             ".editorconfig": {
                 scope: "git-root",
                 content: function(context) { return "from-before"; }
@@ -2472,7 +2472,7 @@ function getConfig(input) {
 function getMinVersion() { return "0.0.0"; }
 function getConfig(input) {
     return {
-        init: {
+        setup: {
             ".editorconfig": {
                 scope: "git-root",
                 content: function(context) {
@@ -2515,7 +2515,7 @@ func TestLoadConfigImplSkipsFailedContentEvaluation(t *testing.T) {
 function getMinVersion() { return "0.0.0"; }
 function getConfig(input) {
     return {
-        init: {
+        setup: {
             "test-fail-eval.txt": {
                 scope: "git-root",
                 content: function(context) { throw new Error("content generation failed"); }

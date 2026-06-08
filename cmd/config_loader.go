@@ -404,31 +404,31 @@ func parseConfigResult(vm *goja.Runtime, resultVal goja.Value) (*config.Config, 
 		cfg.Tools = make(config.MapOfTools)
 	}
 
-	// Handle init configs specially to preserve content functions
+	// Handle setup configs specially to preserve content functions
 	resultObj := resultVal.ToObject(vm)
-	if initVal := resultObj.Get("init"); initVal != nil && initVal != goja.Undefined() {
-		initObj := initVal.ToObject(vm)
+	if setupVal := resultObj.Get("setup"); setupVal != nil && setupVal != goja.Undefined() {
+		setupObj := setupVal.ToObject(vm)
 		cfg.Setup = make(config.MapOfConfigSetup)
 
-		for _, key := range initObj.Keys() {
-			cfgInitVal := initObj.Get(key)
-			cfgInitObj := cfgInitVal.ToObject(vm)
+		for _, key := range setupObj.Keys() {
+			cfgSetupVal := setupObj.Get(key)
+			cfgSetupObj := cfgSetupVal.ToObject(vm)
 
-			var cfgInit config.ConfigSetup
+			var cfgSetup config.ConfigSetup
 
-			if err := vm.ExportTo(cfgInitVal, &cfgInit); err != nil {
-				return nil, fmt.Errorf("failed to export init config %s: %w", key, err)
+			if err := vm.ExportTo(cfgSetupVal, &cfgSetup); err != nil {
+				return nil, fmt.Errorf("failed to export setup config %s: %w", key, err)
 			}
 
-			if contentVal := cfgInitObj.Get("content"); contentVal != nil && contentVal != goja.Undefined() {
-				cfgInit.Content = contentVal
+			if contentVal := cfgSetupObj.Get("content"); contentVal != nil && contentVal != goja.Undefined() {
+				cfgSetup.Content = contentVal
 			}
 
-			if linkTargetVal := cfgInitObj.Get("linkTarget"); linkTargetVal != nil && linkTargetVal != goja.Undefined() {
-				cfgInit.LinkTarget = linkTargetVal.String()
+			if linkTargetVal := cfgSetupObj.Get("linkTarget"); linkTargetVal != nil && linkTargetVal != goja.Undefined() {
+				cfgSetup.LinkTarget = linkTargetVal.String()
 			}
 
-			cfg.Setup[key] = cfgInit
+			cfg.Setup[key] = cfgSetup
 		}
 	}
 
