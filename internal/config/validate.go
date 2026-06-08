@@ -345,8 +345,8 @@ func isValidSHA256Hex(s string) bool {
 	return err == nil
 }
 
-// ValidateInit validates init configuration entries.
-func ValidateInit(initConfigs MapOfConfigInit) error {
+// ValidateSetup validates init configuration entries.
+func ValidateSetup(initConfigs MapOfConfigSetup) error {
 	var errs []string
 
 	names := make([]string, 0, len(initConfigs))
@@ -369,14 +369,14 @@ func ValidateInit(initConfigs MapOfConfigInit) error {
 	return nil
 }
 
-// ValidateInitToolRefs returns warnings for any ConfigInit.Tools entry that does
+// ValidateSetupToolRefs returns warnings for any ConfigSetup.Tools entry that does
 // not reference a configured tool. Such a config can never be selected via
 // `setup --tools` (the name won't intersect any selection), so it would be
 // silently excluded — almost always an authoring typo. This mirrors the
 // unknown-tool warning emitted for .datamitsuignore rules. It warns rather than
 // errors so a config that conditionally omits a tool in some environment still
 // loads.
-func ValidateInitToolRefs(initConfigs MapOfConfigInit, tools MapOfTools) []string {
+func ValidateSetupToolRefs(initConfigs MapOfConfigSetup, tools MapOfTools) []string {
 	var warnings []string
 
 	names := make([]string, 0, len(initConfigs))

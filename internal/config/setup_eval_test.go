@@ -14,7 +14,7 @@ import (
 
 func TestGetPriorLayerContent(t *testing.T) {
 	t.Run("empty priorLayers returns nil", func(t *testing.T) {
-		layerMap := make(InitLayerMap)
+		layerMap := make(SetupLayerMap)
 		result := getPriorLayerContent(layerMap, ".editorconfig")
 		if result != nil {
 			t.Errorf("expected nil, got %q", *result)
@@ -23,10 +23,10 @@ func TestGetPriorLayerContent(t *testing.T) {
 
 	t.Run("single layer with content", func(t *testing.T) {
 		content := "root = true"
-		layerMap := InitLayerMap{
-			".editorconfig": &InitLayerHistory{
+		layerMap := SetupLayerMap{
+			".editorconfig": &SetupLayerHistory{
 				FileName: ".editorconfig",
-				Layers: []InitLayerEntry{
+				Layers: []SetupLayerEntry{
 					{LayerName: "default", GeneratedContent: &content},
 				},
 			},
@@ -43,10 +43,10 @@ func TestGetPriorLayerContent(t *testing.T) {
 	t.Run("walks backward through multiple layers", func(t *testing.T) {
 		content1 := "first"
 		content2 := "second"
-		layerMap := InitLayerMap{
-			".editorconfig": &InitLayerHistory{
+		layerMap := SetupLayerMap{
+			".editorconfig": &SetupLayerHistory{
 				FileName: ".editorconfig",
-				Layers: []InitLayerEntry{
+				Layers: []SetupLayerEntry{
 					{LayerName: "default", GeneratedContent: &content1},
 					{LayerName: "auto", GeneratedContent: &content2},
 				},
@@ -63,10 +63,10 @@ func TestGetPriorLayerContent(t *testing.T) {
 
 	t.Run("returns nil for unknown filename", func(t *testing.T) {
 		content := "some content"
-		layerMap := InitLayerMap{
-			".editorconfig": &InitLayerHistory{
+		layerMap := SetupLayerMap{
+			".editorconfig": &SetupLayerHistory{
 				FileName: ".editorconfig",
-				Layers: []InitLayerEntry{
+				Layers: []SetupLayerEntry{
 					{LayerName: "default", GeneratedContent: &content},
 				},
 			},
@@ -78,10 +78,10 @@ func TestGetPriorLayerContent(t *testing.T) {
 	})
 
 	t.Run("returns nil when layers have no content", func(t *testing.T) {
-		layerMap := InitLayerMap{
-			".editorconfig": &InitLayerHistory{
+		layerMap := SetupLayerMap{
+			".editorconfig": &SetupLayerHistory{
 				FileName: ".editorconfig",
-				Layers: []InitLayerEntry{
+				Layers: []SetupLayerEntry{
 					{LayerName: "default", GeneratedContent: nil},
 				},
 			},
@@ -99,17 +99,17 @@ func TestGetPriorLayerContent(t *testing.T) {
 
 func TestMergeInitLayers(t *testing.T) {
 	t.Run("creates new history entry", func(t *testing.T) {
-		layerMap := make(InitLayerMap)
+		layerMap := make(SetupLayerMap)
 		evaluatedContent := map[string]string{
 			".editorconfig": "root = true",
 		}
-		initConfigs := MapOfConfigInit{
-			".editorconfig": ConfigInit{
+		initConfigs := MapOfConfigSetup{
+			".editorconfig": ConfigSetup{
 				Scope: ScopeGitRoot,
 			},
 		}
 
-		MergeInitLayers(layerMap, "default", evaluatedContent, initConfigs)
+		MergeSetupLayers(layerMap, "default", evaluatedContent, initConfigs)
 
 		history, ok := layerMap[".editorconfig"]
 		if !ok {
@@ -132,26 +132,26 @@ func TestMergeInitLayers(t *testing.T) {
 
 	t.Run("appends to existing history", func(t *testing.T) {
 		content1 := "first"
-		layerMap := InitLayerMap{
-			".editorconfig": &InitLayerHistory{
+		layerMap := SetupLayerMap{
+			".editorconfig": &SetupLayerHistory{
 				FileName: ".editorconfig",
-				Layers: []InitLayerEntry{
+				Layers: []SetupLayerEntry{
 					{LayerName: "default", GeneratedContent: &content1},
 				},
-				FinalConfig: ConfigInit{Scope: ScopeGitRoot},
+				FinalConfig: ConfigSetup{Scope: ScopeGitRoot},
 			},
 		}
 		evaluatedContent := map[string]string{
 			".editorconfig": "second",
 		}
-		initConfigs := MapOfConfigInit{
-			".editorconfig": ConfigInit{
+		initConfigs := MapOfConfigSetup{
+			".editorconfig": ConfigSetup{
 				Scope:        ScopeGitRoot,
 				ProjectTypes: []string{"go"},
 			},
 		}
 
-		MergeInitLayers(layerMap, "auto", evaluatedContent, initConfigs)
+		MergeSetupLayers(layerMap, "auto", evaluatedContent, initConfigs)
 
 		history := layerMap[".editorconfig"]
 		if len(history.Layers) != 2 {
@@ -166,18 +166,18 @@ func TestMergeInitLayers(t *testing.T) {
 	})
 
 	t.Run("updates FinalConfig metadata", func(t *testing.T) {
-		layerMap := make(InitLayerMap)
+		layerMap := make(SetupLayerMap)
 		evaluatedContent := map[string]string{
 			".editorconfig": "content",
 		}
-		initConfigs := MapOfConfigInit{
-			".editorconfig": ConfigInit{
+		initConfigs := MapOfConfigSetup{
+			".editorconfig": ConfigSetup{
 				Scope:        ScopeGitRoot,
 				ProjectTypes: []string{"go", "typescript"},
 			},
 		}
 
-		MergeInitLayers(layerMap, "default", evaluatedContent, initConfigs)
+		MergeSetupLayers(layerMap, "default", evaluatedContent, initConfigs)
 
 		history := layerMap[".editorconfig"]
 		if history.FinalConfig.Scope != ScopeGitRoot {
@@ -190,8 +190,8 @@ func TestMergeInitLayers(t *testing.T) {
 
 	t.Run("preserves OriginalContent when merging layers", func(t *testing.T) {
 		originalContent := "original disk content"
-		layerMap := InitLayerMap{
-			".editorconfig": &InitLayerHistory{
+		layerMap := SetupLayerMap{
+			".editorconfig": &SetupLayerHistory{
 				FileName:        ".editorconfig",
 				OriginalContent: &originalContent,
 			},
@@ -199,13 +199,13 @@ func TestMergeInitLayers(t *testing.T) {
 		evaluatedContent := map[string]string{
 			".editorconfig": "generated content",
 		}
-		initConfigs := MapOfConfigInit{
-			".editorconfig": ConfigInit{
+		initConfigs := MapOfConfigSetup{
+			".editorconfig": ConfigSetup{
 				Scope: ScopeGitRoot,
 			},
 		}
 
-		MergeInitLayers(layerMap, "default", evaluatedContent, initConfigs)
+		MergeSetupLayers(layerMap, "default", evaluatedContent, initConfigs)
 
 		history := layerMap[".editorconfig"]
 		if history.OriginalContent == nil {
@@ -219,14 +219,14 @@ func TestMergeInitLayers(t *testing.T) {
 	t.Run("later layers do not overwrite OriginalContent from first layer", func(t *testing.T) {
 		originalContent := "first layer original"
 		content1 := "layer1 generated"
-		layerMap := InitLayerMap{
-			".editorconfig": &InitLayerHistory{
+		layerMap := SetupLayerMap{
+			".editorconfig": &SetupLayerHistory{
 				FileName:        ".editorconfig",
 				OriginalContent: &originalContent,
-				Layers: []InitLayerEntry{
+				Layers: []SetupLayerEntry{
 					{LayerName: "default", GeneratedContent: &content1},
 				},
-				FinalConfig: ConfigInit{Scope: ScopeGitRoot},
+				FinalConfig: ConfigSetup{Scope: ScopeGitRoot},
 			},
 		}
 
@@ -234,13 +234,13 @@ func TestMergeInitLayers(t *testing.T) {
 		evaluatedContent := map[string]string{
 			".editorconfig": "layer2 generated",
 		}
-		initConfigs := MapOfConfigInit{
-			".editorconfig": ConfigInit{
+		initConfigs := MapOfConfigSetup{
+			".editorconfig": ConfigSetup{
 				Scope: ScopeGitRoot,
 			},
 		}
 
-		MergeInitLayers(layerMap, "auto", evaluatedContent, initConfigs)
+		MergeSetupLayers(layerMap, "auto", evaluatedContent, initConfigs)
 
 		history := layerMap[".editorconfig"]
 		if history.OriginalContent == nil {
@@ -254,39 +254,39 @@ func TestMergeInitLayers(t *testing.T) {
 		}
 	})
 
-	t.Run("new entry in MergeInitLayers without prior OriginalContent gets nil", func(t *testing.T) {
-		layerMap := make(InitLayerMap)
+	t.Run("new entry in MergeSetupLayers without prior OriginalContent gets nil", func(t *testing.T) {
+		layerMap := make(SetupLayerMap)
 		evaluatedContent := map[string]string{
 			"new-file.txt": "new content",
 		}
-		initConfigs := MapOfConfigInit{
-			"new-file.txt": ConfigInit{
+		initConfigs := MapOfConfigSetup{
+			"new-file.txt": ConfigSetup{
 				Scope: ScopeGitRoot,
 			},
 		}
 
-		MergeInitLayers(layerMap, "default", evaluatedContent, initConfigs)
+		MergeSetupLayers(layerMap, "default", evaluatedContent, initConfigs)
 
 		history := layerMap["new-file.txt"]
 		if history == nil {
 			t.Fatal("expected new-file.txt in layerMap")
 		}
 		if history.OriginalContent != nil {
-			t.Errorf("expected nil OriginalContent for entry created by MergeInitLayers, got %q", *history.OriginalContent)
+			t.Errorf("expected nil OriginalContent for entry created by MergeSetupLayers, got %q", *history.OriginalContent)
 		}
 	})
 
 	t.Run("adds non-content layer for init entries without evaluated content", func(t *testing.T) {
-		layerMap := make(InitLayerMap)
+		layerMap := make(SetupLayerMap)
 		evaluatedContent := map[string]string{} // no content evaluated
-		initConfigs := MapOfConfigInit{
-			".editorconfig": ConfigInit{
+		initConfigs := MapOfConfigSetup{
+			".editorconfig": ConfigSetup{
 				Scope:      ScopeGitRoot,
 				LinkTarget: "../some/path",
 			},
 		}
 
-		MergeInitLayers(layerMap, "default", evaluatedContent, initConfigs)
+		MergeSetupLayers(layerMap, "default", evaluatedContent, initConfigs)
 
 		history, ok := layerMap[".editorconfig"]
 		if !ok {
@@ -308,8 +308,8 @@ func TestMergeInitLayers(t *testing.T) {
 func TestEvaluateInitContent(t *testing.T) {
 	t.Run("no content functions returns empty map", func(t *testing.T) {
 		cfg := &Config{
-			Init: MapOfConfigInit{
-				".editorconfig": ConfigInit{
+			Setup: MapOfConfigSetup{
+				".editorconfig": ConfigSetup{
 					Scope:      ScopeGitRoot,
 					LinkTarget: "../target",
 				},
@@ -317,7 +317,7 @@ func TestEvaluateInitContent(t *testing.T) {
 		}
 
 		vm := goja.New()
-		result := EvaluateInitContent(cfg, vm, "/root", "/root", make(InitLayerMap))
+		result := EvaluateInitContent(cfg, vm, "/root", "/root", make(SetupLayerMap))
 		if len(result) != 0 {
 			t.Errorf("expected empty map, got %d entries", len(result))
 		}
@@ -333,15 +333,15 @@ func TestEvaluateInitContent(t *testing.T) {
 		}
 
 		cfg := &Config{
-			Init: MapOfConfigInit{
-				".editorconfig": ConfigInit{
+			Setup: MapOfConfigSetup{
+				".editorconfig": ConfigSetup{
 					Scope:   ScopeGitRoot,
 					Content: fnVal,
 				},
 			},
 		}
 
-		result := EvaluateInitContent(cfg, vm, "/root", "/root", make(InitLayerMap))
+		result := EvaluateInitContent(cfg, vm, "/root", "/root", make(SetupLayerMap))
 		if len(result) != 1 {
 			t.Fatalf("expected 1 entry, got %d", len(result))
 		}
@@ -365,18 +365,18 @@ func TestEvaluateInitContent(t *testing.T) {
 		}
 
 		priorContent := "root = true"
-		priorLayers := InitLayerMap{
-			".editorconfig": &InitLayerHistory{
+		priorLayers := SetupLayerMap{
+			".editorconfig": &SetupLayerHistory{
 				FileName: ".editorconfig",
-				Layers: []InitLayerEntry{
+				Layers: []SetupLayerEntry{
 					{LayerName: "default", GeneratedContent: &priorContent},
 				},
 			},
 		}
 
 		cfg := &Config{
-			Init: MapOfConfigInit{
-				".editorconfig": ConfigInit{
+			Setup: MapOfConfigSetup{
+				".editorconfig": ConfigSetup{
 					Scope:   ScopeGitRoot,
 					Content: fnVal,
 				},
@@ -399,15 +399,15 @@ func TestEvaluateInitContent(t *testing.T) {
 		}
 
 		cfg := &Config{
-			Init: MapOfConfigInit{
-				".editorconfig": ConfigInit{
+			Setup: MapOfConfigSetup{
+				".editorconfig": ConfigSetup{
 					Scope:   ScopeGitRoot,
 					Content: fnVal,
 				},
 			},
 		}
 
-		result := EvaluateInitContent(cfg, vm, "/root", "/root", make(InitLayerMap))
+		result := EvaluateInitContent(cfg, vm, "/root", "/root", make(SetupLayerMap))
 		if len(result) != 0 {
 			t.Errorf("expected empty map when content() throws, got %d entries", len(result))
 		}
@@ -417,15 +417,15 @@ func TestEvaluateInitContent(t *testing.T) {
 		vm := goja.New()
 
 		cfg := &Config{
-			Init: MapOfConfigInit{
-				".editorconfig": ConfigInit{
+			Setup: MapOfConfigSetup{
+				".editorconfig": ConfigSetup{
 					Scope:      ScopeGitRoot,
 					DeleteOnly: true,
 				},
 			},
 		}
 
-		result := EvaluateInitContent(cfg, vm, "/root", "/root", make(InitLayerMap))
+		result := EvaluateInitContent(cfg, vm, "/root", "/root", make(SetupLayerMap))
 		if len(result) != 0 {
 			t.Errorf("expected empty map for deleteOnly, got %d entries", len(result))
 		}
@@ -435,15 +435,15 @@ func TestEvaluateInitContent(t *testing.T) {
 		vm := goja.New()
 
 		cfg := &Config{
-			Init: MapOfConfigInit{
-				".editorconfig": ConfigInit{
+			Setup: MapOfConfigSetup{
+				".editorconfig": ConfigSetup{
 					Scope:      ScopeGitRoot,
 					LinkTarget: "../target",
 				},
 			},
 		}
 
-		result := EvaluateInitContent(cfg, vm, "/root", "/root", make(InitLayerMap))
+		result := EvaluateInitContent(cfg, vm, "/root", "/root", make(SetupLayerMap))
 		if len(result) != 0 {
 			t.Errorf("expected empty map for linkTarget, got %d entries", len(result))
 		}
@@ -460,15 +460,15 @@ func TestEvaluateInitContent(t *testing.T) {
 		}
 
 		cfg := &Config{
-			Init: MapOfConfigInit{
-				"test.txt": ConfigInit{
+			Setup: MapOfConfigSetup{
+				"test.txt": ConfigSetup{
 					Scope:   ScopeGitRoot,
 					Content: fnVal,
 				},
 			},
 		}
 
-		result := EvaluateInitContent(cfg, vm, "/project", "/project/sub", make(InitLayerMap))
+		result := EvaluateInitContent(cfg, vm, "/project", "/project/sub", make(SetupLayerMap))
 		if result["test.txt"] != "/project:/project/sub" {
 			t.Errorf("expected '/project:/project/sub', got %q", result["test.txt"])
 		}
@@ -487,13 +487,13 @@ func TestEvaluateInitContent(t *testing.T) {
 		}
 
 		cfg := &Config{
-			Init: MapOfConfigInit{
-				".editorconfig": ConfigInit{Scope: ScopeGitRoot, Content: fn1},
-				"lefthook.yml":  ConfigInit{Scope: ScopeGitRoot, Content: fn2},
+			Setup: MapOfConfigSetup{
+				".editorconfig": ConfigSetup{Scope: ScopeGitRoot, Content: fn1},
+				"lefthook.yml":  ConfigSetup{Scope: ScopeGitRoot, Content: fn2},
 			},
 		}
 
-		result := EvaluateInitContent(cfg, vm, "/root", "/root", make(InitLayerMap))
+		result := EvaluateInitContent(cfg, vm, "/root", "/root", make(SetupLayerMap))
 		if len(result) != 2 {
 			t.Fatalf("expected 2 entries, got %d", len(result))
 		}
@@ -507,16 +507,16 @@ func TestEvaluateInitContent(t *testing.T) {
 }
 
 // ========================================
-// InitLayerHistory OriginalContent tests
+// SetupLayerHistory OriginalContent tests
 // ========================================
 
 func TestInitLayerHistoryOriginalContent(t *testing.T) {
 	t.Run("can store OriginalContent", func(t *testing.T) {
 		content := "existing file content"
-		history := &InitLayerHistory{
+		history := &SetupLayerHistory{
 			FileName:        ".editorconfig",
 			OriginalContent: &content,
-			Layers:          []InitLayerEntry{},
+			Layers:          []SetupLayerEntry{},
 		}
 		if history.OriginalContent == nil {
 			t.Fatal("expected OriginalContent to be non-nil")
@@ -527,10 +527,10 @@ func TestInitLayerHistoryOriginalContent(t *testing.T) {
 	})
 
 	t.Run("nil OriginalContent when file does not exist", func(t *testing.T) {
-		history := &InitLayerHistory{
+		history := &SetupLayerHistory{
 			FileName:        "nonexistent.txt",
 			OriginalContent: nil,
-			Layers:          []InitLayerEntry{},
+			Layers:          []SetupLayerEntry{},
 		}
 		if history.OriginalContent != nil {
 			t.Error("expected OriginalContent to be nil for nonexistent file")
@@ -540,10 +540,10 @@ func TestInitLayerHistoryOriginalContent(t *testing.T) {
 	t.Run("OriginalContent does not affect GetLastGeneratedContent", func(t *testing.T) {
 		original := "original disk content"
 		generated := "generated content"
-		history := &InitLayerHistory{
+		history := &SetupLayerHistory{
 			FileName:        ".editorconfig",
 			OriginalContent: &original,
-			Layers: []InitLayerEntry{
+			Layers: []SetupLayerEntry{
 				{LayerName: "default", GeneratedContent: &generated},
 			},
 		}
@@ -618,7 +618,7 @@ func TestReadFileContent(t *testing.T) {
 // ========================================
 
 func TestEvaluateInitContentReadsOriginalContent(t *testing.T) {
-	t.Run("reads file from disk and stores in InitLayerMap", func(t *testing.T) {
+	t.Run("reads file from disk and stores in SetupLayerMap", func(t *testing.T) {
 		dir := t.TempDir()
 		filePath := filepath.Join(dir, "package.json")
 		if err := os.WriteFile(filePath, []byte(`{"name": "my-project"}`), 0o644); err != nil {
@@ -632,15 +632,15 @@ func TestEvaluateInitContentReadsOriginalContent(t *testing.T) {
 		}
 
 		cfg := &Config{
-			Init: MapOfConfigInit{
-				"package.json": ConfigInit{
+			Setup: MapOfConfigSetup{
+				"package.json": ConfigSetup{
 					Scope:   ScopeGitRoot,
 					Content: fnVal,
 				},
 			},
 		}
 
-		layerMap := make(InitLayerMap)
+		layerMap := make(SetupLayerMap)
 		EvaluateInitContent(cfg, vm, dir, dir, layerMap)
 
 		history, ok := layerMap["package.json"]
@@ -676,15 +676,15 @@ func TestEvaluateInitContentReadsOriginalContent(t *testing.T) {
 		}
 
 		cfg := &Config{
-			Init: MapOfConfigInit{
-				"tsconfig.json": ConfigInit{
+			Setup: MapOfConfigSetup{
+				"tsconfig.json": ConfigSetup{
 					Scope:   ScopeProject,
 					Content: fnVal,
 				},
 			},
 		}
 
-		layerMap := make(InitLayerMap)
+		layerMap := make(SetupLayerMap)
 		EvaluateInitContent(cfg, vm, rootDir, subDir, layerMap)
 
 		history := layerMap["tsconfig.json"]
@@ -709,15 +709,15 @@ func TestEvaluateInitContentReadsOriginalContent(t *testing.T) {
 		}
 
 		cfg := &Config{
-			Init: MapOfConfigInit{
-				"nonexistent.json": ConfigInit{
+			Setup: MapOfConfigSetup{
+				"nonexistent.json": ConfigSetup{
 					Scope:   ScopeGitRoot,
 					Content: fnVal,
 				},
 			},
 		}
 
-		layerMap := make(InitLayerMap)
+		layerMap := make(SetupLayerMap)
 		EvaluateInitContent(cfg, vm, dir, dir, layerMap)
 
 		history := layerMap["nonexistent.json"]
@@ -743,19 +743,19 @@ func TestEvaluateInitContentReadsOriginalContent(t *testing.T) {
 		}
 
 		cfg := &Config{
-			Init: MapOfConfigInit{
-				"config.json": ConfigInit{
+			Setup: MapOfConfigSetup{
+				"config.json": ConfigSetup{
 					Scope:   ScopeGitRoot,
 					Content: fnVal,
 				},
 			},
 		}
 
-		layerMap := make(InitLayerMap)
+		layerMap := make(SetupLayerMap)
 
 		// First call reads original content
 		EvaluateInitContent(cfg, vm, dir, dir, layerMap)
-		MergeInitLayers(layerMap, "default", map[string]string{"config.json": "generated"}, cfg.Init)
+		MergeSetupLayers(layerMap, "default", map[string]string{"config.json": "generated"}, cfg.Setup)
 
 		// Modify the file on disk
 		if err := os.WriteFile(filePath, []byte("modified"), 0o644); err != nil {
@@ -799,15 +799,15 @@ func TestEvaluateInitContentPassesOriginalContentToJS(t *testing.T) {
 		}
 
 		cfg := &Config{
-			Init: MapOfConfigInit{
-				"package.json": ConfigInit{
+			Setup: MapOfConfigSetup{
+				"package.json": ConfigSetup{
 					Scope:   ScopeGitRoot,
 					Content: fnVal,
 				},
 			},
 		}
 
-		layerMap := make(InitLayerMap)
+		layerMap := make(SetupLayerMap)
 		result := EvaluateInitContent(cfg, vm, dir, dir, layerMap)
 
 		expected := `HAS_ORIGINAL:{"name": "test"}`
@@ -836,15 +836,15 @@ func TestEvaluateInitContentPassesOriginalContentToJS(t *testing.T) {
 		}
 
 		cfg := &Config{
-			Init: MapOfConfigInit{
-				"package.json": ConfigInit{
+			Setup: MapOfConfigSetup{
+				"package.json": ConfigSetup{
 					Scope:   ScopeGitRoot,
 					Content: fnVal,
 				},
 			},
 		}
 
-		layerMap := make(InitLayerMap)
+		layerMap := make(SetupLayerMap)
 		result := EvaluateInitContent(cfg, vm, dir, dir, layerMap)
 
 		// Verify the merged result contains both original and new fields
@@ -889,15 +889,15 @@ func TestEvaluateInitContentPassesOriginalContentToJS(t *testing.T) {
 		}
 
 		cfg := &Config{
-			Init: MapOfConfigInit{
-				"nonexistent.json": ConfigInit{
+			Setup: MapOfConfigSetup{
+				"nonexistent.json": ConfigSetup{
 					Scope:   ScopeGitRoot,
 					Content: fnVal,
 				},
 			},
 		}
 
-		layerMap := make(InitLayerMap)
+		layerMap := make(SetupLayerMap)
 		result := EvaluateInitContent(cfg, vm, dir, dir, layerMap)
 
 		if result["nonexistent.json"] != "UNDEFINED" {
@@ -930,17 +930,17 @@ func TestEdgeCaseRemoteConfigOverridesDefault(t *testing.T) {
 
 	// Layer 1: default config provides .editorconfig
 	defaultCfg := &Config{
-		Init: MapOfConfigInit{
-			".editorconfig": ConfigInit{
+		Setup: MapOfConfigSetup{
+			".editorconfig": ConfigSetup{
 				Scope:   ScopeGitRoot,
 				Content: defaultFn,
 			},
 		},
 	}
-	layerMap := make(InitLayerMap)
+	layerMap := make(SetupLayerMap)
 
 	evaluated1 := EvaluateInitContent(defaultCfg, vm, "/root", "/root", layerMap)
-	MergeInitLayers(layerMap, "default", evaluated1, defaultCfg.Init)
+	MergeSetupLayers(layerMap, "default", evaluated1, defaultCfg.Setup)
 
 	if evaluated1[".editorconfig"] != "default content" {
 		t.Errorf("default layer: expected 'default content', got %q", evaluated1[".editorconfig"])
@@ -948,8 +948,8 @@ func TestEdgeCaseRemoteConfigOverridesDefault(t *testing.T) {
 
 	// Layer 2: remote config overrides .editorconfig, receives default's content
 	remoteCfg := &Config{
-		Init: MapOfConfigInit{
-			".editorconfig": ConfigInit{
+		Setup: MapOfConfigSetup{
+			".editorconfig": ConfigSetup{
 				Scope:   ScopeGitRoot,
 				Content: remoteFn,
 			},
@@ -957,7 +957,7 @@ func TestEdgeCaseRemoteConfigOverridesDefault(t *testing.T) {
 	}
 
 	evaluated2 := EvaluateInitContent(remoteCfg, vm, "/root", "/root", layerMap)
-	MergeInitLayers(layerMap, "remote", evaluated2, remoteCfg.Init)
+	MergeSetupLayers(layerMap, "remote", evaluated2, remoteCfg.Setup)
 
 	expected := "overridden: default content"
 	if evaluated2[".editorconfig"] != expected {
@@ -991,22 +991,22 @@ func TestEdgeCaseInitEntryRemovedInNextLayer(t *testing.T) {
 
 	// Layer 1: defines .editorconfig with content
 	layer1Cfg := &Config{
-		Init: MapOfConfigInit{
-			".editorconfig": ConfigInit{
+		Setup: MapOfConfigSetup{
+			".editorconfig": ConfigSetup{
 				Scope:   ScopeGitRoot,
 				Content: fn,
 			},
 		},
 	}
-	layerMap := make(InitLayerMap)
+	layerMap := make(SetupLayerMap)
 
 	evaluated1 := EvaluateInitContent(layer1Cfg, vm, "/root", "/root", layerMap)
-	MergeInitLayers(layerMap, "default", evaluated1, layer1Cfg.Init)
+	MergeSetupLayers(layerMap, "default", evaluated1, layer1Cfg.Setup)
 
 	// Layer 2: removes .editorconfig (marks as deleteOnly)
 	layer2Cfg := &Config{
-		Init: MapOfConfigInit{
-			".editorconfig": ConfigInit{
+		Setup: MapOfConfigSetup{
+			".editorconfig": ConfigSetup{
 				Scope:      ScopeGitRoot,
 				DeleteOnly: true,
 			},
@@ -1014,7 +1014,7 @@ func TestEdgeCaseInitEntryRemovedInNextLayer(t *testing.T) {
 	}
 
 	evaluated2 := EvaluateInitContent(layer2Cfg, vm, "/root", "/root", layerMap)
-	MergeInitLayers(layerMap, "auto", evaluated2, layer2Cfg.Init)
+	MergeSetupLayers(layerMap, "auto", evaluated2, layer2Cfg.Setup)
 
 	// DeleteOnly entry should not produce content
 	if len(evaluated2) != 0 {
@@ -1055,12 +1055,12 @@ func TestEdgeCaseContentThrowsDuringEvaluation(t *testing.T) {
 	}
 
 	cfg := &Config{
-		Init: MapOfConfigInit{
-			".editorconfig": ConfigInit{
+		Setup: MapOfConfigSetup{
+			".editorconfig": ConfigSetup{
 				Scope:   ScopeGitRoot,
 				Content: throwFn,
 			},
-			"lefthook.yml": ConfigInit{
+			"lefthook.yml": ConfigSetup{
 				Scope:   ScopeGitRoot,
 				Content: okFn,
 			},
@@ -1068,7 +1068,7 @@ func TestEdgeCaseContentThrowsDuringEvaluation(t *testing.T) {
 	}
 
 	// EvaluateInitContent should not fail overall - throwing entries are skipped
-	result := EvaluateInitContent(cfg, vm, "/root", "/root", make(InitLayerMap))
+	result := EvaluateInitContent(cfg, vm, "/root", "/root", make(SetupLayerMap))
 
 	// The throwing entry should be skipped, the ok entry should succeed
 	if _, hasEditor := result[".editorconfig"]; hasEditor {
@@ -1080,8 +1080,8 @@ func TestEdgeCaseContentThrowsDuringEvaluation(t *testing.T) {
 
 	// Merge: the throwing entry won't appear in evaluatedContent,
 	// but will still be tracked as a non-content layer via initConfigs
-	layerMap := make(InitLayerMap)
-	MergeInitLayers(layerMap, "default", result, cfg.Init)
+	layerMap := make(SetupLayerMap)
+	MergeSetupLayers(layerMap, "default", result, cfg.Setup)
 
 	editorHistory := layerMap[".editorconfig"]
 	if editorHistory == nil {
@@ -1106,12 +1106,12 @@ func TestEdgeCaseScopeFiltering(t *testing.T) {
 	}
 
 	cfg := &Config{
-		Init: MapOfConfigInit{
-			".editorconfig": ConfigInit{
+		Setup: MapOfConfigSetup{
+			".editorconfig": ConfigSetup{
 				Scope:   ScopeGitRoot,
 				Content: gitRootFn,
 			},
-			"tsconfig.json": ConfigInit{
+			"tsconfig.json": ConfigSetup{
 				Scope:        ScopeProject,
 				Content:      projectFn,
 				ProjectTypes: []string{"typescript"},
@@ -1121,7 +1121,7 @@ func TestEdgeCaseScopeFiltering(t *testing.T) {
 
 	// EvaluateInitContent evaluates ALL entries regardless of scope.
 	// Scope filtering happens at install time, not at evaluation time.
-	result := EvaluateInitContent(cfg, vm, "/root", "/root/packages/web", make(InitLayerMap))
+	result := EvaluateInitContent(cfg, vm, "/root", "/root/packages/web", make(SetupLayerMap))
 
 	if len(result) != 2 {
 		t.Fatalf("expected 2 entries (both scopes evaluated), got %d", len(result))
@@ -1134,8 +1134,8 @@ func TestEdgeCaseScopeFiltering(t *testing.T) {
 	}
 
 	// Merge preserves scope in FinalConfig
-	layerMap := make(InitLayerMap)
-	MergeInitLayers(layerMap, "default", result, cfg.Init)
+	layerMap := make(SetupLayerMap)
+	MergeSetupLayers(layerMap, "default", result, cfg.Setup)
 
 	if layerMap[".editorconfig"].FinalConfig.Scope != ScopeGitRoot {
 		t.Errorf("expected git-root scope, got %q", layerMap[".editorconfig"].FinalConfig.Scope)
@@ -1176,15 +1176,15 @@ func TestOriginalContentReadsFromRootPathForGitRootScope(t *testing.T) {
 	}
 
 	cfg := &Config{
-		Init: MapOfConfigInit{
-			".editorconfig": ConfigInit{
+		Setup: MapOfConfigSetup{
+			".editorconfig": ConfigSetup{
 				Scope:   ScopeGitRoot,
 				Content: fn,
 			},
 		},
 	}
 
-	layerMap := make(InitLayerMap)
+	layerMap := make(SetupLayerMap)
 	// Pass different rootPath and cwdPath to simulate running from subdirectory
 	result := EvaluateInitContent(cfg, vm, rootDir, subDir, layerMap)
 

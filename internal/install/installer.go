@@ -23,22 +23,22 @@ type Installer struct {
 	cwdPath       string
 	projectTypes  []string
 	selectedTools []string // nil/empty = no --tools filter (install all applicable)
-	configs       config.MapOfConfigInit
+	configs       config.MapOfConfigSetup
 	vm            *goja.Runtime
-	layerMap      *config.InitLayerMap
+	layerMap      *config.SetupLayerMap
 }
 
 // NewInstaller creates a new configuration installer. selectedTools scopes
-// installation to configs associated with those tools (via ConfigInit.Tools);
+// installation to configs associated with those tools (via ConfigSetup.Tools);
 // pass nil to install every applicable config.
 func NewInstaller(
 	rootPath string,
 	cwdPath string,
 	projectTypes []string,
 	selectedTools []string,
-	configs config.MapOfConfigInit,
+	configs config.MapOfConfigSetup,
 	vm *goja.Runtime,
-	layerMap *config.InitLayerMap,
+	layerMap *config.SetupLayerMap,
 ) *Installer {
 	return &Installer{
 		rootPath:      rootPath,
@@ -80,7 +80,7 @@ func (i *Installer) InstallAll(ctx context.Context, dryRun bool) ([]InstallResul
 }
 
 // installConfig installs a single configuration file
-func (i *Installer) installConfig(ctx context.Context, name string, cfg config.ConfigInit, dryRun bool) InstallResult {
+func (i *Installer) installConfig(ctx context.Context, name string, cfg config.ConfigSetup, dryRun bool) InstallResult {
 	result := InstallResult{
 		ConfigName:   name,
 		DeletedFiles: []string{},
@@ -295,7 +295,7 @@ func (i *Installer) installSymlink(mainPath string, linkTarget string, dryRun bo
 }
 
 // isApplicable checks if the config applies to the current project types
-func (i *Installer) isApplicable(cfg config.ConfigInit) bool {
+func (i *Installer) isApplicable(cfg config.ConfigSetup) bool {
 	// If no project types specified, applies to all
 	if len(cfg.ProjectTypes) == 0 {
 		return true
@@ -315,7 +315,7 @@ func (i *Installer) isApplicable(cfg config.ConfigInit) bool {
 // filter. With no filter (selectedTools empty) every config passes. With a
 // filter, only configs whose Tools intersect the selected set pass; configs
 // with no Tools (unassociated infra) are always skipped.
-func (i *Installer) isToolSelected(cfg config.ConfigInit) bool {
+func (i *Installer) isToolSelected(cfg config.ConfigSetup) bool {
 	if len(i.selectedTools) == 0 {
 		return true
 	}
@@ -335,7 +335,7 @@ func (i *Installer) isToolSelected(cfg config.ConfigInit) bool {
 // cancellation-ready; do not drop it.
 //
 //nolint:unparam // ctx reserved for cancellable JS execution; keeps the install chain uniform
-func (i *Installer) generateContent(ctx context.Context, cfg config.ConfigInit, existingContent, originalContent, existingPath *string) (string, error) {
+func (i *Installer) generateContent(ctx context.Context, cfg config.ConfigSetup, existingContent, originalContent, existingPath *string) (string, error) {
 	// Content field should be a goja.Value representing a function
 	contentValue, ok := cfg.Content.(goja.Value)
 	if !ok {

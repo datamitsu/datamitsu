@@ -18,7 +18,7 @@ project-root/
 │   ├── eslint-config → ../.apps/node/my-eslint-config/{hash}/dist/eslint.config.js
 │   └── prettier-config → ../.apps/node/my-prettier-config/{hash}/.prettierrc.json
 ├── eslint.config.js          # imports from .datamitsu/eslint-config
-└── .prettierrc.json          # symlink via ConfigInit
+└── .prettierrc.json          # symlink via ConfigSetup
 ```
 
 The `.datamitsu/` directory is:
@@ -159,9 +159,9 @@ tools.Path.forImport(tools.Path.join(context.datamitsuDir, "eslint.config.js"));
 
 `tools.Path.forImport()` ensures relative paths start with `./` or `../`, which JavaScript/TypeScript `import` statements require. It's idempotent -- paths already starting with `./` or `../` are returned unchanged.
 
-## ConfigInit and Root Symlinks
+## ConfigSetup and Root Symlinks
 
-Beyond `.datamitsu/` links, the `init` configuration creates files and symlinks directly in your project:
+Beyond `.datamitsu/` links, the `setup` configuration creates files and symlinks directly in your project:
 
 ```javascript
 const init = {
