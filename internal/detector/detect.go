@@ -53,14 +53,17 @@ func HasAnyOSIndicator(filename string) bool {
 	return false
 }
 
-// HasAnyArchIndicator checks if the filename contains ANY architecture indicator
+// HasAnyArchIndicator checks if the filename contains ANY architecture
+// indicator — either a target datamitsu selects (ArchPatterns) or a foreign
+// target it only needs to recognise (ForeignArchPattern). Both gate the
+// implicit-amd64 fallback in scoring.go.
 func HasAnyArchIndicator(filename string) bool {
 	for archType := range ArchPatterns {
 		if MatchArch(filename, archType) {
 			return true
 		}
 	}
-	return false
+	return ForeignArchPattern.MatchString(filename)
 }
 
 // DetectContentType determines the content type from filename

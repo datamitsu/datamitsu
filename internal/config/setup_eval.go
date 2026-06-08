@@ -21,7 +21,7 @@ func readFileContent(path string) *string {
 
 // getPriorLayerContent returns the last generated content for a given filename
 // from the layer history. Returns nil if no prior layer generated content.
-func getPriorLayerContent(priorLayers InitLayerMap, fileName string) *string {
+func getPriorLayerContent(priorLayers SetupLayerMap, fileName string) *string {
 	history, ok := priorLayers[fileName]
 	if !ok {
 		return nil
@@ -29,11 +29,11 @@ func getPriorLayerContent(priorLayers InitLayerMap, fileName string) *string {
 	return GetLastGeneratedContent(history)
 }
 
-// MergeInitLayers merges evaluated content from a config layer into the layer map.
+// MergeSetupLayers merges evaluated content from a config layer into the layer map.
 // For each init config entry, it appends a layer entry to the history. Entries with
 // evaluated content are marked as content layers; entries without (e.g., linkTarget-only)
 // are recorded as non-content layers. FinalConfig is always updated to the latest metadata.
-func MergeInitLayers(layerMap InitLayerMap, layerName string, evaluatedContent map[string]string, initConfigs MapOfConfigInit) {
+func MergeSetupLayers(layerMap SetupLayerMap, layerName string, evaluatedContent map[string]string, initConfigs MapOfConfigSetup) {
 	// Process init config entries in sorted order for determinism
 	names := make([]string, 0, len(initConfigs))
 	for name := range initConfigs {
@@ -46,13 +46,13 @@ func MergeInitLayers(layerMap InitLayerMap, layerName string, evaluatedContent m
 
 		history, ok := layerMap[name]
 		if !ok {
-			history = &InitLayerHistory{
+			history = &SetupLayerHistory{
 				FileName: name,
 			}
 			layerMap[name] = history
 		}
 
-		entry := InitLayerEntry{
+		entry := SetupLayerEntry{
 			LayerName: layerName,
 		}
 
@@ -77,22 +77,22 @@ func MergeInitLayers(layerMap InitLayerMap, layerName string, evaluatedContent m
 //     Stays constant across all layers so configs can reference what the user had on disk.
 //   - existingContent: the output of the previous layer's content() call.
 //     Changes with each layer, enabling incremental transformations.
-func EvaluateInitContent(cfg *Config, vm *goja.Runtime, rootPath, cwdPath string, priorLayers InitLayerMap) map[string]string {
-	if cfg.Init == nil {
+func EvaluateInitContent(cfg *Config, vm *goja.Runtime, rootPath, cwdPath string, priorLayers SetupLayerMap) map[string]string {
+	if cfg.Setup == nil {
 		return nil
 	}
 
 	result := make(map[string]string)
 
 	// Process in sorted order for determinism
-	names := make([]string, 0, len(cfg.Init))
-	for name := range cfg.Init {
+	names := make([]string, 0, len(cfg.Setup))
+	for name := range cfg.Setup {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 
 	for _, name := range names {
-		initCfg := cfg.Init[name]
+		initCfg := cfg.Setup[name]
 
 		// Read original file content from disk and store in layer map (once per file).
 		// This must happen before the skip checks so that originalContent is available
@@ -104,7 +104,7 @@ func EvaluateInitContent(cfg *Config, vm *goja.Runtime, rootPath, cwdPath string
 				basePath = rootPath
 			}
 			originalContent := readFileContent(filepath.Join(basePath, name))
-			priorLayers[name] = &InitLayerHistory{
+			priorLayers[name] = &SetupLayerHistory{
 				FileName:        name,
 				OriginalContent: originalContent,
 			}

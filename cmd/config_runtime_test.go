@@ -37,6 +37,7 @@ func TestConfigRuntimeCmd_ValidJSONWithRequiredKeys(t *testing.T) {
 		"maxErrorCmdDisplay",
 		"maxParallelWorkers",
 		"minimumReleaseAgeMinutes",
+		"ociRegistry",
 		"timings",
 	}
 	for _, k := range requiredKeys {

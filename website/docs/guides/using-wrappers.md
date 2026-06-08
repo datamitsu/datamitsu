@@ -178,6 +178,10 @@ RUN datamitsu check
 
 Only changed tools re-download on updates, dramatically speeding up CI builds.
 
+:::tip
+If you maintain the wrapper package itself (rather than just consuming it), you can publish a pre-built image instead of running `datamitsu init --all` at build time. `datamitsu devtools dockerfile` generates an optimized multi-stage Dockerfile with a digest-pinned base and one cacheable layer per tool. See [Generating a Docker image](/docs/how-to/maintain-wrapper#generating-a-docker-image-devtools-dockerfile).
+:::
+
 ## Customizing Wrapper Configs
 
 Wrapper packages provide opinionated defaults, but you can override them in your project.

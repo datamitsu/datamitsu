@@ -467,7 +467,7 @@ func installRuntimeAppsWithLinks(ctx context.Context, binMgr *binmanager.BinMana
 		// Also include any runtime-managed app that has Links defined,
 		// even if not directly referenced by tool operations. Apps with
 		// Links may only be referenced via tools.Config.linkPath() in
-		// ConfigInit sections, which scanReferencedApps does not inspect.
+		// ConfigSetup sections, which scanReferencedApps does not inspect.
 		linkApps := allRuntimeAppsWithLinks(cfg.Apps)
 		appsToInstall = mergeUnique(appsToInstall, linkApps)
 	}

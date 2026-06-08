@@ -118,8 +118,8 @@ const (
 	ScopeGitRoot = "git-root"
 )
 
-// ConfigInit describes how a managed config file is generated or linked.
-type ConfigInit struct { //nolint:revive // exported: name kept explicit; config.ConfigInit reads clearer than the bare config.Init
+// ConfigSetup describes how a managed config file is generated or linked.
+type ConfigSetup struct { //nolint:revive // exported: name kept explicit; config.ConfigSetup reads clearer than the bare config.Setup
 	ProjectTypes []string `json:"projectTypes,omitempty"`
 	// Tools associates this config file with one or more tools (names matching
 	// keys in MapOfTools). With `setup --tools`, only configs whose Tools
@@ -134,8 +134,8 @@ type ConfigInit struct { //nolint:revive // exported: name kept explicit; config
 	Content any `json:"-"`
 }
 
-// MapOfConfigInit maps a config-file name to its generation definition.
-type MapOfConfigInit map[string]ConfigInit
+// MapOfConfigSetup maps a config-file name to its generation definition.
+type MapOfConfigSetup map[string]ConfigSetup
 
 // ========================================
 // Runtime Configuration
@@ -220,7 +220,7 @@ type Config struct {
 	Apps          binmanager.MapOfApps    `json:"apps,omitempty"`
 	Bundles       binmanager.MapOfBundles `json:"bundles,omitempty"`
 	Runtimes      MapOfRuntimes           `json:"runtimes,omitempty"`
-	Init          MapOfConfigInit         `json:"init,omitempty"`
+	Setup         MapOfConfigSetup        `json:"setup,omitempty"`
 	ProjectTypes  MapOfProjectTypes       `json:"projectTypes,omitempty"`
 	Tools         MapOfTools              `json:"tools,omitempty"`
 	InitCommands  MapOfInitCommands       `json:"initCommands,omitempty"`

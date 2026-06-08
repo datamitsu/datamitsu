@@ -652,6 +652,28 @@ func TestGetBinaryCommandOverride(t *testing.T) {
 	})
 }
 
+func TestGetOCIRegistry(t *testing.T) {
+	// t.Setenv registers cleanup that restores ociRegistry.Name even though the
+	// subtest below os.Unsetenv it mid-test.
+	t.Setenv(ociRegistry.Name, os.Getenv(ociRegistry.Name))
+
+	t.Run("returns ghcr.io default when unset", func(t *testing.T) {
+		_ = os.Unsetenv(ociRegistry.Name)
+		got := GetOCIRegistry()
+		if got != "ghcr.io" {
+			t.Errorf("GetOCIRegistry() = %q, want 'ghcr.io'", got)
+		}
+	})
+
+	t.Run("returns override when set", func(t *testing.T) {
+		t.Setenv(ociRegistry.Name, "registry.example.com")
+		got := GetOCIRegistry()
+		if got != "registry.example.com" {
+			t.Errorf("GetOCIRegistry() = %q, want 'registry.example.com'", got)
+		}
+	})
+}
+
 func TestInstallTimeoutSeconds(t *testing.T) {
 	// t.Setenv registers cleanup that restores installTimeout.Name even though
 	// subtests below os.Unsetenv it mid-test.

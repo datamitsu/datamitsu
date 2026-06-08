@@ -38,6 +38,7 @@ type Effective struct {
 	MaxErrorCmdDisplay       int    `json:"maxErrorCmdDisplay"`
 	MaxParallelWorkers       int    `json:"maxParallelWorkers"`
 	MinimumReleaseAgeMinutes int    `json:"minimumReleaseAgeMinutes"`
+	OCIRegistry              string `json:"ociRegistry"`
 	Timings                  bool   `json:"timings"`
 }
 
@@ -52,6 +53,7 @@ func Compute() Effective {
 		MaxErrorCmdDisplay:       env.GetMaxErrorCommandDisplay(),
 		MaxParallelWorkers:       env.GetMaxParallelWorkers(),
 		MinimumReleaseAgeMinutes: env.MinimumReleaseAgeMinutes(),
+		OCIRegistry:              env.GetOCIRegistry(),
 		Timings:                  env.IsTimingsEnabled(),
 	}
 }
