@@ -161,7 +161,7 @@ func runSetup(_ *cobra.Command, _ []string) error {
 	var allResults []install.InstallResult
 	for _, projectPath := range sortedPaths {
 		projectTypes := locationMap[projectPath]
-		installer := install.NewInstaller(rootPath, projectPath, projectTypes, selectedTools, cfg.Init, vm, layerMap)
+		installer := install.NewInstaller(rootPath, projectPath, projectTypes, selectedTools, cfg.Setup, vm, layerMap)
 		results, err := installer.InstallAll(ctx, setupDryRun)
 		if err != nil {
 			return fmt.Errorf("failed to install configs in %s: %w", projectPath, err)
@@ -228,7 +228,7 @@ func runSetup(_ *cobra.Command, _ []string) error {
 
 	// Surface tool-scoped no-ops (a tool may own no config, or its only config
 	// may not apply here). Informational, not an error.
-	for _, t := range toolsWithoutGeneratedConfig(selectedTools, cfg.Init, results) {
+	for _, t := range toolsWithoutGeneratedConfig(selectedTools, cfg.Setup, results) {
 		disp.PhaseBody(clr.Faint("no config generated for " + t))
 	}
 
@@ -398,7 +398,7 @@ func validateSelectedTools(selected []string, tools config.MapOfTools) error {
 // projectTypes did not match this location). It is derived from the actual
 // install results so project-type skips are surfaced too, not just missing
 // associations. Returns nil when no tools were selected.
-func toolsWithoutGeneratedConfig(selected []string, configs config.MapOfConfigInit, results []install.InstallResult) []string {
+func toolsWithoutGeneratedConfig(selected []string, configs config.MapOfConfigSetup, results []install.InstallResult) []string {
 	if len(selected) == 0 {
 		return nil
 	}

@@ -209,7 +209,7 @@ datamitsu setup
 Setup detects project types, generates configuration files, and optionally runs fix afterward.
 
 With `--tools`, setup is scoped to the named tools: it (re)generates only the
-config files associated with them (via each init entry's [`tools`](./configuration-api.md#config-init-init) field)
+config files associated with them (via each setup entry's [`tools`](./configuration-api.md#config-setup-setup) field)
 and leaves everything else untouched — other tools' configs and unassociated
 infrastructure files (`.gitignore`, `lefthook.yaml`, `pnpm-workspace.yaml`, …)
 are skipped. The post-setup fix is scoped to the same tools. This is the
