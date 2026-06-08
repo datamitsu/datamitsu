@@ -22,13 +22,16 @@ import (
 const defaultBaseRepo = "datamitsu/datamitsu"
 
 var (
-	dockerfileOutput   string
-	dockerfileAlpine   bool
-	dockerfileOffline  bool
-	dockerfileNoVerify bool
-	dockerfileConfigJS string
-	dockerfileRepo     string
-	dockerfileLabels   []string
+	dockerfileOutput    string
+	dockerfileAlpine    bool
+	dockerfileOffline   bool
+	dockerfileNoVerify  bool
+	dockerfileConfigJS  string
+	dockerfileRepo      string
+	dockerfileLabels    []string
+	dockerfileArgs      []string
+	dockerfileBuildArgs []string
+	dockerfileEnv       []string
 )
 
 // digestResolver is the seam over ocidigest.Resolver so the command can be
@@ -65,6 +68,9 @@ func init() {
 	dockerfileCmd.Flags().StringVar(&dockerfileConfigJS, "config-js", "datamitsu.config.js", "Pre-built config file COPYed into the image")
 	dockerfileCmd.Flags().StringVar(&dockerfileRepo, "repo", "", "Override the base image repository (default: the repo this datamitsu build was published under)")
 	dockerfileCmd.Flags().StringArrayVar(&dockerfileLabels, "label", nil, "OCI label key=value for the final image (repeatable)")
+	dockerfileCmd.Flags().StringArrayVar(&dockerfileArgs, "arg", nil, "Build ARG (name or name=default) declared before ENV in the final stage (repeatable)")
+	dockerfileCmd.Flags().StringArrayVar(&dockerfileBuildArgs, "build-arg", nil, "Build-time ARG promoted to ENV so install stages inherit it, e.g. DATAMITSU_INSTALL_TIMEOUT=1200; not baked into the final image (repeatable)")
+	dockerfileCmd.Flags().StringArrayVar(&dockerfileEnv, "env", nil, "ENV key=value baked into the final image (repeatable)")
 	_ = dockerfileCmd.MarkFlagRequired("output")
 	devtoolsCmd.AddCommand(dockerfileCmd)
 }
@@ -76,6 +82,21 @@ func runDockerfile(ctx context.Context, cmd *cobra.Command) error {
 	}
 
 	labels, err := parseLabels(dockerfileLabels)
+	if err != nil {
+		return err
+	}
+
+	finalArgs, err := parseArgs("arg", dockerfileArgs)
+	if err != nil {
+		return err
+	}
+
+	buildArgs, err := parseArgs("build-arg", dockerfileBuildArgs)
+	if err != nil {
+		return err
+	}
+
+	envVars, err := parseEnv(dockerfileEnv)
 	if err != nil {
 		return err
 	}
@@ -103,6 +124,9 @@ func runDockerfile(ctx context.Context, cmd *cobra.Command) error {
 	opts.UnpinnedReason = unpinnedReason
 	opts.ConfigSource = dockerfileConfigJS
 	opts.Labels = labels
+	opts.Args = finalArgs
+	opts.BuildArgs = buildArgs
+	opts.Env = envVars
 	opts.NoVerify = dockerfileNoVerify
 
 	text := dockerfile.Render(plan, opts)
@@ -171,15 +195,42 @@ func resolveImageTag(ldflagsTag, version string, alpine bool) string {
 
 // parseLabels turns repeated key=value flags into a map (empty when no flags).
 func parseLabels(pairs []string) (map[string]string, error) {
-	labels := make(map[string]string, len(pairs))
+	return parseKeyValues("label", pairs)
+}
+
+// parseEnv turns repeated key=value flags into a map (empty when no flags).
+func parseEnv(pairs []string) (map[string]string, error) {
+	return parseKeyValues("env", pairs)
+}
+
+// parseArgs turns repeated --arg/--build-arg flags into a map. Unlike labels/env,
+// a bare name (no '=') is allowed: it declares an ARG whose default comes from
+// `docker build --build-arg` at build time (value stored as ""). flag names the
+// originating flag for error messages.
+func parseArgs(flag string, pairs []string) (map[string]string, error) {
+	m := make(map[string]string, len(pairs))
+	for _, pair := range pairs {
+		key, value, _ := strings.Cut(pair, "=")
+		if key == "" {
+			return nil, fmt.Errorf("invalid --%s %q: want name or name=value", flag, pair)
+		}
+		m[key] = value
+	}
+	return m, nil
+}
+
+// parseKeyValues parses repeated --<flag> key=value pairs into a map; the value
+// may itself contain '=' (only the first is the separator).
+func parseKeyValues(flag string, pairs []string) (map[string]string, error) {
+	m := make(map[string]string, len(pairs))
 	for _, pair := range pairs {
 		key, value, ok := strings.Cut(pair, "=")
 		if !ok || key == "" {
-			return nil, fmt.Errorf("invalid --label %q: want key=value", pair)
+			return nil, fmt.Errorf("invalid --%s %q: want key=value", flag, pair)
 		}
-		labels[key] = value
+		m[key] = value
 	}
-	return labels, nil
+	return m, nil
 }
 
 // writeFileAtomic writes data to path via a temp file and rename, fully

@@ -254,5 +254,6 @@ export default defineConfig((config) => ({
     "unrecognised",
     "recognised",
     "chowned",
+    "workdirs",
   ],
 }));

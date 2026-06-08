@@ -301,6 +301,50 @@ datamitsu devtools dockerfile -o docker/Dockerfile \
   --label org.opencontainers.image.source=https://github.com/me/my-config
 ```
 
+**Build args and environment variables.** Declare build-time `ARG`s with repeatable `--arg` flags and runtime `ENV` vars with `--env`. In the final stage all `ARG`s are emitted **before** all `ENV`s, so an `ENV` value can reference an `ARG`. An `--arg` may be a bare `NAME` (its default is supplied by `docker build --build-arg NAME=…`) or `NAME=default`; an `--env` value may contain `=` (only the first separates key from value). Like labels, keep them in the generate invocation so they survive regeneration:
+
+```bash
+datamitsu devtools dockerfile -o docker/Dockerfile \
+  --arg BUILD_DATE \
+  --arg TZ=UTC \
+  --env LANG=C.UTF-8
+```
+
+This emits, in the final stage:
+
+```dockerfile
+ARG BUILD_DATE
+ARG TZ="UTC"
+ENV LANG="C.UTF-8"
+```
+
+**Build-time variables (`--build-arg`).** `--arg`/`--env` only affect the **final** image — they are runtime knobs and do nothing for the build itself. To influence the install stages (for example raise the install timeout for heavy tools), use `--build-arg`. Each one is declared as an `ARG` (overridable via `docker build --build-arg`) and promoted to an `ENV` in a dedicated `dm-build` stage that every install stage derives from, so `datamitsu install` sees it. The final image is built `FROM dm-base` (not `dm-build`), so build args **never leak into the shipped image**:
+
+```bash
+datamitsu devtools dockerfile -o docker/Dockerfile \
+  --build-arg DATAMITSU_INSTALL_TIMEOUT=1200 \
+  --build-arg HTTP_PROXY
+```
+
+emits:
+
+```dockerfile
+FROM dm-base AS dm-build
+ARG DATAMITSU_INSTALL_TIMEOUT="1200"
+ENV DATAMITSU_INSTALL_TIMEOUT=$DATAMITSU_INSTALL_TIMEOUT
+ARG HTTP_PROXY
+ENV HTTP_PROXY=$HTTP_PROXY
+
+FROM dm-build AS rt-go          # install inherits the ENV
+RUN datamitsu install --runtime go
+```
+
+A bare `--build-arg NAME` (no default) takes its value from `docker build --build-arg NAME=…`. With no `--build-arg` flags the `dm-build` stage is omitted and install stages derive straight from `dm-base`.
+
+:::warning Secrets
+Do not pass tokens or other secrets via `--build-arg`: an `ARG` value lingers in the intermediate build layers (visible in the build cache). For credentials use `RUN --mount=type=secret` instead.
+:::
+
 **Pulling from a mirror.** To resolve the base-image digest from a registry other than `ghcr.io` (for example a pull-through cache), set `DATAMITSU_OCI_REGISTRY`:
 
 ```bash

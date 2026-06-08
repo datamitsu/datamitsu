@@ -67,9 +67,8 @@ func TestRender_ConfigSplitLayering(t *testing.T) {
 
 	// The base stage must be config-free: nothing FROM it should be invalidated
 	// by a config edit. The config enters only config-split and final. It also
-	// must not `git init` — slice stages use --no-auto-config, so a git root is
-	// never needed (and COPY --link would make the workdir root-owned, which git
-	// rejects).
+	// must not `git init`: COPY --link makes app-stage workdirs root-owned, and a
+	// `.git` from the base would then be rejected by git as dubious ownership.
 	baseBlock := out[strings.Index(out, "AS dm-base"):strings.Index(out, "AS config-split")]
 	if strings.Contains(baseBlock, "datamitsu.config.js") {
 		t.Errorf("base stage must not COPY the config (it would bust every stage on edit):\n%s", baseBlock)
@@ -82,9 +81,9 @@ func TestRender_ConfigSplitLayering(t *testing.T) {
 	// gets its own git init; its owner-correct workdir keeps git happy.
 	mustContain(t, out, "FROM dm-base AS config-split")
 	mustContain(t, out, "COPY --chown=datamitsu:datamitsu datamitsu.config.js ./")
+	// git init is chained into the same RUN as split-config (one layer, no DL3059).
 	splitBlock := out[strings.Index(out, "AS config-split"):strings.Index(out, "AS rt-")]
-	mustContain(t, splitBlock, "RUN git init -q .")
-	mustContain(t, out, "RUN datamitsu --config /opt/datamitsu-config/datamitsu.config.js devtools split-config --output /slices")
+	mustContain(t, splitBlock, "RUN git init -q . && datamitsu --config /opt/datamitsu-config/datamitsu.config.js devtools split-config --output /slices")
 
 	// Every builder stage COPYs only its own slice from config-split, landing it
 	// at the path install reads.
@@ -156,6 +155,71 @@ func TestRender_Labels(t *testing.T) {
 	out := Render(samplePlan(), opts)
 	mustContain(t, out, `LABEL org.opencontainers.image.source="https://github.com/shibanet0/datamitsu-config"`)
 	mustContain(t, out, `LABEL org.opencontainers.image.title="datamitsu-config"`)
+}
+
+func TestRender_Env(t *testing.T) {
+	opts := pinnedOpts()
+	opts.Env = map[string]string{
+		"TZ":            "UTC",
+		"DATAMITSU_FOO": "bar=baz",
+	}
+	out := Render(samplePlan(), opts)
+	mustContain(t, out, `ENV DATAMITSU_FOO="bar=baz"`)
+	mustContain(t, out, `ENV TZ="UTC"`)
+}
+
+func TestRender_Args(t *testing.T) {
+	opts := pinnedOpts()
+	opts.Args = map[string]string{
+		"BUILD_ID": "",    // bare ARG: default supplied at build time
+		"TZ":       "UTC", // ARG with a default
+	}
+	opts.Env = map[string]string{"APP_TZ": "$TZ"}
+	out := Render(samplePlan(), opts)
+	mustContain(t, out, "ARG BUILD_ID\n")
+	mustContain(t, out, `ARG TZ="UTC"`)
+	// ARGs must precede ENV so an ENV value can reference a build ARG.
+	if strings.Index(out, "ARG TZ=") > strings.Index(out, "ENV APP_TZ=") {
+		t.Errorf("ARG must come before ENV in the final stage:\n%s", out)
+	}
+}
+
+func TestRender_BuildArgs(t *testing.T) {
+	opts := pinnedOpts()
+	opts.BuildArgs = map[string]string{
+		"DATAMITSU_INSTALL_TIMEOUT": "1200",
+		"HTTP_PROXY":                "", // bare ARG, value from docker build --build-arg
+	}
+	out := Render(samplePlan(), opts)
+
+	// dm-build carries each build arg as ARG + promoted ENV (ARG does not cross FROM).
+	mustContain(t, out, "FROM dm-base AS dm-build")
+	mustContain(t, out, `ARG DATAMITSU_INSTALL_TIMEOUT="1200"`)
+	mustContain(t, out, "ENV DATAMITSU_INSTALL_TIMEOUT=$DATAMITSU_INSTALL_TIMEOUT")
+	mustContain(t, out, "ARG HTTP_PROXY\n")
+	mustContain(t, out, "ENV HTTP_PROXY=$HTTP_PROXY")
+
+	// Install stages derive from dm-build; config-split and final stay on dm-base
+	// so the build args never reach the shipped image.
+	mustContain(t, out, "FROM dm-build AS rt-")
+	mustContain(t, out, "FROM dm-base AS config-split")
+	mustContain(t, out, "FROM dm-base AS final")
+	finalIdx := strings.Index(out, "AS final")
+	if finalIdx < 0 {
+		t.Fatal("final stage not found")
+	}
+	if strings.Contains(out[finalIdx:], "ENV DATAMITSU_INSTALL_TIMEOUT") {
+		t.Error("build args must not leak into the final stage")
+	}
+}
+
+func TestRender_NoBuildArgs_NoBuildStage(t *testing.T) {
+	out := Render(samplePlan(), pinnedOpts())
+	if strings.Contains(out, "AS dm-build") {
+		t.Errorf("dm-build stage must be omitted when no build args are set:\n%s", out)
+	}
+	// Install stages derive straight from dm-base in that case.
+	mustContain(t, out, "FROM dm-base AS rt-")
 }
 
 func mustContain(t *testing.T, haystack, needle string) {

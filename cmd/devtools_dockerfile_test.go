@@ -135,6 +135,41 @@ func TestParseLabels(t *testing.T) {
 	}
 }
 
+func TestParseEnv(t *testing.T) {
+	got, err := parseEnv([]string{"TZ=UTC", "FOO=bar=baz"})
+	if err != nil {
+		t.Fatalf("parseEnv: %v", err)
+	}
+	if got["TZ"] != "UTC" || got["FOO"] != "bar=baz" {
+		t.Errorf("parseEnv = %v", got)
+	}
+
+	if _, err := parseEnv([]string{"noequals"}); err == nil {
+		t.Error("expected error for env without '='")
+	}
+	if _, err := parseEnv([]string{"=v"}); err == nil {
+		t.Error("expected error for empty key")
+	}
+}
+
+func TestParseArgs(t *testing.T) {
+	got, err := parseArgs("arg", []string{"BUILD_ID", "TZ=UTC", "EXPR=a=b"})
+	if err != nil {
+		t.Fatalf("parseArgs: %v", err)
+	}
+	if got["BUILD_ID"] != "" || got["TZ"] != "UTC" || got["EXPR"] != "a=b" {
+		t.Errorf("parseArgs = %v", got)
+	}
+
+	_, err = parseArgs("build-arg", []string{"=v"})
+	if err == nil {
+		t.Fatal("expected error for empty arg name")
+	}
+	if !strings.Contains(err.Error(), "--build-arg") {
+		t.Errorf("error should name the flag: %v", err)
+	}
+}
+
 func TestWriteFileAtomic_OverwritesFully(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "docker", "Dockerfile")

@@ -23,6 +23,9 @@ type RenderOptions struct {
 	StoreRoot      string            // DATAMITSU_CACHE_DIR value
 	User           string            // final (and build) image user
 	Labels         map[string]string // OCI labels for the final image
+	Args           map[string]string // final-stage build ARGs declared before ENV (value "" = bare ARG)
+	Env            map[string]string // ENV vars baked into the final image
+	BuildArgs      map[string]string // ARG→ENV promoted in the dm-build stage so install stages inherit them (value "" = bare ARG)
 	Entrypoint     []string          // final ENTRYPOINT; defaulted when nil
 	Cmd            []string          // final CMD
 	NoVerify       bool              // disable in-stage version checks (verification is on by default)
@@ -57,6 +60,7 @@ func Render(plan Plan, opts RenderOptions) string {
 
 	writeHeader(&b, opts)
 	writeBaseStage(&b, opts)
+	writeBuildStage(&b, opts)
 	writeConfigSplitStage(&b, opts)
 	writeRuntimeStages(&b, plan, opts)
 	writeRuntimeAppStages(&b, plan, opts)
@@ -109,6 +113,44 @@ func writeBaseStage(b *strings.Builder, opts RenderOptions) {
 	// so facts are irrelevant). The config-split stage gets its own git init.
 }
 
+// builderBase is the parent stage for install stages (rt-*, binary app-*). When
+// build args are supplied it is dm-build (which carries them as inherited ENV);
+// otherwise install stages derive straight from dm-base and no extra stage exists.
+func (o RenderOptions) builderBase() string {
+	if len(o.BuildArgs) > 0 {
+		return "dm-build"
+	}
+	return "dm-base"
+}
+
+// writeBuildStage emits the dm-build stage: each build arg is declared as an ARG
+// (overridable via `docker build --build-arg`) and immediately promoted to an ENV
+// so every install stage FROM dm-build inherits it — ARG itself does not cross
+// FROM. final stays FROM dm-base, so these never reach the shipped image. Use
+// this for build-time knobs like DATAMITSU_INSTALL_TIMEOUT; for secrets prefer
+// `RUN --mount=type=secret` over an ARG (which lingers in intermediate layers).
+func writeBuildStage(b *strings.Builder, opts RenderOptions) {
+	if len(opts.BuildArgs) == 0 {
+		return
+	}
+	b.WriteString("# --- Build env: ARGs promoted to ENV so every install stage inherits them ---\n")
+	b.WriteString("FROM dm-base AS dm-build\n")
+	keys := make([]string, 0, len(opts.BuildArgs))
+	for k := range opts.BuildArgs {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		if v := opts.BuildArgs[k]; v == "" {
+			fmt.Fprintf(b, "ARG %s\n", k)
+		} else {
+			fmt.Fprintf(b, "ARG %s=%s\n", k, strconv.Quote(v))
+		}
+		fmt.Fprintf(b, "ENV %s=$%s\n", k, k)
+	}
+	b.WriteString("\n")
+}
+
 // writeConfigSplitStage emits the stage that reads the full config once and
 // writes a minimal per-stage config slice into sliceDir. Every builder stage
 // then COPYs only its own slice, so editing one app changes only that app's
@@ -119,9 +161,9 @@ func writeConfigSplitStage(b *strings.Builder, opts RenderOptions) {
 	fmt.Fprintf(b, "COPY --chown=%s:%s %s ./\n", opts.User, opts.User, opts.ConfigSource)
 	// This stage loads the FULL config, which may read facts() (e.g. isInGitRepo),
 	// so it gets a git root. Its workdir is owner-correct (COPY --chown, no
-	// COPY --link), so git accepts it — unlike the COPY --link app stages.
-	b.WriteString("RUN git init -q .\n")
-	fmt.Fprintf(b, "RUN datamitsu --config %s devtools split-config --output %s\n\n", opts.configImagePath(), sliceDir)
+	// COPY --link), so git accepts it — unlike the COPY --link app stages. git init
+	// is chained into the same RUN as split-config (one layer; avoids DL3059).
+	fmt.Fprintf(b, "RUN git init -q . && datamitsu --config %s devtools split-config --output %s\n\n", opts.configImagePath(), sliceDir)
 }
 
 // installCmd is the RUN command a builder stage uses to install one target. The
@@ -146,7 +188,7 @@ func writeRuntimeStages(b *strings.Builder, plan Plan, opts RenderOptions) {
 	b.WriteString("# --- Runtime stages (one per managed runtime) ---\n")
 	for _, rt := range plan.RuntimeStages {
 		stage := stageName("rt-", rt.Name)
-		fmt.Fprintf(b, "FROM dm-base AS %s\n", stage)
+		fmt.Fprintf(b, "FROM %s AS %s\n", opts.builderBase(), stage)
 		fmt.Fprintf(b, "%s\n", opts.copySlice(stage))
 		fmt.Fprintf(b, "%s\n\n", opts.installCmd("--runtime", rt.Name))
 	}
@@ -172,7 +214,7 @@ func writeBinaryStages(b *strings.Builder, plan Plan, opts RenderOptions) {
 	b.WriteString("# --- Binary stages (one per downloaded binary) ---\n")
 	for _, bs := range plan.BinaryStages {
 		stage := stageName("app-", bs.App)
-		fmt.Fprintf(b, "FROM dm-base AS %s\n", stage)
+		fmt.Fprintf(b, "FROM %s AS %s\n", opts.builderBase(), stage)
 		fmt.Fprintf(b, "%s\n", opts.copySlice(stage))
 		fmt.Fprintf(b, "%s\n\n", opts.installCmd(opts.appInstallArgs(bs.App)...))
 	}
@@ -196,6 +238,8 @@ func writeFinalStage(b *strings.Builder, plan Plan, opts RenderOptions) {
 	// edit re-pulls only this small layer for end users, not the tool layers.
 	fmt.Fprintf(b, "COPY --chown=%s:%s %s ./\n", opts.User, opts.User, opts.ConfigSource)
 	writeLabels(b, opts.Labels)
+	writeArgs(b, opts.Args)
+	writeEnv(b, opts.Env)
 
 	// Runtime store subtrees (skip kinds whose runtime is build-only, e.g. go).
 	for _, rt := range plan.RuntimeStages {
@@ -243,6 +287,39 @@ func writeLabels(b *strings.Builder, labels map[string]string) {
 	sort.Strings(keys)
 	for _, k := range keys {
 		fmt.Fprintf(b, "LABEL %s=%s\n", k, strconv.Quote(labels[k]))
+	}
+}
+
+func writeArgs(b *strings.Builder, args map[string]string) {
+	if len(args) == 0 {
+		return
+	}
+	keys := make([]string, 0, len(args))
+	for k := range args {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		// Empty value = bare `ARG NAME` (default comes from --build-arg at build time).
+		if args[k] == "" {
+			fmt.Fprintf(b, "ARG %s\n", k)
+			continue
+		}
+		fmt.Fprintf(b, "ARG %s=%s\n", k, strconv.Quote(args[k]))
+	}
+}
+
+func writeEnv(b *strings.Builder, vars map[string]string) {
+	if len(vars) == 0 {
+		return
+	}
+	keys := make([]string, 0, len(vars))
+	for k := range vars {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		fmt.Fprintf(b, "ENV %s=%s\n", k, strconv.Quote(vars[k]))
 	}
 }
 

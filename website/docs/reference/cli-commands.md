@@ -485,15 +485,18 @@ Generate an optimized, digest-pinned multi-stage Dockerfile from the loaded conf
 datamitsu devtools dockerfile -o docker/Dockerfile
 ```
 
-| Flag                  | Description                                                                                     |
-| --------------------- | ----------------------------------------------------------------------------------------------- |
-| `-o, --output <path>` | **Required.** Output Dockerfile path including filename, fully overwritten on each run          |
-| `--alpine`            | Target the Alpine (musl) base image variant (`<version>-alpine`)                                |
-| `--offline`           | Skip base-image digest resolution; emit an unpinned `FROM` with a warning                       |
-| `--no-verify`         | Do not run apps' version checks in their build stages (verification is on by default)           |
-| `--config-js <path>`  | Pre-built config file COPYed into the image (default `datamitsu.config.js`)                     |
-| `--repo <repo>`       | Override the base image repository (default: the repo this datamitsu build was published under) |
-| `--label <key=value>` | OCI label for the final image (repeatable)                                                      |
+| Flag                  | Description                                                                                                    |
+| --------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `-o, --output <path>` | **Required.** Output Dockerfile path including filename, fully overwritten on each run                         |
+| `--alpine`            | Target the Alpine (musl) base image variant (`<version>-alpine`)                                               |
+| `--offline`           | Skip base-image digest resolution; emit an unpinned `FROM` with a warning                                      |
+| `--no-verify`         | Do not run apps' version checks in their build stages (verification is on by default)                          |
+| `--config-js <path>`  | Pre-built config file COPYed into the image (default `datamitsu.config.js`)                                    |
+| `--repo <repo>`       | Override the base image repository (default: the repo this datamitsu build was published under)                |
+| `--label <key=value>` | OCI label for the final image (repeatable)                                                                     |
+| `--arg <name[=val]>`  | Build `ARG` declared before `ENV` in the final stage; bare name or name=default (repeatable)                   |
+| `--build-arg <n[=v]>` | Build-time `ARG`→`ENV` in a `dm-build` stage so install stages inherit it; not in the final image (repeatable) |
+| `--env <key=value>`   | `ENV` var baked into the final image (repeatable)                                                              |
 
 The base image **repository and tag are baked into the datamitsu binary at release time**, so the `FROM` points at the exact image this build came from — including across release channels, where the stable image (`datamitsu/datamitsu:<version>`) and the unstable image (`datamitsu/datamitsu-unstable:<unstable-tag>`) live in different repositories under different tags. The registry host defaults to `ghcr.io` (override with `DATAMITSU_OCI_REGISTRY`); `--repo` overrides the repository for mirrors or forks. The tag is resolved to a SHA-256 digest and pinned as `FROM …@sha256:…`. Pinning is best-effort and never fails the command: `--offline`, an unreachable registry, or a non-release (`dev`/unstable) build leave the `FROM` unpinned with a warning. The output file is fully overwritten (no managed regions).
 
