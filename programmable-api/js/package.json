@@ -15,7 +15,7 @@
     "@datamitsu/datamitsu": "link:../../packaging/npm/datamitsu",
     "@shibanet0/datamitsu-config": "0.0.10",
     "@types/node": "25.9.1",
-    "tsdown": "0.22.1",
+    "tsdown": "0.22.2",
     "tsx": "4.22.4"
   }
 }
