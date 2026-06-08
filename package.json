@@ -36,15 +36,11 @@
     "@types/node": "25.9.1",
     "tsdown": "0.22.1"
   },
+  "packageManager": "pnpm@11.5.0",
   "engines": {
     "node": ">=22.12.0"
   },
   "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": ">=11.5.0",
-      "onFail": "warn"
-    },
     "runtime": {
       "name": "node",
       "onFail": "warn",
