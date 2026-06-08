@@ -210,6 +210,80 @@ func TestSelectBestAsset_ArchiveBeatsPlainBinary(t *testing.T) {
 	}
 }
 
+// TestSelectBestAsset_ForeignArchNotMisclassifiedAsAmd64 reproduces the three
+// real-world registry bugs where linux/amd64 picked a non-amd64 asset because
+// the foreign/variant arch token was unrecognised and the implicit-amd64
+// fallback claimed it. With those tokens recognised, the genuine x86_64 asset
+// must win (and tie-breaking by name must not let the wrong one through).
+func TestSelectBestAsset_ForeignArchNotMisclassifiedAsAmd64(t *testing.T) {
+	tests := []struct {
+		name   string
+		assets []string
+		libc   string
+		want   string
+	}{
+		{
+			name: "just: loongarch64 must not beat x86_64 (musl-only project)",
+			assets: []string{
+				"just-1.51.0-loongarch64-unknown-linux-musl.tar.gz",
+				"just-1.51.0-aarch64-unknown-linux-musl.tar.gz",
+				"just-1.51.0-x86_64-unknown-linux-musl.tar.gz",
+			},
+			libc: "musl",
+			want: "just-1.51.0-x86_64-unknown-linux-musl.tar.gz",
+		},
+		{
+			name: "protoc: linux-aarch_64 must not beat linux-x86_64",
+			assets: []string{
+				"protoc-35.0-linux-aarch_64.zip",
+				"protoc-35.0-linux-x86_64.zip",
+			},
+			want: "protoc-35.0-linux-x86_64.zip",
+		},
+		{
+			name: "trivy: Linux-32bit must not beat Linux-64bit (alphabetically earlier)",
+			assets: []string{
+				"trivy_0.71.0_Linux-32bit.tar.gz",
+				"trivy_0.71.0_Linux-64bit.tar.gz",
+				"trivy_0.71.0_Linux-ARM64.tar.gz",
+			},
+			want: "trivy_0.71.0_Linux-64bit.tar.gz",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assets := make([]github.Asset, 0, len(tt.assets))
+			for _, n := range tt.assets {
+				assets = append(assets, makeAsset(n))
+			}
+			best := selectBestAsset(assets, syslist.OsTypeLinux, syslist.ArchTypeAmd64, tt.libc)
+			if best == nil {
+				t.Fatalf("expected a result, got nil")
+			}
+			if best.Asset.Name != tt.want {
+				t.Errorf("selectBestAsset picked %q, want %q", best.Asset.Name, tt.want)
+			}
+		})
+	}
+}
+
+// TestSelectBestAsset_ProtocDarwinForeignArch covers protoc's darwin/amd64 bug
+// (osx-aarch_64 was claimed as amd64).
+func TestSelectBestAsset_ProtocDarwinForeignArch(t *testing.T) {
+	assets := []github.Asset{
+		makeAsset("protoc-35.0-osx-aarch_64.zip"),
+		makeAsset("protoc-35.0-osx-x86_64.zip"),
+	}
+	best := selectBestAsset(assets, syslist.OsTypeDarwin, syslist.ArchTypeAmd64, "")
+	if best == nil {
+		t.Fatal("expected a result, got nil")
+	}
+	if best.Asset.Name != "protoc-35.0-osx-x86_64.zip" {
+		t.Errorf("selectBestAsset picked %q, want protoc-35.0-osx-x86_64.zip", best.Asset.Name)
+	}
+}
+
 func TestScoreAsset_MacOSImplicitArm64(t *testing.T) {
 	implicitTotal := scoreOS + scoreArch + scoreLibcNeutral + scoreArchivePrefer
 	tests := []struct {

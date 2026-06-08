@@ -308,11 +308,6 @@ declare global {
       ignoreRules?: string[];
 
       /**
-       * Config file initialization
-       */
-      init?: MapOfConfigInit;
-
-      /**
        * Init commands to run after setup
        */
       initCommands?: MapOfInitCommands;
@@ -326,6 +321,11 @@ declare global {
        * Runtime definitions for managed package managers (UV, PNPM)
        */
       runtimes?: BinManager.MapOfRuntimes;
+
+      /**
+       * Config-file setup (managed files written by dm setup)
+       */
+      setup?: MapOfConfigSetup;
 
       /**
        * Arbitrary key-value storage that flows through the config chain.
@@ -414,9 +414,9 @@ declare global {
     // ========================================
 
     /**
-     * Configuration file initialization (enhanced from existing)
+     * Configuration file setup (managed files written by dm setup)
      */
-    interface ConfigInit {
+    interface ConfigSetup {
       /**
        * Function that generates file content
        * Receives context about the project including existing file content if present
@@ -503,7 +503,7 @@ declare global {
     }
 
     /**
-     * Map of configuration init with mainFilename as key
+     * Map of configuration setup with mainFilename as key
      * @example
      * {
      *   ".gitignore": { content: () => "..." },
@@ -511,7 +511,7 @@ declare global {
      *   ".vscode/settings.json": { content: () => "..." }
      * }
      */
-    type MapOfConfigInit = Record<string, ConfigInit>;
+    type MapOfConfigSetup = Record<string, ConfigSetup>;
 
     // ========================================
     // Init Commands

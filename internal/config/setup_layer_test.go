@@ -9,9 +9,9 @@ func TestGetLastGeneratedContent(t *testing.T) {
 		content1 := "first content"
 		content2 := "second content"
 
-		history := &InitLayerHistory{
+		history := &SetupLayerHistory{
 			FileName: ".editorconfig",
-			Layers: []InitLayerEntry{
+			Layers: []SetupLayerEntry{
 				{LayerName: "default", GeneratedContent: &content1},
 				{LayerName: "auto", GeneratedContent: &content2},
 			},
@@ -29,9 +29,9 @@ func TestGetLastGeneratedContent(t *testing.T) {
 	t.Run("skips non-content layers", func(t *testing.T) {
 		content1 := "first content"
 
-		history := &InitLayerHistory{
+		history := &SetupLayerHistory{
 			FileName: ".editorconfig",
-			Layers: []InitLayerEntry{
+			Layers: []SetupLayerEntry{
 				{LayerName: "default", GeneratedContent: &content1},
 				{LayerName: "auto", GeneratedContent: nil},
 			},
@@ -47,7 +47,7 @@ func TestGetLastGeneratedContent(t *testing.T) {
 	})
 
 	t.Run("returns nil for empty layers", func(t *testing.T) {
-		history := &InitLayerHistory{
+		history := &SetupLayerHistory{
 			FileName: ".editorconfig",
 			Layers:   nil,
 		}
@@ -59,9 +59,9 @@ func TestGetLastGeneratedContent(t *testing.T) {
 	})
 
 	t.Run("returns nil when no content layers", func(t *testing.T) {
-		history := &InitLayerHistory{
+		history := &SetupLayerHistory{
 			FileName: ".editorconfig",
-			Layers: []InitLayerEntry{
+			Layers: []SetupLayerEntry{
 				{LayerName: "default", GeneratedContent: nil},
 				{LayerName: "auto", GeneratedContent: nil},
 			},

@@ -44,7 +44,13 @@ builds:
       - freebsd
     id: datamitsu
     ldflags:
-      - -s -w -X github.com/datamitsu/datamitsu/internal/ldflags.Version={{ .Version }}
+      - -s -w
+      - -X github.com/datamitsu/datamitsu/internal/ldflags.Version={{ .Version }}
+      # Canonical base image ref for `devtools dockerfile`. Set via DATAMITSU_IMAGE_*
+      # in CI (stable vs unstable repo/tag differ); falls back to the stable repo
+      # and the version tag for local goreleaser runs.
+      - -X github.com/datamitsu/datamitsu/internal/ldflags.ImageRepo={{ if index .Env "DATAMITSU_IMAGE_REPO" }}{{ .Env.DATAMITSU_IMAGE_REPO }}{{ else }}datamitsu/datamitsu{{ end }}
+      - -X github.com/datamitsu/datamitsu/internal/ldflags.ImageTag={{ if index .Env "DATAMITSU_IMAGE_TAG" }}{{ .Env.DATAMITSU_IMAGE_TAG }}{{ else }}{{ .Version }}{{ end }}
     main: .
 changelog:
   filters:

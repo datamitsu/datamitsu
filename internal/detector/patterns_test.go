@@ -112,11 +112,19 @@ func TestMatchArch(t *testing.T) {
 		{"x86_64 match", "binary-linux-x86_64", syslist.ArchTypeAmd64, true},
 		{"ARM64 match", "binary-darwin-arm64", syslist.ArchTypeArm64, true},
 		{"aarch64 match", "binary-linux-aarch64", syslist.ArchTypeArm64, true},
+		{"aarch_64 underscore match", "protoc-35.0-linux-aarch_64.zip", syslist.ArchTypeArm64, true},
+		{"aarch-64 hyphen match", "tool-osx-aarch-64.zip", syslist.ArchTypeArm64, true},
 		{"ARMv8 match", "binary-linux-armv8", syslist.ArchTypeArm64, true},
+		{"64bit means amd64 not arm64", "trivy_0.71.0_Linux-64bit.tar.gz", syslist.ArchTypeArm64, false},
+		{"64bit match amd64", "trivy_0.71.0_Linux-64bit.tar.gz", syslist.ArchTypeAmd64, true},
+		{"64-bit hyphen match amd64", "vale_3.14.2_Linux_64-bit.tar.gz", syslist.ArchTypeAmd64, true},
+		{"loongarch64 not amd64", "just-1.51.0-loongarch64-unknown-linux-musl.tar.gz", syslist.ArchTypeAmd64, false},
 		{"386 match", "binary-linux-386", syslist.ArchType386, true},
 		{"i386 match", "binary-linux-i386", syslist.ArchType386, true},
 		{"x86_32 match", "binary-linux-x86_32", syslist.ArchType386, true},
 		{"i686 match", "binary-linux-i686", syslist.ArchType386, true},
+		{"32bit match 386", "trivy_0.71.0_Linux-32bit.tar.gz", syslist.ArchType386, true},
+		{"32bit not amd64", "trivy_0.71.0_Linux-32bit.tar.gz", syslist.ArchTypeAmd64, false},
 		{"ARM bare match", "binary-linux-arm", syslist.ArchTypeArm, true},
 		{"ARM32 match", "binary-linux-arm32", syslist.ArchTypeArm, true},
 		{"ARMv7 match", "binary-linux-armv7", syslist.ArchTypeArm, true},
@@ -142,6 +150,47 @@ func TestMatchArch(t *testing.T) {
 			result := MatchArch(tt.filename, tt.archType)
 			if result != tt.expected {
 				t.Errorf("MatchArch(%q, %v) = %v, want %v", tt.filename, tt.archType, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestHasAnyArchIndicator(t *testing.T) {
+	tests := []struct {
+		name     string
+		filename string
+		expected bool
+	}{
+		// Targets datamitsu selects.
+		{"amd64", "tool-linux-amd64.tar.gz", true},
+		{"arm64", "tool-linux-arm64.tar.gz", true},
+		{"aarch_64 variant", "protoc-35.0-linux-aarch_64.zip", true},
+		{"64bit variant", "trivy_0.71.0_Linux-64bit.tar.gz", true},
+		{"32bit variant", "trivy_0.71.0_Linux-32bit.tar.gz", true},
+		// Foreign targets datamitsu only recognises — must NOT fall through to
+		// the implicit-amd64 rule in scoring.
+		{"loongarch64", "just-1.51.0-loongarch64-unknown-linux-musl.tar.gz", true},
+		{"loong64", "tool-linux-loong64", true},
+		{"mips64le", "tool-linux-mips64le", true},
+		{"mipsle", "tool-linux-mipsle", true},
+		{"sparc64", "tool-linux-sparc64", true},
+		{"s390", "tool-linux-s390", true},
+		{"riscv", "tool-linux-riscv", true},
+		{"ppc64", "tool-linux-ppc64", true},
+		{"powerpc", "tool-linux-powerpc", true},
+		{"wasm", "tool-wasm.tar.gz", true},
+		// No arch token at all → false (lets implicit rules apply).
+		{"no arch token", "tool-linux.tar.gz", false},
+		{"plain name", "tool.tar.gz", false},
+		// Word boundaries: foreign tokens must not fire mid-word (no \b, no other
+		// arch token present).
+		{"mips not mid-word in armips", "tool-armips.tar.gz", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := HasAnyArchIndicator(tt.filename); got != tt.expected {
+				t.Errorf("HasAnyArchIndicator(%q) = %v, want %v", tt.filename, got, tt.expected)
 			}
 		})
 	}

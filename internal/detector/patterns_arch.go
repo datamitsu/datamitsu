@@ -12,22 +12,25 @@ type ArchPattern struct {
 	Pattern *regexp.Regexp
 }
 
-// ArchPatterns maps architecture types to their detection patterns.
-// All architectures that appear in release assets must have entries here so
-// that HasAnyArchIndicator() returns true and the implicit-amd64 fallback in
-// scoring.go does not misclassify them.
+// ArchPatterns maps the architectures datamitsu can run on (and therefore
+// select) to their detection patterns. Variant spellings matter: separators
+// (aarch_64, x86-64) and "NNbit" forms (64bit, 32bit) all appear in the wild.
+// Architectures datamitsu does NOT target but which still appear in release
+// assets are matched by ForeignArchPattern instead — both feed
+// HasAnyArchIndicator() so the implicit-amd64 fallback in scoring.go never
+// claims a non-amd64 asset.
 var ArchPatterns = map[syslist.ArchType]*ArchPattern{
 	syslist.ArchTypeAmd64: {
 		Name:    syslist.ArchTypeAmd64,
-		Pattern: regexp.MustCompile(`(?i)(x64|amd64|x86[\s_-]?64)`),
+		Pattern: regexp.MustCompile(`(?i)(x64|amd64|x86[\s_-]?64|64[\s_-]?bit)`),
 	},
 	syslist.ArchTypeArm64: {
 		Name:    syslist.ArchTypeArm64,
-		Pattern: regexp.MustCompile(`(?i)(arm64|armv8|aarch64)`),
+		Pattern: regexp.MustCompile(`(?i)(arm64|armv8|aarch[\s_-]?64)`),
 	},
 	syslist.ArchType386: {
 		Name:    syslist.ArchType386,
-		Pattern: regexp.MustCompile(`(?i)(x32|i?386|i686|x86[\s_-]?32)`),
+		Pattern: regexp.MustCompile(`(?i)(x32|i?386|i686|x86[\s_-]?32|32[\s_-]?bit)`),
 	},
 	syslist.ArchTypeArm: {
 		Name:    syslist.ArchTypeArm,
@@ -46,6 +49,16 @@ var ArchPatterns = map[syslist.ArchType]*ArchPattern{
 		Pattern: regexp.MustCompile(`(?i)riscv64`),
 	},
 }
+
+// ForeignArchPattern matches architecture tokens for targets datamitsu does not
+// build for (loongarch, mips, sparc, ppc, s390, riscv, wasm, big-endian arm).
+// It exists solely so HasAnyArchIndicator() recognises these assets and the
+// implicit-amd64 fallback excludes them rather than misclassifying e.g.
+// just-…-loongarch64-…musl.tar.gz as amd64. Word boundaries keep it from firing
+// on amd64/arm64 names. Never used for selection — only as an indicator.
+var ForeignArchPattern = regexp.MustCompile(
+	`(?i)(\bloong\w*|\bmips\w*|\bsparc\w*|\bs390\w*|\briscv\w*|\bppc\w*|\bpowerpc\w*|\bwasm\b|\barmbe\b|\barm64be\b)`,
+)
 
 // MatchArch checks if filename matches the architecture pattern
 func MatchArch(filename string, archType syslist.ArchType) bool {

@@ -478,7 +478,7 @@ func TestMergeUnique(t *testing.T) {
 
 func TestSmartInitIncludesAllAppsWithLinks(t *testing.T) {
 	// Simulates the case where an app has Links but is not referenced by any
-	// tool operation (e.g., only referenced via tools.Config.linkPath in ConfigInit).
+	// tool operation (e.g., only referenced via tools.Config.linkPath in ConfigSetup).
 	cfg := &config.Config{
 		Apps: binmanager.MapOfApps{
 			"tool-referenced": {

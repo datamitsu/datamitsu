@@ -15,7 +15,7 @@ func TestNewInstaller(t *testing.T) {
 	rootPath := "/tmp/root"
 	cwdPath := "/tmp/root/project"
 	projectTypes := []string{"node", "go"}
-	configs := config.MapOfConfigInit{}
+	configs := config.MapOfConfigSetup{}
 	vm := goja.New()
 
 	installer := NewInstaller(rootPath, cwdPath, projectTypes, nil, configs, vm, nil)
@@ -44,31 +44,31 @@ func TestIsApplicable(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		cfg      config.ConfigInit
+		cfg      config.ConfigSetup
 		expected bool
 	}{
 		{
 			name:     "no project types specified",
-			cfg:      config.ConfigInit{},
+			cfg:      config.ConfigSetup{},
 			expected: true,
 		},
 		{
 			name: "matching project type",
-			cfg: config.ConfigInit{
+			cfg: config.ConfigSetup{
 				ProjectTypes: []string{"node"},
 			},
 			expected: true,
 		},
 		{
 			name: "non-matching project type",
-			cfg: config.ConfigInit{
+			cfg: config.ConfigSetup{
 				ProjectTypes: []string{"rust"},
 			},
 			expected: false,
 		},
 		{
 			name: "one matching, one non-matching",
-			cfg: config.ConfigInit{
+			cfg: config.ConfigSetup{
 				ProjectTypes: []string{"node", "rust"},
 			},
 			expected: true,
@@ -89,43 +89,43 @@ func TestIsToolSelected(t *testing.T) {
 	tests := []struct {
 		name          string
 		selectedTools []string
-		cfg           config.ConfigInit
+		cfg           config.ConfigSetup
 		expected      bool
 	}{
 		{
 			name:          "no filter, config without tools",
 			selectedTools: nil,
-			cfg:           config.ConfigInit{},
+			cfg:           config.ConfigSetup{},
 			expected:      true,
 		},
 		{
 			name:          "no filter, config with tools",
 			selectedTools: nil,
-			cfg:           config.ConfigInit{Tools: []string{"golangci-lint"}},
+			cfg:           config.ConfigSetup{Tools: []string{"golangci-lint"}},
 			expected:      true,
 		},
 		{
 			name:          "filter matches",
 			selectedTools: []string{"golangci-lint"},
-			cfg:           config.ConfigInit{Tools: []string{"golangci-lint"}},
+			cfg:           config.ConfigSetup{Tools: []string{"golangci-lint"}},
 			expected:      true,
 		},
 		{
 			name:          "filter does not match",
 			selectedTools: []string{"golangci-lint"},
-			cfg:           config.ConfigInit{Tools: []string{"prettier"}},
+			cfg:           config.ConfigSetup{Tools: []string{"prettier"}},
 			expected:      false,
 		},
 		{
 			name:          "filter active, config has no tools (infra)",
 			selectedTools: []string{"golangci-lint"},
-			cfg:           config.ConfigInit{},
+			cfg:           config.ConfigSetup{},
 			expected:      false,
 		},
 		{
 			name:          "intersection of multiple",
 			selectedTools: []string{"a", "b"},
-			cfg:           config.ConfigInit{Tools: []string{"b", "c"}},
+			cfg:           config.ConfigSetup{Tools: []string{"b", "c"}},
 			expected:      true,
 		},
 	}
@@ -149,7 +149,7 @@ func TestInstallAllFiltersBySelectedTools(t *testing.T) {
 	})
 	contentFunc := vm.Get("contentFunc")
 
-	configs := config.MapOfConfigInit{
+	configs := config.MapOfConfigSetup{
 		".golangci.yml": {Tools: []string{"golangci-lint"}, Content: contentFunc},
 		".prettierrc":   {Tools: []string{"prettier"}, Content: contentFunc},
 		".gitignore":    {Content: contentFunc}, // infra, no tools association
@@ -193,7 +193,7 @@ func TestInstallAllNoToolFilterInstallsAll(t *testing.T) {
 	})
 	contentFunc := vm.Get("contentFunc")
 
-	configs := config.MapOfConfigInit{
+	configs := config.MapOfConfigSetup{
 		".golangci.yml": {Tools: []string{"golangci-lint"}, Content: contentFunc},
 		".prettierrc":   {Tools: []string{"prettier"}, Content: contentFunc},
 		".gitignore":    {Content: contentFunc},
@@ -228,7 +228,7 @@ func TestInstallAllToolFilterDryRun(t *testing.T) {
 	})
 	contentFunc := vm.Get("contentFunc")
 
-	configs := config.MapOfConfigInit{
+	configs := config.MapOfConfigSetup{
 		".golangci.yml": {Tools: []string{"golangci-lint"}, Content: contentFunc},
 		".prettierrc":   {Tools: []string{"prettier"}, Content: contentFunc},
 	}
@@ -284,9 +284,9 @@ func TestInstallConfigSkipped(t *testing.T) {
 	tmpDir := t.TempDir()
 	vm := goja.New()
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{"node"}, nil, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{"node"}, nil, config.MapOfConfigSetup{}, vm, nil)
 
-	cfg := config.ConfigInit{
+	cfg := config.ConfigSetup{
 		ProjectTypes: []string{"rust"},
 	}
 
@@ -307,9 +307,9 @@ func TestInstallConfigDeleteOnly(t *testing.T) {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigSetup{}, vm, nil)
 
-	cfg := config.ConfigInit{
+	cfg := config.ConfigSetup{
 		OtherFileNameList: []string{"alt.yml"},
 		DeleteOnly:        true,
 	}
@@ -340,9 +340,9 @@ func TestInstallConfigCreated(t *testing.T) {
 
 	contentFunc := vm.Get("contentFunc")
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigSetup{}, vm, nil)
 
-	cfg := config.ConfigInit{
+	cfg := config.ConfigSetup{
 		Content: contentFunc,
 	}
 
@@ -378,9 +378,9 @@ func TestInstallConfigDryRun(t *testing.T) {
 
 	contentFunc := vm.Get("contentFunc")
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigSetup{}, vm, nil)
 
-	cfg := config.ConfigInit{
+	cfg := config.ConfigSetup{
 		Content: contentFunc,
 	}
 
@@ -414,9 +414,9 @@ func TestInstallConfigScopeGitRootSkipsWhenNotAtRoot(t *testing.T) {
 
 	contentFunc := vm.Get("contentFunc")
 
-	installer := NewInstaller(tmpDir, cwdDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, cwdDir, []string{}, nil, config.MapOfConfigSetup{}, vm, nil)
 
-	cfg := config.ConfigInit{
+	cfg := config.ConfigSetup{
 		Scope:   config.ScopeGitRoot,
 		Content: contentFunc,
 	}
@@ -445,9 +445,9 @@ func TestInstallConfigScopeGitRootRunsAtRoot(t *testing.T) {
 
 	contentFunc := vm.Get("contentFunc")
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigSetup{}, vm, nil)
 
-	cfg := config.ConfigInit{
+	cfg := config.ConfigSetup{
 		Scope:   config.ScopeGitRoot,
 		Content: contentFunc,
 	}
@@ -480,9 +480,9 @@ func TestInstallConfigScopeGitRootWithProjectTypesSkipsWhenTypeNotMatched(t *tes
 
 	contentFunc := vm.Get("contentFunc")
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{"node"}, nil, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{"node"}, nil, config.MapOfConfigSetup{}, vm, nil)
 
-	cfg := config.ConfigInit{
+	cfg := config.ConfigSetup{
 		Scope:        config.ScopeGitRoot,
 		ProjectTypes: []string{"rust"},
 		Content:      contentFunc,
@@ -515,9 +515,9 @@ func TestInstallConfigDeletesAlternatives(t *testing.T) {
 
 	contentFunc := vm.Get("contentFunc")
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigSetup{}, vm, nil)
 
-	cfg := config.ConfigInit{
+	cfg := config.ConfigSetup{
 		OtherFileNameList: []string{"alt1.yml", "alt2.yml"},
 		Content:           contentFunc,
 	}
@@ -548,7 +548,7 @@ func TestInstallAll(t *testing.T) {
 
 	contentFunc := vm.Get("contentFunc")
 
-	configs := config.MapOfConfigInit{
+	configs := config.MapOfConfigSetup{
 		"config1.yml": {
 			Content: contentFunc,
 		},
@@ -584,7 +584,7 @@ func TestInstallSymlinkSetsLinkTarget(t *testing.T) {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigSetup{}, vm, nil)
 
 	tests := []struct {
 		name           string
@@ -616,7 +616,7 @@ func TestInstallSymlinkSetsLinkTarget(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := config.ConfigInit{
+			cfg := config.ConfigSetup{
 				Scope:      config.ScopeGitRoot,
 				LinkTarget: tt.linkTarget,
 			}
@@ -649,9 +649,9 @@ func TestInstallConfigLinkTargetCreatesSymlink(t *testing.T) {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigSetup{}, vm, nil)
 
-	cfg := config.ConfigInit{
+	cfg := config.ConfigSetup{
 		Scope:      config.ScopeGitRoot,
 		LinkTarget: "AGENTS.md",
 	}
@@ -694,9 +694,9 @@ func TestInstallConfigLinkTargetUpdatesStaleSymlink(t *testing.T) {
 	symlinkPath := filepath.Join(tmpDir, "CLAUDE.md")
 	_ = os.Symlink("OLD.md", symlinkPath)
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigSetup{}, vm, nil)
 
-	cfg := config.ConfigInit{
+	cfg := config.ConfigSetup{
 		Scope:      config.ScopeGitRoot,
 		LinkTarget: "AGENTS.md",
 	}
@@ -735,9 +735,9 @@ func TestInstallConfigLinkTargetReplacesRegularFile(t *testing.T) {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigSetup{}, vm, nil)
 
-	cfg := config.ConfigInit{
+	cfg := config.ConfigSetup{
 		Scope:      config.ScopeGitRoot,
 		LinkTarget: "AGENTS.md",
 	}
@@ -771,9 +771,9 @@ func TestInstallConfigLinkTargetIdempotent(t *testing.T) {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigSetup{}, vm, nil)
 
-	cfg := config.ConfigInit{
+	cfg := config.ConfigSetup{
 		Scope:      config.ScopeGitRoot,
 		LinkTarget: "AGENTS.md",
 	}
@@ -810,9 +810,9 @@ func TestInstallConfigLinkTargetDryRun(t *testing.T) {
 	tmpDir := t.TempDir()
 	vm := goja.New()
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigSetup{}, vm, nil)
 
-	cfg := config.ConfigInit{
+	cfg := config.ConfigSetup{
 		Scope:      config.ScopeGitRoot,
 		LinkTarget: "AGENTS.md",
 	}
@@ -842,10 +842,10 @@ func TestInstallConfigLinkTargetNestedPath(t *testing.T) {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigSetup{}, vm, nil)
 
 	// Symlink in a subdirectory pointing to parent
-	cfg := config.ConfigInit{
+	cfg := config.ConfigSetup{
 		Scope:      config.ScopeGitRoot,
 		LinkTarget: "../AGENTS.md",
 	}
@@ -886,9 +886,9 @@ func TestInstallConfigLinkTargetIgnoresContentAndDeleteOnly(t *testing.T) {
 	})
 	contentFunc := vm.Get("contentFunc")
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigSetup{}, vm, nil)
 
-	cfg := config.ConfigInit{
+	cfg := config.ConfigSetup{
 		Scope:      config.ScopeGitRoot,
 		LinkTarget: "AGENTS.md",
 		Content:    contentFunc,
@@ -932,7 +932,7 @@ func TestInstallAllAgentsMDAndSymlinks(t *testing.T) {
 	})
 	agentsContentFunc := vm.Get("agentsContentFunc")
 
-	configs := config.MapOfConfigInit{
+	configs := config.MapOfConfigSetup{
 		"AGENTS.md": {
 			Content: agentsContentFunc,
 			Scope:   config.ScopeGitRoot,
@@ -1042,7 +1042,7 @@ func TestInstallAgentsMDPreservesExistingContent(t *testing.T) {
 	})
 	agentsContentFunc := vm.Get("agentsContentFunc")
 
-	configs := config.MapOfConfigInit{
+	configs := config.MapOfConfigSetup{
 		"AGENTS.md": {
 			Content: agentsContentFunc,
 			Scope:   config.ScopeGitRoot,
@@ -1084,11 +1084,11 @@ func TestInstallConfigSetsScope(t *testing.T) {
 	})
 	contentFunc := vm.Get("contentFunc")
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigSetup{}, vm, nil)
 	ctx := context.Background()
 
 	t.Run("scope git-root", func(t *testing.T) {
-		cfg := config.ConfigInit{
+		cfg := config.ConfigSetup{
 			Scope:   config.ScopeGitRoot,
 			Content: contentFunc,
 		}
@@ -1099,7 +1099,7 @@ func TestInstallConfigSetsScope(t *testing.T) {
 	})
 
 	t.Run("scope empty (project default)", func(t *testing.T) {
-		cfg := config.ConfigInit{
+		cfg := config.ConfigSetup{
 			Content: contentFunc,
 		}
 		result := installer.installConfig(ctx, "local.yml", cfg, true)
@@ -1109,7 +1109,7 @@ func TestInstallConfigSetsScope(t *testing.T) {
 	})
 
 	t.Run("scope preserved on skipped config", func(t *testing.T) {
-		cfg := config.ConfigInit{
+		cfg := config.ConfigSetup{
 			Scope:        config.ScopeGitRoot,
 			ProjectTypes: []string{"rust"},
 		}
@@ -1139,9 +1139,9 @@ func TestGenerateContentWithContext(t *testing.T) {
 
 	contentFunc := vm.Get("contentFunc")
 
-	installer := NewInstaller(tmpDir, cwdDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, cwdDir, []string{}, nil, config.MapOfConfigSetup{}, vm, nil)
 
-	cfg := config.ConfigInit{
+	cfg := config.ConfigSetup{
 		Content: contentFunc,
 	}
 
@@ -1164,7 +1164,7 @@ func TestInstallConfigLinkTargetRejectsTraversal(t *testing.T) {
 	tmpDir := t.TempDir()
 	vm := goja.New()
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigSetup{}, vm, nil)
 
 	tests := []struct {
 		name       string
@@ -1206,7 +1206,7 @@ func TestInstallConfigLinkTargetRejectsTraversal(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := config.ConfigInit{
+			cfg := config.ConfigSetup{
 				Scope:      config.ScopeGitRoot,
 				LinkTarget: tt.linkTarget,
 			}
@@ -1237,9 +1237,9 @@ func TestInstallConfigLinkTargetRejectsSymlinkEscape(t *testing.T) {
 		t.Fatalf("failed to create test symlink: %v", err)
 	}
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigSetup{}, vm, nil)
 
-	cfg := config.ConfigInit{
+	cfg := config.ConfigSetup{
 		Scope:      config.ScopeGitRoot,
 		LinkTarget: "escape/secret.txt",
 	}
@@ -1262,11 +1262,11 @@ func TestInstallConfigLinkTargetRejectsSymlinkEscapeNonExistentTarget(t *testing
 		t.Fatalf("failed to create test symlink: %v", err)
 	}
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigSetup{}, vm, nil)
 
 	// Target file does NOT exist in outsideDir — EvalSymlinks on the full path will fail,
 	// but the ancestor check should still catch the escape
-	cfg := config.ConfigInit{
+	cfg := config.ConfigSetup{
 		Scope:      config.ScopeGitRoot,
 		LinkTarget: "escape/new.txt",
 	}
@@ -1290,9 +1290,9 @@ func TestInstallConfigLinkTargetRejectsBrokenSymlinkEscape(t *testing.T) {
 		t.Fatalf("failed to create test symlink: %v", err)
 	}
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigSetup{}, vm, nil)
 
-	cfg := config.ConfigInit{
+	cfg := config.ConfigSetup{
 		Scope:      config.ScopeGitRoot,
 		LinkTarget: "escape/new.txt",
 	}
@@ -1316,9 +1316,9 @@ func TestInstallConfigLinkTargetRejectsBrokenLeafSymlink(t *testing.T) {
 		t.Fatalf("failed to create test symlink: %v", err)
 	}
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigSetup{}, vm, nil)
 
-	cfg := config.ConfigInit{
+	cfg := config.ConfigSetup{
 		Scope:      config.ScopeGitRoot,
 		LinkTarget: "escape",
 	}
@@ -1346,10 +1346,10 @@ func TestInstallConfigOtherFileNameListSkipsMainFile(t *testing.T) {
 	})
 	contentFunc := vm.Get("contentFunc")
 
-	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigSetup{}, vm, nil)
 
 	// OtherFileNameList includes the main filename — should be skipped
-	cfg := config.ConfigInit{
+	cfg := config.ConfigSetup{
 		OtherFileNameList: []string{"main.yml", "alt.yml"},
 		Content:           contentFunc,
 	}
@@ -1423,8 +1423,8 @@ func TestGenerateContentDatamitsuDir(t *testing.T) {
 			})
 			contentFunc := vm.Get("contentFunc")
 
-			installer := NewInstaller(tmpDir, cwdDir, []string{}, nil, config.MapOfConfigInit{}, vm, nil)
-			cfg := config.ConfigInit{
+			installer := NewInstaller(tmpDir, cwdDir, []string{}, nil, config.MapOfConfigSetup{}, vm, nil)
+			cfg := config.ConfigSetup{
 				Content: contentFunc,
 			}
 
@@ -1444,10 +1444,10 @@ func TestNewInstallerWithLayerMap(t *testing.T) {
 	rootPath := "/tmp/root"
 	cwdPath := "/tmp/root/project"
 	projectTypes := []string{"node"}
-	configs := config.MapOfConfigInit{}
+	configs := config.MapOfConfigSetup{}
 	vm := goja.New()
 
-	layerMap := &config.InitLayerMap{}
+	layerMap := &config.SetupLayerMap{}
 
 	installer := NewInstaller(rootPath, cwdPath, projectTypes, nil, configs, vm, layerMap)
 
@@ -1470,22 +1470,22 @@ func TestInstallConfigUsesLayerHistoryWhenPresent(t *testing.T) {
 	contentFunc := vm.Get("contentFunc")
 
 	layerContent := "content from layer history"
-	layerMap := config.InitLayerMap{
-		"test.yml": &config.InitLayerHistory{
+	layerMap := config.SetupLayerMap{
+		"test.yml": &config.SetupLayerHistory{
 			FileName: "test.yml",
-			Layers: []config.InitLayerEntry{
+			Layers: []config.SetupLayerEntry{
 				{
 					LayerName:        "default",
 					GeneratedContent: &layerContent,
 				},
 			},
-			FinalConfig: config.ConfigInit{
+			FinalConfig: config.ConfigSetup{
 				Content: contentFunc,
 			},
 		},
 	}
 
-	configs := config.MapOfConfigInit{
+	configs := config.MapOfConfigSetup{
 		"test.yml": {Content: contentFunc, Scope: config.ScopeGitRoot},
 	}
 
@@ -1524,22 +1524,22 @@ func TestInstallConfigProjectScopedSkipsLayerHistory(t *testing.T) {
 	contentFunc := vm.Get("contentFunc")
 
 	layerContent := "content from layer history"
-	layerMap := config.InitLayerMap{
-		"tsconfig.json": &config.InitLayerHistory{
+	layerMap := config.SetupLayerMap{
+		"tsconfig.json": &config.SetupLayerHistory{
 			FileName: "tsconfig.json",
-			Layers: []config.InitLayerEntry{
+			Layers: []config.SetupLayerEntry{
 				{
 					LayerName:        "default",
 					GeneratedContent: &layerContent,
 				},
 			},
-			FinalConfig: config.ConfigInit{
+			FinalConfig: config.ConfigSetup{
 				Content: contentFunc,
 			},
 		},
 	}
 
-	configs := config.MapOfConfigInit{
+	configs := config.MapOfConfigSetup{
 		"tsconfig.json": {Content: contentFunc, Scope: config.ScopeProject},
 	}
 
@@ -1574,14 +1574,14 @@ func TestInstallConfigFallsToDiskWhenNoLayerHistory(t *testing.T) {
 	contentFunc := vm.Get("contentFunc")
 
 	// layerMap exists but has no entry for "other.yml"
-	layerMap := config.InitLayerMap{
-		"test.yml": &config.InitLayerHistory{
+	layerMap := config.SetupLayerMap{
+		"test.yml": &config.SetupLayerHistory{
 			FileName: "test.yml",
-			Layers:   []config.InitLayerEntry{},
+			Layers:   []config.SetupLayerEntry{},
 		},
 	}
 
-	configs := config.MapOfConfigInit{
+	configs := config.MapOfConfigSetup{
 		"other.yml": {Content: contentFunc},
 	}
 
@@ -1616,10 +1616,10 @@ func TestInstallConfigUsesGetLastGeneratedContent(t *testing.T) {
 
 	firstContent := "first layer"
 	secondContent := "second layer override"
-	layerMap := config.InitLayerMap{
-		"test.yml": &config.InitLayerHistory{
+	layerMap := config.SetupLayerMap{
+		"test.yml": &config.SetupLayerHistory{
 			FileName: "test.yml",
-			Layers: []config.InitLayerEntry{
+			Layers: []config.SetupLayerEntry{
 				{
 					LayerName:        "default",
 					GeneratedContent: &firstContent,
@@ -1629,13 +1629,13 @@ func TestInstallConfigUsesGetLastGeneratedContent(t *testing.T) {
 					GeneratedContent: &secondContent,
 				},
 			},
-			FinalConfig: config.ConfigInit{
+			FinalConfig: config.ConfigSetup{
 				Content: contentFunc,
 			},
 		},
 	}
 
-	configs := config.MapOfConfigInit{
+	configs := config.MapOfConfigSetup{
 		"test.yml": {Content: contentFunc, Scope: config.ScopeGitRoot},
 	}
 

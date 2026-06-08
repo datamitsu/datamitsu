@@ -257,6 +257,132 @@ datamitsu devtools pull-runtimes runtimes.json --update --runtime go
 
 The Go SDK archives and their per-file SHA-256 come from go.dev (`https://go.dev/dl/?mode=json`): HTTPS plus published SHA-256, no GPG — the same trust posture as the musl Node path. The pull preserves (or sets) `go.goVersion` in the runtime entry.
 
+## Generating a Docker image: `devtools dockerfile`
+
+If you publish a container image of your wrapper with every tool pre-installed, `devtools dockerfile` generates an optimized multi-stage Dockerfile from your config's tool list — so you never hand-write or hand-tune it.
+
+```bash
+datamitsu devtools dockerfile -o docker/Dockerfile
+```
+
+**What it generates.** A config-free shared base, then a `config-split` stage, then one build stage per binary app, per managed runtime, and per runtime-managed app (each inheriting its runtime stage). The final stage assembles the populated datamitsu store with `COPY --link`, one layer per app, and carries the full config for the entrypoint.
+
+**Two layers of cache isolation.** Each app is its own `COPY --link` layer, so bumping a single app re-pulls only that layer instead of the whole image (pull-time, for your users). The generator also isolates the **build**: the base never carries the config, and the `config-split` stage slices the config into one minimal per-stage file (via [`devtools split-config`](../reference/cli-commands.md#devtools-split-config)) that each stage loads on its own. So editing one app — or regenerating/reformatting the whole config — re-runs only the cheap split plus the stages whose slice actually changed, instead of reinstalling every tool from scratch. Changing a runtime rebuilds that runtime and every app under it; changing the base datamitsu image rebuilds everything.
+
+**Base image and digest pinning.** The base image is `ghcr.io/datamitsu/datamitsu` at the version of the datamitsu binary you run the command with — _not_ your `package.json`. That tag is resolved to a SHA-256 digest and pinned as `FROM …@sha256:…` so builds are reproducible.
+
+Pinning is best-effort and never fails the command. If the registry is unreachable, you pass `--offline`, or you build against a non-release (`dev`/unstable) datamitsu, the `FROM` line is left unpinned and a warning is written both into the generated file and to stderr:
+
+```bash
+datamitsu devtools dockerfile -o docker/Dockerfile --offline
+```
+
+:::note
+The generated file is **fully overwritten** on every run — there are no managed regions. It is a generated artifact you own: hand-edit it freely, but re-running the command discards those edits. Commit the generated file and protect it with the drift check below.
+:::
+
+**Build-time verification (on by default).** Each app stage runs the app's version check right after installing it, so an app that doesn't actually run fails the Docker build instead of shipping a broken image. This is the safe default; pass `--no-verify` to turn it off (for example, to speed up emulated cross-arch builds):
+
+```bash
+datamitsu devtools dockerfile -o docker/Dockerfile --no-verify
+```
+
+**Alpine variant.** Pass `--alpine` to target the musl base image (`…:<version>-alpine`):
+
+```bash
+datamitsu devtools dockerfile -o docker/Dockerfile.alpine --alpine
+```
+
+**OCI labels.** Supply your image's labels with repeatable `--label` flags. Keep them in the generate invocation (e.g. a `Taskfile` task) so they survive regeneration:
+
+```bash
+datamitsu devtools dockerfile -o docker/Dockerfile \
+  --label org.opencontainers.image.title=my-config \
+  --label org.opencontainers.image.source=https://github.com/me/my-config
+```
+
+**Build args and environment variables.** Declare build-time `ARG`s with repeatable `--arg` flags and runtime `ENV` vars with `--env`. In the final stage all `ARG`s are emitted **before** all `ENV`s, so an `ENV` value can reference an `ARG`. An `--arg` may be a bare `NAME` (its default is supplied by `docker build --build-arg NAME=…`) or `NAME=default`; an `--env` value may contain `=` (only the first separates key from value). Like labels, keep them in the generate invocation so they survive regeneration:
+
+```bash
+datamitsu devtools dockerfile -o docker/Dockerfile \
+  --arg BUILD_DATE \
+  --arg TZ=UTC \
+  --env LANG=C.UTF-8
+```
+
+This emits, in the final stage:
+
+```dockerfile
+ARG BUILD_DATE
+ARG TZ="UTC"
+ENV LANG="C.UTF-8"
+```
+
+**Build-time variables (`--build-arg`).** `--arg`/`--env` only affect the **final** image — they are runtime knobs and do nothing for the build itself. To influence the install stages (for example raise the install timeout for heavy tools), use `--build-arg`. Each one is declared as an `ARG` (overridable via `docker build --build-arg`) and promoted to an `ENV` in a dedicated `dm-build` stage that every install stage derives from, so `datamitsu install` sees it. The final image is built `FROM dm-base` (not `dm-build`), so build args **never leak into the shipped image**:
+
+```bash
+datamitsu devtools dockerfile -o docker/Dockerfile \
+  --build-arg DATAMITSU_INSTALL_TIMEOUT=1200 \
+  --build-arg HTTP_PROXY
+```
+
+emits:
+
+```dockerfile
+FROM dm-base AS dm-build
+ARG DATAMITSU_INSTALL_TIMEOUT="1200"
+ENV DATAMITSU_INSTALL_TIMEOUT=$DATAMITSU_INSTALL_TIMEOUT
+ARG HTTP_PROXY
+ENV HTTP_PROXY=$HTTP_PROXY
+
+FROM dm-build AS rt-go          # install inherits the ENV
+RUN datamitsu install --runtime go
+```
+
+A bare `--build-arg NAME` (no default) takes its value from `docker build --build-arg NAME=…`. With no `--build-arg` flags the `dm-build` stage is omitted and install stages derive straight from `dm-base`.
+
+:::warning Secrets
+Do not pass tokens or other secrets via `--build-arg`: an `ARG` value lingers in the intermediate build layers (visible in the build cache). For credentials use `RUN --mount=type=secret` instead.
+:::
+
+**libc filtering and `--force-include`.** The image targets one libc — **musl** when you pass `--alpine`, **glibc** otherwise. Binary apps are filtered to those that ship a binary for that libc on every architecture they declare; a glibc-only binary cannot execute on a musl image, so such apps are dropped from the generated Dockerfile rather than failing the build. Each generation prints the dropped apps:
+
+```text
+Warning: excluded 47 app(s) with no musl binary (add via --force-include if universal): actionlint, age, … swag, …
+```
+
+Runtime-managed apps (node/uv/jvm/go) are never filtered — their runtime provides the libc.
+
+Many dropped tools are actually **universal**: a statically-linked Go binary recorded as `glibc` (or a static-musl Rust binary recorded as `musl`) runs fine on the other libc, but the registry under-declares it. Triage the warning list and add the genuinely-universal ones back with `--force-include` (keep it in the generate invocation so it survives regeneration):
+
+```bash
+datamitsu devtools dockerfile -o docker/Dockerfile.alpine --alpine \
+  --force-include jq,shfmt,golangci-lint,hadolint
+```
+
+A truly libc-specific tool (e.g. a dynamically-linked glibc binary like `swag`) should stay excluded — install it another way on that variant, or fix its registry entry if a musl build does exist.
+
+**Pulling from a mirror.** To resolve the base-image digest from a registry other than `ghcr.io` (for example a pull-through cache), set `DATAMITSU_OCI_REGISTRY`:
+
+```bash
+DATAMITSU_OCI_REGISTRY=mirror.internal datamitsu devtools dockerfile -o docker/Dockerfile
+```
+
+### Keeping the generated Dockerfile fresh in CI
+
+Because the output is fully generated, add a drift check that fails when the committed Dockerfile is stale. Run the generator with `--offline` so a re-pushed upstream tag (a moving digest) cannot cause false failures — the check then compares structure and version, not the live digest:
+
+```yaml
+- name: Check Dockerfiles are up to date
+  run: |
+    datamitsu devtools dockerfile -o docker/Dockerfile --offline
+    datamitsu devtools dockerfile -o docker/Dockerfile.alpine --alpine --offline
+    git diff --exit-code -- docker/Dockerfile docker/Dockerfile.alpine \
+      || { echo "Dockerfiles are stale; run the generator and commit."; exit 1; }
+```
+
+In your publish workflow, generate with pinning enabled (drop `--offline`) so the pushed image's `FROM` is digest-pinned.
+
 ## Testing After Updates
 
 ### Verify cross-platform integrity

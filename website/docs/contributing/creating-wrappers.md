@@ -352,8 +352,8 @@ function getConfig(input) {
 
   return {
     ...input,
-    init: {
-      ...input.init,
+    setup: {
+      ...input.setup,
       "AGENTS.md": {
         content: () => agentPrompt,
         scope: "git-root",
@@ -408,8 +408,8 @@ function getConfig(input) {
         },
       },
     },
-    init: {
-      ...input.init,
+    setup: {
+      ...input.setup,
       "AGENTS.md": {
         linkTarget: ".datamitsu/company-agents",
         scope: "git-root",
@@ -428,8 +428,8 @@ For demo purposes, datamitsu core creates a bundle with the agent prompt. You ca
 function getConfig(input) {
   return {
     ...input,
-    init: {
-      ...input.init,
+    setup: {
+      ...input.setup,
       "AGENTS.md": {
         linkTarget: ".datamitsu/datamitsu-guide",
         scope: "git-root",

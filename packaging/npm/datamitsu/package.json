@@ -59,5 +59,8 @@
     "@datamitsu/datamitsu-linux-x64": "0.0.0",
     "@datamitsu/datamitsu-win32-arm64": "0.0.0",
     "@datamitsu/datamitsu-win32-x64": "0.0.0"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   }
 }

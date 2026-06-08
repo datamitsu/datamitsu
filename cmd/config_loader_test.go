@@ -212,7 +212,7 @@ func TestParseConfigResultLinkTarget(t *testing.T) {
 
 	_, err := vm.RunString(`
 		var result = {
-			init: {
+			setup: {
 				"CLAUDE.md": {
 					scope: "git-root",
 					linkTarget: "AGENTS.md"
@@ -234,7 +234,7 @@ func TestParseConfigResultLinkTarget(t *testing.T) {
 		t.Fatalf("parseConfigResult error: %v", err)
 	}
 
-	claudeInit, ok := cfg.Init["CLAUDE.md"]
+	claudeInit, ok := cfg.Setup["CLAUDE.md"]
 	if !ok {
 		t.Fatal("CLAUDE.md init config not found")
 	}
@@ -245,7 +245,7 @@ func TestParseConfigResultLinkTarget(t *testing.T) {
 		t.Errorf("CLAUDE.md Scope = %q, want %q", claudeInit.Scope, "git-root")
 	}
 
-	cursorInit, ok := cfg.Init[".cursorrules"]
+	cursorInit, ok := cfg.Setup[".cursorrules"]
 	if !ok {
 		t.Fatal(".cursorrules init config not found")
 	}
@@ -259,7 +259,7 @@ func TestParseConfigResultLinkTargetWithRelativePath(t *testing.T) {
 
 	_, err := vm.RunString(`
 		var result = {
-			init: {
+			setup: {
 				".cursor/rules": {
 					scope: "git-root",
 					linkTarget: "../AGENTS.md"
@@ -277,7 +277,7 @@ func TestParseConfigResultLinkTargetWithRelativePath(t *testing.T) {
 		t.Fatalf("parseConfigResult error: %v", err)
 	}
 
-	cursorInit, ok := cfg.Init[".cursor/rules"]
+	cursorInit, ok := cfg.Setup[".cursor/rules"]
 	if !ok {
 		t.Fatal(".cursor/rules init config not found")
 	}
@@ -291,7 +291,7 @@ func TestParseConfigResultLinkTargetNotSet(t *testing.T) {
 
 	_, err := vm.RunString(`
 		var result = {
-			init: {
+			setup: {
 				".gitignore": {
 					scope: "git-root",
 					content: function(ctx) { return "node_modules/"; }
@@ -309,7 +309,7 @@ func TestParseConfigResultLinkTargetNotSet(t *testing.T) {
 		t.Fatalf("parseConfigResult error: %v", err)
 	}
 
-	gitignoreInit, ok := cfg.Init[".gitignore"]
+	gitignoreInit, ok := cfg.Setup[".gitignore"]
 	if !ok {
 		t.Fatal(".gitignore init config not found")
 	}
@@ -326,7 +326,7 @@ func TestParseConfigResultLinkTargetWithContent(t *testing.T) {
 
 	_, err := vm.RunString(`
 		var result = {
-			init: {
+			setup: {
 				"CLAUDE.md": {
 					scope: "git-root",
 					linkTarget: "AGENTS.md",
@@ -345,7 +345,7 @@ func TestParseConfigResultLinkTargetWithContent(t *testing.T) {
 		t.Fatalf("parseConfigResult error: %v", err)
 	}
 
-	claudeInit := cfg.Init["CLAUDE.md"]
+	claudeInit := cfg.Setup["CLAUDE.md"]
 	if claudeInit.LinkTarget != "AGENTS.md" {
 		t.Errorf("LinkTarget = %q, want %q", claudeInit.LinkTarget, "AGENTS.md")
 	}
@@ -359,7 +359,7 @@ func TestParseConfigResultInitConfigPreservesAllFields(t *testing.T) {
 
 	_, err := vm.RunString(`
 		var result = {
-			init: {
+			setup: {
 				"test.json": {
 					projectTypes: ["node"],
 					scope: "git-root",
@@ -380,7 +380,7 @@ func TestParseConfigResultInitConfigPreservesAllFields(t *testing.T) {
 		t.Fatalf("parseConfigResult error: %v", err)
 	}
 
-	testInit := cfg.Init["test.json"]
+	testInit := cfg.Setup["test.json"]
 	if len(testInit.ProjectTypes) != 1 || testInit.ProjectTypes[0] != "node" {
 		t.Errorf("ProjectTypes = %v, want [node]", testInit.ProjectTypes)
 	}
@@ -1005,7 +1005,7 @@ type effectiveSnapshot struct {
 	editorconfig string
 }
 
-func snapshotEffective(t *testing.T, cfg *config.Config, layerMap *config.InitLayerMap) effectiveSnapshot {
+func snapshotEffective(t *testing.T, cfg *config.Config, layerMap *config.SetupLayerMap) effectiveSnapshot {
 	t.Helper()
 	snap := effectiveSnapshot{
 		ignoreRules: cfg.IgnoreRules,
@@ -1048,7 +1048,7 @@ function getConfig(input) {
     return {
         apps: apps,
         ignoreRules: ["from-shared: eslint"],
-        init: { ".editorconfig": { scope: "git-root", content: function(ctx) { return "from-shared"; } } }
+        setup: { ".editorconfig": { scope: "git-root", content: function(ctx) { return "from-shared"; } } }
     };
 }`, mergeHelper, jvmApp("a", "1.0.0")))
 
@@ -1065,7 +1065,7 @@ function getConfig(input) {
     return {
         apps: apps,
         ignoreRules: ["from-auto: prettier"],
-        init: { ".editorconfig": { scope: "git-root", content: function(ctx) { return (ctx.existingContent || "") + "\nfrom-auto"; } } }
+        setup: { ".editorconfig": { scope: "git-root", content: function(ctx) { return (ctx.existingContent || "") + "\nfrom-auto"; } } }
     };
 }`, mergeHelper, jvmApp("a", "2.0.0"), jvmApp("b", "1.0.0")))
 
@@ -2412,7 +2412,7 @@ func TestLoadConfigImplEvaluatesInitContent(t *testing.T) {
 function getMinVersion() { return "0.0.0"; }
 function getConfig(input) {
     return {
-        init: {
+        setup: {
             ".editorconfig": {
                 scope: "git-root",
                 content: function(context) { return "root = true"; }
@@ -2454,7 +2454,7 @@ func TestLoadConfigImplMergesLayersAcrossSources(t *testing.T) {
 function getMinVersion() { return "0.0.0"; }
 function getConfig(input) {
     return {
-        init: {
+        setup: {
             ".editorconfig": {
                 scope: "git-root",
                 content: function(context) { return "from-before"; }
@@ -2472,7 +2472,7 @@ function getConfig(input) {
 function getMinVersion() { return "0.0.0"; }
 function getConfig(input) {
     return {
-        init: {
+        setup: {
             ".editorconfig": {
                 scope: "git-root",
                 content: function(context) {
@@ -2515,7 +2515,7 @@ func TestLoadConfigImplSkipsFailedContentEvaluation(t *testing.T) {
 function getMinVersion() { return "0.0.0"; }
 function getConfig(input) {
     return {
-        init: {
+        setup: {
             "test-fail-eval.txt": {
                 scope: "git-root",
                 content: function(context) { throw new Error("content generation failed"); }
