@@ -674,7 +674,7 @@ func TestTool(t *testing.T) {
 }
 
 func TestConfigInit(t *testing.T) {
-	init := ConfigInit{
+	init := ConfigSetup{
 		ProjectTypes:      []string{"node"},
 		Scope:             ScopeGitRoot,
 		OtherFileNameList: []string{".eslintrc.js", ".eslintrc.json"},
@@ -699,7 +699,7 @@ func TestConfigInit(t *testing.T) {
 }
 
 func TestConfigInitLinkTarget(t *testing.T) {
-	ci := ConfigInit{
+	ci := ConfigSetup{
 		Scope:      ScopeGitRoot,
 		LinkTarget: "AGENTS.md",
 	}
@@ -713,7 +713,7 @@ func TestConfigInitLinkTarget(t *testing.T) {
 }
 
 func TestConfigInitLinkTargetEmpty(t *testing.T) {
-	ci := ConfigInit{
+	ci := ConfigSetup{
 		Scope: ScopeGitRoot,
 	}
 
@@ -723,7 +723,7 @@ func TestConfigInitLinkTargetEmpty(t *testing.T) {
 }
 
 func TestConfigInitLinkTargetJSON(t *testing.T) {
-	ci := ConfigInit{
+	ci := ConfigSetup{
 		Scope:      ScopeGitRoot,
 		LinkTarget: "../AGENTS.md",
 	}
@@ -733,7 +733,7 @@ func TestConfigInitLinkTargetJSON(t *testing.T) {
 		t.Fatalf("json.Marshal error: %v", err)
 	}
 
-	var parsed ConfigInit
+	var parsed ConfigSetup
 	if err := json.Unmarshal(data, &parsed); err != nil {
 		t.Fatalf("json.Unmarshal error: %v", err)
 	}
@@ -747,7 +747,7 @@ func TestConfigInitLinkTargetJSON(t *testing.T) {
 }
 
 func TestConfigInitLinkTargetJSONOmitEmpty(t *testing.T) {
-	ci := ConfigInit{
+	ci := ConfigSetup{
 		Scope: ScopeGitRoot,
 	}
 
@@ -763,7 +763,7 @@ func TestConfigInitLinkTargetJSONOmitEmpty(t *testing.T) {
 }
 
 func TestConfigInitTools(t *testing.T) {
-	ci := ConfigInit{
+	ci := ConfigSetup{
 		Tools: []string{"golangci-lint"},
 	}
 
@@ -776,7 +776,7 @@ func TestConfigInitTools(t *testing.T) {
 }
 
 func TestConfigInitToolsJSON(t *testing.T) {
-	ci := ConfigInit{
+	ci := ConfigSetup{
 		Tools: []string{"golangci-lint", "prettier"},
 	}
 
@@ -785,7 +785,7 @@ func TestConfigInitToolsJSON(t *testing.T) {
 		t.Fatalf("json.Marshal error: %v", err)
 	}
 
-	var parsed ConfigInit
+	var parsed ConfigSetup
 	if err := json.Unmarshal(data, &parsed); err != nil {
 		t.Fatalf("json.Unmarshal error: %v", err)
 	}
@@ -796,7 +796,7 @@ func TestConfigInitToolsJSON(t *testing.T) {
 }
 
 func TestConfigInitToolsJSONOmitEmpty(t *testing.T) {
-	ci := ConfigInit{
+	ci := ConfigSetup{
 		Scope: ScopeGitRoot,
 	}
 
@@ -811,7 +811,7 @@ func TestConfigInitToolsJSONOmitEmpty(t *testing.T) {
 }
 
 // TestConfigInitToolsFromJS guards the real data flow: a JS `init` entry's
-// `tools` array must populate ConfigInit.Tools via the same goja json field
+// `tools` array must populate ConfigSetup.Tools via the same goja json field
 // mapper + ExportTo path the config loader uses (no special-case extraction).
 func TestConfigInitToolsFromJS(t *testing.T) {
 	vm := goja.New()
@@ -822,7 +822,7 @@ func TestConfigInitToolsFromJS(t *testing.T) {
 		t.Fatalf("RunString error: %v", err)
 	}
 
-	var ci ConfigInit
+	var ci ConfigSetup
 	if err := vm.ExportTo(val, &ci); err != nil {
 		t.Fatalf("ExportTo error: %v", err)
 	}

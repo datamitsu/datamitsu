@@ -2,8 +2,8 @@
 export function getConfig(input) {
   return {
     ...input,
-    init: {
-      ...input.init,
+    setup: {
+      ...input.setup,
       ".editorconfig": {
         content: function (context) {
           // Verify upstream content exists before overriding

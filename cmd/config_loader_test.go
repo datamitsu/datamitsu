@@ -234,7 +234,7 @@ func TestParseConfigResultLinkTarget(t *testing.T) {
 		t.Fatalf("parseConfigResult error: %v", err)
 	}
 
-	claudeInit, ok := cfg.Init["CLAUDE.md"]
+	claudeInit, ok := cfg.Setup["CLAUDE.md"]
 	if !ok {
 		t.Fatal("CLAUDE.md init config not found")
 	}
@@ -245,7 +245,7 @@ func TestParseConfigResultLinkTarget(t *testing.T) {
 		t.Errorf("CLAUDE.md Scope = %q, want %q", claudeInit.Scope, "git-root")
 	}
 
-	cursorInit, ok := cfg.Init[".cursorrules"]
+	cursorInit, ok := cfg.Setup[".cursorrules"]
 	if !ok {
 		t.Fatal(".cursorrules init config not found")
 	}
@@ -277,7 +277,7 @@ func TestParseConfigResultLinkTargetWithRelativePath(t *testing.T) {
 		t.Fatalf("parseConfigResult error: %v", err)
 	}
 
-	cursorInit, ok := cfg.Init[".cursor/rules"]
+	cursorInit, ok := cfg.Setup[".cursor/rules"]
 	if !ok {
 		t.Fatal(".cursor/rules init config not found")
 	}
@@ -309,7 +309,7 @@ func TestParseConfigResultLinkTargetNotSet(t *testing.T) {
 		t.Fatalf("parseConfigResult error: %v", err)
 	}
 
-	gitignoreInit, ok := cfg.Init[".gitignore"]
+	gitignoreInit, ok := cfg.Setup[".gitignore"]
 	if !ok {
 		t.Fatal(".gitignore init config not found")
 	}
@@ -345,7 +345,7 @@ func TestParseConfigResultLinkTargetWithContent(t *testing.T) {
 		t.Fatalf("parseConfigResult error: %v", err)
 	}
 
-	claudeInit := cfg.Init["CLAUDE.md"]
+	claudeInit := cfg.Setup["CLAUDE.md"]
 	if claudeInit.LinkTarget != "AGENTS.md" {
 		t.Errorf("LinkTarget = %q, want %q", claudeInit.LinkTarget, "AGENTS.md")
 	}
@@ -380,7 +380,7 @@ func TestParseConfigResultInitConfigPreservesAllFields(t *testing.T) {
 		t.Fatalf("parseConfigResult error: %v", err)
 	}
 
-	testInit := cfg.Init["test.json"]
+	testInit := cfg.Setup["test.json"]
 	if len(testInit.ProjectTypes) != 1 || testInit.ProjectTypes[0] != "node" {
 		t.Errorf("ProjectTypes = %v, want [node]", testInit.ProjectTypes)
 	}
@@ -1005,7 +1005,7 @@ type effectiveSnapshot struct {
 	editorconfig string
 }
 
-func snapshotEffective(t *testing.T, cfg *config.Config, layerMap *config.InitLayerMap) effectiveSnapshot {
+func snapshotEffective(t *testing.T, cfg *config.Config, layerMap *config.SetupLayerMap) effectiveSnapshot {
 	t.Helper()
 	snap := effectiveSnapshot{
 		ignoreRules: cfg.IgnoreRules,

@@ -55,13 +55,13 @@ type beforeConfigEntry struct {
 // loadConfig loads and parses the JavaScript configuration. It is the
 // context-free entry point used by command handlers that do not thread a
 // context; callers that hold one should use loadConfigWithPaths.
-func loadConfig() (*config.Config, *config.InitLayerMap, *goja.Runtime, error) {
+func loadConfig() (*config.Config, *config.SetupLayerMap, *goja.Runtime, error) {
 	return loadConfigWithPaths(context.Background(), BeforeConfigPaths, NoAutoConfig, ConfigPaths)
 }
 
 // loadConfigForLockfileGen loads config without enforcing lockfile constraints.
 // Used by config lockfile to allow bootstrapping lockfiles for apps that don't have one yet.
-func loadConfigForLockfileGen() (*config.Config, *config.InitLayerMap, *goja.Runtime, error) {
+func loadConfigForLockfileGen() (*config.Config, *config.SetupLayerMap, *goja.Runtime, error) {
 	return loadConfigImpl(context.Background(), BeforeConfigPaths, NoAutoConfig, ConfigPaths, true)
 }
 
@@ -69,11 +69,11 @@ func loadConfigForLockfileGen() (*config.Config, *config.InitLayerMap, *goja.Run
 // additional configuration files, merging them together.
 // Each config file is loaded in a separate VM and receives the previous config as input.
 // Remote configs declared via getRemoteConfigs() are resolved depth-first.
-func loadConfigWithPaths(ctx context.Context, beforeConfigPaths []string, noAutoConfig bool, configPaths []string) (cfg *config.Config, layerMap *config.InitLayerMap, vm *goja.Runtime, err error) {
+func loadConfigWithPaths(ctx context.Context, beforeConfigPaths []string, noAutoConfig bool, configPaths []string) (cfg *config.Config, layerMap *config.SetupLayerMap, vm *goja.Runtime, err error) {
 	return loadConfigImpl(ctx, beforeConfigPaths, noAutoConfig, configPaths, false)
 }
 
-func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfig bool, configPaths []string, skipLockfileValidation bool) (cfg *config.Config, lm *config.InitLayerMap, vm *goja.Runtime, err error) {
+func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfig bool, configPaths []string, skipLockfileValidation bool) (cfg *config.Config, lm *config.SetupLayerMap, vm *goja.Runtime, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("config loading panic: %v", r)
@@ -116,7 +116,7 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 	// stack: tracks URLs in the current recursion path (for cycle detection).
 	var currentConfig *config.Config
 	var lastVM *goja.Runtime
-	layerMap := make(config.InitLayerMap)
+	layerMap := make(config.SetupLayerMap)
 	resolved := make(map[string]bool)
 	stack := make(map[string]bool)
 	for _, source := range sources {
@@ -125,9 +125,9 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 			return nil, nil, nil, processErr
 		}
 
-		if result.Init != nil {
+		if result.Setup != nil {
 			evaluatedContent := config.EvaluateInitContent(result, resultVM, rootPath, cwdPath, layerMap)
-			config.MergeInitLayers(layerMap, source.name, evaluatedContent, result.Init)
+			config.MergeSetupLayers(layerMap, source.name, evaluatedContent, result.Setup)
 		}
 
 		currentConfig = result
@@ -164,10 +164,10 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 		return nil, nil, nil, err
 	}
 
-	if err := config.ValidateInit(currentConfig.Init); err != nil {
+	if err := config.ValidateSetup(currentConfig.Setup); err != nil {
 		return nil, nil, nil, err
 	}
-	for _, w := range config.ValidateInitToolRefs(currentConfig.Init, currentConfig.Tools) {
+	for _, w := range config.ValidateSetupToolRefs(currentConfig.Setup, currentConfig.Tools) {
 		logger.Logger.Warn(w, zap.String("source", "config"))
 	}
 
@@ -408,13 +408,13 @@ func parseConfigResult(vm *goja.Runtime, resultVal goja.Value) (*config.Config, 
 	resultObj := resultVal.ToObject(vm)
 	if initVal := resultObj.Get("init"); initVal != nil && initVal != goja.Undefined() {
 		initObj := initVal.ToObject(vm)
-		cfg.Init = make(config.MapOfConfigInit)
+		cfg.Setup = make(config.MapOfConfigSetup)
 
 		for _, key := range initObj.Keys() {
 			cfgInitVal := initObj.Get(key)
 			cfgInitObj := cfgInitVal.ToObject(vm)
 
-			var cfgInit config.ConfigInit
+			var cfgInit config.ConfigSetup
 
 			if err := vm.ExportTo(cfgInitVal, &cfgInit); err != nil {
 				return nil, fmt.Errorf("failed to export init config %s: %w", key, err)
@@ -428,7 +428,7 @@ func parseConfigResult(vm *goja.Runtime, resultVal goja.Value) (*config.Config, 
 				cfgInit.LinkTarget = linkTargetVal.String()
 			}
 
-			cfg.Init[key] = cfgInit
+			cfg.Setup[key] = cfgInit
 		}
 	}
 
