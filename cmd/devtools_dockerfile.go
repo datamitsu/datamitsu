@@ -11,6 +11,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"github.com/datamitsu/datamitsu/internal/ocidigest"
+	"github.com/datamitsu/datamitsu/internal/target"
 	"github.com/datamitsu/datamitsu/internal/utils"
 
 	"github.com/spf13/cobra"
@@ -22,16 +23,17 @@ import (
 const defaultBaseRepo = "datamitsu/datamitsu"
 
 var (
-	dockerfileOutput    string
-	dockerfileAlpine    bool
-	dockerfileOffline   bool
-	dockerfileNoVerify  bool
-	dockerfileConfigJS  string
-	dockerfileRepo      string
-	dockerfileLabels    []string
-	dockerfileArgs      []string
-	dockerfileBuildArgs []string
-	dockerfileEnv       []string
+	dockerfileOutput       string
+	dockerfileAlpine       bool
+	dockerfileOffline      bool
+	dockerfileNoVerify     bool
+	dockerfileConfigJS     string
+	dockerfileRepo         string
+	dockerfileLabels       []string
+	dockerfileArgs         []string
+	dockerfileBuildArgs    []string
+	dockerfileEnv          []string
+	dockerfileForceInclude []string
 )
 
 // digestResolver is the seam over ocidigest.Resolver so the command can be
@@ -71,6 +73,7 @@ func init() {
 	dockerfileCmd.Flags().StringArrayVar(&dockerfileArgs, "arg", nil, "Build ARG (name or name=default) declared before ENV in the final stage (repeatable)")
 	dockerfileCmd.Flags().StringArrayVar(&dockerfileBuildArgs, "build-arg", nil, "Build-time ARG promoted to ENV so install stages inherit it, e.g. DATAMITSU_INSTALL_TIMEOUT=1200; not baked into the final image (repeatable)")
 	dockerfileCmd.Flags().StringArrayVar(&dockerfileEnv, "env", nil, "ENV key=value baked into the final image (repeatable)")
+	dockerfileCmd.Flags().StringSliceVar(&dockerfileForceInclude, "force-include", nil, "Binary app names to include even if they lack a binary for the target libc (comma-separated, repeatable)")
 	_ = dockerfileCmd.MarkFlagRequired("output")
 	devtoolsCmd.AddCommand(dockerfileCmd)
 }
@@ -101,7 +104,30 @@ func runDockerfile(ctx context.Context, cmd *cobra.Command) error {
 		return err
 	}
 
-	plan := dockerfile.BuildPlan(cfg.Apps, cfg.Runtimes)
+	// The image targets musl on Alpine and glibc otherwise; binary apps without a
+	// binary for that libc are dropped (a glibc binary can't exec on musl), unless
+	// named in --force-include (for statically-linked tools the registry
+	// under-declares).
+	targetLibc := string(target.LibcGlibc)
+	if dockerfileAlpine {
+		targetLibc = string(target.LibcMusl)
+	}
+	forceInclude := make(map[string]bool, len(dockerfileForceInclude))
+	for _, name := range dockerfileForceInclude {
+		forceInclude[name] = true
+		if _, ok := cfg.Apps[name]; !ok {
+			fmt.Fprintf(os.Stderr, "Warning: --force-include %q is not a known app\n", name)
+		}
+	}
+
+	plan := dockerfile.BuildPlan(cfg.Apps, cfg.Runtimes, dockerfile.PlanOptions{
+		TargetLibc:   targetLibc,
+		ForceInclude: forceInclude,
+	})
+	if len(plan.LibcExcluded) > 0 {
+		fmt.Fprintf(os.Stderr, "Warning: excluded %d app(s) with no %s binary (add via --force-include if universal): %s\n",
+			len(plan.LibcExcluded), targetLibc, strings.Join(plan.LibcExcluded, ", "))
+	}
 
 	// The repository and tag of the datamitsu base image are baked into this
 	// binary at release time (they differ between the stable and unstable

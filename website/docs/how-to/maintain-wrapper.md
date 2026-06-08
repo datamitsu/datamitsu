@@ -345,6 +345,23 @@ A bare `--build-arg NAME` (no default) takes its value from `docker build --buil
 Do not pass tokens or other secrets via `--build-arg`: an `ARG` value lingers in the intermediate build layers (visible in the build cache). For credentials use `RUN --mount=type=secret` instead.
 :::
 
+**libc filtering and `--force-include`.** The image targets one libc — **musl** when you pass `--alpine`, **glibc** otherwise. Binary apps are filtered to those that ship a binary for that libc on every architecture they declare; a glibc-only binary cannot execute on a musl image, so such apps are dropped from the generated Dockerfile rather than failing the build. Each generation prints the dropped apps:
+
+```text
+Warning: excluded 47 app(s) with no musl binary (add via --force-include if universal): actionlint, age, … swag, …
+```
+
+Runtime-managed apps (node/uv/jvm/go) are never filtered — their runtime provides the libc.
+
+Many dropped tools are actually **universal**: a statically-linked Go binary recorded as `glibc` (or a static-musl Rust binary recorded as `musl`) runs fine on the other libc, but the registry under-declares it. Triage the warning list and add the genuinely-universal ones back with `--force-include` (keep it in the generate invocation so it survives regeneration):
+
+```bash
+datamitsu devtools dockerfile -o docker/Dockerfile.alpine --alpine \
+  --force-include jq,shfmt,golangci-lint,hadolint
+```
+
+A truly libc-specific tool (e.g. a dynamically-linked glibc binary like `swag`) should stay excluded — install it another way on that variant, or fix its registry entry if a musl build does exist.
+
 **Pulling from a mirror.** To resolve the base-image digest from a registry other than `ghcr.io` (for example a pull-through cache), set `DATAMITSU_OCI_REGISTRY`:
 
 ```bash
