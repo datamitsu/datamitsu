@@ -39,6 +39,34 @@ datamitsu exec golangci-lint run ./...
 datamitsu exec eslint --fix src/
 ```
 
+## install
+
+Install one or more managed apps (and optionally runtimes) into the store **without executing them**. Where `exec` prepares and runs an app, `install` materializes its files and exits — the building block for the per-app stages of a generated Dockerfile (see [devtools dockerfile](#devtools-dockerfile)).
+
+```bash
+datamitsu install [app...]
+```
+
+| Flag               | Description                                                        |
+| ------------------ | ------------------------------------------------------------------ |
+| `--runtime <name>` | Install the named runtime(s) only, without any app (repeatable)    |
+| `--no-verify`      | Skip the post-install version check (verification runs by default) |
+
+By default, each installed app's version command (`--version`, or its configured `versionCheck.args`) is run after installation, so a broken install fails the command instead of producing a broken artifact. Apps whose version check is disabled, and shell apps, are skipped. Pass `--no-verify` to skip the check.
+
+**Examples:**
+
+```bash
+# Install a single tool
+datamitsu install shellcheck
+
+# Install only the node runtime (no app)
+datamitsu install --runtime node
+
+# Install and verify each tool actually runs
+datamitsu install eslint prettier --verify
+```
+
 ## init
 
 Download binaries, install runtime-managed apps, and run initialization commands.
@@ -448,6 +476,64 @@ datamitsu devtools pull-runtimes --update --dry-run config/src/runtimes.json
 :::tip See also
 For the full runtime update workflow and CI automation, see [Maintaining Wrapper Packages — Runtimes](/docs/how-to/maintain-wrapper#runtimes-devtools-pull-runtimes).
 :::
+
+### devtools dockerfile
+
+Generate an optimized, digest-pinned multi-stage Dockerfile from the loaded config. Emits a config-free base, a `config-split` stage, then one build stage per binary app, per managed runtime, and per runtime-managed app (each inheriting its runtime stage), then assembles the populated store with `COPY --link` — one cacheable layer per app, so bumping one app re-pulls only its layer. The base never carries the config and each stage loads only its own slice (see [devtools split-config](#devtools-split-config)), so editing or regenerating the config rebuilds only the stages whose slice actually changed instead of every tool.
+
+```bash
+datamitsu devtools dockerfile -o docker/Dockerfile
+```
+
+| Flag                     | Description                                                                                                    |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| `-o, --output <path>`    | **Required.** Output Dockerfile path including filename, fully overwritten on each run                         |
+| `--alpine`               | Target the Alpine (musl) base image variant (`<version>-alpine`)                                               |
+| `--offline`              | Skip base-image digest resolution; emit an unpinned `FROM` with a warning                                      |
+| `--no-verify`            | Do not run apps' version checks in their build stages (verification is on by default)                          |
+| `--config-js <path>`     | Pre-built config file COPYed into the image (default `datamitsu.config.js`)                                    |
+| `--repo <repo>`          | Override the base image repository (default: the repo this datamitsu build was published under)                |
+| `--label <key=value>`    | OCI label for the final image (repeatable)                                                                     |
+| `--arg <name[=val]>`     | Build `ARG` declared before `ENV` in the final stage; bare name or name=default (repeatable)                   |
+| `--build-arg <n[=v]>`    | Build-time `ARG`→`ENV` in a `dm-build` stage so install stages inherit it; not in the final image (repeatable) |
+| `--env <key=value>`      | `ENV` var baked into the final image (repeatable)                                                              |
+| `--force-include <apps>` | Keep binary apps that lack a binary for the target libc (comma-separated, repeatable)                          |
+
+**libc filtering.** The generated image targets one libc — **musl** with `--alpine`, **glibc** otherwise — and binary apps are filtered to those that ship a binary for it on every arch they declare. A glibc-only binary can't execute on a musl image (and vice versa), so incompatible apps are dropped from the Dockerfile and listed in a warning. Runtime-managed apps (node/uv/jvm/go) are unaffected — their runtime carries the libc. Statically-linked tools that run on any libc but are under-declared in the registry (e.g. a static Go binary recorded as glibc-only) can be added back with `--force-include name1,name2`.
+
+The base image **repository and tag are baked into the datamitsu binary at release time**, so the `FROM` points at the exact image this build came from — including across release channels, where the stable image (`datamitsu/datamitsu:<version>`) and the unstable image (`datamitsu/datamitsu-unstable:<unstable-tag>`) live in different repositories under different tags. The registry host defaults to `ghcr.io` (override with `DATAMITSU_OCI_REGISTRY`); `--repo` overrides the repository for mirrors or forks. The tag is resolved to a SHA-256 digest and pinned as `FROM …@sha256:…`. Pinning is best-effort and never fails the command: `--offline`, an unreachable registry, or a non-release (`dev`/unstable) build leave the `FROM` unpinned with a warning. The output file is fully overwritten (no managed regions).
+
+**Examples:**
+
+```bash
+# Generate the glibc and Alpine variants
+datamitsu devtools dockerfile -o docker/Dockerfile
+datamitsu devtools dockerfile -o docker/Dockerfile.alpine --alpine
+
+# Offline (no digest pinning) — useful for CI drift checks
+datamitsu devtools dockerfile -o docker/Dockerfile --offline
+
+# Resolve the base digest from a mirror registry
+DATAMITSU_OCI_REGISTRY=mirror.internal datamitsu devtools dockerfile -o docker/Dockerfile
+```
+
+:::tip See also
+For the full image-publishing workflow and CI drift guard, see [Maintaining Wrapper Packages — Generating a Docker image](/docs/how-to/maintain-wrapper#generating-a-docker-image-devtools-dockerfile).
+:::
+
+### devtools split-config
+
+Write one minimal config slice per app and per runtime into a directory. Each slice is a self-contained config defining exactly one stage's target — a single binary, a single runtime, or a single runtime-managed app plus the runtime it installs under — that `install --config` can load on its own.
+
+```bash
+datamitsu devtools split-config -o ./slices
+```
+
+| Flag                 | Description                                          |
+| -------------------- | ---------------------------------------------------- |
+| `-o, --output <dir>` | **Required.** Output directory for the config slices |
+
+This is the build-cache primitive behind [devtools dockerfile](#devtools-dockerfile): the generated Dockerfile runs it in the `config-split` stage so every other stage loads only its own slice. Editing one app then changes only that app's slice — and so invalidates only that app's build cache — instead of busting the whole image. You rarely run it directly; it is documented because it appears in the generated Dockerfile. The config is read from the usual sources (`--config` / `--before-config` / auto-discovery).
 
 ### devtools verify-all
 

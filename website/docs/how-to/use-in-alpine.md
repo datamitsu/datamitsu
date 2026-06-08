@@ -219,6 +219,16 @@ RUN datamitsu init
 
 Binary apps automatically detect musl and select the appropriate variant. Node runs in managed mode via its static musl archive. For JVM, datamitsu auto-detects the system `java` binary. For UV, configure system mode in your wrapper config (see [manual system mode override](#manual-system-mode-override) above).
 
+:::tip
+If you maintain a wrapper package, you can auto-generate an optimized Alpine Dockerfile (digest-pinned base, one cacheable layer per tool) instead of hand-writing the example above:
+
+```bash
+datamitsu devtools dockerfile -o docker/Dockerfile.alpine --alpine
+```
+
+See [Generating a Docker image](/docs/how-to/maintain-wrapper#generating-a-docker-image-devtools-dockerfile).
+:::
+
 ## Checking Detection Results
 
 Use the `facts().libc` value in your config to verify detection:

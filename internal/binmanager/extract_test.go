@@ -186,6 +186,101 @@ func TestExtractTarGz(t *testing.T) {
 	})
 }
 
+// writeTarGz builds a tar.gz at path from ordered (name, content) entries.
+// Order matters: it reproduces archives where a weakly-matching entry precedes
+// the real binary.
+func writeTarGz(t *testing.T, path string, entries [][2]string) {
+	t.Helper()
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("create tar.gz: %v", err)
+	}
+	gzWriter := gzip.NewWriter(file)
+	tarWriter := tar.NewWriter(gzWriter)
+	for _, e := range entries {
+		name, content := e[0], e[1]
+		if err := tarWriter.WriteHeader(&tar.Header{
+			Name:     name,
+			Typeflag: tar.TypeReg,
+			Mode:     0o755,
+			Size:     int64(len(content)),
+		}); err != nil {
+			t.Fatalf("write header %q: %v", name, err)
+		}
+		if _, err := tarWriter.Write([]byte(content)); err != nil {
+			t.Fatalf("write body %q: %v", name, err)
+		}
+	}
+	_ = tarWriter.Close()
+	_ = gzWriter.Close()
+	_ = file.Close()
+}
+
+func TestExtractTarGz_BestMatch(t *testing.T) {
+	tests := []struct {
+		name       string
+		entries    [][2]string
+		targetPath string
+		want       string
+	}{
+		{
+			// buf ships "buf/etc/bash_completion.d/buf" (basename match) BEFORE
+			// the real "buf/bin/buf" (exact match). The exact match must win.
+			name: "exact match wins over earlier basename match",
+			entries: [][2]string{
+				{"buf/etc/bash_completion.d/buf", "# bash completion for buf"},
+				{"buf/bin/buf", "ELF-BINARY"},
+			},
+			targetPath: "buf/bin/buf",
+			want:       "ELF-BINARY",
+		},
+		{
+			// yq's binaryPath carries a directory prefix that does not exist in
+			// the archive; only basename connects "yq_linux_amd64/yq_linux_amd64"
+			// to "./yq_linux_amd64".
+			name: "basename match when explicit dir prefix is absent",
+			entries: [][2]string{
+				{"./yq_linux_amd64", "YQ-BINARY"},
+				{"yq.1", "manpage"},
+				{"install-man-page.sh", "#!/bin/sh"},
+			},
+			targetPath: "yq_linux_amd64/yq_linux_amd64",
+			want:       "YQ-BINARY",
+		},
+		{
+			// suffix match (versioned top-level dir) beats a stray basename match.
+			name: "suffix match wins over basename match",
+			entries: [][2]string{
+				{"docs/tool", "not the binary"},
+				{"tool-v1.2.3/bin/tool", "REAL"},
+			},
+			targetPath: "bin/tool",
+			want:       "REAL",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			tarGzPath := filepath.Join(tmpDir, "archive.tar.gz")
+			writeTarGz(t, tarGzPath, tt.entries)
+
+			targetPath := tt.targetPath
+			extractedPath, err := extractTarGz(tarGzPath, &targetPath, tmpDir)
+			if err != nil {
+				t.Fatalf("extractTarGz() error = %v", err)
+			}
+			content, err := os.ReadFile(extractedPath)
+			if err != nil {
+				t.Fatalf("read extracted: %v", err)
+			}
+			if string(content) != tt.want {
+				t.Errorf("extracted %q, want %q", string(content), tt.want)
+			}
+		})
+	}
+}
+
 func TestExtractTarXz(t *testing.T) {
 	t.Run("successful extraction", func(t *testing.T) {
 		tmpDir := t.TempDir()
