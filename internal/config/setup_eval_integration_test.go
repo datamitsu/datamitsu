@@ -37,12 +37,12 @@ func TestMultiLayerContentEvaluation(t *testing.T) {
 		t.Fatalf("failed to create auto content function: %v", err)
 	}
 
-	layerMap := make(InitLayerMap)
+	layerMap := make(SetupLayerMap)
 
 	// --- Process Layer 1: default ---
 	defaultCfg := &Config{
-		Init: MapOfConfigInit{
-			".editorconfig": ConfigInit{
+		Setup: MapOfConfigSetup{
+			".editorconfig": ConfigSetup{
 				Scope:   ScopeGitRoot,
 				Content: defaultFn,
 			},
@@ -50,7 +50,7 @@ func TestMultiLayerContentEvaluation(t *testing.T) {
 	}
 
 	evaluated1 := EvaluateInitContent(defaultCfg, vm, "/project", "/project", layerMap)
-	MergeInitLayers(layerMap, "default", evaluated1, defaultCfg.Init)
+	MergeSetupLayers(layerMap, "default", evaluated1, defaultCfg.Setup)
 
 	// Verify default layer produced expected content
 	if evaluated1[".editorconfig"] != defaultContent {
@@ -59,8 +59,8 @@ func TestMultiLayerContentEvaluation(t *testing.T) {
 
 	// --- Process Layer 2: auto ---
 	autoCfg := &Config{
-		Init: MapOfConfigInit{
-			".editorconfig": ConfigInit{
+		Setup: MapOfConfigSetup{
+			".editorconfig": ConfigSetup{
 				Scope:   ScopeGitRoot,
 				Content: autoFn,
 			},
@@ -68,7 +68,7 @@ func TestMultiLayerContentEvaluation(t *testing.T) {
 	}
 
 	evaluated2 := EvaluateInitContent(autoCfg, vm, "/project", "/project", layerMap)
-	MergeInitLayers(layerMap, "auto", evaluated2, autoCfg.Init)
+	MergeSetupLayers(layerMap, "auto", evaluated2, autoCfg.Setup)
 
 	// Verify auto layer received default's content as existingContent and produced override
 	autoExpected := "root = true\n\n[*]\nindent_style = space\nindent_size = 4\n"
@@ -125,24 +125,24 @@ func TestMultiLayerContentThrowSkipsEntry(t *testing.T) {
 		t.Fatalf("failed to create auto content function: %v", err)
 	}
 
-	layerMap := make(InitLayerMap)
+	layerMap := make(SetupLayerMap)
 
 	// Process default layer
 	defaultCfg := &Config{
-		Init: MapOfConfigInit{
-			".editorconfig": ConfigInit{
+		Setup: MapOfConfigSetup{
+			".editorconfig": ConfigSetup{
 				Scope:   ScopeGitRoot,
 				Content: defaultFn,
 			},
 		},
 	}
 	evaluated1 := EvaluateInitContent(defaultCfg, vm, "/project", "/project", layerMap)
-	MergeInitLayers(layerMap, "default", evaluated1, defaultCfg.Init)
+	MergeSetupLayers(layerMap, "default", evaluated1, defaultCfg.Setup)
 
 	// Process auto layer - content() throws, entry is skipped
 	autoCfg := &Config{
-		Init: MapOfConfigInit{
-			".editorconfig": ConfigInit{
+		Setup: MapOfConfigSetup{
+			".editorconfig": ConfigSetup{
 				Scope:   ScopeGitRoot,
 				Content: autoFn,
 			},
@@ -155,7 +155,7 @@ func TestMultiLayerContentThrowSkipsEntry(t *testing.T) {
 		t.Error("expected .editorconfig to be skipped when content() throws")
 	}
 
-	MergeInitLayers(layerMap, "auto", evaluated2, autoCfg.Init)
+	MergeSetupLayers(layerMap, "auto", evaluated2, autoCfg.Setup)
 
 	// Layer history should show auto layer as non-content (content() threw)
 	history := layerMap[".editorconfig"]
@@ -185,7 +185,7 @@ func TestMultiLayerContentThrowSkipsEntry(t *testing.T) {
 func TestMultiLayerChainDefaultRemoteAutoExplicit(t *testing.T) {
 	vm := goja.New()
 
-	layerMap := make(InitLayerMap)
+	layerMap := make(SetupLayerMap)
 
 	layerDefs := []struct {
 		name    string
@@ -213,8 +213,8 @@ func TestMultiLayerChainDefaultRemoteAutoExplicit(t *testing.T) {
 		}
 
 		cfg := &Config{
-			Init: MapOfConfigInit{
-				".editorconfig": ConfigInit{
+			Setup: MapOfConfigSetup{
+				".editorconfig": ConfigSetup{
 					Scope:   ScopeGitRoot,
 					Content: fnVal,
 				},
@@ -222,7 +222,7 @@ func TestMultiLayerChainDefaultRemoteAutoExplicit(t *testing.T) {
 		}
 
 		evaluated := EvaluateInitContent(cfg, vm, "/root", "/root", layerMap)
-		MergeInitLayers(layerMap, ld.name, evaluated, cfg.Init)
+		MergeSetupLayers(layerMap, ld.name, evaluated, cfg.Setup)
 	}
 
 	// Verify the content threaded through all 4 layers
@@ -261,7 +261,7 @@ func TestOriginalContentAvailableInAllLayers(t *testing.T) {
 	}
 
 	vm := goja.New()
-	layerMap := make(InitLayerMap)
+	layerMap := make(SetupLayerMap)
 
 	// Layer 1 (default): returns originalContent + marker
 	defaultFn, err := vm.RunString(`(function(context) {
@@ -313,15 +313,15 @@ func TestOriginalContentAvailableInAllLayers(t *testing.T) {
 
 	for _, l := range layers {
 		cfg := &Config{
-			Init: MapOfConfigInit{
-				"package.json": ConfigInit{
+			Setup: MapOfConfigSetup{
+				"package.json": ConfigSetup{
 					Scope:   ScopeGitRoot,
 					Content: l.fn,
 				},
 			},
 		}
 		evaluated := EvaluateInitContent(cfg, vm, tmpDir, tmpDir, layerMap)
-		MergeInitLayers(layerMap, l.name, evaluated, cfg.Init)
+		MergeSetupLayers(layerMap, l.name, evaluated, cfg.Setup)
 
 		if _, ok := evaluated["package.json"]; !ok {
 			t.Fatalf("layer %s: content() was skipped (likely threw an error)", l.name)
@@ -365,7 +365,7 @@ func TestOriginalContentPackageJsonMerge(t *testing.T) {
 	}
 
 	vm := goja.New()
-	layerMap := make(InitLayerMap)
+	layerMap := make(SetupLayerMap)
 
 	// Config layer: merge tool-managed fields into existing package.json
 	// Uses originalContent to preserve user fields while adding/overriding tool config
@@ -391,8 +391,8 @@ func TestOriginalContentPackageJsonMerge(t *testing.T) {
 	}
 
 	cfg := &Config{
-		Init: MapOfConfigInit{
-			"package.json": ConfigInit{
+		Setup: MapOfConfigSetup{
+			"package.json": ConfigSetup{
 				Scope:   ScopeGitRoot,
 				Content: mergeFn,
 			},
@@ -400,7 +400,7 @@ func TestOriginalContentPackageJsonMerge(t *testing.T) {
 	}
 
 	evaluated := EvaluateInitContent(cfg, vm, tmpDir, tmpDir, layerMap)
-	MergeInitLayers(layerMap, "default", evaluated, cfg.Init)
+	MergeSetupLayers(layerMap, "default", evaluated, cfg.Setup)
 
 	content, ok := evaluated["package.json"]
 	if !ok {
@@ -428,7 +428,7 @@ func TestOriginalContentUndefinedWhenFileDoesNotExist(t *testing.T) {
 	// No file written - file doesn't exist
 
 	vm := goja.New()
-	layerMap := make(InitLayerMap)
+	layerMap := make(SetupLayerMap)
 
 	fn, err := vm.RunString(`(function(context) {
 		if (typeof context.originalContent !== "undefined") {
@@ -441,8 +441,8 @@ func TestOriginalContentUndefinedWhenFileDoesNotExist(t *testing.T) {
 	}
 
 	cfg := &Config{
-		Init: MapOfConfigInit{
-			"new-config.yml": ConfigInit{
+		Setup: MapOfConfigSetup{
+			"new-config.yml": ConfigSetup{
 				Scope:   ScopeGitRoot,
 				Content: fn,
 			},

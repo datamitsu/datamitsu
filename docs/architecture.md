@@ -242,7 +242,7 @@ Tool operation arguments support template placeholders that the executor resolve
 - Built with cobra framework
 - `exec` - Execute managed binaries (see [cmd/exec.go](cmd/exec.go))
 - `setup` - Setup configuration files for detected project types (see [cmd/setup.go](cmd/setup.go))
-  - Uses `ConfigInit.Scope` field: `scope: "git-root"` configs run exactly once at git root; `scope: "project"` (default) configs run per detected project
+  - Uses `ConfigSetup.Scope` field: `scope: "git-root"` configs run exactly once at git root; `scope: "project"` (default) configs run per detected project
 - `check` - Runs fix then lint in a single process with shared context (see [cmd/check.go](cmd/check.go))
   - Supports `--explain`, `--file-scoped`, `--tools` flags (same as fix/lint)
   - Fails on fix error without continuing to lint
@@ -319,7 +319,7 @@ final Config
 
 - `content()` functions in Init entries are evaluated eagerly during config loading, not during setup
 - `InitLayerMap` tracks the history of each Init entry across all config layers
-- `InitLayerHistory` stores ordered `InitLayerEntry` items (LayerName, GeneratedContent) and the final `ConfigInit` metadata
+- `SetupLayerHistory` stores ordered `SetupLayerEntry` items (LayerName, GeneratedContent) and the final `ConfigSetup` metadata
 - `EvaluateInitContent()` calls each layer's `content()` functions, passing the previous layer's output as `context.existingContent`
 - `MergeInitLayers()` records evaluated content into the layer map after each config source is processed
 - Evaluation is best-effort: entries whose `content()` throws are silently skipped; the installer falls back to disk-based generation for those entries
@@ -482,15 +482,15 @@ Uses uber-go/zap structured logging throughout. Logger initialization in [intern
 
 ### Managed Config and Symlinks
 
-- **Two-layer symlink creation**: App-level links (`.datamitsu/` via `App.Links` + `CreateDatamitsuLinks`) and config-level links (root via `ConfigInit.LinkTarget`)
+- **Two-layer symlink creation**: App-level links (`.datamitsu/` via `App.Links` + `CreateDatamitsuLinks`) and config-level links (root via `ConfigSetup.LinkTarget`)
 - **`.datamitsu/` directory**: Recreated atomically on each `init` run (remove + recreate). Listed in `.gitignore`. A `.gitignore` file containing `*` is automatically created inside `.datamitsu/` as a defensive measure — prevents accidental commits if users forget to add `.datamitsu/` to their root `.gitignore`. A `datamitsu.config.d.ts` file is written with embedded TypeScript type definitions (from `internal/config/config.d.ts` via `config.GetDefaultConfigDTS()`) to provide IDE autocomplete for config files. After creation, all symlinks are verified (existence, correct target, target file exists) — verification failure is a hard error
 - **Strict app installation**: Uninstalled apps with links cause `CreateDatamitsuLinks()` to return an error immediately (no silent skipping)
-- **ConfigInit.LinkTarget**: When set on a `ConfigInit` entry, the installer creates a symlink instead of writing content. Target is resolved relative to the symlink's directory
+- **ConfigSetup.LinkTarget**: When set on a `ConfigSetup` entry, the installer creates a symlink instead of writing content. Target is resolved relative to the symlink's directory
 - **Lock files**: Node apps support `LockFile` field (written as `pnpm-lock.yaml` with `--frozen-lockfile`); UV apps support `LockFile` (written as `uv.lock` with `--locked` flag). Lock file content can be brotli-compressed with `br:` prefix (see `lockfileenc.go`)
 - **Validation-first**: `ValidateApps()` returns `([]string, error)` -- warnings and validation errors. Runs immediately after config load in `loadConfigWithPaths`, catching link path traversal errors and lockfile requirements before execution. Warns when UV runtime is in system mode without pythonVersion set
 - **Links independence**: Links do not require `required: true`. Smart init installs apps based on tool usage, not Required flag
 - **Windows**: Symlinks only, no fallback. Requires Developer Mode
-- **Installer JS context**: The `content()` function in `ConfigInit` receives a context object with `projectTypes`, `rootPath`, `cwdPath`, `isRoot`, and `datamitsuDir` (relative path from `cwdPath` to `{rootPath}/.datamitsu/`)
+- **Installer JS context**: The `content()` function in `ConfigSetup` receives a context object with `projectTypes`, `rootPath`, `cwdPath`, `isRoot`, and `datamitsuDir` (relative path from `cwdPath` to `{rootPath}/.datamitsu/`)
 - **Import path generation**: `tools.Path.forImport(path)` ensures relative paths are valid ES module imports. JavaScript/TypeScript `import` statements require relative paths to start with `./` or `../`, but `tools.Path.join(context.datamitsuDir, "file.js")` returns `.datamitsu/file.js` (missing `./` prefix). Wrapping with `forImport()` fixes this: `tools.Path.forImport(tools.Path.join(context.datamitsuDir, "eslint.config.js"))` produces `./.datamitsu/eslint.config.js`. The function is idempotent — paths already starting with `./` or `../` are returned unchanged
 
 ### Planner CWD-Subtree Restriction

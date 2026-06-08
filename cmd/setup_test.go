@@ -415,20 +415,20 @@ func TestSetupPassesLayerMapToNewInstaller(t *testing.T) {
 	rootPath := "/tmp/test-root"
 	cwdPath := "/tmp/test-root/project"
 	projectTypes := []string{"node"}
-	configs := config.MapOfConfigInit{}
+	configs := config.MapOfConfigSetup{}
 	vm := goja.New()
 
 	content := "generated content"
-	layerMap := &config.InitLayerMap{
-		".editorconfig": &config.InitLayerHistory{
+	layerMap := &config.SetupLayerMap{
+		".editorconfig": &config.SetupLayerHistory{
 			FileName: ".editorconfig",
-			Layers: []config.InitLayerEntry{
+			Layers: []config.SetupLayerEntry{
 				{
 					LayerName:        "default",
 					GeneratedContent: &content,
 				},
 			},
-			FinalConfig: config.ConfigInit{},
+			FinalConfig: config.ConfigSetup{},
 		},
 	}
 
@@ -451,21 +451,21 @@ func TestDryRunModeLayerHistoryStillBuilt(t *testing.T) {
 
 	vm := goja.New()
 	content := "generated in load phase"
-	layerMap := &config.InitLayerMap{
-		".editorconfig": &config.InitLayerHistory{
+	layerMap := &config.SetupLayerMap{
+		".editorconfig": &config.SetupLayerHistory{
 			FileName: ".editorconfig",
-			Layers: []config.InitLayerEntry{
+			Layers: []config.SetupLayerEntry{
 				{
 					LayerName:        "default",
 					GeneratedContent: &content,
 				},
 			},
-			FinalConfig: config.ConfigInit{Scope: config.ScopeGitRoot},
+			FinalConfig: config.ConfigSetup{Scope: config.ScopeGitRoot},
 		},
 	}
 
-	configs := config.MapOfConfigInit{
-		".editorconfig": config.ConfigInit{Scope: config.ScopeGitRoot},
+	configs := config.MapOfConfigSetup{
+		".editorconfig": config.ConfigSetup{Scope: config.ScopeGitRoot},
 	}
 
 	// In dry-run mode, the installer is still created with the layerMap
@@ -546,7 +546,7 @@ func TestValidateSelectedTools(t *testing.T) {
 }
 
 func TestToolsWithoutGeneratedConfig(t *testing.T) {
-	configs := config.MapOfConfigInit{
+	configs := config.MapOfConfigSetup{
 		".golangci.yml": {Tools: []string{"golangci-lint"}},
 		".prettierrc":   {Tools: []string{"prettier"}},
 		".gitignore":    {}, // infra, no tools
