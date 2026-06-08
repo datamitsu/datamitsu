@@ -36,7 +36,7 @@ interface Config {
   bundles?: Record<string, Bundle>;
   tools?: MapOfTools;
   projectTypes?: MapOfProjectTypes;
-  init?: MapOfConfigInit;
+  setup?: MapOfConfigSetup;
   initCommands?: MapOfInitCommands;
   ignoreRules?: string[];
   sharedStorage?: Record<string, string>;
@@ -578,12 +578,12 @@ const projectTypes = {
 };
 ```
 
-## Config Init (`init`)
+## Config Setup (`setup`)
 
-Config init entries define configuration files that `datamitsu setup` generates.
+Config setup entries define configuration files that `datamitsu setup` generates.
 
 ```typescript
-interface ConfigInit {
+interface ConfigSetup {
   content?: (context: ConfigContext) => string;
   deleteOnly?: boolean; // Only delete, don't create
   linkTarget?: string; // Create symlink instead of writing content

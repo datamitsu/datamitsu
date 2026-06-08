@@ -673,32 +673,32 @@ func TestTool(t *testing.T) {
 	}
 }
 
-func TestConfigInit(t *testing.T) {
-	init := ConfigSetup{
+func TestConfigSetup(t *testing.T) {
+	setup := ConfigSetup{
 		ProjectTypes:      []string{"node"},
 		Scope:             ScopeGitRoot,
 		OtherFileNameList: []string{".eslintrc.js", ".eslintrc.json"},
 		DeleteOnly:        false,
 	}
 
-	if len(init.ProjectTypes) != 1 {
-		t.Errorf("len(ProjectTypes) = %d, want 1", len(init.ProjectTypes))
+	if len(setup.ProjectTypes) != 1 {
+		t.Errorf("len(ProjectTypes) = %d, want 1", len(setup.ProjectTypes))
 	}
 
-	if init.Scope != ScopeGitRoot {
-		t.Errorf("Scope = %q, want %q", init.Scope, ScopeGitRoot)
+	if setup.Scope != ScopeGitRoot {
+		t.Errorf("Scope = %q, want %q", setup.Scope, ScopeGitRoot)
 	}
 
-	if len(init.OtherFileNameList) != 2 {
-		t.Errorf("len(OtherFileNameList) = %d, want 2", len(init.OtherFileNameList))
+	if len(setup.OtherFileNameList) != 2 {
+		t.Errorf("len(OtherFileNameList) = %d, want 2", len(setup.OtherFileNameList))
 	}
 
-	if init.DeleteOnly {
+	if setup.DeleteOnly {
 		t.Error("DeleteOnly should be false")
 	}
 }
 
-func TestConfigInitLinkTarget(t *testing.T) {
+func TestConfigSetupLinkTarget(t *testing.T) {
 	ci := ConfigSetup{
 		Scope:      ScopeGitRoot,
 		LinkTarget: "AGENTS.md",
@@ -712,7 +712,7 @@ func TestConfigInitLinkTarget(t *testing.T) {
 	}
 }
 
-func TestConfigInitLinkTargetEmpty(t *testing.T) {
+func TestConfigSetupLinkTargetEmpty(t *testing.T) {
 	ci := ConfigSetup{
 		Scope: ScopeGitRoot,
 	}
@@ -722,7 +722,7 @@ func TestConfigInitLinkTargetEmpty(t *testing.T) {
 	}
 }
 
-func TestConfigInitLinkTargetJSON(t *testing.T) {
+func TestConfigSetupLinkTargetJSON(t *testing.T) {
 	ci := ConfigSetup{
 		Scope:      ScopeGitRoot,
 		LinkTarget: "../AGENTS.md",
@@ -746,7 +746,7 @@ func TestConfigInitLinkTargetJSON(t *testing.T) {
 	}
 }
 
-func TestConfigInitLinkTargetJSONOmitEmpty(t *testing.T) {
+func TestConfigSetupLinkTargetJSONOmitEmpty(t *testing.T) {
 	ci := ConfigSetup{
 		Scope: ScopeGitRoot,
 	}
@@ -762,7 +762,7 @@ func TestConfigInitLinkTargetJSONOmitEmpty(t *testing.T) {
 	}
 }
 
-func TestConfigInitTools(t *testing.T) {
+func TestConfigSetupTools(t *testing.T) {
 	ci := ConfigSetup{
 		Tools: []string{"golangci-lint"},
 	}
@@ -775,7 +775,7 @@ func TestConfigInitTools(t *testing.T) {
 	}
 }
 
-func TestConfigInitToolsJSON(t *testing.T) {
+func TestConfigSetupToolsJSON(t *testing.T) {
 	ci := ConfigSetup{
 		Tools: []string{"golangci-lint", "prettier"},
 	}
@@ -795,7 +795,7 @@ func TestConfigInitToolsJSON(t *testing.T) {
 	}
 }
 
-func TestConfigInitToolsJSONOmitEmpty(t *testing.T) {
+func TestConfigSetupToolsJSONOmitEmpty(t *testing.T) {
 	ci := ConfigSetup{
 		Scope: ScopeGitRoot,
 	}
@@ -810,10 +810,10 @@ func TestConfigInitToolsJSONOmitEmpty(t *testing.T) {
 	}
 }
 
-// TestConfigInitToolsFromJS guards the real data flow: a JS `init` entry's
+// TestConfigSetupToolsFromJS guards the real data flow: a JS `setup` entry's
 // `tools` array must populate ConfigSetup.Tools via the same goja json field
 // mapper + ExportTo path the config loader uses (no special-case extraction).
-func TestConfigInitToolsFromJS(t *testing.T) {
+func TestConfigSetupToolsFromJS(t *testing.T) {
 	vm := goja.New()
 	vm.SetFieldNameMapper(goja.TagFieldNameMapper("json", true))
 
