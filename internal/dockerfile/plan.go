@@ -13,7 +13,21 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/syslist"
 )
+
+// PlanOptions tunes plan construction. The zero value applies no libc filtering
+// (every binary app is included), preserving the original BuildPlan behavior.
+type PlanOptions struct {
+	// TargetLibc, when non-empty ("glibc"|"musl"), drops binary apps that have no
+	// linux binary for it on every arch they declare — a glibc-only binary can't
+	// run on a musl image and vice versa. Runtime-managed apps are unaffected
+	// (their runtime carries the libc). Empty disables the filter.
+	TargetLibc string
+	// ForceInclude names binary apps to keep despite lacking a TargetLibc binary
+	// (e.g. statically-linked tools the registry under-declares as glibc-only).
+	ForceInclude map[string]bool
+}
 
 // RuntimeStage installs one managed runtime (e.g. node, uv). Runtime-managed
 // app stages inherit FROM it so the runtime is installed once and shared.
@@ -45,6 +59,10 @@ type Plan struct {
 	// Skipped lists app names omitted from the plan (shell apps, or
 	// runtime-managed apps whose runtime reference does not resolve).
 	Skipped []string
+	// LibcExcluded lists binary apps omitted because they have no binary for
+	// PlanOptions.TargetLibc (and were not force-included). Empty when no libc
+	// filter is applied. Sorted.
+	LibcExcluded []string
 }
 
 // classifyApp mirrors runtimemanager.runtimeAppRef's precedence (uv → node → jvm
@@ -84,10 +102,32 @@ func resolveRuntimeName(kind config.RuntimeKind, ref string, runtimes config.Map
 	return ""
 }
 
+// binaryAppSupportsLibc reports whether b provides a linux binary for libc on
+// every linux arch it declares. If any declared arch lacks the target libc the
+// app can't install on that arch (a glibc binary won't exec on musl, etc.), so
+// it is not supported. Apps with no linux binaries are unsupported too.
+func binaryAppSupportsLibc(b *binmanager.AppConfigBinary, libc string) bool {
+	linux := b.Binaries[syslist.OsTypeLinux]
+	if len(linux) == 0 {
+		return false
+	}
+	for _, libcs := range linux {
+		if _, ok := libcs[libc]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
 // BuildPlan resolves the full stage graph for apps + runtimes. It includes every
 // app (required and optional), matching the `init --all` semantics the generated
-// Dockerfile replaces.
-func BuildPlan(apps binmanager.MapOfApps, runtimes config.MapOfRuntimes) Plan {
+// Dockerfile replaces. The optional PlanOptions filters binary apps by target
+// libc (see PlanOptions); the zero value applies no filtering.
+func BuildPlan(apps binmanager.MapOfApps, runtimes config.MapOfRuntimes, opts ...PlanOptions) Plan {
+	var o PlanOptions
+	if len(opts) > 0 {
+		o = opts[0]
+	}
 	appNames := make([]string, 0, len(apps))
 	for name := range apps {
 		appNames = append(appNames, name)
@@ -107,10 +147,13 @@ func BuildPlan(apps binmanager.MapOfApps, runtimes config.MapOfRuntimes) Plan {
 		app := apps[name]
 		kind, ref, ok := classifyApp(app)
 		if !ok {
-			if app.Binary != nil {
-				plan.BinaryStages = append(plan.BinaryStages, BinaryStage{App: name})
-			} else {
+			switch {
+			case app.Binary == nil:
 				plan.Skipped = append(plan.Skipped, name) // shell or empty app
+			case o.TargetLibc != "" && !o.ForceInclude[name] && !binaryAppSupportsLibc(app.Binary, o.TargetLibc):
+				plan.LibcExcluded = append(plan.LibcExcluded, name) // no binary for the target libc
+			default:
+				plan.BinaryStages = append(plan.BinaryStages, BinaryStage{App: name})
 			}
 			continue
 		}
