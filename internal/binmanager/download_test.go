@@ -203,9 +203,9 @@ func TestDownloadAndVerify(t *testing.T) {
 
 		tmpDir := t.TempDir()
 
-		filePath, err := downloadAndVerify(context.Background(), server.URL, expectedHash, BinHashTypeSHA256, tmpDir)
+		filePath, err := downloadAndVerifyWithName(context.Background(), server.URL, expectedHash, BinHashTypeSHA256, tmpDir, "")
 		if err != nil {
-			t.Fatalf("downloadAndVerify() error = %v", err)
+			t.Fatalf("downloadAndVerifyWithName() error = %v", err)
 		}
 
 		if _, err := os.Stat(filePath); os.IsNotExist(err) {
@@ -224,7 +224,7 @@ func TestDownloadAndVerify(t *testing.T) {
 
 		tmpDir := t.TempDir()
 
-		_, err := downloadAndVerify(context.Background(), server.URL, expectedHash, BinHashTypeSHA256, tmpDir)
+		_, err := downloadAndVerifyWithName(context.Background(), server.URL, expectedHash, BinHashTypeSHA256, tmpDir, "")
 		if err == nil {
 			t.Error("expected hash verification error, got nil")
 		}
@@ -236,11 +236,12 @@ func TestDownloadAndVerify(t *testing.T) {
 	})
 
 	t.Run("download fails", func(t *testing.T) {
+		setFastRetries(t) // connection-refused is retryable; keep the retry loop quick
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 		server.Close()
 
 		tmpDir := t.TempDir()
-		_, err := downloadAndVerify(context.Background(), server.URL, expectedHash, BinHashTypeSHA256, tmpDir)
+		_, err := downloadAndVerifyWithName(context.Background(), server.URL, expectedHash, BinHashTypeSHA256, tmpDir, "")
 		if err == nil {
 			t.Error("expected download error, got nil")
 		}
@@ -779,5 +780,112 @@ func TestDownloadFileContextTimeout(t *testing.T) {
 	files, _ := os.ReadDir(tmpDir)
 	if len(files) > 0 {
 		t.Errorf("temp file not cleaned up after timeout: %v", files)
+	}
+}
+
+// setFastRetries shrinks the backoff so retry tests run in microseconds.
+func setFastRetries(t *testing.T) {
+	t.Helper()
+	origBase, origMax := downloadRetryBase, downloadRetryMax
+	downloadRetryBase, downloadRetryMax = time.Millisecond, time.Millisecond
+	t.Cleanup(func() { downloadRetryBase, downloadRetryMax = origBase, origMax })
+}
+
+func TestRetryableStatus(t *testing.T) {
+	for _, c := range []int{500, 502, 503, 504, http.StatusRequestTimeout, http.StatusTooManyRequests} {
+		if !retryableStatus(c) {
+			t.Errorf("status %d should be retryable", c)
+		}
+	}
+	for _, c := range []int{400, 401, 403, 404, 410} {
+		if retryableStatus(c) {
+			t.Errorf("status %d should not be retryable", c)
+		}
+	}
+}
+
+func TestDownloadAndVerify_RetriesTransientThenSucceeds(t *testing.T) {
+	setFastRetries(t)
+	content := []byte("retry me")
+	sum := sha256.Sum256(content)
+	expected := hex.EncodeToString(sum[:])
+
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if calls.Add(1) < 3 {
+			w.WriteHeader(http.StatusServiceUnavailable) // transient 503 -> retry
+			return
+		}
+		_, _ = w.Write(content)
+	}))
+	defer server.Close()
+
+	path, err := downloadAndVerifyWithName(context.Background(), server.URL, expected, BinHashTypeSHA256, t.TempDir(), "")
+	if err != nil {
+		t.Fatalf("expected success after retries, got %v", err)
+	}
+	if got := calls.Load(); got != 3 {
+		t.Errorf("expected 3 attempts, got %d", got)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Errorf("downloaded file missing: %v", err)
+	}
+}
+
+func TestDownloadAndVerify_HashMismatchNotRetried(t *testing.T) {
+	setFastRetries(t)
+	sum := sha256.Sum256([]byte("the expected content"))
+	expected := hex.EncodeToString(sum[:])
+
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		_, _ = w.Write([]byte("a complete but wrong body")) // 200 OK, wrong hash -> permanent
+	}))
+	defer server.Close()
+
+	if _, err := downloadAndVerifyWithName(context.Background(), server.URL, expected, BinHashTypeSHA256, t.TempDir(), ""); err == nil {
+		t.Fatal("expected hash verification error")
+	}
+	if got := calls.Load(); got != 1 {
+		t.Errorf("hash mismatch must not be retried, got %d attempts", got)
+	}
+}
+
+func TestDownloadAndVerify_PermanentStatusNotRetried(t *testing.T) {
+	setFastRetries(t)
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		w.WriteHeader(http.StatusNotFound) // 404 -> permanent
+	}))
+	defer server.Close()
+
+	if _, err := downloadAndVerifyWithName(context.Background(), server.URL, "deadbeef", BinHashTypeSHA256, t.TempDir(), ""); err == nil {
+		t.Fatal("expected error for 404")
+	}
+	if got := calls.Load(); got != 1 {
+		t.Errorf("404 must not be retried, got %d attempts", got)
+	}
+}
+
+func TestDownloadAndVerify_GivesUpAfterMaxAttempts(t *testing.T) {
+	setFastRetries(t)
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		w.WriteHeader(http.StatusBadGateway) // 502 -> always retryable
+	}))
+	defer server.Close()
+
+	_, err := downloadAndVerifyWithName(context.Background(), server.URL, "deadbeef", BinHashTypeSHA256, t.TempDir(), "")
+	if err == nil {
+		t.Fatal("expected failure after exhausting retries")
+	}
+	if got := int(calls.Load()); got != downloadMaxAttempts {
+		t.Errorf("expected %d attempts, got %d", downloadMaxAttempts, got)
+	}
+	if !strings.Contains(err.Error(), "attempts") {
+		t.Errorf("error should mention attempt count: %v", err)
 	}
 }

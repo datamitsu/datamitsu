@@ -2,6 +2,7 @@ package binmanager
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,6 +18,45 @@ import (
 
 // MaxBinarySize is the maximum allowed download size (500 MiB).
 const MaxBinarySize = 500 * 1024 * 1024
+
+// Download retry policy: flaky mirrors (e.g. unofficial-builds.nodejs.org) and
+// transient TLS/connection blips fail individual attempts; a bounded retry with
+// exponential backoff turns those into success instead of failing the whole
+// build. The parent context (install timeout) still bounds total time.
+const downloadMaxAttempts = 4
+
+// Backoff bounds are vars (not consts) only so tests can shrink them; production
+// keeps the 1s base / 8s cap.
+var (
+	downloadRetryBase = time.Second
+	downloadRetryMax  = 8 * time.Second
+)
+
+// permanentDownloadError marks a failure that retrying cannot fix (a 4xx
+// response, an oversized file). The retry loop gives up on it immediately.
+type permanentDownloadError struct{ err error }
+
+func (e *permanentDownloadError) Error() string { return e.err.Error() }
+func (e *permanentDownloadError) Unwrap() error { return e.err }
+
+func permanent(err error) error { return &permanentDownloadError{err: err} }
+
+func isPermanent(err error) bool {
+	var p *permanentDownloadError
+	return errors.As(err, &p)
+}
+
+// retryableStatus reports whether an HTTP status is worth retrying: 5xx server
+// errors plus 408 (Request Timeout) and 429 (Too Many Requests). Other 4xx are
+// permanent (a bad URL won't become good on retry).
+func retryableStatus(code int) bool {
+	return code >= 500 || code == http.StatusRequestTimeout || code == http.StatusTooManyRequests
+}
+
+// retryDelay is the exponential backoff before attempt+1 (1s, 2s, 4s, … capped).
+func retryDelay(attempt int) time.Duration {
+	return min(downloadRetryBase<<(attempt-1), downloadRetryMax)
+}
 
 // httpClient downloads binaries on the shared hardened transport (proxy, dialer,
 // TLS/response-header timeouts, and the HTTPS→HTTP downgrade-rejecting redirect
@@ -82,14 +122,18 @@ func downloadFileInternal(ctx context.Context, url string, destDir string, name 
 		if removeErr := os.Remove(tmpPath); removeErr != nil {
 			log.Warn("failed to remove temp file after bad status", zap.String("path", tmpPath), zap.Error(removeErr))
 		}
-		return "", fmt.Errorf("bad status: %s", resp.Status)
+		statusErr := fmt.Errorf("bad status: %s", resp.Status)
+		if retryableStatus(resp.StatusCode) {
+			return "", statusErr
+		}
+		return "", permanent(statusErr)
 	}
 
 	if resp.ContentLength > MaxBinarySize {
 		if removeErr := os.Remove(tmpPath); removeErr != nil {
 			log.Warn("failed to remove temp file after size rejection", zap.String("path", tmpPath), zap.Error(removeErr))
 		}
-		return "", fmt.Errorf("file too large: Content-Length %d exceeds maximum %d bytes", resp.ContentLength, MaxBinarySize)
+		return "", permanent(fmt.Errorf("file too large: Content-Length %d exceeds maximum %d bytes", resp.ContentLength, MaxBinarySize))
 	}
 
 	// LimitReader with MaxBinarySize+1 allows us to distinguish a file that is
@@ -120,7 +164,7 @@ func downloadFileInternal(ctx context.Context, url string, destDir string, name 
 		if removeErr := os.Remove(tmpPath); removeErr != nil {
 			log.Warn("failed to remove oversized temp file", zap.String("path", tmpPath), zap.Error(removeErr))
 		}
-		return "", fmt.Errorf("file too large: exceeded maximum %d bytes", MaxBinarySize)
+		return "", permanent(fmt.Errorf("file too large: exceeded maximum %d bytes", MaxBinarySize))
 	}
 
 	log.Debug("file downloaded",
@@ -135,26 +179,55 @@ func downloadFile(ctx context.Context, url string, destDir string) (string, erro
 	return downloadFileInternal(ctx, url, destDir, "")
 }
 
+// downloadAndVerifyInternal downloads and hash-verifies a file, retrying
+// transient download failures (network errors, 5xx) with exponential backoff. It
+// stops early on a permanent error (4xx, oversized, hash mismatch) or once the
+// parent context is done. The hash is verified after every successful download,
+// so retries only re-fetch — they never weaken verification.
 func downloadAndVerifyInternal(ctx context.Context, url string, expectedHash string, hashType BinHashType, destDir string, name string) (string, error) {
-	tmpPath, err := downloadFileInternal(ctx, url, destDir, name)
-	if err != nil {
-		return "", err
-	}
-
-	if err := verifyFileHash(tmpPath, expectedHash, hashType); err != nil {
-		if removeErr := os.Remove(tmpPath); removeErr != nil {
-			log.Warn("failed to remove temp file after hash verification failure", zap.String("path", tmpPath), zap.Error(removeErr))
+	var lastErr error
+	for attempt := 1; attempt <= downloadMaxAttempts; attempt++ {
+		tmpPath, err := downloadFileInternal(ctx, url, destDir, name)
+		if err == nil {
+			if vErr := verifyFileHash(tmpPath, expectedHash, hashType); vErr != nil {
+				if removeErr := os.Remove(tmpPath); removeErr != nil {
+					log.Warn("failed to remove temp file after hash verification failure", zap.String("path", tmpPath), zap.Error(removeErr))
+				}
+				// A complete body with the wrong hash is a genuine mismatch (wrong file
+				// or stale hash), not a transient blip — re-downloading won't fix it. A
+				// truncated transfer instead surfaces as a retryable io.Copy error before
+				// the hash is ever checked.
+				return "", fmt.Errorf("hash verification failed: %w", vErr)
+			}
+			log.Debug("file hash verified", zap.String("path", tmpPath))
+			return tmpPath, nil
 		}
-		return "", fmt.Errorf("hash verification failed: %w", err)
+		lastErr = err
+
+		// Stop immediately on unfixable failures or once the parent context (e.g.
+		// the install timeout) is cancelled — further attempts can't succeed.
+		if ctx.Err() != nil || isPermanent(err) {
+			return "", err
+		}
+		if attempt == downloadMaxAttempts {
+			break
+		}
+
+		delay := retryDelay(attempt)
+		log.Warn("download failed, retrying",
+			zap.String("url", url),
+			zap.Int("attempt", attempt),
+			zap.Int("maxAttempts", downloadMaxAttempts),
+			zap.Duration("delay", delay),
+			zap.Error(err),
+		)
+		select {
+		case <-ctx.Done():
+			return "", fmt.Errorf("download cancelled: %w", ctx.Err())
+		case <-time.After(delay):
+		}
 	}
-
-	log.Debug("file hash verified", zap.String("path", tmpPath))
-
-	return tmpPath, nil
-}
-
-func downloadAndVerify(ctx context.Context, url string, expectedHash string, hashType BinHashType, destDir string) (string, error) {
-	return downloadAndVerifyInternal(ctx, url, expectedHash, hashType, destDir, "")
+	return "", fmt.Errorf("after %d attempts: %w", downloadMaxAttempts, lastErr)
 }
 
 func downloadAndVerifyWithName(ctx context.Context, url string, expectedHash string, hashType BinHashType, destDir string, name string) (string, error) {
