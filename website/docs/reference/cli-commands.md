@@ -141,7 +141,9 @@ datamitsu check --explain
 datamitsu check --fail-on-skip
 ```
 
-:::info Skipped tools {#skipped-tools}
+### Skipped tools
+
+:::info
 A tool is reported as **skipped** (not run, not failed) for one of two reasons:
 
 - **Disabled in config** — the tool sets `skip: true` (optionally with a `skipReason`).
