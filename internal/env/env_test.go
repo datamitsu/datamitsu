@@ -737,3 +737,63 @@ func TestMinimumReleaseAgeMinutes(t *testing.T) {
 		})
 	}
 }
+
+func TestOffline(t *testing.T) {
+	t.Setenv(offline.Name, os.Getenv(offline.Name))
+
+	t.Run("false when unset", func(t *testing.T) {
+		_ = os.Unsetenv(offline.Name)
+		if Offline() {
+			t.Error("Offline() = true, want false when unset")
+		}
+	})
+
+	t.Run("true for any non-empty value", func(t *testing.T) {
+		t.Setenv(offline.Name, "1")
+		if !Offline() {
+			t.Error("Offline() = false, want true when set")
+		}
+	})
+}
+
+func TestOfflineVarName(t *testing.T) {
+	if got := OfflineVarName(); got != offline.Name {
+		t.Errorf("OfflineVarName() = %q, want %q", got, offline.Name)
+	}
+}
+
+func TestNoOCI(t *testing.T) {
+	t.Setenv(noOCI.Name, os.Getenv(noOCI.Name))
+
+	t.Run("false when unset", func(t *testing.T) {
+		_ = os.Unsetenv(noOCI.Name)
+		if NoOCI() {
+			t.Error("NoOCI() = true, want false when unset")
+		}
+	})
+
+	t.Run("true for any non-empty value", func(t *testing.T) {
+		t.Setenv(noOCI.Name, "1")
+		if !NoOCI() {
+			t.Error("NoOCI() = false, want true when set")
+		}
+	})
+}
+
+func TestLibcOverride(t *testing.T) {
+	t.Setenv(libcOverride.Name, os.Getenv(libcOverride.Name))
+
+	t.Run("empty when unset", func(t *testing.T) {
+		_ = os.Unsetenv(libcOverride.Name)
+		if got := LibcOverride(); got != "" {
+			t.Errorf("LibcOverride() = %q, want empty", got)
+		}
+	})
+
+	t.Run("returns raw value", func(t *testing.T) {
+		t.Setenv(libcOverride.Name, "musl")
+		if got := LibcOverride(); got != "musl" {
+			t.Errorf("LibcOverride() = %q, want %q", got, "musl")
+		}
+	})
+}

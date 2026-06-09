@@ -16,6 +16,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/datamitsu/datamitsu/internal/httpretry"
 )
 
 func TestDownloadFile(t *testing.T) {
@@ -786,9 +788,9 @@ func TestDownloadFileContextTimeout(t *testing.T) {
 // setFastRetries shrinks the backoff so retry tests run in microseconds.
 func setFastRetries(t *testing.T) {
 	t.Helper()
-	origBase, origMax := downloadRetryBase, downloadRetryMax
-	downloadRetryBase, downloadRetryMax = time.Millisecond, time.Millisecond
-	t.Cleanup(func() { downloadRetryBase, downloadRetryMax = origBase, origMax })
+	origBase, origMax := httpretry.RetryBase, httpretry.RetryMax
+	httpretry.RetryBase, httpretry.RetryMax = time.Millisecond, time.Millisecond
+	t.Cleanup(func() { httpretry.RetryBase, httpretry.RetryMax = origBase, origMax })
 }
 
 func TestRetryableStatus(t *testing.T) {
@@ -887,5 +889,29 @@ func TestDownloadAndVerify_GivesUpAfterMaxAttempts(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "attempts") {
 		t.Errorf("error should mention attempt count: %v", err)
+	}
+}
+
+func TestDownloadFileOfflineRefused(t *testing.T) {
+	var hits atomic.Int64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		_, _ = w.Write([]byte("content"))
+	}))
+	defer server.Close()
+
+	t.Setenv("DATAMITSU_OFFLINE", "1")
+	_, err := downloadFile(context.Background(), server.URL, t.TempDir())
+	if err == nil {
+		t.Fatal("expected offline refusal, got nil")
+	}
+	if !strings.Contains(err.Error(), "DATAMITSU_OFFLINE") {
+		t.Errorf("error %q should mention DATAMITSU_OFFLINE", err)
+	}
+	if !isPermanent(err) {
+		t.Error("offline refusal must be permanent (no retry)")
+	}
+	if hits.Load() != 0 {
+		t.Errorf("server hits = %d, want 0 under offline", hits.Load())
 	}
 }

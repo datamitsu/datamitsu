@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/datamitsu/datamitsu/internal/httpx"
 )
 
 const temurinFallbackMajorVersion = "25"
@@ -27,6 +29,9 @@ func GetLatestTemurinMajorVersion(ctx context.Context) (string, error) {
 }
 
 func getLatestTemurinMajorVersionFromURL(ctx context.Context, url string) (string, error) {
+	if err := httpx.GuardOffline("Temurin release lookup"); err != nil {
+		return temurinFallbackMajorVersion, err
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return temurinFallbackMajorVersion, fmt.Errorf("failed to build request: %w", err)

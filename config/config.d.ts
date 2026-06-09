@@ -313,6 +313,22 @@ declare global {
       initCommands?: MapOfInitCommands;
 
       /**
+       * OCI bundle that seeds the tool store (pull without docker).
+       * Chains as a scalar: the last config layer that set or spread it wins;
+       * a layer that rebuilds its output without `{...input}` silently drops
+       * it. Reset with `oci: undefined` or `oci: null`.
+       * @example
+       * return {
+       *   ...input,
+       *   oci: {
+       *     ref: "ghcr.io/owner/tool-store",
+       *     digest: "sha256:0123…cdef",
+       *   },
+       * };
+       */
+      oci?: OCIRef;
+
+      /**
        * Project type definitions
        */
       projectTypes?: MapOfProjectTypes;
@@ -513,19 +529,62 @@ declare global {
      */
     type MapOfConfigSetup = Record<string, ConfigSetup>;
 
-    // ========================================
-    // Init Commands
-    // ========================================
-
     type MapOfInitCommands = Record<string, InitCommand>;
 
     type MapOfProjectTypes = Record<string, ProjectType>;
 
     // ========================================
-    // Config File Management (ENHANCED)
+    // Init Commands
     // ========================================
 
     type MapOfTools = Record<string, Tool>;
+
+    /**
+     * OCI bundle declaration: the registry repository plus the mandatory
+     * sha256 digest pinning the bundle content. The bundle is a cache seed,
+     * not a trust boundary — binaries and JARs unpacked from it are
+     * re-verified against the published SHA-256 hashes from the config.
+     */
+    interface OCIRef {
+      /**
+       * Bundle index/manifest digest, "sha256:" followed by 64 lowercase hex
+       * characters. Mandatory — a tag alone never pins content.
+       */
+      digest: string;
+
+      /**
+       * Full repository reference including the registry host
+       * (e.g. "ghcr.io/owner/repo"). No default host; tags and digests are
+       * not allowed inside the ref.
+       */
+      ref: string;
+
+      /**
+       * Optional sigstore keyless identity pin of the bundle publisher.
+       * When set, pull verifies the bundle signature before layout and
+       * fails hard on mismatch.
+       */
+      signer?: OCISigner;
+    }
+
+    // ========================================
+    // Config File Management (ENHANCED)
+    // ========================================
+
+    /**
+     * Sigstore keyless publisher identity.
+     */
+    interface OCISigner {
+      /**
+       * Certificate identity, e.g. a GitHub Actions workflow ref.
+       */
+      identity: string;
+
+      /**
+       * OIDC issuer URL, e.g. "https://token.actions.githubusercontent.com".
+       */
+      issuer: string;
+    }
 
     /**
      * Operation type

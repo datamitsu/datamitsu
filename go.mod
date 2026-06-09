@@ -13,6 +13,8 @@ require (
 	github.com/goccy/go-yaml v1.19.2
 	github.com/klauspost/compress v1.18.6
 	github.com/mattn/go-isatty v0.0.22
+	github.com/opencontainers/go-digest v1.0.0
+	github.com/opencontainers/image-spec v1.1.1
 	github.com/pelletier/go-toml/v2 v2.3.1
 	github.com/shamaton/msgpack/v2 v2.4.1
 	github.com/spf13/cobra v1.10.2

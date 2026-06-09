@@ -11,6 +11,8 @@ import (
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/datamitsu/datamitsu/internal/httpx"
 )
 
 // Asset represents a GitHub release asset
@@ -154,6 +156,9 @@ func (c *Client) GetRepository(ctx context.Context, owner, repo string) (*Reposi
 }
 
 func (c *Client) fetchRepository(ctx context.Context, url string) (*Repository, error) {
+	if err := httpx.GuardOffline("GitHub API request"); err != nil {
+		return nil, err
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -248,6 +253,9 @@ func (c *Client) doRequest(ctx context.Context, url string) (*Release, error) {
 
 // doJSONRequest performs a GET request and decodes the JSON response into target.
 func (c *Client) doJSONRequest(ctx context.Context, url string, target any) error {
+	if err := httpx.GuardOffline("GitHub API request"); err != nil {
+		return err
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)

@@ -133,3 +133,31 @@ func TestLibcTypeConstants(t *testing.T) {
 		t.Errorf("LibcUnknown = %q, want %q", LibcUnknown, "unknown")
 	}
 }
+
+func TestDetectHostLibcOverride(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("libc override applies on linux only")
+	}
+
+	t.Run("valid override wins over detection", func(t *testing.T) {
+		t.Setenv("DATAMITSU_LIBC", "musl")
+		if got := DetectHost(context.Background()).Libc; got != LibcMusl {
+			t.Errorf("Libc = %q, want %q", got, LibcMusl)
+		}
+		t.Setenv("DATAMITSU_LIBC", "glibc")
+		if got := DetectHost(context.Background()).Libc; got != LibcGlibc {
+			t.Errorf("Libc = %q, want %q", got, LibcGlibc)
+		}
+	})
+
+	t.Run("invalid override is ignored", func(t *testing.T) {
+		t.Setenv("DATAMITSU_LIBC", "weird")
+		got := DetectHost(context.Background()).Libc
+		if got != LibcGlibc && got != LibcMusl && got != LibcUnknown {
+			t.Errorf("Libc = %q, want a detected value", got)
+		}
+		if string(got) == "weird" {
+			t.Error("invalid override leaked into the detected target")
+		}
+	})
+}

@@ -151,6 +151,10 @@ func (rm *RuntimeManager) downloadPNPMFromRegistryURL(ctx context.Context, regis
 		return nil
 	}
 
+	if err := httpx.GuardOffline("pnpm runtime download"); err != nil {
+		return err
+	}
+
 	url := fmt.Sprintf("%s/pnpm/%s", registryBaseURL, version)
 	metaReq, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {

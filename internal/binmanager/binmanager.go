@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/httpx"
 	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"github.com/datamitsu/datamitsu/internal/syslist"
@@ -501,6 +502,14 @@ func (bm *BinManager) GetCommandInfo(ctx context.Context, appName string) (*Comm
 	return cmdInfo, nil
 }
 
+// ResolvedBinaryInfo returns the BinaryOsArchInfo selected for the host
+// target without downloading anything. Used by the OCI bundle seeder to
+// re-verify seeded binaries against the published hash.
+func (bm *BinManager) ResolvedBinaryInfo(name string) (BinaryOsArchInfo, error) {
+	_, info, err := bm.getBinaryInfo(name)
+	return info, err
+}
+
 // ComputeInstallPath returns the install directory path for an app without checking existence.
 func (bm *BinManager) ComputeInstallPath(appName string) (string, error) {
 	app, ok := bm.mapOfApps[appName]
@@ -668,6 +677,9 @@ func writeFiles(installPath string, files map[string]string) error {
 }
 
 func downloadFileSimple(ctx context.Context, url, destPath string) error {
+	if err := httpx.GuardOffline("download of " + url); err != nil {
+		return err
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to build request: %w", err)

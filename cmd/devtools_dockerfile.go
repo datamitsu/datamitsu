@@ -34,6 +34,7 @@ var (
 	dockerfileBuildArgs    []string
 	dockerfileEnv          []string
 	dockerfileForceInclude []string
+	dockerfileEmitOCIMap   string
 )
 
 // digestResolver is the seam over ocidigest.Resolver so the command can be
@@ -74,6 +75,7 @@ func init() {
 	dockerfileCmd.Flags().StringArrayVar(&dockerfileBuildArgs, "build-arg", nil, "Build-time ARG promoted to ENV so install stages inherit it, e.g. DATAMITSU_INSTALL_TIMEOUT=1200; not baked into the final image (repeatable)")
 	dockerfileCmd.Flags().StringArrayVar(&dockerfileEnv, "env", nil, "ENV key=value baked into the final image (repeatable)")
 	dockerfileCmd.Flags().StringSliceVar(&dockerfileForceInclude, "force-include", nil, "Binary app names to include even if they lack a binary for the target libc (comma-separated, repeatable)")
+	dockerfileCmd.Flags().StringVar(&dockerfileEmitOCIMap, "emit-oci-map", "", "Also write the layer→subtree map JSON (for the OCI bundle annotation post-process) to this path")
 	_ = dockerfileCmd.MarkFlagRequired("output")
 	devtoolsCmd.AddCommand(dockerfileCmd)
 }
@@ -158,6 +160,16 @@ func runDockerfile(ctx context.Context, cmd *cobra.Command) error {
 	text := dockerfile.Render(plan, opts)
 	if err := writeFileAtomic(dockerfileOutput, []byte(text)); err != nil {
 		return fmt.Errorf("failed to write %s: %w", dockerfileOutput, err)
+	}
+
+	if dockerfileEmitOCIMap != "" {
+		mapData, err := dockerfile.MarshalOCIMap(dockerfile.BuildOCIMap(plan, opts))
+		if err != nil {
+			return fmt.Errorf("failed to marshal oci map: %w", err)
+		}
+		if err := writeFileAtomic(dockerfileEmitOCIMap, mapData); err != nil {
+			return fmt.Errorf("failed to write %s: %w", dockerfileEmitOCIMap, err)
+		}
 	}
 
 	printDockerfileSummary(cmd, plan, digest, unpinnedReason)

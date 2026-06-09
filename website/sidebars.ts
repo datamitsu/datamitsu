@@ -35,6 +35,7 @@ const sidebars: SidebarsConfig = {
         "guides/tooling-system",
         "guides/using-wrappers",
         "guides/supply-chain-security",
+        "guides/oci-bundles",
         {
           items: [
             "guides/architecture/planner",

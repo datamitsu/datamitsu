@@ -20,12 +20,15 @@ func TestEffectiveJSONRoundTrip(t *testing.T) {
 	in := Effective{
 		Concurrency:              3,
 		InstallTimeoutSeconds:    600,
+		Libc:                     "glibc",
 		LogLevel:                 "info",
 		MaxCmdLength:             32000,
 		MaxErrorCmdDisplay:       120,
 		MaxParallelWorkers:       12,
 		MinimumReleaseAgeMinutes: 10080,
+		NoOCI:                    true,
 		OCIRegistry:              "ghcr.io",
+		Offline:                  true,
 		Timings:                  false,
 	}
 
@@ -43,12 +46,15 @@ func TestEffectiveJSONRoundTrip(t *testing.T) {
 	requiredKeys := []string{
 		"concurrency",
 		"installTimeoutSeconds",
+		"libc",
 		"logLevel",
 		"maxCmdLength",
 		"maxErrorCmdDisplay",
 		"maxParallelWorkers",
 		"minimumReleaseAgeMinutes",
+		"noOci",
 		"ociRegistry",
+		"offline",
 		"timings",
 	}
 	for _, k := range requiredKeys {
@@ -89,6 +95,37 @@ func TestComputeEnvOverride(t *testing.T) {
 	}
 	if eff.InstallTimeoutSeconds != 1200 {
 		t.Errorf("InstallTimeoutSeconds = %d, want 1200", eff.InstallTimeoutSeconds)
+	}
+}
+
+func TestComputeOfflineAndNoOCIDefaults(t *testing.T) {
+	eff := Compute()
+	if eff.Offline {
+		t.Error("Offline = true, want false by default")
+	}
+	if eff.NoOCI {
+		t.Error("NoOCI = true, want false by default")
+	}
+}
+
+func TestComputeOfflineAndNoOCIOverride(t *testing.T) {
+	t.Setenv("DATAMITSU_OFFLINE", "1")
+	t.Setenv("DATAMITSU_NO_OCI", "1")
+
+	eff := Compute()
+	if !eff.Offline {
+		t.Error("Offline = false, want true with DATAMITSU_OFFLINE set")
+	}
+	if !eff.NoOCI {
+		t.Error("NoOCI = false, want true with DATAMITSU_NO_OCI set")
+	}
+}
+
+func TestComputeLibcPresent(t *testing.T) {
+	switch Compute().Libc {
+	case "glibc", "musl", "unknown":
+	default:
+		t.Errorf("Libc = %q, want glibc, musl, or unknown", Compute().Libc)
 	}
 }
 

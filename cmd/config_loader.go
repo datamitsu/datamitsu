@@ -175,6 +175,10 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 		return nil, nil, nil, err
 	}
 
+	if err := config.ValidateOCI(currentConfig.OCI); err != nil {
+		return nil, nil, nil, err
+	}
+
 	if len(currentConfig.IgnoreRules) > 0 {
 		if _, parseErr := datamitsuignore.ParseRules(currentConfig.IgnoreRules); parseErr != nil {
 			return nil, nil, nil, fmt.Errorf("invalid ignoreRules in config: %w", parseErr)
@@ -383,6 +387,14 @@ func processConfigSource(ctx context.Context, input *config.Config, source confi
 	// IgnoreRules use append semantics: previous rules are prepended to new ones
 	if chainedInput != nil && len(chainedInput.IgnoreRules) > 0 {
 		parsedConfig.IgnoreRules = append(chainedInput.IgnoreRules, parsedConfig.IgnoreRules...)
+	}
+
+	// oci chains as a scalar through {...input} spreads; a layer that reshapes
+	// its output without spreading silently drops it (there is no re-inject).
+	// Surface that silent drop at debug level.
+	if chainedInput != nil && chainedInput.OCI != nil && parsedConfig.OCI == nil {
+		logger.Logger.Debug("config layer dropped inherited oci declaration (missing {...input} spread?)",
+			zap.String("source", source.name))
 	}
 
 	return parsedConfig, vm, nil

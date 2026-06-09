@@ -10,6 +10,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/httpx"
 	"github.com/datamitsu/datamitsu/internal/ui"
 
 	"go.uber.org/zap"
@@ -157,6 +158,12 @@ func (rm *RuntimeManager) installNodeAppOnce(ctx context.Context, appName string
 		if err := rm.removeAll(appEnvPath); err != nil {
 			return fmt.Errorf("app %q: failed to remove stale install at %q before reinstall: %w", appName, appEnvPath, err)
 		}
+	}
+
+	// pnpm install spawns a child process whose network cannot be cut;
+	// refuse before starting the install.
+	if err := httpx.GuardOffline("node app install of " + appName); err != nil {
+		return err
 	}
 
 	// Acquire the node binary directly from the pinned archive (jvm/go-style).

@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/datamitsu/datamitsu/internal/httpx"
 )
 
 // NPMPackageInfo holds the resolved name, version and description of an npm package.
@@ -147,6 +149,9 @@ func npmInfoFromFull(full *npmFullResponse, version string) *NPMPackageInfo {
 }
 
 func getNPMFullResponse(ctx context.Context, packageName string) (*npmFullResponse, error) {
+	if err := httpx.GuardOffline("npm registry lookup"); err != nil {
+		return nil, err
+	}
 	url := fmt.Sprintf("%s/%s", npmRegistryBaseURL, npmPackagePath(packageName))
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -174,6 +179,9 @@ func getNPMFullResponse(ctx context.Context, packageName string) (*npmFullRespon
 }
 
 func getNPMPackageInfoFromURL(ctx context.Context, url, packageName string) (*NPMPackageInfo, error) {
+	if err := httpx.GuardOffline("npm registry lookup"); err != nil {
+		return nil, err
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build request: %w", err)

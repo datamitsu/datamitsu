@@ -8,6 +8,8 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/datamitsu/datamitsu/internal/httpx"
 )
 
 const pythonFallbackStableVersion = "3.14.3"
@@ -27,6 +29,9 @@ func GetLatestPythonStableVersion(ctx context.Context) (string, error) {
 }
 
 func getLatestPythonStableVersionFromURL(ctx context.Context, url string) (string, error) {
+	if err := httpx.GuardOffline("Python release lookup"); err != nil {
+		return pythonFallbackStableVersion, err
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return pythonFallbackStableVersion, fmt.Errorf("failed to build request: %w", err)

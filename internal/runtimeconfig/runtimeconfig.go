@@ -13,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/target"
 )
 
 // Compile-time defaults. These are the canonical default values; env getters
@@ -33,27 +34,36 @@ const (
 type Effective struct {
 	Concurrency              int    `json:"concurrency"`
 	InstallTimeoutSeconds    int    `json:"installTimeoutSeconds"`
+	Libc                     string `json:"libc"`
 	LogLevel                 string `json:"logLevel"`
 	MaxCmdLength             int    `json:"maxCmdLength"`
 	MaxErrorCmdDisplay       int    `json:"maxErrorCmdDisplay"`
 	MaxParallelWorkers       int    `json:"maxParallelWorkers"`
 	MinimumReleaseAgeMinutes int    `json:"minimumReleaseAgeMinutes"`
+	NoOCI                    bool   `json:"noOci"`
 	OCIRegistry              string `json:"ociRegistry"`
+	Offline                  bool   `json:"offline"`
 	Timings                  bool   `json:"timings"`
 }
 
 // Compute reads env getters and returns a fresh Effective. Pure function — no
-// global state, no side effects. Tests use this directly.
+// global state, no side effects. Tests use this directly. Libc is the one
+// exception to "env getters only": it reports the effective host libc
+// (DATAMITSU_LIBC override or detection) so seed-miss diagnostics can see the
+// dimension that selects OCI bundle entries and store paths.
 func Compute() Effective {
 	return Effective{
 		Concurrency:              env.GetConcurrency(),
 		InstallTimeoutSeconds:    env.InstallTimeoutSeconds(),
+		Libc:                     string(target.HostTarget().Libc),
 		LogLevel:                 env.GetLogLevel().String(),
 		MaxCmdLength:             env.GetMaxCommandLength(),
 		MaxErrorCmdDisplay:       env.GetMaxErrorCommandDisplay(),
 		MaxParallelWorkers:       env.GetMaxParallelWorkers(),
 		MinimumReleaseAgeMinutes: env.MinimumReleaseAgeMinutes(),
+		NoOCI:                    env.NoOCI(),
 		OCIRegistry:              env.GetOCIRegistry(),
+		Offline:                  env.Offline(),
 		Timings:                  env.IsTimingsEnabled(),
 	}
 }

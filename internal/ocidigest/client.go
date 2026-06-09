@@ -1,12 +1,13 @@
-// Package ocidigest resolves an OCI image tag to its content digest (the
-// SHA-256 manifest digest) via the registry HTTP API, with a local cache.
+// Package ocidigest is datamitsu's thin OCI registry v2 client. It resolves
+// image tags to content digests (with a local cache) and pulls manifest and
+// blob content with digest verification.
 //
-// It is used by `datamitsu devtools dockerfile` to pin the generated base image
-// by digest. Resolution is best-effort: callers treat any returned error as
-// "leave the FROM line unpinned and warn", never as a fatal failure. Only the
-// transport is exercised here — no artifact is downloaded or executed, so the
-// mandatory-hash policy (which governs runtime artifact downloads) does not
-// apply; the resolved digest is itself an external SHA-256 value.
+// Tag resolution is used by `datamitsu devtools dockerfile` to pin the
+// generated base image by digest; it is best-effort and only the transport is
+// exercised — no artifact is downloaded or executed. The pull path
+// (PullManifest/PullBlob) is used by internal/ocibundle to seed the store from
+// an OCI bundle; there every byte is verified against the sha256 digest chain
+// before use.
 package ocidigest
 
 import (
@@ -19,6 +20,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/datamitsu/datamitsu/internal/env"
@@ -41,24 +43,41 @@ var acceptManifests = strings.Join([]string{
 	"application/vnd.docker.distribution.manifest.v2+json",
 }, ", ")
 
-// Resolver resolves image tags to content digests against a single registry.
+// Resolver resolves image tags to content digests and pulls manifest/blob
+// content against a single registry.
 type Resolver struct {
 	httpClient *http.Client
 	registry   string // registry host, e.g. "ghcr.io"
 	scheme     string // URL scheme, "https" in production (overridden in tests)
 	token      string // GITHUB_TOKEN, used to mint scoped pull tokens
-	cacheDir   string // local digest cache root
+
+	cacheDir string // local digest cache root
+
+	// bearerMu guards bearerTokens, the in-process cache of minted bearer
+	// tokens keyed by repository (the scope is repository:<repo>:pull, so the
+	// repo key is scope-equivalent). Without it every request would repeat the
+	// GET→401→token→GET handshake.
+	bearerMu     sync.Mutex
+	bearerTokens map[string]string
 }
 
 // NewResolver returns a Resolver configured from the environment: the registry
 // host from DATAMITSU_OCI_REGISTRY (default ghcr.io) and GITHUB_TOKEN for auth.
 func NewResolver() *Resolver {
+	return NewResolverForHost(env.GetOCIRegistry())
+}
+
+// NewResolverForHost returns a Resolver against an explicit registry host —
+// for bundle pulls, where the host comes from the config's oci.ref rather
+// than DATAMITSU_OCI_REGISTRY.
+func NewResolverForHost(host string) *Resolver {
 	return &Resolver{
-		httpClient: httpx.NewHardenedClient(defaultTimeout),
-		registry:   env.GetOCIRegistry(),
-		scheme:     "https",
-		token:      os.Getenv("GITHUB_TOKEN"), //nolint:forbidigo // third-party token, not a datamitsu env var
-		cacheDir:   env.GetCachePath(),
+		httpClient:   httpx.NewHardenedClient(defaultTimeout),
+		registry:     host,
+		scheme:       "https",
+		token:        os.Getenv("GITHUB_TOKEN"), //nolint:forbidigo // third-party token, not a datamitsu env var
+		cacheDir:     env.GetCachePath(),
+		bearerTokens: make(map[string]string),
 	}
 }
 
@@ -83,57 +102,94 @@ func (r *Resolver) ResolveCached(ctx context.Context, repo, tag string) (string,
 
 // Resolve returns the content digest (sha256:...) for repo:tag over the network,
 // performing the registry bearer-token handshake when challenged with a 401.
+// GET (not HEAD) is used because the Docker-Content-Digest header is returned
+// for both and GET is universally supported across registries; the body is
+// discarded (manifests are small) so the connection can be reused.
 func (r *Resolver) Resolve(ctx context.Context, repo, tag string) (string, error) {
 	manifestURL := fmt.Sprintf("%s://%s/v2/%s/manifests/%s", r.scheme, r.registry, repo, tag)
 
-	digest, status, challenge, err := r.fetchManifestDigest(ctx, manifestURL, "")
+	resp, err := r.authedGet(ctx, repo, manifestURL, acceptManifests)
 	if err != nil {
 		return "", err
 	}
+	defer func() {
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxBodyBytes))
+		_ = resp.Body.Close()
+	}()
 
-	if status == http.StatusUnauthorized && challenge != "" {
-		token, tErr := r.fetchToken(ctx, challenge)
-		if tErr != nil {
-			return "", tErr
-		}
-		digest, status, _, err = r.fetchManifestDigest(ctx, manifestURL, token)
-		if err != nil {
-			return "", err
-		}
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("registry returned status %d for %s:%s", resp.StatusCode, repo, tag)
 	}
-
-	if status != http.StatusOK {
-		return "", fmt.Errorf("registry returned status %d for %s:%s", status, repo, tag)
-	}
+	digest := resp.Header.Get("Docker-Content-Digest")
 	if digest == "" {
 		return "", fmt.Errorf("registry returned no digest for %s:%s", repo, tag)
 	}
 	return digest, nil
 }
 
-// fetchManifestDigest performs a GET for the manifest and returns the
-// Docker-Content-Digest header, the HTTP status, and any Bearer challenge from a
-// 401 response. The body is read and discarded (manifests are small) so the
-// connection can be reused. GET (not HEAD) is used because the digest header is
-// returned for both and GET is universally supported across registries.
-func (r *Resolver) fetchManifestDigest(ctx context.Context, manifestURL, token string) (digest string, status int, challenge string, err error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, manifestURL, nil)
-	if err != nil {
-		return "", 0, "", fmt.Errorf("create manifest request: %w", err)
+// authedGet performs a GET against a registry endpoint, transparently handling
+// the bearer-token handshake: a cached token for the repository is attached
+// when present; on a 401 with a Bearer challenge a token is minted (and
+// cached), and the request is retried once. The caller owns the response body.
+func (r *Resolver) authedGet(ctx context.Context, repo, rawURL, accept string) (*http.Response, error) {
+	if err := httpx.GuardOffline("oci registry request to " + r.registry); err != nil {
+		return nil, err
 	}
-	req.Header.Set("Accept", acceptManifests)
-	if token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
+	do := func(token string) (*http.Response, error) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+		if err != nil {
+			return nil, fmt.Errorf("create registry request: %w", err)
+		}
+		if accept != "" {
+			req.Header.Set("Accept", accept)
+		}
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+		resp, err := r.httpClient.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("registry request failed: %w", err)
+		}
+		return resp, nil
 	}
 
-	resp, err := r.httpClient.Do(req)
+	resp, err := do(r.cachedBearerToken(repo))
 	if err != nil {
-		return "", 0, "", fmt.Errorf("manifest request failed: %w", err)
+		return nil, err
 	}
-	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusUnauthorized {
+		return resp, nil
+	}
+
+	challenge := resp.Header.Get("WWW-Authenticate")
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxBodyBytes))
+	_ = resp.Body.Close()
+	if challenge == "" {
+		return nil, fmt.Errorf("registry returned 401 without a bearer challenge for %s", repo)
+	}
 
-	return resp.Header.Get("Docker-Content-Digest"), resp.StatusCode, resp.Header.Get("WWW-Authenticate"), nil
+	token, err := r.fetchToken(ctx, challenge)
+	if err != nil {
+		return nil, err
+	}
+	r.storeBearerToken(repo, token)
+
+	return do(token)
+}
+
+func (r *Resolver) cachedBearerToken(repo string) string {
+	r.bearerMu.Lock()
+	defer r.bearerMu.Unlock()
+	return r.bearerTokens[repo]
+}
+
+func (r *Resolver) storeBearerToken(repo, token string) {
+	r.bearerMu.Lock()
+	defer r.bearerMu.Unlock()
+	if r.bearerTokens == nil {
+		r.bearerTokens = make(map[string]string)
+	}
+	r.bearerTokens[repo] = token
 }
 
 // fetchToken mints a bearer token from the realm advertised in a Bearer

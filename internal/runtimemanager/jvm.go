@@ -95,6 +95,9 @@ func (rm *RuntimeManager) installJVMAppOnce(ctx context.Context, appName string,
 }
 
 func downloadAndVerifyJAR(ctx context.Context, name, url, expectedHash, destPath string) error {
+	if err := httpx.GuardOffline("JAR download of " + name); err != nil {
+		return err
+	}
 	if expectedHash == "" {
 		return fmt.Errorf("JAR hash is required but not provided for %s", url)
 	}

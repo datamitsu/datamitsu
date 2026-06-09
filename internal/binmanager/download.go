@@ -2,7 +2,6 @@ package binmanager
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/datamitsu/datamitsu/internal/httpretry"
 	"github.com/datamitsu/datamitsu/internal/httpx"
 	"github.com/datamitsu/datamitsu/internal/ui"
 	"go.uber.org/zap"
@@ -22,41 +22,17 @@ const MaxBinarySize = 500 * 1024 * 1024
 // Download retry policy: flaky mirrors (e.g. unofficial-builds.nodejs.org) and
 // transient TLS/connection blips fail individual attempts; a bounded retry with
 // exponential backoff turns those into success instead of failing the whole
-// build. The parent context (install timeout) still bounds total time.
-const downloadMaxAttempts = 4
+// build. The parent context (install timeout) still bounds total time. The
+// classification and backoff schedule live in internal/httpretry, shared with
+// the OCI blob pull path.
+const downloadMaxAttempts = httpretry.DefaultMaxAttempts
 
-// Backoff bounds are vars (not consts) only so tests can shrink them; production
-// keeps the 1s base / 8s cap.
-var (
-	downloadRetryBase = time.Second
-	downloadRetryMax  = 8 * time.Second
-)
-
-// permanentDownloadError marks a failure that retrying cannot fix (a 4xx
-// response, an oversized file). The retry loop gives up on it immediately.
-type permanentDownloadError struct{ err error }
-
-func (e *permanentDownloadError) Error() string { return e.err.Error() }
-func (e *permanentDownloadError) Unwrap() error { return e.err }
-
-func permanent(err error) error { return &permanentDownloadError{err: err} }
-
-func isPermanent(err error) bool {
-	var p *permanentDownloadError
-	return errors.As(err, &p)
-}
-
-// retryableStatus reports whether an HTTP status is worth retrying: 5xx server
-// errors plus 408 (Request Timeout) and 429 (Too Many Requests). Other 4xx are
-// permanent (a bad URL won't become good on retry).
-func retryableStatus(code int) bool {
-	return code >= 500 || code == http.StatusRequestTimeout || code == http.StatusTooManyRequests
-}
-
-// retryDelay is the exponential backoff before attempt+1 (1s, 2s, 4s, … capped).
-func retryDelay(attempt int) time.Duration {
-	return min(downloadRetryBase<<(attempt-1), downloadRetryMax)
-}
+// Thin aliases over the shared retry policy keep this file's call sites and
+// the existing tests unchanged.
+func permanent(err error) error            { return httpretry.Permanent(err) }
+func isPermanent(err error) bool           { return httpretry.IsPermanent(err) }
+func retryableStatus(code int) bool        { return httpretry.RetryableStatus(code) }
+func retryDelay(attempt int) time.Duration { return httpretry.Delay(attempt) }
 
 // httpClient downloads binaries on the shared hardened transport (proxy, dialer,
 // TLS/response-header timeouts, and the HTTPS→HTTP downgrade-rejecting redirect
@@ -76,6 +52,9 @@ func displayName(name, url string) string {
 }
 
 func downloadFileInternal(ctx context.Context, url string, destDir string, name string) (string, error) {
+	if err := httpx.GuardOffline("download of " + displayName(name, url)); err != nil {
+		return "", permanent(err)
+	}
 	if name != "" {
 		log.Debug("downloading file", zap.String("url", url), zap.String("name", name))
 	} else {

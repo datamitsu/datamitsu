@@ -40,6 +40,7 @@ interface Config {
   initCommands?: MapOfInitCommands;
   ignoreRules?: string[];
   sharedStorage?: Record<string, string>;
+  oci?: OCIRef;
 }
 ```
 
@@ -747,6 +748,41 @@ globalThis.getConfig = getConfig;
 ```
 
 See [Managed Content - Shared Storage](../guides/managed-content.md#shared-storage) for usage examples.
+
+## OCI Bundle (`oci`)
+
+Pins the [OCI bundle](/docs/guides/oci-bundles) that seeds the tool store: the registry repository plus the mandatory SHA-256 digest.
+
+```typescript
+interface OCIRef {
+  ref: string; // full reference incl. registry host, e.g. "ghcr.io/owner/tool-store"
+  digest: string; // "sha256:" + 64 lowercase hex characters — mandatory
+  signer?: {
+    identity: string; // sigstore certificate identity (e.g. a workflow ref)
+    issuer: string; // OIDC issuer URL
+  };
+}
+```
+
+```javascript
+function getConfig(input) {
+  return {
+    ...input,
+    oci: {
+      ref: "ghcr.io/owner/tool-store",
+      digest: "sha256:6c3c624b58dbbcd3c0dd82b4c53f04194d1247c6eebdaab7c610cf7d66709b3b",
+    },
+  };
+}
+```
+
+Rules:
+
+- `ref` must include the registry host as its first segment — there is no default host and no docker.io shorthand. Tags and digests inside `ref` are rejected; content is pinned exclusively by `digest`.
+- `oci` chains through the layers **as a scalar**: the last layer that set or spread it wins, and the effective config holds at most one declaration. A layer that rebuilds its output without `{...input}` silently drops the inherited value (a debug log flags this); reset explicitly with `oci: undefined` or `oci: null`.
+- `signer` optionally pins the sigstore keyless identity of the bundle publisher. When set, pull must verify the signature before layout (not yet supported by the current builds — a set `signer` currently fails the seed rather than silently skipping the check).
+
+See the [OCI Bundles guide](/docs/guides/oci-bundles) for the trust model and the seeding lifecycle.
 
 ## JavaScript APIs
 
