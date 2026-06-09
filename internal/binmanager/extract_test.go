@@ -1742,3 +1742,50 @@ func TestExtractArchiveToPath_ValidSymlink(t *testing.T) {
 		t.Errorf("symlink target = %q, want %q", linkTarget, "real.txt")
 	}
 }
+
+func TestIsRegularTarEntry(t *testing.T) {
+	if !isRegularTarEntry(tar.TypeReg) {
+		t.Error("TypeReg must be treated as a regular entry")
+	}
+	if !isRegularTarEntry(tar.TypeGNUSparse) {
+		t.Error("TypeGNUSparse must be treated as a regular entry (archive/tar expands it on read)")
+	}
+	if isRegularTarEntry(tar.TypeDir) {
+		t.Error("TypeDir must not be treated as a regular entry")
+	}
+	if isRegularTarEntry(tar.TypeSymlink) {
+		t.Error("TypeSymlink must not be treated as a regular entry")
+	}
+}
+
+// TestExtractFromTar_GNUSparseEntry guards the fix for binaries packed as GNU
+// sparse tar entries (e.g. tombi's aarch64 release): they must be extracted, not
+// silently skipped and reported "not found in archive". The fixture is a real
+// GNU-sparse tar.gz (built with `tar --sparse`) whose single entry "tool" has
+// typeflag 'S'.
+func TestExtractFromTar_GNUSparseEntry(t *testing.T) {
+	f, err := os.Open(filepath.Join("testdata", "sparse-fixture.tar.gz"))
+	if err != nil {
+		t.Fatalf("open fixture: %v", err)
+	}
+	defer func() { _ = f.Close() }()
+
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		t.Fatalf("gzip reader: %v", err)
+	}
+	defer func() { _ = gz.Close() }()
+
+	extracted, err := extractFromTar(tar.NewReader(gz), "tool", "tar.gz", "fixture", t.TempDir())
+	if err != nil {
+		t.Fatalf("extractFromTar on GNU sparse entry: %v", err)
+	}
+
+	data, err := os.ReadFile(extracted)
+	if err != nil {
+		t.Fatalf("read extracted file: %v", err)
+	}
+	if !bytes.Contains(data, []byte("TOMBI_BINARY_MARKER")) {
+		t.Error("extracted sparse file is missing its expected content")
+	}
+}
