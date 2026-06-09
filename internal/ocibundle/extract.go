@@ -284,11 +284,12 @@ func writeRegularFile(dest string, tr io.Reader, hdr *tar.Header) (retErr error)
 
 // createRelocatedSymlink recreates a symlink, rewriting an absolute target
 // under the builder store root to the consumer store root. Relative targets
-// are kept verbatim (they stay correct wherever the store lands); absolute
+// are kept (cleaned) as long as they stay inside the subtree; absolute
 // targets outside the builder store root are skipped with a warning, matching
-// the generic extractor's posture.
+// the generic extractor's posture. The value handed to os.Symlink is always
+// re-derived from a containment-checked path, never the raw archive header.
 func createRelocatedSymlink(dest, stagedRoot, linkTarget string, opts layerExtractOptions) error {
-	target := linkTarget
+	var target string
 	if path.IsAbs(linkTarget) {
 		rest, ok := strings.CutPrefix(linkTarget, opts.BuilderStoreRoot+"/")
 		switch {
@@ -307,15 +308,22 @@ func createRelocatedSymlink(dest, stagedRoot, linkTarget string, opts layerExtra
 			return nil
 		}
 	} else {
-		// Relative targets are kept verbatim but must stay inside the subtree,
-		// mirroring the hardlink rule: a link reaching outside its subtree is
-		// a producer error, not a layout we silently materialize.
+		// Relative targets must stay inside the subtree, mirroring the
+		// hardlink rule: a link reaching outside its subtree is a producer
+		// error, not a layout we silently materialize. The created target is
+		// recomputed from the checked absolute path, so only contained values
+		// ever reach os.Symlink.
 		resolved := filepath.Clean(filepath.Join(filepath.Dir(dest), filepath.FromSlash(linkTarget)))
 		if resolved != stagedRoot && !strings.HasPrefix(resolved, stagedRoot+string(filepath.Separator)) {
 			log.Warn("skipping relative symlink escaping its subtree",
 				zap.String("path", dest), zap.String("target", linkTarget))
 			return nil
 		}
+		rel, err := filepath.Rel(filepath.Dir(dest), resolved)
+		if err != nil {
+			return fmt.Errorf("resolve relative symlink %q -> %q: %w", dest, linkTarget, err)
+		}
+		target = rel
 	}
 	if err := os.Symlink(target, dest); err != nil {
 		return fmt.Errorf("create symlink %q -> %q: %w", dest, target, err)
