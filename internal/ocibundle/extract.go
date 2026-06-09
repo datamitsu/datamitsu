@@ -294,12 +294,14 @@ func createRelocatedSymlink(dest, stagedRoot, linkTarget string, opts layerExtra
 		rest, ok := strings.CutPrefix(linkTarget, opts.BuilderStoreRoot+"/")
 		switch {
 		case ok:
-			// filepath.Join cleans the result, so a hostile "store/../../etc"
-			// tail could otherwise climb out of the consumer store root.
-			target = filepath.Join(opts.ConsumerStoreRoot, filepath.FromSlash(rest))
-			if target != opts.ConsumerStoreRoot && !strings.HasPrefix(target, opts.ConsumerStoreRoot+string(filepath.Separator)) {
+			// containedRel laundered through filepath.Rel: a hostile
+			// "store/../../etc" tail surfaces as a ".."-prefixed result and is
+			// rejected; the created target is rebuilt from the checked value.
+			containedRel, err := filepath.Rel(opts.ConsumerStoreRoot, filepath.Join(opts.ConsumerStoreRoot, filepath.FromSlash(rest)))
+			if err != nil || containedRel == ".." || strings.HasPrefix(containedRel, ".."+string(filepath.Separator)) {
 				return fmt.Errorf("symlink %q target %q escapes the store after relocation", dest, linkTarget)
 			}
+			target = filepath.Join(opts.ConsumerStoreRoot, containedRel)
 		case linkTarget == opts.BuilderStoreRoot:
 			target = opts.ConsumerStoreRoot
 		default:
@@ -310,20 +312,23 @@ func createRelocatedSymlink(dest, stagedRoot, linkTarget string, opts layerExtra
 	} else {
 		// Relative targets must stay inside the subtree, mirroring the
 		// hardlink rule: a link reaching outside its subtree is a producer
-		// error, not a layout we silently materialize. The created target is
-		// recomputed from the checked absolute path, so only contained values
-		// ever reach os.Symlink.
-		resolved := filepath.Clean(filepath.Join(filepath.Dir(dest), filepath.FromSlash(linkTarget)))
-		if resolved != stagedRoot && !strings.HasPrefix(resolved, stagedRoot+string(filepath.Separator)) {
+		// error, not a layout we silently materialize. Same laundering: the
+		// subtree-relative position is checked for a ".." escape and the
+		// created target is recomputed from the checked value, so only
+		// contained values ever reach os.Symlink.
+		containedRel, err := filepath.Rel(stagedRoot, filepath.Join(filepath.Dir(dest), filepath.FromSlash(linkTarget)))
+		if err != nil {
+			return fmt.Errorf("resolve relative symlink %q -> %q: %w", dest, linkTarget, err)
+		}
+		if containedRel == ".." || strings.HasPrefix(containedRel, ".."+string(filepath.Separator)) {
 			log.Warn("skipping relative symlink escaping its subtree",
 				zap.String("path", dest), zap.String("target", linkTarget))
 			return nil
 		}
-		rel, err := filepath.Rel(filepath.Dir(dest), resolved)
+		target, err = filepath.Rel(filepath.Dir(dest), filepath.Join(stagedRoot, containedRel))
 		if err != nil {
 			return fmt.Errorf("resolve relative symlink %q -> %q: %w", dest, linkTarget, err)
 		}
-		target = rel
 	}
 	if err := os.Symlink(target, dest); err != nil {
 		return fmt.Errorf("create symlink %q -> %q: %w", dest, target, err)
