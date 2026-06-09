@@ -183,11 +183,25 @@ func okRows(names []string, status string) []initRow {
 	return rows
 }
 
-// skipRows builds skipped rows (faint glyph and status) for a list of names.
+// skipRows builds skipped rows (faint ⊘ glyph and status) for a list of names.
 func skipRows(names []string) []initRow {
 	rows := make([]initRow, 0, len(names))
 	for _, name := range names {
-		rows = append(rows, initRow{sym: clr.Faint("−"), name: name, status: clr.Faint("skipped")})
+		rows = append(rows, initRow{sym: clr.Faint("⊘"), name: name, status: clr.Faint("skipped")})
+	}
+	return rows
+}
+
+// skipRowsWithReason builds skipped rows that show why each binary was skipped
+// (e.g. "no binary for linux/arm64/musl") instead of a bare "skipped".
+func skipRowsWithReason(skipped []binmanager.SkippedBinary) []initRow {
+	rows := make([]initRow, 0, len(skipped))
+	for _, s := range skipped {
+		status := "skipped"
+		if s.Reason != "" {
+			status += ": " + s.Reason
+		}
+		rows = append(rows, initRow{sym: clr.Faint("⊘"), name: s.Name, status: clr.Faint(status)})
 	}
 	return rows
 }
@@ -266,7 +280,7 @@ func reportBinaries(ctx context.Context, disp *ui.Display, binMgr *binmanager.Bi
 
 	rows := okRows(stats.Downloaded, "downloaded")
 	rows = append(rows, okRows(stats.AlreadyCached, "cached")...)
-	rows = append(rows, skipRows(stats.Skipped)...)
+	rows = append(rows, skipRowsWithReason(stats.Skipped)...)
 	for _, f := range stats.Failed {
 		rows = append(rows, failRow(f.Name, f.Error))
 	}

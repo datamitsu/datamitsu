@@ -13,6 +13,17 @@ Before any task runs, the runner installs **every tool the plan needs** up front
 
 This is a hard invariant: **all plan tools are installed before parallel execution begins.** Installing ahead of time means no task ever triggers a lazy, on-demand install while sharing a tool with another task running concurrently. Same-tool concurrent installs cannot occur, so there is no race where one task observes a half-written or briefly-absent binary. Distinct tools may still install in parallel (that is safe — they touch different paths). Dry-run planning skips the installs entirely. A failure here aborts before any task runs, surfacing a clear install error instead of a confusing mid-execution failure.
 
+## Skipped Tools
+
+A tool can end up **skipped** — neither run nor failed — for one of two reasons, both decided during [planning](./planner.md) so they appear in `--explain` and never reach the pre-install phase:
+
+- **Disabled in config** — the tool sets `skip: true`. Use this instead of conditionally omitting the tool: an omitted tool is invisible, a skipped one is reported.
+- **No binary for this platform** — the tool's binary has no build for the current OS/architecture/libc. This is a **soft skip**: the run still succeeds. (Previously this aborted the whole run with an install error.)
+
+Skipped tools render as faint `⊘ <tool> skipped (<reason>)` lines, contribute a `· N skipped` count to the operation footer, and surface as a `skipped` array in `--explain=json`. Other non-runs — a tool that matched no files, doesn't apply to the detected project types, or is disabled by `.datamitsuignore` — stay silent, as before.
+
+The `--fail-on-skip` flag (on `check`/`lint`/`fix`) makes the run exit non-zero **only** for platform skips — a tool you expected to run had no binary for the runner. Intentional `skip: true` skips never fail the run.
+
 ## Two-Layer Execution Model
 
 Execution follows a two-layer structure:

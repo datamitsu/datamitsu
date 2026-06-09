@@ -246,9 +246,16 @@ type DownloadResult struct {
 	Error error
 }
 
+// SkippedBinary records a binary that was not installed, with the reason
+// (typically "binary 'X' is not available for <host>").
+type SkippedBinary struct {
+	Name   string
+	Reason string
+}
+
 // InstallStats summarizes the results of an install run across all binaries.
 type InstallStats struct {
-	Skipped       []string
+	Skipped       []SkippedBinary
 	AlreadyCached []string
 	Downloaded    []string
 	Failed        []DownloadResult
@@ -258,7 +265,7 @@ type InstallStats struct {
 // Returns installation statistics
 func (bm *BinManager) InstallWithConcurrency(ctx context.Context, includeOptional bool, concurrency int, failOnError bool) (InstallStats, error) {
 	stats := InstallStats{
-		Skipped:       []string{},
+		Skipped:       []SkippedBinary{},
 		AlreadyCached: []string{},
 		Downloaded:    []string{},
 		Failed:        []DownloadResult{},
@@ -277,7 +284,10 @@ func (bm *BinManager) InstallWithConcurrency(ctx context.Context, includeOptiona
 
 		binPath, err := bm.getBinaryPath(name)
 		if err != nil {
-			stats.Skipped = append(stats.Skipped, name)
+			// A resolve failure here means no binary matches this host (the only
+			// error getBinaryPath returns once app.Binary != nil); keep the reason
+			// so init can show why the tool was skipped instead of a bare "skipped".
+			stats.Skipped = append(stats.Skipped, SkippedBinary{Name: name, Reason: err.Error()})
 			continue
 		}
 
@@ -843,6 +853,28 @@ func (bm *BinManager) ExecCaptured(ctx context.Context, appName string, args []s
 	}
 
 	return buf.String(), nil
+}
+
+// BinaryAvailable reports whether app can run on the current host. It only
+// resolves (no download): non-binary apps (shell/uv/node/jvm/go) always report
+// available since they have their own fallback paths; a binary app reports
+// unavailable, with the host string as detail, when no build matches this
+// os/arch/libc. Implements tooling.PlatformChecker, so the planner can mark
+// platform-unsupported tools skipped instead of letting install hard-fail.
+func (bm *BinManager) BinaryAvailable(name string) (available bool, detail string) {
+	app, ok := bm.mapOfApps[name]
+	if !ok {
+		// Plans only reference real apps; treat an unknown name as available so
+		// this seam never fabricates a skip for a missing registry entry.
+		return true, ""
+	}
+	if app.Binary == nil {
+		return true, ""
+	}
+	if _, _, err := bm.getBinaryInfo(name); err != nil {
+		return false, bm.resolver.Host().String()
+	}
+	return true, ""
 }
 
 func (bm *BinManager) getBinaryInfo(name string) (*target.ResolvedTarget, BinaryOsArchInfo, error) {

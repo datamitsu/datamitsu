@@ -21,10 +21,21 @@ type PlanFormatter interface {
 
 // PlanJSON represents the JSON structure for execution plan
 type PlanJSON struct {
-	Operation string      `json:"operation"`
-	RootPath  string      `json:"rootPath"`
-	CwdPath   string      `json:"cwdPath"`
-	Groups    []GroupJSON `json:"groups"`
+	Operation string            `json:"operation"`
+	RootPath  string            `json:"rootPath"`
+	CwdPath   string            `json:"cwdPath"`
+	Groups    []GroupJSON       `json:"groups"`
+	Skipped   []SkippedToolJSON `json:"skipped"`
+}
+
+// SkippedToolJSON represents a skipped tool in JSON format. Emitting skips here
+// keeps --explain=json an accurate predictor of behavior: a skip:true or
+// platform-unsupported tool must not look like it will run.
+type SkippedToolJSON struct {
+	ToolName  string `json:"toolName"`
+	Operation string `json:"operation"`
+	Reason    string `json:"reason"`
+	Detail    string `json:"detail,omitempty"`
 }
 
 // GroupJSON represents a task group in JSON format
@@ -124,6 +135,20 @@ func makeRelativePath(path, baseDir string) string {
 	return relPath
 }
 
+// formatSkippedSection renders the human-readable "Skipped" block shared by the
+// summary and detailed formatters. Empty string when nothing was skipped.
+func formatSkippedSection(skipped []SkippedTool) string {
+	if len(skipped) == 0 {
+		return ""
+	}
+	var buf strings.Builder
+	fmt.Fprintf(&buf, "\nSkipped (%d):\n", len(skipped))
+	for _, s := range skipped {
+		fmt.Fprintf(&buf, "  ⊘ %s — %s\n", s.ToolName, s.ReasonText())
+	}
+	return buf.String()
+}
+
 // ========================================
 // Summary Formatter
 // ========================================
@@ -139,7 +164,7 @@ func NewSummaryFormatter() *SummaryFormatter {
 // Format formats the execution plan in summary mode
 func (f *SummaryFormatter) Format(plan *ExecutionPlan, rootPath, cwdPath string, operation config.OperationType) string {
 	if len(plan.Groups) == 0 {
-		return "No applicable tools found for this operation.\n"
+		return "No applicable tools found for this operation.\n" + formatSkippedSection(plan.Skipped)
 	}
 
 	var buf strings.Builder
@@ -173,6 +198,8 @@ func (f *SummaryFormatter) Format(plan *ExecutionPlan, rootPath, cwdPath string,
 		// Show parallelization info
 		buf.WriteString(f.formatParallelizationInfo(group.Tasks, parallelGroups))
 	}
+
+	buf.WriteString(formatSkippedSection(plan.Skipped))
 
 	return buf.String()
 }
@@ -211,7 +238,7 @@ func NewDetailedFormatter() *DetailedFormatter {
 // Format formats the execution plan in detailed mode
 func (f *DetailedFormatter) Format(plan *ExecutionPlan, rootPath, cwdPath string, operation config.OperationType) string {
 	if len(plan.Groups) == 0 {
-		return "No applicable tools found for this operation.\n"
+		return "No applicable tools found for this operation.\n" + formatSkippedSection(plan.Skipped)
 	}
 
 	var buf strings.Builder
@@ -249,6 +276,8 @@ func (f *DetailedFormatter) Format(plan *ExecutionPlan, rootPath, cwdPath string
 		// Show parallelization info
 		buf.WriteString(f.formatParallelizationInfo(group.Tasks, parallelGroups))
 	}
+
+	buf.WriteString(formatSkippedSection(plan.Skipped))
 
 	return buf.String()
 }
@@ -291,6 +320,16 @@ func (f *JSONFormatter) Format(plan *ExecutionPlan, rootPath, cwdPath string, op
 		RootPath:  rootPath,
 		CwdPath:   cwdPath,
 		Groups:    make([]GroupJSON, 0, len(plan.Groups)),
+		Skipped:   make([]SkippedToolJSON, 0, len(plan.Skipped)),
+	}
+
+	for _, s := range plan.Skipped {
+		planJSON.Skipped = append(planJSON.Skipped, SkippedToolJSON{
+			ToolName:  s.ToolName,
+			Operation: string(s.Operation),
+			Reason:    s.Reason.String(),
+			Detail:    s.Detail,
+		})
 	}
 
 	for _, group := range plan.Groups {

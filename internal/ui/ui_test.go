@@ -34,6 +34,13 @@ func TestPlainPrintlnAndStatus(t *testing.T) {
 	}
 }
 
+func TestSymSkipRender(t *testing.T) {
+	got := SymSkip.render()
+	if !strings.Contains(got, "⊘") {
+		t.Errorf("SymSkip.render() = %q, want it to contain ⊘", got)
+	}
+}
+
 func TestPlainDownloadEmitsFinalLine(t *testing.T) {
 	var out bytes.Buffer
 	d := newPlainDisplay(&out, &out)

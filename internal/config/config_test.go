@@ -673,6 +673,53 @@ func TestTool(t *testing.T) {
 	}
 }
 
+func TestToolSkipFields(t *testing.T) {
+	tool := Tool{
+		Name:       "trufflehog",
+		Skip:       true,
+		SkipReason: "runs in CI only",
+		Operations: map[OperationType]ToolOperation{
+			OpLint: {App: "trufflehog", Scope: ToolScopeRepository},
+		},
+	}
+	if !tool.Skip {
+		t.Error("Skip = false, want true")
+	}
+	if tool.SkipReason != "runs in CI only" {
+		t.Errorf("SkipReason = %q, want %q", tool.SkipReason, "runs in CI only")
+	}
+}
+
+func TestToolSkipJSONRoundTrip(t *testing.T) {
+	in := Tool{Name: "trufflehog", Skip: true, SkipReason: "runs in CI only"}
+	data, err := json.Marshal(in)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !strings.Contains(string(data), `"skip":true`) || !strings.Contains(string(data), `"skipReason":"runs in CI only"`) {
+		t.Errorf("marshaled JSON missing skip fields: %s", data)
+	}
+	var out Tool
+	if err := json.Unmarshal(data, &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if !out.Skip || out.SkipReason != "runs in CI only" {
+		t.Errorf("round-trip lost skip fields: %+v", out)
+	}
+}
+
+// Unset skip fields must be omitted so configs that don't use skip serialize
+// identically (keeping cache keys stable).
+func TestToolSkipJSONOmitEmpty(t *testing.T) {
+	data, err := json.Marshal(Tool{Name: "eslint"})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if strings.Contains(string(data), "skip") {
+		t.Errorf("expected skip fields omitted when unset, got: %s", data)
+	}
+}
+
 func TestConfigSetup(t *testing.T) {
 	setup := ConfigSetup{
 		ProjectTypes:      []string{"node"},

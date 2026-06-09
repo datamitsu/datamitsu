@@ -2694,3 +2694,52 @@ func TestGetBinaryInfoNotBinaryApp(t *testing.T) {
 		t.Error("expected error for non-binary app")
 	}
 }
+
+func TestBinaryAvailable(t *testing.T) {
+	hostOS, err := syslist.GetOsTypeFromString(runtime.GOOS)
+	if err != nil {
+		t.Fatalf("host OS: %v", err)
+	}
+	hostArch, err := syslist.GetArchTypeFromString(runtime.GOARCH)
+	if err != nil {
+		t.Fatalf("host arch: %v", err)
+	}
+
+	// An OS different from the host, so the binary cannot resolve here.
+	otherOSStr := "darwin"
+	if runtime.GOOS == "darwin" {
+		otherOSStr = "linux"
+	}
+	otherOS, err := syslist.GetOsTypeFromString(otherOSStr)
+	if err != nil {
+		t.Fatalf("other OS: %v", err)
+	}
+
+	info := BinaryOsArchInfo{URL: "http://example/x", Hash: "deadbeef", ContentType: BinContentTypeBinary}
+	bm := New(MapOfApps{
+		"available": App{Binary: &AppConfigBinary{Binaries: MapOfBinaries{
+			hostOS: {hostArch: {"unknown": info}},
+		}}},
+		"unavailable": App{Binary: &AppConfigBinary{Binaries: MapOfBinaries{
+			otherOS: {hostArch: {"unknown": info}},
+		}}},
+		"shellapp": App{Shell: &AppConfigShell{Name: "bash"}},
+	}, nil, nil)
+
+	if ok, _ := bm.BinaryAvailable("available"); !ok {
+		t.Error("binary built for this host should be available")
+	}
+	ok, detail := bm.BinaryAvailable("unavailable")
+	if ok {
+		t.Error("binary built only for another OS should be unavailable")
+	}
+	if detail == "" {
+		t.Error("unavailable result should carry the host string as detail")
+	}
+	if ok, _ := bm.BinaryAvailable("shellapp"); !ok {
+		t.Error("shell apps have no binary and should report available")
+	}
+	if ok, _ := bm.BinaryAvailable("unknown-app"); !ok {
+		t.Error("unknown app names should default to available, not fabricate a skip")
+	}
+}

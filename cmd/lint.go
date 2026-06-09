@@ -13,6 +13,7 @@ var (
 	lintExplain       string
 	lintFileScoped    bool
 	lintSelectedTools string
+	lintFailOnSkip    bool
 )
 
 var lintCmd = &cobra.Command{
@@ -36,11 +37,12 @@ func init() {
 	lintCmd.Flags().Lookup("explain").NoOptDefVal = "summary"
 	lintCmd.Flags().BoolVar(&lintFileScoped, "file-scoped", false, "Only process git staged files")
 	lintCmd.Flags().StringVar(&lintSelectedTools, "tools", "", "Comma-separated list of tools to run (for debugging)")
+	lintCmd.Flags().BoolVar(&lintFailOnSkip, "fail-on-skip", false, "Exit non-zero if any tool is skipped because its binary is unavailable for this platform")
 	rootCmd.AddCommand(lintCmd)
 }
 
 func runLint(cmd *cobra.Command, args []string) error {
-	err := runner.Run(config.OpLint, args, lintExplain, lintFileScoped, lintSelectedTools, func() (*config.Config, string, error) {
+	err := runner.Run(config.OpLint, args, lintExplain, lintFileScoped, lintSelectedTools, lintFailOnSkip, func() (*config.Config, string, error) {
 		cfg, _, _, err := loadConfig()
 		return cfg, "", err
 	})
