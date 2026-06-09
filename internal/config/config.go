@@ -73,9 +73,16 @@ type ToolOperation struct {
 
 // Tool groups the fix and lint operations of a single development tool.
 type Tool struct {
-	Name         string                          `json:"name"`
-	ProjectTypes []string                        `json:"projectTypes,omitempty"`
-	Operations   map[OperationType]ToolOperation `json:"operations"`
+	Name         string   `json:"name"`
+	ProjectTypes []string `json:"projectTypes,omitempty"`
+	// Skip reports the tool as skipped and never plans or runs it. Prefer this
+	// over conditionally omitting the tool from config: an omitted tool is
+	// invisible, a skipped one is shown with its reason.
+	Skip bool `json:"skip,omitempty"`
+	// SkipReason is the human-readable reason shown in the skipped report when
+	// Skip is true (e.g. "runs in CI only"). Empty falls back to a generic label.
+	SkipReason string                          `json:"skipReason,omitempty"`
+	Operations map[OperationType]ToolOperation `json:"operations"`
 }
 
 // MapOfTools maps a tool name to its configuration.

@@ -45,6 +45,8 @@ const (
 	SymWarn
 	// SymDownload marks a download ("⬇").
 	SymDownload
+	// SymSkip marks a skipped item ("⊘").
+	SymSkip
 )
 
 func (s Symbol) render() string {
@@ -61,6 +63,8 @@ func (s Symbol) render() string {
 		return clr.Yellow("!")
 	case SymDownload:
 		return clr.Cyan("⬇")
+	case SymSkip:
+		return clr.Faint("⊘")
 	}
 	return clr.Faint("→")
 }

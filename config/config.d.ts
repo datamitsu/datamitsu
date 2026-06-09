@@ -576,6 +576,22 @@ declare global {
        * @example ["npm-package", "typescript-project"]
        */
       projectTypes?: string[];
+
+      /**
+       * When true, the tool is reported as skipped and is never planned or run.
+       * Prefer this over conditionally omitting the tool from config: an omitted
+       * tool is invisible, whereas a skipped one is shown in the report with its
+       * reason.
+       * @example skip: !facts().env.CI
+       */
+      skip?: boolean;
+
+      /**
+       * Optional human-readable reason shown in the skipped report when `skip` is
+       * true. Empty falls back to a generic "disabled in config" label.
+       * @example skipReason: "runs in CI only"
+       */
+      skipReason?: string;
     }
 
     /**

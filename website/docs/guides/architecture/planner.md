@@ -7,6 +7,15 @@ description: How datamitsu groups files into prioritized task batches with overl
 
 The planner is the second stage of datamitsu's execution pipeline. It takes the list of discovered files and transforms them into an ordered execution plan — deciding what runs when, what can run in parallel, and what must wait.
 
+## Skip Detection
+
+As it enumerates tools (in stable, sorted order), the planner records two kinds of **skipped tools** on the plan alongside the runnable task groups. A tool is skipped — and reported — when, after it is found applicable to the project and operation:
+
+- it sets `skip: true` in config, or
+- its backing binary has no build for the current OS/architecture/libc.
+
+Detecting both at plan time (rather than at install) is what lets them appear in `--explain` and keeps platform-unsupported tools out of the [pre-install phase](./execution.md#pre-install-phase) entirely, so they never trigger an install error. Tools that are merely inapplicable (no matching files, wrong project type, `.datamitsuignore`) are dropped silently, as before — only the two reasons above are surfaced. See [Skipped Tools](./execution.md#skipped-tools) for how they are reported.
+
 ## Priority-Based Chunking
 
 Every tool operation has a `priority` value (a number). The planner groups all tasks by priority and creates one **TaskGroup** per unique priority level:

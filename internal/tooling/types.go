@@ -25,6 +25,62 @@ type TaskGroup struct {
 // ExecutionPlan represents the full execution plan with ordered task groups
 type ExecutionPlan struct {
 	Groups []TaskGroup
+	// Skipped lists tools that were deliberately not planned, with the reason.
+	// These never run but are reported so the user sees what was left out and why.
+	Skipped []SkippedTool
+}
+
+// SkipReason classifies why a tool was skipped (vs. silently not applicable).
+type SkipReason int
+
+// Skip reason classifications. Only these two reasons are surfaced to the user;
+// other non-runs (project-type mismatch, no matching files, .datamitsuignore)
+// stay silent.
+const (
+	// SkipReasonConfig marks a tool disabled via `skip: true` in config.
+	SkipReasonConfig SkipReason = iota
+	// SkipReasonUnsupportedPlatform marks a tool whose backing binary has no
+	// build for the current os/arch/libc.
+	SkipReasonUnsupportedPlatform
+)
+
+// String is the stable machine-readable key used in --explain=json.
+func (r SkipReason) String() string {
+	switch r {
+	case SkipReasonConfig:
+		return "config"
+	case SkipReasonUnsupportedPlatform:
+		return "unsupported-platform"
+	}
+	return "config"
+}
+
+// SkippedTool records a single tool that was skipped while planning one operation.
+type SkippedTool struct {
+	ToolName  string
+	Operation config.OperationType
+	Reason    SkipReason
+	// Detail is the configured skipReason text (config) or the host string
+	// (unsupported platform). May be empty for config skips with no reason set.
+	Detail string
+}
+
+// ReasonText is the canonical human-facing reason for a skipped tool, shared by
+// the run summary and the --explain formatters.
+func (s SkippedTool) ReasonText() string {
+	switch s.Reason {
+	case SkipReasonConfig:
+		if s.Detail != "" {
+			return s.Detail
+		}
+		return "disabled in config"
+	case SkipReasonUnsupportedPlatform:
+		if s.Detail != "" {
+			return "no binary for " + s.Detail
+		}
+		return "no binary for this platform"
+	}
+	return "disabled in config"
 }
 
 // FailureReason indicates why a task failed, enabling the runner to distinguish

@@ -103,6 +103,12 @@ type sharedContext struct {
 	// nameWidth is the widest configured tool name, computed once so every
 	// operation's result block (fix, lint, …) aligns on the same columns.
 	nameWidth int
+	// failOnSkip makes the run exit non-zero when a tool was skipped because its
+	// binary is unavailable for this host (intentional config skips never fail).
+	failOnSkip bool
+	// platformSkipped collects the names of tools skipped for an unsupported
+	// platform across all operations (deduped), to drive failOnSkip after the run.
+	platformSkipped map[string]struct{}
 }
 
 func initSharedContext(
@@ -110,11 +116,14 @@ func initSharedContext(
 	explainMode string,
 	fileScoped bool,
 	selectedToolsFlag string,
+	failOnSkip bool,
 	loadConfigFunc func() (*config.Config, string, error),
 ) (*sharedContext, error) {
 	ctx := context.Background()
 	sc := &sharedContext{
-		timings: timing.New(),
+		timings:         timing.New(),
+		failOnSkip:      failOnSkip,
+		platformSkipped: make(map[string]struct{}),
 	}
 
 	// Parse selected tools flag
@@ -186,7 +195,8 @@ func initSharedContext(
 	}
 
 	// Create planner
-	sc.planner = tooling.NewPlanner(sc.rootPath, sc.cwdPath, nil, sc.cfg.Tools, sc.cfg.ProjectTypes, sc.cfg.IgnoreRules)
+	planner := tooling.NewPlanner(sc.rootPath, sc.cwdPath, nil, sc.cfg.Tools, sc.cfg.ProjectTypes, sc.cfg.IgnoreRules)
+	sc.planner = planner
 
 	// Create cache
 	cacheDir := env.GetCachePath()
@@ -200,6 +210,10 @@ func initSharedContext(
 	rm := runtimemanager.New(sc.cfg.Runtimes)
 	binMgr := binmanager.New(sc.cfg.Apps, sc.cfg.Bundles, rm)
 	sc.binMgr = binMgr
+	// Let the planner mark tools whose binary is unavailable for this host as
+	// skipped (reported, not fatal) rather than letting EnsureTools hard-fail —
+	// and so they appear in --explain, which never reaches the install step.
+	planner.SetPlatformChecker(binMgr)
 	sc.executor = tooling.NewExecutor(sc.rootPath, false, true, binMgr, sc.projectCache)
 
 	// All configured tools are known here, so the result column width is fixed
@@ -229,32 +243,30 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 
 	// Get detected project types from planner cache
 	projectTypes := sc.planner.GetDetectedProjectTypes()
-	if len(projectTypes) == 0 {
-		if sc.explainLevel == "json" {
-			// In JSON mode, output empty plan even when no project types detected
-			output := formatExecutionPlan(plan, sc.rootPath, sc.cwdPath, operation, sc.explainLevel)
-			fmt.Println(output)
-		} else {
-			fmt.Println("⚠️  No project types detected")
-		}
-		return nil
-	}
 
-	if len(plan.Groups) == 0 {
-		if sc.explainLevel == "json" {
-			// In JSON mode, output empty plan even when no applicable tools
-			output := formatExecutionPlan(plan, sc.rootPath, sc.cwdPath, operation, sc.explainLevel)
-			fmt.Println(output)
-		} else {
-			fmt.Println("ℹ️  No applicable tools found")
-		}
-		return nil
-	}
-
-	// Show plan and exit if explain mode is enabled
+	// Explain mode (json/summary/detailed): print the formatted plan, which now
+	// lists skipped tools too, and stop. Nothing runs, so explain never records
+	// skips for --fail-on-skip.
 	if sc.explainLevel != "" {
 		output := formatExecutionPlan(plan, sc.rootPath, sc.cwdPath, operation, sc.explainLevel)
 		fmt.Println(output)
+		return nil
+	}
+
+	// Nothing to run (no project types, or no applicable tasks). Still surface
+	// any explicit skips — recording unsupported-platform ones for --fail-on-skip
+	// — instead of leaving them invisible.
+	if len(projectTypes) == 0 || len(plan.Groups) == 0 {
+		if len(plan.Skipped) > 0 {
+			renderSkipOnlyBlock(string(operation), plan.Skipped, sc.nameWidth)
+			sc.recordSkips(plan.Skipped)
+			return nil
+		}
+		if len(projectTypes) == 0 {
+			fmt.Println("⚠️  No project types detected")
+		} else {
+			fmt.Println("ℹ️  No applicable tools found")
+		}
 		return nil
 	}
 
@@ -435,19 +447,54 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		}
 	}
 
-	// Close the operation block: per-tool body lines + summary footer (the
-	// footer doubles as the "complete" marker, so no separate line is printed).
-	if len(results) > 0 {
-		toolGroups := groupResultsByTool(results)
+	// Close the operation block: per-tool body lines, skipped-tool lines, then the
+	// summary footer (the footer doubles as the "complete" marker, so no separate
+	// line is printed).
+	toolGroups := groupResultsByTool(results)
+	if len(toolGroups) > 0 || len(plan.Skipped) > 0 {
 		printGroupedResults(toolGroups, sc.nameWidth, env.IsTimingsEnabled())
-		printOperationFooter(toolGroups, totalWallClockTime, cacheHits, cacheMisses)
+		printSkippedTools(plan.Skipped, sc.nameWidth)
+		printOperationFooter(toolGroups, totalWallClockTime, cacheHits, cacheMisses, len(plan.Skipped))
 	}
+	sc.recordSkips(plan.Skipped)
 
 	if hasFailures {
 		return errors.New("operation failed")
 	}
 
 	return nil
+}
+
+// recordSkips accumulates unsupported-platform skips (deduped by tool name) so
+// --fail-on-skip can fail the run afterwards. Intentional config skips are not
+// recorded — they never fail the run.
+func (sc *sharedContext) recordSkips(skipped []tooling.SkippedTool) {
+	for _, s := range skipped {
+		if s.Reason == tooling.SkipReasonUnsupportedPlatform {
+			sc.platformSkipped[s.ToolName] = struct{}{}
+		}
+	}
+}
+
+// printSkippedTools renders faint "┃ ⊘ name   skipped (reason)" body lines,
+// aligned to nameWidth like the per-tool result rows. No-op for an empty list.
+func printSkippedTools(skipped []tooling.SkippedTool, nameWidth int) {
+	for _, s := range skipped {
+		pad := max(nameWidth-utf8.RuneCountInString(s.ToolName), 0) + 2
+		line := clr.Faint("┃ ⊘ ") + clr.Faint(s.ToolName) +
+			strings.Repeat(" ", pad) + clr.Faint("skipped ("+s.ReasonText()+")")
+		fmt.Println(line)
+	}
+}
+
+// renderSkipOnlyBlock prints a minimal operation block containing only skipped
+// tools, used when planning produced skips but nothing runnable.
+func renderSkipOnlyBlock(operation string, skipped []tooling.SkippedTool, nameWidth int) {
+	fmt.Println()
+	fmt.Println(phaseTop(operation))
+	fmt.Println(clr.Faint("┃"))
+	printSkippedTools(skipped, nameWidth)
+	printOperationFooter(nil, 0, 0, 0, len(skipped))
 }
 
 // shortProjectType trims the redundant "-package"/"-project" suffix from a
@@ -468,9 +515,10 @@ func RunSequential(
 	explainMode string,
 	fileScoped bool,
 	selectedToolsFlag string,
+	failOnSkip bool,
 	loadConfigFunc func() (*config.Config, string, error),
 ) error {
-	return runSequential(operations, args, explainMode, fileScoped, selectedToolsFlag, loadConfigFunc, true)
+	return runSequential(operations, args, explainMode, fileScoped, selectedToolsFlag, loadConfigFunc, true, failOnSkip)
 }
 
 // RunContinuation runs a single operation as a continuation of another command's
@@ -484,7 +532,8 @@ func RunContinuation(
 	selectedToolsFlag string,
 	loadConfigFunc func() (*config.Config, string, error),
 ) error {
-	return runSequential([]config.OperationType{operation}, args, explainMode, fileScoped, selectedToolsFlag, loadConfigFunc, false)
+	// Continuations (e.g. setup's post-fix) never harden on skips.
+	return runSequential([]config.OperationType{operation}, args, explainMode, fileScoped, selectedToolsFlag, loadConfigFunc, false, false)
 }
 
 func runSequential(
@@ -495,8 +544,9 @@ func runSequential(
 	selectedToolsFlag string,
 	loadConfigFunc func() (*config.Config, string, error),
 	showBanner bool,
+	failOnSkip bool,
 ) error {
-	sc, err := initSharedContext(args, explainMode, fileScoped, selectedToolsFlag, loadConfigFunc)
+	sc, err := initSharedContext(args, explainMode, fileScoped, selectedToolsFlag, failOnSkip, loadConfigFunc)
 	if err != nil {
 		return err
 	}
@@ -533,7 +583,29 @@ func runSequential(
 		}
 	}
 
+	// --fail-on-skip: only unsupported-platform skips are treated as failures;
+	// intentional config skips (skip: true) never fail the run.
+	if err := sc.skipFailure(); err != nil {
+		return err
+	}
+
 	return nil
+}
+
+// skipFailure returns a non-nil error when --fail-on-skip is set and at least one
+// tool was skipped because its binary is unavailable for this host. Intentional
+// config skips are never recorded, so they never trigger this.
+func (sc *sharedContext) skipFailure() error {
+	if !sc.failOnSkip || len(sc.platformSkipped) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(sc.platformSkipped))
+	for n := range sc.platformSkipped {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	return fmt.Errorf("--fail-on-skip: %d tool(s) have no binary for this host: %s",
+		len(names), strings.Join(names, ", "))
 }
 
 // Run executes a single tool operation (fix, lint, etc.)
@@ -543,11 +615,12 @@ func Run(
 	explainMode string,
 	fileScoped bool,
 	selectedToolsFlag string,
+	failOnSkip bool,
 	loadConfigFunc func() (*config.Config, string, error),
 ) error {
 	return RunSequential(
 		[]config.OperationType{operation},
-		args, explainMode, fileScoped, selectedToolsFlag, loadConfigFunc,
+		args, explainMode, fileScoped, selectedToolsFlag, failOnSkip, loadConfigFunc,
 	)
 }
 
@@ -792,8 +865,8 @@ func phaseTop(operation string) string {
 }
 
 // printOperationFooter renders the closing bracket rule that summarizes the
-// operation (tool/run counts, wall-clock time, failures and cache hit rate).
-func printOperationFooter(toolGroups []toolExecutionGroup, wallClockTime int64, cacheHits, cacheMisses int) {
+// operation (tool/run counts, wall-clock time, failures, skips and cache hit rate).
+func printOperationFooter(toolGroups []toolExecutionGroup, wallClockTime int64, cacheHits, cacheMisses, skipped int) {
 	totalTools := len(toolGroups)
 	totalRuns := 0
 	failedTools := 0
@@ -810,6 +883,11 @@ func printOperationFooter(toolGroups []toolExecutionGroup, wallClockTime int64, 
 	if failedTools > 0 {
 		plain += fmt.Sprintf(" · %d failed", failedTools)
 		colored += " · " + clr.Red(fmt.Sprintf("%d failed", failedTools))
+	}
+	if skipped > 0 {
+		skipText := fmt.Sprintf(" · %d skipped", skipped)
+		plain += skipText
+		colored += clr.Faint(skipText)
 	}
 	if cacheHits+cacheMisses > 0 {
 		pct := float64(cacheHits) / float64(cacheHits+cacheMisses) * 100

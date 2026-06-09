@@ -115,11 +115,12 @@ Run fix followed by lint in a single process with shared context. If fix fails, 
 datamitsu check [files...]
 ```
 
-| Flag               | Description                                                                         |
-| ------------------ | ----------------------------------------------------------------------------------- |
-| `--explain [mode]` | Show execution plan without running. Modes: `summary` (default), `detailed`, `json` |
-| `--file-scoped`    | Only process git staged files                                                       |
-| `--tools <list>`   | Comma-separated list of tools to run                                                |
+| Flag               | Description                                                                                                                    |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| `--explain [mode]` | Show execution plan without running. Modes: `summary` (default), `detailed`, `json`                                            |
+| `--file-scoped`    | Only process git staged files                                                                                                  |
+| `--tools <list>`   | Comma-separated list of tools to run                                                                                           |
+| `--fail-on-skip`   | Exit non-zero if any tool is skipped because its binary is unavailable for this platform (see [Skipped tools](#skipped-tools)) |
 
 **Examples:**
 
@@ -135,7 +136,24 @@ datamitsu check --file-scoped
 
 # Preview what would run
 datamitsu check --explain
+
+# In CI: fail if a tool you rely on has no binary for the runner's platform
+datamitsu check --fail-on-skip
 ```
+
+:::info Skipped tools {#skipped-tools}
+A tool is reported as **skipped** (not run, not failed) for one of two reasons:
+
+- **Disabled in config** — the tool sets `skip: true` (optionally with a `skipReason`).
+- **No binary for this platform** — the tool's binary has no build for the current
+  OS/architecture/libc. This is a soft skip: the run still succeeds.
+
+Skipped tools appear as `⊘ <tool> skipped (<reason>)` lines and a `· N skipped`
+count in the summary footer, and as a `skipped` array in `--explain=json`.
+
+`--fail-on-skip` makes the run exit non-zero **only** for platform skips (a tool
+you expected to run had no binary). Intentional `skip: true` tools never fail the run.
+:::
 
 ## fix
 
@@ -145,11 +163,12 @@ Run fix operations on files.
 datamitsu fix [files...]
 ```
 
-| Flag               | Description                                                                         |
-| ------------------ | ----------------------------------------------------------------------------------- |
-| `--explain [mode]` | Show execution plan without running. Modes: `summary` (default), `detailed`, `json` |
-| `--file-scoped`    | Only process git staged files                                                       |
-| `--tools <list>`   | Comma-separated list of tools to run                                                |
+| Flag               | Description                                                                                                                    |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| `--explain [mode]` | Show execution plan without running. Modes: `summary` (default), `detailed`, `json`                                            |
+| `--file-scoped`    | Only process git staged files                                                                                                  |
+| `--tools <list>`   | Comma-separated list of tools to run                                                                                           |
+| `--fail-on-skip`   | Exit non-zero if any tool is skipped because its binary is unavailable for this platform (see [Skipped tools](#skipped-tools)) |
 
 **Examples:**
 
@@ -172,11 +191,12 @@ Run lint operations on files.
 datamitsu lint [files...]
 ```
 
-| Flag               | Description                                                                         |
-| ------------------ | ----------------------------------------------------------------------------------- |
-| `--explain [mode]` | Show execution plan without running. Modes: `summary` (default), `detailed`, `json` |
-| `--file-scoped`    | Only process git staged files                                                       |
-| `--tools <list>`   | Comma-separated list of tools to run                                                |
+| Flag               | Description                                                                                                                    |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| `--explain [mode]` | Show execution plan without running. Modes: `summary` (default), `detailed`, `json`                                            |
+| `--file-scoped`    | Only process git staged files                                                                                                  |
+| `--tools <list>`   | Comma-separated list of tools to run                                                                                           |
+| `--fail-on-skip`   | Exit non-zero if any tool is skipped because its binary is unavailable for this platform (see [Skipped tools](#skipped-tools)) |
 
 **Examples:**
 

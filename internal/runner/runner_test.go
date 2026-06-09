@@ -856,7 +856,7 @@ func TestPrintOverallSummary(t *testing.T) {
 	oldStdout := os.Stdout
 	os.Stdout = w
 
-	printOperationFooter(toolGroups, 5000, 0, 0)
+	printOperationFooter(toolGroups, 5000, 0, 0, 0)
 
 	_ = w.Close()
 	os.Stdout = oldStdout
@@ -1357,7 +1357,7 @@ func TestPrintGroupedResultsOutputOnce(t *testing.T) {
 func TestRunSequentialConfigLoadError(t *testing.T) {
 	err := RunSequential(
 		[]config.OperationType{config.OpFix},
-		nil, "", false, "",
+		nil, "", false, "", false,
 		func() (*config.Config, string, error) {
 			return nil, "", errors.New("config load failed")
 		},
@@ -1373,7 +1373,7 @@ func TestRunSequentialConfigLoadError(t *testing.T) {
 func TestRunSequentialInvalidExplainMode(t *testing.T) {
 	err := RunSequential(
 		[]config.OperationType{config.OpFix},
-		nil, "invalid_mode", false, "",
+		nil, "invalid_mode", false, "", false,
 		func() (*config.Config, string, error) {
 			return &config.Config{}, "", nil
 		},
@@ -1390,7 +1390,7 @@ func TestRunSequentialConfigLoadedOnce(t *testing.T) {
 	loadCount := 0
 	err := RunSequential(
 		[]config.OperationType{config.OpFix, config.OpLint},
-		nil, "", false, "",
+		nil, "", false, "", false,
 		func() (*config.Config, string, error) {
 			loadCount++
 			return &config.Config{
@@ -1410,7 +1410,7 @@ func TestRunSequentialConfigLoadedOnce(t *testing.T) {
 func TestRunDelegatesToRunSequential(t *testing.T) {
 	err := Run(
 		config.OpFix,
-		nil, "", false, "",
+		nil, "", false, "", false,
 		func() (*config.Config, string, error) {
 			return nil, "", errors.New("test error from Run")
 		},
@@ -1592,7 +1592,7 @@ func TestRunSingleOperationExplainModeSkipsEnsureTools(t *testing.T) {
 func TestRunSequentialFixThenLintOrdering(t *testing.T) {
 	err := RunSequential(
 		[]config.OperationType{config.OpFix, config.OpLint},
-		nil, "summary", false, "",
+		nil, "summary", false, "", false,
 		func() (*config.Config, string, error) {
 			return &config.Config{
 				Tools: config.MapOfTools{

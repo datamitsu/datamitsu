@@ -893,7 +893,7 @@ func TestCollectTasksPerFileWithExcludeGlobs(t *testing.T) {
 		cacheInitialized: true,
 	}
 
-	tasks := planner.collectTasks(context.Background(), config.OpFix, nil)
+	tasks, _ := planner.collectTasks(context.Background(), config.OpFix, nil)
 
 	// Only src/app.js and src/util.ts should survive after excludeGlobs filter.
 	if len(tasks) != 2 {
@@ -948,7 +948,7 @@ func TestCollectTasksRepositoryWithExcludeGlobs(t *testing.T) {
 		cacheInitialized: true,
 	}
 
-	tasks := planner.collectTasks(context.Background(), config.OpLint, nil)
+	tasks, _ := planner.collectTasks(context.Background(), config.OpLint, nil)
 
 	if len(tasks) != 1 {
 		t.Fatalf("expected 1 repository-scope task, got %d", len(tasks))
@@ -1004,7 +1004,7 @@ func TestCollectTasksPerProjectWithExcludeGlobs(t *testing.T) {
 		cacheInitialized: true,
 	}
 
-	tasks := planner.collectTasks(context.Background(), config.OpLint, nil)
+	tasks, _ := planner.collectTasks(context.Background(), config.OpLint, nil)
 
 	if len(tasks) != 2 {
 		t.Fatalf("expected 2 tasks (one per detected go project), got %d", len(tasks))
@@ -1073,7 +1073,7 @@ func TestCollectTasksNilGlobsWithExcludeGlobs(t *testing.T) {
 		cacheInitialized: true,
 	}
 
-	tasks := planner.collectTasks(context.Background(), config.OpLint, nil)
+	tasks, _ := planner.collectTasks(context.Background(), config.OpLint, nil)
 
 	if len(tasks) != 1 {
 		t.Fatalf("expected 1 task (nil globs still emits repository-scope task), got %d", len(tasks))
@@ -1147,7 +1147,7 @@ func TestCollectTasks(t *testing.T) {
 
 	planner := NewPlanner(tmpDir, tmpDir, []string{}, tools, config.MapOfProjectTypes{}, nil)
 
-	tasks := planner.collectTasks(context.Background(), config.OpLint, nil)
+	tasks, _ := planner.collectTasks(context.Background(), config.OpLint, nil)
 
 	if len(tasks) != 1 {
 		t.Errorf("len(tasks) = %d, want 1", len(tasks))
@@ -1177,7 +1177,7 @@ func TestCollectTasksRepositoryScope(t *testing.T) {
 
 	t.Run("root path", func(t *testing.T) {
 		planner := NewPlanner(tmpDir, tmpDir, []string{}, tools, config.MapOfProjectTypes{}, nil)
-		tasks := planner.collectTasks(context.Background(), config.OpLint, nil)
+		tasks, _ := planner.collectTasks(context.Background(), config.OpLint, nil)
 
 		if len(tasks) != 1 {
 			t.Errorf("len(tasks) = %d, want 1", len(tasks))
@@ -1187,7 +1187,7 @@ func TestCollectTasksRepositoryScope(t *testing.T) {
 	t.Run("subdirectory path", func(t *testing.T) {
 		// Repository-scoped tools are skipped when cwd is not the git root
 		planner := NewPlanner(tmpDir, subDir, []string{}, tools, config.MapOfProjectTypes{}, nil)
-		tasks := planner.collectTasks(context.Background(), config.OpLint, nil)
+		tasks, _ := planner.collectTasks(context.Background(), config.OpLint, nil)
 
 		if len(tasks) != 0 {
 			t.Errorf("len(tasks) = %d, want 0 (repository scope skipped when cwd != root)", len(tasks))
@@ -1235,7 +1235,7 @@ func TestCollectTasksRepositoryScopeRespectsDatamitsuignore(t *testing.T) {
 
 	t.Run("catch-all rule disables repository-scoped tool", func(t *testing.T) {
 		p := newPlanner("**/*: golangci-lint\n")
-		tasks := p.collectTasks(context.Background(), config.OpLint, nil)
+		tasks, _ := p.collectTasks(context.Background(), config.OpLint, nil)
 		if len(tasks) != 0 {
 			t.Errorf("repository-scoped tool should be disabled by '**/*: golangci-lint', got %d task(s)", len(tasks))
 		}
@@ -1243,7 +1243,7 @@ func TestCollectTasksRepositoryScopeRespectsDatamitsuignore(t *testing.T) {
 
 	t.Run("non-matching rule leaves repository-scoped tool enabled", func(t *testing.T) {
 		p := newPlanner("**/*: other-tool\n")
-		tasks := p.collectTasks(context.Background(), config.OpLint, nil)
+		tasks, _ := p.collectTasks(context.Background(), config.OpLint, nil)
 		if len(tasks) != 1 {
 			t.Fatalf("repository-scoped tool should run when no rule matches, got %d task(s)", len(tasks))
 		}
@@ -1294,7 +1294,7 @@ func TestCollectTasksPerProjectScopeRespectsDatamitsuignore(t *testing.T) {
 
 	t.Run("catch-all disables per-project tool", func(t *testing.T) {
 		p := newPlanner("**/*: prettier\n")
-		tasks := p.collectTasks(context.Background(), config.OpLint, nil)
+		tasks, _ := p.collectTasks(context.Background(), config.OpLint, nil)
 		if len(tasks) != 0 {
 			t.Errorf("per-project tool should be disabled by '**/*: prettier', got %d task(s)", len(tasks))
 		}
@@ -1302,7 +1302,7 @@ func TestCollectTasksPerProjectScopeRespectsDatamitsuignore(t *testing.T) {
 
 	t.Run("non-matching rule keeps per-project tool", func(t *testing.T) {
 		p := newPlanner("**/*: other-tool\n")
-		tasks := p.collectTasks(context.Background(), config.OpLint, nil)
+		tasks, _ := p.collectTasks(context.Background(), config.OpLint, nil)
 		if len(tasks) != 1 {
 			t.Fatalf("per-project tool should run when no rule matches, got %d task(s)", len(tasks))
 		}
@@ -1353,7 +1353,7 @@ func TestCollectTasksPerProjectScopeNoProjectsRespectsDatamitsuignore(t *testing
 
 	t.Run("catch-all disables tool when no projects detected", func(t *testing.T) {
 		p := newPlanner("**/*: prettier\n")
-		tasks := p.collectTasks(context.Background(), config.OpLint, nil)
+		tasks, _ := p.collectTasks(context.Background(), config.OpLint, nil)
 		if len(tasks) != 0 {
 			t.Errorf("per-project tool should be disabled by '**/*: prettier', got %d task(s)", len(tasks))
 		}
@@ -1361,7 +1361,7 @@ func TestCollectTasksPerProjectScopeNoProjectsRespectsDatamitsuignore(t *testing
 
 	t.Run("non-matching rule keeps tool when no projects detected", func(t *testing.T) {
 		p := newPlanner("**/*: other-tool\n")
-		tasks := p.collectTasks(context.Background(), config.OpLint, nil)
+		tasks, _ := p.collectTasks(context.Background(), config.OpLint, nil)
 		if len(tasks) != 1 {
 			t.Fatalf("per-project tool should run when no rule matches, got %d task(s)", len(tasks))
 		}
@@ -2268,7 +2268,7 @@ func TestCollectTasksPerProjectFromSubdirectory(t *testing.T) {
 		cacheInitialized: true,
 	}
 
-	tasks := planner.collectTasks(context.Background(), config.OpLint, nil)
+	tasks, _ := planner.collectTasks(context.Background(), config.OpLint, nil)
 
 	// Should only create tasks for /repo/services/api (inside cwd), not web or root
 	if len(tasks) != 1 {
@@ -2333,7 +2333,7 @@ func TestCollectTasksPerProjectExplicitFilesFromSubdirectory(t *testing.T) {
 		"/repo/services/shared/util.go",
 		"/repo/lib/helper.go",
 	}
-	tasks := planner.collectTasks(context.Background(), config.OpLint, explicitFiles)
+	tasks, _ := planner.collectTasks(context.Background(), config.OpLint, explicitFiles)
 
 	// Files outside cwd (/repo/lib/helper.go) should be excluded.
 	// Files inside cwd but not matching a cwd-subtree project (/repo/services/shared/util.go)
@@ -2393,7 +2393,7 @@ func TestCollectTasksPerProjectWholeProjectModeFromSubdirectory(t *testing.T) {
 		cacheInitialized: true,
 	}
 
-	tasks := planner.collectTasks(context.Background(), config.OpLint, nil)
+	tasks, _ := planner.collectTasks(context.Background(), config.OpLint, nil)
 
 	// Should only create task for api project (inside cwd)
 	if len(tasks) != 1 {
@@ -2439,7 +2439,7 @@ func TestCollectTasksPerProjectFromRootRegression(t *testing.T) {
 		cacheInitialized: true,
 	}
 
-	tasks := planner.collectTasks(context.Background(), config.OpLint, nil)
+	tasks, _ := planner.collectTasks(context.Background(), config.OpLint, nil)
 
 	// From root, should create tasks for both projects
 	if len(tasks) != 2 {
@@ -2495,7 +2495,7 @@ func TestCollectTasksPerFileFromSubdirectory(t *testing.T) {
 		cacheInitialized: true,
 	}
 
-	tasks := planner.collectTasks(context.Background(), config.OpFix, nil)
+	tasks, _ := planner.collectTasks(context.Background(), config.OpFix, nil)
 
 	// Should only create per-file tasks for files inside cwd
 	if len(tasks) != 2 {
@@ -2546,7 +2546,7 @@ func TestCollectTasksPerFileFromRootRegression(t *testing.T) {
 		cacheInitialized: true,
 	}
 
-	tasks := planner.collectTasks(context.Background(), config.OpFix, nil)
+	tasks, _ := planner.collectTasks(context.Background(), config.OpFix, nil)
 
 	// From root, should create tasks for all 4 matching files
 	if len(tasks) != 4 {

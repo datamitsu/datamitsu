@@ -13,6 +13,7 @@ var (
 	fixExplain       string
 	fixFileScoped    bool
 	fixSelectedTools string
+	fixFailOnSkip    bool
 )
 
 var fixCmd = &cobra.Command{
@@ -36,11 +37,12 @@ func init() {
 	fixCmd.Flags().Lookup("explain").NoOptDefVal = "summary"
 	fixCmd.Flags().BoolVar(&fixFileScoped, "file-scoped", false, "Only process git staged files")
 	fixCmd.Flags().StringVar(&fixSelectedTools, "tools", "", "Comma-separated list of tools to run (for debugging)")
+	fixCmd.Flags().BoolVar(&fixFailOnSkip, "fail-on-skip", false, "Exit non-zero if any tool is skipped because its binary is unavailable for this platform")
 	rootCmd.AddCommand(fixCmd)
 }
 
 func runFix(cmd *cobra.Command, args []string) error {
-	err := runner.Run(config.OpFix, args, fixExplain, fixFileScoped, fixSelectedTools, func() (*config.Config, string, error) {
+	err := runner.Run(config.OpFix, args, fixExplain, fixFileScoped, fixSelectedTools, fixFailOnSkip, func() (*config.Config, string, error) {
 		cfg, _, _, err := loadConfig()
 		return cfg, "", err
 	})

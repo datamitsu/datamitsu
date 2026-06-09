@@ -255,5 +255,6 @@ export default defineConfig((config) => ({
     "recognised",
     "chowned",
     "workdirs",
+    "shellapp",
   ],
 }));

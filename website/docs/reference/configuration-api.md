@@ -510,6 +510,8 @@ interface Tool {
   name: string;
   operations: Partial<Record<"fix" | "lint", ToolOperation>>;
   projectTypes?: string[]; // Restrict to specific project types
+  skip?: boolean; // Report as skipped and never run (instead of omitting the tool)
+  skipReason?: string; // Human-readable reason shown in the skipped report
 }
 
 interface ToolOperation {
@@ -559,6 +561,35 @@ const toolsConfig = {
 | `per-file`    | Runs once per matched file          | Project root      |
 
 See [Template Placeholders](./template-placeholders.md) for the `{file}`, `{files}`, `{root}`, `{cwd}`, and `{toolCache}` placeholders available in `args` (and `{root}`, `{cwd}`, `{toolCache}` in `env`). Unknown placeholders fail config loading rather than being passed through to the tool.
+
+### Skipping a tool (`skip` / `skipReason`)
+
+Set `skip: true` to keep a tool in the config but report it as **skipped** rather
+than running it. This is preferable to conditionally omitting the tool: an omitted
+tool is invisible, whereas a skipped one is shown in the run summary (`⊘ <tool>
+skipped (<reason>)`), the footer's `· N skipped` count, and the `--explain=json`
+`skipped` array. Use `skipReason` to explain why.
+
+A tool is **also** skipped automatically when its binary has no build for the
+current OS/architecture/libc — a soft skip that no longer fails the run. See
+[`--fail-on-skip`](./cli-commands.md#skipped-tools) to harden CI against that case.
+
+```javascript
+// BAD: conditionally omitting the tool — datamitsu never reports it was left out
+const toolsConfig = {
+  ...(facts().env.CI && { trufflehog: { name: "trufflehog", operations: { lint } } }),
+};
+
+// GOOD: keep the tool, mark it skipped with a reason
+const toolsConfig = {
+  trufflehog: {
+    name: "trufflehog",
+    skip: !facts().env.CI,
+    skipReason: "runs in CI only",
+    operations: { lint: { app: "trufflehog", scope: "repository" } },
+  },
+};
+```
 
 ## Project Types (`projectTypes`)
 

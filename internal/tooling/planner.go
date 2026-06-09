@@ -34,6 +34,17 @@ func (e *ToolNotFoundError) Error() string {
 	)
 }
 
+// PlatformChecker reports whether an app's backing binary is available for the
+// current host. It lets the planner mark platform-unsupported tools as skipped
+// at plan time (so they surface in --explain and never reach install), without
+// the planner resolving binaries itself. Satisfied by *binmanager.BinManager.
+type PlatformChecker interface {
+	// BinaryAvailable returns (true, "") when the app can run on this host, and
+	// (false, detail) when its binary has no build for the current os/arch/libc
+	// (detail is the host string). Non-binary apps always return available.
+	BinaryAvailable(app string) (available bool, detail string)
+}
+
 // Planner creates execution plans for tools
 type Planner struct {
 	rootPath           string
@@ -41,6 +52,11 @@ type Planner struct {
 	detectedTypes      []string // Detected project type names
 	tools              config.MapOfTools
 	projectTypesConfig config.MapOfProjectTypes // Project type definitions
+
+	// platformChecker, when set, marks tools whose binary is unavailable for the
+	// current host as skipped instead of planning them. Optional (nil disables
+	// the check), injected via SetPlatformChecker.
+	platformChecker PlatformChecker
 
 	// Extra ignore rules from config (Config.IgnoreRules)
 	extraIgnoreRules []string
@@ -75,6 +91,13 @@ func NewPlanner(
 		extraIgnoreRules:   extraIgnoreRules,
 		timings:            timing.New(),
 	}
+}
+
+// SetPlatformChecker injects the host-availability checker used to skip
+// platform-unsupported tools. Wired from the runner after the BinManager exists;
+// left nil in contexts (e.g. some tests) where the check is not needed.
+func (p *Planner) SetPlatformChecker(c PlatformChecker) {
+	p.platformChecker = c
 }
 
 // GetTimings returns the timing measurements for this planner
@@ -113,9 +136,10 @@ func (p *Planner) Plan(ctx context.Context, operation config.OperationType, file
 
 	// Collect all applicable tasks (now uses cached data)
 	var tasks []Task
+	var skipped []SkippedTool
 	func() {
 		defer p.timings.Start("Collect tasks")()
-		tasks = p.collectTasks(ctx, operation, files)
+		tasks, skipped = p.collectTasks(ctx, operation, files)
 	}()
 
 	// Filter by selectedTools if specified
@@ -129,6 +153,7 @@ func (p *Planner) Plan(ctx context.Context, operation config.OperationType, file
 				return
 			}
 			tasks = filteredTasks
+			skipped = filterSkippedBySelectedTools(skipped, selectedTools)
 		}()
 		if filterErr != nil {
 			return nil, filterErr
@@ -142,12 +167,13 @@ func (p *Planner) Plan(ctx context.Context, operation config.OperationType, file
 		groups = p.groupByPriority(tasks)
 	}()
 
-	return &ExecutionPlan{Groups: groups}, nil
+	return &ExecutionPlan{Groups: groups, Skipped: skipped}, nil
 }
 
-// collectTasks collects all tasks for the given operation
-func (p *Planner) collectTasks(ctx context.Context, operation config.OperationType, files []string) []Task {
+// collectTasks collects all tasks (and explicitly-skipped tools) for the operation.
+func (p *Planner) collectTasks(ctx context.Context, operation config.OperationType, files []string) ([]Task, []SkippedTool) {
 	var tasks []Task
+	var skipped []SkippedTool
 
 	toolNames := make([]string, 0, len(p.tools))
 	for name := range p.tools {
@@ -166,6 +192,33 @@ func (p *Planner) collectTasks(ctx context.Context, operation config.OperationTy
 		opConfig, hasOp := tool.Operations[operation]
 		if !hasOp {
 			continue
+		}
+
+		// Explicit config skip: report it, never plan it. Checked after
+		// applicability/operation so a skip:true tool irrelevant to this repo or
+		// operation does not add noise.
+		if tool.Skip {
+			skipped = append(skipped, SkippedTool{
+				ToolName:  toolName,
+				Operation: operation,
+				Reason:    SkipReasonConfig,
+				Detail:    tool.SkipReason,
+			})
+			continue
+		}
+
+		// Platform skip: the backing binary has no build for this host. Mark it
+		// skipped instead of letting install hard-fail later.
+		if p.platformChecker != nil && opConfig.App != "" {
+			if ok, detail := p.platformChecker.BinaryAvailable(opConfig.App); !ok {
+				skipped = append(skipped, SkippedTool{
+					ToolName:  toolName,
+					Operation: operation,
+					Reason:    SkipReasonUnsupportedPlatform,
+					Detail:    detail,
+				})
+				continue
+			}
 		}
 
 		task := Task{
@@ -264,7 +317,23 @@ func (p *Planner) collectTasks(ctx context.Context, operation config.OperationTy
 		}
 	}
 
-	return tasks
+	return tasks, skipped
+}
+
+// filterSkippedBySelectedTools keeps only skipped entries whose tool is in the
+// --tools selection, mirroring filterTasksBySelectedTools for the skip list.
+func filterSkippedBySelectedTools(skipped []SkippedTool, selectedTools []string) []SkippedTool {
+	selected := make(map[string]bool, len(selectedTools))
+	for _, name := range selectedTools {
+		selected[name] = true
+	}
+	filtered := make([]SkippedTool, 0, len(skipped))
+	for _, s := range skipped {
+		if selected[s.ToolName] {
+			filtered = append(filtered, s)
+		}
+	}
+	return filtered
 }
 
 // isUnderCwd reports whether path is inside (or equal to) p.cwdPath.
