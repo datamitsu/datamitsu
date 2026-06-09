@@ -346,6 +346,16 @@ func extractTar(tarPath string, binaryPath *string, destDir string) (string, err
 	return extractFromTar(tar.NewReader(file), *binaryPath, "tar", tarPath, destDir)
 }
 
+// isRegularTarEntry reports whether a tar entry holds extractable file content.
+// Besides TypeReg it accepts TypeGNUSparse: archive/tar transparently expands
+// sparse entries on read, so they yield the full file like a regular one. Some
+// releases pack their binary as a sparse entry (e.g. tombi's aarch64 build),
+// which would otherwise be silently skipped and reported "not found in archive".
+// (TypeRegA, the old NUL flag, is normalized to TypeReg by archive/tar on read.)
+func isRegularTarEntry(t byte) bool {
+	return t == tar.TypeReg || t == tar.TypeGNUSparse
+}
+
 func extractFromTar(tarReader *tar.Reader, targetPath, archiveType, archivePath, destDir string) (string, error) {
 	bestRank := matchNone
 	bestPath := ""
@@ -361,7 +371,7 @@ func extractFromTar(tarReader *tar.Reader, targetPath, archiveType, archivePath,
 			return "", fmt.Errorf("failed to read tar header: %w", err)
 		}
 
-		if header.Typeflag != tar.TypeReg {
+		if !isRegularTarEntry(header.Typeflag) {
 			continue
 		}
 
@@ -750,7 +760,7 @@ func extractTarToDir(tarReader *tar.Reader, destDir string) (string, error) {
 				return "", fmt.Errorf("failed to create directory %q: %w", header.Name, err)
 			}
 
-		case tar.TypeReg:
+		case tar.TypeReg, tar.TypeGNUSparse:
 			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 				_ = os.RemoveAll(tmpDir)
 				return "", fmt.Errorf("failed to create parent directory for %q: %w", header.Name, err)
@@ -910,7 +920,7 @@ func extractArchiveToPath(destPath string, tarData []byte, archivePath string, f
 				return "", fmt.Errorf("failed to create directory %q: %w", header.Name, err)
 			}
 
-		case tar.TypeReg:
+		case tar.TypeReg, tar.TypeGNUSparse:
 			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 				return "", fmt.Errorf("failed to create parent directory for %q: %w", header.Name, err)
 			}
