@@ -1,9 +1,23 @@
 package cmd
 
 import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/env"
+
+	godigest "github.com/opencontainers/go-digest"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
 func TestStorePathPrintsCachePath(t *testing.T) {
@@ -153,5 +167,202 @@ func TestStoreCommandsRegistered(t *testing.T) {
 	}
 	if !foundStore {
 		t.Error("rootCmd missing 'store' command")
+	}
+}
+
+const storeTestDigest = "sha256:abababababababababababababababababababababababababababababababab"
+
+func TestResolveSeedRef(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("config declaration is used without arguments", func(t *testing.T) {
+		cfg := &config.Config{OCI: &config.OCIRef{Ref: "ghcr.io/owner/repo", Digest: storeTestDigest}}
+		ref, err := resolveSeedRef(ctx, cfg, nil)
+		if err != nil {
+			t.Fatalf("resolveSeedRef: %v", err)
+		}
+		if ref != cfg.OCI {
+			t.Errorf("ref = %+v, want the config declaration", ref)
+		}
+	})
+
+	t.Run("no arguments and no declaration is an error", func(t *testing.T) {
+		_, err := resolveSeedRef(ctx, &config.Config{}, nil)
+		if err == nil || !strings.Contains(err.Error(), "no oci bundle declared") {
+			t.Errorf("err = %v, want a no-declaration error", err)
+		}
+	})
+
+	t.Run("digest-pinned argument overrides the config", func(t *testing.T) {
+		cfg := &config.Config{OCI: &config.OCIRef{Ref: "ghcr.io/owner/other", Digest: storeTestDigest}}
+		ref, err := resolveSeedRef(ctx, cfg, []string{"ghcr.io/owner/repo@" + storeTestDigest})
+		if err != nil {
+			t.Fatalf("resolveSeedRef: %v", err)
+		}
+		if ref.Ref != "ghcr.io/owner/repo" || ref.Digest != storeTestDigest {
+			t.Errorf("ref = %+v, want the explicit argument", ref)
+		}
+	})
+
+	t.Run("tag reference without --resolve-tag is refused", func(t *testing.T) {
+		_, err := resolveSeedRef(ctx, &config.Config{}, []string{"ghcr.io/owner/repo:latest"})
+		if err == nil || !strings.Contains(err.Error(), "--resolve-tag") {
+			t.Errorf("err = %v, want a pin-the-digest refusal", err)
+		}
+	})
+
+	t.Run("bare reference without tag or digest is refused", func(t *testing.T) {
+		_, err := resolveSeedRef(ctx, &config.Config{}, []string{"ghcr.io/owner/repo"})
+		if err == nil {
+			t.Error("expected an error for an unpinned reference")
+		}
+	})
+}
+
+func storeTestSHA256(data []byte) string {
+	sum := sha256.Sum256(data)
+	return "sha256:" + hex.EncodeToString(sum[:])
+}
+
+// seedStoreTestBundle prepares an isolated cache/store, a git root with a
+// config declaring the bundle, the bundle manifest pre-seeded into the
+// on-disk manifest cache (so the handlers never touch the network), and an
+// OCI layout directory holding the same content for import tests. It returns
+// the manifest digest and the store-relative subtree of the single annotated
+// layer.
+func seedStoreTestBundle(t *testing.T) (digest, subtree string) {
+	t.Helper()
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
+	root := setupGitRoot(t)
+
+	subtree = ".bin/cli-tool/0123456789abcdef0123456789abcdef"
+	payload := []byte("cli seeded payload")
+
+	var compressed bytes.Buffer
+	gz := gzip.NewWriter(&compressed)
+	tw := tar.NewWriter(gz)
+	for _, dir := range []string{"dm/", "dm/store/", "dm/store/.bin/", "dm/store/.bin/cli-tool/"} {
+		if err := tw.WriteHeader(&tar.Header{Name: dir, Typeflag: tar.TypeDir, Mode: 0o755}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := tw.WriteHeader(&tar.Header{Name: "dm/store/" + subtree, Typeflag: tar.TypeReg, Mode: 0o755, Size: int64(len(payload))}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tw.Write(payload); err != nil {
+		t.Fatal(err)
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := gz.Close(); err != nil {
+		t.Fatal(err)
+	}
+	blob := compressed.Bytes()
+
+	manifest := ocispec.Manifest{
+		MediaType:   ocispec.MediaTypeImageManifest,
+		Annotations: map[string]string{"com.datamitsu.store-root": "/dm/store"},
+		Layers: []ocispec.Descriptor{{
+			MediaType: "application/vnd.oci.image.layer.v1.tar+gzip",
+			Digest:    godigest.Digest(storeTestSHA256(blob)),
+			Size:      int64(len(blob)),
+			Annotations: map[string]string{
+				"com.datamitsu.subtree": subtree,
+				"com.datamitsu.kind":    "binary",
+				"com.datamitsu.app":     "cli-tool",
+			},
+		}},
+	}
+	raw, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest = storeTestSHA256(raw)
+
+	// Pre-seed the on-disk manifest cache (content-addressed, verified on read).
+	cachePath := filepath.Join(env.GetCachePath(), "oci", "manifests", strings.ReplaceAll(digest, ":", "-")+".json")
+	if err := os.MkdirAll(filepath.Dir(cachePath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cachePath, raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Stage the same content as an OCI image layout for import tests.
+	blobDir := filepath.Join(root, "layout", "blobs", "sha256")
+	if err := os.MkdirAll(blobDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(blobDir, strings.TrimPrefix(storeTestSHA256(blob), "sha256:")), blob, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(blobDir, strings.TrimPrefix(digest, "sha256:")), raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	writeFile(t, filepath.Join(root, "datamitsu.config.ts"), `
+function getMinVersion() { return "0.0.0"; }
+function getConfig(input) {
+  return { ...input, oci: { ref: "registry.invalid/owner/repo", digest: "`+digest+`" } };
+}
+`)
+	return digest, subtree
+}
+
+func TestRunStoreSeed_WarmStoreFullPullWritesMarker(t *testing.T) {
+	digest, subtree := seedStoreTestBundle(t)
+
+	// Pre-place the subtree: the only layer is skipped, so the full pull
+	// completes without any blob download and writes the marker.
+	placed := filepath.Join(env.GetStorePath(), filepath.FromSlash(subtree))
+	if err := os.MkdirAll(filepath.Dir(placed), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(placed, []byte("already here"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := runStoreSeed(context.Background(), nil); err != nil {
+		t.Fatalf("runStoreSeed: %v", err)
+	}
+
+	marker := filepath.Join(env.GetStorePath(), ".oci-seeded", strings.ReplaceAll(digest, ":", "-"))
+	if _, err := os.Stat(marker); err != nil {
+		t.Errorf("full pull did not write the seed marker: %v", err)
+	}
+}
+
+func TestRunStoreImport_LayoutEndToEnd(t *testing.T) {
+	_, subtree := seedStoreTestBundle(t)
+	root, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := runStoreImport(context.Background(), filepath.Join(root, "layout")); err != nil {
+		t.Fatalf("runStoreImport: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(env.GetStorePath(), filepath.FromSlash(subtree)))
+	if err != nil {
+		t.Fatalf("imported binary missing: %v", err)
+	}
+	if string(data) != "cli seeded payload" {
+		t.Errorf("imported content = %q", data)
+	}
+}
+
+func TestRunStoreStatus_TextAndJSON(t *testing.T) {
+	_, _ = seedStoreTestBundle(t)
+
+	if err := runStoreStatus(context.Background()); err != nil {
+		t.Fatalf("runStoreStatus (text): %v", err)
+	}
+
+	storeStatusJSON = true
+	t.Cleanup(func() { storeStatusJSON = false })
+	if err := runStoreStatus(context.Background()); err != nil {
+		t.Fatalf("runStoreStatus (json): %v", err)
 	}
 }

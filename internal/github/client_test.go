@@ -803,3 +803,20 @@ type genericError struct{}
 func (e *genericError) Error() string {
 	return "generic error"
 }
+
+func TestGitHubClientRefusesOffline(t *testing.T) {
+	t.Setenv("DATAMITSU_OFFLINE", "1")
+	client := NewClient()
+
+	if _, err := client.GetRepository(context.Background(), "owner", "repo"); err == nil {
+		t.Fatal("GetRepository: expected offline refusal, got nil")
+	} else if !strings.Contains(err.Error(), "DATAMITSU_OFFLINE") {
+		t.Errorf("GetRepository error %q should mention DATAMITSU_OFFLINE", err)
+	}
+
+	if _, err := client.GetLatestRelease(context.Background(), "owner", "repo"); err == nil {
+		t.Fatal("GetLatestRelease: expected offline refusal, got nil")
+	} else if !strings.Contains(err.Error(), "DATAMITSU_OFFLINE") {
+		t.Errorf("GetLatestRelease error %q should mention DATAMITSU_OFFLINE", err)
+	}
+}

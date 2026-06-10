@@ -22,6 +22,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/syslist"
 	"github.com/datamitsu/datamitsu/internal/target"
 
+	"github.com/klauspost/compress/zstd"
 	godigest "github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
@@ -1119,5 +1120,161 @@ func TestRegistrySourceManifestDiskCache(t *testing.T) {
 	}
 	if _, err := src.manifest(context.Background(), digest); err == nil {
 		t.Error("corrupted cache entry must not be served")
+	}
+}
+
+// buildLayerZstd produces a zstd-compressed tar layer from entries.
+func buildLayerZstd(t *testing.T, entries []tarEntry) []byte {
+	t.Helper()
+	var tarBuf bytes.Buffer
+	tw := tar.NewWriter(&tarBuf)
+	for _, e := range entries {
+		hdr := &tar.Header{
+			Name: e.name, Typeflag: e.typeflag, Mode: e.mode,
+			Linkname: e.linkname, Size: int64(len(e.content)),
+		}
+		if hdr.Mode == 0 {
+			hdr.Mode = 0o644
+		}
+		if err := tw.WriteHeader(hdr); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := tw.Write(e.content); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	zw, err := zstd.NewWriter(&out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := zw.Write(tarBuf.Bytes()); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return out.Bytes()
+}
+
+func TestSeed_ZstdLayer(t *testing.T) {
+	storeRoot := testStore(t)
+	cfg := &config.Config{}
+
+	subtree := ".bin/zstd-tool/0123456789abcdef0123456789abcdef"
+	prefix := strings.TrimPrefix(testBuilderRoot, "/")
+	payload := []byte("zstd compressed payload")
+	blob := buildLayerZstd(t, []tarEntry{
+		dirEntry(prefix + "/"),
+		dirEntry(prefix + "/.bin/"),
+		dirEntry(prefix + "/.bin/zstd-tool/"),
+		fileEntry(prefix+"/"+subtree, payload),
+	})
+
+	src := newFakeSource()
+	dgst := sha256DigestOf(blob)
+	src.blobs[dgst] = blob
+	desc := ocispec.Descriptor{
+		MediaType:   mediaTypeOCILayerZstd,
+		Digest:      godigest.Digest(dgst),
+		Size:        int64(len(blob)),
+		Annotations: map[string]string{AnnotationSubtree: subtree},
+	}
+	digest := src.addManifest(t, []ocispec.Descriptor{desc}, nil)
+
+	if err := seedFrom(context.Background(), cfg, src, "test/bundle", digest, nil, Options{}); err != nil {
+		t.Fatalf("seedFrom: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(storeRoot, filepath.FromSlash(subtree)))
+	if err != nil {
+		t.Fatalf("zstd-seeded file missing: %v", err)
+	}
+	if string(data) != string(payload) {
+		t.Errorf("content = %q, want %q", data, payload)
+	}
+}
+
+func TestSeed_WhiteoutEntryIsFatal(t *testing.T) {
+	testStore(t)
+	cfg := &config.Config{}
+
+	subtree := ".bin/wiped/0123456789abcdef0123456789abcdef"
+	prefix := strings.TrimPrefix(testBuilderRoot, "/") + "/" + subtree
+	layer := subtreeLayer(t, subtree, []tarEntry{
+		fileEntry(prefix+"/.wh.deleted", []byte{}),
+	})
+	src := newFakeSource()
+	digest := src.addManifest(t, []ocispec.Descriptor{src.addLayer(layer, subtree)}, nil)
+
+	err := seedFrom(context.Background(), cfg, src, "test/bundle", digest, nil, Options{})
+	if err == nil || !strings.Contains(err.Error(), "whiteout") {
+		t.Fatalf("expected whiteout rejection, got %v", err)
+	}
+}
+
+func TestSeed_UnsupportedEntryTypeIsFatal(t *testing.T) {
+	testStore(t)
+	cfg := &config.Config{}
+
+	subtree := ".bin/fifo/0123456789abcdef0123456789abcdef"
+	prefix := strings.TrimPrefix(testBuilderRoot, "/") + "/" + subtree
+	layer := subtreeLayer(t, subtree, []tarEntry{
+		{name: prefix + "/pipe", typeflag: tar.TypeFifo, mode: 0o644},
+	})
+	src := newFakeSource()
+	digest := src.addManifest(t, []ocispec.Descriptor{src.addLayer(layer, subtree)}, nil)
+
+	err := seedFrom(context.Background(), cfg, src, "test/bundle", digest, nil, Options{})
+	if err == nil || !strings.Contains(err.Error(), "unsupported tar entry type") {
+		t.Fatalf("expected unsupported-type rejection, got %v", err)
+	}
+}
+
+func TestSeed_LayerWithoutSubtreeEntriesIsFatal(t *testing.T) {
+	testStore(t)
+	cfg := &config.Config{}
+
+	subtree := ".bin/empty/0123456789abcdef0123456789abcdef"
+	// Only structural parents, no actual subtree content.
+	layer := buildLayer(t, []tarEntry{dirEntry("dm/"), dirEntry("dm/store/"), dirEntry("dm/store/.bin/")})
+	src := newFakeSource()
+	digest := src.addManifest(t, []ocispec.Descriptor{src.addLayer(layer, subtree)}, nil)
+
+	err := seedFrom(context.Background(), cfg, src, "test/bundle", digest, nil, Options{})
+	if err == nil || !strings.Contains(err.Error(), "contains no entries") {
+		t.Fatalf("expected empty-subtree rejection, got %v", err)
+	}
+}
+
+func TestSeed_RelativeBuilderStoreRootIsFatal(t *testing.T) {
+	testStore(t)
+	cfg := &config.Config{}
+
+	subtree := ".bin/relative-root/0123456789abcdef0123456789abcdef"
+	layer := subtreeLayer(t, subtree, []tarEntry{
+		fileEntry(strings.TrimPrefix(testBuilderRoot, "/")+"/"+subtree, []byte("x")),
+	})
+	src := newFakeSource()
+	digest := src.addManifest(t, []ocispec.Descriptor{src.addLayer(layer, subtree)},
+		map[string]string{AnnotationStoreRoot: "dm/store"})
+
+	err := seedFrom(context.Background(), cfg, src, "test/bundle", digest, nil, Options{})
+	if err == nil || !IsFatalSeedError(err) {
+		t.Fatalf("expected fatal invalid store-root error, got %v", err)
+	}
+}
+
+func TestSeedBundle_MalformedRefIsRejected(t *testing.T) {
+	testStore(t)
+	for _, ref := range []*config.OCIRef{
+		{Ref: "ghcr.io/owner/repo", Digest: "sha256:short"},
+		{Ref: "owner-only", Digest: "sha256:" + strings.Repeat("ab", 32)},
+	} {
+		if err := SeedBundle(context.Background(), &config.Config{}, ref, Options{}); err == nil {
+			t.Errorf("SeedBundle(%+v) = nil, want validation error", ref)
+		}
 	}
 }
