@@ -901,12 +901,16 @@ func TestResolveNodeAppEnvPath_CacheKeyUnchanged(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Old computation: merge folded into the hash by filesWithMergedWorkspaceYAML.
-			oldFilesForHash, err := filesWithMergedWorkspaceYAML(tc.files)
+			// The cache key folds the storeDir-FREE hash form of the merged
+			// workspace (see buildPNPMWorkspaceHashForm): the storeDir pin is an
+			// absolute path under the store root, and hashing it would make node
+			// app paths root-dependent, breaking OCI bundle relocatability.
+			hashFormYAML, err := buildPNPMWorkspaceHashForm(tc.files)
 			if err != nil {
-				t.Fatalf("filesWithMergedWorkspaceYAML() error = %v", err)
+				t.Fatalf("buildPNPMWorkspaceHashForm() error = %v", err)
 			}
-			wantPath, err := rm.GetAppPath("eslint", config.RuntimeKindNode, appConfig.Version, appConfig.Dependencies, lockFileHash(appConfig.LockFile), oldFilesForHash, nil, "node", NodeAppPathExtra{PackageName: appConfig.PackageName, BinPath: appConfig.BinPath})
+			filesForHash := filesWithWorkspaceYAML(tc.files, hashFormYAML)
+			wantPath, err := rm.GetAppPath("eslint", config.RuntimeKindNode, appConfig.Version, appConfig.Dependencies, lockFileHash(appConfig.LockFile), filesForHash, nil, "node", NodeAppPathExtra{PackageName: appConfig.PackageName, BinPath: appConfig.BinPath})
 			if err != nil {
 				t.Fatalf("GetAppPath() error = %v", err)
 			}
@@ -920,5 +924,34 @@ func TestResolveNodeAppEnvPath_CacheKeyUnchanged(t *testing.T) {
 				t.Errorf("cache key changed: resolveNodeAppEnvPath = %q, want %q", gotPath, wantPath)
 			}
 		})
+	}
+}
+
+// TestResolveNodeAppEnvPath_RelocatableAcrossStoreRoots pins the OCI bundle
+// contract: the hash segment of a node app's store path must not depend on
+// the store root, or a bundle layer hashed under the builder's root could
+// never match a consumer host.
+func TestResolveNodeAppEnvPath_RelocatableAcrossStoreRoots(t *testing.T) {
+	runtimes := nodeRuntimeWith(t, "https://example.com/node.tar.xz", "abc", testLibc)
+	appConfig := &binmanager.AppConfigNode{
+		PackageName: "eslint",
+		Version:     "9.0.0",
+		BinPath:     "node_modules/.bin/eslint",
+		Runtime:     "node",
+	}
+
+	pathUnder := func(root string) string {
+		t.Setenv("DATAMITSU_CACHE_DIR", root)
+		got, err := New(runtimes).resolveNodeAppEnvPath("eslint", appConfig, nil, nil)
+		if err != nil {
+			t.Fatalf("resolveNodeAppEnvPath() error = %v", err)
+		}
+		return got
+	}
+
+	first := pathUnder(t.TempDir())
+	second := pathUnder(t.TempDir())
+	if filepath.Base(first) != filepath.Base(second) {
+		t.Errorf("node app hash depends on the store root: %q vs %q", first, second)
 	}
 }

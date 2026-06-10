@@ -41,7 +41,7 @@ func subtreeRel(storeRoot, abs string) (string, error) {
 
 // expectedSubtrees computes the store-relative subtrees the given tools (and
 // their transitive store dependencies: the runtime of a runtime app, the
-// shared CPython for uv, the pnpm runtime for node) are expected to occupy.
+// shared CPython for uv) are expected to occupy.
 // neededRuntimes adds standalone runtime targets (install --runtime). The map
 // value is a human-readable owner label for diagnostics. Tools whose path
 // cannot be computed (unknown name, shell app, platform-unavailable binary)
@@ -72,9 +72,6 @@ func expectedSubtrees(cfg *config.Config, storeRoot string, needed, neededRuntim
 				addPath(runtimePath, "runtime "+runtimeName)
 			}
 		}
-		if rc.Kind == config.RuntimeKindNode && rc.Node != nil && rc.Node.PNPMVersion != "" && rc.Node.PNPMHash != "" {
-			expected[filepath.ToSlash(filepath.Join(".runtimes", "pnpm", rc.Node.PNPMVersion, rc.Node.PNPMHash))] = "pnpm runtime"
-		}
 	}
 
 	for _, runtimeName := range neededRuntimes {
@@ -100,7 +97,7 @@ func expectedSubtrees(cfg *config.Config, storeRoot string, needed, neededRuntim
 			continue
 		}
 
-		runtimeName, rc, err := mgrs.rm.ResolveRuntime(runtimeRef, kind)
+		runtimeName, _, err := mgrs.rm.ResolveRuntime(runtimeRef, kind)
 		if err != nil {
 			log.Debug("cannot resolve runtime for needed tool",
 				zap.String("app", name), zap.Error(err))
@@ -118,14 +115,14 @@ func expectedSubtrees(cfg *config.Config, storeRoot string, needed, neededRuntim
 			}
 		}
 
-		switch kind {
-		case config.RuntimeKindUV:
+		// pnpm deliberately does NOT join the expected set: the bundle never
+		// carries it (the final image stage copies only declared runtimes) and
+		// executing a seeded node app needs node + the app subtree, not pnpm —
+		// pnpm is an install-time tool. Listing it would defeat the zero-network
+		// fast path: one permanently-missing subtree forces a manifest fetch on
+		// every run.
+		if kind == config.RuntimeKindUV {
 			expected[uvPythonSubtree] = "shared CPython (uv)"
-		case config.RuntimeKindNode:
-			if rc.Node != nil && rc.Node.PNPMVersion != "" && rc.Node.PNPMHash != "" {
-				expected[filepath.ToSlash(filepath.Join(".runtimes", "pnpm", rc.Node.PNPMVersion, rc.Node.PNPMHash))] = "pnpm runtime"
-			}
-		case config.RuntimeKindJVM, config.RuntimeKindGo:
 		}
 	}
 

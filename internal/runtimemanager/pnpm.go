@@ -422,6 +422,32 @@ func buildPNPMWorkspaceForApp(files map[string]string) (string, error) {
 	return string(out), nil
 }
 
+// buildPNPMWorkspaceHashForm is the cache-key form of the merged workspace:
+// identical to buildPNPMWorkspaceForApp EXCEPT the storeDir pin, which is an
+// absolute path under the store root. Folding it into the app hash would make
+// node app store paths root-dependent — breaking the relocatability contract
+// the OCI bundle demand matching relies on (a layer hashed under /dm/store
+// could never match a host store). storeDir only ever changes together with
+// the store root itself, under which no cached content exists anyway, so
+// excluding it loses no invalidation.
+func buildPNPMWorkspaceHashForm(files map[string]string) (string, error) {
+	userYAML := ""
+	if files != nil {
+		userYAML = files["pnpm-workspace.yaml"]
+	}
+
+	merged, err := mergePNPMWorkspaceConfig(pnpmdefaults.Defaults(), userYAML)
+	if err != nil {
+		return "", err
+	}
+
+	out, err := yaml.Marshal(merged)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal pnpm-workspace.yaml hash form: %w", err)
+	}
+	return string(out), nil
+}
+
 func buildPackageJSON(packageName string, version string, deps map[string]string) ([]byte, error) {
 	allDeps := make(map[string]string, len(deps)+1)
 	allDeps[packageName] = version

@@ -66,31 +66,30 @@ func (rm *RuntimeManager) installNode(ctx context.Context, runtimeName string) (
 	return nodeBinPath, nil
 }
 
-// resolveNodeAppEnvPath resolves the node runtime and the app's cache path,
-// computing the merged pnpm-workspace.yaml once for the call. Hot paths that
-// already merged once per exec should call resolveNodeAppEnvPathWith with the
-// shared merged content instead.
+// resolveNodeAppEnvPath resolves the node runtime and the app's cache path.
 func (rm *RuntimeManager) resolveNodeAppEnvPath(appName string, appConfig *binmanager.AppConfigNode, files map[string]string, archives map[string]*binmanager.ArchiveSpec) (string, error) {
-	mergedWorkspaceYAML, err := buildPNPMWorkspace(files)
-	if err != nil {
-		return "", fmt.Errorf("failed to compute pnpm-workspace.yaml for %q: %w", appName, err)
-	}
-	appEnvPath, _, _, err := rm.resolveNodeAppEnvPathWith(appName, appConfig, files, archives, mergedWorkspaceYAML)
+	appEnvPath, _, _, err := rm.resolveNodeAppEnvPathWith(appName, appConfig, files, archives)
 	return appEnvPath, err
 }
 
-// resolveNodeAppEnvPathWith is resolveNodeAppEnvPath with the merged
-// pnpm-workspace.yaml supplied by the caller (computed once per exec). The merged
-// content is folded into the cache key so the path invalidates when the secure
-// defaults are tightened — exactly as recomputing it here would, but without the
-// repeated merge/marshal across the install and command-info passes.
-func (rm *RuntimeManager) resolveNodeAppEnvPathWith(appName string, appConfig *binmanager.AppConfigNode, files map[string]string, archives map[string]*binmanager.ArchiveSpec, mergedWorkspaceYAML string) (appEnvPath string, runtimeName string, rc config.RuntimeConfig, err error) {
+// resolveNodeAppEnvPathWith resolves the app env path plus the runtime it
+// runs under. The cache key folds the storeDir-FREE hash form of the merged
+// workspace (buildPNPMWorkspaceHashForm): the merged file installs write out
+// pins an absolute storeDir, and hashing that would make node app store paths
+// root-dependent — breaking the relocatability the OCI bundle demand matching
+// relies on. The hash form still invalidates the path whenever the secure
+// defaults or the user workspace override change.
+func (rm *RuntimeManager) resolveNodeAppEnvPathWith(appName string, appConfig *binmanager.AppConfigNode, files map[string]string, archives map[string]*binmanager.ArchiveSpec) (appEnvPath string, runtimeName string, rc config.RuntimeConfig, err error) {
 	runtimeName, rc, err = rm.ResolveRuntime(appConfig.Runtime, config.RuntimeKindNode)
 	if err != nil {
 		return "", "", config.RuntimeConfig{}, fmt.Errorf("failed to resolve node runtime for %q: %w", appName, err)
 	}
 
-	filesForHash := filesWithWorkspaceYAML(files, mergedWorkspaceYAML)
+	hashFormYAML, err := buildPNPMWorkspaceHashForm(files)
+	if err != nil {
+		return "", "", config.RuntimeConfig{}, fmt.Errorf("failed to compute pnpm-workspace.yaml hash form for %q: %w", appName, err)
+	}
+	filesForHash := filesWithWorkspaceYAML(files, hashFormYAML)
 
 	appEnvPath, err = rm.GetAppPath(appName, config.RuntimeKindNode, appConfig.Version, appConfig.Dependencies, lockFileHash(appConfig.LockFile), filesForHash, archives, runtimeName, NodeAppPathExtra{
 		PackageName: appConfig.PackageName,
@@ -127,7 +126,7 @@ func (rm *RuntimeManager) installNodeApp(ctx context.Context, appName string, ap
 }
 
 func (rm *RuntimeManager) installNodeAppOnce(ctx context.Context, appName string, appConfig *binmanager.AppConfigNode, customEnv map[string]string, files map[string]string, archives map[string]*binmanager.ArchiveSpec, mergedWorkspaceYAML string) error {
-	appEnvPath, runtimeName, rc, err := rm.resolveNodeAppEnvPathWith(appName, appConfig, files, archives, mergedWorkspaceYAML)
+	appEnvPath, runtimeName, rc, err := rm.resolveNodeAppEnvPathWith(appName, appConfig, files, archives)
 	if err != nil {
 		return err
 	}
@@ -275,17 +274,13 @@ func (rm *RuntimeManager) installNodeAppOnce(ctx context.Context, appName string
 // so the shim's `#!/usr/bin/env node` (or node's own resolution) finds the
 // managed node.
 func (rm *RuntimeManager) GetNodeCommandInfo(ctx context.Context, appName string, appConfig *binmanager.AppConfigNode, files map[string]string, archives map[string]*binmanager.ArchiveSpec) (*binmanager.CommandInfo, error) {
-	mergedWorkspaceYAML, err := buildPNPMWorkspace(files)
-	if err != nil {
-		return nil, fmt.Errorf("failed to compute pnpm-workspace.yaml for %q: %w", appName, err)
-	}
-	return rm.getNodeCommandInfo(ctx, appName, appConfig, files, archives, mergedWorkspaceYAML)
+	return rm.getNodeCommandInfo(ctx, appName, appConfig, files, archives)
 }
 
-// getNodeCommandInfo is GetNodeCommandInfo with the merged pnpm-workspace.yaml
-// supplied by the caller (computed once per exec).
-func (rm *RuntimeManager) getNodeCommandInfo(ctx context.Context, appName string, appConfig *binmanager.AppConfigNode, files map[string]string, archives map[string]*binmanager.ArchiveSpec, mergedWorkspaceYAML string) (*binmanager.CommandInfo, error) {
-	appEnvPath, runtimeName, rc, err := rm.resolveNodeAppEnvPathWith(appName, appConfig, files, archives, mergedWorkspaceYAML)
+// getNodeCommandInfo is GetNodeCommandInfo; path resolution hashes the
+// storeDir-free workspace form internally, so no merged YAML is threaded in.
+func (rm *RuntimeManager) getNodeCommandInfo(ctx context.Context, appName string, appConfig *binmanager.AppConfigNode, files map[string]string, archives map[string]*binmanager.ArchiveSpec) (*binmanager.CommandInfo, error) {
+	appEnvPath, runtimeName, rc, err := rm.resolveNodeAppEnvPathWith(appName, appConfig, files, archives)
 	if err != nil {
 		return nil, err
 	}

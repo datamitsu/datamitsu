@@ -303,7 +303,7 @@ func (rm *RuntimeManager) GetCommandInfo(ctx context.Context, appName string, ap
 		if err := rm.installNodeApp(ctx, appName, app.Node, app.Env, app.Files, app.Archives, mergedWorkspaceYAML); err != nil {
 			return nil, err
 		}
-		return rm.getNodeCommandInfo(ctx, appName, app.Node, app.Files, app.Archives, mergedWorkspaceYAML)
+		return rm.getNodeCommandInfo(ctx, appName, app.Node, app.Files, app.Archives)
 	case app.Jvm != nil:
 		if err := rm.InstallJVMApp(ctx, appName, app.Jvm, app.Files, app.Archives); err != nil {
 			return nil, err

@@ -285,5 +285,6 @@ export default defineConfig((config) => ({
     "spegel",
     "storepaths",
     "whiteouts",
+    "relocatability",
   ],
 }));
