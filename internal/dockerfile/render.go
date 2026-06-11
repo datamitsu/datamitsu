@@ -263,6 +263,17 @@ func writeFinalStage(b *strings.Builder, plan Plan, opts RenderOptions) {
 		writeCopy(b, stageName("app-", bs.App), opts.storeAbs(binaryAppSubtree(bs.App)))
 	}
 
+	// Arbitrary-uid runtimes: k8s and OpenShift commonly run containers under
+	// a random non-root uid whose only predictable membership is group 0. Make
+	// every store/config directory group-0 with group perms mirroring the
+	// owner's, so `datamitsu init` can write the cache and add store entries
+	// at run time. Directories only: chmod over file content would copy-up
+	// every store file into one duplicate layer and roughly double the image,
+	// while creating new files needs only writable directories. The extra
+	// trailing layer is metadata-sized and sits after the per-subtree COPY
+	// block, which the oci-map postprocess locates by probing, not position.
+	b.WriteString("USER root\n")
+	fmt.Fprintf(b, "RUN find %s %s -type d -exec chgrp 0 {} + -exec chmod g=u {} +\n", opts.StoreRoot, opts.WorkDir)
 	fmt.Fprintf(b, "USER %s\n", opts.User)
 	b.WriteString("WORKDIR /workspace\n")
 

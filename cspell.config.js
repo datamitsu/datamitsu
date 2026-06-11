@@ -287,6 +287,7 @@ export default defineConfig((config) => ({
     "whiteouts",
     "relocatability",
     "fuzztime",
+    "chgrp",
     "Mbps",
   ],
 }));

@@ -228,3 +228,24 @@ func mustContain(t *testing.T, haystack, needle string) {
 		t.Errorf("output missing expected line:\n  %s\n--- full output ---\n%s", needle, haystack)
 	}
 }
+
+// TestRender_ArbitraryUIDDirPerms pins the k8s/OpenShift arbitrary-uid fix:
+// after the store is assembled, every store/config DIRECTORY becomes group-0
+// with group perms mirroring the owner's, so a random-uid runtime (gid 0)
+// can write the cache and hydrate the store. Directories only — a file-level
+// chmod would copy-up the whole store into a duplicate layer.
+func TestRender_ArbitraryUIDDirPerms(t *testing.T) {
+	out := Render(samplePlan(), pinnedOpts())
+
+	mustContain(t, out, "RUN find /dm /opt/datamitsu-config -type d -exec chgrp 0 {} + -exec chmod g=u {} +")
+
+	// The perms layer runs as root AFTER the per-subtree COPY block and the
+	// image still drops back to the unprivileged user before ENTRYPOINT.
+	lastCopy := strings.LastIndex(out, "COPY --link --from=")
+	permsRun := strings.Index(out, "RUN find /dm")
+	userDrop := strings.LastIndex(out, "USER datamitsu")
+	if lastCopy >= permsRun || permsRun >= userDrop {
+		t.Errorf("perms RUN must sit between the COPY block and the final USER drop (copy=%d run=%d user=%d)",
+			lastCopy, permsRun, userDrop)
+	}
+}
