@@ -9,7 +9,7 @@ datamitsu can distribute configuration files from runtime-managed apps (node/UV)
 
 ## The .datamitsu/ Directory
 
-When you run `datamitsu init`, it creates a `.datamitsu/` directory at your git root containing symlinks to files inside app install directories:
+When you run `datamitsu init`, it creates a `.datamitsu/` directory at your git root containing symlinks to files inside the install directories of installed apps:
 
 ```
 project-root/
@@ -50,6 +50,15 @@ apps: {
 ```
 
 This creates symlinks at `.datamitsu/eslint-config` and `.datamitsu/eslint-plugin` pointing to the respective files in the app's install directory.
+
+### When links are created
+
+`.datamitsu/` links follow installation — a link exists only once its source app is installed:
+
+- **Referenced link-apps** — apps that a tool runs — are installed during `datamitsu init`, so their links are created then.
+- **Unreferenced link-apps** — user-invoked CLIs that declare `links` but aren't run by any tool (for example, a presentation tool like slidev) — are **not** installed at init. They install lazily the first time you run them with `datamitsu exec <app>`, and their `.datamitsu/` links are materialized at that point.
+
+This keeps `init` from eagerly downloading heavy apps you haven't used yet, while still guaranteeing that a config relying on a link finds it: every app a tool actually uses is installed (and linked) at init.
 
 ### Path Safety
 

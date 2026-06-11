@@ -82,6 +82,7 @@ Six types of applications are supported:
 - Links map link names to relative paths within the app's install directory (e.g., `"eslint-config": "dist/eslint.config.js"`)
 - Links do not require `required: true` — apps are installed during init based on tool usage scanning (smart init)
 - `CreateDatamitsuLinks(gitRoot, apps, resolver, bundles, bundleResolver, dryRun)` removes and recreates `.datamitsu/` atomically, creating symlinks from `.datamitsu/{linkName}` to `{installRoot}/{relativePath}` for both apps and bundles
+- Links follow installation: `materializeInstalledLinks()` passes only **installed** link-apps to `CreateDatamitsuLinks` (filtered by `installedAppsWithLinks()`, which probes the same `InstallRootResolver` the link pass uses, so an included app always resolves). A referenced link-app is installed and linked at init; an unreferenced link-app (e.g. slidev) is deferred and gets its links lazily when first run via `datamitsu exec`, which calls `materializeInstalledLinks()` again. See [cmd/init.go](cmd/init.go) and [cmd/exec.go](cmd/exec.go)
 - Path traversal protection via `validateLinkPath()`: rejects absolute paths, parent traversal (`..`), and symlink escapes outside install directory
 - Uses `InstallRootResolver` interface (implemented by BinManager) to get install paths without circular dependencies
 - `WriteAppFiles(installPath, files, archives)` writes archives (alphabetically) then file content to install directories before package managers run. Files take precedence over archives for overlapping paths
@@ -249,9 +250,9 @@ Tool operation arguments support template placeholders that the executor resolve
   - Uses `runner.RunSequential()` for shared initialization and context reuse
 - `init` - Downloads required binaries and runs initialization commands (see [cmd/init.go](cmd/init.go))
   - Must be run from git root (guard in `checkInitGitRoot()`)
-  - Smart init: scans tool definitions to find referenced apps, installs only those with Links defined (via `scanReferencedApps()`)
+  - Smart init: scans tool definitions to find referenced apps, installs only those with Links defined (via `scanReferencedApps()`). Unreferenced link-apps are deferred — installed lazily on first `datamitsu exec`
   - Installs bundles before creating symlinks; inline-only bundles install regardless of `--skip-download`
-  - After downloads, creates `.datamitsu/` symlinks for both apps and bundles via `managedconfig.CreateDatamitsuLinks()`
+  - After downloads, materializes `.datamitsu/` symlinks for **installed** link-apps and bundles via `materializeInstalledLinks()` → `managedconfig.CreateDatamitsuLinks()`; deferred link-apps get their links on first `datamitsu exec`
   - Supports `--all` flag to download all binaries (both required and optional)
   - Supports `--skip-download` flag to skip binary downloads
   - Supports `--fail-on-download-error` flag to stop on download failures
