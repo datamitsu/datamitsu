@@ -471,24 +471,65 @@ func TestMergeUnique(t *testing.T) {
 	})
 }
 
-func TestSmartInitExcludesUnreferencedLinkApps(t *testing.T) {
-	// A runtime app that declares Links but is referenced by no tool operation
-	// (e.g. slidev — a user-invoked CLI whose Links only materialize its bundled
-	// theme symlink) must NOT be installed at init. It installs lazily on first
-	// `dm exec`, and its link is materialized then. Only link-apps referenced by
-	// a tool are eagerly installed at init.
+func TestEagerRuntimeLinkApps(t *testing.T) {
+	apps := binmanager.MapOfApps{
+		"node-link-eager": { // unreferenced but eager (e.g. commitlint)
+			Node:  &binmanager.AppConfigNode{PackageName: "pkg1"},
+			Links: map[string]string{"config": "dist/config.js"},
+		},
+		"uv-link-eager": {
+			Uv:    &binmanager.AppConfigUV{PackageName: "pkg2"},
+			Links: map[string]string{"other": "dist/other.py"},
+		},
+		"node-link-lazy": { // deferred (e.g. slidev)
+			Node:  &binmanager.AppConfigNode{PackageName: "pkg3"},
+			Links: map[string]string{"theme": "node_modules/@scope/theme"},
+			Lazy:  true,
+		},
+		"node-no-links": {
+			Node: &binmanager.AppConfigNode{PackageName: "pkg4"},
+		},
+		"binary-with-links": {
+			Binary: &binmanager.AppConfigBinary{},
+			Links:  map[string]string{"bin": "config.js"},
+		},
+	}
+
+	result := eagerRuntimeLinkApps(apps)
+
+	expected := []string{"node-link-eager", "uv-link-eager"}
+	if len(result) != len(expected) {
+		t.Fatalf("got %v, want %v", result, expected)
+	}
+	for i, name := range result {
+		if name != expected[i] {
+			t.Errorf("result[%d] = %q, want %q", i, name, expected[i])
+		}
+	}
+}
+
+func TestSmartInitInstallSet(t *testing.T) {
+	// The init install set = link-apps referenced by a tool + every non-lazy
+	// runtime link-app. A Lazy app (slidev) is the only link-app excluded; an
+	// unreferenced non-lazy link-app (commitlint, used by the commit-msg hook)
+	// stays eager.
 	cfg := &config.Config{
 		Apps: binmanager.MapOfApps{
-			"tool-referenced": {
+			"tool-referenced": { // referenced by a tool
 				Node:  &binmanager.AppConfigNode{PackageName: "pkg-a"},
 				Links: map[string]string{"config-a": "dist/a.js"},
 			},
-			"unreferenced-link-app": {
+			"commitlint-like": { // unreferenced, but eager (hook-consumed link)
 				Node:  &binmanager.AppConfigNode{PackageName: "pkg-b"},
+				Links: map[string]string{"commitlint.config.js": "dist/b.js"},
+			},
+			"slidev-like": { // unreferenced and Lazy — the only one deferred
+				Node:  &binmanager.AppConfigNode{PackageName: "pkg-c"},
 				Links: map[string]string{"theme": "node_modules/@scope/theme"},
+				Lazy:  true,
 			},
 			"no-links": {
-				Node: &binmanager.AppConfigNode{PackageName: "pkg-c"},
+				Node: &binmanager.AppConfigNode{PackageName: "pkg-d"},
 			},
 		},
 		Tools: config.MapOfTools{
@@ -500,17 +541,20 @@ func TestSmartInitExcludesUnreferencedLinkApps(t *testing.T) {
 		},
 	}
 
+	// Mirror installRuntimeAppsWithLinks's smart-init set computation.
 	referenced := scanReferencedApps(cfg)
-	result := filterAppsForSmartInit(cfg.Apps, referenced)
+	installSet := mergeUnique(
+		filterAppsForSmartInit(cfg.Apps, referenced),
+		eagerRuntimeLinkApps(cfg.Apps),
+	)
 
-	// Only the tool-referenced link-app is installed; the unreferenced one is excluded.
-	expected := []string{"tool-referenced"}
-	if len(result) != len(expected) {
-		t.Fatalf("got %v, want %v", result, expected)
+	expected := []string{"commitlint-like", "tool-referenced"}
+	if len(installSet) != len(expected) {
+		t.Fatalf("install set = %v, want %v", installSet, expected)
 	}
-	for i, name := range result {
+	for i, name := range installSet {
 		if name != expected[i] {
-			t.Errorf("result[%d] = %q, want %q", i, name, expected[i])
+			t.Errorf("installSet[%d] = %q, want %q", i, name, expected[i])
 		}
 	}
 }

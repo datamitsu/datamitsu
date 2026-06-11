@@ -55,10 +55,10 @@ This creates symlinks at `.datamitsu/eslint-config` and `.datamitsu/eslint-plugi
 
 `.datamitsu/` links follow installation — a link exists only once its source app is installed:
 
-- **Referenced link-apps** — apps that a tool runs — are installed during `datamitsu init`, so their links are created then.
-- **Unreferenced link-apps** — user-invoked CLIs that declare `links` but aren't run by any tool (for example, a presentation tool like slidev) — are **not** installed at init. They install lazily the first time you run them with `datamitsu exec <app>`, and their `.datamitsu/` links are materialized at that point.
+- **Eager apps (default)** — every app that declares `links` is installed during `datamitsu init`, so its links are created then. This covers apps a tool runs, as well as apps whose links are consumed by git hooks or `setup`-generated files (for example, commitlint, run by the commit-msg hook with its config imported from a `.datamitsu/` symlink).
+- **Lazy apps** — an app that sets `lazy: true` is **not** installed at init. It installs the first time you run it with `datamitsu exec <app>`, and its `.datamitsu/` links are materialized at that point. Use this for user-invoked CLIs whose dependencies are heavy and aren't needed until the app is actually run (for example, a presentation tool like slidev, which would otherwise pull a headless browser at init).
 
-This keeps `init` from eagerly downloading heavy apps you haven't used yet, while still guaranteeing that a config relying on a link finds it: every app a tool actually uses is installed (and linked) at init.
+Mark an app `lazy` only when nothing else depends on it being present right after `init` — a tool, hook, or generated config that references the app's link needs the app eager (the default).
 
 ### Path Safety
 

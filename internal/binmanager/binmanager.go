@@ -99,6 +99,14 @@ type App struct {
 	// Optional binaries are downloaded only on first access via GetBinaryPath()
 	Required bool `json:"required,omitempty"`
 
+	// Lazy defers installation: the app is NOT installed during `datamitsu init`,
+	// even when it declares Links, and is installed only on first `datamitsu exec`.
+	// Its `.datamitsu/` links are materialized at that point. Use for user-invoked
+	// CLIs (e.g. a presentation tool) whose deps/links aren't needed until run.
+	// Apps consumed by hooks, tools, or ConfigSetup must stay eager (Lazy=false),
+	// since smart-init can't otherwise see those references.
+	Lazy bool `json:"lazy,omitempty"`
+
 	Description  string           `json:"description,omitempty"`
 	VersionCheck *AppVersionCheck `json:"versionCheck,omitempty"`
 

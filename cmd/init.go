@@ -136,10 +136,11 @@ func runInit(_ *cobra.Command, _ []string) error {
 		}
 		toolCount, failed = n, failed+f
 
-		// Eagerly install runtime-managed (node/UV) link-apps that are referenced
-		// by a tool, so their config links resolve below. Unreferenced link-apps
-		// (e.g. slidev) are deferred — their links are materialized lazily when the
-		// app is first run via `dm exec`. Install feedback is the shared bars.
+		// Install runtime-managed (node/UV) link-apps so their config links resolve
+		// below: those referenced by a tool, plus all non-lazy link-apps (whose
+		// links may be consumed by hooks/ConfigSetup, e.g. commitlint). Only apps
+		// marked Lazy (e.g. slidev) are deferred — they install on first `dm exec`.
+		// Install feedback is the shared bars.
 		if err := installRuntimeAppsWithLinks(ctx, binMgr, cfg, initAll); err != nil {
 			return fmt.Errorf("failed to install runtime apps with links: %w", err)
 		}
@@ -542,12 +543,15 @@ func installRuntimeAppsWithLinks(ctx context.Context, binMgr *binmanager.BinMana
 	if installAll {
 		appsToInstall = filterAppsForSmartInit(cfg.Apps, allAppNames(cfg.Apps))
 	} else {
-		// Install only runtime-managed link-apps referenced by a tool operation.
-		// An unreferenced link-app (e.g. slidev — a user-invoked CLI whose Links
-		// only materialize its bundled theme symlink) is NOT installed at init; it
-		// installs lazily on first `dm exec`, which is when its links matter.
+		// Install link-apps referenced by a tool, plus every non-lazy runtime
+		// link-app. The latter covers apps whose links are consumed by hooks or
+		// ConfigSetup — invisible to scanReferencedApps — e.g. commitlint, run by
+		// the commit-msg hook with its config imported via a `.datamitsu/` symlink.
+		// Only apps explicitly marked Lazy (e.g. slidev) are deferred; they install
+		// on first `dm exec`, which is when their links matter.
 		referencedApps := scanReferencedApps(cfg)
 		appsToInstall = filterAppsForSmartInit(cfg.Apps, referencedApps)
+		appsToInstall = mergeUnique(appsToInstall, eagerRuntimeLinkApps(cfg.Apps))
 	}
 	return installSmartInitApps(ctx, binMgr, appsToInstall)
 }
@@ -568,6 +572,7 @@ func initInstallAppNames(cfg *config.Config, includeAll bool) []string {
 		}
 	}
 	names = mergeUnique(names, filterAppsForSmartInit(cfg.Apps, scanReferencedApps(cfg)))
+	names = mergeUnique(names, eagerRuntimeLinkApps(cfg.Apps))
 	sort.Strings(names)
 	return names
 }
@@ -613,6 +618,27 @@ func filterAppsForSmartInit(apps binmanager.MapOfApps, referencedApps []string) 
 			continue
 		}
 		if len(app.Links) == 0 {
+			continue
+		}
+		if app.Binary != nil || app.Shell != nil || app.Jvm != nil {
+			continue
+		}
+		result = append(result, name)
+	}
+	sort.Strings(result)
+	return result
+}
+
+// eagerRuntimeLinkApps returns runtime-managed (node/UV) apps that declare Links
+// and are NOT marked Lazy. These install at init even when no tool references
+// them, because their links may be consumed by hooks or ConfigSetup that
+// scanReferencedApps cannot see (e.g. commitlint's config, imported via a
+// `.datamitsu/` symlink and run by the commit-msg hook). Lazy apps (e.g. slidev)
+// are excluded — they install on first `datamitsu exec`.
+func eagerRuntimeLinkApps(apps binmanager.MapOfApps) []string {
+	var result []string
+	for name, app := range apps {
+		if len(app.Links) == 0 || app.Lazy {
 			continue
 		}
 		if app.Binary != nil || app.Shell != nil || app.Jvm != nil {
