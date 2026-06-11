@@ -236,10 +236,13 @@ func (p *Planner) collectTasks(ctx context.Context, operation config.OperationTy
 				continue
 			}
 			// Respect .datamitsuignore: skip when this tool is disabled for the
-			// repository root. Mirrors the per-file and per-project branches so a
-			// catch-all rule like "**/*: <tool>" disables repository-scoped tools
-			// too (e.g. the opt-in-tools generated ignore file).
-			if p.isToolDisabledForProject(toolName, p.rootPath) {
+			// repository root. Only short-circuit when there are no globs to
+			// enumerate (e.g. knip) — then there are no files to filter and the
+			// project-level probe is the only signal. With globs, per-file ignore
+			// filtering below handles disabling and, unlike the root-only project
+			// probe, respects subdir re-enables via inversion (e.g.
+			// "**/*: t" + "!config/**/*: t").
+			if len(opConfig.Globs) == 0 && p.isToolDisabledForProject(toolName, p.rootPath) {
 				continue
 			}
 			// Skip when globs are configured but no files match (consistent with per-project behavior).
@@ -252,6 +255,9 @@ func (p *Planner) collectTasks(ctx context.Context, operation config.OperationTy
 				}
 			}
 			matchedFiles = p.excludeFilesByGlobs(matchedFiles, opConfig.ExcludeGlobs)
+			// Respect file-specific .datamitsuignore rules (e.g. "**/foo.toml: oxfmt"):
+			// prune individual files from the batch even though the tool runs once.
+			matchedFiles = p.filterFilesByIgnore(toolName, matchedFiles)
 			if len(matchedFiles) > 0 || len(opConfig.Globs) == 0 {
 				task.Files = matchedFiles
 				task.ProjectPath = p.rootPath
@@ -269,6 +275,7 @@ func (p *Planner) collectTasks(ctx context.Context, operation config.OperationTy
 				}
 				matchedFiles = p.excludeFilesByGlobs(matchedFiles, opConfig.ExcludeGlobs)
 				matchedFiles = p.filterFilesToCwd(matchedFiles)
+				matchedFiles = p.filterFilesByIgnore(toolName, matchedFiles)
 			}
 
 			if len(matchedFiles) > 0 || len(opConfig.Globs) == 0 {
@@ -308,6 +315,7 @@ func (p *Planner) collectTasks(ctx context.Context, operation config.OperationTy
 				}
 				matchedFiles = p.excludeFilesByGlobs(matchedFiles, opConfig.ExcludeGlobs)
 				matchedFiles = p.filterFilesToCwd(matchedFiles)
+				matchedFiles = p.filterFilesByIgnore(toolName, matchedFiles)
 			}
 
 			if len(matchedFiles) > 0 || len(opConfig.Globs) == 0 {
@@ -391,6 +399,23 @@ func (p *Planner) isToolDisabledForFile(toolName string, absFilePath string) boo
 		return false
 	}
 	return p.ignoreMatcher.IsDisabled(toolName, relPath)
+}
+
+// filterFilesByIgnore drops files for which the tool is disabled by a
+// file-specific .datamitsuignore rule. It is applied to repository- and
+// per-project-scoped tools so that file-granular rules (e.g. "**/foo.toml: oxfmt")
+// prune individual files from the batch, mirroring the per-file scope behavior.
+func (p *Planner) filterFilesByIgnore(toolName string, files []string) []string {
+	if p.ignoreMatcher == nil {
+		return files
+	}
+	out := make([]string, 0, len(files))
+	for _, f := range files {
+		if !p.isToolDisabledForFile(toolName, f) {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 // isToolDisabledForProject checks if the tool is disabled for an entire project
@@ -899,19 +924,32 @@ func (p *Planner) initializeCache(ctx context.Context) error {
 	}
 
 	// Build .datamitsuignore matcher from scanned files
+	var ignoreErr error
 	func() {
 		defer cacheTimings.StartChild("Build datamitsuignore matcher")()
-		p.ignoreMatcher = p.buildIgnoreMatcher()
+		p.ignoreMatcher, ignoreErr = p.buildIgnoreMatcher()
 	}()
+	if ignoreErr != nil {
+		return fmt.Errorf("failed to build .datamitsuignore matcher: %w", ignoreErr)
+	}
 
 	p.cacheInitialized = true
 	return nil
 }
 
-// buildIgnoreMatcher scans cached files for .datamitsuignore entries
-// and builds a Matcher. Config-defined ignore rules (extraIgnoreRules)
-// are added as root-level rules.
-func (p *Planner) buildIgnoreMatcher() *datamitsuignore.Matcher {
+// buildIgnoreMatcher scans cached files for .datamitsuignore entries and builds
+// a Matcher. Config-defined ignore rules (extraIgnoreRules) are added as
+// root-level rules.
+//
+// A malformed user .datamitsuignore is a hard error rather than a warning: a
+// parse failure drops every rule in that file, which would silently let tools
+// run on paths the user meant to exclude (e.g. a formatter rewriting a file).
+// Unknown tool names are warned (the intended tool simply never gets disabled).
+//
+// File discovery mirrors internal/bundled's lint/fix: both consume the same
+// gitignore-aware traversal (cachedFiles here, traverser.FindFilesFromPath
+// there), so the set of files validated and the set applied stay identical.
+func (p *Planner) buildIgnoreMatcher() (*datamitsuignore.Matcher, error) {
 	m := datamitsuignore.NewMatcher()
 
 	// Built-in: never run tools on the managed symlinks directory.
@@ -919,12 +957,17 @@ func (p *Planner) buildIgnoreMatcher() *datamitsuignore.Matcher {
 		log.Warn("failed to add built-in .datamitsu ignore rule", zap.Error(err))
 	}
 
+	// Config-defined rules are already validated at config load; warn (not fail)
+	// here to avoid double-reporting the same parse error.
 	if len(p.extraIgnoreRules) > 0 {
 		if err := m.AddFile("", strings.Join(p.extraIgnoreRules, "\n")); err != nil {
-			log.Warn("failed to parse config-defined ignore rules",
-				zap.Error(err),
-			)
+			log.Warn("failed to parse config-defined ignore rules", zap.Error(err))
 		}
+	}
+
+	known := make(map[string]bool, len(p.tools))
+	for name := range p.tools {
+		known[name] = true
 	}
 
 	const filename = ".datamitsuignore"
@@ -935,22 +978,27 @@ func (p *Planner) buildIgnoreMatcher() *datamitsuignore.Matcher {
 		}
 		content, err := os.ReadFile(f)
 		if err != nil {
-			continue
+			return nil, fmt.Errorf("reading %s: %w", f, err)
+		}
+		rules, err := datamitsuignore.Parse(string(content))
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", f, err)
+		}
+		for _, tool := range datamitsuignore.UnknownTools(rules, known) {
+			log.Warn("unknown tool in .datamitsuignore",
+				zap.String("file", f),
+				zap.String("tool", tool),
+			)
 		}
 		relDir, err := filepath.Rel(p.rootPath, filepath.Dir(f))
 		if err != nil {
-			continue
+			return nil, fmt.Errorf("resolving path for %s: %w", f, err)
 		}
 		if relDir == "." {
 			relDir = ""
 		}
-		if err := m.AddFile(relDir, string(content)); err != nil {
-			log.Warn("failed to parse .datamitsuignore",
-				zap.String("file", f),
-				zap.Error(err),
-			)
-		}
+		m.AddRules(relDir, rules)
 	}
 
-	return m
+	return m, nil
 }
