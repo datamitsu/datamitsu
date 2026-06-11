@@ -180,3 +180,56 @@ func TestNewResolverForHostClientSplit(t *testing.T) {
 		t.Error("bearerTokens map not initialized")
 	}
 }
+
+// TestFetchToken_ForeignRealmStaysAnonymous pins that GITHUB_TOKEN is never
+// sent to a non-GHCR token realm: Docker Hub (and others) reject a foreign
+// Basic credential with 401 instead of minting an anonymous token, which
+// would break public pulls in any environment where GITHUB_TOKEN is set.
+func TestFetchToken_ForeignRealmStaysAnonymous(t *testing.T) {
+	var sawBasicAuth bool
+	mux := http.NewServeMux()
+	mux.HandleFunc("/token", func(w http.ResponseWriter, r *http.Request) {
+		_, _, sawBasicAuth = r.BasicAuth()
+		_ = json.NewEncoder(w).Encode(map[string]string{"token": "anon-token"})
+	})
+	mux.HandleFunc("/v2/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer anon-token" {
+			w.Header().Set("WWW-Authenticate",
+				fmt.Sprintf(`Bearer realm="http://%s/token",service="test"`, r.Host))
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Docker-Content-Digest", testDigest)
+		w.WriteHeader(http.StatusOK)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	r := newTestResolver(srv.URL, t.TempDir())
+	r.token = "ghp_should-not-leak"
+	got, err := r.Resolve(context.Background(), "owner/repo", "1.0.0")
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if got != testDigest {
+		t.Errorf("digest = %q, want %q", got, testDigest)
+	}
+	if sawBasicAuth {
+		t.Error("GITHUB_TOKEN was sent as Basic auth to a non-GHCR token realm")
+	}
+}
+
+func TestShouldAttachGitHubToken(t *testing.T) {
+	cases := map[string]bool{
+		"ghcr.io":            true,
+		"auth.docker.io":     false,
+		"index.docker.io":    false,
+		"gitlab.example.com": false,
+		"ghcr.io.evil.com":   false,
+	}
+	for host, want := range cases {
+		if got := shouldAttachGitHubToken(host); got != want {
+			t.Errorf("shouldAttachGitHubToken(%q) = %v, want %v", host, got, want)
+		}
+	}
+}
