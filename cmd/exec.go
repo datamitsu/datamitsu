@@ -147,7 +147,7 @@ func execApp(ctx context.Context, appName string, args []string) error {
 	if len(c.Apps[appName].Links) > 0 {
 		if cwd, cwdErr := os.Getwd(); cwdErr == nil {
 			if root, rootErr := traverser.GetGitRoot(ctx, cwd); rootErr == nil {
-				if _, linkErr := materializeInstalledLinks(root, c, b, false); linkErr != nil {
+				if _, linkErr := materializeInstalledLinks(root, c, b, bundleResolverFor(c, b), false); linkErr != nil {
 					fmt.Fprintf(os.Stderr, "warning: could not refresh .datamitsu links for %s: %v\n", appName, linkErr)
 				}
 			}

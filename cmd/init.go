@@ -320,7 +320,7 @@ func reportBundles(ctx context.Context, disp *ui.Display, binMgr *binmanager.Bin
 }
 
 func reportConfigLinks(disp *ui.Display, rootPath string, cfg *config.Config, binMgr *binmanager.BinManager, dryRun bool) (int, error) {
-	createdLinks, err := materializeInstalledLinks(rootPath, cfg, binMgr, dryRun)
+	createdLinks, err := materializeInstalledLinks(rootPath, cfg, binMgr, bundleResolverFor(cfg, binMgr), dryRun)
 	if err != nil {
 		return 0, err
 	}
@@ -343,7 +343,7 @@ func reportConfigLinks(disp *ui.Display, rootPath string, cfg *config.Config, bi
 // disk, at which point the exec path calls this to add it. Shared by init (after
 // its install phase) and exec. When nothing installed has links, it still lays
 // down .datamitsu/ with type definitions for IDE config autocomplete.
-func materializeInstalledLinks(rootPath string, cfg *config.Config, binMgr *binmanager.BinManager, dryRun bool) ([]string, error) {
+func materializeInstalledLinks(rootPath string, cfg *config.Config, appResolver, bundleResolver managedconfig.InstallRootResolver, dryRun bool) ([]string, error) {
 	if !hasAnyLinks(cfg.Apps, cfg.Bundles) {
 		// No links configured anywhere; still lay down .datamitsu/ type definitions.
 		if err := managedconfig.CreateDatamitsuTypeDefinitions(rootPath, dryRun); err != nil {
@@ -352,12 +352,10 @@ func materializeInstalledLinks(rootPath string, cfg *config.Config, binMgr *binm
 		return nil, nil
 	}
 
-	apps := installedAppsWithLinks(cfg.Apps, binMgr)
+	apps := installedAppsWithLinks(cfg.Apps, appResolver)
 
-	var bundleResolver managedconfig.InstallRootResolver
 	bundles := binmanager.MapOfBundles{}
-	if len(cfg.Bundles) > 0 {
-		bundleResolver = &bundleRootResolver{bm: binMgr}
+	if bundleResolver != nil {
 		bundles = installedBundlesWithLinks(cfg.Bundles, bundleResolver)
 	}
 
@@ -370,7 +368,16 @@ func materializeInstalledLinks(rootPath string, cfg *config.Config, binMgr *binm
 		return nil, nil
 	}
 
-	return managedconfig.CreateDatamitsuLinks(rootPath, apps, binMgr, bundles, bundleResolver, dryRun)
+	return managedconfig.CreateDatamitsuLinks(rootPath, apps, appResolver, bundles, bundleResolver, dryRun)
+}
+
+// bundleResolverFor returns an InstallRootResolver for bundles, or nil when the
+// config declares no bundles.
+func bundleResolverFor(cfg *config.Config, binMgr *binmanager.BinManager) managedconfig.InstallRootResolver {
+	if len(cfg.Bundles) == 0 {
+		return nil
+	}
+	return &bundleRootResolver{bm: binMgr}
 }
 
 // installedAppsWithLinks returns the subset of apps that declare Links and whose
@@ -539,21 +546,24 @@ type commandInfoGetter interface {
 }
 
 func installRuntimeAppsWithLinks(ctx context.Context, binMgr *binmanager.BinManager, cfg *config.Config, installAll bool) error {
-	var appsToInstall []string
+	return installSmartInitApps(ctx, binMgr, smartInitInstallSet(cfg, installAll))
+}
+
+// smartInitInstallSet returns the runtime-managed link-apps init installs.
+//
+// With installAll, every runtime link-app (Lazy included) is installed. In the
+// default (smart) mode the set is the link-apps referenced by a tool, plus every
+// non-lazy runtime link-app — the latter covers apps whose links are consumed by
+// hooks or ConfigSetup, which scanReferencedApps cannot see (e.g. commitlint, run
+// by the commit-msg hook with its config imported via a `.datamitsu/` symlink).
+// Only apps explicitly marked Lazy (e.g. slidev) are deferred; they install on
+// first `dm exec`, which is when their links matter.
+func smartInitInstallSet(cfg *config.Config, installAll bool) []string {
 	if installAll {
-		appsToInstall = filterAppsForSmartInit(cfg.Apps, allAppNames(cfg.Apps))
-	} else {
-		// Install link-apps referenced by a tool, plus every non-lazy runtime
-		// link-app. The latter covers apps whose links are consumed by hooks or
-		// ConfigSetup — invisible to scanReferencedApps — e.g. commitlint, run by
-		// the commit-msg hook with its config imported via a `.datamitsu/` symlink.
-		// Only apps explicitly marked Lazy (e.g. slidev) are deferred; they install
-		// on first `dm exec`, which is when their links matter.
-		referencedApps := scanReferencedApps(cfg)
-		appsToInstall = filterAppsForSmartInit(cfg.Apps, referencedApps)
-		appsToInstall = mergeUnique(appsToInstall, eagerRuntimeLinkApps(cfg.Apps))
+		return filterAppsForSmartInit(cfg.Apps, allAppNames(cfg.Apps))
 	}
-	return installSmartInitApps(ctx, binMgr, appsToInstall)
+	referenced := filterAppsForSmartInit(cfg.Apps, scanReferencedApps(cfg))
+	return mergeUnique(referenced, eagerRuntimeLinkApps(cfg.Apps))
 }
 
 // allAppNames returns all app names from the config (for --all mode).
