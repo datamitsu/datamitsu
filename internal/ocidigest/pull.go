@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/datamitsu/datamitsu/internal/httpretry"
+	"github.com/datamitsu/datamitsu/internal/httpx"
 	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/ui"
 
@@ -31,29 +32,6 @@ var ErrManifestNotFound = errors.New("manifest not found in registry")
 // errDigestMismatch is the base of all content-vs-digest failures. They are
 // permanent: re-downloading identical wrong bytes cannot help.
 var errDigestMismatch = errors.New("digest mismatch")
-
-// blobStallTimeout is the per-attempt progress watchdog window: an attempt is
-// aborted (and retried) only when NO bytes arrive for this long. A var so
-// tests can shrink it.
-var blobStallTimeout = 60 * time.Second
-
-// errBlobStalled marks a watchdog-cancelled attempt; retryable.
-var errBlobStalled = errors.New("blob download stalled")
-
-// stallResetReader rearms the stall watchdog on every successful read, so the
-// watchdog only fires on genuine no-progress stalls.
-type stallResetReader struct {
-	r        io.Reader
-	watchdog *time.Timer
-}
-
-func (s *stallResetReader) Read(p []byte) (int, error) {
-	n, err := s.r.Read(p)
-	if n > 0 {
-		s.watchdog.Reset(blobStallTimeout)
-	}
-	return n, err //nolint:wrapcheck // transparent reader passthrough
-}
 
 // IsDigestMismatch reports whether err is a content-verification failure
 // (manifest body or blob not matching its pinned digest/size).
@@ -206,13 +184,11 @@ func (r *Resolver) pullBlobOnce(ctx context.Context, repo, dgst string, size, ma
 	}()
 
 	// A blob stream is bounded by PROGRESS, not by an end-to-end deadline:
-	// the watchdog cancels the attempt only when no bytes arrive for the
-	// whole window, so a slow-but-moving 2 GiB download is never cut off
-	// mid-stream the way a flat client timeout would.
-	attemptCtx, cancel := context.WithCancelCause(ctx)
-	defer cancel(nil)
-	watchdog := time.AfterFunc(blobStallTimeout, func() { cancel(errBlobStalled) })
-	defer watchdog.Stop()
+	// the guard cancels the attempt only when no bytes arrive for the whole
+	// window, so a slow-but-moving 2 GiB download is never cut off mid-stream
+	// the way a flat client timeout would.
+	guard, attemptCtx := httpx.NewStallGuard(ctx, httpx.DefaultStallWindow)
+	defer guard.Stop()
 
 	blobURL := fmt.Sprintf("%s://%s/v2/%s/blobs/%s", r.scheme, r.registry, repo, dgst)
 	// GHCR answers with a 307 to its CDN; the hardened client follows it and
@@ -233,14 +209,14 @@ func (r *Resolver) pullBlobOnce(ctx context.Context, repo, dgst string, size, ma
 	}
 
 	hasher := sha256.New()
-	limited := &stallResetReader{r: io.LimitReader(resp.Body, maxBytes+1), watchdog: watchdog}
+	limited := guard.Reader(io.LimitReader(resp.Body, maxBytes+1))
 	reader := ui.Current().Download(displayName, size, limited)
 	defer func() { _ = reader.Close() }()
 
 	written, err := io.Copy(io.MultiWriter(tmpFile, hasher), reader)
 	if err != nil {
-		if errors.Is(context.Cause(attemptCtx), errBlobStalled) {
-			return "", fmt.Errorf("blob %s stalled: no data received for %s", dgst, blobStallTimeout)
+		if guard.Stalled() {
+			return "", fmt.Errorf("blob %s stalled: no data received for %s", dgst, guard.Window())
 		}
 		return "", fmt.Errorf("stream blob %s: %w", dgst, err)
 	}

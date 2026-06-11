@@ -29,10 +29,10 @@ import (
 
 const (
 	// defaultTimeout bounds manifest/token requests end-to-end. These carry
-	// at most a few MiB, but flaky links and bearer handshakes deserve more
-	// headroom than the old 30s. Blob streaming deliberately does NOT use
-	// this client — see blobClient.
-	defaultTimeout = 60 * time.Second
+	// at most a few MiB, so even a noisy 1 Mbps VPN fits comfortably; the
+	// old 30s left no headroom for that. Blob streaming deliberately does
+	// NOT use this client — see blobClient.
+	defaultTimeout = 120 * time.Second
 	maxBodyBytes   = 1 << 20
 )
 

@@ -265,9 +265,9 @@ func TestPullBlob_SlowStreamSurvivesManifestDeadline(t *testing.T) {
 // that stops delivering bytes is aborted (retryable) instead of hanging.
 func TestPullBlob_StallAbortsAndRetries(t *testing.T) {
 	setFastBlobRetries(t)
-	origStall := blobStallTimeout
-	blobStallTimeout = 150 * time.Millisecond
-	t.Cleanup(func() { blobStallTimeout = origStall })
+	origStall := httpx.DefaultStallWindow
+	httpx.DefaultStallWindow = 150 * time.Millisecond
+	t.Cleanup(func() { httpx.DefaultStallWindow = origStall })
 
 	var hits atomic.Int64
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

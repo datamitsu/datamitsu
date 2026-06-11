@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
@@ -19,7 +18,9 @@ import (
 	"go.uber.org/zap"
 )
 
-var jvmHTTPClient = httpx.NewHardenedClient(5 * time.Minute)
+// jvmHTTPClient has no end-to-end deadline (JARs reach hundreds of MiB on
+// arbitrarily slow links); stalls are caught by the progress guard below.
+var jvmHTTPClient = httpx.NewHardenedClient(0)
 
 const maxJARDownloadSize = 200 * 1024 * 1024 // 200 MiB
 
@@ -102,6 +103,9 @@ func downloadAndVerifyJAR(ctx context.Context, name, url, expectedHash, destPath
 		return fmt.Errorf("JAR hash is required but not provided for %s", url)
 	}
 
+	guard, ctx := httpx.NewStallGuard(ctx, httpx.DefaultStallWindow)
+	defer guard.Stop()
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to build JAR download request: %w", err)
@@ -131,13 +135,16 @@ func downloadAndVerifyJAR(ctx context.Context, name, url, expectedHash, destPath
 	}()
 
 	hasher := sha256.New()
-	limited := io.LimitReader(resp.Body, maxJARDownloadSize+1)
+	limited := guard.Reader(io.LimitReader(resp.Body, maxJARDownloadSize+1))
 	// Render a progress bar (or throttled lines in CI) for the JAR transfer,
 	// consistent with binary and runtime downloads.
 	tracked := ui.Current().Download(name, resp.ContentLength, limited)
 	defer func() { _ = tracked.Close() }()
 	written, err := io.Copy(io.MultiWriter(tmpFile, hasher), tracked)
 	if err != nil {
+		if guard.Stalled() {
+			return fmt.Errorf("JAR download of %s stalled: no data received for %s", name, guard.Window())
+		}
 		return fmt.Errorf("failed to download JAR: %w", err)
 	}
 	if written > maxJARDownloadSize {
