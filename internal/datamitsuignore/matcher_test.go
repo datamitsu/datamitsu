@@ -254,6 +254,46 @@ func TestMatcherWildcardInversionClearsSpecific(t *testing.T) {
 	}
 }
 
+func TestMatcherWildcardDisableSpecificReEnable(t *testing.T) {
+	// Blanket disable everything, then re-enable a single tool for markdown.
+	// The specific inversion must win over the wildcard "*" disable.
+	m := NewMatcher()
+	if err := m.AddFile("", "**/*: *"); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.AddFile("", "!**/*.md: eslint"); err != nil {
+		t.Fatal(err)
+	}
+
+	if m.IsDisabled("eslint", "README.md") {
+		t.Error("eslint should be re-enabled for markdown despite blanket '*' disable")
+	}
+	// Other tools stay disabled for markdown.
+	if !m.IsDisabled("prettier", "README.md") {
+		t.Error("prettier should remain disabled for markdown")
+	}
+	// eslint stays disabled for non-markdown (inversion only targets *.md).
+	if !m.IsDisabled("eslint", "src/main.js") {
+		t.Error("eslint should remain disabled for non-markdown")
+	}
+}
+
+func TestMatcherWildcardResetsPriorSpecificException(t *testing.T) {
+	// A later blanket "**/*: *" must override an earlier specific re-enable:
+	// the broader, later rule wins.
+	m := NewMatcher()
+	if err := m.AddFile("", "!**/*: eslint"); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.AddFile("", "**/*: *"); err != nil {
+		t.Fatal(err)
+	}
+
+	if !m.IsDisabled("eslint", "src/main.js") {
+		t.Error("later blanket '*' disable should override earlier eslint re-enable")
+	}
+}
+
 func TestIsProjectDisabledBasic(t *testing.T) {
 	m := NewMatcher()
 	if err := m.AddFile("", "vendor/**/*: eslint"); err != nil {

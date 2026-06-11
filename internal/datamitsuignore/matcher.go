@@ -37,11 +37,19 @@ func (m *Matcher) AddFile(relDir string, content string) error {
 	if err != nil {
 		return err
 	}
+	m.AddRules(relDir, rules)
+	return nil
+}
+
+// AddRules associates already-parsed rules with the given directory (relative to
+// root, use "" for root). Empty rule sets are ignored. Use this when the caller
+// has already parsed the content (e.g. to validate tool names first) to avoid a
+// redundant re-parse.
+func (m *Matcher) AddRules(relDir string, rules []Rule) {
 	if len(rules) == 0 {
-		return nil
+		return
 	}
 	m.entries = append(m.entries, dirRules{dir: toSlash(relDir), rules: rules})
-	return nil
 }
 
 // IsDisabled reports whether toolName should be skipped for relFilePath.
@@ -77,7 +85,12 @@ func (m *Matcher) IsDisabled(toolName string, relFilePath string) bool {
 		return depth(applicable[i].dir) < depth(applicable[j].dir)
 	})
 
-	disabled := make(map[string]bool)
+	// wildcard tracks whether a "*" rule currently disables every tool.
+	// overrides holds explicit per-tool decisions (true=disabled, false=enabled)
+	// that take precedence over wildcard, so a specific re-enable like
+	// "!**/*.md: eslint" wins even after a blanket "**/*: *" disable.
+	wildcard := false
+	overrides := make(map[string]bool)
 
 	for _, e := range applicable {
 		for _, rule := range e.rules {
@@ -93,22 +106,25 @@ func (m *Matcher) IsDisabled(toolName string, relFilePath string) bool {
 			}
 
 			for _, tool := range rule.Tools {
-				if rule.Invert {
-					if tool == "*" {
-						for k := range disabled {
-							delete(disabled, k)
-						}
-					} else {
-						delete(disabled, tool)
-					}
-				} else {
-					disabled[tool] = true
+				switch {
+				case tool == "*":
+					// A blanket (re-)enable/disable resets prior per-tool
+					// exceptions: the later, broader rule wins.
+					wildcard = !rule.Invert
+					clear(overrides)
+				case rule.Invert:
+					overrides[tool] = false
+				default:
+					overrides[tool] = true
 				}
 			}
 		}
 	}
 
-	return disabled[toolName] || disabled["*"]
+	if v, ok := overrides[toolName]; ok {
+		return v
+	}
+	return wildcard
 }
 
 // IsProjectDisabled reports whether toolName should be skipped for an entire

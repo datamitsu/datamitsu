@@ -286,5 +286,6 @@ export default defineConfig((config) => ({
     "storepaths",
     "whiteouts",
     "relocatability",
+    "fuzztime",
   ],
 }));

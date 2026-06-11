@@ -1,6 +1,7 @@
 package bundled
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -43,7 +44,7 @@ func TestFindIgnoreFiles(t *testing.T) {
 	}
 	writeTestFile(t, filepath.Join(root, gitIgnoreFile), "*.ts: eslint")
 
-	found, err := FindIgnoreFiles(root)
+	found, err := FindIgnoreFiles(context.Background(), root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,9 +61,40 @@ func TestFindIgnoreFiles(t *testing.T) {
 	}
 }
 
+// TestFindIgnoreFilesRespectsGitignore pins that discovery is gitignore-aware,
+// matching the planner's runtime traversal: a .datamitsuignore under a gitignored
+// path is neither linted/fixed here nor applied at runtime (no divergence).
+func TestFindIgnoreFilesRespectsGitignore(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "ignored"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(root, ".gitignore"), "ignored/\n")
+	writeTestFile(t, filepath.Join(root, ".datamitsuignore"), "*.ts: eslint")
+	writeTestFile(t, filepath.Join(root, "ignored", ".datamitsuignore"), "*.ts: eslint")
+
+	found, err := FindIgnoreFiles(context.Background(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(found) != 1 {
+		t.Fatalf("expected only the non-ignored file, got %d: %v", len(found), found)
+	}
+	for _, f := range found {
+		rel, _ := filepath.Rel(root, f)
+		if strings.HasPrefix(rel, "ignored"+string(filepath.Separator)) {
+			t.Errorf("gitignored .datamitsuignore should not be discovered: %s", rel)
+		}
+	}
+}
+
 func TestFindIgnoreFilesEmpty(t *testing.T) {
 	root := t.TempDir()
-	found, err := FindIgnoreFiles(root)
+	found, err := FindIgnoreFiles(context.Background(), root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +108,7 @@ func TestRunFixNormalizesFormatting(t *testing.T) {
 	path := filepath.Join(root, ".datamitsuignore")
 	writeTestFile(t, path, "**/*.ts:  eslint , prettier\n! vendor/** :  tool1,tool2\n")
 
-	if err := RunFix(root); err != nil {
+	if err := RunFix(context.Background(), root); err != nil {
 		t.Fatal(err)
 	}
 
@@ -97,7 +129,7 @@ func TestRunFixPreservesCommentsAndBlanks(t *testing.T) {
 	content := "# This is a comment\n\n*.go: golangci-lint\n\n# Another comment\n"
 	writeTestFile(t, path, content)
 
-	if err := RunFix(root); err != nil {
+	if err := RunFix(context.Background(), root); err != nil {
 		t.Fatal(err)
 	}
 
@@ -122,7 +154,7 @@ func TestRunFixNoWriteWhenAlreadyNormalized(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := RunFix(root); err != nil {
+	if err := RunFix(context.Background(), root); err != nil {
 		t.Fatal(err)
 	}
 
@@ -149,7 +181,7 @@ func TestRunFixParseErrorFails(t *testing.T) {
 	path := filepath.Join(root, ".datamitsuignore")
 	writeTestFile(t, path, "invalid line without colon\n")
 
-	err := RunFix(root)
+	err := RunFix(context.Background(), root)
 	if err == nil {
 		t.Fatal("expected error for parse failure, got nil")
 	}
@@ -161,7 +193,7 @@ func TestRunLintParseErrorFails(t *testing.T) {
 	writeTestFile(t, path, "invalid line without colon\n")
 
 	tools := config.MapOfTools{}
-	err := RunLint(root, tools)
+	err := RunLint(context.Background(), root, tools)
 	if err == nil {
 		t.Fatal("expected error for parse failure, got nil")
 	}
@@ -176,7 +208,7 @@ func TestRunLintUnknownToolWarning(t *testing.T) {
 		"known-tool": config.Tool{Name: "known-tool"},
 	}
 
-	err := RunLint(root, tools)
+	err := RunLint(context.Background(), root, tools)
 	if err != nil {
 		t.Fatalf("expected no error for unknown tool warning, got: %v", err)
 	}
@@ -189,7 +221,7 @@ func TestRunLintWildcardNotWarned(t *testing.T) {
 
 	tools := config.MapOfTools{}
 
-	err := RunLint(root, tools)
+	err := RunLint(context.Background(), root, tools)
 	if err != nil {
 		t.Fatalf("expected no error for wildcard tool, got: %v", err)
 	}
@@ -204,7 +236,7 @@ func TestRunLintValidFileNoError(t *testing.T) {
 		"golangci-lint": config.Tool{Name: "golangci-lint"},
 	}
 
-	err := RunLint(root, tools)
+	err := RunLint(context.Background(), root, tools)
 	if err != nil {
 		t.Fatalf("expected no error for valid file, got: %v", err)
 	}
@@ -220,7 +252,7 @@ func TestRunLintFormattingWarning(t *testing.T) {
 		"gofmt":         config.Tool{Name: "gofmt"},
 	}
 
-	err := RunLint(root, tools)
+	err := RunLint(context.Background(), root, tools)
 	if err != nil {
 		t.Fatalf("expected no error for formatting warning, got: %v", err)
 	}
@@ -237,7 +269,7 @@ func TestRunFixMultipleFiles(t *testing.T) {
 	writeTestFile(t, filepath.Join(root, ".datamitsuignore"), "*.ts:  eslint\n")
 	writeTestFile(t, filepath.Join(sub, ".datamitsuignore"), "*.go:golangci-lint\n")
 
-	if err := RunFix(root); err != nil {
+	if err := RunFix(context.Background(), root); err != nil {
 		t.Fatal(err)
 	}
 
@@ -308,7 +340,7 @@ func TestNormalizeLinePreservesNonRules(t *testing.T) {
 func TestRunLintEmptyDir(t *testing.T) {
 	root := t.TempDir()
 	tools := config.MapOfTools{}
-	err := RunLint(root, tools)
+	err := RunLint(context.Background(), root, tools)
 	if err != nil {
 		t.Fatalf("expected no error for empty dir, got: %v", err)
 	}
@@ -316,7 +348,7 @@ func TestRunLintEmptyDir(t *testing.T) {
 
 func TestRunFixEmptyDir(t *testing.T) {
 	root := t.TempDir()
-	err := RunFix(root)
+	err := RunFix(context.Background(), root)
 	if err != nil {
 		t.Fatalf("expected no error for empty dir, got: %v", err)
 	}
@@ -327,7 +359,7 @@ func TestRunFixRemovesLeadingBlankLines(t *testing.T) {
 	path := filepath.Join(root, ".datamitsuignore")
 	writeTestFile(t, path, "\n\n*.go: golangci-lint\n")
 
-	if err := RunFix(root); err != nil {
+	if err := RunFix(context.Background(), root); err != nil {
 		t.Fatal(err)
 	}
 
@@ -345,7 +377,7 @@ func TestRunFixCollapsesConsecutiveBlankLines(t *testing.T) {
 	path := filepath.Join(root, ".datamitsuignore")
 	writeTestFile(t, path, "*.go: golangci-lint\n\n\n\n*.ts: eslint\n")
 
-	if err := RunFix(root); err != nil {
+	if err := RunFix(context.Background(), root); err != nil {
 		t.Fatal(err)
 	}
 
@@ -363,7 +395,7 @@ func TestRunFixConvertsWhitespaceOnlyLines(t *testing.T) {
 	path := filepath.Join(root, ".datamitsuignore")
 	writeTestFile(t, path, "*.go: golangci-lint\n   \n*.ts: eslint\n")
 
-	if err := RunFix(root); err != nil {
+	if err := RunFix(context.Background(), root); err != nil {
 		t.Fatal(err)
 	}
 
@@ -382,7 +414,7 @@ func TestRunLintLeadingBlankLineWarning(t *testing.T) {
 	writeTestFile(t, path, "\n*.go: golangci-lint\n")
 
 	tools := config.MapOfTools{"golangci-lint": config.Tool{Name: "golangci-lint"}}
-	err := RunLint(root, tools)
+	err := RunLint(context.Background(), root, tools)
 	if err != nil {
 		t.Fatalf("expected no error for leading blank line (only warning), got: %v", err)
 	}
@@ -397,7 +429,7 @@ func TestRunLintConsecutiveBlankLinesWarning(t *testing.T) {
 		"golangci-lint": config.Tool{Name: "golangci-lint"},
 		"eslint":        config.Tool{Name: "eslint"},
 	}
-	err := RunLint(root, tools)
+	err := RunLint(context.Background(), root, tools)
 	if err != nil {
 		t.Fatalf("expected no error for consecutive blank lines (only warning), got: %v", err)
 	}
@@ -412,7 +444,7 @@ func TestRunLintWhitespaceOnlyLineWarning(t *testing.T) {
 		"golangci-lint": config.Tool{Name: "golangci-lint"},
 		"eslint":        config.Tool{Name: "eslint"},
 	}
-	err := RunLint(root, tools)
+	err := RunLint(context.Background(), root, tools)
 	if err != nil {
 		t.Fatalf("expected no error for whitespace-only line (only warning), got: %v", err)
 	}

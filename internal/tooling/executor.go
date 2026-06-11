@@ -409,7 +409,7 @@ func (e *Executor) executeTask(ctx context.Context, task Task) ExecutionResult {
 
 		result.Success = false
 		result.Error = fmt.Errorf("failed to get command info: %w", err)
-		result.Duration = time.Since(startTime).Milliseconds()
+		result.recordTiming(startTime)
 		result.WorkingDir = workingDir
 		result.RelativeDir = relativeDir
 		result.FailureReason = FailureReasonIndependent
@@ -641,7 +641,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 
 	// If all files are cached, return success immediately
 	if len(filesToProcess) == 0 {
-		result.Duration = time.Since(startTime).Milliseconds()
+		result.recordTiming(startTime)
 		// Even when all cached, call progress callback for each file
 		for i := range task.Files {
 			if e.fileProgressCallback != nil {
@@ -765,7 +765,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 	}
 
 	result.Output = strings.Join(outputs, "\n")
-	result.Duration = time.Since(startTime).Milliseconds()
+	result.recordTiming(startTime)
 	log.Debug("executePerFile completed",
 		zap.String("toolName", task.ToolName),
 		zap.Bool("success", result.Success),
@@ -798,7 +798,7 @@ func (e *Executor) executeBatch(ctx context.Context, task Task, cmdInfo *binmana
 	// If files were specified but all are cached, return success immediately.
 	// Do not skip when task.Files is nil (whole-project mode with no globs).
 	if len(task.Files) > 0 && len(filesToProcess) == 0 {
-		result.Duration = time.Since(startTime).Milliseconds()
+		result.recordTiming(startTime)
 		// Call file progress callback for batch mode (counts as 1 unit of work)
 		if e.fileProgressCallback != nil {
 			e.fileProgressCallback(task.ToolName, 1, 1, true)
@@ -866,7 +866,7 @@ func (e *Executor) executeBatchChunk(ctx context.Context, task Task, cmdInfo *bi
 	if e.dryRun {
 		log.Debug("dry-run mode", zap.Strings("args", args))
 		result.Output = "[DRY-RUN] " + cmdString
-		result.Duration = time.Since(startTime).Milliseconds()
+		result.recordTiming(startTime)
 		return result
 	}
 
@@ -898,7 +898,7 @@ func (e *Executor) executeBatchChunk(ctx context.Context, task Task, cmdInfo *bi
 		log.Debug("batch execution succeeded")
 	}
 
-	result.Duration = time.Since(startTime).Milliseconds()
+	result.recordTiming(startTime)
 
 	return result
 }
@@ -1015,7 +1015,7 @@ func (e *Executor) executeBatchChunksParallel(ctx context.Context, task Task, cm
 		result.FailureReason = FailureReasonCancelled
 	}
 
-	result.Duration = time.Since(startTime).Milliseconds()
+	result.recordTiming(startTime)
 	log.Debug("executeBatchChunksParallel completed",
 		zap.String("toolName", task.ToolName),
 		zap.Bool("success", result.Success),
