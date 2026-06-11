@@ -26,6 +26,8 @@ datamitsu exec <appName> [args...]
 
 When called without arguments, lists all available tools grouped by type (binary, uv, node, jvm, go, shell).
 
+An app is installed on demand the first time you `exec` it. If that app declares `links`, its `.datamitsu/` symlinks are created at the same time — this is how a `lazy: true` link-app that `init` deferred gets its managed-config links on first use.
+
 **Examples:**
 
 ```bash
@@ -91,7 +93,7 @@ Download concurrency is controlled via the `DATAMITSU_CONCURRENCY` env var (defa
 1. Detects project types in the repository
 2. Downloads required binaries and runtimes
 3. Installs runtime-managed apps (node/UV/JVM) that are referenced by tools
-4. Creates `.datamitsu/` symlinks for managed config files
+4. Creates `.datamitsu/` symlinks for the config files of installed link-apps — an app marked `lazy: true` is deferred and gets its links on first `datamitsu exec` instead
 5. Runs configured init commands (e.g., `lefthook install`)
 
 **Examples:**

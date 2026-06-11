@@ -829,6 +829,14 @@ declare global {
       go?: AppConfigGo;
       jvm?: AppConfigJVM;
       /**
+       * Defer installation: when true, the app is NOT installed during `datamitsu init`
+       * (even if it declares links) and installs only on first `datamitsu exec`, when its
+       * `.datamitsu/` links are also materialized. Use for user-invoked CLIs whose deps are
+       * heavy and not needed until run (e.g. slidev). Apps consumed by hooks, tools, or
+       * generated configs must stay eager (omit or false).
+       */
+      lazy?: boolean;
+      /**
        * Symlinks to create in .datamitsu/ directory, mapping link name to relative path in install directory.
        */
       links?: Record<string, string>;

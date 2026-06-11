@@ -80,8 +80,9 @@ Six types of applications are supported:
 - Distributes configuration files from runtime-managed apps (node/UV) to monorepo projects via symlinks in `.datamitsu/` at git root
 - Apps declare `Files map[string]string` (filename -> static content) and `Links map[string]string` (linkName -> relativePath) on the `App` struct
 - Links map link names to relative paths within the app's install directory (e.g., `"eslint-config": "dist/eslint.config.js"`)
-- Links do not require `required: true` — apps are installed during init based on tool usage scanning (smart init)
+- Links do not require `required: true` — smart init installs link-apps referenced by tools plus every non-lazy link-app (`eagerRuntimeLinkApps()`); apps marked `Lazy` are deferred
 - `CreateDatamitsuLinks(gitRoot, apps, resolver, bundles, bundleResolver, dryRun)` removes and recreates `.datamitsu/` atomically, creating symlinks from `.datamitsu/{linkName}` to `{installRoot}/{relativePath}` for both apps and bundles
+- Links follow installation: `materializeInstalledLinks()` passes only **installed** link-apps to `CreateDatamitsuLinks` (filtered by `installedAppsWithLinks()`, which probes the same `InstallRootResolver` the link pass uses, so an included app always resolves). A non-lazy link-app is installed and linked at init (whether or not a tool references it — `eagerRuntimeLinkApps()` covers hook/ConfigSetup-only consumers like commitlint); an app marked `Lazy` (e.g. slidev) is deferred and gets its links when first run via `datamitsu exec`, which calls `materializeInstalledLinks()` again. See [cmd/init.go](cmd/init.go) and [cmd/exec.go](cmd/exec.go)
 - Path traversal protection via `validateLinkPath()`: rejects absolute paths, parent traversal (`..`), and symlink escapes outside install directory
 - Uses `InstallRootResolver` interface (implemented by BinManager) to get install paths without circular dependencies
 - `WriteAppFiles(installPath, files, archives)` writes archives (alphabetically) then file content to install directories before package managers run. Files take precedence over archives for overlapping paths
@@ -249,9 +250,9 @@ Tool operation arguments support template placeholders that the executor resolve
   - Uses `runner.RunSequential()` for shared initialization and context reuse
 - `init` - Downloads required binaries and runs initialization commands (see [cmd/init.go](cmd/init.go))
   - Must be run from git root (guard in `checkInitGitRoot()`)
-  - Smart init: scans tool definitions to find referenced apps, installs only those with Links defined (via `scanReferencedApps()`)
+  - Smart init: installs link-apps referenced by tools (`scanReferencedApps()`) plus every non-lazy runtime link-app (`eagerRuntimeLinkApps()` — covers hook/ConfigSetup-only consumers). Apps marked `Lazy` are deferred and install on first `datamitsu exec`
   - Installs bundles before creating symlinks; inline-only bundles install regardless of `--skip-download`
-  - After downloads, creates `.datamitsu/` symlinks for both apps and bundles via `managedconfig.CreateDatamitsuLinks()`
+  - After downloads, materializes `.datamitsu/` symlinks for **installed** link-apps and bundles via `materializeInstalledLinks()` → `managedconfig.CreateDatamitsuLinks()`; deferred link-apps get their links on first `datamitsu exec`
   - Supports `--all` flag to download all binaries (both required and optional)
   - Supports `--skip-download` flag to skip binary downloads
   - Supports `--fail-on-download-error` flag to stop on download failures
@@ -488,7 +489,7 @@ Uses uber-go/zap structured logging throughout. Logger initialization in [intern
 - **ConfigSetup.LinkTarget**: When set on a `ConfigSetup` entry, the installer creates a symlink instead of writing content. Target is resolved relative to the symlink's directory
 - **Lock files**: Node apps support `LockFile` field (written as `pnpm-lock.yaml` with `--frozen-lockfile`); UV apps support `LockFile` (written as `uv.lock` with `--locked` flag). Lock file content can be brotli-compressed with `br:` prefix (see `lockfileenc.go`)
 - **Validation-first**: `ValidateApps()` returns `([]string, error)` -- warnings and validation errors. Runs immediately after config load in `loadConfigWithPaths`, catching link path traversal errors and lockfile requirements before execution. Warns when UV runtime is in system mode without pythonVersion set
-- **Links independence**: Links do not require `required: true`. Smart init installs apps based on tool usage, not Required flag
+- **Links independence**: Links do not require `required: true`. Smart init installs link-apps by tool usage plus all non-lazy link-apps, not the Required flag; only `Lazy`-marked apps are deferred
 - **Windows**: Symlinks only, no fallback. Requires Developer Mode
 - **Installer JS context**: The `content()` function in `ConfigSetup` receives a context object with `projectTypes`, `rootPath`, `cwdPath`, `isRoot`, and `datamitsuDir` (relative path from `cwdPath` to `{rootPath}/.datamitsu/`)
 - **Import path generation**: `tools.Path.forImport(path)` ensures relative paths are valid ES module imports. JavaScript/TypeScript `import` statements require relative paths to start with `./` or `../`, but `tools.Path.join(context.datamitsuDir, "file.js")` returns `.datamitsu/file.js` (missing `./` prefix). Wrapping with `forImport()` fixes this: `tools.Path.forImport(tools.Path.join(context.datamitsuDir, "eslint.config.js"))` produces `./.datamitsu/eslint.config.js`. The function is idempotent — paths already starting with `./` or `../` are returned unchanged

@@ -11,6 +11,7 @@ import (
 	clr "github.com/datamitsu/datamitsu/internal/color"
 	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 	"github.com/datamitsu/datamitsu/internal/term"
+	"github.com/datamitsu/datamitsu/internal/traverser"
 	"github.com/datamitsu/datamitsu/internal/ui"
 
 	"github.com/spf13/cobra"
@@ -137,6 +138,20 @@ func execApp(ctx context.Context, appName string, args []string) error {
 	restore()
 	if err != nil {
 		return fmt.Errorf("failed to prepare %s: %w", appName, err)
+	}
+
+	// A link-app installed lazily by GetExecCmd (e.g. slidev, whose Links
+	// materialize its bundled theme symlink under .datamitsu/) needs its links
+	// created now — init defers them until the app exists on disk. Best-effort:
+	// a link refresh failure must never stop the requested tool from running.
+	if len(c.Apps[appName].Links) > 0 {
+		if cwd, cwdErr := os.Getwd(); cwdErr == nil {
+			if root, rootErr := traverser.GetGitRoot(ctx, cwd); rootErr == nil {
+				if _, linkErr := materializeInstalledLinks(root, c, b, bundleResolverFor(c, b), false); linkErr != nil {
+					fmt.Fprintf(os.Stderr, "warning: could not refresh .datamitsu links for %s: %v\n", appName, linkErr)
+				}
+			}
+		}
 	}
 
 	// Shell apps download/install nothing, so there is no progress to show; run

@@ -190,6 +190,182 @@ func TestSetupConfigLinks_NoLinksSkipped(t *testing.T) {
 	}
 }
 
+// TestMaterializeInstalledLinks_SkipsDeferredNoError is the regression test for
+// the PR: a link-app that declares Links but is NOT installed (deferred/Lazy)
+// must be silently skipped by the link pass — never a "source not installed"
+// hard error — while installed link-apps are still linked.
+func TestMaterializeInstalledLinks_SkipsDeferredNoError(t *testing.T) {
+	tmp := t.TempDir()
+	gitRoot := filepath.Join(tmp, "repo")
+
+	installedDir := filepath.Join(tmp, "store", "installed", "h1")
+	if err := os.MkdirAll(installedDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(installedDir, "config.js"), []byte("export default {}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := &config.Config{
+		Apps: binmanager.MapOfApps{
+			"installed-link": {
+				Node:  &binmanager.AppConfigNode{PackageName: "p1"},
+				Links: map[string]string{"installed.config.js": "config.js"},
+			},
+			"deferred-link": { // declares links but is not installed — must be skipped, no error
+				Node:  &binmanager.AppConfigNode{PackageName: "p2"},
+				Lazy:  true,
+				Links: map[string]string{"deferred.config.js": "config.js"},
+			},
+		},
+	}
+	resolver := &mockInstallRootResolver{paths: map[string]string{"installed-link": installedDir}}
+
+	created, err := materializeInstalledLinks(gitRoot, cfg, resolver, nil, false)
+	if err != nil {
+		t.Fatalf("a deferred/uninstalled link-app must not error the link pass, got: %v", err)
+	}
+	if len(created) != 1 || created[0] != "installed.config.js" {
+		t.Fatalf("created = %v, want [installed.config.js]", created)
+	}
+	if _, err := os.Lstat(filepath.Join(gitRoot, ".datamitsu", "installed.config.js")); err != nil {
+		t.Errorf("expected installed app's link to exist: %v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(gitRoot, ".datamitsu", "deferred.config.js")); !os.IsNotExist(err) {
+		t.Errorf("expected deferred app's link to be absent, got err=%v", err)
+	}
+}
+
+// TestMaterializeInstalledLinks_AllDeferredWritesTypeDefs: when every configured
+// link-app is deferred (none installed), no symlinks are created but .datamitsu/
+// type definitions are still written and there is no error.
+func TestMaterializeInstalledLinks_AllDeferredWritesTypeDefs(t *testing.T) {
+	gitRoot := filepath.Join(t.TempDir(), "repo")
+	cfg := &config.Config{
+		Apps: binmanager.MapOfApps{
+			"slidev": {
+				Node:  &binmanager.AppConfigNode{PackageName: "p"},
+				Lazy:  true,
+				Links: map[string]string{"theme": "t"},
+			},
+		},
+	}
+	resolver := &mockInstallRootResolver{paths: map[string]string{}} // nothing installed
+
+	created, err := materializeInstalledLinks(gitRoot, cfg, resolver, nil, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(created) != 0 {
+		t.Fatalf("want no links created, got %v", created)
+	}
+	if _, err := os.Stat(filepath.Join(gitRoot, ".datamitsu", "datamitsu.config.d.ts")); err != nil {
+		t.Errorf("expected type defs written even when all link-apps deferred: %v", err)
+	}
+}
+
+// TestMaterializeInstalledLinks_NoLinksWritesTypeDefs: no links configured at all
+// — only type defs are laid down. Also exercises the nil-resolver fast path.
+func TestMaterializeInstalledLinks_NoLinksWritesTypeDefs(t *testing.T) {
+	gitRoot := filepath.Join(t.TempDir(), "repo")
+	cfg := &config.Config{Apps: binmanager.MapOfApps{"x": {Binary: &binmanager.AppConfigBinary{}}}}
+
+	created, err := materializeInstalledLinks(gitRoot, cfg, nil, nil, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(created) != 0 {
+		t.Fatalf("want no links, got %v", created)
+	}
+	if _, err := os.Stat(filepath.Join(gitRoot, ".datamitsu", "datamitsu.config.d.ts")); err != nil {
+		t.Errorf("expected type defs: %v", err)
+	}
+}
+
+// TestMaterializeInstalledLinks_DryRun: dry-run reports the would-be links for
+// installed apps, skips deferred ones without error, and touches no filesystem.
+func TestMaterializeInstalledLinks_DryRun(t *testing.T) {
+	tmp := t.TempDir()
+	gitRoot := filepath.Join(tmp, "repo")
+	installedDir := filepath.Join(tmp, "store", "h1")
+	if err := os.MkdirAll(installedDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(installedDir, "config.js"), []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{
+		Apps: binmanager.MapOfApps{
+			"installed-link": {
+				Node:  &binmanager.AppConfigNode{PackageName: "p"},
+				Links: map[string]string{"c.js": "config.js"},
+			},
+			"deferred-link": {
+				Node:  &binmanager.AppConfigNode{PackageName: "p2"},
+				Lazy:  true,
+				Links: map[string]string{"d.js": "config.js"},
+			},
+		},
+	}
+	resolver := &mockInstallRootResolver{paths: map[string]string{"installed-link": installedDir}}
+
+	created, err := materializeInstalledLinks(gitRoot, cfg, resolver, nil, true)
+	if err != nil {
+		t.Fatalf("dry-run must not error on a deferred app: %v", err)
+	}
+	if len(created) != 1 || created[0] != "c.js" {
+		t.Fatalf("created = %v, want [c.js]", created)
+	}
+	if _, err := os.Lstat(filepath.Join(gitRoot, ".datamitsu", "c.js")); !os.IsNotExist(err) {
+		t.Errorf("dry-run must not create the symlink, got err=%v", err)
+	}
+}
+
+// TestMaterializeInstalledLinks_LinksInstalledBundle covers the bundle branch:
+// an installed bundle that declares links is materialized under .datamitsu/.
+func TestMaterializeInstalledLinks_LinksInstalledBundle(t *testing.T) {
+	tmp := t.TempDir()
+	gitRoot := filepath.Join(tmp, "repo")
+	bundleDir := filepath.Join(tmp, "store", "bundle", "h1")
+	if err := os.MkdirAll(bundleDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(bundleDir, "schema.json"), []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := &config.Config{
+		Bundles: binmanager.MapOfBundles{
+			"my-bundle": {Links: map[string]string{"schema.json": "schema.json"}},
+		},
+	}
+	appResolver := &mockInstallRootResolver{paths: map[string]string{}}
+	bundleResolver := &mockInstallRootResolver{paths: map[string]string{"my-bundle": bundleDir}}
+
+	created, err := materializeInstalledLinks(gitRoot, cfg, appResolver, bundleResolver, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(created) != 1 || created[0] != "schema.json" {
+		t.Fatalf("created = %v, want [schema.json]", created)
+	}
+	if _, err := os.Lstat(filepath.Join(gitRoot, ".datamitsu", "schema.json")); err != nil {
+		t.Errorf("expected bundle link to exist: %v", err)
+	}
+}
+
+func TestBundleResolverFor(t *testing.T) {
+	if r := bundleResolverFor(&config.Config{}, nil); r != nil {
+		t.Errorf("no bundles → want nil resolver, got %v", r)
+	}
+	cfg := &config.Config{Bundles: binmanager.MapOfBundles{
+		"b": {Links: map[string]string{"x": "x"}},
+	}}
+	if r := bundleResolverFor(cfg, nil); r == nil {
+		t.Error("bundles present → want non-nil resolver")
+	}
+}
+
 func TestInitCommandRegistered(t *testing.T) {
 	found := false
 	for _, cmd := range rootCmd.Commands() {

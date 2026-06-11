@@ -136,9 +136,11 @@ func runInit(_ *cobra.Command, _ []string) error {
 		}
 		toolCount, failed = n, failed+f
 
-		// Runtime-managed apps (node/UV) that provide config links must be
-		// installed before CreateDatamitsuLinks can resolve their roots. Their
-		// install feedback is the shared download bars; no extra section here.
+		// Install runtime-managed (node/UV) link-apps so their config links resolve
+		// below: those referenced by a tool, plus all non-lazy link-apps (whose
+		// links may be consumed by hooks/ConfigSetup, e.g. commitlint). Only apps
+		// marked Lazy (e.g. slidev) are deferred — they install on first `dm exec`.
+		// Install feedback is the shared bars.
 		if err := installRuntimeAppsWithLinks(ctx, binMgr, cfg, initAll); err != nil {
 			return fmt.Errorf("failed to install runtime apps with links: %w", err)
 		}
@@ -318,21 +320,7 @@ func reportBundles(ctx context.Context, disp *ui.Display, binMgr *binmanager.Bin
 }
 
 func reportConfigLinks(disp *ui.Display, rootPath string, cfg *config.Config, binMgr *binmanager.BinManager, dryRun bool) (int, error) {
-	if !hasAnyLinks(cfg.Apps, cfg.Bundles) {
-		// Even without links, create .datamitsu/ with type definitions so that
-		// /// <reference path=".datamitsu/datamitsu.config.d.ts" /> works.
-		if err := managedconfig.CreateDatamitsuTypeDefinitions(rootPath, dryRun); err != nil {
-			return 0, err
-		}
-		return 0, nil
-	}
-
-	var bundleResolver managedconfig.InstallRootResolver
-	if len(cfg.Bundles) > 0 {
-		bundleResolver = &bundleRootResolver{bm: binMgr}
-	}
-
-	createdLinks, err := managedconfig.CreateDatamitsuLinks(rootPath, cfg.Apps, binMgr, cfg.Bundles, bundleResolver, dryRun)
+	createdLinks, err := materializeInstalledLinks(rootPath, cfg, binMgr, bundleResolverFor(cfg, binMgr), dryRun)
 	if err != nil {
 		return 0, err
 	}
@@ -346,6 +334,82 @@ func reportConfigLinks(disp *ui.Display, rootPath string, cfg *config.Config, bi
 		initLabelLine(disp, "links", value+clr.Faint(" → .datamitsu/"))
 	}
 	return n, nil
+}
+
+// materializeInstalledLinks (re)builds .datamitsu/ symlinks for every link-app
+// and bundle that is currently installed, skipping any whose install root does
+// not yet resolve. Links thus follow installation: a deferred app (e.g. slidev,
+// installed lazily on first `dm exec`) contributes no link until it exists on
+// disk, at which point the exec path calls this to add it. Shared by init (after
+// its install phase) and exec. When nothing installed has links, it still lays
+// down .datamitsu/ with type definitions for IDE config autocomplete.
+func materializeInstalledLinks(rootPath string, cfg *config.Config, appResolver, bundleResolver managedconfig.InstallRootResolver, dryRun bool) ([]string, error) {
+	if !hasAnyLinks(cfg.Apps, cfg.Bundles) {
+		// No links configured anywhere; still lay down .datamitsu/ type definitions.
+		if err := managedconfig.CreateDatamitsuTypeDefinitions(rootPath, dryRun); err != nil {
+			return nil, err
+		}
+		return nil, nil
+	}
+
+	apps := installedAppsWithLinks(cfg.Apps, appResolver)
+
+	bundles := binmanager.MapOfBundles{}
+	if bundleResolver != nil {
+		bundles = installedBundlesWithLinks(cfg.Bundles, bundleResolver)
+	}
+
+	if len(apps) == 0 && len(bundles) == 0 {
+		// Nothing installed to link; still create .datamitsu/ with type definitions
+		// so /// <reference path=".datamitsu/datamitsu.config.d.ts" /> resolves.
+		if err := managedconfig.CreateDatamitsuTypeDefinitions(rootPath, dryRun); err != nil {
+			return nil, err
+		}
+		return nil, nil
+	}
+
+	return managedconfig.CreateDatamitsuLinks(rootPath, apps, appResolver, bundles, bundleResolver, dryRun)
+}
+
+// bundleResolverFor returns an InstallRootResolver for bundles, or nil when the
+// config declares no bundles.
+func bundleResolverFor(cfg *config.Config, binMgr *binmanager.BinManager) managedconfig.InstallRootResolver {
+	if len(cfg.Bundles) == 0 {
+		return nil
+	}
+	return &bundleRootResolver{bm: binMgr}
+}
+
+// installedAppsWithLinks returns the subset of apps that declare Links and whose
+// install root currently resolves (i.e. the app is installed on disk).
+func installedAppsWithLinks(apps binmanager.MapOfApps, resolver managedconfig.InstallRootResolver) binmanager.MapOfApps {
+	out := make(binmanager.MapOfApps, len(apps))
+	for name, app := range apps {
+		if len(app.Links) == 0 {
+			continue
+		}
+		if _, err := resolver.GetInstallRoot(name); err != nil {
+			continue // not installed (e.g. deferred) — its link is created on install
+		}
+		out[name] = app
+	}
+	return out
+}
+
+// installedBundlesWithLinks returns the subset of bundles that declare Links and
+// whose install root currently resolves.
+func installedBundlesWithLinks(bundles binmanager.MapOfBundles, resolver managedconfig.InstallRootResolver) binmanager.MapOfBundles {
+	out := make(binmanager.MapOfBundles, len(bundles))
+	for name, bundle := range bundles {
+		if bundle == nil || len(bundle.Links) == 0 {
+			continue
+		}
+		if _, err := resolver.GetInstallRoot(name); err != nil {
+			continue
+		}
+		out[name] = bundle
+	}
+	return out
 }
 
 func reportInitCommands(ctx context.Context, disp *ui.Display, rootPath string, projectTypes []string, cfg *config.Config, binMgr *binmanager.BinManager, dryRun bool) error {
@@ -482,21 +546,24 @@ type commandInfoGetter interface {
 }
 
 func installRuntimeAppsWithLinks(ctx context.Context, binMgr *binmanager.BinManager, cfg *config.Config, installAll bool) error {
-	var appsToInstall []string
-	if installAll {
-		appsToInstall = filterAppsForSmartInit(cfg.Apps, allAppNames(cfg.Apps))
-	} else {
-		referencedApps := scanReferencedApps(cfg)
-		appsToInstall = filterAppsForSmartInit(cfg.Apps, referencedApps)
+	return installSmartInitApps(ctx, binMgr, smartInitInstallSet(cfg, installAll))
+}
 
-		// Also include any runtime-managed app that has Links defined,
-		// even if not directly referenced by tool operations. Apps with
-		// Links may only be referenced via tools.Config.linkPath() in
-		// ConfigSetup sections, which scanReferencedApps does not inspect.
-		linkApps := allRuntimeAppsWithLinks(cfg.Apps)
-		appsToInstall = mergeUnique(appsToInstall, linkApps)
+// smartInitInstallSet returns the runtime-managed link-apps init installs.
+//
+// With installAll, every runtime link-app (Lazy included) is installed. In the
+// default (smart) mode the set is the link-apps referenced by a tool, plus every
+// non-lazy runtime link-app — the latter covers apps whose links are consumed by
+// hooks or ConfigSetup, which scanReferencedApps cannot see (e.g. commitlint, run
+// by the commit-msg hook with its config imported via a `.datamitsu/` symlink).
+// Only apps explicitly marked Lazy (e.g. slidev) are deferred; they install on
+// first `dm exec`, which is when their links matter.
+func smartInitInstallSet(cfg *config.Config, installAll bool) []string {
+	if installAll {
+		return filterAppsForSmartInit(cfg.Apps, allAppNames(cfg.Apps))
 	}
-	return installSmartInitApps(ctx, binMgr, appsToInstall)
+	referenced := filterAppsForSmartInit(cfg.Apps, scanReferencedApps(cfg))
+	return mergeUnique(referenced, eagerRuntimeLinkApps(cfg.Apps))
 }
 
 // allAppNames returns all app names from the config (for --all mode).
@@ -515,7 +582,7 @@ func initInstallAppNames(cfg *config.Config, includeAll bool) []string {
 		}
 	}
 	names = mergeUnique(names, filterAppsForSmartInit(cfg.Apps, scanReferencedApps(cfg)))
-	names = mergeUnique(names, allRuntimeAppsWithLinks(cfg.Apps))
+	names = mergeUnique(names, eagerRuntimeLinkApps(cfg.Apps))
 	sort.Strings(names)
 	return names
 }
@@ -572,13 +639,16 @@ func filterAppsForSmartInit(apps binmanager.MapOfApps, referencedApps []string) 
 	return result
 }
 
-// allRuntimeAppsWithLinks returns names of all runtime-managed (UV/node) apps
-// that have Links defined. These apps provide config files for symlinking
-// and should always be installed during init.
-func allRuntimeAppsWithLinks(apps binmanager.MapOfApps) []string {
+// eagerRuntimeLinkApps returns runtime-managed (node/UV) apps that declare Links
+// and are NOT marked Lazy. These install at init even when no tool references
+// them, because their links may be consumed by hooks or ConfigSetup that
+// scanReferencedApps cannot see (e.g. commitlint's config, imported via a
+// `.datamitsu/` symlink and run by the commit-msg hook). Lazy apps (e.g. slidev)
+// are excluded — they install on first `datamitsu exec`.
+func eagerRuntimeLinkApps(apps binmanager.MapOfApps) []string {
 	var result []string
 	for name, app := range apps {
-		if len(app.Links) == 0 {
+		if len(app.Links) == 0 || app.Lazy {
 			continue
 		}
 		if app.Binary != nil || app.Shell != nil || app.Jvm != nil {

@@ -406,52 +406,47 @@ func TestInstallRuntimeAppsWithLinksUsesSmartInit(t *testing.T) {
 	}
 }
 
-func TestAllRuntimeAppsWithLinks(t *testing.T) {
-	t.Run("returns only runtime-managed apps with links", func(t *testing.T) {
-		apps := binmanager.MapOfApps{
-			"node-with-links": {
-				Node:  &binmanager.AppConfigNode{PackageName: "pkg1"},
-				Links: map[string]string{"config": "dist/config.js"},
-			},
-			"uv-with-links": {
-				Uv:    &binmanager.AppConfigUV{PackageName: "pkg2"},
-				Links: map[string]string{"other": "dist/other.py"},
-			},
-			"node-no-links": {
-				Node: &binmanager.AppConfigNode{PackageName: "pkg3"},
-			},
-			"binary-with-links": {
-				Binary: &binmanager.AppConfigBinary{},
-				Links:  map[string]string{"bin": "config.js"},
-			},
-			"jvm-with-links": {
-				Jvm:   &binmanager.AppConfigJVM{Version: "1.0"},
-				Links: map[string]string{"jvm": "config.js"},
-			},
-		}
+// fakeRootResolver reports an app as installed iff its name is in installed.
+type fakeRootResolver struct{ installed map[string]bool }
 
-		result := allRuntimeAppsWithLinks(apps)
+func (f fakeRootResolver) GetInstallRoot(name string) (string, error) {
+	if f.installed[name] {
+		return "/fake/store/" + name, nil
+	}
+	return "", errors.New("not installed")
+}
 
-		expected := []string{"node-with-links", "uv-with-links"}
-		if len(result) != len(expected) {
-			t.Fatalf("got %v, want %v", result, expected)
-		}
-		for i, name := range result {
-			if name != expected[i] {
-				t.Errorf("result[%d] = %q, want %q", i, name, expected[i])
-			}
-		}
-	})
+func TestInstalledAppsWithLinks(t *testing.T) {
+	apps := binmanager.MapOfApps{
+		"installed-link-app": {
+			Node:  &binmanager.AppConfigNode{PackageName: "pkg1"},
+			Links: map[string]string{"config": "dist/config.js"},
+		},
+		"deferred-link-app": { // has links but NOT installed (e.g. slidev)
+			Node:  &binmanager.AppConfigNode{PackageName: "pkg2"},
+			Links: map[string]string{"theme": "node_modules/@scope/theme"},
+		},
+		"installed-no-links": {
+			Node: &binmanager.AppConfigNode{PackageName: "pkg3"},
+		},
+	}
+	resolver := fakeRootResolver{installed: map[string]bool{
+		"installed-link-app": true,
+		"installed-no-links": true,
+		// deferred-link-app intentionally absent → treated as not installed
+	}}
 
-	t.Run("returns empty when no apps have links", func(t *testing.T) {
-		apps := binmanager.MapOfApps{
-			"app1": {Node: &binmanager.AppConfigNode{PackageName: "pkg1"}},
-		}
-		result := allRuntimeAppsWithLinks(apps)
-		if len(result) != 0 {
-			t.Fatalf("expected empty, got %v", result)
-		}
-	})
+	result := installedAppsWithLinks(apps, resolver)
+
+	if len(result) != 1 {
+		t.Fatalf("expected 1 app, got %d: %v", len(result), result)
+	}
+	if _, ok := result["installed-link-app"]; !ok {
+		t.Errorf("expected installed-link-app to be included, got %v", result)
+	}
+	if _, ok := result["deferred-link-app"]; ok {
+		t.Error("deferred (uninstalled) link-app must be excluded from link materialization")
+	}
 }
 
 func TestMergeUnique(t *testing.T) {
@@ -476,21 +471,90 @@ func TestMergeUnique(t *testing.T) {
 	})
 }
 
-func TestSmartInitIncludesAllAppsWithLinks(t *testing.T) {
-	// Simulates the case where an app has Links but is not referenced by any
-	// tool operation (e.g., only referenced via tools.Config.linkPath in ConfigSetup).
+func TestEagerRuntimeLinkApps(t *testing.T) {
+	apps := binmanager.MapOfApps{
+		"node-link-eager": { // unreferenced but eager (e.g. commitlint)
+			Node:  &binmanager.AppConfigNode{PackageName: "pkg1"},
+			Links: map[string]string{"config": "dist/config.js"},
+		},
+		"uv-link-eager": {
+			Uv:    &binmanager.AppConfigUV{PackageName: "pkg2"},
+			Links: map[string]string{"other": "dist/other.py"},
+		},
+		"node-link-lazy": { // deferred (e.g. slidev)
+			Node:  &binmanager.AppConfigNode{PackageName: "pkg3"},
+			Links: map[string]string{"theme": "node_modules/@scope/theme"},
+			Lazy:  true,
+		},
+		"uv-link-lazy": { // Lazy excluded for uv apps too
+			Uv:    &binmanager.AppConfigUV{PackageName: "pkg3b"},
+			Links: map[string]string{"cfg": "dist/cfg.py"},
+			Lazy:  true,
+		},
+		"node-no-links": {
+			Node: &binmanager.AppConfigNode{PackageName: "pkg4"},
+		},
+		"binary-with-links": { // not runtime-managed → excluded
+			Binary: &binmanager.AppConfigBinary{},
+			Links:  map[string]string{"bin": "config.js"},
+		},
+		"jvm-with-links": { // not runtime-managed → excluded
+			Jvm:   &binmanager.AppConfigJVM{Version: "21"},
+			Links: map[string]string{"jvm": "config.js"},
+		},
+	}
+
+	assertStringsEqual(t, eagerRuntimeLinkApps(apps), []string{"node-link-eager", "uv-link-eager"})
+
+	if got := eagerRuntimeLinkApps(binmanager.MapOfApps{}); len(got) != 0 {
+		t.Errorf("empty input: got %v, want []", got)
+	}
+}
+
+func TestInstalledBundlesWithLinks(t *testing.T) {
+	bundles := binmanager.MapOfBundles{
+		"installed-with-links":   {Links: map[string]string{"a": "a.txt"}},
+		"uninstalled-with-links": {Links: map[string]string{"b": "b.txt"}},
+		"installed-no-links":     {},
+		"nil-bundle":             nil,
+	}
+	resolver := fakeRootResolver{installed: map[string]bool{
+		"installed-with-links": true,
+		"installed-no-links":   true,
+		// uninstalled-with-links absent → not installed
+	}}
+
+	out := installedBundlesWithLinks(bundles, resolver)
+
+	if len(out) != 1 {
+		t.Fatalf("expected 1 bundle, got %d: %v", len(out), out)
+	}
+	if _, ok := out["installed-with-links"]; !ok {
+		t.Errorf("expected installed-with-links to be kept, got %v", out)
+	}
+}
+
+func TestSmartInitInstallSet(t *testing.T) {
 	cfg := &config.Config{
 		Apps: binmanager.MapOfApps{
-			"tool-referenced": {
+			"tool-referenced": { // referenced by a tool
 				Node:  &binmanager.AppConfigNode{PackageName: "pkg-a"},
 				Links: map[string]string{"config-a": "dist/a.js"},
 			},
-			"linkpath-only": {
-				Uv:    &binmanager.AppConfigUV{PackageName: "pkg-b"},
-				Links: map[string]string{"config-b": "dist/b.py"},
+			"commitlint-like": { // unreferenced, but eager (hook-consumed link)
+				Node:  &binmanager.AppConfigNode{PackageName: "pkg-b"},
+				Links: map[string]string{"commitlint.config.js": "dist/b.js"},
 			},
-			"no-links": {
-				Node: &binmanager.AppConfigNode{PackageName: "pkg-c"},
+			"slidev-like": { // unreferenced and Lazy — the only one deferred in smart mode
+				Node:  &binmanager.AppConfigNode{PackageName: "pkg-c"},
+				Links: map[string]string{"theme": "node_modules/@scope/theme"},
+				Lazy:  true,
+			},
+			"referenced-no-links": { // a tool runs it but it has no links → not a link-app
+				Node: &binmanager.AppConfigNode{PackageName: "pkg-d"},
+			},
+			"unreferenced-no-links": {
+				Node: &binmanager.AppConfigNode{PackageName: "pkg-e"},
 			},
 		},
 		Tools: config.MapOfTools{
@@ -499,27 +563,35 @@ func TestSmartInitIncludesAllAppsWithLinks(t *testing.T) {
 					config.OpLint: {App: "tool-referenced"},
 				},
 			},
+			"tool-2": {
+				Operations: map[config.OperationType]config.ToolOperation{
+					config.OpLint: {App: "referenced-no-links"},
+				},
+			},
 		},
 	}
 
-	// scanReferencedApps only finds tool-referenced
-	referenced := scanReferencedApps(cfg)
-	filtered := filterAppsForSmartInit(cfg.Apps, referenced)
+	t.Run("smart mode: referenced + non-lazy link-apps, Lazy excluded", func(t *testing.T) {
+		got := smartInitInstallSet(cfg, false)
+		want := []string{"commitlint-like", "tool-referenced"}
+		assertStringsEqual(t, got, want)
+	})
 
-	// allRuntimeAppsWithLinks finds both apps with Links
-	linkApps := allRuntimeAppsWithLinks(cfg.Apps)
+	t.Run("--all installs every runtime link-app, including Lazy", func(t *testing.T) {
+		got := smartInitInstallSet(cfg, true)
+		want := []string{"commitlint-like", "slidev-like", "tool-referenced"}
+		assertStringsEqual(t, got, want)
+	})
+}
 
-	// mergeUnique combines both sets
-	result := mergeUnique(filtered, linkApps)
-
-	// Both apps with Links should be included
-	expected := []string{"linkpath-only", "tool-referenced"}
-	if len(result) != len(expected) {
-		t.Fatalf("got %v, want %v", result, expected)
+func assertStringsEqual(t *testing.T, got, want []string) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
 	}
-	for i, name := range result {
-		if name != expected[i] {
-			t.Errorf("result[%d] = %q, want %q", i, name, expected[i])
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("[%d] = %q, want %q", i, got[i], want[i])
 		}
 	}
 }
