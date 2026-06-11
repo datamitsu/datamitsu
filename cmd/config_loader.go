@@ -62,7 +62,17 @@ func loadConfig() (*config.Config, *config.SetupLayerMap, *goja.Runtime, error) 
 // loadConfigForLockfileGen loads config without enforcing lockfile constraints.
 // Used by config lockfile to allow bootstrapping lockfiles for apps that don't have one yet.
 func loadConfigForLockfileGen() (*config.Config, *config.SetupLayerMap, *goja.Runtime, error) {
-	return loadConfigImpl(context.Background(), BeforeConfigPaths, NoAutoConfig, ConfigPaths, true)
+	return loadConfigImpl(context.Background(), BeforeConfigPaths, NoAutoConfig, ConfigPaths, loadConfigOptions{skipLockfileValidation: true})
+}
+
+// loadConfigForStore loads the config for store-level commands (seed/status/
+// import). Unlike project commands they operate on the GLOBAL store, so a
+// broken git context (no git binary, dubious-ownership errors inside
+// containers) must not be fatal — the auto-discovered project config is
+// simply skipped with a warning.
+func loadConfigForStore(ctx context.Context) (*config.Config, error) {
+	cfg, _, _, err := loadConfigImpl(ctx, BeforeConfigPaths, NoAutoConfig, ConfigPaths, loadConfigOptions{tolerateGitRootFailure: true})
+	return cfg, err
 }
 
 // loadConfigWithPaths loads the default config and then sequentially loads
@@ -70,10 +80,20 @@ func loadConfigForLockfileGen() (*config.Config, *config.SetupLayerMap, *goja.Ru
 // Each config file is loaded in a separate VM and receives the previous config as input.
 // Remote configs declared via getRemoteConfigs() are resolved depth-first.
 func loadConfigWithPaths(ctx context.Context, beforeConfigPaths []string, noAutoConfig bool, configPaths []string) (cfg *config.Config, layerMap *config.SetupLayerMap, vm *goja.Runtime, err error) {
-	return loadConfigImpl(ctx, beforeConfigPaths, noAutoConfig, configPaths, false)
+	return loadConfigImpl(ctx, beforeConfigPaths, noAutoConfig, configPaths, loadConfigOptions{})
 }
 
-func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfig bool, configPaths []string, skipLockfileValidation bool) (cfg *config.Config, lm *config.SetupLayerMap, vm *goja.Runtime, err error) {
+// loadConfigOptions tweaks config loading for special-purpose commands.
+type loadConfigOptions struct {
+	skipLockfileValidation bool
+	// tolerateGitRootFailure downgrades a failed git-root determination to a
+	// warning (the auto config is skipped) instead of aborting. Store-level
+	// commands set it; project commands keep the hard error so a broken git
+	// context can't silently drop the project's config.
+	tolerateGitRootFailure bool
+}
+
+func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfig bool, configPaths []string, opts loadConfigOptions) (cfg *config.Config, lm *config.SetupLayerMap, vm *goja.Runtime, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("config loading panic: %v", r)
@@ -93,7 +113,11 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 		gitRoot, gitErr := facts.GetGitRoot(ctx)
 		if gitErr != nil {
 			if traverser.HasGitDir(cwdPath) {
-				return nil, nil, nil, fmt.Errorf("failed to determine git root: %w", gitErr)
+				if !opts.tolerateGitRootFailure {
+					return nil, nil, nil, fmt.Errorf("failed to determine git root: %w", gitErr)
+				}
+				logger.Logger.Warn("cannot determine the git root; proceeding without the project config",
+					zap.Error(gitErr))
 			}
 		}
 		if gitErr == nil && gitRoot != "" {
@@ -144,7 +168,7 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 	resolvedRemoteURLsMu.Unlock()
 
 	var warnings []string
-	if skipLockfileValidation {
+	if opts.skipLockfileValidation {
 		warnings, err = config.ValidateAppsSkipLockfile(currentConfig.Apps, currentConfig.Runtimes)
 	} else {
 		warnings, err = config.ValidateApps(currentConfig.Apps, currentConfig.Runtimes)

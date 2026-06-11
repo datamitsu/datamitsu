@@ -32,6 +32,29 @@ var ErrManifestNotFound = errors.New("manifest not found in registry")
 // permanent: re-downloading identical wrong bytes cannot help.
 var errDigestMismatch = errors.New("digest mismatch")
 
+// blobStallTimeout is the per-attempt progress watchdog window: an attempt is
+// aborted (and retried) only when NO bytes arrive for this long. A var so
+// tests can shrink it.
+var blobStallTimeout = 60 * time.Second
+
+// errBlobStalled marks a watchdog-cancelled attempt; retryable.
+var errBlobStalled = errors.New("blob download stalled")
+
+// stallResetReader rearms the stall watchdog on every successful read, so the
+// watchdog only fires on genuine no-progress stalls.
+type stallResetReader struct {
+	r        io.Reader
+	watchdog *time.Timer
+}
+
+func (s *stallResetReader) Read(p []byte) (int, error) {
+	n, err := s.r.Read(p)
+	if n > 0 {
+		s.watchdog.Reset(blobStallTimeout)
+	}
+	return n, err //nolint:wrapcheck // transparent reader passthrough
+}
+
 // IsDigestMismatch reports whether err is a content-verification failure
 // (manifest body or blob not matching its pinned digest/size).
 func IsDigestMismatch(err error) bool {
@@ -68,7 +91,7 @@ func (r *Resolver) PullManifest(ctx context.Context, repo, dgst string) ([]byte,
 	}
 
 	manifestURL := fmt.Sprintf("%s://%s/v2/%s/manifests/%s", r.scheme, r.registry, repo, dgst)
-	resp, err := r.authedGet(ctx, repo, manifestURL, acceptManifests)
+	resp, err := r.authedGet(ctx, nil, repo, manifestURL, acceptManifests)
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +139,15 @@ func (r *Resolver) PullBlob(ctx context.Context, repo, dgst string, size, maxByt
 
 	var lastErr error
 	for attempt := 1; attempt <= httpretry.DefaultMaxAttempts; attempt++ {
-		path, err := r.pullBlobOnce(ctx, repo, dgst, size, maxBytes, displayName, destDir)
+		// The retry state lives in the bar label instead of a log line: the
+		// previous attempt's bar is aborted on close, so the user sees one
+		// coherent bar restarting with an explicit retry counter.
+		label := displayName
+		if attempt > 1 {
+			label = fmt.Sprintf("%s (retry %d/%d)", displayName, attempt, httpretry.DefaultMaxAttempts)
+		}
+
+		path, err := r.pullBlobOnce(ctx, repo, dgst, size, maxBytes, label, destDir)
 		if err == nil {
 			return path, nil
 		}
@@ -130,7 +161,7 @@ func (r *Resolver) PullBlob(ctx context.Context, repo, dgst string, size, maxByt
 		}
 
 		delay := httpretry.Delay(attempt)
-		logger.Logger.Warn("blob download failed, retrying",
+		logger.Logger.Debug("blob download failed, retrying",
 			zap.String("digest", dgst),
 			zap.Int("attempt", attempt),
 			zap.Duration("delay", delay),
@@ -143,6 +174,15 @@ func (r *Resolver) PullBlob(ctx context.Context, repo, dgst string, size, maxByt
 		}
 	}
 	return "", fmt.Errorf("after %d attempts: %w", httpretry.DefaultMaxAttempts, lastErr)
+}
+
+// blobClientOrDefault returns the deadline-free blob client, falling back to
+// the manifest client for hand-built Resolvers (tests).
+func (r *Resolver) blobClientOrDefault() *http.Client {
+	if r.blobClient != nil {
+		return r.blobClient
+	}
+	return r.httpClient
 }
 
 func (r *Resolver) pullBlobOnce(ctx context.Context, repo, dgst string, size, maxBytes int64, displayName, destDir string) (path string, retErr error) {
@@ -165,11 +205,20 @@ func (r *Resolver) pullBlobOnce(ctx context.Context, repo, dgst string, size, ma
 		}
 	}()
 
+	// A blob stream is bounded by PROGRESS, not by an end-to-end deadline:
+	// the watchdog cancels the attempt only when no bytes arrive for the
+	// whole window, so a slow-but-moving 2 GiB download is never cut off
+	// mid-stream the way a flat client timeout would.
+	attemptCtx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
+	watchdog := time.AfterFunc(blobStallTimeout, func() { cancel(errBlobStalled) })
+	defer watchdog.Stop()
+
 	blobURL := fmt.Sprintf("%s://%s/v2/%s/blobs/%s", r.scheme, r.registry, repo, dgst)
 	// GHCR answers with a 307 to its CDN; the hardened client follows it and
 	// net/http itself strips Authorization on the cross-host hop. The redirect
 	// target is untrusted either way — trust rests on the digest check below.
-	resp, err := r.authedGet(ctx, repo, blobURL, "")
+	resp, err := r.authedGet(attemptCtx, r.blobClientOrDefault(), repo, blobURL, "")
 	if err != nil {
 		return "", err
 	}
@@ -184,12 +233,15 @@ func (r *Resolver) pullBlobOnce(ctx context.Context, repo, dgst string, size, ma
 	}
 
 	hasher := sha256.New()
-	limited := io.LimitReader(resp.Body, maxBytes+1)
+	limited := &stallResetReader{r: io.LimitReader(resp.Body, maxBytes+1), watchdog: watchdog}
 	reader := ui.Current().Download(displayName, size, limited)
 	defer func() { _ = reader.Close() }()
 
 	written, err := io.Copy(io.MultiWriter(tmpFile, hasher), reader)
 	if err != nil {
+		if errors.Is(context.Cause(attemptCtx), errBlobStalled) {
+			return "", fmt.Errorf("blob %s stalled: no data received for %s", dgst, blobStallTimeout)
+		}
 		return "", fmt.Errorf("stream blob %s: %w", dgst, err)
 	}
 	if written > maxBytes {

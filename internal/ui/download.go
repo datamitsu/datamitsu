@@ -56,7 +56,7 @@ func (d *Display) Download(name string, total int64, r io.Reader) io.ReadCloser 
 				decor.EwmaSpeed(decor.SizeB1024(0), " % .2f", 60),
 			),
 		)
-		return &barReader{ReadCloser: bar.ProxyReader(r), d: d}
+		return &barReader{ReadCloser: bar.ProxyReader(r), bar: bar, d: d}
 	}
 
 	return &plainDownload{d: d, name: name, total: total, r: r, lastPct: -1}
@@ -67,12 +67,23 @@ func (d *Display) Download(name string, total int64, r io.Reader) io.ReadCloser 
 type barReader struct {
 	io.ReadCloser
 
+	bar  *mpb.Bar
 	d    *Display
 	once sync.Once
 }
 
 func (b *barReader) Close() error {
-	b.once.Do(b.d.barEnded)
+	b.once.Do(func() {
+		// Drop the bar unconditionally: a transfer closed before reaching
+		// total is a failed/aborted attempt, and mpb keeps incomplete bars
+		// alive forever — Display.Close waits on the whole container, so a
+		// single zombie bar (e.g. a download that died at 66% and was
+		// retried) would freeze the final render and block the process from
+		// ever printing its error. Abort is a no-op on completed bars, which
+		// are removed on completion anyway.
+		b.bar.Abort(true)
+		b.d.barEnded()
+	})
 	return b.ReadCloser.Close() //nolint:wrapcheck // passthrough of mpb proxy reader
 }
 

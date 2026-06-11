@@ -28,7 +28,11 @@ import (
 )
 
 const (
-	defaultTimeout = 30 * time.Second
+	// defaultTimeout bounds manifest/token requests end-to-end. These carry
+	// at most a few MiB, but flaky links and bearer handshakes deserve more
+	// headroom than the old 30s. Blob streaming deliberately does NOT use
+	// this client — see blobClient.
+	defaultTimeout = 60 * time.Second
 	maxBodyBytes   = 1 << 20
 )
 
@@ -53,6 +57,14 @@ type Resolver struct {
 
 	cacheDir string // local digest cache root
 
+	// blobClient streams layer blobs. It has NO overall timeout: bundle
+	// layers run to hundreds of MiB and an end-to-end deadline would abort
+	// any download slower than size/timeout (a 120 MiB layer at 3 MiB/s
+	// needs ~40s — the old shared 30s client cut it off mid-stream every
+	// time). Stalls are caught instead by the per-attempt progress watchdog
+	// in PullBlob.
+	blobClient *http.Client
+
 	// bearerMu guards bearerTokens, the in-process cache of minted bearer
 	// tokens keyed by repository (the scope is repository:<repo>:pull, so the
 	// repo key is scope-equivalent). Without it every request would repeat the
@@ -73,6 +85,7 @@ func NewResolver() *Resolver {
 func NewResolverForHost(host string) *Resolver {
 	return &Resolver{
 		httpClient:   httpx.NewHardenedClient(defaultTimeout),
+		blobClient:   httpx.NewHardenedClient(0), // no overall deadline; see field doc
 		registry:     host,
 		scheme:       "https",
 		token:        os.Getenv("GITHUB_TOKEN"), //nolint:forbidigo // third-party token, not a datamitsu env var
@@ -108,7 +121,7 @@ func (r *Resolver) ResolveCached(ctx context.Context, repo, tag string) (string,
 func (r *Resolver) Resolve(ctx context.Context, repo, tag string) (string, error) {
 	manifestURL := fmt.Sprintf("%s://%s/v2/%s/manifests/%s", r.scheme, r.registry, repo, tag)
 
-	resp, err := r.authedGet(ctx, repo, manifestURL, acceptManifests)
+	resp, err := r.authedGet(ctx, nil, repo, manifestURL, acceptManifests)
 	if err != nil {
 		return "", err
 	}
@@ -131,9 +144,14 @@ func (r *Resolver) Resolve(ctx context.Context, repo, tag string) (string, error
 // the bearer-token handshake: a cached token for the repository is attached
 // when present; on a 401 with a Bearer challenge a token is minted (and
 // cached), and the request is retried once. The caller owns the response body.
-func (r *Resolver) authedGet(ctx context.Context, repo, rawURL, accept string) (*http.Response, error) {
+// A nil client uses the default (deadline-bounded) manifest client; blob
+// streaming passes the deadline-free blobClient.
+func (r *Resolver) authedGet(ctx context.Context, client *http.Client, repo, rawURL, accept string) (*http.Response, error) {
 	if err := httpx.GuardOffline("oci registry request to " + r.registry); err != nil {
 		return nil, err
+	}
+	if client == nil {
+		client = r.httpClient
 	}
 	do := func(token string) (*http.Response, error) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
@@ -146,7 +164,7 @@ func (r *Resolver) authedGet(ctx context.Context, repo, rawURL, accept string) (
 		if token != "" {
 			req.Header.Set("Authorization", "Bearer "+token)
 		}
-		resp, err := r.httpClient.Do(req)
+		resp, err := client.Do(req)
 		if err != nil {
 			return nil, fmt.Errorf("registry request failed: %w", err)
 		}
