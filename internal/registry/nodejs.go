@@ -8,6 +8,8 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/datamitsu/datamitsu/internal/httpx"
 )
 
 const nodejsFallbackLTSVersion = "24.14.0"
@@ -28,6 +30,9 @@ func GetLatestNodeLTSVersion(ctx context.Context) (string, error) {
 }
 
 func getLatestNodeLTSVersionFromURL(ctx context.Context, url string) (string, error) {
+	if err := httpx.GuardOffline("Node.js release lookup"); err != nil {
+		return nodejsFallbackLTSVersion, err
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nodejsFallbackLTSVersion, fmt.Errorf("failed to build request: %w", err)

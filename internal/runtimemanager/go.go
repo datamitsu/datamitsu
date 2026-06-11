@@ -15,6 +15,7 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/httpx"
 	"github.com/datamitsu/datamitsu/internal/ui"
 
 	"go.uber.org/zap"
@@ -187,6 +188,11 @@ func (rm *RuntimeManager) installGoAppOnce(ctx context.Context, appName string, 
 	// verify the build against, so refuse rather than build unverified.
 	if appConfig.LockFile == "" {
 		return fmt.Errorf("app %q has no lockFile; a lockFile (go.mod + go.sum) is mandatory for Go apps", appName)
+	}
+
+	// `go install` downloads modules itself; refuse before spawning it.
+	if err := httpx.GuardOffline("go app install of " + appName); err != nil {
+		return err
 	}
 
 	goPath, err := rm.getRuntimePath(ctx, runtimeName)

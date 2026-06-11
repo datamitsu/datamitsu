@@ -11,6 +11,7 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/ocibundle"
 	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 	"github.com/datamitsu/datamitsu/internal/term"
 	"github.com/datamitsu/datamitsu/internal/ui"
@@ -64,6 +65,12 @@ func runInstall(ctx context.Context, apps, runtimes []string, verify bool) error
 
 	rm := runtimemanager.New(cfg.Runtimes)
 	binMgr := binmanager.New(cfg.Apps, cfg.Bundles, rm)
+
+	// Seed the requested targets from the declared OCI bundle first so the
+	// installs below hit seeded store content instead of the network.
+	if err := ocibundle.AutoSeed(ctx, cfg, apps, runtimes); err != nil {
+		return err
+	}
 
 	if err := installUnderDisplay(ctx, rm, binMgr, cfg.Apps, apps, runtimes); err != nil {
 		return err

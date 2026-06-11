@@ -151,6 +151,10 @@ func (rm *RuntimeManager) downloadPNPMFromRegistryURL(ctx context.Context, regis
 		return nil
 	}
 
+	if err := httpx.GuardOffline("pnpm runtime download"); err != nil {
+		return err
+	}
+
 	url := fmt.Sprintf("%s/pnpm/%s", registryBaseURL, version)
 	metaReq, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -414,6 +418,32 @@ func buildPNPMWorkspaceForApp(files map[string]string) (string, error) {
 	out, err := yaml.Marshal(merged)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal pnpm-workspace.yaml: %w", err)
+	}
+	return string(out), nil
+}
+
+// buildPNPMWorkspaceHashForm is the cache-key form of the merged workspace:
+// identical to buildPNPMWorkspaceForApp EXCEPT the storeDir pin, which is an
+// absolute path under the store root. Folding it into the app hash would make
+// node app store paths root-dependent — breaking the relocatability contract
+// the OCI bundle demand matching relies on (a layer hashed under /dm/store
+// could never match a host store). storeDir only ever changes together with
+// the store root itself, under which no cached content exists anyway, so
+// excluding it loses no invalidation.
+func buildPNPMWorkspaceHashForm(files map[string]string) (string, error) {
+	userYAML := ""
+	if files != nil {
+		userYAML = files["pnpm-workspace.yaml"]
+	}
+
+	merged, err := mergePNPMWorkspaceConfig(pnpmdefaults.Defaults(), userYAML)
+	if err != nil {
+		return "", err
+	}
+
+	out, err := yaml.Marshal(merged)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal pnpm-workspace.yaml hash form: %w", err)
 	}
 	return string(out), nil
 }

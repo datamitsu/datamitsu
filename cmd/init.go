@@ -17,6 +17,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"github.com/datamitsu/datamitsu/internal/managedconfig"
+	"github.com/datamitsu/datamitsu/internal/ocibundle"
 	"github.com/datamitsu/datamitsu/internal/project"
 	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 	"github.com/datamitsu/datamitsu/internal/term"
@@ -113,6 +114,16 @@ func runInit(_ *cobra.Command, _ []string) error {
 	var runtimeCount, toolCount, bundleCount, linkCount, failed int
 
 	if !initSkipDownload && !initDryRun {
+		// Seed the install set from the declared OCI bundle first (demand-
+		// driven), so the runtime/binary/app installs below hit seeded store
+		// content instead of the network.
+		if err := ocibundle.AutoSeed(ctx, cfg,
+			initInstallAppNames(cfg, initAll),
+			runtimemanager.CollectRequiredRuntimes(cfg.Apps, cfg.Runtimes, initAll),
+		); err != nil {
+			return fmt.Errorf("failed to seed store from oci bundle: %w", err)
+		}
+
 		n, f, rErr := reportRuntimes(ctx, disp, rm, cfg, initAll)
 		if rErr != nil {
 			return fmt.Errorf("failed to install runtimes: %w", rErr)
@@ -489,6 +500,26 @@ func installRuntimeAppsWithLinks(ctx context.Context, binMgr *binmanager.BinMana
 }
 
 // allAppNames returns all app names from the config (for --all mode).
+// initInstallAppNames approximates the set of apps the init download phase
+// installs (binaries under the required/optional gate plus smart-init runtime
+// apps), for demand-driven OCI bundle seeding. Over-approximation is harmless:
+// an extra name only pulls a layer init would download anyway.
+func initInstallAppNames(cfg *config.Config, includeAll bool) []string {
+	if includeAll {
+		return allAppNames(cfg.Apps)
+	}
+	var names []string
+	for name, app := range cfg.Apps {
+		if app.Required {
+			names = append(names, name)
+		}
+	}
+	names = mergeUnique(names, filterAppsForSmartInit(cfg.Apps, scanReferencedApps(cfg)))
+	names = mergeUnique(names, allRuntimeAppsWithLinks(cfg.Apps))
+	sort.Strings(names)
+	return names
+}
+
 func allAppNames(apps binmanager.MapOfApps) []string {
 	result := make([]string, 0, len(apps))
 	for name := range apps {

@@ -219,6 +219,33 @@ type RuntimeConfig struct {
 type MapOfRuntimes map[string]RuntimeConfig
 
 // ========================================
+// OCI Bundle Declaration
+// ========================================
+
+// OCIRef declares the OCI bundle that seeds the tool store: the registry
+// repository plus the mandatory sha256 digest pinning the bundle content.
+// It chains through the config layers as a scalar — the last layer that set
+// or spread it wins; `oci: undefined` or `oci: null` resets it.
+type OCIRef struct {
+	// Ref is the full repository reference including the registry host
+	// (e.g. "ghcr.io/owner/repo"). Tags and digests are not allowed inside
+	// the ref — content is pinned exclusively by Digest.
+	Ref string `json:"ref"`
+	// Digest is the bundle index/manifest digest in "sha256:<64 hex>" form.
+	Digest string `json:"digest"`
+	// Signer optionally pins the sigstore keyless identity of the bundle
+	// publisher. When set, pull must verify the signature before layout.
+	Signer *OCISigner `json:"signer,omitempty"`
+}
+
+// OCISigner pins a sigstore keyless publisher identity: the certificate
+// identity (e.g. a GitHub Actions workflow ref) and the OIDC issuer URL.
+type OCISigner struct {
+	Identity string `json:"identity"`
+	Issuer   string `json:"issuer"`
+}
+
+// ========================================
 // Main Config (ENHANCED)
 // ========================================
 
@@ -233,6 +260,10 @@ type Config struct {
 	InitCommands  MapOfInitCommands       `json:"initCommands,omitempty"`
 	IgnoreRules   []string                `json:"ignoreRules,omitempty"`
 	SharedStorage map[string]string       `json:"sharedStorage,omitempty"`
+	// OCI pins the store-seeding bundle. omitempty is load-bearing: the whole
+	// Config is marshaled into the execution-cache invalidation key, and a nil
+	// field must not change that key on upgrade.
+	OCI *OCIRef `json:"oci,omitempty"`
 }
 
 // GetDefaultConfig returns the embedded default config JS with TypeScript types stripped.

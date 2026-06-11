@@ -16,6 +16,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/httpx"
 	"github.com/datamitsu/datamitsu/internal/ui"
 
 	"go.uber.org/zap"
@@ -94,6 +95,12 @@ func (rm *RuntimeManager) installUVAppOnce(ctx context.Context, appName string, 
 			zap.String("path", binPath),
 		)
 		return nil
+	}
+
+	// uv sync spawns a child process whose network cannot be cut; refuse
+	// before touching the stale dir or starting the install.
+	if err := httpx.GuardOffline("uv app install of " + appName); err != nil {
+		return err
 	}
 
 	// The app dir may exist but be broken (e.g. a dangling venv interpreter

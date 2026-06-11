@@ -334,6 +334,60 @@ func isValidLibcKey(key string) bool {
 	}
 }
 
+// ociRefPattern matches a repository reference: a registry host (optionally
+// with a port) followed by at least one path component. The character set
+// excludes ":" outside the port position and "@" entirely, so a ref carrying
+// a ":tag" or "@digest" suffix cannot match — content is pinned exclusively
+// by OCIRef.Digest.
+var ociRefPattern = regexp.MustCompile(`^[a-z0-9.-]+(:[0-9]+)?(/[a-z0-9._-]+)+$`)
+
+// ValidateOCI validates the top-level oci bundle declaration. A nil ref is
+// valid (no bundle configured).
+func ValidateOCI(ref *OCIRef) error {
+	if ref == nil {
+		return nil
+	}
+
+	var errs []string
+
+	switch {
+	case ref.Ref == "":
+		errs = append(errs, "oci: ref is required (full reference including registry host, e.g. ghcr.io/owner/repo)")
+	case !ociRefPattern.MatchString(ref.Ref):
+		errs = append(errs, fmt.Sprintf("oci: ref %q is not a valid repository reference (expected host[:port]/path, lowercase, no tag and no digest)", ref.Ref))
+	default:
+		// Require an explicit registry host: the first segment must look like a
+		// hostname (contain a dot or a port) or be "localhost". There is no
+		// default host and no docker.io magic.
+		host := ref.Ref[:strings.IndexByte(ref.Ref, '/')]
+		if host != "localhost" && !strings.Contains(host, ".") && !strings.Contains(host, ":") {
+			errs = append(errs, fmt.Sprintf("oci: ref %q must include the registry host as its first segment (e.g. ghcr.io/owner/repo)", ref.Ref))
+		}
+	}
+
+	const digestPrefix = "sha256:"
+	switch {
+	case ref.Digest == "":
+		errs = append(errs, "oci: digest is required (sha256:<64 hex>)")
+	case !strings.HasPrefix(ref.Digest, digestPrefix) || !isValidSHA256Hex(strings.TrimPrefix(ref.Digest, digestPrefix)):
+		errs = append(errs, fmt.Sprintf("oci: digest %q must be \"sha256:\" followed by 64 lowercase hex characters", ref.Digest))
+	}
+
+	if ref.Signer != nil {
+		if ref.Signer.Identity == "" {
+			errs = append(errs, "oci: signer.identity is required when signer is set")
+		}
+		if ref.Signer.Issuer == "" {
+			errs = append(errs, "oci: signer.issuer is required when signer is set")
+		}
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("config validation failed:\n  %s", strings.Join(errs, "\n  "))
+	}
+	return nil
+}
+
 func isValidSHA256Hex(s string) bool {
 	if len(s) != 64 {
 		return false

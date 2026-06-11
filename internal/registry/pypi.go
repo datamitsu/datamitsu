@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"regexp"
 	"time"
+
+	"github.com/datamitsu/datamitsu/internal/httpx"
 )
 
 // PyPIPackageInfo holds the resolved name, version and description of a PyPI package.
@@ -156,6 +158,9 @@ func parsePyPIUploadTime(f pypiReleaseFile) (time.Time, bool) {
 }
 
 func getPyPIFullResponse(ctx context.Context, packageName string) (*pypiFullResponse, error) {
+	if err := httpx.GuardOffline("PyPI registry lookup"); err != nil {
+		return nil, err
+	}
 	url := fmt.Sprintf("%s/pypi/%s/json", pypiBaseURL, packageName)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -183,6 +188,9 @@ func getPyPIFullResponse(ctx context.Context, packageName string) (*pypiFullResp
 }
 
 func getPyPIPackageInfoFromURL(ctx context.Context, url, packageName string) (*PyPIPackageInfo, error) {
+	if err := httpx.GuardOffline("PyPI registry lookup"); err != nil {
+		return nil, err
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build request: %w", err)

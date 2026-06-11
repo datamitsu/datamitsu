@@ -23,6 +23,9 @@ var httpClient = httpx.NewHardenedClient(30 * time.Second)
 // FetchRemoteConfig downloads a remote config file and verifies its SHA-256 hash.
 // The expectedHash must be in the format "sha256:hexdigest" or plain hex digest.
 func FetchRemoteConfig(ctx context.Context, url, expectedHash string) (string, error) {
+	if err := httpx.GuardOffline("remote config fetch of " + url); err != nil {
+		return "", err
+	}
 	if expectedHash == "" {
 		return "", fmt.Errorf("remote config %s: hash is required", url)
 	}

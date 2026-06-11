@@ -127,6 +127,54 @@ func (rm *RuntimeManager) ResolveRuntime(appRuntimeRef string, kind config.Runti
 	return "", config.RuntimeConfig{}, fmt.Errorf("no runtime of kind %q found", kind)
 }
 
+// ComputeRuntimeStorePath returns the store directory (.runtimes/<name>/<hash>)
+// of a managed runtime without installing it, mirroring the hash math of
+// getRuntimePath (including the glibc fallback when the host libc has no
+// entry). ok is false for system-mode runtimes, which have no store directory.
+func (rm *RuntimeManager) ComputeRuntimeStorePath(runtimeName string) (path string, ok bool, err error) {
+	rc, found := rm.mapOfRuntimes[runtimeName]
+	if !found {
+		return "", false, fmt.Errorf("runtime %q not found in registry", runtimeName)
+	}
+
+	rc = rm.resolveEffectiveRuntimeConfig(runtimeName, rc)
+	if rc.Mode == config.RuntimeModeSystem {
+		return "", false, nil
+	}
+	if rc.Managed == nil {
+		return "", false, fmt.Errorf("runtime %q is managed mode but has no managed config", runtimeName)
+	}
+
+	osType, err := syslist.GetOsTypeFromString(runtime.GOOS)
+	if err != nil {
+		return "", false, fmt.Errorf("failed to detect OS type: %w", err)
+	}
+	archType, err := syslist.GetArchTypeFromString(runtime.GOARCH)
+	if err != nil {
+		return "", false, fmt.Errorf("failed to detect architecture type: %w", err)
+	}
+	libc := string(rm.hostTarget.Libc)
+
+	archMap, found := rc.Managed.Binaries[osType]
+	if !found {
+		return "", false, fmt.Errorf("runtime %q not available for OS %q", runtimeName, osType)
+	}
+	libcMap, found := archMap[archType]
+	if !found {
+		return "", false, fmt.Errorf("runtime %q not available for arch %q on OS %q", runtimeName, archType, osType)
+	}
+	info, resolvedLibc := resolveLibcKey(libcMap, libc)
+	if info == nil {
+		return "", false, fmt.Errorf("runtime %q not available for libc %q on %q/%q", runtimeName, libc, osType, archType)
+	}
+
+	configHash, err := calculateRuntimeHash(rc, osType, archType, resolvedLibc)
+	if err != nil {
+		return "", false, fmt.Errorf("failed to calculate runtime hash: %w", err)
+	}
+	return env.GetRuntimeBinaryPath(runtimeName, configHash), true, nil
+}
+
 // NodeAppPathExtra holds npm-app-specific parameters for app hash calculation.
 type NodeAppPathExtra struct {
 	PackageName string
@@ -255,7 +303,7 @@ func (rm *RuntimeManager) GetCommandInfo(ctx context.Context, appName string, ap
 		if err := rm.installNodeApp(ctx, appName, app.Node, app.Env, app.Files, app.Archives, mergedWorkspaceYAML); err != nil {
 			return nil, err
 		}
-		return rm.getNodeCommandInfo(ctx, appName, app.Node, app.Files, app.Archives, mergedWorkspaceYAML)
+		return rm.getNodeCommandInfo(ctx, appName, app.Node, app.Files, app.Archives)
 	case app.Jvm != nil:
 		if err := rm.InstallJVMApp(ctx, appName, app.Jvm, app.Files, app.Archives); err != nil {
 			return nil, err

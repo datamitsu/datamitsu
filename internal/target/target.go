@@ -4,6 +4,11 @@ import (
 	"context"
 	"runtime"
 	"sync"
+
+	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/logger"
+
+	"go.uber.org/zap"
 )
 
 // LibcType represents the libc implementation on the host system.
@@ -52,16 +57,41 @@ type ResolvedTarget struct {
 	FallbackInfo *FallbackInfo
 }
 
-// DetectHost returns the Target for the current system.
+// DetectHost returns the Target for the current system. On Linux the
+// DATAMITSU_LIBC override, when set to a valid value, takes precedence over
+// probing — it both fixes fragile detection on distroless hosts (no
+// ldd/loader) and keeps store paths and OCI bundle selection consistent.
 func DetectHost(ctx context.Context) Target {
 	libc := LibcUnknown
 	if runtime.GOOS == "linux" {
-		libc = DetectLibc(ctx)
+		if override, ok := libcFromEnv(); ok {
+			libc = override
+		} else {
+			libc = DetectLibc(ctx)
+		}
 	}
 	return Target{
 		OS:   runtime.GOOS,
 		Arch: runtime.GOARCH,
 		Libc: libc,
+	}
+}
+
+// libcFromEnv validates the DATAMITSU_LIBC override. Only glibc and musl are
+// accepted; anything else is ignored with a warning so a typo degrades to
+// regular detection instead of poisoning store paths.
+func libcFromEnv() (LibcType, bool) {
+	switch value := env.LibcOverride(); value {
+	case "":
+		return LibcUnknown, false
+	case string(LibcGlibc):
+		return LibcGlibc, true
+	case string(LibcMusl):
+		return LibcMusl, true
+	default:
+		logger.Logger.Warn("ignoring invalid libc override (must be glibc or musl)",
+			zap.String("value", value))
+		return LibcUnknown, false
 	}
 }
 

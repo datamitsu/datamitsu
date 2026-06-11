@@ -25,6 +25,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"github.com/datamitsu/datamitsu/internal/logger"
+	"github.com/datamitsu/datamitsu/internal/ocibundle"
 	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 	"github.com/datamitsu/datamitsu/internal/term"
 	"github.com/datamitsu/datamitsu/internal/timing"
@@ -425,6 +426,12 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	// modes return earlier and never reach this point, so no installs happen
 	// during planning-only runs.
 	if sc.binMgr != nil {
+		// Seed the store from the declared OCI bundle first (demand-driven:
+		// only the layers of the planned tools), so EnsureTools' stat checks
+		// hit seeded content instead of downloading.
+		if err := ocibundle.AutoSeed(ctx, sc.cfg, plan.GetAppNames(), nil); err != nil {
+			return fmt.Errorf("failed to seed store from oci bundle: %w", err)
+		}
 		if err := sc.binMgr.EnsureTools(ctx, plan.GetAppNames()); err != nil {
 			return fmt.Errorf("failed to pre-install tools: %w", err)
 		}

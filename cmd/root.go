@@ -9,6 +9,7 @@ import (
 	clr "github.com/datamitsu/datamitsu/internal/color"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"github.com/datamitsu/datamitsu/internal/logger"
+	"github.com/datamitsu/datamitsu/internal/ocibundle"
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"github.com/datamitsu/datamitsu/internal/sponsor"
 	"github.com/datamitsu/datamitsu/internal/term"
@@ -43,6 +44,8 @@ var (
 	ConfigPaths []string
 	// verbose raises the log level to debug for the whole run
 	verbose bool
+	// noOCI disables OCI bundle store seeding for this invocation
+	noOCI bool
 )
 
 var rootCmd = &cobra.Command{
@@ -63,6 +66,7 @@ func init() {
 			fmt.Fprintf(os.Stderr, "%s %s\n", clr.Red("error:"), err)
 			os.Exit(1)
 		}
+		ocibundle.SetDisabledByFlag(noOCI)
 	})
 
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false,
@@ -75,6 +79,8 @@ func init() {
 		"Disable auto-discovery of datamitsu.config.{js,mjs,ts} at git root")
 	rootCmd.PersistentFlags().StringSliceVar(&ConfigPaths, "config", []string{},
 		"Additional configuration file(s) to load and merge (can be specified multiple times)")
+	rootCmd.PersistentFlags().BoolVar(&noOCI, "no-oci", false,
+		"Disable OCI bundle store seeding (also via DATAMITSU_NO_OCI)")
 }
 
 // Execute runs the root command and exits the process on error.

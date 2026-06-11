@@ -95,4 +95,22 @@ var (
 		DefaultValue: "ghcr.io",
 		Description:  "OCI registry host used to resolve the base image digest for generated Dockerfiles",
 	}
+
+	offline = envVar{
+		Name:         strings.ToUpper(ldflags.PackageName) + "_OFFLINE",
+		DefaultValue: "",
+		Description:  "Refuse all network access (set to any non-empty value); requires a pre-seeded store",
+	}
+
+	noOCI = envVar{
+		Name:         strings.ToUpper(ldflags.PackageName) + "_NO_OCI",
+		DefaultValue: "",
+		Description:  "Disable OCI bundle store seeding (set to any non-empty value)",
+	}
+
+	libcOverride = envVar{
+		Name:         strings.ToUpper(ldflags.PackageName) + "_LIBC",
+		DefaultValue: "",
+		Description:  "Override host libc detection (glibc or musl); affects store paths and OCI bundle selection",
+	}
 )

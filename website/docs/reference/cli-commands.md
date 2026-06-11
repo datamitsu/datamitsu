@@ -520,6 +520,7 @@ datamitsu devtools dockerfile -o docker/Dockerfile
 | `--build-arg <n[=v]>`    | Build-time `ARG`→`ENV` in a `dm-build` stage so install stages inherit it; not in the final image (repeatable) |
 | `--env <key=value>`      | `ENV` var baked into the final image (repeatable)                                                              |
 | `--force-include <apps>` | Keep binary apps that lack a binary for the target libc (comma-separated, repeatable)                          |
+| `--emit-oci-map <path>`  | Also write the layer→subtree map JSON consumed by the OCI bundle annotation post-process                       |
 
 **libc filtering.** The generated image targets one libc — **musl** with `--alpine`, **glibc** otherwise — and binary apps are filtered to those that ship a binary for it on every arch they declare. A glibc-only binary can't execute on a musl image (and vice versa), so incompatible apps are dropped from the Dockerfile and listed in a warning. Runtime-managed apps (node/uv/jvm/go) are unaffected — their runtime carries the libc. Statically-linked tools that run on any libc but are under-declared in the registry (e.g. a static Go binary recorded as glibc-only) can be added back with `--force-include name1,name2`.
 
@@ -716,6 +717,46 @@ datamitsu store clear
 This removes all downloaded binaries and runtimes. You will need to run `datamitsu init` again afterward.
 :::
 
+### store seed
+
+Pull the [OCI bundle](/docs/guides/oci-bundles) declared by the config's top-level `oci` key into the global store — no docker/podman required. Without arguments the **whole** bundle is pulled (airgap seeding); with `--apps` only the layers of the named tools plus their runtime dependencies are pulled.
+
+```bash
+# Full pull from the config's oci declaration
+datamitsu store seed
+
+# Selective pull
+datamitsu store seed --apps golangci-lint,prettier
+
+# Explicit digest-pinned reference (overrides the config)
+datamitsu store seed ghcr.io/owner/tool-store@sha256:0123…cdef
+```
+
+| Flag            | Description                                                                       |
+| --------------- | --------------------------------------------------------------------------------- |
+| `--apps <list>` | Seed only the layers of these apps and their runtime dependencies (repeatable)    |
+| `--resolve-tag` | Allow a `:<tag>` reference: resolve it to a digest first and print it for pinning |
+
+Every manifest body and blob is verified against its SHA-256 descriptor before extraction; seeded single-file binaries and JVM jars are additionally re-hashed against the published hashes from the config. A repeated full pull is a no-op (zero network requests).
+
+### store status
+
+Show what the declared bundle contains for this platform and which configured apps it covers versus which still require the network.
+
+```bash
+datamitsu store status
+datamitsu store status --json
+```
+
+### store import
+
+Seed the store from a local [OCI image layout](https://github.com/opencontainers/image-spec/blob/main/image-layout.md) directory (as produced by `crane pull --format=oci`, `oras copy --to-oci-layout`, or `skopeo copy`) — fully offline bundle transfer. Blobs are verified against the digest chain exactly like a registry pull.
+
+```bash
+datamitsu store import ./bundle-layout
+datamitsu store import ./bundle-layout --digest sha256:0123…cdef
+```
+
 ## version
 
 Print the version number.
@@ -726,16 +767,20 @@ datamitsu version
 
 ## Environment Variables
 
-| Variable                         | Description                                                                    | Default                                             |
-| -------------------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------- |
-| `DATAMITSU_CACHE_DIR`            | Custom base directory for cache and store paths                                | `$XDG_CACHE_HOME/datamitsu` or `~/.cache/datamitsu` |
-| `DATAMITSU_CONCURRENCY`          | Number of concurrent download workers                                          | `3`                                                 |
-| `DATAMITSU_INSTALL_TIMEOUT`      | Per-app install timeout in seconds (`0` = disabled)                            | `600`                                               |
-| `DATAMITSU_MIN_RELEASE_AGE`      | Minimum release age in minutes for `pull-*` version selection (`0` = disabled) | `10080`                                             |
-| `DATAMITSU_MAX_PARALLEL_WORKERS` | Max parallel tool execution workers                                            | `max(4, floor(NumCPU * 0.75))`, capped at 16        |
-| `DATAMITSU_LOG_LEVEL`            | Log level (debug, info, warn, error)                                           | `info`                                              |
-| `DATAMITSU_TIMINGS`              | Enable detailed timing output (1=enabled, 0=disabled)                          | `0`                                                 |
-| `DATAMITSU_BINARY_COMMAND`       | Override binary command path                                                   | -                                                   |
-| `DATAMITSU_NO_SPONSOR`           | Suppress sponsor messages in CLI output                                        | -                                                   |
-| `NO_COLOR`                       | Disable color output                                                           | -                                                   |
-| `FORCE_COLOR`                    | Force color output                                                             | -                                                   |
+| Variable                         | Description                                                                                    | Default                                             |
+| -------------------------------- | ---------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `DATAMITSU_CACHE_DIR`            | Custom base directory for cache and store paths                                                | `$XDG_CACHE_HOME/datamitsu` or `~/.cache/datamitsu` |
+| `DATAMITSU_CONCURRENCY`          | Number of concurrent download workers                                                          | `3`                                                 |
+| `DATAMITSU_INSTALL_TIMEOUT`      | Per-app install timeout in seconds (`0` = disabled)                                            | `600`                                               |
+| `DATAMITSU_MIN_RELEASE_AGE`      | Minimum release age in minutes for `pull-*` version selection (`0` = disabled)                 | `10080`                                             |
+| `DATAMITSU_MAX_PARALLEL_WORKERS` | Max parallel tool execution workers                                                            | `max(4, floor(NumCPU * 0.75))`, capped at 16        |
+| `DATAMITSU_LOG_LEVEL`            | Log level (debug, info, warn, error)                                                           | `info`                                              |
+| `DATAMITSU_TIMINGS`              | Enable detailed timing output (1=enabled, 0=disabled)                                          | `0`                                                 |
+| `DATAMITSU_BINARY_COMMAND`       | Override binary command path                                                                   | -                                                   |
+| `DATAMITSU_NO_SPONSOR`           | Suppress sponsor messages in CLI output                                                        | -                                                   |
+| `DATAMITSU_OFFLINE`              | Refuse all network access (requires a pre-seeded store)                                        | -                                                   |
+| `DATAMITSU_NO_OCI`               | Disable OCI bundle store seeding (twin of the `--no-oci` flag)                                 | -                                                   |
+| `DATAMITSU_LIBC`                 | Override host libc detection (`glibc` or `musl`); affects store paths and OCI bundle selection | auto-detected                                       |
+| `DATAMITSU_OCI_REGISTRY`         | Registry host for base-image digest resolution in `devtools dockerfile`                        | `ghcr.io`                                           |
+| `NO_COLOR`                       | Disable color output                                                                           | -                                                   |
+| `FORCE_COLOR`                    | Force color output                                                                             | -                                                   |

@@ -200,3 +200,25 @@ func GetOCIRegistry() string {
 	}
 	return ociRegistry.DefaultValue
 }
+
+// Offline returns true when all network access must be refused. Offline is
+// orthogonal to OCI seeding: the store must be seeded separately while online.
+func Offline() bool {
+	return os.Getenv(offline.Name) != ""
+}
+
+// OfflineVarName returns the offline env var name for user-facing messages.
+func OfflineVarName() string {
+	return offline.Name
+}
+
+// NoOCI returns true if OCI bundle store seeding is disabled.
+func NoOCI() bool {
+	return os.Getenv(noOCI.Name) != ""
+}
+
+// LibcOverride returns the raw DATAMITSU_LIBC value ("" when unset). The
+// target package validates it (glibc/musl) and applies it to host detection.
+func LibcOverride() string {
+	return os.Getenv(libcOverride.Name)
+}

@@ -53,6 +53,9 @@ func GetLatestGoRelease(ctx context.Context) (*GoRelease, error) {
 }
 
 func getLatestGoReleaseFromURL(ctx context.Context, url string) (*GoRelease, error) {
+	if err := httpx.GuardOffline("Go release lookup"); err != nil {
+		return nil, err
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build request: %w", err)
