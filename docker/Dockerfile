@@ -28,12 +28,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy binary
 COPY --from=binary /datamitsu /usr/local/bin/datamitsu
 
-# Create non-root user and setup workspace
+# Create non-root user, workspace and store root.
+# Group 0 with group perms mirroring the owner's: k8s and OpenShift run
+# containers under a random non-root uid whose only predictable membership is
+# group 0, and datamitsu must be able to write the cache and hydrate the store
+# at run time (direct installs or OCI seeding) under that uid too.
 ARG USER_UID=1000
 WORKDIR /workspace
 RUN chmod +x /usr/local/bin/datamitsu && \
     useradd -m -l -u ${USER_UID} -s /bin/bash datamitsu && \
-    chown datamitsu:datamitsu /workspace
+    mkdir -p /dm && \
+    chown -R datamitsu:0 /dm /workspace && \
+    chmod -R g=u /dm /workspace
+
+# Fixed store/cache root so seeding and caching work identically for the named
+# user and arbitrary uids (no dependence on $HOME, which is "/" for uids
+# without a passwd entry).
+ENV DATAMITSU_CACHE_DIR=/dm
 
 USER datamitsu
 
