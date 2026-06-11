@@ -262,3 +262,43 @@ func isGitAvailable() bool {
 	cmd := exec.Command("git", "--version")
 	return cmd.Run() == nil
 }
+
+// brokenGitContext simulates a repo where git itself cannot run: a .git
+// directory exists, but PATH holds no git binary (containers with
+// dubious-ownership failures behave the same way at this level).
+func brokenGitContext(t *testing.T) {
+	t.Helper()
+	tmpDir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(tmpDir, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(tmpDir)
+	t.Setenv("PATH", tmpDir)
+}
+
+func TestCollectBrokenGitIsFatalByDefault(t *testing.T) {
+	brokenGitContext(t)
+
+	_, _, err := Collect(context.Background(), "")
+	if err == nil {
+		t.Fatal("Collect() should fail when .git exists but git cannot run")
+	}
+	if !strings.Contains(err.Error(), "git command failed") {
+		t.Errorf("err = %v, want the broken-git explanation", err)
+	}
+}
+
+func TestCollectBrokenGitToleratedDegradesToNoRepo(t *testing.T) {
+	brokenGitContext(t)
+
+	facts, gitRoot, err := CollectWithOptions(context.Background(), "", CollectOptions{TolerateGitFailure: true})
+	if err != nil {
+		t.Fatalf("tolerant Collect failed: %v", err)
+	}
+	if facts.IsInGitRepo {
+		t.Error("IsInGitRepo = true, want degraded no-repo state")
+	}
+	if gitRoot != "" {
+		t.Errorf("gitRoot = %q, want empty in degraded state", gitRoot)
+	}
+}

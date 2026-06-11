@@ -741,6 +741,8 @@ datamitsu store seed ghcr.io/owner/tool-store@sha256:0123…cdef
 
 Every manifest body and blob is verified against its SHA-256 descriptor before extraction; seeded single-file binaries and JVM jars are additionally re-hashed against the published hashes from the config. A repeated full pull is a no-op (zero network requests).
 
+Blob downloads have no overall timeout — only an attempt that delivers zero bytes for 2 minutes is aborted and retried, so large layers on slow links finish instead of being cut off mid-stream. The `store` commands also work without a usable git context (no `git` binary, `dubious ownership` in containers): a broken project repo only skips the project-level config with a warning.
+
 ### store status
 
 Show what the declared bundle contains for this platform and which configured apps it covers versus which still require the network.

@@ -152,6 +152,18 @@ DATAMITSU_CONCURRENCY=10 datamitsu init
 
 Progress bars are displayed during downloads so you can see what's being fetched.
 
+## Download Timeouts and Retries
+
+Downloads have **no overall timeout** — a large archive on a slow link is a healthy download that simply takes a while. Instead, each attempt is watched for progress: if no data arrives for 2 minutes, the attempt is aborted with a `stalled: no data received` error and retried automatically (up to 4 attempts with exponential backoff).
+
+The end-to-end time of a single app install (download + extract + verify) is bounded by `DATAMITSU_INSTALL_TIMEOUT` (600 seconds by default; `0` disables the deadline). On very slow connections raise it for the affected runs:
+
+```bash
+DATAMITSU_INSTALL_TIMEOUT=3600 datamitsu init
+```
+
+The effective value is introspectable via `datamitsu config runtime | jq .installTimeoutSeconds`.
+
 ## Version Checks
 
 Apps can optionally configure version checks used by `datamitsu devtools verify-all`:

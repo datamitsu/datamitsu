@@ -144,7 +144,7 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 	resolved := make(map[string]bool)
 	stack := make(map[string]bool)
 	for _, source := range sources {
-		result, resultVM, processErr := processConfigSource(ctx, currentConfig, source, resolved, stack)
+		result, resultVM, processErr := processConfigSource(ctx, currentConfig, source, resolved, stack, opts)
 		if processErr != nil {
 			return nil, nil, nil, processErr
 		}
@@ -259,8 +259,9 @@ func buildConfigSources(ctx context.Context, beforeConfigPaths []string, autoCon
 // The stack map tracks URLs in the current recursion path for cycle detection;
 // URLs are added before recursing and removed after, so shared (diamond)
 // dependencies are allowed while true cycles are still caught.
-func processConfigSource(ctx context.Context, input *config.Config, source configSource, resolved map[string]bool, stack map[string]bool) (*config.Config, *goja.Runtime, error) {
-	e, err := engine.New(ctx, BinaryCommandOverride)
+func processConfigSource(ctx context.Context, input *config.Config, source configSource, resolved map[string]bool, stack map[string]bool, opts loadConfigOptions) (*config.Config, *goja.Runtime, error) {
+	e, err := engine.NewWithOptions(ctx, BinaryCommandOverride,
+		engine.Options{TolerateGitRootFailure: opts.tolerateGitRootFailure})
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create engine: %w", err)
 	}
@@ -370,7 +371,7 @@ func processConfigSource(ctx context.Context, input *config.Config, source confi
 					name:     entry.URL,
 					content:  content,
 					isRemote: true,
-				}, resolved, stack)
+				}, resolved, stack, opts)
 				delete(stack, entry.URL)
 				if remoteErr != nil {
 					return nil, nil, remoteErr
