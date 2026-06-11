@@ -966,6 +966,144 @@ func TestCollectTasksRepositoryWithExcludeGlobs(t *testing.T) {
 	}
 }
 
+// TestBuildIgnoreMatcherMalformedFileFails pins that a malformed .datamitsuignore
+// is a hard error, not a silent warning: otherwise the whole file's rules would
+// be dropped and tools would run on paths the user meant to exclude.
+func TestBuildIgnoreMatcherMalformedFileFails(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, ".datamitsuignore")
+	if err := os.WriteFile(path, []byte("**/*: eslint\nbad line without colon\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	planner := &Planner{
+		rootPath:         root,
+		cwdPath:          root,
+		tools:            config.MapOfTools{},
+		cachedFiles:      []string{path},
+		cachedProjects:   []project.ProjectLocation{},
+		cacheInitialized: true,
+	}
+
+	_, err := planner.buildIgnoreMatcher()
+	if err == nil {
+		t.Fatal("expected hard error for malformed .datamitsuignore, got nil")
+	}
+	if !strings.Contains(err.Error(), ".datamitsuignore") {
+		t.Errorf("error should name the offending file, got: %v", err)
+	}
+}
+
+// TestCollectTasksRepositoryHonorsFileSpecificIgnore pins that a file-specific
+// .datamitsuignore rule prunes individual files from a repository-scoped batch.
+// Regression: previously only catch-all globs (which match the synthetic
+// IsProjectDisabled probe) could affect repository/per-project tools, so a rule
+// like "**/foo.toml: oxfmt" was silently ignored and the file stayed in the batch.
+func TestCollectTasksRepositoryHonorsFileSpecificIgnore(t *testing.T) {
+	root := "/repo"
+	cwd := "/repo"
+
+	tools := config.MapOfTools{
+		"eslint": {
+			Name: "eslint",
+			Operations: map[config.OperationType]config.ToolOperation{
+				config.OpLint: {
+					App:      "eslint",
+					Scope:    config.ToolScopeRepository,
+					Priority: 10,
+					Globs:    []string{"**/*.js"},
+				},
+			},
+		},
+	}
+
+	planner := &Planner{
+		rootPath:         root,
+		cwdPath:          cwd,
+		detectedTypes:    []string{},
+		tools:            tools,
+		extraIgnoreRules: []string{"**/skip.js: eslint"},
+		cachedFiles: []string{
+			"/repo/src/app.js",
+			"/repo/src/skip.js",
+			"/repo/src/lib/helper.js",
+		},
+		cachedProjects:   []project.ProjectLocation{},
+		cacheInitialized: true,
+	}
+	builtMatcher, buildErr := planner.buildIgnoreMatcher()
+	if buildErr != nil {
+		t.Fatalf("buildIgnoreMatcher: %v", buildErr)
+	}
+	planner.ignoreMatcher = builtMatcher
+
+	tasks, _ := planner.collectTasks(context.Background(), config.OpLint, nil)
+
+	if len(tasks) != 1 {
+		t.Fatalf("expected 1 repository-scope task, got %d", len(tasks))
+	}
+	for _, file := range tasks[0].Files {
+		if file == "/repo/src/skip.js" {
+			t.Errorf("file %q should have been pruned by file-specific ignore rule", file)
+		}
+	}
+	if len(tasks[0].Files) != 2 {
+		t.Errorf("expected 2 files after ignore pruning, got %d: %v",
+			len(tasks[0].Files), tasks[0].Files)
+	}
+}
+
+// TestCollectTasksRepositoryHonorsSubdirReEnable pins that a catch-all disable
+// combined with a subdir re-enable runs a repository-scoped tool on the
+// re-enabled files instead of skipping it entirely. Regression: the root-only
+// IsProjectDisabled early-skip could not see the inversion and dropped the tool.
+func TestCollectTasksRepositoryHonorsSubdirReEnable(t *testing.T) {
+	root := "/repo"
+	cwd := "/repo"
+
+	tools := config.MapOfTools{
+		"yamlfmt": {
+			Name: "yamlfmt",
+			Operations: map[config.OperationType]config.ToolOperation{
+				config.OpLint: {
+					App:      "yamlfmt",
+					Scope:    config.ToolScopeRepository,
+					Priority: 10,
+					Globs:    []string{"**/*.yaml"},
+				},
+			},
+		},
+	}
+
+	planner := &Planner{
+		rootPath:         root,
+		cwdPath:          cwd,
+		detectedTypes:    []string{},
+		tools:            tools,
+		extraIgnoreRules: []string{"**/*: yamlfmt", "!config/**/*: yamlfmt"},
+		cachedFiles: []string{
+			"/repo/app.yaml",
+			"/repo/config/ci.yaml",
+		},
+		cachedProjects:   []project.ProjectLocation{},
+		cacheInitialized: true,
+	}
+	builtMatcher, buildErr := planner.buildIgnoreMatcher()
+	if buildErr != nil {
+		t.Fatalf("buildIgnoreMatcher: %v", buildErr)
+	}
+	planner.ignoreMatcher = builtMatcher
+
+	tasks, _ := planner.collectTasks(context.Background(), config.OpLint, nil)
+
+	if len(tasks) != 1 {
+		t.Fatalf("expected 1 repository-scope task (re-enabled config/), got %d", len(tasks))
+	}
+	if len(tasks[0].Files) != 1 || tasks[0].Files[0] != "/repo/config/ci.yaml" {
+		t.Errorf("expected only re-enabled /repo/config/ci.yaml, got %v", tasks[0].Files)
+	}
+}
+
 func TestCollectTasksPerProjectWithExcludeGlobs(t *testing.T) {
 	root := "/repo"
 	cwd := "/repo"

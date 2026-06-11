@@ -4,6 +4,26 @@ import (
 	"testing"
 )
 
+func TestUnknownTools(t *testing.T) {
+	rules, err := Parse("**/*: eslint, ghost\n!**/*.md: *\n**/*.go: eslint, phantom")
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	known := map[string]bool{"eslint": true}
+
+	got := UnknownTools(rules, known)
+	want := []string{"ghost", "phantom"} // "*" skipped, "eslint" known, de-duplicated, ordered
+
+	if len(got) != len(want) {
+		t.Fatalf("UnknownTools = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("UnknownTools[%d] = %q, want %q (full: %v)", i, got[i], want[i], got)
+		}
+	}
+}
+
 func TestParse(t *testing.T) {
 	tests := []struct {
 		name      string

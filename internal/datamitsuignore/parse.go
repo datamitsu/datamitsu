@@ -12,6 +12,25 @@ type Rule struct {
 	Invert bool
 }
 
+// UnknownTools returns the tool names referenced by rules that are absent from
+// known, skipping the "*" wildcard. Results preserve first-seen order and are
+// de-duplicated so callers can warn once per unknown name. It is the single
+// source of truth for "which tool names in a rule set are not configured".
+func UnknownTools(rules []Rule, known map[string]bool) []string {
+	var unknown []string
+	seen := make(map[string]bool)
+	for _, r := range rules {
+		for _, t := range r.Tools {
+			if t == "*" || known[t] || seen[t] {
+				continue
+			}
+			seen[t] = true
+			unknown = append(unknown, t)
+		}
+	}
+	return unknown
+}
+
 // Parse parses .datamitsuignore content into a list of rules.
 // Blank lines and lines starting with # are skipped.
 // Format: "glob: tool1, tool2" or "!glob: tool1, tool2" for inversion.

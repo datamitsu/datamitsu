@@ -256,5 +256,6 @@ export default defineConfig((config) => ({
     "chowned",
     "workdirs",
     "shellapp",
+    "fuzztime",
   ],
 }));
