@@ -3,8 +3,8 @@
 package bundled
 
 import (
+	"context"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,30 +12,25 @@ import (
 	"github.com/datamitsu/datamitsu/internal/color"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/datamitsuignore"
+	"github.com/datamitsu/datamitsu/internal/traverser"
 	"github.com/datamitsu/datamitsu/internal/utils"
 )
 
-// FindIgnoreFiles walks rootPath and returns paths to all .datamitsuignore files,
-// skipping .git directories.
-func FindIgnoreFiles(rootPath string) ([]string, error) {
-	var files []string
-	err := filepath.WalkDir(rootPath, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			switch d.Name() {
-			case ".git", "node_modules", "vendor", ".pnpm-store", ".next", "dist", "__pycache__", ".venv", ".datamitsu":
-				return filepath.SkipDir
-			}
-		}
-		if !d.IsDir() && d.Name() == ".datamitsuignore" {
-			files = append(files, path)
-		}
-		return nil
-	})
+// FindIgnoreFiles returns the paths of every .datamitsuignore file that the
+// planner would actually apply. It uses the same gitignore-aware traversal
+// (traverser.FindFilesFromPath) as internal/tooling's matcher, so the set of
+// files linted/fixed here is identical to the set that takes effect at runtime —
+// no "green lint on a file that never applies" divergence.
+func FindIgnoreFiles(ctx context.Context, rootPath string) ([]string, error) {
+	all, err := traverser.FindFilesFromPath(ctx, rootPath, rootPath)
 	if err != nil {
-		return nil, fmt.Errorf("walking %s: %w", rootPath, err)
+		return nil, fmt.Errorf("scanning %s: %w", rootPath, err)
+	}
+	var files []string
+	for _, f := range all {
+		if filepath.Base(f) == ".datamitsuignore" {
+			files = append(files, f)
+		}
 	}
 	return files, nil
 }
@@ -112,8 +107,8 @@ func toRelPath(rootPath, absPath string) string {
 // RunFix normalizes formatting of all .datamitsuignore files under rootPath.
 // Parse errors cause an immediate error return.
 // Files are written atomically (temp file + rename) only if content changed.
-func RunFix(rootPath string) error {
-	files, err := FindIgnoreFiles(rootPath)
+func RunFix(ctx context.Context, rootPath string) error {
+	files, err := FindIgnoreFiles(ctx, rootPath)
 	if err != nil {
 		return fmt.Errorf("finding .datamitsuignore files: %w", err)
 	}
@@ -188,8 +183,8 @@ func fixFile(path, rootPath string) error {
 // RunLint validates all .datamitsuignore files under rootPath.
 // Parse errors cause an immediate error return.
 // Formatting issues and unknown tool names produce yellow warnings on stderr.
-func RunLint(rootPath string, tools config.MapOfTools) error {
-	files, err := FindIgnoreFiles(rootPath)
+func RunLint(ctx context.Context, rootPath string, tools config.MapOfTools) error {
+	files, err := FindIgnoreFiles(ctx, rootPath)
 	if err != nil {
 		return fmt.Errorf("finding .datamitsuignore files: %w", err)
 	}

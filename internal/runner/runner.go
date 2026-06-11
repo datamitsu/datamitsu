@@ -566,21 +566,21 @@ func runSequential(
 		ui.Current().Banner(ldflags.PackageName, ldflags.Version)
 	}
 
+	ctx := context.Background()
+
 	hasFix := slices.Contains(operations, config.OpFix)
 
 	if hasFix && sc.explainLevel == "" {
-		if err := bundled.RunFix(sc.rootPath); err != nil {
+		if err := bundled.RunFix(ctx, sc.rootPath); err != nil {
 			return err
 		}
 	}
-	if lintErr := bundled.RunLint(sc.rootPath, sc.cfg.Tools); lintErr != nil {
+	if lintErr := bundled.RunLint(ctx, sc.rootPath, sc.cfg.Tools); lintErr != nil {
 		if slices.Contains(operations, config.OpLint) {
 			return lintErr
 		}
 		log.Warn("bundled lint error (non-lint mode, continuing)", zap.Error(lintErr))
 	}
-
-	ctx := context.Background()
 	for _, op := range operations {
 		if err := runSingleOperation(ctx, sc, op); err != nil {
 			return err

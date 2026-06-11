@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -279,7 +280,7 @@ func TestBuildOptInIgnoreContentCanonical(t *testing.T) {
 		t.Fatalf("setup: WriteFile() error = %v", err)
 	}
 
-	if err := bundled.RunFix(dir); err != nil {
+	if err := bundled.RunFix(context.Background(), dir); err != nil {
 		t.Fatalf("RunFix() error = %v", err)
 	}
 
