@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/env"
@@ -588,6 +589,57 @@ func TestPrintGroupedResultsShowsScope(t *testing.T) {
 	}
 	if !strings.Contains(captured, "/home/user/project/packages/web") {
 		t.Errorf("grouped results should contain absolute cwd in failure details, got:\n%s", captured)
+	}
+}
+
+func TestGroupResultsByToolWallClock(t *testing.T) {
+	// Three overlapping parallel runs of one tool. The serial sum is 7500ms, but
+	// the real wall-clock span (earliest start → latest end) is 4000ms.
+	t0 := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	mk := func(start, end, dur int64) tooling.ExecutionResult {
+		return tooling.ExecutionResult{
+			ToolName:  "eslint",
+			Success:   true,
+			Duration:  dur,
+			StartedAt: t0.Add(time.Duration(start) * time.Millisecond),
+			EndedAt:   t0.Add(time.Duration(end) * time.Millisecond),
+		}
+	}
+	groupResults := []tooling.GroupExecutionResult{
+		{Results: []tooling.ExecutionResult{
+			mk(0, 3000, 3000),
+			mk(500, 4000, 3500),
+			mk(1000, 2000, 1000),
+		}},
+	}
+
+	groups := groupResultsByTool(groupResults)
+	if len(groups) != 1 {
+		t.Fatalf("expected 1 group, got %d", len(groups))
+	}
+	g := groups[0]
+	if g.totalTime != 7500 {
+		t.Errorf("totalTime (serial sum) = %d, want 7500", g.totalTime)
+	}
+	if g.wallTime != 4000 {
+		t.Errorf("wallTime (span) = %d, want 4000", g.wallTime)
+	}
+}
+
+func TestGroupResultsByToolWallClockFallsBackToSum(t *testing.T) {
+	// Without timestamps (e.g. dry-run), wallTime falls back to the summed total.
+	groupResults := []tooling.GroupExecutionResult{
+		{Results: []tooling.ExecutionResult{
+			{ToolName: "prettier", Success: true, Duration: 1200},
+			{ToolName: "prettier", Success: true, Duration: 800},
+		}},
+	}
+	groups := groupResultsByTool(groupResults)
+	if len(groups) != 1 {
+		t.Fatalf("expected 1 group, got %d", len(groups))
+	}
+	if groups[0].wallTime != 2000 {
+		t.Errorf("wallTime fallback = %d, want 2000 (sum)", groups[0].wallTime)
 	}
 }
 

@@ -2,6 +2,7 @@ package tooling
 
 import (
 	"sort"
+	"time"
 
 	"github.com/datamitsu/datamitsu/internal/config"
 )
@@ -109,6 +110,20 @@ type ExecutionResult struct {
 	Batch         bool             // Whether files were processed in batch mode
 	Cancelled     bool             // Whether this task was cancelled by fail-fast
 	FailureReason FailureReason    // Why the task failed (independent error vs cascading cancellation)
+	StartedAt     time.Time        // Absolute start of this run (zero if not timed)
+	EndedAt       time.Time        // Absolute end of this run (zero if not timed)
+}
+
+// recordTiming stamps the run's absolute wall-clock window and elapsed Duration
+// from a single start time. Absolute timestamps let the reporter compute a
+// tool's true wall-clock span (max end − min start) across parallel runs,
+// rather than summing per-run durations (which over-counts heavily under
+// parallelism, e.g. 57 parallel runs summing to 4m26s in a 33s run).
+func (r *ExecutionResult) recordTiming(start time.Time) {
+	end := time.Now()
+	r.StartedAt = start
+	r.EndedAt = end
+	r.Duration = end.Sub(start).Milliseconds()
 }
 
 // GroupExecutionResult represents the result of a task group execution
