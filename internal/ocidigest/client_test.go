@@ -156,3 +156,27 @@ func TestParseBearerChallenge(t *testing.T) {
 		t.Error("non-Bearer challenge should return nil")
 	}
 }
+
+// TestNewResolverForHostClientSplit pins the metadata/payload client split:
+// manifest and token requests are deadline-bounded (small bodies), while blob
+// streaming has no end-to-end deadline — large layers on slow links are
+// bounded by the PullBlob progress watchdog instead.
+func TestNewResolverForHostClientSplit(t *testing.T) {
+	r := NewResolverForHost("registry.example")
+
+	if r.registry != "registry.example" {
+		t.Errorf("registry = %q, want %q", r.registry, "registry.example")
+	}
+	if r.scheme != "https" {
+		t.Errorf("scheme = %q, want https", r.scheme)
+	}
+	if r.httpClient.Timeout != defaultTimeout {
+		t.Errorf("metadata client Timeout = %v, want %v", r.httpClient.Timeout, defaultTimeout)
+	}
+	if r.blobClient.Timeout != 0 {
+		t.Errorf("blob client Timeout = %v, want 0 (progress-guarded, not deadline-bounded)", r.blobClient.Timeout)
+	}
+	if r.bearerTokens == nil {
+		t.Error("bearerTokens map not initialized")
+	}
+}

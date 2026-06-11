@@ -1,6 +1,7 @@
 package binmanager
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -18,6 +19,7 @@ import (
 	"time"
 
 	"github.com/datamitsu/datamitsu/internal/httpretry"
+	"github.com/datamitsu/datamitsu/internal/httpx"
 )
 
 func TestDownloadFile(t *testing.T) {
@@ -913,5 +915,63 @@ func TestDownloadFileOfflineRefused(t *testing.T) {
 	}
 	if hits.Load() != 0 {
 		t.Errorf("server hits = %d, want 0 under offline", hits.Load())
+	}
+}
+
+// TestDownloadFileSlowStreamIsNotDeadlineKilled pins the no-flat-deadline
+// contract: a download slower than any historical client budget keeps going
+// as long as bytes flow (bounded only by the progress guard).
+func TestDownloadFileSlowStreamIsNotDeadlineKilled(t *testing.T) {
+	origWindow := httpx.DefaultStallWindow
+	httpx.DefaultStallWindow = 300 * time.Millisecond
+	t.Cleanup(func() { httpx.DefaultStallWindow = origWindow })
+
+	payload := bytes.Repeat([]byte("y"), 10*1024)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		flusher := w.(http.Flusher)
+		chunk := len(payload) / 10
+		for i := 0; i < len(payload); i += chunk {
+			_, _ = w.Write(payload[i:min(i+chunk, len(payload))])
+			flusher.Flush()
+			// Steady trickle: each gap is well under the stall window, but the
+			// whole transfer takes several windows' worth of wall time.
+			time.Sleep(100 * time.Millisecond)
+		}
+	}))
+	defer server.Close()
+
+	path, err := downloadFile(context.Background(), server.URL, t.TempDir())
+	if err != nil {
+		t.Fatalf("slow-but-moving download failed: %v", err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(data) != len(payload) {
+		t.Errorf("downloaded %d bytes, want %d", len(data), len(payload))
+	}
+}
+
+// TestDownloadFileStallAborts pins the guard: a stream that stops delivering
+// bytes fails with a clear stall error instead of hanging forever.
+func TestDownloadFileStallAborts(t *testing.T) {
+	origWindow := httpx.DefaultStallWindow
+	httpx.DefaultStallWindow = 150 * time.Millisecond
+	t.Cleanup(func() { httpx.DefaultStallWindow = origWindow })
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("a trickle then silence"))
+		w.(http.Flusher).Flush()
+		<-r.Context().Done()
+	}))
+	defer server.Close()
+
+	_, err := downloadFile(context.Background(), server.URL, t.TempDir())
+	if err == nil {
+		t.Fatal("expected stall failure, got nil")
+	}
+	if !strings.Contains(err.Error(), "stalled: no data received") {
+		t.Errorf("error %q should describe the stall", err)
 	}
 }

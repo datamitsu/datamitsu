@@ -15,7 +15,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/env"
@@ -109,7 +108,9 @@ func (p *pnpmReporter) errorOutput(stderr string) string {
 // pinned SHA-256 + the registry's SHA-512 integrity, and npm tools are installed
 // with `node <pnpm.cjs> install`.
 
-var pnpmHTTPClient = httpx.NewHardenedClient(5 * time.Minute)
+// pnpmHTTPClient has no end-to-end deadline; the tarball transfer is bounded
+// by the progress guard below instead of a flat size/speed assumption.
+var pnpmHTTPClient = httpx.NewHardenedClient(0)
 
 const maxPNPMDownloadSize = 100 * 1024 * 1024 // 100 MiB
 
@@ -188,6 +189,9 @@ func (rm *RuntimeManager) downloadPNPMFromRegistryURL(ctx context.Context, regis
 		return fmt.Errorf("pnpm@%s: SHA-512 integrity required but not found in registry metadata", version)
 	}
 
+	guard, ctx := httpx.NewStallGuard(ctx, httpx.DefaultStallWindow)
+	defer guard.Stop()
+
 	tarReq, err := http.NewRequestWithContext(ctx, http.MethodGet, meta.Dist.Tarball, nil)
 	if err != nil {
 		return fmt.Errorf("failed to build PNPM tarball request: %w", err)
@@ -212,7 +216,7 @@ func (rm *RuntimeManager) downloadPNPMFromRegistryURL(ctx context.Context, regis
 	sha256Hasher := sha256.New()
 	sha512Hasher := sha512.New()
 	writer := io.MultiWriter(tmpFile, sha256Hasher, sha512Hasher)
-	limitedBody := io.LimitReader(tarResp.Body, maxPNPMDownloadSize+1)
+	limitedBody := guard.Reader(io.LimitReader(tarResp.Body, maxPNPMDownloadSize+1))
 
 	// Render the pnpm tarball download through the shared display, like the node
 	// runtime and managed binaries (a bar in a terminal, throttled lines in CI).
@@ -222,6 +226,9 @@ func (rm *RuntimeManager) downloadPNPMFromRegistryURL(ctx context.Context, regis
 	written, err := io.Copy(writer, tracked)
 	if err != nil {
 		_ = tmpFile.Close()
+		if guard.Stalled() {
+			return fmt.Errorf("pnpm tarball download stalled: no data received for %s", guard.Window())
+		}
 		return fmt.Errorf("failed to download PNPM tarball: %w", err)
 	}
 	_ = tmpFile.Close()

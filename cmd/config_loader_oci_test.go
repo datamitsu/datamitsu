@@ -21,7 +21,7 @@ func runOCIConfigSource(t *testing.T, input *config.Config, name, js string) *co
 	result, _, err := processConfigSource(context.Background(), input, configSource{
 		name:    name,
 		content: content,
-	}, make(map[string]bool), make(map[string]bool))
+	}, make(map[string]bool), make(map[string]bool), loadConfigOptions{})
 	if err != nil {
 		t.Fatalf("processConfigSource(%s) error: %v", name, err)
 	}

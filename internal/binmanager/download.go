@@ -36,8 +36,11 @@ func retryDelay(attempt int) time.Duration { return httpretry.Delay(attempt) }
 
 // httpClient downloads binaries on the shared hardened transport (proxy, dialer,
 // TLS/response-header timeouts, and the HTTPS→HTTP downgrade-rejecting redirect
-// guard). The 5-minute budget accommodates large archive downloads.
-var httpClient = httpx.NewHardenedClient(5 * time.Minute)
+// guard). It has NO end-to-end deadline: a flat budget encodes a hidden
+// "size/speed" assumption that kills large-but-healthy downloads on slow
+// links (a 400 MiB archive on a 1 Mbps VPN needs ~55 minutes). Stalls are
+// caught by the per-attempt progress guard in downloadFileInternal instead.
+var httpClient = httpx.NewHardenedClient(0)
 
 // displayName returns a human-friendly label for a download, falling back to
 // the URL's last path segment when no explicit name is given.
@@ -55,6 +58,12 @@ func downloadFileInternal(ctx context.Context, url string, destDir string, name 
 	if err := httpx.GuardOffline("download of " + displayName(name, url)); err != nil {
 		return "", permanent(err)
 	}
+
+	// Bound the transfer by PROGRESS, not by an end-to-end deadline: only a
+	// connection that delivers zero bytes for the whole window is aborted
+	// (and then retried by the caller's retry loop).
+	guard, ctx := httpx.NewStallGuard(ctx, httpx.DefaultStallWindow)
+	defer guard.Stop()
 	if name != "" {
 		log.Debug("downloading file", zap.String("url", url), zap.String("name", name))
 	} else {
@@ -118,7 +127,7 @@ func downloadFileInternal(ctx context.Context, url string, destDir string, name 
 	// LimitReader with MaxBinarySize+1 allows us to distinguish a file that is
 	// exactly MaxBinarySize (written == MaxBinarySize, allowed) from one that
 	// exceeds it (written > MaxBinarySize, rejected).
-	limitedReader := io.LimitReader(resp.Body, MaxBinarySize+1)
+	limitedReader := guard.Reader(io.LimitReader(resp.Body, MaxBinarySize+1))
 
 	// Route the transfer through the process-wide display: in an interactive
 	// terminal this renders a progress bar in the shared container, in CI/pipe
@@ -135,6 +144,9 @@ func downloadFileInternal(ctx context.Context, url string, destDir string, name 
 	if err != nil {
 		if removeErr := os.Remove(tmpPath); removeErr != nil {
 			log.Warn("failed to remove temp file after write error", zap.String("path", tmpPath), zap.Error(removeErr))
+		}
+		if guard.Stalled() {
+			return "", fmt.Errorf("download of %s stalled: no data received for %s", displayName(name, url), guard.Window())
 		}
 		return "", fmt.Errorf("failed to write file: %w", err)
 	}

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/datamitsu/datamitsu/internal/httpretry"
+	"github.com/datamitsu/datamitsu/internal/httpx"
 	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/ui"
 
@@ -68,7 +69,7 @@ func (r *Resolver) PullManifest(ctx context.Context, repo, dgst string) ([]byte,
 	}
 
 	manifestURL := fmt.Sprintf("%s://%s/v2/%s/manifests/%s", r.scheme, r.registry, repo, dgst)
-	resp, err := r.authedGet(ctx, repo, manifestURL, acceptManifests)
+	resp, err := r.authedGet(ctx, nil, repo, manifestURL, acceptManifests)
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +117,15 @@ func (r *Resolver) PullBlob(ctx context.Context, repo, dgst string, size, maxByt
 
 	var lastErr error
 	for attempt := 1; attempt <= httpretry.DefaultMaxAttempts; attempt++ {
-		path, err := r.pullBlobOnce(ctx, repo, dgst, size, maxBytes, displayName, destDir)
+		// The retry state lives in the bar label instead of a log line: the
+		// previous attempt's bar is aborted on close, so the user sees one
+		// coherent bar restarting with an explicit retry counter.
+		label := displayName
+		if attempt > 1 {
+			label = fmt.Sprintf("%s (retry %d/%d)", displayName, attempt, httpretry.DefaultMaxAttempts)
+		}
+
+		path, err := r.pullBlobOnce(ctx, repo, dgst, size, maxBytes, label, destDir)
 		if err == nil {
 			return path, nil
 		}
@@ -130,7 +139,7 @@ func (r *Resolver) PullBlob(ctx context.Context, repo, dgst string, size, maxByt
 		}
 
 		delay := httpretry.Delay(attempt)
-		logger.Logger.Warn("blob download failed, retrying",
+		logger.Logger.Debug("blob download failed, retrying",
 			zap.String("digest", dgst),
 			zap.Int("attempt", attempt),
 			zap.Duration("delay", delay),
@@ -143,6 +152,15 @@ func (r *Resolver) PullBlob(ctx context.Context, repo, dgst string, size, maxByt
 		}
 	}
 	return "", fmt.Errorf("after %d attempts: %w", httpretry.DefaultMaxAttempts, lastErr)
+}
+
+// blobClientOrDefault returns the deadline-free blob client, falling back to
+// the manifest client for hand-built Resolvers (tests).
+func (r *Resolver) blobClientOrDefault() *http.Client {
+	if r.blobClient != nil {
+		return r.blobClient
+	}
+	return r.httpClient
 }
 
 func (r *Resolver) pullBlobOnce(ctx context.Context, repo, dgst string, size, maxBytes int64, displayName, destDir string) (path string, retErr error) {
@@ -165,11 +183,18 @@ func (r *Resolver) pullBlobOnce(ctx context.Context, repo, dgst string, size, ma
 		}
 	}()
 
+	// A blob stream is bounded by PROGRESS, not by an end-to-end deadline:
+	// the guard cancels the attempt only when no bytes arrive for the whole
+	// window, so a slow-but-moving 2 GiB download is never cut off mid-stream
+	// the way a flat client timeout would.
+	guard, attemptCtx := httpx.NewStallGuard(ctx, httpx.DefaultStallWindow)
+	defer guard.Stop()
+
 	blobURL := fmt.Sprintf("%s://%s/v2/%s/blobs/%s", r.scheme, r.registry, repo, dgst)
 	// GHCR answers with a 307 to its CDN; the hardened client follows it and
 	// net/http itself strips Authorization on the cross-host hop. The redirect
 	// target is untrusted either way — trust rests on the digest check below.
-	resp, err := r.authedGet(ctx, repo, blobURL, "")
+	resp, err := r.authedGet(attemptCtx, r.blobClientOrDefault(), repo, blobURL, "")
 	if err != nil {
 		return "", err
 	}
@@ -184,12 +209,15 @@ func (r *Resolver) pullBlobOnce(ctx context.Context, repo, dgst string, size, ma
 	}
 
 	hasher := sha256.New()
-	limited := io.LimitReader(resp.Body, maxBytes+1)
+	limited := guard.Reader(io.LimitReader(resp.Body, maxBytes+1))
 	reader := ui.Current().Download(displayName, size, limited)
 	defer func() { _ = reader.Close() }()
 
 	written, err := io.Copy(io.MultiWriter(tmpFile, hasher), reader)
 	if err != nil {
+		if guard.Stalled() {
+			return "", fmt.Errorf("blob %s stalled: no data received for %s", dgst, guard.Window())
+		}
 		return "", fmt.Errorf("stream blob %s: %w", dgst, err)
 	}
 	if written > maxBytes {

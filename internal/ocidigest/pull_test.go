@@ -1,12 +1,14 @@
 package ocidigest
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
 	"sync/atomic"
@@ -14,6 +16,7 @@ import (
 	"time"
 
 	"github.com/datamitsu/datamitsu/internal/httpretry"
+	"github.com/datamitsu/datamitsu/internal/httpx"
 )
 
 func sha256Digest(data []byte) string {
@@ -218,5 +221,72 @@ func TestPullBlob_OfflineRefused(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "DATAMITSU_OFFLINE") {
 		t.Errorf("error %q should mention DATAMITSU_OFFLINE", err)
+	}
+}
+
+// TestPullBlob_SlowStreamSurvivesManifestDeadline pins the blob-client split:
+// a download slower than the manifest client's end-to-end deadline must keep
+// streaming (the old shared 30s client aborted any blob slower than
+// size/30s mid-transfer, every time).
+func TestPullBlob_SlowStreamSurvivesManifestDeadline(t *testing.T) {
+	blob := bytes.Repeat([]byte("x"), 10*1024)
+	digest := sha256Digest(blob)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		flusher := w.(http.Flusher)
+		chunk := len(blob) / 10
+		for i := 0; i < len(blob); i += chunk {
+			_, _ = w.Write(blob[i:min(i+chunk, len(blob))])
+			flusher.Flush()
+			time.Sleep(100 * time.Millisecond)
+		}
+	}))
+	defer srv.Close()
+
+	u, _ := url.Parse(srv.URL)
+	r := &Resolver{
+		// Manifest client with a deadline far shorter than the ~1s stream.
+		httpClient: httpx.NewHardenedClient(300 * time.Millisecond),
+		blobClient: httpx.NewHardenedClient(0),
+		registry:   u.Host,
+		scheme:     u.Scheme,
+		cacheDir:   t.TempDir(),
+	}
+	path, err := r.PullBlob(context.Background(), "owner/repo", digest, int64(len(blob)), 1<<20, "slow", t.TempDir())
+	if err != nil {
+		t.Fatalf("PullBlob over the manifest deadline: %v", err)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Errorf("pulled blob missing: %v", err)
+	}
+}
+
+// TestPullBlob_StallAbortsAndRetries pins the progress watchdog: a stream
+// that stops delivering bytes is aborted (retryable) instead of hanging.
+func TestPullBlob_StallAbortsAndRetries(t *testing.T) {
+	setFastBlobRetries(t)
+	origStall := httpx.DefaultStallWindow
+	httpx.DefaultStallWindow = 150 * time.Millisecond
+	t.Cleanup(func() { httpx.DefaultStallWindow = origStall })
+
+	var hits atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		_, _ = w.Write([]byte("a few bytes then silence"))
+		w.(http.Flusher).Flush()
+		<-r.Context().Done() // stall until the watchdog cancels the attempt
+	}))
+	defer srv.Close()
+
+	r := newTestResolver(srv.URL, t.TempDir())
+	_, err := r.PullBlob(context.Background(), "owner/repo", sha256Digest([]byte("never arrives")), 1<<20, 1<<20, "stall", t.TempDir())
+	if err == nil {
+		t.Fatal("expected stall failure, got nil")
+	}
+	if !strings.Contains(err.Error(), "stalled: no data received") {
+		t.Errorf("error %q should describe the stall", err)
+	}
+	if got := hits.Load(); got != int64(httpretry.DefaultMaxAttempts) {
+		t.Errorf("attempts = %d, want %d (stall is retryable)", got, httpretry.DefaultMaxAttempts)
 	}
 }

@@ -46,9 +46,24 @@ type Facts struct {
 	Env map[string]string `json:"env"`
 }
 
+// CollectOptions tweaks fact collection for special-purpose callers.
+type CollectOptions struct {
+	// TolerateGitFailure degrades a broken git context (a .git directory
+	// exists but git cannot run) to "not in a git repository" instead of
+	// failing. Store-level commands set it — they operate on the global
+	// store, so a wrong project root cannot poison a project cache key.
+	// Project commands keep the hard error.
+	TolerateGitFailure bool
+}
+
 // Collect gathers all facts about the current environment.
 // Returns Facts, the git root path (empty if not in a git repo), and any error.
 func Collect(ctx context.Context, binaryCommandOverride string) (*Facts, string, error) {
+	return CollectWithOptions(ctx, binaryCommandOverride, CollectOptions{})
+}
+
+// CollectWithOptions is Collect with explicit CollectOptions.
+func CollectWithOptions(ctx context.Context, binaryCommandOverride string, opts CollectOptions) (*Facts, string, error) {
 	libc := target.LibcUnknown
 	if runtime.GOOS == "linux" {
 		libc = target.DetectLibc(ctx)
@@ -96,8 +111,9 @@ func Collect(ctx context.Context, binaryCommandOverride string) (*Facts, string,
 	} else {
 		// If a .git directory exists but git command failed (broken install,
 		// permissions), surface the error rather than silently falling back
-		// to CWD with a wrong cache key.
-		if traverser.HasGitDir(cwd) {
+		// to CWD with a wrong cache key — unless the caller opted into the
+		// degraded mode (the cmd layer warns about the skipped project config).
+		if !opts.TolerateGitFailure && traverser.HasGitDir(cwd) {
 			return nil, "", fmt.Errorf("failed to determine git root (a .git directory exists but git command failed): %w", err)
 		}
 		facts.IsInGitRepo = false

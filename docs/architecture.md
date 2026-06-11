@@ -38,7 +38,8 @@
 - `App.VersionCheck *AppVersionCheck`: optional per-app version check configuration. `Disabled: true` skips version check; `Args` overrides default `["--version"]`. Used by `devtools verify-all`
 - `verify.go`: Public verification utilities (`VerifyBinaryExtraction`, `DownloadFileForVerify`, `VerifyFileHashPublic`) used by `devtools verify-all` for cross-platform hash verification without touching the cache
 - Supports concurrent downloads with configurable concurrency (see `InstallWithConcurrency()`)
-- Shows progress bars during downloads using github.com/schollz/progressbar
+- Shows progress bars during downloads via `internal/ui` (vbauerster/mpb); partially-downloaded bars are aborted on close so a failed attempt can never wedge `Display.Close`
+- **Download transport model** (shared with runtimemanager and ocidigest blob pulls): payload downloads use `httpx.NewHardenedClient(0)` — **no end-to-end deadline**, because a flat budget encodes a hidden "size/speed < T" assumption that kills large-but-healthy downloads on slow links. Liveness is enforced by `httpx.StallGuard`, a progress watchdog that aborts an attempt only after `DefaultStallWindow` (2 minutes) with zero bytes received; the aborted attempt surfaces a "stalled: no data received" error and is retried by the `httpretry` policy (4 attempts, exponential backoff). OCI **metadata** requests (manifests, token handshake) keep a flat 120s deadline — bodies are small, so a deadline is appropriate there. Whole-install time remains bounded by `DATAMITSU_INSTALL_TIMEOUT` (600s default)
 
 **App Types**
 Six types of applications are supported:

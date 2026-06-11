@@ -144,7 +144,7 @@ func resolveSeedRef(ctx context.Context, cfg *config.Config, args []string) (*co
 }
 
 func runStoreSeed(ctx context.Context, args []string) error {
-	cfg, _, _, err := loadConfigWithPaths(ctx, BeforeConfigPaths, NoAutoConfig, ConfigPaths)
+	cfg, err := loadConfigForStore(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
@@ -173,7 +173,7 @@ func runStoreSeed(ctx context.Context, args []string) error {
 }
 
 func runStoreStatus(ctx context.Context) error {
-	cfg, _, _, err := loadConfigWithPaths(ctx, BeforeConfigPaths, NoAutoConfig, ConfigPaths)
+	cfg, err := loadConfigForStore(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
@@ -239,7 +239,7 @@ func runStoreStatus(ctx context.Context) error {
 }
 
 func runStoreImport(ctx context.Context, dir string) error {
-	cfg, _, _, err := loadConfigWithPaths(ctx, BeforeConfigPaths, NoAutoConfig, ConfigPaths)
+	cfg, err := loadConfigForStore(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}

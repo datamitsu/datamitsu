@@ -26,9 +26,22 @@ type Engine struct {
 // It must be nil in production; tests set it to simulate failure scenarios.
 var testInitHook func(*Engine)
 
+// Options tweaks engine construction for special-purpose callers.
+type Options struct {
+	// TolerateGitRootFailure degrades a broken git context (a .git directory
+	// exists but git cannot run) to "not in a git repository" instead of
+	// failing construction — see facts.CollectOptions.TolerateGitFailure.
+	TolerateGitRootFailure bool
+}
+
 // New collects environment facts and constructs an Engine with a fully
 // initialized goja runtime ready to evaluate datamitsu config scripts.
-func New(ctx context.Context, binaryCommandOverride string) (e *Engine, err error) {
+func New(ctx context.Context, binaryCommandOverride string) (*Engine, error) {
+	return NewWithOptions(ctx, binaryCommandOverride, Options{})
+}
+
+// NewWithOptions is New with explicit Options.
+func NewWithOptions(ctx context.Context, binaryCommandOverride string, opts Options) (e *Engine, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("engine initialization panic: %v", r)
@@ -36,7 +49,8 @@ func New(ctx context.Context, binaryCommandOverride string) (e *Engine, err erro
 	}()
 
 	// Collect facts about the environment
-	projectFacts, gitRoot, err := facts.Collect(ctx, binaryCommandOverride)
+	projectFacts, gitRoot, err := facts.CollectWithOptions(ctx, binaryCommandOverride,
+		facts.CollectOptions{TolerateGitFailure: opts.TolerateGitRootFailure})
 	if err != nil {
 		return nil, err
 	}

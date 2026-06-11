@@ -44,6 +44,12 @@ Multi-platform bundles are a single OCI index. os/arch are matched via the stand
 
 A bundle entry missing for your platform is a degradation, not a failure: datamitsu warns and falls back to direct downloads.
 
+### Slow links and retries
+
+Blob downloads have **no overall timeout** — a 400 MiB layer on a 1 Mbps VPN is a healthy download that simply takes a while. Instead, each attempt is watched for **progress**: if no data arrives for 2 minutes, the attempt is aborted with a clear `stalled: no data received` error and retried (up to 4 attempts with exponential backoff). Registry metadata requests (manifests, auth token handshake) carry small bodies and keep a flat 120-second deadline.
+
+The store commands also work without a usable git context (no `git` binary, `dubious ownership` errors in containers): they operate on the global store, so a broken project repo only skips the project-level config with a warning instead of failing the command.
+
 ## Trust model
 
 The bundle is **not a trust boundary by itself**:
