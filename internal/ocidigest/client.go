@@ -210,10 +210,21 @@ func (r *Resolver) storeBearerToken(repo, token string) {
 	r.bearerTokens[repo] = token
 }
 
+// shouldAttachGitHubToken reports whether the GitHub token may be sent as
+// Basic auth to the token realm host. Only GHCR accepts a GitHub token as the
+// Basic password to mint a scoped pull token; any other registry (Docker Hub,
+// GitLab, ...) treats the credential as real and fails the handshake with 401
+// instead of falling back to an anonymous token — so sending it would break
+// pulls of public images from non-GitHub registries whenever GITHUB_TOKEN is
+// set (i.e. in any CI).
+func shouldAttachGitHubToken(realmHost string) bool {
+	return realmHost == "ghcr.io"
+}
+
 // fetchToken mints a bearer token from the realm advertised in a Bearer
-// challenge, attaching GITHUB_TOKEN as Basic auth when available (GHCR accepts a
-// PAT as the password to mint a scoped pull token, raising rate limits and
-// granting access to private base images).
+// challenge, attaching GITHUB_TOKEN as Basic auth when the realm is GHCR's
+// (GHCR accepts a PAT as the password to mint a scoped pull token, raising
+// rate limits and granting access to private base images).
 func (r *Resolver) fetchToken(ctx context.Context, challenge string) (string, error) {
 	params := parseBearerChallenge(challenge)
 	realm := params["realm"]
@@ -237,7 +248,7 @@ func (r *Resolver) fetchToken(ctx context.Context, challenge string) (string, er
 	if err != nil {
 		return "", fmt.Errorf("create token request: %w", err)
 	}
-	if r.token != "" {
+	if r.token != "" && shouldAttachGitHubToken(u.Host) {
 		req.SetBasicAuth("x-access-token", r.token)
 	}
 
