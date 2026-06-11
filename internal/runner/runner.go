@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 	"unicode/utf8"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
@@ -43,12 +44,15 @@ type toolExecutionGroup struct {
 	totalRuns      int
 	succeededRuns  int
 	failedRuns     int
-	totalTime      int64
-	minTime        int64  // Minimum execution time (-1 if not set)
-	maxTime        int64  // Maximum execution time (-1 if not set)
-	minDir         string // Project directory with minimum time
-	maxDir         string // Project directory with maximum time
-	firstSeenIndex int    // Order in which tool was first seen (for preserving execution order)
+	totalTime      int64     // Sum of per-run durations (serial CPU time; shown only in detailed view)
+	wallTime       int64     // Wall-clock span across this tool's runs: max(end) − min(start)
+	minTime        int64     // Minimum execution time (-1 if not set)
+	maxTime        int64     // Maximum execution time (-1 if not set)
+	minDir         string    // Project directory with minimum time
+	maxDir         string    // Project directory with maximum time
+	wallStart      time.Time // Earliest run start across this tool's runs (zero if none timed)
+	wallEnd        time.Time // Latest run end across this tool's runs
+	firstSeenIndex int       // Order in which tool was first seen (for preserving execution order)
 	executions     []executionInstance
 }
 
@@ -670,6 +674,17 @@ func groupResultsByTool(groupResults []tooling.GroupExecutionResult) []toolExecu
 			group.totalRuns++
 			group.totalTime += result.Duration
 
+			// Track the wall-clock window (earliest start, latest end) so parallel
+			// runs report real elapsed time instead of the summed serial total.
+			if !result.StartedAt.IsZero() {
+				if group.wallStart.IsZero() || result.StartedAt.Before(group.wallStart) {
+					group.wallStart = result.StartedAt
+				}
+				if result.EndedAt.After(group.wallEnd) {
+					group.wallEnd = result.EndedAt
+				}
+			}
+
 			// Track min/max execution times
 			if group.minTime == -1 || result.Duration < group.minTime {
 				group.minTime = result.Duration
@@ -693,6 +708,16 @@ func groupResultsByTool(groupResults []tooling.GroupExecutionResult) []toolExecu
 		}
 	}
 
+	// Resolve each tool's wall-clock span. Fall back to the summed duration when
+	// runs carry no timestamps (e.g. dry-run paths) so the column is never empty.
+	for _, group := range toolMap {
+		if !group.wallStart.IsZero() && group.wallEnd.After(group.wallStart) {
+			group.wallTime = group.wallEnd.Sub(group.wallStart).Milliseconds()
+		} else {
+			group.wallTime = group.totalTime
+		}
+	}
+
 	// Sort by first seen index to preserve execution order
 	groups := make([]toolExecutionGroup, 0, len(toolMap))
 	for _, group := range toolMap {
@@ -712,11 +737,11 @@ func groupResultsByTool(groupResults []tooling.GroupExecutionResult) []toolExecu
 func printGroupedResults(toolGroups []toolExecutionGroup, nameWidth int, detailed bool) {
 	fmt.Println(clr.Faint("┃"))
 
-	// Slowest tool in this run anchors the duration heatmap.
+	// Slowest tool in this run anchors the duration heatmap (by wall-clock).
 	var maxMs int64
 	for _, group := range toolGroups {
-		if group.totalTime > maxMs {
-			maxMs = group.totalTime
+		if group.wallTime > maxMs {
+			maxMs = group.wallTime
 		}
 	}
 
@@ -736,11 +761,11 @@ func printGroupedResults(toolGroups []toolExecutionGroup, nameWidth int, detaile
 		// Reserve a fixed-width slot for the duration so anything after it (the run
 		// count) stays in a stable column instead of floating with the duration
 		// width. Pad only when something follows, to avoid trailing whitespace.
-		durStr := ui.FormatDurationShort(group.totalTime)
+		durStr := ui.FormatDurationShort(group.wallTime)
 		if group.totalRuns > 1 || group.failedRuns > 0 || detailed {
 			durStr = fmt.Sprintf("%-*s", durationColWidth, durStr)
 		}
-		line := clr.Faint("┃ ") + status + " " + nameDisplay + strings.Repeat(" ", pad) + heatDuration(group.totalTime, maxMs, durStr)
+		line := clr.Faint("┃ ") + status + " " + nameDisplay + strings.Repeat(" ", pad) + heatDuration(group.wallTime, maxMs, durStr)
 		if group.totalRuns > 1 {
 			line += " " + clr.Faint(fmt.Sprintf("×%d", group.totalRuns))
 		}
@@ -801,6 +826,9 @@ func toolDetail(group toolExecutionGroup) string {
 	parts = append(parts, "avg "+formatDuration(avg))
 	if group.totalRuns > 1 && group.minTime >= 0 && group.maxTime >= 0 {
 		parts = append(parts, "min "+formatDuration(group.minTime), "max "+formatDuration(group.maxTime))
+		// The headline column is wall-clock; surface the summed serial time so the
+		// parallelism speedup (cpu ≫ wall) is visible.
+		parts = append(parts, "cpu "+formatDuration(group.totalTime))
 	}
 	return strings.Join(parts, " · ")
 }
