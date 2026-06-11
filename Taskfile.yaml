@@ -105,4 +105,14 @@ tasks:
     cmds:
       - node packaging/pack.ts publish --dry-run
     desc: Dry-run npm publish
+  # ── Test ──
+  test:fuzz:
+    cmds:
+      - |
+        for fn in FuzzParse FuzzMatcher; do
+          go test -run='^$' -fuzz="^${fn}$" -fuzztime={{.FUZZTIME}} ./internal/datamitsuignore/
+        done
+    desc: Fuzz the .datamitsuignore parser and matcher (override FUZZTIME, e.g. FUZZTIME=2m)
+    vars:
+      FUZZTIME: "{{.FUZZTIME | default \"20s\"}}"
 version: "3"
