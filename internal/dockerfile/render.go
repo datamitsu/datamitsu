@@ -101,8 +101,11 @@ func writeBaseStage(b *strings.Builder, opts RenderOptions) {
 	b.WriteString("USER root\n")
 	// sliceDir is created here (root, chowned) because the config-split stage
 	// writes into it as the non-root user; other stages just inherit it empty.
-	fmt.Fprintf(b, "RUN mkdir -p %s %s %s && chown -R %s:%s %s %s %s\n",
-		opts.StoreRoot, opts.WorkDir, sliceDir, opts.User, opts.User, opts.StoreRoot, opts.WorkDir, sliceDir)
+	// Group 0 + g=u (not the user's own group) keeps the dirs writable for
+	// arbitrary-uid runtimes — see the final-stage perms normalization.
+	fmt.Fprintf(b, "RUN mkdir -p %s %s %s && chown -R %s:0 %s %s %s && chmod -R g=u %s %s %s\n",
+		opts.StoreRoot, opts.WorkDir, sliceDir, opts.User, opts.StoreRoot, opts.WorkDir, sliceDir,
+		opts.StoreRoot, opts.WorkDir, sliceDir)
 	fmt.Fprintf(b, "USER %s\n", opts.User)
 	fmt.Fprintf(b, "ENV DATAMITSU_CACHE_DIR=%s\n", opts.StoreRoot)
 	fmt.Fprintf(b, "WORKDIR %s\n\n", opts.WorkDir)

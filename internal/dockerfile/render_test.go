@@ -238,6 +238,9 @@ func TestRender_ArbitraryUIDDirPerms(t *testing.T) {
 	out := Render(samplePlan(), pinnedOpts())
 
 	mustContain(t, out, "RUN find /dm /opt/datamitsu-config -type d -exec chgrp 0 {} + -exec chmod g=u {} +")
+	// The build dirs are born group-0 writable too (dm-base).
+	mustContain(t, out,
+		"RUN mkdir -p /dm /opt/datamitsu-config /slices && chown -R datamitsu:0 /dm /opt/datamitsu-config /slices && chmod -R g=u /dm /opt/datamitsu-config /slices")
 
 	// The perms layer runs as root AFTER the per-subtree COPY block and the
 	// image still drops back to the unprivileged user before ENTRYPOINT.
