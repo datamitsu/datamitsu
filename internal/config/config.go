@@ -137,6 +137,14 @@ type ConfigSetup struct { //nolint:revive // exported: name kept explicit; confi
 	OtherFileNameList []string `json:"otherFileNameList,omitempty"`
 	DeleteOnly        bool     `json:"deleteOnly,omitempty"`
 	LinkTarget        string   `json:"linkTarget,omitempty"`
+	// ExpectChainHash, when set on the root (topmost) config layer, pins the
+	// XXH3-128 hash ("xxh3:<hex>" or bare hex) of the content entering that
+	// layer — the output of the whole upstream chain (remote/before layers)
+	// before this layer transforms it. setup recomputes that hash and aborts
+	// with a drift report when it diverges, so upstream changes to a pinned
+	// file surface before any overwrite. Opt-in per file; only the root layer's
+	// value is consulted. Bypass with --no-verify-hash.
+	ExpectChainHash string `json:"expectChainHash,omitempty"`
 	// Content function will be called from JavaScript
 	Content any `json:"-"`
 }

@@ -223,12 +223,13 @@ Set up configuration files for detected project types.
 datamitsu setup
 ```
 
-| Flag             | Description                                                                                                        |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `--dry-run`      | Show what would be done without making changes                                                                     |
-| `--skip-fix`     | Skip running fix after setup                                                                                       |
-| `--opt-in-tools` | Also generate an all-disabled `.datamitsuignore` so tools are opt-in (enable them by removing names from the list) |
-| `--tools`        | Comma-separated list of tools to scope setup to (only their config files are written)                              |
+| Flag               | Description                                                                                                                                                                |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--dry-run`        | Show what would be done without making changes                                                                                                                             |
+| `--skip-fix`       | Skip running fix after setup                                                                                                                                               |
+| `--opt-in-tools`   | Also generate an all-disabled `.datamitsuignore` so tools are opt-in (enable them by removing names from the list)                                                         |
+| `--tools`          | Comma-separated list of tools to scope setup to (only their config files are written)                                                                                      |
+| `--no-verify-hash` | Skip [`expectChainHash`](./configuration-api.md#pinning-the-upstream-chain-expectchainhash) verification (write even when a pinned config drifted from its upstream chain) |
 
 Setup detects project types, generates configuration files, and optionally runs fix afterward.
 
@@ -247,6 +248,13 @@ single `**/*: <tool names>` rule. You then enable tools one at a time by removin
 their names from that list. The file is written before the post-setup fix (so fix
 respects the opt-in state), and setup refuses to overwrite an existing
 `.datamitsuignore`. See [Generating an all-disabled file](./ignore-rules.md#generating-an-all-disabled-file).
+
+Any config file that pins [`expectChainHash`](./configuration-api.md#pinning-the-upstream-chain-expectchainhash)
+is verified before setup writes anything: if its upstream chain drifted from the
+pinned hash, setup aborts with a report (the expected/actual hash and the full
+incoming content) and **no files are written**. Review the change against your
+overrides, update the pin, and re-run — or pass `--no-verify-hash` to write
+regardless. The check runs in `--dry-run` too.
 
 **Examples:**
 
