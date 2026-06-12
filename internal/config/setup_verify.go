@@ -39,6 +39,38 @@ func incomingToRootLayer(history *SetupLayerHistory) string {
 	return ""
 }
 
+// ChainHashEntry is a setup file paired with the XXH3-128 hash of the content
+// entering its root (topmost) layer — the value an expectChainHash pin must match.
+type ChainHashEntry struct {
+	FileName string
+	Hash     string // "xxh3:<hex>"
+}
+
+// ChainHashes returns, for every setup file in the layer map, the chain hash that
+// VerifyChainHashes compares an expectChainHash pin against (the content entering
+// the file's root layer), sorted by filename. It is the introspection counterpart
+// of the gate: the printed value can be copied straight into a pin.
+func ChainHashes(layerMap SetupLayerMap) []ChainHashEntry {
+	names := make([]string, 0, len(layerMap))
+	for name := range layerMap {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	out := make([]ChainHashEntry, 0, len(names))
+	for _, name := range names {
+		history := layerMap[name]
+		if history == nil {
+			continue
+		}
+		out = append(out, ChainHashEntry{
+			FileName: name,
+			Hash:     chainHashPrefix + hashutil.XXH3Hex([]byte(incomingToRootLayer(history))),
+		})
+	}
+	return out
+}
+
 // VerifyChainHashes checks every setup entry whose root (topmost) layer declares
 // expectChainHash against the XXH3-128 hash of the content entering that layer.
 // Only the root layer is consulted; intermediate layers are ignored. The result

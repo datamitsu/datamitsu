@@ -317,6 +317,27 @@ datamitsu config runtime | jq .minimumReleaseAgeMinutes
 DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeconds  # -> 1200
 ```
 
+### config chain-hash
+
+Print the XXH3-128 chain hash that `datamitsu setup` verifies for managed config files — the hash of the content entering each file's root (topmost) config layer. Copy it into a setup entry's [`expectChainHash`](./configuration-api.md#pinning-the-upstream-chain-expectchainhash) to pin the upstream baseline your overrides were written against, without having to trigger a drift error to read it.
+
+```bash
+datamitsu config chain-hash [file...]
+```
+
+The value is the input to the **topmost** layer, so declare your own entry for the file first (a placeholder `expectChainHash` is enough), then read the real hash here. With no arguments every setup file is listed as `file  hash`; with exactly one file only its bare hash is printed, which is convenient for scripting.
+
+**Examples:**
+
+```bash
+# List the chain hash of every setup file
+datamitsu config chain-hash
+
+# Print just one file's hash (capture it into a variable / your config)
+datamitsu config chain-hash eslint.config.mjs
+pin=$(datamitsu config chain-hash eslint.config.mjs)
+```
+
 ### config lockfile
 
 Generate lock file content for a runtime-managed app (node/UV).

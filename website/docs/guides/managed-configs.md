@@ -235,7 +235,11 @@ proceeds; if the upstream chain **drifted**, setup aborts **before writing
 anything** and prints the new hash and incoming content so you can reconcile your
 overrides and update the pin. The check is opt-in per file, honoured only on the
 root layer, byte-for-byte (no normalization), and can be bypassed with
-`datamitsu setup --no-verify-hash`. See the
+`datamitsu setup --no-verify-hash`.
+
+To get the initial value, declare the entry (a placeholder pin is fine) and read
+the real hash with `datamitsu config chain-hash <file>` — it prints exactly what
+the gate checks, so no fake-failure dance is needed. See the
 [`expectChainHash` reference](../reference/configuration-api.md#pinning-the-upstream-chain-expectchainhash)
 for the full contract.
 

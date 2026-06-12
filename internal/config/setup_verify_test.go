@@ -113,6 +113,32 @@ func TestVerifyChainHashes(t *testing.T) {
 	})
 }
 
+func TestChainHashes(t *testing.T) {
+	upstream := "base output\n"
+	want := "xxh3:" + hashutil.XXH3Hex([]byte(upstream))
+
+	lm := SetupLayerMap{
+		"b.yaml": {Layers: []SetupLayerEntry{layer("base", upstream), layer("root", "x")}},
+		"a.yaml": {Layers: []SetupLayerEntry{layer("base", upstream), layer("root", "y")}},
+		"nil":    nil,
+	}
+	got := ChainHashes(lm)
+
+	if len(got) != 2 {
+		t.Fatalf("expected 2 entries (nil history skipped), got %d: %+v", len(got), got)
+	}
+	if got[0].FileName != "a.yaml" || got[1].FileName != "b.yaml" {
+		t.Errorf("entries not sorted by filename: %+v", got)
+	}
+	// Hash covers the content entering the root layer (the base output), not the
+	// root layer's own output — both files share the same base, so same hash.
+	for _, e := range got {
+		if e.Hash != want {
+			t.Errorf("%s hash = %q, want %q", e.FileName, e.Hash, want)
+		}
+	}
+}
+
 // TestVerifyChainHashes_Pipeline drives the real evaluation pipeline — a shared
 // "base" layer followed by a "root" layer that both transforms the content AND
 // pins it — to confirm the gate hashes the content ENTERING the root layer (the

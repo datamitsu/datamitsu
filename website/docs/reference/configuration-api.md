@@ -678,6 +678,14 @@ overrides, update the pin, and re-run. Key properties:
 - **Bypass.** Pass `datamitsu setup --no-verify-hash` to skip the check and write
   regardless of drift.
 
+To obtain the value the first time, declare the entry with a placeholder pin and
+read the real hash with [`datamitsu config chain-hash <file>`](./cli-commands.md#config-chain-hash)
+(it prints exactly what the gate checks, no error needed):
+
+```bash
+pin=$(datamitsu config chain-hash eslint.config.mjs)  # -> xxh3:…
+```
+
 The `content` function receives a context object:
 
 ```typescript
