@@ -36,6 +36,62 @@ func assertOrder(t *testing.T, got string, keys ...string) {
 	}
 }
 
+// TestYAMLSpreadMergeIsStable mirrors the real lefthook.yaml setup content
+// function (datamitsu-config cmdSetup.ts): parse the existing file, spread its
+// parsed commands into a new object, then re-stringify. This is the exact path
+// that drifted the chain-hash — the spread of YAML.parse output exposed Go
+// map-iteration order. With ordered parse it must be stable and source-ordered.
+func TestYAMLSpreadMergeIsStable(t *testing.T) {
+	engine, err := New(context.Background(), "")
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	const existing = `pre-commit:
+  commands:
+    docs-generate:
+      priority: 3
+      run: docs
+      stage_fixed: true
+    sync-datamitsu-version:
+      priority: 2
+      run: sync
+      stage_fixed: true
+    test:
+      priority: 6
+      run: pnpm test
+    validate-blocklist:
+      priority: 4
+      run: validate
+      stage_fixed: false
+  parallel: false
+`
+	script := "(() => {\n" +
+		"  const existing = YAML.parse(`" + existing + "`);\n" +
+		"  return YAML.stringify({\n" +
+		"    ...existing,\n" +
+		"    'pre-commit': {\n" +
+		"      commands: {\n" +
+		"        ...(existing && existing['pre-commit'] && existing['pre-commit'].commands),\n" +
+		"        'dm-check': { priority: 2, run: 'check', stage_fixed: true },\n" +
+		"        'dm-init': { priority: 1, run: 'init' },\n" +
+		"      },\n" +
+		"      parallel: false,\n" +
+		"    },\n" +
+		"  });\n" +
+		"})()"
+
+	got := runDistinct(t, engine, script, 100)
+	if len(got) != 1 {
+		t.Fatalf("spread-merge unstable: %d distinct outputs", len(got))
+	}
+	for s := range got {
+		// Existing commands keep file order, then the two appended ones.
+		assertOrder(t, s, "docs-generate", "sync-datamitsu-version", "test",
+			"validate-blocklist", "dm-check", "dm-init")
+	}
+}
+
 // TestYAMLRoundTripPreservesOrder guards against the chain-hash drift bug:
 // YAML.parse used to decode mappings into an unordered map[string]any, so a
 // parse -> stringify round-trip emitted keys in random Go map-iteration order
