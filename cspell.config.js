@@ -5,8 +5,6 @@ export default defineConfig((config) => ({
   ignorePaths: [...(config.ignorePaths ?? []), "**/*.asc", "**/*.golangci.yaml"],
   words: [
     ...config.words,
-    "udiff",
-    "miscolored",
     "clearsign",
     "clearsigned",
     "keyring",

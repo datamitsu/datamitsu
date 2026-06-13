@@ -230,7 +230,6 @@ datamitsu setup
 | `--opt-in-tools`   | Also generate an all-disabled `.datamitsuignore` so tools are opt-in (enable them by removing names from the list)                                                         |
 | `--tools`          | Comma-separated list of tools to scope setup to (only their config files are written)                                                                                      |
 | `--no-verify-hash` | Skip [`expectChainHash`](./configuration-api.md#pinning-the-upstream-chain-expectchainhash) verification (write even when a pinned config drifted from its upstream chain) |
-| `--no-hash-diff`   | On drift, dump the full incoming content instead of a diff against the on-disk file                                                                                        |
 
 Setup detects project types, generates configuration files, and optionally runs fix afterward.
 
@@ -252,12 +251,10 @@ respects the opt-in state), and setup refuses to overwrite an existing
 
 Any config file that pins [`expectChainHash`](./configuration-api.md#pinning-the-upstream-chain-expectchainhash)
 is verified before setup writes anything: if its upstream chain drifted from the
-pinned hash, setup aborts with a report (the expected/actual hash and a unified
-diff of the on-disk file against the incoming content) and **no files are
-written**. Review the change against your overrides, update the pin, and re-run —
-or pass `--no-verify-hash` to write regardless. Pass `--no-hash-diff` to print the
-full incoming content instead of a diff (also the fallback when the file is absent
-on disk). The check runs in `--dry-run` too.
+pinned hash, setup aborts with a report (the expected/actual hash and the full
+incoming content) and **no files are written**. Review the change against your
+overrides, update the pin, and re-run — or pass `--no-verify-hash` to write
+regardless. The check runs in `--dry-run` too.
 
 **Examples:**
 
