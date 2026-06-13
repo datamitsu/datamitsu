@@ -14,9 +14,10 @@ const chainHashPrefix = "xxh3:"
 // content entering the root layer.
 type ChainHashMismatch struct {
 	FileName string
-	Expected string // normalized "xxh3:<hex>"
-	Actual   string // "xxh3:<hex>"
-	Incoming string // the content that entered the root layer (what was hashed)
+	Expected string  // normalized "xxh3:<hex>"
+	Actual   string  // "xxh3:<hex>"
+	Incoming string  // the content that entered the root layer (what was hashed)
+	OnDisk   *string // current on-disk file content, nil if the file is absent
 }
 
 // incomingToRootLayer returns the content entering the root (topmost) layer for a
@@ -106,6 +107,7 @@ func VerifyChainHashes(layerMap SetupLayerMap) []ChainHashMismatch {
 			Expected: chainHashPrefix + expectedHex,
 			Actual:   chainHashPrefix + actualHex,
 			Incoming: incoming,
+			OnDisk:   history.OriginalContent,
 		})
 	}
 	return mismatches
