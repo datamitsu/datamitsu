@@ -448,6 +448,22 @@ declare global {
       deleteOnly?: boolean;
 
       /**
+       * Pins the XXH3-128 hash of the content entering THIS (root/topmost) config
+       * layer — i.e. the output of the whole upstream chain (remote/before layers)
+       * before this layer transforms it. `datamitsu setup` recomputes that
+       * hash and aborts with a drift report when it diverges, so an upstream change
+       * to a pinned file surfaces before any overwrite instead of silently
+       * clobbering local overrides.
+       *
+       * Opt-in per file and verified only on the root layer (intermediate layers
+       * are ignored). The content is hashed byte-for-byte, with no normalization.
+       * Format: "xxh3:<32-hex>" (a bare 32-hex value is also accepted). Bypass the
+       * check with `--no-verify-hash`.
+       * @example "xxh3:0a1b2c3d4e5f60718293a4b5c6d7e8f9"
+       */
+      expectChainHash?: string;
+
+      /**
        * Relative path to the symlink target, resolved from the directory of the symlink itself.
        * When set, creates a symlink instead of writing file content.
        * Content function is ignored when linkTarget is set.
