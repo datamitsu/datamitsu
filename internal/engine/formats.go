@@ -3,6 +3,7 @@ package engine
 import (
 	"bytes"
 	"fmt"
+	"sort"
 	"strconv"
 
 	"github.com/dop251/goja"
@@ -91,6 +92,70 @@ func tomlStringifyOrdered(slice yaml.MapSlice) (string, error) {
 	return buf.String(), nil
 }
 
+// orderedAnyToGojaValue converts a value produced by an order-preserving decode
+// (yaml.MapSlice for mappings, []any for sequences) into a goja value, building
+// real goja objects so downstream key iteration follows source order.
+//
+// Without this, YAML.parse decoded mappings into Go map[string]any, whose
+// iteration order goja exposes non-deterministically; YAML.stringify then
+// faithfully preserved that random order, drifting setup content (and its
+// expectChainHash) on every run.
+func (e *Engine) orderedAnyToGojaValue(val any) goja.Value {
+	switch v := val.(type) {
+	case yaml.MapSlice:
+		obj := e.vm.NewObject()
+		for _, item := range v {
+			key, ok := item.Key.(string)
+			if !ok {
+				key = fmt.Sprintf("%v", item.Key)
+			}
+			_ = obj.Set(key, e.orderedAnyToGojaValue(item.Value))
+		}
+		return obj
+	case []any:
+		items := make([]any, len(v))
+		for i, item := range v {
+			items[i] = e.orderedAnyToGojaValue(item)
+		}
+		return e.vm.NewArray(items...)
+	default:
+		return e.vm.ToValue(v)
+	}
+}
+
+// sortedMapToGojaValue converts a value decoded into Go's unordered map[string]any
+// (the TOML decoder has no order-preserving mode) into a goja value with keys in
+// deterministic sorted order. Without this, TOML.parse exposed Go map-iteration
+// order, drifting TOML.stringify output (and its content hash) on every run.
+//
+// Unlike YAML/JSON/INI — which preserve source order — TOML normalizes to sorted
+// keys. That matches the existing stringify path, which already alphabetizes
+// nested tables via toml.Marshal; a fully order-preserving TOML codec would mean
+// rewriting both the parser (AST walk) and the encoder, out of scope here.
+func (e *Engine) sortedMapToGojaValue(val any) goja.Value {
+	switch v := val.(type) {
+	case map[string]any:
+		keys := make([]string, 0, len(v))
+		for k := range v {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		obj := e.vm.NewObject()
+		for _, k := range keys {
+			_ = obj.Set(k, e.sortedMapToGojaValue(v[k]))
+		}
+		return obj
+	case []any:
+		items := make([]any, len(v))
+		for i, item := range v {
+			items[i] = e.sortedMapToGojaValue(item)
+		}
+		return e.vm.NewArray(items...)
+	default:
+		return e.vm.ToValue(v)
+	}
+}
+
 // convertGojaValueToOrderedStructure converts a goja.Value to Go structures while preserving key order
 // Uses yaml.MapSlice for objects to maintain insertion order
 func (e *Engine) convertGojaValueToOrderedStructure(val goja.Value) any {
@@ -162,11 +227,14 @@ func (e *Engine) initFormats() {
 			yamlStr := call.Argument(0).String()
 			var result any
 
-			if err := yaml.Unmarshal([]byte(yamlStr), &result); err != nil {
+			// UseOrderedMap decodes mappings into yaml.MapSlice (insertion order)
+			// instead of an unordered map[string]any, so key order survives a
+			// parse -> stringify round-trip and content hashes stay stable.
+			if err := yaml.UnmarshalWithOptions([]byte(yamlStr), &result, yaml.UseOrderedMap()); err != nil {
 				panic(e.vm.NewGoError(fmt.Errorf("YAML.parse error: %w", err)))
 			}
 
-			return e.vm.ToValue(result)
+			return e.orderedAnyToGojaValue(result)
 		},
 		"stringify": func(call goja.FunctionCall) goja.Value {
 			if len(call.Arguments) == 0 {
@@ -194,11 +262,14 @@ func (e *Engine) initFormats() {
 			tomlStr := call.Argument(0).String()
 			var result any
 
+			// The TOML decoder yields an unordered map[string]any; sort keys so a
+			// parse -> stringify round-trip is deterministic and content hashes
+			// stay stable (see sortedMapToGojaValue).
 			if err := toml.Unmarshal([]byte(tomlStr), &result); err != nil {
 				panic(e.vm.NewGoError(fmt.Errorf("TOML.parse error: %w", err)))
 			}
 
-			return e.vm.ToValue(result)
+			return e.sortedMapToGojaValue(result)
 		},
 		"stringify": func(call goja.FunctionCall) goja.Value {
 			if len(call.Arguments) == 0 {

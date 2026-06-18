@@ -206,6 +206,52 @@ The `content()` function receives a context object with:
 - `originalContent` - unmodified content of the file as it exists on disk (available during both config loading and `datamitsu setup`)
 - `existingPath` - path to the existing file on disk (only available during `datamitsu setup`, undefined during config loading)
 
+### Detecting upstream drift (`expectChainHash`)
+
+Configs are produced by **layering**: a shared config (plus any remote/before
+layers) generates a baseline, and your root config — at the git root, or an
+explicit `--config` — runs last on top, where you apply project-specific
+overrides. Those overrides are written against a particular baseline. If the
+shared config later changes, a plain `datamitsu setup` re-derives the file and can
+silently overwrite your tweaks.
+
+Set `expectChainHash` on a root-layer entry to pin the baseline your overrides
+assume — the XXH3-128 hash of the content entering your layer, _before_ your layer
+transforms it:
+
+```javascript
+const setup = {
+  "eslint.config.mjs": {
+    expectChainHash: "xxh3:0a1b2c3d4e5f60718293a4b5c6d7e8f9",
+    content: (context) => {
+      /* overrides layered on top of the shared config */
+    },
+  },
+};
+```
+
+`datamitsu setup` recomputes that hash on every run. If it still matches, setup
+proceeds; if the upstream chain **drifted**, setup aborts **before writing
+anything** and prints the new hash and incoming content so you can reconcile your
+overrides and update the pin. The check is opt-in per file, honoured only on the
+root layer, byte-for-byte (no normalization), and can be bypassed with
+`datamitsu setup --no-verify-hash`.
+
+To get the initial value, declare the entry (a placeholder pin is fine) and read
+the real hash with `datamitsu config chain-hash <file>` — it prints exactly what
+the gate checks, so no fake-failure dance is needed. See the
+[`expectChainHash` reference](../reference/configuration-api.md#pinning-the-upstream-chain-expectchainhash)
+for the full contract.
+
+:::note Which files to pin
+Configs whose handler folds your own on-disk file into the result (e.g. a YAML
+linter config merged with what you already have) will see the hash move when
+**you** edit the file too, not just on upstream changes. Pinning is most useful
+for files generated from a fixed template (the import-style shims like
+`eslint.config.mjs`, `prettier.config.mjs`), where the incoming content is a pure
+function of the upstream version.
+:::
+
 :::tip Architecture
 Learn more about how datamitsu plans and schedules tool execution in [Task Planning](./architecture/planner.md).
 :::

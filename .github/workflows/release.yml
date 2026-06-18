@@ -497,7 +497,7 @@ jobs:
         with:
           setup-go: "false"
       - name: Setup Ruby
-        uses: ruby/setup-ruby@afeafc3d1ab54a631816aba4c914a0081c12ff2f # v1.310.0
+        uses: ruby/setup-ruby@89f90524b88a01fe6e0b732220432cc6142926af # v1.313.0
         with:
           ruby-version: "3.3"
       - if: ${{ !env.ACT }}
@@ -527,7 +527,7 @@ jobs:
           ls -lh *.gem
       - if: ${{ !env.ACT }}
         name: Configure RubyGems credentials (OIDC)
-        uses: rubygems/configure-rubygems-credentials@762a4b77c3300434bb57c7ce80b20e36231927aa # v2.0.0
+        uses: rubygems/configure-rubygems-credentials@dc5a8d8553e6ee01fc26761a49e99e733d17954a # v2.1.0
       - if: ${{ !env.ACT }}
         name: Publish to RubyGems
         run: |
