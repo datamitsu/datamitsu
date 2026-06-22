@@ -24,6 +24,7 @@ packageExtensions:
       vscode-languageserver-protocol: "*"
       vscode-languageserver-types: "*"
 packages:
+  - packaging/action
   - programmable-api/js
   - website
 resolutionMode: lowest-direct

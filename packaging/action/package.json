@@ -1,0 +1,26 @@
+{
+  "name": "@datamitsu/setup-action",
+  "version": "0.0.0",
+  "private": true,
+  "description": "GitHub Action that installs the datamitsu CLI and runs it in CI.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "build": "tsdown",
+    "codegen": "tsx scripts/gen-hashes.ts",
+    "test": "node --import tsx --test 'src/**/*.test.ts'"
+  },
+  "devDependencies": {
+    "@actions/core": "1.11.1",
+    "@actions/exec": "1.1.1",
+    "@actions/io": "1.1.3",
+    "@actions/tool-cache": "2.0.2",
+    "@shibanet0/datamitsu-config": "0.1.0",
+    "@types/node": "26.0.0",
+    "tsdown": "0.22.3",
+    "tsx": "4.22.4"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

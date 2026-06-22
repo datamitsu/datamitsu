@@ -1,0 +1,21 @@
+author: "datamitsu"
+branding:
+  color: "blue"
+  icon: "package"
+description: "Install the datamitsu CLI and run it in CI"
+inputs:
+  args:
+    default: "lint"
+    description: "Arguments passed to datamitsu after setup (e.g. `lint`, `check`, `exec golangci-lint run`). An empty string installs and initializes only."
+    required: false
+  init:
+    default: "true"
+    description: "Run `datamitsu init` after install to provision managed tools."
+    required: false
+name: "Setup datamitsu"
+outputs:
+  version:
+    description: "The datamitsu version that was installed."
+runs:
+  main: "dist/index.mjs"
+  using: "node24"

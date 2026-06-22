@@ -218,6 +218,53 @@ jobs:
           echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
           echo "npm version: $VERSION"
           echo "git tag: $TAG_NAME"
+  publish-action:
+    if: |
+      always() &&
+      !cancelled() &&
+      needs.build.result == 'success' &&
+      needs.determine-release-type.outputs.is_stable == 'true' &&
+      !contains(needs.validate-stable.outputs.version, '-rc.')
+    name: Publish setup-datamitsu action
+    needs:
+      - build
+      - determine-release-type
+      - validate-stable
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ needs.determine-release-type.outputs.checkout_ref }}
+      - uses: ./.github/actions/setup-environment
+        with:
+          setup-go: "false"
+      - if: ${{ !env.ACT }}
+        name: Download build artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-artifacts
+          path: .
+      - if: ${{ !env.ACT }}
+        name: Check out setup-datamitsu (publish target)
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          path: setup-datamitsu-dist
+          ref: main
+          repository: datamitsu/setup-datamitsu
+          token: ${{ secrets.SETUP_DATAMITSU_TOKEN }}
+      - env:
+          GH_TOKEN: ${{ secrets.SETUP_DATAMITSU_TOKEN }}
+          TARGET_DIR: ${{ github.workspace }}/setup-datamitsu-dist
+        if: ${{ !env.ACT }}
+        name: Bake hashes, build, and publish action
+        run: |
+          VERSION_WITH_V="${{ needs.validate-stable.outputs.version }}"
+          export VERSION="${VERSION_WITH_V#v}"
+          pnpm --filter @datamitsu/setup-action codegen
+          pnpm --filter @datamitsu/setup-action build
+          pnpm --filter @datamitsu/setup-action exec tsx scripts/publish.ts
   publish-docker:
     if: |
       always() &&
