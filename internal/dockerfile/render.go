@@ -266,17 +266,23 @@ func writeFinalStage(b *strings.Builder, plan Plan, opts RenderOptions) {
 		writeCopy(b, stageName("app-", bs.App), opts.storeAbs(binaryAppSubtree(bs.App)))
 	}
 
-	// Arbitrary-uid runtimes: k8s and OpenShift commonly run containers under
-	// a random non-root uid whose only predictable membership is group 0. Make
-	// every store/config directory group-0 with group perms mirroring the
-	// owner's, so `datamitsu init` can write the cache and add store entries
-	// at run time. Directories only: chmod over file content would copy-up
-	// every store file into one duplicate layer and roughly double the image,
-	// while creating new files needs only writable directories. The extra
-	// trailing layer is metadata-sized and sits after the per-subtree COPY
-	// block, which the oci-map postprocess locates by probing, not position.
+	// Writable store/config dirs for both run-time users. `COPY --link` above
+	// recreates the destination's parent dirs (/dm, /dm/store, …) as root:root
+	// 0755 in its own layer, shadowing dm-base's datamitsu:0 ones. Restore
+	// owner AND group here: chown to the image user + group 0 with group perms
+	// mirroring the owner's. That covers the named user (owner) — the default
+	// entrypoint path, e.g. GitLab k8s honoring the image USER — AND arbitrary
+	// non-root uids whose only predictable membership is group 0 (OpenShift).
+	// A chgrp-only normalization left the dirs root-owned, so the named user
+	// (primary group != 0) hit "other" perms and `datamitsu init` failed to
+	// create /dm/store/.bundles. Directories only: a chmod/chown over file
+	// content would copy-up every store file into one duplicate layer and
+	// roughly double the image, while creating new files needs only writable
+	// directories. The extra trailing layer is metadata-sized and sits after
+	// the per-subtree COPY block, which the oci-map postprocess locates by
+	// probing, not position.
 	b.WriteString("USER root\n")
-	fmt.Fprintf(b, "RUN find %s %s -type d -exec chgrp 0 {} + -exec chmod g=u {} +\n", opts.StoreRoot, opts.WorkDir)
+	fmt.Fprintf(b, "RUN find %s %s -type d -exec chown %s:0 {} + -exec chmod g=u {} +\n", opts.StoreRoot, opts.WorkDir, opts.User)
 	fmt.Fprintf(b, "USER %s\n", opts.User)
 	b.WriteString("WORKDIR /workspace\n")
 
