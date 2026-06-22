@@ -17,9 +17,6 @@ mkdirSync(join(target, "dist"), { recursive: true });
 copyFileSync(join(ACTION_DIR, "action.yml"), join(target, "action.yml"));
 copyFileSync(join(ACTION_DIR, "dist", "index.mjs"), join(target, "dist", "index.mjs"));
 copyFileSync(join(ACTION_DIR, "README.md"), join(target, "README.md"));
-// Ship the human-readable baked hashes alongside the bundle so reviewers can
-// audit exactly which binaries a published tag verifies.
-copyFileSync(join(ACTION_DIR, "src", "generated.ts"), join(target, "hashes.ts"));
 
 const tag = `v${version}`;
 const git = (...args: string[]): void => {

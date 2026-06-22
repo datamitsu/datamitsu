@@ -1,7 +1,7 @@
 author: "datamitsu"
 branding:
-  color: "blue"
-  icon: "package"
+  color: "yellow"
+  icon: "hexagon"
 description: "Install the datamitsu CLI and run it in CI"
 inputs:
   args:
