@@ -229,15 +229,17 @@ func mustContain(t *testing.T, haystack, needle string) {
 	}
 }
 
-// TestRender_ArbitraryUIDDirPerms pins the k8s/OpenShift arbitrary-uid fix:
-// after the store is assembled, every store/config DIRECTORY becomes group-0
-// with group perms mirroring the owner's, so a random-uid runtime (gid 0)
-// can write the cache and hydrate the store. Directories only — a file-level
-// chmod would copy-up the whole store into a duplicate layer.
+// TestRender_ArbitraryUIDDirPerms pins the writable-dirs fix: after the store
+// is assembled, every store/config DIRECTORY is chowned back to the image user
+// + group 0 with group perms mirroring the owner's. `COPY --link` recreates the
+// destination parents root-owned, so a chgrp-only pass left the named user
+// (primary group != 0) unable to write; restoring the owner covers both the
+// named user (owner) and arbitrary gid-0 runtimes (group). Directories only —
+// a file-level chmod/chown would copy-up the whole store into a duplicate layer.
 func TestRender_ArbitraryUIDDirPerms(t *testing.T) {
 	out := Render(samplePlan(), pinnedOpts())
 
-	mustContain(t, out, "RUN find /dm /opt/datamitsu-config -type d -exec chgrp 0 {} + -exec chmod g=u {} +")
+	mustContain(t, out, "RUN find /dm /opt/datamitsu-config -type d -exec chown datamitsu:0 {} + -exec chmod g=u {} +")
 	// The build dirs are born group-0 writable too (dm-base).
 	mustContain(t, out,
 		"RUN mkdir -p /dm /opt/datamitsu-config /slices && chown -R datamitsu:0 /dm /opt/datamitsu-config /slices && chmod -R g=u /dm /opt/datamitsu-config /slices")
