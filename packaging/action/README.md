@@ -34,9 +34,9 @@ Run a different command, or only set up the CLI:
 ## Versioning and integrity
 
 Each release tag pins **one** datamitsu version: `@v0.1.5` installs datamitsu
-`0.1.5`. The SHA-256 hashes of every release binary are baked into the tag (see
-[`hashes.ts`](hashes.ts)) and verified on download — an unverified or missing
-hash makes the action fail.
+`0.1.5`. The SHA-256 hashes of every release binary are baked into that tag
+(inlined in the non-minified `dist/index.mjs`) and verified on download — an
+unverified or missing hash makes the action fail.
 
 Pin by full version (`@v0.1.5`) or commit SHA, **not** a moving major tag, and
 let [Dependabot](https://docs.github.com/code-security/dependabot) keep it
