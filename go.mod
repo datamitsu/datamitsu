@@ -6,7 +6,7 @@ require (
 	github.com/ProtonMail/go-crypto v1.4.1
 	github.com/andybalholm/brotli v1.2.1
 	github.com/bmatcuk/doublestar/v4 v4.10.0
-	github.com/dop251/goja v0.0.0-20260607120635-348e6bea910d
+	github.com/dop251/goja v0.0.0-20260618133527-c9b2ea77db59
 	github.com/evanw/esbuild v0.28.1
 	github.com/fatih/color v1.19.0
 	github.com/go-git/go-git/v6 v6.0.0-alpha.4
@@ -15,7 +15,7 @@ require (
 	github.com/mattn/go-isatty v0.0.22
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.1
-	github.com/pelletier/go-toml/v2 v2.3.1
+	github.com/pelletier/go-toml/v2 v2.4.0
 	github.com/shamaton/msgpack/v2 v2.4.1
 	github.com/spf13/cobra v1.10.2
 	github.com/ulikunitz/xz v0.5.15
@@ -32,7 +32,7 @@ require (
 	github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
 	github.com/cloudflare/circl v1.6.3 // indirect
-	github.com/dlclark/regexp2/v2 v2.2.1 // indirect
+	github.com/dlclark/regexp2/v2 v2.2.2 // indirect
 	github.com/go-git/gcfg/v2 v2.0.2 // indirect
 	github.com/go-git/go-billy/v6 v6.0.0-alpha.1 // indirect
 	github.com/go-sourcemap/sourcemap v2.1.4+incompatible // indirect
