@@ -150,11 +150,11 @@ production CLI behavior is changed by Phases 0–2 (purely additive test code).
 
 ### Task 0.2: Command runner + environment isolation
 
-- [ ] create `internal/clitest/run.go`: `Run(t, opts, args...) Result{Stdout,Stderr,ExitCode,Err}` via `os/exec`, capturing streams separately, with `opts` for env/workdir/stdin/timeout
-- [ ] build a clean base env: `PATH`, `HOME`, `GOCOVERDIR`, `NO_COLOR=1`, `DATAMITSU_CACHE_DIR=<tmp>`, `DATAMITSU_OFFLINE=1`, `DATAMITSU_NO_OCI=1`; strip all inherited `DATAMITSU_*` and `CI`/`TERM` so mode detection is deterministic
-- [ ] helper `ExitCodeOf(err)` to extract exit codes portably
-- [ ] write tests: `version` → exit 0; unknown command → non-zero + message on stderr; stdout/stderr are separated
-- [ ] run tests — must pass before next task
+- [x] create `internal/clitest/run.go`: `Run(t, opts, args...) Result{Stdout,Stderr,ExitCode,Err}` via `os/exec`, capturing streams separately, with `opts` for env/workdir/stdin/timeout (+ `CacheDir`; default isolated `t.TempDir`; `DefaultTimeout`=60s, context-bounded with a fail-on-timeout)
+- [x] build a clean base env (`BaseEnv(cacheDir)`): inherits `PATH`/`HOME` etc. from `os.Environ()`, sets `GOCOVERDIR`, `NO_COLOR=1`, `DATAMITSU_CACHE_DIR=<tmp>`, `DATAMITSU_OFFLINE=1`, `DATAMITSU_NO_OCI=1`; strips all inherited `DATAMITSU_*` + `CI`/`TERM` (and the keys it sets) so mode detection is deterministic and there are no duplicate-key ambiguities
+- [x] helper `ExitCodeOf(err)` to extract exit codes portably (0/nil, real code via `*exec.ExitError`, -1 on start failure)
+- [x] write tests: `version` → exit 0; unknown command → non-zero + message on stderr; stdout/stderr are separated; plus `BaseEnv` strip/set + no-duplicate-key + `ExitCodeOf` table — `go test ./internal/clitest/...` green, managed golangci-lint clean
+- [x] run tests — must pass before next task — `go test ./internal/clitest/... ./test/cli/...` green
 
 ### Task 0.3: Temp project + config fixtures
 
