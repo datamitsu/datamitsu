@@ -198,8 +198,8 @@ Ordering matches the original ROI ranking — runtimemanager (Task 2) + binmanag
 
 ### Task N: Documentation
 
-- [ ] document the combined-coverage workflow (`test:coverage:all`, covdata merge) in CONTRIBUTING / architecture docs
-- [ ] note the measurement caveat (blackbox needs the merge to count) so future contributors don't misread `cmd/` numbers
+- [x] document the combined-coverage workflow (`test:coverage:all`, covdata merge) in CONTRIBUTING / architecture docs — covered by the "Combined coverage merge" section in [CONTRIBUTING.md](../../CONTRIBUTING.md) (routes unit `-test.gocoverdir` + blackbox `GOCOVERDIR` through `scripts/coverage-all.sh`, `go tool covdata merge`, `-covermode=atomic` rationale)
+- [x] note the measurement caveat (blackbox needs the merge to count) so future contributors don't misread `cmd/` numbers — added an explicit "Measurement caveat" paragraph: plain `go test -coverprofile` can't see subprocess execution and under-reports `cmd/` (~54% unit-only → ~68% merged); always read the merged `coverage.out`
 
 ## Technical Details
 
