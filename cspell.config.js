@@ -2,7 +2,14 @@ import { defineConfig } from "./.datamitsu/cspell.config.js";
 
 export default defineConfig((config) => ({
   ...config,
-  ignorePaths: [...(config.ignorePaths ?? []), "**/*.asc", "**/*.golangci.yaml"],
+  ignorePaths: [
+    ...(config.ignorePaths ?? []),
+    "**/*.asc",
+    "**/*.golangci.yaml",
+    // Vendored third-party OCI config fixture (single source of truth is the
+    // upstream release; not our prose to spell-check).
+    "test/e2e/testdata/datamitsu.config.oci-ghcr.js",
+  ],
   words: [
     ...config.words,
     "clearsign",

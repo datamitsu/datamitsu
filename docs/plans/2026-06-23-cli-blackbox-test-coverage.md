@@ -259,12 +259,12 @@ production CLI behavior is changed by Phases 0–2 (purely additive test code).
 
 ### Task 2.1: OCI e2e tier — vendored config + scaffolding (gated)
 
-- [ ] vendor `test/e2e/testdata/datamitsu.config.oci-ghcr.js` from the v0.1.6 release URL; add `test/e2e/source.go` with the single `OCIConfigSource` const + a comment documenting the "re-download to update" procedure (single source of truth)
-- [ ] add build tag `//go:build e2e_oci` to the tier; `RequireOCIE2E(t)` skips unless enabled (tag + `DATAMITSU_TEST_OCI=1`)
-- [ ] persistent, configurable cache for dedup: `DATAMITSU_TEST_CACHE` (default stable temp path; may point at the real cache) instead of a wiped `t.TempDir`
-- [ ] overlay generator: temp git repo + `datamitsu.config.js` inheriting the vendored config via `getBeforeConfigs`, disabling all but a minimal tool set (via `getConfig` and/or `.datamitsuignore`)
-- [ ] write a gated smoke test that is correctly skipped when the tag/env is absent
-- [ ] run tests (default build: tier skipped) — must pass before next task
+- [x] vendor `test/e2e/testdata/datamitsu.config.oci-ghcr.js` from the v0.1.6 release URL; add `test/e2e/source.go` with the single `OCIConfigSource` const + a comment documenting the "re-download to update" procedure (single source of truth) — vendored 1,079,517 bytes (sha256 `5d9bba7d…df486`, carries `oci.digest` `sha256:1f53…a326`); `source.go` is intentionally **untagged** so the package always has a compilable file and the default build reports "no test files" instead of failing
+- [x] add build tag `//go:build e2e_oci` to the tier; `RequireOCIE2E(t)` skips unless enabled (tag + `DATAMITSU_TEST_OCI=1`) — `helpers_test.go`/`smoke_test.go` carry the tag (gate 1: absent → no test files in default build); `RequireOCIE2E` is gate 2 (tag present but `DATAMITSU_TEST_OCI!=1` → `t.Skip`)
+- [x] persistent, configurable cache for dedup: `DATAMITSU_TEST_CACHE` (default stable temp path; may point at the real cache) instead of a wiped `t.TempDir` — `testCacheDir()` honors `DATAMITSU_TEST_CACHE`, defaults to `{os.TempDir}/datamitsu-e2e-cache` (created + symlink-resolved, never wiped)
+- [x] overlay generator: temp git repo + `datamitsu.config.js` inheriting the vendored config via `getBeforeConfigs`, disabling all but a minimal tool set (via `getConfig` and/or `.datamitsuignore`) — `newOverlayProject(t, mutateJS)` reuses `clitest.NewProject` + `clitest.WriteOverlayConfig`, inheriting the vendored config via `getBeforeConfigs` and trimming tools in `getConfig`. ➕ Added `onlineEnv()` (strips `DATAMITSU_OFFLINE`/`DATAMITSU_NO_OCI` from `clitest.BaseEnv` — `Offline()` treats any non-empty value incl. `"0"` as on, so they must be removed, not set to `0`) + `runOnline()` (online sibling of `clitest.Run`, 5-min timeout, same shared `GOCOVERDIR`).
+- [x] write a gated smoke test that is correctly skipped when the tag/env is absent — `TestOCISmoke`: builds an overlay, runs `config show`, asserts valid JSON with an `apps` key (proves vendored config parses + overlay merges; no network). Verified: tag-absent → "no test files"; tag-present env-absent → SKIP; tag+env → PASS.
+- [x] run tests (default build: tier skipped) — must pass before next task — `go test ./test/e2e/...` → "no test files" (default build clean); `-tags e2e_oci` compiles + skips without env; `DATAMITSU_TEST_OCI=1 -tags e2e_oci` PASS; managed golangci-lint clean (0 issues) both default and `--build-tags e2e_oci`
 
 ### Task 2.2: OCI e2e — `store seed` + `store status`
 
