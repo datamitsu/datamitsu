@@ -184,10 +184,10 @@ Ordering matches the original ROI ranking — runtimemanager (Task 2) + binmanag
 
 ### Task 9: cmd/ residual error branches (post-merge gaps)
 
-- [ ] from the post-Task-1 merged profile, list `cmd/` statements still uncovered after blackbox
-- [ ] add subprocess error-path tests (conflicting flags, invalid values, missing/unreadable config, `runtimeconfig.Init` failure via bad env) reusing `internal/clitest`
-- [ ] where a branch is only reachable in-process, add a unit test on the underlying `internal/*` helper instead (no `cmd/` refactor)
-- [ ] run combined coverage + measure delta — must pass before next task
+- [x] from the post-Task-1 merged profile, list `cmd/` statements still uncovered after blackbox (top residual gaps: `runConfigLockfile` 18.2%, init/setup/dockerfile render+helper funcs, devtools apps-JSON writers' error branches; heavy `devtools_verify`/`devtools_pull_runtimes` paths left to the OCI e2e tier)
+- [x] add subprocess error-path tests (conflicting flags, invalid values, missing/unreadable config, `runtimeconfig.Init` failure via bad env) reusing `internal/clitest` — existing `test/cli/error_paths_test.go` already covers config-load/unreadable/unknown-flag/exec/init-readonly/bad-env; added `TestConfigLockfileListAndErrorPaths` (no-args empty listing, unknown app, binary-app "does not support lock files")
+- [x] where a branch is only reachable in-process, add a unit test on the underlying `internal/*` helper instead (no `cmd/` refactor) — new `cmd/coverage_paths_test.go` (white-box): `shortInitType`, `isApplicableInitCommand`, `failRow`, `skipRowsWithReason`, `buildConfigLinksRegistry`, `pluralWord`, `writeFileAtomic` (success+overwrite+mkdir-failure), `printDockerfileSummary` (pinned/unpinned/skipped via `cmd.OutOrStdout`), `clearAppLockFile` (node/uv/go clear + original left intact + missing-app), `readLockFile` (node/uv/go + unsupported + missing-file branches), node/uv apps-JSON temp-file error branches + ensure-exists no-op
+- [x] run combined coverage + measure delta — **passes; combined 79.0% → 79.4%, cmd/ 68.1% → 69.4%**, full `go test ./...` green + managed golangci-lint clean
 
 ### Task N-1: Verify acceptance criteria
 
