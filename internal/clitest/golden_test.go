@@ -45,6 +45,22 @@ func TestNormalizerMasksVersionTimestampDuration(t *testing.T) {
 	}
 }
 
+func TestNormalizerCollapsesRuleFills(t *testing.T) {
+	// Two footers differing only in rule-fill length (driven by the masked-away
+	// duration width) must normalize to the same line; the single bar in the
+	// "┗━" prefix is preserved.
+	a := "┗━ ready · 7ms ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	b := "┗━ ready · 13ms ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	norm := NewNormalizer()
+	if got := norm.Apply(a); got != norm.Apply(b) {
+		t.Fatalf("rule-fill not collapsed to a stable form:\n a = %q\n b = %q", norm.Apply(a), norm.Apply(b))
+	}
+	want := "┗━ ready · <DUR> <RULE>"
+	if got := norm.Apply(a); got != want {
+		t.Fatalf("Apply = %q, want %q", got, want)
+	}
+}
+
 func TestNormalizerIsIdempotent(t *testing.T) {
 	norm := NewNormalizer().MaskPath("/tmp/proj", "<TMP>")
 	in := "\x1b[32m" + "/tmp/proj/a" + "\x1b[0m" + " took 2.5s at 2026-06-23T00:00:00Z (dev)"

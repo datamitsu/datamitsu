@@ -211,11 +211,11 @@ production CLI behavior is changed by Phases 0–2 (purely additive test code).
 
 ### Task 1.6: Golden — `init` (offline, minimal config)
 
-- [ ] `init --help`; `init --dry-run` with minimal config → golden plan output (banner/sections normalized)
-- [ ] `init` with empty config + `--no-oci` + offline → no-op success (exit 0); assert no unexpected writes outside the temp project/cache
-- [ ] flag combos: `--skip-download`, `--all`, `--fail-on-download-error` parse and behave offline
-- [ ] error paths: missing config + `--no-auto-config`; not a git root
-- [ ] run tests — must pass before next task
+- [x] `init --help`; `init --dry-run` with minimal config → golden plan output (banner/sections normalized) — `init_help.txt` static golden + `init_dry_run.txt` (banner/init-frame/footer; version+duration masked). ➕ Added a built-in normalizer rule (`ruleRE` in `golden.go`) collapsing box-drawing rule fills → `<RULE>`: their length tracks the masked-away duration/version width, so without it the footer was flaky run-to-run.
+- [x] `init` with empty config + `--no-oci` + offline → no-op success (exit 0); assert no unexpected writes outside the temp project/cache — `TestInitNoopSuccess`: `init_noop.txt` golden, exit 0, asserts the project `.datamitsu/` is created (its one expected write) and a temp `HOME` stays empty (nothing leaks outside project/cache). `--no-oci`/offline come from `BaseEnv` (`DATAMITSU_NO_OCI=1`, `DATAMITSU_OFFLINE=1`).
+- [x] flag combos: `--skip-download`, `--all`, `--fail-on-download-error` parse and behave offline — `TestInitFlagCombosOffline`: each yields byte-identical normalized output to a baseline `init` (all no-op "ready" against the empty config), exit 0, each in its own fresh project.
+- [x] error paths: missing config + `--no-auto-config`; not a git root — `TestInitErrorPaths`: a `--config` pointing at a missing file → exit 1 "failed to load config", no usage; outside any git repo → exit 1 "failed to get git root", no usage. **Characterized:** omitting `--config` under `--no-auto-config` is NOT an error (init falls back to the embedded default config), so the genuine config-error path is a missing `--config` file instead.
+- [x] run tests — must pass before next task — `go test ./test/cli/ ./internal/clitest/...` green, byte-stable across two runs, managed golangci-lint clean (0 issues)
 
 ### Task 1.7: Golden — `exec` (offline contract)
 

@@ -34,6 +34,13 @@ var (
 	// 1.2µs, 3h0m0s → <DUR>. It matches one or more number+unit components so a
 	// compound duration collapses to a single placeholder.
 	durationRE = regexp.MustCompile(`\d+(\.\d+)?(ns|µs|us|ms|s|m|h)(\d+(\.\d+)?(ns|µs|us|ms|s|m|h))*`)
+	// ruleRE matches runs of box-drawing horizontal rule characters (banner
+	// borders and the init/setup phase header/footer fills) → <RULE>. These fills
+	// pad a line to the detected width, so their length depends on the width of
+	// content that is itself masked away (version, duration), which would make
+	// goldens flaky run-to-run and build-to-build. A run of 3+ never appears in
+	// semantic text, while the single bar in "┏━"/"┗━"/"┃" prefixes is preserved.
+	ruleRE = regexp.MustCompile(`[━─]{3,}`)
 )
 
 // Normalizer rewrites subprocess output into a stable, machine-independent form
@@ -103,6 +110,9 @@ func (n *Normalizer) Apply(s string) string {
 
 	// 5. Durations.
 	s = durationRE.ReplaceAllString(s, "<DUR>")
+
+	// 6. Box-drawing rule fills (width-dependent padding) → a single placeholder.
+	s = ruleRE.ReplaceAllString(s, "<RULE>")
 
 	if n.sortLines {
 		s = sortLines(s)

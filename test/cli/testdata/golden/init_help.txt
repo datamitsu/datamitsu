@@ -1,0 +1,20 @@
+Downloads required binaries and runs initialization commands (like npm install, lefthook install, etc.)
+By default, downloads only Required binaries with concurrency of 3 (configurable via DATAMITSU_CONCURRENCY env var).
+
+Usage:
+  datamitsu init [flags]
+
+Flags:
+      --all                      Download all binaries (both required and optional)
+      --dry-run                  Show what would be done without making changes
+      --fail-on-download-error   Stop init process if any binary download fails
+  -h, --help                     help for init
+      --skip-download            Skip binary downloads
+
+Global Flags:
+      --before-config strings   Configuration file(s) to load before auto-discovery (for wrappers/libraries)
+      --binary-command string   Override the binary command (for npm package wrappers, etc). Can also be set via DATAMITSU_BINARY_COMMAND env var
+      --config strings          Additional configuration file(s) to load and merge (can be specified multiple times)
+      --no-auto-config          Disable auto-discovery of datamitsu.config.{js,mjs,ts} at git root
+      --no-oci                  Disable OCI bundle store seeding (also via DATAMITSU_NO_OCI)
+  -v, --verbose                 Enable debug-level logging (default level is warn)
