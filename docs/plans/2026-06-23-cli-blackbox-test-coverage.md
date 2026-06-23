@@ -219,10 +219,10 @@ production CLI behavior is changed by Phases 0–2 (purely additive test code).
 
 ### Task 1.7: Golden — `exec` (offline contract)
 
-- [ ] `exec` with no app name + minimal config → tool listing golden (empty/grouped)
-- [ ] `exec <unknown>` → non-zero + clear error (offline)
-- [ ] argument passthrough parsing (`exec foo -- --flag`) reaches the resolver without mangling
-- [ ] run tests — must pass before next task
+- [x] `exec` with no app name + minimal config → tool listing golden (empty/grouped) — `exec_list_empty.txt` ("Available tools:" header, no groups) + `exec_list_grouped.txt` (two shell apps under `[shell]`, sorted, with the command+description detail column) via a two-shell-app config (shell apps download nothing → fully offline)
+- [x] `exec <unknown>` → non-zero + clear error (offline) — `TestExecUnknownApp`: `exec nonesuch` → exit 1, stderr "not found in registry" naming the app, no usage block (SilenceUsage)
+- [x] argument passthrough parsing (`exec foo -- --flag`) reaches the resolver without mangling — `TestExecArgPassthrough`: `exec hello-shell -- --flag value` runs echo with exactly `--flag value` (stdout byte-equal); ➕ `TestExecFlagsBeforeSeparatorRejected` characterizes the converse (no `--` → Cobra rejects the unknown flag)
+- [x] run tests — must pass before next task — `go test ./test/cli/ ./internal/clitest/...` green, byte-stable across two runs, managed golangci-lint clean (0 issues)
 
 ### Task 1.8: Golden — `install` (offline contract)
 
