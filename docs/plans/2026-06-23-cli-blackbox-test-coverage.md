@@ -158,11 +158,11 @@ production CLI behavior is changed by Phases 0–2 (purely additive test code).
 
 ### Task 0.3: Temp project + config fixtures
 
-- [ ] create `internal/clitest/project.go`: `NewProject(t) *Project` → `t.TempDir()` (eval symlinks) + `git init` + minimal `git config` user; helpers `WriteFile`, `Chdir`
-- [ ] `WriteMinimalConfig(p)` writes the no-op config (`getConfig`=identity, empty `apps/runtimes/setup/tools`, `getMinVersion`="0.0.0")
-- [ ] `WriteOverlayConfig(p, beforeConfigPath, mutateJS)` writes a config whose `getBeforeConfigs()` returns `[{path: beforeConfigPath}]` and whose `getConfig` applies `mutateJS` (e.g. disable tools); `WriteDatamitsuIgnore(p, lines)`
-- [ ] write tests: project resolves as git root; `config show` succeeds offline against the minimal config (exit 0, valid JSON)
-- [ ] run tests — must pass before next task
+- [x] create `internal/clitest/project.go`: `NewProject(t) *Project` → `t.TempDir()` (eval symlinks) + `git init` + minimal `git config` user; helpers `WriteFile`, `Chdir` (via `testing.TB.Chdir`)
+- [x] `WriteMinimalConfig(p)` writes the no-op config (`getConfig` returns empty `apps/runtimes/setup/tools`, `getMinVersion`="0.0.0") to a non-auto-discovered name (`minimal.config.js`) for `--no-auto-config --config <path>`
+- [x] `WriteOverlayConfig(p, beforeConfigPath, mutateJS)` writes auto-discoverable `datamitsu.config.js` whose `getBeforeConfigs()` returns `[{path: beforeConfigPath}]` and whose `getConfig` applies `mutateJS`; `WriteDatamitsuIgnore(p, lines)`
+- [x] write tests: project resolves as git root; `config show` succeeds offline against the minimal config (exit 0, valid JSON, empty collections); plus `WriteFile`/overlay/ignore/`jsString`-escaping coverage
+- [x] run tests — must pass before next task — `go test ./internal/clitest/... ./test/cli/...` green, managed golangci-lint clean
 
 ### Task 0.4: Output normalization + golden plumbing
 
