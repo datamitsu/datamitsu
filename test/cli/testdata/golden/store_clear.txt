@@ -1,0 +1,1 @@
+Cleared store: <CACHE>/store

@@ -203,11 +203,11 @@ production CLI behavior is changed by Phases 0–2 (purely additive test code).
 
 ### Task 1.5: Golden — `store` group (offline contract)
 
-- [ ] `store path` → `{base}/store` (normalized); `store --help`
-- [ ] `store status` (human) and `store status --json` with no `oci` configured → golden / JSON shape
-- [ ] `store clear` safety: refuses dangerous paths; succeeds on the temp store (assert message, not the dev's real store)
-- [ ] `store seed` arg validation (bare tag requires `--resolve-tag`; bad `<ref>@digest` format → error) and `store import` (`ExactArgs(1)`, bad layout dir → error), all offline
-- [ ] run tests — must pass before next task
+- [x] `store path` → `{base}/store` (normalized); `store --help` — `store_path.txt` golden (base masked `<CACHE>`) + exact-equality guard; `store_help.txt` static golden + `expectedStoreSubcommands` drift guard (`clear`, `import`, `path`, `seed`, `status`)
+- [x] `store status` (human) and `store status --json` with no `oci` configured → **characterized as error**: BundleStatus refuses to invent a bundle, both forms exit 1 naming "no oci bundle declared", no usage block (`TestStoreStatusNoOCI`); a populated bundle needs the network → gated OCI e2e tier
+- [x] `store clear` safety: `TestStoreClear` freezes the masked "Cleared store" line on the isolated temp store + proves a planted sentinel is removed; `TestStoreClearRefusesDangerousPath` sets `HOME` = store path → exit 1 "refusing to clear dangerous path", store dir untouched
+- [x] `store seed` arg validation (bare tag without `--resolve-tag`; unpinned ref; no-arg-no-oci → all exit 1, no usage — `TestStoreSeedArgValidation`) and `store import` (`ExactArgs(1)` no-arg; missing-digest-no-oci; missing layout dir → all exit 1 — `TestStoreImportArgValidation`), all offline
+- [x] run tests — must pass before next task — `go test ./test/cli/ ./internal/clitest/...` green, byte-stable across two runs, managed golangci-lint clean (0 issues)
 
 ### Task 1.6: Golden — `init` (offline, minimal config)
 
