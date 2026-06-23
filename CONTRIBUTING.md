@@ -35,6 +35,16 @@ CI's `test` job runs this (not plain `pnpm test`). `-covermode=atomic` is
 required so the in-process and blackbox-binary counter modes match (else covdata
 merge rejects the union with a "counter mode clash").
 
+**Measurement caveat — read the merged number, not the unit-only one.** A plain
+`go test ./... -coverprofile` only instruments in-process code, so it **cannot
+see** statements executed inside the blackbox subprocess binary and therefore
+**under-reports** any package the blackbox suite drives. `cmd/` is the headline
+example: unit-only reports ~54%, but the merged profile shows ~68% because the
+CLI golden suite exercises those paths through a real subprocess. Always judge
+`cmd/` (and any package covered by `test/cli`) from the merged `coverage.out`
+produced by `pnpm test:coverage:all` — never from a bare `-coverprofile` run,
+which silently misses the blackbox contribution.
+
 ### Gated OCI e2e tier (`e2e_oci`)
 
 [`test/e2e`](test/e2e) exercises the real seed/install/exec/init/check/fix/lint

@@ -147,6 +147,60 @@ func TestInitReadOnlyTargetDir(t *testing.T) {
 	}
 }
 
+// TestConfigLockfileListAndErrorPaths exercises the early branches of
+// `config lockfile` that the golden suite does not reach and that need no
+// network: the no-argument listing path (empty config → "No apps with lock file
+// support found."), an unknown app name, and a binary app (which has no
+// dependency manifest, so lockfile generation is rejected before any install).
+func TestConfigLockfileListAndErrorPaths(t *testing.T) {
+	p := clitest.NewProject(t)
+
+	t.Run("no-args-empty-config-lists", func(t *testing.T) {
+		cfg := clitest.WriteMinimalConfig(p)
+		res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+			"--no-auto-config", "--config", cfg, "config", "lockfile")
+		if res.ExitCode != 0 {
+			t.Fatalf("`config lockfile` (no args) exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
+		}
+		if !strings.Contains(res.Stderr, "No apps with lock file support found.") {
+			t.Errorf("stderr missing empty-list message:\n%s", res.Stderr)
+		}
+	})
+
+	t.Run("unknown-app", func(t *testing.T) {
+		cfg := clitest.WriteMinimalConfig(p)
+		res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+			"--no-auto-config", "--config", cfg, "config", "lockfile", "ghost")
+		assertOfflineError(t, res, `app "ghost" not found in configuration`)
+	})
+
+	t.Run("binary-app-unsupported", func(t *testing.T) {
+		cfg := p.WriteFile("binary.config.js", lockfileBinaryConfigJS)
+		res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+			"--no-auto-config", "--config", cfg, "config", "lockfile", "mytool")
+		assertOfflineError(t, res, "does not support lock files")
+	})
+}
+
+const lockfileBinaryConfigJS = `const H = "0000000000000000000000000000000000000000000000000000000000000000";
+function mkBin() {
+  const b = { binaries: {} };
+  for (const os of ["linux", "darwin"]) {
+    b.binaries[os] = {};
+    for (const arch of ["amd64", "arm64"]) {
+      b.binaries[os][arch] = {};
+      for (const libc of ["glibc", "musl", "unknown"]) {
+        b.binaries[os][arch][libc] = { url: "https://example.invalid/mytool", hash: H, contentType: "raw" };
+      }
+    }
+  }
+  return b;
+}
+globalThis.getBeforeConfigs = () => [];
+globalThis.getConfig = (config) => ({ apps: { "mytool": { binary: mkBin() } }, runtimes: {}, setup: {}, tools: {} });
+globalThis.getMinVersion = () => "0.0.0";
+`
+
 // TestRuntimeConfigToleratesBadEnv characterizes the root-command initializer
 // (cobra.OnInitialize → runtimeconfig.Init). Init reads env getters that fall
 // back to their defaults on invalid input, so it never returns an error — which
