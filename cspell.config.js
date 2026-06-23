@@ -311,5 +311,6 @@ export default defineConfig((config) => ({
     "goldens",
     "OCIE",
     "gocoverdir",
+    "uncov",
   ],
 }));
