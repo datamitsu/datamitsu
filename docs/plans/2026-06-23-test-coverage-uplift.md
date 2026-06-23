@@ -191,10 +191,10 @@ Ordering matches the original ROI ranking — runtimemanager (Task 2) + binmanag
 
 ### Task N-1: Verify acceptance criteria
 
-- [ ] combined coverage ≥ 80% (record the final number)
-- [ ] full suite green: `go test ./...` and the blackbox tier
-- [ ] managed golangci-lint clean (`--max-issues-per-linter=0 --max-same-issues=0`)
-- [ ] coverage run is deterministic and offline; CI uploads the merged profile
+- [x] combined coverage ≥ 80% (record the final number) — **80.2% combined** (`scripts/coverage-all.sh`, 10515/13103 statements). Started this task at 79.4%; added focused unit tests on the highest-ROI uncovered, hermetic logic to clear the last ~0.8 pt: `cmd` verify internals (`verifyBinaryOrDir`/`verifyExtractDir` via httptest, `runPhase1BinaryApps` end-to-end, `runPhase5VersionChecks` disabled arm, the four `print*Result` status branches) in new `cmd/verify_coverage_test.go`, plus `moveFile` directory arm in `internal/runtimemanager`
+- [x] full suite green: `go test ./...` and the blackbox tier — `go test ./...` exit 0; `test/cli` blackbox suite green and byte-stable under `-count=2`
+- [x] managed golangci-lint clean (`--max-issues-per-linter=0 --max-same-issues=0`) — **0 issues** on the changed packages (`cmd`, `internal/runtimemanager`, `internal/utils`)
+- [x] coverage run is deterministic and offline; CI uploads the merged profile — `scripts/coverage-all.sh` is hermetic/offline (no network), the blackbox tier is byte-stable under `-count=2`, and the CI `test` job uploads the merged `coverage.out` to Codecov + Coveralls (wired in Task 1)
 
 ### Task N: Documentation
 

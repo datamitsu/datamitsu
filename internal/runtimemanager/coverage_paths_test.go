@@ -424,3 +424,20 @@ func TestInstallRuntimes_SkipBranches(t *testing.T) {
 		}
 	})
 }
+
+// TestMoveFile_DirectoryArm covers moveFile's directory rename-success path,
+// where the moved entry is a directory and the executable-chmod step is skipped.
+func TestMoveFile_DirectoryArm(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "src-dir")
+	dst := filepath.Join(dir, "dst-dir")
+	if err := os.MkdirAll(src, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := moveFile(src, dst); err != nil {
+		t.Fatalf("moveFile(dir) error = %v", err)
+	}
+	if info, err := os.Stat(dst); err != nil || !info.IsDir() {
+		t.Errorf("dst dir missing: info=%v err=%v", info, err)
+	}
+}
