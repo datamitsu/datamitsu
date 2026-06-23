@@ -239,10 +239,10 @@ production CLI behavior is changed by Phases 0–2 (purely additive test code).
 
 ### Task 1.10: Golden — `setup` (offline, `--dry-run`)
 
-- [ ] `setup --help`; `setup --dry-run` with minimal config → golden planned actions (created/replaced/linked/removed normalized)
-- [ ] flag combos: `--opt-in-tools` (generates `.datamitsuignore` plan), `--skip-fix`, `--tools`, `--no-verify-hash`
-- [ ] error paths: chain-hash drift reported (when `--no-verify-hash` omitted) without writing
-- [ ] run tests — must pass before next task
+- [x] `setup --help`; `setup --dry-run` with minimal config → golden planned actions (created/replaced/linked/removed normalized) — `test/cli/setup_test.go`: `setup_help.txt` static golden (normalized==raw, no version/path tokens) + `setup_dry_run.txt` (banner/setup-frame "no project types detected"/dry-run notice/footer; version+duration+rule-fills masked)
+- [x] flag combos: `--opt-in-tools` (generates `.datamitsuignore` plan), `--skip-fix`, `--tools`, `--no-verify-hash` — `setup_opt_in_tools.txt` golden ("+ .datamitsuignore (would disable 2 tools)" plan line; dry-run asserts the file is NOT written) + `setup_tools_scoped.txt` golden (`--tools alpha` against tools owning no setup config → "no config generated for alpha" notice) + `TestSetupFlagCombosOffline` (`--skip-fix`/`--no-verify-hash` byte-identical to baseline dry-run) + `TestSetupUnknownTools` (unknown `--tools` → exit 1 "tools not found" naming it, no usage)
+- [x] error paths: chain-hash drift reported (when `--no-verify-hash` omitted) without writing — `TestSetupChainHashDrift`: before-config generates `drift.txt`, root config pins a wrong `expectChainHash`; a real (non-dry-run) `setup` aborts at the gate → exit 1, stderr "chain-hash verification failed" naming the file, no usage block, and `drift.txt` is never created; `--no-verify-hash` bypasses the gate (exit 0, no drift report). Uses auto-discovery so `getBeforeConfigs()` is honored.
+- [x] run tests — must pass before next task — `go test ./test/cli/ ./internal/clitest/...` green, byte-stable across two runs (`-count=2`), managed golangci-lint clean (0 issues)
 
 ### Task 1.11: Golden — `devtools` group (contract/smoke only)
 

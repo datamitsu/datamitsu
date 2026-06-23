@@ -1,0 +1,22 @@
+Sets up configuration files for detected project types.
+This command aggressively replaces existing configs by deleting all known variants
+and creating new ones based on the configuration.
+
+Usage:
+  datamitsu setup [flags]
+
+Flags:
+      --dry-run          Show what would be done without making changes
+  -h, --help             help for setup
+      --no-verify-hash   Skip expectChainHash verification (write even when a pinned config drifted from its upstream chain)
+      --opt-in-tools     Also generate an all-disabled .datamitsuignore so tools are opt-in (enable them by removing names from the list)
+      --skip-fix         Skip running fix after setup
+      --tools string     Comma-separated list of tools to scope setup to (only their config files are written)
+
+Global Flags:
+      --before-config strings   Configuration file(s) to load before auto-discovery (for wrappers/libraries)
+      --binary-command string   Override the binary command (for npm package wrappers, etc). Can also be set via DATAMITSU_BINARY_COMMAND env var
+      --config strings          Additional configuration file(s) to load and merge (can be specified multiple times)
+      --no-auto-config          Disable auto-discovery of datamitsu.config.{js,mjs,ts} at git root
+      --no-oci                  Disable OCI bundle store seeding (also via DATAMITSU_NO_OCI)
+  -v, --verbose                 Enable debug-level logging (default level is warn)
