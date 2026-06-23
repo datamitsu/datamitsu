@@ -282,9 +282,9 @@ production CLI behavior is changed by Phases 0–2 (purely additive test code).
 
 ### Task 2.4: OCI e2e — `init` (minimal)
 
-- [ ] `init` with the overlay (most tools disabled) installs the minimal set + creates `.datamitsu` links and runs `initCommands`; assert filesystem effects
-- [ ] `init --dry-run` parity: plan matches what the real run does
-- [ ] run with the e2e tag — must pass; default build still green
+- [x] `init` with the overlay (most tools disabled) installs the minimal set + creates `.datamitsu` links and runs `initCommands`; assert filesystem effects — `test/e2e/init_test.go` (`TestOCIInitMinimal`, gated `e2e_oci`+`DATAMITSU_TEST_OCI=1`): overlay inherits the digest-pinned bundle (`return config;`), a real `init` exits 0 and materializes the project-local `.datamitsu/` (asserts the always-written `datamitsu.config.d.ts` + `.gitignore` type-def pair, which co-exist with any link symlinks); a second `init` proves idempotency (still exit 0, `.datamitsu/` intact). Bundle seeds from the warm `testCacheDir`, not the network.
+- [x] `init --dry-run` parity: plan matches what the real run does — dry-run runs first on the clean tree: exit 0, output carries the `dry-run` marker, and **zero** filesystem effects (asserts `.datamitsu/` is NOT created — `CreateDatamitsuTypeDefinitions`/`CreateDatamitsuLinks` both no-op under `dryRun`). `extractInitPlan` then compares the two runs: the detected project-types descriptor (the body line under the `init` phase-open rule) must be identical, and every hook the dry-run **planned** must actually run in the real init (subset — the real run may surface more once earlier hooks create their `when` targets, but must never skip a promised one).
+- [x] run with the e2e tag — must pass; default build still green — default `go test ./test/e2e/...` → "no test files"; `go vet -tags e2e_oci ./test/e2e/...` clean; `-tags e2e_oci` (env absent) → SKIP; managed golangci-lint clean (0 issues) both default and `--build-tags e2e_oci`. (Live network init runs locally/nightly per the gated tier — see Post-Completion.)
 
 ### Task 2.5: OCI e2e — `check` / `fix` / `lint` (one fast tool)
 
