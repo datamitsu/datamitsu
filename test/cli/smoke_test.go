@@ -1,7 +1,6 @@
 package cli_test
 
 import (
-	"os"
 	"os/exec"
 	"strings"
 	"testing"
@@ -10,14 +9,16 @@ import (
 )
 
 // TestSmokeVersion exercises the full blackbox path end-to-end: TestMain has
-// already built the instrumented binary; here we run it as a subprocess with
-// GOCOVERDIR set and assert it prints a version line. This is the minimal proof
-// that the harness can drive the binary and collect coverage.
+// already built the instrumented binary; here we run it as a subprocess and
+// assert it prints a version line. This is the minimal proof that the harness
+// can drive the binary and collect coverage. It uses the same hermetic BaseEnv
+// (offline, isolated cache, GOCOVERDIR) as the rest of the suite so no inherited
+// DATAMITSU_* var or developer environment can leak in.
 func TestSmokeVersion(t *testing.T) {
 	bin := clitest.BuildOnce(t)
 
 	cmd := exec.Command(bin, "version")
-	cmd.Env = append(os.Environ(), "GOCOVERDIR="+clitest.CoverDir())
+	cmd.Env = clitest.BaseEnv(t.TempDir())
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("`version` failed: %v\n%s", err, out)
