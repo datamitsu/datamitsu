@@ -51,10 +51,23 @@ func EnsureBuilt() (string, error) {
 
 // CoverDir returns the shared directory that instrumented subprocess runs write
 // their coverage counters into (via the GOCOVERDIR env var). It is created
-// lazily on first use as a temp dir. TestMain converts its contents into a text
-// profile via WriteCoverProfile after the suite runs.
+// lazily on first use. When DATAMITSU_TEST_COVERDIR is set it points there (so a
+// combined-coverage runner can merge these raw counters with unit-test covdata —
+// see scripts/coverage-all.sh); otherwise a fresh temp dir is used. TestMain
+// converts its contents into a text profile via WriteCoverProfile after the
+// suite runs.
 func CoverDir() string {
 	coverDirOnce.Do(func() {
+		// forbidigo: harness-only knob read in the parent test process to pin the
+		// raw covdata location for the combined-coverage merge; not a datamitsu
+		// runtime config var. The subprocess never sees it (BaseEnv strips all
+		// DATAMITSU_* and sets GOCOVERDIR to this path explicitly).
+		if dir := os.Getenv("DATAMITSU_TEST_COVERDIR"); dir != "" { //nolint:forbidigo
+			// G703: dir is a developer-supplied test knob, not untrusted input.
+			errCoverDir = os.MkdirAll(dir, 0o755) //nolint:gosec
+			coverDirPath = dir
+			return
+		}
 		coverDirPath, errCoverDir = os.MkdirTemp("", "datamitsu-cli-cover-*")
 	})
 	if errCoverDir != nil {

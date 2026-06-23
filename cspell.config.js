@@ -12,6 +12,10 @@ export default defineConfig((config) => ({
   ],
   words: [
     ...config.words,
+    "coverdir",
+    "startline",
+    "endline",
+    "stmts",
     "clearsign",
     "clearsigned",
     "keyring",

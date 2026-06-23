@@ -106,6 +106,10 @@ tasks:
       - node packaging/pack.ts publish --dry-run
     desc: Dry-run npm publish
   # ── Test ──
+  test:coverage:all:
+    cmds:
+      - bash scripts/coverage-all.sh
+    desc: Combined coverage — merge unit-test covdata with the blackbox CLI subprocess covdata into one profile
   test:fuzz:
     cmds:
       - |

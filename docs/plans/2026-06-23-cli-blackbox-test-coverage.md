@@ -295,10 +295,20 @@ production CLI behavior is changed by Phases 0–2 (purely additive test code).
 
 ### Task 3.1: Combined coverage tooling + refreshed baseline
 
-- [ ] wire combined coverage: unit tests emit covdata (`go test ./... -cover -args -test.gocoverdir=$DIR1`) + blackbox `GOCOVERDIR=$DIR2`; merge via `go tool covdata merge -i=$DIR1,$DIR2 -o=$MERGED`; `textfmt` → single profile
-- [ ] add a `package.json`/Taskfile script (e.g. `test:coverage:all`) producing the merged profile
-- [ ] record the new combined coverage number; re-list the lowest-covered packages to finalize the Phase 3 target list (data-driven)
-- [ ] run tests — must pass before next task
+- [x] wire combined coverage: unit tests emit covdata (`go test ./... -cover -args -test.gocoverdir=$DIR1`) + blackbox `GOCOVERDIR=$DIR2`; merge via `go tool covdata merge -i=$DIR1,$DIR2 -o=$MERGED`; `textfmt` → single profile — `scripts/coverage-all.sh` routes the blackbox harness's subprocess `GOCOVERDIR` to a known dir via a new `DATAMITSU_TEST_COVERDIR` knob (`clitest.CoverDir()` honors it), runs `go test -cover -covermode=atomic ./... -args -test.gocoverdir=<unit>` (atomic to match the `-cover` binary, else covdata merge fails with "counter mode clash"), then `covdata merge` + `textfmt` → `coverage.out`.
+- [x] add a `package.json`/Taskfile script (e.g. `test:coverage:all`) producing the merged profile — `package.json` `test:coverage:all` + Taskfile `test:coverage:all`, both `bash scripts/coverage-all.sh`.
+- [x] record the new combined coverage number; re-list the lowest-covered packages to finalize the Phase 3 target list (data-driven) — **combined total: 72.8% of statements** (offline tier, 2026-06-23; up from the 67.8% unit-only baseline — blackbox subprocess runs lifted `cmd` 51.7%→64.8%). Refreshed lowest-covered (statement-weighted, Phase 3 targets):
+  1. `internal/cache` — 48.8%
+  2. `internal/detector` — 55.6%
+  3. `internal/utils` — 57.4%
+  4. `internal/runtimemanager` — 60.0%
+  5. `cmd` — 64.8%
+  6. `internal/ui` — 68.5%
+  7. `internal/binmanager` — 68.7%
+  8. `internal/tooling` — 74.8%
+  9. `internal/ocibundle` — 75.8%
+  10. `internal/runner` — 78.4%
+- [x] run tests — must pass before next task — `go test ./internal/clitest/...` green; full `./...` green inside `coverage-all.sh`; managed golangci-lint clean (0 issues) on `internal/clitest`.
 
 ### Task 3.2: Coverage push — under-covered `internal/*` (wave 1)
 
