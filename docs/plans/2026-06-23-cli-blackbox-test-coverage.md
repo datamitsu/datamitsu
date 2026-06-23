@@ -288,10 +288,10 @@ production CLI behavior is changed by Phases 0–2 (purely additive test code).
 
 ### Task 2.5: OCI e2e — `check` / `fix` / `lint` (one fast tool)
 
-- [ ] enable a single fast tool (e.g. one formatter) on a fixture file with a known issue
-- [ ] `lint` reports the issue (non-zero); `fix` repairs the file (content changes); `check` runs fix-then-lint
-- [ ] assert behavior (exit codes + file diff), not byte-exact output (tool versions vary)
-- [ ] run with the e2e tag — must pass; default build still green
+- [x] enable a single fast tool (e.g. one formatter) on a fixture file with a known issue — `test/e2e/check_fix_lint_test.go` (`TestOCICheckFixLint`, gated `e2e_oci`+`DATAMITSU_TEST_OCI=1`): a `formatters` registry of fast native-binary formatters with a real diff/check lint mode (shfmt → yamlfmt, in preference order); `discoverFormatter` picks the first the bundle `covers` for this host (from `store status --json`) and skips if none. The overlay keeps the inherited apps but replaces the tool set with one tool `formatter` whose per-file fix/lint operations (`cache:false`, glob-scoped via `formatterOverlayJS`) drive the chosen formatter; the fixture is written with deliberately-unformatted content.
+- [x] `lint` reports the issue (non-zero); `fix` repairs the file (content changes); `check` runs fix-then-lint — three subtests, each in a fresh overlay project against the warm `testCacheDir`: `lint-reports-issue` (exit non-zero AND the file is left untouched), `fix-repairs-file` (exit 0, file content changes, and a follow-up `lint` now passes — proving the fix was real), `check-fix-then-lint` (starting from the bad content, `check` exits 0 and the file ends formatted).
+- [x] assert behavior (exit codes + file diff), not byte-exact output (tool versions vary) — assertions are exit codes + before/after file content comparison only (`readFixture` diff); no tool stdout/stderr is golden-matched, so a formatter version bump never breaks the test.
+- [x] run with the e2e tag — must pass; default build still green — default `go test ./test/e2e/...` → "no test files"; `go vet -tags e2e_oci ./test/e2e/...` clean; `-tags e2e_oci` (env absent) → SKIP; managed golangci-lint clean (0 issues) both default and `--build-tags e2e_oci`. (Live network check/fix/lint runs locally/nightly per the gated tier — see Post-Completion.)
 
 ### Task 3.1: Combined coverage tooling + refreshed baseline
 
