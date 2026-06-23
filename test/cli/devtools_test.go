@@ -267,3 +267,65 @@ func TestDevtoolsBundlesList(t *testing.T) {
 		clitest.AssertGolden(t, "devtools_bundles_list", norm.Apply(res.Stdout))
 	})
 }
+
+// TestDevtoolsAppsInspectPath characterizes the offline error contract of
+// `devtools apps inspect` and `devtools apps path`: an unknown app is a config
+// error, and a known-but-not-installed app fails the install-root lookup. Both
+// require local-only resolution — no network — and never print the usage block.
+func TestDevtoolsAppsInspectPath(t *testing.T) {
+	for _, sub := range []string{"inspect", "path"} {
+		t.Run(sub+"-unknown", func(t *testing.T) {
+			p := clitest.NewProject(t)
+			cfg := clitest.WriteMinimalConfig(p)
+			res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+				"--no-auto-config", "--config", cfg, "devtools", "apps", sub, "nonesuch")
+			assertOfflineError(t, res, "not found in config")
+		})
+
+		t.Run(sub+"-not-installed", func(t *testing.T) {
+			p := clitest.NewProject(t)
+			cfg := p.WriteFile("apps.config.js", appsListConfigJS)
+			res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+				"--no-auto-config", "--config", cfg, "devtools", "apps", sub, "hello-shell")
+			assertOfflineError(t, res, "is not installed")
+		})
+	}
+}
+
+// TestDevtoolsBundlesInspectPath mirrors TestDevtoolsAppsInspectPath for the
+// bundle inspection commands.
+func TestDevtoolsBundlesInspectPath(t *testing.T) {
+	for _, sub := range []string{"inspect", "path"} {
+		t.Run(sub+"-unknown", func(t *testing.T) {
+			p := clitest.NewProject(t)
+			cfg := clitest.WriteMinimalConfig(p)
+			res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+				"--no-auto-config", "--config", cfg, "devtools", "bundles", sub, "nonesuch")
+			assertOfflineError(t, res, "not found in config")
+		})
+
+		t.Run(sub+"-not-installed", func(t *testing.T) {
+			p := clitest.NewProject(t)
+			cfg := p.WriteFile("bundles.config.js", bundlesListConfigJS)
+			res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+				"--no-auto-config", "--config", cfg, "devtools", "bundles", sub, "alpha-bundle")
+			assertOfflineError(t, res, "is not installed")
+		})
+	}
+}
+
+// assertOfflineError asserts a runtime error: non-zero exit, wantMsg present on
+// stderr, and no usage block (SilenceUsage).
+func assertOfflineError(t *testing.T, res clitest.Result, wantMsg string) {
+	t.Helper()
+	if res.ExitCode == 0 {
+		t.Fatalf("expected non-zero exit, got 0\nstdout:\n%s", res.Stdout)
+	}
+	if !strings.Contains(res.Stderr, wantMsg) {
+		t.Errorf("stderr = %q, want to contain %q", res.Stderr, wantMsg)
+	}
+	if strings.Contains(res.Stderr, "Usage:") || strings.Contains(res.Stdout, "Usage:") {
+		t.Errorf("runtime error printed usage block (SilenceUsage broken):\nstdout:\n%s\nstderr:\n%s",
+			res.Stdout, res.Stderr)
+	}
+}

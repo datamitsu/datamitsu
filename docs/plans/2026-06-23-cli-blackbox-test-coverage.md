@@ -253,9 +253,9 @@ production CLI behavior is changed by Phases 0–2 (purely additive test code).
 
 ### Task 1.12: Contract completeness gate
 
-- [ ] add a test enumerating every leaf command and asserting each has ≥1 blackbox test (registry-driven guard against future commands slipping through untested)
-- [ ] run the whole golden suite twice → assert byte-stable (determinism)
-- [ ] run tests — must pass before next task
+- [x] add a test enumerating every leaf command and asserting each has ≥1 blackbox test (registry-driven guard against future commands slipping through untested) — `test/cli/completeness_test.go`: `TestContractCompletenessGate` walks the binary's `--help` tree (`discoverLeafCommands`) to enumerate the live leaf set and asserts it equals exactly `testedLeafCommands` ∪ `builtinLeafCommands` (untested-new / unregistered-builtin / stale-entry all fail). ➕ Discovery surfaced 5 leaves the golden suite had not yet exercised — added blackbox tests for each before wiring the gate: `config lockfile` (`TestConfigLockfile`: empty-list notice + unknown-app error), `devtools apps inspect|path` and `devtools bundles inspect|path` (`TestDevtoolsAppsInspectPath`/`TestDevtoolsBundlesInspectPath`: unknown→"not found in config", known-but-not-installed→"is not installed", all offline, no usage block via shared `assertOfflineError`). `cache path` is a runnable group (has the `project` child) so it is covered as a group, not required as a leaf.
+- [x] run the whole golden suite twice → assert byte-stable (determinism) — `TestGoldenSuiteDeterministic` runs each high-risk dynamic-output invocation (version, cache path, config show/runtime, init/setup --dry-run, check/fix/lint --explain=json, exec list, devtools apps list) twice in independent isolated setups and asserts the normalized outputs are byte-identical; the exhaustive form (`go test ./test/cli/ -count=2`) is also green.
+- [x] run tests — must pass before next task — `go test ./test/cli/ ./internal/clitest/... -count=2` green, managed golangci-lint clean (0 issues)
 
 ### Task 2.1: OCI e2e tier — vendored config + scaffolding (gated)
 

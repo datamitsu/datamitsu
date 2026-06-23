@@ -279,6 +279,45 @@ func hashFromTableRow(t *testing.T, table, file string) string {
 	return ""
 }
 
+// TestConfigLockfile locks the offline contract of `config lockfile`. With no
+// arguments it lists lock-file-capable apps (node/uv/go); against the minimal
+// config there are none, so it reports the empty-list notice on stderr and exits
+// 0 without reinstalling anything. An unknown app name is a config error. Neither
+// path touches the network or a runtime install.
+func TestConfigLockfile(t *testing.T) {
+	t.Run("list-empty", func(t *testing.T) {
+		p := clitest.NewProject(t)
+		cfg := clitest.WriteMinimalConfig(p)
+		res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+			"--no-auto-config", "--config", cfg, "config", "lockfile")
+		if res.ExitCode != 0 {
+			t.Fatalf("`config lockfile` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
+		}
+		if res.Stdout != "" {
+			t.Errorf("`config lockfile` against empty config should print nothing to stdout, got:\n%s", res.Stdout)
+		}
+		if !strings.Contains(res.Stderr, "No apps with lock file support found") {
+			t.Errorf("stderr missing empty-list notice:\n%s", res.Stderr)
+		}
+	})
+
+	t.Run("unknown-app", func(t *testing.T) {
+		p := clitest.NewProject(t)
+		cfg := clitest.WriteMinimalConfig(p)
+		res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+			"--no-auto-config", "--config", cfg, "config", "lockfile", "nonesuch")
+		if res.ExitCode == 0 {
+			t.Fatalf("expected non-zero exit for unknown app, got 0\nstdout:\n%s", res.Stdout)
+		}
+		if !strings.Contains(res.Stderr, "not found in configuration") {
+			t.Errorf("stderr missing not-found message naming the app:\n%s", res.Stderr)
+		}
+		if strings.Contains(res.Stderr, "Usage:") {
+			t.Errorf("config error printed usage block (SilenceUsage broken):\n%s", res.Stderr)
+		}
+	})
+}
+
 // sortedCopy returns a lexicographically sorted copy of s.
 func sortedCopy(s []string) []string {
 	out := append([]string(nil), s...)
