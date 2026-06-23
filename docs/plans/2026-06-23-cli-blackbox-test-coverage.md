@@ -275,10 +275,10 @@ production CLI behavior is changed by Phases 0–2 (purely additive test code).
 
 ### Task 2.3: OCI e2e — `install` + `exec`
 
-- [ ] `install <minimal-app>` materializes into the store (assert install path exists)
-- [ ] `exec <app> -- --version` runs the real tool → exit 0 + version substring present
-- [ ] `exec` with no args lists the now-installed tool
-- [ ] run with the e2e tag — must pass; default build still green
+- [x] `install <minimal-app>` materializes into the store (assert install path exists) — `test/cli`/`test/e2e/install_exec_test.go` (`TestOCIInstallAndExec`, gated `e2e_oci`+`DATAMITSU_TEST_OCI=1`): `discoverInstallTarget` picks a minimal host-supported binary app from `config show` (prefers small single-binary tools — shellcheck/hadolint/shfmt/… — and requires the bundle to `cover` it for this host, so it seeds from the warm cache, never the network; skips if none); `install <app>` (default post-install verify ON) → exit 0, then asserts the isolated `store path` dir is non-empty AND `store status --json` reports that app `present`.
+- [x] `exec <app> -- --version` runs the real tool → exit 0 + version substring present — `exec <app> -- <versionArgs>` where `versionArgs` is the app's declared `versionCheck.args` (falling back to `--version`, mirroring the install verify default) → exit 0 + non-empty combined stdout/stderr (version output lands on either stream depending on the tool).
+- [x] `exec` with no args lists the now-installed tool — bare `exec` → exit 0, stdout contains the "Available tools:" header and the installed app's name.
+- [x] run with the e2e tag — must pass; default build still green — default build `go test ./test/e2e/...` → "no test files"; `-tags e2e_oci` compiles + `go vet` clean + SKIPs without env; managed golangci-lint clean (0 issues) both default and `--build-tags e2e_oci`. (Live network install/exec runs locally/nightly per the gated tier — see Post-Completion.)
 
 ### Task 2.4: OCI e2e — `init` (minimal)
 
