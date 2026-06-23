@@ -185,11 +185,26 @@ pnpm build
 
 ### Testing
 
-Currently no test commands are configured in package.json. Use standard Go testing:
+Standard Go testing, stdlib `testing` only (no testify) — table-driven, `t.TempDir`/`t.Setenv`.
 
 ```bash
-go test ./...
+go test ./...                 # all unit + offline blackbox tests
+go test ./test/cli/ -count=2  # offline CLI golden suite (must be byte-stable)
+pnpm test:coverage:all        # merged unit + blackbox coverage -> coverage.out
 ```
+
+**CLI blackbox suite** (`test/cli`, harness in `internal/clitest`): runs the
+compiled binary in subprocesses inside isolated temp git repos and golden-tests
+stdout/stderr/exit codes, freezing the CLI contract before a core rewrite.
+Conventions: characterization/golden (lock existing behavior, not TDD), hermetic
+offline env (`DATAMITSU_OFFLINE=1`/`DATAMITSU_NO_OCI=1`/`NO_COLOR=1`, isolated
+cache), normalized goldens regenerated with `-update`. `TestContractCompletenessGate`
+requires every leaf command to have ≥1 blackbox test. See
+[test/cli/README.md](test/cli/README.md) and [CONTRIBUTING.md](CONTRIBUTING.md#testing).
+
+**Gated OCI e2e tier** (`test/e2e`): real seed/install/exec/init/check/fix/lint
+against the digest-pinned config; double-gated by `//go:build e2e_oci` + `DATAMITSU_TEST_OCI=1`,
+never in default CI. Run with `DATAMITSU_TEST_OCI=1 go test -tags e2e_oci ./test/e2e/...`.
 
 ## Architecture
 

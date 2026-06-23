@@ -346,9 +346,9 @@ production CLI behavior is changed by Phases 0–2 (purely additive test code).
 
 ### Task N: Documentation
 
-- [ ] add `test/cli/README.md` (or website docs per the docs policy): how to run the blackbox suite, update goldens (`-update`), run/update the OCI tier, and bump the vendored config (single source of truth)
-- [ ] note the coverage-merge workflow and the `e2e_oci` gate in CONTRIBUTING / architecture docs
-- [ ] update [CLAUDE.md](../../CLAUDE.md) testing section if new conventions were introduced
+- [x] add `test/cli/README.md` (or website docs per the docs policy): how to run the blackbox suite, update goldens (`-update`), run/update the OCI tier, and bump the vendored config (single source of truth) — `test/cli/README.md` covers the harness layout (`internal/clitest`), running the offline suite (incl. `-count=2` determinism), `-update` golden regeneration, the contract-completeness gate, the gated OCI tier (tag + `DATAMITSU_TEST_OCI=1`, `DATAMITSU_TEST_CACHE` warm-cache), bumping the vendored config via the `source.go` single source of truth, and the combined-coverage script.
+- [x] note the coverage-merge workflow and the `e2e_oci` gate in CONTRIBUTING / architecture docs — added a Testing section to [CONTRIBUTING.md](../../CONTRIBUTING.md): blackbox suite + harness, the `GOCOVERDIR`/`-test.gocoverdir` merge via `scripts/coverage-all.sh` (with the `-covermode=atomic` "counter mode clash" rationale and the `pnpm test:coverage:all` entry point CI runs), and the double-gated `e2e_oci` tier (build tag + `DATAMITSU_TEST_OCI=1`, manual/nightly `oci-e2e.yml`, vendored-config single source of truth).
+- [x] update [CLAUDE.md](../../CLAUDE.md) testing section if new conventions were introduced — replaced the stale "no test commands configured" note in `AGENTS.md` (symlinked as `CLAUDE.md`) with the real commands (`go test ./...`, `go test ./test/cli/ -count=2`, `pnpm test:coverage:all`) plus the new conventions: stdlib-only/table-driven, characterization-golden blackbox suite with hermetic offline env + `-update`, the completeness gate, and the gated `e2e_oci` tier.
 
 ## Technical Details
 
