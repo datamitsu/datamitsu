@@ -171,10 +171,10 @@ Ordering matches the original ROI ranking — runtimemanager (Task 2) + binmanag
 
 ### Task 7: small internal/\* packages mop-up
 
-- [ ] cover remaining gaps in `managedconfig`, `utils`, `remotecfg`, `verifycache`, `config` (loader edges), and `engine`/`engine/tools` injection branches
-- [ ] each: success + error/edge cases; skip pure-render code paths
-- [ ] (optional) add a trivial test for `internal/constants` if cheap 100% is wanted
-- [ ] run `go test ./...` + measure delta — must pass before next task
+- [x] cover remaining gaps in `managedconfig`, `utils`, `remotecfg`, `verifycache`, `config` (loader edges), and `engine`/`engine/tools` injection branches — new `coverage_paths_test.go` per package: `config` (`ValidateRuntimes` managed-mode binaries: valid + invalid-libc/missing-url/missing-hash/invalid-hash/disallowed-hashType/unsafe-binaryPath, plus system-missing-config & nil-managed), `engine` (`CallWithTimeout`, `computeRootPath` git-root vs cwd, YAML/TOML nested-array+nested-map round-trips covering the `[]any`/MapSlice recursion), `engine/tools` (ignore stringify reuses existing `tools` obj, null/empty groups, non-array group panic), `remotecfg` (`SaveCached` mkdir error + round-trip), `verifycache` (`SaveState` mkdir error, `LoadState` parse error, `StateManager` empty-path no-op + save-error + persist/load), `utils` (`HomeDir`/`ExpandHome` empty-HOME error path), `managedconfig` (`CreateDatamitsuTypeDefinitions`/`CreateDatamitsuLinks` mkdir-git-root error + type-def file creation)
+- [x] each: success + error/edge cases; skip pure-render code paths
+- [x] (optional) add a trivial test for `internal/constants` if cheap 100% is wanted — skipped (trivial constant data only; out of scope per Overview)
+- [x] run `go test ./...` + measure delta — **passes; config 86.0→89.6 (+3.6), engine 85.8→91.2 (+5.4), engine/tools 83.2→85.0 (+1.8), verifycache 80.3→84.5 (+4.2), remotecfg 81.4→82.6 (+1.2), managedconfig 79.6→80.8 (+1.2), utils 65.6→67.2 (+1.6)**, full `go test ./...` green + managed golangci-lint clean
 
 ### Task 8: internal/ui logic (non-render)
 
