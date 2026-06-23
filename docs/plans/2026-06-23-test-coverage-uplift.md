@@ -136,10 +136,10 @@ Ordering matches the original ROI ranking — runtimemanager (Task 2) + binmanag
 
 ### Task 2: internal/runtimemanager error & platform paths
 
-- [ ] list uncovered funcs: `go tool cover -func=coverage.out | grep runtimemanager | sort -t')' -k2 -n`
-- [ ] add table-driven tests for the lowest-covered runtime install / version-resolution / platform-selection functions (success cases)
-- [ ] add error/edge cases (download failure, bad version, unsupported platform, timeout) using `httptest` + `t.TempDir`
-- [ ] run `go test ./internal/runtimemanager/...` + measure delta — must pass before next task
+- [x] list uncovered funcs: `go tool cover -func=coverage.out | grep runtimemanager | sort -t')' -k2 -n` (top pure-unit gaps: `ComputeRuntimeStorePath` 0%, `GetJVMCommandInfo` 0%, `getRuntimePath`/`InstallRuntimes` error branches, `moveRuntimeFiles`/`removeAll` error paths)
+- [x] add table-driven tests for the lowest-covered runtime install / version-resolution / platform-selection functions (success cases) — new `internal/runtimemanager/coverage_paths_test.go`: `ComputeRuntimeStorePath` (managed/system/store-path), `GetJVMCommandInfo` (jar + main-class modes, system-config fallback), `getRuntimePath` system-mode resolution
+- [x] add error/edge cases (download failure, bad version, unsupported platform, timeout) using `httptest` + `t.TempDir` — unknown runtime, system/managed missing config, unsupported arch/libc, unsafe `binaryPath`, `moveRuntimeFiles` empty-dir/missing-source/unsafe-path, `ComputeAppPath`/`GetCommandInfo` non-runtime & unresolvable-runtime branches, `removeAll` seam
+- [x] run `go test ./internal/runtimemanager/...` + measure delta — **passes; coverage 62.2% → 66.9% (+4.7 pts)**, full `go test ./...` + managed golangci-lint clean
 
 ### Task 3: internal/binmanager download/extract/exec paths
 
