@@ -181,9 +181,9 @@ production CLI behavior is changed by Phases 0–2 (purely additive test code).
 
 ### Task 1.2: Golden — `version`
 
-- [ ] golden the normalized `version` output (`<PackageName> version <VERSION>`); exit 0
-- [ ] assert it ignores extra args / works with `--verbose`
-- [ ] run tests — must pass before next task
+- [x] golden the normalized `version` output (`<PackageName> version <VERSION>`); exit 0 — `version.txt` golden (`datamitsu version <VERSION>`), exit 0, empty stderr asserted (`TestVersionGolden`)
+- [x] assert it ignores extra args / works with `--verbose` — `TestVersionIgnoresExtraArgs`: trailing args (`extra`, `foo bar`) + `--verbose`/`-v` all produce byte-identical normalized output and exit 0
+- [x] run tests — must pass before next task — `go test ./test/cli/ ./internal/clitest/...` green (byte-stable across two runs), managed golangci-lint clean
 
 ### Task 1.3: Golden — `config` group
 
