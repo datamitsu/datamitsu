@@ -195,11 +195,11 @@ production CLI behavior is changed by Phases 0–2 (purely additive test code).
 
 ### Task 1.4: Golden — `cache` group
 
-- [ ] `cache path` → printed path under `DATAMITSU_CACHE_DIR` (normalized); `cache --help`
-- [ ] `cache path project` inside a git project → project cache path; outside git → non-zero error
-- [ ] `cache clear --dry-run` and `cache clear --all --dry-run` → golden messages, nothing deleted
-- [ ] write error/edge cases (project resolution failure)
-- [ ] run tests — must pass before next task
+- [x] `cache path` → printed path under `DATAMITSU_CACHE_DIR` (normalized); `cache --help` — `cache_path.txt` golden (`<CACHE>/cache`, base masked) + exact-equality guard; `cache_help.txt` static golden + `expectedCacheSubcommands` drift guard (`clear`, `path`)
+- [x] `cache path project` inside a git project → project cache path; outside git → **characterized: still succeeds** — inside-git asserts the exact `{base}/cache/projects/<xxh3(gitRoot)>/cache` path; outside-git locks the CWD-fallback (no error — `resolveProjectRoot` only errors on a present-but-unusable `.git`, covered below)
+- [x] `cache clear --dry-run` and `cache clear --all --dry-run` → golden messages, nothing deleted — `cache_clear_dry_run.txt`/`cache_clear_all_dry_run.txt` (cache base + project hash masked); planted sentinel under the project cache survives both runs
+- [x] write error/edge cases (project resolution failure) — `TestCacheProjectResolutionFailure`: a bogus `.git` file → exit 1 + "failed to determine git root" on stderr, no usage block (SilenceUsage), for both `cache path project` and `cache clear --dry-run`
+- [x] run tests — must pass before next task — `go test ./test/cli/ ./internal/clitest/...` green, byte-stable across two runs, managed golangci-lint clean
 
 ### Task 1.5: Golden — `store` group (offline contract)
 
