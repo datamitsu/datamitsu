@@ -1,0 +1,33 @@
+A tool for managing configuration and binaries
+
+Support datamitsu development: https://datamitsu.com/sponsor
+
+Usage:
+  datamitsu [command]
+
+Available Commands:
+  cache       Manage cache
+  check       Run fix then lint operations on files
+  completion  Generate the autocompletion script for the specified shell
+  config      Configuration management commands
+  devtools    Development tools for maintaining datamitsu
+  exec        Execute a managed binary
+  fix         Run fix operations on files
+  help        Help about any command
+  init        Initialize project - download binaries and run init commands
+  install     Install managed apps and/or runtimes without executing them
+  lint        Run lint operations on files
+  setup       Setup configuration files
+  store       Manage the global binary and runtime store
+  version     Print the version number
+
+Flags:
+      --before-config strings   Configuration file(s) to load before auto-discovery (for wrappers/libraries)
+      --binary-command string   Override the binary command (for npm package wrappers, etc). Can also be set via DATAMITSU_BINARY_COMMAND env var
+      --config strings          Additional configuration file(s) to load and merge (can be specified multiple times)
+  -h, --help                    help for datamitsu
+      --no-auto-config          Disable auto-discovery of datamitsu.config.{js,mjs,ts} at git root
+      --no-oci                  Disable OCI bundle store seeding (also via DATAMITSU_NO_OCI)
+  -v, --verbose                 Enable debug-level logging (default level is warn)
+
+Use "datamitsu [command] --help" for more information about a command.

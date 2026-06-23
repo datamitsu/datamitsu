@@ -173,11 +173,11 @@ production CLI behavior is changed by Phases 0–2 (purely additive test code).
 
 ### Task 1.1: Golden — root & global flags
 
-- [ ] `test/cli/root_test.go`: golden for `--help`, no-args help, `help <cmd>`; assert top-level command list is exactly the expected set (drift guard)
-- [ ] flag parsing: `--verbose`, repeated `--config`, `--no-auto-config`, `--no-oci`, `--before-config`, `--binary-command` accepted; unknown global flag → non-zero + message
-- [ ] confirm `SilenceUsage`/`SilenceErrors` behavior: a runtime error does NOT print `Usage:` (subprocess-level assertion)
-- [ ] write error-path cases (bad flag value types) — table-driven
-- [ ] run tests — must pass before next task
+- [x] `test/cli/root_test.go`: golden for `--help`, no-args help, `help <cmd>`; assert top-level command list is exactly the expected set (drift guard) — `root_help.txt`/`help_version.txt` goldens; no-args proven byte-identical to `--help`; `parseAvailableCommands` set-compares against `expectedTopLevelCommands`
+- [x] flag parsing: `--verbose`, repeated `--config`, `--no-auto-config`, `--no-oci`, `--before-config`, `--binary-command` accepted; unknown global flag → non-zero + message — `TestRootGlobalFlagsAccepted` (9 combos incl. all-combined) + `TestRootBadFlags` unknown-global-flag case
+- [x] confirm `SilenceUsage`/`SilenceErrors` behavior: a runtime error does NOT print `Usage:` (subprocess-level assertion) — `TestRootSilenceUsage` via `exec <unknown>` (offline runtime error, no usage block)
+- [x] write error-path cases (bad flag value types) — table-driven — `TestRootBadFlags`: missing arg, bad bool value, unknown command; all non-zero + stderr message + no usage
+- [x] run tests — must pass before next task — `go test ./test/cli/` green (byte-stable across runs), managed golangci-lint clean
 
 ### Task 1.2: Golden — `version`
 
