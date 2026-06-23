@@ -34,6 +34,7 @@ export default defineConfig((config) => ({
     "armv",
     "asciinema",
     "behaviour",
+    "binarypath",
     "binmanager",
     "bmatcuk",
     "callsites",

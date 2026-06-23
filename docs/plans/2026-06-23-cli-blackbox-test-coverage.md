@@ -312,9 +312,9 @@ production CLI behavior is changed by Phases 0–2 (purely additive test code).
 
 ### Task 3.2: Coverage push — under-covered `internal/*` (wave 1)
 
-- [ ] pick the 3–4 lowest-covered packages with real logic from Task 3.1 (candidates: `internal/ui`, `internal/term`, `internal/sponsor`, `internal/remotecfg`, `internal/ocidigest`, `internal/cache`, `internal/httpx`, `internal/dockerfile`)
-- [ ] add table-driven unit tests for their public functions (success + error/edge)
-- [ ] run tests + measure delta — must pass before next task
+- [x] pick the 3–4 lowest-covered packages with real logic from Task 3.1 — picked **`internal/detector`** (55.6%, the whole `binarypath.go` was 0%), **`internal/cache`** (46.4%, many 0% clear/prune/shutdown paths), and **`internal/utils`** (57.4%, untested error branches). All three carry real branchy logic (vs. thin formatting in `internal/ui`/`internal/term`).
+- [x] add table-driven unit tests for their public functions (success + error/edge) — `internal/detector/binarypath_test.go` (every pure parser/heuristic: `isDigit`/`isValidVersion`/`extractVersion*`/`findCommonPattern`/`DetectBinaryPath`+`…WithHistory`/`extractBinaryPathPattern`, incl. archive/non-archive, windows `.exe`, versioned-nested, history-substitution + no-match fallback); `internal/cache/clear_test.go` (`validateCacheDir` danger-path table, `pathEqualFold`, `ClearAll`/`ClearProject` success+idempotent+refused-dangerous, `Clear`/`Prune` live-vs-stale, `MarkDirty`+double-`Shutdown` idempotency); `internal/utils/utils_error_test.go` (EnsureDir/WriteFile parent-is-a-file, ReadFileIfExists on a dir, RenameReplace missing-src). stdlib-only, table-driven, `t.TempDir`/`t.Setenv`.
+- [x] run tests + measure delta — must pass before next task — all green, managed golangci-lint clean (0 issues). Deltas: **`internal/detector` 55.6% → 94.7%**, **`internal/cache` 46.4% → 66.9%**, **`internal/utils` 57.4% → 65.6%** (full `go test ./...` green).
 
 ### Task 3.3: Coverage push — `cmd/` error branches via subprocess (wave 2)
 
