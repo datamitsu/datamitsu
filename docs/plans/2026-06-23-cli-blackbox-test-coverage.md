@@ -246,10 +246,10 @@ production CLI behavior is changed by Phases 0–2 (purely additive test code).
 
 ### Task 1.11: Golden — `devtools` group (contract/smoke only)
 
-- [ ] `devtools --help` and `--help` for each subcommand (apps, bundles, dockerfile, split-config, pull-github, pull-node, pull-uv, pull-runtimes, verify-all, pack-inline-archive)
-- [ ] arg/flag validation without network: `ExactArgs`/`NoArgs` violations; `pull-runtimes` requires `--update`; `dockerfile`/`split-config` require `--output`; `pack-inline-archive` requires a dir
-- [ ] `devtools apps list` / `bundles list` against minimal config → golden (empty/grouped)
-- [ ] run tests — must pass before next task
+- [x] `devtools --help` and `--help` for each subcommand (apps, bundles, dockerfile, split-config, pull-github, pull-node, pull-uv, pull-runtimes, verify-all, pack-inline-archive) — `test/cli/devtools_test.go`: `TestDevtoolsHelpGolden` table over all 11 help surfaces → `devtools_help.txt` + `devtools_<sub>_help.txt` goldens; help blocks are static (no temp paths/durations/real version tokens) so the goldens are **raw** stdout, deliberately un-normalized. ➕ Normalizing would be wrong here: `ldflags.Version` defaults to `"dev"` and pull-runtimes' help mentions `go.dev`, whose `dev` the version rule would mask → build-dependent golden. `TestDevtoolsCommandSetDrift` adds set-compare drift guards for the devtools/apps/bundles subcommand sets (`expectedDevtoolsSubcommands` etc.).
+- [x] arg/flag validation without network: `ExactArgs`/`NoArgs` violations; `pull-runtimes` requires `--update`; `dockerfile`/`split-config` require `--output`; `pack-inline-archive` requires a dir — `TestDevtoolsArgValidation` table: `dockerfile`/`split-config` no `--output` → `required flag(s) "output" not set`; `pull-runtimes`/`pull-github`/`pull-node`/`pull-uv`/`pack-inline-archive` no arg → `accepts 1 arg(s), received 0`; `pull-runtimes <file>` without `--update` → `--update flag is required`; `pack-inline-archive <file>` → `is not a directory`. All exit 1, message on stderr, **no usage block** (SilenceUsage asserted on every case).
+- [x] `devtools apps list` / `bundles list` against minimal config → golden (empty/grouped) — `TestDevtoolsAppsList`/`TestDevtoolsBundlesList`: empty against the minimal config (exit 0, empty stdout) + populated goldens (`devtools_apps_list.txt` from a two-shell-app config → sorted `name (type) [- desc] - not installed`; `devtools_bundles_list.txt` from a two-file-bundle config → sorted `name [(version)] - not installed`). Shell apps / file bundles download nothing → fully offline.
+- [x] run tests — must pass before next task — `go test ./test/cli/ ./internal/clitest/...` green, byte-stable across two runs (`-count=2`), managed golangci-lint clean (0 issues)
 
 ### Task 1.12: Contract completeness gate
 

@@ -1,0 +1,29 @@
+Development tools for maintaining datamitsu binary configurations
+
+Usage:
+  datamitsu devtools [command]
+
+Available Commands:
+  apps                Inspect installed applications
+  bundles             Inspect installed bundles
+  dockerfile          Generate an optimized, digest-pinned multi-stage Dockerfile from the config
+  pack-inline-archive Pack a directory into an inline archive (tar.br: format)
+  pull-github         Update binary configurations from GitHub releases
+  pull-node           Pull latest versions for npm packages from the registry
+  pull-runtimes       Pull runtime configurations from upstream releases
+  pull-uv             Pull latest versions for Python packages from PyPI
+  split-config        Write one minimal per-stage config slice per app/runtime for layered builds
+  verify-all          Verify all apps and runtimes across all configured platforms
+
+Flags:
+  -h, --help   help for devtools
+
+Global Flags:
+      --before-config strings   Configuration file(s) to load before auto-discovery (for wrappers/libraries)
+      --binary-command string   Override the binary command (for npm package wrappers, etc). Can also be set via DATAMITSU_BINARY_COMMAND env var
+      --config strings          Additional configuration file(s) to load and merge (can be specified multiple times)
+      --no-auto-config          Disable auto-discovery of datamitsu.config.{js,mjs,ts} at git root
+      --no-oci                  Disable OCI bundle store seeding (also via DATAMITSU_NO_OCI)
+  -v, --verbose                 Enable debug-level logging (default level is warn)
+
+Use "datamitsu devtools [command] --help" for more information about a command.

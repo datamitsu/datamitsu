@@ -1,0 +1,27 @@
+Query the npm registry for latest versions of all node apps in a JSON file.
+
+Reads the specified JSON file directly, fetches latest versions and descriptions
+from the npm registry, and prints a summary.
+With --update: updates the JSON file with latest versions and descriptions.
+If the file does not exist, an empty JSON file is created.
+
+Example:
+  datamitsu devtools pull-node config/src/nodeApps.json
+  datamitsu devtools pull-node config/src/nodeApps.json --update
+
+Usage:
+  datamitsu devtools pull-node <file> [flags]
+
+Flags:
+      --dry-run       Show results without writing to file
+  -h, --help          help for pull-node
+      --min-age int   Minimum release age in minutes before a version is eligible (-1 = use global default of 10080, 0 = disable age filtering, positive = custom) (default -1)
+      --update        Update versions in the JSON file with latest from npm
+
+Global Flags:
+      --before-config strings   Configuration file(s) to load before auto-discovery (for wrappers/libraries)
+      --binary-command string   Override the binary command (for npm package wrappers, etc). Can also be set via DATAMITSU_BINARY_COMMAND env var
+      --config strings          Additional configuration file(s) to load and merge (can be specified multiple times)
+      --no-auto-config          Disable auto-discovery of datamitsu.config.{js,mjs,ts} at git root
+      --no-oci                  Disable OCI bundle store seeding (also via DATAMITSU_NO_OCI)
+  -v, --verbose                 Enable debug-level logging (default level is warn)
