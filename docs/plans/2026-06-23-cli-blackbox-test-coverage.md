@@ -166,10 +166,10 @@ production CLI behavior is changed by Phases 0–2 (purely additive test code).
 
 ### Task 0.4: Output normalization + golden plumbing
 
-- [ ] create `internal/clitest/golden.go`: normalizers (strip ANSI; mask `t.TempDir` paths → `<TMP>`; mask `$HOME`/cache/store paths; mask the build's version → `<VERSION>`; mask durations/timings; optional line-sort for unordered output)
-- [ ] `AssertGolden(t, name, got)` comparing against `testdata/golden/<name>.txt`, with a package-level `-update` flag to (re)generate goldens
-- [ ] write tests: normalizers are idempotent; `-update` writes the file; a mismatch fails with a readable diff
-- [ ] run tests — must pass before next task
+- [x] create `internal/clitest/golden.go`: normalizers (strip ANSI; mask `t.TempDir` paths → `<TMP>`; mask `$HOME`/cache/store paths; mask the build's version → `<VERSION>`; mask durations/timings; optional line-sort for unordered output) — `Normalizer` with `MaskPath`/`SortLines`/`Apply`; built-in ANSI/timestamp/duration/version rules; longest-path-first masking
+- [x] `AssertGolden(t, name, got)` comparing against `testdata/golden/<name>.txt`, with a package-level `-update` flag to (re)generate goldens — `GoldenDir` configurable; testable `compareGolden` core; line-diff on mismatch
+- [x] write tests: normalizers are idempotent; `-update` writes the file; a mismatch fails with a readable diff — `golden_test.go` (idempotency, ANSI/path/version/timestamp/duration masking, sort, update→match, mismatch diff, missing-file hint)
+- [x] run tests — must pass before next task — `go test ./internal/clitest/...` green, managed golangci-lint clean
 
 ### Task 1.1: Golden — root & global flags
 
