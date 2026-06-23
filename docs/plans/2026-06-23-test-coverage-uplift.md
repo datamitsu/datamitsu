@@ -164,10 +164,10 @@ Ordering matches the original ROI ranking — runtimemanager (Task 2) + binmanag
 
 ### Task 6: internal/runner, cache, target mop-up
 
-- [ ] list uncovered funcs in `runner`, `cache`, `target`
-- [ ] add tests for uncovered orchestration / cache-clear / project-resolution / target-selection branches
-- [ ] add error/edge cases (fail-fast, missing git root, empty selection)
-- [ ] run tests for the three packages + measure delta — must pass before next task
+- [x] list uncovered funcs in `runner`, `cache`, `target` (top gaps: runner `RunContinuation`/`getStagedFiles` 0%, `createCache` 46.7%; cache `Save` 48.4%/`debounceSave` 50%/`AfterFix`/`markPassed` nil-data branches; target `HostTarget` 0%, `detectViaELF`/`detectViaLoaderPaths`/`defaultLoaderGlob`/`runLddVersion` 0–66.7%)
+- [x] add tests for uncovered orchestration / cache-clear / project-resolution / target-selection branches — new `internal/runner/coverage_paths_test.go` (`createCache` invalidateOn dedup + no-invalidateOn, `getStagedFiles` real-git staged/committed, `RunContinuation` wiring), `internal/cache/coverage_paths_test.go` (`AfterFix` change-reset + unchanged-add, disabled no-op, `debounceSave` timer flush), `internal/target/coverage_paths_test.go` (`HostTarget` memoization, `defaultLoaderGlob`, real-Linux `detectViaLdd`/`detectViaELF`/`detectViaLoaderPaths`/`runLddVersion`)
+- [x] add error/edge cases (fail-fast, missing git root, empty selection) — `getStagedFiles` non-repo error branch, nil-data errors for `Save`/`AfterFix`/`AfterLint`(markPassed), `RunContinuation` config-load failure, `defaultLoaderGlob` malformed-pattern error
+- [x] run tests for the three packages + measure delta — **passes; runner 77.0% → 82.5% (+5.5), cache 76.6% → 81.0% (+4.4), target 77.3% → 87.2% (+9.9)**, full `go test ./...` + managed golangci-lint clean
 
 ### Task 7: small internal/\* packages mop-up
 
