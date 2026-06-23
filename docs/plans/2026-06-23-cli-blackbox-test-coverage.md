@@ -142,11 +142,11 @@ production CLI behavior is changed by Phases 0–2 (purely additive test code).
 
 ### Task 0.1: Subprocess harness — build-once instrumented binary
 
-- [ ] create `internal/clitest/binary.go`: `BuildOnce(t)` resolves module root (walk up to `go.mod`), runs `go build -cover -covermode=atomic -o <tmp>/datamitsu .` exactly once (guarded by `sync.Once`), returns the path
-- [ ] create a shared `GOCOVERDIR` (per `TestMain`) that all runs write into; expose `CoverDir()`
-- [ ] add `test/cli/main_test.go` with `TestMain` that calls `BuildOnce`, runs tests, then converts covdata → text (`go tool covdata textfmt`) into a known path for CI merge
-- [ ] write tests for the harness: build succeeds; the binary prints something for `version`
-- [ ] run tests — must pass before next task
+- [x] create `internal/clitest/binary.go`: `BuildOnce(t)` resolves module root (walk up to `go.mod`), runs `go build -cover -covermode=atomic -o <tmp>/datamitsu .` exactly once (guarded by `sync.Once`), returns the path — also `EnsureBuilt()` (TestMain-friendly, no `*testing.T`)
+- [x] create a shared `GOCOVERDIR` (per `TestMain`) that all runs write into; expose `CoverDir()` — lazily-created temp dir; merge target pinnable via `DATAMITSU_TEST_COVER_OUT` (read in TestMain)
+- [x] add `test/cli/main_test.go` with `TestMain` that calls `EnsureBuilt`, runs tests, then converts covdata → text (`WriteCoverProfile` → `go tool covdata textfmt`) into a known path (`DATAMITSU_TEST_COVER_OUT`) for CI merge
+- [x] write tests for the harness: build succeeds (`binary_test.go`); the binary prints something for `version` (`test/cli/smoke_test.go`) — verified coverage profile written end-to-end
+- [x] run tests — must pass before next task — `go test ./internal/clitest/... ./test/cli/...` green
 
 ### Task 0.2: Command runner + environment isolation
 
