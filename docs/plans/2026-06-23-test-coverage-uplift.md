@@ -150,10 +150,10 @@ Ordering matches the original ROI ranking — runtimemanager (Task 2) + binmanag
 
 ### Task 4: internal/tooling planner/runner logic
 
-- [ ] list uncovered funcs in `tooling`
-- [ ] add table-driven tests for uncovered planning/overlap/scoping branches (success cases)
-- [ ] add error/edge cases (no tools, unknown tool, conflicting scopes)
-- [ ] run `go test ./internal/tooling/...` + measure delta — must pass before next task
+- [x] list uncovered funcs in `tooling` (top pure-unit gaps: `executeBatchChunksParallel` 0%, `GetTimings` 0%, `executeBatch` 34.4%, `findFilesByGlobs` 33.3%, `parseGlobExtensions` 48%, `formatParallelizationInfo` 55.6%, `filterTasksBySelectedTools` 66.7%, `createPerProjectTasksWithFiles` 68.9%, `SkipReason.String` 75%)
+- [x] add table-driven tests for uncovered planning/overlap/scoping branches (success cases) — new `internal/tooling/coverage_paths_test.go`: `GetTimings`, `parseGlobExtensions` (simple/brace/nil-reject branches), `filterFilesByGlobs`/`findFilesByGlobs` (cached + uncached traverser fallback), `createPerProjectTasksWithFiles` (projectTypes filter, file grouping, no-files-per-project, no-restriction), `formatParallelizationInfo` (single/all-parallel/worker-pool-exceeded/multi-group), `executeBatch` dry-run (whole-project, single chunk, multi-chunk parallel fan-out)
+- [x] add error/edge cases (no tools, unknown tool, conflicting scopes) — `filterTasksBySelectedTools` `ToolNotFoundError` with sorted available list, `SkipReason.String` out-of-range default branch, `executeBatchChunksParallel` pre-cancelled context → cancelled classification
+- [x] run `go test ./internal/tooling/...` + measure delta — **passes; coverage 80.7% → 89.5% unit-only (+8.8 pts)**, full `go test ./...` + managed golangci-lint clean
 
 ### Task 5: internal/ocibundle + ocidigest error paths
 
