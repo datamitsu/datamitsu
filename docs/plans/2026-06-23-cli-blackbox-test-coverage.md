@@ -268,10 +268,10 @@ production CLI behavior is changed by Phases 0–2 (purely additive test code).
 
 ### Task 2.2: OCI e2e — `store seed` + `store status`
 
-- [ ] `store seed` (no arg → config `oci`) pulls the digest-pinned bundle into the test cache
-- [ ] `store status --json` asserts bundle ref/digest/seeded + covered apps
-- [ ] re-seed is idempotent / fast (dedup from cache)
-- [ ] run with `-tags e2e_oci DATAMITSU_TEST_OCI=1` — must pass; default build still green
+- [x] `store seed` (no arg → config `oci`) pulls the digest-pinned bundle into the test cache — `test/e2e/store_seed_status_test.go` (`TestOCIStoreSeedAndStatus`, gated `e2e_oci`+`DATAMITSU_TEST_OCI=1`): reads the inherited `oci` ref/digest from `config show` (`declaredOCI`), then `store seed` with no arg → exit 0 + `Seeded store from <ref>@<digest>` line. Overlay keeps the config intact (`return config;`) so coverage reflects the real bundle; full-bundle airgap seed into the persistent `testCacheDir`.
+- [x] `store status --json` asserts bundle ref/digest/seeded + covered apps — decodes `ocibundle.Status` JSON (`ociStatus`): asserts `ref`/`digest` equal the declared pin, `fullySeeded==true`, a non-empty `selected` platform, ≥1 layer with every layer `present`, and (when the bundle declares apps) ≥1 app `covered`.
+- [x] re-seed is idempotent / fast (dedup from cache) — second `store seed` → exit 0 + same `Seeded store from …` line; post-reseed `store status --json` is unchanged (same digest, still `fullySeeded`). Dedup comes from the warm `testCacheDir` (never wiped).
+- [x] run with `-tags e2e_oci DATAMITSU_TEST_OCI=1` — must pass; default build still green — default build: `go test ./test/e2e/...` → "no test files"; `-tags e2e_oci` compiles (`go vet`) + SKIPs without env; managed golangci-lint clean (0 issues) both default and `--build-tags e2e_oci`. (Live network seed runs locally/nightly per the gated tier — see Post-Completion.)
 
 ### Task 2.3: OCI e2e — `install` + `exec`
 
