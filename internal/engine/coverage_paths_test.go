@@ -74,7 +74,9 @@ func TestYAMLRoundTrip_NestedArraysAndMaps(t *testing.T) {
 		t.Fatalf("RunString() error = %v", err)
 	}
 	out := v.String()
-	for _, want := range []string{"root", "list", "deep", "flag"} {
+	// Assert keys AND values survive the round-trip, so a serializer that
+	// dropped or mangled nested values would be caught.
+	for _, want := range []string{"root", "list", "- a", "deep: 1", "flag: true"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("YAML round-trip output missing %q:\n%s", want, out)
 		}
@@ -98,7 +100,10 @@ func TestTOMLRoundTrip_NestedArraysAndMaps(t *testing.T) {
 		t.Fatalf("RunString() error = %v", err)
 	}
 	out := v.String()
-	for _, want := range []string{"title", "items", "[server]", "host", "port"} {
+	// Assert keys AND values survive the round-trip, including the nested table
+	// and the array, so a serializer that flattened nesting or dropped values
+	// would be caught.
+	for _, want := range []string{`title = 'x'`, "items = [1, 2, 3]", "[server]", `host = 'localhost'`, "port = 8080"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("TOML round-trip output missing %q:\n%s", want, out)
 		}

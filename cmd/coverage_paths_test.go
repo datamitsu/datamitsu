@@ -176,6 +176,8 @@ func TestWriteFileAtomic(t *testing.T) {
 // TestPrintDockerfileSummary covers the pinned, unpinned, and skipped-apps
 // branches, capturing output via the command's writer.
 func TestPrintDockerfileSummary(t *testing.T) {
+	origOutput := dockerfileOutput
+	t.Cleanup(func() { dockerfileOutput = origOutput })
 	dockerfileOutput = "Dockerfile"
 	plan := dockerfile.Plan{
 		RuntimeStages:    []dockerfile.RuntimeStage{{Name: "node"}},

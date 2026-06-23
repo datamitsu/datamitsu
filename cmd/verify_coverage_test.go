@@ -137,12 +137,8 @@ func TestVerifyBinaryOrDir(t *testing.T) {
 	})
 
 	t.Run("extract-dir download failure is reported", func(t *testing.T) {
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.WriteHeader(http.StatusInternalServerError)
-		}))
-		srv.Close()
 		info := binmanager.BinaryOsArchInfo{
-			URL:         srv.URL,
+			URL:         "http://127.0.0.1:0/never",
 			Hash:        strings.Repeat("0", 64),
 			ContentType: binmanager.BinContentTypeTarGz,
 			ExtractDir:  true,
@@ -266,46 +262,92 @@ func TestRunPhase5VersionChecks_Disabled(t *testing.T) {
 	}
 }
 
-// TestPrintVerifyResults covers the status-branch logic of the verify result
-// printers (not the ANSI bytes — just that every status arm is reachable).
+// TestPrintVerifyResults asserts each status arm of the verify result printers
+// emits the expected status word, identity, and (on failure) the error detail —
+// asserting on content substrings, not the ANSI escape bytes.
 func TestPrintVerifyResults(t *testing.T) {
 	t.Run("binary result statuses", func(t *testing.T) {
-		for _, status := range []string{"ok", "cached", "failed"} {
-			printBinaryResult(binaryVerifyResult{
-				AppName: "app", Version: "1.0.0", Os: "linux", Arch: "amd64", Libc: "glibc",
-				Status: status, ErrorMsg: "boom",
+		cases := map[string]string{"ok": "OK", "cached": "CACHED", "failed": "FAILED"}
+		for status, want := range cases {
+			out := captureStdout(func() {
+				printBinaryResult(binaryVerifyResult{
+					AppName: "app", Version: "1.0.0", Os: "linux", Arch: "amd64", Libc: "glibc",
+					Status: status, ErrorMsg: "boom",
+				})
 			})
+			if !strings.Contains(out, "app") || !strings.Contains(out, want) {
+				t.Errorf("binary %q output = %q, want app + %q", status, out, want)
+			}
+			if status == "failed" && !strings.Contains(out, "boom") {
+				t.Errorf("binary failed output missing error detail: %q", out)
+			}
 		}
 	})
 
 	t.Run("runtime result statuses", func(t *testing.T) {
-		for _, status := range []string{"ok", "cached", "failed"} {
-			printRuntimeResult(runtimeVerifyResult{
-				RuntimeName: "node", Os: "linux", Arch: "amd64", Libc: "glibc",
-				Status: status, ErrorMsg: "boom",
+		cases := map[string]string{"ok": "OK", "cached": "CACHED", "failed": "FAILED"}
+		for status, want := range cases {
+			out := captureStdout(func() {
+				printRuntimeResult(runtimeVerifyResult{
+					RuntimeName: "node", Os: "linux", Arch: "amd64", Libc: "glibc",
+					Status: status, ErrorMsg: "boom",
+				})
 			})
+			if !strings.Contains(out, "node") || !strings.Contains(out, want) {
+				t.Errorf("runtime %q output = %q, want node + %q", status, out, want)
+			}
+			if status == "failed" && !strings.Contains(out, "boom") {
+				t.Errorf("runtime failed output missing error detail: %q", out)
+			}
 		}
 	})
 
 	t.Run("runtime app result statuses", func(t *testing.T) {
-		for _, status := range []string{"ok", "cached", "failed"} {
-			printRuntimeAppResult(runtimeAppResult{
-				AppName: "slidev", Kind: "node", Version: "1.0.0",
-				Status: status, ErrorMsg: "boom",
+		cases := map[string]string{"ok": "installed", "cached": "CACHED", "failed": "FAILED"}
+		for status, want := range cases {
+			out := captureStdout(func() {
+				printRuntimeAppResult(runtimeAppResult{
+					AppName: "slidev", Kind: "node", Version: "1.0.0",
+					Status: status, ErrorMsg: "boom",
+				})
 			})
+			if !strings.Contains(out, "slidev") || !strings.Contains(out, want) {
+				t.Errorf("runtime app %q output = %q, want slidev + %q", status, out, want)
+			}
+			if status == "failed" && !strings.Contains(out, "boom") {
+				t.Errorf("runtime app failed output missing error detail: %q", out)
+			}
 		}
 	})
 
 	t.Run("version check result statuses", func(t *testing.T) {
-		for _, status := range []string{"ok", "mismatch", "skipped", "cached", "parse_failed", "exec_failed"} {
-			printVersionCheckResult(versionCheckResult{
-				AppName: "tool", Args: []string{"--version"}, Expected: "1.0.0", Actual: "1.0.0",
-				Status: status, ErrorMsg: "boom",
-			})
+		cases := map[string]string{
+			"ok": "OK", "mismatch": "MISMATCH", "skipped": "SKIPPED",
+			"cached": "CACHED", "parse_failed": "PARSE_FAILED", "exec_failed": "EXEC_FAILED",
 		}
+		for status, want := range cases {
+			out := captureStdout(func() {
+				printVersionCheckResult(versionCheckResult{
+					AppName: "tool", Args: []string{"--version"}, Expected: "1.0.0", Actual: "1.0.0",
+					Status: status, ErrorMsg: "boom",
+				})
+			})
+			if !strings.Contains(out, "tool") || !strings.Contains(out, want) {
+				t.Errorf("version check %q output = %q, want tool + %q", status, out, want)
+			}
+		}
+
 		// exec_failed with an empty ErrorMsg skips the trailing detail line.
-		printVersionCheckResult(versionCheckResult{
-			AppName: "tool", Args: []string{"--version"}, Status: "exec_failed",
+		out := captureStdout(func() {
+			printVersionCheckResult(versionCheckResult{
+				AppName: "tool", Args: []string{"--version"}, Status: "exec_failed",
+			})
 		})
+		if !strings.Contains(out, "EXEC_FAILED") {
+			t.Errorf("exec_failed (no detail) output = %q, want EXEC_FAILED", out)
+		}
+		if strings.Count(out, "\n") != 1 {
+			t.Errorf("exec_failed with empty ErrorMsg should be a single line, got %q", out)
+		}
 	})
 }

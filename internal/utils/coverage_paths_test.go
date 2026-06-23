@@ -26,7 +26,8 @@ func TestExpandHome_EmptyHome(t *testing.T) {
 	if got := ExpandHome("~"); got != "" {
 		t.Errorf("ExpandHome(~) with empty HOME = %q, want empty", got)
 	}
-	if got := ExpandHome("~/sub"); got != "sub" && got != "/sub" {
-		t.Errorf("ExpandHome(~/sub) with empty HOME = %q", got)
+	// filepath.Join("", "sub") == "sub" deterministically.
+	if got := ExpandHome("~/sub"); got != "sub" {
+		t.Errorf("ExpandHome(~/sub) with empty HOME = %q, want %q", got, "sub")
 	}
 }

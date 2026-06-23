@@ -38,13 +38,18 @@ func TestIgnoreStringify_NullAndEmptyGroups(t *testing.T) {
 	}
 
 	// A null group value maps to an empty group (nil branch); an empty array
-	// stays empty. The stringify must not error.
+	// stays empty. Groups with no rules are omitted entirely, so the result is
+	// an empty string.
 	script := `
 		const groups = { "Empty": null, "Other": [] };
 		tools.Ignore.stringify(groups, ["Empty", "Other"]);
 	`
-	if _, err := vm.RunString(script); err != nil {
+	v, err := vm.RunString(script)
+	if err != nil {
 		t.Fatalf("RunString() error = %v", err)
+	}
+	if got := v.String(); got != "" {
+		t.Errorf("null/empty groups should stringify to empty, got %q", got)
 	}
 }
 

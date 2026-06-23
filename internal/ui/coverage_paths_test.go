@@ -262,6 +262,13 @@ func TestInteractiveTaskIndeterminate(t *testing.T) {
 	task.Add(3)
 	task.Complete()
 	d.Close()
+	// Completing an indeterminate task must still release its active bar.
+	d.mu.Lock()
+	bars := d.bars
+	d.mu.Unlock()
+	if bars != 0 {
+		t.Errorf("indeterminate task bar not released: %d", bars)
+	}
 }
 
 func TestInteractiveSpinnerLifecycle(t *testing.T) {

@@ -121,11 +121,7 @@ func TestVerifyBinaryExtraction(t *testing.T) {
 	})
 
 	t.Run("download failure is reported", func(t *testing.T) {
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.WriteHeader(http.StatusNotFound)
-		}))
-		srv.Close()
-		err := VerifyBinaryExtraction(ctx, srv.URL, strings.Repeat("0", 64), BinHashTypeSHA256, BinContentTypeBinary, nil)
+		err := VerifyBinaryExtraction(ctx, "http://127.0.0.1:0/never", strings.Repeat("0", 64), BinHashTypeSHA256, BinContentTypeBinary, nil)
 		if err == nil || !strings.Contains(err.Error(), "download failed") {
 			t.Fatalf("VerifyBinaryExtraction(download fail) = %v, want download error", err)
 		}
