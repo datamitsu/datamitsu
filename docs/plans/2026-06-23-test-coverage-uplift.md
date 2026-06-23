@@ -178,9 +178,9 @@ Ordering matches the original ROI ranking — runtimemanager (Task 2) + binmanag
 
 ### Task 8: internal/ui logic (non-render)
 
-- [ ] cover `ui` logic branches (state/progress bookkeeping), explicitly NOT ANSI emission
-- [ ] add tests asserting behavior via the data model, not escape-sequence bytes
-- [ ] run `go test ./internal/ui/...` + measure delta — must pass before next task
+- [x] cover `ui` logic branches (state/progress bookkeeping), explicitly NOT ANSI emission — new `internal/ui/coverage_paths_test.go`: `Symbol.render` all branches + default, `Mode`, `Printf` trailing-newline trim, `Header`/`Banner`/`PhaseOpen`/`PhaseBody`(incl. empty spacer)/`PhaseClose` content+blank-line, `Task.Increment`, indeterminate (`total<=0`) Plain task, nil-receiver guards for `*Task`/`*Spinner`, Plain `Spinner` throttle (within/after `plainMinInterval`)+`Done`/`Done("")`/`Fail`, interactive bar-backed `Task`/`Spinner`/`Download` lifecycle paths via mpb→buffer (asserting active-bar bookkeeping reaches 0, double-`Close` no-op), indeterminate interactive `Complete`
+- [x] add tests asserting behavior via the data model, not escape-sequence bytes — assertions check emitted content/glyph presence and the `bars` counter, never raw escape sequences
+- [x] run `go test ./internal/ui/...` + measure delta — **passes; coverage 65.1% → 94.0% unit-only (+28.9 pts)**, full `go test ./...` green + managed golangci-lint clean
 
 ### Task 9: cmd/ residual error branches (post-merge gaps)
 
