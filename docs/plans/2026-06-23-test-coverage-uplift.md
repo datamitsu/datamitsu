@@ -157,10 +157,10 @@ Ordering matches the original ROI ranking — runtimemanager (Task 2) + binmanag
 
 ### Task 5: internal/ocibundle + ocidigest error paths
 
-- [ ] list uncovered funcs in `ocibundle` and `ocidigest`
-- [ ] add tests for seed/status/layout and resolver/token branches (success cases)
-- [ ] add error/edge cases (bad digest, missing layer, registry/token failure) with mocked transport
-- [ ] run `go test ./internal/ocibundle/... ./internal/ocidigest/...` + measure delta — must pass before next task
+- [x] list uncovered funcs in `ocibundle` and `ocidigest` (top pure-unit gaps: ocidigest `NewResolver`/`Registry` 0%, `parseSHA256Digest`/`fetchToken`/`saveCachedDigest`/`PullManifest` partial; ocibundle `removeStaged` 0%, `placeSubtree`/`SeedFromLayout`/`writeMarker`/`runtimeAppKind`/`buildReVerifyIndex`/`expectedSubtrees`/`subtreeRel` + `layoutSource` blob/manifest/blobPath partial)
+- [x] add tests for seed/status/layout and resolver/token branches (success cases) — new `internal/ocidigest/coverage_paths_test.go`: `NewResolver`/`Registry`, `fetchToken` access_token fallback + service/scope forwarding; new `internal/ocibundle/coverage_paths_test.go`: `layoutSource` manifest/blob/blobPath success, `placeSubtree` (race-loss drop + fresh rename), `removeStaged`, `runtimeAppKind` (uv/node/jvm/go), `subtreeRel`, `buildReVerifyIndex` binary app, `expectedSubtrees` binary-app path
+- [x] add error/edge cases (bad digest, missing layer, registry/token failure) with mocked transport — `parseSHA256Digest` (missing prefix/wrong algo/short/non-hex/uppercase), `PullManifest` bad-digest/oversize/5xx, `fetchToken` malformed-challenge/invalid-realm/non-OK/undecodable/empty-token, `saveCachedDigest` mkdir failure; ocibundle `blobPath` bad digests, `manifest` missing/mismatch, `blob` missing/size-mismatch, `SeedFromLayout` missing-dir/not-a-directory, `writeMarker` mkdir failure, `subtreeRel`/`expectedSubtrees` outside-store + unknown/shell-app skips
+- [x] run `go test ./internal/ocibundle/... ./internal/ocidigest/...` + measure delta — **passes; ocidigest 79.3% → 86.3% (+7.0 pts), ocibundle 75.7% → 78.1% (+2.4 pts)**, full `go test ./...` + managed golangci-lint clean
 
 ### Task 6: internal/runner, cache, target mop-up
 
