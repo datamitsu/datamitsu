@@ -187,11 +187,11 @@ production CLI behavior is changed by Phases 0–2 (purely additive test code).
 
 ### Task 1.3: Golden — `config` group
 
-- [ ] `config --help`; `config show` → valid JSON golden + key-shape assertions (against minimal config)
-- [ ] `config types` → non-empty `.d.ts`, stable leading lines
-- [ ] `config runtime` → JSON golden + env-override behavior: `DATAMITSU_INSTALL_TIMEOUT=1200` ⇒ `installTimeoutSeconds==1200`; `DATAMITSU_MIN_RELEASE_AGE` ⇒ `minimumReleaseAgeMinutes`
-- [ ] `config chain-hash`: bare single-file output vs multi-file table; unknown file → non-zero error
-- [ ] run tests — must pass before next task
+- [x] `config --help`; `config show` → valid JSON golden + key-shape assertions (against minimal config) — `config_help.txt` golden + `expectedConfigSubcommands` drift guard; `config_show.txt` (`{}`) + `json.Unmarshal` empty-object assertion
+- [x] `config types` → non-empty `.d.ts`, stable leading lines — `TestConfigTypes`: exit 0, empty stderr, ≥256 bytes, `declare global {` prefix (no full-file golden — the type surface churns)
+- [x] `config runtime` → JSON golden + env-override behavior: `DATAMITSU_INSTALL_TIMEOUT=1200` ⇒ `installTimeoutSeconds==1200`; `DATAMITSU_MIN_RELEASE_AGE` ⇒ `minimumReleaseAgeMinutes` — key-shape assertions on stable keys (not a full golden: `maxParallelWorkers`/`libc` are machine/platform-dependent — assert presence only, per runtimeconfig "required keys, not field count" policy) + `TestConfigRuntimeEnvOverride` table (1200 / 99)
+- [x] `config chain-hash`: bare single-file output vs multi-file table; unknown file → non-zero error — `config_chain_hash_table.txt` golden (deterministic XXH3 over fixed on-disk content); single-file bare hash asserted == its table row; unknown file → exit 1 naming the file
+- [x] run tests — must pass before next task — `go test ./test/cli/ ./internal/clitest/...` green, byte-stable across two runs, managed golangci-lint clean
 
 ### Task 1.4: Golden — `cache` group
 
