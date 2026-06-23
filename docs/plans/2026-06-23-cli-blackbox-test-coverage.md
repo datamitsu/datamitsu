@@ -226,9 +226,9 @@ production CLI behavior is changed by Phases 0–2 (purely additive test code).
 
 ### Task 1.8: Golden — `install` (offline contract)
 
-- [ ] `install` with no targets → non-zero "nothing to install" error; `install --help`
-- [ ] arg + flag validation: `install app`, `--runtime node`, `--no-verify` parse; offline download attempt → graceful offline error
-- [ ] run tests — must pass before next task
+- [x] `install` with no targets → non-zero error; `install --help` — `TestInstallNoTargets` (exit 1, no usage block) **characterized:** the real message is `specify at least one app name or --runtime <name>`, not the plan-era "nothing to install"; `install_help.txt` static golden (normalized == raw — no version/path tokens) via `TestInstallHelpGolden`
+- [x] arg + flag validation: `install app`, `--runtime node`, `--no-verify` parse; offline download attempt → graceful offline error — `TestInstallOfflineDownloadError` declares a binary app for every os/arch/libc (always-found candidate) → exit 1, stderr names `offline mode` + `DATAMITSU_OFFLINE`, no usage; `TestInstallNoVerifyFlagParses` proves `--no-verify` routes the same path; `TestInstallRuntimeFlagParses` characterizes `--runtime node` against an undeclared runtime → no-op exit 0; `TestInstallUnknownApp` → exit 1 "not found in registry"
+- [x] run tests — must pass before next task — `go test ./test/cli/ ./internal/clitest/...` green, byte-stable across two runs, managed golangci-lint clean (0 issues)
 
 ### Task 1.9: Golden — `check` / `fix` / `lint` (offline via `--explain`)
 

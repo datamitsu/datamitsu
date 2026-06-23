@@ -1,0 +1,28 @@
+Install one or more managed apps (and optionally runtimes) into the store
+without running them.
+
+Unlike "exec", which prepares and then runs a tool, "install" materializes a
+tool's files and exits. It is the building block for the per-tool and per-runtime
+stages of a generated Dockerfile (see "devtools dockerfile"), where each stage
+installs exactly one target so it becomes an independently cacheable layer.
+
+By default each installed app's version check is run after installation, so a
+broken or non-functional install fails the command (and, in a Docker build, the
+build) rather than silently producing a broken artifact. Pass --no-verify to skip
+this check.
+
+Usage:
+  datamitsu install [app...] [flags]
+
+Flags:
+  -h, --help              help for install
+      --no-verify         Skip the post-install version check (verification runs by default)
+      --runtime strings   Install the named runtime(s) only, without any app (repeatable)
+
+Global Flags:
+      --before-config strings   Configuration file(s) to load before auto-discovery (for wrappers/libraries)
+      --binary-command string   Override the binary command (for npm package wrappers, etc). Can also be set via DATAMITSU_BINARY_COMMAND env var
+      --config strings          Additional configuration file(s) to load and merge (can be specified multiple times)
+      --no-auto-config          Disable auto-discovery of datamitsu.config.{js,mjs,ts} at git root
+      --no-oci                  Disable OCI bundle store seeding (also via DATAMITSU_NO_OCI)
+  -v, --verbose                 Enable debug-level logging (default level is warn)
