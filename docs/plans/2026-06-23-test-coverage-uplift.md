@@ -143,10 +143,10 @@ Ordering matches the original ROI ranking — runtimemanager (Task 2) + binmanag
 
 ### Task 3: internal/binmanager download/extract/exec paths
 
-- [ ] list uncovered funcs in `binmanager`
-- [ ] add tests for uncovered extract (archive formats), exec wiring, and download error handling (`httptest`, fixture archives under `testdata/`)
-- [ ] add error/edge cases (corrupt archive, missing binary, hash mismatch, permission errors via read-only `t.TempDir`)
-- [ ] run `go test ./internal/binmanager/...` + measure delta — must pass before next task
+- [x] list uncovered funcs in `binmanager` (top pure-unit gaps: `VerifyBinaryExtraction`/`DownloadFileForVerify` 0%, `ResolvedBinaryInfo`/`GetBundles`/`InstallBundleByName` 0%, `downloadFileSimple`/`writeFiles`/`downloadAndExtractExternalArchive`, `copyDir`/`copyFile`/`extractZipToDir`/`extractArchiveToPath` partial branches)
+- [x] add tests for uncovered extract (archive formats), exec wiring, and download error handling (`httptest`, in-memory tar.gz/zip fixtures) — new `internal/binmanager/coverage_paths_test.go`: `VerifyBinaryExtraction` (binary + tar.gz member), `DownloadFileForVerify`, `downloadFileSimple`, `downloadAndExtractExternalArchive` (download→verify→extract), `writeFiles`, `copyDir`/`copyFile` (files/nested/symlinks), `extractZipToDir`, `extractArchiveToPath`/`ExtractArchiveToDir`, `ResolvedBinaryInfo`, `GetBundles`, `InstallBundleByName`, `InstallBundles` already-cached branch
+- [x] add error/edge cases (corrupt archive, missing binary, hash mismatch, missing file, path-traversal/absolute-symlink skips, dest in a missing directory, unsupported format, escape-install) via `httptest` + `t.TempDir`
+- [x] run `go test ./internal/binmanager/...` + measure delta — **passes; coverage 69.3% → 72.5% unit-only (+3.2 pts)**, full `go test ./...` + managed golangci-lint clean
 
 ### Task 4: internal/tooling planner/runner logic
 
