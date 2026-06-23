@@ -232,10 +232,10 @@ production CLI behavior is changed by Phases 0–2 (purely additive test code).
 
 ### Task 1.9: Golden — `check` / `fix` / `lint` (offline via `--explain`)
 
-- [ ] for each of the three: `--help`, and `--explain=summary|detailed|json` against a small synthetic tool config → golden plan (json shape asserted; no execution, so fully offline+deterministic)
-- [ ] flag matrix: `--file-scoped`, `--tools a,b`, `--fail-on-skip`, positional file args, and combinations
-- [ ] error paths: unknown `--tools` value; `--explain` with bad mode
-- [ ] run tests — must pass before next task
+- [x] for each of the three: `--help`, and `--explain=summary|detailed|json` against a small synthetic tool config → golden plan (json shape asserted; no execution, so fully offline+deterministic) — `test/cli/check_fix_lint_test.go`: `{check,fix,lint}_help` static goldens (`TestCheckFixLintHelpGolden`, normalized==raw + `--explain` doc present) and `{check,fix,lint}_explain_{summary,detailed,json}` goldens (`TestExplainPlanGolden`). Synthetic two-tool config (alpha=fix+lint, beta=lint-only; both repository-scope, no globs → deterministic, no per-file paths) via undeclared apps (BinaryAvailable treats unknown as available → no skips/downloads). fix/lint JSON parsed into `planShape` (operation/rootPath==`<TMP>`/groups/skipped-not-null/task completeness); check emits fix-plan+lint-plan (two concatenated objects) → frozen as a golden + substring-asserted, not parsed as one doc.
+- [x] flag matrix: `--file-scoped`, `--tools a,b`, `--fail-on-skip`, positional file args, and combinations — `TestExplainToolsSelection` (parses JSON, `--tools alpha` plans only alpha, drops beta) + `TestExplainFlagMatrix` (`--file-scoped` empty staged set, `--fail-on-skip` no-op in explain, positional `README.md`, and a `check --tools alpha --file-scoped --fail-on-skip --explain=detailed` combo → all exit 0, stdout-only)
+- [x] error paths: unknown `--tools` value; `--explain` with bad mode — `TestExplainErrorPaths` (table over all three commands): unknown `--tools nonesuch` → exit 1 "tools not found" naming it; `--explain=bogus` → exit 1 "invalid --explain value"; both no usage block (SilenceUsage)
+- [x] run tests — must pass before next task — `go test ./test/cli/ ./internal/clitest/...` green, byte-stable across two runs (`-count=2`), managed golangci-lint clean (0 issues)
 
 ### Task 1.10: Golden — `setup` (offline, `--dry-run`)
 

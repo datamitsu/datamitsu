@@ -1,0 +1,27 @@
+Runs fix followed by lint on specified files or the entire project,
+reusing shared context (config, file listing, caches) for efficiency.
+If fix fails, lint is skipped.
+
+Use --explain to see the execution plan without running:
+  --explain          Show brief plan (summary mode, default)
+  --explain=summary  Show brief plan
+  --explain=detailed Show detailed plan with file lists
+  --explain=json     Output plan in JSON format
+
+Usage:
+  datamitsu check [files...] [flags]
+
+Flags:
+      --explain string[="summary"]   Show execution plan without running (summary|detailed|json)
+      --fail-on-skip                 Exit non-zero if any tool is skipped because its binary is unavailable for this platform
+      --file-scoped                  Only process git staged files
+  -h, --help                         help for check
+      --tools string                 Comma-separated list of tools to run (for debugging)
+
+Global Flags:
+      --before-config strings   Configuration file(s) to load before auto-discovery (for wrappers/libraries)
+      --binary-command string   Override the binary command (for npm package wrappers, etc). Can also be set via DATAMITSU_BINARY_COMMAND env var
+      --config strings          Additional configuration file(s) to load and merge (can be specified multiple times)
+      --no-auto-config          Disable auto-discovery of datamitsu.config.{js,mjs,ts} at git root
+      --no-oci                  Disable OCI bundle store seeding (also via DATAMITSU_NO_OCI)
+  -v, --verbose                 Enable debug-level logging (default level is warn)

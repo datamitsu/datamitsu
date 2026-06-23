@@ -1,0 +1,12 @@
+
+Execution Plan for 'fix' operation:
+
+Priority Group 1 (priority: 0):
+  ┌─ alpha
+  │  Scope: repository
+  │  Command: alpha-bin --write
+  │  Working Dir: <TMP>
+  │  Files: whole project
+  │
+  Parallelization: Single task (sequential)
+

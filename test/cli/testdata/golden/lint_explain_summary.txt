@@ -1,0 +1,18 @@
+
+Execution Plan for 'lint' operation:
+
+Priority Group 1 (priority: 0):
+  ┌─ alpha
+  │  Scope: repository
+  │  Command: alpha-bin --check
+  │  Working Dir: <TMP>
+  │  Files: whole project
+  │
+  ┌─ beta
+  │  Scope: repository
+  │  Command: beta-bin lint
+  │  Working Dir: <TMP>
+  │  Files: whole project
+  │
+  Parallelization: 2 parallel groups (some tasks have overlapping files)
+
