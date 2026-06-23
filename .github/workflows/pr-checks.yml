@@ -131,8 +131,18 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: ./.github/actions/setup-environment
-      - name: Run Go tests
-        run: pnpm test
+      - name: Build embedded config library
+        # Regenerate internal/config/config.js so the instrumented binary the
+        # blackbox CLI tier builds (go build -cover . at module root) embeds the
+        # current config. config.js is checked in, but the contract goldens
+        # depend on it being fresh.
+        run: pnpm dm exec task -- build:lib
+      - name: Run Go tests (unit + blackbox CLI tier, merged coverage)
+        # coverage-all.sh runs ./... — including the test/cli subprocess blackbox
+        # tier — and merges in-process unit covdata with the blackbox GOCOVERDIR
+        # counters into coverage.out. The gated OCI e2e tier (//go:build e2e_oci)
+        # is excluded: no -tags e2e_oci is passed, so test/e2e has no test files.
+        run: pnpm test:coverage:all
       - name: Fuzz .datamitsuignore (smoke)
         run: pnpm dm exec task -- test:fuzz
       - name: Upload coverage to Codecov

@@ -1,0 +1,28 @@
+jobs:
+  oci-e2e:
+    name: OCI e2e tier
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: ./.github/actions/setup-environment
+      - name: Build embedded config library
+        # The instrumented/regular binary embeds internal/config/config.js; keep
+        # it fresh before the tier builds and runs it.
+        run: pnpm dm exec task -- build:lib
+      - env:
+          # Second gate (RequireOCIE2E): the //go:build e2e_oci tag alone is not
+          # enough — this env var must also be set, so the network-dependent
+          # tier never runs by accident.
+          DATAMITSU_TEST_OCI: "1"
+        name: Run gated OCI e2e tier
+        # Needs registry/network access to pull the digest-pinned bundle declared
+        # by the vendored config; deliberately NOT part of pr-checks.yml.
+        run: go test -tags e2e_oci ./test/e2e/... -v
+name: OCI e2e (gated)
+on:
+  schedule:
+    # Nightly at 03:17 UTC.
+    - cron: "17 3 * * *"
+  workflow_dispatch: {}
+permissions:
+  contents: read

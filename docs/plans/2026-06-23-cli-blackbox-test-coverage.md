@@ -330,10 +330,10 @@ production CLI behavior is changed by Phases 0–2 (purely additive test code).
 
 ### Task 3.5: CI wiring
 
-- [ ] update [.github/workflows/pr-checks.yml](../../.github/workflows/pr-checks.yml) to run the blackbox tier and upload the merged coverage profile (Codecov/Coveralls)
-- [ ] ensure CI runs `pnpm build` before `go test` (so embedded `config.js` is fresh) and that `test/cli` builds the instrumented binary
-- [ ] keep the OCI e2e tier OUT of default CI (gated); optionally add a manual/nightly job
-- [ ] run CI locally (act or a dry equivalent) / push branch — checks must pass
+- [x] update [.github/workflows/pr-checks.yml](../../.github/workflows/pr-checks.yml) to run the blackbox tier and upload the merged coverage profile (Codecov/Coveralls) — the `test` job now runs `pnpm test:coverage:all` (scripts/coverage-all.sh) instead of `pnpm test`: it runs `./...` including the `test/cli` subprocess blackbox tier and merges in-process unit covdata with the blackbox `GOCOVERDIR` counters into `coverage.out`, which the existing Codecov + Coveralls steps upload. Verified locally: combined coverage **76.3%**, `coverage.out` produced.
+- [x] ensure CI runs `pnpm build` before `go test` (so embedded `config.js` is fresh) and that `test/cli` builds the instrumented binary — added a `Build embedded config library` step (`pnpm dm exec task -- build:lib`, the actual `internal/config/config.js` generator — `pnpm build` would additionally run the heavyweight cross-platform `pack:prepare`, unnecessary for config freshness) before the test step; `test/cli`'s `TestMain` builds the `go build -cover` instrumented binary itself.
+- [x] keep the OCI e2e tier OUT of default CI (gated); optionally add a manual/nightly job — pr-checks passes no `-tags e2e_oci`, so `test/e2e` reports "no test files" in default CI (verified). Added [.github/workflows/oci-e2e.yml](../../.github/workflows/oci-e2e.yml): `workflow_dispatch` + nightly cron, `DATAMITSU_TEST_OCI=1` + `go test -tags e2e_oci ./test/e2e/...`; deliberately not triggered by PR/push.
+- [x] run CI locally (act or a dry equivalent) / push branch — checks must pass — dry equivalent: ran the exact test-step commands locally (`pnpm dm exec task -- build:lib` then `pnpm test:coverage:all`) → green, 76.3% merged coverage, `test/e2e` gated out; `go vet -tags e2e_oci ./test/e2e/...` clean and the tier skips without `DATAMITSU_TEST_OCI`; workflow YAML lints clean (`yamlfmt`/`yamllint`/`prettier`).
 
 ### Task N-1: Verify acceptance criteria
 
