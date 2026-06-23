@@ -780,6 +780,142 @@ func TestNoOCI(t *testing.T) {
 	})
 }
 
+func TestGetMaxCommandLength(t *testing.T) {
+	t.Setenv(maxCmdLength.Name, os.Getenv(maxCmdLength.Name))
+
+	defaultValue, _ := strconv.Atoi(maxCmdLength.DefaultValue)
+
+	tests := []struct {
+		name  string
+		set   bool
+		value string
+		want  int
+	}{
+		{"default when unset", false, "", defaultValue},
+		{"override", true, "64000", 64000},
+		{"zero falls back", true, "0", defaultValue},
+		{"negative falls back", true, "-1", defaultValue},
+		{"invalid falls back", true, "abc", defaultValue},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.set {
+				t.Setenv(maxCmdLength.Name, tt.value)
+			} else {
+				_ = os.Unsetenv(maxCmdLength.Name)
+			}
+			if got := GetMaxCommandLength(); got != tt.want {
+				t.Errorf("GetMaxCommandLength() = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetMaxErrorCommandDisplay(t *testing.T) {
+	t.Setenv(maxErrorCommandDisplay.Name, os.Getenv(maxErrorCommandDisplay.Name))
+
+	defaultValue, _ := strconv.Atoi(maxErrorCommandDisplay.DefaultValue)
+
+	tests := []struct {
+		name  string
+		set   bool
+		value string
+		want  int
+	}{
+		{"default when unset", false, "", defaultValue},
+		{"override", true, "200", 200},
+		{"zero falls back", true, "0", defaultValue},
+		{"negative falls back", true, "-10", defaultValue},
+		{"invalid falls back", true, "notanumber", defaultValue},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.set {
+				t.Setenv(maxErrorCommandDisplay.Name, tt.value)
+			} else {
+				_ = os.Unsetenv(maxErrorCommandDisplay.Name)
+			}
+			if got := GetMaxErrorCommandDisplay(); got != tt.want {
+				t.Errorf("GetMaxErrorCommandDisplay() = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetConcurrency(t *testing.T) {
+	t.Setenv(concurrency.Name, os.Getenv(concurrency.Name))
+
+	defaultValue, _ := strconv.Atoi(concurrency.DefaultValue)
+
+	tests := []struct {
+		name  string
+		set   bool
+		value string
+		want  int
+	}{
+		{"default when unset", false, "", defaultValue},
+		{"override", true, "8", 8},
+		{"zero falls back", true, "0", defaultValue},
+		{"negative falls back", true, "-2", defaultValue},
+		{"invalid falls back", true, "xyz", defaultValue},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.set {
+				t.Setenv(concurrency.Name, tt.value)
+			} else {
+				_ = os.Unsetenv(concurrency.Name)
+			}
+			if got := GetConcurrency(); got != tt.want {
+				t.Errorf("GetConcurrency() = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsTimingsEnabled(t *testing.T) {
+	t.Setenv(timings.Name, os.Getenv(timings.Name))
+
+	tests := []struct {
+		name  string
+		set   bool
+		value string
+		want  bool
+	}{
+		{"default when unset is false", false, "", false},
+		{"one enables", true, "1", true},
+		{"zero disables", true, "0", false},
+		{"other number disables", true, "2", false},
+		{"invalid disables", true, "yes", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.set {
+				t.Setenv(timings.Name, tt.value)
+			} else {
+				_ = os.Unsetenv(timings.Name)
+			}
+			if got := IsTimingsEnabled(); got != tt.want {
+				t.Errorf("IsTimingsEnabled() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEnvVarString(t *testing.T) {
+	if got := concurrency.String(); got != concurrency.Name {
+		t.Errorf("envVar.String() = %q, want %q", got, concurrency.Name)
+	}
+	// String() makes envVar usable directly in formatted error messages.
+	if got := offline.String(); got != offline.Name {
+		t.Errorf("envVar.String() = %q, want %q", got, offline.Name)
+	}
+}
+
 func TestLibcOverride(t *testing.T) {
 	t.Setenv(libcOverride.Name, os.Getenv(libcOverride.Name))
 

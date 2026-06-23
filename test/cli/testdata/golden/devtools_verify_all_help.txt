@@ -1,0 +1,29 @@
+Downloads and hash-verifies binary apps and managed runtimes for all
+configured platforms. Installs runtime-managed apps (UV/Node/JVM/Go) on the
+current platform. Optionally runs each app's version command and compares
+output against the configured version.
+
+Results are persisted to a state file after each check completes. Use
+--skip-passed to skip entries whose config fingerprint is unchanged and
+whose last status was "ok". Skipped entries appear as "cached" in output.
+
+Data source: the same aggregated config used at runtime (loadConfig()).
+
+Usage:
+  datamitsu devtools verify-all [flags]
+
+Flags:
+      --concurrency int    Concurrent download workers (default: DATAMITSU_CONCURRENCY env var or 3)
+  -h, --help               help for verify-all
+      --json               Output machine-readable JSON (progress suppressed, only final JSON to stdout)
+      --no-remote          Skip loading remote configs declared via getRemoteConfigs()
+      --no-version-check   Skip version command execution and comparison
+      --skip-passed        Skip checks whose config is unchanged and passed last run (may use stale data)
+
+Global Flags:
+      --before-config strings   Configuration file(s) to load before auto-discovery (for wrappers/libraries)
+      --binary-command string   Override the binary command (for npm package wrappers, etc). Can also be set via DATAMITSU_BINARY_COMMAND env var
+      --config strings          Additional configuration file(s) to load and merge (can be specified multiple times)
+      --no-auto-config          Disable auto-discovery of datamitsu.config.{js,mjs,ts} at git root
+      --no-oci                  Disable OCI bundle store seeding (also via DATAMITSU_NO_OCI)
+  -v, --verbose                 Enable debug-level logging (default level is warn)

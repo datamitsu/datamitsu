@@ -1,0 +1,28 @@
+Update binary configurations from GitHub releases using auto-detection.
+
+Requires a file argument pointing to the GitHub apps JSON file.
+If the file does not exist, an empty one will be created.
+
+Without --update: refreshes binaries using current tags
+With --update: fetches latest release tags and updates binaries
+
+Example:
+  datamitsu devtools pull-github config/src/githubApps.json
+  datamitsu devtools pull-github config/src/githubApps.json --update
+
+Usage:
+  datamitsu devtools pull-github <file> [flags]
+
+Flags:
+  -h, --help                help for pull-github
+      --min-age int         Minimum release age in minutes before a version is eligible (-1 = use global default of 10080, 0 = disable age filtering, positive = custom) (default -1)
+      --update              Fetch latest release tags before updating binaries
+      --verify-extraction   Download and verify binary extraction for all platforms before saving
+
+Global Flags:
+      --before-config strings   Configuration file(s) to load before auto-discovery (for wrappers/libraries)
+      --binary-command string   Override the binary command (for npm package wrappers, etc). Can also be set via DATAMITSU_BINARY_COMMAND env var
+      --config strings          Additional configuration file(s) to load and merge (can be specified multiple times)
+      --no-auto-config          Disable auto-discovery of datamitsu.config.{js,mjs,ts} at git root
+      --no-oci                  Disable OCI bundle store seeding (also via DATAMITSU_NO_OCI)
+  -v, --verbose                 Enable debug-level logging (default level is warn)

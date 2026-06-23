@@ -1,0 +1,77 @@
+{
+  "operation": "fix",
+  "rootPath": "<TMP>",
+  "cwdPath": "<TMP>",
+  "groups": [
+    {
+      "priority": 0,
+      "parallelGroups": [
+        {
+          "canRunInParallel": false,
+          "tasks": [
+            {
+              "toolName": "alpha",
+              "app": "alpha-bin",
+              "args": [
+                "--write"
+              ],
+              "scope": "repository",
+              "batch": true,
+              "workingDir": "<TMP>",
+              "files": [],
+              "fileCount": 0
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "skipped": []
+}
+{
+  "operation": "lint",
+  "rootPath": "<TMP>",
+  "cwdPath": "<TMP>",
+  "groups": [
+    {
+      "priority": 0,
+      "parallelGroups": [
+        {
+          "canRunInParallel": false,
+          "tasks": [
+            {
+              "toolName": "alpha",
+              "app": "alpha-bin",
+              "args": [
+                "--check"
+              ],
+              "scope": "repository",
+              "batch": true,
+              "workingDir": "<TMP>",
+              "files": [],
+              "fileCount": 0
+            }
+          ]
+        },
+        {
+          "canRunInParallel": false,
+          "tasks": [
+            {
+              "toolName": "beta",
+              "app": "beta-bin",
+              "args": [
+                "lint"
+              ],
+              "scope": "repository",
+              "batch": true,
+              "workingDir": "<TMP>",
+              "files": [],
+              "fileCount": 0
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "skipped": []
+}

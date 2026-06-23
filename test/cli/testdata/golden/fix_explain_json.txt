@@ -1,0 +1,30 @@
+{
+  "operation": "fix",
+  "rootPath": "<TMP>",
+  "cwdPath": "<TMP>",
+  "groups": [
+    {
+      "priority": 0,
+      "parallelGroups": [
+        {
+          "canRunInParallel": false,
+          "tasks": [
+            {
+              "toolName": "alpha",
+              "app": "alpha-bin",
+              "args": [
+                "--write"
+              ],
+              "scope": "repository",
+              "batch": true,
+              "workingDir": "<TMP>",
+              "files": [],
+              "fileCount": 0
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "skipped": []
+}

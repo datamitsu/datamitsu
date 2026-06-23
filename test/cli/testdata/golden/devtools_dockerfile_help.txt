@@ -1,0 +1,34 @@
+Generate a multi-stage Dockerfile that pre-installs every app in the loaded
+config, one cacheable layer per binary, per runtime, and per runtime-managed app.
+
+The base image is datamitsu/datamitsu at the version of the running datamitsu
+binary, pinned by digest when it can be resolved (best-effort: --offline, an
+unreachable registry, or a non-release build leave the FROM line unpinned with a
+warning). The output file is fully overwritten on each run — it is a generated
+artifact you own and may hand-edit, but hand-edits are lost on regeneration.
+
+Usage:
+  datamitsu devtools dockerfile [flags]
+
+Flags:
+      --alpine                  Target the Alpine (musl) base image variant
+      --arg stringArray         Build ARG (name or name=default) declared before ENV in the final stage (repeatable)
+      --build-arg stringArray   Build-time ARG promoted to ENV so install stages inherit it, e.g. DATAMITSU_INSTALL_TIMEOUT=1200; not baked into the final image (repeatable)
+      --config-js string        Pre-built config file COPYed into the image (default "datamitsu.config.js")
+      --emit-oci-map string     Also write the layer→subtree map JSON (for the OCI bundle annotation post-process) to this path
+      --env stringArray         ENV key=value baked into the final image (repeatable)
+      --force-include strings   Binary app names to include even if they lack a binary for the target libc (comma-separated, repeatable)
+  -h, --help                    help for dockerfile
+      --label stringArray       OCI label key=value for the final image (repeatable)
+      --no-verify               Do not run apps' version checks in their build stages (verification is on by default)
+      --offline                 Skip base-image digest resolution (emit an unpinned FROM with a warning)
+  -o, --output string           Output Dockerfile path including filename (required, overwritten)
+      --repo string             Override the base image repository (default: the repo this datamitsu build was published under)
+
+Global Flags:
+      --before-config strings   Configuration file(s) to load before auto-discovery (for wrappers/libraries)
+      --binary-command string   Override the binary command (for npm package wrappers, etc). Can also be set via DATAMITSU_BINARY_COMMAND env var
+      --config strings          Additional configuration file(s) to load and merge (can be specified multiple times)
+      --no-auto-config          Disable auto-discovery of datamitsu.config.{js,mjs,ts} at git root
+      --no-oci                  Disable OCI bundle store seeding (also via DATAMITSU_NO_OCI)
+  -v, --verbose                 Enable debug-level logging (default level is warn)

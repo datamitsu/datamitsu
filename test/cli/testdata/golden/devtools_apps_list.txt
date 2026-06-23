@@ -1,0 +1,2 @@
+hello-shell (shell) - say hi - not installed
+ztool (shell) - not installed

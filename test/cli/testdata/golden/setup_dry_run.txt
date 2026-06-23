@@ -1,0 +1,9 @@
+╭<RULE>╮
+│ datamitsu  <VERSION> │
+╰<RULE>╯
+
+┏━ setup <RULE>
+┃ no project types detected
+┃
+┃ dry-run — no changes will be made
+┗━ dry-run · <DUR> <RULE>

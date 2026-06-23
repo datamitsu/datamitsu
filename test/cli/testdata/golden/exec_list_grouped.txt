@@ -1,0 +1,6 @@
+Available tools:
+
+[shell]
+  hello-shell  echo  say hi
+  ztool        true
+

@@ -1,0 +1,36 @@
+Pull runtime configurations (UV, JVM, Node, Go) with latest versions from upstream.
+
+Fetches latest releases from GitHub, computes SHA-256 hashes, and writes
+the result to the specified file. The Node runtime is pulled as a direct
+archive (url + hash) from nodejs.org (glibc/darwin/windows, GPG-verified) and
+unofficial-builds.nodejs.org (musl, unsigned). The Go runtime is pulled as a
+direct archive from go.dev/dl with its published SHA-256 (HTTPS, no GPG).
+
+Requires --update flag to fetch releases (safety guard).
+With --runtime: updates only the specified runtime (uv, jvm, node, or go)
+With --dry-run: shows what would be updated without writing
+
+Example:
+  datamitsu devtools pull-runtimes --update config/src/runtimes.json
+  datamitsu devtools pull-runtimes --update --runtime uv config/src/runtimes.json
+  datamitsu devtools pull-runtimes --update --runtime node config/src/runtimes.json
+  datamitsu devtools pull-runtimes --update --runtime go config/src/runtimes.json
+  datamitsu devtools pull-runtimes --update --dry-run config/src/runtimes.json
+
+Usage:
+  datamitsu devtools pull-runtimes <file> [flags]
+
+Flags:
+      --dry-run          Show what would be updated without writing files
+  -h, --help             help for pull-runtimes
+      --min-age int      Minimum release age in minutes before a version is eligible (-1 = use global default of 10080, 0 = disable age filtering, positive = custom) (default -1)
+      --runtime string   Update only the specified runtime (uv, jvm, node, or go)
+      --update           Fetch latest versions from upstream before updating
+
+Global Flags:
+      --before-config strings   Configuration file(s) to load before auto-discovery (for wrappers/libraries)
+      --binary-command string   Override the binary command (for npm package wrappers, etc). Can also be set via DATAMITSU_BINARY_COMMAND env var
+      --config strings          Additional configuration file(s) to load and merge (can be specified multiple times)
+      --no-auto-config          Disable auto-discovery of datamitsu.config.{js,mjs,ts} at git root
+      --no-oci                  Disable OCI bundle store seeding (also via DATAMITSU_NO_OCI)
+  -v, --verbose                 Enable debug-level logging (default level is warn)

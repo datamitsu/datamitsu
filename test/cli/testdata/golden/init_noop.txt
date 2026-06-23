@@ -1,0 +1,7 @@
+╭<RULE>╮
+│ datamitsu  <VERSION> │
+╰<RULE>╯
+
+┏━ init <RULE>
+┃ no project types detected
+┗━ ready · <DUR> <RULE>

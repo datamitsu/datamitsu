@@ -1,0 +1,1 @@
+Would delete: <CACHE>/cache/projects/<HASH> (entire project cache directory)
