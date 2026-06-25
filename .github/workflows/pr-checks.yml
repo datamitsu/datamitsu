@@ -11,6 +11,26 @@ jobs:
       - uses: ./.github/actions/setup-environment
       - name: Install syft
         uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+      # Build the WASM parser module BEFORE goreleaser: .goreleaser.yml lists it
+      # under extra_files, so a snapshot build globbing-fails without it. Mirrors
+      # release.yml. rustup/cargo are preinstalled on ubuntu-latest; only the
+      # freestanding wasm32 target needs adding.
+      - name: Add Rust wasm32 target
+        run: rustup target add wasm32-unknown-unknown
+      - name: Cache cargo registry + wasm target
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          key: wasm-parsers-${{ runner.os }}-${{ hashFiles('parsers/Cargo.lock') }}
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            parsers/target
+          restore-keys: |
+            wasm-parsers-${{ runner.os }}-
+      - name: Build WASM parser modules
+        run: |
+          cargo build --release --target wasm32-unknown-unknown --manifest-path parsers/Cargo.toml
+          echo "wasm size: $(wc -c < parsers/target/wasm32-unknown-unknown/release/datamitsu_parsers.wasm) bytes"
       - env:
           GORELEASER_CURRENT_TAG: 0.0.0-pr.${{ github.event.pull_request.number }}
         name: Build binaries with GoReleaser
@@ -37,6 +57,26 @@ jobs:
       - uses: ./.github/actions/setup-environment
       - name: Install syft
         uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+      # Build the WASM parser module BEFORE goreleaser: .goreleaser.yml lists it
+      # under extra_files, so a snapshot build globbing-fails without it. Mirrors
+      # release.yml. rustup/cargo are preinstalled on ubuntu-latest; only the
+      # freestanding wasm32 target needs adding.
+      - name: Add Rust wasm32 target
+        run: rustup target add wasm32-unknown-unknown
+      - name: Cache cargo registry + wasm target
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          key: wasm-parsers-${{ runner.os }}-${{ hashFiles('parsers/Cargo.lock') }}
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            parsers/target
+          restore-keys: |
+            wasm-parsers-${{ runner.os }}-
+      - name: Build WASM parser modules
+        run: |
+          cargo build --release --target wasm32-unknown-unknown --manifest-path parsers/Cargo.toml
+          echo "wasm size: $(wc -c < parsers/target/wasm32-unknown-unknown/release/datamitsu_parsers.wasm) bytes"
       - env:
           GORELEASER_CURRENT_TAG: 0.0.0-pr.${{ github.event.pull_request.number }}
         name: Build binaries with GoReleaser
