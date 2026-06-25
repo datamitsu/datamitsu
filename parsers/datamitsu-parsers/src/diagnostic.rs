@@ -70,7 +70,9 @@ pub fn to_json_array(diags: &[RawDiagnostic]) -> String {
 }
 
 /// Escape a string into a JSON string literal (including the surrounding quotes).
-fn json_string(s: &str) -> String {
+/// Shared with the `capabilities` module so `describe` hand-writes JSON the same
+/// way (no serde dependency — keeps the WASM artifact small).
+pub(crate) fn json_string(s: &str) -> String {
     let mut out = String::with_capacity(s.len() + 2);
     out.push('"');
     for c in s.chars() {

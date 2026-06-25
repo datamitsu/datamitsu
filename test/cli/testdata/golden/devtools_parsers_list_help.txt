@@ -1,0 +1,17 @@
+List every tool the configured parser modules can parse (deduplicated)
+
+Usage:
+  datamitsu devtools parsers list [flags]
+
+Flags:
+  -h, --help          help for list
+      --json          Emit machine-readable JSON instead of the rendered view
+      --wasm string   Describe a local .wasm module file instead of the configured parsers
+
+Global Flags:
+      --before-config strings   Configuration file(s) to load before auto-discovery (for wrappers/libraries)
+      --binary-command string   Override the binary command (for npm package wrappers, etc). Can also be set via DATAMITSU_BINARY_COMMAND env var
+      --config strings          Additional configuration file(s) to load and merge (can be specified multiple times)
+      --no-auto-config          Disable auto-discovery of datamitsu.config.{js,mjs,ts} at git root
+      --no-oci                  Disable OCI bundle store seeding (also via DATAMITSU_NO_OCI)
+  -v, --verbose                 Enable debug-level logging (default level is warn)

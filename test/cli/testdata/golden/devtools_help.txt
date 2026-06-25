@@ -8,6 +8,7 @@ Available Commands:
   bundles             Inspect installed bundles
   dockerfile          Generate an optimized, digest-pinned multi-stage Dockerfile from the config
   pack-inline-archive Pack a directory into an inline archive (tar.br: format)
+  parsers             Inspect WASM output-parser modules and the tools they parse
   pull-github         Update binary configurations from GitHub releases
   pull-node           Pull latest versions for npm packages from the registry
   pull-runtimes       Pull runtime configurations from upstream releases

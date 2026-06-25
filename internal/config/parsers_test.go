@@ -9,7 +9,7 @@ import (
 func TestConfig_ParsersJSONRoundTrip(t *testing.T) {
 	jsonStr := `{
 		"parsers": {
-			"echo": {"url": "https://example.com/echo.wasm", "hash": "` + validParserHash() + `", "version": "1.0.0"}
+			"echo": {"url": "https://example.com/echo.wasm", "hash": "` + validParserHash() + `"}
 		}
 	}`
 	var cfg Config
@@ -20,11 +20,25 @@ func TestConfig_ParsersJSONRoundTrip(t *testing.T) {
 	if !ok {
 		t.Fatal("expected parser \"echo\" to be present")
 	}
-	if p.URL != "https://example.com/echo.wasm" || p.Hash != validParserHash() || p.Version != "1.0.0" {
+	if p.URL != "https://example.com/echo.wasm" || p.Hash != validParserHash() {
 		t.Errorf("unexpected parser values: %+v", p)
 	}
 	if err := ValidateParsers(cfg.Parsers); err != nil {
 		t.Errorf("valid parsers config failed validation: %v", err)
+	}
+}
+
+// TestConfig_ParsersIgnoresLegacyVersion documents that a stray `version` key
+// (removed from the Parser entity — the module reports its own version via its
+// WASM `describe` export) is silently ignored, so an older config still parses.
+func TestConfig_ParsersIgnoresLegacyVersion(t *testing.T) {
+	jsonStr := `{"parsers": {"echo": {"url": "https://x/echo.wasm", "hash": "` + validParserHash() + `", "version": "1.0.0"}}}`
+	var cfg Config
+	if err := json.Unmarshal([]byte(jsonStr), &cfg); err != nil {
+		t.Fatalf("json.Unmarshal error: %v", err)
+	}
+	if _, ok := cfg.Parsers["echo"]; !ok {
+		t.Fatal("expected parser \"echo\" to be present despite legacy version key")
 	}
 }
 
@@ -53,7 +67,7 @@ func TestValidateParsers_NilAndEmptyAreValid(t *testing.T) {
 
 func TestValidateParsers_Valid(t *testing.T) {
 	parsers := MapOfParsers{
-		"echo": {URL: "https://example.com/echo.wasm", Hash: validParserHash(), Version: "1.0.0"},
+		"echo": {URL: "https://example.com/echo.wasm", Hash: validParserHash()},
 		"bare": {URL: "https://example.com/x.wasm", Hash: validParserHash()},
 	}
 	if err := ValidateParsers(parsers); err != nil {

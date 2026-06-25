@@ -22,8 +22,10 @@
 use std::alloc::{self, Layout};
 use std::ptr;
 
+mod capabilities;
 mod diagnostic;
 
+pub use capabilities::describe_json;
 pub use diagnostic::RawDiagnostic;
 
 /// Allocate `len` bytes in the module's linear memory and return a pointer the
@@ -80,6 +82,16 @@ pub unsafe extern "C" fn parse(
     let tool_name = std::str::from_utf8(tool).unwrap_or("");
     let json = dispatch(tool_name, stdout, stderr, exit_code);
     leak_json(json)
+}
+
+/// Describe the module's capabilities: the tools it parses, how to invoke each,
+/// and its build-injected version. Takes no input; returns `(ptr << 32) | len` of
+/// a freshly allocated UTF-8 JSON buffer the host reads then frees via `dealloc`.
+/// Static counterpart to [`parse`] — the host can introspect a module without
+/// running any tool (`datamitsu devtools parsers list`).
+#[no_mangle]
+pub extern "C" fn describe() -> u64 {
+    leak_json(capabilities::describe_json())
 }
 
 unsafe fn slice<'a>(ptr: *const u8, len: u32) -> &'a [u8] {

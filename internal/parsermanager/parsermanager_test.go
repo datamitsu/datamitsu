@@ -42,7 +42,7 @@ func TestLoadWASMBytes_ValidHashStoresAndLoads(t *testing.T) {
 	srv, hits := serveWASM(t, body)
 
 	m := New(config.MapOfParsers{
-		"echo": {URL: srv.URL, Hash: sha256Hex(body), Version: "1"},
+		"echo": {URL: srv.URL, Hash: sha256Hex(body)},
 	})
 
 	got, err := m.LoadWASMBytes(context.Background(), "echo")

@@ -929,15 +929,20 @@ content-addressed in the store, and loaded into a sandboxed WASM runtime
 interface Parser {
   url: string; // URL of the .wasm module
   hash: string; // SHA-256 (64 lowercase hex) — mandatory
-  version?: string; // Optional version for cache invalidation / provenance
+  // No `version` field — see note below.
 }
 ```
 
-| Field     | Type     | Description                                                 |
-| --------- | -------- | ----------------------------------------------------------- |
-| `url`     | `string` | URL of the `.wasm` module                                   |
-| `hash`    | `string` | SHA-256 hash, 64 lowercase hex — **mandatory** (see below)  |
-| `version` | `string` | Optional version string for cache invalidation / provenance |
+| Field  | Type     | Description                                                |
+| ------ | -------- | ---------------------------------------------------------- |
+| `url`  | `string` | URL of the `.wasm` module                                  |
+| `hash` | `string` | SHA-256 hash, 64 lowercase hex — **mandatory** (see below) |
+
+The entity is intentionally **url + hash only**. A module reports its own
+build-injected version (and the tools it parses) through its WASM `describe`
+export, surfaced by [`datamitsu devtools parsers list`](./cli-commands.md#devtools-parsers).
+The module is the single source of truth, so there is no `version` field to drift
+from reality.
 
 A tool opts into a parser via [`tool.outputParser`](#output-parser-outputparser).
 The same parser referenced by several tools is downloaded once.

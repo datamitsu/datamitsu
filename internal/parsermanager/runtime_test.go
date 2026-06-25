@@ -89,6 +89,33 @@ func TestRuntime_UnknownToolReturnsEmpty(t *testing.T) {
 	}
 }
 
+func TestRuntime_DescribeReportsEchoCapability(t *testing.T) {
+	ctx := context.Background()
+	rt, err := NewRuntime(ctx, echoWASM(t))
+	if err != nil {
+		t.Fatalf("NewRuntime() error = %v", err)
+	}
+	t.Cleanup(func() { _ = rt.Close(ctx) })
+
+	caps, err := rt.Describe(ctx)
+	if err != nil {
+		t.Fatalf("Describe() error = %v", err)
+	}
+	if caps.SchemaVersion != 1 {
+		t.Errorf("schemaVersion = %d, want 1", caps.SchemaVersion)
+	}
+	if caps.Module != "datamitsu-parsers" {
+		t.Errorf("module = %q, want %q", caps.Module, "datamitsu-parsers")
+	}
+	// Version is build-injected (or the crate fallback) — never empty.
+	if caps.Version == "" {
+		t.Error("version must be non-empty (build-injected or crate fallback)")
+	}
+	if len(caps.Tools) != 1 || caps.Tools[0].Name != "echo" {
+		t.Fatalf("tools = %+v, want exactly [echo]", caps.Tools)
+	}
+}
+
 func TestRuntime_MalformedModuleFails(t *testing.T) {
 	ctx := context.Background()
 	_, err := NewRuntime(ctx, []byte("\x00asm not a real module"))
@@ -111,7 +138,7 @@ func TestParseOutput_EndToEnd(t *testing.T) {
 	srv, hits := serveWASM(t, wasm)
 
 	m := New(config.MapOfParsers{
-		"echo": {URL: srv.URL, Hash: sha256Hex(wasm), Version: "1"},
+		"echo": {URL: srv.URL, Hash: sha256Hex(wasm)},
 	})
 
 	diags, err := m.ParseOutput(ctx, "echo", "echo", []byte("end to end"), nil, 0)

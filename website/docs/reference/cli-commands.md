@@ -663,6 +663,35 @@ Print the install directory path for a bundle.
 datamitsu devtools bundles path <name>
 ```
 
+### devtools parsers
+
+Inspect the WASM output-parser modules declared in the [`parsers`](./configuration-api.md#output-parsers-parsers)
+config and the tools they can parse. Each module self-describes (via its WASM
+`describe` export) which tools it parses, how to invoke each, its upstream URL, and
+its build-injected version — so this is the source of truth, not the config.
+
+`list` aggregates every configured parser into a **deduplicated** catalog (a module
+declared by N tools is described once); `inspect` shows the full detail for one
+tool. Both accept:
+
+- `--json` — machine-readable output, for driving configs or build pipelines.
+- `--wasm <path>` — describe a local `.wasm` file directly, with no config or
+  network access (handy in CI and release tooling).
+
+```bash
+# Human-readable catalog of all tools the configured parsers can parse
+datamitsu devtools parsers list
+
+# Machine-readable catalog (tools is [] when none are configured)
+datamitsu devtools parsers list --json
+
+# Full detail for one tool
+datamitsu devtools parsers inspect hadolint
+
+# Describe a locally built module without any config
+datamitsu devtools parsers list --wasm ./parsers/target/wasm32-unknown-unknown/release/datamitsu_parsers.wasm
+```
+
 ### Troubleshooting devtools commands
 
 **File not found errors:**

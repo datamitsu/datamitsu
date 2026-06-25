@@ -1,0 +1,28 @@
+List and inspect the WASM output-parser modules declared in the `parsers` config.
+
+Each module self-describes (via its `describe` export) which tools it can parse,
+how to invoke each, and its build-injected version. Results are deduplicated across
+every configured parser — a module declared by N tools is described once.
+
+Use --json for machine-readable output (to drive configs or build pipelines), or
+--wasm <path> to describe a local .wasm file without any config or network access.
+
+Usage:
+  datamitsu devtools parsers [command]
+
+Available Commands:
+  inspect     Show full capability detail for one parsed tool
+  list        List every tool the configured parser modules can parse (deduplicated)
+
+Flags:
+  -h, --help   help for parsers
+
+Global Flags:
+      --before-config strings   Configuration file(s) to load before auto-discovery (for wrappers/libraries)
+      --binary-command string   Override the binary command (for npm package wrappers, etc). Can also be set via DATAMITSU_BINARY_COMMAND env var
+      --config strings          Additional configuration file(s) to load and merge (can be specified multiple times)
+      --no-auto-config          Disable auto-discovery of datamitsu.config.{js,mjs,ts} at git root
+      --no-oci                  Disable OCI bundle store seeding (also via DATAMITSU_NO_OCI)
+  -v, --verbose                 Enable debug-level logging (default level is warn)
+
+Use "datamitsu devtools parsers [command] --help" for more information about a command.

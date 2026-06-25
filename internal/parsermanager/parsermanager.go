@@ -142,8 +142,10 @@ func (m *Manager) ensureModule(ctx context.Context, name string) (string, error)
 // cacheKey is the XXH3-128 content-addressed key for a parser declaration. It is
 // an internal cache key (never compared with an external value), so XXH3 — not a
 // crypto hash — is correct here; the SHA-256 in p.Hash still gates the download.
+// url+hash fully identify the artifact (hash is content-addressed); the module's
+// own version lives in its `describe` output, not the config, so it is not a key.
 func cacheKey(p config.Parser) string {
-	return hashutil.XXH3Multi([]byte(p.URL), []byte(p.Hash), []byte(p.Version))
+	return hashutil.XXH3Multi([]byte(p.URL), []byte(p.Hash))
 }
 
 // moduleDir returns the content-addressed directory for a parser:

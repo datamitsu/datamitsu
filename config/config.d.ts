@@ -702,10 +702,10 @@ declare global {
        */
       url: string;
 
-      /**
-       * Optional version string for cache invalidation / provenance.
-       */
-      version?: string;
+      // NOTE: no `version` field by design. The module reports its own
+      // build-injected version through its WASM `describe` export (see
+      // `datamitsu devtools parsers list`); declaring it here too would only let
+      // the declared and actual versions drift. The entity carries url+hash only.
     }
 
     /**

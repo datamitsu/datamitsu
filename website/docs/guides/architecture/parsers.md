@@ -117,6 +117,23 @@ exported `parse`, then read and free the output buffer. The raw bytes are passed
 preserved; the parser decides whether to split. The JSON result deserializes into
 nullable Go structs (pointer fields, so a field the tool omitted stays `nil`).
 
+### Introspect
+
+Every module also exports `describe` — a static counterpart to `parse` that takes
+no input and returns a JSON **capability manifest**: which tools the module can
+parse, how to invoke each (args + stdin), the upstream URL, and the module's
+**build-injected version**. The version is baked at compile time like a Go ldflags
+`-X` (CI sets `DATAMITSU_PARSERS_VERSION`); the module is the single source of
+truth, which is why the `parsers` config entity carries **no `version` field**.
+
+[`datamitsu devtools parsers list`](../../reference/cli-commands.md#devtools-parsers)
+aggregates `describe` across every configured parser into a **deduplicated** view:
+distinct modules (by content) are described exactly once, and tools are
+deduplicated by name (a tool two different modules claim with diverging identity
+is flagged as a conflict). The default rendering is human-readable; `--json` emits
+the machine-readable catalog for driving configs and build pipelines, and
+`--wasm <path>` describes a local `.wasm` file with no config or network access.
+
 ## diff-in-core (Formatting)
 
 Formatting needs **no parser at all** — it is text in, text out. It is the first

@@ -36,6 +36,8 @@ var testedLeafCommands = map[string]string{
 	"devtools bundles path":        "TestDevtoolsBundlesInspectPath",
 	"devtools dockerfile":          "TestDevtoolsHelpGolden / TestDevtoolsArgValidation",
 	"devtools pack-inline-archive": "TestDevtoolsArgValidation",
+	"devtools parsers inspect":     "TestDevtoolsParsersInspect",
+	"devtools parsers list":        "TestDevtoolsParsersList / TestDevtoolsParsersListJSONEmpty",
 	"devtools pull-github":         "TestDevtoolsArgValidation",
 	"devtools pull-node":           "TestDevtoolsArgValidation",
 	"devtools pull-runtimes":       "TestDevtoolsArgValidation",

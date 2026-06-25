@@ -35,11 +35,12 @@ type RawDiagnostic struct {
 // with NewRuntime and Close it when done; it is not safe for concurrent Parse
 // calls (a single module instance owns its linear memory).
 type ParserRuntime struct {
-	runtime wazero.Runtime
-	mod     api.Module
-	alloc   api.Function
-	dealloc api.Function
-	parse   api.Function
+	runtime  wazero.Runtime
+	mod      api.Module
+	alloc    api.Function
+	dealloc  api.Function
+	parse    api.Function
+	describe api.Function
 }
 
 // NewRuntime instantiates a parser module from its verified WASM bytes in a
@@ -53,17 +54,50 @@ func NewRuntime(ctx context.Context, wasm []byte) (*ParserRuntime, error) {
 		return nil, fmt.Errorf("instantiate parser module: %w", err)
 	}
 	pr := &ParserRuntime{
-		runtime: r,
-		mod:     mod,
-		alloc:   mod.ExportedFunction("alloc"),
-		dealloc: mod.ExportedFunction("dealloc"),
-		parse:   mod.ExportedFunction("parse"),
+		runtime:  r,
+		mod:      mod,
+		alloc:    mod.ExportedFunction("alloc"),
+		dealloc:  mod.ExportedFunction("dealloc"),
+		parse:    mod.ExportedFunction("parse"),
+		describe: mod.ExportedFunction("describe"),
 	}
-	if pr.alloc == nil || pr.dealloc == nil || pr.parse == nil {
+	if pr.alloc == nil || pr.dealloc == nil || pr.parse == nil || pr.describe == nil {
 		_ = r.Close(ctx)
-		return nil, errors.New("parser module missing required exports (alloc/dealloc/parse)")
+		return nil, errors.New("parser module missing required exports (alloc/dealloc/parse/describe)")
 	}
 	return pr, nil
+}
+
+// Describe invokes the module's `describe` export and decodes its capability
+// manifest: the tools it can parse, how to invoke each, and its build-injected
+// version. It takes no tool input — it is pure static introspection, the
+// counterpart to Parse.
+func (p *ParserRuntime) Describe(ctx context.Context) (Capabilities, error) {
+	res, err := p.describe.Call(ctx)
+	if err != nil {
+		return Capabilities{}, fmt.Errorf("call describe: %w", err)
+	}
+
+	// describe returns (ptr << 32) | len of a freshly allocated output buffer.
+	packed := res[0]
+	resPtr := uint32(packed >> 32)
+	resLen := uint32(packed & 0xffffffff)
+	defer p.free(ctx, resPtr, resLen)
+
+	buf, ok := p.mod.Memory().Read(resPtr, resLen)
+	if !ok {
+		return Capabilities{}, fmt.Errorf("describe output out of range (ptr=%d len=%d)", resPtr, resLen)
+	}
+	// Copy before decoding so a later alloc cannot move the bytes out from under
+	// json.Unmarshal (Memory().Read may return a view into linear memory).
+	out := make([]byte, len(buf))
+	copy(out, buf)
+
+	var caps Capabilities
+	if err := json.Unmarshal(out, &caps); err != nil {
+		return Capabilities{}, fmt.Errorf("decode describe output: %w", err)
+	}
+	return caps, nil
 }
 
 // Close releases the runtime and all module state.

@@ -353,8 +353,11 @@ type Parser struct {
 	URL string `json:"url"`
 	// Hash is the mandatory SHA-256 (64 lowercase hex) of the .wasm module.
 	// Empty/malformed is a config error per the security policy.
-	Hash    string `json:"hash"`
-	Version string `json:"version,omitempty"`
+	Hash string `json:"hash"`
+	// NOTE: there is intentionally no `version` field. A module reports its own
+	// build-injected version via its WASM `describe` export (read by
+	// `datamitsu devtools parsers list`), so declaring it here too would only let
+	// the declared and actual versions drift. The config carries url+hash only.
 }
 
 // MapOfParsers maps a parser name to its declaration.
