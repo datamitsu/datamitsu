@@ -477,16 +477,31 @@ hash, version } }` for every shipped parser. The manifest is versioned **with th
 
 ### Task 13: Verify acceptance criteria (Phase-1 end-to-end slice)
 
-- [ ] Verify the full slice: echo `parsers` entity → built in CI → signed → in `checksums.txt`
+- [x] Verify the full slice: echo `parsers` entity → built in CI → signed → in `checksums.txt`
       → delivered → downloaded by the core with hash/signature check → loaded in wazero →
       dispatcher invoked → fixed result. AND: formatting via fix + diff-in-core works in the CLI.
-- [ ] Confirm the scope boundaries were NOT crossed: Diagnostic not finalized (only nullable
+      (Verified mechanically end-to-end: `parsermanager.TestParseOutput_EndToEnd` exercises
+      declare→download→SHA-256 verify→content-addressed store→wazero instantiate→`parse("echo")`→
+      fixed result with second-call store reuse; CI wiring (`release.yml` rust+wasm build,
+      `.goreleaser.yml` `checksum.extra_files`, `assert-wasm-checksum.sh`) and the cosign
+      `signs: artifacts: checksum` block put the `.wasm` SHA-256 under the existing signature;
+      delivery via `packaging/npm/datamitsu-wasm` + parser-manifest generator. Formatting:
+      `tooling.TestApplyStdoutFormat*` + the `sed`/`gofmt` end-to-end tests prove
+      capture→`textdiff.ComputeEdits`→`Apply` produces minimal edits equal to a direct tool run.)
+- [x] Confirm the scope boundaries were NOT crossed: Diagnostic not finalized (only nullable
       layout), no real diagnostic parsers, no diagnostic output, no debug flag, no `lsp`
-      behavior (type declared only).
-- [ ] Run the full unit suite (`go test ./...` + `cargo test`), CLI golden suite
+      behavior (type declared only). (Confirmed: Rust dispatcher has only the `"echo"` match arm;
+      `RawDiagnostic` is marked "Shape placeholder — finalized in Phase 2" and there is no Go
+      `type Diagnostic struct`; `Lsp`/`LspEntry` appear only in `internal/config` types +
+      structural validation, no runtime consumer; no diagnostic-output path and no debug flag added.)
+- [x] Run the full unit suite (`go test ./...` + `cargo test`), CLI golden suite
       (`go test ./test/cli/ -count=2`, byte-stable), and the managed `golangci-lint`
       (`--max-issues-per-linter=0 --max-same-issues=0`) — all clean.
-- [ ] Verify merged coverage meets the ≈80% target (`pnpm test:coverage:all`).
+      (`go test ./...` all pass; `cargo test` 10/10 pass; `go test ./test/cli/ -count=2`
+      byte-stable; managed golangci-lint 2.12.2 over config/parsermanager/textdiff/tooling/env →
+      0 issues; `pnpm test:packaging` 9/9.)
+- [x] Verify merged coverage meets the ≈80% target (`pnpm test:coverage:all`).
+      (Merged total = 80.4%; Phase-1 packages: textdiff 96.4%, tooling 88.9%, parsermanager 80.4%.)
 
 ### Task 14: Documentation
 
