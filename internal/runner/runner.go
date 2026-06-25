@@ -22,6 +22,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/cache"
 	clr "github.com/datamitsu/datamitsu/internal/color"
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/diagnostic"
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"github.com/datamitsu/datamitsu/internal/logger"
@@ -846,6 +847,36 @@ func toolDetail(group toolExecutionGroup) string {
 	return strings.Join(parts, " · ")
 }
 
+// formatDiagnostic renders one parsed diagnostic as
+// "file:row:col severity message [code]", the severity colored by level.
+func formatDiagnostic(d diagnostic.Diagnostic) string {
+	loc := fmt.Sprintf("%d:%d", d.Row, d.Col)
+	if d.File != "" {
+		loc = d.File + ":" + loc
+	}
+	line := fmt.Sprintf("%s %s %s", clr.Faint(loc), severityColor(d.Severity)(d.Severity.String()), d.Message)
+	if d.Code != "" {
+		line += " " + clr.Faint("["+d.Code+"]")
+	}
+	return line
+}
+
+// severityColor maps a severity to its display color.
+func severityColor(s diagnostic.Severity) func(a ...any) string {
+	switch s {
+	case diagnostic.SeverityError:
+		return clr.Red
+	case diagnostic.SeverityWarning:
+		return clr.Yellow
+	case diagnostic.SeverityInfo:
+		return clr.Cyan
+	case diagnostic.SeverityHint:
+		return clr.Faint
+	default:
+		return clr.Faint
+	}
+}
+
 // printFailedExecution prints details of a failed execution in a bordered format
 // showing all context needed to interpret error output in monorepo setups
 func printFailedExecution(runNum int, exec executionInstance) {
@@ -880,14 +911,21 @@ func printFailedExecution(runNum int, exec executionInstance) {
 	fmt.Printf("  %s  %s %s\n", border("│"), label("Exit code:"), clr.Red(strconv.Itoa(result.ExitCode)))
 	fmt.Printf("  %s  %s %s\n", border("│"), label("Duration: "), formatDuration(result.Duration))
 
-	// Tool output
-	if result.Output != "" {
+	switch {
+	// Parsed diagnostics, when the tool has an outputParser, are clearer than the
+	// raw output (often JSON) and take its place.
+	case len(result.Diagnostics) > 0:
+		fmt.Printf("  %s\n", border("│"))
+		for _, d := range result.Diagnostics {
+			fmt.Printf("  %s  %s\n", border("│"), formatDiagnostic(d))
+		}
+	case result.Output != "":
 		fmt.Printf("  %s\n", border("│"))
 		lines := strings.SplitSeq(strings.TrimRight(result.Output, "\n"), "\n")
 		for line := range lines {
 			fmt.Printf("  %s  %s\n", border("│"), line)
 		}
-	} else if result.Error != nil {
+	case result.Error != nil:
 		fmt.Printf("  %s\n", border("│"))
 		fmt.Printf("  %s  %s\n", border("│"), result.Error.Error())
 	}
