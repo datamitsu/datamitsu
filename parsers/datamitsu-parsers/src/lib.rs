@@ -19,7 +19,8 @@
 //! line-splitting in the host loses multiline cases like cue_fmt, so the parser
 //! decides whether to split.
 
-use std::mem;
+use std::alloc::{self, Layout};
+use std::ptr;
 
 mod diagnostic;
 
@@ -27,26 +28,33 @@ pub use diagnostic::RawDiagnostic;
 
 /// Allocate `len` bytes in the module's linear memory and return a pointer the
 /// host can write into. Ownership transfers to the host until it calls
-/// [`dealloc`]; we leak the `Vec` here on purpose.
+/// [`dealloc`]. We allocate an exact `Layout` (size = `len`, align = 1) so the
+/// matching `dealloc` can reconstruct the identical layout — unlike a `Vec`,
+/// whose backing capacity may exceed `len` and would make the free layout
+/// ambiguous.
 #[no_mangle]
 pub extern "C" fn alloc(len: u32) -> *mut u8 {
-    let mut buf = Vec::<u8>::with_capacity(len as usize);
-    let ptr = buf.as_mut_ptr();
-    mem::forget(buf);
-    ptr
+    if len == 0 {
+        return ptr::null_mut();
+    }
+    let layout = Layout::from_size_align(len as usize, 1).expect("valid layout");
+    // SAFETY: len > 0, so the layout is non-zero-sized.
+    unsafe { alloc::alloc(layout) }
 }
 
 /// Free a buffer previously returned by [`alloc`] (or by [`parse`]'s output).
-/// `len` must match the original allocation length.
+/// `len` must match the original allocation length so the freed `Layout` is
+/// identical to the allocated one.
 ///
 /// # Safety
 /// `ptr`/`len` must describe a buffer obtained from this module's `alloc`.
 #[no_mangle]
 pub unsafe extern "C" fn dealloc(ptr: *mut u8, len: u32) {
-    if ptr.is_null() {
+    if ptr.is_null() || len == 0 {
         return;
     }
-    let _ = Vec::from_raw_parts(ptr, len as usize, len as usize);
+    let layout = Layout::from_size_align(len as usize, 1).expect("valid layout");
+    alloc::dealloc(ptr, layout);
 }
 
 /// Dispatcher. Receives the tool name and the tool's raw stdout/stderr bytes
@@ -82,14 +90,25 @@ unsafe fn slice<'a>(ptr: *const u8, len: u32) -> &'a [u8] {
     }
 }
 
-/// Pack a string into linear memory and return `(ptr << 32) | len`.
+/// Pack a string into linear memory and return `(ptr << 32) | len`. The bytes
+/// are copied into an exact-`Layout` allocation (matching [`alloc`]) so the
+/// host's `dealloc(ptr, len)` frees the identical layout.
 fn leak_json(s: String) -> u64 {
     let bytes = s.into_bytes();
-    let len = bytes.len() as u64;
-    let mut buf = bytes;
-    let ptr = buf.as_mut_ptr() as u64;
-    mem::forget(buf);
-    (ptr << 32) | len
+    let len = bytes.len();
+    if len == 0 {
+        return 0;
+    }
+    let layout = Layout::from_size_align(len, 1).expect("valid layout");
+    // SAFETY: len > 0; copy exactly len bytes into the fresh allocation.
+    let ptr = unsafe { alloc::alloc(layout) };
+    if ptr.is_null() {
+        return 0;
+    }
+    unsafe {
+        ptr::copy_nonoverlapping(bytes.as_ptr(), ptr, len);
+    }
+    ((ptr as u64) << 32) | len as u64
 }
 
 /// Pure dispatch core — split out so native `cargo test` can exercise it without

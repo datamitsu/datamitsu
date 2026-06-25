@@ -9,8 +9,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/datamitsu/datamitsu/internal/config"
 )
@@ -126,5 +128,52 @@ func TestLoadWASMBytes_SecondLoadIsCached(t *testing.T) {
 	}
 	if n := atomic.LoadInt64(hits); n != 1 {
 		t.Fatalf("server hits = %d, want 1 (download must be deduplicated)", n)
+	}
+}
+
+// TestLoadWASMBytes_ConcurrentLoadsDeduplicate exercises the singleflight
+// coalescing path (not the on-disk fast path): many goroutines start together
+// against a deliberately slow server, so they collide inside ensureModule. The
+// server must be hit exactly once. Run under -race to catch dedup regressions.
+func TestLoadWASMBytes_ConcurrentLoadsDeduplicate(t *testing.T) {
+	t.Setenv("DATAMITSU_PARSERS_DIR", t.TempDir())
+
+	body := []byte("concurrent-bytes")
+	var hits atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits.Add(1)
+		// Widen the window so concurrent callers coalesce in singleflight
+		// rather than each finding the module already published on disk.
+		time.Sleep(50 * time.Millisecond)
+		_, _ = w.Write(body)
+	}))
+	t.Cleanup(srv.Close)
+
+	m := New(config.MapOfParsers{
+		"echo": {URL: srv.URL, Hash: sha256Hex(body)},
+	})
+
+	const n = 8
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	errs := make([]error, n)
+	for i := range n {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			<-start
+			_, errs[idx] = m.LoadWASMBytes(context.Background(), "echo")
+		}(i)
+	}
+	close(start) // release all goroutines at once
+	wg.Wait()
+
+	for i, err := range errs {
+		if err != nil {
+			t.Fatalf("LoadWASMBytes goroutine %d error = %v", i, err)
+		}
+	}
+	if got := hits.Load(); got != 1 {
+		t.Fatalf("server hits = %d, want 1 (concurrent loads must deduplicate)", got)
 	}
 }

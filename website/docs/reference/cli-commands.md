@@ -815,5 +815,6 @@ datamitsu version
 | `DATAMITSU_NO_OCI`               | Disable OCI bundle store seeding (twin of the `--no-oci` flag)                                 | -                                                   |
 | `DATAMITSU_LIBC`                 | Override host libc detection (`glibc` or `musl`); affects store paths and OCI bundle selection | auto-detected                                       |
 | `DATAMITSU_OCI_REGISTRY`         | Registry host for base-image digest resolution in `devtools dockerfile`                        | `ghcr.io`                                           |
+| `DATAMITSU_PARSERS_DIR`          | Override directory for downloaded WASM output-parser modules                                   | `{store}/.parsers`                                  |
 | `NO_COLOR`                       | Disable color output                                                                           | -                                                   |
 | `FORCE_COLOR`                    | Force color output                                                                             | -                                                   |

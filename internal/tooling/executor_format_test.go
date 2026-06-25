@@ -208,6 +208,57 @@ func TestFormattingPipelineNoChange(t *testing.T) {
 	}
 }
 
+// TestFormattingPipelineEmptyStdoutDoesNotTruncate guards the data-loss footgun:
+// a stdout-mode formatter that exits 0 but writes nothing to stdout (e.g. it only
+// emits to stderr) must NOT have its empty output diffed against the file — that
+// would delete every line. The op must fail and leave the file byte-identical.
+func TestFormattingPipelineEmptyStdoutDoesNotTruncate(t *testing.T) {
+	tmpDir := t.TempDir()
+	file := filepath.Join(tmpDir, "src.txt")
+	original := "keep\nthis\ncontent\n"
+	if err := os.WriteFile(file, []byte(original), 0o600); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+
+	appManager := &mockAppManager{
+		commands: map[string]*binmanager.CommandInfo{
+			// Writes only to stderr, nothing to stdout, exits 0.
+			"silent-fmt": {
+				Type:    "shell",
+				Command: "/bin/sh",
+				Args:    []string{"-c", "echo noise >&2"},
+			},
+		},
+	}
+	executor := NewExecutor(tmpDir, false, false, appManager, nil)
+
+	task := Task{
+		ToolName:  "silent-fmt",
+		Operation: config.OpFix,
+		OpConfig: config.ToolOperation{
+			App:    "silent-fmt",
+			Scope:  config.ToolScopePerFile,
+			Batch:  &batchFalse,
+			Input:  config.ToolInputStdin,
+			Output: config.ToolOutputStdout,
+		},
+		Files:       []string{file},
+		ProjectPath: tmpDir,
+	}
+
+	result := executor.executeTask(context.Background(), task)
+	if result.Success {
+		t.Errorf("expected failure for empty-stdout formatter, got success")
+	}
+	got, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatalf("read back: %v", err)
+	}
+	if string(got) != original {
+		t.Errorf("file was modified by empty-stdout formatter: %q, want %q", got, original)
+	}
+}
+
 // directRun runs `sh -c <script>` with input piped to stdin and returns stdout,
 // giving the reference content a direct tool invocation would produce.
 func directRun(t *testing.T, script, input string) string {

@@ -748,6 +748,13 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 					err = fmt.Errorf("read original content for %s: %w", file, readErr)
 				}
 			}
+			if err == nil && len(stdoutBytes) == 0 && len(original) > 0 {
+				// A stdout-mode formatter that exits 0 but emits nothing is
+				// misbehaving (e.g. it formats in place and writes only to
+				// stderr). Treat it as an error rather than letting the empty
+				// candidate truncate the file to zero bytes.
+				err = fmt.Errorf("formatter produced empty stdout for non-empty file %s", file)
+			}
 			if err == nil {
 				edits, fmtErr := applyStdoutFormat(file, original, stdoutBytes)
 				if fmtErr != nil {

@@ -1,6 +1,6 @@
 # Plan: WASM parser infrastructure + formatting (LSP mode, Phase 1)
 
-**Status:** ready for implementation. Date: 2026-06-25.
+**Status:** completed (Phase 1). Date: 2026-06-25.
 **Source:** `revise.txt` (owner's Phase-1 design) + `analysis.md` (none-ls/efm extraction).
 **Scope owner decisions (2026-06-25):** unit tests = _regular_ (code, then tests);
 lsp `order` ties = _reuse the actual existing mechanism_ (alphabetical by name);

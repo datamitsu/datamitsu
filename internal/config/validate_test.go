@@ -2862,7 +2862,7 @@ func TestValidateTools(t *testing.T) {
 	t.Run("valid input/output modes pass", func(t *testing.T) {
 		tools := MapOfTools{
 			"fmt": {Operations: map[OperationType]ToolOperation{
-				OpFix: {Input: ToolInputStdin, Output: ToolOutputStdout},
+				OpFix: {Input: ToolInputStdin, Output: ToolOutputStdout, Scope: ToolScopePerFile},
 			}},
 			"lint": {Operations: map[OperationType]ToolOperation{
 				OpLint: {Input: ToolInputFile, Output: ToolOutputInplace},
@@ -2870,6 +2870,57 @@ func TestValidateTools(t *testing.T) {
 		}
 		if err := ValidateTools(tools, nil); err != nil {
 			t.Errorf("valid input/output modes should pass, got: %v", err)
+		}
+	})
+
+	t.Run("stdin/stdout without per-file scope fails", func(t *testing.T) {
+		tools := MapOfTools{
+			"fmt": {Operations: map[OperationType]ToolOperation{
+				// No scope → batched → formatting would silently no-op.
+				OpFix: {Input: ToolInputStdin, Output: ToolOutputStdout},
+			}},
+		}
+		err := ValidateTools(tools, nil)
+		if err == nil || !strings.Contains(err.Error(), "require scope") {
+			t.Errorf("expected scope requirement error, got: %v", err)
+		}
+	})
+
+	t.Run("stdout with repository scope fails", func(t *testing.T) {
+		tools := MapOfTools{
+			"fmt": {Operations: map[OperationType]ToolOperation{
+				OpFix: {Output: ToolOutputStdout, Scope: ToolScopeRepository},
+			}},
+		}
+		err := ValidateTools(tools, nil)
+		if err == nil || !strings.Contains(err.Error(), "require scope") {
+			t.Errorf("expected scope requirement error, got: %v", err)
+		}
+	})
+
+	t.Run("stdout per-file with explicit batch:true fails", func(t *testing.T) {
+		batch := true
+		tools := MapOfTools{
+			"fmt": {Operations: map[OperationType]ToolOperation{
+				OpFix: {Output: ToolOutputStdout, Scope: ToolScopePerFile, Batch: &batch},
+			}},
+		}
+		err := ValidateTools(tools, nil)
+		if err == nil || !strings.Contains(err.Error(), "incompatible with batch:true") {
+			t.Errorf("expected batch incompatibility error, got: %v", err)
+		}
+	})
+
+	t.Run("stdout output on a lint operation fails", func(t *testing.T) {
+		tools := MapOfTools{
+			"lint": {Operations: map[OperationType]ToolOperation{
+				// output:stdout rewrites files; never allowed on read-only lint.
+				OpLint: {Output: ToolOutputStdout, Scope: ToolScopePerFile},
+			}},
+		}
+		err := ValidateTools(tools, nil)
+		if err == nil || !strings.Contains(err.Error(), "only valid on the \"fix\" operation") {
+			t.Errorf("expected fix-only error for stdout on lint, got: %v", err)
 		}
 	})
 

@@ -654,6 +654,35 @@ func ValidateTools(tools MapOfTools, parsers MapOfParsers) error {
 				))
 			}
 
+			// The stdin/stdout formatter contract is only honored by the per-file
+			// execution path. Under any batched scope the executor combines output
+			// and feeds no stdin, so these modes would silently no-op. Require
+			// scope:per-file (and reject an explicit batch:true) so a misconfigured
+			// formatter fails fast instead of doing nothing.
+			if op.Input == ToolInputStdin || op.Output == ToolOutputStdout {
+				if op.Scope != ToolScopePerFile {
+					errs = append(errs, fmt.Sprintf(
+						"tool %q operation %q: input %q / output %q require scope %q (got %q)",
+						toolName, opType, ToolInputStdin, ToolOutputStdout, ToolScopePerFile, op.Scope,
+					))
+				} else if op.Batch != nil && *op.Batch {
+					errs = append(errs, fmt.Sprintf(
+						"tool %q operation %q: input %q / output %q are incompatible with batch:true",
+						toolName, opType, ToolInputStdin, ToolOutputStdout,
+					))
+				}
+			}
+
+			// output:stdout drives the diff-in-core formatting path, which rewrites
+			// the file on disk. Restrict it to the fix operation so a read-only
+			// command (lint) can never silently mutate files via a misplaced mode.
+			if op.Output == ToolOutputStdout && OperationType(opType) != OpFix {
+				errs = append(errs, fmt.Sprintf(
+					"tool %q operation %q: output %q rewrites files and is only valid on the %q operation",
+					toolName, opType, ToolOutputStdout, OpFix,
+				))
+			}
+
 			for _, arg := range op.Args {
 				for _, ph := range findUnknownPlaceholders(arg, argAllowed) {
 					errs = append(errs, fmt.Sprintf(

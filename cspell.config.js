@@ -328,5 +328,6 @@ export default defineConfig((config) => ({
     "serde",
     "lossily",
     "rlib",
+    "nonoverlapping",
   ],
 }));
