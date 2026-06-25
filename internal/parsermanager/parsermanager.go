@@ -58,6 +58,29 @@ func (m *Manager) LoadWASMBytes(ctx context.Context, name string) ([]byte, error
 	return data, nil
 }
 
+// ParseOutput resolves the named parser (downloading+verifying on first use),
+// instantiates it in a fresh wazero runtime, and invokes its dispatcher over the
+// tool's raw stdout/stderr and exit code. It is the end-to-end seam: declare →
+// download → verify → load → invoke. The returned diagnostics are nullable per
+// the RawDiagnostic contract (the Go core fills defaults in a later phase).
+func (m *Manager) ParseOutput(
+	ctx context.Context,
+	parserName, toolName string,
+	stdout, stderr []byte,
+	exitCode int32,
+) ([]RawDiagnostic, error) {
+	wasm, err := m.LoadWASMBytes(ctx, parserName)
+	if err != nil {
+		return nil, err
+	}
+	rt, err := NewRuntime(ctx, wasm)
+	if err != nil {
+		return nil, fmt.Errorf("parser %q: %w", parserName, err)
+	}
+	defer func() { _ = rt.Close(ctx) }()
+	return rt.Parse(ctx, toolName, stdout, stderr, exitCode)
+}
+
 // ensureModule downloads-and-verifies the parser if not already cached and
 // returns the path to the verified .wasm. Concurrent calls for the same parser
 // collapse to one download via singleflight; a redeclared url+hash that is
