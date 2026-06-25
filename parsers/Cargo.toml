@@ -1,0 +1,14 @@
+[workspace]
+resolver = "2"
+members = ["datamitsu-parsers"]
+
+# Size is the binding constraint for a WASM module shipped over the network and
+# verified by hash: a smaller artifact is faster to download and cheaper to
+# audit. `opt-level = "s"` + LTO + strip target the ~15-30KB range (revise.txt
+# §2.1). Applied at the workspace root so every member crate inherits it.
+[profile.release]
+opt-level = "s"
+strip = true
+lto = true
+panic = "abort"
+codegen-units = 1

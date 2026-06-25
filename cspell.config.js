@@ -323,5 +323,8 @@ export default defineConfig((config) => ({
     "rustup",
     "fooding",
     "Ints",
+    "serde",
+    "lossily",
+    "rlib",
   ],
 }));

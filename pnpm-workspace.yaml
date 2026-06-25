@@ -27,6 +27,7 @@ packages:
   - packaging/action
   - programmable-api/js
   - website
+  - parsers/datamitsu-parsers
 resolutionMode: lowest-direct
 savePrefix: ""
 strictSsl: true

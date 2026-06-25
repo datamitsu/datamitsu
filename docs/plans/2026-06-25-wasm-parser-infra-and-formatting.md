@@ -249,31 +249,38 @@ tool: string; order?: number }` (inherits the referenced tool's projectTypes/glo
 
 ### Task 5: Scaffold the Rust→WASM parser crate (echo skeleton)
 
-- [ ] Create top-level `parsers/` Rust workspace (parallel to `programmable-api/`): workspace
+- [x] Create top-level `parsers/` Rust workspace (parallel to `programmable-api/`): workspace
       `Cargo.toml` + member crate (e.g. `parsers/datamitsu-parsers`) with `crate-type =
 ["cdylib"]` and `[profile.release] opt-level = "s"`, `lto = true`, `strip = true`.
-- [ ] Implement the **call contract** (hold the boundary): an exported dispatcher
+      (Member uses `["cdylib", "rlib"]` so native `cargo test` links the harness; workspace
+      release profile also adds `codegen-units = 1` + `panic = "abort"` for size.)
+- [x] Implement the **call contract** (hold the boundary): an exported dispatcher
       `parse(tool_name, stdout: &[u8], stderr: &[u8], exit_code: i32)` that receives **raw bytes
       whole, NOT line-split by the host** (`analysis.md` §2.3: line-splitting in the host loses
       multiline cases like cue_fmt — the parser decides whether to split). Implement the WASM
       memory ABI (exported `alloc`/`dealloc`; pass ptr/len; return ptr/len of an output buffer).
-- [ ] Lay out the **output form** (do NOT finalize): a tentative `RawDiagnostic { message:
+      (`src/lib.rs`: `alloc`/`dealloc`/`parse`; `parse` returns `(ptr<<32)|len` of a JSON buffer.
+      Verified the `.wasm` exports `alloc`/`dealloc`/`parse`/`memory`.)
+- [x] Lay out the **output form** (do NOT finalize): a tentative `RawDiagnostic { message:
 String, row: Option<u32>, col: Option<u32>, end_row: Option<u32>, end_col: Option<u32>,
 severity: Option<u8>, source: Option<String>, code: Option<String> }` serialized as
       **JSON**; every field except `message` is `Option<T>` (`None` = "tool didn't provide",
       not an error — `analysis.md` §1: only `message` is mandatory). JSON, not MessagePack
       (debuggable, premature otherwise). Mark in code: shape placeholder, finalized in Phase 2.
-- [ ] Dispatcher body: a single `match` arm `"echo"` returning a fixed serialized result for
-      pipe-testing; all other names → empty/`unknown` result.
-- [ ] Register the crate in `pnpm-workspace.yaml` `packages` and add a `Taskfile.yaml` target
+      (`src/diagnostic.rs`: hand-written JSON, no serde — `None` fields omitted; placeholder noted.)
+- [x] Dispatcher body: a single `match` arm `"echo"` returning a fixed serialized result for
+      pipe-testing; all other names → empty/`unknown` result. (Unknown → `[]`.)
+- [x] Register the crate in `pnpm-workspace.yaml` `packages` and add a `Taskfile.yaml` target
       (e.g. `build:parsers`) that runs `cargo build --release --target wasm32-unknown-unknown`
-      and reports the `.wasm` size.
-- [ ] Write a crate `README.md`: how to add a parser (one `match` arm + a module fn) so Phase 2
-      adds hadolint/yamllint/dotenv_linter/cue_fmt mechanically.
-- [ ] Write Rust tests (`cargo test`, native): the `echo` branch round-trips input→fixed output;
-      ABI alloc/dealloc behaves.
-- [ ] **Dog-food 2:** build to `.wasm` locally; measure + log artifact size (expect ~15-30KB);
+      and reports the `.wasm` size. (pnpm ignores the non-JS path cleanly — `pnpm ls -r` exit 0,
+      no warning, since it has no `package.json`.)
+- [x] Write a crate `README.md`: how to add a parser (one `match` arm + a module fn) so Phase 2
+      adds hadolint/yamllint/dotenv_linter/cue_fmt mechanically. (`parsers/README.md`.)
+- [x] Write Rust tests (`cargo test`, native): the `echo` branch round-trips input→fixed output;
+      ABI alloc/dealloc behaves. (10 tests across `lib.rs` + `diagnostic.rs`; clippy + fmt clean.)
+- [x] **Dog-food 2:** build to `.wasm` locally; measure + log artifact size (expect ~15-30KB);
       exercise the echo branch via the test. Must pass before Task 6.
+      (`task build:parsers` → `datamitsu_parsers.wasm` = 27830 bytes ≈ 27KB, within target.)
 
 ### Task 6: Parser-artifact manager (reuse download/verify/store)
 
