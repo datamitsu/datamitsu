@@ -83,6 +83,10 @@ type Tool struct {
 	// Skip is true (e.g. "runs in CI only"). Empty falls back to a generic label.
 	SkipReason string                          `json:"skipReason,omitempty"`
 	Operations map[OperationType]ToolOperation `json:"operations"`
+	// OutputParser names a parser declared in Config.Parsers used to parse this
+	// tool's text output into structured results. A dangling reference is a
+	// load-time config error.
+	OutputParser string `json:"outputParser,omitempty"`
 }
 
 // MapOfTools maps a tool name to its configuration.

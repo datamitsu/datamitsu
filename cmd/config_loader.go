@@ -195,7 +195,7 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 		logger.Logger.Warn(w, zap.String("source", "config"))
 	}
 
-	if err := config.ValidateTools(currentConfig.Tools); err != nil {
+	if err := config.ValidateTools(currentConfig.Tools, currentConfig.Parsers); err != nil {
 		return nil, nil, nil, err
 	}
 

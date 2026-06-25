@@ -684,6 +684,14 @@ declare global {
       operations: Partial<Record<OperationType, ToolOperation>>;
 
       /**
+       * Name of a parser declared in `parsers` used to parse this tool's text
+       * output into structured results. Must reference an existing `parsers`
+       * entry — a dangling reference is a config error.
+       * @example outputParser: "hadolint"
+       */
+      outputParser?: string;
+
+      /**
        * Which project types this tool applies to
        * Empty array or undefined = applies to all project types
        * @example ["npm-package", "typescript-project"]

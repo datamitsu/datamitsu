@@ -187,17 +187,18 @@ match reality and are corrected below.**
 
 ### Task 2: Add `tool.outputParser` + reference validation
 
-- [ ] Add `outputParser?: string` to the `Tool` interface in `config/config.d.ts` (a by-name
+- [x] Add `outputParser?: string` to the `Tool` interface in `config/config.d.ts` (a by-name
       reference into `parsers`). Add the matching field to the Go `Tool` struct
       (`internal/config/config.go:75-86`).
-- [ ] In `internal/config/validate.go`, extend tool validation: if `outputParser` is set, it
+- [x] In `internal/config/validate.go`, extend tool validation: if `outputParser` is set, it
       must name an existing `parsers` entry; dangling reference → clear error naming the tool
       and the missing parser (new load-time check — there is no existing app-ref check to
-      mirror; follow the runtime-ref validation style).
-- [ ] Run `task build:lib`.
-- [ ] Write tests: valid `outputParser` passes; dangling `outputParser` → error with the
+      mirror; follow the runtime-ref validation style). (Extended `ValidateTools` to take the
+      `parsers` map; wired `currentConfig.Parsers` through in `cmd/config_loader.go`.)
+- [x] Run `task build:lib`.
+- [x] Write tests: valid `outputParser` passes; dangling `outputParser` → error with the
       expected message; entity-level + reference-level errors both covered.
-- [ ] Run `go test ./internal/config/...` — must pass before Task 3.
+- [x] Run `go test ./internal/config/...` — must pass before Task 3.
 
 ### Task 3: Declare the reserved `lsp` config entity (types only, no behavior)
 

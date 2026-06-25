@@ -546,7 +546,12 @@ func placeholderList(names []string) string {
 // {placeholder} datamitsu does not substitute. Passing an unknown placeholder
 // through unchanged silently breaks the tool (e.g. GOLANGCI_LINT_CACHE={toolcache}
 // reaching golangci-lint as a literal non-absolute path), so it is a config error.
-func ValidateTools(tools MapOfTools) error {
+//
+// It also validates the outputParser reference: when a tool sets outputParser, it
+// must name an existing entry in parsers — a dangling reference is a load-time
+// config error (there is no existing app-ref check to mirror; this follows the
+// runtime-ref validation style).
+func ValidateTools(tools MapOfTools, parsers MapOfParsers) error {
 	argAllowed := placeholderSet(ToolArgPlaceholders)
 	envAllowed := placeholderSet(ToolEnvPlaceholders)
 
@@ -559,6 +564,15 @@ func ValidateTools(tools MapOfTools) error {
 	var errs []string
 	for _, toolName := range toolNames {
 		tool := tools[toolName]
+
+		if tool.OutputParser != "" {
+			if _, ok := parsers[tool.OutputParser]; !ok {
+				errs = append(errs, fmt.Sprintf(
+					"tool %q: outputParser references unknown parser %q",
+					toolName, tool.OutputParser,
+				))
+			}
+		}
 
 		opTypes := make([]string, 0, len(tool.Operations))
 		for opType := range tool.Operations {
