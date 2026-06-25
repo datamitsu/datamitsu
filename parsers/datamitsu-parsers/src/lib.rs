@@ -24,6 +24,8 @@ use std::ptr;
 
 mod capabilities;
 mod diagnostic;
+mod severity;
+mod tools;
 
 pub use capabilities::describe_json;
 pub use diagnostic::RawDiagnostic;
@@ -127,6 +129,10 @@ fn leak_json(s: String) -> u64 {
 /// the pointer ABI. Phase 1 only knows the `echo` parser used to prove the pipe;
 /// Phase 2 adds one `match` arm + one module fn per real tool.
 pub fn dispatch(tool: &str, stdout: &[u8], stderr: &[u8], exit_code: i32) -> String {
+    // Real tool parsers live one-per-module under `tools`; try them first.
+    if let Some(diags) = tools::dispatch(tool, stdout, stderr, exit_code) {
+        return diagnostic::to_json_array(&diags);
+    }
     match tool {
         "echo" => echo(stdout, stderr, exit_code),
         // Unknown tool: an empty diagnostic list (not an error — the core decides

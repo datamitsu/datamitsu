@@ -19,11 +19,12 @@ import { basename, join } from "node:path";
 // match `task build:parsers` output and the `.goreleaser.yml` extra_files globs.
 export const WASM_FILENAME = "datamitsu_parsers.wasm";
 
-// Parser names dispatched inside the single WASM module. Phase 1 ships only the
-// `echo` pipe-test parser; each new Rust `match` arm in parsers/datamitsu-parsers
-// adds its name here so the release manifest advertises it. All names share one
-// url+hash because they all live in one module.
-export const PARSER_NAMES: readonly string[] = ["echo"];
+// Parser names dispatched inside the single WASM module. Each Rust tool module in
+// parsers/datamitsu-parsers/src/tools adds its name here so the release manifest
+// advertises it. All names share one url+hash because they live in one module.
+// (The authoritative, richer list — with versions and invocation recipes — comes
+// from the module's `describe` export; this is just the manifest's name set.)
+export const PARSER_NAMES: readonly string[] = ["echo", "cue_fmt", "dotenv_linter", "yamllint"];
 
 // Default GitHub repo the release assets are published under.
 export const DEFAULT_REPO = "datamitsu/datamitsu";

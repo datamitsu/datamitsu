@@ -12,6 +12,7 @@ export default defineConfig((config) => ({
   ],
   words: [
     ...config.words,
+    "errorformat",
     "coverdir",
     "startline",
     "endline",

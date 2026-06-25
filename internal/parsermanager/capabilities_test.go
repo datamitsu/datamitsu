@@ -8,16 +8,22 @@ import (
 	"github.com/datamitsu/datamitsu/internal/config"
 )
 
-func TestDescribeLocal_EchoFixture(t *testing.T) {
+func TestDescribeLocal_Fixture(t *testing.T) {
 	caps, err := DescribeLocal(context.Background(), echoWASM(t))
 	if err != nil {
 		t.Fatalf("DescribeLocal() error = %v", err)
 	}
-	if caps.Module != "datamitsu-parsers" || len(caps.Tools) != 1 || caps.Tools[0].Name != "echo" {
-		t.Fatalf("unexpected capabilities: %+v", caps)
+	if caps.Module != "datamitsu-parsers" || caps.Version == "" {
+		t.Fatalf("unexpected module/version: %+v", caps)
 	}
-	if caps.Version == "" {
-		t.Error("describe must report a non-empty version")
+	got := make(map[string]bool, len(caps.Tools))
+	for _, tc := range caps.Tools {
+		got[tc.Name] = true
+	}
+	for _, want := range []string{"echo", "yamllint", "dotenv_linter", "cue_fmt"} {
+		if !got[want] {
+			t.Errorf("describe missing tool %q; got %+v", want, caps.Tools)
+		}
 	}
 }
 
@@ -63,11 +69,23 @@ func TestListCapabilities_DeduplicatesSharedModule(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListCapabilities() error = %v", err)
 	}
-	if len(cat.Tools) != 1 || cat.Tools[0].Name != "echo" {
-		t.Fatalf("tools = %+v, want exactly [echo]", cat.Tools)
+	// The module dispatches several tools; every one is listed exactly once and
+	// attributed to the alphabetically-first config entry ("echo", not "echo2"),
+	// with no conflicts (it is the same module content).
+	if len(cat.Tools) < 4 {
+		t.Fatalf("got %d tools, want >= 4 (echo + real parsers): %+v", len(cat.Tools), cat.Tools)
 	}
-	if cat.Tools[0].Parser != "echo" {
-		t.Errorf("provider = %q, want first entry %q", cat.Tools[0].Parser, "echo")
+	seen := make(map[string]int)
+	for _, tool := range cat.Tools {
+		seen[tool.Name]++
+		if tool.Parser != "echo" {
+			t.Errorf("tool %q attributed to %q, want first entry %q", tool.Name, tool.Parser, "echo")
+		}
+	}
+	for name, n := range seen {
+		if n != 1 {
+			t.Errorf("tool %q listed %d times, want 1 (deduplicated)", name, n)
+		}
 	}
 	if len(cat.Conflicts) != 0 {
 		t.Errorf("identical module must not conflict, got %v", cat.Conflicts)

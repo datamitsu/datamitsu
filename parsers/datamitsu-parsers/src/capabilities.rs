@@ -11,8 +11,12 @@
 //! version so `describe` is never empty. The version is intentionally NOT a field
 //! of the datamitsu `parsers` config entity — duplicating it there would let the
 //! declared and actual versions drift. The config declares only url+hash.
+//!
+//! Each real tool owns its `DESCRIPTOR` in its `tools::<tool>` module, co-located
+//! with that tool's parser, and is referenced from [`TOOLS`] below.
 
 use crate::diagnostic::json_string;
+use crate::tools;
 
 /// Capabilities schema version. Bump on an incompatible shape change so the Go
 /// decoder can refuse or adapt.
@@ -26,44 +30,53 @@ fn module_version() -> &'static str {
 }
 
 /// The recommended invocation of a tool in one operation mode.
-struct Operation {
+pub(crate) struct Operation {
     /// Operation the recipe is for (e.g. "lint").
-    mode: &'static str,
+    pub(crate) mode: &'static str,
     /// Args to pass the tool to produce output this parser understands.
     /// `{file}` is the per-file placeholder the core substitutes.
-    args: &'static [&'static str],
+    pub(crate) args: &'static [&'static str],
     /// Whether the file content is fed on stdin rather than as a path arg.
-    stdin: bool,
+    pub(crate) stdin: bool,
 }
 
 /// One tool this module knows how to parse.
-struct ToolCapability {
+pub(crate) struct ToolCapability {
     /// Dispatch name — the `parse` match arm and the value of `tool.outputParser`.
-    name: &'static str,
+    pub(crate) name: &'static str,
     /// Human-readable description of the upstream tool.
-    description: &'static str,
+    pub(crate) description: &'static str,
     /// Upstream tool URL, so a reader knows exactly what this parser targets.
     /// Empty for internal/pipe-test parsers.
-    url: &'static str,
+    pub(crate) url: &'static str,
     /// Recommended invocations per mode; empty when the parser ships no canonical
     /// recipe yet.
-    operations: &'static [Operation],
+    pub(crate) operations: &'static [Operation],
 }
 
-/// The capability table. Phase 1 ships only the `echo` pipe-test parser; each
-/// real tool added to `dispatch` adds a row here (and to the manifest's names).
-const TOOLS: &[ToolCapability] = &[ToolCapability {
+/// The `echo` pipe-test parser's descriptor (defined here since `echo` lives in
+/// the crate root, not in `tools`).
+const ECHO: ToolCapability = ToolCapability {
     name: "echo",
     description: "Pipe-test parser: echoes stdout into a single diagnostic message and the \
         exit code into `code`. Proves the declare\u{2192}build\u{2192}sign\u{2192}deliver\u{2192}load\u{2192}invoke \
         pipe end to end; not a real tool.",
     url: "",
     operations: &[],
-}];
+};
+
+/// The capability table: the pipe-test `echo` plus one entry per real tool. A new
+/// tool adds its module's `DESCRIPTOR` here (and a `tools::dispatch` arm).
+const TOOLS: &[&ToolCapability] = &[
+    &ECHO,
+    &tools::cue_fmt::DESCRIPTOR,
+    &tools::dotenv_linter::DESCRIPTOR,
+    &tools::yamllint::DESCRIPTOR,
+];
 
 /// Serialize the module's full capability manifest to JSON.
 pub fn describe_json() -> String {
-    let tools: Vec<String> = TOOLS.iter().map(tool_json).collect();
+    let tools: Vec<String> = TOOLS.iter().map(|&t| tool_json(t)).collect();
     format!(
         r#"{{"schemaVersion":{},"module":{},"version":{},"tools":[{}]}}"#,
         SCHEMA_VERSION,
@@ -106,16 +119,22 @@ mod tests {
     }
 
     #[test]
-    fn describe_lists_echo_with_empty_operations() {
+    fn describe_lists_echo_and_real_tools() {
         let json = describe_json();
-        assert!(json.contains(r#""name":"echo""#), "json: {json}");
-        assert!(json.contains(r#""operations":{}"#), "echo ships no recipe: {json}");
+        for name in ["echo", "yamllint", "dotenv_linter", "cue_fmt"] {
+            assert!(json.contains(&format!(r#""name":"{name}""#)), "missing {name}: {json}");
+        }
+    }
+
+    #[test]
+    fn describe_includes_an_invocation_recipe() {
+        // yamllint advertises how to run it (parsable, stdin).
+        let json = describe_json();
+        assert!(json.contains(r#""lint":{"args":["--format","parsable","-"],"stdin":true}"#), "json: {json}");
     }
 
     #[test]
     fn module_version_is_never_empty() {
-        // Build-injected (DATAMITSU_PARSERS_VERSION) or the crate-version fallback —
-        // either way `describe` always reports a non-empty version.
         assert!(!module_version().is_empty());
     }
 }

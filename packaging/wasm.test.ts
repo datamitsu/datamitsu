@@ -30,9 +30,12 @@ test("parseChecksums maps base names to lowercase sha256, skipping blanks and ma
 test("buildParserManifest derives url+hash+version per parser from checksums.txt", () => {
   const manifest = buildParserManifest(checksumsBody(), "0.1.7");
 
-  assert.deepEqual(Object.keys(manifest), ["echo"]);
+  assert.deepEqual(Object.keys(manifest), ["echo", "cue_fmt", "dotenv_linter", "yamllint"]);
   assert.equal(manifest.echo.hash, SHA);
   assert.equal(manifest.echo.version, "0.1.7");
+  // Every dispatched parser shares the single module's url+hash+version.
+  assert.equal(manifest.yamllint.hash, SHA);
+  assert.equal(manifest.cue_fmt.version, "0.1.7");
   assert.equal(
     manifest.echo.url,
     `https://github.com/datamitsu/datamitsu/releases/download/v0.1.7/${WASM_FILENAME}`,

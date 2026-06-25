@@ -65,8 +65,24 @@ a by-name reference into `parsers`. A dangling reference is a config error. See
 
 Parsers are a Rust workspace compiled to the `wasm32-unknown-unknown` target as a
 freestanding `cdylib`. There is no `wasm-bindgen` — a small **manual-memory ABI**
-keeps the artifact in the ~15–30KB range. A single dispatcher function matches on
-the tool name, so adding a new tool is one `match` arm plus a module function.
+keeps the artifact small. Each tool is **one module** under `src/tools/<tool>.rs`,
+co-locating its parser with its `describe` recipe. A single dispatcher matches on
+the tool name, so adding a tool is one `match` arm + one module + one `TOOLS` row.
+
+Parsers are **hand-written** — no `regex` or `serde` dependency, which would bloat
+the artifact — porting the logic faithfully from the upstream
+[none-ls](https://github.com/nvimtools/none-ls.nvim) builtin or
+[efm-langserver](https://github.com/mattn/efm-langserver) errorformat for each
+tool. The bundled set spans the parsing-difficulty classes:
+
+| Tool            | Output shape                               | Class          |
+| --------------- | ------------------------------------------ | -------------- |
+| `yamllint`      | `file:row:col: [level] msg (rule)` (line)  | simple regex   |
+| `dotenv_linter` | `file:row CODE: msg` (no col, no severity) | missing fields |
+| `cue_fmt`       | two lines per error (message + location)   | multiline      |
+| `echo`          | pipe-test only                             | —              |
+
+The single `.wasm` dispatches all of them by name (`tool.outputParser`).
 
 ### Sign
 

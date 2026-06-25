@@ -89,7 +89,7 @@ func TestRuntime_UnknownToolReturnsEmpty(t *testing.T) {
 	}
 }
 
-func TestRuntime_DescribeReportsEchoCapability(t *testing.T) {
+func TestRuntime_DescribeReportsCapabilities(t *testing.T) {
 	ctx := context.Background()
 	rt, err := NewRuntime(ctx, echoWASM(t))
 	if err != nil {
@@ -111,8 +111,49 @@ func TestRuntime_DescribeReportsEchoCapability(t *testing.T) {
 	if caps.Version == "" {
 		t.Error("version must be non-empty (build-injected or crate fallback)")
 	}
-	if len(caps.Tools) != 1 || caps.Tools[0].Name != "echo" {
-		t.Fatalf("tools = %+v, want exactly [echo]", caps.Tools)
+	got := make(map[string]bool, len(caps.Tools))
+	for _, tc := range caps.Tools {
+		got[tc.Name] = true
+	}
+	for _, want := range []string{"echo", "yamllint", "dotenv_linter", "cue_fmt"} {
+		if !got[want] {
+			t.Errorf("describe missing tool %q; got %+v", want, caps.Tools)
+		}
+	}
+}
+
+// TestRuntime_YamllintParsesRealOutput is the cross-language end-to-end check:
+// real yamllint --format parsable output through the actual WASM parser yields
+// structured, nullable diagnostics in Go.
+func TestRuntime_YamllintParsesRealOutput(t *testing.T) {
+	ctx := context.Background()
+	rt, err := NewRuntime(ctx, echoWASM(t))
+	if err != nil {
+		t.Fatalf("NewRuntime() error = %v", err)
+	}
+	t.Cleanup(func() { _ = rt.Close(ctx) })
+
+	out := []byte("stdin:3:1: [error] too many blank lines (3 > 0) (empty-lines)\n" +
+		"stdin:10:5: [warning] line too long (90 > 80 characters) (line-length)\n")
+	diags, err := rt.Parse(ctx, "yamllint", out, nil, 1)
+	if err != nil {
+		t.Fatalf("Parse(yamllint) error = %v", err)
+	}
+	if len(diags) != 2 {
+		t.Fatalf("got %d diagnostics, want 2: %+v", len(diags), diags)
+	}
+	d := diags[0]
+	if d.Message != "too many blank lines (3 > 0)" {
+		t.Errorf("message = %q", d.Message)
+	}
+	if d.Row == nil || *d.Row != 3 || d.Col == nil || *d.Col != 1 {
+		t.Errorf("row/col = %v/%v, want 3/1", d.Row, d.Col)
+	}
+	if d.Severity == nil || *d.Severity != 1 {
+		t.Errorf("severity = %v, want 1 (error)", d.Severity)
+	}
+	if d.Code == nil || *d.Code != "empty-lines" {
+		t.Errorf("code = %v, want empty-lines", d.Code)
 	}
 }
 
