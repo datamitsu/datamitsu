@@ -441,20 +441,39 @@ wasm32-unknown-unknown` + the existing pinned `actions/cache@v5.0.5` keyed on
 
 ### Task 12: npm wrapper for the WASM module + parser manifest generator
 
-- [ ] Add a platform-independent npm package that distributes the built `.wasm` (mirror
+- [x] Add a platform-independent npm package that distributes the built `.wasm` (mirror
       `packaging/npm` but single-package — no per-platform `optionalDependencies`; bundle the
       `.wasm`, expose its path). Wire it into `packaging/pack.ts` (`prepare`/`publish`).
-- [ ] Add a **parser manifest** generator: a release-time JSON manifest of `{ name → { url,
+      (Committed `packaging/npm/datamitsu-wasm/` — package.json + `get-wasm.js` (`getWasmPath()`) + README; the `.wasm` is `.gitignore`d and copied in at release time. FS/pure logic lives
+      in `packaging/wasm.ts` (`prepareWasmPackage`/`writeParserManifest`/`buildParserManifest`/
+      `parseChecksums`); `pack.ts` wires `prepareWasm()`/`cleanWasm()` into `prepare`/`all`/`clean`
+      and publishes the package in `publishNpm` independent of the core's `optionalDependencies`.)
+- [x] Add a **parser manifest** generator: a release-time JSON manifest of `{ name → { url,
 hash, version } }` for every shipped parser. The manifest is versioned **with the WASM
       monorepo** (not the core) and its integrity is covered by the signed `checksums.txt`
       (sign the manifest directly too if cheap). This manifest is what config maintainers import
       to obtain a parser's url+hash.
-- [ ] Write tests (`pack.ts` / packaging): the wasm npm package builds and contains the `.wasm`;
+      (`buildParserManifest`/`writeParserManifest` read the WASM SHA-256 from `dist/checksums.txt`
+      and emit `dist/parser-manifest.json`; all parser names share one url+hash because they live
+      in one module — Phase-1 `PARSER_NAMES = ["echo"]`, each new Rust match arm adds a name. Hard
+      error if the `.wasm` is absent from or malformed in `checksums.txt`.)
+- [x] Write tests (`pack.ts` / packaging): the wasm npm package builds and contains the `.wasm`;
       the manifest JSON is well-formed and its hashes equal the `checksums.txt` entries.
-- [ ] **Dog-food 5:** run the release flow in dry-run / on a test tag; verify the `.wasm` is in
+      (`packaging/wasm.test.ts`, 9 `node:test` cases run via the new `pnpm test:packaging`
+      (`tsx --test packaging/*.test.ts`): checksums parsing, manifest derivation/repo/version/
+      missing/malformed, `prepareWasmPackage` bundles+stamps and throws when not built, and
+      `writeParserManifest` JSON well-formed with hashes == checksums entries.)
+- [x] **Dog-food 5:** run the release flow in dry-run / on a test tag; verify the `.wasm` is in
       the artifacts, its hash is in `checksums.txt`, the signature verifies, and the npm wrapper
       installs and yields the `.wasm`. Log outcomes.
-- [ ] Run packaging tests — must pass before Task 13.
+      (Ran `prepareWasmPackage` + `writeParserManifest` against the real built
+      `datamitsu_parsers.wasm` (27830 B) and the existing `dist/checksums.txt`: package bundles
+      the module + stamps version, the manifest hash == `sha256sum` of the bundled
+      wasm == the `checksums.txt` entry, and `getWasmPath()` resolves the bundled file. The
+      `checksums.txt` integrity is covered by the existing cosign signature (Task 11). The live
+      signed-tag / OIDC signature-verify step is owner-gated — see Post-Completion "Manual
+      verification". Generated `.wasm`/manifest/version reverted after the run; no scratch committed.)
+- [x] Run packaging tests — must pass before Task 13. (`pnpm test:packaging` → 9/9 pass.)
 
 ### Task 13: Verify acceptance criteria (Phase-1 end-to-end slice)
 

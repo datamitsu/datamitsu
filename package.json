@@ -28,6 +28,7 @@
     "test": "go test -coverprofile=coverage.out ./...",
     "test:coverage": "go test -coverprofile=coverage.out ./... && go tool cover -func=coverage.out | grep total",
     "test:coverage:all": "bash scripts/coverage-all.sh",
+    "test:packaging": "tsx --test packaging/*.test.ts",
     "test:release": "act workflow_dispatch -W .github/workflows/release.yml --input release_type=unstable --input ref=main",
     "test:release:stable": "act workflow_dispatch -W .github/workflows/release.yml --input release_type=stable --input version=v99.99.99",
     "test:release:unstable": "act workflow_dispatch -W .github/workflows/release.yml --input release_type=unstable --input ref=main"
