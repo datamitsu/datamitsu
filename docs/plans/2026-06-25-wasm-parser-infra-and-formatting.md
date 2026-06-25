@@ -380,19 +380,35 @@ severity: Option<u8>, source: Option<String>, code: Option<String> }` serialized
 
 ### Task 10: Formatting pipeline (capture → diff → apply) in the CLI
 
-- [ ] Wire the formatter contract (`analysis.md` §4.1): capture the original file content, run
+- [x] Wire the formatter contract (`analysis.md` §4.1): capture the original file content, run
       the tool through the existing fix vehicle in the new capture mode (stdout-content OR
       in-place + re-read), treat the result as the full new file text, compute the minimal diff
       (Task 8), and apply the minimal edits to the file. No change → no edits (`nil`).
       **Formatting uses NO WASM parser** (text→text). Works in the CLI context (file/project/
       repo) via the existing fix mechanism; the LSP wrapper (`textDocument/formatting`) is
       Phase 3 but reuses this diff-in-core contract.
-- [ ] Write tests: end-to-end formatter with a transform script — diff is minimal (not the whole
+      (`applyStdoutFormat(file, original, candidate)` in `executor.go`: ComputeEdits over
+      original-vs-stdout → Apply → write back with preserved file mode; nil edits → file
+      untouched (mtime preserved). Wired into the per-file path right after the separated
+      stdout capture: original is the stdin content in stdin mode, else re-read from disk.
+      Edits surfaced on the new `ExecutionResult.FormatEdits` for reporting/Phase-3 LSP reuse.)
+- [x] Write tests: end-to-end formatter with a transform script — diff is minimal (not the whole
       file), unchanged input yields zero edits, output equals a direct tool run.
-- [ ] **Dog-food 4:** run formatting through the new path on this repo using an already-configured
+      (`executor_format_test.go`: `applyStdoutFormat` unit (single-line change → ≤1-line edits +
+      file rewritten; no-op → nil edits + mtime preserved); full per-file `sed` formatter
+      end-to-end (FormatEdits minimal, file == direct tool run); `cat` no-op formatter → nil
+      edits + byte-identical file.)
+- [x] **Dog-food 4:** run formatting through the new path on this repo using an already-configured
       formatter (e.g. gofmt/prettier); compare the result to running the tool directly (must
       match); verify the diff is minimal and "no change → no edits". Log outcomes.
-- [ ] Run the full unit suite + CLI golden suite — must pass before Task 11.
+      (Throwaway in-module test against real `gofmt` over badly-formatted Go: `Apply(orig,
+ComputeEdits(orig, gofmtOut)) == gofmtOut`; minimal — 2/7 original lines covered, not the
+      whole file; already-formatted input → nil edits. Test removed after the run; no scratch
+      committed.)
+- [x] Run the full unit suite + CLI golden suite — must pass before Task 11.
+      (`go test ./...` clean; `go test ./test/cli/ -count=2` byte-stable; managed
+      `golangci-lint --max-issues-per-linter=0 --max-same-issues=0 ./internal/tooling/...` →
+      0 issues; `gofmt` clean.)
 
 ### Task 11: CI — build WASM, feed goreleaser, checksum + sign
 

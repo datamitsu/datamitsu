@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/textdiff"
 )
 
 // Task represents a single tool execution task
@@ -117,6 +118,12 @@ type ExecutionResult struct {
 	// formatted content consumed by the diff-in-core formatting path). Empty for
 	// the default combined-capture behavior.
 	CapturedStdout string
+	// FormatEdits records the minimal line-based edits applied to a file by the
+	// diff-in-core formatting path (output mode "stdout"). Nil when the candidate
+	// content equalled the original (no change → no edits → file untouched). In
+	// per-file mode it holds the edits for the last formatted file, mirroring how
+	// Command reports the last command.
+	FormatEdits []textdiff.Edit
 }
 
 // recordTiming stamps the run's absolute wall-clock window and elapsed Duration

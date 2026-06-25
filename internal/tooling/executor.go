@@ -23,6 +23,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/logger"
+	"github.com/datamitsu/datamitsu/internal/textdiff"
 
 	"go.uber.org/zap"
 )
@@ -733,6 +734,30 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 		exitCode := getExitCode(err)
 		lastExitCode = exitCode
 
+		// Formatting pipeline (diff-in-core): in stdout-output mode a successful
+		// run yields the full new file text on stdout. Treat the original file as
+		// "before", the captured stdout as "after", compute the minimal line-based
+		// diff and apply it. No change → no edits → the file is left untouched
+		// (mtime preserved). No WASM parser is involved — formatting is text→text.
+		if err == nil && separate {
+			original := stdinContent // already the file content in stdin mode
+			if original == nil {
+				var readErr error
+				original, readErr = os.ReadFile(file)
+				if readErr != nil {
+					err = fmt.Errorf("read original content for %s: %w", file, readErr)
+				}
+			}
+			if err == nil {
+				edits, fmtErr := applyStdoutFormat(file, original, stdoutBytes)
+				if fmtErr != nil {
+					err = fmtErr
+				} else {
+					result.FormatEdits = edits
+				}
+			}
+		}
+
 		// Output command output in debug mode
 		if len(output) > 0 {
 			log.Debug("command output",
@@ -1290,6 +1315,29 @@ func (e *Executor) runCommandIO(cmd *exec.Cmd, stdinContent []byte, separate boo
 		return outBuf.Bytes(), errBuf.Bytes(), err
 	}
 	return combined.Bytes(), nil, err
+}
+
+// applyStdoutFormat treats candidate (the tool's separately-captured stdout) as
+// the full new text for file, computes the minimal line-based diff against the
+// original content (Task 8's textdiff) and applies it. It returns the edits that
+// were applied, or nil when the candidate equals the original — in which case the
+// file is left untouched so its mtime is preserved ("no change → no edits"). The
+// existing file mode is preserved across the rewrite.
+func applyStdoutFormat(file string, original, candidate []byte) ([]textdiff.Edit, error) {
+	edits := textdiff.ComputeEdits(string(original), string(candidate))
+	if len(edits) == 0 {
+		return nil, nil
+	}
+	newContent := textdiff.Apply(string(original), edits)
+
+	mode := os.FileMode(0o644)
+	if info, statErr := os.Stat(file); statErr == nil {
+		mode = info.Mode().Perm()
+	}
+	if writeErr := os.WriteFile(file, []byte(newContent), mode); writeErr != nil { //nolint:gosec // G703: file is the discovered formatting target (planner-validated, already read above) — writing the formatted text back is the intended operation
+		return nil, fmt.Errorf("write formatted content to %s: %w", file, writeErr)
+	}
+	return edits, nil
 }
 
 // stdinForOperation returns the bytes to feed to the tool's stdin for this
