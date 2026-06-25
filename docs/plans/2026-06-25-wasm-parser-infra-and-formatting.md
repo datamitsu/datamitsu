@@ -412,16 +412,32 @@ ComputeEdits(orig, gofmtOut)) == gofmtOut`; minimal — 2/7 original lines cover
 
 ### Task 11: CI — build WASM, feed goreleaser, checksum + sign
 
-- [ ] In `.github/workflows/release.yml` (build job, before goreleaser): add Rust toolchain
+- [x] In `.github/workflows/release.yml` (build job, before goreleaser): add Rust toolchain
       setup (rustup + `wasm32-unknown-unknown`) and build the `.wasm` (via the `build:parsers`
       task). Cache the cargo/registry + target dir (`actions/cache`, keyed on `Cargo.lock`).
-- [ ] Make goreleaser include the `.wasm` as an extra release artifact so its **SHA-256 lands in
+      (rustup/cargo are preinstalled on `ubuntu-latest`, so only `rustup target add
+wasm32-unknown-unknown` + the existing pinned `actions/cache@v5.0.5` keyed on
+      `parsers/Cargo.lock` are added — no new unpinned action. The build step runs the same
+      `cargo build --release --target wasm32-unknown-unknown` as `task build:parsers` and logs
+      the size. Placed after cosign-install, before goreleaser.)
+- [x] Make goreleaser include the `.wasm` as an extra release artifact so its **SHA-256 lands in
       `checksums.txt`** (`.goreleaser.yml` `extra_files`/release files). Since the existing
       `signs` block signs `artifacts: checksum` (`:159-167`), the WASM hash is then covered by
       the existing cosign signature — no per-version hash embedded in the core (matches §5.2).
-- [ ] "Tests" for CI config: run `goreleaser release --snapshot --clean` locally/in-job and
+      (`checksum.extra_files` adds the `.wasm` to `checksums.txt`; `release.extra_files` uploads
+      it to the GitHub Release. Verified the snapshot lists it under the basename
+      `datamitsu_parsers.wasm`.)
+- [x] "Tests" for CI config: run `goreleaser release --snapshot --clean` locally/in-job and
       assert `dist/checksums.txt` lists the `.wasm` entry; add a small assertion script.
-- [ ] Run the relevant checks — must pass before Task 12.
+      (`.github/scripts/assert-wasm-checksum.sh` greps for the `.wasm` line in `checksums.txt`
+      and fails loudly otherwise; wired into the workflow right after goreleaser as
+      "Assert WASM is in checksums.txt". Both failure paths — missing entry, missing file —
+      exercised.)
+- [x] Run the relevant checks — must pass before Task 12.
+      (`goreleaser check` validated; a real local `goreleaser release --snapshot --clean
+--skip=sign,sbom,publish,docker` produced `dist/checksums.txt` with
+      `datamitsu_parsers.wasm` whose listed SHA-256 == `sha256sum` of the built module; the
+      assertion script passes; both YAML files parse.)
 
 ### Task 12: npm wrapper for the WASM module + parser manifest generator
 

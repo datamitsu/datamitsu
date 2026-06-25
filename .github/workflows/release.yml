@@ -30,6 +30,26 @@ jobs:
         uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
       - name: Install cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      # 2a. Build WASM parser modules — MUST precede goreleaser so the .wasm
+      #     SHA-256 lands in checksums.txt (and is thus covered by the cosign
+      #     signature). rustup/cargo are preinstalled on ubuntu-latest; only the
+      #     freestanding wasm32 target needs adding.
+      - name: Add Rust wasm32 target
+        run: rustup target add wasm32-unknown-unknown
+      - name: Cache cargo registry + wasm target
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          key: wasm-parsers-${{ runner.os }}-${{ hashFiles('parsers/Cargo.lock') }}
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            parsers/target
+          restore-keys: |
+            wasm-parsers-${{ runner.os }}-
+      - name: Build WASM parser modules
+        run: |
+          cargo build --release --target wasm32-unknown-unknown --manifest-path parsers/Cargo.toml
+          echo "wasm size: $(wc -c < parsers/target/wasm32-unknown-unknown/release/datamitsu_parsers.wasm) bytes"
       # 2. Build Binaries (GoReleaser)
       - env:
           # Canonical base image ref baked into the binary for `devtools dockerfile`.
@@ -49,6 +69,10 @@ jobs:
           args: release ${{ needs.determine-release-type.outputs.is_unstable == 'true' && '--snapshot' || '' }} --clean
           distribution: goreleaser
           version: "~> v2"
+      # 2b. Fail the build if the WASM parser module is not in checksums.txt
+      #     (the signed file) — it would otherwise ship unverifiable.
+      - name: Assert WASM is in checksums.txt
+        run: .github/scripts/assert-wasm-checksum.sh
       # 3. Attest build artifacts
       - if: ${{ !env.ACT }}
         name: Attest build artifacts
