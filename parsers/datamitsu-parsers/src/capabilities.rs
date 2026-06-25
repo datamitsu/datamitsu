@@ -71,6 +71,7 @@ const TOOLS: &[&ToolCapability] = &[
     &ECHO,
     &tools::cue_fmt::DESCRIPTOR,
     &tools::dotenv_linter::DESCRIPTOR,
+    &tools::hadolint::DESCRIPTOR,
     &tools::yamllint::DESCRIPTOR,
 ];
 

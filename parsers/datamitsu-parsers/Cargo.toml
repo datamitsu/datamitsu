@@ -11,3 +11,4 @@ publish = false
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+tinyjson = "2.5.1"

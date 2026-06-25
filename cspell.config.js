@@ -13,6 +13,8 @@ export default defineConfig((config) => ({
   words: [
     ...config.words,
     "errorformat",
+    "tinyjson",
+    "fract",
     "coverdir",
     "startline",
     "endline",

@@ -24,7 +24,13 @@ export const WASM_FILENAME = "datamitsu_parsers.wasm";
 // advertises it. All names share one url+hash because they live in one module.
 // (The authoritative, richer list — with versions and invocation recipes — comes
 // from the module's `describe` export; this is just the manifest's name set.)
-export const PARSER_NAMES: readonly string[] = ["echo", "cue_fmt", "dotenv_linter", "yamllint"];
+export const PARSER_NAMES: readonly string[] = [
+  "echo",
+  "cue_fmt",
+  "dotenv_linter",
+  "hadolint",
+  "yamllint",
+];
 
 // Default GitHub repo the release assets are published under.
 export const DEFAULT_REPO = "datamitsu/datamitsu";

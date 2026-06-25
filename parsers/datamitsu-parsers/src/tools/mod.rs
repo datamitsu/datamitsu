@@ -7,8 +7,12 @@
 //! artifact tiny — the logic is ported faithfully from the upstream none-ls
 //! builtin / efm errorformat for each tool.
 
+// Shared helper for the JSON-output tool class (not a tool itself).
+pub mod json_diag;
+
 pub mod cue_fmt;
 pub mod dotenv_linter;
+pub mod hadolint;
 pub mod yamllint;
 
 use crate::diagnostic::RawDiagnostic;
@@ -17,9 +21,10 @@ use crate::diagnostic::RawDiagnostic;
 /// parser for `tool`, so the caller can fall back (echo / unknown).
 pub fn dispatch(tool: &str, stdout: &[u8], stderr: &[u8], exit_code: i32) -> Option<Vec<RawDiagnostic>> {
     match tool {
-        "yamllint" => Some(yamllint::parse(stdout, stderr, exit_code)),
-        "dotenv_linter" => Some(dotenv_linter::parse(stdout, stderr, exit_code)),
         "cue_fmt" => Some(cue_fmt::parse(stdout, stderr, exit_code)),
+        "dotenv_linter" => Some(dotenv_linter::parse(stdout, stderr, exit_code)),
+        "hadolint" => Some(hadolint::parse(stdout, stderr, exit_code)),
+        "yamllint" => Some(yamllint::parse(stdout, stderr, exit_code)),
         _ => None,
     }
 }

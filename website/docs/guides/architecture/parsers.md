@@ -69,20 +69,24 @@ keeps the artifact small. Each tool is **one module** under `src/tools/<tool>.rs
 co-locating its parser with its `describe` recipe. A single dispatcher matches on
 the tool name, so adding a tool is one `match` arm + one module + one `TOOLS` row.
 
-Parsers are **hand-written** — no `regex` or `serde` dependency, which would bloat
-the artifact — porting the logic faithfully from the upstream
+Parsers are **hand-written**, porting the logic faithfully from the upstream
 [none-ls](https://github.com/nvimtools/none-ls.nvim) builtin or
 [efm-langserver](https://github.com/mattn/efm-langserver) errorformat for each
-tool. The bundled set spans the parsing-difficulty classes:
+tool. The only external crate is **`tinyjson`** (a tiny, zero-dependency JSON
+parser) for the JSON-output class — hand-rolling a correct JSON parser is a known
+footgun and many tools emit JSON. Text/line parsers add no dependency. The bundled
+set spans the parsing-difficulty classes:
 
 | Tool            | Output shape                               | Class          |
 | --------------- | ------------------------------------------ | -------------- |
+| `hadolint`      | JSON array of objects                      | structured     |
 | `yamllint`      | `file:row:col: [level] msg (rule)` (line)  | simple regex   |
 | `dotenv_linter` | `file:row CODE: msg` (no col, no severity) | missing fields |
 | `cue_fmt`       | two lines per error (message + location)   | multiline      |
 | `echo`          | pipe-test only                             | —              |
 
-The single `.wasm` dispatches all of them by name (`tool.outputParser`).
+The single `.wasm` dispatches all of them by name (`tool.outputParser`). JSON
+tools share one `from_json` helper (`tools/json_diag.rs`), so each is a few lines.
 
 ### Sign
 
