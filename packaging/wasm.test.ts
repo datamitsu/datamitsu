@@ -7,6 +7,7 @@ import { test } from "node:test";
 import {
   buildParserManifest,
   parseChecksums,
+  PARSER_NAMES,
   prepareWasmPackage,
   WASM_FILENAME,
   writeParserManifest,
@@ -30,13 +31,10 @@ test("parseChecksums maps base names to lowercase sha256, skipping blanks and ma
 test("buildParserManifest derives url+hash+version per parser from checksums.txt", () => {
   const manifest = buildParserManifest(checksumsBody(), "0.1.7");
 
-  assert.deepEqual(Object.keys(manifest), [
-    "echo",
-    "cue_fmt",
-    "dotenv_linter",
-    "hadolint",
-    "yamllint",
-  ]);
+  // One manifest entry per dispatched parser (the full set, which grows as tools
+  // are added — assert against the source of truth rather than a frozen list).
+  assert.deepEqual(Object.keys(manifest), [...PARSER_NAMES]);
+  assert.ok(PARSER_NAMES.includes("echo") && PARSER_NAMES.includes("yamllint"));
   assert.equal(manifest.echo.hash, SHA);
   assert.equal(manifest.echo.version, "0.1.7");
   // Every dispatched parser shares the single module's url+hash+version.
