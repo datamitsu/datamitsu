@@ -254,6 +254,24 @@ type OCISigner struct {
 }
 
 // ========================================
+// Output Parsers (WASM)
+// ========================================
+
+// Parser declares a WASM output-parser module as a url+hash data artifact
+// (modeled on ArchiveSpec/Bundle — data, not a process). The module is
+// downloaded, SHA-256 verified, then loaded into the sandboxed WASM runtime.
+type Parser struct {
+	URL string `json:"url"`
+	// Hash is the mandatory SHA-256 (64 lowercase hex) of the .wasm module.
+	// Empty/malformed is a config error per the security policy.
+	Hash    string `json:"hash"`
+	Version string `json:"version,omitempty"`
+}
+
+// MapOfParsers maps a parser name to its declaration.
+type MapOfParsers map[string]Parser
+
+// ========================================
 // Main Config (ENHANCED)
 // ========================================
 
@@ -272,6 +290,9 @@ type Config struct {
 	// Config is marshaled into the execution-cache invalidation key, and a nil
 	// field must not change that key on upgrade.
 	OCI *OCIRef `json:"oci,omitempty"`
+	// Parsers declares WASM output-parser modules (url+hash data artifacts),
+	// referenced by name from Tool.outputParser.
+	Parsers MapOfParsers `json:"parsers,omitempty"`
 }
 
 // GetDefaultConfig returns the embedded default config JS with TypeScript types stripped.

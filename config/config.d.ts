@@ -329,6 +329,17 @@ declare global {
       oci?: OCIRef;
 
       /**
+       * WASM output-parser modules, keyed by name. Each entry is a url+hash
+       * data artifact (NOT an executable app): a signed Rust→WASM module that
+       * extracts structured results from a tool's text output. Referenced
+       * by-name from `Tool.outputParser`.
+       *
+       * The SHA-256 `hash` is mandatory per the security policy — an empty or
+       * malformed hash is a config error, not a warning.
+       */
+      parsers?: MapOfParsers;
+
+      /**
        * Project type definitions
        */
       projectTypes?: MapOfProjectTypes;
@@ -424,10 +435,6 @@ declare global {
        */
       rootPath: string;
     }
-
-    // ========================================
-    // Tool Execution Configuration
-    // ========================================
 
     /**
      * Configuration file setup (managed files written by dm setup)
@@ -534,6 +541,10 @@ declare global {
       when?: string;
     }
 
+    // ========================================
+    // Tool Execution Configuration
+    // ========================================
+
     /**
      * Map of configuration setup with mainFilename as key
      * @example
@@ -547,13 +558,15 @@ declare global {
 
     type MapOfInitCommands = Record<string, InitCommand>;
 
+    type MapOfParsers = Record<string, Parser>;
+
     type MapOfProjectTypes = Record<string, ProjectType>;
+
+    type MapOfTools = Record<string, Tool>;
 
     // ========================================
     // Init Commands
     // ========================================
-
-    type MapOfTools = Record<string, Tool>;
 
     /**
      * OCI bundle declaration: the registry repository plus the mandatory
@@ -583,10 +596,6 @@ declare global {
       signer?: OCISigner;
     }
 
-    // ========================================
-    // Config File Management (ENHANCED)
-    // ========================================
-
     /**
      * Sigstore keyless publisher identity.
      */
@@ -602,10 +611,39 @@ declare global {
       issuer: string;
     }
 
+    // ========================================
+    // Config File Management (ENHANCED)
+    // ========================================
+
     /**
      * Operation type
      */
     type OperationType = "fix" | "lint";
+
+    /**
+     * A WASM output-parser module: a url+hash data artifact, modeled on
+     * ArchiveSpec/Bundle (data, not a process) — explicitly NOT on App (no
+     * runtime, no lockfile). Downloaded and SHA-256 verified before it is
+     * loaded into the sandboxed WASM runtime.
+     */
+    interface Parser {
+      /**
+       * SHA-256 hash (64 lowercase hex characters) of the .wasm module.
+       * Mandatory per the security policy — an empty or malformed hash is a
+       * config error. Verified before the module is loaded.
+       */
+      hash: string;
+
+      /**
+       * URL of the .wasm module. Downloaded and SHA-256 verified before use.
+       */
+      url: string;
+
+      /**
+       * Optional version string for cache invalidation / provenance.
+       */
+      version?: string;
+    }
 
     /**
      * Project type detector - defines when this project type is detected

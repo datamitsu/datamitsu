@@ -388,6 +388,44 @@ func ValidateOCI(ref *OCIRef) error {
 	return nil
 }
 
+// ValidateParsers validates the parsers map: each entry must have a non-empty
+// url and a non-empty, well-formed SHA-256 hash (64 lowercase hex). An empty
+// hash is a hard error per the security policy (mirrors the bundle/archive
+// hash-mandatory rule) — never a download in "hash-less" mode.
+func ValidateParsers(parsers MapOfParsers) error {
+	if len(parsers) == 0 {
+		return nil
+	}
+
+	names := make([]string, 0, len(parsers))
+	for name := range parsers {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	var errs []string
+	for _, name := range names {
+		if name == "" {
+			errs = append(errs, "parser name must not be empty")
+			continue
+		}
+		p := parsers[name]
+		if p.URL == "" {
+			errs = append(errs, fmt.Sprintf("parser %q: url is required", name))
+		}
+		if p.Hash == "" {
+			errs = append(errs, fmt.Sprintf("parser %q: hash is required (SHA-256)", name))
+		} else if !isValidSHA256Hex(p.Hash) {
+			errs = append(errs, fmt.Sprintf("parser %q: hash must be a valid SHA-256 hex string (64 lowercase hex characters)", name))
+		}
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("config validation failed:\n  %s", strings.Join(errs, "\n  "))
+	}
+	return nil
+}
+
 func isValidSHA256Hex(s string) bool {
 	if len(s) != 64 {
 		return false
