@@ -113,4 +113,10 @@ var (
 		DefaultValue: "",
 		Description:  "Override host libc detection (glibc or musl); affects store paths and OCI bundle selection",
 	}
+
+	parsersDir = envVar{
+		Name:         strings.ToUpper(ldflags.PackageName) + "_PARSERS_DIR",
+		DefaultValue: "",
+		Description:  "Override directory for downloaded WASM parser modules (default {store}/.parsers)",
+	}
 )

@@ -48,6 +48,15 @@ func GetBinPath() string {
 	return filepath.Join(GetStorePath(), ".bin")
 }
 
+// GetParsersPath returns the directory holding downloaded WASM parser modules
+// ({store}/.parsers), or the DATAMITSU_PARSERS_DIR override when set.
+func GetParsersPath() string {
+	if dir := os.Getenv(parsersDir.Name); dir != "" {
+		return dir
+	}
+	return filepath.Join(GetStorePath(), ".parsers")
+}
+
 // GetLogLevel returns log level from environment variable
 // Returns WarnLevel on parse error (matching the default)
 func GetLogLevel() zapcore.Level {

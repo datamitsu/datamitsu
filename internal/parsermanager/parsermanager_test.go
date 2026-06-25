@@ -1,0 +1,130 @@
+package parsermanager
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync/atomic"
+	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/config"
+)
+
+// sha256Hex returns the lowercase hex SHA-256 of b (the form a config hash takes).
+func sha256Hex(b []byte) string {
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])
+}
+
+// serveWASM starts a test server returning fixed bytes and counts requests.
+func serveWASM(t *testing.T, body []byte) (*httptest.Server, *int64) {
+	t.Helper()
+	var hits int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		atomic.AddInt64(&hits, 1)
+		_, _ = w.Write(body)
+	}))
+	t.Cleanup(srv.Close)
+	return srv, &hits
+}
+
+func TestLoadWASMBytes_ValidHashStoresAndLoads(t *testing.T) {
+	t.Setenv("DATAMITSU_PARSERS_DIR", t.TempDir())
+
+	body := []byte("\x00asm-fake-module")
+	srv, hits := serveWASM(t, body)
+
+	m := New(config.MapOfParsers{
+		"echo": {URL: srv.URL, Hash: sha256Hex(body), Version: "1"},
+	})
+
+	got, err := m.LoadWASMBytes(context.Background(), "echo")
+	if err != nil {
+		t.Fatalf("LoadWASMBytes() error = %v", err)
+	}
+	if string(got) != string(body) {
+		t.Fatalf("LoadWASMBytes() = %q, want %q", got, body)
+	}
+
+	// The module must be content-addressed on disk under {parsers}/echo/{key}.
+	dir := moduleDir("echo", m.parsers["echo"])
+	if _, err := os.Stat(filepath.Join(dir, wasmFileName)); err != nil {
+		t.Fatalf("module not stored at %s: %v", dir, err)
+	}
+	if n := atomic.LoadInt64(hits); n != 1 {
+		t.Fatalf("server hits = %d, want 1", n)
+	}
+}
+
+func TestLoadWASMBytes_WrongHashFails(t *testing.T) {
+	t.Setenv("DATAMITSU_PARSERS_DIR", t.TempDir())
+
+	body := []byte("real-bytes")
+	srv, _ := serveWASM(t, body)
+
+	m := New(config.MapOfParsers{
+		"echo": {URL: srv.URL, Hash: sha256Hex([]byte("different-bytes"))},
+	})
+
+	_, err := m.LoadWASMBytes(context.Background(), "echo")
+	if err == nil {
+		t.Fatal("expected hash mismatch error, got nil")
+	}
+	if !strings.Contains(err.Error(), "hash mismatch") {
+		t.Fatalf("error = %v, want it to mention hash mismatch", err)
+	}
+	// A failed verification must leave no published module behind.
+	dir := moduleDir("echo", m.parsers["echo"])
+	if _, statErr := os.Stat(filepath.Join(dir, wasmFileName)); !os.IsNotExist(statErr) {
+		t.Fatalf("module should not be published on hash mismatch (stat err = %v)", statErr)
+	}
+}
+
+func TestLoadWASMBytes_MissingHashIsError(t *testing.T) {
+	t.Setenv("DATAMITSU_PARSERS_DIR", t.TempDir())
+
+	m := New(config.MapOfParsers{
+		"echo": {URL: "https://example.test/echo.wasm"},
+	})
+
+	_, err := m.LoadWASMBytes(context.Background(), "echo")
+	if err == nil || !strings.Contains(err.Error(), "no hash") {
+		t.Fatalf("expected mandatory-hash error, got %v", err)
+	}
+}
+
+func TestLoadWASMBytes_UndeclaredParser(t *testing.T) {
+	t.Setenv("DATAMITSU_PARSERS_DIR", t.TempDir())
+
+	m := New(nil)
+	_, err := m.LoadWASMBytes(context.Background(), "ghost")
+	if err == nil || !strings.Contains(err.Error(), "not declared") {
+		t.Fatalf("expected not-declared error, got %v", err)
+	}
+}
+
+func TestLoadWASMBytes_SecondLoadIsCached(t *testing.T) {
+	t.Setenv("DATAMITSU_PARSERS_DIR", t.TempDir())
+
+	body := []byte("cache-me")
+	srv, hits := serveWASM(t, body)
+
+	m := New(config.MapOfParsers{
+		"echo": {URL: srv.URL, Hash: sha256Hex(body)},
+	})
+
+	// Two references to the same parser (e.g. two tools) must download once.
+	for i := range 2 {
+		if _, err := m.LoadWASMBytes(context.Background(), "echo"); err != nil {
+			t.Fatalf("LoadWASMBytes() call %d error = %v", i, err)
+		}
+	}
+	if n := atomic.LoadInt64(hits); n != 1 {
+		t.Fatalf("server hits = %d, want 1 (download must be deduplicated)", n)
+	}
+}

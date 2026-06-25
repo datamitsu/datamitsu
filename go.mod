@@ -18,6 +18,7 @@ require (
 	github.com/pelletier/go-toml/v2 v2.4.0
 	github.com/shamaton/msgpack/v2 v2.4.1
 	github.com/spf13/cobra v1.10.2
+	github.com/tetratelabs/wazero v1.12.0
 	github.com/ulikunitz/xz v0.5.15
 	github.com/vbauerster/mpb/v8 v8.12.1
 	github.com/zeebo/xxh3 v1.1.0

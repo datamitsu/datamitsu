@@ -284,19 +284,25 @@ severity: Option<u8>, source: Option<String>, code: Option<String> }` serialized
 
 ### Task 6: Parser-artifact manager (reuse download/verify/store)
 
-- [ ] `go get github.com/tetratelabs/wazero`; ensure `go mod tidy` is clean (CI gate).
-- [ ] Add `env.GetParsersPath()` → `filepath.Join(GetStorePath(), ".parsers")` with an `e.go`
-      definition (per the env policy).
-- [ ] New `internal/parsermanager` package that **reuses** the binmanager machinery: download
+- [x] `go get github.com/tetratelabs/wazero`; ensure `go mod tidy` is clean (CI gate).
+      (wazero v1.12.0 added; pinned via a justified blank import in `parsermanager/deps.go`
+      since the runtime wrapper that imports it for real is Task 7 — keeps `go mod tidy` clean.)
+- [x] Add `env.GetParsersPath()` → `filepath.Join(GetStorePath(), ".parsers")` with an `e.go`
+      definition (per the env policy). (Added `parsersDir` = `DATAMITSU_PARSERS_DIR` override.)
+- [x] New `internal/parsermanager` package that **reuses** the binmanager machinery: download
       (`download.go` path) → SHA-256 verify (`verifyFileHash` + `IsAllowedDownloadHashType`) →
       content-addressed store under `.parsers/{name}/{hash}` (XXH3 cache key via `hashutil`) →
       `singleflight` dedup so a parser declared in N tools downloads once. Expose
-      `LoadWASMBytes(name) ([]byte, error)`. (If a binmanager internal needs exporting to reuse
-      cleanly, export it minimally rather than copy-pasting.)
-- [ ] Write tests: serve a fixture via `httptest`/`file://`; correct hash → stored & loadable;
+      `LoadWASMBytes(name) ([]byte, error)`. (Exported a minimal seam
+      `binmanager.DownloadAndVerifySHA256` rather than copy-pasting the hardened download/verify
+      path; `LoadWASMBytes(ctx, name)` takes a context for cancellation/offline-guard reuse.)
+- [x] Write tests: serve a fixture via `httptest`/`file://`; correct hash → stored & loadable;
       wrong hash → "hash mismatch" error; same url+hash referenced twice → one download
-      (assert via server hit count or log).
-- [ ] Run `go test ./internal/parsermanager/...` — must pass before Task 7.
+      (assert via server hit count or log). (`parsermanager_test.go`: valid→stored&loadable+1 hit;
+      wrong hash→"hash mismatch" & no module published; missing hash→error; undeclared→error;
+      second load→cached, server hit count stays 1.)
+- [x] Run `go test ./internal/parsermanager/...` — must pass before Task 7.
+      (Pass; managed golangci-lint clean on parsermanager/env/binmanager.)
 
 ### Task 7: wazero runtime — instantiate + invoke the dispatcher
 

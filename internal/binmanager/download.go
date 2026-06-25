@@ -225,6 +225,16 @@ func downloadAndVerifyWithName(ctx context.Context, url string, expectedHash str
 	return downloadAndVerifyInternal(ctx, url, expectedHash, hashType, destDir, name)
 }
 
+// DownloadAndVerifySHA256 downloads url into destDir (retrying transient
+// failures with backoff) and verifies its SHA-256 hash, returning the path of
+// the verified temp file. It is the minimal seam other store managers (e.g.
+// parsermanager) reuse instead of re-implementing the hardened download+verify
+// path. SHA-256 is enforced per the security policy; the caller is responsible
+// for moving the verified file to its content-addressed location.
+func DownloadAndVerifySHA256(ctx context.Context, url, expectedHash, destDir, name string) (string, error) {
+	return downloadAndVerifyWithName(ctx, url, expectedHash, BinHashTypeSHA256, destDir, name)
+}
+
 func moveFile(src, dst string) error {
 	dstDir := filepath.Dir(dst)
 	if err := os.MkdirAll(dstDir, 0o755); err != nil {
