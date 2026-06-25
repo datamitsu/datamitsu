@@ -330,16 +330,25 @@ severity: Option<u8>, source: Option<String>, code: Option<String> }` serialized
 
 ### Task 8: Line-based Myers diff in the Go core
 
-- [ ] New `internal/textdiff` (or `internal/diff`) package: a **line-based Myers diff** producing
+- [x] New `internal/textdiff` (or `internal/diff`) package: a **line-based Myers diff** producing
       a minimal edit set (port the semantics of efm's `ComputeEdits`, `langserver/diff.go` —
       more precise than none-ls's single-edit; preserves positions for undo/LSP reuse). Unchanged
       input → `nil` (both reference projects return nil on no-op). This is **Go core, not WASM**
       (diff is shared policy, lives with the defaults). Produce edits shaped so they serve both
       CLI apply now and LSP `TextEdit` ranges in Phase 3 (use `[]rune` for any column math —
-      `analysis.md` multibyte note).
-- [ ] Write tests (table-driven): identical → nil; pure insert / pure delete / replace; trailing
+      `analysis.md` multibyte note). (`internal/textdiff`: `ComputeEdits(before, after)` ports
+      efm's Myers SES; line-based `Edit{Range{Start,End Position{Line,Character}}, NewText}` is
+      LSP-shaped (Character always 0 for line edits); identical inputs → nil; line contents copied
+      byte-for-byte so multibyte round-trips; column-math `[]rune` note recorded for Phase 3. Added
+      a companion `Apply(before, edits)` so the CLI formatting path (Task 10) can apply the edits.)
+- [x] Write tests (table-driven): identical → nil; pure insert / pure delete / replace; trailing
       newline handling; multibyte lines; large-file minimal-edit assertion (not whole-file).
-- [ ] Run `go test ./internal/textdiff/...` — must pass before Task 9.
+      (`textdiff_test.go`: 17 table cases incl. insert/delete/replace at start/middle/end,
+      empty↔content, trailing-newline add/remove, multibyte replace+insert, each Apply round-trips
+      to `after`; large-file test asserts a 1-line change in 2000 lines touches ≤10 lines.)
+- [x] Run `go test ./internal/textdiff/...` — must pass before Task 9.
+      (Pass; `gofmt` clean; managed `golangci-lint --max-issues-per-linter=0 --max-same-issues=0`
+      → 0 issues.)
 
 ### Task 9: Executor input modes — stdin + separated stdout capture
 
