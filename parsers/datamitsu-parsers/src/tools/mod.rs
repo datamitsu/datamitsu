@@ -33,6 +33,7 @@ pub mod djlint;
 pub mod dotenv_linter;
 pub mod editorconfig_checker;
 pub mod erb_lint;
+pub mod eslint;
 pub mod fish;
 pub mod gccdiag;
 pub mod gdlint;
@@ -128,6 +129,7 @@ pub fn dispatch(tool: &str, stdout: &[u8], stderr: &[u8], exit_code: i32) -> Opt
         "dotenv_linter" => Some(dotenv_linter::parse(stdout, stderr, exit_code)),
         "editorconfig_checker" => Some(editorconfig_checker::parse(stdout, stderr, exit_code)),
         "erb_lint" => Some(erb_lint::parse(stdout, stderr, exit_code)),
+        "eslint" => Some(eslint::parse(stdout, stderr, exit_code)),
         "fish" => Some(fish::parse(stdout, stderr, exit_code)),
         "gccdiag" => Some(gccdiag::parse(stdout, stderr, exit_code)),
         "gdlint" => Some(gdlint::parse(stdout, stderr, exit_code)),

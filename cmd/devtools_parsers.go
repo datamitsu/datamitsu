@@ -40,6 +40,23 @@ var parsersInspectCmd = &cobra.Command{
 	RunE:  runParsersInspect,
 }
 
+var parsersRunCmd = &cobra.Command{
+	Use:   "run <tool>",
+	Short: "Run a parser on a tool's raw output (from stdin) and print the diagnostics",
+	Long: `Pipe a tool's raw output into its parser and see the structured diagnostics it
+produces — the quickest way to develop or debug a parser against real output.
+
+Reads the tool's stdout from stdin; pass --stderr-file / --exit-code if the parser
+uses them (e.g. cue_fmt reads stderr). Resolves the module from --wasm (a local
+.wasm), or from the configured ` + "`parsers`" + ` entry named <tool>. Output is JSON
+(the nullable RawDiagnostic list — the core fills defaults later).
+
+  pnpm dm exec eslint -- --format json file.js | \
+    datamitsu devtools parsers run eslint --wasm ./datamitsu_parsers.wasm`,
+	Args: cobra.ExactArgs(1),
+	RunE: runParsersRun,
+}
+
 // addParsersFlags gives each leaf the same --json / --wasm pair (read per-RunE so
 // there is no shared mutable flag state between the two commands).
 func addParsersFlags(c *cobra.Command) {
@@ -50,9 +67,52 @@ func addParsersFlags(c *cobra.Command) {
 func init() {
 	addParsersFlags(parsersListCmd)
 	addParsersFlags(parsersInspectCmd)
+	parsersRunCmd.Flags().String("wasm", "", "Local .wasm module to run (instead of the configured parser)")
+	parsersRunCmd.Flags().String("stderr-file", "", "File holding the tool's stderr (some parsers read it, e.g. cue_fmt)")
+	parsersRunCmd.Flags().Int("exit-code", 0, "The tool's exit code")
 	parsersCmd.AddCommand(parsersListCmd)
 	parsersCmd.AddCommand(parsersInspectCmd)
+	parsersCmd.AddCommand(parsersRunCmd)
 	devtoolsCmd.AddCommand(parsersCmd)
+}
+
+func runParsersRun(cmd *cobra.Command, args []string) error {
+	tool := args[0]
+	ctx := cmd.Context()
+
+	stdout, err := io.ReadAll(cmd.InOrStdin())
+	if err != nil {
+		return fmt.Errorf("read stdin: %w", err)
+	}
+	var stderr []byte
+	if p, _ := cmd.Flags().GetString("stderr-file"); p != "" {
+		if stderr, err = os.ReadFile(p); err != nil {
+			return fmt.Errorf("read stderr file: %w", err)
+		}
+	}
+	exitCode, _ := cmd.Flags().GetInt("exit-code")
+	//nolint:gosec // G115: a process exit code is small; the int32 cast is intentional.
+	ec := int32(exitCode)
+
+	var diags []parsermanager.RawDiagnostic
+	if wasmPath, _ := cmd.Flags().GetString("wasm"); wasmPath != "" {
+		wasm, readErr := os.ReadFile(wasmPath)
+		if readErr != nil {
+			return fmt.Errorf("read wasm module: %w", readErr)
+		}
+		diags, err = parsermanager.ParseLocal(ctx, wasm, tool, stdout, stderr, ec)
+	} else {
+		c, _, _, loadErr := loadConfig()
+		if loadErr != nil {
+			return fmt.Errorf("loading config: %w (or pass --wasm <path>)", loadErr)
+		}
+		// The configured parser entry and the dispatch tool name are the same here.
+		diags, err = parsermanager.New(c.Parsers).ParseOutput(ctx, tool, tool, stdout, stderr, ec)
+	}
+	if err != nil {
+		return err
+	}
+	return writeParsersJSON(cmd.OutOrStdout(), diags)
 }
 
 // loadParserCatalog builds the catalog either from a local --wasm file (fully

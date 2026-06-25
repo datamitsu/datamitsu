@@ -1,6 +1,8 @@
 package cli_test
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -8,7 +10,7 @@ import (
 )
 
 // expectedParsersSubcommands is the drift guard for the `devtools parsers` group.
-var expectedParsersSubcommands = []string{"inspect", "list"}
+var expectedParsersSubcommands = []string{"inspect", "list", "run"}
 
 // devtoolsParsersHelpCases freezes the static help surfaces for the parsers group.
 var devtoolsParsersHelpCases = []struct {
@@ -19,6 +21,7 @@ var devtoolsParsersHelpCases = []struct {
 	{"parsers", []string{"devtools", "parsers", "--help"}, "devtools_parsers_help"},
 	{"list", []string{"devtools", "parsers", "list", "--help"}, "devtools_parsers_list_help"},
 	{"inspect", []string{"devtools", "parsers", "inspect", "--help"}, "devtools_parsers_inspect_help"},
+	{"run", []string{"devtools", "parsers", "run", "--help"}, "devtools_parsers_run_help"},
 }
 
 func TestDevtoolsParsersHelpGolden(t *testing.T) {
@@ -90,4 +93,33 @@ func TestDevtoolsParsersInspect(t *testing.T) {
 	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
 		"--no-auto-config", "--config", cfg, "devtools", "parsers", "inspect", "ghost")
 	assertOfflineError(t, res, "not provided by any configured parser")
+}
+
+// TestDevtoolsParsersRun exercises the end-to-end debug path offline: pipe real
+// eslint --format json output into `parsers run eslint --wasm <fixture>` and
+// assert the structured diagnostics come back. The committed echo.wasm fixture
+// bundles every parser, including eslint.
+func TestDevtoolsParsersRun(t *testing.T) {
+	wasm, err := os.ReadFile(filepath.Join("..", "..", "internal", "parsermanager", "testdata", "echo.wasm"))
+	if err != nil {
+		t.Fatalf("read wasm fixture: %v", err)
+	}
+	p := clitest.NewProject(t)
+	wasmPath := filepath.Join(p.Dir, "parsers.wasm")
+	if err := os.WriteFile(wasmPath, wasm, 0o644); err != nil {
+		t.Fatalf("write wasm: %v", err)
+	}
+
+	eslintJSON := `[{"filePath":"a.js","messages":[` +
+		`{"ruleId":"semi","severity":1,"message":"Missing semicolon.","line":2,"column":3,"endLine":2,"endColumn":4}]}]`
+	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, Stdin: eslintJSON},
+		"devtools", "parsers", "run", "eslint", "--wasm", wasmPath, "--exit-code", "1")
+	if res.ExitCode != 0 {
+		t.Fatalf("`parsers run` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
+	}
+	for _, want := range []string{`"message": "Missing semicolon."`, `"code": "semi"`, `"row": 2`} {
+		if !strings.Contains(res.Stdout, want) {
+			t.Errorf("`parsers run` output missing %q:\n%s", want, res.Stdout)
+		}
+	}
 }

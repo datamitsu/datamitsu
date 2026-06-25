@@ -38,6 +38,7 @@ var testedLeafCommands = map[string]string{
 	"devtools pack-inline-archive": "TestDevtoolsArgValidation",
 	"devtools parsers inspect":     "TestDevtoolsParsersInspect",
 	"devtools parsers list":        "TestDevtoolsParsersList / TestDevtoolsParsersListJSONEmpty",
+	"devtools parsers run":         "TestDevtoolsParsersRun",
 	"devtools pull-github":         "TestDevtoolsArgValidation",
 	"devtools pull-node":           "TestDevtoolsArgValidation",
 	"devtools pull-runtimes":       "TestDevtoolsArgValidation",

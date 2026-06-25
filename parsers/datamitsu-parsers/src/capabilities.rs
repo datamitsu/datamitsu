@@ -92,6 +92,7 @@ const TOOLS: &[&ToolCapability] = &[
     &tools::dotenv_linter::DESCRIPTOR,
     &tools::editorconfig_checker::DESCRIPTOR,
     &tools::erb_lint::DESCRIPTOR,
+    &tools::eslint::DESCRIPTOR,
     &tools::fish::DESCRIPTOR,
     &tools::gccdiag::DESCRIPTOR,
     &tools::gdlint::DESCRIPTOR,

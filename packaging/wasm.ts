@@ -49,6 +49,7 @@ export const PARSER_NAMES: readonly string[] = [
   "dotenv_linter",
   "editorconfig_checker",
   "erb_lint",
+  "eslint",
   "fish",
   "gccdiag",
   "gdlint",

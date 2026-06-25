@@ -81,6 +81,18 @@ func (m *Manager) ParseOutput(
 	return rt.Parse(ctx, toolName, stdout, stderr, exitCode)
 }
 
+// ParseLocal runs the named tool's parser, inside an already-loaded WASM module,
+// over the given raw output — like ParseOutput but for a local module (no config
+// or download). It backs `devtools parsers run --wasm` and offline tests.
+func ParseLocal(ctx context.Context, wasm []byte, toolName string, stdout, stderr []byte, exitCode int32) ([]RawDiagnostic, error) {
+	rt, err := NewRuntime(ctx, wasm)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rt.Close(ctx) }()
+	return rt.Parse(ctx, toolName, stdout, stderr, exitCode)
+}
+
 // ensureModule downloads-and-verifies the parser if not already cached and
 // returns the path to the verified .wasm. Concurrent calls for the same parser
 // collapse to one download via singleflight; a redeclared url+hash that is

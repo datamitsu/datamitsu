@@ -692,6 +692,18 @@ datamitsu devtools parsers inspect hadolint
 datamitsu devtools parsers list --wasm ./parsers/target/wasm32-unknown-unknown/release/datamitsu_parsers.wasm
 ```
 
+`run` pipes a tool's raw output (from stdin) through its parser and prints the
+structured diagnostics — the quickest way to develop or debug a parser against
+real output (parsers are not yet wired into the lint pipeline). It reads stdout
+from stdin; pass `--stderr-file` / `--exit-code` for parsers that use them, and
+`--wasm <path>` to use a local module instead of a configured one.
+
+```bash
+# Run eslint through datamitsu, then parse its JSON into diagnostics
+datamitsu exec eslint -- --format json file.js \
+  | datamitsu devtools parsers run eslint --wasm ./datamitsu_parsers.wasm --exit-code 1
+```
+
 ### Troubleshooting devtools commands
 
 **File not found errors:**

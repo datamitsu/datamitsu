@@ -13,6 +13,7 @@ Usage:
 Available Commands:
   inspect     Show full capability detail for one parsed tool
   list        List every tool the configured parser modules can parse (deduplicated)
+  run         Run a parser on a tool's raw output (from stdin) and print the diagnostics
 
 Flags:
   -h, --help   help for parsers
