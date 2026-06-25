@@ -1,4 +1,9 @@
 tasks:
+  # ── Bench ──
+  bench:overhead:
+    cmds:
+      - bash scripts/bench-overhead.sh
+    desc: "Measure datamitsu launch + planner overhead (tsbench probe tool gated by DATAMITSU_BENCH=1)"
   # ── Build ──
   build:
     cmds:
