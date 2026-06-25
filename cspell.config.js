@@ -312,5 +312,7 @@ export default defineConfig((config) => ({
     "OCIE",
     "gocoverdir",
     "uncov",
+    "tsbench",
+    "perfile",
   ],
 }));
