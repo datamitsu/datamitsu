@@ -287,6 +287,26 @@ type LspEntry struct {
 // MapOfLsp maps an LSP entry name to its declaration.
 type MapOfLsp map[string]LspEntry
 
+// LspSortable pairs an LSP entry's name with its order for deterministic
+// ordering. Phase 3 will consume this when composing the LSP server set; it is
+// declared (and unit-tested) now so the tie-break convention is pinned.
+type LspSortable struct {
+	Name  string
+	Order int
+}
+
+// lessLspByOrderThenName orders LSP entries by Order ascending, breaking ties
+// alphabetically by entry name. This reuses the actual existing tie-break
+// mechanism — the planner sorts tool names with sort.Strings (see
+// tooling/planner.go collectTasks) — rather than definition order. Pure; not yet
+// wired into behavior (Phase 3 consumes it).
+func lessLspByOrderThenName(a, b LspSortable) bool {
+	if a.Order != b.Order {
+		return a.Order < b.Order
+	}
+	return a.Name < b.Name
+}
+
 // ========================================
 // Output Parsers (WASM)
 // ========================================

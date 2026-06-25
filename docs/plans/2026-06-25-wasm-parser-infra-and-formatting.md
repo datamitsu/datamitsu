@@ -220,22 +220,31 @@ tool: string; order?: number }` (inherits the referenced tool's projectTypes/glo
 
 ### Task 4: Post-merge tool-facet validation + alphabetical lsp-order helper
 
-- [ ] After all config overlays are merged (load-time), validate each tool has ≥1 facet: a
+- [x] After all config overlays are merged (load-time), validate each tool has ≥1 facet: a
       `fix`/`lint` operation OR (future) an `lsp` binding. **Phase 1: require fix/lint present;
       `lsp` is not yet counted.** Runtime check (not a type), placed alongside the other
       post-merge validations. This is new (no existing empty-operations check).
-- [ ] Add a small pure comparator `lessLspByOrderThenName(a, b)` that sorts by `order` then
+      (`ValidateToolFacets` in `validate.go`, wired into the chain in `cmd/config_loader.go`
+      right after `ValidateTools`.)
+- [x] Add a small pure comparator `lessLspByOrderThenName(a, b)` that sorts by `order` then
       **alphabetically by entry name** on ties — reusing the `sort.Strings`-by-name convention
       from `planner.go:178-182`. Not wired into behavior (Phase 3 consumes it); unit-tested now
       so the convention is pinned. (Records that `revise.txt` §1.5's "definition order"
-      parenthetical was incorrect; actual behavior is alphabetical.)
-- [ ] Write tests: tool with no fix/lint → error; tool with a fix op → ok; comparator: equal
-      `order` → alphabetical by name.
-- [ ] **Dog-food 1:** `task build`; confirm this repo's config loads clean; with a _throwaway
+      parenthetical was incorrect; actual behavior is alphabetical.) (Added `LspSortable` +
+      `lessLspByOrderThenName` in `config.go` near the lsp types.)
+- [x] Write tests: tool with no fix/lint → error; tool with a fix op → ok; comparator: equal
+      `order` → alphabetical by name. (`internal/config/tool_facet_test.go`.)
+- [x] **Dog-food 1:** `task build`; confirm this repo's config loads clean; with a _throwaway
       temp config_ declare a probe `parsers` entry + a `outputParser` on a probe tool →
       validation passes; flip the ref to a non-existent name → validation fails with the clear
       error. Log the outcomes. (Temp config only — do not mutate `datamitsu.config.ts`.)
-- [ ] Run `go test ./internal/config/...` + CLI golden suite `go test ./test/cli/ -count=2` —
+      (Done via `check/lint --config <temp> --explain` in an isolated dir: real repo config
+      loads clean; valid parser+outputParser → probe tool appears in the plan; dangling
+      `outputParser` → `tool "probe": outputParser references unknown parser "nonexistent"`;
+      empty-operations tool → `tool "probe": must declare at least one fix or lint operation`.
+      Note: nil-map fields exposed to JS are truthy goja wrappers — temp config must build the
+      object via spread, not mutate `config.x ?? {}`.)
+- [x] Run `go test ./internal/config/...` + CLI golden suite `go test ./test/cli/ -count=2` —
       must pass before Task 5.
 
 ### Task 5: Scaffold the Rust→WASM parser crate (echo skeleton)

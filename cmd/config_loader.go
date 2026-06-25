@@ -199,6 +199,10 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 		return nil, nil, nil, err
 	}
 
+	if err := config.ValidateToolFacets(currentConfig.Tools); err != nil {
+		return nil, nil, nil, err
+	}
+
 	if err := config.ValidateOCI(currentConfig.OCI); err != nil {
 		return nil, nil, nil, err
 	}

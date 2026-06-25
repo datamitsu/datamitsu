@@ -667,6 +667,41 @@ func ValidateTools(tools MapOfTools, parsers MapOfParsers) error {
 	return nil
 }
 
+// ValidateToolFacets fails when a tool declares no usable facet. After all
+// config overlays are merged, every tool must expose at least one fix or lint
+// operation (a future lsp binding will also count, but lsp is not yet wired in
+// this release). A tool with no operations is silently skipped by the planner
+// (collectTasks drops tools missing the requested op), so an empty tool is
+// almost always an authoring mistake — surface it at load time instead.
+//
+// This is a brand-new check: there is no existing empty-operations validation to
+// mirror.
+func ValidateToolFacets(tools MapOfTools) error {
+	toolNames := make([]string, 0, len(tools))
+	for name := range tools {
+		toolNames = append(toolNames, name)
+	}
+	sort.Strings(toolNames)
+
+	var errs []string
+	for _, toolName := range toolNames {
+		tool := tools[toolName]
+		_, hasFix := tool.Operations[OpFix]
+		_, hasLint := tool.Operations[OpLint]
+		if !hasFix && !hasLint {
+			errs = append(errs, fmt.Sprintf(
+				"tool %q: must declare at least one fix or lint operation",
+				toolName,
+			))
+		}
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("config validation failed:\n  %s", strings.Join(errs, "\n  "))
+	}
+	return nil
+}
+
 // ValidateBundles validates bundle configurations.
 // It checks that each bundle has content (files or archives), link paths are safe,
 // and link names are unique across both apps and bundles.
