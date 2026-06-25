@@ -35,6 +35,8 @@ interface Config {
   runtimes?: BinManager.MapOfRuntimes;
   bundles?: Record<string, Bundle>;
   tools?: MapOfTools;
+  parsers?: Record<string, Parser>;
+  lsp?: Record<string, LspProxy | LspDerived>;
   projectTypes?: MapOfProjectTypes;
   setup?: MapOfConfigSetup;
   initCommands?: MapOfInitCommands;
@@ -510,6 +512,7 @@ Tools define fix and lint operations that datamitsu executes.
 interface Tool {
   name: string;
   operations: Partial<Record<"fix" | "lint", ToolOperation>>;
+  outputParser?: string; // By-name reference into `parsers` (must exist)
   projectTypes?: string[]; // Restrict to specific project types
   skip?: boolean; // Report as skipped and never run (instead of omitting the tool)
   skipReason?: string; // Human-readable reason shown in the skipped report
@@ -525,6 +528,8 @@ interface ToolOperation {
   priority?: number; // Execution order (lower = first, default: 0)
   invalidateOn?: string[]; // Files that invalidate cache
   env?: Record<string, string>; // Extra environment variables; values support {root}, {cwd}, {toolCache}
+  input?: "file" | "stdin"; // How file content reaches the tool (default: "file")
+  output?: "inplace" | "stdout"; // How the result is captured (default: "inplace")
 }
 ```
 
@@ -591,6 +596,80 @@ const toolsConfig = {
   },
 };
 ```
+
+### Output Parser (`outputParser`)
+
+A tool may reference a WASM [output parser](#output-parsers-parsers) by name to
+turn its raw text output into structured results. The reference must name an
+existing `parsers` entry — a dangling reference is a config error.
+
+```javascript
+const toolsConfig = {
+  hadolint: {
+    name: "hadolint",
+    outputParser: "hadolint", // must match a key in `parsers`
+    operations: {
+      lint: { app: "hadolint", args: ["{file}"], scope: "per-file" },
+    },
+  },
+};
+```
+
+Output parsers are a Phase-1 _plumbing_ surface: the pipeline (declare → download
+→ verify → load → invoke) ships now with a trivial `echo` parser, but real
+diagnostic parsers (hadolint, yamllint, …) arrive in a later phase. See
+[WASM Output Parsers](../guides/architecture/parsers.md) for the architecture.
+
+### Formatting input/output modes (`input` / `output`)
+
+By default a tool receives file paths as arguments (`input: "file"`) and either
+mutates files in place or has its combined stdout+stderr captured for reporting
+(`output: "inplace"`). A **formatter** that reads from standard input and writes
+the formatted document to standard output uses the stdin → stdout → diff contract
+instead:
+
+| Field    | Values                    | Default     | Meaning                                                                |
+| -------- | ------------------------- | ----------- | ---------------------------------------------------------------------- |
+| `input`  | `"file"` \| `"stdin"`     | `"file"`    | `"stdin"` pipes the target file's content to the tool's standard input |
+| `output` | `"inplace"` \| `"stdout"` | `"inplace"` | `"stdout"` captures stdout (kept apart from stderr) as the new content |
+
+When `output: "stdout"`, datamitsu treats the tool's stdout as the full new file
+text, computes a **minimal line-based diff** against the original, and applies
+only the changed lines — no change yields no edits. This keeps the formatter
+sandboxed from the filesystem and produces precise edits (reusable as LSP
+`TextEdit` ranges later). Use it with `scope: "per-file"`.
+
+```javascript
+// BAD: a stdin-only formatter forced through the in-place vehicle — it never
+// receives the file and its formatted output is swallowed into the report.
+const toolsConfig = {
+  shfmt: {
+    name: "shfmt",
+    operations: {
+      fix: { app: "shfmt", args: ["{file}"], scope: "per-file" },
+    },
+  },
+};
+
+// GOOD: feed content on stdin, capture stdout, let the core diff + apply.
+const toolsConfig = {
+  shfmt: {
+    name: "shfmt",
+    operations: {
+      fix: {
+        app: "shfmt",
+        args: [], // tool reads stdin, writes stdout
+        scope: "per-file",
+        input: "stdin",
+        output: "stdout",
+      },
+    },
+  },
+};
+```
+
+See [Formatting pipeline](../guides/tooling-system.md#formatting-stdin--stdout--diff)
+for the end-to-end flow.
 
 ## Project Types (`projectTypes`)
 
@@ -837,6 +916,113 @@ Rules:
 
 See the [OCI Bundles guide](/docs/guides/oci-bundles) for the trust model and the seeding lifecycle.
 
+## Output Parsers (`parsers`)
+
+Parsers are signed Rust→WASM modules that extract structured results from a
+tool's raw text output. A `parsers` entry is a **url+hash data artifact** —
+modeled on `ArchiveSpec`/`Bundle`, _not_ on an app: there is no runtime and no
+lockfile, because it is data, not a process. It is downloaded, SHA-256 verified,
+content-addressed in the store, and loaded into a sandboxed WASM runtime
+(wazero).
+
+```typescript
+interface Parser {
+  url: string; // URL of the .wasm module
+  hash: string; // SHA-256 (64 lowercase hex) — mandatory
+  version?: string; // Optional version for cache invalidation / provenance
+}
+```
+
+| Field     | Type     | Description                                                 |
+| --------- | -------- | ----------------------------------------------------------- |
+| `url`     | `string` | URL of the `.wasm` module                                   |
+| `hash`    | `string` | SHA-256 hash, 64 lowercase hex — **mandatory** (see below)  |
+| `version` | `string` | Optional version string for cache invalidation / provenance |
+
+A tool opts into a parser via [`tool.outputParser`](#output-parser-outputparser).
+The same parser referenced by several tools is downloaded once.
+
+```javascript
+function getConfig(input) {
+  return {
+    ...input,
+    parsers: {
+      echo: {
+        url: "https://github.com/owner/repo/releases/download/v1.2.3/datamitsu_parsers.wasm",
+        hash: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        version: "1.2.3",
+      },
+    },
+  };
+}
+```
+
+The SHA-256 `hash` is **mandatory** per the [security policy](#security-requirements)
+— an empty or malformed hash is a config error, not a warning. Config maintainers
+obtain a parser's `url` and `hash` from the release-time **parser manifest**
+published alongside the signed `checksums.txt`. See
+[WASM Output Parsers](../guides/architecture/parsers.md) for the trust model.
+
+```javascript
+// BAD: missing hash — refused at config load
+parsers: {
+  echo: { url: "https://example.com/datamitsu_parsers.wasm" },
+}
+
+// GOOD: mandatory SHA-256 hash from the signed parser manifest
+parsers: {
+  echo: {
+    url: "https://example.com/datamitsu_parsers.wasm",
+    hash: "0123…cdef", // 64 lowercase hex
+  },
+}
+```
+
+## LSP Servers (`lsp`) — reserved
+
+:::info Reserved surface
+`lsp` is a **declaration-only** entity reserved for a later phase. The types load
+and are structurally validated today, but there is **no runtime behavior** in
+this release. Declaring `lsp` entries does nothing yet.
+:::
+
+Each entry is one of two discriminated shapes:
+
+```typescript
+// Wrap a standalone language-server app, scoped by project types.
+interface LspProxy {
+  type: "proxy";
+  app: string; // app name (in `apps`) providing the server
+  projectTypes: string[]; // must be non-empty
+  order?: number; // precedence; ties break alphabetically by entry name
+}
+
+// Reuse an existing tool's projectTypes/globs and its outputParser.
+interface LspDerived {
+  type: "derived";
+  tool: string; // tool name (in `tools`) — must exist
+  order?: number; // precedence; ties break alphabetically by entry name
+}
+```
+
+Structural validation today: `type` must be `"proxy"` or `"derived"`; a `proxy`
+requires `app` plus a non-empty `projectTypes`; a `derived` requires a `tool`
+that exists in `tools`. The optional `order` controls precedence, with **ties
+broken alphabetically by entry name** (the same `sort.Strings`-by-name convention
+the planner uses).
+
+```javascript
+function getConfig(input) {
+  return {
+    ...input,
+    lsp: {
+      "go-lsp": { type: "proxy", app: "gopls", projectTypes: ["golang"] },
+      hadolint: { type: "derived", tool: "hadolint" },
+    },
+  };
+}
+```
+
 ## JavaScript APIs
 
 The following APIs are available in configuration files.
@@ -912,5 +1098,6 @@ All artifacts downloaded from the internet must have a SHA-256 hash specified:
 - JVM apps: `jarHash` field
 - External archives: `hash` field
 - Node runtime (pnpm): `pnpmHash` field
+- Output parsers: `hash` field on each `parsers` entry
 
 Missing or empty hashes are treated as configuration errors.

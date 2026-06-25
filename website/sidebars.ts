@@ -42,6 +42,7 @@ const sidebars: SidebarsConfig = {
             "guides/architecture/execution",
             "guides/architecture/discovery",
             "guides/architecture/caching",
+            "guides/architecture/parsers",
           ],
           label: "Architecture",
           link: { id: "guides/architecture/index", type: "doc" },

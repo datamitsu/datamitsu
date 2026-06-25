@@ -505,12 +505,27 @@ hash, version } }` for every shipped parser. The manifest is versioned **with th
 
 ### Task 14: Documentation
 
-- [ ] Document the `parsers` config entity, `tool.outputParser`, and the reserved `lsp` type in
+- [x] Document the `parsers` config entity, `tool.outputParser`, and the reserved `lsp` type in
       the website docs (`website/docs/...`), and the formatting (stdin→stdout→diff) path. Use the
       repo's BAD/GOOD config conventions and architecture-doc style (Mermaid, no Go snippets).
-- [ ] Update the architecture docs to include the WASM parser pipeline + diff-in-core.
-- [ ] Confirm the crate `README.md` (Task 5) and `config/config.d.ts` ambient declarations give
-      IDE autocomplete for the new config surfaces.
+      (`reference/configuration-api.md`: added `Output Parsers (parsers)`, `LSP Servers (lsp) —
+reserved`, `tool.outputParser` + formatting `input`/`output` mode subsections, the
+      `Config`/`Tool`/`ToolOperation` interface listings, and the parsers hash row in Security
+      Requirements — all with BAD/GOOD blocks. `guides/tooling-system.md`: new
+      `Formatting (stdin → stdout → diff)` section with a BAD/GOOD config + Mermaid flow.)
+- [x] Update the architecture docs to include the WASM parser pipeline + diff-in-core.
+      (New `guides/architecture/parsers.md`: the six-stage declare→build→sign→deliver→download→
+      load pipeline, the extract-only/defaults-in-core invariant, the line-based Myers
+      diff-in-core formatting flow, and a trust-model table — all Mermaid, no Go snippets. Wired
+      into `sidebars.ts`, the architecture `index.md` Components table.)
+- [x] Confirm the crate `README.md` (Task 5) and `config/config.d.ts` ambient declarations give
+      IDE autocomplete for the new config surfaces. (Confirmed: `parsers/README.md` documents the
+      ABI, output form, and the add-a-parser recipe; `config/config.d.ts` carries full JSDoc on
+      `Parser`, `LspProxy`, `LspDerived`, `MapOfParsers`, `MapOfLsp`, `Config.parsers`/`Config.lsp`,
+      `Tool.outputParser`, and `ToolOperation.input`/`output` — so user configs get hover docs and
+      autocomplete. Website docusaurus build is blocked locally by a corrupted pnpm store
+      (zero-byte content files, pre-existing/env), unrelated to the docs — all internal links and
+      heading-slug anchors verified manually instead.)
 
 _Note: ralphex automatically moves the completed plan to `docs/plans/completed/`._
 
