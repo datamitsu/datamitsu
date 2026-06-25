@@ -47,6 +47,10 @@ func (s Severity) String() string {
 // 0-based at its boundary), and severity is resolved. It is produced from a
 // parser's nullable RawDiagnostic by Resolve — never constructed by a parser.
 type Diagnostic struct {
+	// File is the path the diagnostic belongs to. Parsers don't report it (most
+	// tool formats drop the filename), so the executor sets it from the file it
+	// linted; empty when not attributable (e.g. multi-file batch output).
+	File     string   `json:"file,omitempty"`
 	Row      int      `json:"row"`      // 1-based start line
 	Col      int      `json:"col"`      // 1-based start column
 	EndRow   int      `json:"endRow"`   // 1-based end line

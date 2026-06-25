@@ -82,6 +82,7 @@ type planExecutor interface {
 	SetResultCallback(cb tooling.ResultCallback)
 	SetTaskStartCallback(cb tooling.TaskStartCallback)
 	SetFileProgressCallback(cb tooling.FileProgressCallback)
+	SetParser(parser tooling.DiagnosticParser)
 	Execute(ctx context.Context, plan *tooling.ExecutionPlan) ([]tooling.GroupExecutionResult, error)
 }
 
@@ -220,6 +221,11 @@ func initSharedContext(
 	// and so they appear in --explain, which never reaches the install step.
 	planner.SetPlatformChecker(binMgr)
 	sc.executor = tooling.NewExecutor(sc.rootPath, false, true, binMgr, sc.projectCache)
+	// Wire output-parsing only when parsers are declared; otherwise the executor
+	// never parses (tools without an outputParser are unaffected).
+	if len(sc.cfg.Parsers) > 0 {
+		sc.executor.SetParser(newDiagnosticParser(sc.cfg.Parsers))
+	}
 
 	// All configured tools are known here, so the result column width is fixed
 	// once and shared across every operation (so fix and lint blocks align).

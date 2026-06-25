@@ -1496,6 +1496,7 @@ type fakeExecutor struct {
 func (f *fakeExecutor) SetResultCallback(tooling.ResultCallback)             {}
 func (f *fakeExecutor) SetTaskStartCallback(tooling.TaskStartCallback)       {}
 func (f *fakeExecutor) SetFileProgressCallback(tooling.FileProgressCallback) {}
+func (f *fakeExecutor) SetParser(tooling.DiagnosticParser)                   {}
 func (f *fakeExecutor) Execute(_ context.Context, _ *tooling.ExecutionPlan) ([]tooling.GroupExecutionResult, error) {
 	f.called = true
 	*f.order = append(*f.order, "execute")

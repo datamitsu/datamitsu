@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/diagnostic"
 	"github.com/datamitsu/datamitsu/internal/textdiff"
 )
 
@@ -124,6 +125,11 @@ type ExecutionResult struct {
 	// per-file mode it holds the edits for the last formatted file, mirroring how
 	// Command reports the last command.
 	FormatEdits []textdiff.Edit
+	// Diagnostics holds the structured diagnostics parsed from this tool's output
+	// when the tool declares an outputParser (and a parser is wired in). Nil for
+	// tools without a parser — the common case. Populated per-file in per-file
+	// mode, each entry's File set to the file it came from.
+	Diagnostics []diagnostic.Diagnostic
 }
 
 // recordTiming stamps the run's absolute wall-clock window and elapsed Duration

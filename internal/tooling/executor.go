@@ -21,6 +21,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/cache"
 	clr "github.com/datamitsu/datamitsu/internal/color"
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/diagnostic"
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/textdiff"
@@ -43,12 +44,22 @@ type Executor struct {
 	taskStartCallback    TaskStartCallback    // Optional callback when task starts
 	fileProgressCallback FileProgressCallback // Optional callback for per-file progress
 	cache                *cache.Cache         // Cache for storing execution results
+	parser               DiagnosticParser     // Optional: parses tool output into diagnostics
 }
 
 // AppManager interface for getting application command information
 type AppManager interface {
 	GetBinaryPath(ctx context.Context, appName string) (string, error)
 	GetCommandInfo(ctx context.Context, appName string) (*binmanager.CommandInfo, error)
+}
+
+// DiagnosticParser turns a tool's raw output into resolved diagnostics. It is
+// injected via SetParser; when nil (the default) the executor never parses, so
+// tools without an outputParser are entirely unaffected. The concrete
+// implementation (in the runner) loads the WASM module and applies the
+// defaults-in-core resolution.
+type DiagnosticParser interface {
+	Parse(ctx context.Context, parserName, toolName string, stdout, stderr []byte, exitCode int32) ([]diagnostic.Diagnostic, error)
 }
 
 // ResultCallback is called when a task completes
@@ -90,6 +101,12 @@ func (e *Executor) SetTaskStartCallback(callback TaskStartCallback) {
 // SetFileProgressCallback sets a callback to be called after each file is processed
 func (e *Executor) SetFileProgressCallback(callback FileProgressCallback) {
 	e.fileProgressCallback = callback
+}
+
+// SetParser wires the diagnostic parser used for tools that declare an
+// outputParser. Without it, tool output is never parsed.
+func (e *Executor) SetParser(parser DiagnosticParser) {
+	e.parser = parser
 }
 
 // Execute runs an execution plan
@@ -620,6 +637,44 @@ func (e *Executor) updateCacheAfterSuccess(task Task, files []string) {
 }
 
 // executePerFile executes a tool once per file
+// joinStreams concatenates a tool's captured stdout and stderr for the textual
+// fallback display (the parser sees them apart).
+func joinStreams(stdout, stderr []byte) []byte {
+	switch {
+	case len(stderr) == 0:
+		return stdout
+	case len(stdout) == 0:
+		return stderr
+	default:
+		out := make([]byte, 0, len(stdout)+1+len(stderr))
+		out = append(out, stdout...)
+		out = append(out, '\n')
+		return append(out, stderr...)
+	}
+}
+
+// parseFileDiagnostics runs the tool's declared parser over one file's captured
+// output and appends the resolved diagnostics (stamped with the file) to result.
+// A parse failure is logged, not fatal — the tool's own pass/fail is unaffected.
+func (e *Executor) parseFileDiagnostics(ctx context.Context, result *ExecutionResult, task Task, file string, stdout, stderr []byte, exitCode int) {
+	//nolint:gosec // G115: a process exit code is small; the int32 cast is intentional.
+	diags, err := e.parser.Parse(ctx, task.Tool.OutputParser, task.ToolName, stdout, stderr, int32(exitCode))
+	if err != nil {
+		log.Warn("output parser failed",
+			zap.String("tool", task.ToolName),
+			zap.String("parser", task.Tool.OutputParser),
+			zap.String("file", file),
+			zap.Error(err))
+		return
+	}
+	for i := range diags {
+		if diags[i].File == "" {
+			diags[i].File = file
+		}
+	}
+	result.Diagnostics = append(result.Diagnostics, diags...)
+}
+
 func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binmanager.CommandInfo, workingDir string, startTime time.Time) ExecutionResult {
 	log.Debug("executePerFile start", zap.String("toolName", task.ToolName), zap.Int("fileCount", len(task.Files)))
 
@@ -717,16 +772,24 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 			continue
 		}
 
-		separate := task.OpConfig.Output == config.ToolOutputStdout
+		formatMode := task.OpConfig.Output == config.ToolOutputStdout
+		parseMode := e.parser != nil && task.Tool.OutputParser != ""
+		// Both formatting and parsing need stdout and stderr kept apart.
+		separate := formatMode || parseMode
 		stdoutBytes, stderrBytes, err := e.runCommandIO(cmd, stdinContent, separate)
 
 		var output []byte
-		if separate {
+		switch {
+		case formatMode:
 			// stdout is the candidate formatted content; surface it separately
 			// and report only stderr (diagnostics) as the operation output.
 			result.CapturedStdout = string(stdoutBytes)
 			output = stderrBytes
-		} else {
+		case parseMode:
+			// Both streams were captured apart for the parser; for the textual
+			// fallback display keep them both.
+			output = joinStreams(stdoutBytes, stderrBytes)
+		default:
 			output = stdoutBytes
 		}
 		outputs = append(outputs, string(output))
@@ -734,12 +797,19 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 		exitCode := getExitCode(err)
 		lastExitCode = exitCode
 
+		// Parse this file's output into structured diagnostics when the tool
+		// declares an outputParser. Per-file mode means each invocation lints one
+		// file, so the diagnostics belong to it.
+		if parseMode {
+			e.parseFileDiagnostics(ctx, &result, task, file, stdoutBytes, stderrBytes, exitCode)
+		}
+
 		// Formatting pipeline (diff-in-core): in stdout-output mode a successful
 		// run yields the full new file text on stdout. Treat the original file as
 		// "before", the captured stdout as "after", compute the minimal line-based
 		// diff and apply it. No change → no edits → the file is left untouched
 		// (mtime preserved). No WASM parser is involved — formatting is text→text.
-		if err == nil && separate {
+		if err == nil && formatMode {
 			original := stdinContent // already the file content in stdin mode
 			if original == nil {
 				var readErr error
