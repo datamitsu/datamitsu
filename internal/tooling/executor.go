@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -701,7 +702,32 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 
 		opEnv := e.replaceEnvPlaceholders(task.OpConfig.Env, task.ProjectPath, task.ToolName)
 		cmd := e.buildCommand(ctx, cmdInfo, args, workingDir, opEnv)
-		output, err := e.runCommandWithOutput(cmd)
+
+		stdinContent, stdinErr := stdinForOperation(task.OpConfig, file)
+		if stdinErr != nil {
+			result.Success = false
+			result.Error = fmt.Errorf("failed to prepare stdin for file %s: %w", file, stdinErr)
+			if e.fileProgressCallback != nil {
+				e.fileProgressCallback(task.ToolName, cachedCount+i+1, totalFiles, false)
+			}
+			if e.failFast {
+				break
+			}
+			continue
+		}
+
+		separate := task.OpConfig.Output == config.ToolOutputStdout
+		stdoutBytes, stderrBytes, err := e.runCommandIO(cmd, stdinContent, separate)
+
+		var output []byte
+		if separate {
+			// stdout is the candidate formatted content; surface it separately
+			// and report only stderr (diagnostics) as the operation output.
+			result.CapturedStdout = string(stdoutBytes)
+			output = stderrBytes
+		} else {
+			output = stdoutBytes
+		}
 		outputs = append(outputs, string(output))
 
 		exitCode := getExitCode(err)
@@ -1229,16 +1255,53 @@ func getExitCode(err error) int {
 }
 
 func (e *Executor) runCommandWithOutput(cmd *exec.Cmd) ([]byte, error) {
-	var combined bytes.Buffer
-	cmd.Stdout = &combined
-	cmd.Stderr = &combined
+	combined, _, err := e.runCommandIO(cmd, nil, false)
+	return combined, err
+}
+
+// runCommandIO runs cmd with optional stdin content and either combined or
+// separated stdout/stderr capture. When separate is false (the default for
+// every existing tool) stdout and stderr are interleaved into a single buffer,
+// returned as stdoutBytes with stderrBytes nil — byte-for-byte the historical
+// behavior. When separate is true the streams are captured independently so the
+// formatting path can treat stdout as the candidate file content while keeping
+// diagnostics (stderr) apart. A nil stdinContent leaves stdin untouched.
+func (e *Executor) runCommandIO(cmd *exec.Cmd, stdinContent []byte, separate bool) (stdoutBytes, stderrBytes []byte, err error) {
+	var outBuf, errBuf, combined bytes.Buffer
+	if separate {
+		cmd.Stdout = &outBuf
+		cmd.Stderr = &errBuf
+	} else {
+		cmd.Stdout = &combined
+		cmd.Stderr = &combined
+	}
+	if stdinContent != nil {
+		cmd.Stdin = bytes.NewReader(stdinContent)
+	}
 
 	setupProcessGroupCleanup(cmd)
 
-	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("start command: %w", err)
+	if startErr := cmd.Start(); startErr != nil {
+		return nil, nil, fmt.Errorf("start command: %w", startErr)
 	}
 
-	err := cmd.Wait()
-	return combined.Bytes(), err
+	err = cmd.Wait()
+	if separate {
+		return outBuf.Bytes(), errBuf.Bytes(), err
+	}
+	return combined.Bytes(), nil, err
+}
+
+// stdinForOperation returns the bytes to feed to the tool's stdin for this
+// operation, or nil when the operation does not use stdin input. In stdin mode
+// it reads the target file's content (per-file scope feeds one file at a time).
+func stdinForOperation(op config.ToolOperation, file string) ([]byte, error) {
+	if op.Input != config.ToolInputStdin || file == "" {
+		return nil, nil
+	}
+	content, err := os.ReadFile(file)
+	if err != nil {
+		return nil, fmt.Errorf("read stdin content for %s: %w", file, err)
+	}
+	return content, nil
 }

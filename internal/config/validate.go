@@ -636,6 +636,24 @@ func ValidateTools(tools MapOfTools, parsers MapOfParsers) error {
 		for _, opType := range opTypes {
 			op := tool.Operations[OperationType(opType)]
 
+			switch op.Input {
+			case "", ToolInputFile, ToolInputStdin:
+			default:
+				errs = append(errs, fmt.Sprintf(
+					"tool %q operation %q: invalid input mode %q (supported: %q, %q)",
+					toolName, opType, op.Input, ToolInputFile, ToolInputStdin,
+				))
+			}
+
+			switch op.Output {
+			case "", ToolOutputInplace, ToolOutputStdout:
+			default:
+				errs = append(errs, fmt.Sprintf(
+					"tool %q operation %q: invalid output mode %q (supported: %q, %q)",
+					toolName, opType, op.Output, ToolOutputInplace, ToolOutputStdout,
+				))
+			}
+
 			for _, arg := range op.Args {
 				for _, ph := range findUnknownPlaceholders(arg, argAllowed) {
 					errs = append(errs, fmt.Sprintf(

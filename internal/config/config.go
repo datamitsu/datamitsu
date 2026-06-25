@@ -57,6 +57,34 @@ const (
 	OpLint OperationType = "lint"
 )
 
+// ToolInputMode controls how a tool operation receives file content.
+type ToolInputMode string
+
+// Tool input modes: pass file paths as arguments (default) or pipe the file's
+// content to the tool's standard input.
+const (
+	// ToolInputFile passes file paths via the {file}/{files} placeholders. This
+	// is the default and preserves the historical behavior for every tool.
+	ToolInputFile ToolInputMode = "file"
+	// ToolInputStdin pipes the target file's content to the tool's stdin (the
+	// stdin→stdout formatter contract). Used with per-file scope.
+	ToolInputStdin ToolInputMode = "stdin"
+)
+
+// ToolOutputMode controls how a tool operation's result is captured.
+type ToolOutputMode string
+
+// Tool output modes: let the tool mutate files in place (default) or capture
+// stdout separately as the candidate formatted content.
+const (
+	// ToolOutputInplace captures stdout+stderr combined for reporting and lets
+	// the tool mutate files directly. This is the default.
+	ToolOutputInplace ToolOutputMode = "inplace"
+	// ToolOutputStdout captures the tool's stdout separately (kept apart from
+	// stderr) as the candidate formatted content for the diff-in-core path.
+	ToolOutputStdout ToolOutputMode = "stdout"
+)
+
 // ToolOperation describes a single fix or lint invocation of a tool.
 type ToolOperation struct {
 	App          string            `json:"app"`
@@ -69,6 +97,13 @@ type ToolOperation struct {
 	Cache        *bool             `json:"cache,omitempty"`        // Enable caching (default: true)
 	InvalidateOn []string          `json:"invalidateOn,omitempty"` // Config files that invalidate cache
 	Env          map[string]string `json:"env,omitempty"`          // Extra environment variables for this operation
+	// Input selects how the file content reaches the tool: "file" (default,
+	// path via {file}/{files}) or "stdin" (pipe the file's content to stdin).
+	Input ToolInputMode `json:"input,omitempty"`
+	// Output selects how the tool's result is captured: "inplace" (default,
+	// combined stdout+stderr, tool mutates files) or "stdout" (capture stdout
+	// separately as the candidate formatted content).
+	Output ToolOutputMode `json:"output,omitempty"`
 }
 
 // Tool groups the fix and lint operations of a single development tool.

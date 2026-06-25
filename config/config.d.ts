@@ -835,12 +835,31 @@ declare global {
       globs?: string[];
 
       /**
+       * How the file content reaches the tool.
+       * - "file" (default): pass file paths as arguments via {file}/{files}
+       * - "stdin": pipe the target file's content to the tool's standard input
+       *   (the stdin→stdout formatter contract; use with scope "per-file")
+       * @default "file"
+       */
+      input?: "file" | "stdin";
+
+      /**
        * Files that should invalidate the cache when changed
        * Paths are relative to project root
        * @example ["eslint.config.js", "tsconfig.json"]
        * @example [".prettierrc", "package.json"]
        */
       invalidateOn?: string[];
+
+      /**
+       * How the tool's result is captured.
+       * - "inplace" (default): combined stdout+stderr is captured for reporting
+       *   and the tool mutates files directly
+       * - "stdout": capture the tool's stdout separately (kept apart from
+       *   stderr) as the candidate formatted content for the diff-in-core path
+       * @default "inplace"
+       */
+      output?: "inplace" | "stdout";
 
       /**
        * Priority/order when tools have overlapping globs

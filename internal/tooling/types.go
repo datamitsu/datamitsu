@@ -112,6 +112,11 @@ type ExecutionResult struct {
 	FailureReason FailureReason    // Why the task failed (independent error vs cascading cancellation)
 	StartedAt     time.Time        // Absolute start of this run (zero if not timed)
 	EndedAt       time.Time        // Absolute end of this run (zero if not timed)
+	// CapturedStdout holds the tool's stdout captured separately from stderr,
+	// set only when the operation uses output mode "stdout" (the candidate
+	// formatted content consumed by the diff-in-core formatting path). Empty for
+	// the default combined-capture behavior.
+	CapturedStdout string
 }
 
 // recordTiming stamps the run's absolute wall-clock window and elapsed Duration

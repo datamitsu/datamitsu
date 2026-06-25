@@ -2859,6 +2859,44 @@ func TestValidateTools(t *testing.T) {
 		}
 	})
 
+	t.Run("valid input/output modes pass", func(t *testing.T) {
+		tools := MapOfTools{
+			"fmt": {Operations: map[OperationType]ToolOperation{
+				OpFix: {Input: ToolInputStdin, Output: ToolOutputStdout},
+			}},
+			"lint": {Operations: map[OperationType]ToolOperation{
+				OpLint: {Input: ToolInputFile, Output: ToolOutputInplace},
+			}},
+		}
+		if err := ValidateTools(tools, nil); err != nil {
+			t.Errorf("valid input/output modes should pass, got: %v", err)
+		}
+	})
+
+	t.Run("invalid input mode fails", func(t *testing.T) {
+		tools := MapOfTools{
+			"t": {Operations: map[OperationType]ToolOperation{
+				OpFix: {Input: ToolInputMode("pipe")},
+			}},
+		}
+		err := ValidateTools(tools, nil)
+		if err == nil || !strings.Contains(err.Error(), "invalid input mode") {
+			t.Errorf("expected invalid input mode error, got: %v", err)
+		}
+	})
+
+	t.Run("invalid output mode fails", func(t *testing.T) {
+		tools := MapOfTools{
+			"t": {Operations: map[OperationType]ToolOperation{
+				OpLint: {Output: ToolOutputMode("file")},
+			}},
+		}
+		err := ValidateTools(tools, nil)
+		if err == nil || !strings.Contains(err.Error(), "invalid output mode") {
+			t.Errorf("expected invalid output mode error, got: %v", err)
+		}
+	})
+
 	t.Run("valid outputParser reference passes", func(t *testing.T) {
 		tools := MapOfTools{
 			"hadolint": {

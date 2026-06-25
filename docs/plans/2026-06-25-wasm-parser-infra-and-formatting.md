@@ -352,18 +352,31 @@ severity: Option<u8>, source: Option<String>, code: Option<String> }` serialized
 
 ### Task 9: Executor input modes — stdin + separated stdout capture
 
-- [ ] Extend `internal/tooling/executor.go` to support, in addition to the existing `{file}`
+- [x] Extend `internal/tooling/executor.go` to support, in addition to the existing `{file}`
       placeholder: (a) **stdin feeding** (`to_stdin`: pipe file content to the tool's stdin) and
       (b) **separated stdout capture** (stdout = candidate formatted content, kept apart from
       stderr — today they are combined in `runCommandWithOutput:1231-1244`). Gate via a config
       flag on the operation (e.g. `input: "stdin" | "file"`, `output: "stdout" | "inplace"`);
       **default behavior unchanged** for existing tools.
-- [ ] Add the corresponding TS/Go config fields (and `task build:lib`).
-- [ ] Write tests: a fake formatter script in stdin mode and in stdout mode; assert input
+      (`runCommandIO(cmd, stdinContent, separate)` replaces the body of
+      `runCommandWithOutput` — combined mode is byte-for-byte the old path; separate mode
+      splits streams. `stdinForOperation` reads the file in stdin mode. Wired into the
+      per-file path: separate mode surfaces stdout via the new
+      `ExecutionResult.CapturedStdout` and reports only stderr; stdin/stdout modes apply to
+      per-file scope.)
+- [x] Add the corresponding TS/Go config fields (and `task build:lib`).
+      (`ToolInputMode`/`ToolOutputMode` consts + `Input`/`Output` on `ToolOperation` in
+      `config.go`; `input`/`output` on `ToolOperation` in `config/config.d.ts`; value
+      validation added to `ValidateTools`; `task build:lib` regenerated the embedded copies.)
+- [x] Write tests: a fake formatter script in stdin mode and in stdout mode; assert input
       delivery and that stdout is captured cleanly without stderr contamination; existing
       placeholder behavior regression-tested.
-- [ ] Run `go test ./internal/tooling/...` + `go test ./test/cli/ -count=2` — must pass before
-      Task 10.
+      (`executor_io_test.go`: `runCommandIO` combined/separated/stdin cases; full per-file
+      `executeTask` stdin+stdout formatter (CapturedStdout = transformed content, stderr-only
+      report, no content leak); default-mode regression (combined output, empty CapturedStdout);
+      `stdinForOperation` table. Validation tests for the new modes in config.)
+- [x] Run `go test ./internal/tooling/...` + `go test ./test/cli/ -count=2` — must pass before
+      Task 10. (Both pass; managed `golangci-lint` 0 issues; `gofmt` clean.)
 
 ### Task 10: Formatting pipeline (capture → diff → apply) in the CLI
 
