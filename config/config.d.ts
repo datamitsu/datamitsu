@@ -313,6 +313,17 @@ declare global {
       initCommands?: MapOfInitCommands;
 
       /**
+       * LSP server declarations, keyed by name. RESERVED for Phase 3+ — this is
+       * a declaration-only surface with NO runtime behavior in this release.
+       *
+       * Each entry is either a `proxy` (wrap a standalone language server `app`,
+       * scoped by `projectTypes`) or a `derived` entry (reuse an existing tool's
+       * projectTypes/globs and its `outputParser`). The optional `order` controls
+       * precedence; ties break alphabetically by entry name.
+       */
+      lsp?: MapOfLsp;
+
+      /**
        * OCI bundle that seeds the tool store (pull without docker).
        * Chains as a scalar: the last config layer that set or spread it wins;
        * a layer that rebuilds its output without `{...input}` silently drops
@@ -546,6 +557,56 @@ declare global {
     // ========================================
 
     /**
+     * LSP derived declaration: reuse an existing tool's projectTypes/globs and
+     * its `outputParser` instead of declaring a standalone server. RESERVED for
+     * Phase 3+ — declaration only, no runtime behavior in this release.
+     */
+    interface LspDerived {
+      /**
+       * Optional precedence. Ties break alphabetically by entry name.
+       */
+      order?: number;
+
+      /**
+       * Name of the tool (in `tools`) whose projectTypes/globs and
+       * `outputParser` this entry inherits. Must reference an existing tool.
+       */
+      tool: string;
+
+      /**
+       * Discriminator: this entry is derived from an existing tool.
+       */
+      type: "derived";
+    }
+
+    /**
+     * LSP proxy declaration: wrap a standalone language server `app`, scoped to
+     * one or more project types. RESERVED for Phase 3+ — declaration only, no
+     * runtime behavior in this release.
+     */
+    interface LspProxy {
+      /**
+       * Name of the app (in `apps`) that provides the language server.
+       */
+      app: string;
+
+      /**
+       * Optional precedence. Ties break alphabetically by entry name.
+       */
+      order?: number;
+
+      /**
+       * Project types this server applies to. Must be non-empty.
+       */
+      projectTypes: string[];
+
+      /**
+       * Discriminator: this is a proxy over a standalone language-server app.
+       */
+      type: "proxy";
+    }
+
+    /**
      * Map of configuration setup with mainFilename as key
      * @example
      * {
@@ -558,14 +619,20 @@ declare global {
 
     type MapOfInitCommands = Record<string, InitCommand>;
 
+    type MapOfLsp = Record<string, LspDerived | LspProxy>;
+
     type MapOfParsers = Record<string, Parser>;
+
+    // ========================================
+    // Init Commands
+    // ========================================
 
     type MapOfProjectTypes = Record<string, ProjectType>;
 
     type MapOfTools = Record<string, Tool>;
 
     // ========================================
-    // Init Commands
+    // Config File Management (ENHANCED)
     // ========================================
 
     /**
@@ -610,10 +677,6 @@ declare global {
        */
       issuer: string;
     }
-
-    // ========================================
-    // Config File Management (ENHANCED)
-    // ========================================
 
     /**
      * Operation type

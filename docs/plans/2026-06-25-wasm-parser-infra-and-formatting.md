@@ -202,19 +202,21 @@ match reality and are corrected below.**
 
 ### Task 3: Declare the reserved `lsp` config entity (types only, no behavior)
 
-- [ ] Add a discriminated union in `config/config.d.ts`: `LspProxy { type: "proxy"; app: string;
+- [x] Add a discriminated union in `config/config.d.ts`: `LspProxy { type: "proxy"; app: string;
 projectTypes: string[]; order?: number }` (no globs) and `LspDerived { type: "derived";
 tool: string; order?: number }` (inherits the referenced tool's projectTypes/globs and its
-      `outputParser`); `lsp?: Record<string, LspProxy | LspDerived>` on `Config`. JSDoc: reserved
-      for Phase 3+, declaration only.
-- [ ] Add Go structs (`LspEntry` with a `Type` discriminator + optional fields, since Go has no
+      `outputParser`); `lsp?: Record<string, LspProxy | LspDerived>` on `Config` (via `MapOfLsp`).
+      JSDoc: reserved for Phase 3+, declaration only.
+- [x] Add Go structs (`LspEntry` with a `Type` discriminator + optional fields, since Go has no
       unions) and `Config.Lsp`. Minimal structural validation only: `type ∈ {proxy, derived}`;
       `proxy` requires `app` + non-empty `projectTypes`; `derived` requires a `tool` that exists
-      in `tools`. NO runtime behavior.
-- [ ] Run `task build:lib`.
-- [ ] Write tests: valid proxy/derived entries parse; invalid `type` → error; `derived.tool`
-      dangling → error.
-- [ ] Run `go test ./internal/config/...` — must pass before Task 4.
+      in `tools`. NO runtime behavior. (`ValidateLsp` in `validate.go`, wired into the chain in
+      `cmd/config_loader.go`.)
+- [x] Run `task build:lib`.
+- [x] Write tests (`internal/config/lsp_test.go`): valid proxy/derived entries parse; missing
+      `type` → error; invalid `type` → error; proxy missing app / empty projectTypes → error;
+      `derived.tool` missing/dangling → error; all errors aggregated.
+- [x] Run `go test ./internal/config/...` — must pass before Task 4.
 
 ### Task 4: Post-merge tool-facet validation + alphabetical lsp-order helper
 

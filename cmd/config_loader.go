@@ -207,6 +207,10 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 		return nil, nil, nil, err
 	}
 
+	if err := config.ValidateLsp(currentConfig.Lsp, currentConfig.Tools); err != nil {
+		return nil, nil, nil, err
+	}
+
 	if len(currentConfig.IgnoreRules) > 0 {
 		if _, parseErr := datamitsuignore.ParseRules(currentConfig.IgnoreRules); parseErr != nil {
 			return nil, nil, nil, fmt.Errorf("invalid ignoreRules in config: %w", parseErr)

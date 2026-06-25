@@ -258,6 +258,36 @@ type OCISigner struct {
 }
 
 // ========================================
+// LSP Declarations (reserved, Phase 3+)
+// ========================================
+
+// LspType discriminates the kind of an LSP entry.
+type LspType string
+
+// LSP entry types: a proxy over a standalone language-server app, or an entry
+// derived from an existing tool.
+const (
+	LspTypeProxy   LspType = "proxy"
+	LspTypeDerived LspType = "derived"
+)
+
+// LspEntry declares an LSP server. RESERVED for Phase 3+ — declaration only,
+// no runtime behavior in this release. Go has no discriminated unions, so the
+// proxy/derived variants are flattened into one struct keyed by Type:
+//   - Type "proxy":   App + ProjectTypes are used.
+//   - Type "derived": Tool is used (inherits its projectTypes/globs + parser).
+type LspEntry struct {
+	Type         LspType  `json:"type"`
+	App          string   `json:"app,omitempty"`
+	ProjectTypes []string `json:"projectTypes,omitempty"`
+	Tool         string   `json:"tool,omitempty"`
+	Order        int      `json:"order,omitempty"`
+}
+
+// MapOfLsp maps an LSP entry name to its declaration.
+type MapOfLsp map[string]LspEntry
+
+// ========================================
 // Output Parsers (WASM)
 // ========================================
 
@@ -297,6 +327,9 @@ type Config struct {
 	// Parsers declares WASM output-parser modules (url+hash data artifacts),
 	// referenced by name from Tool.outputParser.
 	Parsers MapOfParsers `json:"parsers,omitempty"`
+	// Lsp declares LSP servers (reserved for Phase 3+; structurally validated
+	// at load time but with no runtime behavior in this release).
+	Lsp MapOfLsp `json:"lsp,omitempty"`
 }
 
 // GetDefaultConfig returns the embedded default config JS with TypeScript types stripped.

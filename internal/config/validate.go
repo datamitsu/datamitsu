@@ -426,6 +426,59 @@ func ValidateParsers(parsers MapOfParsers) error {
 	return nil
 }
 
+// ValidateLsp performs minimal structural validation of the reserved lsp
+// declarations (no runtime behavior in this release):
+//   - type must be "proxy" or "derived";
+//   - a proxy requires app + a non-empty projectTypes;
+//   - a derived entry requires a tool that exists in tools.
+//
+// A dangling derived.tool reference is a load-time config error (follows the
+// runtime-ref validation style).
+func ValidateLsp(lsp MapOfLsp, tools MapOfTools) error {
+	if len(lsp) == 0 {
+		return nil
+	}
+
+	names := make([]string, 0, len(lsp))
+	for name := range lsp {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	var errs []string
+	for _, name := range names {
+		if name == "" {
+			errs = append(errs, "lsp entry name must not be empty")
+			continue
+		}
+		entry := lsp[name]
+		switch entry.Type {
+		case LspTypeProxy:
+			if entry.App == "" {
+				errs = append(errs, fmt.Sprintf("lsp %q: proxy requires app", name))
+			}
+			if len(entry.ProjectTypes) == 0 {
+				errs = append(errs, fmt.Sprintf("lsp %q: proxy requires a non-empty projectTypes", name))
+			}
+		case LspTypeDerived:
+			if entry.Tool == "" {
+				errs = append(errs, fmt.Sprintf("lsp %q: derived requires tool", name))
+			} else if _, ok := tools[entry.Tool]; !ok {
+				errs = append(errs, fmt.Sprintf("lsp %q: derived references unknown tool %q", name, entry.Tool))
+			}
+		case "":
+			errs = append(errs, fmt.Sprintf("lsp %q: type is required (must be %q or %q)", name, LspTypeProxy, LspTypeDerived))
+		default:
+			errs = append(errs, fmt.Sprintf("lsp %q: type %q is invalid (must be %q or %q)", name, entry.Type, LspTypeProxy, LspTypeDerived))
+		}
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("config validation failed:\n  %s", strings.Join(errs, "\n  "))
+	}
+	return nil
+}
+
 func isValidSHA256Hex(s string) bool {
 	if len(s) != 64 {
 		return false
