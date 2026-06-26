@@ -10,7 +10,7 @@ import (
 )
 
 // expectedParsersSubcommands is the drift guard for the `devtools parsers` group.
-var expectedParsersSubcommands = []string{"inspect", "list", "run"}
+var expectedParsersSubcommands = []string{"inspect", "list", "prefetch", "run"}
 
 // devtoolsParsersHelpCases freezes the static help surfaces for the parsers group.
 var devtoolsParsersHelpCases = []struct {
@@ -22,6 +22,7 @@ var devtoolsParsersHelpCases = []struct {
 	{"list", []string{"devtools", "parsers", "list", "--help"}, "devtools_parsers_list_help"},
 	{"inspect", []string{"devtools", "parsers", "inspect", "--help"}, "devtools_parsers_inspect_help"},
 	{"run", []string{"devtools", "parsers", "run", "--help"}, "devtools_parsers_run_help"},
+	{"prefetch", []string{"devtools", "parsers", "prefetch", "--help"}, "devtools_parsers_prefetch_help"},
 }
 
 func TestDevtoolsParsersHelpGolden(t *testing.T) {
@@ -41,7 +42,7 @@ func TestDevtoolsParsersHelpGolden(t *testing.T) {
 }
 
 // TestDevtoolsParsersCommandSetDrift asserts the parsers subcommand set is exactly
-// {inspect, list}.
+// {inspect, list, prefetch, run}.
 func TestDevtoolsParsersCommandSetDrift(t *testing.T) {
 	res := clitest.Run(t, clitest.RunOptions{}, "devtools", "parsers", "--help")
 	if res.ExitCode != 0 {
@@ -121,5 +122,20 @@ func TestDevtoolsParsersRun(t *testing.T) {
 		if !strings.Contains(res.Stdout, want) {
 			t.Errorf("`parsers run` output missing %q:\n%s", want, res.Stdout)
 		}
+	}
+}
+
+// TestDevtoolsParsersPrefetch freezes the offline contract: with no parsers
+// declared, `prefetch` reports there is nothing to fetch and exits 0 (no network).
+func TestDevtoolsParsersPrefetch(t *testing.T) {
+	p := clitest.NewProject(t)
+	cfg := clitest.WriteMinimalConfig(p)
+	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+		"--no-auto-config", "--config", cfg, "devtools", "parsers", "prefetch")
+	if res.ExitCode != 0 {
+		t.Fatalf("`devtools parsers prefetch` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
+	}
+	if !strings.Contains(res.Stderr, "no parsers declared") {
+		t.Errorf("`devtools parsers prefetch` over empty config should note no parsers, got stderr:\n%s", res.Stderr)
 	}
 }

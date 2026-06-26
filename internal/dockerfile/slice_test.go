@@ -9,7 +9,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/config"
 )
 
-func sampleConfigForSlicing() (binmanager.MapOfApps, config.MapOfRuntimes) {
+func sampleConfigForSlicing() (binmanager.MapOfApps, config.MapOfRuntimes, config.MapOfParsers) {
 	apps := binmanager.MapOfApps{
 		"shellcheck": {Binary: &binmanager.AppConfigBinary{Version: "0.11.0"}},
 		"prettier":   {Node: &binmanager.AppConfigNode{PackageName: "prettier", Version: "3.8.3", Runtime: "node", BinPath: "bin/prettier.cjs"}},
@@ -19,7 +19,10 @@ func sampleConfigForSlicing() (binmanager.MapOfApps, config.MapOfRuntimes) {
 		"node": {Kind: config.RuntimeKindNode, Node: &config.RuntimeConfigNode{NodeVersion: "22.12.0", PNPMVersion: "11.5.0", PNPMHash: "sha512-x"}},
 		"uv":   {Kind: config.RuntimeKindUV, UV: &config.RuntimeConfigUV{PythonVersion: "3.13"}},
 	}
-	return apps, runtimes
+	parsers := config.MapOfParsers{
+		"core": {URL: "https://example.com/datamitsu_parsers_0.1.8.wasm", Hash: strings.Repeat("a", 64)},
+	}
+	return apps, runtimes, parsers
 }
 
 func findSlice(slices []Slice, file string) *Slice {
@@ -38,9 +41,9 @@ func TestSliceFileName(t *testing.T) {
 }
 
 func TestBuildSlices_OnePerStageMinimal(t *testing.T) {
-	apps, runtimes := sampleConfigForSlicing()
-	plan := BuildPlan(apps, runtimes)
-	slices := BuildSlices(plan, apps, runtimes)
+	apps, runtimes, parsers := sampleConfigForSlicing()
+	plan := BuildPlan(apps, runtimes, PlanOptions{Parsers: parsers})
+	slices := BuildSlices(plan, apps, runtimes, parsers)
 
 	// Runtime slice: only the runtime, no apps.
 	rt := findSlice(slices, "rt-node.js")
@@ -80,12 +83,24 @@ func TestBuildSlices_OnePerStageMinimal(t *testing.T) {
 	if _, leaked := app.Config.Apps["ruff"]; leaked {
 		t.Error("prettier slice leaked a sibling app")
 	}
+
+	// Parser slice: exactly its `parsers` entry, no apps/runtimes.
+	parser := findSlice(slices, "parser-core.js")
+	if parser == nil {
+		t.Fatal("missing parser-core.js slice")
+	}
+	if _, ok := parser.Config.Parsers["core"]; !ok || len(parser.Config.Parsers) != 1 {
+		t.Errorf("parser slice must carry exactly the core parser, got %v", parser.Config.Parsers)
+	}
+	if len(parser.Config.Apps) != 0 || len(parser.Config.Runtimes) != 0 {
+		t.Errorf("parser slice must carry no apps/runtimes, got apps=%v runtimes=%v", parser.Config.Apps, parser.Config.Runtimes)
+	}
 }
 
 func TestRenderSlice_LoadableModuleRoundTrips(t *testing.T) {
-	apps, runtimes := sampleConfigForSlicing()
-	plan := BuildPlan(apps, runtimes)
-	slices := BuildSlices(plan, apps, runtimes)
+	apps, runtimes, parsers := sampleConfigForSlicing()
+	plan := BuildPlan(apps, runtimes, PlanOptions{Parsers: parsers})
+	slices := BuildSlices(plan, apps, runtimes, parsers)
 	app := findSlice(slices, "app-prettier.js")
 	if app == nil {
 		t.Fatal("missing app-prettier.js slice")

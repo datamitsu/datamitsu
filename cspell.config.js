@@ -317,6 +317,7 @@ export default defineConfig((config) => ({
     "workdirs",
     "shellapp",
     "airgap",
+    "airgapped",
     "httpretry",
     "ocibundle",
     "ocispec",

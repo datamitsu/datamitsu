@@ -125,6 +125,7 @@ func runDockerfile(ctx context.Context, cmd *cobra.Command) error {
 	plan := dockerfile.BuildPlan(cfg.Apps, cfg.Runtimes, dockerfile.PlanOptions{
 		TargetLibc:   targetLibc,
 		ForceInclude: forceInclude,
+		Parsers:      cfg.Parsers,
 	})
 	if len(plan.LibcExcluded) > 0 {
 		fmt.Fprintf(os.Stderr, "Warning: excluded %d app(s) with no %s binary (add via --force-include if universal): %s\n",

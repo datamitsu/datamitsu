@@ -27,6 +27,10 @@ type PlanOptions struct {
 	// ForceInclude names binary apps to keep despite lacking a TargetLibc binary
 	// (e.g. statically-linked tools the registry under-declares as glibc-only).
 	ForceInclude map[string]bool
+	// Parsers declares the WASM output-parser modules to bundle as their own
+	// store layers (one stage each). nil/empty bundles no parsers — the bundle is
+	// then binaries/runtimes/apps only, and parsers fall back to network download.
+	Parsers config.MapOfParsers
 }
 
 // RuntimeStage installs one managed runtime (e.g. node, uv). Runtime-managed
@@ -50,12 +54,23 @@ type BinaryStage struct {
 	App string
 }
 
+// ParserStage materializes one WASM output-parser module into the store (via
+// `devtools parsers prefetch`) so its store subtree becomes a COPYed layer. It is
+// built FROM the shared base stage (a download, no runtime). Module is the
+// `parsers` config key.
+type ParserStage struct {
+	Module string
+}
+
 // Plan is the resolved stage graph for a config. Stage slices are sorted for
 // deterministic, byte-stable rendering.
 type Plan struct {
 	RuntimeStages    []RuntimeStage
 	RuntimeAppStages []RuntimeAppStage
 	BinaryStages     []BinaryStage
+	// ParserStages bundle WASM output-parser modules (one per declared parser,
+	// sorted). Empty when PlanOptions.Parsers is unset.
+	ParserStages []ParserStage
 	// Skipped lists app names omitted from the plan (shell apps, or
 	// runtime-managed apps whose runtime reference does not resolve).
 	Skipped []string
@@ -174,6 +189,15 @@ func BuildPlan(apps binmanager.MapOfApps, runtimes config.MapOfRuntimes, opts ..
 	sort.Strings(runtimeNames)
 	for _, name := range runtimeNames {
 		plan.RuntimeStages = append(plan.RuntimeStages, RuntimeStage{Name: name, Kind: neededRuntimes[name]})
+	}
+
+	parserModules := make([]string, 0, len(o.Parsers))
+	for module := range o.Parsers {
+		parserModules = append(parserModules, module)
+	}
+	sort.Strings(parserModules)
+	for _, module := range parserModules {
+		plan.ParserStages = append(plan.ParserStages, ParserStage{Module: module})
 	}
 
 	return plan
