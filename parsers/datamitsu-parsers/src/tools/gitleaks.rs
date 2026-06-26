@@ -34,34 +34,34 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 };
 
 pub fn parse(_stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic> {
-    let attrs = Attrs {
-        row: "StartLine",
-        col: "StartColumn",
-        end_row: "EndLine",
-        end_col: "EndColumn",
-        code: "RuleID",
-        message: "Description",
-        ..Attrs::defaults()
-    };
-    let mut diags = json_diag::from_json(stderr, &attrs, severity_of);
-    for d in &mut diags {
-        d.source = Some("gitleaks".to_string());
-    }
-    diags
+	let attrs = Attrs {
+		row: "StartLine",
+		col: "StartColumn",
+		end_row: "EndLine",
+		end_col: "EndColumn",
+		code: "RuleID",
+		message: "Description",
+		..Attrs::defaults()
+	};
+	let mut diags = json_diag::from_json(stderr, &attrs, severity_of);
+	for d in &mut diags {
+		d.source = Some("gitleaks".to_string());
+	}
+	diags
 }
 
 /// gitleaks findings carry no severity token; the core supplies its fallback.
 fn severity_of(_level: &str) -> Option<u8> {
-    None
+	None
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+	use super::*;
 
-    #[test]
-    fn parses_findings() {
-        let stderr = br#"[
+	#[test]
+	fn parses_findings() {
+		let stderr = br#"[
           {
             "Description": "AWS Access Key",
             "RuleID": "aws-access-token",
@@ -72,20 +72,20 @@ mod tests {
             "Secret": "REDACTED-FAKE-TEST-SECRET"
           }
         ]"#;
-        let out = parse(b"", stderr, 0);
-        assert_eq!(out.len(), 1);
-        assert_eq!(out[0].message, "AWS Access Key");
-        assert_eq!(out[0].code.as_deref(), Some("aws-access-token"));
-        assert_eq!(out[0].row, Some(12));
-        assert_eq!(out[0].col, Some(5));
-        assert_eq!(out[0].end_row, Some(12));
-        assert_eq!(out[0].end_col, Some(25));
-        assert_eq!(out[0].source.as_deref(), Some("gitleaks"));
-        assert_eq!(out[0].severity, None);
-    }
+		let out = parse(b"", stderr, 0);
+		assert_eq!(out.len(), 1);
+		assert_eq!(out[0].message, "AWS Access Key");
+		assert_eq!(out[0].code.as_deref(), Some("aws-access-token"));
+		assert_eq!(out[0].row, Some(12));
+		assert_eq!(out[0].col, Some(5));
+		assert_eq!(out[0].end_row, Some(12));
+		assert_eq!(out[0].end_col, Some(25));
+		assert_eq!(out[0].source.as_deref(), Some("gitleaks"));
+		assert_eq!(out[0].severity, None);
+	}
 
-    #[test]
-    fn empty_report_yields_nothing() {
-        assert!(parse(b"", b"[]", 0).is_empty());
-    }
+	#[test]
+	fn empty_report_yields_nothing() {
+		assert!(parse(b"", b"[]", 0).is_empty());
+	}
 }

@@ -1,0 +1,7 @@
+reorder_imports = true
+newline_style = "Unix"
+edition = "2024"
+tab_spaces = 2
+reorder_modules = true
+hard_tabs = true
+max_width = 120

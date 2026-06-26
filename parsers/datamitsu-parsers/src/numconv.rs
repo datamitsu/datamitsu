@@ -13,48 +13,48 @@
 /// non-negative integer within `u32` range; anything else is `None` (absent)
 /// rather than a saturated `u32::MAX`.
 pub fn json_u32(n: f64) -> Option<u32> {
-    if n.is_finite() && n >= 0.0 && n <= u32::MAX as f64 {
-        Some(n as u32)
-    } else {
-        None
-    }
+	if n.is_finite() && n >= 0.0 && n <= u32::MAX as f64 {
+		Some(n as u32)
+	} else {
+		None
+	}
 }
 
 /// Convert a JSON number to an integer (e.g. a severity token), rejecting
 /// non-finite or non-integer values so `2.5` does not collapse onto `2`.
 pub fn json_int(n: f64) -> Option<i64> {
-    if n.is_finite() && n.fract() == 0.0 {
-        Some(n as i64)
-    } else {
-        None
-    }
+	if n.is_finite() && n.fract() == 0.0 {
+		Some(n as i64)
+	} else {
+		None
+	}
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+	use super::*;
 
-    #[test]
-    fn json_u32_accepts_in_range_integers() {
-        assert_eq!(json_u32(0.0), Some(0));
-        assert_eq!(json_u32(42.0), Some(42));
-        assert_eq!(json_u32(u32::MAX as f64), Some(u32::MAX));
-    }
+	#[test]
+	fn json_u32_accepts_in_range_integers() {
+		assert_eq!(json_u32(0.0), Some(0));
+		assert_eq!(json_u32(42.0), Some(42));
+		assert_eq!(json_u32(u32::MAX as f64), Some(u32::MAX));
+	}
 
-    #[test]
-    fn json_u32_rejects_out_of_range_and_negative() {
-        assert_eq!(json_u32(-1.0), None);
-        assert_eq!(json_u32(u32::MAX as f64 + 1.0), None); // no saturation to u32::MAX
-        assert_eq!(json_u32(9_999_999_999.0), None);
-        assert_eq!(json_u32(f64::NAN), None);
-        assert_eq!(json_u32(f64::INFINITY), None);
-    }
+	#[test]
+	fn json_u32_rejects_out_of_range_and_negative() {
+		assert_eq!(json_u32(-1.0), None);
+		assert_eq!(json_u32(u32::MAX as f64 + 1.0), None); // no saturation to u32::MAX
+		assert_eq!(json_u32(9_999_999_999.0), None);
+		assert_eq!(json_u32(f64::NAN), None);
+		assert_eq!(json_u32(f64::INFINITY), None);
+	}
 
-    #[test]
-    fn json_int_rejects_non_integers() {
-        assert_eq!(json_int(2.0), Some(2));
-        assert_eq!(json_int(2.5), None); // does not truncate to 2
-        assert_eq!(json_int(-3.0), Some(-3));
-        assert_eq!(json_int(f64::NAN), None);
-    }
+	#[test]
+	fn json_int_rejects_non_integers() {
+		assert_eq!(json_int(2.0), Some(2));
+		assert_eq!(json_int(2.5), None); // does not truncate to 2
+		assert_eq!(json_int(-3.0), Some(-3));
+		assert_eq!(json_int(f64::NAN), None);
+	}
 }

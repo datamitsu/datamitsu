@@ -16,59 +16,59 @@ use crate::diagnostic::RawDiagnostic;
 use tinyjson::JsonValue;
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
-    name: "phpstan",
-    description: "PHP static analysis tool.",
-    url: "https://github.com/phpstan/phpstan",
-    operations: &[Operation {
-        mode: "lint",
-        args: &["analyze", "--error-format", "json", "--no-progress", "{file}"],
-        stdin: false,
-    }],
+	name: "phpstan",
+	description: "PHP static analysis tool.",
+	url: "https://github.com/phpstan/phpstan",
+	operations: &[Operation {
+		mode: "lint",
+		args: &["analyze", "--error-format", "json", "--no-progress", "{file}"],
+		stdin: false,
+	}],
 };
 
 pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic> {
-    let text = String::from_utf8_lossy(stdout);
-    let value: JsonValue = match text.parse() {
-        Ok(v) => v,
-        Err(_) => return Vec::new(),
-    };
+	let text = String::from_utf8_lossy(stdout);
+	let value: JsonValue = match text.parse() {
+		Ok(v) => v,
+		Err(_) => return Vec::new(),
+	};
 
-    let attrs = Attrs::defaults();
-    let mut out = Vec::new();
+	let attrs = Attrs::defaults();
+	let mut out = Vec::new();
 
-    // Navigate {"files": {"<path>": {"messages": [...]}}}.
-    if let JsonValue::Object(root) = &value {
-        if let Some(JsonValue::Object(files)) = root.get("files") {
-            for file in files.values() {
-                if let JsonValue::Object(file_obj) = file {
-                    if let Some(JsonValue::Array(messages)) = file_obj.get("messages") {
-                        for msg in messages {
-                            if let Some(d) = json_diag::from_obj(msg, &attrs, severity_of) {
-                                out.push(d);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
+	// Navigate {"files": {"<path>": {"messages": [...]}}}.
+	if let JsonValue::Object(root) = &value {
+		if let Some(JsonValue::Object(files)) = root.get("files") {
+			for file in files.values() {
+				if let JsonValue::Object(file_obj) = file {
+					if let Some(JsonValue::Array(messages)) = file_obj.get("messages") {
+						for msg in messages {
+							if let Some(d) = json_diag::from_obj(msg, &attrs, severity_of) {
+								out.push(d);
+							}
+						}
+					}
+				}
+			}
+		}
+	}
 
-    out
+	out
 }
 
 /// PHPStan's JSON format emits no severity token, so this is never consulted in
 /// practice; provided to satisfy the `from_obj` signature.
 fn severity_of(_level: &str) -> Option<u8> {
-    None
+	None
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+	use super::*;
 
-    #[test]
-    fn parses_nested_file_messages() {
-        let json = br#"{
+	#[test]
+	fn parses_nested_file_messages() {
+		let json = br#"{
             "totals": {"errors": 0, "file_errors": 2},
             "files": {
                 "/app/src/Foo.php": {
@@ -81,24 +81,24 @@ mod tests {
             },
             "errors": []
         }"#;
-        let out = parse(json, b"", 1);
-        assert_eq!(out.len(), 2);
-        assert_eq!(out[0].message, "Undefined variable: $bar");
-        assert_eq!(out[0].row, Some(12));
-        assert_eq!(out[0].col, None);
-        assert_eq!(out[0].severity, None);
-        assert_eq!(out[1].message, "Method foo() not found.");
-        assert_eq!(out[1].row, Some(30));
-    }
+		let out = parse(json, b"", 1);
+		assert_eq!(out.len(), 2);
+		assert_eq!(out[0].message, "Undefined variable: $bar");
+		assert_eq!(out[0].row, Some(12));
+		assert_eq!(out[0].col, None);
+		assert_eq!(out[0].severity, None);
+		assert_eq!(out[1].message, "Method foo() not found.");
+		assert_eq!(out[1].row, Some(30));
+	}
 
-    #[test]
-    fn no_files_yields_nothing() {
-        let json = br#"{"totals":{"errors":0,"file_errors":0},"files":{},"errors":[]}"#;
-        assert!(parse(json, b"", 0).is_empty());
-    }
+	#[test]
+	fn no_files_yields_nothing() {
+		let json = br#"{"totals":{"errors":0,"file_errors":0},"files":{},"errors":[]}"#;
+		assert!(parse(json, b"", 0).is_empty());
+	}
 
-    #[test]
-    fn invalid_json_yields_nothing() {
-        assert!(parse(b"not json", b"", 1).is_empty());
-    }
+	#[test]
+	fn invalid_json_yields_nothing() {
+		assert!(parse(b"not json", b"", 1).is_empty());
+	}
 }
