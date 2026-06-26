@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 
@@ -70,6 +71,22 @@ func GetLogLevel() zapcore.Level {
 		return zapcore.WarnLevel
 	}
 	return level
+}
+
+// GetLogFormat returns the status output format ("console" or "jsonl").
+// Unknown values fall back to the default ("console") rather than erroring, so a
+// stray value never breaks output or the byte-stable CLI golden contract.
+func GetLogFormat() string {
+	value := logFormat.DefaultValue
+	if envValue := os.Getenv(logFormat.Name); envValue != "" {
+		value = strings.ToLower(strings.TrimSpace(envValue))
+	}
+	switch value {
+	case "console", "jsonl":
+		return value
+	default:
+		return logFormat.DefaultValue
+	}
 }
 
 // GetMaxCommandLength returns maximum command line length for batching

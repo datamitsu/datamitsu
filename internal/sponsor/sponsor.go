@@ -9,6 +9,7 @@ import (
 
 	clr "github.com/datamitsu/datamitsu/internal/color"
 	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/ui"
 )
 
 const (
@@ -58,7 +59,10 @@ func (m *Manager) MaybePrint(isJSONOutput bool) {
 		state = &State{}
 	}
 
-	if env.NoSponsor() || isJSONOutput || env.IsCI() {
+	// ui.Quiet() covers JSON-L mode: a sponsor line written to stderr would inject
+	// a non-JSON line into the typed event stream. Returning before the counter
+	// logic also avoids advancing activation state on a suppressed run.
+	if env.NoSponsor() || isJSONOutput || env.IsCI() || ui.Quiet() {
 		return
 	}
 

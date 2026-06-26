@@ -7,6 +7,7 @@ import (
 
 	clr "github.com/datamitsu/datamitsu/internal/color"
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/ui"
 )
 
 // verifyChainHashes runs the root-layer expectChainHash gate over the layer map.
@@ -23,7 +24,12 @@ func verifyChainHashes(layerMap *config.SetupLayerMap, noVerify bool) error {
 		return nil
 	}
 
-	fmt.Fprint(os.Stderr, formatChainHashReport(mismatches))
+	// The human drift report is suppressed in JSON-L mode (it would be a non-JSON
+	// block on the typed stderr stream); the returned error still carries the
+	// failure, which Execute emits as a typed error event.
+	if !ui.Quiet() {
+		fmt.Fprint(os.Stderr, formatChainHashReport(mismatches))
+	}
 	return fmt.Errorf("chain-hash verification failed for %d config file(s)", len(mismatches))
 }
 

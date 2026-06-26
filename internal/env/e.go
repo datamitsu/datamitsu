@@ -36,6 +36,12 @@ var (
 		Description:  "Log level (debug, info, warn, error); default warn, use --verbose for debug",
 	}
 
+	logFormat = envVar{
+		Name:         strings.ToUpper(ldflags.PackageName) + "_LOG_FORMAT",
+		DefaultValue: "console",
+		Description:  "Status output format (console, jsonl); jsonl emits one typed JSON event per line to stderr",
+	}
+
 	maxCmdLength = envVar{
 		Name:         strings.ToUpper(ldflags.PackageName) + "_MAX_CMD_LENGTH",
 		DefaultValue: "32000",

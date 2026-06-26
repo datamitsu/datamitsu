@@ -140,9 +140,10 @@ func (d *Display) Close() {
 }
 
 // ensureProg lazily creates the single mpb container. Returns nil in Plain
-// mode. Caller must hold d.mu.
+// mode, and in JSON-L (quiet) mode so no animated bars compete with the typed
+// stream even when stdout is a TTY. Caller must hold d.mu.
 func (d *Display) ensureProg() *mpb.Progress {
-	if d.mode != term.Interactive {
+	if d.mode != term.Interactive || Quiet() {
 		return nil
 	}
 	if d.prog == nil {
@@ -166,6 +167,11 @@ func (d *Display) barEnded() {
 // avoids the mpb-pending-write race that would otherwise drop a line when
 // non-ui code writes directly to the same stream between bars.
 func (d *Display) writeLine(w io.Writer, s string) {
+	// JSON-L (quiet) mode: human lines are dropped so the typed event stream is
+	// the sole output and stdout stays clean.
+	if Quiet() {
+		return
+	}
 	d.mu.Lock()
 	p := d.prog
 	active := d.bars > 0

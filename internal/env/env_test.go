@@ -203,6 +203,39 @@ func TestGetLogLevel(t *testing.T) {
 	}
 }
 
+func TestGetLogFormat(t *testing.T) {
+	// t.Setenv registers cleanup that restores logFormat.Name even though
+	// subtests below os.Unsetenv it mid-test.
+	t.Setenv(logFormat.Name, os.Getenv(logFormat.Name))
+
+	tests := []struct {
+		name     string
+		envValue string
+		want     string
+	}{
+		{name: "default is console", envValue: "", want: "console"},
+		{name: "jsonl", envValue: "jsonl", want: "jsonl"},
+		{name: "console", envValue: "console", want: "console"},
+		{name: "case-insensitive", envValue: "JSONL", want: "jsonl"},
+		{name: "whitespace trimmed", envValue: "  jsonl  ", want: "jsonl"},
+		{name: "unknown falls back to console", envValue: "yaml", want: "console"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.envValue != "" {
+				t.Setenv(logFormat.Name, tt.envValue)
+			} else {
+				_ = os.Unsetenv(logFormat.Name)
+			}
+
+			if got := GetLogFormat(); got != tt.want {
+				t.Errorf("GetLogFormat() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestGetDefaultMaxWorkers(t *testing.T) {
 	result := getDefaultMaxWorkers()
 	n, err := strconv.Atoi(result)

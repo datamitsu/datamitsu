@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	clr "github.com/datamitsu/datamitsu/internal/color"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
@@ -15,6 +16,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/sponsor"
 	"github.com/datamitsu/datamitsu/internal/term"
 	"github.com/datamitsu/datamitsu/internal/ui"
+	"github.com/datamitsu/datamitsu/internal/uievent"
 
 	"github.com/spf13/cobra"
 	"go.uber.org/zap/zapcore"
@@ -49,6 +51,8 @@ var (
 	noOCI bool
 	// noParse skips output parsers so tools show their raw output (debug aid)
 	noParse bool
+	// logFormat selects the status output encoding ("" defers to env: console|jsonl)
+	logFormat string
 )
 
 var rootCmd = &cobra.Command{
@@ -71,6 +75,17 @@ func init() {
 		}
 		ocibundle.SetDisabledByFlag(noOCI)
 		runner.SetParsingDisabledByFlag(noParse)
+
+		// JSON-L mode: install a process-global typed event sink writing
+		// newline-delimited JSON to stderr, and suppress human line output so
+		// stdout stays clean. Done here (after flag parse, post-runtimeconfig.Init)
+		// so the --log-format flag overrides the effective env value; both resolve
+		// to the same console|jsonl vocabulary.
+		if resolveLogFormat() == "jsonl" {
+			ui.SetEventSink(uievent.NewJSONLSink(os.Stderr), true)
+		} else {
+			ui.SetEventSink(nil, false)
+		}
 	})
 
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false,
@@ -87,6 +102,25 @@ func init() {
 		"Disable OCI bundle store seeding (also via DATAMITSU_NO_OCI)")
 	rootCmd.PersistentFlags().BoolVar(&noParse, "no-parse", false,
 		"Skip output parsers; show tools' raw output instead (also via DATAMITSU_NO_PARSE)")
+	rootCmd.PersistentFlags().StringVar(&logFormat, "log-format", "",
+		"Status output format: console or jsonl (also via DATAMITSU_LOG_FORMAT)")
+}
+
+// resolveLogFormat returns the effective status output format. The --log-format
+// flag wins when set; otherwise it defers to the effective env value resolved by
+// runtimeconfig (Get is safe here — Init ran earlier in OnInitialize). Unknown
+// flag values fall back to the env value rather than erroring.
+func resolveLogFormat() string {
+	if logFormat != "" {
+		switch v := strings.ToLower(strings.TrimSpace(logFormat)); v {
+		case "console", "jsonl":
+			return v
+		}
+	}
+	if eff, err := runtimeconfig.Get(); err == nil {
+		return eff.LogFormat
+	}
+	return "console"
 }
 
 // Execute runs the root command and exits the process on error.
@@ -108,6 +142,18 @@ func Execute() {
 	restore()
 
 	if err != nil {
+		// In JSON-L mode the human error line would be a non-JSON line on the
+		// stderr event stream; emit a typed error event instead so every stderr
+		// line stays valid JSON.
+		if ui.Quiet() {
+			ui.Emit(uievent.Event{
+				Type:   uievent.TypeError,
+				OpID:   uievent.NextOpID("run"),
+				Status: uievent.StatusFail,
+				Msg:    err.Error(),
+			})
+			os.Exit(1)
+		}
 		fmt.Fprintf(os.Stderr, "%s %s\n", clr.Red("error:"), err)
 		os.Exit(1)
 	}

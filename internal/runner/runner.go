@@ -34,6 +34,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/tooling"
 	"github.com/datamitsu/datamitsu/internal/traverser"
 	"github.com/datamitsu/datamitsu/internal/ui"
+	"github.com/datamitsu/datamitsu/internal/uievent"
 
 	"go.uber.org/zap"
 )
@@ -305,10 +306,12 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 			sc.recordSkips(plan.Skipped)
 			return nil
 		}
-		if len(projectTypes) == 0 {
-			fmt.Println("⚠️  No project types detected")
-		} else {
-			fmt.Println("ℹ️  No applicable tools found")
+		if !ui.Quiet() {
+			if len(projectTypes) == 0 {
+				fmt.Println("⚠️  No project types detected")
+			} else {
+				fmt.Println("ℹ️  No applicable tools found")
+			}
 		}
 		return nil
 	}
@@ -324,15 +327,28 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		}
 	}
 
+	// Correlation id for every typed event of THIS operation (phase start/done,
+	// and the parent of each tool_run/chunk op id). Generated once here, captured
+	// by the executor callbacks below.
+	runOpID := uievent.NextOpID("run")
+	ui.Emit(uievent.Event{
+		Type:   uievent.TypePhase,
+		OpID:   runOpID,
+		Status: uievent.StatusStart,
+		Op:     string(operation),
+	})
+
 	// Open the operation block: bold bracket header + dimmed project types. The
 	// matched-tool list is omitted — the per-tool results below cover it.
 	shortTypes := make([]string, len(projectTypes))
 	for i, pt := range projectTypes {
 		shortTypes[i] = shortProjectType(pt)
 	}
-	fmt.Println()
-	fmt.Println(phaseTop(string(operation)))
-	fmt.Println(clr.Faint("┃ " + strings.Join(shortTypes, " · ")))
+	if !ui.Quiet() {
+		fmt.Println()
+		fmt.Println(phaseTop(string(operation)))
+		fmt.Println(clr.Faint("┃ " + strings.Join(shortTypes, " · ")))
+	}
 
 	// Calculate total file processing count for progress bar
 	totalFileProcessing := 0
@@ -417,6 +433,14 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 
 	// Set up task start callback
 	sc.executor.SetTaskStartCallback(func(toolName string, relativeDir string) {
+		ui.Emit(uievent.Event{
+			Type:   uievent.TypeToolRun,
+			OpID:   toolOpID(runOpID, toolName, relativeDir),
+			Status: uievent.StatusStart,
+			Tool:   toolName,
+			Dir:    relativeDir,
+		})
+
 		progressMu.Lock()
 		if activeTools[toolName] == nil {
 			activeTools[toolName] = make(map[string]bool)
@@ -440,6 +464,17 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		dir := activeToolDir(toolName)
 		progressMu.Unlock()
 
+		ui.Emit(uievent.Event{
+			Type:    uievent.TypeChunk,
+			OpID:    toolOpID(runOpID, toolName, dir),
+			Status:  chunkStatus(fileIndex, totalFiles),
+			Tool:    toolName,
+			Dir:     dir,
+			Index:   fileIndex,
+			Total:   totalFiles,
+			Success: new(success),
+		})
+
 		if dir != "" {
 			t.SetLabel(fmt.Sprintf("%s %s (%s) [%d/%d]", status, toolName, dir, fileIndex, totalFiles))
 		} else {
@@ -450,6 +485,32 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 
 	// Set up progress tracking callback
 	sc.executor.SetResultCallback(func(result tooling.ExecutionResult) {
+		// Cancelled tasks are fail-fast noise (mirrors groupResultsByTool); don't
+		// surface them as tool_run/error events. NOTE: a task cancelled AFTER it
+		// emitted its start thus leaves an orphaned start — a known event-stream
+		// fidelity gap documented at toolOpID, deferred to the diagnostics phase.
+		if !result.Cancelled && result.FailureReason != tooling.FailureReasonCancelled {
+			opID := toolOpID(runOpID, result.ToolName, result.RelativeDir)
+			ui.Emit(uievent.Event{
+				Type:       uievent.TypeToolRun,
+				OpID:       opID,
+				Status:     doneStatus(result.Success),
+				Tool:       result.ToolName,
+				Dir:        result.RelativeDir,
+				Success:    new(result.Success),
+				DurationMs: result.Duration,
+			})
+			if !result.Success {
+				ui.Emit(uievent.Event{
+					Type: uievent.TypeError,
+					OpID: opID,
+					Tool: result.ToolName,
+					Dir:  result.RelativeDir,
+					Msg:  resultErrorMessage(result),
+				})
+			}
+		}
+
 		if group, exists := progressTracker[result.ToolName]; exists {
 			group.totalRuns++
 			if result.Success {
@@ -509,13 +570,35 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 
 	// Close the operation block: per-tool body lines, skipped-tool lines, then the
 	// summary footer (the footer doubles as the "complete" marker, so no separate
-	// line is printed).
+	// line is printed). The print helpers self-suppress in JSON-L mode.
 	toolGroups := groupResultsByTool(results)
 	if len(toolGroups) > 0 || len(plan.Skipped) > 0 {
 		printGroupedResults(toolGroups, sc.nameWidth, env.IsTimingsEnabled())
 		printSkippedTools(plan.Skipped, sc.nameWidth)
 		printOperationFooter(toolGroups, totalWallClockTime, cacheHits, cacheMisses, len(plan.Skipped))
 	}
+
+	// Typed completion event for this operation (the JSON-L twin of the footer).
+	totalRuns := 0
+	failedTools := 0
+	for _, group := range toolGroups {
+		totalRuns += group.totalRuns
+		if group.failedRuns > 0 {
+			failedTools++
+		}
+	}
+	ui.Emit(uievent.Event{
+		Type:       uievent.TypeDone,
+		OpID:       runOpID,
+		Status:     doneStatus(!hasFailures),
+		Op:         string(operation),
+		Tools:      len(toolGroups),
+		Runs:       totalRuns,
+		Failed:     failedTools,
+		Skipped:    len(plan.Skipped),
+		DurationMs: totalWallClockTime,
+	})
+
 	sc.recordSkips(plan.Skipped)
 
 	if hasFailures {
@@ -539,6 +622,9 @@ func (sc *sharedContext) recordSkips(skipped []tooling.SkippedTool) {
 // printSkippedTools renders faint "┃ ⊘ name   skipped (reason)" body lines,
 // aligned to nameWidth like the per-tool result rows. No-op for an empty list.
 func printSkippedTools(skipped []tooling.SkippedTool, nameWidth int) {
+	if ui.Quiet() {
+		return
+	}
 	for _, s := range skipped {
 		pad := max(nameWidth-utf8.RuneCountInString(s.ToolName), 0) + 2
 		line := clr.Faint("┃ ⊘ ") + clr.Faint(s.ToolName) +
@@ -550,6 +636,9 @@ func printSkippedTools(skipped []tooling.SkippedTool, nameWidth int) {
 // renderSkipOnlyBlock prints a minimal operation block containing only skipped
 // tools, used when planning produced skips but nothing runnable.
 func renderSkipOnlyBlock(operation string, skipped []tooling.SkippedTool, nameWidth int) {
+	if ui.Quiet() {
+		return
+	}
 	fmt.Println()
 	fmt.Println(phaseTop(operation))
 	fmt.Println(clr.Faint("┃"))
@@ -611,8 +700,12 @@ func runSequential(
 		return err
 	}
 	defer func() {
-		sc.timings.Print()
-		sc.planner.GetTimings().Print()
+		// Timing reports are human output (bare fmt). Suppress in JSON-L mode so
+		// DATAMITSU_TIMINGS doesn't leak a non-JSON block onto the clean streams.
+		if !ui.Quiet() {
+			sc.timings.Print()
+			sc.planner.GetTimings().Print()
+		}
 		sc.shutdown()
 	}()
 
@@ -703,6 +796,56 @@ func activeToolDir(toolName string) string {
 	return ""
 }
 
+// toolOpID derives a per-tool-run correlation id from the run id, tool name and
+// project-relative dir. A derived id (not a generated one stored on the task) is
+// deliberate: executor tasks are value-copied, so a generated id would duplicate;
+// deriving from already-stable identity keeps a tool's start/chunk/done events
+// correlated without threading an id through the copy.
+//
+// KNOWN LIMITATION (deferred to the diagnostics phase, when the LSP consumer
+// fixes the required granularity): because the id is tool+dir, it is NOT unique
+// per individual task. Three cases break strict start->terminal chain pairing,
+// all sharing this root cause and all requiring the executor's FileProgressCallback
+// to carry per-task identity (dir + a per-task discriminant) to fix properly:
+//   - per-file-scope tools matching several files in ONE dir emit N start/done
+//     pairs under one op_id (indistinguishable);
+//   - the same tool running concurrently in two sibling dirs has its chunk events
+//     attributed to the wrong dir (the chunk callback recovers an arbitrary one);
+//   - a task cancelled by fail-fast AFTER it started has its terminal suppressed
+//     (see SetResultCallback), leaving an orphaned start.
+//
+// These only affect machine-consumer event-stream fidelity, never lint/fix
+// execution or exit codes; the common repository/per-project case is correct.
+func toolOpID(runOpID, tool, dir string) string {
+	return runOpID + ":" + tool + ":" + dir
+}
+
+// chunkStatus reports a chunk event's status: done once a tool's last file unit
+// is reached, progress otherwise (progress updates are throttled by the sink).
+func chunkStatus(index, total int) string {
+	if total > 0 && index >= total {
+		return uievent.StatusDone
+	}
+	return uievent.StatusProgress
+}
+
+// doneStatus maps a success flag to a terminal event status.
+func doneStatus(success bool) string {
+	if success {
+		return uievent.StatusDone
+	}
+	return uievent.StatusFail
+}
+
+// resultErrorMessage builds a concise message for a failed tool_run's error
+// event: the underlying error when present, otherwise a non-zero exit summary.
+func resultErrorMessage(result tooling.ExecutionResult) string {
+	if result.Error != nil {
+		return result.Error.Error()
+	}
+	return fmt.Sprintf("exited with code %d", result.ExitCode)
+}
+
 // groupResultsByTool groups execution results by tool name
 func groupResultsByTool(groupResults []tooling.GroupExecutionResult) []toolExecutionGroup {
 	toolMap := make(map[string]*toolExecutionGroup)
@@ -791,6 +934,9 @@ func groupResultsByTool(groupResults []tooling.GroupExecutionResult) []toolExecu
 // detailed timings (scope, avg, min/max) appended only when `detailed` is set
 // (DATAMITSU_TIMINGS). Failed tools show a red ✗ and a bordered detail box.
 func printGroupedResults(toolGroups []toolExecutionGroup, nameWidth int, detailed bool) {
+	if ui.Quiet() {
+		return
+	}
 	fmt.Println(clr.Faint("┃"))
 
 	// Slowest tool in this run anchors the duration heatmap (by wall-clock).
@@ -988,6 +1134,9 @@ func phaseTop(operation string) string {
 // printOperationFooter renders the closing bracket rule that summarizes the
 // operation (tool/run counts, wall-clock time, failures, skips and cache hit rate).
 func printOperationFooter(toolGroups []toolExecutionGroup, wallClockTime int64, cacheHits, cacheMisses, skipped int) {
+	if ui.Quiet() {
+		return
+	}
 	totalTools := len(toolGroups)
 	totalRuns := 0
 	failedTools := 0
