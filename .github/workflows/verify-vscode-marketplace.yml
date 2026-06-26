@@ -1,0 +1,35 @@
+# TEMPORARY — proves the Microsoft Entra OIDC half of VS Code Marketplace publishing end-to-end
+jobs:
+  verify:
+    environment: vscode-marketplace
+    name: Verify Marketplace access via OIDC
+    permissions:
+      contents: read
+      id-token: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: ./.github/actions/setup-environment
+        with:
+          setup-go: "false"
+      # Federated login: the job's OIDC token (subject
+      # repo:datamitsu/datamitsu:environment:vscode-marketplace) is exchanged for
+      # an Azure access token. allow-no-subscriptions because the SP owns no Azure
+      # subscription — it only needs Azure DevOps / Marketplace scope.
+      - name: Azure login (federated OIDC)
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
+        with:
+          allow-no-subscriptions: true
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+      # vsce's --azure-credential resolves the Azure CLI session set up above and
+      # asks the Marketplace whether this identity may publish for the publisher.
+      - name: Verify publisher access
+        run: pnpm --filter "./editors/vscode" exec vsce verify-pat datamitsu --azure-credential
+name: Verify VSCE Marketplace (OIDC)
+on:
+  push:
+    branches:
+      - feat/vscode-extension
+permissions:
+  contents: read
