@@ -21,6 +21,7 @@ func TestEffectiveJSONRoundTrip(t *testing.T) {
 		Concurrency:              3,
 		InstallTimeoutSeconds:    600,
 		Libc:                     "glibc",
+		LogFormat:                "console",
 		LogLevel:                 "info",
 		MaxCmdLength:             32000,
 		MaxErrorCmdDisplay:       120,
@@ -47,6 +48,7 @@ func TestEffectiveJSONRoundTrip(t *testing.T) {
 		"concurrency",
 		"installTimeoutSeconds",
 		"libc",
+		"logFormat",
 		"logLevel",
 		"maxCmdLength",
 		"maxErrorCmdDisplay",
@@ -82,6 +84,16 @@ func TestComputeDefaults(t *testing.T) {
 	}
 	if eff.OCIRegistry != "ghcr.io" {
 		t.Errorf("OCIRegistry = %q, want \"ghcr.io\"", eff.OCIRegistry)
+	}
+	if eff.LogFormat != "console" {
+		t.Errorf("LogFormat = %q, want \"console\"", eff.LogFormat)
+	}
+}
+
+func TestComputeLogFormatOverride(t *testing.T) {
+	t.Setenv("DATAMITSU_LOG_FORMAT", "jsonl")
+	if eff := Compute(); eff.LogFormat != "jsonl" {
+		t.Errorf("LogFormat = %q, want \"jsonl\"", eff.LogFormat)
 	}
 }
 

@@ -35,6 +35,7 @@ type Effective struct {
 	Concurrency              int    `json:"concurrency"`
 	InstallTimeoutSeconds    int    `json:"installTimeoutSeconds"`
 	Libc                     string `json:"libc"`
+	LogFormat                string `json:"logFormat"`
 	LogLevel                 string `json:"logLevel"`
 	MaxCmdLength             int    `json:"maxCmdLength"`
 	MaxErrorCmdDisplay       int    `json:"maxErrorCmdDisplay"`
@@ -56,6 +57,7 @@ func Compute() Effective {
 		Concurrency:              env.GetConcurrency(),
 		InstallTimeoutSeconds:    env.InstallTimeoutSeconds(),
 		Libc:                     string(target.HostTarget().Libc),
+		LogFormat:                env.GetLogFormat(),
 		LogLevel:                 env.GetLogLevel().String(),
 		MaxCmdLength:             env.GetMaxCommandLength(),
 		MaxErrorCmdDisplay:       env.GetMaxErrorCommandDisplay(),

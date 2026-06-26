@@ -1,13 +1,89 @@
 package ui
 
 import (
+	"errors"
 	"io"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/datamitsu/datamitsu/internal/term"
+	"github.com/datamitsu/datamitsu/internal/uievent"
 )
+
+// captureSink records emitted events for assertions.
+type captureSink struct {
+	mu     sync.Mutex
+	events []uievent.Event
+}
+
+func (c *captureSink) Emit(e uievent.Event) {
+	c.mu.Lock()
+	c.events = append(c.events, e)
+	c.mu.Unlock()
+}
+
+func (c *captureSink) lastDownloadStatus() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, v := range slices.Backward(c.events) {
+		if v.Type == uievent.TypeDownload {
+			return v.Status
+		}
+	}
+	return ""
+}
+
+// errReader yields data then a non-EOF error, simulating an aborted transfer.
+type errReader struct {
+	data []byte
+	pos  int
+	err  error
+}
+
+func (r *errReader) Read(b []byte) (int, error) {
+	if r.pos < len(r.data) {
+		n := copy(b, r.data[r.pos:])
+		r.pos += n
+		return n, nil
+	}
+	return 0, r.err
+}
+
+func TestDownloadEmitsDoneOnEOF(t *testing.T) {
+	cs := &captureSink{}
+	SetEventSink(cs, true)
+	defer SetEventSink(nil, false)
+
+	d := New(term.Plain)
+	rc := d.Download("artifact", 4, strings.NewReader("data"))
+	if _, err := io.ReadAll(rc); err != nil {
+		t.Fatalf("ReadAll: %v", err)
+	}
+	_ = rc.Close()
+
+	if got := cs.lastDownloadStatus(); got != uievent.StatusDone {
+		t.Errorf("terminal download status = %q, want %q", got, uievent.StatusDone)
+	}
+}
+
+func TestDownloadEmitsFailOnAbort(t *testing.T) {
+	cs := &captureSink{}
+	SetEventSink(cs, true)
+	defer SetEventSink(nil, false)
+
+	d := New(term.Plain)
+	rc := d.Download("artifact", 100, &errReader{data: []byte("part"), err: errors.New("boom")})
+	// Drain until the non-EOF error surfaces (no done emitted), then close.
+	_, _ = io.ReadAll(rc)
+	_ = rc.Close()
+
+	if got := cs.lastDownloadStatus(); got != uievent.StatusFail {
+		t.Errorf("terminal download status = %q, want %q (aborted transfer must not report done)", got, uievent.StatusFail)
+	}
+}
 
 // TestInteractiveCloseOfPartialDownloadDoesNotBlockDisplayClose pins the
 // zombie-bar fix: a download closed mid-transfer (failed attempt) must abort

@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/datamitsu/datamitsu/internal/uievent"
+
 	"github.com/vbauerster/mpb/v8"
 	"github.com/vbauerster/mpb/v8/decor"
 )
@@ -36,6 +38,7 @@ func (d *Display) Download(name string, total int64, r io.Reader) io.ReadCloser 
 	}
 	d.mu.Unlock()
 
+	var rc io.ReadCloser
 	if prog != nil {
 		bar := prog.AddBar(total,
 			mpb.BarRemoveOnComplete(),
@@ -56,10 +59,113 @@ func (d *Display) Download(name string, total int64, r io.Reader) io.ReadCloser 
 				decor.EwmaSpeed(decor.SizeB1024(0), " % .2f", 60),
 			),
 		)
-		return &barReader{ReadCloser: bar.ProxyReader(r), bar: bar, d: d}
+		rc = &barReader{ReadCloser: bar.ProxyReader(r), bar: bar, d: d}
+	} else {
+		rc = &plainDownload{d: d, name: name, total: total, r: r, lastPct: -1}
 	}
 
-	return &plainDownload{d: d, name: name, total: total, r: r, lastPct: -1}
+	// Emit typed download events independent of the render branch above: the
+	// Interactive barReader never calls plainDownload.maybeReport, so the JSON-L
+	// stream must observe bytes through its own wrapper. No-op (returns rc as-is)
+	// when no event sink is installed, so normal runs pay nothing.
+	return wrapDownloadEvents(name, total, rc)
+}
+
+// wrapDownloadEvents wraps rc in a byte-metering emitter when a typed event sink
+// is active, emitting a start event now and throttled progress + a final done
+// event as the transfer is read/closed. The op_id is generated here (the byte
+// layer has no run handle), so download events are self-correlating start→done.
+func wrapDownloadEvents(name string, total int64, rc io.ReadCloser) io.ReadCloser {
+	if !sinkActive() {
+		return rc
+	}
+	opID := uievent.NextOpID("dl")
+	Emit(uievent.Event{
+		Type:       uievent.TypeDownload,
+		OpID:       opID,
+		Status:     uievent.StatusStart,
+		Name:       name,
+		BytesTotal: total,
+	})
+	return &meteredEmitter{ReadCloser: rc, opID: opID, name: name, total: total}
+}
+
+// meteredEmitter counts bytes flowing through an underlying download reader and
+// emits download progress/done events. Throttling of progress is handled by the
+// sink (per op_id), so this emits on every read and lets the sink drop the
+// excess.
+type meteredEmitter struct {
+	io.ReadCloser
+
+	opID  string
+	name  string
+	total int64
+
+	mu       sync.Mutex
+	read     int64
+	doneSent bool
+}
+
+func (m *meteredEmitter) Read(b []byte) (int, error) {
+	n, err := m.ReadCloser.Read(b)
+	if n > 0 {
+		m.mu.Lock()
+		m.read += int64(n)
+		read := m.read
+		m.mu.Unlock()
+		Emit(uievent.Event{
+			Type:       uievent.TypeDownload,
+			OpID:       m.opID,
+			Status:     uievent.StatusProgress,
+			Name:       m.name,
+			BytesDone:  read,
+			BytesTotal: m.total,
+			Percent:    downloadPct(read, m.total),
+		})
+	}
+	if err == io.EOF {
+		// EOF means the transfer drained to completion -> done.
+		m.emitTerminal(uievent.StatusDone)
+	}
+	return n, err //nolint:wrapcheck // passthrough of underlying reader error (incl. io.EOF) must not be wrapped
+}
+
+func (m *meteredEmitter) Close() error {
+	// If the reader reached EOF, done was already emitted and this is a no-op.
+	// Otherwise the reader was closed before completion (aborted/failed transfer,
+	// e.g. a stall, dropped connection, or verification failure upstream) -> fail,
+	// so a consumer never mistakes a partial download for a successful one.
+	m.emitTerminal(uievent.StatusFail)
+	return m.ReadCloser.Close() //nolint:wrapcheck // passthrough of wrapped reader's closer
+}
+
+func (m *meteredEmitter) emitTerminal(status string) {
+	m.mu.Lock()
+	if m.doneSent {
+		m.mu.Unlock()
+		return
+	}
+	m.doneSent = true
+	read := m.read
+	m.mu.Unlock()
+	Emit(uievent.Event{
+		Type:       uievent.TypeDownload,
+		OpID:       m.opID,
+		Status:     status,
+		Name:       m.name,
+		BytesDone:  read,
+		BytesTotal: m.total,
+		Percent:    downloadPct(read, m.total),
+	})
+}
+
+// downloadPct returns the integer percent complete, or 0 (omitted by omitempty)
+// when total is unknown — consumers fall back to bytes_done/bytes_total.
+func downloadPct(read, total int64) int {
+	if total <= 0 {
+		return 0
+	}
+	return int(read * 100 / total)
 }
 
 // barReader wraps an mpb ProxyReader to release the display's active-bar count

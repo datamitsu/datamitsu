@@ -124,7 +124,9 @@ func verifyInstalledApps(ctx context.Context, binMgr *binmanager.BinManager, all
 		}
 		args, verifiable := versionCheckArgs(app)
 		if !verifiable {
-			fmt.Fprintf(os.Stderr, "Note: %q has no runnable version check; skipping verify\n", name)
+			if !ui.Quiet() {
+				fmt.Fprintf(os.Stderr, "Note: %q has no runnable version check; skipping verify\n", name)
+			}
 			continue
 		}
 
@@ -170,7 +172,7 @@ func versionCheckArgs(app binmanager.App) (args []string, verifiable bool) {
 // nothing, so naming one in `install` is a likely mistake.
 func warnShellApps(allApps binmanager.MapOfApps, names []string) {
 	for _, name := range names {
-		if app, ok := allApps[name]; ok && app.Shell != nil {
+		if app, ok := allApps[name]; ok && app.Shell != nil && !ui.Quiet() {
 			fmt.Fprintf(os.Stderr, "Warning: %q is a shell command; nothing to install\n", name)
 		}
 	}

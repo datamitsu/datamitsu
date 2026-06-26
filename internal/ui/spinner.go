@@ -5,6 +5,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/datamitsu/datamitsu/internal/uievent"
+
 	"github.com/vbauerster/mpb/v8"
 	"github.com/vbauerster/mpb/v8/decor"
 )
@@ -28,8 +30,13 @@ type Spinner struct {
 	bar  *mpb.Bar // Interactive only; nil in Plain
 	name string
 
-	detail  atomic.Value // string
-	release sync.Once
+	// opID correlates the install start/done events for the typed stream; empty
+	// when no event sink is installed.
+	opID string
+
+	detail   atomic.Value // string
+	release  sync.Once
+	termOnce sync.Once // guards the single install done/fail event
 
 	mu     sync.Mutex
 	lastAt time.Time
@@ -50,6 +57,18 @@ func (d *Display) Spinner(name string) *Spinner {
 	// interval rather than emitting immediately on top of the name line — fast
 	// installs then show just the name + final line, slow ones update.
 	s.lastAt = now()
+
+	// Typed install boundary: a Spinner marks one app install (node/uv/go/pnpm/
+	// extract). Emit start now; Done/Fail emit the terminal event.
+	if sinkActive() {
+		s.opID = uievent.NextOpID("inst")
+		Emit(uievent.Event{
+			Type:   uievent.TypeInstall,
+			OpID:   s.opID,
+			Status: uievent.StatusStart,
+			Name:   name,
+		})
+	}
 
 	if prog != nil {
 		s.bar = prog.AddSpinner(0,
@@ -112,6 +131,7 @@ func (s *Spinner) Done(final string) {
 	if final != "" {
 		s.d.Statusf(SymOK, "%s", final)
 	}
+	s.emitTerminal(uievent.StatusDone)
 }
 
 // Fail completes the spinner without a success line (the caller surfaces the
@@ -124,4 +144,22 @@ func (s *Spinner) Fail() {
 		s.bar.SetTotal(-1, true)
 		s.release.Do(s.d.barEnded)
 	}
+	s.emitTerminal(uievent.StatusFail)
+}
+
+// emitTerminal emits the install done/fail event once, guarded by termOnce (its
+// own sync.Once, distinct from the release Once that frees the bar) so a
+// Done-then-Fail or double-Done call is a no-op for the event.
+func (s *Spinner) emitTerminal(status string) {
+	if s.opID == "" {
+		return
+	}
+	s.termOnce.Do(func() {
+		Emit(uievent.Event{
+			Type:   uievent.TypeInstall,
+			OpID:   s.opID,
+			Status: status,
+			Name:   s.name,
+		})
+	})
 }
