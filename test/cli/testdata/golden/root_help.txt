@@ -17,6 +17,7 @@ Available Commands:
   init        Initialize project - download binaries and run init commands
   install     Install managed apps and/or runtimes without executing them
   lint        Run lint operations on files
+  lsp         Run a formatting-only LSP server over stdio
   setup       Setup configuration files
   store       Manage the global binary and runtime store
   version     Print the version number
