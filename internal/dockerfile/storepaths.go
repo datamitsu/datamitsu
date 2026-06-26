@@ -35,6 +35,14 @@ func appEnvSubtree(kind config.RuntimeKind, app string) string {
 	return path.Join(".apps", string(kind), app)
 }
 
+// parserSubtree is the store subtree for a WASM output-parser module
+// ({store}/.parsers/<module>). Like binaryAppSubtree, this is the hash-LESS
+// parent: the content-addressed child (xxh3 of url+hash) is its only entry, and
+// the bundle post-process resolves that segment by scanning the layer tar.
+func parserSubtree(module string) string {
+	return path.Join(".parsers", module)
+}
+
 // runtimeCopiedToFinal reports whether a runtime's own store subtree must be
 // present in the final image. Go builds a self-contained binary, so the Go SDK
 // is build-only; every other kind needs its interpreter/runtime at run time.

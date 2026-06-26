@@ -8,6 +8,7 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/parsermanager"
 	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 
 	"go.uber.org/zap"
@@ -126,7 +127,32 @@ func expectedSubtrees(cfg *config.Config, storeRoot string, needed, neededRuntim
 		}
 	}
 
+	// WASM output-parser modules referenced by any tool. They are small and shared
+	// across tools, so a demand-driven seed includes every referenced module rather
+	// than mapping each tool→app→parser precisely — keeping the airgapped parser
+	// path working with a negligible over-pull. The full seed covers them anyway
+	// (subtreeRoots allows .parsers/); this is only for `seed --apps`.
+	for module := range referencedParserModules(cfg) {
+		p, ok := cfg.Parsers[module]
+		if !ok {
+			continue // a dangling outputParser reference is a config-validation concern
+		}
+		addPath(parsermanager.ModuleStorePath(module, p), "parser "+module)
+	}
+
 	return expected
+}
+
+// referencedParserModules collects the distinct `parsers` module keys referenced
+// by any tool's outputParser. A tool with no parser contributes nothing.
+func referencedParserModules(cfg *config.Config) map[string]struct{} {
+	modules := make(map[string]struct{})
+	for _, tool := range cfg.Tools {
+		if tool.OutputParser != nil && tool.OutputParser.Module != "" {
+			modules[tool.OutputParser.Module] = struct{}{}
+		}
+	}
+	return modules
 }
 
 // runtimeAppKind reports a runtime-managed app's kind and explicit runtime
@@ -202,6 +228,26 @@ func buildReVerifyIndex(cfg *config.Config, storeRoot string) map[string]reVerif
 			}
 			index[rel] = reVerifySpec{relPath: name + ".jar", sha256: app.Jvm.JarHash, owner: name}
 		}
+	}
+
+	// WASM parser modules are the ideal re-verify case: a single module.wasm stored
+	// verbatim, whose published SHA-256 (config Hash) is the content hash. Index
+	// every declared parser; only subtrees actually seeded are re-verified.
+	parserNames := make([]string, 0, len(cfg.Parsers))
+	for name := range cfg.Parsers {
+		parserNames = append(parserNames, name)
+	}
+	sort.Strings(parserNames)
+	for _, name := range parserNames {
+		p := cfg.Parsers[name]
+		if p.Hash == "" {
+			continue // hash is mandatory; a missing one is a config error reported elsewhere
+		}
+		rel, err := subtreeRel(storeRoot, parsermanager.ModuleStorePath(name, p))
+		if err != nil {
+			continue
+		}
+		index[rel] = reVerifySpec{relPath: parsermanager.WASMFileName, sha256: p.Hash, owner: "parser " + name}
 	}
 	return index
 }

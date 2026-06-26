@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/datamitsu/datamitsu/internal/parsermanager"
@@ -57,6 +58,21 @@ uses them (e.g. cue_fmt reads stderr). Resolves the module from --wasm (a local
 	RunE: runParsersRun,
 }
 
+var parsersPrefetchCmd = &cobra.Command{
+	Use:   "prefetch [module...]",
+	Short: "Download + verify parser modules into the store (for OCI-bundle builds / airgap)",
+	Long: `Download and SHA-256 verify the configured WASM parser modules into the store.
+
+With no arguments, every module declared in the ` + "`parsers`" + ` config is fetched; pass
+one or more module names to fetch a subset. A module already on disk (matching
+url+hash) is a no-op. This materializes each module at its content-addressed store
+path so it can be COPYed into an OCI-bundle layer (the generated Dockerfile's
+parser stages run this) and later found offline by the runtime — no compilation,
+fetch only.`,
+	Args: cobra.ArbitraryArgs,
+	RunE: runParsersPrefetch,
+}
+
 // addParsersFlags gives each leaf the same --json / --wasm pair (read per-RunE so
 // there is no shared mutable flag state between the two commands).
 func addParsersFlags(c *cobra.Command) {
@@ -74,7 +90,39 @@ func init() {
 	parsersCmd.AddCommand(parsersListCmd)
 	parsersCmd.AddCommand(parsersInspectCmd)
 	parsersCmd.AddCommand(parsersRunCmd)
+	parsersCmd.AddCommand(parsersPrefetchCmd)
 	devtoolsCmd.AddCommand(parsersCmd)
+}
+
+func runParsersPrefetch(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	c, _, _, err := loadConfig()
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+	if len(c.Parsers) == 0 {
+		if _, err := fmt.Fprintln(cmd.ErrOrStderr(), "no parsers declared in config; nothing to prefetch"); err != nil {
+			return fmt.Errorf("write notice: %w", err)
+		}
+		return nil
+	}
+	mgr := parsermanager.New(c.Parsers)
+	defer func() { _ = mgr.Close(ctx) }()
+	if err := mgr.Prefetch(ctx, args); err != nil {
+		return err
+	}
+	fetched := args
+	if len(fetched) == 0 {
+		fetched = make([]string, 0, len(c.Parsers))
+		for name := range c.Parsers {
+			fetched = append(fetched, name)
+		}
+		sort.Strings(fetched)
+	}
+	if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Prefetched %d parser module(s): %s\n", len(fetched), strings.Join(fetched, ", ")); err != nil {
+		return fmt.Errorf("write summary: %w", err)
+	}
+	return nil
 }
 
 func runParsersRun(cmd *cobra.Command, args []string) error {

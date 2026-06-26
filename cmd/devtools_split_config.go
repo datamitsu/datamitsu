@@ -49,8 +49,8 @@ func runSplitConfig(ctx context.Context) error {
 		return fmt.Errorf("create output directory: %w", err)
 	}
 
-	plan := dockerfile.BuildPlan(cfg.Apps, cfg.Runtimes)
-	slices := dockerfile.BuildSlices(plan, cfg.Apps, cfg.Runtimes)
+	plan := dockerfile.BuildPlan(cfg.Apps, cfg.Runtimes, dockerfile.PlanOptions{Parsers: cfg.Parsers})
+	slices := dockerfile.BuildSlices(plan, cfg.Apps, cfg.Runtimes, cfg.Parsers)
 	for _, slice := range slices {
 		text, renderErr := dockerfile.RenderSlice(slice.Config)
 		if renderErr != nil {

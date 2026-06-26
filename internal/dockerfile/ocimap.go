@@ -16,7 +16,7 @@ import (
 // Subtree. ".uv/python" is already exact (no hash segment).
 type OCIMapEntry struct {
 	Subtree string `json:"subtree"`
-	Kind    string `json:"kind"` // binary|runtime|app|uv-python
+	Kind    string `json:"kind"` // binary|runtime|app|uv-python|parser
 	App     string `json:"app,omitempty"`
 }
 
@@ -71,6 +71,17 @@ func BuildOCIMap(plan Plan, opts RenderOptions) OCIMap {
 			Subtree: binaryAppSubtree(bs.App),
 			Kind:    "binary",
 			App:     bs.App,
+		})
+	}
+
+	// Parser modules: hash-segment-resolved by the post-process like binaries (the
+	// xxh3 child is the layer's single top-level entry under Subtree), NOT exact
+	// like uv-python. App carries the module name (parsers have no owning app).
+	for _, ps := range plan.ParserStages {
+		m.Layers = append(m.Layers, OCIMapEntry{
+			Subtree: parserSubtree(ps.Module),
+			Kind:    "parser",
+			App:     ps.Module,
 		})
 	}
 

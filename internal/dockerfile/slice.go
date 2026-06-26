@@ -32,9 +32,10 @@ func SliceFileName(stage string) string { return stage + ".js" }
 // BuildSlices returns one minimal config slice per stage in the plan: a runtime
 // stage gets only its runtime; a binary stage only its binary; a runtime-managed
 // app gets its app plus the runtime it installs under (so install can resolve the
-// runtime reference). Order mirrors the plan for deterministic output.
-func BuildSlices(plan Plan, apps binmanager.MapOfApps, runtimes config.MapOfRuntimes) []Slice {
-	slices := make([]Slice, 0, len(plan.RuntimeStages)+len(plan.RuntimeAppStages)+len(plan.BinaryStages))
+// runtime reference); a parser stage gets only its `parsers` entry. Order mirrors
+// the plan for deterministic output.
+func BuildSlices(plan Plan, apps binmanager.MapOfApps, runtimes config.MapOfRuntimes, parsers config.MapOfParsers) []Slice {
+	slices := make([]Slice, 0, len(plan.RuntimeStages)+len(plan.RuntimeAppStages)+len(plan.BinaryStages)+len(plan.ParserStages))
 
 	for _, rt := range plan.RuntimeStages {
 		stage := stageName("rt-", rt.Name)
@@ -63,6 +64,15 @@ func BuildSlices(plan Plan, apps binmanager.MapOfApps, runtimes config.MapOfRunt
 			StageName: stage,
 			FileName:  SliceFileName(stage),
 			Config:    &config.Config{Apps: binmanager.MapOfApps{bs.App: apps[bs.App]}},
+		})
+	}
+
+	for _, ps := range plan.ParserStages {
+		stage := stageName("parser-", ps.Module)
+		slices = append(slices, Slice{
+			StageName: stage,
+			FileName:  SliceFileName(stage),
+			Config:    &config.Config{Parsers: config.MapOfParsers{ps.Module: parsers[ps.Module]}},
 		})
 	}
 

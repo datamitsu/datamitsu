@@ -1,6 +1,8 @@
 # OCI Bundles
 
-An OCI bundle packages the datamitsu tool store as a standard OCI image: one layer per store subtree (a binary, a runtime, a runtime-managed app), annotated so datamitsu can pull exactly the pieces it needs — **without docker or podman**. The bundle is a cache accelerator and an airgap seed, not a replacement for resolution: whatever is in the bundle is taken from it, whatever is not gets downloaded the usual way.
+An OCI bundle packages the datamitsu tool store as a standard OCI image: one layer per store subtree (a binary, a runtime, a runtime-managed app, or a WASM output-parser module), annotated so datamitsu can pull exactly the pieces it needs — **without docker or podman**. The bundle is a cache accelerator and an airgap seed, not a replacement for resolution: whatever is in the bundle is taken from it, whatever is not gets downloaded the usual way.
+
+WASM output-parser modules (the `parsers` config entity) ship as their own `.parsers/<module>` layers, materialized in the build by a `devtools parsers prefetch` stage and re-verified against their published SHA-256. So in an airgapped deployment a tool's `outputParser` resolves from the bundle instead of reaching out to the GitHub Release.
 
 ```mermaid
 flowchart LR

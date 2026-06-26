@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
@@ -182,6 +183,29 @@ func (m *Manager) Close(ctx context.Context) error {
 	return nil
 }
 
+// Prefetch downloads and SHA-256 verifies the named parser modules into the
+// store WITHOUT compiling them. It exists so an OCI-bundle Docker build can
+// materialize each module as its own store subtree (then COPYed into a layer),
+// and so callers can warm the cache ahead of an airgapped run. Empty names means
+// every declared parser; names are visited in sorted order for stable logs. A
+// module already on disk (matching url+hash) is a no-op (ensureModule stats
+// first). Unlike Prewarm, it never touches the wazero runtime — fetch only.
+func (m *Manager) Prefetch(ctx context.Context, names []string) error {
+	if len(names) == 0 {
+		names = make([]string, 0, len(m.parsers))
+		for name := range m.parsers {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+	}
+	for _, name := range names {
+		if _, err := m.ensureModule(ctx, name); err != nil {
+			return fmt.Errorf("prefetch parser %q: %w", name, err)
+		}
+	}
+	return nil
+}
+
 // compiledFor returns module's CompiledModule, compiling it exactly once. The
 // compile (download+verify+read+CompileModule) runs under a singleflight keyed by
 // the content key, so concurrent callers for the same module share one compile;
@@ -333,3 +357,17 @@ func cacheKey(p config.Parser) string {
 func moduleDir(name string, p config.Parser) string {
 	return filepath.Join(env.GetParsersPath(), name, cacheKey(p))
 }
+
+// ModuleStorePath is the single source of truth for a parser module's
+// content-addressed store directory ({store}/.parsers/{name}/{xxh3(url,hash)}).
+// The OCI-bundle generator (dockerfile subtree, seed expected-subtree, re-verify)
+// and the runtime resolver must agree on this path, so external callers compute
+// it through here rather than re-deriving the xxh3 key. The directory holds the
+// single verified module.wasm (see WASMFileName).
+func ModuleStorePath(name string, p config.Parser) string {
+	return moduleDir(name, p)
+}
+
+// WASMFileName is the fixed module filename inside a parser's content-addressed
+// store directory, exported so bundle re-verification can target it.
+const WASMFileName = wasmFileName

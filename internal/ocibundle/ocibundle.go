@@ -32,7 +32,7 @@ const (
 	// carries (e.g. ".bin/golangci-lint/<hash>"). Layers without it are base
 	// rootfs/config layers of the runnable image and are skipped.
 	AnnotationSubtree = "com.datamitsu.subtree"
-	// AnnotationKind is the optional layer content kind: binary|runtime|app|uv-python.
+	// AnnotationKind is the optional layer content kind: binary|runtime|app|uv-python|parser.
 	AnnotationKind = "com.datamitsu.kind"
 	// AnnotationApp optionally names the app/runtime a layer belongs to.
 	AnnotationApp = "com.datamitsu.app"
@@ -46,7 +46,8 @@ const (
 var log = logger.Logger.With(zap.Namespace("ocibundle"))
 
 // subtreeRoots are the only store subtrees a bundle layer may write into.
-var subtreeRoots = []string{".bin/", ".runtimes/", ".apps/", ".uv/python"}
+// .parsers/ carries WASM output-parser modules (.parsers/<module>/<xxh3>).
+var subtreeRoots = []string{".bin/", ".runtimes/", ".apps/", ".uv/python", ".parsers/"}
 
 // validateSubtree rejects malformed subtree annotations: absolute paths,
 // traversal, or anything outside the known store subtree roots. A layer with

@@ -65,6 +65,7 @@ func Render(plan Plan, opts RenderOptions) string {
 	writeRuntimeStages(&b, plan, opts)
 	writeRuntimeAppStages(&b, plan, opts)
 	writeBinaryStages(&b, plan, opts)
+	writeParserStages(&b, plan, opts)
 	writeFinalStage(&b, plan, opts)
 
 	return b.String()
@@ -233,6 +234,32 @@ func (o RenderOptions) appInstallArgs(app string) []string {
 	return []string{app}
 }
 
+// writeParserStages emits one stage per WASM output-parser module: it COPYs the
+// stage's slice (carrying only that `parsers` entry) and runs `devtools parsers
+// prefetch`, which downloads+SHA-256-verifies the module into the store. The
+// final stage then COPYs each module's store subtree as its own layer.
+func writeParserStages(b *strings.Builder, plan Plan, opts RenderOptions) {
+	if len(plan.ParserStages) == 0 {
+		return
+	}
+	b.WriteString("# --- Parser stages (one per WASM output-parser module; prefetched into the store) ---\n")
+	for _, ps := range plan.ParserStages {
+		stage := stageName("parser-", ps.Module)
+		fmt.Fprintf(b, "FROM %s AS %s\n", opts.builderBase(), stage)
+		fmt.Fprintf(b, "%s\n", opts.copySlice(stage))
+		fmt.Fprintf(b, "%s\n\n", opts.prefetchCmd())
+	}
+}
+
+// prefetchCmd is the RUN command a parser stage uses to materialize its module
+// into the store. Its slice carries only this stage's parser, so a bare prefetch
+// (no module arg) fetches exactly it. Download always SHA-256-verifies, so there
+// is no --no-verify analog.
+func (o RenderOptions) prefetchCmd() string {
+	parts := []string{"datamitsu", "--config", o.configImagePath(), "devtools", "parsers", "prefetch"}
+	return "RUN " + strings.Join(parts, " ")
+}
+
 func writeFinalStage(b *strings.Builder, plan Plan, opts RenderOptions) {
 	b.WriteString("# --- Final image: assemble per-app store layers ---\n")
 	b.WriteString("FROM dm-base AS final\n")
@@ -264,6 +291,11 @@ func writeFinalStage(b *strings.Builder, plan Plan, opts RenderOptions) {
 	// Binary store subtrees.
 	for _, bs := range plan.BinaryStages {
 		writeCopy(b, stageName("app-", bs.App), opts.storeAbs(binaryAppSubtree(bs.App)))
+	}
+
+	// Parser store subtrees (WASM output-parser modules).
+	for _, ps := range plan.ParserStages {
+		writeCopy(b, stageName("parser-", ps.Module), opts.storeAbs(parserSubtree(ps.Module)))
 	}
 
 	// Writable store/config dirs for both run-time users. `COPY --link` above
