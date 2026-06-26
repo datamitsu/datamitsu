@@ -1,0 +1,14 @@
+[package]
+name = "datamitsu-parsers"
+version = "0.1.0"
+edition = "2021"
+description = "Signed Rust→WASM modules that parse third-party tool output into raw, nullable diagnostics for the datamitsu core."
+publish = false
+
+[lib]
+# cdylib for the wasm32-unknown-unknown artifact; rlib so `cargo test` can link
+# the native test harness against the same crate.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+tinyjson = "2.5.1"

@@ -15,11 +15,13 @@ var expectedDevtoolsSubcommands = []string{
 	"bundles",
 	"dockerfile",
 	"pack-inline-archive",
+	"parsers",
 	"pull-github",
 	"pull-node",
 	"pull-runtimes",
 	"pull-uv",
 	"split-config",
+	"tools",
 	"verify-all",
 }
 

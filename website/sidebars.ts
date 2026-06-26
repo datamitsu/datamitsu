@@ -42,6 +42,7 @@ const sidebars: SidebarsConfig = {
             "guides/architecture/execution",
             "guides/architecture/discovery",
             "guides/architecture/caching",
+            "guides/architecture/parsers",
           ],
           label: "Architecture",
           link: { id: "guides/architecture/index", type: "doc" },
@@ -69,6 +70,7 @@ const sidebars: SidebarsConfig = {
       items: [
         "reference/cli-commands",
         "reference/configuration-api",
+        "reference/parser-catalog",
         "reference/js-api",
         "reference/template-placeholders",
         "reference/ignore-rules",

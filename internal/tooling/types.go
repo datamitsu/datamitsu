@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/diagnostic"
+	"github.com/datamitsu/datamitsu/internal/textdiff"
 )
 
 // Task represents a single tool execution task
@@ -112,6 +114,22 @@ type ExecutionResult struct {
 	FailureReason FailureReason    // Why the task failed (independent error vs cascading cancellation)
 	StartedAt     time.Time        // Absolute start of this run (zero if not timed)
 	EndedAt       time.Time        // Absolute end of this run (zero if not timed)
+	// CapturedStdout holds the tool's stdout captured separately from stderr,
+	// set only when the operation uses output mode "stdout" (the candidate
+	// formatted content consumed by the diff-in-core formatting path). Empty for
+	// the default combined-capture behavior.
+	CapturedStdout string
+	// FormatEdits records the minimal line-based edits applied to a file by the
+	// diff-in-core formatting path (output mode "stdout"). Nil when the candidate
+	// content equalled the original (no change → no edits → file untouched). In
+	// per-file mode it holds the edits for the last formatted file, mirroring how
+	// Command reports the last command.
+	FormatEdits []textdiff.Edit
+	// Diagnostics holds the structured diagnostics parsed from this tool's output
+	// when the tool declares an outputParser (and a parser is wired in). Nil for
+	// tools without a parser — the common case. Populated per-file in per-file
+	// mode, each entry's File set to the file it came from.
+	Diagnostics []diagnostic.Diagnostic
 }
 
 // recordTiming stamps the run's absolute wall-clock window and elapsed Duration

@@ -108,9 +108,21 @@ var (
 		Description:  "Disable OCI bundle store seeding (set to any non-empty value)",
 	}
 
+	noParse = envVar{
+		Name:         strings.ToUpper(ldflags.PackageName) + "_NO_PARSE",
+		DefaultValue: "",
+		Description:  "Skip output parsers and show tools' raw output (set to any non-empty value)",
+	}
+
 	libcOverride = envVar{
 		Name:         strings.ToUpper(ldflags.PackageName) + "_LIBC",
 		DefaultValue: "",
 		Description:  "Override host libc detection (glibc or musl); affects store paths and OCI bundle selection",
+	}
+
+	parsersDir = envVar{
+		Name:         strings.ToUpper(ldflags.PackageName) + "_PARSERS_DIR",
+		DefaultValue: "",
+		Description:  "Override directory for downloaded WASM parser modules (default {store}/.parsers)",
 	}
 )

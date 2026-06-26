@@ -22,10 +22,12 @@ import (
 	"github.com/datamitsu/datamitsu/internal/cache"
 	clr "github.com/datamitsu/datamitsu/internal/color"
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/diagnostic"
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/ocibundle"
+	"github.com/datamitsu/datamitsu/internal/parsermanager"
 	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 	"github.com/datamitsu/datamitsu/internal/term"
 	"github.com/datamitsu/datamitsu/internal/timing"
@@ -82,6 +84,7 @@ type planExecutor interface {
 	SetResultCallback(cb tooling.ResultCallback)
 	SetTaskStartCallback(cb tooling.TaskStartCallback)
 	SetFileProgressCallback(cb tooling.FileProgressCallback)
+	SetParser(parser tooling.DiagnosticParser)
 	Execute(ctx context.Context, plan *tooling.ExecutionPlan) ([]tooling.GroupExecutionResult, error)
 }
 
@@ -105,6 +108,10 @@ type sharedContext struct {
 	executor      planExecutor
 	binMgr        toolEnsurer
 	timings       *timing.Timings
+	// parserMgr owns the WASM output-parser runtime (compile-once, instantiate
+	// per parse). nil when no parsers are declared or parsing is disabled; Closed
+	// in shutdown to release the shared runtime.
+	parserMgr *parsermanager.Manager
 	// nameWidth is the widest configured tool name, computed once so every
 	// operation's result block (fix, lint, …) aligns on the same columns.
 	nameWidth int
@@ -220,6 +227,13 @@ func initSharedContext(
 	// and so they appear in --explain, which never reaches the install step.
 	planner.SetPlatformChecker(binMgr)
 	sc.executor = tooling.NewExecutor(sc.rootPath, false, true, binMgr, sc.projectCache)
+	// Wire output-parsing only when parsers are declared and not disabled via
+	// --no-parse / DATAMITSU_NO_PARSE; otherwise the executor never parses (tools
+	// without an outputParser are unaffected either way).
+	if len(sc.cfg.Parsers) > 0 && !parsingDisabled() {
+		sc.parserMgr = parsermanager.New(sc.cfg.Parsers)
+		sc.executor.SetParser(newDiagnosticParser(sc.parserMgr))
+	}
 
 	// All configured tools are known here, so the result column width is fixed
 	// once and shared across every operation (so fix and lint blocks align).
@@ -236,6 +250,30 @@ func (sc *sharedContext) shutdown() {
 	if sc.projectCache != nil {
 		sc.projectCache.Shutdown()
 	}
+	if sc.parserMgr != nil {
+		// Release the shared WASM runtime and its compiled modules. Use a fresh
+		// context: shutdown may run after the operation's ctx is cancelled.
+		_ = sc.parserMgr.Close(context.Background())
+	}
+}
+
+// plannedParserModules returns the distinct WASM parser modules referenced by the
+// tools in plan (via their outputParser), for prewarming their one-time
+// compilation before execution.
+func plannedParserModules(plan *tooling.ExecutionPlan) []string {
+	seen := make(map[string]bool)
+	var mods []string
+	for _, group := range plan.Groups {
+		for _, task := range group.Tasks {
+			op := task.Tool.OutputParser
+			if op == nil || op.Module == "" || seen[op.Module] {
+				continue
+			}
+			seen[op.Module] = true
+			mods = append(mods, op.Module)
+		}
+	}
+	return mods
 }
 
 // runSingleOperation executes one operation (fix, lint, etc.) using a pre-initialized shared context
@@ -273,6 +311,17 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 			fmt.Println("ℹ️  No applicable tools found")
 		}
 		return nil
+	}
+
+	// Compile the WASM parser modules this plan will use now, once, off the
+	// per-file execution path. Best-effort: a failure falls back to lazy
+	// compile-on-first-parse inside the executor.
+	if sc.parserMgr != nil {
+		if mods := plannedParserModules(plan); len(mods) > 0 {
+			if err := sc.parserMgr.Prewarm(ctx, mods); err != nil {
+				log.Debug("parser prewarm failed; compiling lazily", zap.Error(err))
+			}
+		}
 	}
 
 	// Open the operation block: bold bracket header + dimmed project types. The
@@ -840,6 +889,36 @@ func toolDetail(group toolExecutionGroup) string {
 	return strings.Join(parts, " · ")
 }
 
+// formatDiagnostic renders one parsed diagnostic as
+// "file:row:col severity message [code]", the severity colored by level.
+func formatDiagnostic(d diagnostic.Diagnostic) string {
+	loc := fmt.Sprintf("%d:%d", d.Row, d.Col)
+	if d.File != "" {
+		loc = d.File + ":" + loc
+	}
+	line := fmt.Sprintf("%s %s %s", clr.Faint(loc), severityColor(d.Severity)(d.Severity.String()), d.Message)
+	if d.Code != "" {
+		line += " " + clr.Faint("["+d.Code+"]")
+	}
+	return line
+}
+
+// severityColor maps a severity to its display color.
+func severityColor(s diagnostic.Severity) func(a ...any) string {
+	switch s {
+	case diagnostic.SeverityError:
+		return clr.Red
+	case diagnostic.SeverityWarning:
+		return clr.Yellow
+	case diagnostic.SeverityInfo:
+		return clr.Cyan
+	case diagnostic.SeverityHint:
+		return clr.Faint
+	default:
+		return clr.Faint
+	}
+}
+
 // printFailedExecution prints details of a failed execution in a bordered format
 // showing all context needed to interpret error output in monorepo setups
 func printFailedExecution(runNum int, exec executionInstance) {
@@ -874,14 +953,21 @@ func printFailedExecution(runNum int, exec executionInstance) {
 	fmt.Printf("  %s  %s %s\n", border("│"), label("Exit code:"), clr.Red(strconv.Itoa(result.ExitCode)))
 	fmt.Printf("  %s  %s %s\n", border("│"), label("Duration: "), formatDuration(result.Duration))
 
-	// Tool output
-	if result.Output != "" {
+	switch {
+	// Parsed diagnostics, when the tool has an outputParser, are clearer than the
+	// raw output (often JSON) and take its place.
+	case len(result.Diagnostics) > 0:
+		fmt.Printf("  %s\n", border("│"))
+		for _, d := range result.Diagnostics {
+			fmt.Printf("  %s  %s\n", border("│"), formatDiagnostic(d))
+		}
+	case result.Output != "":
 		fmt.Printf("  %s\n", border("│"))
 		lines := strings.SplitSeq(strings.TrimRight(result.Output, "\n"), "\n")
 		for line := range lines {
 			fmt.Printf("  %s  %s\n", border("│"), line)
 		}
-	} else if result.Error != nil {
+	case result.Error != nil:
 		fmt.Printf("  %s\n", border("│"))
 		fmt.Printf("  %s  %s\n", border("│"), result.Error.Error())
 	}

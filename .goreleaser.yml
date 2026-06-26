@@ -77,6 +77,13 @@ changelog:
   use: github
 checksum:
   algorithm: sha256
+  # The Rust→WASM parser module is built before goreleaser runs (CI: rustup
+  # wasm32 target + `task build:parsers`). Listing it here puts its SHA-256 in
+  # checksums.txt, which the `signs` block below signs with cosign — so the
+  # WASM is covered by the existing signature with no per-version hash embedded
+  # in the core binary (revise.txt §5.2).
+  extra_files:
+    - glob: ./parsers/target/wasm32-unknown-unknown/release/datamitsu_parsers.wasm
   name_template: "checksums.txt"
 homebrew_casks:
   - binaries:
@@ -129,6 +136,11 @@ nfpms:
     vendor: datamitsu
 release:
   draft: false
+  # Upload the built WASM parser module alongside the binaries so consumers can
+  # download it from the GitHub Release; its integrity is verified against the
+  # signed checksums.txt entry added under `checksum.extra_files`.
+  extra_files:
+    - glob: ./parsers/target/wasm32-unknown-unknown/release/datamitsu_parsers.wasm
   github:
     name: datamitsu
     owner: datamitsu

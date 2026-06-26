@@ -20,6 +20,12 @@ tasks:
     deps:
       - "generate:prompts"
     desc: Build config library (generate prompts, compile, copy)
+  build:parsers:
+    cmds:
+      - cargo build --release --target wasm32-unknown-unknown --manifest-path parsers/Cargo.toml
+      - "echo \"wasm size: $(wc -c < parsers/target/wasm32-unknown-unknown/release/datamitsu_parsers.wasm) bytes\""
+      - task: gen:parsers-doc
+    desc: Build the Rust→WASM parser modules, report size, and regenerate the catalog doc
   # ── Demo ──
   demo:capture:
     cmds:
@@ -44,6 +50,17 @@ tasks:
       - docker run --rm datamitsu/datamitsu:dev version
       - docker run --rm datamitsu/datamitsu:dev-alpine version
     desc: Test local Docker images
+  gen:parsers-doc:
+    cmds:
+      # Core emits JSON (its only job); the TS script turns it into Markdown, so the
+      # website build just renders the committed page — never needing Rust/Go/wasm.
+      # node_modules/.bin/tsx directly (not `pnpm exec`, whose engine warning would
+      # leak into the redirected stdout).
+      - go run . devtools parsers list --wasm parsers/target/wasm32-unknown-unknown/release/datamitsu_parsers.wasm --json | ./node_modules/.bin/tsx packaging/parsers-catalog.ts > website/docs/reference/parser-catalog.md
+      # Format the generated page with the repo's own tools so it matches what the
+      # pre-commit hook expects (idempotent → no drift, no .prettierignore needed).
+      - pnpm dm fix ./website/docs/reference/parser-catalog.md
+    desc: Regenerate the parser-catalog docs page from the built WASM module (run by build:parsers)
   generate:prompts:
     cmds:
       - node config/scripts/generate-prompts.ts

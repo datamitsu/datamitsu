@@ -313,6 +313,17 @@ declare global {
       initCommands?: MapOfInitCommands;
 
       /**
+       * LSP server declarations, keyed by name. RESERVED for Phase 3+ — this is
+       * a declaration-only surface with NO runtime behavior in this release.
+       *
+       * Each entry is either a `proxy` (wrap a standalone language server `app`,
+       * scoped by `projectTypes`) or a `derived` entry (reuse an existing tool's
+       * projectTypes/globs and its `outputParser`). The optional `order` controls
+       * precedence; ties break alphabetically by entry name.
+       */
+      lsp?: MapOfLsp;
+
+      /**
        * OCI bundle that seeds the tool store (pull without docker).
        * Chains as a scalar: the last config layer that set or spread it wins;
        * a layer that rebuilds its output without `{...input}` silently drops
@@ -327,6 +338,17 @@ declare global {
        * };
        */
       oci?: OCIRef;
+
+      /**
+       * WASM output-parser modules, keyed by name. Each entry is a url+hash
+       * data artifact (NOT an executable app): a signed Rust→WASM module that
+       * extracts structured results from a tool's text output. Referenced
+       * by-name from `Tool.outputParser`.
+       *
+       * The SHA-256 `hash` is mandatory per the security policy — an empty or
+       * malformed hash is a config error, not a warning.
+       */
+      parsers?: MapOfParsers;
 
       /**
        * Project type definitions
@@ -424,10 +446,6 @@ declare global {
        */
       rootPath: string;
     }
-
-    // ========================================
-    // Tool Execution Configuration
-    // ========================================
 
     /**
      * Configuration file setup (managed files written by dm setup)
@@ -534,6 +552,60 @@ declare global {
       when?: string;
     }
 
+    // ========================================
+    // Tool Execution Configuration
+    // ========================================
+
+    /**
+     * LSP derived declaration: reuse an existing tool's projectTypes/globs and
+     * its `outputParser` instead of declaring a standalone server. RESERVED for
+     * Phase 3+ — declaration only, no runtime behavior in this release.
+     */
+    interface LspDerived {
+      /**
+       * Optional precedence. Ties break alphabetically by entry name.
+       */
+      order?: number;
+
+      /**
+       * Name of the tool (in `tools`) whose projectTypes/globs and
+       * `outputParser` this entry inherits. Must reference an existing tool.
+       */
+      tool: string;
+
+      /**
+       * Discriminator: this entry is derived from an existing tool.
+       */
+      type: "derived";
+    }
+
+    /**
+     * LSP proxy declaration: wrap a standalone language server `app`, scoped to
+     * one or more project types. RESERVED for Phase 3+ — declaration only, no
+     * runtime behavior in this release.
+     */
+    interface LspProxy {
+      /**
+       * Name of the app (in `apps`) that provides the language server.
+       */
+      app: string;
+
+      /**
+       * Optional precedence. Ties break alphabetically by entry name.
+       */
+      order?: number;
+
+      /**
+       * Project types this server applies to. Must be non-empty.
+       */
+      projectTypes: string[];
+
+      /**
+       * Discriminator: this is a proxy over a standalone language-server app.
+       */
+      type: "proxy";
+    }
+
     /**
      * Map of configuration setup with mainFilename as key
      * @example
@@ -547,13 +619,21 @@ declare global {
 
     type MapOfInitCommands = Record<string, InitCommand>;
 
-    type MapOfProjectTypes = Record<string, ProjectType>;
+    type MapOfLsp = Record<string, LspDerived | LspProxy>;
+
+    type MapOfParsers = Record<string, Parser>;
 
     // ========================================
     // Init Commands
     // ========================================
 
+    type MapOfProjectTypes = Record<string, ProjectType>;
+
     type MapOfTools = Record<string, Tool>;
+
+    // ========================================
+    // Config File Management (ENHANCED)
+    // ========================================
 
     /**
      * OCI bundle declaration: the registry repository plus the mandatory
@@ -583,10 +663,6 @@ declare global {
       signer?: OCISigner;
     }
 
-    // ========================================
-    // Config File Management (ENHANCED)
-    // ========================================
-
     /**
      * Sigstore keyless publisher identity.
      */
@@ -606,6 +682,50 @@ declare global {
      * Operation type
      */
     type OperationType = "fix" | "lint";
+
+    /**
+     * A tool's output-parser reference: which `parsers` entry (module) to load and
+     * which parser inside it to run. Kept separate so two tools can target two
+     * versions of the same module. See `Tool.outputParser` (which also accepts a
+     * plain string shorthand).
+     */
+    interface OutputParser {
+      /**
+       * The `parsers` entry to load — a specific WASM artifact (hence version).
+       */
+      module: string;
+
+      /**
+       * The parser inside that module to dispatch (a name from
+       * `datamitsu devtools parsers list`).
+       */
+      parser: string;
+    }
+
+    /**
+     * A WASM output-parser module: a url+hash data artifact, modeled on
+     * ArchiveSpec/Bundle (data, not a process) — explicitly NOT on App (no
+     * runtime, no lockfile). Downloaded and SHA-256 verified before it is
+     * loaded into the sandboxed WASM runtime.
+     */
+    interface Parser {
+      /**
+       * SHA-256 hash (64 lowercase hex characters) of the .wasm module.
+       * Mandatory per the security policy — an empty or malformed hash is a
+       * config error. Verified before the module is loaded.
+       */
+      hash: string;
+
+      /**
+       * URL of the .wasm module. Downloaded and SHA-256 verified before use.
+       */
+      url: string;
+
+      // NOTE: no `version` field by design. The module reports its own
+      // build-injected version through its WASM `describe` export (see
+      // `datamitsu devtools parsers list`); declaring it here too would only let
+      // the declared and actual versions drift. The entity carries url+hash only.
+    }
 
     /**
      * Project type detector - defines when this project type is detected
@@ -644,6 +764,19 @@ declare global {
        * Operations this tool supports
        */
       operations: Partial<Record<OperationType, ToolOperation>>;
+
+      /**
+       * Selects the WASM parser for this tool's output: `module` is the `parsers`
+       * entry to load (a specific WASM artifact, so different versions are different
+       * entries) and `parser` is the parser inside it (a name from
+       * `datamitsu devtools parsers list`). `module` must reference an existing
+       * `parsers` entry; a dangling reference is a config error.
+       *
+       * Keeping module and parser separate lets two tools target two versions of the
+       * same module.
+       * @example outputParser: { module: "core", parser: "eslint" }
+       */
+      outputParser?: OutputParser;
 
       /**
        * Which project types this tool applies to
@@ -726,12 +859,31 @@ declare global {
       globs?: string[];
 
       /**
+       * How the file content reaches the tool.
+       * - "file" (default): pass file paths as arguments via {file}/{files}
+       * - "stdin": pipe the target file's content to the tool's standard input
+       *   (the stdin→stdout formatter contract; use with scope "per-file")
+       * @default "file"
+       */
+      input?: "file" | "stdin";
+
+      /**
        * Files that should invalidate the cache when changed
        * Paths are relative to project root
        * @example ["eslint.config.js", "tsconfig.json"]
        * @example [".prettierrc", "package.json"]
        */
       invalidateOn?: string[];
+
+      /**
+       * How the tool's result is captured.
+       * - "inplace" (default): combined stdout+stderr is captured for reporting
+       *   and the tool mutates files directly
+       * - "stdout": capture the tool's stdout separately (kept apart from
+       *   stderr) as the candidate formatted content for the diff-in-core path
+       * @default "inplace"
+       */
+      output?: "inplace" | "stdout";
 
       /**
        * Priority/order when tools have overlapping globs

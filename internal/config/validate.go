@@ -388,6 +388,97 @@ func ValidateOCI(ref *OCIRef) error {
 	return nil
 }
 
+// ValidateParsers validates the parsers map: each entry must have a non-empty
+// url and a non-empty, well-formed SHA-256 hash (64 lowercase hex). An empty
+// hash is a hard error per the security policy (mirrors the bundle/archive
+// hash-mandatory rule) — never a download in "hash-less" mode.
+func ValidateParsers(parsers MapOfParsers) error {
+	if len(parsers) == 0 {
+		return nil
+	}
+
+	names := make([]string, 0, len(parsers))
+	for name := range parsers {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	var errs []string
+	for _, name := range names {
+		if name == "" {
+			errs = append(errs, "parser name must not be empty")
+			continue
+		}
+		p := parsers[name]
+		if p.URL == "" {
+			errs = append(errs, fmt.Sprintf("parser %q: url is required", name))
+		}
+		if p.Hash == "" {
+			errs = append(errs, fmt.Sprintf("parser %q: hash is required (SHA-256)", name))
+		} else if !isValidSHA256Hex(p.Hash) {
+			errs = append(errs, fmt.Sprintf("parser %q: hash must be a valid SHA-256 hex string (64 lowercase hex characters)", name))
+		}
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("config validation failed:\n  %s", strings.Join(errs, "\n  "))
+	}
+	return nil
+}
+
+// ValidateLsp performs minimal structural validation of the reserved lsp
+// declarations (no runtime behavior in this release):
+//   - type must be "proxy" or "derived";
+//   - a proxy requires app + a non-empty projectTypes;
+//   - a derived entry requires a tool that exists in tools.
+//
+// A dangling derived.tool reference is a load-time config error (follows the
+// runtime-ref validation style).
+func ValidateLsp(lsp MapOfLsp, tools MapOfTools) error {
+	if len(lsp) == 0 {
+		return nil
+	}
+
+	names := make([]string, 0, len(lsp))
+	for name := range lsp {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	var errs []string
+	for _, name := range names {
+		if name == "" {
+			errs = append(errs, "lsp entry name must not be empty")
+			continue
+		}
+		entry := lsp[name]
+		switch entry.Type {
+		case LspTypeProxy:
+			if entry.App == "" {
+				errs = append(errs, fmt.Sprintf("lsp %q: proxy requires app", name))
+			}
+			if len(entry.ProjectTypes) == 0 {
+				errs = append(errs, fmt.Sprintf("lsp %q: proxy requires a non-empty projectTypes", name))
+			}
+		case LspTypeDerived:
+			if entry.Tool == "" {
+				errs = append(errs, fmt.Sprintf("lsp %q: derived requires tool", name))
+			} else if _, ok := tools[entry.Tool]; !ok {
+				errs = append(errs, fmt.Sprintf("lsp %q: derived references unknown tool %q", name, entry.Tool))
+			}
+		case "":
+			errs = append(errs, fmt.Sprintf("lsp %q: type is required (must be %q or %q)", name, LspTypeProxy, LspTypeDerived))
+		default:
+			errs = append(errs, fmt.Sprintf("lsp %q: type %q is invalid (must be %q or %q)", name, entry.Type, LspTypeProxy, LspTypeDerived))
+		}
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("config validation failed:\n  %s", strings.Join(errs, "\n  "))
+	}
+	return nil
+}
+
 func isValidSHA256Hex(s string) bool {
 	if len(s) != 64 {
 		return false
@@ -508,7 +599,12 @@ func placeholderList(names []string) string {
 // {placeholder} datamitsu does not substitute. Passing an unknown placeholder
 // through unchanged silently breaks the tool (e.g. GOLANGCI_LINT_CACHE={toolcache}
 // reaching golangci-lint as a literal non-absolute path), so it is a config error.
-func ValidateTools(tools MapOfTools) error {
+//
+// It also validates the outputParser reference: when a tool sets outputParser, it
+// must name an existing entry in parsers — a dangling reference is a load-time
+// config error (there is no existing app-ref check to mirror; this follows the
+// runtime-ref validation style).
+func ValidateTools(tools MapOfTools, parsers MapOfParsers) error {
 	argAllowed := placeholderSet(ToolArgPlaceholders)
 	envAllowed := placeholderSet(ToolEnvPlaceholders)
 
@@ -522,6 +618,17 @@ func ValidateTools(tools MapOfTools) error {
 	for _, toolName := range toolNames {
 		tool := tools[toolName]
 
+		if tool.OutputParser != nil {
+			// Validate the module reference (which `parsers` entry to load); the
+			// dispatch key inside the module can only be checked at runtime.
+			if _, ok := parsers[tool.OutputParser.Module]; !ok {
+				errs = append(errs, fmt.Sprintf(
+					"tool %q: outputParser references unknown parsers module %q",
+					toolName, tool.OutputParser.Module,
+				))
+			}
+		}
+
 		opTypes := make([]string, 0, len(tool.Operations))
 		for opType := range tool.Operations {
 			opTypes = append(opTypes, string(opType))
@@ -530,6 +637,53 @@ func ValidateTools(tools MapOfTools) error {
 
 		for _, opType := range opTypes {
 			op := tool.Operations[OperationType(opType)]
+
+			switch op.Input {
+			case "", ToolInputFile, ToolInputStdin:
+			default:
+				errs = append(errs, fmt.Sprintf(
+					"tool %q operation %q: invalid input mode %q (supported: %q, %q)",
+					toolName, opType, op.Input, ToolInputFile, ToolInputStdin,
+				))
+			}
+
+			switch op.Output {
+			case "", ToolOutputInplace, ToolOutputStdout:
+			default:
+				errs = append(errs, fmt.Sprintf(
+					"tool %q operation %q: invalid output mode %q (supported: %q, %q)",
+					toolName, opType, op.Output, ToolOutputInplace, ToolOutputStdout,
+				))
+			}
+
+			// The stdin/stdout formatter contract is only honored by the per-file
+			// execution path. Under any batched scope the executor combines output
+			// and feeds no stdin, so these modes would silently no-op. Require
+			// scope:per-file (and reject an explicit batch:true) so a misconfigured
+			// formatter fails fast instead of doing nothing.
+			if op.Input == ToolInputStdin || op.Output == ToolOutputStdout {
+				if op.Scope != ToolScopePerFile {
+					errs = append(errs, fmt.Sprintf(
+						"tool %q operation %q: input %q / output %q require scope %q (got %q)",
+						toolName, opType, ToolInputStdin, ToolOutputStdout, ToolScopePerFile, op.Scope,
+					))
+				} else if op.Batch != nil && *op.Batch {
+					errs = append(errs, fmt.Sprintf(
+						"tool %q operation %q: input %q / output %q are incompatible with batch:true",
+						toolName, opType, ToolInputStdin, ToolOutputStdout,
+					))
+				}
+			}
+
+			// output:stdout drives the diff-in-core formatting path, which rewrites
+			// the file on disk. Restrict it to the fix operation so a read-only
+			// command (lint) can never silently mutate files via a misplaced mode.
+			if op.Output == ToolOutputStdout && OperationType(opType) != OpFix {
+				errs = append(errs, fmt.Sprintf(
+					"tool %q operation %q: output %q rewrites files and is only valid on the %q operation",
+					toolName, opType, ToolOutputStdout, OpFix,
+				))
+			}
 
 			for _, arg := range op.Args {
 				for _, ph := range findUnknownPlaceholders(arg, argAllowed) {
@@ -553,6 +707,41 @@ func ValidateTools(tools MapOfTools) error {
 					))
 				}
 			}
+		}
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("config validation failed:\n  %s", strings.Join(errs, "\n  "))
+	}
+	return nil
+}
+
+// ValidateToolFacets fails when a tool declares no usable facet. After all
+// config overlays are merged, every tool must expose at least one fix or lint
+// operation (a future lsp binding will also count, but lsp is not yet wired in
+// this release). A tool with no operations is silently skipped by the planner
+// (collectTasks drops tools missing the requested op), so an empty tool is
+// almost always an authoring mistake — surface it at load time instead.
+//
+// This is a brand-new check: there is no existing empty-operations validation to
+// mirror.
+func ValidateToolFacets(tools MapOfTools) error {
+	toolNames := make([]string, 0, len(tools))
+	for name := range tools {
+		toolNames = append(toolNames, name)
+	}
+	sort.Strings(toolNames)
+
+	var errs []string
+	for _, toolName := range toolNames {
+		tool := tools[toolName]
+		_, hasFix := tool.Operations[OpFix]
+		_, hasLint := tool.Operations[OpLint]
+		if !hasFix && !hasLint {
+			errs = append(errs, fmt.Sprintf(
+				"tool %q: must declare at least one fix or lint operation",
+				toolName,
+			))
 		}
 	}
 

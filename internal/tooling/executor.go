@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -20,8 +21,10 @@ import (
 	"github.com/datamitsu/datamitsu/internal/cache"
 	clr "github.com/datamitsu/datamitsu/internal/color"
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/diagnostic"
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/logger"
+	"github.com/datamitsu/datamitsu/internal/textdiff"
 
 	"go.uber.org/zap"
 )
@@ -41,12 +44,25 @@ type Executor struct {
 	taskStartCallback    TaskStartCallback    // Optional callback when task starts
 	fileProgressCallback FileProgressCallback // Optional callback for per-file progress
 	cache                *cache.Cache         // Cache for storing execution results
+	parser               DiagnosticParser     // Optional: parses tool output into diagnostics
 }
 
 // AppManager interface for getting application command information
 type AppManager interface {
 	GetBinaryPath(ctx context.Context, appName string) (string, error)
 	GetCommandInfo(ctx context.Context, appName string) (*binmanager.CommandInfo, error)
+}
+
+// DiagnosticParser turns a tool's raw output into resolved diagnostics. It is
+// injected via SetParser; when nil (the default) the executor never parses, so
+// tools without an outputParser are entirely unaffected. The concrete
+// implementation (in the runner) loads the WASM module and applies the
+// defaults-in-core resolution.
+type DiagnosticParser interface {
+	// Parse loads the WASM module named by `module` (a parsers config entry),
+	// dispatches its `parser` (the key inside the module), and labels the resulting
+	// diagnostics with `toolName` as their source.
+	Parse(ctx context.Context, module, parser, toolName string, stdout, stderr []byte, exitCode int32) ([]diagnostic.Diagnostic, error)
 }
 
 // ResultCallback is called when a task completes
@@ -88,6 +104,12 @@ func (e *Executor) SetTaskStartCallback(callback TaskStartCallback) {
 // SetFileProgressCallback sets a callback to be called after each file is processed
 func (e *Executor) SetFileProgressCallback(callback FileProgressCallback) {
 	e.fileProgressCallback = callback
+}
+
+// SetParser wires the diagnostic parser used for tools that declare an
+// outputParser. Without it, tool output is never parsed.
+func (e *Executor) SetParser(parser DiagnosticParser) {
+	e.parser = parser
 }
 
 // Execute runs an execution plan
@@ -618,6 +640,46 @@ func (e *Executor) updateCacheAfterSuccess(task Task, files []string) {
 }
 
 // executePerFile executes a tool once per file
+// joinStreams concatenates a tool's captured stdout and stderr for the textual
+// fallback display (the parser sees them apart).
+func joinStreams(stdout, stderr []byte) []byte {
+	switch {
+	case len(stderr) == 0:
+		return stdout
+	case len(stdout) == 0:
+		return stderr
+	default:
+		out := make([]byte, 0, len(stdout)+1+len(stderr))
+		out = append(out, stdout...)
+		out = append(out, '\n')
+		return append(out, stderr...)
+	}
+}
+
+// parseFileDiagnostics runs the tool's declared parser over one file's captured
+// output and appends the resolved diagnostics (stamped with the file) to result.
+// A parse failure is logged, not fatal — the tool's own pass/fail is unaffected.
+func (e *Executor) parseFileDiagnostics(ctx context.Context, result *ExecutionResult, task Task, file string, stdout, stderr []byte, exitCode int) {
+	op := task.Tool.OutputParser
+	//nolint:gosec // G115: a process exit code is small; the int32 cast is intentional.
+	diags, err := e.parser.Parse(ctx, op.Module, op.Parser, task.ToolName, stdout, stderr, int32(exitCode))
+	if err != nil {
+		log.Warn("output parser failed",
+			zap.String("tool", task.ToolName),
+			zap.String("module", op.Module),
+			zap.String("parser", op.Parser),
+			zap.String("file", file),
+			zap.Error(err))
+		return
+	}
+	for i := range diags {
+		if diags[i].File == "" {
+			diags[i].File = file
+		}
+	}
+	result.Diagnostics = append(result.Diagnostics, diags...)
+}
+
 func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binmanager.CommandInfo, workingDir string, startTime time.Time) ExecutionResult {
 	log.Debug("executePerFile start", zap.String("toolName", task.ToolName), zap.Int("fileCount", len(task.Files)))
 
@@ -701,11 +763,86 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 
 		opEnv := e.replaceEnvPlaceholders(task.OpConfig.Env, task.ProjectPath, task.ToolName)
 		cmd := e.buildCommand(ctx, cmdInfo, args, workingDir, opEnv)
-		output, err := e.runCommandWithOutput(cmd)
+
+		stdinContent, stdinErr := stdinForOperation(task.OpConfig, file)
+		if stdinErr != nil {
+			result.Success = false
+			result.Error = fmt.Errorf("failed to prepare stdin for file %s: %w", file, stdinErr)
+			if e.fileProgressCallback != nil {
+				e.fileProgressCallback(task.ToolName, cachedCount+i+1, totalFiles, false)
+			}
+			if e.failFast {
+				break
+			}
+			continue
+		}
+
+		formatMode := task.OpConfig.Output == config.ToolOutputStdout
+		// A formatter's stdout is the formatted file content, not diagnostics, so it
+		// must never be fed to the parser. Validation already limits output:stdout to
+		// the fix op, but a tool could still pair it with a tool-level outputParser;
+		// !formatMode keeps the parser off the formatted text in that case.
+		parseMode := e.parser != nil && task.Tool.OutputParser != nil && !formatMode
+		// Both formatting and parsing need stdout and stderr kept apart.
+		separate := formatMode || parseMode
+		stdoutBytes, stderrBytes, err := e.runCommandIO(cmd, stdinContent, separate)
+
+		var output []byte
+		switch {
+		case formatMode:
+			// stdout is the candidate formatted content; surface it separately
+			// and report only stderr (diagnostics) as the operation output.
+			result.CapturedStdout = string(stdoutBytes)
+			output = stderrBytes
+		case parseMode:
+			// Both streams were captured apart for the parser; for the textual
+			// fallback display keep them both.
+			output = joinStreams(stdoutBytes, stderrBytes)
+		default:
+			output = stdoutBytes
+		}
 		outputs = append(outputs, string(output))
 
 		exitCode := getExitCode(err)
 		lastExitCode = exitCode
+
+		// Parse this file's output into structured diagnostics when the tool
+		// declares an outputParser. Per-file mode means each invocation lints one
+		// file, so the diagnostics belong to it.
+		if parseMode {
+			e.parseFileDiagnostics(ctx, &result, task, file, stdoutBytes, stderrBytes, exitCode)
+		}
+
+		// Formatting pipeline (diff-in-core): in stdout-output mode a successful
+		// run yields the full new file text on stdout. Treat the original file as
+		// "before", the captured stdout as "after", compute the minimal line-based
+		// diff and apply it. No change → no edits → the file is left untouched
+		// (mtime preserved). No WASM parser is involved — formatting is text→text.
+		if err == nil && formatMode {
+			original := stdinContent // already the file content in stdin mode
+			if original == nil {
+				var readErr error
+				original, readErr = os.ReadFile(file)
+				if readErr != nil {
+					err = fmt.Errorf("read original content for %s: %w", file, readErr)
+				}
+			}
+			if err == nil && len(stdoutBytes) == 0 && len(original) > 0 {
+				// A stdout-mode formatter that exits 0 but emits nothing is
+				// misbehaving (e.g. it formats in place and writes only to
+				// stderr). Treat it as an error rather than letting the empty
+				// candidate truncate the file to zero bytes.
+				err = fmt.Errorf("formatter produced empty stdout for non-empty file %s", file)
+			}
+			if err == nil {
+				edits, fmtErr := applyStdoutFormat(file, original, stdoutBytes)
+				if fmtErr != nil {
+					err = fmtErr
+				} else {
+					result.FormatEdits = edits
+				}
+			}
+		}
 
 		// Output command output in debug mode
 		if len(output) > 0 {
@@ -1229,16 +1366,120 @@ func getExitCode(err error) int {
 }
 
 func (e *Executor) runCommandWithOutput(cmd *exec.Cmd) ([]byte, error) {
-	var combined bytes.Buffer
-	cmd.Stdout = &combined
-	cmd.Stderr = &combined
+	combined, _, err := e.runCommandIO(cmd, nil, false)
+	return combined, err
+}
+
+// runCommandIO runs cmd with optional stdin content and either combined or
+// separated stdout/stderr capture. When separate is false (the default for
+// every existing tool) stdout and stderr are interleaved into a single buffer,
+// returned as stdoutBytes with stderrBytes nil — byte-for-byte the historical
+// behavior. When separate is true the streams are captured independently so the
+// formatting path can treat stdout as the candidate file content while keeping
+// diagnostics (stderr) apart. A nil stdinContent leaves stdin untouched.
+func (e *Executor) runCommandIO(cmd *exec.Cmd, stdinContent []byte, separate bool) (stdoutBytes, stderrBytes []byte, err error) {
+	var outBuf, errBuf, combined bytes.Buffer
+	if separate {
+		cmd.Stdout = &outBuf
+		cmd.Stderr = &errBuf
+	} else {
+		cmd.Stdout = &combined
+		cmd.Stderr = &combined
+	}
+	if stdinContent != nil {
+		cmd.Stdin = bytes.NewReader(stdinContent)
+	}
 
 	setupProcessGroupCleanup(cmd)
 
-	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("start command: %w", err)
+	if startErr := cmd.Start(); startErr != nil {
+		return nil, nil, fmt.Errorf("start command: %w", startErr)
 	}
 
-	err := cmd.Wait()
-	return combined.Bytes(), err
+	err = cmd.Wait()
+	if separate {
+		return outBuf.Bytes(), errBuf.Bytes(), err
+	}
+	return combined.Bytes(), nil, err
+}
+
+// applyStdoutFormat treats candidate (the tool's separately-captured stdout) as
+// the full new text for file, computes the minimal line-based diff against the
+// original content (Task 8's textdiff) and applies it. It returns the edits that
+// were applied, or nil when the candidate equals the original — in which case the
+// file is left untouched so its mtime is preserved ("no change → no edits"). The
+// existing file mode is preserved across the rewrite.
+func applyStdoutFormat(file string, original, candidate []byte) ([]textdiff.Edit, error) {
+	edits := textdiff.ComputeEdits(string(original), string(candidate))
+	if len(edits) == 0 {
+		return nil, nil
+	}
+
+	// Preserve the file's existing mode. The file was just read above, so a stat
+	// failure here is unexpected; treat it as fatal rather than silently writing
+	// back with a guessed 0o644 that could strip the executable (or other) bits.
+	info, statErr := os.Stat(file)
+	if statErr != nil {
+		return nil, fmt.Errorf("stat %s before formatting: %w", file, statErr)
+	}
+
+	// Write the formatter's actual stdout (candidate), not a reconstruction from
+	// the edits: candidate is the ground truth, and round-tripping through
+	// textdiff.Apply could diverge on a diff edge case and silently corrupt the
+	// file. The edits are returned only for FormatEdits (LSP/undo reuse later).
+	if err := writeFileAtomic(file, candidate, info.Mode().Perm()); err != nil {
+		return nil, fmt.Errorf("write formatted content to %s: %w", file, err)
+	}
+	return edits, nil
+}
+
+// writeFileAtomic writes data to a temp file in path's directory then renames it
+// into place, so an interrupted or failed write never leaves the target — a
+// user's source file — truncated or half-written. The rename is atomic within a
+// single filesystem, which the same-directory temp guarantees. Like gofmt's
+// in-place write, a symlinked target is replaced by a regular file rather than
+// written through (an accepted tradeoff for atomicity; formatting targets are
+// real source files in practice).
+func writeFileAtomic(path string, data []byte, mode os.FileMode) (err error) {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".dm-fmt-*")
+	if err != nil {
+		return fmt.Errorf("create temp file: %w", err)
+	}
+	tmpName := tmp.Name()
+	defer func() {
+		if err != nil {
+			_ = os.Remove(tmpName) // best-effort cleanup on any failure before the rename
+		}
+	}()
+
+	if _, err = tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("write temp file: %w", err)
+	}
+	if err = tmp.Chmod(mode); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("chmod temp file: %w", err)
+	}
+	if err = tmp.Close(); err != nil {
+		return fmt.Errorf("close temp file: %w", err)
+	}
+	if err = os.Rename(tmpName, path); err != nil {
+		return fmt.Errorf("rename temp file: %w", err)
+	}
+	return nil
+}
+
+// stdinForOperation returns the bytes to feed to the tool's stdin for this
+// operation, or nil when the operation does not use stdin input. In stdin mode
+// it reads the target file's content (per-file scope feeds one file at a time).
+func stdinForOperation(op config.ToolOperation, file string) ([]byte, error) {
+	if op.Input != config.ToolInputStdin || file == "" {
+		return nil, nil
+	}
+	content, err := os.ReadFile(file)
+	if err != nil {
+		return nil, fmt.Errorf("read stdin content for %s: %w", file, err)
+	}
+	return content, nil
 }

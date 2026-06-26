@@ -212,6 +212,79 @@ datamitsu follows a single-print-layer rule:
 - The runner is the only component that prints output to the user
 - Failed tools show a structured error block with: tool name, scope, directory, command, exit code, and captured output
 
+## Formatting (stdin → stdout → diff)
+
+Most fix tools mutate files in place. A **formatter** that reads a document on
+standard input and writes the formatted result to standard output uses a
+different contract: datamitsu feeds the file content in, captures the formatted
+output, computes a **minimal line-based diff** in the core, and applies only the
+changed lines back to the file.
+
+Opt in with two operation fields:
+
+- `input: "stdin"` — pipe the target file's content to the tool's standard input
+- `output: "stdout"` — capture the tool's stdout (kept apart from stderr) as the
+  candidate new file content
+
+```javascript
+// BAD: a stdin/stdout formatter routed through the default in-place vehicle.
+// It never receives the file, and its formatted output is swallowed into the
+// report instead of being written back.
+const tools = {
+  shfmt: {
+    name: "shfmt",
+    operations: {
+      fix: { app: "shfmt", args: ["{file}"], scope: "per-file" },
+    },
+  },
+};
+
+// GOOD: feed content on stdin, capture stdout, let the core diff + apply.
+const tools = {
+  shfmt: {
+    name: "shfmt",
+    operations: {
+      fix: {
+        app: "shfmt",
+        args: [], // tool reads stdin, writes the formatted document to stdout
+        scope: "per-file",
+        input: "stdin",
+        output: "stdout",
+      },
+    },
+  },
+};
+```
+
+The flow per file:
+
+```mermaid
+graph LR
+    A[Read original content] --> B[Run tool: content on stdin]
+    B --> C[Capture stdout = candidate]
+    C --> D[Line-based diff: original vs candidate]
+    D --> E{Any edits?}
+    E -- yes --> F[Apply minimal edits to file]
+    E -- no --> G[Leave file untouched]
+
+    style A fill:#e8f4fd,stroke:#2196f3
+    style D fill:#fff3e0,stroke:#ff9800
+    style F fill:#e8f5e9,stroke:#4caf50
+    style G fill:#f3e5f5,stroke:#9c27b0
+```
+
+Key properties:
+
+- **Minimal edits.** Changing one line in a 2000-line file touches only that
+  line, not the whole file.
+- **No-op is free.** If the formatted output equals the original, there are no
+  edits and the file (including its mtime) is left untouched.
+- **Diff lives in the core**, not the tool — the same diff-in-core contract is
+  reused by the editor formatting path later.
+
+The diff itself is documented under
+[WASM Output Parsers → diff-in-core](./architecture/parsers.md#diff-in-core-formatting).
+
 ## Filtering
 
 You can narrow what datamitsu processes:

@@ -663,6 +663,64 @@ Print the install directory path for a bundle.
 datamitsu devtools bundles path <name>
 ```
 
+### devtools parsers
+
+Inspect the WASM output-parser modules declared in the [`parsers`](./configuration-api.md#output-parsers-parsers)
+config and the tools they can parse. Each module self-describes (via its WASM
+`describe` export) which tools it parses, how to invoke each, its upstream URL, and
+its build-injected version — so this is the source of truth, not the config.
+
+`list` aggregates every configured parser into a **deduplicated** catalog (a module
+declared by N tools is described once); `inspect` shows the full detail for one
+tool. Both accept:
+
+- `--json` — machine-readable output, for driving configs or build pipelines.
+- `--wasm <path>` — describe a local `.wasm` file directly, with no config or
+  network access (handy in CI and release tooling).
+
+```bash
+# Human-readable catalog of all tools the configured parsers can parse
+datamitsu devtools parsers list
+
+# Machine-readable catalog (tools is [] when none are configured)
+datamitsu devtools parsers list --json
+
+# Full detail for one tool
+datamitsu devtools parsers inspect hadolint
+
+# Describe a locally built module without any config
+datamitsu devtools parsers list --wasm ./parsers/target/wasm32-unknown-unknown/release/datamitsu_parsers.wasm
+```
+
+`run` pipes a tool's raw output (from stdin) through its parser and prints the
+structured diagnostics — the quickest way to develop or debug a parser against
+real output (parsers are not yet wired into the lint pipeline). It reads stdout
+from stdin; pass `--stderr-file` / `--exit-code` for parsers that use them, and
+`--wasm <path>` to use a local module instead of a configured one.
+
+```bash
+# Run eslint through datamitsu, then parse its JSON into diagnostics
+datamitsu exec eslint -- --format json file.js \
+  | datamitsu devtools parsers run eslint --wasm ./datamitsu_parsers.wasm --exit-code 1
+```
+
+### devtools tools
+
+Inspect the tools declared in the config — the fix/lint units datamitsu plans and
+runs. `list` shows each tool's operations, project types, the app it runs, and its
+output parser; `inspect` shows full per-operation detail. Both accept `--json`.
+
+```bash
+# All configured tools: name [operations] (projectTypes) → parser
+datamitsu devtools tools list
+
+# Machine-readable
+datamitsu devtools tools list --json
+
+# Full detail for one tool (per-operation app/scope/globs/args)
+datamitsu devtools tools inspect eslint
+```
+
 ### Troubleshooting devtools commands
 
 **File not found errors:**
@@ -815,5 +873,6 @@ datamitsu version
 | `DATAMITSU_NO_OCI`               | Disable OCI bundle store seeding (twin of the `--no-oci` flag)                                 | -                                                   |
 | `DATAMITSU_LIBC`                 | Override host libc detection (`glibc` or `musl`); affects store paths and OCI bundle selection | auto-detected                                       |
 | `DATAMITSU_OCI_REGISTRY`         | Registry host for base-image digest resolution in `devtools dockerfile`                        | `ghcr.io`                                           |
+| `DATAMITSU_PARSERS_DIR`          | Override directory for downloaded WASM output-parser modules                                   | `{store}/.parsers`                                  |
 | `NO_COLOR`                       | Disable color output                                                                           | -                                                   |
 | `FORCE_COLOR`                    | Force color output                                                                             | -                                                   |

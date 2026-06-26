@@ -2801,7 +2801,7 @@ func TestValidateTools(t *testing.T) {
 				},
 			},
 		}
-		if err := ValidateTools(tools); err != nil {
+		if err := ValidateTools(tools, nil); err != nil {
 			t.Errorf("ValidateTools() = %v, want nil", err)
 		}
 	})
@@ -2812,7 +2812,7 @@ func TestValidateTools(t *testing.T) {
 				OpLint: {Args: []string{"--cache={toolcache}"}}, // wrong case
 			}},
 		}
-		err := ValidateTools(tools)
+		err := ValidateTools(tools, nil)
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
@@ -2827,7 +2827,7 @@ func TestValidateTools(t *testing.T) {
 				OpFix: {Env: map[string]string{"CACHE": "{cache}"}},
 			}},
 		}
-		err := ValidateTools(tools)
+		err := ValidateTools(tools, nil)
 		if err == nil || !strings.Contains(err.Error(), "{cache}") {
 			t.Errorf("expected error naming {cache}, got: %v", err)
 		}
@@ -2839,7 +2839,7 @@ func TestValidateTools(t *testing.T) {
 				OpFix: {Env: map[string]string{"F": "{file}"}},
 			}},
 		}
-		err := ValidateTools(tools)
+		err := ValidateTools(tools, nil)
 		if err == nil || !strings.Contains(err.Error(), "{file}") {
 			t.Errorf("expected {file} rejected in env, got: %v", err)
 		}
@@ -2854,8 +2854,145 @@ func TestValidateTools(t *testing.T) {
 				},
 			}},
 		}
-		if err := ValidateTools(tools); err != nil {
+		if err := ValidateTools(tools, nil); err != nil {
 			t.Errorf("globs/templates should not be flagged, got: %v", err)
+		}
+	})
+
+	t.Run("valid input/output modes pass", func(t *testing.T) {
+		tools := MapOfTools{
+			"fmt": {Operations: map[OperationType]ToolOperation{
+				OpFix: {Input: ToolInputStdin, Output: ToolOutputStdout, Scope: ToolScopePerFile},
+			}},
+			"lint": {Operations: map[OperationType]ToolOperation{
+				OpLint: {Input: ToolInputFile, Output: ToolOutputInplace},
+			}},
+		}
+		if err := ValidateTools(tools, nil); err != nil {
+			t.Errorf("valid input/output modes should pass, got: %v", err)
+		}
+	})
+
+	t.Run("stdin/stdout without per-file scope fails", func(t *testing.T) {
+		tools := MapOfTools{
+			"fmt": {Operations: map[OperationType]ToolOperation{
+				// No scope → batched → formatting would silently no-op.
+				OpFix: {Input: ToolInputStdin, Output: ToolOutputStdout},
+			}},
+		}
+		err := ValidateTools(tools, nil)
+		if err == nil || !strings.Contains(err.Error(), "require scope") {
+			t.Errorf("expected scope requirement error, got: %v", err)
+		}
+	})
+
+	t.Run("stdout with repository scope fails", func(t *testing.T) {
+		tools := MapOfTools{
+			"fmt": {Operations: map[OperationType]ToolOperation{
+				OpFix: {Output: ToolOutputStdout, Scope: ToolScopeRepository},
+			}},
+		}
+		err := ValidateTools(tools, nil)
+		if err == nil || !strings.Contains(err.Error(), "require scope") {
+			t.Errorf("expected scope requirement error, got: %v", err)
+		}
+	})
+
+	t.Run("stdout per-file with explicit batch:true fails", func(t *testing.T) {
+		batch := true
+		tools := MapOfTools{
+			"fmt": {Operations: map[OperationType]ToolOperation{
+				OpFix: {Output: ToolOutputStdout, Scope: ToolScopePerFile, Batch: &batch},
+			}},
+		}
+		err := ValidateTools(tools, nil)
+		if err == nil || !strings.Contains(err.Error(), "incompatible with batch:true") {
+			t.Errorf("expected batch incompatibility error, got: %v", err)
+		}
+	})
+
+	t.Run("stdout output on a lint operation fails", func(t *testing.T) {
+		tools := MapOfTools{
+			"lint": {Operations: map[OperationType]ToolOperation{
+				// output:stdout rewrites files; never allowed on read-only lint.
+				OpLint: {Output: ToolOutputStdout, Scope: ToolScopePerFile},
+			}},
+		}
+		err := ValidateTools(tools, nil)
+		if err == nil || !strings.Contains(err.Error(), "only valid on the \"fix\" operation") {
+			t.Errorf("expected fix-only error for stdout on lint, got: %v", err)
+		}
+	})
+
+	t.Run("invalid input mode fails", func(t *testing.T) {
+		tools := MapOfTools{
+			"t": {Operations: map[OperationType]ToolOperation{
+				OpFix: {Input: ToolInputMode("pipe")},
+			}},
+		}
+		err := ValidateTools(tools, nil)
+		if err == nil || !strings.Contains(err.Error(), "invalid input mode") {
+			t.Errorf("expected invalid input mode error, got: %v", err)
+		}
+	})
+
+	t.Run("invalid output mode fails", func(t *testing.T) {
+		tools := MapOfTools{
+			"t": {Operations: map[OperationType]ToolOperation{
+				OpLint: {Output: ToolOutputMode("file")},
+			}},
+		}
+		err := ValidateTools(tools, nil)
+		if err == nil || !strings.Contains(err.Error(), "invalid output mode") {
+			t.Errorf("expected invalid output mode error, got: %v", err)
+		}
+	})
+
+	t.Run("valid outputParser reference passes", func(t *testing.T) {
+		tools := MapOfTools{
+			"hadolint": {
+				Name:         "hadolint",
+				OutputParser: &OutputParser{Module: "hadolint", Parser: "hadolint"},
+				Operations: map[OperationType]ToolOperation{
+					OpLint: {Args: []string{"{file}"}},
+				},
+			},
+		}
+		parsers := MapOfParsers{
+			"hadolint": {URL: "https://example.com/h.wasm", Hash: strings.Repeat("a", 64)},
+		}
+		if err := ValidateTools(tools, parsers); err != nil {
+			t.Errorf("ValidateTools() = %v, want nil", err)
+		}
+	})
+
+	t.Run("dangling outputParser reference fails", func(t *testing.T) {
+		tools := MapOfTools{
+			"hadolint": {
+				Name:         "hadolint",
+				OutputParser: &OutputParser{Module: "missing", Parser: "missing"},
+				Operations: map[OperationType]ToolOperation{
+					OpLint: {Args: []string{"{file}"}},
+				},
+			},
+		}
+		err := ValidateTools(tools, nil)
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if !strings.Contains(err.Error(), "hadolint") || !strings.Contains(err.Error(), "missing") {
+			t.Errorf("error should name the tool and the missing parser, got: %v", err)
+		}
+	})
+
+	t.Run("empty outputParser is ignored", func(t *testing.T) {
+		tools := MapOfTools{
+			"t": {Operations: map[OperationType]ToolOperation{
+				OpFix: {Args: []string{"{file}"}},
+			}},
+		}
+		if err := ValidateTools(tools, nil); err != nil {
+			t.Errorf("ValidateTools() = %v, want nil", err)
 		}
 	})
 }

@@ -1,0 +1,29 @@
+Pipe a tool's raw output into its parser and see the structured diagnostics it
+produces — the quickest way to develop or debug a parser against real output.
+
+Reads the tool's stdout from stdin; pass --stderr-file / --exit-code if the parser
+uses them (e.g. cue_fmt reads stderr). Resolves the module from --wasm (a local
+.wasm), or from the configured `parsers` entry named <tool>. Output is JSON
+(the nullable RawDiagnostic list — the core fills defaults later).
+
+  pnpm dm exec eslint -- --format json file.js | \
+    datamitsu devtools parsers run eslint --wasm ./datamitsu_parsers.wasm
+
+Usage:
+  datamitsu devtools parsers run <tool> [flags]
+
+Flags:
+      --exit-code int        The tool's exit code
+  -h, --help                 help for run
+      --module string        Which parsers entry (module) to load; defaults to the parser name
+      --stderr-file string   File holding the tool's stderr (some parsers read it, e.g. cue_fmt)
+      --wasm string          Local .wasm module to run (instead of the configured parser)
+
+Global Flags:
+      --before-config strings   Configuration file(s) to load before auto-discovery (for wrappers/libraries)
+      --binary-command string   Override the binary command (for npm package wrappers, etc). Can also be set via DATAMITSU_BINARY_COMMAND env var
+      --config strings          Additional configuration file(s) to load and merge (can be specified multiple times)
+      --no-auto-config          Disable auto-discovery of datamitsu.config.{js,mjs,ts} at git root
+      --no-oci                  Disable OCI bundle store seeding (also via DATAMITSU_NO_OCI)
+      --no-parse                Skip output parsers; show tools' raw output instead (also via DATAMITSU_NO_PARSE)
+  -v, --verbose                 Enable debug-level logging (default level is warn)

@@ -1,0 +1,2 @@
+# Built WASM module — copied in at release time by packaging/pack.ts
+datamitsu_parsers.wasm
