@@ -42,7 +42,7 @@ returned into the core:
 graph LR
     A["Declare<br/>(parsers entry)"] --> B["Build<br/>(Rust → WASM, CI)"]
     B --> C["Sign<br/>(checksums.txt + cosign)"]
-    C --> D["Deliver<br/>(GitHub Release + npm)"]
+    C --> D["Deliver<br/>(GitHub Release asset)"]
     D --> E["Download + verify<br/>(SHA-256)"]
     E --> F["Load + invoke<br/>(wazero sandbox)"]
 
@@ -100,11 +100,11 @@ parsers can update independently of the core binary.
 
 ### Deliver
 
-The built module ships two ways: attached to the GitHub Release, and inside a
-platform-independent npm wrapper package. A release-time **parser manifest**
-(`{ name → { url, hash, version } }`) — itself covered by the signed
-`checksums.txt` — is what config maintainers import to obtain each parser's
-url + hash.
+The built module ships **one way**: as a versioned asset attached to the GitHub
+Release (`datamitsu_parsers_<version>.wasm`), exactly like the binaries. It is
+**not** bundled into any wrapper package (npm/Python/Ruby) — the core always
+downloads it from the release by `url` + `hash`. Config maintainers take the
+`url` from the release asset and the `hash` from the signed `checksums.txt`.
 
 ### Download + verify
 

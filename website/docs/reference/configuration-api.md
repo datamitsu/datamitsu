@@ -965,7 +965,7 @@ function getConfig(input) {
     ...input,
     parsers: {
       echo: {
-        url: "https://github.com/owner/repo/releases/download/v1.2.3/datamitsu_parsers.wasm",
+        url: "https://github.com/owner/repo/releases/download/v1.2.3/datamitsu_parsers_1.2.3.wasm",
         hash: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
         version: "1.2.3",
       },
@@ -975,9 +975,10 @@ function getConfig(input) {
 ```
 
 The SHA-256 `hash` is **mandatory** per the [security policy](#security-requirements)
-— an empty or malformed hash is a config error, not a warning. Config maintainers
-obtain a parser's `url` and `hash` from the release-time **parser manifest**
-published alongside the signed `checksums.txt`. See
+— an empty or malformed hash is a config error, not a warning. The module ships
+only as a versioned asset on the GitHub Release (`datamitsu_parsers_<version>.wasm`);
+config maintainers take the `url` from that release asset and the `hash` from the
+signed `checksums.txt`. See
 [WASM Output Parsers](../guides/architecture/parsers.md) for the trust model.
 
 ```javascript
@@ -986,7 +987,7 @@ parsers: {
   echo: { url: "https://example.com/datamitsu_parsers.wasm" },
 }
 
-// GOOD: mandatory SHA-256 hash from the signed parser manifest
+// GOOD: mandatory SHA-256 hash from the release's signed checksums.txt
 parsers: {
   echo: {
     url: "https://example.com/datamitsu_parsers.wasm",

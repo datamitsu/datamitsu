@@ -23,8 +23,8 @@ export default defineConfig((config) => ({
     "tinyjson",
     "fract",
     "outputparser",
-    // Tool names dispatched by the WASM parser modules (also listed in
-    // packaging/wasm.ts PARSER_NAMES).
+    // Tool names dispatched by the WASM parser modules (one Rust module each
+    // under parsers/datamitsu-parsers/src/tools).
     "ansiblelint",
     "bslint",
     "buildifier",
