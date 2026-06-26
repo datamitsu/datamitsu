@@ -24,6 +24,7 @@ var expectedTopLevelCommands = []string{
 	"init",
 	"install",
 	"lint",
+	"lsp",
 	"setup",
 	"store",
 	"version",
