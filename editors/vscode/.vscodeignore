@@ -1,0 +1,8 @@
+# Everything except the bundled output and the metadata vsce needs. The whole
+# source tree, configs and node_modules are excluded — tsdown bundles all runtime
+# deps into dist/extension.cjs, so the .vsix ships only the bundle.
+**
+!dist/extension.cjs
+!package.json
+!README.md
+!LICENSE

@@ -1,7 +1,10 @@
+# cspell:ignore keytar
 allowBuilds:
   "@swc/core": false
+  "@vscode/vsce-sign": false
   core-js: false
   esbuild: false
+  keytar: false
   sharp: true
 audit: true
 auditLevel: high
@@ -26,6 +29,7 @@ packageExtensions:
       vscode-languageserver-types: "*"
 packages:
   - packaging/action
+  - editors/*
   - programmable-api/js
   - website
   - parsers/datamitsu-parsers

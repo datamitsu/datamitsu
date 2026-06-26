@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "noEmit": true,
+    "rootDir": ".",
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "ES2022",
+    "types": ["node", "vscode"]
+  },
+  "exclude": ["node_modules", "dist"],
+  "extends": "@shibanet0/datamitsu-config/tsconfig/base.json",
+  "include": ["src/**/*", "tsdown.config.ts"]
+}
