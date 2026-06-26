@@ -31,21 +31,28 @@ type RawDiagnostic struct {
 }
 
 // ParserRuntime is an instantiated wazero module ready to parse tool output. It
-// drives the module's memory ABI (alloc/dealloc + ptr/len buffers). Construct it
-// with NewRuntime and Close it when done; it is not safe for concurrent Parse
-// calls (a single module instance owns its linear memory).
+// drives the module's memory ABI (alloc/dealloc + ptr/len buffers). Get one from
+// Manager.Acquire (shared, compile-once runtime) or NewRuntime (one-shot, owns
+// its runtime) and Close it when done; it is not safe for concurrent Parse calls
+// (a single module instance owns its linear memory).
 type ParserRuntime struct {
-	runtime  wazero.Runtime
-	mod      api.Module
-	alloc    api.Function
-	dealloc  api.Function
-	parse    api.Function
-	describe api.Function
+	// ownRuntime is set only for one-shot instances (NewRuntime) that own their
+	// runtime; nil for instances a Manager hands out from its shared, compile-once
+	// runtime. Close releases the whole runtime when set, otherwise just this
+	// instance — so a Manager can serve many isolated instances from one runtime.
+	ownRuntime wazero.Runtime
+	mod        api.Module
+	alloc      api.Function
+	dealloc    api.Function
+	parse      api.Function
+	describe   api.Function
 }
 
 // NewRuntime instantiates a parser module from its verified WASM bytes in a
 // fresh, sandboxed wazero runtime (no host imports, no WASI — the parser is pure
-// computation over byte buffers). The caller owns Close.
+// computation over byte buffers). The instance owns this runtime; Close releases
+// it. For repeated parsing of the same module, prefer Manager.Acquire, which
+// compiles once and instantiates per call.
 func NewRuntime(ctx context.Context, wasm []byte) (*ParserRuntime, error) {
 	r := wazero.NewRuntime(ctx)
 	mod, err := r.Instantiate(ctx, wasm)
@@ -53,16 +60,29 @@ func NewRuntime(ctx context.Context, wasm []byte) (*ParserRuntime, error) {
 		_ = r.Close(ctx)
 		return nil, fmt.Errorf("instantiate parser module: %w", err)
 	}
+	pr, err := newInstance(ctx, mod, r)
+	if err != nil {
+		_ = r.Close(ctx)
+		return nil, err
+	}
+	return pr, nil
+}
+
+// newInstance wraps an already-instantiated module, resolving its ABI exports.
+// ownRuntime is the runtime to close together with the instance (one-shot use),
+// or nil when a Manager owns the shared runtime and Close releases only the
+// instance's linear memory.
+func newInstance(ctx context.Context, mod api.Module, ownRuntime wazero.Runtime) (*ParserRuntime, error) {
 	pr := &ParserRuntime{
-		runtime:  r,
-		mod:      mod,
-		alloc:    mod.ExportedFunction("alloc"),
-		dealloc:  mod.ExportedFunction("dealloc"),
-		parse:    mod.ExportedFunction("parse"),
-		describe: mod.ExportedFunction("describe"),
+		ownRuntime: ownRuntime,
+		mod:        mod,
+		alloc:      mod.ExportedFunction("alloc"),
+		dealloc:    mod.ExportedFunction("dealloc"),
+		parse:      mod.ExportedFunction("parse"),
+		describe:   mod.ExportedFunction("describe"),
 	}
 	if pr.alloc == nil || pr.dealloc == nil || pr.parse == nil || pr.describe == nil {
-		_ = r.Close(ctx)
+		_ = mod.Close(ctx)
 		return nil, errors.New("parser module missing required exports (alloc/dealloc/parse/describe)")
 	}
 	return pr, nil
@@ -100,10 +120,18 @@ func (p *ParserRuntime) Describe(ctx context.Context) (Capabilities, error) {
 	return caps, nil
 }
 
-// Close releases the runtime and all module state.
+// Close releases this instance. For a one-shot runtime (NewRuntime) it closes the
+// whole runtime; for a Manager-owned instance it closes only this module's linear
+// memory, leaving the shared runtime and its compiled modules intact.
 func (p *ParserRuntime) Close(ctx context.Context) error {
-	if err := p.runtime.Close(ctx); err != nil {
-		return fmt.Errorf("close parser runtime: %w", err)
+	if p.ownRuntime != nil {
+		if err := p.ownRuntime.Close(ctx); err != nil {
+			return fmt.Errorf("close parser runtime: %w", err)
+		}
+		return nil
+	}
+	if err := p.mod.Close(ctx); err != nil {
+		return fmt.Errorf("close parser instance: %w", err)
 	}
 	return nil
 }

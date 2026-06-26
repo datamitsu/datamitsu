@@ -112,7 +112,7 @@ fn array_of<'a>(
 
 fn number_at(arr: &[JsonValue], idx: usize) -> Option<u32> {
     match arr.get(idx) {
-        Some(JsonValue::Number(n)) if n.is_finite() && *n >= 0.0 => Some(*n as u32),
+        Some(JsonValue::Number(n)) => crate::numconv::json_u32(*n),
         _ => None,
     }
 }

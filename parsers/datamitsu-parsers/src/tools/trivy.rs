@@ -105,7 +105,7 @@ fn get_str(value: &JsonValue, key: &str) -> Option<String> {
 
 fn get_u32(value: &JsonValue, key: &str) -> Option<u32> {
     match get(value, key) {
-        Some(JsonValue::Number(n)) if n.is_finite() && *n >= 0.0 => Some(*n as u32),
+        Some(JsonValue::Number(n)) => crate::numconv::json_u32(*n),
         _ => None,
     }
 }

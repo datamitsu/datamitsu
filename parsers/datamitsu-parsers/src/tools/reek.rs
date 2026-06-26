@@ -63,7 +63,10 @@ fn expand_record(record: &JsonValue, out: &mut Vec<RawDiagnostic>) {
     };
     for line in lines {
         let row = match line {
-            JsonValue::Number(n) if n.is_finite() && *n >= 0.0 => *n as u32,
+            JsonValue::Number(n) => match crate::numconv::json_u32(*n) {
+                Some(v) => v,
+                None => continue,
+            },
             _ => continue,
         };
         out.push(RawDiagnostic {

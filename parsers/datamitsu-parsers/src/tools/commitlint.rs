@@ -95,9 +95,9 @@ fn level_severity(level: &JsonValue) -> Option<u8> {
         JsonValue::Number(n) => *n,
         _ => return None,
     };
-    match n as i64 {
-        1 => Some(severity::WARNING),
-        2 => Some(severity::ERROR),
+    match crate::numconv::json_int(n) {
+        Some(1) => Some(severity::WARNING),
+        Some(2) => Some(severity::ERROR),
         _ => None,
     }
 }

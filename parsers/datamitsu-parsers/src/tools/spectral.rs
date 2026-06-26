@@ -122,7 +122,7 @@ fn severity_of(level: u32) -> Option<u8> {
 
 fn number_u32(v: &JsonValue) -> Option<u32> {
     match v {
-        JsonValue::Number(n) if *n >= 0.0 => Some(*n as u32),
+        JsonValue::Number(n) => crate::numconv::json_u32(*n),
         _ => None,
     }
 }

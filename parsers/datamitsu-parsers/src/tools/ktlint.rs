@@ -91,7 +91,7 @@ fn from_error(value: &JsonValue) -> Option<RawDiagnostic> {
 
 fn get_u32(map: &std::collections::HashMap<String, JsonValue>, key: &str) -> Option<u32> {
     match map.get(key) {
-        Some(JsonValue::Number(n)) if n.is_finite() && *n >= 0.0 => Some(*n as u32),
+        Some(JsonValue::Number(n)) => crate::numconv::json_u32(*n),
         Some(JsonValue::String(s)) => s.trim().parse().ok(),
         _ => None,
     }

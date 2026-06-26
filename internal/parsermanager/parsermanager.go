@@ -8,9 +8,11 @@ package parsermanager
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
@@ -18,6 +20,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/hashutil"
 	"github.com/datamitsu/datamitsu/internal/logger"
 
+	"github.com/tetratelabs/wazero"
 	"go.uber.org/zap"
 	"golang.org/x/sync/singleflight"
 )
@@ -27,20 +30,39 @@ var log = logger.Logger.With(zap.Namespace("parsermanager"))
 // wasmFileName is the fixed name of the module inside its content-addressed dir.
 const wasmFileName = "module.wasm"
 
-// Manager resolves parser names to verified, on-disk WASM modules. Construct it
-// with the merged `parsers` map from the loaded config.
+// Manager resolves parser names to verified, on-disk WASM modules and serves
+// ready-to-use instances. It compiles each module once (the expensive step) into
+// a shared, sandboxed wazero runtime and instantiates a fresh isolated instance
+// per Acquire, so repeated parsing never recompiles or re-reads the module.
+// Construct it with the merged `parsers` map from the loaded config; Close it
+// (e.g. on shutdown) to release the runtime. The Manager is safe for concurrent
+// use; instances it returns are not (one linear memory each).
 type Manager struct {
 	parsers config.MapOfParsers
 
 	// downloadGroup coalesces concurrent LoadWASMBytes calls for the same parser
 	// so a module referenced by N tools is fetched exactly once.
 	downloadGroup singleflight.Group
+
+	// mu guards runtime and compiled. runtime is created lazily on first compile;
+	// compiled caches each module's CompiledModule by content key so a module is
+	// compiled exactly once. compileGroup coalesces concurrent compiles of the
+	// same module without holding mu across the (slow) compile.
+	mu           sync.Mutex
+	runtime      wazero.Runtime
+	compiled     map[string]wazero.CompiledModule
+	compileGroup singleflight.Group
+	closed       bool
 }
+
+// errClosed is returned by Acquire/compiledFor when the Manager has been Closed,
+// rather than touching the released runtime (a nil interface call would panic).
+var errClosed = errors.New("parser manager is closed")
 
 // New returns a Manager over the given parser declarations. A nil map is valid
 // (yields not-found for every name).
 func New(parsers config.MapOfParsers) *Manager {
-	return &Manager{parsers: parsers}
+	return &Manager{parsers: parsers, compiled: map[string]wazero.CompiledModule{}}
 }
 
 // LoadWASMBytes returns the verified bytes of the named parser's WASM module,
@@ -74,16 +96,157 @@ func (m *Manager) ParseOutput(
 	stdout, stderr []byte,
 	exitCode int32,
 ) ([]RawDiagnostic, error) {
-	wasm, err := m.LoadWASMBytes(ctx, module)
+	rt, err := m.Acquire(ctx, module)
 	if err != nil {
 		return nil, err
 	}
-	rt, err := NewRuntime(ctx, wasm)
-	if err != nil {
-		return nil, fmt.Errorf("parser module %q: %w", module, err)
-	}
 	defer func() { _ = rt.Close(ctx) }()
 	return rt.Parse(ctx, parser, stdout, stderr, exitCode)
+}
+
+// Acquire returns a ready-to-use parser instance for module: it downloads and
+// SHA-256 verifies the module on first use, compiles it once into the shared
+// runtime (cached), and instantiates a fresh, isolated instance. Each instance
+// has its own linear memory, so concurrent Acquire results never interfere; the
+// caller owns Close. This is the "give me a parser" seam — callers do not care
+// how the instance is produced.
+func (m *Manager) Acquire(ctx context.Context, module string) (*ParserRuntime, error) {
+	p, ok := m.parsers[module]
+	if !ok {
+		return nil, fmt.Errorf("parser %q is not declared", module)
+	}
+	compiled, err := m.compiledFor(ctx, module, p)
+	if err != nil {
+		return nil, err
+	}
+	m.mu.Lock()
+	rt := m.runtime
+	closed := m.closed
+	m.mu.Unlock()
+	if closed || rt == nil {
+		return nil, errClosed
+	}
+	// Anonymous name (WithName("")) so many instances of one CompiledModule can
+	// coexist — there is no module-name collision in the runtime's namespace.
+	mod, err := rt.InstantiateModule(ctx, compiled, wazero.NewModuleConfig().WithName(""))
+	if err != nil {
+		return nil, fmt.Errorf("instantiate parser module %q: %w", module, err)
+	}
+	return newInstance(ctx, mod, nil)
+}
+
+// Prewarm compiles the given modules ahead of use so the one-time compilation
+// happens here — typically at planning time, off the per-file execution path —
+// rather than lazily on the first parse. It is best-effort: a failure is
+// returned for the caller to log, and lazy compilation on first Acquire remains
+// the fallback. Modules already compiled are skipped.
+func (m *Manager) Prewarm(ctx context.Context, modules []string) error {
+	seen := make(map[string]bool, len(modules))
+	for _, module := range modules {
+		if seen[module] {
+			continue
+		}
+		seen[module] = true
+		p, ok := m.parsers[module]
+		if !ok {
+			continue // an undeclared reference is a config-validation concern, not ours
+		}
+		if _, err := m.compiledFor(ctx, module, p); err != nil {
+			return fmt.Errorf("prewarm parser %q: %w", module, err)
+		}
+	}
+	return nil
+}
+
+// Close releases the shared runtime and every module compiled into it. Safe to
+// call when nothing was ever compiled (the runtime is created lazily). After
+// Close the Manager must not be used again.
+func (m *Manager) Close(ctx context.Context) error {
+	m.mu.Lock()
+	if m.closed {
+		m.mu.Unlock()
+		return nil
+	}
+	m.closed = true
+	rt := m.runtime
+	m.runtime = nil
+	m.compiled = nil
+	m.mu.Unlock()
+	if rt == nil {
+		return nil
+	}
+	// Closing the runtime closes all compiled modules and outstanding instances.
+	if err := rt.Close(ctx); err != nil {
+		return fmt.Errorf("close parser runtime: %w", err)
+	}
+	return nil
+}
+
+// compiledFor returns module's CompiledModule, compiling it exactly once. The
+// compile (download+verify+read+CompileModule) runs under a singleflight keyed by
+// the content key, so concurrent callers for the same module share one compile;
+// the short mu critical sections only touch the cache and lazily-created runtime.
+func (m *Manager) compiledFor(ctx context.Context, module string, p config.Parser) (wazero.CompiledModule, error) {
+	key := cacheKey(p)
+
+	m.mu.Lock()
+	if cm := m.compiled[key]; cm != nil {
+		m.mu.Unlock()
+		return cm, nil
+	}
+	m.mu.Unlock()
+
+	v, err, _ := m.compileGroup.Do(key, func() (any, error) {
+		// Re-check: a racer may have compiled while we waited for the slot.
+		m.mu.Lock()
+		if cm := m.compiled[key]; cm != nil {
+			m.mu.Unlock()
+			return cm, nil
+		}
+		m.mu.Unlock()
+
+		wasm, err := m.LoadWASMBytes(ctx, module) // download+verify (singleflight) + read
+		if err != nil {
+			return nil, err
+		}
+
+		m.mu.Lock()
+		if m.closed {
+			// Don't resurrect a runtime in a Closed Manager — it would leak (Close
+			// already ran and won't close anything created after it).
+			m.mu.Unlock()
+			return nil, errClosed
+		}
+		if m.runtime == nil {
+			m.runtime = wazero.NewRuntime(ctx)
+		}
+		rt := m.runtime
+		m.mu.Unlock()
+
+		cm, err := rt.CompileModule(ctx, wasm)
+		if err != nil {
+			return nil, fmt.Errorf("compile parser module %q: %w", module, err)
+		}
+
+		m.mu.Lock()
+		if m.closed {
+			// Manager was Closed concurrently; don't cache into a dead Manager.
+			m.mu.Unlock()
+			_ = cm.Close(ctx)
+			return nil, errClosed
+		}
+		m.compiled[key] = cm
+		m.mu.Unlock()
+		return cm, nil
+	})
+	if err != nil {
+		return nil, err //nolint:wrapcheck // err is already wrapped by LoadWASMBytes / the compile step
+	}
+	cm, ok := v.(wazero.CompiledModule)
+	if !ok {
+		return nil, fmt.Errorf("parser %q: compiled-module cache returned %T", module, v)
+	}
+	return cm, nil
 }
 
 // ParseLocal runs the named tool's parser, inside an already-loaded WASM module,

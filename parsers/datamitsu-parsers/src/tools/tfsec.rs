@@ -83,7 +83,7 @@ fn get_str(map: &std::collections::HashMap<String, JsonValue>, key: &str) -> Opt
 
 fn get_u32(map: &std::collections::HashMap<String, JsonValue>, key: &str) -> Option<u32> {
     match map.get(key) {
-        Some(JsonValue::Number(n)) if n.is_finite() && *n >= 0.0 => Some(*n as u32),
+        Some(JsonValue::Number(n)) => crate::numconv::json_u32(*n),
         _ => None,
     }
 }

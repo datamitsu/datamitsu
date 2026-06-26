@@ -93,7 +93,7 @@ fn get_str(map: &HashMapJson, key: &str) -> Option<String> {
 
 fn get_u32(map: &HashMapJson, key: &str) -> Option<u32> {
     match map.get(key) {
-        Some(JsonValue::Number(n)) if n.is_finite() && *n >= 0.0 => Some(*n as u32),
+        Some(JsonValue::Number(n)) => crate::numconv::json_u32(*n),
         _ => None,
     }
 }

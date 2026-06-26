@@ -88,7 +88,7 @@ fn from_offense(value: &JsonValue) -> Option<RawDiagnostic> {
 
 fn json_u32(v: &JsonValue) -> Option<u32> {
     match v {
-        JsonValue::Number(n) if n.is_finite() && *n >= 0.0 => Some(*n as u32),
+        JsonValue::Number(n) => crate::numconv::json_u32(*n),
         JsonValue::String(s) => s.trim().parse().ok(),
         _ => None,
     }

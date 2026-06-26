@@ -56,13 +56,15 @@ type CatalogTool struct {
 }
 
 // DescribeParser resolves the named parser (downloading+verifying on first use),
-// instantiates it, and returns its self-described capabilities.
+// instantiates it from the shared compile-once runtime, and returns its
+// self-described capabilities.
 func (m *Manager) DescribeParser(ctx context.Context, name string) (Capabilities, error) {
-	wasm, err := m.LoadWASMBytes(ctx, name)
+	rt, err := m.Acquire(ctx, name)
 	if err != nil {
 		return Capabilities{}, err
 	}
-	return DescribeLocal(ctx, wasm)
+	defer func() { _ = rt.Close(ctx) }()
+	return rt.Describe(ctx)
 }
 
 // DescribeLocal instantiates an already-loaded WASM module and returns its

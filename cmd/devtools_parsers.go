@@ -113,7 +113,9 @@ func runParsersRun(cmd *cobra.Command, args []string) error {
 		if module == "" {
 			module = tool
 		}
-		diags, err = parsermanager.New(c.Parsers).ParseOutput(ctx, module, tool, stdout, stderr, ec)
+		mgr := parsermanager.New(c.Parsers)
+		defer func() { _ = mgr.Close(ctx) }()
+		diags, err = mgr.ParseOutput(ctx, module, tool, stdout, stderr, ec)
 	}
 	if err != nil {
 		return err
@@ -141,7 +143,9 @@ func loadParserCatalog(cmd *cobra.Command) (*parsermanager.ParserCatalog, error)
 	if err != nil {
 		return nil, fmt.Errorf("loading config: %w", err)
 	}
-	return parsermanager.New(c.Parsers).ListCapabilities(ctx)
+	mgr := parsermanager.New(c.Parsers)
+	defer func() { _ = mgr.Close(ctx) }()
+	return mgr.ListCapabilities(ctx)
 }
 
 func runParsersList(cmd *cobra.Command, _ []string) error {

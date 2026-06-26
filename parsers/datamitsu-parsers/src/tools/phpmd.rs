@@ -86,7 +86,7 @@ fn priority_severity(v: &JsonValue) -> Option<u8> {
         .get::<std::collections::HashMap<String, JsonValue>>()?
         .get("priority")?;
     let n = match p {
-        JsonValue::Number(n) => *n as i64,
+        JsonValue::Number(n) => crate::numconv::json_int(*n)?,
         JsonValue::String(s) => s.trim().parse::<i64>().ok()?,
         _ => return None,
     };

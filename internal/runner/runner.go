@@ -27,6 +27,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/ocibundle"
+	"github.com/datamitsu/datamitsu/internal/parsermanager"
 	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 	"github.com/datamitsu/datamitsu/internal/term"
 	"github.com/datamitsu/datamitsu/internal/timing"
@@ -107,6 +108,10 @@ type sharedContext struct {
 	executor      planExecutor
 	binMgr        toolEnsurer
 	timings       *timing.Timings
+	// parserMgr owns the WASM output-parser runtime (compile-once, instantiate
+	// per parse). nil when no parsers are declared or parsing is disabled; Closed
+	// in shutdown to release the shared runtime.
+	parserMgr *parsermanager.Manager
 	// nameWidth is the widest configured tool name, computed once so every
 	// operation's result block (fix, lint, …) aligns on the same columns.
 	nameWidth int
@@ -226,7 +231,8 @@ func initSharedContext(
 	// --no-parse / DATAMITSU_NO_PARSE; otherwise the executor never parses (tools
 	// without an outputParser are unaffected either way).
 	if len(sc.cfg.Parsers) > 0 && !parsingDisabled() {
-		sc.executor.SetParser(newDiagnosticParser(sc.cfg.Parsers))
+		sc.parserMgr = parsermanager.New(sc.cfg.Parsers)
+		sc.executor.SetParser(newDiagnosticParser(sc.parserMgr))
 	}
 
 	// All configured tools are known here, so the result column width is fixed
@@ -244,6 +250,30 @@ func (sc *sharedContext) shutdown() {
 	if sc.projectCache != nil {
 		sc.projectCache.Shutdown()
 	}
+	if sc.parserMgr != nil {
+		// Release the shared WASM runtime and its compiled modules. Use a fresh
+		// context: shutdown may run after the operation's ctx is cancelled.
+		_ = sc.parserMgr.Close(context.Background())
+	}
+}
+
+// plannedParserModules returns the distinct WASM parser modules referenced by the
+// tools in plan (via their outputParser), for prewarming their one-time
+// compilation before execution.
+func plannedParserModules(plan *tooling.ExecutionPlan) []string {
+	seen := make(map[string]bool)
+	var mods []string
+	for _, group := range plan.Groups {
+		for _, task := range group.Tasks {
+			op := task.Tool.OutputParser
+			if op == nil || op.Module == "" || seen[op.Module] {
+				continue
+			}
+			seen[op.Module] = true
+			mods = append(mods, op.Module)
+		}
+	}
+	return mods
 }
 
 // runSingleOperation executes one operation (fix, lint, etc.) using a pre-initialized shared context
@@ -281,6 +311,17 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 			fmt.Println("ℹ️  No applicable tools found")
 		}
 		return nil
+	}
+
+	// Compile the WASM parser modules this plan will use now, once, off the
+	// per-file execution path. Best-effort: a failure falls back to lazy
+	// compile-on-first-parse inside the executor.
+	if sc.parserMgr != nil {
+		if mods := plannedParserModules(plan); len(mods) > 0 {
+			if err := sc.parserMgr.Prewarm(ctx, mods); err != nil {
+				log.Debug("parser prewarm failed; compiling lazily", zap.Error(err))
+			}
+		}
 	}
 
 	// Open the operation block: bold bracket header + dimmed project types. The

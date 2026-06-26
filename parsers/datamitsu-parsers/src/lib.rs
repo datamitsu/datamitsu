@@ -24,6 +24,7 @@ use std::ptr;
 
 mod capabilities;
 mod diagnostic;
+mod numconv;
 mod severity;
 mod tools;
 

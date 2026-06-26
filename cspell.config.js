@@ -375,5 +375,7 @@ export default defineConfig((config) => ({
     "lossily",
     "rlib",
     "nonoverlapping",
+    "numconv",
+    "recompiles",
   ],
 }));

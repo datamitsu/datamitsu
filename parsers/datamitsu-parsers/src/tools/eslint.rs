@@ -80,16 +80,16 @@ fn message_to_diag(msg: &JsonValue) -> Option<RawDiagnostic> {
 
 fn num(m: &HashMap<String, JsonValue>, key: &str) -> Option<u32> {
     match m.get(key) {
-        Some(JsonValue::Number(n)) if n.is_finite() && *n >= 0.0 => Some(*n as u32),
+        Some(JsonValue::Number(n)) => crate::numconv::json_u32(*n),
         _ => None,
     }
 }
 
 fn severity_of(v: Option<&JsonValue>) -> Option<u8> {
     match v {
-        Some(JsonValue::Number(n)) => match *n as i64 {
-            2 => Some(severity::ERROR),
-            1 => Some(severity::WARNING),
+        Some(JsonValue::Number(n)) => match crate::numconv::json_int(*n) {
+            Some(2) => Some(severity::ERROR),
+            Some(1) => Some(severity::WARNING),
             _ => None,
         },
         _ => None,

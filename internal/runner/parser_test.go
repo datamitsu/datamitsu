@@ -12,6 +12,7 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/diagnostic"
+	"github.com/datamitsu/datamitsu/internal/parsermanager"
 )
 
 func TestParsingDisabled(t *testing.T) {
@@ -53,9 +54,11 @@ func TestDiagnosticParser_EndToEnd(t *testing.T) {
 
 	// The parsers entry is named "core", NOT after the dispatch key — proving
 	// module and parser are independent (so versions can be aliased freely).
-	parser := newDiagnosticParser(config.MapOfParsers{
+	mgr := parsermanager.New(config.MapOfParsers{
 		"core": {URL: srv.URL, Hash: hex.EncodeToString(sum[:])},
 	})
+	t.Cleanup(func() { _ = mgr.Close(context.Background()) })
+	parser := newDiagnosticParser(mgr)
 
 	eslintJSON := []byte(`[{"filePath":"a.js","messages":[` +
 		`{"ruleId":"no-undef","severity":2,"message":"'z' is not defined.","line":2,"column":25,"endLine":2,"endColumn":26},` +

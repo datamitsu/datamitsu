@@ -72,7 +72,7 @@ fn violation_to_diag(value: &JsonValue) -> Option<RawDiagnostic> {
 
 fn num_field(map: &std::collections::HashMap<String, JsonValue>, key: &str) -> Option<u32> {
     match map.get(key) {
-        Some(JsonValue::Number(n)) if n.is_finite() && *n >= 0.0 => Some(*n as u32),
+        Some(JsonValue::Number(n)) => crate::numconv::json_u32(*n),
         _ => None,
     }
 }
@@ -85,11 +85,11 @@ fn severity_of(value: &JsonValue) -> Option<u8> {
         JsonValue::Number(n) => *n,
         _ => return None,
     };
-    match n as i64 {
-        1 => Some(severity::INFO),
-        2 => Some(severity::WARNING),
-        3 => Some(severity::ERROR),
-        4 => Some(severity::HINT),
+    match crate::numconv::json_int(n) {
+        Some(1) => Some(severity::INFO),
+        Some(2) => Some(severity::WARNING),
+        Some(3) => Some(severity::ERROR),
+        Some(4) => Some(severity::HINT),
         _ => None,
     }
 }

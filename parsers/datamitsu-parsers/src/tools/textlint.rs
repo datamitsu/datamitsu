@@ -59,7 +59,9 @@ pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
         };
         if let JsonValue::Object(m) = msg {
             if let Some(JsonValue::Number(n)) = m.get("severity") {
-                d.severity = severity_of(*n as i64);
+                if let Some(v) = crate::numconv::json_int(*n) {
+                    d.severity = severity_of(v);
+                }
             }
         }
         out.push(d);

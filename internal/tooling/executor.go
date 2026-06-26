@@ -778,7 +778,11 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 		}
 
 		formatMode := task.OpConfig.Output == config.ToolOutputStdout
-		parseMode := e.parser != nil && task.Tool.OutputParser != nil
+		// A formatter's stdout is the formatted file content, not diagnostics, so it
+		// must never be fed to the parser. Validation already limits output:stdout to
+		// the fix op, but a tool could still pair it with a tool-level outputParser;
+		// !formatMode keeps the parser off the formatted text in that case.
+		parseMode := e.parser != nil && task.Tool.OutputParser != nil && !formatMode
 		// Both formatting and parsing need stdout and stderr kept apart.
 		separate := formatMode || parseMode
 		stdoutBytes, stderrBytes, err := e.runCommandIO(cmd, stdinContent, separate)
@@ -1410,16 +1414,60 @@ func applyStdoutFormat(file string, original, candidate []byte) ([]textdiff.Edit
 	if len(edits) == 0 {
 		return nil, nil
 	}
-	newContent := textdiff.Apply(string(original), edits)
 
-	mode := os.FileMode(0o644)
-	if info, statErr := os.Stat(file); statErr == nil {
-		mode = info.Mode().Perm()
+	// Preserve the file's existing mode. The file was just read above, so a stat
+	// failure here is unexpected; treat it as fatal rather than silently writing
+	// back with a guessed 0o644 that could strip the executable (or other) bits.
+	info, statErr := os.Stat(file)
+	if statErr != nil {
+		return nil, fmt.Errorf("stat %s before formatting: %w", file, statErr)
 	}
-	if writeErr := os.WriteFile(file, []byte(newContent), mode); writeErr != nil { //nolint:gosec // G703: file is the discovered formatting target (planner-validated, already read above) — writing the formatted text back is the intended operation
-		return nil, fmt.Errorf("write formatted content to %s: %w", file, writeErr)
+
+	// Write the formatter's actual stdout (candidate), not a reconstruction from
+	// the edits: candidate is the ground truth, and round-tripping through
+	// textdiff.Apply could diverge on a diff edge case and silently corrupt the
+	// file. The edits are returned only for FormatEdits (LSP/undo reuse later).
+	if err := writeFileAtomic(file, candidate, info.Mode().Perm()); err != nil {
+		return nil, fmt.Errorf("write formatted content to %s: %w", file, err)
 	}
 	return edits, nil
+}
+
+// writeFileAtomic writes data to a temp file in path's directory then renames it
+// into place, so an interrupted or failed write never leaves the target — a
+// user's source file — truncated or half-written. The rename is atomic within a
+// single filesystem, which the same-directory temp guarantees. Like gofmt's
+// in-place write, a symlinked target is replaced by a regular file rather than
+// written through (an accepted tradeoff for atomicity; formatting targets are
+// real source files in practice).
+func writeFileAtomic(path string, data []byte, mode os.FileMode) (err error) {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".dm-fmt-*")
+	if err != nil {
+		return fmt.Errorf("create temp file: %w", err)
+	}
+	tmpName := tmp.Name()
+	defer func() {
+		if err != nil {
+			_ = os.Remove(tmpName) // best-effort cleanup on any failure before the rename
+		}
+	}()
+
+	if _, err = tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("write temp file: %w", err)
+	}
+	if err = tmp.Chmod(mode); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("chmod temp file: %w", err)
+	}
+	if err = tmp.Close(); err != nil {
+		return fmt.Errorf("close temp file: %w", err)
+	}
+	if err = os.Rename(tmpName, path); err != nil {
+		return fmt.Errorf("rename temp file: %w", err)
+	}
+	return nil
 }
 
 // stdinForOperation returns the bytes to feed to the tool's stdin for this

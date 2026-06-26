@@ -4,7 +4,6 @@ import (
 	"context"
 	"sync/atomic"
 
-	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/diagnostic"
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/parsermanager"
@@ -29,9 +28,11 @@ type diagnosticParser struct {
 	mgr *parsermanager.Manager
 }
 
-// newDiagnosticParser builds the executor's parser over the declared parsers.
-func newDiagnosticParser(parsers config.MapOfParsers) diagnosticParser {
-	return diagnosticParser{mgr: parsermanager.New(parsers)}
+// newDiagnosticParser adapts a parser Manager to the executor's parser. The
+// runner owns the Manager's lifecycle (it must be Closed on shutdown) so the
+// compile-once runtime is shared across every per-file parse.
+func newDiagnosticParser(mgr *parsermanager.Manager) diagnosticParser {
+	return diagnosticParser{mgr: mgr}
 }
 
 func (p diagnosticParser) Parse(
