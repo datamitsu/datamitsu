@@ -222,9 +222,10 @@ func initSharedContext(
 	// and so they appear in --explain, which never reaches the install step.
 	planner.SetPlatformChecker(binMgr)
 	sc.executor = tooling.NewExecutor(sc.rootPath, false, true, binMgr, sc.projectCache)
-	// Wire output-parsing only when parsers are declared; otherwise the executor
-	// never parses (tools without an outputParser are unaffected).
-	if len(sc.cfg.Parsers) > 0 {
+	// Wire output-parsing only when parsers are declared and not disabled via
+	// --no-parse / DATAMITSU_NO_PARSE; otherwise the executor never parses (tools
+	// without an outputParser are unaffected either way).
+	if len(sc.cfg.Parsers) > 0 && !parsingDisabled() {
 		sc.executor.SetParser(newDiagnosticParser(sc.cfg.Parsers))
 	}
 

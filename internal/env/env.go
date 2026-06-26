@@ -226,6 +226,12 @@ func NoOCI() bool {
 	return os.Getenv(noOCI.Name) != ""
 }
 
+// NoParse returns true if output parsing is disabled (tools' raw output is shown
+// instead of structured diagnostics) — the env twin of the --no-parse flag.
+func NoParse() bool {
+	return os.Getenv(noParse.Name) != ""
+}
+
 // LibcOverride returns the raw DATAMITSU_LIBC value ("" when unset). The
 // target package validates it (glibc/musl) and applies it to host detection.
 func LibcOverride() string {

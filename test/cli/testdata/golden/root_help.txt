@@ -28,6 +28,7 @@ Flags:
   -h, --help                    help for datamitsu
       --no-auto-config          Disable auto-discovery of datamitsu.config.{js,mjs,ts} at git root
       --no-oci                  Disable OCI bundle store seeding (also via DATAMITSU_NO_OCI)
+      --no-parse                Skip output parsers; show tools' raw output instead (also via DATAMITSU_NO_PARSE)
   -v, --verbose                 Enable debug-level logging (default level is warn)
 
 Use "datamitsu [command] --help" for more information about a command.

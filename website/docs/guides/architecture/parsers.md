@@ -148,6 +148,11 @@ parse, how to invoke each (args + stdin), the upstream URL, and the module's
 `-X` (CI sets `DATAMITSU_PARSERS_VERSION`); the module is the single source of
 truth, which is why the `parsers` config entity carries **no `version` field**.
 
+To debug a parser against a real `datamitsu lint` run, pass **`--no-parse`** (or set
+`DATAMITSU_NO_PARSE`): the executor skips parsing and shows each tool's raw output,
+so you can see exactly what the parser was given. `devtools parsers run` is the
+complementary tool for iterating on a parser against piped output.
+
 [`datamitsu devtools parsers list`](../../reference/cli-commands.md#devtools-parsers)
 aggregates `describe` across every configured parser into a **deduplicated** view:
 distinct modules (by content) are described exactly once, and tools are

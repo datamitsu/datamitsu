@@ -17,4 +17,5 @@ Global Flags:
       --config strings          Additional configuration file(s) to load and merge (can be specified multiple times)
       --no-auto-config          Disable auto-discovery of datamitsu.config.{js,mjs,ts} at git root
       --no-oci                  Disable OCI bundle store seeding (also via DATAMITSU_NO_OCI)
+      --no-parse                Skip output parsers; show tools' raw output instead (also via DATAMITSU_NO_PARSE)
   -v, --verbose                 Enable debug-level logging (default level is warn)

@@ -14,6 +14,26 @@ import (
 	"github.com/datamitsu/datamitsu/internal/diagnostic"
 )
 
+func TestParsingDisabled(t *testing.T) {
+	t.Cleanup(func() { SetParsingDisabledByFlag(false) })
+
+	SetParsingDisabledByFlag(false)
+	if parsingDisabled() {
+		t.Error("parsingDisabled() = true with flag off and env unset")
+	}
+
+	SetParsingDisabledByFlag(true)
+	if !parsingDisabled() {
+		t.Error("parsingDisabled() = false, want true when --no-parse flag set")
+	}
+
+	SetParsingDisabledByFlag(false)
+	t.Setenv("DATAMITSU_NO_PARSE", "1")
+	if !parsingDisabled() {
+		t.Error("parsingDisabled() = false, want true when DATAMITSU_NO_PARSE set")
+	}
+}
+
 // TestDiagnosticParser_EndToEnd proves the full consume path on the real WASM
 // module: serve the committed parser fixture, resolve a parsers config entry,
 // run eslint's actual --format json output through it, and assert finalized

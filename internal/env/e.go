@@ -108,6 +108,12 @@ var (
 		Description:  "Disable OCI bundle store seeding (set to any non-empty value)",
 	}
 
+	noParse = envVar{
+		Name:         strings.ToUpper(ldflags.PackageName) + "_NO_PARSE",
+		DefaultValue: "",
+		Description:  "Skip output parsers and show tools' raw output (set to any non-empty value)",
+	}
+
 	libcOverride = envVar{
 		Name:         strings.ToUpper(ldflags.PackageName) + "_LIBC",
 		DefaultValue: "",

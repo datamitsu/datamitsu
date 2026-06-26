@@ -780,6 +780,24 @@ func TestNoOCI(t *testing.T) {
 	})
 }
 
+func TestNoParse(t *testing.T) {
+	t.Setenv(noParse.Name, os.Getenv(noParse.Name))
+
+	t.Run("false when unset", func(t *testing.T) {
+		_ = os.Unsetenv(noParse.Name)
+		if NoParse() {
+			t.Error("NoParse() = true, want false when unset")
+		}
+	})
+
+	t.Run("true for any non-empty value", func(t *testing.T) {
+		t.Setenv(noParse.Name, "1")
+		if !NoParse() {
+			t.Error("NoParse() = false, want true when set")
+		}
+	})
+}
+
 func TestGetMaxCommandLength(t *testing.T) {
 	t.Setenv(maxCmdLength.Name, os.Getenv(maxCmdLength.Name))
 

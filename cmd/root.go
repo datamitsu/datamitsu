@@ -10,6 +10,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/ocibundle"
+	"github.com/datamitsu/datamitsu/internal/runner"
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"github.com/datamitsu/datamitsu/internal/sponsor"
 	"github.com/datamitsu/datamitsu/internal/term"
@@ -46,6 +47,8 @@ var (
 	verbose bool
 	// noOCI disables OCI bundle store seeding for this invocation
 	noOCI bool
+	// noParse skips output parsers so tools show their raw output (debug aid)
+	noParse bool
 )
 
 var rootCmd = &cobra.Command{
@@ -67,6 +70,7 @@ func init() {
 			os.Exit(1)
 		}
 		ocibundle.SetDisabledByFlag(noOCI)
+		runner.SetParsingDisabledByFlag(noParse)
 	})
 
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false,
@@ -81,6 +85,8 @@ func init() {
 		"Additional configuration file(s) to load and merge (can be specified multiple times)")
 	rootCmd.PersistentFlags().BoolVar(&noOCI, "no-oci", false,
 		"Disable OCI bundle store seeding (also via DATAMITSU_NO_OCI)")
+	rootCmd.PersistentFlags().BoolVar(&noParse, "no-parse", false,
+		"Skip output parsers; show tools' raw output instead (also via DATAMITSU_NO_PARSE)")
 }
 
 // Execute runs the root command and exits the process on error.
