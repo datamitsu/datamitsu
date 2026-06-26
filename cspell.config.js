@@ -13,12 +13,16 @@ export default defineConfig((config) => ({
     // sample tool output (including intentional misspellings fed to spell-check
     // tools like codespell/proselint). Not prose; spell-checking is pure noise.
     "parsers/datamitsu-parsers/src/tools/*.rs",
+    // Auto-generated parser-catalog page: tool descriptions come verbatim from the
+    // WASM module (jargon: Verilog, Beancount, SPIR…), not our prose.
+    "website/docs/reference/parser-catalog.md",
   ],
   words: [
     ...config.words,
     "errorformat",
     "tinyjson",
     "fract",
+    "outputparser",
     // Tool names dispatched by the WASM parser modules (also listed in
     // packaging/wasm.ts PARSER_NAMES).
     "ansiblelint",

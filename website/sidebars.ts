@@ -70,6 +70,7 @@ const sidebars: SidebarsConfig = {
       items: [
         "reference/cli-commands",
         "reference/configuration-api",
+        "reference/parser-catalog",
         "reference/js-api",
         "reference/template-placeholders",
         "reference/ignore-rules",
