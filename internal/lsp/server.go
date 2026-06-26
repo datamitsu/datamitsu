@@ -122,6 +122,7 @@ func (s *Server) FormatFile(ctx context.Context, absPath string, content []byte)
 	if err != nil {
 		return nil, fmt.Errorf("plan fix for %s: %w", absPath, err)
 	}
+	scopeTasksToFile(plan, absPath)
 
 	apps := planApps(plan)
 	if len(apps) == 0 {
@@ -176,6 +177,42 @@ func (s *Server) FormatFile(ctx context.Context, absPath string, content []byte)
 		return nil, fmt.Errorf("read fixed %s: %w", absPath, err)
 	}
 	return toTextEdits(textdiff.ComputeEdits(string(content), string(fixed)))
+}
+
+// scopeTasksToFile narrows every task in the plan to the single target file.
+// datamitsu config tools are typically batch/repository-scoped (e.g.
+// `golangci-lint fmt` over the whole module), which is right for the CLI but
+// O(repo) per format in an editor — ~80x slower than formatting one file. Tasks
+// that reference {file}/{files} are already scoped by the planner; a task without
+// a file placeholder would run over the whole module, so we append the target
+// path (turning `golangci-lint fmt` into `golangci-lint fmt <file>`) and pin
+// Files to it.
+func scopeTasksToFile(plan *tooling.ExecutionPlan, absPath string) {
+	for gi := range plan.Groups {
+		for ti := range plan.Groups[gi].Tasks {
+			task := &plan.Groups[gi].Tasks[ti]
+			task.Files = []string{absPath}
+			if hasFilePlaceholder(task.OpConfig.Args) {
+				continue // the planner already substitutes the file here
+			}
+			// Clone before appending so we never mutate the shared config slice.
+			args := make([]string, len(task.OpConfig.Args)+1)
+			copy(args, task.OpConfig.Args)
+			args[len(args)-1] = absPath
+			task.OpConfig.Args = args
+		}
+	}
+}
+
+// hasFilePlaceholder reports whether any arg references the per-file placeholder
+// ({file} or {files}), i.e. the planner already targets this task at the file.
+func hasFilePlaceholder(args []string) bool {
+	for _, a := range args {
+		if strings.Contains(a, "{file}") || strings.Contains(a, "{files}") {
+			return true
+		}
+	}
+	return false
 }
 
 // planApps returns the distinct apps a plan needs, in first-seen order.
