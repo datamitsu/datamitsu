@@ -14,6 +14,7 @@ Available Commands:
   pull-runtimes       Pull runtime configurations from upstream releases
   pull-uv             Pull latest versions for Python packages from PyPI
   split-config        Write one minimal per-stage config slice per app/runtime for layered builds
+  tools               Inspect the configured tools (the fix/lint units)
   verify-all          Verify all apps and runtimes across all configured platforms
 
 Flags:

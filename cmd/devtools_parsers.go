@@ -112,7 +112,7 @@ func runParsersRun(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	return writeParsersJSON(cmd.OutOrStdout(), diags)
+	return writeJSONIndent(cmd.OutOrStdout(), diags)
 }
 
 // loadParserCatalog builds the catalog either from a local --wasm file (fully
@@ -145,7 +145,7 @@ func runParsersList(cmd *cobra.Command, _ []string) error {
 	}
 	out := cmd.OutOrStdout()
 	if jsonOut, _ := cmd.Flags().GetBool("json"); jsonOut {
-		return writeParsersJSON(out, cat)
+		return writeJSONIndent(out, cat)
 	}
 	for _, t := range cat.Tools {
 		if _, err := fmt.Fprint(out, renderToolLine(t)); err != nil {
@@ -174,7 +174,7 @@ func runParsersInspect(cmd *cobra.Command, args []string) error {
 		}
 		out := cmd.OutOrStdout()
 		if jsonOut, _ := cmd.Flags().GetBool("json"); jsonOut {
-			return writeParsersJSON(out, cat.Tools[i])
+			return writeJSONIndent(out, cat.Tools[i])
 		}
 		if _, err := fmt.Fprint(out, renderToolDetail(cat.Tools[i])); err != nil {
 			return fmt.Errorf("write parser detail: %w", err)
@@ -184,7 +184,7 @@ func runParsersInspect(cmd *cobra.Command, args []string) error {
 	return fmt.Errorf("tool %q is not provided by any configured parser", name)
 }
 
-func writeParsersJSON(out io.Writer, v any) error {
+func writeJSONIndent(out io.Writer, v any) error {
 	data, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal JSON: %w", err)

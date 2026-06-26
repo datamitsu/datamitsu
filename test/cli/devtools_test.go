@@ -21,6 +21,7 @@ var expectedDevtoolsSubcommands = []string{
 	"pull-runtimes",
 	"pull-uv",
 	"split-config",
+	"tools",
 	"verify-all",
 }
 

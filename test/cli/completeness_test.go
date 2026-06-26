@@ -44,6 +44,8 @@ var testedLeafCommands = map[string]string{
 	"devtools pull-runtimes":       "TestDevtoolsArgValidation",
 	"devtools pull-uv":             "TestDevtoolsArgValidation",
 	"devtools split-config":        "TestDevtoolsHelpGolden / TestDevtoolsArgValidation",
+	"devtools tools inspect":       "TestDevtoolsToolsInspect",
+	"devtools tools list":          "TestDevtoolsToolsList",
 	"devtools verify-all":          "TestDevtoolsHelpGolden",
 	"exec":                         "TestExecListEmpty / TestExecListGrouped",
 	"fix":                          "TestExplainPlanGolden",

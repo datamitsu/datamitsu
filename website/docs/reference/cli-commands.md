@@ -704,6 +704,23 @@ datamitsu exec eslint -- --format json file.js \
   | datamitsu devtools parsers run eslint --wasm ./datamitsu_parsers.wasm --exit-code 1
 ```
 
+### devtools tools
+
+Inspect the tools declared in the config — the fix/lint units datamitsu plans and
+runs. `list` shows each tool's operations, project types, the app it runs, and its
+output parser; `inspect` shows full per-operation detail. Both accept `--json`.
+
+```bash
+# All configured tools: name [operations] (projectTypes) → parser
+datamitsu devtools tools list
+
+# Machine-readable
+datamitsu devtools tools list --json
+
+# Full detail for one tool (per-operation app/scope/globs/args)
+datamitsu devtools tools inspect eslint
+```
+
 ### Troubleshooting devtools commands
 
 **File not found errors:**
