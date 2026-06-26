@@ -47,6 +47,14 @@ function showError(message: string): void {
   vscode.window.showErrorMessage(message).then(undefined, () => {});
 }
 
+function showInfo(message: string): void {
+  vscode.window.showInformationMessage(message).then(undefined, () => {});
+}
+
+// formatHintShown gates the one-time "no changes" hint so it isn't repeated on
+// every format that produces no edits.
+let formatHintShown = false;
+
 // spawnServer launches `datamitsu lsp` and returns its stdio as an LSP stream
 // pair. We spawn it ourselves (rather than let the client own a ChildProcess) so
 // we keep stderr — the JSON-L status stream — for the status bar; stdout/stdin
@@ -122,6 +130,27 @@ async function start(context: vscode.ExtensionContext): Promise<void> {
     // must not be restarted in a loop, and only datamitsu.restartServer re-spawns.
     connectionOptions: { maxRestartCount: 0 },
     documentSelector: [{ scheme: "file" }],
+    middleware: {
+      // Log every format and its outcome to the output channel so a no-op format
+      // is visible (not silent). On the first format that yields no edits, hint
+      // once that a stdin->stdout formatter may be missing from the config — a
+      // bare 0-edit result is otherwise indistinguishable from "already formatted".
+      provideDocumentFormattingEdits: async (document, options, token, next) => {
+        output?.appendLine(`format: ${document.uri.fsPath}`);
+        const edits = await next(document, options, token);
+        const count = edits?.length ?? 0;
+        output?.appendLine(`format: ${count} edit(s)`);
+        if (count === 0 && !formatHintShown) {
+          formatHintShown = true;
+          showInfo(
+            "datamitsu: no formatting changes. Either the file is already formatted, " +
+              'or no tool in your datamitsu config uses output:"stdout" / input:"stdin". ' +
+              "See the datamitsu output channel.",
+          );
+        }
+        return edits;
+      },
+    },
   };
   if (output !== undefined) {
     clientOptions.outputChannel = output;
