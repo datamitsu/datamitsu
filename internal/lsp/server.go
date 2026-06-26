@@ -1,6 +1,7 @@
 package lsp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -97,8 +98,8 @@ func (s *Server) Run(ctx context.Context) error {
 }
 
 // FormatFile formats one file by running the project's configured fix on the
-// REAL file, on disk, in its real location, then returning the diff as LSP
-// TextEdits. This is the only way every tool's own path/project detection
+// REAL file, on disk, in its real location, then reflecting the result back to
+// the editor. This is the only way every tool's own path/project detection
 // (nearest package.json/tsconfig, monorepo workspace, parser inference, ignore
 // files, ...) matches plain `datamitsu fix`: a tool fed a temp copy or stdin
 // would resolve against the wrong location and behave differently or skip the
@@ -106,11 +107,16 @@ func (s *Server) Run(ctx context.Context) error {
 // itself (the planner's cwd is the git root, so no subtree is dropped and
 // repository-scope tools still run), so the caller only passes the path.
 //
-// Because in-place tools must see the file on disk, the (possibly unsaved) editor
-// buffer is persisted to the real file first — i.e. formatting saves the file, as
-// the user explicitly chose. The original buffer is diffed against the fixed
-// on-disk result and the editor converges its buffer to that result. Returns an
-// empty (non-nil) slice when no tool applies or the file is already clean.
+// In-place tools must see the file on disk, so the result is delivered one of two
+// ways depending on whether the editor buffer already matches disk:
+//   - buffer == disk (saved / unedited): fix the file as-is and return NO edits.
+//     The editor reloads the changed file into its clean buffer, so formatting
+//     neither dirties the buffer nor forces a second save.
+//   - buffer != disk (unsaved edits, including the format-on-save path): persist
+//     the buffer first, then return the diff buffer->fixed so the editor applies
+//     it before writing its own save.
+//
+// Returns an empty (non-nil) slice when no tool applies or nothing changed.
 func (s *Server) FormatFile(ctx context.Context, absPath string, content []byte) ([]TextEdit, error) {
 	plan, err := s.planner.Plan(ctx, config.OpFix, []string{absPath}, nil)
 	if err != nil {
@@ -128,24 +134,29 @@ func (s *Server) FormatFile(ctx context.Context, absPath string, content []byte)
 		return nil, fmt.Errorf("ensure tools installed: %w", err)
 	}
 
-	// Defense in depth: only ever write a document inside the workspace. The
-	// planner already yields no tasks for a path outside the git root, but guard
-	// the write explicitly so a crafted file:// URI can never make us write
-	// elsewhere on disk.
+	// Defense in depth: never touch a path outside the workspace root, whatever
+	// URI the editor sent (the planner would also yield no tasks for it).
 	rel, relErr := filepath.Rel(s.root, absPath)
 	if relErr != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return nil, fmt.Errorf("refusing to format %s: outside workspace root", absPath)
 	}
 
-	// Persist the buffer to the real file (preserving its mode) so in-place tools
-	// operate on the live content, then run the fix and read the result back.
-	perm := os.FileMode(0o644)
-	if info, statErr := os.Stat(absPath); statErr == nil {
-		perm = info.Mode().Perm()
-	}
-	//nolint:gosec // absPath is the editor's document URI, validated just above to be inside the workspace root
-	if err := os.WriteFile(absPath, content, perm); err != nil {
-		return nil, fmt.Errorf("write buffer to %s: %w", absPath, err)
+	// clean = the editor's buffer already matches the file on disk; then the editor
+	// will reload our fix and stay non-dirty, so we return no edits below.
+	diskBefore, _ := os.ReadFile(absPath) // missing/unreadable -> treat as dirty
+	clean := bytes.Equal(content, diskBefore)
+
+	if !clean {
+		// Persist the unsaved buffer (preserving mode) so in-place tools operate on
+		// the live content rather than the stale on-disk version.
+		perm := os.FileMode(0o644)
+		if info, statErr := os.Stat(absPath); statErr == nil {
+			perm = info.Mode().Perm()
+		}
+		//nolint:gosec // absPath is the editor's document URI, validated just above to be inside the workspace root
+		if err := os.WriteFile(absPath, content, perm); err != nil {
+			return nil, fmt.Errorf("write buffer to %s: %w", absPath, err)
+		}
 	}
 
 	// failFast is off, so Execute runs the whole plan and returns a nil error even
@@ -154,11 +165,16 @@ func (s *Server) FormatFile(ctx context.Context, absPath string, content []byte)
 		return nil, fmt.Errorf("fix %s: %w", absPath, err)
 	}
 
+	if clean {
+		// The editor reloads the fixed file into its clean buffer; returning edits
+		// here would re-dirty it and force a redundant save.
+		return []TextEdit{}, nil
+	}
+
 	fixed, err := os.ReadFile(absPath)
 	if err != nil {
 		return nil, fmt.Errorf("read fixed %s: %w", absPath, err)
 	}
-
 	return toTextEdits(textdiff.ComputeEdits(string(content), string(fixed)))
 }
 
