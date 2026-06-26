@@ -612,6 +612,7 @@ jobs:
           gem push *.gem
           echo "RubyGems publishing completed"
   publish-vscode:
+    environment: vscode-marketplace
     if: |
       always() &&
       !cancelled() &&
@@ -625,6 +626,7 @@ jobs:
       - validate-stable
     permissions:
       contents: write
+      id-token: write
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -639,6 +641,13 @@ jobs:
         with:
           name: release-artifacts
           path: .
+      - if: ${{ !env.ACT }}
+        name: Azure login (federated OIDC for Marketplace)
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
+        with:
+          allow-no-subscriptions: true
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
       - env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OVSX_PAT: ${{ secrets.OVSX_PAT }}
@@ -654,15 +663,19 @@ jobs:
           pnpm --filter "./editors/vscode" build
           # Package the .vsix (CI's pnpm store is clean, so vsce runs directly).
           pnpm --filter "./editors/vscode" exec vsce package --no-dependencies -o "dist/datamitsu-$VERSION.vsix"
-          VSIX="editors/vscode/dist/datamitsu-$VERSION.vsix"
+          # Absolute path: the ovsx/vsce publish commands below run via
+          # `pnpm --filter` with CWD=editors/vscode, so a repo-relative path would
+          # not resolve there. gh (CWD=repo root) accepts the absolute path too.
+          VSIX="$GITHUB_WORKSPACE/editors/vscode/dist/datamitsu-$VERSION.vsix"
           # Upload the .vsix to the GitHub Release that GoReleaser created.
           gh release upload "v$VERSION" "$VSIX" --clobber
           # Publish to Open VSX (namespace created once; tolerate "already exists").
           pnpm --filter "./editors/vscode" exec ovsx create-namespace datamitsu -p "$OVSX_PAT" || true
           pnpm --filter "./editors/vscode" exec ovsx publish "$VSIX" -p "$OVSX_PAT"
-          # Microsoft VS Code Marketplace publishing is deferred (needs an Azure
-          # DevOps PAT or Entra OIDC). Add a `vsce publish -p $VSCE_PAT` step here
-          # once those credentials exist.
+          # Publish the same .vsix to the Microsoft VS Code Marketplace via Entra
+          # OIDC — the azure/login step above set up the Azure CLI session that
+          # `vsce --azure-credential` consumes (no PAT, no secret).
+          pnpm --filter "./editors/vscode" exec vsce publish --packagePath "$VSIX" --azure-credential
   validate-stable:
     if: |
       always() &&
