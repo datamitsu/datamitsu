@@ -27,6 +27,7 @@ pub mod codespell;
 pub mod commitlint;
 pub mod cppcheck;
 pub mod credo;
+pub mod cspell;
 pub mod cue_fmt;
 pub mod deadnix;
 pub mod djlint;
@@ -43,6 +44,7 @@ pub mod glslc;
 pub mod golangci_lint;
 pub mod hadolint;
 pub mod haml_lint;
+pub mod harper_cli;
 pub mod ktlint;
 pub mod kube_linter;
 pub mod ltrs;
@@ -91,6 +93,7 @@ pub mod textlint;
 pub mod tfsec;
 pub mod tidy;
 pub mod trivy;
+pub mod tsc;
 pub mod twigcs;
 pub mod vacuum;
 pub mod vale;
@@ -123,6 +126,7 @@ pub fn dispatch(tool: &str, stdout: &[u8], stderr: &[u8], exit_code: i32) -> Opt
         "commitlint" => Some(commitlint::parse(stdout, stderr, exit_code)),
         "cppcheck" => Some(cppcheck::parse(stdout, stderr, exit_code)),
         "credo" => Some(credo::parse(stdout, stderr, exit_code)),
+        "cspell" => Some(cspell::parse(stdout, stderr, exit_code)),
         "cue_fmt" => Some(cue_fmt::parse(stdout, stderr, exit_code)),
         "deadnix" => Some(deadnix::parse(stdout, stderr, exit_code)),
         "djlint" => Some(djlint::parse(stdout, stderr, exit_code)),
@@ -139,6 +143,7 @@ pub fn dispatch(tool: &str, stdout: &[u8], stderr: &[u8], exit_code: i32) -> Opt
         "golangci_lint" => Some(golangci_lint::parse(stdout, stderr, exit_code)),
         "hadolint" => Some(hadolint::parse(stdout, stderr, exit_code)),
         "haml_lint" => Some(haml_lint::parse(stdout, stderr, exit_code)),
+        "harper_cli" => Some(harper_cli::parse(stdout, stderr, exit_code)),
         "ktlint" => Some(ktlint::parse(stdout, stderr, exit_code)),
         "kube_linter" => Some(kube_linter::parse(stdout, stderr, exit_code)),
         "ltrs" => Some(ltrs::parse(stdout, stderr, exit_code)),
@@ -187,6 +192,7 @@ pub fn dispatch(tool: &str, stdout: &[u8], stderr: &[u8], exit_code: i32) -> Opt
         "tfsec" => Some(tfsec::parse(stdout, stderr, exit_code)),
         "tidy" => Some(tidy::parse(stdout, stderr, exit_code)),
         "trivy" => Some(trivy::parse(stdout, stderr, exit_code)),
+        "tsc" => Some(tsc::parse(stdout, stderr, exit_code)),
         "twigcs" => Some(twigcs::parse(stdout, stderr, exit_code)),
         "vacuum" => Some(vacuum::parse(stdout, stderr, exit_code)),
         "vale" => Some(vale::parse(stdout, stderr, exit_code)),

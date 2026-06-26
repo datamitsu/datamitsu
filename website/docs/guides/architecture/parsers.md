@@ -75,9 +75,9 @@ Parsers are **hand-written**, porting the logic faithfully from the upstream
 tool. The only external crate is **`tinyjson`** (a tiny, zero-dependency JSON
 parser) for the JSON-output class — hand-rolling a correct JSON parser is a known
 footgun and many tools emit JSON. Text/line parsers add no dependency. The bundled
-set covers **~89 tools** (the none-ls diagnostics builtins plus `eslint`, ported
-from its `--format json` output), spanning the parsing-difficulty classes — a
-representative few:
+set covers **~92 tools** — the none-ls diagnostics builtins plus a few ported
+directly from their output (`eslint` JSON; `tsc`/`tsgo`; `cspell`; `harper-cli`),
+spanning the parsing-difficulty classes — a representative few:
 
 | Tool            | Output shape                               | Class          |
 | --------------- | ------------------------------------------ | -------------- |
