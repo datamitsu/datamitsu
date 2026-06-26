@@ -1,9 +1,8 @@
 ---
+# AUTO-GENERATED — do not edit by hand. Regenerate with `task build:parsers`.
 title: Parser Catalog
 description: Tools whose output the bundled datamitsu WASM parser module turns into diagnostics
 ---
-
-<!-- AUTO-GENERATED — do not edit by hand. Regenerate with `task build:parsers`. -->
 
 :::info Auto-generated
 This page is generated from the WASM parser module's `describe` output by

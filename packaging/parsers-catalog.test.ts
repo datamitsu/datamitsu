@@ -35,7 +35,10 @@ const sample: ParserCatalog = {
 
 test("renderCatalogMarkdown: frontmatter, auto-gen note, module + count", () => {
   const md = renderCatalogMarkdown(sample);
-  assert.ok(md.startsWith("---\ntitle: Parser Catalog\n"), "has frontmatter");
+  // The AUTO-GENERATED marker is a YAML frontmatter comment (not HTML/MDX), so it
+  // is the first line inside the frontmatter, before `title`.
+  assert.ok(md.startsWith("---\n# AUTO-GENERATED"), "marker leads the frontmatter");
+  assert.match(md, /\ntitle: Parser Catalog\n/);
   assert.match(md, /AUTO-GENERATED/);
   assert.match(md, /`datamitsu-parsers`, version `0\.1\.0`/);
   // echo is excluded, so the count is 2, not 3.

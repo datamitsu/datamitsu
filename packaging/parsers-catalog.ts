@@ -43,11 +43,14 @@ export function renderCatalogMarkdown(cat: ParserCatalog): string {
 
   const lines: string[] = [
     "---",
+    // A YAML frontmatter comment, not an HTML/MDX comment: Docusaurus treats `.md`
+    // as MDX, where `<!-- -->` is a syntax error and `{/* */}` gets mangled by
+    // prettier. Frontmatter is stripped before MDX parsing, and prettier's YAML
+    // formatter preserves `#` comments — so this marker survives `dm fix`.
+    "# AUTO-GENERATED — do not edit by hand. Regenerate with `task build:parsers`.",
     "title: Parser Catalog",
     "description: Tools whose output the bundled datamitsu WASM parser module turns into diagnostics",
     "---",
-    "",
-    "<!-- AUTO-GENERATED — do not edit by hand. Regenerate with `task build:parsers`. -->",
     "",
     ":::info Auto-generated",
     "This page is generated from the WASM parser module's `describe` output by",
