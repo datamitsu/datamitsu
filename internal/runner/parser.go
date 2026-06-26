@@ -27,7 +27,8 @@ func (p diagnosticParser) Parse(
 	stdout, stderr []byte,
 	exitCode int32,
 ) ([]diagnostic.Diagnostic, error) {
-	raws, err := p.mgr.ParseOutput(ctx, parserName, toolName, stdout, stderr, exitCode)
+	// Dispatch on the parser name; the tool name only labels the diagnostic source.
+	raws, err := p.mgr.ParseOutput(ctx, parserName, stdout, stderr, exitCode)
 	if err != nil {
 		return nil, err
 	}

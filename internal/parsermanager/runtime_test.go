@@ -182,7 +182,7 @@ func TestParseOutput_EndToEnd(t *testing.T) {
 		"echo": {URL: srv.URL, Hash: sha256Hex(wasm)},
 	})
 
-	diags, err := m.ParseOutput(ctx, "echo", "echo", []byte("end to end"), nil, 0)
+	diags, err := m.ParseOutput(ctx, "echo", []byte("end to end"), nil, 0)
 	if err != nil {
 		t.Fatalf("ParseOutput() error = %v", err)
 	}
@@ -191,7 +191,7 @@ func TestParseOutput_EndToEnd(t *testing.T) {
 	}
 
 	// A second invocation must reuse the stored module — no second download.
-	if _, err := m.ParseOutput(ctx, "echo", "echo", []byte("again"), nil, 0); err != nil {
+	if _, err := m.ParseOutput(ctx, "echo", []byte("again"), nil, 0); err != nil {
 		t.Fatalf("second ParseOutput() error = %v", err)
 	}
 	if n := atomic.LoadInt64(hits); n != 1 {

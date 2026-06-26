@@ -106,8 +106,7 @@ func runParsersRun(cmd *cobra.Command, args []string) error {
 		if loadErr != nil {
 			return fmt.Errorf("loading config: %w (or pass --wasm <path>)", loadErr)
 		}
-		// The configured parser entry and the dispatch tool name are the same here.
-		diags, err = parsermanager.New(c.Parsers).ParseOutput(ctx, tool, tool, stdout, stderr, ec)
+		diags, err = parsermanager.New(c.Parsers).ParseOutput(ctx, tool, stdout, stderr, ec)
 	}
 	if err != nil {
 		return err

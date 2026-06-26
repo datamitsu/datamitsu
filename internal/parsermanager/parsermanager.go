@@ -63,9 +63,14 @@ func (m *Manager) LoadWASMBytes(ctx context.Context, name string) ([]byte, error
 // tool's raw stdout/stderr and exit code. It is the end-to-end seam: declare →
 // download → verify → load → invoke. The returned diagnostics are nullable per
 // the RawDiagnostic contract (the Go core fills defaults in a later phase).
+// ParseOutput resolves the named parser (downloading+verifying on first use) and
+// runs it over the tool's raw output. parserName is BOTH the config `parsers`
+// entry to load AND the dispatch key inside the module (the Rust match arm). It
+// is the value of a tool's `outputParser` — never the tool's registry name, which
+// may differ (e.g. tool "golangci-lint" → parser "golangci_lint").
 func (m *Manager) ParseOutput(
 	ctx context.Context,
-	parserName, toolName string,
+	parserName string,
 	stdout, stderr []byte,
 	exitCode int32,
 ) ([]RawDiagnostic, error) {
@@ -78,7 +83,7 @@ func (m *Manager) ParseOutput(
 		return nil, fmt.Errorf("parser %q: %w", parserName, err)
 	}
 	defer func() { _ = rt.Close(ctx) }()
-	return rt.Parse(ctx, toolName, stdout, stderr, exitCode)
+	return rt.Parse(ctx, parserName, stdout, stderr, exitCode)
 }
 
 // ParseLocal runs the named tool's parser, inside an already-loaded WASM module,
