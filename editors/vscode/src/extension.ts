@@ -143,9 +143,8 @@ async function start(context: vscode.ExtensionContext): Promise<void> {
         if (count === 0 && !formatHintShown) {
           formatHintShown = true;
           showInfo(
-            "datamitsu: no formatting changes. Either the file is already formatted, " +
-              'or no tool in your datamitsu config uses output:"stdout" / input:"stdin". ' +
-              "See the datamitsu output channel.",
+            "datamitsu: no formatting changes — the file is already formatted, or no " +
+              "datamitsu fix tool applies to this file type. See the datamitsu output channel.",
           );
         }
         return edits;

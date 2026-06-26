@@ -8,14 +8,20 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"strings"
+
+	"go.uber.org/zap"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
+	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 	"github.com/datamitsu/datamitsu/internal/textdiff"
 	"github.com/datamitsu/datamitsu/internal/tooling"
 )
+
+var log = logger.Logger.With(zap.Namespace("lsp"))
 
 // Server is a minimal, formatting-only LSP server. It is single-threaded: the
 // read loop handles one message to completion (including any tool download) before
@@ -95,10 +101,21 @@ func (s *Server) Run(ctx context.Context) error {
 }
 
 // FormatFile turns one file's content into LSP TextEdits by composing every
-// applicable stdin->stdout fix formatter (output of tool N feeds tool N+1), then
-// diffing original->final in core. It NEVER writes the file. Tools with in-place
-// (non-stdout) fix operations are skipped — only the stdout/stdin formatter
-// contract is LSP-formattable. Returns an empty (non-nil) slice when nothing
+// applicable fix formatter for the file (the output of tool N feeds tool N+1),
+// then diffing original->final in core. It NEVER reads or writes the real file.
+//
+// Two formatter shapes are supported, both fed the in-memory buffer (so an
+// unsaved editor buffer formats correctly):
+//   - stdin->stdout tools run fully in memory (FormatContent), no disk touch;
+//   - in-place tools (e.g. `--write {file}`) run against a private temp copy
+//     OUTSIDE the repo (FormatFileInPlace); the {file}/{files} placeholder is
+//     redirected to that copy while the working dir stays at the real project so
+//     config discovery is unaffected.
+//
+// A tool that is neither output:stdout nor references {file}/{files} cannot be
+// redirected off the real tree (it would format the whole project / real files),
+// so it is skipped. A single tool failing is logged and skipped rather than
+// aborting the whole format. Returns an empty (non-nil) slice when nothing
 // applies or the content is already formatted.
 func (s *Server) FormatFile(ctx context.Context, absPath string, content []byte) ([]TextEdit, error) {
 	plan, err := s.planner.Plan(ctx, config.OpFix, []string{absPath}, nil)
@@ -106,17 +123,25 @@ func (s *Server) FormatFile(ctx context.Context, absPath string, content []byte)
 		return nil, fmt.Errorf("plan fix for %s: %w", absPath, err)
 	}
 
-	// Collect stdin->stdout formatter tasks in plan order (priority groups, then
-	// task order), plus the distinct apps to install.
-	var tasks []tooling.Task
+	// Collect formattable fix tasks in plan order (priority groups, then task
+	// order). inPlace records how each runs so the compose loop need not re-derive
+	// it; apps is the distinct set to install.
+	type formatTask struct {
+		task    tooling.Task
+		inPlace bool
+	}
+	var tasks []formatTask
 	seen := make(map[string]struct{})
 	var apps []string
 	for _, group := range plan.Groups {
 		for _, task := range group.Tasks {
-			if task.OpConfig.Output != config.ToolOutputStdout || task.OpConfig.Input != config.ToolInputStdin {
+			stdoutMode := task.OpConfig.Output == config.ToolOutputStdout && task.OpConfig.Input == config.ToolInputStdin
+			inPlace := !stdoutMode && hasFilePlaceholder(task.OpConfig.Args)
+			if !stdoutMode && !inPlace {
+				log.Debug("lsp format: skipping non-redirectable tool", zap.String("tool", task.ToolName))
 				continue
 			}
-			tasks = append(tasks, task)
+			tasks = append(tasks, formatTask{task: task, inPlace: inPlace})
 			if _, dup := seen[task.OpConfig.App]; !dup {
 				seen[task.OpConfig.App] = struct{}{}
 				apps = append(apps, task.OpConfig.App)
@@ -134,15 +159,36 @@ func (s *Server) FormatFile(ctx context.Context, absPath string, content []byte)
 	}
 
 	current := content
-	for _, task := range tasks {
-		candidate, _, fmtErr := s.executor.FormatContent(ctx, task, absPath, current)
-		if fmtErr != nil {
-			return nil, fmt.Errorf("format with %s: %w", task.ToolName, fmtErr)
+	for _, ft := range tasks {
+		var next []byte
+		var fmtErr error
+		if ft.inPlace {
+			next, fmtErr = s.executor.FormatFileInPlace(ctx, ft.task, absPath, current)
+		} else {
+			next, _, fmtErr = s.executor.FormatContent(ctx, ft.task, absPath, current)
 		}
-		current = candidate
+		if fmtErr != nil {
+			// One formatter failing must not abort the whole format: skip it and
+			// keep composing from the last good content.
+			log.Warn("lsp format: formatter failed, skipping", zap.String("tool", ft.task.ToolName), zap.Error(fmtErr))
+			continue
+		}
+		current = next
 	}
 
 	return toTextEdits(textdiff.ComputeEdits(string(content), string(current)))
+}
+
+// hasFilePlaceholder reports whether any arg references the per-file placeholder
+// ({file} or {files}) — i.e. the tool can be redirected from the real file to a
+// temp copy for in-place formatting.
+func hasFilePlaceholder(args []string) bool {
+	for _, a := range args {
+		if strings.Contains(a, "{file}") || strings.Contains(a, "{files}") {
+			return true
+		}
+	}
+	return false
 }
 
 // handle dispatches one message and reports whether the loop should stop.
