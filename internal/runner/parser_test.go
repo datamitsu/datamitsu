@@ -51,15 +51,18 @@ func TestDiagnosticParser_EndToEnd(t *testing.T) {
 	t.Cleanup(srv.Close)
 	sum := sha256.Sum256(wasm)
 
+	// The parsers entry is named "core", NOT after the dispatch key — proving
+	// module and parser are independent (so versions can be aliased freely).
 	parser := newDiagnosticParser(config.MapOfParsers{
-		"eslint": {URL: srv.URL, Hash: hex.EncodeToString(sum[:])},
+		"core": {URL: srv.URL, Hash: hex.EncodeToString(sum[:])},
 	})
 
 	eslintJSON := []byte(`[{"filePath":"a.js","messages":[` +
 		`{"ruleId":"no-undef","severity":2,"message":"'z' is not defined.","line":2,"column":25,"endLine":2,"endColumn":26},` +
 		`{"ruleId":"semi","severity":1,"message":"Missing semicolon.","line":1,"column":10}]}]`)
 
-	diags, err := parser.Parse(context.Background(), "eslint", "eslint", eslintJSON, nil, 1)
+	// module "core" (the parsers entry), parser "eslint" (dispatch key), tool "eslint" (source).
+	diags, err := parser.Parse(context.Background(), "core", "eslint", "eslint", eslintJSON, nil, 1)
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}

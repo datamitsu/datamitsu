@@ -2952,7 +2952,7 @@ func TestValidateTools(t *testing.T) {
 		tools := MapOfTools{
 			"hadolint": {
 				Name:         "hadolint",
-				OutputParser: "hadolint",
+				OutputParser: &OutputParser{Module: "hadolint", Parser: "hadolint"},
 				Operations: map[OperationType]ToolOperation{
 					OpLint: {Args: []string{"{file}"}},
 				},
@@ -2970,7 +2970,7 @@ func TestValidateTools(t *testing.T) {
 		tools := MapOfTools{
 			"hadolint": {
 				Name:         "hadolint",
-				OutputParser: "missing",
+				OutputParser: &OutputParser{Module: "missing", Parser: "missing"},
 				Operations: map[OperationType]ToolOperation{
 					OpLint: {Args: []string{"{file}"}},
 				},

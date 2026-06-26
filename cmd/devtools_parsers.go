@@ -68,6 +68,7 @@ func init() {
 	addParsersFlags(parsersListCmd)
 	addParsersFlags(parsersInspectCmd)
 	parsersRunCmd.Flags().String("wasm", "", "Local .wasm module to run (instead of the configured parser)")
+	parsersRunCmd.Flags().String("module", "", "Which parsers entry (module) to load; defaults to the parser name")
 	parsersRunCmd.Flags().String("stderr-file", "", "File holding the tool's stderr (some parsers read it, e.g. cue_fmt)")
 	parsersRunCmd.Flags().Int("exit-code", 0, "The tool's exit code")
 	parsersCmd.AddCommand(parsersListCmd)
@@ -106,7 +107,13 @@ func runParsersRun(cmd *cobra.Command, args []string) error {
 		if loadErr != nil {
 			return fmt.Errorf("loading config: %w (or pass --wasm <path>)", loadErr)
 		}
-		diags, err = parsermanager.New(c.Parsers).ParseOutput(ctx, tool, stdout, stderr, ec)
+		// The positional arg is the parser dispatch key; --module selects which
+		// parsers entry to load (defaults to the same name, the shorthand case).
+		module, _ := cmd.Flags().GetString("module")
+		if module == "" {
+			module = tool
+		}
+		diags, err = parsermanager.New(c.Parsers).ParseOutput(ctx, module, tool, stdout, stderr, ec)
 	}
 	if err != nil {
 		return err

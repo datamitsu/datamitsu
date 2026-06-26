@@ -59,7 +59,10 @@ type AppManager interface {
 // implementation (in the runner) loads the WASM module and applies the
 // defaults-in-core resolution.
 type DiagnosticParser interface {
-	Parse(ctx context.Context, parserName, toolName string, stdout, stderr []byte, exitCode int32) ([]diagnostic.Diagnostic, error)
+	// Parse loads the WASM module named by `module` (a parsers config entry),
+	// dispatches its `parser` (the key inside the module), and labels the resulting
+	// diagnostics with `toolName` as their source.
+	Parse(ctx context.Context, module, parser, toolName string, stdout, stderr []byte, exitCode int32) ([]diagnostic.Diagnostic, error)
 }
 
 // ResultCallback is called when a task completes
@@ -657,12 +660,14 @@ func joinStreams(stdout, stderr []byte) []byte {
 // output and appends the resolved diagnostics (stamped with the file) to result.
 // A parse failure is logged, not fatal — the tool's own pass/fail is unaffected.
 func (e *Executor) parseFileDiagnostics(ctx context.Context, result *ExecutionResult, task Task, file string, stdout, stderr []byte, exitCode int) {
+	op := task.Tool.OutputParser
 	//nolint:gosec // G115: a process exit code is small; the int32 cast is intentional.
-	diags, err := e.parser.Parse(ctx, task.Tool.OutputParser, task.ToolName, stdout, stderr, int32(exitCode))
+	diags, err := e.parser.Parse(ctx, op.Module, op.Parser, task.ToolName, stdout, stderr, int32(exitCode))
 	if err != nil {
 		log.Warn("output parser failed",
 			zap.String("tool", task.ToolName),
-			zap.String("parser", task.Tool.OutputParser),
+			zap.String("module", op.Module),
+			zap.String("parser", op.Parser),
 			zap.String("file", file),
 			zap.Error(err))
 		return
@@ -773,7 +778,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 		}
 
 		formatMode := task.OpConfig.Output == config.ToolOutputStdout
-		parseMode := e.parser != nil && task.Tool.OutputParser != ""
+		parseMode := e.parser != nil && task.Tool.OutputParser != nil
 		// Both formatting and parsing need stdout and stderr kept apart.
 		separate := formatMode || parseMode
 		stdoutBytes, stderrBytes, err := e.runCommandIO(cmd, stdinContent, separate)

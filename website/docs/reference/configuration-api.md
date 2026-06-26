@@ -512,7 +512,7 @@ Tools define fix and lint operations that datamitsu executes.
 interface Tool {
   name: string;
   operations: Partial<Record<"fix" | "lint", ToolOperation>>;
-  outputParser?: string; // By-name reference into `parsers` (must exist)
+  outputParser?: { module: string; parser: string }; // module = parsers entry; parser = dispatch key
   projectTypes?: string[]; // Restrict to specific project types
   skip?: boolean; // Report as skipped and never run (instead of omitting the tool)
   skipReason?: string; // Human-readable reason shown in the skipped report
@@ -599,21 +599,33 @@ const toolsConfig = {
 
 ### Output Parser (`outputParser`)
 
-A tool may reference a WASM [output parser](#output-parsers-parsers) by name to
-turn its raw text output into structured results. The reference must name an
-existing `parsers` entry — a dangling reference is a config error.
+A tool may reference a WASM [output parser](#output-parsers-parsers) to turn its
+raw text output into structured results. The reference is an object with two
+parts: **`module`** — the `parsers` entry to load (a specific WASM artifact, so
+different versions are different entries) — and **`parser`** — the parser inside
+that module to run (a name from `datamitsu devtools parsers list`). `module` must
+name an existing `parsers` entry; a dangling reference is a config error.
 
 ```javascript
 const toolsConfig = {
   hadolint: {
     name: "hadolint",
-    outputParser: "hadolint", // must match a key in `parsers`
+    outputParser: { module: "core", parser: "hadolint" },
+    operations: { lint: { app: "hadolint", args: ["{file}"], scope: "per-file" } },
+  },
+  eslint: {
+    name: "eslint",
+    outputParser: { module: "core", parser: "eslint" },
     operations: {
-      lint: { app: "hadolint", args: ["{file}"], scope: "per-file" },
+      lint: { app: "eslint", args: ["--format", "json", "{file}"], scope: "per-file" },
     },
   },
 };
 ```
+
+Keeping `module` and `parser` separate is what makes multiple module versions
+work: declare `parsers: { core: {…v2}, core_legacy: {…v1} }` and point each tool's
+`outputParser.module` at the version it needs.
 
 Output parsers are a Phase-1 _plumbing_ surface: the pipeline (declare → download
 → verify → load → invoke) ships now with a trivial `echo` parser, but real

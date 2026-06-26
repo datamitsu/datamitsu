@@ -11,22 +11,22 @@ import (
 
 // fakeParser records its inputs and returns a canned result/error.
 type fakeParser struct {
-	gotParser, gotTool string
-	gotStdout          []byte
-	gotExit            int32
-	diags              []diagnostic.Diagnostic
-	err                error
+	gotModule, gotParser, gotTool string
+	gotStdout                     []byte
+	gotExit                       int32
+	diags                         []diagnostic.Diagnostic
+	err                           error
 }
 
-func (f *fakeParser) Parse(_ context.Context, parserName, toolName string, stdout, _ []byte, exitCode int32) ([]diagnostic.Diagnostic, error) {
-	f.gotParser, f.gotTool, f.gotStdout, f.gotExit = parserName, toolName, stdout, exitCode
+func (f *fakeParser) Parse(_ context.Context, module, parser, toolName string, stdout, _ []byte, exitCode int32) ([]diagnostic.Diagnostic, error) {
+	f.gotModule, f.gotParser, f.gotTool, f.gotStdout, f.gotExit = module, parser, toolName, stdout, exitCode
 	return f.diags, f.err
 }
 
-func parseTask(parser string) Task {
+func parseTask(module, parser string) Task {
 	return Task{
 		ToolName: "eslint",
-		Tool:     config.Tool{Name: "eslint", OutputParser: parser},
+		Tool:     config.Tool{Name: "eslint", OutputParser: &config.OutputParser{Module: module, Parser: parser}},
 	}
 }
 
@@ -38,9 +38,10 @@ func TestParseFileDiagnostics_StampsFileAndAppends(t *testing.T) {
 	e := &Executor{parser: fp}
 	var result ExecutionResult
 
-	e.parseFileDiagnostics(context.Background(), &result, parseTask("eslint"), "broken.js", []byte("OUT"), []byte("ERR"), 1)
+	e.parseFileDiagnostics(context.Background(), &result, parseTask("core", "eslint"), "broken.js", []byte("OUT"), []byte("ERR"), 1)
 
-	if fp.gotParser != "eslint" || fp.gotTool != "eslint" || string(fp.gotStdout) != "OUT" || fp.gotExit != 1 {
+	if fp.gotModule != "core" || fp.gotParser != "eslint" || fp.gotTool != "eslint" ||
+		string(fp.gotStdout) != "OUT" || fp.gotExit != 1 {
 		t.Fatalf("parser called with unexpected args: %+v", fp)
 	}
 	if len(result.Diagnostics) != 2 {
@@ -58,7 +59,7 @@ func TestParseFileDiagnostics_ParseErrorIsNonFatal(t *testing.T) {
 	e := &Executor{parser: &fakeParser{err: errors.New("boom")}}
 	var result ExecutionResult
 	// Must not panic and must leave Diagnostics empty.
-	e.parseFileDiagnostics(context.Background(), &result, parseTask("eslint"), "f.js", nil, nil, 0)
+	e.parseFileDiagnostics(context.Background(), &result, parseTask("core", "eslint"), "f.js", nil, nil, 0)
 	if len(result.Diagnostics) != 0 {
 		t.Errorf("a parse error must yield no diagnostics, got %+v", result.Diagnostics)
 	}

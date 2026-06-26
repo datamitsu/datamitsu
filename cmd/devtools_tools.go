@@ -97,6 +97,15 @@ func sortedOps(ops map[config.OperationType]config.ToolOperation) []string {
 	return out
 }
 
+// outputParserLabel renders an OutputParser as "parser" when module and parser
+// coincide (the shorthand), else "module/parser".
+func outputParserLabel(o *config.OutputParser) string {
+	if o.Module == o.Parser {
+		return o.Parser
+	}
+	return o.Module + "/" + o.Parser
+}
+
 func skipReason(t config.Tool) string {
 	if t.SkipReason != "" {
 		return t.SkipReason
@@ -113,8 +122,8 @@ func renderToolConfigSummary(name string, t config.Tool) string {
 	if len(t.ProjectTypes) > 0 {
 		fmt.Fprintf(&b, "  %s", color.New(color.Faint).Sprintf("(%s)", strings.Join(t.ProjectTypes, ",")))
 	}
-	if t.OutputParser != "" {
-		fmt.Fprintf(&b, "  %s", color.New(color.Faint).Sprintf("→ parser:%s", t.OutputParser))
+	if t.OutputParser != nil {
+		fmt.Fprintf(&b, "  %s", color.New(color.Faint).Sprintf("→ parser:%s", outputParserLabel(t.OutputParser)))
 	}
 	if t.Skip {
 		fmt.Fprintf(&b, "  %s", color.New(color.Faint).Sprintf("(skipped: %s)", skipReason(t)))
@@ -133,8 +142,8 @@ func renderToolConfigDetail(name string, t config.Tool) string {
 	if len(t.ProjectTypes) > 0 {
 		fmt.Fprintf(&b, "  projectTypes: %s\n", strings.Join(t.ProjectTypes, ", "))
 	}
-	if t.OutputParser != "" {
-		fmt.Fprintf(&b, "  outputParser: %s\n", t.OutputParser)
+	if t.OutputParser != nil {
+		fmt.Fprintf(&b, "  outputParser: %s\n", outputParserLabel(t.OutputParser))
 	}
 	if t.Skip {
 		fmt.Fprintf(&b, "  skipped:      %s\n", skipReason(t))

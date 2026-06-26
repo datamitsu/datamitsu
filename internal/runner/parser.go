@@ -36,12 +36,12 @@ func newDiagnosticParser(parsers config.MapOfParsers) diagnosticParser {
 
 func (p diagnosticParser) Parse(
 	ctx context.Context,
-	parserName, toolName string,
+	module, parser, toolName string,
 	stdout, stderr []byte,
 	exitCode int32,
 ) ([]diagnostic.Diagnostic, error) {
-	// Dispatch on the parser name; the tool name only labels the diagnostic source.
-	raws, err := p.mgr.ParseOutput(ctx, parserName, stdout, stderr, exitCode)
+	// Load `module`, dispatch `parser`; the tool name only labels the source.
+	raws, err := p.mgr.ParseOutput(ctx, module, parser, stdout, stderr, exitCode)
 	if err != nil {
 		return nil, err
 	}

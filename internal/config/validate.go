@@ -618,11 +618,13 @@ func ValidateTools(tools MapOfTools, parsers MapOfParsers) error {
 	for _, toolName := range toolNames {
 		tool := tools[toolName]
 
-		if tool.OutputParser != "" {
-			if _, ok := parsers[tool.OutputParser]; !ok {
+		if tool.OutputParser != nil {
+			// Validate the module reference (which `parsers` entry to load); the
+			// dispatch key inside the module can only be checked at runtime.
+			if _, ok := parsers[tool.OutputParser.Module]; !ok {
 				errs = append(errs, fmt.Sprintf(
-					"tool %q: outputParser references unknown parser %q",
-					toolName, tool.OutputParser,
+					"tool %q: outputParser references unknown parsers module %q",
+					toolName, tool.OutputParser.Module,
 				))
 			}
 		}

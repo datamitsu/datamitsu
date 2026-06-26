@@ -684,6 +684,25 @@ declare global {
     type OperationType = "fix" | "lint";
 
     /**
+     * A tool's output-parser reference: which `parsers` entry (module) to load and
+     * which parser inside it to run. Kept separate so two tools can target two
+     * versions of the same module. See `Tool.outputParser` (which also accepts a
+     * plain string shorthand).
+     */
+    interface OutputParser {
+      /**
+       * The `parsers` entry to load — a specific WASM artifact (hence version).
+       */
+      module: string;
+
+      /**
+       * The parser inside that module to dispatch (a name from
+       * `datamitsu devtools parsers list`).
+       */
+      parser: string;
+    }
+
+    /**
      * A WASM output-parser module: a url+hash data artifact, modeled on
      * ArchiveSpec/Bundle (data, not a process) — explicitly NOT on App (no
      * runtime, no lockfile). Downloaded and SHA-256 verified before it is
@@ -747,12 +766,17 @@ declare global {
       operations: Partial<Record<OperationType, ToolOperation>>;
 
       /**
-       * Name of a parser declared in `parsers` used to parse this tool's text
-       * output into structured results. Must reference an existing `parsers`
-       * entry — a dangling reference is a config error.
-       * @example outputParser: "hadolint"
+       * Selects the WASM parser for this tool's output: `module` is the `parsers`
+       * entry to load (a specific WASM artifact, so different versions are different
+       * entries) and `parser` is the parser inside it (a name from
+       * `datamitsu devtools parsers list`). `module` must reference an existing
+       * `parsers` entry; a dangling reference is a config error.
+       *
+       * Keeping module and parser separate lets two tools target two versions of the
+       * same module.
+       * @example outputParser: { module: "core", parser: "eslint" }
        */
-      outputParser?: string;
+      outputParser?: OutputParser;
 
       /**
        * Which project types this tool applies to

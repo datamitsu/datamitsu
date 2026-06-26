@@ -118,10 +118,21 @@ type Tool struct {
 	// Skip is true (e.g. "runs in CI only"). Empty falls back to a generic label.
 	SkipReason string                          `json:"skipReason,omitempty"`
 	Operations map[OperationType]ToolOperation `json:"operations"`
-	// OutputParser names a parser declared in Config.Parsers used to parse this
-	// tool's text output into structured results. A dangling reference is a
-	// load-time config error.
-	OutputParser string `json:"outputParser,omitempty"`
+	// OutputParser selects the WASM parser for this tool's output: which `parsers`
+	// entry (module) to load and which parser inside it (dispatch key) to run. nil
+	// when the tool has no parser. See OutputParser.
+	OutputParser *OutputParser `json:"outputParser,omitempty"`
+}
+
+// OutputParser references a tool's output parser as (module, parser): Module is
+// the `parsers` config entry to load — a specific WASM artifact, so different
+// versions are different entries — and Parser is the dispatch key inside that
+// module (a name from `devtools parsers list`). The two are kept separate so two
+// tools can point at two versions of the same module. Always an object in config;
+// there is no string shorthand.
+type OutputParser struct {
+	Module string `json:"module"`
+	Parser string `json:"parser"`
 }
 
 // MapOfTools maps a tool name to its configuration.

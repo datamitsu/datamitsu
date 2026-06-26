@@ -15,6 +15,7 @@ Usage:
 Flags:
       --exit-code int        The tool's exit code
   -h, --help                 help for run
+      --module string        Which parsers entry (module) to load; defaults to the parser name
       --stderr-file string   File holding the tool's stderr (some parsers read it, e.g. cue_fmt)
       --wasm string          Local .wasm module to run (instead of the configured parser)
 
