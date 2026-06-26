@@ -1,14 +1,8 @@
 /**
- * Capture datamitsu check output as asciinema v2 .cast files.
- *
- * Usage (inside Docker only):
- *   node scripts/capture-demo.ts <repo-path> --output-dir <dir>
- *
- * Writes:
- *   <dir>/cold.cast  — cold start (cache cleared before run)
- *   <dir>/warm.cast  — cached run
- *
- * If either run exits non-zero, prints error and exits without writing any files.
+ * Capture datamitsu check output as asciinema v2 .cast files. Usage (inside Docker only): node
+ * scripts/capture-demo.ts <repo-path> --output-dir <dir> Writes: <dir>/cold.cast — cold start
+ * (cache cleared before run) <dir>/warm.cast — cached run If either run exits non-zero, prints
+ * error and exits without writing any files.
  */
 
 import { execSync, spawnSync } from "node:child_process";

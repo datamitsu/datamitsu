@@ -64,9 +64,7 @@ def get_platform_info():
         normalized_arch = normalize_arch(target_arch)
         return normalized_platform, normalized_arch
 
-    system = normalize_platform(sys.platform) or normalize_platform(
-        platform.system()
-    )
+    system = normalize_platform(sys.platform) or normalize_platform(platform.system())
     machine = normalize_arch(platform.machine())
     return system, machine
 
@@ -120,9 +118,7 @@ class CustomBuildHook(BuildHookInterface):
 
         binaries = list(target_dir.glob("datamitsu*"))
         if not binaries:
-            raise FileNotFoundError(
-                f"No datamitsu binary found under {target_dir}."
-            )
+            raise FileNotFoundError(f"No datamitsu binary found under {target_dir}.")
 
         self._temp_dir = Path(tempfile.mkdtemp(prefix="datamitsu-bin-backup-"))
         preserved = {target_dir_name, ".keep"}

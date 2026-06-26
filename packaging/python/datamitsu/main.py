@@ -22,8 +22,7 @@ def main():
     )
     if not os.path.isfile(executable):
         print(
-            f"Couldn't find binary {executable}. "
-            f"Please create an issue: {ISSUE_URL}",
+            f"Couldn't find binary {executable}. Please create an issue: {ISSUE_URL}",
             file=sys.stderr,
         )
         return 1

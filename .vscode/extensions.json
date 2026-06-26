@@ -1,5 +1,6 @@
 {
   "recommendations": [
+    "bierner.comment-tagged-templates",
     "dbaeumer.vscode-eslint",
     "drblury.protobuf-vsc",
     "EditorConfig.EditorConfig",

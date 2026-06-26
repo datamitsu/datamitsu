@@ -1,6 +1,8 @@
 extends: default
 ignore: |
   pnpm-lock.yaml
+  **/*.sops.yaml
+  **/.sops.yml
 rules:
   comments:
     min-spaces-from-content: 1

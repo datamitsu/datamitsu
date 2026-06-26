@@ -1,16 +1,16 @@
 :root {
   /* Warm Color Palette - Light Mode */
-  --datamitsu-cream: #FAF6ED;
-  --datamitsu-cream-dark: #F5EFE3;
-  --datamitsu-brown: #3D2817;
-  --datamitsu-brown-light: #5A4029;
-  --datamitsu-brown-muted: #6B543F;
-  --datamitsu-gold: #D4A855;
-  --datamitsu-gold-light: #E5C073;
-  --datamitsu-gold-dark: #B8923D;
+  --datamitsu-cream: #faf6ed;
+  --datamitsu-cream-dark: #f5efe3;
+  --datamitsu-brown: #3d2817;
+  --datamitsu-brown-light: #5a4029;
+  --datamitsu-brown-muted: #6b543f;
+  --datamitsu-gold: #d4a855;
+  --datamitsu-gold-light: #e5c073;
+  --datamitsu-gold-dark: #b8923d;
 
   /* Card-specific variables */
-  --card-background: #FAF8F3;
+  --card-background: #faf8f3;
   --card-header-background: rgba(212, 168, 85, 0.15);
   --card-border-color: rgba(212, 168, 85, 0.2);
   --card-shadow-light: 0 8px 32px rgba(61, 40, 23, 0.12);
@@ -18,24 +18,24 @@
 
   /* Card tabs */
   --card-tabs-background: rgba(212, 168, 85, 0.12);
-  --card-tab-color: #B8923D;
-  --card-tab-color-hover: #D4A855;
-  --card-tab-color-active: #8A6C2C;
+  --card-tab-color: #b8923d;
+  --card-tab-color-hover: #d4a855;
+  --card-tab-color-active: #8a6c2c;
   --card-tab-background-active: rgba(212, 168, 85, 0.35);
 
   /* Card header text */
-  --card-header-text-color: #B8923D;
+  --card-header-text-color: #b8923d;
 
   /* Docusaurus theme mappings */
-  --ifm-background-color: #FAF6ED;
-  --ifm-font-color-base: #3D2817;
-  --ifm-color-primary: #D4A855;
-  --ifm-color-primary-dark: #B8923D;
-  --ifm-color-primary-darker: #A88436;
-  --ifm-color-primary-darkest: #8A6C2C;
-  --ifm-color-primary-light: #E5C073;
-  --ifm-color-primary-lighter: #EBD091;
-  --ifm-color-primary-lightest: #F5E5C3;
+  --ifm-background-color: #faf6ed;
+  --ifm-font-color-base: #3d2817;
+  --ifm-color-primary: #d4a855;
+  --ifm-color-primary-dark: #b8923d;
+  --ifm-color-primary-darker: #a88436;
+  --ifm-color-primary-darkest: #8a6c2c;
+  --ifm-color-primary-light: #e5c073;
+  --ifm-color-primary-lighter: #ebd091;
+  --ifm-color-primary-lightest: #f5e5c3;
 
   /* Hexagon design tokens */
   --hex-border-width: 3px;
@@ -43,8 +43,8 @@
   --hex-shadow-hover: 0 8px 30px rgba(212, 168, 85, 0.4);
 
   /* Gradients */
-  --gradient-hero: linear-gradient(135deg, #FAF6ED 0%, #F5EFE3 100%);
-  --gradient-gold: linear-gradient(135deg, #D4A855 0%, #E5C073 100%);
+  --gradient-hero: linear-gradient(135deg, #faf6ed 0%, #f5efe3 100%);
+  --gradient-gold: linear-gradient(135deg, #d4a855 0%, #e5c073 100%);
   --gradient-overlay: linear-gradient(180deg, transparent 0%, rgba(250, 246, 237, 0.8) 100%);
 
   /* Code and typography */
@@ -52,20 +52,20 @@
   --docusaurus-highlighted-code-line-bg: rgba(61, 40, 23, 0.1);
 }
 
-[data-theme='dark'] {
+[data-theme="dark"] {
   /* Warm Color Palette - Dark Mode */
-  --datamitsu-cream: #2A2419;
-  --datamitsu-cream-dark: #1F1912;
-  --datamitsu-brown: #F5EFE3;
-  --datamitsu-brown-light: #E5DDCC;
-  --datamitsu-brown-muted: #C9B99A;
-  --datamitsu-gold: #D4A855;
-  --datamitsu-gold-light: #E5C073;
-  --datamitsu-gold-dark: #B8923D;
+  --datamitsu-cream: #2a2419;
+  --datamitsu-cream-dark: #1f1912;
+  --datamitsu-brown: #f5efe3;
+  --datamitsu-brown-light: #e5ddcc;
+  --datamitsu-brown-muted: #c9b99a;
+  --datamitsu-gold: #d4a855;
+  --datamitsu-gold-light: #e5c073;
+  --datamitsu-gold-dark: #b8923d;
 
   /* Card-specific variables - darker than section backgrounds for contrast */
-  --card-background: #16120D;
-  --card-header-background: #211C15;
+  --card-background: #16120d;
+  --card-header-background: #211c15;
   --card-border-color: rgba(212, 168, 85, 0.15);
   --card-shadow-light: 0 8px 32px rgba(61, 40, 23, 0.12);
   --card-shadow-dark: 0 20px 60px rgba(0, 0, 0, 0.3);
@@ -81,23 +81,23 @@
   --card-header-text-color: rgba(212, 168, 85, 0.85);
 
   /* Docusaurus theme mappings */
-  --ifm-background-color: #2A2419;
-  --ifm-font-color-base: #F5EFE3;
-  --ifm-color-primary: #E5C073;
-  --ifm-color-primary-dark: #D4A855;
-  --ifm-color-primary-darker: #C89E4A;
-  --ifm-color-primary-darkest: #B8923D;
-  --ifm-color-primary-light: #EBD091;
-  --ifm-color-primary-lighter: #F0DBA5;
-  --ifm-color-primary-lightest: #F5E5C3;
+  --ifm-background-color: #2a2419;
+  --ifm-font-color-base: #f5efe3;
+  --ifm-color-primary: #e5c073;
+  --ifm-color-primary-dark: #d4a855;
+  --ifm-color-primary-darker: #c89e4a;
+  --ifm-color-primary-darkest: #b8923d;
+  --ifm-color-primary-light: #ebd091;
+  --ifm-color-primary-lighter: #f0dba5;
+  --ifm-color-primary-lightest: #f5e5c3;
 
   /* Hexagon design tokens */
   --hex-shadow: 0 4px 20px rgba(229, 192, 115, 0.2);
   --hex-shadow-hover: 0 8px 30px rgba(229, 192, 115, 0.4);
 
   /* Gradients */
-  --gradient-hero: linear-gradient(135deg, #2A2419 0%, #1F1912 100%);
-  --gradient-gold: linear-gradient(135deg, #D4A855 0%, #E5C073 100%);
+  --gradient-hero: linear-gradient(135deg, #2a2419 0%, #1f1912 100%);
+  --gradient-gold: linear-gradient(135deg, #d4a855 0%, #e5c073 100%);
   --gradient-overlay: linear-gradient(180deg, transparent 0%, rgba(42, 36, 25, 0.8) 100%);
 
   /* Code */
@@ -111,7 +111,7 @@
   --ifm-navbar-link-hover-color: var(--datamitsu-gold);
 }
 
-[data-theme='dark'] {
+[data-theme="dark"] {
   --ifm-navbar-background-color: var(--datamitsu-cream-dark);
   --ifm-navbar-link-color: var(--datamitsu-brown);
   --ifm-navbar-link-hover-color: var(--datamitsu-gold-light);
@@ -126,8 +126,8 @@
   --ifm-footer-title-color: var(--datamitsu-cream);
 }
 
-[data-theme='dark'] {
-  --ifm-footer-background-color: #3D2817;
+[data-theme="dark"] {
+  --ifm-footer-background-color: #3d2817;
   --ifm-footer-color: var(--datamitsu-brown-light);
   --ifm-footer-link-color: var(--datamitsu-gold-light);
   --ifm-footer-link-hover-color: var(--datamitsu-gold);
@@ -140,7 +140,7 @@
   --ifm-card-border-radius: 12px;
 }
 
-[data-theme='dark'] {
+[data-theme="dark"] {
   --ifm-card-background-color: var(--datamitsu-cream-dark);
 }
 
@@ -152,7 +152,7 @@
   --ifm-menu-color-background-hover: rgba(212, 168, 85, 0.05);
 }
 
-[data-theme='dark'] {
+[data-theme="dark"] {
   --ifm-menu-color: var(--datamitsu-brown-light);
   --ifm-menu-color-active: var(--datamitsu-gold-light);
   --ifm-menu-color-background-active: rgba(212, 168, 85, 0.15);
@@ -165,7 +165,7 @@
   --ifm-link-hover-color: var(--datamitsu-gold);
 }
 
-[data-theme='dark'] {
+[data-theme="dark"] {
   --ifm-link-color: var(--datamitsu-gold-light);
   --ifm-link-hover-color: var(--datamitsu-gold);
 }
@@ -175,7 +175,7 @@
   --ifm-heading-color: var(--datamitsu-brown);
 }
 
-[data-theme='dark'] {
+[data-theme="dark"] {
   --ifm-heading-color: var(--datamitsu-brown);
 }
 
@@ -189,85 +189,85 @@
   --ifm-code-padding-horizontal: 0.3rem;
 
   /* Code blocks */
-  --ifm-pre-background: #F5EFE3;
+  --ifm-pre-background: #f5efe3;
   --ifm-pre-color: var(--datamitsu-brown);
   --ifm-pre-border-radius: 8px;
   --ifm-pre-padding: 1rem;
 }
 
-[data-theme='dark'] {
+[data-theme="dark"] {
   /* Inline code */
   --ifm-code-background: rgba(212, 168, 85, 0.15);
   --ifm-code-color: var(--datamitsu-gold-light);
 
   /* Code blocks */
-  --ifm-pre-background: #1F1912;
+  --ifm-pre-background: #1f1912;
   --ifm-pre-color: var(--datamitsu-brown-light);
 }
 
 /* Algolia DocSearch styling */
 :root {
-  --docsearch-primary-color: #D4A855;
-  --docsearch-text-color: #3D2817;
-  --docsearch-highlight-color: #D4A855;
-  --docsearch-muted-color: #6B543F;
+  --docsearch-primary-color: #d4a855;
+  --docsearch-text-color: #3d2817;
+  --docsearch-highlight-color: #d4a855;
+  --docsearch-muted-color: #6b543f;
   --docsearch-container-background: rgba(61, 40, 23, 0.4);
-  --docsearch-modal-background: #FAF6ED;
+  --docsearch-modal-background: #faf6ed;
   --docsearch-modal-shadow: 0 8px 40px rgba(61, 40, 23, 0.2);
-  --docsearch-searchbox-background: #F5EFE3;
-  --docsearch-searchbox-focus-background: #FAF6ED;
-  --docsearch-searchbox-shadow: inset 0 0 0 2px #D4A855;
-  --docsearch-hit-color: #3D2817;
-  --docsearch-hit-active-color: #3D2817;
-  --docsearch-hit-background: #FAF6ED;
+  --docsearch-searchbox-background: #f5efe3;
+  --docsearch-searchbox-focus-background: #faf6ed;
+  --docsearch-searchbox-shadow: inset 0 0 0 2px #d4a855;
+  --docsearch-hit-color: #3d2817;
+  --docsearch-hit-active-color: #3d2817;
+  --docsearch-hit-background: #faf6ed;
   --docsearch-hit-shadow: 0 1px 4px rgba(61, 40, 23, 0.1);
-  --docsearch-key-gradient: linear-gradient(180deg, #F5EFE3, #FAF6ED);
+  --docsearch-key-gradient: linear-gradient(180deg, #f5efe3, #faf6ed);
   --docsearch-key-shadow: 0 1px 0 rgba(61, 40, 23, 0.3);
-  --docsearch-footer-background: #F5EFE3;
+  --docsearch-footer-background: #f5efe3;
   --docsearch-footer-shadow: 0 -1px 0 rgba(212, 168, 85, 0.2);
-  --docsearch-logo-color: #B8923D;
-  --docsearch-icon-color: #6B543F;
+  --docsearch-logo-color: #b8923d;
+  --docsearch-icon-color: #6b543f;
   --docsearch-icon-stroke-width: 1.6;
 }
 
-[data-theme='dark'] {
-  --docsearch-primary-color: #E5C073;
-  --docsearch-text-color: #F5EFE3;
-  --docsearch-highlight-color: #E5C073;
-  --docsearch-muted-color: #C9B99A;
+[data-theme="dark"] {
+  --docsearch-primary-color: #e5c073;
+  --docsearch-text-color: #f5efe3;
+  --docsearch-highlight-color: #e5c073;
+  --docsearch-muted-color: #c9b99a;
   --docsearch-container-background: rgba(15, 12, 8, 0.7);
-  --docsearch-modal-background: #2A2419;
+  --docsearch-modal-background: #2a2419;
   --docsearch-modal-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
-  --docsearch-searchbox-background: #1F1912;
-  --docsearch-searchbox-focus-background: #16120D;
-  --docsearch-searchbox-shadow: inset 0 0 0 2px #D4A855;
-  --docsearch-hit-color: #F5EFE3;
-  --docsearch-hit-active-color: #2A2419;
-  --docsearch-hit-background: #1F1912;
+  --docsearch-searchbox-background: #1f1912;
+  --docsearch-searchbox-focus-background: #16120d;
+  --docsearch-searchbox-shadow: inset 0 0 0 2px #d4a855;
+  --docsearch-hit-color: #f5efe3;
+  --docsearch-hit-active-color: #2a2419;
+  --docsearch-hit-background: #1f1912;
   --docsearch-hit-shadow: none;
-  --docsearch-key-gradient: linear-gradient(180deg, #2A2419, #1F1912);
+  --docsearch-key-gradient: linear-gradient(180deg, #2a2419, #1f1912);
   --docsearch-key-shadow: 0 1px 0 rgba(212, 168, 85, 0.3);
-  --docsearch-footer-background: #1F1912;
+  --docsearch-footer-background: #1f1912;
   --docsearch-footer-shadow: 0 -1px 0 rgba(212, 168, 85, 0.15);
-  --docsearch-logo-color: #D4A855;
-  --docsearch-icon-color: #C9B99A;
+  --docsearch-logo-color: #d4a855;
+  --docsearch-icon-color: #c9b99a;
 }
 
 /* Algolia DocSearch direct overrides (elements that ignore CSS vars) */
 
 /* Footer keyboard shortcut keys */
 .DocSearch-Commands-Key {
-  background: linear-gradient(180deg, #F5EFE3, #FAF6ED) !important;
+  background: linear-gradient(180deg, #f5efe3, #faf6ed) !important;
   border-color: rgba(61, 40, 23, 0.2) !important;
   box-shadow: 0 1px 0 rgba(61, 40, 23, 0.3) !important;
-  color: #6B543F !important;
+  color: #6b543f !important;
 }
 
-[data-theme='dark'] .DocSearch-Commands-Key {
-  background: linear-gradient(180deg, #3D2817, #2A2419) !important;
+[data-theme="dark"] .DocSearch-Commands-Key {
+  background: linear-gradient(180deg, #3d2817, #2a2419) !important;
   border-color: rgba(212, 168, 85, 0.2) !important;
   box-shadow: 0 1px 0 rgba(212, 168, 85, 0.3) !important;
-  color: #C9B99A !important;
+  color: #c9b99a !important;
 }
 
 /* Search bar bottom border */
@@ -276,7 +276,7 @@
   box-shadow: none !important;
 }
 
-[data-theme='dark'] .DocSearch-Form {
+[data-theme="dark"] .DocSearch-Form {
   border-bottom-color: rgba(212, 168, 85, 0.25) !important;
 }
 
@@ -286,36 +286,36 @@
   box-shadow: none !important;
 }
 
-[data-theme='dark'] .DocSearch-Footer {
+[data-theme="dark"] .DocSearch-Footer {
   border-top-color: rgba(212, 168, 85, 0.15) !important;
 }
 
 /* Hit breadcrumb path (the blue "Maintaining Wrapper Packages" text) */
 .DocSearch-Hit-path {
-  color: #B8923D !important;
+  color: #b8923d !important;
 }
 
-[data-theme='dark'] .DocSearch-Hit-path {
-  color: #C9B99A !important;
+[data-theme="dark"] .DocSearch-Hit-path {
+  color: #c9b99a !important;
 }
 
 /* Footer labels text */
 .DocSearch-Commands-Key + span,
 .DocSearch-Label {
-  color: #6B543F !important;
+  color: #6b543f !important;
 }
 
-[data-theme='dark'] .DocSearch-Commands-Key + span,
-[data-theme='dark'] .DocSearch-Label {
-  color: #C9B99A !important;
+[data-theme="dark"] .DocSearch-Commands-Key + span,
+[data-theme="dark"] .DocSearch-Label {
+  color: #c9b99a !important;
 }
 
 /* Active/selected hit item */
-.DocSearch-Hit[aria-selected='true'] a {
+.DocSearch-Hit[aria-selected="true"] a {
   background: rgba(212, 168, 85, 0.2) !important;
 }
 
-[data-theme='dark'] .DocSearch-Hit[aria-selected='true'] a {
+[data-theme="dark"] .DocSearch-Hit[aria-selected="true"] a {
   background: rgba(212, 168, 85, 0.25) !important;
 }
 
@@ -323,25 +323,25 @@
 .DocSearch-Button {
   background: rgba(212, 168, 85, 0.12) !important;
   border: 1px solid rgba(212, 168, 85, 0.25) !important;
-  color: #6B543F !important;
+  color: #6b543f !important;
 }
 
 .DocSearch-Button:hover {
   background: rgba(212, 168, 85, 0.2) !important;
   box-shadow: none !important;
-  color: #3D2817 !important;
+  color: #3d2817 !important;
 }
 
-[data-theme='dark'] .DocSearch-Button {
+[data-theme="dark"] .DocSearch-Button {
   background: rgba(212, 168, 85, 0.1) !important;
   border-color: rgba(212, 168, 85, 0.2) !important;
-  color: #C9B99A !important;
+  color: #c9b99a !important;
 }
 
-[data-theme='dark'] .DocSearch-Button:hover {
+[data-theme="dark"] .DocSearch-Button:hover {
   background: rgba(212, 168, 85, 0.18) !important;
   box-shadow: none !important;
-  color: #F5EFE3 !important;
+  color: #f5efe3 !important;
 }
 
 /* Search button keyboard shortcut badge */
@@ -349,22 +349,21 @@
   background: rgba(212, 168, 85, 0.15) !important;
   border-color: rgba(212, 168, 85, 0.3) !important;
   box-shadow: none !important;
-  color: #6B543F !important;
+  color: #6b543f !important;
 }
 
-[data-theme='dark'] .DocSearch-Button-Key {
+[data-theme="dark"] .DocSearch-Button-Key {
   background: rgba(212, 168, 85, 0.12) !important;
   border-color: rgba(212, 168, 85, 0.25) !important;
-  color: #C9B99A !important;
+  color: #c9b99a !important;
 }
 
-
 /* Additional code block refinements */
-div[class*='codeBlockContainer'] {
+div[class*="codeBlockContainer"] {
   box-shadow: 0 2px 8px rgba(61, 40, 23, 0.1);
 }
 
-[data-theme='dark'] div[class*='codeBlockContainer'] {
+[data-theme="dark"] div[class*="codeBlockContainer"] {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
@@ -373,6 +372,6 @@ div[class*='codeBlockContainer'] {
   border: 1px solid rgba(212, 168, 85, 0.2);
 }
 
-[data-theme='dark'] :not(pre) > code {
+[data-theme="dark"] :not(pre) > code {
   border-color: rgba(212, 168, 85, 0.25);
 }

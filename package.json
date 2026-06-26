@@ -11,7 +11,6 @@
   "scripts": {
     "build": "pnpm dm exec task -- build",
     "demo:capture": "pnpm dm exec task demo:capture",
-    "postinstall": "pnpm dm exec task -- build:lib",
     "pack:clean": "tsx packaging/pack.ts clean",
     "pack:prepare": "tsx packaging/pack.ts prepare",
     "pack:publish": "tsx packaging/pack.ts publish",
@@ -34,7 +33,7 @@
     "test:release:unstable": "act workflow_dispatch -W .github/workflows/release.yml --input release_type=unstable --input ref=main"
   },
   "devDependencies": {
-    "@shibanet0/datamitsu-config": "0.1.0",
+    "@shibanet0/datamitsu-config": "catalog:",
     "@types/node": "26.0.0",
     "tsdown": "0.22.3"
   },

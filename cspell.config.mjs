@@ -1,4 +1,4 @@
-import { defineConfig } from "./.datamitsu/cspell.config.js";
+import { defineConfig } from "./.datamitsu/cspell.config.mjs";
 
 export default defineConfig((config) => ({
   ...config,
@@ -378,5 +378,9 @@ export default defineConfig((config) => ({
     "nonoverlapping",
     "numconv",
     "recompiles",
+    "bierner",
+    "Verilog",
+    "Beancount",
+    "SPIR",
   ],
 }));

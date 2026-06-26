@@ -1,5 +1,7 @@
 exclude:
   - pnpm-lock.yaml
+  - "**/*.sops.yaml"
+  - "**/.sops.yml"
 formatter:
   array_indent: 2
   eof_newline: true

@@ -15,7 +15,9 @@
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.75rem;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
 }
 
 .tab:hover {
