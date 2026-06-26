@@ -9,7 +9,7 @@ post-checkout:
       run: pnpm datamitsu init
     install deps:
       priority: 1
-      run: pnpm i
+      run: pnpm i -y
 pre-commit:
   commands:
     datamitsu-check:

@@ -34,7 +34,7 @@
     "test:release:unstable": "act workflow_dispatch -W .github/workflows/release.yml --input release_type=unstable --input ref=main"
   },
   "devDependencies": {
-    "@shibanet0/datamitsu-config": "0.1.0",
+    "@shibanet0/datamitsu-config": "catalog:",
     "@types/node": "26.0.0",
     "tsdown": "0.22.3"
   },

@@ -1,9 +1,9 @@
 title = "Custom Gitleaks configuration"
 
-[extend]
-path = ".datamitsu/gitleaks-managed.toml"
-
 [allowlist]
 paths = ['\.cache/act/']
 regexTarget = "match"
 regexes = ["074677e081f2ba8b978c240e37a3ce59"]
+
+[extend]
+path = ".datamitsu/gitleaks-managed.toml"

@@ -39,7 +39,7 @@
   flex-shrink: 0;
 }
 
-[data-theme='dark'] .stepNumber {
+[data-theme="dark"] .stepNumber {
   color: var(--datamitsu-cream);
 }
 
@@ -50,7 +50,7 @@
   margin: 0;
 }
 
-[data-theme='dark'] .title {
+[data-theme="dark"] .title {
   color: var(--datamitsu-brown);
 }
 
@@ -61,7 +61,7 @@
   margin: 0;
 }
 
-[data-theme='dark'] .description {
+[data-theme="dark"] .description {
   color: var(--datamitsu-brown-light);
 }
 
@@ -86,7 +86,9 @@
   color: var(--datamitsu-gold-dark);
   margin-bottom: 0.25rem;
   flex-shrink: 0;
-  transition: background 0.3s ease, border-color 0.3s ease;
+  transition:
+    background 0.3s ease,
+    border-color 0.3s ease;
 }
 
 .hexagonCard:hover .iconWrapper {
@@ -94,13 +96,13 @@
   border-color: rgba(212, 168, 85, 0.6);
 }
 
-[data-theme='dark'] .iconWrapper {
+[data-theme="dark"] .iconWrapper {
   background: linear-gradient(135deg, rgba(212, 168, 85, 0.12) 0%, rgba(212, 168, 85, 0.04) 100%);
   border-color: rgba(212, 168, 85, 0.25);
   color: var(--datamitsu-gold-light);
 }
 
-[data-theme='dark'] .hexagonCard:hover .iconWrapper {
+[data-theme="dark"] .hexagonCard:hover .iconWrapper {
   background: linear-gradient(135deg, rgba(212, 168, 85, 0.22) 0%, rgba(212, 168, 85, 0.1) 100%);
   border-color: rgba(212, 168, 85, 0.45);
 }

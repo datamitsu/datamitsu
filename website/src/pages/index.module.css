@@ -15,7 +15,7 @@
   background-size: 28px 28px;
 }
 
-[data-theme='dark'] .heroHoneycomb {
+[data-theme="dark"] .heroHoneycomb {
   background-image: radial-gradient(circle, rgba(212, 168, 85, 0.15) 1px, transparent 1px);
 }
 
@@ -73,11 +73,11 @@
   border-radius: 2px;
 }
 
-[data-theme='dark'] .heroTitle {
+[data-theme="dark"] .heroTitle {
   color: var(--datamitsu-brown);
 }
 
-[data-theme='dark'] .heroTitleAccent {
+[data-theme="dark"] .heroTitleAccent {
   color: var(--datamitsu-gold-light);
 }
 
@@ -89,7 +89,7 @@
   line-height: 1.65;
 }
 
-[data-theme='dark'] .heroSubtitle {
+[data-theme="dark"] .heroSubtitle {
   color: var(--datamitsu-brown-light);
 }
 
@@ -104,7 +104,9 @@
   background: transparent;
   border: 2px solid var(--datamitsu-gold);
   color: var(--datamitsu-brown);
-  transition: background 0.2s ease, color 0.2s ease;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
 }
 
 .buttonSecondary:hover {
@@ -113,12 +115,12 @@
   text-decoration: none;
 }
 
-[data-theme='dark'] .buttonSecondary {
+[data-theme="dark"] .buttonSecondary {
   color: var(--datamitsu-brown-light);
   border-color: var(--datamitsu-gold);
 }
 
-[data-theme='dark'] .buttonSecondary:hover {
+[data-theme="dark"] .buttonSecondary:hover {
   background: rgba(212, 168, 85, 0.15);
   color: var(--datamitsu-brown);
 }
@@ -129,7 +131,7 @@
   background: var(--datamitsu-cream-dark);
 }
 
-[data-theme='dark'] .codeDemoSection {
+[data-theme="dark"] .codeDemoSection {
   background: var(--datamitsu-cream-dark);
 }
 
@@ -166,7 +168,7 @@
 }
 
 /* Override CodeBlock defaults to integrate with code window */
-.codeWindowBody :global(div[class*='codeBlockContainer']) {
+.codeWindowBody :global(div[class*="codeBlockContainer"]) {
   background: transparent !important;
   box-shadow: none !important;
   margin: 0 !important;
@@ -199,12 +201,12 @@
   background: rgba(212, 168, 85, 0.25);
 }
 
-[data-theme='dark'] .codeWindowBody :global(button[class*="copyButton"]) {
+[data-theme="dark"] .codeWindowBody :global(button[class*="copyButton"]) {
   background: rgba(212, 168, 85, 0.2);
   border: 1px solid rgba(212, 168, 85, 0.3);
 }
 
-[data-theme='dark'] .codeWindowBody :global(button[class*="copyButton"]:hover) {
+[data-theme="dark"] .codeWindowBody :global(button[class*="copyButton"]:hover) {
   background: rgba(212, 168, 85, 0.3);
 }
 
@@ -255,7 +257,7 @@
   margin-bottom: 3rem;
 }
 
-[data-theme='dark'] .sectionHeading {
+[data-theme="dark"] .sectionHeading {
   color: var(--datamitsu-brown);
 }
 
@@ -297,7 +299,7 @@
   background: var(--datamitsu-cream-dark);
 }
 
-[data-theme='dark'] .features {
+[data-theme="dark"] .features {
   background: var(--datamitsu-cream-dark);
 }
 
@@ -323,8 +325,8 @@
   overflow: hidden;
 }
 
-[data-theme='dark'] .philosophySection {
-  background: linear-gradient(135deg, #5A4029 0%, #4A3620 100%);
+[data-theme="dark"] .philosophySection {
+  background: linear-gradient(135deg, #5a4029 0%, #4a3620 100%);
 }
 
 .philosophyContent {
@@ -367,7 +369,7 @@
   margin-bottom: 1.5rem;
 }
 
-[data-theme='dark'] .finalCtaHeading {
+[data-theme="dark"] .finalCtaHeading {
   color: var(--datamitsu-brown);
 }
 
@@ -379,7 +381,7 @@
   line-height: 1.7;
 }
 
-[data-theme='dark'] .finalCtaSubheading {
+[data-theme="dark"] .finalCtaSubheading {
   color: var(--datamitsu-brown-light);
 }
 

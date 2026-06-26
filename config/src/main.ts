@@ -3,7 +3,9 @@ import { DATAMITSU_AGENT_GUIDE } from "./prompts/generated";
 import { mapOfRuntimes } from "./runtimes";
 
 function getConfig(config: config.Config): config.Config {
-  /** @type config.Config */
+  /**
+   * @type config.Config
+   */
   const configOutput = {
     ...config,
     apps: {

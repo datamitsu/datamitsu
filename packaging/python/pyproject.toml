@@ -1,3 +1,7 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "datamitsu"
 version = "0.0.0"
@@ -24,7 +28,7 @@ classifiers = [
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
-  "Topic :: Software Development :: Quality Assurance"
+  "Topic :: Software Development :: Quality Assurance",
 ]
 
 [[project.authors]]
@@ -43,10 +47,6 @@ Documentation = "https://datamitsu.com"
 Homepage = "https://github.com/datamitsu/datamitsu"
 Issues = "https://github.com/datamitsu/datamitsu/issues"
 Repository = "https://github.com/datamitsu/datamitsu"
-
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
 
 [tool]
 [tool.hatch]

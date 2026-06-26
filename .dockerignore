@@ -119,6 +119,17 @@
 **/secrets.yml
 **/secrets.json
 
+# Terraform & Terragrunt
+**/.terraform/
+**/.terragrunt-cache/
+**/*.tfstate
+**/*.tfstate.backup
+**/crash.log
+**/override.tf
+**/override.tf.json
+**/*_override.tf
+**/*_override.tf.json
+
 # Testing
 **/coverage/
 **/*.cov

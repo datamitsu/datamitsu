@@ -1,7 +1,7 @@
 /// <reference path="./.datamitsu/datamitsu.config.d.ts" />
 
 const getBeforeConfigs = () => {
-  return [{ path: "./node_modules/@shibanet0/datamitsu-config/datamitsu.config.js" }];
+  return [{ path: "./node_modules/@shibanet0/datamitsu-config/datamitsu.config.oci-ghcr.js" }];
 };
 globalThis.getBeforeConfigs = getBeforeConfigs;
 

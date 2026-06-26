@@ -1,5 +1,4 @@
 allowBuilds:
-  "@shibanet0/datamitsu-config": false
   "@swc/core": false
   core-js: false
   esbuild: false
@@ -7,6 +6,8 @@ allowBuilds:
 audit: true
 auditLevel: high
 autoInstallPeers: true
+catalog:
+  "@shibanet0/datamitsu-config": 0.1.7
 enableGlobalVirtualStore: true
 enablePrePostScripts: false
 hoistPattern: []
