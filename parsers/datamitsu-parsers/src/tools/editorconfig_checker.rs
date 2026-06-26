@@ -2,8 +2,9 @@
 //! Ported from the none-ls diagnostics/editorconfig_checker builtin.
 //!
 //! Upstream emits a file header line followed by indented `<row>: <message>`
-//! lines (read from stderr). The none-ls pattern `(%d+): (.+)` captures only
-//! `row` and `message`; no column, severity, or code is emitted.
+//! lines on **stdout** (the none-ls `from_stderr = true` is wrong for current
+//! versions), so read stdout first and fall back to stderr. The none-ls pattern
+//! `(%d+): (.+)` captures only `row` and `message`; no column/severity/code.
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
 
@@ -19,9 +20,11 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	}],
 };
 
-pub fn parse(_stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic> {
-	// from_stderr=true: diagnostics are read from stderr.
-	String::from_utf8_lossy(stderr).lines().filter_map(parse_line).collect()
+pub fn parse(stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic> {
+	// stdout-first: editorconfig-checker writes diagnostics to stdout, with a
+	// stderr fallback for robustness.
+	let bytes = if stdout.is_empty() { stderr } else { stdout };
+	String::from_utf8_lossy(bytes).lines().filter_map(parse_line).collect()
 }
 
 /// Port of the Lua pattern `(%d+): (.+)`: leading run of digits, then `": "`,
@@ -50,10 +53,12 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 mod tests {
 	use super::*;
 
+	const SAMPLE: &[u8] = b"src/main.rs:\n\t3: Wrong line endings or no final newline\n\t10: Trailing whitespace\n";
+
 	#[test]
-	fn parses_row_and_message_from_stderr() {
-		let stderr = b"src/main.rs:\n\t3: Wrong line endings or no final newline\n\t10: Trailing whitespace\n";
-		let diags = parse(b"", stderr, 1);
+	fn parses_row_and_message_from_stdout() {
+		// The report arrives on stdout, the stream this tool actually writes to.
+		let diags = parse(SAMPLE, b"", 1);
 		assert_eq!(diags.len(), 2);
 		assert_eq!(diags[0].row, Some(3));
 		assert_eq!(diags[0].message, "Wrong line endings or no final newline");
@@ -64,9 +69,14 @@ mod tests {
 	}
 
 	#[test]
+	fn falls_back_to_stderr_when_stdout_empty() {
+		assert_eq!(parse(b"", SAMPLE, 1).len(), 2);
+	}
+
+	#[test]
 	fn skips_non_matching_lines() {
 		// The file header has no `<digits>: ` prefix and must be ignored.
-		let diags = parse(b"", b"path/to/file.txt:\n", 1);
+		let diags = parse(b"path/to/file.txt:\n", b"", 1);
 		assert!(diags.is_empty());
 	}
 }
