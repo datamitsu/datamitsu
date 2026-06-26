@@ -24,7 +24,10 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 
-import { prepareWasmPackage, WASM_FILENAME, writeParserManifest } from "./wasm";
+// The WASM parser module is NOT packaged here. It ships only as a versioned,
+// signed asset on the GitHub Release (datamitsu_parsers_<version>.wasm, hash in
+// the signed checksums.txt); the core downloads it by url+hash. It is never
+// bundled into the npm/Python/Ruby wrappers.
 
 // Track active child processes for cleanup on Ctrl+C
 const activeProcesses = new Set<ReturnType<typeof spawn>>();
@@ -62,21 +65,6 @@ const PYTHON_DIR = join(PACKAGING_DIR, "python");
 const PYTHON_BIN_DIR = join(PYTHON_DIR, "datamitsu", "bin");
 const RUBY_DIR = join(PACKAGING_DIR, "ruby");
 const DIST_DIR = join(ROOT_DIR, "dist");
-
-// Platform-independent npm package distributing the built WASM parser module.
-const WASM_PACKAGE_DIR = join(NPM_DIR, "datamitsu-wasm");
-// Canonical build output of `task build:parsers` (same path goreleaser globs).
-const WASM_SOURCE = join(
-  ROOT_DIR,
-  "parsers",
-  "target",
-  "wasm32-unknown-unknown",
-  "release",
-  WASM_FILENAME,
-);
-// Release-time parser manifest consumed by config maintainers.
-const PARSER_MANIFEST_PATH = join(DIST_DIR, "parser-manifest.json");
-const CHECKSUMS_PATH = join(DIST_DIR, "checksums.txt");
 
 interface PlatformConfig {
   archName: string;
@@ -290,21 +278,6 @@ function cleanRuby() {
   }
 }
 
-function cleanWasm() {
-  console.log("\n📦 Cleaning WASM npm package...");
-
-  // Remove only the copied-in artifact, not the committed package scaffold.
-  const bundledWasm = join(WASM_PACKAGE_DIR, WASM_FILENAME);
-  if (existsSync(bundledWasm)) {
-    rmSync(bundledWasm, { force: true });
-    console.log(`✓ Cleaned ${WASM_FILENAME}`);
-  }
-  if (existsSync(PARSER_MANIFEST_PATH)) {
-    rmSync(PARSER_MANIFEST_PATH, { force: true });
-    console.log("✓ Cleaned parser-manifest.json");
-  }
-}
-
 function exec(command: string, cwd?: string): void {
   console.log(`$ ${command}`);
   execSync(command, { cwd, stdio: "inherit" });
@@ -500,41 +473,6 @@ function prepareRubyPackage() {
   console.log("✓ Ruby gem prepared");
 }
 
-// ============================================================================
-// WASM Packaging
-// ============================================================================
-
-function prepareWasm() {
-  console.log("\n📦 Preparing WASM npm package + parser manifest...");
-
-  prepareWasmPackage({
-    packageDir: WASM_PACKAGE_DIR,
-    version: VERSION,
-    wasmSource: WASM_SOURCE,
-  });
-  console.log(`✓ Bundled ${WASM_FILENAME} into @datamitsu/datamitsu-wasm`);
-
-  // The manifest needs the signed checksums.txt (goreleaser output). When run
-  // without a release build (e.g. local package smoke-test), skip it loudly.
-  if (!existsSync(CHECKSUMS_PATH)) {
-    console.log(
-      `⚠️  ${CHECKSUMS_PATH} not found — skipping parser manifest ` +
-        `(run goreleaser first to produce checksums.txt).`,
-    );
-    return;
-  }
-
-  const checksumsContent = readFileSync(CHECKSUMS_PATH, "utf8");
-  const manifest = writeParserManifest({
-    checksumsContent,
-    destPath: PARSER_MANIFEST_PATH,
-    version: VERSION,
-  });
-  console.log(
-    `✓ Wrote parser manifest (${Object.keys(manifest).length} parser(s)) to ${PARSER_MANIFEST_PATH}`,
-  );
-}
-
 async function publishNpm(dryRun = true) {
   console.log(`\n🚀 Publishing to npm (dry-run: ${dryRun})...`);
 
@@ -591,26 +529,6 @@ async function publishNpm(dryRun = true) {
         );
       }
     }
-  }
-
-  // Publish the platform-independent WASM package (independent of the core's
-  // optionalDependencies — it is data delivery, not the binary).
-  if (existsSync(join(WASM_PACKAGE_DIR, WASM_FILENAME))) {
-    console.log("\nPublishing @datamitsu/datamitsu-wasm...");
-    const wasmResult = await execSafe(npmCommand, WASM_PACKAGE_DIR);
-    if (wasmResult.success) {
-      console.log("✓ Published @datamitsu/datamitsu-wasm");
-    } else {
-      console.error("✗ Failed to publish @datamitsu/datamitsu-wasm");
-      hasErrors = true;
-      if (!dryRun) {
-        throw new Error(
-          `Failed to publish @datamitsu/datamitsu-wasm: ${wasmResult.error?.message || "Unknown error"}`,
-        );
-      }
-    }
-  } else {
-    console.log("\n⚠️  WASM package not prepared (no .wasm bundled) — skipping its publish.");
   }
 
   // Publish main package last
@@ -777,10 +695,6 @@ async function main() {
       preparePlatformPackages();
       updateMainPackage();
 
-      // WASM (platform-independent) + parser manifest
-      cleanWasm();
-      prepareWasm();
-
       // Python
       cleanPython();
       preparePythonPackages();
@@ -804,7 +718,6 @@ async function main() {
 
     case "clean": {
       clean();
-      cleanWasm();
       break;
     }
 
@@ -812,8 +725,6 @@ async function main() {
       clean();
       preparePlatformPackages();
       updateMainPackage();
-      cleanWasm();
-      prepareWasm();
       break;
     }
 

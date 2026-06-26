@@ -84,6 +84,7 @@ checksum:
   # in the core binary (revise.txt §5.2).
   extra_files:
     - glob: ./parsers/target/wasm32-unknown-unknown/release/datamitsu_parsers.wasm
+      name_template: "datamitsu_parsers_{{ .Version }}.wasm"
   name_template: "checksums.txt"
 homebrew_casks:
   - binaries:
@@ -138,9 +139,13 @@ release:
   draft: false
   # Upload the built WASM parser module alongside the binaries so consumers can
   # download it from the GitHub Release; its integrity is verified against the
-  # signed checksums.txt entry added under `checksum.extra_files`.
+  # signed checksums.txt entry added under `checksum.extra_files`. The asset is
+  # versioned like the binaries (datamitsu_parsers_<version>.wasm) via
+  # name_template. This is the ONLY way the module ships — it is never bundled
+  # into the npm/Python/Ruby wrappers; the core downloads it by url+hash.
   extra_files:
     - glob: ./parsers/target/wasm32-unknown-unknown/release/datamitsu_parsers.wasm
+      name_template: "datamitsu_parsers_{{ .Version }}.wasm"
   github:
     name: datamitsu
     owner: datamitsu

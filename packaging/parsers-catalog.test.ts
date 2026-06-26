@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { type ParserCatalog, renderCatalogMarkdown } from "./parsers-catalog";
+import { type ParserCatalog, renderCatalogMarkdown } from "./parsers-catalog.ts";
 
 const sample: ParserCatalog = {
   tools: [
