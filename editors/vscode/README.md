@@ -17,6 +17,26 @@ there is none it downloads the version pinned to the extension build (verified b
 SHA-256). The extension activates only in a workspace that has a
 `datamitsu.config.{js,mjs,ts}`.
 
+## Usage
+
+Both triggers run the same thing — your project's `datamitsu fix` on the real
+file:
+
+- **Format Document** (`Shift+Alt+F`), or set datamitsu as the default formatter.
+- **On save** — enable format-on-save and pick datamitsu as the formatter:
+
+  ```jsonc
+  {
+    "editor.formatOnSave": true,
+    "[go]": { "editor.defaultFormatter": "datamitsu.datamitsu" },
+    "[typescript]": { "editor.defaultFormatter": "datamitsu.datamitsu" },
+  }
+  ```
+
+Because datamitsu's fix tools edit files in place, formatting runs on the file on
+disk and therefore **also saves it**. The edits are computed as the diff between
+your buffer and the fixed result, so the editor stays in sync.
+
 ## Settings
 
 | Setting                  | Default | Description                                                                                           |

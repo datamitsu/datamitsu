@@ -5,7 +5,6 @@ import (
 	"os"
 
 	"github.com/datamitsu/datamitsu/internal/lsp"
-	"github.com/datamitsu/datamitsu/internal/tooling"
 	"github.com/datamitsu/datamitsu/internal/traverser"
 	"github.com/datamitsu/datamitsu/internal/ui"
 	"github.com/datamitsu/datamitsu/internal/uievent"
@@ -17,11 +16,10 @@ var lspCmd = &cobra.Command{
 	Use:   "lsp",
 	Short: "Run a formatting-only LSP server over stdio",
 	Long: `Starts a Language Server Protocol server on stdin/stdout that formats
-documents with the project's configured fix tools plus datamitsu's in-core line
-diff. Both stdin->stdout formatters and in-place "--write" tools are supported:
-the unsaved buffer is formatted via a private temp copy outside the repo, so the
-real file is never written. It implements only textDocument/formatting — no
-diagnostics, no parsers.
+documents by running the project's configured fix on the real file (so every
+tool's own project/config detection matches "datamitsu fix"), then returning the
+diff as edits. A format persists the buffer to disk first, so it also saves the
+file. It implements only textDocument/formatting — no diagnostics, no parsers.
 
 stdout carries ONLY LSP JSON-RPC; all status/progress (including tool downloads)
 is emitted as JSON-L on stderr. (--verbose additionally writes plain-text debug
@@ -59,11 +57,6 @@ func runLsp(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
-
-	// Best-effort crash recovery: sweep in-place-format scratch dirs left by a
-	// prior session that died mid-format. Non-fatal — a failure just leaves stale
-	// temp dirs for the next sweep.
-	_ = tooling.CleanStaleFormatTempDirs()
 
 	srv := lsp.NewServer(os.Stdin, os.Stdout, cfg, root)
 	if err := srv.Run(ctx); err != nil {

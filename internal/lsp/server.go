@@ -8,20 +8,16 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
-
-	"go.uber.org/zap"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
-	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 	"github.com/datamitsu/datamitsu/internal/textdiff"
 	"github.com/datamitsu/datamitsu/internal/tooling"
 )
-
-var log = logger.Logger.With(zap.Namespace("lsp"))
 
 // Server is a minimal, formatting-only LSP server. It is single-threaded: the
 // read loop handles one message to completion (including any tool download) before
@@ -100,95 +96,85 @@ func (s *Server) Run(ctx context.Context) error {
 	}
 }
 
-// FormatFile turns one file's content into LSP TextEdits by composing every
-// applicable fix formatter for the file (the output of tool N feeds tool N+1),
-// then diffing original->final in core. It NEVER reads or writes the real file.
+// FormatFile formats one file by running the project's configured fix on the
+// REAL file, on disk, in its real location, then returning the diff as LSP
+// TextEdits. This is the only way every tool's own path/project detection
+// (nearest package.json/tsconfig, monorepo workspace, parser inference, ignore
+// files, ...) matches plain `datamitsu fix`: a tool fed a temp copy or stdin
+// would resolve against the wrong location and behave differently or skip the
+// file. datamitsu resolves each tool's working directory from the file's project
+// itself (the planner's cwd is the git root, so no subtree is dropped and
+// repository-scope tools still run), so the caller only passes the path.
 //
-// Two formatter shapes are supported, both fed the in-memory buffer (so an
-// unsaved editor buffer formats correctly):
-//   - stdin->stdout tools run fully in memory (FormatContent), no disk touch;
-//   - in-place tools (e.g. `--write {file}`) run against a private temp copy
-//     OUTSIDE the repo (FormatFileInPlace); the {file}/{files} placeholder is
-//     redirected to that copy while the working dir stays at the real project so
-//     config discovery is unaffected.
-//
-// A tool that is neither output:stdout nor references {file}/{files} cannot be
-// redirected off the real tree (it would format the whole project / real files),
-// so it is skipped. A single tool failing is logged and skipped rather than
-// aborting the whole format. Returns an empty (non-nil) slice when nothing
-// applies or the content is already formatted.
+// Because in-place tools must see the file on disk, the (possibly unsaved) editor
+// buffer is persisted to the real file first — i.e. formatting saves the file, as
+// the user explicitly chose. The original buffer is diffed against the fixed
+// on-disk result and the editor converges its buffer to that result. Returns an
+// empty (non-nil) slice when no tool applies or the file is already clean.
 func (s *Server) FormatFile(ctx context.Context, absPath string, content []byte) ([]TextEdit, error) {
 	plan, err := s.planner.Plan(ctx, config.OpFix, []string{absPath}, nil)
 	if err != nil {
 		return nil, fmt.Errorf("plan fix for %s: %w", absPath, err)
 	}
 
-	// Collect formattable fix tasks in plan order (priority groups, then task
-	// order). inPlace records how each runs so the compose loop need not re-derive
-	// it; apps is the distinct set to install.
-	type formatTask struct {
-		task    tooling.Task
-		inPlace bool
+	apps := planApps(plan)
+	if len(apps) == 0 {
+		return []TextEdit{}, nil // no fix tool applies to this file
 	}
-	var tasks []formatTask
+
+	// Auto-install/verify the tools the plan needs (download progress streams to
+	// stderr as JSON-L for the status bar).
+	if err := s.binMgr.EnsureTools(ctx, apps); err != nil {
+		return nil, fmt.Errorf("ensure tools installed: %w", err)
+	}
+
+	// Defense in depth: only ever write a document inside the workspace. The
+	// planner already yields no tasks for a path outside the git root, but guard
+	// the write explicitly so a crafted file:// URI can never make us write
+	// elsewhere on disk.
+	rel, relErr := filepath.Rel(s.root, absPath)
+	if relErr != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return nil, fmt.Errorf("refusing to format %s: outside workspace root", absPath)
+	}
+
+	// Persist the buffer to the real file (preserving its mode) so in-place tools
+	// operate on the live content, then run the fix and read the result back.
+	perm := os.FileMode(0o644)
+	if info, statErr := os.Stat(absPath); statErr == nil {
+		perm = info.Mode().Perm()
+	}
+	//nolint:gosec // absPath is the editor's document URI, validated just above to be inside the workspace root
+	if err := os.WriteFile(absPath, content, perm); err != nil {
+		return nil, fmt.Errorf("write buffer to %s: %w", absPath, err)
+	}
+
+	// failFast is off, so Execute runs the whole plan and returns a nil error even
+	// when individual tools fail; we surface whatever ended up on disk.
+	if _, err := s.executor.Execute(ctx, plan); err != nil {
+		return nil, fmt.Errorf("fix %s: %w", absPath, err)
+	}
+
+	fixed, err := os.ReadFile(absPath)
+	if err != nil {
+		return nil, fmt.Errorf("read fixed %s: %w", absPath, err)
+	}
+
+	return toTextEdits(textdiff.ComputeEdits(string(content), string(fixed)))
+}
+
+// planApps returns the distinct apps a plan needs, in first-seen order.
+func planApps(plan *tooling.ExecutionPlan) []string {
 	seen := make(map[string]struct{})
 	var apps []string
 	for _, group := range plan.Groups {
 		for _, task := range group.Tasks {
-			stdoutMode := task.OpConfig.Output == config.ToolOutputStdout && task.OpConfig.Input == config.ToolInputStdin
-			inPlace := !stdoutMode && hasFilePlaceholder(task.OpConfig.Args)
-			if !stdoutMode && !inPlace {
-				log.Debug("lsp format: skipping non-redirectable tool", zap.String("tool", task.ToolName))
-				continue
-			}
-			tasks = append(tasks, formatTask{task: task, inPlace: inPlace})
 			if _, dup := seen[task.OpConfig.App]; !dup {
 				seen[task.OpConfig.App] = struct{}{}
 				apps = append(apps, task.OpConfig.App)
 			}
 		}
 	}
-	if len(tasks) == 0 {
-		return []TextEdit{}, nil
-	}
-
-	// Auto-install/verify the formatters (download progress streams to stderr
-	// JSON-L). Only the apps we will actually run, not the whole fix plan.
-	if err := s.binMgr.EnsureTools(ctx, apps); err != nil {
-		return nil, fmt.Errorf("ensure formatters installed: %w", err)
-	}
-
-	current := content
-	for _, ft := range tasks {
-		var next []byte
-		var fmtErr error
-		if ft.inPlace {
-			next, fmtErr = s.executor.FormatFileInPlace(ctx, ft.task, absPath, current)
-		} else {
-			next, _, fmtErr = s.executor.FormatContent(ctx, ft.task, absPath, current)
-		}
-		if fmtErr != nil {
-			// One formatter failing must not abort the whole format: skip it and
-			// keep composing from the last good content.
-			log.Warn("lsp format: formatter failed, skipping", zap.String("tool", ft.task.ToolName), zap.Error(fmtErr))
-			continue
-		}
-		current = next
-	}
-
-	return toTextEdits(textdiff.ComputeEdits(string(content), string(current)))
-}
-
-// hasFilePlaceholder reports whether any arg references the per-file placeholder
-// ({file} or {files}) — i.e. the tool can be redirected from the real file to a
-// temp copy for in-place formatting.
-func hasFilePlaceholder(args []string) bool {
-	for _, a := range args {
-		if strings.Contains(a, "{file}") || strings.Contains(a, "{files}") {
-			return true
-		}
-	}
-	return false
+	return apps
 }
 
 // handle dispatches one message and reports whether the loop should stop.
