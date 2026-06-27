@@ -16,9 +16,10 @@ var lspCmd = &cobra.Command{
 	Use:   "lsp",
 	Short: "Run a formatting-only LSP server over stdio",
 	Long: `Starts a Language Server Protocol server on stdin/stdout that formats
-documents with the project's configured fix tools (the stdin->stdout formatter
-contract) plus datamitsu's in-core line diff. It implements only
-textDocument/formatting — no diagnostics, no parsers.
+documents by running the project's configured fix on the real file (so every
+tool's own project/config detection matches "datamitsu fix"), then returning the
+diff as edits. A format persists the buffer to disk first, so it also saves the
+file. It implements only textDocument/formatting — no diagnostics, no parsers.
 
 stdout carries ONLY LSP JSON-RPC; all status/progress (including tool downloads)
 is emitted as JSON-L on stderr. (--verbose additionally writes plain-text debug

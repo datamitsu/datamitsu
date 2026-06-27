@@ -611,6 +611,71 @@ jobs:
           cd packaging/ruby
           gem push *.gem
           echo "RubyGems publishing completed"
+  publish-vscode:
+    environment: vscode-marketplace
+    if: |
+      always() &&
+      !cancelled() &&
+      needs.build.result == 'success' &&
+      needs.determine-release-type.outputs.is_stable == 'true' &&
+      !contains(needs.validate-stable.outputs.version, '-rc.')
+    name: Publish VS Code extension
+    needs:
+      - build
+      - determine-release-type
+      - validate-stable
+    permissions:
+      contents: write
+      id-token: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ needs.determine-release-type.outputs.checkout_ref }}
+      - uses: ./.github/actions/setup-environment
+        with:
+          setup-go: "false"
+      - if: ${{ !env.ACT }}
+        name: Download build artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-artifacts
+          path: .
+      - if: ${{ !env.ACT }}
+        name: Azure login (federated OIDC for Marketplace)
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
+        with:
+          allow-no-subscriptions: true
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        if: ${{ !env.ACT }}
+        name: Bake hashes, build, package, and publish extension
+        run: |
+          VERSION_WITH_V="${{ needs.validate-stable.outputs.version }}"
+          export VERSION="${VERSION_WITH_V#v}"
+          # Bake the binary url+SHA-256 (from the released checksums.txt), pin the
+          # extension version to the release, and build the CJS bundle.
+          pnpm --filter "./editors/vscode" codegen
+          (cd editors/vscode && npm pkg set version="$VERSION")
+          pnpm --filter "./editors/vscode" build
+          # Package the .vsix (CI's pnpm store is clean, so vsce runs directly).
+          pnpm --filter "./editors/vscode" exec vsce package --no-dependencies -o "dist/datamitsu-$VERSION.vsix"
+          # Absolute path: the ovsx/vsce publish commands below run via
+          # `pnpm --filter` with CWD=editors/vscode, so a repo-relative path would
+          # not resolve there. gh (CWD=repo root) accepts the absolute path too.
+          VSIX="$GITHUB_WORKSPACE/editors/vscode/dist/datamitsu-$VERSION.vsix"
+          # Upload the .vsix to the GitHub Release that GoReleaser created.
+          gh release upload "v$VERSION" "$VSIX" --clobber
+          # Publish to Open VSX (namespace created once; tolerate "already exists").
+          pnpm --filter "./editors/vscode" exec ovsx create-namespace datamitsu -p "$OVSX_PAT" || true
+          pnpm --filter "./editors/vscode" exec ovsx publish "$VSIX" -p "$OVSX_PAT"
+          # Publish the same .vsix to the Microsoft VS Code Marketplace via Entra
+          # OIDC — the azure/login step above set up the Azure CLI session that
+          # `vsce --azure-credential` consumes (no PAT, no secret).
+          pnpm --filter "./editors/vscode" exec vsce publish --packagePath "$VSIX" --azure-credential
   validate-stable:
     if: |
       always() &&

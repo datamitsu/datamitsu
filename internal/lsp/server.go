@@ -1,6 +1,7 @@
 package lsp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -8,10 +9,17 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"path/filepath"
+	"strings"
+
+	"go.uber.org/zap"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/cache"
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
+	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 	"github.com/datamitsu/datamitsu/internal/textdiff"
 	"github.com/datamitsu/datamitsu/internal/tooling"
@@ -27,6 +35,7 @@ type Server struct {
 	planner  *tooling.Planner
 	binMgr   *binmanager.BinManager
 	executor *tooling.Executor
+	cache    *cache.Cache // nil when the cache could not be built (formatting still works)
 
 	docs map[string][]byte // open documents: uri -> current full text
 
@@ -36,13 +45,19 @@ type Server struct {
 }
 
 // NewServer builds a formatting-only server over r/w using cfg. It assembles its
-// OWN lightweight planner+binManager+executor (no cache, no parser, no UI) so a
-// format request never writes files, parses diagnostics, or prints to stdout.
+// OWN lightweight planner+binManager+executor (no parser, no UI) so a format
+// request never parses diagnostics or prints to stdout.
 //
 // The planner's cwd is set to the git root, NOT the process launch directory: an
 // editor selects which file to format from anywhere in the workspace, so the
 // CLI's CWD-subtree restriction (which would silently drop files outside the
 // launch dir) is wrong here — any file under the repo root is formattable.
+//
+// It shares the SAME execution cache the CLI uses (keyed on the git root, with
+// matching invalidation key), so formatting a file in the editor warms the
+// per-file fix cache and a later `datamitsu fix`/`check` can skip that unchanged
+// file. Only per-file/globbed tools benefit — whole-project tools (e.g.
+// golangci-lint fmt) the CLI always runs in bulk and never looks up per file.
 func NewServer(r io.Reader, w io.Writer, cfg *config.Config, root string) *Server {
 	rm := runtimemanager.New(cfg.Runtimes)
 	binMgr := binmanager.New(cfg.Apps, cfg.Bundles, rm)
@@ -50,14 +65,47 @@ func NewServer(r io.Reader, w io.Writer, cfg *config.Config, root string) *Serve
 	planner := tooling.NewPlanner(root, root, nil, cfg.Tools, cfg.ProjectTypes, cfg.IgnoreRules)
 	planner.SetPlatformChecker(binMgr)
 
+	// Build the same cache the CLI runner does so keys/paths align. selectedTools
+	// is nil — the LSP, like the lefthook `check`, runs the full tool set, so the
+	// invalidation keys match and entries are shared. A build failure is non-fatal:
+	// formatting just runs without caching.
+	projectCache, err := cache.NewCache(env.GetCachePath(), root, *cfg, invalidateOnFiles(cfg), nil, logger.Logger)
+	if err != nil {
+		logger.Logger.Warn("lsp: cache unavailable, formatting without it", zap.Error(err))
+		projectCache = nil
+	}
+
 	return &Server{
 		conn:     newConn(r, w),
 		root:     root,
 		planner:  planner,
 		binMgr:   binMgr,
-		executor: tooling.NewExecutor(root, false, false, binMgr, nil),
+		executor: tooling.NewExecutor(root, false, false, binMgr, projectCache),
+		cache:    projectCache,
 		docs:     make(map[string][]byte),
 	}
+}
+
+// invalidateOnFiles mirrors the runner's createCache: collect each tool's
+// InvalidateOn paths so the cache's invalidation key matches the CLI's exactly.
+func invalidateOnFiles(cfg *config.Config) map[string][]string {
+	out := make(map[string][]string)
+	for toolName, tool := range cfg.Tools {
+		seen := make(map[string]struct{})
+		var files []string
+		for _, op := range tool.Operations {
+			for _, f := range op.InvalidateOn {
+				if _, dup := seen[f]; !dup {
+					seen[f] = struct{}{}
+					files = append(files, f)
+				}
+			}
+		}
+		if len(files) > 0 {
+			out[toolName] = files
+		}
+	}
+	return out
 }
 
 // ExitCode is the process exit code the caller should honor after Run returns:
@@ -71,6 +119,10 @@ func (s *Server) ExitCode() int { return s.exitCode }
 // message must not tear down the language server). It never writes anything but
 // framed JSON-RPC to its writer.
 func (s *Server) Run(ctx context.Context) error {
+	// Flush + stop the cache's debounce goroutine when the session ends.
+	if s.cache != nil {
+		defer s.cache.Shutdown()
+	}
 	for {
 		body, err := s.conn.readFrame()
 		if err != nil {
@@ -94,55 +146,146 @@ func (s *Server) Run(ctx context.Context) error {
 	}
 }
 
-// FormatFile turns one file's content into LSP TextEdits by composing every
-// applicable stdin->stdout fix formatter (output of tool N feeds tool N+1), then
-// diffing original->final in core. It NEVER writes the file. Tools with in-place
-// (non-stdout) fix operations are skipped — only the stdout/stdin formatter
-// contract is LSP-formattable. Returns an empty (non-nil) slice when nothing
-// applies or the content is already formatted.
+// FormatFile formats one file by running the project's configured fix on the
+// REAL file, on disk, in its real location, then reflecting the result back to
+// the editor. This is the only way every tool's own path/project detection
+// (nearest package.json/tsconfig, monorepo workspace, parser inference, ignore
+// files, ...) matches plain `datamitsu fix`: a tool fed a temp copy or stdin
+// would resolve against the wrong location and behave differently or skip the
+// file. datamitsu resolves each tool's working directory from the file's project
+// itself (the planner's cwd is the git root, so no subtree is dropped and
+// repository-scope tools still run), so the caller only passes the path.
+//
+// In-place tools must see the file on disk, so the result is delivered one of two
+// ways depending on whether the editor buffer already matches disk:
+//   - buffer == disk (saved / unedited): fix the file as-is and return NO edits.
+//     The editor reloads the changed file into its clean buffer, so formatting
+//     neither dirties the buffer nor forces a second save.
+//   - buffer != disk (unsaved edits, including the format-on-save path): persist
+//     the buffer first, then return the diff buffer->fixed so the editor applies
+//     it before writing its own save.
+//
+// Returns an empty (non-nil) slice when no tool applies or nothing changed.
 func (s *Server) FormatFile(ctx context.Context, absPath string, content []byte) ([]TextEdit, error) {
 	plan, err := s.planner.Plan(ctx, config.OpFix, []string{absPath}, nil)
 	if err != nil {
 		return nil, fmt.Errorf("plan fix for %s: %w", absPath, err)
 	}
+	scopeTasksToFile(plan, absPath)
 
-	// Collect stdin->stdout formatter tasks in plan order (priority groups, then
-	// task order), plus the distinct apps to install.
-	var tasks []tooling.Task
+	apps := planApps(plan)
+	if len(apps) == 0 {
+		return []TextEdit{}, nil // no fix tool applies to this file
+	}
+
+	// Auto-install/verify the tools the plan needs (download progress streams to
+	// stderr as JSON-L for the status bar).
+	if err := s.binMgr.EnsureTools(ctx, apps); err != nil {
+		return nil, fmt.Errorf("ensure tools installed: %w", err)
+	}
+
+	// Defense in depth: never touch a path outside the workspace root, whatever
+	// URI the editor sent (the planner would also yield no tasks for it).
+	rel, relErr := filepath.Rel(s.root, absPath)
+	if relErr != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return nil, fmt.Errorf("refusing to format %s: outside workspace root", absPath)
+	}
+
+	// clean = the editor's buffer already matches the file on disk; then the editor
+	// will reload our fix and stay non-dirty, so we return no edits below.
+	diskBefore, _ := os.ReadFile(absPath) // missing/unreadable -> treat as dirty
+	clean := bytes.Equal(content, diskBefore)
+
+	if !clean {
+		// Persist the unsaved buffer (preserving mode) so in-place tools operate on
+		// the live content rather than the stale on-disk version.
+		perm := os.FileMode(0o644)
+		if info, statErr := os.Stat(absPath); statErr == nil {
+			perm = info.Mode().Perm()
+		}
+		//nolint:gosec // absPath is the editor's document URI, validated just above to be inside the workspace root
+		if err := os.WriteFile(absPath, content, perm); err != nil {
+			return nil, fmt.Errorf("write buffer to %s: %w", absPath, err)
+		}
+	}
+
+	// failFast is off, so Execute runs the whole plan and returns a nil error even
+	// when individual tools fail; we surface whatever ended up on disk.
+	if _, err := s.executor.Execute(ctx, plan); err != nil {
+		return nil, fmt.Errorf("fix %s: %w", absPath, err)
+	}
+
+	// Flush the cache synchronously: a format is a discrete, low-frequency event,
+	// so don't rely on the 100ms debounce (the server may exit before it fires).
+	// Best-effort — a failed save only costs a redundant re-run later.
+	if s.cache != nil {
+		if err := s.cache.Save(); err != nil {
+			logger.Logger.Warn("lsp: cache save failed", zap.Error(err))
+		}
+	}
+
+	if clean {
+		// The editor reloads the fixed file into its clean buffer; returning edits
+		// here would re-dirty it and force a redundant save.
+		return []TextEdit{}, nil
+	}
+
+	fixed, err := os.ReadFile(absPath)
+	if err != nil {
+		return nil, fmt.Errorf("read fixed %s: %w", absPath, err)
+	}
+	return toTextEdits(textdiff.ComputeEdits(string(content), string(fixed)))
+}
+
+// scopeTasksToFile narrows every task in the plan to the single target file.
+// datamitsu config tools are typically batch/repository-scoped (e.g.
+// `golangci-lint fmt` over the whole module), which is right for the CLI but
+// O(repo) per format in an editor — ~80x slower than formatting one file. Tasks
+// that reference {file}/{files} are already scoped by the planner; a task without
+// a file placeholder would run over the whole module, so we append the target
+// path (turning `golangci-lint fmt` into `golangci-lint fmt <file>`) and pin
+// Files to it.
+func scopeTasksToFile(plan *tooling.ExecutionPlan, absPath string) {
+	for gi := range plan.Groups {
+		for ti := range plan.Groups[gi].Tasks {
+			task := &plan.Groups[gi].Tasks[ti]
+			task.Files = []string{absPath}
+			if hasFilePlaceholder(task.OpConfig.Args) {
+				continue // the planner already substitutes the file here
+			}
+			// Clone before appending so we never mutate the shared config slice.
+			args := make([]string, len(task.OpConfig.Args)+1)
+			copy(args, task.OpConfig.Args)
+			args[len(args)-1] = absPath
+			task.OpConfig.Args = args
+		}
+	}
+}
+
+// hasFilePlaceholder reports whether any arg references the per-file placeholder
+// ({file} or {files}), i.e. the planner already targets this task at the file.
+func hasFilePlaceholder(args []string) bool {
+	for _, a := range args {
+		if strings.Contains(a, "{file}") || strings.Contains(a, "{files}") {
+			return true
+		}
+	}
+	return false
+}
+
+// planApps returns the distinct apps a plan needs, in first-seen order.
+func planApps(plan *tooling.ExecutionPlan) []string {
 	seen := make(map[string]struct{})
 	var apps []string
 	for _, group := range plan.Groups {
 		for _, task := range group.Tasks {
-			if task.OpConfig.Output != config.ToolOutputStdout || task.OpConfig.Input != config.ToolInputStdin {
-				continue
-			}
-			tasks = append(tasks, task)
 			if _, dup := seen[task.OpConfig.App]; !dup {
 				seen[task.OpConfig.App] = struct{}{}
 				apps = append(apps, task.OpConfig.App)
 			}
 		}
 	}
-	if len(tasks) == 0 {
-		return []TextEdit{}, nil
-	}
-
-	// Auto-install/verify the formatters (download progress streams to stderr
-	// JSON-L). Only the apps we will actually run, not the whole fix plan.
-	if err := s.binMgr.EnsureTools(ctx, apps); err != nil {
-		return nil, fmt.Errorf("ensure formatters installed: %w", err)
-	}
-
-	current := content
-	for _, task := range tasks {
-		candidate, _, fmtErr := s.executor.FormatContent(ctx, task, absPath, current)
-		if fmtErr != nil {
-			return nil, fmt.Errorf("format with %s: %w", task.ToolName, fmtErr)
-		}
-		current = candidate
-	}
-
-	return toTextEdits(textdiff.ComputeEdits(string(content), string(current)))
+	return apps
 }
 
 // handle dispatches one message and reports whether the loop should stop.
