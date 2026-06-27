@@ -662,7 +662,13 @@ jobs:
           (cd editors/vscode && npm pkg set version="$VERSION")
           pnpm --filter "./editors/vscode" build
           # Package the .vsix (CI's pnpm store is clean, so vsce runs directly).
-          pnpm --filter "./editors/vscode" exec vsce package --no-dependencies -o "dist/datamitsu-$VERSION.vsix"
+          # --allow-package-all-secrets/--allow-package-env-file disable vsce's
+          # built-in secret scanner: under pnpm's isolated node_modules it cannot
+          # resolve its own @secretlint/* rule modules from editors/vscode and
+          # crashes on load. The scan is redundant anyway — the .vsix ships only
+          # the bundled extension.cjs + static metadata, and the repo already runs
+          # secretlint + gitleaks via `datamitsu check`.
+          pnpm --filter "./editors/vscode" exec vsce package --allow-package-all-secrets --allow-package-env-file --no-dependencies -o "dist/datamitsu-$VERSION.vsix"
           # Absolute path: the ovsx/vsce publish commands below run via
           # `pnpm --filter` with CWD=editors/vscode, so a repo-relative path would
           # not resolve there. gh (CWD=repo root) accepts the absolute path too.
