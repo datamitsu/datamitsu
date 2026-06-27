@@ -12,9 +12,14 @@ import (
 	"path/filepath"
 	"strings"
 
+	"go.uber.org/zap"
+
 	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/cache"
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
+	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 	"github.com/datamitsu/datamitsu/internal/textdiff"
 	"github.com/datamitsu/datamitsu/internal/tooling"
@@ -30,6 +35,7 @@ type Server struct {
 	planner  *tooling.Planner
 	binMgr   *binmanager.BinManager
 	executor *tooling.Executor
+	cache    *cache.Cache // nil when the cache could not be built (formatting still works)
 
 	docs map[string][]byte // open documents: uri -> current full text
 
@@ -39,13 +45,19 @@ type Server struct {
 }
 
 // NewServer builds a formatting-only server over r/w using cfg. It assembles its
-// OWN lightweight planner+binManager+executor (no cache, no parser, no UI) so a
-// format request never writes files, parses diagnostics, or prints to stdout.
+// OWN lightweight planner+binManager+executor (no parser, no UI) so a format
+// request never parses diagnostics or prints to stdout.
 //
 // The planner's cwd is set to the git root, NOT the process launch directory: an
 // editor selects which file to format from anywhere in the workspace, so the
 // CLI's CWD-subtree restriction (which would silently drop files outside the
 // launch dir) is wrong here — any file under the repo root is formattable.
+//
+// It shares the SAME execution cache the CLI uses (keyed on the git root, with
+// matching invalidation key), so formatting a file in the editor warms the
+// per-file fix cache and a later `datamitsu fix`/`check` can skip that unchanged
+// file. Only per-file/globbed tools benefit — whole-project tools (e.g.
+// golangci-lint fmt) the CLI always runs in bulk and never looks up per file.
 func NewServer(r io.Reader, w io.Writer, cfg *config.Config, root string) *Server {
 	rm := runtimemanager.New(cfg.Runtimes)
 	binMgr := binmanager.New(cfg.Apps, cfg.Bundles, rm)
@@ -53,14 +65,47 @@ func NewServer(r io.Reader, w io.Writer, cfg *config.Config, root string) *Serve
 	planner := tooling.NewPlanner(root, root, nil, cfg.Tools, cfg.ProjectTypes, cfg.IgnoreRules)
 	planner.SetPlatformChecker(binMgr)
 
+	// Build the same cache the CLI runner does so keys/paths align. selectedTools
+	// is nil — the LSP, like the lefthook `check`, runs the full tool set, so the
+	// invalidation keys match and entries are shared. A build failure is non-fatal:
+	// formatting just runs without caching.
+	projectCache, err := cache.NewCache(env.GetCachePath(), root, *cfg, invalidateOnFiles(cfg), nil, logger.Logger)
+	if err != nil {
+		logger.Logger.Warn("lsp: cache unavailable, formatting without it", zap.Error(err))
+		projectCache = nil
+	}
+
 	return &Server{
 		conn:     newConn(r, w),
 		root:     root,
 		planner:  planner,
 		binMgr:   binMgr,
-		executor: tooling.NewExecutor(root, false, false, binMgr, nil),
+		executor: tooling.NewExecutor(root, false, false, binMgr, projectCache),
+		cache:    projectCache,
 		docs:     make(map[string][]byte),
 	}
+}
+
+// invalidateOnFiles mirrors the runner's createCache: collect each tool's
+// InvalidateOn paths so the cache's invalidation key matches the CLI's exactly.
+func invalidateOnFiles(cfg *config.Config) map[string][]string {
+	out := make(map[string][]string)
+	for toolName, tool := range cfg.Tools {
+		seen := make(map[string]struct{})
+		var files []string
+		for _, op := range tool.Operations {
+			for _, f := range op.InvalidateOn {
+				if _, dup := seen[f]; !dup {
+					seen[f] = struct{}{}
+					files = append(files, f)
+				}
+			}
+		}
+		if len(files) > 0 {
+			out[toolName] = files
+		}
+	}
+	return out
 }
 
 // ExitCode is the process exit code the caller should honor after Run returns:
@@ -74,6 +119,10 @@ func (s *Server) ExitCode() int { return s.exitCode }
 // message must not tear down the language server). It never writes anything but
 // framed JSON-RPC to its writer.
 func (s *Server) Run(ctx context.Context) error {
+	// Flush + stop the cache's debounce goroutine when the session ends.
+	if s.cache != nil {
+		defer s.cache.Shutdown()
+	}
 	for {
 		body, err := s.conn.readFrame()
 		if err != nil {
@@ -164,6 +213,15 @@ func (s *Server) FormatFile(ctx context.Context, absPath string, content []byte)
 	// when individual tools fail; we surface whatever ended up on disk.
 	if _, err := s.executor.Execute(ctx, plan); err != nil {
 		return nil, fmt.Errorf("fix %s: %w", absPath, err)
+	}
+
+	// Flush the cache synchronously: a format is a discrete, low-frequency event,
+	// so don't rely on the 100ms debounce (the server may exit before it fires).
+	// Best-effort — a failed save only costs a redundant re-run later.
+	if s.cache != nil {
+		if err := s.cache.Save(); err != nil {
+			logger.Logger.Warn("lsp: cache save failed", zap.Error(err))
+		}
 	}
 
 	if clean {
