@@ -136,7 +136,14 @@ nfpms:
     section: utils
     vendor: datamitsu
 release:
-  draft: false
+  # Created as a draft so the release workflow can attach the VS Code extension
+  # .vsix (built after GoReleaser, since its codegen bakes each binary archive's
+  # SHA-256 from the just-generated checksums.txt) before publishing. GitHub
+  # immutable releases forbid adding assets post-publish, so the asset must be in
+  # place at publish time; the workflow flips draft -> published right after the
+  # .vsix is uploaded. For --snapshot (unstable) runs GoReleaser does not publish
+  # at all, so this setting only affects stable tag releases.
+  draft: true
   # Upload the built WASM parser module alongside the binaries so consumers can
   # download it from the GitHub Release; its integrity is verified against the
   # signed checksums.txt entry added under `checksum.extra_files`. The asset is

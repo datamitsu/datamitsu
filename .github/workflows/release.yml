@@ -85,6 +85,40 @@ jobs:
         uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
         with:
           subject-checksums: ./dist/checksums.txt
+      # 3a. Build the VS Code extension .vsix and attach it to the (draft)
+      #     release. This MUST run after GoReleaser: codegen bakes each binary
+      #     archive's SHA-256 from the just-generated dist/checksums.txt, so the
+      #     .vsix can only be built now — and GitHub immutable releases forbid
+      #     adding assets after publish, so it must be attached before the draft
+      #     is flipped to published (next step). Non-rc stable only; the
+      #     publish-vscode job later pushes this same .vsix to the stores. The
+      #     .vsix lands in dist/ so it also rides along in release-artifacts.
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION_WITH_V: ${{ needs.validate-stable.outputs.version }}
+        if: ${{ !env.ACT && needs.determine-release-type.outputs.is_stable == 'true' && !contains(needs.validate-stable.outputs.version, '-rc.') }}
+        name: Build + attach VS Code extension to release
+        run: |
+          export VERSION="${VERSION_WITH_V#v}"
+          pnpm --filter "./editors/vscode" codegen
+          (cd editors/vscode && npm pkg set version="$VERSION")
+          pnpm --filter "./editors/vscode" build
+          # --allow-package-all-secrets/--allow-package-env-file skip vsce's
+          # built-in secret scanner: under pnpm's isolated node_modules it cannot
+          # resolve its own @secretlint/* rule modules and crashes on load. The
+          # .vsix ships only the bundled extension.cjs + static metadata, and the
+          # repo already scans secrets via `datamitsu check` (secretlint + gitleaks).
+          pnpm --filter "./editors/vscode" exec vsce package --allow-package-all-secrets --allow-package-env-file --no-dependencies -o "$GITHUB_WORKSPACE/dist/datamitsu-$VERSION.vsix"
+          gh release upload "$VERSION_WITH_V" "$GITHUB_WORKSPACE/dist/datamitsu-$VERSION.vsix" --clobber
+      # 3b. Publish the release (flip draft -> published). Runs for every stable
+      #     release, including rc tags that skip the .vsix step above, so the
+      #     binaries never get stranded in a draft.
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION_WITH_V: ${{ needs.validate-stable.outputs.version }}
+        if: ${{ !env.ACT && needs.determine-release-type.outputs.is_stable == 'true' }}
+        name: Publish GitHub release (flip draft to published)
+        run: gh release edit "$VERSION_WITH_V" --draft=false
       # 4. Normalize binaries
       - name: Normalize binaries
         run: .github/scripts/normalize-binaries.sh "${{ needs.determine-release-type.outputs.is_unstable }}"
@@ -625,7 +659,9 @@ jobs:
       - determine-release-type
       - validate-stable
     permissions:
-      contents: write
+      # Reads the release-artifacts workflow artifact (built .vsix) and publishes
+      # to the stores via OIDC — it no longer writes to the GitHub Release.
+      contents: read
       id-token: write
     runs-on: ubuntu-latest
     steps:
@@ -649,37 +685,20 @@ jobs:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
       - env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OVSX_PAT: ${{ secrets.OVSX_PAT }}
         if: ${{ !env.ACT }}
-        name: Bake hashes, build, package, and publish extension
+        name: Publish extension to Marketplace + Open VSX
         run: |
           VERSION_WITH_V="${{ needs.validate-stable.outputs.version }}"
           export VERSION="${VERSION_WITH_V#v}"
-          # Bake the binary url+SHA-256 (from the released checksums.txt), pin the
-          # extension version to the release, and build the CJS bundle.
-          pnpm --filter "./editors/vscode" codegen
-          (cd editors/vscode && npm pkg set version="$VERSION")
-          pnpm --filter "./editors/vscode" build
-          # Package the .vsix (CI's pnpm store is clean, so vsce runs directly).
-          # --allow-package-all-secrets/--allow-package-env-file disable vsce's
-          # built-in secret scanner: under pnpm's isolated node_modules it cannot
-          # resolve its own @secretlint/* rule modules from editors/vscode and
-          # crashes on load. The scan is redundant anyway — the .vsix ships only
-          # the bundled extension.cjs + static metadata, and the repo already runs
-          # secretlint + gitleaks via `datamitsu check`.
-          pnpm --filter "./editors/vscode" exec vsce package --allow-package-all-secrets --allow-package-env-file --no-dependencies -o "dist/datamitsu-$VERSION.vsix"
-          # Absolute path: the ovsx/vsce publish commands below run via
-          # `pnpm --filter` with CWD=editors/vscode, so a repo-relative path would
-          # not resolve there. gh (CWD=repo root) accepts the absolute path too.
-          VSIX="$GITHUB_WORKSPACE/editors/vscode/dist/datamitsu-$VERSION.vsix"
-          # Upload the .vsix to the GitHub Release that GoReleaser created.
-          gh release upload "v$VERSION" "$VSIX" --clobber
+          # The .vsix was built and attached to the release by the build job; it
+          # arrives here inside the release-artifacts download at dist/.
+          VSIX="$GITHUB_WORKSPACE/dist/datamitsu-$VERSION.vsix"
           # Publish to Open VSX (namespace created once; tolerate "already exists").
           pnpm --filter "./editors/vscode" exec ovsx create-namespace datamitsu -p "$OVSX_PAT" || true
           pnpm --filter "./editors/vscode" exec ovsx publish "$VSIX" -p "$OVSX_PAT"
-          # Publish the same .vsix to the Microsoft VS Code Marketplace via Entra
-          # OIDC — the azure/login step above set up the Azure CLI session that
+          # Publish to the Microsoft VS Code Marketplace via Entra OIDC — the
+          # azure/login step above set up the Azure CLI session that
           # `vsce --azure-credential` consumes (no PAT, no secret).
           pnpm --filter "./editors/vscode" exec vsce publish --packagePath "$VSIX" --azure-credential
   validate-stable:
