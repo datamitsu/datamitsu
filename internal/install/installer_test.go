@@ -1149,14 +1149,78 @@ func TestGenerateContentWithContext(t *testing.T) {
 	originalContent := "old"
 	existingPath := "/tmp/old.yml"
 
-	content, err := installer.generateContent(context.Background(), cfg, &existingContent, &originalContent, &existingPath)
+	content, skip, err := installer.generateContent(context.Background(), cfg, &existingContent, &originalContent, &existingPath)
 	if err != nil {
 		t.Fatalf("generateContent() error = %v", err)
+	}
+	if skip {
+		t.Fatal("generateContent() unexpectedly signaled skip")
 	}
 
 	expected := tmpDir + ":" + cwdDir
 	if content != expected {
 		t.Errorf("content = %q, want %q", content, expected)
+	}
+}
+
+// A content() returning undefined is an explicit opt-out: the file is skipped
+// (not errored, not written). This backs the "manage only if it already exists"
+// generator pattern (e.g. dependabot).
+func TestInstallConfigSkipsOnUndefinedContent(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	vm := goja.New()
+	_ = vm.Set("contentFunc", func(_ goja.Value) goja.Value { return goja.Undefined() })
+	contentFunc := vm.Get("contentFunc")
+
+	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfConfigSetup{}, vm, nil)
+	cfg := config.ConfigSetup{Content: contentFunc}
+
+	result := installer.installConfig(context.Background(), "opt-out.yml", cfg, false)
+	if result.Error != nil {
+		t.Fatalf("installConfig() error = %v, want nil (undefined is opt-out, not error)", result.Error)
+	}
+	if result.Action != "skipped" {
+		t.Errorf("Action = %q, want %q", result.Action, "skipped")
+	}
+	if _, err := os.Stat(filepath.Join(tmpDir, "opt-out.yml")); !os.IsNotExist(err) {
+		t.Errorf("opt-out.yml should not have been written, stat err = %v", err)
+	}
+}
+
+// content() receives the detected project context: projectTypes plus
+// projectLocations ({type, path} relative to the git root).
+func TestGenerateContentExposesProjectContext(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	vm := goja.New()
+	if _, err := vm.RunString(
+		`function contentFunc(ctx){` +
+			`var p = ctx.projectLocations;` +
+			`return p.length + "|" + p[0].type + "@" + p[0].path + "|" + ctx.projectTypes.join(",");` +
+			`}`,
+	); err != nil {
+		t.Fatalf("failed to define contentFunc: %v", err)
+	}
+	contentFunc := vm.Get("contentFunc")
+
+	installer := NewInstaller(tmpDir, tmpDir, []string{"golang-package", "npm-package"}, nil, config.MapOfConfigSetup{}, vm, nil)
+	installer.SetProjectLocations([]config.ProjectLocation{
+		{Type: "npm-package", Path: "."},
+		{Type: "golang-package", Path: "service"},
+	})
+	cfg := config.ConfigSetup{Content: contentFunc}
+
+	content, skip, err := installer.generateContent(context.Background(), cfg, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("generateContent() error = %v", err)
+	}
+	if skip {
+		t.Fatal("generateContent() unexpectedly signaled skip")
+	}
+	want := "2|npm-package@.|golang-package,npm-package"
+	if content != want {
+		t.Errorf("content = %q, want %q", content, want)
 	}
 }
 
@@ -1428,9 +1492,12 @@ func TestGenerateContentDatamitsuDir(t *testing.T) {
 				Content: contentFunc,
 			}
 
-			content, err := installer.generateContent(context.Background(), cfg, nil, nil, nil)
+			content, skip, err := installer.generateContent(context.Background(), cfg, nil, nil, nil)
 			if err != nil {
 				t.Fatalf("generateContent() error = %v", err)
+			}
+			if skip {
+				t.Fatal("generateContent() unexpectedly signaled skip")
 			}
 
 			if content != tt.expectedDir {

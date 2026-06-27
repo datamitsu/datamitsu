@@ -437,7 +437,19 @@ declare global {
       originalContent?: string;
 
       /**
-       * Detected project types
+       * Detected project locations: one entry per detected project type and the
+       * directory that holds its marker file, relative to the git root ("." for
+       * the root, POSIX slashes). Lets a git-root scoped generator build
+       * per-directory, per-ecosystem output (e.g. dependabot updates).
+       *
+       * Only populated during `dm setup` (empty for other commands).
+       * @example [{ type: "npm-package", path: "." }, { type: "golang-package", path: "service" }]
+       */
+      projectLocations: { path: string; type: string }[];
+
+      /**
+       * Detected project types (deduplicated). Only populated during `dm setup`
+       * (empty for other commands).
        */
       projectTypes: string[];
 
@@ -455,8 +467,12 @@ declare global {
        * Function that generates file content
        * Receives context about the project including existing file content if present
        * Optional when deleteOnly is true or linkTarget is set
+       *
+       * Returning `undefined` opts out: the file is left untouched (not created,
+       * not overwritten). Use this for "manage only if the file already exists"
+       * generators, e.g. checking `context.originalContent` before producing output.
        */
-      content?: (context: ConfigContext) => string;
+      content?: (context: ConfigContext) => string | undefined;
 
       /**
        * If true, only delete files from otherFileNameList without creating any new file

@@ -77,7 +77,7 @@ func runSetup(_ *cobra.Command, _ []string) error {
 		}
 	}
 
-	cfg, layerMap, vm, err := loadConfig()
+	cfg, layerMap, vm, err := loadConfigForSetup(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
@@ -113,6 +113,10 @@ func runSetup(_ *cobra.Command, _ []string) error {
 		locationMap[loc.Path] = append(locationMap[loc.Path], loc.Type)
 	}
 	detectedCount := len(locationMap)
+
+	// Repo-wide, git-root-relative project locations exposed to setup content()
+	// functions (e.g. dependabot dynamic updates). Same data the eager pass uses.
+	_, projectLocations := projectLocationsToConfig(rootPath, locations)
 
 	// Ensure rootPath is always in the map so git-root scoped configs can run
 	if _, ok := locationMap[rootPath]; !ok {
@@ -171,6 +175,7 @@ func runSetup(_ *cobra.Command, _ []string) error {
 	for _, projectPath := range sortedPaths {
 		projectTypes := locationMap[projectPath]
 		installer := install.NewInstaller(rootPath, projectPath, projectTypes, selectedTools, cfg.Setup, vm, layerMap)
+		installer.SetProjectLocations(projectLocations)
 		results, err := installer.InstallAll(ctx, setupDryRun)
 		if err != nil {
 			return fmt.Errorf("failed to install configs in %s: %w", projectPath, err)
