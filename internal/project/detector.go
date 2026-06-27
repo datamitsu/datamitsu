@@ -60,21 +60,29 @@ type ProjectLocation struct { //nolint:revive // exported: name kept explicit; p
 // For each marker file found, it returns the directory containing that marker
 // Respects .gitignore rules - directories and files matching .gitignore patterns are excluded
 func (d *Detector) DetectAllWithLocations(ctx context.Context) ([]ProjectLocation, error) {
-	var locations []ProjectLocation
-	seen := make(map[string]bool) // To avoid duplicates
-
 	// Get all files respecting .gitignore
 	files, err := traverser.FindFiles(ctx, d.rootPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to traverse files: %w", err)
 	}
 
+	return d.DetectAllWithLocationsFromFiles(files), nil
+}
+
+// DetectAllWithLocationsFromFiles matches detected project locations against a
+// precomputed list of absolute file paths under rootPath. It lets callers that
+// already hold the file set (e.g. config loading, which traverses once and runs
+// detection for several config layers) skip a repeat filesystem walk.
+func (d *Detector) DetectAllWithLocationsFromFiles(files []string) []ProjectLocation {
+	var locations []ProjectLocation
+	seen := make(map[string]bool) // To avoid duplicates
+
 	// Build a map of project types with their compiled patterns
 	type typeMarkers struct {
 		name    string
 		markers []string
 	}
-	var typesList []typeMarkers
+	typesList := make([]typeMarkers, 0, len(d.types))
 	for typeName, ptype := range d.types {
 		typesList = append(typesList, typeMarkers{
 			name:    typeName,
@@ -116,7 +124,7 @@ func (d *Detector) DetectAllWithLocations(ctx context.Context) ([]ProjectLocatio
 		}
 	}
 
-	return locations, nil
+	return locations
 }
 
 // matchesType checks if any marker file exists for the given project type

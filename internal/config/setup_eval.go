@@ -8,6 +8,38 @@ import (
 	"github.com/dop251/goja"
 )
 
+// ProjectLocation pairs a detected project type with the directory that holds
+// its marker file, expressed relative to the git root ("." for the root). It is
+// the shape exposed to setup content() functions as context.projectLocations[i].
+// It is intentionally decoupled from project.ProjectLocation (which carries an
+// absolute path) to keep internal/config free of an import cycle on
+// internal/project.
+type ProjectLocation struct {
+	Type string `json:"type"`
+	Path string `json:"path"`
+}
+
+// ApplyProjectContext sets projectTypes and projectLocations on a setup
+// content() context object so the eager (config-load) and install paths expose
+// an identical shape. projectLocations is rendered as plain {type, path}
+// objects to keep stable JS keys regardless of goja field-name mapping.
+//
+// projectTypes/projectLocations are inputs to setup content() evaluation. When
+// config-evaluation caching is added, they MUST be folded into the cache
+// fingerprint (see the runtime-config policy in AGENTS.md).
+func ApplyProjectContext(obj *goja.Object, projectTypes []string, locations []ProjectLocation) {
+	if projectTypes == nil {
+		projectTypes = []string{}
+	}
+	_ = obj.Set("projectTypes", projectTypes)
+
+	locs := make([]map[string]string, 0, len(locations))
+	for _, l := range locations {
+		locs = append(locs, map[string]string{"type": l.Type, "path": l.Path})
+	}
+	_ = obj.Set("projectLocations", locs)
+}
+
 // readFileContent reads a file from disk and returns its content as a *string.
 // Returns nil if the file doesn't exist or cannot be read.
 func readFileContent(path string) *string {
@@ -78,6 +110,15 @@ func MergeSetupLayers(layerMap SetupLayerMap, layerName string, evaluatedContent
 //   - existingContent: the output of the previous layer's content() call.
 //     Changes with each layer, enabling incremental transformations.
 func EvaluateInitContent(cfg *Config, vm *goja.Runtime, rootPath, cwdPath string, priorLayers SetupLayerMap) map[string]string {
+	return EvaluateInitContentWithProjects(cfg, vm, rootPath, cwdPath, priorLayers, nil, nil)
+}
+
+// EvaluateInitContentWithProjects is EvaluateInitContent with the detected
+// project context (types + git-root-relative locations) exposed to content() as
+// context.projectTypes / context.projectLocations. EvaluateInitContent passes
+// nil for both, preserving the prior empty-context behavior for callers that do
+// not run project detection.
+func EvaluateInitContentWithProjects(cfg *Config, vm *goja.Runtime, rootPath, cwdPath string, priorLayers SetupLayerMap, projectTypes []string, projectLocations []ProjectLocation) map[string]string {
 	if cfg.Setup == nil {
 		return nil
 	}
@@ -125,7 +166,7 @@ func EvaluateInitContent(cfg *Config, vm *goja.Runtime, rootPath, cwdPath string
 		}
 
 		contextObj := vm.NewObject()
-		_ = contextObj.Set("projectTypes", []string{})
+		ApplyProjectContext(contextObj, projectTypes, projectLocations)
 		_ = contextObj.Set("rootPath", rootPath)
 		_ = contextObj.Set("cwdPath", cwdPath)
 		_ = contextObj.Set("isRoot", rootPath == cwdPath)

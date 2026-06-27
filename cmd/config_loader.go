@@ -17,6 +17,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/facts"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"github.com/datamitsu/datamitsu/internal/logger"
+	"github.com/datamitsu/datamitsu/internal/project"
 	"github.com/datamitsu/datamitsu/internal/remotecfg"
 	"github.com/datamitsu/datamitsu/internal/traverser"
 	"github.com/datamitsu/datamitsu/internal/version"
@@ -59,6 +60,15 @@ func loadConfig() (*config.Config, *config.SetupLayerMap, *goja.Runtime, error) 
 	return loadConfigWithPaths(context.Background(), BeforeConfigPaths, NoAutoConfig, ConfigPaths)
 }
 
+// loadConfigForSetup loads config for the setup command. Unlike loadConfig it
+// runs project detection (one git-root file walk) so setup content() functions
+// receive context.projectTypes / context.projectLocations and can build
+// per-ecosystem output (e.g. dependabot). Detection is gated to setup so other
+// commands keep their detection-free, walk-free config load.
+func loadConfigForSetup(ctx context.Context) (*config.Config, *config.SetupLayerMap, *goja.Runtime, error) {
+	return loadConfigImpl(ctx, BeforeConfigPaths, NoAutoConfig, ConfigPaths, loadConfigOptions{detectProjectLocations: true})
+}
+
 // loadConfigForLockfileGen loads config without enforcing lockfile constraints.
 // Used by config lockfile to allow bootstrapping lockfiles for apps that don't have one yet.
 func loadConfigForLockfileGen() (*config.Config, *config.SetupLayerMap, *goja.Runtime, error) {
@@ -91,6 +101,11 @@ type loadConfigOptions struct {
 	// commands set it; project commands keep the hard error so a broken git
 	// context can't silently drop the project's config.
 	tolerateGitRootFailure bool
+	// detectProjectLocations runs project detection (one file walk) during the
+	// eager content-evaluation pass and exposes the result to setup content()
+	// functions as context.projectTypes / context.projectLocations. Off by
+	// default so non-setup loads stay walk-free.
+	detectProjectLocations bool
 }
 
 func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfig bool, configPaths []string, opts loadConfigOptions) (cfg *config.Config, lm *config.SetupLayerMap, vm *goja.Runtime, err error) {
@@ -143,6 +158,32 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 	layerMap := make(config.SetupLayerMap)
 	resolved := make(map[string]bool)
 	stack := make(map[string]bool)
+
+	// detectProjects runs project detection lazily and at most once (the file
+	// walk is shared across config layers), returning the git-root-relative
+	// {type, path} locations and their unique types for the eager content pass.
+	// It is a no-op unless opts.detectProjectLocations is set.
+	var (
+		projFiles      []string
+		projFilesReady bool
+	)
+	detectProjects := func(types config.MapOfProjectTypes) ([]string, []config.ProjectLocation) {
+		if !opts.detectProjectLocations || rootPath == "" || len(types) == 0 {
+			return nil, nil
+		}
+		if !projFilesReady {
+			projFilesReady = true
+			if files, walkErr := traverser.FindFiles(ctx, rootPath); walkErr == nil {
+				projFiles = files
+			} else {
+				logger.Logger.Debug("project detection: file walk failed; setup project context will be empty",
+					zap.Error(walkErr))
+			}
+		}
+		locs := project.NewDetector(rootPath, types).DetectAllWithLocationsFromFiles(projFiles)
+		return projectLocationsToConfig(rootPath, locs)
+	}
+
 	for _, source := range sources {
 		result, resultVM, processErr := processConfigSource(ctx, currentConfig, source, resolved, stack, opts)
 		if processErr != nil {
@@ -150,7 +191,8 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 		}
 
 		if result.Setup != nil {
-			evaluatedContent := config.EvaluateInitContent(result, resultVM, rootPath, cwdPath, layerMap)
+			pTypes, pLocs := detectProjects(result.ProjectTypes)
+			evaluatedContent := config.EvaluateInitContentWithProjects(result, resultVM, rootPath, cwdPath, layerMap, pTypes, pLocs)
 			config.MergeSetupLayers(layerMap, source.name, evaluatedContent, result.Setup)
 		}
 
@@ -222,6 +264,47 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 	}
 
 	return currentConfig, &layerMap, lastVM, nil
+}
+
+// projectLocationsToConfig converts absolute detector locations into the
+// git-root-relative {type, path} shape exposed to setup content() functions
+// (POSIX slashes, "." for the root), deduped and deterministically sorted. It
+// also returns the unique sorted list of detected types. Shared by the eager
+// config-load detection and the setup install path so both expose identical data.
+func projectLocationsToConfig(rootPath string, locs []project.ProjectLocation) ([]string, []config.ProjectLocation) {
+	out := make([]config.ProjectLocation, 0, len(locs))
+	seen := make(map[string]bool)
+	typeSet := make(map[string]bool)
+	for _, l := range locs {
+		rel, err := filepath.Rel(rootPath, l.Path)
+		if err != nil {
+			rel = l.Path
+		}
+		rel = filepath.ToSlash(rel)
+		if rel == "" {
+			rel = "."
+		}
+		key := l.Type + "\x00" + rel
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, config.ProjectLocation{Type: l.Type, Path: rel})
+		typeSet[l.Type] = true
+	}
+	sort.Slice(out, func(a, b int) bool {
+		if out[a].Type != out[b].Type {
+			return out[a].Type < out[b].Type
+		}
+		return out[a].Path < out[b].Path
+	})
+
+	types := make([]string, 0, len(typeSet))
+	for t := range typeSet {
+		types = append(types, t)
+	}
+	sort.Strings(types)
+	return types, out
 }
 
 // buildConfigSources assembles the ordered list of config sources to process.

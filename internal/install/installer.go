@@ -19,13 +19,14 @@ import (
 
 // Installer handles configuration file installation and patching
 type Installer struct {
-	rootPath      string
-	cwdPath       string
-	projectTypes  []string
-	selectedTools []string // nil/empty = no --tools filter (install all applicable)
-	configs       config.MapOfConfigSetup
-	vm            *goja.Runtime
-	layerMap      *config.SetupLayerMap
+	rootPath         string
+	cwdPath          string
+	projectTypes     []string
+	projectLocations []config.ProjectLocation // repo-wide detected {type, path}; exposed to content()
+	selectedTools    []string                 // nil/empty = no --tools filter (install all applicable)
+	configs          config.MapOfConfigSetup
+	vm               *goja.Runtime
+	layerMap         *config.SetupLayerMap
 }
 
 // NewInstaller creates a new configuration installer. selectedTools scopes
@@ -49,6 +50,14 @@ func NewInstaller(
 		vm:            vm,
 		layerMap:      layerMap,
 	}
+}
+
+// SetProjectLocations sets the repo-wide detected project locations (git-root
+// relative {type, path}) exposed to content() functions as
+// context.projectLocations. Optional; defaults to none. Used by setup to let
+// configs (e.g. dependabot) build per-ecosystem output dynamically.
+func (i *Installer) SetProjectLocations(locations []config.ProjectLocation) {
+	i.projectLocations = locations
 }
 
 // InstallResult represents the result of a single config file installation
@@ -179,10 +188,18 @@ func (i *Installer) installConfig(ctx context.Context, name string, cfg config.C
 		}
 	}
 	if !usedLayerContent {
+		var skip bool
 		var err error
-		newContent, err = i.generateContent(ctx, cfg, existingContent, originalContent, existingPath)
+		newContent, skip, err = i.generateContent(ctx, cfg, existingContent, originalContent, existingPath)
 		if err != nil {
 			result.Error = fmt.Errorf("failed to generate content: %w", err)
+			return result
+		}
+		// content() returning undefined/null is an explicit opt-out (e.g. a
+		// "manage only if the file already exists" generator): leave the file
+		// untouched rather than writing it. Mirrors the eager-eval skip.
+		if skip {
+			result.Action = "skipped"
 			return result
 		}
 	}
@@ -334,23 +351,26 @@ func (i *Installer) isToolSelected(cfg config.ConfigSetup) bool {
 // installConfig -> generateContent chain so the public install API stays
 // cancellation-ready; do not drop it.
 //
+// The bool return reports whether content() opted out (returned undefined/null),
+// in which case the caller skips the file rather than writing it.
+//
 //nolint:unparam // ctx reserved for cancellable JS execution; keeps the install chain uniform
-func (i *Installer) generateContent(ctx context.Context, cfg config.ConfigSetup, existingContent, originalContent, existingPath *string) (string, error) {
+func (i *Installer) generateContent(ctx context.Context, cfg config.ConfigSetup, existingContent, originalContent, existingPath *string) (string, bool, error) {
 	// Content field should be a goja.Value representing a function
 	contentValue, ok := cfg.Content.(goja.Value)
 	if !ok {
-		return "", errors.New("content is not a goja.Value")
+		return "", false, errors.New("content is not a goja.Value")
 	}
 
 	// Get the callable
 	contentFunc, ok := goja.AssertFunction(contentValue)
 	if !ok {
-		return "", errors.New("content is not a callable function")
+		return "", false, errors.New("content is not a callable function")
 	}
 
 	// Prepare context object
 	contextObj := i.vm.NewObject()
-	_ = contextObj.Set("projectTypes", i.projectTypes)
+	config.ApplyProjectContext(contextObj, i.projectTypes, i.projectLocations)
 	_ = contextObj.Set("rootPath", i.rootPath)
 	_ = contextObj.Set("cwdPath", i.cwdPath)
 	_ = contextObj.Set("isRoot", i.rootPath == i.cwdPath)
@@ -374,14 +394,16 @@ func (i *Installer) generateContent(ctx context.Context, cfg config.ConfigSetup,
 
 	result, err := contentFunc(goja.Undefined(), contextObj)
 	if err != nil {
-		return "", fmt.Errorf("failed to call content function: %w", err)
+		return "", false, fmt.Errorf("failed to call content function: %w", err)
 	}
 
+	// undefined/null is an explicit opt-out, not an error: the generator chose
+	// not to produce this file (e.g. "manage only if it already exists").
 	if result == nil || goja.IsUndefined(result) || goja.IsNull(result) {
-		return "", errors.New("content function returned nil/undefined")
+		return "", true, nil
 	}
 
-	return result.String(), nil
+	return result.String(), false, nil
 }
 
 // fileExists checks if a file exists
