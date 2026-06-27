@@ -20,6 +20,14 @@ minimumReleaseAgeExclude:
   - "@ovineko/*"
   - "@shibanet0/*"
 optimisticRepeatInstall: true
+# Pin the vscode-* deps injected into langium (below) so mermaid's bundle in the
+# website stays on the 8.2.x/3.17.x line. Without this the "*" floats to 9.0.0 /
+# 3.18.1 once anything pulls them into the tree, and Docusaurus's webpack then
+# fails to bundle vscode-jsonrpc ("Emitter is not exported").
+overrides:
+  vscode-jsonrpc: 8.2.0
+  vscode-languageserver-protocol: 3.17.5
+  vscode-languageserver-types: 3.17.5
 packageExtensions:
   langium:
     dependencies:
