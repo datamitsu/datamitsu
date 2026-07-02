@@ -21,13 +21,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: datamitsu/setup-datamitsu@v0.1.5
+      - uses: datamitsu/setup-datamitsu@v0.1.13
 ```
 
-Those two steps install datamitsu `0.1.5` and run `datamitsu init` to provision
-the tools your config declares (golangci-lint, lefthook, …). By default the
-action then runs `datamitsu lint`; override the command with the `args` input
-(or set `args: ""` to install and initialize only).
+Those two steps install datamitsu `0.1.13` (replace with the
+[latest release](https://github.com/datamitsu/datamitsu/releases/latest)) and
+run `datamitsu init` to provision the tools your config declares
+(golangci-lint, lefthook, …). By default the action then runs `datamitsu lint`;
+override the command with the `args` input (or set `args: ""` to install and
+initialize only).
 
 ## How It Works
 
@@ -68,7 +70,7 @@ empty, leaving just the CLI on `PATH`.
 
 ```yaml
 - uses: actions/checkout@v4
-- uses: datamitsu/setup-datamitsu@v0.1.5
+- uses: datamitsu/setup-datamitsu@v0.1.13
   with:
     args: "exec golangci-lint run ./..."
 ```
@@ -77,7 +79,7 @@ empty, leaving just the CLI on `PATH`.
 
 ```yaml
 - uses: actions/checkout@v4
-- uses: datamitsu/setup-datamitsu@v0.1.5
+- uses: datamitsu/setup-datamitsu@v0.1.13
   with:
     args: ""
 - run: datamitsu check
@@ -86,7 +88,7 @@ empty, leaving just the CLI on `PATH`.
 ### Set up the CLI without provisioning tools
 
 ```yaml
-- uses: datamitsu/setup-datamitsu@v0.1.5
+- uses: datamitsu/setup-datamitsu@v0.1.13
   with:
     args: ""
     init: "false"
@@ -94,12 +96,12 @@ empty, leaving just the CLI on `PATH`.
 
 ## Versioning and Integrity
 
-Each action tag pins **one** datamitsu version: `@v0.1.5` installs datamitsu
-`0.1.5`. The SHA-256 hashes of every release binary are baked into that tag and
+Each action tag pins **one** datamitsu version: `@v0.1.13` installs datamitsu
+`0.1.13`. The SHA-256 hashes of every release binary are baked into that tag and
 verified on download — a missing or mismatched hash fails the run.
 
 :::tip Pin a full version, not a moving tag
-Because each tag carries its own baked hashes, pin a full version (`@v0.1.5`) or
+Because each tag carries its own baked hashes, pin a full version (`@v0.1.13`) or
 a commit SHA — **not** a moving major tag (`@v0`). A moving tag would silently
 swap the verified binary and skip update notifications.
 :::

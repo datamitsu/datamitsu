@@ -18,7 +18,13 @@ description: How to install datamitsu on your system
 - [npm](./npm.md) — any platform with Node.js
 - [PyPI](./pypi.md) — any platform with Python
 - [RubyGems](./rubygems.md) — any platform with Ruby
+- [Docker](./docker.md) — official images on Docker Hub and GHCR (Debian and Alpine variants)
+- [GitHub Releases](./github-releases.md) — direct binary downloads, deb/rpm/apk packages, checksum + cosign verification
 - [Build from Source](./source.md) — requires Go 1.25.2+
+
+## CI
+
+- [GitHub Actions](../../how-to/use-in-github-actions.md) — the official `setup-datamitsu` action installs the CLI, provisions tools, and runs your checks in a single step
 
 ## Editor Integrations
 
