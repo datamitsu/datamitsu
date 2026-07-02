@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { copyFileSync, mkdirSync } from "node:fs";
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const ACTION_DIR = join(import.meta.dirname, "..");
@@ -16,7 +16,20 @@ if (target === undefined || target === "") {
 mkdirSync(join(target, "dist"), { recursive: true });
 copyFileSync(join(ACTION_DIR, "action.yml"), join(target, "action.yml"));
 copyFileSync(join(ACTION_DIR, "dist", "index.mjs"), join(target, "dist", "index.mjs"));
-copyFileSync(join(ACTION_DIR, "README.md"), join(target, "README.md"));
+
+// The README is a template: bake the released version into the usage examples
+// so the dist repo always shows the tag being published. Strip the template
+// marker comment — it only applies to the monorepo source.
+const readme = readFileSync(join(ACTION_DIR, "README.md"), "utf8");
+if (!readme.includes("__VERSION__")) {
+  throw new Error(
+    "packaging/action/README.md has no __VERSION__ placeholders — refusing to publish a stale README",
+  );
+}
+writeFileSync(
+  join(target, "README.md"),
+  readme.replaceAll("__VERSION__", version).replace(/^<!-- TEMPLATE:[\s\S]*?-->\n\n/, ""),
+);
 
 const tag = `v${version}`;
 const git = (...args: string[]): void => {
