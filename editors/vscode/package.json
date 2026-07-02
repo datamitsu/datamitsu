@@ -1,17 +1,22 @@
 {
-  "name": "datamitsu",
-  "displayName": "datamitsu",
+  "name": "datamitsu-toolkit",
+  "displayName": "Datamitsu Toolkit",
   "version": "0.0.1",
   "private": true,
   "description": "Format files with your datamitsu config, via the datamitsu language server.",
   "categories": [
-    "Formatters"
+    "Formatters",
+    "Linters"
   ],
   "keywords": [
     "formatter",
+    "linter",
     "lsp",
     "datamitsu"
   ],
+  "bugs": {
+    "url": "https://github.com/datamitsu/datamitsu/issues"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/datamitsu/datamitsu.git",
@@ -89,8 +94,21 @@
     "vscode-languageclient": "9.0.1"
   },
   "engines": {
-    "node": ">=22.12.0",
     "vscode": "^1.82.0"
   },
-  "icon": "icon.png"
+  "icon": "icon.png",
+  "preview": true,
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "Datamitsu evaluates datamitsu.config.{js,mjs,ts} as code and runs workspace-configured tools, so it requires a trusted workspace."
+    },
+    "virtualWorkspaces": {
+      "supported": false,
+      "description": "Datamitsu spawns a native binary and needs direct local filesystem access; it cannot operate on a virtual filesystem."
+    }
+  },
+  "extensionKind": [
+    "workspace"
+  ]
 }

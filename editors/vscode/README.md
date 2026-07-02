@@ -1,4 +1,4 @@
-# datamitsu for VS Code
+# Datamitsu Toolkit
 
 Format files with your project's [datamitsu](https://github.com/datamitsu/datamitsu)
 config. The extension is a thin client around `datamitsu lsp` — a formatting-only
@@ -28,8 +28,8 @@ file:
   ```jsonc
   {
     "editor.formatOnSave": true,
-    "[go]": { "editor.defaultFormatter": "datamitsu.datamitsu" },
-    "[typescript]": { "editor.defaultFormatter": "datamitsu.datamitsu" },
+    "[go]": { "editor.defaultFormatter": "datamitsu.datamitsu-toolkit" },
+    "[typescript]": { "editor.defaultFormatter": "datamitsu.datamitsu-toolkit" },
   }
   ```
 
