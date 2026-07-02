@@ -13,6 +13,7 @@ const sidebars: SidebarsConfig = {
             "getting-started/installation/pypi",
             "getting-started/installation/rubygems",
             "getting-started/installation/source",
+            "getting-started/installation/vscode",
           ],
           label: "Installation",
           link: { id: "getting-started/installation/index", type: "doc" },
