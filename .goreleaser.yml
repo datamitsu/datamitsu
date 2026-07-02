@@ -136,14 +136,15 @@ nfpms:
     section: utils
     vendor: datamitsu
 release:
-  # Created as a draft so the release workflow can attach the VS Code extension
-  # .vsix (built after GoReleaser, since its codegen bakes each binary archive's
-  # SHA-256 from the just-generated checksums.txt) before publishing. GitHub
-  # immutable releases forbid adding assets post-publish, so the asset must be in
-  # place at publish time; the workflow flips draft -> published right after the
-  # .vsix is uploaded. For --snapshot (unstable) runs GoReleaser does not publish
-  # at all, so this setting only affects stable tag releases.
-  draft: true
+  # NOT a draft. GoReleaser stages every asset — including the .vsix produced
+  # by the vsix `signs` entry — into its own internal draft and publishes the
+  # release only once complete; the homebrew/scoop/winget manifests are pushed
+  # after that. Keeping the release out of a user-visible draft matters: the
+  # manifests' download URLs must resolve the moment the registries' CIs
+  # validate them (a draft release 404s and fails e.g. winget-pkgs PR checks),
+  # and GitHub immutable releases forbid adding assets after publish, so
+  # everything must be attached inside the GoReleaser run.
+  draft: false
   # Upload the built WASM parser module alongside the binaries so consumers can
   # download it from the GitHub Release; its integrity is verified against the
   # signed checksums.txt entry added under `checksum.extra_files`. The asset is
@@ -189,6 +190,22 @@ signs:
     artifacts: checksum
     cmd: cosign
     signature: "${artifact}.sigstore.json"
+  # Not a signature: this entry builds the VS Code extension .vsix. The sign
+  # phase is the only OSS GoReleaser hook that runs after the checksum step
+  # (codegen bakes each archive's SHA-256 from checksums.txt) and before the
+  # release step (so the .vsix is uploaded inside GoReleaser's own
+  # draft->publish flow and the release goes live complete — see the `release`
+  # comment). The .vsix is not covered by the signed checksums.txt; its
+  # integrity on the store side comes from Marketplace/Open VSX signing.
+  - args:
+      - ".github/scripts/build-vsix.sh"
+      - "${artifact}"
+      - "${signature}"
+      - "{{ .Version }}"
+    artifacts: checksum
+    cmd: bash
+    id: vsix
+    signature: "dist/datamitsu-{{ .Version }}.vsix"
 version: 2
 winget:
   - commit_author:

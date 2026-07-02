@@ -85,40 +85,21 @@ jobs:
         uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
         with:
           subject-checksums: ./dist/checksums.txt
-      # 3a. Build the VS Code extension .vsix and attach it to the (draft)
-      #     release. This MUST run after GoReleaser: codegen bakes each binary
-      #     archive's SHA-256 from the just-generated dist/checksums.txt, so the
-      #     .vsix can only be built now — and GitHub immutable releases forbid
-      #     adding assets after publish, so it must be attached before the draft
-      #     is flipped to published (next step). Non-rc stable only; the
-      #     publish-vscode job later pushes this same .vsix to the stores. The
-      #     .vsix lands in dist/ so it also rides along in release-artifacts.
-      - env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION_WITH_V: ${{ needs.validate-stable.outputs.version }}
-        if: ${{ !env.ACT && needs.determine-release-type.outputs.is_stable == 'true' && !contains(needs.validate-stable.outputs.version, '-rc.') }}
-        name: Build + attach VS Code extension to release
-        run: |
-          export VERSION="${VERSION_WITH_V#v}"
-          pnpm --filter "./editors/vscode" codegen
-          (cd editors/vscode && npm pkg set version="$VERSION")
-          pnpm --filter "./editors/vscode" build
-          # --allow-package-all-secrets/--allow-package-env-file skip vsce's
-          # built-in secret scanner: under pnpm's isolated node_modules it cannot
-          # resolve its own @secretlint/* rule modules and crashes on load. The
-          # .vsix ships only the bundled extension.cjs + static metadata, and the
-          # repo already scans secrets via `datamitsu check` (secretlint + gitleaks).
-          pnpm --filter "./editors/vscode" exec vsce package --allow-package-all-secrets --allow-package-env-file --no-dependencies -o "$GITHUB_WORKSPACE/dist/datamitsu-$VERSION.vsix"
-          gh release upload "$VERSION_WITH_V" "$GITHUB_WORKSPACE/dist/datamitsu-$VERSION.vsix" --clobber
-      # 3b. Publish the release (flip draft -> published). Runs for every stable
-      #     release, including rc tags that skip the .vsix step above, so the
-      #     binaries never get stranded in a draft.
-      - env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION_WITH_V: ${{ needs.validate-stable.outputs.version }}
-        if: ${{ !env.ACT && needs.determine-release-type.outputs.is_stable == 'true' }}
-        name: Publish GitHub release (flip draft to published)
-        run: gh release edit "$VERSION_WITH_V" --draft=false
+      # 3a. The .vsix is built INSIDE GoReleaser (vsix `signs` entry in
+      #     .goreleaser.yml) so it ships within GoReleaser's atomic
+      #     draft->publish flow — the release is complete before the
+      #     homebrew/scoop/winget manifests are pushed. Re-publish it here as a
+      #     small artifact so the store publish jobs don't need the full
+      #     release-artifacts for one file. Missing files are fine for unstable
+      #     (--snapshot) runs.
+      - if: ${{ !env.ACT }}
+        name: Upload .vsix artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          if-no-files-found: warn
+          name: vsix
+          path: dist/*.vsix
+          retention-days: 1
       # 4. Normalize binaries
       - name: Normalize binaries
         run: .github/scripts/normalize-binaries.sh "${{ needs.determine-release-type.outputs.is_unstable }}"
@@ -528,6 +509,48 @@ jobs:
               cd ..
             done
           fi
+  publish-open-vsx:
+    # Environment for parity with the other registry jobs (pypi, rubygems,
+    # vscode-marketplace): registries deploy through named environments.
+    # Auto-created on first deploy; OVSX_PAT stays a repo secret.
+    environment: open-vsx
+    if: |
+      always() &&
+      !cancelled() &&
+      needs.build.result == 'success' &&
+      needs.determine-release-type.outputs.is_stable == 'true' &&
+      !contains(needs.validate-stable.outputs.version, '-rc.')
+    name: Publish to Open VSX
+    needs:
+      - build
+      - determine-release-type
+      - validate-stable
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ needs.determine-release-type.outputs.checkout_ref }}
+      - uses: ./.github/actions/setup-environment
+        with:
+          setup-go: "false"
+      - if: ${{ !env.ACT }}
+        name: Download .vsix artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: vsix
+          path: dist
+      - env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        if: ${{ !env.ACT }}
+        name: Publish extension to Open VSX
+        run: |
+          VERSION_WITH_V="${{ needs.validate-stable.outputs.version }}"
+          VERSION="${VERSION_WITH_V#v}"
+          # Namespace created once; tolerate "already exists".
+          pnpm --filter "./editors/vscode" exec ovsx create-namespace datamitsu -p "$OVSX_PAT" || true
+          pnpm --filter "./editors/vscode" exec ovsx publish "$GITHUB_WORKSPACE/dist/datamitsu-$VERSION.vsix" -p "$OVSX_PAT"
   publish-pypi:
     environment: pypi
     if: |
@@ -645,7 +668,7 @@ jobs:
           cd packaging/ruby
           gem push *.gem
           echo "RubyGems publishing completed"
-  publish-vscode:
+  publish-vscode-marketplace:
     environment: vscode-marketplace
     if: |
       always() &&
@@ -653,14 +676,12 @@ jobs:
       needs.build.result == 'success' &&
       needs.determine-release-type.outputs.is_stable == 'true' &&
       !contains(needs.validate-stable.outputs.version, '-rc.')
-    name: Publish VS Code extension
+    name: Publish to VS Code Marketplace
     needs:
       - build
       - determine-release-type
       - validate-stable
     permissions:
-      # Reads the release-artifacts workflow artifact (built .vsix) and publishes
-      # to the stores via OIDC — it no longer writes to the GitHub Release.
       contents: read
       id-token: write
     runs-on: ubuntu-latest
@@ -672,11 +693,11 @@ jobs:
         with:
           setup-go: "false"
       - if: ${{ !env.ACT }}
-        name: Download build artifacts
+        name: Download .vsix artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: release-artifacts
-          path: .
+          name: vsix
+          path: dist
       - if: ${{ !env.ACT }}
         name: Azure login (federated OIDC for Marketplace)
         uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
@@ -684,23 +705,14 @@ jobs:
           allow-no-subscriptions: true
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
-      - env:
-          OVSX_PAT: ${{ secrets.OVSX_PAT }}
-        if: ${{ !env.ACT }}
-        name: Publish extension to Marketplace + Open VSX
+      - if: ${{ !env.ACT }}
+        name: Publish extension to VS Code Marketplace
         run: |
           VERSION_WITH_V="${{ needs.validate-stable.outputs.version }}"
-          export VERSION="${VERSION_WITH_V#v}"
-          # The .vsix was built and attached to the release by the build job; it
-          # arrives here inside the release-artifacts download at dist/.
-          VSIX="$GITHUB_WORKSPACE/dist/datamitsu-$VERSION.vsix"
-          # Publish to Open VSX (namespace created once; tolerate "already exists").
-          pnpm --filter "./editors/vscode" exec ovsx create-namespace datamitsu -p "$OVSX_PAT" || true
-          pnpm --filter "./editors/vscode" exec ovsx publish "$VSIX" -p "$OVSX_PAT"
-          # Publish to the Microsoft VS Code Marketplace via Entra OIDC — the
-          # azure/login step above set up the Azure CLI session that
-          # `vsce --azure-credential` consumes (no PAT, no secret).
-          pnpm --filter "./editors/vscode" exec vsce publish --packagePath "$VSIX" --azure-credential
+          VERSION="${VERSION_WITH_V#v}"
+          # Publish via Entra OIDC — the azure/login step above set up the Azure
+          # CLI session that `vsce --azure-credential` consumes (no PAT).
+          pnpm --filter "./editors/vscode" exec vsce publish --packagePath "$GITHUB_WORKSPACE/dist/datamitsu-$VERSION.vsix" --azure-credential
   validate-stable:
     if: |
       always() &&
