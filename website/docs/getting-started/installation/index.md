@@ -20,6 +20,13 @@ description: How to install datamitsu on your system
 - [RubyGems](./rubygems.md) — any platform with Ruby
 - [Build from Source](./source.md) — requires Go 1.25.2+
 
+## Editor Integrations
+
+- [VS Code Extension](./vscode.md) — Datamitsu Toolkit for VS Code, Cursor,
+  Windsurf, VSCodium, and other VS Code-based editors: format on save with your
+  datamitsu config. Works standalone too — if no `datamitsu` is on `PATH`, it
+  downloads a pinned, SHA-256-verified binary.
+
 ## Verify Installation
 
 Check that datamitsu is available:
