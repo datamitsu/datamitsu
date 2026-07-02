@@ -9,9 +9,13 @@ const sidebars: SidebarsConfig = {
         {
           items: [
             "getting-started/installation/homebrew",
+            "getting-started/installation/winget",
+            "getting-started/installation/scoop",
             "getting-started/installation/npm",
             "getting-started/installation/pypi",
             "getting-started/installation/rubygems",
+            "getting-started/installation/docker",
+            "getting-started/installation/github-releases",
             "getting-started/installation/source",
             "getting-started/installation/vscode",
           ],
@@ -62,6 +66,7 @@ const sidebars: SidebarsConfig = {
         "how-to/manage-cache",
         "how-to/maintain-wrapper",
         "how-to/use-in-alpine",
+        "how-to/use-in-github-actions",
       ],
       label: "How-To",
       link: { type: "generated-index" },
