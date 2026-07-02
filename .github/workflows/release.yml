@@ -510,6 +510,10 @@ jobs:
             done
           fi
   publish-open-vsx:
+    # Environment for parity with the other registry jobs (pypi, rubygems,
+    # vscode-marketplace): registries deploy through named environments.
+    # Auto-created on first deploy; OVSX_PAT stays a repo secret.
+    environment: open-vsx
     if: |
       always() &&
       !cancelled() &&
