@@ -4,7 +4,7 @@ go 1.26.4
 
 require (
 	github.com/ProtonMail/go-crypto v1.4.1
-	github.com/andybalholm/brotli v1.2.1
+	github.com/andybalholm/brotli v1.2.2
 	github.com/bmatcuk/doublestar/v4 v4.10.0
 	github.com/dop251/goja v0.0.0-20260618133527-c9b2ea77db59
 	github.com/evanw/esbuild v0.28.1
