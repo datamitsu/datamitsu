@@ -146,7 +146,7 @@ jobs:
       # Generate metadata for test builds
       - id: meta-debian
         name: Generate Docker metadata (Debian)
-        uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6.1.0
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: |
             ghcr.io/datamitsu/datamitsu
@@ -157,7 +157,7 @@ jobs:
             type=raw,value=test-debian
       - id: meta-alpine
         name: Generate Docker metadata (Alpine)
-        uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6.1.0
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           flavor: |
             suffix=-alpine
@@ -367,7 +367,7 @@ jobs:
       # Generate metadata for production builds
       - id: meta
         name: Generate Docker metadata
-        uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6.1.0
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           flavor: |
             suffix=${{ matrix.variant == 'alpine' && '-alpine' || '' }}
