@@ -43,6 +43,7 @@ func (d *Display) Download(name string, total int64, r io.Reader) io.ReadCloser 
 		bar := prog.AddBar(total,
 			mpb.BarRemoveOnComplete(),
 			mpb.PrependDecorators(
+				// cspell:ignore Dextra
 				// DSyncSpaceR (not DSyncWidthR) so the name column always keeps at
 				// least one trailing space: mpb only pads to W when the name is
 				// shorter than W, so a name >= W runes (e.g.
