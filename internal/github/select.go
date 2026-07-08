@@ -17,7 +17,7 @@ var semverTagRe = regexp.MustCompile(`(?i)v?(\d+\.\d+(?:\.\d+)?(?:-[0-9a-z][0-9a
 // normalizeSemver extracts a canonical, comparable semantic version from an
 // arbitrary release tag. It returns the "vX.Y.Z[-pre]" form understood by
 // golang.org/x/mod/semver and true, or ("", false) when the tag carries no
-// recognisable version (e.g. "nightly", "latest", a bare "v2").
+// recognizable version (e.g. "nightly", "latest", a bare "v2").
 func normalizeSemver(tag string) (string, bool) {
 	m := semverTagRe.FindStringSubmatch(tag)
 	if m == nil {
