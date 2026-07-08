@@ -43,14 +43,21 @@ func (d *Display) Download(name string, total int64, r io.Reader) io.ReadCloser 
 		bar := prog.AddBar(total,
 			mpb.BarRemoveOnComplete(),
 			mpb.PrependDecorators(
-				decor.Name(name, decor.WC{W: 24, C: decor.DSyncWidthR}),
+				// cspell:ignore Dextra
+				// DSyncSpaceR (not DSyncWidthR) so the name column always keeps at
+				// least one trailing space: mpb only pads to W when the name is
+				// shorter than W, so a name >= W runes (e.g.
+				// "sops-v3.13.2.darwin.arm64", 25 > 24) would otherwise butt
+				// straight up against the byte counters ("…arm646.86 MiB"). The
+				// DextraSpace bit reserves that separator regardless of name length.
+				decor.Name(name, decor.WC{W: 24, C: decor.DSyncSpaceR}),
 				// Reserve a fixed, sync-aligned column for the byte counters.
 				// Without it the bar shifts horizontally whenever the digit count
 				// changes (e.g. 9 → 43 → 103 MiB) or when parallel bars show
 				// values of differing width — producing a jittery staircase.
-				// W fits "1023.99 MiB / 1023.99 MiB"; DSyncWidthR keeps every bar
-				// aligned to the same column.
-				decor.CountersKibiByte("% .2f / % .2f", decor.WC{W: 25, C: decor.DSyncWidthR}),
+				// W fits "1023.99 MiB / 1023.99 MiB"; DSyncSpaceR keeps every bar
+				// aligned to the same column and guarantees a gap before the bar.
+				decor.CountersKibiByte("% .2f / % .2f", decor.WC{W: 25, C: decor.DSyncSpaceR}),
 			),
 			mpb.AppendDecorators(
 				// %3.0f keeps the percentage 3-wide ("  8" / " 83" / "100") so the
