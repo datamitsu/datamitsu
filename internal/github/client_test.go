@@ -758,15 +758,58 @@ func TestGetLatestReleaseWithMinAge(t *testing.T) {
 		}
 	})
 
-	t.Run("minAgeMinutes=0 falls through to GetLatestRelease", func(t *testing.T) {
-		var capturedURL string
+	t.Run("selects highest semver among old-enough, not newest by date", func(t *testing.T) {
+		// v1.11.11 is published most recently (a backport to the 1.11 branch)
+		// but v1.12.3 is the higher semver and must win. This is the OpenTofu
+		// regression that motivated semver-based selection.
+		body := `[` +
+			`{"tag_name":"v1.11.11","published_at":"` + old + `","assets":[]},` +
+			`{"tag_name":"v1.12.3","published_at":"` + old + `","assets":[]},` +
+			`{"tag_name":"v1.12.1","published_at":"` + old + `","assets":[]}]`
+		client := newClientReturning(body)
+
+		r, err := client.GetLatestReleaseWithMinAge(context.Background(), "o", "r", 60)
+		if err != nil {
+			t.Fatalf("error = %v", err)
+		}
+		if r == nil || r.TagName != "v1.12.3" {
+			t.Fatalf("expected v1.12.3, got %v", r)
+		}
+	})
+
+	t.Run("minAgeMinutes=0 still selects by semver, not newest by date", func(t *testing.T) {
+		body := `[` +
+			`{"tag_name":"v1.11.11","published_at":"` + old + `","assets":[]},` +
+			`{"tag_name":"v1.12.3","published_at":"` + iso(now.Add(-72*time.Hour)) + `","assets":[]}]`
+		client := newClientReturning(body)
+
+		r, err := client.GetLatestReleaseWithMinAge(context.Background(), "o", "r", 0)
+		if err != nil {
+			t.Fatalf("error = %v", err)
+		}
+		if r == nil || r.TagName != "v1.12.3" {
+			t.Fatalf("expected v1.12.3, got %v", r)
+		}
+	})
+
+	t.Run("minAgeMinutes=0 falls back to /latest when no stable release listed", func(t *testing.T) {
+		var latestHit bool
 		client := NewClient()
 		client.httpClient = &http.Client{
 			Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
-				capturedURL = req.URL.String()
+				if strings.HasSuffix(req.URL.Path, "/releases/latest") {
+					latestHit = true
+					return &http.Response{
+						StatusCode: http.StatusOK,
+						Body:       io.NopCloser(strings.NewReader(`{"tag_name":"v9.9.9","assets":[]}`)),
+					}, nil
+				}
+				// The list holds only a prerelease, so no stable release
+				// qualifies and selection falls back to the latest endpoint.
 				return &http.Response{
 					StatusCode: http.StatusOK,
-					Body:       io.NopCloser(strings.NewReader(`{"tag_name":"v9.9.9","assets":[]}`)),
+					Body: io.NopCloser(strings.NewReader(
+						`[{"tag_name":"v2.0.0-rc1","published_at":"` + old + `","prerelease":true,"assets":[]}]`)),
 				}, nil
 			}),
 		}
@@ -778,8 +821,8 @@ func TestGetLatestReleaseWithMinAge(t *testing.T) {
 		if r == nil || r.TagName != "v9.9.9" {
 			t.Fatalf("expected v9.9.9, got %v", r)
 		}
-		if !strings.HasSuffix(capturedURL, "/releases/latest") {
-			t.Errorf("expected latest endpoint, got %q", capturedURL)
+		if !latestHit {
+			t.Error("expected fallback to /releases/latest endpoint")
 		}
 	})
 
