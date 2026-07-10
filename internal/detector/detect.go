@@ -15,6 +15,20 @@ import (
 // archive format preference, and priority patterns. The highest-scoring asset wins.
 // Ties are broken alphabetically by asset name for determinism.
 func DetectBinary(assets []github.Asset, osType syslist.OsType, archType syslist.ArchType, libcType string) (*github.Asset, error) {
+	candidates, err := DetectBinaryCandidates(assets, osType, archType, libcType)
+	if err != nil {
+		return nil, err
+	}
+	best := candidates[0]
+	return &best, nil
+}
+
+// DetectBinaryCandidates returns every asset matching the requested OS, arch,
+// and libc, ranked best-first by the same scoring DetectBinary uses. Walking
+// the list lets callers fall back to a lower-ranked asset — e.g. a raw binary
+// when a preferred archive fails extraction verification — instead of dropping
+// the platform. The error cases mirror DetectBinary exactly.
+func DetectBinaryCandidates(assets []github.Asset, osType syslist.OsType, archType syslist.ArchType, libcType string) ([]github.Asset, error) {
 	if len(assets) == 0 {
 		return nil, errors.New("no assets available")
 	}
@@ -24,12 +38,16 @@ func DetectBinary(assets []github.Asset, osType syslist.OsType, archType syslist
 		return nil, errors.New("no valid assets found (all were checksum or non-executable package files)")
 	}
 
-	best := selectBestAsset(validAssets, osType, archType, libcType)
-	if best == nil {
+	ranked := rankAssets(validAssets, osType, archType, libcType)
+	if len(ranked) == 0 {
 		return nil, fmt.Errorf("no matching binary found for %s/%s", osType, archType)
 	}
 
-	return &best.Asset, nil
+	out := make([]github.Asset, len(ranked))
+	for i := range ranked {
+		out[i] = ranked[i].Asset
+	}
+	return out, nil
 }
 
 // filterValidAssets removes checksum and non-executable package files

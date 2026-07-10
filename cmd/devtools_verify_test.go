@@ -106,6 +106,41 @@ func TestExtractVersion(t *testing.T) {
 	}
 }
 
+func TestEvaluateVersionCheck(t *testing.T) {
+	tests := []struct {
+		name       string
+		expected   string
+		output     string
+		wantStatus string
+		wantActual string
+	}{
+		// Release-tag prefixes/suffixes on the expected value must not mismatch
+		// when the tool reports exactly the tagged version.
+		{"jq tag prefix", "jq-1.8.2", "jq-1.8.2", "ok", "1.8.2"},
+		{"lychee tag prefix", "lychee-v0.24.2", "lychee 0.24.2", "ok", "0.24.2"},
+		{"tsgo dev suffix", "7.0.0-dev.20260421.2", "Version 7.0.0-dev.20260421.2", "ok", "7.0.0"},
+		// Multi-line output whose first token is an unrelated toolchain version:
+		// the expected version must be matched against any token.
+		{"govulncheck scanner line", "v1.3.0", "Go: go1.26.4\nScanner: govulncheck@v1.3.0\nDB: https://vuln.go.dev", "ok", "1.3.0"},
+		// Genuine mismatch: the tool reports a different version entirely.
+		{"harper genuine mismatch", "v2.6.0", "harper-cli 0.1.0", "mismatch", "0.1.0"},
+		// Existing behaviour preserved.
+		{"clean match", "2.7.2", "golangci-lint has version 2.7.2", "ok", "2.7.2"},
+		{"empty expected skips", "", "anything 9.9.9", "ok", "9.9.9"},
+		{"no token in output", "1.2.3", "no version here", "parse_failed", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			status, actual := evaluateVersionCheck(tt.expected, tt.output)
+			if status != tt.wantStatus || actual != tt.wantActual {
+				t.Errorf("evaluateVersionCheck(%q, %q) = (%q, %q), want (%q, %q)",
+					tt.expected, tt.output, status, actual, tt.wantStatus, tt.wantActual)
+			}
+		})
+	}
+}
+
 func TestGetAppVersion(t *testing.T) {
 	tests := []struct {
 		name     string

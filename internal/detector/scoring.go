@@ -105,23 +105,19 @@ func ScoreAsset(asset github.Asset, osType syslist.OsType, archType syslist.Arch
 	return s
 }
 
-// selectBestAsset scores all assets and returns the highest-scoring one.
-// Ties are broken by asset name (alphabetical, ascending) for determinism.
-func selectBestAsset(assets []github.Asset, osType syslist.OsType, archType syslist.ArchType, libcType string) *AssetScore {
-	if len(assets) == 0 {
-		return nil
-	}
-
+// rankAssets scores every asset and returns the matching ones sorted best-first.
+// Assets that fail to match the requested OS/arch (score 0) are excluded. The
+// ordering is deterministic: score descending, then explicit matches before
+// implicit ones, then asset name ascending. Callers that only need the winner
+// use the first element; callers that want fallbacks (e.g. a raw binary behind
+// a preferred archive) walk the whole slice.
+func rankAssets(assets []github.Asset, osType syslist.OsType, archType syslist.ArchType, libcType string) []AssetScore {
 	scores := make([]AssetScore, 0, len(assets))
 	for _, asset := range assets {
 		s := ScoreAsset(asset, osType, archType, libcType)
 		if s.Total > 0 && s.OSMatch && s.ArchMatch {
 			scores = append(scores, s)
 		}
-	}
-
-	if len(scores) == 0 {
-		return nil
 	}
 
 	sort.Slice(scores, func(i, j int) bool {
@@ -134,5 +130,15 @@ func selectBestAsset(assets []github.Asset, osType syslist.OsType, archType sysl
 		return scores[i].Asset.Name < scores[j].Asset.Name
 	})
 
-	return &scores[0]
+	return scores
+}
+
+// selectBestAsset scores all assets and returns the highest-scoring one.
+// Ties are broken by asset name (alphabetical, ascending) for determinism.
+func selectBestAsset(assets []github.Asset, osType syslist.OsType, archType syslist.ArchType, libcType string) *AssetScore {
+	ranked := rankAssets(assets, osType, archType, libcType)
+	if len(ranked) == 0 {
+		return nil
+	}
+	return &ranked[0]
 }
