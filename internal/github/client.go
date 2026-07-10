@@ -93,37 +93,30 @@ func (c *Client) ListReleases(ctx context.Context, owner, repo string, perPage i
 	return nil, lastErr
 }
 
-// GetLatestReleaseWithMinAge returns the most recent release at least minAgeMinutes old.
-// It fetches up to 30 releases and skips prereleases, drafts, and releases with a
-// zero PublishedAt. When minAgeMinutes <= 0 it falls through to GetLatestRelease.
-// Returns (nil, nil) when no release qualifies.
+// GetLatestReleaseWithMinAge returns the highest-semver stable release that is
+// at least minAgeMinutes old. It lists recent releases and selects by semantic
+// version (never by publish date) via selectLatestStableRelease, so a patch
+// backported to an older branch cannot mask a newer minor/major. Prereleases,
+// drafts, and releases with a zero PublishedAt are skipped.
+//
+// When minAgeMinutes <= 0 the age cutoff is disabled but selection stays
+// semver-based; if the list yields no stable release at all (degenerate repo)
+// it falls back to GitHub's own "latest" designation. Under an active cutoff
+// that excludes every release it returns (nil, nil) — a documented, non-error
+// outcome callers branch on.
 func (c *Client) GetLatestReleaseWithMinAge(ctx context.Context, owner, repo string, minAgeMinutes int) (*Release, error) {
-	if minAgeMinutes <= 0 {
-		return c.GetLatestRelease(ctx, owner, repo)
-	}
-
 	releases, err := c.ListReleases(ctx, owner, repo, 30)
 	if err != nil {
 		return nil, err
 	}
 
-	cutoff := time.Now().Add(-time.Duration(minAgeMinutes) * time.Minute)
-	for i := range releases {
-		r := releases[i]
-		if r.Prerelease || r.Draft {
-			continue
-		}
-		if r.PublishedAt.IsZero() {
-			continue
-		}
-		if r.PublishedAt.After(cutoff) {
-			continue
-		}
-		return &r, nil
+	if sel := selectLatestStableRelease(releases, minAgeMinutes, time.Now()); sel != nil {
+		return sel, nil
 	}
 
-	// No release qualifies under the min-age cutoff; callers branch on a nil
-	// release as a normal, non-error outcome (documented contract).
+	if minAgeMinutes <= 0 {
+		return c.GetLatestRelease(ctx, owner, repo)
+	}
 	return nil, nil //nolint:nilnil
 }
 

@@ -304,6 +304,17 @@ func buildBinariesForApp(ctx context.Context, appName string, release *github.Re
 	}
 	seenByOsArch := make(map[syslist.OsType]map[syslist.ArchType]*seenAsset)
 
+	// When extraction is verified, wrap the binmanager verifier so
+	// pickBinaryForPlatform can retry the next-ranked candidate on failure —
+	// e.g. fall back to a raw binary when a preferred archive's guessed
+	// in-archive path is wrong. Left nil (no verification) when the flag is off.
+	var verify extractionVerifier
+	if verifyExtractionFlag {
+		verify = func(ctx context.Context, url, hash string, contentType binmanager.BinContentType, binaryPath *string) error {
+			return binmanager.VerifyBinaryExtraction(ctx, url, hash, binmanager.BinHashTypeSHA256, contentType, binaryPath)
+		}
+	}
+
 	var results []detectionResult
 	successCount := 0
 	notAvailableCount := 0
@@ -312,7 +323,7 @@ func buildBinariesForApp(ctx context.Context, appName string, release *github.Re
 	deduplicatedCount := 0
 
 	for _, platform := range platforms {
-		asset, err := detector.DetectBinary(release.Assets, platform.os, platform.arch, platform.libc)
+		candidates, err := detector.DetectBinaryCandidates(release.Assets, platform.os, platform.arch, platform.libc)
 		if err != nil {
 			results = append(results, detectionResult{
 				os:     platform.os,
@@ -325,48 +336,33 @@ func buildBinariesForApp(ctx context.Context, appName string, release *github.Re
 			continue
 		}
 
-		// Reject libc mismatches: the detected libc of the asset must not conflict
-		// with the requested libc. This prevents storing e.g. a musl-only asset
-		// under the glibc key.
-		if platform.libc != "unknown" {
-			detectedLibc := detector.DetectLibcFromFilename(asset.Name)
-			if detectedLibc != "" && detectedLibc != platform.libc {
-				results = append(results, detectionResult{
-					os:     platform.os,
-					arch:   platform.arch,
-					libc:   platform.libc,
-					status: "not_available",
-					err:    fmt.Errorf("asset %q is %s, not %s", asset.Name, detectedLibc, platform.libc),
-				})
-				notAvailableCount++
-				continue
-			}
-		}
-
-		// Detect content type
-		contentType := detector.DetectContentType(asset.Name)
-
-		// Detect binary path using historical learning (read-only access)
-		binaryPath := detector.DetectBinaryPathWithHistory(
-			appName,
-			asset.Name,
-			contentType,
-			platform.os,
-			historicalBinaries,
-		)
-
-		// Extract SHA256 hash from digest
-		hash, err := extractHashFromDigest(asset.Digest)
-		if err != nil {
+		// Walk the ranked candidates and take the first that satisfies libc,
+		// hash, and (when enabled) extraction verification. A raw binary can thus
+		// rescue a platform whose higher-ranked archive fails to extract.
+		pick, status, pickErr := pickBinaryForPlatform(ctx, appName, candidates, platform, historicalBinaries, verify)
+		switch status {
+		case "success":
+			// fall through to dedup + store below
+		case "no_hash":
 			results = append(results, detectionResult{
-				os:        platform.os,
-				arch:      platform.arch,
-				libc:      platform.libc,
-				status:    "no_hash",
-				assetName: asset.Name,
-				err:       err,
+				os: platform.os, arch: platform.arch, libc: platform.libc,
+				status: "no_hash", assetName: candidates[0].Name, err: pickErr,
 			})
 			noHashCount++
+			continue
+		case "verification_failed":
+			results = append(results, detectionResult{
+				os: platform.os, arch: platform.arch, libc: platform.libc,
+				status: "verification_failed", assetName: candidates[0].Name, err: pickErr,
+			})
+			verificationFailedCount++
+			continue
+		default: // "not_available" — e.g. every candidate was a libc mismatch
+			results = append(results, detectionResult{
+				os: platform.os, arch: platform.arch, libc: platform.libc,
+				status: "not_available", err: pickErr,
+			})
+			notAvailableCount++
 			continue
 		}
 
@@ -375,7 +371,7 @@ func buildBinariesForApp(ctx context.Context, appName string, release *github.Re
 		if platform.libc == "musl" {
 			if osMap, ok := seenByOsArch[platform.os]; ok {
 				if seen, ok := osMap[platform.arch]; ok {
-					if seen.url == asset.BrowserDownloadURL && seen.hash == hash {
+					if seen.url == pick.asset.BrowserDownloadURL && seen.hash == pick.hash {
 						fmt.Printf("  Skipping musl for %s/%s: same binary as glibc\n", platform.os, platform.arch)
 						results = append(results, detectionResult{
 							os:     platform.os,
@@ -390,38 +386,12 @@ func buildBinariesForApp(ctx context.Context, appName string, release *github.Re
 			}
 		}
 
-		// Verify extraction if flag is enabled
-		if verifyExtractionFlag {
-			hashType := binmanager.BinHashTypeSHA256
-			if err := binmanager.VerifyBinaryExtraction(
-				ctx,
-				asset.BrowserDownloadURL,
-				hash,
-				hashType,
-				contentType,
-				binaryPath,
-			); err != nil {
-				results = append(results, detectionResult{
-					os:          platform.os,
-					arch:        platform.arch,
-					libc:        platform.libc,
-					status:      "verification_failed",
-					assetName:   asset.Name,
-					contentType: contentType,
-					binaryPath:  binaryPath,
-					err:         err,
-				})
-				verificationFailedCount++
-				continue
-			}
-		}
-
 		// Create binary info
 		binInfo := binmanager.BinaryOsArchInfo{
-			URL:         asset.BrowserDownloadURL,
-			Hash:        hash,
-			ContentType: contentType,
-			BinaryPath:  binaryPath,
+			URL:         pick.asset.BrowserDownloadURL,
+			Hash:        pick.hash,
+			ContentType: pick.contentType,
+			BinaryPath:  pick.binaryPath,
 		}
 
 		// Ensure OS, arch, and libc maps exist in the new entry
@@ -440,8 +410,8 @@ func buildBinariesForApp(ctx context.Context, appName string, release *github.Re
 				seenByOsArch[platform.os] = make(map[syslist.ArchType]*seenAsset)
 			}
 			seenByOsArch[platform.os][platform.arch] = &seenAsset{
-				url:  asset.BrowserDownloadURL,
-				hash: hash,
+				url:  pick.asset.BrowserDownloadURL,
+				hash: pick.hash,
 			}
 		}
 
@@ -450,9 +420,9 @@ func buildBinariesForApp(ctx context.Context, appName string, release *github.Re
 			arch:        platform.arch,
 			libc:        platform.libc,
 			status:      "success",
-			assetName:   asset.Name,
-			contentType: contentType,
-			binaryPath:  binaryPath,
+			assetName:   pick.asset.Name,
+			contentType: pick.contentType,
+			binaryPath:  pick.binaryPath,
 		})
 		successCount++
 	}
@@ -480,6 +450,85 @@ func buildBinariesForApp(ctx context.Context, appName string, release *github.Re
 		fmt.Printf("\nSummary: %d detected, %d not available\n", successCount, notAvailableCount)
 	}
 	return entry, nil
+}
+
+// extractionVerifier downloads an asset and confirms its hash and (for
+// archives) that binaryPath extracts to a non-empty file. It is injected so the
+// candidate-selection loop is unit-testable without network access; nil means
+// verification is disabled.
+type extractionVerifier func(ctx context.Context, url, hash string, contentType binmanager.BinContentType, binaryPath *string) error
+
+// candidatePick is the asset chosen for one platform plus the derived metadata
+// needed to record it.
+type candidatePick struct {
+	asset       github.Asset
+	contentType binmanager.BinContentType
+	binaryPath  *string
+	hash        string
+}
+
+// pickBinaryForPlatform walks the ranked candidate assets for one platform and
+// returns the first that satisfies libc, hash, and (when verify != nil)
+// extraction requirements. This lets a lower-ranked raw binary rescue a
+// platform whose preferred archive fails extraction verification instead of the
+// platform being dropped.
+//
+// On failure it returns a nil pick and a status describing the most relevant
+// reason across all candidates — "verification_failed" (some candidate
+// downloaded but did not extract), "no_hash" (a matching candidate lacked a
+// SHA-256 digest), or "not_available" (only libc mismatches / no usable
+// candidate) — together with the corresponding error for reporting.
+func pickBinaryForPlatform(
+	ctx context.Context,
+	appName string,
+	candidates []github.Asset,
+	platform platformTuple,
+	historical binmanager.MapOfBinaries,
+	verify extractionVerifier,
+) (*candidatePick, string, error) {
+	var verifyErr, hashErr, libcErr error
+
+	for i := range candidates {
+		asset := candidates[i]
+
+		// Reject libc mismatches: the detected libc of the asset must not
+		// conflict with the requested libc (e.g. a musl-only asset under glibc).
+		if platform.libc != "unknown" {
+			if detectedLibc := detector.DetectLibcFromFilename(asset.Name); detectedLibc != "" && detectedLibc != platform.libc {
+				libcErr = fmt.Errorf("asset %q is %s, not %s", asset.Name, detectedLibc, platform.libc)
+				continue
+			}
+		}
+
+		contentType := detector.DetectContentType(asset.Name)
+		binaryPath := detector.DetectBinaryPathWithHistory(appName, asset.Name, contentType, platform.os, historical)
+
+		hash, err := extractHashFromDigest(asset.Digest)
+		if err != nil {
+			hashErr = err
+			continue
+		}
+
+		if verify != nil {
+			if err := verify(ctx, asset.BrowserDownloadURL, hash, contentType, binaryPath); err != nil {
+				verifyErr = err
+				continue
+			}
+		}
+
+		return &candidatePick{asset: asset, contentType: contentType, binaryPath: binaryPath, hash: hash}, "success", nil
+	}
+
+	// Precedence favours the most informative failure: a download/extract
+	// failure over a missing hash over a plain libc mismatch.
+	switch {
+	case verifyErr != nil:
+		return nil, "verification_failed", verifyErr
+	case hashErr != nil:
+		return nil, "no_hash", hashErr
+	default:
+		return nil, "not_available", libcErr
+	}
 }
 
 func formatPlatformLabel(r detectionResult) string {
