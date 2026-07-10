@@ -1203,16 +1203,7 @@ func runPhase5VersionChecks(ctx context.Context, cfg *config.Config, bm *binmana
 			continue
 		}
 
-		actual := extractVersion(string(output))
-		normalizedExpected := normalizeVersion(expectedVersion)
-		normalizedActual := normalizeVersion(actual)
-
-		status := "ok"
-		if normalizedExpected != "" && normalizedActual == "" {
-			status = "parse_failed"
-		} else if normalizedExpected != "" && normalizedActual != "" && normalizedExpected != normalizedActual {
-			status = "mismatch"
-		}
+		status, actual := evaluateVersionCheck(expectedVersion, string(output))
 
 		r := versionCheckResult{
 			AppName:  entry.name,
@@ -1271,10 +1262,47 @@ func extractVersion(output string) string {
 	return match
 }
 
+// extractAllVersions returns every dotted-numeric version token in the output,
+// in order. Some tools print an unrelated number before their own version
+// (e.g. govulncheck leads with "Go: go1.26.4" then "Scanner: govulncheck@v1.3.0"),
+// so a check must consider all tokens, not just the first.
+func extractAllVersions(output string) []string {
+	return versionRegex.FindAllString(output, -1)
+}
+
 func normalizeVersion(version string) string {
 	v := strings.TrimPrefix(version, "v")
 	v = normalizeVersionRegex.ReplaceAllString(v, "")
 	return v
+}
+
+// evaluateVersionCheck compares a configured version against a tool's --version
+// output and returns the status ("ok"/"mismatch"/"parse_failed") plus the actual
+// version to display. The expected value is itself run through extractVersion so
+// that release-tag prefixes/suffixes ("jq-1.8.2", "lychee-v0.24.2",
+// "7.0.0-dev.20260421.2") don't cause false mismatches, and it matches against
+// ANY version token in the output so a leading unrelated number (Go toolchain,
+// etc.) doesn't shadow the real one. When matched, the matched token is returned
+// as the actual value; otherwise the first token is shown for diagnostics.
+func evaluateVersionCheck(expectedVersion, output string) (status, actual string) {
+	normalizedExpected := normalizeVersion(extractVersion(expectedVersion))
+	tokens := extractAllVersions(output)
+	if len(tokens) > 0 {
+		actual = tokens[0]
+	}
+
+	if normalizedExpected == "" {
+		return "ok", actual
+	}
+	if len(tokens) == 0 {
+		return "parse_failed", actual
+	}
+	for _, tok := range tokens {
+		if normalizeVersion(tok) == normalizedExpected {
+			return "ok", tok
+		}
+	}
+	return "mismatch", actual
 }
 
 // runtimeAppInfo is the single dispatch point the verify phases share for
