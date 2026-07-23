@@ -25,6 +25,11 @@ optimisticRepeatInstall: true
 # 3.18.1 once anything pulls them into the tree, and Docusaurus's webpack then
 # fails to bundle vscode-jsonrpc ("Emitter is not exported").
 overrides:
+  # Keep every official @docusaurus/* package aligned with @docusaurus/core.
+  # docusaurus-plugin-ideal-image is pinned transitively by
+  # @ovineko/docusaurus-config, so a website bump alone leaves it behind and
+  # Docusaurus refuses to build on a version mismatch.
+  "@docusaurus/plugin-ideal-image": 3.10.2
   vscode-jsonrpc: 8.2.0
   vscode-languageserver-protocol: 3.17.5
   vscode-languageserver-types: 3.17.5
