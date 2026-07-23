@@ -86,15 +86,15 @@
   "devDependencies": {
     "@shibanet0/datamitsu-config": "catalog:",
     "@types/node": "26.1.1",
-    "@types/vscode": "1.82.0",
-    "@vscode/vsce": "3.6.0",
+    "@types/vscode": "1.125.0",
+    "@vscode/vsce": "3.9.2",
     "ovsx": "1.0.2",
     "tsdown": "0.22.13",
     "tsx": "4.23.1",
-    "vscode-languageclient": "9.0.1"
+    "vscode-languageclient": "10.1.0"
   },
   "engines": {
-    "vscode": "^1.82.0"
+    "vscode": "^1.125.0"
   },
   "icon": "icon.png",
   "preview": true,
