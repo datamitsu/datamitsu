@@ -20,19 +20,20 @@ minimumReleaseAgeExclude:
   - "@ovineko/*"
   - "@shibanet0/*"
 optimisticRepeatInstall: true
-# Pin the vscode-* deps injected into langium (below) so mermaid's bundle in the
-# website stays on the 8.2.x/3.17.x line. Without this the "*" floats to 9.0.0 /
-# 3.18.1 once anything pulls them into the tree, and Docusaurus's webpack then
-# fails to bundle vscode-jsonrpc ("Emitter is not exported").
+# Pin the vscode-* deps (injected into langium below, and required by the vscode
+# extension's vscode-languageclient) so the whole tree stays on one line. These
+# are the versions vscode-languageclient 10 depends on; Docusaurus's mermaid
+# bundle also builds cleanly against them. Pinning keeps langium's "*" specs from
+# floating to an untested combination.
 overrides:
   # Keep every official @docusaurus/* package aligned with @docusaurus/core.
   # docusaurus-plugin-ideal-image is pinned transitively by
   # @ovineko/docusaurus-config, so a website bump alone leaves it behind and
   # Docusaurus refuses to build on a version mismatch.
   "@docusaurus/plugin-ideal-image": 3.10.2
-  vscode-jsonrpc: 8.2.0
-  vscode-languageserver-protocol: 3.17.5
-  vscode-languageserver-types: 3.17.5
+  vscode-jsonrpc: 9.0.1
+  vscode-languageserver-protocol: 3.18.2
+  vscode-languageserver-types: 3.18.0
 packageExtensions:
   langium:
     dependencies:
