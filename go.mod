@@ -9,7 +9,7 @@ require (
 	github.com/dop251/goja v0.0.0-20260723142020-b4aef50fa347
 	github.com/evanw/esbuild v0.28.1
 	github.com/fatih/color v1.19.0
-	github.com/go-git/go-git/v6 v6.0.0-alpha.4
+	github.com/go-git/go-git/v6 v6.0.0-alpha.5
 	github.com/goccy/go-yaml v1.19.2
 	github.com/klauspost/compress v1.19.1
 	github.com/mattn/go-isatty v0.0.24
@@ -35,7 +35,7 @@ require (
 	github.com/cloudflare/circl v1.6.4 // indirect
 	github.com/dlclark/regexp2/v2 v2.5.2 // indirect
 	github.com/go-git/gcfg/v2 v2.0.2 // indirect
-	github.com/go-git/go-billy/v6 v6.0.0-alpha.1 // indirect
+	github.com/go-git/go-billy/v6 v6.0.0-alpha.2 // indirect
 	github.com/go-sourcemap/sourcemap v2.1.4+incompatible // indirect
 	github.com/google/pprof v0.0.0-20260709232956-b9395ee17fa0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
