@@ -1,0 +1,62 @@
+# Datamitsu
+
+> Your toolchain deserves a home.
+
+Documentation embedded in this binary, matching its exact version. No network access.
+
+Fetch any page with: `datamitsu llms <slug>`.
+Machine-readable list:  `datamitsu llms --list --json`.
+Standard llms.txt form: `datamitsu llms --web`.
+
+## Table of Contents
+
+- [About datamitsu](about): Learn why datamitsu exists and how it helps teams standardize their development toolchains
+- [Brand Guidelines](contributing/brand-guidelines): Voice, tone, and style guidelines for datamitsu documentation and communications
+- [Creating Wrapper Packages](contributing/creating-wrappers): Build your own datamitsu config distribution package for your team or organization
+- [Contributing to datamitsu](contributing): How to contribute to datamitsu development, documentation, and ecosystem
+- [Multiple Tool Versions](examples/multiple-versions): Run multiple versions of the same tool side-by-side in a monorepo using isolated environments
+- [PNPM Patterns](examples/pnpm-patterns): Managing Node.js tools that require plugins or peer dependencies with PNPM isolation
+- [UV Isolation](examples/uv-isolation): Managing Python tools with UV runtime isolation for conflict-free environments
+- [Core Concepts](getting-started/core-concepts): Understanding the key concepts behind datamitsu
+- [Docker](getting-started/installation/docker): Run datamitsu from the official Docker images on Docker Hub or GitHub Container Registry
+- [GitHub Releases](getting-started/installation/github-releases): Download datamitsu binaries, deb/rpm/apk packages, and verification files directly from GitHub Releases
+- [Homebrew](getting-started/installation/homebrew): Install datamitsu via Homebrew on macOS or Linux
+- [Installation](getting-started/installation): How to install datamitsu on your system
+- [npm](getting-started/installation/npm): Install datamitsu via npm
+- [PyPI](getting-started/installation/pypi): Install datamitsu via pip, uv, or pipx
+- [RubyGems](getting-started/installation/rubygems): Install datamitsu via gem
+- [Scoop](getting-started/installation/scoop): Install datamitsu via Scoop on Windows
+- [Build from Source](getting-started/installation/source): Build datamitsu from source using Go
+- [VS Code Extension](getting-started/installation/vscode): Install the Datamitsu Toolkit extension for VS Code, Cursor, VSCodium, and other VS Code-based editors
+- [Winget](getting-started/installation/winget): Install datamitsu via winget on Windows
+- [Quick Start](getting-started/quick-start): Get up and running with datamitsu in minutes
+- [Caching Strategy](guides/architecture/caching): How datamitsu tracks per-file results, builds invalidation keys from configuration and file hashes, and safely persists cache state under concurrent execution
+- [File Discovery & Project Detection](guides/architecture/discovery): How datamitsu walks the repository tree respecting .gitignore rules and detects project boundaries for monorepo-aware tool execution
+- [Parallel Execution](guides/architecture/execution): How datamitsu runs task groups sequentially while parallelizing tasks within each group, with fail-fast semantics
+- [Internal Architecture](guides/architecture): Overview of datamitsu's internal execution model - file discovery, task planning, parallel execution, and caching
+- [WASM Output Parsers](guides/architecture/parsers): How datamitsu declares, builds, signs, delivers, downloads, and loads sandboxed Rust→WASM output parsers, and how the line-based diff-in-core powers formatting
+- [Task Planning](guides/architecture/planner): How datamitsu groups files into prioritized task batches with overlap detection and CWD-subtree restriction
+- [Binary Management](guides/binary-management): How datamitsu manages binary downloads, hash verification, and caching
+- [Configuration](guides/configuration): How to configure datamitsu with JavaScript config files, remote configs, and config layers
+- [Managed Configs](guides/managed-configs): Using managed configuration files, symlinks, and the .datamitsu/ directory
+- [Managed Content (Bundles)](guides/managed-content): Using bundles to distribute managed content via symlinks with automatic cache invalidation
+- [OCI Bundles](guides/oci-bundles): An OCI bundle packages the datamitsu tool store as a standard OCI image: one layer per store subtree (a binary, a runtime, a runtime-managed app, or a WASM output-parser module), annotated so datamitsu can pull exactly the pieces it needs — **without docker or podman**. The bundle is a cache accelerator and an airgap seed, not a replacement for resolution: whatever is in the bundle is taken from it, whatever is not gets downloaded the usual way.
+- [Runtime Management](guides/runtime-management): Managing UV (Python), Node.js, JVM, and Go runtimes with datamitsu
+- [Supply Chain Security](guides/supply-chain-security): How datamitsu enforces supply chain integrity for pnpm, UV, and Go dependencies
+- [Tooling System](guides/tooling-system): Understanding the fix, lint, and check operations in datamitsu
+- [Using Wrapper Packages](guides/using-wrappers): How to install and use datamitsu wrapper packages in your projects
+- [Add a New Tool](how-to/add-new-tool): Step-by-step guide to adding binary, UV, Node, and JVM tools to datamitsu
+- [Configure Linters](how-to/configure-linters): How to set up and configure linters and formatters with datamitsu
+- [Maintaining Wrapper Packages](how-to/maintain-wrapper): Workflows for keeping wrapper package tool versions, runtimes, and hashes up to date using devtools commands
+- [Manage Cache](how-to/manage-cache): How to manage datamitsu's cache, store, and per-project data
+- [Use in Alpine Linux](how-to/use-in-alpine): How datamitsu handles Alpine Linux and musl libc systems with automatic detection and binary selection
+- [Use in GitHub Actions](how-to/use-in-github-actions): Install datamitsu and run your checks in CI with the official setup-datamitsu action in a single step
+- [Use Remote Configs](how-to/use-remote-configs): How to create, share, and inherit remote configuration files
+- [Introduction](intro): datamitsu - a platform for building reproducible, security-first development tool distributions
+- [CLI Commands](reference/cli-commands): Complete reference for all datamitsu CLI commands
+- [Comparison with Similar Tools](reference/comparison): How datamitsu compares to mise, moon, Nx, and Turborepo
+- [Configuration API](reference/configuration-api): Complete reference for the datamitsu configuration API
+- [Ignore Rules](reference/ignore-rules): Reference for .datamitsuignore syntax and usage
+- [JavaScript API](reference/js-api): Programmatic API reference for the @datamitsu/datamitsu npm package
+- [Parser Catalog](reference/parser-catalog): Tools whose output the bundled datamitsu WASM parser module turns into diagnostics
+- [Template Placeholders](reference/template-placeholders): Reference for template placeholders in tool operation arguments and environment values

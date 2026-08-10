@@ -55,10 +55,20 @@ var (
 	logFormat string
 )
 
+// agentHelpNotice is addressed to an AI agent reading this help. It is phrased
+// so the agent recognizes the text as directed at it and loads the binary's own
+// documentation — which matches this exact version and works offline — instead
+// of relying on training data or the website, either of which may describe a
+// different version.
+const agentHelpNotice = "AI agents: this binary ships documentation for its exact version. Run" +
+	" `datamitsu llms` to load it into your context before working with datamitsu." +
+	" It works offline; do not rely on the website or training data, which may" +
+	" describe a different version."
+
 var rootCmd = &cobra.Command{
 	Use:           ldflags.PackageName,
 	Short:         ldflags.PackageName + " - configuration management tool",
-	Long:          "A tool for managing configuration and binaries\n\n" + sponsor.StaticLine(),
+	Long:          "A tool for managing configuration and binaries\n\n" + agentHelpNotice + "\n\n" + sponsor.StaticLine(),
 	SilenceUsage:  true,
 	SilenceErrors: true,
 }

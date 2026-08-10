@@ -3,3 +3,10 @@
 # Enable a tool by removing it from the list below (or add "!**/*: <tool>").
 website/**/*: tsgo
 **/*: actionlint, bearer, grype, harper-cli, lychee, osv-scanner, trivy, trufflehog, vale, knip, typos, oxfmt
+
+# The embedded documentation snapshot is a verbatim copy of the Docusaurus llms
+# output, written by `task gen:llms-docs`. Its bytes are hashed into
+# manifest.json and diffed by the llms-docs-drift CI job, so any formatter
+# touching it would break that identity and flap the gate. Edit website/docs and
+# re-harvest instead.
+internal/llmsdocs/embed/**/*: *

@@ -1,9 +1,6 @@
----
-title: Contributing to datamitsu
-description: How to contribute to datamitsu development, documentation, and ecosystem
----
-
 # Contributing to datamitsu
+
+> How to contribute to datamitsu development, documentation, and ecosystem
 
 Thank you for your interest in contributing to datamitsu! This project is in alpha stage and welcomes contributions from the community.
 

@@ -1,9 +1,6 @@
----
-title: CLI Commands
-description: Complete reference for all datamitsu CLI commands
----
-
 # CLI Commands
+
+> Complete reference for all datamitsu CLI commands
 
 ## Global Flags
 

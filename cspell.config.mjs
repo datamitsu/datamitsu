@@ -16,9 +16,25 @@ export default defineConfig((config) => ({
     // Auto-generated parser-catalog page: tool descriptions come verbatim from the
     // WASM module (jargon: Verilog, Beancount, SPIR…), not our prose.
     "website/docs/reference/parser-catalog.md",
+    // Embedded documentation snapshot: a verbatim, byte-hashed copy of the
+    // website pages, which are already spell-checked at their source under
+    // website/docs. Checking it again would only add a second place to fix the
+    // same word — and any edit here would break the snapshot's content hash.
+    "internal/llmsdocs/embed/**",
   ],
+  // Misspellings on purpose: fixtures for the `datamitsu llms` did-you-mean
+  // suggester, whose whole job is to map a typo back to the right page. They are
+  // ignored rather than added to `words` because they are genuinely wrong — this
+  // says "expected here", not "correct spelling".
+  ignoreWords: [...(config.ignoreWords ?? []), "aboutt", "cachng", "instalation"],
   words: [
     ...config.words,
+    // Go packages behind `datamitsu llms`: the embedded docs snapshot and its
+    // manifest schema.
+    "llmsdocs",
+    "llmsmanifest",
+    // Damerau–Levenshtein, the edit distance behind page-name suggestions.
+    "Damerau",
     "errorformat",
     "tinyjson",
     "fract",

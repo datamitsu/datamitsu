@@ -53,6 +53,7 @@ var testedLeafCommands = map[string]string{
 	"init":                         "TestInitNoopSuccess / TestInitDryRunGolden",
 	"install":                      "TestInstallNoTargets",
 	"lint":                         "TestExplainPlanGolden",
+	"llms":                         "TestLlmsHelpGolden / TestLlmsRootIndex / TestLlmsUnknownPageGolden",
 	"lsp":                          "TestLspFormattingSession",
 	"setup":                        "TestSetupDryRunGolden",
 	"store clear":                  "TestStoreClear",

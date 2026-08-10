@@ -50,6 +50,16 @@ tasks:
       - docker run --rm datamitsu/datamitsu:dev version
       - docker run --rm datamitsu/datamitsu:dev-alpine version
     desc: Test local Docker images
+  gen:llms-docs:
+    cmds:
+      # docusaurus-plugin-llms already emits the cleaned per-page markdown; the
+      # harvester only reshapes it into the embedded snapshot. Unlike
+      # gen:parsers-doc there is deliberately no `dm fix` step: the pages are
+      # embedded verbatim and their bytes are hashed into manifest.json, so any
+      # formatting would break that identity (see .datamitsuignore).
+      - pnpm --filter website build
+      - go run ./packaging/llms-harvest
+    desc: Regenerate the embedded llms documentation snapshot from the Docusaurus build
   gen:parsers-doc:
     cmds:
       # Core emits JSON (its only job); the TS script turns it into Markdown, so the
