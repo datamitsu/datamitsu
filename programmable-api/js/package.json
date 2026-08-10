@@ -9,14 +9,14 @@
     "test": "node --experimental-test-module-mocks --import tsx --test 'src/**/*.test.ts' 'src/*.test.ts'"
   },
   "dependencies": {
-    "tinyexec": "1.2.4"
+    "tinyexec": "1.3.0"
   },
   "devDependencies": {
     "@datamitsu/datamitsu": "link:../../packaging/npm/datamitsu",
     "@shibanet0/datamitsu-config": "catalog:",
-    "@types/node": "26.1.2",
+    "@types/node": "26.2.0",
     "tsdown": "0.22.14",
-    "tsx": "4.23.9"
+    "tsx": "4.23.11"
   },
   "engines": {
     "node": ">=22.12.0"
