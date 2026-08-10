@@ -20,7 +20,7 @@ require (
 	github.com/spf13/cobra v1.10.2
 	github.com/tetratelabs/wazero v1.12.0
 	github.com/ulikunitz/xz v0.5.16
-	github.com/vbauerster/mpb/v8 v8.13.0
+	github.com/vbauerster/mpb/v8 v8.15.1
 	github.com/zeebo/xxh3 v1.1.0
 	go.uber.org/zap v1.28.0
 	golang.org/x/mod v0.38.0
@@ -41,8 +41,9 @@ require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.4.0 // indirect
 	github.com/mattn/go-colorable v0.1.15 // indirect
-	github.com/mattn/go-runewidth v0.0.24 // indirect
+	github.com/mattn/go-runewidth v0.0.27 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
+	github.com/vbauerster/cupwriter v0.0.4 // indirect
 	github.com/xyproto/randomstring v1.2.0 // indirect
 	github.com/zeebo/assert v1.3.1 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
