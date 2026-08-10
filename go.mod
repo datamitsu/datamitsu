@@ -11,7 +11,7 @@ require (
 	github.com/fatih/color v1.19.0
 	github.com/go-git/go-git/v6 v6.0.0-alpha.4
 	github.com/goccy/go-yaml v1.19.2
-	github.com/klauspost/compress v1.19.1
+	github.com/klauspost/compress v1.19.2
 	github.com/mattn/go-isatty v0.0.24
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.1
