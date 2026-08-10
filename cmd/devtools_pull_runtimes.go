@@ -481,6 +481,46 @@ type UVRuntimeData struct {
 // alongside the error, which pullUVRuntime deliberately discards (see below).
 var getLatestPythonStableVersion = registry.GetLatestPythonStableVersion
 
+// getUVSupportedPythonVersions is the injectable seam for resolving which
+// CPython versions a uv release can install; tests override it to exercise the
+// reconciliation paths without network.
+var getUVSupportedPythonVersions = registry.GetUVSupportedPythonVersions
+
+// reconcilePythonWithUV lowers pythonVersion to something the pinned uv release
+// can actually install.
+//
+// The two lookups in pullUVRuntime have independent release cadences and are
+// free to disagree: endoflife.date reports a CPython patch the moment python.org
+// ships it, whereas uv only gains it in a later uv release, which the
+// minimum-release-age gate then holds back for a week on top. Pinning the gap
+// produces a config that installs nothing — every managed Python tool dies with
+// "No interpreter found for Python <version>" — so the Python pin follows uv
+// rather than the other way round.
+func reconcilePythonWithUV(ctx context.Context, pythonVersion, uvVersion string) (string, error) {
+	supported, err := getUVSupportedPythonVersions(ctx, uvVersion)
+	if err != nil {
+		return "", fmt.Errorf("failed to look up Python versions installable by uv %s: %w", uvVersion, err)
+	}
+	if supported[pythonVersion] {
+		return pythonVersion, nil
+	}
+
+	// Only same-line downgrades are safe to make silently; if uv does not know
+	// the minor line at all, pinning a different line is a call for a human.
+	downgraded := registry.LatestSupportedPythonPatch(supported, pythonVersion)
+	if downgraded == "" {
+		return "", fmt.Errorf(
+			"uv %s cannot install Python %s and has no older patch on that line; "+
+				"wait for a uv release that supports it or lower --min-age",
+			uvVersion, pythonVersion)
+	}
+
+	fmt.Printf("Python %s is not installable by uv %s; pinning %s instead\n",
+		pythonVersion, uvVersion, downgraded)
+
+	return downgraded, nil
+}
+
 func pullUVRuntime(ctx context.Context, minAge int) (*UVRuntimeData, binmanager.MapOfBinaries, error) {
 	data := &UVRuntimeData{}
 
@@ -506,6 +546,13 @@ func pullUVRuntime(ctx context.Context, minAge int) (*UVRuntimeData, binmanager.
 	}
 
 	fmt.Printf("UV release: %s (%d assets)\n", release.TagName, len(release.Assets))
+
+	// Both versions are resolved by now, so reconcile them before either reaches
+	// the generated config.
+	data.PythonVersion, err = reconcilePythonWithUV(ctx, data.PythonVersion, release.TagName)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	binaries, err := detectRuntimeBinaries("uv", release)
 	if err != nil {
