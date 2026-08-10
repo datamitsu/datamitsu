@@ -1,0 +1,2 @@
+llms: unknown page "instalation". Did you mean: getting-started/installation?
+Run "datamitsu llms --list" to see all <N> pages.

@@ -1,0 +1,35 @@
+Print the project documentation embedded in this binary, as plain markdown.
+
+With no arguments it prints an index of every available page, where each entry is
+the exact argument that fetches it, so an agent can choose its next call:
+
+  datamitsu llms                      # index of all pages
+  datamitsu llms about                # one page
+  datamitsu llms contributing/brand-guidelines
+  datamitsu llms brand-guidelines     # unique page names may be abbreviated
+  datamitsu llms --list --json        # machine-readable page list
+  datamitsu llms --web                # standard llms.txt, with website URLs
+
+The documentation is compiled into the binary, so it always matches this exact
+version and is served without network access. Content goes to stdout and
+diagnostics to stderr, so the output can be piped straight into a model's
+context. Exit codes: 2 for a usage error, 3 for an unknown or ambiguous page.
+
+Usage:
+  datamitsu llms [page] [flags]
+
+Flags:
+  -h, --help   help for llms
+      --json   Emit JSON instead of markdown
+      --list   List every page slug, one per line
+      --web    Print the standard llms.txt index with website URLs
+
+Global Flags:
+      --before-config strings   Configuration file(s) to load before auto-discovery (for wrappers/libraries)
+      --binary-command string   Override the binary command (for npm package wrappers, etc). Can also be set via DATAMITSU_BINARY_COMMAND env var
+      --config strings          Additional configuration file(s) to load and merge (can be specified multiple times)
+      --log-format string       Status output format: console or jsonl (also via DATAMITSU_LOG_FORMAT)
+      --no-auto-config          Disable auto-discovery of datamitsu.config.{js,mjs,ts} at git root
+      --no-oci                  Disable OCI bundle store seeding (also via DATAMITSU_NO_OCI)
+      --no-parse                Skip output parsers; show tools' raw output instead (also via DATAMITSU_NO_PARSE)
+  -v, --verbose                 Enable debug-level logging (default level is warn)

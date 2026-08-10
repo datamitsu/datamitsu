@@ -1,0 +1,467 @@
+{
+  "schemaVersion": 1,
+  "generator": "llms-harvest/1",
+  "license": "MIT",
+  "siteTitle": "Datamitsu",
+  "siteTagline": "Your toolchain deserves a home.",
+  "pageCount": 50,
+  "pageSetHash": "c3769b1c5bd3ae27f1a834f19f29b402",
+  "pages": [
+    {
+      "slug": "about",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/about.md",
+      "title": "About datamitsu",
+      "description": "Learn why datamitsu exists and how it helps teams standardize their development toolchains",
+      "bytes": 8828,
+      "contentHash": "59243796dd4bb822644cf2ea566b8da1"
+    },
+    {
+      "slug": "contributing/brand-guidelines",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/contributing/brand-guidelines.md",
+      "title": "Brand Guidelines",
+      "description": "Voice, tone, and style guidelines for datamitsu documentation and communications",
+      "bytes": 6725,
+      "contentHash": "c042b195b8253addfdc1111c3751145e"
+    },
+    {
+      "slug": "contributing/creating-wrappers",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/contributing/creating-wrappers.md",
+      "title": "Creating Wrapper Packages",
+      "description": "Build your own datamitsu config distribution package for your team or organization",
+      "bytes": 15349,
+      "contentHash": "d70fdba84201abf96696dcaa17cd5ea2"
+    },
+    {
+      "slug": "contributing",
+      "aliases": [
+        "contributing/index"
+      ],
+      "url": "https://datamitsu.com/docs/contributing/index.md",
+      "title": "Contributing to datamitsu",
+      "description": "How to contribute to datamitsu development, documentation, and ecosystem",
+      "bytes": 6660,
+      "contentHash": "e91388c8cf927e629d027e70ff14b999"
+    },
+    {
+      "slug": "examples/multiple-versions",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/examples/multiple-versions.md",
+      "title": "Multiple Tool Versions",
+      "description": "Run multiple versions of the same tool side-by-side in a monorepo using isolated environments",
+      "bytes": 7255,
+      "contentHash": "4fb0983b6ed161ac2a61685ef3d79c0f"
+    },
+    {
+      "slug": "examples/pnpm-patterns",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/examples/pnpm-patterns.md",
+      "title": "PNPM Patterns",
+      "description": "Managing Node.js tools that require plugins or peer dependencies with PNPM isolation",
+      "bytes": 5047,
+      "contentHash": "fc00e928d3ba8e26a82f37f3d473779b"
+    },
+    {
+      "slug": "examples/uv-isolation",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/examples/uv-isolation.md",
+      "title": "UV Isolation",
+      "description": "Managing Python tools with UV runtime isolation for conflict-free environments",
+      "bytes": 2983,
+      "contentHash": "1aeeb035f3062ada3a3d493e66a389ea"
+    },
+    {
+      "slug": "getting-started/core-concepts",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/getting-started/core-concepts.md",
+      "title": "Core Concepts",
+      "description": "Understanding the key concepts behind datamitsu",
+      "bytes": 8434,
+      "contentHash": "b781022560e5fb18ac792ef9c52a6fc8"
+    },
+    {
+      "slug": "getting-started/installation/docker",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/getting-started/installation/docker.md",
+      "title": "Docker",
+      "description": "Run datamitsu from the official Docker images on Docker Hub or GitHub Container Registry",
+      "bytes": 1899,
+      "contentHash": "9cbaa104142ac281a798dd5d8cfc69c5"
+    },
+    {
+      "slug": "getting-started/installation/github-releases",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/getting-started/installation/github-releases.md",
+      "title": "GitHub Releases",
+      "description": "Download datamitsu binaries, deb/rpm/apk packages, and verification files directly from GitHub Releases",
+      "bytes": 2432,
+      "contentHash": "6c0a35dbbb08ecce428a62dfdeec46c4"
+    },
+    {
+      "slug": "getting-started/installation/homebrew",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/getting-started/installation/homebrew.md",
+      "title": "Homebrew",
+      "description": "Install datamitsu via Homebrew on macOS or Linux",
+      "bytes": 221,
+      "contentHash": "41c500865e698d9bec1e3538627b4c05"
+    },
+    {
+      "slug": "getting-started/installation",
+      "aliases": [
+        "getting-started/installation/index"
+      ],
+      "url": "https://datamitsu.com/docs/getting-started/installation/index.md",
+      "title": "Installation",
+      "description": "How to install datamitsu on your system",
+      "bytes": 2227,
+      "contentHash": "d1a3cc0732d78d6176bf59db410ae6c3"
+    },
+    {
+      "slug": "getting-started/installation/npm",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/getting-started/installation/npm.md",
+      "title": "npm",
+      "description": "Install datamitsu via npm",
+      "bytes": 166,
+      "contentHash": "aaacfe77d696de4eb7c138e88618f28e"
+    },
+    {
+      "slug": "getting-started/installation/pypi",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/getting-started/installation/pypi.md",
+      "title": "PyPI",
+      "description": "Install datamitsu via pip, uv, or pipx",
+      "bytes": 383,
+      "contentHash": "47974cff114cc959fda4bcea9ba08a35"
+    },
+    {
+      "slug": "getting-started/installation/rubygems",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/getting-started/installation/rubygems.md",
+      "title": "RubyGems",
+      "description": "Install datamitsu via gem",
+      "bytes": 205,
+      "contentHash": "9e0eda89bd50b20f3509c0151a440dec"
+    },
+    {
+      "slug": "getting-started/installation/scoop",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/getting-started/installation/scoop.md",
+      "title": "Scoop",
+      "description": "Install datamitsu via Scoop on Windows",
+      "bytes": 301,
+      "contentHash": "73242cac68185609e5e30584ac719b22"
+    },
+    {
+      "slug": "getting-started/installation/source",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/getting-started/installation/source.md",
+      "title": "Build from Source",
+      "description": "Build datamitsu from source using Go",
+      "bytes": 442,
+      "contentHash": "cdf92f8f41a6f73a3e1fa6e572650b8e"
+    },
+    {
+      "slug": "getting-started/installation/vscode",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/getting-started/installation/vscode.md",
+      "title": "VS Code Extension",
+      "description": "Install the Datamitsu Toolkit extension for VS Code, Cursor, VSCodium, and other VS Code-based editors",
+      "bytes": 3779,
+      "contentHash": "c380ec91e61043541106ae1d79d1e5a4"
+    },
+    {
+      "slug": "getting-started/installation/winget",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/getting-started/installation/winget.md",
+      "title": "Winget",
+      "description": "Install datamitsu via winget on Windows",
+      "bytes": 215,
+      "contentHash": "ca3f266a4222a8e7b02ac2368033a986"
+    },
+    {
+      "slug": "getting-started/quick-start",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/getting-started/quick-start.md",
+      "title": "Quick Start",
+      "description": "Get up and running with datamitsu in minutes",
+      "bytes": 4812,
+      "contentHash": "ed08107f805d3d54adc64aac10e5aa69"
+    },
+    {
+      "slug": "guides/architecture/caching",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/guides/architecture/caching.md",
+      "title": "Caching Strategy",
+      "description": "How datamitsu tracks per-file results, builds invalidation keys from configuration and file hashes, and safely persists cache state under concurrent execution",
+      "bytes": 10813,
+      "contentHash": "b793d303cbbea07f287bc365f5b3b868"
+    },
+    {
+      "slug": "guides/architecture/discovery",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/guides/architecture/discovery.md",
+      "title": "File Discovery & Project Detection",
+      "description": "How datamitsu walks the repository tree respecting .gitignore rules and detects project boundaries for monorepo-aware tool execution",
+      "bytes": 6490,
+      "contentHash": "21b7a77dd19a7658e534b31793c4e889"
+    },
+    {
+      "slug": "guides/architecture/execution",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/guides/architecture/execution.md",
+      "title": "Parallel Execution",
+      "description": "How datamitsu runs task groups sequentially while parallelizing tasks within each group, with fail-fast semantics",
+      "bytes": 10007,
+      "contentHash": "af3728bd64b4c38be53e5d8bed412eac"
+    },
+    {
+      "slug": "guides/architecture",
+      "aliases": [
+        "guides/architecture/index"
+      ],
+      "url": "https://datamitsu.com/docs/guides/architecture/index.md",
+      "title": "Internal Architecture",
+      "description": "Overview of datamitsu's internal execution model - file discovery, task planning, parallel execution, and caching",
+      "bytes": 3209,
+      "contentHash": "bcfaaeadb99831d89dd0c9101cdb5721"
+    },
+    {
+      "slug": "guides/architecture/parsers",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/guides/architecture/parsers.md",
+      "title": "WASM Output Parsers",
+      "description": "How datamitsu declares, builds, signs, delivers, downloads, and loads sandboxed Rust→WASM output parsers, and how the line-based diff-in-core powers formatting",
+      "bytes": 10755,
+      "contentHash": "41a67b624ccd0ffd24231fa30b633314"
+    },
+    {
+      "slug": "guides/architecture/planner",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/guides/architecture/planner.md",
+      "title": "Task Planning",
+      "description": "How datamitsu groups files into prioritized task batches with overlap detection and CWD-subtree restriction",
+      "bytes": 10238,
+      "contentHash": "915f54caf6bd3321b41fb6beeb04a11a"
+    },
+    {
+      "slug": "guides/binary-management",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/guides/binary-management.md",
+      "title": "Binary Management",
+      "description": "How datamitsu manages binary downloads, hash verification, and caching",
+      "bytes": 7272,
+      "contentHash": "3e81e56b22af382277fb208f35a266ca"
+    },
+    {
+      "slug": "guides/configuration",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/guides/configuration.md",
+      "title": "Configuration",
+      "description": "How to configure datamitsu with JavaScript config files, remote configs, and config layers",
+      "bytes": 9786,
+      "contentHash": "a6709a81d00e7ba994abfcface508db7"
+    },
+    {
+      "slug": "guides/managed-configs",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/guides/managed-configs.md",
+      "title": "Managed Configs",
+      "description": "Using managed configuration files, symlinks, and the .datamitsu/ directory",
+      "bytes": 10671,
+      "contentHash": "aac47856d016fb4e11ff1d37382fbe4e"
+    },
+    {
+      "slug": "guides/managed-content",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/guides/managed-content.md",
+      "title": "Managed Content (Bundles)",
+      "description": "Using bundles to distribute managed content via symlinks with automatic cache invalidation",
+      "bytes": 8008,
+      "contentHash": "84349fa81b8fba79860fca39d969135f"
+    },
+    {
+      "slug": "guides/oci-bundles",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/guides/oci-bundles.md",
+      "title": "OCI Bundles",
+      "description": "An OCI bundle packages the datamitsu tool store as a standard OCI image: one layer per store subtree (a binary, a runtime, a runtime-managed app, or a WASM output-parser module), annotated so datamitsu can pull exactly the pieces it needs — **without docker or podman**. The bundle is a cache accelerator and an airgap seed, not a replacement for resolution: whatever is in the bundle is taken from it, whatever is not gets downloaded the usual way.",
+      "bytes": 7397,
+      "contentHash": "d96f6ec9d5b782ea261bef06c97c116c"
+    },
+    {
+      "slug": "guides/runtime-management",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/guides/runtime-management.md",
+      "title": "Runtime Management",
+      "description": "Managing UV (Python), Node.js, JVM, and Go runtimes with datamitsu",
+      "bytes": 12395,
+      "contentHash": "0bb887b1996b9bd04bf57fc18fcda206"
+    },
+    {
+      "slug": "guides/supply-chain-security",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/guides/supply-chain-security.md",
+      "title": "Supply Chain Security",
+      "description": "How datamitsu enforces supply chain integrity for pnpm, UV, and Go dependencies",
+      "bytes": 14802,
+      "contentHash": "f8d364da08a73cee43190fdec86a8fc2"
+    },
+    {
+      "slug": "guides/tooling-system",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/guides/tooling-system.md",
+      "title": "Tooling System",
+      "description": "Understanding the fix, lint, and check operations in datamitsu",
+      "bytes": 10528,
+      "contentHash": "f3fab80742c3dcfab39cd7c9263143c6"
+    },
+    {
+      "slug": "guides/using-wrappers",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/guides/using-wrappers.md",
+      "title": "Using Wrapper Packages",
+      "description": "How to install and use datamitsu wrapper packages in your projects",
+      "bytes": 12503,
+      "contentHash": "e1cda1070f956fa24bee051640b5cbb9"
+    },
+    {
+      "slug": "how-to/add-new-tool",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/how-to/add-new-tool.md",
+      "title": "Add a New Tool",
+      "description": "Step-by-step guide to adding binary, UV, Node, and JVM tools to datamitsu",
+      "bytes": 6539,
+      "contentHash": "4c294bac3f89c4d9262c6f1d05c9954f"
+    },
+    {
+      "slug": "how-to/configure-linters",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/how-to/configure-linters.md",
+      "title": "Configure Linters",
+      "description": "How to set up and configure linters and formatters with datamitsu",
+      "bytes": 5348,
+      "contentHash": "c66f9369a23d36e3539c44e7d7d537de"
+    },
+    {
+      "slug": "how-to/maintain-wrapper",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/how-to/maintain-wrapper.md",
+      "title": "Maintaining Wrapper Packages",
+      "description": "Workflows for keeping wrapper package tool versions, runtimes, and hashes up to date using devtools commands",
+      "bytes": 28633,
+      "contentHash": "d25ba14b37c29a37711b9a09845e4742"
+    },
+    {
+      "slug": "how-to/manage-cache",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/how-to/manage-cache.md",
+      "title": "Manage Cache",
+      "description": "How to manage datamitsu's cache, store, and per-project data",
+      "bytes": 4052,
+      "contentHash": "aefd8c20c800206e4920c80acfa7851c"
+    },
+    {
+      "slug": "how-to/use-in-alpine",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/how-to/use-in-alpine.md",
+      "title": "Use in Alpine Linux",
+      "description": "How datamitsu handles Alpine Linux and musl libc systems with automatic detection and binary selection",
+      "bytes": 11351,
+      "contentHash": "c6131c46169c4ab19994e2844cd80cb1"
+    },
+    {
+      "slug": "how-to/use-in-github-actions",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/how-to/use-in-github-actions.md",
+      "title": "Use in GitHub Actions",
+      "description": "Install datamitsu and run your checks in CI with the official setup-datamitsu action in a single step",
+      "bytes": 4335,
+      "contentHash": "547c2a516c09824541cac001bf255fab"
+    },
+    {
+      "slug": "how-to/use-remote-configs",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/how-to/use-remote-configs.md",
+      "title": "Use Remote Configs",
+      "description": "How to create, share, and inherit remote configuration files",
+      "bytes": 4732,
+      "contentHash": "4a951fdddd107fb872516c3a55fd0b3f"
+    },
+    {
+      "slug": "intro",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/intro.md",
+      "title": "Introduction",
+      "description": "datamitsu - a platform for building reproducible, security-first development tool distributions",
+      "bytes": 3214,
+      "contentHash": "b556eb451da85daa121b7ed6261887d6"
+    },
+    {
+      "slug": "reference/cli-commands",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/reference/cli-commands.md",
+      "title": "CLI Commands",
+      "description": "Complete reference for all datamitsu CLI commands",
+      "bytes": 48362,
+      "contentHash": "2095884744593fe7a6bdbfea8c2d84f4"
+    },
+    {
+      "slug": "reference/comparison",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/reference/comparison.md",
+      "title": "Comparison with Similar Tools",
+      "description": "How datamitsu compares to mise, moon, Nx, and Turborepo",
+      "bytes": 8801,
+      "contentHash": "0a8226c0071b46105e36c4fdb84dd75f"
+    },
+    {
+      "slug": "reference/configuration-api",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/reference/configuration-api.md",
+      "title": "Configuration API",
+      "description": "Complete reference for the datamitsu configuration API",
+      "bytes": 37486,
+      "contentHash": "d4c903f1908ea5a3a32d23fb70d3678e"
+    },
+    {
+      "slug": "reference/ignore-rules",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/reference/ignore-rules.md",
+      "title": "Ignore Rules",
+      "description": "Reference for .datamitsuignore syntax and usage",
+      "bytes": 7195,
+      "contentHash": "2cfa3269ecb6f0376c57d4b38d94d658"
+    },
+    {
+      "slug": "reference/js-api",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/reference/js-api.md",
+      "title": "JavaScript API",
+      "description": "Programmatic API reference for the @datamitsu/datamitsu npm package",
+      "bytes": 13762,
+      "contentHash": "125259ab312dcda1ace0eadc79de9998"
+    },
+    {
+      "slug": "reference/parser-catalog",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/reference/parser-catalog.md",
+      "title": "Parser Catalog",
+      "description": "Tools whose output the bundled datamitsu WASM parser module turns into diagnostics",
+      "bytes": 37643,
+      "contentHash": "a11059569798114fd0551de791bd695e"
+    },
+    {
+      "slug": "reference/template-placeholders",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/reference/template-placeholders.md",
+      "title": "Template Placeholders",
+      "description": "Reference for template placeholders in tool operation arguments and environment values",
+      "bytes": 6270,
+      "contentHash": "279d101c57bf1a79b3bfcc4d35824c03"
+    }
+  ]
+}

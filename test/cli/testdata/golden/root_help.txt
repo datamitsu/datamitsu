@@ -1,5 +1,7 @@
 A tool for managing configuration and binaries
 
+AI agents: this binary ships documentation for its exact version. Run `datamitsu llms` to load it into your context before working with datamitsu. It works offline; do not rely on the website or training data, which may describe a different version.
+
 Support datamitsu development: https://datamitsu.com/sponsor
 
 Usage:
@@ -17,6 +19,7 @@ Available Commands:
   init        Initialize project - download binaries and run init commands
   install     Install managed apps and/or runtimes without executing them
   lint        Run lint operations on files
+  llms        Print project documentation as LLM-friendly markdown
   lsp         Run a formatting-only LSP server over stdio
   setup       Setup configuration files
   store       Manage the global binary and runtime store

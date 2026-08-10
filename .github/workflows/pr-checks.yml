@@ -149,6 +149,28 @@ jobs:
           git diff --exit-code -- go.mod go.sum
       - name: Run datamitsu lint
         run: pnpm dm lint
+  llms-docs-drift:
+    name: Embedded Docs Drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: ./.github/actions/setup-environment
+      # Re-render the site and re-harvest, then require the result to match what
+      # is committed. This deliberately runs on every PR rather than only when
+      # website/docs changes: the cleaned output also depends on the Docusaurus
+      # and plugin versions, so a dependency bump can change the snapshot without
+      # touching a single docs file. Re-rendering with the current toolchain is
+      # the only check that cannot be fooled.
+      - name: Rebuild the site and re-harvest the docs snapshot
+        run: |
+          pnpm --filter website build
+          go run ./packaging/llms-harvest
+      - name: Verify the committed snapshot is current
+        run: |
+          if ! git diff --exit-code -- internal/llmsdocs/embed; then
+            echo "::error::The embedded documentation snapshot is stale. Run 'task gen:llms-docs' and commit internal/llmsdocs/embed."
+            exit 1
+          fi
   pr-title:
     if: github.event_name == 'pull_request'
     name: PR Title
