@@ -42,7 +42,7 @@ The global store holds all downloaded artifacts:
 │   └── lefthook/{hash}/
 ├── .runtimes/               # Runtime binaries
 │   ├── node/{configHash}/
-│   ├── pnpm/11.5.0/{hash}/
+│   ├── pnpm/11.20.0/{hash}/
 │   └── jvm/{hash}/
 ├── .apps/                   # Runtime-managed app environments
 │   ├── uv/yamllint/{hash}/

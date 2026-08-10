@@ -6,7 +6,7 @@ allowBuilds:
   esbuild: false
   keytar: false
   sharp: true
-audit: true
+audit: {}
 auditLevel: high
 autoInstallPeers: true
 catalog:

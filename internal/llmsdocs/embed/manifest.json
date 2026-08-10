@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 50,
-  "pageSetHash": "c3769b1c5bd3ae27f1a834f19f29b402",
+  "pageSetHash": "0e79268a3ec3a9904dad728dce0ce59b",
   "pages": [
     {
       "slug": "about",
@@ -51,8 +51,8 @@
       "url": "https://datamitsu.com/docs/examples/multiple-versions.md",
       "title": "Multiple Tool Versions",
       "description": "Run multiple versions of the same tool side-by-side in a monorepo using isolated environments",
-      "bytes": 7255,
-      "contentHash": "4fb0983b6ed161ac2a61685ef3d79c0f"
+      "bytes": 7258,
+      "contentHash": "2e30d51161da1187605d4e0b3b7756a9"
     },
     {
       "slug": "examples/pnpm-patterns",
@@ -298,8 +298,8 @@
       "url": "https://datamitsu.com/docs/guides/runtime-management.md",
       "title": "Runtime Management",
       "description": "Managing UV (Python), Node.js, JVM, and Go runtimes with datamitsu",
-      "bytes": 12395,
-      "contentHash": "0bb887b1996b9bd04bf57fc18fcda206"
+      "bytes": 12397,
+      "contentHash": "5a74ff540f17d623a0db90cedf9d8f50"
     },
     {
       "slug": "guides/supply-chain-security",
@@ -361,8 +361,8 @@
       "url": "https://datamitsu.com/docs/how-to/manage-cache.md",
       "title": "Manage Cache",
       "description": "How to manage datamitsu's cache, store, and per-project data",
-      "bytes": 4052,
-      "contentHash": "aefd8c20c800206e4920c80acfa7851c"
+      "bytes": 4053,
+      "contentHash": "738fbddc8fbec4a4426de59ebd76e846"
     },
     {
       "slug": "how-to/use-in-alpine",
@@ -424,8 +424,8 @@
       "url": "https://datamitsu.com/docs/reference/configuration-api.md",
       "title": "Configuration API",
       "description": "Complete reference for the datamitsu configuration API",
-      "bytes": 37486,
-      "contentHash": "d4c903f1908ea5a3a32d23fb70d3678e"
+      "bytes": 37488,
+      "contentHash": "aac7bed3da6ac5fae16771dcce9e2439"
     },
     {
       "slug": "reference/ignore-rules",

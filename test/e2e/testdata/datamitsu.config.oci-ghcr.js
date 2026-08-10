@@ -722,7 +722,7 @@ var playwright_chromium = {
 var pnpm = {
   description: "Fast, disk space efficient package manager",
   packageName: "pnpm",
-  version: "11.5.0",
+  version: "11.20.0",
 };
 var prettier = {
   description: "Prettier is an opinionated code formatter",
@@ -9491,7 +9491,7 @@ var runtimes_default = {
     node: {
       nodeVersion: "26.3.0",
       pnpmHash: "a282871708f87a47b9cd72182dfdf9ee251c69100b8bac862a3d4f5e2145d8ff",
-      pnpmVersion: "11.5.0",
+      pnpmVersion: "11.20.0",
     },
   },
   uv: {

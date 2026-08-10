@@ -153,7 +153,7 @@ Both versions are configured on the runtime:
 ```javascript
 node: {
   nodeVersion: "26.2.0",
-  pnpmVersion: "11.5.0",
+  pnpmVersion: "11.20.0",
   pnpmHash: "...",
 }
 ```
@@ -337,7 +337,7 @@ runtimes: {
     kind: "node",
     mode: "system",
     system: { command: "node" },
-    node: { nodeVersion: "26.2.0", pnpmVersion: "11.5.0", pnpmHash: "..." },
+    node: { nodeVersion: "26.2.0", pnpmVersion: "11.20.0", pnpmHash: "..." },
   },
   uv: {
     kind: "uv",

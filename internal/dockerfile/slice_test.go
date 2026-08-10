@@ -16,7 +16,7 @@ func sampleConfigForSlicing() (binmanager.MapOfApps, config.MapOfRuntimes, confi
 		"ruff":       {Uv: &binmanager.AppConfigUV{PackageName: "ruff", Version: "0.15.0", Runtime: "uv"}},
 	}
 	runtimes := config.MapOfRuntimes{
-		"node": {Kind: config.RuntimeKindNode, Node: &config.RuntimeConfigNode{NodeVersion: "22.12.0", PNPMVersion: "11.5.0", PNPMHash: "sha512-x"}},
+		"node": {Kind: config.RuntimeKindNode, Node: &config.RuntimeConfigNode{NodeVersion: "22.12.0", PNPMVersion: "11.20.0", PNPMHash: "sha512-x"}},
 		"uv":   {Kind: config.RuntimeKindUV, UV: &config.RuntimeConfigUV{PythonVersion: "3.13"}},
 	}
 	parsers := config.MapOfParsers{
