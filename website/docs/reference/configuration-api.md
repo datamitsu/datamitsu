@@ -441,7 +441,7 @@ const runtimes = {
     },
     node: {
       nodeVersion: "26.2.0",
-      pnpmVersion: "11.5.0",
+      pnpmVersion: "11.20.0",
       pnpmHash: "def456...", // SHA-256 of pnpm package
     },
   },
@@ -475,7 +475,7 @@ const runtimes = {
 ```typescript
 interface RuntimeConfigNode {
   nodeVersion: string; // e.g., "26.2.0"
-  pnpmVersion: string; // e.g., "11.5.0"
+  pnpmVersion: string; // e.g., "11.20.0"
   pnpmHash: string; // SHA-256 of pnpm package (mandatory)
 }
 ```

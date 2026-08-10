@@ -28,7 +28,7 @@ const mapOfRuntimes: BinManager.MapOfRuntimes = {
     mode: "managed",
     node: {
       nodeVersion: "26.2.0",
-      pnpmVersion: "11.5.0",
+      pnpmVersion: "11.20.0",
       pnpmHash: "<sha256>",
     },
     managed: {
@@ -227,7 +227,7 @@ const mapOfRuntimes: BinManager.MapOfRuntimes = {
     mode: "managed",
     node: {
       nodeVersion: "20.18.0",
-      pnpmVersion: "11.5.0",
+      pnpmVersion: "11.20.0",
       pnpmHash: "abc123def456789012345678901234567890123456789012345678901234",
     },
     managed: {
@@ -241,7 +241,7 @@ const mapOfRuntimes: BinManager.MapOfRuntimes = {
     mode: "managed",
     node: {
       nodeVersion: "22.12.0",
-      pnpmVersion: "11.5.0",
+      pnpmVersion: "11.20.0",
       pnpmHash: "abc123def456789012345678901234567890123456789012345678901234",
     },
     managed: {

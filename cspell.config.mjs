@@ -35,6 +35,9 @@ export default defineConfig((config) => ({
     "llmsmanifest",
     // Damerau–Levenshtein, the edit distance behind page-name suggestions.
     "Damerau",
+    // Alternative Python implementations listed in uv's interpreter download
+    // table alongside CPython.
+    "graalpy",
     "errorformat",
     "tinyjson",
     "fract",

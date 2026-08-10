@@ -33,7 +33,7 @@ tasks:
         docker run --rm --platform linux/amd64 \
           --volume "$(pwd)/scripts:/scripts:ro" \
           --volume "$(pwd)/website/static:/output" \
-          node:26.5.0-trixie-slim \
+          node:26.7.0-trixie-slim \
           sh /scripts/docker-capture.sh
     desc: Run datamitsu check in ovineko/ovineko inside Docker (linux/amd64), write website/static/cold.cast + warm.cast
   # ── Docker ──
