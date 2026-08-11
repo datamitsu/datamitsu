@@ -30,7 +30,7 @@ def main():
     if os_name == "windows":
         import subprocess
 
-        result = subprocess.run([executable] + sys.argv[1:])
+        result = subprocess.run([executable] + sys.argv[1:], check=False)
         sys.exit(result.returncode)
     else:
         try:

@@ -401,5 +401,6 @@ export default defineConfig((config) => ({
     "Verilog",
     "Beancount",
     "SPIR",
+    "keytar",
   ],
 }));

@@ -1,25 +1,27 @@
+glob_matcher: doublestar
+pre-commit:
+  commands:
+    test:
+      priority: 2
+      run: pnpm test
+    datamitsu-init:
+      priority: 10
+      run: pnpm datamitsu init
+    datamitsu-check:
+      priority: 40
+      run: pnpm datamitsu check --file-scoped
+      stage_fixed: true
+  parallel: false
 commit-msg:
   commands:
     lint commit message:
       run: "pnpm datamitsu exec commitlint -- --edit {1}"
 post-checkout:
   commands:
-    init datamitsu:
-      priority: 2
-      run: pnpm datamitsu init
     install deps:
       priority: 1
       run: pnpm i -y
-pre-commit:
-  commands:
-    datamitsu-check:
+    init datamitsu:
       priority: 2
-      run: pnpm datamitsu check --file-scoped
-      stage_fixed: true
-    datamitsu-init:
-      priority: 1
       run: pnpm datamitsu init
-    test:
-      priority: 2
-      run: pnpm test
   parallel: false
