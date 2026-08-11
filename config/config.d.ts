@@ -1,9 +1,8 @@
 declare global {
   /**
-   * Color functions for terminal output. All functions accept any number of arguments,
-   * join them with spaces, and return a string with ANSI color codes applied.
-   * Respects NO_COLOR, FORCE_COLOR, and CLICOLOR environment variables.
-   * Colors are composable: `colors.bold(colors.red("error"))`.
+   * Color functions for terminal output. All functions accept any number of arguments, join them
+   * with spaces, and return a string with ANSI color codes applied. Respects NO_COLOR, FORCE_COLOR,
+   * and CLICOLOR environment variables. Colors are composable: `colors.bold(colors.red("error"))`.
    */
   const colors: {
     // Background colors
@@ -61,59 +60,60 @@ declare global {
   function getConfig(config: config.Config): config.Config;
 
   /**
-   * Recommended pnpm 11 workspace security defaults, injected by the Go engine.
-   * Read this object to publish or extend the defaults — see
-   * `sharedStorage["pnpm-workspace-defaults"]` for the canonical YAML output.
+   * Recommended pnpm 11 workspace security defaults, injected by the Go engine. Read this object to
+   * publish or extend the defaults — see `sharedStorage["pnpm-workspace-defaults"]` for the
+   * canonical YAML output.
    */
   const pnpmWorkspaceDefaults: Record<string, unknown>;
 
   /**
-   * Bounded config-evaluation input surface, injected (frozen) by the Go engine.
-   * Only fields explicitly allowlisted here may be used in config JS decisions.
-   * Unlike `pnpmWorkspaceDefaults` (a published recommendation), every field here
-   * is a genuine config evaluation input. Adding a field requires updating
-   * fingerprinting, cache invalidation, explain/debug output, and documentation.
+   * Bounded config-evaluation input surface, injected (frozen) by the Go engine. Only fields
+   * explicitly allowlisted here may be used in config JS decisions. Unlike `pnpmWorkspaceDefaults`
+   * (a published recommendation), every field here is a genuine config evaluation input. Adding a
+   * field requires updating fingerprinting, cache invalidation, explain/debug output, and
+   * documentation.
    */
   const datamitsuConfigInputs: Readonly<{
     minimumReleaseAgeMinutes: number;
   }>;
 
   /**
-   * Optional export. Declares local parent config files to load before this
-   * config, mirroring the `--before-config` CLI flag declaratively.
-   * Only honoured in the auto-discovered git-root config — declaring it in any
-   * other layer (default / `--before-config` / remote / `--config`) is ignored.
-   * Paths are resolved relative to the directory of the git-root config file;
-   * absolute paths are used as-is. No hash is required (local files share the
-   * root config's trust domain). If `--before-config` is passed on the CLI, this
-   * function is not evaluated at all (the flag wins, avoiding double-loading).
+   * Optional export. Declares local parent config files to load before this config, mirroring the
+   * `--before-config` CLI flag declaratively. Only honoured in the auto-discovered git-root config
+   * — declaring it in any other layer (default / `--before-config` / remote / `--config`) is
+   * ignored. Paths are resolved relative to the directory of the git-root config file; absolute
+   * paths are used as-is. No hash is required (local files share the root config's trust domain).
+   * If `--before-config` is passed on the CLI, this function is not evaluated at all (the flag
+   * wins, avoiding double-loading).
+   *
    * @example
-   * function getBeforeConfigs() {
-   *   return [{ path: "./node_modules/@shibanet0/datamitsu-config/datamitsu.config.js" }];
-   * }
+   *   function getBeforeConfigs() {
+   *     return [{ path: "./node_modules/@shibanet0/datamitsu-config/datamitsu.config.js" }];
+   *   }
    */
   function getBeforeConfigs(): Array<{ path: string }>;
 
   /**
-   * Returns the minimum datamitsu version required by this config (semver format).
-   * The tool validates this version during config loading and fails early with
-   * upgrade instructions if the current version is too old.
-   * Every config must export this function.
+   * Returns the minimum datamitsu version required by this config (semver format). The tool
+   * validates this version during config loading and fails early with upgrade instructions if the
+   * current version is too old. Every config must export this function.
+   *
    * @example
-   * function getMinVersion() {
-   *   return "1.2.0";
-   * }
+   *   function getMinVersion() {
+   *     return "1.2.0";
+   *   }
    */
   function getMinVersion(): string;
 
   /**
-   * Optional export. Declares remote parent configs to load before this config.
-   * Remote configs are resolved depth-first and their results are chained as input.
-   * Hash is REQUIRED for every entry — missing or empty hash causes an immediate error.
+   * Optional export. Declares remote parent configs to load before this config. Remote configs are
+   * resolved depth-first and their results are chained as input. Hash is REQUIRED for every entry —
+   * missing or empty hash causes an immediate error.
+   *
    * @example
-   * function getRemoteConfigs() {
-   *   return [{ url: "https://example.com/base-config.ts", hash: "sha256:abcdef..." }];
-   * }
+   *   function getRemoteConfigs() {
+   *     return [{ url: "https://example.com/base-config.ts", hash: "sha256:abcdef..." }];
+   *   }
    */
   function getRemoteConfigs(): Array<{ hash: string; url: string }>;
 
@@ -133,71 +133,77 @@ declare global {
     namespace Path {
       /**
        * Get absolute path from relative path
+       *
+       * @example
+       *   const absPath = tools.Path.abs("./file.txt");
+       *   // Returns: "/current/working/directory/file.txt"
+       *
        * @param path - Path to convert to absolute
        * @returns Absolute path
        * @throws Error if path cannot be resolved
-       * @example
-       * const absPath = tools.Path.abs("./file.txt");
-       * // Returns: "/current/working/directory/file.txt"
        */
       function abs(path: string): string;
 
       /**
-       * Convert a relative path to an ES module import-compatible format.
-       * Ensures the path starts with `./` or `../` as required by JavaScript/TypeScript imports.
-       * The path is cleaned/normalized before processing.
-       * Idempotent: paths already starting with `./` or `../` are returned unchanged.
+       * Convert a relative path to an ES module import-compatible format. Ensures the path starts
+       * with `./` or `../` as required by JavaScript/TypeScript imports. The path is
+       * cleaned/normalized before processing. Idempotent: paths already starting with `./` or `../`
+       * are returned unchanged.
+       *
+       * @example
+       *   // Basic usage with datamitsuDir context
+       *   const importPath = tools.Path.forImport(
+       *     tools.Path.join(context.datamitsuDir, "eslint.config.js"),
+       *   );
+       *   // ".datamitsu/eslint.config.js" → "./.datamitsu/eslint.config.js"
+       *
+       * @example
+       *   // Idempotent — already-valid paths are unchanged
+       *   tools.Path.forImport("./.datamitsu/file.js"); // "./.datamitsu/file.js"
+       *   tools.Path.forImport("../.datamitsu/file.js"); // "../.datamitsu/file.js"
+       *
+       * @example
+       *   // Composing with linkPath for managed config imports
+       *   const configPath = tools.Config.linkPath("my-app", "eslint-config", context.cwdPath);
+       *   const importPath = tools.Path.forImport(configPath);
+       *   // Use in generated config: `import config from "${importPath}";`
        *
        * @param path - Relative path to convert
        * @returns Import-compatible relative path (always starts with `./` or `../`)
        * @throws TypeError if path is absolute (imports must be relative)
        * @throws TypeError if no argument is provided
-       *
-       * @example
-       * // Basic usage with datamitsuDir context
-       * const importPath = tools.Path.forImport(
-       *   tools.Path.join(context.datamitsuDir, "eslint.config.js")
-       * );
-       * // ".datamitsu/eslint.config.js" → "./.datamitsu/eslint.config.js"
-       *
-       * @example
-       * // Idempotent — already-valid paths are unchanged
-       * tools.Path.forImport("./.datamitsu/file.js");   // "./.datamitsu/file.js"
-       * tools.Path.forImport("../.datamitsu/file.js");  // "../.datamitsu/file.js"
-       *
-       * @example
-       * // Composing with linkPath for managed config imports
-       * const configPath = tools.Config.linkPath("my-app", "eslint-config", context.cwdPath);
-       * const importPath = tools.Path.forImport(configPath);
-       * // Use in generated config: `import config from "${importPath}";`
        */
       function forImport(path: string): string;
 
       /**
        * Join path segments together using the OS-specific separator
+       *
+       * @example
+       *   const fullPath = tools.Path.join("/home", "user", "file.txt");
+       *   // Returns: "/home/user/file.txt" on Unix, "\\home\\user\\file.txt" on Windows
+       *
        * @param paths - Path segments to join
        * @returns Joined path
-       * @example
-       * const fullPath = tools.Path.join("/home", "user", "file.txt");
-       * // Returns: "/home/user/file.txt" on Unix, "\\home\\user\\file.txt" on Windows
        */
       function join(...paths: string[]): string;
 
       /**
        * Get relative path from base to target
+       *
+       * @example
+       *   // Relative to rootPath (git root)
+       *   const relPath = tools.Path.rel("/home/user/project/file.txt");
+       *   // If rootPath is "/home/user/project", returns: "file.txt"
+       *
+       * @example
+       *   // Relative to custom base
+       *   const relPath = tools.Path.rel("/home/user/project/file.txt", "/home");
+       *   // Returns: "user/project/file.txt"
+       *
        * @param targetPath - Target path
        * @param basePath - Base path (defaults to git repository root, or cwd if not in a git repo)
        * @returns Relative path from base to target
        * @throws Error if relative path cannot be computed
-       * @example
-       * // Relative to rootPath (git root)
-       * const relPath = tools.Path.rel("/home/user/project/file.txt");
-       * // If rootPath is "/home/user/project", returns: "file.txt"
-       *
-       * @example
-       * // Relative to custom base
-       * const relPath = tools.Path.rel("/home/user/project/file.txt", "/home");
-       * // Returns: "user/project/file.txt"
        */
       function rel(targetPath: string, basePath?: string): string;
     }
@@ -215,52 +221,56 @@ declare global {
 
       /**
        * Parse .gitignore file to grouped structure with preserved order
+       *
+       * @example
+       *   const { groups, groupOrder } = tools.Ignore.parse(fileContent);
+       *   // groups: { "Dependencies": ["node_modules/"], "Build": ["dist/"] }
+       *   // groupOrder: ["Dependencies", "Build"]
+       *
+       *   // Use the original order when saving back
+       *   const updated = tools.Ignore.stringify(groups, groupOrder);
+       *
        * @param content - .gitignore file content
        * @returns Object with groups and their original order
-       * @example
-       * const { groups, groupOrder } = tools.Ignore.parse(fileContent);
-       * // groups: { "Dependencies": ["node_modules/"], "Build": ["dist/"] }
-       * // groupOrder: ["Dependencies", "Build"]
-       *
-       * // Use the original order when saving back
-       * const updated = tools.Ignore.stringify(groups, groupOrder);
        */
       function parse<T extends string = string>(content: string): ParseResult<T>;
 
       /**
        * Convert grouped structure back to .gitignore format
+       *
+       * @example
+       *   // All groups in alphabetical order
+       *   const content1 = tools.Ignore.stringify({
+       *     Testing: ["coverage/"],
+       *     Build: ["dist/"],
+       *     Dependencies: ["node_modules/"],
+       *   });
+       *   // Result order: Build, Dependencies, Testing
+       *
+       * @example
+       *   // Priority groups first, then alphabetical
+       *   const content2 = tools.Ignore.stringify(
+       *     {
+       *       Testing: ["coverage/"],
+       *       Build: ["dist/"],
+       *       Dependencies: ["node_modules/"],
+       *       IDE: [".vscode/"],
+       *     },
+       *     ["Dependencies", "Build"],
+       *   );
+       *   // Result order: Dependencies, Build, IDE, Testing
+       *
+       * @example
+       *   // Preserve original order
+       *   const { groups, groupOrder } = tools.Ignore.parse(original);
+       *   groups["New Group"] = ["new/rule"];
+       *   const updated = tools.Ignore.stringify(groups, groupOrder);
+       *
        * @param groups - Object with group names as keys and rule arrays as values
-       * @param groupOrder - Optional partial array specifying the priority order of groups.
-       *                     Groups in this array will appear first in the specified order.
-       *                     Remaining groups will follow in alphabetical order.
+       * @param groupOrder - Optional partial array specifying the priority order of groups. Groups
+       *   in this array will appear first in the specified order. Remaining groups will follow in
+       *   alphabetical order.
        * @returns Formatted .gitignore content
-       * @example
-       * // All groups in alphabetical order
-       * const content1 = tools.Ignore.stringify({
-       *   "Testing": ["coverage/"],
-       *   "Build": ["dist/"],
-       *   "Dependencies": ["node_modules/"]
-       * });
-       * // Result order: Build, Dependencies, Testing
-       *
-       * @example
-       * // Priority groups first, then alphabetical
-       * const content2 = tools.Ignore.stringify(
-       *   {
-       *     "Testing": ["coverage/"],
-       *     "Build": ["dist/"],
-       *     "Dependencies": ["node_modules/"],
-       *     "IDE": [".vscode/"]
-       *   },
-       *   ["Dependencies", "Build"]
-       * );
-       * // Result order: Dependencies, Build, IDE, Testing
-       *
-       * @example
-       * // Preserve original order
-       * const { groups, groupOrder } = tools.Ignore.parse(original);
-       * groups["New Group"] = ["new/rule"];
-       * const updated = tools.Ignore.stringify(groups, groupOrder);
        */
       function stringify<T extends string>(groups: IgnoreMap<T>, groupOrder?: T[]): string;
     }
@@ -271,6 +281,7 @@ declare global {
     namespace Config {
       /**
        * Get relative path from a directory to a managed config link in .datamitsu/
+       *
        * @param ownerName - The app or bundle that owns the link
        * @param linkName - The link name in .datamitsu/
        * @param fromPath - The directory to compute the relative path from
@@ -293,17 +304,18 @@ declare global {
       apps?: BinManager.MapOfApps;
 
       /**
-       * Bundle definitions for managed content (files/archives with symlinks).
-       * Bundles are not executable — they store files in a hash-keyed directory
-       * and create symlinks in .datamitsu/ for zero-conflict content updates.
+       * Bundle definitions for managed content (files/archives with symlinks). Bundles are not
+       * executable — they store files in a hash-keyed directory and create symlinks in .datamitsu/
+       * for zero-conflict content updates.
        */
       bundles?: BinManager.MapOfBundles;
 
       /**
-       * Ignore rules in .datamitsuignore syntax.
-       * Applied alongside file-based .datamitsuignore rules.
-       * Rules from multiple configs are concatenated (append).
-       * @example ["**\/*.generated.ts: eslint, prettier", "vendor/**: *"]
+       * Ignore rules in .datamitsuignore syntax. Applied alongside file-based .datamitsuignore
+       * rules. Rules from multiple configs are concatenated (append).
+       *
+       * @example
+       *   ["**\/*.generated.ts: eslint, prettier", "vendor/**: *"];
        */
       ignoreRules?: string[];
 
@@ -313,40 +325,39 @@ declare global {
       initCommands?: MapOfInitCommands;
 
       /**
-       * LSP server declarations, keyed by name. RESERVED for Phase 3+ — this is
-       * a declaration-only surface with NO runtime behavior in this release.
+       * LSP server declarations, keyed by name. RESERVED for Phase 3+ — this is a declaration-only
+       * surface with NO runtime behavior in this release.
        *
-       * Each entry is either a `proxy` (wrap a standalone language server `app`,
-       * scoped by `projectTypes`) or a `derived` entry (reuse an existing tool's
-       * projectTypes/globs and its `outputParser`). The optional `order` controls
-       * precedence; ties break alphabetically by entry name.
+       * Each entry is either a `proxy` (wrap a standalone language server `app`, scoped by
+       * `projectTypes`) or a `derived` entry (reuse an existing tool's projectTypes/globs and its
+       * `outputParser`). The optional `order` controls precedence; ties break alphabetically by
+       * entry name.
        */
       lsp?: MapOfLsp;
 
       /**
-       * OCI bundle that seeds the tool store (pull without docker).
-       * Chains as a scalar: the last config layer that set or spread it wins;
-       * a layer that rebuilds its output without `{...input}` silently drops
-       * it. Reset with `oci: undefined` or `oci: null`.
+       * OCI bundle that seeds the tool store (pull without docker). Chains as a scalar: the last
+       * config layer that set or spread it wins; a layer that rebuilds its output without
+       * `{...input}` silently drops it. Reset with `oci: undefined` or `oci: null`.
+       *
        * @example
-       * return {
-       *   ...input,
-       *   oci: {
-       *     ref: "ghcr.io/owner/tool-store",
-       *     digest: "sha256:0123…cdef",
-       *   },
-       * };
+       *   return {
+       *     ...input,
+       *     oci: {
+       *       ref: "ghcr.io/owner/tool-store",
+       *       digest: "sha256:0123…cdef",
+       *     },
+       *   };
        */
       oci?: OCIRef;
 
       /**
-       * WASM output-parser modules, keyed by name. Each entry is a url+hash
-       * data artifact (NOT an executable app): a signed Rust→WASM module that
-       * extracts structured results from a tool's text output. Referenced
-       * by-name from `Tool.outputParser`.
+       * WASM output-parser modules, keyed by name. Each entry is a url+hash data artifact (NOT an
+       * executable app): a signed Rust→WASM module that extracts structured results from a tool's
+       * text output. Referenced by-name from `Tool.outputParser`.
        *
-       * The SHA-256 `hash` is mandatory per the security policy — an empty or
-       * malformed hash is a config error, not a warning.
+       * The SHA-256 `hash` is mandatory per the security policy — an empty or malformed hash is a
+       * config error, not a warning.
        */
       parsers?: MapOfParsers;
 
@@ -366,28 +377,29 @@ declare global {
       setup?: MapOfConfigSetup;
 
       /**
-       * Arbitrary key-value storage that flows through the config chain.
-       * Any config layer can read/write values via input.sharedStorage.
-       * Useful for passing data between config layers that doesn't fit
-       * the typed config structure.
+       * Arbitrary key-value storage that flows through the config chain. Any config layer can
+       * read/write values via input.sharedStorage. Useful for passing data between config layers
+       * that doesn't fit the typed config structure.
        *
-       * Well-known keys published by the default config:
-       * - `"datamitsu-agent-prompt"`: Markdown guide for AI agents working in
-       *   datamitsu-managed repos.
-       * - `"pnpm-workspace-defaults"`: YAML string of the recommended pnpm 11
-       *   workspace security defaults. Parse with `YAML.parse()`, extend with
-       *   org/repo-specific settings, and write into a project repo via a Bundle
-       *   to produce a secure `pnpm-workspace.yaml`. Separate from the auto-merge
-       *   applied to `App.files["pnpm-workspace.yaml"]` for node apps. See the
-       *   Supply Chain Security guide for the full key list and rationale.
+       * Well-known keys published by the default config: - `"datamitsu-agent-prompt"`: Markdown
+       * guide for AI agents working in datamitsu-managed repos. - `"pnpm-workspace-defaults"`: YAML
+       * string of the recommended pnpm 11 workspace security defaults. Parse with `YAML.parse()`,
+       * extend with org/repo-specific settings, and write into a project repo via a Bundle to
+       * produce a secure `pnpm-workspace.yaml`. Separate from the auto-merge applied to
+       * `App.files["pnpm-workspace.yaml"]` for node apps. See the Supply Chain Security guide for
+       * the full key list and rationale.
        *
        * @example
-       * return { ...input, sharedStorage: { ...input.sharedStorage, "my-key": "my-value" } };
+       *   return { ...input, sharedStorage: { ...input.sharedStorage, "my-key": "my-value" } };
        *
        * @example
-       * // Read pnpm-workspace-defaults and extend for a repo bundle
-       * const defaults = YAML.parse(input.sharedStorage?.["pnpm-workspace-defaults"] ?? "{}");
-       * const repoConfig = { ...defaults, packages: ["packages/*"], allowBuilds: { esbuild: true } };
+       *   // Read pnpm-workspace-defaults and extend for a repo bundle
+       *   const defaults = YAML.parse(input.sharedStorage?.["pnpm-workspace-defaults"] ?? "{}");
+       *   const repoConfig = {
+       *     ...defaults,
+       *     packages: ["packages/*"],
+       *     allowBuilds: { esbuild: true },
+       *   };
        */
       sharedStorage?: Record<string, string>;
 
@@ -407,16 +419,20 @@ declare global {
       cwdPath: string;
 
       /**
-       * Relative path from cwdPath to the .datamitsu/ directory at git root.
-       * Simplifies referencing managed config links in content generators.
-       * @example "../../.datamitsu" // from packages/frontend/
-       * @example ".datamitsu" // from git root
+       * Relative path from cwdPath to the .datamitsu/ directory at git root. Simplifies referencing
+       * managed config links in content generators.
+       *
+       * @example
+       *   "../../.datamitsu"; // from packages/frontend/
+       *
+       * @example
+       *   ".datamitsu"; // from git root
        */
       datamitsuDir: string;
 
       /**
-       * Content of existing file (if it exists)
-       * This may be modified content from previous merge operations
+       * Content of existing file (if it exists) This may be modified content from previous merge
+       * operations
        */
       existingContent?: string;
 
@@ -431,25 +447,27 @@ declare global {
       isRoot: boolean;
 
       /**
-       * Original content of the file as it exists on disk
-       * This is always the unmodified content, even when existingContent has been transformed
+       * Original content of the file as it exists on disk This is always the unmodified content,
+       * even when existingContent has been transformed
        */
       originalContent?: string;
 
       /**
-       * Detected project locations: one entry per detected project type and the
-       * directory that holds its marker file, relative to the git root ("." for
-       * the root, POSIX slashes). Lets a git-root scoped generator build
-       * per-directory, per-ecosystem output (e.g. dependabot updates).
+       * Detected project locations: one entry per detected project type and the directory that
+       * holds its marker file, relative to the git root ("." for the root, POSIX slashes). Lets a
+       * git-root scoped generator build per-directory, per-ecosystem output (e.g. dependabot
+       * updates).
        *
        * Only populated during `dm setup` (empty for other commands).
-       * @example [{ type: "npm-package", path: "." }, { type: "golang-package", path: "service" }]
+       *
+       * @example
+       *   [{ type: "npm-package", path: "." }, { type: "golang-package", path: "service" }]
        */
       projectLocations: { path: string; type: string }[];
 
       /**
-       * Detected project types (deduplicated). Only populated during `dm setup`
-       * (empty for other commands).
+       * Detected project types (deduplicated). Only populated during `dm setup` (empty for other
+       * commands).
        */
       projectTypes: string[];
 
@@ -464,75 +482,80 @@ declare global {
      */
     interface ConfigSetup {
       /**
-       * Function that generates file content
-       * Receives context about the project including existing file content if present
-       * Optional when deleteOnly is true or linkTarget is set
+       * Function that generates file content Receives context about the project including existing
+       * file content if present Optional when deleteOnly is true or linkTarget is set
        *
-       * Returning `undefined` opts out: the file is left untouched (not created,
-       * not overwritten). Use this for "manage only if the file already exists"
-       * generators, e.g. checking `context.originalContent` before producing output.
+       * Returning `undefined` opts out: the file is left untouched (not created, not overwritten).
+       * Use this for "manage only if the file already exists" generators, e.g. checking
+       * `context.originalContent` before producing output.
        */
       content?: (context: ConfigContext) => string | undefined;
 
       /**
-       * If true, only delete files from otherFileNameList without creating any new file
-       * Content function is ignored when deleteOnly is true
+       * If true, only delete files from otherFileNameList without creating any new file Content
+       * function is ignored when deleteOnly is true
+       *
        * @default false
        */
       deleteOnly?: boolean;
 
       /**
-       * Pins the XXH3-128 hash of the content entering THIS (root/topmost) config
-       * layer — i.e. the output of the whole upstream chain (remote/before layers)
-       * before this layer transforms it. `datamitsu setup` recomputes that
-       * hash and aborts with a drift report when it diverges, so an upstream change
-       * to a pinned file surfaces before any overwrite instead of silently
+       * Pins the XXH3-128 hash of the content entering THIS (root/topmost) config layer — i.e. the
+       * output of the whole upstream chain (remote/before layers) before this layer transforms it.
+       * `datamitsu setup` recomputes that hash and aborts with a drift report when it diverges, so
+       * an upstream change to a pinned file surfaces before any overwrite instead of silently
        * clobbering local overrides.
        *
-       * Opt-in per file and verified only on the root layer (intermediate layers
-       * are ignored). The content is hashed byte-for-byte, with no normalization.
-       * Format: "xxh3:<32-hex>" (a bare 32-hex value is also accepted). Bypass the
-       * check with `--no-verify-hash`.
-       * @example "xxh3:0a1b2c3d4e5f60718293a4b5c6d7e8f9"
+       * Opt-in per file and verified only on the root layer (intermediate layers are ignored). The
+       * content is hashed byte-for-byte, with no normalization. Format: "xxh3:<32-hex>" (a bare
+       * 32-hex value is also accepted). Bypass the check with `--no-verify-hash`.
+       *
+       * @example
+       *   "xxh3:0a1b2c3d4e5f60718293a4b5c6d7e8f9";
        */
       expectChainHash?: string;
 
       /**
        * Relative path to the symlink target, resolved from the directory of the symlink itself.
-       * When set, creates a symlink instead of writing file content.
-       * Content function is ignored when linkTarget is set.
-       * @example "AGENTS.md" // symlink in same directory
-       * @example "../AGENTS.md" // symlink to parent directory
+       * When set, creates a symlink instead of writing file content. Content function is ignored
+       * when linkTarget is set.
+       *
+       * @example
+       *   "AGENTS.md"; // symlink in same directory
+       *
+       * @example
+       *   "../AGENTS.md"; // symlink to parent directory
        */
       linkTarget?: string;
 
       /**
-       * All other known filenames for this config
-       * These will be DELETED during install to avoid conflicts
-       * @example [".eslintrc.js", ".eslintrc.json", ".eslintrc.yml", "eslint.config.js"]
+       * All other known filenames for this config These will be DELETED during install to avoid
+       * conflicts
+       *
+       * @example
+       *   [".eslintrc.js", ".eslintrc.json", ".eslintrc.yml", "eslint.config.js"];
        */
       otherFileNameList?: string[];
 
       /**
-       * Which project type this config applies to
-       * If not specified, applies to all projects
+       * Which project type this config applies to If not specified, applies to all projects
        */
       projectTypes?: string[];
 
       /**
-       * Controls where the config file is created.
-       * - "project" (default): creates in the current project directory
-       * - "git-root": creates only at the git repository root (runs once)
+       * Controls where the config file is created. - "project" (default): creates in the current
+       * project directory - "git-root": creates only at the git repository root (runs once)
        */
       scope?: "git-root" | "project";
 
       /**
-       * Tool name(s) this config file belongs to (must match keys in `tools`).
-       * `datamitsu setup --tools <names>` regenerates only configs whose `tools`
-       * intersect the selected set; all others are left untouched. Omit for
-       * infrastructure files (.gitignore, lefthook.yaml) not tied to a single
-       * tool — those are skipped whenever `--tools` is passed.
-       * @example ["golangci-lint"]
+       * Tool name(s) this config file belongs to (must match keys in `tools`). `datamitsu setup
+       * --tools <names>` regenerates only configs whose `tools` intersect the selected set; all
+       * others are left untouched. Omit for infrastructure files (.gitignore, lefthook.yaml) not
+       * tied to a single tool — those are skipped whenever `--tools` is passed.
+       *
+       * @example
+       *   ["golangci-lint"];
        */
       tools?: string[];
     }
@@ -557,8 +580,7 @@ declare global {
       description?: string;
 
       /**
-       * Which project types this applies to
-       * Empty = all project types
+       * Which project types this applies to Empty = all project types
        */
       projectTypes?: string[];
 
@@ -573,9 +595,9 @@ declare global {
     // ========================================
 
     /**
-     * LSP derived declaration: reuse an existing tool's projectTypes/globs and
-     * its `outputParser` instead of declaring a standalone server. RESERVED for
-     * Phase 3+ — declaration only, no runtime behavior in this release.
+     * LSP derived declaration: reuse an existing tool's projectTypes/globs and its `outputParser`
+     * instead of declaring a standalone server. RESERVED for Phase 3+ — declaration only, no
+     * runtime behavior in this release.
      */
     interface LspDerived {
       /**
@@ -584,8 +606,8 @@ declare global {
       order?: number;
 
       /**
-       * Name of the tool (in `tools`) whose projectTypes/globs and
-       * `outputParser` this entry inherits. Must reference an existing tool.
+       * Name of the tool (in `tools`) whose projectTypes/globs and `outputParser` this entry
+       * inherits. Must reference an existing tool.
        */
       tool: string;
 
@@ -596,9 +618,8 @@ declare global {
     }
 
     /**
-     * LSP proxy declaration: wrap a standalone language server `app`, scoped to
-     * one or more project types. RESERVED for Phase 3+ — declaration only, no
-     * runtime behavior in this release.
+     * LSP proxy declaration: wrap a standalone language server `app`, scoped to one or more project
+     * types. RESERVED for Phase 3+ — declaration only, no runtime behavior in this release.
      */
     interface LspProxy {
       /**
@@ -624,12 +645,13 @@ declare global {
 
     /**
      * Map of configuration setup with mainFilename as key
+     *
      * @example
-     * {
+     *   {
      *   ".gitignore": { content: () => "..." },
      *   "lefthook.yaml": { content: () => "..." },
      *   ".vscode/settings.json": { content: () => "..." }
-     * }
+     *   }
      */
     type MapOfConfigSetup = Record<string, ConfigSetup>;
 
@@ -652,29 +674,26 @@ declare global {
     // ========================================
 
     /**
-     * OCI bundle declaration: the registry repository plus the mandatory
-     * sha256 digest pinning the bundle content. The bundle is a cache seed,
-     * not a trust boundary — binaries and JARs unpacked from it are
-     * re-verified against the published SHA-256 hashes from the config.
+     * OCI bundle declaration: the registry repository plus the mandatory sha256 digest pinning the
+     * bundle content. The bundle is a cache seed, not a trust boundary — binaries and JARs unpacked
+     * from it are re-verified against the published SHA-256 hashes from the config.
      */
     interface OCIRef {
       /**
-       * Bundle index/manifest digest, "sha256:" followed by 64 lowercase hex
-       * characters. Mandatory — a tag alone never pins content.
+       * Bundle index/manifest digest, "sha256:" followed by 64 lowercase hex characters. Mandatory
+       * — a tag alone never pins content.
        */
       digest: string;
 
       /**
-       * Full repository reference including the registry host
-       * (e.g. "ghcr.io/owner/repo"). No default host; tags and digests are
-       * not allowed inside the ref.
+       * Full repository reference including the registry host (e.g. "ghcr.io/owner/repo"). No
+       * default host; tags and digests are not allowed inside the ref.
        */
       ref: string;
 
       /**
-       * Optional sigstore keyless identity pin of the bundle publisher.
-       * When set, pull verifies the bundle signature before layout and
-       * fails hard on mismatch.
+       * Optional sigstore keyless identity pin of the bundle publisher. When set, pull verifies the
+       * bundle signature before layout and fails hard on mismatch.
        */
       signer?: OCISigner;
     }
@@ -700,10 +719,9 @@ declare global {
     type OperationType = "fix" | "lint";
 
     /**
-     * A tool's output-parser reference: which `parsers` entry (module) to load and
-     * which parser inside it to run. Kept separate so two tools can target two
-     * versions of the same module. See `Tool.outputParser` (which also accepts a
-     * plain string shorthand).
+     * A tool's output-parser reference: which `parsers` entry (module) to load and which parser
+     * inside it to run. Kept separate so two tools can target two versions of the same module. See
+     * `Tool.outputParser` (which also accepts a plain string shorthand).
      */
     interface OutputParser {
       /**
@@ -712,23 +730,21 @@ declare global {
       module: string;
 
       /**
-       * The parser inside that module to dispatch (a name from
-       * `datamitsu devtools parsers list`).
+       * The parser inside that module to dispatch (a name from `datamitsu devtools parsers list`).
        */
       parser: string;
     }
 
     /**
-     * A WASM output-parser module: a url+hash data artifact, modeled on
-     * ArchiveSpec/Bundle (data, not a process) — explicitly NOT on App (no
-     * runtime, no lockfile). Downloaded and SHA-256 verified before it is
-     * loaded into the sandboxed WASM runtime.
+     * A WASM output-parser module: a url+hash data artifact, modeled on ArchiveSpec/Bundle (data,
+     * not a process) — explicitly NOT on App (no runtime, no lockfile). Downloaded and SHA-256
+     * verified before it is loaded into the sandboxed WASM runtime.
      */
     interface Parser {
       /**
-       * SHA-256 hash (64 lowercase hex characters) of the .wasm module.
-       * Mandatory per the security policy — an empty or malformed hash is a
-       * config error. Verified before the module is loaded.
+       * SHA-256 hash (64 lowercase hex characters) of the .wasm module. Mandatory per the security
+       * policy — an empty or malformed hash is a config error. Verified before the module is
+       * loaded.
        */
       hash: string;
 
@@ -753,12 +769,17 @@ declare global {
       description?: string;
 
       /**
-       * Marker files that indicate this project type
-       * If ANY of these files exist in the root, project type is detected
-       * Supports glob patterns in repo root
-       * @example ["package.json", "yarn.lock"]
-       * @example ["go.mod"]
-       * @example ["*.tf"]
+       * Marker files that indicate this project type If ANY of these files exist in the root,
+       * project type is detected Supports glob patterns in repo root
+       *
+       * @example
+       *   ["package.json", "yarn.lock"];
+       *
+       * @example
+       *   ["go.mod"];
+       *
+       * @example
+       *   ["*.tf"];
        */
       markers: string[];
     }
@@ -782,38 +803,43 @@ declare global {
       operations: Partial<Record<OperationType, ToolOperation>>;
 
       /**
-       * Selects the WASM parser for this tool's output: `module` is the `parsers`
-       * entry to load (a specific WASM artifact, so different versions are different
-       * entries) and `parser` is the parser inside it (a name from
-       * `datamitsu devtools parsers list`). `module` must reference an existing
-       * `parsers` entry; a dangling reference is a config error.
+       * Selects the WASM parser for this tool's output: `module` is the `parsers` entry to load (a
+       * specific WASM artifact, so different versions are different entries) and `parser` is the
+       * parser inside it (a name from `datamitsu devtools parsers list`). `module` must reference
+       * an existing `parsers` entry; a dangling reference is a config error.
        *
-       * Keeping module and parser separate lets two tools target two versions of the
-       * same module.
-       * @example outputParser: { module: "core", parser: "eslint" }
+       * Keeping module and parser separate lets two tools target two versions of the same module.
+       *
+       * @example
+       *   outputParser: { module: "core", parser: "eslint" }
        */
       outputParser?: OutputParser;
 
       /**
-       * Which project types this tool applies to
-       * Empty array or undefined = applies to all project types
-       * @example ["npm-package", "typescript-project"]
+       * Which project types this tool applies to Empty array or undefined = applies to all project
+       * types
+       *
+       * @example
+       *   ["npm-package", "typescript-project"];
        */
       projectTypes?: string[];
 
       /**
-       * When true, the tool is reported as skipped and is never planned or run.
-       * Prefer this over conditionally omitting the tool from config: an omitted
-       * tool is invisible, whereas a skipped one is shown in the report with its
-       * reason.
-       * @example skip: !facts().env.CI
+       * When true, the tool is reported as skipped and is never planned or run. Prefer this over
+       * conditionally omitting the tool from config: an omitted tool is invisible, whereas a
+       * skipped one is shown in the report with its reason.
+       *
+       * @example
+       *   skip: !facts().env.CI;
        */
       skip?: boolean;
 
       /**
-       * Optional human-readable reason shown in the skipped report when `skip` is
-       * true. Empty falls back to a generic "disabled in config" label.
-       * @example skipReason: "runs in CI only"
+       * Optional human-readable reason shown in the skipped report when `skip` is true. Empty falls
+       * back to a generic "disabled in config" label.
+       *
+       * @example
+       *   skipReason: "runs in CI only";
        */
       skipReason?: string;
     }
@@ -828,120 +854,139 @@ declare global {
       app: string;
 
       /**
-       * Arguments to pass to the command.
-       * Template placeholders are expanded by the executor before execution:
-       * - {file} - single file path (per-file scope)
-       * - {files} - space-separated file list (batch mode)
-       * - {root} - git repository root (or cwd if not in a git repo)
-       * - {cwd} - per-project working directory
-       * - {toolCache} - per-project, per-tool cache directory (cache/{projectPath}/{toolName}/)
-       * @example ["--fix", "{file}"]
-       * @example ["--noEmit", "--project", "{root}"]
-       * @example ["--cache-location", "{toolCache}/eslint"]
+       * Arguments to pass to the command. Template placeholders are expanded by the executor before
+       * execution: - {file} - single file path (per-file scope) - {files} - space-separated file
+       * list (batch mode) - {root} - git repository root (or cwd if not in a git repo) - {cwd} -
+       * per-project working directory - {toolCache} - per-project, per-tool cache directory
+       * (cache/{projectPath}/{toolName}/)
+       *
+       * @example
+       *   ["--fix", "{file}"];
+       *
+       * @example
+       *   ["--noEmit", "--project", "{root}"];
+       *
+       * @example
+       *   ["--cache-location", "{toolCache}/eslint"];
        */
       args: string[];
 
       /**
-       * Batch mode - process files in groups or one at a time
-       * Only used for scope: "per-project" or "repository"
+       * Batch mode - process files in groups or one at a time Only used for scope: "per-project" or
+       * "repository"
+       *
        * @default true for "per-project" and "repository", false for "per-file"
        */
       batch?: boolean;
 
       /**
-       * Extra environment variables for this operation
-       * Merge priority: OS env < app env < tool operation env
-       * @example { "NODE_ENV": "production", "ESLINT_USE_FLAT_CONFIG": "true" }
+       * Extra environment variables for this operation Merge priority: OS env < app env < tool
+       * operation env
+       *
+       * @example
+       *   { "NODE_ENV": "production", "ESLINT_USE_FLAT_CONFIG": "true" }
        */
       env?: Record<string, string>;
 
       /**
-       * Glob patterns to exclude from the matched file set
-       * Applied after `globs` — files matching ANY pattern are removed
-       * Uses doublestar glob syntax (same as `globs`)
-       * @example ["**\/*.generated.ts", "**\/vendor/**"]
-       * @example ["**\/node_modules/**"]
+       * Glob patterns to exclude from the matched file set Applied after `globs` — files matching
+       * ANY pattern are removed Uses doublestar glob syntax (same as `globs`)
+       *
+       * @example
+       *   ["**\/*.generated.ts", "**\/vendor/**"];
+       *
+       * @example
+       *   ["**\/node_modules/**"];
        */
       excludeGlobs?: string[];
 
       /**
-       * File glob patterns this tool operates on
-       * Uses doublestar glob syntax: `*`, `**`, `?`, `[...]`, `{alt1,alt2}`
-       * Note: `!` negation is NOT supported — use `excludeGlobs` for exclusions
-       * Optional: omit/empty to match all discovered files
-       * @example ["**\/*.ts", "**\/*.tsx"]
-       * @example ["**\/*.md"]
+       * File glob patterns this tool operates on Uses doublestar glob syntax: `*`, `**`, `?`,
+       * `[...]`, `{alt1,alt2}` Note: `!` negation is NOT supported — use `excludeGlobs` for
+       * exclusions Optional: omit/empty to match all discovered files
+       *
+       * @example
+       *   ["**\/*.ts", "**\/*.tsx"];
+       *
+       * @example
+       *   ["**\/*.md"];
        */
       globs?: string[];
 
       /**
-       * How the file content reaches the tool.
-       * - "file" (default): pass file paths as arguments via {file}/{files}
-       * - "stdin": pipe the target file's content to the tool's standard input
-       *   (the stdin→stdout formatter contract; use with scope "per-file")
+       * How the file content reaches the tool. - "file" (default): pass file paths as arguments via
+       * {file}/{files} - "stdin": pipe the target file's content to the tool's standard input (the
+       * stdin→stdout formatter contract; use with scope "per-file")
+       *
        * @default "file"
        */
       input?: "file" | "stdin";
 
       /**
-       * Files that should invalidate the cache when changed
-       * Paths are relative to project root
-       * @example ["eslint.config.js", "tsconfig.json"]
-       * @example [".prettierrc", "package.json"]
+       * Files that should invalidate the cache when changed Paths are relative to project root
+       *
+       * @example
+       *   ["eslint.config.js", "tsconfig.json"];
+       *
+       * @example
+       *   [".prettierrc", "package.json"];
        */
       invalidateOn?: string[];
 
       /**
-       * How the tool's result is captured.
-       * - "inplace" (default): combined stdout+stderr is captured for reporting
-       *   and the tool mutates files directly
-       * - "stdout": capture the tool's stdout separately (kept apart from
-       *   stderr) as the candidate formatted content for the diff-in-core path
+       * How the tool's result is captured. - "inplace" (default): combined stdout+stderr is
+       * captured for reporting and the tool mutates files directly - "stdout": capture the tool's
+       * stdout separately (kept apart from stderr) as the candidate formatted content for the
+       * diff-in-core path
+       *
        * @default "inplace"
        */
       output?: "inplace" | "stdout";
 
       /**
-       * Priority/order when tools have overlapping globs
-       * Lower number = runs first
-       * Tools with same priority and overlapping globs run sequentially in definition order
-       * Tools with different globs or no overlap run in parallel
+       * Priority/order when tools have overlapping globs Lower number = runs first Tools with same
+       * priority and overlapping globs run sequentially in definition order Tools with different
+       * globs or no overlap run in parallel
+       *
        * @default 0
        */
       priority?: number;
 
       /**
-       * Scope defines the execution area and working directory
-       * - "repository": run once from git root for the entire repository
-       * - "per-project": run for each detected project in its directory
-       * - "per-file": run for each file in its directory
-       * @default "per-project"
+       * Scope defines the execution area and working directory - "repository": run once from git
+       * root for the entire repository - "per-project": run for each detected project in its
+       * directory - "per-file": run for each file in its directory
+       *
        * @example
-       * // ESLint - runs in each project, skips generated files
-       * {
+       *   // ESLint - runs in each project, skips generated files
+       *   {
        *   scope: "per-project",
        *   app: "eslint",
        *   args: ["--quiet", "{files}"],
        *   globs: ["**\/*.ts", "**\/*.js"],
        *   excludeGlobs: ["**\/*.generated.ts"]
-       * }
+       *   }
+       *
        * @example
-       * // syncpack - runs once for the entire monorepo
-       * {
+       *   // syncpack - runs once for the entire monorepo
+       *   {
        *   scope: "repository",
        *   app: "syncpack",
        *   args: ["lint"],
        *   globs: ["**\/package.json"],
        *   excludeGlobs: ["**\/fixtures/**"]
-       * }
+       *   }
+       *
        * @example
-       * // shfmt - formats each shell file separately
-       * {
+       *   // shfmt - formats each shell file separately
+       *   {
        *   scope: "per-file",
        *   app: "shfmt",
        *   args: ["-w", "{file}"],
        *   globs: ["**\/*.sh"]
-       * }
+       *   }
+       *
+       * @default "per-project"
        */
       scope: ToolScope;
     }
@@ -962,9 +1007,9 @@ declare global {
   namespace BinManager {
     interface App {
       /**
-       * Named archives to extract into the app's install directory.
-       * Archive names can be referenced in Links to create symlinks.
-       * Archives are extracted before Files are written, allowing Files to override.
+       * Named archives to extract into the app's install directory. Archive names can be referenced
+       * in Links to create symlinks. Archives are extracted before Files are written, allowing
+       * Files to override.
        */
       archives?: Record<string, ArchiveSpec>;
       binary?: AppConfigBinary;
@@ -973,55 +1018,56 @@ declare global {
        */
       description?: string;
       /**
-       * Custom environment variables for this app, applied to all app kinds
-       * (binary, uv, node, jvm, go, shell). Injected both at install time
-       * (uv/node/go dependency install) and at run time (every app type).
+       * Custom environment variables for this app, applied to all app kinds (binary, uv, node, jvm,
+       * go, shell). Injected both at install time (uv/node/go dependency install) and at run time
+       * (every app type).
        *
-       * Values support placeholder expansion (done in Go, never written into
-       * the committed config):
-       * - `${STORE}` → the shared datamitsu store path (cleaned by
-       *   `datamitsu store clear`).
+       * Values support placeholder expansion (done in Go, never written into the committed config):
+       *
+       * - `${STORE}` → the shared datamitsu store path (cleaned by `datamitsu store clear`).
        * - `${APP_DIR}` → this app's install directory (per-app, config-hashed).
        *
-       * Precedence: any key already set by datamitsu or the runtime wins, so a
-       * user config can never relocate the pnpm store, uv cache, GOPATH, etc.
+       * Precedence: any key already set by datamitsu or the runtime wins, so a user config can
+       * never relocate the pnpm store, uv cache, GOPATH, etc.
        *
        * @example
-       * // Redirect playwright to download browsers into the datamitsu store
-       * env: { PLAYWRIGHT_BROWSERS_PATH: "${STORE}/.playwright/browsers" }
+       *   // Redirect playwright to download browsers into the datamitsu store
+       *   env: {
+       *     PLAYWRIGHT_BROWSERS_PATH: "${STORE}/.playwright/browsers";
+       *   }
        */
       env?: Record<string, string>;
       /**
-       * Static file contents to write into the app's install directory before
-       * the package manager runs. Keys are filenames; values are file contents.
+       * Static file contents to write into the app's install directory before the package manager
+       * runs. Keys are filenames; values are file contents.
        *
-       * Special handling for `pnpm-workspace.yaml` on node apps: the entry is
-       * NOT written verbatim. Instead, the installer parses it and shallow-merges
-       * it on top of the recommended pnpm 11 workspace security defaults, then
-       * writes the merged result. User keys override defaults for the same
-       * top-level key. Use this to add `allowBuilds` for packages that need build
-       * scripts (e.g., puppeteer) without losing the security defaults. See the
-       * Supply Chain Security guide for the full default key list and rationale.
+       * Special handling for `pnpm-workspace.yaml` on node apps: the entry is NOT written verbatim.
+       * Instead, the installer parses it and shallow-merges it on top of the recommended pnpm 11
+       * workspace security defaults, then writes the merged result. User keys override defaults for
+       * the same top-level key. Use this to add `allowBuilds` for packages that need build scripts
+       * (e.g., puppeteer) without losing the security defaults. See the Supply Chain Security guide
+       * for the full default key list and rationale.
        *
        * @example
-       * // Allow puppeteer build scripts; defaults still apply
-       * files: {
+       *   // Allow puppeteer build scripts; defaults still apply
+       *   files: {
        *   "pnpm-workspace.yaml": YAML.stringify({ allowBuilds: { puppeteer: true } }),
-       * }
+       *   }
        */
       files?: Record<string, string>;
       go?: AppConfigGo;
       jvm?: AppConfigJVM;
       /**
-       * Defer installation: when true, the app is NOT installed during `datamitsu init`
-       * (even if it declares links) and installs only on first `datamitsu exec`, when its
-       * `.datamitsu/` links are also materialized. Use for user-invoked CLIs whose deps are
-       * heavy and not needed until run (e.g. slidev). Apps consumed by hooks, tools, or
-       * generated configs must stay eager (omit or false).
+       * Defer installation: when true, the app is NOT installed during `datamitsu init` (even if it
+       * declares links) and installs only on first `datamitsu exec`, when its `.datamitsu/` links
+       * are also materialized. Use for user-invoked CLIs whose deps are heavy and not needed until
+       * run (e.g. slidev). Apps consumed by hooks, tools, or generated configs must stay eager
+       * (omit or false).
        */
       lazy?: boolean;
       /**
-       * Symlinks to create in .datamitsu/ directory, mapping link name to relative path in install directory.
+       * Symlinks to create in .datamitsu/ directory, mapping link name to relative path in install
+       * directory.
        */
       links?: Record<string, string>;
       node?: AppConfigNode;
@@ -1029,10 +1075,8 @@ declare global {
       shell?: AppConfigShell;
       uv?: AppConfigUV;
       /**
-       * Version check configuration for verify-all command.
-       * Absent: use default ["--version"] args.
-       * { disabled: true }: skip version check.
-       * { args: ["version"] }: use custom args.
+       * Version check configuration for verify-all command. Absent: use default ["--version"] args.
+       * { disabled: true }: skip version check. { args: ["version"] }: use custom args.
        */
       versionCheck?: AppVersionCheck;
     }
@@ -1047,23 +1091,26 @@ declare global {
 
     interface AppConfigGo {
       /**
-       * Lock file content for reproducible installs.
-       * Required for all Go apps. Validation fails if omitted.
-       * Stores a JSON wrapper `{"mod":"<go.mod>","sum":"<go.sum>"}` so that
-       * `go build -mod=readonly` fails on any go.sum mismatch (supply chain protection).
-       * When prefixed with "br:", the content is brotli-compressed and base64-encoded.
-       * Generate via: datamitsu config lockfile <appName>
+       * Lock file content for reproducible installs. Required for all Go apps. Validation fails if
+       * omitted. Stores a JSON wrapper `{"mod":"<go.mod>","sum":"<go.sum>"}` so that `go build
+       * -mod=readonly` fails on any go.sum mismatch (supply chain protection). When prefixed with
+       * "br:", the content is brotli-compressed and base64-encoded. Generate via: datamitsu config
+       * lockfile <appName>
        */
       lockFile: string;
       /**
        * Go package import path to build.
-       * @example "golang.org/x/vuln/cmd/govulncheck"
+       *
+       * @example
+       *   "golang.org/x/vuln/cmd/govulncheck";
        */
       packageName: string;
       runtime?: string;
       /**
        * Module version to pin (Go module query).
-       * @example "v1.3.0"
+       *
+       * @example
+       *   "v1.3.0";
        */
       version: string;
     }
@@ -1083,11 +1130,10 @@ declare global {
       binPath: string;
       dependencies?: Record<string, string>;
       /**
-       * Lock file content for reproducible installs.
-       * Required for all node apps. Validation fails if omitted.
-       * When prefixed with "br:", the content is brotli-compressed and base64-encoded.
-       * Plain text is also accepted for backward compatibility.
-       * Generate via: datamitsu config lockfile <appName>
+       * Lock file content for reproducible installs. Required for all node apps. Validation fails
+       * if omitted. When prefixed with "br:", the content is brotli-compressed and base64-encoded.
+       * Plain text is also accepted for backward compatibility. Generate via: datamitsu config
+       * lockfile <appName>
        */
       lockFile: string;
       packageName: string;
@@ -1102,18 +1148,19 @@ declare global {
 
     interface AppConfigUV {
       /**
-       * Lock file content for reproducible installs.
-       * Required for all UV apps. Validation fails if omitted.
-       * When prefixed with "br:", the content is brotli-compressed and base64-encoded.
-       * Plain text is also accepted for backward compatibility.
-       * Generate via: datamitsu config lockfile <appName>
+       * Lock file content for reproducible installs. Required for all UV apps. Validation fails if
+       * omitted. When prefixed with "br:", the content is brotli-compressed and base64-encoded.
+       * Plain text is also accepted for backward compatibility. Generate via: datamitsu config
+       * lockfile <appName>
        */
       lockFile: string;
       packageName: string;
       /**
-       * Python version constraint for pyproject.toml requires-python field.
-       * If not set, defaults to ">=3.12".
-       * @example ">=3.10"
+       * Python version constraint for pyproject.toml requires-python field. If not set, defaults to
+       * ">=3.12".
+       *
+       * @example
+       *   ">=3.10";
        */
       requiresPython?: string;
       runtime?: string;
@@ -1132,30 +1179,34 @@ declare global {
     }
 
     /**
-     * Archive specification for bundling directory trees with apps.
-     * Supports inline (brotli-compressed tar) and external (URL) formats.
-     * Archives are extracted before Files are written, allowing Files to override.
+     * Archive specification for bundling directory trees with apps. Supports inline
+     * (brotli-compressed tar) and external (URL) formats. Archives are extracted before Files are
+     * written, allowing Files to override.
      */
     interface ArchiveSpec {
-      /** Archive format (tar-based only) */
+      /**
+       * Archive format (tar-based only)
+       */
       format?: "tar" | "tar.bz2" | "tar.gz" | "tar.xz" | "tar.zst";
 
       /**
-       * SHA-256 hash (64 lowercase hex characters).
-       * Required for external archives per security policy.
+       * SHA-256 hash (64 lowercase hex characters). Required for external archives per security
+       * policy.
        */
       hash?: string;
 
       /**
-       * Inline archive: brotli-compressed tar + base64 with "tar.br:" prefix.
-       * Maximum decompressed size: 50 MiB.
-       * @example "tar.br:GxsAACBdU6xBxGN0YXIg..."
+       * Inline archive: brotli-compressed tar + base64 with "tar.br:" prefix. Maximum decompressed
+       * size: 50 MiB.
+       *
+       * @example
+       *   "tar.br:GxsAACBdU6xBxGN0YXIg...";
        */
       inline?: string;
 
       /**
-       * External archive URL (requires hash and format).
-       * Downloaded and SHA-256 verified before extraction.
+       * External archive URL (requires hash and format). Downloaded and SHA-256 verified before
+       * extraction.
        */
       url?: string;
     }
@@ -1164,13 +1215,15 @@ declare global {
       binaryPath?: string;
       contentType: BinContentType;
       /**
-       * When true, extracts the entire archive to a directory instead of a single binary.
-       * Used for runtimes like JDK that need the full directory tree (bin/, lib/, etc.).
+       * When true, extracts the entire archive to a directory instead of a single binary. Used for
+       * runtimes like JDK that need the full directory tree (bin/, lib/, etc.).
        */
       extractDir?: boolean;
 
       hash: string;
-      /** @default sha256 */
+      /**
+       * @default sha256
+       */
       hashType?: BinHashType;
       url: string;
     }
@@ -1192,8 +1245,8 @@ declare global {
 
     interface Bundle {
       /**
-       * Named archives to extract into the bundle's install directory.
-       * Supports inline (brotli-compressed tar) and external (URL with hash) formats.
+       * Named archives to extract into the bundle's install directory. Supports inline
+       * (brotli-compressed tar) and external (URL with hash) formats.
        */
       archives?: Record<string, ArchiveSpec>;
 
@@ -1203,9 +1256,9 @@ declare global {
       files?: Record<string, string>;
 
       /**
-       * Symlinks to create in .datamitsu/ directory, mapping link name to relative path in install directory.
-       * Values can point to files or directories within the bundle.
-       * Use "." to link the entire bundle directory.
+       * Symlinks to create in .datamitsu/ directory, mapping link name to relative path in install
+       * directory. Values can point to files or directories within the bundle. Use "." to link the
+       * entire bundle directory.
        */
       links?: Record<string, string>;
 
@@ -1232,28 +1285,25 @@ declare global {
 
     interface RuntimeConfig {
       /**
-       * Go-specific runtime configuration (goVersion).
-       * Required when kind is "go".
+       * Go-specific runtime configuration (goVersion). Required when kind is "go".
        */
       go?: RuntimeConfigGo;
       /**
-       * JVM-specific runtime configuration (javaVersion).
-       * Required when kind is "jvm".
+       * JVM-specific runtime configuration (javaVersion). Required when kind is "jvm".
        */
       jvm?: RuntimeConfigJVM;
       kind: RuntimeKind;
       managed?: RuntimeConfigManaged;
       mode: RuntimeMode;
       /**
-       * Node-specific runtime configuration (nodeVersion, pnpmVersion, pnpmHash).
-       * Required when kind is "node". Node is acquired as a direct, hash-pinned
-       * archive (url + hash), like the jvm runtime.
+       * Node-specific runtime configuration (nodeVersion, pnpmVersion, pnpmHash). Required when
+       * kind is "node". Node is acquired as a direct, hash-pinned archive (url + hash), like the
+       * jvm runtime.
        */
       node?: RuntimeConfigNode;
       system?: RuntimeConfigSystem;
       /**
-       * UV-specific runtime configuration (pythonVersion).
-       * Optional when kind is "uv".
+       * UV-specific runtime configuration (pythonVersion). Optional when kind is "uv".
        */
       uv?: RuntimeConfigUV;
     }
@@ -1261,7 +1311,9 @@ declare global {
     interface RuntimeConfigGo {
       /**
        * Go SDK version to build with.
-       * @example "1.22.3"
+       *
+       * @example
+       *   "1.22.3";
        */
       goVersion: string;
     }
@@ -1277,8 +1329,8 @@ declare global {
     interface RuntimeConfigNode {
       nodeVersion: string;
       /**
-       * SHA-256 hash of the PNPM tarball for integrity verification.
-       * Required per security policy: all downloads must have a pinned hash.
+       * SHA-256 hash of the PNPM tarball for integrity verification. Required per security policy:
+       * all downloads must have a pinned hash.
        */
       pnpmHash: string;
       pnpmVersion: string;
@@ -1302,14 +1354,12 @@ declare global {
   }
 
   /**
-   * Facts about the project environment.
-   * Collected automatically on engine initialization.
+   * Facts about the project environment. Collected automatically on engine initialization.
    *
-   * Path-related fields have been removed. Use template placeholders in tool
-   * operation args instead:
-   * - `{cwd}` - current working directory
-   * - `{root}` - git repository root (or cwd if not in git)
-   * - `{toolCache}` - per-project, per-tool cache directory (cache/{projectPath}/{toolName}/)
+   * Path-related fields have been removed. Use template placeholders in tool operation args
+   * instead: - `{cwd}` - current working directory - `{root}` - git repository root (or cwd if not
+   * in git) - `{toolCache}` - per-project, per-tool cache directory
+   * (cache/{projectPath}/{toolName}/)
    */
   interface Facts {
     /**
@@ -1318,8 +1368,9 @@ declare global {
     arch: SysList.ArchType;
 
     /**
-     * Command to run this binary (can be overridden via --binary-command flag or DATAMITSU_BINARY_COMMAND env var)
-     * Useful for npm package wrappers that need to call the actual binary
+     * Command to run this binary (can be overridden via --binary-command flag or
+     * DATAMITSU_BINARY_COMMAND env var) Useful for npm package wrappers that need to call the
+     * actual binary
      */
     binaryCommand: string;
 
@@ -1329,9 +1380,11 @@ declare global {
     binaryPath: string;
 
     /**
-     * Environment variables with the package prefix (e.g., CHANGE_ME_*)
-     * Only includes variables that start with the prefix defined in ldflags.EnvPrefix
-     * @example { "CHANGE_ME_DEBUG": "true", "CHANGE_ME_LOG_LEVEL": "info" }
+     * Environment variables with the package prefix (e.g., CHANGE_ME_*) Only includes variables
+     * that start with the prefix defined in ldflags.EnvPrefix
+     *
+     * @example
+     *   { "CHANGE_ME_DEBUG": "true", "CHANGE_ME_LOG_LEVEL": "info" }
      */
     env: Record<string, string>;
 
@@ -1346,8 +1399,8 @@ declare global {
     isMonorepo: boolean;
 
     /**
-     * Libc implementation on the host system.
-     * "glibc" or "musl" on Linux, "unknown" on non-Linux systems.
+     * Libc implementation on the host system. "glibc" or "musl" on Linux, "unknown" on non-Linux
+     * systems.
      */
     libc: "glibc" | "musl" | "unknown";
 
@@ -1363,8 +1416,7 @@ declare global {
   }
 
   /**
-   * Function that returns Facts object
-   * Facts are collected once during engine initialization
+   * Function that returns Facts object Facts are collected once during engine initialization
    */
   const facts: () => Facts;
 
@@ -1374,6 +1426,7 @@ declare global {
   namespace YAML {
     /**
      * Parse YAML string to JavaScript object
+     *
      * @param text - YAML string to parse
      * @returns Parsed object
      * @throws Error if YAML is invalid
@@ -1382,6 +1435,7 @@ declare global {
 
     /**
      * Convert JavaScript object to YAML string
+     *
      * @param value - Object to stringify
      * @returns YAML string
      * @throws Error if object cannot be serialized
@@ -1395,6 +1449,7 @@ declare global {
   namespace TOML {
     /**
      * Parse TOML string to JavaScript object
+     *
      * @param text - TOML string to parse
      * @returns Parsed object
      * @throws Error if TOML is invalid
@@ -1403,6 +1458,7 @@ declare global {
 
     /**
      * Convert JavaScript object to TOML string
+     *
      * @param value - Object to stringify
      * @returns TOML string
      * @throws Error if object cannot be serialized
@@ -1429,11 +1485,9 @@ declare global {
 
     /**
      * Parse INI string to array of sections
-     * @param text - INI string to parse
-     * @returns Array of sections (preserves order and allows duplicate section names)
-     * @throws Error if INI is invalid
+     *
      * @example
-     * const ini = INI.parse(`
+     *   const ini = INI.parse(`
      * [database]
      * host = localhost
      * port = 5432
@@ -1442,42 +1496,50 @@ declare global {
      * [*.py]
      * indent_size = 2
      * `);
-     * // Returns: [
-     * //   { name: "database", properties: { host: "localhost", port: "5432" } },
-     * //   { name: "*.py", properties: { indent_size: "4" } },
-     * //   { name: "*.py", properties: { indent_size: "2" } }
-     * // ]
+     *   // Returns: [
+     *   //   { name: "database", properties: { host: "localhost", port: "5432" } },
+     *   //   { name: "*.py", properties: { indent_size: "4" } },
+     *   //   { name: "*.py", properties: { indent_size: "2" } }
+     *   // ]
+     *
+     * @param text - INI string to parse
+     * @returns Array of sections (preserves order and allows duplicate section names)
+     * @throws Error if INI is invalid
      */
     function parse(text: string): Array<SectionEntry>;
 
     /**
      * Convert array of sections to INI string
+     *
+     * @example
+     *   const sections = [
+     *     { name: "database", properties: { host: "localhost", port: "5432" } },
+     *     { name: "*.py", properties: { indent_size: "2" } },
+     *   ];
+     *   console.log(INI.stringify(sections));
+     *
      * @param sections - Array of section entries
      * @returns INI string
      * @throws Error if object cannot be serialized
-     * @example
-     * const sections = [
-     *   { name: "database", properties: { host: "localhost", port: "5432" } },
-     *   { name: "*.py", properties: { indent_size: "2" } }
-     * ];
-     * console.log(INI.stringify(sections));
      */
     function stringify(sections: Array<SectionEntry>): string;
 
     /**
      * Convert array of sections to a record, merging sections with the same name
-     * @param sections - Array of section entries from INI.parse
-     * @returns Record mapping section names to their merged properties
+     *
      * @example
-     * const sections = INI.parse(`
+     *   const sections = INI.parse(`
      * [*.py]
      * indent_size = 4
      * [*.py]
      * indent_size = 2
      * `);
-     * const record = INI.toRecord(sections);
-     * // Returns: { "*.py": { indent_size: "2" } }
-     * // Later values override earlier ones for the same section name
+     *   const record = INI.toRecord(sections);
+     *   // Returns: { "*.py": { indent_size: "2" } }
+     *   // Later values override earlier ones for the same section name
+     *
+     * @param sections - Array of section entries from INI.parse
+     * @returns Record mapping section names to their merged properties
      */
     function toRecord(sections: Array<SectionEntry>): Record<string, Section>;
   }

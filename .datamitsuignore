@@ -2,7 +2,7 @@
 # All configured tools are disabled by default (opt-in model).
 # Enable a tool by removing it from the list below (or add "!**/*: <tool>").
 website/**/*: tsgo
-**/*: actionlint, bearer, grype, harper-cli, lychee, osv-scanner, trivy, trufflehog, vale, knip, typos, oxfmt
+**/*: actionlint, bearer, grype, harper-cli, lychee, osv-scanner, trivy, trufflehog, vale, knip, typos
 
 # The embedded documentation snapshot is a verbatim copy of the Docusaurus llms
 # output, written by `task gen:llms-docs`. Its bytes are hashed into
@@ -10,3 +10,6 @@ website/**/*: tsgo
 # touching it would break that identity and flap the gate. Edit website/docs and
 # re-harvest instead.
 internal/llmsdocs/embed/**/*: *
+website/docs/contributing/creating-wrappers.md: prettier
+packaging/python/pyproject.toml: oxfmt
+Taskfile.yaml: oxfmt
