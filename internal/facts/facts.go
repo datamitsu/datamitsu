@@ -103,8 +103,12 @@ func CollectWithOptions(ctx context.Context, binaryCommandOverride string, opts 
 	if err == nil {
 		facts.IsInGitRepo = true
 
-		// Check if we're in a monorepo (CWD is different from git root)
-		relPath, err := filepath.Rel(gitRoot, cwd)
+		// Check if we're in a monorepo (CWD is different from git root).
+		// Both sides are resolved first: git reports the real path, while Getwd
+		// reports the path as entered, so under a symlinked directory (on macOS
+		// /tmp and /var are symlinks into /private) the two spellings of the same
+		// directory differ and every repository there would look like a monorepo.
+		relPath, err := filepath.Rel(resolveSymlinks(gitRoot), resolveSymlinks(cwd))
 		if err == nil && relPath != "." && relPath != "" {
 			facts.IsMonorepo = true
 		}
@@ -143,6 +147,18 @@ func collectAllEnv() map[string]string {
 	}
 
 	return envMap
+}
+
+// resolveSymlinks returns path with every symlink resolved, or path unchanged
+// when it cannot be resolved (it may not exist, or be unreadable). Used to
+// compare two paths that were obtained differently — a failure to resolve just
+// falls back to the textual comparison that was there before.
+func resolveSymlinks(path string) string {
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return path
+	}
+	return resolved
 }
 
 // GetGitRoot returns the root of the topmost repository in the submodules hierarchy

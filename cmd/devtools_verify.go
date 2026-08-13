@@ -1452,7 +1452,13 @@ func printSummary(s jsonSummary) {
 // inside) so tests can pin a deterministic platform. unparam sees only "linux"
 // because runtime.GOOS is a per-build constant, not because the value is fixed.
 //
-//nolint:unparam // platform is injected for test determinism; not a constant in practice
+// nolintlint is suppressed alongside it because the directive is only *used* on
+// the platform the analysis runs for: on linux unparam fires and the directive
+// is needed, on darwin it does not fire and nolintlint would call the same
+// directive unused. Without this, CI (linux) and a macOS dev machine demand
+// opposite edits.
+//
+//nolint:unparam,nolintlint // platform is injected for test determinism; not a constant in practice
 func buildJSONOutput(
 	currentOs, currentArch string,
 	binaryResults []binaryVerifyResult,
