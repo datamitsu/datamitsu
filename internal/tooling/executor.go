@@ -656,8 +656,10 @@ func joinStreams(stdout, stderr []byte) []byte {
 	}
 }
 
-// parseFileDiagnostics runs the tool's declared parser over one file's captured
-// output and appends the resolved diagnostics (stamped with the file) to result.
+// parseFileDiagnostics runs the tool's declared parser over one invocation's
+// captured output and appends the resolved diagnostics to result. Diagnostics the
+// parser left without a file are stamped with `file`; batch callers pass "" and
+// rely on the parser reporting a path per diagnostic (eslint's JSON does).
 // A parse failure is logged, not fatal — the tool's own pass/fail is unaffected.
 func (e *Executor) parseFileDiagnostics(ctx context.Context, result *ExecutionResult, task Task, file string, stdout, stderr []byte, exitCode int) {
 	op := task.Tool.OutputParser
@@ -955,6 +957,23 @@ func (e *Executor) executeBatch(ctx context.Context, task Task, cmdInfo *binmana
 		return chunkResult
 	}
 
+	// A batch tool whose args never mention the files runs the same command no
+	// matter how the list is split (tsc reads tsconfig.json, not argv). Chunking
+	// it re-runs one identical command N times: N× the work, and — now that batch
+	// output is parsed — every diagnostic reported N times. Run it once.
+	if !argsReferenceFiles(task.OpConfig.Args) {
+		log.Debug("batch args do not reference files; running once",
+			zap.String("toolName", task.ToolName), zap.Int("fileCount", len(relativeFiles)))
+		chunkResult := e.executeBatchChunk(ctx, task, cmdInfo, workingDir, nil, startTime)
+		if e.fileProgressCallback != nil {
+			e.fileProgressCallback(task.ToolName, 1, 1, chunkResult.Success)
+		}
+		if chunkResult.Success {
+			e.updateCacheAfterSuccess(task, filesToProcess)
+		}
+		return chunkResult
+	}
+
 	// Split files into chunks based on command line length limits
 	chunks := e.chunkFilesByCommandLength(relativeFiles, task.OpConfig.Args, cmdInfo)
 	log.Debug("files split into chunks", zap.Int("chunkCount", len(chunks)))
@@ -984,6 +1003,19 @@ func (e *Executor) executeBatch(ctx context.Context, task Task, cmdInfo *binmana
 	return result
 }
 
+// argsReferenceFiles reports whether an operation's args place the matched files
+// on the command line, via {files} or {file} (standalone or embedded). When they
+// do not, the file list only decides *whether* the tool runs, not what it is
+// given — so splitting it into chunks changes nothing but the number of runs.
+func argsReferenceFiles(args []string) bool {
+	for _, arg := range args {
+		if strings.Contains(arg, "{files}") || strings.Contains(arg, "{file}") {
+			return true
+		}
+	}
+	return false
+}
+
 // executeBatchChunk executes a single chunk of files in batch mode
 func (e *Executor) executeBatchChunk(ctx context.Context, task Task, cmdInfo *binmanager.CommandInfo, workingDir string, files []string, startTime time.Time) ExecutionResult {
 	result := ExecutionResult{
@@ -1010,7 +1042,22 @@ func (e *Executor) executeBatchChunk(ctx context.Context, task Task, cmdInfo *bi
 	log.Debug("executing batch command", zap.Strings("args", args), zap.String("workingDir", workingDir))
 	opEnv := e.replaceEnvPlaceholders(task.OpConfig.Env, task.ProjectPath, task.ToolName)
 	cmd := e.buildCommand(ctx, cmdInfo, args, workingDir, opEnv)
-	output, err := e.runCommandWithOutput(cmd)
+
+	// A batch tool with an outputParser (eslint --format=json, …) emits machine
+	// output on stdout while wrappers and the runtime write noise to stderr, so the
+	// parser must see the streams apart — a combined capture would hand it a JSON
+	// document with prose glued in front of it. formatMode is stdout-as-file-content
+	// and must never reach the parser (validation keeps it off batch lint, but a
+	// tool could still pair output:stdout with a tool-level parser).
+	formatMode := task.OpConfig.Output == config.ToolOutputStdout
+	parseMode := e.parser != nil && task.Tool.OutputParser != nil && !formatMode
+	stdoutBytes, stderrBytes, err := e.runCommandIO(cmd, nil, parseMode)
+
+	output := stdoutBytes
+	if parseMode {
+		// Keep both streams in the textual fallback shown when parsing yields nothing.
+		output = joinStreams(stdoutBytes, stderrBytes)
+	}
 	result.Output = string(output)
 
 	// Output command output in debug mode
@@ -1022,6 +1069,12 @@ func (e *Executor) executeBatchChunk(ctx context.Context, task Task, cmdInfo *bi
 
 	exitCode := getExitCode(err)
 	result.ExitCode = exitCode
+
+	// Batch mode lints many files per invocation, so diagnostics carry their own
+	// paths from the parser; nothing to stamp.
+	if parseMode {
+		e.parseFileDiagnostics(ctx, &result, task, "", stdoutBytes, stderrBytes, exitCode)
+	}
 
 	if err != nil {
 		log.Debug("batch execution failed", zap.Int("exitCode", exitCode), zap.Error(err))
@@ -1137,6 +1190,7 @@ func (e *Executor) executeBatchChunksParallel(ctx context.Context, task Task, cm
 		if chunkResult.Error != nil {
 			errors = append(errors, fmt.Errorf("chunk %d: %w", i+1, chunkResult.Error))
 		}
+		result.Diagnostics = append(result.Diagnostics, chunkResult.Diagnostics...)
 		if !chunkResult.Success && chunkResult.FailureReason != FailureReasonCancelled {
 			allCancelled = false
 		}
@@ -1363,11 +1417,6 @@ func getExitCode(err error) int {
 
 	// If we can't determine the exit code, return -1
 	return -1
-}
-
-func (e *Executor) runCommandWithOutput(cmd *exec.Cmd) ([]byte, error) {
-	combined, _, err := e.runCommandIO(cmd, nil, false)
-	return combined, err
 }
 
 // runCommandIO runs cmd with optional stdin content and either combined or

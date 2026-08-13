@@ -28,6 +28,11 @@ type RawDiagnostic struct {
 	Severity *uint8  `json:"severity,omitempty"`
 	Source   *string `json:"source,omitempty"`
 	Code     *string `json:"code,omitempty"`
+	// File is set only by parsers whose format names the file per diagnostic
+	// (eslint's filePath). Batch runs cover many files at once, so this is the
+	// only way to attribute them; per-file parsers leave it nil and the executor
+	// stamps the file it linted.
+	File *string `json:"file,omitempty"`
 }
 
 // ParserRuntime is an instantiated wazero module ready to parse tool output. It

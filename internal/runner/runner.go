@@ -1038,15 +1038,37 @@ func toolDetail(group toolExecutionGroup) string {
 // formatDiagnostic renders one parsed diagnostic as
 // "file:row:col severity message [code]", the severity colored by level.
 func formatDiagnostic(d diagnostic.Diagnostic) string {
+	return formatDiagnosticRelativeTo(d, "")
+}
+
+// formatDiagnosticRelativeTo is formatDiagnostic with paths shortened against
+// baseDir. Batch parsers report absolute paths (eslint's filePath), which in a
+// monorepo push the useful part of the line off-screen; the box already prints
+// the Cwd these are relative to.
+func formatDiagnosticRelativeTo(d diagnostic.Diagnostic, baseDir string) string {
 	loc := fmt.Sprintf("%d:%d", d.Row, d.Col)
 	if d.File != "" {
-		loc = d.File + ":" + loc
+		loc = relativeToBase(d.File, baseDir) + ":" + loc
 	}
 	line := fmt.Sprintf("%s %s %s", clr.Faint(loc), severityColor(d.Severity)(d.Severity.String()), d.Message)
 	if d.Code != "" {
 		line += " " + clr.Faint("["+d.Code+"]")
 	}
 	return line
+}
+
+// relativeToBase shortens an absolute diagnostic path against baseDir, keeping
+// the original whenever that is not possible or would escape upwards ("../..")
+// — a wrong-looking short path is worse than a long correct one.
+func relativeToBase(file, baseDir string) string {
+	if baseDir == "" || !filepath.IsAbs(file) {
+		return file
+	}
+	rel, err := filepath.Rel(baseDir, file)
+	if err != nil || strings.HasPrefix(rel, "..") {
+		return file
+	}
+	return rel
 }
 
 // severityColor maps a severity to its display color.
@@ -1063,6 +1085,30 @@ func severityColor(s diagnostic.Severity) func(a ...any) string {
 	default:
 		return clr.Faint
 	}
+}
+
+// usableDiagnostics reports whether the parsed diagnostics are worth showing in
+// place of the tool's raw output.
+//
+// One batch invocation covers many files, so a diagnostic without a file is
+// unattributable — and the raw output the parsed view replaces almost always did
+// name the file. Rather than silently degrade whenever a batch tool's parser
+// does not report paths, fall back to the raw text. Per-file runs are unaffected:
+// the executor stamps the file it linted, and even unstamped they are read in the
+// context of a single file.
+func usableDiagnostics(result tooling.ExecutionResult) bool {
+	if len(result.Diagnostics) == 0 {
+		return false
+	}
+	if !result.Batch {
+		return true
+	}
+	for _, d := range result.Diagnostics {
+		if d.File != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // printFailedExecution prints details of a failed execution in a bordered format
@@ -1102,10 +1148,10 @@ func printFailedExecution(runNum int, exec executionInstance) {
 	switch {
 	// Parsed diagnostics, when the tool has an outputParser, are clearer than the
 	// raw output (often JSON) and take its place.
-	case len(result.Diagnostics) > 0:
+	case usableDiagnostics(result):
 		fmt.Printf("  %s\n", border("│"))
 		for _, d := range result.Diagnostics {
-			fmt.Printf("  %s  %s\n", border("│"), formatDiagnostic(d))
+			fmt.Printf("  %s  %s\n", border("│"), formatDiagnosticRelativeTo(d, result.WorkingDir))
 		}
 	case result.Output != "":
 		fmt.Printf("  %s\n", border("│"))
