@@ -8,10 +8,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/datamitsu/datamitsu/internal/httpretry"
 	"github.com/datamitsu/datamitsu/internal/httpx"
+	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"github.com/datamitsu/datamitsu/internal/ui"
 	"go.uber.org/zap"
 )
@@ -42,6 +44,92 @@ func retryDelay(attempt int) time.Duration { return httpretry.Delay(attempt) }
 // caught by the per-attempt progress guard in downloadFileInternal instead.
 var httpClient = httpx.NewHardenedClient(0)
 
+// fileScheme marks a local-file source. It exists for the development loop:
+// pointing a config at a locally built artifact (a freshly compiled WASM parser
+// module, say) instead of a published release, without weakening anything — the
+// caller hashes and verifies a file: source exactly like a downloaded one, so
+// the mandatory-SHA-256 policy holds unchanged. Only the transport differs.
+//
+// Two independent locks gate it, so a released binary has no reachable
+// local-read path at all:
+//
+//  1. **Build**: ldflags.LocalArtifacts must be injected (only the dev-link
+//     build does this). Released and ordinary `go build` binaries refuse
+//     file: outright.
+//  2. **Call site**: the caller must pass allowLocalFile. Only the parser store
+//     does, so an app, archive or JAR declaration can never reach it.
+const fileScheme = "file://"
+
+// maxLocalSourceSize bounds a file:// read, mirroring MaxBinarySize. A variable
+// so tests can shrink it without writing half a gigabyte.
+var maxLocalSourceSize int64 = MaxBinarySize
+
+// copyLocalSource materializes a file: URL as a temp file in destDir, mirroring
+// what a download leaves behind so the shared verify/publish path is identical.
+// Failures are permanent: a missing or unreadable local file will not fix itself
+// on retry. Offline mode does not apply — nothing leaves the machine.
+func copyLocalSource(url, destDir string) (string, error) {
+	srcPath := strings.TrimPrefix(url, fileScheme)
+	if !filepath.IsAbs(srcPath) {
+		return "", permanent(fmt.Errorf("file:// source must be an absolute path, got %q", srcPath))
+	}
+	// Regular files only. A FIFO or character device (/dev/zero, /dev/stdin)
+	// would either block forever or stream until the size ceiling — a hang or a
+	// wasted 500 MiB, neither of which a build artifact ever is.
+	//
+	// The check has to happen twice. O_NONBLOCK keeps the open itself from
+	// blocking on a FIFO with no writer (opening one is what blocks, so a
+	// post-open check would never be reached), and the fstat on the resulting
+	// descriptor — not on the path — is what actually decides, so swapping the
+	// path after the open cannot slip a pipe past it.
+	src, err := os.OpenFile(srcPath, os.O_RDONLY|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return "", permanent(fmt.Errorf("open local source: %w", err))
+	}
+	info, err := src.Stat()
+	if err != nil {
+		_ = src.Close()
+		return "", permanent(fmt.Errorf("stat local source: %w", err))
+	}
+	if !info.Mode().IsRegular() {
+		_ = src.Close()
+		return "", permanent(fmt.Errorf("file:// source must be a regular file, got mode %s", info.Mode()))
+	}
+	defer func() {
+		if closeErr := src.Close(); closeErr != nil {
+			log.Warn("failed to close local source", zap.String("path", srcPath), zap.Error(closeErr))
+		}
+	}()
+
+	if err := os.MkdirAll(destDir, 0o755); err != nil {
+		return "", fmt.Errorf("failed to create temp directory: %w", err)
+	}
+	tmpFile, err := os.CreateTemp(destDir, "local-*")
+	if err != nil {
+		return "", fmt.Errorf("failed to create temporary file: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+
+	// Same size ceiling as a download: a local path is still untrusted input.
+	written, copyErr := io.Copy(tmpFile, io.LimitReader(src, maxLocalSourceSize+1))
+	closeErr := tmpFile.Close()
+	if copyErr == nil && written > maxLocalSourceSize {
+		copyErr = fmt.Errorf("local source exceeds max size of %d bytes", maxLocalSourceSize)
+	}
+	if copyErr == nil {
+		copyErr = closeErr
+	}
+	if copyErr != nil {
+		if removeErr := os.Remove(tmpPath); removeErr != nil {
+			log.Warn("failed to remove temp file after local copy error", zap.String("path", tmpPath), zap.Error(removeErr))
+		}
+		return "", permanent(fmt.Errorf("copy local source: %w", copyErr))
+	}
+
+	log.Debug("local source copied", zap.String("src", srcPath), zap.String("tmp", tmpPath))
+	return tmpPath, nil
+}
+
 // displayName returns a human-friendly label for a download, falling back to
 // the URL's last path segment when no explicit name is given.
 func displayName(name, url string) string {
@@ -54,7 +142,19 @@ func displayName(name, url string) string {
 	return url
 }
 
-func downloadFileInternal(ctx context.Context, url string, destDir string, name string) (string, error) {
+func downloadFileInternal(ctx context.Context, url string, destDir string, name string, allowLocalFile bool) (string, error) {
+	if strings.HasPrefix(url, fileScheme) {
+		if !ldflags.LocalArtifactsEnabled() {
+			return "", permanent(fmt.Errorf(
+				"file:// sources are not supported by this build (%s); they exist only in a dev-link build",
+				displayName(name, url)))
+		}
+		if !allowLocalFile {
+			return "", permanent(fmt.Errorf("file:// sources are not allowed for %s", displayName(name, url)))
+		}
+		return copyLocalSource(url, destDir)
+	}
+
 	if err := httpx.GuardOffline("download of " + displayName(name, url)); err != nil {
 		return "", permanent(err)
 	}
@@ -167,7 +267,7 @@ func downloadFileInternal(ctx context.Context, url string, destDir string, name 
 }
 
 func downloadFile(ctx context.Context, url string, destDir string) (string, error) {
-	return downloadFileInternal(ctx, url, destDir, "")
+	return downloadFileInternal(ctx, url, destDir, "", false)
 }
 
 // downloadAndVerifyInternal downloads and hash-verifies a file, retrying
@@ -175,10 +275,10 @@ func downloadFile(ctx context.Context, url string, destDir string) (string, erro
 // stops early on a permanent error (4xx, oversized, hash mismatch) or once the
 // parent context is done. The hash is verified after every successful download,
 // so retries only re-fetch — they never weaken verification.
-func downloadAndVerifyInternal(ctx context.Context, url string, expectedHash string, hashType BinHashType, destDir string, name string) (string, error) {
+func downloadAndVerifyInternal(ctx context.Context, url string, expectedHash string, hashType BinHashType, destDir string, name string, allowLocalFile bool) (string, error) {
 	var lastErr error
 	for attempt := 1; attempt <= downloadMaxAttempts; attempt++ {
-		tmpPath, err := downloadFileInternal(ctx, url, destDir, name)
+		tmpPath, err := downloadFileInternal(ctx, url, destDir, name, allowLocalFile)
 		if err == nil {
 			if vErr := verifyFileHash(tmpPath, expectedHash, hashType); vErr != nil {
 				if removeErr := os.Remove(tmpPath); removeErr != nil {
@@ -222,7 +322,7 @@ func downloadAndVerifyInternal(ctx context.Context, url string, expectedHash str
 }
 
 func downloadAndVerifyWithName(ctx context.Context, url string, expectedHash string, hashType BinHashType, destDir string, name string) (string, error) {
-	return downloadAndVerifyInternal(ctx, url, expectedHash, hashType, destDir, name)
+	return downloadAndVerifyInternal(ctx, url, expectedHash, hashType, destDir, name, false)
 }
 
 // DownloadAndVerifySHA256 downloads url into destDir (retrying transient
@@ -231,8 +331,13 @@ func downloadAndVerifyWithName(ctx context.Context, url string, expectedHash str
 // parsermanager) reuse instead of re-implementing the hardened download+verify
 // path. SHA-256 is enforced per the security policy; the caller is responsible
 // for moving the verified file to its content-addressed location.
-func DownloadAndVerifySHA256(ctx context.Context, url, expectedHash, destDir, name string) (string, error) {
-	return downloadAndVerifyWithName(ctx, url, expectedHash, BinHashTypeSHA256, destDir, name)
+//
+// allowLocalFile additionally accepts a `file://` URL, reading a local artifact
+// instead of fetching one. The hash is still mandatory and verified identically,
+// so this changes the transport, not the trust model; it exists for the
+// build-locally development loop. Leave it false unless a store has a reason.
+func DownloadAndVerifySHA256(ctx context.Context, url, expectedHash, destDir, name string, allowLocalFile bool) (string, error) {
+	return downloadAndVerifyInternal(ctx, url, expectedHash, BinHashTypeSHA256, destDir, name, allowLocalFile)
 }
 
 func moveFile(src, dst string) error {

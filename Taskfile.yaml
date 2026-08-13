@@ -38,6 +38,11 @@ tasks:
     desc: Run datamitsu check in ovineko/ovineko inside Docker (linux/amd64), write website/static/cold.cast + warm.cast
   # ── Docker ──
 
+  # ── Dev ──
+  dev:link:
+    cmds:
+      - node packaging/dev-link.ts
+    desc: Build a linkable dev npm package (core + local WASM parser) into dist/dev-link for testing an unreleased core in a real project
   docker:build:
     cmds:
       - docker buildx build --platform linux/amd64,linux/arm64 --file docker/Dockerfile --tag datamitsu/datamitsu:dev --load .

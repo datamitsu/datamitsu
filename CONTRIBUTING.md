@@ -62,6 +62,73 @@ inherits is the single source of truth in
 [test/e2e/source.go](test/e2e/source.go) — bump and re-download it when a new
 `datamitsu-config` release is cut.
 
+## Testing an unreleased core in a real project (dev-link)
+
+Some behaviour only shows up through the full chain — core → wrapper config
+package → consuming project — with real tools, a real monorepo and real plugin
+noise. Publishing an unstable build to npm just to see it is a slow loop, so
+`task dev:link` produces the same package pair locally:
+
+```bash
+task build:parsers   # only if you changed a WASM parser
+task dev:link        # -> dist/dev-link/ (gitignored)
+```
+
+It writes two throwaway packages mirroring the published ones:
+
+| Package                                  | Contents                                                                             |
+| ---------------------------------------- | ------------------------------------------------------------------------------------ |
+| `@datamitsu/datamitsu-<platform>-<arch>` | the freshly built binary                                                             |
+| `@datamitsu/datamitsu`                   | the launcher (`bin/`, `get-exe.js`), plus the locally built `.wasm` under `parsers/` |
+
+The launcher already symlinks the platform package into its own `node_modules`,
+so it runs as-is and needs no install step. Link it down the chain with pnpm:
+
+```bash
+# in the wrapper config repo (the package your projects depend on)
+pnpm link /path/to/datamitsu/dist/dev-link/datamitsu
+
+# in the consuming project
+pnpm link /path/to/your/wrapper-config-repo
+```
+
+`pnpm dm <command>` in that project now runs your local core. Rebuild with
+`task dev:link` after each change; the links keep pointing at the same directory.
+
+### Local WASM parsers
+
+A parser module is normally fetched from the release by `url` + SHA-256. To run
+a locally built one, `task dev:link` prints a ready `parsers` entry pointing at
+the copy inside the linked package:
+
+```js
+const parsers = {
+  core: {
+    hash: "<printed sha256>",
+    url: "file:///abs/path/to/dist/dev-link/datamitsu/parsers/datamitsu_parsers.wasm",
+  },
+};
+```
+
+Paste it into the wrapper config in place of the release pin, and re-run
+`task dev:link` (which reprints the hash) whenever you rebuild the parser.
+
+**Why this is not a hole in the hash policy.** A `file://` source is copied and
+then SHA-256 verified on exactly the same code path as a download — the hash
+stays mandatory, and a mismatch still fails. Two independent locks keep the
+capability out of anything you ship:
+
+1. **Build.** The local-read path requires `-X …/internal/ldflags.LocalArtifacts=1`,
+   which only `task dev:link` injects. Released binaries — and a plain
+   `go build` — refuse `file://` outright.
+2. **Call site.** Even in a dev-link build, only the parser store passes
+   `allowLocalFile`. An app, archive or JAR declaration can never reach it, so a
+   config cannot turn a `file://` URL into an installed binary.
+
+Reads are further restricted to absolute paths pointing at regular files (no
+FIFOs or devices, which would hang or stream forever) and bounded by the same
+size ceiling as a download.
+
 ## Releases
 
 Releases are automated via GitHub Actions ([release.yml](.github/workflows/release.yml)).

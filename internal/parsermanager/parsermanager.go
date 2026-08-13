@@ -321,7 +321,10 @@ func (m *Manager) ensureModule(ctx context.Context, name string) (string, error)
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return nil, fmt.Errorf("create store dir: %w", err)
 		}
-		tmpPath, err := binmanager.DownloadAndVerifySHA256(ctx, p.URL, p.Hash, dir, name)
+		// allowLocalFile: a parser module is the one artifact developers rebuild
+		// constantly, so a config may point at a locally built .wasm via file://.
+		// The mandatory SHA-256 below is unchanged — only the transport differs.
+		tmpPath, err := binmanager.DownloadAndVerifySHA256(ctx, p.URL, p.Hash, dir, name, true)
 		if err != nil {
 			return nil, fmt.Errorf("download+verify: %w", err)
 		}
