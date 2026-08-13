@@ -72,6 +72,19 @@ func TestResolve_OutOfRangeSeverityFallsBack(t *testing.T) {
 	}
 }
 
+// A batch parser (eslint) names the file per diagnostic; the core must keep it,
+// since the executor has no single file to stamp on a many-file run.
+func TestResolve_CarriesParserReportedFile(t *testing.T) {
+	d := Resolve(parsermanager.RawDiagnostic{Message: "m", File: new("src/a.ts")}, "eslint")
+	if d.File != "src/a.ts" {
+		t.Errorf("file = %q, want the parser-reported path", d.File)
+	}
+	// Absent stays empty so the executor's own stamping still applies.
+	if got := Resolve(parsermanager.RawDiagnostic{Message: "m"}, "eslint"); got.File != "" {
+		t.Errorf("file = %q, want empty when the parser reported none", got.File)
+	}
+}
+
 func TestSeverity_String(t *testing.T) {
 	cases := map[Severity]string{
 		SeverityError: "error", SeverityWarning: "warning",

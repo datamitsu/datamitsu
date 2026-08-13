@@ -47,9 +47,11 @@ func (s Severity) String() string {
 // 0-based at its boundary), and severity is resolved. It is produced from a
 // parser's nullable RawDiagnostic by Resolve — never constructed by a parser.
 type Diagnostic struct {
-	// File is the path the diagnostic belongs to. Parsers don't report it (most
-	// tool formats drop the filename), so the executor sets it from the file it
-	// linted; empty when not attributable (e.g. multi-file batch output).
+	// File is the path the diagnostic belongs to. Most tool formats drop the
+	// filename, so the executor stamps the file it linted; formats that do name
+	// one per diagnostic (eslint's filePath) report it through the parser, which
+	// is what makes batch runs over many files attributable. Empty when neither
+	// source knows it.
 	File     string   `json:"file,omitempty"`
 	Row      int      `json:"row"`      // 1-based start line
 	Col      int      `json:"col"`      // 1-based start column
@@ -89,6 +91,9 @@ func Resolve(raw parsermanager.RawDiagnostic, source string) Diagnostic {
 	}
 	if raw.Code != nil {
 		d.Code = *raw.Code
+	}
+	if raw.File != nil {
+		d.File = *raw.File
 	}
 	return d
 }
