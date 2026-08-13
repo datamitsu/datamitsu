@@ -26,6 +26,9 @@ pub struct Attrs {
 	pub code: &'static str,
 	pub message: &'static str,
 	pub severity: &'static str,
+	/// Key naming the file a diagnostic belongs to. Tools that lint many files
+	/// per run must report it; the core cannot infer it from a batch invocation.
+	pub file: &'static str,
 }
 
 impl Attrs {
@@ -39,6 +42,7 @@ impl Attrs {
 			code: "ruleId",
 			message: "message",
 			severity: "level",
+			file: "file",
 		}
 	}
 }
@@ -51,28 +55,108 @@ pub type SeverityMap = fn(&str) -> Option<u8>;
 /// the message field is skipped (message is the one required field). Invalid JSON
 /// yields no diagnostics rather than an error.
 pub fn from_json(bytes: &[u8], attrs: &Attrs, sev: SeverityMap) -> Vec<RawDiagnostic> {
-	let text = String::from_utf8_lossy(bytes);
-	let value: JsonValue = match text.parse() {
-		Ok(v) => v,
-		Err(_) => return Vec::new(),
-	};
-	let mut out = Vec::new();
-	match &value {
-		JsonValue::Array(items) => {
-			for it in items {
-				if let Some(d) = from_obj(it, attrs, sev) {
+	extract_lenient(bytes, |value| {
+		let mut out = Vec::new();
+		match value {
+			JsonValue::Array(items) => {
+				for it in items {
+					if let Some(d) = from_obj(it, attrs, sev) {
+						out.push(d);
+					}
+				}
+			}
+			JsonValue::Object(_) => {
+				if let Some(d) = from_obj(value, attrs, sev) {
 					out.push(d);
 				}
 			}
+			_ => {}
 		}
-		JsonValue::Object(_) => {
-			if let Some(d) = from_obj(&value, attrs, sev) {
-				out.push(d);
-			}
-		}
-		_ => {}
+		out
+	})
+}
+
+/// Run `extract` over the JSON document embedded in a stream that may carry
+/// non-JSON noise around it, and return what it yielded.
+///
+/// A tool's JSON rarely arrives alone on stdout. Something else in the process
+/// prints ahead of it (`eslint-plugin-sonarjs` `console.debug`s a pnpm catalog
+/// warning; node and python wrappers do the same), or the tool itself appends a
+/// human summary after it — `golangci-lint --output.json.path=stdout` follows the
+/// report with `1 issues:` and a per-linter tally. A strict parse throws away
+/// every diagnostic over either, so instead: find each document opener, scan
+/// forward to its balanced close, and parse that span.
+///
+/// When the whole input parses, that IS the document and its extraction is
+/// returned as-is. Otherwise every candidate span is tried and the **best** one
+/// wins: most diagnostics first, longest span as the tiebreak. Picking the first
+/// span that merely parses is not enough — a `{}` in the leading noise would
+/// shadow the real report, and a one-line JSON log entry ahead of it would be
+/// reported as a phantom diagnostic in its place.
+///
+/// A document that never closes yields nothing from that opener; a truncation
+/// that leaves whole inner elements intact can still yield those elements, which
+/// beats discarding a run's findings over a cut-off tail.
+pub fn extract_lenient<T>(bytes: &[u8], extract: impl Fn(&JsonValue) -> Vec<T>) -> Vec<T> {
+	let text = String::from_utf8_lossy(bytes);
+	if let Ok(v) = text.parse::<JsonValue>() {
+		return extract(&v);
 	}
-	out
+	// Bounded so pathological input (a log full of braces) cannot make parsing
+	// quadratic over a large buffer.
+	const MAX_ATTEMPTS: usize = 16;
+	let mut best: Option<((usize, usize), Vec<T>)> = None;
+	for (start, _) in text
+		.char_indices()
+		.filter(|(_, c)| *c == '[' || *c == '{')
+		.take(MAX_ATTEMPTS)
+	{
+		let Some(end) = balanced_end(&text, start) else {
+			continue;
+		};
+		let Ok(value) = text[start..end].parse::<JsonValue>() else {
+			continue;
+		};
+		let out = extract(&value);
+		let rank = (out.len(), end - start);
+		if best.as_ref().is_none_or(|(best_rank, _)| rank > *best_rank) {
+			best = Some((rank, out));
+		}
+	}
+	best.map(|(_, out)| out).unwrap_or_default()
+}
+
+/// Byte index just past the value opening at `start`, or `None` if it never
+/// closes. Tracks string literals and their escapes, so braces and brackets
+/// inside strings (a Windows path, a message quoting JSON) do not shift the
+/// depth count.
+fn balanced_end(text: &str, start: usize) -> Option<usize> {
+	let mut depth = 0usize;
+	let mut in_string = false;
+	let mut escaped = false;
+	for (i, c) in text[start..].char_indices() {
+		if in_string {
+			match c {
+				_ if escaped => escaped = false,
+				'\\' => escaped = true,
+				'"' => in_string = false,
+				_ => {}
+			}
+			continue;
+		}
+		match c {
+			'"' => in_string = true,
+			'{' | '[' => depth += 1,
+			'}' | ']' => {
+				depth -= 1;
+				if depth == 0 {
+					return Some(start + i + c.len_utf8());
+				}
+			}
+			_ => {}
+		}
+	}
+	None
 }
 
 /// Map one JSON object onto a diagnostic. `None` if it is not an object or has no
@@ -92,6 +176,9 @@ pub fn from_obj(value: &JsonValue, attrs: &Attrs, sev: SeverityMap) -> Option<Ra
 		end_col: get_u32(map, attrs.end_col),
 		code: get_str(map, attrs.code),
 		severity: get_string_only(map, attrs.severity).and_then(|s| sev(&s)),
+		file: get_str(map, attrs.file)
+			.as_deref()
+			.and_then(crate::diagnostic::file_field),
 		..RawDiagnostic::default()
 	})
 }
@@ -181,5 +268,78 @@ mod tests {
 		let out = from_json(br#"{"message":"solo","line":5}"#, &Attrs::defaults(), sev);
 		assert_eq!(out.len(), 1);
 		assert_eq!(out[0].row, Some(5));
+	}
+	#[test]
+	fn parse_lenient_handles_noise_around_the_document() {
+		let attrs = Attrs::defaults();
+
+		// Leading noise (a plugin writing to stdout before the report).
+		let leading = br#"Dependency "x" could not be resolved
+[{"message":"m","line":1,"column":2}]"#;
+		assert_eq!(from_json(leading, &attrs, sev).len(), 1);
+
+		// Trailing summary (golangci-lint prints a tally after its JSON).
+		let trailing = br#"{"message":"m","line":1,"column":2}
+1 issues:
+* errcheck: 1"#;
+		assert_eq!(from_json(trailing, &attrs, sev).len(), 1);
+
+		// Both at once.
+		let both = br#"go: downloading example.com/m v1.0.0
+[{"message":"m","line":3,"column":4}]
+2 issues:"#;
+		let out = from_json(both, &attrs, sev);
+		assert_eq!(out.len(), 1);
+		assert_eq!((out[0].row, out[0].col), (Some(3), Some(4)));
+	}
+
+	#[test]
+	fn parse_lenient_is_not_fooled_by_braces_inside_strings() {
+		// A brace inside a string must not close the document early.
+		let tricky = br#"noise
+[{"message":"use {} instead of \"[]\" here","line":1,"column":1}]
+trailing"#;
+		let out = from_json(tricky, &Attrs::defaults(), sev);
+		assert_eq!(out.len(), 1);
+		assert_eq!(out[0].message, r#"use {} instead of "[]" here"#);
+	}
+
+	#[test]
+	fn nothing_is_extracted_when_no_document_closes() {
+		let attrs = Attrs::defaults();
+		// An object cut off mid-field never closes: no span, nothing extracted.
+		assert!(from_json(br#"[{"message":"m","line":1"#, &attrs, sev).is_empty());
+		assert!(from_json(b"not json at all", &attrs, sev).is_empty());
+		assert!(from_json(b"", &attrs, sev).is_empty());
+	}
+
+	#[test]
+	fn a_truncation_that_leaves_whole_elements_keeps_them() {
+		// The outer array never closes, but the first element did — reporting it
+		// beats discarding the run over a cut-off tail.
+		let cut = br#"[{"message":"first","line":1},{"message":"secon"#;
+		let out = from_json(cut, &Attrs::defaults(), sev);
+		assert_eq!(out.len(), 1);
+		assert_eq!(out[0].message, "first");
+	}
+
+	#[test]
+	fn empty_json_in_the_noise_does_not_shadow_the_real_report() {
+		// Picking the first span that merely parses would return 0 diagnostics.
+		let shadowed = br#"cache: {}
+[{"message":"real","line":7}]"#;
+		let out = from_json(shadowed, &Attrs::defaults(), sev);
+		assert_eq!(out.len(), 1);
+		assert_eq!(out[0].message, "real");
+	}
+
+	#[test]
+	fn a_json_log_line_ahead_of_the_report_is_not_reported_as_a_diagnostic() {
+		// Both spans yield one diagnostic, so the longer (the real report) wins.
+		let logged = br#"{"message":"log line"}
+[{"message":"real","line":1,"column":2}]"#;
+		let out = from_json(logged, &Attrs::defaults(), sev);
+		assert_eq!(out.len(), 1);
+		assert_eq!(out[0].message, "real");
 	}
 }

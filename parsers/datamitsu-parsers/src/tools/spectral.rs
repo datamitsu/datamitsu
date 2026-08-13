@@ -88,6 +88,7 @@ fn parse_result(item: &JsonValue) -> Option<RawDiagnostic> {
 		severity,
 		source: Some("Spectral".to_string()),
 		code,
+		..RawDiagnostic::default()
 	})
 }
 

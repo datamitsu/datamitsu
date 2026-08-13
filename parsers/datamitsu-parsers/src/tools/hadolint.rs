@@ -71,4 +71,14 @@ mod tests {
 	fn clean_run_empty_array_yields_nothing() {
 		assert!(parse(b"[]", b"", 0).is_empty());
 	}
+	#[test]
+	fn reports_the_path_but_not_the_stdin_placeholder() {
+		// The bundled recipe pipes stdin, where hadolint prints "-" — a placeholder
+		// the core must replace with the file it linted.
+		assert!(parse(SAMPLE, b"", 1).iter().all(|d| d.file.is_none()));
+
+		let with_path =
+			br#"[{"file":"docker/Dockerfile","line":1,"column":1,"level":"warning","code":"DL3006","message":"Always tag"}]"#;
+		assert_eq!(parse(with_path, b"", 1)[0].file.as_deref(), Some("docker/Dockerfile"));
+	}
 }

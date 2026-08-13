@@ -36,7 +36,7 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 	let left = &line[..sp]; // "<file>:<row>"
 	let right = &line[sp + 1..]; // "<CODE>: <message>"
 
-	let row: u32 = left.rsplit(':').next()?.trim().parse().ok()?;
+	let (file, row) = crate::location::file_row(left)?;
 	let colon = right.find(':')?;
 	let code = right[..colon].trim();
 	let message = right[colon + 1..].trim();
@@ -47,6 +47,7 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 		message: message.to_string(),
 		row: Some(row),
 		code: Some(code.to_string()),
+		file: crate::diagnostic::file_field(file),
 		// No col, no severity — deliberately left None (the core fills defaults).
 		..RawDiagnostic::default()
 	})
@@ -78,5 +79,11 @@ mod tests {
 		assert_eq!(out.len(), 2);
 		assert_eq!(out[0].row, Some(1));
 		assert_eq!(out[1].code.as_deref(), Some("DuplicatedKey"));
+	}
+	#[test]
+	fn reports_the_path() {
+		let d = parse_line("config/.env:2 UnorderedKey: The FOO key should go before the BAR key").unwrap();
+		assert_eq!(d.file.as_deref(), Some("config/.env"));
+		assert_eq!(d.row, Some(2));
 	}
 }

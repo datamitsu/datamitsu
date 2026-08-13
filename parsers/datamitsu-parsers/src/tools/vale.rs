@@ -39,19 +39,23 @@ fn severity_of(level: &str) -> Option<u8> {
 }
 
 pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic> {
-	let text = String::from_utf8_lossy(stdout);
-	let value: JsonValue = match text.parse() {
-		Ok(v) => v,
-		Err(_) => return Vec::new(),
-	};
+	// Lenient: vale runs over a whole repository, where anything else writing to
+	// stdout would otherwise cost every diagnostic in the run.
+	crate::tools::json_diag::extract_lenient(stdout, from_report)
+}
+
+fn from_report(value: &JsonValue) -> Vec<RawDiagnostic> {
 	let mut out = Vec::new();
 	// Top level is an object keyed by filename; iterate every file's array.
-	if let JsonValue::Object(files) = &value {
-		for items in files.values() {
+	if let JsonValue::Object(files) = value {
+		for (name, items) in files {
 			if let JsonValue::Array(arr) = items {
 				for it in arr {
 					if let JsonValue::Object(obj) = it {
-						if let Some(d) = from_obj(obj) {
+						if let Some(mut d) = from_obj(obj) {
+							// The key is the only place the path appears, and one
+							// vale run covers many files.
+							d.file = crate::diagnostic::file_field(name);
 							out.push(d);
 						}
 					}
@@ -148,5 +152,23 @@ mod tests {
 	#[test]
 	fn invalid_json_yields_nothing() {
 		assert!(parse(b"not json", b"", 1).is_empty());
+	}
+	#[test]
+	fn reports_the_keyed_filename_and_drops_stdin() {
+		let json = br#"{"docs/a.md":[{"Check":"c","Line":2,"Message":"m","Severity":"error","Span":[1,2]}]}"#;
+		let out = parse(json, b"", 1);
+		assert_eq!(out.len(), 1);
+		assert_eq!(out[0].file.as_deref(), Some("docs/a.md"));
+
+		// vale names the stdin buffer "stdin.<ext>" — a placeholder, not a file.
+		let stdin = br#"{"stdin.md":[{"Check":"c","Line":2,"Message":"m","Severity":"error","Span":[1,2]}]}"#;
+		assert_eq!(parse(stdin, b"", 1)[0].file, None);
+	}
+
+	#[test]
+	fn skips_noise_printed_before_the_json() {
+		let noisy = br#"loading config...
+{"docs/a.md":[{"Check":"c","Line":2,"Message":"m","Severity":"error","Span":[1,2]}]}"#;
+		assert_eq!(parse(noisy, b"", 1).len(), 1);
 	}
 }

@@ -32,9 +32,9 @@ pub fn parse(stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic
 fn parse_line(line: &str) -> Option<RawDiagnostic> {
 	// The first ": " follows the column; everything before it is "file:row:col".
 	let sep = line.find(": ")?;
-	let mut it = line[..sep].rsplit(':');
-	let col: u32 = it.next()?.trim().parse().ok()?;
-	let row: u32 = it.next()?.trim().parse().ok()?;
+	// harper-cli lints every file in one run, so its own path is the only thing
+	// attributing a finding.
+	let (file, row, col) = crate::location::file_row_col(&line[..sep])?;
 
 	// "code: message" — code may contain "::", so split at the next ": ".
 	let rest = &line[sep + 2..];
@@ -50,6 +50,7 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 		row: Some(row),
 		col: Some(col),
 		code: if code.is_empty() { None } else { Some(code) },
+		file: crate::diagnostic::file_field(file),
 		..RawDiagnostic::default()
 	})
 }
@@ -81,5 +82,21 @@ mod tests {
         );
 		assert_eq!(out.len(), 2);
 		assert_eq!(out[1].code.as_deref(), Some("Agreement::PronounVerbAgreement"));
+	}
+	#[test]
+	fn reports_the_path_so_a_batch_run_is_attributable() {
+		// harper-cli is batch: true — without the path a finding cannot be traced
+		// back to a file, and the parsed view would be worse than the raw output.
+		let d = parse_line("docs/a.md:1:24: Miscellaneous::AnA: Incorrect indefinite article.").unwrap();
+		assert_eq!(d.file.as_deref(), Some("docs/a.md"));
+		assert_eq!((d.row, d.col), (Some(1), Some(24)));
+		assert_eq!(d.code.as_deref(), Some("Miscellaneous::AnA"));
+	}
+
+	#[test]
+	fn a_location_without_a_path_does_not_panic() {
+		let d = parse_line("1:24: Miscellaneous::AnA: Incorrect indefinite article.").unwrap();
+		assert_eq!(d.file, None);
+		assert_eq!((d.row, d.col), (Some(1), Some(24)));
 	}
 }

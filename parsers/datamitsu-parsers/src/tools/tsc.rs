@@ -52,6 +52,9 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 		col: Some(col),
 		severity: severity_of(sev_tok),
 		code: if code.is_empty() { None } else { Some(code.to_string()) },
+		// tsc type-checks a whole project per run, so the path before "(row,col)"
+		// is what attributes the diagnostic.
+		file: crate::diagnostic::file_field(&line[..open]),
 		..RawDiagnostic::default()
 	})
 }
@@ -93,5 +96,14 @@ mod tests {
 		assert_eq!(out.len(), 2);
 		assert_eq!(out[1].severity, Some(severity::WARNING));
 		assert_eq!(out[1].code.as_deref(), Some("TS6133"));
+	}
+	#[test]
+	fn reports_the_path() {
+		let d = parse_line("src/x.ts(1,7): error TS2322: Type mismatch.").unwrap();
+		assert_eq!(d.file.as_deref(), Some("src/x.ts"));
+		// Absolute paths (and parens earlier in the path) survive.
+		let abs = parse_line("/repo/pkg (v2)/y.ts(9,2): error TS1005: ';' expected.").unwrap();
+		assert_eq!(abs.file.as_deref(), Some("/repo/pkg (v2)/y.ts"));
+		assert_eq!((abs.row, abs.col), (Some(9), Some(2)));
 	}
 }

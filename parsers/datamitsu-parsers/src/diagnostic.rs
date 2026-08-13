@@ -31,6 +31,34 @@ pub struct RawDiagnostic {
 	pub source: Option<String>,
 	/// A rule/diagnostic code, if any.
 	pub code: Option<String>,
+	/// The file the diagnostic belongs to, when the tool's format names one
+	/// (eslint's `filePath`, …). Batch tools lint many files per run, so without
+	/// this the core cannot attribute a diagnostic; per-file tools leave it `None`
+	/// and the core stamps the file it linted.
+	pub file: Option<String>,
+}
+
+/// Normalize a path a tool printed into the `file` field.
+///
+/// Returns `None` for anything that does not name a real file — an empty string,
+/// or one of the placeholders tools print when they read stdin (`-`, `stdin`,
+/// `stdin.md`, `<stdin>`). Those must stay absent so the core stamps the file it
+/// actually linted instead of showing a placeholder.
+pub fn file_field(raw: &str) -> Option<String> {
+	let s = raw.trim();
+	if s.is_empty() {
+		return None;
+	}
+	// Match the placeholder against the last segment only: a real `docs/stdin.md`
+	// is a file and must be kept, while vale's `stdin.md` buffer name is not.
+	// A placeholder never carries a directory, so requiring the whole path to be
+	// one keeps the check from swallowing genuine paths.
+	let is_placeholder =
+		s == "-" || s == "<stdin>" || s == "stdin" || (s.starts_with("stdin.") && !s.contains('/') && !s.contains('\\'));
+	if is_placeholder {
+		return None;
+	}
+	Some(s.to_string())
 }
 
 impl RawDiagnostic {
@@ -58,6 +86,9 @@ impl RawDiagnostic {
 		}
 		if let Some(v) = &self.code {
 			parts.push(format!(r#""code":{}"#, json_string(v)));
+		}
+		if let Some(v) = &self.file {
+			parts.push(format!(r#""file":{}"#, json_string(v)));
 		}
 		format!("{{{}}}", parts.join(","))
 	}
@@ -141,5 +172,16 @@ mod tests {
 	#[test]
 	fn empty_array_for_no_diagnostics() {
 		assert_eq!(to_json_array(&[]), "[]");
+	}
+	#[test]
+	fn file_field_drops_placeholders_but_keeps_real_paths() {
+		for placeholder in ["", "  ", "-", "<stdin>", "stdin", "stdin.md", "stdin.yaml"] {
+			assert_eq!(file_field(placeholder), None, "{placeholder:?} is not a file");
+		}
+		// A path that merely ends in a placeholder-looking segment is a real file.
+		for path in ["docs/stdin.md", "stdin.d/x.yaml", "a/stdin", "src/a.ts"] {
+			assert_eq!(file_field(path).as_deref(), Some(path));
+		}
+		assert_eq!(file_field("  src/a.ts  ").as_deref(), Some("src/a.ts"));
 	}
 }

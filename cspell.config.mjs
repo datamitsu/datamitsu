@@ -39,6 +39,8 @@ export default defineConfig((config) => ({
     // table alongside CPython.
     "graalpy",
     "errorformat",
+    // Rust's right-to-left string split, used to read "<file>:<row>:<col>".
+    "rsplitn",
     "tinyjson",
     "fract",
     "outputparser",
