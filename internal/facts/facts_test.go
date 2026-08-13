@@ -302,3 +302,76 @@ func TestCollectBrokenGitToleratedDegradesToNoRepo(t *testing.T) {
 		t.Errorf("gitRoot = %q, want empty in degraded state", gitRoot)
 	}
 }
+
+// TestCollectUnderSymlinkedGitRoot pins the path comparison behind IsMonorepo.
+// git reports the resolved root while os.Getwd reports the path as entered, so
+// working under a symlinked directory used to make the two spellings of the same
+// directory differ — and every repository there looked like a monorepo. macOS
+// hits this constantly (/tmp and /var are symlinks into /private); the symlink
+// here reproduces it on any platform.
+func TestCollectUnderSymlinkedGitRoot(t *testing.T) {
+	if !isGitAvailable() {
+		t.Skip("git is not available")
+	}
+
+	base := t.TempDir()
+	realRoot := filepath.Join(base, "real")
+	if err := os.Mkdir(realRoot, 0o750); err != nil {
+		t.Fatalf("create repo dir: %v", err)
+	}
+	cmd := exec.Command("git", "init")
+	cmd.Dir = realRoot
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("failed to initialize git repo: %v", err)
+	}
+
+	link := filepath.Join(base, "link")
+	if err := os.Symlink(realRoot, link); err != nil {
+		t.Skipf("cannot symlink here: %v", err)
+	}
+
+	t.Chdir(link)
+	facts, _, err := Collect(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Collect() error = %v", err)
+	}
+	if !facts.IsInGitRepo {
+		t.Error("IsInGitRepo = false, want true")
+	}
+	if facts.IsMonorepo {
+		t.Error("IsMonorepo = true at the git root reached through a symlink, want false")
+	}
+}
+
+func TestResolveSymlinks(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "target")
+	if err := os.Mkdir(target, 0o750); err != nil {
+		t.Fatalf("create target: %v", err)
+	}
+
+	t.Run("follows a link", func(t *testing.T) {
+		link := filepath.Join(dir, "link")
+		if err := os.Symlink(target, link); err != nil {
+			t.Skipf("cannot symlink here: %v", err)
+		}
+		// The target itself may sit under a symlinked temp root (macOS), so
+		// compare against its resolved form rather than the literal path.
+		want, err := filepath.EvalSymlinks(target)
+		if err != nil {
+			t.Fatalf("resolve target: %v", err)
+		}
+		if got := resolveSymlinks(link); got != want {
+			t.Errorf("resolveSymlinks(link) = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("unresolvable path is returned as given", func(t *testing.T) {
+		// The fallback: comparison then degrades to the textual one it replaced,
+		// which is better than dropping the path entirely.
+		missing := filepath.Join(dir, "does-not-exist")
+		if got := resolveSymlinks(missing); got != missing {
+			t.Errorf("resolveSymlinks(missing) = %q, want it unchanged", got)
+		}
+	})
+}
