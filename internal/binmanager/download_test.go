@@ -20,6 +20,7 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/httpretry"
 	"github.com/datamitsu/datamitsu/internal/httpx"
+	"github.com/datamitsu/datamitsu/internal/ldflags"
 )
 
 func TestDownloadFile(t *testing.T) {
@@ -973,5 +974,199 @@ func TestDownloadFileStallAborts(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "stalled: no data received") {
 		t.Errorf("error %q should describe the stall", err)
+	}
+}
+
+// withLocalArtifactsBuild simulates a dev-link build (the ldflags injection) for
+// the duration of a test, and restores the released-build default after.
+func withLocalArtifactsBuild(t *testing.T) {
+	t.Helper()
+	orig := ldflags.LocalArtifacts
+	ldflags.LocalArtifacts = "1"
+	t.Cleanup(func() { ldflags.LocalArtifacts = orig })
+}
+
+// TestDownloadAndVerify_FileScheme covers the local-artifact source used by the
+// development loop: a file:// URL is copied and then hash-verified on exactly the
+// same path as a download, so the mandatory-SHA-256 policy is unaffected.
+func TestDownloadAndVerify_FileScheme(t *testing.T) {
+	setFastRetries(t)
+	withLocalArtifactsBuild(t)
+	content := []byte("locally built module")
+	sum := sha256.Sum256(content)
+	expected := hex.EncodeToString(sum[:])
+
+	srcDir := t.TempDir()
+	src := filepath.Join(srcDir, "module.wasm")
+	if err := os.WriteFile(src, content, 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+
+	t.Run("verified copy", func(t *testing.T) {
+		// Offline must not block a local file — nothing leaves the machine.
+		t.Setenv("DATAMITSU_OFFLINE", "1")
+		got, err := DownloadAndVerifySHA256(context.Background(), "file://"+src, expected, t.TempDir(), "core", true)
+		if err != nil {
+			t.Fatalf("file:// source failed: %v", err)
+		}
+		data, readErr := os.ReadFile(got)
+		if readErr != nil || !bytes.Equal(data, content) {
+			t.Fatalf("copied content = %q (err %v), want %q", data, readErr, content)
+		}
+	})
+
+	t.Run("wrong hash still rejected", func(t *testing.T) {
+		_, err := DownloadAndVerifySHA256(context.Background(), "file://"+src, strings.Repeat("0", 64), t.TempDir(), "core", true)
+		if err == nil {
+			t.Fatal("a file:// source with the wrong hash must be rejected")
+		}
+	})
+
+	t.Run("missing file is permanent", func(t *testing.T) {
+		_, err := downloadFileInternal(context.Background(), "file://"+filepath.Join(srcDir, "absent.wasm"), t.TempDir(), "core", true)
+		if err == nil {
+			t.Fatal("expected an error for a missing local file")
+		}
+		if !isPermanent(err) {
+			t.Error("a missing local file cannot fix itself on retry; must be permanent")
+		}
+	})
+
+	t.Run("relative path rejected", func(t *testing.T) {
+		if _, err := downloadFileInternal(context.Background(), "file://module.wasm", t.TempDir(), "core", true); err == nil {
+			t.Fatal("expected a relative file:// path to be rejected")
+		}
+	})
+}
+
+// TestFileScheme_NotAllowedByDefault pins the opt-in: every caller that does not
+// explicitly ask for local sources (apps, archives, JARs, verify) must reject a
+// file:// URL outright rather than reading from the filesystem.
+func TestFileScheme_NotAllowedByDefault(t *testing.T) {
+	setFastRetries(t)
+	withLocalArtifactsBuild(t)
+	src := filepath.Join(t.TempDir(), "artifact.bin")
+	if err := os.WriteFile(src, []byte("x"), 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+	sum := sha256.Sum256([]byte("x"))
+	hash := hex.EncodeToString(sum[:])
+
+	t.Run("downloadFile", func(t *testing.T) {
+		_, err := downloadFile(context.Background(), "file://"+src, t.TempDir())
+		if err == nil {
+			t.Fatal("file:// must be refused when the caller did not opt in")
+		}
+		if !strings.Contains(err.Error(), "file://") || !isPermanent(err) {
+			t.Errorf("want a permanent file:// refusal, got %v (permanent=%v)", err, isPermanent(err))
+		}
+	})
+
+	t.Run("DownloadAndVerifySHA256 with allowLocalFile=false", func(t *testing.T) {
+		if _, err := DownloadAndVerifySHA256(context.Background(), "file://"+src, hash, t.TempDir(), "app", false); err == nil {
+			t.Fatal("a correct hash must not buy a file:// read without opt-in")
+		}
+	})
+
+	t.Run("DownloadAndVerifySHA256 with allowLocalFile=true", func(t *testing.T) {
+		if _, err := DownloadAndVerifySHA256(context.Background(), "file://"+src, hash, t.TempDir(), "core", true); err != nil {
+			t.Fatalf("opted-in caller should succeed: %v", err)
+		}
+	})
+}
+
+// TestFileScheme_RejectsADirectory guards against a config pointing at anything
+// that is not a regular file. The FIFO half of that guard needs mkfifo and lives
+// in download_fifo_test.go (unix only).
+func TestFileScheme_RejectsADirectory(t *testing.T) {
+	withLocalArtifactsBuild(t)
+
+	_, err := copyLocalSource("file://"+t.TempDir(), t.TempDir())
+	if err == nil {
+		t.Fatal("a directory must be rejected")
+	}
+	if !isPermanent(err) {
+		t.Error("rejection must be permanent")
+	}
+}
+
+// TestFileScheme_SymlinkResolvesToRegularFile documents the deliberate choice:
+// a symlink to a regular file is followed (dev setups symlink built artifacts),
+// while the hash still decides whether the content is accepted.
+func TestFileScheme_SymlinkResolvesToRegularFile(t *testing.T) {
+	withLocalArtifactsBuild(t)
+	dir := t.TempDir()
+	target := filepath.Join(dir, "target.wasm")
+	if err := os.WriteFile(target, []byte("payload"), 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+	link := filepath.Join(dir, "link.wasm")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("cannot symlink here: %v", err)
+	}
+
+	got, err := copyLocalSource("file://"+link, t.TempDir())
+	if err != nil {
+		t.Fatalf("symlink to a regular file should be readable: %v", err)
+	}
+	data, err := os.ReadFile(got)
+	if err != nil || string(data) != "payload" {
+		t.Fatalf("copied content = %q (err %v), want %q", data, err, "payload")
+	}
+}
+
+// TestFileScheme_HonoursSizeCeiling keeps the local path under the same limit as
+// a download, so an oversized local file cannot fill the store.
+func TestFileScheme_HonoursSizeCeiling(t *testing.T) {
+	withLocalArtifactsBuild(t)
+	origMax := maxLocalSourceSize
+	maxLocalSourceSize = 8
+	t.Cleanup(func() { maxLocalSourceSize = origMax })
+
+	src := filepath.Join(t.TempDir(), "big.bin")
+	if err := os.WriteFile(src, []byte("far more than eight bytes"), 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+	destDir := t.TempDir()
+	if _, err := copyLocalSource("file://"+src, destDir); err == nil {
+		t.Fatal("an oversized local source must be rejected")
+	}
+	// The partial temp file must not be left behind.
+	entries, err := os.ReadDir(destDir)
+	if err != nil {
+		t.Fatalf("read destDir: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Errorf("temp file leaked after rejection: %v", entries)
+	}
+}
+
+// TestFileScheme_DisabledInReleasedBuilds is the outer lock: without the
+// dev-link ldflags injection, even the opted-in parser store cannot read a
+// local artifact — the capability does not exist in a released binary.
+func TestFileScheme_DisabledInReleasedBuilds(t *testing.T) {
+	setFastRetries(t)
+	if ldflags.LocalArtifacts != "" {
+		t.Fatalf("test binary was built with LocalArtifacts=%q; the default must be off", ldflags.LocalArtifacts)
+	}
+
+	src := filepath.Join(t.TempDir(), "module.wasm")
+	content := []byte("locally built module")
+	if err := os.WriteFile(src, content, 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+	sum := sha256.Sum256(content)
+	hash := hex.EncodeToString(sum[:])
+
+	// A correct hash and an opted-in call site are both not enough.
+	_, err := DownloadAndVerifySHA256(context.Background(), "file://"+src, hash, t.TempDir(), "core", true)
+	if err == nil {
+		t.Fatal("a released build must refuse file:// sources")
+	}
+	if !strings.Contains(err.Error(), "dev-link build") {
+		t.Errorf("error should explain the build gate, got %v", err)
+	}
+	if !isPermanent(err) {
+		t.Error("the refusal must be permanent (no retry)")
 	}
 }

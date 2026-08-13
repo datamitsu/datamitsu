@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/ldflags"
 )
 
 // sha256Hex returns the lowercase hex SHA-256 of b (the form a config hash takes).
@@ -176,4 +177,61 @@ func TestLoadWASMBytes_ConcurrentLoadsDeduplicate(t *testing.T) {
 	if got := hits.Load(); got != 1 {
 		t.Fatalf("server hits = %d, want 1 (concurrent loads must deduplicate)", got)
 	}
+}
+
+// TestLoadWASMBytes_LocalFileSource covers the dev-link loop end to end at the
+// store level: a `file://` module is verified and content-addressed exactly like
+// a downloaded one, and only a dev-link build may read it at all.
+func TestLoadWASMBytes_LocalFileSource(t *testing.T) {
+	body := []byte("\x00asm-locally-built")
+	src := filepath.Join(t.TempDir(), "datamitsu_parsers.wasm")
+	if err := os.WriteFile(src, body, 0o600); err != nil {
+		t.Fatalf("write local module: %v", err)
+	}
+
+	t.Run("released build refuses", func(t *testing.T) {
+		t.Setenv("DATAMITSU_PARSERS_DIR", t.TempDir())
+		m := New(config.MapOfParsers{"core": {URL: "file://" + src, Hash: sha256Hex(body)}})
+		if _, err := m.LoadWASMBytes(context.Background(), "core"); err == nil {
+			t.Fatal("a build without the dev-link flag must refuse a file:// module")
+		}
+	})
+
+	t.Run("dev-link build loads and verifies", func(t *testing.T) {
+		t.Setenv("DATAMITSU_PARSERS_DIR", t.TempDir())
+		orig := ldflags.LocalArtifacts
+		ldflags.LocalArtifacts = "1"
+		t.Cleanup(func() { ldflags.LocalArtifacts = orig })
+
+		m := New(config.MapOfParsers{"core": {URL: "file://" + src, Hash: sha256Hex(body)}})
+		got, err := m.LoadWASMBytes(context.Background(), "core")
+		if err != nil {
+			t.Fatalf("LoadWASMBytes() error = %v", err)
+		}
+		if string(got) != string(body) {
+			t.Fatalf("LoadWASMBytes() = %q, want %q", got, body)
+		}
+		// Stored content-addressed, same as a downloaded module.
+		dir := moduleDir("core", m.parsers["core"])
+		if _, err := os.Stat(filepath.Join(dir, wasmFileName)); err != nil {
+			t.Fatalf("module not stored at %s: %v", dir, err)
+		}
+	})
+
+	t.Run("hash still mandatory", func(t *testing.T) {
+		t.Setenv("DATAMITSU_PARSERS_DIR", t.TempDir())
+		orig := ldflags.LocalArtifacts
+		ldflags.LocalArtifacts = "1"
+		t.Cleanup(func() { ldflags.LocalArtifacts = orig })
+
+		missing := New(config.MapOfParsers{"core": {URL: "file://" + src}})
+		if _, err := missing.LoadWASMBytes(context.Background(), "core"); err == nil {
+			t.Error("a file:// module with no hash must be a configuration error")
+		}
+
+		wrong := New(config.MapOfParsers{"core": {URL: "file://" + src, Hash: strings.Repeat("0", 64)}})
+		if _, err := wrong.LoadWASMBytes(context.Background(), "core"); err == nil {
+			t.Error("a file:// module with the wrong hash must be rejected")
+		}
+	})
 }

@@ -27,3 +27,19 @@ var ImageRepo = "datamitsu/datamitsu"
 // builds use a distinct tag_name (e.g. unstable-<date>-<sha>) that is NOT the
 // version string. Empty for local builds, where callers fall back to Version.
 var ImageTag = ""
+
+// LocalArtifacts gates the `file://` artifact source (reading a locally built
+// artifact instead of fetching a published one). It is **off unless injected**:
+// only the dev-link build sets it, via
+//
+//	-X github.com/datamitsu/datamitsu/internal/ldflags.LocalArtifacts=1
+//
+// so released binaries have no reachable local-read path at all. Any non-empty
+// value enables it. This is the outer of two locks — the inner one is per call
+// site (only the parser store opts in), and SHA-256 verification is mandatory
+// either way, so the flag changes which transports exist, never whether an
+// artifact is verified.
+var LocalArtifacts = ""
+
+// LocalArtifactsEnabled reports whether this build may read `file://` artifacts.
+func LocalArtifactsEnabled() bool { return LocalArtifacts != "" }
