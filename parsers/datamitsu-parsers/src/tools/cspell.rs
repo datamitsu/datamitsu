@@ -33,14 +33,16 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 	if message.is_empty() {
 		return None;
 	}
-	// Location "<file>:<row>:<col>", read row/col right-to-left.
-	let mut it = line[..dash].rsplit(':');
-	let col: u32 = it.next()?.trim().parse().ok()?;
-	let row: u32 = it.next()?.trim().parse().ok()?;
+	// Location "<file>:<row>:<col>"; the path is what one cspell run over a whole
+	// project needs to report. `find(" - ")` takes the FIRST separator, so a file
+	// literally named "12:30 - notes.md" leaves a location with no path at all —
+	// hence the splitter, which yields "" instead of wrapping below zero.
+	let (file, row, col) = crate::location::file_row_col(&line[..dash])?;
 	Some(RawDiagnostic {
 		message,
 		row: Some(row),
 		col: Some(col),
+		file: crate::diagnostic::file_field(file),
 		..RawDiagnostic::default()
 	})
 }
@@ -72,5 +74,21 @@ mod tests {
 		);
 		assert_eq!(out.len(), 2);
 		assert_eq!(out[1].col, Some(21));
+	}
+	#[test]
+	fn reports_the_path() {
+		let d = parse_line("docs/guide.md:3:6 - Unknown word (sentense)").unwrap();
+		assert_eq!(d.file.as_deref(), Some("docs/guide.md"));
+		assert_eq!((d.row, d.col), (Some(3), Some(6)));
+	}
+	#[test]
+	fn a_location_without_a_path_does_not_panic() {
+		// `find(" - ")` splits at the FIRST separator, so a filename containing
+		// " - " leaves a bare "row:col". The old length arithmetic underflowed
+		// here, which in a panic=abort WASM build trapped the module and cost the
+		// whole run's diagnostics.
+		let d = parse_line("12:30 - notes.md:1:5 - Unknown word (teh)").unwrap();
+		assert_eq!((d.row, d.col), (Some(12), Some(30)));
+		assert_eq!(d.file, None, "no path in the location -> the core stamps it");
 	}
 }

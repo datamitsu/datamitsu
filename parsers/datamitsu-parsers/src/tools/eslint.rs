@@ -28,12 +28,14 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 };
 
 pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic> {
-	let text = String::from_utf8_lossy(stdout);
-	let value: JsonValue = match text.parse() {
-		Ok(v) => v,
-		Err(_) => return Vec::new(),
-	};
-	let results = match &value {
+	// Lenient: eslint runs batched over a whole project, where a plugin writing to
+	// stdout (sonarjs' pnpm-catalog `console.debug`, …) would otherwise cost every
+	// diagnostic in the run.
+	crate::tools::json_diag::extract_lenient(stdout, from_report)
+}
+
+fn from_report(value: &JsonValue) -> Vec<RawDiagnostic> {
+	let results = match value {
 		JsonValue::Array(a) => a,
 		_ => return Vec::new(),
 	};
@@ -43,9 +45,16 @@ pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 			JsonValue::Object(m) => m,
 			_ => continue,
 		};
+		// One eslint run covers many files, so each result's path is the only way
+		// to attribute its messages.
+		let file = match obj.get("filePath") {
+			Some(JsonValue::String(s)) if !s.is_empty() => Some(s.clone()),
+			_ => None,
+		};
 		if let Some(JsonValue::Array(messages)) = obj.get("messages") {
 			for msg in messages {
-				if let Some(d) = message_to_diag(msg) {
+				if let Some(mut d) = message_to_diag(msg) {
+					d.file.clone_from(&file);
 					out.push(d);
 				}
 			}
@@ -124,6 +133,20 @@ mod tests {
 		// null ruleId -> no code; still a diagnostic.
 		assert_eq!(out[2].code, None);
 		assert_eq!(out[2].message, "Parsing error: Unexpected token");
+	}
+
+	#[test]
+	fn attributes_each_message_to_its_file() {
+		let out = parse(SAMPLE, b"", 1);
+		assert!(out.iter().all(|d| d.file.as_deref() == Some("/x/broken.js")));
+	}
+
+	#[test]
+	fn skips_plugin_noise_printed_before_the_json() {
+		// eslint-plugin-sonarjs console.debug()s onto stdout ahead of the report.
+		let mut noisy = b"Dependency \"@scope/pkg\" could not be resolved for catalog \"default\"\n".to_vec();
+		noisy.extend_from_slice(SAMPLE);
+		assert_eq!(parse(&noisy, b"", 1).len(), 3);
 	}
 
 	#[test]

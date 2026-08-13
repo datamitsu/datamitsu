@@ -30,6 +30,9 @@ pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 		code: "ruleId",
 		message: "message",
 		severity: "severity",
+		// markuplint reports the path per violation ("filePath"), which one run
+		// over many files needs.
+		file: "filePath",
 	};
 	let mut out = json_diag::from_json(stdout, &attrs, severity_of);
 	for d in &mut out {

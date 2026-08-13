@@ -40,7 +40,7 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 	let level = &rest[..rb];
 	let after = rest[rb + 1..].trim_start();
 
-	let (row, col) = row_col(prefix)?;
+	let (file, row, col) = crate::location::file_row_col(prefix)?;
 	let (message, code) = split_message_rule(after);
 	Some(RawDiagnostic {
 		message,
@@ -48,17 +48,11 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 		col: Some(col),
 		severity: level_severity(level),
 		code,
+		// yamllint is run over many files at once, so its own path is the only
+		// thing tying a line to a file.
+		file: crate::diagnostic::file_field(file),
 		..RawDiagnostic::default()
 	})
-}
-
-/// The last two `:`-separated fields of `<file>:<row>:<col>`, read right-to-left
-/// so a path containing colons doesn't confuse row/col.
-fn row_col(prefix: &str) -> Option<(u32, u32)> {
-	let mut it = prefix.rsplit(':');
-	let col = it.next()?.trim().parse().ok()?;
-	let row = it.next()?.trim().parse().ok()?;
-	Some((row, col))
 }
 
 /// `message (rule)` → (message, Some(rule)) using the LAST parenthesized group;
@@ -122,5 +116,23 @@ mod tests {
 		let out = parse(b"stdin:1:1: [warning] a (r1)\nstdin:2:2: [error] b (r2)\n", b"", 1);
 		assert_eq!(out.len(), 2);
 		assert_eq!(out[1].message, "b");
+	}
+	#[test]
+	fn reports_the_path_and_drops_the_stdin_placeholder() {
+		// Run over many files, the path is the only attribution.
+		let d = parse_line("config/app.yaml:3:1: [error] too many blank lines (empty-lines)").unwrap();
+		assert_eq!(d.file.as_deref(), Some("config/app.yaml"));
+		// A path with a colon must not eat into row/col.
+		let odd = parse_line("weird:name.yaml:12:4: [warning] line too long (line-length)").unwrap();
+		assert_eq!(odd.file.as_deref(), Some("weird:name.yaml"));
+		assert_eq!((odd.row, odd.col), (Some(12), Some(4)));
+		// "stdin" is a placeholder, not a file: leave it to the core to stamp.
+		assert_eq!(parse_line("stdin:3:1: [error] x (r)").unwrap().file, None);
+	}
+	#[test]
+	fn a_location_without_a_path_does_not_panic() {
+		let d = parse_line("3:1: [error] too many blank lines (empty-lines)").unwrap();
+		assert_eq!((d.row, d.col), (Some(3), Some(1)));
+		assert_eq!(d.file, None);
 	}
 }

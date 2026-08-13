@@ -33,6 +33,47 @@ The dividing line between the WASM module and the Go core is deliberate:
 This "raw-with-holes / defaults-in-core" split keeps parsers tiny, dumb, and
 trivially auditable, and keeps all judgement calls in one reviewable place.
 
+### File attribution
+
+Which file a diagnostic belongs to has two possible sources, and they compose:
+
+- **The parser**, for formats that name a path per diagnostic (eslint's
+  `filePath`). It fills `file` on the raw diagnostic.
+- **The core**, otherwise. Most tool formats drop the filename, so the executor
+  stamps the file it just linted — but only where the parser left `file` empty.
+
+This ordering is what makes **batch** tools work. A `batch: true` tool
+(eslint over a whole project, one invocation, dozens of files) gives the core no
+single file to stamp, so a parser that does not report paths yields unattributed
+diagnostics. Tools in that class must extract the path.
+
+### Noise tolerance
+
+A tool's JSON rarely arrives alone on stdout. Something else in the process
+prints ahead of it (`eslint-plugin-sonarjs` `console.debug`s a pnpm-catalog
+warning; node and python wrappers do the same), or the tool appends a human
+summary after it — `golangci-lint --output.json.path=stdout` follows its report
+with `1 issues:` and a per-linter tally. Under a strict parse, either costs every
+diagnostic in the run.
+
+The shared JSON helper therefore parses **leniently**: it finds each document
+opener, scans to its balanced close (tracking string literals, so braces inside a
+message or a path don't shift the depth), and parses that span. Noise before and
+after is ignored. Every candidate span is tried and the best one wins — most
+diagnostics first, longest span as the tiebreak — because taking the first span
+that merely parses would let a `{}` in the noise shadow the real report, or turn
+a JSON log line printed ahead of it into a phantom diagnostic.
+
+A document that never closes contributes nothing. A truncation that still leaves
+whole inner elements intact yields those elements, which beats discarding a run's
+findings over a cut-off tail.
+
+The core keeps stdout and stderr **apart** whenever a tool declares a parser, in
+both per-file and batch execution. Both streams are handed to the module (some
+tools report on stderr — `tsc` falls back to it, `cue_fmt` uses it exclusively),
+but they arrive as separate buffers, so wrapper noise on one can never interleave
+into the other's JSON.
+
 ## The Pipeline
 
 A parser travels through six stages, from a config declaration to a result

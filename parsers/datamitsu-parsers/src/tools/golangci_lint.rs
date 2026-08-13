@@ -36,13 +36,13 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 };
 
 pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic> {
-	let text = String::from_utf8_lossy(stdout);
-	let value: JsonValue = match text.parse() {
-		Ok(v) => v,
-		Err(_) => return Vec::new(),
-	};
+	// Lenient: one golangci-lint run covers a whole module, and the human summary
+	// the tool itself prints after the JSON would otherwise discard every issue.
+	crate::tools::json_diag::extract_lenient(stdout, from_report)
+}
 
-	let map = match &value {
+fn from_report(value: &JsonValue) -> Vec<RawDiagnostic> {
+	let map = match value {
 		JsonValue::Object(m) => m,
 		_ => return Vec::new(),
 	};
@@ -73,9 +73,18 @@ fn issue_to_diag(issue: &JsonValue) -> Option<RawDiagnostic> {
 		_ => return None,
 	};
 
-	let (row, col) = match map.get("Pos") {
-		Some(JsonValue::Object(pos)) => (get_u32(pos, "Line"), get_u32(pos, "Column")),
-		_ => (None, None),
+	// One run reports issues across the whole module, so Pos.Filename is what
+	// attributes each of them.
+	let (row, col, file) = match map.get("Pos") {
+		Some(JsonValue::Object(pos)) => (
+			get_u32(pos, "Line"),
+			get_u32(pos, "Column"),
+			match pos.get("Filename") {
+				Some(JsonValue::String(s)) => crate::diagnostic::file_field(s),
+				_ => None,
+			},
+		),
+		_ => (None, None, None),
 	};
 
 	let source = match map.get("FromLinter") {
@@ -89,6 +98,7 @@ fn issue_to_diag(issue: &JsonValue) -> Option<RawDiagnostic> {
 		col,
 		severity: Some(severity::WARNING),
 		source,
+		file,
 		..RawDiagnostic::default()
 	})
 }
@@ -132,5 +142,22 @@ mod tests {
 	#[test]
 	fn null_issues_yield_nothing() {
 		assert!(parse(br#"{"Issues":null,"Report":{}}"#, b"", 0).is_empty());
+	}
+	#[test]
+	fn reports_the_path_per_issue() {
+		let json = br#"{"Issues":[
+            {"FromLinter":"errcheck","Text":"unchecked error","Pos":{"Filename":"cmd/root.go","Line":12,"Column":5}},
+            {"FromLinter":"govet","Text":"unreachable","Pos":{"Filename":"internal/x/y.go","Line":20,"Column":1}}
+        ]}"#;
+		let out = parse(json, b"", 1);
+		assert_eq!(out[0].file.as_deref(), Some("cmd/root.go"));
+		assert_eq!(out[1].file.as_deref(), Some("internal/x/y.go"));
+	}
+
+	#[test]
+	fn skips_noise_printed_before_the_json() {
+		let noisy = br#"go: downloading example.com/mod v1.2.3
+{"Issues":[{"FromLinter":"errcheck","Text":"unchecked error","Pos":{"Filename":"main.go","Line":1,"Column":1}}]}"#;
+		assert_eq!(parse(noisy, b"", 1).len(), 1);
 	}
 }
