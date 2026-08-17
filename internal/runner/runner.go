@@ -316,6 +316,19 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		return nil
 	}
 
+	// Seed the store from the declared OCI bundle before anything reads it
+	// (demand-driven: only the layers of the planned tools), so both the parser
+	// prewarm below and EnsureTools later hit seeded content instead of the
+	// network. Seeding after the prewarm meant a bundled parser module was
+	// fetched from its URL on every cold store — and under DATAMITSU_OFFLINE
+	// that fetch is refused, so the airgapped run silently lost its parsers and
+	// fell back to raw tool output.
+	if sc.binMgr != nil {
+		if err := ocibundle.AutoSeed(ctx, sc.cfg, plan.GetAppNames(), nil); err != nil {
+			return fmt.Errorf("failed to seed store from oci bundle: %w", err)
+		}
+	}
+
 	// Compile the WASM parser modules this plan will use now, once, off the
 	// per-file execution path. Best-effort: a failure falls back to lazy
 	// compile-on-first-parse inside the executor.
@@ -536,12 +549,8 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	// modes return earlier and never reach this point, so no installs happen
 	// during planning-only runs.
 	if sc.binMgr != nil {
-		// Seed the store from the declared OCI bundle first (demand-driven:
-		// only the layers of the planned tools), so EnsureTools' stat checks
-		// hit seeded content instead of downloading.
-		if err := ocibundle.AutoSeed(ctx, sc.cfg, plan.GetAppNames(), nil); err != nil {
-			return fmt.Errorf("failed to seed store from oci bundle: %w", err)
-		}
+		// The store was already seeded from the bundle before the parser
+		// prewarm above, so these stat checks hit seeded content.
 		if err := sc.binMgr.EnsureTools(ctx, plan.GetAppNames()); err != nil {
 			return fmt.Errorf("failed to pre-install tools: %w", err)
 		}

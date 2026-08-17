@@ -97,7 +97,7 @@ func CatalogFromCapabilities(parserName string, caps Capabilities) *ParserCatalo
 
 // ListCapabilities builds the deduplicated catalog across every configured
 // parser. Distinct modules (by content key) are described exactly once — N config
-// entries sharing one url+hash call `describe` a single time — and tools are
+// entries sharing one module call `describe` a single time — and tools are
 // deduplicated by name across modules, flagging any tool two different modules
 // claim with diverging identity.
 func (m *Manager) ListCapabilities(ctx context.Context) (*ParserCatalog, error) {

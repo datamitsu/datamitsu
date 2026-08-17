@@ -37,7 +37,8 @@ func appEnvSubtree(kind config.RuntimeKind, app string) string {
 
 // parserSubtree is the store subtree for a WASM output-parser module
 // ({store}/.parsers/<module>). Like binaryAppSubtree, this is the hash-LESS
-// parent: the content-addressed child (xxh3 of url+hash) is its only entry, and
+// parent: the content-addressed child (xxh3 of the module's SHA-256) is its
+// only entry, and
 // the bundle post-process resolves that segment by scanning the layer tar.
 func parserSubtree(module string) string {
 	return path.Join(".parsers", module)

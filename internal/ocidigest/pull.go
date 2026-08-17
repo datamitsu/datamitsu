@@ -62,10 +62,47 @@ func parseSHA256Digest(dgst string) (string, error) {
 // its raw bytes after verifying sha256(body) == digest. Unlike Resolve, the
 // Docker-Content-Digest header is never trusted here — the body itself is
 // hashed, so not a single unverified byte reaches the caller.
+//
+// Transient failures are retried on the same policy as PullBlob: a manifest is
+// the first request of every seed, so one 502 from a registry having a moment
+// used to fail the whole operation while the far larger blob pulls behind it
+// would have shrugged it off.
 func (r *Resolver) PullManifest(ctx context.Context, repo, dgst string) ([]byte, error) {
+	var lastErr error
+	for attempt := 1; attempt <= httpretry.DefaultMaxAttempts; attempt++ {
+		body, err := r.pullManifestOnce(ctx, repo, dgst)
+		if err == nil {
+			return body, nil
+		}
+		lastErr = err
+
+		if ctx.Err() != nil || httpretry.IsPermanent(err) {
+			return nil, err
+		}
+		if attempt == httpretry.DefaultMaxAttempts {
+			break
+		}
+
+		delay := httpretry.Delay(attempt)
+		logger.Logger.Debug("manifest fetch failed, retrying",
+			zap.String("digest", dgst),
+			zap.Int("attempt", attempt),
+			zap.Duration("delay", delay),
+			zap.Error(err),
+		)
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("manifest fetch cancelled: %w", ctx.Err())
+		case <-time.After(delay):
+		}
+	}
+	return nil, fmt.Errorf("after %d attempts: %w", httpretry.DefaultMaxAttempts, lastErr)
+}
+
+func (r *Resolver) pullManifestOnce(ctx context.Context, repo, dgst string) ([]byte, error) {
 	wantHex, err := parseSHA256Digest(dgst)
 	if err != nil {
-		return nil, err
+		return nil, httpretry.Permanent(err)
 	}
 
 	manifestURL := fmt.Sprintf("%s://%s/v2/%s/manifests/%s", r.scheme, r.registry, repo, dgst)
@@ -75,12 +112,14 @@ func (r *Resolver) PullManifest(ctx context.Context, repo, dgst string) ([]byte,
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	switch resp.StatusCode {
-	case http.StatusOK:
-	case http.StatusNotFound:
-		return nil, fmt.Errorf("%w: %s@%s (was the bundle garbage-collected? re-publish it or update oci.digest)", ErrManifestNotFound, repo, dgst)
-	default:
+	switch {
+	case resp.StatusCode == http.StatusOK:
+	case resp.StatusCode == http.StatusNotFound:
+		return nil, httpretry.Permanent(fmt.Errorf("%w: %s@%s (was the bundle garbage-collected? re-publish it or update oci.digest)", ErrManifestNotFound, repo, dgst))
+	case httpretry.RetryableStatus(resp.StatusCode):
 		return nil, fmt.Errorf("registry returned status %d for manifest %s@%s", resp.StatusCode, repo, dgst)
+	default:
+		return nil, httpretry.Permanent(fmt.Errorf("registry returned status %d for manifest %s@%s", resp.StatusCode, repo, dgst))
 	}
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, manifestMaxBytes+1))
@@ -88,12 +127,13 @@ func (r *Resolver) PullManifest(ctx context.Context, repo, dgst string) ([]byte,
 		return nil, fmt.Errorf("read manifest body for %s@%s: %w", repo, dgst, err)
 	}
 	if len(body) > manifestMaxBytes {
-		return nil, fmt.Errorf("manifest %s@%s exceeds the %d byte limit", repo, dgst, manifestMaxBytes)
+		return nil, httpretry.Permanent(fmt.Errorf("manifest %s@%s exceeds the %d byte limit", repo, dgst, manifestMaxBytes))
 	}
 
 	sum := sha256.Sum256(body)
 	if got := hex.EncodeToString(sum[:]); got != wantHex {
-		return nil, fmt.Errorf("manifest body %w for %s: expected sha256:%s got sha256:%s", errDigestMismatch, repo, wantHex, got)
+		// Identical wrong bytes cannot become right on retry.
+		return nil, httpretry.Permanent(fmt.Errorf("manifest body %w for %s: expected sha256:%s got sha256:%s", errDigestMismatch, repo, wantHex, got))
 	}
 	return body, nil
 }
