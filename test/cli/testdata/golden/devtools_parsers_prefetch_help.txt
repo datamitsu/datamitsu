@@ -1,11 +1,11 @@
 Download and SHA-256 verify the configured WASM parser modules into the store.
 
 With no arguments, every module declared in the `parsers` config is fetched; pass
-one or more module names to fetch a subset. A module already on disk (matching
-url+hash) is a no-op. This materializes each module at its content-addressed store
-path so it can be COPYed into an OCI-bundle layer (the generated Dockerfile's
-parser stages run this) and later found offline by the runtime — no compilation,
-fetch only.
+one or more module names to fetch a subset. A module already on disk whose bytes
+still match its declared hash is a no-op. This materializes each module at its
+content-addressed store path so it can be COPYed into an OCI-bundle layer (the
+generated Dockerfile's parser stages run this) and later found offline by the
+runtime — no compilation, fetch only.
 
 Usage:
   datamitsu devtools parsers prefetch [module...] [flags]

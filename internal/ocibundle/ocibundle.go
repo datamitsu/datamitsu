@@ -45,9 +45,14 @@ const (
 
 var log = logger.Logger.With(zap.Namespace("ocibundle"))
 
+// parsersSubtreeRoot is the store subtree carrying WASM output-parser modules
+// (.parsers/<module>/<xxh3>). Named because seeding treats it specially: a
+// parser layer is placed only when the consumer's config declares a hash to
+// verify it against (see seedLayer).
+const parsersSubtreeRoot = ".parsers/"
+
 // subtreeRoots are the only store subtrees a bundle layer may write into.
-// .parsers/ carries WASM output-parser modules (.parsers/<module>/<xxh3>).
-var subtreeRoots = []string{".bin/", ".runtimes/", ".apps/", ".uv/python", ".parsers/"}
+var subtreeRoots = []string{".bin/", ".runtimes/", ".apps/", ".uv/python", parsersSubtreeRoot}
 
 // validateSubtree rejects malformed subtree annotations: absolute paths,
 // traversal, or anything outside the known store subtree roots. A layer with
@@ -120,9 +125,42 @@ func markerPath(storeRoot, digest string) string {
 	return filepath.Join(storeRoot, seedMarkerDir, strings.ReplaceAll(digest, ":", "-"))
 }
 
+// markerExists reports whether a full pull of this digest ever completed. It
+// answers "was the marker written", not "is it still true" — see
+// markerSatisfied for the question seeding asks.
 func markerExists(storeRoot, digest string) bool {
 	_, err := os.Stat(markerPath(storeRoot, digest))
 	return err == nil
+}
+
+// markerSatisfied reports whether a completed full pull of this digest still
+// describes the store. The marker records the subtrees it laid down, so this
+// can be checked rather than assumed: if any of them has since gone — a manual
+// rm, a partially restored cache, a store the core has since laid out
+// differently — the marker is stale and the pull must run again.
+//
+// Bare existence was the previous check, which made `store seed` a silent
+// no-op in precisely the situation that prompts someone to re-run it. Only
+// subtrees this bundle actually recorded are checked, so a partial bundle (a
+// deliberate, supported case) never triggers an endless re-pull.
+func markerSatisfied(storeRoot, digest string) bool {
+	data, err := os.ReadFile(markerPath(storeRoot, digest))
+	if err != nil {
+		return false
+	}
+	var marker seedMarker
+	if err := json.Unmarshal(data, &marker); err != nil {
+		log.Debug("discarding unreadable seed marker", zap.String("digest", digest), zap.Error(err))
+		return false
+	}
+	for _, subtree := range marker.Subtrees {
+		if _, err := os.Stat(filepath.Join(storeRoot, filepath.FromSlash(subtree))); err != nil {
+			log.Debug("seed marker is stale: recorded subtree is missing from the store",
+				zap.String("digest", digest), zap.String("subtree", subtree))
+			return false
+		}
+	}
+	return true
 }
 
 // writeMarker records a completed FULL pull. Demand-driven pulls never write

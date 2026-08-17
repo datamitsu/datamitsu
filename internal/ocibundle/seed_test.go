@@ -356,6 +356,57 @@ func TestSeed_WarmSubtreeSkipsBlobDownload(t *testing.T) {
 	}
 }
 
+// The marker records what a full pull laid down, so a re-seed can check that
+// it is still true instead of trusting that it once was. Bare existence made
+// `store seed` a no-op exactly when someone re-runs it: after the store lost
+// content, or after a core upgrade moved a subtree, leaving an airgapped run
+// to fail later with nothing to fetch from.
+func TestSeed_StaleMarkerRePullsInsteadOfSkipping(t *testing.T) {
+	storeRoot := testStore(t)
+	payload := []byte("binary payload v1")
+	cfg, subtrees := testBinaryConfig(t, map[string][]byte{"tool": payload})
+
+	src := newFakeSource()
+	digest := src.addManifest(t, []ocispec.Descriptor{
+		src.addLayer(binaryLayer(t, subtrees["tool"], payload), subtrees["tool"]),
+	}, nil)
+
+	if err := seedFrom(context.Background(), cfg, src, "test/bundle", digest, nil, Options{}); err != nil {
+		t.Fatalf("first seedFrom: %v", err)
+	}
+	firstPull := src.blobCalls.Load()
+	if firstPull == 0 {
+		t.Fatal("the first full pull fetched nothing")
+	}
+
+	// A second run over an intact store is still the cheap no-op it was.
+	if err := seedFrom(context.Background(), cfg, src, "test/bundle", digest, nil, Options{}); err != nil {
+		t.Fatalf("second seedFrom: %v", err)
+	}
+	if src.blobCalls.Load() != firstPull {
+		t.Errorf("blob calls = %d, want %d: an intact store must still short-circuit on the marker", src.blobCalls.Load(), firstPull)
+	}
+
+	// The content goes; the marker stays.
+	placed := filepath.Join(storeRoot, filepath.FromSlash(subtrees["tool"]))
+	if err := os.RemoveAll(placed); err != nil {
+		t.Fatal(err)
+	}
+	if !markerExists(storeRoot, digest) {
+		t.Fatal("the marker should have survived removing the content")
+	}
+
+	if err := seedFrom(context.Background(), cfg, src, "test/bundle", digest, nil, Options{}); err != nil {
+		t.Fatalf("third seedFrom: %v", err)
+	}
+	if src.blobCalls.Load() <= firstPull {
+		t.Errorf("blob calls = %d, want more than %d: a stale marker must not skip the pull", src.blobCalls.Load(), firstPull)
+	}
+	if _, err := os.Stat(placed); err != nil {
+		t.Errorf("re-seed did not restore the subtree: %v", err)
+	}
+}
+
 func TestSeed_ReVerificationCatchesSwappedBinary(t *testing.T) {
 	storeRoot := testStore(t)
 	published := []byte("the published binary")
