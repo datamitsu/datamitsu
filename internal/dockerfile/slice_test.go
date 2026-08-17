@@ -130,3 +130,63 @@ func TestRenderSlice_LoadableModuleRoundTrips(t *testing.T) {
 		t.Errorf("round-tripped slice lost the node runtime def: %+v", got.Runtimes)
 	}
 }
+
+// TestRenderSlice_OCIParserRoundTrips covers the registry-sourced declaration
+// reaching a buildkit stage. The slice is what `datamitsu install --config`
+// loads inside the build, so the oci pin has to survive marshaling intact —
+// otherwise the stage would try to fetch a module with no source at all.
+func TestRenderSlice_OCIParserRoundTrips(t *testing.T) {
+	apps, runtimes, _ := sampleConfigForSlicing()
+	parsers := config.MapOfParsers{
+		"core": {
+			Hash: strings.Repeat("a", 64),
+			OCI: &config.ParserOCI{
+				Ref:    "ghcr.io/datamitsu/datamitsu-parsers",
+				Digest: "sha256:" + strings.Repeat("b", 64),
+			},
+		},
+	}
+	plan := BuildPlan(apps, runtimes, PlanOptions{Parsers: parsers})
+	if got := plan.RegistrySourcedParsers; len(got) != 1 || got[0] != "core" {
+		t.Errorf("RegistrySourcedParsers = %v, want [core] so the CLI can warn about buildkit egress", got)
+	}
+
+	slices := BuildSlices(plan, apps, runtimes, parsers)
+	parserSlice := findSlice(slices, "parser-core.js")
+	if parserSlice == nil {
+		t.Fatal("missing parser-core.js slice")
+	}
+	js, err := RenderSlice(parserSlice.Config)
+	if err != nil {
+		t.Fatalf("RenderSlice: %v", err)
+	}
+
+	const marker = "getConfig() { return "
+	jsonStart := strings.Index(js, marker) + len(marker)
+	jsonEnd := strings.LastIndex(js, "; }")
+	var got config.Config
+	if err := json.Unmarshal([]byte(js[jsonStart:jsonEnd]), &got); err != nil {
+		t.Fatalf("embedded config is not valid JSON: %v", err)
+	}
+	p := got.Parsers["core"]
+	if p.OCI == nil || p.OCI.Ref != "ghcr.io/datamitsu/datamitsu-parsers" {
+		t.Fatalf("round-tripped slice lost the parser's oci source: %+v", p)
+	}
+	if p.URL != "" {
+		t.Errorf("round-tripped slice grew a url source: %q", p.URL)
+	}
+	if err := config.ValidateParsers(got.Parsers); err != nil {
+		t.Errorf("the slice a build stage loads fails validation: %v", err)
+	}
+}
+
+// TestBuildPlan_URLParserIsNotFlaggedAsRegistrySourced keeps the warning quiet
+// for the default configuration, where the parser is an ordinary HTTPS
+// download and buildkit needs no registry at all.
+func TestBuildPlan_URLParserIsNotFlaggedAsRegistrySourced(t *testing.T) {
+	apps, runtimes, parsers := sampleConfigForSlicing()
+	plan := BuildPlan(apps, runtimes, PlanOptions{Parsers: parsers})
+	if got := plan.RegistrySourcedParsers; len(got) != 0 {
+		t.Errorf("RegistrySourcedParsers = %v, want empty for a url-sourced parser", got)
+	}
+}

@@ -41,14 +41,26 @@ func TestValidateOCI_ValidWithPortAndLocalhost(t *testing.T) {
 	}
 }
 
-func TestValidateOCI_ValidWithSigner(t *testing.T) {
+// TestValidateOCI_SignerIsRejectedAtLoad pins that a pinned signer is a config
+// error rather than a no-op. This build has no sigstore dependency and verifies
+// nothing, so accepting the field would let a config assert a guarantee the
+// binary does not deliver — and the seeder's own rejection only fires once the
+// network is already in play. A complete, well-formed signer is the case that
+// matters: it is the one a user would expect to work.
+func TestValidateOCI_SignerIsRejectedAtLoad(t *testing.T) {
 	oci := validOCIRef()
 	oci.Signer = &OCISigner{
 		Identity: "https://github.com/owner/repo/.github/workflows/release.yml@refs/tags/v1.0.0",
 		Issuer:   "https://token.actions.githubusercontent.com",
 	}
-	if err := ValidateOCI(oci); err != nil {
-		t.Errorf("ValidateOCI() unexpected error: %v", err)
+	err := ValidateOCI(oci)
+	if err == nil {
+		t.Fatal("ValidateOCI() accepted a signer this build cannot verify")
+	}
+	for _, want := range []string{"oci: signer", "not implemented in this build", "digest still verifies"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q missing %q", err, want)
+		}
 	}
 }
 
@@ -108,7 +120,10 @@ func TestValidateOCI_MalformedDigest(t *testing.T) {
 	}
 }
 
-func TestValidateOCI_OneLeggedSigner(t *testing.T) {
+// TestValidateOCI_AnyShapeOfSignerIsRejected covers the partial spellings too:
+// the rejection is about the field being present at all, not about it being
+// filled in correctly, so no shape of it may slip through.
+func TestValidateOCI_AnyShapeOfSignerIsRejected(t *testing.T) {
 	for name, signer := range map[string]*OCISigner{
 		"missing issuer":   {Identity: "workflow-ref"},
 		"missing identity": {Issuer: "https://token.actions.githubusercontent.com"},
@@ -133,7 +148,7 @@ func TestValidateOCI_CollectsAllErrors(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	for _, want := range []string{"oci: ref", "oci: digest", "oci: signer.identity", "oci: signer.issuer"} {
+	for _, want := range []string{"oci: ref", "oci: digest", "oci: signer"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error %q missing %q", err, want)
 		}

@@ -367,13 +367,13 @@ func ValidateOCI(ref *OCIRef) error {
 		errs = append(errs, fmt.Sprintf("oci: digest %q must be \"sha256:\" followed by 64 lowercase hex characters", ref.Digest))
 	}
 
+	// Rejected at load, not accepted-and-ignored. This build verifies no
+	// signatures at all (there is no sigstore dependency), so a config that
+	// pins a signer is asserting a guarantee the binary does not deliver — a
+	// loud error is strictly better than silent non-verification. The seeder
+	// rejects it too, but only once the network is already in play.
 	if ref.Signer != nil {
-		if ref.Signer.Identity == "" {
-			errs = append(errs, "oci: signer.identity is required when signer is set")
-		}
-		if ref.Signer.Issuer == "" {
-			errs = append(errs, "oci: signer.issuer is required when signer is set")
-		}
+		errs = append(errs, signerRejected("oci: signer", "the pinned digest still verifies the bundle bytes"))
 	}
 
 	if len(errs) > 0 {
@@ -382,10 +382,24 @@ func ValidateOCI(ref *OCIRef) error {
 	return nil
 }
 
-// ValidateParsers validates the parsers map: each entry must have a non-empty
-// url and a non-empty, well-formed SHA-256 hash (64 lowercase hex). An empty
-// hash is a hard error per the security policy (mirrors the bundle/archive
-// hash-mandatory rule) — never a download in "hash-less" mode.
+// signerRejected words the "this build cannot verify signatures" rejection the
+// bundle and the parser surfaces share, so the two never drift apart. field is
+// the key being rejected and stillVerified names what does guarantee the bytes,
+// because the answer to "then what protects me?" belongs in the error itself.
+func signerRejected(field, stillVerified string) string {
+	return fmt.Sprintf("%s is set but signature verification is not implemented in this build; remove signer (%s)", field, stillVerified)
+}
+
+// ValidateParsers validates the parsers map: each entry must declare exactly
+// one source (url or oci) and a non-empty, well-formed SHA-256 hash (64
+// lowercase hex). The hash is mandatory for EVERY source — an empty hash is a
+// hard error per the security policy (mirroring the bundle/archive
+// hash-mandatory rule), never a download in "hash-less" mode.
+//
+// The two sources are mutually exclusive rather than a fallback chain: an
+// air-gapped organization must be able to prove there is no github.com egress
+// left, which a "try the registry, then the URL" declaration would quietly
+// undo. Overriding a source is what config layers are for.
 func ValidateParsers(parsers MapOfParsers) error {
 	if len(parsers) == 0 {
 		return nil
@@ -404,20 +418,60 @@ func ValidateParsers(parsers MapOfParsers) error {
 			continue
 		}
 		p := parsers[name]
-		if p.URL == "" {
-			errs = append(errs, fmt.Sprintf("parser %q: url is required", name))
+		switch {
+		case p.URL == "" && p.OCI == nil:
+			errs = append(errs, fmt.Sprintf("parser %q: exactly one of url or oci is required", name))
+		case p.URL != "" && p.OCI != nil:
+			errs = append(errs, fmt.Sprintf("parser %q: url and oci are mutually exclusive (declare one source; use a config layer to override)", name))
 		}
 		if p.Hash == "" {
 			errs = append(errs, fmt.Sprintf("parser %q: hash is required (SHA-256)", name))
 		} else if !isValidSHA256Hex(p.Hash) {
 			errs = append(errs, fmt.Sprintf("parser %q: hash must be a valid SHA-256 hex string (64 lowercase hex characters)", name))
 		}
+		errs = append(errs, validateParserOCI(name, p.OCI)...)
 	}
 
 	if len(errs) > 0 {
 		return fmt.Errorf("config validation failed:\n  %s", strings.Join(errs, "\n  "))
 	}
 	return nil
+}
+
+// validateParserOCI checks a parser's registry source. It mirrors ValidateOCI
+// rule for rule — same grammar, same digest form, same signer rejection — so
+// there is one reference vocabulary to learn regardless of which entity carries
+// the pin; only the message prefix differs.
+func validateParserOCI(name string, oci *ParserOCI) []string {
+	if oci == nil {
+		return nil
+	}
+
+	var errs []string
+	if oci.Ref == "" {
+		errs = append(errs, fmt.Sprintf("parser %q: oci.ref is required (full reference including registry host, e.g. ghcr.io/datamitsu/datamitsu-parsers)", name))
+	} else if _, _, err := ociref.Parse(oci.Ref); err != nil {
+		switch {
+		case errors.Is(err, ociref.ErrRefNoHost):
+			errs = append(errs, fmt.Sprintf("parser %q: oci.ref %q %s", name, oci.Ref, ociref.ErrRefNoHost))
+		default:
+			errs = append(errs, fmt.Sprintf("parser %q: oci.ref %q is %s", name, oci.Ref, ociref.ErrRefSyntax))
+		}
+	}
+
+	const digestPrefix = "sha256:"
+	switch {
+	case oci.Digest == "":
+		errs = append(errs, fmt.Sprintf("parser %q: oci.digest is required (sha256:<64 hex>)", name))
+	case !strings.HasPrefix(oci.Digest, digestPrefix) || !isValidSHA256Hex(strings.TrimPrefix(oci.Digest, digestPrefix)):
+		errs = append(errs, fmt.Sprintf("parser %q: oci.digest %q must be \"sha256:\" followed by 64 lowercase hex characters", name, oci.Digest))
+	}
+
+	if oci.Signer != nil {
+		errs = append(errs, fmt.Sprintf("parser %q: %s", name,
+			signerRejected("oci.signer", "the mandatory hash still verifies the module bytes")))
+	}
+	return errs
 }
 
 // ValidateLsp performs minimal structural validation of the reserved lsp

@@ -78,6 +78,13 @@ type Plan struct {
 	// PlanOptions.TargetLibc (and were not force-included). Empty when no libc
 	// filter is applied. Sorted.
 	LibcExcluded []string
+	// RegistrySourcedParsers lists parser modules whose declaration pulls from
+	// an OCI registry rather than a URL. Their stage still builds, but it runs
+	// `parsers prefetch` INSIDE buildkit, which then needs registry egress and
+	// credentials from the build sandbox — a materially different requirement
+	// from an anonymous HTTPS GET. Surfaced so the CLI can say so before the
+	// build fails somewhere less legible. Sorted.
+	RegistrySourcedParsers []string
 }
 
 // classifyApp mirrors runtimemanager.runtimeAppRef's precedence (uv → node → jvm
@@ -198,6 +205,9 @@ func BuildPlan(apps binmanager.MapOfApps, runtimes config.MapOfRuntimes, opts ..
 	sort.Strings(parserModules)
 	for _, module := range parserModules {
 		plan.ParserStages = append(plan.ParserStages, ParserStage{Module: module})
+		if o.Parsers[module].OCI != nil {
+			plan.RegistrySourcedParsers = append(plan.RegistrySourcedParsers, module)
+		}
 	}
 
 	return plan

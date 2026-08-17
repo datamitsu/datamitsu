@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/httpx"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 )
 
@@ -189,6 +191,157 @@ func TestModuleStorePath_SameHashDifferentSources(t *testing.T) {
 	other := config.Parser{URL: release.URL, Hash: sha256Hex([]byte("a different module"))}
 	if got := ModuleStorePath("core", other); got == want {
 		t.Error("two different modules share a store directory")
+	}
+}
+
+// fakeOCIFetch installs a stand-in for the registry pull and returns a counter
+// of how many times it was called. It writes body into destDir the same way a
+// real pull does — a temp file the caller owns — so the store's publish and
+// verification steps run for real.
+func fakeOCIFetch(t *testing.T, body []byte) *int {
+	t.Helper()
+	calls := 0
+	orig := fetchOCIModule
+	fetchOCIModule = func(_ context.Context, _, _, _, destDir, _ string) (string, error) {
+		calls++
+		f, err := os.CreateTemp(destDir, "oci-blob-*")
+		if err != nil {
+			return "", err
+		}
+		defer func() { _ = f.Close() }()
+		if _, err := f.Write(body); err != nil {
+			return "", err
+		}
+		return f.Name(), nil
+	}
+	t.Cleanup(func() { fetchOCIModule = orig })
+	return &calls
+}
+
+func ociParser(hash string) config.Parser {
+	return config.Parser{
+		Hash: hash,
+		OCI: &config.ParserOCI{
+			Ref:    "ghcr.io/datamitsu/datamitsu-parsers",
+			Digest: "sha256:" + strings.Repeat("ab", 32),
+		},
+	}
+}
+
+func TestLoadWASMBytes_OCISourceStoresAndLoads(t *testing.T) {
+	t.Setenv("DATAMITSU_PARSERS_DIR", t.TempDir())
+
+	body := []byte("\x00asm-from-a-registry")
+	calls := fakeOCIFetch(t, body)
+
+	m := New(config.MapOfParsers{"core": ociParser(sha256Hex(body))})
+
+	got, err := m.LoadWASMBytes(context.Background(), "core")
+	if err != nil {
+		t.Fatalf("LoadWASMBytes() error = %v", err)
+	}
+	if string(got) != string(body) {
+		t.Fatalf("LoadWASMBytes() = %q, want %q", got, body)
+	}
+	dir := moduleDir("core", m.parsers["core"])
+	if _, err := os.Stat(filepath.Join(dir, wasmFileName)); err != nil {
+		t.Fatalf("module not stored at %s: %v", dir, err)
+	}
+
+	// Second load must come off disk, exactly as the url path does.
+	if _, err := m.LoadWASMBytes(context.Background(), "core"); err != nil {
+		t.Fatalf("second LoadWASMBytes() error = %v", err)
+	}
+	if *calls != 1 {
+		t.Errorf("registry fetches = %d, want 1", *calls)
+	}
+}
+
+// TestLoadWASMBytes_OCISourceHashStillGates covers the layered defense: even if
+// the registry chain were satisfied (here the fetch simply succeeds), bytes
+// that do not match the config's mandatory SHA-256 are rejected and nothing is
+// published into the store.
+func TestLoadWASMBytes_OCISourceHashStillGates(t *testing.T) {
+	t.Setenv("DATAMITSU_PARSERS_DIR", t.TempDir())
+
+	fakeOCIFetch(t, []byte("what the registry actually served"))
+	declared := ociParser(sha256Hex([]byte("what the config declares")))
+
+	m := New(config.MapOfParsers{"core": declared})
+	if _, err := m.LoadWASMBytes(context.Background(), "core"); err == nil {
+		t.Fatal("LoadWASMBytes() accepted a module that fails its declared hash")
+	}
+	dir := moduleDir("core", declared)
+	if _, err := os.Stat(filepath.Join(dir, wasmFileName)); !os.IsNotExist(err) {
+		t.Errorf("a module that failed verification was published (stat err = %v)", err)
+	}
+}
+
+func TestEnsureModule_SourceIsExactlyOne(t *testing.T) {
+	t.Setenv("DATAMITSU_PARSERS_DIR", t.TempDir())
+	hash := sha256Hex([]byte("x"))
+
+	cases := map[string]struct {
+		parser  config.Parser
+		wantMsg string
+	}{
+		"neither": {config.Parser{Hash: hash}, "no source"},
+		"both": {config.Parser{
+			URL:  "https://example.com/core.wasm",
+			Hash: hash,
+			OCI:  ociParser(hash).OCI,
+		}, "both url and oci"},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			m := New(config.MapOfParsers{"core": tc.parser})
+			_, err := m.LoadWASMBytes(context.Background(), "core")
+			if err == nil {
+				t.Fatal("expected a source error")
+			}
+			if !strings.Contains(err.Error(), tc.wantMsg) {
+				t.Errorf("error %q does not mention %q", err, tc.wantMsg)
+			}
+		})
+	}
+}
+
+// TestOCISource_NoOCIFlagDoesNotDisableIt pins the semantics of --no-oci: it
+// turns off the bundle store-seeding ACCELERATOR, which degrades gracefully to
+// fetching. A declared parser source is not an accelerator — it is the only
+// route to the bytes — so disabling it would leave no way to get the module at
+// all. DATAMITSU_OFFLINE stays the single hard network gate, and the case below
+// pins that it does refuse.
+//
+// The offline half of this pair deliberately runs the real fetch path: it must
+// be the production GuardOffline that refuses, not a stand-in.
+func TestOCISource_NoOCIFlagDoesNotDisableIt(t *testing.T) {
+	t.Setenv("DATAMITSU_PARSERS_DIR", t.TempDir())
+	t.Setenv("DATAMITSU_NO_OCI", "1")
+
+	body := []byte("\x00asm-still-fetched")
+	calls := fakeOCIFetch(t, body)
+
+	m := New(config.MapOfParsers{"core": ociParser(sha256Hex(body))})
+	if _, err := m.LoadWASMBytes(context.Background(), "core"); err != nil {
+		t.Fatalf("LoadWASMBytes() error = %v", err)
+	}
+	if *calls != 1 {
+		t.Errorf("registry fetches = %d under DATAMITSU_NO_OCI=1, want 1", *calls)
+	}
+}
+
+func TestOCISource_OfflineIsRefused(t *testing.T) {
+	t.Setenv("DATAMITSU_PARSERS_DIR", t.TempDir())
+	t.Setenv("DATAMITSU_OFFLINE", "1")
+
+	m := New(config.MapOfParsers{"core": ociParser(sha256Hex([]byte("unreachable")))})
+	_, err := m.LoadWASMBytes(context.Background(), "core")
+	if err == nil {
+		t.Fatal("LoadWASMBytes() attempted a registry pull in offline mode")
+	}
+	if !errors.Is(err, httpx.ErrOffline) {
+		t.Errorf("error = %v, want it to wrap httpx.ErrOffline", err)
 	}
 }
 

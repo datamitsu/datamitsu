@@ -692,8 +692,8 @@ declare global {
       ref: string;
 
       /**
-       * Optional sigstore keyless identity pin of the bundle publisher. When set, pull verifies the
-       * bundle signature before layout and fails hard on mismatch.
+       * RESERVED. Setting it is currently a config error: this build cannot verify sigstore
+       * signatures. The mandatory `digest` verifies the bundle bytes.
        */
       signer?: OCISigner;
     }
@@ -736,27 +736,59 @@ declare global {
     }
 
     /**
-     * A WASM output-parser module: a url+hash data artifact, modeled on ArchiveSpec/Bundle (data,
-     * not a process) — explicitly NOT on App (no runtime, no lockfile). Downloaded and SHA-256
+     * A WASM output-parser module: a hash-pinned data artifact, modeled on ArchiveSpec/Bundle
+     * (data, not a process) — explicitly NOT on App (no runtime, no lockfile). Fetched and SHA-256
      * verified before it is loaded into the sandboxed WASM runtime.
      */
     interface Parser {
       /**
        * SHA-256 hash (64 lowercase hex characters) of the .wasm module. Mandatory per the security
-       * policy — an empty or malformed hash is a config error. Verified before the module is
-       * loaded.
+       * policy for every source — an empty or malformed hash is a config error. For an `oci` source
+       * it must also equal the artifact's single layer blob digest, so a mismatch is rejected
+       * before the module is downloaded.
        */
       hash: string;
 
       /**
-       * URL of the .wasm module. Downloaded and SHA-256 verified before use.
+       * Registry-sourced module (OCI artifact). Exactly one of `oci` or `url` must be set.
        */
-      url: string;
+      oci?: ParserOCI;
+
+      /**
+       * URL of the .wasm module. Exactly one of `oci` or `url` must be set.
+       */
+      url?: string;
 
       // NOTE: no `version` field by design. The module reports its own
       // build-injected version through its WASM `describe` export (see
       // `datamitsu devtools parsers list`); declaring it here too would only let
-      // the declared and actual versions drift. The entity carries url+hash only.
+      // the declared and actual versions drift. The entity carries a source and
+      // a hash only.
+    }
+
+    /**
+     * A parser module published as an OCI artifact and pulled from a registry. Lets an air-gapped
+     * organization mirror one registry and get everything, including diagnostics parsing.
+     */
+    interface ParserOCI {
+      /**
+       * Artifact manifest digest, "sha256:" followed by 64 lowercase hex characters. Mandatory — a
+       * tag never pins content, and the module hash changes on every build anyway.
+       */
+      digest: string;
+
+      /**
+       * Full repository reference including the registry host (e.g.
+       * "ghcr.io/datamitsu/datamitsu-parsers"). No default host; tags and digests are not allowed
+       * inside the ref.
+       */
+      ref: string;
+
+      /**
+       * RESERVED. Setting it is currently a config error: this build cannot verify sigstore
+       * signatures. The mandatory `hash` verifies the module bytes.
+       */
+      signer?: OCISigner;
     }
 
     /**
