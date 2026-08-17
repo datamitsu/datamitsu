@@ -79,6 +79,15 @@ jobs:
       #     (the signed file) — it would otherwise ship unverifiable.
       - name: Assert WASM is in checksums.txt
         run: .github/scripts/assert-wasm-checksum.sh
+      # 2c. Stage the module into dist/ so it travels with release-artifacts and
+      #     can be attached to an (optional) unstable prerelease. GoReleaser
+      #     uploads it straight from parsers/target on a real release, and
+      #     --clean wipes dist/ before the build, so the copy has to happen
+      #     here — after GoReleaser, under the exact name checksums.txt (the
+      #     signed file) records, so a published asset always matches its
+      #     signed entry.
+      - name: Stage the WASM parser module into dist/
+        run: .github/scripts/stage-wasm-artifact.sh
       # 3. Attest build artifacts
       - if: ${{ !env.ACT }}
         name: Attest build artifacts
@@ -440,13 +449,27 @@ jobs:
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
           draft: false
+          # The .wasm parser module is the reason this job is worth enabling: it
+          # is the one artifact a wrapper config must fetch by url+hash, and an
+          # unstable build otherwise publishes it nowhere, so an unreleased
+          # parser module cannot be exercised downstream. checksums.txt carries
+          # its SHA-256, and --snapshot skips only the release pipe (not the
+          # signs one, which unstable does not --skip), so the cosign bundle is
+          # produced here too and travels with it.
           files: |
             dist/*.tar.gz
             dist/*.zip
             dist/checksums.txt
+            dist/checksums.txt.sigstore.json
+            dist/datamitsu_parsers_*.wasm
           name: Unstable Build ${{ needs.generate-unstable-version.outputs.short_sha }}
           prerelease: true
+          # The tag is created here, and without a commitish GitHub points it at
+          # the default branch head — not at the ref this build was dispatched
+          # for. An unstable build of a feature branch would then publish assets
+          # under a tag naming someone else's commit.
           tag_name: ${{ needs.generate-unstable-version.outputs.tag_name }}
+          target_commitish: ${{ needs.determine-release-type.outputs.checkout_ref }}
   publish-npm:
     if: |
       always() &&
@@ -753,7 +776,7 @@ on:
     inputs:
       create_github_prerelease:
         default: false
-        description: "Create GitHub prerelease (for debugging binaries/checksums)"
+        description: "Create GitHub prerelease (binaries, checksums and the WASM parser module, for downstream testing)"
         required: false
         type: boolean
       ref:
