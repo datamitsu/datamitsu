@@ -440,7 +440,17 @@ jobs:
           - debian
           - alpine
   publish-github:
+    # always() is load-bearing, not decoration. An unstable run skips
+    # validate-stable, and GitHub propagates a skip down the whole dependency
+    # chain — only a job whose own condition says "continue anyway" escapes it.
+    # build escapes with always(); this job did not, so it was skipped on every
+    # unstable dispatch no matter how the prerelease box was set, which is why
+    # no unstable prerelease had ever been created. Every other publish-* job
+    # here already carries this preamble; keep it.
     if: |
+      always() &&
+      !cancelled() &&
+      needs.build.result == 'success' &&
       needs.determine-release-type.outputs.is_unstable == 'true' &&
       needs.determine-release-type.outputs.want_prerelease == 'true'
     name: Publish to GitHub Releases
@@ -477,7 +487,14 @@ jobs:
         name: Create GitHub Release
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
-          draft: false
+          # This repository has immutable releases enabled, which allows asset
+          # uploads only while a release is still a draft — publishing first and
+          # uploading after fails every asset with "Cannot upload asset ... to an
+          # immutable release". So: create the draft, upload into it, publish it
+          # in the step below. The release is not visible to anyone until that
+          # step runs, which also means a failed upload leaves no half-populated
+          # prerelease behind.
+          draft: true
           # The .wasm parser module is the reason this job is worth enabling: it
           # is the one artifact a wrapper config must fetch by url+hash, and an
           # unstable build otherwise publishes it nowhere, so an unreleased
@@ -500,6 +517,16 @@ jobs:
           # under a tag naming someone else's commit.
           tag_name: ${{ needs.generate-unstable-version.outputs.tag_name }}
           target_commitish: ${{ needs.determine-release-type.outputs.checkout_ref }}
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.generate-unstable-version.outputs.tag_name }}
+        if: ${{ !env.ACT }}
+        name: Publish the drafted prerelease
+        # Flipping draft off is what creates the tag and makes the assets
+        # downloadable. --prerelease is repeated rather than assumed: publishing
+        # is the moment the release becomes visible, and a prerelease that
+        # published itself as "latest" would move the release consumers resolve.
+        run: gh release edit "$TAG" --draft=false --prerelease --repo "$GITHUB_REPOSITORY"
   publish-npm:
     if: |
       always() &&
