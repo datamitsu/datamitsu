@@ -39,7 +39,8 @@
   "files": [
     "bin",
     "lib",
-    "get-exe.js"
+    "get-exe.js",
+    "parsers-oci.json"
   ],
   "scripts": {
     "test": "pnpm --filter @datamitsu/programmable-api-js test"

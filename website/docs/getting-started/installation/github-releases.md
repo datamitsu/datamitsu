@@ -15,8 +15,12 @@ Every stable release on the
   `checksums.txt.sigstore.json`, its keyless
   [cosign](https://docs.sigstore.dev/) signature
 - **SBOMs** — one per archive
-- **`datamitsu_parsers_<version>.wasm`** — the parser module (downloaded by the
-  CLI on demand, verified against the signed `checksums.txt`)
+- **`datamitsu_parsers_<version>.wasm`** — the parser module, downloaded by the
+  CLI on demand and verified against the SHA-256 the config pins (the value
+  `checksums.txt` records). This asset is one of two channels: the same module
+  is also published as an OCI artifact at
+  `ghcr.io/datamitsu/datamitsu-parsers`, which a config can pin instead — see
+  [Output Parsers](../../reference/configuration-api.md#output-parsers-parsers)
 - **`datamitsu-<version>.vsix`** — the [VS Code extension](./vscode.md) for
   manual installs
 
@@ -41,6 +45,17 @@ sudo rpm -i datamitsu_${VERSION}_linux_amd64.rpm
 # Alpine
 sudo apk add --allow-untrusted datamitsu_${VERSION}_linux_amd64.apk
 ```
+
+## Unstable prereleases
+
+Unstable builds are dispatched by hand (Actions > Release) and the GitHub
+prerelease is an opt-in checkbox on that form, off by default. When it is
+ticked, the prerelease carries the archives, `checksums.txt` with its cosign
+bundle, the `.wasm` parser module built from that commit, and
+`parsers-oci.json` — the registry pin (`ref`, `digest`, `sha256`) for that same
+module, which every unstable build publishes to
+`ghcr.io/datamitsu/datamitsu-parsers-unstable`. These builds exist for testing
+something that has not shipped yet; install one only for that.
 
 ## Verify downloads
 

@@ -1,8 +1,8 @@
 # Plan: OCI parser artifacts — closing the last github.com hole in the single-registry promise
 
-**Status:** design-doc v1.0 — adjudicated against three adversarial code reviews, every decisive
-claim re-verified in the tree. **Ready to hand off for implementation; no open research.**
-**Date:** 2026-08-17.
+**Status:** IMPLEMENTED — phases 0-5 and 7 shipped in the core; phase 6 (the wrapper repo) is not
+part of this repository and remains open. See "What shipped" below for the deviations.
+**Date:** 2026-08-17 (design), 2026-08-17 (implementation).
 **Related:** `docs/plans/2026-06-09-oci-bundles.md` (the bundle format contract this reuses),
 `internal/ocidigest`, `internal/ocibundle`, `internal/parsermanager`, `.github/workflows/release.yml`.
 
@@ -13,6 +13,47 @@ claim re-verified in the tree. **Ready to hand off for implementation; no open r
 > prerequisites** — three of them are pre-existing security/correctness defects the feature would
 > otherwise inherit and amplify. Two draft claims were **factually wrong** and are corrected here
 > (§14).
+
+---
+
+## What shipped, and where it deviates from this plan
+
+Recorded at implementation time so the next reader does not have to diff the plan against the tree.
+
+**Shipped as designed:** phase 0 (PRs #247, #251, #252), phase 1 (#248), and phases 2, 3, 4, 5 and 7
+in one arc. The locked decisions in §2 all held; nothing in §11 was reopened.
+
+**Deviations, each with its reason:**
+
+1. **`dist/parsers-oci.json` is NOT added to `.goreleaser.yml` `release.extra_files` (§7.7).** It
+   cannot be: goreleaser runs inside `build`, and the manifest digest the file records does not
+   exist until `publish-parsers-oci` has pushed. The record reaches consumers by two routes that do
+   work — the launcher npm package (`packaging/npm/datamitsu/`, listed in its `files`) and the
+   unstable prerelease, which downloads it as a separate job artifact.
+2. **`ValidateOCI`'s signer rejection replaced the identity/issuer checks rather than joining
+   them** (§2.6). Any shape of `signer` is now rejected, complete or not: the rejection is about the
+   field being present at all. `ocibundle/seed.go` and `cmd/store.go` keep their own signer handling
+   as defense in depth for non-config callers of the exported `SeedFromLayout`.
+3. **The parsermanager dispatch goes through a `fetchOCIModule` package variable**, not a direct
+   call (§5 step 4). `ociartifact`'s own `newClient` seam is unexported and unreachable from
+   parsermanager, so without this the dispatch, the post-fetch verification and the store publish
+   would have had no hermetic test at all.
+4. **The gated e2e cases skip rather than fail** when the vendored config declares no
+   registry-sourced parser (§12). The fixture is the wrapper's _published_ config, so until phase 6
+   ships a pin there is nothing real to exercise; a hardcoded ref would have tested a pin nobody
+   uses.
+5. **Docker Hub mirroring is deferred** (§7.5, option 2), as the plan recommended. GHCR is the only
+   parser channel today, matching unstable images, which already never reach Docker Hub.
+6. **`internal/dockerfile` gained `Plan.RegistrySourcedParsers`** so `devtools dockerfile` warns
+   when a generated parser stage would need registry egress from inside buildkit (§10, phase 3).
+
+**Still open (not this repository):** phase 6 — the wrapper's `parsers.ts` placeholder,
+`inject-oci-pin.ts`, `sync-datamitsu-version.ts`, the `test-fresh-init.ts` matrix leg, and the
+`docs/get-started/oci-bundle.md` update, all under `shibanet0/datamitsu-config`.
+
+**Human prerequisite, unchanged:** an org owner has to create `datamitsu-parsers` and
+`datamitsu-parsers-unstable` as **public** GHCR packages. The first release will otherwise fail at
+the anonymous-pull check — which is exactly what that check exists for (§7.4, §13.3).
 
 ---
 

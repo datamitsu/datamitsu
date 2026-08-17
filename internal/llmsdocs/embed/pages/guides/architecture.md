@@ -35,13 +35,13 @@ graph LR
 
 Each stage has its own detailed documentation:
 
-| Component                            | What It Does                                 | Key Concepts                                                   |
-| ------------------------------------ | -------------------------------------------- | -------------------------------------------------------------- |
-| [Task Planning](./planner.md)        | Groups files into prioritized task batches   | Priority chunking, overlap detection, CWD-subtree restriction  |
-| [Parallel Execution](./execution.md) | Runs tasks with fail-fast semantics          | Two-layer model, context cancellation, progress tracking       |
-| [File Discovery](./discovery.md)     | Walks the repo respecting ignore rules       | .gitignore-aware traversal, project auto-detection             |
-| [Caching Strategy](./caching.md)     | Tracks per-file results for incremental runs | XXH3-128 invalidation keys, separate lint/fix tracking         |
-| [WASM Output Parsers](./parsers.md)  | Sandboxed parsers + formatting diff-in-core  | Signed Rust→WASM, SHA-256 trust, wazero, line-based Myers diff |
+| Component                            | What It Does                                 | Key Concepts                                                      |
+| ------------------------------------ | -------------------------------------------- | ----------------------------------------------------------------- |
+| [Task Planning](./planner.md)        | Groups files into prioritized task batches   | Priority chunking, overlap detection, CWD-subtree restriction     |
+| [Parallel Execution](./execution.md) | Runs tasks with fail-fast semantics          | Two-layer model, context cancellation, progress tracking          |
+| [File Discovery](./discovery.md)     | Walks the repo respecting ignore rules       | .gitignore-aware traversal, project auto-detection                |
+| [Caching Strategy](./caching.md)     | Tracks per-file results for incremental runs | XXH3-128 invalidation keys, separate lint/fix tracking            |
+| [WASM Output Parsers](./parsers.md)  | Sandboxed parsers + formatting diff-in-core  | Rust→WASM, SHA-256 trust, https or OCI source, wazero, Myers diff |
 
 ## Reading Order
 

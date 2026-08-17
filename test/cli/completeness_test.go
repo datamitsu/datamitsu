@@ -59,6 +59,7 @@ var testedLeafCommands = map[string]string{
 	"store clear":                  "TestStoreClear",
 	"store import":                 "TestStoreImportArgValidation",
 	"store path":                   "TestStorePath",
+	"store refs":                   "TestStoreRefsPopulated / TestStoreRefsEmpty",
 	"store seed":                   "TestStoreSeedArgValidation",
 	"store status":                 "TestStoreStatusNoOCI",
 	"version":                      "TestVersionGolden",

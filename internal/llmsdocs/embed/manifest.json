@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 50,
-  "pageSetHash": "3d4a9d9c95b65b812aa23ea769828ef5",
+  "pageSetHash": "cdee658d485991feb9aedbc7261c7a96",
   "pages": [
     {
       "slug": "about",
@@ -96,8 +96,8 @@
       "url": "https://datamitsu.com/docs/getting-started/installation/github-releases.md",
       "title": "GitHub Releases",
       "description": "Download datamitsu binaries, deb/rpm/apk packages, and verification files directly from GitHub Releases",
-      "bytes": 2432,
-      "contentHash": "6c0a35dbbb08ecce428a62dfdeec46c4"
+      "bytes": 3312,
+      "contentHash": "033d0c8ceedd4db2c94cfb59c1ab387a"
     },
     {
       "slug": "getting-started/installation/homebrew",
@@ -226,17 +226,17 @@
       "url": "https://datamitsu.com/docs/guides/architecture/index.md",
       "title": "Internal Architecture",
       "description": "Overview of datamitsu's internal execution model - file discovery, task planning, parallel execution, and caching",
-      "bytes": 3209,
-      "contentHash": "bcfaaeadb99831d89dd0c9101cdb5721"
+      "bytes": 3230,
+      "contentHash": "97f037ab916eeb5d9295f23660e977ed"
     },
     {
       "slug": "guides/architecture/parsers",
       "aliases": [],
       "url": "https://datamitsu.com/docs/guides/architecture/parsers.md",
       "title": "WASM Output Parsers",
-      "description": "How datamitsu declares, builds, signs, delivers, downloads, and loads sandboxed Rust→WASM output parsers, and how the line-based diff-in-core powers formatting",
-      "bytes": 12963,
-      "contentHash": "959e42c8c0883c19fb7d90fd79950d41"
+      "description": "How datamitsu declares, builds, delivers over two channels, verifies, and loads sandboxed Rust→WASM output parsers, and how the line-based diff-in-core powers formatting",
+      "bytes": 26325,
+      "contentHash": "dc32a9afdbb4f0ec582ddbc81eb6970b"
     },
     {
       "slug": "guides/architecture/planner",
@@ -289,8 +289,8 @@
       "url": "https://datamitsu.com/docs/guides/oci-bundles.md",
       "title": "OCI Bundles",
       "description": "An OCI bundle packages the datamitsu tool store as a standard OCI image: one layer per store subtree (a binary, a runtime, a runtime-managed app, or a WASM output-parser module), annotated so datamitsu can pull exactly the pieces it needs — **without docker or podman**. The bundle is a cache accelerator and an airgap seed, not a replacement for resolution: whatever is in the bundle is taken from it, whatever is not gets downloaded the usual way.",
-      "bytes": 7397,
-      "contentHash": "d96f6ec9d5b782ea261bef06c97c116c"
+      "bytes": 12452,
+      "contentHash": "385caf1a66d12a3e286dec6c604c8ecb"
     },
     {
       "slug": "guides/runtime-management",
@@ -307,8 +307,8 @@
       "url": "https://datamitsu.com/docs/guides/supply-chain-security.md",
       "title": "Supply Chain Security",
       "description": "How datamitsu enforces supply chain integrity for pnpm, UV, and Go dependencies",
-      "bytes": 14802,
-      "contentHash": "f8d364da08a73cee43190fdec86a8fc2"
+      "bytes": 18554,
+      "contentHash": "3b449bf71932862f745e07781e7259b2"
     },
     {
       "slug": "guides/tooling-system",
@@ -406,8 +406,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 48362,
-      "contentHash": "2095884744593fe7a6bdbfea8c2d84f4"
+      "bytes": 50238,
+      "contentHash": "897066b6418f9bf284674a0170c672d4"
     },
     {
       "slug": "reference/comparison",
@@ -424,8 +424,8 @@
       "url": "https://datamitsu.com/docs/reference/configuration-api.md",
       "title": "Configuration API",
       "description": "Complete reference for the datamitsu configuration API",
-      "bytes": 37488,
-      "contentHash": "aac7bed3da6ac5fae16771dcce9e2439"
+      "bytes": 43843,
+      "contentHash": "8eee1d16f159eb9d744bb44f39273199"
     },
     {
       "slug": "reference/ignore-rules",

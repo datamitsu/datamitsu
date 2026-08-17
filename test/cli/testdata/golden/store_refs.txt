@@ -1,0 +1,7 @@
+ghcr.io/datamitsu/datamitsu-parsers@sha256:6666666666666666666666666666666666666666666666666666666666666666
+ghcr.io/datamitsu/example-bundle@sha256:4444444444444444444444444444444444444444444444444444444444444444
+https://example.test/legacy.wasm
+https://example.test/node-linux-amd64.tar.gz
+https://example.test/prettier-completions.tar.gz
+https://example.test/shellcheck-darwin-arm64.tar.gz
+https://example.test/shellcheck-linux-amd64.tar.gz
