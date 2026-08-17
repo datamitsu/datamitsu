@@ -215,11 +215,24 @@ jobs:
       checkout_ref: ${{ steps.detect.outputs.checkout_ref }}
       is_stable: ${{ steps.detect.outputs.is_stable }}
       is_unstable: ${{ steps.detect.outputs.is_unstable }}
+      want_prerelease: ${{ steps.detect.outputs.want_prerelease }}
     runs-on: ubuntu-latest
     steps:
       - id: detect
         name: Detect release type
         run: |
+          # Resolve the prerelease request here rather than in a job-level `if:`.
+          # A `type: boolean` input reaches github.event.inputs as a string but
+          # the inputs context as a real boolean, and in expression syntax
+          # `true == 'true'` is FALSE — so a gate written against the wrong
+          # spelling skips the job with the box ticked and says nothing about
+          # why. In the shell both spellings interpolate to "true"/"false", and
+          # the answer lands in the log where a reader can see it.
+          WANT_PRERELEASE="${{ inputs.create_github_prerelease }}"
+          [[ "$WANT_PRERELEASE" == "true" ]] || WANT_PRERELEASE=false
+          echo "want_prerelease=$WANT_PRERELEASE" >> $GITHUB_OUTPUT
+          echo "GitHub prerelease requested: $WANT_PRERELEASE"
+
           if [[ "${{ github.event_name }}" == "push" ]]; then
             # Tag push → stable
             echo "is_stable=true" >> $GITHUB_OUTPUT
@@ -243,6 +256,12 @@ jobs:
             echo "is_unstable=true" >> $GITHUB_OUTPUT
             echo "checkout_ref=${{ github.event.inputs.ref }}" >> $GITHUB_OUTPUT
             echo "Detected: Unstable release"
+            if [[ "$WANT_PRERELEASE" != "true" ]]; then
+              # An unstable build publishes npm and images unconditionally, so
+              # "no release appeared" reads as a broken workflow rather than a
+              # box left unchecked. Say so where the run summary shows it.
+              echo "::notice title=No GitHub prerelease::create_github_prerelease was not set, so no prerelease (and no WASM parser module asset) is published for this build. Re-run the workflow with the checkbox ticked to publish one."
+            fi
           fi
   generate-unstable-version:
     if: |
@@ -423,7 +442,7 @@ jobs:
   publish-github:
     if: |
       needs.determine-release-type.outputs.is_unstable == 'true' &&
-      github.event.inputs.create_github_prerelease == 'true'
+      needs.determine-release-type.outputs.want_prerelease == 'true'
     name: Publish to GitHub Releases
     needs:
       - build
