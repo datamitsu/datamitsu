@@ -381,6 +381,8 @@ export default defineConfig((config) => ({
     "blackbox",
     "GOCOVERDIR",
     "clitest",
+    // Go package that strips git's hook variables from child git processes.
+    "gitenv",
     "covermode",
     "covdata",
     "textfmt",

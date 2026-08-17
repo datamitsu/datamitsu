@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/gitenv"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"github.com/datamitsu/datamitsu/internal/target"
 	"github.com/datamitsu/datamitsu/internal/traverser"
@@ -182,7 +183,7 @@ func GetGitRoot(ctx context.Context) (string, error) {
 				args = append([]string{"-C", current}, args...)
 			}
 			cmd := exec.CommandContext(gctx, "git", args...)
-			cmd.Env = os.Environ()
+			cmd.Env = gitenv.Environ()
 			cmd.Dir = ex
 
 			out, err := cmd.Output()
@@ -200,7 +201,7 @@ func GetGitRoot(ctx context.Context) (string, error) {
 				args = append([]string{"-C", current}, args...)
 			}
 			cmd := exec.CommandContext(gctx, "git", args...)
-			cmd.Env = os.Environ()
+			cmd.Env = gitenv.Environ()
 			cmd.Dir = ex
 
 			out, err := cmd.Output()
