@@ -98,6 +98,10 @@ func init() {
 		"Allow a tag reference: resolve it to a digest first and print the digest")
 	storeStatusCmd.Flags().BoolVar(&storeStatusJSON, "json", false,
 		"Emit the status as JSON")
+	storeRefsCmd.Flags().BoolVar(&storeRefsJSON, "json", false,
+		"Emit the references as JSON, including each artifact's mandatory hash")
+	storeRefsCmd.Flags().BoolVar(&storeRefsOCIOnly, "oci-only", false,
+		"List only OCI references, omitting the hash-pinned https downloads")
 	storeImportCmd.Flags().StringVar(&storeImportDigest, "digest", "",
 		"Bundle digest to import (sha256:<64 hex>); defaults to the config's oci.digest")
 
@@ -106,6 +110,7 @@ func init() {
 	storeCmd.AddCommand(storeSeedCmd)
 	storeCmd.AddCommand(storeStatusCmd)
 	storeCmd.AddCommand(storeImportCmd)
+	storeCmd.AddCommand(storeRefsCmd)
 	rootCmd.AddCommand(storeCmd)
 }
 

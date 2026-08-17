@@ -1,0 +1,26 @@
+{
+  "annotations": {
+    "org.opencontainers.image.description": "datamitsu WASM output-parser module",
+    "org.opencontainers.image.source": "https://github.com/datamitsu/datamitsu"
+  },
+  "artifactType": "application/vnd.datamitsu.parsers.v1+wasm",
+  "config": {
+    "digest": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "mediaType": "application/vnd.oci.empty.v1+json",
+    "size": 2
+  },
+  "layers": [
+    {
+      "annotations": {
+        "com.datamitsu.kind": "parser",
+        "com.datamitsu.parsers-version": "0.1.16",
+        "org.opencontainers.image.title": "datamitsu_parsers_0.1.16.wasm"
+      },
+      "digest": "sha256:612a5c2da01d74a35fc0a27ac01ac9ae92442cbdc8bc6ddddee4a32642a9d73f",
+      "mediaType": "application/wasm",
+      "size": 385667
+    }
+  ],
+  "mediaType": "application/vnd.oci.image.manifest.v1+json",
+  "schemaVersion": 2
+}

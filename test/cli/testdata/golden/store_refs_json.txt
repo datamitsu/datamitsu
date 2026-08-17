@@ -1,0 +1,51 @@
+{
+  "oci": [
+    {
+      "kind": "parser",
+      "name": "core",
+      "ref": "ghcr.io/datamitsu/datamitsu-parsers",
+      "digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
+    },
+    {
+      "kind": "bundle",
+      "name": "oci",
+      "ref": "ghcr.io/datamitsu/example-bundle",
+      "digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+    }
+  ],
+  "https": [
+    {
+      "kind": "parser",
+      "name": "legacy",
+      "url": "https://example.test/legacy.wasm",
+      "hash": "7777777777777777777777777777777777777777777777777777777777777777"
+    },
+    {
+      "kind": "runtime-binary",
+      "name": "node",
+      "url": "https://example.test/node-linux-amd64.tar.gz",
+      "hash": "9999999999999999999999999999999999999999999999999999999999999999",
+      "platform": "linux/amd64/glibc"
+    },
+    {
+      "kind": "app-archive",
+      "name": "prettier:completions",
+      "url": "https://example.test/prettier-completions.tar.gz",
+      "hash": "3333333333333333333333333333333333333333333333333333333333333333"
+    },
+    {
+      "kind": "app-binary",
+      "name": "shellcheck",
+      "url": "https://example.test/shellcheck-darwin-arm64.tar.gz",
+      "hash": "2222222222222222222222222222222222222222222222222222222222222222",
+      "platform": "darwin/arm64/unknown"
+    },
+    {
+      "kind": "app-binary",
+      "name": "shellcheck",
+      "url": "https://example.test/shellcheck-linux-amd64.tar.gz",
+      "hash": "1111111111111111111111111111111111111111111111111111111111111111",
+      "platform": "linux/amd64/glibc"
+    }
+  ]
+}

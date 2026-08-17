@@ -62,6 +62,16 @@ inherits is the single source of truth in
 [test/e2e/source.go](test/e2e/source.go) — bump and re-download it when a new
 `datamitsu-config` release is cut.
 
+[test/e2e/parsers_oci_test.go](test/e2e/parsers_oci_test.go) adds the two cases
+for a registry-sourced parser module: one pulls it and calls the module's own
+`describe` export, the other prefetches it and then repeats the run under
+`DATAMITSU_OFFLINE=1`, which is the only end-to-end proof of the airgap claim.
+Both drive `devtools parsers list` rather than `lint`, because a parser failure
+degrades to raw output and would leave `lint` green. Both skip — with the reason
+— while the vendored config still pins its parser by `url`: the fixture is the
+wrapper's published config, so this tier can only exercise a pin that already
+shipped.
+
 ## Testing an unreleased core in a real project (dev-link)
 
 Some behaviour only shows up through the full chain — core → wrapper config
@@ -97,9 +107,9 @@ pnpm link /path/to/your/wrapper-config-repo
 
 ### Local WASM parsers
 
-A parser module is normally fetched from the release by `url` + SHA-256. To run
-a locally built one, `task dev:link` prints a ready `parsers` entry pointing at
-the copy inside the linked package:
+A `parsers` entry declares exactly one source — a `url` or an `oci` pin — plus a
+mandatory SHA-256. To run a locally built module, `task dev:link` prints a ready
+entry pointing at the copy inside the linked package:
 
 ```js
 const parsers = {
@@ -129,6 +139,73 @@ Reads are further restricted to absolute paths pointing at regular files (no
 FIFOs or devices, which would hang or stream forever) and bounded by the same
 size ceiling as a download.
 
+### An unreleased module in downstream CI
+
+`file://` never leaves the machine that built the module, so a downstream
+project's CI cannot use it. That is what the `oci` source is for: the entry pins
+a registry artifact instead of a URL, and the same mandatory hash verifies the
+bytes.
+
+```js
+const parsers = {
+  core: {
+    hash: "0123…cdef",
+    oci: {
+      ref: "ghcr.io/datamitsu/datamitsu-parsers-unstable",
+      digest: "sha256:89ab…4567",
+    },
+  },
+};
+```
+
+The `ref`, the `digest` and the matching `sha256` all come from
+`parsers-oci.json`, which the release workflow writes after the registry push
+(the manifest digest does not exist before then) and ships inside
+`@datamitsu/datamitsu`, so a wrapper reads the pin out of `node_modules`
+instead of querying a registry.
+
+The two sources are mutually exclusive rather than a fallback chain — declaring
+both, or neither, fails at config load:
+
+```js
+// BAD: two sources in one entry — refused at load
+parsers: {
+  core: {
+    url: "file:///abs/path/to/datamitsu_parsers.wasm",
+    oci: { ref: "ghcr.io/datamitsu/datamitsu-parsers-unstable", digest: "sha256:89ab…4567" },
+    hash: "0123…cdef",
+  },
+}
+
+// GOOD: one source; the hash is the same value either way
+parsers: {
+  core: {
+    oci: { ref: "ghcr.io/datamitsu/datamitsu-parsers-unstable", digest: "sha256:89ab…4567" },
+    hash: "0123…cdef",
+  },
+}
+```
+
+Switching transports does not move the module: the parser store key is derived
+from the SHA-256 alone, so a local build, a release download, a registry pull
+and a bundle layer all land in one directory — and whatever is already there is
+re-hashed against the declared SHA-256 on every use and discarded when it does
+not match. A locally built module and a registry-pulled one are therefore
+interchangeable.
+
+Three things that surprise people when the fetch does not go the way they
+expect:
+
+- `--no-oci` / `DATAMITSU_NO_OCI` disables OCI bundle store **seeding**. It does
+  not disable a declared parser `oci` source, which is the only route to those
+  bytes. `DATAMITSU_OFFLINE=1` is the hard network gate.
+- `oci.signer` is rejected at config load, on parsers and on bundles alike. CI
+  cosign-signs the pushed manifest and that signature is verifiable out of band,
+  but this build carries no sigstore dependency and checks no signature itself.
+- A parser failure degrades silently to raw tool output, so CI that means to
+  validate a pin has to force the fetch and assert an exit code — for example
+  `datamitsu devtools parsers prefetch`.
+
 ## Releases
 
 Releases are automated via GitHub Actions ([release.yml](.github/workflows/release.yml)).
@@ -140,7 +217,9 @@ git tag v1.0.0
 git push origin v1.0.0
 ```
 
-Publishes: GitHub Release, npm, Docker (GHCR + Docker Hub), Homebrew cask.
+Publishes: GitHub Release, npm, Docker (GHCR + Docker Hub), Homebrew cask, and
+the WASM parser module as an OCI artifact at
+`ghcr.io/datamitsu/datamitsu-parsers` (tagged with the version, plus `latest`).
 
 ### Release candidate
 
@@ -149,20 +228,34 @@ git tag v1.0.0-rc.1
 git push origin v1.0.0-rc.1
 ```
 
-Same as stable, but Homebrew cask update is skipped (prerelease detected automatically).
+Same as stable, but Homebrew cask update is skipped (prerelease detected
+automatically) and the parser artifact is tagged with the rc version only —
+never `latest`.
 
 ### Unstable release
 
-Actions > Release > Run workflow > release_type: `unstable`.
+Actions > Release > Run workflow > release_type: `unstable`. No tag triggers one:
+`on.push.tags` matches `v1.2.3` and `v1.2.3-rc.N` only, so exercising an
+unreleased core downstream always starts with a human dispatch, followed by a
+wrapper dependency bump and a wrapper PR.
 
-Publishes: npm (`unstable` tag), Docker (GHCR only). No GitHub Release or Homebrew.
+Publishes: npm (`unstable` tag), Docker (GHCR only), and the WASM parser module
+as an OCI artifact at `ghcr.io/datamitsu/datamitsu-parsers-unstable`, tagged
+`unstable-<date>-<sha>`. No Homebrew.
+
+The GitHub prerelease stays opt-in: tick `create_github_prerelease` on the same
+form (off by default) to also attach the archives, `checksums.txt` with its
+cosign bundle, the `.wasm` module and `parsers-oci.json`. Because the module
+reaches the registry on every unstable run, the prerelease is a convenience for
+humans rather than the only way to get at an unreleased parser.
 
 ### Distribution channels
 
-| Channel        | Stable          | RC               | Unstable   |
-| -------------- | --------------- | ---------------- | ---------- |
-| GitHub Release | yes             | yes (prerelease) | opt-in     |
-| npm            | `latest` / `rc` | `rc`             | `unstable` |
-| Docker Hub     | yes             | yes              | no         |
-| GHCR           | yes             | yes              | yes        |
-| Homebrew       | yes             | no               | no         |
+| Channel              | Stable              | RC                  | Unstable                     |
+| -------------------- | ------------------- | ------------------- | ---------------------------- |
+| GitHub Release       | yes                 | yes (prerelease)    | opt-in                       |
+| npm                  | `latest` / `rc`     | `rc`                | `unstable`                   |
+| Docker Hub           | yes                 | yes                 | no                           |
+| GHCR                 | yes                 | yes                 | yes                          |
+| Parser module (GHCR) | `datamitsu-parsers` | `datamitsu-parsers` | `datamitsu-parsers-unstable` |
+| Homebrew             | yes                 | no                  | no                           |

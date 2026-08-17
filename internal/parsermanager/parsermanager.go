@@ -20,6 +20,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/hashutil"
 	"github.com/datamitsu/datamitsu/internal/logger"
+	"github.com/datamitsu/datamitsu/internal/ociartifact"
 
 	"github.com/tetratelabs/wazero"
 	"go.uber.org/zap"
@@ -294,8 +295,11 @@ func (m *Manager) ensureModule(ctx context.Context, name string) (string, error)
 	if !ok {
 		return "", fmt.Errorf("parser %q is not declared", name)
 	}
-	if p.URL == "" {
-		return "", fmt.Errorf("parser %q has no url", name)
+	switch {
+	case p.URL == "" && p.OCI == nil:
+		return "", fmt.Errorf("parser %q has no source (declare exactly one of url or oci)", name)
+	case p.URL != "" && p.OCI != nil:
+		return "", fmt.Errorf("parser %q declares both url and oci (they are mutually exclusive)", name)
 	}
 	if p.Hash == "" {
 		// Mirror the bundle/archive hash-mandatory rule: an empty hash is a
@@ -321,10 +325,7 @@ func (m *Manager) ensureModule(ctx context.Context, name string) (string, error)
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return nil, fmt.Errorf("create store dir: %w", err)
 		}
-		// allowLocalFile: a parser module is the one artifact developers rebuild
-		// constantly, so a config may point at a locally built .wasm via file://.
-		// The mandatory SHA-256 below is unchanged — only the transport differs.
-		tmpPath, err := binmanager.DownloadAndVerifySHA256(ctx, p.URL, p.Hash, dir, name, true)
+		tmpPath, err := fetchModule(ctx, name, p, dir)
 		if err != nil {
 			return nil, fmt.Errorf("download+verify: %w", err)
 		}
@@ -344,6 +345,49 @@ func (m *Manager) ensureModule(ctx context.Context, name string) (string, error)
 		return "", fmt.Errorf("parser %q: %w", name, err)
 	}
 	return wasmPath, nil
+}
+
+// fetchOCIModule pulls a registry-sourced module. It is a variable so tests can
+// exercise the dispatch, the post-fetch verification and the store publish
+// without a registry; production always calls straight through.
+var fetchOCIModule = ociartifact.FetchParserModule
+
+// fetchModule materializes the declared module into a temp file under dir and
+// returns its path; the caller publishes it with an atomic rename. Exactly one
+// source is declared (ensureModule has already checked), so this is a dispatch,
+// never a fallback chain: an air-gapped organization has to be able to prove
+// that no path here reaches github.com.
+//
+// Both branches leave the mandatory SHA-256 in charge of the content. The
+// registry branch adds the digest chain on top of it — it never substitutes
+// for it.
+func fetchModule(ctx context.Context, name string, p config.Parser, dir string) (string, error) {
+	if p.OCI == nil {
+		// allowLocalFile: a parser module is the one artifact developers rebuild
+		// constantly, so a config may point at a locally built .wasm via file://.
+		// The mandatory SHA-256 is unchanged — only the transport differs.
+		path, err := binmanager.DownloadAndVerifySHA256(ctx, p.URL, p.Hash, dir, name, true)
+		if err != nil {
+			return "", fmt.Errorf("download parser module: %w", err)
+		}
+		return path, nil
+	}
+
+	path, err := fetchOCIModule(ctx, p.OCI.Ref, p.OCI.Digest, p.Hash, dir, name)
+	if err != nil {
+		return "", fmt.Errorf("pull parser module: %w", err)
+	}
+	// Re-check the materialized file. Logically redundant — the manifest pivot
+	// compared the layer digest to this same hash, and PullBlob hashed the
+	// stream — and kept deliberately: it is the only check that names p.Hash
+	// AFTER the bytes exist on disk, so "the config hash is verified on every
+	// transport" stays true by grep rather than by reasoning. ~1 ms for 377 KiB,
+	// once per module.
+	if err := binmanager.VerifyFileHashPublic(path, p.Hash, binmanager.BinHashTypeSHA256); err != nil {
+		_ = os.Remove(path)
+		return "", fmt.Errorf("hash verification failed: %w", err)
+	}
+	return path, nil
 }
 
 // storedModuleIsValid reports whether the module already on disk is the one the

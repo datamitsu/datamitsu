@@ -9,7 +9,8 @@ import (
 // Capabilities is a parser module's self-description, returned by its WASM
 // `describe` export (parsers/datamitsu-parsers/src/capabilities.rs). The module
 // is the single source of truth for its version and the tools it can parse —
-// none of this is declared in datamitsu config, which carries only url+hash.
+// none of this is declared in datamitsu config, which carries only a source
+// and a hash.
 type Capabilities struct {
 	SchemaVersion int              `json:"schemaVersion"`
 	Module        string           `json:"module"`

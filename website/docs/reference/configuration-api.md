@@ -904,7 +904,7 @@ interface OCIRef {
   signer?: {
     identity: string; // sigstore certificate identity (e.g. a workflow ref)
     issuer: string; // OIDC issuer URL
-  };
+  }; // rejected at config load — see below
 }
 ```
 
@@ -924,33 +924,35 @@ Rules:
 
 - `ref` must include the registry host as its first segment — there is no default host and no docker.io shorthand. Tags and digests inside `ref` are rejected; content is pinned exclusively by `digest`.
 - `oci` chains through the layers **as a scalar**: the last layer that set or spread it wins, and the effective config holds at most one declaration. A layer that rebuilds its output without `{...input}` silently drops the inherited value (a debug log flags this); reset explicitly with `oci: undefined` or `oci: null`.
-- `signer` optionally pins the sigstore keyless identity of the bundle publisher. When set, pull must verify the signature before layout (not yet supported by the current builds — a set `signer` currently fails the seed rather than silently skipping the check).
+- `signer` is **rejected at config load**: `oci: signer is set but signature verification is not implemented in this build; remove signer (the pinned digest still verifies the bundle bytes)`. This build has no sigstore dependency and verifies no signatures at all, so a config that pins a signer would assert a guarantee the binary does not deliver. The field is reserved so the eventual implementation reuses one vocabulary across bundles and [parsers](#registry-source-oci). Previously a set `signer` loaded and failed later, at seed time; it now fails at load.
 
 See the [OCI Bundles guide](/docs/guides/oci-bundles) for the trust model and the seeding lifecycle.
 
 ## Output Parsers (`parsers`)
 
-Parsers are signed Rust→WASM modules that extract structured results from a
-tool's raw text output. A `parsers` entry is a **url+hash data artifact** —
-modeled on `ArchiveSpec`/`Bundle`, _not_ on an app: there is no runtime and no
-lockfile, because it is data, not a process. It is downloaded, SHA-256 verified,
+Parsers are Rust→WASM modules that extract structured results from a tool's raw
+text output. A `parsers` entry is a **hash-pinned data artifact** — modeled on
+`ArchiveSpec`/`Bundle`, _not_ on an app: there is no runtime and no lockfile,
+because it is data, not a process. It is fetched, SHA-256 verified,
 content-addressed in the store, and loaded into a sandboxed WASM runtime
 (wazero).
 
 ```typescript
 interface Parser {
-  url: string; // URL of the .wasm module
-  hash: string; // SHA-256 (64 lowercase hex) — mandatory
-  // No `version` field — see note below.
+  hash: string; // SHA-256 (64 lowercase hex) — mandatory for every source
+  url?: string; // URL of the .wasm module
+  oci?: ParserOCI; // registry-sourced module
+  // Exactly one of `url` or `oci`. No `version` field — see note below.
 }
 ```
 
-| Field  | Type     | Description                                                |
-| ------ | -------- | ---------------------------------------------------------- |
-| `url`  | `string` | URL of the `.wasm` module                                  |
-| `hash` | `string` | SHA-256 hash, 64 lowercase hex — **mandatory** (see below) |
+| Field  | Type        | Description                                                       |
+| ------ | ----------- | ----------------------------------------------------------------- |
+| `hash` | `string`    | SHA-256 hash, 64 lowercase hex — **mandatory** for every source   |
+| `url`  | `string`    | URL of the `.wasm` module. Exactly one of `url` or `oci`          |
+| `oci`  | `ParserOCI` | Module pulled from an OCI registry. Exactly one of `url` or `oci` |
 
-The entity is intentionally **url + hash only**. A module reports its own
+The entity is intentionally **source + hash only**. A module reports its own
 build-injected version (and the tools it parses) through its WASM `describe`
 export, surfaced by [`datamitsu devtools parsers list`](./cli-commands.md#devtools-parsers).
 The module is the single source of truth, so there is no `version` field to drift
@@ -967,19 +969,24 @@ function getConfig(input) {
       echo: {
         url: "https://github.com/owner/repo/releases/download/v1.2.3/datamitsu_parsers_1.2.3.wasm",
         hash: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-        version: "1.2.3",
       },
     },
   };
 }
 ```
 
-The SHA-256 `hash` is **mandatory** per the [security policy](#security-requirements)
-— an empty or malformed hash is a config error, not a warning. The module ships
-only as a versioned asset on the GitHub Release (`datamitsu_parsers_<version>.wasm`);
-config maintainers take the `url` from that release asset and the `hash` from the
-signed `checksums.txt`. See
-[WASM Output Parsers](../guides/architecture/parsers.md) for the trust model.
+The SHA-256 `hash` is **mandatory** for every source per the
+[security policy](#security-requirements) — an empty or malformed hash is a
+config error, not a warning (`parser "echo": hash is required (SHA-256)` and
+`parser "echo": hash must be a valid SHA-256 hex string (64 lowercase hex characters)`).
+
+The module is delivered through two channels. As a versioned asset on the GitHub
+Release (`datamitsu_parsers_<version>.wasm`): take the `url` from that release
+asset and the `hash` from the release's signed `checksums.txt`. Or as an OCI
+artifact in a registry: take `oci.ref` and `oci.digest` from the published
+artifact, with the same `hash` — see [Registry source (`oci`)](#registry-source-oci)
+below. See [WASM Output Parsers](../guides/architecture/parsers.md) for the trust
+model.
 
 ```javascript
 // BAD: missing hash — refused at config load
@@ -995,6 +1002,121 @@ parsers: {
   },
 }
 ```
+
+### One source per entry (`url` or `oci`)
+
+An entry declares **exactly one** source. Both, or neither, is a config error at
+load:
+
+- neither — `parser "echo": exactly one of url or oci is required`
+- both — `parser "echo": url and oci are mutually exclusive (declare one source; use a config layer to override)`
+
+This is deliberately not a fallback chain. An air-gapped organization has to be
+able to prove there is no `github.com` egress left, which a "try the registry,
+then the URL" declaration would quietly undo. Switching an entry to a registry is
+what config layers are for: a downstream layer replaces the entry with the `oci`
+form instead of adding a second source to it.
+
+```javascript
+// BAD: two sources in one entry — refused at config load
+parsers: {
+  echo: {
+    url: "https://example.com/datamitsu_parsers.wasm",
+    oci: { ref: "ghcr.io/datamitsu/datamitsu-parsers", digest: "sha256:89ab…4567" },
+    hash: "0123…cdef",
+  },
+}
+
+// GOOD: a downstream layer replaces the entry, keeping the same hash
+function getConfig(input) {
+  return {
+    ...input,
+    parsers: {
+      ...input.parsers,
+      echo: {
+        oci: { ref: "ghcr.io/datamitsu/datamitsu-parsers", digest: "sha256:89ab…4567" },
+        hash: input.parsers.echo.hash,
+      },
+    },
+  };
+}
+```
+
+### Registry source (`oci`)
+
+`oci` pulls the module from an OCI registry instead of over HTTPS, so an
+organization that mirrors one registry gets diagnostics parsing along with
+everything else. It mirrors the [OCI bundle](#oci-bundle-oci) reference
+vocabulary — same grammar, same digest form, same `signer` rejection.
+
+```typescript
+interface ParserOCI {
+  ref: string; // full reference incl. registry host, e.g. "ghcr.io/datamitsu/datamitsu-parsers"
+  digest: string; // "sha256:" + 64 lowercase hex characters — mandatory
+  signer?: {
+    identity: string; // sigstore certificate identity (e.g. a workflow ref)
+    issuer: string; // OIDC issuer URL
+  }; // rejected at config load — see below
+}
+```
+
+| Field    | Type        | Description                                                                                                         |
+| -------- | ----------- | ------------------------------------------------------------------------------------------------------------------- |
+| `ref`    | `string`    | Full repository reference including the registry host. Tags and digests inside the ref are rejected — **mandatory** |
+| `digest` | `string`    | Artifact manifest digest, `"sha256:"` + 64 lowercase hex — **mandatory**                                            |
+| `signer` | `OCISigner` | **Rejected at config load** — this build verifies no signatures                                                     |
+
+```javascript
+function getConfig(input) {
+  return {
+    ...input,
+    parsers: {
+      echo: {
+        oci: {
+          ref: "ghcr.io/datamitsu/datamitsu-parsers",
+          digest: "sha256:89abcdef0123456789abcdef0123456789abcdef0123456789abcdef01234567",
+        },
+        hash: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      },
+    },
+  };
+}
+```
+
+Rules:
+
+- `ref` must include the registry host as its first segment — there is no default
+  host and no docker.io shorthand. A ref without a host is rejected with
+  `oci.ref … must include the registry host as its first segment (e.g. ghcr.io/owner/repo)`,
+  and a tag or a digest inside the ref with
+  `oci.ref … is not a valid repository reference (expected host[:port]/path, lowercase, no tag and no digest)`.
+- Content is pinned exclusively by `digest`, which is mandatory:
+  `oci.digest is required (sha256:<64 hex>)`, or
+  `oci.digest … must be "sha256:" followed by 64 lowercase hex characters` when it
+  is malformed.
+- `hash` stays mandatory and does double duty: it is **also** the expected layer
+  blob digest. The artifact's single layer must have digest `"sha256:" + hash`, so
+  the registry digest chain and the config hash are the same number. A manifest
+  that points at other content is rejected before one payload byte is requested,
+  and the same `hash` is checked again on the downloaded stream and once more on
+  the file on disk.
+- `signer` is rejected at load, on this surface and on the bundle's:
+  `oci.signer is set but signature verification is not implemented in this build`.
+  datamitsu verifies no signatures at all; the mandatory `hash` is what guarantees
+  the bytes.
+
+Because the store key under `{store}/.parsers/{name}/` is derived from `hash`
+alone, an entry resolves to **one** store directory however the module arrived — a release URL, a registry, or a
+layer of an OCI bundle — which is what makes a bundle-seeded and a registry-pulled
+module interchangeable. A module already on disk is re-hashed against the declared
+`hash` before use and discarded when it does not match, whatever put it there.
+
+[`--no-oci` / `DATAMITSU_NO_OCI`](./cli-commands.md#environment-variables) disables OCI
+_bundle_ seeding, an accelerator; it does **not** disable a declared parser `oci`
+source, which is the only route to those bytes. `DATAMITSU_OFFLINE` is the single
+hard network gate. [`datamitsu store refs`](./cli-commands.md#store-refs) lists
+every artifact the effective config pins, so a mirror can be filled without
+guessing.
 
 ## LSP Servers (`lsp`) — reserved
 
@@ -1116,6 +1238,7 @@ All artifacts downloaded from the internet must have a SHA-256 hash specified:
 - JVM apps: `jarHash` field
 - External archives: `hash` field
 - Node runtime (pnpm): `pnpmHash` field
-- Output parsers: `hash` field on each `parsers` entry
+- Output parsers: `hash` field on each `parsers` entry, whichever source it declares
+- OCI-sourced parsers: `oci.digest` on the entry, **plus** the same mandatory `hash` — which the artifact's single layer must carry as its blob digest
 
 Missing or empty hashes are treated as configuration errors.

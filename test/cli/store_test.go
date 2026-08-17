@@ -16,6 +16,7 @@ var expectedStoreSubcommands = []string{
 	"clear",
 	"import",
 	"path",
+	"refs",
 	"seed",
 	"status",
 }
@@ -242,4 +243,114 @@ func TestStoreImportArgValidation(t *testing.T) {
 			}
 		})
 	}
+}
+
+// refsConfigJS declares one of everything `store refs` reports: a bundle pin, a
+// registry-sourced parser, a url-sourced parser, a per-platform binary app and
+// a node app carrying an external archive. It exists to prove the traversal reaches every entity —
+// the minimal config would exercise only the empty case.
+func refsConfigJS() string {
+	return `globalThis.getBeforeConfigs = () => [];
+globalThis.getConfig = () => ({
+  apps: {
+    shellcheck: {
+      binary: {
+        binaries: {
+          linux: { amd64: { glibc: { url: "https://example.test/shellcheck-linux-amd64.tar.gz", hash: "` + strings.Repeat("11", 32) + `", contentType: "tar.gz" } } },
+          darwin: { arm64: { unknown: { url: "https://example.test/shellcheck-darwin-arm64.tar.gz", hash: "` + strings.Repeat("22", 32) + `", contentType: "tar.gz" } } },
+        },
+      },
+    },
+    prettier: {
+      node: { packageName: "prettier", version: "3.8.3", binPath: "bin/prettier.cjs", runtime: "node", lockFile: "{}" },
+      archives: {
+        completions: { url: "https://example.test/prettier-completions.tar.gz", hash: "` + strings.Repeat("33", 32) + `", format: "tar.gz" },
+      },
+    },
+  },
+  oci: { ref: "ghcr.io/datamitsu/example-bundle", digest: "sha256:` + strings.Repeat("44", 32) + `" },
+  parsers: {
+    core: { hash: "` + strings.Repeat("55", 32) + `", oci: { ref: "ghcr.io/datamitsu/datamitsu-parsers", digest: "sha256:` + strings.Repeat("66", 32) + `" } },
+    legacy: { hash: "` + strings.Repeat("77", 32) + `", url: "https://example.test/legacy.wasm" },
+  },
+  runtimes: {
+    node: {
+      kind: "node",
+      mode: "managed",
+      node: { nodeVersion: "22.12.0", pnpmVersion: "11.20.0", pnpmHash: "` + strings.Repeat("88", 32) + `" },
+      managed: {
+        binaries: {
+          linux: { amd64: { glibc: { url: "https://example.test/node-linux-amd64.tar.gz", hash: "` + strings.Repeat("99", 32) + `", contentType: "tar.gz", extractDir: true } } },
+        },
+      },
+    },
+  },
+  setup: {},
+  tools: {},
+});
+globalThis.getMinVersion = () => "0.0.0";
+`
+}
+
+// TestStoreRefsEmpty pins the "nothing to mirror" case: a config with no oci
+// pin and no downloads prints nothing at all and still exits 0, so a mirroring
+// loop reading this output degrades to a no-op instead of an error.
+func TestStoreRefsEmpty(t *testing.T) {
+	p := clitest.NewProject(t)
+	cfg := clitest.WriteMinimalConfig(p)
+
+	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+		"--no-auto-config", "--config", cfg, "store", "refs")
+	if res.ExitCode != 0 {
+		t.Fatalf("`store refs` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
+	}
+	if res.Stdout != "" {
+		t.Errorf("`store refs` on an empty config printed:\n%s", res.Stdout)
+	}
+}
+
+// TestStoreRefsPopulated freezes the traversal against a config declaring one
+// of every reportable entity, in all three output shapes. The point of the
+// goldens is the ORDER as much as the content: the output is meant to be piped
+// into a mirroring loop, so it has to be byte-stable across runs.
+func TestStoreRefsPopulated(t *testing.T) {
+	p := clitest.NewProject(t)
+	cfg := p.WriteFile("refs.config.js", refsConfigJS())
+	norm := clitest.NewNormalizer()
+
+	cases := map[string]struct {
+		args   []string
+		golden string
+	}{
+		"plain":    {nil, "store_refs"},
+		"oci only": {[]string{"--oci-only"}, "store_refs_oci_only"},
+		"json":     {[]string{"--json"}, "store_refs_json"},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			args := append([]string{"--no-auto-config", "--config", cfg, "store", "refs"}, tc.args...)
+			res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, args...)
+			if res.ExitCode != 0 {
+				t.Fatalf("`store refs %s` exit = %d, want 0\nstderr:\n%s",
+					strings.Join(tc.args, " "), res.ExitCode, res.Stderr)
+			}
+			if res.Stderr != "" {
+				t.Errorf("`store refs` wrote to stderr:\n%s", res.Stderr)
+			}
+			clitest.AssertGolden(t, tc.golden, norm.Apply(res.Stdout))
+		})
+	}
+}
+
+// TestStoreRefsHelpGolden freezes the leaf help, including the mirroring
+// one-liner in the long description: that example is the command's reason to
+// exist and should not silently disappear.
+func TestStoreRefsHelpGolden(t *testing.T) {
+	norm := clitest.NewNormalizer()
+
+	res := clitest.Run(t, clitest.RunOptions{}, "store", "refs", "--help")
+	if res.ExitCode != 0 {
+		t.Fatalf("`store refs --help` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
+	}
+	clitest.AssertGolden(t, "store_refs_help", norm.Apply(res.Stdout))
 }

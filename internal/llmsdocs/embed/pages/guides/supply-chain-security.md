@@ -12,6 +12,43 @@ The hash is verified before the artifact is unpacked or executed. Lock files are
 
 See the [Binary Management](./binary-management.md) guide for the verification pipeline applied to binary apps.
 
+### Registry-Sourced Parser Modules
+
+A [WASM output parser](./architecture/parsers.md) declares its module either as an `https` URL or as an OCI artifact (`oci: { ref, digest }`) — exactly one of the two. Declaring both, or neither, is a config error at load, and there is no fallback between them: a config that pins a registry never reaches back to a URL.
+
+`hash` stays mandatory for both sources. For an OCI source it does double duty: it is also the expected digest of the artifact's single layer. datamitsu requires that layer to have digest `"sha256:" + hash`, so the registry digest chain and the config hash are the same number rather than two independent claims. A registry serving a correctly-digested manifest that points at different content is rejected before one payload byte is requested.
+
+The module is therefore hash-checked three times on its way into the store:
+
+1. **Manifest** — the manifest body is re-hashed against the pinned digest (the registry's `Docker-Content-Digest` header is never trusted), then its layer digest is compared against the config `hash`. Nothing is requested from the blob endpoint until both hold.
+2. **Stream** — the blob bytes are hashed as they are written; a size or digest mismatch is a permanent failure, not a retry.
+3. **File** — the finished file is verified against the config `hash` before it is published into the store.
+
+After that the store is self-healing: a parser module already on disk is re-hashed against the declared `hash` on every use and discarded when it does not match — whatever put it there (a download, an OCI bundle seed, a restored CI cache, a copy by hand). A module is stored at `{store}/.parsers/{name}/{key}`, where the key is derived from the module's SHA-256 alone — so one entry resolves to one directory no matter which channel delivered the bytes.
+
+:::note `--no-oci` does not disable a declared parser source
+`--no-oci` (or `DATAMITSU_NO_OCI`) turns off OCI **bundle store seeding**, an accelerator that degrades gracefully when it is unavailable. A parser that declares an `oci` source keeps using it, because that is the only route to its bytes. `DATAMITSU_OFFLINE` is the single hard network gate.
+:::
+
+### A Registry `ref` Is a Trusted-Host Setting
+
+The `ref` on a parser or a bundle decides which host datamitsu talks to, and datamitsu can be holding a `GITHUB_TOKEN` while it does. Changing a `ref` is a credential decision, not only a mirroring one.
+
+That token is sent as Basic auth to a registry's token endpoint only when the configured registry host is `ghcr.io` **and** the token realm advertised in that registry's own `WWW-Authenticate` challenge is `ghcr.io`. Both conditions are required: the realm arrives in a header the registry controls, so checking the realm alone would let any host name `ghcr.io` as its realm and be handed a real GitHub token. A `ref` pointed at any other host pulls anonymously. The hash chain protects the bytes; it does not protect a credential handed to the wrong host.
+
+List every registry reference a config pins, without touching the network:
+
+```bash
+datamitsu store refs --oci-only
+# ghcr.io/datamitsu/datamitsu-parsers@sha256:...
+```
+
+### Signatures Are Not Verified
+
+This build verifies no signatures at all — there is no sigstore dependency in the binary. A `signer` set on a bundle's `oci` or on a parser's `oci` is rejected at config load rather than accepted and ignored, so a config can never assert a guarantee the binary does not deliver.
+
+Signatures still exist upstream: CI signs `checksums.txt` and the published parser artifact manifest with keyless cosign, and both can be verified out of band (`cosign verify-blob`, `cosign verify`). What the binary enforces is the hash chain above.
+
 ## Minimum Release Age (Version Selection)
 
 When you pin a tool or runtime version with the `devtools pull-*` commands, datamitsu refuses to select a release that is too fresh. A brand-new release is the most likely to be a typosquat, a compromised publish, or an accidental break that gets yanked within hours. A short soak time lets the ecosystem catch and pull bad releases before you adopt them.

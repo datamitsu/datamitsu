@@ -2,7 +2,7 @@
 
 An OCI bundle packages the datamitsu tool store as a standard OCI image: one layer per store subtree (a binary, a runtime, a runtime-managed app, or a WASM output-parser module), annotated so datamitsu can pull exactly the pieces it needs — **without docker or podman**. The bundle is a cache accelerator and an airgap seed, not a replacement for resolution: whatever is in the bundle is taken from it, whatever is not gets downloaded the usual way.
 
-WASM output-parser modules (the `parsers` config entity) ship as their own `.parsers/<module>` layers, materialized in the build by a `devtools parsers prefetch` stage and re-verified against their published SHA-256. So in an airgapped deployment a tool's `outputParser` resolves from the bundle instead of reaching out to the GitHub Release.
+WASM output-parser modules (the `parsers` config entity) ship as their own `.parsers/<module>` layers, materialized in the build by a `devtools parsers prefetch` stage and re-verified against their published SHA-256. So in an airgapped deployment a tool's `outputParser` resolves from the bundle instead of reaching out to the GitHub Release. A parser entry can also pin a registry artifact of its own, independently of any bundle — see [Mirroring everything](#mirroring-everything).
 
 ```mermaid
 flowchart LR
@@ -60,7 +60,7 @@ The bundle is **not a trust boundary by itself**:
 - Single-file binaries and JVM jars are **re-hashed after extraction against the published SHA-256 from the config** — a bundle whose content was swapped relative to the config fails hard.
 - Runtime app directories (uv/node/go) have no published content hash (they are built, not downloaded); their integrity rests on the digest chain plus the mandatory lockfiles.
 - Each layer may only write into the single store subtree it declares (`com.datamitsu.subtree`); content outside it — including hardlinks pointing elsewhere — fails the pull loudly.
-- `oci.signer` will pin the publisher identity via sigstore verification at pull time (planned; a set `signer` currently fails the seed rather than silently skipping the check).
+- `oci.signer` is **rejected at config load** — on the bundle's `oci` and on a parser's `oci` alike. This build carries no sigstore dependency and verifies **no signatures at all**, so a config that pins a signer would assert a guarantee the binary does not deliver; a loud error before any network beats silent non-verification. Integrity rests on the digest chain and the mandatory hashes above. (Breaking change: a config that set `signer` used to load and fail later, at seed time.)
 
 ## Offline mode
 
@@ -81,9 +81,73 @@ datamitsu config runtime | jq '.offline, .noOci, .libc'
 datamitsu store status
 ```
 
+## Mirroring everything
+
+A parser module can be pinned to a registry as well: a `parsers` entry declares either an https `url` **or** an [`oci` reference](/docs/reference/configuration-api#output-parsers-parsers), never both, never a fallback from one to the other. That closes the last gap in "mirror one registry and everything works" — the bundle carries the binaries, the runtimes and the runtime-managed apps, and the parser artifact carries the WASM module that otherwise comes from a GitHub Release.
+
+A bundle and a parser `oci` pin are complements rather than competitors. A module is stored at `{store}/.parsers/{name}/{key}`, and that key is derived from its SHA-256 alone — so for a given entry a bundle-seeded module and a registry-pulled one are the same directory: whichever arrives first satisfies the other. A module already on disk is re-hashed against the declared SHA-256 on every use and discarded if it no longer matches, whatever put it there.
+
+Start by asking the config what it pins. [`store refs`](/docs/reference/cli-commands#store-refs) reads the effective config and makes no registry request, so it runs from inside a firewall:
+
+```bash
+datamitsu store refs --oci-only
+# ghcr.io/datamitsu/datamitsu-parsers@sha256:8f0e…
+# ghcr.io/owner/tool-store@sha256:6c3c…
+```
+
+Copy both with the community toolchain (`crane`, `regctl` and `skopeo` all do this; `crane` shown here). Tag the mirrored copies — an untagged manifest is a garbage-collection target, and a collected artifact fails every pinned config:
+
+```bash
+crane copy ghcr.io/owner/tool-store@sha256:6c3c… harbor.corp/dm/tool-store:mirror
+crane copy ghcr.io/datamitsu/datamitsu-parsers@sha256:8f0e… harbor.corp/dm/datamitsu-parsers:mirror
+```
+
+A copy moves manifest and blob bytes verbatim, so **every digest survives the move unchanged**. Only the host segment of each reference is edited; `digest` and `hash` stay exactly as published, and both references keep pointing at the same bytes as before:
+
+```javascript
+function getConfig(input) {
+  return {
+    ...input,
+    oci: { ...input.oci, ref: "harbor.corp/dm/tool-store" },
+    parsers: {
+      ...input.parsers,
+      core: {
+        ...input.parsers.core,
+        oci: { ...input.parsers.core.oci, ref: "harbor.corp/dm/datamitsu-parsers" },
+      },
+    },
+  };
+}
+```
+
+Both spreads assume the inherited config already pins the parser to a registry. If it declares a `url` instead, **replace** the entry's source rather than spreading `oci` alongside it: the two sources are mutually exclusive and an entry carrying both fails at config load.
+
+Move both keys or neither. A half-mirrored config still resolves its tools, so the mistake is easy to miss: a parser that cannot be fetched is only logged as a warning and the tool's output degrades to raw text.
+
+```javascript
+// BAD: the bundle is mirrored, the parser is not — a host behind the firewall
+// loses structured diagnostics and the run only warns about it
+oci: { ...input.oci, ref: "harbor.corp/dm/tool-store" },
+
+// GOOD: both references move to the mirror, digests and hashes untouched
+oci: { ...input.oci, ref: "harbor.corp/dm/tool-store" },
+parsers: {
+  ...input.parsers,
+  core: { ...input.parsers.core, oci: { ...input.parsers.core.oci, ref: "harbor.corp/dm/datamitsu-parsers" } },
+},
+```
+
+The mirror is not a trust boundary either. A parser artifact's single layer must have digest `sha256:` + the parser's mandatory `hash`, so a manifest that points at different content is rejected **before one payload byte is requested**; the bytes are hashed again while streaming and once more on the file on disk. A registry that rewrites manifests while proxying them changes their digest and fails the pull closed instead of serving something unexpected.
+
+:::warning Limitations of a mirrored registry
+datamitsu can authenticate to exactly one registry: **GHCR**, using `GITHUB_TOKEN`, and only when the configured `ref` host is `ghcr.io` — the token is never attached to any other host. There is no docker `config.json`, no credential helper, no user/password, no custom CA bundle. A Harbor, Artifactory or Nexus mirror must therefore allow **anonymous pull** of the mirrored repositories; an authenticated private mirror is not supported yet.
+
+GHCR is also the only channel for the parser artifact today — unlike the datamitsu container images, it is not published to Docker Hub.
+:::
+
 ## Kill switches
 
-- `--no-oci` (any command) or `DATAMITSU_NO_OCI=1` — disable bundle seeding entirely; tools download directly as before.
+- `--no-oci` (any command) or `DATAMITSU_NO_OCI=1` — disable bundle seeding entirely; tools download directly as before. It switches off an accelerator, so it does **not** disable a parser that declares an `oci` source: that registry is the only route to those bytes. `DATAMITSU_OFFLINE` remains the hard network gate.
 - Bundles change **where bytes come from**, never which versions run: tool resolution and cache keys are identical with and without a bundle.
 
 ## Producing a bundle

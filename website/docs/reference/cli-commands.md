@@ -708,7 +708,9 @@ datamitsu exec eslint -- --format json file.js \
 store, without compiling or running anything. Each module lands at its
 content-addressed store path, so it can be `COPY`ed into an OCI-bundle layer (the
 generated Dockerfile's parser stages do exactly this) and found offline later. A
-module already on disk with a matching url and hash is a no-op.
+module already on disk whose bytes still match the declared SHA-256 is a no-op —
+and one whose bytes do not is discarded and fetched again, whatever put it
+there.
 
 ```bash
 # Fetch every module declared in the parsers config
@@ -853,6 +855,28 @@ datamitsu store status
 datamitsu store status --json
 ```
 
+### store refs
+
+List every artifact the effective config fetches from outside the machine: OCI references (the bundle and any registry-sourced parser modules) first, then the hash-pinned https downloads. It answers "what do I have to mirror?" and touches no network, so it runs inside a firewall.
+
+```bash
+# Everything this config pulls from anywhere
+datamitsu store refs
+
+# Just the registry side — the input to a mirroring loop
+datamitsu store refs --oci-only | xargs -n1 -I{} crane copy {} harbor.corp/dm/{}
+
+# Every artifact with its mandatory hash and platform
+datamitsu store refs --json | jq '.https[] | select(.kind == "app-binary")'
+```
+
+| Flag         | Description                                                           |
+| ------------ | --------------------------------------------------------------------- |
+| `--json`     | Emit the references as JSON, including each artifact's mandatory hash |
+| `--oci-only` | List only OCI references, omitting the hash-pinned https downloads    |
+
+The output is sorted and byte-stable, so it is safe to pipe or diff between config revisions. Runtime archives (node, uv, the JDK) resolve from a generated manifest at install time rather than from the config, so they are not listed.
+
 ### store import
 
 Seed the store from a local [OCI image layout](https://github.com/opencontainers/image-spec/blob/main/image-layout.md) directory (as produced by `crane pull --format=oci`, `oras copy --to-oci-layout`, or `skopeo copy`) — fully offline bundle transfer. Blobs are verified against the digest chain exactly like a registry pull.
@@ -950,9 +974,20 @@ integration.
 | `DATAMITSU_BINARY_COMMAND`       | Override binary command path                                                                   | -                                                   |
 | `DATAMITSU_NO_SPONSOR`           | Suppress sponsor messages in CLI output                                                        | -                                                   |
 | `DATAMITSU_OFFLINE`              | Refuse all network access (requires a pre-seeded store)                                        | -                                                   |
-| `DATAMITSU_NO_OCI`               | Disable OCI bundle store seeding (twin of the `--no-oci` flag)                                 | -                                                   |
+| `DATAMITSU_NO_OCI`               | Disable OCI bundle store **seeding** (twin of `--no-oci`); see the note below                  | -                                                   |
 | `DATAMITSU_LIBC`                 | Override host libc detection (`glibc` or `musl`); affects store paths and OCI bundle selection | auto-detected                                       |
 | `DATAMITSU_OCI_REGISTRY`         | Registry host for base-image digest resolution in `devtools dockerfile`                        | `ghcr.io`                                           |
 | `DATAMITSU_PARSERS_DIR`          | Override directory for downloaded WASM output-parser modules                                   | `{store}/.parsers`                                  |
 | `NO_COLOR`                       | Disable color output                                                                           | -                                                   |
 | `FORCE_COLOR`                    | Force color output                                                                             | -                                                   |
+
+:::note `--no-oci` is not a network switch
+`--no-oci` / `DATAMITSU_NO_OCI` turns off OCI bundle **store seeding** — an
+accelerator that degrades gracefully to fetching each artifact individually. It
+does **not** disable a parser that declares an `oci` source: that is not an
+accelerator but the only route to those bytes, so disabling it would leave no
+way to get the module at all.
+
+`DATAMITSU_OFFLINE` is the hard gate. It refuses every network operation,
+including a registry-sourced parser, and expects a pre-seeded store.
+:::

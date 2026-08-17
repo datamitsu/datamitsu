@@ -357,18 +357,50 @@ func lessLspByOrderThenName(a, b LspSortable) bool {
 // Output Parsers (WASM)
 // ========================================
 
-// Parser declares a WASM output-parser module as a url+hash data artifact
-// (modeled on ArchiveSpec/Bundle — data, not a process). The module is
-// downloaded, SHA-256 verified, then loaded into the sandboxed WASM runtime.
+// ParserOCI declares a parser module published as an OCI artifact: the registry
+// repository plus the mandatory digest pinning its artifact manifest. It
+// deliberately mirrors OCIRef so there is one reference vocabulary, one
+// validator and one set of error strings across bundles and parsers.
+type ParserOCI struct {
+	// Ref is the full repository reference including the registry host
+	// (e.g. "ghcr.io/datamitsu/datamitsu-parsers"). Tags and digests are not
+	// allowed inside the ref — content is pinned exclusively by Digest.
+	Ref string `json:"ref"`
+	// Digest pins the artifact manifest in "sha256:<64 hex>" form. The single
+	// layer inside that manifest must have digest "sha256:" + Parser.Hash, so a
+	// substituted payload is rejected before it is requested.
+	Digest string `json:"digest"`
+	// Signer is REJECTED at validation while sigstore verification is
+	// unimplemented (as it is for a bundle). The field exists so the eventual
+	// implementation reuses the one signer vocabulary rather than inventing a
+	// second, and so a config that sets it fails loudly instead of silently
+	// getting no verification at all.
+	Signer *OCISigner `json:"signer,omitempty"`
+}
+
+// Parser declares a WASM output-parser module as a hash-pinned data artifact
+// (modeled on ArchiveSpec/Bundle — data, not a process). The module is fetched,
+// SHA-256 verified, then loaded into the sandboxed WASM runtime. Exactly one
+// source — URL or OCI — must be declared.
 type Parser struct {
-	URL string `json:"url"`
-	// Hash is the mandatory SHA-256 (64 lowercase hex) of the .wasm module.
-	// Empty/malformed is a config error per the security policy.
+	// URL is the https:// source of the module (file:// additionally, and only,
+	// in a dev-link build). omitempty so an oci-sourced entry does not marshal
+	// `"url":""`; a url-sourced entry marshals byte-identically to before the
+	// field became optional, so no existing config's execution-cache key moves.
+	URL string `json:"url,omitempty"`
+	// Hash is the mandatory SHA-256 (64 lowercase hex) of the .wasm module, for
+	// every source. Empty/malformed is a config error per the security policy.
+	// For an OCI source it is simultaneously the expected layer blob digest.
 	Hash string `json:"hash"`
+	// OCI sources the module from a registry instead of over https. omitempty is
+	// load-bearing for the same reason as Config.OCI: the whole Config is
+	// marshaled into the execution-cache invalidation key.
+	OCI *ParserOCI `json:"oci,omitempty"`
 	// NOTE: there is intentionally no `version` field. A module reports its own
 	// build-injected version via its WASM `describe` export (read by
 	// `datamitsu devtools parsers list`), so declaring it here too would only let
-	// the declared and actual versions drift. The config carries url+hash only.
+	// the declared and actual versions drift. The config carries a source and a
+	// hash only.
 }
 
 // MapOfParsers maps a parser name to its declaration.
@@ -393,7 +425,7 @@ type Config struct {
 	// Config is marshaled into the execution-cache invalidation key, and a nil
 	// field must not change that key on upgrade.
 	OCI *OCIRef `json:"oci,omitempty"`
-	// Parsers declares WASM output-parser modules (url+hash data artifacts),
+	// Parsers declares WASM output-parser modules (hash-pinned data artifacts),
 	// referenced by name from Tool.outputParser.
 	Parsers MapOfParsers `json:"parsers,omitempty"`
 	// Lsp declares LSP servers (reserved for Phase 3+; structurally validated
