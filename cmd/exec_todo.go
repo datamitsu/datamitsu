@@ -12,6 +12,8 @@ import (
 
 	"github.com/go-git/go-git/v6/plumbing/format/gitignore"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/datamitsu/datamitsu/internal/gitenv"
 )
 
 // Facts holds JSON-serializable facts exposed to the config layer.
@@ -39,7 +41,7 @@ func GetGitRoot(ctx context.Context) (string, error) {
 				args = append([]string{"-C", current}, args...)
 			}
 			cmd := exec.CommandContext(gctx, "git", args...)
-			cmd.Env = os.Environ()
+			cmd.Env = gitenv.Environ()
 
 			cmd.Dir = ex
 
@@ -57,7 +59,7 @@ func GetGitRoot(ctx context.Context) (string, error) {
 				args = append([]string{"-C", current}, args...)
 			}
 			cmd := exec.CommandContext(gctx, "git", args...)
-			cmd.Env = os.Environ()
+			cmd.Env = gitenv.Environ()
 
 			cmd.Dir = ex
 

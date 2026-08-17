@@ -24,6 +24,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/diagnostic"
 	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/gitenv"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/ocibundle"
@@ -1264,6 +1265,7 @@ func formatExecutionPlan(
 func getStagedFiles(ctx context.Context, rootPath string) ([]string, error) {
 	cmd := exec.CommandContext(ctx, "git", "diff", "--cached", "--name-only", "--diff-filter=ACMR")
 	cmd.Dir = rootPath
+	cmd.Env = gitenv.Environ()
 
 	output, err := cmd.Output()
 	if err != nil {
