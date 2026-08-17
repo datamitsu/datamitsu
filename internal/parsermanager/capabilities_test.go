@@ -49,7 +49,7 @@ func TestCatalogFromCapabilities_FlattensSortsAndAttributes(t *testing.T) {
 }
 
 // TestListCapabilities_DeduplicatesSharedModule proves two config entries with
-// the same url+hash resolve to one module: it is described exactly once (one
+// the same module hash resolve to one module: it is described exactly once (one
 // server hit), the tool is listed once, attributed to the alphabetically-first
 // entry, with no spurious conflict.
 func TestListCapabilities_DeduplicatesSharedModule(t *testing.T) {

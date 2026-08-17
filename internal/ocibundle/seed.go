@@ -17,6 +17,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/httpx"
 	"github.com/datamitsu/datamitsu/internal/ocidigest"
+	"github.com/datamitsu/datamitsu/internal/ociref"
 	"github.com/datamitsu/datamitsu/internal/target"
 
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
@@ -121,9 +122,9 @@ func SeedBundle(ctx context.Context, cfg *config.Config, ref *config.OCIRef, opt
 	if err := httpx.GuardOffline("oci bundle seed of " + ref.Ref); err != nil {
 		return err
 	}
-	host, repo, ok := strings.Cut(ref.Ref, "/")
-	if !ok {
-		return fmt.Errorf("oci ref %q has no repository path", ref.Ref)
+	host, repo, err := ociref.Parse(ref.Ref)
+	if err != nil {
+		return fmt.Errorf("oci ref %q %w", ref.Ref, err)
 	}
 	return seedFrom(ctx, cfg, newRegistrySource(host, repo), ref.Ref, ref.Digest, ref.Signer, opts)
 }
@@ -156,7 +157,7 @@ func seedFrom(ctx context.Context, cfg *config.Config, src blobSource, refLabel,
 		if allSubtreesPresent(storeRoot, expected) {
 			return nil
 		}
-	} else if markerExists(storeRoot, digest) {
+	} else if markerSatisfied(storeRoot, digest) {
 		log.Debug("bundle already fully seeded", zap.String("digest", digest))
 		return nil
 	}
@@ -290,6 +291,24 @@ func classifyLayers(manifest *ocispec.Manifest, storeRoot string, expected map[s
 }
 
 func seedLayer(ctx context.Context, src blobSource, job layerJob, builderRoot, storeRoot string, reVerify map[string]reVerifySpec) error {
+	// A parser module the consumer's config does not declare has no hash to be
+	// checked against, and a full seed (`store seed <ref>@<digest>` with no
+	// --apps) queues every annotated layer the bundle carries. Placing it would
+	// leave executable-by-the-parser-runtime bytes in the content-addressed
+	// store that nothing ever verified, ready to be picked up by the plain
+	// os.Stat fast path the day the config pins that very hash.
+	//
+	// Skip rather than fail: a shared organization bundle legitimately carries
+	// the modules of several config variants, and "a partial bundle is a valid
+	// partial seed" is a deliberate property of this seeder. Skipping costs the
+	// consumer nothing — it cannot load a module its config does not declare.
+	if _, ok := reVerify[job.subtree]; !ok && strings.HasPrefix(job.subtree, parsersSubtreeRoot) {
+		log.Warn("skipping bundle parser layer that the config does not declare (nothing could verify it)",
+			zap.String("subtree", job.subtree),
+			zap.String("digest", job.desc.Digest.String()))
+		return nil
+	}
+
 	release, err := lockSubtree(storeRoot, job.subtree)
 	if err != nil {
 		return err

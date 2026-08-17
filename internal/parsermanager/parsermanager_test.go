@@ -132,6 +132,66 @@ func TestLoadWASMBytes_SecondLoadIsCached(t *testing.T) {
 	}
 }
 
+// A module can reach the store without ever passing through a download: OCI
+// bundle seeding, a restored CI cache, an image layer, a stray `cp`. The bytes
+// on disk are therefore not trustworthy just for being there, and the config's
+// mandatory SHA-256 has to be applied to them before they are handed to the
+// WASM runtime.
+func TestLoadWASMBytes_PrePlantedWrongBytesAreRejected(t *testing.T) {
+	parsersDir := t.TempDir()
+	t.Setenv("DATAMITSU_PARSERS_DIR", parsersDir)
+
+	body := []byte("the declared module")
+	declared := config.Parser{URL: "https://example.invalid/module.wasm", Hash: sha256Hex(body)}
+
+	// Plant something else at exactly the path the declaration resolves to.
+	dir := ModuleStorePath("echo", declared)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	planted := filepath.Join(dir, WASMFileName)
+	if err := os.WriteFile(planted, []byte("a module nobody verified"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	m := New(config.MapOfParsers{"echo": declared})
+	// The URL is unreachable, so a refetch is the only other outcome: whatever
+	// happens, the planted bytes must not be what comes back.
+	got, err := m.LoadWASMBytes(context.Background(), "echo")
+	if err == nil {
+		t.Fatalf("LoadWASMBytes returned %q for a module that fails its declared hash", got)
+	}
+	if _, statErr := os.Stat(planted); statErr == nil {
+		t.Error("the mismatched module was left in the store to be picked up again")
+	}
+}
+
+// The store path is derived from the module's hash alone, so the same module
+// lands in the same place however it was obtained. Without that, a consumer
+// pointing at their own mirror would silently stop matching the layer a bundle
+// producer published for the very same bytes.
+func TestModuleStorePath_SameHashDifferentSources(t *testing.T) {
+	t.Setenv("DATAMITSU_PARSERS_DIR", t.TempDir())
+
+	hash := sha256Hex([]byte("one module, several ways to get it"))
+	release := config.Parser{URL: "https://github.com/datamitsu/datamitsu/releases/download/v1/m.wasm", Hash: hash}
+	mirror := config.Parser{URL: "https://mirror.corp.example/datamitsu/m.wasm", Hash: hash}
+	local := config.Parser{URL: "file:///home/dev/datamitsu/parsers/m.wasm", Hash: hash}
+
+	want := ModuleStorePath("core", release)
+	for _, p := range []config.Parser{mirror, local} {
+		if got := ModuleStorePath("core", p); got != want {
+			t.Errorf("ModuleStorePath for %q = %q, want %q", p.URL, got, want)
+		}
+	}
+
+	// A different module still gets its own directory.
+	other := config.Parser{URL: release.URL, Hash: sha256Hex([]byte("a different module"))}
+	if got := ModuleStorePath("core", other); got == want {
+		t.Error("two different modules share a store directory")
+	}
+}
+
 // TestLoadWASMBytes_ConcurrentLoadsDeduplicate exercises the singleflight
 // coalescing path (not the on-disk fast path): many goroutines start together
 // against a deliberately slow server, so they collide inside ensureModule. The

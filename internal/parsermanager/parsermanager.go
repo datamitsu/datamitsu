@@ -188,8 +188,8 @@ func (m *Manager) Close(ctx context.Context) error {
 // materialize each module as its own store subtree (then COPYed into a layer),
 // and so callers can warm the cache ahead of an airgapped run. Empty names means
 // every declared parser; names are visited in sorted order for stable logs. A
-// module already on disk (matching url+hash) is a no-op (ensureModule stats
-// first). Unlike Prewarm, it never touches the wazero runtime — fetch only.
+// module already on disk whose bytes still match the declared SHA-256 is a
+// no-op. Unlike Prewarm, it never touches the wazero runtime — fetch only.
 func (m *Manager) Prefetch(ctx context.Context, names []string) error {
 	if len(names) == 0 {
 		names = make([]string, 0, len(m.parsers))
@@ -287,8 +287,8 @@ func ParseLocal(ctx context.Context, wasm []byte, toolName string, stdout, stder
 
 // ensureModule downloads-and-verifies the parser if not already cached and
 // returns the path to the verified .wasm. Concurrent calls for the same parser
-// collapse to one download via singleflight; a redeclared url+hash that is
-// already on disk skips the network entirely.
+// collapse to one download via singleflight; a module already on disk whose
+// bytes still verify against the declared SHA-256 skips the network entirely.
 func (m *Manager) ensureModule(ctx context.Context, name string) (string, error) {
 	p, ok := m.parsers[name]
 	if !ok {
@@ -305,17 +305,17 @@ func (m *Manager) ensureModule(ctx context.Context, name string) (string, error)
 
 	dir := moduleDir(name, p)
 	wasmPath := filepath.Join(dir, wasmFileName)
-	if _, err := os.Stat(wasmPath); err == nil {
+	if storedModuleIsValid(wasmPath, p) {
 		return wasmPath, nil
 	}
 
 	// Key the singleflight on the content-addressed dir so two tools that share a
-	// parser name (same url+hash) coalesce, while a re-pinned version downloads
+	// parser name (same module) coalesce, while a re-pinned version is fetched
 	// fresh.
 	_, err, _ := m.downloadGroup.Do(dir, func() (any, error) {
 		// Re-check inside the critical section: a racing caller may have finished
 		// the download between our Stat and acquiring the singleflight slot.
-		if _, statErr := os.Stat(wasmPath); statErr == nil {
+		if storedModuleIsValid(wasmPath, p) {
 			return struct{}{}, nil
 		}
 		if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -346,13 +346,54 @@ func (m *Manager) ensureModule(ctx context.Context, name string) (string, error)
 	return wasmPath, nil
 }
 
-// cacheKey is the XXH3-128 content-addressed key for a parser declaration. It is
-// an internal cache key (never compared with an external value), so XXH3 — not a
-// crypto hash — is correct here; the SHA-256 in p.Hash still gates the download.
-// url+hash fully identify the artifact (hash is content-addressed); the module's
-// own version lives in its `describe` output, not the config, so it is not a key.
+// storedModuleIsValid reports whether the module already on disk is the one the
+// config declares, and discards it when it is not.
+//
+// A bare os.Stat used to be enough on the assumption that only a verified
+// download can create this file. It is not: a store is also filled by OCI
+// bundle seeding, by a restored CI cache, by an image layer, or by hand — none
+// of which the config's mandatory SHA-256 has necessarily ever been applied to.
+// Re-hashing here makes the store self-healing regardless of how the bytes
+// arrived, and makes the hash mean what the policy says it means: nothing is
+// loaded that was not checked against it.
+//
+// The cost is one hash of a ~400 KiB file per Prewarm or first Acquire — the
+// compiled module is cached by key, so this is nowhere near the per-parse path.
+func storedModuleIsValid(wasmPath string, p config.Parser) bool {
+	if _, err := os.Stat(wasmPath); err != nil {
+		return false
+	}
+	if err := binmanager.VerifyFileHashPublic(wasmPath, p.Hash, binmanager.BinHashTypeSHA256); err != nil {
+		log.Warn("stored parser module does not match its declared SHA-256; discarding it and fetching again",
+			zap.String("path", wasmPath),
+			zap.Error(err),
+		)
+		if rmErr := os.RemoveAll(filepath.Dir(wasmPath)); rmErr != nil {
+			log.Warn("failed to remove the mismatched parser module",
+				zap.String("path", wasmPath), zap.Error(rmErr))
+		}
+		return false
+	}
+	return true
+}
+
+// cacheKey is the XXH3-128 content-addressed key for a parser declaration.
+//
+// The key is derived from the module's SHA-256 and nothing else, so the same
+// module lands in the same directory however it was obtained: a release URL, a
+// registry mirror, a locally built file, or a layer of an OCI bundle. That is
+// what lets a bundle producer and a consumer who fetches from their own mirror
+// agree on a store path without republishing anything — keying on the source as
+// well would move the directory the moment a consumer re-pointed the URL, and
+// the bundle layer built against the old spelling would silently never match.
+//
+// XXH3, not a crypto hash: this is an internal key, never compared against a
+// value from outside. The SHA-256 it is derived from is what actually gates the
+// content. The "parser-v2" prefix is domain separation, and names this layout
+// so the next migration costs one character. The module's own version lives in
+// its `describe` output rather than the config, so it is not part of the key.
 func cacheKey(p config.Parser) string {
-	return hashutil.XXH3Multi([]byte(p.URL), []byte(p.Hash))
+	return hashutil.XXH3Multi([]byte("parser-v2"), []byte(p.Hash))
 }
 
 // moduleDir returns the content-addressed directory for a parser:

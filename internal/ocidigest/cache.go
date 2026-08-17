@@ -24,12 +24,18 @@ type digestCacheEntry struct {
 	Digest   string `json:"digest"`
 }
 
+// CacheDirName is the cache-relative directory holding resolved-digest entries.
+// Exported so `store clear` can remove it: the cache root is a sibling of the
+// store, so clearing the store alone would leave these entries — which never
+// expire — behind.
+const CacheDirName = ".oci-digests"
+
 // digestCachePath returns the cache file path for a registry/repo/tag triple.
 // The filename is an XXH3 key (an internal cache key — not a security boundary,
 // per the hashing policy); the cached value is the external SHA-256 digest.
 func digestCachePath(cacheDir, registry, repo, tag string) string {
 	key := hashutil.XXH3Multi([]byte(registry), []byte(repo), []byte(tag))
-	return filepath.Join(cacheDir, ".oci-digests", key+".json")
+	return filepath.Join(cacheDir, CacheDirName, key+".json")
 }
 
 // loadCachedDigest returns the cached digest and true when a readable, valid
