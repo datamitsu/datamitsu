@@ -23,7 +23,7 @@ require (
 	github.com/vbauerster/mpb/v8 v8.15.1
 	github.com/zeebo/xxh3 v1.1.0
 	go.uber.org/zap v1.28.0
-	golang.org/x/mod v0.38.0
+	golang.org/x/mod v0.40.0
 	golang.org/x/sync v0.22.0
 	gopkg.in/ini.v1 v1.67.3
 )
