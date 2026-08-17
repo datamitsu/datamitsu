@@ -440,7 +440,17 @@ jobs:
           - debian
           - alpine
   publish-github:
+    # always() is load-bearing, not decoration. An unstable run skips
+    # validate-stable, and GitHub propagates a skip down the whole dependency
+    # chain — only a job whose own condition says "continue anyway" escapes it.
+    # build escapes with always(); this job did not, so it was skipped on every
+    # unstable dispatch no matter how the prerelease box was set, which is why
+    # no unstable prerelease had ever been created. Every other publish-* job
+    # here already carries this preamble; keep it.
     if: |
+      always() &&
+      !cancelled() &&
+      needs.build.result == 'success' &&
       needs.determine-release-type.outputs.is_unstable == 'true' &&
       needs.determine-release-type.outputs.want_prerelease == 'true'
     name: Publish to GitHub Releases
