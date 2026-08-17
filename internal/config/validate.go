@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"path"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/ociref"
 	"github.com/datamitsu/datamitsu/internal/target"
 )
 
@@ -334,13 +336,6 @@ func isValidLibcKey(key string) bool {
 	}
 }
 
-// ociRefPattern matches a repository reference: a registry host (optionally
-// with a port) followed by at least one path component. The character set
-// excludes ":" outside the port position and "@" entirely, so a ref carrying
-// a ":tag" or "@digest" suffix cannot match — content is pinned exclusively
-// by OCIRef.Digest.
-var ociRefPattern = regexp.MustCompile(`^[a-z0-9.-]+(:[0-9]+)?(/[a-z0-9._-]+)+$`)
-
 // ValidateOCI validates the top-level oci bundle declaration. A nil ref is
 // valid (no bundle configured).
 func ValidateOCI(ref *OCIRef) error {
@@ -350,18 +345,17 @@ func ValidateOCI(ref *OCIRef) error {
 
 	var errs []string
 
-	switch {
-	case ref.Ref == "":
+	// The grammar lives in internal/ociref, which the seeder and the CLI parse
+	// with too. The messages stay here: each surface frames a bad reference in
+	// its own words, so ociref reports which rule broke and the caller words it.
+	if ref.Ref == "" {
 		errs = append(errs, "oci: ref is required (full reference including registry host, e.g. ghcr.io/owner/repo)")
-	case !ociRefPattern.MatchString(ref.Ref):
-		errs = append(errs, fmt.Sprintf("oci: ref %q is not a valid repository reference (expected host[:port]/path, lowercase, no tag and no digest)", ref.Ref))
-	default:
-		// Require an explicit registry host: the first segment must look like a
-		// hostname (contain a dot or a port) or be "localhost". There is no
-		// default host and no docker.io magic.
-		host := ref.Ref[:strings.IndexByte(ref.Ref, '/')]
-		if host != "localhost" && !strings.Contains(host, ".") && !strings.Contains(host, ":") {
-			errs = append(errs, fmt.Sprintf("oci: ref %q must include the registry host as its first segment (e.g. ghcr.io/owner/repo)", ref.Ref))
+	} else if _, _, err := ociref.Parse(ref.Ref); err != nil {
+		switch {
+		case errors.Is(err, ociref.ErrRefNoHost):
+			errs = append(errs, fmt.Sprintf("oci: ref %q %s", ref.Ref, ociref.ErrRefNoHost))
+		default:
+			errs = append(errs, fmt.Sprintf("oci: ref %q is %s", ref.Ref, ociref.ErrRefSyntax))
 		}
 	}
 

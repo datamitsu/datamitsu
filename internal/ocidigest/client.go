@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/httpretry"
 	"github.com/datamitsu/datamitsu/internal/httpx"
 )
 
@@ -147,8 +148,11 @@ func (r *Resolver) Resolve(ctx context.Context, repo, tag string) (string, error
 // A nil client uses the default (deadline-bounded) manifest client; blob
 // streaming passes the deadline-free blobClient.
 func (r *Resolver) authedGet(ctx context.Context, client *http.Client, repo, rawURL, accept string) (*http.Response, error) {
+	// Permanent: offline mode will not lift between attempts, so retrying only
+	// spends the backoff schedule before reporting the same refusal. Mirrors
+	// the offline guard on the binmanager download path.
 	if err := httpx.GuardOffline("oci registry request to " + r.registry); err != nil {
-		return nil, err
+		return nil, httpretry.Permanent(err)
 	}
 	if client == nil {
 		client = r.httpClient
@@ -210,15 +214,28 @@ func (r *Resolver) storeBearerToken(repo, token string) {
 	r.bearerTokens[repo] = token
 }
 
-// shouldAttachGitHubToken reports whether the GitHub token may be sent as
-// Basic auth to the token realm host. Only GHCR accepts a GitHub token as the
-// Basic password to mint a scoped pull token; any other registry (Docker Hub,
-// GitLab, ...) treats the credential as real and fails the handshake with 401
-// instead of falling back to an anonymous token — so sending it would break
-// pulls of public images from non-GitHub registries whenever GITHUB_TOKEN is
-// set (i.e. in any CI).
-func shouldAttachGitHubToken(realmHost string) bool {
-	return realmHost == "ghcr.io"
+// ghcrHost is the one registry whose token endpoint accepts a GitHub token.
+const ghcrHost = "ghcr.io"
+
+// mayAttachGitHubToken reports whether GITHUB_TOKEN may be sent as Basic auth
+// to a token realm. Both the registry being pulled from and the realm the
+// challenge advertises must be GHCR.
+//
+// The realm check alone is necessary but NOT sufficient, and reading it as a
+// host check is how the credential leaks: the realm arrives in the registry's
+// own WWW-Authenticate header, so a reference pointed at any host can name
+// ghcr.io as its realm, have a real GHCR token minted at a scope of its
+// choosing, and then receive that token as the Bearer credential on the retried
+// request. Requiring the configured registry to be GHCR too keeps the token
+// with the host it belongs to.
+//
+// The realm check remains because only GHCR accepts a GitHub token as the Basic
+// password; any other registry (Docker Hub, GitLab, ...) treats the credential
+// as real and fails the handshake with 401 instead of falling back to an
+// anonymous token — so sending it would break pulls of public images whenever
+// GITHUB_TOKEN is set (i.e. in any CI).
+func (r *Resolver) mayAttachGitHubToken(realmHost string) bool {
+	return r.token != "" && r.registry == ghcrHost && realmHost == ghcrHost
 }
 
 // fetchToken mints a bearer token from the realm advertised in a Bearer
@@ -248,7 +265,7 @@ func (r *Resolver) fetchToken(ctx context.Context, challenge string) (string, er
 	if err != nil {
 		return "", fmt.Errorf("create token request: %w", err)
 	}
-	if r.token != "" && shouldAttachGitHubToken(u.Host) {
+	if r.mayAttachGitHubToken(u.Host) {
 		req.SetBasicAuth("x-access-token", r.token)
 	}
 

@@ -1,1 +1,2 @@
 Cleared store: <CACHE>/store
+Cleared OCI digest cache: <CACHE>/cache/.oci-digests
