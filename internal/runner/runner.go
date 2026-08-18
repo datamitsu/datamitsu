@@ -76,7 +76,7 @@ var (
 
 // toolPlanner is the planning surface used by runSingleOperation (satisfied by *tooling.Planner).
 type toolPlanner interface {
-	Plan(ctx context.Context, operation config.OperationType, files []string, selectedTools []string) (*tooling.ExecutionPlan, error)
+	Plan(ctx context.Context, operation config.OperationType, sel tooling.Selection, selectedTools []string) (*tooling.ExecutionPlan, error)
 	GetDetectedProjectTypes() []string
 	GetTimings() *timing.Timings
 }
@@ -102,6 +102,7 @@ type sharedContext struct {
 	cfg           *config.Config
 	rootPath      string
 	cwdPath       string
+	selection     tooling.Selection
 	files         []string
 	selectedTools []string
 	explainLevel  string
@@ -202,11 +203,11 @@ func initSharedContext(
 	// Normalize all file paths to absolute paths to prevent filepath.Rel errors in cache.
 	sc.files = normalizeFilePaths(sc.files, sc.cwdPath)
 
-	log.Debug("files", zap.Strings("list", sc.files))
+	sc.selection = tooling.NewSelection(sc.rootPath, sc.cwdPath, sc.files, fileScoped)
 
-	if len(sc.files) == 0 && !fileScoped {
-		log.Debug("no files specified, running whole-project tools only")
-	}
+	log.Debug("selection",
+		zap.String("mode", sc.selection.String()),
+		zap.Strings("files", sc.files))
 
 	// Create planner
 	planner := tooling.NewPlanner(sc.rootPath, sc.cwdPath, nil, sc.cfg.Tools, sc.cfg.ProjectTypes, sc.cfg.IgnoreRules)
@@ -281,7 +282,7 @@ func plannedParserModules(plan *tooling.ExecutionPlan) []string {
 // runSingleOperation executes one operation (fix, lint, etc.) using a pre-initialized shared context
 func runSingleOperation(ctx context.Context, sc *sharedContext, operation config.OperationType) error {
 	// Create execution plan
-	plan, err := sc.planner.Plan(ctx, operation, sc.files, sc.selectedTools)
+	plan, err := sc.planner.Plan(ctx, operation, sc.selection, sc.selectedTools)
 	if err != nil {
 		return fmt.Errorf("failed to create execution plan: %w", err)
 	}
