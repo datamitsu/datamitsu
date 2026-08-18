@@ -441,6 +441,7 @@ export default defineConfig((config) => ({
     "atomises",
     "behavioural",
     "behaviours",
+    "neighbours",
     "defence",
     "generalises",
     "initialisation",
