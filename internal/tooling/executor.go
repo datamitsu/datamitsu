@@ -456,12 +456,34 @@ func (e *Executor) executeTask(ctx context.Context, task Task) ExecutionResult {
 		zap.String("relativeDir", relativeDir),
 		zap.String("scope", string(task.OpConfig.Scope)))
 
+	// A stored verdict means every member and guard is byte-identical to the run
+	// that passed, which is as sound for a narrowed invocation as for a full one
+	// — so the read is not gated on coverage. Only the write is.
+	if key, inputs, ok := e.verdictKeys(task); ok {
+		if !e.cache.ShouldRunVerdict(key, inputs, e.verdictTTL()) {
+			log.Debug("verdict cache hit", zap.String("tool", task.ToolName), zap.String("unit", task.UnitDir))
+			result.Success = true
+			result.recordTiming(startTime)
+			if e.fileProgressCallback != nil {
+				e.fileProgressCallback(task.ToolName, 1, 1, true)
+			}
+			return result
+		}
+	}
+
 	// Dispatch on argv shape, not scope: only {file} takes one path, so only it
 	// needs one process per file.
 	if config.RunsPerFile(task.OpConfig, len(task.Files)) {
 		result = e.executePerFile(ctx, task, cmdInfo, workingDir, startTime)
 	} else {
 		result = e.executeBatch(ctx, task, cmdInfo, workingDir, startTime)
+	}
+
+	// One write point per task, after every process it spawned has succeeded.
+	// The three per-process updateCacheAfterSuccess calls would otherwise let the
+	// first success of an N-process task record a verdict a later failure refutes.
+	if result.Success {
+		e.recordVerdict(task)
 	}
 
 	// Classify unclassified failures as independent (tool failed on its own)
@@ -563,6 +585,15 @@ func (e *Executor) getRelativeDir(workingDir string) string {
 // filterFilesByCache filters files based on cache, returns files that need to be processed
 func (e *Executor) filterFilesByCache(task Task) []string {
 	if e.cache == nil {
+		return task.Files
+	}
+
+	// Per-file entries record "this file passed", which is only a verdict when a
+	// file's result stands alone. For unit and repo granularity it is not: tsc's
+	// answer depends on tsconfig.json, which no .ts glob matches, so an edit to
+	// it left every content hash unchanged and the whole task was skipped with a
+	// tick. Those granularities use the verdict cache instead.
+	if config.InferGranularity(task.OpConfig) != config.GranularityFile {
 		return task.Files
 	}
 
