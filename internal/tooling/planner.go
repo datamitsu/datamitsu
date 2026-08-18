@@ -317,6 +317,7 @@ func (p *Planner) collectTasks(ctx context.Context, operation config.OperationTy
 				fileTask := task
 				fileTask.Files = []string{file}
 				fileTask.ProjectPath = filepath.Dir(file)
+				p.attachUnit(&fileTask, fileTask.ProjectPath)
 				tasks = append(tasks, fileTask)
 			}
 

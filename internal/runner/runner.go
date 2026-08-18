@@ -303,9 +303,15 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	projectTypes := sc.planner.GetDetectedProjectTypes()
 
 	// Explain mode (json/summary/detailed): print the formatted plan, which now
-	// lists skipped tools too, and stop. Nothing runs, so explain never records
-	// skips for --fail-on-skip.
+	// lists skipped tools too, and stop.
 	if sc.explainLevel != "" {
+		// Coverage is decided entirely at plan time, so --require-coverage can be
+		// asserted without running or downloading anything — a cheap CI gate.
+		// --fail-on-skip deliberately stays inert here: it is about a host lacking
+		// a binary, which only matters if something was going to run.
+		sc.recordNarrowingSkips(plan.Skipped)
+		sc.recordCoverage(plan)
+
 		output := formatExecutionPlan(plan, sc.rootPath, sc.cwdPath, operation, sc.explainLevel)
 		fmt.Println(output)
 		return nil
@@ -643,6 +649,21 @@ func (sc *sharedContext) recordSkips(skipped []tooling.SkippedTool) {
 		case tooling.SkipReasonConfig:
 			// Declared, documented, and permanent: a repository that opts a tool
 			// out has not given an incomplete answer, it has given its answer.
+		}
+	}
+}
+
+// recordNarrowingSkips records only what bears on coverage, leaving
+// --fail-on-skip untouched. Explain mode uses it: a host missing a binary
+// matters only if something was going to run, and TestExplainFlagMatrix pins
+// --fail-on-skip as inert there.
+func (sc *sharedContext) recordNarrowingSkips(skipped []tooling.SkippedTool) {
+	if sc.narrowed == nil {
+		sc.narrowed = make(map[string]struct{})
+	}
+	for _, s := range skipped {
+		if s.Reason == tooling.SkipReasonNotNarrowable {
+			sc.narrowed[s.ToolName] = struct{}{}
 		}
 	}
 }
