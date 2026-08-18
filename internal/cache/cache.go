@@ -47,6 +47,9 @@ type File struct {
 	ProjectPath     string               // for debugging
 	LastPruned      time.Time            // when we last cleaned up deleted files
 	Entries         map[string]FileEntry // relativePath -> entry
+	// Verdicts is nil in files written before unit-level caching existed; every
+	// lookup then misses, which is the safe direction.
+	Verdicts map[string]VerdictEntry // opaque identity key -> entry
 }
 
 // Stats holds statistics about cache hits and misses
@@ -128,6 +131,7 @@ func NewCache(
 			ProjectPath:     projectPath,
 			LastPruned:      time.Now(),
 			Entries:         make(map[string]FileEntry),
+			Verdicts:        make(map[string]VerdictEntry),
 		}
 	}
 
@@ -145,6 +149,7 @@ func (c *Cache) Load() error {
 				ProjectPath:     c.projectPath,
 				LastPruned:      time.Now(),
 				Entries:         make(map[string]FileEntry),
+				Verdicts:        make(map[string]VerdictEntry),
 			}
 			return nil
 		}
@@ -177,6 +182,7 @@ func (c *Cache) Load() error {
 			ProjectPath:     c.projectPath,
 			LastPruned:      time.Now(),
 			Entries:         make(map[string]FileEntry),
+			Verdicts:        make(map[string]VerdictEntry),
 		}
 		return nil
 	}
@@ -201,6 +207,14 @@ func (c *Cache) Save() error {
 	// Prevent concurrent saves
 	c.saveMu.Lock()
 	defer c.saveMu.Unlock()
+
+	// Fold in anything another process wrote since we loaded. Without this a
+	// long-lived LSP session would overwrite the CLI's writes wholesale — and for
+	// verdicts that is not just a lost warm cache but a resurrected verdict the
+	// CLI had already invalidated.
+	if err := c.mergeFromDisk(); err != nil {
+		return err
+	}
 
 	c.mu.RLock()
 	if c.data == nil {
@@ -271,8 +285,14 @@ func (c *Cache) Prune() {
 		}
 	}
 
-	if removed > 0 {
-		c.logger.Debug("pruned cache entries", zap.Int("removed", removed))
+	// Verdicts are keyed on an opaque identity, so a unit that no longer exists
+	// leaves an entry nothing will ever match. Age them out on the same pass.
+	verdicts := c.pruneVerdicts(verdictPruneTTL)
+
+	if removed > 0 || verdicts > 0 {
+		c.logger.Debug("pruned cache entries",
+			zap.Int("files", removed),
+			zap.Int("verdicts", verdicts))
 	}
 }
 
@@ -421,6 +441,7 @@ func (c *Cache) Clear() error {
 		ProjectPath:     c.projectPath,
 		LastPruned:      time.Now(),
 		Entries:         make(map[string]FileEntry),
+		Verdicts:        make(map[string]VerdictEntry),
 	}
 	c.mu.Unlock()
 	return c.Save()
@@ -635,4 +656,92 @@ func (c *Cache) debounceSave() {
 			}
 		}
 	})
+}
+
+// mergeFromDisk reconciles in-memory state with whatever is on disk now.
+// Read-modify-write is not atomic across processes, so interleaving can still
+// lose a write; correctness rests on the mismatch rules below, not on mutual
+// exclusion.
+func (c *Cache) mergeFromDisk() error {
+	f, err := os.Open(c.path)
+	if err != nil {
+		return nil // no file yet: nothing to merge
+	}
+	defer func() { _ = f.Close() }()
+
+	onDisk, err := io.ReadAll(f)
+	if err != nil {
+		return nil // unreadable is not fatal; we still write ours
+	}
+	var disk File
+	if err := msgpack.Unmarshal(onDisk, &disk); err != nil {
+		return nil // corrupt on disk: ours replaces it
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// A different key means the on-disk cache belongs to another config. Refuse
+	// to write rather than mixing two configs' results into one file.
+	if disk.InvalidationKey != "" && disk.InvalidationKey != c.invalidationKey {
+		return errStaleCacheOnDisk
+	}
+
+	for path, diskEntry := range disk.Entries {
+		ours, ok := c.data.Entries[path]
+		if !ok {
+			c.data.Entries[path] = diskEntry
+			continue
+		}
+		if ours.ContentHash != diskEntry.ContentHash {
+			// Two views of one file's content cannot be reconciled: FileEntry
+			// carries no timestamp, so "newer" is undecidable, and keeping either
+			// list would attribute passing tools to content they never saw.
+			delete(c.data.Entries, path)
+			continue
+		}
+		ours.Lint = unionStrings(ours.Lint, diskEntry.Lint)
+		ours.Fix = unionStrings(ours.Fix, diskEntry.Fix)
+		c.data.Entries[path] = ours
+	}
+
+	if c.data.Verdicts == nil {
+		c.data.Verdicts = make(map[string]VerdictEntry)
+	}
+	now := time.Now()
+	for key, diskEntry := range disk.Verdicts {
+		// Clamp a future timestamp: a backwards clock jump would otherwise let a
+		// stale entry win every comparison and never expire.
+		if diskEntry.ValidatedAt.After(now) {
+			diskEntry.ValidatedAt = now
+		}
+		ours, ok := c.data.Verdicts[key]
+		if !ok || diskEntry.ValidatedAt.After(ours.ValidatedAt) {
+			c.data.Verdicts[key] = diskEntry
+		}
+	}
+
+	return nil
+}
+
+// errStaleCacheOnDisk reports that the on-disk cache was written for a different
+// config, so this process must not overwrite it.
+var errStaleCacheOnDisk = errors.New("cache on disk belongs to a different config; not overwriting")
+
+func unionStrings(a, b []string) []string {
+	if len(b) == 0 {
+		return a
+	}
+	seen := make(map[string]struct{}, len(a)+len(b))
+	out := make([]string, 0, len(a)+len(b))
+	for _, list := range [][]string{a, b} {
+		for _, v := range list {
+			if _, dup := seen[v]; dup {
+				continue
+			}
+			seen[v] = struct{}{}
+			out = append(out, v)
+		}
+	}
+	return out
 }
