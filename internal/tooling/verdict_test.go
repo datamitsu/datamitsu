@@ -154,3 +154,29 @@ func TestCoverageIsCompleteWhenArgvIgnoresTheSelection(t *testing.T) {
 		t.Errorf("coverage = %q, want complete", tasks[0].Coverage)
 	}
 }
+
+// Tools inherit the whole environment, so a variable that changes what a tool
+// analyses must change the inputs. Without this, GOFLAGS=-tags=integration
+// followed by a plain run hits the verdict and reports green for a package graph
+// nobody looked at.
+func TestVerdictInputsNoticeAnAllowlistedEnvChange(t *testing.T) {
+	root := t.TempDir()
+
+	before := verdictInputs(nil, nil, root)
+	t.Setenv("GOFLAGS", "-tags=integration")
+	if after := verdictInputs(nil, nil, root); before == after {
+		t.Error("GOFLAGS left the verdict inputs unchanged")
+	}
+}
+
+// ...but the noise that changes nothing about the answer must not, or nothing
+// would ever hit.
+func TestVerdictInputsIgnoreUnrelatedEnv(t *testing.T) {
+	root := t.TempDir()
+
+	before := verdictInputs(nil, nil, root)
+	t.Setenv("SOME_TERMINAL_SESSION_ID", "abc123")
+	if after := verdictInputs(nil, nil, root); before != after {
+		t.Error("an unrelated variable changed the verdict inputs")
+	}
+}

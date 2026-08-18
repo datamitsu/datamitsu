@@ -210,6 +210,10 @@ func initSharedContext(
 	// Normalize all file paths to absolute paths to prevent filepath.Rel errors in cache.
 	sc.files = normalizeFilePaths(sc.files, sc.cwdPath)
 
+	if err := opts.validate(); err != nil {
+		return nil, err
+	}
+
 	sc.selection = tooling.NewSelection(sc.rootPath, sc.cwdPath, sc.files, fileScoped)
 
 	log.Debug("selection",
@@ -854,6 +858,29 @@ type Options struct {
 	// RequireCoverage asserts the run answered completely: "unit" for every unit
 	// it touched, "repo" for the repository. Empty disables the assertion.
 	RequireCoverage string
+}
+
+// validate rejects unknown flag values. Rank() reads an unvalidated string
+// through a map, so anything unrecognised ranks 0 — the same as "target", the
+// strictest level. Left unchecked, --widen-to=Repo would ask for the widest
+// policy and silently get the narrowest, and --require-coverage=Repo would arm
+// the assertion while never matching the level that carries the selection
+// clause.
+func (o Options) validate() error {
+	if o.WidenTo != "" && !config.ValidWidenTo(config.WidenTo(o.WidenTo)) {
+		return fmt.Errorf("invalid --widen-to value: %s (must be target, unit or repo)", o.WidenTo)
+	}
+	switch config.WidenTo(o.RequireCoverage) {
+	case "", config.WidenToUnit, config.WidenToRepo:
+		return nil
+	case config.WidenToTarget:
+		return fmt.Errorf("invalid --require-coverage value: %s (must be unit or repo; "+
+			"target asserts only what was named, which is always true)", o.RequireCoverage)
+	default:
+		// "target" is excluded on purpose: it asserts only what was named, which
+		// is always true and so never fails.
+		return fmt.Errorf("invalid --require-coverage value: %s (must be unit or repo)", o.RequireCoverage)
+	}
 }
 
 // Run executes a single tool operation (fix, lint, etc.)
