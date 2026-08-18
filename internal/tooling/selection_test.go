@@ -82,3 +82,86 @@ func TestCollectTasksEmptySelectionPlansNothing(t *testing.T) {
 		t.Fatalf("all selection planned %d tasks, want 2", len(tasks))
 	}
 }
+
+// The reported bug: a repository-scoped formatter asked to fix one file from a
+// subdirectory used to be dropped without a trace — not planned, not skipped,
+// absent from every report. What decides is whether its verdict survives
+// narrowing, which is granularity, not scope.
+func TestCollectTasksNarrowableRepositoryToolRunsFromSubdirectory(t *testing.T) {
+	newPlanner := func() *Planner {
+		return &Planner{
+			rootPath: "/repo",
+			cwdPath:  "/repo/packages/api",
+			tools: config.MapOfTools{
+				// A file list in argv: narrowing keeps the answer complete.
+				"oxfmt": {Operations: map[config.OperationType]config.ToolOperation{
+					config.OpFix: {
+						App: "oxfmt", Args: []string{"--write", "{files}"},
+						Scope: config.ToolScopeRepository, Globs: []string{"**/*.json"},
+					},
+				}},
+				// No file list: the verdict is about the repository as a whole.
+				"syncpack": {Operations: map[config.OperationType]config.ToolOperation{
+					config.OpFix: {
+						App: "syncpack", Args: []string{"fix"},
+						Scope: config.ToolScopeRepository, Globs: []string{"**/package.json"},
+					},
+				}},
+			},
+			cachedFiles: []string{
+				"/repo/packages/api/swagger.json",
+				"/repo/packages/web/other.json",
+				"/repo/package.json",
+			},
+			cacheInitialized: true,
+		}
+	}
+
+	sel := Selection{Mode: SelectionPaths, Paths: []string{"/repo/packages/api/swagger.json"}}
+	tasks, skipped := newPlanner().collectTasks(context.Background(), config.OpFix, sel)
+
+	if len(tasks) != 1 || tasks[0].ToolName != "oxfmt" {
+		t.Fatalf("expected oxfmt to be planned, got %+v", tasks)
+	}
+	// The process still starts at the git root, so {root}-anchored config paths
+	// and {cwd} keep resolving to what they resolved to before.
+	if tasks[0].ProjectPath != "/repo" {
+		t.Errorf("ProjectPath = %q, want the git root", tasks[0].ProjectPath)
+	}
+	if len(tasks[0].Files) != 1 || tasks[0].Files[0] != "/repo/packages/api/swagger.json" {
+		t.Errorf("Files = %v, want only the named file", tasks[0].Files)
+	}
+
+	if len(skipped) != 1 || skipped[0].ToolName != "syncpack" {
+		t.Fatalf("expected syncpack to be reported as skipped, got %+v", skipped)
+	}
+	if skipped[0].Reason != SkipReasonNotNarrowable {
+		t.Errorf("reason = %v, want not-narrowable", skipped[0].Reason)
+	}
+}
+
+// widenTo: "repo" is the opt-in that runs the whole-repository tools anyway.
+func TestCollectTasksWidenToRepoRunsNonNarrowableTools(t *testing.T) {
+	p := &Planner{
+		rootPath: "/repo",
+		cwdPath:  "/repo/packages/api",
+		tools: config.MapOfTools{
+			"syncpack": {Operations: map[config.OperationType]config.ToolOperation{
+				config.OpFix: {
+					App: "syncpack", Args: []string{"fix"},
+					Scope: config.ToolScopeRepository, Globs: []string{"**/package.json"},
+				},
+			}},
+		},
+		cachedFiles:      []string{"/repo/package.json"},
+		cacheInitialized: true,
+	}
+	p.SetWidenPolicy(&config.Execution{
+		WidenTo: map[config.OperationType]config.WidenTo{config.OpFix: config.WidenToRepo},
+	}, "")
+
+	tasks, skipped := p.collectTasks(context.Background(), config.OpFix, Selection{Mode: SelectionSubtree, Dir: "/repo/packages/api"})
+	if len(tasks) != 1 {
+		t.Fatalf("widenTo repo should run it, got %d tasks and %+v", len(tasks), skipped)
+	}
+}

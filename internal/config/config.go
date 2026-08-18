@@ -106,6 +106,10 @@ type ToolOperation struct {
 	Scope ToolScope `json:"scope"`
 	// Arity asserts the argv path shape; must equal InferArity(op) when set.
 	Arity ToolArity `json:"arity,omitempty"`
+	// Granularity is the smallest input set on which this operation's verdict is
+	// complete. Inferred when unset (InferGranularity); declaring "file" is a
+	// speed decision, declaring "unit"/"repo" is always safe.
+	Granularity ToolGranularity `json:"granularity,omitempty"`
 	// Batch is deprecated in favour of Arity. Retained so a config still setting
 	// it errors loudly — goja's ExportTo consults only fields on this struct, so
 	// removing it would drop the key silently. See ValidateToolDeprecations.
@@ -431,15 +435,20 @@ type MapOfParsers map[string]Parser
 
 // Config is the fully resolved datamitsu configuration produced by the JS config layer.
 type Config struct {
-	Apps          binmanager.MapOfApps    `json:"apps,omitempty"`
-	Bundles       binmanager.MapOfBundles `json:"bundles,omitempty"`
-	Runtimes      MapOfRuntimes           `json:"runtimes,omitempty"`
-	Setup         MapOfConfigSetup        `json:"setup,omitempty"`
-	ProjectTypes  MapOfProjectTypes       `json:"projectTypes,omitempty"`
-	Tools         MapOfTools              `json:"tools,omitempty"`
-	InitCommands  MapOfInitCommands       `json:"initCommands,omitempty"`
-	IgnoreRules   []string                `json:"ignoreRules,omitempty"`
-	SharedStorage map[string]string       `json:"sharedStorage,omitempty"`
+	Apps         binmanager.MapOfApps    `json:"apps,omitempty"`
+	Bundles      binmanager.MapOfBundles `json:"bundles,omitempty"`
+	Runtimes     MapOfRuntimes           `json:"runtimes,omitempty"`
+	Setup        MapOfConfigSetup        `json:"setup,omitempty"`
+	ProjectTypes MapOfProjectTypes       `json:"projectTypes,omitempty"`
+	Tools        MapOfTools              `json:"tools,omitempty"`
+	// Execution holds run-shaping policy not tied to a single tool. A pointer so
+	// omitempty actually elides it: the whole config is marshalled into the cache
+	// invalidation key, and a struct value would serialize as {} for every config
+	// and reset every user's cache on upgrade.
+	Execution     *Execution        `json:"execution,omitempty"`
+	InitCommands  MapOfInitCommands `json:"initCommands,omitempty"`
+	IgnoreRules   []string          `json:"ignoreRules,omitempty"`
+	SharedStorage map[string]string `json:"sharedStorage,omitempty"`
 	// OCI pins the store-seeding bundle. omitempty is load-bearing: the whole
 	// Config is marshaled into the execution-cache invalidation key, and a nil
 	// field must not change that key on upgrade.

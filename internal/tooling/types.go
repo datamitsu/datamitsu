@@ -36,15 +36,17 @@ type ExecutionPlan struct {
 // SkipReason classifies why a tool was skipped (vs. silently not applicable).
 type SkipReason int
 
-// Skip reason classifications. Only these two reasons are surfaced to the user;
-// other non-runs (project-type mismatch, no matching files, .datamitsuignore)
-// stay silent.
+// Skip reason classifications. Other non-runs (project-type mismatch, no
+// matching files, .datamitsuignore) stay silent.
 const (
 	// SkipReasonConfig marks a tool disabled via `skip: true` in config.
 	SkipReasonConfig SkipReason = iota
 	// SkipReasonUnsupportedPlatform marks a tool whose backing binary has no
 	// build for the current os/arch/libc.
 	SkipReasonUnsupportedPlatform
+	// SkipReasonNotNarrowable marks an operation whose verdict covers the whole
+	// repository, asked for from a subdirectory. It used to vanish silently.
+	SkipReasonNotNarrowable
 )
 
 // String is the stable machine-readable key used in --explain=json.
@@ -54,6 +56,8 @@ func (r SkipReason) String() string {
 		return "config"
 	case SkipReasonUnsupportedPlatform:
 		return "unsupported-platform"
+	case SkipReasonNotNarrowable:
+		return "not-narrowable"
 	}
 	return "config"
 }
@@ -82,6 +86,8 @@ func (s SkippedTool) ReasonText() string {
 			return "no binary for " + s.Detail
 		}
 		return "no binary for this platform"
+	case SkipReasonNotNarrowable:
+		return "whole-repository verdict — cannot narrow"
 	}
 	return "disabled in config"
 }

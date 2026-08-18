@@ -211,6 +211,8 @@ func initSharedContext(
 
 	// Create planner
 	planner := tooling.NewPlanner(sc.rootPath, sc.cwdPath, nil, sc.cfg.Tools, sc.cfg.ProjectTypes, sc.cfg.IgnoreRules)
+	// A CLI override arrives with the reporting stage; config policy is enough here.
+	planner.SetWidenPolicy(sc.cfg.Execution, "")
 	sc.planner = planner
 
 	// Create cache
