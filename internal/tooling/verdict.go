@@ -167,6 +167,19 @@ func (p *Planner) unitGuards(task Task, unitDir string) []string {
 		}
 	}
 
+	// invalidateOn names extra inputs for this operation. Resolved against the
+	// unit and every ancestor up to the git root — without the ancestor walk a
+	// monorepo package could not name a config that lives above it, which is
+	// where they usually live.
+	for _, pattern := range task.OpConfig.InvalidateOn {
+		for dir := unitDir; ; dir = filepath.Dir(dir) {
+			add(filepath.Join(dir, pattern))
+			if dir == p.rootPath || !strings.HasPrefix(dir, p.rootPath) {
+				break
+			}
+		}
+	}
+
 	sort.Strings(out)
 	return out
 }

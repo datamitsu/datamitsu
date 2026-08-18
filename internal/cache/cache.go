@@ -43,7 +43,7 @@ type FileEntry struct {
 
 // File represents the entire cache for a project
 type File struct {
-	InvalidationKey string               // hash(datamitsuVersion + fullConfigHash + invalidateOnFiles)
+	InvalidationKey string               // hash(datamitsuVersion + fullConfigHash + selectedTools)
 	ProjectPath     string               // for debugging
 	LastPruned      time.Time            // when we last cleaned up deleted files
 	Entries         map[string]FileEntry // relativePath -> entry
@@ -82,13 +82,11 @@ type Cache struct {
 // cacheDir is the base cache directory (e.g., ~/.cache/datamitsu)
 // projectPath is the absolute path to the project
 // cfg is the full configuration
-// invalidateOnFiles is a map of tool -> list of config files that invalidate cache
 // selectedTools is the list of tools selected via --tools flag (for cache key)
 func NewCache(
 	cacheDir string,
 	projectPath string,
 	cfg config.Config,
-	invalidateOnFiles map[string][]string,
 	selectedTools []string,
 	logger *zap.Logger,
 ) (*Cache, error) {
@@ -110,7 +108,7 @@ func NewCache(
 	cachePath := filepath.Join(projectDir, cacheFileName)
 
 	// Calculate invalidation key
-	invalidationKey, err := calculateInvalidationKey(cfg, invalidateOnFiles, projectPath, selectedTools)
+	invalidationKey, err := calculateInvalidationKey(cfg, selectedTools)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate invalidation key: %w", err)
 	}
@@ -447,15 +445,17 @@ func (c *Cache) Clear() error {
 	return c.Save()
 }
 
-// calculateInvalidationKey calculates an XXH3-128 hash from:
-// - datamitsu version
-// - full config JSON
-// - contents of invalidateOn files for each tool
-// - selected tools list
+// calculateInvalidationKey calculates an XXH3-128 hash from the datamitsu
+// version, the full config JSON and the selected tools.
+//
+// invalidateOn used to be folded in here and no longer is. It was broken —
+// paths resolved against the git root, so packages/*/tsconfig.json read as
+// missing and never changed the key — and even repaired it was the wrong shape:
+// a global key means editing one nested config resets the entire cache file for
+// every tool. It is now a per-unit guard in the verdict cache, where a changed
+// input invalidates the unit it belongs to and nothing else.
 func calculateInvalidationKey(
 	cfg config.Config,
-	invalidateOnFiles map[string][]string,
-	projectPath string,
 	selectedTools []string,
 ) (string, error) {
 	// Build a single byte slice with all components separated by \0
@@ -470,32 +470,6 @@ func calculateInvalidationKey(
 		return "", fmt.Errorf("failed to marshal config: %w", err)
 	}
 	parts = append(parts, configBytes)
-
-	// Add contents of invalidateOn files
-	// Sort tools for deterministic ordering
-	var toolNames []string
-	for tool := range invalidateOnFiles {
-		toolNames = append(toolNames, tool)
-	}
-	slices.Sort(toolNames)
-
-	for _, tool := range toolNames {
-		files := invalidateOnFiles[tool]
-		slices.Sort(files) // Sort files for deterministic ordering
-
-		for _, file := range files {
-			absPath := filepath.Join(projectPath, file)
-			content, err := os.ReadFile(absPath)
-			if err != nil {
-				// If file doesn't exist, just add the path
-				parts = append(parts, []byte(file))
-				parts = append(parts, []byte("(missing)"))
-				continue
-			}
-			parts = append(parts, []byte(file))
-			parts = append(parts, content)
-		}
-	}
 
 	// Add selected tools (sorted for deterministic key)
 	if len(selectedTools) > 0 {

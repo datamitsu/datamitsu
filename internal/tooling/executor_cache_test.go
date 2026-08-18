@@ -22,7 +22,7 @@ func TestExecutorCacheFilterRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c, err := cache.NewCache(cacheDir, projectPath, config.Config{}, map[string][]string{}, nil, logger.Logger)
+	c, err := cache.NewCache(cacheDir, projectPath, config.Config{}, nil, logger.Logger)
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
 	}

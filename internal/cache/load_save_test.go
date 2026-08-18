@@ -25,7 +25,7 @@ func newProject(t *testing.T) (cacheDir, projectPath, file string) {
 
 func TestShouldRunCacheHitAndChange(t *testing.T) {
 	cacheDir, projectPath, file := newProject(t)
-	c, err := NewCache(cacheDir, projectPath, config.Config{}, map[string][]string{}, nil, logger.Logger)
+	c, err := NewCache(cacheDir, projectPath, config.Config{}, nil, logger.Logger)
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
 	}
@@ -70,7 +70,7 @@ func TestShouldRunCacheHitAndChange(t *testing.T) {
 func TestLoadRoundTripAndInvalidation(t *testing.T) {
 	cacheDir, projectPath, file := newProject(t)
 
-	c, err := NewCache(cacheDir, projectPath, config.Config{}, map[string][]string{}, nil, logger.Logger)
+	c, err := NewCache(cacheDir, projectPath, config.Config{}, nil, logger.Logger)
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
 	}
@@ -82,7 +82,7 @@ func TestLoadRoundTripAndInvalidation(t *testing.T) {
 	}
 
 	// Reopen with the SAME inputs → Load reads the persisted entry → hit.
-	c2, err := NewCache(cacheDir, projectPath, config.Config{}, map[string][]string{}, nil, logger.Logger)
+	c2, err := NewCache(cacheDir, projectPath, config.Config{}, nil, logger.Logger)
 	if err != nil {
 		t.Fatalf("reopen NewCache() error = %v", err)
 	}
@@ -92,7 +92,7 @@ func TestLoadRoundTripAndInvalidation(t *testing.T) {
 
 	// Reopen with a DIFFERENT selected-tools set → invalidation key mismatch →
 	// the cache resets and the previously-passed file runs again.
-	c3, err := NewCache(cacheDir, projectPath, config.Config{}, map[string][]string{}, []string{"other-tool"}, logger.Logger)
+	c3, err := NewCache(cacheDir, projectPath, config.Config{}, []string{"other-tool"}, logger.Logger)
 	if err != nil {
 		t.Fatalf("reopen-with-tools NewCache() error = %v", err)
 	}
@@ -108,7 +108,7 @@ func TestLoadCorruptFileFallsBack(t *testing.T) {
 	projectsDir := filepath.Join(cacheDir, "projects")
 	// NewCache computes the hashed project dir; create the cache first so we can
 	// find the path, then clobber it and reopen.
-	c, err := NewCache(cacheDir, projectPath, config.Config{}, map[string][]string{}, nil, logger.Logger)
+	c, err := NewCache(cacheDir, projectPath, config.Config{}, nil, logger.Logger)
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
 	}
@@ -118,7 +118,7 @@ func TestLoadCorruptFileFallsBack(t *testing.T) {
 	_ = projectsDir
 
 	// Reopen → Load fails to decode → NewCache warns and starts fresh (no error).
-	c2, err := NewCache(cacheDir, projectPath, config.Config{}, map[string][]string{}, nil, logger.Logger)
+	c2, err := NewCache(cacheDir, projectPath, config.Config{}, nil, logger.Logger)
 	if err != nil {
 		t.Fatalf("NewCache() over corrupt file should not error, got %v", err)
 	}
@@ -131,31 +131,8 @@ func TestLoadCorruptFileFallsBack(t *testing.T) {
 	}
 }
 
-func TestCalculateInvalidationKeyReadsFiles(t *testing.T) {
-	_, projectPath, _ := newProject(t)
-	cfgFile := "config.yaml"
-	if err := os.WriteFile(filepath.Join(projectPath, cfgFile), []byte("a: 1\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	invalidateOn := map[string][]string{"tool": {cfgFile, "missing.yaml"}}
-
-	k1, err := calculateInvalidationKey(config.Config{}, invalidateOn, projectPath, nil)
-	if err != nil {
-		t.Fatalf("calculateInvalidationKey() error = %v", err)
-	}
-
-	// Changing the watched file's content changes the key.
-	if err := os.WriteFile(filepath.Join(projectPath, cfgFile), []byte("a: 2\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	k2, err := calculateInvalidationKey(config.Config{}, invalidateOn, projectPath, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if k1 == k2 {
-		t.Error("invalidation key should change when a watched file changes")
-	}
-	if len(k1) != 32 {
-		t.Errorf("invalidation key length = %d, want 32 (XXH3-128 hex)", len(k1))
-	}
-}
+// invalidateOn no longer participates in the global key: it was resolved against
+// the git root and so never saw a nested config, and a global key is the wrong
+// shape for it anyway — one nested edit would reset the whole file for every
+// tool. It is a per-unit guard in the verdict cache now, covered by
+// tooling.TestVerdictInputsNoticeAConfigEditNoGlobMatches.

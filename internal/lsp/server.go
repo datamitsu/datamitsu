@@ -69,7 +69,7 @@ func NewServer(r io.Reader, w io.Writer, cfg *config.Config, root string) *Serve
 	// is nil — the LSP, like the lefthook `check`, runs the full tool set, so the
 	// invalidation keys match and entries are shared. A build failure is non-fatal:
 	// formatting just runs without caching.
-	projectCache, err := cache.NewCache(env.GetCachePath(), root, *cfg, invalidateOnFiles(cfg), nil, logger.Logger)
+	projectCache, err := cache.NewCache(env.GetCachePath(), root, *cfg, nil, logger.Logger)
 	if err != nil {
 		logger.Logger.Warn("lsp: cache unavailable, formatting without it", zap.Error(err))
 		projectCache = nil
@@ -84,28 +84,6 @@ func NewServer(r io.Reader, w io.Writer, cfg *config.Config, root string) *Serve
 		cache:    projectCache,
 		docs:     make(map[string][]byte),
 	}
-}
-
-// invalidateOnFiles mirrors the runner's createCache: collect each tool's
-// InvalidateOn paths so the cache's invalidation key matches the CLI's exactly.
-func invalidateOnFiles(cfg *config.Config) map[string][]string {
-	out := make(map[string][]string)
-	for toolName, tool := range cfg.Tools {
-		seen := make(map[string]struct{})
-		var files []string
-		for _, op := range tool.Operations {
-			for _, f := range op.InvalidateOn {
-				if _, dup := seen[f]; !dup {
-					seen[f] = struct{}{}
-					files = append(files, f)
-				}
-			}
-		}
-		if len(files) > 0 {
-			out[toolName] = files
-		}
-	}
-	return out
 }
 
 // ExitCode is the process exit code the caller should honor after Run returns:
