@@ -13,6 +13,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/ocibundle"
 	"github.com/datamitsu/datamitsu/internal/ocidigest"
+	"github.com/datamitsu/datamitsu/internal/ociref"
 	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 	"github.com/datamitsu/datamitsu/internal/term"
 	"github.com/datamitsu/datamitsu/internal/ui"
@@ -97,6 +98,10 @@ func init() {
 		"Allow a tag reference: resolve it to a digest first and print the digest")
 	storeStatusCmd.Flags().BoolVar(&storeStatusJSON, "json", false,
 		"Emit the status as JSON")
+	storeRefsCmd.Flags().BoolVar(&storeRefsJSON, "json", false,
+		"Emit the references as JSON, including each artifact's mandatory hash")
+	storeRefsCmd.Flags().BoolVar(&storeRefsOCIOnly, "oci-only", false,
+		"List only OCI references, omitting the hash-pinned https downloads")
 	storeImportCmd.Flags().StringVar(&storeImportDigest, "digest", "",
 		"Bundle digest to import (sha256:<64 hex>); defaults to the config's oci.digest")
 
@@ -105,6 +110,7 @@ func init() {
 	storeCmd.AddCommand(storeSeedCmd)
 	storeCmd.AddCommand(storeStatusCmd)
 	storeCmd.AddCommand(storeImportCmd)
+	storeCmd.AddCommand(storeRefsCmd)
 	rootCmd.AddCommand(storeCmd)
 }
 
@@ -124,16 +130,21 @@ func resolveSeedRef(ctx context.Context, cfg *config.Config, args []string) (*co
 		return &config.OCIRef{Ref: ref, Digest: digest}, nil
 	}
 
-	ref, tag, ok := strings.Cut(arg, ":")
-	if !ok || strings.Contains(tag, "/") {
+	// The tag separator is the last colon after the last "/", so a ported
+	// registry host is not mistaken for one: cutting at the first colon made
+	// "localhost:5000/o/r:latest" parse as ref "localhost" and tag
+	// "5000/o/r:latest", which the check below then rejected — --resolve-tag
+	// could never work against a registry on a port.
+	ref, tag, ok := ociref.SplitTag(arg)
+	if !ok {
 		return nil, fmt.Errorf("reference %q must be pinned as <ref>@sha256:<digest> (or <ref>:<tag> with --resolve-tag)", arg)
 	}
 	if !storeSeedResolveTag {
 		return nil, fmt.Errorf("a tag reference does not pin content; pass <ref>@sha256:<digest>, or use --resolve-tag to resolve %q and print the digest", arg)
 	}
-	host, repo, ok := strings.Cut(ref, "/")
-	if !ok {
-		return nil, fmt.Errorf("reference %q has no repository path", ref)
+	host, repo, err := ociref.Parse(ref)
+	if err != nil {
+		return nil, fmt.Errorf("reference %q %w", ref, err)
 	}
 	digest, err := ocidigest.NewResolverForHost(host).Resolve(ctx, repo, tag)
 	if err != nil {
@@ -295,5 +306,19 @@ func runStoreClear(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to clear store: %w", err)
 	}
 	fmt.Printf("Cleared store: %s\n", storePath)
+
+	// The resolved-digest cache lives beside the store, not inside it, and its
+	// entries never expire — so a tag resolved once while a registry was
+	// serving the wrong thing would survive every `store clear` with no
+	// supported way to get rid of it. Clearing the store is the escape hatch
+	// for exactly that kind of poisoning, so it clears this too. Absent is
+	// fine; a failure to remove it is worth reporting but not worth failing the
+	// command that already did its main job.
+	digestCache := filepath.Join(env.GetCachePath(), ocidigest.CacheDirName)
+	if err := os.RemoveAll(digestCache); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: failed to clear the OCI digest cache %s: %v\n", digestCache, err)
+	} else {
+		fmt.Printf("Cleared OCI digest cache: %s\n", digestCache)
+	}
 	return nil
 }

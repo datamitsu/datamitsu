@@ -7,6 +7,7 @@ Available Commands:
   clear       Clear the entire store
   import      Seed the store from a local OCI image layout directory
   path        Print store directory path
+  refs        List every external artifact the effective config pins
   seed        Seed the store from the declared OCI bundle
   status      Show OCI bundle contents and store coverage
 

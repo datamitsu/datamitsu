@@ -1,11 +1,16 @@
 package ocibundle
 
 import (
+	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/parsermanager"
+
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
 func TestValidateSubtree_AcceptsParsers(t *testing.T) {
@@ -58,6 +63,59 @@ func TestExpectedSubtrees_UnreferencedParserExcluded(t *testing.T) {
 	if expected := expectedSubtrees(cfg, storeRoot, nil, nil); len(expected) != 0 {
 		t.Errorf("expected = %v, want empty (no tool references the parser)", expected)
 	}
+}
+
+// A full seed queues every annotated layer the bundle carries, and only the
+// consumer's own pins have a hash to check against — so a parser module the
+// config does not declare must never reach the store. It would sit there
+// unverified until the day a config pins that hash, at which point the store's
+// stat fast path would hand it straight to the WASM runtime.
+func TestSeed_SkipsParserLayerTheConfigDoesNotDeclare(t *testing.T) {
+	storeRoot := testStore(t)
+	cfg := parserOnlyConfig()
+
+	declaredModule := []byte("declared module bytes")
+	cfg.Parsers["core"] = config.Parser{URL: "https://example.invalid/m.wasm", Hash: sha256Hex(declaredModule)}
+	declaredSubtree, err := subtreeRel(storeRoot, parsermanager.ModuleStorePath("core", cfg.Parsers["core"]))
+	if err != nil {
+		t.Fatalf("subtreeRel: %v", err)
+	}
+	// A second module, published by a bundle producer whose config pins a
+	// different version. Same shape, different content-addressed directory.
+	foreign := config.Parser{URL: "https://example.invalid/other.wasm", Hash: strings.Repeat("b", 64)}
+	foreignSubtree, err := subtreeRel(storeRoot, parsermanager.ModuleStorePath("core", foreign))
+	if err != nil {
+		t.Fatalf("subtreeRel: %v", err)
+	}
+
+	src := newFakeSource()
+	layers := []ocispec.Descriptor{
+		src.addLayer(parserLayer(t, declaredSubtree, declaredModule), declaredSubtree),
+		src.addLayer(parserLayer(t, foreignSubtree, []byte("foreign module bytes")), foreignSubtree),
+	}
+	digest := src.addManifest(t, layers, nil)
+
+	if err := seedFrom(context.Background(), cfg, src, "test/bundle", digest, nil, Options{}); err != nil {
+		t.Fatalf("seedFrom: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(storeRoot, filepath.FromSlash(declaredSubtree))); err != nil {
+		t.Errorf("declared parser module was not seeded: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(storeRoot, filepath.FromSlash(foreignSubtree))); err == nil {
+		t.Error("a parser module the config does not declare was placed in the store unverified")
+	}
+}
+
+// parserLayer builds the layer for a parser module subtree: the module file
+// inside the content-addressed directory.
+func parserLayer(t *testing.T, subtree string, module []byte) []byte {
+	t.Helper()
+	prefix := strings.TrimPrefix(testBuilderRoot, "/")
+	return subtreeLayer(t, subtree, []tarEntry{
+		dirEntry(prefix + "/" + subtree + "/"),
+		fileEntry(prefix+"/"+subtree+"/"+parsermanager.WASMFileName, module),
+	})
 }
 
 func TestBuildReVerifyIndex_IndexesParser(t *testing.T) {

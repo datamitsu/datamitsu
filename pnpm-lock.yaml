@@ -30,7 +30,7 @@ importers:
         version: 26.2.0
       tsdown:
         specifier: 0.22.14
-        version: 0.22.14(tsx@4.23.11)(typescript@6.0.3)
+        version: 0.22.14(tsx@4.23.12)(typescript@6.0.3)
 
   editors/vscode:
     devDependencies:
@@ -51,10 +51,10 @@ importers:
         version: 1.1.1(@types/node@26.2.0)(debug@4.4.3(supports-color@8.1.1))(supports-color@8.1.1)
       tsdown:
         specifier: 0.22.14
-        version: 0.22.14(tsx@4.23.11)(typescript@6.0.3)
+        version: 0.22.14(tsx@4.23.12)(typescript@6.0.3)
       tsx:
-        specifier: 4.23.11
-        version: 4.23.11
+        specifier: 4.23.12
+        version: 4.23.12
       vscode-languageclient:
         specifier: 10.1.0
         version: 10.1.0
@@ -81,10 +81,10 @@ importers:
         version: 26.2.0
       tsdown:
         specifier: 0.22.14
-        version: 0.22.14(tsx@4.23.11)(typescript@6.0.3)
+        version: 0.22.14(tsx@4.23.12)(typescript@6.0.3)
       tsx:
-        specifier: 4.23.11
-        version: 4.23.11
+        specifier: 4.23.12
+        version: 4.23.12
 
   programmable-api/js:
     dependencies:
@@ -103,10 +103,10 @@ importers:
         version: 26.2.0
       tsdown:
         specifier: 0.22.14
-        version: 0.22.14(tsx@4.23.11)(typescript@6.0.3)
+        version: 0.22.14(tsx@4.23.12)(typescript@6.0.3)
       tsx:
-        specifier: 4.23.11
-        version: 4.23.11
+        specifier: 4.23.12
+        version: 4.23.12
 
   website:
     dependencies:
@@ -7536,8 +7536,8 @@ packages:
     engines: {node: '>=18.0.0'}
     hasBin: true
 
-  tsx@4.23.11:
-    resolution: {integrity: sha512-Ry2oTEUnhBdeEdWIztY8kf3/nBGnPnjMLVGL0YfdRXMORuPER5NlKmayqxtxRxwB1xBN+RivRaJfe7PM1rtiyw==}
+  tsx@4.23.12:
+    resolution: {integrity: sha512-FDf4L4sYzKtzWYhU/Xm0AQFdTjdIxNo9ElTf2mxXM6k8YMHXzYUe4yODVaXP4V9uMFbVg8c0qyBccK2OOxb45Q==}
     engines: {node: '>=18.0.0'}
     hasBin: true
 
@@ -17148,7 +17148,7 @@ snapshots:
 
   ts-dedent@2.3.0: {}
 
-  tsdown@0.22.14(tsx@4.23.11)(typescript@6.0.3):
+  tsdown@0.22.14(tsx@4.23.12)(typescript@6.0.3):
     dependencies:
       ansis: 4.3.1
       cac: 7.0.0
@@ -17166,7 +17166,7 @@ snapshots:
       unconfig-core: 7.5.0
       verkit: 0.3.2
     optionalDependencies:
-      tsx: 4.23.11
+      tsx: 4.23.12
       typescript: 6.0.3
     transitivePeerDependencies:
       - '@typescript/native-preview'
@@ -17184,7 +17184,7 @@ snapshots:
     optionalDependencies:
       fsevents: 2.3.3
 
-  tsx@4.23.11:
+  tsx@4.23.12:
     dependencies:
       esbuild: 0.28.2
     optionalDependencies:

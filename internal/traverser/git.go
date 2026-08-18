@@ -11,6 +11,8 @@ import (
 	"strings"
 
 	"golang.org/x/sync/errgroup"
+
+	"github.com/datamitsu/datamitsu/internal/gitenv"
 )
 
 // GetGitRoot returns the root of the topmost repository in submodules hierarchy
@@ -28,7 +30,7 @@ func GetGitRoot(ctx context.Context, cwd string) (string, error) {
 				args = append([]string{"-C", current}, args...)
 			}
 			cmd := exec.CommandContext(gctx, "git", args...)
-			cmd.Env = os.Environ()
+			cmd.Env = gitenv.Environ()
 
 			cmd.Dir = cwd
 
@@ -46,7 +48,7 @@ func GetGitRoot(ctx context.Context, cwd string) (string, error) {
 				args = append([]string{"-C", current}, args...)
 			}
 			cmd := exec.CommandContext(gctx, "git", args...)
-			cmd.Env = os.Environ()
+			cmd.Env = gitenv.Environ()
 
 			cmd.Dir = cwd
 

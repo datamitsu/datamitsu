@@ -131,6 +131,14 @@ func runDockerfile(ctx context.Context, cmd *cobra.Command) error {
 		fmt.Fprintf(os.Stderr, "Warning: excluded %d app(s) with no %s binary (add via --force-include if universal): %s\n",
 			len(plan.LibcExcluded), targetLibc, strings.Join(plan.LibcExcluded, ", "))
 	}
+	// The generated parser stage runs `parsers prefetch` inside buildkit, so an
+	// oci-sourced module turns the build into something that needs registry
+	// egress — and, for a private registry, credentials buildkit does not have.
+	// Say it here rather than letting the build fail deep in a stage.
+	if len(plan.RegistrySourcedParsers) > 0 {
+		fmt.Fprintf(os.Stderr, "Warning: parser module(s) %s are sourced from an OCI registry, so the generated build stage needs registry access from inside buildkit; use a url source in the build config if that is not available\n",
+			strings.Join(plan.RegistrySourcedParsers, ", "))
+	}
 
 	// The repository and tag of the datamitsu base image are baked into this
 	// binary at release time (they differ between the stable and unstable

@@ -170,7 +170,16 @@ func TestBundleStatus_IndexSelectsHostPlatform(t *testing.T) {
 	idxDigest := sha256DigestOf(idxRaw)
 	seedManifestCache(t, idxDigest, idxRaw)
 
-	// Pre-write the full-pull marker to cover the Seeded flag too.
+	// Pre-write the full-pull marker to cover the Seeded flag too. The subtree
+	// it records has to be in the store: a marker whose content is gone reports
+	// not-seeded, which is the whole point of checking it.
+	placed := filepath.Join(storeRoot, filepath.FromSlash(subtrees["tool"]))
+	if err := os.MkdirAll(filepath.Dir(placed), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(placed, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	if err := writeMarker(storeRoot, "registry.invalid/owner/repo", idxDigest, []string{subtrees["tool"]}); err != nil {
 		t.Fatal(err)
 	}

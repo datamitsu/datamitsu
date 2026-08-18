@@ -60,6 +60,77 @@ function getConfig(input) {
 	}
 }
 
+// TestProcessConfigSourceParserOCIParsing covers the other half of the registry
+// story: a parser's `oci` sub-object arriving through the JS VM. It is a
+// pointer nested inside a map value, which is a different reflection path from
+// the top-level bundle pin — and one nothing else in the suite exercises.
+func TestProcessConfigSourceParserOCIParsing(t *testing.T) {
+	result := runOCIConfigSource(t, nil, "parser-oci-parse", `
+function getConfig(input) {
+    return {
+        parsers: {
+            core: {
+                hash: "`+strings.Repeat("ab", 32)+`",
+                oci: { ref: "ghcr.io/datamitsu/datamitsu-parsers", digest: "`+testOCIDigest+`" },
+            },
+        },
+    };
+}`)
+
+	p, ok := result.Parsers["core"]
+	if !ok {
+		t.Fatal("parsers.core missing from the exported config")
+	}
+	if p.OCI == nil {
+		t.Fatal("parsers.core.oci = nil, want the parsed registry source")
+	}
+	if p.OCI.Ref != "ghcr.io/datamitsu/datamitsu-parsers" || p.OCI.Digest != testOCIDigest {
+		t.Errorf("parsers.core.oci = %+v, want the declared ref and digest", p.OCI)
+	}
+	if p.URL != "" {
+		t.Errorf("parsers.core.url = %q, want empty for an oci-sourced parser", p.URL)
+	}
+	if err := config.ValidateParsers(result.Parsers); err != nil {
+		t.Errorf("an oci-sourced parser failed validation after the VM round trip: %v", err)
+	}
+}
+
+// TestProcessConfigSourceParserOCIOverridesURL pins the documented way to move
+// a parser onto a mirror: a later config layer replaces the whole entry. The
+// two sources are mutually exclusive, so the override has to drop the url — if
+// the spread left it behind, the result would fail validation.
+func TestProcessConfigSourceParserOCIOverridesURL(t *testing.T) {
+	hash := strings.Repeat("ab", 32)
+	first := runOCIConfigSource(t, nil, "parser-url", `
+function getConfig(input) {
+    return { ...input, parsers: { core: { url: "https://example.com/core.wasm", hash: "`+hash+`" } } };
+}`)
+	second := runOCIConfigSource(t, first, "parser-oci", `
+function getConfig(input) {
+    return {
+        ...input,
+        parsers: {
+            ...input.parsers,
+            core: { hash: input.parsers.core.hash, oci: { ref: "harbor.corp.example/dm/parsers", digest: "`+testOCIDigest+`" } },
+        },
+    };
+}`)
+
+	p := second.Parsers["core"]
+	if p.OCI == nil || p.OCI.Ref != "harbor.corp.example/dm/parsers" {
+		t.Fatalf("parsers.core.oci = %+v, want the mirror override", p.OCI)
+	}
+	if p.URL != "" {
+		t.Errorf("parsers.core.url = %q, want the override to have replaced the url source", p.URL)
+	}
+	if p.Hash != hash {
+		t.Errorf("parsers.core.hash = %q, want the hash carried over unchanged", p.Hash)
+	}
+	if err := config.ValidateParsers(second.Parsers); err != nil {
+		t.Errorf("the documented mirror override failed validation: %v", err)
+	}
+}
+
 func TestProcessConfigSourceOCILastWins(t *testing.T) {
 	first := runOCIConfigSource(t, nil, "oci-first", `
 function getConfig(input) {

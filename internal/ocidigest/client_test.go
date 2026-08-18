@@ -219,17 +219,75 @@ func TestFetchToken_ForeignRealmStaysAnonymous(t *testing.T) {
 	}
 }
 
-func TestShouldAttachGitHubToken(t *testing.T) {
-	cases := map[string]bool{
-		"ghcr.io":            true,
-		"auth.docker.io":     false,
-		"index.docker.io":    false,
-		"gitlab.example.com": false,
-		"ghcr.io.evil.com":   false,
+func TestMayAttachGitHubToken(t *testing.T) {
+	tests := []struct {
+		name      string
+		registry  string
+		token     string
+		realmHost string
+		want      bool
+	}{
+		{name: "ghcr to ghcr", registry: "ghcr.io", token: "t", realmHost: "ghcr.io", want: true},
+		{name: "no token", registry: "ghcr.io", realmHost: "ghcr.io"},
+
+		// The realm is whatever the registry's own WWW-Authenticate header
+		// says, so a host of the attacker's choosing can claim GHCR's realm.
+		// Minting a real GHCR token for it hands that token to the host that
+		// asked, on the retried request.
+		{name: "hostile registry claiming the ghcr realm", registry: "evil.example", token: "t", realmHost: "ghcr.io"},
+		{name: "hostile lookalike realm", registry: "ghcr.io", token: "t", realmHost: "ghcr.io.evil.com"},
+
+		// Not a leak, but a broken handshake: these registries reject a
+		// GitHub token instead of falling back to an anonymous one.
+		{name: "docker hub", registry: "index.docker.io", token: "t", realmHost: "auth.docker.io"},
+		{name: "gitlab", registry: "gitlab.example.com", token: "t", realmHost: "gitlab.example.com"},
 	}
-	for host, want := range cases {
-		if got := shouldAttachGitHubToken(host); got != want {
-			t.Errorf("shouldAttachGitHubToken(%q) = %v, want %v", host, got, want)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := &Resolver{registry: tt.registry, token: tt.token}
+			if got := r.mayAttachGitHubToken(tt.realmHost); got != tt.want {
+				t.Errorf("mayAttachGitHubToken(registry=%q, realm=%q) = %v, want %v", tt.registry, tt.realmHost, got, tt.want)
+			}
+		})
+	}
+}
+
+// End-to-end version of the relay case: a resolver configured for some other
+// host must neither send Basic auth to the realm it was told about nor forward
+// a bearer token to the registry that asked for it.
+func TestFetchToken_NoGitHubTokenForForeignRegistry(t *testing.T) {
+	var sawBasicAuth, sawBearer bool
+	mux := http.NewServeMux()
+	mux.HandleFunc("/token", func(w http.ResponseWriter, r *http.Request) {
+		if _, _, ok := r.BasicAuth(); ok {
+			sawBasicAuth = true
 		}
+		_ = json.NewEncoder(w).Encode(map[string]string{"token": "minted-token"})
+	})
+	mux.HandleFunc("/v2/", func(w http.ResponseWriter, r *http.Request) {
+		if auth := r.Header.Get("Authorization"); auth == "" {
+			w.Header().Set("WWW-Authenticate",
+				fmt.Sprintf(`Bearer realm="http://%s/token",service="test",scope="repository:victim/private:pull"`, r.Host))
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		} else if strings.HasPrefix(auth, "Bearer github-pat") {
+			sawBearer = true
+		}
+		w.Header().Set("Docker-Content-Digest", testDigest)
+		w.WriteHeader(http.StatusOK)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	r := newTestResolver(srv.URL, t.TempDir())
+	r.token = "github-pat"
+	if _, err := r.Resolve(context.Background(), "victim/private", "1.0.0"); err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if sawBasicAuth {
+		t.Error("GITHUB_TOKEN was sent as Basic auth to a registry that is not GHCR")
+	}
+	if sawBearer {
+		t.Error("GITHUB_TOKEN was forwarded verbatim as a bearer credential")
 	}
 }

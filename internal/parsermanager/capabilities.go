@@ -9,7 +9,8 @@ import (
 // Capabilities is a parser module's self-description, returned by its WASM
 // `describe` export (parsers/datamitsu-parsers/src/capabilities.rs). The module
 // is the single source of truth for its version and the tools it can parse —
-// none of this is declared in datamitsu config, which carries only url+hash.
+// none of this is declared in datamitsu config, which carries only a source
+// and a hash.
 type Capabilities struct {
 	SchemaVersion int              `json:"schemaVersion"`
 	Module        string           `json:"module"`
@@ -97,7 +98,7 @@ func CatalogFromCapabilities(parserName string, caps Capabilities) *ParserCatalo
 
 // ListCapabilities builds the deduplicated catalog across every configured
 // parser. Distinct modules (by content key) are described exactly once — N config
-// entries sharing one url+hash call `describe` a single time — and tools are
+// entries sharing one module call `describe` a single time — and tools are
 // deduplicated by name across modules, flagging any tool two different modules
 // claim with diverging identity.
 func (m *Manager) ListCapabilities(ctx context.Context) (*ParserCatalog, error) {

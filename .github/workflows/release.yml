@@ -79,10 +79,19 @@ jobs:
       #     (the signed file) — it would otherwise ship unverifiable.
       - name: Assert WASM is in checksums.txt
         run: .github/scripts/assert-wasm-checksum.sh
+      # 2c. Stage the module into dist/ so it travels with release-artifacts and
+      #     can be attached to an (optional) unstable prerelease. GoReleaser
+      #     uploads it straight from parsers/target on a real release, and
+      #     --clean wipes dist/ before the build, so the copy has to happen
+      #     here — after GoReleaser, under the exact name checksums.txt (the
+      #     signed file) records, so a published asset always matches its
+      #     signed entry.
+      - name: Stage the WASM parser module into dist/
+        run: .github/scripts/stage-wasm-artifact.sh
       # 3. Attest build artifacts
       - if: ${{ !env.ACT }}
         name: Attest build artifacts
-        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.2.0
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-checksums: ./dist/checksums.txt
       # 3a. The .vsix is built INSIDE GoReleaser (vsix `signs` entry in
@@ -132,7 +141,7 @@ jobs:
           ls -lh dist/datamitsu-linux-*/
       # 8. Test Docker Build (dry-run, no push)
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3 # v4.1.0
+        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
         with:
           platforms: linux/amd64,linux/arm64
       - name: Set up Docker Buildx
@@ -206,11 +215,24 @@ jobs:
       checkout_ref: ${{ steps.detect.outputs.checkout_ref }}
       is_stable: ${{ steps.detect.outputs.is_stable }}
       is_unstable: ${{ steps.detect.outputs.is_unstable }}
+      want_prerelease: ${{ steps.detect.outputs.want_prerelease }}
     runs-on: ubuntu-latest
     steps:
       - id: detect
         name: Detect release type
         run: |
+          # Resolve the prerelease request here rather than in a job-level `if:`.
+          # A `type: boolean` input reaches github.event.inputs as a string but
+          # the inputs context as a real boolean, and in expression syntax
+          # `true == 'true'` is FALSE — so a gate written against the wrong
+          # spelling skips the job with the box ticked and says nothing about
+          # why. In the shell both spellings interpolate to "true"/"false", and
+          # the answer lands in the log where a reader can see it.
+          WANT_PRERELEASE="${{ inputs.create_github_prerelease }}"
+          [[ "$WANT_PRERELEASE" == "true" ]] || WANT_PRERELEASE=false
+          echo "want_prerelease=$WANT_PRERELEASE" >> $GITHUB_OUTPUT
+          echo "GitHub prerelease requested: $WANT_PRERELEASE"
+
           if [[ "${{ github.event_name }}" == "push" ]]; then
             # Tag push → stable
             echo "is_stable=true" >> $GITHUB_OUTPUT
@@ -234,6 +256,12 @@ jobs:
             echo "is_unstable=true" >> $GITHUB_OUTPUT
             echo "checkout_ref=${{ github.event.inputs.ref }}" >> $GITHUB_OUTPUT
             echo "Detected: Unstable release"
+            if [[ "$WANT_PRERELEASE" != "true" ]]; then
+              # An unstable build publishes npm and images unconditionally, so
+              # "no release appeared" reads as a broken workflow rather than a
+              # box left unchecked. Say so where the run summary shows it.
+              echo "::notice title=No GitHub prerelease::create_github_prerelease was not set, so no prerelease (and no WASM parser module asset) is published for this build. Re-run the workflow with the checkbox ticked to publish one."
+            fi
           fi
   generate-unstable-version:
     if: |
@@ -337,7 +365,7 @@ jobs:
           name: release-artifacts
           path: .
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3 # v4.1.0
+        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
         with:
           platforms: linux/amd64,linux/arm64
       - name: Set up Docker Buildx
@@ -412,14 +440,25 @@ jobs:
           - debian
           - alpine
   publish-github:
+    # always() is load-bearing, not decoration. An unstable run skips
+    # validate-stable, and GitHub propagates a skip down the whole dependency
+    # chain — only a job whose own condition says "continue anyway" escapes it.
+    # build escapes with always(); this job did not, so it was skipped on every
+    # unstable dispatch no matter how the prerelease box was set, which is why
+    # no unstable prerelease had ever been created. Every other publish-* job
+    # here already carries this preamble; keep it.
     if: |
+      always() &&
+      !cancelled() &&
+      needs.build.result == 'success' &&
       needs.determine-release-type.outputs.is_unstable == 'true' &&
-      github.event.inputs.create_github_prerelease == 'true'
+      needs.determine-release-type.outputs.want_prerelease == 'true'
     name: Publish to GitHub Releases
     needs:
       - build
       - determine-release-type
       - generate-unstable-version
+      - publish-parsers-oci
     permissions:
       contents: write
     runs-on: ubuntu-latest
@@ -433,20 +472,61 @@ jobs:
         with:
           name: release-artifacts
           path: .
+      - if: ${{ !env.ACT && needs.publish-parsers-oci.outputs.digest != '' }}
+        name: Download the parser pin record
+        # Written by publish-parsers-oci, which runs after build — so it cannot
+        # ride in release-artifacts and has to be fetched separately. Guarded on
+        # the digest so a skipped OCI push does not fail the prerelease.
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: parsers-oci
+          path: dist
       - env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         if: ${{ !env.ACT }}
         name: Create GitHub Release
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
-          draft: false
+          # This repository has immutable releases enabled, which allows asset
+          # uploads only while a release is still a draft — publishing first and
+          # uploading after fails every asset with "Cannot upload asset ... to an
+          # immutable release". So: create the draft, upload into it, publish it
+          # in the step below. The release is not visible to anyone until that
+          # step runs, which also means a failed upload leaves no half-populated
+          # prerelease behind.
+          draft: true
+          # The .wasm parser module is the reason this job is worth enabling: it
+          # is the one artifact a wrapper config must fetch by url+hash, and an
+          # unstable build otherwise publishes it nowhere, so an unreleased
+          # parser module cannot be exercised downstream. checksums.txt carries
+          # its SHA-256, and --snapshot skips only the release pipe (not the
+          # signs one, which unstable does not --skip), so the cosign bundle is
+          # produced here too and travels with it.
           files: |
             dist/*.tar.gz
             dist/*.zip
             dist/checksums.txt
+            dist/checksums.txt.sigstore.json
+            dist/datamitsu_parsers_*.wasm
+            dist/parsers-oci.json
           name: Unstable Build ${{ needs.generate-unstable-version.outputs.short_sha }}
           prerelease: true
+          # The tag is created here, and without a commitish GitHub points it at
+          # the default branch head — not at the ref this build was dispatched
+          # for. An unstable build of a feature branch would then publish assets
+          # under a tag naming someone else's commit.
           tag_name: ${{ needs.generate-unstable-version.outputs.tag_name }}
+          target_commitish: ${{ needs.determine-release-type.outputs.checkout_ref }}
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.generate-unstable-version.outputs.tag_name }}
+        if: ${{ !env.ACT }}
+        name: Publish the drafted prerelease
+        # Flipping draft off is what creates the tag and makes the assets
+        # downloadable. --prerelease is repeated rather than assumed: publishing
+        # is the moment the release becomes visible, and a prerelease that
+        # published itself as "latest" would move the release consumers resolve.
+        run: gh release edit "$TAG" --draft=false --prerelease --repo "$GITHUB_REPOSITORY"
   publish-npm:
     if: |
       always() &&
@@ -456,6 +536,7 @@ jobs:
     needs:
       - build
       - determine-release-type
+      - publish-parsers-oci
       - validate-stable
       - generate-unstable-version
     permissions:
@@ -475,6 +556,34 @@ jobs:
         with:
           name: release-artifacts
           path: .
+      - env:
+          DIGEST: ${{ needs.publish-parsers-oci.outputs.digest }}
+          REF: ${{ needs.publish-parsers-oci.outputs.ref }}
+          SHA256: ${{ needs.publish-parsers-oci.outputs.sha256 }}
+          TAG: ${{ needs.publish-parsers-oci.outputs.tag }}
+        if: ${{ !env.ACT }}
+        name: Write the parser pin record into the launcher package
+        # The wrapper reads this out of node_modules/@datamitsu/datamitsu to
+        # pin its oci config variants, so the launcher package IS the transport
+        # — no `gh release download`, no registry query, no oras in the wrapper.
+        # The digest only exists after the push, which is why this is written
+        # here rather than during the build.
+        run: |
+          if [[ -z "$DIGEST" ]]; then
+            echo "::warning title=No parser pin::publish-parsers-oci produced no digest; publishing the launcher without parsers-oci.json"
+            exit 0
+          fi
+          cat > packaging/npm/datamitsu/parsers-oci.json <<JSON
+          {
+            "module": "core",
+            "version": "$TAG",
+            "ref": "$REF",
+            "tag": "$TAG",
+            "digest": "$DIGEST",
+            "sha256": "$SHA256"
+          }
+          JSON
+          echo "✓ wrote packaging/npm/datamitsu/parsers-oci.json"
       - if: ${{ !env.ACT }}
         name: Restore executable permissions for npm packages
         run: |
@@ -551,6 +660,99 @@ jobs:
           # Namespace created once; tolerate "already exists".
           pnpm --filter "./editors/vscode" exec ovsx create-namespace datamitsu -p "$OVSX_PAT" || true
           pnpm --filter "./editors/vscode" exec ovsx publish "$GITHUB_WORKSPACE/dist/datamitsu-$VERSION.vsix" -p "$OVSX_PAT"
+  publish-parsers-oci:
+    # Every unstable dispatch publishes the module here unconditionally, which
+    # is what makes an unreleased parser testable downstream at all — the GitHub
+    # prerelease stays an opt-in convenience rather than the only channel.
+    if: |
+      always() &&
+      !cancelled() &&
+      needs.build.result == 'success'
+    name: Publish WASM Parser Module (OCI)
+    needs:
+      - build
+      - determine-release-type
+      - generate-unstable-version
+      - validate-stable
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
+      ref: ${{ steps.push.outputs.ref }}
+      sha256: ${{ steps.push.outputs.sha256 }}
+      tag: ${{ steps.push.outputs.tag }}
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
+      packages: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.determine-release-type.outputs.checkout_ref }}
+      # setup-environment is deliberately NOT used: node is preinstalled on the
+      # runner and the push script needs nothing but GITHUB_TOKEN, so the
+      # self-hosting bootstrap (the published core installing tools to publish
+      # the new core's artifacts) stays off this job's critical path. The module
+      # itself rides in release-artifacts because the build stages it into dist/.
+      - if: ${{ !env.ACT }}
+        name: Download build artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-artifacts
+          path: .
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IS_STABLE: ${{ needs.determine-release-type.outputs.is_stable }}
+          UNSTABLE_TAG: ${{ needs.generate-unstable-version.outputs.tag_name }}
+          VERSION: ${{ needs.validate-stable.outputs.version }}
+        id: push
+        if: ${{ !env.ACT }}
+        name: Push parser module as an OCI artifact
+        run: node .github/scripts/push-parsers-oci.mjs
+      - env:
+          PARSERS_DIGEST: ${{ steps.push.outputs.digest }}
+          PARSERS_REPO: ${{ needs.determine-release-type.outputs.is_stable == 'true' && 'datamitsu/datamitsu-parsers' || 'datamitsu/datamitsu-parsers-unstable' }}
+          PARSERS_SHA256: ${{ steps.push.outputs.sha256 }}
+        if: ${{ !env.ACT }}
+        name: Verify the artifact pulls anonymously
+        # A GHCR package created by a workflow is private by default; without
+        # this the release goes green and every consumer 401s.
+        run: .github/scripts/verify-parsers-anonymous.sh
+      - if: ${{ !env.ACT }}
+        name: Log in to GHCR for signing
+        # Strictly AFTER the anonymous check and strictly BEFORE cosign: a
+        # signature is an artifact cosign pushes into the same repository, so it
+        # needs write credentials, and it reads them from the docker credential
+        # store rather than from GITHUB_TOKEN in the environment. Logging in
+        # earlier would put a credential on the box before the step whose entire
+        # job is to prove none is needed.
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          password: ${{ secrets.GITHUB_TOKEN }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+      - if: ${{ !env.ACT }}
+        name: Sign parser artifact with cosign
+        # Real, keyless, transparency-logged — and verifiable only out of band:
+        # the datamitsu binary verifies no signatures at all, which is why a
+        # config that pins `signer` is rejected rather than quietly unverified.
+        run: cosign sign --yes "${{ steps.push.outputs.ref }}@${{ steps.push.outputs.digest }}"
+      - if: ${{ !env.ACT }}
+        name: Attest parser artifact
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-digest: ${{ steps.push.outputs.digest }}
+          subject-name: ${{ steps.push.outputs.ref }}
+      - if: ${{ !env.ACT }}
+        name: Upload the parser pin record
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          if-no-files-found: error
+          name: parsers-oci
+          path: dist/parsers-oci.json
+          retention-days: 1
   publish-pypi:
     environment: pypi
     if: |
@@ -753,7 +955,7 @@ on:
     inputs:
       create_github_prerelease:
         default: false
-        description: "Create GitHub prerelease (for debugging binaries/checksums)"
+        description: "Create GitHub prerelease (binaries, checksums and the WASM parser module, for downstream testing)"
         required: false
         type: boolean
       ref:

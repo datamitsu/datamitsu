@@ -1,0 +1,36 @@
+jobs:
+  prune:
+    name: Prune unstable prereleases
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          DRY_RUN: ${{ inputs.dry_run }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          KEEP: ${{ inputs.keep || '5' }}
+        name: Delete all but the newest unstable prereleases
+        # Two filters, both required, because one of them is not enough:
+        # isPrerelease alone would also match a stable release candidate
+        # (v1.2.0-rc.1 is a prerelease), and the unstable- tag prefix alone would
+        # match a hypothetical full release using that name. A release has to be
+        # both to be considered disposable.
+        run: .github/scripts/prune-unstable-prereleases.sh
+name: Prune unstable prereleases
+on:
+  schedule:
+    # Weekly, Sunday 04:23 UTC — unstable builds are dispatched by hand, so
+    # there is no burst to keep up with, only a slow accumulation to clear.
+    - cron: "23 4 * * 0"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        default: false
+        description: "List what would be deleted without deleting anything"
+        required: false
+        type: boolean
+      keep:
+        default: "5"
+        description: "How many of the newest unstable prereleases to keep"
+        required: false
+        type: string
+permissions:
+  contents: write

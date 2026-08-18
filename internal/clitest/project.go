@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/gitenv"
 )
 
 // Project is an isolated, git-initialized working tree that serves as the CWD
@@ -69,6 +71,7 @@ func (p *Project) git(args ...string) {
 	// G204: args are fixed test-controlled git subcommands, not untrusted input.
 	cmd := exec.CommandContext(context.Background(), "git", args...) //nolint:gosec
 	cmd.Dir = p.Dir
+	cmd.Env = gitenv.Environ()
 	if out, err := cmd.CombinedOutput(); err != nil {
 		p.tb.Fatalf("clitest: git %v failed: %v\n%s", args, err, out)
 	}

@@ -1,0 +1,30 @@
+List every artifact this config fetches from outside the machine: OCI
+references (the bundle and any registry-sourced parser modules) and, unless
+--oci-only is passed, the hash-pinned https downloads.
+
+It answers "what do I have to mirror?" without touching the network, so it runs
+inside a firewall. Output is deterministic and sorted, which makes it usable as
+input to a mirroring loop:
+
+  datamitsu store refs --oci-only | xargs -n1 -I{} crane copy {} harbor.corp/dm/{}
+
+Runtime archives (node, uv, the JDK) are resolved from a generated manifest at
+install time rather than declared in the config, so they are not listed here.
+
+Usage:
+  datamitsu store refs [flags]
+
+Flags:
+  -h, --help       help for refs
+      --json       Emit the references as JSON, including each artifact's mandatory hash
+      --oci-only   List only OCI references, omitting the hash-pinned https downloads
+
+Global Flags:
+      --before-config strings   Configuration file(s) to load before auto-discovery (for wrappers/libraries)
+      --binary-command string   Override the binary command (for npm package wrappers, etc). Can also be set via DATAMITSU_BINARY_COMMAND env var
+      --config strings          Additional configuration file(s) to load and merge (can be specified multiple times)
+      --log-format string       Status output format: console or jsonl (also via DATAMITSU_LOG_FORMAT)
+      --no-auto-config          Disable auto-discovery of datamitsu.config.{js,mjs,ts} at git root
+      --no-oci                  Disable OCI bundle store seeding (also via DATAMITSU_NO_OCI)
+      --no-parse                Skip output parsers; show tools' raw output instead (also via DATAMITSU_NO_PARSE)
+  -v, --verbose                 Enable debug-level logging (default level is warn)

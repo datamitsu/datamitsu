@@ -24,10 +24,17 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 
-// The WASM parser module is NOT packaged here. It ships only as a versioned,
-// signed asset on the GitHub Release (datamitsu_parsers_<version>.wasm, hash in
-// the signed checksums.txt); the core downloads it by url+hash. It is never
-// bundled into the npm/Python/Ruby wrappers.
+// The WASM parser module itself is NOT packaged here. It ships through two
+// channels — a versioned asset on the GitHub Release, and an OCI artifact at
+// ghcr.io/datamitsu/datamitsu-parsers[-unstable] — and the core fetches it from
+// whichever one its config declares, verifying the mandatory SHA-256 either way.
+// It is never bundled into the npm/Python/Ruby wrappers.
+//
+// What DOES travel in the launcher package is parsers-oci.json: the release
+// workflow writes it after the registry push (the manifest digest does not
+// exist before then) so a wrapper can read the pin out of node_modules instead
+// of querying a registry. It is listed in this package's `files`; the file is
+// absent from a local `pack:prepare`, which npm tolerates.
 
 // Track active child processes for cleanup on Ctrl+C
 const activeProcesses = new Set<ReturnType<typeof spawn>>();

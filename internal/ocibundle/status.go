@@ -8,10 +8,10 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/ociref"
 	"github.com/datamitsu/datamitsu/internal/target"
 
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
@@ -55,9 +55,9 @@ func BundleStatus(ctx context.Context, cfg *config.Config) (*Status, error) {
 		return nil, errors.New("no oci bundle declared in the effective config (set the top-level `oci` key)")
 	}
 	ref := cfg.OCI
-	host, repo, ok := strings.Cut(ref.Ref, "/")
-	if !ok {
-		return nil, fmt.Errorf("oci ref %q has no repository path", ref.Ref)
+	host, repo, err := ociref.Parse(ref.Ref)
+	if err != nil {
+		return nil, fmt.Errorf("oci ref %q %w", ref.Ref, err)
 	}
 	src := newRegistrySource(host, repo)
 	storeRoot := env.GetStorePath()
@@ -66,7 +66,9 @@ func BundleStatus(ctx context.Context, cfg *config.Config) (*Status, error) {
 		Ref:    ref.Ref,
 		Digest: ref.Digest,
 		Signed: ref.Signer != nil,
-		Seeded: markerExists(storeRoot, ref.Digest),
+		// Same question the seeder asks, so `store status` and a re-run of
+		// `store seed` can never disagree about whether this bundle is seeded.
+		Seeded: markerSatisfied(storeRoot, ref.Digest),
 	}
 
 	raw, err := src.manifest(ctx, ref.Digest)
