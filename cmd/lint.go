@@ -14,6 +14,8 @@ var (
 	lintFileScoped    bool
 	lintSelectedTools string
 	lintFailOnSkip    bool
+	lintWidenTo       string
+	lintRequireCov    string
 )
 
 var lintCmd = &cobra.Command{
@@ -38,14 +40,18 @@ func init() {
 	lintCmd.Flags().BoolVar(&lintFileScoped, "file-scoped", false, "Only process git staged files")
 	lintCmd.Flags().StringVar(&lintSelectedTools, "tools", "", "Comma-separated list of tools to run (for debugging)")
 	lintCmd.Flags().BoolVar(&lintFailOnSkip, "fail-on-skip", false, "Exit non-zero if any tool is skipped because its binary is unavailable for this platform")
+	lintCmd.Flags().StringVar(&lintWidenTo, "widen-to", "", "Limit how far work may widen beyond the selection (target|unit|repo)")
+	lintCmd.Flags().StringVar(&lintRequireCov, "require-coverage", "", "Exit non-zero unless the run answered completely (unit|repo)")
 	rootCmd.AddCommand(lintCmd)
 }
 
 func runLint(cmd *cobra.Command, args []string) error {
-	err := runner.Run(config.OpLint, args, lintExplain, lintFileScoped, lintSelectedTools, lintFailOnSkip, func() (*config.Config, string, error) {
-		cfg, _, _, err := loadConfig()
-		return cfg, "", err
-	})
+	err := runner.Run(config.OpLint, args, lintExplain, lintFileScoped, lintSelectedTools, lintFailOnSkip,
+		runner.Options{WidenTo: lintWidenTo, RequireCoverage: lintRequireCov},
+		func() (*config.Config, string, error) {
+			cfg, _, _, err := loadConfig()
+			return cfg, "", err
+		})
 	if err == nil && lintExplain == "" {
 		sponsor.New(env.GetCachePath()).MaybePrint(false)
 	}

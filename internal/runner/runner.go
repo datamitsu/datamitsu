@@ -103,6 +103,7 @@ type sharedContext struct {
 	rootPath      string
 	cwdPath       string
 	selection     tooling.Selection
+	opts          Options
 	files         []string
 	selectedTools []string
 	explainLevel  string
@@ -124,6 +125,9 @@ type sharedContext struct {
 	// platformSkipped collects the names of tools skipped for an unsupported
 	// platform across all operations (deduped), to drive failOnSkip after the run.
 	platformSkipped map[string]struct{}
+	// narrowed collects why the run did not answer completely: tools dropped for
+	// narrowing, and tasks that covered only part of their unit.
+	narrowed map[string]struct{}
 }
 
 func initSharedContext(
@@ -132,13 +136,16 @@ func initSharedContext(
 	fileScoped bool,
 	selectedToolsFlag string,
 	failOnSkip bool,
+	opts Options,
 	loadConfigFunc func() (*config.Config, string, error),
 ) (*sharedContext, error) {
 	ctx := context.Background()
 	sc := &sharedContext{
 		timings:         timing.New(),
+		opts:            opts,
 		failOnSkip:      failOnSkip,
 		platformSkipped: make(map[string]struct{}),
+		narrowed:        make(map[string]struct{}),
 	}
 
 	// Parse selected tools flag
@@ -211,8 +218,7 @@ func initSharedContext(
 
 	// Create planner
 	planner := tooling.NewPlanner(sc.rootPath, sc.cwdPath, nil, sc.cfg.Tools, sc.cfg.ProjectTypes, sc.cfg.IgnoreRules)
-	// A CLI override arrives with the reporting stage; config policy is enough here.
-	planner.SetWidenPolicy(sc.cfg.Execution, "")
+	planner.SetWidenPolicy(sc.cfg.Execution, config.WidenTo(sc.opts.WidenTo))
 	sc.planner = planner
 
 	// Create cache
@@ -308,6 +314,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		if len(plan.Skipped) > 0 {
 			renderSkipOnlyBlock(string(operation), plan.Skipped, sc.nameWidth)
 			sc.recordSkips(plan.Skipped)
+			sc.recordCoverage(plan)
 			return nil
 		}
 		if !ui.Quiet() {
@@ -606,6 +613,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	})
 
 	sc.recordSkips(plan.Skipped)
+	sc.recordCoverage(plan)
 
 	if hasFailures {
 		return errors.New("operation failed")
@@ -618,12 +626,76 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 // --fail-on-skip can fail the run afterwards. Intentional config skips are not
 // recorded — they never fail the run.
 func (sc *sharedContext) recordSkips(skipped []tooling.SkippedTool) {
+	if sc.narrowed == nil {
+		sc.narrowed = make(map[string]struct{})
+	}
 	for _, s := range skipped {
-		if s.Reason == tooling.SkipReasonUnsupportedPlatform {
+		switch s.Reason {
+		case tooling.SkipReasonUnsupportedPlatform:
 			sc.platformSkipped[s.ToolName] = struct{}{}
+			sc.narrowed[s.ToolName] = struct{}{}
+		case tooling.SkipReasonNotNarrowable:
+			sc.narrowed[s.ToolName] = struct{}{}
+		case tooling.SkipReasonConfig:
+			// Declared, documented, and permanent: a repository that opts a tool
+			// out has not given an incomplete answer, it has given its answer.
 		}
 	}
 }
+
+// recordCoverage notes tasks that ran over only part of their unit.
+func (sc *sharedContext) recordCoverage(plan *tooling.ExecutionPlan) {
+	for _, group := range plan.Groups {
+		for _, task := range group.Tasks {
+			if task.Coverage == tooling.CoveragePartial {
+				sc.narrowed[task.ToolName] = struct{}{}
+			}
+		}
+	}
+}
+
+// coverageFailure enforces --require-coverage.
+//
+// "unit" asserts every unit the run touched was fully analysed; "repo" adds that
+// the run targeted the repository at all. The second clause is not a formality:
+// per-task coverage is stamped on the units that ran, so without it
+// `check --require-coverage=repo pkg/x.ts` would pass having checked one unit of
+// nine — there is no denominator anywhere else.
+func (sc *sharedContext) coverageFailure() error {
+	level := config.WidenTo(sc.opts.RequireCoverage)
+	if level == "" {
+		return nil
+	}
+
+	if len(sc.selectedTools) > 0 {
+		return errRequireCoverageWithTools
+	}
+
+	var reasons []string
+	if len(sc.narrowed) > 0 {
+		names := make([]string, 0, len(sc.narrowed))
+		for n := range sc.narrowed {
+			names = append(names, n)
+		}
+		sort.Strings(names)
+		reasons = append(reasons, fmt.Sprintf("%d tool(s) did not answer completely: %s",
+			len(names), strings.Join(names, ", ")))
+	}
+	if level == config.WidenToRepo && sc.selection.Mode != tooling.SelectionAll {
+		reasons = append(reasons, fmt.Sprintf("the run targeted %s, not the whole repository", sc.selection))
+	}
+
+	if len(reasons) == 0 {
+		return nil
+	}
+	return fmt.Errorf("--require-coverage=%s: %s", level, strings.Join(reasons, "; "))
+}
+
+// errRequireCoverageWithTools rejects a combination that cannot mean anything:
+// --tools drops the skip entries of unselected tools before anything can observe
+// them, so the assertion would be trivially true over a debug subset.
+var errRequireCoverageWithTools = errors.New(
+	"--require-coverage cannot be combined with --tools: the assertion would only cover the selected subset")
 
 // printSkippedTools renders faint "┃ ⊘ name   skipped (reason)" body lines,
 // aligned to nameWidth like the per-tool result rows. No-op for an empty list.
@@ -671,9 +743,10 @@ func RunSequential(
 	fileScoped bool,
 	selectedToolsFlag string,
 	failOnSkip bool,
+	opts Options,
 	loadConfigFunc func() (*config.Config, string, error),
 ) error {
-	return runSequential(operations, args, explainMode, fileScoped, selectedToolsFlag, loadConfigFunc, true, failOnSkip)
+	return runSequential(operations, args, explainMode, fileScoped, selectedToolsFlag, loadConfigFunc, true, failOnSkip, opts)
 }
 
 // RunContinuation runs a single operation as a continuation of another command's
@@ -688,7 +761,7 @@ func RunContinuation(
 	loadConfigFunc func() (*config.Config, string, error),
 ) error {
 	// Continuations (e.g. setup's post-fix) never harden on skips.
-	return runSequential([]config.OperationType{operation}, args, explainMode, fileScoped, selectedToolsFlag, loadConfigFunc, false, false)
+	return runSequential([]config.OperationType{operation}, args, explainMode, fileScoped, selectedToolsFlag, loadConfigFunc, false, false, Options{})
 }
 
 func runSequential(
@@ -700,8 +773,9 @@ func runSequential(
 	loadConfigFunc func() (*config.Config, string, error),
 	showBanner bool,
 	failOnSkip bool,
+	opts Options,
 ) error {
-	sc, err := initSharedContext(args, explainMode, fileScoped, selectedToolsFlag, failOnSkip, loadConfigFunc)
+	sc, err := initSharedContext(args, explainMode, fileScoped, selectedToolsFlag, failOnSkip, opts, loadConfigFunc)
 	if err != nil {
 		return err
 	}
@@ -748,6 +822,10 @@ func runSequential(
 		return err
 	}
 
+	if err := sc.coverageFailure(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -767,6 +845,17 @@ func (sc *sharedContext) skipFailure() error {
 		len(names), strings.Join(names, ", "))
 }
 
+// Options carries the run-shaping flags. It exists because the entry points had
+// grown to seven positional parameters and the coverage work adds two more.
+type Options struct {
+	// WidenTo narrows how far the core may widen beyond the selection. Empty
+	// means "no override"; it can only narrow the configured policy.
+	WidenTo string
+	// RequireCoverage asserts the run answered completely: "unit" for every unit
+	// it touched, "repo" for the repository. Empty disables the assertion.
+	RequireCoverage string
+}
+
 // Run executes a single tool operation (fix, lint, etc.)
 func Run(
 	operation config.OperationType,
@@ -775,11 +864,12 @@ func Run(
 	fileScoped bool,
 	selectedToolsFlag string,
 	failOnSkip bool,
+	opts Options,
 	loadConfigFunc func() (*config.Config, string, error),
 ) error {
 	return RunSequential(
 		[]config.OperationType{operation},
-		args, explainMode, fileScoped, selectedToolsFlag, failOnSkip, loadConfigFunc,
+		args, explainMode, fileScoped, selectedToolsFlag, failOnSkip, opts, loadConfigFunc,
 	)
 }
 

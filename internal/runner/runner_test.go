@@ -1410,6 +1410,7 @@ func TestRunSequentialConfigLoadError(t *testing.T) {
 	err := RunSequential(
 		[]config.OperationType{config.OpFix},
 		nil, "", false, "", false,
+		Options{},
 		func() (*config.Config, string, error) {
 			return nil, "", errors.New("config load failed")
 		},
@@ -1426,6 +1427,7 @@ func TestRunSequentialInvalidExplainMode(t *testing.T) {
 	err := RunSequential(
 		[]config.OperationType{config.OpFix},
 		nil, "invalid_mode", false, "", false,
+		Options{},
 		func() (*config.Config, string, error) {
 			return &config.Config{}, "", nil
 		},
@@ -1443,6 +1445,7 @@ func TestRunSequentialConfigLoadedOnce(t *testing.T) {
 	err := RunSequential(
 		[]config.OperationType{config.OpFix, config.OpLint},
 		nil, "", false, "", false,
+		Options{},
 		func() (*config.Config, string, error) {
 			loadCount++
 			return &config.Config{
@@ -1463,6 +1466,7 @@ func TestRunDelegatesToRunSequential(t *testing.T) {
 	err := Run(
 		config.OpFix,
 		nil, "", false, "", false,
+		Options{},
 		func() (*config.Config, string, error) {
 			return nil, "", errors.New("test error from Run")
 		},
@@ -1646,6 +1650,7 @@ func TestRunSequentialFixThenLintOrdering(t *testing.T) {
 	err := RunSequential(
 		[]config.OperationType{config.OpFix, config.OpLint},
 		nil, "summary", false, "", false,
+		Options{},
 		func() (*config.Config, string, error) {
 			return &config.Config{
 				Tools: config.MapOfTools{

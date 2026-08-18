@@ -14,6 +14,8 @@ var (
 	fixFileScoped    bool
 	fixSelectedTools string
 	fixFailOnSkip    bool
+	fixWidenTo       string
+	fixRequireCov    string
 )
 
 var fixCmd = &cobra.Command{
@@ -38,14 +40,18 @@ func init() {
 	fixCmd.Flags().BoolVar(&fixFileScoped, "file-scoped", false, "Only process git staged files")
 	fixCmd.Flags().StringVar(&fixSelectedTools, "tools", "", "Comma-separated list of tools to run (for debugging)")
 	fixCmd.Flags().BoolVar(&fixFailOnSkip, "fail-on-skip", false, "Exit non-zero if any tool is skipped because its binary is unavailable for this platform")
+	fixCmd.Flags().StringVar(&fixWidenTo, "widen-to", "", "Limit how far work may widen beyond the selection (target|unit|repo)")
+	fixCmd.Flags().StringVar(&fixRequireCov, "require-coverage", "", "Exit non-zero unless the run answered completely (unit|repo)")
 	rootCmd.AddCommand(fixCmd)
 }
 
 func runFix(cmd *cobra.Command, args []string) error {
-	err := runner.Run(config.OpFix, args, fixExplain, fixFileScoped, fixSelectedTools, fixFailOnSkip, func() (*config.Config, string, error) {
-		cfg, _, _, err := loadConfig()
-		return cfg, "", err
-	})
+	err := runner.Run(config.OpFix, args, fixExplain, fixFileScoped, fixSelectedTools, fixFailOnSkip,
+		runner.Options{WidenTo: fixWidenTo, RequireCoverage: fixRequireCov},
+		func() (*config.Config, string, error) {
+			cfg, _, _, err := loadConfig()
+			return cfg, "", err
+		})
 	if err == nil && fixExplain == "" {
 		sponsor.New(env.GetCachePath()).MaybePrint(false)
 	}
