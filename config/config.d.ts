@@ -318,8 +318,7 @@ declare global {
        * - "unit" — may widen to the unit (project/module) containing the target
        * - "repo" — may widen to the whole repository
        *
-       * Requires the "granularity" capability; cores without it ignore this block entirely. Check
-       * with `facts().capabilities?.includes("granularity")`.
+       * Requires a core that implements granularity; declare it with getMinVersion().
        *
        * @example
        *   execution: { widenTo: { fix: "target" } };
@@ -909,7 +908,6 @@ declare global {
        * list (batch mode) - {root} - git repository root (or cwd if not in a git repo) - {cwd} -
        * per-project working directory - {toolCache} - per-project, per-tool cache directory
        * (cache/{projectPath}/{toolName}/) - {target} - the single directory a scanner should scan
-       * (requires the "arity" capability; on cores without it, {target} is a config load error)
        *
        * @example
        *   ["--fix", "{file}"];
@@ -932,8 +930,6 @@ declare global {
        * - "dir" — exactly one directory, no file list ({target})
        * - "none" — no paths on the command line at all
        *
-       * Requires the "arity" capability; cores without it ignore this field.
-       *
        * @example
        *   arity: "dir";
        */
@@ -945,8 +941,8 @@ declare global {
        *
        * @deprecated Superseded by `arity`, which describes the tool's command-line contract instead
        *   of being derived from `scope`. One boolean cannot express the four shapes that exist (a
-       *   list of paths, exactly one path, one directory, no paths). Cores reporting the "arity"
-       *   capability ignore this field for dispatch; a later release rejects it outright.
+       *   list of paths, exactly one path, one directory, no paths). Ignored for dispatch; a later
+       *   release rejects it outright.
        * @default true for "per-project" and "repository", false for "per-file"
        */
       batch?: boolean;
@@ -996,8 +992,6 @@ declare global {
        * "file", other "repository" scope gives "repo", and "per-project" gives "unit". The
        * per-project default is deliberately conservative — declaring "file" is a speed decision
        * that is only correct when a file's verdict cannot depend on its siblings.
-       *
-       * Requires the "granularity" capability; cores without it ignore this field.
        *
        * @example
        *   granularity: "file";
@@ -1459,16 +1453,6 @@ declare global {
     arch: SysList.ArchType;
 
     /**
-     * The {placeholder} tokens this build substitutes in a tool operation's `args`. Any other
-     * brace-wrapped token is a config load error, never passed through literally, so a config can
-     * check what the running core understands instead of discovering it as a validation failure.
-     *
-     * @example
-     *   facts().argPlaceholders.includes("target");
-     */
-    argPlaceholders: string[];
-
-    /**
      * Command to run this binary (can be overridden via --binary-command flag or
      * DATAMITSU_BINARY_COMMAND env var) Useful for npm package wrappers that need to call the
      * actual binary
@@ -1479,20 +1463,6 @@ declare global {
      * Absolute path to the currently running binary
      */
     binaryPath: string;
-
-    /**
-     * Behaviours this build supports, sorted. Branch on this rather than on `version`: `version` is
-     * "dev" for local builds and "0.0.0-unstable.*" for the prerelease channel, both of which sort
-     * below every real release.
-     *
-     * A core built before this field existed omits the key entirely, so always read it defensively
-     * — `undefined` is the correct answer from a build that cannot be changed retroactively.
-     *
-     * @example
-     *   const caps = facts().capabilities ?? [];
-     *   const hasArity = caps.includes("arity");
-     */
-    capabilities: string[];
 
     /**
      * Environment variables with the package prefix (e.g., CHANGE_ME_*) Only includes variables
@@ -1531,8 +1501,8 @@ declare global {
 
     /**
      * Running build's version string, verbatim: a release tag, "dev" for a plain `go build`, or
-     * "0.0.0-unstable.*" for a prerelease. For diagnostics and reporting only — use `capabilities`
-     * to decide what the core can do.
+     * "0.0.0-unstable.*" for a prerelease. Diagnostics only: declare a minimum core with
+     * getMinVersion(), which is enforced for stable releases.
      */
     version: string;
   }

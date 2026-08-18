@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
-	"github.com/datamitsu/datamitsu/internal/configcontract"
 	"github.com/datamitsu/datamitsu/internal/ociref"
 	"github.com/datamitsu/datamitsu/internal/target"
 )
@@ -632,9 +631,8 @@ func ValidateToolDeprecations(tools MapOfTools) []string {
 			}
 			warnings = append(warnings, fmt.Sprintf(
 				"tool %q operation %q: %q is deprecated and will be rejected in a future release; "+
-					"argv shape comes from %q once this build reports the %q capability. "+
-					"Remove the field — see docs/plans/2026-08-18-tool-invocation-granularity.md",
-				toolName, opType, "batch", "arity", configcontract.CapArity,
+					"argv shape now comes from %q — see docs/plans/2026-08-18-tool-invocation-granularity.md",
+				toolName, opType, "batch", "arity",
 			))
 		}
 	}
@@ -648,13 +646,11 @@ func ValidateToolDeprecations(tools MapOfTools) []string {
 // are the single source of truth for which {placeholder} tokens are valid;
 // ValidateTools rejects any other token instead of passing it through unsubstituted.
 //
-// The values live in internal/configcontract because facts() publishes them to
-// config JavaScript, and a leaf package lets both sides read one definition
-// rather than keeping two in sync. These names stay as the in-package spelling
-// every validator already uses.
+// "target" is absent from ToolEnvPlaceholders on purpose: env values expand on a
+// path with no task, so it would resolve to a wrong directory instead of erroring.
 var (
-	ToolArgPlaceholders = configcontract.ArgPlaceholders
-	ToolEnvPlaceholders = configcontract.EnvPlaceholders
+	ToolArgPlaceholders = []string{"file", "files", "root", "cwd", "toolCache", "target"}
+	ToolEnvPlaceholders = []string{"root", "cwd", "toolCache"}
 )
 
 // toolPlaceholderPattern matches a datamitsu-style placeholder: a brace-wrapped

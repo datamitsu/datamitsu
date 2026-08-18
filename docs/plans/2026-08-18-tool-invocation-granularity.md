@@ -1066,7 +1066,7 @@ correctness precondition.
 
 ## 11. Decided: rollout and completeness reporting
 
-This section replaces the former "Open items". Both items are decided, and the three-step rollout that was circulated for review is **rejected and replaced** — not weakened. The replacement is five releases with a real capability contract, and it has strictly fewer failure windows than the three-step version, in both directions.
+This section replaces the former "Open items". Both items are decided, and the three-step rollout that was circulated for review is **rejected and replaced** — not weakened. The replacement is a release sequence gated by `getMinVersion()` (see §11.1, which reverses the capability-probe design this section originally proposed).
 
 ### 11.0 Rejected premises
 
@@ -1075,30 +1075,34 @@ Four premises of the reviewed draft are factually wrong and are corrected here b
 1. **"The config is digest-pinned in an OCI registry."** False. `internal/ocibundle/ocibundle.go:55` restricts bundle layers to `.bin/`, `.runtimes/`, `.apps/`, `.uv/python`, `.parsers/` — there is no config subtree. `internal/ociartifact` pulls exactly one thing, the WASM parser module (`ArtifactTypeParsers`, `internal/ociartifact/parsers.go:36`, sole caller `internal/parsermanager/parsermanager.go:353`). `datamitsu.config.oci-ghcr.js` is a config **file that contains** a store-bundle pin; it travels by npm tarball and GitHub release asset. The actual core↔config coupling is npm semver plus the consumer's lockfile plus `bin/datamitsu.js` resolving the core through `@datamitsu/datamitsu/get-exe.js`. Nothing about this rollout may reason from digest pinning.
 2. **"`getMinVersion()` can gate the rollout."** False on every build we ship. `internal/version/check.go:40-42` returns silently for `"dev"`; `:44-46` returns `skipped=true` for `IsUnstable`, which `cmd/config_loader.go:426-429` renders as a `Warn` only. The wrapper's `scripts/sync-datamitsu-version.ts:57-61` additionally refuses to update the floor when the pinned core is unstable — and it is (`0.0.0-unstable.20260817.17164c7`), so the published floor is stale by construction. `getMinVersion()` is retained as a courtesy floor for stable users and is **not load-bearing anywhere in this plan**. Fixing it is a separate change and explicitly out of scope here.
 3. **"`{target}` can expand as `{root}` in a first, harmless core release."** False. `gitleaks` today receives `{files}` (`tools.ts:398-408`), which `replacePlaceholders` (`internal/tooling/executor.go:1224`) expands to N relative arguments; `{root}` expands to one absolute path (`expandPathPlaceholders`, `executor.go:1268-1269`). Swapping them turns every narrowed run — including `datamitsu check --file-scoped` in the pre-commit hook — into a whole-repository scan under `--exit-code 1`, and it also flips the dispatch branch, because `argsReferenceFiles` (`executor.go:1010-1017`) matches only `{file}`/`{files}`. That is a silent verdict change, i.e. exactly the broken window the draft claimed not to have. **`{target}` therefore ships in the same release as arity dispatch, never before it.**
-4. **"The wrapper can be released before or after the core with only scheduling care."** False without a probe: `facts()` (`internal/facts/facts.go:28-48`) exposes no version and no capability set, and `datamitsuConfigInputs` allowlists one field, so the config JS cannot observe what it is running on. Step 2 was necessarily all-or-nothing. That is the hole this section closes first.
+4. **"The wrapper can be released before or after the core with only scheduling care."** True in the unstable channel, where both repositories move together by hand, and enforced in the stable one by `getMinVersion()`. See §11.1.
 
-### 11.1 The mechanism: a capability probe in `facts()`
+### 11.1 The mechanism: `getMinVersion()`, and nothing else
 
-**Decision: add `version` and `capabilities` to `facts()`, and expose `argPlaceholders` derived from `config.ToolArgPlaceholders`.** Reason: an old core omits keys it does not know, so `facts().capabilities === undefined` is a _retroactively correct_ negative answer from binaries that shipped before the probe existed — the only signal that works without changing the past.
+**Reversed after implementation, on the owner's call.** §11.0 item 2 called the
+version gate "inert on every build we ship" and built a `facts().capabilities`
+probe around it. That reads a deliberate affordance as a defect.
 
-```go
-// internal/facts/facts.go — additive fields
-Version        string   `json:"version"`        // ldflags.Version, verbatim
-Capabilities   []string `json:"capabilities"`   // sorted, closed vocabulary
-ArgPlaceholders []string `json:"argPlaceholders"` // == config.ToolArgPlaceholders
-```
+`getMinVersion()` is skipped for `dev` and `0.0.0-unstable.*` builds
+(`internal/version/check.go:40-46`) because an unstable version is a semver
+prerelease of `0.0.0` and therefore sorts below every real release — enforcing it
+would reject every config on every unstable build. Unstable is the parallel
+development channel: both repositories are in one pair of hands and are kept in
+step by whoever is editing them. Nothing needs gating there.
 
-- **`argPlaceholders` is injected from `validate.go:601`, not duplicated.** Per the JS↔Go Shared Constants Policy, Go stays the single source of truth; there is no JS copy to drift.
-- **Capabilities, not version comparison.** `ldflags.Version` is `"dev"` in local builds and `0.0.0-unstable.*` in the channel we actually ship, both of which sort below every real release. Any semver-based branch inherits the `getMinVersion()` disease. Capability strings do not.
-- **Vocabulary (closed, additive-only, pinned by a test):** `"arity"` — arity dispatch is live, `{target}` is a valid arg placeholder, `batch` is ignored for dispatch. `"granularity"` — granularity, `coverage`, `execution.widenTo`, the verdict cache and the LSP policy are live.
-- **Home is `facts()`, not `datamitsuConfigInputs`.** The Runtime Config vs Config Inputs Policy makes the latter heavyweight (fingerprint, cache key, explain metadata, two `.d.ts` copies, pinned key-set tests) and reserves it for values config JS may _branch policy_ on. `facts()` is already the branch surface — this repository's own config branches on `facts().env.DATAMITSU_BENCH` (`datamitsu.config.ts:38`). Fingerprinting is already correct: the cache invalidation key marshals the _resulting_ config, so a capability-branched config that produces different args produces a different key.
-- **Canonical probe, documented in `config.d.ts` and in the wrapper:**
-  ```js
-  const caps = facts().capabilities ?? [];
-  const hasArity = caps.includes("arity");
-  ```
-  The `?? []` is mandatory and must be documented as the pattern, not merely used — every future capability depends on it.
-- **Deletion criterion, so this is infrastructure and not a crutch:** each branch is deleted when the wrapper's supported core floor passes the release that introduced the capability. The probe itself is permanent and satisfies "Introspectable by Design".
+Anything that actually ships goes out as a stable release, and there
+`getMinVersion()` enforces normally. A wrapper that needs the arity core declares
+it; an older stable core refuses the config with a clear version error. That is
+the whole mechanism, and it already worked.
+
+The probe is therefore removed: `facts().capabilities`, `facts().argPlaceholders`
+and the `internal/configcontract` package are gone. `facts().version` stays as
+diagnostics. No capability branches appear in the wrapper — §11.2's R2/R4 collapse
+into "release the core stable, then bump the wrapper's floor and migrate".
+
+Recorded rather than quietly reverted, because the reasoning that produced the
+probe was internally consistent and would otherwise be re-derived: the error was
+in the premise, not the deduction.
 
 ### 11.2 The release sequence
 
@@ -1108,21 +1112,16 @@ Five releases. Every one is independently shippable, and after R4 exists there i
 
 **R1 — core. The contract release. No behaviour changes at all.**
 
-Ships: `facts().version` / `.capabilities` (empty array) / `.argPlaceholders`; a deprecation **warning** on any non-nil `Batch` (`internal/config/config.go:93`) naming the tool, the operation and the release that will reject it; the type-only declarations for `granularity`, `arity`, `execution.widenTo` and `{target}` added to `config/config.d.ts` **and** `internal/config/config.d.ts` (they must stay byte-identical — `internal/config/oci_test.go:197-208` enforces it), each with a JSDoc note that cores lacking the matching capability ignore the field; a **debug** log when declared `getBeforeConfigs()` are skipped because `--before-config` was passed (today the substitution is completely silent, which is how the docker images swap in their baked config unnoticed). Debug rather than info, decided during implementation: this is the normal path for every pnpm-wrapper invocation, so info would be noise, and naming _which_ declared configs were skipped would mean running `discoverBeforeConfigs` — a second goja engine evaluating the auto config — purely to describe an intended override. The log names the auto config and the flag paths that won, which is free; a `RenderSlice` comment recording that it is a Go-struct projection and must never round-trip a tool-bearing config (`internal/dockerfile/slice.go:86`, `:92`).
+Ships: `facts().version`; a deprecation **warning** on any non-nil `Batch` (`internal/config/config.go:93`) naming the tool, the operation and the release that will reject it; the type-only declarations for `granularity`, `arity`, `execution.widenTo` and `{target}` added to `config/config.d.ts` **and** `internal/config/config.d.ts` (they must stay byte-identical — `internal/config/oci_test.go:197-208` enforces it), each noting that it needs a core new enough to implement it; a **debug** log when declared `getBeforeConfigs()` are skipped because `--before-config` was passed (today the substitution is completely silent, which is how the docker images swap in their baked config unnoticed). Debug rather than info, decided during implementation: this is the normal path for every pnpm-wrapper invocation, so info would be noise, and naming _which_ declared configs were skipped would mean running `discoverBeforeConfigs` — a second goja engine evaluating the auto config — purely to describe an intended override. The log names the auto config and the flag paths that won, which is free; a `RenderSlice` comment recording that it is a Go-struct projection and must never round-trip a tool-bearing config (`internal/dockerfile/slice.go:86`, `:92`).
 
 A user on any wrapper sees: a warning line per `batch:` key, and nothing else. Argv, plans, goldens and exit codes are unchanged.
 
 Guarantee: additive-only. Every field is new; no existing field changes meaning; no placeholder is added.
 
-Implemented on `feat/tool-invocation-granularity-r1`. Two notes for whoever picks up R3. The
-placeholder vocabulary moved to a new leaf package, `internal/configcontract`, which also owns the
-capability vocabulary: `facts()` publishes both and the validator consumes one, so a leaf package
-lets either side read a single definition (the `internal/pnpmdefaults` precedent in AGENTS.md).
-`config.ToolArgPlaceholders` and `ToolEnvPlaceholders` remain as the in-package spelling every
-validator already uses. And `configcontract` carries
-`TestUnimplementedCapabilitiesAreNotPublished`, which fails if `arity` or `granularity` appears in
-the published set — delete the relevant entry in the same change that implements the behaviour, so a
-capability can never be announced ahead of the code that honours it.
+Implemented on `feat/tool-invocation-granularity-r1`, then partly reverted: the
+capability probe and its `internal/configcontract` leaf package were removed per
+§11.1, leaving the `batch` deprecation warning, `facts().version`, and the type
+declarations.
 
 **Explicitly NOT in R1: `{target}`.** Per §11.0 item 3.
 
@@ -1142,7 +1141,7 @@ Guarantee: the published `datamitsu.config.base.js` is unchanged apart from the 
 
 **R3 — core. Arity. (§9 S1 + S2.)**
 
-Ships: `Selection`; `{target}` added to `ToolArgPlaceholders` (`validate.go:601`) **and deliberately not to `ToolEnvPlaceholders` (`validate.go:602`)**; `{target}` expanded **only** in `replacePlaceholders` (`executor.go:1224-1262`), never in `expandPathPlaceholders` (`executor.go:1268`), which is shared with env-value expansion (`replaceEnvPlaceholders`, `executor.go:1301-1313`) and has no selection, no `UnitDir` and no `Task` — implementing it there would be the one line R5 has to rip out; `ToolArity` + `InferArity`; the four-way dispatch replacing `executor.go:469-477` **and the three other independent re-derivations of the same scope-based default** (`executor.go:442-449` progress units, `internal/tooling/plan_formatter.go:352-355` explain JSON, `internal/runner/runner.go:372-379` progress totals); the stdin/stdout contract rule restated in terms of `scope == "per-file" && arity ∈ {one, none}` (`validate.go:718` reads `op.Batch` today); `hasFilePlaceholder` (`internal/lsp/server.go:267-274`) extended with `{target}` in the same commit — it is a second, independent placeholder enumeration and a `{target}`-bearing task would otherwise get a bare path appended by `scopeTasksToFile` (`server.go:248-263`), turning `gitleaks dir <root>` into `gitleaks dir <root> <file>`; `argsReferenceFiles` pinned by test to exclude `{target}`; `facts().capabilities` gains `"arity"`; `batch` still **accepted and warned**, not rejected.
+Ships: `Selection`; `{target}` added to `ToolArgPlaceholders` (`validate.go:601`) **and deliberately not to `ToolEnvPlaceholders` (`validate.go:602`)**; `{target}` expanded **only** in `replacePlaceholders` (`executor.go:1224-1262`), never in `expandPathPlaceholders` (`executor.go:1268`), which is shared with env-value expansion (`replaceEnvPlaceholders`, `executor.go:1301-1313`) and has no selection, no `UnitDir` and no `Task` — implementing it there would be the one line R5 has to rip out; `ToolArity` + `InferArity`; the four-way dispatch replacing `executor.go:469-477` **and the three other independent re-derivations of the same scope-based default** (`executor.go:442-449` progress units, `internal/tooling/plan_formatter.go:352-355` explain JSON, `internal/runner/runner.go:372-379` progress totals); the stdin/stdout contract rule restated in terms of `scope == "per-file" && arity ∈ {one, none}` (`validate.go:718` reads `op.Batch` today); `hasFilePlaceholder` (`internal/lsp/server.go:267-274`) extended with `{target}` in the same commit — it is a second, independent placeholder enumeration and a `{target}`-bearing task would otherwise get a bare path appended by `scopeTasksToFile` (`server.go:248-263`), turning `gitleaks dir <root>` into `gitleaks dir <root> <file>`; `argsReferenceFiles` pinned by test to exclude `{target}`; `batch` still **accepted and warned**, not rejected.
 
 A user on a pre-R4 wrapper sees: the same warnings as R1, and argv identical to today for all 84 operations. The two operations whose declared `batch` deviates from the scope default — `dotenv-linter` fix+lint (`tools.ts:321-341`, per-file + `batch:true`) and `sort-package-json` fix+lint (`tools.ts:876-895`, per-file + `batch:false`) — land on the arity that reproduces exactly what their `batch` asked for: `{files}` → `many` → the batch path; no placeholder → `none` → one run per planner-atomised task, cwd unchanged.
 
@@ -1154,21 +1153,7 @@ Guarantee: `batch` is honoured-or-equalled, never rejected, so **no config in ex
 
 **R4 — wrapper. The migration release.**
 
-Ships: all 33 `batch:` keys deleted; `granularity` / `arity` annotations added (silently dropped by pre-R3 cores — `vm.ExportTo`, `cmd/config_loader.go:527`); the two capability-branched sites:
-
-```js
-const hasArity = (facts().capabilities ?? []).includes("arity");
-
-// gitleaks lint — tools.ts:398-408
-args: ["dir", "--redact", "--verbose", "--no-banner", "--exit-code", "1",
-       "--config", "{root}/.gitleaks.toml", hasArity ? "{target}" : "{files}"],
-...(hasArity ? { arity: "dir" } : {}),
-
-// dotenv-linter fix+lint — tools.ts:321-341
-...(hasArity ? {} : { batch: true }),
-```
-
-Why exactly these two and no others: they are the only sites where deleting `batch` or switching to `{target}` is observable on a pre-R3 core. For `gitleaks`, `{target}` on a pre-R3 core is a validation **error** (`validate.go:737-741`) and on a `{root}`-expanding core would be a silent whole-repo scan. For `dotenv-linter`, dropping `batch:true` on a pre-R3 core flips per-file → batch, which flip-flops the argv path form (relative → absolute → relative) and flips `ExecutionResult.Batch`, which changes whether parsed diagnostics or raw output is displayed (`usableDiagnostics`, `internal/runner/runner.go:1108-1120`) — `dotenv-linter` does declare `outputParser` (`tools.ts:340`). `sort-package-json` needs no branch: `batch:false` equals the per-file scope default, so deleting it is a no-op on every core.
+Ships: all 33 `batch:` keys deleted; `arity` assertions added on the three `yq` operations; `gitleaks` switched to `{target}` with `arity: "dir"`; and `getMinVersion()` bumped to the stable core that implements arity, which is what makes the change safe — an older stable core refuses the config with a version error rather than mis-running it.
 
 A user on any core sees: on pre-R3 cores, byte-identical behaviour to today plus `batch` warnings where the core emits them; on R3+, arity dispatch with `gitleaks` correctly scanning one directory instead of being handed ~912 paths it ignores.
 
@@ -1180,7 +1165,7 @@ Also in R4: produce `datamitsu.config.oci-dockerhub.js` for unstable releases to
 
 **R5 — core. Granularity. (§9 S3 + S4 + S4b.)**
 
-Ships: everything in §9 S3/S4/S4b; `capabilities` gains `"granularity"`; a non-nil `Batch` becomes a **hard error**; `TaskJSON.Batch` (`plan_formatter.go:59`) is **removed** and replaced by `granularity` / `arity` / `coverage`.
+Ships: everything in §9 S3/S4/S4b; a non-nil `Batch` becomes a **hard error**; `TaskJSON.Batch` (`plan_formatter.go:59`) is **removed** and replaced by `granularity` / `arity` / `coverage`.
 
 Preconditions, all mechanically checkable in the S5 checklist:
 
@@ -1198,7 +1183,7 @@ Guarantee in the config-first direction (new config, old core): none needed — 
 - **§3.3 legality matrix, one cell.** `granularity: "file" × arity: "none"` is **legal when `scope == "per-file"`**, rejected otherwise. Reason: under per-file scope the planner atomises into one task per file with `ProjectPath = filepath.Dir(file)` (`planner.go:297-305`), so the file reaches the tool through cwd rather than argv and the run does cover its unit — which is what §5.5's `arity == none` rule already says. Without this, `sort-package-json` (`tools.ts:876-895`) — a config we ship — becomes unloadable, and the alternative fix (§8.2 item 7, "unverified; confirm the CLI accepts a list first") would be dragged onto the critical path.
 - **§4.2 coverage cells, corrected.** The `file` column's `partial` stamps under `Subtree(D)` and `Paths(P)` are **wrong** and become `complete`. For `file` granularity the unit _is_ the file; a task that ran on the files it was given covered them. As written, §4.2 contradicts §5.5 — coverage gates verdict writes, and `partial` file tasks would kill the per-file cache under every narrowed run, including the ones `executor.go:895` writes today. §5.5 is the load-bearing definition and wins: **`coverage` is a per-task property meaning "this process covered its own unit", never a statement about the repository.** Repository-level under-coverage is expressed by the run-level predicate in §11.4, not by this field.
 - **§7 advisory block.** `--widen-to=repo` and the completeness flag are not sibling remedies at every level. Under `--require-coverage=unit`, `--widen-to=repo` does satisfy the assertion (it un-skips the `not-narrowable` tools). Under `--require-coverage=repo` it does not, and the only remedy is re-running from the git root with no path arguments. The advisory block prints the remedy for the level actually requested.
-- **§8.1.** Item 2 is no longer "one token and one line": it is a capability-branched pair, and the note that it "buys correctness, not narrowing" belongs there — `{target}` does not satisfy `argsReferenceFiles`, so `gitleaks` infers `repo`, and §4.2's `repo` row pins `{target}` to the git root under both `All` and `Paths(P)`. The selection-awareness of `{target}` is inert for the entire R4 config; the first tool that exercises it is a §8.2 scanner in S5.
+- **§8.1.** Item 2 is one token and one line, and the note that it "buys correctness, not narrowing" belongs there — `{target}` does not satisfy `argsReferenceFiles`, so `gitleaks` infers `repo`, and §4.2's `repo` row pins `{target}` to the git root under both `All` and `Paths(P)`. The selection-awareness of `{target}` is inert for the entire R4 config; the first tool that exercises it is a §8.2 scanner in S5.
 - **§9.** S2's release constraint is rewritten against §11.2. S5's checklist gains the three regeneration items above. The `{target}` work moves wholly into S2 (R3); nothing about it lands earlier.
 - **§12.** "No backward compatibility for `batch`" is amended to: rejected with a hard error **in R5, after one full release of an explicit deprecation warning in R3**. The §12 rationale was that _silence_ is the worst outcome (`vm.ExportTo` would drop the key unannounced); a warning is not silence, and a deprecation window is not a half-implementation.
 - **§13.8.** "Explain goldens change only by the added `granularity` key" is false: `TaskJSON.Batch` is already in all three (`test/cli/testdata/golden/{check,fix,lint}_explain_json.txt`). Corrected churn budget: **6 files** — 3 help goldens for the new flags, 3 explain-json goldens for the removal of `batch` and the addition of `granularity`/`arity`/`coverage`/`complete`.
@@ -1265,7 +1250,7 @@ Precedence: **tool failure (1) outranks coverage (4)**, and the machine surfaces
 ### 11.5 Residual risk
 
 1. **The core-first upgrade against a pre-R4 config is a total failure, not a degraded one.** A user who takes R5 through a channel decoupled from their config — homebrew, scoop, winget, a floating GitHub Action major tag, the VS Code extension's bundled binary, docker `latest`, a global `npx datamitsu@latest` — while their repository pins a pre-R4 config gets a hard error from `cmd/config_loader.go:240` on **every** command, including `init`, `store clear` and `exec`. Nothing shipped in R1–R4 can reach a config that predates R4; that is arithmetic, not an oversight. Mitigations are R3's full deprecation release, the directed error naming the layer and the minimum wrapper version, and the fact that "upgrade the config" is unconditionally safe. The failure being _total_ rather than _partial_ is accepted: a config load that half-succeeds is the silence §12 refuses.
-2. **The capability branch makes `--explain` output legitimately core-dependent** for two sites (gitleaks args, dotenv-linter batch) across R2→R5. Deliberate, disclosed, and deleted when the wrapper's floor passes R3.
+2. **A wrapper release and the core release it requires must go out in that order.** `getMinVersion()` enforces it for stable consumers; in the unstable channel it is the author's to keep, which is what that channel is for.
 3. **Pre-R1 cores cannot warn about what they do not know.** A hand-written user config that copies R4's `granularity`/`arity` onto a pre-R1 core has those keys dropped by `vm.ExportTo` (`cmd/config_loader.go:527`) with no diagnostic, and the R1 `.d.ts` additions only reach editors after a `datamitsu init` on an R1+ core (`internal/managedconfig/links.go:345-347`). Irreducible.
 4. **`getMinVersion()` remains inert on `dev` and `0.0.0-unstable.*` builds.** It is not load-bearing here, but this rollout also does not fix it — so there is still no working version floor for any _future_ change that genuinely needs one, and `RenderSlice` hardcodes `"0.0.0"` (`internal/dockerfile/slice.go:92`), permanently exempting slices. Tracked separately.
 5. **The docker images' baked config always wins over a repository's declared `getBeforeConfigs()`**, because the ENTRYPOINT always passes `--before-config` and `cmd/config_loader.go:328` skips declared before-configs whenever the flag is present (`--before-config` is a `StringSliceVar`, `cmd/root.go:105`, so a user-supplied one _appends_). R1's info log makes the substitution visible; it does not remove it. After R4 it is harmless for this rollout, since any config version runs on any core — but the version a user thinks they pinned is still not the version that ran.
