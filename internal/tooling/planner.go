@@ -282,7 +282,7 @@ func (p *Planner) collectTasks(ctx context.Context, operation config.OperationTy
 			// for. ProjectPath below stays the git root, so the process still starts
 			// there and {root}-anchored config paths keep resolving.
 			if config.InferGranularity(opConfig) == config.GranularityFile {
-				matchedFiles = p.filterFilesToCwd(matchedFiles)
+				matchedFiles = p.selectionFilterToCwd(sel, matchedFiles)
 			}
 			// Respect file-specific .datamitsuignore rules (e.g. "**/foo.toml: oxfmt"):
 			// prune individual files from the batch even though the tool runs once.
@@ -296,7 +296,7 @@ func (p *Planner) collectTasks(ctx context.Context, operation config.OperationTy
 
 		case config.ToolScopePerProject:
 			// Per-project scope: run for each detected project in its directory
-			matchedFiles := p.filterFilesByIgnore(toolName, p.filterFilesToCwd(p.matchFiles(ctx, sel, opConfig)))
+			matchedFiles := p.filterFilesByIgnore(toolName, p.selectionFilterToCwd(sel, p.matchFiles(ctx, sel, opConfig)))
 
 			if len(matchedFiles) > 0 || len(opConfig.Globs) == 0 {
 				projectTasks := p.createPerProjectTasksWithFiles(ctx, task, matchedFiles)
@@ -308,7 +308,7 @@ func (p *Planner) collectTasks(ctx context.Context, operation config.OperationTy
 
 		case config.ToolScopePerFile:
 			// Per-file scope: run for each file in its directory
-			matchedFiles := p.filterFilesToCwd(p.matchFiles(ctx, sel, opConfig))
+			matchedFiles := p.selectionFilterToCwd(sel, p.matchFiles(ctx, sel, opConfig))
 
 			for _, file := range matchedFiles {
 				if p.isToolDisabledForFile(toolName, file) {
@@ -323,7 +323,7 @@ func (p *Planner) collectTasks(ctx context.Context, operation config.OperationTy
 
 		default:
 			// Default to per-project for safety
-			matchedFiles := p.filterFilesByIgnore(toolName, p.filterFilesToCwd(p.matchFiles(ctx, sel, opConfig)))
+			matchedFiles := p.filterFilesByIgnore(toolName, p.selectionFilterToCwd(sel, p.matchFiles(ctx, sel, opConfig)))
 
 			if len(matchedFiles) > 0 || len(opConfig.Globs) == 0 {
 				projectTasks := p.createPerProjectTasksWithFiles(ctx, task, matchedFiles)
@@ -385,6 +385,17 @@ func (p *Planner) isUnderCwd(path string) bool {
 	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
+// selectionFilterToCwd restricts files to the cwd subtree, except when the user
+// named paths explicitly. `cd services/api && dm fix ../web/x.ts` used to drop
+// the named file and report nothing: cwd is where you happen to stand, but a
+// path on the command line is a decision.
+func (p *Planner) selectionFilterToCwd(sel Selection, files []string) []string {
+	if sel.Mode == SelectionPaths {
+		return files
+	}
+	return p.filterFilesToCwd(files)
+}
+
 // filterFilesToCwd returns only those files that are under p.cwdPath.
 // No-op when cwdPath == rootPath.
 func (p *Planner) filterFilesToCwd(files []string) []string {
@@ -398,6 +409,43 @@ func (p *Planner) filterFilesToCwd(files []string) []string {
 		}
 	}
 	return out
+}
+
+// contains reports whether dir is an ancestor of (or equal to) path.
+func (p *Planner) contains(dir, path string) bool {
+	rel, err := filepath.Rel(dir, path)
+	if err != nil {
+		return false
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// filterProjectLocationsToSubtree keeps the locations under cwd plus the nearest
+// one containing it.
+func (p *Planner) filterProjectLocationsToSubtree(locs []project.ProjectLocation) []project.ProjectLocation {
+	if p.cwdPath == p.rootPath {
+		return locs
+	}
+
+	out := p.filterProjectLocationsToCwd(locs)
+	if len(out) > 0 {
+		return out
+	}
+
+	// Nothing below: fall back to the deepest project containing cwd.
+	var nearest *project.ProjectLocation
+	for i, loc := range locs {
+		if !p.contains(loc.Path, p.cwdPath) {
+			continue
+		}
+		if nearest == nil || len(loc.Path) > len(nearest.Path) {
+			nearest = &locs[i]
+		}
+	}
+	if nearest != nil {
+		return []project.ProjectLocation{*nearest}
+	}
+	return nil
 }
 
 // filterProjectLocationsToCwd returns only those project locations whose Path
@@ -632,8 +680,12 @@ func (p *Planner) createPerProjectTasksWithFiles(ctx context.Context, baseTask T
 		}
 	}
 
-	// Restrict to cwd subtree (no-op when cwdPath == rootPath)
-	filteredLocations = p.filterProjectLocationsToCwd(filteredLocations)
+	// Restrict to cwd subtree (no-op when cwdPath == rootPath), keeping the
+	// project that CONTAINS cwd as well as those under it. Descendants alone is
+	// the wrong reading of "the app I am standing in": from services/api/src
+	// there are no projects below, so the run planned nothing and reported
+	// nothing — the same silent emptiness this work exists to remove.
+	filteredLocations = p.filterProjectLocationsToSubtree(filteredLocations)
 
 	// If no matching projects found after filtering
 	if len(filteredLocations) == 0 {
@@ -684,7 +736,9 @@ func (p *Planner) createPerProjectTasksWithFiles(ctx context.Context, baseTask T
 			continue
 		}
 
-		if !p.isUnderCwd(projectPath) {
+		// Under cwd, or containing it: standing below a package root is still
+		// standing in that package.
+		if !p.isUnderCwd(projectPath) && !p.contains(projectPath, p.cwdPath) {
 			continue
 		}
 
