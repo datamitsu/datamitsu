@@ -171,7 +171,7 @@ func (s *Server) FormatFile(ctx context.Context, absPath string, content []byte)
 	if err != nil {
 		return nil, fmt.Errorf("plan fix for %s: %w", absPath, err)
 	}
-	scopeTasksToFile(plan, absPath)
+	filterPlanForEditor(plan)
 
 	apps := planApps(plan)
 	if len(apps) == 0 {
@@ -237,40 +237,65 @@ func (s *Server) FormatFile(ctx context.Context, absPath string, content []byte)
 	return toTextEdits(textdiff.ComputeEdits(string(content), string(fixed)))
 }
 
-// scopeTasksToFile narrows every task in the plan to the single target file.
-// datamitsu config tools are typically batch/repository-scoped (e.g.
-// `golangci-lint fmt` over the whole module), which is right for the CLI but
-// O(repo) per format in an editor — ~80x slower than formatting one file. Tasks
-// that reference {file}/{files} are already scoped by the planner; a task without
-// a file placeholder would run over the whole module, so we append the target
-// path (turning `golangci-lint fmt` into `golangci-lint fmt <file>`) and pin
-// Files to it.
-func scopeTasksToFile(plan *tooling.ExecutionPlan, absPath string) {
+// filterPlanForEditor drops tasks too expensive to run on every save.
+//
+// The planner already targets the file: Plan is called with a Paths selection,
+// so a file-granularity task carries exactly this file and nothing else. What
+// remains is a latency choice, not a correctness one — running a unit task here
+// is exactly what `datamitsu fix` does, and correctness lives in the cache's
+// coverage gate.
+//
+// This replaces scopeTasksToFile, which pinned every task's file list and
+// appended the path to argv for any task without a placeholder. For the
+// operations that take no positional path that produced knowingly wrong
+// commands: `tsc --noEmit … a.ts` exits 1 with TS5112 and zero diagnostics,
+// `syncpack lint <file>` rejects the argument outright. It also let a
+// single-file editor run write cache entries as if it had covered a whole unit.
+func filterPlanForEditor(plan *tooling.ExecutionPlan) {
+	widen := editorWidenTo()
 	for gi := range plan.Groups {
-		for ti := range plan.Groups[gi].Tasks {
-			task := &plan.Groups[gi].Tasks[ti]
-			task.Files = []string{absPath}
-			if hasFilePlaceholder(task.OpConfig.Args) {
-				continue // the planner already substitutes the file here
+		kept := plan.Groups[gi].Tasks[:0]
+		for _, task := range plan.Groups[gi].Tasks {
+			if editorRuns(task, widen) {
+				kept = append(kept, task)
 			}
-			// Clone before appending so we never mutate the shared config slice.
-			args := make([]string, len(task.OpConfig.Args)+1)
-			copy(args, task.OpConfig.Args)
-			args[len(args)-1] = absPath
-			task.OpConfig.Args = args
 		}
+		plan.Groups[gi].Tasks = kept
 	}
 }
 
-// hasFilePlaceholder reports whether any arg references the per-file placeholder
-// ({file} or {files}), i.e. the planner already targets this task at the file.
-func hasFilePlaceholder(args []string) bool {
-	for _, a := range args {
-		if strings.Contains(a, "{file}") || strings.Contains(a, "{files}") || strings.Contains(a, "{target}") {
-			return true
-		}
+// editorRuns reports whether a task is cheap enough for a save.
+func editorRuns(task tooling.Task, widen config.WidenTo) bool {
+	switch config.InferGranularity(task.OpConfig) {
+	case config.GranularityFile:
+		return true
+	case config.GranularityUnit:
+		return widen.Rank() >= config.WidenToUnit.Rank()
+	case config.GranularityRepo:
+		// A whole-repository fix on every keystroke is never acceptable, so this
+		// is not configurable.
+		return false
 	}
 	return false
+}
+
+// editorWidenTo is the session policy. Default "unit": a "target" default would
+// silently disable format-on-save for Go, Python, Rust and Terraform, whose fix
+// operations are all per-project with no file arguments — and format-on-save for
+// Go is a documented headline feature.
+func editorWidenTo() config.WidenTo {
+	switch config.WidenTo(env.GetLspFormatWidenTo()) {
+	case config.WidenToTarget:
+		return config.WidenToTarget
+	case config.WidenToUnit:
+		return config.WidenToUnit
+	case config.WidenToRepo:
+		// Not a legal editor policy: a repository-wide fix on save is never
+		// acceptable, so ask for it and you get the default instead.
+		return config.WidenToUnit
+	default:
+		return config.WidenToUnit
+	}
 }
 
 // planApps returns the distinct apps a plan needs, in first-seen order.
