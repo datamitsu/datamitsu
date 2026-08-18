@@ -438,15 +438,8 @@ func (e *Executor) executeTask(ctx context.Context, task Task) ExecutionResult {
 
 		// Call file progress callback even on error to maintain progress tracking
 		if e.fileProgressCallback != nil {
-			// Determine if this would be batch mode
-			batch := task.OpConfig.Batch
-			if batch == nil {
-				defaultBatch := task.OpConfig.Scope != config.ToolScopePerFile
-				batch = &defaultBatch
-			}
-
-			if *batch || len(task.Files) == 0 {
-				// Batch mode: count as 1 unit
+			if !config.RunsPerFile(task.OpConfig, len(task.Files)) {
+				// One process for the whole task: count as 1 unit
 				e.fileProgressCallback(task.ToolName, 1, 1, false)
 			} else {
 				// Per-file mode: count each file
@@ -463,22 +456,12 @@ func (e *Executor) executeTask(ctx context.Context, task Task) ExecutionResult {
 		zap.String("relativeDir", relativeDir),
 		zap.String("scope", string(task.OpConfig.Scope)))
 
-	// Execute based on scope and batch mode
-	// For per-file scope, the planner already created individual tasks per file
-	// For per-project and repository scopes, we execute in batch or per-file based on batch flag
-	batch := task.OpConfig.Batch
-	if batch == nil {
-		// Default batch behavior based on scope
-		defaultBatch := task.OpConfig.Scope != config.ToolScopePerFile
-		batch = &defaultBatch
-	}
-
-	if *batch || len(task.Files) == 0 {
-		// Batch execution (all files at once) or whole-project mode
-		result = e.executeBatch(ctx, task, cmdInfo, workingDir, startTime)
-	} else {
-		// Per-file execution
+	// Dispatch on argv shape, not scope: only {file} takes one path, so only it
+	// needs one process per file.
+	if config.RunsPerFile(task.OpConfig, len(task.Files)) {
 		result = e.executePerFile(ctx, task, cmdInfo, workingDir, startTime)
+	} else {
+		result = e.executeBatch(ctx, task, cmdInfo, workingDir, startTime)
 	}
 
 	// Classify unclassified failures as independent (tool failed on its own)
@@ -1250,6 +1233,18 @@ func (e *Executor) replacePlaceholders(args []string, file string, files []strin
 			}
 			// If {file} is part of a larger string, replace it
 			arg = strings.ReplaceAll(arg, "{file}", file)
+		}
+
+		// Expanded here, never in expandPathPlaceholders: that helper is shared
+		// with env-value expansion, which has no task and so no target. {target}
+		// carries the same directory as {cwd} today but differs in intent — it
+		// marks what the tool scans, which is what makes arity inferable.
+		if strings.Contains(arg, "{target}") {
+			if arg == "{target}" {
+				result = append(result, projectPath)
+				continue
+			}
+			arg = strings.ReplaceAll(arg, "{target}", projectPath)
 		}
 
 		// {root}, {cwd} and {toolCache} are shared with environment-value expansion.

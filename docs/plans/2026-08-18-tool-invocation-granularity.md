@@ -966,10 +966,20 @@ what the `unit` default exists to prevent.
 
 **S1 — `Selection` and the planner.** Introduce `Selection{Mode, Dir, Paths}`; change
 `Planner.Plan` to take it instead of the overloaded `files []string` (which today cannot distinguish
-"an empty selection" from "the whole world"); delete `planner.go:235`; unify the four file-matching
-blocks into one helper; turn the silent exits into reported skips. No dependencies.
-_Tests:_ rewrite the `tooling_test.go` subtest asserting zero tasks from a subdirectory; regenerate
-the `test/cli` goldens for `dm fix <file>`; update `website/docs/guides/architecture/planner.md`.
+"an empty selection" from "the whole world"); unify the four file-matching blocks into one helper.
+No dependencies.
+_Tests:_ the `Selection` mapping is exercised through the existing planner tests; `test/cli` goldens
+must not move, since S1 changes no eligibility.
+
+> **Amended during implementation: the `planner.go:235` deletion moved out of S1 into S3.** §C1
+> requires it to land together with `execution.widenTo` enforcement, and widenTo is defined over
+> granularity — which S3 introduces. Deleting the guard in S1 would leave the core unable to tell a
+> narrowable repository tool from a whole-repo one, so every one of them would become eligible from
+> a subdirectory and, past the `:261` fence, run repository-wide. S1 and S2 therefore change no
+> eligibility at all: they are pure plumbing plus the argv-shape fix, and the user-visible narrowing
+> behaviour arrives in S3 with the model that makes it safe. Turning the silent exits into reported
+> skips moves with it, for the same reason: the skip reason cannot be named before granularity
+> exists to name it.
 
 **S2 — arity.** `ToolArity`, `{target}` in `ToolArgPlaceholders` (`validate.go:601`), `InferArity`,
 the declaration-as-assertion invariants and the §3.3 legality matrix, a four-way dispatch replacing

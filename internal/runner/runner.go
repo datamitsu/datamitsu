@@ -368,18 +368,11 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	totalFileProcessing := 0
 	for _, group := range plan.Groups {
 		for _, task := range group.Tasks {
-			// Determine batch mode
-			batch := task.OpConfig.Batch
-			if batch == nil {
-				defaultBatch := task.OpConfig.Scope != config.ToolScopePerFile
-				batch = &defaultBatch
-			}
-
-			if !*batch && len(task.Files) > 0 {
-				// Per-file mode: count each file
+			if config.RunsPerFile(task.OpConfig, len(task.Files)) {
+				// One process per file: count each file
 				totalFileProcessing += len(task.Files)
 			} else {
-				// Batch mode or whole-project mode (no files): count as 1 unit
+				// One process for the whole task: count as 1 unit
 				totalFileProcessing++
 			}
 		}

@@ -59,7 +59,7 @@ func TestSupportsAgreesWithCapabilities(t *testing.T) {
 // "arity", R5 for "granularity". See
 // docs/plans/2026-08-18-tool-invocation-granularity.md.
 func TestUnimplementedCapabilitiesAreNotPublished(t *testing.T) {
-	unimplemented := []Capability{CapArity, CapGranularity}
+	unimplemented := []Capability{CapGranularity}
 
 	published := Capabilities()
 	for _, c := range unimplemented {
@@ -74,7 +74,7 @@ func TestUnimplementedCapabilitiesAreNotPublished(t *testing.T) {
 // Adding a name here without implementing its expansion turns a loud config
 // error into a literal token silently reaching the tool.
 func TestArgPlaceholdersAreStable(t *testing.T) {
-	want := []string{"file", "files", "root", "cwd", "toolCache"}
+	want := []string{"file", "files", "root", "cwd", "toolCache", "target"}
 	if !slices.Equal(ArgPlaceholders, want) {
 		t.Errorf("ArgPlaceholders = %v, want %v", ArgPlaceholders, want)
 	}

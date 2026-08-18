@@ -48,6 +48,20 @@ const (
 	ToolScopePerFile    ToolScope = "per-file"
 )
 
+// ToolArity is the shape of paths an operation accepts on its command line.
+// Orthogonal to ToolScope: scope says where the process starts, arity says what
+// may go in argv. Inferred from Args (InferArity); declaring it is an assertion,
+// not an override.
+type ToolArity string
+
+// Tool argument arities, in the order InferArity tests for them.
+const (
+	ArityDir  ToolArity = "dir"  // one directory via {target}, no file list
+	ArityMany ToolArity = "many" // arbitrary list of paths via {files}
+	ArityOne  ToolArity = "one"  // exactly one path per process via {file}
+	ArityNone ToolArity = "none" // no path in argv; the file set is only a trigger
+)
+
 // OperationType distinguishes the kind of work a tool operation performs.
 type OperationType string
 
@@ -87,10 +101,15 @@ const (
 
 // ToolOperation describes a single fix or lint invocation of a tool.
 type ToolOperation struct {
-	App          string            `json:"app"`
-	Args         []string          `json:"args"`
-	Scope        ToolScope         `json:"scope"`
-	Batch        *bool             `json:"batch,omitempty"` // Batch mode (default: true for per-project and repository, false for per-file)
+	App   string    `json:"app"`
+	Args  []string  `json:"args"`
+	Scope ToolScope `json:"scope"`
+	// Arity asserts the argv path shape; must equal InferArity(op) when set.
+	Arity ToolArity `json:"arity,omitempty"`
+	// Batch is deprecated in favour of Arity. Retained so a config still setting
+	// it errors loudly — goja's ExportTo consults only fields on this struct, so
+	// removing it would drop the key silently. See ValidateToolDeprecations.
+	Batch        *bool             `json:"batch,omitempty"`
 	Globs        []string          `json:"globs,omitempty"`
 	ExcludeGlobs []string          `json:"excludeGlobs,omitempty"`
 	Priority     int               `json:"priority,omitempty"`
