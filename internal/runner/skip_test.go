@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"errors"
 	"io"
 	"os"
 	"strings"
@@ -56,12 +57,21 @@ func TestRecordSkipsOnlyPlatform(t *testing.T) {
 	sc.recordSkips([]tooling.SkippedTool{
 		{ToolName: "trufflehog", Reason: tooling.SkipReasonConfig},
 		{ToolName: "typstyle", Reason: tooling.SkipReasonUnsupportedPlatform},
+		{ToolName: "syncpack", Reason: tooling.SkipReasonNotNarrowable},
 	})
 	if _, ok := sc.platformSkipped["typstyle"]; !ok {
 		t.Error("platform skip should be recorded")
 	}
 	if _, ok := sc.platformSkipped["trufflehog"]; ok {
 		t.Error("config skip must not be recorded (it is intentional)")
+	}
+	// A tool that could not be narrowed leaves the answer incomplete...
+	if _, ok := sc.narrowed["syncpack"]; !ok {
+		t.Error("not-narrowable should count against coverage")
+	}
+	// ...while one the repository deliberately disabled does not.
+	if _, ok := sc.narrowed["trufflehog"]; ok {
+		t.Error("a config skip is an answer, not an incomplete one")
 	}
 }
 
@@ -158,4 +168,72 @@ func TestRunSingleOperationAllSkipped(t *testing.T) {
 	if _, ok := sc.platformSkipped["typstyle"]; !ok {
 		t.Error("platform skip not recorded in all-skipped path")
 	}
+}
+
+func TestCoverageFailure(t *testing.T) {
+	narrowed := func(names ...string) map[string]struct{} {
+		m := map[string]struct{}{}
+		for _, n := range names {
+			m[n] = struct{}{}
+		}
+		return m
+	}
+
+	t.Run("no flag never fails", func(t *testing.T) {
+		sc := &sharedContext{narrowed: narrowed("syncpack")}
+		if err := sc.coverageFailure(); err != nil {
+			t.Errorf("expected no error, got: %v", err)
+		}
+	})
+
+	t.Run("unit fails on an incomplete answer", func(t *testing.T) {
+		sc := &sharedContext{opts: Options{RequireCoverage: "unit"}, narrowed: narrowed("syncpack")}
+		if err := sc.coverageFailure(); err == nil {
+			t.Error("expected a failure")
+		}
+	})
+
+	t.Run("unit passes a complete one", func(t *testing.T) {
+		sc := &sharedContext{opts: Options{RequireCoverage: "unit"}, narrowed: narrowed()}
+		if err := sc.coverageFailure(); err != nil {
+			t.Errorf("expected no error, got: %v", err)
+		}
+	})
+
+	// Without the selection clause this would pass having checked one unit of
+	// nine: per-task coverage only speaks for the units that ran.
+	t.Run("repo requires the whole repository as the target", func(t *testing.T) {
+		sc := &sharedContext{
+			opts:      Options{RequireCoverage: "repo"},
+			narrowed:  narrowed(),
+			selection: tooling.Selection{Mode: tooling.SelectionPaths},
+		}
+		if err := sc.coverageFailure(); err == nil {
+			t.Error("a narrowed selection cannot satisfy repo coverage")
+		}
+	})
+
+	t.Run("repo passes on a full run", func(t *testing.T) {
+		sc := &sharedContext{
+			opts:      Options{RequireCoverage: "repo"},
+			narrowed:  narrowed(),
+			selection: tooling.Selection{Mode: tooling.SelectionAll},
+		}
+		if err := sc.coverageFailure(); err != nil {
+			t.Errorf("expected no error, got: %v", err)
+		}
+	})
+
+	// --tools deletes the skip entries of unselected tools before anything can
+	// observe them, so the assertion would be trivially true.
+	t.Run("rejected with --tools", func(t *testing.T) {
+		sc := &sharedContext{
+			opts:          Options{RequireCoverage: "unit"},
+			narrowed:      narrowed(),
+			selectedTools: []string{"eslint"},
+		}
+		if err := sc.coverageFailure(); !errors.Is(err, errRequireCoverageWithTools) {
+			t.Errorf("expected the --tools rejection, got: %v", err)
+		}
+	})
 }

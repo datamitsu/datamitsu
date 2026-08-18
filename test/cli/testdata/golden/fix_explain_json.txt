@@ -16,6 +16,9 @@
                 "--write"
               ],
               "scope": "repository",
+              "granularity": "repo",
+              "arity": "none",
+              "coverage": "complete",
               "batch": true,
               "workingDir": "<TMP>",
               "files": [],

@@ -14,6 +14,8 @@ var (
 	checkFileScoped    bool
 	checkSelectedTools string
 	checkFailOnSkip    bool
+	checkWidenTo       string
+	checkRequireCov    string
 )
 
 var checkCmd = &cobra.Command{
@@ -37,6 +39,8 @@ func init() {
 	checkCmd.Flags().Lookup("explain").NoOptDefVal = "summary"
 	checkCmd.Flags().BoolVar(&checkFileScoped, "file-scoped", false, "Only process git staged files")
 	checkCmd.Flags().StringVar(&checkSelectedTools, "tools", "", "Comma-separated list of tools to run (for debugging)")
+	checkCmd.Flags().StringVar(&checkWidenTo, "widen-to", "", "Limit how far work may widen beyond the selection (target|unit|repo)")
+	checkCmd.Flags().StringVar(&checkRequireCov, "require-coverage", "", "Exit non-zero unless the run answered completely (unit|repo)")
 	checkCmd.Flags().BoolVar(&checkFailOnSkip, "fail-on-skip", false, "Exit non-zero if any tool is skipped because its binary is unavailable for this platform")
 	rootCmd.AddCommand(checkCmd)
 }
@@ -45,6 +49,7 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	err := runner.RunSequential(
 		[]config.OperationType{config.OpFix, config.OpLint},
 		args, checkExplain, checkFileScoped, checkSelectedTools, checkFailOnSkip,
+		runner.Options{WidenTo: checkWidenTo, RequireCoverage: checkRequireCov},
 		func() (*config.Config, string, error) {
 			cfg, _, _, err := loadConfig()
 			return cfg, "", err

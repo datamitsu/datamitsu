@@ -56,6 +56,9 @@ type TaskJSON struct {
 	App          string   `json:"app"`
 	Args         []string `json:"args"`
 	Scope        string   `json:"scope"`
+	Granularity  string   `json:"granularity"`
+	Arity        string   `json:"arity"`
+	Coverage     string   `json:"coverage"`
 	Batch        bool     `json:"batch"`
 	WorkingDir   string   `json:"workingDir"`
 	Globs        []string `json:"globs,omitempty"`
@@ -353,6 +356,9 @@ func (f *JSONFormatter) Format(plan *ExecutionPlan, rootPath, cwdPath string, op
 					App:          task.OpConfig.App,
 					Args:         task.OpConfig.Args,
 					Scope:        string(task.OpConfig.Scope),
+					Granularity:  string(config.InferGranularity(task.OpConfig)),
+					Arity:        string(config.EffectiveArity(task.OpConfig)),
+					Coverage:     string(task.Coverage),
 					Batch:        !config.RunsPerFile(task.OpConfig, len(task.Files)),
 					WorkingDir:   workingDir,
 					Globs:        task.OpConfig.Globs,
