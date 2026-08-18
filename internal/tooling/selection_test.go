@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/project"
 )
 
 func TestNewSelection(t *testing.T) {
@@ -163,5 +164,66 @@ func TestCollectTasksWidenToRepoRunsNonNarrowableTools(t *testing.T) {
 	tasks, skipped := p.collectTasks(context.Background(), config.OpFix, Selection{Mode: SelectionSubtree, Dir: "/repo/packages/api"})
 	if len(tasks) != 1 {
 		t.Fatalf("widenTo repo should run it, got %d tasks and %+v", len(tasks), skipped)
+	}
+}
+
+// cwd is where you happen to stand; a path on the command line is a decision.
+// The cwd filter used to apply to both, so naming a file outside the current
+// directory dropped it and reported nothing.
+func TestCollectTasksKeepsExplicitPathsOutsideCwd(t *testing.T) {
+	p := &Planner{
+		rootPath: "/repo",
+		cwdPath:  "/repo/services/api",
+		tools: config.MapOfTools{
+			"shfmt": {Operations: map[config.OperationType]config.ToolOperation{
+				config.OpFix: {
+					App: "shfmt", Args: []string{"-w", "{file}"},
+					Scope: config.ToolScopePerFile, Globs: []string{"**/*.sh"},
+				},
+			}},
+		},
+		cachedFiles:      []string{"/repo/services/api/a.sh", "/repo/services/web/b.sh"},
+		cacheInitialized: true,
+	}
+
+	tasks, _ := p.collectTasks(context.Background(), config.OpFix,
+		Selection{Mode: SelectionPaths, Paths: []string{"/repo/services/web/b.sh"}})
+
+	if len(tasks) != 1 {
+		t.Fatalf("naming a file outside cwd planned %d tasks, want 1", len(tasks))
+	}
+	if tasks[0].Files[0] != "/repo/services/web/b.sh" {
+		t.Errorf("planned %v, want the named file", tasks[0].Files)
+	}
+}
+
+// Standing inside a package, below its root, still means "this app". Only
+// descendants counted before, so from services/api/src there were no projects
+// below and the run planned nothing and reported nothing.
+func TestCollectTasksFromBelowAProjectRoot(t *testing.T) {
+	p := &Planner{
+		rootPath: "/repo",
+		cwdPath:  "/repo/services/api/src",
+		tools: config.MapOfTools{
+			"eslint": {Operations: map[config.OperationType]config.ToolOperation{
+				config.OpFix: {
+					App: "eslint", Args: []string{"{files}"},
+					Scope: config.ToolScopePerProject, Globs: []string{"**/*.ts"},
+				},
+			}},
+		},
+		cachedFiles:      []string{"/repo/services/api/src/a.ts"},
+		cachedProjects:   []project.ProjectLocation{{Type: "npm-package", Path: "/repo/services/api"}},
+		cacheInitialized: true,
+	}
+
+	tasks, _ := p.collectTasks(context.Background(), config.OpFix,
+		Selection{Mode: SelectionSubtree, Dir: "/repo/services/api/src"})
+
+	if len(tasks) != 1 {
+		t.Fatalf("planned %d tasks from inside a project, want 1", len(tasks))
+	}
+	if tasks[0].ProjectPath != "/repo/services/api" {
+		t.Errorf("ProjectPath = %q, want the containing project", tasks[0].ProjectPath)
 	}
 }

@@ -1267,6 +1267,45 @@ Precedence: **tool failure (1) outranks coverage (4)**, and the machine surfaces
 
 ---
 
+## 11b. Shipped, and deliberately deferred (2026-08-19)
+
+R5 is implemented on `feat/tool-invocation-granularity-r5`. Recorded here so the
+gap between plan and branch is explicit rather than something a later reader
+rediscovers.
+
+**Shipped:** granularity with inference; eligibility by granularity instead of
+the cwd guard; `execution.widenTo`; the verdict cache with membership, guards
+G1–G4 and the TTL; the per-file cache gated to file granularity; `invalidateOn`
+as a per-unit guard; the LSP policy and the removal of `scopeTasksToFile`;
+`--widen-to` and `--require-coverage`; `granularity`/`arity`/`coverage` in
+explain JSON; both new runtime parameters in `datamitsu config runtime`; docs.
+
+**Deferred, with the reason:**
+
+- **`batch` is still a warning, not the hard error §11.2 R5 specifies**, and
+  `TaskJSON.Batch` is retained. Rejecting it breaks every config still carrying
+  the field, and the wrapper migration that removes it is written but unreleased
+  — it waits on a stable core with arity. Flip both in the release that follows
+  the wrapper's, not before.
+- **Exit code 4 for a coverage failure.** Needs `CodedError` at `cmd/root.go`'s
+  single exit site and re-routes `--fail-on-skip` through it, which is a breaking
+  change to an existing flag and belongs in its own commit. Until then a coverage
+  failure exits 1 and is indistinguishable from a tool failure — which is the
+  distinction the flag exists to provide, so this is a real gap, not a cosmetic
+  one.
+- **`PlanJSON.complete` / `coverage`, the remaining `SkipReason` values, the
+  `uievent` fields, and the `◑ target:` header with collapsed counters** from §7.
+  Skips are already reported by name, so this is presentation on top of working
+  reporting.
+- **The `--tools` conflict fires after the run**, not as an up-front usage error.
+- **§5.5's torn-read pre/post hashing for lint.** A file edited _during_ a lint
+  can still have its verdict recorded against the pre-edit inputs.
+
+**Two §4.2 cells were unimplemented and are fixed on this branch** — both
+pre-existing on `main`, so neither was a regression, but both are silent losses:
+`Paths(P) × file` applied the cwd filter to explicitly named paths, and
+`Subtree(D) × unit` dropped the project containing the subtree.
+
 ## 12. Non-goals
 
 Not deferred versions — explicit refusals or genuine impossibilities.

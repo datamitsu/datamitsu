@@ -2473,27 +2473,28 @@ func TestCollectTasksPerProjectExplicitFilesFromSubdirectory(t *testing.T) {
 	}
 	tasks, _ := planner.collectTasks(context.Background(), config.OpLint, Selection{Mode: SelectionPaths, Paths: explicitFiles})
 
-	// Files outside cwd (/repo/lib/helper.go) should be excluded.
-	// Files inside cwd but not matching a cwd-subtree project (/repo/services/shared/util.go)
-	// should NOT create a task at rootPath.
+	// Every named file is planned, including the one outside cwd. This reverses
+	// what this test used to pin: cwd narrowed explicit paths too, so naming
+	// /repo/lib/helper.go from /repo/services dropped it and reported nothing.
+	// cwd is where you happen to stand; a path on the command line is a decision.
+	planned := map[string]string{}
 	for _, task := range tasks {
-		if !strings.HasPrefix(task.ProjectPath, "/repo/services") {
-			t.Errorf("task ProjectPath %q is outside cwd subtree %q", task.ProjectPath, cwd)
-		}
 		for _, f := range task.Files {
-			if !strings.HasPrefix(f, "/repo/services/") {
-				t.Errorf("task file %q is outside cwd subtree %q", f, cwd)
-			}
+			planned[f] = task.ProjectPath
 		}
 	}
-
-	// Should have tasks for api and web projects (shared/util.go may be grouped into a
-	// parent project or dropped since its nearest project is /repo which is outside cwd)
-	if len(tasks) < 2 {
-		t.Errorf("expected at least 2 tasks (api + web), got %d", len(tasks))
-		for i, task := range tasks {
-			t.Logf("  task[%d]: ProjectPath=%q Files=%v", i, task.ProjectPath, task.Files)
+	for _, f := range explicitFiles {
+		if _, ok := planned[f]; !ok {
+			t.Errorf("named file %q was not planned", f)
 		}
+	}
+	// The file outside cwd belongs to the root project, which is where its
+	// nearest project is.
+	if got := planned["/repo/lib/helper.go"]; got != "/repo" {
+		t.Errorf("helper.go planned under %q, want the root project", got)
+	}
+	if got := planned["/repo/services/api/main.go"]; got != "/repo/services/api" {
+		t.Errorf("main.go planned under %q, want its own project", got)
 	}
 }
 
