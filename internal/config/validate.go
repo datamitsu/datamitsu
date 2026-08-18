@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/configcontract"
 	"github.com/datamitsu/datamitsu/internal/ociref"
 	"github.com/datamitsu/datamitsu/internal/target"
 )
@@ -592,14 +593,68 @@ func ValidateSetupToolRefs(initConfigs MapOfConfigSetup, tools MapOfTools) []str
 	return warnings
 }
 
+// ValidateToolDeprecations returns one warning per tool operation still setting
+// a deprecated field. It warns rather than erroring so that every config that
+// loads today keeps loading: the rejection lands a full release later, once the
+// replacement has shipped and configs have had a release in which to migrate.
+//
+// `batch` is deprecated in favour of `arity`. The two answer different
+// questions — `batch` is derived from `scope` ("where does the process start"),
+// while argv shape is a property of the tool's command-line contract — and one
+// boolean cannot express the four shapes that exist (a list of paths, exactly
+// one path, one directory, no paths at all). Until the `arity` capability is
+// published, `batch` is still honoured; after it, the field is ignored for
+// dispatch and eventually rejected.
+//
+// Warnings are emitted in a deterministic order so callers can print them
+// without reordering.
+func ValidateToolDeprecations(tools MapOfTools) []string {
+	toolNames := make([]string, 0, len(tools))
+	for name := range tools {
+		toolNames = append(toolNames, name)
+	}
+	sort.Strings(toolNames)
+
+	var warnings []string
+	for _, toolName := range toolNames {
+		tool := tools[toolName]
+
+		opTypes := make([]string, 0, len(tool.Operations))
+		for opType := range tool.Operations {
+			opTypes = append(opTypes, string(opType))
+		}
+		sort.Strings(opTypes)
+
+		for _, opType := range opTypes {
+			op := tool.Operations[OperationType(opType)]
+			if op.Batch == nil {
+				continue
+			}
+			warnings = append(warnings, fmt.Sprintf(
+				"tool %q operation %q: %q is deprecated and will be rejected in a future release; "+
+					"argv shape comes from %q once this build reports the %q capability. "+
+					"Remove the field — see docs/plans/2026-08-18-tool-invocation-granularity.md",
+				toolName, opType, "batch", "arity", configcontract.CapArity,
+			))
+		}
+	}
+
+	return warnings
+}
+
 // ToolArgPlaceholders and ToolEnvPlaceholders are the substitution placeholders
 // datamitsu expands in tool-operation arguments and environment-variable values
 // respectively (the actual expansion lives in internal/tooling's executor). They
 // are the single source of truth for which {placeholder} tokens are valid;
 // ValidateTools rejects any other token instead of passing it through unsubstituted.
+//
+// The values live in internal/configcontract because facts() publishes them to
+// config JavaScript, and a leaf package lets both sides read one definition
+// rather than keeping two in sync. These names stay as the in-package spelling
+// every validator already uses.
 var (
-	ToolArgPlaceholders = []string{"file", "files", "root", "cwd", "toolCache"}
-	ToolEnvPlaceholders = []string{"root", "cwd", "toolCache"}
+	ToolArgPlaceholders = configcontract.ArgPlaceholders
+	ToolEnvPlaceholders = configcontract.EnvPlaceholders
 )
 
 // toolPlaceholderPattern matches a datamitsu-style placeholder: a brace-wrapped

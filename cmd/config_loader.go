@@ -237,6 +237,10 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 		logger.Logger.Warn(w, zap.String("source", "config"))
 	}
 
+	for _, w := range config.ValidateToolDeprecations(currentConfig.Tools) {
+		logger.Logger.Warn(w, zap.String("source", "config"))
+	}
+
 	if err := config.ValidateTools(currentConfig.Tools, currentConfig.Parsers); err != nil {
 		return nil, nil, nil, err
 	}
@@ -322,6 +326,22 @@ func buildConfigSources(ctx context.Context, beforeConfigPaths []string, autoCon
 	// --before-config flag paths (for wrappers/libraries, before auto-discovery).
 	for _, p := range beforeConfigPaths {
 		sources = append(sources, configSource{name: p, path: p})
+	}
+
+	// Record the substitution rather than performing it silently: when the flag
+	// is present the auto config's own getBeforeConfigs() is never consulted, so
+	// the config layer a user believes they pinned may not be the one that ran
+	// (the docker images always pass --before-config from their ENTRYPOINT).
+	// Debug, not info: this is the normal path for every pnpm-wrapper
+	// invocation, and naming what was skipped would mean evaluating the auto
+	// config in a second engine just to log it (discoverBeforeConfigs) — real
+	// cost on the hot path to describe an intended override.
+	if autoConfigPath != "" && len(beforeConfigPaths) > 0 {
+		logger.Logger.Debug(
+			"--before-config given; declared getBeforeConfigs() in the auto config are not consulted",
+			zap.String("autoConfig", autoConfigPath),
+			zap.Strings("beforeConfig", beforeConfigPaths),
+		)
 	}
 
 	// Declared before-configs from the auto config — only when no flag overrides.
