@@ -10,10 +10,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"slices"
 	"strings"
 
-	"github.com/datamitsu/datamitsu/internal/configcontract"
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/gitenv"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
@@ -30,21 +28,10 @@ import (
 type Facts struct {
 	// PackageName is the name of this package from ldflags
 	PackageName string `json:"packageName"`
-	// Version is the running build's version string, verbatim from ldflags:
-	// a release tag, "dev" for a plain `go build`, or "0.0.0-unstable.*" for a
-	// prerelease. Published for diagnostics and reporting only — branch on
-	// Capabilities instead, since "dev" and the unstable channel both sort below
-	// every real release and make version comparison useless.
+	// Version is the running build's version string, verbatim from ldflags.
+	// Diagnostics only: a config that needs a minimum core declares it through
+	// getMinVersion(), which is enforced for stable releases.
 	Version string `json:"version"`
-	// Capabilities lists the behaviours this build supports, sorted. A config
-	// asks `facts().capabilities?.includes("arity")`; the optional chain matters,
-	// because a core built before this field existed omits the key entirely,
-	// which is the correct negative answer from a build that cannot be changed.
-	Capabilities []string `json:"capabilities"`
-	// ArgPlaceholders lists the {placeholder} tokens valid in a tool operation's
-	// args, so a config can check what the running core will substitute rather
-	// than discovering it as a validation error.
-	ArgPlaceholders []string `json:"argPlaceholders"`
 	// BinaryCommand is the command to run this binary (can be overridden via env or flag)
 	BinaryCommand string `json:"binaryCommand"`
 	// BinaryPath is the absolute path to the currently running binary
@@ -88,13 +75,11 @@ func CollectWithOptions(ctx context.Context, binaryCommandOverride string, opts 
 	}
 
 	facts := &Facts{
-		PackageName:     ldflags.PackageName,
-		Version:         ldflags.Version,
-		Capabilities:    configcontract.Capabilities(),
-		ArgPlaceholders: slices.Clone(configcontract.ArgPlaceholders),
-		OS:              runtime.GOOS,
-		Arch:            runtime.GOARCH,
-		Libc:            string(libc),
+		PackageName: ldflags.PackageName,
+		Version:     ldflags.Version,
+		OS:          runtime.GOOS,
+		Arch:        runtime.GOARCH,
+		Libc:        string(libc),
 	}
 
 	// Get binary path

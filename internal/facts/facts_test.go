@@ -6,11 +6,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"slices"
 	"strings"
 	"testing"
 
-	"github.com/datamitsu/datamitsu/internal/configcontract"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 )
 
@@ -378,59 +376,14 @@ func TestResolveSymlinks(t *testing.T) {
 	})
 }
 
-// TestCollectPublishesCoreContract covers the fields config JavaScript uses to
-// discover what the running core can do, rather than guessing from a version.
-func TestCollectPublishesCoreContract(t *testing.T) {
-	ctx := context.Background()
-
-	facts, _, err := Collect(ctx, "")
+// TestCollectPublishesVersion covers the one build fact a config may want for
+// diagnostics. Gating on a minimum core is getMinVersion()'s job, not this.
+func TestCollectPublishesVersion(t *testing.T) {
+	facts, _, err := Collect(context.Background(), "")
 	if err != nil {
 		t.Fatalf("Collect() error = %v", err)
 	}
-
 	if facts.Version != ldflags.Version {
 		t.Errorf("Version = %q, want %q", facts.Version, ldflags.Version)
-	}
-
-	// Non-nil matters more than the contents: a config distinguishes "this core
-	// has the probe" from "this core predates it" by the key being present, so
-	// an empty capability set must still marshal as [] and never as null.
-	if facts.Capabilities == nil {
-		t.Error("Capabilities is nil; an empty set must still be published as an empty list")
-	}
-	if !slices.Equal(facts.Capabilities, configcontract.Capabilities()) {
-		t.Errorf("Capabilities = %v, want %v", facts.Capabilities, configcontract.Capabilities())
-	}
-
-	if !slices.Equal(facts.ArgPlaceholders, configcontract.ArgPlaceholders) {
-		t.Errorf("ArgPlaceholders = %v, want %v", facts.ArgPlaceholders, configcontract.ArgPlaceholders)
-	}
-}
-
-// TestCollectDoesNotAliasContractState guards the goja boundary from the other
-// side: facts are handed to a JS runtime that can mutate arrays, and two
-// collections must not share backing storage with each other or with the
-// package-level vocabulary.
-func TestCollectDoesNotAliasContractState(t *testing.T) {
-	ctx := context.Background()
-
-	first, _, err := Collect(ctx, "")
-	if err != nil {
-		t.Fatalf("Collect() error = %v", err)
-	}
-	if len(first.ArgPlaceholders) == 0 {
-		t.Fatal("ArgPlaceholders is empty")
-	}
-	first.ArgPlaceholders[0] = "mutated"
-
-	second, _, err := Collect(ctx, "")
-	if err != nil {
-		t.Fatalf("Collect() error = %v", err)
-	}
-	if slices.Contains(second.ArgPlaceholders, "mutated") {
-		t.Errorf("ArgPlaceholders aliases shared state: %v", second.ArgPlaceholders)
-	}
-	if slices.Contains(configcontract.ArgPlaceholders, "mutated") {
-		t.Errorf("Collect leaked a mutation into configcontract: %v", configcontract.ArgPlaceholders)
 	}
 }
