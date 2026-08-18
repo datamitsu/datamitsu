@@ -417,6 +417,8 @@ export default defineConfig((config) => ({
     "configcontract",
     // git's --format=%(trailers:...) option token, used to read Co-authored-by.
     "valueonly",
+    // Plural of the ToolArity config field.
+    "arities",
     // Tool names in the wrapper config's repository-scoped set, referenced when
     // classifying which of them can be narrowed to a file subset.
     "blint",

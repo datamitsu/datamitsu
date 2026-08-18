@@ -2899,16 +2899,17 @@ func TestValidateTools(t *testing.T) {
 		}
 	})
 
-	t.Run("stdout per-file with explicit batch:true fails", func(t *testing.T) {
-		batch := true
+	t.Run("stdout per-file with a {files} list fails", func(t *testing.T) {
+		// The stdin/stdout contract feeds one file per process. {files} infers
+		// arity "many", which is one process for the whole list.
 		tools := MapOfTools{
 			"fmt": {Operations: map[OperationType]ToolOperation{
-				OpFix: {Output: ToolOutputStdout, Scope: ToolScopePerFile, Batch: &batch},
+				OpFix: {Output: ToolOutputStdout, Scope: ToolScopePerFile, Args: []string{"{files}"}},
 			}},
 		}
 		err := ValidateTools(tools, nil)
-		if err == nil || !strings.Contains(err.Error(), "incompatible with batch:true") {
-			t.Errorf("expected batch incompatibility error, got: %v", err)
+		if err == nil || !strings.Contains(err.Error(), `infer arity "many"`) {
+			t.Errorf("expected arity incompatibility error, got: %v", err)
 		}
 	})
 

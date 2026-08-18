@@ -348,19 +348,12 @@ func (f *JSONFormatter) Format(plan *ExecutionPlan, rootPath, cwdPath string, op
 			for _, task := range parallelTasks {
 				workingDir := getWorkingDirForTask(task, rootPath)
 
-				// Determine batch mode
-				batch := task.OpConfig.Batch
-				if batch == nil {
-					defaultBatch := task.OpConfig.Scope != config.ToolScopePerFile
-					batch = &defaultBatch
-				}
-
 				taskJSON := TaskJSON{
 					ToolName:     task.ToolName,
 					App:          task.OpConfig.App,
 					Args:         task.OpConfig.Args,
 					Scope:        string(task.OpConfig.Scope),
-					Batch:        *batch,
+					Batch:        !config.RunsPerFile(task.OpConfig, len(task.Files)),
 					WorkingDir:   workingDir,
 					Globs:        task.OpConfig.Globs,
 					ExcludeGlobs: task.OpConfig.ExcludeGlobs,

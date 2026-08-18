@@ -266,7 +266,7 @@ func scopeTasksToFile(plan *tooling.ExecutionPlan, absPath string) {
 // ({file} or {files}), i.e. the planner already targets this task at the file.
 func hasFilePlaceholder(args []string) bool {
 	for _, a := range args {
-		if strings.Contains(a, "{file}") || strings.Contains(a, "{files}") {
+		if strings.Contains(a, "{file}") || strings.Contains(a, "{files}") || strings.Contains(a, "{target}") {
 			return true
 		}
 	}

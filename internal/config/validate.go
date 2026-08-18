@@ -770,12 +770,28 @@ func ValidateTools(tools MapOfTools, parsers MapOfParsers) error {
 						"tool %q operation %q: input %q / output %q require scope %q (got %q)",
 						toolName, opType, ToolInputStdin, ToolOutputStdout, ToolScopePerFile, op.Scope,
 					))
-				} else if op.Batch != nil && *op.Batch {
+				} else if arity := EffectiveArity(op); arity != ArityOne && arity != ArityNone {
 					errs = append(errs, fmt.Sprintf(
-						"tool %q operation %q: input %q / output %q are incompatible with batch:true",
-						toolName, opType, ToolInputStdin, ToolOutputStdout,
+						"tool %q operation %q: input %q / output %q need one file per process, but args infer arity %q",
+						toolName, opType, ToolInputStdin, ToolOutputStdout, arity,
 					))
 				}
+			}
+
+			if op.Arity != "" {
+				if inferred := EffectiveArity(op); op.Arity != inferred {
+					errs = append(errs, fmt.Sprintf(
+						"tool %q operation %q: declared arity %q but args infer %q; arity asserts the argv shape, it cannot override it",
+						toolName, opType, op.Arity, inferred,
+					))
+				}
+			}
+
+			if ArgsReferenceTarget(op.Args) && ArgsReferenceFiles(op.Args) {
+				errs = append(errs, fmt.Sprintf(
+					"tool %q operation %q: args carry both %s and a file placeholder; a directory target and a file list are mutually exclusive",
+					toolName, opType, placeholderTarget,
+				))
 			}
 
 			// output:stdout drives the diff-in-core formatting path, which rewrites

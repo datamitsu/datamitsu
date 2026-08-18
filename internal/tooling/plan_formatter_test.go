@@ -195,15 +195,27 @@ func TestDetailedFormatter_EmptyAndWholeProject(t *testing.T) {
 	}
 }
 
-func TestJSONFormatter_BatchDefaults(t *testing.T) {
-	batchTrue := true
+func TestJSONFormatter_BatchDerivedFromArity(t *testing.T) {
+	// `batch` in explain JSON now answers "does this run as one process", derived
+	// from argv shape rather than from scope or the deprecated batch field.
 	plan := &ExecutionPlan{Groups: []TaskGroup{{Priority: 5, Tasks: []Task{
-		// per-file with no explicit Batch → defaults to false
-		{ToolName: "a", OpConfig: config.ToolOperation{App: "a", Scope: config.ToolScopePerFile, Globs: []string{"**/*.go"}}},
-		// repository with no explicit Batch → defaults to true
-		{ToolName: "b", OpConfig: config.ToolOperation{App: "b", Scope: config.ToolScopeRepository}},
-		// explicit Batch override wins
-		{ToolName: "c", OpConfig: config.ToolOperation{App: "c", Scope: config.ToolScopePerFile, Batch: &batchTrue, Globs: []string{"**/*.md"}}},
+		{ToolName: "one", Files: []string{"/repo/a.go"}, OpConfig: config.ToolOperation{
+			App: "one", Scope: config.ToolScopePerFile, Args: []string{"{file}"},
+		}},
+		{ToolName: "many", Files: []string{"/repo/a.go"}, OpConfig: config.ToolOperation{
+			App: "many", Scope: config.ToolScopeRepository, Args: []string{"{files}"},
+		}},
+		// per-file + {files} is dotenv-linter's shape: one process despite the scope.
+		{ToolName: "perfile-many", Files: []string{"/repo/a.env"}, OpConfig: config.ToolOperation{
+			App: "perfile-many", Scope: config.ToolScopePerFile, Args: []string{"{files}"},
+		}},
+		// per-file with no path in argv is sort-package-json's shape: still per file.
+		{ToolName: "perfile-none", Files: []string{"/repo/package.json"}, OpConfig: config.ToolOperation{
+			App: "perfile-none", Scope: config.ToolScopePerFile, Args: []string{"--quiet"},
+		}},
+		{ToolName: "whole-project", OpConfig: config.ToolOperation{
+			App: "whole-project", Scope: config.ToolScopeRepository, Args: []string{"run"},
+		}},
 	}}}}
 
 	out := NewJSONFormatter().Format(plan, "/repo", "/cwd", config.OpLint)
@@ -224,13 +236,15 @@ func TestJSONFormatter_BatchDefaults(t *testing.T) {
 			batchByTool[task.ToolName] = task.Batch
 		}
 	}
-	if batchByTool["a"] != false {
-		t.Errorf("per-file default batch = %v, want false", batchByTool["a"])
-	}
-	if batchByTool["b"] != true {
-		t.Errorf("repository default batch = %v, want true", batchByTool["b"])
-	}
-	if batchByTool["c"] != true {
-		t.Errorf("explicit batch override = %v, want true", batchByTool["c"])
+	for tool, want := range map[string]bool{
+		"one":           false,
+		"many":          true,
+		"perfile-many":  true,
+		"perfile-none":  false,
+		"whole-project": true,
+	} {
+		if got := batchByTool[tool]; got != want {
+			t.Errorf("%s: batch = %v, want %v", tool, got, want)
+		}
 	}
 }

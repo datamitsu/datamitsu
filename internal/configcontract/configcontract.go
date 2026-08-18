@@ -17,8 +17,10 @@ import "slices"
 // config.ValidateTools rejects any other token instead of passing it through
 // unsubstituted, so adding a name here without implementing its expansion turns
 // a loud config error into a silent literal.
+// "target" is absent from EnvPlaceholders on purpose: env values expand on a
+// path with no task, so it would resolve to a wrong directory instead of erroring.
 var (
-	ArgPlaceholders = []string{"file", "files", "root", "cwd", "toolCache"}
+	ArgPlaceholders = []string{"file", "files", "root", "cwd", "toolCache", "target"}
 	EnvPlaceholders = []string{"root", "cwd", "toolCache"}
 )
 
@@ -49,11 +51,10 @@ const (
 
 // supported lists the capabilities this build actually implements, sorted.
 //
-// It is intentionally empty: this build ships the probe itself, not the
-// behaviours. A config detects the probe with `facts().capabilities !== undefined`
-// and a behaviour with `.includes("arity")`, so an empty array is the correct —
-// and, for cores built before the probe existed, retroactively correct — answer.
-var supported = []Capability{}
+// A config detects the probe with `facts().capabilities !== undefined` and a
+// behaviour with `.includes("arity")`; a core built before the probe existed
+// omits the key, which is the correct negative answer.
+var supported = []Capability{CapArity}
 
 // Capabilities returns the capability names this build supports, sorted, as
 // plain strings for the JS VM. The result is a fresh slice: it is published
