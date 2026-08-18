@@ -412,7 +412,37 @@ export default defineConfig((config) => ({
     "Beancount",
     "SPIR",
     "keytar",
+    // Go package holding the config-schema contract published through facts():
+    // the {placeholder} vocabulary and the core capability set.
+    "configcontract",
     // git's --format=%(trailers:...) option token, used to read Co-authored-by.
     "valueonly",
+    // Tool names in the wrapper config's repository-scoped set, referenced when
+    // classifying which of them can be narrowed to a file subset.
+    "blint",
+    "deptry",
+    "droast",
+    "zizmor",
+    // Terms the granularity design leans on: a git worktree; a scope value that
+    // no validator checks; re-pointing a call site at a moved symbol; and a
+    // hash vector whose part boundaries an attacker could forge.
+    "worktree",
+    "unvalidated",
+    "repoint",
+    "repointed",
+    "forgeable",
+    // British forms, matching the spellings already accepted above
+    // ("behaviour", "recognise", "recognised").
+    "analysed",
+    "atomised",
+    "atomises",
+    "behavioural",
+    "behaviours",
+    "defence",
+    "generalises",
+    "initialisation",
+    "optimisation",
+    "serialised",
+    "serialises",
   ],
 }));
