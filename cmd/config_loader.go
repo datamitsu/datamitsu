@@ -237,10 +237,6 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 		logger.Logger.Warn(w, zap.String("source", "config"))
 	}
 
-	for _, w := range config.ValidateToolDeprecations(currentConfig.Tools) {
-		logger.Logger.Warn(w, zap.String("source", "config"))
-	}
-
 	if err := config.ValidateTools(currentConfig.Tools, currentConfig.Parsers); err != nil {
 		return nil, nil, nil, err
 	}

@@ -1089,12 +1089,9 @@ func (m *mockProgressTracker) onResult(result tooling.ExecutionResult) {
 
 func TestBatchModeProgressTracking(t *testing.T) {
 	tracker := &mockProgressTracker{}
-
-	batchTrue := true
 	task := tooling.Task{
 		ToolName: "test-tool",
 		OpConfig: config.ToolOperation{
-			Batch: &batchTrue,
 			Scope: config.ToolScopePerProject,
 		},
 		Files: []string{"file1.go", "file2.go", "file3.go"},
@@ -1125,12 +1122,9 @@ func TestBatchModeProgressTracking(t *testing.T) {
 
 func TestPerFileModeProgressTracking(t *testing.T) {
 	tracker := &mockProgressTracker{}
-
-	batchFalse := false
 	task := tooling.Task{
 		ToolName: "test-tool",
 		OpConfig: config.ToolOperation{
-			Batch: &batchFalse,
 			Scope: config.ToolScopePerFile,
 		},
 		Files: []string{"file1.go", "file2.go", "file3.go", "file4.go", "file5.go"},
@@ -1174,12 +1168,9 @@ func TestPerFileModeProgressTracking(t *testing.T) {
 
 func TestProgressTrackingWithCachedFiles(t *testing.T) {
 	tracker := &mockProgressTracker{}
-
-	batchTrue := true
 	task := tooling.Task{
 		ToolName: "test-tool",
 		OpConfig: config.ToolOperation{
-			Batch: &batchTrue,
 			Scope: config.ToolScopePerProject,
 		},
 		Files: []string{"file1.go", "file2.go"},
@@ -1206,12 +1197,9 @@ func TestProgressTrackingWithCachedFiles(t *testing.T) {
 
 func TestProgressTrackingWithGetCommandInfoError(t *testing.T) {
 	tracker := &mockProgressTracker{}
-
-	batchTrue := true
 	task := tooling.Task{
 		ToolName: "failing-tool",
 		OpConfig: config.ToolOperation{
-			Batch: &batchTrue,
 			Scope: config.ToolScopePerProject,
 		},
 		Files: []string{"file1.go"},
@@ -1243,14 +1231,10 @@ func TestProgressTrackingWithGetCommandInfoError(t *testing.T) {
 func TestMixedBatchAndPerFileProgress(t *testing.T) {
 	tracker := &mockProgressTracker{}
 
-	batchTrue := true
-	batchFalse := false
-
 	tasks := []tooling.Task{
 		{
 			ToolName: "batch-tool-1",
 			OpConfig: config.ToolOperation{
-				Batch: &batchTrue,
 				Scope: config.ToolScopePerProject,
 			},
 			Files: []string{"file1.go"},
@@ -1258,7 +1242,6 @@ func TestMixedBatchAndPerFileProgress(t *testing.T) {
 		{
 			ToolName: "batch-tool-2",
 			OpConfig: config.ToolOperation{
-				Batch: &batchTrue,
 				Scope: config.ToolScopePerProject,
 			},
 			Files: []string{"file2.go"},
@@ -1266,7 +1249,6 @@ func TestMixedBatchAndPerFileProgress(t *testing.T) {
 		{
 			ToolName: "per-file-tool-1",
 			OpConfig: config.ToolOperation{
-				Batch: &batchFalse,
 				Scope: config.ToolScopePerFile,
 			},
 			Files: []string{"file3.go", "file4.go", "file5.go"},
@@ -1274,7 +1256,6 @@ func TestMixedBatchAndPerFileProgress(t *testing.T) {
 		{
 			ToolName: "per-file-tool-2",
 			OpConfig: config.ToolOperation{
-				Batch: &batchFalse,
 				Scope: config.ToolScopePerFile,
 			},
 			Files: []string{"file6.go", "file7.go", "file8.go"},
@@ -1284,7 +1265,7 @@ func TestMixedBatchAndPerFileProgress(t *testing.T) {
 	for _, task := range tasks {
 		tracker.onTaskStart(task.ToolName)
 
-		if task.OpConfig.Batch != nil && *task.OpConfig.Batch {
+		if !config.RunsPerFile(task.OpConfig, len(task.Files)) {
 			tracker.onFileProgress(task.ToolName, 1, 1, true)
 			result := tooling.ExecutionResult{
 				ToolName: task.ToolName,

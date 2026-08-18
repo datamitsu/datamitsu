@@ -568,12 +568,10 @@ func TestProjectType(t *testing.T) {
 }
 
 func TestToolOperation(t *testing.T) {
-	batchFalse := false
 	op := ToolOperation{
 		App:      "eslint",
 		Args:     []string{"--fix"},
 		Scope:    ToolScopePerFile,
-		Batch:    &batchFalse,
 		Globs:    []string{"*.js", "*.ts"},
 		Priority: 10,
 	}

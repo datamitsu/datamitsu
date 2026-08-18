@@ -12,9 +12,6 @@ import (
 	"github.com/datamitsu/datamitsu/internal/config"
 )
 
-// batchFalse is an addressable false for the *bool Batch field in per-file tasks.
-var batchFalse = false
-
 // shCmd builds a `sh -c <script>` command for the IO tests. These tests rely on
 // a POSIX shell, which is available on the Linux/macOS CI runners.
 func shCmd(ctx context.Context, script string) *exec.Cmd {
@@ -124,7 +121,6 @@ func TestExecuteTaskStdinStdoutMode(t *testing.T) {
 		OpConfig: config.ToolOperation{
 			App:    "fmt-tool",
 			Scope:  config.ToolScopePerFile,
-			Batch:  &batchFalse,
 			Input:  config.ToolInputStdin,
 			Output: config.ToolOutputStdout,
 		},
@@ -174,7 +170,6 @@ func TestExecuteTaskDefaultModeUnchanged(t *testing.T) {
 		OpConfig: config.ToolOperation{
 			App:   "plain-tool",
 			Scope: config.ToolScopePerFile,
-			Batch: &batchFalse,
 		},
 		Files:       []string{file},
 		ProjectPath: tmpDir,

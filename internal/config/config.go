@@ -109,13 +109,7 @@ type ToolOperation struct {
 	// Granularity is the smallest input set on which this operation's verdict is
 	// complete. Inferred when unset (InferGranularity); declaring "file" is a
 	// speed decision, declaring "unit"/"repo" is always safe.
-	Granularity ToolGranularity `json:"granularity,omitempty"`
-	// Batch is removed: argv shape comes from Arity. The field survives only so
-	// a config still setting it fails to load. Deleting it outright would be
-	// worse than useless — goja's ExportTo consults only fields on this struct,
-	// so the key would be dropped in silence and the behaviour change would
-	// arrive unannounced. Drop it once no config in circulation carries it.
-	Batch        *bool             `json:"batch,omitempty"`
+	Granularity  ToolGranularity   `json:"granularity,omitempty"`
 	Globs        []string          `json:"globs,omitempty"`
 	ExcludeGlobs []string          `json:"excludeGlobs,omitempty"`
 	Priority     int               `json:"priority,omitempty"`

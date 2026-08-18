@@ -91,8 +91,6 @@ func TestExecuteBatchChunkParses(t *testing.T) {
 	}
 	executor := NewExecutor(tmpDir, false, false, appManager, nil)
 	executor.SetParser(fp)
-
-	batchTrue := true
 	task := Task{
 		ToolName:  "eslint",
 		Operation: config.OpLint,
@@ -100,7 +98,6 @@ func TestExecuteBatchChunkParses(t *testing.T) {
 		OpConfig: config.ToolOperation{
 			App:   "eslint",
 			Scope: config.ToolScopePerProject,
-			Batch: &batchTrue,
 		},
 		ProjectPath: tmpDir,
 	}
@@ -170,8 +167,6 @@ func TestExecuteBatchChunksParallelMergesDiagnostics(t *testing.T) {
 	}
 	executor := NewExecutor(tmpDir, false, false, appManager, nil)
 	executor.SetParser(fp)
-
-	batchTrue := true
 	result := executor.executeTask(context.Background(), Task{
 		ToolName:  "eslint",
 		Operation: config.OpLint,
@@ -179,7 +174,6 @@ func TestExecuteBatchChunksParallelMergesDiagnostics(t *testing.T) {
 		OpConfig: config.ToolOperation{
 			App:   "eslint",
 			Scope: config.ToolScopePerProject,
-			Batch: &batchTrue,
 			Args:  []string{"{files}"},
 		},
 		Files:       files,
@@ -227,8 +221,6 @@ func TestExecuteBatchRunsOnceWhenArgsIgnoreFiles(t *testing.T) {
 	}
 	executor := NewExecutor(tmpDir, false, false, appManager, nil)
 	executor.SetParser(fp)
-
-	batchTrue := true
 	result := executor.executeTask(context.Background(), Task{
 		ToolName:  "tsc",
 		Operation: config.OpLint,
@@ -236,7 +228,6 @@ func TestExecuteBatchRunsOnceWhenArgsIgnoreFiles(t *testing.T) {
 		OpConfig: config.ToolOperation{
 			App:   "tsc",
 			Scope: config.ToolScopePerProject,
-			Batch: &batchTrue,
 			Args:  []string{"--noEmit"}, // no {files}
 		},
 		Files:       files,

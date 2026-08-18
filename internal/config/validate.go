@@ -592,48 +592,6 @@ func ValidateSetupToolRefs(initConfigs MapOfConfigSetup, tools MapOfTools) []str
 	return warnings
 }
 
-// ValidateToolDeprecations returns one warning per tool operation still setting
-// a removed field.
-//
-// `batch` no longer does anything: argv shape comes from `arity`, inferred from
-// the placeholders in args. It stays a warning rather than an error for one
-// reason — the config package in circulation still sets it on 24 operations, and
-// this repository lints itself with that package. Flip it to an error in
-// ValidateTools once a config without `batch` has shipped; it is a few lines,
-// and the field on ToolOperation exists only to make that error possible.
-func ValidateToolDeprecations(tools MapOfTools) []string {
-	toolNames := make([]string, 0, len(tools))
-	for name := range tools {
-		toolNames = append(toolNames, name)
-	}
-	sort.Strings(toolNames)
-
-	var warnings []string
-	for _, toolName := range toolNames {
-		tool := tools[toolName]
-
-		opTypes := make([]string, 0, len(tool.Operations))
-		for opType := range tool.Operations {
-			opTypes = append(opTypes, string(opType))
-		}
-		sort.Strings(opTypes)
-
-		for _, opType := range opTypes {
-			op := tool.Operations[OperationType(opType)]
-			if op.Batch == nil {
-				continue
-			}
-			warnings = append(warnings, fmt.Sprintf(
-				"tool %q operation %q: %q no longer does anything — argv shape comes from %q, "+
-					"inferred from the placeholders in args. Delete the field.",
-				toolName, opType, "batch", "arity",
-			))
-		}
-	}
-
-	return warnings
-}
-
 // ToolArgPlaceholders and ToolEnvPlaceholders are the substitution placeholders
 // datamitsu expands in tool-operation arguments and environment-variable values
 // respectively (the actual expansion lives in internal/tooling's executor). They

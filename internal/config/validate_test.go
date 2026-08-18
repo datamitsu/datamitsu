@@ -2997,28 +2997,3 @@ func TestValidateTools(t *testing.T) {
 		}
 	})
 }
-
-func TestValidateToolDeprecationsWarnsOnBatch(t *testing.T) {
-	batch := true
-	tools := MapOfTools{
-		"eslint": {Operations: map[OperationType]ToolOperation{
-			OpFix: {App: "eslint", Args: []string{"{files}"}, Scope: ToolScopePerProject, Batch: &batch},
-		}},
-	}
-	w := ValidateToolDeprecations(tools)
-	if len(w) != 1 {
-		t.Fatalf("expected 1 warning, got %d: %v", len(w), w)
-	}
-	// The message has to name the replacement, or the reader is left guessing.
-	if !strings.Contains(w[0], "arity") || !strings.Contains(w[0], "eslint") {
-		t.Errorf("warning should name the tool and its replacement, got: %q", w[0])
-	}
-
-	// An operation without the field is silent.
-	clean := MapOfTools{"oxfmt": {Operations: map[OperationType]ToolOperation{
-		OpFix: {App: "oxfmt", Args: []string{"{files}"}, Scope: ToolScopeRepository},
-	}}}
-	if w := ValidateToolDeprecations(clean); len(w) != 0 {
-		t.Errorf("expected no warnings, got %v", w)
-	}
-}

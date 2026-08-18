@@ -1847,8 +1847,6 @@ func TestFailFastPerFileSkipsRemainingFiles(t *testing.T) {
 		fileProgressCalls = append(fileProgressCalls, fileIndex)
 		mu.Unlock()
 	})
-
-	batchFalse := false
 	plan := &ExecutionPlan{
 		Groups: []TaskGroup{
 			{
@@ -1861,7 +1859,6 @@ func TestFailFastPerFileSkipsRemainingFiles(t *testing.T) {
 							App:   "per-file-tool",
 							Args:  []string{"{file}"},
 							Scope: config.ToolScopePerFile,
-							Batch: &batchFalse,
 						},
 						Files: files,
 					},
@@ -2000,8 +1997,6 @@ func TestFailFastContextCancelsRunningPerFileLoop(t *testing.T) {
 		processedCount++
 		mu.Unlock()
 	})
-
-	batchFalse := false
 	plan := &ExecutionPlan{
 		Groups: []TaskGroup{
 			{
@@ -2014,7 +2009,6 @@ func TestFailFastContextCancelsRunningPerFileLoop(t *testing.T) {
 							App:   "always-fail",
 							Args:  []string{"{file}"},
 							Scope: config.ToolScopePerFile,
-							Batch: &batchFalse,
 						},
 						Files: files,
 					},
@@ -2057,8 +2051,6 @@ func TestExecutorDoesNotPrintOutputDirectly(t *testing.T) {
 		if err := os.WriteFile(file, []byte("test"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-
-		batchFalse := false
 		plan := &ExecutionPlan{
 			Groups: []TaskGroup{
 				{
@@ -2071,7 +2063,6 @@ func TestExecutorDoesNotPrintOutputDirectly(t *testing.T) {
 								App:   "failing-tool",
 								Args:  []string{"{file}"},
 								Scope: config.ToolScopePerFile,
-								Batch: &batchFalse,
 							},
 							Files: []string{file},
 						},
@@ -3235,8 +3226,6 @@ func TestToolCachePlaceholderIntegration(t *testing.T) {
 		}
 
 		executor := NewExecutor(tmpDir, false, false, appManager, nil)
-
-		batchFalse := false
 		plan := &ExecutionPlan{
 			Groups: []TaskGroup{
 				{
@@ -3249,7 +3238,6 @@ func TestToolCachePlaceholderIntegration(t *testing.T) {
 								App:   "file-cache-tool",
 								Args:  []string{"echo --cache-dir={toolCache} --file={file}"},
 								Scope: config.ToolScopePerFile,
-								Batch: &batchFalse,
 							},
 							Files: []string{testFile},
 						},

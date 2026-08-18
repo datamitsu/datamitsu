@@ -119,7 +119,6 @@ func TestFormattingPipelineEndToEnd(t *testing.T) {
 		OpConfig: config.ToolOperation{
 			App:    "fmt-tool",
 			Scope:  config.ToolScopePerFile,
-			Batch:  &batchFalse,
 			Input:  config.ToolInputStdin,
 			Output: config.ToolOutputStdout,
 		},
@@ -184,7 +183,6 @@ func TestFormattingPipelineNoChange(t *testing.T) {
 		OpConfig: config.ToolOperation{
 			App:    "noop-fmt",
 			Scope:  config.ToolScopePerFile,
-			Batch:  &batchFalse,
 			Input:  config.ToolInputStdin,
 			Output: config.ToolOutputStdout,
 		},
@@ -238,7 +236,6 @@ func TestFormattingPipelineEmptyStdoutDoesNotTruncate(t *testing.T) {
 		OpConfig: config.ToolOperation{
 			App:    "silent-fmt",
 			Scope:  config.ToolScopePerFile,
-			Batch:  &batchFalse,
 			Input:  config.ToolInputStdin,
 			Output: config.ToolOutputStdout,
 		},

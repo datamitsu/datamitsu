@@ -17,7 +17,6 @@ func formatTask(appName, projectPath string) Task {
 		OpConfig: config.ToolOperation{
 			App:    appName,
 			Scope:  config.ToolScopePerFile,
-			Batch:  &batchFalse,
 			Input:  config.ToolInputStdin,
 			Output: config.ToolOutputStdout,
 		},
