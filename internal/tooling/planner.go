@@ -69,6 +69,12 @@ type Planner struct {
 	// .datamitsuignore matcher for disabling tools per file
 	ignoreMatcher *datamitsuignore.Matcher
 
+	// execution is the run-shaping policy from config; nil means defaults.
+	execution *config.Execution
+	// widenOverride is a one-off CLI narrowing; it may only narrow (see
+	// config.Execution.ResolveWidenTo).
+	widenOverride config.WidenTo
+
 	// Timings for performance measurement
 	timings *timing.Timings
 }
@@ -91,6 +97,13 @@ func NewPlanner(
 		extraIgnoreRules:   extraIgnoreRules,
 		timings:            timing.New(),
 	}
+}
+
+// SetWidenPolicy wires the run's widening policy. Left unset, every operation
+// takes config.DefaultWidenTo.
+func (p *Planner) SetWidenPolicy(exec *config.Execution, override config.WidenTo) {
+	p.execution = exec
+	p.widenOverride = override
 }
 
 // SetPlatformChecker injects the host-availability checker used to skip
@@ -180,6 +193,8 @@ func (p *Planner) collectTasks(ctx context.Context, operation config.OperationTy
 	var tasks []Task
 	var skipped []SkippedTool
 
+	widenTo := p.execution.ResolveWidenTo(operation, p.widenOverride)
+
 	toolNames := make([]string, 0, len(p.tools))
 	for name := range p.tools {
 		toolNames = append(toolNames, name)
@@ -236,9 +251,20 @@ func (p *Planner) collectTasks(ctx context.Context, operation config.OperationTy
 		// Match files and create tasks based on scope
 		switch opConfig.Scope {
 		case config.ToolScopeRepository:
-			// Repository scope: only run when cwd is the git root.
-			if p.cwdPath != p.rootPath {
-				continue
+			// A repository-scoped operation used to be dropped outright when cwd
+			// was not the git root — silently, without even a skip entry. What
+			// actually matters is whether its verdict survives being narrowed:
+			// one that takes a file list does, one that answers a whole-repository
+			// question does not.
+			if p.cwdPath != p.rootPath && config.InferGranularity(opConfig) != config.GranularityFile {
+				if widenTo != config.WidenToRepo {
+					skipped = append(skipped, SkippedTool{
+						ToolName:  toolName,
+						Operation: operation,
+						Reason:    SkipReasonNotNarrowable,
+					})
+					continue
+				}
 			}
 			// Respect .datamitsuignore: skip when this tool is disabled for the
 			// repository root. Only short-circuit when there are no globs to
@@ -252,6 +278,12 @@ func (p *Planner) collectTasks(ctx context.Context, operation config.OperationTy
 			}
 			// Skip when globs are configured but no files match (consistent with per-project behavior).
 			matchedFiles := p.matchFiles(ctx, sel, opConfig)
+			// Narrowable from a subdirectory: restrict the batch to what was asked
+			// for. ProjectPath below stays the git root, so the process still starts
+			// there and {root}-anchored config paths keep resolving.
+			if config.InferGranularity(opConfig) == config.GranularityFile {
+				matchedFiles = p.filterFilesToCwd(matchedFiles)
+			}
 			// Respect file-specific .datamitsuignore rules (e.g. "**/foo.toml: oxfmt"):
 			// prune individual files from the batch even though the tool runs once.
 			matchedFiles = p.filterFilesByIgnore(toolName, matchedFiles)
