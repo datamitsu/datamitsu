@@ -167,7 +167,7 @@ func (s *Server) Run(ctx context.Context) error {
 //
 // Returns an empty (non-nil) slice when no tool applies or nothing changed.
 func (s *Server) FormatFile(ctx context.Context, absPath string, content []byte) ([]TextEdit, error) {
-	plan, err := s.planner.Plan(ctx, config.OpFix, []string{absPath}, nil)
+	plan, err := s.planner.Plan(ctx, config.OpFix, tooling.Selection{Mode: tooling.SelectionPaths, Paths: []string{absPath}}, nil)
 	if err != nil {
 		return nil, fmt.Errorf("plan fix for %s: %w", absPath, err)
 	}

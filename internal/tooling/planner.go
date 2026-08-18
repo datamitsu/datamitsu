@@ -128,7 +128,7 @@ func (p *Planner) GetDetectedProjectTypes() []string {
 }
 
 // Plan creates an execution plan for the given operation and files
-func (p *Planner) Plan(ctx context.Context, operation config.OperationType, files []string, selectedTools []string) (*ExecutionPlan, error) {
+func (p *Planner) Plan(ctx context.Context, operation config.OperationType, sel Selection, selectedTools []string) (*ExecutionPlan, error) {
 	// Initialize cache once before planning
 	if err := p.initializeCache(ctx); err != nil {
 		return nil, fmt.Errorf("failed to initialize cache: %w", err)
@@ -139,7 +139,7 @@ func (p *Planner) Plan(ctx context.Context, operation config.OperationType, file
 	var skipped []SkippedTool
 	func() {
 		defer p.timings.Start("Collect tasks")()
-		tasks, skipped = p.collectTasks(ctx, operation, files)
+		tasks, skipped = p.collectTasks(ctx, operation, sel)
 	}()
 
 	// Filter by selectedTools if specified
@@ -171,7 +171,12 @@ func (p *Planner) Plan(ctx context.Context, operation config.OperationType, file
 }
 
 // collectTasks collects all tasks (and explicitly-skipped tools) for the operation.
-func (p *Planner) collectTasks(ctx context.Context, operation config.OperationType, files []string) ([]Task, []SkippedTool) {
+func (p *Planner) collectTasks(ctx context.Context, operation config.OperationType, sel Selection) ([]Task, []SkippedTool) {
+	// An empty selection is a selection: it targets nothing, so nothing runs.
+	if sel.Mode == SelectionEmpty {
+		return nil, nil
+	}
+
 	var tasks []Task
 	var skipped []SkippedTool
 
@@ -246,15 +251,7 @@ func (p *Planner) collectTasks(ctx context.Context, operation config.OperationTy
 				continue
 			}
 			// Skip when globs are configured but no files match (consistent with per-project behavior).
-			var matchedFiles []string
-			if len(opConfig.Globs) > 0 {
-				if len(files) == 0 {
-					matchedFiles = p.findFilesByGlobs(ctx, opConfig.Globs)
-				} else {
-					matchedFiles = p.filterFilesByGlobs(files, opConfig.Globs)
-				}
-			}
-			matchedFiles = p.excludeFilesByGlobs(matchedFiles, opConfig.ExcludeGlobs)
+			matchedFiles := p.matchFiles(ctx, sel, opConfig)
 			// Respect file-specific .datamitsuignore rules (e.g. "**/foo.toml: oxfmt"):
 			// prune individual files from the batch even though the tool runs once.
 			matchedFiles = p.filterFilesByIgnore(toolName, matchedFiles)
@@ -266,17 +263,7 @@ func (p *Planner) collectTasks(ctx context.Context, operation config.OperationTy
 
 		case config.ToolScopePerProject:
 			// Per-project scope: run for each detected project in its directory
-			var matchedFiles []string
-			if len(opConfig.Globs) > 0 {
-				if len(files) == 0 {
-					matchedFiles = p.findFilesByGlobs(ctx, opConfig.Globs)
-				} else {
-					matchedFiles = p.filterFilesByGlobs(files, opConfig.Globs)
-				}
-				matchedFiles = p.excludeFilesByGlobs(matchedFiles, opConfig.ExcludeGlobs)
-				matchedFiles = p.filterFilesToCwd(matchedFiles)
-				matchedFiles = p.filterFilesByIgnore(toolName, matchedFiles)
-			}
+			matchedFiles := p.filterFilesByIgnore(toolName, p.filterFilesToCwd(p.matchFiles(ctx, sel, opConfig)))
 
 			if len(matchedFiles) > 0 || len(opConfig.Globs) == 0 {
 				projectTasks := p.createPerProjectTasksWithFiles(ctx, task, matchedFiles)
@@ -285,14 +272,7 @@ func (p *Planner) collectTasks(ctx context.Context, operation config.OperationTy
 
 		case config.ToolScopePerFile:
 			// Per-file scope: run for each file in its directory
-			var matchedFiles []string
-			if len(files) == 0 {
-				matchedFiles = p.findFilesByGlobs(ctx, opConfig.Globs)
-			} else {
-				matchedFiles = p.filterFilesByGlobs(files, opConfig.Globs)
-			}
-			matchedFiles = p.excludeFilesByGlobs(matchedFiles, opConfig.ExcludeGlobs)
-			matchedFiles = p.filterFilesToCwd(matchedFiles)
+			matchedFiles := p.filterFilesToCwd(p.matchFiles(ctx, sel, opConfig))
 
 			for _, file := range matchedFiles {
 				if p.isToolDisabledForFile(toolName, file) {
@@ -306,17 +286,7 @@ func (p *Planner) collectTasks(ctx context.Context, operation config.OperationTy
 
 		default:
 			// Default to per-project for safety
-			var matchedFiles []string
-			if len(opConfig.Globs) > 0 {
-				if len(files) == 0 {
-					matchedFiles = p.findFilesByGlobs(ctx, opConfig.Globs)
-				} else {
-					matchedFiles = p.filterFilesByGlobs(files, opConfig.Globs)
-				}
-				matchedFiles = p.excludeFilesByGlobs(matchedFiles, opConfig.ExcludeGlobs)
-				matchedFiles = p.filterFilesToCwd(matchedFiles)
-				matchedFiles = p.filterFilesByIgnore(toolName, matchedFiles)
-			}
+			matchedFiles := p.filterFilesByIgnore(toolName, p.filterFilesToCwd(p.matchFiles(ctx, sel, opConfig)))
 
 			if len(matchedFiles) > 0 || len(opConfig.Globs) == 0 {
 				projectTasks := p.createPerProjectTasksWithFiles(ctx, task, matchedFiles)
@@ -326,6 +296,23 @@ func (p *Planner) collectTasks(ctx context.Context, operation config.OperationTy
 	}
 
 	return tasks, skipped
+}
+
+// matchFiles resolves an operation's glob-matched file set for the selection.
+// Named paths are filtered down to the operation's globs; every other mode
+// sweeps the cached repository walk. Scope-specific cwd and .datamitsuignore
+// filtering is applied by the caller, which is where the scopes genuinely differ.
+func (p *Planner) matchFiles(ctx context.Context, sel Selection, op config.ToolOperation) []string {
+	if len(op.Globs) == 0 {
+		return nil
+	}
+	var matched []string
+	if named := sel.Files(); len(named) > 0 {
+		matched = p.filterFilesByGlobs(named, op.Globs)
+	} else {
+		matched = p.findFilesByGlobs(ctx, op.Globs)
+	}
+	return p.excludeFilesByGlobs(matched, op.ExcludeGlobs)
 }
 
 // filterSkippedBySelectedTools keeps only skipped entries whose tool is in the

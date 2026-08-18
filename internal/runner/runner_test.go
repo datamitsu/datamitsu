@@ -1480,7 +1480,7 @@ type fakePlanner struct {
 	plan *tooling.ExecutionPlan
 }
 
-func (f *fakePlanner) Plan(_ context.Context, _ config.OperationType, _ []string, _ []string) (*tooling.ExecutionPlan, error) {
+func (f *fakePlanner) Plan(_ context.Context, _ config.OperationType, _ tooling.Selection, _ []string) (*tooling.ExecutionPlan, error) {
 	return f.plan, nil
 }
 func (f *fakePlanner) GetDetectedProjectTypes() []string { return []string{"go"} }
