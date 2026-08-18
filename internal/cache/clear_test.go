@@ -109,7 +109,7 @@ func TestCacheClearAndPrune(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c, err := NewCache(tmpDir, projectPath, config.Config{}, map[string][]string{}, nil, logger.Logger)
+	c, err := NewCache(tmpDir, projectPath, config.Config{}, nil, logger.Logger)
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
 	}
@@ -148,7 +148,7 @@ func TestCacheMarkDirtyAndShutdown(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c, err := NewCache(tmpDir, projectPath, config.Config{}, map[string][]string{}, nil, logger.Logger)
+	c, err := NewCache(tmpDir, projectPath, config.Config{}, nil, logger.Logger)
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
 	}

@@ -11,7 +11,7 @@ import (
 
 func newTestCache(t *testing.T) *Cache {
 	t.Helper()
-	c, err := NewCache(t.TempDir(), t.TempDir(), config.Config{}, nil, nil, zap.NewNop())
+	c, err := NewCache(t.TempDir(), t.TempDir(), config.Config{}, nil, zap.NewNop())
 	if err != nil {
 		t.Fatalf("NewCache: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestInvalidateVerdictsByTool(t *testing.T) {
 func TestSaveMergesVerdictsFromDisk(t *testing.T) {
 	dir, project := t.TempDir(), t.TempDir()
 
-	first, err := NewCache(dir, project, config.Config{}, nil, nil, zap.NewNop())
+	first, err := NewCache(dir, project, config.Config{}, nil, zap.NewNop())
 	if err != nil {
 		t.Fatalf("NewCache: %v", err)
 	}
@@ -95,7 +95,7 @@ func TestSaveMergesVerdictsFromDisk(t *testing.T) {
 		t.Fatalf("first save: %v", err)
 	}
 
-	second, err := NewCache(dir, project, config.Config{}, nil, nil, zap.NewNop())
+	second, err := NewCache(dir, project, config.Config{}, nil, zap.NewNop())
 	if err != nil {
 		t.Fatalf("NewCache: %v", err)
 	}
@@ -104,7 +104,7 @@ func TestSaveMergesVerdictsFromDisk(t *testing.T) {
 		t.Fatalf("second save: %v", err)
 	}
 
-	reloaded, err := NewCache(dir, project, config.Config{}, nil, nil, zap.NewNop())
+	reloaded, err := NewCache(dir, project, config.Config{}, nil, zap.NewNop())
 	if err != nil {
 		t.Fatalf("NewCache: %v", err)
 	}
@@ -121,7 +121,7 @@ func TestSaveMergesVerdictsFromDisk(t *testing.T) {
 func TestSaveDropsFileEntriesWithConflictingContent(t *testing.T) {
 	dir, project := t.TempDir(), t.TempDir()
 
-	first, _ := NewCache(dir, project, config.Config{}, nil, nil, zap.NewNop())
+	first, _ := NewCache(dir, project, config.Config{}, nil, zap.NewNop())
 	first.mu.Lock()
 	first.data.Entries["a.go"] = FileEntry{ContentHash: "h1", Lint: []string{"vet"}}
 	first.mu.Unlock()
@@ -129,7 +129,7 @@ func TestSaveDropsFileEntriesWithConflictingContent(t *testing.T) {
 		t.Fatalf("first save: %v", err)
 	}
 
-	second, _ := NewCache(dir, project, config.Config{}, nil, nil, zap.NewNop())
+	second, _ := NewCache(dir, project, config.Config{}, nil, zap.NewNop())
 	second.mu.Lock()
 	second.data.Entries["a.go"] = FileEntry{ContentHash: "h2", Lint: []string{"golangci"}}
 	second.mu.Unlock()
@@ -137,7 +137,7 @@ func TestSaveDropsFileEntriesWithConflictingContent(t *testing.T) {
 		t.Fatalf("second save: %v", err)
 	}
 
-	reloaded, _ := NewCache(dir, project, config.Config{}, nil, nil, zap.NewNop())
+	reloaded, _ := NewCache(dir, project, config.Config{}, nil, zap.NewNop())
 	reloaded.mu.RLock()
 	_, present := reloaded.data.Entries["a.go"]
 	reloaded.mu.RUnlock()

@@ -1292,29 +1292,5 @@ func getStagedFiles(ctx context.Context, rootPath string) ([]string, error) {
 }
 
 func createCache(cacheDir string, projectPath string, cfg config.Config, selectedTools []string) (*cache.Cache, error) {
-	invalidateOnFiles := make(map[string][]string)
-
-	for toolName, tool := range cfg.Tools {
-		var files []string
-
-		for _, op := range tool.Operations {
-			if op.InvalidateOn != nil {
-				files = append(files, op.InvalidateOn...)
-			}
-		}
-
-		if len(files) > 0 {
-			fileSet := make(map[string]bool)
-			var uniqueFiles []string
-			for _, file := range files {
-				if !fileSet[file] {
-					fileSet[file] = true
-					uniqueFiles = append(uniqueFiles, file)
-				}
-			}
-			invalidateOnFiles[toolName] = uniqueFiles
-		}
-	}
-
-	return cache.NewCache(cacheDir, projectPath, cfg, invalidateOnFiles, selectedTools, logger.Logger)
+	return cache.NewCache(cacheDir, projectPath, cfg, selectedTools, logger.Logger)
 }
