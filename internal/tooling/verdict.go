@@ -11,6 +11,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/hashutil"
+	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 )
 
 // guardNames are files outside a unit that can still change its verdict. Fixed
@@ -282,7 +283,13 @@ func (p *Planner) attachUnit(task *Task, unitDir string) {
 // `extends` chain reaching outside the unit, a hand edit inside node_modules, a
 // network-dependent verdict.
 func (e *Executor) verdictTTL() time.Duration {
-	return time.Duration(env.GetUnitCacheTTLMinutes()) * time.Minute
+	eff, err := runtimeconfig.Get()
+	if err != nil {
+		// Init() runs from cobra.OnInitialize; a caller that skipped it (a test,
+		// an embedded use) gets the compile-time default rather than no cache.
+		return time.Duration(env.GetUnitCacheTTLMinutes()) * time.Minute
+	}
+	return time.Duration(eff.UnitCacheTTLMinutes) * time.Minute
 }
 
 // verdictKeys returns the cache identity and input hash for a task, and whether
@@ -300,6 +307,12 @@ func (e *Executor) verdictKeys(task Task) (key, inputs string, ok bool) {
 	// tools do and hits almost never — the repository changes between runs, that
 	// is why you ran it. Declaring cache: true claims the tool is a closed world.
 	if granularity == config.GranularityRepo && (task.OpConfig.Cache == nil || !*task.OpConfig.Cache) {
+		return "", "", false
+	}
+	// No members means the input vector is constant, so the verdict could never
+	// mismatch — a permanent pass. Reachable when a per-file-scope operation
+	// declares granularity "unit": the planner has no unit to describe.
+	if len(task.UnitMembers) == 0 {
 		return "", "", false
 	}
 	key = verdictIdentity(task, task.UnitDir)

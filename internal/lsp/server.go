@@ -20,6 +20,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"github.com/datamitsu/datamitsu/internal/logger"
+	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 	"github.com/datamitsu/datamitsu/internal/textdiff"
 	"github.com/datamitsu/datamitsu/internal/tooling"
@@ -281,7 +282,11 @@ func taskCoversPath(task tooling.Task, absPath string) bool {
 // operations are all per-project with no file arguments — and format-on-save for
 // Go is a documented headline feature.
 func editorWidenTo() config.WidenTo {
-	switch config.WidenTo(env.GetLspFormatWidenTo()) {
+	policy := env.GetLspFormatWidenTo()
+	if eff, err := runtimeconfig.Get(); err == nil {
+		policy = eff.LspFormatWidenTo
+	}
+	switch config.WidenTo(policy) {
 	case config.WidenToTarget:
 		return config.WidenToTarget
 	case config.WidenToUnit:
