@@ -83,6 +83,15 @@ func BuildSlices(plan Plan, apps binmanager.MapOfApps, runtimes config.MapOfRunt
 // that `datamitsu install --config` can load. getMinVersion returns "0.0.0" so a
 // slice never trips the wrapper's version gate, and getConfig ignores its input
 // and returns exactly this stage's app/runtime.
+//
+// The output is a projection of the Go struct, not a round-trip of the author's
+// config: json.Marshal writes the fields this binary knows about, with this
+// binary's defaults applied. That is fine for the app/runtime slices it is built
+// for — install needs no tool definitions — but it means a slice must never be
+// used to carry tools. A tool-bearing config passed through here would be
+// re-emitted under the current schema, silently dropping any field the running
+// binary does not have and freezing inferred values as if the author had
+// written them. Keep slices app/runtime-only.
 func RenderSlice(cfg *config.Config) (string, error) {
 	data, err := json.Marshal(cfg)
 	if err != nil {
