@@ -290,7 +290,7 @@ func (p *Planner) collectTasks(ctx context.Context, operation config.OperationTy
 			if len(matchedFiles) > 0 || len(opConfig.Globs) == 0 {
 				task.Files = matchedFiles
 				task.ProjectPath = p.rootPath
-				p.attachUnit(&task, sel, p.rootPath, matchedFiles)
+				p.attachUnit(&task, p.rootPath)
 				tasks = append(tasks, task)
 			}
 
@@ -301,7 +301,7 @@ func (p *Planner) collectTasks(ctx context.Context, operation config.OperationTy
 			if len(matchedFiles) > 0 || len(opConfig.Globs) == 0 {
 				projectTasks := p.createPerProjectTasksWithFiles(ctx, task, matchedFiles)
 				for i := range projectTasks {
-					p.attachUnit(&projectTasks[i], sel, projectTasks[i].ProjectPath, projectTasks[i].Files)
+					p.attachUnit(&projectTasks[i], projectTasks[i].ProjectPath)
 				}
 				tasks = append(tasks, projectTasks...)
 			}
@@ -327,7 +327,7 @@ func (p *Planner) collectTasks(ctx context.Context, operation config.OperationTy
 			if len(matchedFiles) > 0 || len(opConfig.Globs) == 0 {
 				projectTasks := p.createPerProjectTasksWithFiles(ctx, task, matchedFiles)
 				for i := range projectTasks {
-					p.attachUnit(&projectTasks[i], sel, projectTasks[i].ProjectPath, projectTasks[i].Files)
+					p.attachUnit(&projectTasks[i], projectTasks[i].ProjectPath)
 				}
 				tasks = append(tasks, projectTasks...)
 			}

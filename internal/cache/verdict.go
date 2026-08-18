@@ -65,19 +65,26 @@ func (c *Cache) AfterVerdict(key string, entry VerdictEntry) {
 	c.MarkDirty()
 }
 
-// InvalidateVerdicts drops every stored verdict for a tool. A fix that rewrote
-// files makes any earlier lint verdict for the same tool unsound, mirroring the
-// per-file AfterFix behaviour.
-func (c *Cache) InvalidateVerdicts(tool string) {
-	c.mu.Lock()
-	for key, entry := range c.data.Verdicts {
-		if entry.Tool == tool {
-			delete(c.data.Verdicts, key)
-		}
+// DeleteVerdict drops one stored verdict by identity. A fix that rewrote files
+// makes the matching lint verdict unsound, mirroring what AfterFix does per file
+// — but only that sibling: deleting every verdict for the tool would also delete
+// the fix verdict just written, so no fix operation could ever get a hit.
+func (c *Cache) DeleteVerdict(key string) {
+	if key == "" {
+		return
 	}
+	c.mu.Lock()
+	_, existed := c.data.Verdicts[key]
+	delete(c.data.Verdicts, key)
+	if c.deletedVerdicts == nil {
+		c.deletedVerdicts = make(map[string]struct{})
+	}
+	c.deletedVerdicts[key] = struct{}{}
 	c.mu.Unlock()
 
-	c.MarkDirty()
+	if existed {
+		c.MarkDirty()
+	}
 }
 
 // verdictPruneTTL is how long an unreferenced verdict survives on disk. It is
