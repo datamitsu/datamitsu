@@ -54,6 +54,35 @@ func verdictIdentity(task Task, unitDirRel string) string {
 	return hashutil.XXH3Multi(parts...)
 }
 
+// envPrefixes are the inherited environment variables that can change a tool's
+// answer. Tools inherit the whole environment (executor.go mergeEnvLayers), so
+// without this GOFLAGS=-tags=integration would change golangci-lint's package
+// graph with no effect on the key. Hashing the whole environment instead is not
+// an option: TERM, session ids and TMPDIR would prevent every hit.
+var envPrefixes = []string{
+	"GO", "CARGO", "RUST", "NODE_", "NPM_", "PYTHON", "PIP_", "UV_",
+	"JAVA_", "TS_", "ESLINT_", "RUFF_", "TF_", "TFLINT_",
+}
+
+// inheritedEnv returns the allowlisted environment as sorted k=v pairs.
+func inheritedEnv() []string {
+	var out []string
+	for _, kv := range os.Environ() {
+		name, _, found := strings.Cut(kv, "=")
+		if !found {
+			continue
+		}
+		for _, prefix := range envPrefixes {
+			if strings.HasPrefix(name, prefix) {
+				out = append(out, kv)
+				break
+			}
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
 // verdictInputs is the cache value: the precondition under which the stored pass
 // remains true. A mismatch is a miss, so every part only has to be *sufficient*
 // to notice a change, never to explain it.
@@ -66,6 +95,10 @@ func verdictInputs(members, guards []string, root string) string {
 	parts = append(parts, []byte("g"))
 	for _, part := range hashedPaths(guards, root) {
 		parts = append(parts, []byte(part))
+	}
+	parts = append(parts, []byte("e"))
+	for _, kv := range inheritedEnv() {
+		parts = append(parts, []byte(kv))
 	}
 	return hashutil.XXH3Multi(parts...)
 }
@@ -255,10 +288,18 @@ func (e *Executor) verdictTTL() time.Duration {
 // verdictKeys returns the cache identity and input hash for a task, and whether
 // the verdict cache applies to it at all.
 func (e *Executor) verdictKeys(task Task) (key, inputs string, ok bool) {
-	if e.cache == nil || config.InferGranularity(task.OpConfig) == config.GranularityFile {
+	granularity := config.InferGranularity(task.OpConfig)
+	if e.cache == nil || granularity == config.GranularityFile {
 		return "", "", false
 	}
 	if task.OpConfig.Cache != nil && !*task.OpConfig.Cache {
+		return "", "", false
+	}
+	// repo granularity is opt-in, not opt-out: the input vector degenerates to a
+	// content hash of every tracked file, which costs more than most of these
+	// tools do and hits almost never — the repository changes between runs, that
+	// is why you ran it. Declaring cache: true claims the tool is a closed world.
+	if granularity == config.GranularityRepo && (task.OpConfig.Cache == nil || !*task.OpConfig.Cache) {
 		return "", "", false
 	}
 	key = verdictIdentity(task, task.UnitDir)
@@ -269,8 +310,7 @@ func (e *Executor) verdictKeys(task Task) (key, inputs string, ok bool) {
 // recordVerdict stores a pass, but only for a run that actually covered its
 // unit. Coverage comes from the planner; the executor cannot tell a narrowed run
 // from a full one and must not guess.
-func (e *Executor) recordVerdict(task Task) {
-	key, inputs, ok := e.verdictKeys(task)
+func (e *Executor) recordVerdict(task Task, key, inputs string, ok bool) {
 	if !ok || task.Coverage != CoverageComplete {
 		return
 	}

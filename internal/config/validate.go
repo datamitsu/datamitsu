@@ -774,6 +774,37 @@ func ValidateTools(tools MapOfTools, parsers MapOfParsers) error {
 				}
 			}
 
+			switch op.Granularity {
+			case "", GranularityFile, GranularityUnit, GranularityRepo:
+			default:
+				errs = append(errs, fmt.Sprintf(
+					"tool %q operation %q: unknown granularity %q (want %q, %q or %q)",
+					toolName, opType, op.Granularity, GranularityFile, GranularityUnit, GranularityRepo,
+				))
+			}
+
+			switch op.Arity {
+			case "", ArityMany, ArityOne, ArityDir, ArityNone:
+			default:
+				errs = append(errs, fmt.Sprintf(
+					"tool %q operation %q: unknown arity %q (want %q, %q, %q or %q)",
+					toolName, opType, op.Arity, ArityMany, ArityOne, ArityDir, ArityNone,
+				))
+			}
+
+			// A "file" verdict claims each file's result stands alone, which puts
+			// the operation back on the per-file cache. Declaring it for a tool
+			// that never receives the file list restores the defect the
+			// granularity model exists to remove.
+			if op.Granularity == GranularityFile &&
+				!ArgsReferenceFiles(op.Args) && op.Scope != ToolScopePerFile {
+				errs = append(errs, fmt.Sprintf(
+					"tool %q operation %q: granularity %q needs the file list to reach the tool — "+
+						"add %s to args or use scope %q",
+					toolName, opType, GranularityFile, placeholderFiles, ToolScopePerFile,
+				))
+			}
+
 			if op.Arity != "" {
 				if inferred := EffectiveArity(op); op.Arity != inferred {
 					errs = append(errs, fmt.Sprintf(

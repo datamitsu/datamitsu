@@ -69,6 +69,12 @@ type Execution struct {
 // being targeted.
 const DefaultWidenTo = WidenToUnit
 
+// ValidWidenTo reports whether w is a known widening level.
+func ValidWidenTo(w WidenTo) bool {
+	_, ok := widenRank[w]
+	return ok
+}
+
 // ResolveWidenTo returns the policy for an operation, honouring an override that
 // may only narrow the configured value. Nil-safe: an absent block means defaults.
 func (e *Execution) ResolveWidenTo(op OperationType, override WidenTo) WidenTo {

@@ -459,10 +459,17 @@ func (e *Executor) executeTask(ctx context.Context, task Task) ExecutionResult {
 	// A stored verdict means every member and guard is byte-identical to the run
 	// that passed, which is as sound for a narrowed invocation as for a full one
 	// — so the read is not gated on coverage. Only the write is.
-	if key, inputs, ok := e.verdictKeys(task); ok {
-		if !e.cache.ShouldRunVerdict(key, inputs, e.verdictTTL()) {
+	verdictKey, verdictInputHash, verdictApplies := e.verdictKeys(task)
+	if verdictApplies {
+		if !e.cache.ShouldRunVerdict(verdictKey, verdictInputHash, e.verdictTTL()) {
 			log.Debug("verdict cache hit", zap.String("tool", task.ToolName), zap.String("unit", task.UnitDir))
+			// Same shape as a real run: consumers key JSON-L on RelativeDir and
+			// print the scope badge only when Scope is set, so a hit that omitted
+			// them would emit a differently-shaped event for the same task.
 			result.Success = true
+			result.WorkingDir = workingDir
+			result.RelativeDir = relativeDir
+			result.Scope = task.OpConfig.Scope
 			result.recordTiming(startTime)
 			if e.fileProgressCallback != nil {
 				e.fileProgressCallback(task.ToolName, 1, 1, true)
@@ -483,7 +490,7 @@ func (e *Executor) executeTask(ctx context.Context, task Task) ExecutionResult {
 	// The three per-process updateCacheAfterSuccess calls would otherwise let the
 	// first success of an N-process task record a verdict a later failure refutes.
 	if result.Success {
-		e.recordVerdict(task)
+		e.recordVerdict(task, verdictKey, verdictInputHash, verdictApplies)
 	}
 
 	// Classify unclassified failures as independent (tool failed on its own)
@@ -624,6 +631,11 @@ func (e *Executor) filterFilesByCache(task Task) []string {
 // updateCacheAfterSuccess updates cache after successful tool execution
 func (e *Executor) updateCacheAfterSuccess(task Task, files []string) {
 	if e.cache == nil {
+		return
+	}
+	// filterFilesByCache only reads these for file granularity; writing them for
+	// unit and repo tasks stores entries nothing consults.
+	if config.InferGranularity(task.OpConfig) != config.GranularityFile {
 		return
 	}
 

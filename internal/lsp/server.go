@@ -149,7 +149,7 @@ func (s *Server) FormatFile(ctx context.Context, absPath string, content []byte)
 	if err != nil {
 		return nil, fmt.Errorf("plan fix for %s: %w", absPath, err)
 	}
-	filterPlanForEditor(plan)
+	filterPlanForEditor(plan, absPath)
 
 	apps := planApps(plan)
 	if len(apps) == 0 {
@@ -229,12 +229,12 @@ func (s *Server) FormatFile(ctx context.Context, absPath string, content []byte)
 // commands: `tsc --noEmit … a.ts` exits 1 with TS5112 and zero diagnostics,
 // `syncpack lint <file>` rejects the argument outright. It also let a
 // single-file editor run write cache entries as if it had covered a whole unit.
-func filterPlanForEditor(plan *tooling.ExecutionPlan) {
+func filterPlanForEditor(plan *tooling.ExecutionPlan, absPath string) {
 	widen := editorWidenTo()
 	for gi := range plan.Groups {
 		kept := plan.Groups[gi].Tasks[:0]
 		for _, task := range plan.Groups[gi].Tasks {
-			if editorRuns(task, widen) {
+			if editorRuns(task, widen, absPath) {
 				kept = append(kept, task)
 			}
 		}
@@ -243,18 +243,37 @@ func filterPlanForEditor(plan *tooling.ExecutionPlan) {
 }
 
 // editorRuns reports whether a task is cheap enough for a save.
-func editorRuns(task tooling.Task, widen config.WidenTo) bool {
+func editorRuns(task tooling.Task, widen config.WidenTo, absPath string) bool {
 	switch config.InferGranularity(task.OpConfig) {
 	case config.GranularityFile:
 		return true
 	case config.GranularityUnit:
-		return widen.Rank() >= config.WidenToUnit.Rank()
+		if widen.Rank() < config.WidenToUnit.Rank() {
+			return false
+		}
+		// Only the unit holding the saved file. An operation with no globs is
+		// planned once per project regardless of what was saved, so without this
+		// a save would run it in every module — rewriting files the editor never
+		// opened, since these tools fix in place and only the target is read back.
+		return taskCoversPath(task, absPath)
 	case config.GranularityRepo:
 		// A whole-repository fix on every keystroke is never acceptable, so this
 		// is not configurable.
 		return false
 	}
 	return false
+}
+
+// taskCoversPath reports whether a task's unit contains the saved file.
+func taskCoversPath(task tooling.Task, absPath string) bool {
+	if task.ProjectPath == "" {
+		return true
+	}
+	rel, err := filepath.Rel(task.ProjectPath, absPath)
+	if err != nil {
+		return false
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 // editorWidenTo is the session policy. Default "unit": a "target" default would
