@@ -71,8 +71,8 @@ type Planner struct {
 
 	// execution is the run-shaping policy from config; nil means defaults.
 	execution *config.Execution
-	// widenOverride is a one-off CLI narrowing; it may only narrow (see
-	// config.Execution.ResolveWidenTo).
+	// widenOverride is a one-off --widen-to; it overrides config in either
+	// direction (see config.Execution.ResolveWidenTo).
 	widenOverride config.WidenTo
 
 	// Timings for performance measurement
@@ -256,15 +256,14 @@ func (p *Planner) collectTasks(ctx context.Context, operation config.OperationTy
 			// actually matters is whether its verdict survives being narrowed:
 			// one that takes a file list does, one that answers a whole-repository
 			// question does not.
-			if p.cwdPath != p.rootPath && config.InferGranularity(opConfig) != config.GranularityFile {
-				if widenTo != config.WidenToRepo {
-					skipped = append(skipped, SkippedTool{
-						ToolName:  toolName,
-						Operation: operation,
-						Reason:    SkipReasonNotNarrowable,
-					})
-					continue
-				}
+			repoWide := config.InferGranularity(opConfig) != config.GranularityFile
+			if repoWide && p.cwdPath != p.rootPath && widenTo != config.WidenToRepo {
+				skipped = append(skipped, SkippedTool{
+					ToolName:  toolName,
+					Operation: operation,
+					Reason:    SkipReasonNotNarrowable,
+				})
+				continue
 			}
 			// Respect .datamitsuignore: skip when this tool is disabled for the
 			// repository root. Only short-circuit when there are no globs to
@@ -276,8 +275,18 @@ func (p *Planner) collectTasks(ctx context.Context, operation config.OperationTy
 			if len(opConfig.Globs) == 0 && p.isToolDisabledForProject(toolName, p.rootPath) {
 				continue
 			}
+			// Permitting the run has to widen its input too. A whole-repository
+			// verdict is computed over the whole repository, so once the policy
+			// allows it the selection that narrowed it no longer applies —
+			// otherwise --widen-to=repo un-skips the tool and then drops it for
+			// matching none of the named paths, which is the silent no-op the
+			// skip entry existed to expose.
+			matchSel := sel
+			if repoWide && widenTo == config.WidenToRepo {
+				matchSel = Selection{Mode: SelectionAll}
+			}
 			// Skip when globs are configured but no files match (consistent with per-project behavior).
-			matchedFiles := p.matchFiles(ctx, sel, opConfig)
+			matchedFiles := p.matchFiles(ctx, matchSel, opConfig)
 			// Narrowable from a subdirectory: restrict the batch to what was asked
 			// for. ProjectPath below stays the git root, so the process still starts
 			// there and {root}-anchored config paths keep resolving.

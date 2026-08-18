@@ -926,8 +926,8 @@ func (sc *sharedContext) skipFailure() error {
 // Options carries the run-shaping flags. It exists because the entry points had
 // grown to seven positional parameters and the coverage work adds two more.
 type Options struct {
-	// WidenTo narrows how far the core may widen beyond the selection. Empty
-	// means "no override"; it can only narrow the configured policy.
+	// WidenTo overrides how far the core may widen beyond the selection, in
+	// either direction. Empty means "no override".
 	WidenTo string
 	// RequireCoverage asserts the run answered completely: "unit" for every unit
 	// it touched, "repo" for the repository. Empty disables the assertion.

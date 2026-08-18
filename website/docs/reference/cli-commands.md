@@ -186,8 +186,8 @@ Before this behaviour existed those tools were dropped silently — absent from 
 report, from `--explain`, from everything. If you were relying on that silence,
 the tools have not changed; only the reporting has.
 
-**`--widen-to`** overrides how far the core may go beyond your request. It can
-only narrow the project's policy, never widen it:
+**`--widen-to`** overrides how far the core may go beyond your request, in either
+direction — you typed it for this one run, so it wins over the project's policy:
 
 ```bash
 # Only what I named. Anything needing more is reported, not run.

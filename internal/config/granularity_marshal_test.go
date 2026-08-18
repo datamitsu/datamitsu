@@ -30,11 +30,12 @@ func TestResolveWidenTo(t *testing.T) {
 		{"empty block", &Execution{}, "", DefaultWidenTo},
 		{"declared", &Execution{WidenTo: map[OperationType]WidenTo{OpFix: WidenToTarget}}, "", WidenToTarget},
 		{"declared for another operation", &Execution{WidenTo: map[OperationType]WidenTo{OpLint: WidenToTarget}}, "", DefaultWidenTo},
-		// A session policy may narrow...
+		// --widen-to was typed for this one run, so it wins in both directions.
 		{"override narrows", &Execution{WidenTo: map[OperationType]WidenTo{OpFix: WidenToRepo}}, WidenToTarget, WidenToTarget},
-		// ...but never widen, or an editor could out-scope the project's policy.
-		{"override cannot widen", &Execution{WidenTo: map[OperationType]WidenTo{OpFix: WidenToTarget}}, WidenToRepo, WidenToTarget},
-		{"override cannot widen the default", nil, WidenToRepo, DefaultWidenTo},
+		// Widening is the point of the flag: `dm fix ./one.json --widen-to=repo`
+		// is how you ask for the whole-repository tools you just saw skipped.
+		{"override widens the declared value", &Execution{WidenTo: map[OperationType]WidenTo{OpFix: WidenToTarget}}, WidenToRepo, WidenToRepo},
+		{"override widens the default", nil, WidenToRepo, WidenToRepo},
 	}
 
 	for _, tt := range tests {

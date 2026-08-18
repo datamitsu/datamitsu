@@ -167,6 +167,39 @@ func TestCollectTasksWidenToRepoRunsNonNarrowableTools(t *testing.T) {
 	}
 }
 
+// Permitting the run must widen its input too. `dm fix ./swagger.json
+// --widen-to=repo` used to clear the not-narrowable skip and then drop the tool
+// anyway, because the named path still filtered the match and package.json is
+// not swagger.json — the flag reported nothing and did nothing, which is the
+// exact failure the skip entry was added to make visible.
+func TestCollectTasksWidenToRepoWidensAnExplicitPathSelection(t *testing.T) {
+	p := &Planner{
+		rootPath: "/repo",
+		cwdPath:  "/repo/packages/api",
+		tools: config.MapOfTools{
+			"syncpack": {Operations: map[config.OperationType]config.ToolOperation{
+				config.OpFix: {
+					App: "syncpack", Args: []string{"fix"},
+					Scope: config.ToolScopeRepository, Globs: []string{"**/package.json"},
+				},
+			}},
+		},
+		cachedFiles:      []string{"/repo/package.json", "/repo/packages/api/swagger.json"},
+		cacheInitialized: true,
+	}
+	p.SetWidenPolicy(nil, config.WidenToRepo)
+
+	sel := Selection{Mode: SelectionPaths, Paths: []string{"/repo/packages/api/swagger.json"}}
+	tasks, skipped := p.collectTasks(context.Background(), config.OpFix, sel)
+
+	if len(tasks) != 1 {
+		t.Fatalf("planned %d tasks and skipped %+v, want syncpack planned", len(tasks), skipped)
+	}
+	if len(tasks[0].Files) != 1 || tasks[0].Files[0] != "/repo/package.json" {
+		t.Errorf("Files = %v, want the repository's package.json", tasks[0].Files)
+	}
+}
+
 // cwd is where you happen to stand; a path on the command line is a decision.
 // The cwd filter used to apply to both, so naming a file outside the current
 // directory dropped it and reported nothing.

@@ -648,8 +648,10 @@ export const getConfig = (config) => ({
 Default `unit` for both operations. Under it, `datamitsu fix ./one.ts` may run a
 project-wide tool over that project — including one that rewrites files you did
 not name, if it takes no file arguments. Set `fix: "target"` if that blast radius
-is not what you want. `--widen-to` overrides it for a single run, and can only
-narrow it.
+is not what you want. `--widen-to` overrides it for a single run, in either
+direction. The narrow-only rule applies to the LSP session policy
+(`DATAMITSU_LSP_FORMAT_WIDEN_TO`) instead: that one is ambient and applies to
+every save, so an editor must not be able to out-scope the project.
 
 ### Skipping a tool (`skip` / `skipReason`)
 

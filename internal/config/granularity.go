@@ -51,7 +51,8 @@ const (
 	WidenToRepo   WidenTo = "repo"   // may widen to the whole repository
 )
 
-// widenRank orders the lattice so a session policy can narrow but never widen.
+// widenRank orders the lattice so the LSP session policy can narrow but never
+// widen the config-resolved value.
 var widenRank = map[WidenTo]int{WidenToTarget: 0, WidenToUnit: 1, WidenToRepo: 2}
 
 // Rank returns the position of w in the target < unit < repo lattice.
@@ -75,17 +76,19 @@ func ValidWidenTo(w WidenTo) bool {
 	return ok
 }
 
-// ResolveWidenTo returns the policy for an operation, honouring an override that
-// may only narrow the configured value. Nil-safe: an absent block means defaults.
+// ResolveWidenTo returns the policy for an operation. An explicit override wins
+// outright, in both directions: it comes from --widen-to, which a person typed
+// for this one run. The narrow-only rule of the lattice governs the LSP session
+// policy instead, because that one is ambient — an editor must not be able to
+// out-scope the project on every save. Nil-safe: an absent block means defaults.
 func (e *Execution) ResolveWidenTo(op OperationType, override WidenTo) WidenTo {
-	resolved := DefaultWidenTo
-	if e != nil {
-		if declared, ok := e.WidenTo[op]; ok && declared != "" {
-			resolved = declared
-		}
-	}
-	if override != "" && override.Rank() < resolved.Rank() {
+	if override != "" {
 		return override
 	}
-	return resolved
+	if e != nil {
+		if declared, ok := e.WidenTo[op]; ok && declared != "" {
+			return declared
+		}
+	}
+	return DefaultWidenTo
 }
