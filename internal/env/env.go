@@ -89,6 +89,22 @@ func GetLogFormat() string {
 	}
 }
 
+// GetUnitCacheTTLMinutes returns how long a unit-level verdict stays trusted.
+// Zero disables the verdict cache. Returns the default on parse error.
+func GetUnitCacheTTLMinutes() int {
+	valueStr := unitCacheTTLMinutes.DefaultValue
+	if envValue := os.Getenv(unitCacheTTLMinutes.Name); envValue != "" {
+		valueStr = envValue
+	}
+
+	value, err := strconv.Atoi(valueStr)
+	if err != nil || value < 0 {
+		defaultValue, _ := strconv.Atoi(unitCacheTTLMinutes.DefaultValue)
+		return defaultValue
+	}
+	return value
+}
+
 // GetMaxCommandLength returns maximum command line length for batching
 // Returns default value on parse error
 func GetMaxCommandLength() int {

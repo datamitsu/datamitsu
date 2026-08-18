@@ -17,7 +17,32 @@ type Task struct {
 	OpConfig    config.ToolOperation
 	Files       []string // Files to process (empty for whole-project mode)
 	ProjectPath string   // Project root path for project-root working dir mode
+
+	// UnitDir is the directory whose verdict this task produces, relative to the
+	// git root ("" is the root). Empty for file-granularity tasks, which have no
+	// unit beyond the files themselves.
+	UnitDir string
+	// UnitMembers is every tracked file under UnitDir — not just the glob
+	// matches. A superset is safe (a stale entry only costs a miss); a subset
+	// would let an untracked-by-globs edit go unnoticed.
+	UnitMembers []string
+	// UnitGuards are inputs outside UnitDir that can still change the verdict:
+	// ancestor configs, lock files, and config paths the args name.
+	UnitGuards []string
+	// Coverage records whether this task, as planned, covers its whole unit. Only
+	// the planner sets it: the executor cannot tell a narrowed run from a full
+	// one, and a run that guessed would record a verdict it did not earn.
+	Coverage Coverage
 }
+
+// Coverage is whether a task covers the whole unit its verdict describes.
+type Coverage string
+
+// Coverage values.
+const (
+	CoverageComplete Coverage = "complete"
+	CoveragePartial  Coverage = "partial"
+)
 
 // TaskGroup represents a group of tasks that can run in parallel
 type TaskGroup struct {
