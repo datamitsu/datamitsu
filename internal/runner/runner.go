@@ -213,6 +213,12 @@ func initSharedContext(
 	if err := opts.validate(); err != nil {
 		return nil, err
 	}
+	// Rejected before anything runs: --tools drops the skip entries of unselected
+	// tools before they can be observed, so the assertion would be trivially true
+	// over a debug subset. Failing after the run would waste it.
+	if opts.RequireCoverage != "" && len(sc.selectedTools) > 0 {
+		return nil, errRequireCoverageWithTools
+	}
 
 	sc.selection = tooling.NewSelection(sc.rootPath, sc.cwdPath, sc.files, fileScoped)
 
@@ -322,7 +328,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	// — instead of leaving them invisible.
 	if len(projectTypes) == 0 || len(plan.Groups) == 0 {
 		if len(plan.Skipped) > 0 {
-			renderSkipOnlyBlock(string(operation), plan.Skipped, sc.nameWidth)
+			renderSkipOnlyBlock(string(operation), sc.targetLine(), plan.Skipped, sc.nameWidth)
 			sc.recordSkips(plan.Skipped)
 			sc.recordCoverage(plan)
 			return nil
@@ -381,6 +387,9 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	if !ui.Quiet() {
 		fmt.Println()
 		fmt.Println(phaseTop(string(operation)))
+		if line := sc.targetLine(); line != "" {
+			fmt.Println(line)
+		}
 		fmt.Println(clr.Faint("┃ " + strings.Join(shortTypes, " · ")))
 	}
 
@@ -692,10 +701,6 @@ func (sc *sharedContext) coverageFailure() error {
 		return nil
 	}
 
-	if len(sc.selectedTools) > 0 {
-		return errRequireCoverageWithTools
-	}
-
 	var reasons []string
 	if len(sc.narrowed) > 0 {
 		names := make([]string, 0, len(sc.narrowed))
@@ -713,7 +718,7 @@ func (sc *sharedContext) coverageFailure() error {
 	if len(reasons) == 0 {
 		return nil
 	}
-	return fmt.Errorf("--require-coverage=%s: %s", level, strings.Join(reasons, "; "))
+	return coverageError{fmt.Errorf("--require-coverage=%s: %s", level, strings.Join(reasons, "; "))}
 }
 
 // errRequireCoverageWithTools rejects a combination that cannot mean anything:
@@ -721,6 +726,51 @@ func (sc *sharedContext) coverageFailure() error {
 // them, so the assertion would be trivially true over a debug subset.
 var errRequireCoverageWithTools = errors.New(
 	"--require-coverage cannot be combined with --tools: the assertion would only cover the selected subset")
+
+// targetLine announces that the run covers less than the repository, so a green
+// result is not mistaken for a full one. Empty for a whole-repository run, which
+// is the common case and needs no annotation.
+func (sc *sharedContext) targetLine() string {
+	switch sc.selection.Mode {
+	case tooling.SelectionAll:
+		return ""
+	case tooling.SelectionEmpty:
+		return clr.Faint("┃ ◑ target: nothing staged · narrowed run")
+	case tooling.SelectionPaths:
+		noun := "files"
+		if len(sc.selection.Paths) == 1 {
+			noun = "file"
+		}
+		names := relativeToRoot(sc.selection.Paths, sc.rootPath)
+		shown := strings.Join(names, " ")
+		if len(names) > 3 {
+			shown = strings.Join(names[:3], " ") + fmt.Sprintf(" +%d more", len(names)-3)
+		}
+		return clr.Faint(fmt.Sprintf("┃ ◑ target: %d %s · %s · narrowed run",
+			len(names), noun, shown))
+	case tooling.SelectionSubtree:
+		dir := sc.selection.Dir
+		if rel, err := filepath.Rel(sc.rootPath, dir); err == nil {
+			dir = rel
+		}
+		return clr.Faint(fmt.Sprintf("┃ ◑ target: %s · narrowed run", dir))
+	}
+	return ""
+}
+
+// relativeToRoot renders paths relative to the git root so the line stays
+// readable and stable regardless of where the repository lives.
+func relativeToRoot(paths []string, root string) []string {
+	out := make([]string, 0, len(paths))
+	for _, p := range paths {
+		if rel, err := filepath.Rel(root, p); err == nil {
+			out = append(out, rel)
+			continue
+		}
+		out = append(out, p)
+	}
+	return out
+}
 
 // printSkippedTools renders faint "┃ ⊘ name   skipped (reason)" body lines,
 // aligned to nameWidth like the per-tool result rows. No-op for an empty list.
@@ -738,12 +788,15 @@ func printSkippedTools(skipped []tooling.SkippedTool, nameWidth int) {
 
 // renderSkipOnlyBlock prints a minimal operation block containing only skipped
 // tools, used when planning produced skips but nothing runnable.
-func renderSkipOnlyBlock(operation string, skipped []tooling.SkippedTool, nameWidth int) {
+func renderSkipOnlyBlock(operation, targetLine string, skipped []tooling.SkippedTool, nameWidth int) {
 	if ui.Quiet() {
 		return
 	}
 	fmt.Println()
 	fmt.Println(phaseTop(operation))
+	if targetLine != "" {
+		fmt.Println(targetLine)
+	}
 	fmt.Println(clr.Faint("┃"))
 	printSkippedTools(skipped, nameWidth)
 	printOperationFooter(nil, 0, 0, 0, len(skipped))

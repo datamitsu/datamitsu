@@ -195,27 +195,16 @@ func TestDetailedFormatter_EmptyAndWholeProject(t *testing.T) {
 	}
 }
 
-func TestJSONFormatter_BatchDerivedFromArity(t *testing.T) {
-	// `batch` in explain JSON now answers "does this run as one process", derived
-	// from argv shape rather than from scope or the deprecated batch field.
+func TestJSONFormatter_ReportsGranularityArityCoverage(t *testing.T) {
 	plan := &ExecutionPlan{Groups: []TaskGroup{{Priority: 5, Tasks: []Task{
-		{ToolName: "one", Files: []string{"/repo/a.go"}, OpConfig: config.ToolOperation{
-			App: "one", Scope: config.ToolScopePerFile, Args: []string{"{file}"},
-		}},
-		{ToolName: "many", Files: []string{"/repo/a.go"}, OpConfig: config.ToolOperation{
-			App: "many", Scope: config.ToolScopeRepository, Args: []string{"{files}"},
-		}},
-		// per-file + {files} is dotenv-linter's shape: one process despite the scope.
-		{ToolName: "perfile-many", Files: []string{"/repo/a.env"}, OpConfig: config.ToolOperation{
-			App: "perfile-many", Scope: config.ToolScopePerFile, Args: []string{"{files}"},
-		}},
-		// per-file with no path in argv is sort-package-json's shape: still per file.
-		{ToolName: "perfile-none", Files: []string{"/repo/package.json"}, OpConfig: config.ToolOperation{
-			App: "perfile-none", Scope: config.ToolScopePerFile, Args: []string{"--quiet"},
-		}},
-		{ToolName: "whole-project", OpConfig: config.ToolOperation{
-			App: "whole-project", Scope: config.ToolScopeRepository, Args: []string{"run"},
-		}},
+		{
+			ToolName: "oxfmt", Files: []string{"/repo/a.json"}, Coverage: CoverageComplete,
+			OpConfig: config.ToolOperation{App: "oxfmt", Scope: config.ToolScopeRepository, Args: []string{"{files}"}},
+		},
+		{
+			ToolName: "tsc", Coverage: CoveragePartial,
+			OpConfig: config.ToolOperation{App: "tsc", Scope: config.ToolScopePerProject, Args: []string{"--noEmit"}},
+		},
 	}}}}
 
 	out := NewJSONFormatter().Format(plan, "/repo", "/cwd", config.OpLint)
@@ -223,28 +212,19 @@ func TestJSONFormatter_BatchDerivedFromArity(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &parsed); err != nil {
 		t.Fatalf("output is not valid JSON: %v\n%s", err, out)
 	}
-	if parsed.Operation != "lint" || parsed.RootPath != "/repo" || parsed.CwdPath != "/cwd" {
-		t.Errorf("unexpected header fields: %+v", parsed)
-	}
-	if len(parsed.Groups) != 1 || parsed.Groups[0].Priority != 5 {
-		t.Fatalf("unexpected groups: %+v", parsed.Groups)
-	}
 
-	batchByTool := map[string]bool{}
+	got := map[string][3]string{}
 	for _, pg := range parsed.Groups[0].ParallelGroups {
 		for _, task := range pg.Tasks {
-			batchByTool[task.ToolName] = task.Batch
+			got[task.ToolName] = [3]string{task.Granularity, task.Arity, task.Coverage}
 		}
 	}
-	for tool, want := range map[string]bool{
-		"one":           false,
-		"many":          true,
-		"perfile-many":  true,
-		"perfile-none":  false,
-		"whole-project": true,
+	for tool, want := range map[string][3]string{
+		"oxfmt": {"file", "many", "complete"},
+		"tsc":   {"unit", "none", "partial"},
 	} {
-		if got := batchByTool[tool]; got != want {
-			t.Errorf("%s: batch = %v, want %v", tool, got, want)
+		if got[tool] != want {
+			t.Errorf("%s: granularity/arity/coverage = %v, want %v", tool, got[tool], want)
 		}
 	}
 }

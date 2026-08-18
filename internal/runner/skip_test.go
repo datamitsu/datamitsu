@@ -224,16 +224,17 @@ func TestCoverageFailure(t *testing.T) {
 		}
 	})
 
-	// --tools deletes the skip entries of unselected tools before anything can
-	// observe them, so the assertion would be trivially true.
-	t.Run("rejected with --tools", func(t *testing.T) {
-		sc := &sharedContext{
-			opts:          Options{RequireCoverage: "unit"},
-			narrowed:      narrowed(),
-			selectedTools: []string{"eslint"},
+	// A coverage failure must be distinguishable from a tool failure, or a
+	// pipeline cannot act on either.
+	t.Run("carries its own exit code", func(t *testing.T) {
+		sc := &sharedContext{opts: Options{RequireCoverage: "unit"}, narrowed: narrowed("syncpack")}
+		err := sc.coverageFailure()
+		var coded interface{ ExitCode() int }
+		if !errors.As(err, &coded) {
+			t.Fatalf("expected a coded error, got: %v", err)
 		}
-		if err := sc.coverageFailure(); !errors.Is(err, errRequireCoverageWithTools) {
-			t.Errorf("expected the --tools rejection, got: %v", err)
+		if coded.ExitCode() != ExitCoverage {
+			t.Errorf("exit code = %d, want %d", coded.ExitCode(), ExitCoverage)
 		}
 	})
 }

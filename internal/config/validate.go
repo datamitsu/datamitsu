@@ -593,20 +593,14 @@ func ValidateSetupToolRefs(initConfigs MapOfConfigSetup, tools MapOfTools) []str
 }
 
 // ValidateToolDeprecations returns one warning per tool operation still setting
-// a deprecated field. It warns rather than erroring so that every config that
-// loads today keeps loading: the rejection lands a full release later, once the
-// replacement has shipped and configs have had a release in which to migrate.
+// a removed field.
 //
-// `batch` is deprecated in favour of `arity`. The two answer different
-// questions — `batch` is derived from `scope` ("where does the process start"),
-// while argv shape is a property of the tool's command-line contract — and one
-// boolean cannot express the four shapes that exist (a list of paths, exactly
-// one path, one directory, no paths at all). Until the `arity` capability is
-// published, `batch` is still honoured; after it, the field is ignored for
-// dispatch and eventually rejected.
-//
-// Warnings are emitted in a deterministic order so callers can print them
-// without reordering.
+// `batch` no longer does anything: argv shape comes from `arity`, inferred from
+// the placeholders in args. It stays a warning rather than an error for one
+// reason — the config package in circulation still sets it on 24 operations, and
+// this repository lints itself with that package. Flip it to an error in
+// ValidateTools once a config without `batch` has shipped; it is a few lines,
+// and the field on ToolOperation exists only to make that error possible.
 func ValidateToolDeprecations(tools MapOfTools) []string {
 	toolNames := make([]string, 0, len(tools))
 	for name := range tools {
@@ -630,8 +624,8 @@ func ValidateToolDeprecations(tools MapOfTools) []string {
 				continue
 			}
 			warnings = append(warnings, fmt.Sprintf(
-				"tool %q operation %q: %q is deprecated and will be rejected in a future release; "+
-					"argv shape now comes from %q — see docs/plans/2026-08-18-tool-invocation-granularity.md",
+				"tool %q operation %q: %q no longer does anything — argv shape comes from %q, "+
+					"inferred from the placeholders in args. Delete the field.",
 				toolName, opType, "batch", "arity",
 			))
 		}

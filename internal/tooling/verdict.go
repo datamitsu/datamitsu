@@ -12,6 +12,8 @@ import (
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/hashutil"
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
+
+	"go.uber.org/zap"
 )
 
 // guardNames are files outside a unit that can still change its verdict. Fixed
@@ -326,6 +328,22 @@ func (e *Executor) verdictKeys(task Task) (key, inputs string, ok bool) {
 func (e *Executor) recordVerdict(task Task, key, inputs string, ok bool) {
 	if !ok || task.Coverage != CoverageComplete {
 		return
+	}
+
+	// The inputs were hashed before the tool ran. If they moved underneath it —
+	// an editor save, a concurrent build, or the tool itself rewriting files —
+	// the pass belongs to a state that no longer exists.
+	after := verdictInputs(task.UnitMembers, task.UnitGuards, e.rootPath)
+	if after != inputs {
+		if task.Operation != config.OpFix {
+			// A read-only operation that saw shifting inputs proves nothing.
+			log.Debug("inputs changed during the run; not recording a verdict",
+				zap.String("tool", task.ToolName), zap.String("unit", task.UnitDir))
+			return
+		}
+		// A fix is expected to change its inputs — that is its job — so record
+		// the state it produced rather than the one it started from.
+		inputs = after
 	}
 	e.cache.AfterVerdict(key, cache.VerdictEntry{
 		Tool:      task.ToolName,

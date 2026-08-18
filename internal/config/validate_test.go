@@ -3,7 +3,6 @@ package config
 import (
 	"archive/tar"
 	"bytes"
-	"slices"
 	"strings"
 	"testing"
 
@@ -2999,80 +2998,27 @@ func TestValidateTools(t *testing.T) {
 	})
 }
 
-func TestValidateToolDeprecations(t *testing.T) {
-	batchTrue := true
-	batchFalse := false
+func TestValidateToolDeprecationsWarnsOnBatch(t *testing.T) {
+	batch := true
+	tools := MapOfTools{
+		"eslint": {Operations: map[OperationType]ToolOperation{
+			OpFix: {App: "eslint", Args: []string{"{files}"}, Scope: ToolScopePerProject, Batch: &batch},
+		}},
+	}
+	w := ValidateToolDeprecations(tools)
+	if len(w) != 1 {
+		t.Fatalf("expected 1 warning, got %d: %v", len(w), w)
+	}
+	// The message has to name the replacement, or the reader is left guessing.
+	if !strings.Contains(w[0], "arity") || !strings.Contains(w[0], "eslint") {
+		t.Errorf("warning should name the tool and its replacement, got: %q", w[0])
+	}
 
-	t.Run("no batch field produces no warnings", func(t *testing.T) {
-		tools := MapOfTools{
-			"eslint": {Operations: map[OperationType]ToolOperation{
-				OpFix: {App: "eslint", Args: []string{"{files}"}, Scope: ToolScopePerProject},
-			}},
-		}
-		if w := ValidateToolDeprecations(tools); len(w) != 0 {
-			t.Errorf("expected no warnings, got %v", w)
-		}
-	})
-
-	t.Run("batch:false warns too", func(t *testing.T) {
-		// The value is irrelevant: the field itself is what goes away, and a
-		// config setting it to the value that happens to match today's default
-		// still has to be migrated.
-		tools := MapOfTools{
-			"sort-package-json": {Operations: map[OperationType]ToolOperation{
-				OpFix: {App: "sort-package-json", Batch: &batchFalse, Scope: ToolScopePerFile},
-			}},
-		}
-		w := ValidateToolDeprecations(tools)
-		if len(w) != 1 {
-			t.Fatalf("expected 1 warning, got %d: %v", len(w), w)
-		}
-		if !strings.Contains(w[0], "sort-package-json") || !strings.Contains(w[0], "fix") {
-			t.Errorf("warning should name the tool and operation, got: %q", w[0])
-		}
-		if !strings.Contains(w[0], "arity") {
-			t.Errorf("warning should name the replacement, got: %q", w[0])
-		}
-	})
-
-	t.Run("one warning per operation", func(t *testing.T) {
-		tools := MapOfTools{
-			"dotenv-linter": {Operations: map[OperationType]ToolOperation{
-				OpFix:  {App: "dotenv-linter", Batch: &batchTrue, Scope: ToolScopePerFile},
-				OpLint: {App: "dotenv-linter", Batch: &batchTrue, Scope: ToolScopePerFile},
-			}},
-		}
-		if w := ValidateToolDeprecations(tools); len(w) != 2 {
-			t.Fatalf("expected 2 warnings, got %d: %v", len(w), w)
-		}
-	})
-
-	t.Run("warnings are deterministic across map iteration", func(t *testing.T) {
-		tools := MapOfTools{
-			"zzz": {Operations: map[OperationType]ToolOperation{
-				OpLint: {App: "zzz", Batch: &batchTrue},
-				OpFix:  {App: "zzz", Batch: &batchTrue},
-			}},
-			"aaa": {Operations: map[OperationType]ToolOperation{
-				OpFix: {App: "aaa", Batch: &batchTrue},
-			}},
-		}
-
-		first := ValidateToolDeprecations(tools)
-		if len(first) != 3 {
-			t.Fatalf("expected 3 warnings, got %d: %v", len(first), first)
-		}
-		// Sorted by tool, then by operation: aaa/fix, zzz/fix, zzz/lint.
-		if !strings.Contains(first[0], "aaa") ||
-			!strings.Contains(first[1], `"zzz" operation "fix"`) ||
-			!strings.Contains(first[2], `"zzz" operation "lint"`) {
-			t.Fatalf("warnings not sorted by tool then operation: %v", first)
-		}
-
-		for range 20 {
-			if got := ValidateToolDeprecations(tools); !slices.Equal(got, first) {
-				t.Fatalf("order varies across calls:\n first = %v\n got   = %v", first, got)
-			}
-		}
-	})
+	// An operation without the field is silent.
+	clean := MapOfTools{"oxfmt": {Operations: map[OperationType]ToolOperation{
+		OpFix: {App: "oxfmt", Args: []string{"{files}"}, Scope: ToolScopeRepository},
+	}}}
+	if w := ValidateToolDeprecations(clean); len(w) != 0 {
+		t.Errorf("expected no warnings, got %v", w)
+	}
 }

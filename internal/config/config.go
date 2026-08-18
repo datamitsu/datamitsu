@@ -110,9 +110,11 @@ type ToolOperation struct {
 	// complete. Inferred when unset (InferGranularity); declaring "file" is a
 	// speed decision, declaring "unit"/"repo" is always safe.
 	Granularity ToolGranularity `json:"granularity,omitempty"`
-	// Batch is deprecated in favour of Arity. Retained so a config still setting
-	// it errors loudly — goja's ExportTo consults only fields on this struct, so
-	// removing it would drop the key silently. See ValidateToolDeprecations.
+	// Batch is removed: argv shape comes from Arity. The field survives only so
+	// a config still setting it fails to load. Deleting it outright would be
+	// worse than useless — goja's ExportTo consults only fields on this struct,
+	// so the key would be dropped in silence and the behaviour change would
+	// arrive unannounced. Drop it once no config in circulation carries it.
 	Batch        *bool             `json:"batch,omitempty"`
 	Globs        []string          `json:"globs,omitempty"`
 	ExcludeGlobs []string          `json:"excludeGlobs,omitempty"`

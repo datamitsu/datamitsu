@@ -3,6 +3,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -152,6 +153,16 @@ func Execute() {
 	restore()
 
 	if err != nil {
+		// A tool failing and a run that did not cover what it was asked to cover
+		// are different outcomes, and CI needs to tell them apart. Everything
+		// keeps exiting 1 unless it says otherwise, so existing pipelines are
+		// unaffected.
+		code := 1
+		var coded CodedError
+		if errors.As(err, &coded) {
+			code = coded.ExitCode()
+		}
+
 		// In JSON-L mode the human error line would be a non-JSON line on the
 		// stderr event stream; emit a typed error event instead so every stderr
 		// line stays valid JSON.
@@ -162,9 +173,9 @@ func Execute() {
 				Status: uievent.StatusFail,
 				Msg:    err.Error(),
 			})
-			os.Exit(1)
+			os.Exit(code)
 		}
 		fmt.Fprintf(os.Stderr, "%s %s\n", clr.Red("error:"), err)
-		os.Exit(1)
+		os.Exit(code)
 	}
 }

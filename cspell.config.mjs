@@ -412,9 +412,6 @@ export default defineConfig((config) => ({
     "Beancount",
     "SPIR",
     "keytar",
-    // Go package holding the config-schema contract published through facts():
-    // the {placeholder} vocabulary and the core capability set.
-    "configcontract",
     // git's --format=%(trailers:...) option token, used to read Co-authored-by.
     "valueonly",
     // Plurals of the ToolArity and ToolGranularity config fields.

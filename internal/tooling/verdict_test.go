@@ -180,3 +180,24 @@ func TestVerdictInputsIgnoreUnrelatedEnv(t *testing.T) {
 		t.Error("an unrelated variable changed the verdict inputs")
 	}
 }
+
+// The input hash is taken before the tool runs. If a file moves underneath it —
+// an editor save, a concurrent build — the pass describes a state that no longer
+// exists, so a read-only operation must not record it.
+func TestVerdictInputsAreRehashedAfterTheRun(t *testing.T) {
+	root := t.TempDir()
+	member := filepath.Join(root, "a.ts")
+	if err := os.WriteFile(member, []byte("before"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	before := verdictInputs([]string{member}, nil, root)
+	if err := os.WriteFile(member, []byte("after"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	after := verdictInputs([]string{member}, nil, root)
+
+	if before == after {
+		t.Fatal("a mid-run edit must change the input vector, or the check is inert")
+	}
+}

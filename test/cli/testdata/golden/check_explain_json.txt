@@ -19,7 +19,6 @@
               "granularity": "repo",
               "arity": "none",
               "coverage": "complete",
-              "batch": true,
               "workingDir": "<TMP>",
               "files": [],
               "fileCount": 0
@@ -52,7 +51,6 @@
               "granularity": "repo",
               "arity": "none",
               "coverage": "complete",
-              "batch": true,
               "workingDir": "<TMP>",
               "files": [],
               "fileCount": 0
@@ -72,7 +70,6 @@
               "granularity": "repo",
               "arity": "none",
               "coverage": "complete",
-              "batch": true,
               "workingDir": "<TMP>",
               "files": [],
               "fileCount": 0
