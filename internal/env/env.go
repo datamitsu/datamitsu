@@ -89,6 +89,16 @@ func GetLogFormat() string {
 	}
 }
 
+// GetLspFormatWidenTo returns the editor's format-on-save widening policy.
+// Editors that send no initializationOptions — which is every shipped client
+// today — fall back to this.
+func GetLspFormatWidenTo() string {
+	if v := os.Getenv(lspFormatWidenTo.Name); v != "" {
+		return v
+	}
+	return lspFormatWidenTo.DefaultValue
+}
+
 // GetUnitCacheTTLMinutes returns how long a unit-level verdict stays trusted.
 // Zero disables the verdict cache. Returns the default on parse error.
 func GetUnitCacheTTLMinutes() int {
