@@ -49,6 +49,23 @@ jobs:
         run: |
           export VERSION=0.0.0-pr.${{ github.event.pull_request.number }}
           pnpm pack:prepare
+  commit-identity:
+    if: github.event_name == 'pull_request'
+    name: Commit Identity
+    runs-on: ubuntu-latest
+    steps:
+      # Needs both PR endpoints, so no shallow clone: the check walks
+      # base..head. Squash merge copies each distinct branch author onto main as
+      # a Co-authored-by trailer, so a bad identity here becomes permanent
+      # public history the moment the PR lands.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        name: Reject the reserved test identity
+        run: .github/scripts/check-commit-identity.sh
   docker-build:
     if: github.event_name == 'pull_request'
     name: Docker Build Test

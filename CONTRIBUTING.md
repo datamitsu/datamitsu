@@ -206,6 +206,38 @@ expect:
   validate a pin has to force the fetch and assert an exit code — for example
   `datamitsu devtools parsers prefetch`.
 
+## Committing
+
+Do not set a repository-local `user.name` / `user.email` here. The CLI blackbox
+suite gives its throwaway fixture repositories a fixed identity,
+`datamitsu-clitest <clitest@datamitsu.invalid>`, and that identity has a way of
+migrating into this repository's own `.git/config` — usually alongside
+`commit.gpgSign = false`, when someone wants to commit non-interactively.
+
+The consequence is not local. Every commit on the branch is authored by an
+account that does not exist, and GitHub's squash merge copies each distinct
+branch author onto `main` as a `Co-authored-by:` trailer — so a local
+convenience becomes permanent, world-readable history, with the commits
+unsigned into the bargain.
+
+Two guards catch it: a lefthook `pre-commit` check before the commit exists, and
+the `Commit Identity` CI job, which walks `base..head` and fails the PR. To
+check by hand:
+
+```bash
+git config --local --get-regexp 'user\.|commit\.'   # expect no output
+```
+
+If commits were already made under the wrong identity, drop the override and
+rewrite them:
+
+```bash
+git config --local --unset user.name
+git config --local --unset user.email
+git config --local --unset commit.gpgSign
+git rebase --reset-author-date --exec 'git commit --amend --no-edit --reset-author' main
+```
+
 ## Releases
 
 Releases are automated via GitHub Actions ([release.yml](.github/workflows/release.yml)).

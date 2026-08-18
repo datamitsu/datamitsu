@@ -1,6 +1,20 @@
 glob_matcher: doublestar
 pre-commit:
   commands:
+    commit identity:
+      priority: 1
+      # Catches a local user.name/user.email override before the commit exists,
+      # rather than after CI rejects the PR. The reserved identity belongs to
+      # internal/clitest fixture repos; in this repository it credits every
+      # commit to an account that does not exist, and rides onto main as a
+      # Co-authored-by trailer when the PR is squash-merged.
+      run: |
+        if git config user.email | grep -qF 'datamitsu.invalid'; then
+          echo "error: committing as $(git config user.name) <$(git config user.email)>" >&2
+          echo "That is the internal/clitest fixture identity, not a real author." >&2
+          echo "Fix: git config --local --unset user.name && git config --local --unset user.email" >&2
+          exit 1
+        fi
     test:
       priority: 2
       run: pnpm test
