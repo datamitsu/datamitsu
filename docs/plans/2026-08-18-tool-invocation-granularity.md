@@ -173,8 +173,11 @@ entire justification for a dedicated `{target}` placeholder (§3.3).
 
 > The script finds 86 `args:` blocks; two of them sit inside commented-out duplicate entries
 > (`tools.ts:414-423`, gitleaks — whose line 418 is not even valid TypeScript — and `:1008-1019`,
-> knip). The 84 live blocks map one-to-one onto the 84 operations (30 `fix:` + 54 `lint:`), and the
-> rows above count only those.
+> knip). Re-derived independently by parsing operation blocks rather than bare `args:` matches: 84
+> live operations (30 `fix:` + 54 `lint:`), classifying 33 `many` / 14 `one` / 19 ambiguous
+> `{root}`/`{cwd}` / 18 with no path token. The two unambiguous classes match exactly; the entire
+> discrepancy between the two methods sits in the ambiguous region, which is the argument for
+> `{target}`.
 
 ---
 
@@ -916,12 +919,18 @@ selection is `All`, so the existing explain goldens stay byte-identical apart fr
 
 1. **Delete `batch:`** — 33 lines. Behaviour-preserving _because dispatch moves to arity_ (§3.3).
 2. **`gitleaks`** (`tools.ts:408`): `"{files}"` → `"{target}"`, plus `arity: "dir"`. One token and one
-   line. The only mandatory `args` change, and the only latent silent bug in the set: `gitleaks dir`
-   takes a single path and ignores the rest. Measured on this repository, chunking sees ~912 tracked
-   files / ~31.4 KB of **relative** paths (after `.datamitsuignore` exclusions and cache filtering)
-   plus ~200 bytes of base command, against the 32000-byte limit — **one chunk today, roughly 400
-   bytes from splitting into two.** At two chunks it becomes two full repository scans with every
-   finding reported twice. The structural defect is present now; the visible symptom is not yet.
+   line. The only mandatory `args` change, and the only silent bug in the set.
+
+   **Measured against gitleaks 8.30.1, not inferred.** Given two file arguments it reports
+   `scanned ~11114 bytes` — byte-identical to `gitleaks dir .` over the same fixture, in both
+   argument orders, exit 0, no warning. One argument scans exactly that file (101 B / 1001 B for the
+   two fixtures). So with more than one path it discards them all and scans the working directory.
+
+   The consequence is larger than the chunking arithmetic suggested: datamitsu's file selection has
+   never reached gitleaks at all. Globs, `.datamitsuignore` pruning and `--file-scoped` are equally
+   inert — it always scans the whole working directory. Chunking only decides whether that happens
+   once or twice.
+
 3. **`granularity: "file"`** on the `per-project` + `{files}` operations that the fail-safe rule
    places in `unit`: eslint, prettier, ruff, ruff-format, sqruff. **cspell and oxlint are deliberately
    NOT in this list** — cspell runs with `--unique` (`tools.ts:273`) and oxlint's enabled rule
@@ -941,7 +950,8 @@ Net: −33 / +18 lines. **The config gets smaller.**
 6. `invalidateOn` on golangci-lint (`.golangci.y*ml`, `go.sum`) — the one class that hides its config
    from argv.
 7. `sort-package-json` from `per-file` to `repository` + `{files}` — N spawns collapse to one.
-   Unverified; confirm the CLI accepts a list first.
+   Verified: given two explicit `package.json` paths it reports "Found 2 files. 2 files successfully
+   sorted." and sorts both.
 8. `granularity: "file"` for cspell and oxlint, each gated on a differential check: run the tool
    globally and narrowed and assert `findings(narrow) ⊆ findings(global) | thatFile`. Until that
    passes they stay `unit`, which is slower and correct.
