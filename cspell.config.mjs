@@ -412,5 +412,7 @@ export default defineConfig((config) => ({
     "Beancount",
     "SPIR",
     "keytar",
+    // git's --format=%(trailers:...) option token, used to read Co-authored-by.
+    "valueonly",
   ],
 }));
