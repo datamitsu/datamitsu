@@ -749,11 +749,12 @@ func ValidateTools(tools MapOfTools, parsers MapOfParsers) error {
 				))
 			}
 
-			// The stdin/stdout formatter contract is only honored by the per-file
-			// execution path. Under any batched scope the executor combines output
-			// and feeds no stdin, so these modes would silently no-op. Require
-			// scope:per-file (and reject an explicit batch:true) so a misconfigured
-			// formatter fails fast instead of doing nothing.
+			// The stdin/stdout formatter contract feeds one file per process. An
+			// operation that takes a file list runs once for the whole batch,
+			// combining output and feeding no stdin, so these modes would silently
+			// no-op. Require per-file scope and an arity that carries at most one
+			// path, so a misconfigured formatter fails fast instead of doing
+			// nothing.
 			if op.Input == ToolInputStdin || op.Output == ToolOutputStdout {
 				if op.Scope != ToolScopePerFile {
 					errs = append(errs, fmt.Sprintf(

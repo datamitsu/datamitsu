@@ -25,11 +25,13 @@ export interface SpawnRaw {
 export interface TaskJSON {
   app: string;
   args: string[];
-  batch: boolean;
+  arity: string;
+  coverage: string;
   excludeGlobs?: string[];
   fileCount: number;
   files: string[];
   globs?: string[];
+  granularity: string;
   scope: string;
   toolName: string;
   workingDir: string;

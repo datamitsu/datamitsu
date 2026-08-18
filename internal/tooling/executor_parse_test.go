@@ -72,7 +72,7 @@ func TestParseFileDiagnostics_ParseErrorIsNonFatal(t *testing.T) {
 }
 
 // TestExecuteBatchChunkParses drives the batch path used by per-project tools
-// like eslint (batch: true + outputParser): the parser must receive the machine
+// like eslint (a {files} list + outputParser): the parser must receive the machine
 // output (stdout) apart from wrapper noise (stderr), and the resolved diagnostics
 // must reach the result so the runner prints them instead of raw JSON.
 func TestExecuteBatchChunkParses(t *testing.T) {

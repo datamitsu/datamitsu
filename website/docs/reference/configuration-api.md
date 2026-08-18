@@ -524,7 +524,8 @@ interface ToolOperation {
   globs?: string[]; // File patterns (doublestar syntax; `!` negation not supported). Omit to match all discovered files.
   excludeGlobs?: string[]; // Patterns removed from the matched set (doublestar syntax)
   scope: "repository" | "per-project" | "per-file";
-  batch?: boolean; // Batch files into single execution (default: true)
+  arity?: "many" | "one" | "dir" | "none"; // argv path shape; inferred, assert-only
+  granularity?: "file" | "unit" | "repo"; // smallest complete input set; inferred
   priority?: number; // Execution order (lower = first, default: 0)
   invalidateOn?: string[]; // Files that invalidate cache
   env?: Record<string, string>; // Extra environment variables; values support {root}, {cwd}, {toolCache}

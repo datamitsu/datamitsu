@@ -905,8 +905,8 @@ declare global {
       /**
        * Arguments to pass to the command. Template placeholders are expanded by the executor before
        * execution: - {file} - single file path (per-file scope) - {files} - space-separated file
-       * list (batch mode) - {root} - git repository root (or cwd if not in a git repo) - {cwd} -
-       * per-project working directory - {toolCache} - per-project, per-tool cache directory
+       * list, one argument per file - {root} - git repository root (or cwd if not in a git repo) -
+       * {cwd} - per-project working directory - {toolCache} - per-project, per-tool cache directory
        * (cache/{projectPath}/{toolName}/) - {target} - the single directory a scanner should scan
        *
        * @example
@@ -934,18 +934,6 @@ declare global {
        *   arity: "dir";
        */
       arity?: "dir" | "many" | "none" | "one";
-
-      /**
-       * Batch mode - process files in groups or one at a time Only used for scope: "per-project" or
-       * "repository"
-       *
-       * @deprecated Superseded by `arity`, which describes the tool's command-line contract instead
-       *   of being derived from `scope`. One boolean cannot express the four shapes that exist (a
-       *   list of paths, exactly one path, one directory, no paths). Ignored for dispatch; a later
-       *   release rejects it outright.
-       * @default true for "per-project" and "repository", false for "per-file"
-       */
-      batch?: boolean;
 
       /**
        * Extra environment variables for this operation Merge priority: OS env < app env < tool

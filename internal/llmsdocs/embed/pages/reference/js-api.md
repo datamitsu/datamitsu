@@ -478,7 +478,8 @@ interface TaskJSON {
   app: string; // Binary/application name
   args: string[]; // Command arguments
   scope: string; // Execution scope
-  batch: boolean; // Whether files are batched
+  arity?: "many" | "one" | "dir" | "none"; // argv path shape (inferred)
+  granularity?: "file" | "unit" | "repo"; // smallest complete input set (inferred)
   workingDir: string; // Task working directory
   globs?: string[]; // File glob patterns (omitted when empty)
   excludeGlobs?: string[]; // Patterns removed from the matched set (omitted when empty)

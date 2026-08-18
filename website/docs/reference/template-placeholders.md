@@ -55,7 +55,7 @@ args: ["--input={file}"];
 
 ## `{files}`
 
-Expands to multiple file paths. Used in tools with `scope: "per-project"` or `scope: "repository"` when `batch` is enabled.
+Expands to one argument per file. Using it is what makes an operation's [arity](configuration-api.md#arity) `many`: one process for the whole list, chunked only when the command line would overflow.
 
 **As entire argument** — expands to multiple separate arguments:
 
@@ -190,7 +190,7 @@ args: ["dir", "--redact", "--config", "{root}/.gitleaks.toml", "{target}"];
 It exists because `{root}` is ambiguous. In `--config {root}/.gitleaks.toml` the
 root is a path the tool _reads_; in `dir {root}` it is the thing it _scans_, and
 nothing in the argument list distinguishes them. `{target}` says which one you
-mean, and that is what lets datamitsu infer the operation's [arity](#arity)
+mean, and that is what lets datamitsu infer the operation's [arity](configuration-api.md#arity)
 exactly rather than guessing.
 
 Handing a directory-scanning tool `{files}` instead is a silent mistake, not a

@@ -26,8 +26,8 @@ const applyBench = (config: config.Config): config.Config => {
   config.tools.tsbench = {
     name: "tsbench (overhead probe)",
     operations: {
-      fix: { app: "tsbench", args: ["{file}"], batch: false, globs: ["**/*"], scope: "per-file" },
-      lint: { app: "tsbench", args: ["{file}"], batch: false, globs: ["**/*"], scope: "per-file" },
+      fix: { app: "tsbench", args: ["{file}"], globs: ["**/*"], scope: "per-file" },
+      lint: { app: "tsbench", args: ["{file}"], globs: ["**/*"], scope: "per-file" },
     },
   };
 
