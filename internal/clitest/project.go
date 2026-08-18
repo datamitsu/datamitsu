@@ -36,10 +36,32 @@ func NewProject(tb testing.TB) *Project {
 	// for any command that needs a clean, isolated git root. We never commit, so
 	// no signing config is required.
 	p.git("init")
-	p.git("config", "user.name", "datamitsu-clitest")
-	p.git("config", "user.email", "clitest@datamitsu.invalid")
+
+	// `git config <name> <value>` writes to the *enclosing* repository, which is
+	// this one only if `git init` really took effect here. If it silently did
+	// not, the identity below would land in whatever repository contains the
+	// temp dir — and a fixture identity in a real repository credits every commit
+	// made there to an account that does not exist, then rides onto the default
+	// branch as a Co-authored-by trailer when a PR is squash-merged. Confirm
+	// ownership before writing rather than trusting `git init`.
+	if top := p.gitOut("rev-parse", "--show-toplevel"); top != p.Dir {
+		p.tb.Fatalf("clitest: git init did not create a repository at %s (toplevel resolved to %q); "+
+			"refusing to write the fixture identity into an enclosing repository", p.Dir, top)
+	}
+
+	p.git("config", "user.name", fixtureUserName)
+	p.git("config", "user.email", fixtureUserEmail)
 	return p
 }
+
+// The fixture identity for throwaway repositories. The .invalid TLD is reserved
+// by RFC 2606 and can never resolve to a real address, which is what lets
+// .github/scripts/check-commit-identity.sh treat any commit carrying it as a
+// misconfiguration rather than a contributor.
+const (
+	fixtureUserName  = "datamitsu-clitest"
+	fixtureUserEmail = "clitest@datamitsu.invalid"
+)
 
 // WriteFile writes content to rel (relative to the project root), creating any
 // parent directories, and returns the absolute path written. It fails the test
@@ -75,6 +97,25 @@ func (p *Project) git(args ...string) {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		p.tb.Fatalf("clitest: git %v failed: %v\n%s", args, err, out)
 	}
+}
+
+// gitOut runs git in the project directory and returns its trimmed stdout,
+// with symlinks resolved so the result is comparable to Project.Dir.
+func (p *Project) gitOut(args ...string) string {
+	p.tb.Helper()
+	// G204: args are fixed test-controlled git subcommands, not untrusted input.
+	cmd := exec.CommandContext(context.Background(), "git", args...) //nolint:gosec
+	cmd.Dir = p.Dir
+	cmd.Env = gitenv.Environ()
+	out, err := cmd.Output()
+	if err != nil {
+		p.tb.Fatalf("clitest: git %v failed: %v", args, err)
+	}
+	resolved, err := filepath.EvalSymlinks(strings.TrimSpace(string(out)))
+	if err != nil {
+		return strings.TrimSpace(string(out))
+	}
+	return resolved
 }
 
 // minimalConfigJS is a no-op config: getConfig discards the inherited (default)

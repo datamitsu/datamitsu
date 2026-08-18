@@ -415,6 +415,8 @@ export default defineConfig((config) => ({
     // Go package holding the config-schema contract published through facts():
     // the {placeholder} vocabulary and the core capability set.
     "configcontract",
+    // git's --format=%(trailers:...) option token, used to read Co-authored-by.
+    "valueonly",
     // Tool names in the wrapper config's repository-scoped set, referenced when
     // classifying which of them can be narrowed to a file subset.
     "blint",
@@ -432,10 +434,10 @@ export default defineConfig((config) => ({
     // British forms, matching the spellings already accepted above
     // ("behaviour", "recognise", "recognised").
     "analysed",
-    "atomises",
-    "behaviours",
     "atomised",
+    "atomises",
     "behavioural",
+    "behaviours",
     "defence",
     "generalises",
     "initialisation",
