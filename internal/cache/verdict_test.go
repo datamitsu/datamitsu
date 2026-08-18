@@ -66,18 +66,66 @@ func TestVerdictFutureTimestampIsNotTrusted(t *testing.T) {
 	}
 }
 
-func TestInvalidateVerdictsByTool(t *testing.T) {
+func TestDeleteVerdict(t *testing.T) {
 	c := newTestCache(t)
-	c.AfterVerdict("a", VerdictEntry{Tool: "tsc", InputHash: "x"})
-	c.AfterVerdict("b", VerdictEntry{Tool: "eslint", InputHash: "y"})
+	c.AfterVerdict("a", VerdictEntry{Tool: "tsc", Op: "lint", InputHash: "x"})
+	c.AfterVerdict("b", VerdictEntry{Tool: "tsc", Op: "fix", InputHash: "y"})
 
-	c.InvalidateVerdicts("tsc")
+	c.DeleteVerdict("a")
 
-	if c.ShouldRunVerdict("b", "y", testTTL) {
-		t.Error("an unrelated tool's verdict must survive")
-	}
 	if !c.ShouldRunVerdict("a", "x", testTTL) {
-		t.Error("the invalidated tool's verdict must be gone")
+		t.Error("the deleted verdict must be gone")
+	}
+	// Deleting the lint sibling must not take the fix verdict with it, or no fix
+	// operation could ever hit the cache.
+	if c.ShouldRunVerdict("b", "y", testTTL) {
+		t.Error("only the named verdict should be deleted")
+	}
+}
+
+// The merge can only add, so a deletion needs a tombstone or the next save
+// resurrects it — which is exactly what the merge was added to prevent.
+func TestDeletedVerdictStaysDeletedAcrossSave(t *testing.T) {
+	dir, project := t.TempDir(), t.TempDir()
+
+	first, _ := NewCache(dir, project, config.Config{}, nil, zap.NewNop())
+	first.AfterVerdict("k", VerdictEntry{Tool: "tsc", InputHash: "x"})
+	if err := first.Save(); err != nil {
+		t.Fatalf("first save: %v", err)
+	}
+
+	second, _ := NewCache(dir, project, config.Config{}, nil, zap.NewNop())
+	second.DeleteVerdict("k")
+	if err := second.Save(); err != nil {
+		t.Fatalf("second save: %v", err)
+	}
+
+	reloaded, _ := NewCache(dir, project, config.Config{}, nil, zap.NewNop())
+	if !reloaded.ShouldRunVerdict("k", "x", testTTL) {
+		t.Error("the deleted verdict came back after the save")
+	}
+}
+
+// A config change resets the cache. The next save must take the file over, not
+// refuse forever — nothing else ever rewrites the on-disk key.
+func TestSaveTakesOverAStaleCacheFile(t *testing.T) {
+	dir, project := t.TempDir(), t.TempDir()
+
+	old, _ := NewCache(dir, project, config.Config{IgnoreRules: []string{"a"}}, nil, zap.NewNop())
+	old.AfterVerdict("k", VerdictEntry{Tool: "tsc", InputHash: "x"})
+	if err := old.Save(); err != nil {
+		t.Fatalf("save with the first config: %v", err)
+	}
+
+	fresh, _ := NewCache(dir, project, config.Config{IgnoreRules: []string{"b"}}, nil, zap.NewNop())
+	fresh.AfterVerdict("k2", VerdictEntry{Tool: "tsc", InputHash: "y"})
+	if err := fresh.Save(); err != nil {
+		t.Fatalf("save after a config change must succeed, got: %v", err)
+	}
+
+	reloaded, _ := NewCache(dir, project, config.Config{IgnoreRules: []string{"b"}}, nil, zap.NewNop())
+	if reloaded.ShouldRunVerdict("k2", "y", testTTL) {
+		t.Error("the cache never warmed again after a config change")
 	}
 }
 

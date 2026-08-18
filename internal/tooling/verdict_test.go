@@ -1,11 +1,13 @@
 package tooling
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/project"
 )
 
 // The defect this whole mechanism exists for: tsc's answer depends on
@@ -82,25 +84,73 @@ func TestVerdictIdentityIgnoresAbsolutePaths(t *testing.T) {
 	}
 }
 
-// Coverage is what gates the write, so its rules carry the correctness weight.
-func TestCoverageFor(t *testing.T) {
-	unit := config.ToolOperation{Scope: config.ToolScopePerProject}
-	withFiles := func(op config.ToolOperation, args []string, files ...string) Task {
-		op.Args = args
-		return Task{OpConfig: op, Files: files}
+// Coverage gates the write, so its rules carry the correctness weight — and the
+// denominator must come from the unit, never from the selection. Driving this
+// through the planner rather than calling coverageFor directly is deliberate: a
+// hand-fed denominator is exactly what hid the tautology this replaced.
+func TestCoverageIsPartialForANarrowedRun(t *testing.T) {
+	p := &Planner{
+		rootPath: "/repo",
+		cwdPath:  "/repo",
+		tools: config.MapOfTools{
+			"eslint": {Operations: map[config.OperationType]config.ToolOperation{
+				config.OpLint: {
+					App: "eslint", Args: []string{"{files}"},
+					Scope: config.ToolScopePerProject, Globs: []string{"**/*.ts"},
+				},
+			}},
+		},
+		cachedFiles:      []string{"/repo/pkg/a.ts", "/repo/pkg/b.ts", "/repo/pkg/package.json"},
+		cachedProjects:   []project.ProjectLocation{{Type: "npm-package", Path: "/repo/pkg"}},
+		cacheInitialized: true,
 	}
 
-	// argv does not depend on the selection, so the command is the one a full run
-	// would have issued.
-	if got := coverageFor(withFiles(unit, []string{"run"}), Selection{Mode: SelectionPaths}, []string{"a", "b"}); got != CoverageComplete {
-		t.Errorf("arity none = %q, want complete", got)
+	// One file named out of two the unit contains.
+	narrowed, _ := p.collectTasks(context.Background(), config.OpLint,
+		Selection{Mode: SelectionPaths, Paths: []string{"/repo/pkg/a.ts"}})
+	if len(narrowed) != 1 {
+		t.Fatalf("expected one task, got %d", len(narrowed))
 	}
-	// A narrowed file list covers less than the unit.
-	if got := coverageFor(withFiles(unit, []string{"{files}"}, "a"), Selection{Mode: SelectionPaths}, []string{"a", "b"}); got != CoveragePartial {
-		t.Errorf("narrowed file list = %q, want partial", got)
+	if narrowed[0].Coverage != CoveragePartial {
+		t.Errorf("coverage = %q, want partial: the run saw a.ts but the unit holds b.ts too",
+			narrowed[0].Coverage)
 	}
-	// The whole repository was asked for, so whatever matched is the whole unit.
-	if got := coverageFor(withFiles(unit, []string{"{files}"}, "a"), Selection{Mode: SelectionAll}, []string{"a"}); got != CoverageComplete {
-		t.Errorf("full selection = %q, want complete", got)
+
+	// The whole repository: the same unit is now fully covered.
+	full, _ := p.collectTasks(context.Background(), config.OpLint, Selection{Mode: SelectionAll})
+	if len(full) != 1 {
+		t.Fatalf("expected one task, got %d", len(full))
+	}
+	if full[0].Coverage != CoverageComplete {
+		t.Errorf("coverage = %q, want complete", full[0].Coverage)
+	}
+}
+
+// An operation that puts no path in argv issues the same command either way, so
+// a narrowed selection still covers its unit.
+func TestCoverageIsCompleteWhenArgvIgnoresTheSelection(t *testing.T) {
+	p := &Planner{
+		rootPath: "/repo",
+		cwdPath:  "/repo",
+		tools: config.MapOfTools{
+			"tsc": {Operations: map[config.OperationType]config.ToolOperation{
+				config.OpLint: {
+					App: "tsc", Args: []string{"--noEmit"},
+					Scope: config.ToolScopePerProject, Globs: []string{"**/*.ts"},
+				},
+			}},
+		},
+		cachedFiles:      []string{"/repo/pkg/a.ts", "/repo/pkg/b.ts"},
+		cachedProjects:   []project.ProjectLocation{{Type: "npm-package", Path: "/repo/pkg"}},
+		cacheInitialized: true,
+	}
+
+	tasks, _ := p.collectTasks(context.Background(), config.OpLint,
+		Selection{Mode: SelectionPaths, Paths: []string{"/repo/pkg/a.ts"}})
+	if len(tasks) != 1 {
+		t.Fatalf("expected one task, got %d", len(tasks))
+	}
+	if tasks[0].Coverage != CoverageComplete {
+		t.Errorf("coverage = %q, want complete", tasks[0].Coverage)
 	}
 }

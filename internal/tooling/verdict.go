@@ -188,27 +188,44 @@ func (p *Planner) unitGuards(task Task, unitDir string) []string {
 // planner can answer this: the executor sees one task and cannot tell a narrowed
 // run from a full one, and a run that guessed would record a verdict it did not
 // earn.
-func coverageFor(task Task, sel Selection, unitMatched []string) Coverage {
+//
+// The denominator is derived here, from UnitMembers, and is never passed in. An
+// earlier version took it as a parameter and every caller passed the task's own
+// file list, making the test `len(files) >= len(matched)` a tautology: partial
+// was unreachable, so a one-file run stamped a whole-unit pass and the next full
+// run hit that verdict and skipped — the exact defect this cache exists to
+// remove, rebuilt inside it.
+func (p *Planner) coverageFor(task Task) Coverage {
 	switch config.EffectiveArity(task.OpConfig) {
 	case config.ArityNone, config.ArityDir:
 		// argv does not depend on the selection, so the command is byte-identical
 		// to the one a full run would issue.
 		return CoverageComplete
 	case config.ArityMany, config.ArityOne:
-		if sel.Mode == SelectionAll {
-			return CoverageComplete
+		// What a full run would have handed this unit, computed from members
+		// rather than from the selection.
+		full := p.filterFilesByIgnore(task.ToolName,
+			p.excludeFilesByGlobs(
+				p.filterFilesByGlobs(task.UnitMembers, task.OpConfig.Globs),
+				task.OpConfig.ExcludeGlobs))
+
+		got := make(map[string]struct{}, len(task.Files))
+		for _, f := range task.Files {
+			got[f] = struct{}{}
 		}
-		if len(task.Files) >= len(unitMatched) {
-			return CoverageComplete
+		for _, f := range full {
+			if _, ok := got[f]; !ok {
+				return CoveragePartial
+			}
 		}
-		return CoveragePartial
+		return CoverageComplete
 	}
 	return CoveragePartial
 }
 
 // attachUnit records what a task's verdict is about, so the executor can cache
 // it without having to work out any of this for itself.
-func (p *Planner) attachUnit(task *Task, sel Selection, unitDir string, matched []string) {
+func (p *Planner) attachUnit(task *Task, unitDir string) {
 	// A file-granularity operation has no unit beyond the files it was given:
 	// each file's verdict stands alone, which is what the per-file cache already
 	// records.
@@ -224,7 +241,7 @@ func (p *Planner) attachUnit(task *Task, sel Selection, unitDir string, matched 
 	task.UnitDir = filepath.ToSlash(rel)
 	task.UnitMembers = p.unitMembers(unitDir)
 	task.UnitGuards = p.unitGuards(*task, unitDir)
-	task.Coverage = coverageFor(*task, sel, matched)
+	task.Coverage = p.coverageFor(*task)
 }
 
 // verdictTTL is how long a stored pass is trusted. Beyond it the operation runs
@@ -264,9 +281,12 @@ func (e *Executor) recordVerdict(task Task) {
 		InputHash: inputs,
 		Members:   len(task.UnitMembers),
 	})
-	// A fix that rewrote files makes any lint verdict for the same tool unsound,
-	// mirroring what AfterFix already does per file.
+	// A fix that rewrote files makes the matching lint verdict unsound. Only that
+	// sibling: dropping every verdict for the tool would delete the one just
+	// written, and no fix operation could ever hit the cache again.
 	if task.Operation == config.OpFix {
-		e.cache.InvalidateVerdicts(task.ToolName)
+		sibling := task
+		sibling.Operation = config.OpLint
+		e.cache.DeleteVerdict(verdictIdentity(sibling, sibling.UnitDir))
 	}
 }

@@ -68,7 +68,12 @@ type Cache struct {
 	misses          atomic.Int64 // Cache misses counter
 	logger          *zap.Logger
 	mu              sync.RWMutex // Protects data map from concurrent access
-	saveMu          sync.Mutex   // Protects Save() from concurrent calls
+	// Tombstones for this process's deletions. Without them mergeFromDisk, which
+	// can only add, re-adds everything Prune or a delete removed — so pruning was
+	// a no-op and an invalidated verdict came back on the next save.
+	deletedEntries  map[string]struct{}
+	deletedVerdicts map[string]struct{}
+	saveMu          sync.Mutex // Protects Save() from concurrent calls
 
 	// Async save support
 	dirty        atomic.Bool
@@ -279,6 +284,10 @@ func (c *Cache) Prune() {
 		absPath := filepath.Join(c.projectPath, relPath)
 		if _, err := os.Stat(absPath); os.IsNotExist(err) {
 			delete(c.data.Entries, relPath)
+			if c.deletedEntries == nil {
+				c.deletedEntries = make(map[string]struct{})
+			}
+			c.deletedEntries[relPath] = struct{}{}
 			removed++
 		}
 	}
@@ -655,13 +664,19 @@ func (c *Cache) mergeFromDisk() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// A different key means the on-disk cache belongs to another config. Refuse
-	// to write rather than mixing two configs' results into one file.
+	// A different key means the file belongs to another config. Load already
+	// discarded it in memory, so this process owns the file now: skip the merge
+	// and let our data replace it. Refusing instead would wedge every later save,
+	// because nothing ever rewrites the on-disk key — one version bump or config
+	// edit and the cache never warms again.
 	if disk.InvalidationKey != "" && disk.InvalidationKey != c.invalidationKey {
-		return errStaleCacheOnDisk
+		return nil
 	}
 
 	for path, diskEntry := range disk.Entries {
+		if _, gone := c.deletedEntries[path]; gone {
+			continue
+		}
 		ours, ok := c.data.Entries[path]
 		if !ok {
 			c.data.Entries[path] = diskEntry
@@ -684,6 +699,9 @@ func (c *Cache) mergeFromDisk() error {
 	}
 	now := time.Now()
 	for key, diskEntry := range disk.Verdicts {
+		if _, gone := c.deletedVerdicts[key]; gone {
+			continue
+		}
 		// Clamp a future timestamp: a backwards clock jump would otherwise let a
 		// stale entry win every comparison and never expire.
 		if diskEntry.ValidatedAt.After(now) {
@@ -697,10 +715,6 @@ func (c *Cache) mergeFromDisk() error {
 
 	return nil
 }
-
-// errStaleCacheOnDisk reports that the on-disk cache was written for a different
-// config, so this process must not overwrite it.
-var errStaleCacheOnDisk = errors.New("cache on disk belongs to a different config; not overwriting")
 
 func unionStrings(a, b []string) []string {
 	if len(b) == 0 {
