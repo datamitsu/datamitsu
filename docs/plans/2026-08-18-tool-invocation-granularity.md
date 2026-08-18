@@ -1106,7 +1106,8 @@ it; an older stable core refuses the config with a clear version error. That is
 the whole mechanism, and it already worked.
 
 The probe is therefore removed: `facts().capabilities`, `facts().argPlaceholders`
-and the `internal/configcontract` package are gone. `facts().version` stays as
+and the leaf package that held the placeholder vocabulary are gone, with the
+vocabulary returning to the validator that is now its only reader. `facts().version` stays as
 diagnostics. No capability branches appear in the wrapper — §11.2's R2/R4 collapse
 into "release the core stable, then bump the wrapper's floor and migrate".
 
@@ -1129,7 +1130,7 @@ A user on any wrapper sees: a warning line per `batch:` key, and nothing else. A
 Guarantee: additive-only. Every field is new; no existing field changes meaning; no placeholder is added.
 
 Implemented on `feat/tool-invocation-granularity-r1`, then partly reverted: the
-capability probe and its `internal/configcontract` leaf package were removed per
+capability probe and the leaf package it needed were removed per
 §11.1, leaving the `batch` deprecation warning, `facts().version`, and the type
 declarations.
 
