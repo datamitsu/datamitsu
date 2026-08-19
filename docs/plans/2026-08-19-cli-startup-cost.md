@@ -197,22 +197,58 @@ a rune boundary for wide-rune strings. Spot-checked against v0.0.27 directly:
 This task changes no semantics — it removes 4 of the 5 calls. The riskier pure-Go
 replacement is deliberately deferred to Task 6.
 
-- [ ] add a process-scoped memo in `internal/facts` keyed by the working directory the lookup
+- [x] add a process-scoped memo in `internal/facts` keyed by the working directory the lookup
       started from, guarded by `sync.RWMutex` (or `sync.Map`), caching both the resolved root
       and the error
-- [ ] make the memo explicitly resettable from tests (an unexported reset helper) so cases
+- [x] make the memo explicitly resettable from tests (an unexported reset helper) so cases
       that `t.Chdir`/`os.Chdir` are not poisoned by a previous case
-- [ ] confirm the memo is safe under `errgroup` concurrency — `engine.New` calls can overlap
-- [ ] document in the function comment that datamitsu is a short-lived process and the cwd
+- [x] confirm the memo is safe under `errgroup` concurrency — `engine.New` calls can overlap
+- [x] document in the function comment that datamitsu is a short-lived process and the cwd
       does not change mid-run, which is what makes the memo sound; call out the LSP
       (`cmd/lsp.go`) as the one long-lived case and verify it does not depend on re-resolution
-- [ ] write a test asserting two calls from the same cwd spawn git exactly once (inject or
+- [x] write a test asserting two calls from the same cwd spawn git exactly once (inject or
       count via a test seam, e.g. a package-level hook or a PATH shim in `t.TempDir`)
-- [ ] write a test asserting two calls from different cwds resolve independently
-- [ ] write a test asserting a cached error is returned identically on the second call
-- [ ] write a concurrency test (`-race`) hammering the memo from 16 goroutines
-- [ ] record the measured drop in `BenchmarkLoadConfig` in this file (expected ~85 ms)
-- [ ] run `go test ./... -race` and `go test ./test/cli/ -count=2` — must pass before Task 4
+- [x] write a test asserting two calls from different cwds resolve independently
+- [x] write a test asserting a cached error is returned identically on the second call
+- [x] write a concurrency test (`-race`) hammering the memo from 16 goroutines
+- [x] record the measured drop in `BenchmarkLoadConfig` in this file (expected ~85 ms)
+- [x] run `go test ./... -race` and `go test ./test/cli/ -count=2` — must pass before Task 4
+
+**Task 3 results.** Apple M1 Max, `-benchtime 30x -count 4`, same fixture as Task 1 (min of
+4 runs).
+
+| Benchmark             | Before (Task 1) | After     | Drop     |
+| --------------------- | --------------- | --------- | -------- |
+| `BenchmarkLoadConfig` | 73,473,125      | 3,353,589 | −70.1 ms |
+| `BenchmarkGetGitRoot` | 16,568,433      | 561,165   | −16.0 ms |
+| `BenchmarkEngineNew`  | 17,170,300      | 679,025   | −16.5 ms |
+
+(ns/op. Allocs: `LoadConfig` 16,156 → 15,492; `GetGitRoot` 169 → 9; `EngineNew` 1,172 → 1,012.)
+
+Read the last two rows as amortized, not per-call: with the memo, one benchmark iteration in
+30 pays the real ~17 ms resolution and the other 29 are map lookups, so `BenchmarkGetGitRoot`
+now measures the memoized path plus 1/30 of a resolution. That is the honest shape of the
+change — the cost did not get cheaper, it happens once per process instead of five times.
+Task 6 makes the resolution itself cheap and is what will move these numbers on the first
+call. `BenchmarkLoadConfig`'s 70 ms drop is the real per-invocation win.
+
+Design notes: `GetGitRoot` now resolves `os.Getwd()` and memoizes on it; the climb moved to
+an unexported `resolveGitRoot(ctx, cwd)`, reachable through the `gitRootLookup` package
+variable so tests can count resolutions. Each cache entry carries a `sync.Once`, so
+overlapping `engine.New` calls collapse onto one resolution instead of racing to duplicate it.
+Errors are cached — a directory does not become a repository mid-run — **except** when
+`ctx.Err() != nil`, since a cancelled context says nothing about the layout; that entry is
+dropped so a later call retries.
+
+`cmd/lsp.go` (the one long-lived command) resolves its root through `traverser.GetGitRoot`,
+not this function, and loads config exactly once per session, so it does not depend on
+re-resolution.
+
+⚠️ Pre-existing, unrelated: `go test ./internal/cache/ -race` panics in
+`(*Cache).debounceSave` (nil `zap.Logger` fired from a timer goroutine after the test's logger
+is torn down, `internal/cache/cache.go:651`). Verified identical on the unmodified tree via
+`git stash`. Not caused by this task; `go test ./...` without `-race` is green, as are
+`./internal/facts/` and `./cmd/` with `-race`.
 
 ### Task 4: Collect facts once per process and share across engines
 
