@@ -43,6 +43,7 @@ const sidebars: SidebarsConfig = {
         "guides/oci-bundles",
         {
           items: [
+            "guides/architecture/startup",
             "guides/architecture/planner",
             "guides/architecture/execution",
             "guides/architecture/discovery",

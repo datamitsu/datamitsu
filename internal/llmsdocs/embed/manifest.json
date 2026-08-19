@@ -4,8 +4,8 @@
   "license": "MIT",
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
-  "pageCount": 50,
-  "pageSetHash": "17d6668ca2ca7548d8fc23bd3a74ba10",
+  "pageCount": 51,
+  "pageSetHash": "3fc34cc0c698e01514dcdb693a1fbd45",
   "pages": [
     {
       "slug": "about",
@@ -226,8 +226,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/index.md",
       "title": "Internal Architecture",
       "description": "Overview of datamitsu's internal execution model - file discovery, task planning, parallel execution, and caching",
-      "bytes": 3230,
-      "contentHash": "97f037ab916eeb5d9295f23660e977ed"
+      "bytes": 3795,
+      "contentHash": "592c6e2008b3929f023b5f411eeab1a2"
     },
     {
       "slug": "guides/architecture/parsers",
@@ -246,6 +246,15 @@
       "description": "How datamitsu groups files into prioritized task batches with overlap detection and CWD-subtree restriction",
       "bytes": 10238,
       "contentHash": "915f54caf6bd3321b41fb6beeb04a11a"
+    },
+    {
+      "slug": "guides/architecture/startup",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/guides/architecture/startup.md",
+      "title": "Startup and Config Load",
+      "description": "What every datamitsu invocation pays before the first tool runs - the config-load cost model, the git-root memo, and how to measure it",
+      "bytes": 5747,
+      "contentHash": "66cd098e6c3227eff265d3528a3461d8"
     },
     {
       "slug": "guides/binary-management",
@@ -406,8 +415,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 54724,
-      "contentHash": "c2aff5320d2e7a6bdfe373935fe204d6"
+      "bytes": 55122,
+      "contentHash": "18fbfa9a770139bf4bdd594edc7395e4"
     },
     {
       "slug": "reference/comparison",

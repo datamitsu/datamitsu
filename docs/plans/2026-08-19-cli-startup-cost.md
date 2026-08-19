@@ -568,13 +568,73 @@ so these paths are unreachable outside tests. Every `test/cli` golden is byte-id
 
 ### Task 8: [Final] Update documentation
 
-- [ ] record the final measurement table in this plan file, replacing the estimates
-- [ ] if `scripts/bench-overhead.sh` gained flags or output, update its usage comment
-- [ ] add a short note to `website/docs/guides/architecture/execution.md` (or the nearest
+- [x] record the final measurement table in this plan file, replacing the estimates
+- [x] if `scripts/bench-overhead.sh` gained flags or output, update its usage comment —
+      **no change needed**, the script is byte-identical to `main` (`git diff main...HEAD --
+scripts/` is empty): it gained no flags and its output shape is unchanged, only the
+      numbers it prints moved
+- [x] add a short note to `website/docs/guides/architecture/execution.md` (or the nearest
       architecture page) describing the config-load cost model and the memo, so the next
       person does not re-introduce a per-engine `GetGitRoot`
-- [ ] run `task gen:llms-docs` and commit `internal/llmsdocs/embed` if any website page
+- [x] run `task gen:llms-docs` and commit `internal/llmsdocs/embed` if any website page
       changed — the `llms-docs-drift` CI job re-harvests on every PR and fails on any diff
+
+**Task 8 results.**
+
+**Final measurements**, replacing the Overview's estimates. Apple M1 Max, wall-clock **min**
+over n=40, machine under load (every figure is an upper bound):
+
+| Path                                         | Baseline (`20c75ba`) | Final   | Change |
+| -------------------------------------------- | -------------------- | ------- | ------ |
+| `datamitsu version`                          | 39.7–51.9 ms         | 13.2 ms | −3.5×  |
+| `datamitsu exec actionlint -- --version`     | 199.6–259.9 ms       | 93.4 ms | −2.1×  |
+| `actionlint --version` direct from the store | 6.1–7.3 ms           | —       | —      |
+| empty Go binary (`func main(){}`)            | 6.0–7.0 ms           | —       | —      |
+
+`scripts/bench-overhead.sh`, n=50, attributable launch overhead
+(`[2].startup − [1].startup`): min 265.6 ms → **76.8 ms**, median 335.0 ms → **80.2 ms**.
+The `bare bash -c` baseline moved 9.0 ms → 7.2 ms min, so the comparison is like for like.
+
+Per-bucket, against the Overview's three buckets:
+
+| Bucket                      | Estimated | Removed      | Where      |
+| --------------------------- | --------- | ------------ | ---------- |
+| `go-runewidth` package init | ~33 ms    | −28.0 ms     | Task 2     |
+| forked `git rev-parse`      | ~105 ms   | 10 → 0 forks | Tasks 3, 6 |
+| wasted esbuild `StripTypes` | ~25 ms    | −34.2 ms     | Task 5     |
+
+Benchmarks across the whole plan (ns/op, `-benchtime 30x -count 4`, min of 4; the
+`GetGitRoot`/`EngineNew` rows are amortized over 30 iterations per the Task 3 note):
+
+| Benchmark             | Task 1 baseline | Final     | Change |
+| --------------------- | --------------- | --------- | ------ |
+| `BenchmarkLoadConfig` | 73,473,125      | 2,236,744 | −32.8× |
+| `BenchmarkGetGitRoot` | 16,568,433      | 5,558     | −2981× |
+| `BenchmarkEngineNew`  | 17,170,300      | 138,161   | −124×  |
+
+Uncached git-root resolution, measured directly (`-benchtime 200x -count 2`, min):
+`resolveGitRootViaGit` 16,892,365 ns/op → `gitRootPure` 42,194 ns/op, a factor of 400.
+
+The `datamitsu version` target (≤15 ms) is met. The `exec` target (≤70 ms) is not, at
+93.4 ms; Task 7 attributes the gap to goja compiling and executing this repository's
+1.95 MB `datamitsu.config.oci-ghcr.js` before-config (+58 ms, measured in isolation with
+**zero** `StripTypes` calls), which is cross-process config-evaluation caching — explicitly
+out of scope here and named as the natural next plan.
+
+**Documentation.** The config-load cost model went to a new architecture page,
+`website/docs/guides/architecture/startup.md`, rather than into `execution.md`: that page
+documents the parallel executor, and startup precedes the whole discovery → planning →
+execution → cache pipeline. It covers the three cost rules (per-engine work is multiplied by
+the source count, forking dominates, evaluation scales with source size), the git-root memo
+with an explicit warning against re-introducing a per-engine resolution, the pure-Go walk and
+when it declines to answer, the extension-only type-stripping rule and why content sniffing
+is not used, and how to measure with `DATAMITSU_STARTUP_TIMINGS=1` and
+`scripts/bench-overhead.sh`. Linked from `architecture/index.md` (component table, stage
+diagram, reading order) and `website/sidebars.ts`.
+
+`DATAMITSU_STARTUP_TIMINGS` and `DATAMITSU_FORCE_GIT_SUBPROCESS` are now rows in the
+environment-variable table at `website/docs/reference/cli-commands.md` — the ➕ item deferred
+from Task 6. `internal/llmsdocs/embed` regenerated with `task gen:llms-docs`.
 
 ## Technical Details
 
