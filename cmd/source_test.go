@@ -504,3 +504,108 @@ func TestConfigChainArgsAreAbsoluteForReplay(t *testing.T) {
 		}
 	}
 }
+
+// TestFlaggedFarmIsNotServedToAPlainInvocation is the inverse of
+// TestSourceManifestDecidesRequiresDiscoveredConfig and the direction that fails
+// silently. A `--config other.ts` bake writes the *root's* farm — the farm's
+// identity is the git root, not the chain — and records a watch set that
+// includes that flag's own file, so every stat tuple in it compares equal
+// afterwards. Without a config-chain comparison the next plain `source bash` in
+// the repository activates the other chain's toolchain and reports success.
+func TestFlaggedFarmIsNotServedToAPlainInvocation(t *testing.T) {
+	t.Cleanup(func() {
+		ConfigPaths = nil
+		setConfigChainFiles(nil)
+	})
+
+	cache := t.TempDir()
+	t.Setenv("DATAMITSU_CACHE_DIR", cache)
+
+	root := t.TempDir()
+	farm, err := env.GetProjectBinPath(root)
+	if err != nil {
+		t.Fatalf("GetProjectBinPath() error = %v", err)
+	}
+	manifestPath, err := env.GetProjectManifestPath(root)
+	if err != nil {
+		t.Fatalf("GetProjectManifestPath() error = %v", err)
+	}
+	if err := os.MkdirAll(farm, 0o700); err != nil {
+		t.Fatalf("create farm directory: %v", err)
+	}
+
+	// Bake as the flagged invocation would: the other chain's file is in the
+	// watch set, so nothing about the tree makes this manifest stale.
+	other := filepath.Join(t.TempDir(), "other.config.ts")
+	if err := os.WriteFile(other, []byte("//\n"), 0o600); err != nil {
+		t.Fatalf("write other config: %v", err)
+	}
+	ConfigPaths = []string{other}
+	plan := sourcefarm.Plan{Root: root, FarmDir: farm, Entries: []sourcefarm.Entry{{Name: "from-other-chain"}}}
+	m := sourcefarm.BuildManifest(plan, sourcefarm.OriginGitRoot, sourcefarm.WatchPaths(root, []string{other}))
+	m.ConfigArgs = configChainArgs()
+	if len(m.ConfigArgs) == 0 {
+		t.Fatal("configChainArgs() recorded nothing for a --config invocation")
+	}
+	data, err := sourcefarm.Encode(m)
+	if err != nil {
+		t.Fatalf("Encode() error = %v", err)
+	}
+	if err := os.WriteFile(manifestPath, data, 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	// Still fresh by the watch set alone — this is what makes the bug silent.
+	if !sourcefarm.Validate(m) {
+		t.Fatal("the flagged manifest is stale by its watch set; the test no longer covers the silent case")
+	}
+
+	ConfigPaths = nil
+	if _, fresh := freshSourcePlanFor(root); fresh {
+		t.Error("a plain invocation was served a farm baked from an explicit --config")
+	}
+	if manifestStatus(manifestPath).Fresh {
+		t.Error("`source status` reported a farm from another config chain as fresh")
+	}
+	if sourceFarmIsFresh(root) {
+		t.Error("`source refresh` would have answered \"already up to date\" for another chain's farm")
+	}
+
+	// The same invocation that baked it is still served from it: this must not
+	// force a rebake on every wrapper-driven activation.
+	ConfigPaths = []string{other}
+	if _, fresh := freshSourcePlanFor(root); !fresh {
+		t.Error("the invocation that baked the farm was not served from it")
+	}
+}
+
+// TestConfigChainFilesAreAbsolute pins the watch set against a relative
+// --config. The shim stats the recorded paths from whatever directory a tool was
+// invoked in, so a relative entry records "exists" at bake time and "missing" on
+// every later stat: the farm reads as permanently stale and every tool
+// invocation pays a full rebake.
+func TestConfigChainFilesAreAbsolute(t *testing.T) {
+	t.Cleanup(func() { setConfigChainFiles(nil) })
+
+	dir := t.TempDir()
+	t.Chdir(dir)
+
+	setConfigChainFiles([]configSource{
+		{name: "default", isDefault: true},
+		{name: "shared.js", path: "shared.js"},
+		{name: "auto", path: filepath.Join(dir, "datamitsu.config.ts")},
+	})
+
+	got := ConfigChainFiles()
+	if len(got) != 2 {
+		t.Fatalf("ConfigChainFiles() = %v, want two entries", got)
+	}
+	for _, p := range got {
+		if !filepath.IsAbs(p) {
+			t.Errorf("ConfigChainFiles() recorded a relative path %q", p)
+		}
+	}
+	if filepath.Base(got[0]) != "shared.js" {
+		t.Errorf("ConfigChainFiles()[0] = %q, want an absolute path to shared.js", got[0])
+	}
+}

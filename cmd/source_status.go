@@ -188,7 +188,12 @@ func manifestStatus(path string) SourceManifestStatus {
 		return s
 	}
 
-	if sourcefarm.Validate(m) {
+	// A manifest baked from a different config chain than this invocation
+	// selected is stale *for this invocation* even when every watched file is
+	// unchanged: it describes a farm built from apps this chain never declared.
+	// Reporting it fresh would make status disagree with the entries printed
+	// beside it, which come from the chain resolved now.
+	if manifestChainMatches(m) && sourcefarm.Validate(m) {
 		s.Fresh = true
 		s.State = ManifestFresh
 		return s

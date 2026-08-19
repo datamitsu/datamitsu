@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"testing"
 	"time"
 
@@ -536,5 +537,97 @@ func TestComputeStalenessKey_Pure(t *testing.T) {
 		if c.key == base {
 			t.Errorf("%s did not change the key", c.name)
 		}
+	}
+}
+
+// TestWatchPathsFollowsAGitdirPointer covers the linked-worktree shape. There
+// <root>/.git is a file naming the directory that holds that worktree's own
+// HEAD, so watching <root>/.git/HEAD would record a path that never exists and
+// match forever — losing the tripwire in exactly the setup where several
+// branches are checked out at once.
+func TestWatchPathsFollowsAGitdirPointer(t *testing.T) {
+	t.Run("directory", func(t *testing.T) {
+		root := t.TempDir()
+		if err := os.MkdirAll(filepath.Join(root, ".git"), 0o755); err != nil {
+			t.Fatalf("create .git: %v", err)
+		}
+		want := filepath.Join(root, ".git", "HEAD")
+		if !slices.Contains(WatchPaths(root, nil), want) {
+			t.Errorf("WatchPaths() does not watch %q", want)
+		}
+	})
+
+	t.Run("pointer file", func(t *testing.T) {
+		base := t.TempDir()
+		root := filepath.Join(base, "wt")
+		gitDir := filepath.Join(base, "main", ".git", "worktrees", "wt")
+		if err := os.MkdirAll(root, 0o755); err != nil {
+			t.Fatalf("create worktree root: %v", err)
+		}
+		if err := os.MkdirAll(gitDir, 0o755); err != nil {
+			t.Fatalf("create worktree gitdir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(root, ".git"), []byte("gitdir: "+gitDir+"\n"), 0o600); err != nil {
+			t.Fatalf("write gitdir pointer: %v", err)
+		}
+		want := filepath.Join(gitDir, "HEAD")
+		got := WatchPaths(root, nil)
+		if !slices.Contains(got, want) {
+			t.Errorf("WatchPaths() = %v, want it to watch %q", got, want)
+		}
+	})
+
+	t.Run("relative pointer", func(t *testing.T) {
+		root := t.TempDir()
+		if err := os.MkdirAll(filepath.Join(root, "nested", "gitdir"), 0o755); err != nil {
+			t.Fatalf("create gitdir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(root, ".git"), []byte("gitdir: nested/gitdir"), 0o600); err != nil {
+			t.Fatalf("write gitdir pointer: %v", err)
+		}
+		want := filepath.Join(root, "nested", "gitdir", "HEAD")
+		if !slices.Contains(WatchPaths(root, nil), want) {
+			t.Errorf("WatchPaths() does not watch %q", want)
+		}
+	})
+
+	t.Run("unreadable pointer falls back", func(t *testing.T) {
+		root := t.TempDir()
+		if err := os.WriteFile(filepath.Join(root, ".git"), []byte("not a pointer"), 0o600); err != nil {
+			t.Fatalf("write .git: %v", err)
+		}
+		want := filepath.Join(root, ".git", "HEAD")
+		if !slices.Contains(WatchPaths(root, nil), want) {
+			t.Errorf("WatchPaths() does not fall back to %q", want)
+		}
+	})
+}
+
+// TestManifestMatchesRejectsADifferentConfigChain pins the other field the
+// staleness key deliberately excludes. Two concurrent bakes for the same root
+// from different config chains compute the same key, so accepting a peer's
+// manifest on the key alone would make the loser activate the winner's
+// toolchain while reporting that it had baked its own.
+func TestManifestMatchesRejectsADifferentConfigChain(t *testing.T) {
+	dir := t.TempDir()
+	manifestPath := filepath.Join(dir, "manifest.json")
+
+	existing := Manifest{StalenessKey: "k1", ConfigArgs: []string{"--config", "/abs/a.ts"}}
+	data, err := Encode(existing)
+	if err != nil {
+		t.Fatalf("Encode() error = %v", err)
+	}
+	if err := os.WriteFile(manifestPath, data, 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	if !manifestMatches(manifestPath, existing) {
+		t.Fatal("manifestMatches = false for an identical bake, want true")
+	}
+	if manifestMatches(manifestPath, Manifest{StalenessKey: "k1"}) {
+		t.Error("a plain bake accepted a peer's flagged manifest")
+	}
+	if manifestMatches(manifestPath, Manifest{StalenessKey: "k1", ConfigArgs: []string{"--config", "/abs/b.ts"}}) {
+		t.Error("a bake accepted a peer's manifest from a different config chain")
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -37,6 +38,9 @@ type harness struct {
 	// test asserting the anti-loop rule reads: the args of a re-entrant spawn
 	// look exactly like a correct one.
 	spawnExes []string
+	// spawnReqs records the full child description, which is what the tests of
+	// the child's PATH and working directory read.
+	spawnReqs []SpawnRequest
 
 	// spawnFunc runs on every Spawn call; the default succeeds and does nothing.
 	spawnFunc func(args []string) error
@@ -95,11 +99,12 @@ func newHarness(t *testing.T) *harness {
 			return nil
 		},
 		EvalSymlinks: filepath.EvalSymlinks,
-		Spawn: func(exe string, args []string) error {
-			h.spawns = append(h.spawns, args)
-			h.spawnExes = append(h.spawnExes, exe)
+		Spawn: func(req SpawnRequest) error {
+			h.spawns = append(h.spawns, req.Args)
+			h.spawnExes = append(h.spawnExes, req.Exe)
+			h.spawnReqs = append(h.spawnReqs, req)
 			if h.spawnFunc != nil {
-				return h.spawnFunc(args)
+				return h.spawnFunc(req.Args)
 			}
 			return nil
 		},
@@ -883,9 +888,9 @@ func TestDispatchSpawnsTheRunningExecutable(t *testing.T) {
 	wantExe := filepath.Join(t.TempDir(), "the-real-datamitsu")
 	h.d.Executable = func() (string, error) { return wantExe, nil }
 	var gotExe string
-	h.d.Spawn = func(exe string, args []string) error {
-		gotExe = exe
-		h.spawns = append(h.spawns, args)
+	h.d.Spawn = func(req SpawnRequest) error {
+		gotExe = req.Exe
+		h.spawns = append(h.spawns, req.Args)
 		return nil
 	}
 	h.invokeThroughFarm("tofu")
@@ -1070,7 +1075,7 @@ func BenchmarkDispatch(b *testing.B) {
 		Validate:     func(sourcefarm.Manifest) bool { return true },
 		Stat:         os.Stat,
 		Exec:         func(string, []string, []string) error { return nil },
-		Spawn:        func(string, []string) error { return errors.New("unexpected spawn") },
+		Spawn:        func(SpawnRequest) error { return errors.New("unexpected spawn") },
 		Stderr:       io.Discard,
 	}
 
@@ -1120,5 +1125,98 @@ func TestDispatchIgnoresAnUnrelatedFarmVariable(t *testing.T) {
 
 	if code, handled := h.d.Dispatch(); handled || code != 0 {
 		t.Fatalf("Dispatch() = (%d, %v), want (0, false)", code, handled)
+	}
+}
+
+// TestSpawnRunsOutsideTheFarm pins the two properties of the rebake/install
+// child that the parent's own environment would get wrong.
+//
+// PATH first. datamitsu runs some of its own subprocesses by bare name, and a
+// system-mode runtime declaring `command: "uv"` is the documented shape for
+// that, so a farm in front of PATH lets an app declared under one of those names
+// interpose on them. For an app of that runtime's own kind the interposition
+// closes a loop — install spawn, farm entry, shim, install spawn — and the deny
+// list cannot close it because the hazardous names come from the user's config.
+//
+// The working directory second: the child re-evaluates the project's config, and
+// facts().isMonorepo is derived from the cwd, so inheriting the tool's directory
+// would make the baked farm depend on which subdirectory triggered the rebake
+// while the staleness key reported it fresh either way.
+func TestSpawnRunsOutsideTheFarm(t *testing.T) {
+	h := newHarness(t)
+	tool := h.tool("tofu")
+	h.writeManifest(sourcefarm.Manifest{
+		Entries: []sourcefarm.Entry{{Name: "tofu", Command: tool, Installed: true}},
+	})
+	h.d.Validate = func(sourcefarm.Manifest) bool { return false }
+
+	// A second farm of the same cache, to prove the filter is not keyed to the
+	// one this invocation came through.
+	otherFarm := filepath.Join(filepath.Dir(filepath.Dir(h.farmDir)), "def", "bin")
+	if err := os.MkdirAll(otherFarm, 0o700); err != nil {
+		t.Fatalf("create second farm: %v", err)
+	}
+	h.d.Environ = func() []string {
+		return []string{
+			"PATH=" + strings.Join([]string{h.farmDir, "/usr/bin", otherFarm, "/bin"}, string(os.PathListSeparator)),
+			"HOME=/home/u",
+		}
+	}
+	h.d.Args = append([]string{filepath.Join(h.farmDir, "tofu")}, "plan")
+	if err := os.WriteFile(filepath.Join(h.farmDir, "tofu"), []byte("shim"), 0o755); err != nil {
+		t.Fatalf("create farm entry: %v", err)
+	}
+
+	if code, handled := h.d.Dispatch(); !handled || code != 0 {
+		t.Fatalf("Dispatch() = (%d, %v), want (0, true)", code, handled)
+	}
+	if len(h.spawnReqs) != 1 {
+		t.Fatalf("spawnReqs = %v, want exactly one", h.spawnReqs)
+	}
+	req := h.spawnReqs[0]
+
+	var gotPath string
+	for _, kv := range req.Environ {
+		if key, value, ok := strings.Cut(kv, "="); ok && key == "PATH" {
+			gotPath = value
+		}
+	}
+	wantPath := strings.Join([]string{"/usr/bin", "/bin"}, string(os.PathListSeparator))
+	if gotPath != wantPath {
+		t.Errorf("child PATH = %q, want %q", gotPath, wantPath)
+	}
+	if !slices.Contains(req.Environ, "HOME=/home/u") {
+		t.Errorf("child environment lost the rest of the parent's: %v", req.Environ)
+	}
+	if req.Dir != h.root {
+		t.Errorf("child dir = %q, want the manifest root %q", req.Dir, h.root)
+	}
+}
+
+// TestSpawnInheritsTheCwdWhenTheRootIsGone keeps a deleted or renamed root from
+// turning a rebake into a chdir failure the user reads as "install failed".
+func TestSpawnInheritsTheCwdWhenTheRootIsGone(t *testing.T) {
+	h := newHarness(t)
+	tool := h.tool("tofu")
+	h.writeManifest(sourcefarm.Manifest{
+		Entries: []sourcefarm.Entry{{Name: "tofu", Command: tool, Installed: true}},
+	})
+	h.d.Validate = func(sourcefarm.Manifest) bool { return false }
+	h.d.Stat = func(path string) (os.FileInfo, error) {
+		if path == h.root {
+			return nil, os.ErrNotExist
+		}
+		return os.Stat(path)
+	}
+	h.invokeThroughFarm("tofu")
+
+	if code, handled := h.d.Dispatch(); !handled || code != 0 {
+		t.Fatalf("Dispatch() = (%d, %v), want (0, true)", code, handled)
+	}
+	if len(h.spawnReqs) != 1 {
+		t.Fatalf("spawnReqs = %v, want exactly one", h.spawnReqs)
+	}
+	if h.spawnReqs[0].Dir != "" {
+		t.Errorf("child dir = %q, want \"\" so the child inherits the cwd", h.spawnReqs[0].Dir)
 	}
 }

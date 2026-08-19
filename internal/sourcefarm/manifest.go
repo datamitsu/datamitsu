@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/hashutil"
@@ -148,11 +149,17 @@ type Manifest struct {
 	// system binary — the silent wrong-binary failure the farm exists to prevent,
 	// arriving through the rebake door.
 	//
-	// Deliberately *not* part of the staleness key. The key answers "does this
-	// farm still match the tree", and a flagged invocation never consults an
-	// existing manifest anyway (cmd.sourceManifestDecides refuses), so folding
-	// the flags in would only force a rebake on plain invocations that are
-	// correctly served by the farm the user activated.
+	// Deliberately *not* part of the staleness key, because folding it in would
+	// not answer the question it looks like it answers: Validate recomputes the
+	// key from the manifest's own recorded fields, so a recorded ConfigArgs would
+	// only ever be compared against itself. Whether a farm was baked from the
+	// chain the *caller* selected is a comparison against the caller's flags, and
+	// it lives where those flags are known — cmd.manifestChainMatches, which
+	// every reader of an existing manifest (activation, status, refresh) goes
+	// through. It matters in both directions: a flagged invocation must not be
+	// answered by a plain farm, and a plain invocation must not be answered by a
+	// flagged one, which is the silent half — a flagged bake overwrites the
+	// root's farm and leaves a watch set that compares equal forever.
 	ConfigArgs []string `json:"configArgs,omitempty"`
 
 	// Entries, Excluded and Shadowed mirror the Plan the farm was baked from.
@@ -237,7 +244,7 @@ func WatchPaths(root string, configFiles []string) []string {
 	paths = append(paths, configFiles...)
 	if root != "" {
 		paths = append(paths,
-			filepath.Join(root, ".git", "HEAD"),
+			gitHeadPath(root),
 			filepath.Join(root, "pnpm-lock.yaml"),
 		)
 		for _, name := range AutoConfigNames {
@@ -245,6 +252,46 @@ func WatchPaths(root string, configFiles []string) []string {
 		}
 	}
 	return paths
+}
+
+// gitHeadPath returns the HEAD file a checkout in root rewrites.
+//
+// In an ordinary repository that is <root>/.git/HEAD. In a linked `git worktree`
+// — and in any repository whose .git is a gitdir pointer file, which is also how
+// a submodule checkout looks — <root>/.git is a file, so that path never exists:
+// the watch entry would record Exists=false at bake time and match forever,
+// silently losing the tripwire in exactly the setup where several branches are
+// checked out at once. The pointer names the directory holding that worktree's
+// own HEAD, which is the file a checkout there rewrites.
+//
+// Every failure to follow the pointer falls back to the ordinary path. A wrong
+// path costs the redundancy this entry provides — the watch set already carries
+// every auto-config candidate with its existence flag, which is what catches a
+// branch that adds or deletes a config — and never a false freshness claim.
+func gitHeadPath(root string) string {
+	dotGit := filepath.Join(root, ".git")
+	fallback := filepath.Join(dotGit, "HEAD")
+
+	info, err := lstat(dotGit)
+	if err != nil || info.IsDir() {
+		return fallback
+	}
+	data, err := os.ReadFile(dotGit)
+	if err != nil {
+		return fallback
+	}
+	target, ok := strings.CutPrefix(strings.TrimSpace(string(data)), "gitdir:")
+	if !ok {
+		return fallback
+	}
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return fallback
+	}
+	if !filepath.IsAbs(target) {
+		target = filepath.Join(root, target)
+	}
+	return filepath.Join(filepath.Clean(target), "HEAD")
 }
 
 // AutoConfigNames are the file names config discovery stats at the git root, in

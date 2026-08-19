@@ -202,13 +202,13 @@ func TestManifestMatchesRejectsMovedShimTarget(t *testing.T) {
 		t.Fatalf("Materialize() error = %v", err)
 	}
 
-	if !manifestMatches(fx.manifestPath(), "k1") {
+	if !manifestMatches(fx.manifestPath(), manifestFor(plan, "k1")) {
 		t.Fatal("manifestMatches = false for the manifest just written, want true")
 	}
 	if err := os.Remove(fx.shimTarget); err != nil {
 		t.Fatalf("remove shim target: %v", err)
 	}
-	if manifestMatches(fx.manifestPath(), "k1") {
+	if manifestMatches(fx.manifestPath(), manifestFor(plan, "k1")) {
 		t.Error("manifestMatches = true after the datamitsu executable moved away, want false")
 	}
 }

@@ -61,11 +61,22 @@ func ConfigChainFiles() []string {
 	return append([]string(nil), configChainFiles...)
 }
 
+// setConfigChainFiles records the chain's on-disk files, every path made
+// absolute.
+//
+// The paths that arrived from --config / --before-config are verbatim flag
+// values and may be relative. Source mode stats them from whatever directory the
+// shim happened to be invoked in, which is rarely the one that baked the farm: a
+// relative entry in the watch set records "exists" at bake time and "missing" on
+// every later stat, so the farm reads as permanently stale and every tool
+// invocation pays a full rebake. (A same-named file in the invoking directory is
+// the rarer inverse — it reads as fresh against a file that is not the config.)
+// configChainArgs makes the same paths absolute for the same reason.
 func setConfigChainFiles(sources []configSource) {
 	paths := make([]string, 0, len(sources))
 	for _, s := range sources {
 		if s.path != "" {
-			paths = append(paths, s.path)
+			paths = append(paths, absOrSelf(s.path))
 		}
 	}
 	configChainFilesMu.Lock()

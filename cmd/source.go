@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -161,7 +162,7 @@ func freshSourcePlanFor(root string) (sourcefarm.Plan, bool) {
 		return sourcefarm.Plan{}, false
 	}
 	m, err := sourcefarm.Load(manifestPath)
-	if err != nil || !sourcefarm.Validate(m) {
+	if err != nil || !manifestChainMatches(m) || !sourcefarm.Validate(m) {
 		return sourcefarm.Plan{}, false
 	}
 	// A manifest whose farm has been deleted out from under it is fresh by the
@@ -194,6 +195,26 @@ func freshSourcePlanFor(root string) (sourcefarm.Plan, bool) {
 // declare. Serving it back as fresh would activate the wrong toolchain silently.
 func sourceManifestDecides() bool {
 	return len(ConfigPaths) == 0 && len(BeforeConfigPaths) == 0 && !NoAutoConfig
+}
+
+// manifestChainMatches reports whether m was baked from the same config chain
+// this invocation selected.
+//
+// sourceManifestDecides covers one direction — a flagged invocation must not be
+// answered by a manifest baked without those flags — and this covers the
+// inverse, which is the one that fails silently. A flagged bake writes the farm
+// at the *root's* path (the farm's identity is the git root, not the chain) and
+// records a watch set that includes the flag's own config file, so every stat
+// tuple in it compares equal afterwards. Without this check a later plain
+// `source bash` in the same repository is served that other chain's farm and
+// reports success, plain `source refresh` answers "already up to date", and the
+// shim keeps replaying the recorded flags forever.
+//
+// Comparing the rendered argv fragment rather than the flag slices is what makes
+// the two sides commensurable: both go through configChainArgs, so the recorded
+// absolute paths are compared against absolute paths.
+func manifestChainMatches(m sourcefarm.Manifest) bool {
+	return slices.Equal(m.ConfigArgs, configChainArgs())
 }
 
 // configChainArgs reconstructs the global flags that selected this invocation's

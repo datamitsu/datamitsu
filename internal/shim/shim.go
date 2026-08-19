@@ -103,7 +103,7 @@ type Dispatcher struct {
 	// Spawn runs datamitsu as a child process for the two cases that need the
 	// full resolution path: re-baking a stale farm and installing a tool that
 	// has not been downloaded yet.
-	Spawn func(exe string, args []string) error
+	Spawn func(SpawnRequest) error
 
 	Stderr io.Writer
 
@@ -382,7 +382,13 @@ func (d *Dispatcher) lookPathFrom(name string, skipFarm bool) string {
 // `tofu init` running `datamitsu init`. Trusting the variable is not a widening:
 // it only ever adds "yes, through a farm", which is the loud-failure branch.
 func (d *Dispatcher) underFarm(path string) bool {
-	dir := filepath.Dir(filepath.Clean(path))
+	return d.isFarmDir(filepath.Dir(filepath.Clean(path)))
+}
+
+// isFarmDir is underFarm asked about the directory itself, which is what PATH
+// entries are.
+func (d *Dispatcher) isFarmDir(dir string) bool {
+	dir = filepath.Clean(dir)
 	if filepath.Base(dir) != farmDirName {
 		return false
 	}
@@ -492,7 +498,7 @@ func (d *Dispatcher) rebake(manifestPath, name string, manifest sourcefarm.Manif
 		d.warn("datamitsu: " + err.Error())
 		return manifest, entry, true
 	}
-	if err := d.Spawn(exe, spawnArgs(manifest, "source", "refresh")); err != nil {
+	if err := d.Spawn(d.spawnRequest(exe, manifest, "source", "refresh")); err != nil {
 		d.warn("datamitsu: could not refresh the source-mode farm, using the previous one: " + err.Error())
 		return manifest, entry, true
 	}
@@ -538,7 +544,7 @@ func (d *Dispatcher) ensureInstalled(manifestPath, name string, manifest sourcef
 	if err != nil {
 		return entry, err
 	}
-	if err := d.Spawn(exe, spawnArgs(manifest, "install", name)); err != nil {
+	if err := d.Spawn(d.spawnRequest(exe, manifest, "install", name)); err != nil {
 		return entry, fmt.Errorf("datamitsu: %s: install failed: %w", name, err)
 	}
 
@@ -550,7 +556,7 @@ func (d *Dispatcher) ensureInstalled(manifestPath, name string, manifest sourcef
 
 	// No recorded location, or the install put it somewhere else: ask the full
 	// resolver where it went and re-read the answer.
-	if err := d.Spawn(exe, spawnArgs(manifest, "source", "refresh", "--force")); err != nil {
+	if err := d.Spawn(d.spawnRequest(exe, manifest, "source", "refresh", "--force")); err != nil {
 		return entry, fmt.Errorf("datamitsu: %s: could not refresh the farm after install: %w", name, err)
 	}
 	reloaded, err := d.Load(manifestPath)
@@ -675,6 +681,93 @@ func installedPath(entry sourcefarm.Entry) string {
 	return entry.Command
 }
 
+// SpawnRequest describes the datamitsu child process a rebake or an install runs.
+type SpawnRequest struct {
+	// Exe is the resolved real datamitsu executable — never a PATH lookup; see
+	// datamitsuExe.
+	Exe string
+
+	// Args is the child's argv[1:], the recorded config-chain flags included.
+	Args []string
+
+	// Dir is the working directory to run the child in, or "" to inherit.
+	Dir string
+
+	// Environ is the child's environment, or nil to inherit.
+	Environ []string
+}
+
+// spawnRequest builds the child description for one datamitsu subcommand.
+//
+// Two properties of the child are set here rather than inherited, and both are
+// correctness rather than hygiene:
+//
+//   - Every farm directory is removed from PATH. datamitsu runs some of its own
+//     subprocesses by bare name, and a system-mode runtime declaring
+//     `command: "uv"` is the documented shape for that, so with the farm in front
+//     of PATH an app declared under one of those names interposes on them. For an
+//     app of that runtime's own kind the interposition closes a loop: the install
+//     spawn resolves the runtime through the farm, re-enters this shim under that
+//     name, and spawns another install, without bound. The deny list cannot close
+//     it, because which names are hazardous comes from the user's config.
+//   - The working directory is the manifest's root. The child re-evaluates the
+//     project's config, and facts() exposes cwd-derived inputs config JS may
+//     branch on (facts().isMonorepo is true in a subdirectory and false at the
+//     root). Inheriting the tool's cwd would make the baked farm depend on which
+//     directory happened to trigger the rebake, while the staleness key — which
+//     records no cwd — reported it fresh either way.
+func (d *Dispatcher) spawnRequest(exe string, m sourcefarm.Manifest, sub ...string) SpawnRequest {
+	return SpawnRequest{
+		Exe:     exe,
+		Args:    spawnArgs(m, sub...),
+		Dir:     d.spawnDir(m),
+		Environ: d.environOutsideFarms(),
+	}
+}
+
+// spawnDir returns the manifest root when it is still a directory, and ""
+// otherwise. A root that has been deleted or renamed must not turn a rebake into
+// a chdir failure the user reads as "install failed": the child inherits the
+// tool's cwd instead and reports whatever the real problem is.
+func (d *Dispatcher) spawnDir(m sourcefarm.Manifest) string {
+	if m.Root == "" {
+		return ""
+	}
+	info, err := d.Stat(m.Root)
+	if err != nil || !info.IsDir() {
+		return ""
+	}
+	return m.Root
+}
+
+// environOutsideFarms returns this process's environment with every farm
+// directory dropped from PATH. A PATH that names no directory at all is returned
+// as an empty PATH rather than removed, because an absent PATH would make the
+// child search a system default list this process never had.
+func (d *Dispatcher) environOutsideFarms() []string {
+	if d.Environ == nil {
+		return nil
+	}
+	environ := d.Environ()
+	out := make([]string, 0, len(environ))
+	for _, kv := range environ {
+		key, value, ok := strings.Cut(kv, "=")
+		if !ok || key != "PATH" {
+			out = append(out, kv)
+			continue
+		}
+		kept := make([]string, 0, len(filepath.SplitList(value)))
+		for _, dir := range filepath.SplitList(value) {
+			if dir != "" && d.isFarmDir(dir) {
+				continue
+			}
+			kept = append(kept, dir)
+		}
+		out = append(out, "PATH="+strings.Join(kept, string(os.PathListSeparator)))
+	}
+	return out
+}
+
 // spawnArgs prefixes a datamitsu subcommand with the config-chain flags the farm
 // was baked from.
 //
@@ -758,17 +851,20 @@ func mergeEnv(base []string, overlay map[string]string) []string {
 // to the tool too — in `cat data.json | jq .` the pipe is the tool's input, and a
 // child that read even one byte of it on a first-use install would silently eat
 // data the tool was about to receive. Neither an install nor a bake prompts.
-func spawnDatamitsu(exe string, args []string) error {
+func spawnDatamitsu(req SpawnRequest) error {
 	// The child inherits this process's lifetime rather than a context: there is
 	// no deadline to impose on an install the user is waiting for, and cancelling
 	// a bake midway is materialization's own problem, not the shim's.
-	// #nosec G204 -- exe comes from os.Executable and args are fixed literals.
-	cmd := exec.CommandContext(context.Background(), exe, args...)
+	// #nosec G204 -- Exe comes from os.Executable and Args are fixed literals
+	// plus the manifest's recorded config-chain flags.
+	cmd := exec.CommandContext(context.Background(), req.Exe, req.Args...)
+	cmd.Dir = req.Dir
+	cmd.Env = req.Environ
 	cmd.Stdin = nil
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("run datamitsu %s: %w", strings.Join(args, " "), err)
+		return fmt.Errorf("run datamitsu %s: %w", strings.Join(req.Args, " "), err)
 	}
 	return nil
 }

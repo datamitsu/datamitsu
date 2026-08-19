@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -140,7 +141,7 @@ func materialize(plan Plan, m Manifest, opts Options) error {
 		lockPath = filepath.Join(parent, env.ProjectLockFileName)
 	}
 
-	release, peerWon, err := acquireBakeLock(lockPath, manifestPath, m.StalenessKey, opts)
+	release, peerWon, err := acquireBakeLock(lockPath, manifestPath, m, opts)
 	if err != nil {
 		return err
 	}
@@ -403,7 +404,7 @@ func syncDir(dir string) error {
 // than queueing: ten shells activating at once should cost one bake, not ten.
 // Only when the peer has not produced a usable manifest before the timeout does
 // this call block on the lock and bake itself.
-func acquireBakeLock(lockPath, manifestPath, stalenessKey string, opts Options) (release func(), peerWon bool, err error) {
+func acquireBakeLock(lockPath, manifestPath string, want Manifest, opts Options) (release func(), peerWon bool, err error) {
 	// os.OpenFile sets close-on-exec, so a lock held here is not inherited by
 	// the tools datamitsu execs. The lock file is created once and never
 	// unlinked: unlinking it would let a peer lock a fresh inode for the same
@@ -438,7 +439,7 @@ func acquireBakeLock(lockPath, manifestPath, stalenessKey string, opts Options) 
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		time.Sleep(poll)
-		if manifestMatches(manifestPath, stalenessKey) {
+		if manifestMatches(manifestPath, want) {
 			_ = file.Close()
 			return nil, true, nil
 		}
@@ -462,18 +463,31 @@ func acquireBakeLock(lockPath, manifestPath, stalenessKey string, opts Options) 
 // manifestMatches reports whether the manifest on disk is already the one this
 // bake would have written.
 //
-// The shim target is checked alongside the key because it is deliberately not
-// part of it (see Manifest.ShimTarget). Without that check, a bake triggered by
-// a moved datamitsu binary would find the old manifest's key equal to its own,
-// declare the peer the winner, and return success over a farm of dangling
-// symlinks — the exact state this bake was run to repair.
-func manifestMatches(manifestPath, stalenessKey string) bool {
-	if stalenessKey == "" {
+// The staleness key alone does not answer it. Two fields are deliberately
+// outside the key and each one, left unchecked, turns a peer's bake into a
+// silently wrong success:
+//
+//   - ShimTarget (see Manifest.ShimTarget). A bake triggered by a moved
+//     datamitsu binary would find the old manifest's key equal to its own,
+//     declare the peer the winner, and return success over a farm of dangling
+//     symlinks — the exact state this bake was run to repair.
+//   - ConfigArgs (see Manifest.ConfigArgs). Two concurrent bakes for the same
+//     root from different config chains compute the same key, so the loser
+//     would activate the winner's toolchain while reporting that it had baked
+//     its own.
+func manifestMatches(manifestPath string, want Manifest) bool {
+	if want.StalenessKey == "" {
 		return false
 	}
 	existing, err := Load(manifestPath)
 	if err != nil {
 		return false
 	}
-	return existing.StalenessKey == stalenessKey && shimTargetUsable(existing.ShimTarget)
+	if existing.StalenessKey != want.StalenessKey {
+		return false
+	}
+	if !slices.Equal(existing.ConfigArgs, want.ConfigArgs) {
+		return false
+	}
+	return shimTargetUsable(existing.ShimTarget)
 }
