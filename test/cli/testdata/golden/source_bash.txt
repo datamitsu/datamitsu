@@ -1,0 +1,10 @@
+export DATAMITSU_ROOT=$'<TMP>'
+export DATAMITSU_FARM=$'<CACHE>/cache/projects/<ROOT>/bin'
+__datamitsu_path=":$PATH:"
+__datamitsu_path="${__datamitsu_path//:"$DATAMITSU_FARM":/:}"
+__datamitsu_path="${__datamitsu_path#:}"
+__datamitsu_path="${__datamitsu_path%:}"
+PATH="$DATAMITSU_FARM${__datamitsu_path:+:$__datamitsu_path}"
+export PATH
+unset __datamitsu_path
+hash -r

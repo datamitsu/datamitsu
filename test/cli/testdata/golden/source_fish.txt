@@ -1,0 +1,3 @@
+set -gx DATAMITSU_ROOT '<TMP>'
+set -gx DATAMITSU_FARM '<CACHE>/cache/projects/<ROOT>/bin'
+fish_add_path --global --move --path '<CACHE>/cache/projects/<ROOT>/bin'

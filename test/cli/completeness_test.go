@@ -151,6 +151,11 @@ const (
 	detCache                  // isolated cache only; cache path masked
 	detMinimal                // git project + no-op minimal config
 	detConfig                 // git project + the case's inline config content
+	// detSource is detConfig's auto-discovery counterpart for `source`: the
+	// config must be discovered at the git root (source refuses an implicit
+	// fallback), PATH/SHELL are pinned because shadow detection reads them, and
+	// the per-root farm fingerprint is masked on top of the path masks.
+	detSource
 )
 
 // detCases are the dynamic-output invocations whose stability is most at risk
@@ -177,6 +182,10 @@ var detCases = []struct {
 	{name: "lint-explain-json", kind: detConfig, config: explainToolsConfigJS, args: []string{"lint", "--explain=json"}},
 	{name: "exec-list", kind: detConfig, config: appsListConfigJS, args: []string{"exec"}},
 	{name: "devtools-apps-list", kind: detConfig, config: appsListConfigJS, args: []string{"devtools", "apps", "list"}},
+	{name: "source-bash", kind: detSource, config: sourceAutoConfigJS, args: []string{"source", "bash"}},
+	{name: "source-fish", kind: detSource, config: sourceAutoConfigJS, args: []string{"source", "fish"}},
+	{name: "source-status", kind: detSource, config: sourceAutoConfigJS, args: []string{"source", "status"}},
+	{name: "source-status-json", kind: detSource, config: sourceAutoConfigJS, args: []string{"source", "status", "--json"}},
 }
 
 // TestGoldenSuiteDeterministic runs each dynamic-output invocation twice, in
@@ -224,6 +233,12 @@ func produceDet(t *testing.T, kind detKind, config string, args ...string) strin
 		full := append([]string{"--no-auto-config", "--config", cfg}, args...)
 		res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, CacheDir: cacheBase}, full...)
 		return norm.Apply(res.Stdout) + "\n===STDERR===\n" + norm.Apply(res.Stderr)
+	case detSource:
+		p := clitest.NewProject(t)
+		p.WriteFile("datamitsu.config.js", config)
+		mask := sourceNormalizer(p, cacheBase)
+		res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, CacheDir: cacheBase, Env: sourceEnv()}, args...)
+		return mask(res.Stdout) + "\n===STDERR===\n" + mask(res.Stderr)
 	default:
 		t.Fatalf("produceDet: unknown detKind %d", kind)
 		return ""

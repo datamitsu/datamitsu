@@ -1,10 +1,11 @@
-package cli
+package cli_test
 
 import (
 	"encoding/json"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -20,12 +21,213 @@ func sourceEnv() []string {
 	return []string{"PATH=/nonexistent-for-tests", "SHELL=/bin/sh"}
 }
 
-// writeAutoConfig writes an auto-discoverable config declaring no apps at all,
+// sourceAutoConfigJS is an auto-discoverable config declaring no apps at all,
 // which is what makes activation output depend on nothing but the farm path.
+const sourceAutoConfigJS = "globalThis.getConfig = () => ({ apps: {}, tools: {}, projectTypes: {} });\n" +
+	"globalThis.getMinVersion = () => \"0.0.0\";\n"
+
+// writeAutoConfig writes sourceAutoConfigJS into the project so it is picked up
+// by auto-discovery, the way a real project's config is.
 func writeAutoConfig(p *clitest.Project) {
-	p.WriteFile("datamitsu.config.js",
-		"globalThis.getConfig = () => ({ apps: {}, tools: {}, projectTypes: {} });\n"+
+	p.WriteFile("datamitsu.config.js", sourceAutoConfigJS)
+}
+
+// farmHashRE matches the per-root directory name in a farm path. The farm lives
+// under {cache}/projects/{XXH3-128(gitRoot)}/, so the segment is a fingerprint
+// of a temp directory that differs on every run — masking the enclosing cache
+// path is not enough to make this output comparable.
+var farmHashRE = regexp.MustCompile(`projects[/\\][0-9a-f]{32}`)
+
+// maskFarmHash replaces the per-root farm fingerprint with a placeholder.
+func maskFarmHash(s string) string {
+	return farmHashRE.ReplaceAllString(s, "projects/<ROOT>")
+}
+
+// sourceNormalizer returns the normalizer every source golden shares: the
+// project dir, the isolated cache dir, and the per-root farm fingerprint that
+// derives from the former.
+func sourceNormalizer(p *clitest.Project, cacheBase string) func(string) string {
+	norm := clitest.NewNormalizer().MaskPath(p.Dir, "<TMP>").MaskPath(cacheBase, "<CACHE>")
+	return func(s string) string { return maskFarmHash(norm.Apply(s)) }
+}
+
+// farmDirFromActivation extracts the farm directory from emitted bash
+// activation code, so a test can inspect the directory the shell was just
+// pointed at rather than guessing its path.
+func farmDirFromActivation(t *testing.T, stdout string) string {
+	t.Helper()
+	for line := range strings.SplitSeq(stdout, "\n") {
+		rest, ok := strings.CutPrefix(line, "export DATAMITSU_FARM=")
+		if !ok {
+			continue
+		}
+		// The renderer emits ANSI-C quoting ($'…'); these fixture paths hold no
+		// escape sequences, so stripping the wrapper is exact.
+		rest = strings.TrimPrefix(rest, "$")
+		return strings.Trim(rest, "'")
+	}
+	t.Fatalf("activation code declares no farm directory:\n%s", stdout)
+	return ""
+}
+
+// TestSourceActivationGolden freezes the exact activation block for all three
+// shells. This is the strongest form of "stdout carries shell code and nothing
+// else": any extra byte — a progress line, a log line, a stray warning — fails
+// the comparison rather than merely being tolerated by a substring assertion.
+func TestSourceActivationGolden(t *testing.T) {
+	for _, shell := range []string{"bash", "zsh", "fish"} {
+		t.Run(shell, func(t *testing.T) {
+			p := clitest.NewProject(t)
+			writeAutoConfig(p)
+			cacheBase := t.TempDir()
+			mask := sourceNormalizer(p, cacheBase)
+
+			res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, CacheDir: cacheBase, Env: sourceEnv()},
+				"source", shell)
+			if res.ExitCode != 0 {
+				t.Fatalf("`source %s` exit = %d, want 0\nstderr:\n%s", shell, res.ExitCode, res.Stderr)
+			}
+			if res.Stderr != "" {
+				t.Errorf("`source %s` wrote to stderr on the clean path:\n%s", shell, res.Stderr)
+			}
+			clitest.AssertGolden(t, "source_"+shell, mask(res.Stdout))
+		})
+	}
+}
+
+// TestSourceHelpGolden freezes the help text of the group command and every
+// leaf, which is the documented surface users read before piping the output
+// into eval.
+func TestSourceHelpGolden(t *testing.T) {
+	cases := []struct {
+		golden string
+		args   []string
+	}{
+		{"source_help", []string{"source", "--help"}},
+		{"source_bash_help", []string{"source", "bash", "--help"}},
+		{"source_zsh_help", []string{"source", "zsh", "--help"}},
+		{"source_fish_help", []string{"source", "fish", "--help"}},
+		{"source_status_help", []string{"source", "status", "--help"}},
+		{"source_refresh_help", []string{"source", "refresh", "--help"}},
+	}
+	norm := clitest.NewNormalizer()
+	for _, tc := range cases {
+		t.Run(tc.golden, func(t *testing.T) {
+			res := clitest.Run(t, clitest.RunOptions{Env: sourceEnv()}, tc.args...)
+			if res.ExitCode != 0 {
+				t.Fatalf("`%s` exit = %d, want 0\nstderr:\n%s", strings.Join(tc.args, " "), res.ExitCode, res.Stderr)
+			}
+			clitest.AssertGolden(t, tc.golden, norm.Apply(res.Stdout))
+		})
+	}
+}
+
+// TestSourceConfigCannotInjectIntoStdout is the config-injection guard. A repo's
+// datamitsu.config.js runs arbitrary JavaScript, its console.log writes straight
+// to stdout, and stdout here is piped into `eval` — so a config that prints
+// would be executing its own text in the user's shell. The activation is
+// compared against a control project whose config is identical minus the
+// printing, so a single extra byte fails.
+func TestSourceConfigCannotInjectIntoStdout(t *testing.T) {
+	noisy := clitest.NewProject(t)
+	noisy.WriteFile("datamitsu.config.js",
+		"console.log(\"echo pwned\");\n"+
+			"globalThis.getConfig = () => { console.log(\"rm -rf /\"); "+
+			"return { apps: {}, tools: {}, projectTypes: {} }; };\n"+
 			"globalThis.getMinVersion = () => \"0.0.0\";\n")
+	noisyCache := t.TempDir()
+	noisyRes := clitest.Run(t, clitest.RunOptions{Dir: noisy.Dir, CacheDir: noisyCache, Env: sourceEnv()},
+		"source", "bash")
+	if noisyRes.ExitCode != 0 {
+		t.Fatalf("`source bash` exit = %d, want 0\nstderr:\n%s", noisyRes.ExitCode, noisyRes.Stderr)
+	}
+
+	control := clitest.NewProject(t)
+	writeAutoConfig(control)
+	controlCache := t.TempDir()
+	controlRes := clitest.Run(t, clitest.RunOptions{Dir: control.Dir, CacheDir: controlCache, Env: sourceEnv()},
+		"source", "bash")
+
+	got := sourceNormalizer(noisy, noisyCache)(noisyRes.Stdout)
+	want := sourceNormalizer(control, controlCache)(controlRes.Stdout)
+	if got != want {
+		t.Errorf("config JS changed the activation on stdout:\n--- want ---\n%s\n--- got ---\n%s", want, got)
+	}
+	for _, injected := range []string{"pwned", "rm -rf"} {
+		if strings.Contains(noisyRes.Stdout, injected) {
+			t.Errorf("config console.log reached stdout (%q):\n%s", injected, noisyRes.Stdout)
+		}
+	}
+}
+
+// TestSourceShellAppNotInFarm asserts a shell app never becomes a farm entry.
+// A shell app resolves its command name through the inherited PATH, so putting
+// one in a directory that is itself first on PATH makes it re-execute itself
+// until the process table gives out.
+func TestSourceShellAppNotInFarm(t *testing.T) {
+	p := clitest.NewProject(t)
+	p.WriteFile("datamitsu.config.js",
+		"globalThis.getConfig = () => ({ apps: {\n"+
+			"  echo: { shell: { name: \"echo\" } },\n"+
+			"}, tools: {}, projectTypes: {} });\n"+
+			"globalThis.getMinVersion = () => \"0.0.0\";\n")
+
+	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, CacheDir: t.TempDir(), Env: sourceEnv()},
+		"source", "bash")
+	if res.ExitCode != 0 {
+		t.Fatalf("`source bash` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
+	}
+
+	farm := farmDirFromActivation(t, res.Stdout)
+	if _, err := os.Lstat(filepath.Join(farm, "echo")); !os.IsNotExist(err) {
+		entries, _ := os.ReadDir(farm)
+		names := make([]string, 0, len(entries))
+		for _, e := range entries {
+			names = append(names, e.Name())
+		}
+		t.Errorf("the farm at %s contains a shell app (lstat err = %v); entries: %v", farm, err, names)
+	}
+}
+
+// TestSourceDenyListedAppExcluded asserts a declared app whose name is on the
+// deny-list is refused with the deny-list reason and never materialized — even
+// though it is a perfectly valid binary app that would otherwise be an entry.
+func TestSourceDenyListedAppExcluded(t *testing.T) {
+	p := clitest.NewProject(t)
+	p.WriteFile("datamitsu.config.js",
+		"globalThis.getConfig = () => ({ apps: {\n"+
+			"  sudo: { binary: { binaries: { linux: { amd64: { glibc: { url: \"https://example.test/x.tar.gz\", hash: \""+
+			strings.Repeat("11", 32)+"\", contentType: \"tar.gz\" } } },\n"+
+			"    darwin: { arm64: { unknown: { url: \"https://example.test/y.tar.gz\", hash: \""+
+			strings.Repeat("22", 32)+"\", contentType: \"tar.gz\" } } } } } },\n"+
+			"}, tools: {}, projectTypes: {} });\n"+
+			"globalThis.getMinVersion = () => \"0.0.0\";\n")
+	opts := clitest.RunOptions{Dir: p.Dir, CacheDir: t.TempDir(), Env: sourceEnv()}
+
+	res := clitest.Run(t, opts, "source", "status", "--json")
+	if res.ExitCode != 0 {
+		t.Fatalf("`source status --json` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
+	}
+
+	var doc struct {
+		Entries  []struct{} `json:"entries"`
+		Excluded []struct {
+			Name   string `json:"name"`
+			Reason string `json:"reason"`
+		} `json:"excluded"`
+	}
+	if err := json.Unmarshal([]byte(res.Stdout), &doc); err != nil {
+		t.Fatalf("`source status --json` does not parse: %v\n%s", err, res.Stdout)
+	}
+	if len(doc.Entries) != 0 {
+		t.Errorf("a deny-listed name became a farm entry: %+v", doc.Entries)
+	}
+	if len(doc.Excluded) != 1 || doc.Excluded[0].Name != "sudo" {
+		t.Fatalf("exclusions = %+v, want exactly sudo", doc.Excluded)
+	}
+	if !strings.Contains(doc.Excluded[0].Reason, "deny-list") {
+		t.Errorf("exclusion reason = %q, want it to name the deny-list", doc.Excluded[0].Reason)
+	}
 }
 
 // TestSourceBashActivation locks the shape of the bash activation: stdout is
@@ -347,5 +549,12 @@ func TestSourceUnknownShell(t *testing.T) {
 	}
 	if strings.Contains(res.Stdout, "PATH=") {
 		t.Errorf("`source powershell` emitted activation code:\n%s", res.Stdout)
+	}
+	// The refusal has to say what would have worked: the user is looking at a
+	// shell that printed nothing, with no other clue about which name to use.
+	for _, shell := range []string{"bash", "zsh", "fish"} {
+		if !strings.Contains(res.Stderr, shell) {
+			t.Errorf("refusal does not name the supported shell %q:\n%s", shell, res.Stderr)
+		}
 	}
 }

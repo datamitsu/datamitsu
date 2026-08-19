@@ -628,35 +628,46 @@ not optional polish.
 
 Both registries are hard build failures if not updated.
 
-- [ ] add `source` to `expectedTopLevelCommands` (`test/cli/root_test.go:15-32`)
-- [ ] register every new leaf in `testedLeafCommands` (`test/cli/completeness_test.go:22`):
+- [x] add `source` to `expectedTopLevelCommands` (`test/cli/root_test.go:15-32`)
+- [x] register every new leaf in `testedLeafCommands` (`test/cli/completeness_test.go:22`):
       `source bash`, `source zsh`, `source fish`, `source status`, `source refresh`
-- [ ] add `test/cli/source_test.go`
-- [ ] regenerate `root_help.txt` and add the per-command help goldens via
-      `go test ./test/cli/ -update`
-- [ ] goldens for bash/zsh/fish using
+- [x] add `test/cli/source_test.go`
+- [x] regenerate `root_help.txt` and add the per-command help goldens via
+      `go test ./test/cli/ -update` — `root_help.txt` already carried `source` from Task 9;
+      added `source_help` plus one golden per leaf
+- [x] goldens for bash/zsh/fish using
       `clitest.NewNormalizer().MaskPath(p.Dir, "<TMP>").MaskPath(cacheBase, "<CACHE>")`
-- [ ] pin `PATH` and `SHELL` explicitly via `RunOptions.Env` in every case —
+- [x] pin `PATH` and `SHELL` explicitly via `RunOptions.Env` in every case —
       `internal/clitest` strips `DATAMITSU_*`/`CI`/`TERM`/`NO_COLOR` but **not** `PATH` or
       `SHELL`, and shadow detection reads `PATH`, so goldens are machine-dependent without
       this. Get it wrong and CI is green locally and red on the runner
-- [ ] add source cases to `detCases` so `TestGoldenSuiteDeterministic` proves byte-stability
-- [ ] write a test asserting stdout contains exactly the expected shell block and nothing else,
+- [x] add source cases to `detCases` so `TestGoldenSuiteDeterministic` proves byte-stability
+- [x] write a test asserting stdout contains exactly the expected shell block and nothing else,
       and stderr is empty for the clean case (mirroring `test/cli/lsp_test.go:23-59`)
-- [ ] write a test with a fixture config whose `getConfig()` calls `console.log`, asserting
+- [x] write a test with a fixture config whose `getConfig()` calls `console.log`, asserting
       stdout has zero extra bytes — this is the config-injection guard
-- [ ] write a test with a fixture config declaring a shell app named `echo`, asserting the farm
+- [x] write a test with a fixture config declaring a shell app named `echo`, asserting the farm
       does not contain `echo`
-- [ ] write a test asserting a fixture config declaring an app named `sudo` produces an
+- [x] write a test asserting a fixture config declaring an app named `sudo` produces an
       exclusion with a deny-list reason
-- [ ] write a test asserting an unknown shell exits non-zero naming the supported shells
-- [ ] write a test asserting `source` outside a git repository exits non-zero, writes nothing
+- [x] write a test asserting an unknown shell exits non-zero naming the supported shells
+- [x] write a test asserting `source` outside a git repository exits non-zero, writes nothing
       to stdout, and names `--config` in the stderr message
-- [ ] write a test asserting `source` in a git repository with no `datamitsu.config.*` does the
+- [x] write a test asserting `source` in a git repository with no `datamitsu.config.*` does the
       same, rather than activating the embedded default config
-- [ ] write a test asserting `--json` parses as JSON and stdout contains no shell code
-- [ ] `go test ./test/cli/ -count=2` passes byte-identically
-- [ ] run `go test ./... -race` — must pass before Task 13
+- [x] write a test asserting `--json` parses as JSON and stdout contains no shell code
+- [x] `go test ./test/cli/ -count=2` passes byte-identically
+- [x] ➕ the per-root farm directory is `{cache}/projects/{XXH3-128(gitRoot)}/`, so masking
+      the cache and project paths is not enough to make source output comparable — the
+      fingerprint of a fresh temp root differs on every run. A `maskFarmHash` normalizer
+      collapses that segment, and a new `detSource` kind carries it into the determinism
+      suite, which also has to write the config where auto-discovery finds it: `source`
+      refuses an implicit fallback, so `detConfig`'s `--no-auto-config --config` shape
+      does not apply
+- [x] ➕ moved `test/cli/source_test.go` from `package cli` to `package cli_test`, matching
+      every other file in the suite bar `lsp_test.go`, so `produceDet` in
+      `completeness_test.go` can share the source fixtures instead of duplicating them
+- [x] run `go test ./... -race` — must pass before Task 13
 
 ### Task 13: Real-shell integration tests
 
