@@ -444,48 +444,57 @@ The shim path must not build the cobra tree or construct the UI. `cmd.Execute()`
 (`cmd/root.go:138-153`) runs `clr.Init()`, `ui.New(term.DetectMode())` and `ui.Activate` before
 cobra; dispatch happens before all of it.
 
-- [ ] in `main.go`, before `cmd.Execute()`, inspect `filepath.Base(os.Args[0])`; when it is not
+- [x] in `main.go`, before `cmd.Execute()`, inspect `filepath.Base(os.Args[0])`; when it is not
       one of datamitsu's own invocation names, take the shim path
-- [ ] **fall back to normal CLI execution** when the name is not declared in the resolvable
+- [x] **fall back to normal CLI execution** when the name is not declared in the resolvable
       manifest and the executable was not invoked through a farm — a user who renames the
       binary must not lose the CLI. Make this rule explicit and test it in both directions
-- [ ] shim path: `getcwd` → cheap walk up for `.git` → open the per-root manifest →
+- [x] shim path: `getcwd` → cheap walk up for `.git` → open the per-root manifest →
       `Validate` → look up the name
-- [ ] fresh manifest and entry installed: `syscall.Exec` the recorded `Command` with `Args`
+- [x] fresh manifest and entry installed: `syscall.Exec` the recorded `Command` with `Args`
       prepended to the user's argv and the recorded `Env` merged into the environment. Pass
       user argv **verbatim** — this is what fixes the `unknown flag: --version` behavior
-- [ ] use `syscall.Exec`, not a child process: it preserves signals, exit codes, stdin/stdout
+- [x] use `syscall.Exec`, not a child process: it preserves signals, exit codes, stdin/stdout
       wiring and the process table, and it is why the shim tax is one process and not two
-- [ ] stale manifest: take the lock, re-bake by spawning the full datamitsu resolution path,
+- [x] stale manifest: take the lock, re-bake by spawning the full datamitsu resolution path,
       then re-read and exec. This is the one visible hiccup per branch switch
-- [ ] entry present but not installed: run the install path, then re-resolve and exec. This is
+- [x] entry present but not installed: run the install path, then re-resolve and exec. This is
       property 3
-- [ ] **`stat` the exec target before `execve` rather than relying on `ENOENT`.** For
+- [x] **`stat` the exec target before `execve` rather than relying on `ENOENT`.** For
       interpreter-based targets (`#!/usr/bin/env node`), `ENOENT` means "script missing" _or_
       "interpreter missing", and the two need different handling. A `stat` costs ~2 µs against
       a ~10 ms process
-- [ ] name not in the manifest: **exit 127** with a message naming the app, the root, and
+- [x] name not in the manifest: **exit 127** with a message naming the app, the root, and
       `datamitsu source status`. Never search the rest of `PATH` (D4)
-- [ ] **no manifest for the cwd's root: exit 127 telling the user to run `datamitsu source`
+- [x] **no manifest for the cwd's root: exit 127 telling the user to run `datamitsu source`
       in that repository.** Do not bake it implicitly. This is the case where an activated
       shell `cd`s into a different, never-activated repository, and baking would mean
       evaluating that repository's JavaScript merely because a tool name was typed —
       direnv's threat model, with no approval gate to answer it. Explicit activation is the
       act of trust
-- [ ] resolve the datamitsu executable to install/rebake from `os.Executable()`, never through
+- [x] resolve the datamitsu executable to install/rebake from `os.Executable()`, never through
       a `PATH` the farm itself controls — otherwise a shimmed name can hijack the spawn
-- [ ] add a benchmark pinning the shim dispatch path's cost so nobody adds work to it
-- [ ] write a test asserting argv is passed verbatim, including a leading `--version` and
+- [x] add a benchmark pinning the shim dispatch path's cost so nobody adds work to it
+      — `BenchmarkDispatch` over a 101-entry manifest measures **214 µs/op** on an
+      Apple M1 Max, ~84% of it in system calls (the manifest read plus four stats)
+- [x] write a test asserting argv is passed verbatim, including a leading `--version` and
       arguments containing spaces, quotes and newlines
-- [ ] write a test asserting the exit code of the target is preserved exactly (0, 1, 42, 127)
-- [ ] write a test asserting stdout and stderr are the target's, unmodified and unbuffered
-- [ ] write a test asserting an unknown name exits 127 with the expected message and does
+- [x] write a test asserting the exit code of the target is preserved exactly (0, 1, 42, 127)
+- [x] write a test asserting stdout and stderr are the target's, unmodified and unbuffered
+- [x] write a test asserting an unknown name exits 127 with the expected message and does
       **not** exec anything from the rest of `PATH`
-- [ ] write a test asserting a renamed datamitsu binary still runs the normal CLI
-- [ ] write a test asserting a stale manifest triggers exactly one rebake and then execs the
+- [x] write a test asserting a renamed datamitsu binary still runs the normal CLI
+- [x] write a test asserting a stale manifest triggers exactly one rebake and then execs the
       new target
-- [ ] write a test asserting a not-installed entry triggers the install path exactly once
-- [ ] run `go test ./... -race` — must pass before Task 9
+- [x] write a test asserting a not-installed entry triggers the install path exactly once
+- [x] ➕ farm detection is a pure path comparison (`{cache}/projects/*/bin/<name>`)
+      rather than a stat of the manifest beside the farm: the cases that most need
+      to fail loudly — no manifest for this tree, or a manifest that will not parse
+      — are exactly the ones a presence check would misread as "not a farm" and
+      quietly turn into a CLI run holding a tool's argv
+- [x] ➕ the exec-path tests run the dispatch in a re-invoked child process, since
+      `syscall.Exec` cannot be observed from the process that performs it
+- [x] run `go test ./... -race` — must pass before Task 9
 
 ### Task 9: The `datamitsu source <shell>` commands
 

@@ -1,0 +1,726 @@
+package shim
+
+import (
+	"bytes"
+	"errors"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/sourcefarm"
+)
+
+type execCall struct {
+	path    string
+	argv    []string
+	environ []string
+}
+
+// harness builds a Dispatcher over a real temp tree — a git root, a farm
+// directory and a manifest beside it — with the process-replacing and
+// process-spawning dependencies stubbed so a test can assert what would have
+// happened.
+type harness struct {
+	t            *testing.T
+	root         string
+	farmDir      string
+	manifestPath string
+	stderr       bytes.Buffer
+
+	execs  []execCall
+	spawns [][]string
+
+	// spawnFunc runs on every Spawn call; the default succeeds and does nothing.
+	spawnFunc func(args []string) error
+
+	d *Dispatcher
+}
+
+func newHarness(t *testing.T) *harness {
+	t.Helper()
+
+	base := t.TempDir()
+	root := filepath.Join(base, "repo")
+	if err := os.MkdirAll(filepath.Join(root, ".git"), 0o755); err != nil {
+		t.Fatalf("create git root: %v", err)
+	}
+	cacheRoot := filepath.Join(base, "cache")
+	project := filepath.Join(cacheRoot, "projects", "abc")
+	farmDir := filepath.Join(project, "bin")
+	if err := os.MkdirAll(farmDir, 0o700); err != nil {
+		t.Fatalf("create farm dir: %v", err)
+	}
+
+	h := &harness{
+		t:            t,
+		root:         root,
+		farmDir:      farmDir,
+		manifestPath: filepath.Join(project, env.ProjectManifestFileName),
+	}
+
+	h.d = &Dispatcher{
+		Getwd:      func() (string, error) { return root, nil },
+		Executable: func() (string, error) { return filepath.Join(base, "datamitsu"), nil },
+		Environ:    func() []string { return []string{"PATH=/usr/bin", "HOME=/home/u"} },
+		ManifestPath: func(gitRoot string) (string, error) {
+			if gitRoot != root {
+				return "", errors.New("unexpected root " + gitRoot)
+			}
+			return h.manifestPath, nil
+		},
+		CacheRoot: func() string { return cacheRoot },
+		Load:      sourcefarm.Load,
+		Validate:  func(sourcefarm.Manifest) bool { return true },
+		Stat:      os.Stat,
+		Exec: func(path string, argv, environ []string) error {
+			h.execs = append(h.execs, execCall{path: path, argv: argv, environ: environ})
+			return nil
+		},
+		Spawn: func(_ string, args []string) error {
+			h.spawns = append(h.spawns, args)
+			if h.spawnFunc != nil {
+				return h.spawnFunc(args)
+			}
+			return nil
+		},
+		Stderr: &h.stderr,
+	}
+	return h
+}
+
+// writeManifest stores a manifest at the harness's manifest path.
+func (h *harness) writeManifest(m sourcefarm.Manifest) {
+	h.t.Helper()
+	m.Root = h.root
+	m.FarmDir = h.farmDir
+	data, err := sourcefarm.Encode(m)
+	if err != nil {
+		h.t.Fatalf("encode manifest: %v", err)
+	}
+	if err := os.WriteFile(h.manifestPath, data, 0o600); err != nil {
+		h.t.Fatalf("write manifest: %v", err)
+	}
+}
+
+// tool creates an executable file standing in for a store binary.
+func (h *harness) tool(name string) string {
+	h.t.Helper()
+	path := filepath.Join(h.t.TempDir(), name)
+	if err := os.WriteFile(path, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		h.t.Fatalf("write tool: %v", err)
+	}
+	return path
+}
+
+// invokeThroughFarm sets argv to a farm symlink invocation.
+func (h *harness) invokeThroughFarm(name string, args ...string) {
+	h.t.Helper()
+	link := filepath.Join(h.farmDir, name)
+	if _, err := os.Lstat(link); err != nil {
+		if err := os.WriteFile(link, []byte("shim"), 0o755); err != nil {
+			h.t.Fatalf("create farm entry: %v", err)
+		}
+	}
+	h.d.Args = append([]string{link}, args...)
+}
+
+func TestDispatchDeclinesOwnName(t *testing.T) {
+	h := newHarness(t)
+	h.d.Args = []string{"/usr/local/bin/datamitsu", "exec", "tofu"}
+
+	code, handled := h.d.Dispatch()
+
+	if handled {
+		t.Fatalf("Dispatch() handled a datamitsu invocation (code %d)", code)
+	}
+	if len(h.execs) != 0 {
+		t.Errorf("Dispatch() ran %v for its own name", h.execs)
+	}
+}
+
+func TestDispatchDeclinesRenamedBinary(t *testing.T) {
+	h := newHarness(t)
+	h.writeManifest(sourcefarm.Manifest{
+		Entries: []sourcefarm.Entry{{Name: "tofu", Command: "/store/tofu", Installed: true}},
+	})
+	// Not a farm path: a datamitsu binary somebody copied to another name.
+	h.d.Args = []string{filepath.Join(t.TempDir(), "datamitsu-dev"), "--help"}
+
+	_, handled := h.d.Dispatch()
+
+	if handled {
+		t.Fatal("Dispatch() handled a renamed datamitsu binary; the CLI would be unreachable")
+	}
+	if len(h.execs) != 0 {
+		t.Errorf("Dispatch() ran %v for a renamed binary", h.execs)
+	}
+}
+
+func TestDispatchUnknownNameThroughFarmExits127(t *testing.T) {
+	h := newHarness(t)
+	h.writeManifest(sourcefarm.Manifest{
+		Entries: []sourcefarm.Entry{{Name: "tofu", Command: "/store/tofu", Installed: true}},
+	})
+	h.invokeThroughFarm("terragrunt", "plan")
+
+	code, handled := h.d.Dispatch()
+
+	if !handled {
+		t.Fatal("Dispatch() declined a farm invocation; PATH would fall through to a system binary")
+	}
+	if code != ExitNotFound {
+		t.Errorf("exit code = %d, want %d", code, ExitNotFound)
+	}
+	if len(h.execs) != 0 {
+		t.Errorf("Dispatch() ran %v for an undeclared name", h.execs)
+	}
+	for _, want := range []string{"terragrunt", "not declared", h.root, "datamitsu source status"} {
+		if !strings.Contains(h.stderr.String(), want) {
+			t.Errorf("stderr %q does not mention %q", h.stderr.String(), want)
+		}
+	}
+}
+
+func TestDispatchExcludedNameReportsReason(t *testing.T) {
+	h := newHarness(t)
+	h.writeManifest(sourcefarm.Manifest{
+		Excluded: []sourcefarm.Excluded{{Name: "echo", Reason: sourcefarm.ReasonShellApp}},
+	})
+	h.invokeThroughFarm("echo", "hi")
+
+	code, handled := h.d.Dispatch()
+
+	if !handled || code != ExitNotFound {
+		t.Fatalf("Dispatch() = (%d, %v), want (%d, true)", code, handled, ExitNotFound)
+	}
+	if !strings.Contains(h.stderr.String(), sourcefarm.ReasonShellApp) {
+		t.Errorf("stderr %q does not carry the exclusion reason", h.stderr.String())
+	}
+}
+
+func TestDispatchNoManifestThroughFarmExits127(t *testing.T) {
+	h := newHarness(t)
+	// No manifest written: an activated shell that cd'ed into a repository that
+	// has never been activated. Baking implicitly would evaluate that
+	// repository's JavaScript without the user ever activating it.
+	h.invokeThroughFarm("tofu")
+
+	code, handled := h.d.Dispatch()
+
+	if !handled || code != ExitNotFound {
+		t.Fatalf("Dispatch() = (%d, %v), want (%d, true)", code, handled, ExitNotFound)
+	}
+	if len(h.spawns) != 0 {
+		t.Errorf("Dispatch() spawned %v; a missing farm must not be baked implicitly", h.spawns)
+	}
+	if !strings.Contains(h.stderr.String(), "datamitsu source") {
+		t.Errorf("stderr %q does not tell the user how to activate", h.stderr.String())
+	}
+}
+
+func TestDispatchNoManifestNotThroughFarmRunsCLI(t *testing.T) {
+	h := newHarness(t)
+	h.d.Args = []string{filepath.Join(t.TempDir(), "tofu")}
+
+	_, handled := h.d.Dispatch()
+
+	if handled {
+		t.Fatal("Dispatch() handled an invocation that reached no farm and no manifest")
+	}
+}
+
+func TestDispatchOutsideGitRepository(t *testing.T) {
+	t.Run("through a farm it fails loudly", func(t *testing.T) {
+		h := newHarness(t)
+		outside := t.TempDir()
+		h.d.Getwd = func() (string, error) { return outside, nil }
+		h.invokeThroughFarm("tofu")
+
+		code, handled := h.d.Dispatch()
+
+		if !handled || code != ExitNotFound {
+			t.Fatalf("Dispatch() = (%d, %v), want (%d, true)", code, handled, ExitNotFound)
+		}
+		if !strings.Contains(h.stderr.String(), "git repository") {
+			t.Errorf("stderr %q does not explain the missing repository", h.stderr.String())
+		}
+	})
+
+	t.Run("otherwise it runs the CLI", func(t *testing.T) {
+		h := newHarness(t)
+		outside := t.TempDir()
+		h.d.Getwd = func() (string, error) { return outside, nil }
+		h.d.Args = []string{filepath.Join(outside, "dm")}
+
+		if _, handled := h.d.Dispatch(); handled {
+			t.Fatal("Dispatch() handled a non-farm invocation outside a repository")
+		}
+	})
+}
+
+func TestDispatchPassesArgvVerbatim(t *testing.T) {
+	h := newHarness(t)
+	tool := h.tool("tofu")
+	h.writeManifest(sourcefarm.Manifest{
+		Entries: []sourcefarm.Entry{{Name: "tofu", Command: tool, Installed: true, Strategy: sourcefarm.StrategySymlink}},
+	})
+	userArgs := []string{"--version", "an arg with spaces", "quote'and\"quote", "line\nbreak", "-"}
+	h.invokeThroughFarm("tofu", userArgs...)
+
+	code, handled := h.d.Dispatch()
+
+	if !handled || code != 0 {
+		t.Fatalf("Dispatch() = (%d, %v), want (0, true)", code, handled)
+	}
+	if len(h.execs) != 1 {
+		t.Fatalf("exec calls = %d, want 1", len(h.execs))
+	}
+	got := h.execs[0]
+	if got.path != tool {
+		t.Errorf("exec path = %q, want %q", got.path, tool)
+	}
+	want := append([]string{tool}, userArgs...)
+	if !equalStrings(got.argv, want) {
+		t.Errorf("argv = %q, want %q", got.argv, want)
+	}
+}
+
+func TestDispatchPrependsArgsAndMergesEnv(t *testing.T) {
+	h := newHarness(t)
+	java := h.tool("java")
+	h.writeManifest(sourcefarm.Manifest{
+		Entries: []sourcefarm.Entry{{
+			Name:      "spectral",
+			Command:   java,
+			Args:      []string{"-jar", "/store/spectral.jar"},
+			Env:       map[string]string{"JAVA_HOME": "/store/jdk", "PATH": "/store/jdk/bin:/usr/bin"},
+			Installed: true,
+		}},
+	})
+	h.invokeThroughFarm("spectral", "lint", "api.yaml")
+
+	if code, handled := h.d.Dispatch(); !handled || code != 0 {
+		t.Fatalf("Dispatch() = (%d, %v), want (0, true)", code, handled)
+	}
+
+	got := h.execs[0]
+	want := []string{java, "-jar", "/store/spectral.jar", "lint", "api.yaml"}
+	if !equalStrings(got.argv, want) {
+		t.Errorf("argv = %q, want %q", got.argv, want)
+	}
+	wantEnv := []string{"HOME=/home/u", "JAVA_HOME=/store/jdk", "PATH=/store/jdk/bin:/usr/bin"}
+	if !equalStrings(got.environ, wantEnv) {
+		t.Errorf("env = %q, want %q", got.environ, wantEnv)
+	}
+}
+
+func TestDispatchStaleManifestRebakesOnce(t *testing.T) {
+	h := newHarness(t)
+	oldTool := h.tool("tofu-v1")
+	newTool := h.tool("tofu-v2")
+	h.writeManifest(sourcefarm.Manifest{
+		Entries: []sourcefarm.Entry{{Name: "tofu", Command: oldTool, Installed: true}},
+	})
+	h.d.Validate = func(sourcefarm.Manifest) bool { return false }
+	h.spawnFunc = func(args []string) error {
+		if args[0] == "source" {
+			h.writeManifest(sourcefarm.Manifest{
+				Entries: []sourcefarm.Entry{{Name: "tofu", Command: newTool, Installed: true}},
+			})
+		}
+		return nil
+	}
+	h.invokeThroughFarm("tofu", "plan")
+
+	if code, handled := h.d.Dispatch(); !handled || code != 0 {
+		t.Fatalf("Dispatch() = (%d, %v), want (0, true)", code, handled)
+	}
+
+	if len(h.spawns) != 1 || !equalStrings(h.spawns[0], []string{"source", "refresh"}) {
+		t.Fatalf("spawns = %v, want exactly one [source refresh]", h.spawns)
+	}
+	if len(h.execs) != 1 || h.execs[0].path != newTool {
+		t.Fatalf("exec = %v, want one call to %q", h.execs, newTool)
+	}
+}
+
+func TestDispatchRebakeFailureKeepsPreviousFarm(t *testing.T) {
+	h := newHarness(t)
+	tool := h.tool("tofu")
+	h.writeManifest(sourcefarm.Manifest{
+		Entries: []sourcefarm.Entry{{Name: "tofu", Command: tool, Installed: true}},
+	})
+	h.d.Validate = func(sourcefarm.Manifest) bool { return false }
+	h.spawnFunc = func([]string) error { return errors.New("offline") }
+	h.invokeThroughFarm("tofu")
+
+	if code, handled := h.d.Dispatch(); !handled || code != 0 {
+		t.Fatalf("Dispatch() = (%d, %v), want (0, true)", code, handled)
+	}
+	if len(h.execs) != 1 || h.execs[0].path != tool {
+		t.Fatalf("exec = %v, want the previous farm's %q", h.execs, tool)
+	}
+	if !strings.Contains(h.stderr.String(), "offline") {
+		t.Errorf("stderr %q does not report the failed refresh", h.stderr.String())
+	}
+}
+
+func TestDispatchRebakeDroppingTheEntryExits127(t *testing.T) {
+	h := newHarness(t)
+	tool := h.tool("tofu")
+	h.writeManifest(sourcefarm.Manifest{
+		Entries: []sourcefarm.Entry{{Name: "tofu", Command: tool, Installed: true}},
+	})
+	h.d.Validate = func(sourcefarm.Manifest) bool { return false }
+	h.spawnFunc = func([]string) error {
+		// The branch that made the manifest stale also removed the app.
+		h.writeManifest(sourcefarm.Manifest{})
+		return nil
+	}
+	h.invokeThroughFarm("tofu")
+
+	code, handled := h.d.Dispatch()
+
+	if !handled || code != ExitNotFound {
+		t.Fatalf("Dispatch() = (%d, %v), want (%d, true)", code, handled, ExitNotFound)
+	}
+	if len(h.execs) != 0 {
+		t.Errorf("Dispatch() ran %v for an app the project no longer declares", h.execs)
+	}
+}
+
+func TestDispatchInstallsOnDemandExactlyOnce(t *testing.T) {
+	h := newHarness(t)
+	target := filepath.Join(t.TempDir(), "tflint")
+	h.writeManifest(sourcefarm.Manifest{
+		Entries: []sourcefarm.Entry{{Name: "tflint", Command: target, Installed: false, Strategy: sourcefarm.StrategyShim}},
+	})
+	h.spawnFunc = func(args []string) error {
+		if args[0] == "install" {
+			return os.WriteFile(target, []byte("#!/bin/sh\n"), 0o755)
+		}
+		return nil
+	}
+	h.invokeThroughFarm("tflint", "--version")
+
+	if code, handled := h.d.Dispatch(); !handled || code != 0 {
+		t.Fatalf("Dispatch() = (%d, %v), want (0, true)", code, handled)
+	}
+	if len(h.spawns) != 1 || !equalStrings(h.spawns[0], []string{"install", "tflint"}) {
+		t.Fatalf("spawns = %v, want exactly one [install tflint]", h.spawns)
+	}
+	if len(h.execs) != 1 || h.execs[0].path != target {
+		t.Fatalf("exec = %v, want one call to %q", h.execs, target)
+	}
+}
+
+func TestDispatchInstallWithoutRecordedPathRefreshes(t *testing.T) {
+	h := newHarness(t)
+	target := filepath.Join(t.TempDir(), "prettier")
+	h.writeManifest(sourcefarm.Manifest{
+		Entries: []sourcefarm.Entry{{Name: "prettier", Installed: false, Strategy: sourcefarm.StrategyShim}},
+	})
+	h.spawnFunc = func(args []string) error {
+		switch args[0] {
+		case "install":
+			return os.WriteFile(target, []byte("#!/bin/sh\n"), 0o755)
+		case "source":
+			h.writeManifest(sourcefarm.Manifest{
+				Entries: []sourcefarm.Entry{{Name: "prettier", Command: target, Installed: true}},
+			})
+		}
+		return nil
+	}
+	h.invokeThroughFarm("prettier", "--check", ".")
+
+	if code, handled := h.d.Dispatch(); !handled || code != 0 {
+		t.Fatalf("Dispatch() = (%d, %v), want (0, true)", code, handled)
+	}
+	if len(h.spawns) != 2 {
+		t.Fatalf("spawns = %v, want an install followed by a forced refresh", h.spawns)
+	}
+	if !equalStrings(h.spawns[1], []string{"source", "refresh", "--force"}) {
+		t.Errorf("second spawn = %v, want [source refresh --force]", h.spawns[1])
+	}
+	if len(h.execs) != 1 || h.execs[0].path != target {
+		t.Fatalf("exec = %v, want one call to %q", h.execs, target)
+	}
+}
+
+func TestDispatchInstallFailureExits127(t *testing.T) {
+	h := newHarness(t)
+	h.writeManifest(sourcefarm.Manifest{
+		Entries: []sourcefarm.Entry{{Name: "tflint", Installed: false}},
+	})
+	h.spawnFunc = func([]string) error { return errors.New("no network") }
+	h.invokeThroughFarm("tflint")
+
+	code, handled := h.d.Dispatch()
+
+	if !handled || code != ExitNotFound {
+		t.Fatalf("Dispatch() = (%d, %v), want (%d, true)", code, handled, ExitNotFound)
+	}
+	if len(h.execs) != 0 {
+		t.Errorf("Dispatch() ran %v after a failed install", h.execs)
+	}
+	if !strings.Contains(h.stderr.String(), "no network") {
+		t.Errorf("stderr %q does not report the install failure", h.stderr.String())
+	}
+}
+
+func TestDispatchMissingTargetIsReportedNotRun(t *testing.T) {
+	h := newHarness(t)
+	missing := filepath.Join(t.TempDir(), "tofu")
+	h.writeManifest(sourcefarm.Manifest{
+		Entries: []sourcefarm.Entry{{Name: "tofu", Command: missing, Installed: true}},
+	})
+	// The install path runs and still produces nothing: the store entry is gone.
+	h.invokeThroughFarm("tofu")
+
+	code, handled := h.d.Dispatch()
+
+	if !handled || code != ExitNotFound {
+		t.Fatalf("Dispatch() = (%d, %v), want (%d, true)", code, handled, ExitNotFound)
+	}
+	if len(h.execs) != 0 {
+		t.Errorf("Dispatch() ran %v with a missing target", h.execs)
+	}
+}
+
+func TestDispatchExecFailureExits126(t *testing.T) {
+	h := newHarness(t)
+	tool := h.tool("tofu")
+	h.writeManifest(sourcefarm.Manifest{
+		Entries: []sourcefarm.Entry{{Name: "tofu", Command: tool, Installed: true}},
+	})
+	h.d.Exec = func(string, []string, []string) error { return errors.New("exec format error") }
+	h.invokeThroughFarm("tofu")
+
+	code, handled := h.d.Dispatch()
+
+	if !handled || code != ExitNotExecutable {
+		t.Fatalf("Dispatch() = (%d, %v), want (%d, true)", code, handled, ExitNotExecutable)
+	}
+}
+
+func TestDispatchUsesTheManifestForTheCurrentDirectory(t *testing.T) {
+	// An activated shell keeps repo A's farm on PATH after cd'ing into repo B.
+	// The manifest that decides what runs is the one for the *current* tree.
+	h := newHarness(t)
+	other := filepath.Join(t.TempDir(), "other-repo")
+	if err := os.MkdirAll(filepath.Join(other, ".git"), 0o755); err != nil {
+		t.Fatalf("create second repo: %v", err)
+	}
+	h.d.Getwd = func() (string, error) { return other, nil }
+	h.writeManifest(sourcefarm.Manifest{
+		Entries: []sourcefarm.Entry{{Name: "tofu", Command: h.tool("tofu"), Installed: true}},
+	})
+	h.invokeThroughFarm("tofu")
+
+	code, handled := h.d.Dispatch()
+
+	if !handled || code != ExitNotFound {
+		t.Fatalf("Dispatch() = (%d, %v), want (%d, true)", code, handled, ExitNotFound)
+	}
+	if len(h.execs) != 0 {
+		t.Errorf("Dispatch() ran %v from another repository's farm", h.execs)
+	}
+}
+
+func TestDispatchIgnoresABinDirectoryOutsideTheCache(t *testing.T) {
+	// A directory that merely happens to be called bin is not a farm. Treating
+	// it as one would turn `/opt/tool/bin/tofu` into an exit 127 for a binary
+	// datamitsu has nothing to do with.
+	h := newHarness(t)
+	h.writeManifest(sourcefarm.Manifest{})
+	elsewhere := filepath.Join(t.TempDir(), "opt", "bin")
+	if err := os.MkdirAll(elsewhere, 0o755); err != nil {
+		t.Fatalf("create directory: %v", err)
+	}
+	h.d.Args = []string{filepath.Join(elsewhere, "tofu")}
+
+	if _, handled := h.d.Dispatch(); handled {
+		t.Fatal("Dispatch() treated an unrelated bin directory as a farm")
+	}
+}
+
+func TestDispatchSpawnsTheRunningExecutable(t *testing.T) {
+	// Never a PATH lookup: the farm is on PATH, so a lookup could find a
+	// shimmed name and turn the rebake spawn into a loop.
+	h := newHarness(t)
+	tool := h.tool("tofu")
+	h.writeManifest(sourcefarm.Manifest{
+		Entries: []sourcefarm.Entry{{Name: "tofu", Command: tool, Installed: true}},
+	})
+	h.d.Validate = func(sourcefarm.Manifest) bool { return false }
+
+	wantExe := filepath.Join(t.TempDir(), "the-real-datamitsu")
+	h.d.Executable = func() (string, error) { return wantExe, nil }
+	var gotExe string
+	h.d.Spawn = func(exe string, args []string) error {
+		gotExe = exe
+		h.spawns = append(h.spawns, args)
+		return nil
+	}
+	h.invokeThroughFarm("tofu")
+
+	if code, handled := h.d.Dispatch(); !handled || code != 0 {
+		t.Fatalf("Dispatch() = (%d, %v), want (0, true)", code, handled)
+	}
+	if gotExe != wantExe {
+		t.Errorf("spawned %q, want the running executable %q", gotExe, wantExe)
+	}
+}
+
+func TestInvokedName(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{"empty argv", nil, ""},
+		{"bare name", []string{"tofu"}, "tofu"},
+		{"absolute path", []string{"/cache/projects/a/bin/tofu"}, "tofu"},
+		{"trailing slash", []string{"/some/dir/"}, "dir"},
+		{"root", []string{"/"}, ""},
+		{"dot", []string{"."}, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := invokedName(tt.args); got != tt.want {
+				t.Errorf("invokedName(%q) = %q, want %q", tt.args, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestInvokedNameStripsWindowsSuffix(t *testing.T) {
+	// filepath.Base is platform-specific, so the suffix rule is asserted on a
+	// plain base name rather than on a Windows path.
+	if got := invokedName([]string{"tofu.exe"}); got != "tofu" {
+		t.Errorf("invokedName(tofu.exe) = %q, want %q", got, "tofu")
+	}
+}
+
+func TestMergeEnv(t *testing.T) {
+	tests := []struct {
+		name    string
+		base    []string
+		overlay map[string]string
+		want    []string
+	}{
+		{
+			name: "no overlay returns the base unchanged",
+			base: []string{"B=2", "A=1"},
+			want: []string{"B=2", "A=1"},
+		},
+		{
+			name:    "overlay wins and the result is sorted",
+			base:    []string{"PATH=/usr/bin", "HOME=/h"},
+			overlay: map[string]string{"PATH": "/store/bin:/usr/bin"},
+			want:    []string{"HOME=/h", "PATH=/store/bin:/usr/bin"},
+		},
+		{
+			name:    "new keys are added",
+			base:    []string{"HOME=/h"},
+			overlay: map[string]string{"UV_CACHE_DIR": "/c"},
+			want:    []string{"HOME=/h", "UV_CACHE_DIR=/c"},
+		},
+		{
+			name:    "malformed base entries are dropped",
+			base:    []string{"HOME=/h", "NOT_AN_ASSIGNMENT"},
+			overlay: map[string]string{"A": "1"},
+			want:    []string{"A=1", "HOME=/h"},
+		},
+		{
+			name:    "an empty value is preserved",
+			base:    []string{"A=1"},
+			overlay: map[string]string{"A": ""},
+			want:    []string{"A="},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := mergeEnv(tt.base, tt.overlay); !equalStrings(got, tt.want) {
+				t.Errorf("mergeEnv() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func equalStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// BenchmarkDispatch pins the cost of the steady-state shim path — the work every
+// invocation of every shimmed tool pays. It exists so a future change that adds
+// a config load, a lock, or a second process to this path shows up as a number
+// rather than as a slow shell.
+func BenchmarkDispatch(b *testing.B) {
+	base := b.TempDir()
+	root := filepath.Join(base, "repo")
+	if err := os.MkdirAll(filepath.Join(root, ".git"), 0o755); err != nil {
+		b.Fatalf("create git root: %v", err)
+	}
+	cacheRoot := filepath.Join(base, "cache")
+	project := filepath.Join(cacheRoot, "projects", "abc")
+	farmDir := filepath.Join(project, "bin")
+	if err := os.MkdirAll(farmDir, 0o700); err != nil {
+		b.Fatalf("create farm dir: %v", err)
+	}
+	tool := filepath.Join(base, "tofu")
+	if err := os.WriteFile(tool, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		b.Fatalf("write tool: %v", err)
+	}
+	manifestPath := filepath.Join(project, env.ProjectManifestFileName)
+
+	entries := make([]sourcefarm.Entry, 0, 100)
+	for i := range 100 {
+		entries = append(entries, sourcefarm.Entry{
+			Name:      "app" + string(rune('a'+i%26)) + string(rune('a'+i/26)),
+			Command:   tool,
+			Installed: true,
+		})
+	}
+	entries = append(entries, sourcefarm.Entry{Name: "tofu", Command: tool, Installed: true})
+	data, err := sourcefarm.Encode(sourcefarm.Manifest{Root: root, FarmDir: farmDir, Entries: entries})
+	if err != nil {
+		b.Fatalf("encode manifest: %v", err)
+	}
+	if err := os.WriteFile(manifestPath, data, 0o600); err != nil {
+		b.Fatalf("write manifest: %v", err)
+	}
+
+	d := &Dispatcher{
+		Args:         []string{filepath.Join(farmDir, "tofu"), "plan"},
+		Getwd:        func() (string, error) { return root, nil },
+		Executable:   func() (string, error) { return filepath.Join(base, "datamitsu"), nil },
+		Environ:      os.Environ,
+		ManifestPath: func(string) (string, error) { return manifestPath, nil },
+		CacheRoot:    func() string { return cacheRoot },
+		Load:         sourcefarm.Load,
+		Validate:     func(sourcefarm.Manifest) bool { return true },
+		Stat:         os.Stat,
+		Exec:         func(string, []string, []string) error { return nil },
+		Spawn:        func(string, []string) error { return errors.New("unexpected spawn") },
+		Stderr:       io.Discard,
+	}
+
+	b.ReportAllocs()
+	for b.Loop() {
+		if _, handled := d.Dispatch(); !handled {
+			b.Fatal("Dispatch() declined the benchmark invocation")
+		}
+	}
+}
