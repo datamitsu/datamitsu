@@ -286,20 +286,20 @@ the network.
 
 Written before any shell text is emitted anywhere.
 
-- [ ] `Bash(s string) string` producing ANSI-C `$'…'` quoting with a guaranteed single-line,
+- [x] `Bash(s string) string` producing ANSI-C `$'…'` quoting with a guaranteed single-line,
       ASCII-only result; handle NUL explicitly rather than silently
-- [ ] `Fish(s string) string` using single-quote escaping with `\Xnn` for control bytes
-- [ ] `FishPathList(dirs []string) string` rendering a space-separated fish list — fish `PATH`
+- [x] `Fish(s string) string` using single-quote escaping with `\Xnn` for control bytes
+- [x] `FishPathList(dirs []string) string` rendering a space-separated fish list — fish `PATH`
       is a list, not a colon-joined string
-- [ ] no dependency on `internal/ui` or any writer; pure string functions
-- [ ] write a table test over: newline, `$(`, backtick, single quote, double quote, backslash,
+- [x] no dependency on `internal/ui` or any writer; pure string functions
+- [x] write a table test over: newline, `$(`, backtick, single quote, double quote, backslash,
       `!`, tab, leading dash, non-UTF-8 bytes, empty string
-- [ ] write a round-trip oracle test: for each vector, `sh -c "printf %s " + Bash(v)` returns
+- [x] write a round-trip oracle test: for each vector, `sh -c "printf %s " + Bash(v)` returns
       `v` byte-exactly; `t.Skip` if `/bin/sh` is unavailable
-- [ ] write the same round-trip oracle against real `fish` for `Fish()`, skipping if absent
-- [ ] write `FuzzBash` asserting the round-trip property over arbitrary byte strings
-- [ ] write a test asserting `Bash()` output never contains a raw newline
-- [ ] run tests — must pass before Task 5
+- [x] write the same round-trip oracle against real `fish` for `Fish()`, skipping if absent
+- [x] write `FuzzBash` asserting the round-trip property over arbitrary byte strings
+- [x] write a test asserting `Bash()` output never contains a raw newline
+- [x] run tests — must pass before Task 5
 
 ### Task 5: internal/sourcefarm — the plan (pure, no filesystem)
 
