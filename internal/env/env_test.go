@@ -999,6 +999,44 @@ func TestStartupTimingsIsDatamitsuPrefixed(t *testing.T) {
 	}
 }
 
+func TestIsForceGitSubprocessEnabled(t *testing.T) {
+	t.Setenv(forceGitSubprocess.Name, os.Getenv(forceGitSubprocess.Name))
+
+	tests := []struct {
+		name  string
+		set   bool
+		value string
+		want  bool
+	}{
+		{"default when unset is false", false, "", false},
+		{"one enables", true, "1", true},
+		{"zero disables", true, "0", false},
+		{"other number disables", true, "2", false},
+		{"invalid disables", true, "always", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.set {
+				t.Setenv(forceGitSubprocess.Name, tt.value)
+			} else {
+				_ = os.Unsetenv(forceGitSubprocess.Name)
+			}
+			if got := IsForceGitSubprocessEnabled(); got != tt.want {
+				t.Errorf("IsForceGitSubprocessEnabled() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// The escape hatch is only golden-safe because internal/clitest strips every
+// DATAMITSU_-prefixed variable from the blackbox environment.
+func TestForceGitSubprocessIsDatamitsuPrefixed(t *testing.T) {
+	if !strings.HasPrefix(forceGitSubprocess.Name, "DATAMITSU_") {
+		t.Errorf("force git subprocess env var = %q, want a DATAMITSU_ prefix", forceGitSubprocess.Name)
+	}
+}
+
 func TestEnvVarString(t *testing.T) {
 	if got := concurrency.String(); got != concurrency.Name {
 		t.Errorf("envVar.String() = %q, want %q", got, concurrency.Name)

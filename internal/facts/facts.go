@@ -199,10 +199,11 @@ func resetGitRootCache() {
 // directory the lookup starts from.
 //
 // The memo is sound because datamitsu is a short-lived process that does not
-// chdir mid-run, so cwd -> git root is constant for one invocation. Resolution
-// costs two forked git processes per superproject level, and a single
+// chdir mid-run, so cwd -> git root is constant for one invocation. A single
 // `datamitsu exec` asks for the root five times (once in the config loader,
-// once per engine.New), so the memo removes four of the five.
+// once per engine.New), so the memo removes four of the five — including, for
+// the layouts gitRootPure declines to answer for, four pairs of forked git
+// processes.
 //
 // The one long-lived command is `datamitsu lsp` (cmd/lsp.go): it resolves the
 // root once at startup via traverser.GetGitRoot — not this function — and loads
@@ -246,9 +247,28 @@ func GetGitRoot(ctx context.Context) (string, error) {
 	return entry.root, entry.err
 }
 
-// resolveGitRoot climbs from ex to the topmost superproject working tree,
+// gitSubprocessLookup is the forking resolver. It is a package variable for the
+// same reason gitRootLookup is: tests need to observe when the pure-Go walk
+// hands over to git.
+var gitSubprocessLookup = resolveGitRootViaGit
+
+// resolveGitRoot answers from the filesystem when it can and from git when it
+// cannot. The pure-Go walk returns false for every layout it is not certain
+// about (see gitRootPure), and DATAMITSU_FORCE_GIT_SUBPROCESS=1 skips it
+// entirely — a wrong root poisons project cache keys, so both paths exist to
+// keep the fast one from ever having to guess.
+func resolveGitRoot(ctx context.Context, cwd string) (string, error) {
+	if !env.IsForceGitSubprocessEnabled() {
+		if root, ok := gitRootPure(cwd); ok {
+			return root, nil
+		}
+	}
+	return gitSubprocessLookup(ctx, cwd)
+}
+
+// resolveGitRootViaGit climbs from ex to the topmost superproject working tree,
 // forking two git processes per level.
-func resolveGitRoot(ctx context.Context, ex string) (string, error) {
+func resolveGitRootViaGit(ctx context.Context, ex string) (string, error) {
 	current := ""
 
 	for {

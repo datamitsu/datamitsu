@@ -377,32 +377,100 @@ it is last. `GetGitRoot` does not return the nearest `.git` — it climbs
 (`internal/facts/facts.go:171-231`). A naive walk-up-to-first-`.git` returns a different
 answer inside a submodule.
 
-- [ ] implement a pure-Go resolver in `internal/facts` that walks up from cwd looking for
+- [x] implement a pure-Go resolver in `internal/facts` that walks up from cwd looking for
       `.git`, and reproduces the superproject climb: when `.git` is a **file**, read its
       `gitdir:` line and classify it
-- [ ] distinguish the two cases that both produce a `.git` file, because they must be
+- [x] distinguish the two cases that both produce a `.git` file, because they must be
       resolved differently: a **submodule** whose gitdir points into
       `<super>/.git/modules/<name>` (keep climbing — this is what
       `--show-superproject-working-tree` follows) and a **linked worktree** whose gitdir
       points into `<main>/.git/worktrees/<name>` (do **not** treat the main repo as a
       superproject)
-- [ ] use the pure-Go resolver as a fast path and fall back to the existing git subprocess
+- [x] use the pure-Go resolver as a fast path and fall back to the existing git subprocess
       path on any ambiguity, unreadable `.git` file, or unrecognised gitdir shape — never
       guess
-- [ ] add an env-var escape hatch to force the subprocess path, defined in
+- [x] add an env-var escape hatch to force the subprocess path, defined in
       `internal/env/e.go` + `internal/env/env.go` per the Environment Variable Usage Policy,
       so a user hitting an unforeseen layout has a documented workaround
-- [ ] keep the memo from Task 3 in front of both paths
-- [ ] write table tests over fixture layouts built in `t.TempDir`: plain repo, nested
+- [x] keep the memo from Task 3 in front of both paths
+- [x] write table tests over fixture layouts built in `t.TempDir`: plain repo, nested
       subdirectory, bare repo, repo with a linked worktree, repo with a submodule, submodule
       inside a submodule, and a directory with no repo at all
-- [ ] write a differential test asserting the pure-Go resolver and the git subprocess return
+- [x] write a differential test asserting the pure-Go resolver and the git subprocess return
       the identical root for every fixture layout — this is the load-bearing test
-- [ ] write a test asserting the fallback engages (and is observable) for a malformed
+- [x] write a test asserting the fallback engages (and is observable) for a malformed
       `.git` file
-- [ ] write a test asserting the force-subprocess env var works
-- [ ] record the measured drop in `BenchmarkGetGitRoot` in this file (expected 21.3 ms → ~2 µs)
-- [ ] run `go test ./... -race` and `go test ./test/cli/ -count=2` — must pass before Task 7
+- [x] write a test asserting the force-subprocess env var works
+- [x] record the measured drop in `BenchmarkGetGitRoot` in this file (expected 21.3 ms → ~2 µs)
+- [x] run `go test ./... -race` and `go test ./test/cli/ -count=2` — must pass before Task 7
+
+**Task 6 results.** Apple M1 Max.
+
+`internal/facts/gitroot.go` holds the walk; `resolveGitRoot` is now a dispatcher that tries
+it and forks git only when it declines. The memo from Task 3 sits in front of both, unchanged.
+
+The walk answers only for layouts it can prove, and returns `false` — "ask git" — for
+everything else, because a wrong root silently produces wrong project cache keys. It declines
+for: a bare repository or a cwd inside `.git/` (git reports no working tree for either), a
+`.git` directory that is not a valid repository (git would climb past it; how far is git's
+business), a repository nested inside another repository's working tree (deciding whether the
+outer one records it in its index as mode 160000 means reading that index), a separate git
+directory, a gitdir path carrying both `modules` and `worktrees` (a linked worktree of a submodule —
+which link to follow is not decidable from the path), a `.git` file whose target does not
+exist, and a malformed or unparsable `.git` file. `DATAMITSU_FORCE_GIT_SUBPROCESS=1` skips the
+walk entirely.
+
+Two behaviours the naive walk-up-to-the-first-`.git` gets wrong are reproduced explicitly:
+`--show-toplevel` reports a _physical_ path, so the walk starts from cwd with symlinks
+resolved (on macOS every `t.TempDir` is under the `/var` → `/private/var` symlink, so this is
+not a corner case); and the submodule climb jumps to the **outermost** `.git` component of
+the gitdir, so `<super>/.git/modules/outer/modules/inner` reaches the topmost superproject in
+one step instead of one level at a time.
+
+| Benchmark             | Task 5    | Task 6    | Drop     |
+| --------------------- | --------- | --------- | -------- |
+| `BenchmarkGetGitRoot` | 560,964   | 5,558     | −0.56 ms |
+| `BenchmarkEngineNew`  | 661,688   | 138,161   | −0.52 ms |
+| `BenchmarkLoadConfig` | 2,719,640 | 2,236,744 | −0.48 ms |
+
+(ns/op, `-benchtime 30x -count 4`, min of 4. `GetGitRoot` allocs 9 → 6, `EngineNew` 1,012 →
+1,009.) These are still the amortized numbers of the Task 3 note — one real resolution spread
+over 30 iterations. The uncached first call is what actually moved, measured directly by the
+new `BenchmarkGitRootPure` / `BenchmarkGitRootSubprocess` pair in `internal/facts` on the same
+fixture (`-benchtime 200x -count 2`, min):
+
+| Resolver               | ns/op      | B/op    | allocs/op |
+| ---------------------- | ---------- | ------- | --------- |
+| `resolveGitRootViaGit` | 16,892,365 | 114,831 | 165       |
+| `gitRootPure`          | 42,194     | 11,488  | 116       |
+
+16.9 ms → 42 µs, a factor of 400. (Not the ~2 µs the plan estimated: most of the remaining
+cost is `EvalSymlinks` on a deep `/var/folders/...` fixture path plus one `Stat` per ancestor
+level, and both are real work the subprocess also did.)
+
+End to end, in this repository with a PATH shim logging every `git` argv:
+`datamitsu exec actionlint -- --version` forks git **0** times (baseline 10, Task 3 left 2),
+`facts.GetGitRoot` reports 61.8 µs (was 17.4 ms at Task 1), and `loadConfig` totals 80.9 ms.
+Wall-clock min, n=40: `datamitsu version` **11.3 ms**, `datamitsu exec actionlint -- --version`
+**82.2 ms** (was 127.5 ms after Task 5).
+
+Tests: `internal/facts/gitroot_test.go`. Eleven fixture layouts built with real git — plain
+repo, nested subdirectory, bare repo, linked worktree, submodule, submodule inside a
+submodule, no repository, inside `.git/`, nested repository, empty `.git` directory, separate
+git directory — run twice: once pinning what the walk must answer or decline, and once as the
+load-bearing differential test that its answer equals git's for every layout it answers for.
+Plus `gitSubprocessLookup`, a counting seam that makes the fallback observable (asserted to
+run exactly once for a malformed `.git` file and for `DATAMITSU_FORCE_GIT_SUBPROCESS=1`, and
+zero times for a plain repository), and unit tables over `parseGitFile` and
+`classifyGitDirPath`.
+
+`go test ./...`, `go test ./internal/facts/ ./cmd/ -race` and `go test ./test/cli/ -count=2`
+are green with no golden regenerated. `go test ./... -race` still hits the pre-existing
+`internal/cache` `debounceSave` panic flagged under Task 3 — unrelated and unchanged.
+
+➕ For Task 8: `DATAMITSU_FORCE_GIT_SUBPROCESS` (and `DATAMITSU_STARTUP_TIMINGS` from Task 1)
+need rows in the environment-variable table at `website/docs/reference/cli-commands.md:1038`.
+Deferred there deliberately so `task gen:llms-docs` runs once, not once per task.
 
 ### Task 7: Verify acceptance criteria
 
