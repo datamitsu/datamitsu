@@ -43,10 +43,13 @@ type FileEntry struct {
 
 // File represents the entire cache for a project
 type File struct {
-	InvalidationKey string               // hash(datamitsuVersion + fullConfigHash + invalidateOnFiles)
+	InvalidationKey string               // hash(datamitsuVersion + fullConfigHash + selectedTools)
 	ProjectPath     string               // for debugging
 	LastPruned      time.Time            // when we last cleaned up deleted files
 	Entries         map[string]FileEntry // relativePath -> entry
+	// Verdicts is nil in files written before unit-level caching existed; every
+	// lookup then misses, which is the safe direction.
+	Verdicts map[string]VerdictEntry // opaque identity key -> entry
 }
 
 // Stats holds statistics about cache hits and misses
@@ -65,7 +68,12 @@ type Cache struct {
 	misses          atomic.Int64 // Cache misses counter
 	logger          *zap.Logger
 	mu              sync.RWMutex // Protects data map from concurrent access
-	saveMu          sync.Mutex   // Protects Save() from concurrent calls
+	// Tombstones for this process's deletions. Without them mergeFromDisk, which
+	// can only add, re-adds everything Prune or a delete removed — so pruning was
+	// a no-op and an invalidated verdict came back on the next save.
+	deletedEntries  map[string]struct{}
+	deletedVerdicts map[string]struct{}
+	saveMu          sync.Mutex // Protects Save() from concurrent calls
 
 	// Async save support
 	dirty        atomic.Bool
@@ -79,13 +87,11 @@ type Cache struct {
 // cacheDir is the base cache directory (e.g., ~/.cache/datamitsu)
 // projectPath is the absolute path to the project
 // cfg is the full configuration
-// invalidateOnFiles is a map of tool -> list of config files that invalidate cache
 // selectedTools is the list of tools selected via --tools flag (for cache key)
 func NewCache(
 	cacheDir string,
 	projectPath string,
 	cfg config.Config,
-	invalidateOnFiles map[string][]string,
 	selectedTools []string,
 	logger *zap.Logger,
 ) (*Cache, error) {
@@ -107,7 +113,7 @@ func NewCache(
 	cachePath := filepath.Join(projectDir, cacheFileName)
 
 	// Calculate invalidation key
-	invalidationKey, err := calculateInvalidationKey(cfg, invalidateOnFiles, projectPath, selectedTools)
+	invalidationKey, err := calculateInvalidationKey(cfg, selectedTools)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate invalidation key: %w", err)
 	}
@@ -128,6 +134,7 @@ func NewCache(
 			ProjectPath:     projectPath,
 			LastPruned:      time.Now(),
 			Entries:         make(map[string]FileEntry),
+			Verdicts:        make(map[string]VerdictEntry),
 		}
 	}
 
@@ -145,6 +152,7 @@ func (c *Cache) Load() error {
 				ProjectPath:     c.projectPath,
 				LastPruned:      time.Now(),
 				Entries:         make(map[string]FileEntry),
+				Verdicts:        make(map[string]VerdictEntry),
 			}
 			return nil
 		}
@@ -177,6 +185,7 @@ func (c *Cache) Load() error {
 			ProjectPath:     c.projectPath,
 			LastPruned:      time.Now(),
 			Entries:         make(map[string]FileEntry),
+			Verdicts:        make(map[string]VerdictEntry),
 		}
 		return nil
 	}
@@ -201,6 +210,14 @@ func (c *Cache) Save() error {
 	// Prevent concurrent saves
 	c.saveMu.Lock()
 	defer c.saveMu.Unlock()
+
+	// Fold in anything another process wrote since we loaded. Without this a
+	// long-lived LSP session would overwrite the CLI's writes wholesale — and for
+	// verdicts that is not just a lost warm cache but a resurrected verdict the
+	// CLI had already invalidated.
+	if err := c.mergeFromDisk(); err != nil {
+		return err
+	}
 
 	c.mu.RLock()
 	if c.data == nil {
@@ -267,12 +284,22 @@ func (c *Cache) Prune() {
 		absPath := filepath.Join(c.projectPath, relPath)
 		if _, err := os.Stat(absPath); os.IsNotExist(err) {
 			delete(c.data.Entries, relPath)
+			if c.deletedEntries == nil {
+				c.deletedEntries = make(map[string]struct{})
+			}
+			c.deletedEntries[relPath] = struct{}{}
 			removed++
 		}
 	}
 
-	if removed > 0 {
-		c.logger.Debug("pruned cache entries", zap.Int("removed", removed))
+	// Verdicts are keyed on an opaque identity, so a unit that no longer exists
+	// leaves an entry nothing will ever match. Age them out on the same pass.
+	verdicts := c.pruneVerdicts(verdictPruneTTL)
+
+	if removed > 0 || verdicts > 0 {
+		c.logger.Debug("pruned cache entries",
+			zap.Int("files", removed),
+			zap.Int("verdicts", verdicts))
 	}
 }
 
@@ -413,7 +440,13 @@ func (c *Cache) GetStats() Stats {
 	}
 }
 
-// Clear removes all cache entries
+// Clear removes all cache entries.
+//
+// The file is deleted before the save rather than overwritten by it. Save folds
+// in whatever is on disk, and an emptied map carries no tombstones, so the merge
+// used to copy every entry Clear had just dropped straight back and rewrite it —
+// `datamitsu cache clear` reported success and cleared nothing. Removing the file
+// leaves the merge with nothing to find.
 func (c *Cache) Clear() error {
 	c.mu.Lock()
 	c.data = &File{
@@ -421,20 +454,30 @@ func (c *Cache) Clear() error {
 		ProjectPath:     c.projectPath,
 		LastPruned:      time.Now(),
 		Entries:         make(map[string]FileEntry),
+		Verdicts:        make(map[string]VerdictEntry),
 	}
+	// Tombstones describe deletions against a file that no longer exists.
+	c.deletedEntries = nil
+	c.deletedVerdicts = nil
 	c.mu.Unlock()
+
+	if err := os.Remove(c.path); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("remove cache file: %w", err)
+	}
 	return c.Save()
 }
 
-// calculateInvalidationKey calculates an XXH3-128 hash from:
-// - datamitsu version
-// - full config JSON
-// - contents of invalidateOn files for each tool
-// - selected tools list
+// calculateInvalidationKey calculates an XXH3-128 hash from the datamitsu
+// version, the full config JSON and the selected tools.
+//
+// invalidateOn used to be folded in here and no longer is. It was broken —
+// paths resolved against the git root, so packages/*/tsconfig.json read as
+// missing and never changed the key — and even repaired it was the wrong shape:
+// a global key means editing one nested config resets the entire cache file for
+// every tool. It is now a per-unit guard in the verdict cache, where a changed
+// input invalidates the unit it belongs to and nothing else.
 func calculateInvalidationKey(
 	cfg config.Config,
-	invalidateOnFiles map[string][]string,
-	projectPath string,
 	selectedTools []string,
 ) (string, error) {
 	// Build a single byte slice with all components separated by \0
@@ -449,32 +492,6 @@ func calculateInvalidationKey(
 		return "", fmt.Errorf("failed to marshal config: %w", err)
 	}
 	parts = append(parts, configBytes)
-
-	// Add contents of invalidateOn files
-	// Sort tools for deterministic ordering
-	var toolNames []string
-	for tool := range invalidateOnFiles {
-		toolNames = append(toolNames, tool)
-	}
-	slices.Sort(toolNames)
-
-	for _, tool := range toolNames {
-		files := invalidateOnFiles[tool]
-		slices.Sort(files) // Sort files for deterministic ordering
-
-		for _, file := range files {
-			absPath := filepath.Join(projectPath, file)
-			content, err := os.ReadFile(absPath)
-			if err != nil {
-				// If file doesn't exist, just add the path
-				parts = append(parts, []byte(file))
-				parts = append(parts, []byte("(missing)"))
-				continue
-			}
-			parts = append(parts, []byte(file))
-			parts = append(parts, content)
-		}
-	}
 
 	// Add selected tools (sorted for deterministic key)
 	if len(selectedTools) > 0 {
@@ -635,4 +652,97 @@ func (c *Cache) debounceSave() {
 			}
 		}
 	})
+}
+
+// mergeFromDisk reconciles in-memory state with whatever is on disk now.
+// Read-modify-write is not atomic across processes, so interleaving can still
+// lose a write; correctness rests on the mismatch rules below, not on mutual
+// exclusion.
+func (c *Cache) mergeFromDisk() error {
+	f, err := os.Open(c.path)
+	if err != nil {
+		return nil // no file yet: nothing to merge
+	}
+	defer func() { _ = f.Close() }()
+
+	onDisk, err := io.ReadAll(f)
+	if err != nil {
+		return nil // unreadable is not fatal; we still write ours
+	}
+	var disk File
+	if err := msgpack.Unmarshal(onDisk, &disk); err != nil {
+		return nil // corrupt on disk: ours replaces it
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// A different key means the file belongs to another config. Load already
+	// discarded it in memory, so this process owns the file now: skip the merge
+	// and let our data replace it. Refusing instead would wedge every later save,
+	// because nothing ever rewrites the on-disk key — one version bump or config
+	// edit and the cache never warms again.
+	if disk.InvalidationKey != "" && disk.InvalidationKey != c.invalidationKey {
+		return nil
+	}
+
+	for path, diskEntry := range disk.Entries {
+		if _, gone := c.deletedEntries[path]; gone {
+			continue
+		}
+		ours, ok := c.data.Entries[path]
+		if !ok {
+			c.data.Entries[path] = diskEntry
+			continue
+		}
+		if ours.ContentHash != diskEntry.ContentHash {
+			// Two views of one file's content cannot be reconciled: FileEntry
+			// carries no timestamp, so "newer" is undecidable, and keeping either
+			// list would attribute passing tools to content they never saw.
+			delete(c.data.Entries, path)
+			continue
+		}
+		ours.Lint = unionStrings(ours.Lint, diskEntry.Lint)
+		ours.Fix = unionStrings(ours.Fix, diskEntry.Fix)
+		c.data.Entries[path] = ours
+	}
+
+	if c.data.Verdicts == nil {
+		c.data.Verdicts = make(map[string]VerdictEntry)
+	}
+	now := time.Now()
+	for key, diskEntry := range disk.Verdicts {
+		if _, gone := c.deletedVerdicts[key]; gone {
+			continue
+		}
+		// Clamp a future timestamp: a backwards clock jump would otherwise let a
+		// stale entry win every comparison and never expire.
+		if diskEntry.ValidatedAt.After(now) {
+			diskEntry.ValidatedAt = now
+		}
+		ours, ok := c.data.Verdicts[key]
+		if !ok || diskEntry.ValidatedAt.After(ours.ValidatedAt) {
+			c.data.Verdicts[key] = diskEntry
+		}
+	}
+
+	return nil
+}
+
+func unionStrings(a, b []string) []string {
+	if len(b) == 0 {
+		return a
+	}
+	seen := make(map[string]struct{}, len(a)+len(b))
+	out := make([]string, 0, len(a)+len(b))
+	for _, list := range [][]string{a, b} {
+		for _, v := range list {
+			if _, dup := seen[v]; dup {
+				continue
+			}
+			seen[v] = struct{}{}
+			out = append(out, v)
+		}
+	}
+	return out
 }

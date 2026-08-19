@@ -16,7 +16,7 @@ import "asciinema-player/dist/bundle/asciinema-player.css";
 import type {
   AsciinemaPlayerHandle,
   AsciinemaPlayerInstance,
-  AsciinemaPlayerProps,
+  AsciinemaPlayerProps as AsciinemaPlayerProperties,
   LoadingState,
 } from "./types";
 
@@ -34,12 +34,15 @@ function useDocusaurusTheme(): "dark" | "light" {
   useEffect(() => {
     // Listen for theme changes via MutationObserver
     const observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        if (mutation.type === "attributes" && mutation.attributeName === "data-theme") {
-          const updatedTheme = document.documentElement.dataset.theme;
-          setTheme(updatedTheme === "light" ? "light" : "dark");
+      for (const mutation of mutations) {
+        // `return` here was a `forEach` early-exit, i.e. skip this mutation.
+        if (mutation.type !== "attributes" || mutation.attributeName !== "data-theme") {
+          continue;
         }
-      });
+
+        const updatedTheme = document.documentElement.dataset.theme;
+        setTheme(updatedTheme === "light" ? "light" : "dark");
+      }
     });
 
     observer.observe(document.documentElement, {
@@ -53,10 +56,10 @@ function useDocusaurusTheme(): "dark" | "light" {
   return theme;
 }
 
-const AsciinemaPlayer = forwardRef<AsciinemaPlayerHandle, AsciinemaPlayerProps>(
-  ({ className, onError, onLoad, options = {}, src }, ref): ReactNode => {
+const AsciinemaPlayer = forwardRef<AsciinemaPlayerHandle, AsciinemaPlayerProperties>(
+  ({ className, onError, onLoad, options = {}, src }, reference): ReactNode => {
     const { siteConfig } = useDocusaurusContext();
-    const containerRef = useRef<HTMLDivElement>(null);
+    const containerReference = useRef<HTMLDivElement>(null);
     const playerInstance = useRef<AsciinemaPlayerInstance | null>(null);
     const [loadingState, setLoadingState] = useState<LoadingState>("idle");
     const [errorState, setErrorState] = useState<Error | null>(null);
@@ -77,7 +80,7 @@ const AsciinemaPlayer = forwardRef<AsciinemaPlayerHandle, AsciinemaPlayerProps>(
 
     // Imperative handle
     useImperativeHandle(
-      ref,
+      reference,
       () => ({
         getCurrentTime: () => playerInstance.current?.getCurrentTime() ?? null,
         getDuration: () => playerInstance.current?.getDuration() ?? null,
@@ -98,21 +101,21 @@ const AsciinemaPlayer = forwardRef<AsciinemaPlayerHandle, AsciinemaPlayerProps>(
 
     // Player initialization effect
     useEffect(() => {
-      let mounted = true;
+      let isMounted = true;
       let player: AsciinemaPlayerInstance | undefined;
 
       setLoadingState("loading");
       setErrorState(null);
 
       import("asciinema-player")
-        .then((mod) => {
-          if (!mounted || !containerRef.current) {
+        .then((module_) => {
+          if (!isMounted || !containerReference.current) {
             return;
           }
 
           try {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            player = (mod as any).create(src, containerRef.current, {
+            player = (module_ as any).create(src, containerReference.current, {
               ...options,
               theme,
             }) as AsciinemaPlayerInstance;
@@ -120,32 +123,34 @@ const AsciinemaPlayer = forwardRef<AsciinemaPlayerHandle, AsciinemaPlayerProps>(
             playerInstance.current = player;
 
             // Player creation success
-            if (mounted) {
+            if (isMounted) {
               setLoadingState("loaded");
               onLoad?.();
             }
           } catch (error) {
-            if (mounted) {
-              const errorObj =
+            if (isMounted) {
+              const errorObject =
                 error instanceof Error ? error : new Error("Failed to create player");
-              setErrorState(errorObj);
+              setErrorState(errorObject);
               setLoadingState("error");
-              onError?.(errorObj);
+              onError?.(errorObject);
             }
           }
         })
         .catch((error) => {
-          if (mounted) {
-            const errorObj =
-              error instanceof Error ? error : new Error("Failed to load player module");
-            setErrorState(errorObj);
-            setLoadingState("error");
-            onError?.(errorObj);
+          if (!isMounted) {
+            return;
           }
+
+          const errorObject =
+            error instanceof Error ? error : new Error("Failed to load player module");
+          setErrorState(errorObject);
+          setLoadingState("error");
+          onError?.(errorObject);
         });
 
       return () => {
-        mounted = false;
+        isMounted = false;
         player?.dispose?.();
         playerInstance.current = null;
       };
@@ -160,7 +165,7 @@ const AsciinemaPlayer = forwardRef<AsciinemaPlayerHandle, AsciinemaPlayerProps>(
 
     return (
       <div className={`${styles.playerContainer} ${className || ""}`}>
-        <div ref={containerRef} style={containerOpacityStyle} />
+        <div ref={containerReference} style={containerOpacityStyle} />
 
         {loadingState === "loading" && (
           <div aria-live="polite" className={styles.loadingOverlay} role="status">

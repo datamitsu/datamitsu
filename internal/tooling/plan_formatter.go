@@ -56,7 +56,9 @@ type TaskJSON struct {
 	App          string   `json:"app"`
 	Args         []string `json:"args"`
 	Scope        string   `json:"scope"`
-	Batch        bool     `json:"batch"`
+	Granularity  string   `json:"granularity"`
+	Arity        string   `json:"arity"`
+	Coverage     string   `json:"coverage"`
 	WorkingDir   string   `json:"workingDir"`
 	Globs        []string `json:"globs,omitempty"`
 	ExcludeGlobs []string `json:"excludeGlobs,omitempty"`
@@ -348,19 +350,14 @@ func (f *JSONFormatter) Format(plan *ExecutionPlan, rootPath, cwdPath string, op
 			for _, task := range parallelTasks {
 				workingDir := getWorkingDirForTask(task, rootPath)
 
-				// Determine batch mode
-				batch := task.OpConfig.Batch
-				if batch == nil {
-					defaultBatch := task.OpConfig.Scope != config.ToolScopePerFile
-					batch = &defaultBatch
-				}
-
 				taskJSON := TaskJSON{
 					ToolName:     task.ToolName,
 					App:          task.OpConfig.App,
 					Args:         task.OpConfig.Args,
 					Scope:        string(task.OpConfig.Scope),
-					Batch:        *batch,
+					Granularity:  string(config.InferGranularity(task.OpConfig)),
+					Arity:        string(config.EffectiveArity(task.OpConfig)),
+					Coverage:     string(task.Coverage),
 					WorkingDir:   workingDir,
 					Globs:        task.OpConfig.Globs,
 					ExcludeGlobs: task.OpConfig.ExcludeGlobs,

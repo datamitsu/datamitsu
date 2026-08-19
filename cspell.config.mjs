@@ -414,5 +414,36 @@ export default defineConfig((config) => ({
     "keytar",
     // git's --format=%(trailers:...) option token, used to read Co-authored-by.
     "valueonly",
+    // Plurals of the ToolArity and ToolGranularity config fields.
+    "arities",
+    "granularities",
+    // Tool names in the wrapper config's repository-scoped set, referenced when
+    // classifying which of them can be narrowed to a file subset.
+    "blint",
+    "deptry",
+    "droast",
+    "zizmor",
+    // Terms the granularity design leans on: a git worktree; a scope value that
+    // no validator checks; re-pointing a call site at a moved symbol; and a
+    // hash vector whose part boundaries an attacker could forge.
+    "worktree",
+    "unvalidated",
+    "repoint",
+    "repointed",
+    "forgeable",
+    // British forms, matching the spellings already accepted above
+    // ("behaviour", "recognise", "recognised").
+    "analysed",
+    "atomised",
+    "atomises",
+    "behavioural",
+    "behaviours",
+    "neighbours",
+    "defence",
+    "generalises",
+    "initialisation",
+    "optimisation",
+    "serialised",
+    "serialises",
   ],
 }));

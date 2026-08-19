@@ -597,8 +597,11 @@ func ValidateSetupToolRefs(initConfigs MapOfConfigSetup, tools MapOfTools) []str
 // respectively (the actual expansion lives in internal/tooling's executor). They
 // are the single source of truth for which {placeholder} tokens are valid;
 // ValidateTools rejects any other token instead of passing it through unsubstituted.
+//
+// "target" is absent from ToolEnvPlaceholders on purpose: env values expand on a
+// path with no task, so it would resolve to a wrong directory instead of erroring.
 var (
-	ToolArgPlaceholders = []string{"file", "files", "root", "cwd", "toolCache"}
+	ToolArgPlaceholders = []string{"file", "files", "root", "cwd", "toolCache", "target"}
 	ToolEnvPlaceholders = []string{"root", "cwd", "toolCache"}
 )
 
@@ -704,23 +707,86 @@ func ValidateTools(tools MapOfTools, parsers MapOfParsers) error {
 				))
 			}
 
-			// The stdin/stdout formatter contract is only honored by the per-file
-			// execution path. Under any batched scope the executor combines output
-			// and feeds no stdin, so these modes would silently no-op. Require
-			// scope:per-file (and reject an explicit batch:true) so a misconfigured
-			// formatter fails fast instead of doing nothing.
+			// The stdin/stdout formatter contract feeds one file per process. An
+			// operation that takes a file list runs once for the whole batch,
+			// combining output and feeding no stdin, so these modes would silently
+			// no-op. Require per-file scope and an arity that carries at most one
+			// path, so a misconfigured formatter fails fast instead of doing
+			// nothing.
 			if op.Input == ToolInputStdin || op.Output == ToolOutputStdout {
 				if op.Scope != ToolScopePerFile {
 					errs = append(errs, fmt.Sprintf(
 						"tool %q operation %q: input %q / output %q require scope %q (got %q)",
 						toolName, opType, ToolInputStdin, ToolOutputStdout, ToolScopePerFile, op.Scope,
 					))
-				} else if op.Batch != nil && *op.Batch {
+				} else if arity := EffectiveArity(op); arity != ArityOne && arity != ArityNone {
 					errs = append(errs, fmt.Sprintf(
-						"tool %q operation %q: input %q / output %q are incompatible with batch:true",
-						toolName, opType, ToolInputStdin, ToolOutputStdout,
+						"tool %q operation %q: input %q / output %q need one file per process, but args infer arity %q",
+						toolName, opType, ToolInputStdin, ToolOutputStdout, arity,
 					))
 				}
+			}
+
+			switch op.Granularity {
+			case "", GranularityFile, GranularityUnit, GranularityRepo:
+			default:
+				errs = append(errs, fmt.Sprintf(
+					"tool %q operation %q: unknown granularity %q (want %q, %q or %q)",
+					toolName, opType, op.Granularity, GranularityFile, GranularityUnit, GranularityRepo,
+				))
+			}
+
+			switch op.Arity {
+			case "", ArityMany, ArityOne, ArityDir, ArityNone:
+			default:
+				errs = append(errs, fmt.Sprintf(
+					"tool %q operation %q: unknown arity %q (want %q, %q, %q or %q)",
+					toolName, opType, op.Arity, ArityMany, ArityOne, ArityDir, ArityNone,
+				))
+			}
+
+			// A "file" verdict claims each file's result stands alone, which puts
+			// the operation back on the per-file cache. Declaring it for a tool
+			// that never receives the file list restores the defect the
+			// granularity model exists to remove.
+			if op.Granularity == GranularityFile &&
+				!ArgsReferenceFiles(op.Args) && op.Scope != ToolScopePerFile {
+				errs = append(errs, fmt.Sprintf(
+					"tool %q operation %q: granularity %q needs the file list to reach the tool — "+
+						"add %s to args or use scope %q",
+					toolName, opType, GranularityFile, placeholderFiles, ToolScopePerFile,
+				))
+			}
+
+			// A repository-scoped operation starts one process at the git root and
+			// is never split per unit, so its verdict covers the repository. There
+			// is no machinery to narrow it to a unit, and the planner would report
+			// it as not narrowable from a subdirectory while stamping a whole-repo
+			// pass from the root — the declaration says one thing and the run does
+			// another. Saying so is the point of per-project scope.
+			if op.Scope == ToolScopeRepository && op.Granularity == GranularityUnit {
+				errs = append(errs, fmt.Sprintf(
+					"tool %q operation %q: scope %q with granularity %q — a repository-scoped "+
+						"operation runs once at the git root, so its verdict covers the whole "+
+						"repository; use scope %q for a unit-complete verdict",
+					toolName, opType, ToolScopeRepository, GranularityUnit, ToolScopePerProject,
+				))
+			}
+
+			if op.Arity != "" {
+				if inferred := EffectiveArity(op); op.Arity != inferred {
+					errs = append(errs, fmt.Sprintf(
+						"tool %q operation %q: declared arity %q but args infer %q; arity asserts the argv shape, it cannot override it",
+						toolName, opType, op.Arity, inferred,
+					))
+				}
+			}
+
+			if ArgsReferenceTarget(op.Args) && ArgsReferenceFiles(op.Args) {
+				errs = append(errs, fmt.Sprintf(
+					"tool %q operation %q: args carry both %s and a file placeholder; a directory target and a file list are mutually exclusive",
+					toolName, opType, placeholderTarget,
+				))
 			}
 
 			// output:stdout drives the diff-in-core formatting path, which rewrites

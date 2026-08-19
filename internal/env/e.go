@@ -42,6 +42,18 @@ var (
 		Description:  "Status output format (console, jsonl); jsonl emits one typed JSON event per line to stderr",
 	}
 
+	lspFormatWidenTo = envVar{
+		Name:         strings.ToUpper(ldflags.PackageName) + "_LSP_FORMAT_WIDEN_TO",
+		DefaultValue: "unit",
+		Description:  "How far LSP format-on-save may widen: target (this file only) or unit (its project)",
+	}
+
+	unitCacheTTLMinutes = envVar{
+		Name:         strings.ToUpper(ldflags.PackageName) + "_UNIT_CACHE_TTL",
+		DefaultValue: "1440",
+		Description:  "Minutes a cached unit-level verdict stays trusted; 0 disables the verdict cache",
+	}
+
 	maxCmdLength = envVar{
 		Name:         strings.ToUpper(ldflags.PackageName) + "_MAX_CMD_LENGTH",
 		DefaultValue: "32000",

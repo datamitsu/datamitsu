@@ -36,6 +36,7 @@ type Effective struct {
 	InstallTimeoutSeconds    int    `json:"installTimeoutSeconds"`
 	Libc                     string `json:"libc"`
 	LogFormat                string `json:"logFormat"`
+	LspFormatWidenTo         string `json:"lspFormatWidenTo"`
 	LogLevel                 string `json:"logLevel"`
 	MaxCmdLength             int    `json:"maxCmdLength"`
 	MaxErrorCmdDisplay       int    `json:"maxErrorCmdDisplay"`
@@ -45,6 +46,7 @@ type Effective struct {
 	OCIRegistry              string `json:"ociRegistry"`
 	Offline                  bool   `json:"offline"`
 	Timings                  bool   `json:"timings"`
+	UnitCacheTTLMinutes      int    `json:"unitCacheTtlMinutes"`
 }
 
 // Compute reads env getters and returns a fresh Effective. Pure function — no
@@ -58,6 +60,7 @@ func Compute() Effective {
 		InstallTimeoutSeconds:    env.InstallTimeoutSeconds(),
 		Libc:                     string(target.HostTarget().Libc),
 		LogFormat:                env.GetLogFormat(),
+		LspFormatWidenTo:         env.GetLspFormatWidenTo(),
 		LogLevel:                 env.GetLogLevel().String(),
 		MaxCmdLength:             env.GetMaxCommandLength(),
 		MaxErrorCmdDisplay:       env.GetMaxErrorCommandDisplay(),
@@ -67,6 +70,7 @@ func Compute() Effective {
 		OCIRegistry:              env.GetOCIRegistry(),
 		Offline:                  env.Offline(),
 		Timings:                  env.IsTimingsEnabled(),
+		UnitCacheTTLMinutes:      env.GetUnitCacheTTLMinutes(),
 	}
 }
 

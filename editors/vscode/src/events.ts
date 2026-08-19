@@ -74,70 +74,70 @@ const isTerminal = (status: string | undefined): boolean => status === "done" ||
 
 // toStatusUpdate is the pure mapping from an event to its status-bar effect, kept
 // free of any editor API so it can be unit-tested directly.
-export function toStatusUpdate(ev: Event): StatusUpdate {
-  switch (ev.type) {
+export function toStatusUpdate(event: Event): StatusUpdate {
+  switch (event.type) {
     case "chunk": {
-      if (isTerminal(ev.status)) {
-        return { opId: ev.op_id };
+      if (isTerminal(event.status)) {
+        return { opId: event.op_id };
       }
-      return { label: chunkLabel(ev), opId: ev.op_id };
+      return { label: chunkLabel(event), opId: event.op_id };
     }
     case "done": {
-      return { opId: ev.op_id };
+      return { opId: event.op_id };
     }
     case "download": {
-      if (isTerminal(ev.status)) {
-        return { opId: ev.op_id };
+      if (isTerminal(event.status)) {
+        return { opId: event.op_id };
       }
-      return { label: downloadLabel(ev), opId: ev.op_id };
+      return { label: downloadLabel(event), opId: event.op_id };
     }
     case "error": {
-      return { error: ev.msg ?? "datamitsu error", opId: ev.op_id };
+      return { error: event.msg ?? "datamitsu error", opId: event.op_id };
     }
     case "install": {
-      if (isTerminal(ev.status)) {
-        return { opId: ev.op_id };
+      if (isTerminal(event.status)) {
+        return { opId: event.op_id };
       }
-      return { label: `installing ${ev.name ?? "tool"}`, opId: ev.op_id };
+      return { label: `installing ${event.name ?? "tool"}`, opId: event.op_id };
     }
     case "phase": {
-      if (isTerminal(ev.status)) {
-        return { opId: ev.op_id };
+      if (isTerminal(event.status)) {
+        return { opId: event.op_id };
       }
-      return { label: ev.op ?? "working", opId: ev.op_id };
+      return { label: event.op ?? "working", opId: event.op_id };
     }
     case "tool_run": {
-      if (isTerminal(ev.status)) {
-        return { opId: ev.op_id };
+      if (isTerminal(event.status)) {
+        return { opId: event.op_id };
       }
       return {
-        label: ev.dir ? `${ev.tool ?? "tool"} (${ev.dir})` : (ev.tool ?? "tool"),
-        opId: ev.op_id,
+        label: event.dir ? `${event.tool ?? "tool"} (${event.dir})` : (event.tool ?? "tool"),
+        opId: event.op_id,
       };
     }
   }
 }
 
-function chunkLabel(ev: Event): string {
-  const tool = ev.tool ?? "tool";
-  if (typeof ev.index === "number" && typeof ev.total === "number" && ev.total > 0) {
-    return `${tool} ${ev.index}/${ev.total}`;
+function chunkLabel(event: Event): string {
+  const tool = event.tool ?? "tool";
+  if (typeof event.index === "number" && typeof event.total === "number" && event.total > 0) {
+    return `${tool} ${event.index}/${event.total}`;
   }
   return tool;
 }
 
-function downloadLabel(ev: Event): string {
-  const name = ev.name ?? "artifact";
-  const pct = downloadPercent(ev);
+function downloadLabel(event: Event): string {
+  const name = event.name ?? "artifact";
+  const pct = downloadPercent(event);
   return pct === undefined ? `downloading ${name}` : `downloading ${name} ${pct}%`;
 }
 
-function downloadPercent(ev: Event): number | undefined {
-  if (typeof ev.percent === "number" && ev.percent > 0) {
-    return ev.percent;
+function downloadPercent(event: Event): number | undefined {
+  if (typeof event.percent === "number" && event.percent > 0) {
+    return event.percent;
   }
-  if (typeof ev.bytes_total === "number" && ev.bytes_total > 0) {
-    return Math.floor(((ev.bytes_done ?? 0) * 100) / ev.bytes_total);
+  if (typeof event.bytes_total === "number" && event.bytes_total > 0) {
+    return Math.floor(((event.bytes_done ?? 0) * 100) / event.bytes_total);
   }
   return undefined;
 }

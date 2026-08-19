@@ -24,7 +24,7 @@ export type ToolCommandResult =
   | { output: string; raw: SpawnRaw; success: true }
   | { plan: PlanJSON; raw: SpawnRaw; success: true };
 
-export function buildArgs(commandName: string, options: BaseOptions = {}): string[] {
+export function buildArguments(commandName: string, options: BaseOptions = {}): string[] {
   const {
     beforeConfig = [],
     config = [],
@@ -35,37 +35,37 @@ export function buildArgs(commandName: string, options: BaseOptions = {}): strin
     tools = [],
   } = options;
 
-  const args: string[] = [commandName];
+  const arguments_: string[] = [commandName];
 
   if (explain === true) {
-    args.push("--explain");
+    arguments_.push("--explain");
   } else if (explain) {
-    args.push(`--explain=${explain}`);
+    arguments_.push(`--explain=${explain}`);
   }
 
   if (fileScoped) {
-    args.push("--file-scoped");
+    arguments_.push("--file-scoped");
   }
 
   if (tools.length > 0) {
-    args.push("--tools", tools.join(","));
+    arguments_.push("--tools", tools.join(","));
   }
 
   for (const c of config) {
-    args.push("--config", c);
+    arguments_.push("--config", c);
   }
 
   for (const bc of beforeConfig) {
-    args.push("--before-config", bc);
+    arguments_.push("--before-config", bc);
   }
 
   if (noAutoConfig) {
-    args.push("--no-auto-config");
+    arguments_.push("--no-auto-config");
   }
 
-  args.push(...files);
+  arguments_.push(...files);
 
-  return args;
+  return arguments_;
 }
 
 export function createToolCommand(
@@ -73,7 +73,7 @@ export function createToolCommand(
 ): (options?: ToolCommandOptions) => Promise<ToolCommandResult> {
   return async function (options: ToolCommandOptions = {}): Promise<ToolCommandResult> {
     const { explain = false } = options;
-    const args = buildArgs(commandName, options);
+    const arguments_ = buildArguments(commandName, options);
     const spawnOptions: { cwd?: string; stdio?: "inherit" | "pipe" } = {};
     if (options.cwd !== undefined) {
       spawnOptions.cwd = options.cwd;
@@ -81,7 +81,7 @@ export function createToolCommand(
     if (options.stdio !== undefined) {
       spawnOptions.stdio = options.stdio;
     }
-    const raw = await spawn(args, spawnOptions);
+    const raw = await spawn(arguments_, spawnOptions);
 
     if (raw.failed) {
       return {
@@ -94,8 +94,8 @@ export function createToolCommand(
 
     if (explain === "json") {
       try {
-        const jsonStr = extractJSON(raw.stdout) || raw.stdout;
-        const plan: PlanJSON = JSON.parse(jsonStr);
+        const jsonString = extractJSON(raw.stdout) || raw.stdout;
+        const plan: PlanJSON = JSON.parse(jsonString);
         return { plan, raw, success: true };
       } catch {
         return {

@@ -15,7 +15,7 @@ import (
 // once its content changes.
 func TestAfterFixResetsLintOnChange(t *testing.T) {
 	cacheDir, projectPath, file := newProject(t)
-	c, err := NewCache(cacheDir, projectPath, config.Config{}, map[string][]string{}, nil, logger.Logger)
+	c, err := NewCache(cacheDir, projectPath, config.Config{}, nil, logger.Logger)
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
 	}
@@ -49,7 +49,7 @@ func TestAfterFixResetsLintOnChange(t *testing.T) {
 // brand-new-entry path (no prior lint/fix) and the idempotent re-add.
 func TestAfterFixUnchangedFileAddsFix(t *testing.T) {
 	cacheDir, projectPath, file := newProject(t)
-	c, err := NewCache(cacheDir, projectPath, config.Config{}, map[string][]string{}, nil, logger.Logger)
+	c, err := NewCache(cacheDir, projectPath, config.Config{}, nil, logger.Logger)
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
 	}
@@ -77,7 +77,7 @@ func TestAfterFixUnchangedFileAddsFix(t *testing.T) {
 // for both AfterLint and AfterFix.
 func TestAfterDisabledToolIsNoOp(t *testing.T) {
 	cacheDir, projectPath, file := newProject(t)
-	c, err := NewCache(cacheDir, projectPath, config.Config{}, map[string][]string{}, nil, logger.Logger)
+	c, err := NewCache(cacheDir, projectPath, config.Config{}, nil, logger.Logger)
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
 	}
@@ -116,7 +116,7 @@ func TestNilDataErrors(t *testing.T) {
 // delayed save that fires on its own (without an explicit Shutdown).
 func TestDebounceSaveFlushesOnTimer(t *testing.T) {
 	cacheDir, projectPath, file := newProject(t)
-	c, err := NewCache(cacheDir, projectPath, config.Config{}, map[string][]string{}, nil, logger.Logger)
+	c, err := NewCache(cacheDir, projectPath, config.Config{}, nil, logger.Logger)
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
 	}

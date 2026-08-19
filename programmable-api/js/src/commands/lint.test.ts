@@ -37,9 +37,9 @@ describe("lint", () => {
     assert.deepEqual(result.plan, planJSON);
     assert.equal(result.raw.exitCode, 0);
 
-    const args = mockSpawn.mock.calls[0].arguments[0];
-    assert.equal(args[0], "lint");
-    assert.ok(args.includes("--explain=json"));
+    const arguments_ = mockSpawn.mock.calls[0].arguments[0];
+    assert.equal(arguments_[0], "lint");
+    assert.ok(arguments_.includes("--explain=json"));
   });
 
   it("lint with explain='summary' returns text output", async () => {
@@ -86,9 +86,9 @@ describe("lint", () => {
 
     await lint({ files: ["src/a.ts", "src/b.ts"] });
 
-    const args = mockSpawn.mock.calls[0].arguments[0];
-    assert.ok(args.includes("src/a.ts"));
-    assert.ok(args.includes("src/b.ts"));
+    const arguments_ = mockSpawn.mock.calls[0].arguments[0];
+    assert.ok(arguments_.includes("src/a.ts"));
+    assert.ok(arguments_.includes("src/b.ts"));
   });
 
   it("lint handles tool errors gracefully", async () => {
@@ -119,8 +119,8 @@ describe("lint", () => {
 
     await lint({ fileScoped: true });
 
-    const args = mockSpawn.mock.calls[0].arguments[0];
-    assert.ok(args.includes("--file-scoped"));
+    const arguments_ = mockSpawn.mock.calls[0].arguments[0];
+    assert.ok(arguments_.includes("--file-scoped"));
   });
 
   it("lint with tools array adds --tools flag", async () => {
@@ -135,10 +135,10 @@ describe("lint", () => {
 
     await lint({ tools: ["eslint", "tsc"] });
 
-    const args = mockSpawn.mock.calls[0].arguments[0];
-    const toolsIdx = args.indexOf("--tools");
-    assert.ok(toolsIdx !== -1);
-    assert.equal(args[toolsIdx + 1], "eslint,tsc");
+    const arguments_ = mockSpawn.mock.calls[0].arguments[0];
+    const toolsIndex = arguments_.indexOf("--tools");
+    assert.ok(toolsIndex !== -1);
+    assert.equal(arguments_[toolsIndex + 1], "eslint,tsc");
   });
 
   it("lint with config and beforeConfig adds respective flags", async () => {
@@ -156,13 +156,13 @@ describe("lint", () => {
       config: ["./custom.config.js"],
     });
 
-    const args = mockSpawn.mock.calls[0].arguments[0];
-    const configIdx = args.indexOf("--config");
-    assert.ok(configIdx !== -1);
-    assert.equal(args[configIdx + 1], "./custom.config.js");
-    const beforeIdx = args.indexOf("--before-config");
-    assert.ok(beforeIdx !== -1);
-    assert.equal(args[beforeIdx + 1], "./base.config.js");
+    const arguments_ = mockSpawn.mock.calls[0].arguments[0];
+    const configIndex = arguments_.indexOf("--config");
+    assert.ok(configIndex !== -1);
+    assert.equal(arguments_[configIndex + 1], "./custom.config.js");
+    const beforeIndex = arguments_.indexOf("--before-config");
+    assert.ok(beforeIndex !== -1);
+    assert.equal(arguments_[beforeIndex + 1], "./base.config.js");
   });
 
   it("lint passes cwd and stdio to spawn", async () => {
@@ -209,7 +209,7 @@ describe("lint", () => {
 
     await lint({ noAutoConfig: true });
 
-    const args = mockSpawn.mock.calls[0].arguments[0];
-    assert.ok(args.includes("--no-auto-config"));
+    const arguments_ = mockSpawn.mock.calls[0].arguments[0];
+    assert.ok(arguments_.includes("--no-auto-config"));
   });
 });

@@ -72,7 +72,7 @@ func TestParseFileDiagnostics_ParseErrorIsNonFatal(t *testing.T) {
 }
 
 // TestExecuteBatchChunkParses drives the batch path used by per-project tools
-// like eslint (batch: true + outputParser): the parser must receive the machine
+// like eslint (a {files} list + outputParser): the parser must receive the machine
 // output (stdout) apart from wrapper noise (stderr), and the resolved diagnostics
 // must reach the result so the runner prints them instead of raw JSON.
 func TestExecuteBatchChunkParses(t *testing.T) {
@@ -91,8 +91,6 @@ func TestExecuteBatchChunkParses(t *testing.T) {
 	}
 	executor := NewExecutor(tmpDir, false, false, appManager, nil)
 	executor.SetParser(fp)
-
-	batchTrue := true
 	task := Task{
 		ToolName:  "eslint",
 		Operation: config.OpLint,
@@ -100,7 +98,6 @@ func TestExecuteBatchChunkParses(t *testing.T) {
 		OpConfig: config.ToolOperation{
 			App:   "eslint",
 			Scope: config.ToolScopePerProject,
-			Batch: &batchTrue,
 		},
 		ProjectPath: tmpDir,
 	}
@@ -170,8 +167,6 @@ func TestExecuteBatchChunksParallelMergesDiagnostics(t *testing.T) {
 	}
 	executor := NewExecutor(tmpDir, false, false, appManager, nil)
 	executor.SetParser(fp)
-
-	batchTrue := true
 	result := executor.executeTask(context.Background(), Task{
 		ToolName:  "eslint",
 		Operation: config.OpLint,
@@ -179,7 +174,6 @@ func TestExecuteBatchChunksParallelMergesDiagnostics(t *testing.T) {
 		OpConfig: config.ToolOperation{
 			App:   "eslint",
 			Scope: config.ToolScopePerProject,
-			Batch: &batchTrue,
 			Args:  []string{"{files}"},
 		},
 		Files:       files,
@@ -227,8 +221,6 @@ func TestExecuteBatchRunsOnceWhenArgsIgnoreFiles(t *testing.T) {
 	}
 	executor := NewExecutor(tmpDir, false, false, appManager, nil)
 	executor.SetParser(fp)
-
-	batchTrue := true
 	result := executor.executeTask(context.Background(), Task{
 		ToolName:  "tsc",
 		Operation: config.OpLint,
@@ -236,7 +228,6 @@ func TestExecuteBatchRunsOnceWhenArgsIgnoreFiles(t *testing.T) {
 		OpConfig: config.ToolOperation{
 			App:   "tsc",
 			Scope: config.ToolScopePerProject,
-			Batch: &batchTrue,
 			Args:  []string{"--noEmit"}, // no {files}
 		},
 		Files:       files,

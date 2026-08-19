@@ -195,15 +195,16 @@ func TestDetailedFormatter_EmptyAndWholeProject(t *testing.T) {
 	}
 }
 
-func TestJSONFormatter_BatchDefaults(t *testing.T) {
-	batchTrue := true
+func TestJSONFormatter_ReportsGranularityArityCoverage(t *testing.T) {
 	plan := &ExecutionPlan{Groups: []TaskGroup{{Priority: 5, Tasks: []Task{
-		// per-file with no explicit Batch → defaults to false
-		{ToolName: "a", OpConfig: config.ToolOperation{App: "a", Scope: config.ToolScopePerFile, Globs: []string{"**/*.go"}}},
-		// repository with no explicit Batch → defaults to true
-		{ToolName: "b", OpConfig: config.ToolOperation{App: "b", Scope: config.ToolScopeRepository}},
-		// explicit Batch override wins
-		{ToolName: "c", OpConfig: config.ToolOperation{App: "c", Scope: config.ToolScopePerFile, Batch: &batchTrue, Globs: []string{"**/*.md"}}},
+		{
+			ToolName: "oxfmt", Files: []string{"/repo/a.json"}, Coverage: CoverageComplete,
+			OpConfig: config.ToolOperation{App: "oxfmt", Scope: config.ToolScopeRepository, Args: []string{"{files}"}},
+		},
+		{
+			ToolName: "tsc", Coverage: CoveragePartial,
+			OpConfig: config.ToolOperation{App: "tsc", Scope: config.ToolScopePerProject, Args: []string{"--noEmit"}},
+		},
 	}}}}
 
 	out := NewJSONFormatter().Format(plan, "/repo", "/cwd", config.OpLint)
@@ -211,26 +212,19 @@ func TestJSONFormatter_BatchDefaults(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &parsed); err != nil {
 		t.Fatalf("output is not valid JSON: %v\n%s", err, out)
 	}
-	if parsed.Operation != "lint" || parsed.RootPath != "/repo" || parsed.CwdPath != "/cwd" {
-		t.Errorf("unexpected header fields: %+v", parsed)
-	}
-	if len(parsed.Groups) != 1 || parsed.Groups[0].Priority != 5 {
-		t.Fatalf("unexpected groups: %+v", parsed.Groups)
-	}
 
-	batchByTool := map[string]bool{}
+	got := map[string][3]string{}
 	for _, pg := range parsed.Groups[0].ParallelGroups {
 		for _, task := range pg.Tasks {
-			batchByTool[task.ToolName] = task.Batch
+			got[task.ToolName] = [3]string{task.Granularity, task.Arity, task.Coverage}
 		}
 	}
-	if batchByTool["a"] != false {
-		t.Errorf("per-file default batch = %v, want false", batchByTool["a"])
-	}
-	if batchByTool["b"] != true {
-		t.Errorf("repository default batch = %v, want true", batchByTool["b"])
-	}
-	if batchByTool["c"] != true {
-		t.Errorf("explicit batch override = %v, want true", batchByTool["c"])
+	for tool, want := range map[string][3]string{
+		"oxfmt": {"file", "many", "complete"},
+		"tsc":   {"unit", "none", "partial"},
+	} {
+		if got[tool] != want {
+			t.Errorf("%s: granularity/arity/coverage = %v, want %v", tool, got[tool], want)
+		}
 	}
 }

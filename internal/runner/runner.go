@@ -76,7 +76,7 @@ var (
 
 // toolPlanner is the planning surface used by runSingleOperation (satisfied by *tooling.Planner).
 type toolPlanner interface {
-	Plan(ctx context.Context, operation config.OperationType, files []string, selectedTools []string) (*tooling.ExecutionPlan, error)
+	Plan(ctx context.Context, operation config.OperationType, sel tooling.Selection, selectedTools []string) (*tooling.ExecutionPlan, error)
 	GetDetectedProjectTypes() []string
 	GetTimings() *timing.Timings
 }
@@ -102,6 +102,8 @@ type sharedContext struct {
 	cfg           *config.Config
 	rootPath      string
 	cwdPath       string
+	selection     tooling.Selection
+	opts          Options
 	files         []string
 	selectedTools []string
 	explainLevel  string
@@ -123,6 +125,9 @@ type sharedContext struct {
 	// platformSkipped collects the names of tools skipped for an unsupported
 	// platform across all operations (deduped), to drive failOnSkip after the run.
 	platformSkipped map[string]struct{}
+	// narrowed collects why the run did not answer completely: tools dropped for
+	// narrowing, and tasks that covered only part of their unit.
+	narrowed map[string]struct{}
 }
 
 func initSharedContext(
@@ -131,13 +136,16 @@ func initSharedContext(
 	fileScoped bool,
 	selectedToolsFlag string,
 	failOnSkip bool,
+	opts Options,
 	loadConfigFunc func() (*config.Config, string, error),
 ) (*sharedContext, error) {
 	ctx := context.Background()
 	sc := &sharedContext{
 		timings:         timing.New(),
+		opts:            opts,
 		failOnSkip:      failOnSkip,
 		platformSkipped: make(map[string]struct{}),
+		narrowed:        make(map[string]struct{}),
 	}
 
 	// Parse selected tools flag
@@ -202,14 +210,25 @@ func initSharedContext(
 	// Normalize all file paths to absolute paths to prevent filepath.Rel errors in cache.
 	sc.files = normalizeFilePaths(sc.files, sc.cwdPath)
 
-	log.Debug("files", zap.Strings("list", sc.files))
-
-	if len(sc.files) == 0 && !fileScoped {
-		log.Debug("no files specified, running whole-project tools only")
+	if err := opts.validate(); err != nil {
+		return nil, err
 	}
+	// Rejected before anything runs: --tools drops the skip entries of unselected
+	// tools before they can be observed, so the assertion would be trivially true
+	// over a debug subset. Failing after the run would waste it.
+	if opts.RequireCoverage != "" && len(sc.selectedTools) > 0 {
+		return nil, errRequireCoverageWithTools
+	}
+
+	sc.selection = tooling.NewSelection(sc.rootPath, sc.cwdPath, sc.files, fileScoped)
+
+	log.Debug("selection",
+		zap.String("mode", sc.selection.String()),
+		zap.Strings("files", sc.files))
 
 	// Create planner
 	planner := tooling.NewPlanner(sc.rootPath, sc.cwdPath, nil, sc.cfg.Tools, sc.cfg.ProjectTypes, sc.cfg.IgnoreRules)
+	planner.SetWidenPolicy(sc.cfg.Execution, config.WidenTo(sc.opts.WidenTo))
 	sc.planner = planner
 
 	// Create cache
@@ -281,7 +300,7 @@ func plannedParserModules(plan *tooling.ExecutionPlan) []string {
 // runSingleOperation executes one operation (fix, lint, etc.) using a pre-initialized shared context
 func runSingleOperation(ctx context.Context, sc *sharedContext, operation config.OperationType) error {
 	// Create execution plan
-	plan, err := sc.planner.Plan(ctx, operation, sc.files, sc.selectedTools)
+	plan, err := sc.planner.Plan(ctx, operation, sc.selection, sc.selectedTools)
 	if err != nil {
 		return fmt.Errorf("failed to create execution plan: %w", err)
 	}
@@ -290,9 +309,15 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	projectTypes := sc.planner.GetDetectedProjectTypes()
 
 	// Explain mode (json/summary/detailed): print the formatted plan, which now
-	// lists skipped tools too, and stop. Nothing runs, so explain never records
-	// skips for --fail-on-skip.
+	// lists skipped tools too, and stop.
 	if sc.explainLevel != "" {
+		// Coverage is decided entirely at plan time, so --require-coverage can be
+		// asserted without running or downloading anything — a cheap CI gate.
+		// --fail-on-skip deliberately stays inert here: it is about a host lacking
+		// a binary, which only matters if something was going to run.
+		sc.recordNarrowingSkips(plan.Skipped)
+		sc.recordCoverage(plan)
+
 		output := formatExecutionPlan(plan, sc.rootPath, sc.cwdPath, operation, sc.explainLevel)
 		fmt.Println(output)
 		return nil
@@ -303,8 +328,9 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	// — instead of leaving them invisible.
 	if len(projectTypes) == 0 || len(plan.Groups) == 0 {
 		if len(plan.Skipped) > 0 {
-			renderSkipOnlyBlock(string(operation), plan.Skipped, sc.nameWidth)
+			renderSkipOnlyBlock(string(operation), sc.targetLine(), plan.Skipped, sc.nameWidth)
 			sc.recordSkips(plan.Skipped)
+			sc.recordCoverage(plan)
 			return nil
 		}
 		if !ui.Quiet() {
@@ -361,6 +387,9 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	if !ui.Quiet() {
 		fmt.Println()
 		fmt.Println(phaseTop(string(operation)))
+		if line := sc.targetLine(); line != "" {
+			fmt.Println(line)
+		}
 		fmt.Println(clr.Faint("┃ " + strings.Join(shortTypes, " · ")))
 	}
 
@@ -368,18 +397,11 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	totalFileProcessing := 0
 	for _, group := range plan.Groups {
 		for _, task := range group.Tasks {
-			// Determine batch mode
-			batch := task.OpConfig.Batch
-			if batch == nil {
-				defaultBatch := task.OpConfig.Scope != config.ToolScopePerFile
-				batch = &defaultBatch
-			}
-
-			if !*batch && len(task.Files) > 0 {
-				// Per-file mode: count each file
+			if config.RunsPerFile(task.OpConfig, len(task.Files)) {
+				// One process per file: count each file
 				totalFileProcessing += len(task.Files)
 			} else {
-				// Batch mode or whole-project mode (no files): count as 1 unit
+				// One process for the whole task: count as 1 unit
 				totalFileProcessing++
 			}
 		}
@@ -610,6 +632,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	})
 
 	sc.recordSkips(plan.Skipped)
+	sc.recordCoverage(plan)
 
 	if hasFailures {
 		return errors.New("operation failed")
@@ -622,11 +645,141 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 // --fail-on-skip can fail the run afterwards. Intentional config skips are not
 // recorded — they never fail the run.
 func (sc *sharedContext) recordSkips(skipped []tooling.SkippedTool) {
+	if sc.narrowed == nil {
+		sc.narrowed = make(map[string]struct{})
+	}
 	for _, s := range skipped {
-		if s.Reason == tooling.SkipReasonUnsupportedPlatform {
+		switch s.Reason {
+		case tooling.SkipReasonUnsupportedPlatform:
 			sc.platformSkipped[s.ToolName] = struct{}{}
+			sc.narrowed[s.ToolName] = struct{}{}
+		case tooling.SkipReasonNotNarrowable:
+			sc.narrowed[s.ToolName] = struct{}{}
+		case tooling.SkipReasonConfig:
+			// Declared, documented, and permanent: a repository that opts a tool
+			// out has not given an incomplete answer, it has given its answer.
 		}
 	}
+}
+
+// recordNarrowingSkips records what bears on coverage, leaving --fail-on-skip
+// untouched. Explain mode uses it: --fail-on-skip is about a host lacking a
+// binary, which only matters if something was going to run, and
+// TestExplainFlagMatrix pins it as inert there.
+//
+// Coverage is a different question, so this records the same reasons the
+// executing path does. A tool with no binary for this host will not answer,
+// whether or not the plan is executed; recording only not-narrowable let
+// `--explain --require-coverage=unit` pass where the real run failed, and two
+// answers to one assertion make it worthless as a CI gate.
+func (sc *sharedContext) recordNarrowingSkips(skipped []tooling.SkippedTool) {
+	if sc.narrowed == nil {
+		sc.narrowed = make(map[string]struct{})
+	}
+	for _, s := range skipped {
+		switch s.Reason {
+		case tooling.SkipReasonNotNarrowable, tooling.SkipReasonUnsupportedPlatform:
+			sc.narrowed[s.ToolName] = struct{}{}
+		case tooling.SkipReasonConfig:
+			// Declared, documented and permanent: a repository that opts a tool
+			// out has not given an incomplete answer, it has given its answer.
+		}
+	}
+}
+
+// recordCoverage notes tasks that ran over only part of their unit.
+func (sc *sharedContext) recordCoverage(plan *tooling.ExecutionPlan) {
+	for _, group := range plan.Groups {
+		for _, task := range group.Tasks {
+			if task.Coverage == tooling.CoveragePartial {
+				sc.narrowed[task.ToolName] = struct{}{}
+			}
+		}
+	}
+}
+
+// coverageFailure enforces --require-coverage.
+//
+// "unit" asserts every unit the run touched was fully analysed; "repo" adds that
+// the run targeted the repository at all. The second clause is not a formality:
+// per-task coverage is stamped on the units that ran, so without it
+// `check --require-coverage=repo pkg/x.ts` would pass having checked one unit of
+// nine — there is no denominator anywhere else.
+func (sc *sharedContext) coverageFailure() error {
+	level := config.WidenTo(sc.opts.RequireCoverage)
+	if level == "" {
+		return nil
+	}
+
+	var reasons []string
+	if len(sc.narrowed) > 0 {
+		names := make([]string, 0, len(sc.narrowed))
+		for n := range sc.narrowed {
+			names = append(names, n)
+		}
+		sort.Strings(names)
+		reasons = append(reasons, fmt.Sprintf("%d tool(s) did not answer completely: %s",
+			len(names), strings.Join(names, ", ")))
+	}
+	if level == config.WidenToRepo && sc.selection.Mode != tooling.SelectionAll {
+		reasons = append(reasons, fmt.Sprintf("the run targeted %s, not the whole repository", sc.selection))
+	}
+
+	if len(reasons) == 0 {
+		return nil
+	}
+	return coverageError{fmt.Errorf("--require-coverage=%s: %s", level, strings.Join(reasons, "; "))}
+}
+
+// errRequireCoverageWithTools rejects a combination that cannot mean anything:
+// --tools drops the skip entries of unselected tools before anything can observe
+// them, so the assertion would be trivially true over a debug subset.
+var errRequireCoverageWithTools = errors.New(
+	"--require-coverage cannot be combined with --tools: the assertion would only cover the selected subset")
+
+// targetLine announces that the run covers less than the repository, so a green
+// result is not mistaken for a full one. Empty for a whole-repository run, which
+// is the common case and needs no annotation.
+func (sc *sharedContext) targetLine() string {
+	switch sc.selection.Mode {
+	case tooling.SelectionAll:
+		return ""
+	case tooling.SelectionEmpty:
+		return clr.Faint("┃ ◑ target: nothing staged · narrowed run")
+	case tooling.SelectionPaths:
+		noun := "files"
+		if len(sc.selection.Paths) == 1 {
+			noun = "file"
+		}
+		names := relativeToRoot(sc.selection.Paths, sc.rootPath)
+		shown := strings.Join(names, " ")
+		if len(names) > 3 {
+			shown = strings.Join(names[:3], " ") + fmt.Sprintf(" +%d more", len(names)-3)
+		}
+		return clr.Faint(fmt.Sprintf("┃ ◑ target: %d %s · %s · narrowed run",
+			len(names), noun, shown))
+	case tooling.SelectionSubtree:
+		dir := sc.selection.Dir
+		if rel, err := filepath.Rel(sc.rootPath, dir); err == nil {
+			dir = rel
+		}
+		return clr.Faint(fmt.Sprintf("┃ ◑ target: %s · narrowed run", dir))
+	}
+	return ""
+}
+
+// relativeToRoot renders paths relative to the git root so the line stays
+// readable and stable regardless of where the repository lives.
+func relativeToRoot(paths []string, root string) []string {
+	out := make([]string, 0, len(paths))
+	for _, p := range paths {
+		if rel, err := filepath.Rel(root, p); err == nil {
+			out = append(out, rel)
+			continue
+		}
+		out = append(out, p)
+	}
+	return out
 }
 
 // printSkippedTools renders faint "┃ ⊘ name   skipped (reason)" body lines,
@@ -645,12 +798,15 @@ func printSkippedTools(skipped []tooling.SkippedTool, nameWidth int) {
 
 // renderSkipOnlyBlock prints a minimal operation block containing only skipped
 // tools, used when planning produced skips but nothing runnable.
-func renderSkipOnlyBlock(operation string, skipped []tooling.SkippedTool, nameWidth int) {
+func renderSkipOnlyBlock(operation, targetLine string, skipped []tooling.SkippedTool, nameWidth int) {
 	if ui.Quiet() {
 		return
 	}
 	fmt.Println()
 	fmt.Println(phaseTop(operation))
+	if targetLine != "" {
+		fmt.Println(targetLine)
+	}
 	fmt.Println(clr.Faint("┃"))
 	printSkippedTools(skipped, nameWidth)
 	printOperationFooter(nil, 0, 0, 0, len(skipped))
@@ -675,9 +831,10 @@ func RunSequential(
 	fileScoped bool,
 	selectedToolsFlag string,
 	failOnSkip bool,
+	opts Options,
 	loadConfigFunc func() (*config.Config, string, error),
 ) error {
-	return runSequential(operations, args, explainMode, fileScoped, selectedToolsFlag, loadConfigFunc, true, failOnSkip)
+	return runSequential(operations, args, explainMode, fileScoped, selectedToolsFlag, loadConfigFunc, true, failOnSkip, opts)
 }
 
 // RunContinuation runs a single operation as a continuation of another command's
@@ -692,7 +849,7 @@ func RunContinuation(
 	loadConfigFunc func() (*config.Config, string, error),
 ) error {
 	// Continuations (e.g. setup's post-fix) never harden on skips.
-	return runSequential([]config.OperationType{operation}, args, explainMode, fileScoped, selectedToolsFlag, loadConfigFunc, false, false)
+	return runSequential([]config.OperationType{operation}, args, explainMode, fileScoped, selectedToolsFlag, loadConfigFunc, false, false, Options{})
 }
 
 func runSequential(
@@ -704,8 +861,9 @@ func runSequential(
 	loadConfigFunc func() (*config.Config, string, error),
 	showBanner bool,
 	failOnSkip bool,
+	opts Options,
 ) error {
-	sc, err := initSharedContext(args, explainMode, fileScoped, selectedToolsFlag, failOnSkip, loadConfigFunc)
+	sc, err := initSharedContext(args, explainMode, fileScoped, selectedToolsFlag, failOnSkip, opts, loadConfigFunc)
 	if err != nil {
 		return err
 	}
@@ -752,6 +910,10 @@ func runSequential(
 		return err
 	}
 
+	if err := sc.coverageFailure(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -771,6 +933,40 @@ func (sc *sharedContext) skipFailure() error {
 		len(names), strings.Join(names, ", "))
 }
 
+// Options carries the run-shaping flags. It exists because the entry points had
+// grown to seven positional parameters and the coverage work adds two more.
+type Options struct {
+	// WidenTo overrides how far the core may widen beyond the selection, in
+	// either direction. Empty means "no override".
+	WidenTo string
+	// RequireCoverage asserts the run answered completely: "unit" for every unit
+	// it touched, "repo" for the repository. Empty disables the assertion.
+	RequireCoverage string
+}
+
+// validate rejects unknown flag values. Rank() reads an unvalidated string
+// through a map, so anything unrecognised ranks 0 — the same as "target", the
+// strictest level. Left unchecked, --widen-to=Repo would ask for the widest
+// policy and silently get the narrowest, and --require-coverage=Repo would arm
+// the assertion while never matching the level that carries the selection
+// clause.
+func (o Options) validate() error {
+	if o.WidenTo != "" && !config.ValidWidenTo(config.WidenTo(o.WidenTo)) {
+		return fmt.Errorf("invalid --widen-to value: %s (must be target, unit or repo)", o.WidenTo)
+	}
+	switch config.WidenTo(o.RequireCoverage) {
+	case "", config.WidenToUnit, config.WidenToRepo:
+		return nil
+	case config.WidenToTarget:
+		return fmt.Errorf("invalid --require-coverage value: %s (must be unit or repo; "+
+			"target asserts only what was named, which is always true)", o.RequireCoverage)
+	default:
+		// "target" is excluded on purpose: it asserts only what was named, which
+		// is always true and so never fails.
+		return fmt.Errorf("invalid --require-coverage value: %s (must be unit or repo)", o.RequireCoverage)
+	}
+}
+
 // Run executes a single tool operation (fix, lint, etc.)
 func Run(
 	operation config.OperationType,
@@ -779,11 +975,12 @@ func Run(
 	fileScoped bool,
 	selectedToolsFlag string,
 	failOnSkip bool,
+	opts Options,
 	loadConfigFunc func() (*config.Config, string, error),
 ) error {
 	return RunSequential(
 		[]config.OperationType{operation},
-		args, explainMode, fileScoped, selectedToolsFlag, failOnSkip, loadConfigFunc,
+		args, explainMode, fileScoped, selectedToolsFlag, failOnSkip, opts, loadConfigFunc,
 	)
 }
 
@@ -1296,29 +1493,5 @@ func getStagedFiles(ctx context.Context, rootPath string) ([]string, error) {
 }
 
 func createCache(cacheDir string, projectPath string, cfg config.Config, selectedTools []string) (*cache.Cache, error) {
-	invalidateOnFiles := make(map[string][]string)
-
-	for toolName, tool := range cfg.Tools {
-		var files []string
-
-		for _, op := range tool.Operations {
-			if op.InvalidateOn != nil {
-				files = append(files, op.InvalidateOn...)
-			}
-		}
-
-		if len(files) > 0 {
-			fileSet := make(map[string]bool)
-			var uniqueFiles []string
-			for _, file := range files {
-				if !fileSet[file] {
-					fileSet[file] = true
-					uniqueFiles = append(uniqueFiles, file)
-				}
-			}
-			invalidateOnFiles[toolName] = uniqueFiles
-		}
-	}
-
-	return cache.NewCache(cacheDir, projectPath, cfg, invalidateOnFiles, selectedTools, logger.Logger)
+	return cache.NewCache(cacheDir, projectPath, cfg, selectedTools, logger.Logger)
 }

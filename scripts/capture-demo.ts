@@ -8,19 +8,20 @@
 import { execSync, spawnSync } from "node:child_process";
 import { existsSync, renameSync } from "node:fs";
 import { resolve as resolvePath } from "node:path";
-import { fileURLToPath } from "node:url";
 
-const __dirname = fileURLToPath(new URL(".", import.meta.url));
+const __dirname = import.meta.dirname;
 
 async function main() {
   // Arg parsing
-  const rawArgs = process.argv.slice(2);
-  const outputDirIdx = rawArgs.indexOf("--output-dir");
+  const rawArguments = process.argv.slice(2);
+  const outputDirIdx = rawArguments.indexOf("--output-dir");
   const outputDir =
     outputDirIdx === -1
       ? resolvePath(__dirname, "..", "website", "static")
-      : resolvePath(rawArgs[outputDirIdx + 1]);
-  const repoPath = rawArgs.find((a, i) => !a.startsWith("--") && i !== outputDirIdx + 1);
+      : resolvePath(rawArguments[outputDirIdx + 1]);
+  const repoPath = rawArguments.find(
+    (a, index) => !a.startsWith("--") && index !== outputDirIdx + 1,
+  );
 
   if (!repoPath) {
     console.error("Usage: node scripts/capture-demo.ts <repo-path> [--output-dir <dir>]");
@@ -39,7 +40,7 @@ async function main() {
   const coldPath = resolvePath(outputDir, "cold.cast");
   const warmPath = resolvePath(outputDir, "warm.cast");
 
-  const env = {
+  const environment = {
     ...process.env,
     FORCE_COLOR: "1",
     npm_config_loglevel: "silent",
@@ -48,7 +49,7 @@ async function main() {
   // ── Cold run ──────────────────────────────────────────────────────────────
   console.log("\n→ Clearing cache...");
   try {
-    execSync("pnpm datamitsu cache clear", { cwd: absRepo, env, stdio: "inherit" });
+    execSync("pnpm datamitsu cache clear", { cwd: absRepo, env: environment, stdio: "inherit" });
   } catch {
     // OK if cache doesn't exist yet
   }
@@ -65,7 +66,7 @@ async function main() {
       "datamitsu check — cold start",
       `${coldPath}.tmp`,
     ],
-    { cwd: absRepo, env, stdio: "inherit" },
+    { cwd: absRepo, env: environment, stdio: "inherit" },
   );
 
   if (coldResult.status !== 0) {
@@ -86,7 +87,7 @@ async function main() {
       "datamitsu check — cached",
       `${warmPath}.tmp`,
     ],
-    { cwd: absRepo, env, stdio: "inherit" },
+    { cwd: absRepo, env: environment, stdio: "inherit" },
   );
 
   if (warmResult.status !== 0) {

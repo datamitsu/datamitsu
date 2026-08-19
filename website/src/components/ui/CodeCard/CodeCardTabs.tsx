@@ -15,7 +15,7 @@ export interface CodeCardTabsProps {
   tabs: CodeCardTab[];
 }
 
-interface CodeCardTabButtonProps {
+interface CodeCardTabButtonProperties {
   active: boolean;
   id: string;
   label: string;
@@ -51,7 +51,7 @@ function CodeCardTabButton({
   label,
   onKeyDown,
   onSelect,
-}: CodeCardTabButtonProps): ReactNode {
+}: CodeCardTabButtonProperties): ReactNode {
   const handleClick = useCallback(() => onSelect(id), [id, onSelect]);
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => onKeyDown?.(e, id),

@@ -63,11 +63,11 @@ export class JsonlProgress implements vscode.Disposable {
   }
 
   private onLine(line: string): void {
-    const ev = parseEvent(line);
-    if (ev === undefined) {
+    const event = parseEvent(line);
+    if (event === undefined) {
       return;
     }
-    const update = toStatusUpdate(ev);
+    const update = toStatusUpdate(event);
 
     if (update.error !== undefined) {
       // Logged, not popped up: the failing LSP request already surfaces its own
@@ -85,8 +85,8 @@ export class JsonlProgress implements vscode.Disposable {
 
   private render(): void {
     // Show the most recently touched active op, hide when none remain.
-    for (let i = this.order.length - 1; i >= 0; i--) {
-      const id = this.order[i];
+    for (let index = this.order.length - 1; index >= 0; index--) {
+      const id = this.order[index];
       if (id === undefined) {
         continue;
       }

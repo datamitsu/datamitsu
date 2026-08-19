@@ -23,17 +23,17 @@ export type CachePathResult =
 export const cache = {
   async clear(options: CacheClearOptions = {}): Promise<CacheClearResult> {
     const { all = false, cwd, dryRun = false } = options;
-    const args = ["cache", "clear"];
+    const arguments_ = ["cache", "clear"];
 
     if (all) {
-      args.push("--all");
+      arguments_.push("--all");
     }
 
     if (dryRun) {
-      args.push("--dry-run");
+      arguments_.push("--dry-run");
     }
 
-    const raw = await spawn(args, cwd ? { cwd } : {});
+    const raw = await spawn(arguments_, cwd ? { cwd } : {});
 
     if (raw.failed) {
       return {

@@ -215,10 +215,12 @@ See the [Configuration API reference](/docs/reference/configuration-api) for com
 
 ## Environment Variables
 
-| Variable                         | Description                        | Default                                      |
-| -------------------------------- | ---------------------------------- | -------------------------------------------- |
-| `DATAMITSU_CONCURRENCY`          | Concurrent downloads during `init` | 3                                            |
-| `DATAMITSU_MAX_PARALLEL_WORKERS` | Max parallel tool workers          | `max(4, floor(NumCPU * 0.75))`, capped at 16 |
-| `DATAMITSU_NO_SPONSOR`           | Suppress sponsor messages          | -                                            |
-| `NO_COLOR`                       | Disable color output               | -                                            |
-| `FORCE_COLOR`                    | Force color output                 | -                                            |
+| Variable                         | Description                                | Default                                      |
+| -------------------------------- | ------------------------------------------ | -------------------------------------------- |
+| `DATAMITSU_CONCURRENCY`          | Concurrent downloads during `init`         | 3                                            |
+| `DATAMITSU_MAX_PARALLEL_WORKERS` | Max parallel tool workers                  | `max(4, floor(NumCPU * 0.75))`, capped at 16 |
+| `DATAMITSU_UNIT_CACHE_TTL`       | Minutes a project-level verdict is trusted | `1440` (24h)                                 |
+| `DATAMITSU_LSP_FORMAT_WIDEN_TO`  | Editor format-on-save widening             | `unit`                                       |
+| `DATAMITSU_NO_SPONSOR`           | Suppress sponsor messages                  | -                                            |
+| `NO_COLOR`                       | Disable color output                       | -                                            |
+| `FORCE_COLOR`                    | Force color output                         | -                                            |

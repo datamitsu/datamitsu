@@ -438,15 +438,8 @@ func (e *Executor) executeTask(ctx context.Context, task Task) ExecutionResult {
 
 		// Call file progress callback even on error to maintain progress tracking
 		if e.fileProgressCallback != nil {
-			// Determine if this would be batch mode
-			batch := task.OpConfig.Batch
-			if batch == nil {
-				defaultBatch := task.OpConfig.Scope != config.ToolScopePerFile
-				batch = &defaultBatch
-			}
-
-			if *batch || len(task.Files) == 0 {
-				// Batch mode: count as 1 unit
+			if !config.RunsPerFile(task.OpConfig, len(task.Files)) {
+				// One process for the whole task: count as 1 unit
 				e.fileProgressCallback(task.ToolName, 1, 1, false)
 			} else {
 				// Per-file mode: count each file
@@ -463,22 +456,41 @@ func (e *Executor) executeTask(ctx context.Context, task Task) ExecutionResult {
 		zap.String("relativeDir", relativeDir),
 		zap.String("scope", string(task.OpConfig.Scope)))
 
-	// Execute based on scope and batch mode
-	// For per-file scope, the planner already created individual tasks per file
-	// For per-project and repository scopes, we execute in batch or per-file based on batch flag
-	batch := task.OpConfig.Batch
-	if batch == nil {
-		// Default batch behavior based on scope
-		defaultBatch := task.OpConfig.Scope != config.ToolScopePerFile
-		batch = &defaultBatch
+	// A stored verdict means every member and guard is byte-identical to the run
+	// that passed, which is as sound for a narrowed invocation as for a full one
+	// — so the read is not gated on coverage. Only the write is.
+	verdictKey, verdictInputHash, verdictApplies := e.verdictKeys(task)
+	if verdictApplies {
+		if !e.cache.ShouldRunVerdict(verdictKey, verdictInputHash, e.verdictTTL()) {
+			log.Debug("verdict cache hit", zap.String("tool", task.ToolName), zap.String("unit", task.UnitDir))
+			// Same shape as a real run: consumers key JSON-L on RelativeDir and
+			// print the scope badge only when Scope is set, so a hit that omitted
+			// them would emit a differently-shaped event for the same task.
+			result.Success = true
+			result.WorkingDir = workingDir
+			result.RelativeDir = relativeDir
+			result.Scope = task.OpConfig.Scope
+			result.recordTiming(startTime)
+			if e.fileProgressCallback != nil {
+				e.fileProgressCallback(task.ToolName, 1, 1, true)
+			}
+			return result
+		}
 	}
 
-	if *batch || len(task.Files) == 0 {
-		// Batch execution (all files at once) or whole-project mode
-		result = e.executeBatch(ctx, task, cmdInfo, workingDir, startTime)
-	} else {
-		// Per-file execution
+	// Dispatch on argv shape, not scope: only {file} takes one path, so only it
+	// needs one process per file.
+	if config.RunsPerFile(task.OpConfig, len(task.Files)) {
 		result = e.executePerFile(ctx, task, cmdInfo, workingDir, startTime)
+	} else {
+		result = e.executeBatch(ctx, task, cmdInfo, workingDir, startTime)
+	}
+
+	// One write point per task, after every process it spawned has succeeded.
+	// The three per-process updateCacheAfterSuccess calls would otherwise let the
+	// first success of an N-process task record a verdict a later failure refutes.
+	if result.Success {
+		e.recordVerdict(task, verdictKey, verdictInputHash, verdictApplies)
 	}
 
 	// Classify unclassified failures as independent (tool failed on its own)
@@ -583,6 +595,15 @@ func (e *Executor) filterFilesByCache(task Task) []string {
 		return task.Files
 	}
 
+	// Per-file entries record "this file passed", which is only a verdict when a
+	// file's result stands alone. For unit and repo granularity it is not: tsc's
+	// answer depends on tsconfig.json, which no .ts glob matches, so an edit to
+	// it left every content hash unchanged and the whole task was skipped with a
+	// tick. Those granularities use the verdict cache instead.
+	if config.InferGranularity(task.OpConfig) != config.GranularityFile {
+		return task.Files
+	}
+
 	// Check if caching is enabled for this tool (default: true)
 	toolCacheEnabled := true
 	if task.OpConfig.Cache != nil {
@@ -610,6 +631,11 @@ func (e *Executor) filterFilesByCache(task Task) []string {
 // updateCacheAfterSuccess updates cache after successful tool execution
 func (e *Executor) updateCacheAfterSuccess(task Task, files []string) {
 	if e.cache == nil {
+		return
+	}
+	// filterFilesByCache only reads these for file granularity; writing them for
+	// unit and repo tasks stores entries nothing consults.
+	if config.InferGranularity(task.OpConfig) != config.GranularityFile {
 		return
 	}
 
@@ -1250,6 +1276,18 @@ func (e *Executor) replacePlaceholders(args []string, file string, files []strin
 			}
 			// If {file} is part of a larger string, replace it
 			arg = strings.ReplaceAll(arg, "{file}", file)
+		}
+
+		// Expanded here, never in expandPathPlaceholders: that helper is shared
+		// with env-value expansion, which has no task and so no target. {target}
+		// carries the same directory as {cwd} today but differs in intent — it
+		// marks what the tool scans, which is what makes arity inferable.
+		if strings.Contains(arg, "{target}") {
+			if arg == "{target}" {
+				result = append(result, projectPath)
+				continue
+			}
+			arg = strings.ReplaceAll(arg, "{target}", projectPath)
 		}
 
 		// {root}, {cwd} and {toolCache} are shared with environment-value expansion.

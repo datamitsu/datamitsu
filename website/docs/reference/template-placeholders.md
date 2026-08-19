@@ -16,8 +16,9 @@ Tool operation **arguments** (`args`) and **environment-variable values** (`env`
 | `{root}`      | Git repository root                   |   ✅   |  ✅   | `"{root}/.config"`          |
 | `{cwd}`       | Per-project working directory         |   ✅   |  ✅   | `"{cwd}/src"`               |
 | `{toolCache}` | Per-project, per-tool cache directory |   ✅   |  ✅   | `"{toolCache}/tsbuildinfo"` |
+| `{target}`    | The single directory a scanner scans  |   ✅   |  ❌   | `"{target}"`                |
 
-`{file}` and `{files}` are per-file/per-batch argument concepts and are **not**
+`{file}`, `{files}` and `{target}` are argument concepts and are **not**
 available in `env` values (an environment variable holds a single string, not an
 argument list). The path placeholders `{root}`, `{cwd}` and `{toolCache}` work in
 both `args` and `env`.
@@ -54,7 +55,7 @@ args: ["--input={file}"];
 
 ## `{files}`
 
-Expands to multiple file paths. Used in tools with `scope: "per-project"` or `scope: "repository"` when `batch` is enabled.
+Expands to one argument per file. Using it is what makes an operation's [arity](configuration-api.md#arity) `many`: one process for the whole list, chunked only when the command line would overflow.
 
 **As entire argument** — expands to multiple separate arguments:
 
@@ -175,6 +176,30 @@ const toolsConfig = {
   },
 };
 ```
+
+## `{target}`
+
+Marks the one directory a tool walks itself, as opposed to a list of files you
+hand it. Scanners want this: `gitleaks dir`, `trivy fs`, `osv-scanner` all take a
+path and do their own traversal.
+
+```js
+args: ["dir", "--redact", "--config", "{root}/.gitleaks.toml", "{target}"];
+```
+
+It exists because `{root}` is ambiguous. In `--config {root}/.gitleaks.toml` the
+root is a path the tool _reads_; in `dir {root}` it is the thing it _scans_, and
+nothing in the argument list distinguishes them. `{target}` says which one you
+mean, and that is what lets datamitsu infer the operation's [arity](configuration-api.md#arity)
+exactly rather than guessing.
+
+Handing a directory-scanning tool `{files}` instead is a silent mistake, not a
+loud one. `gitleaks dir` accepts exactly one path and, given more, discards them
+all and scans the working directory — same exit code, no warning, and your glob
+and ignore rules never reached it.
+
+`{target}` and `{file}`/`{files}` are mutually exclusive: a directory argument
+and a file list are different shapes, and declaring both is a config error.
 
 ## Expansion Order
 

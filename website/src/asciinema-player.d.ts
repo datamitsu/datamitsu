@@ -28,7 +28,7 @@ declare module "asciinema-player" {
   }
 
   export function create(
-    src: string,
+    source: string,
     element: HTMLElement,
     options?: AsciinemaPlayerOptions,
   ): AsciinemaPlayerInstance;

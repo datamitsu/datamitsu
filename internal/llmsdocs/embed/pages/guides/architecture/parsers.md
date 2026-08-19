@@ -39,7 +39,7 @@ Which file a diagnostic belongs to has two possible sources, and they compose:
 - **The core**, otherwise. Most tool formats drop the filename, so the executor
   stamps the file it just linted — but only where the parser left `file` empty.
 
-This ordering is what makes **batch** tools work. A `batch: true` tool
+This ordering is what makes list-taking tools work. A tool given `{files}`
 (eslint over a whole project, one invocation, dozens of files) gives the core no
 single file to stamp, so a parser that does not report paths yields unattributed
 diagnostics. Tools in that class must extract the path.

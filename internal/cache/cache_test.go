@@ -33,8 +33,7 @@ func TestCacheConcurrentAccess(t *testing.T) {
 
 	// Create cache
 	cfg := config.Config{}
-	invalidateOn := map[string][]string{}
-	cache, err := NewCache(tmpDir, projectPath, cfg, invalidateOn, nil, logger.Logger)
+	cache, err := NewCache(tmpDir, projectPath, cfg, nil, logger.Logger)
 	if err != nil {
 		t.Fatalf("failed to create cache: %v", err)
 	}
@@ -111,8 +110,7 @@ func TestCacheConcurrentSave(t *testing.T) {
 
 	// Create cache
 	cfg := config.Config{}
-	invalidateOn := map[string][]string{}
-	cache, err := NewCache(tmpDir, projectPath, cfg, invalidateOn, nil, logger.Logger)
+	cache, err := NewCache(tmpDir, projectPath, cfg, nil, logger.Logger)
 	if err != nil {
 		t.Fatalf("failed to create cache: %v", err)
 	}
@@ -152,7 +150,7 @@ func TestCacheConcurrentSave(t *testing.T) {
 	}
 
 	// Try to load cache to verify it's not corrupted
-	newCache, err := NewCache(tmpDir, projectPath, cfg, invalidateOn, nil, logger.Logger)
+	newCache, err := NewCache(tmpDir, projectPath, cfg, nil, logger.Logger)
 	if err != nil {
 		t.Fatalf("failed to load cache after concurrent saves: %v", err)
 	}
@@ -171,7 +169,7 @@ func TestInvalidationKeyFormat(t *testing.T) {
 	}
 
 	cfg := config.Config{}
-	key, err := calculateInvalidationKey(cfg, nil, projectPath, nil)
+	key, err := calculateInvalidationKey(cfg, nil)
 	if err != nil {
 		t.Fatalf("calculateInvalidationKey() error = %v", err)
 	}
@@ -187,7 +185,7 @@ func TestInvalidationKeyFormat(t *testing.T) {
 	}
 
 	// Deterministic
-	key2, err := calculateInvalidationKey(cfg, nil, projectPath, nil)
+	key2, err := calculateInvalidationKey(cfg, nil)
 	if err != nil {
 		t.Fatalf("calculateInvalidationKey() error = %v", err)
 	}
@@ -196,7 +194,7 @@ func TestInvalidationKeyFormat(t *testing.T) {
 	}
 
 	// Different tools produce different keys
-	keyWithTools, err := calculateInvalidationKey(cfg, nil, projectPath, []string{"eslint"})
+	keyWithTools, err := calculateInvalidationKey(cfg, []string{"eslint"})
 	if err != nil {
 		t.Fatalf("calculateInvalidationKey() error = %v", err)
 	}

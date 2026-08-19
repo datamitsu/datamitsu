@@ -521,7 +521,8 @@ interface ToolOperation {
   globs?: string[]; // File patterns (doublestar syntax; `!` negation not supported). Omit to match all discovered files.
   excludeGlobs?: string[]; // Patterns removed from the matched set (doublestar syntax)
   scope: "repository" | "per-project" | "per-file";
-  batch?: boolean; // Batch files into single execution (default: true)
+  arity?: "many" | "one" | "dir" | "none"; // argv path shape; inferred, assert-only
+  granularity?: "file" | "unit" | "repo"; // smallest complete input set; inferred
   priority?: number; // Execution order (lower = first, default: 0)
   invalidateOn?: string[]; // Files that invalidate cache
   env?: Record<string, string>; // Extra environment variables; values support {root}, {cwd}, {toolCache}
@@ -563,7 +564,109 @@ const toolsConfig = {
 | `per-project` | Runs once per detected project      | Project root      |
 | `per-file`    | Runs once per matched file          | Project root      |
 
-See [Template Placeholders](./template-placeholders.md) for the `{file}`, `{files}`, `{root}`, `{cwd}`, and `{toolCache}` placeholders available in `args` (and `{root}`, `{cwd}`, `{toolCache}` in `env`). Unknown placeholders fail config loading rather than being passed through to the tool.
+See [Template Placeholders](./template-placeholders.md) for the `{file}`, `{files}`, `{target}`, `{root}`, `{cwd}`, and `{toolCache}` placeholders available in `args` (and `{root}`, `{cwd}`, `{toolCache}` in `env`). Unknown placeholders fail config loading rather than being passed through to the tool.
+
+`scope` says where the process starts. Two other properties say what it needs and
+what it can be given, and both are inferred — a tool usually declares neither.
+
+### Granularity
+
+`granularity` is the smallest set of files on which an operation's verdict is
+complete. It decides whether datamitsu may honour a narrowed request, and whether
+a result can be cached per file.
+
+| Value  | Meaning                                   | Example            |
+| ------ | ----------------------------------------- | ------------------ |
+| `file` | Any subset of files is a complete input   | prettier, shfmt    |
+| `unit` | Valid only over a whole project or module | tsc, golangci-lint |
+| `repo` | Valid only over the whole repository      | syncpack, knip     |
+
+Inferred when omitted:
+
+```
+scope: "per-file"                              -> file
+scope: "repository" with {file} or {files}     -> file
+scope: "repository" otherwise                  -> repo
+scope: "per-project"                           -> unit
+```
+
+Note the last line: a per-project operation is `unit` **regardless of its
+arguments**. A type checker and a formatter can carry byte-identical `args` while
+one's answer depends on its siblings and the other's does not, and no inspection
+of the command line can tell them apart. The default therefore errs towards
+`unit`, where being wrong costs a cache entry rather than a wrong answer.
+
+Declaring `granularity: "file"` is a speed decision — it puts the operation back
+on the per-file cache — and is only correct when a file's result cannot depend on
+its neighbours. datamitsu rejects it when the file list never reaches the tool,
+since such an operation cannot have a per-file verdict at all.
+
+Declaring `unit` or `repo` is otherwise safe: it can only cause more work. The
+one rejected combination is `scope: "repository"` with `granularity: "unit"` — a
+repository-scoped operation starts one process at the git root and is never split
+per unit, so its verdict covers the repository whatever it declares. Use
+`scope: "per-project"` for a unit-complete verdict.
+
+### Arity
+
+`arity` is the shape of paths the command line accepts.
+
+| Value  | Meaning                      | Placeholder |
+| ------ | ---------------------------- | ----------- |
+| `many` | An arbitrary list of paths   | `{files}`   |
+| `one`  | Exactly one path per process | `{file}`    |
+| `dir`  | One directory, no file list  | `{target}`  |
+| `none` | No path on the command line  | —           |
+
+It is inferred exactly from the placeholders, so declaring it is an **assertion**,
+not an override: a declared value that disagrees with the arguments is a config
+error. That is what makes it worth writing. `yq -i` given two files splices the
+second into the first and exits 0, so `arity: "one"` on a `yq` operation turns a
+one-token edit from silent data loss into a config error.
+
+#### Replacing `batch`
+
+Arity replaces the old `batch` flag, which no longer exists. The key is simply
+ignored if left in a config, so check the mapping below rather than assuming a
+config carries over unchanged: `batch: false` on an operation carrying `{files}`
+used to mean one process per file, where arity reads it as one process taking the
+whole list.
+
+| Was               | Now                                    |
+| ----------------- | -------------------------------------- |
+| `batch: true`     | `{files}` in `args` (arity `many`)     |
+| `batch: false`    | `{file}` in `args` (arity `one`)       |
+| no file in `args` | nothing to change (arity `none`/`dir`) |
+
+### `execution.widenTo`
+
+How far datamitsu may widen work beyond what you asked for, per operation.
+
+```js
+export const getConfig = (config) => ({
+  ...config,
+  execution: {
+    widenTo: {
+      fix: "target", // only ever touch the files I name
+      lint: "unit",
+    },
+  },
+});
+```
+
+| Value    | Meaning                                                |
+| -------- | ------------------------------------------------------ |
+| `target` | Only what was named; anything needing more is reported |
+| `unit`   | May widen to the project containing the target         |
+| `repo`   | May widen to the whole repository                      |
+
+Default `unit` for both operations. Under it, `datamitsu fix ./one.ts` may run a
+project-wide tool over that project — including one that rewrites files you did
+not name, if it takes no file arguments. Set `fix: "target"` if that blast radius
+is not what you want. `--widen-to` overrides it for a single run, in either
+direction. The narrow-only rule applies to the LSP session policy
+(`DATAMITSU_LSP_FORMAT_WIDEN_TO`) instead: that one is ambient and applies to
+every save, so an editor must not be able to out-scope the project.
 
 ### Skipping a tool (`skip` / `skipReason`)
 

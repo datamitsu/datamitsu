@@ -9789,7 +9789,6 @@ const toolsConfig = {
       fix: {
         app: "dotenv-linter",
         args: ["fix", "{files}"],
-        batch: true,
         globs: dotenvLinterGlobs,
         priority: fixPriority["dotenv-linter"],
         scope: "per-file",
@@ -9797,7 +9796,6 @@ const toolsConfig = {
       lint: {
         app: "dotenv-linter",
         args: ["check", "{files}"],
-        batch: true,
         globs: dotenvLinterGlobs,
         priority: lintPriority["dotenv-linter"],
         scope: "per-file",
@@ -9822,7 +9820,6 @@ const toolsConfig = {
       fix: {
         app: "eslint",
         args: ["--quiet", "--fix", "-c", "{cwd}/eslint.config.mjs", "{files}"],
-        batch: true,
         globs: eslintGlobs,
         priority: fixPriority.eslint,
         scope: "per-project",
@@ -9830,7 +9827,6 @@ const toolsConfig = {
       lint: {
         app: "eslint",
         args: ["--quiet", "-c", "{cwd}/eslint.config.mjs", "{files}"],
-        batch: true,
         globs: eslintGlobs,
         priority: lintPriority.eslint,
         scope: "per-project",
@@ -9924,7 +9920,6 @@ const toolsConfig = {
       lint: {
         app: "harper-cli",
         args: ["lint", "--dialect", "us", "--format", "compact", "{files}"],
-        batch: true,
         globs: markdownGlobs,
         priority: lintPriority["harper-cli"],
         scope: "repository",
@@ -9962,7 +9957,6 @@ const toolsConfig = {
       lint: {
         app: "lychee",
         args: ["--no-progress", "{files}"],
-        batch: true,
         globs: markdownGlobs,
         priority: lintPriority.lychee,
         scope: "repository",
@@ -9991,7 +9985,6 @@ const toolsConfig = {
       fix: {
         app: "oxfmt",
         args: ["--write", "--config", "{root}/oxfmt.config.ts", "{files}"],
-        batch: true,
         globs: oxfmtGlobs,
         priority: fixPriority.oxfmt,
         scope: "repository",
@@ -9999,7 +9992,6 @@ const toolsConfig = {
       lint: {
         app: "oxfmt",
         args: ["--check", "--config", "{root}/oxfmt.config.ts", "{files}"],
-        batch: true,
         globs: oxfmtGlobs,
         priority: lintPriority.oxfmt,
         scope: "repository",
@@ -10012,7 +10004,6 @@ const toolsConfig = {
       fix: {
         app: "oxlint",
         args: ["--disable-nested-config", "-c", "{cwd}/.oxlintrc.json", "--fix", "{files}"],
-        batch: true,
         globs: oxlintGlobs,
         priority: fixPriority.oxlint,
         scope: "per-project",
@@ -10020,7 +10011,6 @@ const toolsConfig = {
       lint: {
         app: "oxlint",
         args: ["--disable-nested-config", "-c", "{cwd}/.oxlintrc.json", "{files}"],
-        batch: true,
         globs: oxlintGlobs,
         priority: lintPriority.oxlint,
         scope: "per-project",
@@ -10047,7 +10037,6 @@ const toolsConfig = {
       fix: {
         app: "prettier",
         args: ["-u", "--write", "--config", "{cwd}/prettier.config.mjs", "{files}"],
-        batch: true,
         globs: prettierGlobs,
         priority: fixPriority.prettier,
         scope: "per-project",
@@ -10055,7 +10044,6 @@ const toolsConfig = {
       lint: {
         app: "prettier",
         args: ["-u", "--check", "--config", "{cwd}/prettier.config.mjs", "{files}"],
-        batch: true,
         globs: prettierGlobs,
         priority: lintPriority.prettier,
         scope: "per-project",
@@ -10088,7 +10076,6 @@ const toolsConfig = {
       fix: {
         app: "ruff",
         args: ["check", "--fix", "--quiet", "{files}"],
-        batch: true,
         globs: ["**/*.py", "**/*.pyi"],
         priority: fixPriority.ruff,
         scope: "per-project",
@@ -10096,7 +10083,6 @@ const toolsConfig = {
       lint: {
         app: "ruff",
         args: ["check", "--quiet", "{files}"],
-        batch: true,
         globs: ["**/*.py", "**/*.pyi"],
         priority: lintPriority.ruff,
         scope: "per-project",
@@ -10110,7 +10096,6 @@ const toolsConfig = {
       fix: {
         app: "ruff",
         args: ["format", "--quiet", "{files}"],
-        batch: true,
         globs: ["**/*.py", "**/*.pyi"],
         priority: fixPriority["ruff-format"],
         scope: "per-project",
@@ -10118,7 +10103,6 @@ const toolsConfig = {
       lint: {
         app: "ruff",
         args: ["format", "--check", "--quiet", "{files}"],
-        batch: true,
         globs: ["**/*.py", "**/*.pyi"],
         priority: lintPriority["ruff-format"],
         scope: "per-project",
@@ -10163,7 +10147,6 @@ const toolsConfig = {
       fix: {
         app: "sort-package-json",
         args: ["--quiet"],
-        batch: false,
         globs: packageJsonGlobs,
         priority: fixPriority["sort-package-json"],
         scope: "per-file",
@@ -10171,7 +10154,6 @@ const toolsConfig = {
       lint: {
         app: "sort-package-json",
         args: ["--check", "--quiet"],
-        batch: false,
         globs: packageJsonGlobs,
         priority: lintPriority["sort-package-json"],
         scope: "per-file",
@@ -10294,7 +10276,6 @@ const toolsConfig = {
       fix: {
         app: "tombi",
         args: ["format", "--quiet", "--no-cache", "--offline", "{files}"],
-        batch: true,
         globs: tomlGlobs,
         priority: fixPriority.toml,
         scope: "repository",
@@ -10302,7 +10283,6 @@ const toolsConfig = {
       lint: {
         app: "tombi",
         args: ["lint", "--quiet", "--no-cache", "--offline", "{files}"],
-        batch: true,
         globs: tomlGlobs,
         priority: lintPriority.toml,
         scope: "repository",
@@ -10423,7 +10403,6 @@ const toolsConfig = {
       lint: {
         app: "vale",
         args: ["--config", "{root}/.vale.ini", "--output", "line", "{files}"],
-        batch: true,
         globs: markdownGlobs,
         priority: lintPriority.vale,
         scope: "repository",
@@ -10436,7 +10415,6 @@ const toolsConfig = {
       fix: {
         app: "yamlfmt",
         args: ["-conf", "{root}/.yamlfmt.yaml", "{files}"],
-        batch: true,
         excludeGlobs: yamlExcludeGlobs,
         globs: yamlGlobs,
         priority: fixPriority.yamlfmt,
@@ -10445,7 +10423,6 @@ const toolsConfig = {
       lint: {
         app: "yamlfmt",
         args: ["-conf", "{root}/.yamlfmt.yaml", "-lint", "{files}"],
-        batch: true,
         excludeGlobs: yamlExcludeGlobs,
         globs: yamlGlobs,
         priority: lintPriority.yamlfmt,
@@ -10459,7 +10436,6 @@ const toolsConfig = {
       lint: {
         app: "yamllint",
         args: ["-c", "{root}/.yamllint.yaml", "--strict", "{files}"],
-        batch: true,
         excludeGlobs: yamlExcludeGlobs,
         globs: yamlGlobs,
         priority: lintPriority.yamllint,

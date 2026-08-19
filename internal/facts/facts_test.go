@@ -375,3 +375,15 @@ func TestResolveSymlinks(t *testing.T) {
 		}
 	})
 }
+
+// TestCollectPublishesVersion covers the one build fact a config may want for
+// diagnostics. Gating on a minimum core is getMinVersion()'s job, not this.
+func TestCollectPublishesVersion(t *testing.T) {
+	facts, _, err := Collect(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Collect() error = %v", err)
+	}
+	if facts.Version != ldflags.Version {
+		t.Errorf("Version = %q, want %q", facts.Version, ldflags.Version)
+	}
+}

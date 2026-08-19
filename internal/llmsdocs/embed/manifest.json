@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 50,
-  "pageSetHash": "cdee658d485991feb9aedbc7261c7a96",
+  "pageSetHash": "17d6668ca2ca7548d8fc23bd3a74ba10",
   "pages": [
     {
       "slug": "about",
@@ -235,8 +235,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/parsers.md",
       "title": "WASM Output Parsers",
       "description": "How datamitsu declares, builds, delivers over two channels, verifies, and loads sandboxed Rust→WASM output parsers, and how the line-based diff-in-core powers formatting",
-      "bytes": 26325,
-      "contentHash": "dc32a9afdbb4f0ec582ddbc81eb6970b"
+      "bytes": 26329,
+      "contentHash": "fdecfe97408ad64c97bb56f740bcc7d2"
     },
     {
       "slug": "guides/architecture/planner",
@@ -262,8 +262,8 @@
       "url": "https://datamitsu.com/docs/guides/configuration.md",
       "title": "Configuration",
       "description": "How to configure datamitsu with JavaScript config files, remote configs, and config layers",
-      "bytes": 9786,
-      "contentHash": "a6709a81d00e7ba994abfcface508db7"
+      "bytes": 10100,
+      "contentHash": "fccca8e012824f913f9db83b083a525c"
     },
     {
       "slug": "guides/managed-configs",
@@ -406,8 +406,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 50238,
-      "contentHash": "897066b6418f9bf284674a0170c672d4"
+      "bytes": 54724,
+      "contentHash": "c2aff5320d2e7a6bdfe373935fe204d6"
     },
     {
       "slug": "reference/comparison",
@@ -424,8 +424,8 @@
       "url": "https://datamitsu.com/docs/reference/configuration-api.md",
       "title": "Configuration API",
       "description": "Complete reference for the datamitsu configuration API",
-      "bytes": 43843,
-      "contentHash": "8eee1d16f159eb9d744bb44f39273199"
+      "bytes": 48666,
+      "contentHash": "3408b542daf41526660b42714b8a1f28"
     },
     {
       "slug": "reference/ignore-rules",
@@ -442,8 +442,8 @@
       "url": "https://datamitsu.com/docs/reference/js-api.md",
       "title": "JavaScript API",
       "description": "Programmatic API reference for the @datamitsu/datamitsu npm package",
-      "bytes": 13762,
-      "contentHash": "125259ab312dcda1ace0eadc79de9998"
+      "bytes": 14274,
+      "contentHash": "83669df6db4aa54167f2a116662d2a7a"
     },
     {
       "slug": "reference/parser-catalog",
@@ -460,8 +460,8 @@
       "url": "https://datamitsu.com/docs/reference/template-placeholders.md",
       "title": "Template Placeholders",
       "description": "Reference for template placeholders in tool operation arguments and environment values",
-      "bytes": 6270,
-      "contentHash": "279d101c57bf1a79b3bfcc4d35824c03"
+      "bytes": 7544,
+      "contentHash": "57aed43732c96eab9be96123647487ca"
     }
   ]
 }

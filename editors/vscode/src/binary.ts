@@ -1,17 +1,17 @@
 import { accessSync, constants, existsSync, statSync } from "node:fs";
 import { delimiter, join } from "node:path";
 
-import { downloadBundled, type DownloadDeps } from "./download";
+import { downloadBundled, type DownloadDependencies } from "./download";
 
 export type BinaryMode = "auto" | "bundled" | "system";
 
 export interface ResolveOptions {
-  download?: (deps: DownloadDeps) => Promise<string>;
+  download?: (dependencies: DownloadDependencies) => Promise<string>;
   // datamitsu.path setting (empty string when unset).
   explicitPath: string;
   log: (message: string) => void;
   // Injection seams for tests.
-  lookPath?: (cmd: string) => string | undefined;
+  lookPath?: (command: string) => string | undefined;
   mode: BinaryMode;
   // Extension global-storage dir the bundled binary is cached in.
   storageDir: string;
@@ -19,14 +19,15 @@ export interface ResolveOptions {
 
 // findInPath returns the first PATH directory containing an executable named cmd
 // (honoring Windows executable extensions), or undefined.
-export function findInPath(cmd: string): string | undefined {
-  const exts = process.platform === "win32" ? [".exe", ".cmd", ".bat", ""] : [""];
-  for (const dir of (process.env.PATH ?? "").split(delimiter)) {
-    if (dir === "") {
+export function findInPath(command: string): string | undefined {
+  const extensions = process.platform === "win32" ? [".exe", ".cmd", ".bat", ""] : [""];
+  const pathEntries = (process.env.PATH ?? "").split(delimiter);
+  for (const directory of pathEntries) {
+    if (directory === "") {
       continue;
     }
-    for (const ext of exts) {
-      const candidate = join(dir, cmd + ext);
+    for (const extension of extensions) {
+      const candidate = join(directory, command + extension);
       if (isExecutableFile(candidate)) {
         return candidate;
       }
@@ -39,8 +40,8 @@ export function findInPath(cmd: string): string | undefined {
 //   datamitsu.path (if set)  >  binaryMode (auto | system | bundled).
 // auto prefers a PATH binary and falls back to the pinned download; system
 // requires a PATH binary; bundled always uses the pinned download.
-export async function resolveBinary(opts: ResolveOptions): Promise<string> {
-  const explicit = opts.explicitPath.trim();
+export async function resolveBinary(options: ResolveOptions): Promise<string> {
+  const explicit = options.explicitPath.trim();
   if (explicit !== "") {
     if (!existsSync(explicit)) {
       throw new Error(`datamitsu.path points to a missing file: ${explicit}`);
@@ -48,16 +49,16 @@ export async function resolveBinary(opts: ResolveOptions): Promise<string> {
     return explicit;
   }
 
-  const lookPath = opts.lookPath ?? findInPath;
-  const download = opts.download ?? downloadBundled;
+  const lookPath = options.lookPath ?? findInPath;
+  const download = options.download ?? downloadBundled;
   const system = lookPath("datamitsu");
 
-  switch (opts.mode) {
+  switch (options.mode) {
     case "auto": {
-      return system ?? download({ log: opts.log, storageDir: opts.storageDir });
+      return system ?? download({ log: options.log, storageDir: options.storageDir });
     }
     case "bundled": {
-      return download({ log: opts.log, storageDir: opts.storageDir });
+      return download({ log: options.log, storageDir: options.storageDir });
     }
     case "system": {
       if (system === undefined) {

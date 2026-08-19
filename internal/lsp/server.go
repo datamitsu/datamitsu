@@ -20,6 +20,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"github.com/datamitsu/datamitsu/internal/logger"
+	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 	"github.com/datamitsu/datamitsu/internal/textdiff"
 	"github.com/datamitsu/datamitsu/internal/tooling"
@@ -36,6 +37,11 @@ type Server struct {
 	binMgr   *binmanager.BinManager
 	executor *tooling.Executor
 	cache    *cache.Cache // nil when the cache could not be built (formatting still works)
+
+	// fixWidenTo is the project's execution.widenTo for fix. The editor policy is
+	// clamped to it: a session default must not out-scope what the repository
+	// asked for.
+	fixWidenTo config.WidenTo
 
 	docs map[string][]byte // open documents: uri -> current full text
 
@@ -64,12 +70,15 @@ func NewServer(r io.Reader, w io.Writer, cfg *config.Config, root string) *Serve
 
 	planner := tooling.NewPlanner(root, root, nil, cfg.Tools, cfg.ProjectTypes, cfg.IgnoreRules)
 	planner.SetPlatformChecker(binMgr)
+	// Without this the planner ran on defaults and ignored execution.widenTo
+	// entirely, so a project that narrowed its fix policy got the default anyway.
+	planner.SetWidenPolicy(cfg.Execution, "")
 
 	// Build the same cache the CLI runner does so keys/paths align. selectedTools
 	// is nil — the LSP, like the lefthook `check`, runs the full tool set, so the
 	// invalidation keys match and entries are shared. A build failure is non-fatal:
 	// formatting just runs without caching.
-	projectCache, err := cache.NewCache(env.GetCachePath(), root, *cfg, invalidateOnFiles(cfg), nil, logger.Logger)
+	projectCache, err := cache.NewCache(env.GetCachePath(), root, *cfg, nil, logger.Logger)
 	if err != nil {
 		logger.Logger.Warn("lsp: cache unavailable, formatting without it", zap.Error(err))
 		projectCache = nil
@@ -83,29 +92,9 @@ func NewServer(r io.Reader, w io.Writer, cfg *config.Config, root string) *Serve
 		executor: tooling.NewExecutor(root, false, false, binMgr, projectCache),
 		cache:    projectCache,
 		docs:     make(map[string][]byte),
-	}
-}
 
-// invalidateOnFiles mirrors the runner's createCache: collect each tool's
-// InvalidateOn paths so the cache's invalidation key matches the CLI's exactly.
-func invalidateOnFiles(cfg *config.Config) map[string][]string {
-	out := make(map[string][]string)
-	for toolName, tool := range cfg.Tools {
-		seen := make(map[string]struct{})
-		var files []string
-		for _, op := range tool.Operations {
-			for _, f := range op.InvalidateOn {
-				if _, dup := seen[f]; !dup {
-					seen[f] = struct{}{}
-					files = append(files, f)
-				}
-			}
-		}
-		if len(files) > 0 {
-			out[toolName] = files
-		}
+		fixWidenTo: cfg.Execution.ResolveWidenTo(config.OpFix, ""),
 	}
-	return out
 }
 
 // ExitCode is the process exit code the caller should honor after Run returns:
@@ -167,11 +156,11 @@ func (s *Server) Run(ctx context.Context) error {
 //
 // Returns an empty (non-nil) slice when no tool applies or nothing changed.
 func (s *Server) FormatFile(ctx context.Context, absPath string, content []byte) ([]TextEdit, error) {
-	plan, err := s.planner.Plan(ctx, config.OpFix, []string{absPath}, nil)
+	plan, err := s.planner.Plan(ctx, config.OpFix, tooling.Selection{Mode: tooling.SelectionPaths, Paths: []string{absPath}}, nil)
 	if err != nil {
 		return nil, fmt.Errorf("plan fix for %s: %w", absPath, err)
 	}
-	scopeTasksToFile(plan, absPath)
+	filterPlanForEditor(plan, absPath, s.fixWidenTo)
 
 	apps := planApps(plan)
 	if len(apps) == 0 {
@@ -237,40 +226,96 @@ func (s *Server) FormatFile(ctx context.Context, absPath string, content []byte)
 	return toTextEdits(textdiff.ComputeEdits(string(content), string(fixed)))
 }
 
-// scopeTasksToFile narrows every task in the plan to the single target file.
-// datamitsu config tools are typically batch/repository-scoped (e.g.
-// `golangci-lint fmt` over the whole module), which is right for the CLI but
-// O(repo) per format in an editor — ~80x slower than formatting one file. Tasks
-// that reference {file}/{files} are already scoped by the planner; a task without
-// a file placeholder would run over the whole module, so we append the target
-// path (turning `golangci-lint fmt` into `golangci-lint fmt <file>`) and pin
-// Files to it.
-func scopeTasksToFile(plan *tooling.ExecutionPlan, absPath string) {
+// filterPlanForEditor drops tasks too expensive to run on every save.
+//
+// The planner already targets the file: Plan is called with a Paths selection,
+// so a file-granularity task carries exactly this file and nothing else. What
+// remains is a latency choice, not a correctness one — running a unit task here
+// is exactly what `datamitsu fix` does, and correctness lives in the cache's
+// coverage gate.
+//
+// This replaces scopeTasksToFile, which pinned every task's file list and
+// appended the path to argv for any task without a placeholder. For the
+// operations that take no positional path that produced knowingly wrong
+// commands: `tsc --noEmit … a.ts` exits 1 with TS5112 and zero diagnostics,
+// `syncpack lint <file>` rejects the argument outright. It also let a
+// single-file editor run write cache entries as if it had covered a whole unit.
+func filterPlanForEditor(plan *tooling.ExecutionPlan, absPath string, projectPolicy config.WidenTo) {
+	// min(project, session): the session policy is ambient and applies to every
+	// save, so it may narrow the project's choice but never widen it. Without the
+	// clamp a project declaring fix: "target" still got the editor default of
+	// "unit", and saving one file ran an in-place formatter over the whole
+	// project — the exact blast radius that setting exists to prevent.
+	widen := editorWidenTo()
+	if projectPolicy != "" && projectPolicy.Rank() < widen.Rank() {
+		widen = projectPolicy
+	}
 	for gi := range plan.Groups {
-		for ti := range plan.Groups[gi].Tasks {
-			task := &plan.Groups[gi].Tasks[ti]
-			task.Files = []string{absPath}
-			if hasFilePlaceholder(task.OpConfig.Args) {
-				continue // the planner already substitutes the file here
+		kept := plan.Groups[gi].Tasks[:0]
+		for _, task := range plan.Groups[gi].Tasks {
+			if editorRuns(task, widen, absPath) {
+				kept = append(kept, task)
 			}
-			// Clone before appending so we never mutate the shared config slice.
-			args := make([]string, len(task.OpConfig.Args)+1)
-			copy(args, task.OpConfig.Args)
-			args[len(args)-1] = absPath
-			task.OpConfig.Args = args
 		}
+		plan.Groups[gi].Tasks = kept
 	}
 }
 
-// hasFilePlaceholder reports whether any arg references the per-file placeholder
-// ({file} or {files}), i.e. the planner already targets this task at the file.
-func hasFilePlaceholder(args []string) bool {
-	for _, a := range args {
-		if strings.Contains(a, "{file}") || strings.Contains(a, "{files}") {
-			return true
+// editorRuns reports whether a task is cheap enough for a save.
+func editorRuns(task tooling.Task, widen config.WidenTo, absPath string) bool {
+	switch config.InferGranularity(task.OpConfig) {
+	case config.GranularityFile:
+		return true
+	case config.GranularityUnit:
+		if widen.Rank() < config.WidenToUnit.Rank() {
+			return false
 		}
+		// Only the unit holding the saved file. An operation with no globs is
+		// planned once per project regardless of what was saved, so without this
+		// a save would run it in every module — rewriting files the editor never
+		// opened, since these tools fix in place and only the target is read back.
+		return taskCoversPath(task, absPath)
+	case config.GranularityRepo:
+		// A whole-repository fix on every keystroke is never acceptable, so this
+		// is not configurable.
+		return false
 	}
 	return false
+}
+
+// taskCoversPath reports whether a task's unit contains the saved file.
+func taskCoversPath(task tooling.Task, absPath string) bool {
+	if task.ProjectPath == "" {
+		return true
+	}
+	rel, err := filepath.Rel(task.ProjectPath, absPath)
+	if err != nil {
+		return false
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// editorWidenTo is the session policy. Default "unit": a "target" default would
+// silently disable format-on-save for Go, Python, Rust and Terraform, whose fix
+// operations are all per-project with no file arguments — and format-on-save for
+// Go is a documented headline feature.
+func editorWidenTo() config.WidenTo {
+	policy := env.GetLspFormatWidenTo()
+	if eff, err := runtimeconfig.Get(); err == nil {
+		policy = eff.LspFormatWidenTo
+	}
+	switch config.WidenTo(policy) {
+	case config.WidenToTarget:
+		return config.WidenToTarget
+	case config.WidenToUnit:
+		return config.WidenToUnit
+	case config.WidenToRepo:
+		// Not a legal editor policy: a repository-wide fix on save is never
+		// acceptable, so ask for it and you get the default instead.
+		return config.WidenToUnit
+	default:
+		return config.WidenToUnit
+	}
 }
 
 // planApps returns the distinct apps a plan needs, in first-seen order.

@@ -85,7 +85,7 @@ mod tests {
 	}
 	#[test]
 	fn reports_the_path_so_a_batch_run_is_attributable() {
-		// harper-cli is batch: true — without the path a finding cannot be traced
+		// harper-cli takes a file list — without the path a finding cannot be traced
 		// back to a file, and the parsed view would be worse than the raw output.
 		let d = parse_line("docs/a.md:1:24: Miscellaneous::AnA: Incorrect indefinite article.").unwrap();
 		assert_eq!(d.file.as_deref(), Some("docs/a.md"));

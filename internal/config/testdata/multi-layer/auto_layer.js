@@ -5,7 +5,7 @@ export function getConfig(input) {
     setup: {
       ...input.setup,
       ".editorconfig": {
-        content: function (context) {
+        content(context) {
           // Verify upstream content exists before overriding
           if (context.existingContent && context.existingContent.indexOf("indent_style") === -1) {
             throw new Error("upstream .editorconfig missing indent_style");

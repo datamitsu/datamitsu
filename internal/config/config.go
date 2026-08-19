@@ -48,6 +48,20 @@ const (
 	ToolScopePerFile    ToolScope = "per-file"
 )
 
+// ToolArity is the shape of paths an operation accepts on its command line.
+// Orthogonal to ToolScope: scope says where the process starts, arity says what
+// may go in argv. Inferred from Args (InferArity); declaring it is an assertion,
+// not an override.
+type ToolArity string
+
+// Tool argument arities, in the order InferArity tests for them.
+const (
+	ArityDir  ToolArity = "dir"  // one directory via {target}, no file list
+	ArityMany ToolArity = "many" // arbitrary list of paths via {files}
+	ArityOne  ToolArity = "one"  // exactly one path per process via {file}
+	ArityNone ToolArity = "none" // no path in argv; the file set is only a trigger
+)
+
 // OperationType distinguishes the kind of work a tool operation performs.
 type OperationType string
 
@@ -87,10 +101,15 @@ const (
 
 // ToolOperation describes a single fix or lint invocation of a tool.
 type ToolOperation struct {
-	App          string            `json:"app"`
-	Args         []string          `json:"args"`
-	Scope        ToolScope         `json:"scope"`
-	Batch        *bool             `json:"batch,omitempty"` // Batch mode (default: true for per-project and repository, false for per-file)
+	App   string    `json:"app"`
+	Args  []string  `json:"args"`
+	Scope ToolScope `json:"scope"`
+	// Arity asserts the argv path shape; must equal InferArity(op) when set.
+	Arity ToolArity `json:"arity,omitempty"`
+	// Granularity is the smallest input set on which this operation's verdict is
+	// complete. Inferred when unset (InferGranularity); declaring "file" is a
+	// speed decision, declaring "unit"/"repo" is always safe.
+	Granularity  ToolGranularity   `json:"granularity,omitempty"`
 	Globs        []string          `json:"globs,omitempty"`
 	ExcludeGlobs []string          `json:"excludeGlobs,omitempty"`
 	Priority     int               `json:"priority,omitempty"`
@@ -412,15 +431,20 @@ type MapOfParsers map[string]Parser
 
 // Config is the fully resolved datamitsu configuration produced by the JS config layer.
 type Config struct {
-	Apps          binmanager.MapOfApps    `json:"apps,omitempty"`
-	Bundles       binmanager.MapOfBundles `json:"bundles,omitempty"`
-	Runtimes      MapOfRuntimes           `json:"runtimes,omitempty"`
-	Setup         MapOfConfigSetup        `json:"setup,omitempty"`
-	ProjectTypes  MapOfProjectTypes       `json:"projectTypes,omitempty"`
-	Tools         MapOfTools              `json:"tools,omitempty"`
-	InitCommands  MapOfInitCommands       `json:"initCommands,omitempty"`
-	IgnoreRules   []string                `json:"ignoreRules,omitempty"`
-	SharedStorage map[string]string       `json:"sharedStorage,omitempty"`
+	Apps         binmanager.MapOfApps    `json:"apps,omitempty"`
+	Bundles      binmanager.MapOfBundles `json:"bundles,omitempty"`
+	Runtimes     MapOfRuntimes           `json:"runtimes,omitempty"`
+	Setup        MapOfConfigSetup        `json:"setup,omitempty"`
+	ProjectTypes MapOfProjectTypes       `json:"projectTypes,omitempty"`
+	Tools        MapOfTools              `json:"tools,omitempty"`
+	// Execution holds run-shaping policy not tied to a single tool. A pointer so
+	// omitempty actually elides it: the whole config is marshalled into the cache
+	// invalidation key, and a struct value would serialize as {} for every config
+	// and reset every user's cache on upgrade.
+	Execution     *Execution        `json:"execution,omitempty"`
+	InitCommands  MapOfInitCommands `json:"initCommands,omitempty"`
+	IgnoreRules   []string          `json:"ignoreRules,omitempty"`
+	SharedStorage map[string]string `json:"sharedStorage,omitempty"`
 	// OCI pins the store-seeding bundle. omitempty is load-bearing: the whole
 	// Config is marshaled into the execution-cache invalidation key, and a nil
 	// field must not change that key on upgrade.

@@ -13,6 +13,17 @@ export interface PlanJSON {
   groups: GroupJSON[];
   operation: string;
   rootPath: string;
+  /**
+   * Tools that will not run, and why. Always present; empty when none.
+   */
+  skipped: SkippedToolJSON[];
+}
+
+export interface SkippedToolJSON {
+  detail?: string;
+  operation: string;
+  reason: "config" | "not-narrowable" | "unsupported-platform";
+  toolName: string;
 }
 
 export interface SpawnRaw {
@@ -25,11 +36,13 @@ export interface SpawnRaw {
 export interface TaskJSON {
   app: string;
   args: string[];
-  batch: boolean;
+  arity: string;
+  coverage: string;
   excludeGlobs?: string[];
   fileCount: number;
   files: string[];
   globs?: string[];
+  granularity: string;
   scope: string;
   toolName: string;
   workingDir: string;

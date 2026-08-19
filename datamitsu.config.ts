@@ -15,19 +15,19 @@ const benchScript =
   'if [ -n "${DATAMITSU_BENCH_LOG:-}" ]; then printf "%s\\t%s\\n" "$ts" "${1:-}" >>"$DATAMITSU_BENCH_LOG"; fi';
 
 const applyBench = (config: config.Config): config.Config => {
-  config.apps = config.apps ?? {};
+  config.apps ??= {};
   config.apps.tsbench = {
     description: "bench: prints a high-res timestamp, ~zero work (overhead probe)",
     shell: { args: ["-c", benchScript, "datamitsu-tsbench"], name: "bash" },
     versionCheck: { disabled: true },
   };
 
-  config.tools = config.tools ?? {};
+  config.tools ??= {};
   config.tools.tsbench = {
     name: "tsbench (overhead probe)",
     operations: {
-      fix: { app: "tsbench", args: ["{file}"], batch: false, globs: ["**/*"], scope: "per-file" },
-      lint: { app: "tsbench", args: ["{file}"], batch: false, globs: ["**/*"], scope: "per-file" },
+      fix: { app: "tsbench", args: ["{file}"], globs: ["**/*"], scope: "per-file" },
+      lint: { app: "tsbench", args: ["{file}"], globs: ["**/*"], scope: "per-file" },
     },
   };
 

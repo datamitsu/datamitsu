@@ -83,9 +83,9 @@ describe("fix", () => {
     await fix({ files: ["src/a.ts", "src/b.ts"] });
 
     const call = mockSpawn.mock.calls[0];
-    const args = call.arguments[0];
-    assert.ok(args.includes("src/a.ts"));
-    assert.ok(args.includes("src/b.ts"));
+    const arguments_ = call.arguments[0];
+    assert.ok(arguments_.includes("src/a.ts"));
+    assert.ok(arguments_.includes("src/b.ts"));
   });
 
   it("fix with fileScoped adds --file-scoped flag", async () => {
@@ -101,8 +101,8 @@ describe("fix", () => {
     await fix({ fileScoped: true });
 
     const call = mockSpawn.mock.calls[0];
-    const args = call.arguments[0];
-    assert.ok(args.includes("--file-scoped"));
+    const arguments_ = call.arguments[0];
+    assert.ok(arguments_.includes("--file-scoped"));
   });
 
   it("fix with tools array adds --tools flag", async () => {
@@ -118,10 +118,10 @@ describe("fix", () => {
     await fix({ tools: ["prettier", "eslint"] });
 
     const call = mockSpawn.mock.calls[0];
-    const args = call.arguments[0];
-    const toolsIdx = args.indexOf("--tools");
-    assert.ok(toolsIdx !== -1);
-    assert.equal(args[toolsIdx + 1], "prettier,eslint");
+    const arguments_ = call.arguments[0];
+    const toolsIndex = arguments_.indexOf("--tools");
+    assert.ok(toolsIndex !== -1);
+    assert.equal(arguments_[toolsIndex + 1], "prettier,eslint");
   });
 
   it("fix with config adds --config flag", async () => {
@@ -137,10 +137,10 @@ describe("fix", () => {
     await fix({ config: ["./custom.config.js"] });
 
     const call = mockSpawn.mock.calls[0];
-    const args = call.arguments[0];
-    const idx = args.indexOf("--config");
-    assert.ok(idx !== -1);
-    assert.equal(args[idx + 1], "./custom.config.js");
+    const arguments_ = call.arguments[0];
+    const index = arguments_.indexOf("--config");
+    assert.ok(index !== -1);
+    assert.equal(arguments_[index + 1], "./custom.config.js");
   });
 
   it("fix with beforeConfig adds --before-config flag", async () => {
@@ -156,10 +156,10 @@ describe("fix", () => {
     await fix({ beforeConfig: ["./base.config.js"] });
 
     const call = mockSpawn.mock.calls[0];
-    const args = call.arguments[0];
-    const idx = args.indexOf("--before-config");
-    assert.ok(idx !== -1);
-    assert.equal(args[idx + 1], "./base.config.js");
+    const arguments_ = call.arguments[0];
+    const index = arguments_.indexOf("--before-config");
+    assert.ok(index !== -1);
+    assert.equal(arguments_[index + 1], "./base.config.js");
   });
 
   it("fix handles tool errors (exit code != 0) gracefully", async () => {
@@ -191,8 +191,8 @@ describe("fix", () => {
     await fix({ noAutoConfig: true });
 
     const call = mockSpawn.mock.calls[0];
-    const args = call.arguments[0];
-    assert.ok(args.includes("--no-auto-config"));
+    const arguments_ = call.arguments[0];
+    assert.ok(arguments_.includes("--no-auto-config"));
   });
 
   it("fix passes cwd and stdio to spawn", async () => {
@@ -241,12 +241,12 @@ describe("fix", () => {
     await fix({ config: ["./a.config.js", "./b.config.js"] });
 
     const call = mockSpawn.mock.calls[0];
-    const args = call.arguments[0];
-    const firstIdx = args.indexOf("--config");
-    assert.ok(firstIdx !== -1);
-    assert.equal(args[firstIdx + 1], "./a.config.js");
-    const secondIdx = args.indexOf("--config", firstIdx + 1);
-    assert.ok(secondIdx !== -1);
-    assert.equal(args[secondIdx + 1], "./b.config.js");
+    const arguments_ = call.arguments[0];
+    const firstIndex = arguments_.indexOf("--config");
+    assert.ok(firstIndex !== -1);
+    assert.equal(arguments_[firstIndex + 1], "./a.config.js");
+    const secondIndex = arguments_.indexOf("--config", firstIndex + 1);
+    assert.ok(secondIndex !== -1);
+    assert.equal(arguments_[secondIndex + 1], "./b.config.js");
   });
 });

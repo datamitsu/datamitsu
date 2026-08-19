@@ -2,7 +2,7 @@ import type { PlanJSON, SpawnRaw } from "../types.js";
 
 import { extractAllJSON } from "../json.js";
 import { spawn } from "../spawn.js";
-import { buildArgs, createToolCommand, type ToolCommandOptions } from "../tool-command.js";
+import { buildArguments, createToolCommand, type ToolCommandOptions } from "../tool-command.js";
 
 export type CheckOptions = ToolCommandOptions;
 
@@ -19,7 +19,7 @@ export async function check(options: CheckOptions = {}): Promise<CheckResult> {
     return baseCheck(options) as Promise<CheckResult>;
   }
 
-  const args = buildArgs("check", options);
+  const arguments_ = buildArguments("check", options);
   const spawnOptions: { cwd?: string; stdio?: "inherit" | "pipe" } = {};
   if (options.cwd !== undefined) {
     spawnOptions.cwd = options.cwd;
@@ -27,7 +27,7 @@ export async function check(options: CheckOptions = {}): Promise<CheckResult> {
   if (options.stdio !== undefined) {
     spawnOptions.stdio = options.stdio;
   }
-  const raw = await spawn(args, spawnOptions);
+  const raw = await spawn(arguments_, spawnOptions);
 
   if (raw.failed) {
     return {

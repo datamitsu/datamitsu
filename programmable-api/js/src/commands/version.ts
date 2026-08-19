@@ -18,11 +18,11 @@ export async function version(): Promise<VersionResult> {
     };
   }
 
-  const output = raw.stdout.trim().split("\n")[0] ?? "";
-  const versionStr = output.replace(/^.*version\s+/, "");
+  const output = raw.stdout.trim().split("\n", 1)[0] ?? "";
+  const versionString = output.replace(/^.*version\s+/, "");
   return {
     raw,
     success: true,
-    version: versionStr,
+    version: versionString,
   };
 }

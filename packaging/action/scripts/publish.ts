@@ -2,16 +2,17 @@ import { execFileSync } from "node:child_process";
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-const ACTION_DIR = join(import.meta.dirname, "..");
-
 const version = (process.env.VERSION ?? "").replace(/^v/, "");
-const target = process.env.TARGET_DIR;
 if (version === "") {
   throw new Error("VERSION env var is required (e.g. v0.1.5)");
 }
+
+const target = process.env.TARGET_DIR;
 if (target === undefined || target === "") {
   throw new Error("TARGET_DIR env var is required (a checked-out setup-datamitsu repo)");
 }
+
+const ACTION_DIR = join(import.meta.dirname, "..");
 
 mkdirSync(join(target, "dist"), { recursive: true });
 copyFileSync(join(ACTION_DIR, "action.yml"), join(target, "action.yml"));
@@ -28,12 +29,15 @@ if (!readme.includes("__VERSION__")) {
 }
 writeFileSync(
   join(target, "README.md"),
-  readme.replaceAll("__VERSION__", version).replace(/^<!-- TEMPLATE:[\s\S]*?-->\n\n/, ""),
+  readme
+    .split("__VERSION__")
+    .join(version)
+    .replace(/^<!-- TEMPLATE:[\s\S]*?-->\n\n/, ""),
 );
 
 const tag = `v${version}`;
-const git = (...args: string[]): void => {
-  execFileSync("git", ["-C", target, ...args], { stdio: "inherit" });
+const git = (...arguments_: string[]): void => {
+  execFileSync("git", ["-C", target, ...arguments_], { stdio: "inherit" });
 };
 
 git("config", "user.name", "datamitsu-bot");

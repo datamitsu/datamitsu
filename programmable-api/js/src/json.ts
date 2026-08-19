@@ -36,22 +36,22 @@ export function extractJSON(output: string): null | string {
 
 function findJSONEnd(output: string, start: number): number {
   let depth = 0;
-  let inString = false;
-  let escape = false;
-  for (let i = start; i < output.length; i++) {
-    const ch = output[i];
-    if (escape) {
-      escape = false;
-    } else if (inString) {
+  let isInString = false;
+  let isEscape = false;
+  for (let index = start; index < output.length; index++) {
+    const ch = output[index];
+    if (isEscape) {
+      isEscape = false;
+    } else if (isInString) {
       if (ch === "\\") {
-        escape = true;
+        isEscape = true;
       } else if (ch === '"') {
-        inString = false;
+        isInString = false;
       }
     } else {
       switch (ch) {
         case '"': {
-          inString = true;
+          isInString = true;
 
           break;
         }
@@ -63,7 +63,7 @@ function findJSONEnd(output: string, start: number): number {
         case "}": {
           depth--;
           if (depth === 0) {
-            return i;
+            return index;
           }
 
           break;

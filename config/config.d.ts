@@ -6,55 +6,55 @@ declare global {
    */
   const colors: {
     // Background colors
-    bgBlack(...args: unknown[]): string;
-    bgBlue(...args: unknown[]): string;
-    bgCyan(...args: unknown[]): string;
-    bgGreen(...args: unknown[]): string;
+    bgBlack(...arguments_: unknown[]): string;
+    bgBlue(...arguments_: unknown[]): string;
+    bgCyan(...arguments_: unknown[]): string;
+    bgGreen(...arguments_: unknown[]): string;
     // Bright background colors
-    bgHiBlack(...args: unknown[]): string;
-    bgHiBlue(...args: unknown[]): string;
-    bgHiCyan(...args: unknown[]): string;
-    bgHiGreen(...args: unknown[]): string;
+    bgHiBlack(...arguments_: unknown[]): string;
+    bgHiBlue(...arguments_: unknown[]): string;
+    bgHiCyan(...arguments_: unknown[]): string;
+    bgHiGreen(...arguments_: unknown[]): string;
 
-    bgHiMagenta(...args: unknown[]): string;
-    bgHiRed(...args: unknown[]): string;
-    bgHiWhite(...args: unknown[]): string;
-    bgHiYellow(...args: unknown[]): string;
-    bgMagenta(...args: unknown[]): string;
-    bgRed(...args: unknown[]): string;
-    bgWhite(...args: unknown[]): string;
-    bgYellow(...args: unknown[]): string;
+    bgHiMagenta(...arguments_: unknown[]): string;
+    bgHiRed(...arguments_: unknown[]): string;
+    bgHiWhite(...arguments_: unknown[]): string;
+    bgHiYellow(...arguments_: unknown[]): string;
+    bgMagenta(...arguments_: unknown[]): string;
+    bgRed(...arguments_: unknown[]): string;
+    bgWhite(...arguments_: unknown[]): string;
+    bgYellow(...arguments_: unknown[]): string;
 
     // Foreground colors
-    black(...args: unknown[]): string;
-    blink(...args: unknown[]): string;
-    blinkRapid(...args: unknown[]): string;
-    blue(...args: unknown[]): string;
+    black(...arguments_: unknown[]): string;
+    blink(...arguments_: unknown[]): string;
+    blinkRapid(...arguments_: unknown[]): string;
+    blue(...arguments_: unknown[]): string;
     // Text attributes
-    bold(...args: unknown[]): string;
-    concealed(...args: unknown[]): string;
-    cyan(...args: unknown[]): string;
-    faint(...args: unknown[]): string;
-    green(...args: unknown[]): string;
+    bold(...arguments_: unknown[]): string;
+    concealed(...arguments_: unknown[]): string;
+    cyan(...arguments_: unknown[]): string;
+    faint(...arguments_: unknown[]): string;
+    green(...arguments_: unknown[]): string;
 
     // Bright foreground colors
-    hiBlack(...args: unknown[]): string;
-    hiBlue(...args: unknown[]): string;
-    hiCyan(...args: unknown[]): string;
-    hiGreen(...args: unknown[]): string;
-    hiMagenta(...args: unknown[]): string;
-    hiRed(...args: unknown[]): string;
-    hiWhite(...args: unknown[]): string;
-    hiYellow(...args: unknown[]): string;
+    hiBlack(...arguments_: unknown[]): string;
+    hiBlue(...arguments_: unknown[]): string;
+    hiCyan(...arguments_: unknown[]): string;
+    hiGreen(...arguments_: unknown[]): string;
+    hiMagenta(...arguments_: unknown[]): string;
+    hiRed(...arguments_: unknown[]): string;
+    hiWhite(...arguments_: unknown[]): string;
+    hiYellow(...arguments_: unknown[]): string;
 
-    italic(...args: unknown[]): string;
-    magenta(...args: unknown[]): string;
-    red(...args: unknown[]): string;
-    reverse(...args: unknown[]): string;
-    strikethrough(...args: unknown[]): string;
-    underline(...args: unknown[]): string;
-    white(...args: unknown[]): string;
-    yellow(...args: unknown[]): string;
+    italic(...arguments_: unknown[]): string;
+    magenta(...arguments_: unknown[]): string;
+    red(...arguments_: unknown[]): string;
+    reverse(...arguments_: unknown[]): string;
+    strikethrough(...arguments_: unknown[]): string;
+    underline(...arguments_: unknown[]): string;
+    white(...arguments_: unknown[]): string;
+    yellow(...arguments_: unknown[]): string;
   };
 
   function getConfig(config: config.Config): config.Config;
@@ -311,6 +311,23 @@ declare global {
       bundles?: BinManager.MapOfBundles;
 
       /**
+       * How far the core may widen work beyond the selection you asked for, per operation. An
+       * operation left unset takes the core default ("unit").
+       *
+       * - "target" — only what was named; anything needing more is reported as skipped
+       * - "unit" — may widen to the unit (project/module) containing the target
+       * - "repo" — may widen to the whole repository
+       *
+       * Requires a core that implements granularity; declare it with getMinVersion().
+       *
+       * @example
+       *   execution: { widenTo: { fix: "target" } };
+       */
+      execution?: {
+        widenTo?: Partial<Record<OperationType, "repo" | "target" | "unit">>;
+      };
+
+      /**
        * Ignore rules in .datamitsuignore syntax. Applied alongside file-based .datamitsuignore
        * rules. Rules from multiple configs are concatenated (append).
        *
@@ -349,7 +366,7 @@ declare global {
        *     },
        *   };
        */
-      oci?: OCIRef;
+      oci?: OCIReference;
 
       /**
        * WASM output-parser modules, keyed by name. Each entry is a url+hash data artifact (NOT an
@@ -678,7 +695,7 @@ declare global {
      * bundle content. The bundle is a cache seed, not a trust boundary — binaries and JARs unpacked
      * from it are re-verified against the published SHA-256 hashes from the config.
      */
-    interface OCIRef {
+    interface OCIReference {
       /**
        * Bundle index/manifest digest, "sha256:" followed by 64 lowercase hex characters. Mandatory
        * — a tag alone never pins content.
@@ -888,9 +905,9 @@ declare global {
       /**
        * Arguments to pass to the command. Template placeholders are expanded by the executor before
        * execution: - {file} - single file path (per-file scope) - {files} - space-separated file
-       * list (batch mode) - {root} - git repository root (or cwd if not in a git repo) - {cwd} -
-       * per-project working directory - {toolCache} - per-project, per-tool cache directory
-       * (cache/{projectPath}/{toolName}/)
+       * list, one argument per file - {root} - git repository root (or cwd if not in a git repo) -
+       * {cwd} - per-project working directory - {toolCache} - per-project, per-tool cache directory
+       * (cache/{projectPath}/{toolName}/) - {target} - the single directory a scanner should scan
        *
        * @example
        *   ["--fix", "{file}"];
@@ -904,12 +921,19 @@ declare global {
       args: string[];
 
       /**
-       * Batch mode - process files in groups or one at a time Only used for scope: "per-project" or
-       * "repository"
+       * The shape of paths this operation accepts on its command line. Inferred exactly from the
+       * placeholders in `args` — declare it only to assert the inference, and a declared value that
+       * disagrees is a config load error.
        *
-       * @default true for "per-project" and "repository", false for "per-file"
+       * - "many" — an arbitrary list of paths ({files})
+       * - "one" — exactly one path per process ({file})
+       * - "dir" — exactly one directory, no file list ({target})
+       * - "none" — no paths on the command line at all
+       *
+       * @example
+       *   arity: "dir";
        */
-      batch?: boolean;
+      arity?: "dir" | "many" | "none" | "one";
 
       /**
        * Extra environment variables for this operation Merge priority: OS env < app env < tool
@@ -944,6 +968,23 @@ declare global {
        *   ["**\/*.md"];
        */
       globs?: string[];
+
+      /**
+       * The smallest set of input files on which this operation's verdict is complete.
+       *
+       * - "file" — any subset of files is a valid, complete input
+       * - "unit" — valid only over a whole project/module/compilation unit
+       * - "repo" — valid only over the whole repository
+       *
+       * Inferred when omitted: "per-file" scope and file-referencing "repository" scope give
+       * "file", other "repository" scope gives "repo", and "per-project" gives "unit". The
+       * per-project default is deliberately conservative — declaring "file" is a speed decision
+       * that is only correct when a file's verdict cannot depend on its siblings.
+       *
+       * @example
+       *   granularity: "file";
+       */
+      granularity?: "file" | "repo" | "unit";
 
       /**
        * How the file content reaches the tool. - "file" (default): pass file paths as arguments via
@@ -1445,6 +1486,13 @@ declare global {
      * Package name from ldflags
      */
     packageName: string;
+
+    /**
+     * Running build's version string, verbatim: a release tag, "dev" for a plain `go build`, or
+     * "0.0.0-unstable.*" for a prerelease. Diagnostics only: declare a minimum core with
+     * getMinVersion(), which is enforced for stable releases.
+     */
+    version: string;
   }
 
   /**

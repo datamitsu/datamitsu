@@ -71,14 +71,14 @@ function buildBinary(outPath: string) {
 // The programmable API is what the `.` export resolves to. A wrapper config
 // imports it for its types, so a dev-link package without lib/ breaks the
 // wrapper's own build — CI builds it during packaging, and so must this.
-function buildProgrammableAPI(destLib: string) {
+function buildProgrammableAPI(destinationLibrary: string) {
   console.log("🔨 Building the programmable API...");
   execFileSync("pnpm", ["--filter", "@datamitsu/programmable-api-js", "build"], {
     cwd: ROOT_DIR,
     stdio: "inherit",
   });
-  rmSync(destLib, { force: true, recursive: true });
-  cpSync(join(ROOT_DIR, "programmable-api", "js", "dist"), destLib, { recursive: true });
+  rmSync(destinationLibrary, { force: true, recursive: true });
+  cpSync(join(ROOT_DIR, "programmable-api", "js", "dist"), destinationLibrary, { recursive: true });
 }
 
 function currentPlatform() {
@@ -92,8 +92,8 @@ function currentPlatform() {
   return { goarch, goos, npmArch, npmPlatform };
 }
 
-function go(...args: string[]): string {
-  return execFileSync("go", args, { cwd: ROOT_DIR, encoding: "utf8" }).trim();
+function go(...arguments_: string[]): string {
+  return execFileSync("go", arguments_, { cwd: ROOT_DIR, encoding: "utf8" }).trim();
 }
 
 // The launcher resolves two things through Node: the platform package (from
@@ -101,10 +101,14 @@ function go(...args: string[]): string {
 // imports tinyexec). `pnpm link` installs nothing — it just points at this
 // directory — so both have to be present in the package's own node_modules or
 // the import fails with ERR_MODULE_NOT_FOUND.
-function linkDependencies(launcherDir: string, platformPkgName: string, platformDirName: string) {
+function linkDependencies(
+  launcherDir: string,
+  platformPackageName: string,
+  platformDirName: string,
+) {
   const scopeDir = join(launcherDir, "node_modules", "@datamitsu");
   mkdirSync(scopeDir, { recursive: true });
-  const linkPath = join(scopeDir, platformPkgName.split("/")[1]);
+  const linkPath = join(scopeDir, platformPackageName.split("/", 2)[1]);
   rmSync(linkPath, { force: true, recursive: true });
   // Relative target so the whole dist/dev-link tree stays movable.
   symlinkSync(join("..", "..", "..", platformDirName), linkPath, "dir");
@@ -120,7 +124,8 @@ function linkRuntimeDependencies(modulesDir: string) {
     readFileSync(join(NPM_DIR, "datamitsu", "package.json"), "utf8"),
   ) as { dependencies?: Record<string, string> };
 
-  for (const name of Object.keys(published.dependencies ?? {})) {
+  const publishedDependencies = Object.keys(published.dependencies ?? {});
+  for (const name of publishedDependencies) {
     const source = resolvePackageDir(name);
     if (!source) {
       // Not fatal: only the programmable API needs these, and the CLI path
@@ -128,9 +133,9 @@ function linkRuntimeDependencies(modulesDir: string) {
       console.log(`⚠  ${name} not resolvable — the programmable API import will fail`);
       continue;
     }
-    const dest = join(modulesDir, name);
-    rmSync(dest, { force: true, recursive: true });
-    cpSync(source, dest, { dereference: true, recursive: true });
+    const destination = join(modulesDir, name);
+    rmSync(destination, { force: true, recursive: true });
+    cpSync(source, destination, { dereference: true, recursive: true });
   }
 }
 
@@ -155,9 +160,9 @@ function resolvePackageDir(name: string): string | undefined {
   return undefined;
 }
 
-function writeLauncherPackage(dir: string, platformPkgName: string, platformDirName: string) {
+function writeLauncherPackage(dir: string, platformPackageName: string, platformDirName: string) {
   mkdirSync(dir, { recursive: true });
-  linkDependencies(dir, platformPkgName, platformDirName);
+  linkDependencies(dir, platformPackageName, platformDirName);
   cpSync(join(NPM_DIR, "datamitsu", "bin"), join(dir, "bin"), { recursive: true });
   cpSync(join(NPM_DIR, "datamitsu", "get-exe.js"), join(dir, "get-exe.js"));
   buildProgrammableAPI(join(dir, "lib"));
@@ -175,7 +180,7 @@ function writeLauncherPackage(dir: string, platformPkgName: string, platformDirN
         files: ["bin", "lib", "get-exe.js", "parsers"],
         // Only the host platform exists locally, wired by path rather than by
         // version so no publish step is involved.
-        optionalDependencies: { [platformPkgName]: `file:../${platformDirName}` },
+        optionalDependencies: { [platformPackageName]: `file:../${platformDirName}` },
         scripts: undefined,
         version: DEV_VERSION,
       },
@@ -187,16 +192,21 @@ function writeLauncherPackage(dir: string, platformPkgName: string, platformDirN
 
 function writePlatformPackage(dir: string, platform: ReturnType<typeof currentPlatform>) {
   const template = readFileSync(join(NPM_DIR, "templates", "platform-package.json"), "utf8");
-  const pkg = template
-    .replaceAll("{{PLATFORM}}", platform.npmPlatform)
-    .replaceAll("{{ARCH}}", platform.npmArch)
-    .replaceAll("{{ARCH_NAME}}", platform.npmArch)
-    .replaceAll("{{OS_NAME}}", platform.npmPlatform)
-    .replaceAll("{{VERSION}}", DEV_VERSION);
+  const package_ = template
+    .split("{{PLATFORM}}")
+    .join(platform.npmPlatform)
+    .split("{{ARCH}}")
+    .join(platform.npmArch)
+    .split("{{ARCH_NAME}}")
+    .join(platform.npmArch)
+    .split("{{OS_NAME}}")
+    .join(platform.npmPlatform)
+    .split("{{VERSION}}")
+    .join(DEV_VERSION);
 
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, "package.json"), pkg);
-  return JSON.parse(pkg).name as string;
+  writeFileSync(join(dir, "package.json"), package_);
+  return JSON.parse(package_).name as string;
 }
 
 const DEV_VERSION = "0.0.0-dev-link";
@@ -211,11 +221,11 @@ function main() {
   rmSync(OUT_DIR, { force: true, recursive: true });
   mkdirSync(OUT_DIR, { recursive: true });
 
-  const platformPkgName = writePlatformPackage(platformDir, platform);
+  const platformPackageName = writePlatformPackage(platformDir, platform);
   buildBinary(join(platformDir, binaryName));
-  writeLauncherPackage(launcherDir, platformPkgName, platformDirName);
+  writeLauncherPackage(launcherDir, platformPackageName, platformDirName);
 
-  console.log(`\n✓ ${platformPkgName} (binary)`);
+  console.log(`\n✓ ${platformPackageName} (binary)`);
   console.log(`✓ @datamitsu/datamitsu (launcher)`);
   console.log(`\n📦 ${OUT_DIR}`);
   console.log(`\nLink it into the wrapper config repo:\n`);
@@ -232,14 +242,14 @@ function main() {
   const wasm = readFileSync(WASM_PATH);
   const parsersDir = join(launcherDir, "parsers");
   mkdirSync(parsersDir, { recursive: true });
-  const wasmDest = join(parsersDir, "datamitsu_parsers.wasm");
-  writeFileSync(wasmDest, wasm);
+  const wasmDestination = join(parsersDir, "datamitsu_parsers.wasm");
+  writeFileSync(wasmDestination, wasm);
   const hash = createHash("sha256").update(wasm).digest("hex");
 
   console.log("Point the wrapper config's `parsers` entry at the local module:\n");
   console.log("  const parsers = { core: {");
   console.log(`    hash: "${hash}",`);
-  console.log(`    url: "file://${wasmDest}"`);
+  console.log(`    url: "file://${wasmDestination}"`);
   console.log("  } };\n");
   console.log("The hash is still mandatory and verified — only the transport is local,");
   console.log("and only this dev-link build can read it.\n");

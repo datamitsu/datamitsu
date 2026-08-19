@@ -117,12 +117,14 @@ Run fix followed by lint in a single process with shared context. If fix fails, 
 datamitsu check [files...]
 ```
 
-| Flag               | Description                                                                                                                    |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
-| `--explain [mode]` | Show execution plan without running. Modes: `summary` (default), `detailed`, `json`                                            |
-| `--file-scoped`    | Only process git staged files                                                                                                  |
-| `--tools <list>`   | Comma-separated list of tools to run                                                                                           |
-| `--fail-on-skip`   | Exit non-zero if any tool is skipped because its binary is unavailable for this platform (see [Skipped tools](#skipped-tools)) |
+| Flag                         | Description                                                                                                                    |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `--explain [mode]`           | Show execution plan without running. Modes: `summary` (default), `detailed`, `json`                                            |
+| `--file-scoped`              | Only process git staged files                                                                                                  |
+| `--tools <list>`             | Comma-separated list of tools to run                                                                                           |
+| `--fail-on-skip`             | Exit non-zero if any tool is skipped because its binary is unavailable for this platform (see [Skipped tools](#skipped-tools)) |
+| `--widen-to <level>`         | Limit how far work may widen beyond what you asked for: `target`, `unit` or `repo` (see [Narrowed runs](#narrowed-runs))       |
+| `--require-coverage <level>` | Exit non-zero unless the run answered completely: `unit` or `repo` (see [Narrowed runs](#narrowed-runs))                       |
 
 **Examples:**
 
@@ -157,7 +159,76 @@ count in the summary footer, and as a `skipped` array in `--explain=json`.
 
 `--fail-on-skip` makes the run exit non-zero **only** for platform skips (a tool
 you expected to run had no binary). Intentional `skip: true` tools never fail the run.
+
+A third reason appears when you narrow a run — see [Narrowed runs](#narrowed-runs).
 :::
+
+### Narrowed runs
+
+Naming files, or running from a subdirectory, asks for less than the whole
+repository. Most tools follow: a formatter given one file formats that file.
+Some cannot. `syncpack` compares versions **across** `package.json` files, so a
+one-file answer is not a smaller answer, it is a wrong one.
+
+datamitsu decides this per operation, from the tool's
+[granularity](configuration-api.md#granularity). A narrowable tool runs on what
+you asked for. One whose verdict covers the whole repository is reported as
+skipped:
+
+```console
+$ cd packages/api
+$ datamitsu fix ./swagger.json
+✓ oxfmt                packages/api/swagger.json
+⊘ syncpack             skipped (whole-repository verdict — cannot narrow)
+```
+
+Before this behaviour existed those tools were dropped silently — absent from the
+report, from `--explain`, from everything. If you were relying on that silence,
+the tools have not changed; only the reporting has.
+
+**`--widen-to`** overrides how far the core may go beyond your request, in either
+direction — you typed it for this one run, so it wins over the project's policy:
+
+```bash
+# Only what I named. Anything needing more is reported, not run.
+datamitsu fix ./swagger.json --widen-to=target
+
+# Run the whole-repository tools anyway.
+datamitsu fix ./swagger.json --widen-to=repo
+```
+
+The policy governs unit-scoped tools too, not only whole-repository ones. A tool
+whose command line carries no path — `go fmt ./...`, `golangci-lint run`, and most
+formatters that find their own files — reads its entire project whatever you
+named, so naming one file runs it over that file's project and no other. Under
+`target` it is reported rather than run, because a whole project is more than what
+you named. Tools that take a `{files}` list are already narrowed by that list and
+are unaffected.
+
+Set the project default in config with
+[`execution.widenTo`](configuration-api.md#executionwidento).
+
+**`--require-coverage`** turns an incomplete answer into a failure, for CI:
+
+```bash
+# Every unit the run touched was fully analysed.
+datamitsu check --require-coverage=unit
+
+# ...and the run covered the repository at all.
+datamitsu check --require-coverage=repo
+```
+
+`unit` fails if a tool could not be narrowed, if a task covered only part of its
+unit, or if the host lacked a binary. `repo` adds that the run must have targeted
+the whole repository — without that clause, `check --require-coverage pkg/x.ts`
+would pass having checked one package of nine.
+
+A tool you disabled with `skip: true` never counts against coverage: a repository
+that opts a tool out has given its answer, not an incomplete one.
+
+It works under `--explain` too, since coverage is decided while planning — a CI
+gate that costs one plan and downloads nothing. It cannot be combined with
+`--tools`, which would make the assertion cover only the selected subset.
 
 ## fix
 
@@ -167,12 +238,14 @@ Run fix operations on files.
 datamitsu fix [files...]
 ```
 
-| Flag               | Description                                                                                                                    |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
-| `--explain [mode]` | Show execution plan without running. Modes: `summary` (default), `detailed`, `json`                                            |
-| `--file-scoped`    | Only process git staged files                                                                                                  |
-| `--tools <list>`   | Comma-separated list of tools to run                                                                                           |
-| `--fail-on-skip`   | Exit non-zero if any tool is skipped because its binary is unavailable for this platform (see [Skipped tools](#skipped-tools)) |
+| Flag                         | Description                                                                                                                    |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `--explain [mode]`           | Show execution plan without running. Modes: `summary` (default), `detailed`, `json`                                            |
+| `--file-scoped`              | Only process git staged files                                                                                                  |
+| `--tools <list>`             | Comma-separated list of tools to run                                                                                           |
+| `--fail-on-skip`             | Exit non-zero if any tool is skipped because its binary is unavailable for this platform (see [Skipped tools](#skipped-tools)) |
+| `--widen-to <level>`         | Limit how far work may widen beyond what you asked for: `target`, `unit` or `repo` (see [Narrowed runs](#narrowed-runs))       |
+| `--require-coverage <level>` | Exit non-zero unless the run answered completely: `unit` or `repo` (see [Narrowed runs](#narrowed-runs))                       |
 
 **Examples:**
 
@@ -195,12 +268,14 @@ Run lint operations on files.
 datamitsu lint [files...]
 ```
 
-| Flag               | Description                                                                                                                    |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
-| `--explain [mode]` | Show execution plan without running. Modes: `summary` (default), `detailed`, `json`                                            |
-| `--file-scoped`    | Only process git staged files                                                                                                  |
-| `--tools <list>`   | Comma-separated list of tools to run                                                                                           |
-| `--fail-on-skip`   | Exit non-zero if any tool is skipped because its binary is unavailable for this platform (see [Skipped tools](#skipped-tools)) |
+| Flag                         | Description                                                                                                                    |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `--explain [mode]`           | Show execution plan without running. Modes: `summary` (default), `detailed`, `json`                                            |
+| `--file-scoped`              | Only process git staged files                                                                                                  |
+| `--tools <list>`             | Comma-separated list of tools to run                                                                                           |
+| `--fail-on-skip`             | Exit non-zero if any tool is skipped because its binary is unavailable for this platform (see [Skipped tools](#skipped-tools)) |
+| `--widen-to <level>`         | Limit how far work may widen beyond what you asked for: `target`, `unit` or `repo` (see [Narrowed runs](#narrowed-runs))       |
+| `--require-coverage <level>` | Exit non-zero unless the run answered completely: `unit` or `repo` (see [Narrowed runs](#narrowed-runs))                       |
 
 **Examples:**
 
@@ -969,6 +1044,8 @@ integration.
 | `DATAMITSU_INSTALL_TIMEOUT`      | Per-app install timeout in seconds (`0` = disabled)                                            | `600`                                               |
 | `DATAMITSU_MIN_RELEASE_AGE`      | Minimum release age in minutes for `pull-*` version selection (`0` = disabled)                 | `10080`                                             |
 | `DATAMITSU_MAX_PARALLEL_WORKERS` | Max parallel tool execution workers                                                            | `max(4, floor(NumCPU * 0.75))`, capped at 16        |
+| `DATAMITSU_UNIT_CACHE_TTL`       | Minutes a cached project-level verdict stays trusted; `0` disables it                          | `1440` (24h)                                        |
+| `DATAMITSU_LSP_FORMAT_WIDEN_TO`  | How far editor format-on-save may widen: `target` or `unit`                                    | `unit`                                              |
 | `DATAMITSU_LOG_LEVEL`            | Log level (debug, info, warn, error)                                                           | `info`                                              |
 | `DATAMITSU_TIMINGS`              | Enable detailed timing output (1=enabled, 0=disabled)                                          | `0`                                                 |
 | `DATAMITSU_BINARY_COMMAND`       | Override binary command path                                                                   | -                                                   |

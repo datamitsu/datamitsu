@@ -28,6 +28,10 @@ import (
 type Facts struct {
 	// PackageName is the name of this package from ldflags
 	PackageName string `json:"packageName"`
+	// Version is the running build's version string, verbatim from ldflags.
+	// Diagnostics only: a config that needs a minimum core declares it through
+	// getMinVersion(), which is enforced for stable releases.
+	Version string `json:"version"`
 	// BinaryCommand is the command to run this binary (can be overridden via env or flag)
 	BinaryCommand string `json:"binaryCommand"`
 	// BinaryPath is the absolute path to the currently running binary
@@ -72,6 +76,7 @@ func CollectWithOptions(ctx context.Context, binaryCommandOverride string, opts 
 
 	facts := &Facts{
 		PackageName: ldflags.PackageName,
+		Version:     ldflags.Version,
 		OS:          runtime.GOOS,
 		Arch:        runtime.GOARCH,
 		Libc:        string(libc),

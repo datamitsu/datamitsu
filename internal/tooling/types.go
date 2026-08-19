@@ -17,7 +17,32 @@ type Task struct {
 	OpConfig    config.ToolOperation
 	Files       []string // Files to process (empty for whole-project mode)
 	ProjectPath string   // Project root path for project-root working dir mode
+
+	// UnitDir is the directory whose verdict this task produces, relative to the
+	// git root ("" is the root). Empty for file-granularity tasks, which have no
+	// unit beyond the files themselves.
+	UnitDir string
+	// UnitMembers is every tracked file under UnitDir — not just the glob
+	// matches. A superset is safe (a stale entry only costs a miss); a subset
+	// would let an untracked-by-globs edit go unnoticed.
+	UnitMembers []string
+	// UnitGuards are inputs outside UnitDir that can still change the verdict:
+	// ancestor configs, lock files, and config paths the args name.
+	UnitGuards []string
+	// Coverage records whether this task, as planned, covers its whole unit. Only
+	// the planner sets it: the executor cannot tell a narrowed run from a full
+	// one, and a run that guessed would record a verdict it did not earn.
+	Coverage Coverage
 }
+
+// Coverage is whether a task covers the whole unit its verdict describes.
+type Coverage string
+
+// Coverage values.
+const (
+	CoverageComplete Coverage = "complete"
+	CoveragePartial  Coverage = "partial"
+)
 
 // TaskGroup represents a group of tasks that can run in parallel
 type TaskGroup struct {
@@ -36,15 +61,17 @@ type ExecutionPlan struct {
 // SkipReason classifies why a tool was skipped (vs. silently not applicable).
 type SkipReason int
 
-// Skip reason classifications. Only these two reasons are surfaced to the user;
-// other non-runs (project-type mismatch, no matching files, .datamitsuignore)
-// stay silent.
+// Skip reason classifications. Other non-runs (project-type mismatch, no
+// matching files, .datamitsuignore) stay silent.
 const (
 	// SkipReasonConfig marks a tool disabled via `skip: true` in config.
 	SkipReasonConfig SkipReason = iota
 	// SkipReasonUnsupportedPlatform marks a tool whose backing binary has no
 	// build for the current os/arch/libc.
 	SkipReasonUnsupportedPlatform
+	// SkipReasonNotNarrowable marks an operation whose verdict covers the whole
+	// repository, asked for from a subdirectory. It used to vanish silently.
+	SkipReasonNotNarrowable
 )
 
 // String is the stable machine-readable key used in --explain=json.
@@ -54,6 +81,8 @@ func (r SkipReason) String() string {
 		return "config"
 	case SkipReasonUnsupportedPlatform:
 		return "unsupported-platform"
+	case SkipReasonNotNarrowable:
+		return "not-narrowable"
 	}
 	return "config"
 }
@@ -82,6 +111,8 @@ func (s SkippedTool) ReasonText() string {
 			return "no binary for " + s.Detail
 		}
 		return "no binary for this platform"
+	case SkipReasonNotNarrowable:
+		return "whole-repository verdict — cannot narrow"
 	}
 	return "disabled in config"
 }

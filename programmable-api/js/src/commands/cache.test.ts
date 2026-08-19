@@ -31,8 +31,8 @@ describe("cache.clear", () => {
     assert.equal(result.message, "Cache cleared successfully");
 
     const call = mockSpawn.mock.calls[0];
-    const args = call.arguments[0];
-    assert.deepEqual(args, ["cache", "clear"]);
+    const arguments_ = call.arguments[0];
+    assert.deepEqual(arguments_, ["cache", "clear"]);
   });
 
   it("cache.clear with all=true adds --all flag", async () => {
@@ -49,8 +49,8 @@ describe("cache.clear", () => {
     assert.equal(result.success, true);
 
     const call = mockSpawn.mock.calls[0];
-    const args = call.arguments[0];
-    assert.ok(args.includes("--all"));
+    const arguments_ = call.arguments[0];
+    assert.ok(arguments_.includes("--all"));
   });
 
   it("cache.clear with dryRun=true adds --dry-run flag", async () => {
@@ -67,8 +67,8 @@ describe("cache.clear", () => {
     assert.equal(result.success, true);
 
     const call = mockSpawn.mock.calls[0];
-    const args = call.arguments[0];
-    assert.ok(args.includes("--dry-run"));
+    const arguments_ = call.arguments[0];
+    assert.ok(arguments_.includes("--dry-run"));
   });
 
   it("cache.clear passes cwd to spawn", async () => {
@@ -125,8 +125,8 @@ describe("cache.path", () => {
     assert.equal(result.path, "/home/user/.cache/datamitsu");
 
     const call = mockSpawn.mock.calls[0];
-    const args = call.arguments[0];
-    assert.deepEqual(args, ["cache", "path"]);
+    const arguments_ = call.arguments[0];
+    assert.deepEqual(arguments_, ["cache", "path"]);
   });
 
   it("cache.path handles errors gracefully", async () => {
@@ -165,8 +165,8 @@ describe("cache.pathProject", () => {
     assert.equal(result.path, "/home/user/.cache/datamitsu/projects/abc123");
 
     const call = mockSpawn.mock.calls[0];
-    const args = call.arguments[0];
-    assert.deepEqual(args, ["cache", "path", "project"]);
+    const arguments_ = call.arguments[0];
+    assert.deepEqual(arguments_, ["cache", "path", "project"]);
   });
 
   it("cache.pathProject respects cwd option", async () => {

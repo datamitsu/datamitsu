@@ -69,6 +69,12 @@ type Planner struct {
 	// .datamitsuignore matcher for disabling tools per file
 	ignoreMatcher *datamitsuignore.Matcher
 
+	// execution is the run-shaping policy from config; nil means defaults.
+	execution *config.Execution
+	// widenOverride is a one-off --widen-to; it overrides config in either
+	// direction (see config.Execution.ResolveWidenTo).
+	widenOverride config.WidenTo
+
 	// Timings for performance measurement
 	timings *timing.Timings
 }
@@ -91,6 +97,13 @@ func NewPlanner(
 		extraIgnoreRules:   extraIgnoreRules,
 		timings:            timing.New(),
 	}
+}
+
+// SetWidenPolicy wires the run's widening policy. Left unset, every operation
+// takes config.DefaultWidenTo.
+func (p *Planner) SetWidenPolicy(exec *config.Execution, override config.WidenTo) {
+	p.execution = exec
+	p.widenOverride = override
 }
 
 // SetPlatformChecker injects the host-availability checker used to skip
@@ -128,7 +141,7 @@ func (p *Planner) GetDetectedProjectTypes() []string {
 }
 
 // Plan creates an execution plan for the given operation and files
-func (p *Planner) Plan(ctx context.Context, operation config.OperationType, files []string, selectedTools []string) (*ExecutionPlan, error) {
+func (p *Planner) Plan(ctx context.Context, operation config.OperationType, sel Selection, selectedTools []string) (*ExecutionPlan, error) {
 	// Initialize cache once before planning
 	if err := p.initializeCache(ctx); err != nil {
 		return nil, fmt.Errorf("failed to initialize cache: %w", err)
@@ -139,7 +152,7 @@ func (p *Planner) Plan(ctx context.Context, operation config.OperationType, file
 	var skipped []SkippedTool
 	func() {
 		defer p.timings.Start("Collect tasks")()
-		tasks, skipped = p.collectTasks(ctx, operation, files)
+		tasks, skipped = p.collectTasks(ctx, operation, sel)
 	}()
 
 	// Filter by selectedTools if specified
@@ -171,9 +184,16 @@ func (p *Planner) Plan(ctx context.Context, operation config.OperationType, file
 }
 
 // collectTasks collects all tasks (and explicitly-skipped tools) for the operation.
-func (p *Planner) collectTasks(ctx context.Context, operation config.OperationType, files []string) ([]Task, []SkippedTool) {
+func (p *Planner) collectTasks(ctx context.Context, operation config.OperationType, sel Selection) ([]Task, []SkippedTool) {
+	// An empty selection is a selection: it targets nothing, so nothing runs.
+	if sel.Mode == SelectionEmpty {
+		return nil, nil
+	}
+
 	var tasks []Task
 	var skipped []SkippedTool
+
+	widenTo := p.execution.ResolveWidenTo(operation, p.widenOverride)
 
 	toolNames := make([]string, 0, len(p.tools))
 	for name := range p.tools {
@@ -231,8 +251,25 @@ func (p *Planner) collectTasks(ctx context.Context, operation config.OperationTy
 		// Match files and create tasks based on scope
 		switch opConfig.Scope {
 		case config.ToolScopeRepository:
-			// Repository scope: only run when cwd is the git root.
-			if p.cwdPath != p.rootPath {
+			// A repository-scoped operation used to be dropped outright when cwd
+			// was not the git root — silently, without even a skip entry. What
+			// actually matters is whether its verdict survives being narrowed:
+			// one that takes a file list does, one that answers a whole-repository
+			// question does not.
+			//
+			// Only "file" and "repo" reach this line. "unit" is meaningless here —
+			// a repository-scoped operation runs once at the git root and is never
+			// split per unit — so ValidateTools rejects the combination outright,
+			// and TestRepositoryScopeNeverSeesUnitGranularity pins that invariant
+			// to this branch. Were it dropped, a declared "unit" would fall through
+			// and plan a whole-repository run for a narrowed request.
+			repoWide := config.InferGranularity(opConfig) == config.GranularityRepo
+			if repoWide && p.cwdPath != p.rootPath && widenTo != config.WidenToRepo {
+				skipped = append(skipped, SkippedTool{
+					ToolName:  toolName,
+					Operation: operation,
+					Reason:    SkipReasonNotNarrowable,
+				})
 				continue
 			}
 			// Respect .datamitsuignore: skip when this tool is disabled for the
@@ -245,54 +282,54 @@ func (p *Planner) collectTasks(ctx context.Context, operation config.OperationTy
 			if len(opConfig.Globs) == 0 && p.isToolDisabledForProject(toolName, p.rootPath) {
 				continue
 			}
-			// Skip when globs are configured but no files match (consistent with per-project behavior).
-			var matchedFiles []string
-			if len(opConfig.Globs) > 0 {
-				if len(files) == 0 {
-					matchedFiles = p.findFilesByGlobs(ctx, opConfig.Globs)
-				} else {
-					matchedFiles = p.filterFilesByGlobs(files, opConfig.Globs)
-				}
+			// Permitting the run has to widen its input too. A whole-repository
+			// verdict is computed over the whole repository, so once the policy
+			// allows it the selection that narrowed it no longer applies —
+			// otherwise --widen-to=repo un-skips the tool and then drops it for
+			// matching none of the named paths, which is the silent no-op the
+			// skip entry existed to expose.
+			matchSel := sel
+			if repoWide && widenTo == config.WidenToRepo {
+				matchSel = Selection{Mode: SelectionAll}
 			}
-			matchedFiles = p.excludeFilesByGlobs(matchedFiles, opConfig.ExcludeGlobs)
+			// Skip when globs are configured but no files match (consistent with per-project behavior).
+			matchedFiles := p.matchFiles(ctx, matchSel, opConfig)
+			// Narrowable from a subdirectory: restrict the batch to what was asked
+			// for. ProjectPath below stays the git root, so the process still starts
+			// there and {root}-anchored config paths keep resolving.
+			if config.InferGranularity(opConfig) == config.GranularityFile {
+				matchedFiles = p.selectionFilterToCwd(sel, matchedFiles)
+			}
 			// Respect file-specific .datamitsuignore rules (e.g. "**/foo.toml: oxfmt"):
 			// prune individual files from the batch even though the tool runs once.
 			matchedFiles = p.filterFilesByIgnore(toolName, matchedFiles)
 			if len(matchedFiles) > 0 || len(opConfig.Globs) == 0 {
 				task.Files = matchedFiles
 				task.ProjectPath = p.rootPath
+				p.attachUnit(&task, p.rootPath)
 				tasks = append(tasks, task)
 			}
 
 		case config.ToolScopePerProject:
 			// Per-project scope: run for each detected project in its directory
-			var matchedFiles []string
-			if len(opConfig.Globs) > 0 {
-				if len(files) == 0 {
-					matchedFiles = p.findFilesByGlobs(ctx, opConfig.Globs)
-				} else {
-					matchedFiles = p.filterFilesByGlobs(files, opConfig.Globs)
-				}
-				matchedFiles = p.excludeFilesByGlobs(matchedFiles, opConfig.ExcludeGlobs)
-				matchedFiles = p.filterFilesToCwd(matchedFiles)
-				matchedFiles = p.filterFilesByIgnore(toolName, matchedFiles)
-			}
+			matchedFiles := p.filterFilesByIgnore(toolName, p.selectionFilterToCwd(sel, p.matchFiles(ctx, sel, opConfig)))
 
 			if len(matchedFiles) > 0 || len(opConfig.Globs) == 0 {
-				projectTasks := p.createPerProjectTasksWithFiles(ctx, task, matchedFiles)
-				tasks = append(tasks, projectTasks...)
+				unitTasks, narrowedAway := p.collectUnitTasks(ctx, task, sel, matchedFiles, widenTo)
+				if narrowedAway {
+					skipped = append(skipped, SkippedTool{
+						ToolName:  toolName,
+						Operation: operation,
+						Reason:    SkipReasonNotNarrowable,
+					})
+					continue
+				}
+				tasks = append(tasks, unitTasks...)
 			}
 
 		case config.ToolScopePerFile:
 			// Per-file scope: run for each file in its directory
-			var matchedFiles []string
-			if len(files) == 0 {
-				matchedFiles = p.findFilesByGlobs(ctx, opConfig.Globs)
-			} else {
-				matchedFiles = p.filterFilesByGlobs(files, opConfig.Globs)
-			}
-			matchedFiles = p.excludeFilesByGlobs(matchedFiles, opConfig.ExcludeGlobs)
-			matchedFiles = p.filterFilesToCwd(matchedFiles)
+			matchedFiles := p.selectionFilterToCwd(sel, p.matchFiles(ctx, sel, opConfig))
 
 			for _, file := range matchedFiles {
 				if p.isToolDisabledForFile(toolName, file) {
@@ -301,31 +338,47 @@ func (p *Planner) collectTasks(ctx context.Context, operation config.OperationTy
 				fileTask := task
 				fileTask.Files = []string{file}
 				fileTask.ProjectPath = filepath.Dir(file)
+				p.attachUnit(&fileTask, fileTask.ProjectPath)
 				tasks = append(tasks, fileTask)
 			}
 
 		default:
 			// Default to per-project for safety
-			var matchedFiles []string
-			if len(opConfig.Globs) > 0 {
-				if len(files) == 0 {
-					matchedFiles = p.findFilesByGlobs(ctx, opConfig.Globs)
-				} else {
-					matchedFiles = p.filterFilesByGlobs(files, opConfig.Globs)
-				}
-				matchedFiles = p.excludeFilesByGlobs(matchedFiles, opConfig.ExcludeGlobs)
-				matchedFiles = p.filterFilesToCwd(matchedFiles)
-				matchedFiles = p.filterFilesByIgnore(toolName, matchedFiles)
-			}
+			matchedFiles := p.filterFilesByIgnore(toolName, p.selectionFilterToCwd(sel, p.matchFiles(ctx, sel, opConfig)))
 
 			if len(matchedFiles) > 0 || len(opConfig.Globs) == 0 {
-				projectTasks := p.createPerProjectTasksWithFiles(ctx, task, matchedFiles)
-				tasks = append(tasks, projectTasks...)
+				unitTasks, narrowedAway := p.collectUnitTasks(ctx, task, sel, matchedFiles, widenTo)
+				if narrowedAway {
+					skipped = append(skipped, SkippedTool{
+						ToolName:  toolName,
+						Operation: operation,
+						Reason:    SkipReasonNotNarrowable,
+					})
+					continue
+				}
+				tasks = append(tasks, unitTasks...)
 			}
 		}
 	}
 
 	return tasks, skipped
+}
+
+// matchFiles resolves an operation's glob-matched file set for the selection.
+// Named paths are filtered down to the operation's globs; every other mode
+// sweeps the cached repository walk. Scope-specific cwd and .datamitsuignore
+// filtering is applied by the caller, which is where the scopes genuinely differ.
+func (p *Planner) matchFiles(ctx context.Context, sel Selection, op config.ToolOperation) []string {
+	if len(op.Globs) == 0 {
+		return nil
+	}
+	var matched []string
+	if named := sel.Files(); len(named) > 0 {
+		matched = p.filterFilesByGlobs(named, op.Globs)
+	} else {
+		matched = p.findFilesByGlobs(ctx, op.Globs)
+	}
+	return p.excludeFilesByGlobs(matched, op.ExcludeGlobs)
 }
 
 // filterSkippedBySelectedTools keeps only skipped entries whose tool is in the
@@ -358,6 +411,17 @@ func (p *Planner) isUnderCwd(path string) bool {
 	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
+// selectionFilterToCwd restricts files to the cwd subtree, except when the user
+// named paths explicitly. `cd services/api && dm fix ../web/x.ts` used to drop
+// the named file and report nothing: cwd is where you happen to stand, but a
+// path on the command line is a decision.
+func (p *Planner) selectionFilterToCwd(sel Selection, files []string) []string {
+	if sel.Mode == SelectionPaths {
+		return files
+	}
+	return p.filterFilesToCwd(files)
+}
+
 // filterFilesToCwd returns only those files that are under p.cwdPath.
 // No-op when cwdPath == rootPath.
 func (p *Planner) filterFilesToCwd(files []string) []string {
@@ -371,6 +435,107 @@ func (p *Planner) filterFilesToCwd(files []string) []string {
 		}
 	}
 	return out
+}
+
+// selectionPermitsUnit reports whether processing the whole of unitDir stays
+// inside what widenTo allows for this selection.
+//
+// It only matters for an operation with no path in argv: that one reads its
+// whole unit whatever file list it was given, so planning it in a unit the
+// selection does not reach widens the run past the declared policy — and these
+// tools fix in place, which means rewriting files nobody named.
+func (p *Planner) selectionPermitsUnit(sel Selection, unitDir string, widenTo config.WidenTo) bool {
+	if widenTo == config.WidenToRepo {
+		return true
+	}
+	switch sel.Mode {
+	case SelectionAll:
+		return true
+	case SelectionEmpty:
+		return false
+	case SelectionSubtree:
+		if p.contains(sel.Dir, unitDir) {
+			return true
+		}
+		// Standing below a unit root still means "this unit", but only once the
+		// policy allows widening to it.
+		return widenTo == config.WidenToUnit && p.contains(unitDir, sel.Dir)
+	case SelectionPaths:
+		// Widening to the unit holding a named path is exactly what "unit" is.
+		if widenTo == config.WidenToUnit {
+			for _, path := range sel.Paths {
+				if p.contains(unitDir, path) {
+					return true
+				}
+			}
+		}
+		// Under "target" a whole unit is more than what was named, so the tool is
+		// reported rather than run.
+		return false
+	}
+	return false
+}
+
+// collectUnitTasks plans the per-project tasks for one operation, dropping the
+// units the widening policy does not reach.
+func (p *Planner) collectUnitTasks(
+	ctx context.Context, task Task, sel Selection, matchedFiles []string, widenTo config.WidenTo,
+) (kept []Task, narrowedAway bool) {
+	projectTasks := p.createPerProjectTasksWithFiles(ctx, task, matchedFiles)
+	for i := range projectTasks {
+		p.attachUnit(&projectTasks[i], projectTasks[i].ProjectPath)
+	}
+	if config.ArgsReferenceFiles(task.OpConfig.Args) {
+		// argv carries the paths, so the tool touches those and nothing else.
+		return projectTasks, false
+	}
+	for _, projectTask := range projectTasks {
+		if p.selectionPermitsUnit(sel, projectTask.ProjectPath, widenTo) {
+			kept = append(kept, projectTask)
+			continue
+		}
+		narrowedAway = true
+	}
+	// Only a tool left with nothing to do has failed to answer: dropping the
+	// units the user did not ask about is the policy working, not a skip.
+	return kept, narrowedAway && len(kept) == 0
+}
+
+// contains reports whether dir is an ancestor of (or equal to) path.
+func (p *Planner) contains(dir, path string) bool {
+	rel, err := filepath.Rel(dir, path)
+	if err != nil {
+		return false
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// filterProjectLocationsToSubtree keeps the locations under cwd plus the nearest
+// one containing it.
+func (p *Planner) filterProjectLocationsToSubtree(locs []project.ProjectLocation) []project.ProjectLocation {
+	if p.cwdPath == p.rootPath {
+		return locs
+	}
+
+	out := p.filterProjectLocationsToCwd(locs)
+	if len(out) > 0 {
+		return out
+	}
+
+	// Nothing below: fall back to the deepest project containing cwd.
+	var nearest *project.ProjectLocation
+	for i, loc := range locs {
+		if !p.contains(loc.Path, p.cwdPath) {
+			continue
+		}
+		if nearest == nil || len(loc.Path) > len(nearest.Path) {
+			nearest = &locs[i]
+		}
+	}
+	if nearest != nil {
+		return []project.ProjectLocation{*nearest}
+	}
+	return nil
 }
 
 // filterProjectLocationsToCwd returns only those project locations whose Path
@@ -605,8 +770,12 @@ func (p *Planner) createPerProjectTasksWithFiles(ctx context.Context, baseTask T
 		}
 	}
 
-	// Restrict to cwd subtree (no-op when cwdPath == rootPath)
-	filteredLocations = p.filterProjectLocationsToCwd(filteredLocations)
+	// Restrict to cwd subtree (no-op when cwdPath == rootPath), keeping the
+	// project that CONTAINS cwd as well as those under it. Descendants alone is
+	// the wrong reading of "the app I am standing in": from services/api/src
+	// there are no projects below, so the run planned nothing and reported
+	// nothing — the same silent emptiness this work exists to remove.
+	filteredLocations = p.filterProjectLocationsToSubtree(filteredLocations)
 
 	// If no matching projects found after filtering
 	if len(filteredLocations) == 0 {
@@ -657,7 +826,9 @@ func (p *Planner) createPerProjectTasksWithFiles(ctx context.Context, baseTask T
 			continue
 		}
 
-		if !p.isUnderCwd(projectPath) {
+		// Under cwd, or containing it: standing below a package root is still
+		// standing in that package.
+		if !p.isUnderCwd(projectPath) && !p.contains(projectPath, p.cwdPath) {
 			continue
 		}
 

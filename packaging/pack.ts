@@ -277,10 +277,12 @@ function cleanRuby() {
   // Clean any .gem files in the ruby dir
   if (existsSync(RUBY_DIR)) {
     for (const entry of readdirSync(RUBY_DIR)) {
-      if (entry.endsWith(".gem")) {
-        rmSync(join(RUBY_DIR, entry), { force: true });
-        console.log(`✓ Cleaned ${entry}`);
+      if (!entry.endsWith(".gem")) {
+        continue;
       }
+
+      rmSync(join(RUBY_DIR, entry), { force: true });
+      console.log(`✓ Cleaned ${entry}`);
     }
   }
 }
@@ -293,13 +295,13 @@ function exec(command: string, cwd?: string): void {
 function execSafe(
   command: string,
   cwd?: string,
-  env?: Record<string, string>,
+  environment?: Record<string, string>,
 ): Promise<{ error?: any; success: boolean }> {
   console.log(`$ ${command}`);
 
   const child = spawn(command, {
     cwd,
-    env: env ? { ...process.env, ...env } : undefined,
+    env: environment ? { ...process.env, ...environment } : undefined,
     shell: true,
     stdio: "inherit",
   });
@@ -399,7 +401,7 @@ function preparePlatformPackages() {
       ARCH_NAME: platform.archName,
       OS_NAME: platform.osName,
       PLATFORM: platform.npmPlatform,
-      VERSION: VERSION,
+      VERSION,
     });
     writeFileSync(join(packageDir, "package.json"), packageJson);
 
@@ -480,8 +482,8 @@ function prepareRubyPackage() {
   console.log("✓ Ruby gem prepared");
 }
 
-async function publishNpm(dryRun = true) {
-  console.log(`\n🚀 Publishing to npm (dry-run: ${dryRun})...`);
+async function publishNpm(isDryRun = true) {
+  console.log(`\n🚀 Publishing to npm (dry-run: ${isDryRun})...`);
 
   // Read version from main package.json if VERSION env var is not set
   let publishVersion = VERSION;
@@ -506,13 +508,13 @@ async function publishNpm(dryRun = true) {
   // Use --provenance for transparent publishing with OIDC
   // Only enable provenance when OIDC token is available (GitHub Actions with id-token: write)
   const hasOIDC = Boolean(process.env.ACTIONS_ID_TOKEN_REQUEST_URL);
-  const provenanceFlag = dryRun || !hasOIDC ? "" : "--provenance";
-  const baseCommand = dryRun
+  const provenanceFlag = isDryRun || !hasOIDC ? "" : "--provenance";
+  const baseCommand = isDryRun
     ? "npm publish --dry-run"
     : `npm publish --access public ${provenanceFlag}`;
   const npmCommand = `${baseCommand} --tag ${tag}`;
   console.log(
-    `Provenance: ${hasOIDC && !dryRun ? "enabled" : "disabled"} (OIDC=${hasOIDC}, dry-run=${dryRun})`,
+    `Provenance: ${hasOIDC && !isDryRun ? "enabled" : "disabled"} (OIDC=${hasOIDC}, dry-run=${isDryRun})`,
   );
 
   let hasErrors = false;
@@ -530,7 +532,7 @@ async function publishNpm(dryRun = true) {
     } else {
       console.error(`✗ Failed to publish ${packageName}`);
       hasErrors = true;
-      if (!dryRun) {
+      if (!isDryRun) {
         throw new Error(
           `Failed to publish ${packageName}: ${result.error?.message || "Unknown error"}`,
         );
@@ -548,14 +550,14 @@ async function publishNpm(dryRun = true) {
   } else {
     console.error("✗ Failed to publish main package");
     hasErrors = true;
-    if (!dryRun) {
+    if (!isDryRun) {
       throw new Error(
         `Failed to publish main package: ${mainResult.error?.message || "Unknown error"}`,
       );
     }
   }
 
-  if (hasErrors && dryRun) {
+  if (hasErrors && isDryRun) {
     console.log(
       "\n⚠️  Some packages had errors during dry-run (this is normal for already published versions)",
     );
@@ -564,8 +566,8 @@ async function publishNpm(dryRun = true) {
   }
 }
 
-async function publishPyPI(dryRun = true) {
-  console.log(`\n🚀 Publishing to PyPI (dry-run: ${dryRun})...`);
+async function publishPyPI(isDryRun = true) {
+  console.log(`\n🚀 Publishing to PyPI (dry-run: ${isDryRun})...`);
 
   const normalizedVersion = normalizePythonVersion(VERSION);
   console.log(`Version: ${normalizedVersion}`);
@@ -574,7 +576,7 @@ async function publishPyPI(dryRun = true) {
   await buildPythonWheels();
 
   // Publish all wheels
-  if (dryRun) {
+  if (isDryRun) {
     console.log("\n[DRY RUN] Would publish datamitsu wheels");
   } else {
     console.log("\n📤 Publishing wheels...");
@@ -588,11 +590,11 @@ async function publishPyPI(dryRun = true) {
     }
   }
 
-  console.log(dryRun ? "\n✅ Dry-run completed!" : "\n✅ All Python wheels published!");
+  console.log(isDryRun ? "\n✅ Dry-run completed!" : "\n✅ All Python wheels published!");
 }
 
-async function publishRubyGems(dryRun = true) {
-  console.log(`\n🚀 Publishing to RubyGems (dry-run: ${dryRun})...`);
+async function publishRubyGems(isDryRun = true) {
+  console.log(`\n🚀 Publishing to RubyGems (dry-run: ${isDryRun})...`);
 
   const rubyVersion = normalizeRubyVersion(VERSION);
   console.log(`Version: ${rubyVersion}`);
@@ -613,7 +615,7 @@ async function publishRubyGems(dryRun = true) {
     throw new Error(`Built gem not found: ${gemPath}`);
   }
 
-  if (dryRun) {
+  if (isDryRun) {
     console.log(`\n[DRY RUN] Would publish ${gemFile}`);
     console.log("\n✅ Dry-run completed!");
     return;
@@ -631,11 +633,11 @@ async function publishRubyGems(dryRun = true) {
   console.log("\n✅ RubyGems publishing completed!");
 }
 
-function replaceVariables(content: string, vars: Record<string, string>): string {
+function replaceVariables(content: string, variables: Record<string, string>): string {
   let result = content;
-  for (const [key, value] of Object.entries(vars)) {
+  for (const [key, value] of Object.entries(variables)) {
     // eslint-disable-next-line security/detect-non-literal-regexp
-    result = result.replaceAll(new RegExp(`{{${key}}}`, "g"), value);
+    result = result.replaceAll(new RegExp(`{{${key}}}`, "g"), () => value);
   }
   return result;
 }
@@ -650,9 +652,9 @@ function updateMainPackage() {
   packageJson.version = VERSION;
 
   // Update optional dependencies versions
-  for (const dep in packageJson.optionalDependencies) {
-    if (Object.hasOwn(packageJson.optionalDependencies, dep)) {
-      packageJson.optionalDependencies[dep] = VERSION;
+  for (const dependency in packageJson.optionalDependencies) {
+    if (Object.hasOwn(packageJson.optionalDependencies, dependency)) {
+      packageJson.optionalDependencies[dependency] = VERSION;
     }
   }
 
@@ -669,7 +671,7 @@ function updateMainPythonPackage() {
   const normalizedVersion = normalizePythonVersion(VERSION);
 
   // Replace version in pyproject.toml
-  content = content.replace(/version = "[^"]*"/, `version = "${normalizedVersion}"`);
+  content = content.replace(/version = "[^"]*"/, () => `version = "${normalizedVersion}"`);
   writeFileSync(pyprojectPath, content);
 
   console.log(`✓ Updated Python package to version ${normalizedVersion}`);
@@ -682,7 +684,10 @@ function updateRubyGemspec() {
   let content = readFileSync(gemspecPath, "utf8");
 
   const rubyVersion = normalizeRubyVersion(VERSION);
-  content = content.replace(/spec\.version\s*=\s*"[^"]*"/, `spec.version       = "${rubyVersion}"`);
+  content = content.replace(
+    /spec\.version\s*=\s*"[^"]*"/,
+    () => `spec.version       = "${rubyVersion}"`,
+  );
 
   writeFileSync(gemspecPath, content);
   console.log(`✓ Updated gemspec to version ${rubyVersion}`);
@@ -748,20 +753,20 @@ async function main() {
     }
 
     case "publish": {
-      const dryRun = process.argv.includes("--dry-run");
-      await publishNpm(dryRun);
+      const isDryRun = process.argv.includes("--dry-run");
+      await publishNpm(isDryRun);
       break;
     }
 
     case "publish-python": {
-      const dryRun = process.argv.includes("--dry-run");
-      await publishPyPI(dryRun);
+      const isDryRun = process.argv.includes("--dry-run");
+      await publishPyPI(isDryRun);
       break;
     }
 
     case "publish-ruby": {
-      const dryRun = process.argv.includes("--dry-run");
-      await publishRubyGems(dryRun);
+      const isDryRun = process.argv.includes("--dry-run");
+      await publishRubyGems(isDryRun);
       break;
     }
 

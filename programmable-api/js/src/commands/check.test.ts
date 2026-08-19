@@ -44,9 +44,9 @@ describe("check", () => {
     assert.deepEqual(result.plans, [fixPlan, lintPlan]);
     assert.equal(result.raw.exitCode, 0);
 
-    const args = mockSpawn.mock.calls[0].arguments[0];
-    assert.equal(args[0], "check");
-    assert.ok(args.includes("--explain=json"));
+    const arguments_ = mockSpawn.mock.calls[0].arguments[0];
+    assert.equal(arguments_[0], "check");
+    assert.ok(arguments_.includes("--explain=json"));
   });
 
   it("check with explain='json' handles single JSON object", async () => {
@@ -131,9 +131,9 @@ describe("check", () => {
 
     await check({ files: ["src/a.ts", "src/b.ts"] });
 
-    const args = mockSpawn.mock.calls[0].arguments[0];
-    assert.ok(args.includes("src/a.ts"));
-    assert.ok(args.includes("src/b.ts"));
+    const arguments_ = mockSpawn.mock.calls[0].arguments[0];
+    assert.ok(arguments_.includes("src/a.ts"));
+    assert.ok(arguments_.includes("src/b.ts"));
   });
 
   it("check with fileScoped adds --file-scoped flag", async () => {
@@ -148,8 +148,8 @@ describe("check", () => {
 
     await check({ fileScoped: true });
 
-    const args = mockSpawn.mock.calls[0].arguments[0];
-    assert.ok(args.includes("--file-scoped"));
+    const arguments_ = mockSpawn.mock.calls[0].arguments[0];
+    assert.ok(arguments_.includes("--file-scoped"));
   });
 
   it("check with tools array adds --tools flag", async () => {
@@ -164,10 +164,10 @@ describe("check", () => {
 
     await check({ tools: ["prettier", "eslint"] });
 
-    const args = mockSpawn.mock.calls[0].arguments[0];
-    const toolsIdx = args.indexOf("--tools");
-    assert.ok(toolsIdx !== -1);
-    assert.equal(args[toolsIdx + 1], "prettier,eslint");
+    const arguments_ = mockSpawn.mock.calls[0].arguments[0];
+    const toolsIndex = arguments_.indexOf("--tools");
+    assert.ok(toolsIndex !== -1);
+    assert.equal(arguments_[toolsIndex + 1], "prettier,eslint");
   });
 
   it("check with config and beforeConfig adds respective flags", async () => {
@@ -185,13 +185,13 @@ describe("check", () => {
       config: ["./custom.config.js"],
     });
 
-    const args = mockSpawn.mock.calls[0].arguments[0];
-    const configIdx = args.indexOf("--config");
-    assert.ok(configIdx !== -1);
-    assert.equal(args[configIdx + 1], "./custom.config.js");
-    const beforeIdx = args.indexOf("--before-config");
-    assert.ok(beforeIdx !== -1);
-    assert.equal(args[beforeIdx + 1], "./base.config.js");
+    const arguments_ = mockSpawn.mock.calls[0].arguments[0];
+    const configIndex = arguments_.indexOf("--config");
+    assert.ok(configIndex !== -1);
+    assert.equal(arguments_[configIndex + 1], "./custom.config.js");
+    const beforeIndex = arguments_.indexOf("--before-config");
+    assert.ok(beforeIndex !== -1);
+    assert.equal(arguments_[beforeIndex + 1], "./base.config.js");
   });
 
   it("check passes cwd and stdio to spawn", async () => {
@@ -238,7 +238,7 @@ describe("check", () => {
 
     await check({ noAutoConfig: true });
 
-    const args = mockSpawn.mock.calls[0].arguments[0];
-    assert.ok(args.includes("--no-auto-config"));
+    const arguments_ = mockSpawn.mock.calls[0].arguments[0];
+    assert.ok(arguments_.includes("--no-auto-config"));
   });
 });

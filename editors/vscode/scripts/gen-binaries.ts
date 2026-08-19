@@ -19,7 +19,7 @@ const checksumsPath = process.env.CHECKSUMS_FILE ?? join(REPO_ROOT, "dist", "che
 // Parse "<sha256>  <filename>" lines (BSD "*" binary marker tolerated).
 const checksums = new Map<string, string>();
 for (const line of readFileSync(checksumsPath, "utf8").split("\n")) {
-  const match = /^([0-9a-f]{64})\s+\*?(.+?)\s*$/i.exec(line.trim());
+  const match = /^([0-9a-f]{64})[ \t]+\*?([^\s](?:.*[^\s])?)$/i.exec(line.trim());
   const sha = match?.[1];
   const file = match?.[2];
   if (sha !== undefined && file !== undefined) {

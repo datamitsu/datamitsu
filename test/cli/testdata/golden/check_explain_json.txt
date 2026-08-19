@@ -16,7 +16,9 @@
                 "--write"
               ],
               "scope": "repository",
-              "batch": true,
+              "granularity": "repo",
+              "arity": "none",
+              "coverage": "complete",
               "workingDir": "<TMP>",
               "files": [],
               "fileCount": 0
@@ -46,7 +48,9 @@
                 "--check"
               ],
               "scope": "repository",
-              "batch": true,
+              "granularity": "repo",
+              "arity": "none",
+              "coverage": "complete",
               "workingDir": "<TMP>",
               "files": [],
               "fileCount": 0
@@ -63,7 +67,9 @@
                 "lint"
               ],
               "scope": "repository",
-              "batch": true,
+              "granularity": "repo",
+              "arity": "none",
+              "coverage": "complete",
               "workingDir": "<TMP>",
               "files": [],
               "fileCount": 0

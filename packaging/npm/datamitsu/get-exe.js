@@ -3,9 +3,9 @@ import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 
 export function getExePath() {
-  const ext = process.platform === "win32" ? ".exe" : "";
+  const extension = process.platform === "win32" ? ".exe" : "";
   const packageName = `@datamitsu/datamitsu-${process.platform}-${process.arch}`;
-  const exeName = `datamitsu${ext}`;
+  const exeName = `datamitsu${extension}`;
 
   try {
     const require = createRequire(import.meta.url);
