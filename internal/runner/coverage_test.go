@@ -51,6 +51,41 @@ func TestOptionsValidate(t *testing.T) {
 	}
 }
 
+// --require-coverage must mean the same thing with and without --explain, or it
+// is useless as a CI gate: the cheap plan-only check would pass exactly where
+// the real run fails. Only the reasons differ from --fail-on-skip, which stays
+// inert in explain mode.
+func TestExplainAndExecutingPathsAgreeOnCoverage(t *testing.T) {
+	skips := []tooling.SkippedTool{
+		{ToolName: "syncpack", Reason: tooling.SkipReasonNotNarrowable},
+		{ToolName: "typstyle", Reason: tooling.SkipReasonUnsupportedPlatform},
+		{ToolName: "bearer", Reason: tooling.SkipReasonConfig},
+	}
+
+	explain := &sharedContext{platformSkipped: map[string]struct{}{}}
+	explain.recordNarrowingSkips(skips)
+
+	executing := &sharedContext{platformSkipped: map[string]struct{}{}}
+	executing.recordSkips(skips)
+
+	if len(explain.narrowed) != len(executing.narrowed) {
+		t.Fatalf("explain recorded %v, executing recorded %v", explain.narrowed, executing.narrowed)
+	}
+	for name := range executing.narrowed {
+		if _, ok := explain.narrowed[name]; !ok {
+			t.Errorf("%q counts against coverage when running but not when explaining", name)
+		}
+	}
+	if _, ok := explain.narrowed["bearer"]; ok {
+		t.Error("a config skip counted against coverage; opting a tool out is an answer, not a gap")
+	}
+	// --fail-on-skip is about a host lacking a binary, which only matters if
+	// something was going to run.
+	if len(explain.platformSkipped) != 0 {
+		t.Errorf("explain armed --fail-on-skip with %v", explain.platformSkipped)
+	}
+}
+
 func TestRecordCoverage(t *testing.T) {
 	sc := &sharedContext{narrowed: map[string]struct{}{}}
 	sc.recordCoverage(&tooling.ExecutionPlan{Groups: []tooling.TaskGroup{{Tasks: []tooling.Task{

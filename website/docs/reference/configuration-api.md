@@ -604,7 +604,11 @@ on the per-file cache — and is only correct when a file's result cannot depend
 its neighbours. datamitsu rejects it when the file list never reaches the tool,
 since such an operation cannot have a per-file verdict at all.
 
-Declaring `unit` or `repo` is always safe: it can only cause more work.
+Declaring `unit` or `repo` is otherwise safe: it can only cause more work. The
+one rejected combination is `scope: "repository"` with `granularity: "unit"` — a
+repository-scoped operation starts one process at the git root and is never split
+per unit, so its verdict covers the repository whatever it declares. Use
+`scope: "per-project"` for a unit-complete verdict.
 
 ### Arity
 

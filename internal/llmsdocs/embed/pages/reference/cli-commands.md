@@ -194,6 +194,14 @@ datamitsu fix ./swagger.json --widen-to=target
 datamitsu fix ./swagger.json --widen-to=repo
 ```
 
+The policy governs unit-scoped tools too, not only whole-repository ones. A tool
+whose command line carries no path — `go fmt ./...`, `golangci-lint run`, and most
+formatters that find their own files — reads its entire project whatever you
+named, so naming one file runs it over that file's project and no other. Under
+`target` it is reported rather than run, because a whole project is more than what
+you named. Tools that take a `{files}` list are already narrowed by that list and
+are unaffected.
+
 Set the project default in config with
 [`execution.widenTo`](configuration-api.md#executionwidento).
 

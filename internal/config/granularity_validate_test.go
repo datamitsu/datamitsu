@@ -34,6 +34,15 @@ func TestValidateToolsRejectsUnknownGranularityAndArity(t *testing.T) {
 			ToolOperation{App: "x", Granularity: GranularityFile, Scope: ToolScopePerProject, Args: []string{"run"}},
 			"needs the file list to reach the tool",
 		},
+		{
+			// Repository scope starts one process at the git root and is never
+			// split per unit, so a unit-complete verdict is not something it can
+			// deliver — the planner would report it as not narrowable from a
+			// subdirectory and stamp a whole-repo pass from the root.
+			"repository scope claiming a unit verdict",
+			ToolOperation{App: "x", Granularity: GranularityUnit, Scope: ToolScopeRepository, Args: []string{"run"}},
+			"use scope \"per-project\"",
+		},
 	}
 
 	for _, tt := range tests {

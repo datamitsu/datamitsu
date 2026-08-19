@@ -662,17 +662,27 @@ func (sc *sharedContext) recordSkips(skipped []tooling.SkippedTool) {
 	}
 }
 
-// recordNarrowingSkips records only what bears on coverage, leaving
-// --fail-on-skip untouched. Explain mode uses it: a host missing a binary
-// matters only if something was going to run, and TestExplainFlagMatrix pins
-// --fail-on-skip as inert there.
+// recordNarrowingSkips records what bears on coverage, leaving --fail-on-skip
+// untouched. Explain mode uses it: --fail-on-skip is about a host lacking a
+// binary, which only matters if something was going to run, and
+// TestExplainFlagMatrix pins it as inert there.
+//
+// Coverage is a different question, so this records the same reasons the
+// executing path does. A tool with no binary for this host will not answer,
+// whether or not the plan is executed; recording only not-narrowable let
+// `--explain --require-coverage=unit` pass where the real run failed, and two
+// answers to one assertion make it worthless as a CI gate.
 func (sc *sharedContext) recordNarrowingSkips(skipped []tooling.SkippedTool) {
 	if sc.narrowed == nil {
 		sc.narrowed = make(map[string]struct{})
 	}
 	for _, s := range skipped {
-		if s.Reason == tooling.SkipReasonNotNarrowable {
+		switch s.Reason {
+		case tooling.SkipReasonNotNarrowable, tooling.SkipReasonUnsupportedPlatform:
 			sc.narrowed[s.ToolName] = struct{}{}
+		case tooling.SkipReasonConfig:
+			// Declared, documented and permanent: a repository that opts a tool
+			// out has not given an incomplete answer, it has given its answer.
 		}
 	}
 }

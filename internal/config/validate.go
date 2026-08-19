@@ -758,6 +758,21 @@ func ValidateTools(tools MapOfTools, parsers MapOfParsers) error {
 				))
 			}
 
+			// A repository-scoped operation starts one process at the git root and
+			// is never split per unit, so its verdict covers the repository. There
+			// is no machinery to narrow it to a unit, and the planner would report
+			// it as not narrowable from a subdirectory while stamping a whole-repo
+			// pass from the root — the declaration says one thing and the run does
+			// another. Saying so is the point of per-project scope.
+			if op.Scope == ToolScopeRepository && op.Granularity == GranularityUnit {
+				errs = append(errs, fmt.Sprintf(
+					"tool %q operation %q: scope %q with granularity %q — a repository-scoped "+
+						"operation runs once at the git root, so its verdict covers the whole "+
+						"repository; use scope %q for a unit-complete verdict",
+					toolName, opType, ToolScopeRepository, GranularityUnit, ToolScopePerProject,
+				))
+			}
+
 			if op.Arity != "" {
 				if inferred := EffectiveArity(op); op.Arity != inferred {
 					errs = append(errs, fmt.Sprintf(

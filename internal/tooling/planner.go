@@ -308,11 +308,16 @@ func (p *Planner) collectTasks(ctx context.Context, operation config.OperationTy
 			matchedFiles := p.filterFilesByIgnore(toolName, p.selectionFilterToCwd(sel, p.matchFiles(ctx, sel, opConfig)))
 
 			if len(matchedFiles) > 0 || len(opConfig.Globs) == 0 {
-				projectTasks := p.createPerProjectTasksWithFiles(ctx, task, matchedFiles)
-				for i := range projectTasks {
-					p.attachUnit(&projectTasks[i], projectTasks[i].ProjectPath)
+				unitTasks, narrowedAway := p.collectUnitTasks(ctx, task, sel, matchedFiles, widenTo)
+				if narrowedAway {
+					skipped = append(skipped, SkippedTool{
+						ToolName:  toolName,
+						Operation: operation,
+						Reason:    SkipReasonNotNarrowable,
+					})
+					continue
 				}
-				tasks = append(tasks, projectTasks...)
+				tasks = append(tasks, unitTasks...)
 			}
 
 		case config.ToolScopePerFile:
@@ -335,11 +340,16 @@ func (p *Planner) collectTasks(ctx context.Context, operation config.OperationTy
 			matchedFiles := p.filterFilesByIgnore(toolName, p.selectionFilterToCwd(sel, p.matchFiles(ctx, sel, opConfig)))
 
 			if len(matchedFiles) > 0 || len(opConfig.Globs) == 0 {
-				projectTasks := p.createPerProjectTasksWithFiles(ctx, task, matchedFiles)
-				for i := range projectTasks {
-					p.attachUnit(&projectTasks[i], projectTasks[i].ProjectPath)
+				unitTasks, narrowedAway := p.collectUnitTasks(ctx, task, sel, matchedFiles, widenTo)
+				if narrowedAway {
+					skipped = append(skipped, SkippedTool{
+						ToolName:  toolName,
+						Operation: operation,
+						Reason:    SkipReasonNotNarrowable,
+					})
+					continue
 				}
-				tasks = append(tasks, projectTasks...)
+				tasks = append(tasks, unitTasks...)
 			}
 		}
 	}
@@ -418,6 +428,70 @@ func (p *Planner) filterFilesToCwd(files []string) []string {
 		}
 	}
 	return out
+}
+
+// selectionPermitsUnit reports whether processing the whole of unitDir stays
+// inside what widenTo allows for this selection.
+//
+// It only matters for an operation with no path in argv: that one reads its
+// whole unit whatever file list it was given, so planning it in a unit the
+// selection does not reach widens the run past the declared policy — and these
+// tools fix in place, which means rewriting files nobody named.
+func (p *Planner) selectionPermitsUnit(sel Selection, unitDir string, widenTo config.WidenTo) bool {
+	if widenTo == config.WidenToRepo {
+		return true
+	}
+	switch sel.Mode {
+	case SelectionAll:
+		return true
+	case SelectionEmpty:
+		return false
+	case SelectionSubtree:
+		if p.contains(sel.Dir, unitDir) {
+			return true
+		}
+		// Standing below a unit root still means "this unit", but only once the
+		// policy allows widening to it.
+		return widenTo == config.WidenToUnit && p.contains(unitDir, sel.Dir)
+	case SelectionPaths:
+		// Widening to the unit holding a named path is exactly what "unit" is.
+		if widenTo == config.WidenToUnit {
+			for _, path := range sel.Paths {
+				if p.contains(unitDir, path) {
+					return true
+				}
+			}
+		}
+		// Under "target" a whole unit is more than what was named, so the tool is
+		// reported rather than run.
+		return false
+	}
+	return false
+}
+
+// collectUnitTasks plans the per-project tasks for one operation, dropping the
+// units the widening policy does not reach.
+func (p *Planner) collectUnitTasks(
+	ctx context.Context, task Task, sel Selection, matchedFiles []string, widenTo config.WidenTo,
+) (kept []Task, narrowedAway bool) {
+	projectTasks := p.createPerProjectTasksWithFiles(ctx, task, matchedFiles)
+	for i := range projectTasks {
+		p.attachUnit(&projectTasks[i], projectTasks[i].ProjectPath)
+	}
+	if config.ArgsReferenceFiles(task.OpConfig.Args) {
+		// argv carries the paths, so the tool touches those and nothing else.
+		return projectTasks, false
+	}
+	for _, projectTask := range projectTasks {
+		if p.selectionPermitsUnit(sel, projectTask.ProjectPath, widenTo) {
+			kept = append(kept, projectTask)
+			continue
+		}
+		narrowedAway = true
+	}
+	// Only a tool left with nothing to do has failed to answer: dropping the
+	// units the user did not ask about is the policy working, not a skip.
+	return kept, narrowedAway && len(kept) == 0
 }
 
 // contains reports whether dir is an ancestor of (or equal to) path.
