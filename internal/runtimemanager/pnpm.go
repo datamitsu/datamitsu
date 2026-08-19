@@ -134,6 +134,7 @@ func (rm *RuntimeManager) installPNPM(ctx context.Context, version string, destD
 }
 
 func (rm *RuntimeManager) downloadPNPMFromRegistry(ctx context.Context, version string, destDir string, pnpmHash string) error {
+	downloaderConstructions.Add(1)
 	return rm.downloadPNPMFromRegistryURL(ctx, "https://registry.npmjs.org", version, destDir, pnpmHash)
 }
 

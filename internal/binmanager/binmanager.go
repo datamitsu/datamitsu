@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/datamitsu/datamitsu/internal/env"
@@ -30,6 +31,17 @@ import (
 )
 
 var log = logger.Logger.With(zap.Namespace("binmanager"))
+
+// networkDownloads counts every entry into a binary download path,
+// process-wide. It exists as a guard for the side-effect-free resolution path
+// (ResolveCommandInfo): a refactor that reintroduces a fetch there flips this
+// counter and fails the guard test deterministically — including offline,
+// where the fetch would error for an unrelated reason and hide the regression.
+var networkDownloads atomic.Int64
+
+// NetworkDownloads reports how many binary downloads have been started in this
+// process. Test-visible guard, not part of the runtime contract.
+func NetworkDownloads() int64 { return networkDownloads.Load() }
 
 // MapOfBinaries maps OS and architecture to the binaries available for it.
 type MapOfBinaries = map[syslist.OsType]map[syslist.ArchType]map[string]BinaryOsArchInfo
@@ -150,6 +162,10 @@ func (a *ArchiveSpec) IsExternal() bool {
 // Implemented by runtimemanager.RuntimeManager to avoid circular imports.
 type RuntimeAppManager interface {
 	GetCommandInfo(ctx context.Context, appName string, app App) (*CommandInfo, error)
+	// ResolveCommandInfo returns the same CommandInfo without installing
+	// anything: no download, no subprocess. Takes no context because it cannot
+	// block on I/O worth cancelling.
+	ResolveCommandInfo(appName string, app App) (*CommandInfo, error)
 	ComputeAppPath(appName string, app App) (string, error)
 }
 
@@ -508,6 +524,81 @@ func (bm *BinManager) GetCommandInfo(ctx context.Context, appName string) (*Comm
 	bm.mergeAppEnv(appName, app, cmdInfo)
 
 	return cmdInfo, nil
+}
+
+// ResolveCommandInfo answers "where would this app be, and is it there?"
+// without touching the network. It returns the same CommandInfo shape
+// GetCommandInfo does — including the merged app Env — plus whether the
+// resolved Command currently exists on disk.
+//
+// This is an addition, not a replacement: GetCommandInfo still installs. The
+// two differ only in side effects, so an app that reports installed=true here
+// runs from exactly the path GetCommandInfo would hand the exec path.
+//
+// Shell apps resolve to their bare command name with installed=true: their
+// executable is found through the inherited PATH at spawn time, so there is no
+// store path to stat.
+func (bm *BinManager) ResolveCommandInfo(appName string) (*CommandInfo, bool, error) {
+	app, ok := bm.mapOfApps[appName]
+	if !ok {
+		return nil, false, fmt.Errorf("app '%s' not found in registry", appName)
+	}
+
+	var (
+		cmdInfo   *CommandInfo
+		installed bool
+	)
+
+	switch {
+	case app.Shell != nil:
+		cmdInfo = &CommandInfo{
+			Type:    "shell",
+			Command: app.Shell.Name,
+			Args:    app.Shell.Args,
+		}
+		installed = true
+
+	case app.Binary != nil:
+		// getBinaryPath is the non-downloading half of GetBinaryPath: it does
+		// the same config-hash path math and stops before the fetch.
+		binPath, err := bm.getBinaryPath(appName)
+		if err != nil {
+			return nil, false, err
+		}
+		cmdInfo = &CommandInfo{
+			Type:    "binary",
+			Command: binPath,
+		}
+		installed = pathExists(binPath)
+
+	case app.Uv != nil || app.Node != nil || app.Jvm != nil || app.Go != nil:
+		if bm.runtimeManager == nil {
+			return nil, false, fmt.Errorf("no runtime manager configured for runtime-managed app %q", appName)
+		}
+		ci, err := bm.runtimeManager.ResolveCommandInfo(appName, app)
+		if err != nil {
+			return nil, false, err
+		}
+		cmdInfo = ci
+		installed = pathExists(cmdInfo.Command)
+
+	default:
+		return nil, false, fmt.Errorf("app '%s' has no valid configuration", appName)
+	}
+
+	bm.mergeAppEnv(appName, app, cmdInfo)
+
+	return cmdInfo, installed, nil
+}
+
+// pathExists reports whether path names an existing filesystem entry. A
+// symlink is followed, matching what execve does.
+func pathExists(path string) bool {
+	if path == "" {
+		return false
+	}
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 // ResolvedBinaryInfo returns the BinaryOsArchInfo selected for the host
@@ -942,6 +1033,8 @@ func (bm *BinManager) getBinaryPath(name string) (string, error) {
 }
 
 func (bm *BinManager) downloadInternal(ctx context.Context, name string) error {
+	networkDownloads.Add(1)
+
 	resolved, binaryInfo, err := bm.getBinaryInfo(name)
 	if err != nil {
 		return err

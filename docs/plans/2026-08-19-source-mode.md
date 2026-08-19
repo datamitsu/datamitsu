@@ -255,32 +255,32 @@ exists today, independent of source mode.
 `source` must be able to ask "where would this tool be, and is it there?" without touching
 the network.
 
-- [ ] split the runtime-bin-path lookup out of `installNode` into a pure
+- [x] split the runtime-bin-path lookup out of `installNode` into a pure
       `resolveNodeBinPath(runtimeName) (string, error)` that does not download —
       `getNodeCommandInfo` calls `installNode` (`internal/runtimemanager/node.go:299`) purely
       to obtain that path
-- [ ] do the same for `GetJVMCommandInfo`'s ctx-carrying path; `GetUVCommandInfo` and
+- [x] do the same for `GetJVMCommandInfo`'s ctx-carrying path; `GetUVCommandInfo` and
       `GetGoCommandInfo` are already install-free and need no change
-- [ ] add `RuntimeManager.ResolveCommandInfo(appName string, app binmanager.App) (*binmanager.CommandInfo, error)`
+- [x] add `RuntimeManager.ResolveCommandInfo(appName string, app binmanager.App) (*binmanager.CommandInfo, error)`
       composing the existing `Get*CommandInfo` halves with no install call
-- [ ] add `BinManager.ResolveCommandInfo(appName string) (*CommandInfo, installed bool, err error)`:
+- [x] add `BinManager.ResolveCommandInfo(appName string) (*CommandInfo, installed bool, err error)`:
       for `binary` apps use the non-downloading path computation plus `os.Stat` rather than
       `GetBinaryPath` (which downloads); for runtime kinds delegate to the new resolver and
       `os.Stat` the resolved `Command`; merge `app.Env` exactly as `GetCommandInfo` does via
       `mergeAppEnv`
-- [ ] leave `GetCommandInfo`'s behavior untouched — this is an addition, not a replacement
-- [ ] add a test-visible guard that the resolve path constructs no downloader, so a future
+- [x] leave `GetCommandInfo`'s behavior untouched — this is an addition, not a replacement
+- [x] add a test-visible guard that the resolve path constructs no downloader, so a future
       refactor cannot silently reintroduce a network call
-- [ ] write a test asserting `ResolveCommandInfo` returns `installed=false` with no error for
+- [x] write a test asserting `ResolveCommandInfo` returns `installed=false` with no error for
       an app with no store entry, and performs no network call (assert under
       `DATAMITSU_OFFLINE=1` and with a nil/failing http client)
-- [ ] write a test asserting resolved `Command`/`Args`/`Env` for a fabricated node app match
+- [x] write a test asserting resolved `Command`/`Args`/`Env` for a fabricated node app match
       what `getNodeCommandInfo` produces (PATH prepend and `npm_config_*` present)
-- [ ] write a test asserting a jvm app resolves to `Command=java` with `-jar` in `Args`
-- [ ] write a test asserting a shell app returns a shell-typed `CommandInfo` without touching
+- [x] write a test asserting a jvm app resolves to `Command=java` with `-jar` in `Args`
+- [x] write a test asserting a shell app returns a shell-typed `CommandInfo` without touching
       the filesystem
-- [ ] write a test asserting an unknown app returns the same error shape as `GetCommandInfo`
-- [ ] run tests — must pass before Task 4
+- [x] write a test asserting an unknown app returns the same error shape as `GetCommandInfo`
+- [x] run tests — must pass before Task 4
 
 ### Task 4: internal/shellquote — per-shell escaping
 

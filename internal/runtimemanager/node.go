@@ -66,6 +66,19 @@ func (rm *RuntimeManager) installNode(ctx context.Context, runtimeName string) (
 	return nodeBinPath, nil
 }
 
+// resolveNodeBinPath is the install-free half of installNode: it returns where
+// the node binary lives (or would live) without downloading anything. The path
+// is returned whether or not the file exists — the side-effect-free resolution
+// path (ResolveCommandInfo) needs the location to report, and decides
+// installed-ness with its own stat.
+func (rm *RuntimeManager) resolveNodeBinPath(runtimeName string) (string, error) {
+	nodeBinPath, err := rm.ResolveRuntimePath(runtimeName)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve node runtime %q: %w", runtimeName, err)
+	}
+	return nodeBinPath, nil
+}
+
 // resolveNodeAppEnvPath resolves the node runtime and the app's cache path.
 func (rm *RuntimeManager) resolveNodeAppEnvPath(appName string, appConfig *binmanager.AppConfigNode, files map[string]string, archives map[string]*binmanager.ArchiveSpec) (string, error) {
 	appEnvPath, _, _, err := rm.resolveNodeAppEnvPathWith(appName, appConfig, files, archives)
@@ -280,6 +293,25 @@ func (rm *RuntimeManager) GetNodeCommandInfo(ctx context.Context, appName string
 // getNodeCommandInfo is GetNodeCommandInfo; path resolution hashes the
 // storeDir-free workspace form internally, so no merged YAML is threaded in.
 func (rm *RuntimeManager) getNodeCommandInfo(ctx context.Context, appName string, appConfig *binmanager.AppConfigNode, files map[string]string, archives map[string]*binmanager.ArchiveSpec) (*binmanager.CommandInfo, error) {
+	// Command-info resolution only ever touches an already-installed runtime
+	// (the install pass ran first), so there is no fresh download to bound; the
+	// caller's context is still propagated for cancellation.
+	return rm.nodeCommandInfo(appName, appConfig, files, archives, func(runtimeName string) (string, error) {
+		return rm.installNode(ctx, runtimeName)
+	})
+}
+
+// resolveNodeCommandInfo is getNodeCommandInfo without the install side effect:
+// identical Command/Args/Env, resolved through resolveNodeBinPath instead of
+// installNode. Both go through nodeCommandInfo so the two can never drift.
+func (rm *RuntimeManager) resolveNodeCommandInfo(appName string, appConfig *binmanager.AppConfigNode, files map[string]string, archives map[string]*binmanager.ArchiveSpec) (*binmanager.CommandInfo, error) {
+	return rm.nodeCommandInfo(appName, appConfig, files, archives, rm.resolveNodeBinPath)
+}
+
+// nodeCommandInfo builds a node app's CommandInfo, obtaining the node binary
+// through the injected nodeBin func — installNode on the exec path,
+// resolveNodeBinPath on the side-effect-free path.
+func (rm *RuntimeManager) nodeCommandInfo(appName string, appConfig *binmanager.AppConfigNode, files map[string]string, archives map[string]*binmanager.ArchiveSpec, nodeBin func(string) (string, error)) (*binmanager.CommandInfo, error) {
 	appEnvPath, runtimeName, rc, err := rm.resolveNodeAppEnvPathWith(appName, appConfig, files, archives)
 	if err != nil {
 		return nil, err
@@ -293,10 +325,7 @@ func (rm *RuntimeManager) getNodeCommandInfo(ctx context.Context, appName string
 		return nil, fmt.Errorf("app %q: unsafe binPath: %w", appName, err)
 	}
 
-	// Command-info resolution only ever touches an already-installed runtime
-	// (the install pass ran first), so there is no fresh download to bound; the
-	// caller's context is still propagated for cancellation.
-	nodeBinPath, err := rm.installNode(ctx, runtimeName)
+	nodeBinPath, err := nodeBin(runtimeName)
 	if err != nil {
 		return nil, err
 	}
