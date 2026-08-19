@@ -255,19 +255,46 @@ is torn down, `internal/cache/cache.go:651`). Verified identical on the unmodifi
 After Task 3, `engine.New`'s dominant cost is gone, but `facts.CollectWithOptions` still
 re-reads the environment and re-derives the same values four times.
 
-- [ ] measure `BenchmarkEngineNew` after Task 3 and record it here; **if the remaining cost is
+- [x] measure `BenchmarkEngineNew` after Task 3 and record it here; **if the remaining cost is
       under 1 ms/op, mark this task skipped with a note and move to Task 5** — do not add a
       sharing mechanism for a cost that no longer exists
-- [ ] if it is still material: collect the facts snapshot once in `cmd/config_loader.go` and
+- [x] if it is still material: collect the facts snapshot once in `cmd/config_loader.go` and
       pass it into each `engine.New` via an option, keeping the existing per-engine collection
-      as the fallback when no snapshot is supplied
-- [ ] ensure the snapshot is immutable once shared — no engine may mutate what another reads
-- [ ] verify `isMonorepo` and any other cwd-derived fact is still correct for every source,
-      since all four engines run from the same cwd in one process
-- [ ] write a test asserting the shared snapshot produces byte-identical facts to
-      per-engine collection for a fixture repo
-- [ ] write a test asserting an engine constructed without a snapshot still collects its own
-- [ ] run `go test ./...` and `go test ./test/cli/ -count=2` — must pass before Task 5
+      as the fallback when no snapshot is supplied — **skipped, gate not met**
+- [x] ensure the snapshot is immutable once shared — no engine may mutate what another reads
+      — **skipped, no snapshot introduced**
+- [x] verify `isMonorepo` and any other cwd-derived fact is still correct for every source,
+      since all four engines run from the same cwd in one process — **skipped, collection
+      unchanged**
+- [x] write a test asserting the shared snapshot produces byte-identical facts to
+      per-engine collection for a fixture repo — **skipped, no shared snapshot exists**
+- [x] write a test asserting an engine constructed without a snapshot still collects its own
+      — **skipped, no snapshot option exists**
+- [x] run `go test ./...` and `go test ./test/cli/ -count=2` — must pass before Task 5
+
+**Task 4 results — SKIPPED by the task's own gate.**
+
+Re-measured on the current tree, Apple M1 Max, `-benchtime 30x -count 4` (min of 4 runs):
+
+| Benchmark             | Task 1 baseline | Task 3    | Task 4 re-measure |
+| --------------------- | --------------- | --------- | ----------------- |
+| `BenchmarkEngineNew`  | 17,170,300      | 679,025   | 671,474           |
+| `BenchmarkLoadConfig` | 73,473,125      | 3,353,589 | 3,289,406         |
+| `BenchmarkGetGitRoot` | 16,568,433      | 561,165   | 576,749           |
+
+(ns/op. `EngineNew` allocs steady at 1,012.)
+
+`BenchmarkEngineNew` is 0.67 ms/op, under the 1 ms/op threshold, so the gate trips and no
+facts-sharing mechanism is added. Note that most of even that 0.67 ms is not fact derivation:
+`BenchmarkGetGitRoot` measures 0.58 ms/op on the same amortization (one real resolution spread
+over 30 iterations, per the Task 3 note), so `engine.New`'s own non-git cost is roughly
+0.1 ms/op. Collecting facts once and threading a snapshot through an engine option would buy
+back a fraction of that while adding an immutability contract and a fallback path to maintain
+— the wrong trade at this magnitude. Task 3's memo already removed the cost this task existed
+to address.
+
+No code changed. `go test ./...` and `go test ./test/cli/ -count=2` are green and
+`git status` reports no modifications under `test/cli/testdata/golden/`.
 
 ### Task 5: Skip esbuild for sources that are already JavaScript
 
