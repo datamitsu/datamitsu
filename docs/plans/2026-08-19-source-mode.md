@@ -741,22 +741,57 @@ the user actually experiences.
 
 ### Task 14: Verify acceptance criteria
 
-- [ ] `datamitsu source bash|zsh|fish` prints valid activation code that the target shell
-      parses without error
-- [ ] activation is idempotent and adds exactly one `PATH` entry
-- [ ] activation downloads nothing (assert under `DATAMITSU_OFFLINE=1`)
-- [ ] a `binary` app's steady-state invocation adds no measurable overhead versus running the
-      store binary directly — record the measured delta here
-- [ ] a `node`/`jvm` app's steady-state invocation adds ~10 ms — record the measured delta here
-- [ ] the branch-switch hiccup (first invocation after a checkout) is recorded here as a real
-      number
-- [ ] stdout carries shell code only; all warnings are on stderr
-- [ ] no secrets appear in activation output
-- [ ] every declared app has a farm entry; no farm entry is a dangling symlink
-- [ ] `go test ./... -race` passes
-- [ ] `go test ./test/cli/ -count=2` passes
-- [ ] `pnpm dm check` passes
-- [ ] coverage meets the project standard via `pnpm test:coverage:all`
+All measurements below are on an Apple M1 Max, `hyperfine -N` with ≥300 warmup runs, against
+this repository's own 111-app config unless stated otherwise.
+
+- [x] `datamitsu source bash|zsh|fish` prints valid activation code that the target shell
+      parses without error — bash and fish are proven by the Task 13 tier, which **executes**
+      the activation rather than parsing it (all 10 tests ran, neither shell skipped). zsh is
+      not driven by that tier, so it was verified directly: `zsh -n` on the emitted file parses,
+      and a live `eval` leaves the farm at `$path[1]`
+- [x] activation is idempotent and adds exactly one `PATH` entry — `TestActivationIsIdempotent`
+      covers bash and fish; the zsh check above double-activates and counts exactly 1
+      occurrence of the farm directory in `PATH`
+- [x] activation downloads nothing (assert under `DATAMITSU_OFFLINE=1`) — a cold-cache
+      `source bash` under `DATAMITSU_OFFLINE=1 DATAMITSU_NO_OCI=1` exits 0 and bakes all 110
+      entries; `TestSourceRefreshDownloadsNothing` pins it
+- [x] a `binary` app's steady-state invocation adds no measurable overhead versus running the
+      store binary directly — **⚠️ NOT MET as written, by the deliberate Task 13 narrowing of
+      D1.** With `Strategy=symlink` withdrawn, a `binary` app pays the same shim tax as every
+      other kind. Measured against `/usr/bin/true` as the exec target, so the number is the
+      datamitsu process itself and not the tool's own startup: **+10.1 ms** (12.8 ± 0.7 ms vs
+      2.7 ± 2.2 ms) and **+12.3 ms** (14.0 ± 2.5 ms vs 1.7 ± 0.3 ms) across two independent
+      runs — call it **~10–12 ms**. This is the cost the owner is being asked to confirm
+      alongside the D1 narrowing; the alternative is a silently wrong binary after a checkout
+- [x] a `node`/`jvm` app's steady-state invocation adds ~10 ms — **+11.8 ms** (13.5 ± 1.3 ms vs
+      1.7 ± 0.3 ms) for an entry carrying both an argv prefix and an `Env` overlay, measured in
+      the same run as the `binary` entry above. Indistinguishable from the `binary` case within
+      noise, which is the expected consequence of every entry being a shim: the dispatch work is
+      identical and only the exec target differs
+- [x] the branch-switch hiccup (first invocation after a checkout) is recorded here as a real
+      number — the stale path is a full config load plus resolve plus materialize, measured as
+      `source refresh --force` over the 111-app config: **132.2 ± 27.7 ms** (20 runs, offline).
+      Adding the ~12 ms shim gives a **~145 ms one-off hiccup per config change**. The
+      steady-state counterpart, `source refresh` on a fresh manifest, is **12.7 ± 2.5 ms** —
+      identical to a bare shim invocation, confirming the watch-set check itself costs nothing
+      measurable beyond process startup. Measured by composition rather than end to end: the
+      shim's stale path needs an installed entry _and_ a real config, and the two fixtures that
+      have each do not overlap. The Task 13 tier proves the behavior end to end
+- [x] stdout carries shell code only; all warnings are on stderr — the activation is 444 bytes
+      of `export`/`PATH` lines and nothing else, while all 21 shadow warnings went to stderr
+- [x] no secrets appear in activation output — the emitted code names exactly two values, the
+      git root and the farm directory, both already-known paths. No config content, no
+      environment values, no tokens
+- [x] every declared app has a farm entry; no farm entry is a dangling symlink — 111 declared
+      names resolve to 110 farm entries plus 1 exclusion (`rustfmt`, a shell app, carrying the
+      shell reason); the farm directory holds exactly 110 files, every entry name is present as
+      a file, and `find -type l ! -exec test -e {} \;` returns nothing
+- [x] `go test ./... -race` passes
+- [x] `go test ./test/cli/ -count=2` passes — 43.6 s, byte-identical across both runs
+- [x] `pnpm dm check` passes — 22 tools, 80 runs, 0 failed
+- [x] coverage meets the project standard via `pnpm test:coverage:all` — **81.7%** combined.
+      The packages this plan added are above it: `internal/shellquote` 100%,
+      `internal/shim` 88.7%, `internal/sourcefarm` 84.6%
 
 ### Task 15: [Final] Documentation
 
