@@ -1,0 +1,309 @@
+# Plan: Cut CLI startup cost from ~195 ms to ~15 ms per invocation
+
+**Status:** ready for implementation.
+**Date:** 2026-08-19.
+**Related:** `internal/facts`, `internal/engine`, `internal/config`, `cmd/config_loader.go`, `go.mod`.
+**Blocks:** `docs/plans/2026-08-19-source-mode.md` — source mode's per-invocation and
+branch-switch numbers are hostage to this work, but nothing here is a design commitment to it.
+
+**Branch:** `cli-startup-cost`, branched from `main`. First of three stacked plans
+(`cli-startup-cost` → `source-mode` → `global-config-layer`). Do all work on this branch and
+do not merge to `main` as part of this plan — the next plan stacks on top of it.
+Review base ref: `main` (the default).
+
+## Overview
+
+Every `datamitsu` invocation pays ~195 ms of overhead before the tool it was asked to run
+starts. Measured on Apple M1 Max at commit `20c75ba`:
+
+| Path                                               | Wall (min)     |
+| -------------------------------------------------- | -------------- |
+| `actionlint --version` run directly from the store | 6.1–7.3 ms     |
+| `datamitsu exec actionlint -- --version`           | 199.6–259.9 ms |
+| `datamitsu version` (no config load at all)        | 39.7–51.9 ms   |
+| empty Go binary (`func main(){}`)                  | 6.0–7.0 ms     |
+
+Only ~7 ms of that is the irreducible Go process floor. The rest lives in three independent
+buckets, and the two largest are cheap to remove:
+
+1. **~33 ms — `github.com/mattn/go-runewidth` v0.0.27.** Its `init()` eagerly builds rune
+   lookup tables: 33.0 ms of CPU at every process start, 88% of all package-init time across
+   196 packages (`GODEBUG=inittrace=1`). v0.0.28 makes the tables lazy: 0.01 ms. It reaches us
+   as an indirect dependency through `mpb` → `internal/ui`.
+2. **~105 ms — forked `git rev-parse`.** Every `datamitsu exec` forks **10** git processes:
+   `facts.GetGitRoot` (`internal/facts/facts.go:171`) runs `--show-toplevel` and
+   `--show-superproject-working-tree` as an errgroup pair, and it is called once in
+   `loadConfigImpl` plus once inside each of the four `engine.New` calls. One fork costs
+   10.3 ms; the parallel pair costs 21.3 ms.
+3. **~85 ms — JS config evaluation.** Four goja VMs and four esbuild `StripTypes` calls per
+   run. 25.1 ms of the esbuild time is spent stripping types from
+   `node_modules/@shibanet0/datamitsu-config/datamitsu.config.oci-ghcr.js` — a 1,096,706-byte
+   file that is **already plain JavaScript**.
+
+This plan removes buckets 1 and 2 in full and the wasted esbuild pass from bucket 3. It does
+not restructure config loading or introduce a config cache — that is deliberately out of
+scope, because the cheap wins land first and change the arithmetic for whatever comes next.
+
+Target after this plan: `datamitsu version` ≈ 12 ms, `datamitsu exec <installed tool>` ≈ 60 ms.
+
+## Context (from discovery)
+
+- `internal/facts/facts.go:171` — `GetGitRoot` walks superproject levels, spawning two git
+  processes per level via `errgroup`. Its result is a pure function of cwd within one process.
+- `internal/engine/engine.go` — `engine.New` calls `facts.CollectWithOptions`, which calls
+  `GetGitRoot`. Four engines are constructed per `exec`: one in `discoverBeforeConfigs`
+  (`cmd/config_loader.go:624`) and one per config source.
+- `cmd/config_loader.go:679` and `:694` — both call `config.StripTypes` unconditionally,
+  regardless of whether the source is `.ts`, `.js` or `.mjs`.
+- `internal/config/config.go:471` — `StripTypes` is the esbuild entry point; it already logs
+  its own duration at debug level (`:476`).
+- `scripts/bench-overhead.sh` — the repo's existing startup benchmark. It independently
+  reports 265.6 ms min / 335.0 ms median of attributable overhead against a 9.0 ms
+  `bash -c` baseline.
+- `internal/timing` — instruments the planner and runner only; the config-load path is not
+  covered.
+
+## Development Approach
+
+- **Testing approach**: Regular (code first, then tests), except Task 1 which is
+  measurement-first because every later task is validated against its baseline.
+- Complete each task fully before moving to the next.
+- **CRITICAL: every task MUST include new/updated tests** for code changes in that task.
+  Tests are listed as separate checklist items, never bundled with implementation.
+- **CRITICAL: all tests must pass before starting the next task.** Run `go test ./...` and
+  `go test ./test/cli/ -count=2` (the CLI goldens must stay byte-stable).
+- **CRITICAL: update this plan file when scope changes during implementation.**
+- Behavior must not change. This plan is a pure performance change: every existing golden
+  file must remain byte-identical, and any golden that moves is a bug in the change, not a
+  golden to regenerate.
+
+## Testing Strategy
+
+- **Unit tests**: required for every task. Stdlib `testing` only, table-driven,
+  `t.TempDir`/`t.Setenv` — no testify.
+- **Blackbox CLI tests**: `go test ./test/cli/ -count=2` must pass unchanged. No golden file
+  may be regenerated by this plan.
+- **Benchmarks**: Go benchmarks are the acceptance evidence for Tasks 2, 3, 4 and 5. Commit
+  them; they are the regression guard.
+- **No e2e**: the OCI e2e tier (`test/e2e`, `//go:build e2e_oci`) is untouched.
+
+## Progress Tracking
+
+- Mark completed items with `[x]` immediately when done.
+- Add newly discovered tasks with ➕ prefix.
+- Document issues/blockers with ⚠️ prefix.
+- Record the measured before/after number for each perf task directly in this file.
+
+## What Goes Where
+
+- **Implementation Steps** (`[ ]` checkboxes): code, tests, benchmarks, docs in this repo.
+- **Post-Completion** (no checkboxes): measurements to re-run on an idle machine, and the
+  follow-up work this plan deliberately does not do.
+
+## Implementation Steps
+
+### Task 1: Make the startup cost reproducible from the CLI
+
+Every later task is judged against this. Build it first so the numbers are not re-derived
+from throwaway scripts.
+
+- [ ] extend `internal/timing` (or add a sibling) so the config-load path can be
+      instrumented: record durations for `discoverBeforeConfigs`, each `engine.New`, each
+      `config.StripTypes` call, each `getConfig()` evaluation, and total `loadConfig`
+- [ ] wire the instrumentation into `cmd/config_loader.go` at the existing seams
+      (`:624` pre-pass, `:679`, `:694`) and into `internal/engine/engine.go`'s `New`
+- [ ] gate emission behind an existing debug/timing mechanism rather than a new always-on
+      path — add the env var to `internal/env/e.go` + getter in `internal/env/env.go` per the
+      Environment Variable Usage Policy, and confirm `internal/clitest` strips it (it strips
+      `DATAMITSU_*`, so a `DATAMITSU_`-prefixed name is automatically golden-safe)
+- [ ] add `BenchmarkLoadConfig` in package `cmd` that exercises the same path `exec` uses,
+      reporting ns/op and allocs/op
+- [ ] add `BenchmarkGetGitRoot` and `BenchmarkEngineNew` so Tasks 3 and 4 have direct targets
+- [ ] record the baseline in this file: `go test ./cmd/ -run XXX -bench 'LoadConfig|GetGitRoot|EngineNew' -benchtime 30x -count 4`
+- [ ] write tests asserting the instrumentation emits nothing when the env var is unset
+- [ ] write tests asserting each recorded phase name appears exactly once per load
+- [ ] run `go test ./...` and `go test ./test/cli/ -count=2` — must pass before Task 2
+
+### Task 2: Bump go-runewidth to v0.0.28
+
+The single highest value-to-effort change in the repository.
+
+- [ ] `go get github.com/mattn/go-runewidth@v0.0.28` and `go mod tidy`
+- [ ] confirm it is still reachable only as an indirect dependency via `mpb` →
+      `internal/ui`, and that no direct import was introduced
+- [ ] verify with `GODEBUG=inittrace=1 ./datamitsu version 2>&1 | grep runewidth` that
+      package-init time for it drops from ~33 ms to <0.1 ms
+- [ ] record before/after `datamitsu version` wall-min in this file (expected ~52 ms → ~13 ms)
+- [ ] write a test in `internal/ui` asserting the width helpers still behave correctly for
+      the cases the display relies on — CJK wide runes, combining marks, emoji ZWJ sequences,
+      and ASCII — so the lazy-table change cannot silently alter column math
+- [ ] write a test covering the progress-bar/line truncation path with a wide-rune string
+- [ ] run `go test ./...` and `go test ./test/cli/ -count=2` — the CLI goldens must be
+      byte-identical, which is the proof that rendering did not shift
+- [ ] must pass before Task 3
+
+### Task 3: Memoize the git root for the process lifetime
+
+`GetGitRoot` is called 5 times per `exec` and is a pure function of cwd within one process.
+This task changes no semantics — it removes 4 of the 5 calls. The riskier pure-Go
+replacement is deliberately deferred to Task 6.
+
+- [ ] add a process-scoped memo in `internal/facts` keyed by the working directory the lookup
+      started from, guarded by `sync.RWMutex` (or `sync.Map`), caching both the resolved root
+      and the error
+- [ ] make the memo explicitly resettable from tests (an unexported reset helper) so cases
+      that `t.Chdir`/`os.Chdir` are not poisoned by a previous case
+- [ ] confirm the memo is safe under `errgroup` concurrency — `engine.New` calls can overlap
+- [ ] document in the function comment that datamitsu is a short-lived process and the cwd
+      does not change mid-run, which is what makes the memo sound; call out the LSP
+      (`cmd/lsp.go`) as the one long-lived case and verify it does not depend on re-resolution
+- [ ] write a test asserting two calls from the same cwd spawn git exactly once (inject or
+      count via a test seam, e.g. a package-level hook or a PATH shim in `t.TempDir`)
+- [ ] write a test asserting two calls from different cwds resolve independently
+- [ ] write a test asserting a cached error is returned identically on the second call
+- [ ] write a concurrency test (`-race`) hammering the memo from 16 goroutines
+- [ ] record the measured drop in `BenchmarkLoadConfig` in this file (expected ~85 ms)
+- [ ] run `go test ./... -race` and `go test ./test/cli/ -count=2` — must pass before Task 4
+
+### Task 4: Collect facts once per process and share across engines
+
+After Task 3, `engine.New`'s dominant cost is gone, but `facts.CollectWithOptions` still
+re-reads the environment and re-derives the same values four times.
+
+- [ ] measure `BenchmarkEngineNew` after Task 3 and record it here; **if the remaining cost is
+      under 1 ms/op, mark this task skipped with a note and move to Task 5** — do not add a
+      sharing mechanism for a cost that no longer exists
+- [ ] if it is still material: collect the facts snapshot once in `cmd/config_loader.go` and
+      pass it into each `engine.New` via an option, keeping the existing per-engine collection
+      as the fallback when no snapshot is supplied
+- [ ] ensure the snapshot is immutable once shared — no engine may mutate what another reads
+- [ ] verify `isMonorepo` and any other cwd-derived fact is still correct for every source,
+      since all four engines run from the same cwd in one process
+- [ ] write a test asserting the shared snapshot produces byte-identical facts to
+      per-engine collection for a fixture repo
+- [ ] write a test asserting an engine constructed without a snapshot still collects its own
+- [ ] run `go test ./...` and `go test ./test/cli/ -count=2` — must pass before Task 5
+
+### Task 5: Skip esbuild for sources that are already JavaScript
+
+25.1 ms of the 28.8 ms of esbuild time per run is spent stripping types from a file that has
+none.
+
+- [ ] in `cmd/config_loader.go`, skip the `config.StripTypes` call at `:679` and `:694` when
+      the source path's extension is `.js` or `.mjs`, passing the content through unchanged
+- [ ] keep `StripTypes` for `.ts`, `.mts`, `.cts` and for the embedded default config
+      (`internal/config/config.go:462`)
+- [ ] decide the rule by file extension, not by content sniffing — a heuristic that guesses
+      wrong silently produces a syntax error deep inside goja
+- [ ] confirm the OCI/remote-config path (`internal/remotecfg`) routes through the same
+      extension check, or document why it cannot and handle it explicitly
+- [ ] write a table test over `.ts`/`.mts`/`.js`/`.mjs`/no-extension asserting which inputs
+      reach esbuild (use a test seam or assert on the debug log)
+- [ ] write a test asserting a `.js` config containing syntax esbuild would rewrite
+      (e.g. modern syntax it would downlevel) is passed through byte-identically
+- [ ] write a test asserting a `.ts` config still gets its types stripped
+- [ ] record the measured drop in `BenchmarkLoadConfig` in this file (expected ~25 ms)
+- [ ] run `go test ./...` and `go test ./test/cli/ -count=2` — must pass before Task 6
+
+### Task 6: Pure-Go git-root discovery with a git fallback
+
+This is the last ~21 ms and the only task in this plan with real semantic risk, which is why
+it is last. `GetGitRoot` does not return the nearest `.git` — it climbs
+`--show-superproject-working-tree` to the **topmost superproject**
+(`internal/facts/facts.go:171-231`). A naive walk-up-to-first-`.git` returns a different
+answer inside a submodule.
+
+- [ ] implement a pure-Go resolver in `internal/facts` that walks up from cwd looking for
+      `.git`, and reproduces the superproject climb: when `.git` is a **file**, read its
+      `gitdir:` line and classify it
+- [ ] distinguish the two cases that both produce a `.git` file, because they must be
+      resolved differently: a **submodule** whose gitdir points into
+      `<super>/.git/modules/<name>` (keep climbing — this is what
+      `--show-superproject-working-tree` follows) and a **linked worktree** whose gitdir
+      points into `<main>/.git/worktrees/<name>` (do **not** treat the main repo as a
+      superproject)
+- [ ] use the pure-Go resolver as a fast path and fall back to the existing git subprocess
+      path on any ambiguity, unreadable `.git` file, or unrecognised gitdir shape — never
+      guess
+- [ ] add an env-var escape hatch to force the subprocess path, defined in
+      `internal/env/e.go` + `internal/env/env.go` per the Environment Variable Usage Policy,
+      so a user hitting an unforeseen layout has a documented workaround
+- [ ] keep the memo from Task 3 in front of both paths
+- [ ] write table tests over fixture layouts built in `t.TempDir`: plain repo, nested
+      subdirectory, bare repo, repo with a linked worktree, repo with a submodule, submodule
+      inside a submodule, and a directory with no repo at all
+- [ ] write a differential test asserting the pure-Go resolver and the git subprocess return
+      the identical root for every fixture layout — this is the load-bearing test
+- [ ] write a test asserting the fallback engages (and is observable) for a malformed
+      `.git` file
+- [ ] write a test asserting the force-subprocess env var works
+- [ ] record the measured drop in `BenchmarkGetGitRoot` in this file (expected 21.3 ms → ~2 µs)
+- [ ] run `go test ./... -race` and `go test ./test/cli/ -count=2` — must pass before Task 7
+
+### Task 7: Verify acceptance criteria
+
+- [ ] `datamitsu version` wall-min is ≤ 15 ms (baseline 39.7–51.9 ms)
+- [ ] `datamitsu exec <installed binary app> -- --version` wall-min is ≤ 70 ms
+      (baseline 199.6–259.9 ms)
+- [ ] `git rev-parse` forks per `datamitsu exec` is ≤ 2, verified by a PATH shim script that
+      logs argv and then execs the real git (baseline: 10)
+- [ ] `esbuild StripTypes` calls per `datamitsu exec` no longer include the 1.07 MB
+      before-config, verified from the debug log at `internal/config/config.go:476`
+- [ ] `go test ./...` passes with `-race`
+- [ ] `go test ./test/cli/ -count=2` passes with **zero regenerated goldens** — `git status`
+      shows no changes under `test/cli/testdata/golden/`
+- [ ] `pnpm dm check` (linters) passes
+- [ ] coverage meets the project standard via `pnpm test:coverage:all`
+- [ ] re-run `scripts/bench-overhead.sh` and record before/after in this file
+
+### Task 8: [Final] Update documentation
+
+- [ ] record the final measurement table in this plan file, replacing the estimates
+- [ ] if `scripts/bench-overhead.sh` gained flags or output, update its usage comment
+- [ ] add a short note to `website/docs/guides/architecture/execution.md` (or the nearest
+      architecture page) describing the config-load cost model and the memo, so the next
+      person does not re-introduce a per-engine `GetGitRoot`
+- [ ] run `task gen:llms-docs` and commit `internal/llmsdocs/embed` if any website page
+      changed — the `llms-docs-drift` CI job re-harvests on every PR and fails on any diff
+
+## Technical Details
+
+**Measurement discipline.** All baseline numbers above were taken on a machine under load
+average 25–205. Wall-clock **minimum** over n≥40 is the estimator to use; medians are
+contaminated by contention. Report min, and state n.
+
+**Why the goldens must not move.** This plan changes no observable behavior. `test/cli` runs
+the compiled binary and byte-compares stdout/stderr. If a golden shifts, the change altered
+output — most plausibly through the runewidth bump changing column math in `internal/ui`.
+Investigate; do not regenerate.
+
+**Why the memo is sound.** datamitsu is a short-lived process that does not `chdir` mid-run,
+so cwd → git root is constant for the process. The one exception is `cmd/lsp.go`, which is
+long-lived; Task 3 requires verifying the LSP does not depend on re-resolving the root within
+a session.
+
+**What this plan does not do.** It does not cache config evaluation across processes, does not
+reduce the four-VM structure, and does not touch `discoverBeforeConfigs`' habit of building an
+entire engine to read one function that returns a list of filenames (`cmd/config_loader.go:624`,
+32.5 ms). Those are real, but they are architecture changes and they belong with the consumer
+that needs them.
+
+## Post-Completion
+
+**Manual verification:**
+
+- Re-run every benchmark on an idle machine (load average < 2) and update the recorded
+  numbers. The committed figures are upper bounds.
+- Verify on Linux as well as macOS — the git-fork cost and the `.git` file layouts differ.
+- Verify inside a real submodule checkout and a real `git worktree` before trusting Task 6.
+
+**Follow-up work this plan deliberately excludes:**
+
+- Cross-process config-evaluation caching. This becomes the dominant remaining cost
+  (~85 ms) and is the natural next plan. Note the CLAUDE.md forward contract: config JS
+  evaluation is not cached today, and `internal/engine/configinputs.go:36-41` documents that
+  every field exposed in `datamitsuConfigInputs` must be folded into the cache fingerprint
+  when it is.
+- Collapsing `discoverBeforeConfigs`' dedicated engine into a cheaper read.
+- Store garbage collection. Unrelated to startup, but discovered alongside: the store is
+  14 GB with no GC, and `lefthook` alone holds six coexisting 13 MB copies.
