@@ -632,10 +632,10 @@ that changes what runs, and `batch: false` on an operation carrying `{files}`
 used to mean one process per file where arity now reads it as one process taking
 the whole list.
 
-| Was              | Now                                    |
-| ---------------- | -------------------------------------- |
-| `batch: true`    | `{files}` in `args` (arity `many`)     |
-| `batch: false`   | `{file}` in `args` (arity `one`)       |
+| Was               | Now                                    |
+| ----------------- | -------------------------------------- |
+| `batch: true`     | `{files}` in `args` (arity `many`)     |
+| `batch: false`    | `{file}` in `args` (arity `one`)       |
 | no file in `args` | nothing to change (arity `none`/`dir`) |
 
 ### `execution.widenTo`
