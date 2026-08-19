@@ -114,6 +114,28 @@ type Manifest struct {
 	// Watch is the ordered watch set, sorted by Path.
 	Watch []WatchFile `json:"watch"`
 
+	// ConfigArgs are the global flags that selected the config chain this farm
+	// was baked from, with every path made absolute — `--before-config
+	// /abs/shared.js`, `--config /abs/x.ts`, `--no-auto-config`. Empty for the
+	// ordinary case of auto-discovery at the git root.
+	//
+	// It exists so the shim can re-bake the *same* farm. A wrapper invokes
+	// datamitsu with `--before-config <shared config>`, so a farm baked through
+	// one lists apps that only that chain declares; the shim's rebake spawns the
+	// resolved real datamitsu binary, deliberately bypassing the wrapper, and
+	// without these flags it would re-resolve a chain that never saw them. Every
+	// wrapper-provided app would vanish from the farm on the next branch switch,
+	// and the next invocation of those names would fall through PATH to the
+	// system binary — the silent wrong-binary failure the farm exists to prevent,
+	// arriving through the rebake door.
+	//
+	// Deliberately *not* part of the staleness key. The key answers "does this
+	// farm still match the tree", and a flagged invocation never consults an
+	// existing manifest anyway (cmd.sourceManifestDecides refuses), so folding
+	// the flags in would only force a rebake on plain invocations that are
+	// correctly served by the farm the user activated.
+	ConfigArgs []string `json:"configArgs,omitempty"`
+
 	// Entries, Excluded and Shadowed mirror the Plan the farm was baked from.
 	// Excluded is carried so `source status` can explain a name's absence
 	// without reloading the config.

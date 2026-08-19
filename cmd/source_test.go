@@ -438,10 +438,11 @@ func TestFreshSourcePlanServesTheManifest(t *testing.T) {
 func TestSourceManifestDecidesRequiresDiscoveredConfig(t *testing.T) {
 	t.Cleanup(func() {
 		ConfigPaths = nil
+		BeforeConfigPaths = nil
 		NoAutoConfig = false
 	})
 
-	ConfigPaths, NoAutoConfig = nil, false
+	ConfigPaths, BeforeConfigPaths, NoAutoConfig = nil, nil, false
 	if !sourceManifestDecides() {
 		t.Error("a discovered config was not allowed to use the manifest")
 	}
@@ -451,8 +452,55 @@ func TestSourceManifestDecidesRequiresDiscoveredConfig(t *testing.T) {
 		t.Error("an explicit --config was served from the manifest")
 	}
 
-	ConfigPaths, NoAutoConfig = nil, true
+	// --before-config prepends files to the chain, so a manifest baked without
+	// them describes a farm missing whatever they declare.
+	ConfigPaths, BeforeConfigPaths = nil, []string{"/elsewhere/shared.js"}
+	if sourceManifestDecides() {
+		t.Error("an explicit --before-config was served from the manifest")
+	}
+
+	ConfigPaths, BeforeConfigPaths, NoAutoConfig = nil, nil, true
 	if sourceManifestDecides() {
 		t.Error("--no-auto-config was served from the manifest")
+	}
+}
+
+// TestConfigChainArgsAreAbsoluteForReplay pins what the manifest records for
+// the shim to replay. Paths must be absolute: the shim spawns from whatever
+// directory the user happened to run a tool in, not the one that baked the farm.
+func TestConfigChainArgsAreAbsoluteForReplay(t *testing.T) {
+	t.Cleanup(func() {
+		ConfigPaths = nil
+		BeforeConfigPaths = nil
+		NoAutoConfig = false
+	})
+
+	ConfigPaths, BeforeConfigPaths, NoAutoConfig = nil, nil, false
+	if got := configChainArgs(); len(got) != 0 {
+		t.Errorf("configChainArgs() = %v for an auto-discovered config, want empty", got)
+	}
+
+	dir := t.TempDir()
+	t.Chdir(dir)
+	BeforeConfigPaths = []string{"shared.js"}
+	NoAutoConfig = true
+
+	got := configChainArgs()
+	want := []string{"--no-auto-config", "--before-config", filepath.Join(dir, "shared.js")}
+	if len(got) != len(want) {
+		t.Fatalf("configChainArgs() = %v, want %v", got, want)
+	}
+	for i := range want {
+		// The temp dir may itself be a symlink (/var on macOS); compare the
+		// flag words exactly and the path by its base plus absoluteness.
+		if strings.HasPrefix(want[i], "--") {
+			if got[i] != want[i] {
+				t.Errorf("arg %d = %q, want %q", i, got[i], want[i])
+			}
+			continue
+		}
+		if !filepath.IsAbs(got[i]) || filepath.Base(got[i]) != "shared.js" {
+			t.Errorf("arg %d = %q, want an absolute path to shared.js", i, got[i])
+		}
 	}
 }

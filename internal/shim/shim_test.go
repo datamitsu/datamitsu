@@ -480,6 +480,100 @@ func TestDispatchInstallsOnDemandExactlyOnce(t *testing.T) {
 	}
 }
 
+// TestDispatchAfterInstallSpawnsNothing is the second half of "installs on
+// demand exactly once", and the half that a single-dispatch test cannot see.
+//
+// A lazy install writes the store, not the manifest, and touches nothing in the
+// watch set — so the manifest stays fresh, and its entry keeps saying
+// Installed=false forever. Deciding from that flag would put a full `datamitsu
+// install` child process (a config load) in front of every later invocation of
+// the tool. The recorded store path is what settles it.
+func TestDispatchAfterInstallSpawnsNothing(t *testing.T) {
+	h := newHarness(t)
+	target := filepath.Join(t.TempDir(), "tflint")
+	h.writeManifest(sourcefarm.Manifest{
+		Entries: []sourcefarm.Entry{{Name: "tflint", Command: target, Installed: false, Strategy: sourcefarm.StrategyShim}},
+	})
+	h.spawnFunc = func(args []string) error {
+		if args[0] == "install" {
+			return os.WriteFile(target, []byte("#!/bin/sh\n"), 0o755)
+		}
+		return nil
+	}
+	h.invokeThroughFarm("tflint", "--version")
+
+	if code, handled := h.d.Dispatch(); !handled || code != 0 {
+		t.Fatalf("first Dispatch() = (%d, %v), want (0, true)", code, handled)
+	}
+	spawnsAfterInstall := len(h.spawns)
+
+	// Second invocation: same manifest, same Installed=false entry, tool now on
+	// disk. Nothing may be spawned.
+	if code, handled := h.d.Dispatch(); !handled || code != 0 {
+		t.Fatalf("second Dispatch() = (%d, %v), want (0, true)", code, handled)
+	}
+
+	if len(h.spawns) != spawnsAfterInstall {
+		t.Errorf("second Dispatch() spawned %v; the tool is already installed, so it must spawn nothing",
+			h.spawns[spawnsAfterInstall:])
+	}
+	if len(h.execs) != 2 || h.execs[1].path != target {
+		t.Fatalf("execs = %v, want a second call to %q", h.execs, target)
+	}
+}
+
+// TestSpawnArgsReplayTheRecordedConfigChain pins the rebake against the wrapper
+// case: a farm baked through `--before-config <shared config>` must re-resolve
+// that same chain, not the auto-discovered one. The shim spawns the resolved
+// real datamitsu binary, which deliberately bypasses the wrapper that would have
+// supplied the flag, so the manifest has to carry it.
+func TestSpawnArgsReplayTheRecordedConfigChain(t *testing.T) {
+	h := newHarness(t)
+	tool := h.tool("tofu")
+	chain := []string{"--before-config", "/abs/shared.js"}
+	h.writeManifest(sourcefarm.Manifest{
+		ConfigArgs: chain,
+		Entries:    []sourcefarm.Entry{{Name: "tofu", Command: tool, Installed: true}},
+	})
+	h.d.Validate = func(sourcefarm.Manifest) bool { return false }
+	h.invokeThroughFarm("tofu")
+
+	if code, handled := h.d.Dispatch(); !handled || code != 0 {
+		t.Fatalf("Dispatch() = (%d, %v), want (0, true)", code, handled)
+	}
+	want := []string{"--before-config", "/abs/shared.js", "source", "refresh"}
+	if len(h.spawns) != 1 || !equalStrings(h.spawns[0], want) {
+		t.Fatalf("spawns = %v, want exactly one %v", h.spawns, want)
+	}
+	// The manifest's own slice must not be handed to the spawn and appended to.
+	if !equalStrings(chain, []string{"--before-config", "/abs/shared.js"}) {
+		t.Errorf("spawnArgs mutated the recorded chain: %v", chain)
+	}
+}
+
+// TestSpawnArgsReplayOnInstall covers the other spawn: installing an app that
+// only the recorded chain declares fails with "app not found" without the flags.
+func TestSpawnArgsReplayOnInstall(t *testing.T) {
+	h := newHarness(t)
+	target := filepath.Join(t.TempDir(), "wrapper-tool")
+	h.writeManifest(sourcefarm.Manifest{
+		ConfigArgs: []string{"--no-auto-config", "--config", "/abs/w.ts"},
+		Entries:    []sourcefarm.Entry{{Name: "wrapper-tool", Command: target, Strategy: sourcefarm.StrategyShim}},
+	})
+	h.spawnFunc = func(args []string) error {
+		return os.WriteFile(target, []byte("#!/bin/sh\n"), 0o755)
+	}
+	h.invokeThroughFarm("wrapper-tool")
+
+	if code, handled := h.d.Dispatch(); !handled || code != 0 {
+		t.Fatalf("Dispatch() = (%d, %v), want (0, true)", code, handled)
+	}
+	want := []string{"--no-auto-config", "--config", "/abs/w.ts", "install", "wrapper-tool"}
+	if len(h.spawns) != 1 || !equalStrings(h.spawns[0], want) {
+		t.Fatalf("spawns = %v, want exactly one %v", h.spawns, want)
+	}
+}
+
 func TestDispatchInstallWithoutRecordedPathRefreshes(t *testing.T) {
 	h := newHarness(t)
 	target := filepath.Join(t.TempDir(), "prettier")

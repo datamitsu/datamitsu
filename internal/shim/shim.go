@@ -189,7 +189,7 @@ func (d *Dispatcher) Dispatch() (int, bool) {
 		}
 	}
 
-	entry, err = d.ensureInstalled(manifestPath, name, entry)
+	entry, err = d.ensureInstalled(manifestPath, name, manifest, entry)
 	if err != nil {
 		return d.fail(err.Error()), true
 	}
@@ -492,7 +492,7 @@ func (d *Dispatcher) rebake(manifestPath, name string, manifest sourcefarm.Manif
 		d.warn("datamitsu: " + err.Error())
 		return manifest, entry, true
 	}
-	if err := d.Spawn(exe, []string{"source", "refresh"}); err != nil {
+	if err := d.Spawn(exe, spawnArgs(manifest, "source", "refresh")); err != nil {
 		d.warn("datamitsu: could not refresh the source-mode farm, using the previous one: " + err.Error())
 		return manifest, entry, true
 	}
@@ -519,9 +519,17 @@ func (d *Dispatcher) rebake(manifestPath, name string, manifest sourcefarm.Manif
 // will land — every kind whose store path is a pure function of its config —
 // that path is used directly afterwards, and only an entry with no recorded
 // command needs a second pass through the resolver.
-func (d *Dispatcher) ensureInstalled(manifestPath, name string, entry sourcefarm.Entry) (sourcefarm.Entry, error) {
-	if entry.Installed && installedPath(entry) != "" {
-		if _, err := d.Stat(installedPath(entry)); err == nil {
+//
+// The decision is the stat alone, deliberately ignoring entry.Installed. That
+// flag is bake-time state: a lazy install writes the store, not the manifest,
+// and nothing an install touches is in the watch set, so the manifest stays
+// fresh with Installed=false forever. Consulting it would send every later
+// invocation of a lazily installed tool back through a full `datamitsu install`
+// child process — a config load per exec, against this package's ~10 ms budget.
+// The store path is the truth; the flag is only a hint for `source status`.
+func (d *Dispatcher) ensureInstalled(manifestPath, name string, manifest sourcefarm.Manifest, entry sourcefarm.Entry) (sourcefarm.Entry, error) {
+	if path := installedPath(entry); path != "" {
+		if _, err := d.Stat(path); err == nil {
 			return entry, nil
 		}
 	}
@@ -530,20 +538,19 @@ func (d *Dispatcher) ensureInstalled(manifestPath, name string, entry sourcefarm
 	if err != nil {
 		return entry, err
 	}
-	if err := d.Spawn(exe, []string{"install", name}); err != nil {
+	if err := d.Spawn(exe, spawnArgs(manifest, "install", name)); err != nil {
 		return entry, fmt.Errorf("datamitsu: %s: install failed: %w", name, err)
 	}
 
 	if path := installedPath(entry); path != "" {
 		if _, err := d.Stat(path); err == nil {
-			entry.Installed = true
 			return entry, nil
 		}
 	}
 
 	// No recorded location, or the install put it somewhere else: ask the full
 	// resolver where it went and re-read the answer.
-	if err := d.Spawn(exe, []string{"source", "refresh", "--force"}); err != nil {
+	if err := d.Spawn(exe, spawnArgs(manifest, "source", "refresh", "--force")); err != nil {
 		return entry, fmt.Errorf("datamitsu: %s: could not refresh the farm after install: %w", name, err)
 	}
 	reloaded, err := d.Load(manifestPath)
@@ -666,6 +673,24 @@ func installedPath(entry sourcefarm.Entry) string {
 		return entry.Artifact
 	}
 	return entry.Command
+}
+
+// spawnArgs prefixes a datamitsu subcommand with the config-chain flags the farm
+// was baked from.
+//
+// Both spawns here re-enter datamitsu to re-resolve the project's apps, and the
+// binary they re-enter is the resolved real one — a wrapper that would have
+// supplied `--before-config <shared config>` is deliberately bypassed. Replaying
+// the recorded flags is what keeps the re-resolved chain the same chain: without
+// them a rebake drops every app only the wrapper's config declares, and an
+// install of one fails with "app not found".
+func spawnArgs(m sourcefarm.Manifest, sub ...string) []string {
+	if len(m.ConfigArgs) == 0 {
+		return sub
+	}
+	args := make([]string, 0, len(m.ConfigArgs)+len(sub))
+	args = append(args, m.ConfigArgs...)
+	return append(args, sub...)
 }
 
 // lookupEntry finds a manifest entry by name.

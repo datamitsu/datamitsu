@@ -95,7 +95,11 @@ func TestBuildPlan_ShellAppAlwaysExcluded(t *testing.T) {
 // resolvable binary app: interposing on `sudo` or on datamitsu's own name is
 // refused mechanically, not by asking whether the app looks usable.
 func TestBuildPlan_DenyListedExcluded(t *testing.T) {
-	for _, name := range []string{"sudo", "git", "datamitsu", "sh", "ssh"} {
+	// The mixed-case spellings are the case-insensitive-filesystem hazard: on
+	// macOS and Windows a farm entry named `Git` is what the shell's PATH search
+	// finds for a plain `git`, and the shim — which looks the manifest up
+	// exactly — would exit 127 for it, breaking git in every activated shell.
+	for _, name := range []string{"sudo", "git", "datamitsu", "sh", "ssh", "Git", "SUDO", "Env", "Datamitsu"} {
 		t.Run(name, func(t *testing.T) {
 			apps := binmanager.MapOfApps{name: binaryApp()}
 			resolver := &stubResolver{

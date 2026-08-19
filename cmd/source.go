@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -187,8 +188,44 @@ func freshSourcePlanFor(root string) (sourcefarm.Plan, bool) {
 // different file compares equal against a watch set that never mentioned it —
 // the freshness check would report "unchanged" for a config it has never seen.
 // Those invocations always re-resolve.
+//
+// --before-config is on the same footing as --config: it prepends files to the
+// chain, so a manifest baked without them describes a farm missing whatever they
+// declare. Serving it back as fresh would activate the wrong toolchain silently.
 func sourceManifestDecides() bool {
-	return len(ConfigPaths) == 0 && !NoAutoConfig
+	return len(ConfigPaths) == 0 && len(BeforeConfigPaths) == 0 && !NoAutoConfig
+}
+
+// configChainArgs reconstructs the global flags that selected this invocation's
+// config chain, as an argv fragment the shim can replay.
+//
+// Paths are made absolute because the fragment is replayed from whatever
+// directory the shim happened to be invoked in, which is rarely the one that
+// baked the farm. A path that cannot be made absolute is passed through
+// unchanged: os.Getwd fails only when the working directory has been removed,
+// and the relative path is a strictly better answer than dropping the flag and
+// re-baking a different chain.
+func configChainArgs() []string {
+	args := make([]string, 0, 2*(len(BeforeConfigPaths)+len(ConfigPaths))+1)
+	if NoAutoConfig {
+		args = append(args, "--no-auto-config")
+	}
+	for _, p := range BeforeConfigPaths {
+		args = append(args, "--before-config", absOrSelf(p))
+	}
+	for _, p := range ConfigPaths {
+		args = append(args, "--config", absOrSelf(p))
+	}
+	return args
+}
+
+// absOrSelf returns path made absolute, or path unchanged when it cannot be.
+func absOrSelf(path string) string {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return path
+	}
+	return abs
 }
 
 // reportBakeFailure tells the user that the farm they are activating is the
@@ -235,6 +272,7 @@ func bakeSourceFarm(ctx context.Context, stderr io.Writer) (bakeResult, error) {
 
 	m := sourcefarm.BuildManifest(plan, sourcefarm.OriginGitRoot,
 		sourcefarm.WatchPaths(plan.Root, ConfigChainFiles()))
+	m.ConfigArgs = configChainArgs()
 
 	// sourcefarm already reports the failure on the writer it was given.
 	matErr := sourcefarm.MaterializeWithOptions(plan, m, sourcefarm.Options{

@@ -23,6 +23,7 @@ package sourcefarm
 import (
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 )
@@ -215,7 +216,7 @@ func BuildPlan(root, farmDir string, apps binmanager.MapOfApps, resolve Resolver
 			plan.Excluded = append(plan.Excluded, Excluded{Name: name, Reason: ReasonShellApp})
 			continue
 		}
-		if _, denied := denyList[name]; denied {
+		if DenyListed(name) {
 			plan.Excluded = append(plan.Excluded, Excluded{Name: name, Reason: ReasonDenyListed})
 			continue
 		}
@@ -331,7 +332,16 @@ func inFarm(found, farmDir string) bool {
 // DenyListed reports whether name is refused by the hard deny-list. Exported
 // so `source status` and the config validator can explain the refusal without
 // duplicating the list.
+//
+// The comparison folds case because the farm is a directory on PATH and app
+// names permit uppercase. On a case-insensitive filesystem — macOS by default,
+// and Windows — an app declared as `Git` materializes as `<farm>/Git`, which the
+// shell's PATH search then finds for a plain `git`. The name would reach the
+// shim, which looks the manifest up exactly, find no `git` entry, and exit 127:
+// git broken in every activated shell, including the `git rev-parse` a
+// `source refresh` needs to repair it. Every entry on the list names a hazard
+// that does not care how the config spelled it.
 func DenyListed(name string) bool {
-	_, ok := denyList[name]
+	_, ok := denyList[strings.ToLower(name)]
 	return ok
 }
