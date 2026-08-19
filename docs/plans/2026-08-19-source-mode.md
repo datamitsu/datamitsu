@@ -395,44 +395,48 @@ refresh --force` is the escape hatch. Tracking the variables the VM actually rea
 
 ### Task 7: Atomic farm materialization
 
-- [ ] `Materialize(plan, manifest) error`: build the whole directory in a sibling temp dir on
+- [x] `Materialize(plan, manifest) error`: build the whole directory in a sibling temp dir on
       the same filesystem, fsync, then `os.Rename` into place; on rename failure `os.Stat` the
       destination and treat its existence as a peer having won (aqua's lock-free model). Never
       mutate a live directory in place
-- [ ] `symlink` entries become a real symlink to the resolved `Command` in the
+- [x] `symlink` entries become a real symlink to the resolved `Command` in the
       content-addressed store
-- [ ] `shim` entries become a symlink to the absolute datamitsu executable path
+- [x] `shim` entries become a symlink to the absolute datamitsu executable path
       (`os.Executable`, resolved), so argv[0] dispatch can pick them up
-- [ ] **never emit a dangling symlink** — an entry whose target does not exist is a `shim`
+- [x] **never emit a dangling symlink** — an entry whose target does not exist is a `shim`
       entry by construction (Task 5's `Installed` condition), so this is a guarded invariant
       with a test, not a hope
-- [ ] write the manifest inside the same atomic swap so the farm and its manifest can never
+- [x] write the manifest inside the same atomic swap so the farm and its manifest can never
       disagree
-- [ ] directory `0o700`, entries `0o755`; refuse to materialize if an existing farm directory
+- [x] directory `0o700`, entries `0o755`; refuse to materialize if an existing farm directory
       is group- or other-writable or not owned by the current uid
-- [ ] refuse to materialize if the target path is not under `GetCachePath()` — defense against
+- [x] refuse to materialize if the target path is not under `GetCachePath()` — defense against
       a bad root
-- [ ] per-root advisory lock around the bake (`flock` on a lock file created
+- [x] per-root advisory lock around the bake (`flock` on a lock file created
       `O_CREAT|O_RDWR|O_CLOEXEC` and **never unlinked**), non-blocking first with a poll-and-
       timeout fallback: poll for the artifact to appear, and only on timeout block on the
       lock. Ten tmux panes activating at once is the case this exists for
-- [ ] on a failed bake (offline, broken config, unreachable remote config) **keep the previous
+- [x] on a failed bake (offline, broken config, unreachable remote config) **keep the previous
       manifest and farm**, do not advance the stamp, print one line to stderr, and let the next
       invocation retry — nix-direnv's fail-stale-not-empty rule. The alternative default is an
       empty farm and a machine-wide 127 storm
-- [ ] no `ui.Current()` calls anywhere in this package — it must be silent
-- [ ] write a test asserting re-materializing over an existing farm removes entries no longer
+- [x] no `ui.Current()` calls anywhere in this package — it must be silent
+- [x] write a test asserting re-materializing over an existing farm removes entries no longer
       in the plan
-- [ ] write a test asserting modes: directory `0o700`, entries `0o755`
-- [ ] write a test asserting materializing to a path outside the cache root errors
-- [ ] write a test asserting two successive `Materialize` calls with the same plan produce
+- [x] write a test asserting modes: directory `0o700`, entries `0o755`
+- [x] write a test asserting materializing to a path outside the cache root errors
+- [x] write a test asserting two successive `Materialize` calls with the same plan produce
       identical directory listings
-- [ ] write a test asserting no entry in the farm is a dangling symlink
-- [ ] write a concurrency test (`-race`) running N concurrent `Materialize` calls for the same
+- [x] write a test asserting no entry in the farm is a dangling symlink
+- [x] write a concurrency test (`-race`) running N concurrent `Materialize` calls for the same
       root and asserting the final farm is complete and consistent, with no partial directory
-- [ ] write a test asserting a bake that fails midway leaves the previous farm and manifest
+- [x] write a test asserting a bake that fails midway leaves the previous farm and manifest
       intact
-- [ ] run `go test ./... -race` — must pass before Task 8
+- [x] ➕ add `env.GetProjectLockPath` and `env.ProjectLockFileName`
+      (`internal/env/runtime.go`) so the lock file's location is derived from the same
+      per-root path helper as the farm and the manifest, rather than being assembled by
+      string concatenation in `sourcefarm`
+- [x] run `go test ./... -race` — must pass before Task 8
 
 ### Task 8: argv[0] shim dispatch
 

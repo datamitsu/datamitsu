@@ -1101,6 +1101,23 @@ func TestGetProjectBinPath(t *testing.T) {
 		}
 	})
 
+	t.Run("lock file is a sibling of the farm directory", func(t *testing.T) {
+		binPath, err := GetProjectBinPath("/home/user/myproject")
+		if err != nil {
+			t.Fatalf("GetProjectBinPath() error = %v", err)
+		}
+		lock, err := GetProjectLockPath("/home/user/myproject")
+		if err != nil {
+			t.Fatalf("GetProjectLockPath() error = %v", err)
+		}
+		if filepath.Dir(binPath) != filepath.Dir(lock) {
+			t.Errorf("lock %q is not a sibling of bin dir %q", lock, binPath)
+		}
+		if filepath.Base(lock) != ProjectLockFileName {
+			t.Errorf("lock base = %q, want %q", filepath.Base(lock), ProjectLockFileName)
+		}
+	})
+
 	t.Run("distinct roots produce distinct paths, same root is stable", func(t *testing.T) {
 		tests := []struct {
 			name     string
@@ -1165,6 +1182,9 @@ func TestGetProjectBinPath(t *testing.T) {
 			}
 			if got, err := GetProjectManifestPath(root); err == nil {
 				t.Errorf("GetProjectManifestPath(%q) = %q, want error", root, got)
+			}
+			if got, err := GetProjectLockPath(root); err == nil {
+				t.Errorf("GetProjectLockPath(%q) = %q, want error", root, got)
 			}
 		}
 	})

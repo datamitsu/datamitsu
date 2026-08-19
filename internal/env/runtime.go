@@ -49,6 +49,10 @@ func HashProjectPath(projectPath string) string {
 // stored alongside the farm's bin directory under the per-root cache directory.
 const ProjectManifestFileName = "manifest.json"
 
+// ProjectLockFileName is the file name of the per-root advisory lock taken while
+// the source-mode farm is baked.
+const ProjectLockFileName = "lock"
+
 // projectRootDir returns the per-git-root cache directory
 // ({cache}/projects/{XXH3-128(gitRoot)}), rejecting roots that are not absolute.
 func projectRootDir(gitRoot string) (string, error) {
@@ -86,6 +90,19 @@ func GetProjectManifestPath(gitRoot string) (string, error) {
 		return "", err
 	}
 	return filepath.Join(dir, ProjectManifestFileName), nil
+}
+
+// GetProjectLockPath returns the source-mode farm lock file for a git root
+// ({cache}/projects/{XXH3-128(gitRoot)}/lock), a sibling of the farm directory
+// returned by GetProjectBinPath. The file is advisory-locked during a bake and
+// is deliberately never unlinked: unlinking it would let a second process lock a
+// fresh inode for the same root and bake concurrently.
+func GetProjectLockPath(gitRoot string) (string, error) {
+	dir, err := projectRootDir(gitRoot)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, ProjectLockFileName), nil
 }
 
 // GetProjectCachePath returns a per-project, per-tool cache directory, rejecting
