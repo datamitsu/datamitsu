@@ -4,8 +4,8 @@
   "license": "MIT",
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
-  "pageCount": 51,
-  "pageSetHash": "17f5345fdfb1f340f75f0711dc8379e3",
+  "pageCount": 52,
+  "pageSetHash": "151a8c2242c07f3dc5c2523869d51752",
   "pages": [
     {
       "slug": "about",
@@ -311,6 +311,15 @@
       "contentHash": "5a74ff540f17d623a0db90cedf9d8f50"
     },
     {
+      "slug": "guides/source-mode",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/guides/source-mode.md",
+      "title": "Source Mode",
+      "description": "Put a project's declared toolchain on PATH for the current shell, so every tool runs at the version the repository pins — with lazy downloads and invisible branch switching",
+      "bytes": 13331,
+      "contentHash": "ab9af53947442a54d4e38026754c9f2a"
+    },
+    {
       "slug": "guides/supply-chain-security",
       "aliases": [],
       "url": "https://datamitsu.com/docs/guides/supply-chain-security.md",
@@ -424,8 +433,8 @@
       "url": "https://datamitsu.com/docs/reference/comparison.md",
       "title": "Comparison with Similar Tools",
       "description": "How datamitsu compares to mise, moon, Nx, and Turborepo",
-      "bytes": 8801,
-      "contentHash": "0a8226c0071b46105e36c4fdb84dd75f"
+      "bytes": 9860,
+      "contentHash": "315b1bd270ff3e85ba104514473b0e1c"
     },
     {
       "slug": "reference/configuration-api",
