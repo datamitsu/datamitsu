@@ -47,7 +47,7 @@ func TestRemovedOperationFieldUses(t *testing.T) {
 			js:   `{tools: {eslint: {operations: {lint: {app: "eslint", batch: true}}}}}`,
 			want: 1,
 			match: []string{
-				`"batch" no longer has any effect`,
+				`"batch" was removed`,
 				"dispatch now comes from arity",
 				"{file}", "{files}",
 			},
@@ -89,8 +89,42 @@ func TestRemovedOperationFieldUses(t *testing.T) {
 	}
 }
 
+// Reporting is not enough on its own: the config has to fail to load. This was
+// a warning only while the published wrapper still shipped batch; that wrapper
+// has been replaced, so a config still carrying the key is now rejected.
+func TestParseConfigResultRejectsRemovedFields(t *testing.T) {
+	t.Run("a config carrying batch does not load", func(t *testing.T) {
+		vm, val := evalConfig(t, `{tools: {
+			prettier: {operations: {fix: {app: "prettier", args: ["--write", "{files}"], batch: false}}},
+		}}`)
+
+		cfg, err := parseConfigResult(vm, val)
+		if err == nil {
+			t.Fatal("parseConfigResult accepted a config still setting batch")
+		}
+		if cfg != nil {
+			t.Error("a rejected config was returned anyway")
+		}
+		for _, want := range []string{"removed fields", `tool "prettier"`, "arity"} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("error %v does not mention %q", err, want)
+			}
+		}
+	})
+
+	t.Run("a clean config loads", func(t *testing.T) {
+		vm, val := evalConfig(t, `{tools: {
+			prettier: {operations: {fix: {app: "prettier", args: ["--write", "{files}"]}}},
+		}}`)
+
+		if _, err := parseConfigResult(vm, val); err != nil {
+			t.Fatalf("parseConfigResult rejected a clean config: %v", err)
+		}
+	})
+}
+
 // Map iteration is random, so an unsorted report would reorder between runs and
-// make the warnings unreadable in a diff or a CI log.
+// make the message unreadable in a diff or a CI log.
 func TestRemovedOperationFieldUsesAreSorted(t *testing.T) {
 	js := `{tools: {
 		zebra:  {operations: {lint: {app: "z", batch: true}}},

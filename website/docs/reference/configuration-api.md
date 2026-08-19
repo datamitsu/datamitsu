@@ -627,6 +627,20 @@ error. That is what makes it worth writing. `yq -i` given two files splices the
 second into the first and exits 0, so `arity: "one"` on a `yq` operation turns a
 one-token edit from silent data loss into a config error.
 
+#### Replacing `batch`
+
+Arity replaces the old `batch` flag, which no longer exists. A config still
+setting it is **rejected at load** rather than ignored: the two disagree in a way
+that changes what runs, and `batch: false` on an operation carrying `{files}`
+used to mean one process per file where arity now reads it as one process taking
+the whole list.
+
+| Was               | Now                                    |
+| ----------------- | -------------------------------------- |
+| `batch: true`     | `{files}` in `args` (arity `many`)     |
+| `batch: false`    | `{file}` in `args` (arity `one`)       |
+| no file in `args` | nothing to change (arity `none`/`dir`) |
+
 ### `execution.widenTo`
 
 How far datamitsu may widen work beyond what you asked for, per operation.

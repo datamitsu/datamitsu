@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -555,11 +556,11 @@ var removedOperationFields = map[string]string{
 // removedOperationFieldUses reports every tool operation still carrying a
 // removed key, one message each.
 //
-// A warning, not a load error, for exactly as long as the published wrapper
-// still ships these keys: rejecting them would make a new core refuse the only
-// config available to it. It becomes an error once a wrapper without them is
-// released. Warning is already the point — the defect was that the field
-// vanished during export and the run silently changed shape.
+// A load error, not a warning. It was a warning for exactly as long as the
+// published wrapper still shipped these keys — rejecting them then would have
+// made a new core refuse the only config available to it — and the wrapper that
+// dropped them has shipped. Silence was the defect: the field vanished during
+// export and the run changed shape with nothing said.
 func removedOperationFieldUses(vm *goja.Runtime, resultVal goja.Value) []string {
 	resultObj := resultVal.ToObject(vm)
 	if resultObj == nil {
@@ -592,8 +593,7 @@ func removedOperationFieldUses(vm *goja.Runtime, resultVal goja.Value) []string 
 			for _, field := range opObj.Keys() {
 				if advice, removed := removedOperationFields[field]; removed {
 					uses = append(uses, fmt.Sprintf(
-						"config uses a removed field: tool %q operation %q: %q no longer has any "+
-							"effect — %s", toolName, opName, field, advice))
+						"tool %q operation %q: %q was removed — %s", toolName, opName, field, advice))
 				}
 			}
 		}
@@ -618,8 +618,8 @@ func parseConfigResult(vm *goja.Runtime, resultVal goja.Value) (*config.Config, 
 		return nil, fmt.Errorf("failed to export config: %w", err)
 	}
 
-	for _, use := range removedOperationFieldUses(vm, resultVal) {
-		logger.Logger.Warn(use, zap.String("source", "config"))
+	if uses := removedOperationFieldUses(vm, resultVal); len(uses) > 0 {
+		return nil, errors.New("config uses removed fields:\n  " + strings.Join(uses, "\n  "))
 	}
 
 	// Initialize empty maps if they are nil
