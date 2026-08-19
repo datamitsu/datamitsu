@@ -152,6 +152,67 @@ func TestMaterializeCreatesEntries(t *testing.T) {
 	}
 }
 
+// TestMaterializeRecordsShimTarget closes the loop between the two halves of
+// the moved-binary repair: materialization is the only place that knows which
+// executable the entries point at, and Validate can only stat what was written
+// down. A bake that forgets to record it leaves the farm reporting fresh forever
+// after a `mv` of the datamitsu binary.
+func TestMaterializeRecordsShimTarget(t *testing.T) {
+	fx := newFarmFixture(t)
+	plan := fx.plan(t, []string{"tofu"}, []string{"prettier"})
+
+	// The caller never fills the field in; it is materialization's to write.
+	m := manifestFor(plan, "k1")
+	if m.ShimTarget != "" {
+		t.Fatalf("fixture manifest already carries a shim target %q", m.ShimTarget)
+	}
+	if err := MaterializeWithOptions(plan, m, fx.options()); err != nil {
+		t.Fatalf("Materialize() error = %v", err)
+	}
+
+	loaded, err := Load(fx.manifestPath())
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if loaded.ShimTarget != fx.shimTarget {
+		t.Errorf("manifest shim target = %q, want %q", loaded.ShimTarget, fx.shimTarget)
+	}
+
+	// And the recorded path is one a moved binary invalidates.
+	if !shimTargetUsable(loaded.ShimTarget) {
+		t.Fatal("recorded shim target is not usable straight after the bake")
+	}
+	if err := os.Remove(fx.shimTarget); err != nil {
+		t.Fatalf("remove shim target: %v", err)
+	}
+	if shimTargetUsable(loaded.ShimTarget) {
+		t.Error("recorded shim target still reported usable after the executable moved away")
+	}
+}
+
+// TestManifestMatchesRejectsMovedShimTarget pins the contended-bake half of the
+// repair. The staleness key deliberately excludes the shim target, so a peer's
+// manifest can carry an identical key while naming an executable that is gone;
+// treating that as "the peer already baked what I would have" would return
+// success over a farm of dangling symlinks.
+func TestManifestMatchesRejectsMovedShimTarget(t *testing.T) {
+	fx := newFarmFixture(t)
+	plan := fx.plan(t, []string{"tofu"}, nil)
+	if err := MaterializeWithOptions(plan, manifestFor(plan, "k1"), fx.options()); err != nil {
+		t.Fatalf("Materialize() error = %v", err)
+	}
+
+	if !manifestMatches(fx.manifestPath(), "k1") {
+		t.Fatal("manifestMatches = false for the manifest just written, want true")
+	}
+	if err := os.Remove(fx.shimTarget); err != nil {
+		t.Fatalf("remove shim target: %v", err)
+	}
+	if manifestMatches(fx.manifestPath(), "k1") {
+		t.Error("manifestMatches = true after the datamitsu executable moved away, want false")
+	}
+}
+
 func TestMaterializeRemovesStaleEntries(t *testing.T) {
 	fx := newFarmFixture(t)
 	first := fx.plan(t, []string{"tofu", "kubectl"}, []string{"prettier"})

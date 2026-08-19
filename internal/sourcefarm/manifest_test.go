@@ -232,6 +232,79 @@ func TestValidate_FutureFormatVersionIsStaleNotAnError(t *testing.T) {
 	}
 }
 
+// TestValidate_ShimTargetTransitions covers the failure the watch set cannot
+// see: the datamitsu binary itself moving or losing its executable bit while the
+// tree and the version string stay identical. Every farm entry is a symlink to
+// that one file, so the farm is entirely broken and every other freshness input
+// still says fresh. Reporting stale is what lets `source refresh` repair it
+// without --force.
+func TestValidate_ShimTargetTransitions(t *testing.T) {
+	tests := []struct {
+		name string
+		// mutate returns the manifest's ShimTarget after doing whatever it does to
+		// the file at target.
+		mutate    func(t *testing.T, target string)
+		wantFresh bool
+	}{
+		{
+			name:      "target still there and executable",
+			mutate:    func(*testing.T, string) {},
+			wantFresh: true,
+		},
+		{
+			name: "target moved away",
+			mutate: func(t *testing.T, target string) {
+				t.Helper()
+				if err := os.Remove(target); err != nil {
+					t.Fatalf("remove shim target: %v", err)
+				}
+			},
+		},
+		{
+			name: "target lost its executable bit",
+			mutate: func(t *testing.T, target string) {
+				t.Helper()
+				if err := os.Chmod(target, 0o644); err != nil {
+					t.Fatalf("chmod shim target: %v", err)
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root, m := fixtureRoot(t)
+			target := filepath.Join(root, "datamitsu-bin")
+			mustWrite(t, target, "#!/bin/sh\n")
+			if err := os.Chmod(target, 0o755); err != nil {
+				t.Fatalf("chmod shim target: %v", err)
+			}
+			m.ShimTarget = target
+
+			if !Validate(m) {
+				t.Fatal("Validate = false before the mutation, want true")
+			}
+			tt.mutate(t, target)
+
+			if got := Validate(m); got != tt.wantFresh {
+				t.Errorf("Validate = %t, want %t", got, tt.wantFresh)
+			}
+		})
+	}
+}
+
+// TestValidate_EmptyShimTargetIsNotChecked pins the compatibility rule: a
+// manifest written before the field existed carries no target, and must be
+// judged on its watch set rather than reported permanently stale.
+func TestValidate_EmptyShimTargetIsNotChecked(t *testing.T) {
+	_, m := fixtureRoot(t)
+	m.ShimTarget = ""
+
+	if !Validate(m) {
+		t.Error("Validate = false for a manifest with no recorded shim target, want true")
+	}
+}
+
 // TestValidate_OnlyStats proves the property the whole design rests on:
 // deciding freshness reads no file contents and spawns nothing. The counting
 // hook pins the call count to exactly one lstat per watched path, so a future

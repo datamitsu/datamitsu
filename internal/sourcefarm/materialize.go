@@ -172,6 +172,11 @@ func materialize(plan Plan, m Manifest, opts Options) error {
 		return err
 	}
 
+	// Recorded here rather than by the caller: this is the only place that knows
+	// which executable the entries actually point at, and the manifest must not
+	// name one the farm was not built against.
+	m.ShimTarget = shimTarget
+
 	manifestData, err := Encode(m)
 	if err != nil {
 		return err
@@ -456,6 +461,12 @@ func acquireBakeLock(lockPath, manifestPath, stalenessKey string, opts Options) 
 
 // manifestMatches reports whether the manifest on disk is already the one this
 // bake would have written.
+//
+// The shim target is checked alongside the key because it is deliberately not
+// part of it (see Manifest.ShimTarget). Without that check, a bake triggered by
+// a moved datamitsu binary would find the old manifest's key equal to its own,
+// declare the peer the winner, and return success over a farm of dangling
+// symlinks — the exact state this bake was run to repair.
 func manifestMatches(manifestPath, stalenessKey string) bool {
 	if stalenessKey == "" {
 		return false
@@ -464,5 +475,5 @@ func manifestMatches(manifestPath, stalenessKey string) bool {
 	if err != nil {
 		return false
 	}
-	return existing.StalenessKey == stalenessKey
+	return existing.StalenessKey == stalenessKey && shimTargetUsable(existing.ShimTarget)
 }

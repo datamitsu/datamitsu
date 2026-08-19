@@ -106,6 +106,25 @@ type Manifest struct {
 	OS   string `json:"os"`
 	Arch string `json:"arch"`
 
+	// ShimTarget is the datamitsu executable every shim entry links to, as
+	// resolveShimTarget resolved it at bake time. Materialization fills it in;
+	// callers building a manifest leave it empty.
+	//
+	// It is recorded because moving the datamitsu binary — a `mv`, a package
+	// manager relocating it, a `go build -o` to a new path — turns every entry in
+	// every farm on the machine into a dangling symlink while changing nothing the
+	// watch set or the version string can see. The farm would report fresh
+	// forever, `source refresh` would answer "already up to date", and the shim
+	// could not repair it because the kernel fails the exec before any datamitsu
+	// code runs. Validate stats this path so the states that *can* still run —
+	// `source status`, `source refresh`, a fresh activation — see the farm as
+	// stale and rebake it against the executable's new location.
+	//
+	// Deliberately *not* part of the staleness key: the key is a recorded value
+	// compared against a recomputation over recorded inputs, so folding the path
+	// in would compare it against itself. Only stat'ing it answers the question.
+	ShimTarget string `json:"shimTarget,omitempty"`
+
 	// StalenessKey is the XXH3-128 fingerprint described on ComputeStalenessKey.
 	// It is an internal fingerprint, never compared against a value that came
 	// over the network, so a cryptographic hash would only cost cycles.
@@ -318,6 +337,28 @@ func Load(path string) (Manifest, error) {
 	return m, nil
 }
 
+// shimTargetUsable reports whether the datamitsu executable a farm's shim
+// entries link to is still there and still executable.
+//
+// An empty target means the manifest predates the field, or was built by a
+// caller that never materialized it; there is nothing to check and the farm is
+// judged on its watch set alone.
+//
+// It goes through the same lstat hook as the watch set: resolveShimTarget
+// already ran the path through EvalSymlinks, so the target is a real file and
+// lstat and stat agree — while keeping Validate's "nothing but lstat" property
+// mechanically checkable.
+func shimTargetUsable(target string) bool {
+	if target == "" {
+		return true
+	}
+	info, err := lstat(target)
+	if err != nil {
+		return false
+	}
+	return info.Mode().Perm()&0o100 != 0
+}
+
 // Validate reports whether the farm this manifest describes is still correct for
 // the tree as it is now.
 //
@@ -336,6 +377,10 @@ func Validate(m Manifest) bool {
 		return false
 	}
 	if m.OS != runtime.GOOS || m.Arch != runtime.GOARCH {
+		return false
+	}
+
+	if !shimTargetUsable(m.ShimTarget) {
 		return false
 	}
 
