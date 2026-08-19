@@ -301,21 +301,73 @@ No code changed. `go test ./...` and `go test ./test/cli/ -count=2` are green an
 25.1 ms of the 28.8 ms of esbuild time per run is spent stripping types from a file that has
 none.
 
-- [ ] in `cmd/config_loader.go`, skip the `config.StripTypes` call at `:679` and `:694` when
+- [x] in `cmd/config_loader.go`, skip the `config.StripTypes` call at `:679` and `:694` when
       the source path's extension is `.js` or `.mjs`, passing the content through unchanged
-- [ ] keep `StripTypes` for `.ts`, `.mts`, `.cts` and for the embedded default config
+- [x] keep `StripTypes` for `.ts`, `.mts`, `.cts` and for the embedded default config
       (`internal/config/config.go:462`)
-- [ ] decide the rule by file extension, not by content sniffing — a heuristic that guesses
+- [x] decide the rule by file extension, not by content sniffing — a heuristic that guesses
       wrong silently produces a syntax error deep inside goja
-- [ ] confirm the OCI/remote-config path (`internal/remotecfg`) routes through the same
+- [x] confirm the OCI/remote-config path (`internal/remotecfg`) routes through the same
       extension check, or document why it cannot and handle it explicitly
-- [ ] write a table test over `.ts`/`.mts`/`.js`/`.mjs`/no-extension asserting which inputs
+- [x] write a table test over `.ts`/`.mts`/`.js`/`.mjs`/no-extension asserting which inputs
       reach esbuild (use a test seam or assert on the debug log)
-- [ ] write a test asserting a `.js` config containing syntax esbuild would rewrite
+- [x] write a test asserting a `.js` config containing syntax esbuild would rewrite
       (e.g. modern syntax it would downlevel) is passed through byte-identically
-- [ ] write a test asserting a `.ts` config still gets its types stripped
-- [ ] record the measured drop in `BenchmarkLoadConfig` in this file (expected ~25 ms)
-- [ ] run `go test ./...` and `go test ./test/cli/ -count=2` — must pass before Task 6
+- [x] write a test asserting a `.ts` config still gets its types stripped
+- [x] record the measured drop in `BenchmarkLoadConfig` in this file (expected ~25 ms)
+- [x] run `go test ./...` and `go test ./test/cli/ -count=2` — must pass before Task 6
+
+**Task 5 results.** Apple M1 Max.
+
+Both loader seams now go through `prepareConfigSource(content, ref)`, which consults
+`isPlainJavaScriptSource(ref)` and calls esbuild only when the source may contain types. The
+Task 1 instrumentation is the observation seam — `PhaseStripTypes` is recorded exactly when
+esbuild runs, so tests count the phase rather than wrapping the production call. (A
+`var stripTypes = config.StripTypes` function-value seam was tried first and discarded: the
+unresolvable indirect call sent gosec's taint analysis off the rails and produced a
+false-positive G703 on unrelated code in `discoverAutoConfig`.)
+
+The rule is the extension and nothing else — `.js`/`.mjs` pass through, everything
+unrecognised (`.ts`/`.mts`/`.cts`, `.cjs`, no extension, `default`, an OCI reference) still
+strips, because esbuild is a no-op on valid JavaScript while a wrong guess hands goja
+TypeScript and fails far from its cause. `internal/remotecfg` needs no change: its content
+arrives at `loadConfigString` with the source **URL** as the ref, and the same helper
+(`configSourceExt`) reads the extension off the URL's path component only — so
+`https://example.js` is a host rather than a JS file, `oci://ghcr.io/org/cfg:v1` has no extension, and a query string does not hide the extension.
+
+Real `datamitsu exec actionlint -- --version` in this repo (whose auto config is
+`datamitsu.config.ts` and whose declared before-config is the 1.95 MB
+`datamitsu.config.oci-ghcr.js`), `DATAMITSU_STARTUP_TIMINGS=1`:
+
+| Phase               | Before        | After        |
+| ------------------- | ------------- | ------------ |
+| `config.StripTypes` | n=3 / 47.8 ms | n=2 / 3.9 ms |
+| `loadConfig` total  | 178.1 ms      | 85.0 ms      |
+
+Wall-clock min, n=40: `exec actionlint -- --version` 161.6 ms → 127.5 ms (−34 ms). Stripping
+the oci-ghcr file alone benchmarks at 34.0 ms/op, which is the whole of the win; the two
+remaining strips are the `.ts` auto config, read once by the `getBeforeConfigs` pre-pass and
+once as a config source.
+
+`BenchmarkLoadConfig` moves far less because its fixture config is a three-line `.js` file,
+not a 2 MB one — the benchmark measures the call being skipped, not the file it was skipping
+(`-benchtime 30x -count 4`, min of 4):
+
+| Benchmark             | Task 4    | Task 5    |
+| --------------------- | --------- | --------- |
+| `BenchmarkLoadConfig` | 3,289,406 | 2,719,640 |
+| `BenchmarkGetGitRoot` | 576,749   | 560,964   |
+| `BenchmarkEngineNew`  | 671,474   | 661,688   |
+
+(ns/op. `LoadConfig` allocs 15,492 → 13,461, B/op 2,240,691 → 1,295,377 — esbuild's buffers,
+gone.)
+
+Tests: `cmd/config_js_source_test.go` (extension table incl. URLs and OCI refs, which refs
+reach the esbuild seam, `.js` byte-identical pass-through of syntax esbuild would reformat,
+`.ts` still stripped, and both through the real `loadConfigFile` + engine).
+`TestStartupTimingsPhasesPerLoad` is now table-driven over the auto config's extension and
+pins the counts directly: `.js` → 0 strips, `.ts` → 2. Every `test/cli` golden is
+byte-identical after `-count=2`.
 
 ### Task 6: Pure-Go git-root discovery with a git fallback
 

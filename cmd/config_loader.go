@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -682,6 +683,62 @@ func discoverBeforeConfigs(ctx context.Context, autoConfigPath string) ([]string
 	return paths, nil
 }
 
+// isPlainJavaScriptSource reports whether a config source is already plain
+// JavaScript and can therefore skip the esbuild type-stripping pass.
+//
+// The decision is made from the file extension only, never by sniffing the
+// content: a heuristic that guesses wrong hands goja a file still full of
+// TypeScript and surfaces as a syntax error far from its cause. Anything
+// unrecognised — .ts/.mts/.cts, a path with no extension, an OCI reference —
+// keeps going through esbuild, which is a no-op for JavaScript that is already
+// valid.
+//
+// ref is either a filesystem path or, for configs pulled in via
+// getRemoteConfigs(), the source URL; the URL's path component carries the same
+// extension, so both route through this one check.
+func isPlainJavaScriptSource(ref string) bool {
+	switch configSourceExt(ref) {
+	case ".js", ".mjs":
+		return true
+	default:
+		return false
+	}
+}
+
+// configSourceExt returns ref's lowercased extension, or "" when it has none.
+// For a ref carrying a scheme only the path component counts, so a bare host
+// (https://example.js) and an OCI reference (oci://ghcr.io/org/cfg:v1) both
+// come back without an extension instead of looking like JavaScript.
+func configSourceExt(ref string) string {
+	if scheme, rest, isURL := strings.Cut(ref, "://"); isURL && scheme != "" {
+		_, urlPath, hasPath := strings.Cut(rest, "/")
+		if !hasPath {
+			return ""
+		}
+		urlPath, _, _ = strings.Cut(urlPath, "#")
+		urlPath, _, _ = strings.Cut(urlPath, "?")
+		return strings.ToLower(path.Ext(urlPath))
+	}
+	return strings.ToLower(filepath.Ext(ref))
+}
+
+// prepareConfigSource returns the JavaScript to execute for a config source,
+// running esbuild only when the source may contain TypeScript. Skipping it for
+// plain JavaScript is the single largest esbuild cost per invocation: the
+// shared oci-ghcr config is a ~2 MB file that never had types to strip.
+//
+// The PhaseStripTypes timing observation doubles as the seam tests use to check
+// which sources actually reach esbuild.
+func prepareConfigSource(content, ref string) (string, error) {
+	if isPlainJavaScriptSource(ref) {
+		return content, nil
+	}
+
+	endStrip := timing.StartStartupPhase(timing.PhaseStripTypes)
+	defer endStrip()
+	return config.StripTypes(content)
+}
+
 // loadConfigFile loads and executes a single configuration file in the given engine.
 func loadConfigFile(e *engine.Engine, path string) error {
 	data, err := os.ReadFile(path)
@@ -689,9 +746,7 @@ func loadConfigFile(e *engine.Engine, path string) error {
 		return fmt.Errorf("failed to read config file: %w", err)
 	}
 
-	endStrip := timing.StartStartupPhase(timing.PhaseStripTypes)
-	jsCode, err := config.StripTypes(string(data))
-	endStrip()
+	jsCode, err := prepareConfigSource(string(data), path)
 	if err != nil {
 		return fmt.Errorf("failed to strip types: %w", err)
 	}
@@ -704,11 +759,10 @@ func loadConfigFile(e *engine.Engine, path string) error {
 }
 
 // loadConfigString loads and executes a config from a string content in the given engine.
-// The content is treated as TypeScript and types are stripped before execution.
+// Types are stripped first unless sourceName identifies the content as plain
+// JavaScript (see isPlainJavaScriptSource).
 func loadConfigString(e *engine.Engine, content, sourceName string) error {
-	endStrip := timing.StartStartupPhase(timing.PhaseStripTypes)
-	jsCode, err := config.StripTypes(content)
-	endStrip()
+	jsCode, err := prepareConfigSource(content, sourceName)
 	if err != nil {
 		return fmt.Errorf("failed to strip types from %s: %w", sourceName, err)
 	}

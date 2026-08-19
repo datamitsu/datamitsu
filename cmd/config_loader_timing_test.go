@@ -71,42 +71,57 @@ func TestStartupTimingsSilentWhenDisabled(t *testing.T) {
 // later optimisation tasks are measured against: dropping a redundant
 // engine.New or StripTypes call must show up here as a smaller count.
 func TestStartupTimingsPhasesPerLoad(t *testing.T) {
-	enableStartupTimings(t)
-
-	root := setupGitRoot(t)
-	writeTimingFixtureConfig(t, filepath.Join(root, ldflags.PackageName+".config.js"))
-
-	if _, _, _, err := loadConfigWithPaths(context.Background(), nil, false, nil); err != nil {
-		t.Fatalf("loadConfigWithPaths() error = %v", err)
+	tests := []struct {
+		name string
+		ext  string
+		// The auto config is the only file source, but it is read twice: once
+		// by the getBeforeConfigs pre-pass and once as a config source. Since
+		// Task 5 only the TypeScript one reaches esbuild. The embedded default
+		// config is not routed through this seam.
+		wantStripTypes int
+	}{
+		{name: "js auto config skips esbuild", ext: ".js", wantStripTypes: 0},
+		{name: "ts auto config strips twice", ext: ".ts", wantStripTypes: 2},
 	}
 
-	counts := phaseCounts(t)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			enableStartupTimings(t)
 
-	// One load, one git-root lookup from the loader, one before-config pre-pass.
-	for _, name := range []string{
-		timing.PhaseLoadConfig,
-		timing.PhaseGitRoot,
-		timing.PhaseDiscoverBeforeConfigs,
-	} {
-		if counts[name] != 1 {
-			t.Errorf("phase %q recorded %d times, want exactly 1", name, counts[name])
-		}
-	}
+			root := setupGitRoot(t)
+			writeTimingFixtureConfig(t, filepath.Join(root, ldflags.PackageName+".config"+tt.ext))
 
-	// The auto config is the only file source, but it is read and stripped
-	// twice: once by the getBeforeConfigs pre-pass and once as a config source.
-	// The embedded default config is not routed through this seam.
-	if counts[timing.PhaseStripTypes] != 2 {
-		t.Errorf("phase %q recorded %d times, want 2", timing.PhaseStripTypes, counts[timing.PhaseStripTypes])
-	}
+			if _, _, _, err := loadConfigWithPaths(context.Background(), nil, false, nil); err != nil {
+				t.Fatalf("loadConfigWithPaths() error = %v", err)
+			}
 
-	// Two sources (default + auto) each get their own VM and getConfig() call,
-	// plus one engine for the discoverBeforeConfigs pre-pass.
-	if counts[timing.PhaseGetConfig] != 2 {
-		t.Errorf("phase %q recorded %d times, want 2", timing.PhaseGetConfig, counts[timing.PhaseGetConfig])
-	}
-	if counts[timing.PhaseEngineNew] != 3 {
-		t.Errorf("phase %q recorded %d times, want 3", timing.PhaseEngineNew, counts[timing.PhaseEngineNew])
+			counts := phaseCounts(t)
+
+			// One load, one git-root lookup from the loader, one before-config pre-pass.
+			for _, name := range []string{
+				timing.PhaseLoadConfig,
+				timing.PhaseGitRoot,
+				timing.PhaseDiscoverBeforeConfigs,
+			} {
+				if counts[name] != 1 {
+					t.Errorf("phase %q recorded %d times, want exactly 1", name, counts[name])
+				}
+			}
+
+			if counts[timing.PhaseStripTypes] != tt.wantStripTypes {
+				t.Errorf("phase %q recorded %d times, want %d",
+					timing.PhaseStripTypes, counts[timing.PhaseStripTypes], tt.wantStripTypes)
+			}
+
+			// Two sources (default + auto) each get their own VM and getConfig() call,
+			// plus one engine for the discoverBeforeConfigs pre-pass.
+			if counts[timing.PhaseGetConfig] != 2 {
+				t.Errorf("phase %q recorded %d times, want 2", timing.PhaseGetConfig, counts[timing.PhaseGetConfig])
+			}
+			if counts[timing.PhaseEngineNew] != 3 {
+				t.Errorf("phase %q recorded %d times, want 3", timing.PhaseEngineNew, counts[timing.PhaseEngineNew])
+			}
+		})
 	}
 }
 
