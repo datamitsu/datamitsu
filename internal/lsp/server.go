@@ -38,6 +38,11 @@ type Server struct {
 	executor *tooling.Executor
 	cache    *cache.Cache // nil when the cache could not be built (formatting still works)
 
+	// fixWidenTo is the project's execution.widenTo for fix. The editor policy is
+	// clamped to it: a session default must not out-scope what the repository
+	// asked for.
+	fixWidenTo config.WidenTo
+
 	docs map[string][]byte // open documents: uri -> current full text
 
 	initialized      bool
@@ -65,6 +70,9 @@ func NewServer(r io.Reader, w io.Writer, cfg *config.Config, root string) *Serve
 
 	planner := tooling.NewPlanner(root, root, nil, cfg.Tools, cfg.ProjectTypes, cfg.IgnoreRules)
 	planner.SetPlatformChecker(binMgr)
+	// Without this the planner ran on defaults and ignored execution.widenTo
+	// entirely, so a project that narrowed its fix policy got the default anyway.
+	planner.SetWidenPolicy(cfg.Execution, "")
 
 	// Build the same cache the CLI runner does so keys/paths align. selectedTools
 	// is nil — the LSP, like the lefthook `check`, runs the full tool set, so the
@@ -84,6 +92,8 @@ func NewServer(r io.Reader, w io.Writer, cfg *config.Config, root string) *Serve
 		executor: tooling.NewExecutor(root, false, false, binMgr, projectCache),
 		cache:    projectCache,
 		docs:     make(map[string][]byte),
+
+		fixWidenTo: cfg.Execution.ResolveWidenTo(config.OpFix, ""),
 	}
 }
 
@@ -150,7 +160,7 @@ func (s *Server) FormatFile(ctx context.Context, absPath string, content []byte)
 	if err != nil {
 		return nil, fmt.Errorf("plan fix for %s: %w", absPath, err)
 	}
-	filterPlanForEditor(plan, absPath)
+	filterPlanForEditor(plan, absPath, s.fixWidenTo)
 
 	apps := planApps(plan)
 	if len(apps) == 0 {
@@ -230,8 +240,16 @@ func (s *Server) FormatFile(ctx context.Context, absPath string, content []byte)
 // commands: `tsc --noEmit … a.ts` exits 1 with TS5112 and zero diagnostics,
 // `syncpack lint <file>` rejects the argument outright. It also let a
 // single-file editor run write cache entries as if it had covered a whole unit.
-func filterPlanForEditor(plan *tooling.ExecutionPlan, absPath string) {
+func filterPlanForEditor(plan *tooling.ExecutionPlan, absPath string, projectPolicy config.WidenTo) {
+	// min(project, session): the session policy is ambient and applies to every
+	// save, so it may narrow the project's choice but never widen it. Without the
+	// clamp a project declaring fix: "target" still got the editor default of
+	// "unit", and saving one file ran an in-place formatter over the whole
+	// project — the exact blast radius that setting exists to prevent.
 	widen := editorWidenTo()
+	if projectPolicy != "" && projectPolicy.Rank() < widen.Rank() {
+		widen = projectPolicy
+	}
 	for gi := range plan.Groups {
 		kept := plan.Groups[gi].Tasks[:0]
 		for _, task := range plan.Groups[gi].Tasks {

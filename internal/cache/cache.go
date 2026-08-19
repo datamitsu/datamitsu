@@ -440,7 +440,13 @@ func (c *Cache) GetStats() Stats {
 	}
 }
 
-// Clear removes all cache entries
+// Clear removes all cache entries.
+//
+// The file is deleted before the save rather than overwritten by it. Save folds
+// in whatever is on disk, and an emptied map carries no tombstones, so the merge
+// used to copy every entry Clear had just dropped straight back and rewrite it —
+// `datamitsu cache clear` reported success and cleared nothing. Removing the file
+// leaves the merge with nothing to find.
 func (c *Cache) Clear() error {
 	c.mu.Lock()
 	c.data = &File{
@@ -450,7 +456,14 @@ func (c *Cache) Clear() error {
 		Entries:         make(map[string]FileEntry),
 		Verdicts:        make(map[string]VerdictEntry),
 	}
+	// Tombstones describe deletions against a file that no longer exists.
+	c.deletedEntries = nil
+	c.deletedVerdicts = nil
 	c.mu.Unlock()
+
+	if err := os.Remove(c.path); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("remove cache file: %w", err)
+	}
 	return c.Save()
 }
 

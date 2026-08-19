@@ -93,7 +93,12 @@ func (c *Cache) DeleteVerdict(key string) {
 const verdictPruneTTL = 30 * 24 * time.Hour
 
 // pruneVerdicts drops entries older than ttl. Called from Prune, which already
-// runs at most daily.
+// runs at most daily and holds c.mu.
+//
+// Each key gets a tombstone for the same reason DeleteVerdict leaves one: the merge
+// in Save can only add, so an entry dropped here and not recorded as deleted is
+// restored from disk by the very save meant to persist its removal — the file
+// would never shrink and the map would grow without bound.
 func (c *Cache) pruneVerdicts(ttl time.Duration) int {
 	if ttl <= 0 {
 		return 0
@@ -102,6 +107,10 @@ func (c *Cache) pruneVerdicts(ttl time.Duration) int {
 	for key, entry := range c.data.Verdicts {
 		if time.Since(entry.ValidatedAt) > ttl {
 			delete(c.data.Verdicts, key)
+			if c.deletedVerdicts == nil {
+				c.deletedVerdicts = make(map[string]struct{})
+			}
+			c.deletedVerdicts[key] = struct{}{}
 			removed++
 		}
 	}

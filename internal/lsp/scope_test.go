@@ -41,7 +41,7 @@ func TestFilterPlanForEditor(t *testing.T) {
 		// repo granularity: never on save
 		config.ToolOperation{Scope: config.ToolScopeRepository, Args: []string{"run"}},
 	)
-	filterPlanForEditor(plan, "/repo/pkg/a.ts")
+	filterPlanForEditor(plan, "/repo/pkg/a.ts", "")
 
 	got := toolNames(plan)
 	if len(got) != 2 || got[0] != "a" || got[1] != "b" {
@@ -56,7 +56,7 @@ func TestFilterPlanForEditorTargetPolicy(t *testing.T) {
 		config.ToolOperation{Scope: config.ToolScopePerFile, Args: []string{"{file}"}},
 		config.ToolOperation{Scope: config.ToolScopePerProject, Args: []string{"run"}},
 	)
-	filterPlanForEditor(plan, "/repo/pkg/a.ts")
+	filterPlanForEditor(plan, "/repo/pkg/a.ts", "")
 
 	if got := toolNames(plan); len(got) != 1 || got[0] != "a" {
 		t.Errorf("kept %v, want only the file-granularity task", got)
@@ -72,7 +72,7 @@ func TestFilterPlanForEditorDefaultKeepsUnitTasks(t *testing.T) {
 		Scope: config.ToolScopePerProject,
 		Args:  []string{"run", "--fix", "--allow-parallel-runners"},
 	})
-	filterPlanForEditor(plan, "/repo/pkg/a.ts")
+	filterPlanForEditor(plan, "/repo/pkg/a.ts", "")
 
 	if got := toolNames(plan); len(got) != 1 {
 		t.Errorf("kept %v, want the unit task under the default policy", got)
@@ -84,7 +84,7 @@ func TestFilterPlanForEditorNeverRunsRepoTasks(t *testing.T) {
 	t.Setenv("DATAMITSU_LSP_FORMAT_WIDEN_TO", "repo")
 
 	plan := planWith(config.ToolOperation{Scope: config.ToolScopeRepository, Args: []string{"run"}})
-	filterPlanForEditor(plan, "/repo/pkg/a.ts")
+	filterPlanForEditor(plan, "/repo/pkg/a.ts", "")
 
 	if got := toolNames(plan); len(got) != 0 {
 		t.Errorf("kept %v, want nothing", got)
@@ -104,7 +104,7 @@ func TestFilterPlanForEditorSkipsOtherUnits(t *testing.T) {
 		{ToolName: "theirs", OpConfig: op, ProjectPath: "/repo/svc/b"},
 	}}}}
 
-	filterPlanForEditor(plan, "/repo/svc/a/main.go")
+	filterPlanForEditor(plan, "/repo/svc/a/main.go", "")
 
 	if got := toolNames(plan); len(got) != 1 || got[0] != "mine" {
 		t.Errorf("kept %v, want only the unit holding the saved file", got)

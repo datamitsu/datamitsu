@@ -33,6 +33,53 @@ func TestEditorWidenTo(t *testing.T) {
 	}
 }
 
+// The session policy is ambient, so it is clamped to the project's. A project
+// that declared fix: "target" used to get the editor default of "unit" anyway,
+// and saving one file ran an in-place, unit-granularity formatter over the whole
+// project — precisely the blast radius that setting exists to prevent.
+func TestFilterPlanForEditorClampsToTheProjectPolicy(t *testing.T) {
+	t.Setenv("DATAMITSU_LSP_FORMAT_WIDEN_TO", "unit")
+
+	unitOp := config.ToolOperation{Scope: config.ToolScopePerProject, Args: []string{"fmt"}}
+	fileOp := config.ToolOperation{Scope: config.ToolScopePerFile, Args: []string{"{file}"}}
+	newPlan := func() *tooling.ExecutionPlan {
+		return &tooling.ExecutionPlan{Groups: []tooling.TaskGroup{{Tasks: []tooling.Task{
+			{ToolName: "gofmt", OpConfig: unitOp, ProjectPath: "/repo/pkg"},
+			{ToolName: "shfmt", OpConfig: fileOp, ProjectPath: "/repo/pkg"},
+		}}}}
+	}
+
+	t.Run("project target overrides the looser session default", func(t *testing.T) {
+		plan := newPlan()
+		filterPlanForEditor(plan, "/repo/pkg/a.go", config.WidenToTarget)
+
+		got := toolNames(plan)
+		if len(got) != 1 || got[0] != "shfmt" {
+			t.Errorf("kept %v, want only the file-granularity task", got)
+		}
+	})
+
+	t.Run("a looser project policy does not widen the session", func(t *testing.T) {
+		t.Setenv("DATAMITSU_LSP_FORMAT_WIDEN_TO", "target")
+		plan := newPlan()
+		filterPlanForEditor(plan, "/repo/pkg/a.go", config.WidenToRepo)
+
+		got := toolNames(plan)
+		if len(got) != 1 || got[0] != "shfmt" {
+			t.Errorf("kept %v; the narrower of the two must win", got)
+		}
+	})
+
+	t.Run("agreeing policies keep the unit task", func(t *testing.T) {
+		plan := newPlan()
+		filterPlanForEditor(plan, "/repo/pkg/a.go", config.WidenToUnit)
+
+		if got := toolNames(plan); len(got) != 2 {
+			t.Errorf("kept %v, want both tasks", got)
+		}
+	})
+}
+
 // A unit operation with no globs is planned once per project regardless of what
 // was saved, so without a containment check saving one file runs it in every
 // module — and these tools fix in place, rewriting files the editor never opened.
