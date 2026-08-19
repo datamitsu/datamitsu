@@ -16,6 +16,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"github.com/datamitsu/datamitsu/internal/sponsor"
 	"github.com/datamitsu/datamitsu/internal/term"
+	"github.com/datamitsu/datamitsu/internal/timing"
 	"github.com/datamitsu/datamitsu/internal/ui"
 	"github.com/datamitsu/datamitsu/internal/uievent"
 
@@ -151,6 +152,12 @@ func Execute() {
 
 	disp.Close()
 	restore()
+
+	// Startup instrumentation goes to stderr after the display is closed so it
+	// cannot interleave with progress rendering. It is a no-op unless
+	// DATAMITSU_STARTUP_TIMINGS=1, which internal/clitest strips, so goldens are
+	// unaffected.
+	timing.PrintStartup(os.Stderr)
 
 	if err != nil {
 		// A tool failing and a run that did not cover what it was asked to cover

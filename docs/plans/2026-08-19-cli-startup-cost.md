@@ -107,22 +107,49 @@ Target after this plan: `datamitsu version` ≈ 12 ms, `datamitsu exec <installe
 Every later task is judged against this. Build it first so the numbers are not re-derived
 from throwaway scripts.
 
-- [ ] extend `internal/timing` (or add a sibling) so the config-load path can be
+- [x] extend `internal/timing` (or add a sibling) so the config-load path can be
       instrumented: record durations for `discoverBeforeConfigs`, each `engine.New`, each
       `config.StripTypes` call, each `getConfig()` evaluation, and total `loadConfig`
-- [ ] wire the instrumentation into `cmd/config_loader.go` at the existing seams
+- [x] wire the instrumentation into `cmd/config_loader.go` at the existing seams
       (`:624` pre-pass, `:679`, `:694`) and into `internal/engine/engine.go`'s `New`
-- [ ] gate emission behind an existing debug/timing mechanism rather than a new always-on
+- [x] gate emission behind an existing debug/timing mechanism rather than a new always-on
       path — add the env var to `internal/env/e.go` + getter in `internal/env/env.go` per the
       Environment Variable Usage Policy, and confirm `internal/clitest` strips it (it strips
       `DATAMITSU_*`, so a `DATAMITSU_`-prefixed name is automatically golden-safe)
-- [ ] add `BenchmarkLoadConfig` in package `cmd` that exercises the same path `exec` uses,
+- [x] add `BenchmarkLoadConfig` in package `cmd` that exercises the same path `exec` uses,
       reporting ns/op and allocs/op
-- [ ] add `BenchmarkGetGitRoot` and `BenchmarkEngineNew` so Tasks 3 and 4 have direct targets
-- [ ] record the baseline in this file: `go test ./cmd/ -run XXX -bench 'LoadConfig|GetGitRoot|EngineNew' -benchtime 30x -count 4`
-- [ ] write tests asserting the instrumentation emits nothing when the env var is unset
-- [ ] write tests asserting each recorded phase name appears exactly once per load
-- [ ] run `go test ./...` and `go test ./test/cli/ -count=2` — must pass before Task 2
+- [x] add `BenchmarkGetGitRoot` and `BenchmarkEngineNew` so Tasks 3 and 4 have direct targets
+- [x] record the baseline in this file: `go test ./cmd/ -run XXX -bench 'LoadConfig|GetGitRoot|EngineNew' -benchtime 30x -count 4`
+- [x] write tests asserting the instrumentation emits nothing when the env var is unset
+- [x] write tests asserting each recorded phase name appears exactly once per load
+- [x] run `go test ./...` and `go test ./test/cli/ -count=2` — must pass before Task 2
+
+**Task 1 results.**
+
+Instrumentation: `DATAMITSU_STARTUP_TIMINGS=1` (`internal/timing/startup.go`,
+`env.IsStartupTimingsEnabled`). Phases are aggregated by name for the process and reported to
+stderr at most once — from the end of `loadConfigImpl` (because `exec` calls `os.Exit` and
+never returns to `Execute`) and from `cmd/root.go`'s `Execute` for commands that never load
+config. `internal/clitest` strips every `DATAMITSU_*` var, so goldens are unaffected.
+
+Baseline, Apple M1 Max, `-benchtime 30x -count 4`, fixture git repo with a trivial
+`datamitsu.config.js` (min of 4 runs):
+
+| Benchmark             | ns/op      | B/op      | allocs/op |
+| --------------------- | ---------- | --------- | --------- |
+| `BenchmarkLoadConfig` | 73,473,125 | 2,240,691 | 16,156    |
+| `BenchmarkGetGitRoot` | 16,568,433 | 115,252   | 169       |
+| `BenchmarkEngineNew`  | 17,170,300 | 196,871   | 1,172     |
+
+Phase report for one real `datamitsu exec` in that fixture (`loadConfig` total 81.18 ms):
+`engine.New` n=3 / 53.84 ms, `discoverBeforeConfigs` n=1 / 23.47 ms, `facts.GetGitRoot` n=1 /
+17.39 ms, `config.StripTypes` n=2 / 6.44 ms, `getConfig` n=2 / 0.20 ms.
+
+➕ Discovered: the auto config is read **and type-stripped twice** — once by the
+`discoverBeforeConfigs` pre-pass and once as a config source. Task 5's extension check removes
+both for `.js`/`.mjs`. The `facts.GetGitRoot` phase counts only the loader's own call; the
+four inside `engine.New` are folded into that phase's total, which is why `engine.New` at
+17.2 ms/op is almost entirely git-root resolution (Task 3).
 
 ### Task 2: Bump go-runewidth to v0.0.28
 

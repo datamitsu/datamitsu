@@ -19,6 +19,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/project"
 	"github.com/datamitsu/datamitsu/internal/remotecfg"
+	"github.com/datamitsu/datamitsu/internal/timing"
 	"github.com/datamitsu/datamitsu/internal/traverser"
 	"github.com/datamitsu/datamitsu/internal/version"
 
@@ -109,6 +110,12 @@ type loadConfigOptions struct {
 }
 
 func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfig bool, configPaths []string, opts loadConfigOptions) (cfg *config.Config, lm *config.SetupLayerMap, vm *goja.Runtime, err error) {
+	// Registered before the phase timer so it runs after it (defers are LIFO):
+	// the report then includes the load's own total. Commands that os.Exit
+	// (exec) never return to Execute, so the report is emitted here rather than
+	// only at process exit; PrintStartup prints at most once per process.
+	defer timing.PrintStartup(os.Stderr)
+	defer timing.StartStartupPhase(timing.PhaseLoadConfig)()
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("config loading panic: %v", r)
@@ -125,7 +132,9 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 	// Discover the auto-loaded config from git root (unless --no-auto-config).
 	var autoConfigPath string
 	if !noAutoConfig {
+		endGitRoot := timing.StartStartupPhase(timing.PhaseGitRoot)
 		gitRoot, gitErr := facts.GetGitRoot(ctx)
+		endGitRoot()
 		if gitErr != nil {
 			if traverser.HasGitDir(cwdPath) {
 				if !opts.tolerateGitRootFailure {
@@ -514,7 +523,9 @@ func processConfigSource(ctx context.Context, input *config.Config, source confi
 		inputVal = vm.ToValue(&inputCopy)
 	}
 
+	endGetConfig := timing.StartStartupPhase(timing.PhaseGetConfig)
 	resultVal, callErr := e.CallWithTimeout(getConfigFunc, 10*time.Second, inputVal)
+	endGetConfig()
 	if callErr != nil {
 		return nil, nil, fmt.Errorf("failed to call getConfig in %s: %w", source.name, callErr)
 	}
@@ -621,6 +632,8 @@ func discoverAutoConfig(gitRoot string) (string, error) {
 // (nil, nil) — only the auto config is consulted, so nested declarations in
 // other layers are never read (scope is enforced structurally).
 func discoverBeforeConfigs(ctx context.Context, autoConfigPath string) ([]string, error) {
+	defer timing.StartStartupPhase(timing.PhaseDiscoverBeforeConfigs)()
+
 	e, err := engine.New(ctx, BinaryCommandOverride)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create engine: %w", err)
@@ -676,7 +689,9 @@ func loadConfigFile(e *engine.Engine, path string) error {
 		return fmt.Errorf("failed to read config file: %w", err)
 	}
 
+	endStrip := timing.StartStartupPhase(timing.PhaseStripTypes)
 	jsCode, err := config.StripTypes(string(data))
+	endStrip()
 	if err != nil {
 		return fmt.Errorf("failed to strip types: %w", err)
 	}
@@ -691,7 +706,9 @@ func loadConfigFile(e *engine.Engine, path string) error {
 // loadConfigString loads and executes a config from a string content in the given engine.
 // The content is treated as TypeScript and types are stripped before execution.
 func loadConfigString(e *engine.Engine, content, sourceName string) error {
+	endStrip := timing.StartStartupPhase(timing.PhaseStripTypes)
 	jsCode, err := config.StripTypes(content)
+	endStrip()
 	if err != nil {
 		return fmt.Errorf("failed to strip types from %s: %w", sourceName, err)
 	}
