@@ -342,51 +342,56 @@ This is what makes property 2 work at ~0 cost: the shim revalidates per invocati
 handful of `stat` calls (measured: 2.1 µs each, 14 µs for a full chain check) instead of a
 config load (measured: ~226 ms before the startup plan, ~60 ms after).
 
-- [ ] define the on-disk manifest as **JSON** with a typed Go struct and `json` tags — not a
+- [x] define the on-disk manifest as **JSON** with a typed Go struct and `json` tags — not a
       packed binary format. Reading and decoding a 16.6 KB / 100-app table was measured at
       311 µs against a ~10 ms process; a hand-rolled codec buys 0.3 ms and costs a format
       version to migrate and test data that cannot be golden-diffed
-- [ ] manifest contents: format version, the authoritative git root, the datamitsu version,
+- [x] manifest contents: format version, the authoritative git root, the datamitsu version,
       os/arch, the staleness key, the watch set, and one record per entry
       (name, strategy, command, args, env, installed)
-- [ ] include an `origin` field recording how the farm was created — `git-root` is the only
+- [x] include an `origin` field recording how the farm was created — `git-root` is the only
       value this plan produces. It exists so the follow-up plan for activation outside a
       repository can add a second value without a format migration, and so the shim can decide
       whether cwd-based root discovery applies at all
-- [ ] record the **authoritative** root (as resolved by the config loader) inside the
+- [x] record the **authoritative** root (as resolved by the config loader) inside the
       manifest, so the shim's cheap walk is only used to _select_ which manifest to open, not
       to decide the root. The two can disagree inside a submodule, where `facts.GetGitRoot`
       climbs to the topmost superproject
-- [ ] watch set: every config-chain file path with `{path, mtime_ns, size, exists}`, plus
+- [x] watch set: every config-chain file path with `{path, mtime_ns, size, exists}`, plus
       `.git/HEAD`. Compare with `!=`, not a `>` watermark — `!=` catches mtime regressions and
       the exists/gone transitions a branch switch actually produces. `.git/HEAD` is
       load-bearing, not belt-and-braces: a branch that _deletes_ `datamitsu.config.ts`
       produces no mtime on a file that no longer exists, and `HEAD` is rewritten by checkout
       but not by commit, so it causes no spurious rebakes
-- [ ] include `pnpm-lock.yaml` and the resolved before-config file paths in the watch set —
+- [x] include `pnpm-lock.yaml` and the resolved before-config file paths in the watch set —
       a branch that bumps the shared config dependency changes those, and without them the
       rebake reads stale `node_modules` and stamps the result fresh
-- [ ] staleness key: XXH3-128 (`internal/hashutil`) over {format version, datamitsu version,
+- [x] staleness key: XXH3-128 (`internal/hashutil`) over {format version, datamitsu version,
       authoritative git root, os/arch, the ordered watch-set tuples, and the `DATAMITSU_*`
       environment variables that feed `runtimeconfig`}. Internal fingerprint, never compared
       against an external value — XXH3 is mandatory here per the hashing policy
-- [ ] **document the known hole in the manifest format's doc comment**: config JS receives the
+- [x] **document the known hole in the manifest format's doc comment**: config JS receives the
       whole environment via `facts().env` (`internal/facts/facts.go:51`) and this repo's own
       `datamitsu.config.ts` already branches on `facts().env.DATAMITSU_BENCH`. A config
       branching on a non-`DATAMITSU_` variable will not invalidate the key. `datamitsu source
 refresh --force` is the escape hatch. Tracking the variables the VM actually read
       requires goja read-instrumentation and is explicitly deferred
-- [ ] `Load(path)` / `Validate(manifest) (fresh bool)` API, where `Validate` performs only
+- [x] `Load(path)` / `Validate(manifest) (fresh bool)` API, where `Validate` performs only
       `lstat` calls and the key comparison — no config load, no allocation-heavy work
-- [ ] write a table test over staleness transitions: file content changed, file deleted, file
+- [x] write a table test over staleness transitions: file content changed, file deleted, file
       added, mtime regressed, size changed, `.git/HEAD` rewritten, datamitsu version changed,
       `DATAMITSU_*` var changed — each must report stale
-- [ ] write a test asserting an unchanged tree reports fresh
-- [ ] write a test asserting `Validate` opens no config and spawns no subprocess
-- [ ] write a benchmark asserting `Validate` over a 3-file chain stays in the microsecond range
-- [ ] write a test asserting an unknown/newer format version reports stale rather than erroring
-- [ ] write a round-trip test through `json.Marshal`/`Unmarshal` with stable key order
-- [ ] run tests — must pass before Task 7
+- [x] write a test asserting an unchanged tree reports fresh
+- [x] write a test asserting `Validate` opens no config and spawns no subprocess
+- [x] write a benchmark asserting `Validate` over a 3-file chain stays in the microsecond range
+- [x] write a test asserting an unknown/newer format version reports stale rather than erroring
+- [x] write a round-trip test through `json.Marshal`/`Unmarshal` with stable key order
+- [x] ➕ add `env.Environ()` (`internal/env/environ.go`) returning datamitsu's own
+      environment variables sorted, so the staleness key can fingerprint them without any
+      package reaching for `os.Getenv` directly — per the environment-variable policy. It is
+      deliberately a superset of the variables feeding `runtimeconfig`: over-invalidating is
+      correct but slow, missing one is a stale farm
+- [x] run tests — must pass before Task 7
 
 ### Task 7: Atomic farm materialization
 
