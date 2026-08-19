@@ -303,38 +303,38 @@ Written before any shell text is emitted anywhere.
 
 ### Task 5: internal/sourcefarm — the plan (pure, no filesystem)
 
-- [ ] define `Entry{Name, Provider, Kind, Strategy, Command, Args, Env, Installed}`,
+- [x] define `Entry{Name, Provider, Kind, Strategy, Command, Args, Env, Installed}`,
       `Excluded{Name, Reason}` and `Plan{Root, FarmDir, Entries, Excluded, Shadowed}`
-- [ ] `Strategy` is `symlink` or `shim`, decided mechanically: `symlink` only when the kind is
+- [x] `Strategy` is `symlink` or `shim`, decided mechanically: `symlink` only when the kind is
       `binary` or `go`, **and** the app is installed, **and** `Args` is empty, **and** the
       merged `Env` is empty. Everything else is `shim`
-- [ ] `BuildPlan(apps, resolver, lookPath)` — exclude `shell` kind categorically with the
+- [x] `BuildPlan(apps, resolver, lookPath)` — exclude `shell` kind categorically with the
       reason "shell apps resolve through the inherited PATH"; exclude deny-listed names;
       resolve via the injected side-effect-free resolver from Task 3
-- [ ] **include every declared app as an Entry, installed or not** — a not-yet-installed app
+- [x] **include every declared app as an Entry, installed or not** — a not-yet-installed app
       gets `Strategy=shim, Installed=false`. This is the D4 consequence: a declared name must
       never be absent from the farm, or `PATH` falls through to a system binary
-- [ ] hard deny-list constant: `sudo`, `su`, `doas`, `sudoedit`, `sh`, `bash`, `zsh`, `fish`,
+- [x] hard deny-list constant: `sudo`, `su`, `doas`, `sudoedit`, `sh`, `bash`, `zsh`, `fish`,
       `dash`, `env`, `ssh`, `scp`, `sftp`, `git`, and `datamitsu` itself. aqua-proxy refuses to
       proxy its own name for the same reason: a shimmed `datamitsu` turns the shim's own
       installer spawn into an infinite `exec` loop
-- [ ] shadow detection: for each surviving entry, call the injected `lookPath` against the
+- [x] shadow detection: for each surviving entry, call the injected `lookPath` against the
       **pre-activation** `PATH` and record the absolute path found
-- [ ] record an explicit `Reason` on every exclusion — a name that silently does not appear is
+- [x] record an explicit `Reason` on every exclusion — a name that silently does not appear is
       undebuggable, and this field is what `source status` prints
-- [ ] deterministic ordering: sort `Entries` and `Excluded` by name
-- [ ] write a test asserting a shell app named `echo` is always excluded with the shell reason
-- [ ] write a test asserting a deny-listed name is excluded even when it resolves to a valid
+- [x] deterministic ordering: sort `Entries` and `Excluded` by name
+- [x] write a test asserting a shell app named `echo` is always excluded with the shell reason
+- [x] write a test asserting a deny-listed name is excluded even when it resolves to a valid
       binary app
-- [ ] write a test asserting an uninstalled app produces an Entry with `Strategy=shim` and
+- [x] write a test asserting an uninstalled app produces an Entry with `Strategy=shim` and
       `Installed=false` — **not** an exclusion
-- [ ] write a test asserting `Strategy=symlink` requires all four conditions, with a case
+- [x] write a test asserting `Strategy=symlink` requires all four conditions, with a case
       per condition failing
-- [ ] write a test asserting shadow detection reports the absolute path from the injected
+- [x] write a test asserting shadow detection reports the absolute path from the injected
       `lookPath` stub and leaves the entry included
-- [ ] write a determinism test: `BuildPlan` output is byte-identical across two calls over a
+- [x] write a determinism test: `BuildPlan` output is byte-identical across two calls over a
       map with randomized iteration order
-- [ ] run tests — must pass before Task 6
+- [x] run tests — must pass before Task 6
 
 ### Task 6: The manifest and the staleness key
 
