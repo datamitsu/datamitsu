@@ -58,6 +58,12 @@ are all `binary` apps, so the tools that motivated the feature take the zero-ove
 and the ~10 ms shim tax is confined to cases that structurally require a process (argv
 prefixes, env overlays, lazy install).
 
+⚠️ **D1 was narrowed during Task 13.** The real-shell tier proved that a symlink entry cannot
+satisfy property 2: nothing of datamitsu's runs when the kernel follows a symlink, so an
+installed `binary` app keeps running the previous branch's version after a checkout — silently.
+Every entry is now a shim; the symlink machinery remains implemented and tested behind a single
+branch in `strategyFor`. See the Task 13 notes. The owner should confirm the narrowing.
+
 D4 matters more than it looks. Without it the feature's failure mode is a _silent wrong
 binary_: a name that is declared but missing from the farm falls through `PATH` to a stale
 `/usr/local/bin/terragrunt`, exits 0, and prints plausible output. That is strictly worse
@@ -674,30 +680,64 @@ Both registries are hard build failures if not updated.
 The only tier that can prove properties 1–3. Everything above tests Go; this tests the thing
 the user actually experiences.
 
-- [ ] add a test tier driving real `bash` and real `fish` against a fixture git repository with
+- [x] add a test tier driving real `bash` and real `fish` against a fixture git repository with
       two branches pinning different versions of the same fake tool, using a stub "binary"
-      that prints its version
-- [ ] `t.Skip` cleanly when the shell is not installed, and state in the skip message that the
+      that prints its version — `test/shell`, with a loopback `httptest` release host so the
+      real download, SHA-256 verification and install path run end to end
+- [x] `t.Skip` cleanly when the shell is not installed, and state in the skip message that the
       property is unverified on this machine
-- [ ] **property 1**: activate, run the tool, assert the pinned version — not a same-named
+- [x] **property 1**: activate, run the tool, assert the pinned version — not a same-named
       binary planted earlier in `PATH`
-- [ ] **property 2, the load-bearing case**: in one activated shell, run
+- [x] **property 2, the load-bearing case**: in one activated shell, run
       `git checkout v2 && <tool> --version` **on a single line** and assert the v2 version. Then
       `git checkout v1 && <tool> --version` on a single line and assert v1. No re-activation
-      between them
-- [ ] **property 2, non-interactive**: assert the same through `make`, through `bash -c`, and
+      between them — ⚠️ **this failed on first run, and the cause was D1's symlink half**; see
+      the scope change below
+- [x] **property 2, non-interactive**: assert the same through `make`, through `bash -c`, and
       through a `sh -c` recipe — contexts where no prompt ever renders
-- [ ] **property 3**: delete the tool from the store, run it, assert it is materialized and
-      executed, and assert the exit code is the tool's and not 127
-- [ ] **D4**: plant a same-named binary in `PATH`, remove the app from the config, re-bake, and
-      assert exit 127 rather than the planted binary running
-- [ ] assert exit codes propagate for 0, 1 and 42
-- [ ] assert argv passes verbatim: a `--version` flag, an argument with a space, an argument
-      with a single quote, an argument with a newline
-- [ ] test a farm path containing a space, a `'` and a `[` — glob-sensitive shell code is the
+- [x] **property 3**: delete the tool from the store, run it, assert it is materialized and
+      executed, and assert the exit code is the tool's and not 127 — split in two: the
+      never-installed case (the first invocation after activation, which is the real lazy path)
+      and a delete-from-store case repaired by `source refresh --force`
+- [x] **D4**: plant a same-named binary in `PATH`, remove the app from the config, re-bake, and
+      assert exit 127 rather than the planted binary running — the re-bake is the shim's own,
+      triggered by `git checkout none && <tool>` on one line, and the test first asserts the
+      planted binary is reachable so it cannot pass vacuously. ⚠️ **this failed on first run
+      too**; see the argv[0] scope change below
+- [x] assert exit codes propagate for 0, 1 and 42
+- [x] assert argv passes verbatim: a `--version` flag, an argument with a space, an argument
+      with a single quote, an argument with a newline (and a bare `*`, which a shell would
+      glob-expand if the shim reconstructed the command line instead of passing argv through)
+- [x] test a farm path containing a space, a `'` and a `[` — glob-sensitive shell code is the
       class of bug only a real shell catches
-- [ ] assert activating twice does not duplicate the `PATH` entry, in both bash and fish
-- [ ] run `go test ./... -race` and the new tier — must pass before Task 14
+- [x] assert activating twice does not duplicate the `PATH` entry, in both bash and fish
+- [x] run `go test ./... -race` and the new tier — must pass before Task 14
+- [x] ⚠️ **scope change, correctness: `Strategy=symlink` is no longer chosen.** The property-2
+      test fails for an _installed_ `binary` app, which is exactly what D1 optimizes. A store
+      symlink has nowhere to put the freshness check: nothing of datamitsu's runs when the
+      kernel follows it, so after `git checkout v2` the entry keeps resolving to the previous
+      branch's version — silently, exiting 0, printing plausible output. That is the failure
+      D4 exists to prevent, arriving through the other door. `strategyFor` now returns
+      `shim` for every entry; `StrategySymlink` and its materialization stay implemented and
+      tested, so re-enabling is one branch if a cheaper revalidation hook is ever found.
+      **This narrows D1 and the owner should confirm it.** Measured cost of the change:
+      `BenchmarkDispatch` is 227 µs/op, against 0 for a symlink.
+- [x] ⚠️ **scope change, correctness: farm detection cannot read argv[0].** Task 8 assumed a
+      shell execs the absolute path it found on `PATH` and passes it as argv[0]. It does not —
+      bash, fish and dash all pass the _word the user typed_ (verified directly). Every loud
+      failure therefore degraded into an ordinary CLI run: `stub-tool` after a branch that
+      dropped the app printed datamitsu's help and exited 0 instead of exiting 127.
+      `invokedThroughFarm` now resolves a bare name against `PATH` itself, the same way the
+      shell just did, and memoizes the answer **before** any rebake — the config change that
+      makes a manifest stale is usually the one that removed the app, and the rebake deletes
+      the farm entry the answer is read from
+- [x] ➕ **the shim's install/rebake spawn re-entered itself on macOS.** A farm entry is a
+      symlink to the datamitsu binary, and `os.Executable` reports the invoked path rather than
+      the file behind it on darwin, so `Spawn(exe, "install", name)` ran the tool's own farm
+      entry again: a fork bomb that only ended with the process table. `datamitsuExe` now
+      resolves symlinks and refuses outright to spawn anything still inside a farm
+- [x] ➕ `BenchmarkDispatch` now benchmarks the invocation shape a shell actually produces —
+      a bare argv[0] with the farm first on `PATH` — rather than a pre-resolved absolute path
 
 ### Task 14: Verify acceptance criteria
 
@@ -730,8 +770,9 @@ Budget it as real work, not as "write two markdown files".
       change, invisible thereafter
 - [ ] document the `facts().env` staleness hole from Task 6 and point at
       `datamitsu source refresh --force`
-- [ ] document that `which <tool>` shows the farm path for shim entries and the real store
-      path for symlink entries — the asdf pathology, halved by D1 but not eliminated
+- [ ] document that `which <tool>` shows the farm path, never the store path — the asdf
+      pathology, now unmitigated since D1's symlink half was withdrawn in Task 13. Point at
+      `datamitsu source status`, which prints the real target
 - [ ] add a hand-written `## source` section to `website/docs/reference/cli-commands.md` in
       house style, modelled on the `## llms` section — written from the generated goldens, not
       from this plan
@@ -756,8 +797,8 @@ Budget it as real work, not as "write two markdown files".
 ```text
 {cache}/projects/{XXH3-128(gitRoot)}/
   bin/
-    terragrunt   -> {store}/.bin/terragrunt/{configHash}     # symlink, 0 ms
-    kubectl      -> {store}/.bin/kubectl/{configHash}        # symlink, 0 ms
+    terragrunt   -> {abs path to datamitsu}                  # shim
+    kubectl      -> {abs path to datamitsu}                  # shim
     prettier     -> {abs path to datamitsu}                  # shim, needs Env
     spectral     -> {abs path to datamitsu}                  # shim, jvm Args
     tflint       -> {abs path to datamitsu}                  # shim, not installed yet
@@ -765,16 +806,16 @@ Budget it as real work, not as "write two markdown files".
   lock
 ```
 
+Every entry is a shim after the Task 13 narrowing of D1. A store symlink — the 0 ms path this
+layout originally reserved for `terragrunt` and `kubectl` — has nowhere to put the freshness
+check, so it cannot switch versions with the branch.
+
 `echo` (shell app) and `git`/`sudo` (deny-listed) appear in `manifest.json` under `excluded`
 with a reason, and never as files.
 
 ### What happens when the user types `terragrunt plan`
 
-**Symlink entry, steady state.** `PATH[0]` hit → `execve` → kernel resolves one symlink hop
-into the content-addressed store → the real binary runs. Datamitsu contributes nothing
-measurable.
-
-**Shim entry, steady state.** `PATH[0]` hit → `execve` of the datamitsu binary → argv[0]
+**Steady state.** `PATH[0]` hit → `execve` of the datamitsu binary → argv[0]
 dispatch before cobra → `getcwd`, walk up for `.git`, read + validate the manifest
 (microseconds) → `stat` the target → `syscall.Exec`. ~10 ms, one process, signals and exit
 codes preserved.
@@ -783,7 +824,7 @@ codes preserved.
 (one full config load), and execs the new target. One hiccup, then back to steady state.
 
 **Tool not yet downloaded.** The entry is a shim with `Installed=false`. The shim installs,
-re-resolves and execs. Subsequent invocations take the symlink or shim steady-state path.
+re-resolves and execs. Subsequent invocations take the steady-state path.
 
 ### Why the hot path holds no trust decision
 

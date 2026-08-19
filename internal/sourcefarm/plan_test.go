@@ -169,10 +169,13 @@ func TestBuildPlan_UnresolvableIsStillAnEntry(t *testing.T) {
 	}
 }
 
-// TestBuildPlan_SymlinkRequiresAllFourConditions walks one case per condition:
-// each failure independently forces the shim, because each is a fact a symlink
-// structurally cannot carry.
-func TestBuildPlan_SymlinkRequiresAllFourConditions(t *testing.T) {
+// TestBuildPlan_EveryEntryIsAShim walks the cases a symlink was once chosen for
+// alongside the ones it never could be. They all come out shims, and the first
+// two are the point: an installed binary app with no args and no env is exactly
+// what a store symlink would be cheapest for, and exactly what silently keeps
+// running the previous branch's version, because nothing of datamitsu's runs
+// when the kernel follows a symlink.
+func TestBuildPlan_EveryEntryIsAShim(t *testing.T) {
 	tests := []struct {
 		name      string
 		app       binmanager.App
@@ -185,14 +188,14 @@ func TestBuildPlan_SymlinkRequiresAllFourConditions(t *testing.T) {
 			app:       binaryApp(),
 			info:      &binmanager.CommandInfo{Type: "binary", Command: "/store/.bin/tofu/abc"},
 			installed: true,
-			want:      StrategySymlink,
+			want:      StrategyShim,
 		},
 		{
-			name:      "go kind also symlinks",
+			name:      "go kind, the other symlink candidate",
 			app:       goApp(),
 			info:      &binmanager.CommandInfo{Type: "go", Command: "/store/.apps/go/task/abc/bin/task"},
 			installed: true,
-			want:      StrategySymlink,
+			want:      StrategyShim,
 		},
 		{
 			name:      "wrong kind",

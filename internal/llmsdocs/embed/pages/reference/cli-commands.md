@@ -1068,7 +1068,7 @@ datamitsu source status --json
 
 Reports the farm for the current project: its root and directory, whether the
 baked manifest still matches the working tree, every tool the farm provides with
-how it is materialized (`symlink` or `shim`) and whether it has been downloaded
+how it is materialized (`shim`) and whether it has been downloaded
 yet, every declared name that was refused **with the reason**, and every system
 binary the farm shadows with the absolute path it was found at.
 

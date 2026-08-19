@@ -237,29 +237,32 @@ func BuildPlan(root, farmDir string, apps binmanager.MapOfApps, resolve Resolver
 	return plan
 }
 
-// strategyFor decides how an entry is materialized. All four conditions are
-// required for a symlink, and each one is load-bearing:
+// strategyFor decides how an entry is materialized. Every entry is a shim.
 //
-//   - kind binary or go: every other kind either needs an argv prefix or an
-//     env overlay by construction. A node app additionally cannot be
-//     symlinked at all — pnpm's .bin wrapper computes its own basedir from $0,
-//     which the kernel sets to the invoked path, so a symlink makes it look
-//     for its entry point inside the farm.
-//   - installed: a symlink to a file that does not exist is ENOENT at exec
-//     time, not a trigger to install it. Lazy materialization is the shim's job.
-//   - no Args: a symlink carries a path, not an argument vector.
-//   - no Env: a symlink carries no environment overlay either.
-func strategyFor(e Entry) Strategy {
-	if e.Kind != "binary" && e.Kind != "go" {
-		return StrategyShim
-	}
-	if !e.Installed || e.Command == "" {
-		return StrategyShim
-	}
-	if len(e.Args) != 0 || len(e.Env) != 0 {
-		return StrategyShim
-	}
-	return StrategySymlink
+// A symlink straight into the content-addressed store is the cheapest possible
+// entry — the kernel resolves one hop and datamitsu contributes nothing
+// measurable — and four conditions would make one safe to emit: kind binary or
+// go (any other kind needs an argv prefix or an env overlay, and a node app
+// cannot be symlinked at all, because pnpm's .bin wrapper computes its basedir
+// from $0), installed (a symlink to a missing file is ENOENT at exec time, not
+// a trigger to install it), no Args, and no Env.
+//
+// It is still wrong, for a reason none of those conditions covers: a symlink
+// has nowhere to put the freshness check. Nothing of datamitsu's runs when the
+// kernel follows it, so after `git checkout v2` the entry keeps resolving to
+// the version the previous branch pinned — silently, exiting 0, printing
+// plausible output. That is the exact failure the feature exists to prevent,
+// and it defeats transparent branch switching for precisely the tools the
+// optimization was meant for: installed binary apps.
+//
+// The real-shell tier found this by running the case an installed tool actually
+// takes (test/shell: TestBranchSwitchOnASingleLine). The check has to happen
+// per invocation, so the invocation has to reach a process — which is what a
+// shim is. Materialization still implements StrategySymlink and the manifest
+// still round-trips it, so re-enabling is one branch here if a cheaper
+// revalidation hook ever exists.
+func strategyFor(Entry) Strategy {
+	return StrategyShim
 }
 
 // kindOf returns the declared app kind, or "" when the app declares none.

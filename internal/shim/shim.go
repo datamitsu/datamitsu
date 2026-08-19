@@ -80,6 +80,9 @@ type Dispatcher struct {
 	Getwd      func() (string, error)
 	Executable func() (string, error)
 	Environ    func() []string
+	// EvalSymlinks resolves a path to the file behind it. It is what keeps a
+	// spawn from re-entering dispatch; see datamitsuExe.
+	EvalSymlinks func(string) (string, error)
 
 	// ManifestPath maps a git root to its manifest file, and CacheRoot returns
 	// the directory every farm lives under.
@@ -101,6 +104,11 @@ type Dispatcher struct {
 	Spawn func(exe string, args []string) error
 
 	Stderr io.Writer
+
+	// throughFarm memoizes whether this invocation arrived through a farm. It is
+	// decided once, before anything can rebake the farm out from under the
+	// answer; see invokedThroughFarm.
+	throughFarm *bool
 }
 
 // New returns a Dispatcher wired to the real process.
@@ -110,6 +118,7 @@ func New() *Dispatcher {
 		Getwd:        os.Getwd,
 		Executable:   os.Executable,
 		Environ:      os.Environ,
+		EvalSymlinks: filepath.EvalSymlinks,
 		ManifestPath: env.GetProjectManifestPath,
 		CacheRoot:    env.GetCachePath,
 		Load:         sourcefarm.Load,
@@ -140,6 +149,11 @@ func (d *Dispatcher) Dispatch() (int, bool) {
 	if _, own := ownNames[name]; own {
 		return 0, false
 	}
+
+	// Decided here, before a rebake can delete the very farm entry the answer is
+	// read from: an invocation that arrived through a farm must fail loudly even
+	// when the config change that made the manifest stale is what removed it.
+	d.invokedThroughFarm()
 
 	root, ok := d.discoverRoot()
 	if !ok {
@@ -221,29 +235,92 @@ func (d *Dispatcher) discoverRoot() (string, bool) {
 	}
 }
 
-// invokedThroughFarm reports whether argv[0] names a file inside a farm
-// directory: {cache}/projects/{hash}/bin/{name}. It is what separates "a farm
-// entry whose farm is unusable" (exit 127) from "somebody renamed the datamitsu
+// invokedThroughFarm reports whether this invocation arrived through a farm
+// entry: {cache}/projects/{hash}/bin/{name}. It is what separates "a farm entry
+// whose farm is unusable" (exit 127) from "somebody renamed the datamitsu
 // binary" (run the CLI).
 //
-// It is a pure path comparison and deliberately does not stat the farm's
-// manifest. The cases that most need to fail loudly — no manifest for this
-// tree at all, or a manifest that will not parse — are exactly the ones a
-// presence check would misread as "not a farm" and quietly turn into a CLI run
-// with a tool's argv.
+// It deliberately does not stat the farm's manifest. The cases that most need to
+// fail loudly — no manifest for this tree at all, or a manifest that will not
+// parse — are exactly the ones a presence check would misread as "not a farm"
+// and quietly turn into a CLI run holding a tool's argv.
 //
-// A shell resolving a command through PATH execs the absolute path it found and
-// passes it as argv[0], so the directory is available here.
+// argv[0] alone cannot answer it. A shell resolving a command through PATH
+// passes the *word the user typed*, not the path it found: bash, fish and dash
+// all exec with argv[0] == "tofu" (verified in test/shell). So a bare name is
+// resolved against PATH here, the same way the shell just did, and the first
+// executable hit decides. A name that does carry a directory — `$DATAMITSU_FARM/tofu`,
+// or `./tofu` — is answered from the path itself.
+//
+// The answer is memoized because it must be taken before a rebake: the config
+// change that made a manifest stale is often the one that dropped the app, and
+// the rebake deletes the farm entry this reads.
 func (d *Dispatcher) invokedThroughFarm() bool {
+	if d.throughFarm == nil {
+		value := d.computeThroughFarm()
+		d.throughFarm = &value
+	}
+	return *d.throughFarm
+}
+
+func (d *Dispatcher) computeThroughFarm() bool {
 	if len(d.Args) == 0 {
 		return false
 	}
-	dir := filepath.Dir(filepath.Clean(d.Args[0]))
+	argv0 := d.Args[0]
+	if strings.ContainsRune(argv0, filepath.Separator) {
+		return d.underFarm(argv0)
+	}
+	return d.underFarm(d.lookPath(argv0))
+}
+
+// lookPath returns the first executable named name on PATH, or "" — the file the
+// shell just ran. It is the resolution step, not a permission check: a
+// directory or a non-executable file is skipped exactly as a shell skips it.
+func (d *Dispatcher) lookPath(name string) string {
+	var pathEnv string
+	for _, kv := range d.Environ() {
+		if key, value, ok := strings.Cut(kv, "="); ok && key == "PATH" {
+			pathEnv = value
+		}
+	}
+	for _, dir := range filepath.SplitList(pathEnv) {
+		if dir == "" {
+			dir = "."
+		}
+		candidate := filepath.Join(dir, name)
+		info, err := d.Stat(candidate)
+		if err != nil || info.IsDir() || info.Mode().Perm()&0o111 == 0 {
+			continue
+		}
+		return candidate
+	}
+	return ""
+}
+
+// underFarm reports whether path names a file directly inside some farm
+// directory of this cache.
+//
+// The comparison falls back to resolved paths when the textual one fails,
+// because the two sides can describe the same directory differently: a path that
+// went through EvalSymlinks (as the executable does) has /var rewritten to
+// /private/var on macOS, while the cache root has not.
+func (d *Dispatcher) underFarm(path string) bool {
+	dir := filepath.Dir(filepath.Clean(path))
 	if filepath.Base(dir) != farmDirName {
 		return false
 	}
-	projects := filepath.Join(d.CacheRoot(), projectsDirName)
-	return filepath.Dir(filepath.Dir(dir)) == filepath.Clean(projects)
+	projects := filepath.Clean(filepath.Join(d.CacheRoot(), projectsDirName))
+	candidate := filepath.Dir(filepath.Dir(dir))
+	if candidate == projects {
+		return true
+	}
+	if d.EvalSymlinks == nil {
+		return false
+	}
+	resolvedCandidate, errCandidate := d.EvalSymlinks(candidate)
+	resolvedProjects, errProjects := d.EvalSymlinks(projects)
+	return errCandidate == nil && errProjects == nil && resolvedCandidate == resolvedProjects
 }
 
 // decline handles every dead end reached before a manifest entry was found.
@@ -298,10 +375,26 @@ func (d *Dispatcher) warn(msg string) {
 // datamitsuExe returns the absolute path of the running datamitsu, never a PATH
 // lookup: the farm is on PATH, so a lookup could find a shimmed name and turn
 // the rebake spawn into a loop.
+//
+// The path is additionally resolved through symlinks. A farm entry *is* a
+// symlink to this binary, and os.Executable reports the path the process was
+// invoked through rather than the file behind it on darwin — so spawning it
+// unresolved re-enters dispatch with the tool's name in argv[0], and the install
+// that was supposed to happen becomes an exec loop. Resolution is not merely an
+// optimization here: a path still inside a farm after it is refused outright,
+// because there is no safe way to spawn it.
 func (d *Dispatcher) datamitsuExe() (string, error) {
 	exe, err := d.Executable()
 	if err != nil {
 		return "", fmt.Errorf("locate the datamitsu executable: %w", err)
+	}
+	if d.EvalSymlinks != nil {
+		if resolved, resolveErr := d.EvalSymlinks(exe); resolveErr == nil {
+			exe = resolved
+		}
+	}
+	if d.underFarm(exe) {
+		return "", fmt.Errorf("refusing to run %s: it is a source-mode farm entry, not the datamitsu executable", exe)
 	}
 	return exe, nil
 }

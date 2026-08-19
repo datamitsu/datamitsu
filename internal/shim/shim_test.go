@@ -25,6 +25,7 @@ type execCall struct {
 // happened.
 type harness struct {
 	t            *testing.T
+	base         string
 	root         string
 	farmDir      string
 	manifestPath string
@@ -32,6 +33,10 @@ type harness struct {
 
 	execs  []execCall
 	spawns [][]string
+	// spawnExes records the executable each spawn was pointed at. It is what a
+	// test asserting the anti-loop rule reads: the args of a re-entrant spawn
+	// look exactly like a correct one.
+	spawnExes []string
 
 	// spawnFunc runs on every Spawn call; the default succeeds and does nothing.
 	spawnFunc func(args []string) error
@@ -56,6 +61,7 @@ func newHarness(t *testing.T) *harness {
 
 	h := &harness{
 		t:            t,
+		base:         base,
 		root:         root,
 		farmDir:      farmDir,
 		manifestPath: filepath.Join(project, env.ProjectManifestFileName),
@@ -79,8 +85,10 @@ func newHarness(t *testing.T) *harness {
 			h.execs = append(h.execs, execCall{path: path, argv: argv, environ: environ})
 			return nil
 		},
-		Spawn: func(_ string, args []string) error {
+		EvalSymlinks: filepath.EvalSymlinks,
+		Spawn: func(exe string, args []string) error {
 			h.spawns = append(h.spawns, args)
+			h.spawnExes = append(h.spawnExes, exe)
 			if h.spawnFunc != nil {
 				return h.spawnFunc(args)
 			}
@@ -450,6 +458,172 @@ func TestDispatchInstallWithoutRecordedPathRefreshes(t *testing.T) {
 	}
 }
 
+// TestDispatchBareArgv0ResolvesThroughPATH is the shape every real invocation
+// has. A shell that finds a command on PATH execs it with argv[0] set to the
+// word the user typed — "tofu", not the farm path it was found at — so a farm
+// invocation is indistinguishable from a renamed binary by argv[0] alone.
+// Getting this wrong is silent: every loud failure (D4's exit 127 among them)
+// degrades into an ordinary CLI run that prints datamitsu's help and exits 0
+// while holding a tool's arguments.
+func TestDispatchBareArgv0ResolvesThroughPATH(t *testing.T) {
+	t.Run("found in the farm, fails loudly", func(t *testing.T) {
+		h := newHarness(t)
+		h.writeManifest(sourcefarm.Manifest{
+			Entries: []sourcefarm.Entry{{Name: "tofu", Command: "/store/tofu", Installed: true}},
+		})
+		// The farm holds the name; the system copy is further down PATH.
+		system := t.TempDir()
+		writeExecutable(t, filepath.Join(h.farmDir, "terragrunt"))
+		writeExecutable(t, filepath.Join(system, "terragrunt"))
+		h.d.Environ = func() []string { return []string{"PATH=" + h.farmDir + ":" + system} }
+		h.d.Args = []string{"terragrunt", "plan"}
+
+		code, handled := h.d.Dispatch()
+
+		if !handled || code != ExitNotFound {
+			t.Fatalf("Dispatch() = (%d, %v), want (%d, true); PATH would fall through to %s",
+				code, handled, ExitNotFound, system)
+		}
+	})
+
+	t.Run("found outside a farm, runs the CLI", func(t *testing.T) {
+		h := newHarness(t)
+		system := t.TempDir()
+		writeExecutable(t, filepath.Join(system, "datamitsu-dev"))
+		h.d.Environ = func() []string { return []string{"PATH=" + system + ":" + h.farmDir} }
+		h.d.Args = []string{"datamitsu-dev", "--help"}
+
+		if _, handled := h.d.Dispatch(); handled {
+			t.Fatal("Dispatch() handled a binary that PATH resolves outside any farm")
+		}
+	})
+}
+
+// writeExecutable creates an executable file, creating parent directories.
+func writeExecutable(t *testing.T, path string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatalf("mkdir for %s: %v", path, err)
+	}
+	if err := os.WriteFile(path, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
+}
+
+// TestDispatchThroughFarmIsDecidedBeforeARebake pins the ordering. The config
+// change that makes a manifest stale is usually the one that dropped the app,
+// and the rebake deletes the farm entry that answers "was this a farm
+// invocation?" — so the answer has to be taken first, or D4's exit 127 turns
+// back into a PATH fall-through at the worst possible moment.
+func TestDispatchThroughFarmIsDecidedBeforeARebake(t *testing.T) {
+	h := newHarness(t)
+	entry := filepath.Join(h.farmDir, "tofu")
+	writeExecutable(t, entry)
+	h.d.Environ = func() []string { return []string{"PATH=" + h.farmDir} }
+	h.d.Args = []string{"tofu"}
+	h.d.Validate = func(sourcefarm.Manifest) bool { return false }
+	h.writeManifest(sourcefarm.Manifest{
+		Entries: []sourcefarm.Entry{{Name: "tofu", Command: "/store/tofu", Installed: true}},
+	})
+	// The rebake drops the app, exactly as a branch that stops declaring it does.
+	h.spawnFunc = func([]string) error {
+		if err := os.Remove(entry); err != nil {
+			return err
+		}
+		h.writeManifest(sourcefarm.Manifest{})
+		return nil
+	}
+
+	code, handled := h.d.Dispatch()
+
+	if !handled || code != ExitNotFound {
+		t.Fatalf("Dispatch() = (%d, %v), want (%d, true)", code, handled, ExitNotFound)
+	}
+	if !strings.Contains(h.stderr.String(), "not declared") {
+		t.Errorf("stderr %q does not report the app as undeclared", h.stderr.String())
+	}
+}
+
+// TestDispatchSpawnResolvesTheFarmSymlink pins the anti-loop rule. A farm entry
+// is a symlink to the datamitsu binary, and os.Executable reports the path the
+// process was invoked through rather than the file behind it on darwin — so the
+// executable this process would naively spawn is the tool's own farm entry.
+// Spawning it re-enters dispatch under the tool's name, and the install that was
+// supposed to happen becomes an exec loop that only ends when the process table
+// does. The real-shell tier found this; this test is what keeps it fixed.
+func TestDispatchSpawnResolvesTheFarmSymlink(t *testing.T) {
+	h := newHarness(t)
+	realExe := filepath.Join(h.base, "datamitsu")
+	if err := os.WriteFile(realExe, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("write the datamitsu executable: %v", err)
+	}
+	link := filepath.Join(h.farmDir, "tflint")
+	if err := os.Symlink(realExe, link); err != nil {
+		t.Fatalf("create the farm symlink: %v", err)
+	}
+	// What darwin's os.Executable reports for a process reached through the farm.
+	h.d.Executable = func() (string, error) { return link, nil }
+
+	target := filepath.Join(t.TempDir(), "tflint")
+	h.writeManifest(sourcefarm.Manifest{
+		Entries: []sourcefarm.Entry{{Name: "tflint", Command: target, Installed: false, Strategy: sourcefarm.StrategyShim}},
+	})
+	h.spawnFunc = func(args []string) error {
+		if args[0] == "install" {
+			return os.WriteFile(target, []byte("#!/bin/sh\n"), 0o755)
+		}
+		return nil
+	}
+	h.invokeThroughFarm("tflint", "--version")
+
+	if code, handled := h.d.Dispatch(); !handled || code != 0 {
+		t.Fatalf("Dispatch() = (%d, %v), want (0, true)", code, handled)
+	}
+	if len(h.spawnExes) != 1 {
+		t.Fatalf("spawns = %v, want exactly one", h.spawnExes)
+	}
+	// Compared through EvalSymlinks: on macOS a temp path is itself reached via
+	// /var -> /private/var, and that difference is not what this test is about.
+	wantExe, err := filepath.EvalSymlinks(realExe)
+	if err != nil {
+		t.Fatalf("resolve the datamitsu executable: %v", err)
+	}
+	if h.spawnExes[0] != wantExe {
+		t.Errorf("spawned %q, want the datamitsu binary %q — spawning a farm entry is an exec loop",
+			h.spawnExes[0], wantExe)
+	}
+}
+
+// TestDispatchRefusesToSpawnAFarmEntry covers the case resolution cannot save:
+// the executable path still points inside a farm after symlinks are resolved.
+// There is no safe program to spawn, so the invocation fails loudly instead of
+// forking itself.
+func TestDispatchRefusesToSpawnAFarmEntry(t *testing.T) {
+	h := newHarness(t)
+	// A regular file in the farm: EvalSymlinks succeeds and returns it unchanged.
+	entry := filepath.Join(h.farmDir, "tflint")
+	if err := os.WriteFile(entry, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("write the farm entry: %v", err)
+	}
+	h.d.Executable = func() (string, error) { return entry, nil }
+	h.writeManifest(sourcefarm.Manifest{
+		Entries: []sourcefarm.Entry{{Name: "tflint", Installed: false, Strategy: sourcefarm.StrategyShim}},
+	})
+	h.invokeThroughFarm("tflint")
+
+	code, handled := h.d.Dispatch()
+
+	if !handled || code != ExitNotFound {
+		t.Fatalf("Dispatch() = (%d, %v), want (%d, true)", code, handled, ExitNotFound)
+	}
+	if len(h.spawns) != 0 {
+		t.Fatalf("spawned %v from inside the farm; that is the exec loop", h.spawns)
+	}
+	if !strings.Contains(h.stderr.String(), "farm entry") {
+		t.Errorf("stderr %q does not explain the refusal", h.stderr.String())
+	}
+}
+
 func TestDispatchInstallFailureExits127(t *testing.T) {
 	h := newHarness(t)
 	h.writeManifest(sourcefarm.Manifest{
@@ -702,11 +876,19 @@ func BenchmarkDispatch(b *testing.B) {
 		b.Fatalf("write manifest: %v", err)
 	}
 
+	// The invocation is shaped the way a shell makes it: a bare name in argv[0]
+	// and a PATH whose first entry is the farm, so the resolution the dispatcher
+	// has to redo is part of the measurement.
+	if err := os.WriteFile(filepath.Join(farmDir, "tofu"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+		b.Fatalf("write farm entry: %v", err)
+	}
+	environ := append(os.Environ(), "PATH="+farmDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
 	d := &Dispatcher{
-		Args:         []string{filepath.Join(farmDir, "tofu"), "plan"},
+		Args:         []string{"tofu", "plan"},
 		Getwd:        func() (string, error) { return root, nil },
 		Executable:   func() (string, error) { return filepath.Join(base, "datamitsu"), nil },
-		Environ:      os.Environ,
+		Environ:      func() []string { return environ },
 		ManifestPath: func(string) (string, error) { return manifestPath, nil },
 		CacheRoot:    func() string { return cacheRoot },
 		Load:         sourcefarm.Load,
@@ -719,6 +901,7 @@ func BenchmarkDispatch(b *testing.B) {
 
 	b.ReportAllocs()
 	for b.Loop() {
+		d.throughFarm = nil // each iteration is a fresh process
 		if _, handled := d.Dispatch(); !handled {
 			b.Fatal("Dispatch() declined the benchmark invocation")
 		}
