@@ -24,14 +24,19 @@ func newVerdictExecutor(t *testing.T) (*Executor, string) {
 }
 
 // unitTask is a task the verdict cache applies to: unit granularity, one member.
+// Tool is populated because the planner always populates it, and sibling
+// invalidation reads the tool's other operations out of it.
 func unitTask(root string) Task {
+	op := config.ToolOperation{
+		App: "tsc", Args: []string{"--noEmit"},
+		Scope: config.ToolScopePerProject,
+	}
 	return Task{
 		ToolName:  "tsc",
+		Tool:      config.Tool{Operations: map[config.OperationType]config.ToolOperation{config.OpLint: op}},
 		Operation: config.OpLint,
-		OpConfig: config.ToolOperation{
-			App: "tsc", Args: []string{"--noEmit"},
-			Scope: config.ToolScopePerProject,
-		},
+		OpConfig:  op,
+
 		UnitDir:     "pkg",
 		UnitMembers: []string{filepath.Join(root, "pkg", "a.ts")},
 		Coverage:    CoverageComplete,
@@ -325,6 +330,51 @@ func TestRecordVerdict(t *testing.T) {
 		after := verdictInputs(task.UnitMembers, task.UnitGuards, root)
 		if e.cache.ShouldRunVerdict(key, after, time.Hour) {
 			t.Error("a fix did not record the state it produced, so it can never hit")
+		}
+	})
+
+	// The sibling has to be the real lint operation, not the fix task relabelled.
+	// verdictIdentity hashes args, env, granularity and arity, so a fix carrying
+	// --write and a lint carrying --check hash differently: relabelling deleted a
+	// key no lint ever used and left the actual lint verdict standing. The case
+	// below is the norm — a fix and a lint sharing byte-identical args is the
+	// exception, and it is what made this invisible.
+	t.Run("invalidates the lint identity even when the args differ", func(t *testing.T) {
+		e, root := newVerdictExecutor(t)
+
+		lintOp := config.ToolOperation{
+			App: "prettier", Args: []string{"--check"},
+			Scope: config.ToolScopePerProject,
+		}
+		fixOp := config.ToolOperation{
+			App: "prettier", Args: []string{"--write"},
+			Scope: config.ToolScopePerProject,
+		}
+		tool := config.Tool{Operations: map[config.OperationType]config.ToolOperation{
+			config.OpLint: lintOp,
+			config.OpFix:  fixOp,
+		}}
+
+		lint := unitTask(root)
+		lint.Tool, lint.OpConfig, lint.Operation = tool, lintOp, config.OpLint
+		writeMembers(t, lint)
+		lintKey, lintInputs, lintOK := e.verdictKeys(lint)
+		e.recordVerdict(lint, lintKey, lintInputs, lintOK)
+		if e.cache.ShouldRunVerdict(lintKey, lintInputs, time.Hour) {
+			t.Fatal("precondition: the lint verdict should be stored")
+		}
+
+		fix := lint
+		fix.OpConfig, fix.Operation = fixOp, config.OpFix
+		fixKey, fixInputs, fixOK := e.verdictKeys(fix)
+		e.recordVerdict(fix, fixKey, fixInputs, fixOK)
+
+		if !e.cache.ShouldRunVerdict(lintKey, lintInputs, time.Hour) {
+			t.Error("the fix left the real lint verdict standing; the next lint reuses a " +
+				"pass for content the fix rewrote")
+		}
+		if e.cache.ShouldRunVerdict(fixKey, fixInputs, time.Hour) {
+			t.Error("the fix deleted its own verdict")
 		}
 	})
 

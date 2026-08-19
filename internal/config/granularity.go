@@ -1,5 +1,12 @@
 package config
 
+import (
+	"errors"
+	"fmt"
+	"sort"
+	"strings"
+)
+
 // ToolGranularity is the smallest set of input files on which an operation's
 // verdict is complete. Orthogonal to ToolScope (where the process starts) and to
 // ToolArity (what goes in argv): this is about when an answer can be trusted.
@@ -74,6 +81,42 @@ const DefaultWidenTo = WidenToUnit
 func ValidWidenTo(w WidenTo) bool {
 	_, ok := widenRank[w]
 	return ok
+}
+
+// ValidateExecution rejects unknown operations and widening levels.
+//
+// Both are read through maps that yield the zero value for anything
+// unrecognised, so without this a typo is silently the opposite of what was
+// asked: widenTo: { fix: "Repo" } loads, fails every comparison against "repo",
+// and ranks 0 — the same as "target", the narrowest policy. --widen-to has been
+// checked since it was added; the config form deserves the same.
+func ValidateExecution(e *Execution) error {
+	if e == nil {
+		return nil
+	}
+	var errs []string
+	ops := make([]string, 0, len(e.WidenTo))
+	for op := range e.WidenTo {
+		ops = append(ops, string(op))
+	}
+	sort.Strings(ops)
+
+	for _, op := range ops {
+		if OperationType(op) != OpFix && OperationType(op) != OpLint {
+			errs = append(errs, fmt.Sprintf(
+				"execution.widenTo: unknown operation %q (want %q or %q)", op, OpFix, OpLint))
+		}
+		if level := e.WidenTo[OperationType(op)]; !ValidWidenTo(level) {
+			errs = append(errs, fmt.Sprintf(
+				"execution.widenTo.%s: unknown value %q (want %q, %q or %q)",
+				op, level, WidenToTarget, WidenToUnit, WidenToRepo))
+		}
+	}
+
+	if len(errs) > 0 {
+		return errors.New("config validation failed:\n  " + strings.Join(errs, "\n  "))
+	}
+	return nil
 }
 
 // ResolveWidenTo returns the policy for an operation. An explicit override wins

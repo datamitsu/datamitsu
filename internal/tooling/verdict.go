@@ -355,9 +355,20 @@ func (e *Executor) recordVerdict(task Task, key, inputs string, ok bool) {
 	// A fix that rewrote files makes the matching lint verdict unsound. Only that
 	// sibling: dropping every verdict for the tool would delete the one just
 	// written, and no fix operation could ever hit the cache again.
+	//
+	// The sibling carries the lint operation's own config. Relabelling the fix
+	// task was not enough — verdictIdentity hashes args, env, granularity and
+	// arity, so a fix carrying --write and a lint carrying --check hash
+	// differently, and the delete landed on a key no lint had ever written while
+	// the real lint verdict survived.
 	if task.Operation == config.OpFix {
+		lintOp, ok := task.Tool.Operations[config.OpLint]
+		if !ok {
+			return
+		}
 		sibling := task
 		sibling.Operation = config.OpLint
+		sibling.OpConfig = lintOp
 		e.cache.DeleteVerdict(verdictIdentity(sibling, sibling.UnitDir))
 	}
 }

@@ -476,6 +476,14 @@ interface PlanJSON {
   rootPath: string; // Git repository root
   cwdPath: string; // Current working directory
   groups: GroupJSON[]; // Ordered execution groups
+  skipped: SkippedToolJSON[]; // Tools that will not run; empty when none
+}
+
+interface SkippedToolJSON {
+  toolName: string; // Tool identifier
+  operation: string; // "fix" or "lint"
+  reason: "config" | "unsupported-platform" | "not-narrowable";
+  detail?: string; // Configured skipReason, or the unsupported platform
 }
 
 interface GroupJSON {
@@ -493,8 +501,9 @@ interface TaskJSON {
   app: string; // Binary/application name
   args: string[]; // Command arguments
   scope: string; // Execution scope
-  arity?: "many" | "one" | "dir" | "none"; // argv path shape (inferred)
-  granularity?: "file" | "unit" | "repo"; // smallest complete input set (inferred)
+  arity: "many" | "one" | "dir" | "none"; // argv path shape (inferred)
+  granularity: "file" | "unit" | "repo"; // smallest complete input set (inferred)
+  coverage: "complete" | "partial"; // whether the task answers for its whole unit
   workingDir: string; // Task working directory
   globs?: string[]; // File glob patterns (omitted when empty)
   excludeGlobs?: string[]; // Patterns removed from the matched set (omitted when empty)

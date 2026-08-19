@@ -98,6 +98,64 @@ func TestValidateToolsAcceptsDeclaredGranularityAndArity(t *testing.T) {
 	}
 }
 
+// A typo in the config form of the policy is silently the opposite of what was
+// asked: an unknown value fails every comparison against "repo" and ranks 0, the
+// same as "target". --widen-to has been checked since it was added.
+func TestValidateExecution(t *testing.T) {
+	tests := []struct {
+		name    string
+		exec    *Execution
+		wantErr string
+	}{
+		{"nil block", nil, ""},
+		{"empty block", &Execution{}, ""},
+		{
+			"both operations set",
+			&Execution{WidenTo: map[OperationType]WidenTo{OpFix: WidenToTarget, OpLint: WidenToRepo}},
+			"",
+		},
+		{
+			"wrong case reads as the narrowest policy",
+			&Execution{WidenTo: map[OperationType]WidenTo{OpFix: "Repo"}},
+			`execution.widenTo.fix: unknown value "Repo"`,
+		},
+		{
+			"unknown value",
+			&Execution{WidenTo: map[OperationType]WidenTo{OpLint: "everything"}},
+			`execution.widenTo.lint: unknown value "everything"`,
+		},
+		{
+			"empty value",
+			&Execution{WidenTo: map[OperationType]WidenTo{OpFix: ""}},
+			`execution.widenTo.fix: unknown value ""`,
+		},
+		{
+			// An operation nothing reads is a setting that silently does nothing.
+			"unknown operation",
+			&Execution{WidenTo: map[OperationType]WidenTo{"format": WidenToUnit}},
+			`unknown operation "format"`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateExecution(tt.exec)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("ValidateExecution = %v, want nil", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("ValidateExecution accepted %+v, want an error mentioning %q", tt.exec, tt.wantErr)
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("ValidateExecution = %v, want it to mention %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 // Declaring an arity is an assertion about argv, not an override of it: the
 // placeholders decide the shape, so a mismatch is a config bug the user wants
 // told about rather than silently resolved either way.

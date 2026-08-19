@@ -241,6 +241,10 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 		return nil, nil, nil, err
 	}
 
+	if err := config.ValidateExecution(currentConfig.Execution); err != nil {
+		return nil, nil, nil, err
+	}
+
 	if err := config.ValidateToolFacets(currentConfig.Tools); err != nil {
 		return nil, nil, nil, err
 	}
@@ -536,12 +540,86 @@ func processConfigSource(ctx context.Context, input *config.Config, source confi
 	return parsedConfig, vm, nil
 }
 
+// removedOperationFields are operation keys the core no longer reads. ExportTo
+// silently drops anything it does not recognise, so without this check a config
+// still setting one loads clean and runs under different semantics: batch: false
+// on a per-project operation carrying {files} used to mean one process per file
+// and now means one process for the whole list. Dispatch comes from arity — see
+// the arity reference — and a config that disagreed with the inferred shape must
+// be told, not quietly reinterpreted.
+var removedOperationFields = map[string]string{
+	"batch": "dispatch now comes from arity; use {file} for one process per file, " +
+		"{files} for one process taking the list, or declare arity explicitly",
+}
+
+// removedOperationFieldUses reports every tool operation still carrying a
+// removed key, one message each.
+//
+// A warning, not a load error, for exactly as long as the published wrapper
+// still ships these keys: rejecting them would make a new core refuse the only
+// config available to it. It becomes an error once a wrapper without them is
+// released. Warning is already the point — the defect was that the field
+// vanished during export and the run silently changed shape.
+func removedOperationFieldUses(vm *goja.Runtime, resultVal goja.Value) []string {
+	resultObj := resultVal.ToObject(vm)
+	if resultObj == nil {
+		return nil
+	}
+	toolsVal := resultObj.Get("tools")
+	if toolsVal == nil || goja.IsUndefined(toolsVal) || goja.IsNull(toolsVal) {
+		return nil
+	}
+	toolsObj := toolsVal.ToObject(vm)
+	if toolsObj == nil {
+		return nil
+	}
+
+	var uses []string
+	for _, toolName := range toolsObj.Keys() {
+		toolObj := objectAt(vm, toolsObj.Get(toolName))
+		if toolObj == nil {
+			continue
+		}
+		opsObj := objectAt(vm, toolObj.Get("operations"))
+		if opsObj == nil {
+			continue
+		}
+		for _, opName := range opsObj.Keys() {
+			opObj := objectAt(vm, opsObj.Get(opName))
+			if opObj == nil {
+				continue
+			}
+			for _, field := range opObj.Keys() {
+				if advice, removed := removedOperationFields[field]; removed {
+					uses = append(uses, fmt.Sprintf(
+						"config uses a removed field: tool %q operation %q: %q no longer has any "+
+							"effect — %s", toolName, opName, field, advice))
+				}
+			}
+		}
+	}
+	sort.Strings(uses)
+	return uses
+}
+
+// objectAt returns v as an object, or nil when it is absent or not one.
+func objectAt(vm *goja.Runtime, v goja.Value) *goja.Object {
+	if v == nil || goja.IsUndefined(v) || goja.IsNull(v) {
+		return nil
+	}
+	return v.ToObject(vm)
+}
+
 // parseConfigResult converts getConfig result to config.Config struct
 func parseConfigResult(vm *goja.Runtime, resultVal goja.Value) (*config.Config, error) {
 	cfg := &config.Config{}
 
 	if err := vm.ExportTo(resultVal, cfg); err != nil {
 		return nil, fmt.Errorf("failed to export config: %w", err)
+	}
+
+	for _, use := range removedOperationFieldUses(vm, resultVal) {
+		logger.Logger.Warn(use, zap.String("source", "config"))
 	}
 
 	// Initialize empty maps if they are nil

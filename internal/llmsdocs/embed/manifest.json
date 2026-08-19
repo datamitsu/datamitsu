@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 50,
-  "pageSetHash": "942135a820e9453b8796df5c121b9ab8",
+  "pageSetHash": "f11dec50bf2add92e64387b2c82e03b6",
   "pages": [
     {
       "slug": "about",
@@ -442,8 +442,8 @@
       "url": "https://datamitsu.com/docs/reference/js-api.md",
       "title": "JavaScript API",
       "description": "Programmatic API reference for the @datamitsu/datamitsu npm package",
-      "bytes": 13872,
-      "contentHash": "a34e3b453687fc315b0449a622089eac"
+      "bytes": 14274,
+      "contentHash": "83669df6db4aa54167f2a116662d2a7a"
     },
     {
       "slug": "reference/parser-catalog",
