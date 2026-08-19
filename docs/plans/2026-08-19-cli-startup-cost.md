@@ -155,19 +155,41 @@ four inside `engine.New` are folded into that phase's total, which is why `engin
 
 The single highest value-to-effort change in the repository.
 
-- [ ] `go get github.com/mattn/go-runewidth@v0.0.28` and `go mod tidy`
-- [ ] confirm it is still reachable only as an indirect dependency via `mpb` →
+- [x] `go get github.com/mattn/go-runewidth@v0.0.28` and `go mod tidy`
+- [x] confirm it is still reachable only as an indirect dependency via `mpb` →
       `internal/ui`, and that no direct import was introduced
-- [ ] verify with `GODEBUG=inittrace=1 ./datamitsu version 2>&1 | grep runewidth` that
+- [x] verify with `GODEBUG=inittrace=1 ./datamitsu version 2>&1 | grep runewidth` that
       package-init time for it drops from ~33 ms to <0.1 ms
-- [ ] record before/after `datamitsu version` wall-min in this file (expected ~52 ms → ~13 ms)
-- [ ] write a test in `internal/ui` asserting the width helpers still behave correctly for
+- [x] record before/after `datamitsu version` wall-min in this file (expected ~52 ms → ~13 ms)
+- [x] write a test in `internal/ui` asserting the width helpers still behave correctly for
       the cases the display relies on — CJK wide runes, combining marks, emoji ZWJ sequences,
       and ASCII — so the lazy-table change cannot silently alter column math
-- [ ] write a test covering the progress-bar/line truncation path with a wide-rune string
-- [ ] run `go test ./...` and `go test ./test/cli/ -count=2` — the CLI goldens must be
+- [x] write a test covering the progress-bar/line truncation path with a wide-rune string
+- [x] run `go test ./...` and `go test ./test/cli/ -count=2` — the CLI goldens must be
       byte-identical, which is the proof that rendering did not shift
-- [ ] must pass before Task 3
+- [x] must pass before Task 3
+
+**Task 2 results.** Apple M1 Max, machine under light load, n=40 per measurement.
+
+| Measurement                       | Before (v0.0.27) | After (v0.0.28) |
+| --------------------------------- | ---------------- | --------------- |
+| `runewidth` package init (clock)  | 28.0 ms          | 0.057 ms        |
+| `runewidth` package init (allocs) | 54 (57,368 B)    | 2 (32 B)        |
+| `datamitsu version` wall-min      | 39.9 ms          | 11.7 ms         |
+| `datamitsu version` wall-median   | 41.0 ms          | 12.7 ms         |
+
+`go mod why` still resolves as `internal/ui` → `mpb/v8` → `go-runewidth`; the dependency
+stays `// indirect` and no source file imports it. Every `test/cli` golden is byte-identical
+(`git status test/cli/testdata/golden/` is empty after `-count=2`), which is the proof that
+column math did not move.
+
+Tests: `internal/ui/runewidth_test.go`. Deliberately asserts through `decor.Name` and a real
+`mpb` render rather than importing `runewidth` — that keeps the dependency indirect and
+covers the actual rendering path. Coverage: padding by display width (CJK, Hangul, mixed,
+NFC vs NFD latin, stacked combining marks, emoji ZWJ, plain emoji, UI symbols, empty), the
+extra-space separator contract for names at/over the column, and renderer line truncation on
+a rune boundary for wide-rune strings. Spot-checked against v0.0.27 directly:
+`StringWidth`/`Truncate` return identical results for every one of these inputs.
 
 ### Task 3: Memoize the git root for the process lifetime
 
