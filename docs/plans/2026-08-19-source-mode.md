@@ -232,23 +232,23 @@ exists today, independent of source mode.
 
 ### Task 2: Add the per-root farm paths to internal/env
 
-- [ ] add `GetProjectBinPath(gitRoot string) (string, error)` in `internal/env/runtime.go`
+- [x] add `GetProjectBinPath(gitRoot string) (string, error)` in `internal/env/runtime.go`
       returning `{cache}/projects/{XXH3-128(gitRoot)}/bin`, mirroring `GetProjectCachePath`
       (`internal/env/runtime.go:49`) but without its hardcoded `cache` segment and without the
       `relativeProjectPath`/`toolName` parameters
-- [ ] add a sibling getter for the manifest file path under the same per-root directory
-- [ ] reuse the existing `HashProjectPath` (`internal/env/runtime.go:43`, XXH3-128 via
+- [x] add a sibling getter for the manifest file path under the same per-root directory
+- [x] reuse the existing `HashProjectPath` (`internal/env/runtime.go:43`, XXH3-128 via
       `internal/hashutil`) — an internal fingerprint never compared against an external value,
       per the hashing policy
-- [ ] reject empty or relative `gitRoot` the same way `GetProjectCachePath` rejects escapes
-- [ ] write a table test: distinct git roots produce distinct paths; the same root is stable
+- [x] reject empty or relative `gitRoot` the same way `GetProjectCachePath` rejects escapes
+- [x] write a table test: distinct git roots produce distinct paths; the same root is stable
       across calls
-- [ ] write a test asserting the path is under `GetCachePath()` and contains no `..` after
+- [x] write a test asserting the path is under `GetCachePath()` and contains no `..` after
       `filepath.Clean`
-- [ ] write a test asserting `DATAMITSU_CACHE_DIR` is honored via `t.Setenv`, matching the
+- [x] write a test asserting `DATAMITSU_CACHE_DIR` is honored via `t.Setenv`, matching the
       existing `TestGetProjectCachePath` shape
-- [ ] write a test asserting empty and relative roots error
-- [ ] run tests — must pass before Task 3
+- [x] write a test asserting empty and relative roots error
+- [x] run tests — must pass before Task 3
 
 ### Task 3: Side-effect-free resolution
 

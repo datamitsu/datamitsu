@@ -1064,3 +1064,128 @@ func TestLibcOverride(t *testing.T) {
 		}
 	})
 }
+
+func TestGetProjectBinPath(t *testing.T) {
+	t.Setenv(cacheDir.Name, "/tmp/test-cache")
+
+	t.Run("path shape and location", func(t *testing.T) {
+		got, err := GetProjectBinPath("/home/user/myproject")
+		if err != nil {
+			t.Fatalf("GetProjectBinPath() error = %v", err)
+		}
+		want := filepath.Join(
+			GetCachePath(),
+			"projects",
+			HashProjectPath("/home/user/myproject"),
+			"bin",
+		)
+		if got != want {
+			t.Errorf("GetProjectBinPath() = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("manifest is a sibling of the farm directory", func(t *testing.T) {
+		binPath, err := GetProjectBinPath("/home/user/myproject")
+		if err != nil {
+			t.Fatalf("GetProjectBinPath() error = %v", err)
+		}
+		manifest, err := GetProjectManifestPath("/home/user/myproject")
+		if err != nil {
+			t.Fatalf("GetProjectManifestPath() error = %v", err)
+		}
+		if filepath.Dir(binPath) != filepath.Dir(manifest) {
+			t.Errorf("manifest %q is not a sibling of bin dir %q", manifest, binPath)
+		}
+		if filepath.Base(manifest) != ProjectManifestFileName {
+			t.Errorf("manifest base = %q, want %q", filepath.Base(manifest), ProjectManifestFileName)
+		}
+	})
+
+	t.Run("distinct roots produce distinct paths, same root is stable", func(t *testing.T) {
+		tests := []struct {
+			name     string
+			rootA    string
+			rootB    string
+			wantSame bool
+		}{
+			{name: "same root", rootA: "/home/user/a", rootB: "/home/user/a", wantSame: true},
+			{name: "sibling roots", rootA: "/home/user/a", rootB: "/home/user/b", wantSame: false},
+			{name: "nested root", rootA: "/home/user/a", rootB: "/home/user/a/sub", wantSame: false},
+			{name: "case differs", rootA: "/home/user/a", rootB: "/home/user/A", wantSame: false},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				a, err := GetProjectBinPath(tt.rootA)
+				if err != nil {
+					t.Fatalf("GetProjectBinPath(%q) error = %v", tt.rootA, err)
+				}
+				b, err := GetProjectBinPath(tt.rootB)
+				if err != nil {
+					t.Fatalf("GetProjectBinPath(%q) error = %v", tt.rootB, err)
+				}
+				if (a == b) != tt.wantSame {
+					t.Errorf("GetProjectBinPath(%q)=%q vs (%q)=%q: same=%v, want %v",
+						tt.rootA, a, tt.rootB, b, a == b, tt.wantSame)
+				}
+			})
+		}
+	})
+
+	t.Run("paths stay under the cache root and contain no dot segments", func(t *testing.T) {
+		roots := []string{"/home/user/myproject", "/", "/a/b/../c"}
+		for _, root := range roots {
+			binPath, err := GetProjectBinPath(root)
+			if err != nil {
+				t.Fatalf("GetProjectBinPath(%q) error = %v", root, err)
+			}
+			manifest, err := GetProjectManifestPath(root)
+			if err != nil {
+				t.Fatalf("GetProjectManifestPath(%q) error = %v", root, err)
+			}
+			cacheRoot := GetCachePath() + string(filepath.Separator)
+			for _, p := range []string{binPath, manifest} {
+				if p != filepath.Clean(p) {
+					t.Errorf("path %q is not clean", p)
+				}
+				if strings.Contains(p, ".."+string(filepath.Separator)) {
+					t.Errorf("path %q contains a parent segment", p)
+				}
+				if !strings.HasPrefix(p, cacheRoot) {
+					t.Errorf("path %q is not under cache root %q", p, cacheRoot)
+				}
+			}
+		}
+	})
+
+	t.Run("empty and relative roots error", func(t *testing.T) {
+		tests := []string{"", "relative/path", "./project", "..", "~/project"}
+		for _, root := range tests {
+			if got, err := GetProjectBinPath(root); err == nil {
+				t.Errorf("GetProjectBinPath(%q) = %q, want error", root, got)
+			}
+			if got, err := GetProjectManifestPath(root); err == nil {
+				t.Errorf("GetProjectManifestPath(%q) = %q, want error", root, got)
+			}
+		}
+	})
+}
+
+func TestGetProjectBinPathHonorsCacheDirEnv(t *testing.T) {
+	t.Setenv(cacheDir.Name, "/tmp/custom-cache")
+
+	got, err := GetProjectBinPath("/home/user/myproject")
+	if err != nil {
+		t.Fatalf("GetProjectBinPath() error = %v", err)
+	}
+	if !strings.HasPrefix(got, "/tmp/custom-cache"+string(filepath.Separator)) {
+		t.Errorf("GetProjectBinPath() = %q, want it under /tmp/custom-cache", got)
+	}
+
+	manifest, err := GetProjectManifestPath("/home/user/myproject")
+	if err != nil {
+		t.Fatalf("GetProjectManifestPath() error = %v", err)
+	}
+	if !strings.HasPrefix(manifest, "/tmp/custom-cache"+string(filepath.Separator)) {
+		t.Errorf("GetProjectManifestPath() = %q, want it under /tmp/custom-cache", manifest)
+	}
+}
