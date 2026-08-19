@@ -38,8 +38,21 @@ func doValidateApps(apps binmanager.MapOfApps, runtimes MapOfRuntimes, skipLockf
 	}
 	sort.Strings(appNames)
 
+	// Names are checked as a set first: a case-fold collision is a property of
+	// the pair, not of either name, so it cannot be reported from inside the
+	// per-app loop below.
+	errs = append(errs, findCaseFoldCollisions(appNames)...)
+
 	for _, appName := range appNames {
 		app := apps[appName]
+
+		// An unusable name makes every other message about this app noise —
+		// the app cannot be installed under it at all — so report the name and
+		// move on.
+		if err := validateAppName(appName); err != nil {
+			errs = append(errs, err.Error())
+			continue
+		}
 
 		if (app.Binary != nil || app.Shell != nil || app.Jvm != nil || app.Go != nil) && (len(app.Files) > 0 || len(app.Links) > 0 || len(app.Archives) > 0) {
 			errs = append(errs, fmt.Sprintf("app %q: files/links/archives are only supported on uv and node apps", appName))
@@ -97,32 +110,7 @@ func doValidateApps(apps binmanager.MapOfApps, runtimes MapOfRuntimes, skipLockf
 			}
 		}
 
-		if app.Go != nil {
-			// packageName goes verbatim into `go get pkg@version`, so reject
-			// path traversal and any character outside the safe set.
-			switch {
-			case app.Go.PackageName == "":
-				errs = append(errs, fmt.Sprintf("app %q: go.packageName is required", appName))
-			case strings.Contains(app.Go.PackageName, ".."):
-				errs = append(errs, fmt.Sprintf("app %q: go.packageName %q must not contain %q", appName, app.Go.PackageName, ".."))
-			case !safeGoPackagePattern.MatchString(app.Go.PackageName):
-				errs = append(errs, fmt.Sprintf("app %q: go.packageName %q contains invalid characters (must be alphanumeric, dots, slashes, hyphens, or underscores)", appName, app.Go.PackageName))
-			default:
-				if base := path.Base(app.Go.PackageName); base == "." || base == ".." {
-					errs = append(errs, fmt.Sprintf("app %q: go.packageName %q must end in a valid path element", appName, app.Go.PackageName))
-				}
-			}
-			// version is the pinned `go get` query; a floating "latest" defeats
-			// reproducible lockfile generation, so require a concrete version.
-			switch {
-			case app.Go.Version == "":
-				errs = append(errs, fmt.Sprintf("app %q: go.version is required", appName))
-			case strings.EqualFold(app.Go.Version, "latest"):
-				errs = append(errs, fmt.Sprintf("app %q: go.version must be a pinned version, not %q", appName, app.Go.Version))
-			case !isValidVersionString(app.Go.Version):
-				errs = append(errs, fmt.Sprintf("app %q: go.version %q contains invalid characters (must be alphanumeric, dots, hyphens, underscores, or plus signs)", appName, app.Go.Version))
-			}
-		}
+		errs = append(errs, validateGoApp(appName, app.Go)...)
 
 		if !skipLockfileCheck && app.Uv != nil && app.Uv.LockFile == "" {
 			errs = append(errs, fmt.Sprintf("app %q: lockFile is required (run: datamitsu config lockfile %s)", appName, appName))
@@ -279,6 +267,45 @@ func doValidateApps(apps binmanager.MapOfApps, runtimes MapOfRuntimes, skipLockf
 	}
 
 	return warnings, nil
+}
+
+// validateGoApp checks a go app's package and version. A nil goApp is valid
+// (the app is not a go app). It is a function rather than an inline block only
+// so doValidateApps stays under the cyclomatic-complexity ceiling.
+func validateGoApp(appName string, goApp *binmanager.AppConfigGo) []string {
+	if goApp == nil {
+		return nil
+	}
+
+	var errs []string
+
+	// packageName goes verbatim into `go get pkg@version`, so reject
+	// path traversal and any character outside the safe set.
+	switch {
+	case goApp.PackageName == "":
+		errs = append(errs, fmt.Sprintf("app %q: go.packageName is required", appName))
+	case strings.Contains(goApp.PackageName, ".."):
+		errs = append(errs, fmt.Sprintf("app %q: go.packageName %q must not contain %q", appName, goApp.PackageName, ".."))
+	case !safeGoPackagePattern.MatchString(goApp.PackageName):
+		errs = append(errs, fmt.Sprintf("app %q: go.packageName %q contains invalid characters (must be alphanumeric, dots, slashes, hyphens, or underscores)", appName, goApp.PackageName))
+	default:
+		if base := path.Base(goApp.PackageName); base == "." || base == ".." {
+			errs = append(errs, fmt.Sprintf("app %q: go.packageName %q must end in a valid path element", appName, goApp.PackageName))
+		}
+	}
+
+	// version is the pinned `go get` query; a floating "latest" defeats
+	// reproducible lockfile generation, so require a concrete version.
+	switch {
+	case goApp.Version == "":
+		errs = append(errs, fmt.Sprintf("app %q: go.version is required", appName))
+	case strings.EqualFold(goApp.Version, "latest"):
+		errs = append(errs, fmt.Sprintf("app %q: go.version must be a pinned version, not %q", appName, goApp.Version))
+	case !isValidVersionString(goApp.Version):
+		errs = append(errs, fmt.Sprintf("app %q: go.version %q contains invalid characters (must be alphanumeric, dots, hyphens, underscores, or plus signs)", appName, goApp.Version))
+	}
+
+	return errs
 }
 
 func validateAppRuntimeRef(ref string, expectedKind RuntimeKind, appName string, runtimes MapOfRuntimes) error {

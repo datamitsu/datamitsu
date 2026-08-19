@@ -201,30 +201,34 @@ verbatim; this is a correctness requirement of property 1, independent of perfor
 App names become filenames and dispatch keys. This also closes a latent store-escape bug that
 exists today, independent of source mode.
 
-- [ ] in `doValidateApps` (`internal/config/validate.go`), validate every app name against
+- [x] in `doValidateApps` (`internal/config/validate.go`), validate every app name against
       `^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$` as a hard error, appended to the existing `errs`
       slice in the established message style
-- [ ] reject `.`, `..`, any path separator, a leading `-`, and Windows reserved device names
+- [x] reject `.`, `..`, any path separator, a leading `-`, and Windows reserved device names
       (`CON`, `PRN`, `AUX`, `NUL`, `COM1`-`COM9`, `LPT1`-`LPT9`) — `website/docs` promises
       Windows support eventually and these are unusable as filenames there
-- [ ] detect case-fold collisions across the app map (`strings.ToLower` over the sorted
+- [x] detect case-fold collisions across the app map (`strings.ToLower` over the sorted
       `appNames` slice already built at `validate.go:35-39`) and report both names — macOS
       filesystems are case-insensitive, so `Git` and `git` are one file
-- [ ] state in the error text that the constraint exists because app names become filesystem
+- [x] state in the error text that the constraint exists because app names become filesystem
       entries
-- [ ] **before landing**: enumerate every app name in the wrapper config
+- [x] **before landing**: enumerate every app name in the wrapper config
       (`node_modules/@shibanet0/datamitsu-config/`) against the regex and record the result
       here. The wrapper ships 92 of this repo's 98 apps and is versioned separately; a
       violation means the wrapper must be fixed and republished first
-- [ ] write a table test of hostile names: `../x`, `a b`, `$(id)`, `a\nb`, `.`, `..`, `-rf`,
+      — **Result: clean.** `datamitsu devtools apps list` over the merged config
+      (`@shibanet0/datamitsu-config@0.0.0-unstable.20260819.598bb47` plus this repo's own
+      declarations) yields **111** app names. All 111 match the regex; no case-fold
+      collisions; no Windows reserved device names. No wrapper republish needed.
+- [x] write a table test of hostile names: `../x`, `a b`, `$(id)`, `a\nb`, `.`, `..`, `-rf`,
       300 chars, empty, `CON`, `com1`
-- [ ] write a test asserting a case-fold collision (`{"Git": …, "git": …}`) produces exactly
+- [x] write a test asserting a case-fold collision (`{"Git": …, "git": …}`) produces exactly
       one error naming both
-- [ ] write a test asserting every app name in the embedded default config
+- [x] write a test asserting every app name in the embedded default config
       (`config/src/apps.ts`) passes — guards against breaking the shipped config
-- [ ] write a test asserting valid names are accepted: `yq-json`, `terraform-docs`, `mmdc`,
+- [x] write a test asserting valid names are accepted: `yq-json`, `terraform-docs`, `mmdc`,
       `git-cliff`, `task`
-- [ ] run `go test ./... -race` and `go test ./test/cli/ -count=2` — must pass before Task 2
+- [x] run `go test ./... -race` and `go test ./test/cli/ -count=2` — must pass before Task 2
 
 ### Task 2: Add the per-root farm paths to internal/env
 
