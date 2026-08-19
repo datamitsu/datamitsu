@@ -128,7 +128,7 @@ func NewCache(
 
 	// Load existing cache or create new one
 	if err := c.Load(); err != nil {
-		c.logger.Warn("failed to load cache, creating new", zap.Error(err))
+		c.log().Warn("failed to load cache, creating new", zap.Error(err))
 		c.data = &File{
 			InvalidationKey: invalidationKey,
 			ProjectPath:     projectPath,
@@ -160,7 +160,7 @@ func (c *Cache) Load() error {
 	}
 	defer func() {
 		if closeErr := f.Close(); closeErr != nil {
-			c.logger.Warn("failed to close cache file", zap.Error(closeErr))
+			c.log().Warn("failed to close cache file", zap.Error(closeErr))
 		}
 	}()
 
@@ -177,7 +177,7 @@ func (c *Cache) Load() error {
 
 	// Check invalidation key
 	if data.InvalidationKey != c.invalidationKey {
-		c.logger.Info("invalidation key mismatch, resetting cache",
+		c.log().Info("invalidation key mismatch, resetting cache",
 			zap.String("old", data.InvalidationKey),
 			zap.String("new", c.invalidationKey))
 		c.data = &File{
@@ -198,7 +198,7 @@ func (c *Cache) Load() error {
 		c.data.LastPruned = time.Now()
 		// Save after pruning
 		if err := c.Save(); err != nil {
-			c.logger.Warn("failed to save cache after pruning", zap.Error(err))
+			c.log().Warn("failed to save cache after pruning", zap.Error(err))
 		}
 	}
 
@@ -297,7 +297,7 @@ func (c *Cache) Prune() {
 	verdicts := c.pruneVerdicts(verdictPruneTTL)
 
 	if removed > 0 || verdicts > 0 {
-		c.logger.Debug("pruned cache entries",
+		c.log().Debug("pruned cache entries",
 			zap.Int("files", removed),
 			zap.Int("verdicts", verdicts))
 	}
@@ -323,7 +323,7 @@ func (c *Cache) ShouldRun(file, tool string, op Operation, toolCacheEnabled bool
 	// Convert to relative path
 	relPath, err := filepath.Rel(c.projectPath, file)
 	if err != nil {
-		c.logger.Debug("failed to get relative path",
+		c.log().Debug("failed to get relative path",
 			zap.String("file", file),
 			zap.Error(err))
 		c.misses.Add(1)
@@ -340,7 +340,7 @@ func (c *Cache) ShouldRun(file, tool string, op Operation, toolCacheEnabled bool
 	// Check if file content has changed
 	currentHash, err := hashFile(file)
 	if err != nil {
-		c.logger.Debug("failed to hash file",
+		c.log().Debug("failed to hash file",
 			zap.String("file", file),
 			zap.Error(err))
 		c.misses.Add(1)
@@ -406,7 +406,7 @@ func (c *Cache) AfterFix(file, tool string, toolCacheEnabled bool) error {
 
 	// If file changed after fix, reset lint cache
 	if exists && entry.ContentHash != newHash {
-		c.logger.Debug("file modified by fix, resetting lint cache",
+		c.log().Debug("file modified by fix, resetting lint cache",
 			zap.String("file", relPath),
 			zap.String("tool", tool))
 		c.data.Entries[relPath] = FileEntry{
@@ -577,7 +577,12 @@ func (c *Cache) MarkDirty() {
 // Shutdown ensures final save before exit
 func (c *Cache) Shutdown() {
 	c.shutdownOnce.Do(func() {
-		close(c.shutdownCh)
+		// A Cache built as a bare struct literal (tests) has no shutdown channel;
+		// closing a nil channel panics, and Shutdown must stay callable so the
+		// debounce timer can always be stopped before its owner goes away.
+		if c.shutdownCh != nil {
+			close(c.shutdownCh)
+		}
 
 		c.saveTimerMu.Lock()
 		if c.saveTimer != nil {
@@ -587,7 +592,7 @@ func (c *Cache) Shutdown() {
 
 		if c.dirty.Swap(false) {
 			if err := c.Save(); err != nil {
-				c.logger.Warn("final save failed", zap.Error(err))
+				c.log().Warn("final save failed", zap.Error(err))
 			}
 		}
 	})
@@ -636,6 +641,17 @@ func (c *Cache) markPassed(file, tool string, op Operation) error {
 	return nil
 }
 
+// log returns the cache logger, falling back to a no-op logger when the Cache
+// was built without one. debounceSave logs from a timer goroutine that outlives
+// the call that scheduled it, and a nil deref there kills the process rather
+// than failing a single operation — so logging must never assume a logger.
+func (c *Cache) log() *zap.Logger {
+	if c.logger == nil {
+		return zap.NewNop()
+	}
+	return c.logger
+}
+
 // debounceSave triggers delayed save (coalesces rapid changes)
 func (c *Cache) debounceSave() {
 	c.saveTimerMu.Lock()
@@ -648,7 +664,7 @@ func (c *Cache) debounceSave() {
 	c.saveTimer = time.AfterFunc(100*time.Millisecond, func() {
 		if c.dirty.Swap(false) {
 			if err := c.Save(); err != nil {
-				c.logger.Warn("async save failed", zap.Error(err))
+				c.log().Warn("async save failed", zap.Error(err))
 			}
 		}
 	})

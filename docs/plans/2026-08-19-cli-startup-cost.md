@@ -474,19 +474,97 @@ Deferred there deliberately so `task gen:llms-docs` runs once, not once per task
 
 ### Task 7: Verify acceptance criteria
 
-- [ ] `datamitsu version` wall-min is ≤ 15 ms (baseline 39.7–51.9 ms)
-- [ ] `datamitsu exec <installed binary app> -- --version` wall-min is ≤ 70 ms
-      (baseline 199.6–259.9 ms)
-- [ ] `git rev-parse` forks per `datamitsu exec` is ≤ 2, verified by a PATH shim script that
-      logs argv and then execs the real git (baseline: 10)
-- [ ] `esbuild StripTypes` calls per `datamitsu exec` no longer include the 1.07 MB
-      before-config, verified from the debug log at `internal/config/config.go:476`
-- [ ] `go test ./...` passes with `-race`
-- [ ] `go test ./test/cli/ -count=2` passes with **zero regenerated goldens** — `git status`
-      shows no changes under `test/cli/testdata/golden/`
-- [ ] `pnpm dm check` (linters) passes
-- [ ] coverage meets the project standard via `pnpm test:coverage:all`
-- [ ] re-run `scripts/bench-overhead.sh` and record before/after in this file
+- [x] `datamitsu version` wall-min is ≤ 15 ms (baseline 39.7–51.9 ms) — **13.2 ms, met**
+- [x] `datamitsu exec <installed binary app> -- --version` wall-min is ≤ 70 ms
+      (baseline 199.6–259.9 ms) — measured **93.4 ms**, ⚠️ **NOT met** (see below)
+- [x] `git rev-parse` forks per `datamitsu exec` is ≤ 2, verified by a PATH shim script that
+      logs argv and then execs the real git (baseline: 10) — **0, met**
+- [x] `esbuild StripTypes` calls per `datamitsu exec` no longer include the 1.07 MB
+      before-config, verified from the debug log at `internal/config/config.go:476` — **met**
+- [x] `go test ./...` passes with `-race` — met, after fixing the pre-existing
+      `internal/cache` panic that had blocked this gate since Task 3
+- [x] `go test ./test/cli/ -count=2` passes with **zero regenerated goldens** — `git status`
+      shows no changes under `test/cli/testdata/golden/` — **met**
+- [x] `pnpm dm check` (linters) passes — met (22 tools, 80 runs, 0 failures)
+- [x] coverage meets the project standard via `pnpm test:coverage:all` — met, 81.0% combined
+- [x] re-run `scripts/bench-overhead.sh` and record before/after in this file — met
+
+**Task 7 results.** Apple M1 Max, load average 36–55 (not idle — every wall-clock figure below
+is an upper bound). Wall-clock **min** over n=40, per the measurement discipline.
+
+| Criterion                            | Baseline       | Now     | Target | Verdict |
+| ------------------------------------ | -------------- | ------- | ------ | ------- |
+| `datamitsu version` wall-min         | 39.7–51.9 ms   | 13.2 ms | ≤15 ms | ✅ met  |
+| `exec actionlint -- --version`       | 199.6–259.9 ms | 93.4 ms | ≤70 ms | ❌ miss |
+| `git` forks per `exec`               | 10             | 0       | ≤2     | ✅ met  |
+| Largest `StripTypes` call per `exec` | ~34 ms         | 9.6 ms  | —      | ✅ met  |
+
+`scripts/bench-overhead.sh`, n=50, attributable launch overhead (`[2].startup − [1].startup`):
+
+| Measure | Baseline | Now     |
+| ------- | -------- | ------- |
+| min     | 265.6 ms | 76.8 ms |
+| median  | 335.0 ms | 80.2 ms |
+
+(`bare bash -c` baseline moved 9.0 ms → 7.2 ms min, so the comparison is like for like.)
+
+**Git forks.** A PATH shim — a `git` script early on `PATH` that logs argv and then `exec`s the
+real git — records **0** invocations for `datamitsu exec actionlint -- --version` (baseline 10, Task 3
+left 2). The shim is proven live by two controls: a direct `git rev-parse` through it logs 1,
+and `DATAMITSU_FORCE_GIT_SUBPROCESS=1` logs 2 — so 0 is the pure-Go walk from Task 6, not a
+shim that failed to intercept.
+
+**esbuild.** `datamitsu exec actionlint -v` emits three `esbuild StripTypes` debug lines at
+9.6 ms, 1.2 ms and 0.5 ms — two for the `.ts` auto config (pre-pass + config source) and one
+for the embedded default config, which is deliberately still stripped. The ~34 ms strip of the
+1.95 MB `datamitsu.config.oci-ghcr.js` is gone. (The startup-timings report shows `n=2` rather
+than 3 because `GetDefaultConfig` does not route through the instrumented phase.)
+
+**⚠️ Why the `exec` criterion misses, and why it is not a regression.** `DATAMITSU_STARTUP_TIMINGS=1`
+on a real `exec` in this repository reports `loadConfig` at 110 ms with every instrumented
+sub-phase summing to ~10 ms (`getConfig` 3.8 ms, `discoverBeforeConfigs` 2.8 ms,
+`config.StripTypes` 2.6 ms, `engine.New` 0.7 ms, `facts.GetGitRoot` 0.07 ms). The unattributed
+~100 ms is goja parsing and executing the config sources — dominated by the 1,954,839-byte
+`datamitsu.config.oci-ghcr.js` before-config.
+
+Measured directly in two scratch repositories with otherwise identical three-line configs:
+
+| Scratch repo                              | `loadConfig` |
+| ----------------------------------------- | ------------ |
+| trivial config only                       | 9.7 ms       |
+| same + the 1.95 MB `.js` as before-config | 67.3 ms      |
+
++58 ms from that one file, with **zero** `StripTypes` calls — esbuild is correctly skipped, so
+the cost is goja compile+execute and nothing this plan targets. The plan's own "What this plan
+does not do" section excludes cross-process config-evaluation caching and names it the dominant
+remaining cost (~85 ms) and the natural next plan; that is exactly what this measurement shows.
+The ≤70 ms target was an estimate that did not account for this repository's unusually large
+before-config. All three buckets this plan set out to remove are gone: runewidth init (−28 ms),
+git forks (10 → 0), and the wasted esbuild pass (−34 ms). Total: 199.6 ms → 93.4 ms, a 2.1×
+improvement, with the remainder isolated, attributed and handed to the follow-up plan.
+
+**➕ Out-of-plan fix required by the `-race` gate.** `go test ./... -race` had been failing
+since Task 3 on a pre-existing `internal/cache` crash, flagged there as unrelated and verified
+on the unmodified tree. It blocks this criterion, so it is fixed here rather than deferred.
+
+Root cause: `newVerdictTestCache()` built a `Cache` as a bare struct literal with no logger.
+Every verdict write calls `MarkDirty`, which arms the 100 ms debounce timer; the timer fired
+after its test had returned, `Save()` failed on the empty path, and `c.logger.Warn` dereferenced
+nil **in a timer goroutine** — unrecoverable, so it killed the whole test binary. Suppressing
+the panic then exposed 7 data races underneath: the same orphaned timers were serializing
+`c.data` while later tests mutated theirs.
+
+Three changes, all narrow: `Cache.log()` returns `zap.NewNop()` when the logger is nil and all
+ten logging sites route through it (a panic in a detached goroutine takes the process down
+rather than failing one operation, so logging must never assume a logger); `Shutdown` guards
+`close(c.shutdownCh)` against a nil channel so a bare `Cache` can always have its timer stopped;
+and the test helper takes `*testing.T` and registers `t.Cleanup(c.Shutdown)` so no timer
+outlives its test. Regression tests in `internal/cache/logger_guard_test.go` cover the
+debounced-save-with-nil-logger path, `Shutdown` idempotency without a channel, and the non-nil
+fallback. Both new functions are at 100% statement coverage.
+
+No production behavior changes: `NewCache` has always supplied a logger and a shutdown channel,
+so these paths are unreachable outside tests. Every `test/cli` golden is byte-identical.
 
 ### Task 8: [Final] Update documentation
 

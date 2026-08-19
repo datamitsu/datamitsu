@@ -9,7 +9,7 @@ import (
 // Storing it anyway would create an entry nothing can ever match, or worse, one
 // that every other empty-keyed call collides with.
 func TestAfterVerdictRejectsIncompleteEntries(t *testing.T) {
-	c := newVerdictTestCache()
+	c := newVerdictTestCache(t)
 
 	c.AfterVerdict("", VerdictEntry{InputHash: "h"})
 	c.AfterVerdict("k", VerdictEntry{InputHash: ""})
@@ -20,7 +20,7 @@ func TestAfterVerdictRejectsIncompleteEntries(t *testing.T) {
 }
 
 func TestDeleteVerdictIgnoresAnEmptyKey(t *testing.T) {
-	c := newVerdictTestCache()
+	c := newVerdictTestCache(t)
 	c.DeleteVerdict("")
 
 	if len(c.deletedVerdicts) != 0 {
@@ -31,7 +31,7 @@ func TestDeleteVerdictIgnoresAnEmptyKey(t *testing.T) {
 // A tombstone is what makes a delete survive the merge with what is already on
 // disk: the merge can only add, so without one the entry comes straight back.
 func TestDeleteVerdictLeavesATombstone(t *testing.T) {
-	c := newVerdictTestCache()
+	c := newVerdictTestCache(t)
 	c.AfterVerdict("k", VerdictEntry{InputHash: "h"})
 	c.DeleteVerdict("k")
 
@@ -45,7 +45,7 @@ func TestDeleteVerdictLeavesATombstone(t *testing.T) {
 
 func TestShouldRunVerdict(t *testing.T) {
 	fresh := func() *Cache {
-		c := newVerdictTestCache()
+		c := newVerdictTestCache(t)
 		c.AfterVerdict("k", VerdictEntry{InputHash: "h"})
 		return c
 	}
@@ -75,7 +75,7 @@ func TestShouldRunVerdict(t *testing.T) {
 	}
 
 	t.Run("expired entry", func(t *testing.T) {
-		c := newVerdictTestCache()
+		c := newVerdictTestCache(t)
 		c.AfterVerdict("k", VerdictEntry{InputHash: "h"})
 		entry := c.data.Verdicts["k"]
 		entry.ValidatedAt = time.Now().Add(-2 * time.Hour)
@@ -89,7 +89,7 @@ func TestShouldRunVerdict(t *testing.T) {
 	// A timestamp in the future is a clock jump, not a fresh entry; trusting it
 	// would pin the verdict until the clock caught up.
 	t.Run("timestamp in the future", func(t *testing.T) {
-		c := newVerdictTestCache()
+		c := newVerdictTestCache(t)
 		c.AfterVerdict("k", VerdictEntry{InputHash: "h"})
 		entry := c.data.Verdicts["k"]
 		entry.ValidatedAt = time.Now().Add(time.Hour)
@@ -103,7 +103,7 @@ func TestShouldRunVerdict(t *testing.T) {
 
 func TestPruneVerdicts(t *testing.T) {
 	build := func() *Cache {
-		c := newVerdictTestCache()
+		c := newVerdictTestCache(t)
 		c.AfterVerdict("old", VerdictEntry{InputHash: "h"})
 		c.AfterVerdict("new", VerdictEntry{InputHash: "h"})
 		stale := c.data.Verdicts["old"]
@@ -138,6 +138,14 @@ func TestPruneVerdicts(t *testing.T) {
 
 // newVerdictTestCache is a Cache with just enough state for the verdict map;
 // the zero value has a nil *File and panics on first write.
-func newVerdictTestCache() *Cache {
-	return &Cache{data: &File{Verdicts: map[string]VerdictEntry{}}}
+//
+// Every verdict write marks the cache dirty, which arms the 100ms debounce
+// timer. Without the Shutdown cleanup that timer fires after the test returns
+// and saves concurrently with whatever test is running by then — a race on
+// c.data, and previously a nil-logger panic that took the whole binary down.
+func newVerdictTestCache(t *testing.T) *Cache {
+	t.Helper()
+	c := &Cache{data: &File{Verdicts: map[string]VerdictEntry{}}}
+	t.Cleanup(c.Shutdown)
+	return c
 }
