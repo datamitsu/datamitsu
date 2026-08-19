@@ -9,7 +9,7 @@ import { binaryName, resolveTarget, targetKey } from "./platform";
 
 const REPO = "datamitsu/datamitsu";
 
-export interface DownloadDeps {
+export interface DownloadDependencies {
   log: (message: string) => void;
   // Directory the verified binary is cached in (the extension's global storage).
   storageDir: string;
@@ -24,8 +24,8 @@ let inflight: Promise<string> | undefined;
 // downloadBundled returns the path to the datamitsu binary pinned to this
 // extension build, downloading and SHA-256-verifying it on first use and caching
 // it under storageDir. Hash-or-refuse: a build with no baked checksums throws.
-export async function downloadBundled(deps: DownloadDeps): Promise<string> {
-  inflight ??= run(deps).finally(() => {
+export async function downloadBundled(dependencies: DownloadDependencies): Promise<string> {
+  inflight ??= run(dependencies).finally(() => {
     inflight = undefined;
   });
   return inflight;
@@ -33,9 +33,9 @@ export async function downloadBundled(deps: DownloadDeps): Promise<string> {
 
 // extract uses the system `tar` (BSD tar on macOS/Windows 10+, GNU tar on Linux),
 // which unpacks both .tar.gz and .zip, so the extension needs no archive library.
-async function extract(archive: string, dest: string): Promise<void> {
+async function extract(archive: string, destination: string): Promise<void> {
   await new Promise<void>((resolve, reject) => {
-    const child = spawn("tar", ["-xf", archive, "-C", dest], { stdio: "ignore" });
+    const child = spawn("tar", ["-xf", archive, "-C", destination], { stdio: "ignore" });
     child.on("error", reject);
     child.on("exit", (code) => {
       if (code === 0) {
@@ -48,14 +48,14 @@ async function extract(archive: string, dest: string): Promise<void> {
 }
 
 async function fetchBytes(url: string): Promise<Buffer> {
-  const res = await fetch(url, { redirect: "follow" });
-  if (!res.ok) {
-    throw new Error(`Download failed (${res.status} ${res.statusText}) for ${url}`);
+  const response = await fetch(url, { redirect: "follow" });
+  if (!response.ok) {
+    throw new Error(`Download failed (${response.status} ${response.statusText}) for ${url}`);
   }
-  return Buffer.from(await res.arrayBuffer());
+  return Buffer.from(await response.arrayBuffer());
 }
 
-async function run(deps: DownloadDeps): Promise<string> {
+async function run(dependencies: DownloadDependencies): Promise<string> {
   const { goarch, goos } = resolveTarget(process.platform, process.arch);
   const key = targetKey({ goarch, goos });
   const asset = RELEASES[key];
@@ -68,31 +68,31 @@ async function run(deps: DownloadDeps): Promise<string> {
   }
 
   const exeName = binaryName(goos);
-  const versionDir = join(deps.storageDir, VERSION);
-  const cached = join(versionDir, exeName);
+  const versionDirectory = join(dependencies.storageDir, VERSION);
+  const cached = join(versionDirectory, exeName);
   if (existsSync(cached)) {
     return cached;
   }
 
-  await mkdir(deps.storageDir, { recursive: true });
-  await mkdir(versionDir, { recursive: true });
+  await mkdir(dependencies.storageDir, { recursive: true });
+  await mkdir(versionDirectory, { recursive: true });
 
   const url = `https://github.com/${REPO}/releases/download/v${VERSION}/${asset.file}`;
-  deps.log(`Downloading ${asset.file}`);
+  dependencies.log(`Downloading ${asset.file}`);
   const data = await fetchBytes(url);
 
   const digest = createHash("sha256").update(data).digest("hex");
   if (digest !== asset.sha256) {
     throw new Error(`SHA-256 mismatch for ${asset.file}: expected ${asset.sha256}, got ${digest}`);
   }
-  deps.log(`Verified SHA-256 ${digest}`);
+  dependencies.log(`Verified SHA-256 ${digest}`);
 
   // Unpack in a private, freshly-created (0700) directory on the SAME filesystem
   // as the cache, then atomically rename the binary into place. This avoids a
   // predictable temp path a local attacker could pre-create as a symlink, writes
   // the verified bytes with O_EXCL ("wx"), and lets a concurrent process see only
   // the absent-or-complete cache entry, never a half-extracted one.
-  const work = await mkdtemp(join(deps.storageDir, ".dl-"));
+  const work = await mkdtemp(join(dependencies.storageDir, ".dl-"));
   try {
     const archive = join(work, asset.file);
     await writeFile(archive, data, { flag: "wx" });

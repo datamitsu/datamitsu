@@ -23,15 +23,15 @@ export interface ToolInfo {
 }
 
 export async function exec(appName?: string, options: ExecOptions = {}): Promise<ExecResult> {
-  const spawnArgs = buildArgs(appName, options);
-  const spawnOpts: { cwd?: string; stdio?: "inherit" | "pipe" } = {};
+  const spawnArguments = buildArguments(appName, options);
+  const spawnOptions: { cwd?: string; stdio?: "inherit" | "pipe" } = {};
   if (options.cwd !== undefined) {
-    spawnOpts.cwd = options.cwd;
+    spawnOptions.cwd = options.cwd;
   }
   if (options.stdio !== undefined) {
-    spawnOpts.stdio = options.stdio;
+    spawnOptions.stdio = options.stdio;
   }
-  const raw = await spawn(spawnArgs, spawnOpts);
+  const raw = await spawn(spawnArguments, spawnOptions);
 
   if (!appName) {
     if (raw.failed) {
@@ -75,9 +75,10 @@ export function parseToolList(output: string): ToolInfo[] {
   const tools: ToolInfo[] = [];
   let currentType: null | string = null;
   const typePattern = /^\[(binary|uv|node|jvm|go|shell)\]$/;
-  const toolPattern = /^ {2}(\S+)(?:\s{2,}(.+))?$/;
+  const toolPattern = /^ {2}(\S+)(?:[ \t]{2,}([^\s].*))?$/;
 
-  for (const line of output.split("\n").map((l) => l.replace(ANSI_PATTERN, ""))) {
+  const lines = output.split("\n").map((line) => line.replace(ANSI_PATTERN, ""));
+  for (const line of lines) {
     const typeMatch = line.match(typePattern);
     if (typeMatch?.[1]) {
       currentType = typeMatch[1];
@@ -96,26 +97,26 @@ export function parseToolList(output: string): ToolInfo[] {
   return tools;
 }
 
-function buildArgs(appName: string | undefined, options: ExecOptions = {}): string[] {
-  const { args = [], beforeConfig = [], config = [], noAutoConfig = false } = options;
+function buildArguments(appName: string | undefined, options: ExecOptions = {}): string[] {
+  const { args: arguments_ = [], beforeConfig = [], config = [], noAutoConfig = false } = options;
 
-  const spawnArgs = ["exec"];
+  const spawnArguments = ["exec"];
 
   for (const c of config) {
-    spawnArgs.push("--config", c);
+    spawnArguments.push("--config", c);
   }
 
   for (const bc of beforeConfig) {
-    spawnArgs.push("--before-config", bc);
+    spawnArguments.push("--before-config", bc);
   }
 
   if (noAutoConfig) {
-    spawnArgs.push("--no-auto-config");
+    spawnArguments.push("--no-auto-config");
   }
 
   if (appName) {
-    spawnArgs.push(appName, ...args);
+    spawnArguments.push(appName, ...arguments_);
   }
 
-  return spawnArgs;
+  return spawnArguments;
 }

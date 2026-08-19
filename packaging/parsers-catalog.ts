@@ -71,7 +71,7 @@ export function renderCatalogMarkdown(cat: ParserCatalog): string {
   for (const t of tools) {
     const modes =
       Object.keys(t.operations ?? {})
-        .sort()
+        .sort((a, b) => a.localeCompare(b))
         .join(", ") || "—";
     const upstream = t.url ? `[link](${t.url})` : "—";
     lines.push(`| \`${t.name}\` | ${modes} | ${cell(t.description)} | ${upstream} |`);

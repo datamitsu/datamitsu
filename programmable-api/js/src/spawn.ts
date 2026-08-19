@@ -8,15 +8,15 @@ export interface SpawnOptions {
   stdio?: "inherit" | "pipe";
 }
 
-export async function spawn(args: string[], options: SpawnOptions = {}): Promise<SpawnRaw> {
+export async function spawn(arguments_: string[], options: SpawnOptions = {}): Promise<SpawnRaw> {
   const { cwd, stdio = "pipe" } = options;
 
   const binaryPath = getExePath();
-  const fullArgs = ["--binary-command", "datamitsu", ...args];
+  const fullArguments = ["--binary-command", "datamitsu", ...arguments_];
 
   let result;
   try {
-    result = await x(binaryPath, fullArgs, {
+    result = await x(binaryPath, fullArguments, {
       nodeOptions: { cwd, stdio },
       throwOnError: false,
     });

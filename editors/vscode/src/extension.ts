@@ -53,7 +53,7 @@ function showInfo(message: string): void {
 
 // formatHintShown gates the one-time "no changes" hint so it isn't repeated on
 // every format that produces no edits.
-let formatHintShown = false;
+let isFormatHintShown = false;
 
 // spawnServer launches `datamitsu lsp` and returns its stdio as an LSP stream
 // pair. We spawn it ourselves (rather than let the client own a ChildProcess) so
@@ -67,13 +67,13 @@ function spawnServer(binaryPath: string): Promise<StreamInfo> {
   return new Promise<StreamInfo>((resolve, reject) => {
     const child = spawn(binaryPath, ["lsp"], { cwd });
     serverProcess = child;
-    let settled = false;
+    let isSettled = false;
 
-    child.once("error", (err) => {
-      output?.appendLine(`server process error: ${err.message}`);
-      if (!settled) {
-        settled = true;
-        reject(err);
+    child.once("error", (error) => {
+      output?.appendLine(`server process error: ${error.message}`);
+      if (!isSettled) {
+        isSettled = true;
+        reject(error);
       }
     });
     child.on("exit", (code, signal) => {
@@ -86,33 +86,33 @@ function spawnServer(binaryPath: string): Promise<StreamInfo> {
       }
     });
     child.once("spawn", () => {
-      if (settled) {
+      if (isSettled) {
         return;
       }
       const { stderr, stdin, stdout } = child;
       if (stdout === null || stdin === null) {
-        settled = true;
+        isSettled = true;
         reject(new Error("datamitsu lsp: stdio pipes are unavailable"));
         return;
       }
       if (stderr !== null) {
         progress?.attach(stderr);
       }
-      settled = true;
+      isSettled = true;
       resolve({ reader: stdout, writer: stdin });
     });
   });
 }
 
 async function start(context: vscode.ExtensionContext): Promise<void> {
-  const cfg = vscode.workspace.getConfiguration("datamitsu");
+  const config = vscode.workspace.getConfiguration("datamitsu");
 
   let binaryPath: string;
   try {
     binaryPath = await resolveBinary({
-      explicitPath: cfg.get<string>("path") ?? "",
+      explicitPath: config.get<string>("path") ?? "",
       log: (message) => output?.appendLine(message),
-      mode: cfg.get<BinaryMode>("binaryMode") ?? "auto",
+      mode: config.get<BinaryMode>("binaryMode") ?? "auto",
       storageDir: context.globalStorageUri.fsPath,
     });
   } catch (error) {
@@ -140,8 +140,8 @@ async function start(context: vscode.ExtensionContext): Promise<void> {
         const edits = await next(document, options, token);
         const count = edits?.length ?? 0;
         output?.appendLine(`format: ${count} edit(s)`);
-        if (count === 0 && !formatHintShown) {
-          formatHintShown = true;
+        if (count === 0 && !isFormatHintShown) {
+          isFormatHintShown = true;
           showInfo(
             "datamitsu: no formatting changes — the file is already formatted, or no " +
               "datamitsu fix tool applies to this file type. See the datamitsu output channel.",

@@ -120,11 +120,11 @@ describe("spawn", () => {
     await spawn(["fix", "--explain"]);
 
     const call = mockX.mock.calls[0];
-    const args = call.arguments[1];
-    assert.ok(args.includes("--binary-command"));
-    assert.ok(args.includes("datamitsu"));
-    assert.ok(args.includes("fix"));
-    assert.ok(args.includes("--explain"));
+    const arguments_ = call.arguments[1];
+    assert.ok(arguments_.includes("--binary-command"));
+    assert.ok(arguments_.includes("datamitsu"));
+    assert.ok(arguments_.includes("fix"));
+    assert.ok(arguments_.includes("--explain"));
   });
 
   it("passes binary path to tinyexec", async () => {

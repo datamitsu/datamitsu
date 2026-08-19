@@ -31,8 +31,8 @@ describe("version", () => {
     assert.equal(result.version, "1.2.3");
 
     const call = mockSpawn.mock.calls[0];
-    const args = call.arguments[0];
-    assert.deepEqual(args, ["version"]);
+    const arguments_ = call.arguments[0];
+    assert.deepEqual(arguments_, ["version"]);
   });
 
   it("version handles errors gracefully", async () => {

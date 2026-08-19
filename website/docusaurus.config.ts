@@ -65,7 +65,7 @@ const config: Config = {
       respectPrefersColorScheme: true,
     },
     footer: {
-      copyright: `Copyright \u00A9 ${new Date().getFullYear()} datamitsu<br/>Your toolchain deserves a home.`,
+      copyright: `Copyright \u{A9} ${new Date().getFullYear()} datamitsu<br/>Your toolchain deserves a home.`,
       links: [
         {
           items: [

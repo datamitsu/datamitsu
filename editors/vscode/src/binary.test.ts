@@ -7,25 +7,25 @@ import { test } from "node:test";
 
 import { findInPath, resolveBinary } from "./binary";
 
-const baseOpts = {
+const baseOptions = {
   explicitPath: "",
   log: () => {},
   storageDir: join(tmpdir(), "dm-vscode-test"),
 };
 
 test("explicit path: returns it when it exists, errors when missing", async () => {
-  const ok = await resolveBinary({ ...baseOpts, explicitPath: execPath, mode: "auto" });
+  const ok = await resolveBinary({ ...baseOptions, explicitPath: execPath, mode: "auto" });
   assert.equal(ok, execPath);
 
   await assert.rejects(
-    resolveBinary({ ...baseOpts, explicitPath: "/no/such/datamitsu", mode: "auto" }),
+    resolveBinary({ ...baseOptions, explicitPath: "/no/such/datamitsu", mode: "auto" }),
     /missing file/,
   );
 });
 
 test("system mode: returns the PATH binary, errors when absent", async () => {
   const found = await resolveBinary({
-    ...baseOpts,
+    ...baseOptions,
     download: async () => assert.fail("must not download in system mode"),
     lookPath: () => "/usr/bin/datamitsu",
     mode: "system",
@@ -33,14 +33,14 @@ test("system mode: returns the PATH binary, errors when absent", async () => {
   assert.equal(found, "/usr/bin/datamitsu");
 
   await assert.rejects(
-    resolveBinary({ ...baseOpts, lookPath: () => {}, mode: "system" }),
+    resolveBinary({ ...baseOptions, lookPath: () => {}, mode: "system" }),
     /not found on PATH/,
   );
 });
 
 test("auto mode: prefers PATH, falls back to download", async () => {
   const sys = await resolveBinary({
-    ...baseOpts,
+    ...baseOptions,
     download: async () => assert.fail("must not download when PATH has datamitsu"),
     lookPath: () => "/usr/bin/datamitsu",
     mode: "auto",
@@ -48,7 +48,7 @@ test("auto mode: prefers PATH, falls back to download", async () => {
   assert.equal(sys, "/usr/bin/datamitsu");
 
   const dl = await resolveBinary({
-    ...baseOpts,
+    ...baseOptions,
     download: async () => "/cache/datamitsu",
     lookPath: () => {},
     mode: "auto",
@@ -58,7 +58,7 @@ test("auto mode: prefers PATH, falls back to download", async () => {
 
 test("bundled mode: always downloads, ignoring PATH", async () => {
   const dl = await resolveBinary({
-    ...baseOpts,
+    ...baseOptions,
     download: async () => "/cache/datamitsu",
     lookPath: () => "/usr/bin/datamitsu",
     mode: "bundled",
@@ -70,13 +70,13 @@ test(
   "findInPath returns an executable regular file on PATH",
   { skip: platform === "win32" },
   () => {
-    const dir = mkdtempSync(join(tmpdir(), "dm-path-"));
-    const exe = join(dir, "datamitsu");
+    const directory = mkdtempSync(join(tmpdir(), "dm-path-"));
+    const exe = join(directory, "datamitsu");
     writeFileSync(exe, "#!/bin/sh\necho hi\n");
     chmodSync(exe, 0o755);
 
     const saved = process.env.PATH;
-    process.env.PATH = dir;
+    process.env.PATH = directory;
     try {
       assert.equal(findInPath("datamitsu"), exe);
     } finally {
@@ -89,16 +89,16 @@ test(
   "findInPath skips a directory and a non-executable file (auto can fall through)",
   { skip: platform === "win32" },
   () => {
-    const dirOnly = mkdtempSync(join(tmpdir(), "dm-dir-"));
-    mkdirSync(join(dirOnly, "datamitsu")); // a directory named like the binary
+    const directoryOnly = mkdtempSync(join(tmpdir(), "dm-directory-"));
+    mkdirSync(join(directoryOnly, "datamitsu")); // a directory named like the binary
 
-    const nonExecDir = mkdtempSync(join(tmpdir(), "dm-file-"));
-    const nonExec = join(nonExecDir, "datamitsu");
+    const nonExecDirectory = mkdtempSync(join(tmpdir(), "dm-file-"));
+    const nonExec = join(nonExecDirectory, "datamitsu");
     writeFileSync(nonExec, "not executable");
     chmodSync(nonExec, 0o644);
 
     const saved = process.env.PATH;
-    process.env.PATH = [dirOnly, nonExecDir].join(":");
+    process.env.PATH = [directoryOnly, nonExecDirectory].join(":");
     try {
       assert.equal(findInPath("datamitsu"), undefined);
     } finally {

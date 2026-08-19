@@ -11,7 +11,7 @@ const Heading = HeadingLib as React.FC<{
   className?: string;
 }>;
 
-interface HexagonCardProps {
+interface HexagonCardProperties {
   description: string;
   icon?: ReactNode;
   number?: number;
@@ -25,7 +25,7 @@ export default function HexagonCard({
   number,
   title,
   variant = "feature",
-}: HexagonCardProps): ReactNode {
+}: HexagonCardProperties): ReactNode {
   return (
     <div className={clsx(styles.hexagonCard, styles[variant])}>
       <div className={styles.hexagonContent}>

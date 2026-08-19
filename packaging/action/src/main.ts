@@ -43,23 +43,23 @@ async function install(): Promise<string> {
   const extracted = asset.file.endsWith(".zip")
     ? await tc.extractZip(archive)
     : await tc.extractTar(archive);
-  const dir = await tc.cacheDir(extracted, TOOL, VERSION, goarch);
-  core.addPath(dir);
-  return dir;
+  const installPath = await tc.cacheDir(extracted, TOOL, VERSION, goarch);
+  core.addPath(installPath);
+  return installPath;
 }
 
 async function run(): Promise<void> {
-  const dir = await install();
+  const installPath = await install();
   core.setOutput("version", VERSION);
-  core.info(`datamitsu ${VERSION} ready (${dir})`);
+  core.info(`datamitsu ${VERSION} ready (${installPath})`);
 
   if (core.getBooleanInput("init")) {
     await exec.exec(TOOL, ["init"]);
   }
 
-  const args = core.getInput("args");
-  if (args.trim() !== "") {
-    await exec.exec(`${TOOL} ${args}`);
+  const arguments_ = core.getInput("args");
+  if (arguments_.trim() !== "") {
+    await exec.exec(`${TOOL} ${arguments_}`);
   }
 }
 

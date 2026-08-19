@@ -274,11 +274,11 @@ function HomepageFeatures() {
           A foundation, not a boilerplate
         </Heading>
         <div className={styles.featuresGrid}>
-          {FeatureList.map((feature, idx) => (
+          {FeatureList.map((feature, index) => (
             <HexagonCard
               description={feature.description}
               icon={feature.icon}
-              key={idx}
+              key={index}
               title={feature.title}
               variant="feature"
             />

@@ -90,8 +90,8 @@ describe("exec", () => {
     await exec("lefthook", { args: ["run", "pre-commit"] });
 
     const call = mockSpawn.mock.calls[0];
-    const args = call.arguments[0];
-    assert.deepEqual(args, ["exec", "lefthook", "run", "pre-commit"]);
+    const arguments_ = call.arguments[0];
+    assert.deepEqual(arguments_, ["exec", "lefthook", "run", "pre-commit"]);
   });
 
   it("exec handles app errors gracefully", async () => {
@@ -145,13 +145,13 @@ describe("exec", () => {
     });
 
     const call = mockSpawn.mock.calls[0];
-    const args = call.arguments[0];
-    const configIdx = args.indexOf("--config");
-    assert.ok(configIdx !== -1);
-    assert.equal(args[configIdx + 1], "./custom.config.js");
-    const beforeIdx = args.indexOf("--before-config");
-    assert.ok(beforeIdx !== -1);
-    assert.equal(args[beforeIdx + 1], "./base.config.js");
+    const arguments_ = call.arguments[0];
+    const configIndex = arguments_.indexOf("--config");
+    assert.ok(configIndex !== -1);
+    assert.equal(arguments_[configIndex + 1], "./custom.config.js");
+    const beforeIndex = arguments_.indexOf("--before-config");
+    assert.ok(beforeIndex !== -1);
+    assert.equal(arguments_[beforeIndex + 1], "./base.config.js");
   });
 
   it("exec passes noAutoConfig flag", async () => {
@@ -167,8 +167,8 @@ describe("exec", () => {
     await exec("lefthook", { noAutoConfig: true });
 
     const call = mockSpawn.mock.calls[0];
-    const args = call.arguments[0];
-    assert.ok(args.includes("--no-auto-config"));
+    const arguments_ = call.arguments[0];
+    assert.ok(arguments_.includes("--no-auto-config"));
   });
 
   it("exec without appName and empty output returns empty tools array", async () => {
@@ -265,11 +265,11 @@ describe("parseToolList", () => {
 
   it("handles ANSI color codes in output", () => {
     const output = [
-      "\u001B[1m[binary]\u001B[0m",
-      "  lefthook    \u001B[2m0.9.0  Git hooks manager\u001B[0m",
+      "\u{1B}[1m[binary]\u{1B}[0m",
+      "  lefthook    \u{1B}[2m0.9.0  Git hooks manager\u{1B}[0m",
       "",
-      "\u001B[1m[uv]\u001B[0m",
-      "  yamllint  \u001B[2m1.35.0  YAML linter\u001B[0m",
+      "\u{1B}[1m[uv]\u{1B}[0m",
+      "  yamllint  \u{1B}[2m1.35.0  YAML linter\u{1B}[0m",
     ].join("\n");
 
     const tools = parseToolList(output);

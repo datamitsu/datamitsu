@@ -4,17 +4,17 @@ import { test } from "node:test";
 import { parseEvent, toStatusUpdate } from "./events";
 
 test("parseEvent decodes a typed line", () => {
-  const ev = parseEvent(
+  const event = parseEvent(
     `{"type":"download","op_id":"dl-1","status":"progress","name":"golangci","percent":42}`,
   );
-  assert.equal(ev?.type, "download");
-  assert.equal(ev?.op_id, "dl-1");
-  assert.equal(ev?.percent, 42);
+  assert.equal(event?.type, "download");
+  assert.equal(event?.op_id, "dl-1");
+  assert.equal(event?.percent, 42);
 });
 
 test("parseEvent rejects blank, non-JSON, and lines missing discriminators", () => {
   assert.equal(parseEvent(""), undefined);
-  assert.equal(parseEvent("   "), undefined);
+  assert.equal(parseEvent(" ".repeat(3)), undefined);
   assert.equal(parseEvent("DEBUG esbuild StripTypes {elapsed: 1}"), undefined); // a --verbose line
   assert.equal(parseEvent(`{"op_id":"x"}`), undefined); // no type
   assert.equal(parseEvent(`{"type":"download"}`), undefined); // no op_id

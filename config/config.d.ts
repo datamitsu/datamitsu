@@ -6,55 +6,55 @@ declare global {
    */
   const colors: {
     // Background colors
-    bgBlack(...args: unknown[]): string;
-    bgBlue(...args: unknown[]): string;
-    bgCyan(...args: unknown[]): string;
-    bgGreen(...args: unknown[]): string;
+    bgBlack(...arguments_: unknown[]): string;
+    bgBlue(...arguments_: unknown[]): string;
+    bgCyan(...arguments_: unknown[]): string;
+    bgGreen(...arguments_: unknown[]): string;
     // Bright background colors
-    bgHiBlack(...args: unknown[]): string;
-    bgHiBlue(...args: unknown[]): string;
-    bgHiCyan(...args: unknown[]): string;
-    bgHiGreen(...args: unknown[]): string;
+    bgHiBlack(...arguments_: unknown[]): string;
+    bgHiBlue(...arguments_: unknown[]): string;
+    bgHiCyan(...arguments_: unknown[]): string;
+    bgHiGreen(...arguments_: unknown[]): string;
 
-    bgHiMagenta(...args: unknown[]): string;
-    bgHiRed(...args: unknown[]): string;
-    bgHiWhite(...args: unknown[]): string;
-    bgHiYellow(...args: unknown[]): string;
-    bgMagenta(...args: unknown[]): string;
-    bgRed(...args: unknown[]): string;
-    bgWhite(...args: unknown[]): string;
-    bgYellow(...args: unknown[]): string;
+    bgHiMagenta(...arguments_: unknown[]): string;
+    bgHiRed(...arguments_: unknown[]): string;
+    bgHiWhite(...arguments_: unknown[]): string;
+    bgHiYellow(...arguments_: unknown[]): string;
+    bgMagenta(...arguments_: unknown[]): string;
+    bgRed(...arguments_: unknown[]): string;
+    bgWhite(...arguments_: unknown[]): string;
+    bgYellow(...arguments_: unknown[]): string;
 
     // Foreground colors
-    black(...args: unknown[]): string;
-    blink(...args: unknown[]): string;
-    blinkRapid(...args: unknown[]): string;
-    blue(...args: unknown[]): string;
+    black(...arguments_: unknown[]): string;
+    blink(...arguments_: unknown[]): string;
+    blinkRapid(...arguments_: unknown[]): string;
+    blue(...arguments_: unknown[]): string;
     // Text attributes
-    bold(...args: unknown[]): string;
-    concealed(...args: unknown[]): string;
-    cyan(...args: unknown[]): string;
-    faint(...args: unknown[]): string;
-    green(...args: unknown[]): string;
+    bold(...arguments_: unknown[]): string;
+    concealed(...arguments_: unknown[]): string;
+    cyan(...arguments_: unknown[]): string;
+    faint(...arguments_: unknown[]): string;
+    green(...arguments_: unknown[]): string;
 
     // Bright foreground colors
-    hiBlack(...args: unknown[]): string;
-    hiBlue(...args: unknown[]): string;
-    hiCyan(...args: unknown[]): string;
-    hiGreen(...args: unknown[]): string;
-    hiMagenta(...args: unknown[]): string;
-    hiRed(...args: unknown[]): string;
-    hiWhite(...args: unknown[]): string;
-    hiYellow(...args: unknown[]): string;
+    hiBlack(...arguments_: unknown[]): string;
+    hiBlue(...arguments_: unknown[]): string;
+    hiCyan(...arguments_: unknown[]): string;
+    hiGreen(...arguments_: unknown[]): string;
+    hiMagenta(...arguments_: unknown[]): string;
+    hiRed(...arguments_: unknown[]): string;
+    hiWhite(...arguments_: unknown[]): string;
+    hiYellow(...arguments_: unknown[]): string;
 
-    italic(...args: unknown[]): string;
-    magenta(...args: unknown[]): string;
-    red(...args: unknown[]): string;
-    reverse(...args: unknown[]): string;
-    strikethrough(...args: unknown[]): string;
-    underline(...args: unknown[]): string;
-    white(...args: unknown[]): string;
-    yellow(...args: unknown[]): string;
+    italic(...arguments_: unknown[]): string;
+    magenta(...arguments_: unknown[]): string;
+    red(...arguments_: unknown[]): string;
+    reverse(...arguments_: unknown[]): string;
+    strikethrough(...arguments_: unknown[]): string;
+    underline(...arguments_: unknown[]): string;
+    white(...arguments_: unknown[]): string;
+    yellow(...arguments_: unknown[]): string;
   };
 
   function getConfig(config: config.Config): config.Config;
@@ -366,7 +366,7 @@ declare global {
        *     },
        *   };
        */
-      oci?: OCIRef;
+      oci?: OCIReference;
 
       /**
        * WASM output-parser modules, keyed by name. Each entry is a url+hash data artifact (NOT an
@@ -695,7 +695,7 @@ declare global {
      * bundle content. The bundle is a cache seed, not a trust boundary — binaries and JARs unpacked
      * from it are re-verified against the published SHA-256 hashes from the config.
      */
-    interface OCIRef {
+    interface OCIReference {
       /**
        * Bundle index/manifest digest, "sha256:" followed by 64 lowercase hex characters. Mandatory
        * — a tag alone never pins content.

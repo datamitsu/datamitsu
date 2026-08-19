@@ -48,19 +48,19 @@ class Registry {
   }
 
   async authenticate(challenge) {
-    const params = new Map();
+    const parameters = new Map();
     for (const part of challenge.replace(/^Bearer\s+/i, "").split(",")) {
-      const [key, value] = part.split("=");
+      const [key, value] = part.split("=", 2);
       if (key && value) {
-        params.set(key.trim(), value.trim().replaceAll('"', ""));
+        parameters.set(key.trim(), value.trim().replaceAll('"', ""));
       }
     }
-    const realm = params.get("realm");
+    const realm = parameters.get("realm");
     if (!realm) {
       throw new Error(`unsupported auth challenge: ${challenge}`);
     }
     const url = new URL(realm);
-    const service = params.get("service");
+    const service = parameters.get("service");
     if (service) {
       url.searchParams.set("service", service);
     }
@@ -111,7 +111,7 @@ class Registry {
       }
       const target = new URL(location, this.base + "/");
       target.searchParams.set("digest", digest);
-      const put = await this.request(target.toString(), {
+      const put = await this.request(target.href, {
         body: bytes,
         headers: { "Content-Type": "application/octet-stream" },
         method: "PUT",
@@ -257,12 +257,12 @@ async function main() {
     await registry.putManifest("latest", manifestBytes);
   }
 
-  const ref = `${REGISTRY}/${repo}`;
-  const record = { digest, module: "core", ref, sha256: hash, tag, version };
+  const reference = `${REGISTRY}/${repo}`;
+  const record = { digest, module: "core", ref: reference, sha256: hash, tag, version };
   writeFileSync("dist/parsers-oci.json", `${JSON.stringify(record, null, 2)}\n`);
 
   emitOutput("digest", digest);
-  emitOutput("ref", ref);
+  emitOutput("ref", reference);
   emitOutput("sha256", hash);
   emitOutput("tag", tag);
 
@@ -270,12 +270,12 @@ async function main() {
     appendFileSync(
       process.env.GITHUB_STEP_SUMMARY,
       `### WASM parser module (OCI)\n\n` +
-        `- artifact: \`${ref}@${digest}\`\n` +
+        `- artifact: \`${reference}@${digest}\`\n` +
         `- tag: \`${tag}\`\n` +
         `- module sha256: \`${hash}\` (also the layer digest)\n\n` +
         "Pin it in a config with:\n\n" +
         "```js\n" +
-        `parsers: { core: { hash: "${hash}", oci: { ref: "${ref}", digest: "${digest}" } } }\n` +
+        `parsers: { core: { hash: "${hash}", oci: { ref: "${reference}", digest: "${digest}" } } }\n` +
         "```\n",
     );
   }
@@ -292,7 +292,7 @@ function resolveModule(checksumsPath) {
   const lines = readFileSync(checksumsPath, "utf8").split("\n");
   const matches = [];
   for (const line of lines) {
-    const [hash, name] = line.trim().split(/\s+/);
+    const [hash, name] = line.trim().split(/\s+/, 2);
     if (name && /^datamitsu_parsers.*\.wasm$/.test(name)) {
       matches.push({ hash, name });
     }

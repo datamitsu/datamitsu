@@ -41,17 +41,17 @@ export default function TerminalDemo(): ReactNode {
 }
 
 // Helper: Debounce function to avoid excessive re-renders
-function debounce<T extends (...args: any[]) => any>(
-  func: T,
+function debounce<T extends (...arguments_: any[]) => any>(
+  function_: T,
   wait: number,
-): (...args: Parameters<T>) => void {
+): (...arguments_: Parameters<T>) => void {
   let timeoutId: null | ReturnType<typeof setTimeout> = null;
 
-  return (...args: Parameters<T>) => {
+  return (...arguments_: Parameters<T>) => {
     if (timeoutId !== null) {
       clearTimeout(timeoutId);
     }
-    timeoutId = setTimeout(() => func(...args), wait);
+    timeoutId = setTimeout(() => function_(...arguments_), wait);
   };
 }
 
@@ -59,9 +59,11 @@ function debounce<T extends (...args: any[]) => any>(
 function getBreakpointDimensions(width: number): { cols: number; rows: number } {
   if (width <= 480) {
     return { cols: 60, rows: 18 };
-  } else if (width <= 768) {
+  }
+  if (width <= 768) {
     return { cols: 80, rows: 24 };
-  } else if (width <= 1024) {
+  }
+  if (width <= 1024) {
     return { cols: 100, rows: 28 };
   }
   return { cols: 120, rows: 30 };
@@ -72,7 +74,7 @@ function TerminalDemoInner(): ReactNode {
   const [announcement, setAnnouncement] = useState("");
   const { cols, rows } = useTerminalDimensions();
   const docusaurusTheme = useDocusaurusTheme();
-  const playerRef = useRef<AsciinemaPlayerHandle>(null);
+  const playerReference = useRef<AsciinemaPlayerHandle>(null);
   const isFirstRender = useRef(true);
 
   const playerOptions = useMemo(
@@ -91,18 +93,20 @@ function TerminalDemoInner(): ReactNode {
 
   // Announce tab changes to screen readers
   useEffect(() => {
-    if (activeKind) {
-      // Use setTimeout to defer state update and avoid synchronous setState in effect
-      const announceTimer = setTimeout(() => {
-        setAnnouncement(`Switched to ${LABELS[activeKind]} demo`);
-      }, 0);
-      const clearTimer = setTimeout(() => setAnnouncement(""), 1000);
-
-      return () => {
-        clearTimeout(announceTimer);
-        clearTimeout(clearTimer);
-      };
+    if (!activeKind) {
+      return;
     }
+
+    // Use setTimeout to defer state update and avoid synchronous setState in effect
+    const announceTimer = setTimeout(() => {
+      setAnnouncement(`Switched to ${LABELS[activeKind]} demo`);
+    }, 0);
+    const clearTimer = setTimeout(() => setAnnouncement(""), 1000);
+
+    return () => {
+      clearTimeout(announceTimer);
+      clearTimeout(clearTimer);
+    };
   }, [activeKind]);
 
   // Auto-play when tab changes (but not on initial render)
@@ -113,8 +117,8 @@ function TerminalDemoInner(): ReactNode {
     }
 
     const timer = setTimeout(() => {
-      if (playerRef.current?.isReady()) {
-        playerRef.current.play();
+      if (playerReference.current?.isReady()) {
+        playerReference.current.play();
       }
     }, 100);
 
@@ -129,10 +133,10 @@ function TerminalDemoInner(): ReactNode {
     switch (e.key) {
       case "ArrowLeft": {
         e.preventDefault();
-        const prevIndex = (currentIndex - 1 + kinds.length) % kinds.length;
-        setActiveKind(kinds[prevIndex]);
+        const previousIndex = (currentIndex - 1 + kinds.length) % kinds.length;
+        setActiveKind(kinds[previousIndex]);
         setTimeout(() => {
-          globalThis.document.getElementById(`tab-${kinds[prevIndex]}`)?.focus();
+          document.getElementById(`tab-${kinds[previousIndex]}`)?.focus();
         }, 0);
 
         break;
@@ -142,7 +146,7 @@ function TerminalDemoInner(): ReactNode {
         const nextIndex = (currentIndex + 1) % kinds.length;
         setActiveKind(kinds[nextIndex]);
         setTimeout(() => {
-          globalThis.document.getElementById(`tab-${kinds[nextIndex]}`)?.focus();
+          document.getElementById(`tab-${kinds[nextIndex]}`)?.focus();
         }, 0);
 
         break;
@@ -152,7 +156,7 @@ function TerminalDemoInner(): ReactNode {
         const lastKind = kinds.at(-1)!; // Non-null assertion: kinds array is always non-empty
         setActiveKind(lastKind);
         setTimeout(() => {
-          globalThis.document.getElementById(`tab-${lastKind}`)?.focus();
+          document.getElementById(`tab-${lastKind}`)?.focus();
         }, 0);
 
         break;
@@ -161,7 +165,7 @@ function TerminalDemoInner(): ReactNode {
         e.preventDefault();
         setActiveKind(kinds[0]);
         setTimeout(() => {
-          globalThis.document.getElementById(`tab-${kinds[0]}`)?.focus();
+          document.getElementById(`tab-${kinds[0]}`)?.focus();
         }, 0);
 
         break;
@@ -219,7 +223,7 @@ function TerminalDemoInner(): ReactNode {
         <AsciinemaPlayer
           key={`${activeKind}-${cols}-${rows}-${docusaurusTheme}`}
           options={playerOptions}
-          ref={playerRef}
+          ref={playerReference}
           src={CAST_FILES[activeKind]}
         />
       </div>
@@ -233,21 +237,24 @@ function useDocusaurusTheme(): "dark" | "light" {
     if (typeof document === "undefined") {
       return "dark"; // SSR fallback
     }
-    return globalThis.document.documentElement.dataset.theme === "light" ? "light" : "dark";
+    return document.documentElement.dataset.theme === "light" ? "light" : "dark";
   });
 
   useEffect(() => {
     // Listen for theme changes via MutationObserver
     const observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        if (mutation.type === "attributes" && mutation.attributeName === "data-theme") {
-          const updatedTheme = globalThis.document.documentElement.dataset.theme;
-          setTheme(updatedTheme === "light" ? "light" : "dark");
+      for (const mutation of mutations) {
+        // `return` here was a `forEach` early-exit, i.e. skip this mutation.
+        if (mutation.type !== "attributes" || mutation.attributeName !== "data-theme") {
+          continue;
         }
-      });
+
+        const updatedTheme = document.documentElement.dataset.theme;
+        setTheme(updatedTheme === "light" ? "light" : "dark");
+      }
     });
 
-    observer.observe(globalThis.document.documentElement, {
+    observer.observe(document.documentElement, {
       attributeFilter: ["data-theme"],
       attributes: true,
     });
@@ -264,22 +271,22 @@ function useTerminalDimensions(): { cols: number; rows: number } {
     if (globalThis.window === undefined) {
       return { cols: 80, rows: 24 }; // SSR fallback
     }
-    return getBreakpointDimensions(globalThis.window.innerWidth);
+    return getBreakpointDimensions(window.innerWidth);
   });
 
   const handleResize = useMemo(
     () =>
       debounce(() => {
-        setDimensions(getBreakpointDimensions(globalThis.window.innerWidth));
+        setDimensions(getBreakpointDimensions(window.innerWidth));
       }, 300),
     [],
   );
 
   // eslint-disable-next-line fsecond/valid-event-listener -- Custom debounced handler requires direct addEventListener
   useEffect(() => {
-    globalThis.window.addEventListener("resize", handleResize);
+    window.addEventListener("resize", handleResize);
     return () => {
-      globalThis.window.removeEventListener("resize", handleResize);
+      window.removeEventListener("resize", handleResize);
     };
   }, [handleResize]);
 

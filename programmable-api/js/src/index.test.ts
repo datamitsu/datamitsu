@@ -31,12 +31,12 @@ describe("index module exports", () => {
   });
 
   it("named exports are the same references as default export methods", async () => {
-    const mod = await import("./index.js");
-    assert.equal(mod.fix, mod.default.fix);
-    assert.equal(mod.lint, mod.default.lint);
-    assert.equal(mod.check, mod.default.check);
-    assert.equal(mod.exec, mod.default.exec);
-    assert.equal(mod.cache, mod.default.cache);
-    assert.equal(mod.version, mod.default.version);
+    const module_ = await import("./index.js");
+    assert.equal(module_.fix, module_.default.fix);
+    assert.equal(module_.lint, module_.default.lint);
+    assert.equal(module_.check, module_.default.check);
+    assert.equal(module_.exec, module_.default.exec);
+    assert.equal(module_.cache, module_.default.cache);
+    assert.equal(module_.version, module_.default.version);
   });
 });
