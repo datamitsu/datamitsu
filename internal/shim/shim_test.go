@@ -987,3 +987,44 @@ func BenchmarkDispatch(b *testing.B) {
 		}
 	}
 }
+
+// TestDispatchTrustsTheActivatedFarmVariable covers the case where this process
+// resolves the cache root differently than the activation did — a
+// DATAMITSU_CACHE_DIR or HOME that differs in the child context. Without the
+// exported farm directory to fall back on, a genuine farm entry looks like a
+// renamed datamitsu, Dispatch declines, and the tool's argv reaches the CLI:
+// `tofu init` would run `datamitsu init`.
+func TestDispatchTrustsTheActivatedFarmVariable(t *testing.T) {
+	h := newHarness(t)
+	h.d.CacheRoot = func() string { return filepath.Join(h.base, "a-different-cache") }
+	h.d.Environ = func() []string {
+		return []string{"PATH=/usr/bin", env.SourceFarmVarName() + "=" + h.farmDir}
+	}
+	// No manifest is written: the dead end has to be the loud one.
+	h.invokeThroughFarm("tofu", "init")
+
+	code, handled := h.d.Dispatch()
+	if !handled || code != ExitNotFound {
+		t.Fatalf("Dispatch() = (%d, %v), want (%d, true) — the invocation fell through to the CLI",
+			code, handled, ExitNotFound)
+	}
+	if !strings.Contains(h.stderr.String(), "tofu") {
+		t.Errorf("the failure did not name the tool:\n%s", h.stderr.String())
+	}
+}
+
+// TestDispatchIgnoresAnUnrelatedFarmVariable pins the other half: the variable
+// only ever says "yes, through a farm" for the directory it actually names. A
+// stale or foreign value must not turn a renamed datamitsu into an exit 127.
+func TestDispatchIgnoresAnUnrelatedFarmVariable(t *testing.T) {
+	h := newHarness(t)
+	h.d.CacheRoot = func() string { return filepath.Join(h.base, "a-different-cache") }
+	h.d.Environ = func() []string {
+		return []string{"PATH=/usr/bin", env.SourceFarmVarName() + "=" + filepath.Join(h.base, "elsewhere", "bin")}
+	}
+	h.invokeThroughFarm("tofu", "init")
+
+	if code, handled := h.d.Dispatch(); handled || code != 0 {
+		t.Fatalf("Dispatch() = (%d, %v), want (0, false)", code, handled)
+	}
+}

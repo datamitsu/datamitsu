@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,7 +18,7 @@ import (
 // declared names were refused.
 func TestSummarizeRefreshCounts(t *testing.T) {
 	var buf bytes.Buffer
-	summarizeRefresh(&buf, statusPlan(t))
+	summarizeRefresh(&buf, bakeResult{Plan: statusPlan(t)})
 
 	line := buf.String()
 	if strings.Count(line, "\n") != 1 {
@@ -34,10 +35,32 @@ func TestSummarizeRefreshCounts(t *testing.T) {
 // summary. Silence would be indistinguishable from the command not running.
 func TestSummarizeRefreshEmptyFarm(t *testing.T) {
 	var buf bytes.Buffer
-	summarizeRefresh(&buf, sourcefarm.Plan{Root: "/repo"})
+	summarizeRefresh(&buf, bakeResult{Plan: sourcefarm.Plan{Root: "/repo"}})
 
 	if !strings.Contains(buf.String(), "baked 0 tool(s)") {
 		t.Errorf("empty farm produced no usable summary:\n%s", buf.String())
+	}
+}
+
+// TestSummarizeRefreshReportsFailedBake asserts a refresh whose materialization
+// failed does not claim to have baked anything. The previous farm is still what
+// is on PATH, and a success line here would send the user away believing the
+// repair they just ran had taken effect.
+func TestSummarizeRefreshReportsFailedBake(t *testing.T) {
+	var buf bytes.Buffer
+	summarizeRefresh(&buf, bakeResult{
+		Plan:           statusPlan(t),
+		MaterializeErr: errors.New("no space left on device"),
+	})
+
+	out := buf.String()
+	if strings.Contains(out, "baked") {
+		t.Errorf("a failed bake reported a bake count:\n%s", out)
+	}
+	for _, want := range []string{"could not re-bake", "no space left on device", "/repo"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("failure summary is missing %q:\n%s", want, out)
+		}
 	}
 }
 

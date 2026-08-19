@@ -6,7 +6,6 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
-	"github.com/datamitsu/datamitsu/internal/sourcefarm"
 
 	"github.com/spf13/cobra"
 )
@@ -60,17 +59,17 @@ func runSourceRefresh(cmd *cobra.Command) error {
 		return err
 	}
 
-	if !sourceRefreshForce && sourceFarmIsFresh(root) {
+	if !sourceRefreshForce && sourceManifestDecides() && sourceFarmIsFresh(root) {
 		_, _ = fmt.Fprintf(stderr, "%s: source farm for %s is already up to date\n", ldflags.PackageName, root)
 		return nil
 	}
 
-	plan, err := bakeSourceFarm(ctx, stderr)
+	res, err := bakeSourceFarm(ctx, stderr)
 	if err != nil {
 		return err
 	}
 
-	summarizeRefresh(stderr, plan)
+	summarizeRefresh(stderr, res)
 	return nil
 }
 
@@ -92,13 +91,22 @@ func sourceFarmIsFresh(root string) bool {
 // It goes to stderr with the rest of source mode's human output: a refresh may
 // be called from the same shell function that runs an activation through `eval`, and a single
 // stray byte on stdout there is a syntax error in the user's shell.
-func summarizeRefresh(stderr io.Writer, plan sourcefarm.Plan) {
+//
+// A bake that failed but left the previous farm standing reports the failure
+// instead of a count. Printing "baked N tool(s)" for a farm that was not written
+// is the one summary that would send the user away believing the repair worked.
+func summarizeRefresh(stderr io.Writer, res bakeResult) {
+	if res.MaterializeErr != nil {
+		_, _ = fmt.Fprintf(stderr, "%s: could not re-bake the farm for %s, the previous one is left in place: %v\n",
+			ldflags.PackageName, res.Plan.Root, res.MaterializeErr)
+		return
+	}
 	pending := 0
-	for _, e := range plan.Entries {
+	for _, e := range res.Plan.Entries {
 		if !e.Installed {
 			pending++
 		}
 	}
 	_, _ = fmt.Fprintf(stderr, "%s: baked %d tool(s) for %s (%d not downloaded yet, %d excluded)\n",
-		ldflags.PackageName, len(plan.Entries), plan.Root, pending, len(plan.Excluded))
+		ldflags.PackageName, len(res.Plan.Entries), res.Plan.Root, pending, len(res.Plan.Excluded))
 }

@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
@@ -297,9 +296,10 @@ func (rm *RuntimeManager) getNodeCommandInfo(ctx context.Context, appName string
 	// Command-info resolution only ever touches an already-installed runtime
 	// (the install pass ran first), so there is no fresh download to bound; the
 	// caller's context is still propagated for cancellation.
-	return rm.nodeCommandInfo(appName, appConfig, files, archives, func(runtimeName string) (string, error) {
+	info, _, err := rm.nodeCommandInfo(appName, appConfig, files, archives, func(runtimeName string) (string, error) {
 		return rm.installNode(ctx, runtimeName)
 	})
+	return info, err
 }
 
 // resolveNodeCommandInfo is getNodeCommandInfo without the install side effect:
@@ -314,63 +314,72 @@ func (rm *RuntimeManager) getNodeCommandInfo(ctx context.Context, appName string
 // manager names a directory that is gone once that shell exits, and it writes
 // the user's whole PATH into an on-disk artifact that `source status --json`
 // prints. Only the runtime-owned prefix is recorded; the shim prepends it to
-// whatever PATH the caller actually has (see shim.mergeEnv).
+// whatever PATH the caller actually has (see shim.mergeEnv). The prefix is
+// returned by nodeCommandInfo rather than parsed back out of the composed value,
+// so a runtime that contributes no directory at all records no PATH entry.
 func (rm *RuntimeManager) resolveNodeCommandInfo(appName string, appConfig *binmanager.AppConfigNode, files map[string]string, archives map[string]*binmanager.ArchiveSpec) (*binmanager.CommandInfo, error) {
-	info, err := rm.nodeCommandInfo(appName, appConfig, files, archives, rm.resolveNodeBinPath)
+	info, pathPrefix, err := rm.nodeCommandInfo(appName, appConfig, files, archives, rm.resolveNodeBinPath)
 	if err != nil {
 		return nil, err
 	}
 	if info.Env != nil {
-		if path, ok := info.Env["PATH"]; ok {
-			info.Env["PATH"] = nodePathPrefix(path)
+		if pathPrefix == "" {
+			delete(info.Env, "PATH")
+		} else {
+			info.Env["PATH"] = pathPrefix
 		}
 	}
 	return info, nil
 }
 
-// nodePathPrefix drops the inherited tail nodeCommandInfo appended, leaving the
-// managed node's bin directory. The composition is
-// "{nodeBinDir}{sep}{os.Getenv(PATH)}", so cutting at the first separator is
-// exact rather than a heuristic.
-func nodePathPrefix(composed string) string {
-	prefix, _, found := strings.Cut(composed, string(os.PathListSeparator))
-	if !found {
-		return composed
-	}
-	return prefix
-}
-
 // nodeCommandInfo builds a node app's CommandInfo, obtaining the node binary
 // through the injected nodeBin func — installNode on the exec path,
-// resolveNodeBinPath on the side-effect-free path.
-func (rm *RuntimeManager) nodeCommandInfo(appName string, appConfig *binmanager.AppConfigNode, files map[string]string, archives map[string]*binmanager.ArchiveSpec, nodeBin func(string) (string, error)) (*binmanager.CommandInfo, error) {
+// resolveNodeBinPath on the side-effect-free path. The second return value is
+// the runtime-owned PATH prefix, empty when the runtime contributes none.
+func (rm *RuntimeManager) nodeCommandInfo(appName string, appConfig *binmanager.AppConfigNode, files map[string]string, archives map[string]*binmanager.ArchiveSpec, nodeBin func(string) (string, error)) (*binmanager.CommandInfo, string, error) {
 	appEnvPath, runtimeName, rc, err := rm.resolveNodeAppEnvPathWith(appName, appConfig, files, archives)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	if rc.Node == nil {
-		return nil, fmt.Errorf("runtime for %q has no node config (nodeVersion/pnpmVersion)", appName)
+		return nil, "", fmt.Errorf("runtime for %q has no node config (nodeVersion/pnpmVersion)", appName)
 	}
 
 	if err := validateRelativePath(appConfig.BinPath); err != nil {
-		return nil, fmt.Errorf("app %q: unsafe binPath: %w", appName, err)
+		return nil, "", fmt.Errorf("app %q: unsafe binPath: %w", appName, err)
 	}
 
 	nodeBinPath, err := nodeBin(runtimeName)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	nodeBinDir := filepath.Dir(nodeBinPath)
 	appBinPath := filepath.Join(appEnvPath, appConfig.BinPath)
 
+	// A system-mode runtime may name its interpreter by bare word ("node"), and
+	// filepath.Dir of that is ".". Prepending "." to PATH would put the current
+	// working directory in front of every lookup the app makes — and on the
+	// resolve path it is persisted into the farm manifest, so every later shell
+	// replays it. A bare word is found through PATH by the exec itself, so there
+	// is nothing for the runtime to contribute.
+	pathPrefix := filepath.Dir(nodeBinPath)
+	if !filepath.IsAbs(pathPrefix) {
+		pathPrefix = ""
+	}
+
 	envVars := getNodeEnvVars(appEnvPath)
-	envVars["PATH"] = nodeBinDir + string(os.PathListSeparator) + os.Getenv("PATH") //nolint:forbidigo // standard PATH for child process env, not a datamitsu env var
+	//nolint:forbidigo // standard PATH for child process env, not a datamitsu env var
+	inheritedPath := os.Getenv("PATH")
+	if pathPrefix == "" {
+		envVars["PATH"] = inheritedPath
+	} else {
+		envVars["PATH"] = pathPrefix + string(os.PathListSeparator) + inheritedPath
+	}
 
 	return &binmanager.CommandInfo{
 		Type:    "node",
 		Command: appBinPath,
 		Args:    nil,
 		Env:     envVars,
-	}, nil
+	}, pathPrefix, nil
 }

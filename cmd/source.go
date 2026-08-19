@@ -99,40 +99,167 @@ func init() {
 // and the renderers remove an existing farm entry from PATH before prepending
 // it, so re-activation cannot grow PATH.
 func runSource(cmd *cobra.Command, render func(sourcefarm.Plan) string) error {
-	plan, err := bakeSourceFarm(commandContext(cmd), cmd.ErrOrStderr())
+	ctx := commandContext(cmd)
+	stderr := cmd.ErrOrStderr()
+
+	plan, fresh, err := freshSourcePlan(ctx)
 	if err != nil {
 		return err
 	}
-	warnSourceFarm(cmd.ErrOrStderr(), plan)
+	if !fresh {
+		res, err := bakeSourceFarm(ctx, stderr)
+		if err != nil {
+			return err
+		}
+		reportBakeFailure(stderr, res)
+		plan = res.Plan
+	}
+
+	warnSourceFarm(stderr, plan)
 	if _, err := fmt.Fprint(cmd.OutOrStdout(), render(plan)); err != nil {
 		return fmt.Errorf("write activation code: %w", err)
 	}
 	return nil
 }
 
+// freshSourcePlan returns the farm the on-disk manifest already describes, when
+// that manifest still matches the tree.
+//
+// Activation lives in a shell rc file, so every new shell and every tmux pane
+// pays it. Re-resolving the whole config there costs an order of magnitude more
+// than reading the manifest back, for an answer that is identical whenever the
+// manifest is fresh — and fresh is the steady state, because a tool invocation
+// re-bakes on its own as soon as the tree changes.
+//
+// Installed flags come from bake time rather than a fresh stat, so a store entry
+// deleted since the bake is reported as present. That only affects the "not
+// downloaded yet" warning: the shim stats the target itself and installs on
+// demand. `source status` is the command that answers with what is true now, and
+// it deliberately keeps resolving.
+func freshSourcePlan(ctx context.Context) (sourcefarm.Plan, bool, error) {
+	root, err := sourceProjectRoot(ctx)
+	if err != nil {
+		return sourcefarm.Plan{}, false, err
+	}
+	if !sourceManifestDecides() {
+		return sourcefarm.Plan{}, false, nil
+	}
+	plan, fresh := freshSourcePlanFor(root)
+	return plan, fresh, nil
+}
+
+// freshSourcePlanFor is freshSourcePlan once the root is known.
+//
+// It cannot fail, which is why it returns no error. Every state that is not
+// "fresh, with the farm it describes still on disk" — no manifest, one that will
+// not decode, an aged-out watch set, a deleted farm — means the same thing to the
+// caller and gets the same answer: false, go resolve the config and bake.
+func freshSourcePlanFor(root string) (sourcefarm.Plan, bool) {
+	manifestPath, err := env.GetProjectManifestPath(root)
+	if err != nil {
+		return sourcefarm.Plan{}, false
+	}
+	m, err := sourcefarm.Load(manifestPath)
+	if err != nil || !sourcefarm.Validate(m) {
+		return sourcefarm.Plan{}, false
+	}
+	// A manifest whose farm has been deleted out from under it is fresh by the
+	// watch set and useless in practice: activating it would put a directory that
+	// does not exist on PATH.
+	if info, err := os.Stat(m.FarmDir); err != nil || !info.IsDir() {
+		return sourcefarm.Plan{}, false
+	}
+
+	return sourcefarm.Plan{
+		Root:     m.Root,
+		FarmDir:  m.FarmDir,
+		Entries:  m.Entries,
+		Excluded: m.Excluded,
+		Shadowed: m.Shadowed,
+	}, true
+}
+
+// sourceManifestDecides reports whether the on-disk manifest may answer for the
+// current invocation.
+//
+// It may not when the config came from a flag. The manifest's watch set records
+// the files of the config chain that baked it, so an explicit --config naming a
+// different file compares equal against a watch set that never mentioned it —
+// the freshness check would report "unchanged" for a config it has never seen.
+// Those invocations always re-resolve.
+func sourceManifestDecides() bool {
+	return len(ConfigPaths) == 0 && !NoAutoConfig
+}
+
+// reportBakeFailure tells the user that the farm they are activating is the
+// previous one, not the one this command just tried to write.
+func reportBakeFailure(stderr io.Writer, res bakeResult) {
+	if res.MaterializeErr == nil {
+		return
+	}
+	_, _ = fmt.Fprintf(stderr, "%s: could not re-bake the farm, activating the one already on disk: %v\n",
+		ldflags.PackageName, res.MaterializeErr)
+}
+
+// bakeResult is what a bake produced: the plan, plus a materialization failure
+// that was survivable.
+type bakeResult struct {
+	Plan sourcefarm.Plan
+
+	// MaterializeErr is a materialization failure the caller survived because a
+	// usable farm was already on disk. It is reported, never fatal — when there
+	// was nothing to fall back on, bakeSourceFarm returns an error instead.
+	MaterializeErr error
+}
+
 // bakeSourceFarm resolves the project's declared apps and materializes the farm,
 // returning the plan it wrote.
 //
-// A materialization failure is not fatal: the previous farm and manifest are
-// still on disk and still work, so activation continues after one line on
-// stderr. That is the same rule sourcefarm itself follows — an empty farm would
-// turn every declared tool into an exit-127 across every shell on the machine.
-func bakeSourceFarm(ctx context.Context, stderr io.Writer) (sourcefarm.Plan, error) {
+// A materialization failure is not fatal *when a previous farm is still on disk*:
+// that farm still works, so activation continues after one line on stderr. That
+// is the same rule sourcefarm itself follows — an empty farm would turn every
+// declared tool into an exit-127 across every shell on the machine.
+//
+// With no farm to fall back on the rule inverts and the failure is fatal.
+// Emitting activation code for a farm directory that does not exist would exit 0
+// after prepending nothing, and every declared tool would then resolve through
+// the rest of PATH to whatever the system happens to have — the silent
+// wrong-binary failure the farm exists to prevent, arriving through the
+// activation door. In fish it is quieter still: fish_add_path skips a
+// non-existent directory without a word.
+func bakeSourceFarm(ctx context.Context, stderr io.Writer) (bakeResult, error) {
 	plan, err := resolveSourcePlan(ctx)
 	if err != nil {
-		return sourcefarm.Plan{}, err
+		return bakeResult{}, err
 	}
 
 	m := sourcefarm.BuildManifest(plan, sourcefarm.OriginGitRoot,
 		sourcefarm.WatchPaths(plan.Root, ConfigChainFiles()))
 
-	// sourcefarm already reports the failure on the writer it was given; the
-	// activation itself proceeds against whatever farm is on disk.
-	_ = sourcefarm.MaterializeWithOptions(plan, m, sourcefarm.Options{
+	// sourcefarm already reports the failure on the writer it was given.
+	matErr := sourcefarm.MaterializeWithOptions(plan, m, sourcefarm.Options{
 		Warn: func(line string) { _, _ = fmt.Fprintln(stderr, line) },
 	})
+	if matErr != nil && !farmOnDisk(plan) {
+		return bakeResult{}, fmt.Errorf("failed to bake the source farm for %s, and no previous farm is usable: %w", plan.Root, matErr)
+	}
 
-	return plan, nil
+	return bakeResult{Plan: plan, MaterializeErr: matErr}, nil
+}
+
+// farmOnDisk reports whether a previously baked farm for this plan is still
+// usable: the farm directory is there and its manifest still decodes.
+func farmOnDisk(plan sourcefarm.Plan) bool {
+	info, err := os.Stat(plan.FarmDir)
+	if err != nil || !info.IsDir() {
+		return false
+	}
+	manifestPath, err := env.GetProjectManifestPath(plan.Root)
+	if err != nil {
+		return false
+	}
+	_, err = sourcefarm.Load(manifestPath)
+	return err == nil
 }
 
 // resolveSourcePlan computes what the farm for the current project should
@@ -197,6 +324,18 @@ func sourceProjectRoot(ctx context.Context) (string, error) {
 		// An explicit --config is the user saying which config to activate, so
 		// the git root only supplies the farm's identity.
 		return root, nil
+	}
+
+	// --no-auto-config with nothing to replace it does not mean "activate the
+	// embedded default config". It would bake five built-in apps into the farm
+	// this root's real config owns, replacing it at the same path — every
+	// already-activated shell for this root would then get exit 127 for every
+	// tool the project actually declares.
+	if NoAutoConfig {
+		return "", fmt.Errorf("%s source cannot use --no-auto-config without a config.\n"+
+			"Drop the flag to use the config at %s, or pass one explicitly:\n"+
+			"  %s --config /path/to/%s.config.ts source bash",
+			ldflags.PackageName, root, ldflags.PackageName, ldflags.PackageName)
 	}
 
 	discovered, err := discoverAutoConfig(root)

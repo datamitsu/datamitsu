@@ -304,3 +304,155 @@ func TestConfigChainFilesRecordsOnlyFilePaths(t *testing.T) {
 		t.Fatalf("ConfigChainFiles() handed out its own slice: %v", again)
 	}
 }
+
+// TestFarmOnDiskRequiresBothHalves pins what "a previous farm is still usable"
+// means. Only when the farm directory and a decodable manifest are both there
+// may a failed bake be downgraded to a warning; anything less and activation has
+// nothing to fall back on.
+func TestFarmOnDiskRequiresBothHalves(t *testing.T) {
+	cache := t.TempDir()
+	t.Setenv("DATAMITSU_CACHE_DIR", cache)
+
+	root := t.TempDir()
+	farm, err := env.GetProjectBinPath(root)
+	if err != nil {
+		t.Fatalf("GetProjectBinPath() error = %v", err)
+	}
+	manifestPath, err := env.GetProjectManifestPath(root)
+	if err != nil {
+		t.Fatalf("GetProjectManifestPath() error = %v", err)
+	}
+	plan := sourcefarm.Plan{Root: root, FarmDir: farm}
+
+	if farmOnDisk(plan) {
+		t.Error("a root that was never baked reported a usable farm")
+	}
+
+	if err := os.MkdirAll(farm, 0o700); err != nil {
+		t.Fatalf("create farm directory: %v", err)
+	}
+	if farmOnDisk(plan) {
+		t.Error("a farm directory with no manifest reported usable")
+	}
+
+	if err := os.WriteFile(manifestPath, []byte("{not json"), 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+	if farmOnDisk(plan) {
+		t.Error("a manifest that does not decode reported usable")
+	}
+
+	data, err := sourcefarm.Encode(sourcefarm.BuildManifest(plan, sourcefarm.OriginGitRoot, nil))
+	if err != nil {
+		t.Fatalf("Encode() error = %v", err)
+	}
+	if err := os.WriteFile(manifestPath, data, 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+	if !farmOnDisk(plan) {
+		t.Error("a baked farm reported unusable")
+	}
+}
+
+// TestFreshSourcePlanServesTheManifest covers the activation fast path: a fresh
+// manifest is rendered straight back, and every state that is not "fresh with a
+// farm behind it" falls through to a full resolve rather than activating a
+// directory that is not there.
+func TestFreshSourcePlanServesTheManifest(t *testing.T) {
+	cache := t.TempDir()
+	t.Setenv("DATAMITSU_CACHE_DIR", cache)
+
+	root := t.TempDir()
+	farm, err := env.GetProjectBinPath(root)
+	if err != nil {
+		t.Fatalf("GetProjectBinPath() error = %v", err)
+	}
+	manifestPath, err := env.GetProjectManifestPath(root)
+	if err != nil {
+		t.Fatalf("GetProjectManifestPath() error = %v", err)
+	}
+	if err := os.MkdirAll(farm, 0o700); err != nil {
+		t.Fatalf("create farm directory: %v", err)
+	}
+
+	watched := filepath.Join(root, "datamitsu.config.js")
+	if err := os.WriteFile(watched, []byte("//\n"), 0o600); err != nil {
+		t.Fatalf("write watched file: %v", err)
+	}
+	plan := sourcefarm.Plan{
+		Root:     root,
+		FarmDir:  farm,
+		Entries:  []sourcefarm.Entry{{Name: "tofu", Installed: true}},
+		Shadowed: []sourcefarm.Shadow{{Name: "tofu", Path: "/usr/local/bin/tofu"}},
+	}
+	m := sourcefarm.BuildManifest(plan, sourcefarm.OriginGitRoot, sourcefarm.WatchPaths(root, []string{watched}))
+	data, err := sourcefarm.Encode(m)
+	if err != nil {
+		t.Fatalf("Encode() error = %v", err)
+	}
+	if err := os.WriteFile(manifestPath, data, 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	got, fresh := freshSourcePlanFor(root)
+	if !fresh {
+		t.Fatal("a fresh manifest with its farm on disk was not served from the manifest")
+	}
+	if got.Root != root || got.FarmDir != farm {
+		t.Fatalf("served plan = %+v, want root %q farm %q", got, root, farm)
+	}
+	// The warnings the activation prints come from the served plan, so the
+	// manifest's entry and shadow lists have to survive the round trip.
+	if len(got.Entries) != 1 || got.Entries[0].Name != "tofu" {
+		t.Errorf("served plan lost its entries: %+v", got.Entries)
+	}
+	if len(got.Shadowed) != 1 || got.Shadowed[0].Path != "/usr/local/bin/tofu" {
+		t.Errorf("served plan lost its shadow list: %+v", got.Shadowed)
+	}
+
+	// A farm directory deleted out from under a manifest that is otherwise fresh
+	// must re-bake: activating it would prepend a path that does not exist.
+	if err := os.RemoveAll(farm); err != nil {
+		t.Fatalf("remove farm directory: %v", err)
+	}
+	if _, fresh := freshSourcePlanFor(root); fresh {
+		t.Error("a manifest whose farm is gone was served anyway")
+	}
+
+	// A changed tree must re-bake too.
+	if err := os.MkdirAll(farm, 0o700); err != nil {
+		t.Fatalf("recreate farm directory: %v", err)
+	}
+	if err := os.WriteFile(watched, []byte("// changed\n"), 0o600); err != nil {
+		t.Fatalf("rewrite watched file: %v", err)
+	}
+	if _, fresh := freshSourcePlanFor(root); fresh {
+		t.Error("a stale manifest was served anyway")
+	}
+}
+
+// TestSourceManifestDecidesRequiresDiscoveredConfig pins that a flag-supplied
+// config always re-resolves. The manifest's watch set describes the chain that
+// baked it and cannot answer for a file it has never seen, so serving it for an
+// explicit --config would activate the wrong toolchain and report it fresh.
+func TestSourceManifestDecidesRequiresDiscoveredConfig(t *testing.T) {
+	t.Cleanup(func() {
+		ConfigPaths = nil
+		NoAutoConfig = false
+	})
+
+	ConfigPaths, NoAutoConfig = nil, false
+	if !sourceManifestDecides() {
+		t.Error("a discovered config was not allowed to use the manifest")
+	}
+
+	ConfigPaths = []string{"/elsewhere/other.config.ts"}
+	if sourceManifestDecides() {
+		t.Error("an explicit --config was served from the manifest")
+	}
+
+	ConfigPaths, NoAutoConfig = nil, true
+	if sourceManifestDecides() {
+		t.Error("--no-auto-config was served from the manifest")
+	}
+}

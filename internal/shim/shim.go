@@ -311,6 +311,23 @@ func (d *Dispatcher) computeThroughFarm() bool {
 	return d.underFarm(d.lookPath(argv0))
 }
 
+// activatedFarm returns the farm directory this shell was activated with, or "".
+// It reads the environment through the injected Environ for the same reason
+// lookPathFrom does: the whole decision tree stays testable without touching the
+// real process environment.
+func (d *Dispatcher) activatedFarm() string {
+	if d.Environ == nil {
+		return ""
+	}
+	name := env.SourceFarmVarName()
+	for _, kv := range d.Environ() {
+		if key, value, ok := strings.Cut(kv, "="); ok && key == name {
+			return value
+		}
+	}
+	return ""
+}
+
 // lookPath returns the first executable named name on PATH, or "" — the file the
 // shell just ran. It is the resolution step, not a permission check: a
 // directory or a non-executable file is skipped exactly as a shell skips it.
@@ -357,10 +374,20 @@ func (d *Dispatcher) lookPathFrom(name string, skipFarm bool) string {
 // because the two sides can describe the same directory differently: a path that
 // went through EvalSymlinks (as the executable does) has /var rewritten to
 // /private/var on macOS, while the cache root has not.
+// The activated shell exported the farm directory it put on PATH, and that
+// answer is taken here before the cache root is consulted. The two can disagree:
+// a DATAMITSU_CACHE_DIR or HOME that resolves differently in this process than it
+// did at activation makes a genuine farm entry look like a plain renamed
+// datamitsu, and Dispatch would then decline and hand a tool's argv to the CLI —
+// `tofu init` running `datamitsu init`. Trusting the variable is not a widening:
+// it only ever adds "yes, through a farm", which is the loud-failure branch.
 func (d *Dispatcher) underFarm(path string) bool {
 	dir := filepath.Dir(filepath.Clean(path))
 	if filepath.Base(dir) != farmDirName {
 		return false
+	}
+	if farm := d.activatedFarm(); farm != "" && filepath.Clean(farm) == dir {
+		return true
 	}
 	projects := filepath.Clean(filepath.Join(d.CacheRoot(), projectsDirName))
 	candidate := filepath.Dir(filepath.Dir(dir))
@@ -701,13 +728,18 @@ func mergeEnv(base []string, overlay map[string]string) []string {
 // Its stdout is redirected to stderr: this process's stdout belongs to the tool
 // the user asked for, and a progress line landing in `terragrunt output -json |
 // jq` would corrupt it.
+//
+// Its stdin is closed for the mirror-image reason. This process's stdin belongs
+// to the tool too — in `cat data.json | jq .` the pipe is the tool's input, and a
+// child that read even one byte of it on a first-use install would silently eat
+// data the tool was about to receive. Neither an install nor a bake prompts.
 func spawnDatamitsu(exe string, args []string) error {
 	// The child inherits this process's lifetime rather than a context: there is
 	// no deadline to impose on an install the user is waiting for, and cancelling
 	// a bake midway is materialization's own problem, not the shim's.
 	// #nosec G204 -- exe comes from os.Executable and args are fixed literals.
 	cmd := exec.CommandContext(context.Background(), exe, args...)
-	cmd.Stdin = os.Stdin
+	cmd.Stdin = nil
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {

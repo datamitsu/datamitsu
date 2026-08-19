@@ -582,3 +582,58 @@ func TestSourceUnknownShell(t *testing.T) {
 		}
 	}
 }
+
+// TestSourceNoAutoConfigIsRefused asserts --no-auto-config with no --config to
+// replace it is an error rather than an activation of the embedded default
+// config.
+//
+// The failure it prevents is not merely a wrong activation. The farm is keyed on
+// the git root alone, so baking the default config's handful of built-in apps
+// would overwrite the farm this root's real config owns — every already-activated
+// shell for the root would then get exit 127 for every tool the project declares.
+func TestSourceNoAutoConfigIsRefused(t *testing.T) {
+	p := clitest.NewProject(t)
+	writeAutoConfig(p)
+
+	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, Env: sourceEnv()}, "--no-auto-config", "source", "bash")
+	if res.ExitCode == 0 {
+		t.Fatalf("`--no-auto-config source bash` exited 0:\n%s", res.Stdout)
+	}
+	if res.Stdout != "" {
+		t.Errorf("`--no-auto-config source bash` wrote to stdout on failure:\n%s", res.Stdout)
+	}
+	if !strings.Contains(res.Stderr, "--config") {
+		t.Errorf("failure message does not name --config:\n%s", res.Stderr)
+	}
+}
+
+// TestSourceActivationIsIdempotentAcrossRuns asserts a second activation of an
+// unchanged tree produces byte-identical shell code.
+//
+// The second run takes the manifest fast path rather than re-resolving the
+// config, and the point of that path is that it is invisible: activation sits in
+// a shell rc file, so a difference between the first shell of the day and the
+// tenth would be a difference nobody would think to look for.
+func TestSourceActivationIsIdempotentAcrossRuns(t *testing.T) {
+	p := clitest.NewProject(t)
+	writeAutoConfig(p)
+
+	// One cache across both runs: the second activation must find the farm the
+	// first one baked, which is the whole point of the fast path.
+	opts := clitest.RunOptions{Dir: p.Dir, Env: sourceEnv(), CacheDir: t.TempDir()}
+
+	first := clitest.Run(t, opts, "source", "bash")
+	if first.ExitCode != 0 {
+		t.Fatalf("first activation failed (%d):\n%s", first.ExitCode, first.Stderr)
+	}
+	second := clitest.Run(t, opts, "source", "bash")
+	if second.ExitCode != 0 {
+		t.Fatalf("second activation failed (%d):\n%s", second.ExitCode, second.Stderr)
+	}
+	if first.Stdout != second.Stdout {
+		t.Errorf("re-activation changed the emitted code:\nfirst:\n%s\nsecond:\n%s", first.Stdout, second.Stdout)
+	}
+	if first.Stderr != second.Stderr {
+		t.Errorf("re-activation changed the warnings:\nfirst:\n%s\nsecond:\n%s", first.Stderr, second.Stderr)
+	}
+}

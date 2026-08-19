@@ -412,3 +412,52 @@ func assertNoDownloads(t *testing.T, beforeRM, beforeBM int64) {
 		t.Errorf("resolution started %d binmanager downloads, want 0", got)
 	}
 }
+
+// TestResolveCommandInfo_NodeSystemBareCommand pins that a system-mode node
+// runtime naming its interpreter by bare word contributes no PATH entry at all.
+//
+// filepath.Dir("node") is ".", and recording that would put the current working
+// directory in front of every lookup the app makes — persisted into the farm
+// manifest, so every shell that ever replays the entry inherits it. A bare word
+// is found through PATH by the exec itself, so there is nothing to contribute.
+func TestResolveCommandInfo_NodeSystemBareCommand(t *testing.T) {
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
+	t.Setenv("DATAMITSU_OFFLINE", "1")
+
+	rm := New(config.MapOfRuntimes{
+		"node": {
+			Kind: config.RuntimeKindNode,
+			Mode: config.RuntimeModeSystem,
+			Node: &config.RuntimeConfigNode{
+				NodeVersion: "26.2.0",
+				PNPMVersion: "11.0.0",
+				PNPMHash:    "0000000000000000000000000000000000000000000000000000000000000000",
+			},
+			System: &config.RuntimeConfigSystem{Command: "node"},
+		},
+	})
+
+	appConfig := &binmanager.AppConfigNode{
+		PackageName: "eslint",
+		Version:     "9.0.0",
+		BinPath:     "node_modules/.bin/eslint",
+		Runtime:     "node",
+	}
+
+	resolved, err := rm.ResolveCommandInfo("eslint", binmanager.App{Node: appConfig})
+	if err != nil {
+		t.Fatalf("ResolveCommandInfo() error = %v", err)
+	}
+	if path, ok := resolved.Env["PATH"]; ok {
+		t.Errorf("Env[PATH] = %q, want no PATH entry at all for a bare system command", path)
+	}
+
+	// The exec path composes a live PATH and must not lead it with "." either.
+	execInfo, err := rm.GetNodeCommandInfo(context.Background(), "eslint", appConfig, nil, nil)
+	if err != nil {
+		t.Fatalf("GetNodeCommandInfo() error = %v", err)
+	}
+	if strings.HasPrefix(execInfo.Env["PATH"], "."+string(os.PathListSeparator)) {
+		t.Errorf("exec-path Env[PATH] = %q, want the working directory not to lead it", execInfo.Env["PATH"])
+	}
+}

@@ -12,7 +12,7 @@ eval "$(datamitsu source bash)"      # bash / zsh
 tofu plan                            # the pinned version, not the system one
 ```
 
-Activation is a per-shell act. It downloads nothing, costs a few milliseconds, and is safe to put in a shell rc file or a tmux profile.
+Activation is a per-shell act. It downloads nothing, costs a manifest read when the farm is already current, and is safe to put in a shell rc file or a tmux profile.
 
 ## Activating
 
@@ -106,6 +106,8 @@ Activation downloads nothing, even for tools that have never been fetched. A dec
 
 This is why activation is cheap enough for a shell rc file: a repository declaring a hundred tools costs the same at activation time as one declaring three.
 
+Activation also skips the config load entirely when the baked manifest still matches the tree — the same freshness comparison the shim makes — and renders the shell code from the manifest it reads back. Only an activation that finds a changed tree pays a full resolve. Passing `--config` explicitly always re-resolves: the manifest's watch set describes the config chain that baked it, and it cannot speak for a file it has never seen.
+
 ### A declared name never falls through
 
 If a name is declared for this project but cannot be resolved for the current tree, the shim **exits 127** naming the app, the root, and `datamitsu source status`. It never searches the rest of `PATH`.
@@ -171,7 +173,8 @@ Honest numbers, measured on an Apple M1 Max against a 111-app config:
 
 | Situation                                               | Cost                                                                |
 | ------------------------------------------------------- | ------------------------------------------------------------------- |
-| Activation                                              | A few milliseconds. Downloads nothing.                              |
+| Activation, farm already current                        | **~15 ms**. Reads the manifest back; downloads nothing.             |
+| Activation, after a config change or branch switch      | **~110 ms**, once. One full config load, then back to ~15 ms.       |
 | Steady-state tool invocation                            | **~10–12 ms** on top of the tool's own startup.                     |
 | First invocation after a config change or branch switch | **~145 ms**, once. One full config load, then back to steady state. |
 | First invocation of a tool never downloaded             | The download, once.                                                 |
