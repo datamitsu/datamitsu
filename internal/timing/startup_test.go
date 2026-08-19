@@ -77,9 +77,6 @@ func TestStartStartupPhaseAggregatesByName(t *testing.T) {
 	if phases[1].Count != 1 {
 		t.Errorf("loadConfig count = %d, want 1", phases[1].Count)
 	}
-	if phases[0].Longest < phases[0].Shortest {
-		t.Errorf("longest %v < shortest %v", phases[0].Longest, phases[0].Shortest)
-	}
 	if phases[0].Total < phases[0].Longest {
 		t.Errorf("total %v < longest %v", phases[0].Total, phases[0].Longest)
 	}

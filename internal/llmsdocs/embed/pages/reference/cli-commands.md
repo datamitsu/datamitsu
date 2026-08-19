@@ -1057,6 +1057,11 @@ integration.
 | `NO_COLOR`                       | Disable color output                                                                            | -                                                   |
 | `FORCE_COLOR`                    | Force color output                                                                              | -                                                   |
 
+`DATAMITSU_FORCE_GIT_SUBPROCESS` applies to the config loader's memoized git-root
+lookup, which is where the pure-Go walk runs; the command handlers use a separate
+resolver that always forks `git`. See
+[Startup and Config Load](../guides/architecture/startup.md).
+
 :::note `--no-oci` is not a network switch
 `--no-oci` / `DATAMITSU_NO_OCI` turns off OCI bundle **store seeding** — an
 accelerator that degrades gracefully to fetching each artifact individually. It

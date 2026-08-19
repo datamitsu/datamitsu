@@ -112,9 +112,10 @@ type loadConfigOptions struct {
 
 func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfig bool, configPaths []string, opts loadConfigOptions) (cfg *config.Config, lm *config.SetupLayerMap, vm *goja.Runtime, err error) {
 	// Registered before the phase timer so it runs after it (defers are LIFO):
-	// the report then includes the load's own total. Commands that os.Exit
-	// (exec) never return to Execute, so the report is emitted here rather than
-	// only at process exit; PrintStartup prints at most once per process.
+	// the report then includes the load's own total. This is the only call
+	// site — every startup phase is recorded within this call, and commands
+	// that os.Exit (exec) would never reach a process-exit one anyway.
+	// PrintStartup prints at most once per process.
 	defer timing.PrintStartup(os.Stderr)
 	defer timing.StartStartupPhase(timing.PhaseLoadConfig)()
 	defer func() {

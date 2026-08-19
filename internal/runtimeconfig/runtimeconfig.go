@@ -33,6 +33,7 @@ const (
 // internal to the engine layer via json.Marshal/json.Unmarshal.
 type Effective struct {
 	Concurrency              int    `json:"concurrency"`
+	ForceGitSubprocess       bool   `json:"forceGitSubprocess"`
 	InstallTimeoutSeconds    int    `json:"installTimeoutSeconds"`
 	Libc                     string `json:"libc"`
 	LogFormat                string `json:"logFormat"`
@@ -45,6 +46,7 @@ type Effective struct {
 	NoOCI                    bool   `json:"noOci"`
 	OCIRegistry              string `json:"ociRegistry"`
 	Offline                  bool   `json:"offline"`
+	StartupTimings           bool   `json:"startupTimings"`
 	Timings                  bool   `json:"timings"`
 	UnitCacheTTLMinutes      int    `json:"unitCacheTtlMinutes"`
 }
@@ -57,6 +59,7 @@ type Effective struct {
 func Compute() Effective {
 	return Effective{
 		Concurrency:              env.GetConcurrency(),
+		ForceGitSubprocess:       env.IsForceGitSubprocessEnabled(),
 		InstallTimeoutSeconds:    env.InstallTimeoutSeconds(),
 		Libc:                     string(target.HostTarget().Libc),
 		LogFormat:                env.GetLogFormat(),
@@ -69,6 +72,7 @@ func Compute() Effective {
 		NoOCI:                    env.NoOCI(),
 		OCIRegistry:              env.GetOCIRegistry(),
 		Offline:                  env.Offline(),
+		StartupTimings:           env.IsStartupTimingsEnabled(),
 		Timings:                  env.IsTimingsEnabled(),
 		UnitCacheTTLMinutes:      env.GetUnitCacheTTLMinutes(),
 	}

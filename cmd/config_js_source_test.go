@@ -144,6 +144,65 @@ function getConfig(input: Cfg): Cfg { return input as Cfg; }
 	}
 }
 
+// TestLoadConfigStringSkipsEsbuildForRemoteJS exercises the path remote configs
+// take: processConfigSource hands loadConfigString the source URL as the name,
+// and that URL is the only thing carrying the extension. A shared remote config
+// is the largest source datamitsu loads, so this is where skipping esbuild pays
+// most — and where renaming the source would silently undo it.
+func TestLoadConfigStringSkipsEsbuildForRemoteJS(t *testing.T) {
+	tests := []struct {
+		name       string
+		sourceName string
+		content    string
+		wantStrip  bool
+	}{
+		{
+			name:       "remote js url",
+			sourceName: "https://example.com/shared/datamitsu.config.js",
+			content:    `function getConfig(input) { return { ignoreRules: ["remote-js: eslint"] }; }`,
+			wantStrip:  false,
+		},
+		{
+			name:       "remote ts url",
+			sourceName: "https://example.com/shared/datamitsu.config.ts",
+			content:    `function getConfig(input: unknown) { return { ignoreRules: ["remote-ts: eslint"] }; }`,
+			wantStrip:  true,
+		},
+		{
+			name:       "oci reference",
+			sourceName: "oci://ghcr.io/datamitsu/config:v1",
+			content:    `function getConfig(input) { return { ignoreRules: ["oci: eslint"] }; }`,
+			wantStrip:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			enableStartupTimings(t)
+
+			e, err := engine.New(context.Background(), "")
+			if err != nil {
+				t.Fatalf("engine.New error: %v", err)
+			}
+			if err := loadConfigString(e, tt.content, tt.sourceName); err != nil {
+				t.Fatalf("loadConfigString error: %v", err)
+			}
+
+			if _, ok := goja.AssertFunction(e.VM().Get("getConfig")); !ok {
+				t.Fatal("getConfig is not a function after load")
+			}
+
+			want := 0
+			if tt.wantStrip {
+				want = 1
+			}
+			if got := stripTypesCalls(t); got != want {
+				t.Errorf("esbuild calls = %d, want %d for %q", got, want, tt.sourceName)
+			}
+		})
+	}
+}
+
 // TestLoadConfigFileSkipsEsbuildForJS exercises the real file-loading path:
 // a .js config must execute without reaching esbuild, a .ts one must reach it.
 func TestLoadConfigFileSkipsEsbuildForJS(t *testing.T) {

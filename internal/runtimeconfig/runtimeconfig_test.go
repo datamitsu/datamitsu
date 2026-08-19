@@ -57,6 +57,8 @@ func TestEffectiveJSONRoundTrip(t *testing.T) {
 		"noOci",
 		"ociRegistry",
 		"offline",
+		"startupTimings",
+		"forceGitSubprocess",
 		"timings",
 	}
 	for _, k := range requiredKeys {
@@ -107,6 +109,26 @@ func TestComputeEnvOverride(t *testing.T) {
 	}
 	if eff.InstallTimeoutSeconds != 1200 {
 		t.Errorf("InstallTimeoutSeconds = %d, want 1200", eff.InstallTimeoutSeconds)
+	}
+}
+
+// The startup-instrumentation and git-root escape hatches change what the
+// process actually does, so `datamitsu config runtime` has to report them.
+func TestComputeStartupToggles(t *testing.T) {
+	if eff := Compute(); eff.StartupTimings || eff.ForceGitSubprocess {
+		t.Errorf("StartupTimings = %v, ForceGitSubprocess = %v; want both false by default",
+			eff.StartupTimings, eff.ForceGitSubprocess)
+	}
+
+	t.Setenv("DATAMITSU_STARTUP_TIMINGS", "1")
+	t.Setenv("DATAMITSU_FORCE_GIT_SUBPROCESS", "1")
+
+	eff := Compute()
+	if !eff.StartupTimings {
+		t.Error("StartupTimings = false with DATAMITSU_STARTUP_TIMINGS=1")
+	}
+	if !eff.ForceGitSubprocess {
+		t.Error("ForceGitSubprocess = false with DATAMITSU_FORCE_GIT_SUBPROCESS=1")
 	}
 }
 

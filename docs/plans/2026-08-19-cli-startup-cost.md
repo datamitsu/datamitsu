@@ -1,6 +1,9 @@
 # Plan: Cut CLI startup cost from ~195 ms to ~15 ms per invocation
 
-**Status:** ready for implementation.
+**Status:** implemented. Task 4 was skipped by its own gate; the `exec` ≤ 70 ms
+acceptance criterion is missed at 93.4 ms, attributed to goja evaluating the large
+before-config on every invocation — cross-process config-evaluation caching is out of
+scope here and is named as the follow-up.
 **Date:** 2026-08-19.
 **Related:** `internal/facts`, `internal/engine`, `internal/config`, `cmd/config_loader.go`, `go.mod`.
 **Blocks:** `docs/plans/2026-08-19-source-mode.md` — source mode's per-invocation and
@@ -411,7 +414,10 @@ it and forks git only when it declines. The memo from Task 3 sits in front of bo
 
 The walk answers only for layouts it can prove, and returns `false` — "ask git" — for
 everything else, because a wrong root silently produces wrong project cache keys. It declines
-for: a bare repository or a cwd inside `.git/` (git reports no working tree for either), a
+for: a bare repository or a cwd inside `.git/` (git reports no working tree for either),
+a repository whose config sets `core.bare` — an ordinary `.git` directory can be marked bare,
+and `--show-toplevel` then fails outright, so the check reads the value rather than the key
+(`git init` writes `bare = false` into every config), a
 `.git` directory that is not a valid repository (git would climb past it; how far is git's
 business), a repository nested inside another repository's working tree (deciding whether the
 outer one records it in its index as mode 160000 means reading that index), a separate git
@@ -463,6 +469,40 @@ Plus `gitSubprocessLookup`, a counting seam that makes the fallback observable (
 run exactly once for a malformed `.git` file and for `DATAMITSU_FORCE_GIT_SUBPROCESS=1`, and
 zero times for a plain repository), and unit tables over `parseGitFile` and
 `classifyGitDirPath`.
+
+➕ Follow-up from review, implemented here: the submodule climb originally accepted
+`.gitmodules` as proof that the superproject still registers the submodule. Git tests the
+superproject's **index** for a gitlink (mode 160000), not that file, and the two disagree after
+`git rm --cached <sub>` — verified against real git: `--show-superproject-working-tree` goes
+empty while `.gitmodules` still lists the path, so the walk would have answered with a root git
+disagrees with. `internal/facts/gitindex.go` now reads the index and proves the gitlink; the
+`.gitmodules` check is kept in front of it as the cheaper filter. The reader is deliberately
+partial — index version 4 (prefix-compressed entry paths), an unrecognised entry shape, an
+oversized file, or trailing bytes that do not parse as extension blocks all report false, which
+declines the climb and costs one subprocess rather than risking a wrong root. The digest size
+is not recorded in the index header, so the scan tries SHA-1 and SHA-256 and keeps whichever
+accounts for every byte up to the trailing checksum. Three fixture layouts pin it: a submodule
+unregistered from the index (declines), a sha256 superproject (answers, exercising the 32-byte
+branch) and an index version 4 superproject (declines).
+
+The scan matches **stage 0 entries only**. Git answers this question from the first
+`ls-files --stage` line for the path, and an unmerged path has no stage 0 entry at all — its
+stages 1, 2 and 3 are listed in that order, so a file/gitlink conflict whose stage 1 is a regular
+file makes git report no superproject even though stages 2 and 3 are gitlinks. Verified against
+real git: with `100644` at stage 1 and `160000` at stages 2 and 3,
+`--show-superproject-working-tree` is empty and `--show-toplevel` is the submodule itself, while
+a stage-blind scan answered with the superproject. A fourth fixture builds exactly that index via
+`update-index --index-info` and pins the decline.
+
+Two further review fixes in the same area: `containsPath` treated a relative path of exactly
+`".."` as containment, which would have let `superprojectOf` accept a gitdir owner that is a
+child of the candidate superproject; and `findWorkTreeRoot` treated every `Lstat` failure on a
+`.git` entry as "absent" and kept climbing, so a permission or IO error could skip the nearest
+repository marker and answer with an ancestor root — only `fs.ErrNotExist` now continues the
+climb, anything else declines. `resolveGitRoot` also checks `ctx.Err()` before either path: the
+subprocess path got cancellation from `exec.CommandContext`, but the pure-Go walk touches only
+the filesystem and would otherwise let a cancelled config load carry on (the memo already drops
+context failures rather than caching them).
 
 `go test ./...`, `go test ./internal/facts/ ./cmd/ -race` and `go test ./test/cli/ -count=2`
 are green with no golden regenerated. `go test ./... -race` still hits the pre-existing

@@ -32,11 +32,10 @@ const (
 // flat: startup phases are recorded from several packages that do not share a
 // parent handle, so they are aggregated by name instead of nested.
 type StartupPhase struct {
-	Name     string
-	Count    int
-	Total    time.Duration
-	Longest  time.Duration
-	Shortest time.Duration
+	Name    string
+	Count   int
+	Total   time.Duration
+	Longest time.Duration
 }
 
 // startupRecorder aggregates startup phase durations for the process.
@@ -49,11 +48,11 @@ type startupRecorder struct {
 
 var startup = &startupRecorder{phases: make(map[string]*StartupPhase)}
 
-// StartupEnabled reports whether startup instrumentation is active. The env var
+// startupEnabled reports whether startup instrumentation is active. The env var
 // is read on every call rather than cached so tests can toggle it with
 // t.Setenv; the cost is one os.Getenv on a path that runs a handful of times
 // per process.
-func StartupEnabled() bool {
+func startupEnabled() bool {
 	return env.IsStartupTimingsEnabled()
 }
 
@@ -63,7 +62,7 @@ func StartupEnabled() bool {
 //
 // Usage: defer timing.StartStartupPhase(timing.PhaseEngineNew)()
 func StartStartupPhase(name string) func() {
-	if !StartupEnabled() {
+	if !startupEnabled() {
 		return func() {}
 	}
 
@@ -80,7 +79,7 @@ func (r *startupRecorder) record(name string, d time.Duration) {
 
 	p, ok := r.phases[name]
 	if !ok {
-		p = &StartupPhase{Name: name, Shortest: d}
+		p = &StartupPhase{Name: name}
 		r.phases[name] = p
 		r.order = append(r.order, name)
 	}
@@ -88,9 +87,6 @@ func (r *startupRecorder) record(name string, d time.Duration) {
 	p.Total += d
 	if d > p.Longest {
 		p.Longest = d
-	}
-	if d < p.Shortest {
-		p.Shortest = d
 	}
 }
 
@@ -119,13 +115,11 @@ func ResetStartupPhases() {
 
 // PrintStartup writes the recorded startup phases to w, slowest total first. It
 // writes nothing when instrumentation is disabled, when nothing was recorded,
-// or when a previous call already printed — so it can be invoked both at the
-// end of the config load and at process exit. Commands that os.Exit (exec)
-// never reach the exit-time call, and commands that do not load config have
-// nothing to report at load time; between them every path is covered exactly
-// once.
+// or when a previous call already printed. Every phase is recorded inside the
+// config load, which is where the single call site lives; the print-once guard
+// keeps a command that loads config twice from emitting two reports.
 func PrintStartup(w io.Writer) {
-	if !StartupEnabled() {
+	if !startupEnabled() {
 		return
 	}
 

@@ -257,7 +257,15 @@ var gitSubprocessLookup = resolveGitRootViaGit
 // about (see gitRootPure), and DATAMITSU_FORCE_GIT_SUBPROCESS=1 skips it
 // entirely — a wrong root poisons project cache keys, so both paths exist to
 // keep the fast one from ever having to guess.
+//
+// A cancelled context is honoured before either path runs. The subprocess path
+// gets that from exec.CommandContext, but the walk touches only the filesystem
+// and would otherwise let a cancelled config load carry on; GetGitRoot drops the
+// resulting entry rather than memoizing it.
 func resolveGitRoot(ctx context.Context, cwd string) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", fmt.Errorf("resolve git root: %w", err)
+	}
 	if !env.IsForceGitSubprocessEnabled() {
 		if root, ok := gitRootPure(cwd); ok {
 			return root, nil

@@ -44,6 +44,14 @@ export default defineConfig((config) => ({
     "tinyjson",
     "fract",
     "outputparser",
+    // Git's index format, read to prove a submodule registration in
+    // internal/facts: "DIRC" is the file signature, a gitlink is the mode
+    // 160000 entry that records a submodule; the reader lives in
+    // internal/facts/gitindex.go.
+    "DIRC",
+    "gitindex",
+    "gitlink",
+    "gitlinks",
     // Tool names dispatched by the WASM parser modules (one Rust module each
     // under parsers/datamitsu-parsers/src/tools).
     "ansiblelint",
