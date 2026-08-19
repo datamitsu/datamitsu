@@ -14,7 +14,6 @@
 package shellquote
 
 import (
-	"fmt"
 	"strings"
 )
 
@@ -151,17 +150,4 @@ func writeHexEscape(b *strings.Builder, prefix string, c byte) {
 	b.WriteString(prefix)
 	b.WriteByte(hexDigits[c>>4])
 	b.WriteByte(hexDigits[c&0x0f])
-}
-
-// String renders s for the named shell. Supported names are "bash", "zsh" and
-// "fish"; anything else is an error naming the supported set.
-func String(shell, s string) (string, error) {
-	switch shell {
-	case "bash", "zsh":
-		return Bash(s), nil
-	case "fish":
-		return Fish(s), nil
-	default:
-		return "", fmt.Errorf("shellquote: unsupported shell %q (supported: bash, zsh, fish)", shell)
-	}
 }

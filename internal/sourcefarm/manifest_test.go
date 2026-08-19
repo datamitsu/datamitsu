@@ -3,7 +3,6 @@ package sourcefarm
 import (
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -29,12 +28,13 @@ func fixtureRoot(t *testing.T) (string, Manifest) {
 		FarmDir: filepath.Join(root, "farm"),
 		Entries: []Entry{{Name: "tofu", Kind: "binary", Strategy: StrategySymlink, Command: "/store/.bin/tofu/abc", Installed: true}},
 	}
+	// Exactly what cmd.ConfigChainFiles() yields: the discovered config plus the
+	// resolved before-config files, and nothing else. The undiscovered
+	// auto-config candidates are WatchPaths's job to add — the "config file
+	// added" transition below is what proves it does.
 	chain := []string{
 		filepath.Join(root, "datamitsu.config.ts"),
 		filepath.Join(root, "before.config.ts"),
-		// A config file this branch does not have. Recorded absent, so the branch
-		// that adds it compares unequal.
-		filepath.Join(root, "datamitsu.config.js"),
 	}
 	m := BuildManifest(plan, OriginGitRoot, WatchPaths(root, chain))
 	if !Validate(m) {
@@ -91,7 +91,11 @@ func TestValidate_StalenessTransitions(t *testing.T) {
 			},
 		},
 		{
-			name: "config file added",
+			// The tree gains a second auto-config candidate. Config discovery
+			// refuses to load a root with two, so the farm must not stay fresh —
+			// and this file is in no chain the loader produced, so only
+			// WatchPaths's candidate list can catch it.
+			name: "second auto-config candidate appears",
 			mutate: func(t *testing.T, root string, _ *Manifest) {
 				t.Helper()
 				mustWrite(t, filepath.Join(root, "datamitsu.config.js"), "module.exports = {}\n")
@@ -234,7 +238,7 @@ func TestValidate_FutureFormatVersionIsStaleNotAnError(t *testing.T) {
 // refactor cannot quietly add an os.ReadFile or a git subprocess to the hot
 // path.
 func TestValidate_OnlyStats(t *testing.T) {
-	root, m := fixtureRoot(t)
+	_, m := fixtureRoot(t)
 
 	// Make every watched file unreadable. Any attempt to read contents fails;
 	// lstat still succeeds.
@@ -259,17 +263,12 @@ func TestValidate_OnlyStats(t *testing.T) {
 	if !Validate(m) {
 		t.Fatal("Validate = false over an unchanged but unreadable tree, want true")
 	}
+	// The lstat count is the whole assertion: it is exact, so a Validate that
+	// grew an os.ReadFile, a second stat, or an exec.Command would have to keep
+	// the count at exactly one per watched path to slip through, and the
+	// unreadable files above rule out the read.
 	if calls != len(m.Watch) {
 		t.Errorf("lstat calls = %d, want %d (one per watched path)", calls, len(m.Watch))
-	}
-	if root == "" {
-		t.Fatal("empty fixture root")
-	}
-
-	// A subprocess would have to come from somewhere on PATH; assert the
-	// package does not shell out to git, the one tool it would plausibly want.
-	if _, err := exec.LookPath("definitely-not-a-real-binary-datamitsu"); err == nil {
-		t.Fatal("test environment is not what it claims to be")
 	}
 }
 
@@ -401,16 +400,21 @@ func TestWatchSet_SortedAndDeduplicated(t *testing.T) {
 	}
 }
 
-// TestWatchPaths_IncludesHeadAndLockfile pins the two paths that are not config
-// files but change the resolved toolchain.
+// TestWatchPaths_IncludesHeadAndLockfile pins the paths that are not the
+// discovered config but still change the resolved toolchain: .git/HEAD, the
+// pnpm lockfile, and the auto-config candidates that were not discovered — a
+// tree that grows a second candidate stops loading, so it must not be reported
+// fresh.
 func TestWatchPaths_IncludesHeadAndLockfile(t *testing.T) {
 	root := filepath.Join(string(filepath.Separator), "repo")
 	paths := WatchPaths(root, []string{filepath.Join(root, "datamitsu.config.ts")})
 
 	want := map[string]bool{
-		filepath.Join(root, "datamitsu.config.ts"): false,
-		filepath.Join(root, ".git", "HEAD"):        false,
-		filepath.Join(root, "pnpm-lock.yaml"):      false,
+		filepath.Join(root, "datamitsu.config.ts"):  false,
+		filepath.Join(root, "datamitsu.config.js"):  false,
+		filepath.Join(root, "datamitsu.config.mjs"): false,
+		filepath.Join(root, ".git", "HEAD"):         false,
+		filepath.Join(root, "pnpm-lock.yaml"):       false,
 	}
 	for _, p := range paths {
 		if _, ok := want[p]; !ok {

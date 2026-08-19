@@ -37,35 +37,86 @@ var vectors = []struct {
 	{"all_control_bytes", "\x01\x02\x03\x04\x05\x06\x07\x08\x0b\x0c\x0e\x0f"},
 }
 
-func TestBashTable(t *testing.T) {
-	for _, tc := range vectors {
+// TestBashExactLiterals and TestFishExactLiterals pin the emitted bytes rather
+// than the literal's shape.
+//
+// The round-trip tests below are the real oracle, but they skip when the shell
+// is absent — and fish is absent on most machines and in CI, so without exact
+// expectations a regression in Fish (an \x escape where \X is required, a
+// dropped closing quote) ships with the suite green. These cases hold the two
+// renderers to a fixed encoding with no shell installed.
+func TestBashExactLiterals(t *testing.T) {
+	cases := []struct{ name, in, want string }{
+		{"empty", "", "''"},
+		{"plain", "/tmp/bin", `$'/tmp/bin'`},
+		{"space", "/tmp/my project", `$'/tmp/my project'`},
+		{"single_quote", "it's", `$'it\'s'`},
+		{"backslash", `a\b`, `$'a\\b'`},
+		{"newline", "a\nb", `$'a\nb'`},
+		{"carriage_return", "a\rb", `$'a\rb'`},
+		{"tab", "a\tb", `$'a\tb'`},
+		{"command_substitution", "$(id)", `$'$(id)'`},
+		{"glob", "a[b]c*?", `$'a[b]c*?'`},
+		{"non_utf8", "a\xffb", `$'a\xffb'`},
+		{"hex_after_escape", "\x01ab", `$'\x01ab'`},
+		{"del", "a\x7fb", `$'a\x7fb'`},
+	}
+	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := Bash(tc.in)
-			if got == "" {
-				t.Fatal("Bash returned an empty literal")
-			}
-			if tc.in == "" && got != "''" {
-				t.Fatalf("Bash(%q) = %q, want ''", tc.in, got)
-			}
-			if tc.in != "" && !strings.HasPrefix(got, "$'") {
-				t.Fatalf("Bash(%q) = %q, want an ANSI-C literal", tc.in, got)
-			}
-			if !strings.HasSuffix(got, "'") {
-				t.Fatalf("Bash(%q) = %q, want a trailing quote", tc.in, got)
+			if got := Bash(tc.in); got != tc.want {
+				t.Fatalf("Bash(%q) = %q, want %q", tc.in, got, tc.want)
 			}
 		})
 	}
 }
 
-func TestFishTable(t *testing.T) {
+func TestFishExactLiterals(t *testing.T) {
+	cases := []struct{ name, in, want string }{
+		{"empty", "", "''"},
+		{"plain", "/tmp/bin", `'/tmp/bin'`},
+		{"space", "/tmp/my project", `'/tmp/my project'`},
+		{"single_quote", "it's", `'it\'s'`},
+		{"backslash", `a\b`, `'a\\b'`},
+		// A control byte closes the quoted run, is written as a raw-byte \X
+		// escape, and the next printable byte opens a new run; fish joins
+		// adjacent tokens into one word.
+		{"newline", "a\nb", `'a'\X0a'b'`},
+		{"carriage_return", "a\rb", `'a'\X0d'b'`},
+		{"tab", "a\tb", `'a'\X09'b'`},
+		{"command_substitution", "$(id)", `'$(id)'`},
+		{"glob", "a[b]c*?", `'a[b]c*?'`},
+		{"non_utf8", "a\xffb", `'a'\Xff'b'`},
+		{"leading_control", "\x01ab", `\X01'ab'`},
+		{"trailing_control", "ab\x01", `'ab'\X01`},
+		{"del", "a\x7fb", `'a'\X7f'b'`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := Fish(tc.in); got != tc.want {
+				t.Fatalf("Fish(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestLiteralShape holds the structural invariants over the whole hostile
+// corpus, which the exact-literal cases above only sample.
+func TestLiteralShape(t *testing.T) {
 	for _, tc := range vectors {
 		t.Run(tc.name, func(t *testing.T) {
-			got := Fish(tc.in)
-			if got == "" {
-				t.Fatal("Fish returned an empty literal")
+			bash := Bash(tc.in)
+			if tc.in == "" {
+				if bash != "''" {
+					t.Fatalf("Bash(%q) = %q, want ''", tc.in, bash)
+				}
+			} else if !strings.HasPrefix(bash, "$'") {
+				t.Fatalf("Bash(%q) = %q, want an ANSI-C literal", tc.in, bash)
 			}
-			if tc.in == "" && got != "''" {
-				t.Fatalf("Fish(%q) = %q, want ''", tc.in, got)
+			if !strings.HasSuffix(bash, "'") {
+				t.Fatalf("Bash(%q) = %q, want a trailing quote", tc.in, bash)
+			}
+			if fish := Fish(tc.in); fish == "" {
+				t.Fatalf("Fish(%q) returned an empty literal", tc.in)
 			}
 		})
 	}
@@ -122,26 +173,6 @@ func TestFishPathList(t *testing.T) {
 				t.Fatalf("FishPathList(%q) = %q, want %q", tc.dirs, got, tc.want)
 			}
 		})
-	}
-}
-
-func TestString(t *testing.T) {
-	for _, shell := range []string{"bash", "zsh"} {
-		if got, err := String(shell, "a b"); err != nil || got != Bash("a b") {
-			t.Errorf("String(%q, …) = %q, %v; want the bash literal", shell, got, err)
-		}
-	}
-	if got, err := String("fish", "a b"); err != nil || got != Fish("a b") {
-		t.Errorf("String(fish, …) = %q, %v; want the fish literal", got, err)
-	}
-	got, err := String("powershell", "a")
-	if err == nil {
-		t.Fatalf("String(powershell, …) = %q, want an error", got)
-	}
-	for _, want := range []string{"powershell", "bash", "zsh", "fish"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("error %q does not mention %q", err, want)
-		}
 	}
 }
 

@@ -580,7 +580,7 @@ func (bm *BinManager) ResolveCommandInfo(appName string) (*CommandInfo, bool, er
 			return nil, false, err
 		}
 		cmdInfo = ci
-		installed = pathExists(cmdInfo.Command)
+		installed = pathExists(cmdInfo.InstalledPath())
 
 	default:
 		return nil, false, fmt.Errorf("app '%s' has no valid configuration", appName)
@@ -834,6 +834,23 @@ type CommandInfo struct {
 	Command string            // Path to binary or command name
 	Args    []string          // Additional arguments (for shell)
 	Env     map[string]string // Additional env variables (for shell)
+
+	// Artifact is the file whose presence means "this app is installed", when
+	// that is not Command itself. A JVM app runs `java -jar app.jar`: Command is
+	// an interpreter that a system-mode runtime may supply from PATH, so it says
+	// nothing about whether the app was ever downloaded. Empty means Command is
+	// the artifact.
+	Artifact string
+}
+
+// InstalledPath returns the file whose existence decides whether the app is
+// installed — Artifact when the invocation runs through an interpreter,
+// Command otherwise.
+func (c *CommandInfo) InstalledPath() string {
+	if c.Artifact != "" {
+		return c.Artifact
+	}
+	return c.Command
 }
 
 // GetAppsList returns sorted list of all available applications with types

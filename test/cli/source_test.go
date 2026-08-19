@@ -537,6 +537,30 @@ func TestSourceWithoutAConfig(t *testing.T) {
 	}
 }
 
+// TestSourceWithoutAShellIsAnError asserts the group command does not fall back
+// to cobra's default of printing help and exiting 0.
+//
+// `eval "$(datamitsu source)"` is the failure this prevents: a help screen on
+// stdout would be evaluated as shell code. The command must exit non-zero with
+// nothing at all on stdout.
+func TestSourceWithoutAShellIsAnError(t *testing.T) {
+	p := clitest.NewProject(t)
+	writeAutoConfig(p)
+
+	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, Env: sourceEnv()}, "source")
+	if res.ExitCode == 0 {
+		t.Fatalf("bare `source` exited 0:\n%s", res.Stdout)
+	}
+	if res.Stdout != "" {
+		t.Errorf("bare `source` wrote to stdout, which would be eval'd:\n%s", res.Stdout)
+	}
+	for _, shell := range []string{"bash", "zsh", "fish"} {
+		if !strings.Contains(res.Stderr, shell) {
+			t.Errorf("error does not name the supported shell %q:\n%s", shell, res.Stderr)
+		}
+	}
+}
+
 // TestSourceUnknownShell asserts an unsupported shell is refused by cobra rather
 // than silently emitting bash code.
 func TestSourceUnknownShell(t *testing.T) {

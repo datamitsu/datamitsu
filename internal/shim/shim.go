@@ -33,6 +33,7 @@ package shim
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -42,6 +43,7 @@ import (
 	"strings"
 
 	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"github.com/datamitsu/datamitsu/internal/sourcefarm"
 )
 
@@ -54,12 +56,12 @@ const ExitNotFound = 127
 // executed, matching the shell's convention for the same condition.
 const ExitNotExecutable = 126
 
-// ownNames are the names under which the executable is datamitsu itself rather
-// than a farm entry. Anything else is a candidate for dispatch — and, when no
-// manifest claims it, falls back to the normal CLI, so a user who renames the
-// binary keeps a working datamitsu.
-var ownNames = map[string]struct{}{
-	"datamitsu": {},
+// isOwnName reports whether the executable was invoked under datamitsu's own
+// name rather than as a farm entry. Anything else is a candidate for dispatch —
+// and, when no manifest claims it, falls back to the normal CLI, so a user who
+// renames the binary keeps a working datamitsu.
+func isOwnName(name string) bool {
+	return name == ldflags.PackageName
 }
 
 // farmDirName is the last path element of a farm directory, and projectsDirName
@@ -105,10 +107,10 @@ type Dispatcher struct {
 
 	Stderr io.Writer
 
-	// throughFarm memoizes whether this invocation arrived through a farm. It is
-	// decided once, before anything can rebake the farm out from under the
-	// answer; see invokedThroughFarm.
-	throughFarm *bool
+	// throughFarm records whether this invocation arrived through a farm. It is
+	// computed once at the top of Dispatch, before anything can rebake the farm
+	// out from under the answer; see computeThroughFarm.
+	throughFarm bool
 }
 
 // New returns a Dispatcher wired to the real process.
@@ -146,33 +148,29 @@ func (d *Dispatcher) Dispatch() (int, bool) {
 	if name == "" {
 		return 0, false
 	}
-	if _, own := ownNames[name]; own {
+	if isOwnName(name) {
 		return 0, false
 	}
 
 	// Decided here, before a rebake can delete the very farm entry the answer is
 	// read from: an invocation that arrived through a farm must fail loudly even
 	// when the config change that made the manifest stale is what removed it.
-	d.invokedThroughFarm()
+	d.throughFarm = d.computeThroughFarm()
 
-	root, ok := d.discoverRoot()
-	if !ok {
+	roots := d.discoverRoots()
+	if len(roots) == 0 {
 		// Outside a repository there is no manifest to consult, so the name
 		// cannot be one of ours.
 		return d.decline(name, "", "the current directory is not inside a git repository")
 	}
 
-	manifestPath, err := d.ManifestPath(root)
-	if err != nil {
-		return d.decline(name, root, err.Error())
-	}
-	manifest, err := d.Load(manifestPath)
+	manifestPath, manifest, root, err := d.loadManifest(roots)
 	if err != nil {
 		// An activated shell that cds into a never-activated repository lands
 		// here. The farm is deliberately not baked implicitly: baking evaluates
 		// that repository's JavaScript, and typing a tool name is not consent to
 		// run code from a tree the user has not activated.
-		return d.decline(name, root, "no source-mode farm has been created for this repository")
+		return d.decline(name, root, err.Error())
 	}
 
 	entry, found := lookupEntry(manifest, name)
@@ -213,29 +211,75 @@ func invokedName(args []string) string {
 	return strings.TrimSuffix(base, ".exe")
 }
 
-// discoverRoot walks up from the working directory looking for .git. This is a
-// deliberately cheap approximation: it selects *which* manifest to open, and the
-// manifest records the authoritative root the config loader resolved. The two
-// disagree inside a submodule, where root discovery climbs to the topmost
-// superproject, and the manifest is the one that is right.
-func (d *Dispatcher) discoverRoot() (string, bool) {
+// discoverRoots returns every working-tree root above the current directory,
+// innermost first. It is a deliberately cheap approximation of the resolution
+// facts.GetGitRoot performs: it only selects *which* manifest to open, and the
+// manifest records the authoritative root the config loader resolved.
+//
+// Two properties of that resolution force the shape of this walk, and getting
+// either wrong means a farm that exists is never found:
+//
+//   - The authoritative root is physical. facts resolves the working directory
+//     through EvalSymlinks (and `git rev-parse --show-toplevel` reports a
+//     physical path too), while os.Getwd honours $PWD and so reports the logical
+//     path a shell cd'd through. On macOS every repository under /tmp or /var is
+//     reached logically, so hashing the logical path keys a farm that was never
+//     baked. The cwd is resolved here for the same reason.
+//
+//   - The authoritative root climbs past submodules to the topmost superproject
+//     (see resolveGitRootViaGit). Stopping at the nearest `.git` would key a
+//     submodule's own directory, where no farm was ever baked. Rather than
+//     re-implementing git's superproject detection — which needs the outer
+//     index to tell a submodule from an unrelated nested repository — every
+//     candidate is returned and loadManifest takes the innermost one that has a
+//     farm. A plain repository yields exactly one candidate and the extra
+//     stat calls never happen.
+func (d *Dispatcher) discoverRoots() []string {
 	dir, err := d.Getwd()
 	if err != nil {
-		return "", false
+		return nil
 	}
+	if d.EvalSymlinks != nil {
+		if resolved, resolveErr := d.EvalSymlinks(dir); resolveErr == nil {
+			dir = resolved
+		}
+	}
+
+	var roots []string
 	for {
 		if _, err := d.Stat(filepath.Join(dir, ".git")); err == nil {
-			return dir, true
+			roots = append(roots, dir)
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			return "", false
+			return roots
 		}
 		dir = parent
 	}
 }
 
-// invokedThroughFarm reports whether this invocation arrived through a farm
+// loadManifest opens the farm manifest for the innermost candidate root that has
+// one, returning its path, its contents and the root it belongs to.
+//
+// The error names the innermost root, because that is the repository the user is
+// standing in and the one `datamitsu source bash` would activate.
+func (d *Dispatcher) loadManifest(roots []string) (string, sourcefarm.Manifest, string, error) {
+	for _, root := range roots {
+		manifestPath, err := d.ManifestPath(root)
+		if err != nil {
+			continue
+		}
+		manifest, err := d.Load(manifestPath)
+		if err != nil {
+			continue
+		}
+		return manifestPath, manifest, root, nil
+	}
+	return "", sourcefarm.Manifest{}, roots[0],
+		errors.New("no source-mode farm has been created for this repository")
+}
+
+// computeThroughFarm reports whether this invocation arrived through a farm
 // entry: {cache}/projects/{hash}/bin/{name}. It is what separates "a farm entry
 // whose farm is unusable" (exit 127) from "somebody renamed the datamitsu
 // binary" (run the CLI).
@@ -252,17 +296,10 @@ func (d *Dispatcher) discoverRoot() (string, bool) {
 // executable hit decides. A name that does carry a directory — `$DATAMITSU_FARM/tofu`,
 // or `./tofu` — is answered from the path itself.
 //
-// The answer is memoized because it must be taken before a rebake: the config
-// change that made a manifest stale is often the one that dropped the app, and
-// the rebake deletes the farm entry this reads.
-func (d *Dispatcher) invokedThroughFarm() bool {
-	if d.throughFarm == nil {
-		value := d.computeThroughFarm()
-		d.throughFarm = &value
-	}
-	return *d.throughFarm
-}
-
+// Dispatch calls this once and stores the answer in d.throughFarm, because it
+// must be taken before a rebake: the config change that made a manifest stale is
+// often the one that dropped the app, and the rebake deletes the farm entry this
+// reads.
 func (d *Dispatcher) computeThroughFarm() bool {
 	if len(d.Args) == 0 {
 		return false
@@ -278,6 +315,18 @@ func (d *Dispatcher) computeThroughFarm() bool {
 // shell just ran. It is the resolution step, not a permission check: a
 // directory or a non-executable file is skipped exactly as a shell skips it.
 func (d *Dispatcher) lookPath(name string) string {
+	return d.lookPathFrom(name, false)
+}
+
+// lookPathOutsideFarm is lookPath with every farm directory skipped. It is what
+// resolves an interpreter an entry names by bare word — a system-mode JVM's
+// "java" — where taking the first PATH hit could find the farm's own entry of
+// that name and exec this binary again instead of the interpreter.
+func (d *Dispatcher) lookPathOutsideFarm(name string) string {
+	return d.lookPathFrom(name, true)
+}
+
+func (d *Dispatcher) lookPathFrom(name string, skipFarm bool) string {
 	var pathEnv string
 	for _, kv := range d.Environ() {
 		if key, value, ok := strings.Cut(kv, "="); ok && key == "PATH" {
@@ -291,6 +340,9 @@ func (d *Dispatcher) lookPath(name string) string {
 		candidate := filepath.Join(dir, name)
 		info, err := d.Stat(candidate)
 		if err != nil || info.IsDir() || info.Mode().Perm()&0o111 == 0 {
+			continue
+		}
+		if skipFarm && d.underFarm(candidate) {
 			continue
 		}
 		return candidate
@@ -330,7 +382,7 @@ func (d *Dispatcher) underFarm(path string) bool {
 // other way, the executable is just datamitsu under another name and the normal
 // CLI runs.
 func (d *Dispatcher) decline(name, root, reason string) (int, bool) {
-	if !d.invokedThroughFarm() {
+	if !d.throughFarm {
 		return 0, false
 	}
 	msg := fmt.Sprintf("datamitsu: %s: %s", name, reason)
@@ -344,7 +396,7 @@ func (d *Dispatcher) decline(name, root, reason string) (int, bool) {
 // reports why it was excluded: a name that silently does not work is
 // undebuggable, and the reason is already recorded.
 func (d *Dispatcher) declineUnknown(name string, manifest sourcefarm.Manifest) (int, bool) {
-	if !d.invokedThroughFarm() {
+	if !d.throughFarm {
 		return 0, false
 	}
 	for _, ex := range manifest.Excluded {
@@ -441,8 +493,8 @@ func (d *Dispatcher) rebake(manifestPath, name string, manifest sourcefarm.Manif
 // that path is used directly afterwards, and only an entry with no recorded
 // command needs a second pass through the resolver.
 func (d *Dispatcher) ensureInstalled(manifestPath, name string, entry sourcefarm.Entry) (sourcefarm.Entry, error) {
-	if entry.Installed && entry.Command != "" {
-		if _, err := d.Stat(entry.Command); err == nil {
+	if entry.Installed && installedPath(entry) != "" {
+		if _, err := d.Stat(installedPath(entry)); err == nil {
 			return entry, nil
 		}
 	}
@@ -455,8 +507,8 @@ func (d *Dispatcher) ensureInstalled(manifestPath, name string, entry sourcefarm
 		return entry, fmt.Errorf("datamitsu: %s: install failed: %w", name, err)
 	}
 
-	if entry.Command != "" {
-		if _, err := d.Stat(entry.Command); err == nil {
+	if path := installedPath(entry); path != "" {
+		if _, err := d.Stat(path); err == nil {
 			entry.Installed = true
 			return entry, nil
 		}
@@ -485,31 +537,108 @@ func (d *Dispatcher) execEntry(entry sourcefarm.Entry, manifest sourcefarm.Manif
 			entry.Name, manifest.Root)), true
 	}
 
+	// A command with no separator is an interpreter the config named by bare
+	// word — a system-mode JVM runtime's "java". syscall.Exec does not search
+	// PATH, so it is resolved here, the way the shell would have.
+	command := entry.Command
+	if !strings.ContainsRune(command, filepath.Separator) {
+		resolved := d.lookPathOutsideFarm(command)
+		if resolved == "" {
+			return d.fail(fmt.Sprintf("datamitsu: %s: %s was not found on PATH\ndatamitsu: install it, or point this app's runtime at an absolute path (%s)",
+				entry.Name, command, manifest.Root)), true
+		}
+		command = resolved
+	}
+
 	// The target is stat'ed rather than left to execve's ENOENT. For an
 	// interpreter-based target — a script starting with #!/usr/bin/env node —
 	// ENOENT means either "the script is missing" or "the interpreter is
 	// missing", and the two need different messages. A stat costs microseconds
 	// against a process that has already cost milliseconds.
-	if _, err := d.Stat(entry.Command); err != nil {
+	if _, err := d.Stat(command); err != nil {
 		return d.fail(fmt.Sprintf("datamitsu: %s: %s is missing: %v\ndatamitsu: run `datamitsu source refresh --force` in %s",
-			entry.Name, entry.Command, err, manifest.Root)), true
+			entry.Name, command, err, manifest.Root)), true
 	}
 
 	// User argv is passed through untouched. `datamitsu exec actionlint
 	// --version` cannot do this — cobra parses the tool's flags and rejects
 	// them — and passing them verbatim is a correctness requirement of the
 	// feature, not a performance detail.
+	//
+	// argv[0] is the name the user typed, not the store path being exec'd. Most
+	// CLIs derive their usage line and error prefixes from argv[0], and
+	// syscall.Exec takes the path to run separately, so there is no reason for
+	// `actionlint --help` to print a content-addressed cache path as the program
+	// name. Where an entry carries Args (a JVM app's `-jar`, say), the exec'd
+	// program is the interpreter and its own argv[0] convention still holds, so
+	// the entry's command name is used instead.
 	argv := make([]string, 0, 1+len(entry.Args)+len(d.Args)-1)
-	argv = append(argv, entry.Command)
+	argv = append(argv, execArgv0(entry, d.Args))
 	argv = append(argv, entry.Args...)
 	argv = append(argv, d.Args[1:]...)
 
-	if err := d.Exec(entry.Command, argv, mergeEnv(d.Environ(), entry.Env)); err != nil {
-		d.warn(fmt.Sprintf("datamitsu: %s: cannot execute %s: %v", entry.Name, entry.Command, err))
+	if err := d.Exec(command, argv, mergeEnv(d.Environ(), entry.Env)); err != nil {
+		d.warn(fmt.Sprintf("datamitsu: %s: cannot execute %s: %v", entry.Name, command, err))
 		return ExitNotExecutable, true
 	}
 	// Unreachable on success: the process image has been replaced.
 	return 0, true
+}
+
+// execArgv0 returns the value to pass as the exec'd program's argv[0].
+//
+// For a direct entry it is the name the user typed, so the tool reports itself
+// under that name rather than under its store path. An entry with Args execs an
+// interpreter that owns argv[0] by its own convention (`java -jar …` expects
+// "java"), so the recorded command's base name is used there.
+func execArgv0(entry sourcefarm.Entry, args []string) string {
+	if len(entry.Args) > 0 {
+		return filepath.Base(entry.Command)
+	}
+	if name := invokedName(args); name != "" {
+		return name
+	}
+	return entry.Command
+}
+
+// prependPath puts the entry's runtime-owned directories in front of the
+// inherited PATH, dropping any inherited copy of a directory it already names.
+//
+// The de-duplication is what keeps PATH bounded: a tool the farm runs may itself
+// invoke another farm entry, and without it each hop would append the prefix
+// again.
+func prependPath(prefix, inherited string) string {
+	if prefix == "" {
+		return inherited
+	}
+	if inherited == "" {
+		return prefix
+	}
+	dirs := filepath.SplitList(prefix)
+	seen := make(map[string]struct{}, len(dirs))
+	for _, dir := range dirs {
+		seen[dir] = struct{}{}
+	}
+	for _, dir := range filepath.SplitList(inherited) {
+		if _, dup := seen[dir]; dup {
+			continue
+		}
+		seen[dir] = struct{}{}
+		dirs = append(dirs, dir)
+	}
+	return strings.Join(dirs, string(os.PathListSeparator))
+}
+
+// installedPath returns the file whose existence decides whether an entry has
+// been downloaded — the recorded artifact when the entry runs through an
+// interpreter, the command otherwise. Stat'ing Command for a jvm entry would
+// answer "is there a JVM?", which is true even when the JAR was never fetched
+// and, for a system-mode runtime naming a bare "java", false even when it was.
+func installedPath(entry sourcefarm.Entry) string {
+	if entry.Artifact != "" {
+		return entry.Artifact
+	}
+	return entry.Command
 }
 
 // lookupEntry finds a manifest entry by name.
@@ -525,6 +654,14 @@ func lookupEntry(m sourcefarm.Manifest, name string) (sourcefarm.Entry, bool) {
 // mergeEnv overlays an entry's environment on the inherited one. The result is
 // sorted so an ran process sees a stable environment regardless of map
 // iteration order.
+//
+// PATH is the one key that is prepended rather than replaced. A manifest is
+// baked once and read by every shell afterwards, so a PATH captured at bake time
+// is wrong by the time it is used: it pins whatever the baking shell happened to
+// have, which for a per-shell version manager is a directory that stops existing
+// when that shell exits. The entry records only the directories the runtime
+// itself owns (a managed node's bin/, say) and they go in front of whatever the
+// caller actually has.
 func mergeEnv(base []string, overlay map[string]string) []string {
 	if len(overlay) == 0 {
 		return base
@@ -545,6 +682,9 @@ func mergeEnv(base []string, overlay map[string]string) []string {
 		set(key, value)
 	}
 	for k, v := range overlay {
+		if k == "PATH" {
+			v = prependPath(v, merged[k])
+		}
 		set(k, v)
 	}
 	sort.Strings(order)

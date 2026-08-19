@@ -5,6 +5,7 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -217,6 +218,89 @@ func TestMaterializeRejectsNonExecutableTarget(t *testing.T) {
 
 	if err := MaterializeWithOptions(plan, manifestFor(plan, "k1"), fx.options()); err == nil {
 		t.Fatal("Materialize() = nil, want an error for a non-executable target")
+	}
+}
+
+// TestMaterializeRejectsUnusableShimTarget is the all-shim counterpart to the
+// symlink-target checks above, and it covers the shape production actually
+// bakes: strategyFor returns StrategyShim unconditionally, so every real entry
+// points at the datamitsu executable and its mode is the only one that matters.
+//
+// The message must name that executable rather than an arbitrary entry, because
+// the fix is to the binary's permissions, not to any app.
+func TestMaterializeRejectsUnusableShimTarget(t *testing.T) {
+	tests := []struct {
+		name string
+		mode os.FileMode
+	}{
+		{"not executable", 0o644},
+		{"group-writable", 0o775},
+		{"world-writable", 0o707},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fx := newFarmFixture(t)
+			plan := fx.plan(t, nil, []string{"tofu", "prettier"})
+			if err := os.Chmod(fx.shimTarget, tt.mode); err != nil {
+				t.Fatalf("chmod shim target: %v", err)
+			}
+
+			err := MaterializeWithOptions(plan, manifestFor(plan, "k1"), fx.options())
+			if err == nil {
+				t.Fatal("Materialize() = nil, want an error for an unusable shim target")
+			}
+			if !strings.Contains(err.Error(), fx.shimTarget) {
+				t.Errorf("error does not name the datamitsu executable %q: %v", fx.shimTarget, err)
+			}
+			if _, statErr := os.Stat(fx.farmDir); statErr == nil {
+				t.Error("a failed bake created a farm directory")
+			}
+		})
+	}
+}
+
+// TestMaterializeShimFailureKeepsPreviousFarm is TestMaterializeFailureKeepsPreviousFarm
+// for the production entry shape. The previous farm must survive a failed
+// rebake: replacing a working toolchain with nothing turns every declared name
+// into an exit-127 in every shell on the machine.
+func TestMaterializeShimFailureKeepsPreviousFarm(t *testing.T) {
+	fx := newFarmFixture(t)
+	good := fx.plan(t, nil, []string{"tofu", "prettier"})
+	if err := MaterializeWithOptions(good, manifestFor(good, "k1"), fx.options()); err != nil {
+		t.Fatalf("first Materialize() error = %v", err)
+	}
+	before := listFarm(t, fx.farmDir)
+	manifestBefore, err := os.ReadFile(fx.manifestPath())
+	if err != nil {
+		t.Fatalf("read manifest: %v", err)
+	}
+
+	// The datamitsu executable goes missing between the first bake and the
+	// second — the update-in-place case.
+	if err := os.Remove(fx.shimTarget); err != nil {
+		t.Fatalf("remove shim target: %v", err)
+	}
+
+	broken := fx.plan(t, nil, []string{"kubectl", "helm"})
+	var warned []string
+	opts := fx.options()
+	opts.Warn = func(line string) { warned = append(warned, line) }
+	if err := MaterializeWithOptions(broken, manifestFor(broken, "k2"), opts); err == nil {
+		t.Fatal("Materialize() = nil, want an error")
+	}
+	if len(warned) != 1 {
+		t.Errorf("warnings = %d, want exactly 1: %v", len(warned), warned)
+	}
+	// "keeping the previous one" must be true, not just printed.
+	if got := listFarm(t, fx.farmDir); !slices.Equal(got, before) {
+		t.Errorf("farm changed after a failed bake: %v, want %v", got, before)
+	}
+	manifestAfter, err := os.ReadFile(fx.manifestPath())
+	if err != nil {
+		t.Fatalf("read manifest after: %v", err)
+	}
+	if !slices.Equal(manifestAfter, manifestBefore) {
+		t.Error("manifest changed after a failed bake")
 	}
 }
 
@@ -443,7 +527,7 @@ func TestMaterializeRefusesNonDirectoryFarmPath(t *testing.T) {
 	}
 }
 
-func TestMaterializeRejectsUnusableShimTarget(t *testing.T) {
+func TestMaterializeRejectsMissingShimTarget(t *testing.T) {
 	fx := newFarmFixture(t)
 	opts := fx.options()
 	opts.ShimTarget = filepath.Join(fx.storeDir, "does-not-exist")

@@ -119,10 +119,15 @@ func TestResolveRuntimePath_Errors(t *testing.T) {
 
 // TestResolveCommandInfo_NodeMatchesGetCommandInfo is the parity test that
 // keeps the two node paths honest: the side-effect-free resolver must produce
-// the same Command, Args and Env — the PATH prepend to the managed node bin
-// dir and the npm_config_* triple — that the exec path produces. A drift here
-// means a shim would run a node app under a different environment than
-// `datamitsu exec` does.
+// the same Command, Args and env — the managed node bin dir on PATH and the
+// npm_config_* triple — that the exec path produces. A drift here means a shim
+// would run a node app under a different environment than `datamitsu exec` does.
+//
+// PATH is the one deliberate difference and is asserted separately below. The
+// exec path composes and uses it immediately, so it folds in the current
+// process's PATH; the resolver's answer is persisted in the source-mode farm
+// manifest and replayed by later shells, so it records only the runtime-owned
+// directory and the shim prepends it to the caller's live PATH.
 func TestResolveCommandInfo_NodeMatchesGetCommandInfo(t *testing.T) {
 	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 	t.Setenv("DATAMITSU_OFFLINE", "1")
@@ -159,21 +164,46 @@ func TestResolveCommandInfo_NodeMatchesGetCommandInfo(t *testing.T) {
 	if !slices.Equal(resolved.Args, want.Args) {
 		t.Errorf("Args = %v, want %v", resolved.Args, want.Args)
 	}
-	if !maps.Equal(resolved.Env, want.Env) {
-		t.Errorf("Env = %v, want %v", resolved.Env, want.Env)
+	resolvedRest, wantRest := withoutPath(resolved.Env), withoutPath(want.Env)
+	if !maps.Equal(resolvedRest, wantRest) {
+		t.Errorf("Env (excluding PATH) = %v, want %v", resolvedRest, wantRest)
 	}
 
 	// Pin the two properties the shim depends on explicitly, so a change that
 	// broke both paths in the same way would still fail.
-	wantPrefix := filepath.Dir(nodeBin) + string(os.PathListSeparator)
-	if !strings.HasPrefix(resolved.Env["PATH"], wantPrefix) {
-		t.Errorf("Env[PATH] = %q, want it to start with %q", resolved.Env["PATH"], wantPrefix)
+	nodeBinDir := filepath.Dir(nodeBin)
+	if resolved.Env["PATH"] != nodeBinDir {
+		t.Errorf("Env[PATH] = %q, want exactly the managed node bin dir %q", resolved.Env["PATH"], nodeBinDir)
+	}
+	// Nothing of the baking process's own PATH may be recorded: the manifest
+	// outlives the shell that wrote it, and a per-shell version manager's
+	// directory is gone by the time another shell replays it.
+	if inherited := os.Getenv("PATH"); inherited != "" && strings.Contains(resolved.Env["PATH"], inherited) {
+		t.Errorf("Env[PATH] = %q captured the current process's PATH", resolved.Env["PATH"])
+	}
+	// The exec path, by contrast, does compose the live PATH, because it is
+	// about to use it.
+	if !strings.HasPrefix(want.Env["PATH"], nodeBinDir+string(os.PathListSeparator)) {
+		t.Errorf("exec-path Env[PATH] = %q, want it to start with %q", want.Env["PATH"], nodeBinDir)
 	}
 	for _, key := range []string{"npm_config_store_dir", "npm_config_virtual_store_dir", "npm_config_global_dir"} {
 		if resolved.Env[key] == "" {
 			t.Errorf("Env[%s] is empty, want the node app env to carry it", key)
 		}
 	}
+}
+
+// withoutPath copies env minus PATH, which the two node paths intentionally
+// disagree on.
+func withoutPath(env map[string]string) map[string]string {
+	out := make(map[string]string, len(env))
+	for k, v := range env {
+		if k == "PATH" {
+			continue
+		}
+		out[k] = v
+	}
+	return out
 }
 
 // TestResolveCommandInfo_NodeUninstalledRuntime asserts the resolver answers

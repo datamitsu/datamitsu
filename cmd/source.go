@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/facts"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
@@ -151,6 +152,18 @@ func resolveSourcePlan(ctx context.Context) (sourcefarm.Plan, error) {
 	cfg, _, _, err := loadConfigWithPaths(ctx, BeforeConfigPaths, NoAutoConfig, ConfigPaths)
 	if err != nil {
 		return sourcefarm.Plan{}, fmt.Errorf("failed to load config: %w", err)
+	}
+
+	// Every app name becomes a filename in a directory that goes on PATH, so the
+	// name rule is re-checked here rather than trusted from the load. Config
+	// validation already applied it, which is exactly why a failure at this
+	// point means the plan is about to write something the validator never saw.
+	names := make([]string, 0, len(cfg.Apps))
+	for name := range cfg.Apps {
+		names = append(names, name)
+	}
+	if err := config.ValidateAppNames(names); err != nil {
+		return sourcefarm.Plan{}, err
 	}
 
 	farmDir, err := env.GetProjectBinPath(root)

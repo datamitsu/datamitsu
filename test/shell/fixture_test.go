@@ -324,6 +324,10 @@ func (f *fixture) runRaw(shell, script string) shellResult {
 	switch shell {
 	case "bash":
 		args = []string{"--noprofile", "--norc", "-c", script}
+	case "zsh":
+		// --no-rcs is zsh's spelling of bash's --noprofile --norc: no startup
+		// file may put anything on PATH that the test did not.
+		args = []string{"--no-rcs", "-c", script}
 	case "fish":
 		args = []string{"--no-config", "-c", script}
 	default:
@@ -358,9 +362,14 @@ func requireShell(t *testing.T, shell string) string {
 	return bin
 }
 
-// shells is the set every property is proved against. bash covers zsh too: they
-// share a renderer, and test/cli asserts the two outputs agree.
-var shells = []string{"bash", "fish"}
+// shells is the set every property is proved against.
+//
+// zsh is listed even though it shares bash's renderer and test/cli asserts the
+// two outputs are byte-identical. Identical output is not identical execution:
+// zsh's rules for pattern matching inside ${p//pat/rep} differ from bash's, and
+// that substitution is what keeps re-activation from growing PATH. Running it is
+// the only way to know. requireShell skips cleanly where zsh is absent.
+var shells = []string{"bash", "zsh", "fish"}
 
 // assertRan fails unless the tool printed exactly the version the given branch
 // pins — and never the impostor's output.

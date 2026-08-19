@@ -1,8 +1,12 @@
 # Plan: Source mode — activate the project toolchain in a shell
 
-**Status:** ready for implementation. Architecture decisions closed by the owner (§Decisions).
+**Status:** implemented (2026-08-20). All 15 tasks are done; the branch is not merged, per
+the branch note below. Two items remain open as **owner decisions**, not as work: the D1
+narrowing recorded under Task 13 (every entry is a shim; the symlink fast path is
+implemented but never selected), and the measured ~10–12 ms steady-state cost, which the
+Task 14 acceptance row flags as not met as originally written.
 **Date:** 2026-08-19.
-**Depends on:** `docs/plans/2026-08-19-cli-startup-cost.md` — land it first. Every latency
+**Depends on:** `docs/plans/completed/2026-08-19-cli-startup-cost.md` — landed. Every latency
 number in this plan assumes it.
 **Related:** `internal/binmanager`, `internal/runtimemanager`, `internal/env`,
 `internal/config/validate.go`, `cmd/exec.go`, `main.go`, `test/cli`.
@@ -46,12 +50,12 @@ has not been downloaded, and a dangling symlink is `ENOENT`, not a trigger.
 
 ## Decisions (closed by the owner, do not re-litigate)
 
-| #   | Decision                                            | Chosen                                                                                                                                                                                                     |
-| --- | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| D1  | Hot-path shape                                      | **Hybrid.** Real symlink into the content-addressed store for _installed_ `binary`/`go` apps (0 ms). Shim for everything else: `jvm`, `node`, `uv`, any app carrying `Env`, and any not-yet-installed app. |
-| D2  | Startup optimizations                               | **Separate plan, landed first** (`2026-08-19-cli-startup-cost.md`).                                                                                                                                        |
-| D3  | Activation outside a git repository                 | **Deferred to its own plan.** This plan is project-scoped only: `source` requires a discovered config and fails loudly without one.                                                                        |
-| D4  | Name declared but unresolvable for the current root | **Fail loudly, exit 127.** Never fall through to a system binary. Report shadowing explicitly.                                                                                                             |
+| #   | Decision                                            | Chosen                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| --- | --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D1  | Hot-path shape                                      | ~~**Hybrid.** Real symlink into the content-addressed store for _installed_ `binary`/`go` apps (0 ms). Shim for everything else.~~ **Superseded during Task 13: every entry is a shim.** A symlink has nowhere to put the freshness check, so after `git checkout v2` it keeps resolving to the version the previous branch pinned — silently, exiting 0. `StrategySymlink` remains implemented and round-trips through the manifest, but `strategyFor` never selects it. See the ⚠️ note below; awaiting owner confirmation. |
+| D2  | Startup optimizations                               | **Separate plan, landed first** (`2026-08-19-cli-startup-cost.md`).                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| D3  | Activation outside a git repository                 | **Deferred to its own plan.** This plan is project-scoped only: `source` requires a discovered config and fails loudly without one.                                                                                                                                                                                                                                                                                                                                                                                           |
+| D4  | Name declared but unresolvable for the current root | **Fail loudly, exit 127.** Never fall through to a system binary. Report shadowing explicitly.                                                                                                                                                                                                                                                                                                                                                                                                                                |
 
 D1 is the decision that makes the numbers work: `terragrunt`, `tofu`, `sops` and `kubectl`
 are all `binary` apps, so the tools that motivated the feature take the zero-overhead path,

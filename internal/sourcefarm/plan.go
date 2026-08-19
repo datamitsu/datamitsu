@@ -21,6 +21,7 @@
 package sourcefarm
 
 import (
+	"path/filepath"
 	"sort"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
@@ -79,9 +80,17 @@ const (
 // datamitsu, without bound. aqua-proxy refuses to proxy its own name for
 // exactly this reason.
 //
-// `git` is here because datamitsu shells out to git for root discovery and
-// because git's own subprocess protocol (hooks, credential helpers, pagers)
-// makes interposition unusually far-reaching.
+// `git` and `ldd` are here for the same reason as `datamitsu`: datamitsu runs
+// both by bare name, so shimming either turns an internal subprocess into a
+// re-entry. git is root discovery; ldd is libc detection, which
+// target.DetectLibc runs on Linux once per BinManager/RuntimeManager
+// construction — including the one the shim's own install spawn performs, which
+// is what closes the loop. git additionally earns a place on the list because
+// its subprocess protocol (hooks, credential helpers, pagers) makes
+// interposition unusually far-reaching.
+//
+// Any bare-name subprocess datamitsu spawns belongs here; git and ldd are
+// currently the only two.
 var denyList = map[string]struct{}{
 	"sudo":      {},
 	"su":        {},
@@ -97,6 +106,7 @@ var denyList = map[string]struct{}{
 	"scp":       {},
 	"sftp":      {},
 	"git":       {},
+	"ldd":       {},
 	"datamitsu": {},
 }
 
@@ -126,6 +136,13 @@ type Entry struct {
 
 	// Args are prepended to the user's argv by the shim.
 	Args []string `json:"args,omitempty"`
+
+	// Artifact is the file whose presence means the app is downloaded, when
+	// that is not Command. A jvm app's Command is an interpreter — for a
+	// system-mode runtime, the bare word "java" — so it answers nothing about
+	// whether the app itself is present; the JAR does. Empty means Command is
+	// the artifact.
+	Artifact string `json:"artifact,omitempty"`
 
 	// Env is the overlay merged into the environment by the shim.
 	Env map[string]string `json:"env,omitempty"`
@@ -217,6 +234,7 @@ func BuildPlan(root, farmDir string, apps binmanager.MapOfApps, resolve Resolver
 				entry.Command = info.Command
 				entry.Args = info.Args
 				entry.Env = info.Env
+				entry.Artifact = info.Artifact
 				entry.Installed = installed
 			}
 		}
@@ -224,7 +242,7 @@ func BuildPlan(root, farmDir string, apps binmanager.MapOfApps, resolve Resolver
 		plan.Entries = append(plan.Entries, entry)
 
 		if lookPath != nil {
-			if found, err := lookPath(name); err == nil && found != "" {
+			if found, err := lookPath(name); err == nil && found != "" && !inFarm(found, farmDir) {
 				plan.Shadowed = append(plan.Shadowed, Shadow{Name: name, Path: found})
 			}
 		}
@@ -282,6 +300,32 @@ func kindOf(app binmanager.App) string {
 	default:
 		return ""
 	}
+}
+
+// inFarm reports whether a lookPath hit is the farm's own entry for that name.
+//
+// Shadow detection is meant to answer "what was this name running before
+// activation", and re-running `datamitsu source` from an already-activated shell
+// is both documented as safe and the normal case (a shell rc file, a directory
+// hook, a new tmux pane). By then the farm is already on PATH and is the first
+// hit for every entry, so without this every declared app reports itself as
+// shadowing itself — a warning per app on stderr, a bogus `shadowed` array in
+// the manifest, and the real system shadows lost in the noise.
+func inFarm(found, farmDir string) bool {
+	if farmDir == "" {
+		return false
+	}
+	dir := filepath.Dir(filepath.Clean(found))
+	farm := filepath.Clean(farmDir)
+	if dir == farm {
+		return true
+	}
+	// The two can name the same directory differently — a PATH entry that went
+	// through EvalSymlinks has /var rewritten to /private/var on macOS, while
+	// the computed farm path has not.
+	resolvedDir, errDir := filepath.EvalSymlinks(dir)
+	resolvedFarm, errFarm := filepath.EvalSymlinks(farm)
+	return errDir == nil && errFarm == nil && resolvedDir == resolvedFarm
 }
 
 // DenyListed reports whether name is refused by the hard deny-list. Exported

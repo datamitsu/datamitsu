@@ -153,6 +153,8 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
 
 **Breaking change: Cache/Store path separation** — `GetCachePath()` now returns `{base}/cache` and `GetStorePath()` returns `{base}/store` instead of both pointing to `{base}`. Users upgrading need to either move existing directories into the new structure or run `datamitsu store clear && datamitsu init` to re-download.
 
+**Breaking change: App names are validated** — a key in `apps` must match `^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`, must not be a Windows reserved device name, and must not case-fold-collide with another name in the same config. This is enforced by `ValidateApps` on every config load, so a previously accepted config with e.g. `my/tool` or both `Task` and `task` now fails to load for every command, not just `source`. The rule lives in `internal/config/app-name` validation; app names become file names in the store and in the source-mode farm.
+
 ## Project Overview
 
 datamitsu is a configuration management and binary distribution tool written in Go. It downloads, verifies, and manages binaries for linting and development tools (like lefthook, golangci-lint, hadolint, shellcheck, etc.) across multiple platforms. The tool uses JavaScript configuration files powered by the goja JavaScript runtime to define binary sources and configurations.
@@ -201,6 +203,15 @@ offline env (`DATAMITSU_OFFLINE=1`/`DATAMITSU_NO_OCI=1`/`NO_COLOR=1`, isolated
 cache), normalized goldens regenerated with `-update`. `TestContractCompletenessGate`
 requires every leaf command to have ≥1 blackbox test. See
 [test/cli/README.md](test/cli/README.md) and [CONTRIBUTING.md](CONTRIBUTING.md#testing).
+
+**Real-shell tier** (`test/shell`): drives real `bash`, `zsh` and `fish` against
+a two-branch fixture repo with a loopback `httptest` release host, proving the
+source-mode properties no Go-level tier can — pinned versions win over a system
+binary of the same name, a branch switch takes effect on the same command line,
+and activation downloads nothing. Not build-tagged: it runs under `go test ./...`
+and `t.Skip`s cleanly when a shell is missing, naming the property left
+unverified. It shares `clitest.CoverDir()` with `test/cli`, so the coverage
+destination is deliberately not overridable. Run with `go test ./test/shell/`.
 
 **Gated OCI e2e tier** (`test/e2e`): real seed/install/exec/init/check/fix/lint
 against the digest-pinned config; double-gated by `//go:build e2e_oci` + `DATAMITSU_TEST_OCI=1`,

@@ -1132,8 +1132,17 @@ from the same shell function that runs an activation through `eval`.
 | `DATAMITSU_LIBC`                 | Override host libc detection (`glibc` or `musl`); affects store paths and OCI bundle selection  | auto-detected                                       |
 | `DATAMITSU_OCI_REGISTRY`         | Registry host for base-image digest resolution in `devtools dockerfile`                         | `ghcr.io`                                           |
 | `DATAMITSU_PARSERS_DIR`          | Override directory for downloaded WASM output-parser modules                                    | `{store}/.parsers`                                  |
+| `DATAMITSU_ROOT`                 | Git root of the source-mode farm activated in this shell (exported by `datamitsu source`)       | -                                                   |
+| `DATAMITSU_FARM`                 | Farm directory activated in this shell (exported by `datamitsu source`)                         | -                                                   |
 | `NO_COLOR`                       | Disable color output                                                                            | -                                                   |
 | `FORCE_COLOR`                    | Force color output                                                                              | -                                                   |
+
+`DATAMITSU_ROOT` and `DATAMITSU_FARM` are written by `datamitsu source` and are
+informational only. Nothing reads them back to resolve a tool — the shim
+discovers the repository root from the working directory, so a tool run in
+another repository resolves against that repository, not against the one the
+shell was activated in. They are also excluded from the farm's staleness
+fingerprint, so exporting them cannot make a farm look stale.
 
 `DATAMITSU_FORCE_GIT_SUBPROCESS` applies to the config loader's memoized git-root
 lookup, which is where the pure-Go walk runs; the command handlers use a separate

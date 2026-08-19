@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
@@ -302,10 +303,41 @@ func (rm *RuntimeManager) getNodeCommandInfo(ctx context.Context, appName string
 }
 
 // resolveNodeCommandInfo is getNodeCommandInfo without the install side effect:
-// identical Command/Args/Env, resolved through resolveNodeBinPath instead of
+// the same Command/Args/Env, resolved through resolveNodeBinPath instead of
 // installNode. Both go through nodeCommandInfo so the two can never drift.
+//
+// The one deliberate difference is PATH. The exec path composes it and uses it
+// immediately, so folding in the current process's PATH is right there. This
+// path's answer is persisted in the source-mode farm manifest and replayed by
+// every later shell, where a captured PATH is not merely stale but actively
+// wrong: it pins the baking shell's environment, which for a per-shell version
+// manager names a directory that is gone once that shell exits, and it writes
+// the user's whole PATH into an on-disk artifact that `source status --json`
+// prints. Only the runtime-owned prefix is recorded; the shim prepends it to
+// whatever PATH the caller actually has (see shim.mergeEnv).
 func (rm *RuntimeManager) resolveNodeCommandInfo(appName string, appConfig *binmanager.AppConfigNode, files map[string]string, archives map[string]*binmanager.ArchiveSpec) (*binmanager.CommandInfo, error) {
-	return rm.nodeCommandInfo(appName, appConfig, files, archives, rm.resolveNodeBinPath)
+	info, err := rm.nodeCommandInfo(appName, appConfig, files, archives, rm.resolveNodeBinPath)
+	if err != nil {
+		return nil, err
+	}
+	if info.Env != nil {
+		if path, ok := info.Env["PATH"]; ok {
+			info.Env["PATH"] = nodePathPrefix(path)
+		}
+	}
+	return info, nil
+}
+
+// nodePathPrefix drops the inherited tail nodeCommandInfo appended, leaving the
+// managed node's bin directory. The composition is
+// "{nodeBinDir}{sep}{os.Getenv(PATH)}", so cutting at the first separator is
+// exact rather than a heuristic.
+func nodePathPrefix(composed string) string {
+	prefix, _, found := strings.Cut(composed, string(os.PathListSeparator))
+	if !found {
+		return composed
+	}
+	return prefix
 }
 
 // nodeCommandInfo builds a node app's CommandInfo, obtaining the node binary

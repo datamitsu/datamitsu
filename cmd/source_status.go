@@ -197,6 +197,27 @@ func manifestStatus(path string) SourceManifestStatus {
 	return s
 }
 
+// writeStatusSection writes one titled, count-annotated block of name/detail
+// rows, left-padding the name column to the widest name in that block. An empty
+// block still prints its header, so "no shadowed binaries" and "this section
+// does not exist" cannot be confused.
+func writeStatusSection(b *strings.Builder, title string, rows [][2]string) {
+	fmt.Fprintf(b, "\n%s (%d):\n", title, len(rows))
+	if len(rows) == 0 {
+		b.WriteString("  none\n")
+		return
+	}
+	width := 0
+	for _, row := range rows {
+		if len(row[0]) > width {
+			width = len(row[0])
+		}
+	}
+	for _, row := range rows {
+		fmt.Fprintf(b, "  %-*s  %s\n", width, row[0], row[1])
+	}
+}
+
 // renderSourceStatus writes the human report.
 //
 // Column widths are derived from the content rather than hard-coded so the
@@ -213,51 +234,30 @@ func renderSourceStatus(out io.Writer, s SourceStatus) error {
 		fmt.Fprintf(&b, "          %s\n", s.Manifest.Error)
 	}
 
-	fmt.Fprintf(&b, "\nentries (%d):\n", len(s.Entries))
-	if len(s.Entries) == 0 {
-		b.WriteString("  none\n")
-	}
-	width := 0
-	for _, e := range s.Entries {
-		if len(e.Name) > width {
-			width = len(e.Name)
-		}
-	}
-	for _, e := range s.Entries {
+	entries := make([][2]string, len(s.Entries))
+	for i, e := range s.Entries {
 		state := "not installed"
 		if e.Installed {
 			state = "installed"
 		}
-		fmt.Fprintf(&b, "  %-*s  %-7s  %s\n", width, e.Name, e.Strategy, state)
+		// The strategy column is padded to a fixed width rather than to the
+		// content's, so it stays aligned across a farm where every entry happens
+		// to share one strategy.
+		entries[i] = [2]string{e.Name, fmt.Sprintf("%-7s  %s", e.Strategy, state)}
 	}
+	writeStatusSection(&b, "entries", entries)
 
-	fmt.Fprintf(&b, "\nexcluded (%d):\n", len(s.Excluded))
-	if len(s.Excluded) == 0 {
-		b.WriteString("  none\n")
+	excluded := make([][2]string, len(s.Excluded))
+	for i, x := range s.Excluded {
+		excluded[i] = [2]string{x.Name, x.Reason}
 	}
-	width = 0
-	for _, x := range s.Excluded {
-		if len(x.Name) > width {
-			width = len(x.Name)
-		}
-	}
-	for _, x := range s.Excluded {
-		fmt.Fprintf(&b, "  %-*s  %s\n", width, x.Name, x.Reason)
-	}
+	writeStatusSection(&b, "excluded", excluded)
 
-	fmt.Fprintf(&b, "\nshadowed (%d):\n", len(s.Shadowed))
-	if len(s.Shadowed) == 0 {
-		b.WriteString("  none\n")
+	shadowed := make([][2]string, len(s.Shadowed))
+	for i, sh := range s.Shadowed {
+		shadowed[i] = [2]string{sh.Name, sh.Path}
 	}
-	width = 0
-	for _, sh := range s.Shadowed {
-		if len(sh.Name) > width {
-			width = len(sh.Name)
-		}
-	}
-	for _, sh := range s.Shadowed {
-		fmt.Fprintf(&b, "  %-*s  %s\n", width, sh.Name, sh.Path)
-	}
+	writeStatusSection(&b, "shadowed", shadowed)
 
 	if _, err := io.WriteString(out, b.String()); err != nil {
 		return fmt.Errorf("write source status: %w", err)

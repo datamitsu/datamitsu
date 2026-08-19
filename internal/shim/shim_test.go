@@ -47,7 +47,16 @@ type harness struct {
 func newHarness(t *testing.T) *harness {
 	t.Helper()
 
+	// The temp dir is resolved through symlinks because that is what production
+	// does: the bake keys the farm on the physical git root (facts resolves the
+	// cwd, and `git rev-parse --show-toplevel` reports a physical path), so
+	// discoverRoots resolves too. On macOS t.TempDir() hands back a /var path
+	// that is really /private/var, and a harness pinned to the unresolved form
+	// would assert the bug rather than the behaviour.
 	base := t.TempDir()
+	if resolved, err := filepath.EvalSymlinks(base); err == nil {
+		base = resolved
+	}
 	root := filepath.Join(base, "repo")
 	if err := os.MkdirAll(filepath.Join(root, ".git"), 0o755); err != nil {
 		t.Fatalf("create git root: %v", err)
@@ -290,7 +299,10 @@ func TestDispatchPassesArgvVerbatim(t *testing.T) {
 	if got.path != tool {
 		t.Errorf("exec path = %q, want %q", got.path, tool)
 	}
-	want := append([]string{tool}, userArgs...)
+	// argv[0] is the name the user typed, not the store path being exec'd: a
+	// tool's own usage line and error prefixes come from argv[0], and printing a
+	// content-addressed cache path there is both ugly and unstable.
+	want := append([]string{"tofu"}, userArgs...)
 	if !equalStrings(got.argv, want) {
 		t.Errorf("argv = %q, want %q", got.argv, want)
 	}
@@ -315,13 +327,56 @@ func TestDispatchPrependsArgsAndMergesEnv(t *testing.T) {
 	}
 
 	got := h.execs[0]
-	want := []string{java, "-jar", "/store/spectral.jar", "lint", "api.yaml"}
+	// An entry with Args execs an interpreter, and the interpreter owns argv[0]
+	// by its own convention: `java -jar …` expects "java" there, not "spectral".
+	want := []string{"java", "-jar", "/store/spectral.jar", "lint", "api.yaml"}
 	if !equalStrings(got.argv, want) {
 		t.Errorf("argv = %q, want %q", got.argv, want)
 	}
+	// The entry's PATH is prepended to the inherited one, not substituted for
+	// it, and a directory already present is not repeated: /usr/bin is inherited
+	// and also named by the overlay, so it appears once.
 	wantEnv := []string{"HOME=/home/u", "JAVA_HOME=/store/jdk", "PATH=/store/jdk/bin:/usr/bin"}
 	if !equalStrings(got.environ, wantEnv) {
 		t.Errorf("env = %q, want %q", got.environ, wantEnv)
+	}
+}
+
+// TestDispatchPrependsRatherThanReplacesPATH is the property that keeps a baked
+// manifest usable from a shell other than the one that baked it.
+//
+// A manifest is written once and replayed by every later shell. An entry whose
+// PATH was captured at bake time would pin the baking shell's environment —
+// which, for a per-shell version manager, names a directory that stops existing
+// when that shell exits — and would drop whatever the calling shell actually
+// has.
+func TestDispatchPrependsRatherThanReplacesPATH(t *testing.T) {
+	h := newHarness(t)
+	node := h.tool("eslint")
+	h.writeManifest(sourcefarm.Manifest{
+		Entries: []sourcefarm.Entry{{
+			Name:      "eslint",
+			Command:   node,
+			Env:       map[string]string{"PATH": "/store/node/bin"},
+			Installed: true,
+		}},
+	})
+	h.invokeThroughFarm("eslint")
+
+	if code, handled := h.d.Dispatch(); !handled || code != 0 {
+		t.Fatalf("Dispatch() = (%d, %v), want (0, true)", code, handled)
+	}
+
+	var gotPath string
+	for _, kv := range h.execs[0].environ {
+		if key, value, ok := strings.Cut(kv, "="); ok && key == "PATH" {
+			gotPath = value
+		}
+	}
+	// The harness's inherited PATH is /usr/bin; it must survive, behind the
+	// runtime's own directory.
+	if want := "/store/node/bin:/usr/bin"; gotPath != want {
+		t.Errorf("PATH = %q, want %q", gotPath, want)
 	}
 }
 
@@ -793,9 +848,35 @@ func TestMergeEnv(t *testing.T) {
 		},
 		{
 			name:    "overlay wins and the result is sorted",
-			base:    []string{"PATH=/usr/bin", "HOME=/h"},
+			base:    []string{"LANG=C", "HOME=/h"},
+			overlay: map[string]string{"LANG": "en_US.UTF-8"},
+			want:    []string{"HOME=/h", "LANG=en_US.UTF-8"},
+		},
+		{
+			// PATH is the one key that is prepended rather than replaced: the
+			// caller's own PATH must survive a farm entry's runtime directories.
+			name:    "PATH is prepended, not replaced",
+			base:    []string{"PATH=/usr/bin:/bin", "HOME=/h"},
+			overlay: map[string]string{"PATH": "/store/bin"},
+			want:    []string{"HOME=/h", "PATH=/store/bin:/usr/bin:/bin"},
+		},
+		{
+			name:    "a directory the overlay already names is not repeated",
+			base:    []string{"PATH=/usr/bin:/bin"},
 			overlay: map[string]string{"PATH": "/store/bin:/usr/bin"},
-			want:    []string{"HOME=/h", "PATH=/store/bin:/usr/bin"},
+			want:    []string{"PATH=/store/bin:/usr/bin:/bin"},
+		},
+		{
+			name:    "an empty inherited PATH leaves just the overlay",
+			base:    []string{"PATH="},
+			overlay: map[string]string{"PATH": "/store/bin"},
+			want:    []string{"PATH=/store/bin"},
+		},
+		{
+			name:    "an empty overlay PATH leaves the inherited one",
+			base:    []string{"PATH=/usr/bin"},
+			overlay: map[string]string{"PATH": ""},
+			want:    []string{"PATH=/usr/bin"},
 		},
 		{
 			name:    "new keys are added",
@@ -901,7 +982,6 @@ func BenchmarkDispatch(b *testing.B) {
 
 	b.ReportAllocs()
 	for b.Loop() {
-		d.throughFarm = nil // each iteration is a fresh process
 		if _, handled := d.Dispatch(); !handled {
 			b.Fatal("Dispatch() declined the benchmark invocation")
 		}

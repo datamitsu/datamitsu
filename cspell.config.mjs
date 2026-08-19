@@ -29,6 +29,11 @@ export default defineConfig((config) => ({
   ignoreWords: [...(config.ignoreWords ?? []), "aboutt", "cachng", "instalation"],
   words: [
     ...config.words,
+    // A shell-literal expectation in internal/shellquote: `$'a\xffb'`. The
+    // trailing "b" is load-bearing — it is a hex digit, and the test asserts
+    // that a shell stops the \x escape after exactly two digits rather than
+    // absorbing it.
+    "xffb",
     // Go packages behind `datamitsu llms`: the embedded docs snapshot and its
     // manifest schema.
     "llmsdocs",

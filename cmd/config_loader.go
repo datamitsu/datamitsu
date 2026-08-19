@@ -20,6 +20,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/project"
 	"github.com/datamitsu/datamitsu/internal/remotecfg"
+	"github.com/datamitsu/datamitsu/internal/sourcefarm"
 	"github.com/datamitsu/datamitsu/internal/timing"
 	"github.com/datamitsu/datamitsu/internal/traverser"
 	"github.com/datamitsu/datamitsu/internal/version"
@@ -639,10 +640,12 @@ func parseConfigResult(vm *goja.Runtime, resultVal goja.Value) (*config.Config, 
 // Returns the path if exactly one exists, empty string if none exists,
 // or an error if more than one exist.
 func discoverAutoConfig(gitRoot string) (string, error) {
-	candidates := []string{
-		filepath.Join(gitRoot, ldflags.PackageName+".config.js"),
-		filepath.Join(gitRoot, ldflags.PackageName+".config.mjs"),
-		filepath.Join(gitRoot, ldflags.PackageName+".config.ts"),
+	// The same list source-mode's watch set uses, so a farm cannot be reported
+	// fresh for a tree that has since gained a second candidate and stopped
+	// loading here.
+	candidates := make([]string, 0, len(sourcefarm.AutoConfigNames))
+	for _, name := range sourcefarm.AutoConfigNames {
+		candidates = append(candidates, filepath.Join(gitRoot, name))
 	}
 
 	var found []string

@@ -11,10 +11,22 @@ import (
 	"github.com/datamitsu/datamitsu/internal/sourcefarm"
 )
 
+// isolateCache points the cache root at a scratch directory.
+//
+// buildSourceStatus resolves the manifest path through env.GetCachePath and
+// stats it, so without this the tests read whichever farms the developer running
+// them happens to have baked — and Manifest.State would depend on the machine.
+func isolateCache(t *testing.T) {
+	t.Helper()
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
+}
+
 // statusPlan is a farm exercising every list the status document carries: an
 // installed symlink entry, an uninstalled shim, two distinct exclusion reasons
 // and a shadowed system binary.
-func statusPlan() sourcefarm.Plan {
+func statusPlan(t *testing.T) sourcefarm.Plan {
+	t.Helper()
+	isolateCache(t)
 	return sourcefarm.Plan{
 		Root:    "/repo",
 		FarmDir: "/cache/projects/abc/bin",
@@ -43,7 +55,7 @@ func marshalStatus(t *testing.T, s SourceStatus) string {
 // must serialize byte-identically every time, with every list in the order
 // BuildPlan sorted it into.
 func TestSourceStatusJSONIsStable(t *testing.T) {
-	s := buildSourceStatus(statusPlan())
+	s := buildSourceStatus(statusPlan(t))
 
 	first, second := marshalStatus(t, s), marshalStatus(t, s)
 	if first != second {
@@ -71,7 +83,7 @@ func TestSourceStatusJSONIsStable(t *testing.T) {
 // TestSourceStatusJSONHasRequiredKeys asserts presence and values rather than a
 // field count, so adding a field to the document never breaks this test.
 func TestSourceStatusJSONHasRequiredKeys(t *testing.T) {
-	out := marshalStatus(t, buildSourceStatus(statusPlan()))
+	out := marshalStatus(t, buildSourceStatus(statusPlan(t)))
 
 	var doc map[string]any
 	if err := json.Unmarshal([]byte(out), &doc); err != nil {
@@ -123,13 +135,13 @@ func TestSourceStatusJSONHasRequiredKeys(t *testing.T) {
 // something is. Under D4 the absolute path is the whole value of the field — it
 // is what tells the user which binary they stopped getting.
 func TestSourceStatusShadowsOmittedWhenEmpty(t *testing.T) {
-	clean := statusPlan()
+	clean := statusPlan(t)
 	clean.Shadowed = nil
 	if out := marshalStatus(t, buildSourceStatus(clean)); strings.Contains(out, "shadowed") {
 		t.Errorf("empty shadow list was serialized:\n%s", out)
 	}
 
-	out := marshalStatus(t, buildSourceStatus(statusPlan()))
+	out := marshalStatus(t, buildSourceStatus(statusPlan(t)))
 	var doc struct {
 		Shadowed []sourcefarm.Shadow `json:"shadowed"`
 	}
@@ -149,7 +161,7 @@ func TestSourceStatusShadowsOmittedWhenEmpty(t *testing.T) {
 // was never declared, which is precisely the debugging session this command
 // exists to prevent.
 func TestSourceStatusEveryExclusionHasAReason(t *testing.T) {
-	s := buildSourceStatus(statusPlan())
+	s := buildSourceStatus(statusPlan(t))
 	if len(s.Excluded) == 0 {
 		t.Fatal("fixture has no exclusions to check")
 	}
@@ -161,7 +173,7 @@ func TestSourceStatusEveryExclusionHasAReason(t *testing.T) {
 
 	// The list is present even when empty: a caller distinguishing "nothing was
 	// refused" from "the field is missing" should never have to.
-	empty := statusPlan()
+	empty := statusPlan(t)
 	empty.Excluded = nil
 	if out := marshalStatus(t, buildSourceStatus(empty)); !strings.Contains(out, `"excluded": []`) {
 		t.Errorf("empty exclusion list was omitted:\n%s", out)
@@ -172,7 +184,7 @@ func TestSourceStatusEveryExclusionHasAReason(t *testing.T) {
 // typed value, which is what makes it usable as the single serialization any
 // future JSON surface reuses.
 func TestSourceStatusJSONRoundTrips(t *testing.T) {
-	want := buildSourceStatus(statusPlan())
+	want := buildSourceStatus(statusPlan(t))
 	out := marshalStatus(t, want)
 
 	var got SourceStatus
@@ -233,7 +245,7 @@ func TestManifestStatusStates(t *testing.T) {
 // paths, the freshness word, and every list with its reason or path. It is the
 // half of D4's mitigation a person actually reads.
 func TestRenderSourceStatusReportsEverything(t *testing.T) {
-	s := buildSourceStatus(statusPlan())
+	s := buildSourceStatus(statusPlan(t))
 	s.Manifest = SourceManifestStatus{Path: "/cache/projects/abc/manifest.json", Exists: true, Fresh: true, State: ManifestFresh}
 
 	var buf bytes.Buffer
@@ -258,7 +270,11 @@ func TestRenderSourceStatusReportsEverything(t *testing.T) {
 		}
 	}
 
-	if second := new(bytes.Buffer); renderSourceStatus(second, s) == nil && second.String() != out {
+	second := new(bytes.Buffer)
+	if err := renderSourceStatus(second, s); err != nil {
+		t.Fatalf("renderSourceStatus() second call error = %v", err)
+	}
+	if second.String() != out {
 		t.Errorf("report is not byte-stable:\n%s\n%s", out, second.String())
 	}
 }
@@ -266,6 +282,7 @@ func TestRenderSourceStatusReportsEverything(t *testing.T) {
 // TestRenderSourceStatusEmptyFarm asserts the empty case still says so on every
 // list rather than rendering three bare headers.
 func TestRenderSourceStatusEmptyFarm(t *testing.T) {
+	isolateCache(t)
 	var buf bytes.Buffer
 	if err := renderSourceStatus(&buf, buildSourceStatus(sourcefarm.Plan{Root: "/repo", FarmDir: "/farm"})); err != nil {
 		t.Fatalf("renderSourceStatus() error = %v", err)

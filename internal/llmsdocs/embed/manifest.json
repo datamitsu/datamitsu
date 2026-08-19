@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 52,
-  "pageSetHash": "151a8c2242c07f3dc5c2523869d51752",
+  "pageSetHash": "73dda3eab17c3b75d2b1e0ebc7bf39c2",
   "pages": [
     {
       "slug": "about",
@@ -253,8 +253,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/startup.md",
       "title": "Startup and Config Load",
       "description": "What every datamitsu invocation pays before the first tool runs - the config-load cost model, the git-root memo, and how to measure it",
-      "bytes": 9092,
-      "contentHash": "53059f21c0a485b72ce9c6b68aca1d22"
+      "bytes": 9823,
+      "contentHash": "2146ff03aa2eda5006be7c003e545f88"
     },
     {
       "slug": "guides/binary-management",
@@ -424,8 +424,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 58352,
-      "contentHash": "229ffb706ec82d36b2eeca2c28c9105a"
+      "bytes": 59173,
+      "contentHash": "9168adb8ce29a81f45b5cba191d31488"
     },
     {
       "slug": "reference/comparison",
@@ -442,8 +442,8 @@
       "url": "https://datamitsu.com/docs/reference/configuration-api.md",
       "title": "Configuration API",
       "description": "Complete reference for the datamitsu configuration API",
-      "bytes": 48666,
-      "contentHash": "3408b542daf41526660b42714b8a1f28"
+      "bytes": 49417,
+      "contentHash": "0135f76a0e918d57c15a6faa35c4744e"
     },
     {
       "slug": "reference/ignore-rules",

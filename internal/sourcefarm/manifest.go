@@ -178,19 +178,41 @@ func WatchSet(paths []string) []WatchFile {
 //   - pnpm-lock.yaml, because a branch that bumps the shared config dependency
 //     changes the lockfile and nothing else datamitsu reads. Without it a rebake
 //     would read a stale node_modules and stamp the result fresh.
+//   - every auto-config candidate filename, not just the one that was
+//     discovered. Config discovery stats three names at the root and refuses to
+//     load when more than one exists, so a tree that gains a second candidate
+//     stops being loadable — but if only the discovered file were watched, every
+//     stat tuple would be unchanged and the farm would be reported fresh. The
+//     shim would keep running the old toolchain while `datamitsu` itself
+//     errored. Absent candidates record as Exists=false, so their appearance is
+//     what changes the key.
 //
 // configFiles is every file in the chain — the discovered config plus any
 // resolved before-config files — and may contain paths that do not exist.
+// Duplicates are collapsed by BuildManifest, which sorts and de-duplicates
+// before stat'ing.
 func WatchPaths(root string, configFiles []string) []string {
-	paths := make([]string, 0, len(configFiles)+2)
+	paths := make([]string, 0, len(configFiles)+2+len(AutoConfigNames))
 	paths = append(paths, configFiles...)
 	if root != "" {
 		paths = append(paths,
 			filepath.Join(root, ".git", "HEAD"),
 			filepath.Join(root, "pnpm-lock.yaml"),
 		)
+		for _, name := range AutoConfigNames {
+			paths = append(paths, filepath.Join(root, name))
+		}
 	}
 	return paths
+}
+
+// AutoConfigNames are the file names config discovery stats at the git root, in
+// the order it stats them. It mirrors cmd.discoverAutoConfig, which cannot be
+// imported here.
+var AutoConfigNames = []string{
+	ldflags.PackageName + ".config.js",
+	ldflags.PackageName + ".config.mjs",
+	ldflags.PackageName + ".config.ts",
 }
 
 // ComputeStalenessKey fingerprints everything that, when changed, must produce a

@@ -275,6 +275,10 @@ func TestWarnSourceFarmSilentWhenClean(t *testing.T) {
 // a watch entry for "" would stat the working directory on every tool
 // invocation.
 func TestConfigChainFilesRecordsOnlyFilePaths(t *testing.T) {
+	// configChainFiles is a package global; leaving it set would leak these
+	// fake paths into any later test in this package that reads it.
+	t.Cleanup(func() { setConfigChainFiles(nil) })
+
 	setConfigChainFiles([]configSource{
 		{name: "default", isDefault: true},
 		{name: "/repo/base.config.ts", path: "/repo/base.config.ts"},

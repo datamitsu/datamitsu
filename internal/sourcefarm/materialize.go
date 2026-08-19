@@ -77,13 +77,8 @@ type Options struct {
 	Warn func(string)
 }
 
-// Materialize writes the farm described by plan, and the manifest describing it,
-// atomically.
-func Materialize(plan Plan, m Manifest) error {
-	return MaterializeWithOptions(plan, m, Options{})
-}
-
-// MaterializeWithOptions is Materialize with the knobs tests and callers need.
+// MaterializeWithOptions writes the farm described by plan, and the manifest
+// describing it, atomically.
 func MaterializeWithOptions(plan Plan, m Manifest, opts Options) error {
 	err := materialize(plan, m, opts)
 	if err != nil {
@@ -91,10 +86,27 @@ func MaterializeWithOptions(plan Plan, m Manifest, opts Options) error {
 		if warn == nil {
 			warn = func(line string) { fmt.Fprintln(os.Stderr, line) }
 		}
-		warn("datamitsu: source farm not updated, keeping the previous one: " + err.Error())
+		// A failure after the farm has been swapped in leaves the new entries
+		// live under the previous manifest, so "keeping the previous one" would
+		// be untrue. The stale watch set makes the next invocation rebake, but
+		// the message must not claim nothing happened.
+		var swapped farmSwappedError
+		if errors.As(err, &swapped) {
+			warn("datamitsu: source farm replaced but its manifest could not be written; run `datamitsu source refresh --force`: " + err.Error())
+		} else {
+			warn("datamitsu: source farm not updated, keeping the previous one: " + err.Error())
+		}
 	}
 	return err
 }
+
+// farmSwappedError marks a failure that happened after the new farm directory was
+// already live, so the caller can tell "nothing changed" from "everything
+// changed except the manifest".
+type farmSwappedError struct{ err error }
+
+func (e farmSwappedError) Error() string { return e.err.Error() }
+func (e farmSwappedError) Unwrap() error { return e.err }
 
 func materialize(plan Plan, m Manifest, opts Options) error {
 	farmDir, parent, err := checkFarmPath(plan.FarmDir, opts.CacheRoot)
@@ -114,6 +126,11 @@ func materialize(plan Plan, m Manifest, opts Options) error {
 		return err
 	}
 
+	// Both are siblings of the farm directory, derived from `parent` rather than
+	// from env.GetProject*Path(plan.Root): those recompute the whole path from
+	// the real cache root and would ignore opts.CacheRoot, writing a test's
+	// manifest into the developer's cache. The file *names* still come from the
+	// env constants, which is what keeps these in step with what the shim reads.
 	manifestPath := opts.ManifestPath
 	if manifestPath == "" {
 		manifestPath = filepath.Join(parent, env.ProjectManifestFileName)
@@ -256,8 +273,18 @@ func resolveShimTarget(override string) (string, error) {
 	if !filepath.IsAbs(target) {
 		return "", fmt.Errorf("shim target must be absolute: %q", target)
 	}
-	if _, err := os.Stat(target); err != nil {
+	info, err := os.Stat(target)
+	if err != nil {
 		return "", fmt.Errorf("shim target %q is not usable: %w", target, err)
+	}
+	// Every farm entry is a symlink to this one file, so its mode is checked
+	// once here rather than repeated per entry — and the message names the
+	// datamitsu executable, which is the thing the user has to fix. A
+	// group-writable target means anyone in that group can replace what every
+	// shimmed tool on the machine execs.
+	if perm := info.Mode().Perm(); perm&0o100 == 0 || perm&0o022 != 0 {
+		return "", fmt.Errorf("the datamitsu executable %q has mode %04o; source mode needs it owner-executable and not group- or world-writable (for example %04o)",
+			target, perm, farmEntryMode.Perm())
 	}
 	return target, nil
 }
@@ -281,9 +308,14 @@ func writeEntries(dir string, entries []Entry, shimTarget string) error {
 		if err != nil {
 			return fmt.Errorf("entry %q would be a dangling symlink to %q: %w", entry.Name, target, err)
 		}
-		if perm := info.Mode().Perm(); perm&0o100 == 0 || perm&0o022 != 0 {
-			return fmt.Errorf("entry %q target %q has mode %04o, want an owner-executable, non-group-writable file such as %04o",
-				entry.Name, target, perm, farmEntryMode.Perm())
+		// The shim target's mode is already checked once in resolveShimTarget,
+		// which can name the executable in its message; only a symlink entry's
+		// own store target still needs checking here.
+		if entry.Strategy == StrategySymlink {
+			if perm := info.Mode().Perm(); perm&0o100 == 0 || perm&0o022 != 0 {
+				return fmt.Errorf("entry %q target %q has mode %04o, want an owner-executable, non-group-writable file such as %04o",
+					entry.Name, target, perm, farmEntryMode.Perm())
+			}
 		}
 		link := filepath.Join(dir, entry.Name)
 		if filepath.Dir(link) != dir {
@@ -334,16 +366,13 @@ func swapIntoPlace(stagedFarm, farmDir, stagedManifest, manifestPath, stage, par
 		return fmt.Errorf("move the new farm into place: %w", err)
 	}
 
-	if err := renameFile(stagedManifest, manifestPath); err != nil {
-		return err
+	// From here the new farm is live, so every remaining failure is reported as
+	// farmSwappedError rather than as "nothing was updated".
+	if err := os.Rename(stagedManifest, manifestPath); err != nil {
+		return farmSwappedError{fmt.Errorf("move the farm manifest into place: %w", err)}
 	}
-	return syncDir(parent)
-}
-
-// renameFile replaces dst with src atomically.
-func renameFile(src, dst string) error {
-	if err := os.Rename(src, dst); err != nil {
-		return fmt.Errorf("move the farm manifest into place: %w", err)
+	if err := syncDir(parent); err != nil {
+		return farmSwappedError{err}
 	}
 	return nil
 }

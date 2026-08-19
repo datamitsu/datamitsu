@@ -232,5 +232,9 @@ func (rm *RuntimeManager) jvmCommandInfo(appName string, appConfig *binmanager.A
 		Type:    "jvm",
 		Command: javaBin,
 		Args:    args,
+		// The JAR is what gets downloaded; javaBin is an interpreter that a
+		// system-mode runtime supplies as a bare "java" off PATH. Without this,
+		// "is it installed?" would be answered by stat'ing the JVM.
+		Artifact: jarPath,
 	}, nil
 }

@@ -86,9 +86,16 @@ func findCaseFoldCollisions(sortedNames []string) []string {
 	return errs
 }
 
-// ValidateAppNames validates the app-name set on its own, without any of the
-// per-kind checks. It exists so callers holding only a name list (the source
-// farm planner) can apply the same rule doValidateApps applies.
+// ValidateAppNames applies the name rule to a bare name list, without any of
+// the per-kind checks doValidateApps also performs. It exists so callers
+// holding only a name list can apply the same rule doValidateApps applies:
+// source-mode's farm bake re-checks the names it is about to turn into
+// filenames, and the guard over the embedded default config checks the names
+// datamitsu itself ships.
+//
+// The re-check is deliberate belt-and-braces. Config validation already ran on
+// load, so a name reaching here should always pass; if one ever does not, the
+// next step writes it into a directory on PATH.
 func ValidateAppNames(names []string) error {
 	sorted := append([]string(nil), names...)
 	sort.Strings(sorted)

@@ -17,7 +17,7 @@ import (
 // declared names were refused.
 func TestSummarizeRefreshCounts(t *testing.T) {
 	var buf bytes.Buffer
-	summarizeRefresh(&buf, statusPlan())
+	summarizeRefresh(&buf, statusPlan(t))
 
 	line := buf.String()
 	if strings.Count(line, "\n") != 1 {
