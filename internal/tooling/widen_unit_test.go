@@ -133,6 +133,79 @@ func TestCollectTasksHonoursWidenToForASubtree(t *testing.T) {
 	})
 }
 
+// The repository-scope branch narrows on granularity "repo" alone, which is
+// exhaustive only because "unit" cannot get there: it is meaningless at a scope
+// that runs one process at the git root and never splits per unit, so
+// ValidateTools rejects it. That invariant lives in another package, so pin it
+// here — if it is ever relaxed, a declared "unit" starts falling through the
+// branch and plans a whole-repository run for a narrowed request.
+func TestRepositoryScopeNeverSeesUnitGranularity(t *testing.T) {
+	err := config.ValidateTools(config.MapOfTools{
+		"tool": {Operations: map[config.OperationType]config.ToolOperation{
+			config.OpLint: {
+				App: "x", Args: []string{"run"},
+				Scope: config.ToolScopeRepository, Granularity: config.GranularityUnit,
+			},
+		}},
+	}, nil)
+
+	if err == nil {
+		t.Fatal("repository scope with granularity \"unit\" now loads; the planner's " +
+			"repo-only narrowing check is no longer exhaustive")
+	}
+}
+
+// Repository scope is narrowable exactly when the file list reaches the tool:
+// that one answers about the files it was handed, the other about the whole
+// repository whatever it is given.
+func TestCollectTasksNarrowsRepositoryScopeByGranularity(t *testing.T) {
+	newPlanner := func(args []string) *Planner {
+		return &Planner{
+			rootPath: "/repo",
+			cwdPath:  "/repo/packages/api",
+			tools: config.MapOfTools{
+				"tool": {Operations: map[config.OperationType]config.ToolOperation{
+					config.OpLint: {
+						App: "tool", Args: args,
+						Scope: config.ToolScopeRepository, Globs: []string{"**/*.json"},
+					},
+				}},
+			},
+			cachedFiles: []string{
+				"/repo/packages/api/a.json",
+				"/repo/packages/web/b.json",
+			},
+			cacheInitialized: true,
+		}
+	}
+	sel := Selection{Mode: SelectionSubtree, Dir: "/repo/packages/api"}
+
+	t.Run("a file list narrows", func(t *testing.T) {
+		tasks, skipped := newPlanner([]string{"check", "{files}"}).
+			collectTasks(context.Background(), config.OpLint, sel)
+
+		if len(tasks) != 1 {
+			t.Fatalf("planned %d tasks and skipped %+v, want the tool narrowed to the subtree",
+				len(tasks), skipped)
+		}
+		if len(tasks[0].Files) != 1 || tasks[0].Files[0] != "/repo/packages/api/a.json" {
+			t.Errorf("Files = %v, want only the subtree's file", tasks[0].Files)
+		}
+	})
+
+	t.Run("a whole-repository question does not", func(t *testing.T) {
+		tasks, skipped := newPlanner([]string{"check"}).
+			collectTasks(context.Background(), config.OpLint, sel)
+
+		if len(tasks) != 0 {
+			t.Errorf("planned %d tasks, want none", len(tasks))
+		}
+		if len(skipped) != 1 || skipped[0].Reason != SkipReasonNotNarrowable {
+			t.Errorf("skipped %+v, want one not-narrowable entry", skipped)
+		}
+	})
+}
+
 // A whole-repository run is the common case and must keep planning everything.
 func TestCollectTasksPlansEveryUnitForAWholeRepositoryRun(t *testing.T) {
 	p := noArgvPathPlanner("/repo")

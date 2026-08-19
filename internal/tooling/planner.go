@@ -256,7 +256,14 @@ func (p *Planner) collectTasks(ctx context.Context, operation config.OperationTy
 			// actually matters is whether its verdict survives being narrowed:
 			// one that takes a file list does, one that answers a whole-repository
 			// question does not.
-			repoWide := config.InferGranularity(opConfig) != config.GranularityFile
+			//
+			// Only "file" and "repo" reach this line. "unit" is meaningless here —
+			// a repository-scoped operation runs once at the git root and is never
+			// split per unit — so ValidateTools rejects the combination outright,
+			// and TestRepositoryScopeNeverSeesUnitGranularity pins that invariant
+			// to this branch. Were it dropped, a declared "unit" would fall through
+			// and plan a whole-repository run for a narrowed request.
+			repoWide := config.InferGranularity(opConfig) == config.GranularityRepo
 			if repoWide && p.cwdPath != p.rootPath && widenTo != config.WidenToRepo {
 				skipped = append(skipped, SkippedTool{
 					ToolName:  toolName,
