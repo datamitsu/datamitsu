@@ -87,6 +87,7 @@ func init() {
 	sourceCmd.AddCommand(sourceZshCmd)
 	sourceCmd.AddCommand(sourceFishCmd)
 	sourceCmd.AddCommand(sourceStatusCmd)
+	sourceCmd.AddCommand(sourceRefreshCmd)
 	rootCmd.AddCommand(sourceCmd)
 }
 

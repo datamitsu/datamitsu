@@ -602,17 +602,27 @@ not optional polish.
 
 ### Task 11: `datamitsu source refresh`
 
-- [ ] add a `refresh` leaf that re-bakes the farm for the current root and prints a one-line
+- [x] add a `refresh` leaf that re-bakes the farm for the current root and prints a one-line
       summary to stderr, nothing to stdout
-- [ ] `--force` bypasses the staleness check entirely — the documented escape hatch for the
+- [x] `--force` bypasses the staleness check entirely — the documented escape hatch for the
       `facts().env` hole recorded in Task 6
-- [ ] respect offline and strict-OCI policy: refresh resolves and materializes the farm but
+- [x] respect offline and strict-OCI policy: refresh resolves and materializes the farm but
       **downloads nothing**; a missing tool stays a `shim` entry
-- [ ] write a test asserting `refresh` on an unchanged tree is a no-op that still exits 0
-- [ ] write a test asserting `--force` re-bakes an already-fresh manifest
-- [ ] write a test asserting `refresh` performs no download under `DATAMITSU_OFFLINE=1`
-- [ ] write a test asserting stdout is empty
-- [ ] run tests — must pass before Task 12
+- [x] write a test asserting `refresh` on an unchanged tree is a no-op that still exits 0
+- [x] write a test asserting `--force` re-bakes an already-fresh manifest
+- [x] write a test asserting `refresh` performs no download under `DATAMITSU_OFFLINE=1`
+- [x] write a test asserting stdout is empty
+- [x] ➕ the freshness check runs **before** the config is loaded, not after: the no-op case
+      is the common one, and deciding it from the on-disk manifest's watch set costs a
+      handful of `lstat` calls instead of a full config evaluation. Every non-fresh state —
+      missing, unreadable, aged out — answers "re-bake", so a corrupted farm can be repaired
+      without deleting the cache
+- [x] ➕ registered `source refresh` in `test/cli/completeness_test.go`, added
+      `TestSourceRefresh`/`TestSourceRefreshDownloadsNothing` to `test/cli/source_test.go`,
+      extended the `## source` section of `website/docs/reference/cli-commands.md` and
+      regenerated `internal/llmsdocs/embed` — the same three build gates Tasks 9 and 10 had
+      to satisfy the moment a leaf command exists
+- [x] run tests — must pass before Task 12
 
 ### Task 12: Blackbox CLI tests and contract registration
 

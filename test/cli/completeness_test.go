@@ -58,6 +58,7 @@ var testedLeafCommands = map[string]string{
 	"setup":                        "TestSetupDryRunGolden",
 	"source bash":                  "TestSourceBashActivation",
 	"source fish":                  "TestSourceFishActivation",
+	"source refresh":               "TestSourceRefresh",
 	"source status":                "TestSourceStatus",
 	"source zsh":                   "TestSourceZshActivation",
 	"store clear":                  "TestStoreClear",

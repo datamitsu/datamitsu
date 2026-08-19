@@ -1085,6 +1085,34 @@ text to stdout; warnings still go to stderr.
 
 `status` resolves and reports. It never downloads and never re-bakes the farm.
 
+### source refresh
+
+```bash
+datamitsu source refresh
+datamitsu source refresh --force
+```
+
+Re-resolves the project's declared apps and rewrites the farm the current shell's
+`PATH` points at.
+
+Nothing normally needs this. A tool invocation notices on its own that the config
+changed and re-bakes before running, which is what makes branch switching
+invisible. `refresh` exists for the case that detection cannot see: the staleness
+check watches the config chain's files and `.git/HEAD`, so a config that branches
+on an environment variable outside datamitsu's own namespace — reachable through
+`facts().env` — changes what it produces without changing anything the check
+compares. `--force` re-bakes unconditionally and is the escape hatch for exactly
+that.
+
+Without `--force`, a farm that already matches the tree is left alone and the
+command exits 0.
+
+Refresh resolves and materializes; it downloads nothing. A tool that has not been
+fetched yet stays a shim entry and installs on its first real use.
+
+The summary goes to stderr and stdout stays empty, so `refresh` is safe to call
+from the same shell function that runs an activation through `eval`.
+
 ## Environment Variables
 
 | Variable                         | Description                                                                                     | Default                                             |

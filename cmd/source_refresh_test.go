@@ -1,0 +1,99 @@
+package cmd
+
+import (
+	"bytes"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/sourcefarm"
+)
+
+// TestSummarizeRefreshCounts asserts the one line a refresh prints reports what
+// the user needs to decide whether anything is wrong: how many names the farm
+// now provides, how many of them still have to be downloaded, and how many
+// declared names were refused.
+func TestSummarizeRefreshCounts(t *testing.T) {
+	var buf bytes.Buffer
+	summarizeRefresh(&buf, statusPlan())
+
+	line := buf.String()
+	if strings.Count(line, "\n") != 1 {
+		t.Fatalf("summary is not exactly one line:\n%s", line)
+	}
+	for _, want := range []string{"baked 2 tool(s)", "/repo", "1 not downloaded yet", "2 excluded"} {
+		if !strings.Contains(line, want) {
+			t.Errorf("summary is missing %q:\n%s", want, line)
+		}
+	}
+}
+
+// TestSummarizeRefreshEmptyFarm asserts a project declaring nothing still gets a
+// summary. Silence would be indistinguishable from the command not running.
+func TestSummarizeRefreshEmptyFarm(t *testing.T) {
+	var buf bytes.Buffer
+	summarizeRefresh(&buf, sourcefarm.Plan{Root: "/repo"})
+
+	if !strings.Contains(buf.String(), "baked 0 tool(s)") {
+		t.Errorf("empty farm produced no usable summary:\n%s", buf.String())
+	}
+}
+
+// TestSourceFarmIsFresh covers the check that decides whether a plain `refresh`
+// is a no-op, across all four manifest states.
+func TestSourceFarmIsFresh(t *testing.T) {
+	cache := t.TempDir()
+	t.Setenv("DATAMITSU_CACHE_DIR", cache)
+
+	root := t.TempDir()
+	manifestPath, err := env.GetProjectManifestPath(root)
+	if err != nil {
+		t.Fatalf("GetProjectManifestPath() error = %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(manifestPath), 0o700); err != nil {
+		t.Fatalf("create per-root directory: %v", err)
+	}
+
+	// Nothing baked here yet.
+	if sourceFarmIsFresh(root) {
+		t.Error("an unbaked root reported fresh")
+	}
+
+	// A file that will not decode must not be reported fresh either — it is the
+	// state a refresh most needs to be able to repair.
+	if err := os.WriteFile(manifestPath, []byte("{not json"), 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+	if sourceFarmIsFresh(root) {
+		t.Error("an unreadable manifest reported fresh")
+	}
+
+	// A manifest whose watch set still matches the tree is the no-op case.
+	watched := filepath.Join(root, "datamitsu.config.js")
+	if err := os.WriteFile(watched, []byte("//\n"), 0o600); err != nil {
+		t.Fatalf("write watched file: %v", err)
+	}
+	m := sourcefarm.BuildManifest(sourcefarm.Plan{Root: root}, sourcefarm.OriginGitRoot,
+		sourcefarm.WatchPaths(root, []string{watched}))
+	data, err := sourcefarm.Encode(m)
+	if err != nil {
+		t.Fatalf("Encode() error = %v", err)
+	}
+	if err := os.WriteFile(manifestPath, data, 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+	if !sourceFarmIsFresh(root) {
+		t.Error("a manifest matching the tree reported stale")
+	}
+
+	// Touching a watched file is exactly the transition --force exists to
+	// substitute for when the watch set cannot see the change.
+	if err := os.WriteFile(watched, []byte("// changed\n"), 0o600); err != nil {
+		t.Fatalf("rewrite watched file: %v", err)
+	}
+	if sourceFarmIsFresh(root) {
+		t.Error("a changed config reported fresh")
+	}
+}

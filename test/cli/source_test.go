@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/json"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -180,6 +181,125 @@ func TestSourceStatusDoesNotBake(t *testing.T) {
 	if len(manifests) != 0 {
 		t.Errorf("`source status` baked a farm: %v", manifests)
 	}
+}
+
+// TestSourceRefresh covers the whole refresh contract in one project, because
+// the interesting assertions are about the transition between runs: a first bake,
+// a second run that must recognize the tree as unchanged, and --force overriding
+// that recognition. stdout stays empty throughout — refresh may be called from
+// the same shell function that runs an activation through `eval`.
+func TestSourceRefresh(t *testing.T) {
+	p := clitest.NewProject(t)
+	writeAutoConfig(p)
+	cacheDir := t.TempDir()
+	opts := clitest.RunOptions{Dir: p.Dir, CacheDir: cacheDir, Env: sourceEnv()}
+
+	first := clitest.Run(t, opts, "source", "refresh")
+	if first.ExitCode != 0 {
+		t.Fatalf("first `source refresh` exit = %d, want 0\nstderr:\n%s", first.ExitCode, first.Stderr)
+	}
+	if first.Stdout != "" {
+		t.Errorf("`source refresh` wrote to stdout:\n%s", first.Stdout)
+	}
+	if !strings.Contains(first.Stderr, "baked") {
+		t.Errorf("first refresh did not report a bake:\n%s", first.Stderr)
+	}
+	if manifests := findManifests(t, cacheDir); len(manifests) != 1 {
+		t.Fatalf("first refresh wrote %d manifests, want 1: %v", len(manifests), manifests)
+	}
+
+	// Nothing in the tree changed, so the farm on disk already describes it.
+	// Rewriting it would churn inodes under every live shell for no change.
+	second := clitest.Run(t, opts, "source", "refresh")
+	if second.ExitCode != 0 {
+		t.Fatalf("second `source refresh` exit = %d, want 0\nstderr:\n%s", second.ExitCode, second.Stderr)
+	}
+	if second.Stdout != "" {
+		t.Errorf("no-op `source refresh` wrote to stdout:\n%s", second.Stdout)
+	}
+	if !strings.Contains(second.Stderr, "already up to date") {
+		t.Errorf("second refresh re-baked an unchanged tree:\n%s", second.Stderr)
+	}
+
+	// --force is the documented escape hatch for the changes the watch set
+	// cannot see: a config branching on an environment variable outside
+	// datamitsu's own namespace changes what it produces without touching a
+	// single watched file.
+	forced := clitest.Run(t, opts, "source", "refresh", "--force")
+	if forced.ExitCode != 0 {
+		t.Fatalf("`source refresh --force` exit = %d, want 0\nstderr:\n%s", forced.ExitCode, forced.Stderr)
+	}
+	if forced.Stdout != "" {
+		t.Errorf("`source refresh --force` wrote to stdout:\n%s", forced.Stdout)
+	}
+	if !strings.Contains(forced.Stderr, "baked") {
+		t.Errorf("--force did not re-bake a fresh manifest:\n%s", forced.Stderr)
+	}
+}
+
+// TestSourceRefreshDownloadsNothing asserts refresh resolves and materializes
+// without fetching. The whole blackbox suite runs under DATAMITSU_OFFLINE=1, so
+// a download attempt would fail the command outright; the store assertion catches
+// the subtler version where something arrives from a cache instead.
+func TestSourceRefreshDownloadsNothing(t *testing.T) {
+	p := clitest.NewProject(t)
+	p.WriteFile("datamitsu.config.js",
+		"globalThis.getConfig = () => ({ apps: {\n"+
+			"  shellcheck: { binary: { binaries: { linux: { amd64: { glibc: { url: \"https://example.test/x.tar.gz\", hash: \""+
+			strings.Repeat("11", 32)+"\", contentType: \"tar.gz\" } } },\n"+
+			"    darwin: { arm64: { unknown: { url: \"https://example.test/y.tar.gz\", hash: \""+
+			strings.Repeat("22", 32)+"\", contentType: \"tar.gz\" } } } } } },\n"+
+			"}, tools: {}, projectTypes: {} });\n"+
+			"globalThis.getMinVersion = () => \"0.0.0\";\n")
+	cacheDir := t.TempDir()
+	opts := clitest.RunOptions{Dir: p.Dir, CacheDir: cacheDir, Env: sourceEnv()}
+
+	res := clitest.Run(t, opts, "source", "refresh")
+	if res.ExitCode != 0 {
+		t.Fatalf("`source refresh` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
+	}
+
+	// The tool was never fetched, so it stays a shim entry that installs on its
+	// first real use rather than becoming an error at activation time.
+	status := clitest.Run(t, opts, "source", "status", "--json")
+	var doc struct {
+		Entries []struct {
+			Name      string `json:"name"`
+			Strategy  string `json:"strategy"`
+			Installed bool   `json:"installed"`
+		} `json:"entries"`
+	}
+	if err := json.Unmarshal([]byte(status.Stdout), &doc); err != nil {
+		t.Fatalf("`source status --json` does not parse: %v\n%s", err, status.Stdout)
+	}
+	if len(doc.Entries) != 1 || doc.Entries[0].Name != "shellcheck" {
+		t.Fatalf("farm entries = %+v, want exactly shellcheck", doc.Entries)
+	}
+	if doc.Entries[0].Installed || doc.Entries[0].Strategy != "shim" {
+		t.Errorf("refresh installed the tool: %+v", doc.Entries[0])
+	}
+
+	if store := filepath.Join(cacheDir, "store", ".bin"); dirExists(store) {
+		t.Errorf("refresh populated the store at %s", store)
+	}
+}
+
+// findManifests lists every baked farm manifest under a cache directory.
+func findManifests(t *testing.T, cacheDir string) []string {
+	t.Helper()
+	var found []string
+	_ = filepath.WalkDir(cacheDir, func(path string, d fs.DirEntry, err error) error {
+		if err == nil && !d.IsDir() && d.Name() == "manifest.json" {
+			found = append(found, path)
+		}
+		return nil
+	})
+	return found
+}
+
+func dirExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
 }
 
 // TestSourceOutsideAGitRepository asserts the loud failure. Activating against
