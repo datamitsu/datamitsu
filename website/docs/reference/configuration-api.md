@@ -629,11 +629,11 @@ one-token edit from silent data loss into a config error.
 
 #### Replacing `batch`
 
-Arity replaces the old `batch` flag, which no longer exists. A config still
-setting it is **rejected at load** rather than ignored: the two disagree in a way
-that changes what runs, and `batch: false` on an operation carrying `{files}`
-used to mean one process per file where arity now reads it as one process taking
-the whole list.
+Arity replaces the old `batch` flag, which no longer exists. The key is simply
+ignored if left in a config, so check the mapping below rather than assuming a
+config carries over unchanged: `batch: false` on an operation carrying `{files}`
+used to mean one process per file, where arity reads it as one process taking the
+whole list.
 
 | Was               | Now                                    |
 | ----------------- | -------------------------------------- |
