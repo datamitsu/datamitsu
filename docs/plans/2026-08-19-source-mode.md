@@ -501,14 +501,14 @@ cobra; dispatch happens before all of it.
 Shells are subcommands, matching how cobra's own `completion bash|fish|zsh` works and this
 repo's `store`/`config` group style.
 
-- [ ] add `cmd/source.go` with a `source` group command and `bash`, `zsh`, `fish` leaves
-- [ ] `PersistentPreRun` unconditionally calling
+- [x] add `cmd/source.go` with a `source` group command and `bash`, `zsh`, `fish` leaves
+- [x] `PersistentPreRun` unconditionally calling
       `ui.SetEventSink(uievent.NewJSONLSink(os.Stderr), true)` — the `cmd/lsp.go:31-33`
       pattern. It beats `--log-format` and silences both `ui.Current()` in library code and
       config-JS `console.log`
-- [ ] handler: load config → `BuildPlan` → `Materialize` → write shell code with
+- [x] handler: load config → `BuildPlan` → `Materialize` → write shell code with
       `fmt.Fprint(cmd.OutOrStdout(), …)` only, never through any `ui` primitive
-- [ ] **no config discovered (no git root, or a git root with no `datamitsu.config.*`): exit
+- [x] **no config discovered (no git root, or a git root with no `datamitsu.config.*`): exit
       non-zero with an actionable message and write nothing to stdout.** Config discovery is
       git-root-only (`discoverAutoConfig` stats three filenames at the git root and nowhere
       else), so outside a repository datamitsu would otherwise fall back to the embedded
@@ -517,24 +517,51 @@ repo's `store`/`config` group style.
       `--config` persistent flag (`cmd/root.go:110`) and show a concrete invocation. Making
       that path actually produce a working farm is the follow-up plan; failing loudly is this
       plan's job
-- [ ] bash/zsh renderer: export `DATAMITSU_ROOT` and `DATAMITSU_FARM`, remove any existing
+- [x] bash/zsh renderer: export `DATAMITSU_ROOT` and `DATAMITSU_FARM`, remove any existing
       occurrence of the farm dir from `PATH`, prepend it, then `hash -r`. Target bash 3.2
       (macOS ships it) — no associative arrays, no namerefs
-- [ ] fish renderer: `set -gx`, then `fish_add_path --global --move --path <dir>` — `--move`
-      is required or re-activation silently no-ops — then `functions -c`
-- [ ] every emitted path goes through `internal/shellquote`
-- [ ] activation must **not** install anything and must be safe to run repeatedly
-- [ ] warnings via direct `fmt.Fprintf(os.Stderr, …)`, bypassing `ui`: not-yet-installed apps,
+- [x] fish renderer: `set -gx`, then `fish_add_path --global --move --path <dir>` — `--move`
+      is required or re-activation silently no-ops
+      — ⚠️ **scope change: no `functions -c` line.** `functions -c` takes two arguments (it
+      copies a function) and would abort the activation. fish has no `hash -r` equivalent to
+      emit: it resolves commands against `PATH` per invocation, verified by the real-fish
+      test. ➕ Also discovered: `fish_add_path` silently skips a directory that does not
+      exist, so the real-shell tests bake against a farm directory that is actually there
+- [x] every emitted path goes through `internal/shellquote`
+- [x] activation must **not** install anything and must be safe to run repeatedly
+- [x] warnings via direct `fmt.Fprintf(os.Stderr, …)`, bypassing `ui`: not-yet-installed apps,
       shadowed system binaries with their absolute paths, and offline failures surfacing
-      `httpx.GuardOffline`'s existing text verbatim rather than new wording
-- [ ] write renderer unit tests: bash output contains exactly one `PATH` mutation; fish output
+      `httpx.GuardOffline`'s existing text verbatim rather than new wording (a failed config
+      load is returned unwrapped in wording, so the guard's own text is what the user reads)
+- [x] write renderer unit tests: bash output contains exactly one `PATH` mutation; fish output
       uses `--move`; rendering twice is byte-identical
-- [ ] write a test asserting a farm path containing a space and a single quote renders to
-      shell that `/bin/sh` parses without error
-- [ ] write a test asserting the renderers accept a `Plan` and return a string, with no
+- [x] write a test asserting a farm path containing a space and a single quote renders to
+      shell that parses without error — ⚠️ **scope change: real `bash` and real `fish`, not
+      `/bin/sh`.** The renderer uses `${var//pat/rep}`, which is bash/zsh syntax and not
+      POSIX, so `sh -n` would be a false negative under dash. The tests execute the
+      activation and read back `PATH`, which is strictly stronger than a parse check, and
+      skip cleanly when the shell is absent
+- [x] write a test asserting the renderers accept a `Plan` and return a string, with no
       filesystem or config dependency
-- [ ] write a test asserting stdout contains no warning text when warnings are emitted
-- [ ] run tests — must pass before Task 10
+- [x] write a test asserting stdout contains no warning text when warnings are emitted
+- [x] ➕ add `DATAMITSU_ROOT`/`DATAMITSU_FARM` to `internal/env` (`e.go` + getters and
+      name accessors in `env.go`) per the environment-variable policy, and **exclude them
+      from `env.Environ()`**: they mark which farm a shell activated rather than how
+      datamitsu behaves, and including them in the staleness key would make every activated
+      shell disagree with the process that baked its farm and rebake on every command
+- [x] ➕ record the config chain's file paths during `loadConfigImpl`
+      (`cmd.ConfigChainFiles()`), so the manifest's watch set covers the declared
+      before-configs — which are only known after the auto config has been evaluated, the
+      exact work the watch set exists to avoid repeating
+- [x] ➕ `datamitsu source` with no shell, or with an unsupported one, exits non-zero: a
+      cobra group with no `Run` prints help and exits 0, which under `eval "$(…)"` would
+      evaluate a help screen
+- [x] ➕ registered `source bash|zsh|fish` in `test/cli/root_test.go` and
+      `test/cli/completeness_test.go` with an initial `test/cli/source_test.go`, and added a
+      `## source` section to `website/docs/reference/cli-commands.md` plus a regenerated
+      `internal/llmsdocs/embed` — all three are hard build gates that fail the moment a leaf
+      command exists, so they cannot wait for Tasks 12 and 15
+- [x] run tests — must pass before Task 10
 
 ### Task 10: `datamitsu source status` and `--json`
 

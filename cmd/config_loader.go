@@ -38,6 +38,40 @@ var (
 	resolvedRemoteURLsMu sync.Mutex
 )
 
+// configChainFiles collects the on-disk files that fed the last config load, in
+// chain order: the --before-config paths (or the before-configs the auto config
+// declared), the auto-discovered git-root config, and every --config path.
+//
+// Source mode records them in the farm manifest's watch set, so a branch that
+// changes any of them — including one that deletes the config outright — makes
+// the farm stale on the next tool invocation. It is captured here rather than
+// re-derived by the caller because the declared before-configs are only known
+// after evaluating the auto config, which is exactly the work the watch set
+// exists to avoid repeating.
+var (
+	configChainFiles   []string
+	configChainFilesMu sync.Mutex
+)
+
+// ConfigChainFiles returns the file paths that fed the last config load.
+func ConfigChainFiles() []string {
+	configChainFilesMu.Lock()
+	defer configChainFilesMu.Unlock()
+	return append([]string(nil), configChainFiles...)
+}
+
+func setConfigChainFiles(sources []configSource) {
+	paths := make([]string, 0, len(sources))
+	for _, s := range sources {
+		if s.path != "" {
+			paths = append(paths, s.path)
+		}
+	}
+	configChainFilesMu.Lock()
+	configChainFiles = paths
+	configChainFilesMu.Unlock()
+}
+
 type configSource struct {
 	name      string
 	path      string // file path (mutually exclusive with content)
@@ -160,6 +194,7 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 	if srcErr != nil {
 		return nil, nil, nil, srcErr
 	}
+	setConfigChainFiles(sources)
 
 	// Process all sources sequentially with eager content evaluation.
 	// resolved: collects all remote URLs processed (for display/reporting).

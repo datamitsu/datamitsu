@@ -22,6 +22,7 @@ Available Commands:
   llms        Print project documentation as LLM-friendly markdown
   lsp         Run a formatting-only LSP server over stdio
   setup       Setup configuration files
+  source      Put the project's toolchain on PATH for this shell
   store       Manage the global binary and runtime store
   version     Print the version number
 

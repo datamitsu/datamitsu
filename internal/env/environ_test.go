@@ -2,6 +2,7 @@ package env
 
 import (
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -57,5 +58,44 @@ func TestEnviron_ValueChangeIsVisible(t *testing.T) {
 
 	if slices.Equal(before, after) {
 		t.Errorf("Environ() unchanged after a value change: %v", after)
+	}
+}
+
+// TestEnviron_ExcludesActivationMarkers is the guard against a rebake loop: the
+// variables `datamitsu source` exports into a shell describe which farm is
+// active, so a farm baked before activation and a tool run after it must agree
+// on the fingerprint.
+func TestEnviron_ExcludesActivationMarkers(t *testing.T) {
+	before := Environ()
+
+	t.Setenv(SourceRootVarName(), "/repo")
+	t.Setenv(SourceFarmVarName(), "/cache/projects/abc/bin")
+
+	after := Environ()
+
+	if !slices.Equal(before, after) {
+		t.Errorf("activation markers changed the fingerprint:\nbefore: %v\nafter:  %v", before, after)
+	}
+	for _, kv := range after {
+		if strings.HasPrefix(kv, SourceRootVarName()+"=") || strings.HasPrefix(kv, SourceFarmVarName()+"=") {
+			t.Errorf("Environ() leaked an activation marker: %q", kv)
+		}
+	}
+}
+
+// TestSourceMarkerAccessors pins that the exported names and the getters agree,
+// so the shell renderer and any reader cannot drift apart.
+func TestSourceMarkerAccessors(t *testing.T) {
+	t.Setenv(SourceRootVarName(), "/repo")
+	t.Setenv(SourceFarmVarName(), "/cache/bin")
+
+	if got := SourceRoot(); got != "/repo" {
+		t.Errorf("SourceRoot() = %q, want /repo", got)
+	}
+	if got := SourceFarm(); got != "/cache/bin" {
+		t.Errorf("SourceFarm() = %q, want /cache/bin", got)
+	}
+	if !strings.HasSuffix(SourceRootVarName(), "_ROOT") || !strings.HasSuffix(SourceFarmVarName(), "_FARM") {
+		t.Errorf("unexpected marker names: %q, %q", SourceRootVarName(), SourceFarmVarName())
 	}
 }

@@ -1035,6 +1035,33 @@ This is normally launched by an editor rather than by hand — see the
 [VS Code extension](../getting-started/installation/vscode.md) for the packaged
 integration.
 
+## source
+
+Put the project's declared toolchain on `PATH` for the current shell, so every
+tool runs as an ordinary command at the version this repository pins.
+
+```bash
+# bash / zsh
+eval "$(datamitsu source bash)"
+eval "$(datamitsu source zsh)"
+
+# fish
+datamitsu source fish | source
+```
+
+Activation downloads nothing — a tool is fetched the first time it is actually
+run. Switching branches needs no re-activation: the next tool invocation notices
+the config changed and re-resolves itself.
+
+`source` requires a project. Run inside a repository whose git root holds a
+`datamitsu.config.{js,mjs,ts}`, or name one explicitly with the global
+`--config` flag; outside a project it exits non-zero and writes nothing to
+stdout.
+
+stdout carries shell code and nothing else, so the output is always safe to
+`eval`. Warnings — tools not downloaded yet, system binaries this shadows — go
+to stderr.
+
 ## Environment Variables
 
 | Variable                         | Description                                                                                     | Default                                             |

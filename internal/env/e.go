@@ -155,4 +155,21 @@ var (
 		DefaultValue: "",
 		Description:  "Override directory for downloaded WASM parser modules (default {store}/.parsers)",
 	}
+
+	// sourceRoot and sourceFarm are written by `datamitsu source <shell>` into
+	// the activated shell, never read back by datamitsu's own resolution: the
+	// shim discovers the root from the working directory so a `cd` into another
+	// repository keeps working inside an already-activated shell. They exist so
+	// a user (and a prompt, and a bug report) can see which farm is active.
+	//
+	// They are deliberately excluded from Environ — see the note there.
+	sourceRoot = envVar{
+		Name:        strings.ToUpper(ldflags.PackageName) + "_ROOT",
+		Description: "Git root of the source-mode farm activated in this shell (set by `datamitsu source`)",
+	}
+
+	sourceFarm = envVar{
+		Name:        strings.ToUpper(ldflags.PackageName) + "_FARM",
+		Description: "Directory of the source-mode farm activated in this shell (set by `datamitsu source`)",
+	}
 )

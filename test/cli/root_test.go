@@ -27,6 +27,7 @@ var expectedTopLevelCommands = []string{
 	"llms",
 	"lsp",
 	"setup",
+	"source",
 	"store",
 	"version",
 }
