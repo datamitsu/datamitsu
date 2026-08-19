@@ -1059,6 +1059,29 @@ stdout carries shell code and nothing else, so the output is always safe to
 `eval`. Warnings — tools not downloaded yet, system binaries this shadows — go
 to stderr.
 
+### source status
+
+```bash
+datamitsu source status
+datamitsu source status --json
+```
+
+Reports the farm for the current project: its root and directory, whether the
+baked manifest still matches the working tree, every tool the farm provides with
+how it is materialized (`symlink` or `shim`) and whether it has been downloaded
+yet, every declared name that was refused **with the reason**, and every system
+binary the farm shadows with the absolute path it was found at.
+
+Names are never silently dropped, which is what makes this the first command to
+run when a tool is missing or resolves to the wrong version: a refused name is
+listed with its reason, so it can never be confused with a name that was never
+declared.
+
+`--json` emits the same information as a single document and writes no human
+text to stdout; warnings still go to stderr.
+
+`status` resolves and reports. It never downloads and never re-bakes the farm.
+
 ## Environment Variables
 
 | Variable                         | Description                                                                                     | Default                                             |

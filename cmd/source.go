@@ -86,6 +86,7 @@ func init() {
 	sourceCmd.AddCommand(sourceBashCmd)
 	sourceCmd.AddCommand(sourceZshCmd)
 	sourceCmd.AddCommand(sourceFishCmd)
+	sourceCmd.AddCommand(sourceStatusCmd)
 	rootCmd.AddCommand(sourceCmd)
 }
 
@@ -115,6 +116,32 @@ func runSource(cmd *cobra.Command, render func(sourcefarm.Plan) string) error {
 // stderr. That is the same rule sourcefarm itself follows — an empty farm would
 // turn every declared tool into an exit-127 across every shell on the machine.
 func bakeSourceFarm(ctx context.Context, stderr io.Writer) (sourcefarm.Plan, error) {
+	plan, err := resolveSourcePlan(ctx)
+	if err != nil {
+		return sourcefarm.Plan{}, err
+	}
+
+	m := sourcefarm.BuildManifest(plan, sourcefarm.OriginGitRoot,
+		sourcefarm.WatchPaths(plan.Root, ConfigChainFiles()))
+
+	// sourcefarm already reports the failure on the writer it was given; the
+	// activation itself proceeds against whatever farm is on disk.
+	_ = sourcefarm.MaterializeWithOptions(plan, m, sourcefarm.Options{
+		Warn: func(line string) { _, _ = fmt.Fprintln(stderr, line) },
+	})
+
+	return plan, nil
+}
+
+// resolveSourcePlan computes what the farm for the current project should
+// contain, without writing a byte of it.
+//
+// It is the read-only half of bakeSourceFarm, split out because `source status`
+// must be able to describe the farm — including apps whose store entry has since
+// been deleted, which show up as Installed=false — without materializing
+// anything. Resolution is side-effect free by construction: the resolver
+// binmanager exposes to sourcefarm never downloads.
+func resolveSourcePlan(ctx context.Context) (sourcefarm.Plan, error) {
 	root, err := sourceProjectRoot(ctx)
 	if err != nil {
 		return sourcefarm.Plan{}, err
@@ -131,18 +158,7 @@ func bakeSourceFarm(ctx context.Context, stderr io.Writer) (sourcefarm.Plan, err
 	}
 
 	b := binmanager.New(cfg.Apps, cfg.Bundles, runtimemanager.New(cfg.Runtimes))
-	plan := sourcefarm.BuildPlan(root, farmDir, cfg.Apps, b, exec.LookPath)
-
-	m := sourcefarm.BuildManifest(plan, sourcefarm.OriginGitRoot,
-		sourcefarm.WatchPaths(root, ConfigChainFiles()))
-
-	// sourcefarm already reports the failure on the writer it was given; the
-	// activation itself proceeds against whatever farm is on disk.
-	_ = sourcefarm.MaterializeWithOptions(plan, m, sourcefarm.Options{
-		Warn: func(line string) { _, _ = fmt.Fprintln(stderr, line) },
-	})
-
-	return plan, nil
+	return sourcefarm.BuildPlan(root, farmDir, cfg.Apps, b, exec.LookPath), nil
 }
 
 // sourceProjectRoot returns the git root whose config the farm is built from, or

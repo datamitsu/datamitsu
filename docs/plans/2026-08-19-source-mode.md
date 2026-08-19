@@ -568,24 +568,37 @@ repo's `store`/`config` group style.
 Under D4 this is the primary mitigation for shadowing and the primary debugging tool. It is
 not optional polish.
 
-- [ ] add a `status` leaf printing: the root, the farm directory, whether the manifest is
+- [x] add a `status` leaf printing: the root, the farm directory, whether the manifest is
       fresh, every entry with its strategy and install state, every exclusion **with its
       reason**, and every shadowed system binary with the absolute path it was found at
-- [ ] add `--json` emitting one typed struct with `json` tags — no `map[string]any`, and
+- [x] add `--json` emitting one typed struct with `json` tags — no `map[string]any`, and
       nothing derived from `runtimeconfig.Effective` (per the Runtime Config vs Config Inputs
       policy). Serialize with `json.MarshalIndent(v, "", "  ")` via `cmd.OutOrStdout()`,
       matching `cmd/devtools_parsers.go:245-254`
-- [ ] in `--json` mode emit no human text at all; warnings still go to stderr
-- [ ] document this struct as the single serialization any future `exec --json` reuses
-- [ ] write a test asserting marshalled output has stable key order and sorted lists across
+- [x] in `--json` mode emit no human text at all; warnings still go to stderr
+- [x] document this struct as the single serialization any future `exec --json` reuses
+- [x] write a test asserting marshalled output has stable key order and sorted lists across
       two calls
-- [ ] write a test asserting required keys are present — assert presence and values, never a
+- [x] write a test asserting required keys are present — assert presence and values, never a
       field count, per the runtime-config policy precedent
-- [ ] write a test asserting `shadows` is omitted when empty and carries the absolute path
+- [x] write a test asserting `shadows` is omitted when empty and carries the absolute path
       when set
-- [ ] write a test asserting every exclusion carries a non-empty reason
-- [ ] write a test asserting the output round-trips through `json.Unmarshal`
-- [ ] run tests — must pass before Task 11
+- [x] write a test asserting every exclusion carries a non-empty reason
+- [x] write a test asserting the output round-trips through `json.Unmarshal`
+- [x] ➕ `status` resolves and reports but never materializes: a diagnostic that repairs the
+      farm it describes cannot be used to observe a broken one. `bakeSourceFarm` was split
+      into a read-only `resolveSourcePlan` plus the materialize step, which Task 11's
+      `refresh` reuses. A blackbox test asserts no `manifest.json` appears in the cache
+- [x] ➕ the manifest's freshness is reported as a four-state word — `fresh`, `stale`,
+      `missing`, `unreadable` — rather than a bare boolean. All three non-fresh states mean
+      the same rebake, but a user needs to tell a corrupted farm from one that has simply
+      aged out, and "never baked here" is the state the shim reports as exit 127
+- [x] ➕ registered `source status` in `test/cli/completeness_test.go`, added
+      `TestSourceStatus`/`TestSourceStatusJSON`/`TestSourceStatusDoesNotBake` to
+      `test/cli/source_test.go`, extended the `## source` section of
+      `website/docs/reference/cli-commands.md` and regenerated `internal/llmsdocs/embed` —
+      the same three build gates Task 9 had to satisfy the moment a leaf command exists
+- [x] run tests — must pass before Task 11
 
 ### Task 11: `datamitsu source refresh`
 
