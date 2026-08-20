@@ -197,7 +197,9 @@ func TestExecPassesArgvVerbatim(t *testing.T) {
 	}
 	var want strings.Builder
 	for _, a := range args {
-		want.WriteString("[" + a + "]")
+		want.WriteString("[")
+		want.WriteString(a)
+		want.WriteString("]")
 	}
 	if stdout != want.String() {
 		t.Errorf("argv seen by the tool = %q, want %q", stdout, want.String())
