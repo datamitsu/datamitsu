@@ -68,12 +68,64 @@ const (
 // on error.
 func (p *Project) WriteFile(rel, content string) string {
 	p.tb.Helper()
-	abs := filepath.Join(p.Dir, rel)
+	return writeFileIn(p.tb, p.Dir, rel, content)
+}
+
+// BareDir is an isolated temp directory that is deliberately NOT a git
+// repository and has no repository above it. It is the fixture for the
+// machine-level toolchain: a config named explicitly with --config, activated
+// from a shell rc file in a directory git knows nothing about.
+type BareDir struct {
+	tb  testing.TB
+	Dir string
+}
+
+// NewBareDir creates a fresh temp directory, resolves its symlinks, and asserts
+// that no repository encloses it.
+//
+// The assertion is the whole point: TMPDIR is not ours to choose, and a
+// developer whose temp directory happens to live inside a checkout would
+// otherwise get a green run that proved the opposite property — an explicit
+// config resolving *with* a git root available. When that happens the test is
+// skipped, naming the property left unverified, rather than passing quietly.
+func NewBareDir(tb testing.TB) *BareDir {
+	tb.Helper()
+
+	dir, err := filepath.EvalSymlinks(tb.TempDir())
+	if err != nil {
+		tb.Fatalf("clitest: eval symlinks for bare dir: %v", err)
+	}
+
+	// G204: a fixed git subcommand run in a harness-created directory.
+	cmd := exec.CommandContext(context.Background(), "git", "rev-parse", "--show-toplevel")
+	cmd.Dir = dir
+	cmd.Env = gitenv.Environ()
+	if out, err := cmd.Output(); err == nil {
+		tb.Skipf("clitest: %s is inside the repository at %s, so it cannot stand in for a directory "+
+			"outside version control; skipping (leaves unverified: config resolution with no git root)",
+			dir, strings.TrimSpace(string(out)))
+	}
+
+	return &BareDir{tb: tb, Dir: dir}
+}
+
+// WriteFile writes content to rel (relative to the bare directory), creating any
+// parent directories, and returns the absolute path written.
+func (d *BareDir) WriteFile(rel, content string) string {
+	d.tb.Helper()
+	return writeFileIn(d.tb, d.Dir, rel, content)
+}
+
+// writeFileIn writes content to rel under base, creating parent directories, and
+// returns the absolute path. Shared by Project and BareDir.
+func writeFileIn(tb testing.TB, base, rel, content string) string {
+	tb.Helper()
+	abs := filepath.Join(base, rel)
 	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
-		p.tb.Fatalf("clitest: mkdir for %s: %v", rel, err)
+		tb.Fatalf("clitest: mkdir for %s: %v", rel, err)
 	}
 	if err := os.WriteFile(abs, []byte(content), 0o644); err != nil {
-		p.tb.Fatalf("clitest: write %s: %v", rel, err)
+		tb.Fatalf("clitest: write %s: %v", rel, err)
 	}
 	return abs
 }

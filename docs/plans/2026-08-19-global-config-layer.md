@@ -123,21 +123,53 @@ repository's toolchain still requires typing `datamitsu source` there.
 This task is investigation with a test as its deliverable. Do it first: its outcome decides
 whether Task 2 is trivial or has real work in it.
 
-- [ ] establish, by reading `cmd/config_loader.go` and by running the built binary from a
+- [x] establish, by reading `cmd/config_loader.go` and by running the built binary from a
       directory that is not inside any git repository, whether
       `datamitsu --config <path> exec` already resolves and lists that config's apps
-- [ ] record the answer in this file, with the code path that decides it
-- [ ] if a git root is required somewhere on that path, identify precisely where and make the
+- [x] record the answer in this file, with the code path that decides it
+- [x] if a git root is required somewhere on that path, identify precisely where and make the
       minimum change so an explicitly named config does not need one — do not add a synthetic
-      or fabricated root
-- [ ] confirm `--config` composes with `--no-auto-config` as expected inside a repository
-- [ ] write a test asserting an explicitly named config resolves its apps with no git root
+      or fabricated root — **not required, see the finding below**
+- [x] confirm `--config` composes with `--no-auto-config` as expected inside a repository
+- [x] write a test asserting an explicitly named config resolves its apps with no git root
       present (build the fixture in `t.TempDir`, outside any repository)
-- [ ] write a test asserting a nonexistent `--config` path produces a clear error naming the
+- [x] write a test asserting a nonexistent `--config` path produces a clear error naming the
       path
-- [ ] write a test asserting `--config` inside a repository merges with the discovered config,
+- [x] write a test asserting `--config` inside a repository merges with the discovered config,
       and that `--no-auto-config` suppresses the discovered half
-- [ ] run `go test ./... -race` — must pass before Task 2
+- [x] run `go test ./... -race` — must pass before Task 2
+
+#### Finding: no git root is required, and no code change was needed
+
+`datamitsu --config <path> exec` already resolves and lists that config's apps from a
+directory outside every repository. Verified by running the built binary in a `mktemp -d`
+directory where `git rev-parse --show-toplevel` fails: `config show` printed the config's
+apps and exited 0. Task 2 is therefore the trivial branch of this task's outcome.
+
+The code path that decides it is `loadConfigImpl` (`cmd/config_loader.go:159`):
+
+1. The git-root lookup at `:184` is entered **only** to find the auto-discovered config, and
+   only when `--no-auto-config` was not given.
+2. When `facts.GetGitRoot` fails, `:187` makes the failure fatal **only** if
+   `traverser.HasGitDir(cwdPath)` reports a `.git` directory — i.e. a repository that exists
+   but whose git command is broken. Outside a repository there is no `.git`, so the failure is
+   swallowed, `rootPath` stays at cwd and `autoConfigPath` stays empty.
+3. `buildConfigSources` (`:380`) appends the `--config` paths at `:422` unconditionally, with
+   no reference to `autoConfigPath`.
+4. `facts.Collect` (`internal/facts/facts.go:109-132`) treats a missing git root the same way:
+   `IsInGitRepo=false`, `gitRoot=""`, non-fatal without a `.git` directory. So `engine.New`
+   builds a VM outside a repository too.
+
+Two consequences recorded for later tasks: an explicit config's apps are appended **after**
+the auto-discovered config when both are present (so the explicit half wins on key collision),
+and a nonexistent `--config` path is a hard error naming the path
+(`failed to load config from <path>: failed to read config file: …`), not a silent skip.
+
+Tests live in `test/cli/config_explicit_test.go`. The outside-a-repository fixture needs a
+directory git knows nothing about, which `clitest.NewProject` cannot provide — hence
+`clitest.NewBareDir` (`internal/clitest/project.go`). It resolves symlinks like `NewProject`
+and asserts no repository encloses the temp dir, skipping with the unverified property named
+if `TMPDIR` happens to sit inside a checkout.
 
 ### Task 2: Farm identity without a git root
 
