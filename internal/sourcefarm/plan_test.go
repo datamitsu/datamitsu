@@ -6,9 +6,11 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/env"
 )
 
 // stubResolver answers from a fixed table, so a plan test never depends on a
@@ -484,5 +486,49 @@ func TestSystemLookPathSkipsTheFarm(t *testing.T) {
 	}
 	if got, err := SystemLookPath(farm)("tflint"); err == nil {
 		t.Errorf("SystemLookPath()(\"tflint\") = %q, want a not-found error", got)
+	}
+}
+
+// TestSystemLookPathSkipsTheOtherFarm covers the two-farm layering machine-level
+// config farms make normal: baking a project farm from a shell activated against
+// a --config chain must not report that config farm's shim as the system binary
+// the project farm shadows.
+func TestSystemLookPathSkipsTheOtherFarm(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("PATH executability is decided by PATHEXT on Windows; the unix mode bits below do not apply")
+	}
+	cache := t.TempDir()
+	t.Setenv("DATAMITSU_CACHE_DIR", cache)
+
+	configFarm := filepath.Join(env.GetCachePath(), env.ConfigFarmsDirName, "deadbeef", "bin")
+	projectFarm := filepath.Join(env.GetCachePath(), env.ProjectFarmsDirName, "cafebabe", "bin")
+	system := t.TempDir()
+	for _, dir := range []string{configFarm, projectFarm} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", dir, err)
+		}
+	}
+	for _, dir := range []string{configFarm, projectFarm, system} {
+		if err := os.WriteFile(filepath.Join(dir, "jq"), []byte("#!/bin/sh\n"), 0o700); err != nil {
+			t.Fatalf("write executable in %s: %v", dir, err)
+		}
+	}
+
+	// The activated config farm sits ahead of the system, exactly as an activated
+	// machine-level shell has it.
+	t.Setenv("PATH", strings.Join([]string{configFarm, system}, string(os.PathListSeparator)))
+
+	got, err := SystemLookPath(projectFarm)("jq")
+	if err != nil {
+		t.Fatalf("SystemLookPath()(\"jq\") error = %v, want the system copy", err)
+	}
+	if want := filepath.Join(system, "jq"); got != want {
+		t.Errorf("SystemLookPath()(\"jq\") = %q, want %q: another farm is not the shadowed system binary", got, want)
+	}
+
+	// With only farms on PATH there is no system binary to report.
+	t.Setenv("PATH", strings.Join([]string{configFarm, projectFarm}, string(os.PathListSeparator)))
+	if got, err := SystemLookPath(projectFarm)("jq"); err == nil {
+		t.Errorf("SystemLookPath()(\"jq\") = %q, want a not-found error", got)
 	}
 }

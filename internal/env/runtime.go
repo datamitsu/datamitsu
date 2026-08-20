@@ -56,6 +56,12 @@ const ProjectManifestFileName = "manifest.json"
 // fresh inode for the same root and bake concurrently.
 const ProjectLockFileName = "lock"
 
+// ProjectFarmsDirName is the cache namespace holding farms whose identity comes
+// from a git root. It is exported because internal/shim recognizes a farm
+// directory by path — {cache}/{namespace}/{hash}/bin — and a second spelling of
+// the name in that package would be a silent way for the two to drift apart.
+const ProjectFarmsDirName = "projects"
+
 // projectRootDir returns the per-git-root cache directory
 // ({cache}/projects/{XXH3-128(gitRoot)}), rejecting roots that are not absolute.
 func projectRootDir(gitRoot string) (string, error) {
@@ -68,7 +74,7 @@ func projectRootDir(gitRoot string) (string, error) {
 
 	return filepath.Clean(filepath.Join(
 		GetCachePath(),
-		"projects",
+		ProjectFarmsDirName,
 		HashProjectPath(gitRoot),
 	)), nil
 }
@@ -89,6 +95,105 @@ func GetProjectBinPath(gitRoot string) (string, error) {
 // directory returned by GetProjectBinPath.
 func GetProjectManifestPath(gitRoot string) (string, error) {
 	dir, err := projectRootDir(gitRoot)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, ProjectManifestFileName), nil
+}
+
+// ConfigFarmsDirName is the cache namespace holding farms whose identity comes
+// from an explicitly named config chain instead of a git root.
+//
+// It is deliberately a sibling of "projects" rather than a differently-hashed
+// entry inside it. The two identities are computed from different kinds of
+// input — a directory on one side, an ordered list of files on the other — and
+// nothing stops a hash of one from colliding with a hash of the other if they
+// ever shared a namespace. Separate directories make the collision impossible by
+// construction, and leave a future store GC able to tell the two kinds apart by
+// path alone.
+const ConfigFarmsDirName = "configs"
+
+// ResolveConfigChain returns the resolved, absolute, cleaned form of each config
+// path, in the order given.
+//
+// Order is preserved and duplicates are kept, because the chain is a merge
+// order: `--config a --config b` and `--config b --config a` select different
+// effective configs and must therefore be different farms.
+//
+// Symlinks are followed so that `--config ./cfg.ts`, `--config /abs/cfg.ts` and
+// a symlink pointing at the same file all name one farm rather than three. A
+// path that cannot be resolved — most commonly because it does not exist yet —
+// falls back to its cleaned absolute form: identity must be computable before
+// the caller has decided whether a missing config is an error, and the
+// non-existent path is still a stable name for it.
+func ResolveConfigChain(paths []string) ([]string, error) {
+	resolved := make([]string, 0, len(paths))
+	for _, p := range paths {
+		if p == "" {
+			return nil, errors.New("config path must not be empty")
+		}
+		abs, err := filepath.Abs(p)
+		if err != nil {
+			return nil, fmt.Errorf("resolve config path %q: %w", p, err)
+		}
+		abs = filepath.Clean(abs)
+		if resolvedPath, err := filepath.EvalSymlinks(abs); err == nil {
+			abs = filepath.Clean(resolvedPath)
+		}
+		resolved = append(resolved, abs)
+	}
+	return resolved, nil
+}
+
+// ConfigFarmIdentity returns the XXH3-128 fingerprint of a config chain.
+//
+// The input is run through ResolveConfigChain first, so the function is
+// idempotent: passing an already-resolved chain returns the same identity as
+// passing the paths the user typed. The hash is an internal fingerprint only,
+// never compared against a value from any external source.
+func ConfigFarmIdentity(configPaths []string) (string, error) {
+	if len(configPaths) == 0 {
+		return "", errors.New("config chain must not be empty")
+	}
+	resolved, err := ResolveConfigChain(configPaths)
+	if err != nil {
+		return "", err
+	}
+	parts := make([][]byte, 0, len(resolved))
+	for _, p := range resolved {
+		parts = append(parts, []byte(p))
+	}
+	return hashutil.XXH3Multi(parts...), nil
+}
+
+// configFarmRootDir returns the per-chain cache directory
+// ({cache}/configs/{XXH3-128(resolved chain)}).
+func configFarmRootDir(configPaths []string) (string, error) {
+	identity, err := ConfigFarmIdentity(configPaths)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Clean(filepath.Join(
+		GetCachePath(),
+		ConfigFarmsDirName,
+		identity,
+	)), nil
+}
+
+// GetConfigFarmBinPath returns the source-mode farm directory for an explicitly
+// named config chain ({cache}/configs/{XXH3-128(resolved chain)}/bin).
+func GetConfigFarmBinPath(configPaths []string) (string, error) {
+	dir, err := configFarmRootDir(configPaths)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "bin"), nil
+}
+
+// GetConfigFarmManifestPath returns the manifest file for an explicit-config
+// farm, a sibling of the directory returned by GetConfigFarmBinPath.
+func GetConfigFarmManifestPath(configPaths []string) (string, error) {
+	dir, err := configFarmRootDir(configPaths)
 	if err != nil {
 		return "", err
 	}

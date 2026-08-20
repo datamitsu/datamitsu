@@ -209,7 +209,11 @@ requires every leaf command to have ≥1 blackbox test. See
 a two-branch fixture repo with a loopback `httptest` release host, proving the
 source-mode properties no Go-level tier can — pinned versions win over a system
 binary of the same name, a branch switch takes effect on the same command line,
-and activation downloads nothing. Not build-tagged: it runs under `go test ./...`
+and activation downloads nothing. It also covers the machine-level (`--config`)
+properties: a rootless farm activates outside any repository, a project farm
+ahead of it on `PATH` wins, and a shell activated against a machine-level config
+that `cd`s into a never-activated repository never evaluates that repository's
+config. Not build-tagged: it runs under `go test ./...`
 and `t.Skip`s cleanly when a shell is missing, naming the property left
 unverified. It shares `clitest.CoverDir()` with `test/cli`, so the coverage
 destination is deliberately not overridable. Run with `go test ./test/shell/`.

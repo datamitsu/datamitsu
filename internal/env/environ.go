@@ -18,8 +18,9 @@ import (
 // manifest stale, and rebakes. Two activated repositories would rebake each
 // other's farm on every `cd`.
 var environExcluded = map[string]bool{
-	sourceRoot.Name: true,
-	sourceFarm.Name: true,
+	sourceRoot.Name:       true,
+	sourceFarm.Name:       true,
+	sourceFarmConfig.Name: true,
 }
 
 // Environ returns every datamitsu-owned environment variable currently set, as

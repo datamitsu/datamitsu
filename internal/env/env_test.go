@@ -1198,3 +1198,37 @@ func TestGetProjectBinPathHonorsCacheDirEnv(t *testing.T) {
 		t.Errorf("GetProjectManifestPath() = %q, want it under /tmp/custom-cache", manifest)
 	}
 }
+
+// TestSourceActivationVarNames pins the three variables `datamitsu source`
+// writes into an activated shell. Their names are part of the user-visible
+// surface — a prompt, a bug report and the shim's own farm recognition all read
+// them — so a rename is a breaking change rather than an implementation detail.
+//
+// They must also be distinct: SourceFarmConfigVarName shares a prefix with
+// SourceFarmVarName, and the renderers emit both, so a collision would make one
+// activation silently overwrite the other.
+func TestSourceActivationVarNames(t *testing.T) {
+	names := map[string]string{
+		"root":       SourceRootVarName(),
+		"farm":       SourceFarmVarName(),
+		"farmConfig": SourceFarmConfigVarName(),
+	}
+	want := map[string]string{
+		"root":       "DATAMITSU_ROOT",
+		"farm":       "DATAMITSU_FARM",
+		"farmConfig": "DATAMITSU_FARM_CONFIG",
+	}
+	for key, got := range names {
+		if got != want[key] {
+			t.Errorf("%s variable = %q, want %q", key, got, want[key])
+		}
+	}
+
+	seen := make(map[string]string, len(names))
+	for key, name := range names {
+		if other, dup := seen[name]; dup {
+			t.Errorf("%s and %s are both named %q", key, other, name)
+		}
+		seen[name] = key
+	}
+}

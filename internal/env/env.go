@@ -329,3 +329,11 @@ func SourceRootVarName() string {
 func SourceFarmVarName() string {
 	return sourceFarm.Name
 }
+
+// SourceFarmConfigVarName returns the name of the variable an activated shell
+// carries the config chain of an explicit-config farm in. A farm with no git
+// root has nothing to put in SourceRootVarName, and this is what names it
+// instead.
+func SourceFarmConfigVarName() string {
+	return sourceFarmConfig.Name
+}

@@ -39,11 +39,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
+	"github.com/datamitsu/datamitsu/internal/shellquote"
 	"github.com/datamitsu/datamitsu/internal/sourcefarm"
 )
 
@@ -64,13 +66,27 @@ func isOwnName(name string) bool {
 	return name == ldflags.PackageName
 }
 
-// farmDirName is the last path element of a farm directory, and projectsDirName
-// its grandparent. Together they identify an invocation as having arrived
-// through a farm: {cache}/projects/{hash}/bin/{name}.
+// farmDirName is the last path element of a farm directory, and the two
+// namespace names its grandparent. Together they identify an invocation as
+// having arrived through a farm: {cache}/{namespace}/{hash}/bin/{name}.
+//
+// There are two namespaces because there are two farm origins. A project farm
+// is keyed by git root and lives under "projects"; a farm baked from a config
+// chain the user named with --config is keyed by that chain and lives under
+// "configs". Both are farms for every purpose this file cares about — they go
+// on PATH, they must be stripped from a child's PATH, and an entry in either
+// must fail loudly rather than fall through. The names come from env so the
+// two packages cannot spell them differently.
 const (
 	farmDirName     = "bin"
-	projectsDirName = "projects"
+	projectsDirName = env.ProjectFarmsDirName
+	configsDirName  = env.ConfigFarmsDirName
 )
+
+// noAutoConfigFlag suppresses git-root config discovery in a spawned child. It
+// is what keeps an explicit-config rebake from merging in whatever config the
+// directory the tool happened to run from belongs to; see explicitConfigArgs.
+const noAutoConfigFlag = "--no-auto-config"
 
 // Dispatcher performs argv[0] dispatch. Every dependency that touches the
 // process, the filesystem or another program is a field so the whole decision
@@ -113,10 +129,12 @@ type Dispatcher struct {
 
 	Stderr io.Writer
 
-	// throughFarm records whether this invocation arrived through a farm. It is
-	// computed once at the top of Dispatch, before anything can rebake the farm
-	// out from under the answer; see computeThroughFarm.
-	throughFarm bool
+	// throughFarm records whether this invocation arrived through a farm, and
+	// invokedFarmDir the farm directory it arrived through. Both are computed
+	// once at the top of Dispatch, before anything can rebake the farm out from
+	// under the answer; see computeThroughFarm.
+	throughFarm    bool
+	invokedFarmDir string
 }
 
 // New returns a Dispatcher wired to the real process.
@@ -148,8 +166,11 @@ func Dispatch() (exitCode int, handled bool) {
 	return New().Dispatch()
 }
 
-// Dispatch resolves the invoked name against the manifest for the current
-// directory's git root and execs the recorded command.
+// Dispatch resolves the invoked name against a farm manifest and execs the
+// recorded command. Which manifest depends on the farm's origin: a git-root
+// farm's is the one for the current directory's git root, so a `cd` or a branch
+// switch is picked up transparently, while an explicit-config farm's is the one
+// beside the farm the invocation came through, and cwd plays no part at all.
 func (d *Dispatcher) Dispatch() (int, bool) {
 	name := invokedName(d.Args)
 	if name == "" {
@@ -163,6 +184,19 @@ func (d *Dispatcher) Dispatch() (int, bool) {
 	// read from: an invocation that arrived through a farm must fail loudly even
 	// when the config change that made the manifest stale is what removed it.
 	d.throughFarm = d.computeThroughFarm()
+
+	// The origin branch, and with it the trust boundary. An explicit-config farm
+	// is answered entirely from what it recorded: no getcwd, no walk up for
+	// .git, no manifest belonging to whatever repository the shell is standing
+	// in. A shell activated against a machine-level config that cds into an
+	// untrusted clone therefore keeps running the machine-level tools rather
+	// than starting to evaluate the clone's JavaScript.
+	if configManifestPath, configManifest, handled, failure := d.explicitConfigFarm(name); handled {
+		if failure != "" {
+			return d.fail(failure), true
+		}
+		return d.runManifest(name, configManifestPath, configManifest)
+	}
 
 	nearest, inRepo := d.nearestRoot()
 	if !inRepo {
@@ -180,6 +214,15 @@ func (d *Dispatcher) Dispatch() (int, bool) {
 		return d.decline(name, root, err.Error())
 	}
 
+	return d.runManifest(name, manifestPath, manifest)
+}
+
+// runManifest resolves the invoked name against one already-loaded manifest and
+// execs it. Both origins share it: once the right manifest is in hand, a
+// git-root farm and an explicit-config farm behave identically — the same
+// freshness check, the same rebake, the same lazy install, the same exec — and
+// everything that differs between them is recorded in the manifest itself.
+func (d *Dispatcher) runManifest(name, manifestPath string, manifest sourcefarm.Manifest) (int, bool) {
 	entry, found := lookupEntry(manifest, name)
 	if !found {
 		return d.declineUnknown(name, manifest)
@@ -200,7 +243,7 @@ func (d *Dispatcher) Dispatch() (int, bool) {
 		}
 	}
 
-	entry, err = d.ensureInstalled(manifestPath, name, manifest, entry)
+	entry, err := d.ensureInstalled(manifestPath, name, manifest, entry)
 	if err != nil {
 		return d.fail(err.Error()), true
 	}
@@ -328,15 +371,132 @@ func (d *Dispatcher) tryLoad(root string) (string, sourcefarm.Manifest, bool) {
 // must be taken before a rebake: the config change that made a manifest stale is
 // often the one that dropped the app, and the rebake deletes the farm entry this
 // reads.
+// It also records which farm directory the invocation came through, because
+// with two farms on PATH that directory is the only thing that says which of
+// them answered the name. That is the whole of the precedence rule: a project
+// farm sits ahead of a config farm on PATH, the shell resolved the name against
+// PATH, and this reads back the answer it already gave. There is no resolution
+// logic here to disagree with `echo $PATH`.
 func (d *Dispatcher) computeThroughFarm() bool {
 	if len(d.Args) == 0 {
 		return false
 	}
 	argv0 := d.Args[0]
-	if strings.ContainsRune(argv0, filepath.Separator) {
-		return d.underFarm(argv0)
+	resolved := argv0
+	if !strings.ContainsRune(argv0, filepath.Separator) {
+		resolved = d.lookPath(argv0)
 	}
-	return d.underFarm(d.lookPath(argv0))
+	if resolved == "" {
+		return false
+	}
+	dir := filepath.Dir(filepath.Clean(resolved))
+	if !d.isFarmDir(dir) {
+		return false
+	}
+	d.invokedFarmDir = dir
+	return true
+}
+
+// explicitConfigFarm reports whether this invocation must be answered from an
+// explicit-config farm, and returns that farm's manifest.
+//
+// A config farm has no git root, so there is nothing to derive its manifest
+// from: the location has to come from the invocation itself. That location is
+// the farm directory the invocation arrived through, which is the entry PATH
+// order already selected. With both a project farm and a config farm active
+// this is what makes the project's pin win, without a precedence table. The
+// directory is recognizable either by the cache namespace it sits in or — when
+// the path this process computes for the cache disagrees with the one
+// activation computed, from a DATAMITSU_CACHE_DIR or HOME that resolves
+// differently — by the farm variable the activated shell exported; isFarmDir
+// accepts both, so there is no second location to consult here.
+//
+// A farm directory with no readable manifest is a loud failure, never a
+// fall-through. Falling through would send a machine-level tool name into git
+// discovery — the exact step this origin exists to refuse — and, on a rebake,
+// evaluate the config of whatever repository the shell was standing in. That
+// holds for the namespace-recognized farm and the variable-recognized one
+// alike: without the manifest the origin is unknowable, and the unknown case is
+// the one that must not be guessed. A farm the invocation is known to be a
+// machine-level one whose manifest decodes to some *other* origin is the same
+// unknown case wearing a readable file, and gets the same loud failure.
+//
+// "Known to be machine-level" is two independent facts, and either one is
+// enough: the config cache namespace the directory sits in, or the pair of
+// variables the activated shell exported — DATAMITSU_FARM_CONFIG set, and
+// DATAMITSU_FARM naming this very directory. The second exists because the first
+// is judged against the cache root *this* process computes, which a
+// DATAMITSU_CACHE_DIR or HOME that resolves differently makes disagree with the
+// one activation computed; without it, exactly the invocations that already need
+// the variable to be recognized as farm invocations at all would lose the
+// origin check. The pair cannot name a project farm: a git-root activation
+// clears DATAMITSU_FARM_CONFIG (see sourceActivation.staleVars), so the variable
+// surviving alongside a matching DATAMITSU_FARM means the farm this shell
+// activated is the explicit-config one.
+//
+// Reading a non-explicit origin as "a project farm answered" is therefore only
+// allowed when neither fact holds, where it is the truth: some other farm on
+// PATH, in a cache namespace this process cannot recognize.
+//
+// A directory textually inside the *project* namespace ends the search outright,
+// before its manifest is even read. PATH selected that farm, so it is the only
+// one allowed to answer, and an unreadable manifest there must become the
+// git-root path's loud decline — not a silent hand-off to whatever config farm
+// DATAMITSU_FARM happens to name, which would exec a different tool than the one
+// PATH resolved. Returning early is also what keeps the ordinary invocation from
+// decoding the same manifest twice, once here and once in loadManifest.
+//
+// handled=false means "this is not a config-farm invocation": either it came
+// through a project farm, or it did not come through a farm at all. The
+// git-root path answers both.
+func (d *Dispatcher) explicitConfigFarm(name string) (string, sourcefarm.Manifest, bool, string) {
+	if !d.throughFarm {
+		return "", sourcefarm.Manifest{}, false, ""
+	}
+	dir := filepath.Clean(d.invokedFarmDir)
+
+	if d.inNamespace(dir, projectsDirName) {
+		return "", sourcefarm.Manifest{}, false, ""
+	}
+
+	manifestPath := filepath.Join(filepath.Dir(dir), env.ProjectManifestFileName)
+	manifest, err := d.Load(manifestPath)
+	knownConfigFarm := d.isConfigFarmDir(dir) || d.isActivatedConfigFarm(dir)
+	if err == nil {
+		if manifest.Origin != sourcefarm.OriginExplicitConfig {
+			if knownConfigFarm {
+				// The invocation says machine-level farm and the manifest says
+				// something else, so the two disagree about the one fact this
+				// branch exists to establish. A decodable manifest is no more
+				// trustworthy here than a missing one — it takes a truncated
+				// write, a hand edit or a build that wrote a different schema —
+				// and falling through would do exactly what the missing-manifest
+				// case already refuses: send a machine-level tool name into git
+				// discovery, and evaluate the config of whatever repository the
+				// shell happened to be standing in.
+				return "", sourcefarm.Manifest{}, true, fmt.Sprintf(
+					"datamitsu: %s: the explicit-config farm %s has a manifest recording a different origin (%q)\n"+
+						"datamitsu: re-activate it with `datamitsu source bash --config <path>` (or your shell)",
+					name, dir, manifest.Origin)
+			}
+			// A project farm answered the name. Its manifest records the
+			// authoritative root, and the ordinary path is where that is read.
+			return "", sourcefarm.Manifest{}, false, ""
+		}
+		return manifestPath, manifest, true, ""
+	}
+	if knownConfigFarm {
+		return "", sourcefarm.Manifest{}, true, fmt.Sprintf(
+			"datamitsu: %s: the explicit-config farm %s has no readable manifest: %v\n"+
+				"datamitsu: re-activate it with `datamitsu source bash --config <path>` (or your shell)",
+			name, dir, err)
+	}
+	// A farm only the activation variable identifies. Its origin is unknowable
+	// without the manifest, so the message names neither one.
+	return "", sourcefarm.Manifest{}, true, fmt.Sprintf(
+		"datamitsu: %s: the farm %s has no readable manifest: %v\n"+
+			"datamitsu: re-activate it with `datamitsu source bash` (add `--config <path>` for a machine-level farm)",
+		name, dir, err)
 }
 
 // activatedFarm returns the farm directory this shell was activated with, or "".
@@ -344,10 +504,34 @@ func (d *Dispatcher) computeThroughFarm() bool {
 // lookPathFrom does: the whole decision tree stays testable without touching the
 // real process environment.
 func (d *Dispatcher) activatedFarm() string {
+	return d.envValue(env.SourceFarmVarName())
+}
+
+// isActivatedConfigFarm reports whether dir is the farm this shell activated
+// *and* that activation was an explicit-config one, judged by the variables
+// alone.
+//
+// It is the path-independent half of "this is a machine-level farm", and exists
+// for the invocation isFarmDir already has to recognize by variable: one whose
+// cache root this process computes differently than activation did, where the
+// config namespace check cannot fire. Both variables are required, and the farm
+// one must name this directory: a git-root activation exports DATAMITSU_FARM and
+// clears DATAMITSU_FARM_CONFIG, so neither a stale chain from an earlier
+// machine-level activation nor a config farm still sitting further down PATH can
+// make a project farm's entry answer to this.
+func (d *Dispatcher) isActivatedConfigFarm(dir string) bool {
+	if d.envValue(env.SourceFarmConfigVarName()) == "" {
+		return false
+	}
+	farm := d.activatedFarm()
+	return farm != "" && filepath.Clean(farm) == filepath.Clean(dir)
+}
+
+// envValue returns the value of one variable in the injected environment, or "".
+func (d *Dispatcher) envValue(name string) string {
 	if d.Environ == nil {
 		return ""
 	}
-	name := env.SourceFarmVarName()
 	for _, kv := range d.Environ() {
 		if key, value, ok := strings.Cut(kv, "="); ok && key == name {
 			return value
@@ -414,7 +598,11 @@ func (d *Dispatcher) underFarm(path string) bool {
 }
 
 // isFarmDir is underFarm asked about the directory itself, which is what PATH
-// entries are.
+// entries are. Both farm namespaces count: a config farm is prepended to PATH
+// exactly like a project farm, so every place that asks "is this a farm
+// directory?" — the loud-failure branch, the PATH stripped from a spawned
+// child, the refusal to spawn a farm entry as if it were datamitsu — must
+// answer yes for it too.
 func (d *Dispatcher) isFarmDir(dir string) bool {
 	dir = filepath.Clean(dir)
 	if filepath.Base(dir) != farmDirName {
@@ -423,17 +611,41 @@ func (d *Dispatcher) isFarmDir(dir string) bool {
 	if farm := d.activatedFarm(); farm != "" && filepath.Clean(farm) == dir {
 		return true
 	}
-	projects := filepath.Clean(filepath.Join(d.CacheRoot(), projectsDirName))
+	return d.inNamespace(dir, projectsDirName) || d.inNamespace(dir, configsDirName)
+}
+
+// isConfigFarmDir reports whether dir is a farm directory in the config-farm
+// namespace, judged by path alone.
+//
+// It is deliberately not "the manifest there says explicit-config": its one
+// caller asks it precisely when there is no readable manifest, to tell a config
+// farm whose manifest is missing from a directory that was never a config farm.
+func (d *Dispatcher) isConfigFarmDir(dir string) bool {
+	dir = filepath.Clean(dir)
+	if filepath.Base(dir) != farmDirName {
+		return false
+	}
+	return d.inNamespace(dir, configsDirName)
+}
+
+// inNamespace reports whether dir is {cache}/{namespace}/{hash}/bin.
+//
+// The comparison falls back to resolved paths when the textual one fails,
+// because the two sides can describe the same directory differently: a path
+// that went through EvalSymlinks (as the executable does) has /var rewritten to
+// /private/var on macOS, while the cache root has not.
+func (d *Dispatcher) inNamespace(dir, namespace string) bool {
+	nsDir := filepath.Clean(filepath.Join(d.CacheRoot(), namespace))
 	candidate := filepath.Dir(filepath.Dir(dir))
-	if candidate == projects {
+	if candidate == nsDir {
 		return true
 	}
 	if d.EvalSymlinks == nil {
 		return false
 	}
 	resolvedCandidate, errCandidate := d.EvalSymlinks(candidate)
-	resolvedProjects, errProjects := d.EvalSymlinks(projects)
-	return errCandidate == nil && errProjects == nil && resolvedCandidate == resolvedProjects
+	resolvedNS, errNS := d.EvalSymlinks(nsDir)
+	return errCandidate == nil && errNS == nil && resolvedCandidate == resolvedNS
 }
 
 // decline handles every dead end reached before a manifest entry was found.
@@ -463,11 +675,70 @@ func (d *Dispatcher) declineUnknown(name string, manifest sourcefarm.Manifest) (
 	for _, ex := range manifest.Excluded {
 		if ex.Name == name {
 			return d.fail(fmt.Sprintf("datamitsu: %s: excluded from source mode: %s (%s)\ndatamitsu: see `datamitsu source status`",
-				name, ex.Reason, manifest.Root)), true
+				name, ex.Reason, farmLabel(manifest))), true
 		}
 	}
 	return d.fail(fmt.Sprintf("datamitsu: %s: not declared by this project (%s)\ndatamitsu: see `datamitsu source status`",
-		name, manifest.Root)), true
+		name, farmLabel(manifest))), true
+}
+
+// farmLabel names a farm in a user-facing message. A project farm is its git
+// root, which is what the user would cd to; an explicit-config farm has no root
+// and is named by the config chain it was baked from, which is what the user
+// would pass to --config.
+func farmLabel(m sourcefarm.Manifest) string {
+	if m.Root != "" {
+		return m.Root
+	}
+	if len(m.ConfigPaths) > 0 {
+		return strings.Join(m.ConfigPaths, ", ")
+	}
+	return "unknown farm"
+}
+
+// refreshHint is the command that rebuilds a farm from scratch, spelled for the
+// farm's own origin — telling someone to run a command "in that repository"
+// when there is no repository is an instruction that cannot be followed.
+func refreshHint(m sourcefarm.Manifest) string {
+	if m.Origin != sourcefarm.OriginExplicitConfig {
+		return "run `" + ldflags.PackageName + " source refresh --force` in that repository"
+	}
+	// The chain is quoted when it has to be: this hint is printed when the farm
+	// is already broken and cannot repair itself, so it is the one command the
+	// user has to be able to paste verbatim, and an unquoted path with a space
+	// in it would split into two arguments and name neither config.
+	var b strings.Builder
+	b.WriteString("run `")
+	b.WriteString(ldflags.PackageName)
+	b.WriteString(" source refresh")
+	for _, p := range m.ConfigPaths {
+		b.WriteString(" --config ")
+		b.WriteString(quoteIfNeeded(p))
+	}
+	b.WriteString(" --force`")
+	return b.String()
+}
+
+// quoteIfNeeded returns p as a bash word, left alone when it already is one.
+//
+// The ordinary case is an absolute path of unremarkable characters, and running
+// every such path through shellquote.Bash would render it as $'...' — correct,
+// but noise in a message whose whole job is to be read and pasted by a human.
+// Anything outside the safe set goes through the real quoter.
+func quoteIfNeeded(p string) string {
+	if p == "" {
+		return shellquote.Bash(p)
+	}
+	for i := range len(p) {
+		c := p[i]
+		switch {
+		case c >= 'A' && c <= 'Z', c >= 'a' && c <= 'z', c >= '0' && c <= '9':
+		case strings.IndexByte("._/@%+:,-", c) >= 0:
+		default:
+			return shellquote.Bash(p)
+		}
+	}
+	return p
 }
 
 // fail prints one line to stderr and returns the not-found exit code.
@@ -549,6 +820,17 @@ func (d *Dispatcher) rebake(manifestPath, name string, manifest sourcefarm.Manif
 		d.warn("datamitsu: could not read the refreshed farm manifest, using the previous one: " + err.Error())
 		return d.fallback(manifest, entry)
 	}
+	if !sourcefarm.UsableStale(reloaded) {
+		// The spawn reported success but what is on disk is still a manifest this
+		// build must not act on, so the refresh landed somewhere else — a farm
+		// baked by a format-2 build from an explicit --config is the case that
+		// exists: replaying its recorded flags now writes an explicit-config farm
+		// in the other namespace and never touches this path. Serving the entries
+		// back would be permanent: every later invocation repeats the same rebake,
+		// finds the same manifest, and execs the same never-updated tools.
+		d.warn("datamitsu: the refreshed farm manifest is still one this " + ldflags.PackageName + " cannot use")
+		return rebakeResult{manifest: reloaded, retired: true}
+	}
 	refreshed, found := lookupEntry(reloaded, name)
 	if !found {
 		// The name was removed from the config by whatever change made the
@@ -584,8 +866,8 @@ func (d *Dispatcher) fallback(manifest sourcefarm.Manifest, entry sourcefarm.Ent
 // failRetired reports a farm that could neither be refreshed nor served.
 func (d *Dispatcher) failRetired(name string, manifest sourcefarm.Manifest) int {
 	return d.fail(fmt.Sprintf("datamitsu: %s: this project's source-mode farm was built by a different %s and could not be refreshed (%s)\n"+
-		"datamitsu: run `datamitsu source refresh --force` in that repository",
-		name, ldflags.PackageName, manifest.Root))
+		"datamitsu: %s",
+		name, ldflags.PackageName, farmLabel(manifest), refreshHint(manifest)))
 }
 
 // ensureInstalled materializes an entry that has never been downloaded. This is
@@ -636,7 +918,7 @@ func (d *Dispatcher) ensureInstalled(manifestPath, name string, manifest sourcef
 		// Asked against the re-resolved entry, so an install that produced a
 		// wrapper without its interpreter — or a package without its runtime —
 		// fails here instead of exec'ing something that runs unpinned.
-		return entry, fmt.Errorf("datamitsu: %s: still not installed after install (%s)", name, reloaded.Root)
+		return entry, fmt.Errorf("datamitsu: %s: still not installed after install (%s)", name, farmLabel(reloaded))
 	}
 	return refreshed, nil
 }
@@ -645,7 +927,7 @@ func (d *Dispatcher) ensureInstalled(manifestPath, name string, manifest sourcef
 func (d *Dispatcher) execEntry(entry sourcefarm.Entry, manifest sourcefarm.Manifest) (int, bool) {
 	if entry.Command == "" {
 		return d.fail(fmt.Sprintf("datamitsu: %s: no executable recorded for this app (%s)\ndatamitsu: see `datamitsu source status`",
-			entry.Name, manifest.Root)), true
+			entry.Name, farmLabel(manifest))), true
 	}
 
 	// A command with no separator is an interpreter the config named by bare
@@ -656,7 +938,7 @@ func (d *Dispatcher) execEntry(entry sourcefarm.Entry, manifest sourcefarm.Manif
 		resolved := d.lookPathOutsideFarm(command)
 		if resolved == "" {
 			return d.fail(fmt.Sprintf("datamitsu: %s: %s was not found on PATH\ndatamitsu: install it, or point this app's runtime at an absolute path (%s)",
-				entry.Name, command, manifest.Root)), true
+				entry.Name, command, farmLabel(manifest))), true
 		}
 		command = resolved
 	}
@@ -667,8 +949,8 @@ func (d *Dispatcher) execEntry(entry sourcefarm.Entry, manifest sourcefarm.Manif
 	// missing", and the two need different messages. A stat costs microseconds
 	// against a process that has already cost milliseconds.
 	if _, err := d.Stat(command); err != nil {
-		return d.fail(fmt.Sprintf("datamitsu: %s: %s is missing: %v\ndatamitsu: run `datamitsu source refresh --force` in %s",
-			entry.Name, command, err, manifest.Root)), true
+		return d.fail(fmt.Sprintf("datamitsu: %s: %s is missing: %v\ndatamitsu: %s",
+			entry.Name, command, err, refreshHint(manifest))), true
 	}
 
 	// User argv is passed through untouched. `datamitsu exec actionlint
@@ -831,15 +1113,26 @@ func (d *Dispatcher) spawnRequest(exe string, m sourcefarm.Manifest, sub ...stri
 // otherwise. A root that has been deleted or renamed must not turn a rebake into
 // a chdir failure the user reads as "install failed": the child inherits the
 // tool's cwd instead and reports whatever the real problem is.
+//
+// An explicit-config farm has no root, and inheriting the tool's cwd there is
+// the one thing that must not happen: it would make a machine-level farm's
+// contents depend on which directory the user happened to be standing in when
+// the rebake fired, through every cwd-derived input facts() exposes. The
+// directory holding the first config in the chain is used instead — recorded,
+// stable, and the same on every rebake.
 func (d *Dispatcher) spawnDir(m sourcefarm.Manifest) string {
-	if m.Root == "" {
+	dir := m.Root
+	if dir == "" && len(m.ConfigPaths) > 0 {
+		dir = filepath.Dir(m.ConfigPaths[0])
+	}
+	if dir == "" {
 		return ""
 	}
-	info, err := d.Stat(m.Root)
+	info, err := d.Stat(dir)
 	if err != nil || !info.IsDir() {
 		return ""
 	}
-	return m.Root
+	return dir
 }
 
 // environOutsideFarms returns this process's environment with every farm
@@ -880,12 +1173,40 @@ func (d *Dispatcher) environOutsideFarms() []string {
 // them a rebake drops every app only the wrapper's config declares, and an
 // install of one fails with "app not found".
 func spawnArgs(m sourcefarm.Manifest, sub ...string) []string {
-	if len(m.ConfigArgs) == 0 {
+	prefix := m.ConfigArgs
+	if m.Origin == sourcefarm.OriginExplicitConfig {
+		prefix = explicitConfigArgs(m)
+	}
+	if len(prefix) == 0 {
 		return sub
 	}
-	args := make([]string, 0, len(m.ConfigArgs)+len(sub))
-	args = append(args, m.ConfigArgs...)
+	args := make([]string, 0, len(prefix)+len(sub))
+	args = append(args, prefix...)
 	return append(args, sub...)
+}
+
+// explicitConfigArgs returns the global flags that re-select an explicit-config
+// farm's chain in a spawned child.
+//
+// Two things are guaranteed here and nowhere else. The chain is named
+// explicitly — from the recorded flags when there are any, and from the
+// recorded config paths otherwise, so a farm can still be rebuilt even if the
+// flags were never written. And discovery is switched off, which is the trust
+// boundary in its rebake form: the child runs `source refresh` or `install`
+// with a working directory that may sit inside some repository, and without
+// this flag it would discover that repository's config and merge the tools it
+// declares into a machine-level farm the user activated from their shell rc.
+func explicitConfigArgs(m sourcefarm.Manifest) []string {
+	args := append([]string(nil), m.ConfigArgs...)
+	if len(args) == 0 {
+		for _, p := range m.ConfigPaths {
+			args = append(args, "--config", p)
+		}
+	}
+	if !slices.Contains(args, noAutoConfigFlag) {
+		args = append(args, noAutoConfigFlag)
+	}
+	return args
 }
 
 // lookupEntry finds a manifest entry by name.

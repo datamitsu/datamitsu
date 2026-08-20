@@ -106,7 +106,7 @@ Activation downloads nothing, even for tools that have never been fetched. A dec
 
 This is why activation is cheap enough for a shell rc file: a repository declaring a hundred tools costs the same at activation time as one declaring three.
 
-Activation also skips the config load entirely when the baked manifest still matches the tree — the same freshness comparison the shim makes — and renders the shell code from the manifest it reads back. Only an activation that finds a changed tree pays a full resolve. Any of `--config`, `--before-config` and `--no-auto-config` always re-resolves: the manifest's watch set describes the config chain that baked it, and it cannot speak for a file it has never seen. A farm baked with those flags is likewise not served back to a later plain `datamitsu source`. `--no-auto-config` with no `--config` to replace it is refused outright, because baking the built-in default config would overwrite the farm this root's real config owns.
+Activation also skips the config load entirely when the baked manifest still matches the tree — the same freshness comparison the shim makes — and renders the shell code from the manifest it reads back. Only an activation that finds a changed tree pays a full resolve. `--before-config` and `--no-auto-config` always re-resolve: the manifest's watch set describes the config chain that baked it, and it cannot speak for a file it has never seen. A farm baked with those flags is likewise not served back to a later plain `datamitsu source`. `--config` is the exception, and takes the fast path like any other activation: an explicit-config farm's manifest lives at the path the chain itself hashes to, so the only manifest such an invocation can find is one already baked from those very files. `--no-auto-config` with no `--config` to replace it is refused outright, because baking the built-in default config would overwrite the farm this root's real config owns.
 
 ### A bake that fails still activates
 
@@ -116,7 +116,7 @@ The toolchain you get is therefore the previous one, not the branch's. `datamits
 
 ### A declared name never falls through
 
-If a name is declared for this project but cannot be resolved for the current tree, the shim **exits 127** naming the app, the root, and `datamitsu source status`. It never searches the rest of `PATH`.
+If a name is declared for this project but cannot be resolved for the current tree, the shim **exits 127** naming the app, the farm — its git root, or the config chain for a [machine-level farm](../how-to/machine-level-toolchain.md) that has no root — and `datamitsu source status`. It never searches the rest of `PATH`.
 
 That is deliberate and it is the single most important failure-mode decision in the feature. The alternative — falling through to a stale `/usr/local/bin/terragrunt` — exits 0 and prints plausible output, which is strictly worse than not shipping source mode at all. For the same reason, a farm baked for a different repository is never used implicitly: `cd` into a repository you have never activated and a tool name exits 127 telling you to run `datamitsu source` there. Baking it implicitly would mean evaluating that repository's JavaScript merely because you typed a tool name; explicit activation is the act of trust.
 
@@ -140,6 +140,7 @@ App names themselves are validated as filesystem entries: `^[A-Za-z0-9][A-Za-z0-
 
 ```bash
 $ datamitsu source status
+origin:   git-root
 root:     /home/you/infra
 farm:     /home/you/.cache/datamitsu/cache/projects/02982286cbc2c265e43806925d7f4907/bin
 manifest: /home/you/.cache/datamitsu/cache/projects/02982286cbc2c265e43806925d7f4907/manifest.json (fresh)
@@ -160,7 +161,9 @@ shadowed (2):
 
 The manifest state is one of `fresh`, `stale`, `missing` or `unreadable`. All three non-fresh states mean the same re-bake, but they tell you very different things: `missing` is "never activated here" — the state the shim reports as exit 127 — while `unreadable` is a corrupted farm.
 
-`--json` emits the same information as one document and writes no human text to stdout; warnings still go to stderr. `status` resolves and reports — it never downloads and never re-bakes, so it can be used to observe a broken farm rather than silently repairing the thing it is meant to describe.
+`origin` is always present in both forms. A [machine-level farm](../how-to/machine-level-toolchain.md) reports `explicit-config` and prints `config:` lines in place of `root:`, because it has no repository to `cd` to — the chain is what you would pass to `--config` again.
+
+`--json` emits the same information as one document and writes no human text to stdout; warnings still go to stderr. It carries `origin` alongside the fields above, and `configPaths` for an `explicit-config` farm. `status` resolves and reports — it never downloads and never re-bakes, so it can be used to observe a broken farm rather than silently repairing the thing it is meant to describe.
 
 ## `which` shows the farm, not the store
 
@@ -207,6 +210,7 @@ Closing this hole soundly needs read-instrumentation inside the JavaScript VM, s
 
 ## See also
 
+- [Machine-Level Toolchain](/docs/how-to/machine-level-toolchain) — the same guarantees for a config outside any repository, activated from a shell rc file
 - [`source` command reference](/docs/reference/cli-commands#source) — every flag, in detail
 - [Binary Management](/docs/guides/binary-management) — how the content-addressed store makes two branches' versions coexist
 - [Supply Chain Security](/docs/guides/supply-chain-security) — the hash verification that happens at download time, not on this path

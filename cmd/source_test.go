@@ -53,6 +53,43 @@ func simplePlan() sourcefarm.Plan {
 	return sourcefarm.Plan{Root: "/repo", FarmDir: "/cache/projects/abc/bin"}
 }
 
+// gitRootTarget is the target a plain `datamitsu source` inside root resolves
+// to, built without going through git so a test can name the root directly.
+func gitRootTarget(t *testing.T, root string) sourceTarget {
+	t.Helper()
+	farmDir, err := env.GetProjectBinPath(root)
+	if err != nil {
+		t.Fatalf("GetProjectBinPath() error = %v", err)
+	}
+	manifestPath, err := env.GetProjectManifestPath(root)
+	if err != nil {
+		t.Fatalf("GetProjectManifestPath() error = %v", err)
+	}
+	return sourceTarget{
+		Origin:       sourcefarm.OriginGitRoot,
+		Root:         root,
+		FarmDir:      farmDir,
+		ManifestPath: manifestPath,
+	}
+}
+
+// configTarget is the target `datamitsu source --config <chain>` resolves to.
+func configTarget(t *testing.T, configPaths ...string) sourceTarget {
+	t.Helper()
+	t.Cleanup(func() { ConfigPaths = nil })
+	ConfigPaths = configPaths
+	target, err := explicitConfigTarget()
+	if err != nil {
+		t.Fatalf("explicitConfigTarget() error = %v", err)
+	}
+	return target
+}
+
+// activationOf is what runSource hands a renderer for a git-root farm.
+func activationOf(plan sourcefarm.Plan) sourceActivation {
+	return activationFor(sourceTarget{Origin: sourcefarm.OriginGitRoot, Root: plan.Root}, plan)
+}
+
 // countPathAssignments counts the lines that assign PATH itself. The scratch
 // variable the renderer edits does not count: the invariant is that PATH takes
 // exactly one new value, so a half-rendered activation can never be observed.
@@ -68,7 +105,7 @@ func countPathAssignments(script string) int {
 
 func TestRenderBashSinglePathMutation(t *testing.T) {
 	for _, plan := range []sourcefarm.Plan{simplePlan(), hostilePlan()} {
-		got := renderBash(plan)
+		got := renderBash(activationOf(plan))
 		if n := countPathAssignments(got); n != 1 {
 			t.Errorf("renderBash assigned PATH %d times, want exactly 1:\n%s", n, got)
 		}
@@ -94,7 +131,7 @@ func TestRenderBashSinglePathMutation(t *testing.T) {
 
 func TestRenderFishUsesMove(t *testing.T) {
 	for _, plan := range []sourcefarm.Plan{simplePlan(), hostilePlan()} {
-		got := renderFish(plan)
+		got := renderFish(activationOf(plan))
 		if !strings.Contains(got, "fish_add_path --global --move --path ") {
 			// --move is what makes re-activation actually re-order PATH instead
 			// of silently doing nothing when the farm is already present.
@@ -114,11 +151,12 @@ func TestRenderFishUsesMove(t *testing.T) {
 
 // TestRenderersAreDeterministic is what lets the CLI goldens exist at all.
 func TestRenderersAreDeterministic(t *testing.T) {
-	renderers := map[string]func(sourcefarm.Plan) string{"bash": renderBash, "fish": renderFish}
+	renderers := map[string]func(sourceActivation) string{"bash": renderBash, "fish": renderFish}
 	for name, render := range renderers {
 		t.Run(name, func(t *testing.T) {
 			plan := hostilePlan()
-			if first, second := render(plan), render(plan); first != second {
+			a := activationOf(plan)
+			if first, second := render(a), render(a); first != second {
 				t.Errorf("%s renderer is not byte-stable:\n%q\n%q", name, first, second)
 			}
 		})
@@ -130,9 +168,9 @@ func TestRenderersAreDeterministic(t *testing.T) {
 // exist renders exactly like one that does.
 func TestRenderersArePure(t *testing.T) {
 	missing := sourcefarm.Plan{Root: "/no/such/root", FarmDir: "/no/such/root/bin"}
-	for name, render := range map[string]func(sourcefarm.Plan) string{"bash": renderBash, "fish": renderFish} {
+	for name, render := range map[string]func(sourceActivation) string{"bash": renderBash, "fish": renderFish} {
 		t.Run(name, func(t *testing.T) {
-			got := render(missing)
+			got := render(activationOf(missing))
 			if !strings.Contains(got, "/no/such/root") {
 				t.Errorf("%s renderer dropped the plan's paths:\n%s", name, got)
 			}
@@ -150,7 +188,7 @@ func TestRenderBashRunsInRealBash(t *testing.T) {
 	}
 
 	plan := realHostilePlan(t)
-	script := renderBash(plan) + "printf '%s' \"$PATH\"\n"
+	script := renderBash(activationOf(plan)) + "printf '%s' \"$PATH\"\n"
 
 	run := func(t *testing.T, startPath string) string {
 		t.Helper()
@@ -195,7 +233,7 @@ func TestRenderBashRemovesAnExistingFarmEntry(t *testing.T) {
 	}
 
 	plan := realHostilePlan(t)
-	script := renderBash(plan) + "printf '%s' \"$PATH\"\n"
+	script := renderBash(activationOf(plan)) + "printf '%s' \"$PATH\"\n"
 	cmd := exec.Command(bash, "-c", script)
 	cmd.Env = append(cmd.Environ(), "PATH=/usr/bin:"+plan.FarmDir+":/bin")
 	out, err := cmd.Output()
@@ -218,7 +256,7 @@ func TestRenderFishRunsInRealFish(t *testing.T) {
 	}
 
 	plan := realHostilePlan(t)
-	script := renderFish(plan) + "printf '%s' \"$PATH[1]\"\n"
+	script := renderFish(activationOf(plan)) + "printf '%s' \"$PATH[1]\"\n"
 	cmd := exec.Command(fish, "--no-config", "-c", script)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -260,8 +298,8 @@ func TestWarningsNeverReachStdout(t *testing.T) {
 		t.Errorf("shadow warning is not the full line:\n%s", warnings)
 	}
 
-	for name, render := range map[string]func(sourcefarm.Plan) string{"bash": renderBash, "fish": renderFish} {
-		stdout := render(plan)
+	for name, render := range map[string]func(sourceActivation) string{"bash": renderBash, "fish": renderFish} {
+		stdout := render(activationOf(plan))
 		for _, forbidden := range []string{"not downloaded yet", "shadowing", "tflint"} {
 			if strings.Contains(stdout, forbidden) {
 				t.Errorf("%s activation code contains warning text %q:\n%s", name, forbidden, stdout)
@@ -339,21 +377,21 @@ func TestFarmOnDiskRequiresBothHalves(t *testing.T) {
 	}
 	plan := sourcefarm.Plan{Root: root, FarmDir: farm}
 
-	if farmOnDisk(plan) {
+	if farmOnDisk(plan, gitRootTarget(t, root)) {
 		t.Error("a root that was never baked reported a usable farm")
 	}
 
 	if err := os.MkdirAll(farm, 0o700); err != nil {
 		t.Fatalf("create farm directory: %v", err)
 	}
-	if farmOnDisk(plan) {
+	if farmOnDisk(plan, gitRootTarget(t, root)) {
 		t.Error("a farm directory with no manifest reported usable")
 	}
 
 	if err := os.WriteFile(manifestPath, []byte("{not json"), 0o600); err != nil {
 		t.Fatalf("write manifest: %v", err)
 	}
-	if farmOnDisk(plan) {
+	if farmOnDisk(plan, gitRootTarget(t, root)) {
 		t.Error("a manifest that does not decode reported usable")
 	}
 
@@ -364,10 +402,10 @@ func TestFarmOnDiskRequiresBothHalves(t *testing.T) {
 	if err := os.WriteFile(manifestPath, data, 0o600); err != nil {
 		t.Fatalf("write manifest: %v", err)
 	}
-	if !farmOnDisk(plan) {
+	if !farmOnDisk(plan, gitRootTarget(t, root)) {
 		t.Error("a baked farm reported unusable")
 	}
-	if _, ok := loadSourcePlan(root, false); !ok {
+	if _, ok := loadSourcePlan(gitRootTarget(t, root), false); !ok {
 		t.Fatal("a baked farm was not served to the activation fallback")
 	}
 
@@ -377,10 +415,10 @@ func TestFarmOnDiskRequiresBothHalves(t *testing.T) {
 	if err := os.Chmod(farm, 0o777); err != nil {
 		t.Fatalf("chmod farm directory: %v", err)
 	}
-	if farmOnDisk(plan) {
+	if farmOnDisk(plan, gitRootTarget(t, root)) {
 		t.Error("a world-writable farm reported usable, so a refused bake would activate it")
 	}
-	if _, fresh := loadSourcePlan(root, false); fresh {
+	if _, fresh := loadSourcePlan(gitRootTarget(t, root), false); fresh {
 		t.Error("a world-writable farm was served to the activation fallback")
 	}
 }
@@ -426,7 +464,7 @@ func TestFreshSourcePlanServesTheManifest(t *testing.T) {
 		t.Fatalf("write manifest: %v", err)
 	}
 
-	got, fresh := freshSourcePlanFor(root)
+	got, fresh := freshSourcePlanFor(gitRootTarget(t, root))
 	if !fresh {
 		t.Fatal("a fresh manifest with its farm on disk was not served from the manifest")
 	}
@@ -447,7 +485,7 @@ func TestFreshSourcePlanServesTheManifest(t *testing.T) {
 	if err := os.RemoveAll(farm); err != nil {
 		t.Fatalf("remove farm directory: %v", err)
 	}
-	if _, fresh := freshSourcePlanFor(root); fresh {
+	if _, fresh := freshSourcePlanFor(gitRootTarget(t, root)); fresh {
 		t.Error("a manifest whose farm is gone was served anyway")
 	}
 
@@ -457,11 +495,11 @@ func TestFreshSourcePlanServesTheManifest(t *testing.T) {
 	if err := os.MkdirAll(farm, 0o700); err != nil {
 		t.Fatalf("recreate farm directory: %v", err)
 	}
-	if _, fresh := freshSourcePlanFor(root); fresh {
+	if _, fresh := freshSourcePlanFor(gitRootTarget(t, root)); fresh {
 		t.Error("a farm missing the entry its manifest describes was served anyway")
 	}
 	writeFarmEntries(t, farm, "tofu")
-	if _, fresh := freshSourcePlanFor(root); !fresh {
+	if _, fresh := freshSourcePlanFor(gitRootTarget(t, root)); !fresh {
 		t.Fatal("restoring the entry did not make the farm servable again")
 	}
 
@@ -469,7 +507,7 @@ func TestFreshSourcePlanServesTheManifest(t *testing.T) {
 	if err := os.WriteFile(watched, []byte("// changed\n"), 0o600); err != nil {
 		t.Fatalf("rewrite watched file: %v", err)
 	}
-	if _, fresh := freshSourcePlanFor(root); fresh {
+	if _, fresh := freshSourcePlanFor(gitRootTarget(t, root)); fresh {
 		t.Error("a stale manifest was served anyway")
 	}
 }
@@ -559,11 +597,11 @@ func TestPreviousSourcePlanServesAStaleFarm(t *testing.T) {
 	if err := os.WriteFile(watched, []byte("// changed\n"), 0o600); err != nil {
 		t.Fatalf("rewrite watched file: %v", err)
 	}
-	if _, fresh := freshSourcePlanFor(root); fresh {
+	if _, fresh := freshSourcePlanFor(gitRootTarget(t, root)); fresh {
 		t.Fatal("a stale manifest was served by the fast path")
 	}
 
-	got, ok := previousSourcePlan(root)
+	got, ok := previousSourcePlan(gitRootTarget(t, root))
 	if !ok {
 		t.Fatal("a stale farm still on disk was not offered as the fallback")
 	}
@@ -576,7 +614,7 @@ func TestPreviousSourcePlanServesAStaleFarm(t *testing.T) {
 	if err := os.RemoveAll(farm); err != nil {
 		t.Fatalf("remove farm directory: %v", err)
 	}
-	if _, ok := previousSourcePlan(root); ok {
+	if _, ok := previousSourcePlan(gitRootTarget(t, root)); ok {
 		t.Error("a farm that is gone was offered as the fallback")
 	}
 }
@@ -618,15 +656,16 @@ func TestPreviousSourcePlanRefusesARetiredManifest(t *testing.T) {
 		t.Fatalf("write manifest: %v", err)
 	}
 
-	if _, ok := previousSourcePlan(root); ok {
+	if _, ok := previousSourcePlan(gitRootTarget(t, root)); ok {
 		t.Error("a manifest from a retired format was offered as the fallback")
 	}
 }
 
 // TestSourceManifestDecidesRequiresDiscoveredConfig pins that a flag-supplied
-// config always re-resolves. The manifest's watch set describes the chain that
-// baked it and cannot answer for a file it has never seen, so serving it for an
-// explicit --config would activate the wrong toolchain and report it fresh.
+// config never answers a *git-root* farm from the manifest. That farm's identity
+// is the root, so a flag's file is not part of what selected the manifest: its
+// watch set describes a chain it has never seen, and serving it would activate
+// the wrong toolchain and report it fresh.
 func TestSourceManifestDecidesRequiresDiscoveredConfig(t *testing.T) {
 	t.Cleanup(func() {
 		ConfigPaths = nil
@@ -634,26 +673,43 @@ func TestSourceManifestDecidesRequiresDiscoveredConfig(t *testing.T) {
 		NoAutoConfig = false
 	})
 
+	target := gitRootTarget(t, "/repo")
+
 	ConfigPaths, BeforeConfigPaths, NoAutoConfig = nil, nil, false
-	if !sourceManifestDecides() {
+	if !sourceManifestDecides(target) {
 		t.Error("a discovered config was not allowed to use the manifest")
 	}
 
 	ConfigPaths = []string{"/elsewhere/other.config.ts"}
-	if sourceManifestDecides() {
-		t.Error("an explicit --config was served from the manifest")
+	if sourceManifestDecides(target) {
+		t.Error("an explicit --config was served from a git-root manifest")
 	}
 
 	// --before-config prepends files to the chain, so a manifest baked without
 	// them describes a farm missing whatever they declare.
 	ConfigPaths, BeforeConfigPaths = nil, []string{"/elsewhere/shared.js"}
-	if sourceManifestDecides() {
+	if sourceManifestDecides(target) {
 		t.Error("an explicit --before-config was served from the manifest")
 	}
 
 	ConfigPaths, BeforeConfigPaths, NoAutoConfig = nil, nil, true
-	if sourceManifestDecides() {
+	if sourceManifestDecides(target) {
 		t.Error("--no-auto-config was served from the manifest")
+	}
+}
+
+// TestConfigFarmManifestDecides is the other half: an explicit-config farm may
+// use its manifest, because the manifest it can find is the one the chain itself
+// hashes to. Activation lives in a shell rc file, so the alternative is a full
+// config resolution in every shell and every tmux pane.
+func TestConfigFarmManifestDecides(t *testing.T) {
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
+	cfg := filepath.Join(t.TempDir(), "tools.config.ts")
+	if err := os.WriteFile(cfg, []byte("//\n"), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	if !sourceManifestDecides(configTarget(t, cfg)) {
+		t.Error("an explicit-config farm was forced to re-resolve on every activation")
 	}
 }
 
@@ -754,20 +810,20 @@ func TestFlaggedFarmIsNotServedToAPlainInvocation(t *testing.T) {
 	}
 
 	ConfigPaths = nil
-	if _, fresh := freshSourcePlanFor(root); fresh {
+	if _, fresh := freshSourcePlanFor(gitRootTarget(t, root)); fresh {
 		t.Error("a plain invocation was served a farm baked from an explicit --config")
 	}
-	if manifestStatus(manifestPath).Fresh {
+	if manifestStatus(manifestPath, gitRootTarget(t, root)).Fresh {
 		t.Error("`source status` reported a farm from another config chain as fresh")
 	}
-	if sourceFarmIsFresh(root) {
+	if sourceFarmIsFresh(gitRootTarget(t, root)) {
 		t.Error("`source refresh` would have answered \"already up to date\" for another chain's farm")
 	}
 
 	// The same invocation that baked it is still served from it: this must not
 	// force a rebake on every wrapper-driven activation.
 	ConfigPaths = []string{other}
-	if _, fresh := freshSourcePlanFor(root); !fresh {
+	if _, fresh := freshSourcePlanFor(gitRootTarget(t, root)); !fresh {
 		t.Error("the invocation that baked the farm was not served from it")
 	}
 }

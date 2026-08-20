@@ -854,7 +854,7 @@ datamitsu cache clear
 | `--all`     | Clear all project caches (not just the current project) |
 | `--dry-run` | Show what would be deleted without deleting             |
 
-:::warning This removes source-mode farms
+:::warning This removes project source-mode farms
 
 A project's [source-mode](../guides/source-mode.md) farm and manifest live in the
 same per-project cache directory, so `cache clear` deletes them along with the
@@ -862,6 +862,11 @@ lint/fix caches. Every shell already activated for that project then reports exi
 127 for every declared tool — the shim deliberately does not re-bake a farm that
 is not there. Run `datamitsu source refresh` (or re-activate) afterwards, and use
 `--dry-run` first to see what would go.
+
+[Machine-level farms](../how-to/machine-level-toolchain.md) created with
+`datamitsu source --config <path>` live in a separate `configs/` namespace and are
+**not** removed by `cache clear`, not even with `--all`. Rebuild one deliberately
+with `datamitsu source refresh --config <path> --force`.
 
 :::
 
@@ -1072,11 +1077,11 @@ to stderr.
 
 `--no-auto-config` without a `--config` is refused: activating the built-in
 default config would bake a handful of built-in apps into the farm this root's
-real config owns. Any of `--config`, `--before-config` or `--no-auto-config` also
-bypasses the manifest fast path and re-resolves the config, and a farm baked with
-those flags is not reused by a later plain `datamitsu source` — a manifest baked
-from a different config chain would otherwise activate a toolchain the plain
-invocation never asked for.
+real config owns. `--before-config` and `--no-auto-config` also bypass the
+manifest fast path and re-resolve the config, and a farm baked with them is not
+reused by a later plain `datamitsu source` — a manifest baked from a different
+config chain would otherwise activate a toolchain the plain invocation never
+asked for.
 
 If the farm cannot be re-baked at all — a config that does not evaluate on this
 branch, a remote config unreachable offline — activation warns on stderr,
@@ -1086,14 +1091,66 @@ through `PATH` to whatever the system has. `source refresh` is the repair comman
 and inverts this: a failed bake exits non-zero, leaving the previous farm in
 place, so a CI step can trust `refresh`'s exit code but not `source`'s.
 
+### source --config: a machine-level toolchain
+
+```bash
+# outside any repository, e.g. from a shell rc file
+datamitsu source fish --config ~/.config/datamitsu/datamitsu.config.ts | source
+eval "$(datamitsu source bash --config ~/.config/datamitsu/datamitsu.config.ts)"
+```
+
+With the global `--config` flag the toolchain comes from a config you name rather
+than from a project, so `source` works outside any git repository. `status` and
+`refresh` take the same flag and act on the same farm.
+
+Such a farm's origin is `explicit-config`, and it differs from a project farm in
+two ways:
+
+|           | `git-root`                       | `explicit-config`                                             |
+| --------- | -------------------------------- | ------------------------------------------------------------- |
+| identity  | the git root                     | XXH3-128 of the resolved config chain                         |
+| farm path | `{cache}/cache/projects/{hash}/` | `{cache}/cache/configs/{hash}/`                               |
+| watch set | config chain + `.git/HEAD`       | the config chain                                              |
+| shim      | re-resolves from cwd's git root  | revalidates its own recorded chain, never walks up for `.git` |
+
+The chain is resolved to absolute paths with symlinks followed before hashing, so
+a relative, an absolute and a symlinked spelling of the same file are one farm.
+Order is significant, and `--before-config` files are part of the chain rather
+than a modifier of it.
+
+An explicit-config activation never merges a discovered config, even when it runs
+inside a repository: the chain is exactly what was named, and every re-bake the
+shim spawns carries `--no-auto-config` for the same reason. Unlike the other
+config flags, `--config` does **not** bypass the manifest fast path — a config
+farm's manifest lives at the path the chain itself hashes to, so the only
+manifest such an invocation can find is one baked from those very files.
+
+**The trust boundary:** an explicit-config farm never evaluates a project's
+config. A shell activated against a machine-level config that `cd`s into an
+untrusted clone keeps running the machine-level tools; entering a repository's
+toolchain still requires running `datamitsu source` there. This is a security
+property, not an omission — a config is evaluated JavaScript.
+
+Both farms can be active at once. Layering is `PATH` order and nothing else: the
+project farm sits ahead of the config farm, so the project's pin wins, and a name
+only the machine-level config declares stays reachable from inside the project.
+
+Activation exports `DATAMITSU_FARM` and `DATAMITSU_FARM_CONFIG`, and deliberately
+no `DATAMITSU_ROOT` — there is no git root, and an empty one would read as "the
+repository could not be determined".
+
+See [Machine-Level Toolchain](../how-to/machine-level-toolchain.md) for the
+full walkthrough.
+
 ### source status
 
 ```bash
 datamitsu source status
 datamitsu source status --json
+datamitsu source status --config ~/.config/datamitsu/datamitsu.config.ts
 ```
 
-Reports the farm for the current project: its root and directory, whether the
+Reports the farm for the current project: its origin, its root and directory, whether the
 baked manifest still matches the working tree, every tool the farm provides with
 how it is materialized (`shim`) and whether it has been downloaded
 yet, every declared name that was refused **with the reason**, and every system
@@ -1105,7 +1162,9 @@ listed with its reason, so it can never be confused with a name that was never
 declared.
 
 `--json` emits the same information as a single document and writes no human
-text to stdout; warnings still go to stderr.
+text to stdout; warnings still go to stderr. `origin` is always present; a
+`git-root` farm reports `root`, an `explicit-config` farm reports `configPaths`
+and prints `config:` lines in place of `root:`.
 
 `status` resolves and reports. It never downloads and never re-bakes the farm.
 
@@ -1114,10 +1173,12 @@ text to stdout; warnings still go to stderr.
 ```bash
 datamitsu source refresh
 datamitsu source refresh --force
+datamitsu source refresh --config ~/.config/datamitsu/datamitsu.config.ts --force
 ```
 
 Re-resolves the project's declared apps and rewrites the farm the current shell's
-`PATH` points at.
+`PATH` points at. With `--config` it acts on that chain's machine-level farm
+instead.
 
 Nothing normally needs this. A tool invocation notices on its own that the config
 changed and re-bakes before running, which is what makes branch switching
@@ -1161,6 +1222,7 @@ from the same shell function that runs an activation through `eval`.
 | `DATAMITSU_PARSERS_DIR`          | Override directory for downloaded WASM output-parser modules                                    | `{store}/.parsers`                                  |
 | `DATAMITSU_ROOT`                 | Git root of the source-mode farm activated in this shell (exported by `datamitsu source`)       | -                                                   |
 | `DATAMITSU_FARM`                 | Farm directory activated in this shell (exported by `datamitsu source`)                         | -                                                   |
+| `DATAMITSU_FARM_CONFIG`          | Config chain of the farm activated in this shell (exported by `datamitsu source --config`)      | -                                                   |
 | `NO_COLOR`                       | Disable color output                                                                            | -                                                   |
 | `FORCE_COLOR`                    | Force color output                                                                              | -                                                   |
 
@@ -1173,8 +1235,11 @@ invocation arrived through a farm directory when the computed cache path and the
 activated one spell the same directory differently (a `DATAMITSU_CACHE_DIR` or
 `HOME` that resolves differently in this process). Without it a genuine tool
 invocation could be mistaken for a renamed `datamitsu` binary and handed to the
-CLI. Both are excluded from the farm's staleness fingerprint, so exporting them
-cannot make a farm look stale.
+CLI. `DATAMITSU_FARM_CONFIG` is written only by an `explicit-config` activation,
+which exports no `DATAMITSU_ROOT` because it has no git root; it records the
+config chain the farm was baked from, joined with the platform's list separator,
+and is informational in the same way. All three are excluded from the farm's
+staleness fingerprint, so exporting them cannot make a farm look stale.
 
 `DATAMITSU_FORCE_GIT_SUBPROCESS` applies to the config loader's memoized git-root
 lookup, which is where the pure-Go walk runs; the command handlers use a separate

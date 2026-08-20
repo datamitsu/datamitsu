@@ -1,3 +1,4 @@
+unset DATAMITSU_FARM_CONFIG
 export DATAMITSU_ROOT=$'<TMP>'
 export DATAMITSU_FARM=$'<CACHE>/cache/projects/<ROOT>/bin'
 __datamitsu_path=":$PATH:"

@@ -53,28 +53,28 @@ func runSourceRefresh(cmd *cobra.Command) error {
 	ctx := commandContext(cmd)
 	stderr := cmd.ErrOrStderr()
 
-	root, err := sourceProjectRoot(ctx)
+	target, err := resolveSourceTarget(ctx)
 	if err != nil {
 		return err
 	}
 
-	if !sourceRefreshForce && sourceManifestDecides() && sourceFarmIsFresh(root) {
-		_, _ = fmt.Fprintf(stderr, "%s: source farm for %s is already up to date\n", ldflags.PackageName, root)
+	if !sourceRefreshForce && sourceManifestDecides(target) && sourceFarmIsFresh(target) {
+		_, _ = fmt.Fprintf(stderr, "%s: source farm for %s is already up to date\n", ldflags.PackageName, target.label())
 		return nil
 	}
 
-	res, err := bakeSourceFarm(ctx, stderr)
+	res, err := bakeSourceFarm(ctx, stderr, target)
 	if err != nil {
 		return err
 	}
 
-	summarizeRefresh(stderr, res)
+	summarizeRefresh(stderr, res, target)
 	if res.MaterializeErr != nil {
 		// Refresh is the repair command: exiting 0 after failing to write the
 		// farm tells a CI step that the toolchain was updated when it still
 		// holds whatever the previous bake left. Activation may survive this;
 		// an explicit repair may not.
-		return fmt.Errorf("failed to re-bake the source farm for %s: %w", res.Plan.Root, res.MaterializeErr)
+		return fmt.Errorf("failed to re-bake the source farm for %s: %w", target.label(), res.MaterializeErr)
 	}
 	return nil
 }
@@ -89,8 +89,8 @@ func runSourceRefresh(cmd *cobra.Command) error {
 // directory is part of the question because a manifest survives an `rm -rf` of
 // the farm perfectly intact: answering "already up to date" there would refuse
 // the repair for the one state that most needs it.
-func sourceFarmIsFresh(root string) bool {
-	_, fresh := freshSourcePlanFor(root)
+func sourceFarmIsFresh(target sourceTarget) bool {
+	_, fresh := freshSourcePlanFor(target)
 	return fresh
 }
 
@@ -103,14 +103,14 @@ func sourceFarmIsFresh(root string) bool {
 // A bake that failed but left the previous farm standing reports the failure
 // instead of a count. Printing "baked N tool(s)" for a farm that was not written
 // is the one summary that would send the user away believing the repair worked.
-func summarizeRefresh(stderr io.Writer, res bakeResult) {
+func summarizeRefresh(stderr io.Writer, res bakeResult, target sourceTarget) {
 	if res.MaterializeErr != nil {
 		// The failure itself is reported twice already if this repeats it:
 		// sourcefarm wrote its own line through Options.Warn, and runSourceRefresh
 		// returns the error for the process to print. This says only what the
 		// user cannot infer from either — which farm they are left with.
 		_, _ = fmt.Fprintf(stderr, "%s: the farm for %s was not re-baked, the previous one is left in place\n",
-			ldflags.PackageName, res.Plan.Root)
+			ldflags.PackageName, target.label())
 		return
 	}
 	pending := 0
@@ -120,5 +120,5 @@ func summarizeRefresh(stderr io.Writer, res bakeResult) {
 		}
 	}
 	_, _ = fmt.Fprintf(stderr, "%s: baked %d tool(s) for %s (%d not downloaded yet, %d excluded)\n",
-		ldflags.PackageName, len(res.Plan.Entries), res.Plan.Root, pending, len(res.Plan.Excluded))
+		ldflags.PackageName, len(res.Plan.Entries), target.label(), pending, len(res.Plan.Excluded))
 }

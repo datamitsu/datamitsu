@@ -28,7 +28,13 @@ import (
 	"strings"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/env"
 )
+
+// farmDirName is the last path element of every farm directory, in either
+// namespace. internal/shim spells the same constant for the same reason: a farm
+// is recognized by path.
+const farmDirName = "bin"
 
 // Strategy is how a farm entry is materialized on disk.
 type Strategy string
@@ -233,7 +239,7 @@ func SystemLookPath(farmDir string) LookPathFunc {
 			// returns it — ending the loop before the real system binary further
 			// down PATH is ever considered.
 			candidate := dir + string(filepath.Separator) + name
-			if inFarm(candidate, farmDir) {
+			if inFarm(candidate, farmDir) || inAnyFarm(candidate) {
 				continue
 			}
 			if found, err := exec.LookPath(candidate); err == nil {
@@ -379,6 +385,42 @@ func inFarm(found, farmDir string) bool {
 	resolvedDir, errDir := filepath.EvalSymlinks(dir)
 	resolvedFarm, errFarm := filepath.EvalSymlinks(farm)
 	return errDir == nil && errFarm == nil && resolvedDir == resolvedFarm
+}
+
+// inAnyFarm reports whether found sits in a source-mode farm directory of
+// either namespace — {cache}/projects/{hash}/bin or {cache}/configs/{hash}/bin
+// — rather than only in the farm currently being baked.
+//
+// Two farms on one PATH is the normal state once machine-level config farms
+// exist: a shell activated against a `--config` chain carries that farm ahead of
+// everything the system installed, and baking a project farm from such a shell
+// resolves a name declared by both to the *config* farm's shim. Reporting that
+// shim as the system binary the project farm shadows is the exact failure the
+// farmDir skip exists to prevent — the real /opt/homebrew/bin/jq is never
+// reported, and `source status` tells the user to trust a list that names one
+// datamitsu farm shadowing another.
+//
+// Like inFarm, the comparison falls back to resolved paths, because a PATH entry
+// that went through EvalSymlinks has /var rewritten to /private/var on macOS
+// while the cache root has not.
+func inAnyFarm(found string) bool {
+	dir := filepath.Dir(filepath.Clean(found))
+	if filepath.Base(dir) != farmDirName {
+		return false
+	}
+	namespace := filepath.Dir(filepath.Dir(dir))
+	for _, name := range []string{env.ProjectFarmsDirName, env.ConfigFarmsDirName} {
+		nsDir := filepath.Clean(filepath.Join(env.GetCachePath(), name))
+		if namespace == nsDir {
+			return true
+		}
+		resolvedNS, errNS := filepath.EvalSymlinks(nsDir)
+		resolvedCandidate, errCandidate := filepath.EvalSymlinks(namespace)
+		if errNS == nil && errCandidate == nil && resolvedNS == resolvedCandidate {
+			return true
+		}
+	}
+	return false
 }
 
 // DenyListed reports whether name is refused by the hard deny-list. Exported

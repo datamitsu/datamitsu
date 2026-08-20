@@ -56,7 +56,7 @@ func marshalStatus(t *testing.T, s SourceStatus) string {
 // must serialize byte-identically every time, with every list in the order
 // BuildPlan sorted it into.
 func TestSourceStatusJSONIsStable(t *testing.T) {
-	s := buildSourceStatus(statusPlan(t))
+	s := buildSourceStatus(statusPlan(t), gitRootTarget(t, "/repo"))
 
 	first, second := marshalStatus(t, s), marshalStatus(t, s)
 	if first != second {
@@ -84,7 +84,7 @@ func TestSourceStatusJSONIsStable(t *testing.T) {
 // TestSourceStatusJSONHasRequiredKeys asserts presence and values rather than a
 // field count, so adding a field to the document never breaks this test.
 func TestSourceStatusJSONHasRequiredKeys(t *testing.T) {
-	out := marshalStatus(t, buildSourceStatus(statusPlan(t)))
+	out := marshalStatus(t, buildSourceStatus(statusPlan(t), gitRootTarget(t, "/repo")))
 
 	var doc map[string]any
 	if err := json.Unmarshal([]byte(out), &doc); err != nil {
@@ -138,11 +138,11 @@ func TestSourceStatusJSONHasRequiredKeys(t *testing.T) {
 func TestSourceStatusShadowsOmittedWhenEmpty(t *testing.T) {
 	clean := statusPlan(t)
 	clean.Shadowed = nil
-	if out := marshalStatus(t, buildSourceStatus(clean)); strings.Contains(out, "shadowed") {
+	if out := marshalStatus(t, buildSourceStatus(clean, gitRootTarget(t, "/repo"))); strings.Contains(out, "shadowed") {
 		t.Errorf("empty shadow list was serialized:\n%s", out)
 	}
 
-	out := marshalStatus(t, buildSourceStatus(statusPlan(t)))
+	out := marshalStatus(t, buildSourceStatus(statusPlan(t), gitRootTarget(t, "/repo")))
 	var doc struct {
 		Shadowed []sourcefarm.Shadow `json:"shadowed"`
 	}
@@ -162,7 +162,7 @@ func TestSourceStatusShadowsOmittedWhenEmpty(t *testing.T) {
 // was never declared, which is precisely the debugging session this command
 // exists to prevent.
 func TestSourceStatusEveryExclusionHasAReason(t *testing.T) {
-	s := buildSourceStatus(statusPlan(t))
+	s := buildSourceStatus(statusPlan(t), gitRootTarget(t, "/repo"))
 	if len(s.Excluded) == 0 {
 		t.Fatal("fixture has no exclusions to check")
 	}
@@ -176,7 +176,7 @@ func TestSourceStatusEveryExclusionHasAReason(t *testing.T) {
 	// refused" from "the field is missing" should never have to.
 	empty := statusPlan(t)
 	empty.Excluded = nil
-	if out := marshalStatus(t, buildSourceStatus(empty)); !strings.Contains(out, `"excluded": []`) {
+	if out := marshalStatus(t, buildSourceStatus(empty, gitRootTarget(t, "/repo"))); !strings.Contains(out, `"excluded": []`) {
 		t.Errorf("empty exclusion list was omitted:\n%s", out)
 	}
 }
@@ -185,7 +185,7 @@ func TestSourceStatusEveryExclusionHasAReason(t *testing.T) {
 // typed value, which is what makes it usable as the single serialization any
 // future JSON surface reuses.
 func TestSourceStatusJSONRoundTrips(t *testing.T) {
-	want := buildSourceStatus(statusPlan(t))
+	want := buildSourceStatus(statusPlan(t), gitRootTarget(t, "/repo"))
 	out := marshalStatus(t, want)
 
 	var got SourceStatus
@@ -210,7 +210,7 @@ func TestSourceStatusJSONRoundTrips(t *testing.T) {
 func TestManifestStatusStates(t *testing.T) {
 	dir := t.TempDir()
 
-	missing := manifestStatus(filepath.Join(dir, "manifest.json"))
+	missing := manifestStatus(filepath.Join(dir, "manifest.json"), gitRootTarget(t, "/repo"))
 	if missing.State != ManifestMissing || missing.Exists || missing.Fresh {
 		t.Errorf("missing manifest = %+v", missing)
 	}
@@ -219,7 +219,7 @@ func TestManifestStatusStates(t *testing.T) {
 	if err := os.WriteFile(broken, []byte("{not json"), 0o600); err != nil {
 		t.Fatalf("write broken manifest: %v", err)
 	}
-	got := manifestStatus(broken)
+	got := manifestStatus(broken, gitRootTarget(t, "/repo"))
 	if got.State != ManifestUnreadable || !got.Exists || got.Fresh {
 		t.Errorf("unreadable manifest = %+v", got)
 	}
@@ -237,7 +237,7 @@ func TestManifestStatusStates(t *testing.T) {
 	if err := os.WriteFile(future, data, 0o600); err != nil {
 		t.Fatalf("write manifest: %v", err)
 	}
-	if got := manifestStatus(future); got.State != ManifestStale || !got.Exists || got.Fresh {
+	if got := manifestStatus(future, gitRootTarget(t, "/repo")); got.State != ManifestStale || !got.Exists || got.Fresh {
 		t.Errorf("future-version manifest = %+v", got)
 	}
 }
@@ -277,7 +277,7 @@ func TestManifestStatusDemotesAFarmThatIsNotThere(t *testing.T) {
 		t.Fatalf("write manifest: %v", err)
 	}
 
-	if got := manifestStatus(manifestPath); !got.Fresh || got.State != ManifestFresh {
+	if got := manifestStatus(manifestPath, gitRootTarget(t, "/repo")); !got.Fresh || got.State != ManifestFresh {
 		t.Fatalf("an intact farm is not reported fresh: %+v; the test no longer covers the silent case", got)
 	}
 
@@ -285,7 +285,7 @@ func TestManifestStatusDemotesAFarmThatIsNotThere(t *testing.T) {
 	if err := os.Remove(filepath.Join(farm, "tofu")); err != nil {
 		t.Fatalf("remove farm entry: %v", err)
 	}
-	got := manifestStatus(manifestPath)
+	got := manifestStatus(manifestPath, gitRootTarget(t, "/repo"))
 	if got.Fresh || got.State != ManifestStale {
 		t.Errorf("a farm missing an entry = %+v, want stale", got)
 	}
@@ -297,7 +297,7 @@ func TestManifestStatusDemotesAFarmThatIsNotThere(t *testing.T) {
 	if err := os.RemoveAll(farm); err != nil {
 		t.Fatalf("remove farm: %v", err)
 	}
-	if got := manifestStatus(manifestPath); got.Fresh || got.State != ManifestStale {
+	if got := manifestStatus(manifestPath, gitRootTarget(t, "/repo")); got.Fresh || got.State != ManifestStale {
 		t.Errorf("a missing farm directory = %+v, want stale", got)
 	}
 }
@@ -306,7 +306,7 @@ func TestManifestStatusDemotesAFarmThatIsNotThere(t *testing.T) {
 // paths, the freshness word, and every list with its reason or path. It is the
 // half of D4's mitigation a person actually reads.
 func TestRenderSourceStatusReportsEverything(t *testing.T) {
-	s := buildSourceStatus(statusPlan(t))
+	s := buildSourceStatus(statusPlan(t), gitRootTarget(t, "/repo"))
 	s.Manifest = SourceManifestStatus{Path: "/cache/projects/abc/manifest.json", Exists: true, Fresh: true, State: ManifestFresh}
 
 	var buf bytes.Buffer
@@ -345,7 +345,7 @@ func TestRenderSourceStatusReportsEverything(t *testing.T) {
 func TestRenderSourceStatusEmptyFarm(t *testing.T) {
 	isolateCache(t)
 	var buf bytes.Buffer
-	if err := renderSourceStatus(&buf, buildSourceStatus(sourcefarm.Plan{Root: "/repo", FarmDir: "/farm"})); err != nil {
+	if err := renderSourceStatus(&buf, buildSourceStatus(sourcefarm.Plan{Root: "/repo", FarmDir: "/farm"}, gitRootTarget(t, "/repo"))); err != nil {
 		t.Fatalf("renderSourceStatus() error = %v", err)
 	}
 	if n := strings.Count(buf.String(), "  none\n"); n != 3 {
