@@ -56,6 +56,12 @@ const ProjectManifestFileName = "manifest.json"
 // fresh inode for the same root and bake concurrently.
 const ProjectLockFileName = "lock"
 
+// ProjectFarmsDirName is the cache namespace holding farms whose identity comes
+// from a git root. It is exported because internal/shim recognizes a farm
+// directory by path — {cache}/{namespace}/{hash}/bin — and a second spelling of
+// the name in that package would be a silent way for the two to drift apart.
+const ProjectFarmsDirName = "projects"
+
 // projectRootDir returns the per-git-root cache directory
 // ({cache}/projects/{XXH3-128(gitRoot)}), rejecting roots that are not absolute.
 func projectRootDir(gitRoot string) (string, error) {
@@ -68,7 +74,7 @@ func projectRootDir(gitRoot string) (string, error) {
 
 	return filepath.Clean(filepath.Join(
 		GetCachePath(),
-		"projects",
+		ProjectFarmsDirName,
 		HashProjectPath(gitRoot),
 	)), nil
 }
@@ -95,7 +101,7 @@ func GetProjectManifestPath(gitRoot string) (string, error) {
 	return filepath.Join(dir, ProjectManifestFileName), nil
 }
 
-// configFarmsDirName is the cache namespace holding farms whose identity comes
+// ConfigFarmsDirName is the cache namespace holding farms whose identity comes
 // from an explicitly named config chain instead of a git root.
 //
 // It is deliberately a sibling of "projects" rather than a differently-hashed
@@ -105,7 +111,7 @@ func GetProjectManifestPath(gitRoot string) (string, error) {
 // ever shared a namespace. Separate directories make the collision impossible by
 // construction, and leave a future store GC able to tell the two kinds apart by
 // path alone.
-const configFarmsDirName = "configs"
+const ConfigFarmsDirName = "configs"
 
 // ResolveConfigChain returns the resolved, absolute, cleaned form of each config
 // path, in the order given.
@@ -169,7 +175,7 @@ func configFarmRootDir(configPaths []string) (string, error) {
 	}
 	return filepath.Clean(filepath.Join(
 		GetCachePath(),
-		configFarmsDirName,
+		ConfigFarmsDirName,
 		identity,
 	)), nil
 }

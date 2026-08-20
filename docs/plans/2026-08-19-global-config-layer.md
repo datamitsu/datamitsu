@@ -220,26 +220,58 @@ if `TMPDIR` happens to sit inside a checkout.
 
 The trust boundary lives here, in one branch.
 
-- [ ] teach the shim to branch on the manifest's `origin`: a `git-root` farm resolves from
+- [x] teach the shim to branch on the manifest's `origin`: a `git-root` farm resolves from
       cwd's git root as the source-mode plan specifies; an `explicit-config` farm **never
       performs git discovery** and revalidates only its recorded config chain
-- [ ] the shim locates an explicit-config manifest through the farm path exported by
+- [x] the shim locates an explicit-config manifest through the farm path exported by
       activation, since there is no git root to derive it from. Read it from the environment,
       and fail loudly with an actionable message if it is absent or points nowhere
-- [ ] precedence when both are active: a project farm sits ahead of a config farm on `PATH`, so
+- [x] precedence when both are active: a project farm sits ahead of a config farm on `PATH`, so
       the project's pin wins by ordinary `PATH` order. Do not add resolution logic for this —
       `PATH` order is the mechanism, and it is the one users can inspect
-- [ ] a stale explicit-config farm re-bakes exactly as a project farm does, using the recorded
+- [x] a stale explicit-config farm re-bakes exactly as a project farm does, using the recorded
       config paths
-- [ ] write a test asserting an explicit-config shim performs no git-root discovery even when
+- [x] write a test asserting an explicit-config shim performs no git-root discovery even when
       cwd is deep inside a repository that has its own config — assert on the absence of the
       call, not merely on the outcome
-- [ ] write a test asserting an explicit-config shim re-bakes when its config file changes
-- [ ] write a test asserting a missing or dangling farm environment variable produces an
+- [x] write a test asserting an explicit-config shim re-bakes when its config file changes
+- [x] write a test asserting a missing or dangling farm environment variable produces an
       actionable error rather than a silent fallback
-- [ ] write a test asserting a name absent from an explicit-config manifest exits 127 and does
+- [x] write a test asserting a name absent from an explicit-config manifest exits 127 and does
       not search the rest of `PATH`
-- [ ] run `go test ./... -race` — must pass before Task 4
+- [x] run `go test ./... -race` — must pass before Task 4
+
+#### Implementation notes
+
+- `Dispatch` now takes the origin branch before it touches the working directory:
+  `explicitConfigFarm` runs first, and only when it declines does the git-root path run at all.
+  The shared tail — freshness check, rebake, lazy install, exec — moved into `runManifest`, so
+  the two origins differ only in _which manifest is found_, never in what happens afterwards.
+- The manifest is located from the farm directory the invocation arrived through, which
+  `computeThroughFarm` now records in `d.invokedFarmDir`. That directory is the answer PATH
+  order already gave, which is exactly the precedence rule the plan asks for — a project farm
+  ahead of a config farm on `PATH` means the invocation arrives through the project farm and
+  the config farm is never consulted. `DATAMITSU_FARM` is the second source, covering the case
+  where a `DATAMITSU_CACHE_DIR`/`HOME` that resolves differently in this process makes the farm
+  directory recognizable only through the exported variable. No new env var was needed.
+- A directory textually inside `{cache}/configs/*/bin` with no readable manifest is exit 127
+  naming the farm and `--config`, never a fall-through: falling through would send a
+  machine-level tool name into git discovery and, on a rebake, evaluate the config of whatever
+  repository the shell happened to be in.
+- `isFarmDir` now recognizes both namespaces (`env.ProjectFarmsDirName`,
+  `env.ConfigFarmsDirName`, exported so the two packages cannot spell them differently), so a
+  config farm is stripped from a spawned child's `PATH` and refused as a spawn target exactly
+  like a project farm.
+- The rebake spawn for an explicit-config farm always carries `--no-auto-config` on top of the
+  recorded `ConfigArgs` (or `--config <path>` synthesized from `ConfigPaths` when none were
+  recorded), and runs in the first config path's own directory rather than inheriting the
+  tool's cwd. Without the flag a rebake fired from inside a repository would merge that
+  repository's config into a machine-level farm; without the fixed directory the farm's
+  contents would depend on where the user was standing.
+- User-facing messages go through `farmLabel`/`refreshHint`, so a rootless farm is named by its
+  config chain and told to run `source refresh --config <path> --force` instead of "in that
+  repository". A git-root farm's messages are byte-identical to before — `go test ./test/cli/
+-count=2` is unchanged.
 
 ### Task 4: Wire `source` to accept the explicit path
 

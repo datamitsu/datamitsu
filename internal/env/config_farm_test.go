@@ -157,7 +157,7 @@ func TestGetConfigFarmBinPath(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ConfigFarmIdentity() error = %v", err)
 		}
-		want := filepath.Join(GetCachePath(), configFarmsDirName, identity, "bin")
+		want := filepath.Join(GetCachePath(), ConfigFarmsDirName, identity, "bin")
 		if got != want {
 			t.Errorf("GetConfigFarmBinPath() = %q, want %q", got, want)
 		}
@@ -216,8 +216,8 @@ func TestGetConfigFarmBinPath(t *testing.T) {
 		if projectNS != configNS {
 			t.Fatalf("farms are not siblings under one cache root: %q vs %q", projectNS, configNS)
 		}
-		if filepath.Base(filepath.Dir(filepath.Dir(config))) != configFarmsDirName {
-			t.Errorf("config farm is not under %q: %q", configFarmsDirName, config)
+		if filepath.Base(filepath.Dir(filepath.Dir(config))) != ConfigFarmsDirName {
+			t.Errorf("config farm is not under %q: %q", ConfigFarmsDirName, config)
 		}
 
 		// The stronger claim: even a config farm whose identity hash happened to
