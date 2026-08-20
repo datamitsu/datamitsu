@@ -391,19 +391,47 @@ The trust boundary lives here, in one branch.
 
 ### Task 6: Real-shell tests
 
-- [ ] fixture: a config outside any repository declaring a stub tool at version A, and a
+- [x] fixture: a config outside any repository declaring a stub tool at version A, and a
       project repository declaring the same tool at version B
-- [ ] assert activating the config farm outside any repository runs version A
-- [ ] assert `cd`ing into the project **without** activating it still runs version A, and that
+- [x] assert activating the config farm outside any repository runs version A
+- [x] assert `cd`ing into the project **without** activating it still runs version A, and that
       the project's config is never evaluated — the trust boundary, proven rather than assumed
-- [ ] assert activating the project as well runs version B, and that removing the project farm
+- [x] assert activating the project as well runs version B, and that removing the project farm
       from `PATH` returns to version A
-- [ ] assert branch switching inside the project still swaps versions on a single command line
+- [x] assert branch switching inside the project still swaps versions on a single command line
       with the config farm active underneath
-- [ ] assert a tool declared only in the machine-level config stays reachable from inside the
+- [x] assert a tool declared only in the machine-level config stays reachable from inside the
       project
-- [ ] assert both bash and fish, skipping cleanly when a shell is unavailable
-- [ ] run the tier — must pass before Task 7
+- [x] assert both bash and fish, skipping cleanly when a shell is unavailable
+- [x] run the tier — must pass before Task 7
+
+#### Implementation notes
+
+- The fixture grew a machine-level tier alongside the two-branch repository:
+  `fixture.machineConfig()` writes a config into a `clitest.NewBareDir` (a temp directory with
+  no repository above it, which skips cleanly when `TMPDIR` sits inside a checkout) declaring
+  `stub-tool` at `9.9.9` — a version no branch uses, so which farm answered is readable
+  straight off the output — plus `stub-only`, which exists in no repository at all. Both are
+  served from the same loopback host as the branch stubs, hash-verified for real.
+- `stubScript`, `configJS` and `assertRan` were generalized to take a name (and a list of apps)
+  rather than closing over `toolName` and one branch. `runRawIn`/`datamitsuIn` add cwd control,
+  which the machine-level cases need in both directions: a cwd outside every repository, and a
+  cwd inside one that was never activated.
+- **The trust boundary is proved by a poisoned config, not by an absence.** The repository's
+  config is replaced with one that throws on evaluation, and the test first asserts that
+  `datamitsu source bash` in that repository does fail with the marker — otherwise the case
+  would pass vacuously against a config that happens to be harmless. Only then does it run the
+  tool from the repository root under a machine-level activation and require version `9.9.9`,
+  no marker on either stream, and no farm under `{cache}/cache/projects`.
+- `TestProjectFarmWinsOverMachineFarm` asserts the mechanism, not just the outcome: it dumps
+  `PATH`, requires the project farm to appear ahead of the config farm, then drops that one
+  directory from `PATH` in the shell — no datamitsu command, no re-activation — and requires the
+  machine-level version back. A precedence table would not show up in that dump at all.
+- `configShells` is bash and fish. zsh shares bash's renderer and is already covered by the
+  project cases in `source_test.go`; repeating every machine-level case in it would triple the
+  tier's runtime for one already-proved property.
+- `go test ./test/shell/`, `go test ./... -race` and `go test ./test/cli/ -count=2` all pass,
+  and `golangci-lint run ./test/shell/` is clean.
 
 ### Task 7: Verify acceptance criteria
 

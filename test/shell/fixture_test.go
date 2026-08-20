@@ -37,6 +37,16 @@ const (
 // versionOf maps a branch to the version string its pinned stub prints.
 var versionOf = map[string]string{branchV1: "1.0.0", branchV2: "2.0.0"}
 
+// The machine-level toolchain: a config outside every repository, named with
+// --config from a shell rc file. It pins the same tool at a version no branch
+// uses, so "which farm answered" is readable straight off the output, and one
+// tool no repository declares at all, which is how a machine-level farm stays
+// useful from inside a project.
+const (
+	machineVersion  = "9.9.9"
+	machineOnlyTool = "stub-only"
+)
+
 // impostorOutput is what the same-named binary planted later on PATH prints. It
 // must never appear in any test's output: every time it does, source mode has
 // fallen through to a system binary, which is the exact failure the feature
@@ -48,13 +58,13 @@ const impostorOutput = "IMPOSTOR"
 // script keeps the fixture readable — the interpreter line also exercises the
 // stat-before-execve rule, where ENOENT is ambiguous between a missing script
 // and a missing interpreter.
-func stubScript(version string) string {
+func stubScript(name, version string) string {
 	return "#!/bin/sh\n" +
 		"case \"$1\" in\n" +
 		"  --exit) exit \"$2\" ;;\n" +
 		"  --argv) shift; for a in \"$@\"; do printf '<%s>\\n' \"$a\"; done; exit 0 ;;\n" +
 		"esac\n" +
-		"printf '" + toolName + " %s\\n' '" + version + "'\n"
+		"printf '" + name + " %s\\n' '" + version + "'\n"
 }
 
 // sha256Hex is the artifact hash the config declares. Downloads are verified
@@ -65,31 +75,48 @@ func sha256Hex(s string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// configJS renders an auto-discoverable config declaring the stub as a binary
-// app for the host target only. The libc dimension is filled in for all three
-// values so the fixture does not depend on how the host's libc was detected.
-func configJS(url, hash string) string {
+// stubApp is one binary app a rendered config declares: a name, the loopback URL
+// its artifact is served from, and the SHA-256 that artifact must verify against.
+type stubApp struct{ Name, URL, Hash string }
+
+// configJS renders a config declaring each app as a binary app for the host
+// target only. The libc dimension is filled in for all three values so the
+// fixture does not depend on how the host's libc was detected.
+func configJS(apps ...stubApp) string {
 	host := target.DetectHost(context.Background())
-	var libcs strings.Builder
-	for _, libc := range []string{"glibc", "musl", "unknown"} {
-		fmt.Fprintf(&libcs, "        %s: { url: %q, hash: %q, contentType: \"binary\" },\n", libc, url, hash)
-	}
-	return fmt.Sprintf(`globalThis.getBeforeConfigs = () => [];
-globalThis.getConfig = () => ({
-  apps: {
-    %q: { binary: { binaries: {
+	var entries strings.Builder
+	for _, app := range apps {
+		var libcs strings.Builder
+		for _, libc := range []string{"glibc", "musl", "unknown"} {
+			fmt.Fprintf(&libcs, "        %s: { url: %q, hash: %q, contentType: \"binary\" },\n", libc, app.URL, app.Hash)
+		}
+		fmt.Fprintf(&entries, `    %q: { binary: { binaries: {
       %s: {
         %s: {
 %s        },
       },
     } } },
-  },
+`, app.Name, host.OS, host.Arch, libcs.String())
+	}
+	return fmt.Sprintf(`globalThis.getBeforeConfigs = () => [];
+globalThis.getConfig = () => ({
+  apps: {
+%s  },
   tools: {},
   projectTypes: {},
 });
 globalThis.getMinVersion = () => "0.0.0";
-`, toolName, host.OS, host.Arch, libcs.String())
+`, entries.String())
 }
+
+// poisonedConfigJS throws the moment it is evaluated. It is how the trust
+// boundary is proved rather than assumed: a machine-level shim that ever
+// resolved a repository's config would have to evaluate this file, and the
+// failure would be loud instead of inferred from an absence.
+const poisonMarker = "PROJECT-CONFIG-EVALUATED"
+
+const poisonedConfigJS = `throw new Error("` + poisonMarker + `");
+`
 
 // emptyConfigJS is the config on the `none` branch: a real, valid project that
 // simply declares no apps.
@@ -107,6 +134,13 @@ type fixture struct {
 	Cache string // DATAMITSU_CACHE_DIR
 	Plant string // a directory on PATH holding an impostor named toolName
 	srv   *httptest.Server
+
+	// The machine-level config, materialized on first use by machineConfig().
+	// MachineDir is a directory git knows nothing about — no repository above it
+	// either — which is the only place the outside-a-repository case can be
+	// proved from.
+	MachineDir string
+	machineCfg string
 }
 
 // newFixture builds the fixture with a plain temp cache directory.
@@ -165,12 +199,20 @@ func newFixtureWithCache(t *testing.T, cache string) *fixture {
 // and the store write that follow are the production ones.
 func (f *fixture) startReleaseHost() {
 	mux := http.NewServeMux()
-	for branch, version := range versionOf {
-		body := stubScript(version)
-		mux.HandleFunc("/"+branch+"/"+toolName, func(w http.ResponseWriter, _ *http.Request) {
+	serve := func(path, body string) {
+		mux.HandleFunc(path, func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/octet-stream")
 			_, _ = w.Write([]byte(body))
 		})
+	}
+	for branch, version := range versionOf {
+		serve("/"+branch+"/"+toolName, stubScript(toolName, version))
+	}
+	// The machine-level tier serves both its tools from one path prefix: the
+	// version they print is what tells a machine-level answer apart from a
+	// project one.
+	for _, name := range machineTools {
+		serve("/machine/"+name, stubScript(name, machineVersion))
 	}
 	f.srv = httptest.NewServer(mux)
 	f.t.Cleanup(f.srv.Close)
@@ -223,7 +265,62 @@ func (f *fixture) initRepository() {
 func (f *fixture) writeConfigFor(branch string) {
 	f.t.Helper()
 	url := f.srv.URL + "/" + branch + "/" + toolName
-	f.writeFile("datamitsu.config.js", configJS(url, sha256Hex(stubScript(versionOf[branch]))))
+	f.writeFile("datamitsu.config.js", configJS(stubApp{
+		Name: toolName,
+		URL:  url,
+		Hash: sha256Hex(stubScript(toolName, versionOf[branch])),
+	}))
+}
+
+// machineTools are the apps the machine-level config declares. toolName collides
+// with the repository's on purpose; machineOnlyTool exists nowhere else.
+var machineTools = []string{toolName, machineOnlyTool}
+
+// machineConfig writes the machine-level config into a directory outside every
+// repository and returns its path. It is created once per fixture, so the chain
+// — and therefore the farm identity — is the same for every activation a test
+// performs.
+func (f *fixture) machineConfig() string {
+	f.t.Helper()
+	if f.machineCfg != "" {
+		return f.machineCfg
+	}
+	d := clitest.NewBareDir(f.t)
+	apps := make([]stubApp, 0, len(machineTools))
+	for _, name := range machineTools {
+		apps = append(apps, stubApp{
+			Name: name,
+			URL:  f.srv.URL + "/machine/" + name,
+			Hash: sha256Hex(stubScript(name, machineVersion)),
+		})
+	}
+	f.MachineDir = d.Dir
+	f.machineCfg = d.WriteFile("machine.config.js", configJS(apps...))
+	return f.machineCfg
+}
+
+// poisonProjectConfig replaces the repository's config with one that throws on
+// evaluation, leaving the tree dirty on purpose. Any command that resolves this
+// repository's config fails loudly from here on.
+func (f *fixture) poisonProjectConfig() {
+	f.t.Helper()
+	f.writeFile("datamitsu.config.js", poisonedConfigJS)
+}
+
+// projectFarms lists the per-git-root farm directories in the isolated cache.
+// A machine-level activation must never create one: baking a project farm is
+// what evaluating a repository's config looks like on disk.
+func (f *fixture) projectFarms() []string {
+	f.t.Helper()
+	entries, err := os.ReadDir(filepath.Join(f.Cache, "cache", "projects"))
+	if err != nil {
+		return nil
+	}
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
+		names = append(names, e.Name())
+	}
+	return names
 }
 
 func (f *fixture) writeFile(rel, content string) {
@@ -297,8 +394,15 @@ func (f *fixture) env() []string {
 // datamitsu runs the CLI in the fixture repository.
 func (f *fixture) datamitsu(args ...string) clitest.Result {
 	f.t.Helper()
+	return f.datamitsuIn(f.Dir, args...)
+}
+
+// datamitsuIn runs the CLI in an arbitrary directory, which is how the
+// machine-level activation runs from outside every repository.
+func (f *fixture) datamitsuIn(dir string, args ...string) clitest.Result {
+	f.t.Helper()
 	return clitest.Run(f.t, clitest.RunOptions{
-		Dir:      f.Dir,
+		Dir:      dir,
 		CacheDir: f.Cache,
 		Env: []string{
 			"DATAMITSU_OFFLINE=",
@@ -320,10 +424,35 @@ func (f *fixture) activation(shell string) string {
 	return res.Stdout
 }
 
-// farmDir returns the farm directory the activation points the shell at.
+// machineActivation returns the shell code a rc file gets for the machine-level
+// toolchain: `datamitsu source <shell> --config <path>`, run from outside every
+// repository so nothing about the result can come from a discovered config.
+func (f *fixture) machineActivation(shell string) string {
+	f.t.Helper()
+	cfg := f.machineConfig()
+	res := f.datamitsuIn(f.MachineDir, "source", shell, "--config", cfg)
+	if res.ExitCode != 0 {
+		f.t.Fatalf("`datamitsu source %s --config %s` exit = %d\nstderr:\n%s", shell, cfg, res.ExitCode, res.Stderr)
+	}
+	return res.Stdout
+}
+
+// farmDir returns the farm directory the project activation points the shell at.
 func (f *fixture) farmDir() string {
 	f.t.Helper()
-	for line := range strings.SplitSeq(f.activation("bash"), "\n") {
+	return f.farmDirOf(f.activation("bash"))
+}
+
+// machineFarmDir is farmDir for the machine-level farm.
+func (f *fixture) machineFarmDir() string {
+	f.t.Helper()
+	return f.farmDirOf(f.machineActivation("bash"))
+}
+
+// farmDirOf reads the farm directory out of a bash activation block.
+func (f *fixture) farmDirOf(activation string) string {
+	f.t.Helper()
+	for line := range strings.SplitSeq(activation, "\n") {
 		rest, ok := strings.CutPrefix(line, "export DATAMITSU_FARM=")
 		if !ok {
 			continue
@@ -350,8 +479,16 @@ func (f *fixture) run(shell, body string) shellResult {
 	return f.runRaw(shell, script)
 }
 
-// runRaw executes a script with no activation prepended.
+// runRaw executes a script with no activation prepended, in the repository.
 func (f *fixture) runRaw(shell, script string) shellResult {
+	f.t.Helper()
+	return f.runRawIn(shell, f.Dir, script)
+}
+
+// runRawIn executes a script with no activation prepended, in an arbitrary
+// directory — the machine-level cases need both a cwd outside every repository
+// and a cwd deep inside one that was never activated.
+func (f *fixture) runRawIn(shell, dir, script string) shellResult {
 	f.t.Helper()
 	bin := requireShell(f.t, shell)
 
@@ -374,7 +511,7 @@ func (f *fixture) runRaw(shell, script string) shellResult {
 
 	// G204: bin is a shell resolved from PATH by the test, script is test-owned.
 	cmd := exec.CommandContext(ctx, bin, args...)
-	cmd.Dir = f.Dir
+	cmd.Dir = dir
 	cmd.Env = f.env()
 	var stdout, stderr strings.Builder
 	cmd.Stdout = &stdout
@@ -413,9 +550,17 @@ var shells = []string{"bash", "zsh", "fish"}
 // pins — and never the impostor's output.
 func assertRan(t *testing.T, res shellResult, branch string) {
 	t.Helper()
-	want := toolName + " " + versionOf[branch] + "\n"
+	assertRanTool(t, res, toolName, versionOf[branch])
+}
+
+// assertRanTool is assertRan for a name and version that no branch defines — the
+// machine-level farm pins the same tool at a version of its own, and declares one
+// tool no repository has.
+func assertRanTool(t *testing.T, res shellResult, name, version string) {
+	t.Helper()
+	want := name + " " + version + "\n"
 	if res.ExitCode != 0 {
-		t.Fatalf("running %s exited %d\nstdout:\n%s\nstderr:\n%s", toolName, res.ExitCode, res.Stdout, res.Stderr)
+		t.Fatalf("running %s exited %d\nstdout:\n%s\nstderr:\n%s", name, res.ExitCode, res.Stdout, res.Stderr)
 	}
 	if strings.Contains(res.Stdout, impostorOutput) {
 		t.Fatalf("PATH fell through to the system binary:\nstdout:\n%s\nstderr:\n%s", res.Stdout, res.Stderr)
