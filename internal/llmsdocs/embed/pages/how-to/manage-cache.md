@@ -30,6 +30,17 @@ Each project gets its own isolated cache namespace:
 
 The `{hash}` is an XXH3-128 hash of the git root path. Within it, tool caches are organized by project path and tool name.
 
+[Machine-level toolchains](machine-level-toolchain.md) have no git root, so they live in a sibling namespace keyed by the config chain instead:
+
+```
+~/.cache/datamitsu/cache/configs/{hash}/
+├── bin/            # the farm PATH points at
+├── manifest.json   # what it contains, and what makes it stale
+└── lock            # the advisory bake lock
+```
+
+Here `{hash}` is an XXH3-128 hash of the resolved config chain. `datamitsu cache clear` only touches `projects/`; rebuild a machine-level farm with `datamitsu source refresh --config <path> --force`.
+
 Tools reference their cache directory using the `{toolCache}` placeholder in their operation arguments or environment variables.
 
 ## Store Structure

@@ -240,8 +240,11 @@ func TestSourceBashActivation(t *testing.T) {
 	if res.ExitCode != 0 {
 		t.Fatalf("`source bash` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
 	}
-	if !strings.HasPrefix(res.Stdout, "export DATAMITSU_ROOT=") {
-		t.Errorf("activation does not start with the root export:\n%s", res.Stdout)
+	// The clear comes first: a shell re-activated here from a machine-level farm
+	// still carries that farm's DATAMITSU_FARM_CONFIG, and a stale one reads as
+	// current everywhere a human looks at it.
+	if !strings.HasPrefix(res.Stdout, "unset DATAMITSU_FARM_CONFIG\nexport DATAMITSU_ROOT=") {
+		t.Errorf("activation does not clear the config chain and export the root:\n%s", res.Stdout)
 	}
 	if !strings.Contains(res.Stdout, "hash -r\n") {
 		t.Errorf("activation does not flush the shell's command hash:\n%s", res.Stdout)

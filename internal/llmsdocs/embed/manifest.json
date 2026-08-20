@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 53,
-  "pageSetHash": "e584173cbc56b287b1ffc81fff53a1d2",
+  "pageSetHash": "5832ae04e6b998beeef2cb2d65e9fdde",
   "pages": [
     {
       "slug": "about",
@@ -316,8 +316,8 @@
       "url": "https://datamitsu.com/docs/guides/source-mode.md",
       "title": "Source Mode",
       "description": "Put a project's declared toolchain on PATH for the current shell, so every tool runs at the version the repository pins — with lazy downloads and invisible branch switching",
-      "bytes": 15515,
-      "contentHash": "9b37ba024c4ddccb196f7b7f66d0cffb"
+      "bytes": 16264,
+      "contentHash": "0dfa59fee7d77eacc5adb72f252b48c5"
     },
     {
       "slug": "guides/supply-chain-security",
@@ -370,8 +370,8 @@
       "url": "https://datamitsu.com/docs/how-to/machine-level-toolchain.md",
       "title": "Machine-Level Toolchain",
       "description": "Activate a hash-verified, pinned toolchain from a config outside any repository, so the tools you want on your machine are on PATH in every shell",
-      "bytes": 12885,
-      "contentHash": "145f9577106b5a6d16d95b702b48d96f"
+      "bytes": 13027,
+      "contentHash": "af96f53dd9fba5a860e1ec93797f6b77"
     },
     {
       "slug": "how-to/maintain-wrapper",
@@ -388,8 +388,8 @@
       "url": "https://datamitsu.com/docs/how-to/manage-cache.md",
       "title": "Manage Cache",
       "description": "How to manage datamitsu's cache, store, and per-project data",
-      "bytes": 4053,
-      "contentHash": "738fbddc8fbec4a4426de59ebd76e846"
+      "bytes": 4622,
+      "contentHash": "3df2a582876d49d238dc5e9567915a8a"
     },
     {
       "slug": "how-to/use-in-alpine",
@@ -433,8 +433,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 64855,
-      "contentHash": "20ba1e5e4eda62c105a5f0ec0e3ee78f"
+      "bytes": 65159,
+      "contentHash": "336796dcbde445407faca44903fb54e4"
     },
     {
       "slug": "reference/comparison",

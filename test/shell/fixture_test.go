@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -312,9 +314,17 @@ func (f *fixture) poisonProjectConfig() {
 // what evaluating a repository's config looks like on disk.
 func (f *fixture) projectFarms() []string {
 	f.t.Helper()
-	entries, err := os.ReadDir(filepath.Join(f.Cache, "cache", "projects"))
-	if err != nil {
+	dir := filepath.Join(f.Cache, "cache", "projects")
+	entries, err := os.ReadDir(dir)
+	if errors.Is(err, fs.ErrNotExist) {
+		// No namespace at all is the strongest form of "no project farm", and
+		// the expected state after a machine-level activation.
 		return nil
+	}
+	if err != nil {
+		// Any other failure must not read as an empty list: the assertion this
+		// feeds would then pass without having looked at anything.
+		f.t.Fatalf("read %s: %v", dir, err)
 	}
 	names := make([]string, 0, len(entries))
 	for _, e := range entries {

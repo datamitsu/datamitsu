@@ -1,6 +1,6 @@
 # Plan: Activation outside a git repository — machine-level toolchains via explicit `--config`
 
-**Status:** ready for implementation.
+**Status:** implemented.
 **Date:** 2026-08-19.
 **Depends on:** `docs/plans/2026-08-19-cli-startup-cost.md` and
 `docs/plans/2026-08-19-source-mode.md`. This plan is decision **D3** of the source-mode plan.

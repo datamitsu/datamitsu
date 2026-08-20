@@ -513,6 +513,48 @@ func TestDispatchRebakeDroppingTheEntryExits127(t *testing.T) {
 	}
 }
 
+// TestDispatchRebakeThatLandsElsewhereExits127 covers the upgrade path a
+// format-2 build left behind: a git-root farm baked from an explicit --config
+// recorded those flags, and replaying them now resolves an explicit-config
+// target, so `source refresh` succeeds by writing a farm in the other namespace
+// and this manifest is never touched. The spawn reports no error and the reload
+// works, so nothing here fails on its own — only the format check catches it.
+// Serving the entries back would be permanent, since every later invocation
+// repeats exactly this sequence.
+func TestDispatchRebakeThatLandsElsewhereExits127(t *testing.T) {
+	h := newHarness(t)
+	tool := h.tool("tofu")
+	stale := sourcefarm.Manifest{
+		FormatVersion: sourcefarm.ManifestFormatVersion - 1,
+		ConfigArgs:    []string{"--config", "/etc/datamitsu/datamitsu.config.js"},
+		Entries:       []sourcefarm.Entry{{Name: "tofu", Command: tool, Installed: true}},
+	}
+	h.writeManifest(stale)
+	h.d.Validate = func(sourcefarm.Manifest) bool { return false }
+	spawns := 0
+	h.spawnFunc = func([]string) error {
+		// The refresh baked the explicit-config farm and left this one alone.
+		spawns++
+		return nil
+	}
+	h.invokeThroughFarm("tofu")
+
+	code, handled := h.d.Dispatch()
+
+	if !handled || code != ExitNotFound {
+		t.Fatalf("Dispatch() = (%d, %v), want (%d, true)", code, handled, ExitNotFound)
+	}
+	if spawns != 1 {
+		t.Errorf("spawned %d refreshes, want 1", spawns)
+	}
+	if len(h.execs) != 0 {
+		t.Errorf("Dispatch() ran %v from a farm no refresh can update", h.execs)
+	}
+	if !strings.Contains(h.stderr.String(), "source refresh --force") {
+		t.Errorf("stderr %q does not tell the user how to repair the farm", h.stderr.String())
+	}
+}
+
 func TestDispatchInstallsOnDemandExactlyOnce(t *testing.T) {
 	h := newHarness(t)
 	target := filepath.Join(t.TempDir(), "tflint")

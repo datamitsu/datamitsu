@@ -170,10 +170,24 @@ func TestConfigActivationExportsTheChain(t *testing.T) {
 
 	bash := renderBash(a)
 	fish := renderFish(a)
-	for name, out := range map[string]string{"bash": bash, "fish": fish} {
-		if strings.Contains(out, env.SourceRootVarName()) {
+	for name, clear := range map[string]string{
+		"bash": "unset " + env.SourceRootVarName() + "\n",
+		"fish": "set -e -g " + env.SourceRootVarName() + "\n",
+	} {
+		out := map[string]string{"bash": bash, "fish": fish}[name]
+		if strings.Contains(out, "export "+env.SourceRootVarName()) ||
+			strings.Contains(out, "set -gx "+env.SourceRootVarName()) {
 			t.Errorf("%s activation exported a git root for a rootless farm:\n%s", name, out)
 		}
+		// A shell re-activated from a project farm carries DATAMITSU_ROOT from
+		// that activation. Leaving it behind would have this shell advertise a
+		// repository it is no longer pinned to — well-formed and wrong, which a
+		// prompt and a bug report both read as current.
+		if !strings.Contains(out, clear) {
+			t.Errorf("%s activation did not clear a stale %s:\n%s", name, env.SourceRootVarName(), out)
+		}
+	}
+	for name, out := range map[string]string{"bash": bash, "fish": fish} {
 		if !strings.Contains(out, env.SourceFarmConfigVarName()) {
 			t.Errorf("%s activation did not export the config chain:\n%s", name, out)
 		}
@@ -294,5 +308,80 @@ func TestConfigFarmLabelNamesTheChain(t *testing.T) {
 	}
 	if got := gitRootTarget(t, "/repo").label(); got != "/repo" {
 		t.Errorf("a git-root farm is labelled %q, want /repo", got)
+	}
+}
+
+// TestPreviousConfigFarmSurvivesAFailedBake covers the fallback on the rootless
+// path. A machine-level config lives in a shell rc file, so a config that stops
+// evaluating — an edit mid-save, a remote import unreachable offline — would
+// otherwise leave every new shell on the machine with no toolchain at all. The
+// git-root equivalent is TestPreviousSourcePlanServesAStaleFarm; this is the
+// same guarantee for a farm that has no repository to fall back through.
+func TestPreviousConfigFarmSurvivesAFailedBake(t *testing.T) {
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
+	cfg := writeMachineConfigFile(t, "machine.config.ts")
+	target := configTarget(t, cfg)
+
+	if err := os.MkdirAll(target.FarmDir, 0o700); err != nil {
+		t.Fatalf("create config farm: %v", err)
+	}
+	writeFarmEntries(t, target.FarmDir, "machine-tool")
+
+	plan := sourcefarm.Plan{
+		FarmDir: target.FarmDir,
+		Entries: []sourcefarm.Entry{{Name: "machine-tool", Installed: true}},
+	}
+	watch := sourcefarm.WatchSet(targetWatchPaths(target, nil))
+	m := sourcefarm.BuildConfigManifest(plan, target.ConfigPaths, watch)
+	m.ConfigArgs = sourceConfigArgs(target)
+	data, err := sourcefarm.Encode(m)
+	if err != nil {
+		t.Fatalf("Encode() error = %v", err)
+	}
+	if err := os.WriteFile(target.ManifestPath, data, 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	// Editing the chain is what makes the manifest stale, and it is also the
+	// only thing an explicit-config farm watches.
+	if err := os.WriteFile(target.ConfigPaths[0], []byte("// changed\n"), 0o600); err != nil {
+		t.Fatalf("rewrite the config: %v", err)
+	}
+	if _, fresh := freshSourcePlanFor(target); fresh {
+		t.Fatal("a stale config farm was served by the activation fast path")
+	}
+
+	got, ok := previousSourcePlan(target)
+	if !ok {
+		t.Fatal("a stale machine-level farm still on disk was not offered as the fallback")
+	}
+	if got.FarmDir != target.FarmDir {
+		t.Errorf("fallback farm = %q, want %q", got.FarmDir, target.FarmDir)
+	}
+	if got.Root != "" {
+		t.Errorf("fallback plan carries root %q, want none for a rootless farm", got.Root)
+	}
+	if len(got.Entries) != 1 || got.Entries[0].Name != "machine-tool" {
+		t.Errorf("fallback entries = %+v, want machine-tool", got.Entries)
+	}
+	if !farmOnDisk(got, target) {
+		t.Error("farmOnDisk() refused a machine-level farm that is present and readable")
+	}
+
+	// The chain check applies to the fallback too: a farm baked from a different
+	// chain must never be activated in place of the one that was asked for.
+	other := target
+	other.ConfigPaths = []string{filepath.Join(filepath.Dir(target.ConfigPaths[0]), "other.config.ts")}
+	if _, ok := previousSourcePlan(other); ok {
+		t.Error("a farm baked from a different config chain was offered as the fallback")
+	}
+
+	// Nothing on disk to fall back to is the one state that must report failure
+	// instead of activating a directory that is not there.
+	if err := os.RemoveAll(target.FarmDir); err != nil {
+		t.Fatalf("remove the farm directory: %v", err)
+	}
+	if _, ok := previousSourcePlan(target); ok {
+		t.Error("a machine-level farm that is gone was offered as the fallback")
 	}
 }

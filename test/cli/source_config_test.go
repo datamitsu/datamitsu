@@ -265,8 +265,8 @@ func TestSourceConfigActivatesOutsideARepository(t *testing.T) {
 	// A farm with no git root exports the chain that identifies it, and
 	// deliberately not a root variable: an empty DATAMITSU_ROOT would read as a
 	// repository that could not be determined.
-	if !strings.HasPrefix(res.Stdout, "export DATAMITSU_FARM=") {
-		t.Errorf("activation does not start with the farm export:\n%s", res.Stdout)
+	if !strings.HasPrefix(res.Stdout, "unset DATAMITSU_ROOT\nexport DATAMITSU_FARM=") {
+		t.Errorf("activation does not clear the root and export the farm:\n%s", res.Stdout)
 	}
 	if strings.Contains(res.Stdout, "DATAMITSU_ROOT=") {
 		t.Errorf("a rootless farm exported a git root:\n%s", res.Stdout)

@@ -67,7 +67,17 @@ import (
 // for every local build — so a stale format-1 farm would otherwise keep exec'ing
 // partially installed runtime-managed apps until an unrelated edit invalidated
 // it. Any future field the shim's correctness depends on needs the same bump.
-const ManifestFormatVersion = 2
+//
+// Version 3 added Manifest.Origin and Manifest.ConfigPaths, and with them a
+// second farm namespace. The bump retires the one manifest a format-2 build
+// could write that this build can no longer refresh in place: a git-root farm
+// baked from an explicit --config recorded those flags in ConfigArgs, and
+// replaying them now resolves an explicit-config target, so the rebake writes a
+// farm under {cache}/configs/ and leaves the git-root manifest exactly as stale
+// as it was. Without the bump that manifest is still readable and still
+// UsableStale, so the shim would serve its entries back after every failed-to-
+// land rebake — silently, forever, from a farm nothing can update.
+const ManifestFormatVersion = 3
 
 // Origin records how the farm's root was established.
 type Origin string

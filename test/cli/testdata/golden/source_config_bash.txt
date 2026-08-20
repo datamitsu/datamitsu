@@ -1,3 +1,4 @@
+unset DATAMITSU_ROOT
 export DATAMITSU_FARM=$'<CACHE>/cache/configs/<CHAIN>/bin'
 export DATAMITSU_FARM_CONFIG=$'<TMP>/machine.config.js'
 __datamitsu_path=":$PATH:"

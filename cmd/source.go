@@ -538,11 +538,16 @@ func bakeSourceFarm(ctx context.Context, stderr io.Writer, target sourceTarget) 
 	}
 
 	watch := watchSetSince(prior, sourcefarm.WatchSet(targetWatchPaths(target, ConfigChainFiles())))
-	m := sourcefarm.BuildManifest(plan, target.Origin, watch)
+	// Built once, on one branch or the other: BuildConfigManifest calls
+	// BuildManifest itself, so computing both would hash the whole watch set and
+	// every DATAMITSU_* variable twice and throw the first result away.
+	var m sourcefarm.Manifest
 	if target.explicitConfig() {
 		// The recorded chain is the resolved one, so the manifest describes the
 		// exact input its own farm path was hashed from.
 		m = sourcefarm.BuildConfigManifest(plan, target.ConfigPaths, watch)
+	} else {
+		m = sourcefarm.BuildManifest(plan, target.Origin, watch)
 	}
 	m.ConfigArgs = sourceConfigArgs(target)
 
@@ -643,7 +648,31 @@ func resolveSourcePlanFor(ctx context.Context, target sourceTarget) (sourcefarm.
 	// sourceConfigArgs, which records the same decision for the shim to replay.
 	noAutoConfig := NoAutoConfig || target.explicitConfig()
 
-	cfg, _, _, err := loadConfigWithPaths(ctx, BeforeConfigPaths, noAutoConfig, ConfigPaths)
+	var before, chain []string
+	pin := target.Root
+	if target.explicitConfig() {
+		// Loaded from the *resolved* chain, in the one flag shape the shim
+		// replays (sourceConfigArgs flattens --before-config into --config,
+		// because with discovery off there is no auto config for it to precede).
+		// Reading the raw flag values here instead would make the first bake and
+		// every later rebake two different loads of the same farm.
+		before, chain = nil, target.ConfigPaths
+		pin = configChainDir(target.ConfigPaths)
+	} else {
+		// The pin is about to move the working directory these were typed
+		// relative to. Resolving them first is what keeps `--before-config
+		// ./extra.ts` naming the same file after the move; the explicit-config
+		// branch needs no equivalent because its chain is already absolute.
+		before, chain = absPaths(BeforeConfigPaths), ConfigPaths
+	}
+
+	restore, err := pinDir(pin)
+	if err != nil {
+		return sourcefarm.Plan{}, err
+	}
+	defer restore()
+
+	cfg, _, _, err := loadConfigWithPaths(ctx, before, noAutoConfig, chain)
 	if err != nil {
 		return sourcefarm.Plan{}, fmt.Errorf("failed to load config: %w", err)
 	}
@@ -662,6 +691,66 @@ func resolveSourcePlanFor(ctx context.Context, target sourceTarget) (sourcefarm.
 
 	b := binmanager.New(cfg.Apps, cfg.Bundles, runtimemanager.New(cfg.Runtimes))
 	return sourcefarm.BuildPlan(target.Root, target.FarmDir, cfg.Apps, b, sourcefarm.SystemLookPath(target.FarmDir)), nil
+}
+
+// pinDir moves the working directory to dir for the duration of a config
+// resolution and returns the undo.
+//
+// A farm's contents must not depend on which directory the user happened to be
+// standing in when they activated it. Config evaluation sees cwd-derived inputs
+// through facts() — facts().isMonorepo is true in a subdirectory and false at
+// the git root — so the same config resolved from a subdirectory and from the
+// root can produce two different toolchains. The shim already pins every rebake
+// spawn to one directory (shim.spawnDir: the manifest root, or the directory
+// holding the first config in the chain when there is no root); pinning the
+// first bake to the same one is what makes the bake and every later rebake one
+// computation instead of two that silently disagree, with nothing in the
+// staleness key to report the difference.
+//
+// Callers pass an absolute directory and an already-absolute config chain, so
+// moving the working directory cannot change which files the load reads.
+func pinDir(dir string) (func(), error) {
+	if dir == "" {
+		return func() {}, nil
+	}
+	// A working directory that cannot be read has been removed out from under the
+	// process. That costs the restore, not the pin: resolving from the pinned
+	// directory is still the right computation, and the alternative — a hard
+	// failure — would refuse to activate over a directory nothing here needs.
+	prev, wdErr := os.Getwd()
+	if wdErr != nil {
+		prev = ""
+	}
+
+	if err := os.Chdir(dir); err != nil {
+		return nil, fmt.Errorf("resolve the config from %s: %w", dir, err)
+	}
+	if prev == "" {
+		return func() {}, nil
+	}
+	return func() { _ = os.Chdir(prev) }, nil
+}
+
+// configChainDir returns the directory holding the first config in an
+// already-resolved chain, or "" for an empty chain.
+func configChainDir(configPaths []string) string {
+	if len(configPaths) == 0 {
+		return ""
+	}
+	return filepath.Dir(configPaths[0])
+}
+
+// absPaths returns paths made absolute, each falling back to itself when it
+// cannot be (see absOrSelf).
+func absPaths(paths []string) []string {
+	if len(paths) == 0 {
+		return paths
+	}
+	out := make([]string, len(paths))
+	for i, p := range paths {
+		out[i] = absOrSelf(p)
+	}
+	return out
 }
 
 // sourceProjectRoot returns the git root whose config the farm is built from, or
@@ -747,6 +836,9 @@ func renderBash(a sourceActivation) string {
 	farmVar := env.SourceFarmVarName()
 
 	var b strings.Builder
+	for _, name := range a.staleVars() {
+		fmt.Fprintf(&b, "unset %s\n", name)
+	}
 	for _, v := range a.vars() {
 		fmt.Fprintf(&b, "export %s=%s\n", v.name, shellquote.Bash(v.value))
 	}
@@ -777,6 +869,9 @@ func renderBash(a sourceActivation) string {
 // bash cache-flush line has no counterpart here.
 func renderFish(a sourceActivation) string {
 	var b strings.Builder
+	for _, name := range a.staleVars() {
+		fmt.Fprintf(&b, "set -e -g %s\n", name)
+	}
 	for _, v := range a.vars() {
 		fmt.Fprintf(&b, "set -gx %s %s\n", v.name, shellquote.Fish(v.value))
 	}
@@ -835,4 +930,24 @@ func (a sourceActivation) vars() []shellVar {
 		{env.SourceRootVarName(), a.Root},
 		{env.SourceFarmVarName(), a.FarmDir},
 	}
+}
+
+// staleVars returns the identity variables this origin does not own, which the
+// activation must clear.
+//
+// Re-activating one shell against the other kind of farm is the intended
+// workflow — a machine-level activation in an rc file, then `datamitsu source
+// bash` after cd-ing into a repository — and each origin exports only its own
+// identity. Left alone, the previous one survives: a shell now pinned to a
+// repository still advertises DATAMITSU_FARM_CONFIG naming a machine-level
+// chain, or the reverse. That is worse than an empty value, because a prompt or
+// a bug report reads a stale-but-well-formed path as current.
+//
+// Both variables are in env.environExcluded, so clearing one cannot perturb any
+// farm's staleness key.
+func (a sourceActivation) staleVars() []string {
+	if a.Root == "" {
+		return []string{env.SourceRootVarName()}
+	}
+	return []string{env.SourceFarmConfigVarName()}
 }

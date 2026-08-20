@@ -86,15 +86,17 @@ The emitted code exports the farm directory and puts it first on `PATH`:
 
 ```console
 $ datamitsu source fish --config ~/.config/datamitsu/datamitsu.config.js
+set -e -g DATAMITSU_ROOT
 set -gx DATAMITSU_FARM '/home/you/.cache/datamitsu/cache/configs/8d1f…/bin'
 set -gx DATAMITSU_FARM_CONFIG '/home/you/.config/datamitsu/datamitsu.config.js'
 fish_add_path --global --move --path '/home/you/.cache/datamitsu/cache/configs/8d1f…/bin'
 ```
 
-There is deliberately **no `DATAMITSU_ROOT`**: this farm has no git root, and an empty one would
-read as "the repository could not be determined". `DATAMITSU_FARM_CONFIG` records the config
-chain it was baked from, joined like `PATH`. Both are informational — no tool resolves through
-them.
+`DATAMITSU_ROOT` is deliberately **unset** rather than set to an empty value: this farm has no
+git root, and an empty one would read as "the repository could not be determined". Unsetting it
+also clears whatever a project activation left behind in the same shell.
+`DATAMITSU_FARM_CONFIG` records the config chain it was baked from, joined like `PATH`. Both are
+informational — no tool resolves through them.
 
 The farm itself lives in its own namespace, keyed by the resolved config chain rather than by a
 root:

@@ -857,7 +857,7 @@ datamitsu cache clear
 | `--all`     | Clear all project caches (not just the current project) |
 | `--dry-run` | Show what would be deleted without deleting             |
 
-:::warning This removes source-mode farms
+:::warning This removes project source-mode farms
 
 A project's [source-mode](../guides/source-mode.md) farm and manifest live in the
 same per-project cache directory, so `cache clear` deletes them along with the
@@ -865,6 +865,11 @@ lint/fix caches. Every shell already activated for that project then reports exi
 127 for every declared tool — the shim deliberately does not re-bake a farm that
 is not there. Run `datamitsu source refresh` (or re-activate) afterwards, and use
 `--dry-run` first to see what would go.
+
+[Machine-level farms](../how-to/machine-level-toolchain.md) created with
+`datamitsu source --config <path>` live in a separate `configs/` namespace and are
+**not** removed by `cache clear`, not even with `--all`. Rebuild one deliberately
+with `datamitsu source refresh --config <path> --force`.
 
 :::
 

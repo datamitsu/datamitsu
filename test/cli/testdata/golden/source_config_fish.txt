@@ -1,3 +1,4 @@
+set -e -g DATAMITSU_ROOT
 set -gx DATAMITSU_FARM '<CACHE>/cache/configs/<CHAIN>/bin'
 set -gx DATAMITSU_FARM_CONFIG '<TMP>/machine.config.js'
 fish_add_path --global --move --path '<CACHE>/cache/configs/<CHAIN>/bin'
