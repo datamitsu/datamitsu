@@ -8,6 +8,15 @@ Activation downloads nothing: a tool is fetched the first time it is actually
 run. Switching branches needs no re-activation — the next tool invocation
 notices the config changed and re-resolves itself.
 
+With --config the toolchain comes from a config you name instead of from a
+project, so it works outside any repository — a machine-level toolchain for a
+shell rc file:
+
+  datamitsu source fish --config ~/.config/datamitsu/datamitsu.config.ts | source
+
+Such a farm never evaluates a project's config: entering a repository's
+toolchain stays an explicit datamitsu source in that repository.
+
 stdout carries ONLY shell code. Warnings — tools not downloaded yet, system
 binaries this shadows — go to stderr, so the output is always safe to eval.
 

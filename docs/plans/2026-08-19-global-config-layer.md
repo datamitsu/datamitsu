@@ -275,24 +275,72 @@ The trust boundary lives here, in one branch.
 
 ### Task 4: Wire `source` to accept the explicit path
 
-- [ ] `datamitsu source <shell> --config <path>` bakes and activates the config farm; the
+- [x] `datamitsu source <shell> --config <path>` bakes and activates the config farm; the
       error added in the source-mode plan's Task 9 now only fires when neither a discovered
       config nor `--config` is available
-- [ ] `source status` and `source refresh` work against a config farm exactly as they do
+- [x] `source status` and `source refresh` work against a config farm exactly as they do
       against a project farm, and `status` reports which origin the farm has
-- [ ] activation exports the farm path and the config paths, not a git root that does not exist
-- [ ] the deny-list, shell-app exclusion and shadow reporting from the source-mode plan apply
+- [x] activation exports the farm path and the config paths, not a git root that does not exist
+- [x] the deny-list, shell-app exclusion and shadow reporting from the source-mode plan apply
       unchanged. Shadow reporting matters **more** here: a machine-level farm is first on
       `PATH` in every shell, so the list of system binaries it takes over is the thing the user
       most needs to be able to read
-- [ ] write a test asserting `source <shell> --config <path>` outside a repository emits valid
+- [x] write a test asserting `source <shell> --config <path>` outside a repository emits valid
       shell code and exits 0
-- [ ] write a test asserting it downloads nothing, under `DATAMITSU_OFFLINE=1`
-- [ ] write a test asserting `source status` reports `origin: explicit-config` and the config
+- [x] write a test asserting it downloads nothing, under `DATAMITSU_OFFLINE=1`
+- [x] write a test asserting `source status` reports `origin: explicit-config` and the config
       paths
-- [ ] write a test asserting a config declaring a shell app or a deny-listed name still
+- [x] write a test asserting a config declaring a shell app or a deny-listed name still
       excludes it, with a reason
-- [ ] run tests — must pass before Task 5
+- [x] run tests — must pass before Task 5
+
+#### Implementation notes
+
+- The branch is taken once, in `resolveSourceTarget` (`cmd/source.go`), which every `source`
+  leaf now calls first. A `sourceTarget` carries the origin, the identity (a git root **or** a
+  resolved chain) and the two paths derived from it; everything downstream — freshness, bake,
+  activation, status, refresh — is shared. `--config` present means an explicit-config target,
+  in a repository or out of one.
+- **An explicit-config bake never discovers.** `resolveSourcePlanFor` forces `noAutoConfig`,
+  and `sourceConfigArgs` records `--no-auto-config` in the manifest, so the bake and every
+  rebake the shim spawns resolve the same chain. Without it, `source fish --config ~/tools.ts`
+  run from inside a repository would merge that repository's config into a machine-level farm —
+  and the first rebake (which always carries the flag, per Task 3) would silently drop
+  everything it contributed. That merge is what the pre-Task-4 `--config` handling did; it is
+  now a farm of its own, keyed by the chain rather than by the root it happened to run in.
+- `--before-config` files are part of the identity, not a modifier of it: the chain is
+  before-configs then configs, hashed as one. Two invocations differing only in them are two
+  farms rather than one farm baked twice from different inputs.
+- Recorded `ConfigArgs` are rebuilt from the _resolved_ chain, so the three spellings that
+  already collapse to one farm also record one fragment. Recording the typed spelling would
+  make an absolute and a relative invocation rebake each other forever through
+  `manifestChainMatches`.
+- **The manifest fast path is now open to config farms** (`sourceManifestDecides`). It is safe
+  by construction rather than by permission: such a farm's manifest does not live at a git
+  root's path but at the path the chain itself hashes to, so the only manifest an invocation
+  can find is one baked from those files. Activation lives in a shell rc file, so the
+  alternative is a full config resolution in every shell and every tmux pane. `loadSourcePlan`
+  and `manifestStatus` additionally compare `Origin`, so neither kind of farm can ever be
+  served to the other.
+- Activation exports `DATAMITSU_FARM` + a new `DATAMITSU_FARM_CONFIG` for a rootless farm, and
+  deliberately no `DATAMITSU_ROOT` — an empty one reads as "the repository could not be
+  determined". ➕ This is the one new `DATAMITSU_*` variable the plan said it did not expect to
+  need; it goes through `internal/env` (`e.go`, `env.go`, `env_test.go`) and is in
+  `environExcluded`, like the other two activation markers, so it cannot make every command in
+  an activated shell report the manifest stale. `clitest.BaseEnv` already strips every
+  `DATAMITSU_*`, so no harness change was needed.
+- `source status` gained `origin` (never omitted) and `configPaths` (`omitempty`); the human
+  report prints an `origin:` line and, for a rootless farm, `config:` lines in place of `root:`.
+  There is no golden for the human report, so nothing shifted. Every other user-facing message
+  goes through `sourceTarget.label()`, so a rootless farm is named by its chain.
+- Only one golden changed: `source_help`, which now documents `--config`. A git-root
+  activation's stdout, stderr and manifest bytes are unchanged — `go test ./test/cli/ -count=2`
+  and `go test ./test/shell/` both pass.
+- Tests: `cmd/source_config_test.go` (target resolution, recorded args, watch set, activation
+  vars, origin-crossed manifests, status shape, labels) and `test/cli/source_config_test.go`
+  (activation outside a repository in bash and fish, downloads-nothing offline, status origin
+  and chain, exclusions with reasons, no merge of a surrounding repository, refresh no-op and
+  rebake, one identity per chain).
 
 ### Task 5: Blackbox tests and goldens
 
@@ -392,9 +440,15 @@ resolution logic to get wrong — and the user can see the whole thing with `ech
 ### What this plan deliberately does not add
 
 No `~/.config/datamitsu` auto-discovery, no `GetUserConfigPath()`, no new config source, no
-`--no-user-config`, no `internal/clitest` `BaseEnv` change, and no new environment variable.
-An earlier draft of this plan had all six. They existed only to make an implicit discovery
-layer safe; naming the config removes the need for every one of them.
+`--no-user-config` and no `internal/clitest` `BaseEnv` change. An earlier draft of this plan
+had all five. They existed only to make an implicit discovery layer safe; naming the config
+removes the need for every one of them.
+
+➕ One item on that list did not survive Task 4: `DATAMITSU_FARM_CONFIG`, the activation
+marker naming the chain a rootless farm was baked from. It is the counterpart of the existing
+`DATAMITSU_ROOT`, which such a farm has nothing truthful to put in. It is informational — no
+tool resolves through it — and it is in `environExcluded`, so it does not enter any
+fingerprint. It changes no discovery rule, which is what the list is actually about.
 
 ## Post-Completion
 

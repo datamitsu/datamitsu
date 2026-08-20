@@ -6,7 +6,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"github.com/datamitsu/datamitsu/internal/sourcefarm"
 
@@ -46,8 +45,21 @@ const (
 // Every list is sorted by name by BuildPlan, so marshalling the same farm twice
 // is byte-identical.
 type SourceStatus struct {
-	// Root is the authoritative git root the farm was built for.
+	// Origin is how the farm's identity was established: "git-root" for a farm
+	// discovered from a repository, "explicit-config" for one named with
+	// --config. It is never omitted — which of the two a farm is decides what
+	// the shim does with it, so a reader must not have to infer it from the
+	// presence of another field.
+	Origin sourcefarm.Origin `json:"origin"`
+
+	// Root is the authoritative git root the farm was built for, and is empty
+	// for an explicit-config farm.
 	Root string `json:"root"`
+
+	// ConfigPaths is the resolved config chain an explicit-config farm was baked
+	// from — its identity, and what the user would pass to --config again.
+	// Omitted for a git-root farm, which has none.
+	ConfigPaths []string `json:"configPaths,omitempty"`
 
 	// FarmDir is the directory whose entries go on PATH.
 	FarmDir string `json:"farmDir"`
@@ -123,12 +135,17 @@ func init() {
 // It deliberately does not materialize: status is a diagnostic, and a diagnostic
 // that repairs what it is describing cannot be used to observe a broken farm.
 func runSourceStatus(cmd *cobra.Command) error {
-	plan, err := resolveSourcePlan(commandContext(cmd))
+	ctx := commandContext(cmd)
+	target, err := resolveSourceTarget(ctx)
+	if err != nil {
+		return err
+	}
+	plan, err := resolveSourcePlanFor(ctx, target)
 	if err != nil {
 		return err
 	}
 
-	status := buildSourceStatus(plan)
+	status := buildSourceStatus(plan, target)
 
 	if sourceStatusJSON {
 		// Warnings are still a human's business and still belong on stderr;
@@ -148,13 +165,15 @@ func runSourceStatus(cmd *cobra.Command) error {
 // manifest records what was true at bake time, and the question status answers is
 // what is true now — including a store path that has been deleted out from under
 // a farm that is otherwise perfectly fresh.
-func buildSourceStatus(plan sourcefarm.Plan) SourceStatus {
+func buildSourceStatus(plan sourcefarm.Plan, target sourceTarget) SourceStatus {
 	status := SourceStatus{
-		Root:     plan.Root,
-		FarmDir:  plan.FarmDir,
-		Entries:  plan.Entries,
-		Excluded: plan.Excluded,
-		Shadowed: plan.Shadowed,
+		Origin:      target.Origin,
+		Root:        plan.Root,
+		ConfigPaths: target.ConfigPaths,
+		FarmDir:     plan.FarmDir,
+		Entries:     plan.Entries,
+		Excluded:    plan.Excluded,
+		Shadowed:    plan.Shadowed,
 	}
 	if status.Entries == nil {
 		status.Entries = []sourcefarm.Entry{}
@@ -163,17 +182,16 @@ func buildSourceStatus(plan sourcefarm.Plan) SourceStatus {
 		status.Excluded = []sourcefarm.Excluded{}
 	}
 
-	manifestPath, err := env.GetProjectManifestPath(plan.Root)
-	if err != nil {
-		status.Manifest = SourceManifestStatus{State: ManifestMissing, Error: err.Error()}
+	if target.ManifestPath == "" {
+		status.Manifest = SourceManifestStatus{State: ManifestMissing}
 		return status
 	}
-	status.Manifest = manifestStatus(manifestPath)
+	status.Manifest = manifestStatus(target.ManifestPath, target)
 	return status
 }
 
 // manifestStatus reads one manifest and classifies it.
-func manifestStatus(path string) SourceManifestStatus {
+func manifestStatus(path string, target sourceTarget) SourceManifestStatus {
 	s := SourceManifestStatus{Path: path}
 	if _, err := os.Stat(path); err != nil {
 		s.State = ManifestMissing
@@ -193,7 +211,9 @@ func manifestStatus(path string) SourceManifestStatus {
 	// unchanged: it describes a farm built from apps this chain never declared.
 	// Reporting it fresh would make status disagree with the entries printed
 	// beside it, which come from the chain resolved now.
-	if manifestChainMatches(m) && sourcefarm.Validate(m) {
+	// A manifest recording the other origin is stale for the same reason: the
+	// farm it describes is not the one this invocation selected.
+	if m.Origin == target.Origin && manifestChainMatches(m, target) && sourcefarm.Validate(m) {
 		// Freshness watches the *tree*, never the farm, so a manifest whose farm
 		// directory was deleted — or which is missing one entry — validates
 		// clean. That is the one shadowing failure no shim can report: with no
@@ -257,7 +277,17 @@ func writeStatusSection(b *strings.Builder, title string, rows [][2]string) {
 func renderSourceStatus(out io.Writer, s SourceStatus) error {
 	var b strings.Builder
 
-	fmt.Fprintf(&b, "root:     %s\n", s.Root)
+	fmt.Fprintf(&b, "origin:   %s\n", s.Origin)
+	// A farm has one identity or the other, never both, and the line printed is
+	// the one that exists: an empty "root:" for a machine-level farm would read
+	// as a repository that could not be determined.
+	if s.Origin == sourcefarm.OriginExplicitConfig {
+		for _, p := range s.ConfigPaths {
+			fmt.Fprintf(&b, "config:   %s\n", p)
+		}
+	} else {
+		fmt.Fprintf(&b, "root:     %s\n", s.Root)
+	}
 	fmt.Fprintf(&b, "farm:     %s\n", s.FarmDir)
 	fmt.Fprintf(&b, "manifest: %s (%s)\n", s.Manifest.Path, s.Manifest.State)
 	if s.Manifest.Error != "" {

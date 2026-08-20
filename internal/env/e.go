@@ -178,4 +178,21 @@ var (
 		Name:        strings.ToUpper(ldflags.PackageName) + "_FARM",
 		Description: "Directory of the source-mode farm activated in this shell (set by `datamitsu source`)",
 	}
+
+	// sourceFarmConfig is the explicit-config counterpart of sourceRoot. A farm
+	// baked from a config chain the user named with --config has no git root, so
+	// there is nothing truthful to put in sourceRoot; the chain is what identifies
+	// it, and it is what the user would pass to --config again. Paths are joined
+	// with the platform's list separator, like PATH.
+	//
+	// It is informational in exactly the way sourceRoot is: nothing resolves a
+	// tool through it. The shim locates an explicit-config manifest from the farm
+	// directory the invocation arrived through, or from sourceFarm.
+	//
+	// Excluded from Environ for the same reason as the other two — see the note
+	// there.
+	sourceFarmConfig = envVar{
+		Name:        strings.ToUpper(ldflags.PackageName) + "_FARM_CONFIG",
+		Description: "Config chain of the source-mode farm activated in this shell (set by `datamitsu source --config`)",
+	}
 )

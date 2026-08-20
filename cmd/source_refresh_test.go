@@ -18,7 +18,7 @@ import (
 // declared names were refused.
 func TestSummarizeRefreshCounts(t *testing.T) {
 	var buf bytes.Buffer
-	summarizeRefresh(&buf, bakeResult{Plan: statusPlan(t)})
+	summarizeRefresh(&buf, bakeResult{Plan: statusPlan(t)}, sourceTarget{Origin: sourcefarm.OriginGitRoot, Root: "/repo"})
 
 	line := buf.String()
 	if strings.Count(line, "\n") != 1 {
@@ -35,7 +35,7 @@ func TestSummarizeRefreshCounts(t *testing.T) {
 // summary. Silence would be indistinguishable from the command not running.
 func TestSummarizeRefreshEmptyFarm(t *testing.T) {
 	var buf bytes.Buffer
-	summarizeRefresh(&buf, bakeResult{Plan: sourcefarm.Plan{Root: "/repo"}})
+	summarizeRefresh(&buf, bakeResult{Plan: sourcefarm.Plan{Root: "/repo"}}, sourceTarget{Origin: sourcefarm.OriginGitRoot, Root: "/repo"})
 
 	if !strings.Contains(buf.String(), "baked 0 tool(s)") {
 		t.Errorf("empty farm produced no usable summary:\n%s", buf.String())
@@ -51,7 +51,7 @@ func TestSummarizeRefreshReportsFailedBake(t *testing.T) {
 	summarizeRefresh(&buf, bakeResult{
 		Plan:           statusPlan(t),
 		MaterializeErr: errors.New("no space left on device"),
-	})
+	}, sourceTarget{Origin: sourcefarm.OriginGitRoot, Root: "/repo"})
 
 	out := buf.String()
 	if strings.Contains(out, "tool(s)") {
@@ -86,7 +86,7 @@ func TestSourceFarmIsFresh(t *testing.T) {
 	}
 
 	// Nothing baked here yet.
-	if sourceFarmIsFresh(root) {
+	if sourceFarmIsFresh(gitRootTarget(t, root)) {
 		t.Error("an unbaked root reported fresh")
 	}
 
@@ -95,7 +95,7 @@ func TestSourceFarmIsFresh(t *testing.T) {
 	if err := os.WriteFile(manifestPath, []byte("{not json"), 0o600); err != nil {
 		t.Fatalf("write manifest: %v", err)
 	}
-	if sourceFarmIsFresh(root) {
+	if sourceFarmIsFresh(gitRootTarget(t, root)) {
 		t.Error("an unreadable manifest reported fresh")
 	}
 
@@ -121,7 +121,7 @@ func TestSourceFarmIsFresh(t *testing.T) {
 	if err := os.WriteFile(manifestPath, data, 0o600); err != nil {
 		t.Fatalf("write manifest: %v", err)
 	}
-	if !sourceFarmIsFresh(root) {
+	if !sourceFarmIsFresh(gitRootTarget(t, root)) {
 		t.Error("a manifest matching the tree reported stale")
 	}
 
@@ -132,7 +132,7 @@ func TestSourceFarmIsFresh(t *testing.T) {
 	if err := os.RemoveAll(farmDir); err != nil {
 		t.Fatalf("remove farm directory: %v", err)
 	}
-	if sourceFarmIsFresh(root) {
+	if sourceFarmIsFresh(gitRootTarget(t, root)) {
 		t.Error("a manifest whose farm was deleted reported fresh")
 	}
 	if err := os.MkdirAll(farmDir, 0o700); err != nil {
@@ -144,7 +144,7 @@ func TestSourceFarmIsFresh(t *testing.T) {
 	if err := os.WriteFile(watched, []byte("// changed\n"), 0o600); err != nil {
 		t.Fatalf("rewrite watched file: %v", err)
 	}
-	if sourceFarmIsFresh(root) {
+	if sourceFarmIsFresh(gitRootTarget(t, root)) {
 		t.Error("a changed config reported fresh")
 	}
 }
