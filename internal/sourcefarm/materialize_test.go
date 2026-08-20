@@ -573,6 +573,135 @@ func TestMaterializeRefusesUnsafeExistingFarm(t *testing.T) {
 	}
 }
 
+// TestFarmUsableAppliesTheMaterializationSafetyRule pins the property that makes
+// the refusal above worth anything: a farm materialization will not replace must
+// not be activated either. Without it the refusal is only a refusal to rewrite,
+// and the unsafe farm goes on PATH through the fallback path.
+func TestFarmUsableAppliesTheMaterializationSafetyRule(t *testing.T) {
+	fx := newFarmFixture(t)
+	plan := fx.plan(t, []string{"tofu"}, nil)
+	if err := MaterializeWithOptions(plan, manifestFor(plan, "k1"), fx.options()); err != nil {
+		t.Fatalf("Materialize() error = %v", err)
+	}
+	if !FarmUsable(fx.farmDir, fx.cacheRoot) {
+		t.Fatal("FarmUsable() = false for a farm this bake just wrote")
+	}
+
+	if err := os.Chmod(fx.farmDir, 0o777); err != nil {
+		t.Fatalf("chmod farm dir: %v", err)
+	}
+	if FarmUsable(fx.farmDir, fx.cacheRoot) {
+		t.Error("FarmUsable() = true for a world-writable farm directory")
+	}
+
+	if FarmUsable(filepath.Join(fx.parent, "no-such-farm"), fx.cacheRoot) {
+		t.Error("FarmUsable() = true for a farm directory that does not exist")
+	}
+}
+
+// TestMaterializeRefusesAnUnsafePerRootDirectory covers the level above the
+// farm. The farm's own 0700 keeps other accounts out of it, but PATH names the
+// farm by path and every exec re-resolves that path: an account that can write
+// {cache}/projects/{hash} can rename bin aside and leave its own directory
+// there, and it can rewrite the manifest the shim execs from. Neither needs a
+// single write inside the farm.
+func TestMaterializeRefusesAnUnsafePerRootDirectory(t *testing.T) {
+	fx := newFarmFixture(t)
+	plan := fx.plan(t, []string{"tofu"}, nil)
+	if err := MaterializeWithOptions(plan, manifestFor(plan, "k1"), fx.options()); err != nil {
+		t.Fatalf("Materialize() error = %v", err)
+	}
+	if err := os.Chmod(fx.parent, 0o777); err != nil {
+		t.Fatalf("chmod per-root dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(fx.parent, 0o700) })
+
+	if err := MaterializeWithOptions(plan, manifestFor(plan, "k2"), fx.options()); err == nil {
+		t.Fatal("Materialize() = nil, want an error for a world-writable per-root directory")
+	}
+	if FarmUsable(fx.farmDir, fx.cacheRoot) {
+		t.Error("FarmUsable() = true for a farm under a world-writable per-root directory")
+	}
+
+	// And the refusal is about that directory alone: restoring it makes both
+	// answers correct again, so the check cannot be a blanket failure.
+	if err := os.Chmod(fx.parent, 0o700); err != nil {
+		t.Fatalf("restore per-root dir: %v", err)
+	}
+	if !FarmUsable(fx.farmDir, fx.cacheRoot) {
+		t.Error("FarmUsable() = false once the per-root directory is owner-only again")
+	}
+}
+
+// TestMaterializeRefusesAnUnsafeCacheAncestor covers the levels above the
+// per-root directory. Checking only {cache}/projects/{hash} moves the hijack one
+// component up instead of closing it: an account that can write {cache}/projects
+// renames {hash} aside and substitutes bin and manifest together, and an account
+// that can write the cache root does the same to projects. The walk therefore
+// runs up to and including the cache root, which is the last directory
+// datamitsu creates.
+func TestMaterializeRefusesAnUnsafeCacheAncestor(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		dir  func(fx farmFixture) string
+	}{
+		{"the projects directory", func(fx farmFixture) string { return filepath.Dir(fx.parent) }},
+		{"the cache root", func(fx farmFixture) string { return fx.cacheRoot }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fx := newFarmFixture(t)
+			plan := fx.plan(t, []string{"tofu"}, nil)
+			if err := MaterializeWithOptions(plan, manifestFor(plan, "k1"), fx.options()); err != nil {
+				t.Fatalf("Materialize() error = %v", err)
+			}
+
+			dir := tc.dir(fx)
+			if err := os.Chmod(dir, 0o777); err != nil {
+				t.Fatalf("chmod %s: %v", dir, err)
+			}
+			t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+
+			if err := MaterializeWithOptions(plan, manifestFor(plan, "k2"), fx.options()); err == nil {
+				t.Fatalf("Materialize() = nil, want an error for a world-writable %s", tc.name)
+			}
+			if FarmUsable(fx.farmDir, fx.cacheRoot) {
+				t.Errorf("FarmUsable() = true for a farm under a world-writable %s", tc.name)
+			}
+
+			if err := os.Chmod(dir, 0o700); err != nil {
+				t.Fatalf("restore %s: %v", dir, err)
+			}
+			if !FarmUsable(fx.farmDir, fx.cacheRoot) {
+				t.Errorf("FarmUsable() = false once %s is owner-only again", tc.name)
+			}
+		})
+	}
+}
+
+// TestFarmUsableStopsAtTheCacheRoot pins the other half of the walk: it must not
+// keep climbing past the cache root into $HOME or a sticky world-writable /tmp,
+// where the mode is not datamitsu's to have an opinion about.
+func TestFarmUsableStopsAtTheCacheRoot(t *testing.T) {
+	fx := newFarmFixture(t)
+	plan := fx.plan(t, []string{"tofu"}, nil)
+	if err := MaterializeWithOptions(plan, manifestFor(plan, "k1"), fx.options()); err != nil {
+		t.Fatalf("Materialize() error = %v", err)
+	}
+
+	above := filepath.Dir(fx.cacheRoot)
+	if err := os.Chmod(above, 0o777); err != nil {
+		t.Fatalf("chmod %s: %v", above, err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(above, 0o700) })
+
+	if !FarmUsable(fx.farmDir, fx.cacheRoot) {
+		t.Error("FarmUsable() = false for a cache root under a world-writable directory the user owns")
+	}
+	if err := MaterializeWithOptions(plan, manifestFor(plan, "k2"), fx.options()); err != nil {
+		t.Errorf("Materialize() error = %v, want the walk to stop at the cache root", err)
+	}
+}
+
 func TestMaterializeRefusesNonDirectoryFarmPath(t *testing.T) {
 	fx := newFarmFixture(t)
 	if err := os.MkdirAll(fx.parent, 0o700); err != nil {

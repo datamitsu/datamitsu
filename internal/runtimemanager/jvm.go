@@ -207,6 +207,10 @@ func (rm *RuntimeManager) jvmCommandInfo(appName string, appConfig *binmanager.A
 
 	// Determine the java binary path
 	var javaBin string
+	// A managed JVM is datamitsu's to provide, so its absence means the app is
+	// not installed and an install repairs it. A system-mode `java` is the
+	// user's, resolved at exec time, and is deliberately not a health path.
+	var requiredPaths []string
 	if rc.Mode == config.RuntimeModeSystem {
 		if rc.System != nil {
 			javaBin = rc.System.Command
@@ -219,6 +223,9 @@ func (rm *RuntimeManager) jvmCommandInfo(appName string, appConfig *binmanager.A
 			return nil, fmt.Errorf("failed to get JVM runtime path: %w", err)
 		}
 		javaBin = javaPath
+		if filepath.IsAbs(javaPath) {
+			requiredPaths = []string{javaPath}
+		}
 	}
 
 	var args []string
@@ -235,6 +242,7 @@ func (rm *RuntimeManager) jvmCommandInfo(appName string, appConfig *binmanager.A
 		// The JAR is what gets downloaded; javaBin is an interpreter that a
 		// system-mode runtime supplies as a bare "java" off PATH. Without this,
 		// "is it installed?" would be answered by stat'ing the JVM.
-		Artifact: jarPath,
+		Artifact:      jarPath,
+		RequiredPaths: requiredPaths,
 	}, nil
 }

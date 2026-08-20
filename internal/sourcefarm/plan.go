@@ -145,6 +145,16 @@ type Entry struct {
 	// the artifact.
 	Artifact string `json:"artifact,omitempty"`
 
+	// RequiredPaths are the other files that must exist for the app to run as
+	// pinned — a uv app's venv interpreter, a node app's installed package and
+	// managed node binary, a managed JVM's java. They come from the resolver,
+	// which is the only side that knows a kind's health rule, and they are
+	// recorded because the shim decides "install first?" from the filesystem and
+	// must ask the same question the installer would. Checking Command alone lets
+	// a half-present store entry exec: the tool fails in its own voice, or a node
+	// .bin shim finds a system node through PATH and runs unpinned.
+	RequiredPaths []string `json:"requiredPaths,omitempty"`
+
 	// Env is the overlay merged into the environment by the shim.
 	Env map[string]string `json:"env,omitempty"`
 
@@ -236,6 +246,7 @@ func BuildPlan(root, farmDir string, apps binmanager.MapOfApps, resolve Resolver
 				entry.Args = info.Args
 				entry.Env = info.Env
 				entry.Artifact = info.Artifact
+				entry.RequiredPaths = info.RequiredPaths
 				entry.Installed = installed
 			}
 		}

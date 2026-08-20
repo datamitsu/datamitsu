@@ -58,7 +58,16 @@ import (
 // ManifestFormatVersion is the on-disk format version. A manifest carrying any
 // other value is reported stale rather than rejected: an old datamitsu meeting a
 // newer farm must rebake, never error.
-const ManifestFormatVersion = 1
+//
+// Version 2 added Entry.RequiredPaths. The bump is what retires manifests baked
+// before it: a format-1 entry decodes with RequiredPaths == nil, which the shim
+// reads as "nothing else is required" and falls back to the single-path check
+// the field exists to replace. Nothing else in the manifest distinguishes the
+// two — the watch set does not cover the store, and DatamitsuVersion is "dev"
+// for every local build — so a stale format-1 farm would otherwise keep exec'ing
+// partially installed runtime-managed apps until an unrelated edit invalidated
+// it. Any future field the shim's correctness depends on needs the same bump.
+const ManifestFormatVersion = 2
 
 // Origin records how the farm's root was established.
 type Origin string
@@ -406,6 +415,46 @@ func shimTargetUsable(target string) bool {
 	return info.Mode().Perm()&0o100 != 0
 }
 
+// UsableStale reports whether a manifest that is *not* fresh may still be
+// served back.
+//
+// Every path that falls back to the farm already on disk goes through here:
+// activation after a bake that could not be computed, and the shim after a
+// rebake that could not run. Those paths deliberately prefer a stale farm to no
+// farm — a working toolchain from five minutes ago beats a machine-wide storm of
+// exit-127s — but "stale" and "written in a schema this build cannot read" are
+// different states, and only the first one is safe to serve.
+//
+// Three of Validate's checks therefore survive the fallback:
+//
+//   - FormatVersion. The version is bumped exactly when the shim's correctness
+//     depends on a new field (Entry.RequiredPaths in version 2), so an older
+//     manifest is not merely stale: reading it silently downgrades a check.
+//     Serving it back is what would let a partially installed runtime-managed
+//     app exec — the failure the bump exists to retire.
+//   - OS and Arch. The recorded commands are absolute paths to this platform's
+//     binaries; a farm baked for another one (a cache directory shared over a
+//     network home) names files that are not runnable here.
+//   - ShimTarget. Every shim entry is a symlink to it, so a target that has
+//     moved leaves a farm of dangling links — and a dangling link is the one
+//     kind of broken entry a shell skips silently, walking on to the system
+//     binary of the same name.
+//
+// DatamitsuVersion is deliberately *not* checked. It is a staleness signal, not
+// a schema one: an upgraded datamitsu meeting a farm baked by the previous build
+// finds entries that still name real store paths, and the shim re-stats every
+// one of them before exec'ing. Refusing there would break the case the fallback
+// exists for — offline, right after an upgrade.
+func UsableStale(m Manifest) bool {
+	if m.FormatVersion != ManifestFormatVersion {
+		return false
+	}
+	if m.OS != runtime.GOOS || m.Arch != runtime.GOARCH {
+		return false
+	}
+	return shimTargetUsable(m.ShimTarget)
+}
+
 // Validate reports whether the farm this manifest describes is still correct for
 // the tree as it is now.
 //
@@ -417,17 +466,10 @@ func shimTargetUsable(target string) bool {
 // caller can do with the distinction: the response to "wrong format version",
 // "different datamitsu build" and "the config changed" is the same rebake.
 func Validate(m Manifest) bool {
-	if m.FormatVersion != ManifestFormatVersion {
-		return false
-	}
 	if m.DatamitsuVersion != ldflags.Version {
 		return false
 	}
-	if m.OS != runtime.GOOS || m.Arch != runtime.GOARCH {
-		return false
-	}
-
-	if !shimTargetUsable(m.ShimTarget) {
+	if !UsableStale(m) {
 		return false
 	}
 

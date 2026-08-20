@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -114,10 +115,26 @@ func newHarness(t *testing.T) *harness {
 }
 
 // writeManifest stores a manifest at the harness's manifest path.
+//
+// The schema fields BuildManifest always stamps are filled in when the caller
+// left them zero, so a test can keep writing the two or three fields it is
+// about. They are not decoration: the fallback after a failed rebake refuses a
+// manifest whose format or platform this build cannot act on, and a test
+// fixture missing them would exercise that refusal rather than the behaviour it
+// is written for. A test that wants the refusal sets them itself.
 func (h *harness) writeManifest(m sourcefarm.Manifest) {
 	h.t.Helper()
 	m.Root = h.root
 	m.FarmDir = h.farmDir
+	if m.FormatVersion == 0 {
+		m.FormatVersion = sourcefarm.ManifestFormatVersion
+	}
+	if m.OS == "" {
+		m.OS = runtime.GOOS
+	}
+	if m.Arch == "" {
+		m.Arch = runtime.GOARCH
+	}
 	data, err := sourcefarm.Encode(m)
 	if err != nil {
 		h.t.Fatalf("encode manifest: %v", err)
@@ -436,6 +453,37 @@ func TestDispatchRebakeFailureKeepsPreviousFarm(t *testing.T) {
 	}
 }
 
+// TestDispatchRebakeFailureOnARetiredManifestExits127 is the limit of the
+// keep-the-previous-farm rule above. A manifest from a retired format decodes
+// with RequiredPaths unset on every entry, which entryHealthy reads as "nothing
+// else is required" — so serving it back would exec a runtime-managed app whose
+// wrapper is present and whose interpreter is not, which is exactly what the
+// format bump retired. The fallback is what would smuggle that back in, so it
+// fails loudly instead.
+func TestDispatchRebakeFailureOnARetiredManifestExits127(t *testing.T) {
+	h := newHarness(t)
+	tool := h.tool("tofu")
+	h.writeManifest(sourcefarm.Manifest{
+		FormatVersion: sourcefarm.ManifestFormatVersion - 1,
+		Entries:       []sourcefarm.Entry{{Name: "tofu", Command: tool, Installed: true}},
+	})
+	h.d.Validate = func(sourcefarm.Manifest) bool { return false }
+	h.spawnFunc = func([]string) error { return errors.New("offline") }
+	h.invokeThroughFarm("tofu")
+
+	code, handled := h.d.Dispatch()
+
+	if !handled || code != ExitNotFound {
+		t.Fatalf("Dispatch() = (%d, %v), want (%d, true)", code, handled, ExitNotFound)
+	}
+	if len(h.execs) != 0 {
+		t.Errorf("Dispatch() ran %v from a manifest this build cannot read", h.execs)
+	}
+	if !strings.Contains(h.stderr.String(), "source refresh --force") {
+		t.Errorf("stderr %q does not tell the user how to repair the farm", h.stderr.String())
+	}
+}
+
 func TestDispatchRebakeDroppingTheEntryExits127(t *testing.T) {
 	h := newHarness(t)
 	tool := h.tool("tofu")
@@ -479,6 +527,86 @@ func TestDispatchInstallsOnDemandExactlyOnce(t *testing.T) {
 	}
 	if len(h.spawns) != 1 || !equalStrings(h.spawns[0], []string{"install", "tflint"}) {
 		t.Fatalf("spawns = %v, want exactly one [install tflint]", h.spawns)
+	}
+	if len(h.execs) != 1 || h.execs[0].path != target {
+		t.Fatalf("exec = %v, want one call to %q", h.execs, target)
+	}
+}
+
+// TestDispatchInstallsWhenARequiredPathIsMissing pins the half of "is it
+// installed?" that one stat cannot answer.
+//
+// A uv wrapper without its venv interpreter, a node .bin shim without its
+// package or its pinned node, a managed JVM app without its java: in each the
+// recorded command is present and running it is wrong — the tool fails in its
+// own voice, or the node shim's `#!/usr/bin/env node` finds a system node and
+// the app runs on an unpinned interpreter. The bake records those paths so the
+// shim can ask the same question the installer asks.
+func TestDispatchInstallsWhenARequiredPathIsMissing(t *testing.T) {
+	h := newHarness(t)
+	store := t.TempDir()
+	target := filepath.Join(store, "prettier")
+	required := filepath.Join(store, "node")
+	if err := os.WriteFile(target, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("write command: %v", err)
+	}
+	h.writeManifest(sourcefarm.Manifest{
+		Entries: []sourcefarm.Entry{{
+			Name:          "prettier",
+			Command:       target,
+			RequiredPaths: []string{required},
+			Installed:     true,
+			Strategy:      sourcefarm.StrategyShim,
+		}},
+	})
+	h.spawnFunc = func(args []string) error {
+		if args[0] == "install" {
+			return os.WriteFile(required, []byte("#!/bin/sh\n"), 0o755)
+		}
+		return nil
+	}
+	h.invokeThroughFarm("prettier", "--version")
+
+	if code, handled := h.d.Dispatch(); !handled || code != 0 {
+		t.Fatalf("Dispatch() = (%d, %v), want (0, true)", code, handled)
+	}
+	if len(h.spawns) != 1 || !equalStrings(h.spawns[0], []string{"install", "prettier"}) {
+		t.Fatalf("spawns = %v, want exactly one [install prettier]; the recorded command existed but its runtime did not", h.spawns)
+	}
+	if len(h.execs) != 1 || h.execs[0].path != target {
+		t.Fatalf("exec = %v, want one call to %q", h.execs, target)
+	}
+}
+
+// TestDispatchSkipsInstallWhenEveryRequiredPathIsPresent is the other side of
+// the rule: a fully present app must not pay a `datamitsu install` child process
+// per invocation.
+func TestDispatchSkipsInstallWhenEveryRequiredPathIsPresent(t *testing.T) {
+	h := newHarness(t)
+	store := t.TempDir()
+	target := filepath.Join(store, "prettier")
+	required := filepath.Join(store, "node")
+	for _, path := range []string{target, required} {
+		if err := os.WriteFile(path, []byte("#!/bin/sh\n"), 0o755); err != nil {
+			t.Fatalf("write %s: %v", path, err)
+		}
+	}
+	h.writeManifest(sourcefarm.Manifest{
+		Entries: []sourcefarm.Entry{{
+			Name:          "prettier",
+			Command:       target,
+			RequiredPaths: []string{required},
+			Installed:     false,
+			Strategy:      sourcefarm.StrategyShim,
+		}},
+	})
+	h.invokeThroughFarm("prettier", "--version")
+
+	if code, handled := h.d.Dispatch(); !handled || code != 0 {
+		t.Fatalf("Dispatch() = (%d, %v), want (0, true)", code, handled)
+	}
+	if len(h.spawns) != 0 {
+		t.Errorf("spawns = %v, want none for an app whose every recorded path is on disk", h.spawns)
 	}
 	if len(h.execs) != 1 || h.execs[0].path != target {
 		t.Fatalf("exec = %v, want one call to %q", h.execs, target)

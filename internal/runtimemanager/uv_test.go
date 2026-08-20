@@ -199,6 +199,29 @@ func TestGetUVCommandInfo(t *testing.T) {
 		}
 	})
 
+	// The venv interpreter is the second half of uvVenvHealthy, and reporting it
+	// as required is what keeps the side-effect-free resolve (and the source-mode
+	// farm built from it) in step with the installer: a wrapper whose interpreter
+	// symlink dangles after a store restore is not installed.
+	t.Run("requires the venv interpreter", func(t *testing.T) {
+		appConfig := &binmanager.AppConfigUV{
+			PackageName: "yamllint",
+			Version:     "1.37.0",
+			Runtime:     "uv",
+		}
+
+		info, err := rm.GetUVCommandInfo("yamllint", appConfig, nil, nil)
+		if err != nil {
+			t.Fatalf("GetUVCommandInfo() error = %v", err)
+		}
+
+		appEnvPath := filepath.Dir(filepath.Dir(filepath.Dir(info.Command))) // .venv/bin/<pkg>
+		want := getUVInterpreterPath(appEnvPath)
+		if len(info.RequiredPaths) != 1 || info.RequiredPaths[0] != want {
+			t.Errorf("RequiredPaths = %v, want [%s]", info.RequiredPaths, want)
+		}
+	})
+
 	t.Run("explicit runtime ref", func(t *testing.T) {
 		appConfig := &binmanager.AppConfigUV{
 			PackageName: "yamllint",

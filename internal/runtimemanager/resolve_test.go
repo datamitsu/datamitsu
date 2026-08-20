@@ -328,6 +328,84 @@ func TestResolveCommandInfo_JVMManagedUninstalled(t *testing.T) {
 	}
 }
 
+// TestResolveCommandInfo_RequiredPaths pins what each kind reports as required
+// beyond the path that gets exec'd, which is what the source-mode farm records
+// and the shim replays before deciding an install can be skipped.
+//
+// A node app needs its installed package and — for a managed runtime — the node
+// binary its .bin shim resolves through `#!/usr/bin/env node`; without the
+// latter the lookup falls through PATH to whatever node the system has. A
+// managed JVM app needs its java. A system-mode runtime's interpreter is the
+// user's to supply and is deliberately absent: reinstalling would not produce
+// it.
+func TestResolveCommandInfo_RequiredPaths(t *testing.T) {
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
+	t.Setenv("DATAMITSU_OFFLINE", "1")
+
+	t.Run("node names its package and its managed runtime", func(t *testing.T) {
+		rm := New(nodeRuntimeWith(t, "http://127.0.0.1:1/node.tar.xz", "abc", testLibc))
+		nodeBin := plantRuntimeBinary(t, rm, "node")
+		app := binmanager.App{Node: &binmanager.AppConfigNode{
+			PackageName: "eslint",
+			Version:     "9.0.0",
+			BinPath:     "node_modules/.bin/eslint",
+			Runtime:     "node",
+		}}
+
+		info, err := rm.ResolveCommandInfo("eslint", app)
+		if err != nil {
+			t.Fatalf("ResolveCommandInfo() error = %v", err)
+		}
+		if !slices.Contains(info.RequiredPaths, nodeBin) {
+			t.Errorf("RequiredPaths = %v, want it to contain the managed node %q", info.RequiredPaths, nodeBin)
+		}
+		wantModule := filepath.Join("node_modules", "eslint", "package.json")
+		if !slices.ContainsFunc(info.RequiredPaths, func(p string) bool { return strings.HasSuffix(p, wantModule) }) {
+			t.Errorf("RequiredPaths = %v, want one ending in %q", info.RequiredPaths, wantModule)
+		}
+	})
+
+	t.Run("managed jvm names its java", func(t *testing.T) {
+		runtimes := nodeRuntimeWith(t, "http://127.0.0.1:1/jdk.tar.xz", "abc", testLibc)
+		jvm := runtimes["node"]
+		jvm.Kind = config.RuntimeKindJVM
+		jvm.Node = nil
+		rm := New(config.MapOfRuntimes{"jvm": jvm})
+		app := binmanager.App{Jvm: &binmanager.AppConfigJVM{
+			Version: "1.0.0",
+			JarURL:  "https://example.com/tool.jar",
+			JarHash: "0000000000000000000000000000000000000000000000000000000000000000",
+			Runtime: "jvm",
+		}}
+
+		info, err := rm.ResolveCommandInfo("tool", app)
+		if err != nil {
+			t.Fatalf("ResolveCommandInfo() error = %v", err)
+		}
+		if !slices.Equal(info.RequiredPaths, []string{info.Command}) {
+			t.Errorf("RequiredPaths = %v, want [%s]", info.RequiredPaths, info.Command)
+		}
+	})
+
+	t.Run("system jvm requires nothing extra", func(t *testing.T) {
+		rm := New(jvmRuntimes(config.RuntimeModeSystem))
+		app := binmanager.App{Jvm: &binmanager.AppConfigJVM{
+			Version: "6.11.0",
+			JarURL:  "https://example.com/spectral.jar",
+			JarHash: "0000000000000000000000000000000000000000000000000000000000000000",
+			Runtime: "jvm",
+		}}
+
+		info, err := rm.ResolveCommandInfo("spectral", app)
+		if err != nil {
+			t.Fatalf("ResolveCommandInfo() error = %v", err)
+		}
+		if len(info.RequiredPaths) != 0 {
+			t.Errorf("RequiredPaths = %v, want none for a system-mode java the user supplies", info.RequiredPaths)
+		}
+	})
+}
+
 // TestResolveCommandInfo_UVAndGo asserts the two already-install-free kinds are
 // wired into the resolver and report the paths their apps will occupy.
 func TestResolveCommandInfo_UVAndGo(t *testing.T) {

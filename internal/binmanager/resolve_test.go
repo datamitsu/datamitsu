@@ -212,6 +212,50 @@ func TestResolveCommandInfo_MergesAppEnv(t *testing.T) {
 	}
 }
 
+// TestResolveCommandInfo_RequiredPathsDecideInstalled pins that a runtime app is
+// installed only when every path its runtime declares required is on disk.
+//
+// The runtime installers already work this way — a uv venv without its
+// interpreter and a node .bin shim without its package are both "reinstall" —
+// and this is the answer source mode records and the shim replays. Deciding from
+// the command alone would let a half-present store entry run: the tool fails in
+// its own voice, or a node shim resolves `node` through PATH and the app runs on
+// whatever interpreter the system has.
+func TestResolveCommandInfo_RequiredPathsDecideInstalled(t *testing.T) {
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
+
+	store := t.TempDir()
+	command := filepath.Join(store, "yamllint")
+	interpreter := filepath.Join(store, "python")
+	if err := os.WriteFile(command, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("write command: %v", err)
+	}
+
+	mock := &mockRuntimeAppManager{
+		resolveCommandInfoFunc: func(string, App) (*CommandInfo, error) {
+			return &CommandInfo{Type: "uv", Command: command, RequiredPaths: []string{interpreter}}, nil
+		},
+	}
+	bm := New(MapOfApps{
+		"yamllint": App{Uv: &AppConfigUV{PackageName: "yamllint", Version: "1.38.0"}},
+	}, nil, mock)
+
+	if _, installed, err := bm.ResolveCommandInfo("yamllint"); err != nil {
+		t.Fatalf("ResolveCommandInfo() error = %v", err)
+	} else if installed {
+		t.Error("installed = true with the venv interpreter missing, want false")
+	}
+
+	if err := os.WriteFile(interpreter, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("write interpreter: %v", err)
+	}
+	if _, installed, err := bm.ResolveCommandInfo("yamllint"); err != nil {
+		t.Fatalf("ResolveCommandInfo() error = %v", err)
+	} else if !installed {
+		t.Error("installed = false with every required path present, want true")
+	}
+}
+
 // TestResolveCommandInfo_NoRuntimeManager asserts a runtime-managed app without
 // a configured runtime manager errors rather than reporting a bogus path.
 func TestResolveCommandInfo_NoRuntimeManager(t *testing.T) {

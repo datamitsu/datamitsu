@@ -377,9 +377,32 @@ func (rm *RuntimeManager) nodeCommandInfo(appName string, appConfig *binmanager.
 	}
 
 	return &binmanager.CommandInfo{
-		Type:    "node",
-		Command: appBinPath,
-		Args:    nil,
-		Env:     envVars,
+		Type:          "node",
+		Command:       appBinPath,
+		Args:          nil,
+		Env:           envVars,
+		RequiredPaths: nodeRequiredPaths(appEnvPath, appConfig.PackageName, nodeBinPath, rc),
 	}, pathPrefix, nil
+}
+
+// nodeRequiredPaths lists what must exist besides the .bin shim for a node app
+// to be healthy: the installed package itself, and — for a managed runtime — the
+// node binary the shim's `#!/usr/bin/env node` line resolves through.
+//
+// Both mirror rules that already exist. installNodeAppOnce treats a shim without
+// its module as stale and reinstalls; nothing was checking the same thing on the
+// resolve path, so source mode reported such an app installed and ran a shim
+// whose require() fails. The runtime binary is the sharper one: the shim finds
+// node through PATH, and with the managed node gone the runtime-owned prefix
+// names a directory that is not there — the lookup falls through to whatever
+// node the system has, silently running the app on an unpinned interpreter.
+//
+// A system-mode runtime contributes nothing here. Its interpreter is the user's
+// to provide, and reinstalling the app would not conjure it.
+func nodeRequiredPaths(appEnvPath, packageName, nodeBinPath string, rc config.RuntimeConfig) []string {
+	paths := []string{filepath.Join(appEnvPath, "node_modules", packageName, "package.json")}
+	if rc.Mode != config.RuntimeModeSystem && filepath.IsAbs(nodeBinPath) {
+		paths = append(paths, nodeBinPath)
+	}
+	return paths
 }

@@ -110,7 +110,7 @@ func (e farmSwappedError) Error() string { return e.err.Error() }
 func (e farmSwappedError) Unwrap() error { return e.err }
 
 func materialize(plan Plan, m Manifest, opts Options) error {
-	farmDir, parent, err := checkFarmPath(plan.FarmDir, opts.CacheRoot)
+	farmDir, parent, cacheRoot, err := checkFarmPath(plan.FarmDir, opts.CacheRoot)
 	if err != nil {
 		return err
 	}
@@ -120,10 +120,13 @@ func materialize(plan Plan, m Manifest, opts Options) error {
 		return err
 	}
 
-	if err := os.MkdirAll(parent, 0o700); err != nil {
+	if err := os.MkdirAll(parent, farmDirMode); err != nil {
 		return fmt.Errorf("create farm parent directory: %w", err)
 	}
-	if err := checkExistingFarm(farmDir); err != nil {
+	if err := checkAncestorsSafe(parent, cacheRoot); err != nil {
+		return err
+	}
+	if err := CheckFarmSafe(farmDir); err != nil {
 		return err
 	}
 
@@ -210,37 +213,84 @@ const farmDirMode os.FileMode = 0o700
 const farmEntryMode os.FileMode = 0o755
 
 // checkFarmPath validates the farm directory and returns it cleaned along with
-// its parent (the per-root directory holding the manifest and the lock).
-func checkFarmPath(farmDir, cacheRoot string) (string, string, error) {
+// its parent (the per-root directory holding the manifest and the lock) and the
+// cleaned cache root the containment check was made against.
+func checkFarmPath(farmDir, cacheRoot string) (string, string, string, error) {
 	if farmDir == "" {
-		return "", "", errors.New("farm directory must not be empty")
+		return "", "", "", errors.New("farm directory must not be empty")
 	}
 	if !filepath.IsAbs(farmDir) {
-		return "", "", fmt.Errorf("farm directory must be absolute: %q", farmDir)
+		return "", "", "", fmt.Errorf("farm directory must be absolute: %q", farmDir)
 	}
 	cleaned := filepath.Clean(farmDir)
 
-	if cacheRoot == "" {
-		cacheRoot = env.GetCachePath()
-	}
-	cacheRoot = filepath.Clean(cacheRoot)
+	cacheRoot = resolveCacheRoot(cacheRoot)
 
-	rel, err := filepath.Rel(cacheRoot, cleaned)
-	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return "", "", fmt.Errorf("farm directory %q is not under the datamitsu cache directory %q", cleaned, cacheRoot)
+	if !underRoot(cleaned, cacheRoot) {
+		return "", "", "", fmt.Errorf("farm directory %q is not under the datamitsu cache directory %q", cleaned, cacheRoot)
 	}
 
 	parent := filepath.Dir(cleaned)
 	if parent == cleaned {
-		return "", "", fmt.Errorf("farm directory %q has no parent directory", cleaned)
+		return "", "", "", fmt.Errorf("farm directory %q has no parent directory", cleaned)
 	}
-	return cleaned, parent, nil
+	return cleaned, parent, cacheRoot, nil
 }
 
-// checkExistingFarm refuses to replace a farm that is not safely owned. A farm
-// another account can write to is a farm another account can point at its own
-// binaries, and PATH resolution asks no further questions.
-func checkExistingFarm(farmDir string) error {
+// resolveCacheRoot returns the cleaned cache root an override names, or the real
+// one when the override is empty.
+func resolveCacheRoot(override string) string {
+	if override == "" {
+		override = env.GetCachePath()
+	}
+	return filepath.Clean(override)
+}
+
+// underRoot reports whether dir is a strict descendant of root. Both must
+// already be cleaned.
+func underRoot(dir, root string) bool {
+	rel, err := filepath.Rel(root, dir)
+	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return false
+	}
+	return true
+}
+
+// FarmUsable reports whether farmDir is a farm that may be put on PATH: it
+// exists, it is a directory, and it — along with every directory between it and
+// the cache root — passes the same ownership and mode checks materialization
+// enforces before replacing it. cacheRoot empty means the real cache root, which
+// is what every production caller wants; tests that bake into a temporary root
+// pass it explicitly so the chain is walked to the same place materialization
+// walked it.
+//
+// Every caller that activates or falls back to an *existing* farm — rather than
+// one this process just wrote — goes through here. Without it the security
+// refusal in CheckFarmSafe is only a refusal to rewrite: a farm another account
+// can write to would fail materialization and then be activated anyway, because
+// "the directory is there and its manifest decodes" was the whole test. The two
+// questions ("may I replace this?" and "may I trust this?") have the same
+// answer, so they share the same check.
+func FarmUsable(farmDir, cacheRoot string) bool {
+	info, err := os.Lstat(farmDir)
+	if err != nil || !info.IsDir() {
+		return false
+	}
+	if parent := filepath.Dir(farmDir); parent != farmDir {
+		if checkAncestorsSafe(parent, resolveCacheRoot(cacheRoot)) != nil {
+			return false
+		}
+	}
+	return CheckFarmSafe(farmDir) == nil
+}
+
+// CheckFarmSafe refuses a farm that is not safely owned. A farm another account
+// can write to is a farm another account can point at its own binaries, and PATH
+// resolution asks no further questions.
+//
+// A farm that does not exist is not an error: materialization is about to create
+// one. Callers that need it to exist use FarmUsable.
+func CheckFarmSafe(farmDir string) error {
 	info, err := os.Lstat(farmDir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -251,12 +301,77 @@ func checkExistingFarm(farmDir string) error {
 	if !info.IsDir() {
 		return fmt.Errorf("existing farm path %q is not a directory", farmDir)
 	}
+	return checkDirOwnership(info, farmDir, "existing farm directory")
+}
+
+// checkAncestorsSafe refuses a farm whose path runs through any directory
+// another account can write to, from the per-root directory holding the farm up
+// to and including the cache root.
+//
+// The farm's own mode is not the whole answer, because a farm entry is reached
+// by *path*: PATH names {cache}/projects/{hash}/bin, and every exec re-resolves
+// it. An account that can write any directory along that path cannot write
+// inside an owner-only bin, but it does not need to — it can rename the
+// component below it aside and put its own tree there after FarmUsable has
+// already passed, and every shell already holding that path on PATH then execs
+// whatever it contains. Checking only the immediate parent would leave
+// {cache}/projects and the cache root as the same hijack one level up: renaming
+// {hash} substitutes the whole per-root directory, bin and manifest together.
+// The manifest and the lock live beside the farm, so a writable ancestor is also
+// a free hand to rewrite the recorded commands the shim execs without a config
+// load.
+//
+// The walk stops at the cache root because that is the last directory datamitsu
+// creates: everything above it is the user's own $HOME or $XDG_CACHE_HOME, whose
+// mode is not this program's to have an opinion about (and /tmp-rooted caches
+// would fail on the sticky world-writable directory above them).
+//
+// Unlike the farm itself, these directories are never repaired: they are created
+// 0700 by materialization, so finding one otherwise means something outside
+// datamitsu made it, and chmod'ing another account's directory is not a fix.
+func checkAncestorsSafe(parent, cacheRoot string) error {
+	dir := filepath.Clean(parent)
+	for {
+		if err := checkAncestorSafe(dir); err != nil {
+			return err
+		}
+		if dir == cacheRoot || !underRoot(dir, cacheRoot) {
+			// Either the walk reached the last directory datamitsu owns, or the
+			// farm is not under this cache root at all — the latter cannot happen
+			// on the materialization path (checkFarmPath rejects it first) and is
+			// the caller's own business on the FarmUsable path.
+			return nil
+		}
+		next := filepath.Dir(dir)
+		if next == dir {
+			return nil
+		}
+		dir = next
+	}
+}
+
+// checkAncestorSafe applies the ownership and mode rule to one directory on the
+// farm's path.
+func checkAncestorSafe(dir string) error {
+	info, err := os.Lstat(dir)
+	if err != nil {
+		return fmt.Errorf("inspect the farm parent directory: %w", err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("farm parent path %q is not a directory", dir)
+	}
+	return checkDirOwnership(info, dir, "farm parent directory")
+}
+
+// checkDirOwnership is the ownership and mode rule both directory checks apply:
+// owned by this user, and writable by nobody else.
+func checkDirOwnership(info os.FileInfo, dir, what string) error {
 	if perm := info.Mode().Perm(); perm&0o022 != 0 {
-		return fmt.Errorf("existing farm directory %q is group- or world-writable (mode %04o)", farmDir, perm)
+		return fmt.Errorf("%s %q is group- or world-writable (mode %04o)", what, dir, perm)
 	}
 	if uid, ok := ownerUID(info); ok {
 		if self := os.Getuid(); self >= 0 && uid != self {
-			return fmt.Errorf("existing farm directory %q is owned by uid %d, not %d", farmDir, uid, self)
+			return fmt.Errorf("%s %q is owned by uid %d, not %d", what, dir, uid, self)
 		}
 	}
 	return nil

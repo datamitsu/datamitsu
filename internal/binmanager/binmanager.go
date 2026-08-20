@@ -580,7 +580,12 @@ func (bm *BinManager) ResolveCommandInfo(appName string) (*CommandInfo, bool, er
 			return nil, false, err
 		}
 		cmdInfo = ci
-		installed = pathExists(cmdInfo.InstalledPath())
+		// Every path the runtime declares required, not just the one that gets
+		// exec'd: the runtime installers treat a wrapper without its package, or
+		// a venv without its interpreter, as not installed, and an answer that
+		// disagreed with them would let the shim skip the repair they exist to
+		// trigger.
+		installed = allPathsExist(cmdInfo.HealthPaths())
 
 	default:
 		return nil, false, fmt.Errorf("app '%s' has no valid configuration", appName)
@@ -599,6 +604,21 @@ func pathExists(path string) bool {
 	}
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+// allPathsExist reports whether every path exists. An empty list is false: an
+// app with nothing to stat has not been resolved to anywhere, so it cannot be
+// installed.
+func allPathsExist(paths []string) bool {
+	if len(paths) == 0 {
+		return false
+	}
+	for _, p := range paths {
+		if !pathExists(p) {
+			return false
+		}
+	}
+	return true
 }
 
 // ResolvedBinaryInfo returns the BinaryOsArchInfo selected for the host
@@ -841,6 +861,24 @@ type CommandInfo struct {
 	// nothing about whether the app was ever downloaded. Empty means Command is
 	// the artifact.
 	Artifact string
+
+	// RequiredPaths are the other absolute paths that must exist for the app to
+	// run correctly, beyond InstalledPath.
+	//
+	// One path is not enough for a runtime-managed app, and each installer
+	// already knows it: a UV app needs its venv interpreter as well as the
+	// wrapper script (the interpreter is a symlink into the shared Python dir and
+	// dangles after a partial store restore), a node app needs the installed
+	// package under node_modules as well as pnpm's .bin shim, and a
+	// managed-runtime app needs its runtime binary. Reporting such an app
+	// installed on the strength of the wrapper alone makes the exec fail in the
+	// tool's own voice — or, worse for a node .bin shim, succeed against a system
+	// `node` found through PATH.
+	//
+	// A path here must be one whose absence means "reinstall", matching the
+	// health rule the installer applies; an interpreter a system-mode runtime
+	// names by bare word belongs on PATH, not here.
+	RequiredPaths []string
 }
 
 // InstalledPath returns the file whose existence decides whether the app is
@@ -851,6 +889,21 @@ func (c *CommandInfo) InstalledPath() string {
 		return c.Artifact
 	}
 	return c.Command
+}
+
+// HealthPaths returns every file that must exist for the app to be considered
+// installed: InstalledPath plus RequiredPaths, with empties dropped.
+func (c *CommandInfo) HealthPaths() []string {
+	paths := make([]string, 0, 1+len(c.RequiredPaths))
+	if p := c.InstalledPath(); p != "" {
+		paths = append(paths, p)
+	}
+	for _, p := range c.RequiredPaths {
+		if p != "" {
+			paths = append(paths, p)
+		}
+	}
+	return paths
 }
 
 // GetAppsList returns sorted list of all available applications with types

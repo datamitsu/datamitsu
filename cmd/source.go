@@ -189,7 +189,16 @@ func previousSourcePlan(root string) (sourcefarm.Plan, bool) {
 // a manifest whose watch set still matches the tree, while the failed-bake
 // fallback takes a stale farm over no farm. Both reject a manifest whose farm
 // directory is gone — putting a directory that does not exist on PATH activates
-// nothing while reporting success.
+// nothing while reporting success — and both reject one that is not safely
+// owned: neither path materializes anything, so sourcefarm's ownership and mode
+// refusal would never run, and the unsafe farm would go on PATH unexamined.
+//
+// "Stale is fine" is not "anything is fine": the fallback still goes through
+// sourcefarm.UsableStale, which is the subset of the freshness check that
+// survives retirement — the schema version, the platform, and a shim target
+// that is still there. Skipping it wholesale would let a manifest written in a
+// format this build reads differently go on PATH precisely when nothing else
+// could correct it.
 func loadSourcePlan(root string, requireFresh bool) (sourcefarm.Plan, bool) {
 	manifestPath, err := env.GetProjectManifestPath(root)
 	if err != nil {
@@ -199,10 +208,14 @@ func loadSourcePlan(root string, requireFresh bool) (sourcefarm.Plan, bool) {
 	if err != nil || !manifestChainMatches(m) {
 		return sourcefarm.Plan{}, false
 	}
-	if requireFresh && !sourcefarm.Validate(m) {
+	if requireFresh {
+		if !sourcefarm.Validate(m) {
+			return sourcefarm.Plan{}, false
+		}
+	} else if !sourcefarm.UsableStale(m) {
 		return sourcefarm.Plan{}, false
 	}
-	if info, err := os.Stat(m.FarmDir); err != nil || !info.IsDir() {
+	if !sourcefarm.FarmUsable(m.FarmDir, "") {
 		return sourcefarm.Plan{}, false
 	}
 
@@ -351,10 +364,17 @@ func bakeSourceFarm(ctx context.Context, stderr io.Writer) (bakeResult, error) {
 }
 
 // farmOnDisk reports whether a previously baked farm for this plan is still
-// usable: the farm directory is there and its manifest still decodes.
+// usable: the farm directory passes the same ownership and mode checks
+// materialization enforces, and its manifest still decodes.
+//
+// The safety half is not decoration. This function is what decides whether a
+// materialization failure is survivable, and one of the failures it must not
+// survive is materialization's own refusal to touch a group-writable or
+// foreign-owned farm. Answering "usable" on directory-exists alone would turn
+// that refusal into "activate it anyway", which is the one outcome the refusal
+// exists to prevent.
 func farmOnDisk(plan sourcefarm.Plan) bool {
-	info, err := os.Stat(plan.FarmDir)
-	if err != nil || !info.IsDir() {
+	if !sourcefarm.FarmUsable(plan.FarmDir, "") {
 		return false
 	}
 	manifestPath, err := env.GetProjectManifestPath(plan.Root)

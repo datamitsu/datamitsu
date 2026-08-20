@@ -183,8 +183,12 @@ func (d *Dispatcher) Dispatch() (int, bool) {
 	// happens on every invocation rather than on a prompt hook that a compound
 	// command never fires.
 	if !d.Validate(manifest) {
-		manifest, entry, found = d.rebake(manifestPath, name, manifest, entry)
-		if !found {
+		res := d.rebake(manifestPath, name, manifest, entry)
+		manifest, entry = res.manifest, res.entry
+		if res.retired {
+			return d.failRetired(name, manifest), true
+		}
+		if !res.found {
 			return d.declineUnknown(name, manifest)
 		}
 	}
@@ -484,6 +488,20 @@ func (d *Dispatcher) datamitsuExe() (string, error) {
 	return exe, nil
 }
 
+// rebakeResult is what a rebake attempt leaves the dispatcher holding.
+type rebakeResult struct {
+	manifest sourcefarm.Manifest
+	entry    sourcefarm.Entry
+
+	// found is false when the farm no longer declares the invoked name — the
+	// config change that made the manifest stale is the one that dropped it.
+	found bool
+
+	// retired is true when the rebake did not happen *and* the manifest still on
+	// disk is one this build must not act on; see fallback.
+	retired bool
+}
+
 // rebake re-runs the full resolution path for a stale manifest and re-reads the
 // result. This is the one visible hiccup per config change; every invocation
 // after it is back to the steady-state cost.
@@ -492,29 +510,58 @@ func (d *Dispatcher) datamitsuExe() (string, error) {
 // works, so the invocation continues with the stale entry after one line on
 // stderr, exactly as materialization keeps the previous farm rather than
 // replacing it with an empty one.
-func (d *Dispatcher) rebake(manifestPath, name string, manifest sourcefarm.Manifest, entry sourcefarm.Entry) (sourcefarm.Manifest, sourcefarm.Entry, bool) {
+func (d *Dispatcher) rebake(manifestPath, name string, manifest sourcefarm.Manifest, entry sourcefarm.Entry) rebakeResult {
 	exe, err := d.datamitsuExe()
 	if err != nil {
 		d.warn("datamitsu: " + err.Error())
-		return manifest, entry, true
+		return d.fallback(manifest, entry)
 	}
 	if err := d.Spawn(d.spawnRequest(exe, manifest, "source", "refresh")); err != nil {
 		d.warn("datamitsu: could not refresh the source-mode farm, using the previous one: " + err.Error())
-		return manifest, entry, true
+		return d.fallback(manifest, entry)
 	}
 	reloaded, err := d.Load(manifestPath)
 	if err != nil {
 		d.warn("datamitsu: could not read the refreshed farm manifest, using the previous one: " + err.Error())
-		return manifest, entry, true
+		return d.fallback(manifest, entry)
 	}
 	refreshed, found := lookupEntry(reloaded, name)
 	if !found {
 		// The name was removed from the config by whatever change made the
 		// manifest stale. Falling through to PATH here would run the system
 		// binary the project just stopped pinning.
-		return reloaded, sourcefarm.Entry{}, false
+		return rebakeResult{manifest: reloaded}
 	}
-	return reloaded, refreshed, true
+	return rebakeResult{manifest: reloaded, entry: refreshed, found: true}
+}
+
+// fallback decides whether the manifest that is still on disk may answer this
+// invocation after a rebake that could not run.
+//
+// Usually it may: stale-but-working is the whole point of not making a failed
+// rebake fatal. But a manifest this build cannot read the way it was written is
+// a different case — sourcefarm.UsableStale names the three states that qualify,
+// and the one this exists for is the retired format version. A format-1 entry
+// decodes with no RequiredPaths, which entryHealthy then reads as "nothing else
+// is required", so serving it back would exec a runtime-managed app whose
+// wrapper exists and whose interpreter does not. That is exactly what the
+// version bump retired, and it must not come back through the fallback door.
+//
+// The answer there is exit 127 rather than a silent downgrade: the farm is on
+// PATH, so anything short of failing loudly runs the system binary or a
+// half-installed one.
+func (d *Dispatcher) fallback(manifest sourcefarm.Manifest, entry sourcefarm.Entry) rebakeResult {
+	if !sourcefarm.UsableStale(manifest) {
+		return rebakeResult{manifest: manifest, retired: true}
+	}
+	return rebakeResult{manifest: manifest, entry: entry, found: true}
+}
+
+// failRetired reports a farm that could neither be refreshed nor served.
+func (d *Dispatcher) failRetired(name string, manifest sourcefarm.Manifest) int {
+	return d.fail(fmt.Sprintf("datamitsu: %s: this project's source-mode farm was built by a different %s and could not be refreshed (%s)\n"+
+		"datamitsu: run `datamitsu source refresh --force` in that repository",
+		name, ldflags.PackageName, manifest.Root))
 }
 
 // ensureInstalled materializes an entry that has never been downloaded. This is
@@ -526,7 +573,8 @@ func (d *Dispatcher) rebake(manifestPath, name string, manifest sourcefarm.Manif
 // that path is used directly afterwards, and only an entry with no recorded
 // command needs a second pass through the resolver.
 //
-// The decision is the stat alone, deliberately ignoring entry.Installed. That
+// The decision is the recorded paths alone, deliberately ignoring
+// entry.Installed (see entryHealthy for which paths those are). That
 // flag is bake-time state: a lazy install writes the store, not the manifest,
 // and nothing an install touches is in the watch set, so the manifest stays
 // fresh with Installed=false forever. Consulting it would send every later
@@ -534,10 +582,8 @@ func (d *Dispatcher) rebake(manifestPath, name string, manifest sourcefarm.Manif
 // child process — a config load per exec, against this package's ~10 ms budget.
 // The store path is the truth; the flag is only a hint for `source status`.
 func (d *Dispatcher) ensureInstalled(manifestPath, name string, manifest sourcefarm.Manifest, entry sourcefarm.Entry) (sourcefarm.Entry, error) {
-	if path := installedPath(entry); path != "" {
-		if _, err := d.Stat(path); err == nil {
-			return entry, nil
-		}
+	if d.entryHealthy(entry) {
+		return entry, nil
 	}
 
 	exe, err := d.datamitsuExe()
@@ -548,10 +594,8 @@ func (d *Dispatcher) ensureInstalled(manifestPath, name string, manifest sourcef
 		return entry, fmt.Errorf("datamitsu: %s: install failed: %w", name, err)
 	}
 
-	if path := installedPath(entry); path != "" {
-		if _, err := d.Stat(path); err == nil {
-			return entry, nil
-		}
+	if d.entryHealthy(entry) {
+		return entry, nil
 	}
 
 	// No recorded location, or the install put it somewhere else: ask the full
@@ -564,7 +608,10 @@ func (d *Dispatcher) ensureInstalled(manifestPath, name string, manifest sourcef
 		return entry, fmt.Errorf("datamitsu: %s: could not read the farm manifest after install: %w", name, err)
 	}
 	refreshed, found := lookupEntry(reloaded, name)
-	if !found || refreshed.Command == "" {
+	if !found || !d.entryHealthy(refreshed) {
+		// Asked against the re-resolved entry, so an install that produced a
+		// wrapper without its interpreter — or a package without its runtime —
+		// fails here instead of exec'ing something that runs unpinned.
 		return entry, fmt.Errorf("datamitsu: %s: still not installed after install (%s)", name, reloaded.Root)
 	}
 	return refreshed, nil
@@ -679,6 +726,37 @@ func installedPath(entry sourcefarm.Entry) string {
 		return entry.Artifact
 	}
 	return entry.Command
+}
+
+// entryHealthy reports whether every file this entry needs is on disk, which is
+// what decides that the install can be skipped.
+//
+// One stat is not the whole question for a runtime-managed app, which is why the
+// bake records RequiredPaths: a uv wrapper without its venv interpreter, a node
+// .bin shim without its package or without the managed node it was pinned to,
+// and a managed JVM app without its java are all states where the recorded
+// command exists and running it is wrong. The installers already refuse to call
+// those installed; this asks them the same way, from the recorded paths, without
+// a config load.
+//
+// An entry with nothing recorded is not healthy — there is no path to run.
+func (d *Dispatcher) entryHealthy(entry sourcefarm.Entry) bool {
+	path := installedPath(entry)
+	if path == "" {
+		return false
+	}
+	if _, err := d.Stat(path); err != nil {
+		return false
+	}
+	for _, required := range entry.RequiredPaths {
+		if required == "" {
+			continue
+		}
+		if _, err := d.Stat(required); err != nil {
+			return false
+		}
+	}
+	return true
 }
 
 // SpawnRequest describes the datamitsu child process a rebake or an install runs.

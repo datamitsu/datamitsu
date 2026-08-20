@@ -306,6 +306,84 @@ func TestValidate_EmptyShimTargetIsNotChecked(t *testing.T) {
 	}
 }
 
+// TestUsableStale pins which of Validate's checks survive into the fallback
+// paths. It is the difference between "stale" — which every fallback prefers to
+// no farm at all — and "written in a schema this build reads differently", which
+// no fallback may serve.
+func TestUsableStale(t *testing.T) {
+	root, base := fixtureRoot(t)
+	target := filepath.Join(root, "datamitsu-bin")
+	mustWrite(t, target, "#!/bin/sh\n")
+	if err := os.Chmod(target, 0o755); err != nil {
+		t.Fatalf("chmod shim target: %v", err)
+	}
+	base.ShimTarget = target
+
+	tests := []struct {
+		name   string
+		mutate func(m *Manifest)
+		want   bool
+	}{
+		{name: "as baked", mutate: func(*Manifest) {}, want: true},
+		{
+			// The case the whole function exists for: a retired format decodes
+			// with RequiredPaths unset, which the shim reads as "nothing else is
+			// required".
+			name:   "retired format version",
+			mutate: func(m *Manifest) { m.FormatVersion = ManifestFormatVersion - 1 },
+		},
+		{
+			name:   "newer format version",
+			mutate: func(m *Manifest) { m.FormatVersion = ManifestFormatVersion + 1 },
+		},
+		{
+			name:   "baked for another platform",
+			mutate: func(m *Manifest) { m.OS = "plan9" },
+		},
+		{
+			name:   "baked for another architecture",
+			mutate: func(m *Manifest) { m.Arch = "mips" },
+		},
+		{
+			name:   "shim target is gone",
+			mutate: func(m *Manifest) { m.ShimTarget = filepath.Join(root, "not-here") },
+		},
+		{
+			// A datamitsu upgrade is staleness, not a schema change: the recorded
+			// store paths are still real files and the shim re-stats every one of
+			// them. Refusing here would break the case the fallback exists for —
+			// offline, right after an upgrade.
+			name:   "baked by another datamitsu build",
+			mutate: func(m *Manifest) { m.DatamitsuVersion = "some-other-build" },
+			want:   true,
+		},
+		{
+			// A tree that changed is the ordinary stale farm every fallback is
+			// meant to keep serving.
+			name:   "watch set no longer matches",
+			mutate: func(m *Manifest) { m.Watch[0].MtimeNS++ },
+			want:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := base
+			m.Watch = slices.Clone(base.Watch)
+			tt.mutate(&m)
+
+			if got := UsableStale(m); got != tt.want {
+				t.Errorf("UsableStale = %t, want %t", got, tt.want)
+			}
+			// Nothing UsableStale rejects may be fresh, or the two would disagree
+			// about a manifest activation is about to serve.
+			if !tt.want && Validate(m) {
+				t.Error("Validate = true for a manifest UsableStale rejects")
+			}
+		})
+	}
+}
+
 // TestValidate_OnlyStats proves the property the whole design rests on:
 // deciding freshness reads no file contents and spawns nothing. The counting
 // hook pins the call count to exactly one lstat per watched path, so a future

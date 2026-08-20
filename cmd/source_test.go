@@ -352,6 +352,22 @@ func TestFarmOnDiskRequiresBothHalves(t *testing.T) {
 	if !farmOnDisk(plan) {
 		t.Error("a baked farm reported unusable")
 	}
+	if _, ok := loadSourcePlan(root, false); !ok {
+		t.Fatal("a baked farm was not served to the activation fallback")
+	}
+
+	// A farm materialization refuses to touch must not be reported usable
+	// either: this is the answer that decides whether a materialization failure
+	// is survivable, and the failure it must not survive is that very refusal.
+	if err := os.Chmod(farm, 0o777); err != nil {
+		t.Fatalf("chmod farm directory: %v", err)
+	}
+	if farmOnDisk(plan) {
+		t.Error("a world-writable farm reported usable, so a refused bake would activate it")
+	}
+	if _, fresh := loadSourcePlan(root, false); fresh {
+		t.Error("a world-writable farm was served to the activation fallback")
+	}
 }
 
 // TestFreshSourcePlanServesTheManifest covers the activation fast path: a fresh
@@ -497,6 +513,48 @@ func TestPreviousSourcePlanServesAStaleFarm(t *testing.T) {
 	}
 	if _, ok := previousSourcePlan(root); ok {
 		t.Error("a farm that is gone was offered as the fallback")
+	}
+}
+
+// TestPreviousSourcePlanRefusesARetiredManifest is where the fallback above
+// stops. "Stale is fine" is not "anything is fine": a manifest written in a
+// format this build reads differently — the version is bumped exactly when the
+// shim's correctness starts depending on a new field — must not go on PATH
+// precisely when the bake that would have replaced it could not run.
+func TestPreviousSourcePlanRefusesARetiredManifest(t *testing.T) {
+	cache := t.TempDir()
+	t.Setenv("DATAMITSU_CACHE_DIR", cache)
+
+	root := t.TempDir()
+	farm, err := env.GetProjectBinPath(root)
+	if err != nil {
+		t.Fatalf("GetProjectBinPath() error = %v", err)
+	}
+	manifestPath, err := env.GetProjectManifestPath(root)
+	if err != nil {
+		t.Fatalf("GetProjectManifestPath() error = %v", err)
+	}
+	if err := os.MkdirAll(farm, 0o700); err != nil {
+		t.Fatalf("create farm directory: %v", err)
+	}
+
+	plan := sourcefarm.Plan{
+		Root:    root,
+		FarmDir: farm,
+		Entries: []sourcefarm.Entry{{Name: "tofu", Installed: true}},
+	}
+	m := sourcefarm.BuildManifest(plan, sourcefarm.OriginGitRoot, nil)
+	m.FormatVersion = sourcefarm.ManifestFormatVersion - 1
+	data, err := sourcefarm.Encode(m)
+	if err != nil {
+		t.Fatalf("Encode() error = %v", err)
+	}
+	if err := os.WriteFile(manifestPath, data, 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	if _, ok := previousSourcePlan(root); ok {
+		t.Error("a manifest from a retired format was offered as the fallback")
 	}
 }
 
