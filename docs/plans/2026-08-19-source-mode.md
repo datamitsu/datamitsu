@@ -483,6 +483,16 @@ cobra; dispatch happens before all of it.
       evaluating that repository's JavaScript merely because a tool name was typed —
       direnv's threat model, with no approval gate to answer it. Explicit activation is the
       act of trust
+- [x] **climb out of a root with no manifest only along the superproject chain.** A tool run
+      inside a submodule must reach the superproject's farm (that is the root
+      `facts.GetGitRoot` resolves), but an unrelated repository checked out inside an
+      activated one — `outer/vendor/inner` — is a different repository and exits 127. The
+      `.git` link's own shape settles most layouts without a subprocess, and a
+      modules-shaped link then goes through `facts.SuperprojectOf` — the same
+      `.gitmodules`-plus-index-gitlink proof `facts.GetGitRoot` climbs on, so the shim
+      cannot climb where the authoritative root resolution would not. A submodule the
+      superproject no longer records (branch without it, `git rm --cached`) keeps the shape
+      but fails the proof; only a layout neither can settle forks git
 - [x] resolve the datamitsu executable to install/rebake from `os.Executable()`, never through
       a `PATH` the farm itself controls — otherwise a shimmed name can hijack the spawn
 - [x] add a benchmark pinning the shim dispatch path's cost so nobody adds work to it

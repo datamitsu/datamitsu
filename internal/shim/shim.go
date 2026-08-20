@@ -94,6 +94,12 @@ type Dispatcher struct {
 	Load     func(path string) (sourcefarm.Manifest, error)
 	Validate func(sourcefarm.Manifest) bool
 
+	// Superproject reports the working tree that owns a root as a submodule, or
+	// false when the root has no superproject. It is what decides whether the
+	// manifest search may climb out of a root that has no farm; see
+	// superprojectOf.
+	Superproject func(root string) (string, bool)
+
 	Stat func(path string) (os.FileInfo, error)
 
 	// Exec replaces this process with another program. It returns only on
@@ -125,6 +131,7 @@ func New() *Dispatcher {
 		CacheRoot:    env.GetCachePath,
 		Load:         sourcefarm.Load,
 		Validate:     sourcefarm.Validate,
+		Superproject: superprojectOf,
 		Stat:         os.Stat,
 		Exec:         execProcess,
 		Spawn:        spawnDatamitsu,
@@ -157,14 +164,14 @@ func (d *Dispatcher) Dispatch() (int, bool) {
 	// when the config change that made the manifest stale is what removed it.
 	d.throughFarm = d.computeThroughFarm()
 
-	roots := d.discoverRoots()
-	if len(roots) == 0 {
+	nearest, inRepo := d.nearestRoot()
+	if !inRepo {
 		// Outside a repository there is no manifest to consult, so the name
 		// cannot be one of ours.
 		return d.decline(name, "", "the current directory is not inside a git repository")
 	}
 
-	manifestPath, manifest, root, err := d.loadManifest(roots)
+	manifestPath, manifest, root, err := d.loadManifest(nearest)
 	if err != nil {
 		// An activated shell that cds into a never-activated repository lands
 		// here. The farm is deliberately not baked implicitly: baking evaluates
@@ -215,33 +222,21 @@ func invokedName(args []string) string {
 	return strings.TrimSuffix(base, ".exe")
 }
 
-// discoverRoots returns every working-tree root above the current directory,
-// innermost first. It is a deliberately cheap approximation of the resolution
+// nearestRoot returns the innermost working-tree root at or above the current
+// directory. It is a deliberately cheap approximation of the resolution
 // facts.GetGitRoot performs: it only selects *which* manifest to open, and the
 // manifest records the authoritative root the config loader resolved.
 //
-// Two properties of that resolution force the shape of this walk, and getting
-// either wrong means a farm that exists is never found:
-//
-//   - The authoritative root is physical. facts resolves the working directory
-//     through EvalSymlinks (and `git rev-parse --show-toplevel` reports a
-//     physical path too), while os.Getwd honours $PWD and so reports the logical
-//     path a shell cd'd through. On macOS every repository under /tmp or /var is
-//     reached logically, so hashing the logical path keys a farm that was never
-//     baked. The cwd is resolved here for the same reason.
-//
-//   - The authoritative root climbs past submodules to the topmost superproject
-//     (see resolveGitRootViaGit). Stopping at the nearest `.git` would key a
-//     submodule's own directory, where no farm was ever baked. Rather than
-//     re-implementing git's superproject detection — which needs the outer
-//     index to tell a submodule from an unrelated nested repository — every
-//     candidate is returned and loadManifest takes the innermost one that has a
-//     farm. A plain repository yields exactly one candidate and the extra
-//     stat calls never happen.
-func (d *Dispatcher) discoverRoots() []string {
+// The authoritative root is physical. facts resolves the working directory
+// through EvalSymlinks (and `git rev-parse --show-toplevel` reports a physical
+// path too), while os.Getwd honours $PWD and so reports the logical path a shell
+// cd'd through. On macOS every repository under /tmp or /var is reached
+// logically, so hashing the logical path keys a farm that was never baked. The
+// cwd is resolved here for the same reason.
+func (d *Dispatcher) nearestRoot() (string, bool) {
 	dir, err := d.Getwd()
 	if err != nil {
-		return nil
+		return "", false
 	}
 	if d.EvalSymlinks != nil {
 		if resolved, resolveErr := d.EvalSymlinks(dir); resolveErr == nil {
@@ -249,38 +244,67 @@ func (d *Dispatcher) discoverRoots() []string {
 		}
 	}
 
-	var roots []string
 	for {
 		if _, err := d.Stat(filepath.Join(dir, ".git")); err == nil {
-			roots = append(roots, dir)
+			return dir, true
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			return roots
+			return "", false
 		}
 		dir = parent
 	}
 }
 
-// loadManifest opens the farm manifest for the innermost candidate root that has
-// one, returning its path, its contents and the root it belongs to.
+// loadManifest opens the farm manifest for the nearest root that has one,
+// returning its path, its contents and the root it belongs to.
 //
-// The error names the innermost root, because that is the repository the user is
+// It may climb above the nearest root, but only along the chain the
+// authoritative resolution itself follows: facts.GetGitRoot climbs past
+// submodules to the topmost superproject (see resolveGitRootViaGit), so a farm
+// baked for a superproject is the farm a tool run from inside its submodule must
+// get — the submodule's own directory never had one baked.
+//
+// Every other nested repository stops the search. `outer/vendor/inner`, where
+// inner is an unrelated checkout, is a *different repository*, and serving it
+// outer's farm would silently pin tools outer chose for a tree that never
+// consented to them. That is the same rule as "a farm baked for a different
+// repository is never used implicitly", and the answer here is the documented
+// one: exit 127 naming the root to activate.
+//
+// The error names the nearest root, because that is the repository the user is
 // standing in and the one `datamitsu source bash` would activate.
-func (d *Dispatcher) loadManifest(roots []string) (string, sourcefarm.Manifest, string, error) {
-	for _, root := range roots {
-		manifestPath, err := d.ManifestPath(root)
-		if err != nil {
-			continue
+func (d *Dispatcher) loadManifest(nearest string) (string, sourcefarm.Manifest, string, error) {
+	root := nearest
+	for range maxSuperprojectClimb {
+		if manifestPath, manifest, ok := d.tryLoad(root); ok {
+			return manifestPath, manifest, root, nil
 		}
-		manifest, err := d.Load(manifestPath)
-		if err != nil {
-			continue
+		if d.Superproject == nil {
+			break
 		}
-		return manifestPath, manifest, root, nil
+		super, ok := d.Superproject(root)
+		if !ok {
+			break
+		}
+		root = super
 	}
-	return "", sourcefarm.Manifest{}, roots[0],
+	return "", sourcefarm.Manifest{}, nearest,
 		errors.New("no source-mode farm has been created for this repository")
+}
+
+// tryLoad reads the farm manifest for one root, reporting whether there is one
+// to act on.
+func (d *Dispatcher) tryLoad(root string) (string, sourcefarm.Manifest, bool) {
+	manifestPath, err := d.ManifestPath(root)
+	if err != nil {
+		return "", sourcefarm.Manifest{}, false
+	}
+	manifest, err := d.Load(manifestPath)
+	if err != nil {
+		return "", sourcefarm.Manifest{}, false
+	}
+	return manifestPath, manifest, true
 }
 
 // computeThroughFarm reports whether this invocation arrived through a farm

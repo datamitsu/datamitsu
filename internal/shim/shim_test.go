@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -12,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/gitenv"
 	"github.com/datamitsu/datamitsu/internal/sourcefarm"
 )
 
@@ -55,7 +57,7 @@ func newHarness(t *testing.T) *harness {
 	// The temp dir is resolved through symlinks because that is what production
 	// does: the bake keys the farm on the physical git root (facts resolves the
 	// cwd, and `git rev-parse --show-toplevel` reports a physical path), so
-	// discoverRoots resolves too. On macOS t.TempDir() hands back a /var path
+	// nearestRoot resolves too. On macOS t.TempDir() hands back a /var path
 	// that is really /private/var, and a harness pinned to the unresolved form
 	// would assert the bug rather than the behaviour.
 	base := t.TempDir()
@@ -94,7 +96,10 @@ func newHarness(t *testing.T) *harness {
 		CacheRoot: func() string { return cacheRoot },
 		Load:      sourcefarm.Load,
 		Validate:  func(sourcefarm.Manifest) bool { return true },
-		Stat:      os.Stat,
+		// The real gate, so the tests of the climb exercise production's own
+		// submodule detection rather than a stub of it.
+		Superproject: superprojectOf,
+		Stat:         os.Stat,
 		Exec: func(path string, argv, environ []string) error {
 			h.execs = append(h.execs, execCall{path: path, argv: argv, environ: environ})
 			return nil
@@ -1422,24 +1427,87 @@ func TestExecEntryBareInterpreterNotOnPATHFailsLoudly(t *testing.T) {
 	}
 }
 
-// TestLoadManifestClimbsPastASubmodule pins why discoverRoots returns every
-// working-tree root rather than stopping at the nearest .git. A submodule
-// checkout has its own .git, but the farm was baked for the superproject, so a
-// tool run from inside the submodule must be answered by the outer manifest.
-func TestLoadManifestClimbsPastASubmodule(t *testing.T) {
-	h := newHarness(t)
-	sub := filepath.Join(h.root, "vendor", "lib")
-	if err := os.MkdirAll(filepath.Join(sub, ".git"), 0o755); err != nil {
-		t.Fatalf("create submodule git dir: %v", err)
-	}
-	h.d.Getwd = func() (string, error) { return sub, nil }
-	// Only the superproject has a manifest, which is what a real bake produces.
+// onlySuperprojectHasAManifest points every root but the harness's own at a
+// file that does not exist, which is what a real bake produces for a tree only
+// the superproject was activated in.
+func (h *harness) onlySuperprojectHasAManifest() {
 	h.d.ManifestPath = func(gitRoot string) (string, error) {
 		if gitRoot != h.root {
 			return filepath.Join(gitRoot, "no-manifest.json"), nil
 		}
 		return h.manifestPath, nil
 	}
+}
+
+// submodule adds a working tree under the harness root as a real submodule of
+// it, with git doing the work.
+//
+// The shape alone — a `.git` file pointing into the superproject's
+// .git/modules — is not what the climb is gated on, because git leaves exactly
+// that shape behind for a submodule it no longer records (see
+// TestLoadManifestRefusesASubmoduleTheSuperprojectNoLongerRecords). The fixture
+// therefore has to be registered the way a real one is: `.gitmodules` plus a
+// gitlink in the superproject's index.
+func (h *harness) submodule(rel ...string) string {
+	h.t.Helper()
+	name := strings.Join(rel, "/")
+	initGitRepo(h.t, h.root)
+	initGitRepo(h.t, filepath.Join(h.base, "child"))
+	runGit(h.t, h.root, "-c", "protocol.file.allow=always",
+		"submodule", "add", "-q", filepath.Join(h.base, "child"), name)
+	runGit(h.t, h.root, "commit", "-qm", "add "+name)
+	return filepath.Join(append([]string{h.root}, rel...)...)
+}
+
+// initGitRepo makes dir a repository with one commit, which a submodule needs
+// on both sides. A missing git skips the test rather than failing it: the
+// property under test is git's own, and it cannot be stated without git.
+func initGitRepo(t *testing.T, dir string) {
+	t.Helper()
+
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed: the submodule climb is unverified")
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("create repo dir: %v", err)
+	}
+	runGit(t, dir, "init", "-q", "-b", "main")
+	if err := os.WriteFile(filepath.Join(dir, "file.txt"), []byte("x\n"), 0o600); err != nil {
+		t.Fatalf("write repo file: %v", err)
+	}
+	runGit(t, dir, "add", "file.txt")
+	runGit(t, dir, "commit", "-qm", "init")
+}
+
+// runGit runs git in dir with an environment that cannot reach any repository
+// but that one — no user config, and none of the repository-binding variables a
+// hook exports (see internal/gitenv).
+func runGit(t *testing.T, dir string, args ...string) {
+	t.Helper()
+
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	cmd.Env = append(gitenv.Environ(),
+		"GIT_CONFIG_GLOBAL=/dev/null",
+		"GIT_CONFIG_SYSTEM=/dev/null",
+		"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@example.com",
+		"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@example.com",
+	)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %s in %s: %v\n%s", strings.Join(args, " "), dir, err, out)
+	}
+}
+
+// TestLoadManifestClimbsPastASubmodule pins why the manifest search does not
+// stop at the nearest .git. A submodule checkout has its own .git, but the farm
+// was baked for the superproject — which is the root facts.GetGitRoot resolves
+// from inside the submodule — so a tool run there must be answered by the outer
+// manifest.
+func TestLoadManifestClimbsPastASubmodule(t *testing.T) {
+	h := newHarness(t)
+	sub := h.submodule("vendor", "lib")
+	h.d.Getwd = func() (string, error) { return sub, nil }
+	h.onlySuperprojectHasAManifest()
 	tool := h.tool("tofu")
 	h.writeManifest(sourcefarm.Manifest{
 		Entries: []sourcefarm.Entry{{Name: "tofu", Command: tool, Installed: true}},
@@ -1453,5 +1521,105 @@ func TestLoadManifestClimbsPastASubmodule(t *testing.T) {
 	}
 	if len(h.execs) != 1 || h.execs[0].path != tool {
 		t.Fatalf("execs = %+v, want one exec of %q", h.execs, tool)
+	}
+}
+
+// TestLoadManifestRefusesASubmoduleTheSuperprojectNoLongerRecords pins that the
+// `.git` file's shape is not the gate. `git rm --cached sub` drops the gitlink
+// from the superproject's index while leaving `.gitmodules` and the submodule's
+// working tree — `.git` file included — exactly where they were. Git stops
+// reporting a superproject at that moment, so facts.GetGitRoot resolves the
+// leftover tree as its own root; a climb keyed on the path shape alone would
+// hand it the outer farm and disagree with the root the bake used.
+func TestLoadManifestRefusesASubmoduleTheSuperprojectNoLongerRecords(t *testing.T) {
+	h := newHarness(t)
+	sub := h.submodule("vendor", "lib")
+	runGit(t, h.root, "rm", "--cached", "-q", "vendor/lib")
+	h.d.Getwd = func() (string, error) { return sub, nil }
+	h.onlySuperprojectHasAManifest()
+	tool := h.tool("tofu")
+	h.writeManifest(sourcefarm.Manifest{
+		Entries: []sourcefarm.Entry{{Name: "tofu", Command: tool, Installed: true}},
+	})
+	h.invokeThroughFarm("tofu", "plan")
+
+	code, handled := h.d.Dispatch()
+
+	if !handled || code != ExitNotFound {
+		t.Fatalf("Dispatch() = (%d, %v), want (%d, true)", code, handled, ExitNotFound)
+	}
+	if len(h.execs) != 0 {
+		t.Errorf("Dispatch() exec'd %+v from an unregistered submodule checkout", h.execs)
+	}
+}
+
+// TestLoadManifestRefusesAnUnrelatedNestedRepo is the sibling of the submodule
+// test and the reason the climb is gated at all. An unrelated repository checked
+// out inside an activated one is a different repository, so the outer farm must
+// not answer for it: the documented contract is exit 127 telling the user to
+// activate that tree, not a silently inherited toolchain.
+func TestLoadManifestRefusesAnUnrelatedNestedRepo(t *testing.T) {
+	h := newHarness(t)
+	inner := filepath.Join(h.root, "vendor", "inner")
+	// A plain .git directory — no gitdir link into the outer repository's
+	// modules, which is exactly what an independent clone looks like.
+	if err := os.MkdirAll(filepath.Join(inner, ".git"), 0o755); err != nil {
+		t.Fatalf("create nested repo: %v", err)
+	}
+	h.d.Getwd = func() (string, error) { return inner, nil }
+	h.onlySuperprojectHasAManifest()
+	tool := h.tool("tofu")
+	h.writeManifest(sourcefarm.Manifest{
+		Entries: []sourcefarm.Entry{{Name: "tofu", Command: tool, Installed: true}},
+	})
+	h.invokeThroughFarm("tofu", "plan")
+
+	code, handled := h.d.Dispatch()
+
+	if !handled || code != ExitNotFound {
+		t.Fatalf("Dispatch() = (%d, %v), want (%d, true)", code, handled, ExitNotFound)
+	}
+	if len(h.execs) != 0 {
+		t.Errorf("Dispatch() exec'd %+v from an unrelated nested repository", h.execs)
+	}
+	for _, want := range []string{"tofu", "no source-mode farm", inner} {
+		if !strings.Contains(h.stderr.String(), want) {
+			t.Errorf("stderr %q does not mention %q", h.stderr.String(), want)
+		}
+	}
+}
+
+// TestLoadManifestRefusesALinkedWorktreeOfAnotherRepo pins the second shape the
+// filesystem can settle without git: a linked worktree's .git file points into
+// <main>/.git/worktrees, which is proof of no superproject even when the
+// worktree happens to sit inside an activated repository.
+func TestLoadManifestRefusesALinkedWorktreeOfAnotherRepo(t *testing.T) {
+	h := newHarness(t)
+	main := filepath.Join(h.base, "other")
+	gitdir := filepath.Join(main, ".git", "worktrees", "wt")
+	if err := os.MkdirAll(gitdir, 0o755); err != nil {
+		t.Fatalf("create worktree git dir: %v", err)
+	}
+	wt := filepath.Join(h.root, "wt")
+	if err := os.MkdirAll(wt, 0o755); err != nil {
+		t.Fatalf("create worktree: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(wt, ".git"), []byte("gitdir: "+gitdir+"\n"), 0o600); err != nil {
+		t.Fatalf("write worktree .git file: %v", err)
+	}
+	h.d.Getwd = func() (string, error) { return wt, nil }
+	h.onlySuperprojectHasAManifest()
+	h.writeManifest(sourcefarm.Manifest{
+		Entries: []sourcefarm.Entry{{Name: "tofu", Command: h.tool("tofu"), Installed: true}},
+	})
+	h.invokeThroughFarm("tofu")
+
+	code, handled := h.d.Dispatch()
+
+	if !handled || code != ExitNotFound {
+		t.Fatalf("Dispatch() = (%d, %v), want (%d, true)", code, handled, ExitNotFound)
+	}
+	if len(h.execs) != 0 {
+		t.Errorf("Dispatch() exec'd %+v from a linked worktree of another repository", h.execs)
 	}
 }
