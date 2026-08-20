@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 52,
-  "pageSetHash": "32298690d628161eefd98d1e30e05c0e",
+  "pageSetHash": "d84d0bc3d358d77c730db8b0892fd190",
   "pages": [
     {
       "slug": "about",
@@ -316,8 +316,8 @@
       "url": "https://datamitsu.com/docs/guides/source-mode.md",
       "title": "Source Mode",
       "description": "Put a project's declared toolchain on PATH for the current shell, so every tool runs at the version the repository pins — with lazy downloads and invisible branch switching",
-      "bytes": 14979,
-      "contentHash": "47f80e23ff133afc69f5ac65f43c72d5"
+      "bytes": 15357,
+      "contentHash": "300955df1910fc1d3f973d8764239404"
     },
     {
       "slug": "guides/supply-chain-security",

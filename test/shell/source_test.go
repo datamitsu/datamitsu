@@ -167,6 +167,9 @@ func TestExitCodesPropagate(t *testing.T) {
 
 	for _, shell := range shells {
 		t.Run(shell, func(t *testing.T) {
+			// The fixture is built once above, so it must be rebound here or a
+			// missing shell skips the parent instead of this subtest.
+			f := f.with(t)
 			for _, want := range []int{0, 1, 42} {
 				res := f.run(shell, toolName+" --exit "+strconv.Itoa(want)+"\n")
 				if res.ExitCode != want {

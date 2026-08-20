@@ -121,13 +121,13 @@ That is deliberate and it is the single most important failure-mode decision in 
 
 Some declared names never become farm entries. They appear in `datamitsu source status` under `excluded` **with a reason** — a name that silently does not appear would be undebuggable.
 
-| Excluded                                   | Reason                                                                                                                           |
-| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
-| `shell` apps                               | A shell app resolves its command through the **inherited** `PATH`. Shimming one would make it call itself, recursively, forever. |
-| `sudo`, `su`, `doas`, `sudoedit`           | Privilege boundaries are not something a project config gets to redefine.                                                        |
-| `sh`, `bash`, `zsh`, `fish`, `dash`, `env` | Shimming the interpreter that runs the shim is a loop.                                                                           |
+| Excluded                                   | Reason                                                                                                                                                                                          |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `shell` apps                               | A shell app resolves its command through the **inherited** `PATH`. Shimming one would make it call itself, recursively, forever.                                                                |
+| `sudo`, `su`, `doas`, `sudoedit`           | Privilege boundaries are not something a project config gets to redefine.                                                                                                                       |
+| `sh`, `bash`, `zsh`, `fish`, `dash`, `env` | Shimming the interpreter that runs the shim is a loop.                                                                                                                                          |
 | `ssh`, `scp`, `sftp`, `git`, `ldd`         | Too load-bearing to redirect from a repository's own config. `git` and `ldd` are also spawned by datamitsu itself (git-root discovery, libc detection), so shimming either re-enters datamitsu. |
-| `datamitsu`                                | A shimmed `datamitsu` turns the shim's own installer spawn into an infinite `exec` loop.                                         |
+| `datamitsu`                                | A shimmed `datamitsu` turns the shim's own installer spawn into an infinite `exec` loop.                                                                                                        |
 
 App names themselves are validated as filesystem entries: `^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`, no path separators, no Windows reserved device names, and no two names that differ only by case (macOS filesystems would collapse them into one file).
 

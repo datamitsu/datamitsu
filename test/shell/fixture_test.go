@@ -115,6 +115,26 @@ func newFixture(t *testing.T) *fixture {
 	return newFixtureWithCache(t, t.TempDir())
 }
 
+// with returns a copy of the fixture bound to t, and every per-shell subtest
+// must start with it.
+//
+// A fixture is built once per top-level test and shared across the subtests, so
+// the t it captured is the parent's. Reporting against a parent from inside a
+// subtest does not skip or fail that subtest: Skipf and Fatalf call
+// runtime.Goexit in the subtest's goroutine, which Go reports as "test executed
+// panic(nil) or runtime.Goexit: subtest may have called FailNow on a parent
+// test" — a failure, not a skip. That is what a machine without zsh saw, which
+// is every Linux CI runner and no developer laptop.
+//
+// The copy shares the release host and the directories; they stay owned by the
+// parent's Cleanup, which is what keeps the server alive for the later shells.
+func (f *fixture) with(t *testing.T) *fixture {
+	t.Helper()
+	bound := *f
+	bound.t = t
+	return &bound
+}
+
 // newFixtureWithCache builds the fixture with a caller-chosen cache directory,
 // which is how the hostile-path test gets a farm directory containing a space,
 // a single quote and a glob character.
@@ -213,12 +233,30 @@ func (f *fixture) writeFile(rel, content string) {
 	}
 }
 
+// fixtureGitEnv is gitenv.Environ with the developer's own git configuration
+// taken out of the picture.
+//
+// gitenv.Environ only strips git's hook variables, so the fixture still
+// inherited ~/.gitconfig — and a contributor who signs commits got
+// "Enter passphrase ... fatal: failed to write commit object" instead of a
+// passing tier. This is invisible in CI, where no signing key is configured,
+// and this tier is not build-tagged, so it runs on every `go test ./...`.
+// Pointing both config scopes at the null device also keeps templates, hook
+// paths and init.defaultBranch out; the fixture sets its own identity and
+// creates its branches explicitly, so it needs nothing from either scope.
+func fixtureGitEnv() []string {
+	return append(gitenv.Environ(),
+		"GIT_CONFIG_GLOBAL="+os.DevNull,
+		"GIT_CONFIG_SYSTEM="+os.DevNull,
+	)
+}
+
 func (f *fixture) git(args ...string) {
 	f.t.Helper()
 	// G204: fixed test-controlled git subcommands, not untrusted input.
 	cmd := exec.CommandContext(context.Background(), "git", args...)
 	cmd.Dir = f.Dir
-	cmd.Env = gitenv.Environ()
+	cmd.Env = fixtureGitEnv()
 	if out, err := cmd.CombinedOutput(); err != nil {
 		f.t.Fatalf("git %v failed: %v\n%s", args, err, out)
 	}
@@ -229,7 +267,7 @@ func (f *fixture) gitOut(args ...string) string {
 	// G204: fixed test-controlled git subcommands, not untrusted input.
 	cmd := exec.CommandContext(context.Background(), "git", args...)
 	cmd.Dir = f.Dir
-	cmd.Env = gitenv.Environ()
+	cmd.Env = fixtureGitEnv()
 	out, err := cmd.Output()
 	if err != nil {
 		f.t.Fatalf("git %v failed: %v", args, err)
