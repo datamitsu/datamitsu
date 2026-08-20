@@ -173,26 +173,48 @@ if `TMPDIR` happens to sit inside a checkout.
 
 ### Task 2: Farm identity without a git root
 
-- [ ] compute the farm root identity for an explicit-config activation from the **resolved,
+- [x] compute the farm root identity for an explicit-config activation from the **resolved,
       absolute, ordered** config file paths rather than a git root — XXH3-128 via
       `internal/hashutil`, an internal fingerprint never compared against an external value
-- [ ] place it under the cache root alongside project farms but in a distinct namespace, so a
+- [x] place it under the cache root alongside project farms but in a distinct namespace, so a
       project farm and a config farm can never collide and both are visible to a future GC
-- [ ] resolve symlinks and relative paths before hashing, so
+- [x] resolve symlinks and relative paths before hashing, so
       `--config ./cfg.ts` and `--config /abs/cfg.ts` from the same directory produce one farm
       rather than two
-- [ ] set `origin: explicit-config` in the manifest and record the config paths in it
-- [ ] the watch set is the resolved config chain, with `{path, mtime_ns, size, exists}` compared
+- [x] set `origin: explicit-config` in the manifest and record the config paths in it
+- [x] the watch set is the resolved config chain, with `{path, mtime_ns, size, exists}` compared
       with `!=`. There is no `.git/HEAD` to watch, and nothing should pretend there is
-- [ ] write a test asserting two different config paths produce different farm identities
-- [ ] write a test asserting the same config named relatively, absolutely, and through a
+- [x] write a test asserting two different config paths produce different farm identities
+- [x] write a test asserting the same config named relatively, absolutely, and through a
       symlink produces one identity
-- [ ] write a test asserting the identity is stable across calls and contains no `..` after
+- [x] write a test asserting the identity is stable across calls and contains no `..` after
       `filepath.Clean`
-- [ ] write a test asserting a config farm and a project farm for the same directory do not
+- [x] write a test asserting a config farm and a project farm for the same directory do not
       collide
-- [ ] write a test asserting the manifest records `origin: explicit-config` and the config paths
-- [ ] run tests — must pass before Task 3
+- [x] write a test asserting the manifest records `origin: explicit-config` and the config paths
+- [x] run tests — must pass before Task 3
+
+#### Implementation notes
+
+- `internal/env/runtime.go` gained `ResolveConfigChain`, `ConfigFarmIdentity`,
+  `GetConfigFarmBinPath` and `GetConfigFarmManifestPath`. The namespace is
+  `{cache}/configs/{XXH3-128(resolved chain)}/`, a sibling of `{cache}/projects/`, so a
+  collision between the two kinds of identity is impossible by construction rather than by
+  hash luck. The lock file needs no new accessor: `materialize.go` derives it from the farm
+  directory's parent.
+- Chain order is significant and duplicates are preserved — the chain is a merge order, so two
+  orderings of the same files resolve to different configs and are different farms.
+- A path that cannot be `EvalSymlinks`'d (typically: it does not exist) falls back to its
+  cleaned absolute form. Identity must be computable before the caller decides whether a
+  missing config is an error.
+- `internal/sourcefarm`: `OriginExplicitConfig`, `Manifest.ConfigPaths`, `ConfigWatchPaths`
+  (the chain and nothing else) and `BuildConfigManifest`. `Manifest.Root` stays **empty** for
+  such a farm rather than carrying a synthetic root — a fabricated root would be
+  indistinguishable from a real one to Task 3's origin branch. `ConfigPaths` is deliberately
+  outside the staleness key: every path in it is already a watch-set entry, and the key is
+  recomputed from the manifest's own fields, so folding it in would compare it against itself.
+- Existing `BuildManifest` callers are untouched, and `configPaths` is `omitempty`, so no
+  git-root manifest changes byte-for-byte. `go test ./test/cli/ -count=2` is unchanged.
 
 ### Task 3: Shim resolution for explicit-config farms
 

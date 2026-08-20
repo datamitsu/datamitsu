@@ -72,11 +72,23 @@ const ManifestFormatVersion = 2
 // Origin records how the farm's root was established.
 type Origin string
 
-// OriginGitRoot is the only origin this version produces: the root came from
-// git discovery and a config file found there. The field exists so activation
-// outside a repository can add a second value without a format migration, and
-// so the shim can tell whether cwd-based root discovery applies at all.
+// OriginGitRoot is the origin of a project farm: the root came from git
+// discovery and a config file found there. The shim re-resolves such a farm from
+// cwd's git root, which is what makes branch switching transparent.
 const OriginGitRoot Origin = "git-root"
+
+// OriginExplicitConfig is the origin of a farm baked from a config chain the
+// user named with --config. There is no git root behind it: the identity is a
+// fingerprint of the resolved config paths (env.ConfigFarmIdentity), the watch
+// set is that chain and nothing else, and the shim revalidates only what the
+// manifest records — it never walks up for .git.
+//
+// That last property is the trust boundary. A shell activated against a
+// machine-level config that cd's into an untrusted clone keeps running the
+// machine-level tools; it does not start evaluating the clone's JavaScript
+// because a tool name was typed. Entering a repository's toolchain stays an
+// explicit `datamitsu source` in that repository.
+const OriginExplicitConfig Origin = "explicit-config"
 
 // WatchFile is one file whose state can change the resolved toolchain.
 //
@@ -103,7 +115,26 @@ type Manifest struct {
 	// inside a submodule, where root discovery climbs to the topmost
 	// superproject. The shim's walk selects which manifest to open; this field
 	// decides what the root actually is.
+	//
+	// Empty for an OriginExplicitConfig farm, which has no git root. Nothing
+	// synthetic is put here: a fabricated root would be indistinguishable from a
+	// real one to every later reader, and the shim's origin branch would be
+	// deciding on a lie. ConfigPaths carries that farm's identity instead.
 	Root string `json:"root"`
+
+	// ConfigPaths is the resolved, absolute, ordered config chain an
+	// OriginExplicitConfig farm was baked from — the exact input its identity
+	// (env.ConfigFarmIdentity) is computed over. Empty for a git-root farm.
+	//
+	// Order is significant and duplicates are preserved, because the chain is a
+	// merge order: two chains over the same files in a different order resolve
+	// to different configs and are therefore different farms.
+	//
+	// Deliberately *not* folded into the staleness key: every path here is also a
+	// watch-set entry, so the key already changes when the chain does, and the
+	// key is recomputed from the manifest's own recorded fields — adding
+	// ConfigPaths would compare it against itself.
+	ConfigPaths []string `json:"configPaths,omitempty"`
 
 	// FarmDir is the directory the entries live in.
 	FarmDir string `json:"farmDir"`
@@ -263,6 +294,19 @@ func WatchPaths(root string, configFiles []string) []string {
 	return paths
 }
 
+// ConfigWatchPaths returns the paths an explicit-config farm watches: the
+// resolved config chain, and nothing else.
+//
+// There is no .git/HEAD to watch and no root to stat auto-config candidates at,
+// and nothing here pretends otherwise — a farm whose identity is a list of files
+// becomes stale exactly when one of those files changes, appears or disappears,
+// which the {path, mtime, size, exists} tuples already express. Adding the
+// repository tripwires a project farm needs would make a machine-level farm
+// rebake on every checkout of whatever repository the shell happened to be in.
+func ConfigWatchPaths(configFiles []string) []string {
+	return WatchPaths("", configFiles)
+}
+
 // gitHeadPath returns the HEAD file a checkout in root rewrites.
 //
 // In an ordinary repository that is <root>/.git/HEAD. In a linked `git worktree`
@@ -366,6 +410,21 @@ func BuildManifest(plan Plan, origin Origin, watch []WatchFile) Manifest {
 		Shadowed:         plan.Shadowed,
 	}
 	m.StalenessKey = ComputeStalenessKey(m.FormatVersion, m.DatamitsuVersion, m.Root, m.OS, m.Arch, watch, env.Environ())
+	return m
+}
+
+// BuildConfigManifest returns the manifest describing a farm baked from an
+// explicitly named config chain. configPaths must already be resolved —
+// env.ResolveConfigChain is what produced the farm directory, and recording a
+// different spelling of the same files here would leave the manifest describing
+// a farm no identity computation reproduces.
+//
+// plan.Root is expected to be empty for such a farm; it is not overwritten here,
+// so a caller that sets it wrongly fails its own test rather than being quietly
+// corrected.
+func BuildConfigManifest(plan Plan, configPaths []string, watch []WatchFile) Manifest {
+	m := BuildManifest(plan, OriginExplicitConfig, watch)
+	m.ConfigPaths = append([]string(nil), configPaths...)
 	return m
 }
 
