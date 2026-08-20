@@ -431,6 +431,75 @@ func TestFreshSourcePlanServesTheManifest(t *testing.T) {
 	}
 }
 
+// TestPreviousSourcePlanServesAStaleFarm covers the failed-bake fallback: when
+// the config cannot be resolved at all — it does not evaluate on this branch, a
+// remote config is unreachable offline — activation takes the stale farm every
+// already-activated shell for this root is running over activating nothing.
+// Activating nothing exits 0 with a shell that was never activated, and every declared tool
+// then resolves through the rest of PATH to whatever the system has.
+func TestPreviousSourcePlanServesAStaleFarm(t *testing.T) {
+	cache := t.TempDir()
+	t.Setenv("DATAMITSU_CACHE_DIR", cache)
+
+	root := t.TempDir()
+	farm, err := env.GetProjectBinPath(root)
+	if err != nil {
+		t.Fatalf("GetProjectBinPath() error = %v", err)
+	}
+	manifestPath, err := env.GetProjectManifestPath(root)
+	if err != nil {
+		t.Fatalf("GetProjectManifestPath() error = %v", err)
+	}
+	if err := os.MkdirAll(farm, 0o700); err != nil {
+		t.Fatalf("create farm directory: %v", err)
+	}
+
+	watched := filepath.Join(root, "datamitsu.config.js")
+	if err := os.WriteFile(watched, []byte("//\n"), 0o600); err != nil {
+		t.Fatalf("write watched file: %v", err)
+	}
+	plan := sourcefarm.Plan{
+		Root:    root,
+		FarmDir: farm,
+		Entries: []sourcefarm.Entry{{Name: "tofu", Installed: true}},
+	}
+	m := sourcefarm.BuildManifest(plan, sourcefarm.OriginGitRoot, sourcefarm.WatchPaths(root, []string{watched}))
+	data, err := sourcefarm.Encode(m)
+	if err != nil {
+		t.Fatalf("Encode() error = %v", err)
+	}
+	if err := os.WriteFile(manifestPath, data, 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	// Exactly the state a broken config leaves behind: the watch set no longer
+	// matches, so the fast path refuses it, but the farm is still there and still
+	// works.
+	if err := os.WriteFile(watched, []byte("// changed\n"), 0o600); err != nil {
+		t.Fatalf("rewrite watched file: %v", err)
+	}
+	if _, fresh := freshSourcePlanFor(root); fresh {
+		t.Fatal("a stale manifest was served by the fast path")
+	}
+
+	got, ok := previousSourcePlan(root)
+	if !ok {
+		t.Fatal("a stale farm still on disk was not offered as the fallback")
+	}
+	if got.FarmDir != farm || len(got.Entries) != 1 || got.Entries[0].Name != "tofu" {
+		t.Fatalf("fallback plan = %+v, want the farm at %q with tofu", got, farm)
+	}
+
+	// With the farm gone there is nothing to fall back on, and the caller must
+	// report the failure instead of activating a directory that is not there.
+	if err := os.RemoveAll(farm); err != nil {
+		t.Fatalf("remove farm directory: %v", err)
+	}
+	if _, ok := previousSourcePlan(root); ok {
+		t.Error("a farm that is gone was offered as the fallback")
+	}
+}
+
 // TestSourceManifestDecidesRequiresDiscoveredConfig pins that a flag-supplied
 // config always re-resolves. The manifest's watch set describes the chain that
 // baked it and cannot answer for a file it has never seen, so serving it for an

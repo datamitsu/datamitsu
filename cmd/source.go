@@ -104,17 +104,34 @@ func runSource(cmd *cobra.Command, render func(sourcefarm.Plan) string) error {
 	ctx := commandContext(cmd)
 	stderr := cmd.ErrOrStderr()
 
-	plan, fresh, err := freshSourcePlan(ctx)
+	root, err := sourceProjectRoot(ctx)
 	if err != nil {
 		return err
 	}
+
+	plan, fresh := freshSourcePlan(root)
 	if !fresh {
-		res, err := bakeSourceFarm(ctx, stderr)
-		if err != nil {
-			return err
+		res, bakeErr := bakeSourceFarm(ctx, stderr)
+		if bakeErr != nil {
+			// A bake can fail before it ever reaches materialization — a config
+			// that does not evaluate on this branch, a remote config that cannot
+			// be fetched offline. That is the same situation materialization
+			// already survives, and it gets the same answer: activate the farm
+			// already on disk rather than emitting nothing. Emitting nothing
+			// exits 0 with a shell that was never activated, and every declared
+			// tool then resolves through the rest of PATH to whatever the system
+			// has.
+			previous, ok := previousSourcePlan(root)
+			if !ok {
+				return bakeErr
+			}
+			_, _ = fmt.Fprintf(stderr, "%s: %v\n", ldflags.PackageName, bakeErr)
+			reportPreviousFarm(stderr, root)
+			plan = previous
+		} else {
+			reportBakeFailure(stderr, res)
+			plan = res.Plan
 		}
-		reportBakeFailure(stderr, res)
-		plan = res.Plan
 	}
 
 	warnSourceFarm(stderr, plan)
@@ -138,36 +155,53 @@ func runSource(cmd *cobra.Command, render func(sourcefarm.Plan) string) error {
 // downloaded yet" warning: the shim stats the target itself and installs on
 // demand. `source status` is the command that answers with what is true now, and
 // it deliberately keeps resolving.
-func freshSourcePlan(ctx context.Context) (sourcefarm.Plan, bool, error) {
-	root, err := sourceProjectRoot(ctx)
-	if err != nil {
-		return sourcefarm.Plan{}, false, err
-	}
+func freshSourcePlan(root string) (sourcefarm.Plan, bool) {
 	if !sourceManifestDecides() {
-		return sourcefarm.Plan{}, false, nil
+		return sourcefarm.Plan{}, false
 	}
-	plan, fresh := freshSourcePlanFor(root)
-	return plan, fresh, nil
+	return freshSourcePlanFor(root)
 }
 
-// freshSourcePlanFor is freshSourcePlan once the root is known.
+// freshSourcePlanFor is freshSourcePlan once the flag question has been settled.
 //
 // It cannot fail, which is why it returns no error. Every state that is not
 // "fresh, with the farm it describes still on disk" — no manifest, one that will
 // not decode, an aged-out watch set, a deleted farm — means the same thing to the
 // caller and gets the same answer: false, go resolve the config and bake.
 func freshSourcePlanFor(root string) (sourcefarm.Plan, bool) {
+	return loadSourcePlan(root, true)
+}
+
+// previousSourcePlan returns the farm already on disk for root, freshness aside.
+//
+// It is the fallback for a bake that could not be computed at all: the farm it
+// describes is what every already-activated shell for this root is running, so
+// it is a strictly better answer than activating nothing. The chain check still
+// applies — serving a farm baked from a different config chain would activate a
+// toolchain this invocation never asked for.
+func previousSourcePlan(root string) (sourcefarm.Plan, bool) {
+	return loadSourcePlan(root, false)
+}
+
+// loadSourcePlan reads back the farm the on-disk manifest describes for root.
+//
+// requireFresh distinguishes the two callers: activation's fast path only trusts
+// a manifest whose watch set still matches the tree, while the failed-bake
+// fallback takes a stale farm over no farm. Both reject a manifest whose farm
+// directory is gone — putting a directory that does not exist on PATH activates
+// nothing while reporting success.
+func loadSourcePlan(root string, requireFresh bool) (sourcefarm.Plan, bool) {
 	manifestPath, err := env.GetProjectManifestPath(root)
 	if err != nil {
 		return sourcefarm.Plan{}, false
 	}
 	m, err := sourcefarm.Load(manifestPath)
-	if err != nil || !manifestChainMatches(m) || !sourcefarm.Validate(m) {
+	if err != nil || !manifestChainMatches(m) {
 		return sourcefarm.Plan{}, false
 	}
-	// A manifest whose farm has been deleted out from under it is fresh by the
-	// watch set and useless in practice: activating it would put a directory that
-	// does not exist on PATH.
+	if requireFresh && !sourcefarm.Validate(m) {
+		return sourcefarm.Plan{}, false
+	}
 	if info, err := os.Stat(m.FarmDir); err != nil || !info.IsDir() {
 		return sourcefarm.Plan{}, false
 	}
@@ -251,12 +285,22 @@ func absOrSelf(path string) string {
 
 // reportBakeFailure tells the user that the farm they are activating is the
 // previous one, not the one this command just tried to write.
+//
+// sourcefarm has already put the failure itself on stderr through Options.Warn,
+// and it words that line more precisely than this can — it is the only side that
+// knows whether the new farm was swapped in before the failure. So this adds the
+// consequence and does not repeat the error.
 func reportBakeFailure(stderr io.Writer, res bakeResult) {
 	if res.MaterializeErr == nil {
 		return
 	}
-	_, _ = fmt.Fprintf(stderr, "%s: could not re-bake the farm, activating the one already on disk: %v\n",
-		ldflags.PackageName, res.MaterializeErr)
+	reportPreviousFarm(stderr, res.Plan.Root)
+}
+
+// reportPreviousFarm is the one line that tells the user which farm they ended
+// up with when the intended bake did not happen.
+func reportPreviousFarm(stderr io.Writer, root string) {
+	_, _ = fmt.Fprintf(stderr, "%s: activating the farm already on disk for %s\n", ldflags.PackageName, root)
 }
 
 // bakeResult is what a bake produced: the plan, plus a materialization failure

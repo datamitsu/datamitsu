@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 
 	"github.com/spf13/cobra"
@@ -70,20 +69,29 @@ func runSourceRefresh(cmd *cobra.Command) error {
 	}
 
 	summarizeRefresh(stderr, res)
+	if res.MaterializeErr != nil {
+		// Refresh is the repair command: exiting 0 after failing to write the
+		// farm tells a CI step that the toolchain was updated when it still
+		// holds whatever the previous bake left. Activation may survive this;
+		// an explicit repair may not.
+		return fmt.Errorf("failed to re-bake the source farm for %s: %w", res.Plan.Root, res.MaterializeErr)
+	}
 	return nil
 }
 
-// sourceFarmIsFresh reports whether the baked manifest still matches the tree.
+// sourceFarmIsFresh reports whether the baked manifest still matches the tree
+// and the farm it describes is still on disk.
 //
-// Every non-fresh state — missing, unreadable, aged out — answers false: they
-// all mean the same repair, and refusing to re-bake a farm that cannot be read
-// would leave the user with no way to fix it short of deleting the cache.
+// Every other state — missing, unreadable, aged out, or a manifest whose farm
+// directory has been deleted out from under it — answers false: they all mean
+// the same repair, and refusing to re-bake a farm that cannot be read would
+// leave the user with no way to fix it short of deleting the cache. The farm
+// directory is part of the question because a manifest survives an `rm -rf` of
+// the farm perfectly intact: answering "already up to date" there would refuse
+// the repair for the one state that most needs it.
 func sourceFarmIsFresh(root string) bool {
-	manifestPath, err := env.GetProjectManifestPath(root)
-	if err != nil {
-		return false
-	}
-	return manifestStatus(manifestPath).Fresh
+	_, fresh := freshSourcePlanFor(root)
+	return fresh
 }
 
 // summarizeRefresh writes the one line the user reads after a re-bake.
@@ -97,8 +105,12 @@ func sourceFarmIsFresh(root string) bool {
 // is the one summary that would send the user away believing the repair worked.
 func summarizeRefresh(stderr io.Writer, res bakeResult) {
 	if res.MaterializeErr != nil {
-		_, _ = fmt.Fprintf(stderr, "%s: could not re-bake the farm for %s, the previous one is left in place: %v\n",
-			ldflags.PackageName, res.Plan.Root, res.MaterializeErr)
+		// The failure itself is reported twice already if this repeats it:
+		// sourcefarm wrote its own line through Options.Warn, and runSourceRefresh
+		// returns the error for the process to print. This says only what the
+		// user cannot infer from either — which farm they are left with.
+		_, _ = fmt.Fprintf(stderr, "%s: the farm for %s was not re-baked, the previous one is left in place\n",
+			ldflags.PackageName, res.Plan.Root)
 		return
 	}
 	pending := 0

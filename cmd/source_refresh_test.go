@@ -54,10 +54,16 @@ func TestSummarizeRefreshReportsFailedBake(t *testing.T) {
 	})
 
 	out := buf.String()
-	if strings.Contains(out, "baked") {
+	if strings.Contains(out, "tool(s)") {
 		t.Errorf("a failed bake reported a bake count:\n%s", out)
 	}
-	for _, want := range []string{"could not re-bake", "no space left on device", "/repo"} {
+	// The error text itself is deliberately absent: sourcefarm already put it on
+	// stderr and runSourceRefresh returns it for the process to print. What this
+	// line owns is which farm the user is left with.
+	if strings.Contains(out, "no space left on device") {
+		t.Errorf("the summary repeats an error reported twice already:\n%s", out)
+	}
+	for _, want := range []string{"was not re-baked", "previous one is left in place", "/repo"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("failure summary is missing %q:\n%s", want, out)
 		}
@@ -93,12 +99,20 @@ func TestSourceFarmIsFresh(t *testing.T) {
 		t.Error("an unreadable manifest reported fresh")
 	}
 
-	// A manifest whose watch set still matches the tree is the no-op case.
+	// A manifest whose watch set still matches the tree, with the farm it
+	// describes still on disk, is the no-op case.
+	farmDir, err := env.GetProjectBinPath(root)
+	if err != nil {
+		t.Fatalf("GetProjectBinPath() error = %v", err)
+	}
+	if err := os.MkdirAll(farmDir, 0o700); err != nil {
+		t.Fatalf("create farm directory: %v", err)
+	}
 	watched := filepath.Join(root, "datamitsu.config.js")
 	if err := os.WriteFile(watched, []byte("//\n"), 0o600); err != nil {
 		t.Fatalf("write watched file: %v", err)
 	}
-	m := sourcefarm.BuildManifest(sourcefarm.Plan{Root: root}, sourcefarm.OriginGitRoot,
+	m := sourcefarm.BuildManifest(sourcefarm.Plan{Root: root, FarmDir: farmDir}, sourcefarm.OriginGitRoot,
 		sourcefarm.WatchPaths(root, []string{watched}))
 	data, err := sourcefarm.Encode(m)
 	if err != nil {
@@ -109,6 +123,20 @@ func TestSourceFarmIsFresh(t *testing.T) {
 	}
 	if !sourceFarmIsFresh(root) {
 		t.Error("a manifest matching the tree reported stale")
+	}
+
+	// A farm deleted out from under an otherwise perfect manifest is the state a
+	// refresh most needs to repair: every declared tool has fallen through to
+	// whatever the system has, and answering "already up to date" would refuse
+	// the repair.
+	if err := os.RemoveAll(farmDir); err != nil {
+		t.Fatalf("remove farm directory: %v", err)
+	}
+	if sourceFarmIsFresh(root) {
+		t.Error("a manifest whose farm was deleted reported fresh")
+	}
+	if err := os.MkdirAll(farmDir, 0o700); err != nil {
+		t.Fatalf("recreate farm directory: %v", err)
 	}
 
 	// Touching a watched file is exactly the transition --force exists to
