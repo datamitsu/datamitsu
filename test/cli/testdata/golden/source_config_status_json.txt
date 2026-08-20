@@ -1,0 +1,16 @@
+{
+  "origin": "explicit-config",
+  "root": "",
+  "configPaths": [
+    "<TMP>/machine.config.js"
+  ],
+  "farmDir": "<CACHE>/cache/configs/<CHAIN>/bin",
+  "manifest": {
+    "path": "<CACHE>/cache/configs/<CHAIN>/manifest.json",
+    "exists": false,
+    "fresh": false,
+    "state": "missing"
+  },
+  "entries": [],
+  "excluded": []
+}

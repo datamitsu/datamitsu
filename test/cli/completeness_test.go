@@ -156,6 +156,11 @@ const (
 	// fallback), PATH/SHELL are pinned because shadow detection reads them, and
 	// the per-root farm fingerprint is masked on top of the path masks.
 	detSource
+	// detSourceConfig is detSource's machine-level counterpart: the config
+	// is named explicitly with --config from a directory git knows nothing about,
+	// and the farm fingerprint masked is the per-chain one rather than the
+	// per-root one.
+	detSourceConfig
 )
 
 // detCases are the dynamic-output invocations whose stability is most at risk
@@ -186,6 +191,16 @@ var detCases = []struct {
 	{name: "source-fish", kind: detSource, config: sourceAutoConfigJS, args: []string{"source", "fish"}},
 	{name: "source-status", kind: detSource, config: sourceAutoConfigJS, args: []string{"source", "status"}},
 	{name: "source-status-json", kind: detSource, config: sourceAutoConfigJS, args: []string{"source", "status", "--json"}},
+	// The machine-level counterparts. Their farm identity is hashed from the
+	// resolved config chain rather than from a git root, so they are the cases
+	// that would catch a chain resolution that is not stable run-to-run.
+	{name: "source-config-bash", kind: detSourceConfig, config: emptyMachineConfigJS, args: []string{"source", "bash"}},
+	{name: "source-config-fish", kind: detSourceConfig, config: emptyMachineConfigJS, args: []string{"source", "fish"}},
+	{name: "source-config-status", kind: detSourceConfig, config: emptyMachineConfigJS, args: []string{"source", "status"}},
+	{
+		name: "source-config-status-json", kind: detSourceConfig, config: emptyMachineConfigJS,
+		args: []string{"source", "status", "--json"},
+	},
 }
 
 // TestGoldenSuiteDeterministic runs each dynamic-output invocation twice, in
@@ -238,6 +253,13 @@ func produceDet(t *testing.T, kind detKind, config string, args ...string) strin
 		p.WriteFile("datamitsu.config.js", config)
 		mask := sourceNormalizer(p, cacheBase)
 		res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, CacheDir: cacheBase, Env: sourceEnv()}, args...)
+		return mask(res.Stdout) + "\n===STDERR===\n" + mask(res.Stderr)
+	case detSourceConfig:
+		d := clitest.NewBareDir(t)
+		cfg := d.WriteFile("machine.config.js", config)
+		mask := sourceConfigNormalizer(d.Dir, cacheBase)
+		full := append(append([]string(nil), args...), "--config", cfg)
+		res := clitest.Run(t, clitest.RunOptions{Dir: d.Dir, CacheDir: cacheBase, Env: sourceEnv()}, full...)
 		return mask(res.Stdout) + "\n===STDERR===\n" + mask(res.Stderr)
 	default:
 		t.Fatalf("produceDet: unknown detKind %d", kind)

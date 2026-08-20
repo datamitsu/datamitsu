@@ -1,0 +1,13 @@
+origin:   explicit-config
+config:   <TMP>/machine.config.js
+farm:     <CACHE>/cache/configs/<CHAIN>/bin
+manifest: <CACHE>/cache/configs/<CHAIN>/manifest.json (missing)
+
+entries (0):
+  none
+
+excluded (0):
+  none
+
+shadowed (0):
+  none

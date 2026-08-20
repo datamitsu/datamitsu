@@ -344,22 +344,50 @@ The trust boundary lives here, in one branch.
 
 ### Task 5: Blackbox tests and goldens
 
-- [ ] add goldens for `source <shell> --config <path>` with the normalizer masking the temp
+- [x] add goldens for `source <shell> --config <path>` with the normalizer masking the temp
       config directory and the cache root
-- [ ] pin `PATH` explicitly via `RunOptions.Env` in every case, as the source-mode plan
+- [x] pin `PATH` explicitly via `RunOptions.Env` in every case, as the source-mode plan
       requires — shadow detection reads `PATH` and goldens are machine-dependent otherwise
-- [ ] add cases to `detCases` so `TestGoldenSuiteDeterministic` covers them
-- [ ] no new leaf command should be needed: `--config` is an existing persistent flag, so
+- [x] add cases to `detCases` so `TestGoldenSuiteDeterministic` covers them
+- [x] no new leaf command should be needed: `--config` is an existing persistent flag, so
       `testedLeafCommands` (`test/cli/completeness_test.go:22`) needs no new entry. Confirm
       this rather than assuming it, and regenerate the `source` help goldens if the help text
       changed
-- [ ] write a test asserting a config whose `getConfig()` calls `console.log` produces stdout
+- [x] write a test asserting a config whose `getConfig()` calls `console.log` produces stdout
       with zero extra bytes — the config-injection guard, now applied to a config the user
       names explicitly
-- [ ] write a test asserting an unreadable or malformed `--config` path exits non-zero with
+- [x] write a test asserting an unreadable or malformed `--config` path exits non-zero with
       nothing on stdout
-- [ ] `go test ./test/cli/ -count=2` passes byte-identically
-- [ ] run `go test ./... -race` — must pass before Task 6
+- [x] `go test ./test/cli/ -count=2` passes byte-identically
+- [x] run `go test ./... -race` — must pass before Task 6
+
+#### Implementation notes
+
+- Five new goldens: `source_config_{bash,zsh,fish}` and `source_config_status{,_json}`. They
+  use `emptyMachineConfigJS` — the machine-level counterpart of `sourceAutoConfigJS`, declaring
+  no apps — so the frozen bytes depend on nothing but the farm path and the chain that names it.
+  `machineConfigJS`'s exclusions belong to `TestSourceConfigExclusionsStillApply`, which asserts
+  on their reasons rather than on their formatting.
+- `sourceConfigNormalizer` is `sourceNormalizer`'s counterpart: the bare directory holding the
+  config → `<TMP>`, the isolated cache → `<CACHE>`, and `configFarmHashRE`
+  (`configs/[0-9a-f]{32}`) → `configs/<CHAIN>`. Masking the cache path alone is not enough —
+  the chain fingerprint hashes a temp directory that differs on every run.
+- `detSourceConfig` joins `detCases` for bash, fish and both status forms. It is the case that
+  would catch a chain resolution that is not stable run-to-run, which a per-git-root case cannot.
+- **`testedLeafCommands` needed no entry, confirmed rather than assumed:** `TestContractCompletenessGate`
+  discovers leaves from the `--help` tree, and `--config` is a persistent flag, not a command,
+  so the discovered leaf set is unchanged. The `source` help goldens were already regenerated in
+  Task 4 (`source_help` documents `--config` and the outside-a-repository example) and did not
+  shift again here.
+- The injection guard is `TestSourceExplicitConfigCannotInjectIntoStdout` — named apart from
+  `TestSourceConfigCannotInjectIntoStdout`, the discovered-config case in `source_test.go`.
+  Naming a config is the trust boundary for _evaluating_ it, not permission for it to write to
+  stdout: the output is `eval`'d in a shell rc file.
+- `TestSourceConfigUnusableChainFails` covers both ways a chain is unusable — the path is absent,
+  and the file is present but not valid JavaScript. It asserts empty stdout in both, since a
+  diagnostic that leaked there would be run as shell code by the shell that failed to activate.
+  Unreadability is exercised as a missing path rather than `chmod 0000`, which is a no-op for root.
+- No existing golden shifted: `go test ./test/cli/ -count=2` and `go test ./... -race` both pass.
 
 ### Task 6: Real-shell tests
 

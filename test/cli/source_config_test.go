@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -60,6 +61,165 @@ func writeMachineConfig(t *testing.T) (*clitest.BareDir, string) {
 	t.Helper()
 	d := clitest.NewBareDir(t)
 	return d, d.WriteFile("machine.config.js", machineConfigJS)
+}
+
+// emptyMachineConfigJS is the machine-level counterpart of sourceAutoConfigJS:
+// a config outside every repository declaring no apps at all, so the activation
+// it produces depends on nothing but the farm path and the chain that names it.
+// Goldens use it rather than machineConfigJS, whose exclusions write reasons to
+// stderr that belong to TestSourceConfigExclusionsStillApply.
+const emptyMachineConfigJS = "globalThis.getBeforeConfigs = () => [];\n" +
+	"globalThis.getConfig = () => ({ apps: {}, tools: {}, projectTypes: {} });\n" +
+	"globalThis.getMinVersion = () => \"0.0.0\";\n"
+
+// configFarmHashRE matches the per-chain directory name in a config farm path.
+// The farm lives under {cache}/configs/{XXH3-128(resolved chain)}/, so the
+// segment fingerprints a temp directory that differs on every run — masking the
+// enclosing cache path is not enough to make the output comparable. It is the
+// exact counterpart of farmHashRE for the other namespace.
+var configFarmHashRE = regexp.MustCompile(`configs[/\\][0-9a-f]{32}`)
+
+// sourceConfigNormalizer returns the normalizer every machine-level source
+// golden shares: the bare directory holding the config, the isolated cache dir,
+// and the per-chain farm fingerprint that derives from the former.
+func sourceConfigNormalizer(dir, cacheBase string) func(string) string {
+	norm := clitest.NewNormalizer().MaskPath(dir, "<TMP>").MaskPath(cacheBase, "<CACHE>")
+	return func(s string) string {
+		return configFarmHashRE.ReplaceAllString(norm.Apply(s), "configs/<CHAIN>")
+	}
+}
+
+// TestSourceConfigActivationGolden freezes the exact activation block a shell rc
+// file gets for a machine-level toolchain, in all three shells. Substring
+// assertions elsewhere in this file state individual properties; the golden is
+// what fails on a byte that no property thought to forbid — a progress line, a
+// log line, a stray warning — in output that is piped straight into `eval`.
+func TestSourceConfigActivationGolden(t *testing.T) {
+	for _, shell := range []string{"bash", "zsh", "fish"} {
+		t.Run(shell, func(t *testing.T) {
+			d := clitest.NewBareDir(t)
+			cfg := d.WriteFile("machine.config.js", emptyMachineConfigJS)
+			cacheBase := t.TempDir()
+			mask := sourceConfigNormalizer(d.Dir, cacheBase)
+
+			res := clitest.Run(t, clitest.RunOptions{Dir: d.Dir, CacheDir: cacheBase, Env: sourceEnv()},
+				"source", shell, "--config", cfg)
+			if res.ExitCode != 0 {
+				t.Fatalf("`source %s --config <path>` exit = %d, want 0\nstderr:\n%s", shell, res.ExitCode, res.Stderr)
+			}
+			if res.Stderr != "" {
+				t.Errorf("`source %s --config <path>` wrote to stderr on the clean path:\n%s", shell, res.Stderr)
+			}
+			clitest.AssertGolden(t, "source_config_"+shell, mask(res.Stdout))
+		})
+	}
+}
+
+// TestSourceConfigStatusGolden freezes the machine-level status report, human
+// and JSON. It is the surface the plan calls out as mattering most here: a farm
+// that is first on PATH in every shell is one the user has to be able to read
+// back — which origin it has, and which files it was baked from.
+func TestSourceConfigStatusGolden(t *testing.T) {
+	for _, tc := range []struct {
+		golden string
+		args   []string
+	}{
+		{"source_config_status", []string{"source", "status"}},
+		{"source_config_status_json", []string{"source", "status", "--json"}},
+	} {
+		t.Run(tc.golden, func(t *testing.T) {
+			d := clitest.NewBareDir(t)
+			cfg := d.WriteFile("machine.config.js", emptyMachineConfigJS)
+			cacheBase := t.TempDir()
+			mask := sourceConfigNormalizer(d.Dir, cacheBase)
+
+			args := append(append([]string(nil), tc.args...), "--config", cfg)
+			res := clitest.Run(t, clitest.RunOptions{Dir: d.Dir, CacheDir: cacheBase, Env: sourceEnv()}, args...)
+			if res.ExitCode != 0 {
+				t.Fatalf("`%s` exit = %d, want 0\nstderr:\n%s", strings.Join(args, " "), res.ExitCode, res.Stderr)
+			}
+			clitest.AssertGolden(t, tc.golden, mask(res.Stdout))
+		})
+	}
+}
+
+// TestSourceExplicitConfigCannotInjectIntoStdout is the config-injection guard
+// applied to a config the user names explicitly. Naming the file is the trust boundary
+// for *evaluating* it, not permission for it to write to stdout: the output is
+// piped into `eval` in a shell rc file, so a console.log would be executing its
+// own text in every shell the user opens. The activation is compared against a
+// control chain whose config is identical minus the printing, so a single extra
+// byte fails.
+func TestSourceExplicitConfigCannotInjectIntoStdout(t *testing.T) {
+	noisy := clitest.NewBareDir(t)
+	noisyCfg := noisy.WriteFile("machine.config.js",
+		"console.log(\"echo pwned\");\n"+
+			"globalThis.getBeforeConfigs = () => [];\n"+
+			"globalThis.getConfig = () => { console.log(\"rm -rf /\"); "+
+			"return { apps: {}, tools: {}, projectTypes: {} }; };\n"+
+			"globalThis.getMinVersion = () => \"0.0.0\";\n")
+	noisyCache := t.TempDir()
+	noisyRes := clitest.Run(t, clitest.RunOptions{Dir: noisy.Dir, CacheDir: noisyCache, Env: sourceEnv()},
+		"source", "bash", "--config", noisyCfg)
+	if noisyRes.ExitCode != 0 {
+		t.Fatalf("`source bash --config <path>` exit = %d, want 0\nstderr:\n%s", noisyRes.ExitCode, noisyRes.Stderr)
+	}
+
+	control := clitest.NewBareDir(t)
+	controlCfg := control.WriteFile("machine.config.js", emptyMachineConfigJS)
+	controlCache := t.TempDir()
+	controlRes := clitest.Run(t, clitest.RunOptions{Dir: control.Dir, CacheDir: controlCache, Env: sourceEnv()},
+		"source", "bash", "--config", controlCfg)
+	if controlRes.ExitCode != 0 {
+		t.Fatalf("control `source bash --config <path>` exit = %d, want 0\nstderr:\n%s",
+			controlRes.ExitCode, controlRes.Stderr)
+	}
+
+	got := sourceConfigNormalizer(noisy.Dir, noisyCache)(noisyRes.Stdout)
+	want := sourceConfigNormalizer(control.Dir, controlCache)(controlRes.Stdout)
+	if got != want {
+		t.Errorf("config JS changed the activation on stdout:\n--- want ---\n%s\n--- got ---\n%s", want, got)
+	}
+	for _, injected := range []string{"pwned", "rm -rf"} {
+		if strings.Contains(noisyRes.Stdout, injected) {
+			t.Errorf("config console.log reached stdout (%q):\n%s", injected, noisyRes.Stdout)
+		}
+	}
+}
+
+// TestSourceConfigUnusableChainFails asserts a --config that cannot be resolved
+// is a loud failure with an empty stdout, for both ways it can be unusable: the
+// path is not there, and the file is there but is not valid JavaScript.
+//
+// Empty stdout is the load-bearing half. The activation is consumed as
+// `eval "$(datamitsu source bash --config …)"`, so a diagnostic that leaked onto
+// stdout would be run as shell code by the very shell that failed to activate.
+func TestSourceConfigUnusableChainFails(t *testing.T) {
+	d := clitest.NewBareDir(t)
+	missing := filepath.Join(d.Dir, "absent.config.js")
+	malformed := d.WriteFile("broken.config.js", "globalThis.getConfig = () => ({ apps: {\n")
+
+	for _, tc := range []struct {
+		name string
+		path string
+	}{
+		{"missing", missing},
+		{"malformed", malformed},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			res := clitest.Run(t, clitest.RunOptions{Dir: d.Dir, CacheDir: t.TempDir(), Env: sourceEnv()},
+				"source", "bash", "--config", tc.path)
+			if res.ExitCode == 0 {
+				t.Fatalf("`source bash --config %s` exited 0:\n%s", tc.path, res.Stdout)
+			}
+			if res.Stdout != "" {
+				t.Errorf("failure wrote to stdout, which would be eval'd:\n%s", res.Stdout)
+			}
+			if !strings.Contains(res.Stderr, tc.path) {
+				t.Errorf("failure message does not name the config path %s:\n%s", tc.path, res.Stderr)
+			}
+		})
+	}
 }
 
 // sourceStatusDoc is the subset of `source status --json` these tests read.
