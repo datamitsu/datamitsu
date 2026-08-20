@@ -457,9 +457,16 @@ type Config struct {
 	Lsp MapOfLsp `json:"lsp,omitempty"`
 }
 
-// GetDefaultConfig returns the embedded default config JS with TypeScript types stripped.
+// GetDefaultConfig returns the embedded default config JS.
+//
+// config.js is the bundler's output for the TypeScript sources — plain
+// JavaScript by construction — so it does not go through StripTypes: that pass
+// would be a pure identity transform costing about a millisecond of every
+// invocation's startup. This mirrors the extension check the loader applies to
+// every other config source (see prepareConfigSource). The error return is
+// retained because callers treat obtaining the default config as fallible.
 func GetDefaultConfig() (string, error) {
-	return StripTypes(defaultConfig)
+	return defaultConfig, nil
 }
 
 // GetDefaultConfigDTS returns the embedded TypeScript declarations for the config.

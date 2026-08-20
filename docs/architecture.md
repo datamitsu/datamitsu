@@ -157,6 +157,7 @@ Tool operation arguments support template placeholders that the executor resolve
 - `{file}` and `{files}` when used as entire argument expand to separate args; when embedded in a string, they are replaced inline
 - `{toolCache}` resolves to `~/.cache/datamitsu/cache/projects/{xxh3_128(gitRoot)}/cache/{relativeProjectPath}/{toolName}/`; computed per task from `task.ProjectPath` and `task.ToolName`; when computation fails, the literal `{toolCache}` is preserved
 - `{cwd}` falls back to `rootPath` when `projectPath` is empty
+- `facts.GetGitRoot` is memoized per working directory for the process lifetime and resolves via a pure-Go filesystem walk, falling back to a forked `git` for layouts it cannot prove (`DATAMITSU_FORCE_GIT_SUBPROCESS=1` forces the subprocess). `internal/traverser.GetGitRoot` is a separate resolver, not covered by the memo, used by the command handlers
 - Facts struct exposes platform/environment info (`os`, `arch`, `libc`, `isInGitRepo`, `isMonorepo`, `env`) via `facts()` in JS; `libc` is "glibc", "musl", or "unknown" (Linux-only detection); path fields were removed in favor of template placeholders
 
 **Datamitsu Ignore** ([internal/datamitsuignore/](internal/datamitsuignore/))
@@ -316,6 +317,8 @@ final Config
 - Circular remote config dependencies are detected and produce an error
 - `--no-remote` flag on `devtools verify-all` skips remote config resolution
 - `loadConfig()` returns a 4-tuple: `(*config.Config, *config.InitLayerMap, *goja.Runtime, error)`
+- Each source is run through `config.StripTypes` (esbuild) only when its extension is not `.js`/`.mjs` — the decision is by extension, never by content sniffing (`prepareConfigSource` in [cmd/config_loader.go](cmd/config_loader.go)). The embedded default is bundler output and is likewise handed to goja unstripped
+- Startup/config-load phases are instrumented behind `DATAMITSU_STARTUP_TIMINGS=1`; see [Startup and Config Load](../website/docs/guides/architecture/startup.md) for the cost model
 
 **Eager Content Evaluation** (`internal/config/init_eval.go`, `internal/config/init_layer.go`):
 

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/datamitsu/datamitsu/internal/facts"
+	"github.com/datamitsu/datamitsu/internal/timing"
 
 	"github.com/dop251/goja"
 )
@@ -42,6 +43,7 @@ func New(ctx context.Context, binaryCommandOverride string) (*Engine, error) {
 
 // NewWithOptions is New with explicit Options.
 func NewWithOptions(ctx context.Context, binaryCommandOverride string, opts Options) (e *Engine, err error) {
+	defer timing.StartStartupPhase(timing.PhaseEngineNew)()
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("engine initialization panic: %v", r)

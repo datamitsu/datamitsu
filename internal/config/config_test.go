@@ -27,6 +27,24 @@ func TestGetDefaultConfig(t *testing.T) {
 	}
 }
 
+// The embedded default skips the esbuild pass every other JavaScript config
+// source skips, so what goja executes is the bundler's output verbatim. Both
+// halves of that have to hold: the bytes are handed over untouched, and they
+// are JavaScript goja can compile.
+func TestDefaultConfigIsHandedToGojaUnstripped(t *testing.T) {
+	got, err := GetDefaultConfig()
+	if err != nil {
+		t.Fatalf("GetDefaultConfig() error = %v", err)
+	}
+
+	if got != defaultConfig {
+		t.Error("GetDefaultConfig() rewrote the embedded config; it must be returned verbatim")
+	}
+	if _, err := goja.Compile("config.js", got, true); err != nil {
+		t.Fatalf("embedded config does not compile in goja without type stripping: %v", err)
+	}
+}
+
 func TestGetDefaultConfigDTS(t *testing.T) {
 	dts := GetDefaultConfigDTS()
 

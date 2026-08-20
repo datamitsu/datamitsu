@@ -177,6 +177,42 @@ func IsTimingsEnabled() bool {
 	return value == 1
 }
 
+// IsStartupTimingsEnabled returns true if per-phase startup instrumentation
+// (config load, engine construction, type stripping, git-root lookup) should be
+// recorded and reported. It is separate from IsTimingsEnabled, which covers the
+// planner/runner stages: startup phases are measured before any command handler
+// runs and are reported to stderr rather than the timing table.
+func IsStartupTimingsEnabled() bool {
+	valueStr := startupTimings.DefaultValue
+	if envValue := os.Getenv(startupTimings.Name); envValue != "" {
+		valueStr = envValue
+	}
+
+	value, err := strconv.Atoi(valueStr)
+	if err != nil {
+		return false
+	}
+	return value == 1
+}
+
+// IsForceGitSubprocessEnabled returns true if git-root discovery must go
+// through the git subprocess instead of the pure-Go filesystem walk. It is the
+// documented escape hatch for a repository layout the walk refuses to answer
+// for incorrectly rather than not at all — the walk already falls back on
+// anything it does not recognise.
+func IsForceGitSubprocessEnabled() bool {
+	valueStr := forceGitSubprocess.DefaultValue
+	if envValue := os.Getenv(forceGitSubprocess.Name); envValue != "" {
+		valueStr = envValue
+	}
+
+	value, err := strconv.Atoi(valueStr)
+	if err != nil {
+		return false
+	}
+	return value == 1
+}
+
 // GetConcurrency returns number of concurrent binary downloads
 // Returns default value on parse error
 func GetConcurrency() int {

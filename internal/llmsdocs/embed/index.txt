@@ -36,6 +36,7 @@ Standard llms.txt form: `datamitsu llms --web`.
 - [Internal Architecture](guides/architecture): Overview of datamitsu's internal execution model - file discovery, task planning, parallel execution, and caching
 - [WASM Output Parsers](guides/architecture/parsers): How datamitsu declares, builds, delivers over two channels, verifies, and loads sandboxed Rust→WASM output parsers, and how the line-based diff-in-core powers formatting
 - [Task Planning](guides/architecture/planner): How datamitsu groups files into prioritized task batches with overlap detection and CWD-subtree restriction
+- [Startup and Config Load](guides/architecture/startup): What every datamitsu invocation pays before the first tool runs - the config-load cost model, the git-root memo, and how to measure it
 - [Binary Management](guides/binary-management): How datamitsu manages binary downloads, hash verification, and caching
 - [Configuration](guides/configuration): How to configure datamitsu with JavaScript config files, remote configs, and config layers
 - [Managed Configs](guides/managed-configs): Using managed configuration files, symlinks, and the .datamitsu/ directory

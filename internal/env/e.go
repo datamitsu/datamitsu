@@ -78,6 +78,18 @@ var (
 		Description:  "Enable detailed timing output for each stage (1=enabled, 0=disabled)",
 	}
 
+	startupTimings = envVar{
+		Name:         strings.ToUpper(ldflags.PackageName) + "_STARTUP_TIMINGS",
+		DefaultValue: "0",
+		Description:  "Report per-phase startup/config-load durations to stderr (1=enabled, 0=disabled)",
+	}
+
+	forceGitSubprocess = envVar{
+		Name:         strings.ToUpper(ldflags.PackageName) + "_FORCE_GIT_SUBPROCESS",
+		DefaultValue: "0",
+		Description:  "Resolve the git root by forking git instead of walking the filesystem (1=enabled, 0=disabled)",
+	}
+
 	concurrency = envVar{
 		Name:         strings.ToUpper(ldflags.PackageName) + "_CONCURRENCY",
 		DefaultValue: "3",

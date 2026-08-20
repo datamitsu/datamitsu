@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/gitenv"
@@ -167,14 +168,116 @@ func resolveSymlinks(path string) string {
 	return resolved
 }
 
-// GetGitRoot returns the root of the topmost repository in the submodules hierarchy
-func GetGitRoot(ctx context.Context) (string, error) {
-	current := ""
+// gitRootEntry is one memoized lookup. once collapses concurrent callers for
+// the same working directory onto a single resolution.
+type gitRootEntry struct {
+	once sync.Once
+	root string
+	err  error
+}
 
-	ex, err := os.Getwd()
+var (
+	gitRootMu    sync.RWMutex
+	gitRootCache = map[string]*gitRootEntry{}
+)
+
+// gitRootLookup is the uncached resolver. It is a package variable so tests can
+// count how often a memoized call actually reaches git.
+var gitRootLookup = resolveGitRoot
+
+// resetGitRootCache drops every memoized lookup. Test-only: production code
+// never needs it, but tests that os.Chdir between cases would otherwise read a
+// previous case's answer for a reused path.
+func resetGitRootCache() {
+	gitRootMu.Lock()
+	gitRootCache = map[string]*gitRootEntry{}
+	gitRootMu.Unlock()
+}
+
+// GetGitRoot returns the root of the topmost repository in the submodules
+// hierarchy, memoized for the lifetime of the process and keyed by the working
+// directory the lookup starts from.
+//
+// The memo is sound because datamitsu is a short-lived process that does not
+// chdir mid-run, so cwd -> git root is constant for one invocation. A single
+// `datamitsu exec` asks for the root five times (once in the config loader,
+// once per engine.New), so the memo removes four of the five — including, for
+// the layouts gitRootPure declines to answer for, four pairs of forked git
+// processes.
+//
+// The one long-lived command is `datamitsu lsp` (cmd/lsp.go): it resolves the
+// root once at startup via traverser.GetGitRoot — not this function — and loads
+// config once for the whole session, so it does not depend on re-resolution
+// within a session either.
+//
+// Errors are memoized alongside successes: a directory that is not a repository
+// does not become one mid-run. The exception is a failure caused by a cancelled
+// or expired context, which says nothing about the repository layout and is
+// therefore not retained.
+func GetGitRoot(ctx context.Context) (string, error) {
+	cwd, err := os.Getwd()
 	if err != nil {
 		return "", fmt.Errorf("determine working directory: %w", err)
 	}
+
+	gitRootMu.RLock()
+	entry := gitRootCache[cwd]
+	gitRootMu.RUnlock()
+
+	if entry == nil {
+		gitRootMu.Lock()
+		if entry = gitRootCache[cwd]; entry == nil {
+			entry = &gitRootEntry{}
+			gitRootCache[cwd] = entry
+		}
+		gitRootMu.Unlock()
+	}
+
+	entry.once.Do(func() {
+		entry.root, entry.err = gitRootLookup(ctx, cwd)
+		if entry.err != nil && ctx.Err() != nil {
+			gitRootMu.Lock()
+			if gitRootCache[cwd] == entry {
+				delete(gitRootCache, cwd)
+			}
+			gitRootMu.Unlock()
+		}
+	})
+
+	return entry.root, entry.err
+}
+
+// gitSubprocessLookup is the forking resolver. It is a package variable for the
+// same reason gitRootLookup is: tests need to observe when the pure-Go walk
+// hands over to git.
+var gitSubprocessLookup = resolveGitRootViaGit
+
+// resolveGitRoot answers from the filesystem when it can and from git when it
+// cannot. The pure-Go walk returns false for every layout it is not certain
+// about (see gitRootPure), and DATAMITSU_FORCE_GIT_SUBPROCESS=1 skips it
+// entirely — a wrong root poisons project cache keys, so both paths exist to
+// keep the fast one from ever having to guess.
+//
+// A cancelled context is honoured before either path runs. The subprocess path
+// gets that from exec.CommandContext, but the walk touches only the filesystem
+// and would otherwise let a cancelled config load carry on; GetGitRoot drops the
+// resulting entry rather than memoizing it.
+func resolveGitRoot(ctx context.Context, cwd string) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", fmt.Errorf("resolve git root: %w", err)
+	}
+	if !env.IsForceGitSubprocessEnabled() {
+		if root, ok := gitRootPure(cwd); ok {
+			return root, nil
+		}
+	}
+	return gitSubprocessLookup(ctx, cwd)
+}
+
+// resolveGitRootViaGit climbs from ex to the topmost superproject working tree,
+// forking two git processes per level.
+func resolveGitRootViaGit(ctx context.Context, ex string) (string, error) {
+	current := ""
 
 	for {
 		var root, parent string

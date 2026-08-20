@@ -1034,26 +1034,33 @@ integration.
 
 ## Environment Variables
 
-| Variable                         | Description                                                                                    | Default                                             |
-| -------------------------------- | ---------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| `DATAMITSU_CACHE_DIR`            | Custom base directory for cache and store paths                                                | `$XDG_CACHE_HOME/datamitsu` or `~/.cache/datamitsu` |
-| `DATAMITSU_CONCURRENCY`          | Number of concurrent download workers                                                          | `3`                                                 |
-| `DATAMITSU_INSTALL_TIMEOUT`      | Per-app install timeout in seconds (`0` = disabled)                                            | `600`                                               |
-| `DATAMITSU_MIN_RELEASE_AGE`      | Minimum release age in minutes for `pull-*` version selection (`0` = disabled)                 | `10080`                                             |
-| `DATAMITSU_MAX_PARALLEL_WORKERS` | Max parallel tool execution workers                                                            | `max(4, floor(NumCPU * 0.75))`, capped at 16        |
-| `DATAMITSU_UNIT_CACHE_TTL`       | Minutes a cached project-level verdict stays trusted; `0` disables it                          | `1440` (24h)                                        |
-| `DATAMITSU_LSP_FORMAT_WIDEN_TO`  | How far editor format-on-save may widen: `target` or `unit`                                    | `unit`                                              |
-| `DATAMITSU_LOG_LEVEL`            | Log level (debug, info, warn, error)                                                           | `info`                                              |
-| `DATAMITSU_TIMINGS`              | Enable detailed timing output (1=enabled, 0=disabled)                                          | `0`                                                 |
-| `DATAMITSU_BINARY_COMMAND`       | Override binary command path                                                                   | -                                                   |
-| `DATAMITSU_NO_SPONSOR`           | Suppress sponsor messages in CLI output                                                        | -                                                   |
-| `DATAMITSU_OFFLINE`              | Refuse all network access (requires a pre-seeded store)                                        | -                                                   |
-| `DATAMITSU_NO_OCI`               | Disable OCI bundle store **seeding** (twin of `--no-oci`); see the note below                  | -                                                   |
-| `DATAMITSU_LIBC`                 | Override host libc detection (`glibc` or `musl`); affects store paths and OCI bundle selection | auto-detected                                       |
-| `DATAMITSU_OCI_REGISTRY`         | Registry host for base-image digest resolution in `devtools dockerfile`                        | `ghcr.io`                                           |
-| `DATAMITSU_PARSERS_DIR`          | Override directory for downloaded WASM output-parser modules                                   | `{store}/.parsers`                                  |
-| `NO_COLOR`                       | Disable color output                                                                           | -                                                   |
-| `FORCE_COLOR`                    | Force color output                                                                             | -                                                   |
+| Variable                         | Description                                                                                     | Default                                             |
+| -------------------------------- | ----------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `DATAMITSU_CACHE_DIR`            | Custom base directory for cache and store paths                                                 | `$XDG_CACHE_HOME/datamitsu` or `~/.cache/datamitsu` |
+| `DATAMITSU_CONCURRENCY`          | Number of concurrent download workers                                                           | `3`                                                 |
+| `DATAMITSU_INSTALL_TIMEOUT`      | Per-app install timeout in seconds (`0` = disabled)                                             | `600`                                               |
+| `DATAMITSU_MIN_RELEASE_AGE`      | Minimum release age in minutes for `pull-*` version selection (`0` = disabled)                  | `10080`                                             |
+| `DATAMITSU_MAX_PARALLEL_WORKERS` | Max parallel tool execution workers                                                             | `max(4, floor(NumCPU * 0.75))`, capped at 16        |
+| `DATAMITSU_UNIT_CACHE_TTL`       | Minutes a cached project-level verdict stays trusted; `0` disables it                           | `1440` (24h)                                        |
+| `DATAMITSU_LSP_FORMAT_WIDEN_TO`  | How far editor format-on-save may widen: `target` or `unit`                                     | `unit`                                              |
+| `DATAMITSU_LOG_LEVEL`            | Log level (debug, info, warn, error)                                                            | `info`                                              |
+| `DATAMITSU_TIMINGS`              | Enable detailed timing output (1=enabled, 0=disabled)                                           | `0`                                                 |
+| `DATAMITSU_STARTUP_TIMINGS`      | Report per-phase startup/config-load durations to stderr (1=enabled, 0=disabled)                | `0`                                                 |
+| `DATAMITSU_FORCE_GIT_SUBPROCESS` | Resolve the git root by forking `git` instead of walking the filesystem (1=enabled, 0=disabled) | `0`                                                 |
+| `DATAMITSU_BINARY_COMMAND`       | Override binary command path                                                                    | -                                                   |
+| `DATAMITSU_NO_SPONSOR`           | Suppress sponsor messages in CLI output                                                         | -                                                   |
+| `DATAMITSU_OFFLINE`              | Refuse all network access (requires a pre-seeded store)                                         | -                                                   |
+| `DATAMITSU_NO_OCI`               | Disable OCI bundle store **seeding** (twin of `--no-oci`); see the note below                   | -                                                   |
+| `DATAMITSU_LIBC`                 | Override host libc detection (`glibc` or `musl`); affects store paths and OCI bundle selection  | auto-detected                                       |
+| `DATAMITSU_OCI_REGISTRY`         | Registry host for base-image digest resolution in `devtools dockerfile`                         | `ghcr.io`                                           |
+| `DATAMITSU_PARSERS_DIR`          | Override directory for downloaded WASM output-parser modules                                    | `{store}/.parsers`                                  |
+| `NO_COLOR`                       | Disable color output                                                                            | -                                                   |
+| `FORCE_COLOR`                    | Force color output                                                                              | -                                                   |
+
+`DATAMITSU_FORCE_GIT_SUBPROCESS` applies to the config loader's memoized git-root
+lookup, which is where the pure-Go walk runs; the command handlers use a separate
+resolver that always forks `git`. See
+[Startup and Config Load](../guides/architecture/startup.md).
 
 :::note `--no-oci` is not a network switch
 `--no-oci` / `DATAMITSU_NO_OCI` turns off OCI bundle **store seeding** — an
