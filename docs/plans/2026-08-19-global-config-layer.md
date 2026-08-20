@@ -435,18 +435,52 @@ The trust boundary lives here, in one branch.
 
 ### Task 7: Verify acceptance criteria
 
-- [ ] `datamitsu source fish --config <path>` in a shell rc file activates a working farm from
+- [x] `datamitsu source fish --config <path>` in a shell rc file activates a working farm from
       a directory that is not a git repository, and downloads nothing
-- [ ] `datamitsu source` with no discovered config and no `--config` still fails loudly with a
+- [x] `datamitsu source` with no discovered config and no `--config` still fails loudly with a
       message naming `--config`
-- [ ] an explicit-config shim never evaluates a project's config
-- [ ] `lint`, `fix` and `check` are entirely unaffected: the execution-cache invalidation key is
+- [x] an explicit-config shim never evaluates a project's config
+- [x] `lint`, `fix` and `check` are entirely unaffected: the execution-cache invalidation key is
       byte-identical with and without a machine-level config present on disk
-- [ ] no new implicit discovery path was added anywhere
-- [ ] `go test ./... -race` passes
-- [ ] `go test ./test/cli/ -count=2` passes
-- [ ] `pnpm dm check` passes
-- [ ] coverage meets the project standard via `pnpm test:coverage:all`
+- [x] no new implicit discovery path was added anywhere
+- [x] `go test ./... -race` passes
+- [x] `go test ./test/cli/ -count=2` passes
+- [x] `pnpm dm check` passes
+- [x] coverage meets the project standard via `pnpm test:coverage:all`
+
+#### Verification notes
+
+- **Activation outside a repository, downloading nothing** — `test/cli/source_config_test.go`
+  (`TestSourceConfigFishActivatesOutsideARepository`, `TestSourceConfigActivatesOutsideARepository`,
+  `TestSourceConfigDownloadsNothing`, all under `DATAMITSU_OFFLINE=1`) and the real-shell tier
+  (`test/shell/source_config_test.go`), which activates in a live bash and fish and runs the
+  resulting tool.
+- **The loud failure still names `--config`** — `TestSourceOutsideAGitRepository` and
+  `TestSourceWithoutAConfig` (`test/cli/source_test.go`) assert non-zero exit, empty stdout and
+  `--config` in stderr. Task 4 widened when the error fires, not what it says.
+- **The shim never evaluates a project's config** — `internal/shim/config_farm_test.go` asserts on
+  the absence of the git-discovery call, and the real-shell tier proves it end to end against a
+  repository whose config throws on evaluation, requiring the machine-level version and no marker
+  on either stream.
+- **`lint`/`fix`/`check` unaffected** — new file `test/cli/machine_config_isolation_test.go`. It
+  plants the same config in every location an implicit layer would plausibly read
+  (`$XDG_CONFIG_HOME/datamitsu/datamitsu.config.{js,ts,mjs}`, `$HOME/.datamitsu/`, `$HOME` itself,
+  and the directory above the project), with `$HOME`/`$XDG_CONFIG_HOME` pinned at the fixture —
+  `clitest.BaseEnv` strips every `DATAMITSU_*` var but deliberately not those two, so a test that
+  cares must pin them itself. `config show` is `json.MarshalIndent` of the same `config.Config`
+  that `cache.calculateInvalidationKey` marshals, so byte-identical output there is a
+  byte-identical key; the `--explain=json` plans for all three commands are compared as well.
+  `TestMachineConfigReachesTheChainOnlyWhenNamed` is the positive control — naming one of the
+  planted files with `--config` does add its app, so the identical-bytes assertions are not
+  passing against an inert fixture.
+- **No new implicit discovery** — `git diff source-mode..HEAD -- cmd/config_loader.go` is empty;
+  `discoverAutoConfig` is still called from exactly one place with a git root as its argument.
+- **Results:** `go test ./... -race`, `go test ./test/cli/ -count=2` and `pnpm dm check` all pass.
+  `pnpm test:coverage:all` reports 81.9% merged (`cmd` 75.0% read from the merged profile,
+  `internal/shim` 88.9%, `internal/sourcefarm` 85.7%, `internal/env` 93.7%). Its first run failed
+  on a transient `coverage meta-data emit failed: … no such file or directory` while writing into
+  the shared `GOCOVERDIR`, which desynchronized a determinism case's two runs; it passed on a
+  clean rerun and is a covdata-emit flake, not a test defect.
 
 ### Task 8: [Final] Documentation
 
