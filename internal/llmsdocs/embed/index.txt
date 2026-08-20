@@ -49,6 +49,7 @@ Standard llms.txt form: `datamitsu llms --web`.
 - [Using Wrapper Packages](guides/using-wrappers): How to install and use datamitsu wrapper packages in your projects
 - [Add a New Tool](how-to/add-new-tool): Step-by-step guide to adding binary, UV, Node, and JVM tools to datamitsu
 - [Configure Linters](how-to/configure-linters): How to set up and configure linters and formatters with datamitsu
+- [Machine-Level Toolchain](how-to/machine-level-toolchain): Activate a hash-verified, pinned toolchain from a config outside any repository, so the tools you want on your machine are on PATH in every shell
 - [Maintaining Wrapper Packages](how-to/maintain-wrapper): Workflows for keeping wrapper package tool versions, runtimes, and hashes up to date using devtools commands
 - [Manage Cache](how-to/manage-cache): How to manage datamitsu's cache, store, and per-project data
 - [Use in Alpine Linux](how-to/use-in-alpine): How datamitsu handles Alpine Linux and musl libc systems with automatic detection and binary selection

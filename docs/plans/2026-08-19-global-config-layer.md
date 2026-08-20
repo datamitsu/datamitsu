@@ -484,23 +484,48 @@ The trust boundary lives here, in one branch.
 
 ### Task 8: [Final] Documentation
 
-- [ ] a `website/docs/how-to/` page for the machine-level toolchain: writing a config outside
+- [x] a `website/docs/how-to/` page for the machine-level toolchain: writing a config outside
       any project, activating it from a shell rc file, and how it layers with project
       activation
-- [ ] document the trust boundary explicitly — an explicit-config farm never evaluates project
+- [x] document the trust boundary explicitly — an explicit-config farm never evaluates project
       configs, and project activation is deliberate. State that this is a security property,
       not an omission
-- [ ] document the migration path from unverified download scripts honestly, including what
+- [x] document the migration path from unverified download scripts honestly, including what
       stays with the system package manager and why. Keep it generic: the guide belongs to
       whoever reads it, and it should not describe any particular person's machine
-- [ ] document that hash verification is the point — every tool datamitsu takes over gains a
+- [x] document that hash verification is the point — every tool datamitsu takes over gains a
       mandatory SHA-256, which `curl | sh` installers generally do not have
-- [ ] document `--config` in the `## source` section of
+- [x] document `--config` in the `## source` section of
       `website/docs/reference/cli-commands.md`, including the outside-a-repository invocation
-- [ ] register new pages in `website/sidebars.ts`
-- [ ] run `task gen:llms-docs` and commit `internal/llmsdocs/embed` — the `llms-docs-drift` job
+- [x] register new pages in `website/sidebars.ts`
+- [x] run `task gen:llms-docs` and commit `internal/llmsdocs/embed` — the `llms-docs-drift` job
       fails on any diff
-- [ ] `pnpm dm check --file-scoped` passes
+- [x] `pnpm dm check --file-scoped` passes
+
+#### Implementation notes
+
+- `website/docs/how-to/machine-level-toolchain.md` is the new page: writing the config,
+  activating it from bash/zsh/fish rc files, the two farm namespaces
+  (`{cache}/cache/configs/{hash}` vs `.../projects/{hash}`), the `PATH`-order layering rule, the
+  trust boundary, `status`/`refresh --config`, the hash argument, and the migration table.
+- The migration section is deliberately a table of _kinds_ of tool rather than a list of tools:
+  single-binary CLIs, npm/uv globals and `go install`-ed tools move; package managers, GUI
+  installers, fonts and anything needing `sudo` stay. It describes no particular machine.
+- The example config's `hash` fields are `<sha256 of that file>` placeholders with the format
+  requirement stated next to them, and the page points at `devtools pull-github` as the way to
+  fill them in. Inventing plausible-looking SHA-256 values for a real release URL would be a
+  worse example than an obviously-unfinished one.
+- The `## source` reference gained a `### source --config: a machine-level toolchain` subsection
+  with the origin comparison table, and its pre-existing claim that "any of `--config`,
+  `--before-config` or `--no-auto-config` bypasses the manifest fast path" was corrected —
+  Task 4 opened the fast path to config farms, so only the other two flags still bypass it.
+  `source status`/`refresh` document their `--config` form, and `DATAMITSU_FARM_CONFIG` joins the
+  environment-variable table.
+- `task gen:llms-docs` had to run **twice**: the first harvest ran before `dm check`'s prettier
+  reformatted the new pages, so its snapshot was already stale (`pageSetHash` changed on the
+  second run). Format first, then harvest.
+- `go test ./test/cli/` and `go test ./internal/llmsdocs/` pass; `pnpm dm check --file-scoped` is
+  clean with the changes staged (it finds nothing when they are not).
 
 ## Technical Details
 

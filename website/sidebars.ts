@@ -65,6 +65,7 @@ const sidebars: SidebarsConfig = {
         "how-to/add-new-tool",
         "how-to/configure-linters",
         "how-to/use-remote-configs",
+        "how-to/machine-level-toolchain",
         "how-to/manage-cache",
         "how-to/maintain-wrapper",
         "how-to/use-in-alpine",

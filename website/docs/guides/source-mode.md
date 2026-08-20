@@ -207,6 +207,7 @@ Closing this hole soundly needs read-instrumentation inside the JavaScript VM, s
 
 ## See also
 
+- [Machine-Level Toolchain](/docs/how-to/machine-level-toolchain) — the same guarantees for a config outside any repository, activated from a shell rc file
 - [`source` command reference](/docs/reference/cli-commands#source) — every flag, in detail
 - [Binary Management](/docs/guides/binary-management) — how the content-addressed store makes two branches' versions coexist
 - [Supply Chain Security](/docs/guides/supply-chain-security) — the hash verification that happens at download time, not on this path

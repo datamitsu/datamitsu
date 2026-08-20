@@ -4,8 +4,8 @@
   "license": "MIT",
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
-  "pageCount": 52,
-  "pageSetHash": "d84d0bc3d358d77c730db8b0892fd190",
+  "pageCount": 53,
+  "pageSetHash": "e584173cbc56b287b1ffc81fff53a1d2",
   "pages": [
     {
       "slug": "about",
@@ -316,8 +316,8 @@
       "url": "https://datamitsu.com/docs/guides/source-mode.md",
       "title": "Source Mode",
       "description": "Put a project's declared toolchain on PATH for the current shell, so every tool runs at the version the repository pins — with lazy downloads and invisible branch switching",
-      "bytes": 15357,
-      "contentHash": "300955df1910fc1d3f973d8764239404"
+      "bytes": 15515,
+      "contentHash": "9b37ba024c4ddccb196f7b7f66d0cffb"
     },
     {
       "slug": "guides/supply-chain-security",
@@ -363,6 +363,15 @@
       "description": "How to set up and configure linters and formatters with datamitsu",
       "bytes": 5348,
       "contentHash": "c66f9369a23d36e3539c44e7d7d537de"
+    },
+    {
+      "slug": "how-to/machine-level-toolchain",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/how-to/machine-level-toolchain.md",
+      "title": "Machine-Level Toolchain",
+      "description": "Activate a hash-verified, pinned toolchain from a config outside any repository, so the tools you want on your machine are on PATH in every shell",
+      "bytes": 12885,
+      "contentHash": "145f9577106b5a6d16d95b702b48d96f"
     },
     {
       "slug": "how-to/maintain-wrapper",
@@ -424,8 +433,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 61113,
-      "contentHash": "af1929ee8d0b024778c5f0bc9ad66dec"
+      "bytes": 64855,
+      "contentHash": "20ba1e5e4eda62c105a5f0ec0e3ee78f"
     },
     {
       "slug": "reference/comparison",
