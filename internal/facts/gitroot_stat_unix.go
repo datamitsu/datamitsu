@@ -23,8 +23,22 @@ func statIdentity(path string) (dirIdentity, bool) {
 		return dirIdentity{}, false
 	}
 
-	// st.Dev is signed on some platforms and unsigned on others. The value is
-	// only ever compared with another one produced here, so the conversion just
-	// has to be consistent.
-	return dirIdentity{uid: uint64(st.Uid), device: uint64(st.Dev)}, true //nolint:gosec // identity, never arithmetic
+	return dirIdentity{uid: widenID(st.Uid), device: widenID(st.Dev)}, true
+}
+
+// widenID widens a syscall.Stat_t identity field to uint64.
+//
+// The field types are platform-dependent — st.Dev is int32 on darwin and
+// openbsd but uint64 on linux and freebsd — so a plain uint64(...) is
+// load-bearing on one platform and a no-op on another, where unconvert reports
+// it. Suppressing that with a //nolint only moves the problem, because the
+// directive is then unused on the other platform and nolintlint reports *that*.
+// Converting from a type parameter is the one expression that is correct, and
+// lint-clean, on every unix.
+//
+// The values are only ever compared with others produced here, so reinterpreting
+// the sign of a negative device number is harmless — it only has to be
+// consistent.
+func widenID[T int32 | int64 | uint32 | uint64](v T) uint64 {
+	return uint64(v)
 }
