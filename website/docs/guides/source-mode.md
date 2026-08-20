@@ -106,7 +106,13 @@ Activation downloads nothing, even for tools that have never been fetched. A dec
 
 This is why activation is cheap enough for a shell rc file: a repository declaring a hundred tools costs the same at activation time as one declaring three.
 
-Activation also skips the config load entirely when the baked manifest still matches the tree — the same freshness comparison the shim makes — and renders the shell code from the manifest it reads back. Only an activation that finds a changed tree pays a full resolve. Passing `--config` explicitly always re-resolves: the manifest's watch set describes the config chain that baked it, and it cannot speak for a file it has never seen.
+Activation also skips the config load entirely when the baked manifest still matches the tree — the same freshness comparison the shim makes — and renders the shell code from the manifest it reads back. Only an activation that finds a changed tree pays a full resolve. Any of `--config`, `--before-config` and `--no-auto-config` always re-resolves: the manifest's watch set describes the config chain that baked it, and it cannot speak for a file it has never seen. A farm baked with those flags is likewise not served back to a later plain `datamitsu source`. `--no-auto-config` with no `--config` to replace it is refused outright, because baking the built-in default config would overwrite the farm this root's real config owns.
+
+### A bake that fails still activates
+
+If the farm cannot be re-baked — a config that does not evaluate on this branch, a remote config unreachable offline — activation warns on stderr, activates the farm already on disk and exits 0. Emitting nothing would exit 0 with a shell that was never activated, and every declared tool would then fall through `PATH` to whatever the system has, which is the failure this feature exists to prevent.
+
+The toolchain you get is therefore the previous one, not the branch's. `datamitsu source refresh` is the repair command and inverts the rule: a failed bake exits non-zero, so a CI step can trust its exit code where it cannot trust `source`'s.
 
 ### A declared name never falls through
 
@@ -118,13 +124,13 @@ That is deliberate and it is the single most important failure-mode decision in 
 
 Some declared names never become farm entries. They appear in `datamitsu source status` under `excluded` **with a reason** — a name that silently does not appear would be undebuggable.
 
-| Excluded                                   | Reason                                                                                                                           |
-| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
-| `shell` apps                               | A shell app resolves its command through the **inherited** `PATH`. Shimming one would make it call itself, recursively, forever. |
-| `sudo`, `su`, `doas`, `sudoedit`           | Privilege boundaries are not something a project config gets to redefine.                                                        |
-| `sh`, `bash`, `zsh`, `fish`, `dash`, `env` | Shimming the interpreter that runs the shim is a loop.                                                                           |
-| `ssh`, `scp`, `sftp`, `git`                | Too load-bearing to redirect from a repository's own config.                                                                     |
-| `datamitsu`                                | A shimmed `datamitsu` turns the shim's own installer spawn into an infinite `exec` loop.                                         |
+| Excluded                                   | Reason                                                                                                                                                                                          |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `shell` apps                               | A shell app resolves its command through the **inherited** `PATH`. Shimming one would make it call itself, recursively, forever.                                                                |
+| `sudo`, `su`, `doas`, `sudoedit`           | Privilege boundaries are not something a project config gets to redefine.                                                                                                                       |
+| `sh`, `bash`, `zsh`, `fish`, `dash`, `env` | Shimming the interpreter that runs the shim is a loop.                                                                                                                                          |
+| `ssh`, `scp`, `sftp`, `git`, `ldd`         | Too load-bearing to redirect from a repository's own config. `git` and `ldd` are also spawned by datamitsu itself (git-root discovery, libc detection), so shimming either re-enters datamitsu. |
+| `datamitsu`                                | A shimmed `datamitsu` turns the shim's own installer spawn into an infinite `exec` loop.                                                                                                        |
 
 App names themselves are validated as filesystem entries: `^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`, no path separators, no Windows reserved device names, and no two names that differ only by case (macOS filesystems would collapse them into one file).
 

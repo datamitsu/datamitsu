@@ -37,7 +37,7 @@ func fixtureRoot(t *testing.T) (string, Manifest) {
 		filepath.Join(root, "datamitsu.config.ts"),
 		filepath.Join(root, "before.config.ts"),
 	}
-	m := BuildManifest(plan, OriginGitRoot, WatchPaths(root, chain))
+	m := BuildManifest(plan, OriginGitRoot, WatchSet(WatchPaths(root, chain)))
 	if !Validate(m) {
 		t.Fatalf("freshly built manifest is not fresh: %+v", m)
 	}
@@ -439,10 +439,10 @@ func BenchmarkValidate(b *testing.B) {
 		}
 	}
 	plan := Plan{Root: root, FarmDir: filepath.Join(root, "farm")}
-	m := BuildManifest(plan, OriginGitRoot, WatchPaths(root, []string{
+	m := BuildManifest(plan, OriginGitRoot, WatchSet(WatchPaths(root, []string{
 		filepath.Join(root, "datamitsu.config.ts"),
 		filepath.Join(root, "before.config.ts"),
-	}))
+	})))
 
 	iterations := 0
 	for b.Loop() {

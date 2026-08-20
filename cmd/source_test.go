@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -34,6 +35,18 @@ func realHostilePlan(t *testing.T) sourcefarm.Plan {
 		t.Fatalf("create farm directory: %v", err)
 	}
 	return sourcefarm.Plan{Root: root, FarmDir: farm}
+}
+
+// writeFarmEntries creates a file per entry name in farm. loadSourcePlan checks
+// that the farm still holds one, so a manifest listing entries needs them on
+// disk to be served at all.
+func writeFarmEntries(t *testing.T, farm string, names ...string) {
+	t.Helper()
+	for _, name := range names {
+		if err := os.WriteFile(filepath.Join(farm, name), []byte("shim"), 0o700); err != nil {
+			t.Fatalf("write farm entry %q: %v", name, err)
+		}
+	}
 }
 
 func simplePlan() sourcefarm.Plan {
@@ -241,8 +254,10 @@ func TestWarningsNeverReachStdout(t *testing.T) {
 			t.Errorf("stderr is missing %q:\n%s", want, warnings)
 		}
 	}
-	if strings.Contains(warnings, "tofu\n") && !strings.Contains(warnings, "shadowing") {
-		t.Errorf("shadow warning lost its path:\n%s", warnings)
+	// The shadow warning must name both sides on one line: the name that changed
+	// meaning and the binary it now hides. Either half alone is unactionable.
+	if !strings.Contains(warnings, "tofu now runs this project's version, shadowing /usr/local/bin/tofu") {
+		t.Errorf("shadow warning is not the full line:\n%s", warnings)
 	}
 
 	for name, render := range map[string]func(sourcefarm.Plan) string{"bash": renderBash, "fish": renderFish} {
@@ -390,6 +405,7 @@ func TestFreshSourcePlanServesTheManifest(t *testing.T) {
 	if err := os.MkdirAll(farm, 0o700); err != nil {
 		t.Fatalf("create farm directory: %v", err)
 	}
+	writeFarmEntries(t, farm, "tofu")
 
 	watched := filepath.Join(root, "datamitsu.config.js")
 	if err := os.WriteFile(watched, []byte("//\n"), 0o600); err != nil {
@@ -401,7 +417,7 @@ func TestFreshSourcePlanServesTheManifest(t *testing.T) {
 		Entries:  []sourcefarm.Entry{{Name: "tofu", Installed: true}},
 		Shadowed: []sourcefarm.Shadow{{Name: "tofu", Path: "/usr/local/bin/tofu"}},
 	}
-	m := sourcefarm.BuildManifest(plan, sourcefarm.OriginGitRoot, sourcefarm.WatchPaths(root, []string{watched}))
+	m := sourcefarm.BuildManifest(plan, sourcefarm.OriginGitRoot, sourcefarm.WatchSet(sourcefarm.WatchPaths(root, []string{watched})))
 	data, err := sourcefarm.Encode(m)
 	if err != nil {
 		t.Fatalf("Encode() error = %v", err)
@@ -435,15 +451,63 @@ func TestFreshSourcePlanServesTheManifest(t *testing.T) {
 		t.Error("a manifest whose farm is gone was served anyway")
 	}
 
-	// A changed tree must re-bake too.
+	// A farm that lost one entry file is the same failure one name at a time: the
+	// tree is unchanged, so nothing about freshness notices, and that name falls
+	// through PATH to whatever the system has.
 	if err := os.MkdirAll(farm, 0o700); err != nil {
 		t.Fatalf("recreate farm directory: %v", err)
 	}
+	if _, fresh := freshSourcePlanFor(root); fresh {
+		t.Error("a farm missing the entry its manifest describes was served anyway")
+	}
+	writeFarmEntries(t, farm, "tofu")
+	if _, fresh := freshSourcePlanFor(root); !fresh {
+		t.Fatal("restoring the entry did not make the farm servable again")
+	}
+
+	// A changed tree must re-bake too.
 	if err := os.WriteFile(watched, []byte("// changed\n"), 0o600); err != nil {
 		t.Fatalf("rewrite watched file: %v", err)
 	}
 	if _, fresh := freshSourcePlanFor(root); fresh {
 		t.Error("a stale manifest was served anyway")
+	}
+}
+
+// TestWatchSetSincePrefersThePreLoadTuple pins the anti-TOCTOU rule in
+// bakeSourceFarm: a config edit that lands while the config is being evaluated
+// must be recorded as the state *before* the read, so the next freshness check
+// reports stale. Recording the post-edit tuple would claim the farm already
+// reflects an edit it never saw, and it would keep claiming it forever.
+func TestWatchSetSincePrefersThePreLoadTuple(t *testing.T) {
+	prior := []sourcefarm.WatchFile{
+		{Path: "/repo/datamitsu.config.ts", MtimeNS: 100, Size: 10, Exists: true},
+		{Path: "/repo/.git/HEAD", MtimeNS: 200, Size: 20, Exists: true},
+	}
+	current := []sourcefarm.WatchFile{
+		{Path: "/repo/before.config.ts", MtimeNS: 300, Size: 30, Exists: true},
+		{Path: "/repo/datamitsu.config.ts", MtimeNS: 999, Size: 99, Exists: true},
+		{Path: "/repo/.git/HEAD", MtimeNS: 200, Size: 20, Exists: true},
+	}
+
+	got := watchSetSince(prior, current)
+	if len(got) != len(current) {
+		t.Fatalf("watchSetSince changed the watch set length: %+v", got)
+	}
+	if got[1] != prior[0] {
+		t.Errorf("a file edited during the load recorded its new tuple: %+v", got[1])
+	}
+	if got[0] != current[0] {
+		t.Errorf("a path the pre-load snapshot never saw was rewritten: %+v", got[0])
+	}
+	if got[2] != current[2] {
+		t.Errorf("an unchanged path was not passed through: %+v", got[2])
+	}
+
+	// With nothing to compare against the post-load set is the only answer there
+	// is, and it must survive untouched.
+	if got := watchSetSince(nil, current); !slices.Equal(got, current) {
+		t.Errorf("watchSetSince(nil, current) = %+v, want %+v", got, current)
 	}
 }
 
@@ -469,6 +533,7 @@ func TestPreviousSourcePlanServesAStaleFarm(t *testing.T) {
 	if err := os.MkdirAll(farm, 0o700); err != nil {
 		t.Fatalf("create farm directory: %v", err)
 	}
+	writeFarmEntries(t, farm, "tofu")
 
 	watched := filepath.Join(root, "datamitsu.config.js")
 	if err := os.WriteFile(watched, []byte("//\n"), 0o600); err != nil {
@@ -479,7 +544,7 @@ func TestPreviousSourcePlanServesAStaleFarm(t *testing.T) {
 		FarmDir: farm,
 		Entries: []sourcefarm.Entry{{Name: "tofu", Installed: true}},
 	}
-	m := sourcefarm.BuildManifest(plan, sourcefarm.OriginGitRoot, sourcefarm.WatchPaths(root, []string{watched}))
+	m := sourcefarm.BuildManifest(plan, sourcefarm.OriginGitRoot, sourcefarm.WatchSet(sourcefarm.WatchPaths(root, []string{watched})))
 	data, err := sourcefarm.Encode(m)
 	if err != nil {
 		t.Fatalf("Encode() error = %v", err)
@@ -660,6 +725,7 @@ func TestFlaggedFarmIsNotServedToAPlainInvocation(t *testing.T) {
 	if err := os.MkdirAll(farm, 0o700); err != nil {
 		t.Fatalf("create farm directory: %v", err)
 	}
+	writeFarmEntries(t, farm, "from-other-chain")
 
 	// Bake as the flagged invocation would: the other chain's file is in the
 	// watch set, so nothing about the tree makes this manifest stale.
@@ -669,7 +735,7 @@ func TestFlaggedFarmIsNotServedToAPlainInvocation(t *testing.T) {
 	}
 	ConfigPaths = []string{other}
 	plan := sourcefarm.Plan{Root: root, FarmDir: farm, Entries: []sourcefarm.Entry{{Name: "from-other-chain"}}}
-	m := sourcefarm.BuildManifest(plan, sourcefarm.OriginGitRoot, sourcefarm.WatchPaths(root, []string{other}))
+	m := sourcefarm.BuildManifest(plan, sourcefarm.OriginGitRoot, sourcefarm.WatchSet(sourcefarm.WatchPaths(root, []string{other})))
 	m.ConfigArgs = configChainArgs()
 	if len(m.ConfigArgs) == 0 {
 		t.Fatal("configChainArgs() recorded nothing for a --config invocation")

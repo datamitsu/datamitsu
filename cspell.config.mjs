@@ -34,6 +34,10 @@ export default defineConfig((config) => ({
     // that a shell stops the \x escape after exactly two digits rather than
     // absorbing it.
     "xffb",
+    // Windows' executable-extension list, which is what decides whether a PATH
+    // hit is runnable there — source mode's PATH search has to say so.
+    "PATHEXT",
+    "executability",
     // Go packages behind `datamitsu llms`: the embedded docs snapshot and its
     // manifest schema.
     "llmsdocs",

@@ -270,6 +270,13 @@ func TestResolveCommandInfo_JVM(t *testing.T) {
 	if !strings.HasSuffix(info.Args[1], "spectral.jar") {
 		t.Errorf("Args[1] = %q, want it to end with spectral.jar", info.Args[1])
 	}
+	// Artifact is what makes "is this installed?" answerable for a JVM app. The
+	// command is the bare word "java", which no stat can decide, so without the
+	// jar recorded here a system-mode app reads as permanently uninstalled and
+	// the shim spawns a full install on every single invocation.
+	if info.Artifact != info.Args[1] {
+		t.Errorf("Artifact = %q, want the jar %q", info.Artifact, info.Args[1])
+	}
 }
 
 // TestResolveCommandInfo_JVMMainClass covers the -cp/mainClass variant, so the
@@ -325,6 +332,13 @@ func TestResolveCommandInfo_JVMManagedUninstalled(t *testing.T) {
 
 	if _, statErr := os.Stat(info.Command); statErr == nil {
 		t.Errorf("resolve materialized the java binary at %q; it must not download", info.Command)
+	}
+	// The managed case is the mirror of the system one: java exists as soon as
+	// the JDK is unpacked, so only the recorded jar can tell the shim the app
+	// itself has not been fetched. Without it the shim execs `java -jar` against
+	// a file that was never downloaded.
+	if info.Artifact == "" || !strings.HasSuffix(info.Artifact, "tool.jar") {
+		t.Errorf("Artifact = %q, want the tool.jar path the install will write", info.Artifact)
 	}
 }
 

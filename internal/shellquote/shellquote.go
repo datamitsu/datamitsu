@@ -122,20 +122,6 @@ func Fish(s string) string {
 	return b.String()
 }
 
-// FishPathList renders dirs as a fish list literal — a space-separated
-// sequence of quoted words, suitable for `set -gx PATH …`.
-//
-// fish's PATH is a list variable, not a colon-joined string, so joining with
-// os.PathListSeparator would produce one element containing colons rather than
-// several elements.
-func FishPathList(dirs []string) string {
-	quoted := make([]string, len(dirs))
-	for i, d := range dirs {
-		quoted[i] = Fish(d)
-	}
-	return strings.Join(quoted, " ")
-}
-
 // isPrintableASCII reports whether c is a byte that every shell passes through
 // a quoted word unchanged (modulo the quote and backslash characters, which
 // callers escape themselves).

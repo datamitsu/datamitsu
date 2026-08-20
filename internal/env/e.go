@@ -157,10 +157,16 @@ var (
 	}
 
 	// sourceRoot and sourceFarm are written by `datamitsu source <shell>` into
-	// the activated shell, never read back by datamitsu's own resolution: the
-	// shim discovers the root from the working directory so a `cd` into another
+	// the activated shell. Neither takes part in resolving a tool: the shim
+	// discovers the root from the working directory so a `cd` into another
 	// repository keeps working inside an already-activated shell. They exist so
 	// a user (and a prompt, and a bug report) can see which farm is active.
+	//
+	// sourceFarm has one reader — shim.isFarmDir, which consults it to recognize
+	// a farm directory whose path this process computes differently than the
+	// activating shell did (a DATAMITSU_CACHE_DIR or HOME that resolves
+	// differently). That only ever adds "yes, through a farm", the branch that
+	// fails loudly, so it cannot turn a CLI invocation into a tool run.
 	//
 	// They are deliberately excluded from Environ — see the note there.
 	sourceRoot = envVar{

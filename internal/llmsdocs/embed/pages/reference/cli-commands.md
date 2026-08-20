@@ -854,6 +854,17 @@ datamitsu cache clear
 | `--all`     | Clear all project caches (not just the current project) |
 | `--dry-run` | Show what would be deleted without deleting             |
 
+:::warning This removes source-mode farms
+
+A project's [source-mode](../guides/source-mode.md) farm and manifest live in the
+same per-project cache directory, so `cache clear` deletes them along with the
+lint/fix caches. Every shell already activated for that project then reports exit
+127 for every declared tool — the shim deliberately does not re-bake a farm that
+is not there. Run `datamitsu source refresh` (or re-activate) afterwards, and use
+`--dry-run` first to see what would go.
+
+:::
+
 ### cache path
 
 Print the absolute path to the global cache directory.
@@ -1059,6 +1070,22 @@ stdout carries shell code and nothing else, so the output is always safe to
 `eval`. Warnings — tools not downloaded yet, system binaries this shadows — go
 to stderr.
 
+`--no-auto-config` without a `--config` is refused: activating the built-in
+default config would bake a handful of built-in apps into the farm this root's
+real config owns. Any of `--config`, `--before-config` or `--no-auto-config` also
+bypasses the manifest fast path and re-resolves the config, and a farm baked with
+those flags is not reused by a later plain `datamitsu source` — a manifest baked
+from a different config chain would otherwise activate a toolchain the plain
+invocation never asked for.
+
+If the farm cannot be re-baked at all — a config that does not evaluate on this
+branch, a remote config unreachable offline — activation warns on stderr,
+activates the farm already on disk and **exits 0**. Emitting nothing would exit 0
+with a shell that was never activated, and every declared tool would then fall
+through `PATH` to whatever the system has. `source refresh` is the repair command
+and inverts this: a failed bake exits non-zero, leaving the previous farm in
+place, so a CI step can trust `refresh`'s exit code but not `source`'s.
+
 ### source status
 
 ```bash
@@ -1137,12 +1164,17 @@ from the same shell function that runs an activation through `eval`.
 | `NO_COLOR`                       | Disable color output                                                                            | -                                                   |
 | `FORCE_COLOR`                    | Force color output                                                                              | -                                                   |
 
-`DATAMITSU_ROOT` and `DATAMITSU_FARM` are written by `datamitsu source` and are
-informational only. Nothing reads them back to resolve a tool — the shim
-discovers the repository root from the working directory, so a tool run in
-another repository resolves against that repository, not against the one the
-shell was activated in. They are also excluded from the farm's staleness
-fingerprint, so exporting them cannot make a farm look stale.
+`DATAMITSU_ROOT` and `DATAMITSU_FARM` are written by `datamitsu source`. Neither
+is used to resolve a tool — the shim discovers the repository root from the
+working directory, so a tool run in another repository resolves against that
+repository, not against the one the shell was activated in. `DATAMITSU_ROOT` is
+purely informational; `DATAMITSU_FARM` is read in one place, to recognize that an
+invocation arrived through a farm directory when the computed cache path and the
+activated one spell the same directory differently (a `DATAMITSU_CACHE_DIR` or
+`HOME` that resolves differently in this process). Without it a genuine tool
+invocation could be mistaken for a renamed `datamitsu` binary and handed to the
+CLI. Both are excluded from the farm's staleness fingerprint, so exporting them
+cannot make a farm look stale.
 
 `DATAMITSU_FORCE_GIT_SUBPROCESS` applies to the config loader's memoized git-root
 lookup, which is where the pure-Go walk runs; the command handlers use a separate

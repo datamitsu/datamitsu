@@ -329,13 +329,3 @@ func SourceRootVarName() string {
 func SourceFarmVarName() string {
 	return sourceFarm.Name
 }
-
-// SourceRoot returns the git root of the farm activated in this shell, or "".
-func SourceRoot() string {
-	return os.Getenv(sourceRoot.Name)
-}
-
-// SourceFarm returns the farm directory activated in this shell, or "".
-func SourceFarm() string {
-	return os.Getenv(sourceFarm.Name)
-}

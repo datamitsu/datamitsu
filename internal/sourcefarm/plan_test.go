@@ -3,6 +3,9 @@ package sourcefarm
 import (
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
@@ -427,5 +430,49 @@ func TestBuildPlan_ResolvedFieldsCopied(t *testing.T) {
 	}
 	if entry.Env["JAVA_HOME"] == "" {
 		t.Errorf("Env = %v, want JAVA_HOME preserved", entry.Env)
+	}
+}
+
+// TestSystemLookPathSkipsTheFarm is the regression test for shadow detection
+// going blind in an activated shell. exec.LookPath would stop at the farm's own
+// entry, which BuildPlan then drops, so re-running `datamitsu source` from an
+// activated shell reported no shadows at all — the state the user is most
+// likely to be in when they read the list.
+func TestSystemLookPathSkipsTheFarm(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("PATH executability is decided by PATHEXT on Windows; the unix mode bits below do not apply")
+	}
+	farm := t.TempDir()
+	system := t.TempDir()
+	for _, dir := range []string{farm, system} {
+		if err := os.WriteFile(filepath.Join(dir, "tofu"), []byte("#!/bin/sh\n"), 0o700); err != nil {
+			t.Fatalf("write executable in %s: %v", dir, err)
+		}
+	}
+	// The farm is first, exactly as an activated shell has it.
+	t.Setenv("PATH", farm+string(os.PathListSeparator)+system)
+
+	got, err := SystemLookPath(farm)("tofu")
+	if err != nil {
+		t.Fatalf("SystemLookPath()(\"tofu\") error = %v, want the system copy", err)
+	}
+	if want := filepath.Join(system, "tofu"); got != want {
+		t.Errorf("SystemLookPath()(\"tofu\") = %q, want %q", got, want)
+	}
+
+	// With nothing outside the farm there is no shadow to report, and the farm's
+	// own entry must not be offered as one.
+	t.Setenv("PATH", farm)
+	if got, err := SystemLookPath(farm)("tofu"); err == nil {
+		t.Errorf("SystemLookPath()(\"tofu\") = %q, want a not-found error", got)
+	}
+
+	// A non-executable file is skipped the way a shell skips it.
+	t.Setenv("PATH", system)
+	if err := os.WriteFile(filepath.Join(system, "tflint"), []byte("data\n"), 0o600); err != nil {
+		t.Fatalf("write non-executable: %v", err)
+	}
+	if got, err := SystemLookPath(farm)("tflint"); err == nil {
+		t.Errorf("SystemLookPath()(\"tflint\") = %q, want a not-found error", got)
 	}
 }

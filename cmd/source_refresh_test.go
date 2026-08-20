@@ -113,7 +113,7 @@ func TestSourceFarmIsFresh(t *testing.T) {
 		t.Fatalf("write watched file: %v", err)
 	}
 	m := sourcefarm.BuildManifest(sourcefarm.Plan{Root: root, FarmDir: farmDir}, sourcefarm.OriginGitRoot,
-		sourcefarm.WatchPaths(root, []string{watched}))
+		sourcefarm.WatchSet(sourcefarm.WatchPaths(root, []string{watched})))
 	data, err := sourcefarm.Encode(m)
 	if err != nil {
 		t.Fatalf("Encode() error = %v", err)

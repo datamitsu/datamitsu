@@ -82,20 +82,3 @@ func TestEnviron_ExcludesActivationMarkers(t *testing.T) {
 		}
 	}
 }
-
-// TestSourceMarkerAccessors pins that the exported names and the getters agree,
-// so the shell renderer and any reader cannot drift apart.
-func TestSourceMarkerAccessors(t *testing.T) {
-	t.Setenv(SourceRootVarName(), "/repo")
-	t.Setenv(SourceFarmVarName(), "/cache/bin")
-
-	if got := SourceRoot(); got != "/repo" {
-		t.Errorf("SourceRoot() = %q, want /repo", got)
-	}
-	if got := SourceFarm(); got != "/cache/bin" {
-		t.Errorf("SourceFarm() = %q, want /cache/bin", got)
-	}
-	if !strings.HasSuffix(SourceRootVarName(), "_ROOT") || !strings.HasSuffix(SourceFarmVarName(), "_FARM") {
-		t.Errorf("unexpected marker names: %q, %q", SourceRootVarName(), SourceFarmVarName())
-	}
-}

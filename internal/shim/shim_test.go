@@ -1348,3 +1348,110 @@ func TestSpawnInheritsTheCwdWhenTheRootIsGone(t *testing.T) {
 		t.Errorf("child dir = %q, want \"\" so the child inherits the cwd", h.spawnReqs[0].Dir)
 	}
 }
+
+// TestExecEntryResolvesABareInterpreterOutsideTheFarm covers the shape a
+// system-mode JVM runtime produces: Command is the bare word "java", which
+// syscall.Exec does not search PATH for. Resolving it must skip the farm, or a
+// project that also declares an app named `java` execs its own shim under that
+// name and re-enters dispatch forever.
+func TestExecEntryResolvesABareInterpreterOutsideTheFarm(t *testing.T) {
+	h := newHarness(t)
+	system := t.TempDir()
+	writeExecutable(t, filepath.Join(h.farmDir, "java"))
+	writeExecutable(t, filepath.Join(system, "java"))
+	h.d.Environ = func() []string { return []string{"PATH=" + h.farmDir + ":" + system} }
+	jar := h.tool("spotless.jar")
+	h.writeManifest(sourcefarm.Manifest{
+		Entries: []sourcefarm.Entry{{
+			Name:      "spotless",
+			Command:   "java",
+			Args:      []string{"-jar", jar},
+			Artifact:  jar,
+			Installed: true,
+		}},
+	})
+	h.invokeThroughFarm("spotless", "--version")
+
+	code, handled := h.d.Dispatch()
+
+	if !handled {
+		t.Fatalf("Dispatch() declined a farm invocation (code %d)", code)
+	}
+	if len(h.execs) != 1 {
+		t.Fatalf("execs = %+v, want exactly one", h.execs)
+	}
+	if want := filepath.Join(system, "java"); h.execs[0].path != want {
+		t.Errorf("exec'd %q, want the interpreter outside the farm %q", h.execs[0].path, want)
+	}
+	if got := h.execs[0].argv[0]; got != "java" {
+		t.Errorf("argv[0] = %q, want %q", got, "java")
+	}
+}
+
+// TestExecEntryBareInterpreterNotOnPATHFailsLoudly is the other half: with only
+// the farm's own entry of that name on PATH there is no interpreter, and the
+// message has to say so rather than let execve report a missing file.
+func TestExecEntryBareInterpreterNotOnPATHFailsLoudly(t *testing.T) {
+	h := newHarness(t)
+	writeExecutable(t, filepath.Join(h.farmDir, "java"))
+	h.d.Environ = func() []string { return []string{"PATH=" + h.farmDir} }
+	jar := h.tool("spotless.jar")
+	h.writeManifest(sourcefarm.Manifest{
+		Entries: []sourcefarm.Entry{{
+			Name:      "spotless",
+			Command:   "java",
+			Args:      []string{"-jar", jar},
+			Artifact:  jar,
+			Installed: true,
+		}},
+	})
+	h.invokeThroughFarm("spotless")
+
+	code, handled := h.d.Dispatch()
+
+	if !handled || code != ExitNotFound {
+		t.Fatalf("Dispatch() = (%d, %v), want (%d, true)", code, handled, ExitNotFound)
+	}
+	if len(h.execs) != 0 {
+		t.Errorf("Dispatch() exec'd %+v with no interpreter on PATH", h.execs)
+	}
+	for _, want := range []string{"spotless", "java", "was not found on PATH"} {
+		if !strings.Contains(h.stderr.String(), want) {
+			t.Errorf("stderr %q does not mention %q", h.stderr.String(), want)
+		}
+	}
+}
+
+// TestLoadManifestClimbsPastASubmodule pins why discoverRoots returns every
+// working-tree root rather than stopping at the nearest .git. A submodule
+// checkout has its own .git, but the farm was baked for the superproject, so a
+// tool run from inside the submodule must be answered by the outer manifest.
+func TestLoadManifestClimbsPastASubmodule(t *testing.T) {
+	h := newHarness(t)
+	sub := filepath.Join(h.root, "vendor", "lib")
+	if err := os.MkdirAll(filepath.Join(sub, ".git"), 0o755); err != nil {
+		t.Fatalf("create submodule git dir: %v", err)
+	}
+	h.d.Getwd = func() (string, error) { return sub, nil }
+	// Only the superproject has a manifest, which is what a real bake produces.
+	h.d.ManifestPath = func(gitRoot string) (string, error) {
+		if gitRoot != h.root {
+			return filepath.Join(gitRoot, "no-manifest.json"), nil
+		}
+		return h.manifestPath, nil
+	}
+	tool := h.tool("tofu")
+	h.writeManifest(sourcefarm.Manifest{
+		Entries: []sourcefarm.Entry{{Name: "tofu", Command: tool, Installed: true}},
+	})
+	h.invokeThroughFarm("tofu", "plan")
+
+	code, handled := h.d.Dispatch()
+
+	if !handled {
+		t.Fatalf("Dispatch() declined inside a submodule (code %d): %s", code, h.stderr.String())
+	}
+	if len(h.execs) != 1 || h.execs[0].path != tool {
+		t.Fatalf("execs = %+v, want one exec of %q", h.execs, tool)
+	}
+}

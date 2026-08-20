@@ -156,26 +156,6 @@ func TestNULPanics(t *testing.T) {
 	}
 }
 
-func TestFishPathList(t *testing.T) {
-	tests := []struct {
-		name string
-		dirs []string
-		want string
-	}{
-		{"empty", nil, ""},
-		{"single", []string{"/a/b"}, "'/a/b'"},
-		{"multiple", []string{"/a", "/b"}, "'/a' '/b'"},
-		{"space_and_quote", []string{"/a b", "/it's"}, `'/a b' '/it\'s'`},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := FishPathList(tc.dirs); got != tc.want {
-				t.Fatalf("FishPathList(%q) = %q, want %q", tc.dirs, got, tc.want)
-			}
-		})
-	}
-}
-
 // roundTrip asks the shell itself whether the literal parses back to the input
 // byte-exactly. This is the only check that matters; everything else is a
 // proxy for it.

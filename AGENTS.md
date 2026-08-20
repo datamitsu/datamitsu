@@ -71,6 +71,7 @@ on Intel i9-14900K it is 26× faster.
 2. Add getter function in `internal/env/env.go`
 3. Add tests in `internal/env/env_test.go`
 4. Use the getter everywhere else
+5. Decide whether the variable belongs in the source-mode staleness fingerprint. `env.Environ()` returns **every** `DATAMITSU_*` variable and the farm's staleness key hashes it, so a new variable invalidates baked farms by default — which is correct for anything that changes what datamitsu produces. A variable that only records _which_ farm a shell activated must be added to `environExcluded` in `internal/env/environ.go`, or every command in an activated shell reports the manifest stale and re-bakes.
 
 **Examples:**
 

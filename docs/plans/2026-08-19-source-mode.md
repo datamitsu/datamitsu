@@ -442,10 +442,11 @@ refresh --force` is the escape hatch. Tracking the variables the VM actually rea
       root and asserting the final farm is complete and consistent, with no partial directory
 - [x] write a test asserting a bake that fails midway leaves the previous farm and manifest
       intact
-- [x] ➕ add `env.GetProjectLockPath` and `env.ProjectLockFileName`
-      (`internal/env/runtime.go`) so the lock file's location is derived from the same
-      per-root path helper as the farm and the manifest, rather than being assembled by
-      string concatenation in `sourcefarm`
+- [x] ➕ add `env.ProjectLockFileName` (`internal/env/runtime.go`) so the lock file's name is
+      owned by the same package as the farm and manifest names. **Narrowed:** no
+      `env.GetProjectLockPath` — `sourcefarm` derives the directory from the farm path it was
+      given, so a test's `Options.CacheRoot` override is honoured; a path helper reading the
+      real cache root would ignore it
 - [x] run `go test ./... -race` — must pass before Task 8
 
 ### Task 8: argv[0] shim dispatch

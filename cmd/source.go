@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"sort"
@@ -215,7 +214,7 @@ func loadSourcePlan(root string, requireFresh bool) (sourcefarm.Plan, bool) {
 	} else if !sourcefarm.UsableStale(m) {
 		return sourcefarm.Plan{}, false
 	}
-	if !sourcefarm.FarmUsable(m.FarmDir, "") {
+	if !sourcefarm.FarmUsable(m.FarmDir, "") || !farmEntriesPresent(m) {
 		return sourcefarm.Plan{}, false
 	}
 
@@ -226,6 +225,28 @@ func loadSourcePlan(root string, requireFresh bool) (sourcefarm.Plan, bool) {
 		Excluded: m.Excluded,
 		Shadowed: m.Shadowed,
 	}, true
+}
+
+// farmEntriesPresent reports whether the farm still holds a file for every entry
+// the manifest describes.
+//
+// The manifest's freshness check watches the *tree*, not the farm, so a farm
+// missing one entry — a stray `rm`, a partially restored backup, an editor that
+// cleaned a directory it should not have — reads as perfectly fresh. Activating
+// it exits 0 while that one name resolves through the rest of PATH to whatever
+// the system has, which is the silent wrong-binary failure the farm exists to
+// prevent. Nothing else can catch it: the missing entry means no shim ever runs
+// for that name, so activation is the only moment it is observable.
+//
+// The cost is one lstat per declared app, once per shell activation, against a
+// path already in the directory cache from the FarmUsable check.
+func farmEntriesPresent(m sourcefarm.Manifest) bool {
+	for _, e := range m.Entries {
+		if _, err := os.Lstat(filepath.Join(m.FarmDir, e.Name)); err != nil {
+			return false
+		}
+	}
+	return true
 }
 
 // sourceManifestDecides reports whether the on-disk manifest may answer for the
@@ -343,13 +364,26 @@ type bakeResult struct {
 // activation door. In fish it is quieter still: fish_add_path skips a
 // non-existent directory without a word.
 func bakeSourceFarm(ctx context.Context, stderr io.Writer) (bakeResult, error) {
+	// Snapshot the watch set before the config is read, not only after. An edit
+	// that lands while the config is being evaluated — a `git checkout` in
+	// another terminal, an editor saving — is otherwise stat'ed *after* it
+	// happened and recorded as the state this farm was built from, so the next
+	// freshness check compares equal and the farm serves the previous branch's
+	// toolchain forever, silently. Taking the earlier tuple makes that case read
+	// as stale and re-bake, which is the failure direction that self-corrects.
+	// The git root is cached by facts, so asking for it again costs nothing.
+	var prior []sourcefarm.WatchFile
+	if root, rootErr := sourceProjectRoot(ctx); rootErr == nil {
+		prior = sourcefarm.WatchSet(sourcefarm.WatchPaths(root, nil))
+	}
+
 	plan, err := resolveSourcePlan(ctx)
 	if err != nil {
 		return bakeResult{}, err
 	}
 
-	m := sourcefarm.BuildManifest(plan, sourcefarm.OriginGitRoot,
-		sourcefarm.WatchPaths(plan.Root, ConfigChainFiles()))
+	watch := watchSetSince(prior, sourcefarm.WatchSet(sourcefarm.WatchPaths(plan.Root, ConfigChainFiles())))
+	m := sourcefarm.BuildManifest(plan, sourcefarm.OriginGitRoot, watch)
 	m.ConfigArgs = configChainArgs()
 
 	// sourcefarm already reports the failure on the writer it was given.
@@ -361,6 +395,35 @@ func bakeSourceFarm(ctx context.Context, stderr io.Writer) (bakeResult, error) {
 	}
 
 	return bakeResult{Plan: plan, MaterializeErr: matErr}, nil
+}
+
+// watchSetSince returns current, with any tuple prior recorded differently
+// replaced by prior's.
+//
+// prior is the pre-load snapshot and current the post-load one, so a path they
+// disagree about is a file that changed while the config was being evaluated.
+// Recording the older tuple is what makes the manifest report itself stale on
+// the next check; recording the newer one would claim the farm already reflects
+// an edit it never saw. Paths prior does not cover — chain files discovered by
+// the load itself — pass through unchanged; they are the smaller window, since
+// the load has to find a file before it can read it.
+func watchSetSince(prior, current []sourcefarm.WatchFile) []sourcefarm.WatchFile {
+	if len(prior) == 0 {
+		return current
+	}
+	byPath := make(map[string]sourcefarm.WatchFile, len(prior))
+	for _, w := range prior {
+		byPath[w.Path] = w
+	}
+	out := make([]sourcefarm.WatchFile, len(current))
+	for i, w := range current {
+		if earlier, ok := byPath[w.Path]; ok {
+			out[i] = earlier
+			continue
+		}
+		out[i] = w
+	}
+	return out
 }
 
 // farmOnDisk reports whether a previously baked farm for this plan is still
@@ -422,7 +485,7 @@ func resolveSourcePlan(ctx context.Context) (sourcefarm.Plan, error) {
 	}
 
 	b := binmanager.New(cfg.Apps, cfg.Bundles, runtimemanager.New(cfg.Runtimes))
-	return sourcefarm.BuildPlan(root, farmDir, cfg.Apps, b, exec.LookPath), nil
+	return sourcefarm.BuildPlan(root, farmDir, cfg.Apps, b, sourcefarm.SystemLookPath(farmDir)), nil
 }
 
 // sourceProjectRoot returns the git root whose config the farm is built from, or

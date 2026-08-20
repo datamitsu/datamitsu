@@ -342,12 +342,16 @@ func ComputeStalenessKey(formatVersion int, datamitsuVersion, root, goos, goarch
 	return hashutil.XXH3Multi(parts...)
 }
 
-// BuildManifest stats the watch paths and returns the manifest describing plan.
-// It writes nothing — materialization is Task 7's concern — so the caller can
-// place the manifest inside the same atomic swap as the farm directory and the
-// two can never disagree.
-func BuildManifest(plan Plan, origin Origin, watchPaths []string) Manifest {
-	watch := WatchSet(watchPaths)
+// BuildManifest returns the manifest describing plan. It writes nothing —
+// materialization is Task 7's concern — so the caller can place the manifest
+// inside the same atomic swap as the farm directory and the two can never
+// disagree.
+//
+// The watch set arrives already stat'ed rather than as paths, because *when* it
+// was stat'ed is a correctness question only the caller can answer: a tuple
+// taken after the config was read describes a file the plan may not reflect.
+// See cmd.bakeSourceFarm, which snapshots before the load for that reason.
+func BuildManifest(plan Plan, origin Origin, watch []WatchFile) Manifest {
 	m := Manifest{
 		FormatVersion:    ManifestFormatVersion,
 		Origin:           origin,

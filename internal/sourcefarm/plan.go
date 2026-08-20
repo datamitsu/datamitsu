@@ -21,6 +21,8 @@
 package sourcefarm
 
 import (
+	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -199,9 +201,43 @@ type Resolver interface {
 }
 
 // LookPathFunc reports where a bare command name resolves on the
-// pre-activation PATH. exec.LookPath is the production implementation; tests
+// pre-activation PATH. SystemLookPath is the production implementation; tests
 // inject a stub so shadow detection does not depend on the host.
 type LookPathFunc func(name string) (string, error)
+
+// SystemLookPath resolves name against PATH the way a shell would, with farmDir
+// skipped.
+//
+// exec.LookPath cannot answer the question shadow detection asks — "what did
+// this name run before activation". From an already-activated shell the farm is
+// the *first* PATH entry, so exec.LookPath returns the farm's own entry and
+// stops: the system binary further down PATH is never seen, and BuildPlan's
+// inFarm filter then drops the only hit there was. Re-running `datamitsu source`
+// from an activated shell is the normal case (a shell rc file, a directory hook,
+// a new tmux pane), so with exec.LookPath the manifest's shadow list empties out
+// precisely when the user is most likely to read it.
+//
+// Each candidate is handed to exec.LookPath rather than mode-checked here: for a
+// path that already carries a directory, exec.LookPath applies the platform's
+// own executability rule, which on Windows means PATHEXT.
+func SystemLookPath(farmDir string) LookPathFunc {
+	return func(name string) (string, error) {
+		for _, dir := range filepath.SplitList(os.Getenv("PATH")) { //nolint:forbidigo // the shell's own PATH, not a datamitsu env var
+			if dir == "" {
+				// A shell treats an empty PATH element as the working directory.
+				dir = "."
+			}
+			candidate := filepath.Join(dir, name)
+			if inFarm(candidate, farmDir) {
+				continue
+			}
+			if found, err := exec.LookPath(candidate); err == nil {
+				return found, nil
+			}
+		}
+		return "", exec.ErrNotFound
+	}
+}
 
 // BuildPlan computes the farm plan for apps.
 //
