@@ -87,8 +87,8 @@ type SourceManifestStatus struct {
 	// State is one of fresh, stale, missing, unreadable.
 	State string `json:"state"`
 
-	// Error carries the decode failure for the unreadable state and is empty
-	// otherwise.
+	// Error carries the decode failure for the unreadable state, or the reason
+	// an otherwise-fresh manifest was demoted to stale, and is empty otherwise.
 	Error string `json:"error,omitempty"`
 }
 
@@ -194,12 +194,37 @@ func manifestStatus(path string) SourceManifestStatus {
 	// Reporting it fresh would make status disagree with the entries printed
 	// beside it, which come from the chain resolved now.
 	if manifestChainMatches(m) && sourcefarm.Validate(m) {
+		// Freshness watches the *tree*, never the farm, so a manifest whose farm
+		// directory was deleted — or which is missing one entry — validates
+		// clean. That is the one shadowing failure no shim can report: with no
+		// farm entry for the name, nothing of datamitsu's runs and the shell
+		// falls through PATH to the system binary, exit 0. Reporting it fresh
+		// here would confirm the wrong conclusion in the command that exists to
+		// diagnose exactly this. Activation already refuses such a manifest
+		// (loadSourcePlan), and `source refresh` already re-bakes it, so stale is
+		// the state the rest of source mode agrees on.
+		if reason := farmDefect(m); reason != "" {
+			s.State = ManifestStale
+			s.Error = reason
+			return s
+		}
 		s.Fresh = true
 		s.State = ManifestFresh
 		return s
 	}
 	s.State = ManifestStale
 	return s
+}
+
+// farmDefect returns why m's farm cannot be served as-is, or "" when it can.
+func farmDefect(m sourcefarm.Manifest) string {
+	if !sourcefarm.FarmUsable(m.FarmDir, "") {
+		return fmt.Sprintf("farm directory %s is missing or not safely owned", m.FarmDir)
+	}
+	if !farmEntriesPresent(m) {
+		return fmt.Sprintf("farm directory %s is missing one or more entries", m.FarmDir)
+	}
+	return ""
 }
 
 // writeStatusSection writes one titled, count-annotated block of name/detail

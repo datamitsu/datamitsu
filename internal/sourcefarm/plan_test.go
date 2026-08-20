@@ -467,6 +467,16 @@ func TestSystemLookPathSkipsTheFarm(t *testing.T) {
 		t.Errorf("SystemLookPath()(\"tofu\") = %q, want a not-found error", got)
 	}
 
+	// An empty PATH element means the working directory, and it must not turn
+	// the candidate back into a bare name: exec.LookPath would then run a full
+	// PATH search, hit the farm's entry first and return it, ending the walk
+	// before the system copy below is ever considered.
+	t.Chdir(t.TempDir())
+	t.Setenv("PATH", farm+string(os.PathListSeparator)+string(os.PathListSeparator)+system)
+	if got, err := SystemLookPath(farm)("tofu"); err != nil || got != filepath.Join(system, "tofu") {
+		t.Errorf("SystemLookPath()(\"tofu\") with an empty PATH element = %q, %v, want the system copy", got, err)
+	}
+
 	// A non-executable file is skipped the way a shell skips it.
 	t.Setenv("PATH", system)
 	if err := os.WriteFile(filepath.Join(system, "tflint"), []byte("data\n"), 0o600); err != nil {

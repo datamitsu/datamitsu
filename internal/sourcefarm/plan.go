@@ -227,7 +227,12 @@ func SystemLookPath(farmDir string) LookPathFunc {
 				// A shell treats an empty PATH element as the working directory.
 				dir = "."
 			}
-			candidate := filepath.Join(dir, name)
+			// Not filepath.Join: it cleans "./name" back down to "name", and a
+			// separator-less argument sends exec.LookPath on a full PATH search,
+			// which from an activated shell hits the farm's own entry first and
+			// returns it — ending the loop before the real system binary further
+			// down PATH is ever considered.
+			candidate := dir + string(filepath.Separator) + name
 			if inFarm(candidate, farmDir) {
 				continue
 			}

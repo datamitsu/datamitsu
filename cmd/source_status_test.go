@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/sourcefarm"
 )
 
@@ -238,6 +239,66 @@ func TestManifestStatusStates(t *testing.T) {
 	}
 	if got := manifestStatus(future); got.State != ManifestStale || !got.Exists || got.Fresh {
 		t.Errorf("future-version manifest = %+v", got)
+	}
+}
+
+// TestManifestStatusDemotesAFarmThatIsNotThere pins the one state the watch set
+// cannot see. Freshness compares stat tuples of the *tree*; the farm itself is
+// never in it, so deleting an entry — or the whole farm directory — leaves a
+// manifest that validates clean. In an activated shell that name then resolves
+// through the rest of PATH to the system binary, silently, and no shim runs to
+// report it. Activation (loadSourcePlan) and `source refresh` both already
+// refuse such a manifest; status reporting it fresh would confirm the wrong
+// conclusion in the command whose whole purpose is diagnosing this.
+func TestManifestStatusDemotesAFarmThatIsNotThere(t *testing.T) {
+	isolateCache(t)
+
+	root := t.TempDir()
+	farm, err := env.GetProjectBinPath(root)
+	if err != nil {
+		t.Fatalf("GetProjectBinPath() error = %v", err)
+	}
+	manifestPath, err := env.GetProjectManifestPath(root)
+	if err != nil {
+		t.Fatalf("GetProjectManifestPath() error = %v", err)
+	}
+	if err := os.MkdirAll(farm, 0o700); err != nil {
+		t.Fatalf("create farm directory: %v", err)
+	}
+	writeFarmEntries(t, farm, "tofu")
+
+	plan := sourcefarm.Plan{Root: root, FarmDir: farm, Entries: []sourcefarm.Entry{{Name: "tofu"}}}
+	m := sourcefarm.BuildManifest(plan, sourcefarm.OriginGitRoot, sourcefarm.WatchSet(sourcefarm.WatchPaths(root, nil)))
+	data, err := sourcefarm.Encode(m)
+	if err != nil {
+		t.Fatalf("Encode() error = %v", err)
+	}
+	if err := os.WriteFile(manifestPath, data, 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	if got := manifestStatus(manifestPath); !got.Fresh || got.State != ManifestFresh {
+		t.Fatalf("an intact farm is not reported fresh: %+v; the test no longer covers the silent case", got)
+	}
+
+	// One entry gone: the tree is untouched, so only a farm-side check catches it.
+	if err := os.Remove(filepath.Join(farm, "tofu")); err != nil {
+		t.Fatalf("remove farm entry: %v", err)
+	}
+	got := manifestStatus(manifestPath)
+	if got.Fresh || got.State != ManifestStale {
+		t.Errorf("a farm missing an entry = %+v, want stale", got)
+	}
+	if got.Error == "" {
+		t.Error("a demoted manifest carries no explanation")
+	}
+
+	// The whole farm gone is the same answer, by the other branch.
+	if err := os.RemoveAll(farm); err != nil {
+		t.Fatalf("remove farm: %v", err)
+	}
+	if got := manifestStatus(manifestPath); got.Fresh || got.State != ManifestStale {
+		t.Errorf("a missing farm directory = %+v, want stale", got)
 	}
 }
 
