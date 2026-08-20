@@ -857,6 +857,17 @@ datamitsu cache clear
 | `--all`     | Clear all project caches (not just the current project) |
 | `--dry-run` | Show what would be deleted without deleting             |
 
+:::warning This removes source-mode farms
+
+A project's [source-mode](../guides/source-mode.md) farm and manifest live in the
+same per-project cache directory, so `cache clear` deletes them along with the
+lint/fix caches. Every shell already activated for that project then reports exit
+127 for every declared tool — the shim deliberately does not re-bake a farm that
+is not there. Run `datamitsu source refresh` (or re-activate) afterwards, and use
+`--dry-run` first to see what would go.
+
+:::
+
 ### cache path
 
 Print the absolute path to the global cache directory.
@@ -1035,6 +1046,100 @@ This is normally launched by an editor rather than by hand — see the
 [VS Code extension](../getting-started/installation/vscode.md) for the packaged
 integration.
 
+## source
+
+Put the project's declared toolchain on `PATH` for the current shell, so every
+tool runs as an ordinary command at the version this repository pins.
+
+```bash
+# bash / zsh
+eval "$(datamitsu source bash)"
+eval "$(datamitsu source zsh)"
+
+# fish
+datamitsu source fish | source
+```
+
+Activation downloads nothing — a tool is fetched the first time it is actually
+run. Switching branches needs no re-activation: the next tool invocation notices
+the config changed and re-resolves itself.
+
+`source` requires a project. Run inside a repository whose git root holds a
+`datamitsu.config.{js,mjs,ts}`, or name one explicitly with the global
+`--config` flag; outside a project it exits non-zero and writes nothing to
+stdout.
+
+stdout carries shell code and nothing else, so the output is always safe to
+`eval`. Warnings — tools not downloaded yet, system binaries this shadows — go
+to stderr.
+
+`--no-auto-config` without a `--config` is refused: activating the built-in
+default config would bake a handful of built-in apps into the farm this root's
+real config owns. Any of `--config`, `--before-config` or `--no-auto-config` also
+bypasses the manifest fast path and re-resolves the config, and a farm baked with
+those flags is not reused by a later plain `datamitsu source` — a manifest baked
+from a different config chain would otherwise activate a toolchain the plain
+invocation never asked for.
+
+If the farm cannot be re-baked at all — a config that does not evaluate on this
+branch, a remote config unreachable offline — activation warns on stderr,
+activates the farm already on disk and **exits 0**. Emitting nothing would exit 0
+with a shell that was never activated, and every declared tool would then fall
+through `PATH` to whatever the system has. `source refresh` is the repair command
+and inverts this: a failed bake exits non-zero, leaving the previous farm in
+place, so a CI step can trust `refresh`'s exit code but not `source`'s.
+
+### source status
+
+```bash
+datamitsu source status
+datamitsu source status --json
+```
+
+Reports the farm for the current project: its root and directory, whether the
+baked manifest still matches the working tree, every tool the farm provides with
+how it is materialized (`shim`) and whether it has been downloaded
+yet, every declared name that was refused **with the reason**, and every system
+binary the farm shadows with the absolute path it was found at.
+
+Names are never silently dropped, which is what makes this the first command to
+run when a tool is missing or resolves to the wrong version: a refused name is
+listed with its reason, so it can never be confused with a name that was never
+declared.
+
+`--json` emits the same information as a single document and writes no human
+text to stdout; warnings still go to stderr.
+
+`status` resolves and reports. It never downloads and never re-bakes the farm.
+
+### source refresh
+
+```bash
+datamitsu source refresh
+datamitsu source refresh --force
+```
+
+Re-resolves the project's declared apps and rewrites the farm the current shell's
+`PATH` points at.
+
+Nothing normally needs this. A tool invocation notices on its own that the config
+changed and re-bakes before running, which is what makes branch switching
+invisible. `refresh` exists for the case that detection cannot see: the staleness
+check watches the config chain's files and `.git/HEAD`, so a config that branches
+on an environment variable outside datamitsu's own namespace — reachable through
+`facts().env` — changes what it produces without changing anything the check
+compares. `--force` re-bakes unconditionally and is the escape hatch for exactly
+that.
+
+Without `--force`, a farm that already matches the tree is left alone and the
+command exits 0.
+
+Refresh resolves and materializes; it downloads nothing. A tool that has not been
+fetched yet stays a shim entry and installs on its first real use.
+
+The summary goes to stderr and stdout stays empty, so `refresh` is safe to call
+from the same shell function that runs an activation through `eval`.
+
 ## Environment Variables
 
 | Variable                         | Description                                                                                     | Default                                             |
@@ -1057,8 +1162,22 @@ integration.
 | `DATAMITSU_LIBC`                 | Override host libc detection (`glibc` or `musl`); affects store paths and OCI bundle selection  | auto-detected                                       |
 | `DATAMITSU_OCI_REGISTRY`         | Registry host for base-image digest resolution in `devtools dockerfile`                         | `ghcr.io`                                           |
 | `DATAMITSU_PARSERS_DIR`          | Override directory for downloaded WASM output-parser modules                                    | `{store}/.parsers`                                  |
+| `DATAMITSU_ROOT`                 | Git root of the source-mode farm activated in this shell (exported by `datamitsu source`)       | -                                                   |
+| `DATAMITSU_FARM`                 | Farm directory activated in this shell (exported by `datamitsu source`)                         | -                                                   |
 | `NO_COLOR`                       | Disable color output                                                                            | -                                                   |
 | `FORCE_COLOR`                    | Force color output                                                                              | -                                                   |
+
+`DATAMITSU_ROOT` and `DATAMITSU_FARM` are written by `datamitsu source`. Neither
+is used to resolve a tool — the shim discovers the repository root from the
+working directory, so a tool run in another repository resolves against that
+repository, not against the one the shell was activated in. `DATAMITSU_ROOT` is
+purely informational; `DATAMITSU_FARM` is read in one place, to recognize that an
+invocation arrived through a farm directory when the computed cache path and the
+activated one spell the same directory differently (a `DATAMITSU_CACHE_DIR` or
+`HOME` that resolves differently in this process). Without it a genuine tool
+invocation could be mistaken for a renamed `datamitsu` binary and handed to the
+CLI. Both are excluded from the farm's staleness fingerprint, so exporting them
+cannot make a farm look stale.
 
 `DATAMITSU_FORCE_GIT_SUBPROCESS` applies to the config loader's memoized git-root
 lookup, which is where the pure-Go walk runs; the command handlers use a separate

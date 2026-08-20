@@ -26,8 +26,9 @@ import (
 )
 
 type mockRuntimeAppManager struct {
-	getCommandInfoFunc func(ctx context.Context, appName string, app App) (*CommandInfo, error)
-	computeAppPathFunc func(appName string, app App) (string, error)
+	getCommandInfoFunc     func(ctx context.Context, appName string, app App) (*CommandInfo, error)
+	resolveCommandInfoFunc func(appName string, app App) (*CommandInfo, error)
+	computeAppPathFunc     func(appName string, app App) (string, error)
 }
 
 func (m *mockRuntimeAppManager) GetCommandInfo(ctx context.Context, appName string, app App) (*CommandInfo, error) {
@@ -35,6 +36,13 @@ func (m *mockRuntimeAppManager) GetCommandInfo(ctx context.Context, appName stri
 		return m.getCommandInfoFunc(ctx, appName, app)
 	}
 	return nil, errors.New("mock: not implemented")
+}
+
+func (m *mockRuntimeAppManager) ResolveCommandInfo(appName string, app App) (*CommandInfo, error) {
+	if m.resolveCommandInfoFunc != nil {
+		return m.resolveCommandInfoFunc(appName, app)
+	}
+	return nil, errors.New("mock: ResolveCommandInfo not implemented")
 }
 
 func (m *mockRuntimeAppManager) ComputeAppPath(appName string, app App) (string, error) {

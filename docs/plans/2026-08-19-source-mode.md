@@ -1,8 +1,12 @@
 # Plan: Source mode — activate the project toolchain in a shell
 
-**Status:** ready for implementation. Architecture decisions closed by the owner (§Decisions).
+**Status:** implemented (2026-08-20). All 15 tasks are done; the branch is not merged, per
+the branch note below. Two items remain open as **owner decisions**, not as work: the D1
+narrowing recorded under Task 13 (every entry is a shim; the symlink fast path is
+implemented but never selected), and the measured ~10–12 ms steady-state cost, which the
+Task 14 acceptance row flags as not met as originally written.
 **Date:** 2026-08-19.
-**Depends on:** `docs/plans/2026-08-19-cli-startup-cost.md` — land it first. Every latency
+**Depends on:** `docs/plans/completed/2026-08-19-cli-startup-cost.md` — landed. Every latency
 number in this plan assumes it.
 **Related:** `internal/binmanager`, `internal/runtimemanager`, `internal/env`,
 `internal/config/validate.go`, `cmd/exec.go`, `main.go`, `test/cli`.
@@ -46,17 +50,23 @@ has not been downloaded, and a dangling symlink is `ENOENT`, not a trigger.
 
 ## Decisions (closed by the owner, do not re-litigate)
 
-| #   | Decision                                            | Chosen                                                                                                                                                                                                     |
-| --- | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| D1  | Hot-path shape                                      | **Hybrid.** Real symlink into the content-addressed store for _installed_ `binary`/`go` apps (0 ms). Shim for everything else: `jvm`, `node`, `uv`, any app carrying `Env`, and any not-yet-installed app. |
-| D2  | Startup optimizations                               | **Separate plan, landed first** (`2026-08-19-cli-startup-cost.md`).                                                                                                                                        |
-| D3  | Activation outside a git repository                 | **Deferred to its own plan.** This plan is project-scoped only: `source` requires a discovered config and fails loudly without one.                                                                        |
-| D4  | Name declared but unresolvable for the current root | **Fail loudly, exit 127.** Never fall through to a system binary. Report shadowing explicitly.                                                                                                             |
+| #   | Decision                                            | Chosen                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| --- | --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D1  | Hot-path shape                                      | ~~**Hybrid.** Real symlink into the content-addressed store for _installed_ `binary`/`go` apps (0 ms). Shim for everything else.~~ **Superseded during Task 13: every entry is a shim.** A symlink has nowhere to put the freshness check, so after `git checkout v2` it keeps resolving to the version the previous branch pinned — silently, exiting 0. `StrategySymlink` remains implemented and round-trips through the manifest, but `strategyFor` never selects it. See the ⚠️ note below; awaiting owner confirmation. |
+| D2  | Startup optimizations                               | **Separate plan, landed first** (`2026-08-19-cli-startup-cost.md`).                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| D3  | Activation outside a git repository                 | **Deferred to its own plan.** This plan is project-scoped only: `source` requires a discovered config and fails loudly without one.                                                                                                                                                                                                                                                                                                                                                                                           |
+| D4  | Name declared but unresolvable for the current root | **Fail loudly, exit 127.** Never fall through to a system binary. Report shadowing explicitly.                                                                                                                                                                                                                                                                                                                                                                                                                                |
 
 D1 is the decision that makes the numbers work: `terragrunt`, `tofu`, `sops` and `kubectl`
 are all `binary` apps, so the tools that motivated the feature take the zero-overhead path,
 and the ~10 ms shim tax is confined to cases that structurally require a process (argv
 prefixes, env overlays, lazy install).
+
+⚠️ **D1 was narrowed during Task 13.** The real-shell tier proved that a symlink entry cannot
+satisfy property 2: nothing of datamitsu's runs when the kernel follows a symlink, so an
+installed `binary` app keeps running the previous branch's version after a checkout — silently.
+Every entry is now a shim; the symlink machinery remains implemented and tested behind a single
+branch in `strategyFor`. See the Task 13 notes. The owner should confirm the narrowing.
 
 D4 matters more than it looks. Without it the feature's failure mode is a _silent wrong
 binary_: a name that is declared but missing from the farm falls through `PATH` to a stale
@@ -201,136 +211,140 @@ verbatim; this is a correctness requirement of property 1, independent of perfor
 App names become filenames and dispatch keys. This also closes a latent store-escape bug that
 exists today, independent of source mode.
 
-- [ ] in `doValidateApps` (`internal/config/validate.go`), validate every app name against
+- [x] in `doValidateApps` (`internal/config/validate.go`), validate every app name against
       `^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$` as a hard error, appended to the existing `errs`
       slice in the established message style
-- [ ] reject `.`, `..`, any path separator, a leading `-`, and Windows reserved device names
+- [x] reject `.`, `..`, any path separator, a leading `-`, and Windows reserved device names
       (`CON`, `PRN`, `AUX`, `NUL`, `COM1`-`COM9`, `LPT1`-`LPT9`) — `website/docs` promises
       Windows support eventually and these are unusable as filenames there
-- [ ] detect case-fold collisions across the app map (`strings.ToLower` over the sorted
+- [x] detect case-fold collisions across the app map (`strings.ToLower` over the sorted
       `appNames` slice already built at `validate.go:35-39`) and report both names — macOS
       filesystems are case-insensitive, so `Git` and `git` are one file
-- [ ] state in the error text that the constraint exists because app names become filesystem
+- [x] state in the error text that the constraint exists because app names become filesystem
       entries
-- [ ] **before landing**: enumerate every app name in the wrapper config
+- [x] **before landing**: enumerate every app name in the wrapper config
       (`node_modules/@shibanet0/datamitsu-config/`) against the regex and record the result
       here. The wrapper ships 92 of this repo's 98 apps and is versioned separately; a
       violation means the wrapper must be fixed and republished first
-- [ ] write a table test of hostile names: `../x`, `a b`, `$(id)`, `a\nb`, `.`, `..`, `-rf`,
+      — **Result: clean.** `datamitsu devtools apps list` over the merged config
+      (`@shibanet0/datamitsu-config@0.0.0-unstable.20260819.598bb47` plus this repo's own
+      declarations) yields **111** app names. All 111 match the regex; no case-fold
+      collisions; no Windows reserved device names. No wrapper republish needed.
+- [x] write a table test of hostile names: `../x`, `a b`, `$(id)`, `a\nb`, `.`, `..`, `-rf`,
       300 chars, empty, `CON`, `com1`
-- [ ] write a test asserting a case-fold collision (`{"Git": …, "git": …}`) produces exactly
+- [x] write a test asserting a case-fold collision (`{"Git": …, "git": …}`) produces exactly
       one error naming both
-- [ ] write a test asserting every app name in the embedded default config
+- [x] write a test asserting every app name in the embedded default config
       (`config/src/apps.ts`) passes — guards against breaking the shipped config
-- [ ] write a test asserting valid names are accepted: `yq-json`, `terraform-docs`, `mmdc`,
+- [x] write a test asserting valid names are accepted: `yq-json`, `terraform-docs`, `mmdc`,
       `git-cliff`, `task`
-- [ ] run `go test ./... -race` and `go test ./test/cli/ -count=2` — must pass before Task 2
+- [x] run `go test ./... -race` and `go test ./test/cli/ -count=2` — must pass before Task 2
 
 ### Task 2: Add the per-root farm paths to internal/env
 
-- [ ] add `GetProjectBinPath(gitRoot string) (string, error)` in `internal/env/runtime.go`
+- [x] add `GetProjectBinPath(gitRoot string) (string, error)` in `internal/env/runtime.go`
       returning `{cache}/projects/{XXH3-128(gitRoot)}/bin`, mirroring `GetProjectCachePath`
       (`internal/env/runtime.go:49`) but without its hardcoded `cache` segment and without the
       `relativeProjectPath`/`toolName` parameters
-- [ ] add a sibling getter for the manifest file path under the same per-root directory
-- [ ] reuse the existing `HashProjectPath` (`internal/env/runtime.go:43`, XXH3-128 via
+- [x] add a sibling getter for the manifest file path under the same per-root directory
+- [x] reuse the existing `HashProjectPath` (`internal/env/runtime.go:43`, XXH3-128 via
       `internal/hashutil`) — an internal fingerprint never compared against an external value,
       per the hashing policy
-- [ ] reject empty or relative `gitRoot` the same way `GetProjectCachePath` rejects escapes
-- [ ] write a table test: distinct git roots produce distinct paths; the same root is stable
+- [x] reject empty or relative `gitRoot` the same way `GetProjectCachePath` rejects escapes
+- [x] write a table test: distinct git roots produce distinct paths; the same root is stable
       across calls
-- [ ] write a test asserting the path is under `GetCachePath()` and contains no `..` after
+- [x] write a test asserting the path is under `GetCachePath()` and contains no `..` after
       `filepath.Clean`
-- [ ] write a test asserting `DATAMITSU_CACHE_DIR` is honored via `t.Setenv`, matching the
+- [x] write a test asserting `DATAMITSU_CACHE_DIR` is honored via `t.Setenv`, matching the
       existing `TestGetProjectCachePath` shape
-- [ ] write a test asserting empty and relative roots error
-- [ ] run tests — must pass before Task 3
+- [x] write a test asserting empty and relative roots error
+- [x] run tests — must pass before Task 3
 
 ### Task 3: Side-effect-free resolution
 
 `source` must be able to ask "where would this tool be, and is it there?" without touching
 the network.
 
-- [ ] split the runtime-bin-path lookup out of `installNode` into a pure
+- [x] split the runtime-bin-path lookup out of `installNode` into a pure
       `resolveNodeBinPath(runtimeName) (string, error)` that does not download —
       `getNodeCommandInfo` calls `installNode` (`internal/runtimemanager/node.go:299`) purely
       to obtain that path
-- [ ] do the same for `GetJVMCommandInfo`'s ctx-carrying path; `GetUVCommandInfo` and
+- [x] do the same for `GetJVMCommandInfo`'s ctx-carrying path; `GetUVCommandInfo` and
       `GetGoCommandInfo` are already install-free and need no change
-- [ ] add `RuntimeManager.ResolveCommandInfo(appName string, app binmanager.App) (*binmanager.CommandInfo, error)`
+- [x] add `RuntimeManager.ResolveCommandInfo(appName string, app binmanager.App) (*binmanager.CommandInfo, error)`
       composing the existing `Get*CommandInfo` halves with no install call
-- [ ] add `BinManager.ResolveCommandInfo(appName string) (*CommandInfo, installed bool, err error)`:
+- [x] add `BinManager.ResolveCommandInfo(appName string) (*CommandInfo, installed bool, err error)`:
       for `binary` apps use the non-downloading path computation plus `os.Stat` rather than
       `GetBinaryPath` (which downloads); for runtime kinds delegate to the new resolver and
       `os.Stat` the resolved `Command`; merge `app.Env` exactly as `GetCommandInfo` does via
       `mergeAppEnv`
-- [ ] leave `GetCommandInfo`'s behavior untouched — this is an addition, not a replacement
-- [ ] add a test-visible guard that the resolve path constructs no downloader, so a future
+- [x] leave `GetCommandInfo`'s behavior untouched — this is an addition, not a replacement
+- [x] add a test-visible guard that the resolve path constructs no downloader, so a future
       refactor cannot silently reintroduce a network call
-- [ ] write a test asserting `ResolveCommandInfo` returns `installed=false` with no error for
+- [x] write a test asserting `ResolveCommandInfo` returns `installed=false` with no error for
       an app with no store entry, and performs no network call (assert under
       `DATAMITSU_OFFLINE=1` and with a nil/failing http client)
-- [ ] write a test asserting resolved `Command`/`Args`/`Env` for a fabricated node app match
+- [x] write a test asserting resolved `Command`/`Args`/`Env` for a fabricated node app match
       what `getNodeCommandInfo` produces (PATH prepend and `npm_config_*` present)
-- [ ] write a test asserting a jvm app resolves to `Command=java` with `-jar` in `Args`
-- [ ] write a test asserting a shell app returns a shell-typed `CommandInfo` without touching
+- [x] write a test asserting a jvm app resolves to `Command=java` with `-jar` in `Args`
+- [x] write a test asserting a shell app returns a shell-typed `CommandInfo` without touching
       the filesystem
-- [ ] write a test asserting an unknown app returns the same error shape as `GetCommandInfo`
-- [ ] run tests — must pass before Task 4
+- [x] write a test asserting an unknown app returns the same error shape as `GetCommandInfo`
+- [x] run tests — must pass before Task 4
 
 ### Task 4: internal/shellquote — per-shell escaping
 
 Written before any shell text is emitted anywhere.
 
-- [ ] `Bash(s string) string` producing ANSI-C `$'…'` quoting with a guaranteed single-line,
+- [x] `Bash(s string) string` producing ANSI-C `$'…'` quoting with a guaranteed single-line,
       ASCII-only result; handle NUL explicitly rather than silently
-- [ ] `Fish(s string) string` using single-quote escaping with `\Xnn` for control bytes
-- [ ] `FishPathList(dirs []string) string` rendering a space-separated fish list — fish `PATH`
+- [x] `Fish(s string) string` using single-quote escaping with `\Xnn` for control bytes
+- [x] `FishPathList(dirs []string) string` rendering a space-separated fish list — fish `PATH`
       is a list, not a colon-joined string
-- [ ] no dependency on `internal/ui` or any writer; pure string functions
-- [ ] write a table test over: newline, `$(`, backtick, single quote, double quote, backslash,
+- [x] no dependency on `internal/ui` or any writer; pure string functions
+- [x] write a table test over: newline, `$(`, backtick, single quote, double quote, backslash,
       `!`, tab, leading dash, non-UTF-8 bytes, empty string
-- [ ] write a round-trip oracle test: for each vector, `sh -c "printf %s " + Bash(v)` returns
+- [x] write a round-trip oracle test: for each vector, `sh -c "printf %s " + Bash(v)` returns
       `v` byte-exactly; `t.Skip` if `/bin/sh` is unavailable
-- [ ] write the same round-trip oracle against real `fish` for `Fish()`, skipping if absent
-- [ ] write `FuzzBash` asserting the round-trip property over arbitrary byte strings
-- [ ] write a test asserting `Bash()` output never contains a raw newline
-- [ ] run tests — must pass before Task 5
+- [x] write the same round-trip oracle against real `fish` for `Fish()`, skipping if absent
+- [x] write `FuzzBash` asserting the round-trip property over arbitrary byte strings
+- [x] write a test asserting `Bash()` output never contains a raw newline
+- [x] run tests — must pass before Task 5
 
 ### Task 5: internal/sourcefarm — the plan (pure, no filesystem)
 
-- [ ] define `Entry{Name, Provider, Kind, Strategy, Command, Args, Env, Installed}`,
+- [x] define `Entry{Name, Provider, Kind, Strategy, Command, Args, Env, Installed}`,
       `Excluded{Name, Reason}` and `Plan{Root, FarmDir, Entries, Excluded, Shadowed}`
-- [ ] `Strategy` is `symlink` or `shim`, decided mechanically: `symlink` only when the kind is
+- [x] `Strategy` is `symlink` or `shim`, decided mechanically: `symlink` only when the kind is
       `binary` or `go`, **and** the app is installed, **and** `Args` is empty, **and** the
       merged `Env` is empty. Everything else is `shim`
-- [ ] `BuildPlan(apps, resolver, lookPath)` — exclude `shell` kind categorically with the
+- [x] `BuildPlan(apps, resolver, lookPath)` — exclude `shell` kind categorically with the
       reason "shell apps resolve through the inherited PATH"; exclude deny-listed names;
       resolve via the injected side-effect-free resolver from Task 3
-- [ ] **include every declared app as an Entry, installed or not** — a not-yet-installed app
+- [x] **include every declared app as an Entry, installed or not** — a not-yet-installed app
       gets `Strategy=shim, Installed=false`. This is the D4 consequence: a declared name must
       never be absent from the farm, or `PATH` falls through to a system binary
-- [ ] hard deny-list constant: `sudo`, `su`, `doas`, `sudoedit`, `sh`, `bash`, `zsh`, `fish`,
+- [x] hard deny-list constant: `sudo`, `su`, `doas`, `sudoedit`, `sh`, `bash`, `zsh`, `fish`,
       `dash`, `env`, `ssh`, `scp`, `sftp`, `git`, and `datamitsu` itself. aqua-proxy refuses to
       proxy its own name for the same reason: a shimmed `datamitsu` turns the shim's own
       installer spawn into an infinite `exec` loop
-- [ ] shadow detection: for each surviving entry, call the injected `lookPath` against the
+- [x] shadow detection: for each surviving entry, call the injected `lookPath` against the
       **pre-activation** `PATH` and record the absolute path found
-- [ ] record an explicit `Reason` on every exclusion — a name that silently does not appear is
+- [x] record an explicit `Reason` on every exclusion — a name that silently does not appear is
       undebuggable, and this field is what `source status` prints
-- [ ] deterministic ordering: sort `Entries` and `Excluded` by name
-- [ ] write a test asserting a shell app named `echo` is always excluded with the shell reason
-- [ ] write a test asserting a deny-listed name is excluded even when it resolves to a valid
+- [x] deterministic ordering: sort `Entries` and `Excluded` by name
+- [x] write a test asserting a shell app named `echo` is always excluded with the shell reason
+- [x] write a test asserting a deny-listed name is excluded even when it resolves to a valid
       binary app
-- [ ] write a test asserting an uninstalled app produces an Entry with `Strategy=shim` and
+- [x] write a test asserting an uninstalled app produces an Entry with `Strategy=shim` and
       `Installed=false` — **not** an exclusion
-- [ ] write a test asserting `Strategy=symlink` requires all four conditions, with a case
+- [x] write a test asserting `Strategy=symlink` requires all four conditions, with a case
       per condition failing
-- [ ] write a test asserting shadow detection reports the absolute path from the injected
+- [x] write a test asserting shadow detection reports the absolute path from the injected
       `lookPath` stub and leaves the entry included
-- [ ] write a determinism test: `BuildPlan` output is byte-identical across two calls over a
+- [x] write a determinism test: `BuildPlan` output is byte-identical across two calls over a
       map with randomized iteration order
-- [ ] run tests — must pass before Task 6
+- [x] run tests — must pass before Task 6
 
 ### Task 6: The manifest and the staleness key
 
@@ -338,92 +352,102 @@ This is what makes property 2 work at ~0 cost: the shim revalidates per invocati
 handful of `stat` calls (measured: 2.1 µs each, 14 µs for a full chain check) instead of a
 config load (measured: ~226 ms before the startup plan, ~60 ms after).
 
-- [ ] define the on-disk manifest as **JSON** with a typed Go struct and `json` tags — not a
+- [x] define the on-disk manifest as **JSON** with a typed Go struct and `json` tags — not a
       packed binary format. Reading and decoding a 16.6 KB / 100-app table was measured at
       311 µs against a ~10 ms process; a hand-rolled codec buys 0.3 ms and costs a format
       version to migrate and test data that cannot be golden-diffed
-- [ ] manifest contents: format version, the authoritative git root, the datamitsu version,
+- [x] manifest contents: format version, the authoritative git root, the datamitsu version,
       os/arch, the staleness key, the watch set, and one record per entry
       (name, strategy, command, args, env, installed)
-- [ ] include an `origin` field recording how the farm was created — `git-root` is the only
+- [x] include an `origin` field recording how the farm was created — `git-root` is the only
       value this plan produces. It exists so the follow-up plan for activation outside a
       repository can add a second value without a format migration, and so the shim can decide
       whether cwd-based root discovery applies at all
-- [ ] record the **authoritative** root (as resolved by the config loader) inside the
+- [x] record the **authoritative** root (as resolved by the config loader) inside the
       manifest, so the shim's cheap walk is only used to _select_ which manifest to open, not
       to decide the root. The two can disagree inside a submodule, where `facts.GetGitRoot`
       climbs to the topmost superproject
-- [ ] watch set: every config-chain file path with `{path, mtime_ns, size, exists}`, plus
+- [x] watch set: every config-chain file path with `{path, mtime_ns, size, exists}`, plus
       `.git/HEAD`. Compare with `!=`, not a `>` watermark — `!=` catches mtime regressions and
       the exists/gone transitions a branch switch actually produces. `.git/HEAD` is
       load-bearing, not belt-and-braces: a branch that _deletes_ `datamitsu.config.ts`
       produces no mtime on a file that no longer exists, and `HEAD` is rewritten by checkout
       but not by commit, so it causes no spurious rebakes
-- [ ] include `pnpm-lock.yaml` and the resolved before-config file paths in the watch set —
+- [x] include `pnpm-lock.yaml` and the resolved before-config file paths in the watch set —
       a branch that bumps the shared config dependency changes those, and without them the
       rebake reads stale `node_modules` and stamps the result fresh
-- [ ] staleness key: XXH3-128 (`internal/hashutil`) over {format version, datamitsu version,
+- [x] staleness key: XXH3-128 (`internal/hashutil`) over {format version, datamitsu version,
       authoritative git root, os/arch, the ordered watch-set tuples, and the `DATAMITSU_*`
       environment variables that feed `runtimeconfig`}. Internal fingerprint, never compared
       against an external value — XXH3 is mandatory here per the hashing policy
-- [ ] **document the known hole in the manifest format's doc comment**: config JS receives the
+- [x] **document the known hole in the manifest format's doc comment**: config JS receives the
       whole environment via `facts().env` (`internal/facts/facts.go:51`) and this repo's own
       `datamitsu.config.ts` already branches on `facts().env.DATAMITSU_BENCH`. A config
       branching on a non-`DATAMITSU_` variable will not invalidate the key. `datamitsu source
 refresh --force` is the escape hatch. Tracking the variables the VM actually read
       requires goja read-instrumentation and is explicitly deferred
-- [ ] `Load(path)` / `Validate(manifest) (fresh bool)` API, where `Validate` performs only
+- [x] `Load(path)` / `Validate(manifest) (fresh bool)` API, where `Validate` performs only
       `lstat` calls and the key comparison — no config load, no allocation-heavy work
-- [ ] write a table test over staleness transitions: file content changed, file deleted, file
+- [x] write a table test over staleness transitions: file content changed, file deleted, file
       added, mtime regressed, size changed, `.git/HEAD` rewritten, datamitsu version changed,
       `DATAMITSU_*` var changed — each must report stale
-- [ ] write a test asserting an unchanged tree reports fresh
-- [ ] write a test asserting `Validate` opens no config and spawns no subprocess
-- [ ] write a benchmark asserting `Validate` over a 3-file chain stays in the microsecond range
-- [ ] write a test asserting an unknown/newer format version reports stale rather than erroring
-- [ ] write a round-trip test through `json.Marshal`/`Unmarshal` with stable key order
-- [ ] run tests — must pass before Task 7
+- [x] write a test asserting an unchanged tree reports fresh
+- [x] write a test asserting `Validate` opens no config and spawns no subprocess
+- [x] write a benchmark asserting `Validate` over a 3-file chain stays in the microsecond range
+- [x] write a test asserting an unknown/newer format version reports stale rather than erroring
+- [x] write a round-trip test through `json.Marshal`/`Unmarshal` with stable key order
+- [x] ➕ add `env.Environ()` (`internal/env/environ.go`) returning datamitsu's own
+      environment variables sorted, so the staleness key can fingerprint them without any
+      package reaching for `os.Getenv` directly — per the environment-variable policy. It is
+      deliberately a superset of the variables feeding `runtimeconfig`: over-invalidating is
+      correct but slow, missing one is a stale farm
+- [x] run tests — must pass before Task 7
 
 ### Task 7: Atomic farm materialization
 
-- [ ] `Materialize(plan, manifest) error`: build the whole directory in a sibling temp dir on
+- [x] `Materialize(plan, manifest) error`: build the whole directory in a sibling temp dir on
       the same filesystem, fsync, then `os.Rename` into place; on rename failure `os.Stat` the
       destination and treat its existence as a peer having won (aqua's lock-free model). Never
       mutate a live directory in place
-- [ ] `symlink` entries become a real symlink to the resolved `Command` in the
+- [x] `symlink` entries become a real symlink to the resolved `Command` in the
       content-addressed store
-- [ ] `shim` entries become a symlink to the absolute datamitsu executable path
+- [x] `shim` entries become a symlink to the absolute datamitsu executable path
       (`os.Executable`, resolved), so argv[0] dispatch can pick them up
-- [ ] **never emit a dangling symlink** — an entry whose target does not exist is a `shim`
+- [x] **never emit a dangling symlink** — an entry whose target does not exist is a `shim`
       entry by construction (Task 5's `Installed` condition), so this is a guarded invariant
       with a test, not a hope
-- [ ] write the manifest inside the same atomic swap so the farm and its manifest can never
+- [x] write the manifest inside the same atomic swap so the farm and its manifest can never
       disagree
-- [ ] directory `0o700`, entries `0o755`; refuse to materialize if an existing farm directory
+- [x] directory `0o700`, entries `0o755`; refuse to materialize if an existing farm directory
       is group- or other-writable or not owned by the current uid
-- [ ] refuse to materialize if the target path is not under `GetCachePath()` — defense against
+- [x] refuse to materialize if the target path is not under `GetCachePath()` — defense against
       a bad root
-- [ ] per-root advisory lock around the bake (`flock` on a lock file created
+- [x] per-root advisory lock around the bake (`flock` on a lock file created
       `O_CREAT|O_RDWR|O_CLOEXEC` and **never unlinked**), non-blocking first with a poll-and-
       timeout fallback: poll for the artifact to appear, and only on timeout block on the
       lock. Ten tmux panes activating at once is the case this exists for
-- [ ] on a failed bake (offline, broken config, unreachable remote config) **keep the previous
+- [x] on a failed bake (offline, broken config, unreachable remote config) **keep the previous
       manifest and farm**, do not advance the stamp, print one line to stderr, and let the next
       invocation retry — nix-direnv's fail-stale-not-empty rule. The alternative default is an
       empty farm and a machine-wide 127 storm
-- [ ] no `ui.Current()` calls anywhere in this package — it must be silent
-- [ ] write a test asserting re-materializing over an existing farm removes entries no longer
+- [x] no `ui.Current()` calls anywhere in this package — it must be silent
+- [x] write a test asserting re-materializing over an existing farm removes entries no longer
       in the plan
-- [ ] write a test asserting modes: directory `0o700`, entries `0o755`
-- [ ] write a test asserting materializing to a path outside the cache root errors
-- [ ] write a test asserting two successive `Materialize` calls with the same plan produce
+- [x] write a test asserting modes: directory `0o700`, entries `0o755`
+- [x] write a test asserting materializing to a path outside the cache root errors
+- [x] write a test asserting two successive `Materialize` calls with the same plan produce
       identical directory listings
-- [ ] write a test asserting no entry in the farm is a dangling symlink
-- [ ] write a concurrency test (`-race`) running N concurrent `Materialize` calls for the same
+- [x] write a test asserting no entry in the farm is a dangling symlink
+- [x] write a concurrency test (`-race`) running N concurrent `Materialize` calls for the same
       root and asserting the final farm is complete and consistent, with no partial directory
-- [ ] write a test asserting a bake that fails midway leaves the previous farm and manifest
+- [x] write a test asserting a bake that fails midway leaves the previous farm and manifest
       intact
-- [ ] run `go test ./... -race` — must pass before Task 8
+- [x] ➕ add `env.ProjectLockFileName` (`internal/env/runtime.go`) so the lock file's name is
+      owned by the same package as the farm and manifest names. **Narrowed:** no
+      `env.GetProjectLockPath` — `sourcefarm` derives the directory from the farm path it was
+      given, so a test's `Options.CacheRoot` override is honoured; a path helper reading the
+      real cache root would ignore it
+- [x] run `go test ./... -race` — must pass before Task 8
 
 ### Task 8: argv[0] shim dispatch
 
@@ -431,62 +455,81 @@ The shim path must not build the cobra tree or construct the UI. `cmd.Execute()`
 (`cmd/root.go:138-153`) runs `clr.Init()`, `ui.New(term.DetectMode())` and `ui.Activate` before
 cobra; dispatch happens before all of it.
 
-- [ ] in `main.go`, before `cmd.Execute()`, inspect `filepath.Base(os.Args[0])`; when it is not
+- [x] in `main.go`, before `cmd.Execute()`, inspect `filepath.Base(os.Args[0])`; when it is not
       one of datamitsu's own invocation names, take the shim path
-- [ ] **fall back to normal CLI execution** when the name is not declared in the resolvable
+- [x] **fall back to normal CLI execution** when the name is not declared in the resolvable
       manifest and the executable was not invoked through a farm — a user who renames the
       binary must not lose the CLI. Make this rule explicit and test it in both directions
-- [ ] shim path: `getcwd` → cheap walk up for `.git` → open the per-root manifest →
+- [x] shim path: `getcwd` → cheap walk up for `.git` → open the per-root manifest →
       `Validate` → look up the name
-- [ ] fresh manifest and entry installed: `syscall.Exec` the recorded `Command` with `Args`
+- [x] fresh manifest and entry installed: `syscall.Exec` the recorded `Command` with `Args`
       prepended to the user's argv and the recorded `Env` merged into the environment. Pass
       user argv **verbatim** — this is what fixes the `unknown flag: --version` behavior
-- [ ] use `syscall.Exec`, not a child process: it preserves signals, exit codes, stdin/stdout
+- [x] use `syscall.Exec`, not a child process: it preserves signals, exit codes, stdin/stdout
       wiring and the process table, and it is why the shim tax is one process and not two
-- [ ] stale manifest: take the lock, re-bake by spawning the full datamitsu resolution path,
+- [x] stale manifest: take the lock, re-bake by spawning the full datamitsu resolution path,
       then re-read and exec. This is the one visible hiccup per branch switch
-- [ ] entry present but not installed: run the install path, then re-resolve and exec. This is
+- [x] entry present but not installed: run the install path, then re-resolve and exec. This is
       property 3
-- [ ] **`stat` the exec target before `execve` rather than relying on `ENOENT`.** For
+- [x] **`stat` the exec target before `execve` rather than relying on `ENOENT`.** For
       interpreter-based targets (`#!/usr/bin/env node`), `ENOENT` means "script missing" _or_
       "interpreter missing", and the two need different handling. A `stat` costs ~2 µs against
       a ~10 ms process
-- [ ] name not in the manifest: **exit 127** with a message naming the app, the root, and
+- [x] name not in the manifest: **exit 127** with a message naming the app, the root, and
       `datamitsu source status`. Never search the rest of `PATH` (D4)
-- [ ] **no manifest for the cwd's root: exit 127 telling the user to run `datamitsu source`
+- [x] **no manifest for the cwd's root: exit 127 telling the user to run `datamitsu source`
       in that repository.** Do not bake it implicitly. This is the case where an activated
       shell `cd`s into a different, never-activated repository, and baking would mean
       evaluating that repository's JavaScript merely because a tool name was typed —
       direnv's threat model, with no approval gate to answer it. Explicit activation is the
       act of trust
-- [ ] resolve the datamitsu executable to install/rebake from `os.Executable()`, never through
+- [x] **climb out of a root with no manifest only along the superproject chain.** A tool run
+      inside a submodule must reach the superproject's farm (that is the root
+      `facts.GetGitRoot` resolves), but an unrelated repository checked out inside an
+      activated one — `outer/vendor/inner` — is a different repository and exits 127. The
+      `.git` link's own shape settles most layouts without a subprocess, and a
+      modules-shaped link then goes through `facts.SuperprojectOf` — the same
+      `.gitmodules`-plus-index-gitlink proof `facts.GetGitRoot` climbs on, so the shim
+      cannot climb where the authoritative root resolution would not. A submodule the
+      superproject no longer records (branch without it, `git rm --cached`) keeps the shape
+      but fails the proof; only a layout neither can settle forks git
+- [x] resolve the datamitsu executable to install/rebake from `os.Executable()`, never through
       a `PATH` the farm itself controls — otherwise a shimmed name can hijack the spawn
-- [ ] add a benchmark pinning the shim dispatch path's cost so nobody adds work to it
-- [ ] write a test asserting argv is passed verbatim, including a leading `--version` and
+- [x] add a benchmark pinning the shim dispatch path's cost so nobody adds work to it
+      — `BenchmarkDispatch` over a 101-entry manifest measures **214 µs/op** on an
+      Apple M1 Max, ~84% of it in system calls (the manifest read plus four stats)
+- [x] write a test asserting argv is passed verbatim, including a leading `--version` and
       arguments containing spaces, quotes and newlines
-- [ ] write a test asserting the exit code of the target is preserved exactly (0, 1, 42, 127)
-- [ ] write a test asserting stdout and stderr are the target's, unmodified and unbuffered
-- [ ] write a test asserting an unknown name exits 127 with the expected message and does
+- [x] write a test asserting the exit code of the target is preserved exactly (0, 1, 42, 127)
+- [x] write a test asserting stdout and stderr are the target's, unmodified and unbuffered
+- [x] write a test asserting an unknown name exits 127 with the expected message and does
       **not** exec anything from the rest of `PATH`
-- [ ] write a test asserting a renamed datamitsu binary still runs the normal CLI
-- [ ] write a test asserting a stale manifest triggers exactly one rebake and then execs the
+- [x] write a test asserting a renamed datamitsu binary still runs the normal CLI
+- [x] write a test asserting a stale manifest triggers exactly one rebake and then execs the
       new target
-- [ ] write a test asserting a not-installed entry triggers the install path exactly once
-- [ ] run `go test ./... -race` — must pass before Task 9
+- [x] write a test asserting a not-installed entry triggers the install path exactly once
+- [x] ➕ farm detection is a pure path comparison (`{cache}/projects/*/bin/<name>`)
+      rather than a stat of the manifest beside the farm: the cases that most need
+      to fail loudly — no manifest for this tree, or a manifest that will not parse
+      — are exactly the ones a presence check would misread as "not a farm" and
+      quietly turn into a CLI run holding a tool's argv
+- [x] ➕ the exec-path tests run the dispatch in a re-invoked child process, since
+      `syscall.Exec` cannot be observed from the process that performs it
+- [x] run `go test ./... -race` — must pass before Task 9
 
 ### Task 9: The `datamitsu source <shell>` commands
 
 Shells are subcommands, matching how cobra's own `completion bash|fish|zsh` works and this
 repo's `store`/`config` group style.
 
-- [ ] add `cmd/source.go` with a `source` group command and `bash`, `zsh`, `fish` leaves
-- [ ] `PersistentPreRun` unconditionally calling
+- [x] add `cmd/source.go` with a `source` group command and `bash`, `zsh`, `fish` leaves
+- [x] `PersistentPreRun` unconditionally calling
       `ui.SetEventSink(uievent.NewJSONLSink(os.Stderr), true)` — the `cmd/lsp.go:31-33`
       pattern. It beats `--log-format` and silences both `ui.Current()` in library code and
       config-JS `console.log`
-- [ ] handler: load config → `BuildPlan` → `Materialize` → write shell code with
+- [x] handler: load config → `BuildPlan` → `Materialize` → write shell code with
       `fmt.Fprint(cmd.OutOrStdout(), …)` only, never through any `ui` primitive
-- [ ] **no config discovered (no git root, or a git root with no `datamitsu.config.*`): exit
+- [x] **no config discovered (no git root, or a git root with no `datamitsu.config.*`): exit
       non-zero with an actionable message and write nothing to stdout.** Config discovery is
       git-root-only (`discoverAutoConfig` stats three filenames at the git root and nowhere
       else), so outside a repository datamitsu would otherwise fall back to the embedded
@@ -495,176 +538,321 @@ repo's `store`/`config` group style.
       `--config` persistent flag (`cmd/root.go:110`) and show a concrete invocation. Making
       that path actually produce a working farm is the follow-up plan; failing loudly is this
       plan's job
-- [ ] bash/zsh renderer: export `DATAMITSU_ROOT` and `DATAMITSU_FARM`, remove any existing
+- [x] bash/zsh renderer: export `DATAMITSU_ROOT` and `DATAMITSU_FARM`, remove any existing
       occurrence of the farm dir from `PATH`, prepend it, then `hash -r`. Target bash 3.2
       (macOS ships it) — no associative arrays, no namerefs
-- [ ] fish renderer: `set -gx`, then `fish_add_path --global --move --path <dir>` — `--move`
-      is required or re-activation silently no-ops — then `functions -c`
-- [ ] every emitted path goes through `internal/shellquote`
-- [ ] activation must **not** install anything and must be safe to run repeatedly
-- [ ] warnings via direct `fmt.Fprintf(os.Stderr, …)`, bypassing `ui`: not-yet-installed apps,
+- [x] fish renderer: `set -gx`, then `fish_add_path --global --move --path <dir>` — `--move`
+      is required or re-activation silently no-ops
+      — ⚠️ **scope change: no `functions -c` line.** `functions -c` takes two arguments (it
+      copies a function) and would abort the activation. fish has no `hash -r` equivalent to
+      emit: it resolves commands against `PATH` per invocation, verified by the real-fish
+      test. ➕ Also discovered: `fish_add_path` silently skips a directory that does not
+      exist, so the real-shell tests bake against a farm directory that is actually there
+- [x] every emitted path goes through `internal/shellquote`
+- [x] activation must **not** install anything and must be safe to run repeatedly
+- [x] warnings via direct `fmt.Fprintf(os.Stderr, …)`, bypassing `ui`: not-yet-installed apps,
       shadowed system binaries with their absolute paths, and offline failures surfacing
-      `httpx.GuardOffline`'s existing text verbatim rather than new wording
-- [ ] write renderer unit tests: bash output contains exactly one `PATH` mutation; fish output
+      `httpx.GuardOffline`'s existing text verbatim rather than new wording (a failed config
+      load is returned unwrapped in wording, so the guard's own text is what the user reads)
+- [x] write renderer unit tests: bash output contains exactly one `PATH` mutation; fish output
       uses `--move`; rendering twice is byte-identical
-- [ ] write a test asserting a farm path containing a space and a single quote renders to
-      shell that `/bin/sh` parses without error
-- [ ] write a test asserting the renderers accept a `Plan` and return a string, with no
+- [x] write a test asserting a farm path containing a space and a single quote renders to
+      shell that parses without error — ⚠️ **scope change: real `bash` and real `fish`, not
+      `/bin/sh`.** The renderer uses `${var//pat/rep}`, which is bash/zsh syntax and not
+      POSIX, so `sh -n` would be a false negative under dash. The tests execute the
+      activation and read back `PATH`, which is strictly stronger than a parse check, and
+      skip cleanly when the shell is absent
+- [x] write a test asserting the renderers accept a `Plan` and return a string, with no
       filesystem or config dependency
-- [ ] write a test asserting stdout contains no warning text when warnings are emitted
-- [ ] run tests — must pass before Task 10
+- [x] write a test asserting stdout contains no warning text when warnings are emitted
+- [x] ➕ add `DATAMITSU_ROOT`/`DATAMITSU_FARM` to `internal/env` (`e.go` + getters and
+      name accessors in `env.go`) per the environment-variable policy, and **exclude them
+      from `env.Environ()`**: they mark which farm a shell activated rather than how
+      datamitsu behaves, and including them in the staleness key would make every activated
+      shell disagree with the process that baked its farm and rebake on every command
+- [x] ➕ record the config chain's file paths during `loadConfigImpl`
+      (`cmd.ConfigChainFiles()`), so the manifest's watch set covers the declared
+      before-configs — which are only known after the auto config has been evaluated, the
+      exact work the watch set exists to avoid repeating
+- [x] ➕ `datamitsu source` with no shell, or with an unsupported one, exits non-zero: a
+      cobra group with no `Run` prints help and exits 0, which under `eval "$(…)"` would
+      evaluate a help screen
+- [x] ➕ registered `source bash|zsh|fish` in `test/cli/root_test.go` and
+      `test/cli/completeness_test.go` with an initial `test/cli/source_test.go`, and added a
+      `## source` section to `website/docs/reference/cli-commands.md` plus a regenerated
+      `internal/llmsdocs/embed` — all three are hard build gates that fail the moment a leaf
+      command exists, so they cannot wait for Tasks 12 and 15
+- [x] run tests — must pass before Task 10
 
 ### Task 10: `datamitsu source status` and `--json`
 
 Under D4 this is the primary mitigation for shadowing and the primary debugging tool. It is
 not optional polish.
 
-- [ ] add a `status` leaf printing: the root, the farm directory, whether the manifest is
+- [x] add a `status` leaf printing: the root, the farm directory, whether the manifest is
       fresh, every entry with its strategy and install state, every exclusion **with its
       reason**, and every shadowed system binary with the absolute path it was found at
-- [ ] add `--json` emitting one typed struct with `json` tags — no `map[string]any`, and
+- [x] add `--json` emitting one typed struct with `json` tags — no `map[string]any`, and
       nothing derived from `runtimeconfig.Effective` (per the Runtime Config vs Config Inputs
       policy). Serialize with `json.MarshalIndent(v, "", "  ")` via `cmd.OutOrStdout()`,
       matching `cmd/devtools_parsers.go:245-254`
-- [ ] in `--json` mode emit no human text at all; warnings still go to stderr
-- [ ] document this struct as the single serialization any future `exec --json` reuses
-- [ ] write a test asserting marshalled output has stable key order and sorted lists across
+- [x] in `--json` mode emit no human text at all; warnings still go to stderr
+- [x] document this struct as the single serialization any future `exec --json` reuses
+- [x] write a test asserting marshalled output has stable key order and sorted lists across
       two calls
-- [ ] write a test asserting required keys are present — assert presence and values, never a
+- [x] write a test asserting required keys are present — assert presence and values, never a
       field count, per the runtime-config policy precedent
-- [ ] write a test asserting `shadows` is omitted when empty and carries the absolute path
+- [x] write a test asserting `shadows` is omitted when empty and carries the absolute path
       when set
-- [ ] write a test asserting every exclusion carries a non-empty reason
-- [ ] write a test asserting the output round-trips through `json.Unmarshal`
-- [ ] run tests — must pass before Task 11
+- [x] write a test asserting every exclusion carries a non-empty reason
+- [x] write a test asserting the output round-trips through `json.Unmarshal`
+- [x] ➕ `status` resolves and reports but never materializes: a diagnostic that repairs the
+      farm it describes cannot be used to observe a broken one. `bakeSourceFarm` was split
+      into a read-only `resolveSourcePlan` plus the materialize step, which Task 11's
+      `refresh` reuses. A blackbox test asserts no `manifest.json` appears in the cache
+- [x] ➕ the manifest's freshness is reported as a four-state word — `fresh`, `stale`,
+      `missing`, `unreadable` — rather than a bare boolean. All three non-fresh states mean
+      the same rebake, but a user needs to tell a corrupted farm from one that has simply
+      aged out, and "never baked here" is the state the shim reports as exit 127
+- [x] ➕ registered `source status` in `test/cli/completeness_test.go`, added
+      `TestSourceStatus`/`TestSourceStatusJSON`/`TestSourceStatusDoesNotBake` to
+      `test/cli/source_test.go`, extended the `## source` section of
+      `website/docs/reference/cli-commands.md` and regenerated `internal/llmsdocs/embed` —
+      the same three build gates Task 9 had to satisfy the moment a leaf command exists
+- [x] run tests — must pass before Task 11
 
 ### Task 11: `datamitsu source refresh`
 
-- [ ] add a `refresh` leaf that re-bakes the farm for the current root and prints a one-line
+- [x] add a `refresh` leaf that re-bakes the farm for the current root and prints a one-line
       summary to stderr, nothing to stdout
-- [ ] `--force` bypasses the staleness check entirely — the documented escape hatch for the
+- [x] `--force` bypasses the staleness check entirely — the documented escape hatch for the
       `facts().env` hole recorded in Task 6
-- [ ] respect offline and strict-OCI policy: refresh resolves and materializes the farm but
+- [x] respect offline and strict-OCI policy: refresh resolves and materializes the farm but
       **downloads nothing**; a missing tool stays a `shim` entry
-- [ ] write a test asserting `refresh` on an unchanged tree is a no-op that still exits 0
-- [ ] write a test asserting `--force` re-bakes an already-fresh manifest
-- [ ] write a test asserting `refresh` performs no download under `DATAMITSU_OFFLINE=1`
-- [ ] write a test asserting stdout is empty
-- [ ] run tests — must pass before Task 12
+- [x] write a test asserting `refresh` on an unchanged tree is a no-op that still exits 0
+- [x] write a test asserting `--force` re-bakes an already-fresh manifest
+- [x] write a test asserting `refresh` performs no download under `DATAMITSU_OFFLINE=1`
+- [x] write a test asserting stdout is empty
+- [x] ➕ the freshness check runs **before** the config is loaded, not after: the no-op case
+      is the common one, and deciding it from the on-disk manifest's watch set costs a
+      handful of `lstat` calls instead of a full config evaluation. Every non-fresh state —
+      missing, unreadable, aged out — answers "re-bake", so a corrupted farm can be repaired
+      without deleting the cache
+- [x] ➕ registered `source refresh` in `test/cli/completeness_test.go`, added
+      `TestSourceRefresh`/`TestSourceRefreshDownloadsNothing` to `test/cli/source_test.go`,
+      extended the `## source` section of `website/docs/reference/cli-commands.md` and
+      regenerated `internal/llmsdocs/embed` — the same three build gates Tasks 9 and 10 had
+      to satisfy the moment a leaf command exists
+- [x] run tests — must pass before Task 12
 
 ### Task 12: Blackbox CLI tests and contract registration
 
 Both registries are hard build failures if not updated.
 
-- [ ] add `source` to `expectedTopLevelCommands` (`test/cli/root_test.go:15-32`)
-- [ ] register every new leaf in `testedLeafCommands` (`test/cli/completeness_test.go:22`):
+- [x] add `source` to `expectedTopLevelCommands` (`test/cli/root_test.go:15-32`)
+- [x] register every new leaf in `testedLeafCommands` (`test/cli/completeness_test.go:22`):
       `source bash`, `source zsh`, `source fish`, `source status`, `source refresh`
-- [ ] add `test/cli/source_test.go`
-- [ ] regenerate `root_help.txt` and add the per-command help goldens via
-      `go test ./test/cli/ -update`
-- [ ] goldens for bash/zsh/fish using
+- [x] add `test/cli/source_test.go`
+- [x] regenerate `root_help.txt` and add the per-command help goldens via
+      `go test ./test/cli/ -update` — `root_help.txt` already carried `source` from Task 9;
+      added `source_help` plus one golden per leaf
+- [x] goldens for bash/zsh/fish using
       `clitest.NewNormalizer().MaskPath(p.Dir, "<TMP>").MaskPath(cacheBase, "<CACHE>")`
-- [ ] pin `PATH` and `SHELL` explicitly via `RunOptions.Env` in every case —
+- [x] pin `PATH` and `SHELL` explicitly via `RunOptions.Env` in every case —
       `internal/clitest` strips `DATAMITSU_*`/`CI`/`TERM`/`NO_COLOR` but **not** `PATH` or
       `SHELL`, and shadow detection reads `PATH`, so goldens are machine-dependent without
       this. Get it wrong and CI is green locally and red on the runner
-- [ ] add source cases to `detCases` so `TestGoldenSuiteDeterministic` proves byte-stability
-- [ ] write a test asserting stdout contains exactly the expected shell block and nothing else,
+- [x] add source cases to `detCases` so `TestGoldenSuiteDeterministic` proves byte-stability
+- [x] write a test asserting stdout contains exactly the expected shell block and nothing else,
       and stderr is empty for the clean case (mirroring `test/cli/lsp_test.go:23-59`)
-- [ ] write a test with a fixture config whose `getConfig()` calls `console.log`, asserting
+- [x] write a test with a fixture config whose `getConfig()` calls `console.log`, asserting
       stdout has zero extra bytes — this is the config-injection guard
-- [ ] write a test with a fixture config declaring a shell app named `echo`, asserting the farm
+- [x] write a test with a fixture config declaring a shell app named `echo`, asserting the farm
       does not contain `echo`
-- [ ] write a test asserting a fixture config declaring an app named `sudo` produces an
+- [x] write a test asserting a fixture config declaring an app named `sudo` produces an
       exclusion with a deny-list reason
-- [ ] write a test asserting an unknown shell exits non-zero naming the supported shells
-- [ ] write a test asserting `source` outside a git repository exits non-zero, writes nothing
+- [x] write a test asserting an unknown shell exits non-zero naming the supported shells
+- [x] write a test asserting `source` outside a git repository exits non-zero, writes nothing
       to stdout, and names `--config` in the stderr message
-- [ ] write a test asserting `source` in a git repository with no `datamitsu.config.*` does the
+- [x] write a test asserting `source` in a git repository with no `datamitsu.config.*` does the
       same, rather than activating the embedded default config
-- [ ] write a test asserting `--json` parses as JSON and stdout contains no shell code
-- [ ] `go test ./test/cli/ -count=2` passes byte-identically
-- [ ] run `go test ./... -race` — must pass before Task 13
+- [x] write a test asserting `--json` parses as JSON and stdout contains no shell code
+- [x] `go test ./test/cli/ -count=2` passes byte-identically
+- [x] ➕ the per-root farm directory is `{cache}/projects/{XXH3-128(gitRoot)}/`, so masking
+      the cache and project paths is not enough to make source output comparable — the
+      fingerprint of a fresh temp root differs on every run. A `maskFarmHash` normalizer
+      collapses that segment, and a new `detSource` kind carries it into the determinism
+      suite, which also has to write the config where auto-discovery finds it: `source`
+      refuses an implicit fallback, so `detConfig`'s `--no-auto-config --config` shape
+      does not apply
+- [x] ➕ moved `test/cli/source_test.go` from `package cli` to `package cli_test`, matching
+      every other file in the suite bar `lsp_test.go`, so `produceDet` in
+      `completeness_test.go` can share the source fixtures instead of duplicating them
+- [x] run `go test ./... -race` — must pass before Task 13
 
 ### Task 13: Real-shell integration tests
 
 The only tier that can prove properties 1–3. Everything above tests Go; this tests the thing
 the user actually experiences.
 
-- [ ] add a test tier driving real `bash` and real `fish` against a fixture git repository with
+- [x] add a test tier driving real `bash` and real `fish` against a fixture git repository with
       two branches pinning different versions of the same fake tool, using a stub "binary"
-      that prints its version
-- [ ] `t.Skip` cleanly when the shell is not installed, and state in the skip message that the
+      that prints its version — `test/shell`, with a loopback `httptest` release host so the
+      real download, SHA-256 verification and install path run end to end
+- [x] `t.Skip` cleanly when the shell is not installed, and state in the skip message that the
       property is unverified on this machine
-- [ ] **property 1**: activate, run the tool, assert the pinned version — not a same-named
+- [x] **property 1**: activate, run the tool, assert the pinned version — not a same-named
       binary planted earlier in `PATH`
-- [ ] **property 2, the load-bearing case**: in one activated shell, run
+- [x] **property 2, the load-bearing case**: in one activated shell, run
       `git checkout v2 && <tool> --version` **on a single line** and assert the v2 version. Then
       `git checkout v1 && <tool> --version` on a single line and assert v1. No re-activation
-      between them
-- [ ] **property 2, non-interactive**: assert the same through `make`, through `bash -c`, and
+      between them — ⚠️ **this failed on first run, and the cause was D1's symlink half**; see
+      the scope change below
+- [x] **property 2, non-interactive**: assert the same through `make`, through `bash -c`, and
       through a `sh -c` recipe — contexts where no prompt ever renders
-- [ ] **property 3**: delete the tool from the store, run it, assert it is materialized and
-      executed, and assert the exit code is the tool's and not 127
-- [ ] **D4**: plant a same-named binary in `PATH`, remove the app from the config, re-bake, and
-      assert exit 127 rather than the planted binary running
-- [ ] assert exit codes propagate for 0, 1 and 42
-- [ ] assert argv passes verbatim: a `--version` flag, an argument with a space, an argument
-      with a single quote, an argument with a newline
-- [ ] test a farm path containing a space, a `'` and a `[` — glob-sensitive shell code is the
+- [x] **property 3**: delete the tool from the store, run it, assert it is materialized and
+      executed, and assert the exit code is the tool's and not 127 — split in two: the
+      never-installed case (the first invocation after activation, which is the real lazy path)
+      and a delete-from-store case repaired by `source refresh --force`
+- [x] **D4**: plant a same-named binary in `PATH`, remove the app from the config, re-bake, and
+      assert exit 127 rather than the planted binary running — the re-bake is the shim's own,
+      triggered by `git checkout none && <tool>` on one line, and the test first asserts the
+      planted binary is reachable so it cannot pass vacuously. ⚠️ **this failed on first run
+      too**; see the argv[0] scope change below
+- [x] assert exit codes propagate for 0, 1 and 42
+- [x] assert argv passes verbatim: a `--version` flag, an argument with a space, an argument
+      with a single quote, an argument with a newline (and a bare `*`, which a shell would
+      glob-expand if the shim reconstructed the command line instead of passing argv through)
+- [x] test a farm path containing a space, a `'` and a `[` — glob-sensitive shell code is the
       class of bug only a real shell catches
-- [ ] assert activating twice does not duplicate the `PATH` entry, in both bash and fish
-- [ ] run `go test ./... -race` and the new tier — must pass before Task 14
+- [x] assert activating twice does not duplicate the `PATH` entry, in both bash and fish
+- [x] run `go test ./... -race` and the new tier — must pass before Task 14
+- [x] ⚠️ **scope change, correctness: `Strategy=symlink` is no longer chosen.** The property-2
+      test fails for an _installed_ `binary` app, which is exactly what D1 optimizes. A store
+      symlink has nowhere to put the freshness check: nothing of datamitsu's runs when the
+      kernel follows it, so after `git checkout v2` the entry keeps resolving to the previous
+      branch's version — silently, exiting 0, printing plausible output. That is the failure
+      D4 exists to prevent, arriving through the other door. `strategyFor` now returns
+      `shim` for every entry; `StrategySymlink` and its materialization stay implemented and
+      tested, so re-enabling is one branch if a cheaper revalidation hook is ever found.
+      **This narrows D1 and the owner should confirm it.** Measured cost of the change:
+      `BenchmarkDispatch` is 227 µs/op, against 0 for a symlink.
+- [x] ⚠️ **scope change, correctness: farm detection cannot read argv[0].** Task 8 assumed a
+      shell execs the absolute path it found on `PATH` and passes it as argv[0]. It does not —
+      bash, fish and dash all pass the _word the user typed_ (verified directly). Every loud
+      failure therefore degraded into an ordinary CLI run: `stub-tool` after a branch that
+      dropped the app printed datamitsu's help and exited 0 instead of exiting 127.
+      `invokedThroughFarm` now resolves a bare name against `PATH` itself, the same way the
+      shell just did, and memoizes the answer **before** any rebake — the config change that
+      makes a manifest stale is usually the one that removed the app, and the rebake deletes
+      the farm entry the answer is read from
+- [x] ➕ **the shim's install/rebake spawn re-entered itself on macOS.** A farm entry is a
+      symlink to the datamitsu binary, and `os.Executable` reports the invoked path rather than
+      the file behind it on darwin, so `Spawn(exe, "install", name)` ran the tool's own farm
+      entry again: a fork bomb that only ended with the process table. `datamitsuExe` now
+      resolves symlinks and refuses outright to spawn anything still inside a farm
+- [x] ➕ `BenchmarkDispatch` now benchmarks the invocation shape a shell actually produces —
+      a bare argv[0] with the farm first on `PATH` — rather than a pre-resolved absolute path
 
 ### Task 14: Verify acceptance criteria
 
-- [ ] `datamitsu source bash|zsh|fish` prints valid activation code that the target shell
-      parses without error
-- [ ] activation is idempotent and adds exactly one `PATH` entry
-- [ ] activation downloads nothing (assert under `DATAMITSU_OFFLINE=1`)
-- [ ] a `binary` app's steady-state invocation adds no measurable overhead versus running the
-      store binary directly — record the measured delta here
-- [ ] a `node`/`jvm` app's steady-state invocation adds ~10 ms — record the measured delta here
-- [ ] the branch-switch hiccup (first invocation after a checkout) is recorded here as a real
-      number
-- [ ] stdout carries shell code only; all warnings are on stderr
-- [ ] no secrets appear in activation output
-- [ ] every declared app has a farm entry; no farm entry is a dangling symlink
-- [ ] `go test ./... -race` passes
-- [ ] `go test ./test/cli/ -count=2` passes
-- [ ] `pnpm dm check` passes
-- [ ] coverage meets the project standard via `pnpm test:coverage:all`
+All measurements below are on an Apple M1 Max, `hyperfine -N` with ≥300 warmup runs, against
+this repository's own 111-app config unless stated otherwise.
+
+- [x] `datamitsu source bash|zsh|fish` prints valid activation code that the target shell
+      parses without error — bash and fish are proven by the Task 13 tier, which **executes**
+      the activation rather than parsing it (all 10 tests ran, neither shell skipped). zsh is
+      not driven by that tier, so it was verified directly: `zsh -n` on the emitted file parses,
+      and a live `eval` leaves the farm at `$path[1]`
+- [x] activation is idempotent and adds exactly one `PATH` entry — `TestActivationIsIdempotent`
+      covers bash and fish; the zsh check above double-activates and counts exactly 1
+      occurrence of the farm directory in `PATH`
+- [x] activation downloads nothing (assert under `DATAMITSU_OFFLINE=1`) — a cold-cache
+      `source bash` under `DATAMITSU_OFFLINE=1 DATAMITSU_NO_OCI=1` exits 0 and bakes all 110
+      entries; `TestSourceRefreshDownloadsNothing` pins it
+- [x] a `binary` app's steady-state invocation adds no measurable overhead versus running the
+      store binary directly — **⚠️ NOT MET as written, by the deliberate Task 13 narrowing of
+      D1.** With `Strategy=symlink` withdrawn, a `binary` app pays the same shim tax as every
+      other kind. Measured against `/usr/bin/true` as the exec target, so the number is the
+      datamitsu process itself and not the tool's own startup: **+10.1 ms** (12.8 ± 0.7 ms vs
+      2.7 ± 2.2 ms) and **+12.3 ms** (14.0 ± 2.5 ms vs 1.7 ± 0.3 ms) across two independent
+      runs — call it **~10–12 ms**. This is the cost the owner is being asked to confirm
+      alongside the D1 narrowing; the alternative is a silently wrong binary after a checkout
+- [x] a `node`/`jvm` app's steady-state invocation adds ~10 ms — **+11.8 ms** (13.5 ± 1.3 ms vs
+      1.7 ± 0.3 ms) for an entry carrying both an argv prefix and an `Env` overlay, measured in
+      the same run as the `binary` entry above. Indistinguishable from the `binary` case within
+      noise, which is the expected consequence of every entry being a shim: the dispatch work is
+      identical and only the exec target differs
+- [x] the branch-switch hiccup (first invocation after a checkout) is recorded here as a real
+      number — the stale path is a full config load plus resolve plus materialize, measured as
+      `source refresh --force` over the 111-app config: **132.2 ± 27.7 ms** (20 runs, offline).
+      Adding the ~12 ms shim gives a **~145 ms one-off hiccup per config change**. The
+      steady-state counterpart, `source refresh` on a fresh manifest, is **12.7 ± 2.5 ms** —
+      identical to a bare shim invocation, confirming the watch-set check itself costs nothing
+      measurable beyond process startup. Measured by composition rather than end to end: the
+      shim's stale path needs an installed entry _and_ a real config, and the two fixtures that
+      have each do not overlap. The Task 13 tier proves the behavior end to end
+- [x] stdout carries shell code only; all warnings are on stderr — the activation is 444 bytes
+      of `export`/`PATH` lines and nothing else, while all 21 shadow warnings went to stderr
+- [x] no secrets appear in activation output — the emitted code names exactly two values, the
+      git root and the farm directory, both already-known paths. No config content, no
+      environment values, no tokens
+- [x] every declared app has a farm entry; no farm entry is a dangling symlink — 111 declared
+      names resolve to 110 farm entries plus 1 exclusion (`rustfmt`, a shell app, carrying the
+      shell reason); the farm directory holds exactly 110 files, every entry name is present as
+      a file, and `find -type l ! -exec test -e {} \;` returns nothing
+- [x] `go test ./... -race` passes
+- [x] `go test ./test/cli/ -count=2` passes — 43.6 s, byte-identical across both runs
+- [x] `pnpm dm check` passes — 22 tools, 80 runs, 0 failed
+- [x] coverage meets the project standard via `pnpm test:coverage:all` — **81.7%** combined.
+      The packages this plan added are above it: `internal/shellquote` 100%,
+      `internal/shim` 88.7%, `internal/sourcefarm` 84.6%
 
 ### Task 15: [Final] Documentation
 
 The docs tail is non-negotiable and the drift job runs a full Docusaurus build on every PR.
 Budget it as real work, not as "write two markdown files".
 
-- [ ] `website/docs/guides/source-mode.md` with `title` + `description` frontmatter (the
+- [x] `website/docs/guides/source-mode.md` with `title` + `description` frontmatter (the
       harvester rejects pages without them) and a Mermaid diagram of
       config → resolved apps → farm → activation. Examples in bash and fish only, no Go
-- [ ] document the branch-switch performance contract honestly: one visible hiccup per config
-      change, invisible thereafter
-- [ ] document the `facts().env` staleness hole from Task 6 and point at
+- [x] document the branch-switch performance contract honestly: one visible hiccup per config
+      change, invisible thereafter — a four-row table carrying the Task 14 numbers verbatim
+      (~10–12 ms steady state, ~145 ms once per config change), including why the 0 ms symlink
+      path was withdrawn
+- [x] document the `facts().env` staleness hole from Task 6 and point at
       `datamitsu source refresh --force`
-- [ ] document that `which <tool>` shows the farm path for shim entries and the real store
-      path for symlink entries — the asdf pathology, halved by D1 but not eliminated
-- [ ] add a hand-written `## source` section to `website/docs/reference/cli-commands.md` in
+- [x] document that `which <tool>` shows the farm path, never the store path — the asdf
+      pathology, now unmitigated since D1's symlink half was withdrawn in Task 13. Point at
+      `datamitsu source status`, which prints the real target
+- [x] add a hand-written `## source` section to `website/docs/reference/cli-commands.md` in
       house style, modelled on the `## llms` section — written from the generated goldens, not
-      from this plan
-- [ ] register both pages in `website/sidebars.ts`
-- [ ] rewrite `website/docs/reference/comparison.md:108-112`, which currently tells users to
+      from this plan — written incrementally in Tasks 9–11 (each leaf command is a hard build
+      gate the moment it exists), reviewed here against the goldens and left as-is
+- [x] register both pages in `website/sidebars.ts` — `guides/source-mode` added to the Guides
+      category; `reference/cli-commands` and `reference/comparison` were already registered
+- [x] rewrite `website/docs/reference/comparison.md:108-112`, which currently tells users to
       pick mise when "shell-integrated workflows are important". Use the "different layers"
       framing — datamitsu activates a pinned, hash-verified, config-distributed toolchain;
-      mise activates per-developer runtime versions. No replacement claims
-- [ ] replace every `terraform` example with `tofu` — the wrapper declares
+      mise activates per-developer runtime versions. No replacement claims — replaced with a
+      "Both activate a shell — at different layers" block that composes the two in one example
+      and names the concrete mechanical difference (prompt hook vs per-invocation revalidation)
+- [x] replace every `terraform` example with `tofu` — the wrapper declares
       tofu/terragrunt/tflint/tfupdate/terraform-docs and there is no `terraform` app
-- [ ] run `task gen:llms-docs` and commit `internal/llmsdocs/embed` — the `llms-docs-drift`
-      job re-harvests on every PR and fails on any diff
-- [ ] do **not** modify `config/src/prompts/datamitsu-agent-guide.md` — it is distributed to
+      — **Result: no examples to replace.** A sweep of `website/` finds `terraform` only in the
+      generated `reference/parser-catalog.md`, as the upstream parser id `terraform_validate`,
+      the `hashicorp/terraform` link and tfsec's own description — real upstream names, not
+      datamitsu app names, and the page is regenerated by `task gen:parsers-doc`. The new guide
+      uses `tofu` throughout
+- [x] run `task gen:llms-docs` and commit `internal/llmsdocs/embed` — the `llms-docs-drift`
+      job re-harvests on every PR and fails on any diff — 52 pages, pageSetHash
+      `151a8c2242c07f3dc5c2523869d51752`
+- [x] do **not** modify `config/src/prompts/datamitsu-agent-guide.md` — it is distributed to
       every consuming repo on their next `dm init`, and source mode is not yet the recommended
-      path for agents
-- [ ] `pnpm dm check --file-scoped` passes (cspell, prettier, markdownlint)
+      path for agents — untouched
+- [x] `pnpm dm check --file-scoped` passes (cspell, prettier, markdownlint) — 9 tools, 9 runs,
+      0 failed. `go test ./... -race` and `go test ./test/cli/ -count=2` re-run green after the
+      docs regeneration
 
 ## Technical Details
 
@@ -673,8 +861,8 @@ Budget it as real work, not as "write two markdown files".
 ```text
 {cache}/projects/{XXH3-128(gitRoot)}/
   bin/
-    terragrunt   -> {store}/.bin/terragrunt/{configHash}     # symlink, 0 ms
-    kubectl      -> {store}/.bin/kubectl/{configHash}        # symlink, 0 ms
+    terragrunt   -> {abs path to datamitsu}                  # shim
+    kubectl      -> {abs path to datamitsu}                  # shim
     prettier     -> {abs path to datamitsu}                  # shim, needs Env
     spectral     -> {abs path to datamitsu}                  # shim, jvm Args
     tflint       -> {abs path to datamitsu}                  # shim, not installed yet
@@ -682,16 +870,16 @@ Budget it as real work, not as "write two markdown files".
   lock
 ```
 
+Every entry is a shim after the Task 13 narrowing of D1. A store symlink — the 0 ms path this
+layout originally reserved for `terragrunt` and `kubectl` — has nowhere to put the freshness
+check, so it cannot switch versions with the branch.
+
 `echo` (shell app) and `git`/`sudo` (deny-listed) appear in `manifest.json` under `excluded`
 with a reason, and never as files.
 
 ### What happens when the user types `terragrunt plan`
 
-**Symlink entry, steady state.** `PATH[0]` hit → `execve` → kernel resolves one symlink hop
-into the content-addressed store → the real binary runs. Datamitsu contributes nothing
-measurable.
-
-**Shim entry, steady state.** `PATH[0]` hit → `execve` of the datamitsu binary → argv[0]
+**Steady state.** `PATH[0]` hit → `execve` of the datamitsu binary → argv[0]
 dispatch before cobra → `getcwd`, walk up for `.git`, read + validate the manifest
 (microseconds) → `stat` the target → `syscall.Exec`. ~10 ms, one process, signals and exit
 codes preserved.
@@ -700,7 +888,7 @@ codes preserved.
 (one full config load), and execs the new target. One hiccup, then back to steady state.
 
 **Tool not yet downloaded.** The entry is a shim with `Installed=false`. The shim installs,
-re-resolves and execs. Subsequent invocations take the symlink or shim steady-state path.
+re-resolves and execs. Subsequent invocations take the steady-state path.
 
 ### Why the hot path holds no trust decision
 

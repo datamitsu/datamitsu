@@ -316,3 +316,16 @@ func NoParse() bool {
 func LibcOverride() string {
 	return os.Getenv(libcOverride.Name)
 }
+
+// SourceRootVarName returns the name of the variable an activated shell carries
+// the source-mode git root in, so the shell renderer does not have to rebuild it
+// from ldflags.PackageName.
+func SourceRootVarName() string {
+	return sourceRoot.Name
+}
+
+// SourceFarmVarName returns the name of the variable an activated shell carries
+// the source-mode farm directory in.
+func SourceFarmVarName() string {
+	return sourceFarm.Name
+}

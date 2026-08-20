@@ -340,6 +340,10 @@ func (rm *RuntimeManager) GetUVCommandInfo(appName string, appConfig *binmanager
 		Type:    "uv",
 		Command: binPath,
 		Env:     envVars,
+		// The same pair uvVenvHealthy checks. The wrapper script alone survives a
+		// store restore that lost the shared Python dir, and running it then fails
+		// on a dangling `#!` line instead of reinstalling.
+		RequiredPaths: []string{getUVInterpreterPath(appEnvPath)},
 	}, nil
 }
 

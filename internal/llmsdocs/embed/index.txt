@@ -43,6 +43,7 @@ Standard llms.txt form: `datamitsu llms --web`.
 - [Managed Content (Bundles)](guides/managed-content): Using bundles to distribute managed content via symlinks with automatic cache invalidation
 - [OCI Bundles](guides/oci-bundles): An OCI bundle packages the datamitsu tool store as a standard OCI image: one layer per store subtree (a binary, a runtime, a runtime-managed app, or a WASM output-parser module), annotated so datamitsu can pull exactly the pieces it needs — **without docker or podman**. The bundle is a cache accelerator and an airgap seed, not a replacement for resolution: whatever is in the bundle is taken from it, whatever is not gets downloaded the usual way.
 - [Runtime Management](guides/runtime-management): Managing UV (Python), Node.js, JVM, and Go runtimes with datamitsu
+- [Source Mode](guides/source-mode): Put a project's declared toolchain on PATH for the current shell, so every tool runs at the version the repository pins — with lazy downloads and invisible branch switching
 - [Supply Chain Security](guides/supply-chain-security): How datamitsu enforces supply chain integrity for pnpm, UV, and Go dependencies
 - [Tooling System](guides/tooling-system): Understanding the fix, lint, and check operations in datamitsu
 - [Using Wrapper Packages](guides/using-wrappers): How to install and use datamitsu wrapper packages in your projects

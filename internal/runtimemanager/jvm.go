@@ -96,6 +96,7 @@ func (rm *RuntimeManager) installJVMAppOnce(ctx context.Context, appName string,
 }
 
 func downloadAndVerifyJAR(ctx context.Context, name, url, expectedHash, destPath string) error {
+	downloaderConstructions.Add(1)
 	if err := httpx.GuardOffline("JAR download of " + name); err != nil {
 		return err
 	}
@@ -175,6 +176,23 @@ func (rm *RuntimeManager) GetJVMAppPath(appName string, appConfig *binmanager.Ap
 
 // GetJVMCommandInfo returns command info for running a JVM app (java -jar <jar>).
 func (rm *RuntimeManager) GetJVMCommandInfo(ctx context.Context, appName string, appConfig *binmanager.AppConfigJVM, files map[string]string, archives map[string]*binmanager.ArchiveSpec) (*binmanager.CommandInfo, error) {
+	return rm.jvmCommandInfo(appName, appConfig, files, archives, func(runtimeName string) (string, error) {
+		return rm.getRuntimePath(ctx, runtimeName)
+	})
+}
+
+// resolveJVMCommandInfo is GetJVMCommandInfo without the install side effect:
+// the java binary is located through ResolveRuntimePath instead of
+// getRuntimePath, so a managed JVM that is not yet downloaded still yields the
+// path it will occupy rather than triggering a fetch.
+func (rm *RuntimeManager) resolveJVMCommandInfo(appName string, appConfig *binmanager.AppConfigJVM, files map[string]string, archives map[string]*binmanager.ArchiveSpec) (*binmanager.CommandInfo, error) {
+	return rm.jvmCommandInfo(appName, appConfig, files, archives, rm.ResolveRuntimePath)
+}
+
+// jvmCommandInfo builds a JVM app's CommandInfo, obtaining the managed java
+// binary through the injected runtimePath func. System-mode runtimes never
+// consult it — their command comes straight from the config.
+func (rm *RuntimeManager) jvmCommandInfo(appName string, appConfig *binmanager.AppConfigJVM, files map[string]string, archives map[string]*binmanager.ArchiveSpec, runtimePath func(string) (string, error)) (*binmanager.CommandInfo, error) {
 	runtimeName, rc, err := rm.ResolveRuntime(appConfig.Runtime, config.RuntimeKindJVM)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve runtime for %q: %w", appName, err)
@@ -189,6 +207,10 @@ func (rm *RuntimeManager) GetJVMCommandInfo(ctx context.Context, appName string,
 
 	// Determine the java binary path
 	var javaBin string
+	// A managed JVM is datamitsu's to provide, so its absence means the app is
+	// not installed and an install repairs it. A system-mode `java` is the
+	// user's, resolved at exec time, and is deliberately not a health path.
+	var requiredPaths []string
 	if rc.Mode == config.RuntimeModeSystem {
 		if rc.System != nil {
 			javaBin = rc.System.Command
@@ -196,11 +218,14 @@ func (rm *RuntimeManager) GetJVMCommandInfo(ctx context.Context, appName string,
 			javaBin = "java"
 		}
 	} else {
-		runtimePath, err := rm.getRuntimePath(ctx, runtimeName)
+		javaPath, err := runtimePath(runtimeName)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get JVM runtime path: %w", err)
 		}
-		javaBin = runtimePath
+		javaBin = javaPath
+		if filepath.IsAbs(javaPath) {
+			requiredPaths = []string{javaPath}
+		}
 	}
 
 	var args []string
@@ -214,5 +239,10 @@ func (rm *RuntimeManager) GetJVMCommandInfo(ctx context.Context, appName string,
 		Type:    "jvm",
 		Command: javaBin,
 		Args:    args,
+		// The JAR is what gets downloaded; javaBin is an interpreter that a
+		// system-mode runtime supplies as a bare "java" off PATH. Without this,
+		// "is it installed?" would be answered by stat'ing the JVM.
+		Artifact:      jarPath,
+		RequiredPaths: requiredPaths,
 	}, nil
 }

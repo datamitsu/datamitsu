@@ -105,8 +105,20 @@ datamitsu check               # datamitsu provides tools
 
 **When to use mise instead of datamitsu:**
 
-- You need **per-directory tool versions** for individual developers
-- **Shell-integrated workflows** are important (`mise activate`)
+- You need **per-directory runtime versions** for individual developers
+- You want a **personal, per-developer toolchain** that follows you across unrelated repositories
+
+**Both activate a shell — at different layers:**
+
+Shell activation is not a reason to pick one over the other. [`datamitsu source`](/docs/guides/source-mode) puts the **project's pinned, hash-verified, config-distributed toolchain** on `PATH`; `mise activate` puts **per-developer runtime versions** on `PATH`. They answer different questions and compose:
+
+```bash
+mise use node@20                  # which Node runtime this directory gets
+eval "$(datamitsu source bash)"    # the team's pinned tools, as ordinary commands
+tofu plan                          # the version this repository pins
+```
+
+The mechanisms differ where it matters. `mise activate` installs a prompt hook, so a version change is picked up when a prompt renders. datamitsu's activation revalidates on every tool invocation instead, which is what makes `git checkout v2 && tofu plan` — one line, no prompt in between — run v2's version. And a name the project declares but cannot resolve exits 127 rather than falling through to a system binary.
 
 ## moon: Build Orchestration vs Tool Delivery
 

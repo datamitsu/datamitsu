@@ -4,8 +4,8 @@
   "license": "MIT",
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
-  "pageCount": 51,
-  "pageSetHash": "7993dd1d46d6a700d6f72e31899077f8",
+  "pageCount": 52,
+  "pageSetHash": "d84d0bc3d358d77c730db8b0892fd190",
   "pages": [
     {
       "slug": "about",
@@ -253,8 +253,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/startup.md",
       "title": "Startup and Config Load",
       "description": "What every datamitsu invocation pays before the first tool runs - the config-load cost model, the git-root memo, and how to measure it",
-      "bytes": 9092,
-      "contentHash": "53059f21c0a485b72ce9c6b68aca1d22"
+      "bytes": 9823,
+      "contentHash": "2146ff03aa2eda5006be7c003e545f88"
     },
     {
       "slug": "guides/binary-management",
@@ -309,6 +309,15 @@
       "description": "Managing UV (Python), Node.js, JVM, and Go runtimes with datamitsu",
       "bytes": 12397,
       "contentHash": "5a74ff540f17d623a0db90cedf9d8f50"
+    },
+    {
+      "slug": "guides/source-mode",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/guides/source-mode.md",
+      "title": "Source Mode",
+      "description": "Put a project's declared toolchain on PATH for the current shell, so every tool runs at the version the repository pins — with lazy downloads and invisible branch switching",
+      "bytes": 15357,
+      "contentHash": "300955df1910fc1d3f973d8764239404"
     },
     {
       "slug": "guides/supply-chain-security",
@@ -415,8 +424,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 55387,
-      "contentHash": "1d4d8e553b709a266888485ac66252e5"
+      "bytes": 61113,
+      "contentHash": "af1929ee8d0b024778c5f0bc9ad66dec"
     },
     {
       "slug": "reference/comparison",
@@ -424,8 +433,8 @@
       "url": "https://datamitsu.com/docs/reference/comparison.md",
       "title": "Comparison with Similar Tools",
       "description": "How datamitsu compares to mise, moon, Nx, and Turborepo",
-      "bytes": 8801,
-      "contentHash": "0a8226c0071b46105e36c4fdb84dd75f"
+      "bytes": 9860,
+      "contentHash": "315b1bd270ff3e85ba104514473b0e1c"
     },
     {
       "slug": "reference/configuration-api",
@@ -433,8 +442,8 @@
       "url": "https://datamitsu.com/docs/reference/configuration-api.md",
       "title": "Configuration API",
       "description": "Complete reference for the datamitsu configuration API",
-      "bytes": 48666,
-      "contentHash": "3408b542daf41526660b42714b8a1f28"
+      "bytes": 49417,
+      "contentHash": "0135f76a0e918d57c15a6faa35c4744e"
     },
     {
       "slug": "reference/ignore-rules",

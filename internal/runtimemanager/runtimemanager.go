@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync/atomic"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
@@ -26,6 +27,19 @@ import (
 )
 
 var log = logger.Logger.With(zap.Namespace("runtimemanager"))
+
+// downloaderConstructions counts every point at which this package builds
+// something that fetches from the network — the throwaway binmanager used to
+// acquire a runtime archive, the pnpm tarball fetch, and the JAR fetch. It is
+// the runtimemanager half of the guard described on binmanager.NetworkDownloads:
+// ResolveCommandInfo must leave both counters untouched, so a future refactor
+// cannot silently reintroduce a network call on the resolution path.
+var downloaderConstructions atomic.Int64
+
+// DownloaderConstructions reports how many times this package has constructed
+// something that fetches from the network in this process. Test-visible guard,
+// not part of the runtime contract.
+func DownloaderConstructions() int64 { return downloaderConstructions.Load() }
 
 // RuntimeManager resolves, installs and caches managed language runtimes
 // (uv/node/jvm/go) and the apps that run on top of them.
@@ -175,6 +189,17 @@ func (rm *RuntimeManager) ComputeRuntimeStorePath(runtimeName string) (path stri
 	return env.GetRuntimeBinaryPath(runtimeName, configHash), true, nil
 }
 
+// ResolveRuntimePath returns where a runtime's binary lives without installing
+// it. The path is returned whether or not the file exists; callers that care
+// stat it themselves.
+func (rm *RuntimeManager) ResolveRuntimePath(runtimeName string) (string, error) {
+	resolved, err := rm.computeRuntimeBinPath(runtimeName)
+	if err != nil {
+		return "", err
+	}
+	return resolved.binPath, nil
+}
+
 // NodeAppPathExtra holds npm-app-specific parameters for app hash calculation.
 type NodeAppPathExtra struct {
 	PackageName string
@@ -313,6 +338,32 @@ func (rm *RuntimeManager) GetCommandInfo(ctx context.Context, appName string, ap
 		if err := rm.InstallGoApp(ctx, appName, app.Go, app.Env, app.Files, app.Archives); err != nil {
 			return nil, err
 		}
+		return rm.GetGoCommandInfo(appName, app.Go, app.Files, app.Archives)
+	default:
+		return nil, fmt.Errorf("app %q is not a runtime-managed app", appName)
+	}
+}
+
+// ResolveCommandInfo returns the same CommandInfo GetCommandInfo would return
+// for a runtime-managed app, without installing anything: no download, no
+// subprocess, no filesystem mutation. It composes the install-free halves of
+// the four per-kind resolvers, so the Command/Args/Env it reports are the ones
+// the exec path will actually use once the app is installed.
+//
+// The app need not be installed — the returned Command is the path it will
+// occupy. Callers decide installed-ness by stating that path themselves
+// (binmanager.ResolveCommandInfo does).
+//
+// Satisfies binmanager.RuntimeAppManager interface.
+func (rm *RuntimeManager) ResolveCommandInfo(appName string, app binmanager.App) (*binmanager.CommandInfo, error) {
+	switch {
+	case app.Uv != nil:
+		return rm.GetUVCommandInfo(appName, app.Uv, app.Files, app.Archives)
+	case app.Node != nil:
+		return rm.resolveNodeCommandInfo(appName, app.Node, app.Files, app.Archives)
+	case app.Jvm != nil:
+		return rm.resolveJVMCommandInfo(appName, app.Jvm, app.Files, app.Archives)
+	case app.Go != nil:
 		return rm.GetGoCommandInfo(appName, app.Go, app.Files, app.Archives)
 	default:
 		return nil, fmt.Errorf("app %q is not a runtime-managed app", appName)
@@ -490,6 +541,7 @@ func (rm *RuntimeManager) InstallRuntimes(ctx context.Context, names []string, c
 		return stats, nil
 	}
 
+	downloaderConstructions.Add(1)
 	tmpBm := binmanager.New(toDownload, nil, nil)
 	dlStats, dlErr := tmpBm.InstallWithConcurrency(ctx, true, concurrency, false)
 	if dlErr != nil {
@@ -773,57 +825,73 @@ func (rm *RuntimeManager) resolveEffectiveRuntimeConfig(runtimeName string, rc c
 	return rc
 }
 
-func (rm *RuntimeManager) getRuntimePath(ctx context.Context, runtimeName string) (string, error) {
+// resolvedRuntime is the outcome of computing where a runtime's binary lives
+// without touching the network. System-mode runtimes carry only BinPath (the
+// system command) and have managed == false.
+type resolvedRuntime struct {
+	binPath    string
+	rc         config.RuntimeConfig
+	configHash string
+	binaryPath *string
+	managed    bool
+}
+
+// computeRuntimeBinPath resolves the absolute path a runtime's binary occupies
+// (or would occupy) in the store, performing no download and no filesystem
+// mutation. It is the install-free half of getRuntimePath: both share this
+// selection logic, including the glibc fallback and its warning, so a resolve
+// and an install can never disagree about which file they mean.
+func (rm *RuntimeManager) computeRuntimeBinPath(runtimeName string) (resolvedRuntime, error) {
 	rc, ok := rm.mapOfRuntimes[runtimeName]
 	if !ok {
-		return "", fmt.Errorf("runtime %q not found in registry", runtimeName)
+		return resolvedRuntime{}, fmt.Errorf("runtime %q not found in registry", runtimeName)
 	}
 
 	rc = rm.resolveEffectiveRuntimeConfig(runtimeName, rc)
 
 	if rc.Mode == config.RuntimeModeSystem {
 		if rc.System == nil {
-			return "", fmt.Errorf("runtime %q is system mode but has no system config", runtimeName)
+			return resolvedRuntime{}, fmt.Errorf("runtime %q is system mode but has no system config", runtimeName)
 		}
-		return rc.System.Command, nil
+		return resolvedRuntime{binPath: rc.System.Command, rc: rc}, nil
 	}
 
 	if rc.Managed == nil {
-		return "", fmt.Errorf("runtime %q is managed mode but has no managed config", runtimeName)
+		return resolvedRuntime{}, fmt.Errorf("runtime %q is managed mode but has no managed config", runtimeName)
 	}
 
 	osType, err := syslist.GetOsTypeFromString(runtime.GOOS)
 	if err != nil {
-		return "", fmt.Errorf("failed to detect OS type: %w", err)
+		return resolvedRuntime{}, fmt.Errorf("failed to detect OS type: %w", err)
 	}
 
 	archType, err := syslist.GetArchTypeFromString(runtime.GOARCH)
 	if err != nil {
-		return "", fmt.Errorf("failed to detect architecture type: %w", err)
+		return resolvedRuntime{}, fmt.Errorf("failed to detect architecture type: %w", err)
 	}
 
 	libc := string(rm.hostTarget.Libc)
 
 	configHash, err := calculateRuntimeHash(rc, osType, archType, libc)
 	if err != nil {
-		return "", fmt.Errorf("failed to calculate runtime hash: %w", err)
+		return resolvedRuntime{}, fmt.Errorf("failed to calculate runtime hash: %w", err)
 	}
 
 	binPath := env.GetRuntimeBinaryPath(runtimeName, configHash)
 
 	archMap, ok := rc.Managed.Binaries[osType]
 	if !ok {
-		return "", fmt.Errorf("runtime %q not available for OS %q", runtimeName, osType)
+		return resolvedRuntime{}, fmt.Errorf("runtime %q not available for OS %q", runtimeName, osType)
 	}
 
 	libcMap, ok := archMap[archType]
 	if !ok {
-		return "", fmt.Errorf("runtime %q not available for arch %q on OS %q", runtimeName, archType, osType)
+		return resolvedRuntime{}, fmt.Errorf("runtime %q not available for arch %q on OS %q", runtimeName, archType, osType)
 	}
 
 	info, resolvedLibc := resolveLibcKey(libcMap, libc)
 	if info == nil {
-		return "", fmt.Errorf("runtime %q not available for libc %q on %q/%q", runtimeName, libc, osType, archType)
+		return resolvedRuntime{}, fmt.Errorf("runtime %q not available for libc %q on %q/%q", runtimeName, libc, osType, archType)
 	}
 
 	if resolvedLibc != libc {
@@ -834,17 +902,36 @@ func (rm *RuntimeManager) getRuntimePath(ctx context.Context, runtimeName string
 		)
 		configHash, err = calculateRuntimeHash(rc, osType, archType, resolvedLibc)
 		if err != nil {
-			return "", fmt.Errorf("failed to calculate runtime hash with fallback libc: %w", err)
+			return resolvedRuntime{}, fmt.Errorf("failed to calculate runtime hash with fallback libc: %w", err)
 		}
 		binPath = env.GetRuntimeBinaryPath(runtimeName, configHash)
 	}
 
 	if info.BinaryPath != nil {
 		if err := validateRelativePath(*info.BinaryPath); err != nil {
-			return "", fmt.Errorf("runtime %q: unsafe binaryPath: %w", runtimeName, err)
+			return resolvedRuntime{}, fmt.Errorf("runtime %q: unsafe binaryPath: %w", runtimeName, err)
 		}
 		binPath = filepath.Join(binPath, *info.BinaryPath)
 	}
+
+	return resolvedRuntime{
+		binPath:    binPath,
+		rc:         rc,
+		configHash: configHash,
+		binaryPath: info.BinaryPath,
+		managed:    true,
+	}, nil
+}
+
+func (rm *RuntimeManager) getRuntimePath(ctx context.Context, runtimeName string) (string, error) {
+	resolved, err := rm.computeRuntimeBinPath(runtimeName)
+	if err != nil {
+		return "", err
+	}
+	if !resolved.managed {
+		return resolved.binPath, nil
+	}
+	rc, configHash, binPath := resolved.rc, resolved.configHash, resolved.binPath
 
 	if _, err := os.Stat(binPath); err == nil {
 		log.Debug("runtime found in cache",
@@ -855,7 +942,7 @@ func (rm *RuntimeManager) getRuntimePath(ctx context.Context, runtimeName string
 	}
 
 	_, err, _ = rm.runtimeInstall.Do(runtimeName, func() (any, error) {
-		return nil, rm.downloadRuntime(ctx, runtimeName, rc, configHash, info.BinaryPath)
+		return nil, rm.downloadRuntime(ctx, runtimeName, rc, configHash, resolved.binaryPath)
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to install runtime %q: %w", runtimeName, err)
@@ -891,6 +978,7 @@ func (rm *RuntimeManager) downloadRuntime(ctx context.Context, runtimeName strin
 		},
 	}
 
+	downloaderConstructions.Add(1)
 	tmpBinManager := binmanager.New(binmanager.MapOfApps{
 		runtimeName: runtimeApp,
 	}, nil, nil)

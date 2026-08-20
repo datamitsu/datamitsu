@@ -485,6 +485,28 @@ func classifyGitDirPath(gitdir string) gitLinkKind {
 	return kind
 }
 
+// SuperprojectOf reports the working tree that records root as a submodule —
+// the one level `git rev-parse --show-superproject-working-tree` climbs — when
+// the filesystem proves it, and false when it does not.
+//
+// It is the proof gitRootPure climbs on, exported so a caller outside this
+// package (the source-mode shim, which must select a farm for exactly the root
+// GetGitRoot resolves) gates its own climb on the same condition rather than on
+// a weaker path-shaped guess. False means "not proven", which is not the same as
+// "no superproject": a caller that must be sure asks git.
+func SuperprojectOf(root string) (string, bool) {
+	top, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return "", false
+	}
+
+	gitdir, kind := classifyGitLink(top)
+	if kind != gitLinkSubmodule {
+		return "", false
+	}
+	return superprojectOf(gitdir, top)
+}
+
 // superprojectOf maps the submodule working tree at top, whose git directory is
 // gitdir (<owner>/.git/modules/...), to the superproject working tree one level
 // up. gitRootPure calls it repeatedly, so a nested submodule reaches the top of

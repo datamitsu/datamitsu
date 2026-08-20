@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/datamitsu/datamitsu/internal/env"
@@ -30,6 +31,17 @@ import (
 )
 
 var log = logger.Logger.With(zap.Namespace("binmanager"))
+
+// networkDownloads counts every entry into a binary download path,
+// process-wide. It exists as a guard for the side-effect-free resolution path
+// (ResolveCommandInfo): a refactor that reintroduces a fetch there flips this
+// counter and fails the guard test deterministically — including offline,
+// where the fetch would error for an unrelated reason and hide the regression.
+var networkDownloads atomic.Int64
+
+// NetworkDownloads reports how many binary downloads have been started in this
+// process. Test-visible guard, not part of the runtime contract.
+func NetworkDownloads() int64 { return networkDownloads.Load() }
 
 // MapOfBinaries maps OS and architecture to the binaries available for it.
 type MapOfBinaries = map[syslist.OsType]map[syslist.ArchType]map[string]BinaryOsArchInfo
@@ -150,6 +162,10 @@ func (a *ArchiveSpec) IsExternal() bool {
 // Implemented by runtimemanager.RuntimeManager to avoid circular imports.
 type RuntimeAppManager interface {
 	GetCommandInfo(ctx context.Context, appName string, app App) (*CommandInfo, error)
+	// ResolveCommandInfo returns the same CommandInfo without installing
+	// anything: no download, no subprocess. Takes no context because it cannot
+	// block on I/O worth cancelling.
+	ResolveCommandInfo(appName string, app App) (*CommandInfo, error)
 	ComputeAppPath(appName string, app App) (string, error)
 }
 
@@ -510,6 +526,101 @@ func (bm *BinManager) GetCommandInfo(ctx context.Context, appName string) (*Comm
 	return cmdInfo, nil
 }
 
+// ResolveCommandInfo answers "where would this app be, and is it there?"
+// without touching the network. It returns the same CommandInfo shape
+// GetCommandInfo does — including the merged app Env — plus whether the
+// resolved Command currently exists on disk.
+//
+// This is an addition, not a replacement: GetCommandInfo still installs. The
+// two differ only in side effects, so an app that reports installed=true here
+// runs from exactly the path GetCommandInfo would hand the exec path.
+//
+// Shell apps resolve to their bare command name with installed=true: their
+// executable is found through the inherited PATH at spawn time, so there is no
+// store path to stat.
+func (bm *BinManager) ResolveCommandInfo(appName string) (*CommandInfo, bool, error) {
+	app, ok := bm.mapOfApps[appName]
+	if !ok {
+		return nil, false, fmt.Errorf("app '%s' not found in registry", appName)
+	}
+
+	var (
+		cmdInfo   *CommandInfo
+		installed bool
+	)
+
+	switch {
+	case app.Shell != nil:
+		cmdInfo = &CommandInfo{
+			Type:    "shell",
+			Command: app.Shell.Name,
+			Args:    app.Shell.Args,
+		}
+		installed = true
+
+	case app.Binary != nil:
+		// getBinaryPath is the non-downloading half of GetBinaryPath: it does
+		// the same config-hash path math and stops before the fetch.
+		binPath, err := bm.getBinaryPath(appName)
+		if err != nil {
+			return nil, false, err
+		}
+		cmdInfo = &CommandInfo{
+			Type:    "binary",
+			Command: binPath,
+		}
+		installed = pathExists(binPath)
+
+	case app.Uv != nil || app.Node != nil || app.Jvm != nil || app.Go != nil:
+		if bm.runtimeManager == nil {
+			return nil, false, fmt.Errorf("no runtime manager configured for runtime-managed app %q", appName)
+		}
+		ci, err := bm.runtimeManager.ResolveCommandInfo(appName, app)
+		if err != nil {
+			return nil, false, err
+		}
+		cmdInfo = ci
+		// Every path the runtime declares required, not just the one that gets
+		// exec'd: the runtime installers treat a wrapper without its package, or
+		// a venv without its interpreter, as not installed, and an answer that
+		// disagreed with them would let the shim skip the repair they exist to
+		// trigger.
+		installed = allPathsExist(cmdInfo.HealthPaths())
+
+	default:
+		return nil, false, fmt.Errorf("app '%s' has no valid configuration", appName)
+	}
+
+	bm.mergeAppEnv(appName, app, cmdInfo)
+
+	return cmdInfo, installed, nil
+}
+
+// pathExists reports whether path names an existing filesystem entry. A
+// symlink is followed, matching what execve does.
+func pathExists(path string) bool {
+	if path == "" {
+		return false
+	}
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+// allPathsExist reports whether every path exists. An empty list is false: an
+// app with nothing to stat has not been resolved to anywhere, so it cannot be
+// installed.
+func allPathsExist(paths []string) bool {
+	if len(paths) == 0 {
+		return false
+	}
+	for _, p := range paths {
+		if !pathExists(p) {
+			return false
+		}
+	}
+	return true
+}
+
 // ResolvedBinaryInfo returns the BinaryOsArchInfo selected for the host
 // target without downloading anything. Used by the OCI bundle seeder to
 // re-verify seeded binaries against the published hash.
@@ -743,6 +854,56 @@ type CommandInfo struct {
 	Command string            // Path to binary or command name
 	Args    []string          // Additional arguments (for shell)
 	Env     map[string]string // Additional env variables (for shell)
+
+	// Artifact is the file whose presence means "this app is installed", when
+	// that is not Command itself. A JVM app runs `java -jar app.jar`: Command is
+	// an interpreter that a system-mode runtime may supply from PATH, so it says
+	// nothing about whether the app was ever downloaded. Empty means Command is
+	// the artifact.
+	Artifact string
+
+	// RequiredPaths are the other absolute paths that must exist for the app to
+	// run correctly, beyond InstalledPath.
+	//
+	// One path is not enough for a runtime-managed app, and each installer
+	// already knows it: a UV app needs its venv interpreter as well as the
+	// wrapper script (the interpreter is a symlink into the shared Python dir and
+	// dangles after a partial store restore), a node app needs the installed
+	// package under node_modules as well as pnpm's .bin shim, and a
+	// managed-runtime app needs its runtime binary. Reporting such an app
+	// installed on the strength of the wrapper alone makes the exec fail in the
+	// tool's own voice — or, worse for a node .bin shim, succeed against a system
+	// `node` found through PATH.
+	//
+	// A path here must be one whose absence means "reinstall", matching the
+	// health rule the installer applies; an interpreter a system-mode runtime
+	// names by bare word belongs on PATH, not here.
+	RequiredPaths []string
+}
+
+// InstalledPath returns the file whose existence decides whether the app is
+// installed — Artifact when the invocation runs through an interpreter,
+// Command otherwise.
+func (c *CommandInfo) InstalledPath() string {
+	if c.Artifact != "" {
+		return c.Artifact
+	}
+	return c.Command
+}
+
+// HealthPaths returns every file that must exist for the app to be considered
+// installed: InstalledPath plus RequiredPaths, with empties dropped.
+func (c *CommandInfo) HealthPaths() []string {
+	paths := make([]string, 0, 1+len(c.RequiredPaths))
+	if p := c.InstalledPath(); p != "" {
+		paths = append(paths, p)
+	}
+	for _, p := range c.RequiredPaths {
+		if p != "" {
+			paths = append(paths, p)
+		}
+	}
+	return paths
 }
 
 // GetAppsList returns sorted list of all available applications with types
@@ -942,6 +1103,8 @@ func (bm *BinManager) getBinaryPath(name string) (string, error) {
 }
 
 func (bm *BinManager) downloadInternal(ctx context.Context, name string) error {
+	networkDownloads.Add(1)
+
 	resolved, binaryInfo, err := bm.getBinaryInfo(name)
 	if err != nil {
 		return err

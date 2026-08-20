@@ -51,6 +51,22 @@ Six types of applications are supported:
 5. `go` - Go tools built from source via managed Go SDK (e.g., govulncheck). Pins the SDK with SHA-256, stores go.mod+go.sum in a mandatory lockfile, and builds with `go build -trimpath -mod=readonly` so any go.sum mismatch fails the build
 6. `shell` - Shell commands with custom env
 
+**Source Mode: Farm** ([internal/sourcefarm/](internal/sourcefarm/))
+
+- Turns a config's app map into a directory of commands that goes on `PATH`, in three separable steps: `BuildPlan` (pure — asks a side-effect-free resolver where each app would live and an injected `lookPath` what the name resolved to before activation), `BuildManifest` (stats the watch set and computes the XXH3 staleness key), `MaterializeWithOptions` (stages, then atomically swaps the farm directory and the manifest into place)
+- `BuildPlan` never fails: an app the resolver cannot answer for still becomes an entry with `Installed=false`, so the name is present and the shim can fail loudly instead of letting `PATH` fall through to a system binary of the same name. Categorical refusals (`shell` apps, deny-listed names) are recorded as `Excluded` with a reason, never dropped silently
+- The deny-list refuses names where interposition is a security or recursion hazard: privilege tools (`sudo`, `ssh`, …), the shells, and the bare-name subprocesses datamitsu itself spawns (`git`, `ldd`, `datamitsu`)
+- Materialization keeps the previous farm on any failure — replacing a working toolchain with an empty directory would turn every declared name into an exit-127 in every shell on the machine
+- The watch set is the config chain plus `.git/HEAD`, `pnpm-lock.yaml` and every auto-config candidate name; freshness is a comparison of recorded lstat tuples, so it costs microseconds
+
+**Source Mode: argv[0] Shim** ([internal/shim/](internal/shim/))
+
+- `shim.Dispatch()` runs in `main` **before** `cmd.Execute()`. A farm entry is a symlink to the datamitsu binary; dispatch resolves the invoked name against the manifest for the current directory's git root and `syscall.Exec`s the recorded command, so signals, exit codes and stdio belong to the tool rather than to a child process
+- Steady state is getcwd, a walk up for `.git`, one manifest read, an lstat per watched path, one stat of the target, and execve — no config load, no network, no second process
+- Root discovery mirrors `facts.GetGitRoot`: the working directory is resolved through symlinks (the authoritative root is physical), and every `.git`-bearing ancestor is a candidate so a submodule finds the superproject's farm
+- A dead end is exit 127, never a `PATH` search — except for a datamitsu binary that was merely renamed, which falls through to the normal CLI
+- Entry `Env` is overlaid on the caller's environment, with `PATH` prepended rather than replaced: a manifest outlives the shell that baked it, so a captured `PATH` would be wrong by the time it is used
+
 **Runtime Manager** ([internal/runtimemanager/](internal/runtimemanager/))
 
 - Manages runtime binaries (UV, Node, JVM, Go) with hash verification and caching
@@ -458,7 +474,8 @@ Uses uber-go/zap structured logging throughout. Logger initialization in [intern
 
 - **Cache/Store separation**: `getBasePath()` resolves the base directory (`DATAMITSU_CACHE_DIR` → `XDG_CACHE_HOME` → `~/.cache/datamitsu`). `GetCachePath()` returns `{base}/cache` (project execution state). `GetStorePath()` returns `{base}/store` (downloaded binaries, runtimes, apps)
 - Cache path and bin path utilities in [internal/env/](internal/env/)
-- Runtime path helpers in [internal/env/runtime.go](internal/env/runtime.go): `GetRuntimesPath()`, `GetRuntimeBinaryPath()`, `GetAppsPath()`, `GetAppEnvPath()`, `GetPNPMStorePath()`, `GetPNPMPath()`, `GetProjectCachePath()`
+- Runtime path helpers in [internal/env/runtime.go](internal/env/runtime.go): `GetRuntimesPath()`, `GetRuntimeBinaryPath()`, `GetAppsPath()`, `GetAppEnvPath()`, `GetPNPMStorePath()`, `GetPNPMPath()`, `GetProjectCachePath()`, `GetProjectBinPath()`, `GetProjectManifestPath()`
+- Per-git-root source-mode paths live under `{cache}/projects/{xxh3_128(gitRoot)}/`: `bin/` (the farm), `manifest.json` (its self-description) and `lock` (the advisory bake lock). The file names are the `ProjectManifestFileName` / `ProjectLockFileName` constants; `sourcefarm` derives the directory itself so a test's `Options.CacheRoot` override is honoured
 - Store-related paths (`GetBinPath`, `GetRuntimesPath`, `GetAppsPath`, `GetPNPMStorePath`) use `GetStorePath()`
 - Cache-related paths (`GetProjectCachePath`) use `GetCachePath()`
 - Binary caching uses stable hash-based paths for reproducibility

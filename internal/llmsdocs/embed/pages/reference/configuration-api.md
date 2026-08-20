@@ -82,6 +82,21 @@ Apps define the tools datamitsu manages. The app kind is determined by which sub
 | `go`     | `go`       | Go tools built from source via managed Go SDK     |
 | `shell`  | `shell`    | Shell commands with custom environment            |
 
+### App Names
+
+A key in `apps` must match `^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`. That means no
+path separators, no leading `-`, not `.` or `..`, and not a Windows reserved
+device name (`CON`, `PRN`, `AUX`, `NUL`, `COM1`–`COM9`, `LPT1`–`LPT9`). Two names
+differing only by case — `Git` and `git` — are rejected as a collision, because a
+case-insensitive filesystem would collapse them into one file.
+
+The rule exists because an app name is not just a lookup key: it becomes a file
+name in the store and, under [source mode](../guides/source-mode.md), a file name
+in a directory placed on `PATH`.
+
+This is a hard validation error on every command, not a warning and not
+source-mode-specific: a config using a name outside this set fails to load.
+
 ### Common App Fields
 
 All app kinds share these optional fields:

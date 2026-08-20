@@ -45,6 +45,27 @@ CLI golden suite exercises those paths through a real subprocess. Always judge
 produced by `pnpm test:coverage:all` — never from a bare `-coverprofile` run,
 which silently misses the blackbox contribution.
 
+### Real-shell tier (`test/shell`)
+
+[`test/shell`](test/shell) proves the source-mode properties that only a real
+shell can show: that a project's pinned version wins over a system binary of the
+same name, that a branch switch takes effect on the same command line (no prompt
+hook involved), and that activation downloads nothing until a tool is first run.
+It drives real `bash`, `zsh` and `fish` against a two-branch fixture repository
+served by a loopback `httptest` release host.
+
+It is deliberately **not** build-tagged — it runs under plain `go test ./...`:
+
+```bash
+go test ./test/shell/
+```
+
+Where a shell (or `make`) is not installed, the affected cases `t.Skip` and name
+the property left unverified rather than passing silently. The tier shares
+`clitest.CoverDir()` with `test/cli`, so its coverage output path is fixed on
+purpose: making it overridable would let the two tiers clobber each other's
+profile.
+
 ### Gated OCI e2e tier (`e2e_oci`)
 
 [`test/e2e`](test/e2e) exercises the real seed/install/exec/init/check/fix/lint

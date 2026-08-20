@@ -65,6 +65,19 @@ new leaf command without a blackbox test (or removing one) fails this gate — s
 every command stays covered. When you add a command, add at least one blackbox
 test and register it in the gate's tested-leaf set.
 
+## Real-shell tier (`test/shell`)
+
+`test/shell` sits one level above this suite. Where `test/cli` golden-tests what
+the binary _prints_, the shell tier tests what a shell _does_ with it: it evaluates
+the activation code in real `bash`, `zsh` and `fish` and then runs tools by bare
+name. That is the only way to prove the three properties source mode exists for —
+pinned versions beat a same-named system binary, a branch switch lands on the
+same command line, and activation downloads nothing.
+
+It is not build-tagged and runs under `go test ./...`; cases skip with a message
+naming the unverified property when a shell is missing. It writes into the same
+`clitest.CoverDir()` this suite uses, which is why that path is not overridable.
+
 ## Gated OCI e2e tier (`test/e2e`)
 
 The OCI tier exercises the **real** seed/install/exec/init/check/fix/lint

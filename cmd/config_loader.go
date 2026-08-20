@@ -20,6 +20,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/project"
 	"github.com/datamitsu/datamitsu/internal/remotecfg"
+	"github.com/datamitsu/datamitsu/internal/sourcefarm"
 	"github.com/datamitsu/datamitsu/internal/timing"
 	"github.com/datamitsu/datamitsu/internal/traverser"
 	"github.com/datamitsu/datamitsu/internal/version"
@@ -37,6 +38,51 @@ var (
 	resolvedRemoteURLs   []string
 	resolvedRemoteURLsMu sync.Mutex
 )
+
+// configChainFiles collects the on-disk files that fed the last config load, in
+// chain order: the --before-config paths (or the before-configs the auto config
+// declared), the auto-discovered git-root config, and every --config path.
+//
+// Source mode records them in the farm manifest's watch set, so a branch that
+// changes any of them — including one that deletes the config outright — makes
+// the farm stale on the next tool invocation. It is captured here rather than
+// re-derived by the caller because the declared before-configs are only known
+// after evaluating the auto config, which is exactly the work the watch set
+// exists to avoid repeating.
+var (
+	configChainFiles   []string
+	configChainFilesMu sync.Mutex
+)
+
+// ConfigChainFiles returns the file paths that fed the last config load.
+func ConfigChainFiles() []string {
+	configChainFilesMu.Lock()
+	defer configChainFilesMu.Unlock()
+	return append([]string(nil), configChainFiles...)
+}
+
+// setConfigChainFiles records the chain's on-disk files, every path made
+// absolute.
+//
+// The paths that arrived from --config / --before-config are verbatim flag
+// values and may be relative. Source mode stats them from whatever directory the
+// shim happened to be invoked in, which is rarely the one that baked the farm: a
+// relative entry in the watch set records "exists" at bake time and "missing" on
+// every later stat, so the farm reads as permanently stale and every tool
+// invocation pays a full rebake. (A same-named file in the invoking directory is
+// the rarer inverse — it reads as fresh against a file that is not the config.)
+// configChainArgs makes the same paths absolute for the same reason.
+func setConfigChainFiles(sources []configSource) {
+	paths := make([]string, 0, len(sources))
+	for _, s := range sources {
+		if s.path != "" {
+			paths = append(paths, absOrSelf(s.path))
+		}
+	}
+	configChainFilesMu.Lock()
+	configChainFiles = paths
+	configChainFilesMu.Unlock()
+}
 
 type configSource struct {
 	name      string
@@ -160,6 +206,7 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 	if srcErr != nil {
 		return nil, nil, nil, srcErr
 	}
+	setConfigChainFiles(sources)
 
 	// Process all sources sequentially with eager content evaluation.
 	// resolved: collects all remote URLs processed (for display/reporting).
@@ -604,10 +651,12 @@ func parseConfigResult(vm *goja.Runtime, resultVal goja.Value) (*config.Config, 
 // Returns the path if exactly one exists, empty string if none exists,
 // or an error if more than one exist.
 func discoverAutoConfig(gitRoot string) (string, error) {
-	candidates := []string{
-		filepath.Join(gitRoot, ldflags.PackageName+".config.js"),
-		filepath.Join(gitRoot, ldflags.PackageName+".config.mjs"),
-		filepath.Join(gitRoot, ldflags.PackageName+".config.ts"),
+	// The same list source-mode's watch set uses, so a farm cannot be reported
+	// fresh for a tree that has since gained a second candidate and stopped
+	// loading here.
+	candidates := make([]string, 0, len(sourcefarm.AutoConfigNames))
+	for _, name := range sourcefarm.AutoConfigNames {
+		candidates = append(candidates, filepath.Join(gitRoot, name))
 	}
 
 	var found []string

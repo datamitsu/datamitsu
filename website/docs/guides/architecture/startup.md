@@ -5,13 +5,22 @@ description: What every datamitsu invocation pays before the first tool runs - t
 
 # Startup and Config Load
 
-Every `datamitsu` invocation does the same work before [file discovery](./discovery.md) even begins: it resolves the repository root, evaluates the JavaScript configuration, and builds the engines that expose datamitsu's APIs to that configuration. This page describes what that costs, which parts are memoized, and how to measure the rest — so an optimization is never undone by a change that looks harmless.
+Every `datamitsu` CLI invocation does the same work before [file discovery](./discovery.md) even begins: it resolves the repository root, evaluates the JavaScript configuration, and builds the engines that expose datamitsu's APIs to that configuration. This page describes what that costs, which parts are memoized, and how to measure the rest — so an optimization is never undone by a change that looks harmless.
+
+:::note One invocation shape skips all of this
+
+Under [source mode](../source-mode.md), a tool run by bare name execs the same datamitsu binary under the tool's name. That invocation is decided by `argv[0]` in `main`, before the cobra command tree or the UI is built, and in the steady state it never loads a config at all: it reads the farm manifest, stats the watch set, and `syscall.Exec`s the target. Everything below describes the CLI path — which source mode still takes whenever the manifest is stale and a rebake is needed.
+
+:::
 
 ## The Load Sequence
 
 ```mermaid
 graph TD
-    A["process start<br/>package init"] --> B["resolve git root"]
+    A["process start<br/>package init"] --> S{"argv[0] is a<br/>farm entry?"}
+    S -->|yes| S1["read farm manifest<br/>lstat watch set"]
+    S1 --> S2["execve the tool<br/>(no config load)"]
+    S -->|no| B["resolve git root"]
     B --> C["pre-pass engine<br/>read declared before-configs"]
     C --> D["per source: read file"]
     D --> E{"extension<br/>.js / .mjs?"}
@@ -21,6 +30,7 @@ graph TD
     G --> H["merged config"]
 
     style B fill:#e8f4fd,stroke:#2196f3
+    style S fill:#fff3e0,stroke:#ff9800
     style E fill:#fff3e0,stroke:#ff9800
     style F fill:#fff3e0,stroke:#ff9800
     style G fill:#f3e5f5,stroke:#9c27b0

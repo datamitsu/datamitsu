@@ -1,6 +1,7 @@
 package env
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -42,6 +43,56 @@ func GetPNPMPath(storeRoot string, pnpmVersion string, pnpmHash string) string {
 // Used for cache directory naming. Shared between env and cache packages.
 func HashProjectPath(projectPath string) string {
 	return hashutil.XXH3Hex([]byte(projectPath))
+}
+
+// ProjectManifestFileName is the file name of the source-mode farm manifest,
+// stored alongside the farm's bin directory under the per-root cache directory.
+const ProjectManifestFileName = "manifest.json"
+
+// ProjectLockFileName is the file name of the per-root advisory lock taken while
+// the source-mode farm is baked. It sits beside the farm directory returned by
+// GetProjectBinPath. The file is advisory-locked during a bake and is
+// deliberately never unlinked: unlinking it would let a second process lock a
+// fresh inode for the same root and bake concurrently.
+const ProjectLockFileName = "lock"
+
+// projectRootDir returns the per-git-root cache directory
+// ({cache}/projects/{XXH3-128(gitRoot)}), rejecting roots that are not absolute.
+func projectRootDir(gitRoot string) (string, error) {
+	if gitRoot == "" {
+		return "", errors.New("gitRoot must not be empty")
+	}
+	if !filepath.IsAbs(gitRoot) {
+		return "", fmt.Errorf("gitRoot must be absolute: %q", gitRoot)
+	}
+
+	return filepath.Clean(filepath.Join(
+		GetCachePath(),
+		"projects",
+		HashProjectPath(gitRoot),
+	)), nil
+}
+
+// GetProjectBinPath returns the source-mode farm directory for a git root
+// ({cache}/projects/{XXH3-128(gitRoot)}/bin). The hash is an internal fingerprint
+// only, never compared against an external value.
+func GetProjectBinPath(gitRoot string) (string, error) {
+	dir, err := projectRootDir(gitRoot)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "bin"), nil
+}
+
+// GetProjectManifestPath returns the source-mode farm manifest file for a git root
+// ({cache}/projects/{XXH3-128(gitRoot)}/manifest.json), a sibling of the farm
+// directory returned by GetProjectBinPath.
+func GetProjectManifestPath(gitRoot string) (string, error) {
+	dir, err := projectRootDir(gitRoot)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, ProjectManifestFileName), nil
 }
 
 // GetProjectCachePath returns a per-project, per-tool cache directory, rejecting

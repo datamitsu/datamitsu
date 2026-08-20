@@ -35,6 +35,7 @@ const sidebars: SidebarsConfig = {
         "guides/configuration",
         "guides/binary-management",
         "guides/runtime-management",
+        "guides/source-mode",
         "guides/managed-configs",
         "guides/managed-content",
         "guides/tooling-system",
