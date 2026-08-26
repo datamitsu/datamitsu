@@ -14,9 +14,15 @@ import (
 	"github.com/datamitsu/datamitsu/internal/httpretry"
 	"github.com/datamitsu/datamitsu/internal/httpx"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
+	"github.com/datamitsu/datamitsu/internal/trace"
 	"github.com/datamitsu/datamitsu/internal/ui"
 	"go.uber.org/zap"
 )
+
+// cntDownloads counts artifacts fetched and verified. On a warm store it must be
+// zero — a non-zero count on a run that should have hit the store is the signal
+// that something is re-downloading.
+var cntDownloads = trace.NewCounter("install.artifacts_downloaded")
 
 // MaxBinarySize is the maximum allowed download size (500 MiB).
 const MaxBinarySize = 500 * 1024 * 1024
@@ -276,11 +282,20 @@ func downloadFile(ctx context.Context, url string, destDir string) (string, erro
 // parent context is done. The hash is verified after every successful download,
 // so retries only re-fetch — they never weaken verification.
 func downloadAndVerifyInternal(ctx context.Context, url string, expectedHash string, hashType BinHashType, destDir string, name string, allowLocalFile bool) (string, error) {
+	// Fetching and verifying are separate spans because they answer different
+	// questions on a cold store: whether the run is bound by the network or by
+	// hashing what it just pulled down.
 	var lastErr error
 	for attempt := 1; attempt <= downloadMaxAttempts; attempt++ {
+		fetchSpan := trace.Start(trace.CatInstall, "artifact.fetch")
 		tmpPath, err := downloadFileInternal(ctx, url, destDir, name, allowLocalFile)
+		fetchSpan.EndWith(trace.A("name", name), trace.A("attempt", attempt))
 		if err == nil {
-			if vErr := verifyFileHash(tmpPath, expectedHash, hashType); vErr != nil {
+			cntDownloads.Add(1)
+			verifySpan := trace.Start(trace.CatInstall, "artifact.verify")
+			vErr := verifyFileHash(tmpPath, expectedHash, hashType)
+			verifySpan.EndWith(trace.A("name", name))
+			if vErr != nil {
 				if removeErr := os.Remove(tmpPath); removeErr != nil {
 					log.Warn("failed to remove temp file after hash verification failure", zap.String("path", tmpPath), zap.Error(removeErr))
 				}
