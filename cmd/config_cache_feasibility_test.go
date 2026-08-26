@@ -74,6 +74,17 @@ func BenchmarkConfigCacheEvaluate(b *testing.B) {
 	}
 }
 
+// BenchmarkConfigCacheHit is the acceptance number for the whole plan: the same
+// chain served from the cross-process cache instead of evaluated. It is a
+// placeholder until the loader learns to consult the cache (task 5 of
+// docs/plans/2026-08-26-config-eval-cache.md); until then it fails loudly rather
+// than reporting a fictional timing, so the number has a home that cannot be
+// mistaken for a measurement.
+func BenchmarkConfigCacheHit(b *testing.B) {
+	_ = feasibilityConfigPath(b)
+	b.Fatal("not implemented: the loader does not consult a config-evaluation cache yet; see docs/plans/2026-08-26-config-eval-cache.md task 5")
+}
+
 // BenchmarkConfigCacheKeyXXH3 is the cost the cache would add on the read side:
 // reading every byte of the config chain and hashing it into a cache key.
 // XXH3 per the repository's hashing policy — this is an internal cache key over

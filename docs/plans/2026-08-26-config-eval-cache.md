@@ -122,13 +122,56 @@ group- or world-writable`). That failure is environmental and unrelated to any c
 
 ### Task 1: Pin the baseline
 
-- [ ] run the existing feasibility benchmarks and record the numbers in this file:
+- [x] run the existing feasibility benchmarks and record the numbers in this file:
       `CONFIG_CACHE_FEASIBILITY=<path to a real before-config> go test ./cmd/ -run XXX -bench 'ConfigCache' -benchtime 30x -count 3`
-- [ ] record `DATAMITSU_TRACE=1 datamitsu exec <installed tool> -- --version` in a large repository:
+- [x] record `DATAMITSU_TRACE=1 datamitsu exec <installed tool> -- --version` in a large repository:
       the `loadConfig` span total and the command's wall total
-- [ ] record the same two numbers for `datamitsu lint --explain=summary`
-- [ ] add `BenchmarkConfigCacheHit` as a placeholder that fails until Task 5 lands, so the
+- [x] record the same two numbers for `datamitsu lint --explain=summary`
+- [x] add `BenchmarkConfigCacheHit` as a placeholder that fails until Task 5 lands, so the
       acceptance number has a home
+
+#### Recorded baseline (2026-08-26)
+
+Machine: i9-14900K, Linux, warm caches, machine **not** idle (a build ran alongside some
+iterations) — re-run on an idle machine per Post-Completion before quoting these as final.
+
+**Feasibility benchmarks** — `CONFIG_CACHE_FEASIBILITY=node_modules/@shibanet0/datamitsu-config/datamitsu.config.base.js`
+(1,954,723 B), `go test ./cmd/ -run XXX -bench 'ConfigCache' -benchtime 30x -count 3`, best of 3:
+
+| Benchmark                                      | ns/op          | Note                                 |
+| ---------------------------------------------- | -------------- | ------------------------------------ |
+| `ConfigCacheEvaluate`                          | **34,015,395** | the cost the cache removes           |
+| `ConfigCacheKeyXXH3/read+hash`                 | 328,029        | the key, read from a cold page cache |
+| `ConfigCacheKeyXXH3/hash-only`                 | 29,209         | 66.9 GB/s                            |
+| `ConfigCacheKeyXXH3/sha256-only`               | 702,063        | 2.78 GB/s — 24× slower than XXH3     |
+| `ConfigCacheKeyXXH3/stat-only`                 | 1,885          | rejected: mtime is not robust        |
+| `ConfigCacheSerialize/msgpack-marshal`         | 729,195        | miss path                            |
+| `ConfigCacheSerialize/msgpack-unmarshal`       | 813,532        |                                      |
+| `ConfigCacheSerialize/json-unmarshal`          | 7,081,066      | 8.7× msgpack — confirms msgpack      |
+| `ConfigCacheSerialize/read-artifact-from-disk` | **1,293,316**  | the whole hit path minus the key     |
+
+Hit path ≈ 0.33 ms (key) + 1.29 ms (read + decode) = **~1.6 ms against 34.0 ms of evaluation, 21×.**
+
+**Command-level baseline** — 14,370-tracked-file TypeScript monorepo, `--before-config` pointed at a
+1.95 MB base config so the chain matches the table above; wall is the **min over n=20** measured
+without tracing, spans are from separate `DATAMITSU_TRACE=1` runs (tracing itself costs ~2 ms):
+
+| Command                  | wall min (n=20) | `loadConfig` span (3 runs) |
+| ------------------------ | --------------- | -------------------------- |
+| `exec task -- --version` | **60.7 ms**     | 38.2 / 40.5 / 42.3 ms      |
+| `lint --explain=summary` | **155.9 ms**    | 38.0 / 38.4 / 40.3 ms      |
+
+Inside a traced `exec`: `compileConfig` 14.7–16.0 ms, `exportConfigResult` 12.6–13.0 ms,
+`validateConfig` 1.9–2.5 ms — the same shape the Overview predicted.
+
+For scale-sensitivity, the same repository with **its own** 1.08 MB before-config: `exec` 45.4 ms
+wall / 23.8 ms `loadConfig`, `lint --explain=summary` 146.0 ms wall / 24.1 ms `loadConfig`. Config
+size, not repository size, drives the cost this plan removes.
+
+⚠️ Task 6's acceptance number ("≤ 45 ms, baseline 78 ms") was written against a different machine
+state; against the 60.7 ms measured here the equivalent target is **≤ 28 ms**, i.e. the baseline
+minus the ~38 ms `loadConfig` plus the ~1.6 ms hit path. Judge Task 6 against the 60.7 ms figure
+recorded here, re-measured on the same machine.
 
 ### Task 2: The cache key
 
