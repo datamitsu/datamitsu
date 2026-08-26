@@ -53,6 +53,9 @@ export default defineConfig((config) => ({
     "tinyjson",
     "fract",
     "outputparser",
+    // The package that classifies a glob pattern once instead of re-parsing it
+    // per path, shared by the planner and project detection.
+    "globmatch",
     // The build tag that compiles internal/trace out entirely: `-tags
     // datamitsu_notrace`. Named for what it removes, so it reads correctly in
     // the build constraint it appears in.

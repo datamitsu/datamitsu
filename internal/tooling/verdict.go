@@ -12,6 +12,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/hashutil"
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
+	"github.com/datamitsu/datamitsu/internal/trace"
 
 	"go.uber.org/zap"
 )
@@ -137,17 +138,42 @@ func sortedEnv(env map[string]string) []string {
 	return out
 }
 
+// Verdict-planning counters. attachUnit runs per task and each of its three
+// steps walks the repository file list again, or stats an ancestor chain, so the
+// call counts are what expose the tasks × files product.
+var (
+	cntGuardStat       = trace.NewCounter("plan.unit.guard_stats")
+	cntGuardStatMiss   = trace.NewCounter("plan.unit.guard_stats_enoent")
+	cntUnitMembersScan = trace.NewCounter("plan.unit.member_scans")
+)
+
 // unitMembers returns every tracked file under unitDir, from the walk the
 // planner already did. Deliberately wider than the operation's globs: a new
 // .cts, a generated-but-tracked file or an edit in a nested sub-unit all count.
 // Narrowing this risks a stale pass; widening it only costs a miss.
 func (p *Planner) unitMembers(unitDir string) []string {
+	cntUnitMembersScan.Add(1)
+
 	if !p.cacheInitialized {
 		return nil
 	}
 	if unitDir == p.rootPath {
 		return p.cachedFiles
 	}
+
+	// Memoized per unit directory. The scan is a full pass over every tracked
+	// file in the repository, and every tool planning a task in the same
+	// directory — six of them for a typical TypeScript package — produced the
+	// identical list. The result is read-only for callers (it ends up in
+	// Task.UnitMembers, which is only ever ranged over), exactly as the root
+	// case above has always shared p.cachedFiles.
+	p.unitCacheMu.Lock()
+	if cached, ok := p.memberCache[unitDir]; ok {
+		p.unitCacheMu.Unlock()
+		return cached
+	}
+	p.unitCacheMu.Unlock()
+
 	prefix := unitDir + string(filepath.Separator)
 	out := make([]string, 0, len(p.cachedFiles))
 	for _, f := range p.cachedFiles {
@@ -155,6 +181,55 @@ func (p *Planner) unitMembers(unitDir string) []string {
 			out = append(out, f)
 		}
 	}
+
+	p.unitCacheMu.Lock()
+	if p.memberCache == nil {
+		p.memberCache = make(map[string][]string)
+	}
+	p.memberCache[unitDir] = out
+	p.unitCacheMu.Unlock()
+	return out
+}
+
+// ancestorGuards returns the guard files that exist on the chain from unitDir up
+// to the repository root.
+//
+// Memoized per directory: the walk stats every name in guardNames at every
+// ancestor level, the overwhelming majority of which do not exist, and the
+// answer depends only on the directory — not on the task. Without the memo a
+// repository with sixty packages and six per-project tools paid the same few
+// hundred failing stats sixty times over.
+func (p *Planner) ancestorGuards(unitDir string) []string {
+	p.unitCacheMu.Lock()
+	if cached, ok := p.guardCache[unitDir]; ok {
+		p.unitCacheMu.Unlock()
+		return cached
+	}
+	p.unitCacheMu.Unlock()
+
+	var out []string
+	for dir := unitDir; ; dir = filepath.Dir(dir) {
+		for _, name := range guardNames {
+			path := filepath.Join(dir, name)
+			cntGuardStat.Add(1)
+			st, err := os.Stat(path)
+			if err != nil || st.IsDir() {
+				cntGuardStatMiss.Add(1)
+				continue
+			}
+			out = append(out, path)
+		}
+		if dir == p.rootPath || !strings.HasPrefix(dir, p.rootPath) {
+			break
+		}
+	}
+
+	p.unitCacheMu.Lock()
+	if p.guardCache == nil {
+		p.guardCache = make(map[string][]string)
+	}
+	p.guardCache[unitDir] = out
+	p.unitCacheMu.Unlock()
 	return out
 }
 
@@ -168,7 +243,10 @@ func (p *Planner) unitGuards(task Task, unitDir string) []string {
 		if _, dup := seen[path]; dup {
 			return
 		}
-		if st, err := os.Stat(path); err != nil || st.IsDir() {
+		cntGuardStat.Add(1)
+		st, err := os.Stat(path)
+		if err != nil || st.IsDir() {
+			cntGuardStatMiss.Add(1)
 			return
 		}
 		seen[path] = struct{}{}
@@ -176,13 +254,11 @@ func (p *Planner) unitGuards(task Task, unitDir string) []string {
 	}
 
 	// Walk up to the git root: a unit inherits whatever its ancestors declare.
-	for dir := unitDir; ; dir = filepath.Dir(dir) {
-		for _, name := range guardNames {
-			add(filepath.Join(dir, name))
-		}
-		if dir == p.rootPath || !strings.HasPrefix(dir, p.rootPath) {
-			break
-		}
+	// The chain depends only on the directory, so it is resolved once and shared
+	// by every task rooted there; the two sources below are per task.
+	for _, path := range p.ancestorGuards(unitDir) {
+		seen[path] = struct{}{}
+		out = append(out, path)
 	}
 
 	// Anything the args point at is a declared input by construction. Excludes
@@ -262,6 +338,15 @@ func (p *Planner) coverageFor(task Task) Coverage {
 // attachUnit records what a task's verdict is about, so the executor can cache
 // it without having to work out any of this for itself.
 func (p *Planner) attachUnit(task *Task, unitDir string) {
+	attachSpan := trace.Start(trace.CatPlan, "attachUnit")
+	defer func() {
+		attachSpan.EndWith(
+			trace.A("tool", task.ToolName),
+			trace.A("members", len(task.UnitMembers)),
+			trace.A("guards", len(task.UnitGuards)),
+		)
+	}()
+
 	// A file-granularity operation has no unit beyond the files it was given:
 	// each file's verdict stands alone, which is what the per-file cache already
 	// records.
@@ -275,9 +360,18 @@ func (p *Planner) attachUnit(task *Task, unitDir string) {
 		rel = ""
 	}
 	task.UnitDir = filepath.ToSlash(rel)
+
+	membersSpan := trace.Start(trace.CatPlan, "unitMembers")
 	task.UnitMembers = p.unitMembers(unitDir)
+	membersSpan.EndWith(trace.A("members", len(task.UnitMembers)))
+
+	guardsSpan := trace.Start(trace.CatPlan, "unitGuards")
 	task.UnitGuards = p.unitGuards(*task, unitDir)
+	guardsSpan.EndWith(trace.A("guards", len(task.UnitGuards)))
+
+	coverageSpan := trace.Start(trace.CatPlan, "coverageFor")
 	task.Coverage = p.coverageFor(*task)
+	coverageSpan.End()
 }
 
 // verdictTTL is how long a stored pass is trusted. Beyond it the operation runs

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -392,5 +393,48 @@ func TestWalkDeepNesting(t *testing.T) {
 
 	if len(files) != 10 {
 		t.Errorf("len(files) = %d, want 10", len(files))
+	}
+}
+
+// TestFindFilesFromPathReturnsSortedPaths pins that discovery is deterministic.
+//
+// The walk fans out across directories and appends results under a mutex, so its
+// natural order is whichever goroutine won the race. Every consumer inherited
+// that: the argv a tool receives, and the precedence between two
+// .datamitsuignore files at equal depth, which internal/datamitsuignore resolves
+// by discovery order. Sorting is what makes two runs over an unchanged tree
+// agree.
+func TestFindFilesFromPathReturnsSortedPaths(t *testing.T) {
+	root := t.TempDir()
+	// Enough breadth and depth that an unsorted concurrent walk would almost
+	// certainly interleave differently between runs.
+	for _, dir := range []string{"zebra", "alpha", "mike/nested", "bravo", "yankee/deep/deeper"} {
+		if err := os.MkdirAll(filepath.Join(root, dir), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		for _, name := range []string{"c.txt", "a.txt", "b.txt"} {
+			if err := os.WriteFile(filepath.Join(root, dir, name), []byte("x"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	first, err := FindFilesFromPath(context.Background(), root, root)
+	if err != nil {
+		t.Fatalf("FindFilesFromPath: %v", err)
+	}
+	if len(first) == 0 {
+		t.Fatal("walk found no files; the fixture is not exercising ordering")
+	}
+	if !sort.StringsAreSorted(first) {
+		t.Errorf("walk result is not sorted: %v", first)
+	}
+
+	second, err := FindFilesFromPath(context.Background(), root, root)
+	if err != nil {
+		t.Fatalf("FindFilesFromPath (second): %v", err)
+	}
+	if !slices.Equal(first, second) {
+		t.Error("two walks of the same tree returned different orders")
 	}
 }
