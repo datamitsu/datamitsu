@@ -3,9 +3,11 @@ package cache
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/configcache"
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/logger"
 )
@@ -95,6 +97,47 @@ func TestClearProject(t *testing.T) {
 
 	if err := ClearProject("relative", projectPath); err == nil {
 		t.Error("ClearProject with invalid cache dir expected error, got nil")
+	}
+}
+
+// TestClearRemovesEvaluatedConfigs pins that `datamitsu cache clear` reaches the
+// config-evaluation artifacts too: they are a sibling tree of projects/, so
+// clearing only projects/ would leave an evaluated config behind a command that
+// was told to forget everything.
+func TestClearRemovesEvaluatedConfigs(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	cacheDir := filepath.Join(t.TempDir(), "datamitsu", "cache")
+	projectPath := filepath.Join(t.TempDir(), "myproject")
+
+	artifactDir := filepath.Join(cacheDir, configcache.DirName,
+		env.ProjectFarmsDirName, env.HashProjectPath(projectPath))
+	// A 32-hex-digit key, spelled as a repeat so it is neither a plausible
+	// secret nor an unknown word to the spell checker.
+	artifact := filepath.Join(artifactDir, strings.Repeat("ab", 16)+".msgpack")
+	write := func() {
+		t.Helper()
+		if err := os.MkdirAll(artifactDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(artifact, []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	write()
+	if err := ClearProject(cacheDir, projectPath); err != nil {
+		t.Fatalf("ClearProject() error = %v", err)
+	}
+	if _, err := os.Stat(artifact); !os.IsNotExist(err) {
+		t.Errorf("ClearProject left the evaluated config behind (stat err %v)", err)
+	}
+
+	write()
+	if err := ClearAll(cacheDir); err != nil {
+		t.Fatalf("ClearAll() error = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(cacheDir, configcache.DirName)); !os.IsNotExist(err) {
+		t.Errorf("ClearAll left the config-eval tree behind (stat err %v)", err)
 	}
 }
 

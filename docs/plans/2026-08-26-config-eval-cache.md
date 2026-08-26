@@ -255,25 +255,53 @@ leave an earlier chain's verdict standing for Task 5's write to read.
 
 ### Task 4: The artifact store
 
-- [ ] store at `{env.GetCachePath()}/config-eval/{namespace}/{key}.msgpack`. `GetCachePath()` is
+- [x] store at `{env.GetCachePath()}/config-eval/{namespace}/{key}.msgpack`. `GetCachePath()` is
       the cache tree, not the store: it must be safe to delete
-- [ ] `{namespace}` mirrors the source-farm layout — `projects/{XXH3-128(gitRoot)}` for a repository
+- [x] `{namespace}` mirrors the source-farm layout — `projects/{XXH3-128(gitRoot)}` for a repository
       chain, and the explicit-config namespace (`internal/sourcefarm/plan.go:413`) for a
       machine-level `--config` chain. **Do not fall back to cwd**, or two directories share an entry
-- [ ] the artifact holds the merged `config.Config` with every `ConfigSetup.Content` nil, encoded
+- [x] the artifact holds the merged `config.Config` with every `ConfigSetup.Content` nil, encoded
       with msgpack
-- [ ] write with `os.CreateTemp` in the same directory + `os.Rename`, never in place. Entries are
+- [x] write with `os.CreateTemp` in the same directory + `os.Rename`, never in place. Entries are
       immutable per key, so reads need no lock and a concurrent double-write of one key is harmless
-- [ ] a decode failure, a truncated file or an unknown `formatVersion` is a **miss**, never an
+- [x] a decode failure, a truncated file or an unknown `formatVersion` is a **miss**, never an
       error: a corrupt cache must degrade to evaluating, and the bad entry should be removed
-- [ ] prune entries unread for N days at write time — do not repeat the store's "no GC, 7 GB" mistake
-- [ ] `datamitsu cache clear` must clear this tree; check `internal/cache/cache.go:547` `ClearAll`
-- [ ] write a round-trip test over a real merged config (extend the existing one)
-- [ ] write a test asserting a corrupt artifact is a miss and is removed
-- [ ] write a test asserting an unknown `formatVersion` is a miss
-- [ ] write a test asserting the rename is atomic under concurrent writers (`-race`, N goroutines)
-- [ ] write a test asserting `cache clear` removes it
-- [ ] run `go test ./... -race` and `go test ./test/cli/ -count=2` — must pass before Task 5
+- [x] prune entries unread for N days at write time — do not repeat the store's "no GC, 7 GB" mistake
+- [x] `datamitsu cache clear` must clear this tree; check `internal/cache/cache.go:547` `ClearAll`
+- [x] write a round-trip test over a real merged config (extend the existing one)
+- [x] write a test asserting a corrupt artifact is a miss and is removed
+- [x] write a test asserting an unknown `formatVersion` is a miss
+- [x] write a test asserting the rename is atomic under concurrent writers (`-race`, N goroutines)
+- [x] write a test asserting `cache clear` removes it
+- [x] run `go test ./... -race` and `go test ./test/cli/ -count=2` — must pass before Task 5
+
+#### How the store is built (2026-08-26)
+
+`internal/configcache/store.go`. `NewStore(namespace)` takes a namespace from
+`ProjectNamespace(gitRoot)` or `ChainNamespace(configPaths)` — both delegate to
+the farm identities in `internal/env` (`HashProjectPath`, `ConfigFarmIdentity`),
+so the artifacts sit beside the farm rather than in a second naming scheme, and
+there is no cwd fallback. Namespace and key are both validated (kind must be
+`projects`/`configs`, identity and key must be lowercase hex), which makes a
+path escape structurally impossible rather than merely unlikely.
+
+➕ `Save` drops setup content through `withoutSetupContent`, which **copies**
+rather than clearing in place: the caller's config is the live one the command
+is about to run with. `TestStoreRoundTrip` asserts both halves.
+
+➕ "Unread for N days" is implemented as mtime plus a refresh on the hit path:
+`Load` touches an entry only once its mtime is older than `refreshInterval`
+(24 h), so a config that is read daily never expires while the hit path stays a
+read in the common case. `MaxAge` is 14 days, pruned by `Prune` from `Save` —
+the miss path — so garbage collection never costs the fast path anything. The
+walk collects and the removals happen after it, so the tree is never mutated
+mid-walk.
+
+➕ `cache clear` reaches the tree through `configcache.ClearAll` /
+`ClearProject`, called from `internal/cache`'s functions of the same name. The
+config-eval tree is a **sibling** of `projects/`, so clearing only `projects/`
+would have left evaluated configs behind — `TestClearRemovesEvaluatedConfigs`
+pins that.
 
 ### Task 5: Wire it into the loader
 
