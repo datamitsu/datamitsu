@@ -70,17 +70,19 @@ func Collect(ctx context.Context, binaryCommandOverride string) (*Facts, string,
 
 // CollectWithOptions is Collect with explicit CollectOptions.
 func CollectWithOptions(ctx context.Context, binaryCommandOverride string, opts CollectOptions) (*Facts, string, error) {
-	libc := target.LibcUnknown
-	if runtime.GOOS == "linux" {
-		libc = target.DetectLibc(ctx)
-	}
+	// Through HostTarget, not DetectLibc: the memo runs the `ldd` probe once per
+	// process rather than once per engine (four engines are built per config
+	// load), and it is the only path that honours the DATAMITSU_LIBC override.
+	// Calling DetectLibc here made facts().libc disagree with the libc used for
+	// store paths and OCI bundle selection whenever the override was set.
+	host := target.HostTarget()
 
 	facts := &Facts{
 		PackageName: ldflags.PackageName,
 		Version:     ldflags.Version,
 		OS:          runtime.GOOS,
 		Arch:        runtime.GOARCH,
-		Libc:        string(libc),
+		Libc:        string(host.Libc),
 	}
 
 	// Get binary path

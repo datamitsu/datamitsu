@@ -22,6 +22,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/remotecfg"
 	"github.com/datamitsu/datamitsu/internal/sourcefarm"
 	"github.com/datamitsu/datamitsu/internal/timing"
+	"github.com/datamitsu/datamitsu/internal/trace"
 	"github.com/datamitsu/datamitsu/internal/traverser"
 	"github.com/datamitsu/datamitsu/internal/version"
 
@@ -114,7 +115,16 @@ func loadConfig() (*config.Config, *config.SetupLayerMap, *goja.Runtime, error) 
 // per-ecosystem output (e.g. dependabot). Detection is gated to setup so other
 // commands keep their detection-free, walk-free config load.
 func loadConfigForSetup(ctx context.Context) (*config.Config, *config.SetupLayerMap, *goja.Runtime, error) {
-	return loadConfigImpl(ctx, BeforeConfigPaths, NoAutoConfig, ConfigPaths, loadConfigOptions{detectProjectLocations: true})
+	return loadConfigImpl(ctx, BeforeConfigPaths, NoAutoConfig, ConfigPaths,
+		loadConfigOptions{detectProjectLocations: true, evaluateSetupContent: true})
+}
+
+// loadConfigForChainHash loads config with setup content evaluated, which is
+// what a chain hash is computed over. It is the only non-setup command that
+// needs the layer map.
+func loadConfigForChainHash() (*config.Config, *config.SetupLayerMap, *goja.Runtime, error) {
+	return loadConfigImpl(context.Background(), BeforeConfigPaths, NoAutoConfig, ConfigPaths,
+		loadConfigOptions{evaluateSetupContent: true})
 }
 
 // loadConfigForLockfileGen loads config without enforcing lockfile constraints.
@@ -154,6 +164,15 @@ type loadConfigOptions struct {
 	// functions as context.projectTypes / context.projectLocations. Off by
 	// default so non-setup loads stay walk-free.
 	detectProjectLocations bool
+	// evaluateSetupContent renders every setup entry's content() into the layer
+	// map. Off by default: it reads each entry's target file from disk and calls
+	// into the VM once per entry per config layer — for the shared config, 57
+	// reads and 100 calls — and only `setup`, `init` and `config chain-hash`
+	// consume the result. Every other command discarded it, having paid for it.
+	//
+	// A load with this off returns an EMPTY layer map, not a partial one, so a
+	// caller that needs the map must ask for it rather than find it thin.
+	evaluateSetupContent bool
 }
 
 func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfig bool, configPaths []string, opts loadConfigOptions) (cfg *config.Config, lm *config.SetupLayerMap, vm *goja.Runtime, err error) {
@@ -164,6 +183,7 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 	// PrintStartup prints at most once per process.
 	defer timing.PrintStartup(os.Stderr)
 	defer timing.StartStartupPhase(timing.PhaseLoadConfig)()
+	defer trace.Start(trace.CatConfig, "loadConfig").End()
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("config loading panic: %v", r)
@@ -248,10 +268,12 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 			return nil, nil, nil, processErr
 		}
 
-		if result.Setup != nil {
+		if result.Setup != nil && opts.evaluateSetupContent {
+			evalSpan := trace.Start(trace.CatConfig, "evaluateSetupContent")
 			pTypes, pLocs := detectProjects(result.ProjectTypes)
 			evaluatedContent := config.EvaluateInitContentWithProjects(result, resultVM, rootPath, cwdPath, layerMap, pTypes, pLocs)
 			config.MergeSetupLayers(layerMap, source.name, evaluatedContent, result.Setup)
+			evalSpan.EndWith(trace.A("source", source.name), trace.A("entries", len(result.Setup)))
 		}
 
 		currentConfig = result
@@ -266,6 +288,12 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 	}
 	sort.Strings(resolvedRemoteURLs)
 	resolvedRemoteURLsMu.Unlock()
+
+	validateSpan := trace.Start(trace.CatConfig, "validateConfig")
+	defer validateSpan.EndWith(
+		trace.A("apps", len(currentConfig.Apps)),
+		trace.A("tools", len(currentConfig.Tools)),
+	)
 
 	var warnings []string
 	if opts.skipLockfileValidation {
@@ -433,6 +461,9 @@ func buildConfigSources(ctx context.Context, beforeConfigPaths []string, autoCon
 // URLs are added before recursing and removed after, so shared (diamond)
 // dependencies are allowed while true cycles are still caught.
 func processConfigSource(ctx context.Context, input *config.Config, source configSource, resolved map[string]bool, stack map[string]bool, opts loadConfigOptions) (*config.Config, *goja.Runtime, error) {
+	sourceSpan := trace.Start(trace.CatConfig, "configSource")
+	defer sourceSpan.EndWith(trace.A("name", source.name))
+
 	e, err := engine.NewWithOptions(ctx, BinaryCommandOverride,
 		engine.Options{TolerateGitRootFailure: opts.tolerateGitRootFailure})
 	if err != nil {
@@ -573,13 +604,17 @@ func processConfigSource(ctx context.Context, input *config.Config, source confi
 	}
 
 	endGetConfig := timing.StartStartupPhase(timing.PhaseGetConfig)
+	getConfigSpan := trace.Start(trace.CatConfig, "callGetConfig")
 	resultVal, callErr := e.CallWithTimeout(getConfigFunc, 10*time.Second, inputVal)
+	getConfigSpan.EndWith(trace.A("source", source.name))
 	endGetConfig()
 	if callErr != nil {
 		return nil, nil, fmt.Errorf("failed to call getConfig in %s: %w", source.name, callErr)
 	}
 
+	exportSpan := trace.Start(trace.CatConfig, "exportConfigResult")
 	parsedConfig, parseErr := parseConfigResult(vm, resultVal)
+	exportSpan.EndWith(trace.A("source", source.name))
 	if parseErr != nil {
 		return nil, nil, fmt.Errorf("failed to parse config from %s: %w", source.name, parseErr)
 	}
@@ -684,6 +719,7 @@ func discoverAutoConfig(gitRoot string) (string, error) {
 // other layers are never read (scope is enforced structurally).
 func discoverBeforeConfigs(ctx context.Context, autoConfigPath string) ([]string, error) {
 	defer timing.StartStartupPhase(timing.PhaseDiscoverBeforeConfigs)()
+	defer trace.Start(trace.CatConfig, "discoverBeforeConfigs").End()
 
 	e, err := engine.New(ctx, BinaryCommandOverride)
 	if err != nil {
@@ -791,7 +827,9 @@ func prepareConfigSource(content, ref string) (string, error) {
 
 // loadConfigFile loads and executes a single configuration file in the given engine.
 func loadConfigFile(e *engine.Engine, path string) error {
+	readSpan := trace.Start(trace.CatConfig, "readConfigFile")
 	data, err := os.ReadFile(path)
+	readSpan.EndWith(trace.A("path", path), trace.A("bytes", len(data)))
 	if err != nil {
 		return fmt.Errorf("failed to read config file: %w", err)
 	}
@@ -801,7 +839,24 @@ func loadConfigFile(e *engine.Engine, path string) error {
 		return fmt.Errorf("failed to strip types: %w", err)
 	}
 
-	if _, err := e.RunWithTimeout(jsCode, 10*time.Second); err != nil {
+	// The single largest unattributed cost in a cold `datamitsu <anything>`:
+	// goja compiles and then executes the whole config source, and the shared
+	// wrapper config is a ~2 MB file. Compilation and execution are separated
+	// here rather than left inside RunWithTimeout because they answer different
+	// questions — parsing scales with source bytes, the top-level run with what
+	// the config actually does at load time — and only the split says which one
+	// a cache would have to eliminate.
+	compileSpan := trace.Start(trace.CatConfig, "compileConfig")
+	program, err := goja.Compile(path, jsCode, false)
+	compileSpan.EndWith(trace.A("path", path), trace.A("bytes", len(jsCode)))
+	if err != nil {
+		return fmt.Errorf("failed to compile config: %w", err)
+	}
+
+	runSpan := trace.Start(trace.CatConfig, "runConfigTopLevel")
+	_, err = e.RunProgramWithTimeout(program, 10*time.Second)
+	runSpan.EndWith(trace.A("path", path))
+	if err != nil {
 		return fmt.Errorf("failed to execute config: %w", err)
 	}
 
@@ -817,7 +872,10 @@ func loadConfigString(e *engine.Engine, content, sourceName string) error {
 		return fmt.Errorf("failed to strip types from %s: %w", sourceName, err)
 	}
 
-	if _, err := e.RunWithTimeout(jsCode, 10*time.Second); err != nil {
+	runSpan := trace.Start(trace.CatConfig, "vmRunConfig")
+	_, err = e.RunWithTimeout(jsCode, 10*time.Second)
+	runSpan.EndWith(trace.A("path", sourceName), trace.A("bytes", len(jsCode)))
+	if err != nil {
 		return fmt.Errorf("failed to execute config %s: %w", sourceName, err)
 	}
 

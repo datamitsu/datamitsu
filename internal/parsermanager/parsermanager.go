@@ -21,6 +21,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/hashutil"
 	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/ociartifact"
+	"github.com/datamitsu/datamitsu/internal/trace"
 
 	"github.com/tetratelabs/wazero"
 	"go.uber.org/zap"
@@ -28,6 +29,13 @@ import (
 )
 
 var log = logger.Logger.With(zap.Namespace("parsermanager"))
+
+// Parser counters. Instantiation happens once per parsed tool invocation, so a
+// count equal to the parse count says an instance pool would pay for itself.
+var (
+	cntInstantiate = trace.NewCounter("parser.module_instantiations")
+	cntCompile     = trace.NewCounter("parser.module_compilations")
+)
 
 // wasmFileName is the fixed name of the module inside its content-addressed dir.
 const wasmFileName = "module.wasm"
@@ -130,7 +138,10 @@ func (m *Manager) Acquire(ctx context.Context, module string) (*ParserRuntime, e
 	}
 	// Anonymous name (WithName("")) so many instances of one CompiledModule can
 	// coexist — there is no module-name collision in the runtime's namespace.
+	cntInstantiate.Add(1)
+	instSpan := trace.Start(trace.CatParse, "parser.instantiate")
 	mod, err := rt.InstantiateModule(ctx, compiled, wazero.NewModuleConfig().WithName(""))
+	instSpan.EndWith(trace.A("module", module))
 	if err != nil {
 		return nil, fmt.Errorf("instantiate parser module %q: %w", module, err)
 	}
@@ -143,6 +154,8 @@ func (m *Manager) Acquire(ctx context.Context, module string) (*ParserRuntime, e
 // returned for the caller to log, and lazy compilation on first Acquire remains
 // the fallback. Modules already compiled are skipped.
 func (m *Manager) Prewarm(ctx context.Context, modules []string) error {
+	defer trace.Start(trace.CatParse, "parser.prewarm").EndWith(trace.A("modules", len(modules)))
+
 	seen := make(map[string]bool, len(modules))
 	for _, module := range modules {
 		if seen[module] {
@@ -248,7 +261,10 @@ func (m *Manager) compiledFor(ctx context.Context, module string, p config.Parse
 		rt := m.runtime
 		m.mu.Unlock()
 
+		cntCompile.Add(1)
+		compileSpan := trace.Start(trace.CatParse, "parser.compileModule")
 		cm, err := rt.CompileModule(ctx, wasm)
+		compileSpan.EndWith(trace.A("module", module), trace.A("bytes", len(wasm)))
 		if err != nil {
 			return nil, fmt.Errorf("compile parser module %q: %w", module, err)
 		}

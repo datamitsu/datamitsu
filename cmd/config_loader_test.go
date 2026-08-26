@@ -1070,12 +1070,12 @@ function getConfig(input) {
 }`, mergeHelper, jvmApp("a", "2.0.0"), jvmApp("b", "1.0.0")))
 
 	// Run A: declared before-config via auto discovery.
-	cfgA, lmA, _, errA := loadConfigWithPaths(context.Background(), nil, false, nil)
+	cfgA, lmA, _, errA := loadConfigForTestWithSetupContent(context.Background(), nil, false, nil)
 	if errA != nil {
 		t.Fatalf("declared run error: %v", errA)
 	}
 	// Run B: explicit --before-config (shared) + --config (auto), auto-discovery off.
-	cfgB, lmB, _, errB := loadConfigWithPaths(context.Background(), []string{sharedPath}, true, []string{autoPath})
+	cfgB, lmB, _, errB := loadConfigForTestWithSetupContent(context.Background(), []string{sharedPath}, true, []string{autoPath})
 	if errB != nil {
 		t.Fatalf("flag run error: %v", errB)
 	}
@@ -2424,7 +2424,7 @@ function getConfig(input) {
 		t.Fatal(err)
 	}
 
-	_, layerMap, _, err := loadConfigWithPaths(context.Background(), nil, true, []string{configPath})
+	_, layerMap, _, err := loadConfigForTestWithSetupContent(context.Background(), nil, true, []string{configPath})
 	if err != nil {
 		t.Fatalf("loadConfigWithPaths error: %v", err)
 	}
@@ -2489,7 +2489,7 @@ function getConfig(input) {
 		t.Fatal(err)
 	}
 
-	_, layerMap, _, err := loadConfigWithPaths(context.Background(), []string{beforePath}, true, []string{configPath})
+	_, layerMap, _, err := loadConfigForTestWithSetupContent(context.Background(), []string{beforePath}, true, []string{configPath})
 	if err != nil {
 		t.Fatalf("loadConfigWithPaths error: %v", err)
 	}
@@ -2527,7 +2527,7 @@ function getConfig(input) {
 		t.Fatal(err)
 	}
 
-	_, layerMap, _, err := loadConfigWithPaths(context.Background(), nil, true, []string{configPath})
+	_, layerMap, _, err := loadConfigForTestWithSetupContent(context.Background(), nil, true, []string{configPath})
 	if err != nil {
 		t.Fatalf("loadConfigWithPaths should not error on failed content(): %v", err)
 	}
@@ -2627,4 +2627,13 @@ function getConfig(input) { return {}; }`,
 	if n := observed.FilterMessageSnippet("version check skipped").Len(); n != 0 {
 		t.Errorf("stable failure path emitted %d unexpected unstable-bypass warnings", n)
 	}
+}
+
+// loadConfigForTestWithSetupContent is loadConfigWithPaths with setup content
+// evaluation turned on. Evaluation is opt-in for production loads — only setup,
+// init and `config chain-hash` consume the layer map — so a test about the layer
+// map has to ask for it, exactly as those commands do.
+func loadConfigForTestWithSetupContent(ctx context.Context, beforeConfigPaths []string, noAutoConfig bool, configPaths []string) (*config.Config, *config.SetupLayerMap, *goja.Runtime, error) {
+	return loadConfigImpl(ctx, beforeConfigPaths, noAutoConfig, configPaths,
+		loadConfigOptions{evaluateSetupContent: true})
 }
