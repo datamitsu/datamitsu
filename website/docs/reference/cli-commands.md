@@ -1211,6 +1211,7 @@ from the same shell function that runs an activation through `eval`.
 | `DATAMITSU_MIN_RELEASE_AGE`      | Minimum release age in minutes for `pull-*` version selection (`0` = disabled)                  | `10080`                                             |
 | `DATAMITSU_MAX_PARALLEL_WORKERS` | Max parallel tool execution workers                                                             | `max(4, floor(NumCPU * 0.75))`, capped at 16        |
 | `DATAMITSU_UNIT_CACHE_TTL`       | Minutes a cached project-level verdict stays trusted; `0` disables it                           | `1440` (24h)                                        |
+| `DATAMITSU_CONFIG_CACHE`         | Serve the evaluated config chain from disk (`0`/`false`/`off`/`no` disables it)                 | `1`                                                 |
 | `DATAMITSU_LSP_FORMAT_WIDEN_TO`  | How far editor format-on-save may widen: `target` or `unit`                                     | `unit`                                              |
 | `DATAMITSU_LOG_LEVEL`            | Log level (debug, info, warn, error)                                                            | `info`                                              |
 | `DATAMITSU_TIMINGS`              | Enable detailed timing output (1=enabled, 0=disabled)                                           | `0`                                                 |

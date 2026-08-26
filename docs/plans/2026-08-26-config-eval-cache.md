@@ -433,14 +433,36 @@ would legitimately share one entry — the property under test only exists for a
 
 ### Task 7: [Final] Update documentation
 
-- [ ] record the final measurement table in this plan file, replacing the estimates
-- [ ] add `DATAMITSU_CONFIG_CACHE` to the environment-variable table in
+- [x] record the final measurement table in this plan file, replacing the estimates
+- [x] add `DATAMITSU_CONFIG_CACHE` to the environment-variable table in
       `website/docs/reference/cli-commands.md`
-- [ ] extend `website/docs/guides/architecture/startup.md` with the cache: what is in the key, why
+- [x] extend `website/docs/guides/architecture/startup.md` with the cache: what is in the key, why
       the environment is hashed whole rather than the `DATAMITSU_*` subset, and the non-determinism
       refusal
-- [ ] run `task gen:llms-docs` and commit `internal/llmsdocs/embed` if any website page changed —
+- [x] run `task gen:llms-docs` and commit `internal/llmsdocs/embed` if any website page changed —
       the `llms-docs-drift` CI job re-harvests on every PR and fails on any diff
+
+#### Final measurements (2026-08-27)
+
+The estimates in the Overview are superseded by these, all taken on the machine and repository of the
+Task 1 baseline (i9-14900K, 14,370-tracked-file TypeScript monorepo, `--before-config` pointed at the
+1.95 MB base config, machine **not** idle). Wall is the min over n=20 without tracing; spans come
+from separate `DATAMITSU_TRACE=1` runs.
+
+| Measurement                              | Baseline (Task 1) | After (Task 5/6)              | Change             |
+| ---------------------------------------- | ----------------- | ----------------------------- | ------------------ |
+| `exec task -- --version` wall min (n=20) | 60.7 ms           | **23.8 ms**                   | −36.9 ms (2.6×)    |
+| same, `DATAMITSU_CONFIG_CACHE=0`         | —                 | 68.2 ms                       | cache off ≈ before |
+| `loadConfig` span on a hit (n=12)        | 38.2–42.3 ms      | **2.44 ms min / 2.96 ms max** | −36 ms (15×)       |
+| — `configcache.read`                     | —                 | 2.1–2.5 ms                    |                    |
+| — `configcache.key`                      | —                 | 0.36–0.65 ms                  |                    |
+| `BenchmarkConfigCacheEvaluate` (ns/op)   | 34,015,395        | 31,588,546                    | cache off          |
+| `BenchmarkConfigCacheHit` (ns/op)        | —                 | **2,042,650**                 | 15.5×              |
+
+The Overview's "31.6 ms → 1.4 ms, a factor of 22" was optimistic in one direction only: the real hit
+is 2.0 ms, because a hit also collects facts and hashes the chain, which the 1.4 ms estimate counted
+as a bare 0.33 ms key. The end-to-end prediction ("78 ms → ~40 ms") was measured against a different
+machine state; on this one it is 60.7 ms → 23.8 ms, which beats it.
 
 ## Technical Details
 

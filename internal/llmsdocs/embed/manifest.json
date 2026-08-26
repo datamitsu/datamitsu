@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 53,
-  "pageSetHash": "5832ae04e6b998beeef2cb2d65e9fdde",
+  "pageSetHash": "be075462217bcbe09fa707742691277c",
   "pages": [
     {
       "slug": "about",
@@ -253,8 +253,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/startup.md",
       "title": "Startup and Config Load",
       "description": "What every datamitsu invocation pays before the first tool runs - the config-load cost model, the git-root memo, and how to measure it",
-      "bytes": 9823,
-      "contentHash": "2146ff03aa2eda5006be7c003e545f88"
+      "bytes": 16152,
+      "contentHash": "1423545383df848c84824c81a8e740c1"
     },
     {
       "slug": "guides/binary-management",
@@ -433,8 +433,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 65159,
-      "contentHash": "336796dcbde445407faca44903fb54e4"
+      "bytes": 65348,
+      "contentHash": "fbbcb08c1a7566770b6aeb63ff6dc780"
     },
     {
       "slug": "reference/comparison",
