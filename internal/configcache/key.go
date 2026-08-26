@@ -209,12 +209,19 @@ func Key(in Inputs) string {
 // be read — missing, or unreadable — records as absent rather than failing the
 // load: the key then differs from the key a readable file produces, which is a
 // miss, never a wrong hit.
+// It streams rather than reading the file whole: a config is megabytes, and
+// faulting in a fresh multi-megabyte buffer costs more than the hash itself.
 func HashChainFile(path string) ChainFile {
-	data, err := os.ReadFile(path)
+	f, err := os.Open(path)
 	if err != nil {
 		return ChainFile{Path: path, Exists: false}
 	}
-	return ChainFile{Path: path, ContentHash: hashutil.XXH3Hex(data), Exists: true}
+	defer func() { _ = f.Close() }()
+	hash, err := hashutil.XXH3Reader(f)
+	if err != nil {
+		return ChainFile{Path: path, Exists: false}
+	}
+	return ChainFile{Path: path, ContentHash: hash, Exists: true}
 }
 
 // ConfigInputKeys returns the JSON key names of ConfigInputs, sorted. It is

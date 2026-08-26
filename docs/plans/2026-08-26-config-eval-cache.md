@@ -387,16 +387,49 @@ would have measured a cache hit and reported it as the cost of evaluation.
 
 ### Task 6: Verify acceptance criteria
 
-- [ ] `datamitsu exec <installed binary app> -- --version` wall-min is ≤ 45 ms in a repository whose
-      before-config is ~2 MB (baseline 78 ms) — measure with n≥20, report the min
-- [ ] a cache hit's `loadConfig` span is ≤ 3 ms
-- [ ] `go test ./...` passes with `-race` (under `umask 022`)
-- [ ] `go test ./test/cli/ -count=2` passes with **zero** regenerated goldens
-- [ ] `pnpm dm check` passes
-- [ ] coverage meets the project standard via `pnpm test:coverage:all`
-- [ ] a second identical invocation writes no new artifact (assert the file's mtime is unchanged)
-- [ ] `datamitsu config show` output is byte-identical between a miss and a hit
-- [ ] the cache tree's size after 20 invocations across 3 branches is bounded (prune works)
+- [x] `datamitsu exec <installed binary app> -- --version` wall-min is ≤ 45 ms in a repository whose
+      before-config is ~2 MB (baseline 78 ms) — measure with n≥20, report the min — **23.8 ms**
+- [x] a cache hit's `loadConfig` span is ≤ 3 ms — **2.44 ms min, 2.96 ms max over n=12**
+- [x] `go test ./...` passes with `-race` (under `umask 022`)
+- [x] `go test ./test/cli/ -count=2` passes with **zero** regenerated goldens
+- [x] `pnpm dm check` passes
+- [x] coverage meets the project standard via `pnpm test:coverage:all` — **82.3%** combined
+- [x] a second identical invocation writes no new artifact (assert the file's mtime is unchanged) —
+      `TestConfigCacheSecondInvocationWritesNothing`
+- [x] `datamitsu config show` output is byte-identical between a miss and a hit —
+      `TestConfigShowIdenticalAcrossCacheMissAndHit` (stdout **and** stderr)
+- [x] the cache tree's size after 20 invocations across 3 branches is bounded (prune works) —
+      `TestConfigCacheTreeBoundedAcrossBranches`: 21 loads, 3 artifacts
+
+#### Acceptance measurements (2026-08-27)
+
+Same machine and same repository as the Task 1 baseline (i9-14900K, 14,370-file TypeScript monorepo,
+`--before-config` pointed at the 1.95 MB base config), machine **not** idle:
+
+| Measurement                              | Baseline (Task 1) | Now                           |
+| ---------------------------------------- | ----------------- | ----------------------------- |
+| `exec task -- --version` wall min (n=20) | 60.7 ms           | **23.8 ms**                   |
+| same, `DATAMITSU_CONFIG_CACHE=0`         | —                 | 68.2 ms                       |
+| `loadConfig` span on a hit (n=12)        | 38–42 ms          | **2.44 ms min / 2.96 ms max** |
+| — `configcache.read`                     | —                 | 2.1–2.5 ms                    |
+| — `configcache.key`                      | —                 | 0.36–0.65 ms                  |
+
+The wall min beats both the written target (≤ 45 ms) and the revised one the Task 1 ⚠️ note derived
+from this machine (≤ 28 ms).
+
+➕ **`HashChainFile` now streams.** It first measured 1.4–2.2 ms — the key alone was two thirds of
+the ≤ 3 ms budget — because `os.ReadFile` faults in a fresh ~2 MB buffer per chain file. Hashing
+through `hashutil.XXH3Reader` over an open file (io.Copy's 32 KB window) cut the whole
+`configcache.key` span to 0.36–0.65 ms, a 3–4× improvement for a five-line change. The artifact read
+is left as `os.ReadFile`: msgpack decoding needs the whole buffer anyway.
+
+➕ **Four blackbox tests, `test/cli/config_cache_test.go`.** Three are the acceptance items above;
+the fourth (`TestConfigCacheDisabledStoresNothing`) pins that `DATAMITSU_CONFIG_CACHE=0` never
+creates the tree, so a user who turns the cache off has no cache to go stale.
+
+⚠️ The branch-bounding test auto-discovers its config rather than passing `--config`. An explicit
+chain is machine-level, has no git root and therefore no HEAD in its key, so all three branches
+would legitimately share one entry — the property under test only exists for a repository chain.
 
 ### Task 7: [Final] Update documentation
 
