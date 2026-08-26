@@ -22,6 +22,10 @@ type Engine struct {
 	vm       *goja.Runtime
 	facts    *facts.Facts
 	rootPath string
+	// nonDeterminism names the first clock or entropy source config JS read in
+	// this VM, or "" if it read none. Written only from the goroutine driving
+	// the VM (goja is single-threaded by construction), so it needs no lock.
+	nonDeterminism string
 }
 
 // testInitHook is called at the end of New() during tests to inject custom init behavior.
@@ -85,6 +89,7 @@ func NewWithOptions(ctx context.Context, binaryCommandOverride string, opts Opti
 	e.initFacts()
 	e.initPNPMWorkspaceDefaults()
 	e.initConfigInputs()
+	e.initNonDeterminismShims()
 	globalsSpan.End()
 
 	if testInitHook != nil {

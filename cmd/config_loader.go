@@ -85,6 +85,70 @@ func setConfigChainFiles(sources []configSource) {
 	configChainFilesMu.Unlock()
 }
 
+// configEvalNonDeterminism names the clock or entropy source read while the
+// last config chain was evaluated, or "" if none was. Protected by its mutex
+// for the same reason configChainFiles is.
+var (
+	configEvalNonDeterminism   string
+	configEvalNonDeterminismMu sync.Mutex
+)
+
+// configEvalCacheable reports whether the config produced by the last load may
+// be written to the config-eval cache (internal/configcache).
+//
+// A config that read the clock or Math.random is not a function of the cache
+// key, so storing its result would serve one moment's answer forever — with no
+// error, no stale marker and no external symptom, which makes it the one
+// failure mode of this cache that a user could never diagnose. Refusing to
+// store it costs nothing but the evaluation such a config was always going to
+// pay.
+func configEvalCacheable() bool {
+	configEvalNonDeterminismMu.Lock()
+	defer configEvalNonDeterminismMu.Unlock()
+	return configEvalNonDeterminism == ""
+}
+
+// chainObservations accumulates what only evaluating the chain can know. Today
+// that is the first non-deterministic source any layer read; the chain-level
+// answer is the OR over its engines, since one impure layer makes the merged
+// result impure.
+type chainObservations struct {
+	nonDeterminism string
+}
+
+func (o *chainObservations) record(e *engine.Engine) {
+	if o == nil || e == nil {
+		return
+	}
+	if o.nonDeterminism == "" && e.ObservedNonDeterminism() {
+		o.nonDeterminism = e.NonDeterminismSource()
+	}
+}
+
+// markIncomplete parks the global verdict at "not cacheable" for the duration
+// of a load, so a chain that fails half-way cannot leave an earlier chain's
+// verdict in place for a later reader.
+func (o *chainObservations) markIncomplete() {
+	configEvalNonDeterminismMu.Lock()
+	configEvalNonDeterminism = "config evaluation did not complete"
+	configEvalNonDeterminismMu.Unlock()
+}
+
+// publish records the chain-level verdict for configEvalCacheable and names the
+// refusal at debug level. Debug, not warn: a config that reads the clock is
+// unusual but legitimate, and the only consequence is that it evaluates every
+// time — which is exactly what happens today for every config.
+func (o *chainObservations) publish() {
+	configEvalNonDeterminismMu.Lock()
+	configEvalNonDeterminism = o.nonDeterminism
+	configEvalNonDeterminismMu.Unlock()
+
+	if o.nonDeterminism != "" {
+		logger.Logger.Debug("config evaluation read a non-deterministic source; its result will not be cached",
+			zap.String("source", o.nonDeterminism))
+	}
+}
+
 type configSource struct {
 	name      string
 	path      string // file path (mutually exclusive with content)
@@ -233,6 +297,10 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 	// stack: tracks URLs in the current recursion path (for cycle detection).
 	var currentConfig *config.Config
 	var lastVM *goja.Runtime
+	obs := &chainObservations{}
+	// Until the chain has finished evaluating, the verdict is "not cacheable":
+	// an early failure must never leave the previous load's verdict standing.
+	obs.markIncomplete()
 	layerMap := make(config.SetupLayerMap)
 	resolved := make(map[string]bool)
 	stack := make(map[string]bool)
@@ -263,10 +331,11 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 	}
 
 	for _, source := range sources {
-		result, resultVM, processErr := processConfigSource(ctx, currentConfig, source, resolved, stack, opts)
+		result, resultEngine, processErr := processConfigSource(ctx, currentConfig, source, resolved, stack, opts, obs)
 		if processErr != nil {
 			return nil, nil, nil, processErr
 		}
+		resultVM := resultEngine.VM()
 
 		if result.Setup != nil && opts.evaluateSetupContent {
 			evalSpan := trace.Start(trace.CatConfig, "evaluateSetupContent")
@@ -274,11 +343,14 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 			evaluatedContent := config.EvaluateInitContentWithProjects(result, resultVM, rootPath, cwdPath, layerMap, pTypes, pLocs)
 			config.MergeSetupLayers(layerMap, source.name, evaluatedContent, result.Setup)
 			evalSpan.EndWith(trace.A("source", source.name), trace.A("entries", len(result.Setup)))
+			// content() runs arbitrary config JS, so it is observed too.
+			obs.record(resultEngine)
 		}
 
 		currentConfig = result
 		lastVM = resultVM
 	}
+	obs.publish()
 
 	// Collect resolved remote URLs from resolved map
 	resolvedRemoteURLsMu.Lock()
@@ -460,7 +532,7 @@ func buildConfigSources(ctx context.Context, beforeConfigPaths []string, autoCon
 // The stack map tracks URLs in the current recursion path for cycle detection;
 // URLs are added before recursing and removed after, so shared (diamond)
 // dependencies are allowed while true cycles are still caught.
-func processConfigSource(ctx context.Context, input *config.Config, source configSource, resolved map[string]bool, stack map[string]bool, opts loadConfigOptions) (*config.Config, *goja.Runtime, error) {
+func processConfigSource(ctx context.Context, input *config.Config, source configSource, resolved map[string]bool, stack map[string]bool, opts loadConfigOptions, obs *chainObservations) (*config.Config, *engine.Engine, error) {
 	sourceSpan := trace.Start(trace.CatConfig, "configSource")
 	defer sourceSpan.EndWith(trace.A("name", source.name))
 
@@ -575,7 +647,7 @@ func processConfigSource(ctx context.Context, input *config.Config, source confi
 					name:     entry.URL,
 					content:  content,
 					isRemote: true,
-				}, resolved, stack, opts)
+				}, resolved, stack, opts, obs)
 				delete(stack, entry.URL)
 				if remoteErr != nil {
 					return nil, nil, remoteErr
@@ -632,7 +704,12 @@ func processConfigSource(ctx context.Context, input *config.Config, source confi
 			zap.String("source", source.name))
 	}
 
-	return parsedConfig, vm, nil
+	// Recorded after every call into this layer's VM — the top-level run,
+	// getRemoteConfigs and getConfig — so any clock or entropy read anywhere in
+	// the layer reaches the chain-level verdict.
+	obs.record(e)
+
+	return parsedConfig, e, nil
 }
 
 // parseConfigResult converts getConfig result to config.Config struct

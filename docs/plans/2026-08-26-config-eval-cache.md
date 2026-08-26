@@ -215,19 +215,43 @@ anything. goja exposes `Date` and `Math.random` and nothing in this repository c
 `SetRandSource`/`SetTimeSource` (grep: zero hits outside tests). A config reading either is not
 cacheable, and a cache that stored it would serve a wrong answer forever without erroring.
 
-- [ ] in `internal/engine`, install instrumented shims over `Date.now`, the `Date` constructor and
+- [x] in `internal/engine`, install instrumented shims over `Date.now`, the `Date` constructor and
       `Math.random` that record an observation flag on the Engine
-- [ ] expose the flag (e.g. `Engine.ObservedNonDeterminism() bool`)
-- [ ] the shims must be transparent: same values, same types, same behaviour — they only record
-- [ ] `loadConfigImpl` must refuse to _write_ an artifact when any engine in the chain observed
+- [x] expose the flag (e.g. `Engine.ObservedNonDeterminism() bool`)
+- [x] the shims must be transparent: same values, same types, same behaviour — they only record
+- [x] `loadConfigImpl` must refuse to _write_ an artifact when any engine in the chain observed
       non-determinism, and log the refusal at debug level naming the source
-- [ ] write a test with a config calling `Date.now()` asserting the flag is set and nothing is
+- [x] write a test with a config calling `Date.now()` asserting the flag is set and nothing is
       stored
-- [ ] write a test with a config calling `Math.random()` asserting the same
-- [ ] write a test with a config doing neither asserting the flag is clear and an artifact is stored
-- [ ] write a test asserting the shims return usable values (a config that computes with `Date.now()`
+- [x] write a test with a config calling `Math.random()` asserting the same
+- [x] write a test with a config doing neither asserting the flag is clear and an artifact is stored
+      — the flag half is asserted (`TestConfigEvalCacheableRefusesNonDeterministicConfig/deterministic`);
+      the "an artifact is stored" half moves to Task 5, which is where a write first exists
+- [x] write a test asserting the shims return usable values (a config that computes with `Date.now()`
       still evaluates correctly)
-- [ ] run `go test ./...` and `go test ./test/cli/ -count=2` — must pass before Task 4
+- [x] run `go test ./...` and `go test ./test/cli/ -count=2` — must pass before Task 4
+
+#### How the observation is made (2026-08-26)
+
+➕ The shims are goja's `SetTimeSource` / `SetRandSource` hooks
+(`internal/engine/determinism.go`), not JS wrappers around the globals. goja
+reads `r.now()` for `new Date()`, `Date()` and `Date.now()` and `r.rand()` for
+`Math.random()` — `builtin_date.go:16,72,98` and `builtin_math.go:216` are the
+complete set of clock and entropy reads a config can make — so the hooks cover
+exactly what the task asked for while staying transparent by construction.
+
+⚠️ A JS-level shim was written first and rejected: goja's `instanceof` refuses a
+Proxy on the right-hand side, so proxying `Date` makes `x instanceof Date` throw
+(`TypeError: Expecting a function in instanceof check`). A plain wrapper function
+breaks `Date.prototype` and `class X extends Date`
+instead. The hooks have neither problem,
+and a `new Date(2020, 0, 1)` never reaches the time source, so a config that
+builds dates from explicit arguments keeps its cache entry.
+
+The chain-level verdict is `cmd.configEvalCacheable()`, the OR over every
+engine in the chain (including the setup-content pass). It is parked at "not
+cacheable" for the duration of a load, so a chain that fails half-way cannot
+leave an earlier chain's verdict standing for Task 5's write to read.
 
 ### Task 4: The artifact store
 
