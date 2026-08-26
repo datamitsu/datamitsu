@@ -195,6 +195,35 @@ func IsStartupTimingsEnabled() bool {
 	return value == 1
 }
 
+// IsTraceEnabled returns true if the full execution trace should be recorded.
+//
+// It is the deepest of the three instrumentation switches: IsTimingsEnabled
+// reports a fixed set of planner/runner stages, IsStartupTimingsEnabled reports
+// aggregated config-load phases, and this one records every span and counter the
+// code declares, writes them to a file and prints a summary. Independent of both
+// — any combination may be on.
+func IsTraceEnabled() bool {
+	valueStr := trace.DefaultValue
+	if envValue := os.Getenv(trace.Name); envValue != "" {
+		valueStr = envValue
+	}
+
+	value, err := strconv.Atoi(valueStr)
+	if err != nil {
+		return false
+	}
+	return value == 1
+}
+
+// GetTracePath returns the directory execution traces are written to: the
+// DATAMITSU_TRACE_DIR override, else {cache}/traces.
+func GetTracePath() string {
+	if dir := os.Getenv(traceDir.Name); dir != "" {
+		return dir
+	}
+	return filepath.Join(GetCachePath(), "traces")
+}
+
 // IsForceGitSubprocessEnabled returns true if git-root discovery must go
 // through the git subprocess instead of the pure-Go filesystem walk. It is the
 // documented escape hatch for a repository layout the walk refuses to answer

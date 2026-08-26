@@ -1232,3 +1232,85 @@ func TestSourceActivationVarNames(t *testing.T) {
 		seen[name] = key
 	}
 }
+
+func TestIsTraceEnabled(t *testing.T) {
+	t.Setenv(trace.Name, os.Getenv(trace.Name))
+
+	tests := []struct {
+		name  string
+		set   bool
+		value string
+		want  bool
+	}{
+		{"default when unset is false", false, "", false},
+		{"one enables", true, "1", true},
+		{"zero disables", true, "0", false},
+		{"other number disables", true, "2", false},
+		{"invalid disables", true, "yes", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.set {
+				t.Setenv(trace.Name, tt.value)
+			} else {
+				_ = os.Unsetenv(trace.Name)
+			}
+			if got := IsTraceEnabled(); got != tt.want {
+				t.Errorf("IsTraceEnabled() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetTracePath(t *testing.T) {
+	base := t.TempDir()
+	t.Setenv(cacheDir.Name, base)
+
+	t.Run("defaults under the cache directory", func(t *testing.T) {
+		_ = os.Unsetenv(traceDir.Name)
+		want := filepath.Join(base, "cache", "traces")
+		if got := GetTracePath(); got != want {
+			t.Errorf("GetTracePath() = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("override wins", func(t *testing.T) {
+		custom := filepath.Join(base, "elsewhere")
+		t.Setenv(traceDir.Name, custom)
+		if got := GetTracePath(); got != custom {
+			t.Errorf("GetTracePath() = %q, want %q", got, custom)
+		}
+	})
+}
+
+// TestTraceVarsExcludedFromEnviron pins the reason the trace variables are in
+// environExcluded: Environ feeds the source-mode farm staleness key, so a
+// variable that only turns observation on would otherwise make every farm stale
+// the moment a user tried to measure one — and the first traced invocation would
+// then measure a rebake instead of the command under study.
+func TestTraceVarsExcludedFromEnviron(t *testing.T) {
+	t.Setenv(trace.Name, "1")
+	t.Setenv(traceDir.Name, "/tmp/somewhere")
+	t.Setenv(timings.Name, "1")
+
+	got := Environ()
+	for _, kv := range got {
+		name, _, _ := strings.Cut(kv, "=")
+		if name == trace.Name || name == traceDir.Name {
+			t.Errorf("Environ() includes %s; it must be excluded", name)
+		}
+	}
+
+	// A control: a variable that DOES change what datamitsu produces still
+	// appears, so the test cannot pass by Environ returning nothing.
+	var sawTimings bool
+	for _, kv := range got {
+		if name, _, _ := strings.Cut(kv, "="); name == timings.Name {
+			sawTimings = true
+		}
+	}
+	if !sawTimings {
+		t.Errorf("Environ() = %v, expected it to include %s", got, timings.Name)
+	}
+}

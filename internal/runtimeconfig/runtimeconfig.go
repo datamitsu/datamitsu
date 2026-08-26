@@ -48,6 +48,8 @@ type Effective struct {
 	Offline                  bool   `json:"offline"`
 	StartupTimings           bool   `json:"startupTimings"`
 	Timings                  bool   `json:"timings"`
+	Trace                    bool   `json:"trace"`
+	TraceDir                 string `json:"traceDir"`
 	UnitCacheTTLMinutes      int    `json:"unitCacheTtlMinutes"`
 }
 
@@ -74,6 +76,8 @@ func Compute() Effective {
 		Offline:                  env.Offline(),
 		StartupTimings:           env.IsStartupTimingsEnabled(),
 		Timings:                  env.IsTimingsEnabled(),
+		Trace:                    env.IsTraceEnabled(),
+		TraceDir:                 env.GetTracePath(),
 		UnitCacheTTLMinutes:      env.GetUnitCacheTTLMinutes(),
 	}
 }
