@@ -178,35 +178,35 @@ recorded here, re-measured on the same machine.
 The whole risk of this plan is here. A key that is too narrow serves a wrong config silently; a key
 that is too wide only costs a miss.
 
-- [ ] create `internal/configcache` with `Inputs` (a struct, not a map) and
+- [x] create `internal/configcache` with `Inputs` (a struct, not a map) and
       `Key(Inputs) string` returning an XXH3-128 hex digest via `internal/hashutil`
-- [ ] `Inputs` must carry, and `Key` must hash, all of:
-  - [ ] the content hash of every file in the chain, **in chain order** — hash the bytes, not
+- [x] `Inputs` must carry, and `Key` must hash, all of:
+  - [x] the content hash of every file in the chain, **in chain order** — hash the bytes, not
         mtime+size, so the cache survives `git checkout`, `git stash` and rebuilds that reset modification times
-  - [ ] the resolved chain shape: absolute paths in order, the `--no-auto-config` flag, and the
+  - [x] the resolved chain shape: absolute paths in order, the `--no-auto-config` flag, and the
         existence of every auto-config candidate that was _not_ chosen (mirror
         `internal/sourcefarm/manifest.go:292-305`)
-  - [ ] the URL and declared SHA-256 of every `getRemoteConfigs()` entry (content-addressed by
+  - [x] the URL and declared SHA-256 of every `getRemoteConfigs()` entry (content-addressed by
         construction, so the declared hash is sufficient)
-  - [ ] **the entire environment**, sorted — not `env.Environ()`, which is deliberately narrower.
+  - [x] **the entire environment**, sorted — not `env.Environ()`, which is deliberately narrower.
         The shared config branches on `CI`, `DATAMITSU_DEV_MODE`, `DATAMITSU_OCI_MINIMAL` and
         `DATAMITSU_PACKAGE_NAME`; a `DATAMITSU_*`-only key is defeated by `CI` alone
-  - [ ] every field of `datamitsuConfigInputs` (`internal/engine/configinputs.go`) — today exactly
+  - [x] every field of `datamitsuConfigInputs` (`internal/engine/configinputs.go`) — today exactly
         `minimumReleaseAgeMinutes`
-  - [ ] the JS-visible `Facts` (`internal/facts/facts.go:70`): `binaryCommand`, `binaryPath`,
+  - [x] the JS-visible `Facts` (`internal/facts/facts.go:70`): `binaryCommand`, `binaryPath`,
         `packageName`, `version`, `os`, `arch`, `libc`, `isInGitRepo`, `isMonorepo`
-  - [ ] cwd and git root **separately** — `isMonorepo` is derived from their relationship, and setup
+  - [x] cwd and git root **separately** — `isMonorepo` is derived from their relationship, and setup
         content receives paths computed relative to cwd
-  - [ ] `.git/HEAD` (the resolved ref), because a branch switch can add, delete or change chain files
-  - [ ] `ldflags.Version`, plus a `formatVersion` integer for the artifact schema
-- [ ] write a test asserting the key changes when each input changes, one subtest per input — this
+  - [x] `.git/HEAD` (the resolved ref), because a branch switch can add, delete or change chain files
+  - [x] `ldflags.Version`, plus a `formatVersion` integer for the artifact schema
+- [x] write a test asserting the key changes when each input changes, one subtest per input — this
       is the table that proves nothing was forgotten
-- [ ] write a test asserting the key is stable across two calls with identical inputs
-- [ ] write a test that fails when `configinputs.go`'s injected key set changes without `Inputs`
+- [x] write a test asserting the key is stable across two calls with identical inputs
+- [x] write a test that fails when `configinputs.go`'s injected key set changes without `Inputs`
       changing, so adding a config input cannot silently skip the key
-- [ ] update the forward-contract comment at `internal/engine/configinputs.go:36-41`: it currently
+- [x] update the forward-contract comment at `internal/engine/configinputs.go:36-41`: it currently
       says caching does not exist
-- [ ] run `go test ./...` and `go test ./test/cli/ -count=2` — must pass before Task 3
+- [x] run `go test ./...` and `go test ./test/cli/ -count=2` — must pass before Task 3
 
 ### Task 3: Refuse to cache a non-deterministic config
 
