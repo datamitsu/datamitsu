@@ -88,3 +88,36 @@ func TestEnviron_ExcludesActivationMarkers(t *testing.T) {
 		}
 	}
 }
+
+// Whether a cache is consulted is not part of what datamitsu produces: folding
+// it into the source-mode staleness key would rebake every farm on the machine
+// the moment somebody toggled it.
+func TestEnviron_ExcludesTheConfigCacheSwitch(t *testing.T) {
+	t.Setenv(configCache.Name, "0")
+	for _, kv := range Environ() {
+		if strings.HasPrefix(kv, configCache.Name+"=") {
+			t.Errorf("Environ() contains %q; the config-cache switch must not enter a fingerprint", kv)
+		}
+	}
+}
+
+// EnvironAll is the config-evaluation fingerprint: everything config JS can
+// read through facts().env, minus the same observation-only variables.
+func TestEnvironAll_CoversTheWholeEnvironmentButTheExclusions(t *testing.T) {
+	t.Setenv("CI", "1")
+	t.Setenv(configCache.Name, "0")
+	t.Setenv(trace.Name, "1")
+
+	all := EnvironAll()
+	if !slices.Contains(all, "CI=1") {
+		t.Error("EnvironAll() dropped CI, which the shared config branches on")
+	}
+	if !slices.IsSorted(all) {
+		t.Error("EnvironAll() is not sorted; the value has to be hashable")
+	}
+	for _, kv := range all {
+		if strings.HasPrefix(kv, configCache.Name+"=") || strings.HasPrefix(kv, trace.Name+"=") {
+			t.Errorf("EnvironAll() contains %q; observation-only variables must not change a cache key", kv)
+		}
+	}
+}

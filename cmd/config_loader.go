@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/configcache"
 	"github.com/datamitsu/datamitsu/internal/datamitsuignore"
 	"github.com/datamitsu/datamitsu/internal/engine"
 	"github.com/datamitsu/datamitsu/internal/env"
@@ -180,7 +181,7 @@ func loadConfig() (*config.Config, *config.SetupLayerMap, *goja.Runtime, error) 
 // commands keep their detection-free, walk-free config load.
 func loadConfigForSetup(ctx context.Context) (*config.Config, *config.SetupLayerMap, *goja.Runtime, error) {
 	return loadConfigImpl(ctx, BeforeConfigPaths, NoAutoConfig, ConfigPaths,
-		loadConfigOptions{detectProjectLocations: true, evaluateSetupContent: true})
+		loadConfigOptions{detectProjectLocations: true, evaluateSetupContent: true, requireVM: true})
 }
 
 // loadConfigForChainHash loads config with setup content evaluated, which is
@@ -237,6 +238,13 @@ type loadConfigOptions struct {
 	// A load with this off returns an EMPTY layer map, not a partial one, so a
 	// caller that needs the map must ask for it rather than find it thin.
 	evaluateSetupContent bool
+	// requireVM declares that the caller uses the returned *goja.Runtime.
+	// loadConfigForSetup is the only such path (cmd/setup.go). A load that sets
+	// it never serves from the config-evaluation cache: a hit has an evaluated
+	// config and no VM, and a VM cannot be reconstructed from one. Gating on the
+	// caller rather than on the artifact means the wrong shape is never produced
+	// instead of being produced and hopefully not used.
+	requireVM bool
 }
 
 func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfig bool, configPaths []string, opts loadConfigOptions) (cfg *config.Config, lm *config.SetupLayerMap, vm *goja.Runtime, err error) {
@@ -260,6 +268,7 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 		return nil, nil, nil, fmt.Errorf("failed to determine working directory: %w", cwdErr)
 	}
 	rootPath := cwdPath
+	gitRootPath := ""
 
 	// Discover the auto-loaded config from git root (unless --no-auto-config).
 	var autoConfigPath string
@@ -278,6 +287,7 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 		}
 		if gitErr == nil && gitRoot != "" {
 			rootPath = gitRoot
+			gitRootPath = gitRoot
 			discovered, autoErr := discoverAutoConfig(gitRoot)
 			if autoErr != nil {
 				return nil, nil, nil, autoErr
@@ -286,11 +296,46 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 		}
 	}
 
+	// Snapshot the auto config BEFORE resolving the chain, because resolving it
+	// reads that file (for its declared before-configs). A snapshot taken
+	// afterwards would record the state a concurrent edit left behind rather
+	// than the state that was read, and would stamp a key fresh for bytes nobody
+	// ran. It is the only file read this early — every other chain file is first
+	// read during evaluation, which the post-evaluation re-check covers — so
+	// hashing more here would only re-read megabytes to learn nothing.
+	var priorChain map[string]configcache.ChainFile
+	if autoConfigPath != "" && configCacheUsable(opts) {
+		priorChain = hashConfigPaths([]string{autoConfigPath})
+	}
+
 	sources, srcErr := buildConfigSources(ctx, beforeConfigPaths, autoConfigPath, configPaths)
 	if srcErr != nil {
 		return nil, nil, nil, srcErr
 	}
 	setConfigChainFiles(sources)
+
+	cache := newConfigCache(ctx, configCacheParams{
+		sources:       sources,
+		explicitChain: append(append([]string(nil), beforeConfigPaths...), configPaths...),
+		noAutoConfig:  noAutoConfig,
+		gitRoot:       gitRootPath,
+		cwd:           cwdPath,
+		prior:         priorChain,
+		opts:          opts,
+	})
+	if entry, hit := cache.load(); hit {
+		// Nothing was evaluated, so there is nothing new to store — and the
+		// verdict of whatever chain ran last must not be left standing for a
+		// later reader.
+		markConfigServedFromCache()
+		publishConfigWarnings(entry.Warnings)
+		setResolvedRemoteURLs(entry.RemoteURLs)
+		// An EMPTY layer map, never a partial one: ConfigSetup.Content is a live
+		// goja value a hit cannot reconstruct, and a caller that needs it asked
+		// for evaluateSetupContent, which never reaches this branch.
+		emptyLayerMap := make(config.SetupLayerMap)
+		return entry.Config, &emptyLayerMap, nil, nil
+	}
 
 	// Process all sources sequentially with eager content evaluation.
 	// resolved: collects all remote URLs processed (for display/reporting).
@@ -353,13 +398,12 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 	obs.publish()
 
 	// Collect resolved remote URLs from resolved map
-	resolvedRemoteURLsMu.Lock()
-	resolvedRemoteURLs = nil
+	remoteURLs := make([]string, 0, len(resolved))
 	for url := range resolved {
-		resolvedRemoteURLs = append(resolvedRemoteURLs, url)
+		remoteURLs = append(remoteURLs, url)
 	}
-	sort.Strings(resolvedRemoteURLs)
-	resolvedRemoteURLsMu.Unlock()
+	sort.Strings(remoteURLs)
+	setResolvedRemoteURLs(remoteURLs)
 
 	validateSpan := trace.Start(trace.CatConfig, "validateConfig")
 	defer validateSpan.EndWith(
@@ -367,15 +411,18 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 		trace.A("tools", len(currentConfig.Tools)),
 	)
 
+	// Collected as well as logged: a hit must reproduce the warnings its miss
+	// printed, or a command's stderr would depend on whether a cache happened to
+	// be warm.
+	var configWarnings []string
 	var warnings []string
 	if opts.skipLockfileValidation {
 		warnings, err = config.ValidateAppsSkipLockfile(currentConfig.Apps, currentConfig.Runtimes)
 	} else {
 		warnings, err = config.ValidateApps(currentConfig.Apps, currentConfig.Runtimes)
 	}
-	for _, w := range warnings {
-		logger.Logger.Warn(w, zap.String("source", "config"))
-	}
+	configWarnings = append(configWarnings, warnings...)
+	publishConfigWarnings(warnings)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -391,9 +438,9 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 	if err := config.ValidateSetup(currentConfig.Setup); err != nil {
 		return nil, nil, nil, err
 	}
-	for _, w := range config.ValidateSetupToolRefs(currentConfig.Setup, currentConfig.Tools) {
-		logger.Logger.Warn(w, zap.String("source", "config"))
-	}
+	setupToolWarnings := config.ValidateSetupToolRefs(currentConfig.Setup, currentConfig.Tools)
+	configWarnings = append(configWarnings, setupToolWarnings...)
+	publishConfigWarnings(setupToolWarnings)
 
 	if err := config.ValidateTools(currentConfig.Tools, currentConfig.Parsers); err != nil {
 		return nil, nil, nil, err
@@ -425,7 +472,43 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 		}
 	}
 
+	// The stored config is the post-validation one, which is sound only because
+	// ldflags.Version is in the key: a binary that validates differently cannot
+	// read this entry.
+	cache.save(&configcache.Entry{
+		Config:     currentConfig,
+		Warnings:   configWarnings,
+		RemoteURLs: remoteURLs,
+	})
+
 	return currentConfig, &layerMap, lastVM, nil
+}
+
+// publishConfigWarnings emits config validation warnings. It is the single
+// place they are written, so a hit replaying stored warnings and a miss
+// producing them are indistinguishable.
+func publishConfigWarnings(warnings []string) {
+	for _, w := range warnings {
+		logger.Logger.Warn(w, zap.String("source", "config"))
+	}
+}
+
+// setResolvedRemoteURLs records the remote configs the chain resolved, for
+// `devtools verify-all`. A hit restores the stored list rather than leaving the
+// previous load's.
+func setResolvedRemoteURLs(urls []string) {
+	resolvedRemoteURLsMu.Lock()
+	resolvedRemoteURLs = append([]string(nil), urls...)
+	resolvedRemoteURLsMu.Unlock()
+}
+
+// markConfigServedFromCache parks the cacheability verdict after a hit. No
+// chain was evaluated, so there is nothing to store and no observation to
+// report — and, crucially, no earlier chain's verdict may be left standing.
+func markConfigServedFromCache() {
+	configEvalNonDeterminismMu.Lock()
+	configEvalNonDeterminism = "config was served from the evaluation cache"
+	configEvalNonDeterminismMu.Unlock()
 }
 
 // projectLocationsToConfig converts absolute detector locations into the

@@ -117,6 +117,7 @@ func TestKeyChangesForEveryInput(t *testing.T) {
 		{"remote config added", func(in *Inputs) {
 			in.RemoteConfigs = append(in.RemoteConfigs, RemoteConfig{URL: "u", Hash: "h"})
 		}},
+		{"skip-remote-config flag", func(in *Inputs) { in.SkipRemoteConfig = true }},
 
 		{"environment value", func(in *Inputs) { in.Environ[0] = "CI=0" }},
 		{"environment variable added", func(in *Inputs) {
@@ -166,7 +167,7 @@ func TestKeyCoversEveryInputsField(t *testing.T) {
 	want := []string{
 		"AutoConfigCandidates", "CWD", "ChainFiles", "ConfigInputs", "Environ",
 		"Facts", "FormatVersion", "GitHead", "GitRoot", "NoAutoConfig",
-		"RemoteConfigs", "Version",
+		"RemoteConfigs", "SkipRemoteConfig", "Version",
 	}
 	t.Run("Inputs", func(t *testing.T) { assertFields(t, reflect.TypeFor[Inputs](), want) })
 	t.Run("Facts", func(t *testing.T) {

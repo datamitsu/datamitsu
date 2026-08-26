@@ -114,21 +114,37 @@ func isHex(s string) bool {
 	return true
 }
 
+// Entry is what one evaluation of the chain produced, beyond the merged config
+// itself: everything a caller would otherwise notice missing on a hit.
+//
+// Warnings and RemoteURLs are carried because a hit must be observationally
+// identical to a miss. The validators warn to stderr on every evaluation, and
+// `devtools verify-all` prints the remote configs the chain resolved; a hit that
+// dropped either would make a command's output depend on whether a cache
+// happened to be warm.
+type Entry struct {
+	Config     *config.Config
+	Warnings   []string
+	RemoteURLs []string
+}
+
 // artifact is the stored shape. FormatVersion is repeated inside the file even
 // though it is already folded into the key: a file whose name says one thing and
 // whose body says another is corruption, and corruption must read as a miss.
 type artifact struct {
 	FormatVersion int            `msgpack:"formatVersion"`
 	Config        *config.Config `msgpack:"config"`
+	Warnings      []string       `msgpack:"warnings"`
+	RemoteURLs    []string       `msgpack:"remoteUrls"`
 }
 
-// Load returns the cached config for key, and whether it was a hit.
+// Load returns the cached entry for key, and whether it was a hit.
 //
 // Every failure mode is a miss, never an error: a truncated write, a partially
 // deleted cache tree, a file from a binary that encoded a different shape. A
 // config-evaluation cache that can fail a command is worse than no cache, so the
 // only thing a bad entry earns is removal.
-func (s *Store) Load(key string) (*config.Config, bool) {
+func (s *Store) Load(key string) (*Entry, bool) {
 	p, err := s.pathFor(key)
 	if err != nil {
 		return nil, false
@@ -149,10 +165,10 @@ func (s *Store) Load(key string) (*config.Config, bool) {
 	}
 
 	s.touch(p)
-	return art.Config, true
+	return &Entry{Config: art.Config, Warnings: art.Warnings, RemoteURLs: art.RemoteURLs}, true
 }
 
-// Save writes cfg under key.
+// Save writes entry under key.
 //
 // Setup content is dropped before encoding: ConfigSetup.Content holds a live
 // goja value that cannot be serialized and must never be faked. The write goes
@@ -160,8 +176,8 @@ func (s *Store) Load(key string) (*config.Config, bool) {
 // artifact or none of it. Entries are immutable per key, so two processes
 // writing the same key concurrently is harmless — the loser's bytes are
 // identical to the winner's.
-func (s *Store) Save(key string, cfg *config.Config) error {
-	if cfg == nil {
+func (s *Store) Save(key string, entry *Entry) error {
+	if entry == nil || entry.Config == nil {
 		return errors.New("config must not be nil")
 	}
 	p, err := s.pathFor(key)
@@ -172,7 +188,12 @@ func (s *Store) Save(key string, cfg *config.Config) error {
 		return fmt.Errorf("create config cache directory: %w", err)
 	}
 
-	encoded, err := msgpack.Marshal(artifact{FormatVersion: FormatVersion, Config: withoutSetupContent(cfg)})
+	encoded, err := msgpack.Marshal(artifact{
+		FormatVersion: FormatVersion,
+		Config:        withoutSetupContent(entry.Config),
+		Warnings:      entry.Warnings,
+		RemoteURLs:    entry.RemoteURLs,
+	})
 	if err != nil {
 		return fmt.Errorf("encode config artifact: %w", err)
 	}

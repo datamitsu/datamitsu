@@ -305,35 +305,85 @@ pins that.
 
 ### Task 5: Wire it into the loader
 
-- [ ] add `loadConfigOptions.requireVM bool` and set it in `loadConfigForSetup`, which is the only
+- [x] add `loadConfigOptions.requireVM bool` and set it in `loadConfigForSetup`, which is the only
       path whose caller uses the returned `*goja.Runtime` (`cmd/setup.go:80`)
-- [ ] serve from cache only when `!opts.requireVM && !opts.evaluateSetupContent`; otherwise evaluate
-- [ ] on a hit return `(cfg, &emptyLayerMap, nil, nil)` — an **empty** layer map, not a partial one
-- [ ] on a miss, evaluate as today, then write the artifact
-- [ ] **snapshot the key inputs before reading the config files**, and re-verify nothing in the watch
+- [x] serve from cache only when `!opts.requireVM && !opts.evaluateSetupContent`; otherwise evaluate
+- [x] on a hit return `(cfg, &emptyLayerMap, nil, nil)` — an **empty** layer map, not a partial one
+- [x] on a miss, evaluate as today, then write the artifact
+- [x] **snapshot the key inputs before reading the config files**, and re-verify nothing in the watch
       set moved between evaluation and write; a file edited mid-evaluation must read as stale rather
       than be stamped fresh. `cmd/source.go:525-533` already demonstrates the required ordering
-- [ ] validation runs on the _evaluated_ config and the post-validation result is what is stored;
+- [x] validation runs on the _evaluated_ config and the post-validation result is what is stored;
       this is sound only because `ldflags.Version` is in the key (Task 2)
-- [ ] add `DATAMITSU_CONFIG_CACHE` (default on) per the Environment Variable Usage Policy: `envVar`
+- [x] add `DATAMITSU_CONFIG_CACHE` (default on) per the Environment Variable Usage Policy: `envVar`
       in `internal/env/e.go`, getter in `internal/env/env.go`, test in `internal/env/env_test.go`,
       typed field on `runtimeconfig.Effective` wired in `Compute()`, consumed via
       `runtimeconfig.Get()`
-- [ ] **add `DATAMITSU_CONFIG_CACHE` to `environExcluded`** in `internal/env/environ.go`, with a
+- [x] **add `DATAMITSU_CONFIG_CACHE` to `environExcluded`** in `internal/env/environ.go`, with a
       comment: it decides whether a cache is consulted, never what datamitsu produces, so folding it
       into the source-mode staleness key would rebake every farm when someone toggled it
-- [ ] add `trace` spans: `configcache.key`, `configcache.read`, `configcache.write`, and a
+- [x] add `trace` spans: `configcache.key`, `configcache.read`, `configcache.write`, and a
       hit/miss counter
-- [ ] write the load-bearing differential test: for a fixture chain, the config from a cold load and
+- [x] write the load-bearing differential test: for a fixture chain, the config from a cold load and
       the config from a hit must be **equal as a whole graph** (compare serialized forms, not counts)
-- [ ] write a test asserting `loadConfigForSetup` never serves from cache and always returns a VM
-- [ ] write a test asserting `config chain-hash` still produces the same hashes (it evaluates setup
+- [x] write a test asserting `loadConfigForSetup` never serves from cache and always returns a VM
+- [x] write a test asserting `config chain-hash` still produces the same hashes (it evaluates setup
       content, so it must miss)
-- [ ] write a test asserting a changed config file produces a miss
-- [ ] write a test asserting a changed environment variable produces a miss (use `CI`)
-- [ ] write a test asserting `DATAMITSU_CONFIG_CACHE=0` always evaluates
-- [ ] fill in `BenchmarkConfigCacheHit` from Task 1 and record hit vs miss here
-- [ ] run `go test ./... -race` and `go test ./test/cli/ -count=2` — must pass before Task 6
+- [x] write a test asserting a changed config file produces a miss
+- [x] write a test asserting a changed environment variable produces a miss (use `CI`)
+- [x] write a test asserting `DATAMITSU_CONFIG_CACHE=0` always evaluates
+- [x] fill in `BenchmarkConfigCacheHit` from Task 1 and record hit vs miss here
+- [x] run `go test ./... -race` and `go test ./test/cli/ -count=2` — must pass before Task 6
+
+#### How the wiring works, and what changed in scope (2026-08-27)
+
+`cmd/config_cache.go` holds the per-load handle; `loadConfigImpl` consults it after the chain is
+resolved and writes to it after validation.
+
+**Measured, same machine as the Task 1 baseline** (i9-14900K, 1.95 MB before-config,
+`-benchtime 30x -count 3`, best of 3):
+
+| Benchmark             | ns/op          | Note                                   |
+| --------------------- | -------------- | -------------------------------------- |
+| `ConfigCacheEvaluate` | **31,588,546** | cache off (`DATAMITSU_CONFIG_CACHE=0`) |
+| `ConfigCacheHit`      | **2,042,650**  | same chain, served from disk           |
+
+**15.5× on the evaluation, 29.5 ms removed from every load that hits.** The hit is ~0.4 ms above the
+Task 1 estimate because a hit also collects facts and hashes the chain — both are what make the key
+trustworthy, and both were counted as "the key" at 0.33 ms rather than measured end to end.
+
+➕ **The key is computed after the chain is resolved, not before.** The declared before-configs are
+part of the chain and are only known once the auto config has been read for them. The pre-read
+snapshot the task asks for therefore covers exactly the auto config — the only file read that early
+— and the post-evaluation re-hash covers everything else. Hashing the flag-given paths twice was
+tried and reverted: it re-read 1.95 MB to learn nothing and cost 0.5 ms of the hit path.
+
+➕ **`Inputs.SkipRemoteConfig`** was added to the Task 2 key. `--skip-remote-config` drops every
+remote layer from the merged result and is not derivable from the chain bytes, so a key without it
+would serve a full config to a run that asked for none. The declared `getRemoteConfigs()` entries
+stay in `Inputs` but are left empty by the loader: they cannot be known before evaluation, and they
+are a pure function of inputs that are already in the key.
+
+➕ **`skipLockfileValidation` loads neither read nor write.** That path validates less than every
+other one, so an artifact it wrote would let a later strict load skip the error it exists to raise —
+the only direction in which this cache could turn a refusal into a silent success.
+
+➕ **The artifact carries the validation warnings and the resolved remote URLs**
+(`configcache.Entry`), and a hit replays both. Without that, a command's stderr would depend on
+whether a cache happened to be warm — and `devtools verify-all` would stop listing the remote
+configs the chain resolved. This is why `Store.Save`/`Load` take an `Entry` rather than a bare
+`*config.Config`.
+
+➕ **`env.EnvironAll()`** is the environment fingerprint: the whole environment, sorted, minus
+`environExcluded`. The exclusions carry over deliberately — a key that folded in `DATAMITSU_TRACE`
+would make the first traced run miss because it was traced, so the instrument would change the
+measurement it was reaching for.
+
+➕ `sourcefarm.gitHeadPath` is now exported as `GitHeadPath`: the loader needs the same
+worktree-aware HEAD the farm watches, and duplicating that logic is how the two drift.
+
+⚠️ `BenchmarkConfigCacheEvaluate` now sets `DATAMITSU_CONFIG_CACHE=0` explicitly. Left as it was, it
+would have measured a cache hit and reported it as the cost of evaluation.
 
 ### Task 6: Verify acceptance criteria
 

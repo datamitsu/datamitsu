@@ -1314,3 +1314,34 @@ func TestTraceVarsExcludedFromEnviron(t *testing.T) {
 		t.Errorf("Environ() = %v, expected it to include %s", got, timings.Name)
 	}
 }
+
+// The config-evaluation cache is on unless it is explicitly turned off: a typo
+// must degrade to caching, not to re-evaluating the whole chain every time.
+func TestConfigCacheEnabled(t *testing.T) {
+	t.Setenv(configCache.Name, os.Getenv(configCache.Name))
+
+	t.Run("on when unset", func(t *testing.T) {
+		_ = os.Unsetenv(configCache.Name)
+		if !ConfigCacheEnabled() {
+			t.Error("ConfigCacheEnabled() = false, want true when unset")
+		}
+	})
+
+	for _, value := range []string{"0", "false", "off", "no", "OFF", " 0 "} {
+		t.Run("off for "+value, func(t *testing.T) {
+			t.Setenv(configCache.Name, value)
+			if ConfigCacheEnabled() {
+				t.Errorf("ConfigCacheEnabled() = true for %q, want false", value)
+			}
+		})
+	}
+
+	for _, value := range []string{"1", "true", "yes", "please"} {
+		t.Run("on for "+value, func(t *testing.T) {
+			t.Setenv(configCache.Name, value)
+			if !ConfigCacheEnabled() {
+				t.Errorf("ConfigCacheEnabled() = false for %q, want true", value)
+			}
+		})
+	}
+}

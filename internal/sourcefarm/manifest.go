@@ -294,7 +294,7 @@ func WatchPaths(root string, configFiles []string) []string {
 	paths = append(paths, configFiles...)
 	if root != "" {
 		paths = append(paths,
-			gitHeadPath(root),
+			GitHeadPath(root),
 			filepath.Join(root, "pnpm-lock.yaml"),
 		)
 		for _, name := range AutoConfigNames {
@@ -317,7 +317,7 @@ func ConfigWatchPaths(configFiles []string) []string {
 	return WatchPaths("", configFiles)
 }
 
-// gitHeadPath returns the HEAD file a checkout in root rewrites.
+// GitHeadPath returns the HEAD file a checkout in root rewrites.
 //
 // In an ordinary repository that is <root>/.git/HEAD. In a linked `git worktree`
 // — and in any repository whose .git is a gitdir pointer file, which is also how
@@ -331,7 +331,7 @@ func ConfigWatchPaths(configFiles []string) []string {
 // path costs the redundancy this entry provides — the watch set already carries
 // every auto-config candidate with its existence flag, which is what catches a
 // branch that adds or deletes a config — and never a false freshness claim.
-func gitHeadPath(root string) string {
+func GitHeadPath(root string) string {
 	dotGit := filepath.Join(root, ".git")
 	fallback := filepath.Join(dotGit, "HEAD")
 

@@ -120,7 +120,18 @@ type Inputs struct {
 	// not, with its existence.
 	AutoConfigCandidates []AutoConfigCandidate
 	// RemoteConfigs are the getRemoteConfigs() entries in resolution order.
+	//
+	// A caller that computes the key BEFORE evaluating the chain cannot know
+	// them and leaves this empty, which is sound: the declared entries are a
+	// pure function of the chain bytes and of the other inputs the config reads
+	// to declare them, all of which are already here. It is carried for callers
+	// that do know the chain up front, and because a key that names its inputs
+	// is worth more than one that relies on that derivation being remembered.
 	RemoteConfigs []RemoteConfig
+	// SkipRemoteConfig records --skip-remote-config, which drops every remote
+	// layer from the merged result. Unlike the declared entries it is NOT
+	// derivable from the chain bytes, so it must be hashed explicitly.
+	SkipRemoteConfig bool
 
 	// Environ is the ENTIRE environment as "NAME=VALUE" strings, not the
 	// DATAMITSU_*-only env.Environ(): the shared config branches on CI,
@@ -154,6 +165,7 @@ func Key(in Inputs) string {
 		[]byte("v"), []byte(strconv.Itoa(in.FormatVersion)),
 		[]byte("version"), []byte(in.Version),
 		[]byte("noAutoConfig"), []byte(strconv.FormatBool(in.NoAutoConfig)),
+		[]byte("skipRemoteConfig"), []byte(strconv.FormatBool(in.SkipRemoteConfig)),
 		[]byte("cwd"), []byte(in.CWD),
 		[]byte("gitRoot"), []byte(in.GitRoot),
 		[]byte("gitHead"), []byte(in.GitHead),

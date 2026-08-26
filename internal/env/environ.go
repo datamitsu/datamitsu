@@ -23,12 +23,43 @@ import (
 // tracing on invalidates every baked farm, so the first traced invocation would
 // measure a rebake instead of the command under study — the instrument would
 // change the measurement.
+//
+// configCache is excluded for the same reason as the trace variables: it
+// decides whether an already-computed evaluation is consulted, never what
+// datamitsu produces. Folding it into the source-mode staleness key would
+// rebake every farm on the machine the moment somebody toggled it, and folding
+// it into the config-eval key would mean a run with the cache off wrote an
+// entry no run with it on could ever read.
 var environExcluded = map[string]bool{
 	sourceRoot.Name:       true,
 	sourceFarm.Name:       true,
 	sourceFarmConfig.Name: true,
 	trace.Name:            true,
 	traceDir.Name:         true,
+	configCache.Name:      true,
+}
+
+// EnvironAll returns the ENTIRE environment as sorted "NAME=VALUE" strings,
+// minus the observation-only variables of environExcluded.
+//
+// It is the environment fingerprint for anything config JS can read, which is
+// all of it through facts().env: the shared config branches on CI, and a
+// DATAMITSU_*-only fingerprint (Environ) is defeated by that one variable. The
+// exclusions carry over unchanged — a variable that only says which farm a
+// shell activated, or that datamitsu is being traced, must not change what a
+// cache lookup finds, or the first traced run would measure a miss caused by
+// tracing itself.
+func EnvironAll() []string {
+	all := os.Environ()
+	out := make([]string, 0, len(all))
+	for _, kv := range all {
+		if name, _, ok := strings.Cut(kv, "="); ok && environExcluded[name] {
+			continue
+		}
+		out = append(out, kv)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // Environ returns every datamitsu-owned environment variable currently set, as

@@ -63,10 +63,13 @@ func loadFeasibilityConfig(tb testing.TB) *config.Config {
 	return cfg
 }
 
-// BenchmarkConfigCacheEvaluate is the cost the cache would remove: the full
-// chain evaluated in goja, exactly as every command pays it today.
+// BenchmarkConfigCacheEvaluate is the cost the cache removes: the full chain
+// evaluated in goja, exactly as every command paid it before this cache
+// existed. The cache is switched off explicitly — measuring "evaluation" with
+// it on would silently measure a hit.
 func BenchmarkConfigCacheEvaluate(b *testing.B) {
 	path := feasibilityConfigPath(b)
+	b.Setenv("DATAMITSU_CONFIG_CACHE", "0")
 	for b.Loop() {
 		if _, _, _, err := loadConfigWithPaths(context.Background(), []string{path}, true, nil); err != nil {
 			b.Fatal(err)
@@ -75,14 +78,34 @@ func BenchmarkConfigCacheEvaluate(b *testing.B) {
 }
 
 // BenchmarkConfigCacheHit is the acceptance number for the whole plan: the same
-// chain served from the cross-process cache instead of evaluated. It is a
-// placeholder until the loader learns to consult the cache (task 5 of
-// docs/plans/2026-08-26-config-eval-cache.md); until then it fails loudly rather
-// than reporting a fictional timing, so the number has a home that cannot be
-// mistaken for a measurement.
+// chain served from the cross-process cache instead of evaluated. Compare it
+// against BenchmarkConfigCacheEvaluate — that ratio is what this plan bought.
+//
+// The chain is passed as a --config path rather than a --before-config one so
+// the load has an explicit chain to be namespaced by; with neither a git root
+// nor an explicit chain there is nothing to key a namespace on and the loader
+// deliberately does not cache.
 func BenchmarkConfigCacheHit(b *testing.B) {
-	_ = feasibilityConfigPath(b)
-	b.Fatal("not implemented: the loader does not consult a config-evaluation cache yet; see docs/plans/2026-08-26-config-eval-cache.md task 5")
+	path := feasibilityConfigPath(b)
+
+	if _, _, _, err := loadConfigWithPaths(context.Background(), nil, true, []string{path}); err != nil {
+		b.Fatal(err)
+	}
+	// A nil VM is the hit signal: a load that evaluated returns the last
+	// layer's runtime. Failing here beats reporting an evaluation as a hit.
+	_, _, vm, err := loadConfigWithPaths(context.Background(), nil, true, []string{path})
+	if err != nil {
+		b.Fatal(err)
+	}
+	if vm != nil {
+		b.Fatal("the warm-up load evaluated instead of hitting the cache; this would measure evaluation, not a hit")
+	}
+
+	for b.Loop() {
+		if _, _, _, err := loadConfigWithPaths(context.Background(), nil, true, []string{path}); err != nil {
+			b.Fatal(err)
+		}
+	}
 }
 
 // BenchmarkConfigCacheKeyXXH3 is the cost the cache would add on the read side:

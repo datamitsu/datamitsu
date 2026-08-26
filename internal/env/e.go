@@ -154,6 +154,16 @@ var (
 		Description:  "Disable OCI bundle store seeding (set to any non-empty value)",
 	}
 
+	// configCache switches the on-disk config-evaluation cache
+	// (internal/configcache) off. It decides whether an evaluation is reused,
+	// never what datamitsu produces, so it is excluded from Environ — see the
+	// note there.
+	configCache = envVar{
+		Name:         strings.ToUpper(ldflags.PackageName) + "_CONFIG_CACHE",
+		DefaultValue: "1",
+		Description:  "Reuse the evaluated config chain from disk (set to 0 to always re-evaluate)",
+	}
+
 	noParse = envVar{
 		Name:         strings.ToUpper(ldflags.PackageName) + "_NO_PARSE",
 		DefaultValue: "",
