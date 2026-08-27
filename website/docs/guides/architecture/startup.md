@@ -100,17 +100,26 @@ The key is an XXH3-128 digest — an internal cache key over local files, which 
 - The JS-visible [facts](../../reference/configuration-api.md) — os, arch, libc, version, package name, binary path, whether this is a git repository or a monorepo.
 - The **working directory and the git root separately**, since setup content receives paths computed relative to the working directory.
 - The resolved `.git/HEAD`, because a branch switch can add, delete or change chain files.
-- The binary's own version, plus a format version for the artifact schema.
+- Whether **colors render**, since the `colors` config global emits ANSI escapes only when they are enabled, and that falls back to whether stdout is a terminal — which no environment variable records.
+- The **identity of the binary**: its version, a format version for the artifact schema, and — because every local build reports the version `dev` — a hash of the embedded default config plus the executable's size and modification time.
 
-**Why the whole environment and not the `DATAMITSU_*` subset.** Source mode's staleness key hashes `env.Environ()`, which is deliberately narrow. Config JS sees the entire environment through `facts().env`, and real configs branch on `CI`, so a `DATAMITSU_*`-only key would be defeated by `CI` alone — a CI machine and a developer's shell would share one entry. The exclusions that make a variable purely observational (`DATAMITSU_TRACE`, and `DATAMITSU_CONFIG_CACHE` itself) carry over: a key that folded in the trace flag would make the first traced run miss _because_ it was traced, so the instrument would change the measurement it was reaching for.
+**Why the whole environment and not the `DATAMITSU_*` subset.** Source mode's staleness key hashes `env.Environ()`, which is deliberately narrow. Config JS sees the entire environment through `facts().env`, and real configs branch on `CI`, so a `DATAMITSU_*`-only key would be defeated by `CI` alone — a CI machine and a developer's shell would share one entry. Only the purely observational variables (`DATAMITSU_TRACE`, `DATAMITSU_TRACE_DIR`, and `DATAMITSU_CONFIG_CACHE` itself) are dropped: a key that folded in the trace flag would make the first traced run miss _because_ it was traced, so the instrument would change the measurement it was reaching for. Those same three are hidden from `facts().env`, so config JS cannot branch on a variable the key does not carry — dropping one from the fingerprint while leaving it readable would turn it into a config input no key could distinguish. Source mode's extra exclusions — the activation markers that say which farm a shell is in — deliberately do **not** carry over, because config JS can read them and there is no rebake loop on this side to protect against.
+
+**Why the binary's identity and not just its version.** Validation and merging run in Go, after the JS, and the head of every chain is a config embedded in the binary — so two builds reporting the same version can produce different evaluations. Released builds carry distinct versions, but every local build says `dev`, and a developer rebuilding after editing the embedded config would otherwise be served the previous build's result until the entry expired.
 
 The key is computed after the chain is resolved, because declared before-configs are only known once the auto config has been read. The one file read before that — the auto config — is snapshotted first, and every chain file is re-hashed after evaluation before the artifact is written, so a file edited mid-evaluation reads as stale instead of being stamped fresh.
 
-### Refusing a Non-Deterministic Config
+### Refusing a Config the Artifact Cannot Reproduce
 
 A config that reads the clock or the entropy source is not a pure function of its inputs, and an artifact holding its result would be served forever without ever erroring — the one failure mode with no external symptom. goja routes `new Date()`, `Date()`, `Date.now()` and `Math.random()` through a time source and a random source, so datamitsu installs recording hooks on both. They are transparent: same values, same types, only an observation flag is set. If any engine in the chain trips it, the load evaluates normally and **writes nothing**.
 
 The refusal is deliberately narrow. `new Date(2020, 0, 1)` never reaches the time source, so a config that builds dates from explicit arguments keeps its cache entry.
+
+**Enumeration order is pinned, not refused.** The chained input and `facts()` are Go maps, and goja enumerates a Go map by ranging over it — so `Object.keys(input.tools)`, a spread and `JSON.stringify(facts().env)` would each observe Go's randomized iteration order. A config that turned that order into an ordered output would produce a different result per run, and the first result would then be the one the cache served. Both surfaces are therefore materialized with their map keys in sorted order before JavaScript sees them; the shapes are goja's own (a nil map is still `{}`, a nil pointer still `null`), only the order is fixed. A duplicated environment variable is collapsed the same way on both sides — last occurrence wins, in `facts().env` and in the hashed environment alike — so two environments that read differently cannot hash the same.
+
+Console output is refused for the same reason from the other direction: a hit runs no JavaScript, so a config that called `console.log` would print on the cold run and fall silent on every run afterwards. A config that logs therefore evaluates every time — which is exactly what it did before this cache existed.
+
+Everything else a miss produces is carried in the artifact rather than lost: the config-validation warnings and the remote-config URLs the chain resolved are stored alongside the config and replayed on a hit, so a command's output does not depend on whether a cache happened to be warm.
 
 ### The Artifact Store
 
@@ -118,19 +127,19 @@ Artifacts live under `{cache}/config-eval/{namespace}/{key}.msgpack` — in the 
 
 msgpack rather than JSON: decoding the ~1.8 MB artifact takes 0.8 ms against 7 ms for JSON of the same graph.
 
-Writes go to a temporary file in the same directory and are renamed into place, never written in place. Entries are immutable per key, so reads need no lock and two processes racing to write the same key are harmless. A decode failure, a truncated file or an unknown format version is a **miss**, never an error — the bad entry is removed and the config is evaluated — so a corrupt cache degrades to the old cost rather than to a broken CLI. Entries unread for 14 days are pruned on the miss path, so garbage collection never costs a hit anything, and a hit refreshes an entry's timestamp at most once a day so a config read daily never expires. `datamitsu cache clear` removes the tree.
+Writes go to a temporary file in the same directory, are flushed, and are renamed into place, never written in place. Entries are immutable per key, so reads need no lock and two processes racing to write the same key are harmless. The stored entry is a nested blob covered by a hash recorded in the envelope: a rename is atomic against a concurrent reader but not against a crash, and a file whose tail is zeros would otherwise decode as a structurally valid but silently truncated config that skipped every validator. A decode failure, a truncated file, a payload that does not match its hash, or an unknown format version is a **miss**, never an error — the bad entry is removed and the config is evaluated — so a corrupt cache degrades to the old cost rather than to a broken CLI. Entries unread for 14 days are pruned on the miss path, so garbage collection never costs a hit anything, and a hit refreshes an entry's timestamp at most once an hour so a config in daily use never expires. Age alone bounds only the rate at which the tree grows — the working directory, the environment, `HEAD` and the binary are all key inputs, so a project mints fresh multi-megabyte artifacts far faster than 14 days retires them — so each project (or machine-level chain) also keeps at most its 8 most recently read entries. `datamitsu cache clear` removes the tree.
 
 ### When the Cache Is Bypassed
 
 Three paths always evaluate:
 
 - **`datamitsu setup`** is the only caller that uses the returned JavaScript VM, and a hit has no VM to return.
-- Anything that needs **evaluated setup content** — `datamitsu config chain-hash`, `init` — because that content is a live JavaScript function that cannot be serialized. A hit returns an empty setup layer map rather than a partial one, and the callers that need it are gated out instead.
+- Anything that needs **evaluated setup content** — `datamitsu config chain-hash` — because that content is a live JavaScript function that cannot be serialized. A hit returns an empty setup layer map rather than a partial one, and the callers that need it are gated out instead.
 - Loads that **skip lockfile validation**. That path validates less than every other one, so an artifact it wrote could let a later strict load skip an error it exists to raise.
 
 Setting `DATAMITSU_CONFIG_CACHE=0` turns the cache off entirely — nothing is read and nothing is written, so the tree is never created. The value is reported by `datamitsu config runtime` as `configCache`.
 
-Caching the validated result is sound because the validators are a pure function of the merged config, and a binary that validates differently produces a different key — which is why the version is in the key and is not optional.
+Caching the validated result is sound because the validators are a pure function of the merged config, and a binary that validates differently produces a different key — which is why the binary's identity is in the key and is not optional.
 
 ## Measuring Startup
 

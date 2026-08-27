@@ -2,13 +2,18 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
+	"github.com/datamitsu/datamitsu/internal/color"
+	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/configcache"
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/facts"
+	"github.com/datamitsu/datamitsu/internal/hashutil"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
@@ -48,9 +53,9 @@ type configCacheParams struct {
 	gitRoot       string
 	cwd           string
 	// prior is the content snapshot taken BEFORE any config file was read,
-	// keyed by absolute path. It covers only the paths known that early: the
-	// auto config and the flag-given paths. Declared before-configs are not in
-	// it because discovering them is itself a read of the auto config.
+	// keyed by absolute path. It holds the auto config alone — the only file
+	// read that early. Every other chain file, flag-given or declared, is first
+	// read during evaluation and is covered by the post-evaluation re-check.
 	prior map[string]configcache.ChainFile
 	opts  loadConfigOptions
 }
@@ -135,16 +140,27 @@ func configCacheNamespace(gitRoot string, explicitChain []string) (string, error
 // configCacheInputs collects everything the evaluated config is a function of,
 // and returns the chain snapshot separately so the write path can re-verify it.
 func configCacheInputs(ctx context.Context, p configCacheParams) (configcache.Inputs, []configcache.ChainFile, error) {
-	f, _, err := facts.CollectWithOptions(ctx, BinaryCommandOverride,
+	f, factsGitRoot, err := facts.CollectWithOptions(ctx, BinaryCommandOverride,
 		facts.CollectOptions{TolerateGitFailure: p.opts.tolerateGitRootFailure})
 	if err != nil {
 		return configcache.Inputs{}, nil, err
+	}
+
+	// Under --no-auto-config the loader never resolves a git root, but every
+	// engine still does: computeRootPath makes it the base of tools.path.rel, so
+	// it is JS-visible whether or not discovery ran. Falling back to the root
+	// facts collection just resolved keeps it in the key — the discovery-only
+	// inputs below stay on p.gitRoot, since nothing was discovered.
+	gitRoot := p.gitRoot
+	if gitRoot == "" {
+		gitRoot = factsGitRoot
 	}
 
 	chain := hashConfigChain(p.sources)
 	return configcache.Inputs{
 		FormatVersion:        configcache.FormatVersion,
 		Version:              ldflags.Version,
+		BinaryIdentity:       binaryIdentity(),
 		ChainFiles:           chain,
 		NoAutoConfig:         p.noAutoConfig,
 		AutoConfigCandidates: autoConfigCandidates(p.gitRoot),
@@ -153,11 +169,52 @@ func configCacheInputs(ctx context.Context, p configCacheParams) (configcache.In
 		ConfigInputs: configcache.ConfigInputs{
 			MinimumReleaseAgeMinutes: effectiveRuntimeConfig().MinimumReleaseAgeMinutes,
 		},
-		Facts:   configcache.FactsFrom(f),
-		CWD:     p.cwd,
-		GitRoot: p.gitRoot,
-		GitHead: gitHeadContent(p.gitRoot),
+		Facts:        configcache.FactsFrom(f),
+		CWD:          p.cwd,
+		GitRoot:      gitRoot,
+		GitHead:      gitHeadContent(gitRoot),
+		ColorEnabled: color.LibraryEnabled(),
 	}, chain, nil
+}
+
+// binaryIdentity distinguishes two builds that report the same ldflags.Version,
+// which every local build does — they all say "dev". Two things in the binary
+// decide what an evaluation produces: the embedded default config, which is the
+// head of every chain, and the Go merge and validation logic that runs after
+// the JS. The first is hashed directly. The second cannot be hashed cheaply —
+// the binary is tens of megabytes — so the executable's size and modification
+// time stand in for it: a rebuild moves both, and neither costs more than a
+// stat.
+//
+// A step that fails degrades to a literal naming the failure rather than to
+// nothing, so a key computed without it is distinguishable from one computed
+// with it.
+var binaryIdentity = sync.OnceValue(func() string {
+	parts := make([][]byte, 0, 4)
+
+	defaultConfig, err := config.GetDefaultConfig()
+	if err != nil {
+		parts = append(parts, []byte("defaultConfig"), fmt.Appendf(nil, "unreadable\x1f%v", err))
+	} else {
+		parts = append(parts, []byte("defaultConfig"), []byte(hashutil.XXH3Hex([]byte(defaultConfig))))
+	}
+
+	parts = append(parts, []byte("executable"), []byte(executableStamp()))
+	return hashutil.XXH3Multi(parts...)
+})
+
+// executableStamp is the running executable's size and modification time, the
+// cheap stand-in for its content.
+func executableStamp() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return fmt.Sprintf("unknown\x1f%v", err)
+	}
+	info, err := os.Stat(exe)
+	if err != nil {
+		return fmt.Sprintf("stat failed\x1f%v", err)
+	}
+	return fmt.Sprintf("%d\x1f%d", info.Size(), info.ModTime().UnixNano())
 }
 
 // hashConfigChain hashes every on-disk file of the chain, in chain order. The
@@ -259,17 +316,25 @@ func (c *configCache) load() (*configcache.Entry, bool) {
 // unrepresentative of the key: a config that read a clock or Math.random, or a
 // chain file that moved while the chain was being evaluated. Every refusal is a
 // debug line and never an error — the command already has its config.
-func (c *configCache) save(entry *configcache.Entry) {
+//
+// The verdict arrives as this load's own observations rather than through the
+// package-global configEvalCacheable: two loads in one process (the LSP server
+// evaluates a config per request) would otherwise let one load's publish() hand
+// the other a verdict for a chain it never ran.
+func (c *configCache) save(obs *chainObservations, entry *configcache.Entry) {
 	if c == nil || entry == nil || entry.Config == nil {
 		return
 	}
-	if !configEvalCacheable() {
+	if obs == nil || obs.nonDeterminism != "" {
 		// publish() already named the source at debug level.
 		return
 	}
-	if !chainMatches(chainSnapshot(c.chain), rehashChain(c.chain)) {
-		logger.Logger.Debug("a config file changed while the chain was being evaluated; not storing the result")
-		return
+	for _, was := range c.chain {
+		if now := configcache.HashChainFile(was.Path); now.Exists != was.Exists || now.ContentHash != was.ContentHash {
+			logger.Logger.Debug("a config file changed while the chain was being evaluated; not storing the result",
+				zap.String("path", was.Path))
+			return
+		}
 	}
 
 	writeSpan := trace.Start(trace.CatConfig, "configcache.write")
@@ -278,23 +343,4 @@ func (c *configCache) save(entry *configcache.Entry) {
 	if err != nil {
 		logger.Logger.Debug("failed to store the evaluated config", zap.Error(err))
 	}
-}
-
-// chainSnapshot indexes a chain snapshot by path for chainMatches.
-func chainSnapshot(chain []configcache.ChainFile) map[string]configcache.ChainFile {
-	out := make(map[string]configcache.ChainFile, len(chain))
-	for _, f := range chain {
-		out[f.Path] = f
-	}
-	return out
-}
-
-// rehashChain re-hashes the paths of an earlier snapshot, in the same
-// order, so the two can be compared entry for entry.
-func rehashChain(chain []configcache.ChainFile) []configcache.ChainFile {
-	out := make([]configcache.ChainFile, 0, len(chain))
-	for _, f := range chain {
-		out = append(out, configcache.HashChainFile(f.Path))
-	}
-	return out
 }

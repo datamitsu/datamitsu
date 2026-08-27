@@ -109,21 +109,40 @@ func configEvalCacheable() bool {
 	return configEvalNonDeterminism == ""
 }
 
-// chainObservations accumulates what only evaluating the chain can know. Today
-// that is the first non-deterministic source any layer read; the chain-level
-// answer is the OR over its engines, since one impure layer makes the merged
-// result impure.
+// chainObservations accumulates what only evaluating the chain can know: the
+// first non-deterministic source or unreproducible side effect any layer
+// produced, and the warnings the evaluation emitted. The chain-level verdict is
+// the OR over its engines, since one impure layer makes the merged result
+// impure.
 type chainObservations struct {
 	nonDeterminism string
+	// warnings are the evaluation-time warnings a hit must replay, in the order
+	// they were produced.
+	warnings []string
 }
 
 func (o *chainObservations) record(e *engine.Engine) {
 	if o == nil || e == nil {
 		return
 	}
-	if o.nonDeterminism == "" && e.ObservedNonDeterminism() {
-		o.nonDeterminism = e.NonDeterminismSource()
+	if o.nonDeterminism != "" {
+		return
 	}
+	if e.ObservedNonDeterminism() {
+		o.nonDeterminism = e.NonDeterminismSource()
+		return
+	}
+	o.nonDeterminism = e.ObservedSideEffect()
+}
+
+// warn records a warning the evaluation produced. It is not emitted here: the
+// chain publishes every warning through publishConfigWarnings, the same call a
+// hit replays the stored ones through, so a miss and a hit print the same lines.
+func (o *chainObservations) warn(msg string) {
+	if o == nil {
+		return
+	}
+	o.warnings = append(o.warnings, msg)
 }
 
 // markIncomplete parks the global verdict at "not cacheable" for the duration
@@ -145,7 +164,7 @@ func (o *chainObservations) publish() {
 	configEvalNonDeterminismMu.Unlock()
 
 	if o.nonDeterminism != "" {
-		logger.Logger.Debug("config evaluation read a non-deterministic source; its result will not be cached",
+		logger.Logger.Debug("config evaluation is not reproducible from the cache key; its result will not be cached",
 			zap.String("source", o.nonDeterminism))
 	}
 }
@@ -396,6 +415,7 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 		lastVM = resultVM
 	}
 	obs.publish()
+	publishConfigWarnings(obs.warnings)
 
 	// Collect resolved remote URLs from resolved map
 	remoteURLs := make([]string, 0, len(resolved))
@@ -414,7 +434,7 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 	// Collected as well as logged: a hit must reproduce the warnings its miss
 	// printed, or a command's stderr would depend on whether a cache happened to
 	// be warm.
-	var configWarnings []string
+	configWarnings := append([]string(nil), obs.warnings...)
 	var warnings []string
 	if opts.skipLockfileValidation {
 		warnings, err = config.ValidateAppsSkipLockfile(currentConfig.Apps, currentConfig.Runtimes)
@@ -475,7 +495,7 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 	// The stored config is the post-validation one, which is sound only because
 	// ldflags.Version is in the key: a binary that validates differently cannot
 	// read this entry.
-	cache.save(&configcache.Entry{
+	cache.save(obs, &configcache.Entry{
 		Config:     currentConfig,
 		Warnings:   configWarnings,
 		RemoteURLs: remoteURLs,
@@ -684,12 +704,12 @@ func processConfigSource(ctx context.Context, input *config.Config, source confi
 			return nil, nil, fmt.Errorf("config %s: %w", sourceLabel, err)
 		}
 		if skipped {
-			logger.Logger.Warn(
-				"version check skipped: current build is unstable — proceeding at your own risk",
-				zap.String("source", sourceLabel),
-				zap.String("current", ldflags.Version),
-				zap.String("required", minVersionStr),
-			)
+			// Collected rather than logged here: an unstable build's warning must
+			// survive into the cached artifact, or it would print on the miss and
+			// never again.
+			obs.warn(fmt.Sprintf(
+				"config %s: version check skipped: current build is unstable (current %s, required %s) — proceeding at your own risk",
+				sourceLabel, ldflags.Version, minVersionStr))
 		}
 	}
 
@@ -755,7 +775,11 @@ func processConfigSource(ctx context.Context, input *config.Config, source confi
 		// include old rules, and the Go merge below would duplicate them.
 		inputCopy := *chainedInput
 		inputCopy.IgnoreRules = nil
-		inputVal = vm.ToValue(&inputCopy)
+		// Through DeterministicValue, not ToValue: every collection in a config
+		// is a Go map, and a layer that enumerates one (Object.keys, a spread,
+		// JSON.stringify) would otherwise observe Go's randomized iteration
+		// order — a config input no cache key can represent.
+		inputVal = engine.DeterministicValue(vm, &inputCopy)
 	}
 
 	endGetConfig := timing.StartStartupPhase(timing.PhaseGetConfig)

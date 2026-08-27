@@ -98,6 +98,13 @@ func TestClearProject(t *testing.T) {
 	if err := ClearProject("relative", projectPath); err == nil {
 		t.Error("ClearProject with invalid cache dir expected error, got nil")
 	}
+
+	// A non-git caller passes a relative project path. Nothing was ever written
+	// under the projects namespace for it, so the config-eval clear is skipped
+	// rather than failing the command on a namespace it could not compute.
+	if err := ClearProject(cacheDir, "relative/project"); err != nil {
+		t.Errorf("ClearProject with a relative project path error = %v, want nil", err)
+	}
 }
 
 // TestClearRemovesEvaluatedConfigs pins that `datamitsu cache clear` reaches the

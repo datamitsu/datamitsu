@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/datamitsu/datamitsu/internal/cache"
+	"github.com/datamitsu/datamitsu/internal/configcache"
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/traverser"
 
@@ -102,6 +103,7 @@ func runCacheClear(cmd *cobra.Command, args []string) error {
 		projectsDir := filepath.Join(cacheDir, "projects")
 		if cacheDryRun {
 			fmt.Printf("Would delete: %s (all project caches)\n", projectsDir)
+			fmt.Printf("Would delete: %s (all evaluated configs)\n", filepath.Join(cacheDir, configcache.DirName))
 			return nil
 		}
 
@@ -110,7 +112,7 @@ func runCacheClear(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("failed to clear all project caches: %w", err)
 		}
 
-		fmt.Println("✅ Cleared all project caches (lint/fix + tool caches)")
+		fmt.Println("✅ Cleared all project caches (lint/fix + tool caches + evaluated configs)")
 	} else {
 		// Clear only current project
 		cwdPath, err := os.Getwd()
@@ -127,6 +129,10 @@ func runCacheClear(cmd *cobra.Command, args []string) error {
 			projectHash := env.HashProjectPath(rootPath)
 			projectDir := filepath.Join(cacheDir, "projects", projectHash)
 			fmt.Printf("Would delete: %s (entire project cache directory)\n", projectDir)
+			if ns, nsErr := configcache.ProjectNamespace(rootPath); nsErr == nil {
+				fmt.Printf("Would delete: %s (evaluated configs)\n",
+					filepath.Join(cacheDir, configcache.DirName, filepath.FromSlash(ns)))
+			}
 			return nil
 		}
 
@@ -135,7 +141,7 @@ func runCacheClear(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("failed to clear project cache: %w", err)
 		}
 
-		fmt.Printf("✅ Cleared cache for project: %s (lint/fix + tool caches)\n", rootPath)
+		fmt.Printf("✅ Cleared cache for project: %s (lint/fix + tool caches + evaluated configs)\n", rootPath)
 	}
 
 	return nil

@@ -121,3 +121,48 @@ func TestEnvironAll_CoversTheWholeEnvironmentButTheExclusions(t *testing.T) {
 		}
 	}
 }
+
+// The activation markers are excluded from the source-mode staleness key to
+// avoid a rebake loop, but config JS reads them through facts().env, which is
+// the unfiltered environment. A config-eval key that dropped them would serve
+// an activated shell the config a shell outside any farm evaluated.
+func TestEnvironAll_KeepsActivationMarkers(t *testing.T) {
+	t.Setenv(SourceRootVarName(), "/repo")
+	t.Setenv(SourceFarmVarName(), "/cache/projects/abc/bin")
+	t.Setenv(SourceFarmConfigVarName(), "/home/u/.config/datamitsu/datamitsu.config.ts")
+
+	all := EnvironAll()
+	for _, name := range []string{SourceRootVarName(), SourceFarmVarName(), SourceFarmConfigVarName()} {
+		if !slices.ContainsFunc(all, func(kv string) bool { return strings.HasPrefix(kv, name+"=") }) {
+			t.Errorf("EnvironAll() dropped %s; config JS can read it through facts().env", name)
+		}
+	}
+}
+
+// A repeated name in the inherited environment must collapse the same way
+// facts.collectAllEnv collapses it (last occurrence wins), or two environments
+// that make facts().env differ would hash to one key.
+func TestCanonicalEnviron_ResolvesDuplicatesLastWins(t *testing.T) {
+	keepAll := func(string) bool { return false }
+
+	forward := canonicalEnviron([]string{"FOO=1", "BAR=x", "FOO=2"}, keepAll)
+	reverse := canonicalEnviron([]string{"FOO=2", "BAR=x", "FOO=1"}, keepAll)
+
+	if got, want := forward, []string{"BAR=x", "FOO=2"}; !slices.Equal(got, want) {
+		t.Errorf("canonicalEnviron(FOO=1,FOO=2) = %v, want %v", got, want)
+	}
+	if got, want := reverse, []string{"BAR=x", "FOO=1"}; !slices.Equal(got, want) {
+		t.Errorf("canonicalEnviron(FOO=2,FOO=1) = %v, want %v", got, want)
+	}
+	if slices.Equal(forward, reverse) {
+		t.Error("two orderings of a duplicated name produced the same fingerprint; facts().env would differ")
+	}
+}
+
+// An entry without '=' is not a variable and must not enter the fingerprint.
+func TestCanonicalEnviron_SkipsMalformedEntries(t *testing.T) {
+	got := canonicalEnviron([]string{"NOEQUALS", "OK=1"}, func(string) bool { return false })
+	if !slices.Equal(got, []string{"OK=1"}) {
+		t.Errorf("canonicalEnviron() = %v, want [OK=1]", got)
+	}
+}

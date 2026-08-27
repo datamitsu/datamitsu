@@ -5,10 +5,12 @@
 // costs a miss. Every input config JS can observe is folded in — the bytes of
 // every chain file, the shape of the chain, the declared hash of every remote
 // config, the entire environment, the allowlisted datamitsuConfigInputs, the
-// JS-visible facts, cwd and git root, .git/HEAD, and the running version.
+// JS-visible facts, cwd and git root, .git/HEAD, whether colors render, and the
+// identity of the running binary.
 package configcache
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"reflect"
@@ -109,6 +111,12 @@ type Inputs struct {
 	// the artifact is stored, so a binary that validates differently must
 	// produce a different key.
 	Version string
+	// BinaryIdentity distinguishes two binaries that report the same Version.
+	// Every local build reports "dev", yet each one carries its own embedded
+	// default config and its own merge and validation logic — so Version alone
+	// would serve a rebuilt binary the previous build's evaluated config for as
+	// long as the entry lives. See cmd.binaryIdentity for what goes into it.
+	BinaryIdentity string
 
 	// ChainFiles are the chain's files in chain order. Order is significant —
 	// the same set of files merged in a different order is a different config.
@@ -152,18 +160,30 @@ type Inputs struct {
 	// GitHead is the content of the resolved .git/HEAD, empty outside a
 	// repository. A branch switch can add, delete or change chain files.
 	GitHead string
+
+	// ColorEnabled is whether the `colors` config global renders ANSI escapes —
+	// color.LibraryEnabled(), the flag fatih/color's SprintFunc actually reads,
+	// not datamitsu's own color.Enabled() policy, which the two disagree on
+	// under FORCE_COLOR. It is NOT derivable from Environ: the env vars are only
+	// the override, and the fallback is whether stdout is a terminal. A config
+	// that puts colors.red(...) in a value would otherwise have its terminal
+	// variant served to a piped run.
+	ColorEnabled bool
 }
 
 // Key returns the XXH3-128 hex digest of in.
 //
-// Every part is labeled and length-delimited through XXH3Multi's separator, so
-// no two differently-shaped inputs can serialize to the same byte stream.
+// Every part is labeled, every variable-length run is preceded by its count,
+// and XXH3Multi joins parts with a NUL byte, which no input here can contain —
+// so no two differently-shaped inputs serialize to the same byte stream.
 func Key(in Inputs) string {
 	parts := make([][]byte, 0, 24+len(in.ChainFiles)+len(in.AutoConfigCandidates)+len(in.RemoteConfigs)+len(in.Environ))
 
 	parts = append(parts,
 		[]byte("v"), []byte(strconv.Itoa(in.FormatVersion)),
 		[]byte("version"), []byte(in.Version),
+		[]byte("binary"), []byte(in.BinaryIdentity),
+		[]byte("colorEnabled"), []byte(strconv.FormatBool(in.ColorEnabled)),
 		[]byte("noAutoConfig"), []byte(strconv.FormatBool(in.NoAutoConfig)),
 		[]byte("skipRemoteConfig"), []byte(strconv.FormatBool(in.SkipRemoteConfig)),
 		[]byte("cwd"), []byte(in.CWD),
@@ -186,8 +206,10 @@ func Key(in Inputs) string {
 		parts = append(parts, fmt.Appendf(nil, "%s\x1f%s", r.URL, r.Hash))
 	}
 
-	parts = append(parts, []byte("configInputs"),
-		fmt.Appendf(nil, "minimumReleaseAgeMinutes=%d", in.ConfigInputs.MinimumReleaseAgeMinutes))
+	// Marshalled rather than formatted field by field: a new
+	// datamitsuConfigInputs field must enter the digest by existing, not by
+	// somebody remembering to add a line here.
+	parts = append(parts, []byte("configInputs"), configInputsBytes(in.ConfigInputs))
 
 	f := in.Facts
 	parts = append(parts, []byte("facts"), fmt.Appendf(nil,
@@ -222,6 +244,19 @@ func HashChainFile(path string) ChainFile {
 		return ChainFile{Path: path, Exists: false}
 	}
 	return ChainFile{Path: path, ContentHash: hash, Exists: true}
+}
+
+// configInputsBytes renders ConfigInputs as its JSON encoding, which Go emits in
+// struct-field order and therefore stably. A marshalling failure is impossible
+// for this struct, and a key that silently dropped its inputs would be worse
+// than one that names the failure, so it degrades to a distinguishable literal
+// rather than to nothing.
+func configInputsBytes(ci ConfigInputs) []byte {
+	encoded, err := json.Marshal(ci)
+	if err != nil {
+		return fmt.Appendf(nil, "encode failed\x1f%v", err)
+	}
+	return encoded
 }
 
 // ConfigInputKeys returns the JSON key names of ConfigInputs, sorted. It is

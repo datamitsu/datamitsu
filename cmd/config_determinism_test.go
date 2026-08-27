@@ -4,27 +4,36 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/env"
 
 	"go.uber.org/zap/zapcore"
 )
 
 // isolateCacheTree points the cache tree at a temp directory and returns it, so
 // a test can assert on what config loading did or did not store.
+//
+// DATAMITSU_CACHE_DIR, not XDG_CACHE_HOME: it wins over XDG in env.getBasePath,
+// so a developer running the suite inside a `datamitsu source` shell (which sets
+// it) would otherwise write into their real cache and assert on an empty temp
+// tree — every "stored nothing" assertion would pass vacuously.
 func isolateCacheTree(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	t.Setenv("XDG_CACHE_HOME", dir)
+	t.Setenv("DATAMITSU_CACHE_DIR", dir)
+	if base := env.GetCachePath(); !strings.HasPrefix(base, dir) {
+		t.Fatalf("cache tree not isolated: GetCachePath() = %q, want a path under %q", base, dir)
+	}
 	return dir
 }
 
-// configEvalArtifactCount counts everything under the config-eval cache tree.
-// Until the store lands (Task 4 of the config-eval cache plan) the tree is never
-// created, so this is 0 on every path; the assertion exists so wiring the store
-// in cannot quietly start storing a non-deterministic config.
+// configEvalArtifactCount counts everything under the config-eval cache tree of
+// an isolateCacheTree directory.
 func configEvalArtifactCount(t *testing.T, cacheHome string) int {
 	t.Helper()
-	root := filepath.Join(cacheHome, "datamitsu", "cache", "config-eval")
+	root := filepath.Join(cacheHome, "cache", "config-eval")
 	count := 0
 	err := filepath.Walk(root, func(_ string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -57,8 +66,9 @@ function getConfig(input) {
 }
 
 // A config that reads the clock or the random source is not a function of the
-// cache key. Storing its result would serve one moment's answer forever, with
-// no error and no external symptom — the one failure mode of this cache a user
+// cache key, and one that prints cannot have its output reproduced from an
+// artifact. Storing either would serve one moment's answer forever, with no
+// error and no external symptom — the one failure mode of this cache a user
 // could never diagnose — so the loader must refuse to store it.
 func TestConfigEvalCacheableRefusesNonDeterministicConfig(t *testing.T) {
 	tests := []struct {
@@ -79,6 +89,14 @@ func TestConfigEvalCacheableRefusesNonDeterministicConfig(t *testing.T) {
 		{
 			name:          "Math.random",
 			body:          `var r = Math.random(); return { ignoreRules: ["r-" + (r < 2) + ": eslint"] };`,
+			wantCacheable: false,
+		},
+		{
+			// Not a non-deterministic read, but it costs the entry for the same
+			// reason: a hit runs no JS, so a config that printed would print
+			// exactly once and then fall silent forever.
+			name:          "console output",
+			body:          `console.log("evaluating"); return { ignoreRules: ["logged: eslint"] };`,
 			wantCacheable: false,
 		},
 		{
@@ -120,9 +138,9 @@ func TestConfigEvalRefusalIsLogged(t *testing.T) {
 		t.Fatalf("loadConfigWithPaths: %v", err)
 	}
 
-	entries := observed.FilterMessageSnippet("non-deterministic source").All()
+	entries := observed.FilterMessageSnippet("not reproducible from the cache key").All()
 	if len(entries) == 0 {
-		t.Fatal("no debug entry naming the non-deterministic source")
+		t.Fatal("no debug entry naming the source of the refusal")
 	}
 	if src, ok := entries[0].ContextMap()["source"].(string); !ok || src == "" {
 		t.Errorf("refusal entry has no source field: %v", entries[0].ContextMap())

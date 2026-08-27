@@ -1,7 +1,7 @@
 # Plan: Cache config evaluation across processes
 
-**Status:** ready for implementation. Every design decision below is closed and backed by a
-measurement; nothing is left to be chosen during the work.
+**Status:** complete. Tasks 1-7 are implemented on `perf/config-eval-cache` and every acceptance
+measurement below was recorded against the built binary.
 **Date:** 2026-08-26.
 **Related:** `cmd/config_loader.go`, `internal/config`, `internal/engine`, `internal/facts`,
 `internal/env`, `internal/hashutil`, `internal/sourcefarm`, `internal/cache`.
@@ -266,7 +266,8 @@ leave an earlier chain's verdict standing for Task 5's write to read.
       immutable per key, so reads need no lock and a concurrent double-write of one key is harmless
 - [x] a decode failure, a truncated file or an unknown `formatVersion` is a **miss**, never an
       error: a corrupt cache must degrade to evaluating, and the bad entry should be removed
-- [x] prune entries unread for N days at write time — do not repeat the store's "no GC, 7 GB" mistake
+- [x] prune entries unread for N days at write time — do not repeat the store's "no GC, 7 GB" mistake.
+      Age alone turned out to bound only the rate; `Prune` also caps entries per namespace (see below)
 - [x] `datamitsu cache clear` must clear this tree; check `internal/cache/cache.go:547` `ClearAll`
 - [x] write a round-trip test over a real merged config (extend the existing one)
 - [x] write a test asserting a corrupt artifact is a miss and is removed
@@ -389,7 +390,10 @@ would have measured a cache hit and reported it as the cost of evaluation.
 
 - [x] `datamitsu exec <installed binary app> -- --version` wall-min is ≤ 45 ms in a repository whose
       before-config is ~2 MB (baseline 78 ms) — measure with n≥20, report the min — **23.8 ms**
-- [x] a cache hit's `loadConfig` span is ≤ 3 ms — **2.44 ms min, 2.96 ms max over n=12**
+- [x] a cache hit's `loadConfig` span is ≤ 3 ms — **2.44 ms min, 2.96 ms max over n=12**, with
+      `--before-config`. ⚠️ **Not met in the default (auto-discovery) flow**, where the criterion was
+      never measured: a hit there is **9.27 ms**, of which `discoverBeforeConfigs` is **4.91 ms**.
+      See "What the hit path still evaluates" below.
 - [x] `go test ./...` passes with `-race` (under `umask 022`)
 - [x] `go test ./test/cli/ -count=2` passes with **zero** regenerated goldens
 - [x] `pnpm dm check` passes
@@ -400,6 +404,52 @@ would have measured a cache hit and reported it as the cost of evaluation.
       `TestConfigShowIdenticalAcrossCacheMissAndHit` (stdout **and** stderr)
 - [x] the cache tree's size after 20 invocations across 3 branches is bounded (prune works) —
       `TestConfigCacheTreeBoundedAcrossBranches`: 21 loads, 3 artifacts
+
+#### What the hit path still evaluates (2026-08-27)
+
+`buildConfigSources` runs **before** the cache is consulted, and when no
+`--before-config` flag is given it calls `discoverBeforeConfigs`: a second engine,
+an esbuild type-strip and a full evaluation of the repository's auto config, just
+to read its `getBeforeConfigs()`. Every Task 1 and Task 6 measurement passed
+`--before-config`, which skips that pass entirely — so the recorded hit numbers
+characterize the wrapper flow, not the one most consumers are on.
+
+Measured on this repository, warm cache, `DATAMITSU_TRACE=1 datamitsu config show`
+(`config.cache.hit 1`):
+
+| Span                    | Time        |
+| ----------------------- | ----------- |
+| `loadConfig`            | **9.27 ms** |
+| `discoverBeforeConfigs` | 4.91 ms     |
+| `configcache.read`      | 3.64 ms     |
+| `configcache.key`       | 0.57 ms     |
+
+The cache still removes the bulk of the cost (~39 ms → ~9 ms), but 53 % of what
+is left is config JS this cache was built to stop running. Closing it needs the
+resolved before-config chain to become a cached input rather than a re-evaluated
+one — either stored in `configcache.Entry` and re-validated by content hash on
+load (which moves the before-config hashes out of the key and into the entry), or
+given its own small artifact keyed by the auto config's hash plus the
+environment. Follow-up, deliberately not done here: it changes the key's
+"function of all inputs" invariant, which is the one property the rest of this
+plan is built on.
+
+#### The tree is bounded by count as well as age (2026-08-27)
+
+`MaxAge` alone bounds a _rate_, not a _size_. An artifact is the whole merged
+config — 1.8 MB for this repository's chain — and four key inputs mint a fresh
+one without the project changing: `CWD` (every subdirectory a command runs from),
+the environment (`OLDPWD` moves on every `cd`), `.git/HEAD` (every commit, and
+under the detached HEAD that `actions/checkout` produces, every CI checkout), and
+the executable stamp (every `go build` orphans the entire previous set). Measured
+on a real cache tree mid-development: **173 artifacts / 34 MB**, one namespace
+holding 14 entries / 25 MB — inside the 14-day window, so age pruning would never
+have touched it.
+
+`Prune` therefore also enforces `MaxEntriesPerNamespace` (8), keeping the most
+recently _read_ artifacts — `Load`'s `touch` is what makes mtime the read time.
+The cap is per namespace so a busy project cannot evict a quiet one's only entry
+(`TestPruneCapsEntriesPerNamespace`, `TestPruneCapsEachNamespaceIndependently`).
 
 #### Acceptance measurements (2026-08-27)
 

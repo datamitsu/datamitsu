@@ -5,11 +5,16 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/configcache"
 
 	"github.com/dop251/goja"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 // loadCached evaluates a standalone chain the way every non-setup command does.
@@ -66,6 +71,49 @@ func TestConfigCacheHitEqualsMiss(t *testing.T) {
 	}
 	if len(*warmLayers) != 0 {
 		t.Errorf("a hit returned %d setup layers, want an empty map", len(*warmLayers))
+	}
+}
+
+// The same equality over a realistic graph rather than a two-field fixture. The
+// chain here carries the embedded default config forward, so apps, runtimes,
+// tools and setup entries all pass through msgpack — a field the encoder
+// silently drops or normalizes is what makes this cache fast and wrong, and a
+// small fixture would never touch one.
+func TestConfigCacheHitEqualsMissForTheDefaultChain(t *testing.T) {
+	isolateCacheTree(t)
+	// Object.assign, not spread: the config is loaded as plain JavaScript and
+	// goja is the parser, so the test must not depend on its ES level.
+	path := writeStandaloneConfig(t, `
+		return Object.assign({}, input, {
+			ignoreRules: ["rich: eslint"],
+			tools: {
+				eslint: {
+					name: "eslint",
+					operations: {
+						lint: { app: "eslint", args: ["--format", "json", "."], scope: "project" },
+						fix: { app: "eslint", args: ["--fix", "."] },
+					},
+				},
+			},
+			setup: { ".editorconfig": { linkTarget: "shared/.editorconfig" } },
+			execution: { maxConcurrency: 3 },
+		});`)
+
+	cold, _, coldVM := loadCached(t, path)
+	if servedFromCache(coldVM) {
+		t.Fatal("the first load was served from an empty cache")
+	}
+	if len(cold.Apps) == 0 || len(cold.Tools) == 0 || len(cold.Setup) == 0 {
+		t.Fatalf("the merged config is thin (apps %d, tools %d, setup %d); the fixture is not exercising the graph",
+			len(cold.Apps), len(cold.Tools), len(cold.Setup))
+	}
+
+	warm, _, warmVM := loadCached(t, path)
+	if !servedFromCache(warmVM) {
+		t.Fatal("the second identical load evaluated instead of hitting the cache")
+	}
+	if got := marshal(t, warm); got != marshal(t, cold) {
+		t.Errorf("cached config differs from the evaluated one:\n hit  %s\n miss %s", got, marshal(t, cold))
 	}
 }
 
@@ -193,11 +241,14 @@ func TestChainHashUnaffectedByTheCache(t *testing.T) {
 		};`)
 	withConfigPaths(t, path)
 
-	first, _, _, err := loadConfigForChainHash()
+	_, coldLayerMap, _, err := loadConfigForChainHash()
 	if err != nil {
 		t.Fatalf("loadConfigForChainHash: %v", err)
 	}
-	_ = first
+	cold := config.ChainHashes(*coldLayerMap)
+	if len(cold) == 0 {
+		t.Fatal("chain-hash produced no entries with a cold cache")
+	}
 
 	// Warm the cache through the ordinary path, then ask again.
 	loadCached(t, path)
@@ -209,9 +260,209 @@ func TestChainHashUnaffectedByTheCache(t *testing.T) {
 	if vm == nil {
 		t.Fatal("chain-hash was served from the cache; it needs the evaluated layer map")
 	}
-	if len(config.ChainHashes(*layerMap)) == 0 {
-		t.Error("chain-hash produced no entries with a warm cache")
+	warm := config.ChainHashes(*layerMap)
+	if !slices.Equal(cold, warm) {
+		t.Errorf("chain hashes changed with a warm cache: cold %v, warm %v", cold, warm)
 	}
+}
+
+// `config lockfile` validates less than every other load, so an artifact it
+// wrote would let a later strict load skip the very error the lock-file rule
+// exists to raise. It must therefore neither read nor write the cache.
+func TestLockfileGenLoadNeverTouchesTheCache(t *testing.T) {
+	cacheHome := isolateCacheTree(t)
+	// No runtimes map, so the app is validated for its missing lockFile alone.
+	path := writeStandaloneConfig(t, `
+		return {
+			apps: {
+				eslint: {
+					node: { packageName: "eslint", version: "9.0.0", binPath: "node_modules/.bin/eslint" },
+				},
+			},
+		};`)
+	withConfigPaths(t, path)
+
+	if _, _, _, err := loadConfigForLockfileGen(); err != nil {
+		t.Fatalf("loadConfigForLockfileGen: %v", err)
+	}
+	if n := configEvalArtifactCount(t, cacheHome); n != 0 {
+		t.Fatalf("the lockfile-gen load stored %d artifacts, want 0", n)
+	}
+
+	// The direction that matters: a strict load afterwards must still refuse.
+	_, _, _, err := loadConfigWithPaths(context.Background(), nil, true, []string{path})
+	if err == nil {
+		t.Fatal("a strict load after the lockfile-gen load accepted an app with no lock file")
+	}
+	if !strings.Contains(err.Error(), "lockFile is required") {
+		t.Errorf("strict load failed for the wrong reason: %v", err)
+	}
+}
+
+// A hit must print the warnings its miss printed. Otherwise a config warning
+// would appear on the cold run and silently never again.
+func TestConfigCacheReplaysWarningsOnAHit(t *testing.T) {
+	isolateCacheTree(t)
+	path := writeStandaloneConfig(t, `
+		return { setup: { ".prettierrc": { tools: ["no-such-tool"] } } };`)
+
+	coldLogs := swapLoggerWithObserver(t, zapcore.WarnLevel)
+	if _, _, vm := loadCached(t, path); servedFromCache(vm) {
+		t.Fatal("the first load was served from an empty cache")
+	}
+	cold := warningMessages(coldLogs)
+	if len(cold) == 0 {
+		t.Fatal("the evaluated load produced no warning, so there is nothing to replay")
+	}
+
+	warmLogs := swapLoggerWithObserver(t, zapcore.WarnLevel)
+	if _, _, vm := loadCached(t, path); !servedFromCache(vm) {
+		t.Fatal("the second identical load evaluated instead of hitting the cache")
+	}
+	if warm := warningMessages(warmLogs); !slices.Equal(warm, cold) {
+		t.Errorf("warnings differ between a miss and a hit:\n miss %v\n hit  %v", cold, warm)
+	}
+}
+
+// A hit must restore the remote configs the chain resolved: `devtools
+// verify-all` reports them, and a warm cache would otherwise report none.
+func TestConfigCacheReplaysRemoteURLsOnAHit(t *testing.T) {
+	isolateCacheTree(t)
+	path := writeStandaloneConfig(t, `return { ignoreRules: ["remote: eslint"] };`)
+
+	loadCached(t, path)
+	setResolvedRemoteURLs([]string{"https://example.test/leftover.js"})
+
+	if _, _, vm := loadCached(t, path); !servedFromCache(vm) {
+		t.Fatal("the second identical load evaluated instead of hitting the cache")
+	}
+	resolvedRemoteURLsMu.Lock()
+	got := append([]string(nil), resolvedRemoteURLs...)
+	resolvedRemoteURLsMu.Unlock()
+	if len(got) != 0 {
+		t.Errorf("a hit left the previous load's remote URLs standing: %v", got)
+	}
+}
+
+// A config edited while the chain was being evaluated must not be stamped
+// fresh: the key describes bytes nobody ran, and every later invocation would
+// be served a config that never existed on disk.
+func TestConfigCacheRefusesAChainEditedMidEvaluation(t *testing.T) {
+	cacheHome := isolateCacheTree(t)
+	path := writeStandaloneConfig(t, `return { ignoreRules: ["before: eslint"] };`)
+
+	c := newConfigCache(context.Background(), configCacheParams{
+		sources:       []configSource{{name: path, path: path}},
+		explicitChain: []string{path},
+		noAutoConfig:  true,
+		cwd:           t.TempDir(),
+	})
+	if c == nil {
+		t.Fatal("newConfigCache returned nil for a cacheable chain")
+	}
+
+	writeFile(t, path, `
+function getMinVersion() { return "0.0.0"; }
+function getConfig(input) { return { ignoreRules: ["after: eslint"] }; }`)
+
+	c.save(&chainObservations{}, &configcache.Entry{Config: &config.Config{}})
+	if n := configEvalArtifactCount(t, cacheHome); n != 0 {
+		t.Errorf("stored %d artifacts for a chain edited mid-evaluation, want 0", n)
+	}
+}
+
+// The same guard on the other side of the evaluation: a config edited while the
+// chain was being resolved disables the cache for that load outright.
+func TestConfigCacheDisabledWhenTheChainChangesWhileResolving(t *testing.T) {
+	isolateCacheTree(t)
+	path := writeStandaloneConfig(t, `return { ignoreRules: ["before: eslint"] };`)
+	prior := hashConfigPaths([]string{path})
+
+	writeFile(t, path, `
+function getMinVersion() { return "0.0.0"; }
+function getConfig(input) { return { ignoreRules: ["after: eslint"] }; }`)
+
+	c := newConfigCache(context.Background(), configCacheParams{
+		sources:       []configSource{{name: path, path: path}},
+		explicitChain: []string{path},
+		noAutoConfig:  true,
+		cwd:           t.TempDir(),
+		prior:         prior,
+	})
+	if c != nil {
+		t.Error("newConfigCache returned a handle for a chain that changed while resolving")
+	}
+}
+
+func TestChainMatches(t *testing.T) {
+	dir := t.TempDir()
+	present := filepath.Join(dir, "present.js")
+	writeFile(t, present, "// present")
+	absent := filepath.Join(dir, "absent.js")
+
+	snapshot := hashConfigPaths([]string{present, absent})
+
+	tests := []struct {
+		name  string
+		chain []configcache.ChainFile
+		want  bool
+	}{
+		{"unchanged", []configcache.ChainFile{snapshot[present], snapshot[absent]}, true},
+		{"empty chain", nil, true},
+		{
+			name:  "path the snapshot does not cover",
+			chain: []configcache.ChainFile{{Path: filepath.Join(dir, "later.js"), ContentHash: "abc", Exists: true}},
+			want:  true,
+		},
+		{
+			name:  "content changed",
+			chain: []configcache.ChainFile{{Path: present, ContentHash: "different", Exists: true}},
+			want:  false,
+		},
+		{
+			name:  "file appeared",
+			chain: []configcache.ChainFile{{Path: absent, ContentHash: "abc", Exists: true}},
+			want:  false,
+		},
+		{
+			name:  "file vanished",
+			chain: []configcache.ChainFile{{Path: present, Exists: false}},
+			want:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := chainMatches(snapshot, tt.chain); got != tt.want {
+				t.Errorf("chainMatches() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// hashConfigPaths must be a set: an empty entry is not a path, and one path
+// named twice is one entry.
+func TestHashConfigPathsIgnoresEmptyAndDuplicatePaths(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "one.js")
+	writeFile(t, path, "// one")
+
+	got := hashConfigPaths([]string{"", path, path})
+	if len(got) != 1 {
+		t.Fatalf("hashConfigPaths returned %d entries, want 1: %v", len(got), got)
+	}
+	if entry, ok := got[path]; !ok || !entry.Exists || entry.ContentHash == "" {
+		t.Errorf("entry for %q = %+v, want an existing file with a hash", path, entry)
+	}
+}
+
+// warningMessages returns the observed warn-level messages in order.
+func warningMessages(logs *observer.ObservedLogs) []string {
+	out := make([]string, 0, logs.Len())
+	for _, e := range logs.All() {
+		out = append(out, e.Message)
+	}
+	return out
 }
 
 // withConfigPaths points the package-level flag globals at one config for the
@@ -229,7 +480,7 @@ func withConfigPaths(t *testing.T, paths ...string) {
 // when there is not exactly one.
 func singleArtifact(t *testing.T, cacheHome string) string {
 	t.Helper()
-	root := filepath.Join(cacheHome, "datamitsu", "cache", "config-eval")
+	root := filepath.Join(cacheHome, "cache", "config-eval")
 	var found []string
 	err := filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -247,4 +498,41 @@ func singleArtifact(t *testing.T, cacheHome string) string {
 		t.Fatalf("found %d artifacts under %s, want 1", len(found), root)
 	}
 	return found[0]
+}
+
+// The engine resolves the git root whether or not config discovery ran —
+// computeRootPath makes it the base of tools.path.rel, so it is JS-visible under
+// --no-auto-config too, and such a load still caches (a --config chain supplies
+// the namespace). A key that recorded an empty git root there would serve one
+// root's relative paths for another's.
+func TestConfigCacheInputsRecordTheGitRootUnderNoAutoConfig(t *testing.T) {
+	isolateCacheTree(t)
+	root := initGitRepo(t)
+	t.Chdir(root)
+	cfgPath := writeStandaloneConfig(t, `return { ignoreRules: ["no-auto: eslint"] };`)
+
+	inputs, _, err := configCacheInputs(context.Background(), configCacheParams{
+		sources:       []configSource{{name: cfgPath, path: cfgPath}},
+		explicitChain: []string{cfgPath},
+		noAutoConfig:  true,
+		gitRoot:       "", // --no-auto-config: the loader never resolves one
+		cwd:           root,
+	})
+	if err != nil {
+		t.Fatalf("configCacheInputs: %v", err)
+	}
+
+	if inputs.GitRoot != root {
+		t.Errorf("GitRoot = %q, want %q: the root the engine hands to computeRootPath must be in the key", inputs.GitRoot, root)
+	}
+	if inputs.GitHead == "" {
+		t.Error("GitHead is empty; a branch switch under --no-auto-config could not move the key")
+	}
+	// Discovery never ran, so the discovery-only inputs stay empty.
+	if !inputs.NoAutoConfig {
+		t.Error("NoAutoConfig = false, want true")
+	}
+	if len(inputs.AutoConfigCandidates) != 0 {
+		t.Errorf("AutoConfigCandidates = %v, want none: nothing was discovered", inputs.AutoConfigCandidates)
+	}
 }

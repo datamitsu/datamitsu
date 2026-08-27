@@ -2587,15 +2587,25 @@ function getConfig(input) { return { ignoreRules: ["unstable-bypass: eslint"] };
 	if len(entries) != 1 {
 		t.Fatalf("expected exactly 1 'version check skipped' warning, got %d (all=%v)", len(entries), observed.All())
 	}
-	fields := entries[0].ContextMap()
-	if fields["current"] != unstableVersion {
-		t.Errorf("warning 'current' field = %v, want %q", fields["current"], unstableVersion)
+	// The message carries what used to be structured fields: the warning is
+	// stored in the cache artifact and replayed verbatim on a hit, so everything
+	// it says has to survive as text.
+	msg := entries[0].Message
+	for _, want := range []string{configPath, unstableVersion, "99.0.0"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("warning %q does not name %q", msg, want)
+		}
 	}
-	if fields["required"] != "99.0.0" {
-		t.Errorf("warning 'required' field = %v, want %q", fields["required"], "99.0.0")
+
+	// A hit must print it too, or the safety warning appears exactly once.
+	warm := swapLoggerWithObserver(t, zapcore.WarnLevel)
+	if _, _, vm, warmErr := loadConfigWithPaths(context.Background(), nil, true, []string{configPath}); warmErr != nil {
+		t.Fatalf("second load: %v", warmErr)
+	} else if vm != nil {
+		t.Skip("the second load evaluated instead of hitting the cache; the replay path is covered by TestConfigCacheReplaysWarningsOnAHit")
 	}
-	if _, ok := fields["source"]; !ok {
-		t.Errorf("warning is missing 'source' field, got fields: %v", fields)
+	if replayed := warm.FilterMessageSnippet("version check skipped").All(); len(replayed) != 1 {
+		t.Errorf("a cache hit printed %d 'version check skipped' warnings, want 1", len(replayed))
 	}
 }
 
@@ -2636,4 +2646,36 @@ function getConfig(input) { return {}; }`,
 func loadConfigForTestWithSetupContent(ctx context.Context, beforeConfigPaths []string, noAutoConfig bool, configPaths []string) (*config.Config, *config.SetupLayerMap, *goja.Runtime, error) {
 	return loadConfigImpl(ctx, beforeConfigPaths, noAutoConfig, configPaths,
 		loadConfigOptions{evaluateSetupContent: true})
+}
+
+// A config layer reads its input through Go maps, whose iteration order goja
+// exposes verbatim. Turning that order into an ordered output — an array built
+// from Object.keys() — must produce the same result on every evaluation, or the
+// config-eval cache would freeze whichever order the first run happened to see.
+func TestProcessConfigSourceInputMapOrderIsStable(t *testing.T) {
+	input := &config.Config{Tools: config.MapOfTools{}}
+	for _, name := range []string{"zeta", "alpha", "mu", "beta", "kappa", "omega", "delta", "iota"} {
+		input.Tools[name] = config.Tool{}
+	}
+
+	const content = `function getMinVersion() { return "0.0.0"; }
+function getConfig(input) {
+    return { ignoreRules: [Object.keys(input.tools).join(","), Object.keys({...input.tools}).join(",")] };
+}`
+	const want = "alpha,beta,delta,iota,kappa,mu,omega,zeta"
+
+	for range 25 {
+		result, _, err := processConfigSource(context.Background(), input, configSource{
+			name:    "test-order",
+			content: content,
+		}, map[string]bool{}, map[string]bool{}, loadConfigOptions{}, nil)
+		if err != nil {
+			t.Fatalf("processConfigSource error: %v", err)
+		}
+		for _, got := range result.IgnoreRules {
+			if got != want {
+				t.Fatalf("input.tools enumeration = %q, want %q", got, want)
+			}
+		}
+	}
 }

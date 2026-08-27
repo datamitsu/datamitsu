@@ -17,8 +17,10 @@ import (
 // the zero value.
 func baseInputs() Inputs {
 	return Inputs{
-		FormatVersion: FormatVersion,
-		Version:       "1.2.3",
+		FormatVersion:  FormatVersion,
+		Version:        "1.2.3",
+		BinaryIdentity: "0123456789abcdef0123456789abcdef",
+		ColorEnabled:   true,
 		ChainFiles: []ChainFile{
 			{Path: "/repo/datamitsu.config.js", ContentHash: "aaaa", Exists: true},
 			{Path: "/repo/pkg/datamitsu.config.js", ContentHash: "bbbb", Exists: true},
@@ -89,6 +91,10 @@ func TestKeyChangesForEveryInput(t *testing.T) {
 	}{
 		{"format version", func(in *Inputs) { in.FormatVersion++ }},
 		{"binary version", func(in *Inputs) { in.Version = "9.9.9" }},
+		// Every local build reports Version "dev", so this is the only input
+		// that separates one `go build` from the next.
+		{"binary identity", func(in *Inputs) { in.BinaryIdentity = "ffffffffffffffffffffffffffffffff" }},
+		{"color enabled", func(in *Inputs) { in.ColorEnabled = false }},
 
 		{"chain file content", func(in *Inputs) { in.ChainFiles[0].ContentHash = "cccc" }},
 		{"chain file path", func(in *Inputs) { in.ChainFiles[0].Path = "/repo/other.config.js" }},
@@ -165,9 +171,10 @@ func TestKeyChangesForEveryInput(t *testing.T) {
 // it enumerates the whole struct.
 func TestKeyCoversEveryInputsField(t *testing.T) {
 	want := []string{
-		"AutoConfigCandidates", "CWD", "ChainFiles", "ConfigInputs", "Environ",
-		"Facts", "FormatVersion", "GitHead", "GitRoot", "NoAutoConfig",
-		"RemoteConfigs", "SkipRemoteConfig", "Version",
+		"AutoConfigCandidates", "BinaryIdentity", "CWD", "ChainFiles",
+		"ColorEnabled", "ConfigInputs", "Environ", "Facts", "FormatVersion",
+		"GitHead", "GitRoot", "NoAutoConfig", "RemoteConfigs",
+		"SkipRemoteConfig", "Version",
 	}
 	t.Run("Inputs", func(t *testing.T) { assertFields(t, reflect.TypeFor[Inputs](), want) })
 	t.Run("Facts", func(t *testing.T) {

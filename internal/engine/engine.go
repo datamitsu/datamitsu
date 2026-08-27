@@ -26,6 +26,10 @@ type Engine struct {
 	// this VM, or "" if it read none. Written only from the goroutine driving
 	// the VM (goja is single-threaded by construction), so it needs no lock.
 	nonDeterminism string
+	// sideEffect names the first output config JS produced that a stored
+	// artifact cannot reproduce, or "" if it produced none. Same single-goroutine
+	// argument as nonDeterminism.
+	sideEffect string
 }
 
 // testInitHook is called at the end of New() during tests to inject custom init behavior.
@@ -145,10 +149,13 @@ func (e *Engine) CallWithTimeout(fn goja.Callable, timeout time.Duration, args .
 	return val, err
 }
 
-// initFacts exposes the facts() function to JavaScript
+// initFacts exposes the facts() function to JavaScript.
+//
+// Through DeterministicValue, not ToValue: facts().env is a Go map, and its
+// enumeration order is a config input the cache key cannot represent.
 func (e *Engine) initFacts() {
 	_ = e.vm.Set("facts", func() goja.Value {
-		return e.vm.ToValue(e.facts)
+		return DeterministicValue(e.vm, e.facts)
 	})
 }
 

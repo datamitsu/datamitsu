@@ -12,6 +12,7 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/hashutil"
 	"github.com/shamaton/msgpack/v2"
 )
 
@@ -30,10 +31,37 @@ const artifactExt = ".msgpack"
 // not pay for garbage collection on the fast path either.
 const MaxAge = 14 * 24 * time.Hour
 
+// MaxEntriesPerNamespace bounds how many artifacts one project (or one
+// machine-level chain) keeps, newest-read first.
+//
+// Age alone does not bound this tree. An artifact is the whole merged config —
+// megabytes for a real chain — and several key inputs produce a fresh one
+// without anything about the project changing: CWD (every subdirectory a
+// command runs from), the environment (OLDPWD moves on every `cd`), .git/HEAD
+// (every commit, and under a detached HEAD every CI checkout), and the
+// executable stamp (every rebuild orphans the entire previous set). Left to the
+// 14-day cutoff those multiply into hundreds of megabytes, which is the "no GC,
+// 7 GB" failure this store exists not to repeat.
+//
+// The cap is per namespace rather than global so one busy project cannot evict
+// another's entries, and the retained set is the most recently *read* one, which
+// is what a hit refreshes.
+const MaxEntriesPerNamespace = 8
+
 // refreshInterval bounds how often a hit rewrites an entry's mtime. Without it
-// every invocation would touch the file; with it the touch happens at most once
-// a day while still keeping a used entry alive indefinitely.
-const refreshInterval = 24 * time.Hour
+// every invocation would touch the file; with it the touch costs at most one
+// chtimes an hour on the fast path.
+//
+// It is an hour rather than a day because mtime is the only recency signal the
+// per-namespace cap ranks by, and an entry is not refreshed until it is older
+// than this. At a day's granularity every entry written since midnight is
+// indistinguishable from every other, so the cap degrades to eviction by write
+// order: the entry a project is actually built on — written once in the
+// morning, hit all day — is the oldest of the set and the first to go, evicted
+// by the incidental keys that a few `cd`s and a commit produce. That is exactly
+// the entry the cache exists for. An hour keeps a working session's reads
+// ordered while leaving the hit path effectively a read.
+const refreshInterval = time.Hour
 
 // ProjectNamespace returns the namespace of a repository chain,
 // "projects/{XXH3-128(gitRoot)}" — the same identity the source-mode farm uses,
@@ -128,14 +156,45 @@ type Entry struct {
 	RemoteURLs []string
 }
 
-// artifact is the stored shape. FormatVersion is repeated inside the file even
-// though it is already folded into the key: a file whose name says one thing and
-// whose body says another is corruption, and corruption must read as a miss.
+// artifact is the stored envelope. FormatVersion is repeated inside the file
+// even though it is already folded into the key: a file whose name says one
+// thing and whose body says another is corruption, and corruption must read as
+// a miss.
+//
+// The entry itself is a nested msgpack blob rather than inline fields so that
+// PayloadHash can cover it. A rename is atomic against a concurrent reader but
+// not against a crash: on ext4 data=ordered a rename that lands before the data
+// blocks leaves a present file whose tail is zeros, and trailing zeros decode as
+// "0" / "" / "empty collection" — a structurally valid artifact holding a
+// silently truncated config, which would then skip every validator. The hash
+// turns that into a miss.
 type artifact struct {
-	FormatVersion int            `msgpack:"formatVersion"`
-	Config        *config.Config `msgpack:"config"`
-	Warnings      []string       `msgpack:"warnings"`
-	RemoteURLs    []string       `msgpack:"remoteUrls"`
+	FormatVersion int    `msgpack:"formatVersion"`
+	PayloadHash   string `msgpack:"payloadHash"`
+	Payload       []byte `msgpack:"payload"`
+}
+
+// payload is the hashed body of an artifact.
+type payload struct {
+	Config     *config.Config `msgpack:"config"`
+	Warnings   []string       `msgpack:"warnings"`
+	RemoteURLs []string       `msgpack:"remoteUrls"`
+}
+
+// decode reads data into v, converting a decoder panic into an error. The
+// msgpack decoder indexes its input without bounds-checking every read, so a
+// truncated file panics rather than erroring — and an escaping panic would both
+// fail the command and leave the bad file on disk to fail every later one.
+func decode(data []byte, v any) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("corrupt config artifact: %v", r)
+		}
+	}()
+	if err := msgpack.Unmarshal(data, v); err != nil {
+		return fmt.Errorf("decode config artifact: %w", err)
+	}
+	return nil
 }
 
 // Load returns the cached entry for key, and whether it was a hit.
@@ -155,17 +214,23 @@ func (s *Store) Load(key string) (*Entry, bool) {
 	}
 
 	var art artifact
-	if err := msgpack.Unmarshal(data, &art); err != nil {
+	if err := decode(data, &art); err != nil {
 		s.discard(p)
 		return nil, false
 	}
-	if art.FormatVersion != FormatVersion || art.Config == nil {
+	if art.FormatVersion != FormatVersion || hashutil.XXH3Hex(art.Payload) != art.PayloadHash {
+		s.discard(p)
+		return nil, false
+	}
+
+	var body payload
+	if err := decode(art.Payload, &body); err != nil || body.Config == nil {
 		s.discard(p)
 		return nil, false
 	}
 
 	s.touch(p)
-	return &Entry{Config: art.Config, Warnings: art.Warnings, RemoteURLs: art.RemoteURLs}, true
+	return &Entry{Config: body.Config, Warnings: body.Warnings, RemoteURLs: body.RemoteURLs}, true
 }
 
 // Save writes entry under key.
@@ -188,11 +253,18 @@ func (s *Store) Save(key string, entry *Entry) error {
 		return fmt.Errorf("create config cache directory: %w", err)
 	}
 
+	body, err := msgpack.Marshal(payload{
+		Config:     withoutSetupContent(entry.Config),
+		Warnings:   entry.Warnings,
+		RemoteURLs: entry.RemoteURLs,
+	})
+	if err != nil {
+		return fmt.Errorf("encode config artifact: %w", err)
+	}
 	encoded, err := msgpack.Marshal(artifact{
 		FormatVersion: FormatVersion,
-		Config:        withoutSetupContent(entry.Config),
-		Warnings:      entry.Warnings,
-		RemoteURLs:    entry.RemoteURLs,
+		PayloadHash:   hashutil.XXH3Hex(body),
+		Payload:       body,
 	})
 	if err != nil {
 		return fmt.Errorf("encode config artifact: %w", err)
@@ -208,6 +280,14 @@ func (s *Store) Save(key string, entry *Entry) error {
 		_ = os.Remove(tmp)
 		return fmt.Errorf("write config artifact: %w", err)
 	}
+	// Flush before the rename: without it a crash can publish a present file
+	// whose blocks never landed, and the reader would have to distinguish that
+	// from a real artifact.
+	if err := f.Sync(); err != nil {
+		_ = f.Close()
+		_ = os.Remove(tmp)
+		return fmt.Errorf("flush config artifact: %w", err)
+	}
 	if err := f.Close(); err != nil {
 		_ = os.Remove(tmp)
 		return fmt.Errorf("close config artifact: %w", err)
@@ -217,7 +297,7 @@ func (s *Store) Save(key string, entry *Entry) error {
 		return fmt.Errorf("install config artifact: %w", err)
 	}
 
-	Prune(filepath.Join(env.GetCachePath(), DirName), MaxAge)
+	Prune(filepath.Join(env.GetCachePath(), DirName), MaxAge, MaxEntriesPerNamespace)
 	return nil
 }
 
@@ -265,13 +345,27 @@ func withoutSetupContent(cfg *config.Config) *config.Config {
 	return &clone
 }
 
-// Prune removes artifacts under root that have not been read for maxAge, and
-// then any directory the removals emptied. Failures are ignored throughout:
+// liveEntry is an artifact that survived the age cutoff, carried through the
+// walk so the per-namespace cap can rank a directory's survivors without
+// re-stat'ing them.
+type liveEntry struct {
+	path  string
+	mtime time.Time
+}
+
+// Prune removes artifacts under root that have not been read for maxAge, plus
+// any temp file an interrupted write abandoned, plus — per namespace directory —
+// everything past the maxPerDir most recently read artifacts, and then any
+// directory the removals emptied. Failures are ignored throughout:
 // pruning is opportunistic maintenance on the miss path and must never turn a
 // successful evaluation into an error.
-func Prune(root string, maxAge time.Duration) {
+func Prune(root string, maxAge time.Duration, maxPerDir int) {
 	cutoff := time.Now().Add(-maxAge)
 	var stale, dirs []string
+	// live[dir] holds the artifacts that survived the age cutoff, so the
+	// per-namespace cap is applied to what is actually left rather than to what
+	// was found.
+	live := make(map[string][]liveEntry)
 	// The walk only collects; the removals happen after it. Mutating a tree
 	// while walking it is how a symlinked subtree turns into a delete somewhere
 	// else entirely.
@@ -285,17 +379,46 @@ func Prune(root string, maxAge time.Duration) {
 			}
 			return nil
 		}
-		if filepath.Ext(p) != artifactExt {
+		// Temp files are named ".{key}.{random}", so their extension is the random
+		// suffix, not artifactExt. A write killed between CreateTemp and Rename
+		// leaves one behind; unpruned it would live forever and keep its namespace
+		// directory non-empty, which is the "no GC" failure this store exists to
+		// avoid.
+		if filepath.Ext(p) != artifactExt && !strings.HasPrefix(d.Name(), ".") {
 			return nil
 		}
 		// An entry that vanished mid-walk needs no pruning, and one younger than
 		// the cutoff is still live.
-		if info, err := d.Info(); err != nil || !info.ModTime().Before(cutoff) {
+		info, err := d.Info()
+		if err != nil {
 			return nil //nolint:nilerr // see above: pruning must never fail a load
+		}
+		if !info.ModTime().Before(cutoff) {
+			// Only real artifacts count against the cap. A temp file is a write in
+			// flight or the debris of one; evicting a live artifact to make room for
+			// it would be backwards.
+			if filepath.Ext(p) == artifactExt && !strings.HasPrefix(d.Name(), ".") {
+				dir := filepath.Dir(p)
+				live[dir] = append(live[dir], liveEntry{path: p, mtime: info.ModTime()})
+			}
+			return nil
 		}
 		stale = append(stale, p)
 		return nil
 	})
+
+	for _, entries := range live {
+		if maxPerDir <= 0 || len(entries) <= maxPerDir {
+			continue
+		}
+		// Newest read first, so the tail is the least recently used. touch()
+		// refreshes an entry's mtime on a hit, which is what makes mtime the
+		// read time rather than the write time.
+		slices.SortFunc(entries, func(a, b liveEntry) int { return b.mtime.Compare(a.mtime) })
+		for _, e := range entries[maxPerDir:] {
+			stale = append(stale, e.path)
+		}
+	}
 
 	for _, p := range stale {
 		_ = os.Remove(p)

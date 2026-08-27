@@ -11,6 +11,25 @@ const (
 	sourceRand  = "Math.random"
 )
 
+// sourceConsole names console output, which is not a non-deterministic read but
+// costs a config its cache entry for the same reason: a hit runs no JS, so a
+// config that printed on the miss would fall silent on every later invocation.
+const sourceConsole = "console output"
+
+// ObservedSideEffect names the first output config JS produced that a stored
+// artifact cannot reproduce, or "" if it produced none.
+func (e *Engine) ObservedSideEffect() string {
+	return e.sideEffect
+}
+
+// observeConsoleOutput records that config JS printed. Only the first call
+// matters; later ones do not overwrite it, matching observeNonDeterminism.
+func (e *Engine) observeConsoleOutput() {
+	if e.sideEffect == "" {
+		e.sideEffect = sourceConsole
+	}
+}
+
 // ObservedNonDeterminism reports whether config JS evaluated in this engine read
 // the clock or the random source. An evaluated config that did is not a pure
 // function of the cache key, so its result must never be stored: a cached

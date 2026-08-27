@@ -870,6 +870,12 @@ with `datamitsu source refresh --config <path> --force`.
 
 :::
 
+`cache clear` also drops this project's [cached config
+evaluations](../guides/architecture/startup.md#the-config-evaluation-cache)
+(`{cache}/config-eval/projects/{hash}`); `--all` drops the whole `config-eval`
+tree, including the machine-level `--config` chains whose farms survive. Clearing
+them costs one re-evaluation and nothing else.
+
 ### cache path
 
 Print the absolute path to the global cache directory.
