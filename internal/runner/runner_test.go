@@ -1468,6 +1468,10 @@ type fakePlanner struct {
 func (f *fakePlanner) Plan(_ context.Context, _ config.OperationType, _ tooling.Selection, _ []string) (*tooling.ExecutionPlan, error) {
 	return f.plan, nil
 }
+
+// SeedFiles discards the list: these tests drive runSingleOperation with a
+// pre-built plan, so nothing downstream reads the repository walk.
+func (f *fakePlanner) SeedFiles(_ []string)              {}
 func (f *fakePlanner) GetDetectedProjectTypes() []string { return []string{"go"} }
 func (f *fakePlanner) GetTimings() *timing.Timings       { return timing.New() }
 

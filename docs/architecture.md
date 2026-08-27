@@ -191,10 +191,10 @@ Tool operation arguments support template placeholders that the executor resolve
 
 - Built-in lint and fix operations for datamitsu-owned file formats, run as part of `RunSequential` before user-configured tools
 - `.datamitsuignore` linter/fixer (`datamitsuignore.go`):
-  - `FindIgnoreFiles(ctx, rootPath)` walks the directory tree with the same gitignore-aware traversal the planner uses and returns all `.datamitsuignore` file paths
+  - `IgnoreFilesIn(files)` selects the `.datamitsuignore` paths out of a repository file list the caller already has; `FindIgnoreFiles(ctx, rootPath)` is the same thing preceded by a walk, for callers that hold no list
   - `RunFix(rootPath, files)` normalizes formatting to canonical form `{!}{glob}: {tool1}, {tool2}`. Writes atomically (temp file + rename) only if content changed. Parse errors cause immediate failure
   - `RunLint(rootPath, tools, files)` validates the given `.datamitsuignore` files: parse errors cause immediate failure; formatting deviations and unknown tool names produce yellow warnings on stderr but do not fail
-- In `RunSequential`: `FindIgnoreFiles` runs once and its result is handed to both `RunFix` and `RunLint` — a `check` is a fix followed by a lint over the same tree, and discovering twice cost a second full repository walk for an identical answer. A discovery failure aborts the run. `RunFix` runs when operations include `fix` (not in `--explain` mode) and its errors abort; `RunLint` runs always (printing warnings for unknown tools/formatting), and its errors halt execution only when operations include `lint`
+- In `RunSequential`: the tree is walked **once per run**, and the resulting file list is handed to all three consumers — `RunFix`, `RunLint`, and the planner via `Planner.SeedFiles`. Each used to walk for itself, for an identical answer. Sharing it is also what keeps the rules bundled validates and the rules the planner applies the same set, which `buildIgnoreMatcher` requires. Sharing is sound because nothing between the walk and its uses changes the file set: `RunFix` only rewrites files it was handed, in place. A walk failure aborts the run. `RunFix` runs when operations include `fix` (not in `--explain` mode) and its errors abort; `RunLint` runs always (printing warnings for unknown tools/formatting), and its errors halt execution only when operations include `lint`
 - Key files: `datamitsuignore.go`
 
 **Remote Config** ([internal/remotecfg/](internal/remotecfg/))

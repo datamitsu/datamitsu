@@ -82,6 +82,10 @@ type Planner struct {
 	cachedProjects   []project.ProjectLocation // All project locations (cached)
 	cacheInitialized bool                      // Whether cache has been populated
 
+	// seedFiles is a file list a caller already walked for, consumed by cache
+	// initialization in place of walking again. See SeedFiles.
+	seedFiles []string
+
 	// globCache memoizes the sweep of cachedFiles for one glob list. Guarded by
 	// its own mutex because Plan may be called from a long-lived server (the LSP)
 	// rather than only from a one-shot CLI process.
@@ -173,6 +177,29 @@ func (p *Planner) GetDetectedProjectTypes() []string {
 	return types
 }
 
+// SeedFiles hands the planner a gitignore-aware repository file list the caller
+// has already walked for, to be used in place of walking the tree again.
+//
+// The runner walks once to find the .datamitsuignore files that bundled lint/fix
+// operate on, immediately before planning walks for the same list from the same
+// root. buildIgnoreMatcher already documents that the two sets must be identical
+// — it validates the rules the planner then applies — and sharing the walk makes
+// that identity structural rather than a property two call sites have to keep.
+//
+// A seed is only sound while the file set it describes still holds. Only the set
+// matters, not content: bundled fix rewrites .datamitsuignore files in place
+// between the walk and its use, and the matcher is still built from disk
+// afterwards, so the rules that take effect are the fixed ones. A caller that
+// outlives the tree it walked calls Invalidate, which drops an unconsumed seed
+// with everything else. Seeding an already-initialized planner does nothing:
+// that cache is what the seed would have produced.
+func (p *Planner) SeedFiles(files []string) {
+	if p.cacheInitialized {
+		return
+	}
+	p.seedFiles = files
+}
+
 // Invalidate drops everything derived from the repository walk, so the next Plan
 // re-walks the tree.
 //
@@ -193,6 +220,10 @@ func (p *Planner) Invalidate() {
 	p.cachedProjects = nil
 	p.cacheInitialized = false
 	p.ignoreMatcher = nil
+	// A seed is a snapshot of the tree as the caller saw it. Invalidate exists
+	// precisely because that snapshot may have aged out, so an unconsumed one is
+	// dropped rather than being handed to the re-initialization it invalidated.
+	p.seedFiles = nil
 
 	p.globCacheMu.Lock()
 	p.globCache = nil
@@ -1232,8 +1263,13 @@ func (p *Planner) initializeCache(ctx context.Context) error {
 	func() {
 		defer cacheTimings.StartChild("Scan files")()
 		scanSpan := trace.Start(trace.CatWalk, "scanFiles")
-		files, err := traverser.FindFilesFromPath(ctx, p.rootPath, p.rootPath)
-		scanSpan.EndWith(trace.A("files", len(files)))
+		files, seeded := p.seedFiles, p.seedFiles != nil
+		p.seedFiles = nil // a snapshot, good for this initialization only
+		var err error
+		if !seeded {
+			files, err = traverser.FindFilesFromPath(ctx, p.rootPath, p.rootPath)
+		}
+		scanSpan.EndWith(trace.A("files", len(files)), trace.A("seeded", seeded))
 		if err != nil {
 			walkErr = fmt.Errorf("failed to scan files: %w", err)
 			return
@@ -1284,9 +1320,10 @@ func (p *Planner) initializeCache(ctx context.Context) error {
 // run on paths the user meant to exclude (e.g. a formatter rewriting a file).
 // Unknown tool names are warned (the intended tool simply never gets disabled).
 //
-// File discovery mirrors internal/bundled's lint/fix: both consume the same
-// gitignore-aware traversal (cachedFiles here, traverser.FindFilesFromPath
-// there), so the set of files validated and the set applied stay identical.
+// The files scanned here and the ones internal/bundled lints and fixes are the
+// same set, so the rules validated are the rules applied. That used to be two
+// traversals that had to agree; the runner now walks once and both sides read
+// the one list (see SeedFiles).
 func (p *Planner) buildIgnoreMatcher() (*datamitsuignore.Matcher, error) {
 	m := datamitsuignore.NewMatcher()
 

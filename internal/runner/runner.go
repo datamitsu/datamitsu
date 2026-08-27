@@ -35,6 +35,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/timing"
 	"github.com/datamitsu/datamitsu/internal/tooling"
 	"github.com/datamitsu/datamitsu/internal/trace"
+	"github.com/datamitsu/datamitsu/internal/traverser"
 	"github.com/datamitsu/datamitsu/internal/ui"
 	"github.com/datamitsu/datamitsu/internal/uievent"
 
@@ -78,6 +79,7 @@ var (
 // toolPlanner is the planning surface used by runSingleOperation (satisfied by *tooling.Planner).
 type toolPlanner interface {
 	Plan(ctx context.Context, operation config.OperationType, sel tooling.Selection, selectedTools []string) (*tooling.ExecutionPlan, error)
+	SeedFiles(files []string)
 	GetDetectedProjectTypes() []string
 	GetTimings() *timing.Timings
 }
@@ -927,12 +929,19 @@ func runSequential(
 
 	hasFix := slices.Contains(operations, config.OpFix)
 
-	// Discovered once and handed to both: fix and lint answer different questions
-	// about the same set of files, and finding that set is a full repository walk.
-	ignoreFiles, err := bundled.FindIgnoreFiles(ctx, sc.rootPath)
+	// One walk, three consumers: bundled fix, bundled lint, and the planner.
+	//
+	// All three want the same gitignore-aware list of the same tree, and the
+	// planner used to walk for it again a few milliseconds later. Their agreement
+	// is not just a saving — buildIgnoreMatcher validates the .datamitsuignore
+	// files this list yields and the planner applies their rules, so a divergence
+	// would mean linting one set of rules and enforcing another.
+	allFiles, err := traverser.FindFilesFromPath(ctx, sc.rootPath, sc.rootPath)
 	if err != nil {
-		return fmt.Errorf("finding .datamitsuignore files: %w", err)
+		return fmt.Errorf("scanning %s: %w", sc.rootPath, err)
 	}
+	ignoreFiles := bundled.IgnoreFilesIn(allFiles)
+	sc.planner.SeedFiles(allFiles)
 
 	if hasFix && sc.explainLevel == "" {
 		if err := bundled.RunFix(sc.rootPath, ignoreFiles); err != nil {

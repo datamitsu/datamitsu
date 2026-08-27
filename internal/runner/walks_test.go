@@ -79,11 +79,19 @@ func runWithWalkCount(t *testing.T, ops []config.OperationType) int64 {
 	return 0
 }
 
-// A `check` is a fix followed by a lint over the same tree. Both used to discover
-// the .datamitsuignore files themselves, so the run paid for one full
-// gitignore-aware repository walk more than a `lint` did — for an identical
-// answer. Discovery now happens once and is handed to both.
-func TestCheckAndLintShareOneIgnoreDiscoveryWalk(t *testing.T) {
+// A run walks the repository once, whatever it was asked to do.
+//
+// Three consumers want that list: bundled fix, bundled lint and the planner.
+// Each used to walk for itself, so a `check` paid for three full gitignore-aware
+// traversals of one tree and a `lint` for two — every one of them producing the
+// same answer. bundled's two were merged first; the planner now takes the same
+// list by seed rather than walking again a few milliseconds later.
+//
+// The count alone is a weak assertion — handing every consumer an empty list
+// would also read as one walk — so the fix is checked to have rewritten the file
+// it was given. The runner passes one variable to both consumers, and that the
+// planner's copy is as good as its own walk is TestSeedFilesMatchesWalk.
+func TestRunPerformsOneRepositoryWalk(t *testing.T) {
 	lintRoot := walkFixture(t)
 	lintWalks := runWithWalkCount(t, []config.OperationType{config.OpLint})
 	if got := ignoreFileContent(t, lintRoot); got != unformattedRule {
@@ -92,17 +100,14 @@ func TestCheckAndLintShareOneIgnoreDiscoveryWalk(t *testing.T) {
 
 	checkRoot := walkFixture(t)
 	checkWalks := runWithWalkCount(t, []config.OperationType{config.OpFix, config.OpLint})
-	// The discovered list must be the one RunFix works from: hand it an empty
-	// list instead and the walk counts below stay at 2 while the fix silently
-	// stops happening.
 	if got := ignoreFileContent(t, checkRoot); got != canonicalRule {
 		t.Errorf("check left .datamitsuignore as %q, want %q — the discovered files never reached RunFix", got, canonicalRule)
 	}
 
-	if lintWalks != 2 {
-		t.Errorf("lint performed %d repository walks, want 2 (bundled discovery + the planner)", lintWalks)
+	if lintWalks != 1 {
+		t.Errorf("lint performed %d repository walks, want 1", lintWalks)
 	}
-	if checkWalks != 2 {
-		t.Errorf("check performed %d repository walks, want 2 — fix and lint must share one discovery", checkWalks)
+	if checkWalks != 1 {
+		t.Errorf("check performed %d repository walks, want 1", checkWalks)
 	}
 }
