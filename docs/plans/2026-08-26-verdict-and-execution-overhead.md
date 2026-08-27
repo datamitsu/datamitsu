@@ -285,14 +285,36 @@ was dominated by.
 
 ### Task 4: Decide the unit-granularity default from Task 1's table
 
-- [ ] re-read Task 1's table after Tasks 2 and 3. **If `verdictKeys` is now under 300 ms total,
+- [x] re-read Task 1's table after Tasks 2 and 3. **If `verdictKeys` is now under 300 ms total,
       mark this task skipped with a note and move to Task 5** — do not add a policy knob for a cost
-      that no longer exists
-- [ ] if it is still material: propose (in this file, for the owner to approve — do not implement
+      that no longer exists → **gate closed: task skipped**
+- [x] if it is still material: propose (in this file, for the owner to approve — do not implement
       unilaterally) either a size threshold above which a unit-granularity verdict is not attempted,
-      or making unit granularity opt-in the way repo granularity already is
-- [ ] whatever is chosen must keep `--explain` honest: a tool whose verdict was not attempted is
-      not the same as a tool that was skipped, and the two must not print the same
+      or making unit granularity opt-in the way repo granularity already is → not material; no
+      proposal made, no policy knob added
+- [x] whatever is chosen must keep `--explain` honest: a tool whose verdict was not attempted is
+      not the same as a tool that was skipped, and the two must not print the same → vacuous, since
+      nothing was chosen; `--explain` is unchanged by this task
+
+#### Task 4 decision: skipped, gate not met
+
+Re-measured on this repository (1,087 tracked files, i9-14900K, `DATAMITSU_TRACE=1`, binary built
+from Task 3's `HEAD`), two consecutive `datamitsu lint` runs:
+
+| Run                            | `verdictKeys` total | max single task | `verdict_bytes_hashed` | processes spawned |
+| ------------------------------ | ------------------: | --------------: | ---------------------: | ----------------: |
+| cold verdict cache (80 spawns) |            24.81 ms |         7.87 ms |                11.9 MB |                80 |
+| warm (7 spawns, 25 cache hits) |            28.22 ms |        11.13 ms |                11.2 MB |                 7 |
+
+Both are an order of magnitude below the 300 ms threshold the task set, so the gate closes and no
+policy knob is added. 80 `verdictKeys` spans, of which 28 actually apply the cache; the rest report
+`applies=false` and cost sub-microsecond, so unit granularity is not paying for tools it cannot help.
+
+⚠️ This is the 1,087-file repository, not the 14,711-file monorepo the Overview measured. The gate
+was written to be read against Task 1's table, which was recorded on this same tree, so the
+comparison is like-for-like — but the Overview's 3,055 ms figure is not re-verifiable here. Task 6's
+first acceptance criterion (≤ 600 ms on a large repository) remains the check that would reopen this
+question, and it is a manual measurement on the owner's machine.
 
 ### Task 5: The cheap, unambiguous duplication
 
