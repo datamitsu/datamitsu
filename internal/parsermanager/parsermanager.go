@@ -35,6 +35,7 @@ var log = logger.Logger.With(zap.Namespace("parsermanager"))
 var (
 	cntInstantiate = trace.NewCounter("parser.module_instantiations")
 	cntCompile     = trace.NewCounter("parser.module_compilations")
+	cntPoolHit     = trace.NewCounter("parser.instance_pool_hits")
 )
 
 // wasmFileName is the fixed name of the module inside its content-addressed dir.
@@ -63,7 +64,18 @@ type Manager struct {
 	compiled     map[string]wazero.CompiledModule
 	compileGroup singleflight.Group
 	closed       bool
+
+	// idle holds instances ParseOutput has finished with, keyed by content key, so
+	// a run that parses N tool invocations of one module instantiates once per
+	// concurrent parse rather than once per parse. Guarded by mu.
+	idle map[string][]*ParserRuntime
 }
+
+// maxIdleInstances bounds how many instances of one module are kept per Manager.
+// Instances are only ever pooled after a parse returned, so this caps the pool at
+// roughly the peak parse concurrency; anything beyond it is closed rather than
+// held (a wasm instance owns a linear memory).
+const maxIdleInstances = 8
 
 // errClosed is returned by Acquire/compiledFor when the Manager has been Closed,
 // rather than touching the released runtime (a nil interface call would panic).
@@ -72,7 +84,11 @@ var errClosed = errors.New("parser manager is closed")
 // New returns a Manager over the given parser declarations. A nil map is valid
 // (yields not-found for every name).
 func New(parsers config.MapOfParsers) *Manager {
-	return &Manager{parsers: parsers, compiled: map[string]wazero.CompiledModule{}}
+	return &Manager{
+		parsers:  parsers,
+		compiled: map[string]wazero.CompiledModule{},
+		idle:     map[string][]*ParserRuntime{},
+	}
 }
 
 // LoadWASMBytes returns the verified bytes of the named parser's WASM module,
@@ -100,18 +116,18 @@ func (m *Manager) LoadWASMBytes(ctx context.Context, name string) ([]byte, error
 // are distinct: module selects the WASM artifact (so versions are separate
 // entries), parser is the dispatch key inside it (a name from describe). Both come
 // from a tool's `outputParser`.
+// Instances are pooled: after a successful parse the instance goes back into the
+// Manager rather than being closed, so a run that parses many tool invocations of
+// one module pays for one instantiation per concurrent parse instead of one per
+// parse. Pooling is invisible to the caller — see parsePooled for the two rules
+// that keep it so.
 func (m *Manager) ParseOutput(
 	ctx context.Context,
 	module, parser string,
 	stdout, stderr []byte,
 	exitCode int32,
 ) ([]RawDiagnostic, error) {
-	rt, err := m.Acquire(ctx, module)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rt.Close(ctx) }()
-	return rt.Parse(ctx, parser, stdout, stderr, exitCode)
+	return m.parsePooled(ctx, module, parser, stdout, stderr, exitCode)
 }
 
 // Acquire returns a ready-to-use parser instance for module: it downloads and
@@ -186,6 +202,9 @@ func (m *Manager) Close(ctx context.Context) error {
 	rt := m.runtime
 	m.runtime = nil
 	m.compiled = nil
+	// Closing the runtime below closes every instance it owns, pooled or not; the
+	// map is dropped so a post-Close release cannot resurrect one.
+	m.idle = nil
 	m.mu.Unlock()
 	if rt == nil {
 		return nil
@@ -218,6 +237,103 @@ func (m *Manager) Prefetch(ctx context.Context, names []string) error {
 		}
 	}
 	return nil
+}
+
+// parsePooled runs one parse through a pooled instance under two rules:
+//
+//  1. An instance whose parse returned an error is closed, never pooled. A trap
+//     mid-ABI can leave the module's allocator in a state the next parse would
+//     inherit, and no state may leak from one tool's output into another's.
+//  2. A failure on a *reused* instance is retried once on a fresh one. The
+//     failure may belong to the instance rather than to the input — it may have
+//     been closed underneath the pool — and pooling must never turn a parse that
+//     works into one that fails. A fresh instance is not retried: its failure is
+//     the module's answer to this input.
+func (m *Manager) parsePooled(
+	ctx context.Context,
+	module, parser string,
+	stdout, stderr []byte,
+	exitCode int32,
+) ([]RawDiagnostic, error) {
+	inst, reused, err := m.acquirePooled(ctx, module)
+	if err != nil {
+		return nil, err
+	}
+
+	diags, parseErr := inst.Parse(ctx, parser, stdout, stderr, exitCode)
+	if parseErr == nil {
+		m.release(ctx, module, inst)
+		return diags, nil
+	}
+	_ = inst.Close(ctx)
+	if !reused {
+		return nil, parseErr
+	}
+
+	fresh, err := m.Acquire(ctx, module)
+	if err != nil {
+		return nil, parseErr // report the parse failure, not the re-instantiate one
+	}
+	diags, parseErr = fresh.Parse(ctx, parser, stdout, stderr, exitCode)
+	if parseErr != nil {
+		_ = fresh.Close(ctx)
+		return nil, parseErr
+	}
+	m.release(ctx, module, fresh)
+	return diags, nil
+}
+
+// acquirePooled returns an idle instance of module when one is available, and
+// instantiates a fresh one otherwise. reused says which, because the caller
+// treats a failure on the two differently.
+func (m *Manager) acquirePooled(ctx context.Context, module string) (inst *ParserRuntime, reused bool, err error) {
+	if key, ok := m.instanceKey(module); ok {
+		m.mu.Lock()
+		if !m.closed {
+			if n := len(m.idle[key]); n > 0 {
+				inst = m.idle[key][n-1]
+				m.idle[key] = m.idle[key][:n-1]
+			}
+		}
+		m.mu.Unlock()
+		if inst != nil {
+			cntPoolHit.Add(1)
+			return inst, true, nil
+		}
+	}
+	inst, err = m.Acquire(ctx, module)
+	if err != nil {
+		return nil, false, err
+	}
+	return inst, false, nil
+}
+
+// release returns a finished instance to the pool, or closes it when the pool is
+// full or the Manager has been closed under it.
+func (m *Manager) release(ctx context.Context, module string, inst *ParserRuntime) {
+	key, ok := m.instanceKey(module)
+	if !ok {
+		_ = inst.Close(ctx)
+		return
+	}
+	m.mu.Lock()
+	if m.closed || len(m.idle[key]) >= maxIdleInstances {
+		m.mu.Unlock()
+		_ = inst.Close(ctx)
+		return
+	}
+	m.idle[key] = append(m.idle[key], inst)
+	m.mu.Unlock()
+}
+
+// instanceKey is the pool key for a module: its content key, so a re-pinned
+// module never draws an instance compiled from the bytes it replaced.
+func (m *Manager) instanceKey(module string) (string, bool) {
+	p, ok := m.parsers[module]
+	if !ok {
+		return "", false
+	}
+	return cacheKey(p), true
 }
 
 // compiledFor returns module's CompiledModule, compiling it exactly once. The

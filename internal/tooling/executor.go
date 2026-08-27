@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -56,6 +57,10 @@ type Executor struct {
 	fileProgressCallback FileProgressCallback // Optional callback for per-file progress
 	cache                *cache.Cache         // Cache for storing execution results
 	parser               DiagnosticParser     // Optional: parses tool output into diagnostics
+
+	// cmdInfos memoizes command resolution for the lifetime of one Execute; it is
+	// nil outside one (FormatContent), which resolves directly.
+	cmdInfos atomic.Pointer[commandInfoMemo]
 }
 
 // AppManager interface for getting application command information
@@ -127,6 +132,11 @@ func (e *Executor) SetParser(parser DiagnosticParser) {
 func (e *Executor) Execute(ctx context.Context, plan *ExecutionPlan) ([]GroupExecutionResult, error) {
 	log.Debug("starting execution plan", zap.Int("groupCount", len(plan.Groups)))
 	var results []GroupExecutionResult
+
+	// A fresh memo per Execute: an app installed between two runs must be
+	// re-resolved, and only within one run is the answer constant.
+	e.cmdInfos.Store(newCommandInfoMemo())
+	defer e.cmdInfos.Store(nil)
 
 	// Create a cancellable context for fail-fast propagation
 	execCtx, cancel := context.WithCancel(ctx)
@@ -450,7 +460,7 @@ func (e *Executor) executeTask(ctx context.Context, task Task) ExecutionResult {
 
 	// Get command info
 	cmdSpan := trace.Start(trace.CatExec, "getCommandInfo")
-	cmdInfo, err := e.appManager.GetCommandInfo(ctx, task.OpConfig.App)
+	cmdInfo, err := e.commandInfo(ctx, task.OpConfig.App)
 	cmdSpan.EndWith(trace.A("app", task.OpConfig.App))
 	if err != nil {
 		log.Debug("failed to get command info",

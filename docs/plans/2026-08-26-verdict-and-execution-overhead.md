@@ -320,23 +320,75 @@ question, and it is a manual measurement on the owner's machine.
 
 Three independent items, none of which changes a decision.
 
-- [ ] memoize `GetCommandInfo` per app inside the executor for the lifetime of one `Execute`, handing
+- [x] memoize `GetCommandInfo` per app inside the executor for the lifetime of one `Execute`, handing
       out copies rather than the shared pointer; first verify by grep that no caller mutates
       `CommandInfo.Env` or its slices
-- [ ] have the runner call `bundled.FindIgnoreFiles` once and pass the result to both `RunFix` and
+- [x] have the runner call `bundled.FindIgnoreFiles` once and pass the result to both `RunFix` and
       `RunLint`, instead of each walking the tree — `check` drops from three walks to two
-- [ ] pool wazero parser instances instead of instantiating one per parse, keeping one instance per
+- [x] pool wazero parser instances instead of instantiating one per parse, keeping one instance per
       module per worker; an instance must be reset or discarded between parses so no state leaks
       between two tools' output
-- [ ] write a test asserting `GetCommandInfo` is called once per distinct app across a multi-task plan
-- [ ] write a test asserting a returned `CommandInfo` cannot be mutated by one caller into another's
+- [x] write a test asserting `GetCommandInfo` is called once per distinct app across a multi-task plan
+- [x] write a test asserting a returned `CommandInfo` cannot be mutated by one caller into another's
       view
-- [ ] write a test asserting `check` performs exactly two repository walks (assert on the
+- [x] write a test asserting `check` performs exactly two repository walks (assert on the
       `walk.repository_walks` counter)
-- [ ] write a test asserting two parses through a pooled instance produce the same diagnostics as two
+- [x] write a test asserting two parses through a pooled instance produce the same diagnostics as two
       parses through fresh instances — including a parse that errors between them
-- [ ] record the measured drop in `getCommandInfo` total, walk count, and `parser.instantiate` total
-- [ ] run `go test ./... -race` and `go test ./test/cli/ -count=2` — must pass before Task 6
+- [x] record the measured drop in `getCommandInfo` total, walk count, and `parser.instantiate` total
+- [x] run `go test ./... -race` and `go test ./test/cli/ -count=2` — must pass before Task 6
+
+#### Task 5 implementation and measurements
+
+**Command info.** `internal/tooling/command_info_memo.go` holds `commandInfoMemo`, a
+`app -> (*CommandInfo, error)` map whose entries resolve under a `sync.Once`, so the five tasks the
+worker pool starts for one app at the same moment wait on one resolve instead of starting five.
+`Execute` stores a fresh memo and clears it on return (`atomic.Pointer`), so an install between two
+runs is always seen and `FormatContent` — the LSP path, which runs outside `Execute` — resolves
+directly. Callers get `cloneCommandInfo`, never the shared pointer: `Env`, `Args` and `RequiredPaths`
+are all reference types, and one task editing them would rewrite another task's command line. A
+grep confirmed no caller mutates them today (`buildCommand` only reads); the copy is what keeps that
+true. A resolve failure is memoized too — within one `Execute` an unresolvable tool cannot become
+resolvable, and retrying per task turns one error into N installs.
+
+**Ignore-file discovery.** `bundled.RunFix`/`RunLint` now take the file list instead of discovering
+it; the runner calls `FindIgnoreFiles` once and hands the same list to both.
+
+**Parser instances.** `Manager` keeps idle `ParserRuntime`s per content key (max 8), and
+`ParseOutput` draws from that pool. Two rules keep pooling invisible: an instance whose parse
+returned an error is closed rather than pooled (a trap mid-ABI can leave the module's allocator in a
+state the next parse would inherit), and a failure on a _reused_ instance is retried once on a fresh
+one (the failure may belong to the instance — it can be closed underneath the pool — and pooling must
+never turn a parse that works into one that fails). A fresh instance is never retried: its failure is
+the module's answer to that input.
+
+Measured on this repository (1,087 tracked files, i9-14900K), same-machine A/B between a binary built
+from `HEAD` and this change, warm `lint`, `DATAMITSU_TRACE=1`:
+
+| Metric                          | Baseline |   After | Change                                      |
+| ------------------------------- | -------: | ------: | ------------------------------------------- |
+| `getCommandInfo` total (n=30)   | 15.61 ms | 9.72 ms | **−37.7%**                                  |
+| `getCommandInfo` max single     |  2.10 ms | 0.65 ms | −69.2%                                      |
+| `exec.command_info_resolved`    |       30 |       7 | one per distinct app, not one per task      |
+| `exec.command_info_memo_hits`   |        — |      23 | —                                           |
+| `parser.module_instantiations`  |        2 |       1 | one per module, not one per parse           |
+| `parser.instance_pool_hits`     |        — |       1 | —                                           |
+| `walk.repository_walks`, `lint` |        2 |       2 | unchanged — the duplicate walk is `check`'s |
+| `exec.processes_spawned`        |        5 |       5 | the set of tools that ran is identical      |
+| `exec.verdict_cache_hits`       |       23 |      23 | same skips                                  |
+
+The 23 memo hits still show as `getCommandInfo` spans in the trace, because a task that arrives while
+the first resolve is in flight blocks on the `Once` — the span covers the wait. That is why the total
+drops by 38% rather than by 23/30: the win is the resolves that no longer happen, not the waits.
+
+`walk.repository_walks` on `check` is measured by `TestCheckWalksTheRepositoryTwice`
+(`internal/runner/walks_test.go`) rather than from the CLI, because a real `check` on this repository
+rewrites files. Reintroducing the second discovery makes that test report 3; with the shared list a
+`check` walks exactly as many times as a `lint` does, which is 2.
+
+`parser.module_instantiations` is 1 against 2 parses here because this repository parses two tool
+invocations through one module on a warm run. The counter is the shape that matters: it is now the
+number of concurrently-live parses, not the number of parses.
 
 ### Task 6: Verify acceptance criteria
 

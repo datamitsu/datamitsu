@@ -29,7 +29,7 @@ func (e *Executor) FormatContent(ctx context.Context, task Task, absPath string,
 		return nil, nil, fmt.Errorf("tool %s: FormatContent requires output:stdout", task.ToolName)
 	}
 
-	cmdInfo, err := e.appManager.GetCommandInfo(ctx, task.OpConfig.App)
+	cmdInfo, err := e.commandInfo(ctx, task.OpConfig.App)
 	if err != nil {
 		return nil, nil, fmt.Errorf("get command info for %s: %w", task.OpConfig.App, err)
 	}
