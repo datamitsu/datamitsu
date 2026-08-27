@@ -33,6 +33,7 @@ const (
 // internal to the engine layer via json.Marshal/json.Unmarshal.
 type Effective struct {
 	Concurrency              int    `json:"concurrency"`
+	ConfigCache              bool   `json:"configCache"`
 	ForceGitSubprocess       bool   `json:"forceGitSubprocess"`
 	InstallTimeoutSeconds    int    `json:"installTimeoutSeconds"`
 	Libc                     string `json:"libc"`
@@ -61,6 +62,7 @@ type Effective struct {
 func Compute() Effective {
 	return Effective{
 		Concurrency:              env.GetConcurrency(),
+		ConfigCache:              env.ConfigCacheEnabled(),
 		ForceGitSubprocess:       env.IsForceGitSubprocessEnabled(),
 		InstallTimeoutSeconds:    env.InstallTimeoutSeconds(),
 		Libc:                     string(target.HostTarget().Libc),

@@ -36,9 +36,11 @@ type ProjectLocation struct {
 // an identical shape. projectLocations is rendered as plain {type, path}
 // objects to keep stable JS keys regardless of goja field-name mapping.
 //
-// projectTypes/projectLocations are inputs to setup content() evaluation. When
-// config-evaluation caching is added, they MUST be folded into the cache
-// fingerprint (see the runtime-config policy in AGENTS.md).
+// projectTypes/projectLocations are inputs to setup content() evaluation only.
+// A load that evaluates setup content never uses the config-evaluation cache
+// (configCacheUsable in cmd/config_cache.go), so they are deliberately absent
+// from configcache.Inputs. If the setup layer ever gains its own cache, they
+// MUST be folded into its key.
 func ApplyProjectContext(obj *goja.Object, projectTypes []string, locations []ProjectLocation) {
 	if projectTypes == nil {
 		projectTypes = []string{}

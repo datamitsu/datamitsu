@@ -25,8 +25,12 @@ func (e *Engine) initConsole() {
 	// instead of stdout/stderr: a user config's console.log would otherwise inject
 	// a stray non-JSON line onto the clean stdout machine-data channel (or onto the
 	// typed stderr event stream for warn/error), breaking the JSON-L contract.
+	// Every console.* call is recorded as a side effect: the stored artifact
+	// carries no output, so a config that printed here must not be cached or it
+	// would print exactly once and never again.
 	_ = e.vm.Set("console", map[string]any{
 		"log": func(call goja.FunctionCall) goja.Value {
+			e.observeConsoleOutput()
 			if ui.Quiet() {
 				logger.Logger.Debug(argsToString(call.Arguments), zap.String("source", "js"), zap.String("level", "log"))
 			} else {
@@ -35,6 +39,7 @@ func (e *Engine) initConsole() {
 			return goja.Undefined()
 		},
 		"info": func(call goja.FunctionCall) goja.Value {
+			e.observeConsoleOutput()
 			if ui.Quiet() {
 				logger.Logger.Debug(argsToString(call.Arguments), zap.String("source", "js"), zap.String("level", "info"))
 			} else {
@@ -43,6 +48,7 @@ func (e *Engine) initConsole() {
 			return goja.Undefined()
 		},
 		"warn": func(call goja.FunctionCall) goja.Value {
+			e.observeConsoleOutput()
 			if ui.Quiet() {
 				logger.Logger.Debug(argsToString(call.Arguments), zap.String("source", "js"), zap.String("level", "warn"))
 			} else {
@@ -51,6 +57,7 @@ func (e *Engine) initConsole() {
 			return goja.Undefined()
 		},
 		"error": func(call goja.FunctionCall) goja.Value {
+			e.observeConsoleOutput()
 			if ui.Quiet() {
 				logger.Logger.Debug(argsToString(call.Arguments), zap.String("source", "js"), zap.String("level", "error"))
 			} else {
@@ -59,6 +66,7 @@ func (e *Engine) initConsole() {
 			return goja.Undefined()
 		},
 		"debug": func(call goja.FunctionCall) goja.Value {
+			e.observeConsoleOutput()
 			logger.Logger.Debug(argsToString(call.Arguments), zap.String("source", "js"))
 			return goja.Undefined()
 		},

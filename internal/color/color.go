@@ -50,6 +50,15 @@ func Enabled() bool {
 	return isatty.IsTerminal(os.Stdout.Fd()) || isatty.IsCygwinTerminal(os.Stdout.Fd())
 }
 
+// LibraryEnabled reports whether fatih/color renders escapes right now — the
+// flag its SprintFunc consults, which is what the `colors` config global is
+// built from. It can disagree with Enabled(): Init() is not called on every
+// path, and fatih's own package init honours neither FORCE_COLOR nor
+// CLICOLOR_FORCE. Anything fingerprinting the colors global must use this, not
+// Enabled(), or a piped run and a terminal run share a fingerprint while
+// producing different strings.
+func LibraryEnabled() bool { return !color.NoColor }
+
 // Init configures the fatih/color library based on environment detection.
 // Call this once at startup.
 func Init() {

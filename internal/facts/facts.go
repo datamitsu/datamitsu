@@ -139,18 +139,28 @@ func CollectWithOptions(ctx context.Context, binaryCommandOverride string, opts 
 	return facts, gitRoot, nil
 }
 
-// collectAllEnv collects all environment variables
+// collectAllEnv collects all environment variables except the observation-only
+// ones.
+//
+// This map is facts().env, the whole environment config JS can branch on, and
+// the config-evaluation cache key hashes env.EnvironAll(), which drops exactly
+// these variables. Leaving one visible here would make it a config input that
+// cannot move the key, so a traced run could be served an untraced run's config.
 func collectAllEnv() map[string]string {
 	envMap := make(map[string]string)
 
-	for _, env := range os.Environ() {
-		parts := strings.SplitN(env, "=", 2)
+	for _, kv := range os.Environ() {
+		parts := strings.SplitN(kv, "=", 2)
 		if len(parts) != 2 {
 			continue
 		}
 
 		key := parts[0]
 		value := parts[1]
+
+		if env.ObservationOnly(key) {
+			continue
+		}
 
 		envMap[key] = value
 	}

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/configcache"
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/hashutil"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
@@ -576,7 +577,9 @@ func ClearAll(cacheDir string) error {
 	if err := os.RemoveAll(projectsDir); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to remove projects cache directory: %w", err)
 	}
-	return nil
+	// The evaluated-config artifacts live in a sibling tree, so "clear the cache"
+	// has to name it explicitly or a stale-looking config survives the clear.
+	return configcache.ClearAll(cacheDir)
 }
 
 // ClearProject removes the entire project cache directory (lint/fix + tool caches)
@@ -589,7 +592,10 @@ func ClearProject(cacheDir string, projectPath string) error {
 	if err := os.RemoveAll(projectDir); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to remove project directory: %w", err)
 	}
-	return nil
+	if !filepath.IsAbs(projectPath) {
+		return nil // not a git root: nothing was written under the projects namespace
+	}
+	return configcache.ClearProject(cacheDir, projectPath)
 }
 
 // MarkDirty marks cache as needing save (non-blocking)

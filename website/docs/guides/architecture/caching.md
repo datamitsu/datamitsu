@@ -241,3 +241,11 @@ Tool-specific caches (e.g., TypeScript's `tsbuildinfo`, ESLint's `.eslintcache`)
 ```
 
 These are managed by the tools themselves via the `{toolCache}` template placeholder — datamitsu just provides the directory path.
+
+Evaluated config chains live in a sibling tree, keyed by the same project identity the source-mode farm uses:
+
+```
+~/.cache/datamitsu/cache/config-eval/{projects|configs}/{identity}/{key}.msgpack
+```
+
+`projects/` holds repository chains (identified by the git root), `configs/` holds machine-level `--config` chains (identified by the chain itself). The file name is the hash of every input the evaluation is a function of. See [the config-evaluation cache](./startup.md#the-config-evaluation-cache) for the key inputs and the invalidation rules.

@@ -334,6 +334,23 @@ func NoOCI() bool {
 	return os.Getenv(noOCI.Name) != ""
 }
 
+// ConfigCacheEnabled reports whether an evaluated config chain may be served
+// from and written to the on-disk config-evaluation cache. It defaults to on;
+// only an explicitly falsy value turns it off, so a typo degrades to caching
+// rather than to a silent 30 ms tax on every invocation.
+func ConfigCacheEnabled() bool {
+	value := os.Getenv(configCache.Name)
+	if value == "" {
+		value = configCache.DefaultValue
+	}
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "0", "false", "off", "no":
+		return false
+	default:
+		return true
+	}
+}
+
 // NoParse returns true if output parsing is disabled (tools' raw output is shown
 // instead of structured diagnostics) — the env twin of the --no-parse flag.
 func NoParse() bool {
