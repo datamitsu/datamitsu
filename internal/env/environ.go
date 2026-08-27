@@ -8,19 +8,27 @@ import (
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 )
 
-// environExcluded lists datamitsu-owned variables that describe *which* farm a
-// shell activated rather than *how* datamitsu behaves, and so must not enter a
-// fingerprint.
+// environExcluded lists datamitsu-owned variables that must not enter a
+// fingerprint, for one of two reasons.
 //
-// Including them would make the source-mode staleness key disagree with itself
-// across shells: a farm is baked by a process that does not yet have them set,
-// then every command in the activated shell runs with them set, reports the
-// manifest stale, and rebakes. Two activated repositories would rebake each
-// other's farm on every `cd`.
+// The source-mode variables describe *which* farm a shell activated rather than
+// *how* datamitsu behaves. Including them would make the source-mode staleness
+// key disagree with itself across shells: a farm is baked by a process that does
+// not yet have them set, then every command in the activated shell runs with
+// them set, reports the manifest stale, and rebakes. Two activated repositories
+// would rebake each other's farm on every `cd`.
+//
+// The trace variables are observation only: they change what datamitsu *reports
+// about itself*, never what it produces. Folding them in would mean turning
+// tracing on invalidates every baked farm, so the first traced invocation would
+// measure a rebake instead of the command under study — the instrument would
+// change the measurement.
 var environExcluded = map[string]bool{
 	sourceRoot.Name:       true,
 	sourceFarm.Name:       true,
 	sourceFarmConfig.Name: true,
+	trace.Name:            true,
+	traceDir.Name:         true,
 }
 
 // Environ returns every datamitsu-owned environment variable currently set, as

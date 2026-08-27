@@ -24,6 +24,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"github.com/datamitsu/datamitsu/internal/syslist"
 	"github.com/datamitsu/datamitsu/internal/target"
+	"github.com/datamitsu/datamitsu/internal/trace"
 	"github.com/datamitsu/datamitsu/internal/ui"
 
 	"go.uber.org/zap"
@@ -289,6 +290,8 @@ type InstallStats struct {
 // InstallWithConcurrency installs binaries with specified concurrency level
 // Returns installation statistics
 func (bm *BinManager) InstallWithConcurrency(ctx context.Context, includeOptional bool, concurrency int, failOnError bool) (InstallStats, error) {
+	defer trace.Start(trace.CatInstall, "binmanager.installAll").EndWith(trace.A("concurrency", concurrency))
+
 	stats := InstallStats{
 		Skipped:       []SkippedBinary{},
 		AlreadyCached: []string{},
@@ -697,6 +700,8 @@ func WriteAppFiles(ctx context.Context, installPath string, files map[string]str
 // When multiple archives contain files at the same path, later archives (alphabetically)
 // overwrite earlier ones.
 func extractArchives(ctx context.Context, installPath string, archives map[string]*ArchiveSpec) error {
+	defer trace.Start(trace.CatInstall, "archive.extract").EndWith(trace.A("archives", len(archives)))
+
 	names := make([]string, 0, len(archives))
 	for name := range archives {
 		names = append(names, name)
@@ -1103,6 +1108,8 @@ func (bm *BinManager) getBinaryPath(name string) (string, error) {
 }
 
 func (bm *BinManager) downloadInternal(ctx context.Context, name string) error {
+	defer trace.Start(trace.CatInstall, "binmanager.install").EndWith(trace.A("app", name))
+
 	networkDownloads.Add(1)
 
 	resolved, binaryInfo, err := bm.getBinaryInfo(name)

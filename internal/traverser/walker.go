@@ -9,8 +9,14 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/datamitsu/datamitsu/internal/trace"
+
 	"golang.org/x/sync/errgroup"
 )
+
+// cntWalks counts full gitignore-aware repository walks. One invocation should
+// need one; more than that is duplicated discovery.
+var cntWalks = trace.NewCounter("walk.repository_walks")
 
 // Walker recursively collects non-ignored file paths under a directory,
 // applying .gitignore rules relative to the repository root.
@@ -123,9 +129,18 @@ func FindFiles(ctx context.Context, rootPath string) ([]string, error) {
 
 // FindFilesFromPath finds all files starting from scanPath, respecting .gitignore from rootPath
 func FindFilesFromPath(ctx context.Context, rootPath string, scanPath string) ([]string, error) {
+	// Instrumented here, at the one entry point every caller goes through, so a
+	// trace shows how many full repository walks one invocation actually
+	// performs — the planner runs two concurrently, and the bundled lint/fix
+	// helpers add more.
+	cntWalks.Add(1)
+	walkSpan := trace.Start(trace.CatWalk, "traverser.walk")
+
 	git := NewGitIgnore(rootPath)
+	rulesSpan := trace.Start(trace.CatWalk, "gitignore.compile")
 	_ = git.CollectRules(ctx, rootPath)
 	_ = git.Compile()
+	rulesSpan.End()
 
 	w := Walker{
 		rootPath: rootPath,
@@ -133,7 +148,19 @@ func FindFilesFromPath(ctx context.Context, rootPath string, scanPath string) ([
 		git:      git,
 	}
 
-	return w.Walk(ctx)
+	files, err := w.Walk(ctx)
+
+	// Sorted before returning. The walk fans out across directories and appends
+	// under a mutex, so its natural order is whatever the goroutines won — which
+	// made every consumer non-reproducible: the plan's file lists and therefore
+	// the argv handed to each tool, and, less visibly, the precedence between two
+	// .datamitsuignore files at equal depth, which internal/datamitsuignore
+	// resolves by discovery order. Sorting here fixes all of them at one place,
+	// for a few milliseconds on a repository of tens of thousands of files.
+	sort.Strings(files)
+
+	walkSpan.EndWith(trace.A("scanPath", scanPath), trace.A("files", len(files)))
+	return files, err
 }
 
 // SortAscending returns a sorted copy of arr without mutating the input.

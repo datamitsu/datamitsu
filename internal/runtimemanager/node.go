@@ -11,6 +11,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/httpx"
+	"github.com/datamitsu/datamitsu/internal/trace"
 	"github.com/datamitsu/datamitsu/internal/ui"
 
 	"go.uber.org/zap"
@@ -139,6 +140,8 @@ func (rm *RuntimeManager) installNodeApp(ctx context.Context, appName string, ap
 }
 
 func (rm *RuntimeManager) installNodeAppOnce(ctx context.Context, appName string, appConfig *binmanager.AppConfigNode, customEnv map[string]string, files map[string]string, archives map[string]*binmanager.ArchiveSpec, mergedWorkspaceYAML string) error {
+	defer trace.Start(trace.CatInstall, "node.installApp").EndWith(trace.A("app", appName))
+
 	appEnvPath, runtimeName, rc, err := rm.resolveNodeAppEnvPathWith(appName, appConfig, files, archives)
 	if err != nil {
 		return err

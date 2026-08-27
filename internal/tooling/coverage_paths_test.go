@@ -46,34 +46,6 @@ func TestSkipReasonStringDefault(t *testing.T) {
 	}
 }
 
-// TestParseGlobExtensions exercises the extension-parsing branches: simple
-// extensions, brace expansion, and the various nil-returning rejections.
-func TestParseGlobExtensions(t *testing.T) {
-	tests := []struct {
-		name    string
-		pattern string
-		want    []string
-	}{
-		{"simple extension", "*.go", []string{".go"}},
-		{"nested path simple", "**/*.js", []string{".js"}},
-		{"brace expansion", "**/*.{ts,tsx,js}", []string{".ts", ".tsx", ".js"}},
-		{"no extension pattern returns nil", "Makefile", nil},
-		{"directory glob returns nil", "src/**", nil},
-		{"too short returns nil", "*.", nil},
-		{"empty brace member returns nil", "*.{ts,}", nil},
-		{"wildcard inside extension returns nil", "*.g*", nil},
-		{"bracket inside extension returns nil", "*.[ab]", nil},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := parseGlobExtensions(tt.pattern)
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("parseGlobExtensions(%q) = %v, want %v", tt.pattern, got, tt.want)
-			}
-		})
-	}
-}
-
 // TestFilterTasksBySelectedTools covers both the happy path (filtering to the
 // selected subset) and the ToolNotFoundError path (unknown tool name).
 func TestFilterTasksBySelectedTools(t *testing.T) {

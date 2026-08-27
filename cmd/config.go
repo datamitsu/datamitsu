@@ -147,7 +147,7 @@ bare hash is printed, which is handy for scripting:
 
   pin=$(datamitsu config chain-hash eslint.config.mjs)`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		_, layerMap, _, err := loadConfig()
+		_, layerMap, _, err := loadConfigForChainHash()
 		if err != nil {
 			return fmt.Errorf("failed to load config: %w", err)
 		}

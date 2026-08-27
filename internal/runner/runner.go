@@ -24,6 +24,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/diagnostic"
 	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/facts"
 	"github.com/datamitsu/datamitsu/internal/gitenv"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"github.com/datamitsu/datamitsu/internal/logger"
@@ -33,7 +34,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/term"
 	"github.com/datamitsu/datamitsu/internal/timing"
 	"github.com/datamitsu/datamitsu/internal/tooling"
-	"github.com/datamitsu/datamitsu/internal/traverser"
+	"github.com/datamitsu/datamitsu/internal/trace"
 	"github.com/datamitsu/datamitsu/internal/ui"
 	"github.com/datamitsu/datamitsu/internal/uievent"
 
@@ -168,8 +169,20 @@ func initSharedContext(
 		return nil, fmt.Errorf("failed to get cwd: %w", err)
 	}
 
-	// Get root path
-	sc.rootPath, err = traverser.GetGitRoot(ctx, sc.cwdPath)
+	// Get root path.
+	//
+	// facts.GetGitRoot, not traverser.GetGitRoot: both answer the same question
+	// — the topmost repository in a submodule hierarchy — but facts memoizes the
+	// answer per cwd for the process and resolves it from the filesystem,
+	// forking git only for layouts its walk refuses to decide. traverser's
+	// resolver always forks, two processes per hierarchy level, and the config
+	// load a few lines below has already computed the identical value.
+	//
+	// It reads os.Getwd() itself rather than taking a cwd; sc.cwdPath came from
+	// the same call above and nothing changes directory in between.
+	rootSpan := trace.Start(trace.CatCLI, "runner.gitRoot")
+	sc.rootPath, err = facts.GetGitRoot(ctx)
+	rootSpan.EndWith(trace.A("root", sc.rootPath))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get git root: %w", err)
 	}
@@ -177,6 +190,7 @@ func initSharedContext(
 	// Load configuration
 	func() {
 		defer sc.timings.Start("Load configuration")()
+		defer trace.Start(trace.CatConfig, "runner.loadConfig").End()
 		sc.cfg, _, err = loadConfigFunc()
 	}()
 	if err != nil {
@@ -233,7 +247,9 @@ func initSharedContext(
 
 	// Create cache
 	cacheDir := env.GetCachePath()
+	cacheSpan := trace.Start(trace.CatCache, "createCache")
 	projectCache, err := createCache(cacheDir, sc.rootPath, *sc.cfg, sc.selectedTools)
+	cacheSpan.End()
 	if err != nil {
 		log.Warn("failed to create cache, continuing without caching", zap.Error(err))
 	}
@@ -299,6 +315,8 @@ func plannedParserModules(plan *tooling.ExecutionPlan) []string {
 
 // runSingleOperation executes one operation (fix, lint, etc.) using a pre-initialized shared context
 func runSingleOperation(ctx context.Context, sc *sharedContext, operation config.OperationType) error {
+	defer trace.Start(trace.CatCLI, "runSingleOperation").EndWith(trace.A("operation", string(operation)))
+
 	// Create execution plan
 	plan, err := sc.planner.Plan(ctx, operation, sc.selection, sc.selectedTools)
 	if err != nil {
@@ -351,7 +369,10 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	// that fetch is refused, so the airgapped run silently lost its parsers and
 	// fell back to raw tool output.
 	if sc.binMgr != nil {
-		if err := ocibundle.AutoSeed(ctx, sc.cfg, plan.GetAppNames(), nil); err != nil {
+		seedSpan := trace.Start(trace.CatInstall, "ocibundle.AutoSeed")
+		err := ocibundle.AutoSeed(ctx, sc.cfg, plan.GetAppNames(), nil)
+		seedSpan.EndWith(trace.A("apps", len(plan.GetAppNames())))
+		if err != nil {
 			return fmt.Errorf("failed to seed store from oci bundle: %w", err)
 		}
 	}
@@ -359,11 +380,25 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	// Compile the WASM parser modules this plan will use now, once, off the
 	// per-file execution path. Best-effort: a failure falls back to lazy
 	// compile-on-first-parse inside the executor.
+	//
+	// Started in the background rather than awaited. Compiling the module takes
+	// ~80 ms, and nothing can parse output before a tool has produced any, so
+	// blocking here put that entirely on the critical path — every run paid it
+	// before the first tool started. Manager.compiledFor collapses concurrent callers onto one compilation, so a
+	// parse that arrives before this finishes joins the in-flight compilation
+	// instead of starting a second one, and one that arrives after finds it
+	// cached; either way the prewarm remains what it always was, an
+	// optimisation with a lazy fallback.
 	if sc.parserMgr != nil {
 		if mods := plannedParserModules(plan); len(mods) > 0 {
-			if err := sc.parserMgr.Prewarm(ctx, mods); err != nil {
-				log.Debug("parser prewarm failed; compiling lazily", zap.Error(err))
-			}
+			prewarmDone := make(chan struct{})
+			defer func() { <-prewarmDone }()
+			go func() {
+				defer close(prewarmDone)
+				if err := sc.parserMgr.Prewarm(ctx, mods); err != nil {
+					log.Debug("parser prewarm failed; compiling lazily", zap.Error(err))
+				}
+			}()
 		}
 	}
 
@@ -574,12 +609,17 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	if sc.binMgr != nil {
 		// The store was already seeded from the bundle before the parser
 		// prewarm above, so these stat checks hit seeded content.
-		if err := sc.binMgr.EnsureTools(ctx, plan.GetAppNames()); err != nil {
+		ensureSpan := trace.Start(trace.CatInstall, "EnsureTools")
+		err := sc.binMgr.EnsureTools(ctx, plan.GetAppNames())
+		ensureSpan.EndWith(trace.A("apps", len(plan.GetAppNames())))
+		if err != nil {
 			return fmt.Errorf("failed to pre-install tools: %w", err)
 		}
 	}
 
+	execSpan := trace.Start(trace.CatExec, "executePlan")
 	results, execErr := sc.executor.Execute(ctx, plan)
+	execSpan.EndWith(trace.A("groups", len(plan.Groups)))
 	// Finalize progress before printing any summaries/errors to avoid interleaved output.
 	finalizeProgress()
 

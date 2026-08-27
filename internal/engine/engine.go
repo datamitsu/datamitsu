@@ -11,6 +11,7 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/facts"
 	"github.com/datamitsu/datamitsu/internal/timing"
+	"github.com/datamitsu/datamitsu/internal/trace"
 
 	"github.com/dop251/goja"
 )
@@ -44,6 +45,7 @@ func New(ctx context.Context, binaryCommandOverride string) (*Engine, error) {
 // NewWithOptions is New with explicit Options.
 func NewWithOptions(ctx context.Context, binaryCommandOverride string, opts Options) (e *Engine, err error) {
 	defer timing.StartStartupPhase(timing.PhaseEngineNew)()
+	defer trace.Start(trace.CatEngine, "engine.New").End()
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("engine initialization panic: %v", r)
@@ -51,8 +53,10 @@ func NewWithOptions(ctx context.Context, binaryCommandOverride string, opts Opti
 	}()
 
 	// Collect facts about the environment
+	factsSpan := trace.Start(trace.CatEngine, "facts.Collect")
 	projectFacts, gitRoot, err := facts.CollectWithOptions(ctx, binaryCommandOverride,
 		facts.CollectOptions{TolerateGitFailure: opts.TolerateGitRootFailure})
+	factsSpan.End()
 	if err != nil {
 		return nil, err
 	}
@@ -62,8 +66,10 @@ func NewWithOptions(ctx context.Context, binaryCommandOverride string, opts Opti
 		return nil, fmt.Errorf("failed to compute root path: %w", err)
 	}
 
+	vmSpan := trace.Start(trace.CatEngine, "goja.New")
 	vm := goja.New()
 	vm.SetFieldNameMapper(goja.TagFieldNameMapper("json", true))
+	vmSpan.End()
 
 	e = &Engine{
 		vm:       vm,
@@ -71,6 +77,7 @@ func NewWithOptions(ctx context.Context, binaryCommandOverride string, opts Opti
 		rootPath: rootPath,
 	}
 
+	globalsSpan := trace.Start(trace.CatEngine, "engine.initGlobals")
 	e.initConsole()
 	e.initColors()
 	e.initFormats()
@@ -78,6 +85,7 @@ func NewWithOptions(ctx context.Context, binaryCommandOverride string, opts Opti
 	e.initFacts()
 	e.initPNPMWorkspaceDefaults()
 	e.initConfigInputs()
+	globalsSpan.End()
 
 	if testInitHook != nil {
 		testInitHook(e)
@@ -104,6 +112,21 @@ func (e *Engine) RunWithTimeout(script string, timeout time.Duration) (goja.Valu
 	e.vm.ClearInterrupt()
 	if err != nil {
 		return val, fmt.Errorf("run script: %w", err)
+	}
+	return val, nil
+}
+
+// RunProgramWithTimeout executes an already-compiled program with a watchdog
+// timeout. It exists so a caller can separate compilation from execution —
+// which is both what the trace needs to attribute the two costs and what makes
+// a compiled program reusable across VMs within one process.
+func (e *Engine) RunProgramWithTimeout(program *goja.Program, timeout time.Duration) (goja.Value, error) {
+	done := e.withTimeout(timeout)
+	val, err := e.vm.RunProgram(program)
+	done()
+	e.vm.ClearInterrupt()
+	if err != nil {
+		return val, fmt.Errorf("run program: %w", err)
 	}
 	return val, nil
 }

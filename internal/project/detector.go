@@ -6,11 +6,11 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/globmatch"
 	"github.com/datamitsu/datamitsu/internal/traverser"
-
-	"github.com/bmatcuk/doublestar/v4"
 )
 
 // Detector handles project type detection based on marker files
@@ -29,16 +29,46 @@ func NewDetector(rootPath string, types config.MapOfProjectTypes) *Detector {
 
 // DetectAll detects all matching project types in the repository
 // Returns a slice of project type names that match based on marker files
+//
+// The tree is walked once and every type is matched against that one file list.
+// It used to call matchesType per type, and each of those walked the whole
+// repository again — one gitignore-aware traversal per configured project type,
+// of which the shared config declares dozens, all producing the identical list.
 func (d *Detector) DetectAll(ctx context.Context) ([]string, error) {
-	var detected []string
+	files, err := traverser.FindFiles(ctx, d.rootPath)
+	if err != nil {
+		// Matching used to swallow a failed walk and report "no marker found",
+		// so a broken traversal looked like a repository with no project types.
+		// Keeping that shape here would hide it just as well; the caller decides.
+		return nil, fmt.Errorf("failed to traverse files: %w", err)
+	}
 
+	var detected []string
 	for name, ptype := range d.types {
-		if d.matchesType(ctx, ptype) {
+		if matchesTypeInFiles(d, globmatch.New(ptype.Markers), files) {
 			detected = append(detected, name)
 		}
 	}
 
 	return detected, nil
+}
+
+// matchesTypeInFiles reports whether any file matches one of the prepared marker
+// patterns.
+func matchesTypeInFiles(d *Detector, markers globmatch.Set, files []string) bool {
+	if markers.Len() == 0 {
+		return false
+	}
+	for _, file := range files {
+		relPath, ok := d.relToRoot(file)
+		if !ok {
+			continue
+		}
+		if markers.Match(relPath) {
+			return true
+		}
+	}
+	return false
 }
 
 // IsType checks if a specific project type is detected
@@ -77,80 +107,83 @@ func (d *Detector) DetectAllWithLocationsFromFiles(files []string) []ProjectLoca
 	var locations []ProjectLocation
 	seen := make(map[string]bool) // To avoid duplicates
 
-	// Build a map of project types with their compiled patterns
+	// Prepare each type's markers once. This loop is files x types x markers —
+	// on a large monorepo, hundreds of thousands of matches — so the patterns are
+	// compiled outside it and most reduce to a suffix or final-segment test
+	// rather than a full glob walk (`**/package.json`, `**/*.csproj`).
 	type typeMarkers struct {
-		name    string
-		markers []string
+		name string
+		set  globmatch.Set
 	}
 	typesList := make([]typeMarkers, 0, len(d.types))
 	for typeName, ptype := range d.types {
 		typesList = append(typesList, typeMarkers{
-			name:    typeName,
-			markers: ptype.Markers,
+			name: typeName,
+			set:  globmatch.New(ptype.Markers),
 		})
 	}
 
 	// Check each file against all patterns
 	for _, file := range files {
-		// Get relative path from rootPath
-		relPath, err := filepath.Rel(d.rootPath, file)
-		if err != nil {
+		relPath, ok := d.relToRoot(file)
+		if !ok {
 			continue
 		}
 
 		// Check against all project type markers
 		for _, tm := range typesList {
-			for _, marker := range tm.markers {
-				matched, err := doublestar.Match(marker, relPath)
-				if err != nil || !matched {
-					continue
-				}
-
-				// Get the directory containing the marker file
-				dir := filepath.Dir(file)
-
-				// Create unique key for this location
-				key := tm.name + ":" + dir
-				if seen[key] {
-					continue
-				}
-				seen[key] = true
-
-				locations = append(locations, ProjectLocation{
-					Type: tm.name,
-					Path: dir,
-				})
+			if !tm.set.Match(relPath) {
+				continue
 			}
+
+			// Get the directory containing the marker file
+			dir := filepath.Dir(file)
+
+			// Create unique key for this location
+			key := tm.name + ":" + dir
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+
+			locations = append(locations, ProjectLocation{
+				Type: tm.name,
+				Path: dir,
+			})
 		}
 	}
 
 	return locations
 }
 
-// matchesType checks if any marker file exists for the given project type
+// relToRoot returns file's path relative to the detector's root. Files come from
+// a walk rooted there, so they are absolute, cleaned and under it — a slice of
+// the existing string, rather than filepath.Rel's split-and-rejoin and the fresh
+// string it allocates for every file for every project type.
+//
+// It reports false for a path outside the root, which is the case the Rel-based
+// version signalled with an error and skipped.
+func (d *Detector) relToRoot(file string) (string, bool) {
+	root := d.rootPath
+	if root != "" && len(file) > len(root)+1 &&
+		strings.HasPrefix(file, root) && file[len(root)] == filepath.Separator {
+		return file[len(root)+1:], true
+	}
+	rel, err := filepath.Rel(root, file)
+	if err != nil {
+		return "", false
+	}
+	return rel, true
+}
+
+// matchesType checks if any marker file exists for the given project type.
+// Single-type callers (IsType) walk once here; DetectAll walks once for all
+// types and matches through matchesTypeInFiles instead.
 func (d *Detector) matchesType(ctx context.Context, ptype config.ProjectType) bool {
 	// Get all files respecting .gitignore
 	files, err := traverser.FindFiles(ctx, d.rootPath)
 	if err != nil {
 		return false
 	}
-
-	// Check each file against marker patterns
-	for _, file := range files {
-		relPath, err := filepath.Rel(d.rootPath, file)
-		if err != nil {
-			continue
-		}
-
-		for _, marker := range ptype.Markers {
-			matched, err := doublestar.Match(marker, relPath)
-			if err != nil {
-				continue
-			}
-			if matched {
-				return true
-			}
-		}
-	}
-	return false
+	return matchesTypeInFiles(d, globmatch.New(ptype.Markers), files)
 }

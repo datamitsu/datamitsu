@@ -6,9 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	clr "github.com/datamitsu/datamitsu/internal/color"
+	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/facts"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/ocibundle"
@@ -16,6 +19,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"github.com/datamitsu/datamitsu/internal/sponsor"
 	"github.com/datamitsu/datamitsu/internal/term"
+	"github.com/datamitsu/datamitsu/internal/trace"
 	"github.com/datamitsu/datamitsu/internal/ui"
 	"github.com/datamitsu/datamitsu/internal/uievent"
 
@@ -80,6 +84,11 @@ func init() {
 		if verbose {
 			logger.SetLevel(zapcore.DebugLevel)
 		}
+		// Enabled here rather than in an init() so the command path is known and
+		// lands in the trace file name. Everything before this point (package
+		// init, flag parsing) is outside the trace by construction; it is also
+		// the part that no longer costs anything measurable.
+		trace.Init(env.IsTraceEnabled(), tracedCommandPath())
 		if err := runtimeconfig.Init(); err != nil {
 			fmt.Fprintf(os.Stderr, "%s %s\n", clr.Red("error:"), err)
 			os.Exit(1)
@@ -134,6 +143,68 @@ func resolveLogFormat() string {
 	return "console"
 }
 
+// tracedCommandPath returns the command being run, for the trace file name.
+// cobra has not resolved the command yet when OnInitialize fires, so this reads
+// argv directly and keeps only the leading non-flag words ("config runtime",
+// "lint"), which is exactly the identity a directory of traces needs.
+func tracedCommandPath() string {
+	var parts []string
+	for _, a := range os.Args[1:] {
+		if strings.HasPrefix(a, "-") {
+			break
+		}
+		parts = append(parts, a)
+		if len(parts) == 2 {
+			break
+		}
+	}
+	return strings.Join(parts, "-")
+}
+
+// flushTrace writes the execution trace. It is called on every exit path
+// including the error paths, which os.Exit out of Execute — a trace that only
+// exists for successful runs would be missing exactly the runs worth studying.
+// Flush is idempotent, so the duplicate call on the success path is free.
+func flushTrace() {
+	if !trace.Enabled() {
+		return
+	}
+	trace.Flush(trace.FlushOptions{
+		Dir:     env.GetTracePath(),
+		Slug:    traceSlug(),
+		Summary: os.Stderr,
+		Meta: map[string]string{
+			"command": strings.Join(os.Args[1:], " "),
+			"version": ldflags.Version,
+			"cwd":     tracedCwd(),
+		},
+	})
+}
+
+// traceSlug names the repository in the trace file name. The git root is already
+// memoized and resolved without forking git, so asking for it here costs a map
+// lookup on any command that loaded config, and one filesystem walk on the few
+// that did not.
+func traceSlug() string {
+	cwd := tracedCwd()
+	root, err := facts.GetGitRoot(context.Background())
+	if err == nil && root != "" {
+		return filepath.Base(root)
+	}
+	if cwd != "" {
+		return filepath.Base(cwd)
+	}
+	return ""
+}
+
+func tracedCwd() string {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+	return cwd
+}
+
 // Execute runs the root command and exits the process on error.
 func Execute() {
 	clr.Init()
@@ -151,6 +222,10 @@ func Execute() {
 
 	disp.Close()
 	restore()
+
+	// After the display is torn down so the summary is not overwritten by a
+	// progress container repaint, and before any os.Exit below.
+	flushTrace()
 
 	if err != nil {
 		// A tool failing and a run that did not cover what it was asked to cover

@@ -53,6 +53,15 @@ export default defineConfig((config) => ({
     "tinyjson",
     "fract",
     "outputparser",
+    // The package that classifies a glob pattern once instead of re-parsing it
+    // per path, shared by the planner and project detection.
+    "globmatch",
+    // The package planned for the cross-process config-evaluation cache.
+    "configcache",
+    // The build tag that compiles internal/trace out entirely: `-tags
+    // datamitsu_notrace`. Named for what it removes, so it reads correctly in
+    // the build constraint it appears in.
+    "notrace",
     // Git's index format, read to prove a submodule registration in
     // internal/facts: "DIRC" is the file signature, a gitlink is the mode
     // 160000 entry that records a submodule; the reader lives in

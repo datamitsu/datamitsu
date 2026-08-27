@@ -8,16 +8,31 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/datamitsuignore"
+	"github.com/datamitsu/datamitsu/internal/globmatch"
 	"github.com/datamitsu/datamitsu/internal/project"
 	"github.com/datamitsu/datamitsu/internal/timing"
+	"github.com/datamitsu/datamitsu/internal/trace"
 	"github.com/datamitsu/datamitsu/internal/traverser"
 
-	"github.com/bmatcuk/doublestar/v4"
 	"go.uber.org/zap"
-	"golang.org/x/sync/errgroup"
+)
+
+// Planning counters. These live on the per-file × per-tool path, where a span
+// per call would cost more than the work it measures, so they are counted
+// instead: an atomic increment is affordable at hundreds of thousands of calls
+// and the totals are what identify a quadratic.
+var (
+	cntGlobRel      = trace.NewCounter("plan.glob.filepath_rel_calls")
+	cntExcludeMatch = trace.NewCounter("plan.glob.exclude_match_calls")
+	cntIgnoreCheck  = trace.NewCounter("plan.ignore.file_checks")
+	cntTasks        = trace.NewCounter("plan.tasks_planned")
+	cntToolsMatched = trace.NewCounter("plan.tools_considered")
+	cntGlobMemoHit  = trace.NewCounter("plan.glob.memo_hits")
+	cntToolsIgnored = trace.NewCounter("plan.tools_disabled_everywhere")
 )
 
 // ToolNotFoundError is returned when selected tools are not found
@@ -63,8 +78,23 @@ type Planner struct {
 
 	// Cache fields for performance optimization
 	cachedFiles      []string                  // All files in repo (cached)
+	cachedRel        []string                  // cachedFiles as root-relative paths, same order
 	cachedProjects   []project.ProjectLocation // All project locations (cached)
 	cacheInitialized bool                      // Whether cache has been populated
+
+	// globCache memoizes the sweep of cachedFiles for one glob list. Guarded by
+	// its own mutex because Plan may be called from a long-lived server (the LSP)
+	// rather than only from a one-shot CLI process.
+	globCacheMu sync.Mutex
+	globCache   map[string][]string
+
+	// memberCache and guardCache memoize the two per-unit derivations that scale
+	// with the repository rather than with the unit: the members of a unit
+	// directory, and the guard files on its ancestor chain. Both are pure
+	// functions of the directory within one run.
+	unitCacheMu sync.Mutex
+	memberCache map[string][]string
+	guardCache  map[string][]string
 
 	// .datamitsuignore matcher for disabling tools per file
 	ignoreMatcher *datamitsuignore.Matcher
@@ -142,6 +172,9 @@ func (p *Planner) GetDetectedProjectTypes() []string {
 
 // Plan creates an execution plan for the given operation and files
 func (p *Planner) Plan(ctx context.Context, operation config.OperationType, sel Selection, selectedTools []string) (*ExecutionPlan, error) {
+	planSpan := trace.Start(trace.CatPlan, "Plan")
+	defer planSpan.EndWith(trace.A("operation", string(operation)))
+
 	// Initialize cache once before planning
 	if err := p.initializeCache(ctx); err != nil {
 		return nil, fmt.Errorf("failed to initialize cache: %w", err)
@@ -152,7 +185,13 @@ func (p *Planner) Plan(ctx context.Context, operation config.OperationType, sel 
 	var skipped []SkippedTool
 	func() {
 		defer p.timings.Start("Collect tasks")()
+		collectSpan := trace.Start(trace.CatPlan, "collectTasks")
 		tasks, skipped = p.collectTasks(ctx, operation, sel)
+		collectSpan.EndWith(
+			trace.A("tools", len(p.tools)),
+			trace.A("files", len(p.cachedFiles)),
+			trace.A("tasks", len(tasks)),
+		)
 	}()
 
 	// Filter by selectedTools if specified
@@ -213,6 +252,29 @@ func (p *Planner) collectTasks(ctx context.Context, operation config.OperationTy
 		if !hasOp {
 			continue
 		}
+
+		// A tool .datamitsuignore disables across the whole tree, with nothing
+		// able to re-enable it, cannot produce a task: every scope below filters
+		// its matches through the same matcher and ends up with an empty set, so
+		// the plan is identical either way. Dropping it here skips a full glob
+		// sweep of the repository per such tool — the opt-in model means most of
+		// the configured tools are in exactly this state.
+		if p.ignoreMatcher != nil && p.ignoreMatcher.DisabledEverywhere(toolName) {
+			cntToolsIgnored.Add(1)
+			continue
+		}
+
+		// Opened past the two cheap rejections, so the span covers the glob
+		// sweep this tool is about to pay for and nothing else. One span per
+		// tool — never per file — keeps the instrument off the hot loop.
+		//
+		// Ended at the bottom of the switch. An iteration that `continue`s out
+		// of a skip branch records no span, which is deliberate: those branches
+		// exit before any matching work (or, for narrowedAway, after work that
+		// produced no task), and a Span that is never ended records nothing.
+		cntToolsMatched.Add(1)
+		toolSpan := trace.Start(trace.CatPlan, "collectTool")
+		tasksBefore := len(tasks)
 
 		// Explicit config skip: report it, never plan it. Checked after
 		// applicability/operation so a skip:true tool irrelevant to this repo or
@@ -359,8 +421,16 @@ func (p *Planner) collectTasks(ctx context.Context, operation config.OperationTy
 				tasks = append(tasks, unitTasks...)
 			}
 		}
+
+		toolSpan.EndWith(
+			trace.A("tool", toolName),
+			trace.A("scope", string(opConfig.Scope)),
+			trace.A("globs", len(opConfig.Globs)),
+			trace.A("tasks", len(tasks)-tasksBefore),
+		)
 	}
 
+	cntTasks.Add(int64(len(tasks)))
 	return tasks, skipped
 }
 
@@ -372,6 +442,9 @@ func (p *Planner) matchFiles(ctx context.Context, sel Selection, op config.ToolO
 	if len(op.Globs) == 0 {
 		return nil
 	}
+	matchSpan := trace.Start(trace.CatPlan, "matchFiles")
+	defer func() { matchSpan.EndWith(trace.A("globs", len(op.Globs))) }()
+
 	var matched []string
 	if named := sel.Files(); len(named) > 0 {
 		matched = p.filterFilesByGlobs(named, op.Globs)
@@ -416,6 +489,8 @@ func (p *Planner) isUnderCwd(path string) bool {
 // the named file and report nothing: cwd is where you happen to stand, but a
 // path on the command line is a decision.
 func (p *Planner) selectionFilterToCwd(sel Selection, files []string) []string {
+	defer trace.Start(trace.CatPlan, "selectionFilterToCwd").EndWith(trace.A("files", len(files)))
+
 	if sel.Mode == SelectionPaths {
 		return files
 	}
@@ -559,11 +634,8 @@ func (p *Planner) isToolDisabledForFile(toolName string, absFilePath string) boo
 	if p.ignoreMatcher == nil {
 		return false
 	}
-	relPath, err := filepath.Rel(p.rootPath, absFilePath)
-	if err != nil {
-		return false
-	}
-	return p.ignoreMatcher.IsDisabled(toolName, relPath)
+	cntIgnoreCheck.Add(1)
+	return p.ignoreMatcher.IsDisabled(toolName, p.relToRoot(absFilePath))
 }
 
 // filterFilesByIgnore drops files for which the tool is disabled by a
@@ -574,6 +646,9 @@ func (p *Planner) filterFilesByIgnore(toolName string, files []string) []string 
 	if p.ignoreMatcher == nil {
 		return files
 	}
+	defer trace.Start(trace.CatPlan, "filterFilesByIgnore").EndWith(
+		trace.A("tool", toolName), trace.A("files", len(files)))
+
 	out := make([]string, 0, len(files))
 	for _, f := range files {
 		if !p.isToolDisabledForFile(toolName, f) {
@@ -697,6 +772,9 @@ func (p *Planner) filterTasksBySelectedTools(tasks []Task, selectedTools []strin
 // Each file belongs to its NEAREST parent project (not all ancestor projects)
 // This ensures files are processed exactly once
 func (p *Planner) groupFilesByProject(files []string, projectLocations []project.ProjectLocation) map[string][]string {
+	defer trace.Start(trace.CatPlan, "groupFilesByProject").EndWith(
+		trace.A("files", len(files)), trace.A("projects", len(projectLocations)))
+
 	result := make(map[string][]string)
 
 	// Sort projects by path length (longest first)
@@ -712,14 +790,17 @@ func (p *Planner) groupFilesByProject(files []string, projectLocations []project
 		var belongsTo string
 
 		for _, loc := range sortedProjects {
-			// Check if file is under this project directory
-			relPath, err := filepath.Rel(loc.Path, file)
-			if err != nil {
-				continue
-			}
-
-			// File is under this project if relPath doesn't escape via parent traversal
-			if relPath != ".." && !strings.HasPrefix(relPath, ".."+string(filepath.Separator)) && relPath != "." {
+			// Check if file is under this project directory.
+			//
+			// A prefix test, not filepath.Rel: this is the innermost loop of
+			// planning — every matched file against every detected project, for
+			// every per-project tool — and Rel splits both paths, walks their
+			// components and builds a new string only for the caller to throw
+			// away. Both sides are absolute and cleaned (the walk produces the
+			// files, the detector the locations), so "under" is exactly "starts
+			// with the directory plus a separator", which also excludes the
+			// directory itself — the case the old `relPath != "."` guard covered.
+			if isStrictlyUnder(loc.Path, file) {
 				// This is the nearest parent (because we sorted by depth)
 				belongsTo = loc.Path
 				break
@@ -737,9 +818,21 @@ func (p *Planner) groupFilesByProject(files []string, projectLocations []project
 	return result
 }
 
+// isStrictlyUnder reports whether path lies inside dir, excluding dir itself.
+// Both must be absolute and cleaned.
+func isStrictlyUnder(dir, path string) bool {
+	if len(path) <= len(dir)+1 {
+		return false
+	}
+	return path[len(dir)] == filepath.Separator && strings.HasPrefix(path, dir)
+}
+
 // createPerProjectTasksWithFiles creates tasks per project, grouping files by project
 // Now uses cached project locations instead of detecting every time
 func (p *Planner) createPerProjectTasksWithFiles(ctx context.Context, baseTask Task, files []string) []Task {
+	defer trace.Start(trace.CatPlan, "createPerProjectTasks").EndWith(
+		trace.A("tool", baseTask.ToolName), trace.A("files", len(files)))
+
 	// Use cached projects instead of detecting again
 	var locations []project.ProjectLocation
 
@@ -812,16 +905,24 @@ func (p *Planner) createPerProjectTasksWithFiles(ctx context.Context, baseTask T
 	// Group files by project
 	filesByProject := p.groupFilesByProject(files, filteredLocations)
 
-	// Create deduplicated list of project paths
-	seenPaths := make(map[string]bool)
+	// Create deduplicated list of project paths.
+	//
+	// Iterated in sorted order, not map order: the task list becomes the
+	// execution plan, and Go randomizes map iteration, so the same repository
+	// produced a differently-ordered plan on every run. That made
+	// `--explain=json` impossible to diff between two runs and the execution
+	// order arbitrary. A map cannot have duplicate keys, so the sort also
+	// subsumes the seenPaths guard it replaced.
+	projectPaths := make([]string, 0, len(filesByProject))
+	for projectPath := range filesByProject {
+		projectPaths = append(projectPaths, projectPath)
+	}
+	sort.Strings(projectPaths)
+
 	var tasks []Task
 
-	for projectPath, projectFiles := range filesByProject {
-		if seenPaths[projectPath] {
-			continue
-		}
-		seenPaths[projectPath] = true
-
+	for _, projectPath := range projectPaths {
+		projectFiles := filesByProject[projectPath]
 		if len(projectFiles) == 0 {
 			continue
 		}
@@ -859,8 +960,18 @@ func (p *Planner) createPerProjectTasksWithFiles(ctx context.Context, baseTask T
 	return tasks
 }
 
-// findFilesByGlobs finds all files in the repository matching the given glob patterns
-// Now uses cached file list instead of scanning every time
+// globCacheKey joins a glob list into a memo key. The separator cannot occur in
+// a path pattern, so distinct lists cannot collide.
+func globCacheKey(globs []string) string {
+	return strings.Join(globs, "\x00")
+}
+
+// findFilesByGlobs finds all files in the repository matching the given glob patterns.
+//
+// The sweep over the cached file list is memoized per glob list: tools routinely
+// declare the same patterns (`**/*.ts`, `**/*.json`), and lint and fix of one
+// tool almost always share them, so without the memo the same list is swept over
+// every file in the repository once per tool per operation.
 func (p *Planner) findFilesByGlobs(ctx context.Context, globs []string) []string {
 	// Use cached files instead of scanning again
 	if !p.cacheInitialized {
@@ -872,31 +983,95 @@ func (p *Planner) findFilesByGlobs(ctx context.Context, globs []string) []string
 		return p.filterFilesByGlobs(allFiles, globs)
 	}
 
-	// Filter cached files by globs
-	return p.filterFilesByGlobs(p.cachedFiles, globs)
+	key := globCacheKey(globs)
+	p.globCacheMu.Lock()
+	cached, hit := p.globCache[key]
+	p.globCacheMu.Unlock()
+	if hit {
+		cntGlobMemoHit.Add(1)
+		return cached
+	}
+
+	matched := p.matchRelIndexed(p.cachedFiles, p.relCache(), globmatch.New(globs))
+
+	p.globCacheMu.Lock()
+	if p.globCache == nil {
+		p.globCache = make(map[string][]string)
+	}
+	p.globCache[key] = matched
+	p.globCacheMu.Unlock()
+	return matched
 }
 
-// filterFilesByGlobs filters files that match any of the given glob patterns
-func (p *Planner) filterFilesByGlobs(files []string, globs []string) []string {
+// relCache returns cachedFiles as root-relative paths, deriving them if they are
+// missing or out of step with cachedFiles.
+//
+// initializeCache fills this alongside the walk; the lazy rebuild covers callers
+// that set cachedFiles directly (tests, and any future path that populates the
+// planner from an existing file list) so a stale pairing can never index out of
+// range or, worse, match the wrong file.
+func (p *Planner) relCache() []string {
+	if len(p.cachedRel) == len(p.cachedFiles) {
+		return p.cachedRel
+	}
+	rel := make([]string, len(p.cachedFiles))
+	for i, f := range p.cachedFiles {
+		rel[i] = p.relToRoot(f)
+	}
+	p.cachedRel = rel
+	return rel
+}
+
+// matchRelIndexed filters files using rel[i] as file[i]'s root-relative path.
+// The caller owns the pairing; rel must be the same length as files.
+func (p *Planner) matchRelIndexed(files, rel []string, set globmatch.Set) []string {
 	var matched []string
-
-	for _, file := range files {
-		// Make path relative to root for glob matching
-		relPath, err := filepath.Rel(p.rootPath, file)
-		if err != nil {
-			relPath = file
+	for i, file := range files {
+		if set.Match(rel[i]) {
+			matched = append(matched, file)
 		}
+	}
+	return matched
+}
 
-		for _, glob := range globs {
-			match, err := doublestar.Match(glob, relPath)
-			if err == nil && match {
-				matched = append(matched, file)
-				break
-			}
+// filterFilesByGlobs filters files that match any of the given glob patterns.
+// Used where the candidate list is not the cached repository walk (named paths
+// on the command line, a unit's members), so relative paths are derived here.
+func (p *Planner) filterFilesByGlobs(files []string, globs []string) []string {
+	set := globmatch.New(globs)
+
+	var matched []string
+	for _, file := range files {
+		if set.Match(p.relToRoot(file)) {
+			matched = append(matched, file)
 		}
 	}
 
 	return matched
+}
+
+// relToRoot returns file's path relative to the repository root. Files from the
+// cached walk are absolute, clean and already under the root, so the common case
+// is a slice of the existing string rather than filepath.Rel's split-and-rejoin
+// — which allocated a fresh string per file per tool.
+//
+// The prefix test is deliberately spelled out rather than a HasPrefix on a
+// precomputed `root + separator`: a Planner built as a struct literal (several
+// tests do) would have that field empty, HasPrefix would be trivially true, and
+// every path would come back absolute — matching nothing. Deriving it from
+// rootPath here cannot get out of step with it.
+func (p *Planner) relToRoot(file string) string {
+	root := p.rootPath
+	if root != "" && len(file) > len(root)+1 &&
+		strings.HasPrefix(file, root) && file[len(root)] == filepath.Separator {
+		return file[len(root)+1:]
+	}
+	cntGlobRel.Add(1)
+	rel, err := filepath.Rel(root, file)
+	if err != nil {
+		return file
+	}
+	return rel
 }
 
 // excludeFilesByGlobs removes files matching any of the given exclude glob patterns.
@@ -906,22 +1081,11 @@ func (p *Planner) excludeFilesByGlobs(files []string, excludeGlobs []string) []s
 		return files
 	}
 
+	set := globmatch.New(excludeGlobs)
 	kept := make([]string, 0, len(files))
 	for _, file := range files {
-		relPath, err := filepath.Rel(p.rootPath, file)
-		if err != nil {
-			relPath = file
-		}
-
-		excluded := false
-		for _, glob := range excludeGlobs {
-			match, err := doublestar.Match(glob, relPath)
-			if err == nil && match {
-				excluded = true
-				break
-			}
-		}
-		if !excluded {
+		cntExcludeMatch.Add(1)
+		if !set.Match(p.relToRoot(file)) {
 			kept = append(kept, file)
 		}
 	}
@@ -965,8 +1129,8 @@ func globsOverlap(globs1, globs2 []string) bool {
 		return true
 	}
 
-	exts1 := extractGlobExtensions(globs1)
-	exts2 := extractGlobExtensions(globs2)
+	exts1 := globmatch.ExtensionsAll(globs1)
+	exts2 := globmatch.ExtensionsAll(globs2)
 
 	// If we couldn't extract extensions from all patterns, assume overlap
 	if exts1 == nil || exts2 == nil {
@@ -983,71 +1147,6 @@ func globsOverlap(globs1, globs2 []string) bool {
 	return false
 }
 
-// extractGlobExtensions extracts file extensions from glob patterns.
-// Returns nil if any pattern cannot be reduced to a set of extensions
-// (e.g., patterns without extensions like "Makefile" or "src/**").
-func extractGlobExtensions(globs []string) map[string]bool {
-	exts := make(map[string]bool)
-	for _, g := range globs {
-		patternExts := parseGlobExtensions(g)
-		if patternExts == nil {
-			return nil
-		}
-		for _, ext := range patternExts {
-			exts[ext] = true
-		}
-	}
-	return exts
-}
-
-// parseGlobExtensions extracts file extensions from a single glob pattern.
-// Handles patterns like "*.go", "**/*.{ts,tsx}", "**/*.js".
-// Returns nil if the pattern cannot be reduced to extensions.
-func parseGlobExtensions(pattern string) []string {
-	// Find the last segment after the final path separator
-	lastSlash := -1
-	for i := len(pattern) - 1; i >= 0; i-- {
-		if pattern[i] == '/' {
-			lastSlash = i
-			break
-		}
-	}
-	filename := pattern[lastSlash+1:]
-
-	// Must start with "*." to be an extension pattern
-	if len(filename) < 3 || filename[0] != '*' || filename[1] != '.' {
-		return nil
-	}
-	extPart := filename[2:]
-
-	// Handle brace expansion like {ts,tsx,js}
-	if len(extPart) > 2 && extPart[0] == '{' && extPart[len(extPart)-1] == '}' {
-		inner := extPart[1 : len(extPart)-1]
-		var exts []string
-		start := 0
-		for i := 0; i <= len(inner); i++ {
-			if i == len(inner) || inner[i] == ',' {
-				ext := inner[start:i]
-				if ext == "" {
-					return nil
-				}
-				exts = append(exts, "."+ext)
-				start = i + 1
-			}
-		}
-		return exts
-	}
-
-	// Reject extensions containing wildcards or braces
-	for _, c := range extPart {
-		if c == '*' || c == '?' || c == '{' || c == '}' || c == '[' {
-			return nil
-		}
-	}
-
-	return []string{"." + extPart}
-}
-
 // initializeCache performs expensive one-time operations:
 // - Scans all files in repository (respecting .gitignore)
 // - Detects all project locations
@@ -1057,47 +1156,69 @@ func (p *Planner) initializeCache(ctx context.Context) error {
 		return nil
 	}
 
-	// Track timing with children for parallel operations
+	// One parent stage with a child per step, so the timing table keeps the
+	// shape callers already read.
 	cacheTimings := p.timings.StartWithChildren("Cache initialization")
 	defer cacheTimings.End()
 
 	// Create detector once
 	detector := project.NewDetector(p.rootPath, p.projectTypesConfig)
 
-	// Use errgroup for parallel execution
-	g, gctx := errgroup.WithContext(ctx)
+	initSpan := trace.Start(trace.CatPlan, "initializeCache")
+	defer func() {
+		initSpan.EndWith(
+			trace.A("files", len(p.cachedFiles)),
+			trace.A("projects", len(p.cachedProjects)),
+		)
+	}()
 
-	// Goroutine 1: Scan all files
-	g.Go(func() error {
+	// Walk first, then detect from the result.
+	//
+	// These used to run concurrently, which hid the fact that they were two
+	// separate gitignore-aware walks of the same tree producing the same file
+	// list. Concurrency made the wall time the max of the two rather than the
+	// sum, but the second walk's IO and CPU were pure duplication — and on a cold
+	// page cache, or a repository large enough that the walk is not free, the two
+	// contend rather than overlap. Detection already has an entry point that
+	// takes a precomputed file list; config loading has used it for the same
+	// reason.
+	var walkErr error
+	func() {
 		defer cacheTimings.StartChild("Scan files")()
-		files, err := traverser.FindFilesFromPath(gctx, p.rootPath, p.rootPath)
+		scanSpan := trace.Start(trace.CatWalk, "scanFiles")
+		files, err := traverser.FindFilesFromPath(ctx, p.rootPath, p.rootPath)
+		scanSpan.EndWith(trace.A("files", len(files)))
 		if err != nil {
-			return fmt.Errorf("failed to scan files: %w", err)
+			walkErr = fmt.Errorf("failed to scan files: %w", err)
+			return
 		}
 		p.cachedFiles = files
-		return nil
-	})
-
-	// Goroutine 2: Detect all projects
-	g.Go(func() error {
-		defer cacheTimings.StartChild("Detect projects")()
-		locations, err := detector.DetectAllWithLocations(gctx)
-		if err != nil {
-			return fmt.Errorf("failed to detect projects: %w", err)
+		// Derived once here rather than per file per tool. Glob matching and the
+		// .datamitsuignore probe both need the root-relative form, and computing
+		// it in those loops was hundreds of thousands of filepath.Rel calls —
+		// each one a split, a join and a fresh string — for a value that never
+		// changes within a run.
+		p.cachedRel = make([]string, len(files))
+		for i, f := range files {
+			p.cachedRel[i] = p.relToRoot(f)
 		}
-		p.cachedProjects = locations
-		return nil
-	})
-
-	// Wait for both to complete
-	if err := g.Wait(); err != nil {
-		return fmt.Errorf("failed to initialize cache: %w", err)
+	}()
+	if walkErr != nil {
+		return walkErr
 	}
+
+	func() {
+		defer cacheTimings.StartChild("Detect projects")()
+		detectSpan := trace.Start(trace.CatWalk, "detectProjects")
+		p.cachedProjects = detector.DetectAllWithLocationsFromFiles(p.cachedFiles)
+		detectSpan.EndWith(trace.A("projects", len(p.cachedProjects)))
+	}()
 
 	// Build .datamitsuignore matcher from scanned files
 	var ignoreErr error
 	func() {
 		defer cacheTimings.StartChild("Build datamitsuignore matcher")()
+		defer trace.Start(trace.CatPlan, "buildIgnoreMatcher").End()
 		p.ignoreMatcher, ignoreErr = p.buildIgnoreMatcher()
 	}()
 	if ignoreErr != nil {
