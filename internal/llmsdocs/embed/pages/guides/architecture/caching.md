@@ -120,9 +120,14 @@ This is necessary because the fixer's changes might introduce new lint issues. F
 
 ## Unit Verdicts and the Content-Hash Memo
 
-Per-file tracking answers "has this file changed?". A tool with `granularity: "per-project"` asks a
-coarser question: "has anything in this unit changed?" — and the answer is a **verdict**, keyed by a
-hash over every member of the unit plus every `invalidateOn` guard.
+Per-file tracking answers "has this file changed?". A tool whose `granularity` is `unit` — the value
+inferred for every `scope: "per-project"` operation — asks a coarser question: "has anything in this
+unit changed?" — and the answer is a **verdict**, keyed by a hash over every member of the unit plus
+every guard: the ancestor configs and lock files the unit inherits, any config path the operation's
+`args` name, and its `invalidateOn` entries resolved against the unit and each ancestor.
+
+A `repo`-granularity operation gets a verdict too, but only when it opts in with `cache: true`.
+`file` granularity and an explicit `cache: false` never produce one.
 
 Computing that key means reading and hashing the files of the unit. The cost is real: a package with
 three thousand files is hashed once per per-project tool planning a task there, four to six times per
@@ -130,24 +135,42 @@ run in a typical monorepo, even though the content of a file does not depend on 
 
 ### The memo
 
-datamitsu keeps a **process-scoped content-hash memo** — a `path -> (hash, size, modification time)`
-map, shared by every task of one run and safe under the executor's worker pool. The first tool to
-need a file reads and hashes it; every later tool over the same file gets the hash back without
-touching the disk.
+datamitsu keeps a **process-scoped content-hash memo** — a
+`path -> (hash, size, modification time, inode identity)` map, shared by every task of a run and safe
+under the executor's worker pool. The first tool to need a file reads and hashes it; every later
+tool over the same file gets the hash back without touching the disk.
+
+The scope is the _process_, not the run: a one-shot CLI invocation discards the memo when it exits,
+while a long-lived `datamitsu lsp` server keeps it across every run it serves. Entries are never
+expired on a timer — they are revalidated by `stat` on each use, and a `stat` that cannot clear an
+entry is simply a miss. The map is capped so a session-long process cannot grow it without bound;
+on reaching the cap it is dropped whole, which costs a re-read and nothing else.
 
 This is a cache of a pure function (bytes → XXH3-128) behind a **validity check**, not an assumption
 that files hold still. An entry is only handed out when all of the following are true:
 
-| Condition                                               | What it rules out                                           |
-| ------------------------------------------------------- | ----------------------------------------------------------- |
-| A fresh `stat` succeeds and reports the same **size**   | A rewrite that changed the file's length                    |
-| ...and the same **modification time**                   | Any write the filesystem recorded                           |
-| ...and that mtime is at least **2 seconds** in the past | A rewrite inside the current mtime tick, at the same length |
+| Condition                                                                      | What it rules out                                                                      |
+| ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| A fresh `stat` succeeds and reports the same **size**                          | A rewrite that changed the file's length                                               |
+| ...and the same **modification time**                                          | Any write the filesystem recorded                                                      |
+| ...and the same **inode number and inode-change time**, both actually reported | A same-length rewrite that restored the original mtime (`rsync -a`, `cp -p`, `tar -x`) |
+| ...and that mtime was already **2 seconds** old when the bytes were read       | A rewrite inside the mtime tick the read landed in, at the same length                 |
 
-The third condition is the subtle one. Filesystem mtime granularity is coarse — FAT's tick is two
-seconds — so a file written, hashed, and rewritten within one tick can present an identical `stat`
-while holding different bytes. An entry younger than that granularity is therefore never trusted;
-the file is re-read. Every uncertain answer is a miss, and a miss only ever costs a read.
+The third condition exists because size and mtime are both restorable: anything that calls
+`utimes` can rewrite a file to the same length and put the timestamp back, and a `(size, mtime)`
+comparison sees nothing. The inode-change time is not restorable — the write moves it, and the call
+that restores the mtime moves it again. The check is only sound when the platform actually reports a
+change time, so an **unknown** identity is treated as proving nothing rather than falling back to
+`(size, mtime)`: the entry is a miss and the bytes are re-read. Windows is that platform — no change
+time is reachable from a path-only stat, so the memo never hits there and every file is hashed as it
+was before the memo existed.
+
+The fourth condition is the subtle one, and it is anchored to the **read**, not to the lookup.
+Filesystem mtime granularity is coarse — FAT's tick is two seconds — so a file written, hashed, and
+rewritten within one tick can present an identical `stat` while holding different bytes. Waiting
+does not repair such an entry: the ambiguous write it cannot rule out already happened, and no later
+`stat` can see it. An entry taken inside its own tick is therefore never handed out at all, however
+long it sits in the map. Every uncertain answer is a miss, and a miss only ever costs a read.
 
 ### The post-run probe bypasses the memo
 
@@ -166,27 +189,45 @@ mtime granularity is exactly the case that bites — so `fix` keeps the **full r
 pass rather than the stat-based probe a read-only `lint` uses, and neither pass reads through the
 memo.
 
+A `fix` pass does, however, **write** what it read back into the memo, replacing the pre-fix entries
+for those paths. Reading past the memo answers the question honestly; overwriting keeps the answer
+honest for everyone downstream. `datamitsu check` runs `fix` and then `lint` in one process, so
+entries a fixer has just disproved would otherwise still be there for the next task to be handed —
+and they describe bytes that no longer exist.
+
 ```mermaid
 graph TD
-    P["Pre-run: hash unit inputs"] -->|"reads through memo"| M[("Content-hash memopath → hash, size, mtime")]
+    P["Pre-run: hash unit inputs"] -->|"reads through memo"| M[("Content-hash memopath → hash, size, mtime, inode identity")]
     P --> R["Run tool"]
     R --> Q{"Operation?"}
-    Q -->|"lint (read-only)"| S["Re-stat every path,re-hash only what moved"]
+    Q -->|"lint (read-only)"| S["Re-stat every path,re-hash all a stat cannot clear"]
     Q -->|"fix"| F["Full re-hash"]
     S -->|"bypasses memo"| D{"Inputs unchanged?"}
-    F -->|"bypasses memo"| D
+    F -->|"bypasses memo on read,overwrites its entries"| G{"Inputs unchanged?"}
+    F -.->|"replaces stale entries"| M
     D -->|"Yes"| W["Record verdict"]
     D -->|"No"| N["Record nothing"]
+    G -->|"Yes"| W
+    G -->|"No — expected,the fixer wrote them"| V["Record verdictover the produced state"]
 
     style M fill:#e8f4fd,stroke:#2196f3
     style W fill:#e8f5e9,stroke:#4caf50
+    style V fill:#e8f5e9,stroke:#4caf50
     style N fill:#ffebee,stroke:#f44336
 ```
 
-The read-only probe re-stats every member and guard and re-hashes only the paths whose size or mtime
-changed since the pre-run pass. A path that cannot be stat'ed, one that was missing and now exists,
-or one modified inside the current tick falls back to a full re-hash — never to assuming it was
-unchanged.
+The read-only probe re-stats every member and guard and re-hashes every path a stat cannot prove
+identical: one whose size, mtime, inode number or inode-change time moved, one that cannot be
+stat'ed, one that was missing and now exists, one modified inside the current tick, and — on a
+platform that reports no change time — every path, unconditionally. It never falls back to assuming
+a path was unchanged.
+
+The two operations then read the same answer differently. For a read-only `lint`, a mismatch means
+the inputs moved underneath a tool that could not have moved them, so the pass describes a state that
+no longer exists and nothing is recorded. For `fix`, a mismatch is the expected outcome — rewriting
+those files is the job — so the verdict is recorded against the state the fixer **produced**, not the
+one it started from. A `fix` also drops the matching `lint` verdict for that unit, which the rewrite
+has just made unsound.
 
 ## Cache Invalidation Best Practices
 

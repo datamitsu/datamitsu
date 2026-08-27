@@ -1,8 +1,6 @@
 package tooling
 
 import (
-	"errors"
-	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -103,7 +101,8 @@ type pathState struct {
 	entry string // "<relpath>\x00<hash>"
 	size  int64
 	mod   time.Time
-	read  bool // the file was opened and hashed; false means the sentinel
+	ident fileIdent // the part of the stat a writer cannot restore
+	read  bool      // the file was opened and hashed; false means the sentinel
 }
 
 // verdictSnapshot is the pre-run input vector plus everything needed to decide,
@@ -139,10 +138,12 @@ const mtimeGranularity = 2 * time.Second
 // to notice a change, never to explain it.
 //
 // It reads every path itself. This is the second pass an OpFix run pays for, so
-// it deliberately bypasses the content memo: a fixer rewrites the files it just
-// read, which is exactly the write a stat-validated memo cannot see.
+// it deliberately does not *consult* the content memo: a fixer rewrites the
+// files it just read, which is exactly the write a stat-validated memo cannot
+// see. It does overwrite what it finds there — the pre-fix hashes are precisely
+// the entries a later task in the same process must not be handed.
 func verdictInputs(members, guards []string, root string) string {
-	snap, _ := verdictSnapshotWith(members, guards, root, nil)
+	snap, _ := verdictSnapshotMode(members, guards, root, contentMemo, memoRewrite)
 	return snap.inputs
 }
 
@@ -151,15 +152,15 @@ func verdictInputs(members, guards []string, root string) string {
 // than a whole second read of the unit. It is the pre-run pass, so it shares the
 // process-scoped content memo with every other task of the run.
 func verdictSnapshotOf(members, guards []string, root string) (*verdictSnapshot, int64) {
-	return verdictSnapshotWith(members, guards, root, contentMemo)
+	return verdictSnapshotMode(members, guards, root, contentMemo, memoShared)
 }
 
-// verdictSnapshotWith is verdictSnapshotOf against an explicit memo; a nil memo
-// reads every path.
-func verdictSnapshotWith(members, guards []string, root string, memo *hashMemo) (*verdictSnapshot, int64) {
+// verdictSnapshotMode is verdictSnapshotOf against an explicit memo and memo
+// mode; a nil memo reads every path.
+func verdictSnapshotMode(members, guards []string, root string, memo *hashMemo, mode memoMode) (*verdictSnapshot, int64) {
 	snap := &verdictSnapshot{root: root, taken: time.Now()}
-	memberStates, memberBytes := hashedStates(members, root, memo)
-	guardStates, guardBytes := hashedStates(guards, root, memo)
+	memberStates, memberBytes := hashedStates(members, root, memo, mode)
+	guardStates, guardBytes := hashedStates(guards, root, memo, mode)
 	snap.members, snap.guards = memberStates, guardStates
 	snap.inputs = hashStates(memberStates, guardStates)
 
@@ -189,7 +190,7 @@ func (s *verdictSnapshot) refreshStates(prev []pathState) ([]pathState, int64) {
 		}
 		// nil memo: this is the check that the pre-run pass moved, and answering
 		// it from the memo that pass filled would compare a value against itself.
-		fresh, n := hashedState(st.path, s.root, nil)
+		fresh, n := hashedState(st.path, s.root, nil, memoShared)
 		out[i], bytesRead = fresh, bytesRead+n
 	}
 	return out, bytesRead
@@ -209,6 +210,16 @@ func (s *verdictSnapshot) settled(st pathState) bool {
 		return false
 	}
 	if fi.Size() != st.size || !fi.ModTime().Equal(st.mod) {
+		return false
+	}
+	// A rewrite that restores the original mtime — `rsync -a`, `cp -p`, an
+	// archive extraction — leaves size and mtime untouched, and no anchoring of
+	// the tick guard can see it. The inode-change time can: the write moves it
+	// and the restoring utimes call moves it again. Where the platform reports no
+	// change time (known == false) nothing here can rule that rewrite out, so the
+	// path is re-hashed rather than trusted.
+	fresh := identOf(fi)
+	if !fresh.known || fresh != st.ident {
 		return false
 	}
 	// Unchanged stat, but a file last modified within a tick of the pre-run pass
@@ -248,11 +259,11 @@ func sortedEntries(states []pathState) []string {
 
 // hashedStates reads every path in order. A missing file hashes to a sentinel,
 // so its disappearance is itself a change.
-func hashedStates(paths []string, root string, memo *hashMemo) ([]pathState, int64) {
+func hashedStates(paths []string, root string, memo *hashMemo, mode memoMode) ([]pathState, int64) {
 	out := make([]pathState, 0, len(paths))
 	var bytesRead int64
 	for _, p := range paths {
-		st, n := hashedState(p, root, memo)
+		st, n := hashedState(p, root, memo, mode)
 		out, bytesRead = append(out, st), bytesRead+n
 	}
 	return out, bytesRead
@@ -262,24 +273,31 @@ func hashedStates(paths []string, root string, memo *hashMemo) ([]pathState, int
 // produced it. The stat comes from the open handle, so it describes the bytes
 // that were actually hashed and not a later state of the path.
 //
-// With a memo, a path whose stat still matches an entry the memo took under is
-// answered without reading it; the entry's own validity check is in lookup.
-func hashedState(p, root string, memo *hashMemo) (pathState, int64) {
+// With a memo in memoShared mode, a path whose stat still matches an entry the
+// memo took under is answered without reading it; the entry's own validity check
+// is in lookup. In memoRewrite mode the bytes are always read, and what they
+// hash to replaces whatever the memo held for that path.
+func hashedState(p, root string, memo *hashMemo, mode memoMode) (pathState, int64) {
 	rel, err := filepath.Rel(root, p)
 	if err != nil {
 		rel = p
 	}
 	st := pathState{path: p, entry: filepath.ToSlash(rel) + "\x00(missing)"}
 
-	if memo != nil {
+	if memo != nil && mode == memoShared {
 		if fi, err := os.Stat(p); err == nil && !fi.IsDir() {
-			if hash, ok := memo.lookup(p, fi.Size(), fi.ModTime(), time.Now()); ok {
+			ident := identOf(fi)
+			if hash, ok := memo.lookup(p, fi.Size(), fi.ModTime(), ident); ok {
 				st.entry = filepath.ToSlash(rel) + "\x00" + hash
-				st.size, st.mod, st.read = fi.Size(), fi.ModTime(), true
+				st.size, st.mod, st.ident, st.read = fi.Size(), fi.ModTime(), ident, true
 				return st, 0
 			}
 		}
 	}
+
+	// Stamped before the read, so an entry can be compared against the tick its
+	// own bytes were taken in rather than against whenever it is looked up.
+	taken := time.Now()
 
 	f, err := os.Open(p)
 	if err != nil {
@@ -291,37 +309,17 @@ func hashedState(p, root string, memo *hashMemo) (pathState, int64) {
 	if err != nil || fi.IsDir() {
 		return st, 0
 	}
-	data, err := readAllSized(f, fi.Size())
+	// Streamed from the open handle, so the hash and the stat that guards it come
+	// from the same file description without materializing the file in memory.
+	hash, err := hashutil.XXH3Reader(f)
 	if err != nil {
 		return st, 0
 	}
-	hash := hashutil.XXH3Hex(data)
+	ident := identOf(fi)
 	st.entry = filepath.ToSlash(rel) + "\x00" + hash
-	st.size, st.mod, st.read = fi.Size(), fi.ModTime(), true
-	memo.store(p, hash, fi.Size(), fi.ModTime())
-	return st, int64(len(data))
-}
-
-// readAllSized is os.ReadFile's read loop against an already-open handle, so the
-// hash and the stat that guards it come from the same file description.
-func readAllSized(f *os.File, size int64) ([]byte, error) {
-	if size < 0 {
-		size = 0
-	}
-	data := make([]byte, 0, size+1)
-	for {
-		if len(data) == cap(data) {
-			data = append(data, 0)[:len(data)]
-		}
-		n, err := f.Read(data[len(data):cap(data)])
-		data = data[:len(data)+n]
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				err = nil
-			}
-			return data, err
-		}
-	}
+	st.size, st.mod, st.ident, st.read = fi.Size(), fi.ModTime(), ident, true
+	memo.store(p, hash, fi.Size(), fi.ModTime(), ident, taken)
+	return st, fi.Size()
 }
 
 func sortedEnv(env map[string]string) []string {
@@ -586,17 +584,11 @@ func (e *Executor) verdictTTL() time.Duration {
 	return time.Duration(eff.UnitCacheTTLMinutes) * time.Minute
 }
 
-// verdictKeys returns the cache identity and input hash for a task, and whether
-// the verdict cache applies to it at all.
-func (e *Executor) verdictKeys(task Task) (key string, snap *verdictSnapshot, ok bool) {
-	key, snap, _, ok = e.verdictKeysMeasured(task)
-	return key, snap, ok
-}
-
-// verdictKeysMeasured is verdictKeys plus the number of bytes it read, which the
-// executor attaches to the verdictKeys span so the cost of deciding to skip a
-// tool can be compared against the cost of running it.
-func (e *Executor) verdictKeysMeasured(task Task) (key string, snap *verdictSnapshot, bytesRead int64, ok bool) {
+// verdictKeys returns the cache identity and input hash for a task, whether the
+// verdict cache applies to it at all, and the number of bytes it read — which
+// the executor attaches to the verdictKeys span so the cost of deciding to skip
+// a tool can be compared against the cost of running it.
+func (e *Executor) verdictKeys(task Task) (key string, snap *verdictSnapshot, bytesRead int64, ok bool) {
 	granularity := config.InferGranularity(task.OpConfig)
 	if e.cache == nil || granularity == config.GranularityFile {
 		return "", nil, 0, false

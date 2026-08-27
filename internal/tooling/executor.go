@@ -500,7 +500,7 @@ func (e *Executor) executeTask(ctx context.Context, task Task) ExecutionResult {
 	// that passed, which is as sound for a narrowed invocation as for a full one
 	// — so the read is not gated on coverage. Only the write is.
 	verdictSpan := trace.Start(trace.CatCache, "verdictKeys")
-	verdictKey, verdictSnap, verdictBytes, verdictApplies := e.verdictKeysMeasured(task)
+	verdictKey, verdictSnap, verdictBytes, verdictApplies := e.verdictKeys(task)
 	// The lookup is a map read under a read lock, so folding it into this span
 	// keeps the recorded duration comparable while letting the hit/miss ride along
 	// with the member count and byte volume that produced it — the three numbers
@@ -514,23 +514,22 @@ func (e *Executor) executeTask(ctx context.Context, task Task) ExecutionResult {
 		trace.A("guards", len(task.UnitGuards)),
 		trace.A("bytes", verdictBytes),
 	)
-	if verdictApplies {
-		if verdictHit {
-			cntVerdictHit.Add(1)
-			log.Debug("verdict cache hit", zap.String("tool", task.ToolName), zap.String("unit", task.UnitDir))
-			// Same shape as a real run: consumers key JSON-L on RelativeDir and
-			// print the scope badge only when Scope is set, so a hit that omitted
-			// them would emit a differently-shaped event for the same task.
-			result.Success = true
-			result.WorkingDir = workingDir
-			result.RelativeDir = relativeDir
-			result.Scope = task.OpConfig.Scope
-			result.recordTiming(startTime)
-			if e.fileProgressCallback != nil {
-				e.fileProgressCallback(task.ToolName, 1, 1, true)
-			}
-			return result
+	// verdictHit already implies verdictApplies.
+	if verdictHit {
+		cntVerdictHit.Add(1)
+		log.Debug("verdict cache hit", zap.String("tool", task.ToolName), zap.String("unit", task.UnitDir))
+		// Same shape as a real run: consumers key JSON-L on RelativeDir and
+		// print the scope badge only when Scope is set, so a hit that omitted
+		// them would emit a differently-shaped event for the same task.
+		result.Success = true
+		result.WorkingDir = workingDir
+		result.RelativeDir = relativeDir
+		result.Scope = task.OpConfig.Scope
+		result.recordTiming(startTime)
+		if e.fileProgressCallback != nil {
+			e.fileProgressCallback(task.ToolName, 1, 1, true)
 		}
+		return result
 	}
 
 	// Dispatch on argv shape, not scope: only {file} takes one path, so only it

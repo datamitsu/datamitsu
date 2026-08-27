@@ -10,22 +10,42 @@ import (
 	"github.com/datamitsu/datamitsu/internal/trace"
 )
 
+// unformattedRule is the fixture's .datamitsuignore content, deliberately not in
+// canonical form: whether `fix` rewrote it is how a test tells that the hoisted
+// discovery result actually reached RunFix, rather than an empty list reaching it
+// and the walk count landing on the same number for the wrong reason.
+const (
+	unformattedRule = "*.go:golangci-lint  \n"
+	canonicalRule   = "*.go: golangci-lint\n"
+)
+
 // walkFixture is a repository with one .datamitsuignore, so bundled discovery has
 // something to find and the walk it needs is not optimized away.
-func walkFixture(t *testing.T) {
+func walkFixture(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
 	cmd := exec.Command("git", "init", "-q", root)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Skipf("git init: %v: %s", err, out)
 	}
-	if err := os.WriteFile(filepath.Join(root, ".datamitsuignore"), []byte("*.go: golangci-lint\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, ".datamitsuignore"), []byte(unformattedRule), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	t.Chdir(root)
+	return root
+}
+
+// ignoreFileContent reads the fixture's .datamitsuignore back.
+func ignoreFileContent(t *testing.T, root string) string {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join(root, ".datamitsuignore"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
 }
 
 func runWithWalkCount(t *testing.T, ops []config.OperationType) int64 {
@@ -63,12 +83,21 @@ func runWithWalkCount(t *testing.T, ops []config.OperationType) int64 {
 // the .datamitsuignore files themselves, so the run paid for one full
 // gitignore-aware repository walk more than a `lint` did — for an identical
 // answer. Discovery now happens once and is handed to both.
-func TestCheckWalksTheRepositoryTwice(t *testing.T) {
-	walkFixture(t)
+func TestCheckAndLintShareOneIgnoreDiscoveryWalk(t *testing.T) {
+	lintRoot := walkFixture(t)
 	lintWalks := runWithWalkCount(t, []config.OperationType{config.OpLint})
+	if got := ignoreFileContent(t, lintRoot); got != unformattedRule {
+		t.Errorf("lint rewrote .datamitsuignore to %q; lint must not fix", got)
+	}
 
-	walkFixture(t)
+	checkRoot := walkFixture(t)
 	checkWalks := runWithWalkCount(t, []config.OperationType{config.OpFix, config.OpLint})
+	// The discovered list must be the one RunFix works from: hand it an empty
+	// list instead and the walk counts below stay at 2 while the fix silently
+	// stops happening.
+	if got := ignoreFileContent(t, checkRoot); got != canonicalRule {
+		t.Errorf("check left .datamitsuignore as %q, want %q — the discovered files never reached RunFix", got, canonicalRule)
+	}
 
 	if lintWalks != 2 {
 		t.Errorf("lint performed %d repository walks, want 2 (bundled discovery + the planner)", lintWalks)

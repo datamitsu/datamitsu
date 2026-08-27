@@ -167,10 +167,72 @@ func TestVerdictProbeCatchesARewriteInsideOneMtimeTick(t *testing.T) {
 	}
 }
 
+// testIdent is a synthetic identity for the unit-level memo tests, which never
+// touch a real file. Its known flag is what makes a lookup answerable at all.
+var testIdent = fileIdent{ino: 1, ctimeNano: 1, known: true}
+
+// identReported says whether this platform's stat carries the inode-change time.
+// Where it does not, no stat comparison is trusted at all, so the tests that
+// assert a saved read — rather than a correct answer — have nothing to assert.
+func identReported(t *testing.T) bool {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "ident-probe")
+	writeUnder(t, p, "x")
+	fi, err := os.Stat(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return identOf(fi).known
+}
+
+// requireIdent skips a test whose subject is the read a stat comparison saves.
+func requireIdent(t *testing.T) {
+	t.Helper()
+	if !identReported(t) {
+		t.Skip("this platform reports no inode-change time, so no stat can clear a path; " +
+			"the bytes are always re-read — correctness is covered, the saving is not available here")
+	}
+}
+
+// The harder version of the case above: the rewrite preserves the *length* as
+// well as the mtime, so size cannot catch it either. This is what `rsync -a`,
+// `cp -p` and an archive extraction do to a file whose content changed but whose
+// recorded timestamp did not, and the tick guard is no help — the mtime is hours
+// old, which is precisely the state the guard calls settled.
+func TestVerdictProbeCatchesASameLengthRewriteWithRestoredMtime(t *testing.T) {
+	root := t.TempDir()
+	member := filepath.Join(root, "a.ts")
+	writeUnder(t, member, "export const a = 1\n")
+	backdate(t, member)
+
+	fi, err := os.Stat(member)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snap, _ := verdictSnapshotOf([]string{member}, nil, root)
+
+	writeUnder(t, member, "export const a = 2\n") // same length, different bytes
+	if err := os.Chtimes(member, fi.ModTime(), fi.ModTime()); err != nil {
+		t.Fatal(err)
+	}
+
+	after, bytesRead := snap.refresh()
+	if bytesRead == 0 {
+		t.Error("the probe read nothing; it settled a path whose stat it cannot vouch for")
+	}
+	if after == snap.inputs {
+		t.Fatal("a same-length rewrite with the mtime restored went unnoticed; the pass would be a lie")
+	}
+	if full := verdictInputs([]string{member}, nil, root); after != full {
+		t.Errorf("probe = %q, full re-hash = %q", after, full)
+	}
+}
+
 // A file that was modified moments before the run cannot be cleared by a stat at
 // all: a write during the run could land in the same tick and look identical. The
 // probe has to read it rather than trust it.
 func TestVerdictProbeRehashesFilesModifiedDuringTheTick(t *testing.T) {
+	requireIdent(t)
 	root := t.TempDir()
 	member := filepath.Join(root, "a.ts")
 	writeUnder(t, member, "export const a = 1\n")
@@ -209,6 +271,7 @@ func TestVerdictProbeRehashesWhatItCannotStat(t *testing.T) {
 // The point of the change: a lint's post-run check reads nothing when nothing
 // moved, where it used to read the whole unit a second time.
 func TestVerdictProbeReadsNothingWhenNothingMoved(t *testing.T) {
+	requireIdent(t)
 	root, members, guards := probeFixture(t)
 
 	trace.Reset()
@@ -247,7 +310,7 @@ func TestRecordVerdictFixStillRehashesEverything(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	key, snap, ok := e.verdictKeys(task)
+	key, snap, _, ok := e.verdictKeys(task)
 	if !ok {
 		t.Fatal("precondition: the verdict cache should apply to this task")
 	}
@@ -298,8 +361,7 @@ func BenchmarkVerdictProbe(b *testing.B) {
 	snap, _ := verdictSnapshotOf(paths, nil, root)
 
 	b.SetBytes(int64(members * len(content)))
-	b.ResetTimer()
-	for range b.N {
+	for b.Loop() {
 		if hash, _ := snap.refresh(); hash != snap.inputs {
 			b.Fatal("an untouched unit reported a change")
 		}

@@ -36,6 +36,10 @@ var (
 	cntInstantiate = trace.NewCounter("parser.module_instantiations")
 	cntCompile     = trace.NewCounter("parser.module_compilations")
 	cntPoolHit     = trace.NewCounter("parser.instance_pool_hits")
+	// cntNoReuse counts instances closed after a successful parse because their
+	// state could not be cleared — a module without a `reset` export parses at the
+	// pre-pooling cost, and this is how that shows up.
+	cntNoReuse = trace.NewCounter("parser.unresettable_discards")
 )
 
 // wasmFileName is the fixed name of the module inside its content-addressed dir.
@@ -65,9 +69,9 @@ type Manager struct {
 	compileGroup singleflight.Group
 	closed       bool
 
-	// idle holds instances ParseOutput has finished with, keyed by content key, so
-	// a run that parses N tool invocations of one module instantiates once per
-	// concurrent parse rather than once per parse. Guarded by mu.
+	// idle holds instances ParseOutput has finished with and reset, keyed by content
+	// key, so a run that parses N tool invocations of one module instantiates once
+	// per concurrent parse rather than once per parse. Guarded by mu.
 	idle map[string][]*ParserRuntime
 }
 
@@ -106,28 +110,67 @@ func (m *Manager) LoadWASMBytes(ctx context.Context, name string) ([]byte, error
 	return data, nil
 }
 
-// ParseOutput resolves the named parser (downloading+verifying on first use),
-// instantiates it in a fresh wazero runtime, and invokes its dispatcher over the
-// tool's raw stdout/stderr and exit code. It is the end-to-end seam: declare →
-// download → verify → load → invoke. The returned diagnostics are nullable per
-// the RawDiagnostic contract (the Go core fills defaults in a later phase).
 // ParseOutput loads the `parsers` entry named module (downloading+verifying on
-// first use) and runs its parser dispatch key over the tool's raw output. The two
-// are distinct: module selects the WASM artifact (so versions are separate
-// entries), parser is the dispatch key inside it (a name from describe). Both come
-// from a tool's `outputParser`.
-// Instances are pooled: after a successful parse the instance goes back into the
-// Manager rather than being closed, so a run that parses many tool invocations of
-// one module pays for one instantiation per concurrent parse instead of one per
-// parse. Pooling is invisible to the caller — see parsePooled for the two rules
-// that keep it so.
+// first use) and runs its parser dispatch key over the tool's raw stdout/stderr
+// and exit code. It is the end-to-end seam: declare → download → verify → load →
+// invoke. The two names are distinct: module selects the WASM artifact (so
+// versions are separate entries), parser is the dispatch key inside it (a name
+// from describe). Both come from a tool's `outputParser`. The returned
+// diagnostics are nullable per the RawDiagnostic contract (the Go core fills
+// defaults in a later phase).
+//
+// Instances of a module that exports `reset` are pooled: after a successful parse
+// the instance is reset and goes back into the Manager rather than being closed,
+// so a run that parses many tool invocations of one module pays for one
+// instantiation per concurrent parse instead of one per parse. Three rules keep
+// that invisible to the caller:
+//
+//  1. An instance is pooled only after `reset` returned it to its
+//     post-instantiation state. The ABI does not make a module stateless, and a
+//     module with mutable globals or retained linear memory would let parse N+1
+//     observe parse N — one tool's output shaping another's diagnostics. A module
+//     that does not export `reset` makes no such guarantee and is never reused:
+//     its instances are closed after every parse, as they were before pooling.
+//  2. An instance whose parse returned an error is closed, never pooled. A trap
+//     mid-ABI can leave the module's allocator in a state the next parse would
+//     inherit, and no state may leak from one tool's output into another's.
+//  3. A failure on a *reused* instance is retried once on a fresh one. The
+//     failure may belong to the instance rather than to the input — it may have
+//     been closed underneath the pool — and pooling must never turn a parse that
+//     works into one that fails. A fresh instance is not retried: its failure is
+//     the module's answer to this input.
 func (m *Manager) ParseOutput(
 	ctx context.Context,
 	module, parser string,
 	stdout, stderr []byte,
 	exitCode int32,
 ) ([]RawDiagnostic, error) {
-	return m.parsePooled(ctx, module, parser, stdout, stderr, exitCode)
+	inst, reused, err := m.acquirePooled(ctx, module)
+	if err != nil {
+		return nil, err
+	}
+
+	diags, parseErr := inst.Parse(ctx, parser, stdout, stderr, exitCode)
+	if parseErr == nil {
+		m.releaseReset(ctx, module, inst)
+		return diags, nil
+	}
+	_ = inst.Close(ctx)
+	if !reused {
+		return nil, parseErr
+	}
+
+	fresh, err := m.Acquire(ctx, module)
+	if err != nil {
+		return nil, parseErr // report the parse failure, not the re-instantiate one
+	}
+	diags, parseErr = fresh.Parse(ctx, parser, stdout, stderr, exitCode)
+	if parseErr != nil {
+		_ = fresh.Close(ctx)
+		return nil, parseErr
+	}
+	m.releaseReset(ctx, module, fresh)
+	return diags, nil
 }
 
 // Acquire returns a ready-to-use parser instance for module: it downloads and
@@ -239,48 +282,20 @@ func (m *Manager) Prefetch(ctx context.Context, names []string) error {
 	return nil
 }
 
-// parsePooled runs one parse through a pooled instance under two rules:
-//
-//  1. An instance whose parse returned an error is closed, never pooled. A trap
-//     mid-ABI can leave the module's allocator in a state the next parse would
-//     inherit, and no state may leak from one tool's output into another's.
-//  2. A failure on a *reused* instance is retried once on a fresh one. The
-//     failure may belong to the instance rather than to the input — it may have
-//     been closed underneath the pool — and pooling must never turn a parse that
-//     works into one that fails. A fresh instance is not retried: its failure is
-//     the module's answer to this input.
-func (m *Manager) parsePooled(
-	ctx context.Context,
-	module, parser string,
-	stdout, stderr []byte,
-	exitCode int32,
-) ([]RawDiagnostic, error) {
-	inst, reused, err := m.acquirePooled(ctx, module)
-	if err != nil {
-		return nil, err
+// releaseReset pools inst only after its state has been cleared. A module that
+// cannot reset (no such export) or whose reset failed is closed instead: reuse is
+// an optimization, and there is no version of it worth a parse observing the
+// previous one's leftovers.
+func (m *Manager) releaseReset(ctx context.Context, module string, inst *ParserRuntime) {
+	if err := inst.Reset(ctx); err != nil {
+		cntNoReuse.Add(1)
+		if !errors.Is(err, errNotResettable) {
+			log.Debug("parser instance not reused", zap.String("module", module), zap.Error(err))
+		}
+		_ = inst.Close(ctx)
+		return
 	}
-
-	diags, parseErr := inst.Parse(ctx, parser, stdout, stderr, exitCode)
-	if parseErr == nil {
-		m.release(ctx, module, inst)
-		return diags, nil
-	}
-	_ = inst.Close(ctx)
-	if !reused {
-		return nil, parseErr
-	}
-
-	fresh, err := m.Acquire(ctx, module)
-	if err != nil {
-		return nil, parseErr // report the parse failure, not the re-instantiate one
-	}
-	diags, parseErr = fresh.Parse(ctx, parser, stdout, stderr, exitCode)
-	if parseErr != nil {
-		_ = fresh.Close(ctx)
-		return nil, parseErr
-	}
-	m.release(ctx, module, fresh)
-	return diags, nil
+	m.release(ctx, module, inst)
 }
 
 // acquirePooled returns an idle instance of module when one is available, and

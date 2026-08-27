@@ -45,22 +45,22 @@ replaces the plan's estimates with what was actually measured, on this repositor
 files, i9-14900K, `DATAMITSU_TRACE=1`), A/B against a binary built from `f062b0d` — the commit the
 branch was cut from. Full method and per-task detail live in the Task 1–6 sections below.
 
-| Metric                             |   Baseline |      Final |                                 Change | Task |
-| ---------------------------------- | ---------: | ---------: | -------------------------------------: | ---- |
-| `verdictKeys` total, warm `lint`   |    71.7 ms |    27.4 ms |                             **−61.8%** | 2, 3 |
-| `verdictKeys` max single task      |    11.9 ms |   10.66 ms |                                   −10% | 3    |
-| `cache.verdict_bytes_hashed`, warm |    77.5 MB |    11.3 MB |                             **−85.4%** | 3    |
-| `cache.verdict_bytes_hashed`, cold |   131.5 MB |    77.6 MB |                                 −41.0% | 2    |
-| `cache.verdict_hash_memo_misses`   |          — |      1,097 |              ≈ 1 read per tracked file | 3    |
-| `cache.verdict_hash_memo_hits`     |          — |      5,645 |                                      — | 3    |
-| `getCommandInfo` total             |   15.61 ms |    9.72 ms |                                 −37.7% | 5    |
-| `exec.command_info_resolved`       |         30 |         21 |     one per distinct app, not per task | 5    |
-| `parser.module_instantiations`     |   = parses |          1 |                     one per live parse | 5    |
-| `walk.repository_walks`, `check`   |          3 |          2 |                                     −1 | 5    |
-| `lint` wall-min (n=9)              |    1.919 s |    1.879 s |                                  −2.1% | —    |
-| `check` wall-min (n=9)             |    5.226 s |    5.093 s |                                  −2.5% | —    |
-| `BenchmarkVerdictInputs`           | 5.98 ms/op | 6.95 ms/op |                         unchanged path | 2    |
-| `BenchmarkVerdictProbe`            |          — | 1.18 ms/op | 5.9× cheaper than the pass it replaces | 2    |
+| Metric                             |   Baseline |      Final |                                             Change | Task |
+| ---------------------------------- | ---------: | ---------: | -------------------------------------------------: | ---- |
+| `verdictKeys` total, warm `lint`   |    71.7 ms |    27.4 ms |                                         **−61.8%** | 2, 3 |
+| `verdictKeys` max single task      |    11.9 ms |   10.66 ms |                                               −10% | 3    |
+| `cache.verdict_bytes_hashed`, warm |    77.5 MB |    11.3 MB |                                         **−85.4%** | 3    |
+| `cache.verdict_bytes_hashed`, cold |   131.5 MB |    77.6 MB |                                             −41.0% | 2    |
+| `cache.verdict_hash_memo_misses`   |          — |      1,097 |                          ≈ 1 read per tracked file | 3    |
+| `cache.verdict_hash_memo_hits`     |          — |      5,645 |                                                  — | 3    |
+| `getCommandInfo` total             |   15.61 ms |    9.72 ms |                                             −37.7% | 5    |
+| `exec.command_info_resolved`       |         30 |         21 |                 one per distinct app, not per task | 5    |
+| `parser.module_instantiations`     |   = parses |          1 | one per live parse, for a module exporting `reset` | 5    |
+| `walk.repository_walks`, `check`   |          3 |          2 |                                                 −1 | 5    |
+| `lint` wall-min (n=9)              |    1.919 s |    1.879 s |                                              −2.1% | —    |
+| `check` wall-min (n=9)             |    5.226 s |    5.093 s |                                              −2.5% | —    |
+| `BenchmarkVerdictInputs`           | 5.98 ms/op | 6.95 ms/op |                                     unchanged path | 2    |
+| `BenchmarkVerdictProbe`            |          — | 1.18 ms/op |             5.9× cheaper than the pass it replaces | 2    |
 
 **The set of tools that ran is byte-identical** to the baseline on a cold cache, a warm cache, and a
 run where one file changed — the criterion the plan says to fail on. Task 4's gate closed (27.4 ms
@@ -281,16 +281,26 @@ does not depend on which tool is asking.
 #### Task 3 implementation and measurements
 
 `internal/tooling/hash_memo.go` holds `contentMemo`, a process-scoped `path -> (hash, size, mtime)`
-map behind a `sync.RWMutex`. `hashedState` takes a memo: with one, it stats the path first and
-returns the memoized hash when the stat still matches the entry — with `nil` it reads the bytes, as
-before. `verdictSnapshotOf` (the pre-run pass) passes `contentMemo`; `verdictInputs` (the `OpFix`
-second pass) and `verdictSnapshot.refresh` (the read-only post-run probe) both pass `nil`, because
-each exists precisely to notice a write the pre-run pass could not, and a memo filled by that pass
-would answer them with their own input.
+map behind a `sync.RWMutex`. `hashedState` takes a memo and a mode: in `memoShared` it stats the path
+first and returns the memoized hash when the stat still matches the entry — with `nil`, or in
+`memoRewrite`, it reads the bytes. `verdictSnapshotOf` (the pre-run pass) passes `contentMemo` in
+`memoShared`; `verdictSnapshot.refresh` (the read-only post-run probe) passes `nil`, because it
+exists precisely to notice a write the pre-run pass could not and a memo filled by that pass would
+answer it with its own input.
 
-`lookup` declines an entry whose mtime is newer than `mtimeGranularity` before the moment of the
-lookup — the same guard `settled` uses, for the same reason: a file written inside the current tick
-can be rewritten again at the same length and show an identical stat.
+`verdictInputs` (the `OpFix` second pass) passes `contentMemo` in `memoRewrite`: it never consults an
+entry, for the same reason as the probe, but it **replaces** the ones it read. The pre-fix hashes it
+has just disproved are exactly the entries a later task in the same process must not be handed —
+`check` runs `fix` and then `lint` in one process — and a fixer that preserves size and mtime, the
+write this full re-hash exists to catch, would otherwise leave them live and stat-clean for the lint
+pass to hit an unrelated old verdict on. Overwriting also repopulates the memo with the post-fix
+bytes, so the sibling `lint` task re-reads nothing the fixer did not touch.
+
+`lookup` declines an entry whose mtime is newer than `mtimeGranularity` before the moment the entry's
+**bytes were read** — the same guard `settled` uses against `snap.taken`, for the same reason: a file
+written inside the tick the read landed in can be rewritten again at the same length and show an
+identical stat. The anchor is the read and not the lookup: waiting cannot settle such an entry,
+because the ambiguous write it fails to rule out already happened.
 
 Measured on this repository (1,087 tracked files, i9-14900K), same-machine A/B between a binary built
 from `HEAD` and this change, warm `lint`:
@@ -389,12 +399,21 @@ resolvable, and retrying per task turns one error into N installs.
 it; the runner calls `FindIgnoreFiles` once and hands the same list to both.
 
 **Parser instances.** `Manager` keeps idle `ParserRuntime`s per content key (max 8), and
-`ParseOutput` draws from that pool. Two rules keep pooling invisible: an instance whose parse
+`ParseOutput` draws from that pool. Reuse is gated on the module exporting `reset` (a fifth,
+optional ABI export, added to `datamitsu-parsers`): the host calls it before pooling an instance, and
+a module that omits it is instantiated per parse as before — the ABI does not make a module
+stateless, so without that boundary parse N+1 could observe parse N. Two further rules keep pooling
+invisible: an instance whose parse
 returned an error is closed rather than pooled (a trap mid-ABI can leave the module's allocator in a
 state the next parse would inherit), and a failure on a _reused_ instance is retried once on a fresh
 one (the failure may belong to the instance — it can be closed underneath the pool — and pooling must
 never turn a parse that works into one that fails). A fresh instance is never retried: its failure is
 the module's answer to that input.
+
+The pool numbers below were measured against a module built from this tree (with `reset`). A
+_released_ module predating the export parses at the pre-pooling cost — `parser.module_instantiations`
+equal to the parse count and `parser.unresettable_discards` equal to it too — until the next parser
+release ships the export.
 
 Measured on this repository (1,087 tracked files, i9-14900K), same-machine A/B between a binary built
 from `HEAD` and this change, warm `lint`, `DATAMITSU_TRACE=1`:
@@ -415,7 +434,7 @@ The 23 memo hits still show as `getCommandInfo` spans in the trace, because a ta
 the first resolve is in flight blocks on the `Once` — the span covers the wait. That is why the total
 drops by 38% rather than by 23/30: the win is the resolves that no longer happen, not the waits.
 
-`walk.repository_walks` on `check` is measured by `TestCheckWalksTheRepositoryTwice`
+`walk.repository_walks` on `check` is measured by `TestCheckAndLintShareOneIgnoreDiscoveryWalk`
 (`internal/runner/walks_test.go`) rather than from the CLI, because a real `check` on this repository
 rewrites files. Reintroducing the second discovery makes that test report 3; with the shared list a
 `check` walks exactly as many times as a `lint` does, which is 2.
@@ -467,19 +486,19 @@ binaries, and by the same tools.
 
 **Counters, warm `lint`, `DATAMITSU_TRACE=1`:**
 
-| Counter / span                   |    Value | Reading                                                   |
-| -------------------------------- | -------: | --------------------------------------------------------- |
-| `verdictKeys` total (n=80)       |  27.4 ms | ≪ the 600 ms criterion                                    |
-| `verdictKeys` max single task    | 10.66 ms | —                                                         |
-| `cache.verdict_hash_memo_misses` |    1,097 | ≈ 1,094 tracked files — each file hashed once             |
-| `cache.verdict_hash_memo_hits`   |    5,645 | the five per-project tools sharing those reads            |
-| `cache.verdict_bytes_hashed`     |  11.3 MB | against 77.5 MB at the Task 1 baseline                    |
-| `exec.command_info_resolved`     |       21 | against 80 tasks                                          |
-| `exec.command_info_memo_hits`    |       59 | —                                                         |
-| `parser.module_instantiations`   |        1 | one per live parse, not one per parse                     |
-| `walk.repository_walks`          |        2 | `check` is 2 as well (`TestCheckWalksTheRepositoryTwice`) |
-| `exec.processes_spawned`         |        7 | —                                                         |
-| `exec.verdict_cache_hits`        |       25 | —                                                         |
+| Counter / span                   |    Value | Reading                                                              |
+| -------------------------------- | -------: | -------------------------------------------------------------------- |
+| `verdictKeys` total (n=80)       |  27.4 ms | ≪ the 600 ms criterion                                               |
+| `verdictKeys` max single task    | 10.66 ms | —                                                                    |
+| `cache.verdict_hash_memo_misses` |    1,097 | ≈ 1,094 tracked files — each file hashed once                        |
+| `cache.verdict_hash_memo_hits`   |    5,645 | the five per-project tools sharing those reads                       |
+| `cache.verdict_bytes_hashed`     |  11.3 MB | against 77.5 MB at the Task 1 baseline                               |
+| `exec.command_info_resolved`     |       21 | against 80 tasks                                                     |
+| `exec.command_info_memo_hits`    |       59 | —                                                                    |
+| `parser.module_instantiations`   |        1 | one per live parse; pooling is gated on the `reset` export           |
+| `walk.repository_walks`          |        2 | `check` is 2 as well (`TestCheckAndLintShareOneIgnoreDiscoveryWalk`) |
+| `exec.processes_spawned`         |        7 | —                                                                    |
+| `exec.verdict_cache_hits`        |       25 | —                                                                    |
 
 **Wall-clock minimum, n=9, interleaved baseline/new so drift hits both equally:**
 
@@ -496,8 +515,7 @@ dominated by it and this one is not.
 **Suites:** `go test ./... -race` under `umask 022` — 0 failures. `go test ./test/cli/ -count=2` —
 pass, `git status test/cli` clean, so zero goldens were regenerated. `pnpm dm check` — exit 0, working
 tree unchanged. `pnpm test:coverage:all` — 82.5% combined; every function added by this plan in
-`verdict.go` is at 100% except `hashedState` (88.5%) and `readAllSized` (83.3%), whose uncovered
-branches are `io` error paths.
+`verdict.go` is at 100% except `hashedState` (88.5%), whose uncovered branches are `io` error paths.
 
 ⚠️ The first criterion's threshold was written against a 14,711-file monorepo that is not available
 to the implementation, exactly as Task 4 recorded. What is verified here is that the criterion holds
@@ -519,7 +537,7 @@ large repository stays in Post-Completion as owner-machine manual verification.
       decide (Task 4 § decision)
 - [x] run `task gen:llms-docs` and commit `internal/llmsdocs/embed` if any website page changed —
       the `llms-docs-drift` CI job re-harvests on every PR and fails on any diff → re-harvested
-      (53 pages, `pageSetHash 6d764cd54e5db68d6c9b9492255d2c79`) **after** `pnpm dm check` reformatted
+      (53 pages, `pageSetHash c3b8fe33e2591d19df0d0f59c77fac37`) **after** `pnpm dm check` reformatted
       the new tables, so the embedded bytes match the formatted page
 
 #### Task 7 notes
@@ -544,7 +562,23 @@ is CPU across tasks, not wall time — quote both, and never present the total a
 (bytes → hash) behind a validity check, and a stale entry can only be produced by a write that
 preserves both size and mtime within the filesystem's granularity. The post-run probe in Task 2 is
 the one place where exactly that write is plausible — a fixer rewriting a file it just read — which
-is why that path keeps the full hash for `OpFix` and bypasses the memo entirely.
+is why that path keeps the full hash for `OpFix`, never reads through the memo, and overwrites the
+entries it disproved so no later task in the process inherits them.
+
+**Why the comparison is not mtime+size alone.** A writer that _restores_ the mtime it found —
+`rsync -a`, `cp -p`, an archive extraction, anything calling `Chtimes` — can rewrite the same number
+of bytes and leave both halves of that pair untouched, and no anchoring of the tick guard can see it:
+the mtime it puts back is hours old, which is exactly the state the guard calls settled. Both stat
+comparisons therefore also carry `fileIdent` (`internal/tooling/statident*.go`), the inode and the
+inode-change time — the part a writer cannot put back, because the write moves it and the `utimes`
+call that restores the mtime moves it again. It is the same field git's index stores for the same
+reason. On Windows no change time is reachable from a path-only stat, so `fileIdent` carries a
+`known` flag that is false there — and an unknown identity is a miss, never a match. That platform
+therefore keeps the pre-plan behaviour exactly: the memo never hands an entry out and the post-run
+probe re-hashes every path, so it loses the saving rather than the guarantee. Degrading to mtime+size
+would have been the one thing the zero value must not do, since two zero values compare equal. The
+tests that assert a _saved read_ skip there and name the missing property; the tests that assert a
+_correct answer_ run everywhere.
 
 **What must not change.** The set of tools that run. Every task here is an optimisation of the
 decision procedure, not of the decision. Task 6's third criterion is the one to fail the plan on.

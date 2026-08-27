@@ -97,7 +97,7 @@ func TestVerdictKeysAppliesOnlyWhereItIsSound(t *testing.T) {
 			tt.mutate(&task)
 			exec := &Executor{rootPath: root, cache: tt.cache}
 
-			key, snap, ok := exec.verdictKeys(task)
+			key, snap, _, ok := exec.verdictKeys(task)
 			if ok != tt.want {
 				t.Fatalf("verdictKeys ok = %v, want %v", ok, tt.want)
 			}
@@ -214,7 +214,7 @@ func TestHashedPathsMarksMissingFiles(t *testing.T) {
 	}
 	missing := filepath.Join(root, "gone.ts")
 
-	states, _ := hashedStates([]string{present, missing}, root, nil)
+	states, _ := hashedStates([]string{present, missing}, root, nil, memoShared)
 	got := sortedEntries(states)
 	if len(got) != 2 {
 		t.Fatalf("hashedStates = %v, want 2 entries", got)
@@ -240,7 +240,7 @@ func hashOf(t *testing.T, s string) string {
 	if err := os.WriteFile(p, []byte(s), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	states, _ := hashedStates([]string{p}, dir, nil)
+	states, _ := hashedStates([]string{p}, dir, nil, memoShared)
 	entries := sortedEntries(states)
 	return entries[0][len("f\x00"):]
 }
@@ -260,7 +260,7 @@ func TestRecordVerdict(t *testing.T) {
 		task := unitTask(root)
 		writeMembers(t, task)
 
-		key, snap, ok := e.verdictKeys(task)
+		key, snap, _, ok := e.verdictKeys(task)
 		e.recordVerdict(task, key, snap, ok)
 
 		if e.cache.ShouldRunVerdict(key, snap.hash(), time.Hour) {
@@ -274,7 +274,7 @@ func TestRecordVerdict(t *testing.T) {
 		task.Coverage = CoveragePartial
 		writeMembers(t, task)
 
-		key, snap, ok := e.verdictKeys(task)
+		key, snap, _, ok := e.verdictKeys(task)
 		e.recordVerdict(task, key, snap, ok)
 
 		if !e.cache.ShouldRunVerdict(key, snap.hash(), time.Hour) {
@@ -286,7 +286,7 @@ func TestRecordVerdict(t *testing.T) {
 		e, root := newVerdictExecutor(t)
 		task := unitTask(root)
 		writeMembers(t, task)
-		key, snap, _ := e.verdictKeys(task)
+		key, snap, _, _ := e.verdictKeys(task)
 
 		e.recordVerdict(task, key, snap, false)
 
@@ -301,7 +301,7 @@ func TestRecordVerdict(t *testing.T) {
 		e, root := newVerdictExecutor(t)
 		task := unitTask(root)
 		writeMembers(t, task)
-		key, snap, ok := e.verdictKeys(task)
+		key, snap, _, ok := e.verdictKeys(task)
 
 		if err := os.WriteFile(task.UnitMembers[0], []byte("edited mid-run"), 0o644); err != nil {
 			t.Fatal(err)
@@ -323,7 +323,7 @@ func TestRecordVerdict(t *testing.T) {
 		task := unitTask(root)
 		task.Operation = config.OpFix
 		writeMembers(t, task)
-		key, snap, ok := e.verdictKeys(task)
+		key, snap, _, ok := e.verdictKeys(task)
 
 		if err := os.WriteFile(task.UnitMembers[0], []byte("formatted"), 0o644); err != nil {
 			t.Fatal(err)
@@ -361,7 +361,7 @@ func TestRecordVerdict(t *testing.T) {
 		lint := unitTask(root)
 		lint.Tool, lint.OpConfig, lint.Operation = tool, lintOp, config.OpLint
 		writeMembers(t, lint)
-		lintKey, lintSnap, lintOK := e.verdictKeys(lint)
+		lintKey, lintSnap, _, lintOK := e.verdictKeys(lint)
 		e.recordVerdict(lint, lintKey, lintSnap, lintOK)
 		if e.cache.ShouldRunVerdict(lintKey, lintSnap.hash(), time.Hour) {
 			t.Fatal("precondition: the lint verdict should be stored")
@@ -369,7 +369,7 @@ func TestRecordVerdict(t *testing.T) {
 
 		fix := lint
 		fix.OpConfig, fix.Operation = fixOp, config.OpFix
-		fixKey, fixSnap, fixOK := e.verdictKeys(fix)
+		fixKey, fixSnap, _, fixOK := e.verdictKeys(fix)
 		e.recordVerdict(fix, fixKey, fixSnap, fixOK)
 
 		if !e.cache.ShouldRunVerdict(lintKey, lintSnap.hash(), time.Hour) {
@@ -388,7 +388,7 @@ func TestRecordVerdict(t *testing.T) {
 
 		lint := unitTask(root)
 		writeMembers(t, lint)
-		lintKey, lintSnap, lintOK := e.verdictKeys(lint)
+		lintKey, lintSnap, _, lintOK := e.verdictKeys(lint)
 		e.recordVerdict(lint, lintKey, lintSnap, lintOK)
 		if e.cache.ShouldRunVerdict(lintKey, lintSnap.hash(), time.Hour) {
 			t.Fatal("precondition: the lint verdict should be stored")
@@ -396,7 +396,7 @@ func TestRecordVerdict(t *testing.T) {
 
 		fix := lint
 		fix.Operation = config.OpFix
-		fixKey, fixSnap, fixOK := e.verdictKeys(fix)
+		fixKey, fixSnap, _, fixOK := e.verdictKeys(fix)
 		e.recordVerdict(fix, fixKey, fixSnap, fixOK)
 
 		if !e.cache.ShouldRunVerdict(lintKey, lintSnap.hash(), time.Hour) {

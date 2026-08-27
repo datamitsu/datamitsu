@@ -95,10 +95,10 @@ func TestExecuteResolvesEachAppOnce(t *testing.T) {
 	}
 
 	if got := mgr.callsFor("alpha"); got != 1 {
-		t.Errorf("GetCommandInfo(alpha) called %d times across 4 tasks, want 1", got)
+		t.Errorf("GetCommandInfo(alpha) called %d times across 8 tasks, want 1", got)
 	}
 	if got := mgr.callsFor("beta"); got != 1 {
-		t.Errorf("GetCommandInfo(beta) called %d times across 4 tasks, want 1", got)
+		t.Errorf("GetCommandInfo(beta) called %d times across 8 tasks, want 1", got)
 	}
 }
 
