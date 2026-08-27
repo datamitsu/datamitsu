@@ -214,7 +214,7 @@ func TestHashedPathsMarksMissingFiles(t *testing.T) {
 	}
 	missing := filepath.Join(root, "gone.ts")
 
-	states, _ := hashedStates([]string{present, missing}, root)
+	states, _ := hashedStates([]string{present, missing}, root, nil)
 	got := sortedEntries(states)
 	if len(got) != 2 {
 		t.Fatalf("hashedStates = %v, want 2 entries", got)
@@ -240,7 +240,7 @@ func hashOf(t *testing.T, s string) string {
 	if err := os.WriteFile(p, []byte(s), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	states, _ := hashedStates([]string{p}, dir)
+	states, _ := hashedStates([]string{p}, dir, nil)
 	entries := sortedEntries(states)
 	return entries[0][len("f\x00"):]
 }

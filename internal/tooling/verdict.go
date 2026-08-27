@@ -137,18 +137,29 @@ const mtimeGranularity = 2 * time.Second
 // verdictInputs is the cache value: the precondition under which the stored pass
 // remains true. A mismatch is a miss, so every part only has to be *sufficient*
 // to notice a change, never to explain it.
+//
+// It reads every path itself. This is the second pass an OpFix run pays for, so
+// it deliberately bypasses the content memo: a fixer rewrites the files it just
+// read, which is exactly the write a stat-validated memo cannot see.
 func verdictInputs(members, guards []string, root string) string {
-	snap, _ := verdictSnapshotOf(members, guards, root)
+	snap, _ := verdictSnapshotWith(members, guards, root, nil)
 	return snap.inputs
 }
 
 // verdictSnapshotOf is verdictInputs plus the per-path stats, which is what lets
 // recordVerdict check the inputs again for the price of a stat per file rather
-// than a whole second read of the unit.
+// than a whole second read of the unit. It is the pre-run pass, so it shares the
+// process-scoped content memo with every other task of the run.
 func verdictSnapshotOf(members, guards []string, root string) (*verdictSnapshot, int64) {
+	return verdictSnapshotWith(members, guards, root, contentMemo)
+}
+
+// verdictSnapshotWith is verdictSnapshotOf against an explicit memo; a nil memo
+// reads every path.
+func verdictSnapshotWith(members, guards []string, root string, memo *hashMemo) (*verdictSnapshot, int64) {
 	snap := &verdictSnapshot{root: root, taken: time.Now()}
-	memberStates, memberBytes := hashedStates(members, root)
-	guardStates, guardBytes := hashedStates(guards, root)
+	memberStates, memberBytes := hashedStates(members, root, memo)
+	guardStates, guardBytes := hashedStates(guards, root, memo)
 	snap.members, snap.guards = memberStates, guardStates
 	snap.inputs = hashStates(memberStates, guardStates)
 
@@ -176,7 +187,9 @@ func (s *verdictSnapshot) refreshStates(prev []pathState) ([]pathState, int64) {
 			out[i] = st
 			continue
 		}
-		fresh, n := hashedState(st.path, s.root)
+		// nil memo: this is the check that the pre-run pass moved, and answering
+		// it from the memo that pass filled would compare a value against itself.
+		fresh, n := hashedState(st.path, s.root, nil)
 		out[i], bytesRead = fresh, bytesRead+n
 	}
 	return out, bytesRead
@@ -235,11 +248,11 @@ func sortedEntries(states []pathState) []string {
 
 // hashedStates reads every path in order. A missing file hashes to a sentinel,
 // so its disappearance is itself a change.
-func hashedStates(paths []string, root string) ([]pathState, int64) {
+func hashedStates(paths []string, root string, memo *hashMemo) ([]pathState, int64) {
 	out := make([]pathState, 0, len(paths))
 	var bytesRead int64
 	for _, p := range paths {
-		st, n := hashedState(p, root)
+		st, n := hashedState(p, root, memo)
 		out, bytesRead = append(out, st), bytesRead+n
 	}
 	return out, bytesRead
@@ -248,12 +261,25 @@ func hashedStates(paths []string, root string) ([]pathState, int64) {
 // hashedState reads one path and records both its content hash and the stat that
 // produced it. The stat comes from the open handle, so it describes the bytes
 // that were actually hashed and not a later state of the path.
-func hashedState(p, root string) (pathState, int64) {
+//
+// With a memo, a path whose stat still matches an entry the memo took under is
+// answered without reading it; the entry's own validity check is in lookup.
+func hashedState(p, root string, memo *hashMemo) (pathState, int64) {
 	rel, err := filepath.Rel(root, p)
 	if err != nil {
 		rel = p
 	}
 	st := pathState{path: p, entry: filepath.ToSlash(rel) + "\x00(missing)"}
+
+	if memo != nil {
+		if fi, err := os.Stat(p); err == nil && !fi.IsDir() {
+			if hash, ok := memo.lookup(p, fi.Size(), fi.ModTime(), time.Now()); ok {
+				st.entry = filepath.ToSlash(rel) + "\x00" + hash
+				st.size, st.mod, st.read = fi.Size(), fi.ModTime(), true
+				return st, 0
+			}
+		}
+	}
 
 	f, err := os.Open(p)
 	if err != nil {
@@ -269,8 +295,10 @@ func hashedState(p, root string) (pathState, int64) {
 	if err != nil {
 		return st, 0
 	}
-	st.entry = filepath.ToSlash(rel) + "\x00" + hashutil.XXH3Hex(data)
+	hash := hashutil.XXH3Hex(data)
+	st.entry = filepath.ToSlash(rel) + "\x00" + hash
 	st.size, st.mod, st.read = fi.Size(), fi.ModTime(), true
+	memo.store(p, hash, fi.Size(), fi.ModTime())
 	return st, int64(len(data))
 }
 

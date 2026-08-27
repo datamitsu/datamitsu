@@ -232,17 +232,56 @@ is the counter this task actually targets. Task 3's memo is what moves `cache.fi
 A file in a package is hashed by every per-project tool planning a task there. The content of a file
 does not depend on which tool is asking.
 
-- [ ] add a process-scoped content-hash memo keyed by path, **validated** by size and modification
+- [x] add a process-scoped content-hash memo keyed by path, **validated** by size and modification
       time — a cache of a pure function with a cheap validity check, not an assumption
-- [ ] the memo must be shared across tasks and safe under the executor's worker pool (`-race`)
-- [ ] `recordVerdict`'s post-run probe must bypass the memo, or the check it performs becomes
+- [x] the memo must be shared across tasks and safe under the executor's worker pool (`-race`)
+- [x] `recordVerdict`'s post-run probe must bypass the memo, or the check it performs becomes
       tautological — this is the single most important line in the task
-- [ ] write a test asserting two tools over the same unit read each file once
-- [ ] write a test asserting a file rewritten between two tasks is re-hashed (change the length)
-- [ ] write a concurrency test (`-race`) hammering the memo from 16 goroutines
-- [ ] write a test asserting the post-run probe does not consult the memo
-- [ ] record the measured drop in `cache.file_hashes` and in `lint` wall-min
-- [ ] run `go test ./... -race` and `go test ./test/cli/ -count=2` — must pass before Task 4
+- [x] write a test asserting two tools over the same unit read each file once
+- [x] write a test asserting a file rewritten between two tasks is re-hashed (change the length)
+- [x] write a concurrency test (`-race`) hammering the memo from 16 goroutines
+- [x] write a test asserting the post-run probe does not consult the memo
+- [x] record the measured drop in `cache.file_hashes` and in `lint` wall-min
+- [x] run `go test ./... -race` and `go test ./test/cli/ -count=2` — must pass before Task 4
+
+#### Task 3 implementation and measurements
+
+`internal/tooling/hash_memo.go` holds `contentMemo`, a process-scoped `path -> (hash, size, mtime)`
+map behind a `sync.RWMutex`. `hashedState` takes a memo: with one, it stats the path first and
+returns the memoized hash when the stat still matches the entry — with `nil` it reads the bytes, as
+before. `verdictSnapshotOf` (the pre-run pass) passes `contentMemo`; `verdictInputs` (the `OpFix`
+second pass) and `verdictSnapshot.refresh` (the read-only post-run probe) both pass `nil`, because
+each exists precisely to notice a write the pre-run pass could not, and a memo filled by that pass
+would answer them with their own input.
+
+`lookup` declines an entry whose mtime is newer than `mtimeGranularity` before the moment of the
+lookup — the same guard `settled` uses, for the same reason: a file written inside the current tick
+can be rewritten again at the same length and show an identical stat.
+
+Measured on this repository (1,087 tracked files, i9-14900K), same-machine A/B between a binary built
+from `HEAD` and this change, warm `lint`:
+
+| Metric                                    | Baseline |   After | Change     |
+| ----------------------------------------- | -------: | ------: | ---------- |
+| `verdictKeys` total, warm `lint`          |  60.6 ms | 21.7 ms | **−64.2%** |
+| `verdictKeys` max single task             |  11.9 ms |  8.4 ms | −29.4%     |
+| `cache.verdict_bytes_hashed`, warm `lint` |  65.3 MB | 11.2 MB | **−82.8%** |
+| `cache.verdict_hash_memo_hits`            |        — |   4,415 | —          |
+| `cache.verdict_hash_memo_misses`          |        — |   1,092 | —          |
+| `cache.file_hashes`                       |        8 |       8 | unchanged  |
+| `lint` wall-min (n=9, warm)               |   1.65 s |  1.65 s | unchanged  |
+
+4,415 hits against 1,092 misses is the shape the task predicted: each file is read once and answered
+five times, once per per-project tool planning a task over its unit.
+
+⚠️ Correction to Task 2's closing note: `cache.file_hashes` counts the per-file content cache in
+`internal/cache`, which the verdict pass does not use, so the memo was never going to move it either
+— the counter this task moves is `cache.verdict_bytes_hashed`. Task 6's second acceptance criterion
+should be read against that counter, not `cache.file_hashes`.
+
+`lint` wall-min does not move on this repository because 60 ms of the 1.65 s is inside the noise;
+the win is CPU that scales with tracked bytes, which is what the Overview's 14,711-file measurement
+was dominated by.
 
 ### Task 4: Decide the unit-granularity default from Task 1's table
 
