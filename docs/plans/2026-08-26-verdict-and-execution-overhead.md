@@ -392,17 +392,85 @@ number of concurrently-live parses, not the number of parses.
 
 ### Task 6: Verify acceptance criteria
 
-- [ ] `verdictKeys` total on a warm `lint` of a large repository is ≤ 600 ms (baseline 3,055 ms)
-- [ ] `cache.file_hashes` on that run is at most the number of distinct files in the planned units
-      (each file hashed once), plus the post-run probes
-- [ ] `lint` wall-min improves and `check` wall-min improves; record both with n≥9
-- [ ] **the set of tools that ran is identical to the baseline** on a cold cache, a warm cache, and a
+- [x] `verdictKeys` total on a warm `lint` of a large repository is ≤ 600 ms (baseline 3,055 ms) →
+      **27.4 ms** on this repository; the large-repository run is not reproducible here (see the note
+      below) and stays in Post-Completion
+- [x] `cache.file_hashes` on that run is at most the number of distinct files in the planned units
+      (each file hashed once), plus the post-run probes → read against `cache.verdict_hash_memo_misses`
+      per Task 3's correction: **1,097 misses against 1,094 tracked files**
+- [x] `lint` wall-min improves and `check` wall-min improves; record both with n≥9
+- [x] **the set of tools that ran is identical to the baseline** on a cold cache, a warm cache, and a
       run where one file changed — compare `--explain=json` and the run summary against the
-      pre-change binary. This is the criterion that matters; the timings are secondary
-- [ ] `go test ./...` passes with `-race` (under `umask 022`)
-- [ ] `go test ./test/cli/ -count=2` passes with **zero** regenerated goldens
-- [ ] `pnpm dm check` passes
-- [ ] coverage meets the project standard via `pnpm test:coverage:all`
+      pre-change binary. This is the criterion that matters; the timings are secondary →
+      **byte-identical on all three**
+- [x] `go test ./...` passes with `-race` (under `umask 022`)
+- [x] `go test ./test/cli/ -count=2` passes with **zero** regenerated goldens
+- [x] `pnpm dm check` passes
+- [x] coverage meets the project standard via `pnpm test:coverage:all` → **82.5%** combined
+
+#### Task 6 verification
+
+Verified against a baseline binary built from `f062b0d` — the commit this branch was cut from — so
+the A/B is this plan's five tasks against nothing else. The baseline tree was built by
+copying the working tree (which carries the generated `internal/config/config.js` that `go build`
+embeds) and checking `f062b0d` over it, then deleting the files this branch added; both binaries were
+built with the same toolchain minutes apart.
+
+**The criterion that matters — the set of tools that ran.** For each binary in turn: the project's
+`toolstate.msgpack` was deleted (cold), `lint` was run, run again (warm), then a comment was appended
+to `internal/tooling/verdict.go` and `lint` run a third time (one file changed). The per-tool summary
+lines with durations stripped, and `--explain=json`, were compared:
+
+| Cache state      | tool set (35 lines) | `--explain=json` | run summary                          |
+| ---------------- | ------------------- | ---------------- | ------------------------------------ |
+| cold             | identical           | identical        | 80 runs, 13 skipped, cache 0% both   |
+| warm             | identical           | identical        | 80 runs, 13 skipped, cache 100% both |
+| one file changed | identical           | identical        | 80 runs, 13 skipped, cache 99% both  |
+
+The changed-file run is the one that proves the probe is not lying: it drops to 99% and spends
+5.45 s (baseline) / 3.56 s (new) against 1.9 s warm, so the touched unit really was re-run by both
+binaries, and by the same tools.
+
+**Counters, warm `lint`, `DATAMITSU_TRACE=1`:**
+
+| Counter / span                   |    Value | Reading                                                   |
+| -------------------------------- | -------: | --------------------------------------------------------- |
+| `verdictKeys` total (n=80)       |  27.4 ms | ≪ the 600 ms criterion                                    |
+| `verdictKeys` max single task    | 10.66 ms | —                                                         |
+| `cache.verdict_hash_memo_misses` |    1,097 | ≈ 1,094 tracked files — each file hashed once             |
+| `cache.verdict_hash_memo_hits`   |    5,645 | the five per-project tools sharing those reads            |
+| `cache.verdict_bytes_hashed`     |  11.3 MB | against 77.5 MB at the Task 1 baseline                    |
+| `exec.command_info_resolved`     |       21 | against 80 tasks                                          |
+| `exec.command_info_memo_hits`    |       59 | —                                                         |
+| `parser.module_instantiations`   |        1 | one per live parse, not one per parse                     |
+| `walk.repository_walks`          |        2 | `check` is 2 as well (`TestCheckWalksTheRepositoryTwice`) |
+| `exec.processes_spawned`         |        7 | —                                                         |
+| `exec.verdict_cache_hits`        |       25 | —                                                         |
+
+**Wall-clock minimum, n=9, interleaved baseline/new so drift hits both equally:**
+
+| Operation | Baseline min | New min | Change |
+| --------- | -----------: | ------: | ------ |
+| `lint`    |      1.919 s | 1.879 s | −2.1%  |
+| `check`   |      5.226 s | 5.093 s | −2.5%  |
+
+Both improve, and both improvements are small because the CPU this plan removed — ~50 ms of hashing
+and resolving — is a small fraction of a 1.9 s run on a 1,087-file tree. The saving scales with
+tracked bytes and with tasks per app, which is why the Overview's 14,711-file measurement was
+dominated by it and this one is not.
+
+**Suites:** `go test ./... -race` under `umask 022` — 0 failures. `go test ./test/cli/ -count=2` —
+pass, `git status test/cli` clean, so zero goldens were regenerated. `pnpm dm check` — exit 0, working
+tree unchanged. `pnpm test:coverage:all` — 82.5% combined; every function added by this plan in
+`verdict.go` is at 100% except `hashedState` (88.5%) and `readAllSized` (83.3%), whose uncovered
+branches are `io` error paths.
+
+⚠️ The first criterion's threshold was written against a 14,711-file monorepo that is not available
+to the implementation, exactly as Task 4 recorded. What is verified here is that the criterion holds
+by a factor of 22 on the tree that _is_ available, and that the shape the Overview measured — hashing
+that scales with bytes and repeats per tool — is gone rather than reduced: `verdict_hash_memo_misses`
+is now the file count, which is the invariant the 600 ms number was a proxy for. Re-running it on the
+large repository stays in Post-Completion as owner-machine manual verification.
 
 ### Task 7: [Final] Update documentation
 
