@@ -142,11 +142,11 @@ func TestVerdictSpanRecordsTheCostOfTheDecision(t *testing.T) {
 
 	t.Run("hit", func(t *testing.T) {
 		e, task := tracedVerdictFixture(t, 2)
-		key, inputs, ok := e.verdictKeys(task)
+		key, snap, ok := e.verdictKeys(task)
 		if !ok {
 			t.Fatal("precondition: the verdict cache should apply to this task")
 		}
-		e.recordVerdict(task, key, inputs, ok)
+		e.recordVerdict(task, key, snap, ok)
 
 		traceOn(t)
 		result := e.executeTask(context.Background(), task)
@@ -210,7 +210,7 @@ func BenchmarkVerdictInputs(b *testing.B) {
 	b.SetBytes(int64(members * len(content)))
 	b.ResetTimer()
 	for range b.N {
-		if hash, _ := verdictInputs(paths, guards, root); hash == "" {
+		if hash := verdictInputs(paths, guards, root); hash == "" {
 			b.Fatal("empty input hash")
 		}
 	}

@@ -1,6 +1,8 @@
 package tooling
 
 import (
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -93,54 +95,205 @@ func inheritedEnv() []string {
 // being helped by the cache.
 var cntVerdictBytes = trace.NewCounter("cache.verdict_bytes_hashed")
 
+// pathState is one input as the pre-run pass saw it: the entry that went into
+// the hash, plus the stat the post-run probe compares against. Recording the
+// stat is free — reading the file already had to fstat it.
+type pathState struct {
+	path  string
+	entry string // "<relpath>\x00<hash>"
+	size  int64
+	mod   time.Time
+	read  bool // the file was opened and hashed; false means the sentinel
+}
+
+// verdictSnapshot is the pre-run input vector plus everything needed to decide,
+// after the run, whether any of it moved — without reading it all again.
+type verdictSnapshot struct {
+	inputs  string
+	root    string
+	members []pathState
+	guards  []pathState
+	// taken is stamped *before* the first read, so any write that could still
+	// hide inside an mtime tick is one this snapshot flags as unsafe.
+	taken time.Time
+}
+
+// hash is the pre-run input vector, and "" for a task the cache does not apply
+// to — callers pass it straight to the cache, which treats "" as a miss.
+func (s *verdictSnapshot) hash() string {
+	if s == nil {
+		return ""
+	}
+	return s.inputs
+}
+
+// mtimeGranularity is the coarsest modification-time resolution this code will
+// assume it might be running on (FAT stores two-second ticks). A file modified
+// within one tick of the pre-run pass cannot be cleared by a stat comparison at
+// all, because a later write could land in the same tick, so the probe re-hashes
+// it instead of trusting the stat.
+const mtimeGranularity = 2 * time.Second
+
 // verdictInputs is the cache value: the precondition under which the stored pass
 // remains true. A mismatch is a miss, so every part only has to be *sufficient*
 // to notice a change, never to explain it.
-//
-// The second return is the number of bytes read to produce it, which the caller
-// attaches to its span; it is a by-product of work already done, so computing it
-// costs nothing when tracing is off.
-func verdictInputs(members, guards []string, root string) (string, int64) {
-	parts := make([][]byte, 0, len(members)+len(guards)+2)
+func verdictInputs(members, guards []string, root string) string {
+	snap, _ := verdictSnapshotOf(members, guards, root)
+	return snap.inputs
+}
+
+// verdictSnapshotOf is verdictInputs plus the per-path stats, which is what lets
+// recordVerdict check the inputs again for the price of a stat per file rather
+// than a whole second read of the unit.
+func verdictSnapshotOf(members, guards []string, root string) (*verdictSnapshot, int64) {
+	snap := &verdictSnapshot{root: root, taken: time.Now()}
+	memberStates, memberBytes := hashedStates(members, root)
+	guardStates, guardBytes := hashedStates(guards, root)
+	snap.members, snap.guards = memberStates, guardStates
+	snap.inputs = hashStates(memberStates, guardStates)
+
+	bytesRead := memberBytes + guardBytes
+	cntVerdictBytes.Add(bytesRead)
+	return snap, bytesRead
+}
+
+// refresh recomputes the input vector after the run, re-hashing only the paths
+// whose size or modification time moved. Everything else is answered by a stat.
+func (s *verdictSnapshot) refresh() (string, int64) {
+	members, memberBytes := s.refreshStates(s.members)
+	guards, guardBytes := s.refreshStates(s.guards)
+
+	bytesRead := memberBytes + guardBytes
+	cntVerdictBytes.Add(bytesRead)
+	return hashStates(members, guards), bytesRead
+}
+
+func (s *verdictSnapshot) refreshStates(prev []pathState) ([]pathState, int64) {
+	out := make([]pathState, len(prev))
+	var bytesRead int64
+	for i, st := range prev {
+		if s.settled(st) {
+			out[i] = st
+			continue
+		}
+		fresh, n := hashedState(st.path, s.root)
+		out[i], bytesRead = fresh, bytesRead+n
+	}
+	return out, bytesRead
+}
+
+// settled answers "can a stat alone prove this path is byte-identical to what
+// the pre-run pass hashed?". Every uncertain answer is false, which costs a
+// re-hash; there is no case in which it may guess true.
+func (s *verdictSnapshot) settled(st pathState) bool {
+	fi, err := os.Stat(st.path)
+	if err != nil {
+		// Still absent, still the sentinel. If it *was* read, it has vanished —
+		// that is a change, and re-hashing is what records it.
+		return !st.read
+	}
+	if fi.IsDir() || !st.read {
+		return false
+	}
+	if fi.Size() != st.size || !fi.ModTime().Equal(st.mod) {
+		return false
+	}
+	// Unchanged stat, but a file last modified within a tick of the pre-run pass
+	// could have been rewritten at the same length during the run and still show
+	// this mtime. Only a re-hash can tell.
+	return !st.mod.After(s.taken.Add(-mtimeGranularity))
+}
+
+// hashStates folds the member and guard entries, plus the allowlisted
+// environment, into the input hash. Entries are sorted so the vector does not
+// depend on the order the planner happened to collect paths in.
+func hashStates(members, guards []pathState) string {
+	parts := make([][]byte, 0, len(members)+len(guards)+3)
 	parts = append(parts, []byte("m"))
-	memberPaths, memberBytes := hashedPaths(members, root)
-	for _, part := range memberPaths {
-		parts = append(parts, []byte(part))
+	for _, entry := range sortedEntries(members) {
+		parts = append(parts, []byte(entry))
 	}
 	parts = append(parts, []byte("g"))
-	guardPaths, guardBytes := hashedPaths(guards, root)
-	for _, part := range guardPaths {
-		parts = append(parts, []byte(part))
+	for _, entry := range sortedEntries(guards) {
+		parts = append(parts, []byte(entry))
 	}
 	parts = append(parts, []byte("e"))
 	for _, kv := range inheritedEnv() {
 		parts = append(parts, []byte(kv))
 	}
-	bytesRead := memberBytes + guardBytes
-	cntVerdictBytes.Add(bytesRead)
-	return hashutil.XXH3Multi(parts...), bytesRead
+	return hashutil.XXH3Multi(parts...)
 }
 
-// hashedPaths returns "<relpath>\x00<hash>" for each path, sorted, and the total
-// number of bytes read. A missing file hashes to a sentinel so its
-// disappearance is itself a change.
-func hashedPaths(paths []string, root string) ([]string, int64) {
-	out := make([]string, 0, len(paths))
-	var bytesRead int64
-	for _, p := range paths {
-		rel, err := filepath.Rel(root, p)
-		if err != nil {
-			rel = p
-		}
-		hash := "(missing)"
-		if data, readErr := os.ReadFile(p); readErr == nil {
-			hash = hashutil.XXH3Hex(data)
-			bytesRead += int64(len(data))
-		}
-		out = append(out, filepath.ToSlash(rel)+"\x00"+hash)
+func sortedEntries(states []pathState) []string {
+	out := make([]string, 0, len(states))
+	for _, st := range states {
+		out = append(out, st.entry)
 	}
 	sort.Strings(out)
+	return out
+}
+
+// hashedStates reads every path in order. A missing file hashes to a sentinel,
+// so its disappearance is itself a change.
+func hashedStates(paths []string, root string) ([]pathState, int64) {
+	out := make([]pathState, 0, len(paths))
+	var bytesRead int64
+	for _, p := range paths {
+		st, n := hashedState(p, root)
+		out, bytesRead = append(out, st), bytesRead+n
+	}
 	return out, bytesRead
+}
+
+// hashedState reads one path and records both its content hash and the stat that
+// produced it. The stat comes from the open handle, so it describes the bytes
+// that were actually hashed and not a later state of the path.
+func hashedState(p, root string) (pathState, int64) {
+	rel, err := filepath.Rel(root, p)
+	if err != nil {
+		rel = p
+	}
+	st := pathState{path: p, entry: filepath.ToSlash(rel) + "\x00(missing)"}
+
+	f, err := os.Open(p)
+	if err != nil {
+		return st, 0
+	}
+	defer func() { _ = f.Close() }()
+
+	fi, err := f.Stat()
+	if err != nil || fi.IsDir() {
+		return st, 0
+	}
+	data, err := readAllSized(f, fi.Size())
+	if err != nil {
+		return st, 0
+	}
+	st.entry = filepath.ToSlash(rel) + "\x00" + hashutil.XXH3Hex(data)
+	st.size, st.mod, st.read = fi.Size(), fi.ModTime(), true
+	return st, int64(len(data))
+}
+
+// readAllSized is os.ReadFile's read loop against an already-open handle, so the
+// hash and the stat that guards it come from the same file description.
+func readAllSized(f *os.File, size int64) ([]byte, error) {
+	if size < 0 {
+		size = 0
+	}
+	data := make([]byte, 0, size+1)
+	for {
+		if len(data) == cap(data) {
+			data = append(data, 0)[:len(data)]
+		}
+		n, err := f.Read(data[len(data):cap(data)])
+		data = data[:len(data)+n]
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				err = nil
+			}
+			return data, err
+		}
+	}
 }
 
 func sortedEnv(env map[string]string) []string {
@@ -407,52 +560,63 @@ func (e *Executor) verdictTTL() time.Duration {
 
 // verdictKeys returns the cache identity and input hash for a task, and whether
 // the verdict cache applies to it at all.
-func (e *Executor) verdictKeys(task Task) (key, inputs string, ok bool) {
-	key, inputs, _, ok = e.verdictKeysMeasured(task)
-	return key, inputs, ok
+func (e *Executor) verdictKeys(task Task) (key string, snap *verdictSnapshot, ok bool) {
+	key, snap, _, ok = e.verdictKeysMeasured(task)
+	return key, snap, ok
 }
 
 // verdictKeysMeasured is verdictKeys plus the number of bytes it read, which the
 // executor attaches to the verdictKeys span so the cost of deciding to skip a
 // tool can be compared against the cost of running it.
-func (e *Executor) verdictKeysMeasured(task Task) (key, inputs string, bytesRead int64, ok bool) {
+func (e *Executor) verdictKeysMeasured(task Task) (key string, snap *verdictSnapshot, bytesRead int64, ok bool) {
 	granularity := config.InferGranularity(task.OpConfig)
 	if e.cache == nil || granularity == config.GranularityFile {
-		return "", "", 0, false
+		return "", nil, 0, false
 	}
 	if task.OpConfig.Cache != nil && !*task.OpConfig.Cache {
-		return "", "", 0, false
+		return "", nil, 0, false
 	}
 	// repo granularity is opt-in, not opt-out: the input vector degenerates to a
 	// content hash of every tracked file, which costs more than most of these
 	// tools do and hits almost never — the repository changes between runs, that
 	// is why you ran it. Declaring cache: true claims the tool is a closed world.
 	if granularity == config.GranularityRepo && (task.OpConfig.Cache == nil || !*task.OpConfig.Cache) {
-		return "", "", 0, false
+		return "", nil, 0, false
 	}
 	// No members means the input vector is constant, so the verdict could never
 	// mismatch — a permanent pass. Reachable when a per-file-scope operation
 	// declares granularity "unit": the planner has no unit to describe.
 	if len(task.UnitMembers) == 0 {
-		return "", "", 0, false
+		return "", nil, 0, false
 	}
 	key = verdictIdentity(task, task.UnitDir)
-	inputs, bytesRead = verdictInputs(task.UnitMembers, task.UnitGuards, e.rootPath)
-	return key, inputs, bytesRead, true
+	snap, bytesRead = verdictSnapshotOf(task.UnitMembers, task.UnitGuards, e.rootPath)
+	return key, snap, bytesRead, true
 }
 
 // recordVerdict stores a pass, but only for a run that actually covered its
 // unit. Coverage comes from the planner; the executor cannot tell a narrowed run
 // from a full one and must not guess.
-func (e *Executor) recordVerdict(task Task, key, inputs string, ok bool) {
-	if !ok || task.Coverage != CoverageComplete {
+func (e *Executor) recordVerdict(task Task, key string, snap *verdictSnapshot, ok bool) {
+	if !ok || snap == nil || task.Coverage != CoverageComplete {
 		return
 	}
+	inputs := snap.inputs
 
 	// The inputs were hashed before the tool ran. If they moved underneath it —
 	// an editor save, a concurrent build, or the tool itself rewriting files —
 	// the pass belongs to a state that no longer exists.
-	after, _ := verdictInputs(task.UnitMembers, task.UnitGuards, e.rootPath)
+	//
+	// A read-only operation gets there by stat: nothing it did can have rewritten
+	// a file at the same length and mtime, and the snapshot re-hashes every path
+	// whose stat is inconclusive. A fix rewrites files by design — that is exactly
+	// the write an mtime tick can hide — so it pays for the full second pass.
+	var after string
+	if task.Operation == config.OpFix {
+		after = verdictInputs(task.UnitMembers, task.UnitGuards, e.rootPath)
+	} else {
+		after, _ = snap.refresh()
+	}
 	if after != inputs {
 		if task.Operation != config.OpFix {
 			// A read-only operation that saw shifting inputs proves nothing.

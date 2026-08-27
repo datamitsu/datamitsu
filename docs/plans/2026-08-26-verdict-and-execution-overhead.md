@@ -179,21 +179,53 @@ paying for them.
 inputs that moved while the tool ran, and for a read-only operation it is load-bearing — but it is
 only load-bearing for files that _could_ have moved.
 
-- [ ] for `OpLint` (read-only), replace the full re-hash with a cheap staleness probe: re-stat every
+- [x] for `OpLint` (read-only), replace the full re-hash with a cheap staleness probe: re-stat every
       member and guard and re-hash only the paths whose size or modification time changed since the
       pre-run pass, which requires recording those stats during the first pass
-- [ ] a path that cannot be stat'ed, or whose stat is unchanged but whose mtime granularity makes
+- [x] a path that cannot be stat'ed, or whose stat is unchanged but whose mtime granularity makes
       the comparison unsafe, must fall back to re-hashing — never to assuming unchanged
-- [ ] leave `OpFix` on the full re-hash: a fixer rewrites files by design, mtime granularity is
+- [x] leave `OpFix` on the full re-hash: a fixer rewrites files by design, mtime granularity is
       exactly the case that bites, and the existing branch already treats a fix specially
-- [ ] write a differential test: for a fixture unit, the pre/post comparison must reach the same
+- [x] write a differential test: for a fixture unit, the pre/post comparison must reach the same
       verdict as a full re-hash — unchanged, one file touched (mtime only, same bytes), one file
       rewritten with different bytes, one file deleted, one guard appearing
-- [ ] write a test asserting a file rewritten within the same mtime tick is still detected (write,
+- [x] write a test asserting a file rewritten within the same mtime tick is still detected (write,
       stat, rewrite with different length — length alone must catch it)
-- [ ] write a test asserting `OpFix` still performs the full re-hash
-- [ ] record the measured drop in `verdictKeys` total and in `cache.file_hashes`
-- [ ] run `go test ./... -race` and `go test ./test/cli/ -count=2` — must pass before Task 3
+- [x] write a test asserting `OpFix` still performs the full re-hash
+- [x] record the measured drop in `verdictKeys` total and in `cache.file_hashes`
+- [x] run `go test ./... -race` and `go test ./test/cli/ -count=2` — must pass before Task 3
+
+#### Task 2 implementation and measurements
+
+`verdictKeysMeasured` now returns a `verdictSnapshot` (`internal/tooling/verdict.go`) instead of a
+bare input hash: the pre-run pass records, per path, the entry it hashed plus the size and
+modification time of the handle it read it from. `recordVerdict` asks that snapshot to `refresh()`
+for a read-only operation, which re-stats every path and re-reads only the ones a stat cannot clear.
+`OpFix` keeps calling `verdictInputs` for the full second pass.
+
+`settled` is the whole of the trade, and it answers "unchanged" only when: the path stats, is not a
+directory, was read the first time, has the same size and the same mtime, **and** its mtime is at
+least `mtimeGranularity` (2 s, FAT's tick) older than the moment the snapshot began. Anything else —
+a stat error, a file that was missing and now exists, a file modified inside the current tick — falls
+through to a re-hash.
+
+Measured on this repository (1,087 tracked files, i9-14900K), against the Task 1 baseline:
+
+| Metric                                    |   Baseline |                      After | Change                                            |
+| ----------------------------------------- | ---------: | -------------------------: | ------------------------------------------------- |
+| `cache.verdict_bytes_hashed`, cold `lint` |   131.5 MB |                    77.6 MB | **−41.0%**                                        |
+| `cache.verdict_bytes_hashed`, warm `lint` |    77.5 MB |                    77.6 MB | unchanged (a hit never records)                   |
+| `verdictKeys` total, cold                 |    78.3 ms |                    83.8 ms | unchanged — the span covers only the pre-run pass |
+| `cache.file_hashes`                       |        657 |                        657 | unchanged — a different cache                     |
+| `lint` wall-min (n=9, warm)               |     1.89 s |                     1.93 s | noise; the win is on a miss                       |
+| `BenchmarkVerdictInputs` (2,000 × 2 KB)   | 5.98 ms/op |                 6.95 ms/op | full re-hash, unchanged path                      |
+| `BenchmarkVerdictProbe` (same unit)       |          — | **1.18 ms/op**, 3,463 MB/s | 5.9× cheaper than the pass it replaces            |
+
+The cold-run byte drop is exactly the 41% Task 1 predicted for the second pass, and it is the whole
+of the win: warm runs never reached `recordVerdict` to begin with, so `verdictKeys` — which times
+only the pre-run pass — does not move. ⚠️ `cache.file_hashes` counts the per-file content cache in
+`internal/cache`, not the verdict pass, so it was never going to move here; `cache.verdict_bytes_hashed`
+is the counter this task actually targets. Task 3's memo is what moves `cache.file_hashes`.
 
 ### Task 3: Hash each file once per process, not once per tool
 

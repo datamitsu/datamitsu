@@ -490,12 +490,12 @@ func (e *Executor) executeTask(ctx context.Context, task Task) ExecutionResult {
 	// that passed, which is as sound for a narrowed invocation as for a full one
 	// — so the read is not gated on coverage. Only the write is.
 	verdictSpan := trace.Start(trace.CatCache, "verdictKeys")
-	verdictKey, verdictInputHash, verdictBytes, verdictApplies := e.verdictKeysMeasured(task)
+	verdictKey, verdictSnap, verdictBytes, verdictApplies := e.verdictKeysMeasured(task)
 	// The lookup is a map read under a read lock, so folding it into this span
 	// keeps the recorded duration comparable while letting the hit/miss ride along
 	// with the member count and byte volume that produced it — the three numbers
 	// are only meaningful together.
-	verdictHit := verdictApplies && !e.cache.ShouldRunVerdict(verdictKey, verdictInputHash, e.verdictTTL())
+	verdictHit := verdictApplies && !e.cache.ShouldRunVerdict(verdictKey, verdictSnap.hash(), e.verdictTTL())
 	verdictSpan.EndWith(
 		trace.A("tool", task.ToolName),
 		trace.A("applies", verdictApplies),
@@ -535,7 +535,7 @@ func (e *Executor) executeTask(ctx context.Context, task Task) ExecutionResult {
 	// The three per-process updateCacheAfterSuccess calls would otherwise let the
 	// first success of an N-process task record a verdict a later failure refutes.
 	if result.Success {
-		e.recordVerdict(task, verdictKey, verdictInputHash, verdictApplies)
+		e.recordVerdict(task, verdictKey, verdictSnap, verdictApplies)
 	}
 
 	// Classify unclassified failures as independent (tool failed on its own)

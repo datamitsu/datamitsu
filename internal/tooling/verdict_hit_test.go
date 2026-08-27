@@ -52,11 +52,11 @@ func TestExecuteTaskHitsTheVerdictCache(t *testing.T) {
 		Coverage:    CoverageComplete,
 	}
 
-	key, inputs, ok := e.verdictKeys(task)
+	key, snap, ok := e.verdictKeys(task)
 	if !ok {
 		t.Fatal("precondition: the verdict cache should apply to this task")
 	}
-	e.recordVerdict(task, key, inputs, ok)
+	e.recordVerdict(task, key, snap, ok)
 
 	result := e.executeTask(context.Background(), task)
 
@@ -74,7 +74,7 @@ func TestExecuteTaskHitsTheVerdictCache(t *testing.T) {
 	if err := os.WriteFile(member, []byte("export const a = 2"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, after, _ := e.verdictKeys(task); after == inputs {
+	if _, after, _ := e.verdictKeys(task); after.hash() == snap.hash() {
 		t.Fatal("editing a member left the input vector unchanged")
 	}
 	if !c.ShouldRunVerdict(key, mustInputs(e, task), e.verdictTTL()) {
@@ -83,8 +83,8 @@ func TestExecuteTaskHitsTheVerdictCache(t *testing.T) {
 }
 
 func mustInputs(e *Executor, task Task) string {
-	_, inputs, _ := e.verdictKeys(task)
-	return inputs
+	_, snap, _ := e.verdictKeys(task)
+	return snap.hash()
 }
 
 // The per-file cache records "this file passed", which is only a verdict when a
