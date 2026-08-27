@@ -214,7 +214,7 @@ func TestHashedPathsMarksMissingFiles(t *testing.T) {
 	}
 	missing := filepath.Join(root, "gone.ts")
 
-	got := hashedPaths([]string{present, missing}, root)
+	got, _ := hashedPaths([]string{present, missing}, root)
 	if len(got) != 2 {
 		t.Fatalf("hashedPaths = %v, want 2 entries", got)
 	}
@@ -239,7 +239,8 @@ func hashOf(t *testing.T, s string) string {
 	if err := os.WriteFile(p, []byte(s), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	return hashedPaths([]string{p}, dir)[0][len("f\x00"):]
+	entries, _ := hashedPaths([]string{p}, dir)
+	return entries[0][len("f\x00"):]
 }
 
 // Without Init() the executor must still get a usable TTL, or every embedded or
@@ -305,7 +306,7 @@ func TestRecordVerdict(t *testing.T) {
 		}
 		e.recordVerdict(task, key, inputs, ok)
 
-		after := verdictInputs(task.UnitMembers, task.UnitGuards, root)
+		after, _ := verdictInputs(task.UnitMembers, task.UnitGuards, root)
 		if !e.cache.ShouldRunVerdict(key, after, time.Hour) {
 			t.Error("a lint recorded a pass for a state that no longer exists")
 		}
@@ -327,7 +328,7 @@ func TestRecordVerdict(t *testing.T) {
 		}
 		e.recordVerdict(task, key, inputs, ok)
 
-		after := verdictInputs(task.UnitMembers, task.UnitGuards, root)
+		after, _ := verdictInputs(task.UnitMembers, task.UnitGuards, root)
 		if e.cache.ShouldRunVerdict(key, after, time.Hour) {
 			t.Error("a fix did not record the state it produced, so it can never hit")
 		}

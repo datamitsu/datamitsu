@@ -204,6 +204,44 @@ func Counters() []*Counter {
 	return append([]*Counter(nil), counters...)
 }
 
+// RecordedSpan is a finished span, exposed so a package that instruments itself
+// can assert on what it recorded — and, more importantly, on what it did not
+// record while tracing was off.
+type RecordedSpan struct {
+	Cat     string
+	Name    string
+	Dur     time.Duration
+	Attrs   []Attr
+	Instant bool
+}
+
+// Attr returns the value of the named attribute and whether it was present.
+func (s RecordedSpan) Attr(key string) (any, bool) {
+	for _, a := range s.Attrs {
+		if a.Key == key {
+			return a.Value, true
+		}
+	}
+	return nil, false
+}
+
+// Spans returns the spans and instants recorded so far. Intended for tests;
+// production output goes through Flush.
+func Spans() []RecordedSpan {
+	events, _ := rec.snapshot()
+	out := make([]RecordedSpan, 0, len(events))
+	for _, e := range events {
+		out = append(out, RecordedSpan{
+			Cat:     e.Cat,
+			Name:    e.Name,
+			Dur:     time.Duration(e.Dur),
+			Attrs:   e.Attrs,
+			Instant: e.Instant,
+		})
+	}
+	return out
+}
+
 // event is one recorded span or instant.
 type event struct {
 	Name    string

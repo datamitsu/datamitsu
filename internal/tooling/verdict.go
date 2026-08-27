@@ -87,30 +87,46 @@ func inheritedEnv() []string {
 	return out
 }
 
+// cntVerdictBytes is the volume the verdict cache reads to decide whether to
+// skip a tool. Paired with the tool's own spawn duration it is the whole trade:
+// a tool that runs in 40 ms over a unit whose bytes take 60 ms to hash is not
+// being helped by the cache.
+var cntVerdictBytes = trace.NewCounter("cache.verdict_bytes_hashed")
+
 // verdictInputs is the cache value: the precondition under which the stored pass
 // remains true. A mismatch is a miss, so every part only has to be *sufficient*
 // to notice a change, never to explain it.
-func verdictInputs(members, guards []string, root string) string {
+//
+// The second return is the number of bytes read to produce it, which the caller
+// attaches to its span; it is a by-product of work already done, so computing it
+// costs nothing when tracing is off.
+func verdictInputs(members, guards []string, root string) (string, int64) {
 	parts := make([][]byte, 0, len(members)+len(guards)+2)
 	parts = append(parts, []byte("m"))
-	for _, part := range hashedPaths(members, root) {
+	memberPaths, memberBytes := hashedPaths(members, root)
+	for _, part := range memberPaths {
 		parts = append(parts, []byte(part))
 	}
 	parts = append(parts, []byte("g"))
-	for _, part := range hashedPaths(guards, root) {
+	guardPaths, guardBytes := hashedPaths(guards, root)
+	for _, part := range guardPaths {
 		parts = append(parts, []byte(part))
 	}
 	parts = append(parts, []byte("e"))
 	for _, kv := range inheritedEnv() {
 		parts = append(parts, []byte(kv))
 	}
-	return hashutil.XXH3Multi(parts...)
+	bytesRead := memberBytes + guardBytes
+	cntVerdictBytes.Add(bytesRead)
+	return hashutil.XXH3Multi(parts...), bytesRead
 }
 
-// hashedPaths returns "<relpath>\x00<hash>" for each path, sorted. A missing
-// file hashes to a sentinel so its disappearance is itself a change.
-func hashedPaths(paths []string, root string) []string {
+// hashedPaths returns "<relpath>\x00<hash>" for each path, sorted, and the total
+// number of bytes read. A missing file hashes to a sentinel so its
+// disappearance is itself a change.
+func hashedPaths(paths []string, root string) ([]string, int64) {
 	out := make([]string, 0, len(paths))
+	var bytesRead int64
 	for _, p := range paths {
 		rel, err := filepath.Rel(root, p)
 		if err != nil {
@@ -119,11 +135,12 @@ func hashedPaths(paths []string, root string) []string {
 		hash := "(missing)"
 		if data, readErr := os.ReadFile(p); readErr == nil {
 			hash = hashutil.XXH3Hex(data)
+			bytesRead += int64(len(data))
 		}
 		out = append(out, filepath.ToSlash(rel)+"\x00"+hash)
 	}
 	sort.Strings(out)
-	return out
+	return out, bytesRead
 }
 
 func sortedEnv(env map[string]string) []string {
@@ -391,29 +408,37 @@ func (e *Executor) verdictTTL() time.Duration {
 // verdictKeys returns the cache identity and input hash for a task, and whether
 // the verdict cache applies to it at all.
 func (e *Executor) verdictKeys(task Task) (key, inputs string, ok bool) {
+	key, inputs, _, ok = e.verdictKeysMeasured(task)
+	return key, inputs, ok
+}
+
+// verdictKeysMeasured is verdictKeys plus the number of bytes it read, which the
+// executor attaches to the verdictKeys span so the cost of deciding to skip a
+// tool can be compared against the cost of running it.
+func (e *Executor) verdictKeysMeasured(task Task) (key, inputs string, bytesRead int64, ok bool) {
 	granularity := config.InferGranularity(task.OpConfig)
 	if e.cache == nil || granularity == config.GranularityFile {
-		return "", "", false
+		return "", "", 0, false
 	}
 	if task.OpConfig.Cache != nil && !*task.OpConfig.Cache {
-		return "", "", false
+		return "", "", 0, false
 	}
 	// repo granularity is opt-in, not opt-out: the input vector degenerates to a
 	// content hash of every tracked file, which costs more than most of these
 	// tools do and hits almost never — the repository changes between runs, that
 	// is why you ran it. Declaring cache: true claims the tool is a closed world.
 	if granularity == config.GranularityRepo && (task.OpConfig.Cache == nil || !*task.OpConfig.Cache) {
-		return "", "", false
+		return "", "", 0, false
 	}
 	// No members means the input vector is constant, so the verdict could never
 	// mismatch — a permanent pass. Reachable when a per-file-scope operation
 	// declares granularity "unit": the planner has no unit to describe.
 	if len(task.UnitMembers) == 0 {
-		return "", "", false
+		return "", "", 0, false
 	}
 	key = verdictIdentity(task, task.UnitDir)
-	inputs = verdictInputs(task.UnitMembers, task.UnitGuards, e.rootPath)
-	return key, inputs, true
+	inputs, bytesRead = verdictInputs(task.UnitMembers, task.UnitGuards, e.rootPath)
+	return key, inputs, bytesRead, true
 }
 
 // recordVerdict stores a pass, but only for a run that actually covered its
@@ -427,7 +452,7 @@ func (e *Executor) recordVerdict(task Task, key, inputs string, ok bool) {
 	// The inputs were hashed before the tool ran. If they moved underneath it —
 	// an editor save, a concurrent build, or the tool itself rewriting files —
 	// the pass belongs to a state that no longer exists.
-	after := verdictInputs(task.UnitMembers, task.UnitGuards, e.rootPath)
+	after, _ := verdictInputs(task.UnitMembers, task.UnitGuards, e.rootPath)
 	if after != inputs {
 		if task.Operation != config.OpFix {
 			// A read-only operation that saw shifting inputs proves nothing.

@@ -112,15 +112,66 @@ Before making the hashing cheaper, establish whether it is worth doing at all fo
 answer plausibly differs: for a tool that runs in 40 ms over a unit of 3,000 files, hashing those
 files twice is pure loss.
 
-- [ ] add a `bytes_hashed` counter and a per-task attribute to the existing `verdictKeys` span
+- [x] add a `bytes_hashed` counter and a per-task attribute to the existing `verdictKeys` span
       recording the member count, the guard count and the total bytes read
-- [ ] add a span attribute recording whether the verdict was a hit or a miss
-- [ ] produce a table, per tool, of `verdictKeys` time against that tool's own `spawn` duration on a
+- [x] add a span attribute recording whether the verdict was a hit or a miss
+- [x] produce a table, per tool, of `verdictKeys` time against that tool's own `spawn` duration on a
       cold run and on a warm run, and record it in this file
-- [ ] record the baseline: `verdictKeys` total, `cache.file_hashes`, and `lint` wall-min (n≥9)
-- [ ] add `BenchmarkVerdictInputs` over a fixture unit of ~2,000 files so Tasks 2 and 4 have a target
-- [ ] write a test asserting the new counter and attributes are absent when tracing is off
-- [ ] run `go test ./...` and `go test ./test/cli/ -count=2` — must pass before Task 2
+- [x] record the baseline: `verdictKeys` total, `cache.file_hashes`, and `lint` wall-min (n≥9)
+- [x] add `BenchmarkVerdictInputs` over a fixture unit of ~2,000 files so Tasks 2 and 4 have a target
+- [x] write a test asserting the new counter and attributes are absent when tracing is off
+- [x] run `go test ./...` and `go test ./test/cli/ -count=2` — must pass before Task 2
+
+#### Task 1 measurements
+
+Recorded on **this repository** (1,087 tracked files, i9-14900K, `DATAMITSU_TRACE=1`), not on the
+14,711-file monorepo of the Overview — that machine is not available to the implementation. The
+absolute numbers are therefore an order of magnitude smaller; the _shape_ is what carries over, and
+the ratio per tool is the thing Task 4 has to read.
+
+Per tool, `verdictKeys` span total (summed over its tasks, concurrent) against that tool's own
+`spawn` total. Tools whose `verdictKeys` is 0.00 ms are ones the cache does not apply to (repo
+granularity without `cache: true`, or file granularity); they are listed to show the cache is not
+paying for them.
+
+| Tool                 |   n | `verdictKeys` | bytes hashed | hits (warm) | `spawn` cold | `spawn` warm |
+| -------------------- | --: | ------------: | -----------: | ----------: | -----------: | -----------: |
+| cspell               |  11 |       25.0 ms |      20.5 MB |        9/11 |     6,244 ms |       879 ms |
+| tsc                  |   5 |       16.6 ms |      15.2 MB |         5/5 |     2,040 ms |         0 ms |
+| oxlint               |   6 |       15.8 ms |      16.0 MB |         5/6 |       318 ms |        55 ms |
+| tsgo                 |   4 |        9.9 ms |      13.5 MB |         4/4 |       299 ms |         0 ms |
+| golangci-lint        |   1 |       11.9 ms |      11.2 MB |         1/1 |     2,913 ms |         0 ms |
+| rustfmt              |   1 |        1.2 ms |       1.1 MB |         1/1 |         0 ms |         0 ms |
+| eslint               |   6 |       0.00 ms |            0 |           — |    12,005 ms |         0 ms |
+| prettier             |   6 |       0.00 ms |            0 |           — |     3,625 ms |         0 ms |
+| shellcheck           |  11 |       0.01 ms |            0 |           — |       206 ms |         0 ms |
+| gitleaks             |   1 |       0.00 ms |            0 |           — |       904 ms |       888 ms |
+| editorconfig-checker |   1 |       0.00 ms |            0 |           — |       238 ms |       226 ms |
+
+**Baseline (warm `lint`, this repository):**
+
+| Metric                       |                                     Value |
+| ---------------------------- | ----------------------------------------: |
+| `verdictKeys` total          |               71.7 ms warm / 78.3 ms cold |
+| `cache.verdict_bytes_hashed` |              77.5 MB warm / 131.5 MB cold |
+| `cache.file_hashes`          |                                       657 |
+| `exec.verdict_cache_hits`    |                                 25 (warm) |
+| `exec.processes_spawned`     |                          7 warm / 80 cold |
+| `walk.repository_walks`      |                                         2 |
+| `lint` wall-min (n=9)        |                                    1.89 s |
+| `BenchmarkVerdictInputs`     | 5.98 ms/op, 685 MB/s (2,000 × 2 KB files) |
+
+**Two readings that matter for the later tasks.**
+
+1. _The trade is currently positive here._ Every tool the cache applies to costs 1–25 ms of hashing
+   and saves hundreds to thousands of milliseconds of spawn. On this repository Task 4's gate is
+   already met (71.7 ms ≪ 300 ms); the 3,055 ms of the Overview is a property of a 14× larger tree,
+   where `verdictKeys` scales with bytes and `spawn` does not scale as fast.
+2. _The post-run re-hash is half the volume._ Cold: 131.5 MB counted in total against 77.5 MB
+   attributed to `verdictKeys` spans — the missing 54 MB is `recordVerdict` hashing the same files a
+   second time. Warm the two are equal, because a hit never reaches `recordVerdict`. That is Task 2's
+   target, stated as a number: **the second pass is ~41% of all verdict bytes on a cold run and 0% on
+   a fully warm one.**
 
 ### Task 2: Stop hashing the same file twice per task
 

@@ -490,10 +490,22 @@ func (e *Executor) executeTask(ctx context.Context, task Task) ExecutionResult {
 	// that passed, which is as sound for a narrowed invocation as for a full one
 	// — so the read is not gated on coverage. Only the write is.
 	verdictSpan := trace.Start(trace.CatCache, "verdictKeys")
-	verdictKey, verdictInputHash, verdictApplies := e.verdictKeys(task)
-	verdictSpan.EndWith(trace.A("tool", task.ToolName), trace.A("applies", verdictApplies))
+	verdictKey, verdictInputHash, verdictBytes, verdictApplies := e.verdictKeysMeasured(task)
+	// The lookup is a map read under a read lock, so folding it into this span
+	// keeps the recorded duration comparable while letting the hit/miss ride along
+	// with the member count and byte volume that produced it — the three numbers
+	// are only meaningful together.
+	verdictHit := verdictApplies && !e.cache.ShouldRunVerdict(verdictKey, verdictInputHash, e.verdictTTL())
+	verdictSpan.EndWith(
+		trace.A("tool", task.ToolName),
+		trace.A("applies", verdictApplies),
+		trace.A("hit", verdictHit),
+		trace.A("members", len(task.UnitMembers)),
+		trace.A("guards", len(task.UnitGuards)),
+		trace.A("bytes", verdictBytes),
+	)
 	if verdictApplies {
-		if !e.cache.ShouldRunVerdict(verdictKey, verdictInputHash, e.verdictTTL()) {
+		if verdictHit {
 			cntVerdictHit.Add(1)
 			log.Debug("verdict cache hit", zap.String("tool", task.ToolName), zap.String("unit", task.UnitDir))
 			// Same shape as a real run: consumers key JSON-L on RelativeDir and

@@ -32,13 +32,13 @@ func TestVerdictInputsNoticeAConfigEditNoGlobMatches(t *testing.T) {
 	members := []string{source}
 	guards := []string{tsconfig}
 
-	before := verdictInputs(members, guards, root)
+	before, _ := verdictInputs(members, guards, root)
 
 	// Turn strict on. No .ts file changed.
 	if err := os.WriteFile(tsconfig, []byte(`{"compilerOptions":{"strict":true}}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	after := verdictInputs(members, guards, root)
+	after, _ := verdictInputs(members, guards, root)
 
 	if before == after {
 		t.Error("editing tsconfig.json left the verdict inputs unchanged; the stale pass would stand")
@@ -53,11 +53,11 @@ func TestVerdictInputsNoticeADeletedMember(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	before := verdictInputs([]string{file}, nil, root)
+	before, _ := verdictInputs([]string{file}, nil, root)
 	if err := os.Remove(file); err != nil {
 		t.Fatal(err)
 	}
-	if after := verdictInputs([]string{file}, nil, root); before == after {
+	if after, _ := verdictInputs([]string{file}, nil, root); before == after {
 		t.Error("a deleted member left the inputs unchanged")
 	}
 }
@@ -162,9 +162,9 @@ func TestCoverageIsCompleteWhenArgvIgnoresTheSelection(t *testing.T) {
 func TestVerdictInputsNoticeAnAllowlistedEnvChange(t *testing.T) {
 	root := t.TempDir()
 
-	before := verdictInputs(nil, nil, root)
+	before, _ := verdictInputs(nil, nil, root)
 	t.Setenv("GOFLAGS", "-tags=integration")
-	if after := verdictInputs(nil, nil, root); before == after {
+	if after, _ := verdictInputs(nil, nil, root); before == after {
 		t.Error("GOFLAGS left the verdict inputs unchanged")
 	}
 }
@@ -174,9 +174,9 @@ func TestVerdictInputsNoticeAnAllowlistedEnvChange(t *testing.T) {
 func TestVerdictInputsIgnoreUnrelatedEnv(t *testing.T) {
 	root := t.TempDir()
 
-	before := verdictInputs(nil, nil, root)
+	before, _ := verdictInputs(nil, nil, root)
 	t.Setenv("SOME_TERMINAL_SESSION_ID", "abc123")
-	if after := verdictInputs(nil, nil, root); before != after {
+	if after, _ := verdictInputs(nil, nil, root); before != after {
 		t.Error("an unrelated variable changed the verdict inputs")
 	}
 }
@@ -191,11 +191,11 @@ func TestVerdictInputsAreRehashedAfterTheRun(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	before := verdictInputs([]string{member}, nil, root)
+	before, _ := verdictInputs([]string{member}, nil, root)
 	if err := os.WriteFile(member, []byte("after"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	after := verdictInputs([]string{member}, nil, root)
+	after, _ := verdictInputs([]string{member}, nil, root)
 
 	if before == after {
 		t.Fatal("a mid-run edit must change the input vector, or the check is inert")
