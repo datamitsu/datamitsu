@@ -1,7 +1,8 @@
 # Plan: Cut the per-run CPU that decides not to run anything
 
-**Status:** ready for implementation. The measurements are recorded; two of the four tasks have a
-gate that may close them, and that is deliberate.
+**Status:** complete. All seven tasks are done; Task 4's gate closed and that task is deliberately
+skipped. Final numbers are in Overview § Final measurements. What remains is the owner-machine
+manual verification listed under Post-Completion.
 **Date:** 2026-08-26.
 **Related:** `internal/tooling/verdict.go`, `internal/tooling/executor.go`, `internal/bundled`,
 `internal/parsermanager`, `internal/cache`, `internal/runner`.
@@ -36,6 +37,39 @@ per-project tool — four to six times per run on this repository.
 
 This plan does not assume the verdict cache is wrong. It makes the trade visible per tool first
 (Task 1), then removes the duplication that is unambiguously waste (Tasks 2–3), then decides.
+
+### Final measurements
+
+The table above is the **pre-change baseline** and is kept for the shape it records. What follows
+replaces the plan's estimates with what was actually measured, on this repository (1,087 tracked
+files, i9-14900K, `DATAMITSU_TRACE=1`), A/B against a binary built from `f062b0d` — the commit the
+branch was cut from. Full method and per-task detail live in the Task 1–6 sections below.
+
+| Metric                             |   Baseline |      Final |                                 Change | Task |
+| ---------------------------------- | ---------: | ---------: | -------------------------------------: | ---- |
+| `verdictKeys` total, warm `lint`   |    71.7 ms |    27.4 ms |                             **−61.8%** | 2, 3 |
+| `verdictKeys` max single task      |    11.9 ms |   10.66 ms |                                   −10% | 3    |
+| `cache.verdict_bytes_hashed`, warm |    77.5 MB |    11.3 MB |                             **−85.4%** | 3    |
+| `cache.verdict_bytes_hashed`, cold |   131.5 MB |    77.6 MB |                                 −41.0% | 2    |
+| `cache.verdict_hash_memo_misses`   |          — |      1,097 |              ≈ 1 read per tracked file | 3    |
+| `cache.verdict_hash_memo_hits`     |          — |      5,645 |                                      — | 3    |
+| `getCommandInfo` total             |   15.61 ms |    9.72 ms |                                 −37.7% | 5    |
+| `exec.command_info_resolved`       |         30 |         21 |     one per distinct app, not per task | 5    |
+| `parser.module_instantiations`     |   = parses |          1 |                     one per live parse | 5    |
+| `walk.repository_walks`, `check`   |          3 |          2 |                                     −1 | 5    |
+| `lint` wall-min (n=9)              |    1.919 s |    1.879 s |                                  −2.1% | —    |
+| `check` wall-min (n=9)             |    5.226 s |    5.093 s |                                  −2.5% | —    |
+| `BenchmarkVerdictInputs`           | 5.98 ms/op | 6.95 ms/op |                         unchanged path | 2    |
+| `BenchmarkVerdictProbe`            |          — | 1.18 ms/op | 5.9× cheaper than the pass it replaces | 2    |
+
+**The set of tools that ran is byte-identical** to the baseline on a cold cache, a warm cache, and a
+run where one file changed — the criterion the plan says to fail on. Task 4's gate closed (27.4 ms
+against a 300 ms threshold), so no policy knob was added.
+
+Wall-clock moves by ~2% because the ~50 ms this plan removes is a small fraction of a 1.9 s run on a
+1,087-file tree. The saving scales with tracked bytes and with tasks per app, which is what the
+14,711-file measurement in the table above was dominated by; re-running it there is Post-Completion
+manual verification on the owner's machine.
 
 ## Context (from discovery)
 
@@ -474,13 +508,31 @@ large repository stays in Post-Completion as owner-machine manual verification.
 
 ### Task 7: [Final] Update documentation
 
-- [ ] record the final measurement table in this plan file, replacing the estimates
-- [ ] document the content-hash memo and its validity check in
+- [x] record the final measurement table in this plan file, replacing the estimates →
+      **Overview § Final measurements**; the 14,711-file table above it is kept, relabelled as the
+      pre-change baseline it always was
+- [x] document the content-hash memo and its validity check in
       `website/docs/guides/architecture/caching.md`, including the rule that the post-run probe
-      bypasses it and why
-- [ ] if Task 4 produced a proposal, record the owner's decision here rather than leaving it open
-- [ ] run `task gen:llms-docs` and commit `internal/llmsdocs/embed` if any website page changed —
-      the `llms-docs-drift` CI job re-harvests on every PR and fails on any diff
+      bypasses it and why → new **Unit Verdicts and the Content-Hash Memo** section
+- [x] if Task 4 produced a proposal, record the owner's decision here rather than leaving it open →
+      no proposal: the gate closed at 27.4 ms against a 300 ms threshold, so there is nothing to
+      decide (Task 4 § decision)
+- [x] run `task gen:llms-docs` and commit `internal/llmsdocs/embed` if any website page changed —
+      the `llms-docs-drift` CI job re-harvests on every PR and fails on any diff → re-harvested
+      (53 pages, `pageSetHash 6d764cd54e5db68d6c9b9492255d2c79`) **after** `pnpm dm check` reformatted
+      the new tables, so the embedded bytes match the formatted page
+
+#### Task 7 notes
+
+The caching page gains one section rather than a new page: the memo is not a cache users configure,
+it is an implementation detail of a cache that is already documented there, and splitting it would
+separate the memo from the verdict it serves. Three things are stated explicitly because they are the
+parts that can be got wrong later — the two-second mtime guard and what it rules out, that the
+post-run probe bypasses the memo (and that a tautological check is worse than none), and that `fix`
+keeps the full re-hash rather than the stat probe.
+
+**Suite state at close:** `go test ./...` — 0 failures. `go test ./test/cli/ -count=2` — pass with
+`git status test/cli` clean, so zero goldens were regenerated. `pnpm dm check` — 80 runs, 0 failures.
 
 ## Technical Details
 

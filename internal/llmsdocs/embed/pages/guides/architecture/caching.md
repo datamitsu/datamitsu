@@ -118,6 +118,76 @@ When a fix operation modifies a file, the lint cache for that file is reset:
 
 This is necessary because the fixer's changes might introduce new lint issues. For example, an auto-formatter might reformat code in a way that triggers a different linter rule. Resetting the lint cache ensures linters always re-check after fixes.
 
+## Unit Verdicts and the Content-Hash Memo
+
+Per-file tracking answers "has this file changed?". A tool with `granularity: "per-project"` asks a
+coarser question: "has anything in this unit changed?" — and the answer is a **verdict**, keyed by a
+hash over every member of the unit plus every `invalidateOn` guard.
+
+Computing that key means reading and hashing the files of the unit. The cost is real: a package with
+three thousand files is hashed once per per-project tool planning a task there, four to six times per
+run in a typical monorepo, even though the content of a file does not depend on which tool is asking.
+
+### The memo
+
+datamitsu keeps a **process-scoped content-hash memo** — a `path -> (hash, size, modification time)`
+map, shared by every task of one run and safe under the executor's worker pool. The first tool to
+need a file reads and hashes it; every later tool over the same file gets the hash back without
+touching the disk.
+
+This is a cache of a pure function (bytes → XXH3-128) behind a **validity check**, not an assumption
+that files hold still. An entry is only handed out when all of the following are true:
+
+| Condition                                               | What it rules out                                           |
+| ------------------------------------------------------- | ----------------------------------------------------------- |
+| A fresh `stat` succeeds and reports the same **size**   | A rewrite that changed the file's length                    |
+| ...and the same **modification time**                   | Any write the filesystem recorded                           |
+| ...and that mtime is at least **2 seconds** in the past | A rewrite inside the current mtime tick, at the same length |
+
+The third condition is the subtle one. Filesystem mtime granularity is coarse — FAT's tick is two
+seconds — so a file written, hashed, and rewritten within one tick can present an identical `stat`
+while holding different bytes. An entry younger than that granularity is therefore never trusted;
+the file is re-read. Every uncertain answer is a miss, and a miss only ever costs a read.
+
+### The post-run probe bypasses the memo
+
+Before running a tool, datamitsu computes the unit's input hash. **After** the tool finishes, it
+computes it again, and records the verdict only if the two agree. That second pass is the only thing
+standing between "this unit passed" and a lie: it catches inputs that moved underneath the tool while
+it ran.
+
+The post-run probe **must not consult the memo**, and does not. The memo was populated by the pre-run
+pass over those exact paths; answering the probe from it would compare the pre-run value against
+itself, and the check would pass by construction no matter what happened on disk. A tautological
+check is worse than no check, because it looks like a check.
+
+The same rule applies to a `fix` operation from both directions. A fixer rewrites files by design —
+mtime granularity is exactly the case that bites — so `fix` keeps the **full re-hash** for its second
+pass rather than the stat-based probe a read-only `lint` uses, and neither pass reads through the
+memo.
+
+```mermaid
+graph TD
+    P["Pre-run: hash unit inputs"] -->|"reads through memo"| M[("Content-hash memopath → hash, size, mtime")]
+    P --> R["Run tool"]
+    R --> Q{"Operation?"}
+    Q -->|"lint (read-only)"| S["Re-stat every path,re-hash only what moved"]
+    Q -->|"fix"| F["Full re-hash"]
+    S -->|"bypasses memo"| D{"Inputs unchanged?"}
+    F -->|"bypasses memo"| D
+    D -->|"Yes"| W["Record verdict"]
+    D -->|"No"| N["Record nothing"]
+
+    style M fill:#e8f4fd,stroke:#2196f3
+    style W fill:#e8f5e9,stroke:#4caf50
+    style N fill:#ffebee,stroke:#f44336
+```
+
+The read-only probe re-stats every member and guard and re-hashes only the paths whose size or mtime
+changed since the pre-run pass. A path that cannot be stat'ed, one that was missing and now exists,
+or one modified inside the current tick falls back to a full re-hash — never to assuming it was
+unchanged.
+
 ## Cache Invalidation Best Practices
 
 ### Declare tool configuration files
