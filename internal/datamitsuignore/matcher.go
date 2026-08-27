@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/bmatcuk/doublestar/v4"
+	"github.com/datamitsu/datamitsu/internal/globmatch"
 )
 
 func toSlash(p string) string {
@@ -16,7 +16,19 @@ func toSlash(p string) string {
 
 type dirRules struct {
 	dir   string // relative to root, "" for root
-	rules []Rule
+	rules []preparedRule
+}
+
+// preparedRule is a Rule with everything that does not depend on the path being
+// tested resolved once: the glob scoped to the rule's directory, and that glob
+// compiled.
+//
+// IsDisabled runs once per (file, tool) — tens of thousands of times when
+// planning a large repository — and used to rebuild the scoped pattern string
+// and re-parse it on every one of those calls.
+type preparedRule struct {
+	rule Rule
+	set  globmatch.Set
 }
 
 // Matcher collects .datamitsuignore rules per directory and determines
@@ -49,7 +61,64 @@ func (m *Matcher) AddRules(relDir string, rules []Rule) {
 	if len(rules) == 0 {
 		return
 	}
-	m.entries = append(m.entries, dirRules{dir: toSlash(relDir), rules: rules})
+	dir := toSlash(relDir)
+	prepared := make([]preparedRule, 0, len(rules))
+	for _, rule := range rules {
+		glob := rule.Glob
+		// A relative glob is scoped to the rule's directory. Resolved here, not
+		// per query.
+		if dir != "" && !strings.HasPrefix(glob, "**/") {
+			glob = dir + "/" + glob
+		}
+		prepared = append(prepared, preparedRule{rule: rule, set: globmatch.New([]string{glob})})
+	}
+	m.entries = append(m.entries, dirRules{dir: dir, rules: prepared})
+
+	// Kept sorted here rather than on every query. Rules are applied root-first
+	// so a deeper directory can override a shallower one, and IsDisabled runs
+	// once per (file, tool) — tens of thousands of times on a large repository —
+	// so the ordering must not cost a slice allocation and a sort each time.
+	// A stable sort of an already-ordered slice with one appended entry puts that
+	// entry at the end of its depth group, which is the same order sorting once
+	// at the end would produce.
+	sort.SliceStable(m.entries, func(i, j int) bool {
+		return depth(m.entries[i].dir) < depth(m.entries[j].dir)
+	})
+}
+
+// DisabledEverywhere reports whether toolName is disabled for every path in the
+// tree and no rule anywhere can re-enable it.
+//
+// It exists so a caller can drop a tool before doing any per-file work. The
+// answer is deliberately conservative — it proves the "disabled" case and says
+// false whenever it cannot — because the only sound use of a true is to skip
+// work that would have produced nothing anyway.
+//
+// A proof needs both halves: some root-scoped rule that disables the tool (or
+// every tool) across the whole tree, and no inversion anywhere naming the tool
+// or "*". Only a `**/*` glob at the root covers the tree; a narrower glob such
+// as `**/*.md` leaves paths it does not match enabled.
+func (m *Matcher) DisabledEverywhere(toolName string) bool {
+	disabled := false
+	for _, e := range m.entries {
+		for _, pr := range e.rules {
+			rule := pr.rule
+			for _, tool := range rule.Tools {
+				if rule.Invert && (tool == toolName || tool == "*") {
+					return false
+				}
+			}
+			if rule.Invert || e.dir != "" || rule.Glob != "**/*" {
+				continue
+			}
+			for _, tool := range rule.Tools {
+				if tool == toolName || tool == "*" {
+					disabled = true
+				}
+			}
+		}
+	}
+	return disabled
 }
 
 // IsDisabled reports whether toolName should be skipped for relFilePath.
@@ -64,67 +133,65 @@ func (m *Matcher) IsDisabled(toolName string, relFilePath string) bool {
 	relFilePath = toSlash(relFilePath)
 	fileDir := toSlash(filepath.Dir(relFilePath))
 
-	// Collect applicable entries: those whose directory is an ancestor of (or
-	// equal to) the file's directory.
-	var applicable []dirRules
-	for _, e := range m.entries {
-		if isAncestorOrEqual(e.dir, fileDir) {
-			applicable = append(applicable, e)
-		}
-	}
-
-	if len(applicable) == 0 {
-		return false
-	}
-
-	// Sort by directory depth (root first, deeper dirs later).
-	// Stable sort preserves insertion order for same-depth entries,
-	// ensuring deterministic precedence between config-defined rules
-	// and file-based rules at the same directory level.
-	sort.SliceStable(applicable, func(i, j int) bool {
-		return depth(applicable[i].dir) < depth(applicable[j].dir)
-	})
-
 	// wildcard tracks whether a "*" rule currently disables every tool.
-	// overrides holds explicit per-tool decisions (true=disabled, false=enabled)
-	// that take precedence over wildcard, so a specific re-enable like
-	// "!**/*.md: eslint" wins even after a blanket "**/*: *" disable.
+	// override holds the explicit decision for toolName (true=disabled,
+	// false=enabled), which takes precedence over wildcard — so a specific
+	// re-enable like "!**/*.md: eslint" wins even after a blanket "**/*: *".
+	//
+	// Only toolName's own decision is tracked, not a map of every tool's: the
+	// question is about one tool, and the blanket-rule reset that used to
+	// clear(overrides) is exactly "forget what we knew about toolName". This
+	// runs once per (file, tool), so the map and the per-call applicable slice
+	// it replaced were the allocation cost of planning on a large repository.
 	wildcard := false
-	overrides := make(map[string]bool)
+	override, hasOverride := false, false
 
-	for _, e := range applicable {
-		for _, rule := range e.rules {
-			glob := rule.Glob
-			// If the rule's glob is relative, scope it to the rule's directory.
-			if e.dir != "" && !strings.HasPrefix(glob, "**/") {
-				glob = e.dir + "/" + glob
+	// m.entries is kept sorted by directory depth, root first, so rules apply in
+	// precedence order without a per-call sort.
+	for _, e := range m.entries {
+		if !isAncestorOrEqual(e.dir, fileDir) {
+			continue
+		}
+		for _, pr := range e.rules {
+			rule := pr.rule
+			if !ruleMentions(rule, toolName) {
+				continue
 			}
-
-			matched, err := doublestar.Match(glob, relFilePath)
-			if err != nil || !matched {
+			if !pr.set.Match(relFilePath) {
 				continue
 			}
 
 			for _, tool := range rule.Tools {
-				switch {
-				case tool == "*":
+				switch tool {
+				case "*":
 					// A blanket (re-)enable/disable resets prior per-tool
 					// exceptions: the later, broader rule wins.
 					wildcard = !rule.Invert
-					clear(overrides)
-				case rule.Invert:
-					overrides[tool] = false
-				default:
-					overrides[tool] = true
+					hasOverride = false
+				case toolName:
+					override, hasOverride = !rule.Invert, true
 				}
 			}
 		}
 	}
 
-	if v, ok := overrides[toolName]; ok {
-		return v
+	if hasOverride {
+		return override
 	}
 	return wildcard
+}
+
+// ruleMentions reports whether a rule can affect toolName at all, so a rule
+// naming only other tools is rejected before its glob is matched. A rule listing
+// 20 tools for a file we are asking about one of them is the common shape, and
+// the glob match is the expensive part.
+func ruleMentions(rule Rule, toolName string) bool {
+	for _, tool := range rule.Tools {
+		if tool == "*" || tool == toolName {
+			return true
+		}
+	}
+	return false
 }
 
 // IsProjectDisabled reports whether toolName should be skipped for an entire

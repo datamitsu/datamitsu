@@ -195,6 +195,35 @@ func IsStartupTimingsEnabled() bool {
 	return value == 1
 }
 
+// IsTraceEnabled returns true if the full execution trace should be recorded.
+//
+// It is the deepest of the three instrumentation switches: IsTimingsEnabled
+// reports a fixed set of planner/runner stages, IsStartupTimingsEnabled reports
+// aggregated config-load phases, and this one records every span and counter the
+// code declares, writes them to a file and prints a summary. Independent of both
+// — any combination may be on.
+func IsTraceEnabled() bool {
+	valueStr := trace.DefaultValue
+	if envValue := os.Getenv(trace.Name); envValue != "" {
+		valueStr = envValue
+	}
+
+	value, err := strconv.Atoi(valueStr)
+	if err != nil {
+		return false
+	}
+	return value == 1
+}
+
+// GetTracePath returns the directory execution traces are written to: the
+// DATAMITSU_TRACE_DIR override, else {cache}/traces.
+func GetTracePath() string {
+	if dir := os.Getenv(traceDir.Name); dir != "" {
+		return dir
+	}
+	return filepath.Join(GetCachePath(), "traces")
+}
+
 // IsForceGitSubprocessEnabled returns true if git-root discovery must go
 // through the git subprocess instead of the pure-Go filesystem walk. It is the
 // documented escape hatch for a repository layout the walk refuses to answer
@@ -303,6 +332,23 @@ func OfflineVarName() string {
 // NoOCI returns true if OCI bundle store seeding is disabled.
 func NoOCI() bool {
 	return os.Getenv(noOCI.Name) != ""
+}
+
+// ConfigCacheEnabled reports whether an evaluated config chain may be served
+// from and written to the on-disk config-evaluation cache. It defaults to on;
+// only an explicitly falsy value turns it off, so a typo degrades to caching
+// rather than to a silent 30 ms tax on every invocation.
+func ConfigCacheEnabled() bool {
+	value := os.Getenv(configCache.Name)
+	if value == "" {
+		value = configCache.DefaultValue
+	}
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "0", "false", "off", "no":
+		return false
+	default:
+		return true
+	}
 }
 
 // NoParse returns true if output parsing is disabled (tools' raw output is shown

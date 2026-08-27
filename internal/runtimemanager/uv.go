@@ -17,6 +17,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/httpx"
+	"github.com/datamitsu/datamitsu/internal/trace"
 	"github.com/datamitsu/datamitsu/internal/ui"
 
 	"go.uber.org/zap"
@@ -77,6 +78,8 @@ func (rm *RuntimeManager) InstallUVApp(ctx context.Context, appName string, appC
 }
 
 func (rm *RuntimeManager) installUVAppOnce(ctx context.Context, appName string, appConfig *binmanager.AppConfigUV, customEnv map[string]string, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
+	defer trace.Start(trace.CatInstall, "uv.installApp").EndWith(trace.A("app", appName))
+
 	runtimeName, rc, err := rm.ResolveRuntime(appConfig.Runtime, config.RuntimeKindUV)
 	if err != nil {
 		return fmt.Errorf("failed to resolve runtime for %q: %w", appName, err)

@@ -216,6 +216,8 @@ Configuration files run in a JavaScript VM (goja) with access to several built-i
 
 See the [Configuration API reference](/docs/reference/configuration-api) for complete API documentation.
 
+The evaluated result is cached on disk per set of inputs, so an unchanged config chain is not re-evaluated on the next command (see [the config-evaluation cache](/docs/guides/architecture/startup#the-config-evaluation-cache)). A config that reads the clock (`Date.now()`, `new Date()` with no arguments), calls `Math.random()`, or writes to `console.*` still evaluates normally — it simply never gets a cache entry, because a cache hit runs no JavaScript and could not reproduce the value or the output. Dates built from explicit arguments (`new Date(2020, 0, 1)`) are pure and cost nothing.
+
 ## Environment Variables
 
 | Variable                         | Description                                | Default                                      |
@@ -224,6 +226,7 @@ See the [Configuration API reference](/docs/reference/configuration-api) for com
 | `DATAMITSU_MAX_PARALLEL_WORKERS` | Max parallel tool workers                  | `max(4, floor(NumCPU * 0.75))`, capped at 16 |
 | `DATAMITSU_UNIT_CACHE_TTL`       | Minutes a project-level verdict is trusted | `1440` (24h)                                 |
 | `DATAMITSU_LSP_FORMAT_WIDEN_TO`  | Editor format-on-save widening             | `unit`                                       |
+| `DATAMITSU_CONFIG_CACHE`         | Serve the evaluated config chain from disk | `1` (`0`/`false`/`off`/`no` disables)        |
 | `DATAMITSU_NO_SPONSOR`           | Suppress sponsor messages                  | -                                            |
 | `NO_COLOR`                       | Disable color output                       | -                                            |
 | `FORCE_COLOR`                    | Force color output                         | -                                            |

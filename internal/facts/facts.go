@@ -70,17 +70,19 @@ func Collect(ctx context.Context, binaryCommandOverride string) (*Facts, string,
 
 // CollectWithOptions is Collect with explicit CollectOptions.
 func CollectWithOptions(ctx context.Context, binaryCommandOverride string, opts CollectOptions) (*Facts, string, error) {
-	libc := target.LibcUnknown
-	if runtime.GOOS == "linux" {
-		libc = target.DetectLibc(ctx)
-	}
+	// Through HostTarget, not DetectLibc: the memo runs the `ldd` probe once per
+	// process rather than once per engine (four engines are built per config
+	// load), and it is the only path that honours the DATAMITSU_LIBC override.
+	// Calling DetectLibc here made facts().libc disagree with the libc used for
+	// store paths and OCI bundle selection whenever the override was set.
+	host := target.HostTarget()
 
 	facts := &Facts{
 		PackageName: ldflags.PackageName,
 		Version:     ldflags.Version,
 		OS:          runtime.GOOS,
 		Arch:        runtime.GOARCH,
-		Libc:        string(libc),
+		Libc:        string(host.Libc),
 	}
 
 	// Get binary path
@@ -137,18 +139,28 @@ func CollectWithOptions(ctx context.Context, binaryCommandOverride string, opts 
 	return facts, gitRoot, nil
 }
 
-// collectAllEnv collects all environment variables
+// collectAllEnv collects all environment variables except the observation-only
+// ones.
+//
+// This map is facts().env, the whole environment config JS can branch on, and
+// the config-evaluation cache key hashes env.EnvironAll(), which drops exactly
+// these variables. Leaving one visible here would make it a config input that
+// cannot move the key, so a traced run could be served an untraced run's config.
 func collectAllEnv() map[string]string {
 	envMap := make(map[string]string)
 
-	for _, env := range os.Environ() {
-		parts := strings.SplitN(env, "=", 2)
+	for _, kv := range os.Environ() {
+		parts := strings.SplitN(kv, "=", 2)
 		if len(parts) != 2 {
 			continue
 		}
 
 		key := parts[0]
 		value := parts[1]
+
+		if env.ObservationOnly(key) {
+			continue
+		}
 
 		envMap[key] = value
 	}

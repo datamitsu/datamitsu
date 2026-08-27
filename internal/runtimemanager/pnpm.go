@@ -20,6 +20,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/httpx"
 	"github.com/datamitsu/datamitsu/internal/pnpmdefaults"
+	"github.com/datamitsu/datamitsu/internal/trace"
 	"github.com/datamitsu/datamitsu/internal/ui"
 	"github.com/goccy/go-yaml"
 )
@@ -124,6 +125,8 @@ type npmVersionMeta struct {
 
 func (rm *RuntimeManager) installPNPM(ctx context.Context, version string, destDir string, pnpmHash string) error {
 	key := version + "\x00" + pnpmHash
+	defer trace.Start(trace.CatInstall, "pnpm.install").End()
+
 	_, err, _ := rm.pnpmInstall.Do(key, func() (any, error) {
 		return nil, rm.downloadPNPMFromRegistry(ctx, version, destDir, pnpmHash)
 	})

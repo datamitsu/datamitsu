@@ -387,3 +387,30 @@ func TestCollectPublishesVersion(t *testing.T) {
 		t.Errorf("Version = %q, want %q", facts.Version, ldflags.Version)
 	}
 }
+
+// TestCollectExcludesObservationOnlyEnv pins the boundary between the
+// environment config JS can branch on and the environment the config-evaluation
+// cache key hashes. env.EnvironAll drops the observation-only variables; leaving
+// one in facts().env would make it a config input that cannot move the key, so a
+// traced run could be served an untraced run's evaluated config.
+func TestCollectExcludesObservationOnlyEnv(t *testing.T) {
+	t.Setenv("DATAMITSU_TRACE", "1")
+	t.Setenv("DATAMITSU_TRACE_DIR", "/tmp/traces")
+	t.Setenv("DATAMITSU_CONFIG_CACHE", "0")
+	t.Setenv("DATAMITSU_OFFLINE", "1")
+
+	f, _, err := Collect(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Collect() error = %v", err)
+	}
+
+	for _, name := range []string{"DATAMITSU_TRACE", "DATAMITSU_TRACE_DIR", "DATAMITSU_CONFIG_CACHE"} {
+		if _, ok := f.Env[name]; ok {
+			t.Errorf("facts().env exposes observation-only %s; it is absent from env.EnvironAll and so cannot move the config-eval key", name)
+		}
+	}
+	// A variable that is not observation-only still reaches config JS.
+	if got := f.Env["DATAMITSU_OFFLINE"]; got != "1" {
+		t.Errorf("facts().env[DATAMITSU_OFFLINE] = %q, want %q", got, "1")
+	}
+}

@@ -15,11 +15,21 @@ import (
 	"time"
 
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/configcache"
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/hashutil"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
+	"github.com/datamitsu/datamitsu/internal/trace"
 	"github.com/shamaton/msgpack/v2"
 	"go.uber.org/zap"
+)
+
+// Cache counters. hashFile reads and hashes a whole file, so its call count is
+// the cache layer's real IO volume — a per-file span would cost more than the
+// hash for a small file.
+var (
+	cntHashFile  = trace.NewCounter("cache.file_hashes")
+	cntShouldRun = trace.NewCounter("cache.should_run_checks")
 )
 
 // Operation represents the type of operation (lint or fix)
@@ -143,6 +153,8 @@ func NewCache(
 
 // Load loads the cache from disk
 func (c *Cache) Load() error {
+	defer trace.Start(trace.CatCache, "cache.Load").End()
+
 	f, err := os.Open(c.path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -170,8 +182,15 @@ func (c *Cache) Load() error {
 		return fmt.Errorf("failed to read cache file: %w", err)
 	}
 
+	decodeSpan := trace.Start(trace.CatCache, "cache.decode")
 	var data File
-	if err := msgpack.Unmarshal(fileData, &data); err != nil {
+	err = msgpack.Unmarshal(fileData, &data)
+	decodeSpan.EndWith(
+		trace.A("bytes", len(fileData)),
+		trace.A("entries", len(data.Entries)),
+		trace.A("verdicts", len(data.Verdicts)),
+	)
+	if err != nil {
 		return fmt.Errorf("failed to decode cache: %w", err)
 	}
 
@@ -207,6 +226,8 @@ func (c *Cache) Load() error {
 
 // Save saves the cache to disk atomically
 func (c *Cache) Save() error {
+	defer trace.Start(trace.CatCache, "cache.Save").End()
+
 	// Prevent concurrent saves
 	c.saveMu.Lock()
 	defer c.saveMu.Unlock()
@@ -307,6 +328,8 @@ func (c *Cache) Prune() {
 // Returns true if the tool should run, false if it can be skipped (cache hit)
 // toolCacheEnabled controls whether caching is enabled for this specific tool
 func (c *Cache) ShouldRun(file, tool string, op Operation, toolCacheEnabled bool) bool {
+	cntShouldRun.Add(1)
+
 	// Cache disabled for this tool - always run
 	if !toolCacheEnabled {
 		return true
@@ -508,6 +531,8 @@ func calculateInvalidationKey(
 
 // hashFile calculates XXH3-128 hash of a file's contents
 func hashFile(path string) (string, error) {
+	cntHashFile.Add(1)
+
 	f, err := os.Open(path)
 	if err != nil {
 		return "", fmt.Errorf("open file for hashing: %w", err)
@@ -552,7 +577,9 @@ func ClearAll(cacheDir string) error {
 	if err := os.RemoveAll(projectsDir); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to remove projects cache directory: %w", err)
 	}
-	return nil
+	// The evaluated-config artifacts live in a sibling tree, so "clear the cache"
+	// has to name it explicitly or a stale-looking config survives the clear.
+	return configcache.ClearAll(cacheDir)
 }
 
 // ClearProject removes the entire project cache directory (lint/fix + tool caches)
@@ -565,7 +592,10 @@ func ClearProject(cacheDir string, projectPath string) error {
 	if err := os.RemoveAll(projectDir); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to remove project directory: %w", err)
 	}
-	return nil
+	if !filepath.IsAbs(projectPath) {
+		return nil // not a git root: nothing was written under the projects namespace
+	}
+	return configcache.ClearProject(cacheDir, projectPath)
 }
 
 // MarkDirty marks cache as needing save (non-blocking)
@@ -675,6 +705,8 @@ func (c *Cache) debounceSave() {
 // lose a write; correctness rests on the mismatch rules below, not on mutual
 // exclusion.
 func (c *Cache) mergeFromDisk() error {
+	defer trace.Start(trace.CatCache, "cache.mergeFromDisk").End()
+
 	f, err := os.Open(c.path)
 	if err != nil {
 		return nil // no file yet: nothing to merge

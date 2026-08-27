@@ -1,1 +1,2 @@
 Would delete: <CACHE>/cache/projects/<HASH> (entire project cache directory)
+Would delete: <CACHE>/cache/config-eval/projects/<HASH> (evaluated configs)

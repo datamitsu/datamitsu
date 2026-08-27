@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 53,
-  "pageSetHash": "5832ae04e6b998beeef2cb2d65e9fdde",
+  "pageSetHash": "d20677bada3e0c708cccc0ecbc5faf12",
   "pages": [
     {
       "slug": "about",
@@ -197,8 +197,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/caching.md",
       "title": "Caching Strategy",
       "description": "How datamitsu tracks per-file results, builds invalidation keys from configuration and file hashes, and safely persists cache state under concurrent execution",
-      "bytes": 10813,
-      "contentHash": "b793d303cbbea07f287bc365f5b3b868"
+      "bytes": 18987,
+      "contentHash": "c90ee9f163431d51bf781103f1cd2f73"
     },
     {
       "slug": "guides/architecture/discovery",
@@ -226,8 +226,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/index.md",
       "title": "Internal Architecture",
       "description": "Overview of datamitsu's internal execution model - file discovery, task planning, parallel execution, and caching",
-      "bytes": 3795,
-      "contentHash": "592c6e2008b3929f023b5f411eeab1a2"
+      "bytes": 3771,
+      "contentHash": "6d1355029c26044b089d3feca222f23e"
     },
     {
       "slug": "guides/architecture/parsers",
@@ -235,8 +235,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/parsers.md",
       "title": "WASM Output Parsers",
       "description": "How datamitsu declares, builds, delivers over two channels, verifies, and loads sandboxed Rust→WASM output parsers, and how the line-based diff-in-core powers formatting",
-      "bytes": 26329,
-      "contentHash": "fdecfe97408ad64c97bb56f740bcc7d2"
+      "bytes": 27974,
+      "contentHash": "0a16db150d913d4854267356e51ca956"
     },
     {
       "slug": "guides/architecture/planner",
@@ -253,8 +253,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/startup.md",
       "title": "Startup and Config Load",
       "description": "What every datamitsu invocation pays before the first tool runs - the config-load cost model, the git-root memo, and how to measure it",
-      "bytes": 9823,
-      "contentHash": "2146ff03aa2eda5006be7c003e545f88"
+      "bytes": 19605,
+      "contentHash": "572a1383c926ec987eb3f34c27c2e09a"
     },
     {
       "slug": "guides/binary-management",
@@ -271,8 +271,8 @@
       "url": "https://datamitsu.com/docs/guides/configuration.md",
       "title": "Configuration",
       "description": "How to configure datamitsu with JavaScript config files, remote configs, and config layers",
-      "bytes": 10100,
-      "contentHash": "fccca8e012824f913f9db83b083a525c"
+      "bytes": 10824,
+      "contentHash": "3a35bdd5fb79cbe840ae79073747bead"
     },
     {
       "slug": "guides/managed-configs",
@@ -433,8 +433,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 65159,
-      "contentHash": "336796dcbde445407faca44903fb54e4"
+      "bytes": 65688,
+      "contentHash": "c3f86faee4ab256d1438f2a461457797"
     },
     {
       "slug": "reference/comparison",

@@ -21,6 +21,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/syslist"
 	"github.com/datamitsu/datamitsu/internal/target"
+	"github.com/datamitsu/datamitsu/internal/trace"
 
 	"go.uber.org/zap"
 	"golang.org/x/sync/singleflight"
@@ -444,6 +445,8 @@ func CollectRequiredRuntimes(apps binmanager.MapOfApps, runtimes config.MapOfRun
 // InstallRuntimes downloads and caches managed runtimes with progress bars.
 // System runtimes are reported as already cached. Returns installation statistics.
 func (rm *RuntimeManager) InstallRuntimes(ctx context.Context, names []string, concurrency int) (RuntimeInstallStats, error) {
+	defer trace.Start(trace.CatInstall, "runtime.installAll").EndWith(trace.A("runtimes", len(names)))
+
 	stats := RuntimeInstallStats{
 		Downloaded:    []string{},
 		AlreadyCached: []string{},
@@ -956,6 +959,8 @@ func (rm *RuntimeManager) getRuntimePath(ctx context.Context, runtimeName string
 }
 
 func (rm *RuntimeManager) downloadRuntime(ctx context.Context, runtimeName string, rc config.RuntimeConfig, configHash string, binaryPath *string) error {
+	defer trace.Start(trace.CatInstall, "runtime.install").EndWith(trace.A("runtime", runtimeName))
+
 	// Bail out early if the per-app install deadline already elapsed before we
 	// even started acquiring the runtime. The binary download itself runs through
 	// binmanager, which applies its own per-app install timeout, so the heavy

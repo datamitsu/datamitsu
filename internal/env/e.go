@@ -90,6 +90,22 @@ var (
 		Description:  "Resolve the git root by forking git instead of walking the filesystem (1=enabled, 0=disabled)",
 	}
 
+	// trace and traceDir drive internal/trace. Both are deliberately excluded
+	// from Environ — see the note there. Tracing observes what datamitsu does
+	// without changing it, so folding it into the source-mode staleness key
+	// would make turning tracing on re-bake every farm, and the first traced
+	// invocation would then measure a rebake instead of the command.
+	trace = envVar{
+		Name:         strings.ToUpper(ldflags.PackageName) + "_TRACE",
+		DefaultValue: "0",
+		Description:  "Record a full execution trace (spans + counters) to a file and stderr (1=enabled, 0=disabled)",
+	}
+
+	traceDir = envVar{
+		Name:        strings.ToUpper(ldflags.PackageName) + "_TRACE_DIR",
+		Description: "Directory for execution trace files (default {cache}/traces)",
+	}
+
 	concurrency = envVar{
 		Name:         strings.ToUpper(ldflags.PackageName) + "_CONCURRENCY",
 		DefaultValue: "3",
@@ -136,6 +152,16 @@ var (
 		Name:         strings.ToUpper(ldflags.PackageName) + "_NO_OCI",
 		DefaultValue: "",
 		Description:  "Disable OCI bundle store seeding (set to any non-empty value)",
+	}
+
+	// configCache switches the on-disk config-evaluation cache
+	// (internal/configcache) off. It decides whether an evaluation is reused,
+	// never what datamitsu produces, so it is excluded from Environ — see the
+	// note there.
+	configCache = envVar{
+		Name:         strings.ToUpper(ldflags.PackageName) + "_CONFIG_CACHE",
+		DefaultValue: "1",
+		Description:  "Reuse the evaluated config chain from disk (set to 0 to always re-evaluate)",
 	}
 
 	noParse = envVar{

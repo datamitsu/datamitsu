@@ -17,23 +17,33 @@ import (
 	"github.com/datamitsu/datamitsu/internal/utils"
 )
 
-// FindIgnoreFiles returns the paths of every .datamitsuignore file that the
-// planner would actually apply. It uses the same gitignore-aware traversal
-// (traverser.FindFilesFromPath) as internal/tooling's matcher, so the set of
-// files linted/fixed here is identical to the set that takes effect at runtime —
-// no "green lint on a file that never applies" divergence.
+// FindIgnoreFiles walks the tree and returns the paths of every .datamitsuignore
+// file the planner would actually apply, so the set linted and fixed here is the
+// set that takes effect at runtime — no "green lint on a file that never
+// applies" divergence.
+//
+// The runner does not use this: it already walks for the planner and calls
+// IgnoreFilesIn on that list instead. This is for callers holding no list.
 func FindIgnoreFiles(ctx context.Context, rootPath string) ([]string, error) {
 	all, err := traverser.FindFilesFromPath(ctx, rootPath, rootPath)
 	if err != nil {
 		return nil, fmt.Errorf("scanning %s: %w", rootPath, err)
 	}
+	return IgnoreFilesIn(all), nil
+}
+
+// IgnoreFilesIn selects the .datamitsuignore files out of a repository file
+// list the caller has already walked for. Callers that need both this set and
+// the full list — the runner, which also hands the list to the planner — take
+// this form so the tree is walked once.
+func IgnoreFilesIn(all []string) []string {
 	var files []string
 	for _, f := range all {
 		if filepath.Base(f) == ".datamitsuignore" {
 			files = append(files, f)
 		}
 	}
-	return files, nil
+	return files
 }
 
 // normalizeRule formats a parsed rule into canonical form: "{!}{glob}: {tool1}, {tool2}"
@@ -105,15 +115,20 @@ func toRelPath(rootPath, absPath string) string {
 	return rel
 }
 
-// RunFix normalizes formatting of all .datamitsuignore files under rootPath.
-// Parse errors cause an immediate error return.
+// RunFix normalizes formatting of the given .datamitsuignore files (as returned
+// by FindIgnoreFiles). Parse errors cause an immediate error return.
 // Files are written atomically (temp file + rename) only if content changed.
-func RunFix(ctx context.Context, rootPath string) error {
-	files, err := FindIgnoreFiles(ctx, rootPath)
-	if err != nil {
-		return fmt.Errorf("finding .datamitsuignore files: %w", err)
-	}
-
+//
+// The file list is a parameter rather than discovered here because the runner
+// walks the tree once for every consumer of that walk — this, RunLint, and the
+// planner — where each discovering for itself meant repeated full
+// gitignore-aware traversals for one answer.
+//
+// Rewriting in place is what makes that sharing sound: the walk happens before
+// this runs and its result is used after, so the file set the other consumers
+// hold must survive a fix. Creating or deleting a .datamitsuignore here would
+// break that.
+func RunFix(rootPath string, files []string) error {
 	for _, path := range files {
 		if err := fixFile(path, rootPath); err != nil {
 			return err
@@ -181,15 +196,10 @@ func fixFile(path, rootPath string) error {
 	return nil
 }
 
-// RunLint validates all .datamitsuignore files under rootPath.
-// Parse errors cause an immediate error return.
+// RunLint validates the given .datamitsuignore files (as returned by
+// FindIgnoreFiles). Parse errors cause an immediate error return.
 // Formatting issues and unknown tool names produce yellow warnings on stderr.
-func RunLint(ctx context.Context, rootPath string, tools config.MapOfTools) error {
-	files, err := FindIgnoreFiles(ctx, rootPath)
-	if err != nil {
-		return fmt.Errorf("finding .datamitsuignore files: %w", err)
-	}
-
+func RunLint(rootPath string, tools config.MapOfTools, files []string) error {
 	for _, path := range files {
 		if err := lintFile(path, tools, rootPath); err != nil {
 			return err

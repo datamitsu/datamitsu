@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -25,11 +26,22 @@ import (
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/textdiff"
+	"github.com/datamitsu/datamitsu/internal/trace"
 
 	"go.uber.org/zap"
 )
 
 var log = logger.Logger.With(zap.Namespace("cmd"))
+
+// Execution counters. The spawn count is the one number that separates
+// datamitsu's own overhead from the tools' work: a run whose wall time is
+// dominated by N processes is bounded by those processes, not by the planner.
+var (
+	cntSpawn        = trace.NewCounter("exec.processes_spawned")
+	cntVerdictHit   = trace.NewCounter("exec.verdict_cache_hits")
+	cntCacheSkipped = trace.NewCounter("exec.files_skipped_by_cache")
+	cntParse        = trace.NewCounter("exec.parser_invocations")
+)
 
 // errCancelled is a sentinel error used when tasks are cancelled due to fail-fast context cancellation.
 var errCancelled = errors.New("cancelled")
@@ -45,6 +57,10 @@ type Executor struct {
 	fileProgressCallback FileProgressCallback // Optional callback for per-file progress
 	cache                *cache.Cache         // Cache for storing execution results
 	parser               DiagnosticParser     // Optional: parses tool output into diagnostics
+
+	// cmdInfos memoizes command resolution for the lifetime of one Execute; it is
+	// nil outside one (FormatContent), which resolves directly.
+	cmdInfos atomic.Pointer[commandInfoMemo]
 }
 
 // AppManager interface for getting application command information
@@ -116,6 +132,11 @@ func (e *Executor) SetParser(parser DiagnosticParser) {
 func (e *Executor) Execute(ctx context.Context, plan *ExecutionPlan) ([]GroupExecutionResult, error) {
 	log.Debug("starting execution plan", zap.Int("groupCount", len(plan.Groups)))
 	var results []GroupExecutionResult
+
+	// A fresh memo per Execute: an app installed between two runs must be
+	// re-resolved, and only within one run is the answer constant.
+	e.cmdInfos.Store(newCommandInfoMemo())
+	defer e.cmdInfos.Store(nil)
 
 	// Create a cancellable context for fail-fast propagation
 	execCtx, cancel := context.WithCancel(ctx)
@@ -192,13 +213,23 @@ func (e *Executor) Execute(ctx context.Context, plan *ExecutionPlan) ([]GroupExe
 }
 
 // executeGroup executes a task group
-func (e *Executor) executeGroup(ctx context.Context, group TaskGroup, cancel context.CancelFunc) GroupExecutionResult {
+func (e *Executor) executeGroup(ctx context.Context, group TaskGroup, cancel context.CancelFunc) (result GroupExecutionResult) {
 	startTime := time.Now()
 	log.Debug("executeGroup start", zap.Int("priority", group.Priority), zap.Int("tasks", len(group.Tasks)))
-	result := GroupExecutionResult{
+	result = GroupExecutionResult{
 		Priority: group.Priority,
 		Success:  true,
 	}
+
+	// Recorded in a defer, not at the bottom of the function: the two fail-fast
+	// branches below return early, and they used to skip the assignment
+	// entirely. A group that failed fast therefore reported a wall-clock time of
+	// zero, and the run footer showed "done in 0ms" for a run that had just spent
+	// seconds spawning processes — with several groups, it silently reported the
+	// sum of only the groups that did not fail.
+	defer func() {
+		result.WallClockDuration = time.Since(startTime).Milliseconds()
+	}()
 
 	// Detect overlaps within the group to determine parallelization strategy
 	parallelGroups := e.detectParallelGroups(group.Tasks)
@@ -257,7 +288,6 @@ func (e *Executor) executeGroup(ctx context.Context, group TaskGroup, cancel con
 		}
 	}
 
-	result.WallClockDuration = time.Since(startTime).Milliseconds()
 	return result
 }
 
@@ -401,6 +431,14 @@ func (e *Executor) executeTasksParallel(ctx context.Context, tasks []Task, cance
 // executeTask executes a single task
 func (e *Executor) executeTask(ctx context.Context, task Task) ExecutionResult {
 	startTime := time.Now()
+	taskSpan := trace.Start(trace.CatExec, "executeTask")
+	defer func() {
+		taskSpan.EndWith(
+			trace.A("tool", task.ToolName),
+			trace.A("app", task.OpConfig.App),
+			trace.A("files", len(task.Files)),
+		)
+	}()
 	log.Debug("executeTask start",
 		zap.String("toolName", task.ToolName),
 		zap.String("app", task.OpConfig.App),
@@ -421,7 +459,9 @@ func (e *Executor) executeTask(ctx context.Context, task Task) ExecutionResult {
 	}
 
 	// Get command info
-	cmdInfo, err := e.appManager.GetCommandInfo(ctx, task.OpConfig.App)
+	cmdSpan := trace.Start(trace.CatExec, "getCommandInfo")
+	cmdInfo, err := e.commandInfo(ctx, task.OpConfig.App)
+	cmdSpan.EndWith(trace.A("app", task.OpConfig.App))
 	if err != nil {
 		log.Debug("failed to get command info",
 			zap.String("app", task.OpConfig.App),
@@ -459,23 +499,37 @@ func (e *Executor) executeTask(ctx context.Context, task Task) ExecutionResult {
 	// A stored verdict means every member and guard is byte-identical to the run
 	// that passed, which is as sound for a narrowed invocation as for a full one
 	// — so the read is not gated on coverage. Only the write is.
-	verdictKey, verdictInputHash, verdictApplies := e.verdictKeys(task)
-	if verdictApplies {
-		if !e.cache.ShouldRunVerdict(verdictKey, verdictInputHash, e.verdictTTL()) {
-			log.Debug("verdict cache hit", zap.String("tool", task.ToolName), zap.String("unit", task.UnitDir))
-			// Same shape as a real run: consumers key JSON-L on RelativeDir and
-			// print the scope badge only when Scope is set, so a hit that omitted
-			// them would emit a differently-shaped event for the same task.
-			result.Success = true
-			result.WorkingDir = workingDir
-			result.RelativeDir = relativeDir
-			result.Scope = task.OpConfig.Scope
-			result.recordTiming(startTime)
-			if e.fileProgressCallback != nil {
-				e.fileProgressCallback(task.ToolName, 1, 1, true)
-			}
-			return result
+	verdictSpan := trace.Start(trace.CatCache, "verdictKeys")
+	verdictKey, verdictSnap, verdictBytes, verdictApplies := e.verdictKeys(task)
+	// The lookup is a map read under a read lock, so folding it into this span
+	// keeps the recorded duration comparable while letting the hit/miss ride along
+	// with the member count and byte volume that produced it — the three numbers
+	// are only meaningful together.
+	verdictHit := verdictApplies && !e.cache.ShouldRunVerdict(verdictKey, verdictSnap.hash(), e.verdictTTL())
+	verdictSpan.EndWith(
+		trace.A("tool", task.ToolName),
+		trace.A("applies", verdictApplies),
+		trace.A("hit", verdictHit),
+		trace.A("members", len(task.UnitMembers)),
+		trace.A("guards", len(task.UnitGuards)),
+		trace.A("bytes", verdictBytes),
+	)
+	// verdictHit already implies verdictApplies.
+	if verdictHit {
+		cntVerdictHit.Add(1)
+		log.Debug("verdict cache hit", zap.String("tool", task.ToolName), zap.String("unit", task.UnitDir))
+		// Same shape as a real run: consumers key JSON-L on RelativeDir and
+		// print the scope badge only when Scope is set, so a hit that omitted
+		// them would emit a differently-shaped event for the same task.
+		result.Success = true
+		result.WorkingDir = workingDir
+		result.RelativeDir = relativeDir
+		result.Scope = task.OpConfig.Scope
+		result.recordTiming(startTime)
+		if e.fileProgressCallback != nil {
+			e.fileProgressCallback(task.ToolName, 1, 1, true)
 		}
+		return result
 	}
 
 	// Dispatch on argv shape, not scope: only {file} takes one path, so only it
@@ -490,7 +544,7 @@ func (e *Executor) executeTask(ctx context.Context, task Task) ExecutionResult {
 	// The three per-process updateCacheAfterSuccess calls would otherwise let the
 	// first success of an N-process task record a verdict a later failure refutes.
 	if result.Success {
-		e.recordVerdict(task, verdictKey, verdictInputHash, verdictApplies)
+		e.recordVerdict(task, verdictKey, verdictSnap, verdictApplies)
 	}
 
 	// Classify unclassified failures as independent (tool failed on its own)
@@ -618,12 +672,19 @@ func (e *Executor) filterFilesByCache(task Task) []string {
 		cacheOp = cache.OperationFix
 	}
 
+	filterSpan := trace.Start(trace.CatCache, "filterFilesByCache")
 	var filesToProcess []string
 	for _, file := range task.Files {
 		if e.cache.ShouldRun(file, task.ToolName, cacheOp, toolCacheEnabled) {
 			filesToProcess = append(filesToProcess, file)
 		}
 	}
+	cntCacheSkipped.Add(int64(len(task.Files) - len(filesToProcess)))
+	filterSpan.EndWith(
+		trace.A("tool", task.ToolName),
+		trace.A("in", len(task.Files)),
+		trace.A("out", len(filesToProcess)),
+	)
 
 	return filesToProcess
 }
@@ -689,8 +750,16 @@ func joinStreams(stdout, stderr []byte) []byte {
 // A parse failure is logged, not fatal — the tool's own pass/fail is unaffected.
 func (e *Executor) parseFileDiagnostics(ctx context.Context, result *ExecutionResult, task Task, file string, stdout, stderr []byte, exitCode int) {
 	op := task.Tool.OutputParser
+	cntParse.Add(1)
+	parseSpan := trace.Start(trace.CatParse, "parseDiagnostics")
 	//nolint:gosec // G115: a process exit code is small; the int32 cast is intentional.
 	diags, err := e.parser.Parse(ctx, op.Module, op.Parser, task.ToolName, stdout, stderr, int32(exitCode))
+	parseSpan.EndWith(
+		trace.A("tool", task.ToolName),
+		trace.A("parser", op.Parser),
+		trace.A("bytes", len(stdout)+len(stderr)),
+		trace.A("diagnostics", len(diags)),
+	)
 	if err != nil {
 		log.Warn("output parser failed",
 			zap.String("tool", task.ToolName),
@@ -1479,11 +1548,18 @@ func (e *Executor) runCommandIO(cmd *exec.Cmd, stdinContent []byte, separate boo
 
 	setupProcessGroupCleanup(cmd)
 
+	cntSpawn.Add(1)
+	spawnSpan := trace.Start(trace.CatExec, "spawn")
 	if startErr := cmd.Start(); startErr != nil {
+		spawnSpan.EndWith(trace.A("error", startErr.Error()))
 		return nil, nil, fmt.Errorf("start command: %w", startErr)
 	}
 
 	err = cmd.Wait()
+	spawnSpan.EndWith(
+		trace.A("argv0", cmd.Path),
+		trace.A("exit", getExitCode(err)),
+	)
 	if separate {
 		return outBuf.Bytes(), errBuf.Bytes(), err
 	}

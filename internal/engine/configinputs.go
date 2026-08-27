@@ -2,6 +2,7 @@ package engine
 
 import (
 	"encoding/json"
+	"fmt"
 	"sort"
 
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
@@ -21,6 +22,38 @@ type configInputs struct {
 	MinimumReleaseAgeMinutes int `json:"minimumReleaseAgeMinutes"`
 }
 
+// ConfigInputKeys returns the names of the globals injected as
+// datamitsuConfigInputs, sorted. It is derived from the same JSON round trip
+// initConfigInputs uses, so a new field appears here automatically — which is
+// what lets configcache pin the agreement rather than trust a comment.
+func ConfigInputKeys() []string {
+	m, err := configInputsMap(configInputs{})
+	if err != nil {
+		return nil
+	}
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// configInputsMap round-trips inputs through JSON so the injected keys honor
+// the json tags (camelCase) and stay in lockstep with the struct definition
+// rather than being hand-duplicated.
+func configInputsMap(inputs configInputs) (map[string]any, error) {
+	data, err := json.Marshal(inputs)
+	if err != nil {
+		return nil, fmt.Errorf("marshal config inputs: %w", err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(data, &m); err != nil {
+		return nil, fmt.Errorf("unmarshal config inputs: %w", err)
+	}
+	return m, nil
+}
+
 // initConfigInputs injects datamitsuConfigInputs as a frozen JS global holding
 // only the allowlisted config-evaluation inputs. The full runtimeconfig.Effective
 // struct is intentionally NOT injected — exposing every runtime parameter would
@@ -33,12 +66,12 @@ type configInputs struct {
 // freeze, goja exposes the underlying values such that JS mutation could write
 // through to them.
 //
-// Forward contract: config JS evaluation is NOT cached today
-// (cmd/config_loader.go re-evaluates the VM fresh every invocation), so
-// branching on these inputs is safe — there is no stale-cache risk. When config
-// evaluation caching is implemented, every field exposed here MUST be folded
-// into the cache fingerprint key, or stale config could be served after an env
-// override changes the value.
+// Forward contract, now enforced: config JS evaluation IS cached
+// (internal/configcache), so every field exposed here MUST be folded into the
+// cache key, or stale config could be served after an env override changes the
+// value. The mirror lives in configcache.ConfigInputs and the two key sets are
+// pinned against each other by TestConfigInputsMatchEngine — a new field here
+// fails that test until configcache carries it too.
 func (e *Engine) initConfigInputs() {
 	eff, err := runtimeconfig.Get()
 	if err != nil {
@@ -51,15 +84,8 @@ func (e *Engine) initConfigInputs() {
 		MinimumReleaseAgeMinutes: eff.MinimumReleaseAgeMinutes,
 	}
 
-	// Round-trip through JSON so the injected keys honor the json tags
-	// (camelCase) and stay in lockstep with the struct definition rather than
-	// being hand-duplicated.
-	data, err := json.Marshal(inputs)
+	m, err := configInputsMap(inputs)
 	if err != nil {
-		return
-	}
-	var m map[string]any
-	if err := json.Unmarshal(data, &m); err != nil {
 		return
 	}
 

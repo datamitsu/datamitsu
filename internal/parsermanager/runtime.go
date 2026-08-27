@@ -51,7 +51,16 @@ type ParserRuntime struct {
 	dealloc    api.Function
 	parse      api.Function
 	describe   api.Function
+	// reset is optional: it is nil for a module built against the four-export ABI.
+	// Its presence is a module's declaration that it can be returned to a
+	// post-instantiation state, which is what makes the instance reusable — see
+	// Reset.
+	reset api.Function
 }
+
+// errNotResettable reports that a module does not export `reset`, so no instance
+// of it may be reused across parses.
+var errNotResettable = errors.New("parser module does not export reset")
 
 // NewRuntime instantiates a parser module from its verified WASM bytes in a
 // fresh, sandboxed wazero runtime (no host imports, no WASI — the parser is pure
@@ -85,6 +94,7 @@ func newInstance(ctx context.Context, mod api.Module, ownRuntime wazero.Runtime)
 		dealloc:    mod.ExportedFunction("dealloc"),
 		parse:      mod.ExportedFunction("parse"),
 		describe:   mod.ExportedFunction("describe"),
+		reset:      mod.ExportedFunction("reset"), // optional; nil disables reuse
 	}
 	if pr.alloc == nil || pr.dealloc == nil || pr.parse == nil || pr.describe == nil {
 		_ = mod.Close(ctx)
@@ -123,6 +133,23 @@ func (p *ParserRuntime) Describe(ctx context.Context) (Capabilities, error) {
 		return Capabilities{}, fmt.Errorf("decode describe output: %w", err)
 	}
 	return caps, nil
+}
+
+// Reset returns the instance to its post-instantiation state by invoking the
+// module's optional `reset` export. It is the boundary that makes reuse safe: a
+// module may keep state across parses (mutable globals, retained linear-memory
+// buffers), and without a reset one tool's output could shape the diagnostics of
+// the next. A module that does not export `reset` makes no such guarantee, so
+// Reset reports errNotResettable and the caller must close the instance instead
+// of reusing it.
+func (p *ParserRuntime) Reset(ctx context.Context) error {
+	if p.reset == nil {
+		return errNotResettable
+	}
+	if _, err := p.reset.Call(ctx); err != nil {
+		return fmt.Errorf("call reset: %w", err)
+	}
+	return nil
 }
 
 // Close releases this instance. For a one-shot runtime (NewRuntime) it closes the

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/configcache"
 	"github.com/datamitsu/datamitsu/internal/datamitsuignore"
 	"github.com/datamitsu/datamitsu/internal/engine"
 	"github.com/datamitsu/datamitsu/internal/env"
@@ -22,6 +23,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/remotecfg"
 	"github.com/datamitsu/datamitsu/internal/sourcefarm"
 	"github.com/datamitsu/datamitsu/internal/timing"
+	"github.com/datamitsu/datamitsu/internal/trace"
 	"github.com/datamitsu/datamitsu/internal/traverser"
 	"github.com/datamitsu/datamitsu/internal/version"
 
@@ -84,6 +86,89 @@ func setConfigChainFiles(sources []configSource) {
 	configChainFilesMu.Unlock()
 }
 
+// configEvalNonDeterminism names the clock or entropy source read while the
+// last config chain was evaluated, or "" if none was. Protected by its mutex
+// for the same reason configChainFiles is.
+var (
+	configEvalNonDeterminism   string
+	configEvalNonDeterminismMu sync.Mutex
+)
+
+// configEvalCacheable reports whether the config produced by the last load may
+// be written to the config-eval cache (internal/configcache).
+//
+// A config that read the clock or Math.random is not a function of the cache
+// key, so storing its result would serve one moment's answer forever — with no
+// error, no stale marker and no external symptom, which makes it the one
+// failure mode of this cache that a user could never diagnose. Refusing to
+// store it costs nothing but the evaluation such a config was always going to
+// pay.
+func configEvalCacheable() bool {
+	configEvalNonDeterminismMu.Lock()
+	defer configEvalNonDeterminismMu.Unlock()
+	return configEvalNonDeterminism == ""
+}
+
+// chainObservations accumulates what only evaluating the chain can know: the
+// first non-deterministic source or unreproducible side effect any layer
+// produced, and the warnings the evaluation emitted. The chain-level verdict is
+// the OR over its engines, since one impure layer makes the merged result
+// impure.
+type chainObservations struct {
+	nonDeterminism string
+	// warnings are the evaluation-time warnings a hit must replay, in the order
+	// they were produced.
+	warnings []string
+}
+
+func (o *chainObservations) record(e *engine.Engine) {
+	if o == nil || e == nil {
+		return
+	}
+	if o.nonDeterminism != "" {
+		return
+	}
+	if e.ObservedNonDeterminism() {
+		o.nonDeterminism = e.NonDeterminismSource()
+		return
+	}
+	o.nonDeterminism = e.ObservedSideEffect()
+}
+
+// warn records a warning the evaluation produced. It is not emitted here: the
+// chain publishes every warning through publishConfigWarnings, the same call a
+// hit replays the stored ones through, so a miss and a hit print the same lines.
+func (o *chainObservations) warn(msg string) {
+	if o == nil {
+		return
+	}
+	o.warnings = append(o.warnings, msg)
+}
+
+// markIncomplete parks the global verdict at "not cacheable" for the duration
+// of a load, so a chain that fails half-way cannot leave an earlier chain's
+// verdict in place for a later reader.
+func (o *chainObservations) markIncomplete() {
+	configEvalNonDeterminismMu.Lock()
+	configEvalNonDeterminism = "config evaluation did not complete"
+	configEvalNonDeterminismMu.Unlock()
+}
+
+// publish records the chain-level verdict for configEvalCacheable and names the
+// refusal at debug level. Debug, not warn: a config that reads the clock is
+// unusual but legitimate, and the only consequence is that it evaluates every
+// time — which is exactly what happens today for every config.
+func (o *chainObservations) publish() {
+	configEvalNonDeterminismMu.Lock()
+	configEvalNonDeterminism = o.nonDeterminism
+	configEvalNonDeterminismMu.Unlock()
+
+	if o.nonDeterminism != "" {
+		logger.Logger.Debug("config evaluation is not reproducible from the cache key; its result will not be cached",
+			zap.String("source", o.nonDeterminism))
+	}
+}
+
 type configSource struct {
 	name      string
 	path      string // file path (mutually exclusive with content)
@@ -114,7 +199,16 @@ func loadConfig() (*config.Config, *config.SetupLayerMap, *goja.Runtime, error) 
 // per-ecosystem output (e.g. dependabot). Detection is gated to setup so other
 // commands keep their detection-free, walk-free config load.
 func loadConfigForSetup(ctx context.Context) (*config.Config, *config.SetupLayerMap, *goja.Runtime, error) {
-	return loadConfigImpl(ctx, BeforeConfigPaths, NoAutoConfig, ConfigPaths, loadConfigOptions{detectProjectLocations: true})
+	return loadConfigImpl(ctx, BeforeConfigPaths, NoAutoConfig, ConfigPaths,
+		loadConfigOptions{detectProjectLocations: true, evaluateSetupContent: true, requireVM: true})
+}
+
+// loadConfigForChainHash loads config with setup content evaluated, which is
+// what a chain hash is computed over. It is the only non-setup command that
+// needs the layer map.
+func loadConfigForChainHash() (*config.Config, *config.SetupLayerMap, *goja.Runtime, error) {
+	return loadConfigImpl(context.Background(), BeforeConfigPaths, NoAutoConfig, ConfigPaths,
+		loadConfigOptions{evaluateSetupContent: true})
 }
 
 // loadConfigForLockfileGen loads config without enforcing lockfile constraints.
@@ -154,6 +248,22 @@ type loadConfigOptions struct {
 	// functions as context.projectTypes / context.projectLocations. Off by
 	// default so non-setup loads stay walk-free.
 	detectProjectLocations bool
+	// evaluateSetupContent renders every setup entry's content() into the layer
+	// map. Off by default: it reads each entry's target file from disk and calls
+	// into the VM once per entry per config layer — for the shared config, 57
+	// reads and 100 calls — and only `setup`, `init` and `config chain-hash`
+	// consume the result. Every other command discarded it, having paid for it.
+	//
+	// A load with this off returns an EMPTY layer map, not a partial one, so a
+	// caller that needs the map must ask for it rather than find it thin.
+	evaluateSetupContent bool
+	// requireVM declares that the caller uses the returned *goja.Runtime.
+	// loadConfigForSetup is the only such path (cmd/setup.go). A load that sets
+	// it never serves from the config-evaluation cache: a hit has an evaluated
+	// config and no VM, and a VM cannot be reconstructed from one. Gating on the
+	// caller rather than on the artifact means the wrong shape is never produced
+	// instead of being produced and hopefully not used.
+	requireVM bool
 }
 
 func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfig bool, configPaths []string, opts loadConfigOptions) (cfg *config.Config, lm *config.SetupLayerMap, vm *goja.Runtime, err error) {
@@ -164,6 +274,7 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 	// PrintStartup prints at most once per process.
 	defer timing.PrintStartup(os.Stderr)
 	defer timing.StartStartupPhase(timing.PhaseLoadConfig)()
+	defer trace.Start(trace.CatConfig, "loadConfig").End()
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("config loading panic: %v", r)
@@ -176,6 +287,7 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 		return nil, nil, nil, fmt.Errorf("failed to determine working directory: %w", cwdErr)
 	}
 	rootPath := cwdPath
+	gitRootPath := ""
 
 	// Discover the auto-loaded config from git root (unless --no-auto-config).
 	var autoConfigPath string
@@ -194,6 +306,7 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 		}
 		if gitErr == nil && gitRoot != "" {
 			rootPath = gitRoot
+			gitRootPath = gitRoot
 			discovered, autoErr := discoverAutoConfig(gitRoot)
 			if autoErr != nil {
 				return nil, nil, nil, autoErr
@@ -202,17 +315,56 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 		}
 	}
 
+	// Snapshot the auto config BEFORE resolving the chain, because resolving it
+	// reads that file (for its declared before-configs). A snapshot taken
+	// afterwards would record the state a concurrent edit left behind rather
+	// than the state that was read, and would stamp a key fresh for bytes nobody
+	// ran. It is the only file read this early — every other chain file is first
+	// read during evaluation, which the post-evaluation re-check covers — so
+	// hashing more here would only re-read megabytes to learn nothing.
+	var priorChain map[string]configcache.ChainFile
+	if autoConfigPath != "" && configCacheUsable(opts) {
+		priorChain = hashConfigPaths([]string{autoConfigPath})
+	}
+
 	sources, srcErr := buildConfigSources(ctx, beforeConfigPaths, autoConfigPath, configPaths)
 	if srcErr != nil {
 		return nil, nil, nil, srcErr
 	}
 	setConfigChainFiles(sources)
 
+	cache := newConfigCache(ctx, configCacheParams{
+		sources:       sources,
+		explicitChain: append(append([]string(nil), beforeConfigPaths...), configPaths...),
+		noAutoConfig:  noAutoConfig,
+		gitRoot:       gitRootPath,
+		cwd:           cwdPath,
+		prior:         priorChain,
+		opts:          opts,
+	})
+	if entry, hit := cache.load(); hit {
+		// Nothing was evaluated, so there is nothing new to store — and the
+		// verdict of whatever chain ran last must not be left standing for a
+		// later reader.
+		markConfigServedFromCache()
+		publishConfigWarnings(entry.Warnings)
+		setResolvedRemoteURLs(entry.RemoteURLs)
+		// An EMPTY layer map, never a partial one: ConfigSetup.Content is a live
+		// goja value a hit cannot reconstruct, and a caller that needs it asked
+		// for evaluateSetupContent, which never reaches this branch.
+		emptyLayerMap := make(config.SetupLayerMap)
+		return entry.Config, &emptyLayerMap, nil, nil
+	}
+
 	// Process all sources sequentially with eager content evaluation.
 	// resolved: collects all remote URLs processed (for display/reporting).
 	// stack: tracks URLs in the current recursion path (for cycle detection).
 	var currentConfig *config.Config
 	var lastVM *goja.Runtime
+	obs := &chainObservations{}
+	// Until the chain has finished evaluating, the verdict is "not cacheable":
+	// an early failure must never leave the previous load's verdict standing.
+	obs.markIncomplete()
 	layerMap := make(config.SetupLayerMap)
 	resolved := make(map[string]bool)
 	stack := make(map[string]bool)
@@ -243,39 +395,54 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 	}
 
 	for _, source := range sources {
-		result, resultVM, processErr := processConfigSource(ctx, currentConfig, source, resolved, stack, opts)
+		result, resultEngine, processErr := processConfigSource(ctx, currentConfig, source, resolved, stack, opts, obs)
 		if processErr != nil {
 			return nil, nil, nil, processErr
 		}
+		resultVM := resultEngine.VM()
 
-		if result.Setup != nil {
+		if result.Setup != nil && opts.evaluateSetupContent {
+			evalSpan := trace.Start(trace.CatConfig, "evaluateSetupContent")
 			pTypes, pLocs := detectProjects(result.ProjectTypes)
 			evaluatedContent := config.EvaluateInitContentWithProjects(result, resultVM, rootPath, cwdPath, layerMap, pTypes, pLocs)
 			config.MergeSetupLayers(layerMap, source.name, evaluatedContent, result.Setup)
+			evalSpan.EndWith(trace.A("source", source.name), trace.A("entries", len(result.Setup)))
+			// content() runs arbitrary config JS, so it is observed too.
+			obs.record(resultEngine)
 		}
 
 		currentConfig = result
 		lastVM = resultVM
 	}
+	obs.publish()
+	publishConfigWarnings(obs.warnings)
 
 	// Collect resolved remote URLs from resolved map
-	resolvedRemoteURLsMu.Lock()
-	resolvedRemoteURLs = nil
+	remoteURLs := make([]string, 0, len(resolved))
 	for url := range resolved {
-		resolvedRemoteURLs = append(resolvedRemoteURLs, url)
+		remoteURLs = append(remoteURLs, url)
 	}
-	sort.Strings(resolvedRemoteURLs)
-	resolvedRemoteURLsMu.Unlock()
+	sort.Strings(remoteURLs)
+	setResolvedRemoteURLs(remoteURLs)
 
+	validateSpan := trace.Start(trace.CatConfig, "validateConfig")
+	defer validateSpan.EndWith(
+		trace.A("apps", len(currentConfig.Apps)),
+		trace.A("tools", len(currentConfig.Tools)),
+	)
+
+	// Collected as well as logged: a hit must reproduce the warnings its miss
+	// printed, or a command's stderr would depend on whether a cache happened to
+	// be warm.
+	configWarnings := append([]string(nil), obs.warnings...)
 	var warnings []string
 	if opts.skipLockfileValidation {
 		warnings, err = config.ValidateAppsSkipLockfile(currentConfig.Apps, currentConfig.Runtimes)
 	} else {
 		warnings, err = config.ValidateApps(currentConfig.Apps, currentConfig.Runtimes)
 	}
-	for _, w := range warnings {
-		logger.Logger.Warn(w, zap.String("source", "config"))
-	}
+	configWarnings = append(configWarnings, warnings...)
+	publishConfigWarnings(warnings)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -291,9 +458,9 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 	if err := config.ValidateSetup(currentConfig.Setup); err != nil {
 		return nil, nil, nil, err
 	}
-	for _, w := range config.ValidateSetupToolRefs(currentConfig.Setup, currentConfig.Tools) {
-		logger.Logger.Warn(w, zap.String("source", "config"))
-	}
+	setupToolWarnings := config.ValidateSetupToolRefs(currentConfig.Setup, currentConfig.Tools)
+	configWarnings = append(configWarnings, setupToolWarnings...)
+	publishConfigWarnings(setupToolWarnings)
 
 	if err := config.ValidateTools(currentConfig.Tools, currentConfig.Parsers); err != nil {
 		return nil, nil, nil, err
@@ -325,7 +492,43 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 		}
 	}
 
+	// The stored config is the post-validation one, which is sound only because
+	// ldflags.Version is in the key: a binary that validates differently cannot
+	// read this entry.
+	cache.save(obs, &configcache.Entry{
+		Config:     currentConfig,
+		Warnings:   configWarnings,
+		RemoteURLs: remoteURLs,
+	})
+
 	return currentConfig, &layerMap, lastVM, nil
+}
+
+// publishConfigWarnings emits config validation warnings. It is the single
+// place they are written, so a hit replaying stored warnings and a miss
+// producing them are indistinguishable.
+func publishConfigWarnings(warnings []string) {
+	for _, w := range warnings {
+		logger.Logger.Warn(w, zap.String("source", "config"))
+	}
+}
+
+// setResolvedRemoteURLs records the remote configs the chain resolved, for
+// `devtools verify-all`. A hit restores the stored list rather than leaving the
+// previous load's.
+func setResolvedRemoteURLs(urls []string) {
+	resolvedRemoteURLsMu.Lock()
+	resolvedRemoteURLs = append([]string(nil), urls...)
+	resolvedRemoteURLsMu.Unlock()
+}
+
+// markConfigServedFromCache parks the cacheability verdict after a hit. No
+// chain was evaluated, so there is nothing to store and no observation to
+// report — and, crucially, no earlier chain's verdict may be left standing.
+func markConfigServedFromCache() {
+	configEvalNonDeterminismMu.Lock()
+	configEvalNonDeterminism = "config was served from the evaluation cache"
+	configEvalNonDeterminismMu.Unlock()
 }
 
 // projectLocationsToConfig converts absolute detector locations into the
@@ -432,7 +635,10 @@ func buildConfigSources(ctx context.Context, beforeConfigPaths []string, autoCon
 // The stack map tracks URLs in the current recursion path for cycle detection;
 // URLs are added before recursing and removed after, so shared (diamond)
 // dependencies are allowed while true cycles are still caught.
-func processConfigSource(ctx context.Context, input *config.Config, source configSource, resolved map[string]bool, stack map[string]bool, opts loadConfigOptions) (*config.Config, *goja.Runtime, error) {
+func processConfigSource(ctx context.Context, input *config.Config, source configSource, resolved map[string]bool, stack map[string]bool, opts loadConfigOptions, obs *chainObservations) (*config.Config, *engine.Engine, error) {
+	sourceSpan := trace.Start(trace.CatConfig, "configSource")
+	defer sourceSpan.EndWith(trace.A("name", source.name))
+
 	e, err := engine.NewWithOptions(ctx, BinaryCommandOverride,
 		engine.Options{TolerateGitRootFailure: opts.tolerateGitRootFailure})
 	if err != nil {
@@ -498,12 +704,12 @@ func processConfigSource(ctx context.Context, input *config.Config, source confi
 			return nil, nil, fmt.Errorf("config %s: %w", sourceLabel, err)
 		}
 		if skipped {
-			logger.Logger.Warn(
-				"version check skipped: current build is unstable — proceeding at your own risk",
-				zap.String("source", sourceLabel),
-				zap.String("current", ldflags.Version),
-				zap.String("required", minVersionStr),
-			)
+			// Collected rather than logged here: an unstable build's warning must
+			// survive into the cached artifact, or it would print on the miss and
+			// never again.
+			obs.warn(fmt.Sprintf(
+				"config %s: version check skipped: current build is unstable (current %s, required %s) — proceeding at your own risk",
+				sourceLabel, ldflags.Version, minVersionStr))
 		}
 	}
 
@@ -544,7 +750,7 @@ func processConfigSource(ctx context.Context, input *config.Config, source confi
 					name:     entry.URL,
 					content:  content,
 					isRemote: true,
-				}, resolved, stack, opts)
+				}, resolved, stack, opts, obs)
 				delete(stack, entry.URL)
 				if remoteErr != nil {
 					return nil, nil, remoteErr
@@ -569,17 +775,25 @@ func processConfigSource(ctx context.Context, input *config.Config, source confi
 		// include old rules, and the Go merge below would duplicate them.
 		inputCopy := *chainedInput
 		inputCopy.IgnoreRules = nil
-		inputVal = vm.ToValue(&inputCopy)
+		// Through DeterministicValue, not ToValue: every collection in a config
+		// is a Go map, and a layer that enumerates one (Object.keys, a spread,
+		// JSON.stringify) would otherwise observe Go's randomized iteration
+		// order — a config input no cache key can represent.
+		inputVal = engine.DeterministicValue(vm, &inputCopy)
 	}
 
 	endGetConfig := timing.StartStartupPhase(timing.PhaseGetConfig)
+	getConfigSpan := trace.Start(trace.CatConfig, "callGetConfig")
 	resultVal, callErr := e.CallWithTimeout(getConfigFunc, 10*time.Second, inputVal)
+	getConfigSpan.EndWith(trace.A("source", source.name))
 	endGetConfig()
 	if callErr != nil {
 		return nil, nil, fmt.Errorf("failed to call getConfig in %s: %w", source.name, callErr)
 	}
 
+	exportSpan := trace.Start(trace.CatConfig, "exportConfigResult")
 	parsedConfig, parseErr := parseConfigResult(vm, resultVal)
+	exportSpan.EndWith(trace.A("source", source.name))
 	if parseErr != nil {
 		return nil, nil, fmt.Errorf("failed to parse config from %s: %w", source.name, parseErr)
 	}
@@ -597,7 +811,12 @@ func processConfigSource(ctx context.Context, input *config.Config, source confi
 			zap.String("source", source.name))
 	}
 
-	return parsedConfig, vm, nil
+	// Recorded after every call into this layer's VM — the top-level run,
+	// getRemoteConfigs and getConfig — so any clock or entropy read anywhere in
+	// the layer reaches the chain-level verdict.
+	obs.record(e)
+
+	return parsedConfig, e, nil
 }
 
 // parseConfigResult converts getConfig result to config.Config struct
@@ -684,6 +903,7 @@ func discoverAutoConfig(gitRoot string) (string, error) {
 // other layers are never read (scope is enforced structurally).
 func discoverBeforeConfigs(ctx context.Context, autoConfigPath string) ([]string, error) {
 	defer timing.StartStartupPhase(timing.PhaseDiscoverBeforeConfigs)()
+	defer trace.Start(trace.CatConfig, "discoverBeforeConfigs").End()
 
 	e, err := engine.New(ctx, BinaryCommandOverride)
 	if err != nil {
@@ -791,7 +1011,9 @@ func prepareConfigSource(content, ref string) (string, error) {
 
 // loadConfigFile loads and executes a single configuration file in the given engine.
 func loadConfigFile(e *engine.Engine, path string) error {
+	readSpan := trace.Start(trace.CatConfig, "readConfigFile")
 	data, err := os.ReadFile(path)
+	readSpan.EndWith(trace.A("path", path), trace.A("bytes", len(data)))
 	if err != nil {
 		return fmt.Errorf("failed to read config file: %w", err)
 	}
@@ -801,7 +1023,24 @@ func loadConfigFile(e *engine.Engine, path string) error {
 		return fmt.Errorf("failed to strip types: %w", err)
 	}
 
-	if _, err := e.RunWithTimeout(jsCode, 10*time.Second); err != nil {
+	// The single largest unattributed cost in a cold `datamitsu <anything>`:
+	// goja compiles and then executes the whole config source, and the shared
+	// wrapper config is a ~2 MB file. Compilation and execution are separated
+	// here rather than left inside RunWithTimeout because they answer different
+	// questions — parsing scales with source bytes, the top-level run with what
+	// the config actually does at load time — and only the split says which one
+	// a cache would have to eliminate.
+	compileSpan := trace.Start(trace.CatConfig, "compileConfig")
+	program, err := goja.Compile(path, jsCode, false)
+	compileSpan.EndWith(trace.A("path", path), trace.A("bytes", len(jsCode)))
+	if err != nil {
+		return fmt.Errorf("failed to compile config: %w", err)
+	}
+
+	runSpan := trace.Start(trace.CatConfig, "runConfigTopLevel")
+	_, err = e.RunProgramWithTimeout(program, 10*time.Second)
+	runSpan.EndWith(trace.A("path", path))
+	if err != nil {
 		return fmt.Errorf("failed to execute config: %w", err)
 	}
 
@@ -817,7 +1056,10 @@ func loadConfigString(e *engine.Engine, content, sourceName string) error {
 		return fmt.Errorf("failed to strip types from %s: %w", sourceName, err)
 	}
 
-	if _, err := e.RunWithTimeout(jsCode, 10*time.Second); err != nil {
+	runSpan := trace.Start(trace.CatConfig, "vmRunConfig")
+	_, err = e.RunWithTimeout(jsCode, 10*time.Second)
+	runSpan.EndWith(trace.A("path", sourceName), trace.A("bytes", len(jsCode)))
+	if err != nil {
 		return fmt.Errorf("failed to execute config %s: %w", sourceName, err)
 	}
 

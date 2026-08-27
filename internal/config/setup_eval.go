@@ -5,7 +5,19 @@ import (
 	"path/filepath"
 	"sort"
 
+	"github.com/datamitsu/datamitsu/internal/trace"
+
 	"github.com/dop251/goja"
+)
+
+// Setup-evaluation counters. Every command that loads config pays this pass,
+// but only setup/init and `config chain-hash` consume the result — the call
+// counts are the evidence for how much a lint run reads and evaluates for
+// nothing.
+var (
+	cntSetupEntries = trace.NewCounter("config.setup.entries")
+	cntSetupReads   = trace.NewCounter("config.setup.files_read")
+	cntSetupCalls   = trace.NewCounter("config.setup.content_calls")
 )
 
 // ProjectLocation pairs a detected project type with the directory that holds
@@ -24,9 +36,11 @@ type ProjectLocation struct {
 // an identical shape. projectLocations is rendered as plain {type, path}
 // objects to keep stable JS keys regardless of goja field-name mapping.
 //
-// projectTypes/projectLocations are inputs to setup content() evaluation. When
-// config-evaluation caching is added, they MUST be folded into the cache
-// fingerprint (see the runtime-config policy in AGENTS.md).
+// projectTypes/projectLocations are inputs to setup content() evaluation only.
+// A load that evaluates setup content never uses the config-evaluation cache
+// (configCacheUsable in cmd/config_cache.go), so they are deliberately absent
+// from configcache.Inputs. If the setup layer ever gains its own cache, they
+// MUST be folded into its key.
 func ApplyProjectContext(obj *goja.Object, projectTypes []string, locations []ProjectLocation) {
 	if projectTypes == nil {
 		projectTypes = []string{}
@@ -123,6 +137,10 @@ func EvaluateInitContentWithProjects(cfg *Config, vm *goja.Runtime, rootPath, cw
 		return nil
 	}
 
+	evalSpan := trace.Start(trace.CatConfig, "setup.evaluate")
+	defer func() { evalSpan.EndWith(trace.A("entries", len(cfg.Setup))) }()
+	cntSetupEntries.Add(int64(len(cfg.Setup)))
+
 	result := make(map[string]string)
 
 	// Process in sorted order for determinism
@@ -144,6 +162,7 @@ func EvaluateInitContentWithProjects(cfg *Config, vm *goja.Runtime, rootPath, cw
 			if initCfg.Scope == ScopeGitRoot {
 				basePath = rootPath
 			}
+			cntSetupReads.Add(1)
 			originalContent := readFileContent(filepath.Join(basePath, name))
 			priorLayers[name] = &SetupLayerHistory{
 				FileName:        name,
@@ -187,6 +206,7 @@ func EvaluateInitContentWithProjects(cfg *Config, vm *goja.Runtime, rootPath, cw
 			_ = contextObj.Set("originalContent", *history.OriginalContent)
 		}
 
+		cntSetupCalls.Add(1)
 		callResult, err := contentFunc(goja.Undefined(), contextObj)
 		if err != nil {
 			continue

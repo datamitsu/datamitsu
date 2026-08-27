@@ -188,3 +188,16 @@ func TestInstallTimeoutMatchesConstant(t *testing.T) {
 		t.Errorf("env.InstallTimeoutSeconds() = %d, want %d", env.InstallTimeoutSeconds(), InstallTimeoutSeconds)
 	}
 }
+
+// The config-evaluation cache is a runtime parameter like any other: it must be
+// introspectable through `datamitsu config runtime`, on by default, and
+// overridable.
+func TestComputeConfigCache(t *testing.T) {
+	if eff := Compute(); !eff.ConfigCache {
+		t.Error("ConfigCache = false by default, want true")
+	}
+	t.Setenv("DATAMITSU_CONFIG_CACHE", "0")
+	if eff := Compute(); eff.ConfigCache {
+		t.Error("ConfigCache = true with DATAMITSU_CONFIG_CACHE=0")
+	}
+}

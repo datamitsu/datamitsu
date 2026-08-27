@@ -11,6 +11,7 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/facts"
 	"github.com/datamitsu/datamitsu/internal/timing"
+	"github.com/datamitsu/datamitsu/internal/trace"
 
 	"github.com/dop251/goja"
 )
@@ -21,6 +22,14 @@ type Engine struct {
 	vm       *goja.Runtime
 	facts    *facts.Facts
 	rootPath string
+	// nonDeterminism names the first clock or entropy source config JS read in
+	// this VM, or "" if it read none. Written only from the goroutine driving
+	// the VM (goja is single-threaded by construction), so it needs no lock.
+	nonDeterminism string
+	// sideEffect names the first output config JS produced that a stored
+	// artifact cannot reproduce, or "" if it produced none. Same single-goroutine
+	// argument as nonDeterminism.
+	sideEffect string
 }
 
 // testInitHook is called at the end of New() during tests to inject custom init behavior.
@@ -44,6 +53,7 @@ func New(ctx context.Context, binaryCommandOverride string) (*Engine, error) {
 // NewWithOptions is New with explicit Options.
 func NewWithOptions(ctx context.Context, binaryCommandOverride string, opts Options) (e *Engine, err error) {
 	defer timing.StartStartupPhase(timing.PhaseEngineNew)()
+	defer trace.Start(trace.CatEngine, "engine.New").End()
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("engine initialization panic: %v", r)
@@ -51,8 +61,10 @@ func NewWithOptions(ctx context.Context, binaryCommandOverride string, opts Opti
 	}()
 
 	// Collect facts about the environment
+	factsSpan := trace.Start(trace.CatEngine, "facts.Collect")
 	projectFacts, gitRoot, err := facts.CollectWithOptions(ctx, binaryCommandOverride,
 		facts.CollectOptions{TolerateGitFailure: opts.TolerateGitRootFailure})
+	factsSpan.End()
 	if err != nil {
 		return nil, err
 	}
@@ -62,8 +74,10 @@ func NewWithOptions(ctx context.Context, binaryCommandOverride string, opts Opti
 		return nil, fmt.Errorf("failed to compute root path: %w", err)
 	}
 
+	vmSpan := trace.Start(trace.CatEngine, "goja.New")
 	vm := goja.New()
 	vm.SetFieldNameMapper(goja.TagFieldNameMapper("json", true))
+	vmSpan.End()
 
 	e = &Engine{
 		vm:       vm,
@@ -71,6 +85,7 @@ func NewWithOptions(ctx context.Context, binaryCommandOverride string, opts Opti
 		rootPath: rootPath,
 	}
 
+	globalsSpan := trace.Start(trace.CatEngine, "engine.initGlobals")
 	e.initConsole()
 	e.initColors()
 	e.initFormats()
@@ -78,6 +93,8 @@ func NewWithOptions(ctx context.Context, binaryCommandOverride string, opts Opti
 	e.initFacts()
 	e.initPNPMWorkspaceDefaults()
 	e.initConfigInputs()
+	e.initNonDeterminismShims()
+	globalsSpan.End()
 
 	if testInitHook != nil {
 		testInitHook(e)
@@ -108,6 +125,21 @@ func (e *Engine) RunWithTimeout(script string, timeout time.Duration) (goja.Valu
 	return val, nil
 }
 
+// RunProgramWithTimeout executes an already-compiled program with a watchdog
+// timeout. It exists so a caller can separate compilation from execution —
+// which is both what the trace needs to attribute the two costs and what makes
+// a compiled program reusable across VMs within one process.
+func (e *Engine) RunProgramWithTimeout(program *goja.Program, timeout time.Duration) (goja.Value, error) {
+	done := e.withTimeout(timeout)
+	val, err := e.vm.RunProgram(program)
+	done()
+	e.vm.ClearInterrupt()
+	if err != nil {
+		return val, fmt.Errorf("run program: %w", err)
+	}
+	return val, nil
+}
+
 // CallWithTimeout invokes a goja.Callable with a watchdog timeout.
 func (e *Engine) CallWithTimeout(fn goja.Callable, timeout time.Duration, args ...goja.Value) (goja.Value, error) {
 	done := e.withTimeout(timeout)
@@ -117,10 +149,13 @@ func (e *Engine) CallWithTimeout(fn goja.Callable, timeout time.Duration, args .
 	return val, err
 }
 
-// initFacts exposes the facts() function to JavaScript
+// initFacts exposes the facts() function to JavaScript.
+//
+// Through DeterministicValue, not ToValue: facts().env is a Go map, and its
+// enumeration order is a config input the cache key cannot represent.
 func (e *Engine) initFacts() {
 	_ = e.vm.Set("facts", func() goja.Value {
-		return e.vm.ToValue(e.facts)
+		return DeterministicValue(e.vm, e.facts)
 	})
 }
 
