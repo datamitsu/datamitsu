@@ -104,7 +104,7 @@ Both fixed; detection on the lint path went **107 ms → 4 ms**.
 
 `internal/tooling/planner.go`. `initializeCache` ran discovery and detection in an errgroup, each
 walking the whole tree. Concurrency hid the duplication rather than removing it. Now one walk feeds
-both. Walks per `lint`: 3 → 2.
+both. Walks per `lint`: 3 → 2, and later to 1 in §4.1.
 
 ### 1.7 `unitMembers` and `unitGuards` recomputed per task
 
@@ -330,10 +330,7 @@ Directions, cheapest first:
 - **`getCommandInfo` per task** — 118 ms across 120 tasks, ~10 distinct apps. `EnsureTools` has
   already installed everything before the executor runs, so the result is constant. Memoize in the
   executor and hand out copies; check first that no caller mutates `CommandInfo.Env`.
-- **The second and third repository walks** — `bundled.RunFix` and `bundled.RunLint` each call
-  `FindIgnoreFiles`, which walks the whole tree, before the planner walks it again. One shared walk
-  for the two bundled passes is free; sharing across the bundled/planner boundary needs care because
-  a `fix` between them can create or delete an ignore file.
+- ~~**The second and third repository walks**~~ — **done**, see 4.1 below.
 - **Parser instance pooling** — a fresh wazero instance per parse (~230 µs) where the count equals
   the parse count.
 - **wazero compilation cache** — `NewCompilationCacheWithDir` would remove the ~80 ms compile
@@ -347,6 +344,39 @@ Directions, cheapest first:
   `Save` calls per run first: the 100 ms debounce may already collapse them to one.
 - **Store garbage collection** — 7.1 GB on this machine with no GC; every config-hash change orphans
   a directory permanently.
+
+### 4.1 One repository walk per run
+
+`internal/runner/runner.go`, `internal/bundled/datamitsuignore.go`, `internal/tooling/planner.go`.
+
+Three consumers wanted the same gitignore-aware list of the same tree: bundled fix, bundled lint,
+and the planner. Merging the two bundled passes was the easy half and landed with phase 3 (§1.6 took
+`lint` from 3 walks to 2). The remaining pair looked riskier — the note above worried that a `fix`
+between the walks could create or delete an ignore file — and that turned out not to be possible.
+`RunFix` only rewrites files it was handed, each through a temp file in the same directory followed
+by a rename. Contents change; the file **set** cannot. Nothing else runs in between.
+
+So the runner walks once and hands the list to both: `bundled.IgnoreFilesIn` filters it, and
+`Planner.SeedFiles` gives the planner the same slice to use in place of its own walk. The matcher is
+still built from disk after bundled fix has run, so the rules that take effect are the fixed ones —
+seeding shares the file set, not the file contents.
+
+This is also a correctness change, not only a saving. `buildIgnoreMatcher` already documented that
+its file set and bundled's must be identical, because it validates the rules the planner then
+applies — a divergence would mean linting one set of rules and enforcing another. That agreement was
+a property two call sites had to keep; now there is one call site.
+
+Walks per `lint` and per `check`: 2 → 1. On this repository (1,099 files) `scanFiles` goes from
+2.48 ms to 157 ns and the run drops ~2.7 ms; the saving is one full traversal, so it scales with the
+tree rather than being a fixed win. `--explain=json` for `lint` and `fix` is byte-identical to the
+previous binary (≈500 KB and ≈168 KB of output).
+
+`TestSeedFilesMatchesWalk` is the load-bearing test: a seeded planner and one that walked for itself
+must agree on the file list, its root-relative form, the detected projects, and the ignore matcher
+built from them. `TestRunPerformsOneRepositoryWalk` pins the count, and asserts the fix actually
+rewrote its fixture — without that, handing every consumer an empty list would also read as one
+walk. `TestInvalidateDropsAnUnconsumedSeed` keeps a stale snapshot from surviving the call whose
+whole purpose is to discard stale snapshots.
 
 ## Verification standard used
 
