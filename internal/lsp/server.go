@@ -156,6 +156,13 @@ func (s *Server) Run(ctx context.Context) error {
 //
 // Returns an empty (non-nil) slice when no tool applies or nothing changed.
 func (s *Server) FormatFile(ctx context.Context, absPath string, content []byte) ([]TextEdit, error) {
+	// One planner serves the whole session, and its file list is walked once. A
+	// file created after the server started would otherwise stay invisible to
+	// unit member lists, leaving a unit's verdict inputs unchanged and taking a
+	// cached pass the new file invalidates — a formatter silently not running.
+	// Correctness over the saved walk: an editor formats one file per request.
+	s.planner.Invalidate()
+
 	plan, err := s.planner.Plan(ctx, config.OpFix, tooling.Selection{Mode: tooling.SelectionPaths, Paths: []string{absPath}}, nil)
 	if err != nil {
 		return nil, fmt.Errorf("plan fix for %s: %w", absPath, err)

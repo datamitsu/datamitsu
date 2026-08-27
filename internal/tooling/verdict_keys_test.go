@@ -97,18 +97,18 @@ func TestVerdictKeysAppliesOnlyWhereItIsSound(t *testing.T) {
 			tt.mutate(&task)
 			exec := &Executor{rootPath: root, cache: tt.cache}
 
-			key, inputs, ok := exec.verdictKeys(task)
+			key, snap, _, ok := exec.verdictKeys(task)
 			if ok != tt.want {
 				t.Fatalf("verdictKeys ok = %v, want %v", ok, tt.want)
 			}
 			if !ok {
-				if key != "" || inputs != "" {
-					t.Errorf("an inapplicable task returned key=%q inputs=%q, want both empty", key, inputs)
+				if key != "" || snap.hash() != "" {
+					t.Errorf("an inapplicable task returned key=%q inputs=%q, want both empty", key, snap.hash())
 				}
 				return
 			}
-			if key == "" || inputs == "" {
-				t.Errorf("applicable task returned key=%q inputs=%q, want both set", key, inputs)
+			if key == "" || snap.hash() == "" {
+				t.Errorf("applicable task returned key=%q inputs=%q, want both set", key, snap.hash())
 			}
 		})
 	}
@@ -214,9 +214,10 @@ func TestHashedPathsMarksMissingFiles(t *testing.T) {
 	}
 	missing := filepath.Join(root, "gone.ts")
 
-	got := hashedPaths([]string{present, missing}, root)
+	states, _ := hashedStates([]string{present, missing}, root, nil, memoShared)
+	got := sortedEntries(states)
 	if len(got) != 2 {
-		t.Fatalf("hashedPaths = %v, want 2 entries", got)
+		t.Fatalf("hashedStates = %v, want 2 entries", got)
 	}
 	// Relative, so moving the repository does not orphan every entry.
 	for _, entry := range got {
@@ -239,7 +240,9 @@ func hashOf(t *testing.T, s string) string {
 	if err := os.WriteFile(p, []byte(s), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	return hashedPaths([]string{p}, dir)[0][len("f\x00"):]
+	states, _ := hashedStates([]string{p}, dir, nil, memoShared)
+	entries := sortedEntries(states)
+	return entries[0][len("f\x00"):]
 }
 
 // Without Init() the executor must still get a usable TTL, or every embedded or
@@ -257,10 +260,10 @@ func TestRecordVerdict(t *testing.T) {
 		task := unitTask(root)
 		writeMembers(t, task)
 
-		key, inputs, ok := e.verdictKeys(task)
-		e.recordVerdict(task, key, inputs, ok)
+		key, snap, _, ok := e.verdictKeys(task)
+		e.recordVerdict(task, key, snap, ok)
 
-		if e.cache.ShouldRunVerdict(key, inputs, time.Hour) {
+		if e.cache.ShouldRunVerdict(key, snap.hash(), time.Hour) {
 			t.Error("the verdict was not stored; the next identical run repeats the work")
 		}
 	})
@@ -271,10 +274,10 @@ func TestRecordVerdict(t *testing.T) {
 		task.Coverage = CoveragePartial
 		writeMembers(t, task)
 
-		key, inputs, ok := e.verdictKeys(task)
-		e.recordVerdict(task, key, inputs, ok)
+		key, snap, _, ok := e.verdictKeys(task)
+		e.recordVerdict(task, key, snap, ok)
 
-		if !e.cache.ShouldRunVerdict(key, inputs, time.Hour) {
+		if !e.cache.ShouldRunVerdict(key, snap.hash(), time.Hour) {
 			t.Error("a partial run stamped a whole-unit pass")
 		}
 	})
@@ -283,11 +286,11 @@ func TestRecordVerdict(t *testing.T) {
 		e, root := newVerdictExecutor(t)
 		task := unitTask(root)
 		writeMembers(t, task)
-		key, inputs, _ := e.verdictKeys(task)
+		key, snap, _, _ := e.verdictKeys(task)
 
-		e.recordVerdict(task, key, inputs, false)
+		e.recordVerdict(task, key, snap, false)
 
-		if !e.cache.ShouldRunVerdict(key, inputs, time.Hour) {
+		if !e.cache.ShouldRunVerdict(key, snap.hash(), time.Hour) {
 			t.Error("recorded a verdict for a task the cache does not apply to")
 		}
 	})
@@ -298,18 +301,18 @@ func TestRecordVerdict(t *testing.T) {
 		e, root := newVerdictExecutor(t)
 		task := unitTask(root)
 		writeMembers(t, task)
-		key, inputs, ok := e.verdictKeys(task)
+		key, snap, _, ok := e.verdictKeys(task)
 
 		if err := os.WriteFile(task.UnitMembers[0], []byte("edited mid-run"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		e.recordVerdict(task, key, inputs, ok)
+		e.recordVerdict(task, key, snap, ok)
 
 		after := verdictInputs(task.UnitMembers, task.UnitGuards, root)
 		if !e.cache.ShouldRunVerdict(key, after, time.Hour) {
 			t.Error("a lint recorded a pass for a state that no longer exists")
 		}
-		if !e.cache.ShouldRunVerdict(key, inputs, time.Hour) {
+		if !e.cache.ShouldRunVerdict(key, snap.hash(), time.Hour) {
 			t.Error("a lint recorded a pass against the pre-run state")
 		}
 	})
@@ -320,12 +323,12 @@ func TestRecordVerdict(t *testing.T) {
 		task := unitTask(root)
 		task.Operation = config.OpFix
 		writeMembers(t, task)
-		key, inputs, ok := e.verdictKeys(task)
+		key, snap, _, ok := e.verdictKeys(task)
 
 		if err := os.WriteFile(task.UnitMembers[0], []byte("formatted"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		e.recordVerdict(task, key, inputs, ok)
+		e.recordVerdict(task, key, snap, ok)
 
 		after := verdictInputs(task.UnitMembers, task.UnitGuards, root)
 		if e.cache.ShouldRunVerdict(key, after, time.Hour) {
@@ -358,22 +361,22 @@ func TestRecordVerdict(t *testing.T) {
 		lint := unitTask(root)
 		lint.Tool, lint.OpConfig, lint.Operation = tool, lintOp, config.OpLint
 		writeMembers(t, lint)
-		lintKey, lintInputs, lintOK := e.verdictKeys(lint)
-		e.recordVerdict(lint, lintKey, lintInputs, lintOK)
-		if e.cache.ShouldRunVerdict(lintKey, lintInputs, time.Hour) {
+		lintKey, lintSnap, _, lintOK := e.verdictKeys(lint)
+		e.recordVerdict(lint, lintKey, lintSnap, lintOK)
+		if e.cache.ShouldRunVerdict(lintKey, lintSnap.hash(), time.Hour) {
 			t.Fatal("precondition: the lint verdict should be stored")
 		}
 
 		fix := lint
 		fix.OpConfig, fix.Operation = fixOp, config.OpFix
-		fixKey, fixInputs, fixOK := e.verdictKeys(fix)
-		e.recordVerdict(fix, fixKey, fixInputs, fixOK)
+		fixKey, fixSnap, _, fixOK := e.verdictKeys(fix)
+		e.recordVerdict(fix, fixKey, fixSnap, fixOK)
 
-		if !e.cache.ShouldRunVerdict(lintKey, lintInputs, time.Hour) {
+		if !e.cache.ShouldRunVerdict(lintKey, lintSnap.hash(), time.Hour) {
 			t.Error("the fix left the real lint verdict standing; the next lint reuses a " +
 				"pass for content the fix rewrote")
 		}
-		if e.cache.ShouldRunVerdict(fixKey, fixInputs, time.Hour) {
+		if e.cache.ShouldRunVerdict(fixKey, fixSnap.hash(), time.Hour) {
 			t.Error("the fix deleted its own verdict")
 		}
 	})
@@ -385,21 +388,21 @@ func TestRecordVerdict(t *testing.T) {
 
 		lint := unitTask(root)
 		writeMembers(t, lint)
-		lintKey, lintInputs, lintOK := e.verdictKeys(lint)
-		e.recordVerdict(lint, lintKey, lintInputs, lintOK)
-		if e.cache.ShouldRunVerdict(lintKey, lintInputs, time.Hour) {
+		lintKey, lintSnap, _, lintOK := e.verdictKeys(lint)
+		e.recordVerdict(lint, lintKey, lintSnap, lintOK)
+		if e.cache.ShouldRunVerdict(lintKey, lintSnap.hash(), time.Hour) {
 			t.Fatal("precondition: the lint verdict should be stored")
 		}
 
 		fix := lint
 		fix.Operation = config.OpFix
-		fixKey, fixInputs, fixOK := e.verdictKeys(fix)
-		e.recordVerdict(fix, fixKey, fixInputs, fixOK)
+		fixKey, fixSnap, _, fixOK := e.verdictKeys(fix)
+		e.recordVerdict(fix, fixKey, fixSnap, fixOK)
 
-		if !e.cache.ShouldRunVerdict(lintKey, lintInputs, time.Hour) {
+		if !e.cache.ShouldRunVerdict(lintKey, lintSnap.hash(), time.Hour) {
 			t.Error("the fix left a stale lint verdict behind")
 		}
-		if e.cache.ShouldRunVerdict(fixKey, fixInputs, time.Hour) {
+		if e.cache.ShouldRunVerdict(fixKey, fixSnap.hash(), time.Hour) {
 			t.Error("the fix deleted its own verdict; no fix could ever hit the cache")
 		}
 	})

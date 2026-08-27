@@ -98,6 +98,17 @@ pub extern "C" fn describe() -> u64 {
 	leak_json(capabilities::describe_json())
 }
 
+/// Drop everything `parse` may have carried over, returning the module to its
+/// freshly-instantiated state. The host calls this before returning an instance
+/// to its reuse pool, and reuses **only** instances that export it: without a
+/// reset boundary parse N+1 could observe parse N's state, leaking one tool's
+/// output into another's diagnostics. This module keeps no state between parses
+/// (every buffer is freed through `dealloc`), so the reset is a no-op — but
+/// exporting it is what declares that, and any future module-level state must be
+/// cleared here.
+#[no_mangle]
+pub extern "C" fn reset() {}
+
 unsafe fn slice<'a>(ptr: *const u8, len: u32) -> &'a [u8] {
 	if ptr.is_null() || len == 0 {
 		&[]

@@ -280,7 +280,11 @@ func TestBuildOptInIgnoreContentCanonical(t *testing.T) {
 		t.Fatalf("setup: WriteFile() error = %v", err)
 	}
 
-	if err := bundled.RunFix(context.Background(), dir); err != nil {
+	found, err := bundled.FindIgnoreFiles(context.Background(), dir)
+	if err != nil {
+		t.Fatalf("FindIgnoreFiles() error = %v", err)
+	}
+	if err := bundled.RunFix(dir, found); err != nil {
 		t.Fatalf("RunFix() error = %v", err)
 	}
 

@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -56,6 +57,10 @@ type Executor struct {
 	fileProgressCallback FileProgressCallback // Optional callback for per-file progress
 	cache                *cache.Cache         // Cache for storing execution results
 	parser               DiagnosticParser     // Optional: parses tool output into diagnostics
+
+	// cmdInfos memoizes command resolution for the lifetime of one Execute; it is
+	// nil outside one (FormatContent), which resolves directly.
+	cmdInfos atomic.Pointer[commandInfoMemo]
 }
 
 // AppManager interface for getting application command information
@@ -127,6 +132,11 @@ func (e *Executor) SetParser(parser DiagnosticParser) {
 func (e *Executor) Execute(ctx context.Context, plan *ExecutionPlan) ([]GroupExecutionResult, error) {
 	log.Debug("starting execution plan", zap.Int("groupCount", len(plan.Groups)))
 	var results []GroupExecutionResult
+
+	// A fresh memo per Execute: an app installed between two runs must be
+	// re-resolved, and only within one run is the answer constant.
+	e.cmdInfos.Store(newCommandInfoMemo())
+	defer e.cmdInfos.Store(nil)
 
 	// Create a cancellable context for fail-fast propagation
 	execCtx, cancel := context.WithCancel(ctx)
@@ -450,7 +460,7 @@ func (e *Executor) executeTask(ctx context.Context, task Task) ExecutionResult {
 
 	// Get command info
 	cmdSpan := trace.Start(trace.CatExec, "getCommandInfo")
-	cmdInfo, err := e.appManager.GetCommandInfo(ctx, task.OpConfig.App)
+	cmdInfo, err := e.commandInfo(ctx, task.OpConfig.App)
 	cmdSpan.EndWith(trace.A("app", task.OpConfig.App))
 	if err != nil {
 		log.Debug("failed to get command info",
@@ -490,25 +500,36 @@ func (e *Executor) executeTask(ctx context.Context, task Task) ExecutionResult {
 	// that passed, which is as sound for a narrowed invocation as for a full one
 	// — so the read is not gated on coverage. Only the write is.
 	verdictSpan := trace.Start(trace.CatCache, "verdictKeys")
-	verdictKey, verdictInputHash, verdictApplies := e.verdictKeys(task)
-	verdictSpan.EndWith(trace.A("tool", task.ToolName), trace.A("applies", verdictApplies))
-	if verdictApplies {
-		if !e.cache.ShouldRunVerdict(verdictKey, verdictInputHash, e.verdictTTL()) {
-			cntVerdictHit.Add(1)
-			log.Debug("verdict cache hit", zap.String("tool", task.ToolName), zap.String("unit", task.UnitDir))
-			// Same shape as a real run: consumers key JSON-L on RelativeDir and
-			// print the scope badge only when Scope is set, so a hit that omitted
-			// them would emit a differently-shaped event for the same task.
-			result.Success = true
-			result.WorkingDir = workingDir
-			result.RelativeDir = relativeDir
-			result.Scope = task.OpConfig.Scope
-			result.recordTiming(startTime)
-			if e.fileProgressCallback != nil {
-				e.fileProgressCallback(task.ToolName, 1, 1, true)
-			}
-			return result
+	verdictKey, verdictSnap, verdictBytes, verdictApplies := e.verdictKeys(task)
+	// The lookup is a map read under a read lock, so folding it into this span
+	// keeps the recorded duration comparable while letting the hit/miss ride along
+	// with the member count and byte volume that produced it — the three numbers
+	// are only meaningful together.
+	verdictHit := verdictApplies && !e.cache.ShouldRunVerdict(verdictKey, verdictSnap.hash(), e.verdictTTL())
+	verdictSpan.EndWith(
+		trace.A("tool", task.ToolName),
+		trace.A("applies", verdictApplies),
+		trace.A("hit", verdictHit),
+		trace.A("members", len(task.UnitMembers)),
+		trace.A("guards", len(task.UnitGuards)),
+		trace.A("bytes", verdictBytes),
+	)
+	// verdictHit already implies verdictApplies.
+	if verdictHit {
+		cntVerdictHit.Add(1)
+		log.Debug("verdict cache hit", zap.String("tool", task.ToolName), zap.String("unit", task.UnitDir))
+		// Same shape as a real run: consumers key JSON-L on RelativeDir and
+		// print the scope badge only when Scope is set, so a hit that omitted
+		// them would emit a differently-shaped event for the same task.
+		result.Success = true
+		result.WorkingDir = workingDir
+		result.RelativeDir = relativeDir
+		result.Scope = task.OpConfig.Scope
+		result.recordTiming(startTime)
+		if e.fileProgressCallback != nil {
+			e.fileProgressCallback(task.ToolName, 1, 1, true)
 		}
+		return result
 	}
 
 	// Dispatch on argv shape, not scope: only {file} takes one path, so only it
@@ -523,7 +544,7 @@ func (e *Executor) executeTask(ctx context.Context, task Task) ExecutionResult {
 	// The three per-process updateCacheAfterSuccess calls would otherwise let the
 	// first success of an N-process task record a verdict a later failure refutes.
 	if result.Success {
-		e.recordVerdict(task, verdictKey, verdictInputHash, verdictApplies)
+		e.recordVerdict(task, verdictKey, verdictSnap, verdictApplies)
 	}
 
 	// Classify unclassified failures as independent (tool failed on its own)

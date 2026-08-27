@@ -58,6 +58,10 @@ export default defineConfig((config) => ({
     "globmatch",
     // The package planned for the cross-process config-evaluation cache.
     "configcache",
+    // A pooled WASM parser instance whose module exports no `reset`: it cannot
+    // be returned to a clean state, so it is discarded rather than reused
+    // (`parser.unresettable_discards` in internal/parsermanager).
+    "unresettable",
     // The build tag that compiles internal/trace out entirely: `-tags
     // datamitsu_notrace`. Named for what it removes, so it reads correctly in
     // the build constraint it appears in.
@@ -491,5 +495,12 @@ export default defineConfig((config) => ({
     "Fprint",
     "namerefs",
     "tfupdate",
+    // The stat fields carrying a file's inode-change time (syscall.Stat_t.Ctim
+    // on Linux, .Ctimespec on the BSDs), the Go call that restores a mtime, and
+    // the package that reads them: internal/tooling/statident*.go.
+    "Ctim",
+    "Ctimespec",
+    "Chtimes",
+    "statident",
   ],
 }));

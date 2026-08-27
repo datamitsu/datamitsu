@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 53,
-  "pageSetHash": "0c7653184328f51caed936a99c090eb2",
+  "pageSetHash": "d20677bada3e0c708cccc0ecbc5faf12",
   "pages": [
     {
       "slug": "about",
@@ -197,8 +197,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/caching.md",
       "title": "Caching Strategy",
       "description": "How datamitsu tracks per-file results, builds invalidation keys from configuration and file hashes, and safely persists cache state under concurrent execution",
-      "bytes": 11361,
-      "contentHash": "a94d64cb2a7785a4bb0aaec209cf3457"
+      "bytes": 18987,
+      "contentHash": "c90ee9f163431d51bf781103f1cd2f73"
     },
     {
       "slug": "guides/architecture/discovery",
@@ -235,8 +235,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/parsers.md",
       "title": "WASM Output Parsers",
       "description": "How datamitsu declares, builds, delivers over two channels, verifies, and loads sandboxed Rust→WASM output parsers, and how the line-based diff-in-core powers formatting",
-      "bytes": 26329,
-      "contentHash": "fdecfe97408ad64c97bb56f740bcc7d2"
+      "bytes": 27974,
+      "contentHash": "0a16db150d913d4854267356e51ca956"
     },
     {
       "slug": "guides/architecture/planner",

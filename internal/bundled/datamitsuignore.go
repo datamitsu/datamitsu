@@ -105,15 +105,14 @@ func toRelPath(rootPath, absPath string) string {
 	return rel
 }
 
-// RunFix normalizes formatting of all .datamitsuignore files under rootPath.
-// Parse errors cause an immediate error return.
+// RunFix normalizes formatting of the given .datamitsuignore files (as returned
+// by FindIgnoreFiles). Parse errors cause an immediate error return.
 // Files are written atomically (temp file + rename) only if content changed.
-func RunFix(ctx context.Context, rootPath string) error {
-	files, err := FindIgnoreFiles(ctx, rootPath)
-	if err != nil {
-		return fmt.Errorf("finding .datamitsuignore files: %w", err)
-	}
-
+//
+// The file list is a parameter rather than discovered here because a `check`
+// runs RunFix and RunLint back to back over the same tree: discovering twice
+// meant two full gitignore-aware repository walks for one answer.
+func RunFix(rootPath string, files []string) error {
 	for _, path := range files {
 		if err := fixFile(path, rootPath); err != nil {
 			return err
@@ -181,15 +180,10 @@ func fixFile(path, rootPath string) error {
 	return nil
 }
 
-// RunLint validates all .datamitsuignore files under rootPath.
-// Parse errors cause an immediate error return.
+// RunLint validates the given .datamitsuignore files (as returned by
+// FindIgnoreFiles). Parse errors cause an immediate error return.
 // Formatting issues and unknown tool names produce yellow warnings on stderr.
-func RunLint(ctx context.Context, rootPath string, tools config.MapOfTools) error {
-	files, err := FindIgnoreFiles(ctx, rootPath)
-	if err != nil {
-		return fmt.Errorf("finding .datamitsuignore files: %w", err)
-	}
-
+func RunLint(rootPath string, tools config.MapOfTools, files []string) error {
 	for _, path := range files {
 		if err := lintFile(path, tools, rootPath); err != nil {
 			return err

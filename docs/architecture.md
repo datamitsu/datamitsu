@@ -191,10 +191,10 @@ Tool operation arguments support template placeholders that the executor resolve
 
 - Built-in lint and fix operations for datamitsu-owned file formats, run as part of `RunSequential` before user-configured tools
 - `.datamitsuignore` linter/fixer (`datamitsuignore.go`):
-  - `FindIgnoreFiles(rootPath)` walks the directory tree (skipping `.git/`, `node_modules/`, `vendor/`, and other heavy directories) and returns all `.datamitsuignore` file paths
-  - `RunFix(rootPath)` normalizes formatting to canonical form `{!}{glob}: {tool1}, {tool2}`. Writes atomically (temp file + rename) only if content changed. Parse errors cause immediate failure
-  - `RunLint(rootPath, tools)` validates all `.datamitsuignore` files: parse errors cause immediate failure; formatting deviations and unknown tool names produce yellow warnings on stderr but do not fail
-- In `RunSequential`: `RunFix` runs when operations include `fix` (not in `--explain` mode), errors logged as warnings; `RunLint` runs always (printing warnings for unknown tools/formatting), errors halt execution only when operations include `lint`
+  - `FindIgnoreFiles(ctx, rootPath)` walks the directory tree with the same gitignore-aware traversal the planner uses and returns all `.datamitsuignore` file paths
+  - `RunFix(rootPath, files)` normalizes formatting to canonical form `{!}{glob}: {tool1}, {tool2}`. Writes atomically (temp file + rename) only if content changed. Parse errors cause immediate failure
+  - `RunLint(rootPath, tools, files)` validates the given `.datamitsuignore` files: parse errors cause immediate failure; formatting deviations and unknown tool names produce yellow warnings on stderr but do not fail
+- In `RunSequential`: `FindIgnoreFiles` runs once and its result is handed to both `RunFix` and `RunLint` — a `check` is a fix followed by a lint over the same tree, and discovering twice cost a second full repository walk for an identical answer. A discovery failure aborts the run. `RunFix` runs when operations include `fix` (not in `--explain` mode) and its errors abort; `RunLint` runs always (printing warnings for unknown tools/formatting), and its errors halt execution only when operations include `lint`
 - Key files: `datamitsuignore.go`
 
 **Remote Config** ([internal/remotecfg/](internal/remotecfg/))

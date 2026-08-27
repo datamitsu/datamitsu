@@ -90,8 +90,11 @@ type Planner struct {
 
 	// memberCache and guardCache memoize the two per-unit derivations that scale
 	// with the repository rather than with the unit: the members of a unit
-	// directory, and the guard files on its ancestor chain. Both are pure
-	// functions of the directory within one run.
+	// directory, and the guard files on its ancestor chain. memberCache is a pure
+	// function of cachedFiles, so it stays valid for as long as cachedFiles does
+	// and is dropped with it by Invalidate; guardCache reads the filesystem, so
+	// Plan drops it on every call rather than letting a long-lived planner answer
+	// from a walk taken sessions ago.
 	unitCacheMu sync.Mutex
 	memberCache map[string][]string
 	guardCache  map[string][]string
@@ -170,6 +173,37 @@ func (p *Planner) GetDetectedProjectTypes() []string {
 	return types
 }
 
+// Invalidate drops everything derived from the repository walk, so the next Plan
+// re-walks the tree.
+//
+// Plan's own per-call reset covers guardCache, which stats the disk. The file
+// list does not: initializeCache returns early once cacheInitialized is set, and
+// unitMembers — the other half of the verdict input vector — is derived from it.
+// A long-lived planner would therefore keep answering with the file set as it
+// stood at startup, so a file created afterwards leaves the verdict inputs for
+// its unit byte-identical to a recorded pass and the tool is skipped for a unit
+// whose contents demonstrably changed.
+//
+// This is deliberately not folded into Plan: `check` plans twice in one process
+// (fix, then lint) and would pay a second full walk for a file set that has not
+// moved. The caller that outlives a single run (the LSP server) asks for it.
+func (p *Planner) Invalidate() {
+	p.cachedFiles = nil
+	p.cachedRel = nil
+	p.cachedProjects = nil
+	p.cacheInitialized = false
+	p.ignoreMatcher = nil
+
+	p.globCacheMu.Lock()
+	p.globCache = nil
+	p.globCacheMu.Unlock()
+
+	p.unitCacheMu.Lock()
+	p.memberCache = nil
+	p.guardCache = nil
+	p.unitCacheMu.Unlock()
+}
+
 // Plan creates an execution plan for the given operation and files
 func (p *Planner) Plan(ctx context.Context, operation config.OperationType, sel Selection, selectedTools []string) (*ExecutionPlan, error) {
 	planSpan := trace.Start(trace.CatPlan, "Plan")
@@ -179,6 +213,18 @@ func (p *Planner) Plan(ctx context.Context, operation config.OperationType, sel 
 	if err := p.initializeCache(ctx); err != nil {
 		return nil, fmt.Errorf("failed to initialize cache: %w", err)
 	}
+
+	// The guard chain is stat'ed off disk rather than derived from the file list,
+	// so it is the one per-unit memo that can go stale while the planner lives:
+	// under `datamitsu lsp` one planner serves the whole session, and a
+	// prettier.config.js or lockfile created after the first request would keep
+	// being missed — leaving the verdict inputs unchanged and hitting a cached
+	// pass the new file invalidates. Dropping it per Plan keeps the memo doing
+	// what it was for (the tasks × ancestors product inside one plan) and costs
+	// one guard walk per call.
+	p.unitCacheMu.Lock()
+	p.guardCache = nil
+	p.unitCacheMu.Unlock()
 
 	// Collect all applicable tasks (now uses cached data)
 	var tasks []Task

@@ -927,12 +927,19 @@ func runSequential(
 
 	hasFix := slices.Contains(operations, config.OpFix)
 
+	// Discovered once and handed to both: fix and lint answer different questions
+	// about the same set of files, and finding that set is a full repository walk.
+	ignoreFiles, err := bundled.FindIgnoreFiles(ctx, sc.rootPath)
+	if err != nil {
+		return fmt.Errorf("finding .datamitsuignore files: %w", err)
+	}
+
 	if hasFix && sc.explainLevel == "" {
-		if err := bundled.RunFix(ctx, sc.rootPath); err != nil {
+		if err := bundled.RunFix(sc.rootPath, ignoreFiles); err != nil {
 			return err
 		}
 	}
-	if lintErr := bundled.RunLint(ctx, sc.rootPath, sc.cfg.Tools); lintErr != nil {
+	if lintErr := bundled.RunLint(sc.rootPath, sc.cfg.Tools, ignoreFiles); lintErr != nil {
 		if slices.Contains(operations, config.OpLint) {
 			return lintErr
 		}

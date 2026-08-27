@@ -363,6 +363,31 @@ exported `parse`, then read and free the output buffer. The raw bytes are passed
 preserved; the parser decides whether to split. The JSON result deserializes into
 nullable Go structs (pointer fields, so a field the tool omitted stays `nil`).
 
+Instances are **pooled**. Instantiating a module allocates a fresh linear memory,
+and a run parses the output of many tool invocations of the same module, so after
+a successful parse the instance goes back to the manager rather than being
+closed. The pool is keyed by the module's **content key** — a re-pinned module
+never draws an instance compiled from the bytes it replaced — and holds at most
+eight idle instances per module; the excess is closed, so the pool is bounded by
+that cap rather than by peak concurrency.
+
+Three rules keep pooling invisible to callers, and all three are load-bearing:
+
+- **Only an instance that was reset is pooled.** The ABI does not make a module
+  stateless: mutable globals or retained linear memory would let one parse
+  observe the previous one. A module declares it can be returned to its
+  post-instantiation state by exporting `reset`, which the host calls before
+  pooling the instance. A module that does not export it is never reused — its
+  instances are closed after every parse, exactly as before pooling existed.
+- **An instance whose parse returned an error is closed, never pooled.** A trap
+  mid-ABI can leave the module's allocator in a state the next parse would
+  inherit, and no state may leak from one tool's output into another's.
+- **A failure on a _reused_ instance is retried once on a fresh one.** The
+  failure may belong to the instance rather than to the input — it may have been
+  closed underneath the pool — and pooling must never turn a parse that works
+  into one that fails. A _fresh_ instance's failure is not retried: it is the
+  module's answer to this input.
+
 ### Introspect
 
 Every module also exports `describe` — a static counterpart to `parse` that takes

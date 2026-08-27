@@ -25,6 +25,11 @@ The host (Go core, via wazero) drives a small manual-memory ABI — there is no
    The result packs `(ptr << 32) | len` of a freshly allocated UTF-8 JSON buffer.
 3. Host reads the JSON, then calls `dealloc(ptr, len)` on the output buffer (and
    on each input buffer) to free it.
+4. Host calls `reset()` before reusing the instance for another parse. A module
+   that exports it declares it can be returned to its post-instantiation state;
+   the host reuses **only** such instances, instantiating a fresh module per
+   parse for any module that omits the export. Keep every parse's state
+   reachable from `reset` — never in a global that survives it.
 
 Raw bytes are delivered **whole — never host-line-split**. Line-splitting in the
 host loses multiline cases (e.g. `cue_fmt`); the parser decides whether to split.
