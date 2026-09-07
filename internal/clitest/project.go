@@ -175,7 +175,7 @@ func (p *Project) gitOut(args ...string) string {
 // minimal regardless of what the embedded default contributes. getMinVersion is
 // pinned low so any build satisfies it.
 const minimalConfigJS = `globalThis.getBeforeConfigs = () => [];
-globalThis.getConfig = (config) => ({ apps: {}, runtimes: {}, setup: {}, tools: {} });
+globalThis.getConfig = (config) => ({ apps: {}, runtimes: {}, managedConfigs: {}, tools: {} });
 globalThis.getMinVersion = () => "0.0.0";
 `
 

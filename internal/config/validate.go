@@ -565,20 +565,20 @@ func isValidSHA256Hex(s string) bool {
 	return err == nil
 }
 
-// ValidateSetup validates init configuration entries.
-func ValidateSetup(initConfigs MapOfConfigSetup) error {
+// ValidateManagedConfigs validates managed configuration file entries.
+func ValidateManagedConfigs(managedConfigs MapOfManagedConfigs) error {
 	var errs []string
 
-	names := make([]string, 0, len(initConfigs))
-	for name := range initConfigs {
+	names := make([]string, 0, len(managedConfigs))
+	for name := range managedConfigs {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 
 	for _, name := range names {
-		cfg := initConfigs[name]
+		cfg := managedConfigs[name]
 		if cfg.Scope != "" && cfg.Scope != ScopeProject && cfg.Scope != ScopeGitRoot {
-			errs = append(errs, fmt.Sprintf("init %q: scope must be %q, %q, or empty, got %q", name, ScopeProject, ScopeGitRoot, cfg.Scope))
+			errs = append(errs, fmt.Sprintf("managed config %q: scope must be %q, %q, or empty, got %q", name, ScopeProject, ScopeGitRoot, cfg.Scope))
 		}
 	}
 
@@ -589,27 +589,27 @@ func ValidateSetup(initConfigs MapOfConfigSetup) error {
 	return nil
 }
 
-// ValidateSetupToolRefs returns warnings for any ConfigSetup.Tools entry that does
+// ValidateManagedConfigToolRefs returns warnings for any ManagedConfig.Tools entry that does
 // not reference a configured tool. Such a config can never be selected via
-// `setup --tools` (the name won't intersect any selection), so it would be
+// `config reconcile --tools` (the name won't intersect any selection), so it would be
 // silently excluded — almost always an authoring typo. This mirrors the
 // unknown-tool warning emitted for .datamitsuignore rules. It warns rather than
 // errors so a config that conditionally omits a tool in some environment still
 // loads.
-func ValidateSetupToolRefs(initConfigs MapOfConfigSetup, tools MapOfTools) []string {
+func ValidateManagedConfigToolRefs(managedConfigs MapOfManagedConfigs, tools MapOfTools) []string {
 	var warnings []string
 
-	names := make([]string, 0, len(initConfigs))
-	for name := range initConfigs {
+	names := make([]string, 0, len(managedConfigs))
+	for name := range managedConfigs {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 
 	for _, name := range names {
-		for _, toolName := range initConfigs[name].Tools {
+		for _, toolName := range managedConfigs[name].Tools {
 			if _, ok := tools[toolName]; !ok {
 				warnings = append(warnings, fmt.Sprintf(
-					"init %q: tools references unknown tool %q (it will never match `setup --tools %s`)",
+					"managed config %q: tools references unknown tool %q (it will never match `config reconcile --tools %s`)",
 					name, toolName, toolName,
 				))
 			}

@@ -38,7 +38,9 @@ Check that datamitsu is available:
 datamitsu --help
 ```
 
-You should see the available commands listed, including `exec`, `init`, `check`, `setup`, and others.
+You should see the available commands listed, including `exec`, `init`, `check`,
+and `config`. Managed project files are handled by the explicit
+`config reconcile` subcommand; use `config reconcile --dry-run` to preview them.
 
 ## Global Cache Directory
 

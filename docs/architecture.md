@@ -100,7 +100,7 @@ Six types of applications are supported:
 - Links map link names to relative paths within the app's install directory (e.g., `"eslint-config": "dist/eslint.config.js"`)
 - Links do not require `required: true` — smart init installs link-apps referenced by tools plus every non-lazy link-app (`eagerRuntimeLinkApps()`); apps marked `Lazy` are deferred
 - `CreateDatamitsuLinks(gitRoot, apps, resolver, bundles, bundleResolver, dryRun)` removes and recreates `.datamitsu/` atomically, creating symlinks from `.datamitsu/{linkName}` to `{installRoot}/{relativePath}` for both apps and bundles
-- Links follow installation: `materializeInstalledLinks()` passes only **installed** link-apps to `CreateDatamitsuLinks` (filtered by `installedAppsWithLinks()`, which probes the same `InstallRootResolver` the link pass uses, so an included app always resolves). A non-lazy link-app is installed and linked at init (whether or not a tool references it — `eagerRuntimeLinkApps()` covers hook/ConfigSetup-only consumers like commitlint); an app marked `Lazy` (e.g. slidev) is deferred and gets its links when first run via `datamitsu exec`, which calls `materializeInstalledLinks()` again. See [cmd/init.go](cmd/init.go) and [cmd/exec.go](cmd/exec.go)
+- Links follow installation: `materializeInstalledLinks()` passes only **installed** link-apps to `CreateDatamitsuLinks` (filtered by `installedAppsWithLinks()`, which probes the same `InstallRootResolver` the link pass uses, so an included app always resolves). A non-lazy link-app is installed and linked at init (whether or not a tool references it — `eagerRuntimeLinkApps()` covers hook/ManagedConfig-only consumers like commitlint); an app marked `Lazy` (e.g. slidev) is deferred and gets its links when first run via `datamitsu exec`, which calls `materializeInstalledLinks()` again. See [cmd/init.go](cmd/init.go) and [cmd/exec.go](cmd/exec.go)
 - Path traversal protection via `validateLinkPath()`: rejects absolute paths, parent traversal (`..`), and symlink escapes outside install directory
 - Uses `InstallRootResolver` interface (implemented by BinManager) to get install paths without circular dependencies
 - `WriteAppFiles(installPath, files, archives)` writes archives (alphabetically) then file content to install directories before package managers run. Files take precedence over archives for overlapping paths
@@ -271,15 +271,13 @@ Tool operation arguments support template placeholders that the executor resolve
 
 - Built with cobra framework
 - `exec` - Execute managed binaries (see [cmd/exec.go](cmd/exec.go))
-- `setup` - Setup configuration files for detected project types (see [cmd/setup.go](cmd/setup.go))
-  - Uses `ConfigSetup.Scope` field: `scope: "git-root"` configs run exactly once at git root; `scope: "project"` (default) configs run per detected project
 - `check` - Runs fix then lint in a single process with shared context (see [cmd/check.go](cmd/check.go))
   - Supports `--explain`, `--file-scoped`, `--tools` flags (same as fix/lint)
   - Fails on fix error without continuing to lint
   - Uses `runner.RunSequential()` for shared initialization and context reuse
 - `init` - Downloads required binaries and runs initialization commands (see [cmd/init.go](cmd/init.go))
   - Must be run from git root (guard in `checkInitGitRoot()`)
-  - Smart init: installs link-apps referenced by tools (`scanReferencedApps()`) plus every non-lazy runtime link-app (`eagerRuntimeLinkApps()` — covers hook/ConfigSetup-only consumers). Apps marked `Lazy` are deferred and install on first `datamitsu exec`
+  - Smart init: installs link-apps referenced by tools (`scanReferencedApps()`) plus every non-lazy runtime link-app (`eagerRuntimeLinkApps()` — covers hook/ManagedConfig-only consumers). Apps marked `Lazy` are deferred and install on first `datamitsu exec`
   - Installs bundles before creating symlinks; inline-only bundles install regardless of `--skip-download`
   - After downloads, materializes `.datamitsu/` symlinks for **installed** link-apps and bundles via `materializeInstalledLinks()` → `managedconfig.CreateDatamitsuLinks()`; deferred link-apps get their links on first `datamitsu exec`
   - Supports `--all` flag to download all binaries (both required and optional)
@@ -288,6 +286,7 @@ Tool operation arguments support template placeholders that the executor resolve
   - Supports `--dry-run` flag to preview actions without making changes
   - Concurrency controlled via `DATAMITSU_CONCURRENCY` env var (default: 3)
 - `config` - Parent command for configuration management subcommands (see [cmd/config.go](cmd/config.go))
+  - `config reconcile` - Rewrites files declared by `managedConfigs`, then runs `fix` by default (see [cmd/config_reconcile.go](cmd/config_reconcile.go)); `--dry-run` previews without either phase and `--skip-fix` performs only reconciliation; `scope: "git-root"` entries run once at the root, while `scope: "project"` entries run per detected project
   - `config lockfile [appName]` - Generates lock file content for node/UV/Go apps (see [cmd/config_lockfile.go](cmd/config_lockfile.go))
     - Without args: lists available node/UV/Go apps grouped by kind
     - With appName: deletes app cache, reinstalls, reads generated lock file (pnpm-lock.yaml or uv.lock); for Go apps, instead resolves deps via `go mod init` + `go get pkg@version` (`GenerateGoLockFiles`) and assembles the `{"mod","sum"}` JSON wrapper (`BuildGoLockFileJSON`) — a reinstall can't produce it because the build requires the lockfile to already exist
@@ -343,21 +342,21 @@ final Config
 - `IgnoreRules` use append semantics across config layers (previous rules prepended to new)
 - Circular remote config dependencies are detected and produce an error
 - `--no-remote` flag on `devtools verify-all` skips remote config resolution
-- `loadConfig()` returns a 4-tuple: `(*config.Config, *config.SetupLayerMap, *goja.Runtime, error)`. On a config-evaluation cache hit the layer map is **empty** and the runtime is **nil** — nothing was evaluated, so there is no VM to return
-- **Config-evaluation cache** ([internal/configcache](internal/configcache), wired in [cmd/config_cache.go](cmd/config_cache.go)): the merged, post-validation config is stored at `{cache}/config-eval/{projects|configs}/{identity}/{key}.msgpack`, namespaced by the same identity the source-mode farm uses (git root, or the resolved chain for a machine-level `--config`). There is deliberately no fall back to cwd, so a load with neither a git root nor an explicit chain simply does not cache. The key covers every input config JS can observe: chain file contents in chain order, the auto-config candidate names and their existence, `--no-auto-config` / `--skip-remote-config`, the whole environment, the allowlisted `datamitsuConfigInputs`, the JS-visible facts, cwd, git root, `.git/HEAD` and `ldflags.Version`. A load that needs the VM (`requireVM`) or the setup layer map (`evaluateSetupContent`), and the lock-file-relaxed `config lockfile` load, bypass it entirely (`configCacheUsable`). An evaluation that read the clock or `Math.random`, or that called `console.*`, is never stored: a hit runs no JS and could reproduce neither the value nor the output. Warnings and resolved remote URLs are carried in the artifact so a hit is observationally identical to a miss. Disable with `DATAMITSU_CONFIG_CACHE=0`; see [Startup and Config Load](../website/docs/guides/architecture/startup.md#the-config-evaluation-cache)
+- `loadConfig()` returns a 4-tuple: `(*config.Config, *config.ManagedConfigLayerMap, *goja.Runtime, error)`. On a config-evaluation cache hit the layer map is **empty** and the runtime is **nil** — nothing was evaluated, so there is no VM to return
+- **Config-evaluation cache** ([internal/configcache](internal/configcache), wired in [cmd/config_cache.go](cmd/config_cache.go)): the merged, post-validation config is stored at `{cache}/config-eval/{projects|configs}/{identity}/{key}.msgpack`, namespaced by the same identity the source-mode farm uses (git root, or the resolved chain for a machine-level `--config`). There is deliberately no fall back to cwd, so a load with neither a git root nor an explicit chain simply does not cache. The key covers every input config JS can observe: chain file contents in chain order, the auto-config candidate names and their existence, `--no-auto-config` / `--skip-remote-config`, the whole environment, the allowlisted `datamitsuConfigInputs`, the JS-visible facts, cwd, git root, `.git/HEAD` and `ldflags.Version`. A load that needs the VM (`requireVM`) or the managed-config layer map (`evaluateManagedConfigContent`), and the lock-file-relaxed `config lockfile` load, bypass it entirely (`configCacheUsable`). An evaluation that read the clock or `Math.random`, or that called `console.*`, is never stored: a hit runs no JS and could reproduce neither the value nor the output. Warnings and resolved remote URLs are carried in the artifact so a hit is observationally identical to a miss. Disable with `DATAMITSU_CONFIG_CACHE=0`; see [Startup and Config Load](../website/docs/guides/architecture/startup.md#the-config-evaluation-cache)
 - Each source is run through `config.StripTypes` (esbuild) only when its extension is not `.js`/`.mjs` — the decision is by extension, never by content sniffing (`prepareConfigSource` in [cmd/config_loader.go](cmd/config_loader.go)). The embedded default is bundler output and is likewise handed to goja unstripped
 - Startup/config-load phases are instrumented behind `DATAMITSU_STARTUP_TIMINGS=1`; see [Startup and Config Load](../website/docs/guides/architecture/startup.md) for the cost model
 
-**Eager Content Evaluation** (`internal/config/setup_eval.go`, `internal/config/setup_layer.go`):
+**Managed Config Content Evaluation** (`internal/config/managed_config_eval.go`, `internal/config/managed_config_layer.go`):
 
-- `content()` functions in `setup` entries are evaluated eagerly during setup-capable config loading
-- `SetupLayerMap` tracks the history of each managed file across all config layers
-- `SetupLayerHistory` stores ordered `SetupLayerEntry` items (LayerName, GeneratedContent) and the final `ConfigSetup` metadata
-- `EvaluateInitContent()` calls each layer's `content()` functions, passing the previous layer's output as `context.existingContent`
-- `MergeSetupLayers()` records evaluated content into the layer map after each config source is processed
+- `content()` functions in `managedConfigs` entries are evaluated eagerly during reconciliation-capable config loading
+- `ManagedConfigLayerMap` tracks the history of each managed file across all config layers
+- `ManagedConfigLayerHistory` stores ordered `ManagedConfigLayerEntry` items (LayerName, GeneratedContent) and the final `ManagedConfig` metadata
+- `EvaluateManagedConfigContent()` calls each layer's `content()` functions, passing the previous layer's output as `context.existingContent`
+- `MergeManagedConfigLayers()` records evaluated content into the layer map after each config source is processed
 - Evaluation is best-effort: entries whose `content()` throws are silently skipped; the installer falls back to disk-based generation for those entries
-- `context.existingContent` contains the previous layer's generated content (not disk content); `context.originalContent` contains unmodified disk content (available during both eager evaluation and setup)
-- The installer checks `InitLayerMap` first; if history exists for a file, it uses `GetLastGeneratedContent()` instead of calling `content()` again
+- `context.existingContent` contains the previous layer's generated content (not disk content); `context.originalContent` contains unmodified disk content during reconciliation
+- The installer checks `ManagedConfigLayerMap` first; if history exists for a file, it uses `GetLastGeneratedContent()` instead of calling `content()` again
 
 ## Key Data Flow
 
@@ -379,7 +378,7 @@ The [internal/config/config.js](internal/config/config.js) file defines:
 - `mapOfRuntimes`: Runtime definitions (UV, Node, JVM, Go) with managed binary URLs and hashes per platform
 - `mapOfApps`: All available binaries/tools with URLs, hashes, and platform support
 - `ignoreGroups`: Categorized ignore patterns (Dependencies, Build outputs, Cache, Testing, Logs, Environment, Security, IDE & OS, Golang specific)
-- `setup`: Configuration for generating managed tool configs like lefthook.yml
+- `managedConfigs`: Definitions for project-owned files reconciled by `config reconcile`
 - `ignoreRules`: Optional `string[]` of `.datamitsuignore`-syntax rules applied alongside file-based rules; merged via append across config layers
 
 Tools API exposed to JS includes ignore pattern parsing/stringifying utilities (`tools.Ignore`), `tools.Config.linkPath()` for computing relative paths to `.datamitsu/` symlinks, and `tools.Path` for path manipulation.
@@ -518,15 +517,15 @@ Uses uber-go/zap structured logging throughout. Logger initialization in [intern
 
 ### Managed Config and Symlinks
 
-- **Two-layer symlink creation**: App-level links (`.datamitsu/` via `App.Links` + `CreateDatamitsuLinks`) and config-level links (root via `ConfigSetup.LinkTarget`)
+- **Two-layer symlink creation**: App-level links (`.datamitsu/` via `App.Links` + `CreateDatamitsuLinks`) and config-level links (root via `ManagedConfig.LinkTarget`)
 - **`.datamitsu/` directory**: Recreated atomically on each `init` run (remove + recreate). Listed in `.gitignore`. A `.gitignore` file containing `*` is automatically created inside `.datamitsu/` as a defensive measure — prevents accidental commits if users forget to add `.datamitsu/` to their root `.gitignore`. A `datamitsu.config.d.ts` file is written with embedded TypeScript type definitions (from `internal/config/config.d.ts` via `config.GetDefaultConfigDTS()`) to provide IDE autocomplete for config files. After creation, all symlinks are verified (existence, correct target, target file exists) — verification failure is a hard error
 - **Strict app installation**: Uninstalled apps with links cause `CreateDatamitsuLinks()` to return an error immediately (no silent skipping)
-- **ConfigSetup.LinkTarget**: When set on a `ConfigSetup` entry, the installer creates a symlink instead of writing content. Target is resolved relative to the symlink's directory
+- **ManagedConfig.LinkTarget**: When set on a `ManagedConfig` entry, the installer creates a symlink instead of writing content. Target is resolved relative to the symlink's directory
 - **Lock files**: Node, UV, and Go apps require `LockFile`. Node writes `pnpm-lock.yaml` and uses `--frozen-lockfile`; UV writes `uv.lock` and uses `--locked --no-build`; Go expands a JSON payload into `go.mod` + `go.sum` and builds with `-mod=readonly`. Lock content can be brotli-compressed with the `br:` prefix
 - **Validation-first**: `ValidateApps()` returns `([]string, error)` -- warnings and validation errors. Runs immediately after config load in `loadConfigWithPaths`, catching link path traversal errors and lockfile requirements before execution. Warns when UV runtime is in system mode without pythonVersion set
 - **Links independence**: Links do not require `required: true`. Smart init installs link-apps by tool usage plus all non-lazy link-apps, not the Required flag; only `Lazy`-marked apps are deferred
 - **Windows**: Symlinks only, no fallback. Requires Developer Mode
-- **Installer JS context**: The `content()` function in `ConfigSetup` receives `projectTypes`, `projectLocations` (`{type, path}` with git-root-relative paths), `rootPath`, `cwdPath`, `isRoot`, and `datamitsuDir`. Project locations are populated only for setup-capable loads
+- **Installer JS context**: The `content()` function in `ManagedConfig` receives `projectTypes`, `projectLocations` (`{type, path}` with git-root-relative paths), `rootPath`, `cwdPath`, `isRoot`, and `datamitsuDir`. Project locations are populated only for reconciliation-capable loads
 - **Import path generation**: `tools.Path.forImport(path)` ensures relative paths are valid ES module imports. JavaScript/TypeScript `import` statements require relative paths to start with `./` or `../`, but `tools.Path.join(context.datamitsuDir, "file.js")` returns `.datamitsu/file.js` (missing `./` prefix). Wrapping with `forImport()` fixes this: `tools.Path.forImport(tools.Path.join(context.datamitsuDir, "eslint.config.js"))` produces `./.datamitsu/eslint.config.js`. The function is idempotent — paths already starting with `./` or `../` are returned unchanged
 
 ### Planner CWD-Subtree Restriction

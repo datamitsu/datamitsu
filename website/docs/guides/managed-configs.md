@@ -18,7 +18,7 @@ project-root/
 │   ├── eslint-config → {store}/.apps/node/my-eslint-config/{hash}/dist/eslint.config.js
 │   └── prettier-config → {store}/.apps/node/my-prettier-config/{hash}/.prettierrc.json
 ├── eslint.config.js          # imports from .datamitsu/eslint-config
-└── .prettierrc.json          # symlink via ConfigSetup
+└── .prettierrc.json          # symlink via ManagedConfig
 ```
 
 The `.datamitsu/` directory is:
@@ -56,7 +56,7 @@ This creates symlinks at `.datamitsu/eslint-config` and `.datamitsu/eslint-plugi
 
 `.datamitsu/` links follow installation — a link exists only once its source app is installed:
 
-- **Eager apps (default)** — every app that declares `links` is installed during `datamitsu init`, so its links are created then. This covers apps a tool runs, as well as apps whose links are consumed by git hooks or `setup`-generated files (for example, commitlint, run by the commit-msg hook with its config imported from a `.datamitsu/` symlink).
+- **Eager apps (default)** — every app that declares `links` is installed during `datamitsu init`, so its links are created then. This covers apps a tool runs, as well as apps whose links are consumed by git hooks or `managedConfigs` entries (for example, commitlint, run by the commit-msg hook with its config imported from a `.datamitsu/` symlink).
 - **Lazy apps** — an app that sets `lazy: true` is **not** installed at init. It installs the first time you run it with `datamitsu exec <app>`, and its `.datamitsu/` links are materialized at that point. Use this for user-invoked CLIs whose dependencies are heavy and aren't needed until the app is actually run (for example, a presentation tool like slidev, which would otherwise pull a headless browser at init).
 
 Mark an app `lazy` only when nothing else depends on it being present right after `init` — a tool, hook, or generated config that references the app's link needs the app eager (the default).
@@ -137,7 +137,7 @@ archives: {
 In your JavaScript configuration, use `tools.Config.linkPath()` to compute relative paths from a project directory to a `.datamitsu/` symlink:
 
 ```javascript
-const setup = {
+const managedConfigs = {
   "eslint.config.js": {
     content: (context) => {
       const configPath = tools.Config.linkPath(
@@ -170,12 +170,15 @@ tools.Path.forImport(tools.Path.join(context.datamitsuDir, "eslint.config.js"));
 
 `tools.Path.forImport()` ensures relative paths start with `./` or `../`, which JavaScript/TypeScript `import` statements require. It's idempotent -- paths already starting with `./` or `../` are returned unchanged.
 
-## ConfigSetup and Root Symlinks
+## Managed Config Files and Root Symlinks
 
-Beyond `.datamitsu/` links, the `setup` configuration creates files and symlinks directly in your project:
+Beyond `.datamitsu/` links, `managedConfigs` entries describe files and
+symlinks owned directly in your project. Preview their reconciliation with
+`datamitsu config reconcile --dry-run`; run `datamitsu config reconcile` to
+write them and then run `datamitsu fix`.
 
 ```javascript
-const setup = {
+const managedConfigs = {
   // Write file content, associated with the eslint tool
   ".eslintrc.js": {
     tools: ["eslint"],
@@ -190,24 +193,25 @@ const setup = {
 ```
 
 Optionally associate an entry with one or more tools via `tools`. When you run
-[`datamitsu setup --tools <names>`](../reference/cli-commands.md#setup), only the
-config files whose `tools` intersect the selected set are regenerated and
+[`datamitsu config reconcile --tools <names>`](../reference/cli-commands.md#config-reconcile), only the
+config files whose `tools` intersect the selected set are considered and
 everything else is left untouched — ideal for iterating on a single tool's config
 without rewriting your whole project. Entries with no `tools` (shared
 infrastructure like `.gitignore` or `lefthook.yaml`) are skipped whenever
-`--tools` is passed.
+`--tools` is passed. Add `--dry-run` to preview the scoped plan, or
+`--skip-fix` to write it without running the scoped fix afterward.
 
 The `content()` function receives a context object with:
 
 - `projectTypes` - detected project types in the directory
-- `projectLocations` - every detected `{ type, path }` pair, relative to the git root; populated by `setup`
+- `projectLocations` - every detected `{ type, path }` pair, relative to the git root; populated during reconciliation
 - `rootPath` - git repository root
 - `cwdPath` - current working directory
 - `isRoot` - whether cwdPath is the repository root
 - `datamitsuDir` - relative path from cwdPath to `{rootPath}/.datamitsu/`
 - `existingContent` - previous config layer's generated content for this file (undefined if no prior layer generated content)
-- `originalContent` - unmodified content of the file as it exists on disk (available during both config loading and `datamitsu setup`)
-- `existingPath` - path to the existing file on disk (only available during `datamitsu setup`, undefined during config loading)
+- `originalContent` - unmodified content of the file as it exists on disk during reconciliation
+- `existingPath` - path to the existing file on disk during reconciliation, if it exists
 
 ### Detecting upstream drift (`expectChainHash`)
 
@@ -215,7 +219,7 @@ Configs are produced by **layering**: a shared config (plus any remote/before
 layers) generates a baseline, and your root config — at the git root, or an
 explicit `--config` — runs last on top, where you apply project-specific
 overrides. Those overrides are written against a particular baseline. If the
-shared config later changes, a plain `datamitsu setup` re-derives the file and can
+shared config later changes, a plain `datamitsu config reconcile` re-derives the file and can
 silently overwrite your tweaks.
 
 Set `expectChainHash` on a root-layer entry to pin the baseline your overrides
@@ -223,7 +227,7 @@ assume — the XXH3-128 hash of the content entering your layer, _before_ your l
 transforms it:
 
 ```javascript
-const setup = {
+const managedConfigs = {
   "eslint.config.mjs": {
     expectChainHash: "xxh3:0a1b2c3d4e5f60718293a4b5c6d7e8f9",
     content: (context) => {
@@ -233,12 +237,13 @@ const setup = {
 };
 ```
 
-`datamitsu setup` recomputes that hash on every run. If it still matches, setup
-proceeds; if the upstream chain **drifted**, setup aborts **before writing
+`datamitsu config reconcile` recomputes that hash during both dry-runs and
+normal reconciliation.
+If it still matches, reconciliation proceeds; if the upstream chain **drifted**, reconciliation aborts **before writing
 anything** and prints the new hash and incoming content so you can reconcile your
 overrides and update the pin. The check is opt-in per file, honoured only on the
 root layer, byte-for-byte (no normalization), and can be bypassed with
-`datamitsu setup --no-verify-hash`.
+`datamitsu config reconcile --no-verify-hash`.
 
 To get the initial value, declare the entry (a placeholder pin is fine) and read
 the real hash with `datamitsu config chain-hash <file>` — it prints exactly what

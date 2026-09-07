@@ -40,7 +40,7 @@ The `datamitsu` binary provides the platform capabilities:
 - Declarative + imperative configuration approach
 - Config chaining with inheritance
 - Tool operations (fix/lint/check)
-- Setup orchestration
+- Safe managed-config reconciliation
 - File patching (gitignore/dockerignore/package.json)
 
 **What the core does NOT contain:**
@@ -65,7 +65,7 @@ Wrapper packages provide the actual tool configurations:
 ```
 datamitsu core (Go binary)
   ↓
-  Provides: binary mgmt, config engine, setup orchestration
+  Provides: binary mgmt, config engine, managed-config reconciliation
 
 Wrappers (language-specific packages)
   ↓
@@ -74,7 +74,7 @@ Wrappers (language-specific packages)
 Projects (end users)
   ↓
   Install: npm install @company/dev-standards
-  Run: datamitsu setup && datamitsu check
+  Run: datamitsu config reconcile && datamitsu lint
 ```
 
 This architecture enables teams to:
@@ -192,14 +192,18 @@ This dramatically speeds up CI builds by avoiding tool downloads on every run.
 
 ### 4. Migration-Free Updates
 
-Update your config package, re-run setup, and your customizations survive:
+Update your config package, optionally preview the reconciliation, then run it;
+your customizations survive:
 
 ```bash
 # Update config wrapper
 npm update @company/datamitsu-config
 
-# Re-apply setup (preserves customizations!)
-datamitsu setup
+# Preview without writing or fixing
+datamitsu config reconcile --dry-run
+
+# Reconcile files, then run fix (preserves customizations!)
+datamitsu config reconcile
 ```
 
 The patching mechanism merges new defaults with your project-specific changes.
@@ -249,7 +253,7 @@ For detailed comparisons with similar tools, see the [Comparison Guide](./refere
 # Create @company/dev-standards package once
 # Then in every project:
 npm install @company/dev-standards
-datamitsu setup  # Creates all configs automatically
+datamitsu config reconcile  # Creates all configs automatically
 ```
 
 **Result:**
@@ -294,7 +298,7 @@ RUN datamitsu check
 }
 ```
 
-Run `npm install && npx datamitsu setup` → Everything configured automatically.
+Run `npm install && npx datamitsu config reconcile` → Everything configured automatically.
 
 **Result:**
 

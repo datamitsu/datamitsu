@@ -2719,23 +2719,23 @@ func TestValidateInit_ValidScopes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			initConfigs := MapOfConfigSetup{
+			managedConfigs := MapOfManagedConfigs{
 				"test.yml": {Scope: tt.scope},
 			}
-			if err := ValidateSetup(initConfigs); err != nil {
-				t.Errorf("ValidateSetup() unexpected error for scope %q: %v", tt.scope, err)
+			if err := ValidateManagedConfigs(managedConfigs); err != nil {
+				t.Errorf("ValidateManagedConfigs() unexpected error for scope %q: %v", tt.scope, err)
 			}
 		})
 	}
 }
 
 func TestValidateInit_UnknownScope(t *testing.T) {
-	initConfigs := MapOfConfigSetup{
+	managedConfigs := MapOfManagedConfigs{
 		"test.yml": {Scope: "invalid-scope"},
 	}
-	err := ValidateSetup(initConfigs)
+	err := ValidateManagedConfigs(managedConfigs)
 	if err == nil {
-		t.Fatal("ValidateSetup() expected error for unknown scope, got nil")
+		t.Fatal("ValidateManagedConfigs() expected error for unknown scope, got nil")
 	}
 	if !strings.Contains(err.Error(), "scope must be") {
 		t.Errorf("expected 'scope must be' in error, got: %v", err)
@@ -2749,21 +2749,21 @@ func TestValidateInitToolRefs(t *testing.T) {
 	}
 
 	t.Run("known tool refs produce no warnings", func(t *testing.T) {
-		initConfigs := MapOfConfigSetup{
+		managedConfigs := MapOfManagedConfigs{
 			".golangci.yml": {Tools: []string{"golangci-lint"}},
 			".prettierrc":   {Tools: []string{"prettier"}},
 			".gitignore":    {}, // no tools is fine
 		}
-		if w := ValidateSetupToolRefs(initConfigs, tools); len(w) != 0 {
+		if w := ValidateManagedConfigToolRefs(managedConfigs, tools); len(w) != 0 {
 			t.Errorf("expected no warnings, got %v", w)
 		}
 	})
 
 	t.Run("unknown tool ref produces a warning", func(t *testing.T) {
-		initConfigs := MapOfConfigSetup{
+		managedConfigs := MapOfManagedConfigs{
 			".golangci.yml": {Tools: []string{"golangci"}}, // typo
 		}
-		w := ValidateSetupToolRefs(initConfigs, tools)
+		w := ValidateManagedConfigToolRefs(managedConfigs, tools)
 		if len(w) != 1 {
 			t.Fatalf("expected 1 warning, got %d: %v", len(w), w)
 		}
@@ -2773,11 +2773,11 @@ func TestValidateInitToolRefs(t *testing.T) {
 	})
 
 	t.Run("multiple unknown refs are reported deterministically", func(t *testing.T) {
-		initConfigs := MapOfConfigSetup{
+		managedConfigs := MapOfManagedConfigs{
 			"b.yml": {Tools: []string{"nope"}},
 			"a.yml": {Tools: []string{"bogus"}},
 		}
-		w := ValidateSetupToolRefs(initConfigs, tools)
+		w := ValidateManagedConfigToolRefs(managedConfigs, tools)
 		if len(w) != 2 {
 			t.Fatalf("expected 2 warnings, got %d: %v", len(w), w)
 		}

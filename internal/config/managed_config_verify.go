@@ -24,7 +24,7 @@ type ChainHashMismatch struct {
 // back to the original on-disk content when no upstream layer produced any. The
 // final entry is the root layer's own output and is intentionally excluded — the
 // pin is verified against the root layer's input, not its result.
-func incomingToRootLayer(history *SetupLayerHistory) string {
+func incomingToRootLayer(history *ManagedConfigLayerHistory) string {
 	if history == nil {
 		return ""
 	}
@@ -39,18 +39,18 @@ func incomingToRootLayer(history *SetupLayerHistory) string {
 	return ""
 }
 
-// ChainHashEntry is a setup file paired with the XXH3-128 hash of the content
+// ChainHashEntry is a managed config file paired with the XXH3-128 hash of the content
 // entering its root (topmost) layer — the value an expectChainHash pin must match.
 type ChainHashEntry struct {
 	FileName string
 	Hash     string // "xxh3:<hex>"
 }
 
-// ChainHashes returns, for every setup file in the layer map, the chain hash that
+// ChainHashes returns, for every managed config file in the layer map, the chain hash that
 // VerifyChainHashes compares an expectChainHash pin against (the content entering
 // the file's root layer), sorted by filename. It is the introspection counterpart
 // of the gate: the printed value can be copied straight into a pin.
-func ChainHashes(layerMap SetupLayerMap) []ChainHashEntry {
+func ChainHashes(layerMap ManagedConfigLayerMap) []ChainHashEntry {
 	names := make([]string, 0, len(layerMap))
 	for name := range layerMap {
 		names = append(names, name)
@@ -71,12 +71,12 @@ func ChainHashes(layerMap SetupLayerMap) []ChainHashEntry {
 	return out
 }
 
-// VerifyChainHashes checks every setup entry whose root (topmost) layer declares
+// VerifyChainHashes checks every managed config entry whose root (topmost) layer declares
 // expectChainHash against the XXH3-128 hash of the content entering that layer.
 // Only the root layer is consulted; intermediate layers are ignored. The result
 // is sorted by filename for deterministic reporting and is empty when all pins
 // hold or none are declared.
-func VerifyChainHashes(layerMap SetupLayerMap) []ChainHashMismatch {
+func VerifyChainHashes(layerMap ManagedConfigLayerMap) []ChainHashMismatch {
 	names := make([]string, 0, len(layerMap))
 	for name := range layerMap {
 		names = append(names, name)

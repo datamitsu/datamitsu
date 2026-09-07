@@ -21,7 +21,7 @@ func TestConfigLoadErrorPaths(t *testing.T) {
 
 	missing := p.Dir + "/does-not-exist.config.js"
 	noMinVersion := p.WriteFile("no-min.config.js",
-		"globalThis.getConfig = (c) => ({ apps: {}, runtimes: {}, setup: {}, tools: {} });\n")
+		"globalThis.getConfig = (c) => ({ apps: {}, runtimes: {}, managedConfigs: {}, tools: {} });\n")
 	emptyMinVersion := p.WriteFile("empty-min.config.js",
 		"globalThis.getConfig = (c) => ({});\nglobalThis.getMinVersion = () => \"\";\n")
 	minVersionNotFunc := p.WriteFile("not-func-min.config.js",
@@ -197,7 +197,7 @@ function mkBin() {
   return b;
 }
 globalThis.getBeforeConfigs = () => [];
-globalThis.getConfig = (config) => ({ apps: { "mytool": { binary: mkBin() } }, runtimes: {}, setup: {}, tools: {} });
+globalThis.getConfig = (config) => ({ apps: { "mytool": { binary: mkBin() } }, runtimes: {}, managedConfigs: {}, tools: {} });
 globalThis.getMinVersion = () => "0.0.0";
 `
 

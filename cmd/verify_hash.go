@@ -14,7 +14,7 @@ import (
 // On any mismatch it prints a full drift report to stderr and returns an error so
 // the caller aborts before writing anything. noVerify bypasses the gate entirely
 // (the --no-verify-hash flag); a nil layerMap is a no-op.
-func verifyChainHashes(layerMap *config.SetupLayerMap, noVerify bool) error {
+func verifyChainHashes(layerMap *config.ManagedConfigLayerMap, noVerify bool) error {
 	if noVerify || layerMap == nil {
 		return nil
 	}

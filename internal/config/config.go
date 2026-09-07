@@ -196,13 +196,14 @@ const (
 	ScopeGitRoot = "git-root"
 )
 
-// ConfigSetup describes how a managed config file is generated or linked.
-type ConfigSetup struct { //nolint:revive // exported: name kept explicit; config.ConfigSetup reads clearer than the bare config.Setup
+// ManagedConfig describes how a managed config file is generated or linked.
+type ManagedConfig struct {
 	ProjectTypes []string `json:"projectTypes,omitempty"`
 	// Tools associates this config file with one or more tools (names matching
-	// keys in MapOfTools). With `setup --tools`, only configs whose Tools
-	// intersect the selected set are written; empty Tools means unassociated
-	// infra (skipped under --tools, installed normally without it).
+	// keys in MapOfTools). With `config reconcile --tools`, only configs whose
+	// Tools intersect the selected set are considered; empty Tools means
+	// unassociated infrastructure (skipped under --tools, reconciled normally
+	// without it).
 	Tools             []string `json:"tools,omitempty"`
 	Scope             string   `json:"scope,omitempty"`
 	OtherFileNameList []string `json:"otherFileNameList,omitempty"`
@@ -211,17 +212,17 @@ type ConfigSetup struct { //nolint:revive // exported: name kept explicit; confi
 	// ExpectChainHash, when set on the root (topmost) config layer, pins the
 	// XXH3-128 hash ("xxh3:<hex>" or bare hex) of the content entering that
 	// layer — the output of the whole upstream chain (remote/before layers)
-	// before this layer transforms it. setup recomputes that hash and aborts
-	// with a drift report when it diverges, so upstream changes to a pinned
-	// file surface before any overwrite. Opt-in per file; only the root layer's
-	// value is consulted. Bypass with --no-verify-hash.
+	// before this layer transforms it. `config reconcile` recomputes that hash
+	// and aborts with a drift report when it diverges, so upstream changes to a
+	// pinned file surface before any overwrite. Opt-in per file; only the root
+	// layer's value is consulted. Bypass with --no-verify-hash.
 	ExpectChainHash string `json:"expectChainHash,omitempty"`
 	// Content function will be called from JavaScript
 	Content any `json:"-"`
 }
 
-// MapOfConfigSetup maps a config-file name to its generation definition.
-type MapOfConfigSetup map[string]ConfigSetup
+// MapOfManagedConfigs maps a config-file name to its generation definition.
+type MapOfManagedConfigs map[string]ManagedConfig
 
 // ========================================
 // Runtime Configuration
@@ -433,12 +434,12 @@ type MapOfParsers map[string]Parser
 
 // Config is the fully resolved datamitsu configuration produced by the JS config layer.
 type Config struct {
-	Apps         binmanager.MapOfApps    `json:"apps,omitempty"`
-	Bundles      binmanager.MapOfBundles `json:"bundles,omitempty"`
-	Runtimes     MapOfRuntimes           `json:"runtimes,omitempty"`
-	Setup        MapOfConfigSetup        `json:"setup,omitempty"`
-	ProjectTypes MapOfProjectTypes       `json:"projectTypes,omitempty"`
-	Tools        MapOfTools              `json:"tools,omitempty"`
+	Apps           binmanager.MapOfApps    `json:"apps,omitempty"`
+	Bundles        binmanager.MapOfBundles `json:"bundles,omitempty"`
+	Runtimes       MapOfRuntimes           `json:"runtimes,omitempty"`
+	ManagedConfigs MapOfManagedConfigs     `json:"managedConfigs,omitempty"`
+	ProjectTypes   MapOfProjectTypes       `json:"projectTypes,omitempty"`
+	Tools          MapOfTools              `json:"tools,omitempty"`
 	// Execution holds run-shaping policy not tied to a single tool. A pointer so
 	// omitempty actually elides it: the whole config is marshalled into the cache
 	// invalidation key, and a struct value would serialize as {} for every config

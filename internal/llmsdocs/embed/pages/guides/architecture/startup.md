@@ -53,7 +53,7 @@ The repository root is a pure function of the working directory within one proce
 The memo exists because the root was previously resolved once per engine plus once in the loader — ten forked `git` processes per invocation, about half of all startup overhead. If you add a call site, call the memoized helper (`facts.GetGitRoot`, which takes no directory argument and answers for the process working directory); do not shell out to `git rev-parse` directly.
 :::
 
-Two helpers resolve the root today. `facts.GetGitRoot` is the memoized one described here, used by the config loader and by every engine construction. `traverser.GetGitRoot` takes an explicit directory and is used by the command handlers (`exec`, `init`, `setup`, `cache`, `lsp`) and the runner; it is not memoized, has no pure-Go path, and ignores `DATAMITSU_FORCE_GIT_SUBPROCESS`. Consolidating the two is follow-up work.
+Two helpers resolve the root today. `facts.GetGitRoot` is the memoized one described here, used by the config loader and by every engine construction. `traverser.GetGitRoot` takes an explicit directory and is used by command handlers (`exec`, `init`, `config reconcile`, `cache`, `lsp`) and the runner; it is not memoized, has no pure-Go path, and ignores `DATAMITSU_FORCE_GIT_SUBPROCESS`. Consolidating the two is follow-up work.
 
 Resolution itself has two paths. The fast path is a pure-Go walk up from the working directory, which reproduces two behaviors a naive walk gets wrong: it reports a _physical_ path with symlinks resolved, and inside a submodule it climbs to the **topmost superproject** rather than stopping at the nearest `.git`. The walk answers only for layouts it can prove and defers to a `git` subprocess for everything else — a bare repository, a repository nested inside another repository's working tree, a separate git directory, an unreadable or malformed `.git` file. A wrong root silently produces wrong project cache keys, so declining is always preferred to guessing.
 
@@ -95,7 +95,7 @@ The key is an XXH3-128 digest — an internal cache key over local files, which 
 - The **whole environment**, sorted.
 - Every field of `datamitsuConfigInputs`, the allowlisted values config JS is permitted to branch on.
 - The JS-visible [facts](../../reference/configuration-api.md) — os, arch, libc, version, package name, binary path, whether this is a git repository or a monorepo.
-- The **working directory and the git root separately**, since setup content receives paths computed relative to the working directory.
+- The **working directory and the git root separately**, since managed config content receives paths computed relative to the working directory.
 - The resolved `.git/HEAD`, because a branch switch can add, delete or change chain files.
 - Whether **colors render**, since the `colors` config global emits ANSI escapes only when they are enabled, and that falls back to whether stdout is a terminal — which no environment variable records.
 - The **identity of the binary**: its version, a format version for the artifact schema, and — because every local build reports the version `dev` — a hash of the embedded default config plus the executable's size and modification time.
@@ -130,8 +130,8 @@ Writes go to a temporary file in the same directory, are flushed, and are rename
 
 Three paths always evaluate:
 
-- **`datamitsu setup`** is the only caller that uses the returned JavaScript VM, and a hit has no VM to return.
-- Anything that needs **evaluated setup content** — `datamitsu config chain-hash` — because that content is a live JavaScript function that cannot be serialized. A hit returns an empty setup layer map rather than a partial one, and the callers that need it are gated out instead.
+- **`datamitsu config reconcile`** uses the returned JavaScript VM to evaluate managed file content, and a hit has no VM to return.
+- Anything that needs **evaluated managed config content** — including `datamitsu config chain-hash` — because that content is a live JavaScript function that cannot be serialized. A hit returns an empty managed-config layer map rather than a partial one, and the callers that need it are gated out instead.
 - Loads that **skip lockfile validation**. That path validates less than every other one, so an artifact it wrote could let a later strict load skip an error it exists to raise.
 
 Setting `DATAMITSU_CONFIG_CACHE=0` turns the cache off entirely — nothing is read and nothing is written, so the tree is never created. The value is reported by `datamitsu config runtime` as `configCache`.

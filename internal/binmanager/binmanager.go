@@ -116,7 +116,7 @@ type App struct {
 	// even when it declares Links, and is installed only on first `datamitsu exec`.
 	// Its `.datamitsu/` links are materialized at that point. Use for user-invoked
 	// CLIs (e.g. a presentation tool) whose deps/links aren't needed until run.
-	// Apps consumed by hooks, tools, or ConfigSetup must stay eager (Lazy=false),
+	// Apps consumed by hooks, tools, or ManagedConfig must stay eager (Lazy=false),
 	// since smart-init can't otherwise see those references.
 	Lazy bool `json:"lazy,omitempty"`
 

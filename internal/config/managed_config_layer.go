@@ -2,26 +2,26 @@ package config
 
 import "slices"
 
-// SetupLayerEntry represents one layer's contribution to a setup entry.
-type SetupLayerEntry struct {
+// ManagedConfigLayerEntry represents one layer's contribution to a managed config entry.
+type ManagedConfigLayerEntry struct {
 	LayerName        string
 	GeneratedContent *string
 }
 
-// SetupLayerHistory tracks the evolution of a single setup entry across config layers.
-type SetupLayerHistory struct {
+// ManagedConfigLayerHistory tracks one managed config entry across config layers.
+type ManagedConfigLayerHistory struct {
 	FileName        string
 	OriginalContent *string // original disk content, read once during first evaluation
-	Layers          []SetupLayerEntry
-	FinalConfig     ConfigSetup
+	Layers          []ManagedConfigLayerEntry
+	FinalConfig     ManagedConfig
 }
 
-// SetupLayerMap maps filename to layer history.
-type SetupLayerMap map[string]*SetupLayerHistory
+// ManagedConfigLayerMap maps filename to layer history.
+type ManagedConfigLayerMap map[string]*ManagedConfigLayerHistory
 
 // GetLastGeneratedContent returns the content from the last layer that produced content,
 // walking backward through the layer list. Returns nil if no layer generated content.
-func GetLastGeneratedContent(history *SetupLayerHistory) *string {
+func GetLastGeneratedContent(history *ManagedConfigLayerHistory) *string {
 	if history == nil {
 		return nil
 	}

@@ -10,7 +10,7 @@ Wrapper packages are language-specific packages (npm, gem, pypi, etc.) that bund
 
 - Concrete tool versions and configurations
 - Opinionated defaults for linters, formatters, and other tools
-- Project setup files (configs, ignore files, etc.)
+- Managed project files (configs, ignore files, etc.)
 - Custom configuration logic in JavaScript/TypeScript
 
 Think of wrappers as "datamitsu config distributions" — similar to how lefthook has npm/gem/pypi wrappers around its Go core.
@@ -27,7 +27,7 @@ The `datamitsu` binary provides platform capabilities:
 - Programmable JavaScript configuration engine (goja)
 - Config chaining with inheritance
 - Tool operations (fix/lint/check)
-- Setup orchestration
+- Safe managed-config reconciliation
 - File patching engine
 
 **The core does NOT provide:**
@@ -42,7 +42,7 @@ Your wrapper package provides:
 
 - Full tool suite definitions (golangci-lint, eslint, prettier, etc.)
 - Configured defaults for all tools
-- Setup files and configurations
+- Managed config files and generation rules
 - Project type detection logic
 - Custom config functions
 
@@ -56,13 +56,13 @@ datamitsu core (Go binary)
 Your wrapper package (@company/datamitsu-config)
   ↓
   Distributed via npm/gem/pypi
-  Contains: tool versions, configs, setup files
+  Contains: tool versions, configs, managed config definitions
 
 End-user projects
   ↓
   Install: npm install @company/dev-standards
   Config loads: datamitsu.config.ts (optional overrides)
-  Run: datamitsu setup && datamitsu check
+  Run: datamitsu config reconcile && datamitsu lint
 ```
 
 ## Creating Your First Wrapper
@@ -149,9 +149,9 @@ function getConfig(prev) {
       },
     },
 
-    setup: {
-      ...prev.setup,
-      // Add setup files
+    managedConfigs: {
+      ...prev.managedConfigs,
+      // Add managed config files
       ".golangci.yml": {
         content: () => `
 linters:
@@ -363,8 +363,8 @@ function getConfig(input) {
 
   return {
     ...input,
-    setup: {
-      ...input.setup,
+    managedConfigs: {
+      ...input.managedConfigs,
       "AGENTS.md": {
         content: () => agentPrompt,
         scope: "git-root",
@@ -419,8 +419,8 @@ function getConfig(input) {
         },
       },
     },
-    setup: {
-      ...input.setup,
+    managedConfigs: {
+      ...input.managedConfigs,
       "AGENTS.md": {
         linkTarget: ".datamitsu/company-agents",
         scope: "git-root",
@@ -439,8 +439,8 @@ For demo purposes, datamitsu core creates a bundle with the agent prompt. You ca
 function getConfig(input) {
   return {
     ...input,
-    setup: {
-      ...input.setup,
+    managedConfigs: {
+      ...input.managedConfigs,
       "AGENTS.md": {
         linkTarget: ".datamitsu/datamitsu-guide",
         scope: "git-root",

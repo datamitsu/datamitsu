@@ -37,20 +37,20 @@ func TestMultiLayerContentEvaluation(t *testing.T) {
 		t.Fatalf("failed to create auto content function: %v", err)
 	}
 
-	layerMap := make(SetupLayerMap)
+	layerMap := make(ManagedConfigLayerMap)
 
 	// --- Process Layer 1: default ---
 	defaultCfg := &Config{
-		Setup: MapOfConfigSetup{
-			".editorconfig": ConfigSetup{
+		ManagedConfigs: MapOfManagedConfigs{
+			".editorconfig": ManagedConfig{
 				Scope:   ScopeGitRoot,
 				Content: defaultFn,
 			},
 		},
 	}
 
-	evaluated1 := EvaluateInitContent(defaultCfg, vm, "/project", "/project", layerMap)
-	MergeSetupLayers(layerMap, "default", evaluated1, defaultCfg.Setup)
+	evaluated1 := EvaluateManagedConfigContent(defaultCfg, vm, "/project", "/project", layerMap)
+	MergeManagedConfigLayers(layerMap, "default", evaluated1, defaultCfg.ManagedConfigs)
 
 	// Verify default layer produced expected content
 	if evaluated1[".editorconfig"] != defaultContent {
@@ -59,16 +59,16 @@ func TestMultiLayerContentEvaluation(t *testing.T) {
 
 	// --- Process Layer 2: auto ---
 	autoCfg := &Config{
-		Setup: MapOfConfigSetup{
-			".editorconfig": ConfigSetup{
+		ManagedConfigs: MapOfManagedConfigs{
+			".editorconfig": ManagedConfig{
 				Scope:   ScopeGitRoot,
 				Content: autoFn,
 			},
 		},
 	}
 
-	evaluated2 := EvaluateInitContent(autoCfg, vm, "/project", "/project", layerMap)
-	MergeSetupLayers(layerMap, "auto", evaluated2, autoCfg.Setup)
+	evaluated2 := EvaluateManagedConfigContent(autoCfg, vm, "/project", "/project", layerMap)
+	MergeManagedConfigLayers(layerMap, "auto", evaluated2, autoCfg.ManagedConfigs)
 
 	// Verify auto layer received default's content as existingContent and produced override
 	autoExpected := "root = true\n\n[*]\nindent_style = space\nindent_size = 4\n"
@@ -125,37 +125,37 @@ func TestMultiLayerContentThrowSkipsEntry(t *testing.T) {
 		t.Fatalf("failed to create auto content function: %v", err)
 	}
 
-	layerMap := make(SetupLayerMap)
+	layerMap := make(ManagedConfigLayerMap)
 
 	// Process default layer
 	defaultCfg := &Config{
-		Setup: MapOfConfigSetup{
-			".editorconfig": ConfigSetup{
+		ManagedConfigs: MapOfManagedConfigs{
+			".editorconfig": ManagedConfig{
 				Scope:   ScopeGitRoot,
 				Content: defaultFn,
 			},
 		},
 	}
-	evaluated1 := EvaluateInitContent(defaultCfg, vm, "/project", "/project", layerMap)
-	MergeSetupLayers(layerMap, "default", evaluated1, defaultCfg.Setup)
+	evaluated1 := EvaluateManagedConfigContent(defaultCfg, vm, "/project", "/project", layerMap)
+	MergeManagedConfigLayers(layerMap, "default", evaluated1, defaultCfg.ManagedConfigs)
 
 	// Process auto layer - content() throws, entry is skipped
 	autoCfg := &Config{
-		Setup: MapOfConfigSetup{
-			".editorconfig": ConfigSetup{
+		ManagedConfigs: MapOfManagedConfigs{
+			".editorconfig": ManagedConfig{
 				Scope:   ScopeGitRoot,
 				Content: autoFn,
 			},
 		},
 	}
-	evaluated2 := EvaluateInitContent(autoCfg, vm, "/project", "/project", layerMap)
+	evaluated2 := EvaluateManagedConfigContent(autoCfg, vm, "/project", "/project", layerMap)
 
 	// The auto layer's content() threw, so it should be skipped
 	if _, hasEditor := evaluated2[".editorconfig"]; hasEditor {
 		t.Error("expected .editorconfig to be skipped when content() throws")
 	}
 
-	MergeSetupLayers(layerMap, "auto", evaluated2, autoCfg.Setup)
+	MergeManagedConfigLayers(layerMap, "auto", evaluated2, autoCfg.ManagedConfigs)
 
 	// Layer history should show auto layer as non-content (content() threw)
 	history := layerMap[".editorconfig"]
@@ -185,7 +185,7 @@ func TestMultiLayerContentThrowSkipsEntry(t *testing.T) {
 func TestMultiLayerChainDefaultRemoteAutoExplicit(t *testing.T) {
 	vm := goja.New()
 
-	layerMap := make(SetupLayerMap)
+	layerMap := make(ManagedConfigLayerMap)
 
 	layerDefs := []struct {
 		name    string
@@ -213,16 +213,16 @@ func TestMultiLayerChainDefaultRemoteAutoExplicit(t *testing.T) {
 		}
 
 		cfg := &Config{
-			Setup: MapOfConfigSetup{
-				".editorconfig": ConfigSetup{
+			ManagedConfigs: MapOfManagedConfigs{
+				".editorconfig": ManagedConfig{
 					Scope:   ScopeGitRoot,
 					Content: fnVal,
 				},
 			},
 		}
 
-		evaluated := EvaluateInitContent(cfg, vm, "/root", "/root", layerMap)
-		MergeSetupLayers(layerMap, ld.name, evaluated, cfg.Setup)
+		evaluated := EvaluateManagedConfigContent(cfg, vm, "/root", "/root", layerMap)
+		MergeManagedConfigLayers(layerMap, ld.name, evaluated, cfg.ManagedConfigs)
 	}
 
 	// Verify the content threaded through all 4 layers
@@ -261,7 +261,7 @@ func TestOriginalContentAvailableInAllLayers(t *testing.T) {
 	}
 
 	vm := goja.New()
-	layerMap := make(SetupLayerMap)
+	layerMap := make(ManagedConfigLayerMap)
 
 	// Layer 1 (default): returns originalContent + marker
 	defaultFn, err := vm.RunString(`(function(context) {
@@ -313,15 +313,15 @@ func TestOriginalContentAvailableInAllLayers(t *testing.T) {
 
 	for _, l := range layers {
 		cfg := &Config{
-			Setup: MapOfConfigSetup{
-				"package.json": ConfigSetup{
+			ManagedConfigs: MapOfManagedConfigs{
+				"package.json": ManagedConfig{
 					Scope:   ScopeGitRoot,
 					Content: l.fn,
 				},
 			},
 		}
-		evaluated := EvaluateInitContent(cfg, vm, tmpDir, tmpDir, layerMap)
-		MergeSetupLayers(layerMap, l.name, evaluated, cfg.Setup)
+		evaluated := EvaluateManagedConfigContent(cfg, vm, tmpDir, tmpDir, layerMap)
+		MergeManagedConfigLayers(layerMap, l.name, evaluated, cfg.ManagedConfigs)
 
 		if _, ok := evaluated["package.json"]; !ok {
 			t.Fatalf("layer %s: content() was skipped (likely threw an error)", l.name)
@@ -365,7 +365,7 @@ func TestOriginalContentPackageJsonMerge(t *testing.T) {
 	}
 
 	vm := goja.New()
-	layerMap := make(SetupLayerMap)
+	layerMap := make(ManagedConfigLayerMap)
 
 	// Config layer: merge tool-managed fields into existing package.json
 	// Uses originalContent to preserve user fields while adding/overriding tool config
@@ -391,16 +391,16 @@ func TestOriginalContentPackageJsonMerge(t *testing.T) {
 	}
 
 	cfg := &Config{
-		Setup: MapOfConfigSetup{
-			"package.json": ConfigSetup{
+		ManagedConfigs: MapOfManagedConfigs{
+			"package.json": ManagedConfig{
 				Scope:   ScopeGitRoot,
 				Content: mergeFn,
 			},
 		},
 	}
 
-	evaluated := EvaluateInitContent(cfg, vm, tmpDir, tmpDir, layerMap)
-	MergeSetupLayers(layerMap, "default", evaluated, cfg.Setup)
+	evaluated := EvaluateManagedConfigContent(cfg, vm, tmpDir, tmpDir, layerMap)
+	MergeManagedConfigLayers(layerMap, "default", evaluated, cfg.ManagedConfigs)
 
 	content, ok := evaluated["package.json"]
 	if !ok {
@@ -428,7 +428,7 @@ func TestOriginalContentUndefinedWhenFileDoesNotExist(t *testing.T) {
 	// No file written - file doesn't exist
 
 	vm := goja.New()
-	layerMap := make(SetupLayerMap)
+	layerMap := make(ManagedConfigLayerMap)
 
 	fn, err := vm.RunString(`(function(context) {
 		if (typeof context.originalContent !== "undefined") {
@@ -441,15 +441,15 @@ func TestOriginalContentUndefinedWhenFileDoesNotExist(t *testing.T) {
 	}
 
 	cfg := &Config{
-		Setup: MapOfConfigSetup{
-			"new-config.yml": ConfigSetup{
+		ManagedConfigs: MapOfManagedConfigs{
+			"new-config.yml": ManagedConfig{
 				Scope:   ScopeGitRoot,
 				Content: fn,
 			},
 		},
 	}
 
-	evaluated := EvaluateInitContent(cfg, vm, tmpDir, tmpDir, layerMap)
+	evaluated := EvaluateManagedConfigContent(cfg, vm, tmpDir, tmpDir, layerMap)
 	if _, ok := evaluated["new-config.yml"]; !ok {
 		t.Fatal("content() was skipped (likely threw because originalContent was unexpectedly defined)")
 	}

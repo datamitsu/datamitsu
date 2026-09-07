@@ -192,7 +192,7 @@ globalThis.getConfig = (config) => ({
     "hello-shell": { shell: { name: "echo" }, description: "say hi" },
     "ztool": { shell: { name: "true" } }
   },
-  runtimes: {}, setup: {}, tools: {}
+  runtimes: {}, managedConfigs: {}, tools: {}
 });
 globalThis.getMinVersion = () => "0.0.0";
 `
@@ -201,7 +201,7 @@ globalThis.getMinVersion = () => "0.0.0";
 // `devtools bundles list` is deterministic and offline.
 const bundlesListConfigJS = `globalThis.getBeforeConfigs = () => [];
 globalThis.getConfig = (config) => ({
-  apps: {}, runtimes: {}, setup: {}, tools: {},
+  apps: {}, runtimes: {}, managedConfigs: {}, tools: {},
   bundles: {
     "alpha-bundle": { version: "1.0", files: { "a.txt": "hi" } },
     "beta-bundle": { files: { "b.txt": "yo" } }

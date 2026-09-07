@@ -2,8 +2,8 @@
 │ datamitsu  <VERSION> │
 ╰<RULE>╯
 
-┏━ setup <RULE>
+┏━ config reconcile <RULE>
 ┃ no project types detected
 ┃
-┃ dry-run — no changes will be made
+┃ dry-run — no files will be written and fix will not run
 ┗━ dry-run · <DUR> <RULE>

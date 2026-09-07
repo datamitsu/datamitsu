@@ -17,7 +17,7 @@ globalThis.getConfig = (config) => ({
     "hello-shell": { shell: { name: "echo" }, description: "say hi" },
     "ztool": { shell: { name: "true" } }
   },
-  runtimes: {}, setup: {}, tools: {}
+  runtimes: {}, managedConfigs: {}, tools: {}
 });
 globalThis.getMinVersion = () => "0.0.0";
 `

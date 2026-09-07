@@ -235,7 +235,7 @@ func (s *Store) Load(key string) (*Entry, bool) {
 
 // Save writes entry under key.
 //
-// Setup content is dropped before encoding: ConfigSetup.Content holds a live
+// Managed config content is dropped before encoding: ManagedConfig.Content holds a live
 // goja value that cannot be serialized and must never be faked. The write goes
 // through a sibling temp file and a rename, so a reader sees either the whole
 // artifact or none of it. Entries are immutable per key, so two processes
@@ -254,7 +254,7 @@ func (s *Store) Save(key string, entry *Entry) error {
 	}
 
 	body, err := msgpack.Marshal(payload{
-		Config:     withoutSetupContent(entry.Config),
+		Config:     withoutManagedConfigContent(entry.Config),
 		Warnings:   entry.Warnings,
 		RemoteURLs: entry.RemoteURLs,
 	})
@@ -328,20 +328,20 @@ func (s *Store) touch(path string) {
 	_ = os.Chtimes(path, now, now)
 }
 
-// withoutSetupContent returns a shallow copy of cfg whose Setup entries carry no
-// Content. The copy leaves the caller's config untouched: it is the live one the
-// command is about to run with.
-func withoutSetupContent(cfg *config.Config) *config.Config {
+// withoutManagedConfigContent returns a shallow copy of cfg whose managed config
+// entries carry no Content. The copy leaves the caller's config untouched: it is
+// the live one the command is about to run with.
+func withoutManagedConfigContent(cfg *config.Config) *config.Config {
 	clone := *cfg
-	if len(cfg.Setup) == 0 {
+	if len(cfg.ManagedConfigs) == 0 {
 		return &clone
 	}
-	setup := make(config.MapOfConfigSetup, len(cfg.Setup))
-	for name, entry := range cfg.Setup {
+	managedConfigs := make(config.MapOfManagedConfigs, len(cfg.ManagedConfigs))
+	for name, entry := range cfg.ManagedConfigs {
 		entry.Content = nil
-		setup[name] = entry
+		managedConfigs[name] = entry
 	}
-	clone.Setup = setup
+	clone.ManagedConfigs = managedConfigs
 	return &clone
 }
 

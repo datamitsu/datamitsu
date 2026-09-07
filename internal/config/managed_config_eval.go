@@ -10,19 +10,19 @@ import (
 	"github.com/dop251/goja"
 )
 
-// Setup-evaluation counters. Every command that loads config pays this pass,
-// but only setup/init and `config chain-hash` consume the result — the call
+// Managed-config evaluation counters. Only `config reconcile` and
+// `config chain-hash` consume this pass — the call
 // counts are the evidence for how much a lint run reads and evaluates for
 // nothing.
 var (
-	cntSetupEntries = trace.NewCounter("config.setup.entries")
-	cntSetupReads   = trace.NewCounter("config.setup.files_read")
-	cntSetupCalls   = trace.NewCounter("config.setup.content_calls")
+	cntManagedConfigEntries = trace.NewCounter("config.managed_configs.entries")
+	cntManagedConfigReads   = trace.NewCounter("config.managed_configs.files_read")
+	cntManagedConfigCalls   = trace.NewCounter("config.managed_configs.content_calls")
 )
 
 // ProjectLocation pairs a detected project type with the directory that holds
 // its marker file, expressed relative to the git root ("." for the root). It is
-// the shape exposed to setup content() functions as context.projectLocations[i].
+// the shape exposed to managed config content() functions as context.projectLocations[i].
 // It is intentionally decoupled from project.ProjectLocation (which carries an
 // absolute path) to keep internal/config free of an import cycle on
 // internal/project.
@@ -31,15 +31,15 @@ type ProjectLocation struct {
 	Path string `json:"path"`
 }
 
-// ApplyProjectContext sets projectTypes and projectLocations on a setup
+// ApplyProjectContext sets projectTypes and projectLocations on a managed config
 // content() context object so the eager (config-load) and install paths expose
 // an identical shape. projectLocations is rendered as plain {type, path}
 // objects to keep stable JS keys regardless of goja field-name mapping.
 //
-// projectTypes/projectLocations are inputs to setup content() evaluation only.
-// A load that evaluates setup content never uses the config-evaluation cache
+// projectTypes/projectLocations are inputs to managed config content() evaluation only.
+// A load that evaluates managed config content never uses the config-evaluation cache
 // (configCacheUsable in cmd/config_cache.go), so they are deliberately absent
-// from configcache.Inputs. If the setup layer ever gains its own cache, they
+// from configcache.Inputs. If managed config evaluation ever gains its own cache, they
 // MUST be folded into its key.
 func ApplyProjectContext(obj *goja.Object, projectTypes []string, locations []ProjectLocation) {
 	if projectTypes == nil {
@@ -67,7 +67,7 @@ func readFileContent(path string) *string {
 
 // getPriorLayerContent returns the last generated content for a given filename
 // from the layer history. Returns nil if no prior layer generated content.
-func getPriorLayerContent(priorLayers SetupLayerMap, fileName string) *string {
+func getPriorLayerContent(priorLayers ManagedConfigLayerMap, fileName string) *string {
 	history, ok := priorLayers[fileName]
 	if !ok {
 		return nil
@@ -75,30 +75,30 @@ func getPriorLayerContent(priorLayers SetupLayerMap, fileName string) *string {
 	return GetLastGeneratedContent(history)
 }
 
-// MergeSetupLayers merges evaluated content from a config layer into the layer map.
-// For each init config entry, it appends a layer entry to the history. Entries with
+// MergeManagedConfigLayers merges evaluated content from a config layer into the layer map.
+// For each managed config entry, it appends a layer entry to the history. Entries with
 // evaluated content are marked as content layers; entries without (e.g., linkTarget-only)
 // are recorded as non-content layers. FinalConfig is always updated to the latest metadata.
-func MergeSetupLayers(layerMap SetupLayerMap, layerName string, evaluatedContent map[string]string, initConfigs MapOfConfigSetup) {
-	// Process init config entries in sorted order for determinism
-	names := make([]string, 0, len(initConfigs))
-	for name := range initConfigs {
+func MergeManagedConfigLayers(layerMap ManagedConfigLayerMap, layerName string, evaluatedContent map[string]string, managedConfigs MapOfManagedConfigs) {
+	// Process managed config entries in sorted order for determinism.
+	names := make([]string, 0, len(managedConfigs))
+	for name := range managedConfigs {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 
 	for _, name := range names {
-		cfg := initConfigs[name]
+		cfg := managedConfigs[name]
 
 		history, ok := layerMap[name]
 		if !ok {
-			history = &SetupLayerHistory{
+			history = &ManagedConfigLayerHistory{
 				FileName: name,
 			}
 			layerMap[name] = history
 		}
 
-		entry := SetupLayerEntry{
+		entry := ManagedConfigLayerEntry{
 			LayerName: layerName,
 		}
 
@@ -111,7 +111,7 @@ func MergeSetupLayers(layerMap SetupLayerMap, layerName string, evaluatedContent
 	}
 }
 
-// EvaluateInitContent evaluates content() functions from a config's Init entries.
+// EvaluateManagedConfigContent evaluates content() functions from managedConfigs entries.
 // It passes the previous layer's generated content as existingContent in the context.
 // Returns a map of filename -> generated content for entries that have content functions.
 // Entries with LinkTarget, DeleteOnly, or no Content function are skipped.
@@ -123,35 +123,35 @@ func MergeSetupLayers(layerMap SetupLayerMap, layerName string, evaluatedContent
 //     Stays constant across all layers so configs can reference what the user had on disk.
 //   - existingContent: the output of the previous layer's content() call.
 //     Changes with each layer, enabling incremental transformations.
-func EvaluateInitContent(cfg *Config, vm *goja.Runtime, rootPath, cwdPath string, priorLayers SetupLayerMap) map[string]string {
-	return EvaluateInitContentWithProjects(cfg, vm, rootPath, cwdPath, priorLayers, nil, nil)
+func EvaluateManagedConfigContent(cfg *Config, vm *goja.Runtime, rootPath, cwdPath string, priorLayers ManagedConfigLayerMap) map[string]string {
+	return EvaluateManagedConfigContentWithProjects(cfg, vm, rootPath, cwdPath, priorLayers, nil, nil)
 }
 
-// EvaluateInitContentWithProjects is EvaluateInitContent with the detected
+// EvaluateManagedConfigContentWithProjects is EvaluateManagedConfigContent with the detected
 // project context (types + git-root-relative locations) exposed to content() as
-// context.projectTypes / context.projectLocations. EvaluateInitContent passes
+// context.projectTypes / context.projectLocations. EvaluateManagedConfigContent passes
 // nil for both, preserving the prior empty-context behavior for callers that do
 // not run project detection.
-func EvaluateInitContentWithProjects(cfg *Config, vm *goja.Runtime, rootPath, cwdPath string, priorLayers SetupLayerMap, projectTypes []string, projectLocations []ProjectLocation) map[string]string {
-	if cfg.Setup == nil {
+func EvaluateManagedConfigContentWithProjects(cfg *Config, vm *goja.Runtime, rootPath, cwdPath string, priorLayers ManagedConfigLayerMap, projectTypes []string, projectLocations []ProjectLocation) map[string]string {
+	if cfg.ManagedConfigs == nil {
 		return nil
 	}
 
-	evalSpan := trace.Start(trace.CatConfig, "setup.evaluate")
-	defer func() { evalSpan.EndWith(trace.A("entries", len(cfg.Setup))) }()
-	cntSetupEntries.Add(int64(len(cfg.Setup)))
+	evalSpan := trace.Start(trace.CatConfig, "managed_config.evaluate")
+	defer func() { evalSpan.EndWith(trace.A("entries", len(cfg.ManagedConfigs))) }()
+	cntManagedConfigEntries.Add(int64(len(cfg.ManagedConfigs)))
 
 	result := make(map[string]string)
 
 	// Process in sorted order for determinism
-	names := make([]string, 0, len(cfg.Setup))
-	for name := range cfg.Setup {
+	names := make([]string, 0, len(cfg.ManagedConfigs))
+	for name := range cfg.ManagedConfigs {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 
 	for _, name := range names {
-		initCfg := cfg.Setup[name]
+		managedCfg := cfg.ManagedConfigs[name]
 
 		// Read original file content from disk and store in layer map (once per file).
 		// This must happen before the skip checks so that originalContent is available
@@ -159,22 +159,22 @@ func EvaluateInitContentWithProjects(cfg *Config, vm *goja.Runtime, rootPath, cw
 		// Use rootPath for git-root scoped entries, cwdPath otherwise.
 		if _, exists := priorLayers[name]; !exists {
 			basePath := cwdPath
-			if initCfg.Scope == ScopeGitRoot {
+			if managedCfg.Scope == ScopeGitRoot {
 				basePath = rootPath
 			}
-			cntSetupReads.Add(1)
+			cntManagedConfigReads.Add(1)
 			originalContent := readFileContent(filepath.Join(basePath, name))
-			priorLayers[name] = &SetupLayerHistory{
+			priorLayers[name] = &ManagedConfigLayerHistory{
 				FileName:        name,
 				OriginalContent: originalContent,
 			}
 		}
 
-		if initCfg.DeleteOnly || initCfg.LinkTarget != "" || initCfg.Content == nil {
+		if managedCfg.DeleteOnly || managedCfg.LinkTarget != "" || managedCfg.Content == nil {
 			continue
 		}
 
-		contentValue, ok := initCfg.Content.(goja.Value)
+		contentValue, ok := managedCfg.Content.(goja.Value)
 		if !ok {
 			continue
 		}
@@ -206,7 +206,7 @@ func EvaluateInitContentWithProjects(cfg *Config, vm *goja.Runtime, rootPath, cw
 			_ = contextObj.Set("originalContent", *history.OriginalContent)
 		}
 
-		cntSetupCalls.Add(1)
+		cntManagedConfigCalls.Add(1)
 		callResult, err := contentFunc(goja.Undefined(), contextObj)
 		if err != nil {
 			continue

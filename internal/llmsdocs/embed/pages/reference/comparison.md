@@ -38,7 +38,7 @@ datamitsu occupies a category that didn't exist: **toolchain distribution as cod
 **What this means:**
 
 - You build a package (`@company/dev-standards`)
-- That package bundles tools + configs + setup scripts
+- That package bundles tools + managed config rules
 - Teams install it like any dependency (`npm install @company/dev-standards`)
 - Everything is configured automatically
 
@@ -266,8 +266,8 @@ npm install @company/dev-standards  # datamitsu wrapper installed
 # Initialize tools
 datamitsu init                      # Download all linters/formatters
 
-# Setup project
-datamitsu setup                     # Generate config files
+# Reconcile project config, then run fix
+datamitsu config reconcile
 
 # Development
 moon run :lint                      # moon orchestrates linting task

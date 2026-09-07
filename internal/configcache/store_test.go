@@ -44,7 +44,7 @@ func sampleConfig(t *testing.T) *config.Config {
 				},
 			},
 		},
-		Setup: config.MapOfConfigSetup{
+		ManagedConfigs: config.MapOfManagedConfigs{
 			"eslint": {
 				ProjectTypes: []string{"node"},
 				Scope:        "project",
@@ -106,19 +106,19 @@ func TestStoreRoundTrip(t *testing.T) {
 		t.Errorf("remote URLs = %v, want %v", got.RemoteURLs, remotes)
 	}
 
-	// Setup content cannot survive and must not be faked.
-	for name, entry := range got.Config.Setup {
+	// Managed config content cannot survive and must not be faked.
+	for name, entry := range got.Config.ManagedConfigs {
 		if entry.Content != nil {
-			t.Errorf("setup %q: Content survived the round trip, want nil", name)
+			t.Errorf("managed config %q: Content survived the round trip, want nil", name)
 		}
 	}
-	if cfg.Setup["eslint"].Content == nil {
+	if cfg.ManagedConfigs["eslint"].Content == nil {
 		t.Error("Save mutated the caller's config: Content was cleared in place")
 	}
 
 	// The whole graph, not counts: strip content from the original and compare
 	// serialized forms.
-	want := withoutSetupContent(cfg)
+	want := withoutManagedConfigContent(cfg)
 	before, err := json.Marshal(want)
 	if err != nil {
 		t.Fatal(err)
@@ -241,7 +241,7 @@ func TestStoreEveryTruncationIsAMiss(t *testing.T) {
 // matches its recorded digest must not be served, however well it decodes.
 func TestStoreTamperedPayloadIsAMiss(t *testing.T) {
 	s := newTestStore(t)
-	body, err := msgpack.Marshal(payload{Config: withoutSetupContent(sampleConfig(t))})
+	body, err := msgpack.Marshal(payload{Config: withoutManagedConfigContent(sampleConfig(t))})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -271,7 +271,7 @@ func TestStoreTamperedPayloadIsAMiss(t *testing.T) {
 
 func TestStoreUnknownFormatVersionIsAMiss(t *testing.T) {
 	s := newTestStore(t)
-	body, err := msgpack.Marshal(payload{Config: withoutSetupContent(sampleConfig(t))})
+	body, err := msgpack.Marshal(payload{Config: withoutManagedConfigContent(sampleConfig(t))})
 	if err != nil {
 		t.Fatal(err)
 	}

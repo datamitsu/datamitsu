@@ -189,31 +189,31 @@ type beforeConfigEntry struct {
 // loadConfig loads and parses the JavaScript configuration. It is the
 // context-free entry point used by command handlers that do not thread a
 // context; callers that hold one should use loadConfigWithPaths.
-func loadConfig() (*config.Config, *config.SetupLayerMap, *goja.Runtime, error) {
+func loadConfig() (*config.Config, *config.ManagedConfigLayerMap, *goja.Runtime, error) {
 	return loadConfigWithPaths(context.Background(), BeforeConfigPaths, NoAutoConfig, ConfigPaths)
 }
 
-// loadConfigForSetup loads config for the setup command. Unlike loadConfig it
-// runs project detection (one git-root file walk) so setup content() functions
+// loadConfigForReconcile loads config for `config reconcile`. Unlike loadConfig it
+// runs project detection (one git-root file walk) so managed config content() functions
 // receive context.projectTypes / context.projectLocations and can build
-// per-ecosystem output (e.g. dependabot). Detection is gated to setup so other
+// per-ecosystem output (e.g. dependabot). Detection is gated to reconciliation so other
 // commands keep their detection-free, walk-free config load.
-func loadConfigForSetup(ctx context.Context) (*config.Config, *config.SetupLayerMap, *goja.Runtime, error) {
+func loadConfigForReconcile(ctx context.Context) (*config.Config, *config.ManagedConfigLayerMap, *goja.Runtime, error) {
 	return loadConfigImpl(ctx, BeforeConfigPaths, NoAutoConfig, ConfigPaths,
-		loadConfigOptions{detectProjectLocations: true, evaluateSetupContent: true, requireVM: true})
+		loadConfigOptions{detectProjectLocations: true, evaluateManagedConfigContent: true, requireVM: true})
 }
 
-// loadConfigForChainHash loads config with setup content evaluated, which is
-// what a chain hash is computed over. It is the only non-setup command that
+// loadConfigForChainHash loads config with managed config content evaluated,
+// which is what a chain hash is computed over. It is the only non-reconciliation command that
 // needs the layer map.
-func loadConfigForChainHash() (*config.Config, *config.SetupLayerMap, *goja.Runtime, error) {
+func loadConfigForChainHash() (*config.Config, *config.ManagedConfigLayerMap, *goja.Runtime, error) {
 	return loadConfigImpl(context.Background(), BeforeConfigPaths, NoAutoConfig, ConfigPaths,
-		loadConfigOptions{evaluateSetupContent: true})
+		loadConfigOptions{evaluateManagedConfigContent: true})
 }
 
 // loadConfigForLockfileGen loads config without enforcing lockfile constraints.
 // Used by config lockfile to allow bootstrapping lockfiles for apps that don't have one yet.
-func loadConfigForLockfileGen() (*config.Config, *config.SetupLayerMap, *goja.Runtime, error) {
+func loadConfigForLockfileGen() (*config.Config, *config.ManagedConfigLayerMap, *goja.Runtime, error) {
 	return loadConfigImpl(context.Background(), BeforeConfigPaths, NoAutoConfig, ConfigPaths, loadConfigOptions{skipLockfileValidation: true})
 }
 
@@ -231,7 +231,7 @@ func loadConfigForStore(ctx context.Context) (*config.Config, error) {
 // additional configuration files, merging them together.
 // Each config file is loaded in a separate VM and receives the previous config as input.
 // Remote configs declared via getRemoteConfigs() are resolved depth-first.
-func loadConfigWithPaths(ctx context.Context, beforeConfigPaths []string, noAutoConfig bool, configPaths []string) (cfg *config.Config, layerMap *config.SetupLayerMap, vm *goja.Runtime, err error) {
+func loadConfigWithPaths(ctx context.Context, beforeConfigPaths []string, noAutoConfig bool, configPaths []string) (cfg *config.Config, layerMap *config.ManagedConfigLayerMap, vm *goja.Runtime, err error) {
 	return loadConfigImpl(ctx, beforeConfigPaths, noAutoConfig, configPaths, loadConfigOptions{})
 }
 
@@ -244,21 +244,21 @@ type loadConfigOptions struct {
 	// context can't silently drop the project's config.
 	tolerateGitRootFailure bool
 	// detectProjectLocations runs project detection (one file walk) during the
-	// eager content-evaluation pass and exposes the result to setup content()
+	// eager content-evaluation pass and exposes the result to managed config content()
 	// functions as context.projectTypes / context.projectLocations. Off by
-	// default so non-setup loads stay walk-free.
+	// default so other loads stay walk-free.
 	detectProjectLocations bool
-	// evaluateSetupContent renders every setup entry's content() into the layer
+	// evaluateManagedConfigContent renders every managedConfigs entry's content() into the layer
 	// map. Off by default: it reads each entry's target file from disk and calls
 	// into the VM once per entry per config layer — for the shared config, 57
-	// reads and 100 calls — and only `setup`, `init` and `config chain-hash`
+	// reads and 100 calls — and only `config reconcile` and `config chain-hash`
 	// consume the result. Every other command discarded it, having paid for it.
 	//
 	// A load with this off returns an EMPTY layer map, not a partial one, so a
 	// caller that needs the map must ask for it rather than find it thin.
-	evaluateSetupContent bool
+	evaluateManagedConfigContent bool
 	// requireVM declares that the caller uses the returned *goja.Runtime.
-	// loadConfigForSetup is the only such path (cmd/setup.go). A load that sets
+	// loadConfigForReconcile is the only such path (cmd/config_reconcile.go). A load that sets
 	// it never serves from the config-evaluation cache: a hit has an evaluated
 	// config and no VM, and a VM cannot be reconstructed from one. Gating on the
 	// caller rather than on the artifact means the wrong shape is never produced
@@ -266,7 +266,7 @@ type loadConfigOptions struct {
 	requireVM bool
 }
 
-func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfig bool, configPaths []string, opts loadConfigOptions) (cfg *config.Config, lm *config.SetupLayerMap, vm *goja.Runtime, err error) {
+func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfig bool, configPaths []string, opts loadConfigOptions) (cfg *config.Config, lm *config.ManagedConfigLayerMap, vm *goja.Runtime, err error) {
 	// Registered before the phase timer so it runs after it (defers are LIFO):
 	// the report then includes the load's own total. This is the only call
 	// site — every startup phase is recorded within this call, and commands
@@ -349,10 +349,10 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 		markConfigServedFromCache()
 		publishConfigWarnings(entry.Warnings)
 		setResolvedRemoteURLs(entry.RemoteURLs)
-		// An EMPTY layer map, never a partial one: ConfigSetup.Content is a live
+		// An EMPTY layer map, never a partial one: ManagedConfig.Content is a live
 		// goja value a hit cannot reconstruct, and a caller that needs it asked
-		// for evaluateSetupContent, which never reaches this branch.
-		emptyLayerMap := make(config.SetupLayerMap)
+		// for evaluateManagedConfigContent, which never reaches this branch.
+		emptyLayerMap := make(config.ManagedConfigLayerMap)
 		return entry.Config, &emptyLayerMap, nil, nil
 	}
 
@@ -365,7 +365,7 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 	// Until the chain has finished evaluating, the verdict is "not cacheable":
 	// an early failure must never leave the previous load's verdict standing.
 	obs.markIncomplete()
-	layerMap := make(config.SetupLayerMap)
+	layerMap := make(config.ManagedConfigLayerMap)
 	resolved := make(map[string]bool)
 	stack := make(map[string]bool)
 
@@ -386,7 +386,7 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 			if files, walkErr := traverser.FindFiles(ctx, rootPath); walkErr == nil {
 				projFiles = files
 			} else {
-				logger.Logger.Debug("project detection: file walk failed; setup project context will be empty",
+				logger.Logger.Debug("project detection: file walk failed; managed config context will be empty",
 					zap.Error(walkErr))
 			}
 		}
@@ -401,12 +401,12 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 		}
 		resultVM := resultEngine.VM()
 
-		if result.Setup != nil && opts.evaluateSetupContent {
-			evalSpan := trace.Start(trace.CatConfig, "evaluateSetupContent")
+		if result.ManagedConfigs != nil && opts.evaluateManagedConfigContent {
+			evalSpan := trace.Start(trace.CatConfig, "evaluateManagedConfigContent")
 			pTypes, pLocs := detectProjects(result.ProjectTypes)
-			evaluatedContent := config.EvaluateInitContentWithProjects(result, resultVM, rootPath, cwdPath, layerMap, pTypes, pLocs)
-			config.MergeSetupLayers(layerMap, source.name, evaluatedContent, result.Setup)
-			evalSpan.EndWith(trace.A("source", source.name), trace.A("entries", len(result.Setup)))
+			evaluatedContent := config.EvaluateManagedConfigContentWithProjects(result, resultVM, rootPath, cwdPath, layerMap, pTypes, pLocs)
+			config.MergeManagedConfigLayers(layerMap, source.name, evaluatedContent, result.ManagedConfigs)
+			evalSpan.EndWith(trace.A("source", source.name), trace.A("entries", len(result.ManagedConfigs)))
 			// content() runs arbitrary config JS, so it is observed too.
 			obs.record(resultEngine)
 		}
@@ -455,12 +455,12 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 		return nil, nil, nil, err
 	}
 
-	if err := config.ValidateSetup(currentConfig.Setup); err != nil {
+	if err := config.ValidateManagedConfigs(currentConfig.ManagedConfigs); err != nil {
 		return nil, nil, nil, err
 	}
-	setupToolWarnings := config.ValidateSetupToolRefs(currentConfig.Setup, currentConfig.Tools)
-	configWarnings = append(configWarnings, setupToolWarnings...)
-	publishConfigWarnings(setupToolWarnings)
+	managedConfigToolWarnings := config.ValidateManagedConfigToolRefs(currentConfig.ManagedConfigs, currentConfig.Tools)
+	configWarnings = append(configWarnings, managedConfigToolWarnings...)
+	publishConfigWarnings(managedConfigToolWarnings)
 
 	if err := config.ValidateTools(currentConfig.Tools, currentConfig.Parsers); err != nil {
 		return nil, nil, nil, err
@@ -532,10 +532,10 @@ func markConfigServedFromCache() {
 }
 
 // projectLocationsToConfig converts absolute detector locations into the
-// git-root-relative {type, path} shape exposed to setup content() functions
+// git-root-relative {type, path} shape exposed to managed config content() functions
 // (POSIX slashes, "." for the root), deduped and deterministically sorted. It
 // also returns the unique sorted list of detected types. Shared by the eager
-// config-load detection and the setup install path so both expose identical data.
+// config-load detection and the reconciliation path so both expose identical data.
 func projectLocationsToConfig(rootPath string, locs []project.ProjectLocation) ([]string, []config.ProjectLocation) {
 	out := make([]config.ProjectLocation, 0, len(locs))
 	seen := make(map[string]bool)
@@ -781,7 +781,6 @@ func processConfigSource(ctx context.Context, input *config.Config, source confi
 		// order — a config input no cache key can represent.
 		inputVal = engine.DeterministicValue(vm, &inputCopy)
 	}
-
 	endGetConfig := timing.StartStartupPhase(timing.PhaseGetConfig)
 	getConfigSpan := trace.Start(trace.CatConfig, "callGetConfig")
 	resultVal, callErr := e.CallWithTimeout(getConfigFunc, 10*time.Second, inputVal)
@@ -821,6 +820,10 @@ func processConfigSource(ctx context.Context, input *config.Config, source confi
 
 // parseConfigResult converts getConfig result to config.Config struct
 func parseConfigResult(vm *goja.Runtime, resultVal goja.Value) (*config.Config, error) {
+	resultObj := resultVal.ToObject(vm)
+	managedConfigsVal := resultObj.Get("managedConfigs")
+	usesManagedConfigs := managedConfigsVal != nil && !goja.IsUndefined(managedConfigsVal)
+
 	cfg := &config.Config{}
 
 	if err := vm.ExportTo(resultVal, cfg); err != nil {
@@ -835,31 +838,30 @@ func parseConfigResult(vm *goja.Runtime, resultVal goja.Value) (*config.Config, 
 		cfg.Tools = make(config.MapOfTools)
 	}
 
-	// Handle setup configs specially to preserve content functions
-	resultObj := resultVal.ToObject(vm)
-	if setupVal := resultObj.Get("setup"); setupVal != nil && setupVal != goja.Undefined() {
-		setupObj := setupVal.ToObject(vm)
-		cfg.Setup = make(config.MapOfConfigSetup)
+	// Handle managed configs specially to preserve content functions.
+	if usesManagedConfigs {
+		managedConfigsObj := managedConfigsVal.ToObject(vm)
+		cfg.ManagedConfigs = make(config.MapOfManagedConfigs)
 
-		for _, key := range setupObj.Keys() {
-			cfgSetupVal := setupObj.Get(key)
-			cfgSetupObj := cfgSetupVal.ToObject(vm)
+		for _, key := range managedConfigsObj.Keys() {
+			managedConfigVal := managedConfigsObj.Get(key)
+			managedConfigObj := managedConfigVal.ToObject(vm)
 
-			var cfgSetup config.ConfigSetup
+			var managedConfig config.ManagedConfig
 
-			if err := vm.ExportTo(cfgSetupVal, &cfgSetup); err != nil {
-				return nil, fmt.Errorf("failed to export setup config %s: %w", key, err)
+			if err := vm.ExportTo(managedConfigVal, &managedConfig); err != nil {
+				return nil, fmt.Errorf("failed to export managed config %s: %w", key, err)
 			}
 
-			if contentVal := cfgSetupObj.Get("content"); contentVal != nil && contentVal != goja.Undefined() {
-				cfgSetup.Content = contentVal
+			if contentVal := managedConfigObj.Get("content"); contentVal != nil && !goja.IsUndefined(contentVal) {
+				managedConfig.Content = contentVal
 			}
 
-			if linkTargetVal := cfgSetupObj.Get("linkTarget"); linkTargetVal != nil && linkTargetVal != goja.Undefined() {
-				cfgSetup.LinkTarget = linkTargetVal.String()
+			if linkTargetVal := managedConfigObj.Get("linkTarget"); linkTargetVal != nil && !goja.IsUndefined(linkTargetVal) {
+				managedConfig.LinkTarget = linkTargetVal.String()
 			}
 
-			cfg.Setup[key] = cfgSetup
+			cfg.ManagedConfigs[key] = managedConfig
 		}
 	}
 

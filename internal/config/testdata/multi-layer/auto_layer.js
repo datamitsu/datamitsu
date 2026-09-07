@@ -2,8 +2,8 @@
 export function getConfig(input) {
   return {
     ...input,
-    setup: {
-      ...input.setup,
+    managedConfigs: {
+      ...input.managedConfigs,
       ".editorconfig": {
         content(context) {
           // Verify upstream content exists before overriding
