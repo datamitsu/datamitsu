@@ -66,15 +66,30 @@ globalThis.getMinVersion = () => "1.0.0";
 
 ## Hash Verification
 
-Every remote config requires a SHA-256 hash. This is a strict security requirement -- datamitsu refuses to load any remote config without a valid hash.
+Every remote config requires a SHA-256 hash. This is a strict security
+requirement: datamitsu refuses to load a remote config without a valid hash.
 
-To get the hash of a remote config:
+The publisher should hash the local file **before** uploading it and distribute
+that value through a reviewed release or change:
 
 ```bash
-curl -sL "https://config.myorg.com/datamitsu/base.js" | sha256sum
+sha256sum base.js
 ```
 
-Copy the hash into the `hash` field of your remote config reference. When the remote config changes, you must update the hash in every project that references it.
+Copy the published value into the `hash` field. Do not download unknown content
+merely to discover the value that will later be used to trust the same content.
+If you audit the hosted bytes manually, start with the expected hash and verify
+the download immediately:
+
+```bash
+EXPECTED_SHA256="a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+curl --fail --location --output /tmp/datamitsu-base.js \
+  "https://config.myorg.com/datamitsu/base.js"
+printf '%s  %s\n' "$EXPECTED_SHA256" /tmp/datamitsu-base.js | sha256sum --check -
+```
+
+When the remote config changes, update its reviewed hash in every consuming
+project.
 
 ## Config Inheritance Chain
 
@@ -157,8 +172,8 @@ datamitsu devtools verify-all --no-remote
 
 When a remote config is updated, each consuming project needs to update its hash:
 
-1. Publish the new remote config
-2. Compute the new SHA-256 hash
+1. Compute the new SHA-256 from the local release file
+2. Publish that exact file and its hash
 3. Update the `hash` field in each project's `getRemoteConfigs()` return value
 4. Commit the hash update
 

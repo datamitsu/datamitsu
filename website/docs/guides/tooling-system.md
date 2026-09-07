@@ -332,7 +332,7 @@ You can disable specific tools for certain files or directories using `.datamits
 datamitsu is designed for monorepos with multiple projects. Each project gets:
 
 - Its own tool execution with isolated working directory
-- Its own cache namespace at `~/.cache/datamitsu/projects/{hash}/cache/{projectPath}/{toolName}/`
+- Its own cache namespace at `~/.cache/datamitsu/cache/projects/{hash}/cache/{projectPath}/{toolName}/`
 - Independent results and error reporting
 
 See the [Core Concepts](/docs/getting-started/core-concepts#monorepo-support) page for more on monorepo architecture.

@@ -5,29 +5,33 @@ description: How to manage datamitsu's cache, store, and per-project data
 
 # Manage Cache
 
-datamitsu uses two storage areas: a per-project **cache** for tool results and a global **store** for downloaded binaries and runtimes. Understanding these helps you troubleshoot issues and manage disk space.
+datamitsu separates ephemeral **cache** state from the global **store** of
+downloaded, verified artifacts. Both are children of the base selected by
+`DATAMITSU_CACHE_DIR`, `XDG_CACHE_HOME`, or the platform fallback.
 
 ## Cache vs Store
 
-| Area      | What it holds                      | Scope       | Command prefix    |
-| --------- | ---------------------------------- | ----------- | ----------------- |
-| **Cache** | Lint/fix results, tool cache files | Per-project | `datamitsu cache` |
-| **Store** | Binaries, runtimes, apps, remotes  | Global      | `datamitsu store` |
+| Area      | What it holds                                                                   | Scope                 | Command prefix    |
+| --------- | ------------------------------------------------------------------------------- | --------------------- | ----------------- |
+| **Cache** | File results, unit verdicts, tool caches, source farms, evaluated config chains | Per repo/config chain | `datamitsu cache` |
+| **Store** | Binaries, runtimes, apps, bundles, parsers, remotes, package-manager data       | Global to the user    | `datamitsu store` |
 
 ## Cache Structure
 
-Each project gets its own isolated cache namespace:
+Each repository gets an isolated namespace. The same repository directory holds
+its source-mode farm, execution state, and tool-owned caches:
 
 ```
-~/.cache/datamitsu/cache/projects/{hash}/cache/
-├── packages/
-│   ├── frontend/
-│   │   ├── tsc/tsbuildinfo
-│   │   └── eslint/.eslintcache
-│   └── backend/
-│       └── golangci-lint/
-└── services/
-    └── api/
+~/.cache/datamitsu/cache/projects/{hash}/
+├── bin/                    # source-mode command farm
+├── manifest.json           # farm contents and staleness fingerprint
+├── lock                    # advisory farm bake lock
+├── toolstate.msgpack       # file entries and unit/repo verdicts
+└── cache/                  # directories exposed as {toolCache}
+    ├── packages/frontend/
+    │   ├── tsc/tsbuildinfo
+    │   └── eslint/.eslintcache
+    └── services/api/
         └── ruff/.ruff_cache/
 ```
 
@@ -42,7 +46,15 @@ The `{hash}` is an XXH3-128 hash of the git root path. Within it, tool caches ar
 └── lock            # the advisory bake lock
 ```
 
-Here `{hash}` is an XXH3-128 hash of the resolved config chain. `datamitsu cache clear` only touches `projects/`; rebuild a machine-level farm with `datamitsu source refresh --config <path> --force`.
+Here `{hash}` is an XXH3-128 hash of the resolved config chain. Project config
+evaluation results live separately under
+`cache/config-eval/projects/{identity}/{key}.msgpack`; explicit machine config
+chains use `cache/config-eval/configs/`.
+
+`datamitsu cache clear` only removes repository namespaces and the relevant
+evaluated-config entries. It does not remove `cache/configs/` machine-level
+farms. Rebuild one with
+`datamitsu source refresh --config <path> --force`.
 
 Tools reference their cache directory using the `{toolCache}` placeholder in their operation arguments or environment variables.
 
@@ -57,12 +69,18 @@ The global store holds all downloaded artifacts:
 ├── .runtimes/               # Runtime binaries
 │   ├── node/{configHash}/
 │   ├── pnpm/11.20.0/{hash}/
-│   └── jvm/{hash}/
+│   ├── jvm/{hash}/
+│   └── go/{hash}/
 ├── .apps/                   # Runtime-managed app environments
 │   ├── uv/yamllint/{hash}/
-│   └── node/eslint/{hash}/
+│   ├── node/eslint/{hash}/
+│   ├── jvm/openapi-generator-cli/{hash}/
+│   └── go/govulncheck/{hash}/
+├── .bundles/                # Managed static content
+├── .parsers/                # Downloaded WASM output parsers
 ├── .remote-configs/         # Cached remote configs
-└── .pnpm-store/             # Shared pnpm content-addressable store
+├── .pnpm-store/             # Shared pnpm content-addressable store
+└── .uv/python/              # Python installations managed by uv
 ```
 
 ## Viewing Cache Paths
@@ -93,7 +111,11 @@ datamitsu cache clear --dry-run
 datamitsu cache clear --all
 ```
 
-This removes lint/fix result caches and per-tool cache files (like `.eslintcache` or tsbuildinfo). It does not remove downloaded binaries or runtimes.
+For the current repository this removes the complete `projects/{hash}` namespace
+(source farm, lint/fix state, verdicts, and per-tool caches) plus that
+repository's evaluated config chains. `--all` removes all `projects/` namespaces
+and the entire `config-eval/` tree. Neither form removes machine-level farms in
+`cache/configs/`, downloaded artifacts, or execution traces.
 
 ## Clearing the Store
 
@@ -104,7 +126,10 @@ datamitsu store clear
 ```
 
 :::warning
-This removes everything: binaries, runtimes, app environments, and remote config caches. You will need to run `datamitsu init` again to re-download everything.
+This removes the whole global store: binaries, runtimes, app environments,
+bundles, parsers, package-manager stores, managed Python installations, and
+remote configs. You will need to run `datamitsu init` again to download required
+content.
 :::
 
 ## When to Clear Cache
@@ -130,8 +155,12 @@ This removes everything: binaries, runtimes, app environments, and remote config
 
 datamitsu automatically invalidates caches when configuration changes:
 
-- **Binary apps**: Cache key includes URL, hash, format, OS, and architecture. Upgrading a version creates a new cache entry
-- **Runtime apps**: Cache key includes runtime config, app config, OS, and architecture. Changing the package version or runtime version creates a new environment
-- **Remote configs**: Cached by URL; cache validity is determined by hash match (no TTL)
+- **Binary apps**: The store key includes URL, hash, format, and resolved OS/architecture/libc target
+- **Runtime apps**: The store key includes the runtime and app configuration, lock content, managed files/archives, and target dimensions
+- **Execution state**: The project key includes the datamitsu version, full effective config, and sorted `--tools` selection; file contents and unit guards decide individual hits
+- **Remote configs**: The store filename is derived from the URL, but cached bytes are accepted only when their mandatory SHA-256 matches
 
-No manual cache management is needed for version upgrades -- just update the config and the next run uses the new version.
+No manual clearing is needed for version upgrades: update the config and the next
+run selects the new content-addressed entry. Superseded store entries are not
+removed automatically; `datamitsu store clear` is currently the available
+cleanup command.

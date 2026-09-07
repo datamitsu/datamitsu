@@ -16,6 +16,7 @@ const mapOfApps: BinManager.MapOfApps = {
     uv: {
       packageName: "yamllint",
       version: "1.38.0",
+      lockFile: "br:...",
     },
   },
 };
@@ -24,7 +25,7 @@ const mapOfApps: BinManager.MapOfApps = {
 This creates an isolated UV tool environment at:
 
 ```
-~/.cache/datamitsu/.apps/uv/yamllint/{hash}/
+~/.cache/datamitsu/store/.apps/uv/yamllint/{hash}/
 ```
 
 UV environment variables are set automatically:
@@ -32,9 +33,10 @@ UV environment variables are set automatically:
 - `UV_CACHE_DIR` - UV's download cache (per-app, under the app dir)
 - `UV_PYTHON_INSTALL_DIR` - the managed CPython location, redirected into the store at `<store>/.uv/python/` (shared per-version) so the cached store is self-contained and each app's `.venv/bin/python` symlink resolves after a cache restore
 
-## Lock File for Reproducibility
+## Mandatory Lock File
 
-For reproducible installs, provide a `lockFile` with the UV lock file content:
+Every UV app must provide a `lockFile`. Normal config loading fails before any
+download when it is absent. The field contains the app's `uv.lock` content:
 
 ```typescript
 const mapOfApps: BinManager.MapOfApps = {
@@ -48,15 +50,19 @@ const mapOfApps: BinManager.MapOfApps = {
 };
 ```
 
-When `lockFile` is present:
+For every UV app:
 
 1. The lock file content is written to the app directory as `uv.lock`
-2. UV runs with `--locked`, refusing to modify `uv.lock`
+2. UV runs with `--locked --no-build`, refusing to modify `uv.lock` or build an
+   sdist
 3. Content prefixed with `br:` is brotli-compressed and base64-encoded
-4. This catches supply-chain changes where the same version resolves to
+4. The lock records hashes for the resolved artifacts, catching changes where the same version resolves to
    different transitive dependencies
 
-To generate lock file content, run `datamitsu config lockfile <appName>`.
+To bootstrap one, first declare the package name and version, then run
+`datamitsu config lockfile <appName>` and paste its output into `lockFile`. That
+command deliberately permits the missing field while generating it; normal
+commands do not.
 
 ## Multiple Python Tools
 
@@ -65,13 +71,13 @@ Each Python tool gets its own isolated environment:
 ```typescript
 const mapOfApps: BinManager.MapOfApps = {
   yamllint: {
-    uv: { packageName: "yamllint", version: "1.37.1" },
+    uv: { packageName: "yamllint", version: "1.37.1", lockFile: "br:..." },
   },
   ruff: {
-    uv: { packageName: "ruff", version: "0.8.6" },
+    uv: { packageName: "ruff", version: "0.8.6", lockFile: "br:..." },
   },
   mypy: {
-    uv: { packageName: "mypy", version: "1.14.1" },
+    uv: { packageName: "mypy", version: "1.14.1", lockFile: "br:..." },
   },
 };
 ```
@@ -79,7 +85,7 @@ const mapOfApps: BinManager.MapOfApps = {
 Store structure:
 
 ```
-~/.cache/datamitsu/.apps/uv/
+~/.cache/datamitsu/store/.apps/uv/
   yamllint/{hash-a}/    # yamllint + its dependencies
   ruff/{hash-b}/        # ruff + its dependencies
   mypy/{hash-c}/        # mypy + its dependencies

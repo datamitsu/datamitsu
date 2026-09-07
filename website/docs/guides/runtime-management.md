@@ -76,7 +76,8 @@ runtimes: {
 }
 ```
 
-The optional `systemVersion` field lets you manually invalidate the cache when the system runtime changes (e.g., after a system upgrade).
+The optional `systemVersion` field moves runtime-dependent apps to a new store
+key when the system runtime changes (for example, after a system upgrade).
 
 ## UV Runtime (Python)
 
@@ -85,7 +86,7 @@ UV apps use [uv](https://github.com/astral-sh/uv) to create isolated Python envi
 ### How UV Apps Work
 
 1. datamitsu ensures the UV runtime is available (downloads it in managed mode)
-2. Creates an isolated environment at `.apps/uv/{appName}/{hash}/`
+2. Creates an isolated environment at `{store}/.apps/uv/{appName}/{hash}/`
 3. Writes a `pyproject.toml` and runs `uv sync` to install the package
 4. Executes the tool from the isolated environment
 
@@ -97,6 +98,7 @@ apps: {
     uv: {
       packageName: "yamllint",
       version: "1.35.1",
+      lockFile: "br:...", // required; generated with config lockfile
     },
   },
 }
@@ -128,7 +130,7 @@ Node apps use a managed Node.js runtime — downloaded as a pinned, SHA-256-veri
 
 1. datamitsu downloads and verifies (SHA-256) the configured Node.js archive and extracts it
 2. Downloads pnpm from the npm registry
-3. Creates an isolated environment at `.apps/node/{appName}/{hash}/`
+3. Creates an isolated environment at `{store}/.apps/node/{appName}/{hash}/`
 4. Runs `pnpm install` to set up the package
 5. Executes the tool via Node.js
 
@@ -141,6 +143,7 @@ apps: {
       packageName: "eslint",
       version: "9.0.0",
       binPath: "node_modules/.bin/eslint",
+      lockFile: "br:...", // required; generated with config lockfile
     },
   },
 }
@@ -158,7 +161,10 @@ node: {
 }
 ```
 
-Node.js versions are cached at `.runtimes/node/{configHash}/`, and pnpm is cached separately. A shared pnpm content-addressable store at `.pnpm-store/` deduplicates packages across apps.
+Node.js versions are stored at `{store}/.runtimes/node/{configHash}/`, and pnpm
+is stored separately under `{store}/.runtimes/pnpm/`. A shared pnpm
+content-addressable store at `{store}/.pnpm-store/` deduplicates packages across
+apps.
 
 ## JVM Runtime (Java)
 
@@ -233,11 +239,13 @@ A Go app's lock file is a JSON wrapper carrying both `go.mod` and `go.sum`. Beca
 
 ## Lock Files
 
-Node and UV apps support lock files to ensure reproducible installs across environments. Lock files pin exact dependency versions so that `pnpm install` and `uv sync` produce identical results everywhere.
+Node, UV, and Go apps require lock files. They pin exact dependencies and their
+integrity data so installs and builds are reproducible across environments.
 
 ### Generating a Lock File
 
-Use the `config lockfile` command to generate lock file content:
+First declare the app's package and version. Then use the special
+`config lockfile` command to generate its lock content:
 
 ```bash
 datamitsu config lockfile eslint
@@ -259,18 +267,19 @@ eslint: {
 ### How Lock Files Work
 
 - **Node apps**: The lock file is written as `pnpm-lock.yaml` and pnpm runs with `--frozen-lockfile`, refusing to install if dependencies don't match
-- **UV apps**: The lock file is written as `uv.lock` and uv runs with `--locked`, ensuring exact version matching
+- **UV apps**: The lock file is written as `uv.lock` and uv runs with `--locked --no-build`, ensuring exact version matching and permitting wheels only
+- **Go apps**: The JSON payload is expanded into `go.mod` and `go.sum`, and the tool is built with `go build -trimpath -mod=readonly`
 
-### Lock Files
-
-Lock files are mandatory for all UV and node apps. If a UV or node app does not have a `lockFile` configured, validation will fail with an error. Use `datamitsu config lockfile <appName>` to generate a lock file for an app.
+The generation command deliberately loads config without enforcing the missing
+field so it can create that field. Every normal config load rejects a node, UV,
+or Go app without `lockFile` before downloading or executing anything.
 
 ## Isolated Environments
 
 Each runtime-managed app gets its own isolated environment. This prevents version conflicts between tools:
 
 ```
-.apps/
+{store}/.apps/
 ├── uv/
 │   ├── yamllint/{hash}/     # isolated Python env
 │   └── ruff/{hash}/         # separate isolated env
@@ -281,7 +290,9 @@ Each runtime-managed app gets its own isolated environment. This prevents versio
     └── openapi-generator/{hash}/  # JAR + metadata
 ```
 
-The `{hash}` is computed from the runtime config, app config, OS, and architecture. Changing any of these (like upgrading a version) creates a new isolated environment, while the old one remains cached until explicitly cleared.
+The `{hash}` covers the runtime identity, app configuration (including the lock
+file and any files or archives), and resolved target. Changing one creates a new
+isolated environment; the old entry remains in the store until it is cleared.
 
 ## Runtime Resolution
 

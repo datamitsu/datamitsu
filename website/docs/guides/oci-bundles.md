@@ -148,7 +148,9 @@ GHCR is also the only channel for the parser artifact today — unlike the datam
 ## Kill switches
 
 - `--no-oci` (any command) or `DATAMITSU_NO_OCI=1` — disable bundle seeding entirely; tools download directly as before. It switches off an accelerator, so it does **not** disable a parser that declares an `oci` source: that registry is the only route to those bytes. `DATAMITSU_OFFLINE` remains the hard network gate.
-- Bundles change **where bytes come from**, never which versions run: tool resolution and cache keys are identical with and without a bundle.
+- Bundles change **where bytes come from**, never which versions run: tool
+  resolution and content-addressed store keys are identical with and without a
+  bundle.
 
 ## Producing a bundle
 

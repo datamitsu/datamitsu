@@ -24,7 +24,7 @@ as a JSON-escaped string ready to paste into configuration.
 When called without arguments, lists all apps that support lock files (node/uv/go).
 
 This command:
-1. Deletes the app's cache directory
+1. Deletes the app's existing content-addressed store entry
 2. Reinstalls the app from scratch (for go, resolves deps with go mod init + go get)
 3. Reads the generated lock file (pnpm-lock.yaml, uv.lock, or go.mod + go.sum)
 4. Outputs the content as a JSON string for use in lockFile config field`,
@@ -90,9 +90,9 @@ func runConfigLockfile(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to compute install path for %q: %w", appName, err)
 	}
 
-	fmt.Fprintf(os.Stderr, "Removing cache at %s...\n", freshInstallPath)
+	fmt.Fprintf(os.Stderr, "Removing store entry at %s...\n", freshInstallPath)
 	if err := os.RemoveAll(freshInstallPath); err != nil {
-		return fmt.Errorf("failed to remove cache directory: %w", err)
+		return fmt.Errorf("failed to remove store entry: %w", err)
 	}
 
 	var lockContent string

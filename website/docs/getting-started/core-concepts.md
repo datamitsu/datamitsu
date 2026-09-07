@@ -9,9 +9,9 @@ datamitsu is built around five core concepts: binary management, runtime managem
 
 ## Binary Management
 
-datamitsu downloads, verifies, and caches tool binaries per platform. Every binary must have a SHA-256 hash — datamitsu refuses to download anything without one.
+datamitsu downloads, verifies, and stores tool binaries per platform. Every binary must have a SHA-256 hash — datamitsu refuses to download anything without one.
 
-Binaries are cached at `~/.cache/datamitsu/store/.bin/{name}/{configHash}` and reused across runs. The cache key is derived from the binary info, OS, and architecture, so changing a version or hash automatically downloads the new version.
+Binaries are kept at `~/.cache/datamitsu/store/.bin/{name}/{configHash}` and reused across runs. The internal store key is derived from the binary info and resolved target, so changing a version, hash, OS, architecture, or libc selects a fresh entry.
 
 Supported archive formats include: `tar.gz`, `tar.xz`, `tar.bz2`, `tar.zst`, `zip`, and raw binaries.
 
@@ -37,7 +37,11 @@ For tools that need a language runtime (Python, Node.js, Java), datamitsu manage
 1. **Managed mode** — datamitsu downloads the runtime binary (UV, Node.js, JDK, or Go SDK) with hash verification
 2. **System mode** — Uses a runtime already installed on your system
 
-Each runtime-managed app gets an isolated directory at `~/.cache/datamitsu/store/.apps/{runtime}/{app}/{hash}/`. The hash includes the runtime config, app config, OS, and architecture, so any change produces a fresh environment.
+Each runtime-managed app gets an isolated directory at
+`~/.cache/datamitsu/store/.apps/{kind}/{app}/{hash}/`. The internal key includes
+the effective runtime and app configuration, lock and managed-content inputs,
+and applicable target dimensions (OS, architecture, and libc), so a relevant
+change produces a fresh environment.
 
 ### Runtime Types
 
@@ -48,7 +52,9 @@ Each runtime-managed app gets an isolated directory at `~/.cache/datamitsu/store
 
 ### Lock Files
 
-Node and UV apps support lock files (`pnpm-lock.yaml` and `uv.lock`) for reproducible installations. Lock file content can be embedded in config using brotli compression.
+Node, UV, and Go apps require lock files (`pnpm-lock.yaml`, `uv.lock`, or a
+`go.mod` + `go.sum` payload). Normal config loading rejects a runtime-managed
+app without one. Lock content can be embedded compactly with brotli compression.
 
 Generate a lock file:
 
@@ -68,6 +74,7 @@ Apps declare what files they expose through `Links`:
     packageName: "@company/eslint-config",
     binPath: "node_modules/.bin/eslint",
     version: "1.0.0",
+    lockFile: "br:...",
   },
   links: {
     "eslint-config": "dist/eslint.config.js",
@@ -200,7 +207,7 @@ datamitsu is designed for monorepos. It detects project boundaries by looking fo
 
 Each project gets:
 
-- **Isolated cache** at `~/.cache/datamitsu/projects/{hash}/cache/{projectPath}/{toolName}/`
+- **Isolated cache** at `~/.cache/datamitsu/cache/projects/{hash}/cache/{projectPath}/{toolName}/`
 - **Scoped tool execution** in the project's working directory
 - **Independent configuration** via managed config links
 

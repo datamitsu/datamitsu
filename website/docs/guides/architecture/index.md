@@ -26,10 +26,12 @@ graph LR
 ```
 
 0. **Startup and Config Load** resolves the repository root and evaluates every config source into the merged configuration everything downstream reads.
-1. **File Discovery** walks the repository tree, respecting `.gitignore` rules, and collects all files that match tool glob patterns.
+1. **File Discovery** performs one gitignore-aware repository walk, sorts the
+   resulting inventory, and shares it with bundled checks and the planner.
 2. **Task Planning** groups matched files into tasks based on tool priorities, scopes, and project boundaries. Overlapping globs are detected and resolved.
 3. **Parallel Execution** runs task groups sequentially by priority level, but tasks within each group run in parallel across available CPU cores.
-4. **Cache Update** records results per file so unchanged files are skipped on the next run.
+4. **Cache Update** records per-file passes for independent operations and
+   complete unit/repository verdicts for coarser operations.
 
 ## Why This Matters
 
@@ -41,14 +43,14 @@ graph LR
 
 Each stage has its own detailed documentation:
 
-| Component                             | What It Does                                 | Key Concepts                                                           |
-| ------------------------------------- | -------------------------------------------- | ---------------------------------------------------------------------- |
-| [Startup & Config Load](./startup.md) | Resolves the repo root, evaluates config     | Config-evaluation cache, git-root memo, extension-based type stripping |
-| [Task Planning](./planner.md)         | Groups files into prioritized task batches   | Priority chunking, overlap detection, CWD-subtree restriction          |
-| [Parallel Execution](./execution.md)  | Runs tasks with fail-fast semantics          | Two-layer model, context cancellation, progress tracking               |
-| [File Discovery](./discovery.md)      | Walks the repo respecting ignore rules       | .gitignore-aware traversal, project auto-detection                     |
-| [Caching Strategy](./caching.md)      | Tracks per-file results for incremental runs | XXH3-128 invalidation keys, separate lint/fix tracking                 |
-| [WASM Output Parsers](./parsers.md)   | Sandboxed parsers + formatting diff-in-core  | Rust→WASM, SHA-256 trust, https or OCI source, wazero, Myers diff      |
+| Component                             | What It Does                                   | Key Concepts                                                           |
+| ------------------------------------- | ---------------------------------------------- | ---------------------------------------------------------------------- |
+| [Startup & Config Load](./startup.md) | Resolves the repo root, evaluates config       | Config-evaluation cache, git-root memo, extension-based type stripping |
+| [Task Planning](./planner.md)         | Groups inventory into prioritized tasks        | Granularity, widening, overlap detection, CWD selection                |
+| [Parallel Execution](./execution.md)  | Runs tasks with fail-fast semantics            | Two-layer model, context cancellation, progress tracking               |
+| [File Discovery](./discovery.md)      | Builds one shared, sorted repository inventory | .gitignore traversal, project auto-detection, inventory reuse          |
+| [Caching Strategy](./caching.md)      | Tracks file passes and unit/repo verdicts      | XXH3-128 keys, guards, TTL, concurrent persistence                     |
+| [WASM Output Parsers](./parsers.md)   | Sandboxed parsers + formatting diff-in-core    | Rust→WASM, SHA-256 trust, https or OCI source, wazero, Myers diff      |
 
 ## Reading Order
 

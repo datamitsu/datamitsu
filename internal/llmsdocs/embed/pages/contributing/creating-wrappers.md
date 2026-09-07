@@ -90,8 +90,8 @@ Create `config/datamitsu.config.js` (or `.ts`):
 
 ```javascript
 /**
- * @param {import('datamitsu').Config} prev
- * @returns {import('datamitsu').Config}
+ * @param {config.Config} prev
+ * @returns {config.Config}
  */
 function getConfig(prev) {
   return {
@@ -100,38 +100,52 @@ function getConfig(prev) {
       ...prev.apps,
       // Define your tools here
       "golangci-lint": {
-        type: "binary",
         binary: {
           binaries: {
             linux: {
               amd64: {
-                url: "https://github.com/golangci/golangci-lint/releases/download/v1.55.0/golangci-lint-1.55.0-linux-amd64.tar.gz",
-                hash: "<sha256-hash>",
-                contentType: "tar.gz",
-                binaryPath: "golangci-lint-1.55.0-linux-amd64/golangci-lint",
+                glibc: {
+                  url: "https://github.com/golangci/golangci-lint/releases/download/v1.55.0/golangci-lint-1.55.0-linux-amd64.tar.gz",
+                  hash: "<sha256-hash>",
+                  contentType: "tar.gz",
+                  binaryPath: "golangci-lint-1.55.0-linux-amd64/golangci-lint",
+                },
               },
             },
             darwin: {
               amd64: {
-                url: "https://github.com/golangci/golangci-lint/releases/download/v1.55.0/golangci-lint-1.55.0-darwin-amd64.tar.gz",
-                hash: "<sha256-hash>",
-                contentType: "tar.gz",
-                binaryPath: "golangci-lint-1.55.0-darwin-amd64/golangci-lint",
+                unknown: {
+                  url: "https://github.com/golangci/golangci-lint/releases/download/v1.55.0/golangci-lint-1.55.0-darwin-amd64.tar.gz",
+                  hash: "<sha256-hash>",
+                  contentType: "tar.gz",
+                  binaryPath: "golangci-lint-1.55.0-darwin-amd64/golangci-lint",
+                },
               },
               arm64: {
-                url: "https://github.com/golangci/golangci-lint/releases/download/v1.55.0/golangci-lint-1.55.0-darwin-arm64.tar.gz",
-                hash: "<sha256-hash>",
-                contentType: "tar.gz",
-                binaryPath: "golangci-lint-1.55.0-darwin-arm64/golangci-lint",
+                unknown: {
+                  url: "https://github.com/golangci/golangci-lint/releases/download/v1.55.0/golangci-lint-1.55.0-darwin-arm64.tar.gz",
+                  hash: "<sha256-hash>",
+                  contentType: "tar.gz",
+                  binaryPath: "golangci-lint-1.55.0-darwin-arm64/golangci-lint",
+                },
               },
             },
           },
         },
+      },
+    },
+    tools: {
+      ...prev.tools,
+      "golangci-lint": {
+        name: "golangci-lint",
         operations: {
           lint: {
+            app: "golangci-lint",
             args: ["run"],
+            scope: "per-project",
           },
         },
+        projectTypes: ["golang-package"],
       },
     },
 
@@ -152,7 +166,7 @@ linters:
 }
 
 globalThis.getConfig = getConfig;
-globalThis.getMinVersion = () => "1.0.0";
+globalThis.getMinVersion = () => "0.0.1";
 ```
 
 ### Step 3: Use the `--before-config` Flag

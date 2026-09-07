@@ -81,7 +81,7 @@ npx datamitsu init
 datamitsu --before-config node_modules/@company/datamitsu-config/config/datamitsu.config.js init
 ```
 
-This downloads and caches all binaries defined in the wrapper package.
+This downloads and stores all binaries defined in the wrapper package.
 
 ### Step 4: Run Setup
 
@@ -253,22 +253,31 @@ function getConfig(prev) {
     apps: {
       ...prev.apps,
       "custom-linter": {
-        type: "binary",
         binary: {
           binaries: {
             linux: {
               amd64: {
-                url: "https://example.com/custom-linter-linux-amd64.tar.gz",
-                hash: "<sha256>",
-                contentType: "tar.gz",
-                binaryPath: "custom-linter",
+                glibc: {
+                  url: "https://example.com/custom-linter-linux-amd64.tar.gz",
+                  hash: "<sha256>",
+                  contentType: "tar.gz",
+                  binaryPath: "custom-linter",
+                },
               },
             },
           },
         },
+      },
+    },
+    tools: {
+      ...prev.tools,
+      "custom-linter": {
+        name: "custom-linter",
         operations: {
           lint: {
+            app: "custom-linter",
             args: ["check"],
+            scope: "repository",
           },
         },
       },
@@ -276,6 +285,7 @@ function getConfig(prev) {
   };
 }
 globalThis.getConfig = getConfig;
+globalThis.getMinVersion = () => "0.0.1";
 ```
 
 ## Migration-Free Updates
@@ -454,7 +464,7 @@ ls node_modules/@company/datamitsu-config/bin/datamitsu
 ./node_modules/.bin/datamitsu init
 
 # Or install datamitsu globally
-npm install -g datamitsu
+npm install -g @datamitsu/datamitsu
 datamitsu --before-config node_modules/@company/datamitsu-config/config/datamitsu.config.js init
 ```
 
@@ -477,10 +487,12 @@ function getConfig(prev) {
           binaries: {
             linux: {
               amd64: {
-                url: "https://github.com/golangci/golangci-lint/releases/download/v1.60.0/...",
-                hash: "<new-hash>",
-                contentType: "tar.gz",
-                binaryPath: "...",
+                glibc: {
+                  url: "https://github.com/golangci/golangci-lint/releases/download/v1.60.0/...",
+                  hash: "<new-sha256>",
+                  contentType: "tar.gz",
+                  binaryPath: "...",
+                },
               },
             },
           },

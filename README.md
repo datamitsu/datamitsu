@@ -45,7 +45,7 @@ Full documentation is available at [https://datamitsu.com](https://datamitsu.com
 
 **Getting Started:**
 
-- [Installation](website/docs/getting-started/installation.md)
+- [Installation](website/docs/getting-started/installation/index.md)
 - [Quick Start Guide](website/docs/getting-started/quick-start.md)
 - [About datamitsu](website/docs/about.md) — Why datamitsu exists and what makes it unique
 

@@ -6,9 +6,14 @@ datamitsu treats supply chain integrity as a non-negotiable property of every in
 
 ## Hash Verification (All Downloads)
 
-Every artifact downloaded from the internet must have a SHA-256 hash. This applies to binary apps, managed runtimes, JVM JAR files, and remote config files. If a hash is missing, datamitsu refuses to download — there is no permissive fallback mode.
+Every artifact downloaded from the internet must have a SHA-256 hash. This
+includes binary apps, managed runtimes, JVM JAR files, external app and bundle
+archives, pnpm itself, remote config files, and WASM output parsers. If a hash is
+missing, datamitsu refuses to download — there is no permissive fallback mode.
 
-The hash is verified before the artifact is unpacked or executed. Lock files are mandatory for all UV and node apps; the lock file content itself is hash-verified as part of the app config.
+The hash is verified before the artifact is unpacked or executed. Lock files
+are mandatory for all Node, UV, and Go apps; their package managers then enforce
+the integrity values carried by `pnpm-lock.yaml`, `uv.lock`, or `go.sum`.
 
 See the [Binary Management](./binary-management.md) guide for the verification pipeline applied to binary apps.
 
@@ -147,7 +152,7 @@ What each setting does:
 | `minimumReleaseAge`         | Refuses to install packages published less than 7 days ago — defeats most typosquats    |
 | `trustPolicy: no-downgrade` | Blocks unsigned/older provenance from replacing a previously-trusted version            |
 | `lockfile`                  | Requires a lockfile in every install                                                    |
-| `preferFrozenLockfile`      | Uses `--frozen-lockfile` semantics when a lockfile is present                           |
+| `preferFrozenLockfile`      | Prefers frozen-lockfile semantics; datamitsu also passes `--frozen-lockfile` explicitly |
 
 ### Per-App Overrides via `App.files`
 
@@ -225,13 +230,19 @@ UV apps use [uv](https://github.com/astral-sh/uv) to install Python packages int
 
 ### `--locked` Enforces the Lock File
 
-When a `lockFile` is present, `uv sync` runs with `--locked`. UV refuses to modify `uv.lock` and exits non-zero if it would need to resolve versions differently.
+Every UV app requires `lockFile`, and `uv sync` runs with `--locked`. UV refuses
+to modify `uv.lock` and exits non-zero if it would need to resolve versions
+differently.
 
 ### `--no-build` Blocks Source Distributions
 
-When a `lockFile` is present, datamitsu also passes `--no-build`. UV will install only pre-built wheels — never source distributions (sdists), which would otherwise execute arbitrary build code during install.
+datamitsu also passes `--no-build`. UV will install only pre-built wheels —
+never source distributions (sdists), which would otherwise execute arbitrary
+build code during install.
 
-The pair `--locked --no-build` is intentional. With a lock file you know exactly which versions will be installed, so you can be confident wheels exist for your target platforms. Without a lock file, `--no-build` is omitted because wheel availability cannot be predicted.
+The pair `--locked --no-build` is intentional. A locked dependency without a
+wheel for the target platform fails rather than falling back to executing a
+build backend.
 
 **Trade-off**: if a locked version has no wheel for your platform (e.g., a niche arch, or a pure-Python package without a wheel), the install fails. This is intentional — the failure surfaces a security-relevant gap rather than silently executing setup.py.
 
@@ -323,10 +334,10 @@ files: {
 A reasonable CI pipeline for repositories that consume datamitsu:
 
 ```bash
-datamitsu init --no-cache       # fresh install, all hashes re-verified
-datamitsu check                  # run the full check pipeline
+datamitsu init  # on a fresh runner, materialize the hash-pinned store
+datamitsu check # run the full check pipeline
 go mod verify                    # if your repo has Go code
-govulncheck ./...                # if your repo has Go code
+datamitsu exec govulncheck -- ./... # if your repo has Go code
 ```
 
 For wrapper packages, also run `datamitsu devtools verify-all` to confirm every platform's binaries and runtimes still hash-match.

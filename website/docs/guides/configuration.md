@@ -142,7 +142,8 @@ Remote configs are resolved depth-first before the current config's `getConfig()
 Key requirements:
 
 - Every remote config **must** have a SHA-256 `hash` for security verification
-- Remote configs are cached locally; cache validity is determined by hash match (no TTL)
+- Remote configs are stored under `{store}/.remote-configs`; cached bytes are
+  accepted only when their SHA-256 matches (no TTL)
 - Circular dependencies are detected and produce an error
 - HTTPS-to-HTTP redirects are rejected for security
 
@@ -211,7 +212,15 @@ Configuration files run in a JavaScript VM (goja) with access to several built-i
 - **Path utilities**: `tools.Path.join()`, `tools.Path.abs()`, `tools.Path.rel()`, `tools.Path.forImport()`
 - **Config links**: `tools.Config.linkPath()` for computing paths to `.datamitsu/` symlinks
 - **Ignore utilities**: `tools.Ignore.parse()`, `tools.Ignore.stringify()` for working with ignore patterns
-- **Facts**: `facts()` returns platform and environment information (`os`, `arch`, `isInGitRepo`, `isMonorepo`, `env`)
+- **Facts**: `facts()` returns platform, process, and environment information
+  (`os`, `arch`, `libc`, `binaryPath`, `binaryCommand`, repository flags, and
+  `env`). `env` is the whole observable process environment except
+  observation-only tracing/config-cache controls.
+- **pnpm defaults**: frozen `pnpmWorkspaceDefaults` publishes the recommended
+  pnpm 11 workspace security policy from the Go source of truth
+- **Config inputs**: frozen `datamitsuConfigInputs` exposes only runtime values
+  config is explicitly allowed to branch on; currently
+  `minimumReleaseAgeMinutes`
 - **Console**: `console.log()`, `console.warn()`, `console.error()` for debugging
 
 See the [Configuration API reference](/docs/reference/configuration-api) for complete API documentation.
@@ -219,6 +228,10 @@ See the [Configuration API reference](/docs/reference/configuration-api) for com
 The evaluated result is cached on disk per set of inputs, so an unchanged config chain is not re-evaluated on the next command (see [the config-evaluation cache](/docs/guides/architecture/startup#the-config-evaluation-cache)). A config that reads the clock (`Date.now()`, `new Date()` with no arguments), calls `Math.random()`, or writes to `console.*` still evaluates normally — it simply never gets a cache entry, because a cache hit runs no JavaScript and could not reproduce the value or the output. Dates built from explicit arguments (`new Date(2020, 0, 1)`) are pure and cost nothing.
 
 ## Environment Variables
+
+Frequently used variables are below. See the
+[CLI environment reference](/docs/reference/cli-commands#environment-variables)
+for the complete list and effective defaults.
 
 | Variable                         | Description                                | Default                                      |
 | -------------------------------- | ------------------------------------------ | -------------------------------------------- |

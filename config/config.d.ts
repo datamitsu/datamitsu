@@ -936,6 +936,16 @@ declare global {
       arity?: "dir" | "many" | "none" | "one";
 
       /**
+       * Controls result caching for this operation.
+       *
+       * File-granularity and unit-granularity operations cache successful results by default;
+       * `false` makes them run every time. Repository-granularity verdicts are deliberately opt-in
+       * because their key hashes every tracked repository file: set `true` only when the operation
+       * is deterministic and its declared inputs form a closed world.
+       */
+      cache?: boolean;
+
+      /**
        * Extra environment variables for this operation Merge priority: OS env < app env < tool
        * operation env
        *
@@ -996,7 +1006,13 @@ declare global {
       input?: "file" | "stdin";
 
       /**
-       * Files that should invalidate the cache when changed Paths are relative to project root
+       * Additional files that affect a unit- or repository-granularity verdict. Each path is
+       * resolved against the task's unit and every ancestor up to the git root, so a package can
+       * inherit a root-level config. Missing paths are ignored until they exist.
+       *
+       * This field does not affect file-granularity cache entries. If a formatter's result for one
+       * file depends on a shared config, use unit granularity so that config can be part of the
+       * verdict input set.
        *
        * @example
        *   ["eslint.config.js", "tsconfig.json"];
@@ -1082,7 +1098,8 @@ declare global {
       /**
        * Named archives to extract into the app's install directory. Archive names can be referenced
        * in Links to create symlinks. Archives are extracted before Files are written, allowing
-       * Files to override.
+       * Files to override. Only valid for UV and Node apps; using this field on a binary, JVM, Go,
+       * or shell app is a configuration error.
        */
       archives?: Record<string, ArchiveSpec>;
       binary?: AppConfigBinary;
@@ -1112,7 +1129,8 @@ declare global {
       env?: Record<string, string>;
       /**
        * Static file contents to write into the app's install directory before the package manager
-       * runs. Keys are filenames; values are file contents.
+       * runs. Keys are filenames; values are file contents. Only valid for UV and Node apps; using
+       * this field on a binary, JVM, Go, or shell app is a configuration error.
        *
        * Special handling for `pnpm-workspace.yaml` on node apps: the entry is NOT written verbatim.
        * Instead, the installer parses it and shallow-merges it on top of the recommended pnpm 11
@@ -1140,7 +1158,8 @@ declare global {
       lazy?: boolean;
       /**
        * Symlinks to create in .datamitsu/ directory, mapping link name to relative path in install
-       * directory.
+       * directory. Only valid for UV and Node apps; using this field on a binary, JVM, Go, or shell
+       * app is a configuration error.
        */
       links?: Record<string, string>;
       node?: AppConfigNode;
@@ -1314,7 +1333,7 @@ declare global {
       | "zip"
       | "zst";
 
-    type BinHashType = "md5" | "sha1" | "sha256" | "sha384" | "sha512";
+    type BinHashType = "sha256";
 
     interface Bundle {
       /**
@@ -1453,11 +1472,13 @@ declare global {
     binaryPath: string;
 
     /**
-     * Environment variables with the package prefix (e.g., CHANGE_ME_*) Only includes variables
-     * that start with the prefix defined in ldflags.EnvPrefix
+     * The process environment available to configuration code, except observation-only datamitsu
+     * variables (`DATAMITSU_TRACE`, `DATAMITSU_TRACE_DIR`, and `DATAMITSU_CONFIG_CACHE`). The
+     * config-evaluation cache hashes this same observable environment, so branching on a value
+     * cannot reuse a result produced under a different value.
      *
      * @example
-     *   { "CHANGE_ME_DEBUG": "true", "CHANGE_ME_LOG_LEVEL": "info" }
+     *   { "CI": "true", "NODE_OPTIONS": "--max-old-space-size=4096" }
      */
     env: Record<string, string>;
 

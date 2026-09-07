@@ -4,14 +4,35 @@
 
 The planner is the second stage of datamitsu's execution pipeline. It takes the list of discovered files and transforms them into an ordered execution plan — deciding what runs when, what can run in parallel, and what must wait.
 
+## Shared Repository Inventory
+
+The runner performs one gitignore-aware traversal at the git root and sorts the
+result. That same immutable inventory feeds the bundled `.datamitsuignore`
+fix/lint checks and is seeded into the planner for glob matching, project
+detection, unit membership, and narrowing. A `check` run therefore does not walk
+the same tree once for fix, again for lint, and again for planning.
+
+`Planner` can still initialize itself with a fallback walk when used outside the
+normal runner path. Invalidating a planner discards an earlier seed, so a stale
+inventory is never silently reused.
+
 ## Skip Detection
 
-As it enumerates tools (in stable, sorted order), the planner records two kinds of **skipped tools** on the plan alongside the runnable task groups. A tool is skipped — and reported — when, after it is found applicable to the project and operation:
+As it enumerates tools in stable name order, the planner records three kinds of
+**skipped tools** alongside the runnable task groups. A tool is reported as
+skipped when, after it is found applicable to the project and operation:
 
 - it sets `skip: true` in config, or
-- its backing binary has no build for the current OS/architecture/libc.
+- its backing binary has no build for the current OS/architecture/libc, or
+- a narrowed selection needs a wider unit/repository verdict than the active
+  widening policy permits.
 
-Detecting both at plan time (rather than at install) is what lets them appear in `--explain` and keeps platform-unsupported tools out of the [pre-install phase](./execution.md#pre-install-phase) entirely, so they never trigger an install error. Tools that are merely inapplicable (no matching files, wrong project type, `.datamitsuignore`) are dropped silently, as before — only the two reasons above are surfaced. See [Skipped Tools](./execution.md#skipped-tools) for how they are reported.
+Plan-time detection makes all three visible in `--explain` and keeps
+platform-unsupported apps out of the [pre-install phase](./execution.md#pre-install-phase).
+Tools that are merely inapplicable (no matching files, wrong project type, or
+disabled by `.datamitsuignore`) remain silent. A not-narrowable skip counts
+against `--require-coverage`; only platform skips participate in
+`--fail-on-skip`.
 
 ## Priority-Based Chunking
 
@@ -179,7 +200,11 @@ stylelint:
 
 ## CWD-Subtree Restriction
 
-When you run datamitsu from a subdirectory instead of the repository root, the planner restricts its scope to only the files and projects within that subdirectory. This is useful in large monorepos where you want to check only the package you're working on.
+When you run datamitsu from a subdirectory instead of the repository root, that
+subtree becomes the initial selection. File-complete work remains inside it;
+coarser operations may widen to a containing unit when policy permits. This is
+useful in large monorepos where you want to start with only the package you are
+working on without silently accepting an incomplete project-wide answer.
 
 **Behavior from different directories:**
 
@@ -188,21 +213,26 @@ When you run datamitsu from a subdirectory instead of the repository root, the p
 ~/repo$ datamitsu check
 # → Runs all tools on all files across all projects
 
-# From a subdirectory — processes only that subtree
+# From a subdirectory — starts with that subtree as the selection
 ~/repo$ cd services/api
 ~/repo/services/api$ datamitsu check
-# → Only processes files under services/api/
-# → Only runs per-project tasks for projects under services/api/
-# → Skips repository-scope tasks entirely
+# → File-complete work stays inside services/api/
+# → Unit-complete work may widen to the containing project (default policy)
+# → Whole-repository work is reported as not narrowable
 ```
 
-**Three scope types behave differently:**
+Scope chooses the working directory; granularity decides whether narrowing is
+sound:
 
-| Scope         | From root                      | From subdirectory                      |
-| ------------- | ------------------------------ | -------------------------------------- |
-| `repository`  | Runs once at root              | **Skipped entirely**                   |
-| `per-project` | Runs for all detected projects | Runs only for projects under cwd       |
-| `per-file`    | Processes all matched files    | Processes only matched files under cwd |
+| Operation shape                        | Behavior from a subdirectory                                                    |
+| -------------------------------------- | ------------------------------------------------------------------------------- |
+| File-granularity, any compatible scope | Uses only selected matching files                                               |
+| Unit-granularity, `per-project` scope  | Runs complete selected/containing units when `widenTo` permits (default `unit`) |
+| Repo-granularity, `repository` scope   | Reported not narrowable unless `--widen-to=repo`; then runs the whole repo      |
+
+A repository-scoped operation with `{file}` or `{files}` is normally inferred
+as file-granularity, so it can still run once from the git root with a narrowed
+file list. Repository **scope** alone is not a reason to skip it.
 
 **Example monorepo:**
 
@@ -227,7 +257,10 @@ repo/
 ~/repo/services$ datamitsu check
 ```
 
-The restriction uses path containment checks — a file or project path must be a descendant of the current working directory to be included. Sibling directories with similar prefixes are correctly excluded (e.g., running from `services/api` does not include `services/api-admin`).
+The restriction uses path-component-aware containment checks, so sibling paths
+with similar prefixes are excluded (`services/api` does not include
+`services/api-admin`). For unit work, the nearest detected project containing
+the selection can also be retained when the widening policy permits it.
 
 ## File-to-Project Assignment
 

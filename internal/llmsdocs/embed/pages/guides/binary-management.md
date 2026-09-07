@@ -1,21 +1,21 @@
 # Binary Management
 
-> How datamitsu manages binary downloads, hash verification, and caching
+> How datamitsu downloads, verifies, and stores binary apps
 
-datamitsu downloads, verifies, and caches tool binaries so your entire team uses the exact same versions across all platforms. Once configured, binaries are managed automatically with no manual installation required.
+datamitsu downloads, verifies, and stores tool binaries so your entire team uses the exact same versions across all platforms. Once configured, binaries are managed automatically with no manual installation required.
 
 ## How It Works
 
 When you run a tool through datamitsu (e.g., `datamitsu exec lefthook`), the binary manager:
 
-1. Checks the local cache for a matching binary
-2. If not cached, downloads the binary from the configured URL
+1. Checks the global store for a matching binary
+2. If absent, downloads the binary from the configured URL
 3. Verifies the SHA-256 hash of the downloaded file
 4. Extracts the binary from its archive format
-5. Caches the result for future use
+5. Stores the result at a content-addressed path
 6. Executes the binary with your arguments
 
-All of this happens transparently. After the first download, subsequent runs use the cached binary instantly.
+All of this happens transparently. After the first download, subsequent runs use the stored binary instantly.
 
 ## Defining a Binary App
 
@@ -64,6 +64,7 @@ function getConfig(config) {
   };
 }
 globalThis.getConfig = getConfig;
+globalThis.getMinVersion = () => "0.0.1";
 ```
 
 The `binaries` map uses a three-level nested structure: `os → arch → libc → BinaryOsArchInfo`. Linux platforms use `"glibc"` or `"musl"` as the libc key; non-Linux platforms use `"unknown"`.
@@ -112,32 +113,36 @@ datamitsu supports a three-dimensional target model:
 
 On Linux, datamitsu automatically detects the libc implementation (glibc vs musl) via multi-stage detection (ldd parsing, ELF interpreter reading, loader path globbing). When a musl-specific binary is available, it is selected automatically. When only a glibc binary exists, datamitsu falls back with a warning.
 
-Not every tool needs to support all platforms. Define only the OS/arch/libc combinations that the tool provides downloads for. If a user tries to run a tool on an unsupported platform, they get a clear error message.
+Not every tool needs to support all platforms. Define only the OS/arch/libc
+combinations for which the tool publishes downloads. A direct
+`datamitsu exec <app>` fails with a platform error when none matches; a
+`fix`/`lint`/`check` plan reports that tool as skipped. Add `--fail-on-skip` in
+CI when an unavailable platform binary must fail the run.
 
-## Caching
+## Content-Addressed Storage
 
-Binaries are cached in a content-addressable store under the datamitsu cache directory:
+Binaries live in the global content-addressed store:
 
 ```
-{cache}/.bin/{name}/{configHash}/
+{store}/.bin/{name}/{configHash}/
 ```
 
-The cache key (`configHash`) is computed from:
+The store key (`configHash`) is computed from:
 
-- The binary's URL, hash, and format
+- The binary's URL, hash, format, and extraction metadata
 - The resolved target (OS, architecture, and libc)
 
-This means changing any configuration detail (like upgrading to a new version) or running on a different libc variant automatically invalidates the cache and triggers a fresh download. Glibc and musl binaries get separate cache entries.
+This means changing any configuration detail (like upgrading to a new version) or running on a different libc variant selects a new store path and triggers a fresh download. Glibc and musl binaries get separate entries.
 
-### Cache Location
+### Store Location
 
-The cache is stored in the standard user cache directory:
+By default, the store is a child of the standard user cache directory:
 
 - **All platforms**: `~/.cache/datamitsu/store/`
 
 You can override this location by setting the `DATAMITSU_CACHE_DIR` or `XDG_CACHE_HOME` environment variable.
 
-Use `datamitsu store path` to see the exact path, and `datamitsu store clear` to remove all cached binaries.
+Use `datamitsu store path` to see the exact path, and `datamitsu store clear` to remove all stored binaries.
 
 ## Concurrent Downloads
 
@@ -189,7 +194,7 @@ binary: {
       amd64: {
         glibc: {
           url: "https://example.com/jdk-21_linux-x64.tar.gz",
-          hash: "...",
+          hash: "0000000000000000000000000000000000000000000000000000000000000000", // replace with the expected SHA-256
           contentType: "tar.gz",
           extractDir: true,
         },

@@ -78,7 +78,7 @@ const mapOfRuntimes: BinManager.MapOfRuntimes = {
 
 Define two separate apps for the two ESLint versions. Each gets its own
 isolated environment because the version (and dependencies) differ, producing
-different cache hashes.
+different store hashes.
 
 ```typescript
 const mapOfApps: BinManager.MapOfApps = {
@@ -88,6 +88,7 @@ const mapOfApps: BinManager.MapOfApps = {
       packageName: "eslint",
       binPath: "node_modules/.bin/eslint",
       version: "10.0.0",
+      lockFile: "br:<eslint-v10-lock>",
     },
   },
 
@@ -97,6 +98,7 @@ const mapOfApps: BinManager.MapOfApps = {
       packageName: "eslint",
       binPath: "node_modules/.bin/eslint",
       version: "9.17.0",
+      lockFile: "br:<eslint-v9-lock>",
       dependencies: {
         "eslint-plugin-import": "2.31.0",
         "eslint-plugin-react": "7.37.3",
@@ -162,7 +164,7 @@ const toolsConfig: config.MapOfTools = {
 Each app's environment is stored under a hash-based path:
 
 ```
-~/.cache/datamitsu/.apps/node/
+~/.cache/datamitsu/store/.apps/node/
   eslint/{hash-for-v10}/
     package.json          # {"dependencies": {"eslint": "10.0.0"}}
     node_modules/
@@ -179,8 +181,9 @@ Each app's environment is stored under a hash-based path:
       @typescript-eslint/
 ```
 
-The hash is computed from: `app name + version + sorted dependencies + runtime hash`.
-Changing any of these inputs produces a new hash and a fresh environment.
+The hash covers the app name, package/version, sorted dependencies, mandatory
+lock file, app-provided files and archives, binary path, runtime identity, and
+the resolved target. Changing any of these inputs produces a fresh environment.
 
 ## Cache Key Uniqueness
 
@@ -201,8 +204,8 @@ After running `datamitsu init --all`:
 
 ```bash
 # Both versions are installed in separate directories
-ls ~/.cache/datamitsu/.apps/node/eslint/
-ls ~/.cache/datamitsu/.apps/node/eslint-legacy/
+ls ~/.cache/datamitsu/store/.apps/node/eslint/
+ls ~/.cache/datamitsu/store/.apps/node/eslint-legacy/
 
 # Each has its own node_modules with the correct version
 datamitsu exec eslint -- --version
@@ -256,6 +259,7 @@ const mapOfApps: BinManager.MapOfApps = {
       binPath: "node_modules/.bin/eslint",
       version: "10.0.0",
       runtime: "node-22", // Explicit runtime reference
+      lockFile: "br:<eslint-node-22-lock>",
     },
   },
   "eslint-legacy": {
@@ -264,6 +268,7 @@ const mapOfApps: BinManager.MapOfApps = {
       binPath: "node_modules/.bin/eslint",
       version: "9.17.0",
       runtime: "node-20", // Uses the older Node.js
+      lockFile: "br:<eslint-node-20-lock>",
     },
   },
 };

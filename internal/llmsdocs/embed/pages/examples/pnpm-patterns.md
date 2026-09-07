@@ -17,6 +17,7 @@ const mapOfApps: BinManager.MapOfApps = {
       packageName: "@mermaid-js/mermaid-cli",
       binPath: "node_modules/.bin/mmdc",
       version: "11.12.0",
+      lockFile: "br:...",
     },
   },
 };
@@ -44,6 +45,7 @@ const mapOfApps: BinManager.MapOfApps = {
       packageName: "eslint",
       binPath: "node_modules/.bin/eslint",
       version: "9.17.0",
+      lockFile: "br:...",
       dependencies: {
         "eslint-plugin-import": "2.31.0",
         "eslint-plugin-react": "7.37.3",
@@ -83,6 +85,7 @@ const mapOfApps: BinManager.MapOfApps = {
       packageName: "@stoplight/spectral-cli",
       binPath: "node_modules/.bin/spectral",
       version: "6.14.2",
+      lockFile: "br:...",
       dependencies: {
         "@stoplight/spectral-owasp-ruleset": "2.0.1",
       },
@@ -91,9 +94,10 @@ const mapOfApps: BinManager.MapOfApps = {
 };
 ```
 
-## Lock File for Reproducibility
+## Mandatory Lock Files
 
-Pin the exact dependency tree with a lock file:
+Every node app must pin its exact dependency tree with a `lockFile`. A normal
+config load fails before any download if the field is absent:
 
 ```typescript
 const mapOfApps: BinManager.MapOfApps = {
@@ -108,18 +112,20 @@ const mapOfApps: BinManager.MapOfApps = {
 };
 ```
 
-When `lockFile` is present:
+For every node app:
 
 - PNPM runs with `--frozen-lockfile`, refusing to modify `pnpm-lock.yaml`
 - The lock file content is written to the app directory before installation
 - Content prefixed with `br:` is brotli-compressed and base64-encoded
 
-Without `lockFile`, PNPM resolves dependencies fresh and generates a new lockfile.
+To bootstrap lock file content:
 
-To generate lock file content:
+1. Declare the app's package, version, dependencies, and binary path.
+2. Run `datamitsu config lockfile <appName>`.
+3. Add the output to the app's `lockFile` field.
 
-1. Run `datamitsu config lockfile <appName>` to generate compressed lock file content
-2. Add the output to your config's `lockFile` field
+The generation command deliberately permits a missing `lockFile`; every other
+config load requires it.
 
 ## Workspace Overrides for Packages with Build Scripts
 
@@ -163,17 +169,20 @@ merged YAML format, see the
 
 ## PNPM Store Isolation
 
-Each app environment has isolated PNPM store paths:
+Each app has an isolated workspace and virtual store, while package content is
+deduplicated in one shared content-addressable store:
 
 ```
-~/.cache/datamitsu/.apps/node/eslint/{hash}/
-  package.json
-  pnpm-lock.yaml
-  node_modules/
-    .bin/eslint          # Executable symlink
-    eslint/
-    eslint-plugin-*/
-  .pnpm-store/           # Content-addressable store (shared dedup)
+~/.cache/datamitsu/store/
+  .apps/node/eslint/{hash}/
+    package.json
+    pnpm-lock.yaml
+    node_modules/
+      .bin/eslint        # Executable symlink
+      .pnpm/             # App-local virtual store
+      eslint/
+      eslint-plugin-*/
+  .pnpm-store/           # Shared content-addressable package store
 ```
 
 PNPM's content-addressable store means identical packages across apps are

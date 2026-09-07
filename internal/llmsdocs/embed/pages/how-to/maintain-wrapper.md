@@ -541,7 +541,7 @@ Keep a changelog documenting what changed in each release:
 A typical update cycle looks like this:
 
 1. Run `devtools pull-*` commands to detect and apply updates
-2. Regenerate lock files for any updated node/UV apps
+2. Regenerate lock files for any updated Node, UV, or Go apps
 3. Run `devtools verify-all` to check cross-platform integrity
 4. Run `datamitsu init && datamitsu check` locally
 5. Commit, push, and create a release

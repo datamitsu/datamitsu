@@ -42,7 +42,10 @@ interface Config {
   initCommands?: MapOfInitCommands;
   ignoreRules?: string[];
   sharedStorage?: Record<string, string>;
-  oci?: OCIRef;
+  execution?: {
+    widenTo?: Partial<Record<"fix" | "lint", "target" | "unit" | "repo">>;
+  };
+  oci?: OCIReference;
 }
 ```
 
@@ -102,14 +105,18 @@ source-mode-specific: a config using a name outside this set fails to load.
 
 ### Common App Fields
 
-All app kinds share these optional fields:
+All app kinds share metadata, environment, and version-check fields. The common
+schema also exposes managed-content fields, but config validation accepts
+`files`, `links`, and `archives` only on UV and Node apps.
 
 ```typescript
 interface AppCommon {
+  description?: string; // Human-readable text shown in app listings
   required?: boolean; // Whether the app is required for init
-  files?: Record<string, string>; // filename → static content
-  links?: Record<string, string>; // linkName → relativePath in install dir
-  archives?: Record<string, ArchiveSpec>; // name → archive specification
+  lazy?: boolean; // Defer installation and link creation until first exec
+  files?: Record<string, string>; // UV/Node only: filename → static content
+  links?: Record<string, string>; // UV/Node only: linkName → relativePath
+  archives?: Record<string, ArchiveSpec>; // UV/Node only: name → archive
   env?: Record<string, string>; // Custom environment variables (all app kinds)
   versionCheck?: {
     disabled?: boolean; // Skip version check in verify-all
@@ -117,6 +124,11 @@ interface AppCommon {
   };
 }
 ```
+
+`lazy: true` keeps a user-invoked app out of `datamitsu init`; its environment
+and `.datamitsu/` links are created on the first `datamitsu exec`. Apps consumed
+by tools, hooks, or generated setup files must remain eager (omit `lazy` or set
+it to `false`).
 
 #### Custom environment variables (`env`)
 
@@ -200,6 +212,7 @@ interface AppConfigBinary {
 interface BinaryOsArchInfo {
   url: string;
   hash: string; // SHA-256 hash (mandatory)
+  hashType?: "sha256"; // Optional assertion; SHA-256 is the only accepted type
   contentType: BinContentType;
   binaryPath?: string; // Path to binary within archive
   extractDir?: boolean; // Extract entire archive to directory
@@ -368,7 +381,9 @@ interface AppConfigShell {
 
 ## Bundles (`bundles`)
 
-Bundles store static content (files, archives) in a hash-keyed cache directory and expose it through `.datamitsu/` symlinks. Unlike apps, bundles are not executable.
+Bundles store static content (files, archives) in a hash-keyed directory in the
+global store and expose it through `.datamitsu/` symlinks. Unlike apps, bundles
+are not executable.
 
 ```typescript
 interface Bundle {
@@ -408,7 +423,7 @@ const bundles = {
 };
 ```
 
-Install path: `{cache}/.bundles/{name}/{hash}/`
+Install path: `{store}/.bundles/{name}/{hash}/`
 
 See [Managed Content (Bundles)](../guides/managed-content.md) for a full guide.
 
@@ -542,7 +557,8 @@ interface ToolOperation {
   arity?: "many" | "one" | "dir" | "none"; // argv path shape; inferred, assert-only
   granularity?: "file" | "unit" | "repo"; // smallest complete input set; inferred
   priority?: number; // Execution order (lower = first, default: 0)
-  invalidateOn?: string[]; // Files that invalidate cache
+  cache?: boolean; // Disable file/unit caching, or opt a repo verdict in
+  invalidateOn?: string[]; // Additional unit/repo verdict inputs
   env?: Record<string, string>; // Extra environment variables; values support {root}, {cwd}, {toolCache}
   input?: "file" | "stdin"; // How file content reaches the tool (default: "file")
   output?: "inplace" | "stdout"; // How the result is captured (default: "inplace")
@@ -624,6 +640,37 @@ one rejected combination is `scope: "repository"` with `granularity: "unit"` —
 repository-scoped operation starts one process at the git root and is never split
 per unit, so its verdict covers the repository whatever it declares. Use
 `scope: "per-project"` for a unit-complete verdict.
+
+### Caching
+
+Caching follows the operation's granularity:
+
+| Granularity | Default                       | What a successful entry means                         |
+| ----------- | ----------------------------- | ----------------------------------------------------- |
+| `file`      | Enabled unless `cache: false` | This tool passed for this exact file content          |
+| `unit`      | Enabled unless `cache: false` | This tool passed for every member and guard in a unit |
+| `repo`      | Disabled unless `cache: true` | This tool passed for the whole tracked repository     |
+
+A unit or repository verdict is stored only after a successful run with
+complete coverage. Its input hash includes every member of the unit plus
+ancestor marker/config/lock files, existing absolute file arguments, and paths
+listed in `invalidateOn`. The hash also includes inherited environment variables
+whose names match the toolchain-oriented allowlist documented in
+[Caching Strategy](../guides/architecture/caching.md#unit-verdicts-and-the-content-hash-memo).
+Each `invalidateOn` path is resolved against the unit and every ancestor up to
+the git root, so a nested package can name an inherited root-level configuration
+file.
+
+`invalidateOn` does not participate in file-granularity cache entries. If one
+file's result can change because a shared config changes, declare
+`granularity: "unit"` and list that config instead of claiming file independence.
+File entries also do not fold in inherited process environment; use unit
+granularity or `cache: false` when such a value affects the result.
+Unit and repository verdicts expire after `DATAMITSU_UNIT_CACHE_TTL` minutes
+(`1440` by default; `0` disables them).
+
+See [Caching Strategy](../guides/architecture/caching.md) for the complete key,
+coverage, and persistence model.
 
 ### Arity
 
@@ -904,6 +951,7 @@ interface ConfigContext {
   datamitsuDir: string; // Relative path from cwdPath to .datamitsu/
   isRoot: boolean; // Is cwdPath the git root?
   projectTypes: string[]; // Detected project types
+  projectLocations: Array<{ type: string; path: string }>; // Git-root-relative markers
   existingContent?: string; // Previous layer's generated content (if any)
   existingPath?: string; // Current file path (if exists)
   originalContent?: string; // Unmodified content from disk
@@ -937,8 +985,14 @@ interface InitCommand {
   command: string; // App name from apps
   args: string[]; // Command arguments
   projectTypes?: string[]; // Restrict to project types
+  description?: string; // Human-readable description
+  when?: string; // Run only if this root-relative file or directory exists
 }
 ```
+
+`when` is resolved from the git root. A missing path skips the command; any
+other stat result leaves it eligible to run. Commands are filtered by
+`projectTypes`, then executed in stable name order.
 
 **Example:**
 
@@ -1016,7 +1070,7 @@ See [Managed Content - Shared Storage](../guides/managed-content.md#shared-stora
 Pins the [OCI bundle](/docs/guides/oci-bundles) that seeds the tool store: the registry repository plus the mandatory SHA-256 digest.
 
 ```typescript
-interface OCIRef {
+interface OCIReference {
   ref: string; // full reference incl. registry host, e.g. "ghcr.io/owner/tool-store"
   digest: string; // "sha256:" + 64 lowercase hex characters — mandatory
   signer?: {
@@ -1285,6 +1339,24 @@ function getConfig(input) {
 
 The following APIs are available in configuration files.
 
+### Engine Globals
+
+Two frozen plain-object globals are injected by the Go engine:
+
+```javascript
+// Recommended pnpm 11 workspace security settings. These are publication
+// defaults, not inputs that vary with the current invocation.
+const workspacePolicy = pnpmWorkspaceDefaults;
+
+// The deliberately small set of runtime values config JS may branch on.
+const minimumAge = datamitsuConfigInputs.minimumReleaseAgeMinutes;
+```
+
+`datamitsuConfigInputs` currently exposes only `minimumReleaseAgeMinutes`. The
+full `datamitsu config runtime` snapshot is intentionally CLI-only and is not
+injected into the VM. Keeping this allowlist small makes every observable input
+explicit in config-evaluation cache keys.
+
 ### Format Utilities
 
 ```javascript
@@ -1345,18 +1417,30 @@ const info = facts();
 // info.libc     → "glibc", "musl", "unknown" (Linux-only detection)
 // info.isInGitRepo → true/false
 // info.isMonorepo  → true/false
-// info.env      → environment variables
+// info.env      → process environment, except observation-only datamitsu variables
 ```
+
+`facts().env` omits `DATAMITSU_TRACE`, `DATAMITSU_TRACE_DIR`, and
+`DATAMITSU_CONFIG_CACHE`: they only observe execution or control evaluation
+caching and cannot change what config produces. The config-evaluation key hashes
+the same remaining environment, so a result cannot be reused across distinct
+values the config was allowed to observe.
 
 ## Security Requirements
 
-All artifacts downloaded from the internet must have a SHA-256 hash specified:
+All content downloaded from the internet must have a SHA-256 hash specified:
 
 - Binary apps: `hash` field on each platform entry
+- Managed Node, UV/Python, JVM, and Go runtimes: `hash` on every downloaded platform entry
 - JVM apps: `jarHash` field
 - External archives: `hash` field
 - Node runtime (pnpm): `pnpmHash` field
+- Remote configs: `hash` on every `getRemoteConfigs()` entry
 - Output parsers: `hash` field on each `parsers` entry, whichever source it declares
 - OCI-sourced parsers: `oci.digest` on the entry, **plus** the same mandatory `hash` — which the artifact's single layer must carry as its blob digest
+- OCI store bundles: mandatory `oci.digest`; unpacked artifacts are re-verified against their individual SHA-256 pins
 
-Missing or empty hashes are treated as configuration errors.
+Node, UV, and Go apps also require lock files. These locks pin transitive package
+content and are installed in frozen/read-only modes. Missing or empty hashes and
+missing lock files are configuration errors, never warnings or hash-less
+fallbacks.
