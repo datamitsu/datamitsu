@@ -370,6 +370,42 @@ func (rm *RuntimeManager) nodeCommandInfo(appName string, appConfig *binmanager.
 		pathPrefix = ""
 	}
 
+	// The app's dependency bin directory goes in front of that, the way `npm run`
+	// and `pnpm exec` put `node_modules/.bin` on PATH: an app's dependencies can
+	// ship executables the app itself expects to find there, and nothing else puts
+	// them within reach. oxlint locates its type-aware engine (`tsgolint`, declared
+	// as an optional peer and installed right beside it) exactly this way —
+	// installing the package next to oxlint is not enough, because the lookup goes
+	// through PATH.
+	//
+	// Spelled out rather than derived from BinPath: BinPath is free-form config and
+	// only conventionally lives in node_modules/.bin, so filepath.Dir of it would
+	// name the dependency bin dir by coincidence and something else the moment an
+	// app points BinPath elsewhere.
+	//
+	// The directory is immutable for a given app configuration — the hash covers
+	// version, dependencies and lockfile — so it is as safe to persist into the
+	// source-mode farm manifest as the runtime's own prefix. It is prepended rather
+	// than appended so an app resolves its own pinned dependency ahead of whatever
+	// the ambient PATH happens to carry, matching npm/pnpm.
+	appDepBinDir := filepath.Join(appEnvPath, "node_modules", ".bin")
+	if filepath.IsAbs(appDepBinDir) {
+		if pathPrefix == "" {
+			pathPrefix = appDepBinDir
+		} else {
+			pathPrefix = appDepBinDir + string(os.PathListSeparator) + pathPrefix
+		}
+	} else {
+		// Only reachable with a relative DATAMITSU_CACHE_DIR, which makes the whole
+		// app path relative. Recording a relative directory would be worse than
+		// recording none — the manifest is replayed from other working directories —
+		// but dropping it silently turns "type-aware linting does nothing" into an
+		// unexplainable bug, so say so once.
+		log.Warn("app dependency bin directory is not absolute; executables shipped by the app's own dependencies will not be found",
+			zap.String("app", appName),
+			zap.String("dir", appDepBinDir))
+	}
+
 	envVars := getNodeEnvVars(appEnvPath)
 	//nolint:forbidigo // standard PATH for child process env, not a datamitsu env var
 	inheritedPath := os.Getenv("PATH")

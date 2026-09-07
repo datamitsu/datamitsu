@@ -126,8 +126,9 @@ func TestResolveRuntimePath_Errors(t *testing.T) {
 // PATH is the one deliberate difference and is asserted separately below. The
 // exec path composes and uses it immediately, so it folds in the current
 // process's PATH; the resolver's answer is persisted in the source-mode farm
-// manifest and replayed by later shells, so it records only the runtime-owned
-// directory and the shim prepends it to the caller's live PATH.
+// manifest and replayed by later shells, so it records only stable store
+// directories — the app's own bin dir and the runtime-owned one — and the shim
+// prepends them to the caller's live PATH.
 func TestResolveCommandInfo_NodeMatchesGetCommandInfo(t *testing.T) {
 	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 	t.Setenv("DATAMITSU_OFFLINE", "1")
@@ -172,8 +173,16 @@ func TestResolveCommandInfo_NodeMatchesGetCommandInfo(t *testing.T) {
 	// Pin the two properties the shim depends on explicitly, so a change that
 	// broke both paths in the same way would still fail.
 	nodeBinDir := filepath.Dir(nodeBin)
-	if resolved.Env["PATH"] != nodeBinDir {
-		t.Errorf("Env[PATH] = %q, want exactly the managed node bin dir %q", resolved.Env["PATH"], nodeBinDir)
+	appEnvPath, err := rm.resolveNodeAppEnvPath("eslint", appConfig, nil, nil)
+	if err != nil {
+		t.Fatalf("resolveNodeAppEnvPath() error = %v", err)
+	}
+	appBinDir := filepath.Dir(filepath.Join(appEnvPath, appConfig.BinPath))
+	// The app's own bin dir leads, so an app resolves the executables its own
+	// pinned dependencies ship before anything else; the runtime's dir follows.
+	wantPrefix := appBinDir + string(os.PathListSeparator) + nodeBinDir
+	if resolved.Env["PATH"] != wantPrefix {
+		t.Errorf("Env[PATH] = %q, want exactly the app bin dir then the managed node bin dir %q", resolved.Env["PATH"], wantPrefix)
 	}
 	// Nothing of the baking process's own PATH may be recorded: the manifest
 	// outlives the shell that wrote it, and a per-shell version manager's
@@ -183,8 +192,8 @@ func TestResolveCommandInfo_NodeMatchesGetCommandInfo(t *testing.T) {
 	}
 	// The exec path, by contrast, does compose the live PATH, because it is
 	// about to use it.
-	if !strings.HasPrefix(want.Env["PATH"], nodeBinDir+string(os.PathListSeparator)) {
-		t.Errorf("exec-path Env[PATH] = %q, want it to start with %q", want.Env["PATH"], nodeBinDir)
+	if !strings.HasPrefix(want.Env["PATH"], wantPrefix+string(os.PathListSeparator)) {
+		t.Errorf("exec-path Env[PATH] = %q, want it to start with %q", want.Env["PATH"], wantPrefix)
 	}
 	for _, key := range []string{"npm_config_store_dir", "npm_config_virtual_store_dir", "npm_config_global_dir"} {
 		if resolved.Env[key] == "" {
@@ -505,13 +514,89 @@ func assertNoDownloads(t *testing.T, beforeRM, beforeBM int64) {
 	}
 }
 
+// TestNodeCommandInfo_AppDependencyBinOnPath is the behavioural test for the
+// feature the prefix exists for: an executable shipped by one of the app's own
+// dependencies has to be reachable when the app shells out to it, and it has to
+// win over a same-named one on the ambient PATH.
+//
+// oxlint is the case that forced this — it finds its type-aware engine by
+// running `tsgolint`, and a version resolved from the developer's shell would be
+// the wrong one. Asserting on the composed PATH rather than on a spawn keeps the
+// test hermetic while still pinning both properties.
+func TestNodeCommandInfo_AppDependencyBinOnPath(t *testing.T) {
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
+	t.Setenv("DATAMITSU_OFFLINE", "1")
+
+	// A same-named executable earlier in the ambient PATH, which must lose.
+	ambient := t.TempDir()
+	if err := os.WriteFile(filepath.Join(ambient, "sidecar"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("write ambient sidecar: %v", err)
+	}
+
+	t.Setenv("PATH", ambient+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	rm := New(nodeRuntimeWith(t, "http://127.0.0.1:1/node.tar.xz", "abc", testLibc))
+	plantRuntimeBinary(t, rm, "node")
+
+	appConfig := &binmanager.AppConfigNode{
+		PackageName: "eslint",
+		Version:     "9.0.0",
+		BinPath:     "node_modules/.bin/eslint",
+		Runtime:     "node",
+	}
+
+	appEnvPath, err := rm.resolveNodeAppEnvPath("eslint", appConfig, nil, nil)
+	if err != nil {
+		t.Fatalf("resolveNodeAppEnvPath() error = %v", err)
+	}
+	depBinDir := filepath.Join(appEnvPath, "node_modules", ".bin")
+	if err := os.MkdirAll(depBinDir, 0o755); err != nil {
+		t.Fatalf("mkdir dep bin dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(depBinDir, "sidecar"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("write dep sidecar: %v", err)
+	}
+
+	info, err := rm.GetNodeCommandInfo(context.Background(), "eslint", appConfig, nil, nil)
+	if err != nil {
+		t.Fatalf("GetNodeCommandInfo() error = %v", err)
+	}
+
+	dirs := filepath.SplitList(info.Env["PATH"])
+	depIdx, ambientIdx := -1, -1
+	for i, dir := range dirs {
+		switch dir {
+		case depBinDir:
+			if depIdx == -1 {
+				depIdx = i
+			}
+		case ambient:
+			if ambientIdx == -1 {
+				ambientIdx = i
+			}
+		}
+	}
+	if depIdx == -1 {
+		t.Fatalf("Env[PATH] = %q, want it to contain the app dependency bin dir %q", info.Env["PATH"], depBinDir)
+	}
+	if ambientIdx == -1 {
+		t.Fatalf("Env[PATH] = %q, want it to keep the ambient dir %q", info.Env["PATH"], ambient)
+	}
+	if depIdx > ambientIdx {
+		t.Errorf("app dependency bin dir is at %d, ambient dir at %d; the app's own pinned executable must win", depIdx, ambientIdx)
+	}
+}
+
 // TestResolveCommandInfo_NodeSystemBareCommand pins that a system-mode node
-// runtime naming its interpreter by bare word contributes no PATH entry at all.
+// runtime naming its interpreter by bare word contributes nothing of its own to
+// PATH — the recorded prefix is the app's dependency bin directory and nothing
+// else.
 //
 // filepath.Dir("node") is ".", and recording that would put the current working
 // directory in front of every lookup the app makes — persisted into the farm
 // manifest, so every shell that ever replays the entry inherits it. A bare word
-// is found through PATH by the exec itself, so there is nothing to contribute.
+// is found through PATH by the exec itself, so the runtime has nothing to add;
+// the app's own dependencies still do.
 func TestResolveCommandInfo_NodeSystemBareCommand(t *testing.T) {
 	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 	t.Setenv("DATAMITSU_OFFLINE", "1")
@@ -540,8 +625,17 @@ func TestResolveCommandInfo_NodeSystemBareCommand(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResolveCommandInfo() error = %v", err)
 	}
-	if path, ok := resolved.Env["PATH"]; ok {
-		t.Errorf("Env[PATH] = %q, want no PATH entry at all for a bare system command", path)
+	// A bare system command contributes no runtime directory, but the app's own
+	// bin dir is still a real absolute path and still has to be reachable — that
+	// is where an app's dependencies put the executables it shells out to. What
+	// must never appear is ".", which is what filepath.Dir of a bare word yields.
+	appEnvPath, err := rm.resolveNodeAppEnvPath("eslint", appConfig, nil, nil)
+	if err != nil {
+		t.Fatalf("resolveNodeAppEnvPath() error = %v", err)
+	}
+	wantAppBinDir := filepath.Dir(filepath.Join(appEnvPath, appConfig.BinPath))
+	if path := resolved.Env["PATH"]; path != wantAppBinDir {
+		t.Errorf("Env[PATH] = %q, want exactly the app bin dir %q for a bare system command", path, wantAppBinDir)
 	}
 
 	// The exec path composes a live PATH and must not lead it with "." either.
