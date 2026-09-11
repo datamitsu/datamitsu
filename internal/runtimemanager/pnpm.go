@@ -168,6 +168,8 @@ func (rm *RuntimeManager) installPNPMAppOnce(ctx context.Context, spec pnpmAppIn
 	if _, err := os.Stat(appBinPath); err == nil {
 		healthPaths := []string{appModulePkg}
 		if spec.runtimeKind == "bun" {
+			// Stat resolves the alias link, so an app whose runtime moved or was
+			// collected reinstalls instead of running with a dangling `node`.
 			healthPaths = append(healthPaths, bunNodeAliasPath(spec.appEnvPath))
 		}
 		installHealthy := true
@@ -262,7 +264,10 @@ func (rm *RuntimeManager) installPNPMAppOnce(ctx context.Context, spec pnpmAppIn
 	inheritedPath := os.Getenv("PATH") //nolint:forbidigo // standard PATH for child process env, not a datamitsu env var
 	pathParts := make([]string, 0, 3)
 	if spec.runtimeKind == "bun" {
+		// Lifecycle scripts reach Bun as `node` through the alias; BUN_OPTIONS
+		// gives those processes the installer's ambient-input guards too.
 		pathParts = append(pathParts, filepath.Dir(bunNodeAliasPath(spec.appEnvPath)))
+		envVars["BUN_OPTIONS"] = bunGuardOptions
 	}
 	if runtimeBinDir := filepath.Dir(runtimeBinPath); filepath.IsAbs(runtimeBinDir) {
 		pathParts = append(pathParts, runtimeBinDir)
