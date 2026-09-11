@@ -413,7 +413,14 @@ func TestConfigReconcileCommandFlags(t *testing.T) {
 	}
 }
 
+// TestConfigReconcileLoadConfigReturns4Tuple runs in an isolated repository and
+// cache: the contract under test is loadConfig's return values, and loading
+// this checkout's own config chain would tie it to whichever wrapper config
+// version the repository happens to pin.
 func TestConfigReconcileLoadConfigReturns4Tuple(t *testing.T) {
+	setupGitRoot(t)
+	isolateCacheTree(t)
+
 	cfg, layerMap, vm, err := loadConfig()
 	if err != nil {
 		t.Fatalf("loadConfig() error = %v", err)
