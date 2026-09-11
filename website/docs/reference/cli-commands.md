@@ -601,7 +601,7 @@ For the full UV app update workflow including lock file regeneration, see [Maint
 
 ### devtools pull-runtimes
 
-Pull runtime configurations (Bun, Node, UV, JVM, Go) with latest versions from upstream releases. Fetches latest releases from upstream, computes SHA-256 hashes, and writes the result to `<file>`.
+Pull runtime configurations (Bun, Node, UV, JVM, Go, pnpm) with latest versions from upstream releases. Fetches latest releases from upstream, computes SHA-256 hashes, and writes the result to `<file>`.
 
 ```bash
 datamitsu devtools pull-runtimes --update <file>
@@ -611,7 +611,7 @@ datamitsu devtools pull-runtimes --update <file>
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `--update`            | Required. Fetch latest versions from upstream before updating                                                                                                                                                                                                                                                               |
 | `--dry-run`           | Show what would be updated without writing files                                                                                                                                                                                                                                                                            |
-| `--runtime <name>`    | Update only the specified runtime (`bun`, `node`, `uv`, `jvm`, or `go`)                                                                                                                                                                                                                                                     |
+| `--runtime <name>`    | Update only the specified runtime (`bun`, `node`, `uv`, `jvm`, `go`, or `pnpm`)                                                                                                                                                                                                                                             |
 | `--min-age <minutes>` | Minimum release age before a version is eligible (`-1` = global default of `10080`, `0` = disable, positive = custom). Applies to specific-version sources (GitHub releases, npm pnpm), not major-version-line lookups. See [Minimum Release Age](/docs/guides/supply-chain-security#minimum-release-age-version-selection) |
 
 The command detects binaries for all platform combinations (OS/Arch/Libc). For Linux, both glibc and musl variants are detected when upstream provides separate binaries. If a musl binary is identical to the glibc variant (same URL and hash), the musl entry is deduplicated.
@@ -619,7 +619,8 @@ The command detects binaries for all platform combinations (OS/Arch/Libc). For L
 **Version sources:**
 
 - **bun**: latest eligible Bun GitHub release; official archives and their SHA-256 digests from GitHub release metadata
-- **node**: latest Node.js LTS resolved automatically; archives + SHA-256 from nodejs.org/dist (glibc/darwin/windows, GPG-verified via SHASUMS256.txt.asc) and unofficial-builds.nodejs.org (musl); pnpm from the npm registry
+- **node**: latest Node.js LTS resolved automatically; archives + SHA-256 from nodejs.org/dist (glibc/darwin/windows, GPG-verified via SHASUMS256.txt.asc) and unofficial-builds.nodejs.org (musl)
+- **pnpm**: newest pnpm 12 release old enough for the minimum release age (judged by its npm publish date), with per-platform archive SHA-256 digests from the matching pnpm/pnpm GitHub release; the Node and Bun entries reference it with `pnpmRuntime: "pnpm"`
 - **UV**: Python stable from endoflife.date, UV binary from GitHub
 - **JVM**: Java version from Adoptium API, Temurin JDK from GitHub
 - **go**: latest stable Go release + per-file SHA-256 from go.dev (`https://go.dev/dl/?mode=json`); HTTPS with published SHA-256, no GPG (the git-pinned hash is the integrity anchor, same trust model as the musl Node path)
@@ -638,6 +639,9 @@ datamitsu devtools pull-runtimes --update --runtime uv config/src/runtimes.json
 
 # Update only Go runtime
 datamitsu devtools pull-runtimes --update --runtime go config/src/runtimes.json
+
+# Update only the pnpm runtime shared by Node and Bun
+datamitsu devtools pull-runtimes --update --runtime pnpm config/src/runtimes.json
 
 # Preview changes without writing
 datamitsu devtools pull-runtimes --update --dry-run config/src/runtimes.json
@@ -1018,8 +1022,9 @@ datamitsu store refs --json | jq '.https[] | select(.kind == "app-binary")'
 | `--oci-only` | List only OCI references, omitting the hash-pinned https downloads    |
 
 The output is sorted and byte-stable, so it is safe to pipe or diff between
-config revisions. Managed runtime binaries declared by the effective config are
-included. Package-manager dependencies fetched later by pnpm, UV, or Go are not
+config revisions. Managed runtime binaries declared by the effective config,
+including the native pnpm archives of the pnpm runtime, are included. Package-manager dependencies
+fetched later by pnpm, UV, or Go are not
 individual entries; their exact versions and integrity data live in each app's
 mandatory lock file.
 

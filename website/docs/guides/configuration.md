@@ -217,7 +217,7 @@ Configuration files run in a JavaScript VM (goja) with access to several built-i
   `env`). `env` is the whole observable process environment except
   observation-only tracing/config-cache controls.
 - **pnpm defaults**: frozen `pnpmWorkspaceDefaults` publishes the recommended
-  pnpm 11 workspace security policy from the Go source of truth
+  pnpm workspace security policy from the Go source of truth
 - **Config inputs**: frozen `datamitsuConfigInputs` exposes only runtime values
   config is explicitly allowed to branch on; currently
   `minimumReleaseAgeMinutes`

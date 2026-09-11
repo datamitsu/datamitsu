@@ -126,19 +126,19 @@ This version-selection filter — applied when _you_ pin versions with `pull-*` 
 
 ## Bun Apps
 
-The Bun runtime is downloaded from an official GitHub release archive and verified against the SHA-256 digest published in that release's asset metadata. Bun apps use the same mandatory `pnpm-lock.yaml` and hardened workspace policy as Node apps. Bun launches the pinned pnpm package directly:
+The Bun runtime is downloaded from an official GitHub release archive and verified against the SHA-256 digest published in that release's asset metadata. Bun apps use the same mandatory `pnpm-lock.yaml`, hardened workspace policy, and pinned native pnpm build as Node apps:
 
 ```bash
-bun run --bun --no-install <pnpm.cjs> install --frozen-lockfile
+pnpm install --frozen-lockfile   # PATH starts with datamitsu's node → bun alias
 ```
 
-The workspace policy blocks unapproved dependency lifecycle scripts, and `--frozen-lockfile` rejects any dependency graph that would modify the configured lock. `--bun` keeps Node-shebang commands on the selected runtime during both installation and execution, and `--no-install` disables Bun's automatic dependency installation. datamitsu also disables Bun's automatic `.env` loading and supplies an empty Bun config, preventing a target repository's `.env` files or `bunfig.toml` from changing a managed tool process. The app therefore cannot turn a cache miss into an unpinned network fetch during tool execution.
+The workspace policy blocks unapproved dependency lifecycle scripts, and `--frozen-lockfile` rejects any dependency graph that would modify the configured lock. Approved lifecycle scripts that call `node` resolve to the selected Bun through the alias, so installation never acquires Node. At execution, `--bun` keeps Node-shebang commands on the selected runtime and `--no-install` disables Bun's automatic dependency installation. datamitsu also disables Bun's automatic `.env` loading and supplies an empty Bun config when it executes the tool, preventing a target repository's `.env` files or `bunfig.toml` from changing a managed tool process. The app therefore cannot turn a cache miss into an unpinned network fetch during tool execution.
 
 ## pnpm (Bun and Node Apps)
 
-The Node.js runtime itself is acquired as a direct, SHA-256-pinned archive download (like the JVM runtime), and pnpm is pinned by SHA-256 as well — so the toolchain executing your installs is integrity-verified before any package is fetched.
+The Node.js runtime itself is acquired as a direct, SHA-256-pinned archive download (like the JVM runtime), and pnpm — a native binary since pnpm 12 — is a runtime of its own, pinned the same way: one archive per platform from the pnpm GitHub release, each with the SHA-256 digest published in that release's asset metadata, referenced by the Node and Bun runtimes through `pnpmRuntime`. The toolchain executing your installs is integrity-verified before any package is fetched, and `datamitsu store refs` lists the pnpm archives as ordinary `runtime-binary` entries alongside the other downloads to mirror.
 
-pnpm 11 introduces strict supply chain defaults that block lifecycle scripts for unapproved packages. datamitsu integrates with these defaults rather than disabling them: when a Bun or Node app is installed, datamitsu writes a `pnpm-workspace.yaml` containing a secure baseline. Any per-app overrides supplied via `App.files["pnpm-workspace.yaml"]` are shallow-merged on top.
+pnpm ships strict supply chain defaults (since pnpm 11) that block lifecycle scripts for unapproved packages. datamitsu integrates with these defaults rather than disabling them: when a Bun or Node app is installed, datamitsu writes a `pnpm-workspace.yaml` containing a secure baseline. Any per-app overrides supplied via `App.files["pnpm-workspace.yaml"]` are shallow-merged on top.
 
 ### Recommended Defaults
 
@@ -159,7 +159,7 @@ What each setting does:
 
 | Setting                     | Purpose                                                                                 |
 | --------------------------- | --------------------------------------------------------------------------------------- |
-| `strictDepBuilds`           | Blocks lifecycle scripts for unapproved packages (the pnpm 11 default)                  |
+| `strictDepBuilds`           | Blocks lifecycle scripts for unapproved packages (the pnpm default since v11)           |
 | `blockExoticSubdeps`        | Rejects transitive deps from non-registry sources (git URLs, local paths) added by deps |
 | `enablePrePostScripts`      | Disables `pre*`/`post*` script execution across all packages                            |
 | `dangerouslyAllowAllBuilds` | Must stay `false`; setting `true` neutralizes `strictDepBuilds`                         |
@@ -167,6 +167,12 @@ What each setting does:
 | `trustPolicy: no-downgrade` | Blocks unsigned/older provenance from replacing a previously-trusted version            |
 | `lockfile`                  | Requires a lockfile in every install                                                    |
 | `preferFrozenLockfile`      | Prefers frozen-lockfile semantics; datamitsu also passes `--frozen-lockfile` explicitly |
+
+:::note Too-young dependencies stop the install
+
+Since pnpm 12.3, `minimumReleaseAgeStrict` defaults to `true` whenever `minimumReleaseAge` is set explicitly, as datamitsu does. A dependency version younger than the cutoff is gated instead of being silently added to `minimumReleaseAgeExclude`, which in datamitsu's non-interactive installs stops the install. Wait until the version ages past the cutoff, or pin an older one.
+
+:::
 
 ### Per-App Overrides via `App.files`
 

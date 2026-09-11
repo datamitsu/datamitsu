@@ -258,7 +258,7 @@ interface AppConfigUV {
 
 ### Bun Apps
 
-Bun apps install npm packages with pnpm and execute their JavaScript entrypoint with the managed Bun runtime. Bun executes `pnpm.cjs` directly, so a Bun app does not require a Node runtime for installation.
+Bun apps install npm packages with pnpm and execute their JavaScript entrypoint with the managed Bun runtime. pnpm runs as a native binary and its lifecycle scripts reach Bun through a `node` alias, so a Bun app does not require a Node runtime for installation.
 
 ```javascript
 const apps = {
@@ -288,7 +288,7 @@ interface AppConfigBun {
 }
 ```
 
-Installs use `bun <pnpm.cjs> install --frozen-lockfile` with the same hardened `pnpm-workspace.yaml` policy as Node apps. Execution uses `bun run --bun --no-install <binPath>` so Node-shebang commands stay on the selected Bun runtime and Bun cannot fetch dependencies on first run.
+Installs run the pinned native `pnpm install --frozen-lockfile` with the same hardened `pnpm-workspace.yaml` policy as Node apps. Execution uses `bun run --bun --no-install <binPath>` so Node-shebang commands stay on the selected Bun runtime and Bun cannot fetch dependencies on first run.
 
 ### Node Apps (Node.js/npm)
 
@@ -468,7 +468,7 @@ Runtimes define how language-specific package managers are provisioned.
 
 ```typescript
 interface RuntimeConfig {
-  kind: "bun" | "node" | "uv" | "jvm" | "go";
+  kind: "bun" | "node" | "uv" | "jvm" | "go" | "pnpm";
   mode: "managed" | "system";
   managed?: RuntimeConfigManaged; // Required for managed mode
   system?: RuntimeConfigSystem; // For system mode
@@ -477,6 +477,7 @@ interface RuntimeConfig {
   uv?: RuntimeConfigUV; // When kind is "uv"
   jvm?: RuntimeConfigJVM; // Required when kind is "jvm"
   go?: RuntimeConfigGo; // Required when kind is "go"
+  pnpm?: RuntimeConfigPNPM; // Required when kind is "pnpm" (managed mode)
 }
 ```
 
@@ -507,8 +508,30 @@ const runtimes = {
     },
     node: {
       nodeVersion: "26.2.0",
-      pnpmVersion: "11.20.0",
-      pnpmHash: "def456...", // SHA-256 of pnpm package
+      pnpmRuntime: "pnpm", // the runtime below installs this runtime's apps
+    },
+  },
+  pnpm: {
+    kind: "pnpm",
+    mode: "managed",
+    managed: {
+      binaries: {
+        linux: {
+          amd64: {
+            glibc: {
+              url: "https://github.com/pnpm/pnpm/releases/download/v12.4.1/pnpm-linux-x64.tar.gz",
+              hash: "def456...", // SHA-256 (mandatory)
+              contentType: "tar.gz",
+              binaryPath: "pnpm",
+              extractDir: true,
+            },
+          },
+        },
+        // ... other platforms
+      },
+    },
+    pnpm: {
+      pnpmVersion: "12.4.1",
     },
   },
 };
@@ -541,8 +564,7 @@ const runtimes = {
 ```typescript
 interface RuntimeConfigBun {
   bunVersion: string; // e.g., "1.4.1"
-  pnpmVersion: string; // e.g., "11.20.0"
-  pnpmHash: string; // SHA-256 of pnpm package (mandatory)
+  pnpmRuntime: string; // name of a runtime of kind "pnpm" (required)
 }
 ```
 
@@ -551,10 +573,19 @@ interface RuntimeConfigBun {
 ```typescript
 interface RuntimeConfigNode {
   nodeVersion: string; // e.g., "26.2.0"
-  pnpmVersion: string; // e.g., "11.20.0"
-  pnpmHash: string; // SHA-256 of pnpm package (mandatory)
+  pnpmRuntime: string; // name of a runtime of kind "pnpm" (required)
 }
 ```
+
+**pnpm Runtime:**
+
+```typescript
+interface RuntimeConfigPNPM {
+  pnpmVersion: string; // e.g., "12.4.1" (optional in system mode)
+}
+```
+
+pnpm 12 ships no JavaScript implementation, so pnpm is a runtime of its own: its per-platform native archives live in the pnpm runtime's `managed.binaries`, with the same shape and validation rules as any managed runtime, and `datamitsu devtools pull-runtimes` fills them from the pnpm GitHub release. Node and Bun runtimes name it with `pnpmRuntime`, which must reference a runtime of kind `pnpm`; an app cannot select a pnpm runtime as its own. The earlier `pnpmVersion` and `pnpmHash` fields on Node and Bun runtimes were removed: a runtime that still pins pnpm that way fails to load (it has no `pnpmRuntime`) until it is regenerated.
 
 **UV Runtime:**
 
@@ -1392,7 +1423,7 @@ The following APIs are available in configuration files.
 Two frozen plain-object globals are injected by the Go engine:
 
 ```javascript
-// Recommended pnpm 11 workspace security settings. These are publication
+// Recommended pnpm workspace security settings. These are publication
 // defaults, not inputs that vary with the current invocation.
 const workspacePolicy = pnpmWorkspaceDefaults;
 
@@ -1479,10 +1510,9 @@ values the config was allowed to observe.
 All content downloaded from the internet must have a SHA-256 hash specified:
 
 - Binary apps: `hash` field on each platform entry
-- Managed Bun, Node, UV/Python, JVM, and Go runtimes: `hash` on every downloaded platform entry
+- Managed Bun, Node, pnpm, UV/Python, JVM, and Go runtimes: `hash` on every downloaded platform entry
 - JVM apps: `jarHash` field
 - External archives: `hash` field
-- Bun and Node runtimes (pnpm): `pnpmHash` field
 - Remote configs: `hash` on every `getRemoteConfigs()` entry
 - Output parsers: `hash` field on each `parsers` entry, whichever source it declares
 - OCI-sourced parsers: `oci.digest` on the entry, **plus** the same mandatory `hash` — which the artifact's single layer must carry as its blob digest

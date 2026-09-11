@@ -25,8 +25,7 @@ const mapOfRuntimes: BinManager.MapOfRuntimes = {
     mode: "managed",
     node: {
       nodeVersion: "26.2.0",
-      pnpmVersion: "11.20.0",
-      pnpmHash: "<sha256>",
+      pnpmRuntime: "pnpm",
     },
     managed: {
       binaries: {
@@ -68,6 +67,17 @@ const mapOfRuntimes: BinManager.MapOfRuntimes = {
             },
           },
         },
+      },
+    },
+  },
+  pnpm: {
+    kind: "pnpm",
+    mode: "managed",
+    pnpm: { pnpmVersion: "12.4.1" },
+    managed: {
+      binaries: {
+        // One SHA-256-pinned native pnpm archive per platform —
+        // `datamitsu devtools pull-runtimes` generates it
       },
     },
   },
@@ -227,8 +237,7 @@ const mapOfRuntimes: BinManager.MapOfRuntimes = {
     mode: "managed",
     node: {
       nodeVersion: "20.18.0",
-      pnpmVersion: "11.20.0",
-      pnpmHash: "abc123def456789012345678901234567890123456789012345678901234",
+      pnpmRuntime: "pnpm",
     },
     managed: {
       binaries: {
@@ -241,8 +250,7 @@ const mapOfRuntimes: BinManager.MapOfRuntimes = {
     mode: "managed",
     node: {
       nodeVersion: "22.12.0",
-      pnpmVersion: "11.20.0",
-      pnpmHash: "abc123def456789012345678901234567890123456789012345678901234",
+      pnpmRuntime: "pnpm",
     },
     managed: {
       binaries: {
@@ -250,6 +258,7 @@ const mapOfRuntimes: BinManager.MapOfRuntimes = {
       },
     },
   },
+  // ...plus the "pnpm" runtime from the first example, shared by both
 };
 
 const mapOfApps: BinManager.MapOfApps = {
