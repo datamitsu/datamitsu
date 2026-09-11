@@ -206,6 +206,11 @@ signs:
     cmd: bash
     id: vsix
     signature: "dist/datamitsu-{{ .Version }}.vsix"
+snapshot:
+  # CI passes a version whose tag is created only after the build, and
+  # GoReleaser 2.18 stamps v0.0.0 when it cannot read that tag.
+  version_template: >-
+    {{ if index .Env "GORELEASER_CURRENT_TAG" }}{{ .Env.GORELEASER_CURRENT_TAG }}{{ else }}{{ .Version }}-SNAPSHOT-{{ .ShortCommit }}{{ end }}
 version: 2
 winget:
   - commit_author:
