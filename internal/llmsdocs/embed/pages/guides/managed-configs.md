@@ -12,8 +12,8 @@ When you run `datamitsu init`, it creates a `.datamitsu/` directory at your git 
 project-root/
 ├── .datamitsu/
 │   ├── datamitsu.config.d.ts  # auto-generated type definitions
-│   ├── eslint-config → ../.apps/node/my-eslint-config/{hash}/dist/eslint.config.js
-│   └── prettier-config → ../.apps/node/my-prettier-config/{hash}/.prettierrc.json
+│   ├── eslint-config → {store}/.apps/node/my-eslint-config/{hash}/dist/eslint.config.js
+│   └── prettier-config → {store}/.apps/node/my-prettier-config/{hash}/.prettierrc.json
 ├── eslint.config.js          # imports from .datamitsu/eslint-config
 └── .prettierrc.json          # symlink via ConfigSetup
 ```
@@ -37,6 +37,7 @@ apps: {
       packageName: "@myorg/eslint-config",
       version: "2.0.0",
       binPath: "node_modules/.bin/eslint",
+      lockFile: "br:...",
     },
     links: {
       "eslint-config": "dist/eslint.config.js",
@@ -76,6 +77,7 @@ apps: {
       packageName: "my-tool",
       version: "1.0.0",
       binPath: "node_modules/.bin/my-tool",
+      lockFile: "br:...",
     },
     files: {
       ".npmrc": "registry=https://registry.myorg.com\n",
@@ -132,7 +134,7 @@ archives: {
 In your JavaScript configuration, use `tools.Config.linkPath()` to compute relative paths from a project directory to a `.datamitsu/` symlink:
 
 ```javascript
-const init = {
+const setup = {
   "eslint.config.js": {
     content: (context) => {
       const configPath = tools.Config.linkPath(
@@ -170,7 +172,7 @@ tools.Path.forImport(tools.Path.join(context.datamitsuDir, "eslint.config.js"));
 Beyond `.datamitsu/` links, the `setup` configuration creates files and symlinks directly in your project:
 
 ```javascript
-const init = {
+const setup = {
   // Write file content, associated with the eslint tool
   ".eslintrc.js": {
     tools: ["eslint"],
@@ -195,6 +197,7 @@ infrastructure like `.gitignore` or `lefthook.yaml`) are skipped whenever
 The `content()` function receives a context object with:
 
 - `projectTypes` - detected project types in the directory
+- `projectLocations` - every detected `{ type, path }` pair, relative to the git root; populated by `setup`
 - `rootPath` - git repository root
 - `cwdPath` - current working directory
 - `isRoot` - whether cwdPath is the repository root

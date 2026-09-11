@@ -24,16 +24,51 @@ Every stable release on the
 - **`datamitsu-<version>.vsix`** — the [VS Code extension](./vscode.md) for
   manual installs
 
-## Binary archive
+## Verify the release manifest
+
+Obtain the SHA-256 values for the checksum manifest and its Sigstore bundle from
+an independently authenticated release announcement or mirror manifest. If
+either value is unavailable, stop: do not download or process that artifact.
+Verify both files before asking Cosign to authenticate the manifest:
 
 ```bash
-VERSION=0.1.13
-curl -LO "https://github.com/datamitsu/datamitsu/releases/download/v${VERSION}/datamitsu_${VERSION}_linux_amd64.tar.gz"
-tar -xzf "datamitsu_${VERSION}_linux_amd64.tar.gz"
+VERSION=0.2.1
+CHECKSUMS_SHA256="<trusted-sha256-for-checksums.txt>"
+SIGSTORE_BUNDLE_SHA256="<trusted-sha256-for-checksums.txt.sigstore.json>"
+curl --fail --location --remote-name \
+  "https://github.com/datamitsu/datamitsu/releases/download/v${VERSION}/checksums.txt"
+curl --fail --location --remote-name \
+  "https://github.com/datamitsu/datamitsu/releases/download/v${VERSION}/checksums.txt.sigstore.json"
+printf '%s  %s\n' "$CHECKSUMS_SHA256" checksums.txt | sha256sum --check -
+printf '%s  %s\n' "$SIGSTORE_BUNDLE_SHA256" checksums.txt.sigstore.json | sha256sum --check -
+cosign verify-blob \
+  --bundle checksums.txt.sigstore.json \
+  --certificate-identity-regexp 'https://github.com/datamitsu/datamitsu/.*' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  checksums.txt
+```
+
+## Binary archive
+
+Select the asset and extract its expected SHA-256 from the authenticated
+manifest **before** downloading it. Verify the bytes before extraction:
+
+```bash
+ASSET="datamitsu_${VERSION}_linux_amd64.tar.gz"
+EXPECTED_SHA256=$(awk -v asset="$ASSET" '$2 == asset { print $1 }' checksums.txt)
+test "${#EXPECTED_SHA256}" -eq 64
+
+curl --fail --location --remote-name \
+  "https://github.com/datamitsu/datamitsu/releases/download/v${VERSION}/${ASSET}"
+printf '%s  %s\n' "$EXPECTED_SHA256" "$ASSET" | sha256sum --check -
+tar -xzf "$ASSET"
 sudo install -m 0755 datamitsu /usr/local/bin/datamitsu
 ```
 
 ## Linux packages
+
+Download the selected package only after obtaining its SHA-256 from the verified
+manifest above, and run the same `sha256sum --check -` step before installing it:
 
 ```bash
 # Debian / Ubuntu
@@ -57,29 +92,10 @@ module, which every unstable build publishes to
 `ghcr.io/datamitsu/datamitsu-parsers-unstable`. These builds exist for testing
 something that has not shipped yet; install one only for that.
 
-## Verify downloads
+## Verify provenance
 
-Check the SHA-256 against `checksums.txt`:
-
-```bash
-curl -LO "https://github.com/datamitsu/datamitsu/releases/download/v${VERSION}/checksums.txt"
-sha256sum --ignore-missing -c checksums.txt
-```
-
-`checksums.txt` itself is signed in CI with keyless cosign. Verify the
-signature to establish that the checksums came from this repository's release
-workflow:
-
-```bash
-curl -LO "https://github.com/datamitsu/datamitsu/releases/download/v${VERSION}/checksums.txt.sigstore.json"
-cosign verify-blob \
-  --bundle checksums.txt.sigstore.json \
-  --certificate-identity-regexp 'https://github.com/datamitsu/datamitsu/.*' \
-  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-  checksums.txt
-```
-
-Release artifacts also carry [GitHub build provenance attestations](https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations):
+Release artifacts also carry
+[GitHub build provenance attestations](https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations):
 
 ```bash
 gh attestation verify datamitsu_${VERSION}_linux_amd64.tar.gz --repo datamitsu/datamitsu

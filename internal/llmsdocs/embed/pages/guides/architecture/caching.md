@@ -1,20 +1,24 @@
 # Caching Strategy
 
-> How datamitsu tracks per-file results, builds invalidation keys from configuration and file hashes, and safely persists cache state under concurrent execution
+> How datamitsu caches file-level results and unit or repository verdicts, computes XXH3-128 keys, and persists them safely
 
-datamitsu caches the results of lint and fix operations at the per-file level. When a file hasn't changed and the configuration is the same, tools that already passed are skipped entirely. This page explains how cache keys are built, how per-file tracking works, and how the cache stays consistent under parallel execution.
+datamitsu has two execution-cache models. File-granularity operations record a
+pass for each exact file content. Unit-granularity operations record a verdict
+over a complete project/module input set; repository verdicts use the same model
+but are opt-in. This page explains their keys and persistence behavior.
 
 For context on how tasks reach the cache layer, see [Parallel Execution](./execution.md).
 
 ## Cache Invalidation Keys
 
-Every cache is identified by a single **invalidation key** — an XXH3-128 hash computed from four inputs. If any input changes, the entire project cache is discarded and rebuilt from scratch.
+Every project cache has a top-level **invalidation key**: an XXH3-128 hash of
+three process inputs. If it changes, both the file entries and stored verdicts
+are discarded and rebuilt.
 
 ```mermaid
 graph LR
     V["datamitsu version"] --> H["XXH3-128"]
     C["Full config (JSON)"] --> H
-    F["invalidateOn file contents"] --> H
     T["--tools selection"] --> H
     H --> K["Invalidation Key"]
     K --> D{"Matches stored key?"}
@@ -28,16 +32,16 @@ graph LR
 
 ### What goes into the key
 
-| Input                  | What it captures                                                                       | Why it matters                                                                     |
-| ---------------------- | -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| **datamitsu version**  | The release version string                                                             | A new datamitsu version may change tool behavior or output parsing                 |
-| **Full configuration** | The entire `Config` struct serialized as JSON                                          | Any change to tools, operations, runtimes, or project types invalidates results    |
-| **invalidateOn files** | Contents of config files referenced by tools (e.g., `.eslintrc.json`, `tsconfig.json`) | Tool behavior depends on these files — if they change, cached results may be stale |
-| **--tools selection**  | Tool names passed via `--tools` flag (sorted)                                          | Running a subset of tools produces different cache state than running all tools    |
+| Input                  | What it captures                              | Why it matters                                                               |
+| ---------------------- | --------------------------------------------- | ---------------------------------------------------------------------------- |
+| **datamitsu version**  | The release version string                    | A new core may change planning, execution, or parsing                        |
+| **Full configuration** | The complete `Config` serialized as JSON      | Any effective config change invalidates results                              |
+| **--tools selection**  | Selected tool names, sorted deterministically | A subset run must not claim the cache state produced by a different tool set |
 
-### How invalidateOn files work
+### Where `invalidateOn` fits
 
-Each tool operation can declare files that affect its behavior:
+`invalidateOn` is not part of the top-level key. It adds inputs to the verdict
+for a unit- or repository-granularity operation:
 
 ```javascript
 tools: {
@@ -45,9 +49,10 @@ tools: {
     operations: {
       lint: {
         app: "eslint",
-        args: ["."],
+        args: ["{files}"],
+        scope: "per-project",
+        granularity: "unit",
         invalidateOn: ["eslint.config.js", ".eslintignore"],
-        cache: true,
       },
     },
   },
@@ -56,15 +61,20 @@ tools: {
       lint: {
         app: "typescript",
         args: ["--noEmit"],
+        scope: "per-project",
         invalidateOn: ["tsconfig.json"],
-        cache: true,
       },
     },
   },
 },
 ```
 
-During invalidation key calculation, files are processed deterministically: tool names sorted alphabetically, then file paths sorted within each tool. The actual file contents are hashed — not just the paths. If a declared file doesn't exist, a `(missing)` marker is hashed instead, so adding or removing a config file also invalidates the cache.
+Each path is resolved against the unit and every ancestor up to the git root.
+Only existing files become guards; this lets a nested package inherit a root
+config without spelling its relative depth. The verdict hashes file contents,
+not just names. `invalidateOn` has no effect on per-file cache entries: an
+operation whose result depends on shared configuration must use unit or repo
+granularity rather than claim that each file is independent.
 
 ## Per-File Tracking
 
@@ -124,14 +134,24 @@ Per-file tracking answers "has this file changed?". A tool whose `granularity` i
 inferred for every `scope: "per-project"` operation — asks a coarser question: "has anything in this
 unit changed?" — and the answer is a **verdict**, keyed by a hash over every member of the unit plus
 every guard: the ancestor configs and lock files the unit inherits, any config path the operation's
-`args` name, and its `invalidateOn` entries resolved against the unit and each ancestor.
+`args` names as an absolute path, and its `invalidateOn` entries resolved against the unit and each
+ancestor. The input hash also includes selected inherited environment variables whose names start
+with `GO`, `CARGO`, `RUST`, `NODE_`, `NPM_`, `PYTHON`, `PIP_`, `UV_`, `JAVA_`, `TS_`,
+`ESLINT_`, `RUFF_`, `TF_`, or `TFLINT_`.
 
 A `repo`-granularity operation gets a verdict too, but only when it opts in with `cache: true`.
 `file` granularity and an explicit `cache: false` never produce one.
 
-Computing that key means reading and hashing the files of the unit. The cost is real: a package with
-three thousand files is hashed once per per-project tool planning a task there, four to six times per
-run in a typical monorepo, even though the content of a file does not depend on which tool is asking.
+Only a successful task with **complete unit coverage** may write a verdict. A
+narrowed partial task can consume an earlier full verdict when its inputs still
+match, but it cannot mint a new whole-unit pass. Verdict hits also have a TTL,
+controlled by `DATAMITSU_UNIT_CACHE_TTL` (`1440` minutes by default; `0`
+disables verdict caching). This bounds dependencies that the declared guard set
+cannot see, such as network state or an undeclared file outside the unit.
+
+Computing a verdict key means reading and hashing the unit. Without reuse, a
+package with three thousand files would be read again for every per-project tool,
+even though the content does not depend on which tool asks for it.
 
 ### The memo
 
@@ -233,17 +253,20 @@ has just made unsound.
 
 ### Declare tool configuration files
 
-Always list files that affect a tool's behavior in `invalidateOn`. Without this, changing a config file won't invalidate cached results, leading to stale passes.
+For a unit or repository verdict, list extra files that affect the tool in
+`invalidateOn`. Files already inside the unit and inherited marker/config/lock
+files are included automatically.
 
 ```javascript
-// BAD: missing invalidateOn — cache won't bust when eslint config changes
+// BAD: the unit verdict does not name its external config
 tools: {
   eslint: {
     operations: {
       lint: {
         app: "eslint",
-        args: ["."],
-        cache: true,
+        args: ["{files}"],
+        scope: "per-project",
+        granularity: "unit",
       },
     },
   },
@@ -251,15 +274,16 @@ tools: {
 ```
 
 ```javascript
-// GOOD: eslint config changes automatically invalidate cache
+// GOOD: the inherited config participates in the unit verdict
 tools: {
   eslint: {
     operations: {
       lint: {
         app: "eslint",
-        args: ["."],
+        args: ["{files}"],
+        scope: "per-project",
+        granularity: "unit",
         invalidateOn: ["eslint.config.js"],
-        cache: true,
       },
     },
   },
@@ -284,11 +308,19 @@ tools: {
 },
 ```
 
-When `cache: false`, the tool always runs regardless of file state.
+When `cache: false`, the tool always runs regardless of file state. For
+repository granularity the default is already no verdict; `cache: true` is an
+explicit claim that the operation is deterministic and the tracked repository
+plus its guards form a closed input set.
 
 ### Conservative is safer
 
-If you're unsure whether a file affects a tool's behavior, include it in `invalidateOn`. The worst case is unnecessary re-runs (correct but slower). The alternative — a missing entry — risks stale cached results (incorrect but fast).
+If a result may depend on sibling files or shared config, prefer unit granularity
+and declare the extra guards. Declaring file granularity is a performance claim:
+it is correct only when each file's result stands alone. Per-file entries contain
+the file content, effective config, datamitsu version, and tool selection, but do
+not fold in inherited process environment; use unit granularity or disable the
+cache when such an environment value can change the answer.
 
 ## Concurrency Model
 
@@ -313,24 +345,39 @@ This reduces I/O significantly when many files are processed in quick succession
 
 Cache persistence uses the temp-file-and-rename pattern: data is written to a temporary file, then atomically renamed to the final path. This prevents corruption if the process crashes mid-write — the cache file is either the old version or the new version, never a partial write.
 
+Before saving, a process merges entries that another process has already written.
+Matching file-content entries union their successful tool lists; conflicting
+content hashes are dropped because neither can safely be called newer. Verdicts
+keep the latest validation timestamp, while deletions and pruning leave
+tombstones so the merge cannot resurrect them. The read-modify-write sequence is
+not locked across processes, so an unlucky interleaving can still lose a warm
+entry; that costs a later rerun, not an incorrect cache hit.
+
 ### Shutdown safety
 
 On process exit, the cache performs a final flush: any pending debounce timer is cancelled and a synchronous save executes if the dirty flag is set. This ensures no results are lost, even if the process exits immediately after the last tool completes.
 
 ### Pruning
 
-To prevent unbounded growth from deleted files, the cache periodically prunes entries. On load, if more than 24 hours have passed since the last prune, entries pointing to files that no longer exist on disk are removed. This keeps the cache size proportional to the actual repository.
+To prevent unbounded growth, the cache prunes at most once per 24 hours. File
+entries whose paths no longer exist are removed, and verdicts not validated for
+30 days are aged out. The read path still applies the shorter configurable
+verdict TTL; the 30-day limit only bounds unused data on disk.
 
 ## Performance Implications
 
 The caching strategy provides compound speedups across repeated runs. XXH3-128 is 10-26x faster than SHA-256 on typical inputs (26x on Intel i9-14900K, 11-14x on Apple M1 Max), making per-file content hashing nearly free even in large monorepos.
 
-- **First run:** All tools execute. Cache is populated with per-file results
-- **Unchanged files:** Immediate cache hit — only an XXH3-128 hash comparison, no tool execution
-- **Partial changes:** Only modified files are re-checked. In a large monorepo with thousands of files, a single-file edit means only that file's tools re-run
-- **Config changes:** The invalidation key detects config drift and rebuilds the cache automatically — no manual `cache clear` needed
+- **First run:** Tools execute and complete runs populate file entries or verdicts
+- **Unchanged file-granularity input:** Only changed files are rechecked
+- **Changed unit input:** The affected unit-wide operation reruns as a whole
+- **Changed repository input:** An opted-in repository verdict misses and reruns
+- **Config changes:** The top-level key rebuilds the project cache automatically
 
-For wrapper maintainers: caching is transparent to end users. The main tuning points are `invalidateOn` declarations (ensuring correctness) and the `cache` flag (opting out for non-deterministic tools).
+For wrapper maintainers, the main correctness decision is `granularity`. Use
+`invalidateOn` for additional unit/repository inputs and `cache: false` for
+non-deterministic or side-effecting file/unit operations. Opt repository verdicts
+in only deliberately.
 
 ## Cache Storage
 

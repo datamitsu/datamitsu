@@ -13,12 +13,18 @@ The file walker respects `.gitignore` rules at every directory level. This means
 
 ### How It Works
 
-The walker starts at the git root and recursively descends into subdirectories. At each level, it:
+For a fix/lint/check run, the runner starts one walk at the git root and shares
+its sorted result with every downstream consumer. At each level, the walker:
 
 1. Checks for a `.gitignore` file and merges its rules with the parent's rules
 2. Skips `.git` directories and symlinks (avoiding circular references)
 3. Processes subdirectories in parallel (up to 8 concurrent goroutines)
-4. Collects matching files in a thread-safe accumulator
+4. Collects non-ignored files in a thread-safe accumulator
+
+After the parallel walk finishes, the complete absolute-path list is sorted once.
+That deterministic inventory is reused by bundled `.datamitsuignore` validation,
+project detection, glob matching, unit membership, and both halves of
+`datamitsu check`.
 
 ```mermaid
 graph TD
@@ -73,7 +79,10 @@ export function getConfig(input) {
 }
 ```
 
-The detector walks the entire file list and matches each path against the marker patterns. Every directory containing a matching marker becomes a detected project location. A single repository can contain dozens of detected projects across multiple types.
+The detector scans the shared file inventory and matches each path against the
+marker patterns; it does not traverse the repository again. Every directory
+containing a matching marker becomes a detected project location. A single
+repository can contain dozens of detected projects across multiple types.
 
 ### How Tools Use Project Types
 
@@ -161,4 +170,9 @@ The output of file discovery and project detection flows directly into the [plan
 2. **Project locations** — detected project directories and their types, used to scope per-project tools
 3. **CWD restriction** — when running from a subdirectory, both file list and project locations are filtered to the current subtree (see [CWD-Subtree Restriction](./planner.md#cwd-subtree-restriction))
 
-This separation of concerns means the planner never touches the filesystem directly — it works purely with the pre-collected file list and project map provided by the discovery stage.
+The expensive tree traversal is centralized, but the planner is not completely
+filesystem-free. For unit/repository verdicts it stats and hashes the shared
+inventory's members and resolves guard files such as ancestor markers, lock
+files, absolute file arguments, and `invalidateOn` paths. A planner constructed
+outside the normal runner can also fall back to its own discovery walk when no
+inventory was seeded.

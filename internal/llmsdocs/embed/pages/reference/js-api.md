@@ -44,7 +44,7 @@ The `@datamitsu/datamitsu` npm package provides a programmatic API for integrati
   </TabItem>
 </Tabs>
 
-The package requires Node.js 18+ and uses ES modules.
+The package requires Node.js 22.12+ and uses ES modules.
 
 ## Quick Start
 
@@ -389,7 +389,7 @@ function cache.path(): Promise<CachePathResult>;
 ```javascript
 const result = await cache.path();
 if (result.success) {
-  console.log(result.path); // e.g., "/home/user/.cache/datamitsu"
+  console.log(result.path); // e.g., "/home/user/.cache/datamitsu/cache"
 }
 ```
 
@@ -406,7 +406,7 @@ function cache.pathProject(options?: { cwd?: string }): Promise<CachePathResult>
 ```javascript
 const result = await cache.pathProject();
 if (result.success) {
-  console.log(result.path); // e.g., "/home/user/.cache/datamitsu/projects/abc123"
+  console.log(result.path); // e.g., "/home/user/.cache/datamitsu/cache/projects/abc123"
 }
 ```
 

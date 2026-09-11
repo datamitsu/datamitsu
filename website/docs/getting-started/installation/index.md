@@ -47,8 +47,12 @@ You should see the available commands listed, including `exec`, `init`, `check`,
 
 datamitsu stores data under `~/.cache/datamitsu/` (or `$XDG_CACHE_HOME/datamitsu/`), split into two subdirectories:
 
-- **`store/`** — Downloaded binaries (`.bin/`), runtime binaries (`.runtimes/`), runtime-managed app environments (`.apps/`), remote configs (`.remote-configs/`)
-- **`cache/`** — Per-project tool caches (`projects/`), verify state (`.verify-state/`)
+- **`store/`** — Downloaded binaries (`.bin/`), runtimes (`.runtimes/`),
+  runtime-managed apps (`.apps/`), bundles (`.bundles/`), WASM parsers
+  (`.parsers/`), remote configs (`.remote-configs/`), and package-manager data
+- **`cache/`** — Per-repository execution state/source farms (`projects/`),
+  machine-level farms (`configs/`), evaluated config chains (`config-eval/`),
+  traces, and verification state
 
 You can view the cache path with:
 

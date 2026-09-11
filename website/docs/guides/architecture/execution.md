@@ -9,20 +9,36 @@ The executor is the third stage of datamitsu's execution pipeline. It takes the 
 
 ## Pre-Install Phase
 
-Before any task runs, the runner installs **every tool the plan needs** up front. Immediately after planning and before the executor starts, it calls `EnsureTools` with the plan's deduped tool set, installing each distinct tool exactly once.
+Before any task runs, the runner installs **every app the plan needs** up front.
+Immediately after planning and before the executor starts, it calls `EnsureTools`
+with the plan's sorted, deduplicated app names. An operation's tool key and
+`app` can differ, so installation follows the app reference carried by the task.
 
-This is a hard invariant: **all plan tools are installed before parallel execution begins.** Installing ahead of time means no task ever triggers a lazy, on-demand install while sharing a tool with another task running concurrently. Same-tool concurrent installs cannot occur, so there is no race where one task observes a half-written or briefly-absent binary. Distinct tools may still install in parallel (that is safe — they touch different paths). Dry-run planning skips the installs entirely. A failure here aborts before any task runs, surfacing a clear install error instead of a confusing mid-execution failure.
+This is a hard invariant: **all plan apps are installed before parallel execution
+begins.** Installing ahead of time means no task triggers an on-demand install
+while another task is resolving the same app. Distinct apps may still install in
+parallel because they use separate content-addressed paths. Explain mode skips
+installation. A failure here aborts before any task runs.
 
 ## Skipped Tools
 
-A tool can end up **skipped** — neither run nor failed — for one of two reasons, both decided during [planning](./planner.md) so they appear in `--explain` and never reach the pre-install phase:
+A tool can end up **skipped** — neither run nor failed — for one of three
+reported reasons, all decided during [planning](./planner.md) so they appear in
+`--explain` and never reach the pre-install phase:
 
 - **Disabled in config** — the tool sets `skip: true`. Use this instead of conditionally omitting the tool: an omitted tool is invisible, a skipped one is reported.
 - **No binary for this platform** — the tool's binary has no build for the current OS/architecture/libc. This is a **soft skip**: the run still succeeds. (Previously this aborted the whole run with an install error.)
+- **Cannot narrow** — the request selected less than the operation's declared
+  granularity, and the active `execution.widenTo`/`--widen-to` policy does not
+  allow expanding far enough to produce a sound verdict.
 
 Skipped tools render as faint `⊘ <tool> skipped (<reason>)` lines, contribute a `· N skipped` count to the operation footer, and surface as a `skipped` array in `--explain=json`. Other non-runs — a tool that matched no files, doesn't apply to the detected project types, or is disabled by `.datamitsuignore` — stay silent, as before.
 
-The `--fail-on-skip` flag (on `check`/`lint`/`fix`) makes the run exit non-zero **only** for platform skips — a tool you expected to run had no binary for the runner. Intentional `skip: true` skips never fail the run.
+The `--fail-on-skip` flag (on `check`/`lint`/`fix`) makes the run exit non-zero
+**only** for platform skips — a tool you expected to run had no binary for the
+runner. Intentional config skips and not-narrowable skips do not fail that flag.
+Use `--require-coverage=unit` or `--require-coverage=repo` when an incomplete
+narrowed answer must fail CI.
 
 ## Two-Layer Execution Model
 

@@ -1,17 +1,23 @@
 ---
 title: Managed Content (Bundles)
-description: Using bundles to distribute managed content via symlinks with automatic cache invalidation
+description: Using content-addressed bundles to distribute managed files through symlinks
 ---
 
 # Managed Content (Bundles)
 
-Bundles are a way to distribute managed content (files, directory trees) to your repositories via symlinks. Unlike apps, bundles are not executable — they store static content in a hash-keyed cache directory and expose it through `.datamitsu/` symlinks.
+Bundles distribute managed content (files and directory trees) to repositories
+through symlinks. Unlike apps, bundles are not executable: static content lives
+in a hash-keyed directory in the global store and is exposed through
+`.datamitsu/`.
 
 ## The Problem
 
 Without bundles, `datamitsu init` writes files (e.g. `agents.md`, skill definitions) directly into repositories. When the content changes in the config, every repository must be manually patched — causing git conflicts or silent staleness.
 
-With bundles, the content lives in a hash-keyed cache directory. The repository only holds a symlink into `.datamitsu/`. Running `datamitsu init` atomically updates the symlink to point to the new hash directory — no git conflicts, no manual patching.
+With bundles, content lives in a hash-keyed store directory. The repository only
+holds a symlink in `.datamitsu/`. Running `datamitsu init` atomically updates the
+symlink to point to the new hash directory — no git conflicts and no manual
+patching.
 
 ## Defining a Bundle
 
@@ -39,7 +45,7 @@ const config = {
 
 | Field      | Type                          | Description                                                  |
 | ---------- | ----------------------------- | ------------------------------------------------------------ |
-| `version`  | `string`                      | Version identifier (changes trigger cache invalidation)      |
+| `version`  | `string`                      | Version identifier included in the store key                 |
 | `files`    | `Record<string, string>`      | Filename to content mapping (written to install dir)         |
 | `archives` | `Record<string, ArchiveSpec>` | Named archives (inline or external) extracted to install dir |
 | `links`    | `Record<string, string>`      | Link name to relative path mapping for `.datamitsu/`         |
@@ -72,14 +78,14 @@ After `datamitsu init`, the `.datamitsu/` directory will contain:
 
 ```
 .datamitsu/
-├── my-content → ../.bundles/my-content/{hash}/
-├── my-templates → ../.bundles/my-content/{hash}/templates/
-└── my-config → ../.bundles/my-content/{hash}/config.yaml
+├── my-content → ~/.cache/datamitsu/store/.bundles/my-content/{hash}/
+├── my-templates → ~/.cache/datamitsu/store/.bundles/my-content/{hash}/templates/
+└── my-config → ~/.cache/datamitsu/store/.bundles/my-content/{hash}/config.yaml
 ```
 
-## How Cache Invalidation Works
+## How Store Keys Work
 
-Bundles are stored at `{cache}/.bundles/{name}/{hash}/`, where the hash is computed from:
+Bundles are stored at `{store}/.bundles/{name}/{hash}/`, where the hash is computed from:
 
 - Bundle name
 - Version string
@@ -135,7 +141,7 @@ bundles: {
     archives: {
       "data": {
         url: "https://example.com/content-v3.tar.gz",
-        hash: "abc123...",  // SHA-256 (mandatory)
+        hash: "0000000000000000000000000000000000000000000000000000000000000000", // replace with the expected SHA-256
         format: "tar.gz",
       },
     },
@@ -170,8 +176,8 @@ Bundles and apps serve different purposes:
 | Feature       | Bundle                      | App                                |
 | ------------- | --------------------------- | ---------------------------------- |
 | Executable    | No                          | Yes (`datamitsu exec`)             |
-| Runtime       | None                        | binary, uv, node, jvm, shell       |
-| Content       | Files + archives            | Files + archives + package manager |
+| Runtime       | None                        | binary, UV, Node, JVM, Go, shell   |
+| Content       | Files + archives            | UV/Node content or managed package |
 | Links         | Yes (`.datamitsu/`)         | Yes (`.datamitsu/`)                |
 | Version check | No                          | Optional (`versionCheck`)          |
 | Use case      | Static content distribution | Tool/binary management             |

@@ -1,6 +1,6 @@
 # Add a New Tool
 
-> Step-by-step guide to adding binary, UV, Node, and JVM tools to datamitsu
+> Step-by-step guide to adding binary, UV, Node, JVM, and Go tools to datamitsu
 
 This guide walks through adding each type of tool to your datamitsu configuration.
 
@@ -12,13 +12,17 @@ Binary apps are standalone executables downloaded directly from release URLs.
 
 Locate the download URLs for each platform you need. Most tools publish releases on GitHub with platform-specific archives.
 
-### 2. Get the SHA-256 hashes
+### 2. Obtain and verify the SHA-256 hashes
 
-Download each archive and compute its SHA-256 hash:
+Obtain each archive's SHA-256 from an authenticated upstream release manifest
+or signature before downloading it. Never treat a digest computed only after an
+untrusted download as the trust anchor. Then verify the download against that
+expected value:
 
 ```bash
+EXPECTED_SHA256="<sha256-from-the-upstream-manifest>"
 curl -L -o tool.tar.gz "https://github.com/org/tool/releases/download/v1.0.0/tool_linux_amd64.tar.gz"
-sha256sum tool.tar.gz
+printf '%s  %s\n' "$EXPECTED_SHA256" tool.tar.gz | sha256sum --check -
 ```
 
 ### 3. Add the app definition
@@ -38,21 +42,30 @@ function getConfig(config) {
           binaries: {
             darwin: {
               amd64: {
-                url: "https://github.com/org/mytool/releases/download/v1.0.0/mytool_darwin_amd64.tar.gz",
-                hash: "abc123...",
-                contentType: "tar.gz",
+                unknown: {
+                  url: "https://github.com/org/mytool/releases/download/v1.0.0/mytool_darwin_amd64.tar.gz",
+                  hash: "<sha256>",
+                  contentType: "tar.gz",
+                  binaryPath: "mytool",
+                },
               },
               arm64: {
-                url: "https://github.com/org/mytool/releases/download/v1.0.0/mytool_darwin_arm64.tar.gz",
-                hash: "def456...",
-                contentType: "tar.gz",
+                unknown: {
+                  url: "https://github.com/org/mytool/releases/download/v1.0.0/mytool_darwin_arm64.tar.gz",
+                  hash: "<sha256>",
+                  contentType: "tar.gz",
+                  binaryPath: "mytool",
+                },
               },
             },
             linux: {
               amd64: {
-                url: "https://github.com/org/mytool/releases/download/v1.0.0/mytool_linux_amd64.tar.gz",
-                hash: "789abc...",
-                contentType: "tar.gz",
+                glibc: {
+                  url: "https://github.com/org/mytool/releases/download/v1.0.0/mytool_linux_amd64.tar.gz",
+                  hash: "<sha256>",
+                  contentType: "tar.gz",
+                  binaryPath: "mytool",
+                },
               },
             },
           },
@@ -62,13 +75,14 @@ function getConfig(config) {
   };
 }
 globalThis.getConfig = getConfig;
+globalThis.getMinVersion = () => "0.0.1";
 ```
 
 ### 4. Test the tool
 
 ```bash
 datamitsu init
-datamitsu exec mytool --version
+datamitsu exec mytool -- --version
 ```
 
 ### 5. Verify cross-platform hashes (optional)
@@ -107,13 +121,16 @@ function getConfig(config) {
   };
 }
 globalThis.getConfig = getConfig;
+globalThis.getMinVersion = () => "0.0.1";
 ```
 
 The `runtime` field references a UV runtime defined in `runtimes`. The default configuration already includes one.
 
-### 3. Generate a lock file (recommended)
+### 3. Generate the mandatory lock file
 
-Lock files ensure reproducible installs:
+The `config lockfile` command deliberately permits this app's initially missing
+`lockFile` so it can generate one. All normal commands reject the config until
+you paste the result back:
 
 ```bash
 datamitsu config lockfile yamllint
@@ -135,7 +152,7 @@ yamllint: {
 
 ```bash
 datamitsu init
-datamitsu exec yamllint --version
+datamitsu exec yamllint -- --version
 ```
 
 ## Adding a Node App (Node.js)
@@ -167,9 +184,10 @@ function getConfig(config) {
   };
 }
 globalThis.getConfig = getConfig;
+globalThis.getMinVersion = () => "0.0.1";
 ```
 
-### 3. Generate a lock file (recommended)
+### 3. Generate the mandatory lock file
 
 ```bash
 datamitsu config lockfile prettier
@@ -187,6 +205,7 @@ prettier: {
     packageName: "prettier",
     version: "3.2.0",
     binPath: "node_modules/.bin/prettier",
+    lockFile: "br:...",
   },
   links: {
     "prettier-config": "dist/prettier.config.js",
@@ -200,7 +219,7 @@ After `datamitsu init`, this creates a symlink at `.datamitsu/prettier-config` p
 
 ```bash
 datamitsu init
-datamitsu exec prettier --version
+datamitsu exec prettier -- --version
 ```
 
 ## Adding a JVM App
@@ -211,12 +230,11 @@ JVM apps are JAR files executed with a managed JDK.
 
 Locate the direct download URL for the JAR file, typically from Maven Central or the project's releases.
 
-### 2. Get the SHA-256 hash
+### 2. Obtain the SHA-256 hash
 
-```bash
-curl -L -o tool.jar "https://repo1.maven.org/maven2/org/example/tool/1.0.0/tool-1.0.0.jar"
-sha256sum tool.jar
-```
+Obtain the digest from the repository's authenticated checksum metadata or a
+signed upstream release manifest. As with binary apps, set `jarHash` before
+allowing datamitsu to download the JAR; a missing hash is a config error.
 
 ### 3. Add the app definition
 
@@ -240,6 +258,7 @@ function getConfig(config) {
   };
 }
 globalThis.getConfig = getConfig;
+globalThis.getMinVersion = () => "0.0.1";
 ```
 
 ### 4. Test the tool
@@ -247,6 +266,65 @@ globalThis.getConfig = getConfig;
 ```bash
 datamitsu init
 datamitsu exec openapi-generator version
+```
+
+## Adding a Go App
+
+Go apps are built from a pinned module version with a managed, hash-verified Go
+SDK. Their lock payload contains both `go.mod` and `go.sum`.
+
+### 1. Add the package and version
+
+The initial definition may omit `lockFile` only while running the generation
+command:
+
+```javascript
+/// <reference path=".datamitsu/datamitsu.config.d.ts" />
+
+function getConfig(config) {
+  return {
+    ...config,
+    apps: {
+      ...config.apps,
+      govulncheck: {
+        go: {
+          packageName: "golang.org/x/vuln/cmd/govulncheck",
+          version: "v1.3.0",
+        },
+      },
+    },
+  };
+}
+globalThis.getConfig = getConfig;
+globalThis.getMinVersion = () => "0.0.1";
+```
+
+### 2. Generate the mandatory lock file
+
+```bash
+datamitsu config lockfile govulncheck
+```
+
+Paste the output into the app:
+
+```javascript
+govulncheck: {
+  go: {
+    packageName: "golang.org/x/vuln/cmd/govulncheck",
+    version: "v1.3.0",
+    lockFile: "br:...", // contains go.mod + go.sum
+  },
+},
+```
+
+The subsequent build uses `go build -trimpath -mod=readonly`; dependency drift
+that would modify either module file fails instead.
+
+### 3. Test the tool
+
+```bash
+datamitsu init
+datamitsu exec govulncheck -- --version
 ```
 
 ## Wiring a Tool to the Tooling System

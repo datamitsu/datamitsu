@@ -109,13 +109,15 @@ type ToolOperation struct {
 	// Granularity is the smallest input set on which this operation's verdict is
 	// complete. Inferred when unset (InferGranularity); declaring "file" is a
 	// speed decision, declaring "unit"/"repo" is always safe.
-	Granularity  ToolGranularity   `json:"granularity,omitempty"`
-	Globs        []string          `json:"globs,omitempty"`
-	ExcludeGlobs []string          `json:"excludeGlobs,omitempty"`
-	Priority     int               `json:"priority,omitempty"`
-	Cache        *bool             `json:"cache,omitempty"`        // Enable caching (default: true)
-	InvalidateOn []string          `json:"invalidateOn,omitempty"` // Config files that invalidate cache
-	Env          map[string]string `json:"env,omitempty"`          // Extra environment variables for this operation
+	Granularity  ToolGranularity `json:"granularity,omitempty"`
+	Globs        []string        `json:"globs,omitempty"`
+	ExcludeGlobs []string        `json:"excludeGlobs,omitempty"`
+	Priority     int             `json:"priority,omitempty"`
+	// Cache defaults on for file/unit granularity and off for repository verdicts.
+	Cache *bool `json:"cache,omitempty"`
+	// InvalidateOn adds unit/repository verdict guards resolved through ancestors.
+	InvalidateOn []string          `json:"invalidateOn,omitempty"`
+	Env          map[string]string `json:"env,omitempty"` // Extra environment variables for this operation
 	// Input selects how the file content reaches the tool: "file" (default,
 	// path via {file}/{files}) or "stdin" (pipe the file's content to stdin).
 	Input ToolInputMode `json:"input,omitempty"`

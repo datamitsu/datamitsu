@@ -102,11 +102,15 @@ Key rules:
 - Linux platforms typically have `glibc` and optionally `musl` variants
 - All config sources (JSON and inline TypeScript) use the three-level format directly
 
-### Cache Isolation
+### Store Isolation
 
-Cache paths include the resolved target, so glibc and musl binaries are cached separately. A tool resolved as `linux/amd64/musl` gets a different cache path than the same tool resolved as `linux/amd64/glibc`, even on the same machine.
+Store paths include the resolved target, so glibc and musl binaries occupy
+separate entries. A tool resolved as `linux/amd64/musl` gets a different store
+path than the same tool resolved as `linux/amd64/glibc`, even on the same
+machine.
 
-This prevents cache conflicts when switching between container environments or testing with different libc variants.
+This prevents conflicts when switching between container environments or
+testing with different libc variants.
 
 ## Managed Runtimes (Node, UV, JVM)
 

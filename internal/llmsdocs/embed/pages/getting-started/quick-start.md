@@ -28,16 +28,20 @@ function getConfig(prev) {
           binaries: {
             linux: {
               amd64: {
-                url: "https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-x86_64",
-                hash: "56de6d5e5ec427e17b74fa48d51271c7fc0d61571c37f4a4c87c04f911dc5f94",
-                contentType: "binary",
+                glibc: {
+                  url: "https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-x86_64",
+                  hash: "56de6d5e5ec427e17b74fa48d51271c7fc0d61571c37f4a4c87c04f911dc5f94",
+                  contentType: "binary",
+                },
               },
             },
             darwin: {
               amd64: {
-                url: "https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Darwin-x86_64",
-                hash: "911006e5fe41981c319cf4ef331d12bd1c02b594e4a1e9a4b1dbe5fbab0e5b5c",
-                contentType: "binary",
+                unknown: {
+                  url: "https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Darwin-x86_64",
+                  hash: "911006e5fe41981c319cf4ef331d12bd1c02b594e4a1e9a4b1dbe5fbab0e5b5c",
+                  contentType: "binary",
+                },
               },
               // arm64: no native ARM64 binary; omit or use x86_64 via Rosetta 2
             },
@@ -151,13 +155,16 @@ datamitsu loads config in layers, each extending the previous:
 
 ```mermaid
 graph TD
-    A[defaultembedded config] --> B[--before-config flagsfor library wrappers]
-    B --> C[datamitsu.config.tsat git rootauto-discovered]
-    C --> D[--config flagsfor CI overrides]
-    D --> E[final Config]
+    A[defaultembedded config] --> B{"--before-configsupplied?"}
+    B -->|yes| C[--before-config files]
+    B -->|no| D[declared before-configsfrom getBeforeConfigs]
+    C --> E[auto-discoveredgit-root config]
+    D --> E
+    E --> F[--config filesoverrides]
+    F --> G[final Config]
 ```
 
-Every config must export `getMinVersion()` (returns the minimum datamitsu version required) and `getConfig(prev)` (receives the previous layer's config and returns a new config that extends or overrides it).
+Every config must export `getMinVersion()` (returns the minimum datamitsu version required) and `getConfig(prev)` (receives the previous layer's config and returns a new config that extends or overrides it). A source may also declare hash-pinned remote parents with `getRemoteConfigs()`; they are resolved depth-first immediately before that source. See [Config Loading Order](../guides/configuration.md#config-loading-order) for the full rules.
 
 ## Next Steps
 

@@ -99,13 +99,13 @@ Use `{cwd}` to reference project-specific files within a monorepo.
 Expands to an isolated, per-project, per-tool cache directory. The path is computed using an XXH3-128 hash of the git root to ensure uniqueness.
 
 ```
-~/.cache/datamitsu/projects/{xxh3_128(gitRoot)}/cache/{relativeProjectPath}/{toolName}/
+~/.cache/datamitsu/cache/projects/{xxh3_128(gitRoot)}/cache/{relativeProjectPath}/{toolName}/
 ```
 
 ```javascript
 args: ["--cache-dir", "{toolCache}"];
 // Tool: "eslint", Project: "packages/frontend"
-// Result: ["--cache-dir", "~/.cache/datamitsu/projects/a1b2c3/cache/packages/frontend/eslint/"]
+// Result: ["--cache-dir", "~/.cache/datamitsu/cache/projects/a1b2c3/cache/packages/frontend/eslint/"]
 ```
 
 Each tool and each project gets its own cache directory, preventing conflicts in monorepos.

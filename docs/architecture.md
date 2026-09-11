@@ -9,7 +9,7 @@
 - Exposes console API, format utilities (YAML, TOML, INI), and tools API to JS runtime
 - Allows dynamic configuration through JavaScript with type definitions in config.d.ts
 - Every config file must export `getMinVersion()` returning a semver string; the loader validates the current datamitsu version meets this minimum before proceeding
-- **VM globals injected from Go** (set in `engine.New()` via per-domain `initX()` methods): `console`, `colors`, `YAML` / `TOML` / `INI` (separate format parser namespaces, each exposing `parse` / `stringify`), `tools` (sub-namespaces `Path`, `Ignore`, `Config`), `facts()` (function returning host/git/env info), and `pnpmWorkspaceDefaults` (frozen plain object — recommended pnpm 11 workspace security defaults sourced from `internal/pnpmdefaults.Defaults()`, injected with sorted keys so `YAML.stringify` output is deterministic). Plain-object globals (like `pnpmWorkspaceDefaults`) avoid the function-call indirection used for `facts()` so config.js can read them as ordinary JS values; the freeze is load-bearing — without it goja exposes the underlying Go map by reference and JS writes would propagate back, letting a user config silently downgrade the published security defaults
+- **VM globals injected from Go** (set in `engine.New()` via per-domain `initX()` methods): `console`, `colors`, `YAML` / `TOML` / `INI` (separate format parser namespaces, each exposing `parse` / `stringify`), `tools` (sub-namespaces `Path`, `Ignore`, `Config`), `facts()` (function returning host/git/env info), `pnpmWorkspaceDefaults` (frozen recommended pnpm 11 workspace defaults), and `datamitsuConfigInputs` (frozen, deliberately minimal config-input allowlist; currently only `minimumReleaseAgeMinutes`). Plain-object globals avoid function-call indirection and are frozen so JS cannot mutate Go-owned policy. Every field exposed through `datamitsuConfigInputs` must also enter the config-evaluation cache key
 - **Single source of truth for pnpm defaults** (`internal/pnpmdefaults`): Go is the only place the 8 pnpm workspace security keys are defined. The node app installer reads them via `buildPNPMWorkspaceForApp()` (which merges `pnpmdefaults.Defaults()` with any user override), and `config.js` reads the same map through the `pnpmWorkspaceDefaults` VM global to publish it as `sharedStorage["pnpm-workspace-defaults"]`. Changing a value in `pnpmdefaults.go` updates both code paths atomically; the full key list and rationale live in [supply-chain-security](../website/docs/guides/supply-chain-security.md#pnpm-node-apps)
 
 **Target Resolution** ([internal/target/](internal/target/))
@@ -32,7 +32,7 @@
 - `ExtractDir` mode: when `BinaryOsArchInfo.ExtractDir` is true, extracts entire archive to a directory (used by JVM runtimes for full JDK trees) instead of a single binary file
 - Platform-specific binaries for darwin/linux/freebsd/openbsd/windows across amd64/arm64/aarch64
 - **Target-aware resolution**: Uses `target.Resolver` to select best binary candidate from nested storage (os → arch → libc → BinaryInfo); `parseBinaryCandidates()` converts nested map to `[]target.Candidate`; `getBinaryInfo()` calls `resolver.Resolve()` and emits fallback warnings
-- Caches binaries in `{store}/.bin/{name}/{configHash}` with lazy loading; config hash includes resolved target (OS, Arch, Libc) for cache isolation between glibc and musl variants
+- Stores binaries in `{store}/.bin/{name}/{configHash}` with lazy loading; config hash includes resolved target (OS, Arch, Libc) for isolation between glibc and musl variants
 - Can execute binaries through `Exec()` method with env passthrough
 - `GetExecCmd(name, args)` returns a prepared `*exec.Cmd` without executing it. Returns `(nil, nil)` for shell apps. Used by `devtools verify-all` for version checks
 - `App.VersionCheck *AppVersionCheck`: optional per-app version check configuration. `Disabled: true` skips version check; `Args` overrides default `["--version"]`. Used by `devtools verify-all`
@@ -73,11 +73,11 @@ Six types of applications are supported:
 - Manages runtime binaries (UV, Node, JVM, Go) with hash verification and caching
 - Supports `managed` mode (download runtime binary) and `system` mode (use system-installed)
 - Automatic musl fallback: `resolveEffectiveRuntimeConfig()` detects when host is musl and managed config lacks a musl binary; if the system binary (`node`, `uv`, `java`, or `go`) is found via `lookPathFunc`, automatically overrides to system mode. Called by `GetRuntimePath`, `InstallRuntimes`, `ResolveRuntime`, and `GetAppPath`. `lookPathFunc` field on `RuntimeManager` enables test injection
-- Creates isolated per-app environments: `.apps/{runtime}/{app}/{hash}/`
+- Creates isolated per-app environments: `{store}/.apps/{kind}/{app}/{hash}/`
 - Runtime resolution: app-level override -> global default by kind
 - Uses `RuntimeAppManager` interface to avoid circular dependency with BinManager
 - **RuntimeKind registry** (`internal/config/runtimekind.go`): a table-driven map keyed by `config.RuntimeKind` describing per-kind facts — system command name, cache-affecting version field(s), and validation rules (`RuntimeKindInfo`, `LookupRuntimeKind`, `AllRuntimeKinds`). Replaces the hand-written per-kind `if/switch` chains previously duplicated across `systemCommandForKind`, the hash-fold blocks in `hash.go`, `ValidateRuntimes`, and the verify dispatch in `cmd/devtools_verify.go`, so adding a runtime kind is a single registry entry instead of a whole-repo edit fan-out. The app-level install/command-info dispatch keeps a typed `switch` (each kind's method takes a differently-typed `AppConfig*`), but the precedence is defined once via `runtimeAppRef`. Lives in `config` (not a separate package) to avoid a `config`↔registry import cycle
-- Cache keys use XXH3-128 hash of runtime config + app config + OS + arch
+- Store keys use XXH3-128 over the relevant runtime/app/lock/content configuration and resolved target dimensions, including libc where applicable
 - Concurrent installs are deduplicated via `golang.org/x/sync/singleflight` groups (`runtimeInstall`, `appInstall`, `pnpmInstall`) keyed by runtime name / `kind/appName` / `pnpmVersion\x00pnpmHash`: only one install per key runs at a time and all waiters share its result. Node apps reuse `appInstall` with key `node/appName` (there is no separate `nodeInstall` group). A failed call does not orphan in-flight readers, and the next call after completion starts fresh — so retry-after-error works without explicit cleanup (replaced the prior `sync.Once` + `sync.Map` + `CompareAndDelete` pattern, which could orphan a reader when a deletion overlapped an in-flight call)
 - `RuntimeConfigNode` (NodeVersion, PNPMVersion, PNPMHash), `RuntimeConfigUV` (PythonVersion), `RuntimeConfigJVM` (JavaVersion), and `RuntimeConfigGo` (GoVersion) on `RuntimeConfig` hold version info per runtime kind
 - Lockfiles are mandatory for all UV/node/Go apps; `ValidateApps` enforces that all UV/node/Go apps have a `LockFile` configured
@@ -175,7 +175,7 @@ Tool operation arguments support template placeholders that the executor resolve
 - `{toolCache}` resolves to `~/.cache/datamitsu/cache/projects/{xxh3_128(gitRoot)}/cache/{relativeProjectPath}/{toolName}/`; computed per task from `task.ProjectPath` and `task.ToolName`; when computation fails, the literal `{toolCache}` is preserved
 - `{cwd}` falls back to `rootPath` when `projectPath` is empty
 - `facts.GetGitRoot` is memoized per working directory for the process lifetime and resolves via a pure-Go filesystem walk, falling back to a forked `git` for layouts it cannot prove (`DATAMITSU_FORCE_GIT_SUBPROCESS=1` forces the subprocess). `internal/traverser.GetGitRoot` is a separate resolver, not covered by the memo, used by the command handlers
-- Facts struct exposes platform/environment info (`os`, `arch`, `libc`, `isInGitRepo`, `isMonorepo`, `env`) via `facts()` in JS; `libc` is "glibc", "musl", or "unknown" (Linux-only detection); path fields were removed in favor of template placeholders
+- Facts struct exposes platform/environment info (`os`, `arch`, `libc`, `isInGitRepo`, `isMonorepo`, `env`) via `facts()` in JS; `libc` is "glibc", "musl", or "unknown" (Linux-only detection). `env` contains the whole process environment except observation-only `DATAMITSU_TRACE`, `DATAMITSU_TRACE_DIR`, and `DATAMITSU_CONFIG_CACHE`; the config-evaluation key hashes the same observable set. Path fields were removed in favor of template placeholders
 
 **Datamitsu Ignore** ([internal/datamitsuignore/](internal/datamitsuignore/))
 
@@ -201,7 +201,7 @@ Tool operation arguments support template placeholders that the executor resolve
 
 - Fetches, caches, and resolves remote configuration files declared via `getRemoteConfigs()` in JS configs
 - `FetchRemoteConfig(url, expectedHash)`: HTTP GET with 30s timeout, SHA-256 hash verification, 10 MiB size limit, HTTPS-to-HTTP redirect rejection
-- `CachedConfigPath(cacheDir, url)`: returns `{cacheDir}/.remote-configs/{xxh3_128(url)}.ts`
+- `CachedConfigPath(storeDir, url)`: returns `{store}/.remote-configs/{xxh3_128(url)}.ts` in normal config loading
 - `LoadCached(path)`: reads cached file content
 - `SaveCached(path, content)`: atomic write (temp file + rename)
 - `Resolve(url, expectedHash, cacheDir)`: orchestrates cache lookup and fetching — cache hit when hash matches (no TTL), cache miss triggers fetch + verify + save
@@ -243,7 +243,17 @@ Tool operation arguments support template placeholders that the executor resolve
 
 - Walks directory trees respecting .gitignore rules
 - Finds git repository root and collects gitignore patterns
+- Returns a stable sorted path list. `runner.RunSequential` performs one walk and shares it with bundled `.datamitsuignore` fix/lint and `Planner.SeedFiles`; an unseeded planner retains a fallback walk for standalone use
 - Custom gitignore matcher implementation in [internal/traverser/git.go](internal/traverser/git.go)
+
+**Execution Cache** ([internal/cache/](internal/cache/), [internal/tooling/verdict.go](internal/tooling/verdict.go))
+
+- Project state lives at `{cache}/projects/{xxh3_128(gitRoot)}/toolstate.msgpack`. Its top-level XXH3-128 invalidation key covers `ldflags.Version`, the complete config JSON, and the sorted `--tools` selection; `invalidateOn` is deliberately not global
+- File-granularity operations cache successful lint/fix results per exact content hash by default. Unit-granularity operations cache a verdict over every unit member and guard by default. Repo-granularity verdicts are opt-in with `cache: true`; `cache: false` disables either model
+- Unit guards include inherited ancestor marker/config/lock files, existing absolute file arguments, and each `invalidateOn` path resolved from the unit through its ancestors. Verdict input hashes also include an allowlist of inherited toolchain environment variables. Only complete coverage can write a verdict, though a narrowed task may consume a previous complete verdict
+- Verdict trust uses `DATAMITSU_UNIT_CACHE_TTL` (1440 minutes default, 0 disables). Unreferenced verdicts are pruned from disk after 30 days during the at-most-daily cache prune
+- Verdict hashing uses a process-scoped content memo validated by size, mtime, inode/change time, and a two-second mtime safety window. Post-run validation bypasses the memo; fix probes fully rehash and refresh memo entries
+- In-process reads/updates use an RWMutex and saves are debounced. Persistence merges on-disk state, uses deletion tombstones, and writes via temp + rename. Cross-process read-modify-write is best-effort: an interleaving can lose a warm entry but mismatch rules prevent an unsound hit
 
 **Programmatic API** ([programmable-api/js/](programmable-api/js/))
 
@@ -297,14 +307,14 @@ Tool operation arguments support template placeholders that the executor resolve
   - `devtools bundles path <name>` - Print install directory path for a bundle
   - `devtools verify-all` - Cross-platform config integrity checker (see [cmd/devtools_verify.go](cmd/devtools_verify.go)); downloads and hash-verifies binary apps and managed runtimes for all configured platforms, installs runtime-managed apps and bundles on current platform, optionally runs version checks; supports `--no-version-check`, `--concurrency`, `--json`, `--skip-passed`, `--no-remote`; results persisted incrementally to a state file in `{cache}/.verify-state/`; `--skip-passed` skips entries whose config fingerprint is unchanged and last status was "ok", showing them as "cached"; `--no-remote` skips remote config resolution
 - `cache` - Manage per-project caches (see [cmd/cache.go](cmd/cache.go))
-  - `cache clear` - Clears the current project's cache (lint/fix results + tool caches). By default clears only the current project
-    - Supports `--all` flag to clear caches for all projects
+  - `cache clear` - Removes the current repository namespace (source farm, lint/fix state, verdicts, tool caches) plus its evaluated-config entries
+    - `--all` removes every repository namespace and the whole evaluated-config tree; machine-level farms under `{cache}/configs` remain
     - Supports `--dry-run` flag to preview what would be deleted without deleting
   - `cache path` - Prints the absolute path to the global cache directory
   - `cache path project` - Prints the absolute path to the current project's cache directory
 - `store` - Manage the global binary and runtime store (see [cmd/store.go](cmd/store.go))
   - `store path` - Prints the absolute path to the global store directory (`env.GetStorePath()`)
-  - `store clear` - Removes the entire store directory via `os.RemoveAll`; includes all binaries, runtimes, apps, and remote configs. Refuses dangerous paths (`/`, `$HOME`). No confirmation prompt
+  - `store clear` - Removes the entire store directory via `os.RemoveAll`; includes binaries, runtimes, apps, bundles, parsers, package-manager stores, managed Python, and remote configs. Refuses dangerous paths (`/`, `$HOME`). No confirmation prompt
 
 ## Config Loading Order
 
@@ -333,18 +343,18 @@ final Config
 - `IgnoreRules` use append semantics across config layers (previous rules prepended to new)
 - Circular remote config dependencies are detected and produce an error
 - `--no-remote` flag on `devtools verify-all` skips remote config resolution
-- `loadConfig()` returns a 4-tuple: `(*config.Config, *config.InitLayerMap, *goja.Runtime, error)`. On a config-evaluation cache hit the layer map is **empty** and the runtime is **nil** — nothing was evaluated, so there is no VM to return
+- `loadConfig()` returns a 4-tuple: `(*config.Config, *config.SetupLayerMap, *goja.Runtime, error)`. On a config-evaluation cache hit the layer map is **empty** and the runtime is **nil** — nothing was evaluated, so there is no VM to return
 - **Config-evaluation cache** ([internal/configcache](internal/configcache), wired in [cmd/config_cache.go](cmd/config_cache.go)): the merged, post-validation config is stored at `{cache}/config-eval/{projects|configs}/{identity}/{key}.msgpack`, namespaced by the same identity the source-mode farm uses (git root, or the resolved chain for a machine-level `--config`). There is deliberately no fall back to cwd, so a load with neither a git root nor an explicit chain simply does not cache. The key covers every input config JS can observe: chain file contents in chain order, the auto-config candidate names and their existence, `--no-auto-config` / `--skip-remote-config`, the whole environment, the allowlisted `datamitsuConfigInputs`, the JS-visible facts, cwd, git root, `.git/HEAD` and `ldflags.Version`. A load that needs the VM (`requireVM`) or the setup layer map (`evaluateSetupContent`), and the lock-file-relaxed `config lockfile` load, bypass it entirely (`configCacheUsable`). An evaluation that read the clock or `Math.random`, or that called `console.*`, is never stored: a hit runs no JS and could reproduce neither the value nor the output. Warnings and resolved remote URLs are carried in the artifact so a hit is observationally identical to a miss. Disable with `DATAMITSU_CONFIG_CACHE=0`; see [Startup and Config Load](../website/docs/guides/architecture/startup.md#the-config-evaluation-cache)
 - Each source is run through `config.StripTypes` (esbuild) only when its extension is not `.js`/`.mjs` — the decision is by extension, never by content sniffing (`prepareConfigSource` in [cmd/config_loader.go](cmd/config_loader.go)). The embedded default is bundler output and is likewise handed to goja unstripped
 - Startup/config-load phases are instrumented behind `DATAMITSU_STARTUP_TIMINGS=1`; see [Startup and Config Load](../website/docs/guides/architecture/startup.md) for the cost model
 
-**Eager Content Evaluation** (`internal/config/init_eval.go`, `internal/config/init_layer.go`):
+**Eager Content Evaluation** (`internal/config/setup_eval.go`, `internal/config/setup_layer.go`):
 
-- `content()` functions in Init entries are evaluated eagerly during config loading, not during setup
-- `InitLayerMap` tracks the history of each Init entry across all config layers
+- `content()` functions in `setup` entries are evaluated eagerly during setup-capable config loading
+- `SetupLayerMap` tracks the history of each managed file across all config layers
 - `SetupLayerHistory` stores ordered `SetupLayerEntry` items (LayerName, GeneratedContent) and the final `ConfigSetup` metadata
 - `EvaluateInitContent()` calls each layer's `content()` functions, passing the previous layer's output as `context.existingContent`
-- `MergeInitLayers()` records evaluated content into the layer map after each config source is processed
+- `MergeSetupLayers()` records evaluated content into the layer map after each config source is processed
 - Evaluation is best-effort: entries whose `content()` throws are silently skipped; the installer falls back to disk-based generation for those entries
 - `context.existingContent` contains the previous layer's generated content (not disk content); `context.originalContent` contains unmodified disk content (available during both eager evaluation and setup)
 - The installer checks `InitLayerMap` first; if history exists for a file, it uses `GetLastGeneratedContent()` instead of calling `content()` again
@@ -356,7 +366,7 @@ final Config
 3. BinManager is initialized with MapOfApps; RuntimeManager is initialized with MapOfRuntimes
 4. When `exec <appName>` is called:
    - BinManager delegates to RuntimeManager for uv/node/jvm/go apps
-   - For binary apps: checks cache, downloads/verifies hash, extracts, executes
+   - For binary apps: checks the store, downloads/verifies hash, extracts, executes
    - For uv apps: resolves UV runtime, downloads if needed, installs app in isolated env, executes
    - For node apps: resolves the Node runtime, downloads+verifies+extracts the pinned Node.js archive, downloads pnpm from the npm registry, installs app dependencies, executes via node
    - For jvm apps: resolves JVM runtime (Temurin JDK), downloads JAR with hash verification, executes via `java -jar`
@@ -369,10 +379,10 @@ The [internal/config/config.js](internal/config/config.js) file defines:
 - `mapOfRuntimes`: Runtime definitions (UV, Node, JVM, Go) with managed binary URLs and hashes per platform
 - `mapOfApps`: All available binaries/tools with URLs, hashes, and platform support
 - `ignoreGroups`: Categorized ignore patterns (Dependencies, Build outputs, Cache, Testing, Logs, Environment, Security, IDE & OS, Golang specific)
-- `init`: Configuration for initializing tool configs like lefthook.yml
+- `setup`: Configuration for generating managed tool configs like lefthook.yml
 - `ignoreRules`: Optional `string[]` of `.datamitsuignore`-syntax rules applied alongside file-based rules; merged via append across config layers
 
-Tools API exposed to JS includes ignore pattern parsing/stringifying utilities (`tools.Ignores`), `tools.Config.linkPath()` for computing relative paths to `.datamitsu/` symlinks, and `tools.Path` for path manipulation.
+Tools API exposed to JS includes ignore pattern parsing/stringifying utilities (`tools.Ignore`), `tools.Config.linkPath()` for computing relative paths to `.datamitsu/` symlinks, and `tools.Path` for path manipulation.
 
 **Version Requirement** (`getMinVersion()`):
 
@@ -483,7 +493,7 @@ Uses uber-go/zap structured logging throughout. Logger initialization in [intern
 - Store-related paths (`GetBinPath`, `GetRuntimesPath`, `GetAppsPath`, `GetPNPMStorePath`) use `GetStorePath()`
 - Cache-related paths (`GetProjectCachePath`) use `GetCachePath()`
 - Binary caching uses stable hash-based paths for reproducibility
-- Runtime-managed apps cached in `{store}/.apps/{runtime}/{app}/{hash}/` with isolated environments
+- Runtime-managed apps stored in `{store}/.apps/{kind}/{app}/{hash}/` with isolated environments
 - `DATAMITSU_MAX_PARALLEL_WORKERS` defaults to a dynamic CPU-based value: `max(4, floor(NumCPU * 0.75))`, capped at 16. Set this env var to override.
 - **No forced CI=true**: The tool never overrides CI environment variable. Child processes inherit the system's CI state naturally.
 - **Layered env merge order** (in executor.buildCommand): OS env -> color hints -> app env (cmdInfo.Env) -> ToolOperation.Env. Later layers override earlier ones.
@@ -512,20 +522,19 @@ Uses uber-go/zap structured logging throughout. Logger initialization in [intern
 - **`.datamitsu/` directory**: Recreated atomically on each `init` run (remove + recreate). Listed in `.gitignore`. A `.gitignore` file containing `*` is automatically created inside `.datamitsu/` as a defensive measure — prevents accidental commits if users forget to add `.datamitsu/` to their root `.gitignore`. A `datamitsu.config.d.ts` file is written with embedded TypeScript type definitions (from `internal/config/config.d.ts` via `config.GetDefaultConfigDTS()`) to provide IDE autocomplete for config files. After creation, all symlinks are verified (existence, correct target, target file exists) — verification failure is a hard error
 - **Strict app installation**: Uninstalled apps with links cause `CreateDatamitsuLinks()` to return an error immediately (no silent skipping)
 - **ConfigSetup.LinkTarget**: When set on a `ConfigSetup` entry, the installer creates a symlink instead of writing content. Target is resolved relative to the symlink's directory
-- **Lock files**: Node apps support `LockFile` field (written as `pnpm-lock.yaml` with `--frozen-lockfile`); UV apps support `LockFile` (written as `uv.lock` with `--locked` flag). Lock file content can be brotli-compressed with `br:` prefix (see `lockfileenc.go`)
+- **Lock files**: Node, UV, and Go apps require `LockFile`. Node writes `pnpm-lock.yaml` and uses `--frozen-lockfile`; UV writes `uv.lock` and uses `--locked --no-build`; Go expands a JSON payload into `go.mod` + `go.sum` and builds with `-mod=readonly`. Lock content can be brotli-compressed with the `br:` prefix
 - **Validation-first**: `ValidateApps()` returns `([]string, error)` -- warnings and validation errors. Runs immediately after config load in `loadConfigWithPaths`, catching link path traversal errors and lockfile requirements before execution. Warns when UV runtime is in system mode without pythonVersion set
 - **Links independence**: Links do not require `required: true`. Smart init installs link-apps by tool usage plus all non-lazy link-apps, not the Required flag; only `Lazy`-marked apps are deferred
 - **Windows**: Symlinks only, no fallback. Requires Developer Mode
-- **Installer JS context**: The `content()` function in `ConfigSetup` receives a context object with `projectTypes`, `rootPath`, `cwdPath`, `isRoot`, and `datamitsuDir` (relative path from `cwdPath` to `{rootPath}/.datamitsu/`)
+- **Installer JS context**: The `content()` function in `ConfigSetup` receives `projectTypes`, `projectLocations` (`{type, path}` with git-root-relative paths), `rootPath`, `cwdPath`, `isRoot`, and `datamitsuDir`. Project locations are populated only for setup-capable loads
 - **Import path generation**: `tools.Path.forImport(path)` ensures relative paths are valid ES module imports. JavaScript/TypeScript `import` statements require relative paths to start with `./` or `../`, but `tools.Path.join(context.datamitsuDir, "file.js")` returns `.datamitsu/file.js` (missing `./` prefix). Wrapping with `forImport()` fixes this: `tools.Path.forImport(tools.Path.join(context.datamitsuDir, "eslint.config.js"))` produces `./.datamitsu/eslint.config.js`. The function is idempotent — paths already starting with `./` or `../` are returned unchanged
 
 ### Planner CWD-Subtree Restriction
 
-When running from a subdirectory (cwd != git root), the planner restricts its scope:
-
-- **Repository-scope** tasks are skipped entirely (they only run from git root)
-- **Per-project** tasks are restricted to projects whose paths are within the cwd subtree
-- **Per-file** tasks are restricted to files within the cwd subtree
-- When running from git root (cwd == rootPath), behavior is unchanged -- all scopes operate on the full repository
-
-Implemented via `isUnderCwd()`, `filterFilesToCwd()`, and `filterProjectLocationsToCwd()` in `internal/tooling/planner.go`. Both `rootPath` and `cwdPath` are normalized with `filepath.Clean` in `NewPlanner`.
+When running from a subdirectory (cwd != git root), the planner starts from that
+narrowed selection and compares it with each operation's granularity and widening
+policy. File-granularity operations remain narrowed even when their process has
+repository scope. Unit-granularity per-project operations may widen to the
+selected/containing unit under the default `unit` policy. Repo-granularity
+operations are reported as `not-narrowable` unless `--widen-to=repo` (or config)
+permits a whole-repository run. These skips count against `--require-coverage`.
