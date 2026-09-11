@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -36,7 +35,11 @@ var (
 	pullRuntimesMinAge      *int
 )
 
-var validRuntimeNames = []string{"bun", "uv", "jvm", "node", "go"}
+var validRuntimeNames = []string{"bun", "uv", "jvm", "node", "go", "pnpm"}
+
+// defaultPNPMRuntimeName is the runtime pull-runtimes writes pnpm under and
+// points the Node and Bun runtimes at.
+const defaultPNPMRuntimeName = "pnpm"
 
 func init() {
 	devtoolsCmd.AddCommand(pullRuntimesCmd)
@@ -45,23 +48,26 @@ func init() {
 	pullRuntimesCmd.Flags().BoolVar(&pullRuntimesDryRunFlag, "dry-run", false,
 		"Show what would be updated without writing files")
 	pullRuntimesCmd.Flags().StringVar(&pullRuntimesRuntimeFlag, "runtime", "",
-		"Update only the specified runtime (bun, uv, jvm, node, or go)")
+		"Update only the specified runtime (bun, uv, jvm, node, go, or pnpm)")
 	pullRuntimesMinAge = addMinAgeFlag(pullRuntimesCmd)
 }
 
 var pullRuntimesCmd = &cobra.Command{
 	Use:   "pull-runtimes <file>",
 	Short: "Pull runtime configurations from upstream releases",
-	Long: `Pull runtime configurations (Bun, UV, JVM, Node, Go) with latest versions from upstream.
+	Long: `Pull runtime configurations (Bun, UV, JVM, Node, Go, pnpm) with latest versions from upstream.
 
 Fetches latest releases from GitHub, computes SHA-256 hashes, and writes
 the result to the specified file. The Node runtime is pulled as a direct
 archive (url + hash) from nodejs.org (glibc/darwin/windows, GPG-verified) and
 unofficial-builds.nodejs.org (musl, unsigned). The Go runtime is pulled as a
 direct archive from go.dev/dl with its published SHA-256 (HTTPS, no GPG).
+The pnpm runtime, which the Node and Bun runtimes install their apps with,
+takes its version from npm (so the minimum release age applies) and its
+archives from the matching pnpm/pnpm GitHub release.
 
 Requires --update flag to fetch releases (safety guard).
-With --runtime: updates only the specified runtime (bun, uv, jvm, node, or go)
+With --runtime: updates only the specified runtime (bun, uv, jvm, node, go, or pnpm)
 With --dry-run: shows what would be updated without writing
 
 Example:
@@ -70,6 +76,7 @@ Example:
   datamitsu devtools pull-runtimes --update --runtime uv config/src/runtimes.json
   datamitsu devtools pull-runtimes --update --runtime node config/src/runtimes.json
   datamitsu devtools pull-runtimes --update --runtime go config/src/runtimes.json
+  datamitsu devtools pull-runtimes --update --runtime pnpm config/src/runtimes.json
   datamitsu devtools pull-runtimes --update --dry-run config/src/runtimes.json`,
 	Args: cobra.ExactArgs(1),
 	RunE: runPullRuntimes,
@@ -126,14 +133,6 @@ func runPullRuntimes(cmd *cobra.Command, args []string) error {
 	}
 
 	var results []runtimePullResult
-	var sharedPNPMData *PNPMRuntimeData
-	var sharedPNPMErr error
-	getSharedPNPM := func() (*PNPMRuntimeData, error) {
-		if sharedPNPMData == nil && sharedPNPMErr == nil {
-			sharedPNPMData, sharedPNPMErr = pullPNPMRuntime(ctx, minAge)
-		}
-		return sharedPNPMData, sharedPNPMErr
-	}
 
 	for _, name := range runtimesToUpdate {
 		fmt.Printf("\n=== Updating %s ===\n", name)
@@ -145,11 +144,7 @@ func runPullRuntimes(cmd *cobra.Command, args []string) error {
 		case "bun":
 			var data *BunRuntimeData
 			var binaries binmanager.MapOfBinaries
-			var pnpmData *PNPMRuntimeData
-			pnpmData, updateErr = getSharedPNPM()
-			if updateErr == nil {
-				data, binaries, updateErr = pullBunRuntimeWithPNPM(ctx, minAge, pnpmData)
-			}
+			data, binaries, updateErr = pullBunRuntime(ctx, minAge)
 			if updateErr == nil {
 				runtimeJSON = buildBunRuntimeJSON(data, binaries)
 			}
@@ -170,11 +165,7 @@ func runPullRuntimes(cmd *cobra.Command, args []string) error {
 		case "node":
 			var data *NodeRuntimeData
 			var binaries binmanager.MapOfBinaries
-			var pnpmData *PNPMRuntimeData
-			pnpmData, updateErr = getSharedPNPM()
-			if updateErr == nil {
-				data, binaries, updateErr = pullNodeRuntimeWithPNPM(ctx, minAge, pnpmData)
-			}
+			data, binaries, updateErr = pullNodeRuntime(ctx)
 			if updateErr == nil {
 				runtimeJSON = buildNodeRuntimeJSON(data, binaries)
 			}
@@ -184,6 +175,13 @@ func runPullRuntimes(cmd *cobra.Command, args []string) error {
 			data, binaries, updateErr = pullGoRuntime(ctx)
 			if updateErr == nil {
 				runtimeJSON = buildGoRuntimeJSON(data, binaries)
+			}
+		case "pnpm":
+			var data *PNPMRuntimeData
+			var binaries binmanager.MapOfBinaries
+			data, binaries, updateErr = pullPNPMRuntime(ctx, minAge)
+			if updateErr == nil {
+				runtimeJSON = buildPNPMRuntimeJSON(data, binaries)
 			}
 		}
 
@@ -241,16 +239,19 @@ func runtimeVersion(r *RuntimeJSON) string {
 		parts = append(parts, "python="+r.UV.PythonVersion)
 	}
 	if r.Bun != nil {
-		parts = append(parts, fmt.Sprintf("bun=%s,pnpm=%s", r.Bun.BunVersion, r.Bun.PNPMVersion))
+		parts = append(parts, "bun="+r.Bun.BunVersion)
 	}
 	if r.JVM != nil {
 		parts = append(parts, "java="+r.JVM.JavaVersion)
 	}
 	if r.Node != nil {
-		parts = append(parts, fmt.Sprintf("node=%s,pnpm=%s", r.Node.NodeVersion, r.Node.PNPMVersion))
+		parts = append(parts, "node="+r.Node.NodeVersion)
 	}
 	if r.Go != nil {
 		parts = append(parts, "go="+r.Go.GoVersion)
+	}
+	if r.PNPM != nil {
+		parts = append(parts, "pnpm="+r.PNPM.PNPMVersion)
 	}
 	if r.Managed != nil {
 		binCount := 0
@@ -304,13 +305,13 @@ type RuntimeJSON struct {
 	JVM     *JVMConfigJSON      `json:"jvm,omitempty"`
 	Node    *NodeConfigJSON     `json:"node,omitempty"`
 	Go      *GoConfigJSON       `json:"go,omitempty"`
+	PNPM    *PNPMConfigJSON     `json:"pnpm,omitempty"`
 }
 
 // BunConfigJSON holds Bun-specific configuration in the JSON output.
 type BunConfigJSON struct {
 	BunVersion  string `json:"bunVersion"`
-	PNPMVersion string `json:"pnpmVersion"`
-	PNPMHash    string `json:"pnpmHash"`
+	PNPMRuntime string `json:"pnpmRuntime"`
 }
 
 // RuntimeManagedJSON holds the managed binary configuration for a runtime.
@@ -331,8 +332,12 @@ type JVMConfigJSON struct {
 // NodeConfigJSON holds Node-specific configuration in the JSON output.
 type NodeConfigJSON struct {
 	NodeVersion string `json:"nodeVersion"`
+	PNPMRuntime string `json:"pnpmRuntime"`
+}
+
+// PNPMConfigJSON holds pnpm-specific configuration in the JSON output.
+type PNPMConfigJSON struct {
 	PNPMVersion string `json:"pnpmVersion"`
-	PNPMHash    string `json:"pnpmHash"`
 }
 
 // GoConfigJSON holds Go-specific configuration in the JSON output.
@@ -402,8 +407,7 @@ func buildBunRuntimeJSON(data *BunRuntimeData, binaries binmanager.MapOfBinaries
 		},
 		Bun: &BunConfigJSON{
 			BunVersion:  data.BunVersion,
-			PNPMVersion: data.PNPMVersion,
-			PNPMHash:    data.PNPMHash,
+			PNPMRuntime: defaultPNPMRuntimeName,
 		},
 	}
 }
@@ -432,8 +436,21 @@ func buildNodeRuntimeJSON(data *NodeRuntimeData, binaries binmanager.MapOfBinari
 		},
 		Node: &NodeConfigJSON{
 			NodeVersion: data.NodeVersion,
+			PNPMRuntime: defaultPNPMRuntimeName,
+		},
+	}
+}
+
+// buildPNPMRuntimeJSON constructs a RuntimeJSON from pnpm updater results.
+func buildPNPMRuntimeJSON(data *PNPMRuntimeData, binaries binmanager.MapOfBinaries) *RuntimeJSON {
+	return &RuntimeJSON{
+		Kind: "pnpm",
+		Mode: "managed",
+		Managed: &RuntimeManagedJSON{
+			Binaries: binaries,
+		},
+		PNPM: &PNPMConfigJSON{
 			PNPMVersion: data.PNPMVersion,
-			PNPMHash:    data.PNPMHash,
 		},
 	}
 }
@@ -452,80 +469,14 @@ func buildGoRuntimeJSON(data *GoRuntimeData, binaries binmanager.MapOfBinaries) 
 	}
 }
 
-// pnpmHTTPClient fetches pnpm metadata/tarballs during the pull-runtimes
+// pnpmHTTPClient fetches the Node release manifests during the pull-runtimes
 // devtools flow over the shared hardened transport. The 2-minute budget is
-// shorter than the runtime-install clients because this only computes hashes.
+// shorter than the runtime-install clients because this only reads metadata.
 var pnpmHTTPClient = httpx.NewHardenedClient(2 * time.Minute)
-
-type npmVersionMetaForPull struct {
-	Dist struct {
-		Tarball string `json:"tarball"`
-	} `json:"dist"`
-}
-
-// fetchPNPMTarballHash downloads the PNPM tarball for the given version and
-// computes its SHA-256 hash without writing to permanent storage.
-func fetchPNPMTarballHash(ctx context.Context, version string) (string, error) {
-	metaURL := "https://registry.npmjs.org/pnpm/" + version
-	metaReq, err := http.NewRequestWithContext(ctx, http.MethodGet, metaURL, nil)
-	if err != nil {
-		return "", fmt.Errorf("failed to build request: %w", err)
-	}
-	resp, err := pnpmHTTPClient.Do(metaReq)
-	if err != nil {
-		return "", fmt.Errorf("failed to fetch PNPM metadata: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("npm registry returned status %d for pnpm@%s", resp.StatusCode, version)
-	}
-
-	var meta npmVersionMetaForPull
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 10<<20)).Decode(&meta); err != nil {
-		return "", fmt.Errorf("failed to decode PNPM metadata: %w", err)
-	}
-
-	if meta.Dist.Tarball == "" {
-		return "", fmt.Errorf("no tarball URL found for pnpm@%s", version)
-	}
-
-	if !strings.HasPrefix(meta.Dist.Tarball, "https://") {
-		return "", fmt.Errorf("pnpm tarball URL is not HTTPS: %s", meta.Dist.Tarball)
-	}
-
-	tarReq, err := http.NewRequestWithContext(ctx, http.MethodGet, meta.Dist.Tarball, nil)
-	if err != nil {
-		return "", fmt.Errorf("failed to build request: %w", err)
-	}
-	tarResp, err := pnpmHTTPClient.Do(tarReq)
-	if err != nil {
-		return "", fmt.Errorf("failed to download PNPM tarball: %w", err)
-	}
-	defer func() { _ = tarResp.Body.Close() }()
-
-	if tarResp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("pnpm tarball download returned status %d", tarResp.StatusCode)
-	}
-
-	const maxSize = 100 * 1024 * 1024 // 100 MiB
-	hasher := sha256.New()
-	written, err := io.Copy(hasher, io.LimitReader(tarResp.Body, maxSize+1))
-	if err != nil {
-		return "", fmt.Errorf("failed to read PNPM tarball: %w", err)
-	}
-	if written > maxSize {
-		return "", fmt.Errorf("pnpm tarball exceeds maximum size of %d bytes", maxSize)
-	}
-
-	return hex.EncodeToString(hasher.Sum(nil)), nil
-}
 
 // BunRuntimeData holds the Bun-specific runtime configuration data.
 type BunRuntimeData struct {
-	BunVersion  string
-	PNPMVersion string
-	PNPMHash    string
+	BunVersion string
 }
 
 type bunArchiveSpec struct {
@@ -595,7 +546,7 @@ func detectBunBinaries(release *github.Release) (binmanager.MapOfBinaries, error
 	return binaries, nil
 }
 
-func pullBunRuntimeWithPNPM(ctx context.Context, minAge int, pnpmData *PNPMRuntimeData) (*BunRuntimeData, binmanager.MapOfBinaries, error) {
+func pullBunRuntime(ctx context.Context, minAge int) (*BunRuntimeData, binmanager.MapOfBinaries, error) {
 	client := github.NewClient()
 	release, err := client.GetLatestReleaseWithMinAge(ctx, "oven-sh", "bun", minAge)
 	if err != nil {
@@ -615,13 +566,77 @@ func pullBunRuntimeWithPNPM(ctx context.Context, minAge int, pnpmData *PNPMRunti
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to detect Bun binaries: %w", err)
 	}
-	if pnpmData == nil {
-		pnpmData, err = pullPNPMRuntime(ctx, minAge)
-		if err != nil {
-			return nil, nil, err
-		}
+	return &BunRuntimeData{BunVersion: version}, binaries, nil
+}
+
+type pnpmArchiveSpec struct {
+	os       syslist.OsType
+	arch     syslist.ArchType
+	libc     string
+	filename string
+}
+
+// pnpmArchiveSpecs lists the pnpm release archives datamitsu pins, keyed the
+// way the other runtimes are. pnpm also publishes freebsd, android, riscv64,
+// ppc64 and s390x builds, which no other runtime here covers.
+func pnpmArchiveSpecs() []pnpmArchiveSpec {
+	return []pnpmArchiveSpec{
+		{syslist.OsTypeDarwin, syslist.ArchTypeAmd64, "unknown", "pnpm-darwin-x64.tar.gz"},
+		{syslist.OsTypeDarwin, syslist.ArchTypeArm64, "unknown", "pnpm-darwin-arm64.tar.gz"},
+		{syslist.OsTypeLinux, syslist.ArchTypeAmd64, "glibc", "pnpm-linux-x64.tar.gz"},
+		{syslist.OsTypeLinux, syslist.ArchTypeAmd64, "musl", "pnpm-linux-x64-musl.tar.gz"},
+		{syslist.OsTypeLinux, syslist.ArchTypeArm64, "glibc", "pnpm-linux-arm64.tar.gz"},
+		{syslist.OsTypeLinux, syslist.ArchTypeArm64, "musl", "pnpm-linux-arm64-musl.tar.gz"},
+		{syslist.OsTypeWindows, syslist.ArchTypeAmd64, "unknown", "pnpm-win32-x64.zip"},
+		{syslist.OsTypeWindows, syslist.ArchTypeArm64, "unknown", "pnpm-win32-arm64.zip"},
 	}
-	return &BunRuntimeData{BunVersion: version, PNPMVersion: pnpmData.Version, PNPMHash: pnpmData.Hash}, binaries, nil
+}
+
+// detectPNPMBinaries maps a pnpm GitHub release to per-platform archive
+// entries, pinned by the SHA-256 digests GitHub publishes for each asset. The
+// archives hold the binary at their root beside dist/, the node-gyp pnpm uses
+// to build native dependencies, so the whole archive is extracted.
+func detectPNPMBinaries(release *github.Release) (binmanager.MapOfBinaries, error) {
+	assets := make(map[string]github.Asset, len(release.Assets))
+	for _, asset := range release.Assets {
+		assets[asset.Name] = asset
+	}
+
+	binaries := make(binmanager.MapOfBinaries)
+	for _, spec := range pnpmArchiveSpecs() {
+		asset, ok := assets[spec.filename]
+		if !ok {
+			return nil, fmt.Errorf("pnpm %s: release asset %s not found", release.TagName, spec.filename)
+		}
+		hash, err := extractHashFromDigest(asset.Digest)
+		if err != nil {
+			return nil, fmt.Errorf("pnpm %s asset %s: %w", release.TagName, spec.filename, err)
+		}
+
+		binaryPath := "pnpm"
+		contentType := binmanager.BinContentTypeTarGz
+		if spec.os == syslist.OsTypeWindows {
+			binaryPath = "pnpm.exe"
+			contentType = binmanager.BinContentTypeZip
+		}
+		info := binmanager.BinaryOsArchInfo{
+			URL:         asset.BrowserDownloadURL,
+			Hash:        hash,
+			ContentType: contentType,
+			BinaryPath:  &binaryPath,
+			ExtractDir:  true,
+		}
+		if binaries[spec.os] == nil {
+			binaries[spec.os] = make(map[syslist.ArchType]map[string]binmanager.BinaryOsArchInfo)
+		}
+		if binaries[spec.os][spec.arch] == nil {
+			binaries[spec.os][spec.arch] = make(map[string]binmanager.BinaryOsArchInfo)
+		}
+		binaries[spec.os][spec.arch][spec.libc] = info
+	}
+
+	fmt.Printf("  pnpm: %d archives detected (sha256 from GitHub release metadata)\n", len(pnpmArchiveSpecs()))
+	return binaries, nil
 }
 
 // UVRuntimeData holds the UV-specific runtime configuration data.
@@ -902,33 +917,37 @@ const (
 // NodeRuntimeData holds the Node-specific runtime configuration data.
 type NodeRuntimeData struct {
 	NodeVersion string
-	PNPMVersion string
-	PNPMHash    string
 }
 
-// PNPMRuntimeData is shared by Bun and Node during one pull-runtimes run so
-// both runtime entries receive one coherent, hash-pinned installer release.
+// PNPMRuntimeData holds the pnpm-specific runtime configuration data.
 type PNPMRuntimeData struct {
-	Version string
-	Hash    string
+	PNPMVersion string
 }
 
-const supportedPNPMMajor = 11
+const supportedPNPMMajor = 12
 
-func pullPNPMRuntime(ctx context.Context, minAge int) (*PNPMRuntimeData, error) {
+// pullPNPMRuntime picks the pnpm version by its npm publish date, so the
+// minimum release age gates it like any npm package, then pins that version's
+// per-platform archives from the matching GitHub release.
+func pullPNPMRuntime(ctx context.Context, minAge int) (*PNPMRuntimeData, binmanager.MapOfBinaries, error) {
 	pnpmInfo, err := registry.GetNPMPackageInfoWithMinAgeMajor(ctx, "pnpm", supportedPNPMMajor, minAge)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch pnpm %d version: %w", supportedPNPMMajor, err)
+		return nil, nil, fmt.Errorf("failed to fetch pnpm %d version: %w", supportedPNPMMajor, err)
 	}
 	if pnpmInfo == nil {
-		return nil, noReleaseOldEnoughErr(fmt.Sprintf("pnpm %d", supportedPNPMMajor), minAge)
+		return nil, nil, noReleaseOldEnoughErr(fmt.Sprintf("pnpm %d", supportedPNPMMajor), minAge)
 	}
 
-	pnpmHash, err := fetchPNPMTarballHash(ctx, pnpmInfo.Version)
+	release, err := github.NewClient().GetRelease(ctx, "pnpm", "pnpm", "v"+pnpmInfo.Version)
 	if err != nil {
-		return nil, fmt.Errorf("failed to compute pnpm hash: %w", err)
+		return nil, nil, fmt.Errorf("failed to fetch pnpm %s GitHub release: %w", pnpmInfo.Version, err)
 	}
-	return &PNPMRuntimeData{Version: pnpmInfo.Version, Hash: pnpmHash}, nil
+	fmt.Printf("pnpm release: %s (%d assets)\n", release.TagName, len(release.Assets))
+	binaries, err := detectPNPMBinaries(release)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to detect pnpm binaries: %w", err)
+	}
+	return &PNPMRuntimeData{PNPMVersion: pnpmInfo.Version}, binaries, nil
 }
 
 // nodePullConfig configures Node binary detection so tests can inject mock
@@ -1163,13 +1182,9 @@ func resolveLatestNodeLTS(ctx context.Context) (string, error) {
 	return version, nil
 }
 
-// pullNodeRuntime resolves the latest Node version + pnpm, then fetches and
+// pullNodeRuntime resolves the latest Node LTS version, then fetches and
 // verifies the Node release manifests to build the archive registry entry.
-func pullNodeRuntime(ctx context.Context, minAge int) (*NodeRuntimeData, binmanager.MapOfBinaries, error) {
-	return pullNodeRuntimeWithPNPM(ctx, minAge, nil)
-}
-
-func pullNodeRuntimeWithPNPM(ctx context.Context, minAge int, pnpmData *PNPMRuntimeData) (*NodeRuntimeData, binmanager.MapOfBinaries, error) {
+func pullNodeRuntime(ctx context.Context) (*NodeRuntimeData, binmanager.MapOfBinaries, error) {
 	data := &NodeRuntimeData{}
 
 	// The Node LTS version is a major-version-line selection from endoflife.date,
@@ -1180,22 +1195,12 @@ func pullNodeRuntimeWithPNPM(ctx context.Context, minAge int, pnpmData *PNPMRunt
 	}
 	data.NodeVersion = nodeVersion
 
-	// pnpm is a specific npm package version, so age filtering applies.
-	if pnpmData == nil {
-		pnpmData, err = pullPNPMRuntime(ctx, minAge)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-	data.PNPMVersion = pnpmData.Version
-	data.PNPMHash = pnpmData.Hash
-
 	keyring, err := nodekeys.ReleaseKeyring()
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to load Node release keys: %w", err)
 	}
 
-	fmt.Printf("Node version: v%s (pnpm %s)\n", data.NodeVersion, data.PNPMVersion)
+	fmt.Printf("Node version: v%s\n", data.NodeVersion)
 
 	binaries, err := detectNodeBinaries(ctx, nodePullConfig{
 		version:     data.NodeVersion,

@@ -351,12 +351,11 @@ func TestBuildNodeBinaries_UppercaseHashNormalizedAndValid(t *testing.T) {
 		Mode: config.RuntimeModeManaged,
 		Node: &config.RuntimeConfigNode{
 			NodeVersion: nodeTestVersion,
-			PNPMVersion: "11.2.2",
-			PNPMHash:    strings.Repeat("a", 64),
+			PNPMRuntime: "pnpm",
 		},
 		Managed: &config.RuntimeConfigManaged{Binaries: binaries},
 	}
-	if err := config.ValidateRuntimes(config.MapOfRuntimes{"node": rt}); err != nil {
+	if err := config.ValidateRuntimes(config.MapOfRuntimes{"node": rt, "pnpm": testPNPMRuntime()}); err != nil {
 		t.Fatalf("ValidateRuntimes rejected normalized hashes: %v", err)
 	}
 }
@@ -463,11 +462,7 @@ func TestDetectNodeBinaries_MissingMuslAssetFromServer(t *testing.T) {
 }
 
 func TestBuildNodeRuntimeJSON(t *testing.T) {
-	data := &NodeRuntimeData{
-		NodeVersion: "26.2.0",
-		PNPMVersion: "11.2.2",
-		PNPMHash:    testHash1,
-	}
+	data := &NodeRuntimeData{NodeVersion: "26.2.0"}
 	result := buildNodeRuntimeJSON(data, make(binmanager.MapOfBinaries))
 
 	if result.Kind != "node" {
@@ -482,8 +477,8 @@ func TestBuildNodeRuntimeJSON(t *testing.T) {
 	if result.Node.NodeVersion != "26.2.0" {
 		t.Errorf("NodeVersion = %q, want %q", result.Node.NodeVersion, "26.2.0")
 	}
-	if result.Node.PNPMVersion != "11.2.2" {
-		t.Errorf("PNPMVersion = %q", result.Node.PNPMVersion)
+	if result.Node.PNPMRuntime != defaultPNPMRuntimeName {
+		t.Errorf("PNPMRuntime = %q, want %q", result.Node.PNPMRuntime, defaultPNPMRuntimeName)
 	}
 	if result.UV != nil || result.JVM != nil {
 		t.Error("only Node config should be set for a node runtime")
@@ -492,13 +487,14 @@ func TestBuildNodeRuntimeJSON(t *testing.T) {
 
 func TestRuntimeVersion_Node(t *testing.T) {
 	r := &RuntimeJSON{
-		Node: &NodeConfigJSON{NodeVersion: "26.2.0", PNPMVersion: "11.2.2"},
+		Node: &NodeConfigJSON{NodeVersion: "26.2.0", PNPMRuntime: defaultPNPMRuntimeName},
 	}
 	v := runtimeVersion(r)
 	if !strings.Contains(v, "node=26.2.0") {
 		t.Errorf("expected node version, got %q", v)
 	}
-	if !strings.Contains(v, "pnpm=11.2.2") {
-		t.Errorf("expected pnpm version, got %q", v)
+	// The pnpm version belongs to the pnpm runtime entry.
+	if strings.Contains(v, "pnpm=") {
+		t.Errorf("node version string must not carry a pnpm version, got %q", v)
 	}
 }

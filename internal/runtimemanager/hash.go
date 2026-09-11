@@ -131,16 +131,18 @@ func calculateAppHash(appName string, version string, deps map[string]string, ru
 
 // calculatePackageAppHash hashes a Node- or Bun-kind package app's identity.
 // The cache key folds in the package name, version, binPath, dependencies,
-// lockfile, files, and the runtime hash (which already includes the runtime's
-// archive and kind-specific version fields). The app-env path is additionally
-// prefixed by its runtime kind ("node" or "bun").
-func calculatePackageAppHash(appName string, packageName string, pkgVersion string, binPath string, deps map[string]string, runtimeHash string, lockHash string, filesHash string) string {
+// lockfile, files, the runtime hash (which already includes the runtime's
+// archive and kind-specific version fields) and the hash of the pnpm runtime
+// that installs the app. The app-env path is additionally prefixed by its
+// runtime kind ("node" or "bun").
+func calculatePackageAppHash(appName string, packageName string, pkgVersion string, binPath string, deps map[string]string, runtimeHash string, pnpmHash string, lockHash string, filesHash string) string {
 	parts := [][]byte{
 		[]byte(appName),
 		[]byte(packageName),
 		[]byte(pkgVersion),
 		[]byte(binPath),
 		[]byte(runtimeHash),
+		[]byte(pnpmHash),
 		[]byte(lockHash),
 		[]byte(filesHash),
 	}

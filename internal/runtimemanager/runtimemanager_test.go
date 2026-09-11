@@ -67,11 +67,12 @@ func makeTestRuntimes() config.MapOfRuntimes {
 				Command: "/usr/local/bin/uv",
 			},
 		},
+		testPNPMRuntimeName: testPNPMRuntime(),
 		"node": {
 			Kind: config.RuntimeKindNode,
 			Mode: config.RuntimeModeManaged,
 			Node: &config.RuntimeConfigNode{
-				PNPMHash: "test-pnpm-sha256-hash",
+				PNPMRuntime: testPNPMRuntimeName,
 			},
 			Managed: &config.RuntimeConfigManaged{
 				Binaries: binmanager.MapOfBinaries{
@@ -579,8 +580,7 @@ func TestGetAppPathNode(t *testing.T) {
 			Mode: config.RuntimeModeManaged,
 			Node: &config.RuntimeConfigNode{
 				NodeVersion: "20.11.1",
-				PNPMVersion: "10.7.0",
-				PNPMHash:    "test-pnpm-sha256-hash",
+				PNPMRuntime: testPNPMRuntimeName,
 			},
 			Managed: runtimesWithDiffNode["node"].Managed,
 		}
@@ -594,16 +594,13 @@ func TestGetAppPathNode(t *testing.T) {
 		}
 	})
 
-	t.Run("different pnpm versions produce different paths", func(t *testing.T) {
+	t.Run("different pnpm runtimes produce different paths", func(t *testing.T) {
 		runtimesWithDiffPNPM := makeTestRuntimes()
+		runtimesWithDiffPNPM["pnpm-9"] = pnpmRuntimeWithVersion("9.15.0")
 		runtimesWithDiffPNPM["node-alt-pnpm"] = config.RuntimeConfig{
-			Kind: config.RuntimeKindNode,
-			Mode: config.RuntimeModeManaged,
-			Node: &config.RuntimeConfigNode{
-				NodeVersion: "22.14.0",
-				PNPMVersion: "9.15.0",
-				PNPMHash:    "test-pnpm-sha256-hash",
-			},
+			Kind:    config.RuntimeKindNode,
+			Mode:    config.RuntimeModeManaged,
+			Node:    &config.RuntimeConfigNode{PNPMRuntime: "pnpm-9"},
 			Managed: runtimesWithDiffPNPM["node"].Managed,
 		}
 		rmDiffPNPM := New(runtimesWithDiffPNPM)
@@ -1520,7 +1517,7 @@ func TestGetRuntimePath_MuslAutoFallback(t *testing.T) {
 		Kind: config.RuntimeKindNode,
 		Mode: config.RuntimeModeManaged,
 		Node: &config.RuntimeConfigNode{
-			PNPMHash: "test-pnpm-sha256-hash",
+			PNPMRuntime: testPNPMRuntimeName,
 		},
 		Managed: &config.RuntimeConfigManaged{
 			Binaries: glibcOnlyBinaries(),

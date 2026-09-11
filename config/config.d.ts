@@ -60,7 +60,7 @@ declare global {
   function getConfig(config: config.Config): config.Config;
 
   /**
-   * Recommended pnpm 11 workspace security defaults, injected by the Go engine. Read this object to
+   * Recommended pnpm workspace security defaults, injected by the Go engine. Read this object to
    * publish or extend the defaults — see `sharedStorage["pnpm-workspace-defaults"]` for the
    * canonical YAML output.
    */
@@ -404,7 +404,7 @@ declare global {
        *
        * Well-known keys published by the default config: - `"datamitsu-agent-prompt"`: Markdown
        * guide for AI agents working in datamitsu-managed repos. - `"pnpm-workspace-defaults"`: YAML
-       * string of the recommended pnpm 11 workspace security defaults. Parse with `YAML.parse()`,
+       * string of the recommended pnpm workspace security defaults. Parse with `YAML.parse()`,
        * extend with org/repo-specific settings, and write into a project repo via a Bundle to
        * produce a secure `pnpm-workspace.yaml`. Separate from the auto-merge applied to
        * `App.files["pnpm-workspace.yaml"]` for node apps. See the Supply Chain Security guide for
@@ -1139,7 +1139,7 @@ declare global {
        *
        * Special handling for `pnpm-workspace.yaml` on Bun and Node apps: the entry is NOT written
        * verbatim. Instead, the installer parses it and shallow-merges it on top of the recommended
-       * pnpm 11 workspace security defaults, then writes the merged result. User keys override
+       * pnpm workspace security defaults, then writes the merged result. User keys override
        * defaults for the same top-level key. Use this to add `allowBuilds` for packages that need
        * build scripts (e.g., puppeteer) without losing the security defaults. See the Supply Chain
        * Security guide for the full default key list and rationale.
@@ -1403,8 +1403,9 @@ declare global {
 
     interface RuntimeConfig {
       /**
-       * Bun-specific runtime configuration (bunVersion, pnpmVersion, pnpmHash). Required when kind
-       * is "bun". pnpm installs dependencies while Bun executes both pnpm and the installed app.
+       * Bun-specific runtime configuration (bunVersion, pnpmRuntime). Required when kind is "bun".
+       * The referenced pnpm runtime installs dependencies while Bun executes the installed app and
+       * the `node` of lifecycle scripts.
        */
       bun?: RuntimeConfigBun;
       /**
@@ -1419,11 +1420,18 @@ declare global {
       managed?: RuntimeConfigManaged;
       mode: RuntimeMode;
       /**
-       * Node-specific runtime configuration (nodeVersion, pnpmVersion, pnpmHash). Required when
-       * kind is "node". Node is acquired as a direct, hash-pinned archive (url + hash), like the
-       * jvm runtime.
+       * Node-specific runtime configuration (nodeVersion, pnpmRuntime). Required when kind is
+       * "node". Node is acquired as a direct, hash-pinned archive (url + hash), like the jvm
+       * runtime.
        */
       node?: RuntimeConfigNode;
+      /**
+       * Pnpm-specific runtime configuration (pnpmVersion). Required when kind is "pnpm". pnpm 12 is
+       * a native binary, so it is acquired like any runtime (per-platform `managed.binaries`, each
+       * SHA-256-pinned) and referenced by Node and Bun runtimes through `pnpmRuntime`. No app runs
+       * on it.
+       */
+      pnpm?: RuntimeConfigPNPM;
       system?: RuntimeConfigSystem;
       /**
        * UV-specific runtime configuration (pythonVersion). Optional when kind is "uv".
@@ -1434,11 +1442,12 @@ declare global {
     interface RuntimeConfigBun {
       bunVersion: string;
       /**
-       * SHA-256 hash of the pnpm tarball for integrity verification. Required per security policy:
-       * all downloads must have a pinned hash.
+       * Name of the runtime of kind "pnpm" that installs this runtime's apps.
+       *
+       * @example
+       *   "pnpm";
        */
-      pnpmHash: string;
-      pnpmVersion: string;
+      pnpmRuntime: string;
     }
 
     interface RuntimeConfigGo {
@@ -1462,10 +1471,21 @@ declare global {
     interface RuntimeConfigNode {
       nodeVersion: string;
       /**
-       * SHA-256 hash of the PNPM tarball for integrity verification. Required per security policy:
-       * all downloads must have a pinned hash.
+       * Name of the runtime of kind "pnpm" that installs this runtime's apps.
+       *
+       * @example
+       *   "pnpm";
        */
-      pnpmHash: string;
+      pnpmRuntime: string;
+    }
+
+    interface RuntimeConfigPNPM {
+      /**
+       * Pinned pnpm version. Optional in system mode, where it only feeds cache invalidation.
+       *
+       * @example
+       *   "12.4.1";
+       */
       pnpmVersion: string;
     }
 
@@ -1481,7 +1501,7 @@ declare global {
       pythonVersion?: string;
     }
 
-    type RuntimeKind = "bun" | "go" | "jvm" | "node" | "uv";
+    type RuntimeKind = "bun" | "go" | "jvm" | "node" | "pnpm" | "uv";
 
     type RuntimeMode = "managed" | "system";
   }

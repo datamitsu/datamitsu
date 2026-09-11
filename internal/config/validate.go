@@ -1094,6 +1094,7 @@ func ValidateRuntimes(runtimes MapOfRuntimes) error {
 		if info, ok := LookupRuntimeKind(rc.Kind); ok && info.Validate != nil {
 			errs = append(errs, info.Validate(name, rc)...)
 		}
+		errs = append(errs, validatePNPMRuntimeRef(name, rc, runtimes)...)
 		if rc.Mode == RuntimeModeManaged {
 			if rc.Managed == nil {
 				errs = append(errs, fmt.Sprintf("runtime %q: managed mode requires managed config with binaries", name))

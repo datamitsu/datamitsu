@@ -93,9 +93,10 @@ func TestLoadConfigRuntimes(t *testing.T) {
 	if bunRuntime.Bun == nil || bunRuntime.Bun.BunVersion == "" {
 		t.Fatal("bun runtime bunVersion is empty")
 	}
-	if bunRuntime.Bun.PNPMVersion == "" || bunRuntime.Bun.PNPMHash == "" {
-		t.Fatal("bun runtime pnpm pin is empty")
+	if bunRuntime.Bun.PNPMRuntime != defaultPNPMRuntimeName {
+		t.Errorf("bun runtime pnpmRuntime = %q, want %q", bunRuntime.Bun.PNPMRuntime, defaultPNPMRuntimeName)
 	}
+	assertEmbeddedPNPMRuntime(t, cfg.Runtimes)
 	if bunRuntime.Managed == nil {
 		t.Fatal("bun runtime managed config is nil")
 	}
@@ -149,11 +150,8 @@ func TestLoadConfigRuntimes(t *testing.T) {
 	if nodeRuntime.Node.NodeVersion == "" {
 		t.Error("node runtime nodeVersion is empty")
 	}
-	if nodeRuntime.Node.PNPMVersion == "" {
-		t.Error("node runtime pnpmVersion is empty")
-	}
-	if nodeRuntime.Node.PNPMHash == "" {
-		t.Error("node runtime pnpmHash is empty")
+	if nodeRuntime.Node.PNPMRuntime != defaultPNPMRuntimeName {
+		t.Errorf("node runtime pnpmRuntime = %q, want %q", nodeRuntime.Node.PNPMRuntime, defaultPNPMRuntimeName)
 	}
 	if nodeRuntime.Managed == nil {
 		t.Fatal("node runtime managed config is nil")

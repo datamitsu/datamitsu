@@ -1,6 +1,9 @@
 package config
 
-import "fmt"
+import (
+	"fmt"
+	"sort"
+)
 
 // RuntimeKindInfo captures the per-kind facts that were previously duplicated
 // across the runtime manager (system-command lookup, cache-hash folding) and the
@@ -11,7 +14,7 @@ import "fmt"
 // runtimeKinds instead of edits fanned out across systemCommandForKind, the two
 // hash functions, and ValidateRuntimes.
 type RuntimeKindInfo struct {
-	// Name is the canonical kind string ("bun" | "uv" | "node" | "jvm" | "go").
+	// Name is the canonical kind string ("bun" | "uv" | "node" | "jvm" | "go" | "pnpm").
 	Name string
 	// SystemCommand is the system binary name used when falling back to system
 	// mode (e.g. on a musl host without a musl archive). Empty means the kind has
@@ -40,7 +43,7 @@ var runtimeKinds = map[RuntimeKind]RuntimeKindInfo{
 			if rc.Bun == nil {
 				return nil
 			}
-			return []string{rc.Bun.BunVersion, rc.Bun.PNPMVersion, rc.Bun.PNPMHash}
+			return []string{rc.Bun.BunVersion}
 		},
 		Validate: validateBunRuntimeKind,
 	},
@@ -64,7 +67,7 @@ var runtimeKinds = map[RuntimeKind]RuntimeKindInfo{
 			if rc.Node == nil {
 				return nil
 			}
-			return []string{rc.Node.NodeVersion, rc.Node.PNPMVersion, rc.Node.PNPMHash}
+			return []string{rc.Node.NodeVersion}
 		},
 		Validate: validateNodeRuntimeKind,
 	},
@@ -90,11 +93,22 @@ var runtimeKinds = map[RuntimeKind]RuntimeKindInfo{
 		},
 		Validate: validateGoRuntimeKind,
 	},
+	RuntimeKindPNPM: {
+		Name:          string(RuntimeKindPNPM),
+		SystemCommand: "pnpm",
+		HashFields: func(rc RuntimeConfig) []string {
+			if rc.PNPM == nil {
+				return nil
+			}
+			return []string{rc.PNPM.PNPMVersion}
+		},
+		Validate: validatePNPMRuntimeKind,
+	},
 }
 
 func validateBunRuntimeKind(name string, rc RuntimeConfig) []string {
 	if rc.Bun == nil {
-		return []string{fmt.Sprintf("runtime %q: Bun runtime requires bun config with bunVersion, pnpmVersion, and pnpmHash", name)}
+		return []string{fmt.Sprintf("runtime %q: Bun runtime requires bun config with bunVersion and pnpmRuntime", name)}
 	}
 	var errs []string
 	if rc.Bun.BunVersion == "" {
@@ -102,15 +116,8 @@ func validateBunRuntimeKind(name string, rc RuntimeConfig) []string {
 	} else if !isValidVersionString(rc.Bun.BunVersion) {
 		errs = append(errs, fmt.Sprintf("runtime %q: bun.bunVersion %q contains invalid characters (must be alphanumeric, dots, hyphens, underscores, or plus signs)", name, rc.Bun.BunVersion))
 	}
-	if rc.Bun.PNPMVersion == "" {
-		errs = append(errs, fmt.Sprintf("runtime %q: bun.pnpmVersion is required", name))
-	} else if !isValidVersionString(rc.Bun.PNPMVersion) {
-		errs = append(errs, fmt.Sprintf("runtime %q: bun.pnpmVersion %q contains invalid characters (must be alphanumeric, dots, hyphens, underscores, or plus signs)", name, rc.Bun.PNPMVersion))
-	}
-	if rc.Bun.PNPMHash == "" {
-		errs = append(errs, fmt.Sprintf("runtime %q: bun.pnpmHash is required (SHA-256 hash of pnpm tarball)", name))
-	} else if !isValidSHA256Hex(rc.Bun.PNPMHash) {
-		errs = append(errs, fmt.Sprintf("runtime %q: bun.pnpmHash must be a valid SHA-256 hex string (64 lowercase hex characters)", name))
+	if rc.Bun.PNPMRuntime == "" {
+		errs = append(errs, fmt.Sprintf("runtime %q: bun.pnpmRuntime is required (the name of the runtime of kind \"pnpm\" that installs Bun apps)", name))
 	}
 	return errs
 }
@@ -135,7 +142,7 @@ func AllRuntimeKinds() []RuntimeKind {
 
 func validateNodeRuntimeKind(name string, rc RuntimeConfig) []string {
 	if rc.Node == nil {
-		return []string{fmt.Sprintf("runtime %q: Node runtime requires node config with nodeVersion, pnpmVersion, and pnpmHash", name)}
+		return []string{fmt.Sprintf("runtime %q: Node runtime requires node config with nodeVersion and pnpmRuntime", name)}
 	}
 	var errs []string
 	if rc.Node.NodeVersion == "" {
@@ -143,15 +150,8 @@ func validateNodeRuntimeKind(name string, rc RuntimeConfig) []string {
 	} else if !isValidVersionString(rc.Node.NodeVersion) {
 		errs = append(errs, fmt.Sprintf("runtime %q: node.nodeVersion %q contains invalid characters (must be alphanumeric, dots, hyphens, underscores, or plus signs)", name, rc.Node.NodeVersion))
 	}
-	if rc.Node.PNPMVersion == "" {
-		errs = append(errs, fmt.Sprintf("runtime %q: node.pnpmVersion is required", name))
-	} else if !isValidVersionString(rc.Node.PNPMVersion) {
-		errs = append(errs, fmt.Sprintf("runtime %q: node.pnpmVersion %q contains invalid characters (must be alphanumeric, dots, hyphens, underscores, or plus signs)", name, rc.Node.PNPMVersion))
-	}
-	if rc.Node.PNPMHash == "" {
-		errs = append(errs, fmt.Sprintf("runtime %q: node.pnpmHash is required (SHA-256 hash of PNPM tarball)", name))
-	} else if !isValidSHA256Hex(rc.Node.PNPMHash) {
-		errs = append(errs, fmt.Sprintf("runtime %q: node.pnpmHash must be a valid SHA-256 hex string (64 lowercase hex characters)", name))
+	if rc.Node.PNPMRuntime == "" {
+		errs = append(errs, fmt.Sprintf("runtime %q: node.pnpmRuntime is required (the name of the runtime of kind \"pnpm\" that installs Node apps)", name))
 	}
 	return errs
 }
@@ -186,4 +186,68 @@ func validateGoRuntimeKind(name string, rc RuntimeConfig) []string {
 		return []string{fmt.Sprintf("runtime %q: go.goVersion %q contains invalid characters (must be alphanumeric, dots, hyphens, underscores, or plus signs)", name, rc.Go.GoVersion)}
 	}
 	return nil
+}
+
+func validatePNPMRuntimeKind(name string, rc RuntimeConfig) []string {
+	switch {
+	case rc.Mode == RuntimeModeSystem:
+		// A system pnpm is whatever the host provides; pnpmVersion then only
+		// feeds cache invalidation, like goVersion, so it is optional.
+		if rc.PNPM != nil && rc.PNPM.PNPMVersion != "" && !isValidVersionString(rc.PNPM.PNPMVersion) {
+			return []string{fmt.Sprintf("runtime %q: pnpm.pnpmVersion %q contains invalid characters (must be alphanumeric, dots, hyphens, underscores, or plus signs)", name, rc.PNPM.PNPMVersion)}
+		}
+	case rc.PNPM == nil:
+		return []string{fmt.Sprintf("runtime %q: pnpm runtime requires pnpm config with pnpmVersion", name)}
+	case rc.PNPM.PNPMVersion == "":
+		return []string{fmt.Sprintf("runtime %q: pnpm.pnpmVersion is required", name)}
+	case !isValidVersionString(rc.PNPM.PNPMVersion):
+		return []string{fmt.Sprintf("runtime %q: pnpm.pnpmVersion %q contains invalid characters (must be alphanumeric, dots, hyphens, underscores, or plus signs)", name, rc.PNPM.PNPMVersion)}
+	}
+	return nil
+}
+
+// validatePNPMRuntimeRef checks that the pnpmRuntime of a Node or Bun runtime
+// names a runtime of kind pnpm. An empty reference is reported by the kind's
+// own validation.
+func validatePNPMRuntimeRef(name string, rc RuntimeConfig, runtimes MapOfRuntimes) []string {
+	ref := rc.PNPMRuntimeRef()
+	if ref == "" {
+		return nil
+	}
+	field := string(rc.Kind) + ".pnpmRuntime"
+	target, ok := runtimes[ref]
+	if !ok {
+		return []string{fmt.Sprintf("runtime %q: %s %q not found", name, field, ref)}
+	}
+	if target.Kind != RuntimeKindPNPM {
+		return []string{fmt.Sprintf("runtime %q: %s %q is kind %q, expected %q", name, field, ref, target.Kind, RuntimeKindPNPM)}
+	}
+	return nil
+}
+
+// PNPMRuntimeName returns the pnpm runtime that installs the apps of rc, a Node
+// or Bun runtime: its pnpmRuntime when that names a runtime of kind pnpm, or,
+// when pnpmRuntime is empty, the first pnpm runtime by name — the default the
+// runtime manager applies. ok is false when nothing resolves.
+func (m MapOfRuntimes) PNPMRuntimeName(rc RuntimeConfig) (string, bool) {
+	if rc.Kind != RuntimeKindNode && rc.Kind != RuntimeKindBun {
+		return "", false
+	}
+	if ref := rc.PNPMRuntimeRef(); ref != "" {
+		if target, ok := m[ref]; ok && target.Kind == RuntimeKindPNPM {
+			return ref, true
+		}
+		return "", false
+	}
+	names := make([]string, 0, len(m))
+	for name, candidate := range m {
+		if candidate.Kind == RuntimeKindPNPM {
+			names = append(names, name)
+		}
+	}
+	if len(names) == 0 {
+		return "", false
+	}
+	sort.Strings(names)
+	return names[0], true
 }

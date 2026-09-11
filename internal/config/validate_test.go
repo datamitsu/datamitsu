@@ -538,8 +538,7 @@ func TestValidateRuntimes_Valid(t *testing.T) {
 			Managed: testManagedConfig(),
 			Node: &RuntimeConfigNode{
 				NodeVersion: "22.14.0",
-				PNPMVersion: "10.7.0",
-				PNPMHash:    "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+				PNPMRuntime: "pnpm",
 			},
 		},
 		"uv": {
@@ -547,6 +546,7 @@ func TestValidateRuntimes_Valid(t *testing.T) {
 			Mode:    RuntimeModeManaged,
 			Managed: testManagedConfig(),
 		},
+		"pnpm": testPNPMRuntime(),
 	}
 
 	if err := ValidateRuntimes(runtimes); err != nil {
@@ -562,10 +562,10 @@ func TestValidateRuntimes_Node_Valid(t *testing.T) {
 			Managed: testManagedConfig(),
 			Node: &RuntimeConfigNode{
 				NodeVersion: "26.2.0",
-				PNPMVersion: "11.0.0",
-				PNPMHash:    "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+				PNPMRuntime: "pnpm",
 			},
 		},
+		"pnpm": testPNPMRuntime(),
 	}
 
 	if err := ValidateRuntimes(runtimes); err != nil {
@@ -585,7 +585,7 @@ func TestValidateRuntimes_Node_MissingConfig(t *testing.T) {
 	if err == nil {
 		t.Fatal("ValidateRuntimes() expected error, got nil")
 	}
-	if !strings.Contains(err.Error(), "Node runtime requires node config with nodeVersion, pnpmVersion, and pnpmHash") {
+	if !strings.Contains(err.Error(), "Node runtime requires node config with nodeVersion and pnpmRuntime") {
 		t.Errorf("unexpected error message: %v", err)
 	}
 }
@@ -596,8 +596,7 @@ func TestValidateRuntimes_Node_MissingNodeVersion(t *testing.T) {
 			Kind: RuntimeKindNode,
 			Mode: RuntimeModeManaged,
 			Node: &RuntimeConfigNode{
-				PNPMVersion: "11.0.0",
-				PNPMHash:    "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+				PNPMRuntime: "pnpm",
 			},
 		},
 	}
@@ -611,83 +610,26 @@ func TestValidateRuntimes_Node_MissingNodeVersion(t *testing.T) {
 	}
 }
 
-func TestValidateRuntimes_Node_MissingPNPMVersion(t *testing.T) {
+// Dangling and wrong-kind references are covered by
+// TestValidateRuntimes_PNPMRuntimeRef.
+func TestValidateRuntimes_Node_MissingPNPMRuntime(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"node": {
 			Kind: RuntimeKindNode,
 			Mode: RuntimeModeManaged,
 			Node: &RuntimeConfigNode{
 				NodeVersion: "26.2.0",
-				PNPMHash:    "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
 			},
 		},
+		"pnpm": testPNPMRuntime(),
 	}
 
 	err := ValidateRuntimes(runtimes)
 	if err == nil {
 		t.Fatal("ValidateRuntimes() expected error, got nil")
 	}
-	if !strings.Contains(err.Error(), "node.pnpmVersion is required") {
+	if !strings.Contains(err.Error(), "node.pnpmRuntime is required") {
 		t.Errorf("unexpected error message: %v", err)
-	}
-}
-
-func TestValidateRuntimes_Node_MissingPNPMHash(t *testing.T) {
-	runtimes := MapOfRuntimes{
-		"node": {
-			Kind: RuntimeKindNode,
-			Mode: RuntimeModeManaged,
-			Node: &RuntimeConfigNode{
-				NodeVersion: "26.2.0",
-				PNPMVersion: "11.0.0",
-			},
-		},
-	}
-
-	err := ValidateRuntimes(runtimes)
-	if err == nil {
-		t.Fatal("ValidateRuntimes() expected error, got nil")
-	}
-	if !strings.Contains(err.Error(), "node.pnpmHash is required") {
-		t.Errorf("unexpected error message: %v", err)
-	}
-}
-
-func TestValidateRuntimes_Node_InvalidPNPMHashFormat(t *testing.T) {
-	tests := []struct {
-		name     string
-		pnpmHash string
-	}{
-		{"too short", "abc123"},
-		{"path traversal", "../../../../../../tmp/evil/../../../../../../../tmp/evil"},
-		{"contains slash", "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6/xx"},
-		{"non-hex chars", "g1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"},
-		{"too long", "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b200"},
-		{"uppercase", "A1B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4E5F6A1B2"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			runtimes := MapOfRuntimes{
-				"node": {
-					Kind: RuntimeKindNode,
-					Mode: RuntimeModeManaged,
-					Node: &RuntimeConfigNode{
-						NodeVersion: "26.2.0",
-						PNPMVersion: "11.0.0",
-						PNPMHash:    tt.pnpmHash,
-					},
-				},
-			}
-
-			err := ValidateRuntimes(runtimes)
-			if err == nil {
-				t.Fatalf("ValidateRuntimes() expected error for pnpmHash %q, got nil", tt.pnpmHash)
-			}
-			if !strings.Contains(err.Error(), "node.pnpmHash must be a valid SHA-256 hex string") {
-				t.Errorf("unexpected error message: %v", err)
-			}
-		})
 	}
 }
 
@@ -709,8 +651,7 @@ func TestValidateRuntimes_Node_InvalidNodeVersion(t *testing.T) {
 					Mode: RuntimeModeManaged,
 					Node: &RuntimeConfigNode{
 						NodeVersion: tt.nodeVersion,
-						PNPMVersion: "11.0.0",
-						PNPMHash:    "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+						PNPMRuntime: "pnpm",
 					},
 				},
 			}
@@ -726,35 +667,26 @@ func TestValidateRuntimes_Node_InvalidNodeVersion(t *testing.T) {
 	}
 }
 
-func TestValidateRuntimes_Node_InvalidPNPMVersion(t *testing.T) {
+func TestValidateRuntimes_PNPM_InvalidPNPMVersion(t *testing.T) {
 	tests := []struct {
 		name        string
 		pnpmVersion string
 	}{
 		{"path traversal", "../../etc/passwd"},
-		{"contains slash", "11/0/0"},
-		{"shell metacharacter", "11.0.0 && curl evil"},
+		{"contains slash", "12/4/1"},
+		{"shell metacharacter", "12.4.1 && curl evil"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			runtimes := MapOfRuntimes{
-				"node": {
-					Kind: RuntimeKindNode,
-					Mode: RuntimeModeManaged,
-					Node: &RuntimeConfigNode{
-						NodeVersion: "26.2.0",
-						PNPMVersion: tt.pnpmVersion,
-						PNPMHash:    "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
-					},
-				},
-			}
+			rc := testPNPMRuntime()
+			rc.PNPM.PNPMVersion = tt.pnpmVersion
 
-			err := ValidateRuntimes(runtimes)
+			err := ValidateRuntimes(MapOfRuntimes{"pnpm": rc})
 			if err == nil {
 				t.Fatalf("ValidateRuntimes() expected error for pnpmVersion %q, got nil", tt.pnpmVersion)
 			}
-			if !strings.Contains(err.Error(), "node.pnpmVersion") {
+			if !strings.Contains(err.Error(), "pnpm.pnpmVersion") {
 				t.Errorf("unexpected error message: %v", err)
 			}
 		})
@@ -773,9 +705,14 @@ func TestValidateRuntimes_Node_ValidVersionFormats(t *testing.T) {
 					Managed: testManagedConfig(),
 					Node: &RuntimeConfigNode{
 						NodeVersion: v,
-						PNPMVersion: v,
-						PNPMHash:    "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+						PNPMRuntime: "pnpm",
 					},
+				},
+				"pnpm": {
+					Kind:    RuntimeKindPNPM,
+					Mode:    RuntimeModeManaged,
+					Managed: testManagedConfig(),
+					PNPM:    &RuntimeConfigPNPM{PNPMVersion: v},
 				},
 			}
 
@@ -791,7 +728,7 @@ func TestValidateRuntimes_Node_ValidVersionFormats(t *testing.T) {
 // does not match any known RuntimeKind* constant is treated as an unrecognized
 // kind, so ValidateRuntimes applies none of the node.* field validation to it —
 // even with no node config present, it must not produce node.nodeVersion /
-// node.pnpmVersion / node.pnpmHash errors.
+// node.pnpmRuntime errors.
 func TestValidateRuntimes_UnrecognizedKindSkipped(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"legacy": {
@@ -907,8 +844,7 @@ func TestValidateAppsSkipLockfile_AllowsMissingLockfile_Node(t *testing.T) {
 			Mode: RuntimeModeManaged,
 			Node: &RuntimeConfigNode{
 				NodeVersion: "22.14.0",
-				PNPMVersion: "10.7.0",
-				PNPMHash:    "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+				PNPMRuntime: "pnpm",
 			},
 		},
 	}
@@ -934,8 +870,7 @@ func TestValidateApps_Lockfile_Node_Missing(t *testing.T) {
 			Mode: RuntimeModeManaged,
 			Node: &RuntimeConfigNode{
 				NodeVersion: "22.14.0",
-				PNPMVersion: "10.7.0",
-				PNPMHash:    "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+				PNPMRuntime: "pnpm",
 			},
 		},
 	}
@@ -965,8 +900,7 @@ func TestValidateApps_Lockfile_Node_Present(t *testing.T) {
 			Mode: RuntimeModeManaged,
 			Node: &RuntimeConfigNode{
 				NodeVersion: "22.14.0",
-				PNPMVersion: "10.7.0",
-				PNPMHash:    "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+				PNPMRuntime: "pnpm",
 			},
 		},
 	}
@@ -1175,8 +1109,7 @@ func TestValidateApps_WrongKindRuntimeRef_UV(t *testing.T) {
 			Mode: RuntimeModeManaged,
 			Node: &RuntimeConfigNode{
 				NodeVersion: "22.14.0",
-				PNPMVersion: "10.7.0",
-				PNPMHash:    "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+				PNPMRuntime: "pnpm",
 			},
 		},
 	}
@@ -1206,8 +1139,7 @@ func TestValidateApps_UnknownRuntimeRef_Node(t *testing.T) {
 			Mode: RuntimeModeManaged,
 			Node: &RuntimeConfigNode{
 				NodeVersion: "22.14.0",
-				PNPMVersion: "10.7.0",
-				PNPMHash:    "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+				PNPMRuntime: "pnpm",
 			},
 		},
 	}
@@ -1299,8 +1231,7 @@ func TestValidateApps_ValidExplicitRuntimeRef(t *testing.T) {
 			Mode: RuntimeModeManaged,
 			Node: &RuntimeConfigNode{
 				NodeVersion: "22.14.0",
-				PNPMVersion: "10.7.0",
-				PNPMHash:    "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+				PNPMRuntime: "pnpm",
 			},
 		},
 		"jvm": {
@@ -1495,7 +1426,7 @@ func TestValidateApps_NodeSystemModeNoWarning(t *testing.T) {
 			Kind:   RuntimeKindNode,
 			Mode:   RuntimeModeSystem,
 			System: &RuntimeConfigSystem{Command: "/usr/bin/node"},
-			Node:   &RuntimeConfigNode{NodeVersion: "22.14.0", PNPMVersion: "10.7.0", PNPMHash: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"},
+			Node:   &RuntimeConfigNode{NodeVersion: "22.14.0", PNPMRuntime: "pnpm"},
 		},
 	}
 	apps := binmanager.MapOfApps{}

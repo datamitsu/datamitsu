@@ -32,9 +32,14 @@ globalThis.getConfig = (config) => ({
       system: { command: "bun" },
       bun: {
         bunVersion: "1.4.2",
-        pnpmVersion: "11.33.0",
-        pnpmHash: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        pnpmRuntime: "pnpm"
       }
+    },
+    pnpm: {
+      kind: "pnpm",
+      mode: "system",
+      system: { command: "pnpm" },
+      pnpm: { pnpmVersion: "12.4.1" }
     }
   },
   managedConfigs: {}, tools: {}

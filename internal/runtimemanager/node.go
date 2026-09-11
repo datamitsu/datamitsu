@@ -122,10 +122,8 @@ func (rm *RuntimeManager) installNodeAppOnce(ctx context.Context, appName string
 	}
 
 	if rc.Node == nil {
-		return fmt.Errorf("runtime for %q has no node config (nodeVersion/pnpmVersion)", appName)
+		return fmt.Errorf("runtime for %q has no node config (nodeVersion/pnpmRuntime)", appName)
 	}
-	pnpmVersion := rc.Node.PNPMVersion
-	pnpmHash := rc.Node.PNPMHash
 
 	return rm.installPNPMAppOnce(ctx, pnpmAppInstallSpec{
 		appName:        appName,
@@ -137,8 +135,7 @@ func (rm *RuntimeManager) installNodeAppOnce(ctx context.Context, appName string
 		runtimeKind:    "node",
 		runtimeName:    runtimeName,
 		runtimeVersion: rc.Node.NodeVersion,
-		pnpmVersion:    pnpmVersion,
-		pnpmHash:       pnpmHash,
+		pnpmRuntime:    rc.Node.PNPMRuntime,
 		appEnvPath:     appEnvPath,
 	}, customEnv, files, archives, mergedWorkspaceYAML)
 }
@@ -204,7 +201,7 @@ func (rm *RuntimeManager) nodeCommandInfo(appName string, appConfig *binmanager.
 	}
 
 	if rc.Node == nil {
-		return nil, "", fmt.Errorf("runtime for %q has no node config (nodeVersion/pnpmVersion)", appName)
+		return nil, "", fmt.Errorf("runtime for %q has no node config (nodeVersion/pnpmRuntime)", appName)
 	}
 
 	if err := validateRelativePath(appConfig.BinPath); err != nil {

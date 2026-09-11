@@ -639,11 +639,7 @@ func buildTestRuntimes() RuntimesJSON {
 
 	return RuntimesJSON{
 		"node": buildNodeRuntimeJSON(
-			&NodeRuntimeData{
-				NodeVersion: "24.14.0",
-				PNPMVersion: "10.31.0",
-				PNPMHash:    testHash1,
-			},
+			&NodeRuntimeData{NodeVersion: "24.14.0"},
 			binmanager.MapOfBinaries{
 				syslist.OsTypeDarwin: {
 					syslist.ArchTypeAmd64: {
@@ -1001,6 +997,7 @@ func TestIsValidRuntime(t *testing.T) {
 		{"jvm", true},
 		{"node", true},
 		{"go", true},
+		{"pnpm", true},
 		{"npm", false},
 		{"invalid", false},
 		{"", false},
@@ -1171,7 +1168,7 @@ func TestReadWriteRuntimesJSON_PreservesGoEntry(t *testing.T) {
   "node": {
     "kind": "node",
     "mode": "managed",
-    "node": { "nodeVersion": "24.14.0", "pnpmVersion": "10.31.0", "pnpmHash": "` + testHash2 + `" },
+    "node": { "nodeVersion": "24.14.0", "pnpmVersion": "10.31.0", "pnpmBinaries": { "linux": { "amd64": { "glibc": { "url": "https://github.com/pnpm/pnpm/releases/download/v12.4.1/pnpm-linux-x64.tar.gz", "hash": "` + testHash2 + `", "contentType": "tar.gz", "binaryPath": "pnpm", "extractDir": true } } } } },
     "managed": { "binaries": {} }
   }
 }`
@@ -1291,14 +1288,14 @@ func TestWriteRuntimesJSON_SingleFile(t *testing.T) {
 }
 
 func TestValidRuntimeNames(t *testing.T) {
-	expected := map[string]bool{"bun": true, "uv": true, "jvm": true, "node": true, "go": true}
+	expected := map[string]bool{"bun": true, "uv": true, "jvm": true, "node": true, "go": true, "pnpm": true}
 	for _, name := range validRuntimeNames {
 		if !expected[name] {
 			t.Errorf("unexpected runtime name: %s", name)
 		}
 	}
-	if len(validRuntimeNames) != 5 {
-		t.Errorf("expected 5 valid runtime names, got %d", len(validRuntimeNames))
+	if len(validRuntimeNames) != len(expected) {
+		t.Errorf("expected %d valid runtime names, got %d", len(expected), len(validRuntimeNames))
 	}
 }
 
@@ -1382,8 +1379,7 @@ func TestPullNodeRuntime_LTSLookupError(t *testing.T) {
 		return "24.14.0", errors.New("simulated lookup failure")
 	}
 
-	// minAge is irrelevant here: the LTS lookup fails before any network call.
-	data, binaries, err := pullNodeRuntime(context.Background(), 0)
+	data, binaries, err := pullNodeRuntime(context.Background())
 	if err == nil {
 		t.Fatal("expected pullNodeRuntime to return an error on LTS lookup failure")
 	}
@@ -1457,7 +1453,7 @@ func TestIntegration_FullPullFlow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("detectRuntimeBinaries(node): %v", err)
 	}
-	nodeData := &NodeRuntimeData{NodeVersion: "24.14.0", PNPMVersion: "10.31.0", PNPMHash: testHash5}
+	nodeData := &NodeRuntimeData{NodeVersion: "24.14.0"}
 	nodeJSON := buildNodeRuntimeJSON(nodeData, nodeBinaries)
 
 	// Simulate UV release (separate gnu + musl → both keys)
@@ -1624,7 +1620,7 @@ func TestIntegration_GracefulFallbackNoMusl(t *testing.T) {
 	}
 
 	nodeJSON := buildNodeRuntimeJSON(
-		&NodeRuntimeData{NodeVersion: "24.14.0", PNPMVersion: "10.31.0", PNPMHash: testHash4},
+		&NodeRuntimeData{NodeVersion: "24.14.0"},
 		nodeBinaries,
 	)
 	runtimes := RuntimesJSON{"node": nodeJSON}
@@ -1657,7 +1653,7 @@ func TestIntegration_VersionDetectionWithFallback(t *testing.T) {
 	// the built JSON structures, and that version strings appear in output.
 
 	nodeJSON := buildNodeRuntimeJSON(
-		&NodeRuntimeData{NodeVersion: "24.14.0", PNPMVersion: "10.31.0", PNPMHash: testHash1},
+		&NodeRuntimeData{NodeVersion: "24.14.0"},
 		binmanager.MapOfBinaries{
 			syslist.OsTypeDarwin: {
 				syslist.ArchTypeAmd64: {"unknown": binmanager.BinaryOsArchInfo{URL: "x", Hash: testHash1}},
@@ -1683,13 +1679,17 @@ func TestIntegration_VersionDetectionWithFallback(t *testing.T) {
 		},
 	)
 
-	// Node: should include node and pnpm versions
+	// Node: the node version only; pnpm is versioned by its own runtime entry
 	nodeVer := runtimeVersion(nodeJSON)
 	if !strings.Contains(nodeVer, "node=24.14.0") {
 		t.Errorf("Node version should contain node version, got %q", nodeVer)
 	}
-	if !strings.Contains(nodeVer, "pnpm=10.31.0") {
-		t.Errorf("Node version should contain pnpm version, got %q", nodeVer)
+	if strings.Contains(nodeVer, "pnpm=") {
+		t.Errorf("Node version should not carry a pnpm version, got %q", nodeVer)
+	}
+	pnpmVer := runtimeVersion(buildPNPMRuntimeJSON(&PNPMRuntimeData{PNPMVersion: "12.4.1"}, testPNPMBinaries()))
+	if !strings.Contains(pnpmVer, "pnpm=12.4.1") {
+		t.Errorf("pnpm version should contain the pnpm version, got %q", pnpmVer)
 	}
 
 	// UV: should include python version
@@ -1797,7 +1797,7 @@ func TestIntegration_JSONGeneration(t *testing.T) {
 		}
 	}
 
-	// Node must have node config section with nodeVersion, pnpmVersion, pnpmHash
+	// Node must have node config section with nodeVersion and pnpmRuntime
 	var nodeEntry map[string]json.RawMessage
 	_ = json.Unmarshal(raw["node"], &nodeEntry)
 	var nodeConfig NodeConfigJSON
@@ -1807,11 +1807,8 @@ func TestIntegration_JSONGeneration(t *testing.T) {
 	if nodeConfig.NodeVersion == "" {
 		t.Error("node: nodeVersion is empty")
 	}
-	if nodeConfig.PNPMVersion == "" {
-		t.Error("node: pnpmVersion is empty")
-	}
-	if nodeConfig.PNPMHash == "" {
-		t.Error("node: pnpmHash is empty")
+	if nodeConfig.PNPMRuntime != defaultPNPMRuntimeName {
+		t.Errorf("node: pnpmRuntime = %q, want %q", nodeConfig.PNPMRuntime, defaultPNPMRuntimeName)
 	}
 
 	// UV must have uv config section with pythonVersion

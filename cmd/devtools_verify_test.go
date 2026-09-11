@@ -572,6 +572,28 @@ func TestRuntimeAppKeyAndFP_Go(t *testing.T) {
 	}
 }
 
+// TestRuntimeAppKeyAndFP_NodeFoldsPNPMRuntime pins that a Node app's verdict
+// depends on the pnpm runtime that installs it: bumping pnpm must re-verify.
+func TestRuntimeAppKeyAndFP_NodeFoldsPNPMRuntime(t *testing.T) {
+	runtimesWith := func(pnpmVersion string) config.MapOfRuntimes {
+		return config.MapOfRuntimes{
+			"node": {Kind: config.RuntimeKindNode, Node: &config.RuntimeConfigNode{NodeVersion: "26.2.0", PNPMRuntime: "pnpm"}},
+			"pnpm": {Kind: config.RuntimeKindPNPM, PNPM: &config.RuntimeConfigPNPM{PNPMVersion: pnpmVersion}},
+		}
+	}
+	entry := runtimeAppEntry{
+		name: "semver",
+		app:  binmanager.App{Node: &binmanager.AppConfigNode{PackageName: "semver", Version: "7.7.2", BinPath: "node_modules/.bin/semver"}},
+		kind: "node",
+	}
+
+	_, fp := runtimeAppKeyAndFP(entry, runtimesWith("12.4.1"), "linux", "amd64")
+	_, fpBumped := runtimeAppKeyAndFP(entry, runtimesWith("12.4.2"), "linux", "amd64")
+	if fp == fpBumped {
+		t.Error("expected a different fingerprint when the referenced pnpm runtime changes")
+	}
+}
+
 func TestFilterSkippedVersionCheckEntries(t *testing.T) {
 	entries := []versionCheckEntry{
 		{

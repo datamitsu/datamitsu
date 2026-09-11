@@ -14,7 +14,6 @@ func TestRuntimeHTTPClientTimeouts(t *testing.T) {
 		name    string
 		timeout time.Duration
 	}{
-		{"pnpm", pnpmHTTPClient.Timeout},
 		{"jvm", jvmHTTPClient.Timeout},
 	}
 	for _, tt := range tests {

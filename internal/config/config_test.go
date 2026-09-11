@@ -432,6 +432,9 @@ func TestRuntimeKindConstants(t *testing.T) {
 	if RuntimeKindGo != "go" {
 		t.Errorf("RuntimeKindGo = %q, want %q", RuntimeKindGo, "go")
 	}
+	if RuntimeKindPNPM != "pnpm" {
+		t.Errorf("RuntimeKindPNPM = %q, want %q", RuntimeKindPNPM, "pnpm")
+	}
 }
 
 func TestRuntimeConfig_BunField_JSONRoundTrip(t *testing.T) {
@@ -440,8 +443,7 @@ func TestRuntimeConfig_BunField_JSONRoundTrip(t *testing.T) {
 		Mode: RuntimeModeManaged,
 		Bun: &RuntimeConfigBun{
 			BunVersion:  "1.4.1",
-			PNPMVersion: "11.20.0",
-			PNPMHash:    strings.Repeat("a", 64),
+			PNPMRuntime: "pnpm",
 		},
 	}
 
@@ -454,8 +456,11 @@ func TestRuntimeConfig_BunField_JSONRoundTrip(t *testing.T) {
 	if err := json.Unmarshal(data, &decoded); err != nil {
 		t.Fatalf("json.Unmarshal error: %v", err)
 	}
-	if decoded.Kind != RuntimeKindBun || decoded.Bun == nil || decoded.Bun.BunVersion != "1.4.1" || decoded.Bun.PNPMVersion != "11.20.0" {
-		t.Errorf("decoded runtime = %+v, want Bun 1.4.1", decoded)
+	if decoded.Kind != RuntimeKindBun || decoded.Bun == nil || decoded.Bun.BunVersion != "1.4.1" || decoded.Bun.PNPMRuntime != "pnpm" {
+		t.Fatalf("decoded runtime = %+v, want Bun 1.4.1 installed by pnpm", decoded)
+	}
+	if !strings.Contains(string(data), `"pnpmRuntime":"pnpm"`) {
+		t.Errorf("JSON should carry pnpmRuntime, got: %s", data)
 	}
 }
 
@@ -523,18 +528,14 @@ func TestRuntimeConfig_GoField_OmittedWhenNil(t *testing.T) {
 func TestRuntimeConfigNode_Fields(t *testing.T) {
 	cfg := RuntimeConfigNode{
 		NodeVersion: "26.2.0",
-		PNPMVersion: "11.0.0",
-		PNPMHash:    "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+		PNPMRuntime: "pnpm",
 	}
 
 	if cfg.NodeVersion != "26.2.0" {
 		t.Errorf("NodeVersion = %q, want %q", cfg.NodeVersion, "26.2.0")
 	}
-	if cfg.PNPMVersion != "11.0.0" {
-		t.Errorf("PNPMVersion = %q, want %q", cfg.PNPMVersion, "11.0.0")
-	}
-	if cfg.PNPMHash != "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2" {
-		t.Errorf("PNPMHash = %q, unexpected", cfg.PNPMHash)
+	if cfg.PNPMRuntime != "pnpm" {
+		t.Errorf("PNPMRuntime = %q, want %q", cfg.PNPMRuntime, "pnpm")
 	}
 }
 
@@ -544,8 +545,7 @@ func TestRuntimeConfig_NodeField_JSONRoundTrip(t *testing.T) {
 		"mode": "managed",
 		"node": {
 			"nodeVersion": "26.2.0",
-			"pnpmVersion": "11.0.0",
-			"pnpmHash": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+			"pnpmRuntime": "pnpm-12"
 		}
 	}`
 
@@ -563,11 +563,8 @@ func TestRuntimeConfig_NodeField_JSONRoundTrip(t *testing.T) {
 	if decoded.Node.NodeVersion != "26.2.0" {
 		t.Errorf("NodeVersion = %q, want %q", decoded.Node.NodeVersion, "26.2.0")
 	}
-	if decoded.Node.PNPMVersion != "11.0.0" {
-		t.Errorf("PNPMVersion = %q, want %q", decoded.Node.PNPMVersion, "11.0.0")
-	}
-	if decoded.Node.PNPMHash != "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2" {
-		t.Errorf("PNPMHash = %q, unexpected", decoded.Node.PNPMHash)
+	if decoded.Node.PNPMRuntime != "pnpm-12" {
+		t.Errorf("PNPMRuntime = %q, want %q", decoded.Node.PNPMRuntime, "pnpm-12")
 	}
 
 	// Re-marshal and ensure the node field is emitted.

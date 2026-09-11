@@ -2,22 +2,16 @@ package runtimemanager
 
 import (
 	"context"
-	"crypto/sha256"
-	"crypto/sha512"
-	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"maps"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/httpx"
 	"github.com/datamitsu/datamitsu/internal/pnpmdefaults"
@@ -28,9 +22,10 @@ import (
 )
 
 // pnpmReporter parses pnpm's --reporter=ndjson stream into live progress for a
-// ui.Spinner and collects human-readable errors. pnpm emits errors as ndjson
-// objects on stdout (level "error" with err.message/hint/code), not on stderr,
-// so the error text must be extracted here rather than read from stderr.
+// ui.Spinner and collects the failure text. pnpm 12 writes the events to
+// stderr and reports a failure as plain text among them (error code, cause and
+// hint) rather than as an event, so non-JSON lines are kept for the error
+// message. ndjson error events (level "error") are still honored.
 type pnpmReporter struct {
 	sp *ui.Spinner
 
@@ -38,7 +33,11 @@ type pnpmReporter struct {
 	downloaded int
 	added      int
 	errs       []string
+	text       []string
 }
+
+// maxPNPMTextLines bounds the plain-text output kept for an error message.
+const maxPNPMTextLines = 200
 
 func newPNPMReporter(sp *ui.Spinner) *pnpmReporter {
 	return &pnpmReporter{sp: sp}
@@ -60,6 +59,7 @@ func (p *pnpmReporter) line(b []byte) {
 		} `json:"err"`
 	}
 	if json.Unmarshal(b, &ev) != nil {
+		p.addText(string(b))
 		return
 	}
 
@@ -97,31 +97,37 @@ func (p *pnpmReporter) line(b []byte) {
 		p.resolved, p.downloaded, p.added))
 }
 
+func (p *pnpmReporter) addText(line string) {
+	if len(p.text) == maxPNPMTextLines {
+		p.text = p.text[1:]
+	}
+	p.text = append(p.text, line)
+}
+
 // errorOutput returns the best human-readable failure text: pnpm's ndjson error
-// events when present, otherwise the captured stderr.
-func (p *pnpmReporter) errorOutput(stderr string) string {
+// events when present, otherwise its plain-text output, otherwise fallback.
+func (p *pnpmReporter) errorOutput(fallback string) string {
 	if len(p.errs) > 0 {
 		return strings.Join(p.errs, "\n")
 	}
-	return stderr
+	if text := strings.TrimSpace(strings.Join(p.text, "\n")); text != "" {
+		return text
+	}
+	return fallback
 }
 
-// pnpm.go holds the pnpm download and npm-app installation path shared by the
-// Node and Bun runtimes. pnpm is downloaded directly from the npm registry with
-// a pinned SHA-256 plus the registry's SHA-512 integrity. The selected app
-// runtime executes pnpm.cjs, so a Bun app never acquires Node merely to install
+// pnpm.go holds the npm-app installation path shared by the Node and Bun
+// runtimes. Since pnpm 12 there is no JavaScript implementation: pnpm is a
+// native binary published per platform, so it is a runtime of its own (kind
+// "pnpm") that Node and Bun runtimes name with pnpmRuntime, acquired like any
+// managed runtime and run directly. The app runtime is only reached as `node`
+// by lifecycle scripts, so a Bun app never acquires Node merely to install
 // dependencies.
-
-// pnpmHTTPClient has no end-to-end deadline; the tarball transfer is bounded
-// by the progress guard below instead of a flat size/speed assumption.
-var pnpmHTTPClient = httpx.NewHardenedClient(0)
-
-const maxPNPMDownloadSize = 100 * 1024 * 1024 // 100 MiB
 
 // getPNPMEnvVars returns the per-app npm/pnpm environment shared by Node and
 // Bun apps.
 //
-// NOTE: pnpm 11 does NOT read store-dir / virtual-store-dir from these
+// NOTE: pnpm does NOT read store-dir / virtual-store-dir from these
 // npm_config_* env vars (nor from .npmrc) — it only honors the workspace
 // storeDir key, which buildPNPMWorkspaceForApp pins to GetPNPMStorePath(). The
 // store_dir entry here is retained so the installer can pre-create that
@@ -146,8 +152,7 @@ type pnpmAppInstallSpec struct {
 	runtimeKind    string
 	runtimeName    string
 	runtimeVersion string
-	pnpmVersion    string
-	pnpmHash       string
+	pnpmRuntime    string
 	appEnvPath     string
 }
 
@@ -193,10 +198,13 @@ func (rm *RuntimeManager) installPNPMAppOnce(ctx context.Context, spec pnpmAppIn
 		return fmt.Errorf("failed to acquire %s runtime %q: %w", spec.runtimeKind, spec.runtimeName, err)
 	}
 
-	storeRoot := env.GetStorePath()
-	pnpmDir := filepath.Join(storeRoot, ".runtimes", "pnpm", spec.pnpmVersion, spec.pnpmHash)
-	if err := rm.installPNPM(ctx, spec.pnpmVersion, pnpmDir, spec.pnpmHash); err != nil {
-		return fmt.Errorf("failed to download pnpm: %w", err)
+	pnpmRuntimeName, _, err := rm.ResolveRuntime(spec.pnpmRuntime, config.RuntimeKindPNPM)
+	if err != nil {
+		return fmt.Errorf("failed to resolve the pnpm runtime of %s runtime %q: %w", spec.runtimeKind, spec.runtimeName, err)
+	}
+	pnpmBinPath, err := rm.getRuntimePath(ctx, pnpmRuntimeName)
+	if err != nil {
+		return fmt.Errorf("failed to acquire pnpm runtime %q: %w", pnpmRuntimeName, err)
 	}
 
 	cleanupOnError := true
@@ -249,14 +257,8 @@ func (rm *RuntimeManager) installPNPMAppOnce(ctx context.Context, spec pnpmAppIn
 		}
 	}
 
-	pnpmCjsPath := env.GetPNPMPath(storeRoot, spec.pnpmVersion, spec.pnpmHash)
-	args := buildPNPMInstallArgs(pnpmCjsPath, spec.lockFile != "")
-	if spec.runtimeKind == "bun" {
-		// `--bun` makes lifecycle scripts whose shebang or body invokes `node`
-		// resolve that command back to Bun. The config/env guards keep the target
-		// repository's bunfig.toml and .env files out of the installer process.
-		args = append([]string{"--config=" + os.DevNull, "--no-env-file", "run", "--bun", "--no-install"}, args...)
-	}
+	// Lifecycle scripts reach the app runtime as `node` through PATH. For Bun
+	// that is the alias written above, so a script's `node` resolves to Bun.
 	inheritedPath := os.Getenv("PATH") //nolint:forbidigo // standard PATH for child process env, not a datamitsu env var
 	pathParts := make([]string, 0, 3)
 	if spec.runtimeKind == "bun" {
@@ -269,7 +271,7 @@ func (rm *RuntimeManager) installPNPMAppOnce(ctx context.Context, spec pnpmAppIn
 	envVars["PATH"] = strings.Join(pathParts, string(os.PathListSeparator))
 	envVars = mergeInstallEnv(envVars, customEnv, spec.appEnvPath)
 
-	cmd := exec.CommandContext(ctx, runtimeBinPath, args...) //nolint:gosec // runtimeBinPath comes from the trusted runtime store and args are built from validated config
+	cmd := exec.CommandContext(ctx, pnpmBinPath, buildPNPMInstallArgs(spec.lockFile != "")...) //nolint:gosec // pnpmBinPath comes from the configured pnpm runtime and the args are fixed
 	cmd.Dir = spec.appEnvPath
 	cmd.Env = buildEnvWithOverrides(os.Environ(), envVars)
 
@@ -277,208 +279,20 @@ func (rm *RuntimeManager) installPNPMAppOnce(ctx context.Context, spec pnpmAppIn
 		zap.String("app", spec.appName),
 		zap.String("package", spec.packageName),
 		zap.String(spec.runtimeKind, spec.runtimeVersion),
-		zap.String("pnpm", spec.pnpmVersion),
+		zap.String("pnpm", pnpmRuntimeName),
 	)
 
 	sp := ui.Current().Spinner("Installing " + spec.appName)
 	rep := newPNPMReporter(sp)
-	stderr, err := runInstallCmdStreaming(ctx, cmd, rep.line)
+	stdout, _, err := runInstallCmdStreamingStderr(ctx, cmd, func(line string) { rep.line([]byte(line)) })
 	if err != nil {
 		sp.Fail()
-		ui.Current().Errorln(rep.errorOutput(stderr))
+		ui.Current().Errorln(rep.errorOutput(stdout))
 		return fmt.Errorf("failed to install %s app %q: %w", spec.runtimeKind, spec.appName, err)
 	}
 
 	sp.Done("Installed " + spec.appName)
 	cleanupOnError = false
-	return nil
-}
-
-type npmVersionMeta struct {
-	Dist struct {
-		Tarball   string `json:"tarball"`
-		Shasum    string `json:"shasum"`
-		Integrity string `json:"integrity"`
-	} `json:"dist"`
-}
-
-func (rm *RuntimeManager) installPNPM(ctx context.Context, version string, destDir string, pnpmHash string) error {
-	key := version + "\x00" + pnpmHash
-	defer trace.Start(trace.CatInstall, "pnpm.install").End()
-
-	_, err, _ := rm.pnpmInstall.Do(key, func() (any, error) {
-		return nil, rm.downloadPNPMFromRegistry(ctx, version, destDir, pnpmHash)
-	})
-	if err != nil {
-		return fmt.Errorf("failed to install pnpm %q: %w", version, err)
-	}
-	return nil
-}
-
-func (rm *RuntimeManager) downloadPNPMFromRegistry(ctx context.Context, version string, destDir string, pnpmHash string) error {
-	downloaderConstructions.Add(1)
-	return rm.downloadPNPMFromRegistryURL(ctx, "https://registry.npmjs.org", version, destDir, pnpmHash)
-}
-
-// downloadPNPMFromRegistryURL downloads, verifies, and extracts pnpm from the
-// given npm registry base URL. The base URL is a parameter purely so tests can
-// point it at a mock registry and exercise the real download/verify/extract
-// path (pinned SHA-256 + registry SHA-512); production always passes the public
-// npm registry via downloadPNPMFromRegistry.
-func (rm *RuntimeManager) downloadPNPMFromRegistryURL(ctx context.Context, registryBaseURL, version, destDir, pnpmHash string) error {
-	if pnpmHash == "" {
-		return fmt.Errorf("PNPM hash is required but not provided for pnpm@%s", version)
-	}
-
-	pnpmCjsPath := filepath.Join(destDir, "package", "bin", "pnpm.cjs")
-	if _, err := os.Stat(pnpmCjsPath); err == nil {
-		return nil
-	}
-
-	if err := httpx.GuardOffline("pnpm runtime download"); err != nil {
-		return err
-	}
-
-	url := fmt.Sprintf("%s/pnpm/%s", registryBaseURL, version)
-	metaReq, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return fmt.Errorf("failed to build PNPM metadata request: %w", err)
-	}
-	resp, err := pnpmHTTPClient.Do(metaReq)
-	if err != nil {
-		return fmt.Errorf("failed to fetch PNPM metadata: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("npm registry returned status %d for pnpm@%s", resp.StatusCode, version)
-	}
-
-	var meta npmVersionMeta
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 10<<20)).Decode(&meta); err != nil {
-		return fmt.Errorf("failed to decode PNPM metadata: %w", err)
-	}
-
-	if meta.Dist.Tarball == "" {
-		return fmt.Errorf("no tarball URL found for pnpm@%s", version)
-	}
-	// The pinned SHA-256 is the integrity anchor, but the tarball must still be
-	// fetched over TLS so the registry response cannot downgrade us to a
-	// plaintext URL (mirrors fetchPNPMTarballHash on the pull side).
-	if !strings.HasPrefix(meta.Dist.Tarball, "https://") {
-		return fmt.Errorf("pnpm@%s: tarball URL is not https: %s", version, meta.Dist.Tarball)
-	}
-	if !hasSHA512Prefix(meta.Dist.Integrity) {
-		return fmt.Errorf("pnpm@%s: SHA-512 integrity required but not found in registry metadata", version)
-	}
-
-	guard, ctx := httpx.NewStallGuard(ctx, httpx.DefaultStallWindow)
-	defer guard.Stop()
-
-	tarReq, err := http.NewRequestWithContext(ctx, http.MethodGet, meta.Dist.Tarball, nil)
-	if err != nil {
-		return fmt.Errorf("failed to build PNPM tarball request: %w", err)
-	}
-	tarResp, err := pnpmHTTPClient.Do(tarReq)
-	if err != nil {
-		return fmt.Errorf("failed to download PNPM tarball: %w", err)
-	}
-	defer func() { _ = tarResp.Body.Close() }()
-
-	if tarResp.StatusCode != http.StatusOK {
-		return fmt.Errorf("pnpm tarball download returned status %d", tarResp.StatusCode)
-	}
-
-	tmpFile, err := os.CreateTemp("", "pnpm-*.tgz")
-	if err != nil {
-		return fmt.Errorf("failed to create temp file: %w", err)
-	}
-	tmpPath := tmpFile.Name()
-	defer func() { _ = os.Remove(tmpPath) }()
-
-	sha256Hasher := sha256.New()
-	sha512Hasher := sha512.New()
-	writer := io.MultiWriter(tmpFile, sha256Hasher, sha512Hasher)
-	limitedBody := guard.Reader(io.LimitReader(tarResp.Body, maxPNPMDownloadSize+1))
-
-	// Render the pnpm tarball download through the shared display, like the node
-	// runtime and managed binaries (a bar in a terminal, throttled lines in CI).
-	tracked := ui.Current().Download("pnpm "+version, tarResp.ContentLength, limitedBody)
-	defer func() { _ = tracked.Close() }()
-
-	written, err := io.Copy(writer, tracked)
-	if err != nil {
-		_ = tmpFile.Close()
-		if guard.Stalled() {
-			return fmt.Errorf("pnpm tarball download stalled: no data received for %s", guard.Window())
-		}
-		return fmt.Errorf("failed to download PNPM tarball: %w", err)
-	}
-	_ = tmpFile.Close()
-
-	if written > maxPNPMDownloadSize {
-		return fmt.Errorf("pnpm tarball exceeds maximum size of %d bytes", maxPNPMDownloadSize)
-	}
-
-	if err := verifyPNPMPinnedHash(pnpmHash, sha256Hasher.Sum(nil)); err != nil {
-		return err
-	}
-
-	if err := verifyPNPMIntegrity(meta, sha512Hasher.Sum(nil)); err != nil {
-		return err
-	}
-
-	// Extract through binmanager's single hardened tar path (the same walker
-	// used for managed-binary installs): traversal entries, absolute symlinks,
-	// and escaping symlinks are skipped, and size limits are enforced. It writes
-	// directly into destDir, so {destDir}/package/bin/pnpm.cjs lands as expected.
-	if err := binmanager.ExtractArchiveToDir(tmpPath, binmanager.BinContentTypeTarGz, destDir); err != nil {
-		_ = os.RemoveAll(destDir)
-		return fmt.Errorf("failed to extract PNPM tarball: %w", err)
-	}
-
-	return nil
-}
-
-// verifyPNPMPinnedHash verifies the downloaded PNPM tarball against the
-// pinned SHA-256 hash from configuration. This is the primary security check
-// per the project's security policy: all downloads must be verified against
-// a pinned hash, not against untrusted registry-provided metadata.
-func verifyPNPMPinnedHash(expectedHash string, actualSHA256 []byte) error {
-	if expectedHash == "" {
-		return errors.New("pnpm tarball SHA-256 hash is required but not configured")
-	}
-	actualHex := hex.EncodeToString(actualSHA256)
-	if actualHex != expectedHash {
-		return fmt.Errorf("pnpm tarball SHA-256 hash mismatch: expected %q, got %q", expectedHash, actualHex)
-	}
-	return nil
-}
-
-// hasSHA512Prefix reports whether an npm SRI integrity string carries the
-// required "sha512-" prefix. An empty string returns false, so callers reject
-// both missing and non-sha512 integrity with a single !hasSHA512Prefix(s) check.
-func hasSHA512Prefix(integrity string) bool {
-	return strings.HasPrefix(integrity, "sha512-")
-}
-
-// verifyPNPMIntegrity checks the downloaded tarball against the npm registry
-// SHA-512 integrity metadata (SRI format). SHA-1 fallback is not supported.
-func verifyPNPMIntegrity(meta npmVersionMeta, sha512Sum []byte) error {
-	if !hasSHA512Prefix(meta.Dist.Integrity) {
-		return errors.New("SHA-512 integrity required but not found in registry metadata")
-	}
-
-	expectedB64 := strings.TrimPrefix(meta.Dist.Integrity, "sha512-")
-	expectedHash, err := base64.StdEncoding.DecodeString(expectedB64)
-	if err != nil {
-		return fmt.Errorf("failed to decode integrity hash: %w", err)
-	}
-	actualB64 := base64.StdEncoding.EncodeToString(sha512Sum)
-	expectedB64Normalized := base64.StdEncoding.EncodeToString(expectedHash)
-	if actualB64 != expectedB64Normalized {
-		return fmt.Errorf("pnpm tarball SHA-512 integrity mismatch: expected %q, got %q", meta.Dist.Integrity, "sha512-"+actualB64)
-	}
 	return nil
 }
 
@@ -507,11 +321,11 @@ func filesWithWorkspaceYAML(files map[string]string, mergedYAML string) map[stri
 	return out
 }
 
-func buildPNPMInstallArgs(pnpmCjsPath string, hasLockFile bool) []string {
-	// --reporter=ndjson emits a machine-readable event stream on stdout that the
-	// installer parses for live progress (and errors) instead of letting pnpm's
-	// human reporter write raw output over the shared progress display.
-	args := []string{pnpmCjsPath, "install", "--reporter=ndjson"}
+func buildPNPMInstallArgs(hasLockFile bool) []string {
+	// --reporter=ndjson emits a machine-readable event stream (on stderr) that
+	// the installer parses for live progress instead of letting pnpm's human
+	// reporter write raw output over the shared progress display.
+	args := []string{"install", "--reporter=ndjson"}
 	if hasLockFile {
 		args = append(args, "--frozen-lockfile")
 	}
@@ -600,7 +414,7 @@ func buildPNPMWorkspaceForApp(files map[string]string) (string, error) {
 
 	// Pin the content-addressable store inside the datamitsu store so it lives
 	// under GetStorePath() (and `datamitsu store clear` actually removes it).
-	// pnpm 11 ignores npm_config_store_dir / .npmrc store-dir; the workspace
+	// pnpm ignores npm_config_store_dir / .npmrc store-dir; the workspace
 	// storeDir key is the mechanism it honors. Forced after the user merge —
 	// datamitsu owns the store location, a user config must not relocate it.
 	merged["storeDir"] = env.GetPNPMStorePath()

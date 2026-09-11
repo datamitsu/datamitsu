@@ -27,29 +27,23 @@ func TestPullRuntimesCmd_HasMinAgeFlag(t *testing.T) {
 // reaching the nodejs.org archive fetch. This validates the
 // GetNPMPackageInfoWithMinAge wiring and the nil-return error handling without
 // touching the network beyond the mocked npm registry.
-func TestPullNodeRuntime_MinAgePnpmNotOldEnough(t *testing.T) {
+func TestPullPNPMRuntime_MinAgeNotOldEnough(t *testing.T) {
 	if err := runtimeconfig.Init(); err != nil {
 		t.Fatalf("runtimeconfig.Init: %v", err)
-	}
-
-	origLTS := getLatestNodeLTSVersion
-	defer func() { getLatestNodeLTSVersion = origLTS }()
-	getLatestNodeLTSVersion = func(_ context.Context) (string, error) {
-		return "24.14.0", nil
 	}
 
 	now := time.Now()
 	// pnpm's only version is one hour old — too fresh for a one-day cutoff.
 	times := map[string]string{
 		"created": now.Add(-30 * 24 * time.Hour).Format(time.RFC3339),
-		"9.0.0":   now.Add(-1 * time.Hour).Format(time.RFC3339),
+		"12.0.0":  now.Add(-1 * time.Hour).Format(time.RFC3339),
 	}
-	srv := newNPMTestRegistry(t, "pnpm", "9.0.0", times)
+	srv := newNPMTestRegistry(t, "pnpm", "12.0.0", times)
 
 	withNPMRegistry(t, srv, func() {
-		data, binaries, err := pullNodeRuntime(context.Background(), 24*60)
+		data, binaries, err := pullPNPMRuntime(context.Background(), 24*60)
 		if err == nil {
-			t.Fatal("expected pullNodeRuntime to error when no pnpm version is old enough")
+			t.Fatal("expected pullPNPMRuntime to error when no pnpm version is old enough")
 		}
 		if !strings.Contains(err.Error(), "pnpm") {
 			t.Errorf("error = %v, want it to mention pnpm", err)

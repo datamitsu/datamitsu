@@ -267,13 +267,9 @@ func TestMultiVersionRuntimeCollectsForBothApps(t *testing.T) {
 
 	collected := CollectRequiredRuntimes(apps, runtimes, false)
 
-	found := slices.Contains(collected, "node")
-	if !found {
-		t.Errorf("expected node runtime to be collected, got %v", collected)
-	}
-
-	if len(collected) != 1 {
-		t.Errorf("expected exactly 1 runtime (node) for both eslint apps, got %d: %v",
-			len(collected), collected)
+	// Both eslint apps share the node runtime and the pnpm runtime it installs
+	// them with.
+	if want := []string{"node", testPNPMRuntimeName}; !slices.Equal(collected, want) {
+		t.Errorf("expected exactly %v for both eslint apps, got %v", want, collected)
 	}
 }

@@ -283,6 +283,11 @@ func runtimeAppKeyAndFP(e runtimeAppEntry, runtimes config.MapOfRuntimes, curren
 		}
 		if rt, ok := runtimes[runtimeRef]; ok {
 			rtJSON = marshalFP(rt)
+			// A Node or Bun app is installed by its pnpm runtime, so a pnpm bump
+			// must invalidate the verdict too.
+			if pnpmName, ok := runtimes.PNPMRuntimeName(rt); ok {
+				rtJSON = append(rtJSON, marshalFP(runtimes[pnpmName])...)
+			}
 		}
 	}
 

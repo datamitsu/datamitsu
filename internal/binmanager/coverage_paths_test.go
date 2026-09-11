@@ -509,8 +509,8 @@ func TestExtractArchiveToPath_Branches(t *testing.T) {
 		if err := os.WriteFile(tarPath, []byte("ignored"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		if err := ExtractArchiveToDir(tarPath, BinContentTypeZip, t.TempDir()); err == nil {
-			t.Error("ExtractArchiveToDir(zip format) = nil, want unsupported-format error")
+		if err := extractFileToDir(tarPath, BinContentTypeZip, t.TempDir()); err == nil {
+			t.Error("extractFileToDir(zip format) = nil, want unsupported-format error")
 		}
 	})
 
@@ -521,8 +521,8 @@ func TestExtractArchiveToPath_Branches(t *testing.T) {
 	})
 
 	t.Run("missing archive file errors", func(t *testing.T) {
-		if err := ExtractArchiveToDir(filepath.Join(t.TempDir(), "nope.tar"), BinContentTypeTar, t.TempDir()); err == nil {
-			t.Error("ExtractArchiveToDir(missing) = nil, want error")
+		if err := extractFileToDir(filepath.Join(t.TempDir(), "nope.tar"), BinContentTypeTar, t.TempDir()); err == nil {
+			t.Error("extractFileToDir(missing) = nil, want error")
 		}
 	})
 

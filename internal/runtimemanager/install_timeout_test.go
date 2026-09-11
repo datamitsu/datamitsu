@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -139,11 +140,11 @@ func TestRunInstallCmd_FailurePassesThrough(t *testing.T) {
 	}
 }
 
-// TestDownloadPNPMFromRegistry_ContextPropagated proves the install-timeout
-// context reaches the pnpm registry HTTP request: against a server that never
-// responds, a short-deadline context aborts the metadata fetch with
-// context.DeadlineExceeded instead of blocking for the client's 5-minute budget.
-func TestDownloadPNPMFromRegistry_ContextPropagated(t *testing.T) {
+// TestPNPMRuntime_ContextPropagated proves the install-timeout context reaches
+// the pnpm archive download: against a server that never responds, a
+// short-deadline context aborts the fetch instead of blocking on the transfer.
+func TestPNPMRuntime_ContextPropagated(t *testing.T) {
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		<-r.Context().Done() // hang until the client cancels
 	}))
@@ -152,11 +153,11 @@ func TestDownloadPNPMFromRegistry_ContextPropagated(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
 	defer cancel()
 
-	rm := New(config.MapOfRuntimes{})
-	destDir := t.TempDir()
-
 	start := time.Now()
-	err := rm.downloadPNPMFromRegistryURL(ctx, server.URL, "9.15.0", destDir, "deadbeef")
+	rm := New(config.MapOfRuntimes{
+		testPNPMRuntimeName: hostPNPMRuntime(t, server.URL+"/pnpm.tar.gz", strings.Repeat("ab", 32), testLibc),
+	})
+	_, err := rm.getRuntimePath(ctx, testPNPMRuntimeName)
 	elapsed := time.Since(start)
 
 	if err == nil {
