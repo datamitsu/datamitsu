@@ -132,7 +132,11 @@ Bun apps use [pnpm](https://pnpm.io/) for dependency installation and a managed 
 4. Runs `pnpm install --frozen-lockfile` with datamitsu's `node` → Bun alias first on `PATH`, so lifecycle scripts that call `node` run on Bun
 5. Executes the configured JavaScript entrypoint with `bun run --bun --no-install`
 
-Both Bun and Node apps share pnpm's content-addressable store at `{store}/.pnpm-store/`, while every app keeps its own `node_modules` directory. During execution, `--bun` and the same alias keep Node-shebang commands launched by the tool on the selected runtime. Runtime auto-install is disabled, and datamitsu passes `--no-env-file` plus an empty Bun config when it executes the tool so a target repository's `.env` files and `bunfig.toml` cannot change a managed tool's behavior.
+Both Bun and Node apps share pnpm's content-addressable store at `{store}/.pnpm-store/`, while every app keeps its own `node_modules` directory. During execution, `--bun` and the same alias keep Node-shebang commands launched by the tool on the selected runtime.
+
+The alias at `.datamitsu-runtime-bin/node` is a link to the Bun executable rather than a wrapper script, because Bun emulates the node CLI only when it is invoked under the name `node` — called under its own name it would read `node build` as its bundler and `node install` as its package manager.
+
+Runtime auto-install is disabled, and datamitsu passes `--no-env-file` plus an empty Bun config when it executes the tool, so a target repository's `.env` files and `bunfig.toml` cannot change a managed tool's behavior. The same guards travel in `BUN_OPTIONS`, which every Bun process started under the app inherits, so they hold for the `node` processes a lifecycle script or the tool starts itself too.
 
 ### Defining a Bun App
 

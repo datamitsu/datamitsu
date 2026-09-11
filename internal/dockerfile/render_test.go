@@ -10,7 +10,7 @@ import (
 func samplePlan() Plan {
 	return Plan{
 		RuntimeStages: []RuntimeStage{
-			{Name: "node", Kind: config.RuntimeKindNode},
+			{Name: "node", Kind: config.RuntimeKindNode, PNPMRuntime: "pnpm"},
 			{Name: "uv", Kind: config.RuntimeKindUV},
 			{Name: "go", Kind: config.RuntimeKindGo},
 		},
@@ -42,8 +42,16 @@ func TestRender_PinnedStructure(t *testing.T) {
 	mustContain(t, out, "FROM rt-node AS app-prettier")
 	mustContain(t, out, "FROM rt-uv AS app-ruff")
 	mustContain(t, out, "FROM dm-base AS app-shellcheck")
-	mustContain(t, out, "datamitsu --config /opt/datamitsu-config/datamitsu.config.js install --runtime node")
+	// The Node stage installs the pnpm runtime its apps need, so the app stages
+	// built FROM it inherit one pnpm download.
+	mustContain(t, out, "datamitsu --config /opt/datamitsu-config/datamitsu.config.js install --runtime node --runtime pnpm")
 	mustContain(t, out, "datamitsu --config /opt/datamitsu-config/datamitsu.config.js install prettier")
+	if strings.Contains(out, "AS rt-pnpm") {
+		t.Error("pnpm is install-only: it must ride the Node stage, not get a stage of its own")
+	}
+	if strings.Contains(out, "/dm/store/.runtimes/pnpm") {
+		t.Error("the pnpm runtime subtree must NOT be copied to the final image")
+	}
 
 	// Final COPY --link assembly.
 	mustContain(t, out, "COPY --link --from=rt-node /dm/store/.runtimes/node /dm/store/.runtimes/node")

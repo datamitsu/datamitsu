@@ -1484,9 +1484,9 @@ declare global {
        * Pinned pnpm version. Optional in system mode, where it only feeds cache invalidation.
        *
        * @example
-       *   "12.4.1";
+       *   "12.3.4";
        */
-      pnpmVersion: string;
+      pnpmVersion?: string;
     }
 
     interface RuntimeConfigSystem {

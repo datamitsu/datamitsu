@@ -30,7 +30,9 @@ type Slice struct {
 func SliceFileName(stage string) string { return stage + ".js" }
 
 // BuildSlices returns one minimal config slice per stage in the plan: a runtime
-// stage gets only its runtime; a binary stage only its binary; a runtime-managed
+// stage gets its runtime plus, for Node and Bun, the pnpm runtime it references
+// (which that stage installs for the app stages built FROM it); a binary stage
+// only its binary; a runtime-managed
 // app gets its app plus the runtime it installs under (so install can resolve the
 // runtime reference) and, for Node and Bun, the pnpm runtime that installs it; a
 // parser stage gets only its `parsers` entry. Order mirrors the plan for
@@ -40,10 +42,17 @@ func BuildSlices(plan Plan, apps binmanager.MapOfApps, runtimes config.MapOfRunt
 
 	for _, rt := range plan.RuntimeStages {
 		stage := stageName("rt-", rt.Name)
+		sliceRuntimes := config.MapOfRuntimes{rt.Name: runtimes[rt.Name]}
+		// Every config load validates a Node or Bun runtime's pnpmRuntime
+		// reference, so without the pnpm definition the stage could not even load
+		// its own slice — it installs pnpm here for the app stages below.
+		if rt.PNPMRuntime != "" {
+			sliceRuntimes[rt.PNPMRuntime] = runtimes[rt.PNPMRuntime]
+		}
 		slices = append(slices, Slice{
 			StageName: stage,
 			FileName:  SliceFileName(stage),
-			Config:    &config.Config{Runtimes: config.MapOfRuntimes{rt.Name: runtimes[rt.Name]}},
+			Config:    &config.Config{Runtimes: sliceRuntimes},
 		})
 	}
 

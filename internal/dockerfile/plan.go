@@ -37,7 +37,11 @@ type PlanOptions struct {
 // app stages inherit FROM it so the runtime is installed once and shared.
 type RuntimeStage struct {
 	Name string             // runtime name as keyed in config.Runtimes
-	Kind config.RuntimeKind // uv | node | jvm | go
+	Kind config.RuntimeKind // uv | node | jvm | go | pnpm
+	// PNPMRuntime is the pnpm runtime a Node or Bun runtime installs its apps
+	// with, empty for every other kind. The stage carries it so its slice still
+	// validates and so the app stages built FROM it inherit one pnpm download.
+	PNPMRuntime string
 }
 
 // RuntimeAppStage installs one runtime-managed app. It is built FROM the runtime
@@ -197,7 +201,11 @@ func BuildPlan(apps binmanager.MapOfApps, runtimes config.MapOfRuntimes, opts ..
 	}
 	sort.Strings(runtimeNames)
 	for _, name := range runtimeNames {
-		plan.RuntimeStages = append(plan.RuntimeStages, RuntimeStage{Name: name, Kind: neededRuntimes[name]})
+		stage := RuntimeStage{Name: name, Kind: neededRuntimes[name]}
+		if pnpmName, ok := runtimes.PNPMRuntimeName(runtimes[name]); ok {
+			stage.PNPMRuntime = pnpmName
+		}
+		plan.RuntimeStages = append(plan.RuntimeStages, stage)
 	}
 
 	parserModules := make([]string, 0, len(o.Parsers))

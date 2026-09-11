@@ -53,6 +53,21 @@ func findSlice(slices []Slice, file string) *Slice {
 	return nil
 }
 
+// TestBuildSlices_EverySliceLoads pins what the generated Dockerfile depends on:
+// every stage loads only its own slice, and a config load validates each runtime
+// reference in it — a Node or Bun slice without its pnpm runtime would fail to
+// load and take the whole build down with it.
+func TestBuildSlices_EverySliceLoads(t *testing.T) {
+	apps, runtimes, parsers := sampleConfigForSlicing()
+	plan := BuildPlan(apps, runtimes, PlanOptions{Parsers: parsers})
+
+	for _, s := range BuildSlices(plan, apps, runtimes, parsers) {
+		if err := config.ValidateRuntimes(s.Config.Runtimes); err != nil {
+			t.Errorf("stage %s cannot load its slice: %v", s.StageName, err)
+		}
+	}
+}
+
 func TestSliceFileName(t *testing.T) {
 	if got := SliceFileName("app-prettier"); got != "app-prettier.js" {
 		t.Errorf("SliceFileName = %q, want app-prettier.js", got)
@@ -72,8 +87,10 @@ func TestBuildSlices_OnePerStageMinimal(t *testing.T) {
 	if len(rt.Config.Apps) != 0 {
 		t.Errorf("runtime slice must carry no apps, got %v", rt.Config.Apps)
 	}
-	if _, ok := rt.Config.Runtimes["node"]; !ok || len(rt.Config.Runtimes) != 1 {
-		t.Errorf("rt-node slice must carry exactly the node runtime, got %v", rt.Config.Runtimes)
+	_, rtHasNode := rt.Config.Runtimes["node"]
+	_, rtHasPNPM := rt.Config.Runtimes["pnpm"]
+	if !rtHasNode || !rtHasPNPM || len(rt.Config.Runtimes) != 2 {
+		t.Errorf("rt-node slice must carry the node runtime and the pnpm runtime it references, got %v", rt.Config.Runtimes)
 	}
 
 	// Binary slice: only the binary, no runtime.

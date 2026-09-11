@@ -286,3 +286,63 @@ func isLowerHex64(s string) bool {
 	}
 	return true
 }
+
+// TestPreservePNPMRuntimeRefKeepsExistingName covers a filtered `--runtime node`
+// pull into a config whose pnpm runtime is not named "pnpm": the pull rewrites
+// the Node entry alone, so it must not repoint it at a runtime that is missing.
+func TestPreservePNPMRuntimeRefKeepsExistingName(t *testing.T) {
+	existing := &RuntimeJSON{
+		Kind: "node",
+		Mode: "managed",
+		Node: &NodeConfigJSON{NodeVersion: "26.7.0", PNPMRuntime: "pnpm-custom"},
+	}
+	updated := buildNodeRuntimeJSON(&NodeRuntimeData{NodeVersion: "26.8.0"}, nil)
+
+	preservePNPMRuntimeRef(existing, updated)
+
+	if updated.Node.PNPMRuntime != "pnpm-custom" {
+		t.Errorf("node.pnpmRuntime = %q, want the reference the file already had", updated.Node.PNPMRuntime)
+	}
+}
+
+// TestPreservePNPMRuntimeRefDefaultsForNewEntry pins the other half: an entry
+// the file does not have yet gets the name pull-runtimes writes pnpm under.
+func TestPreservePNPMRuntimeRefDefaultsForNewEntry(t *testing.T) {
+	updated := buildBunRuntimeJSON(&BunRuntimeData{BunVersion: "1.4.1"}, nil)
+
+	preservePNPMRuntimeRef(nil, updated)
+
+	if updated.Bun.PNPMRuntime != defaultPNPMRuntimeName {
+		t.Errorf("bun.pnpmRuntime = %q, want the default %q", updated.Bun.PNPMRuntime, defaultPNPMRuntimeName)
+	}
+}
+
+func TestValidatePNPMRuntimeRefs(t *testing.T) {
+	nodeEntry := buildNodeRuntimeJSON(&NodeRuntimeData{NodeVersion: "26.7.0"}, nil)
+	pnpmEntry := buildPNPMRuntimeJSON(&PNPMRuntimeData{PNPMVersion: "12.3.4"}, testPNPMBinaries())
+
+	tests := []struct {
+		name     string
+		runtimes RuntimesJSON
+		wantErr  string
+	}{
+		{"reference resolves", RuntimesJSON{"node": nodeEntry, "pnpm": pnpmEntry}, ""},
+		{"pnpm entry missing", RuntimesJSON{"node": nodeEntry}, "does not define"},
+		{"reference names another kind", RuntimesJSON{"node": nodeEntry, "pnpm": {Kind: "uv", Mode: "managed"}}, "kind"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validatePNPMRuntimeRefs(tt.runtimes)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("validatePNPMRuntimeRefs() error = %v, want nil", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("validatePNPMRuntimeRefs() error = %v, want one mentioning %q", err, tt.wantErr)
+			}
+		})
+	}
+}

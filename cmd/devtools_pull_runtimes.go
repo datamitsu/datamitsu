@@ -199,6 +199,7 @@ func runPullRuntimes(cmd *cobra.Command, args []string) error {
 		result.newVersion = runtimeVersion(runtimeJSON)
 		if old, ok := runtimes[name]; ok {
 			result.oldVersion = runtimeVersion(old)
+			preservePNPMRuntimeRef(old, runtimeJSON)
 		}
 		result.updated = result.oldVersion != result.newVersion
 
@@ -212,6 +213,10 @@ func runPullRuntimes(cmd *cobra.Command, args []string) error {
 		if r.err != nil {
 			return errors.New("some runtimes failed to update")
 		}
+	}
+
+	if err := validatePNPMRuntimeRefs(runtimes); err != nil {
+		return err
 	}
 
 	if !pullRuntimesDryRunFlag {
@@ -228,6 +233,53 @@ func runPullRuntimes(cmd *cobra.Command, args []string) error {
 
 func isValidRuntime(name string) bool {
 	return slices.Contains(validRuntimeNames, name)
+}
+
+// preservePNPMRuntimeRef keeps the pnpm runtime an existing Node or Bun entry
+// already names. A filtered `--runtime node` pull rewrites that entry alone, so
+// resetting its reference to the default name would point a config whose pnpm
+// runtime is named something else at a runtime that is not there.
+func preservePNPMRuntimeRef(existing, updated *RuntimeJSON) {
+	if existing == nil || updated == nil {
+		return
+	}
+	if existing.Node != nil && updated.Node != nil && existing.Node.PNPMRuntime != "" {
+		updated.Node.PNPMRuntime = existing.Node.PNPMRuntime
+	}
+	if existing.Bun != nil && updated.Bun != nil && existing.Bun.PNPMRuntime != "" {
+		updated.Bun.PNPMRuntime = existing.Bun.PNPMRuntime
+	}
+}
+
+// validatePNPMRuntimeRefs refuses to write a file whose Node or Bun entry names
+// a pnpm runtime the file does not define: every later config load would fail
+// validation, and a filtered pull into a file without a pnpm entry is the easy
+// way to produce one.
+func validatePNPMRuntimeRefs(runtimes RuntimesJSON) error {
+	for _, name := range slices.Sorted(maps.Keys(runtimes)) {
+		entry := runtimes[name]
+		if entry == nil {
+			continue
+		}
+		var ref string
+		switch {
+		case entry.Node != nil:
+			ref = entry.Node.PNPMRuntime
+		case entry.Bun != nil:
+			ref = entry.Bun.PNPMRuntime
+		}
+		if ref == "" {
+			continue
+		}
+		target, ok := runtimes[ref]
+		if !ok || target == nil {
+			return fmt.Errorf("runtime %q names pnpm runtime %q, which this file does not define; pull it too (--runtime pnpm, or drop --runtime to update every runtime)", name, ref)
+		}
+		if target.Kind != "pnpm" {
+			return fmt.Errorf("runtime %q names pnpm runtime %q, which is kind %q", name, ref, target.Kind)
+		}
+	}
+	return nil
 }
 
 func runtimeVersion(r *RuntimeJSON) string {

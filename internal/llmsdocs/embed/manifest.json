@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 53,
-  "pageSetHash": "5f6d933cd6ed5979b1fa2dcb4b33e10d",
+  "pageSetHash": "571d29b35a3a113e25811f2345b633b1",
   "pages": [
     {
       "slug": "about",
@@ -307,8 +307,8 @@
       "url": "https://datamitsu.com/docs/guides/runtime-management.md",
       "title": "Runtime Management",
       "description": "Managing Bun, UV (Python), Node.js, JVM, and Go runtimes with datamitsu",
-      "bytes": 18468,
-      "contentHash": "89225da1b93684b6c226130a37085bf0"
+      "bytes": 18956,
+      "contentHash": "33fbb3165062458457b7a2410d76a5c7"
     },
     {
       "slug": "guides/source-mode",
