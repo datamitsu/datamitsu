@@ -42,6 +42,17 @@ func seedBunTestPNPM(t *testing.T) string {
 	return pnpmPath
 }
 
+// fakeBunExecutable stands in for the Bun binary the alias links to: the tests
+// that do not run it only care about its path.
+func fakeBunExecutable(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "bun")
+	if err := os.WriteFile(path, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("write fake Bun: %v", err)
+	}
+	return path
+}
+
 func TestResolveBunCommandInfo(t *testing.T) {
 	storeRoot := t.TempDir()
 	t.Setenv("DATAMITSU_CACHE_DIR", storeRoot)
@@ -65,6 +76,9 @@ func TestResolveBunCommandInfo(t *testing.T) {
 	}
 	if got := info.Env["npm_config_store_dir"]; got != env.GetPNPMStorePath() {
 		t.Errorf("npm_config_store_dir = %q, want %q", got, env.GetPNPMStorePath())
+	}
+	if got := info.Env["BUN_OPTIONS"]; got != bunGuardOptions {
+		t.Errorf("BUN_OPTIONS = %q, want the ambient-input guards %q inherited by every Bun child", got, bunGuardOptions)
 	}
 	appEnvPath, err := rm.resolveBunAppEnvPath("eslint", app, nil, nil)
 	if err != nil {
@@ -100,6 +114,7 @@ printf '{}\n' > node_modules/demo/package.json
 printf 'console.log("ok")\n' > node_modules/demo/cli.js
 printf 'lockfileVersion: 9.0\n' > pnpm-lock.yaml
 printf '%s\n' "$@" > bun-args.txt
+printf '%s\n' "${BUN_OPTIONS:-}" > bun-env.txt
 `
 	if err := os.WriteFile(fakeBun, []byte(script), 0o755); err != nil {
 		t.Fatalf("write fake Bun: %v", err)
@@ -138,6 +153,109 @@ printf '%s\n' "$@" > bun-args.txt
 	}
 	if strings.Contains(string(args), "--frozen-lockfile") {
 		t.Errorf("lockfile generation install unexpectedly used --frozen-lockfile: %q", args)
+	}
+	guards, err := os.ReadFile(filepath.Join(appPath, "bun-env.txt"))
+	if err != nil {
+		t.Fatalf("read installer BUN_OPTIONS: %v", err)
+	}
+	if strings.TrimSpace(string(guards)) != bunGuardOptions {
+		t.Errorf("installer BUN_OPTIONS = %q, want %q", strings.TrimSpace(string(guards)), bunGuardOptions)
+	}
+}
+
+// TestWriteBunNodeAliasKeepsNodeArgv0 pins the alias shape: Bun emulates the
+// node CLI only when argv[0] names it `node`, so the alias has to be a link to
+// the executable and not a wrapper that runs it under Bun's own name.
+func TestWriteBunNodeAliasKeepsNodeArgv0(t *testing.T) {
+	appEnvPath := t.TempDir()
+	target := fakeBunExecutable(t)
+
+	if err := writeBunNodeAlias(appEnvPath, target); err != nil {
+		t.Fatalf("writeBunNodeAlias() error = %v", err)
+	}
+
+	aliasPath := bunNodeAliasPath(appEnvPath)
+	if name := strings.TrimSuffix(filepath.Base(aliasPath), ".exe"); name != "node" {
+		t.Errorf("alias file name = %q, want node", filepath.Base(aliasPath))
+	}
+	aliasInfo, err := os.Stat(aliasPath)
+	if err != nil {
+		t.Fatalf("stat alias: %v", err)
+	}
+	targetInfo, err := os.Stat(target)
+	if err != nil {
+		t.Fatalf("stat Bun executable: %v", err)
+	}
+	if !os.SameFile(aliasInfo, targetInfo) {
+		t.Errorf("alias does not resolve to the Bun executable %q", target)
+	}
+	if runtime.GOOS == "windows" {
+		return
+	}
+	linkInfo, err := os.Lstat(aliasPath)
+	if err != nil {
+		t.Fatalf("lstat alias: %v", err)
+	}
+	if linkInfo.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("alias mode = %v, want a symlink", linkInfo.Mode())
+	}
+	// An absolute target is the shape the OCI bundle extractor relocates.
+	resolved, err := os.Readlink(aliasPath)
+	if err != nil {
+		t.Fatalf("readlink alias: %v", err)
+	}
+	if resolved != target {
+		t.Errorf("alias target = %q, want the absolute Bun path %q", resolved, target)
+	}
+}
+
+// TestWriteBunNodeAliasResolvesSystemCommand covers a system-mode runtime
+// configured with a bare command: a link to "bun" would resolve against the
+// alias directory, so the PATH lookup has to happen when the alias is written.
+func TestWriteBunNodeAliasResolvesSystemCommand(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("test uses a POSIX fake Bun executable")
+	}
+	target := fakeBunExecutable(t)
+	t.Setenv("PATH", filepath.Dir(target))
+
+	appEnvPath := t.TempDir()
+	if err := writeBunNodeAlias(appEnvPath, "bun"); err != nil {
+		t.Fatalf("writeBunNodeAlias() error = %v", err)
+	}
+	resolved, err := os.Readlink(bunNodeAliasPath(appEnvPath))
+	if err != nil {
+		t.Fatalf("readlink alias: %v", err)
+	}
+	if resolved != target {
+		t.Errorf("alias target = %q, want the resolved system Bun %q", resolved, target)
+	}
+}
+
+// TestWriteBunNodeAliasReplacesStaleAlias covers a reinstall into an app
+// environment that still carries the alias of a previous runtime.
+func TestWriteBunNodeAliasReplacesStaleAlias(t *testing.T) {
+	appEnvPath := t.TempDir()
+	previous := fakeBunExecutable(t)
+	current := fakeBunExecutable(t)
+
+	if err := writeBunNodeAlias(appEnvPath, previous); err != nil {
+		t.Fatalf("writeBunNodeAlias() previous error = %v", err)
+	}
+	if err := writeBunNodeAlias(appEnvPath, current); err != nil {
+		t.Fatalf("writeBunNodeAlias() current error = %v", err)
+	}
+
+	aliasInfo, err := os.Stat(bunNodeAliasPath(appEnvPath))
+	if err != nil {
+		t.Fatalf("stat alias: %v", err)
+	}
+	currentInfo, err := os.Stat(current)
+	if err != nil {
+		t.Fatalf("stat Bun executable: %v", err)
+	}
+	if !os.SameFile(aliasInfo, currentInfo) {
+		t.Errorf("alias still points at the previous runtime %q", previous)
 	}
 }
 
@@ -223,7 +341,7 @@ func TestGetCommandInfoBunMergesWorkspaceOnceOnCacheHit(t *testing.T) {
 	if err := os.WriteFile(modulePackageJSON, []byte("{}\n"), 0o644); err != nil {
 		t.Fatalf("write module package.json: %v", err)
 	}
-	if err := writeBunNodeAlias(appEnvPath, "bun"); err != nil {
+	if err := writeBunNodeAlias(appEnvPath, fakeBunExecutable(t)); err != nil {
 		t.Fatalf("write Bun node alias: %v", err)
 	}
 
