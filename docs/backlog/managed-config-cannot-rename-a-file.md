@@ -49,7 +49,7 @@ deletes the project's task definitions and writes an empty replacement. Not a mi
 loss of hand-written work, on a reconciliation apply.
 
 Worth noting that Taskfile is not managed at all today — no entry under
-`src/datamitsu-config/setup/`, and no tool in the config matches it — so nothing is broken right
+`src/datamitsu-config/managed-configs/`, and no tool in the config matches it — so nothing is broken right
 now. The gap is that the capability needed to start managing it does not exist.
 
 The same wall stands in front of any future config where the file is authored by the project rather

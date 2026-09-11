@@ -98,7 +98,7 @@ func tomlStringifyOrdered(slice yaml.MapSlice) (string, error) {
 //
 // Without this, YAML.parse decoded mappings into Go map[string]any, whose
 // iteration order goja exposes non-deterministically; YAML.stringify then
-// faithfully preserved that random order, drifting setup content (and its
+// faithfully preserved that random order, drifting managed-config content (and its
 // expectChainHash) on every run.
 func (e *Engine) orderedAnyToGojaValue(val any) goja.Value {
 	switch v := val.(type) {
