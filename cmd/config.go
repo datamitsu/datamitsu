@@ -112,7 +112,7 @@ func selectChainHashes(all []config.ChainHashEntry, args []string) ([]config.Cha
 		}
 	}
 	if len(missing) > 0 {
-		return nil, fmt.Errorf("no setup config named: %s (run without arguments to list all)", strings.Join(missing, ", "))
+		return nil, fmt.Errorf("no managed config named: %s (run without arguments to list all)", strings.Join(missing, ", "))
 	}
 	return selected, nil
 }
@@ -134,15 +134,15 @@ func formatChainHashTable(entries []config.ChainHashEntry) string {
 
 var configChainHashCmd = &cobra.Command{
 	Use:   "chain-hash [file...]",
-	Short: "Print the expectChainHash value for setup files",
-	Long: `Print the XXH3-128 chain hash that ` + "`datamitsu setup`" + ` verifies for managed
+	Short: "Print the expectChainHash value for managed config files",
+	Long: `Print the XXH3-128 chain hash that ` + "`datamitsu config reconcile`" + ` verifies for managed
 config files — the hash of the content entering each file's root (topmost) config
-layer. Copy it into a setup entry's ` + "`expectChainHash`" + ` to pin the upstream
+layer. Copy it into a managedConfigs entry's ` + "`expectChainHash`" + ` to pin the upstream
 baseline your overrides were written against.
 
 The value is the input to the TOPMOST layer, so declare your own entry for the
 file first (a placeholder ` + "`expectChainHash`" + ` is enough), then read the hash
-here. With no arguments every setup file is listed; with exactly one file only its
+here. With no arguments every managed config file is listed; with exactly one file only its
 bare hash is printed, which is handy for scripting:
 
   pin=$(datamitsu config chain-hash eslint.config.mjs)`,

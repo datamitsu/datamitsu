@@ -17,10 +17,10 @@ import (
 	"go.uber.org/zap/zaptest/observer"
 )
 
-// loadCached evaluates a standalone chain the way every non-setup command does.
+// loadCached evaluates a standalone chain the way ordinary cached commands do.
 // The returned VM is the hit signal: a load that evaluated returns the last
 // layer's runtime, and a load served from the cache has none to return.
-func loadCached(t *testing.T, paths ...string) (*config.Config, *config.SetupLayerMap, *goja.Runtime) {
+func loadCached(t *testing.T, paths ...string) (*config.Config, *config.ManagedConfigLayerMap, *goja.Runtime) {
 	t.Helper()
 	cfg, layerMap, vm, err := loadConfigWithPaths(context.Background(), nil, true, paths)
 	if err != nil {
@@ -70,13 +70,13 @@ func TestConfigCacheHitEqualsMiss(t *testing.T) {
 		t.Fatal("a hit returned a nil layer map, want an empty one")
 	}
 	if len(*warmLayers) != 0 {
-		t.Errorf("a hit returned %d setup layers, want an empty map", len(*warmLayers))
+		t.Errorf("a hit returned %d managed-config layers, want an empty map", len(*warmLayers))
 	}
 }
 
 // The same equality over a realistic graph rather than a two-field fixture. The
 // chain here carries the embedded default config forward, so apps, runtimes,
-// tools and setup entries all pass through msgpack — a field the encoder
+// tools and managed config entries all pass through msgpack — a field the encoder
 // silently drops or normalizes is what makes this cache fast and wrong, and a
 // small fixture would never touch one.
 func TestConfigCacheHitEqualsMissForTheDefaultChain(t *testing.T) {
@@ -95,7 +95,7 @@ func TestConfigCacheHitEqualsMissForTheDefaultChain(t *testing.T) {
 					},
 				},
 			},
-			setup: { ".editorconfig": { linkTarget: "shared/.editorconfig" } },
+			managedConfigs: { ".editorconfig": { linkTarget: "shared/.editorconfig" } },
 			execution: { maxConcurrency: 3 },
 		});`)
 
@@ -103,9 +103,9 @@ func TestConfigCacheHitEqualsMissForTheDefaultChain(t *testing.T) {
 	if servedFromCache(coldVM) {
 		t.Fatal("the first load was served from an empty cache")
 	}
-	if len(cold.Apps) == 0 || len(cold.Tools) == 0 || len(cold.Setup) == 0 {
-		t.Fatalf("the merged config is thin (apps %d, tools %d, setup %d); the fixture is not exercising the graph",
-			len(cold.Apps), len(cold.Tools), len(cold.Setup))
+	if len(cold.Apps) == 0 || len(cold.Tools) == 0 || len(cold.ManagedConfigs) == 0 {
+		t.Fatalf("the merged config is thin (apps %d, tools %d, managed configs %d); the fixture is not exercising the graph",
+			len(cold.Apps), len(cold.Tools), len(cold.ManagedConfigs))
 	}
 
 	warm, _, warmVM := loadCached(t, path)
@@ -203,39 +203,39 @@ func TestConfigCacheDisabledAlwaysEvaluates(t *testing.T) {
 	}
 }
 
-// setup is the one caller that uses the returned VM, so it must never be served
-// from the cache — and must never leave an artifact whose empty layer map a
-// later setup could inherit.
-func TestLoadConfigForSetupNeverServesFromCache(t *testing.T) {
+// Reconciliation uses the returned VM, so it must never be served from the
+// cache — and must never leave an artifact whose empty layer map a later
+// reconciliation could inherit.
+func TestLoadConfigForReconcileNeverServesFromCache(t *testing.T) {
 	cacheHome := isolateCacheTree(t)
-	path := writeStandaloneConfig(t, `return { ignoreRules: ["setup: eslint"] };`)
+	path := writeStandaloneConfig(t, `return { ignoreRules: ["generated/**: eslint"] };`)
 
 	withConfigPaths(t, path)
 	for i := range 2 {
-		_, layerMap, vm, err := loadConfigForSetup(context.Background())
+		_, layerMap, vm, err := loadConfigForReconcile(context.Background())
 		if err != nil {
-			t.Fatalf("loadConfigForSetup (load %d): %v", i, err)
+			t.Fatalf("loadConfigForReconcile (load %d): %v", i, err)
 		}
 		if vm == nil {
-			t.Fatalf("load %d returned no VM; setup cannot run without one", i)
+			t.Fatalf("load %d returned no VM; reconciliation cannot run without one", i)
 		}
 		if layerMap == nil {
 			t.Fatalf("load %d returned a nil layer map", i)
 		}
 	}
 	if n := configEvalArtifactCount(t, cacheHome); n != 0 {
-		t.Errorf("setup stored %d artifacts, want 0: its layer map cannot be cached", n)
+		t.Errorf("reconciliation stored %d artifacts, want 0: its layer map cannot be cached", n)
 	}
 }
 
-// `config chain-hash` evaluates setup content, so it must miss even when a
+// `config chain-hash` evaluates managed config content, so it must miss even when a
 // warm artifact exists — and must produce the same hashes it did before the
 // cache existed.
 func TestChainHashUnaffectedByTheCache(t *testing.T) {
 	isolateCacheTree(t)
 	path := writeStandaloneConfig(t, `
 		return {
-			setup: {
+			managedConfigs: {
 				"eslint.config.mjs": { content: function () { return "export default [];"; } },
 			},
 		};`)
@@ -304,7 +304,7 @@ func TestLockfileGenLoadNeverTouchesTheCache(t *testing.T) {
 func TestConfigCacheReplaysWarningsOnAHit(t *testing.T) {
 	isolateCacheTree(t)
 	path := writeStandaloneConfig(t, `
-		return { setup: { ".prettierrc": { tools: ["no-such-tool"] } } };`)
+		return { managedConfigs: { ".prettierrc": { tools: ["no-such-tool"] } } };`)
 
 	coldLogs := swapLoggerWithObserver(t, zapcore.WarnLevel)
 	if _, _, vm := loadCached(t, path); servedFromCache(vm) {

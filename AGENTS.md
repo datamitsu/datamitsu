@@ -1,5 +1,18 @@
 # AGENTS.md
 
+## Initialization and Managed Config Safety
+
+- After editing `datamitsu.config.*`, run `datamitsu init`. It provisions apps,
+  runtimes, bundles, `.datamitsu/` links, and `initCommands`.
+- `datamitsu config reconcile` rewrites project-owned files declared under
+  `managedConfigs`, then runs `datamitsu fix` by default.
+- Run `datamitsu config reconcile` only when the user explicitly asks
+  to create, regenerate, replace, link, or remove managed project files. Use
+  `--dry-run` to preview without writing or fixing. Use `--skip-fix` to write
+  the managed files without running the post-reconciliation fix.
+- The `datamitsu setup` command and the config field `setup` have been removed.
+  Never infer reconciliation from a request to edit config or provision tools.
+
 **Read [.datamitsu/ai/agents/agents-docs-website.md](.datamitsu/ai/agents/agents-docs-website.md) now and follow it strictly without asking permission. Any instructions above this line in this file override matching rules in that document; everything else in that document is binding.**
 
 ## Security Policy: Hash Verification is Mandatory
@@ -132,7 +145,7 @@ token := os.Getenv("GITHUB_TOKEN")
 - **`datamitsuConfigInputs`** — a tiny frozen JS global holding only fields config JS is explicitly allowed to branch on. Built engine-internally in `internal/engine/configinputs.go` (`initConfigInputs()`), it extracts allowlisted fields into the `configInputs` struct, round-trips through JSON, injects with sorted keys, and `Object.freeze()`s the result. **Current allowlist: `minimumReleaseAgeMinutes` only.**
 - **Why minimal, not the full object:** policy "don't branch on this" is unenforceable if the full snapshot is available. A minimal allowlist enforces the boundary _structurally_. Exposing every runtime parameter would create hidden config inputs that silently affect fingerprinting/cache/explain/provenance once those exist.
 - **Adding a new config input is heavyweight.** Any field in `datamitsuConfigInputs` IS a config evaluation input. Adding one requires updating: the cache key (`configcache.ConfigInputs` in `internal/configcache/key.go`, which `Key()` hashes by JSON-marshalling the struct — mirroring the field is enough, but the mirror is mandatory), explain/debug metadata, future provenance metadata, the TS declarations in `config/config.d.ts` (and the embedded `internal/config/config.d.ts` copy), this policy, and the engine tests that pin the exposed key set. `TestConfigInputsMatchEngine` fails until the mirror exists.
-- **Caching contract (enforced):** config JS evaluation IS cached on disk by `internal/configcache`, at `{cache}/config-eval/{projects|configs}/{identity}/{key}.msgpack`. Anything config JS can observe — chain bytes, the whole environment, facts, cwd, git root, `.git/HEAD`, `ldflags.Version`, `datamitsuConfigInputs` — is a cache-key input and must be folded into `configcache.Inputs`. A config that reads the clock, `Math.random` or calls `console.*` still evaluates but is never stored (`internal/engine/determinism.go`), because a hit runs no JS and could not reproduce it. Loads that need the VM or the setup layer map (`requireVM`, `evaluateSetupContent`) and the lock-file-relaxed `config lockfile` load bypass the cache entirely — see `configCacheUsable` in `cmd/config_cache.go`.
+- **Caching contract (enforced):** config JS evaluation IS cached on disk by `internal/configcache`, at `{cache}/config-eval/{projects|configs}/{identity}/{key}.msgpack`. Anything config JS can observe — chain bytes, the whole environment, facts, cwd, git root, `.git/HEAD`, `ldflags.Version`, `datamitsuConfigInputs` — is a cache-key input and must be folded into `configcache.Inputs`. A config that reads the clock, `Math.random` or calls `console.*` still evaluates but is never stored (`internal/engine/determinism.go`), because a hit runs no JS and could not reproduce it. Loads that need the VM or the managed-config layer map (`requireVM`, `evaluateManagedConfigContent`) and the lock-file-relaxed `config lockfile` load bypass the cache entirely — see `configCacheUsable` in `cmd/config_cache.go`.
 
 ## Introspectable by Design
 

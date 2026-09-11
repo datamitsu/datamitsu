@@ -138,7 +138,7 @@ func runInit(_ *cobra.Command, _ []string) error {
 
 		// Install runtime-managed (node/UV) link-apps so their config links resolve
 		// below: those referenced by a tool, plus all non-lazy link-apps (whose
-		// links may be consumed by hooks/ConfigSetup, e.g. commitlint). Only apps
+		// links may be consumed by hooks/ManagedConfig, e.g. commitlint). Only apps
 		// marked Lazy (e.g. slidev) are deferred — they install on first `dm exec`.
 		// Install feedback is the shared bars.
 		if err := installRuntimeAppsWithLinks(ctx, binMgr, cfg, initAll); err != nil {
@@ -554,7 +554,7 @@ func installRuntimeAppsWithLinks(ctx context.Context, binMgr *binmanager.BinMana
 // With installAll, every runtime link-app (Lazy included) is installed. In the
 // default (smart) mode the set is the link-apps referenced by a tool, plus every
 // non-lazy runtime link-app — the latter covers apps whose links are consumed by
-// hooks or ConfigSetup, which scanReferencedApps cannot see (e.g. commitlint, run
+// hooks or ManagedConfig, which scanReferencedApps cannot see (e.g. commitlint, run
 // by the commit-msg hook with its config imported via a `.datamitsu/` symlink).
 // Only apps explicitly marked Lazy (e.g. slidev) are deferred; they install on
 // first `dm exec`, which is when their links matter.
@@ -641,7 +641,7 @@ func filterAppsForSmartInit(apps binmanager.MapOfApps, referencedApps []string) 
 
 // eagerRuntimeLinkApps returns runtime-managed (node/UV) apps that declare Links
 // and are NOT marked Lazy. These install at init even when no tool references
-// them, because their links may be consumed by hooks or ConfigSetup that
+// them, because their links may be consumed by hooks or ManagedConfig that
 // scanReferencedApps cannot see (e.g. commitlint's config, imported via a
 // `.datamitsu/` symlink and run by the commit-msg hook). Lazy apps (e.g. slidev)
 // are excluded — they install on first `datamitsu exec`.

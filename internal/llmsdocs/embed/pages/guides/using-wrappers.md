@@ -15,7 +15,7 @@ npm install eslint prettier @typescript-eslint/parser @typescript-eslint/eslint-
 
 # With datamitsu wrapper
 npm install @company/datamitsu-config
-datamitsu setup
+datamitsu config reconcile
 # Everything configured automatically
 ```
 
@@ -23,7 +23,7 @@ Wrapper packages contain:
 
 - Tool definitions (versions, download URLs, hashes)
 - Pre-configured settings (ESLint rules, Prettier options, etc.)
-- Setup files (configs, ignore files, git hooks)
+- Managed project files (configs, ignore files, git hooks)
 - Project-specific customization logic
 
 ## Installing a Wrapper Package
@@ -65,6 +65,13 @@ Install your team's wrapper package as a dev dependency:
     ```
 
   </TabItem>
+  <TabItem value="deno" label="deno">
+
+    ```bash
+    deno add npm:@company/datamitsu-config
+    ```
+
+  </TabItem>
 </Tabs>
 
 The wrapper package typically includes a `datamitsu` binary in its bin/ folder that wraps the core binary with `--before-config`.
@@ -83,15 +90,24 @@ datamitsu --before-config node_modules/@company/datamitsu-config/config/datamits
 
 This downloads and stores all binaries defined in the wrapper package.
 
-### Step 4: Run Setup
+### Step 4: Reconcile Managed Configs
 
-Generate configuration files:
+Reconciliation writes managed files and then runs `datamitsu fix`. Preview the
+changes without either action first:
 
 ```bash
-npx datamitsu setup
+npx datamitsu config reconcile --dry-run
 ```
 
-This creates config files (`.eslintrc.js`, `.prettierrc`, `.golangci.yml`, etc.) in your project based on the wrapper's setup definitions.
+Then reconcile the managed files:
+
+```bash
+npx datamitsu config reconcile
+```
+
+This creates config files (`.eslintrc.js`, `.prettierrc`, `.golangci.yml`, etc.)
+in your project based on the wrapper's `managedConfigs` entries. It is separate
+from `init`, which provisions the toolchain and `.datamitsu` links.
 
 ### Step 5: Run Checks
 
@@ -119,7 +135,7 @@ Use the wrapper's `datamitsu` binary:
 ```bash
 # All commands automatically use the wrapper config
 npx datamitsu init
-npx datamitsu setup
+npx datamitsu config reconcile
 npx datamitsu check
 npx datamitsu exec golangci-lint run
 ```
@@ -134,7 +150,7 @@ Add datamitsu commands to your `package.json`:
     "lint": "datamitsu lint",
     "fix": "datamitsu fix",
     "check": "datamitsu check",
-    "setup": "datamitsu setup"
+    "reconcile-config": "datamitsu config reconcile"
   }
 }
 ```
@@ -212,9 +228,9 @@ globalThis.getConfig = getConfig;
 globalThis.getMinVersion = () => "0.0.1";
 ```
 
-### Replace Setup Files
+### Replace Managed Config Files
 
-Override the wrapper's setup files by providing your own:
+Override the wrapper's managed config files by providing your own:
 
 ```typescript
 /// <reference path=".datamitsu/datamitsu.config.d.ts" />
@@ -222,8 +238,8 @@ Override the wrapper's setup files by providing your own:
 function getConfig(prev) {
   return {
     ...prev,
-    setup: {
-      ...prev.setup,
+    managedConfigs: {
+      ...prev.managedConfigs,
       ".eslintrc.js": {
         content: () => `
 export default {
@@ -299,14 +315,14 @@ The patching mechanism merges new defaults with your project-specific changes:
 1. **Wrapper provides base config** — Tool versions, default settings
 2. **Your project customizes** — Overrides specific settings
 3. **Wrapper updates** — New tool versions, new defaults
-4. **Re-run setup** — Customizations preserved, new defaults applied
+4. **Re-run reconciliation** — Customizations preserved, new defaults applied
 
 ### Example Workflow
 
 ```bash
 # Initial install
 npm install @company/datamitsu-config@1.0.0
-datamitsu setup
+datamitsu config reconcile
 
 # Customize .eslintrc.js manually
 # ... make changes ...
@@ -314,8 +330,8 @@ datamitsu setup
 # Months later: wrapper updates
 npm update @company/datamitsu-config  # Now 2.0.0
 
-# Re-run setup
-datamitsu setup
+# Reconcile managed config changes, then run fix
+datamitsu config reconcile
 
 # Your customizations preserved
 # New defaults from wrapper applied
@@ -364,11 +380,12 @@ Install the reference wrapper:
 npm install --save-dev shibanet0/datamitsu-config
 ```
 
-Initialize and setup:
+Initialize tools, optionally preview managed config changes, then reconcile them:
 
 ```bash
 npx datamitsu init
-npx datamitsu setup
+npx datamitsu config reconcile --dry-run
+npx datamitsu config reconcile
 ```
 
 This installs and configures:
@@ -506,13 +523,13 @@ globalThis.getConfig = getConfig;
 globalThis.getMinVersion = () => "0.0.1";
 ```
 
-### Setup Files Not Generated
+### Managed Config Files Not Generated
 
-If `datamitsu setup` doesn't create expected files:
+If `datamitsu config reconcile` doesn't create expected files:
 
-1. Check that the wrapper defines setup files in `setup` config
-2. Verify you're in a git repository (setup only runs in git repos)
-3. Check project type detection (setup may be conditional)
+1. Check that the wrapper defines files under `managedConfigs`
+2. Verify you're in a git repository (reconciliation only runs in git repos)
+3. Check project type detection (managed config entries may be conditional)
 
 ### Cache Issues
 

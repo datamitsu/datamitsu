@@ -25,7 +25,7 @@ import (
 // FormatVersion is the schema version of the stored artifact. Bump it whenever
 // the encoded artifact's shape changes; every old entry then misses rather than
 // decoding into a struct that no longer means the same thing.
-const FormatVersion = 1
+const FormatVersion = 2
 
 // ChainFile is one on-disk file of the resolved config chain. A file that does
 // not exist is recorded with Exists=false and an empty hash: its appearance is
@@ -153,7 +153,7 @@ type Inputs struct {
 	Facts Facts
 
 	// CWD and GitRoot are hashed separately: isMonorepo is derived from their
-	// relationship, and setup content receives paths computed relative to cwd.
+	// relationship, and managed config content receives paths computed relative to cwd.
 	CWD     string
 	GitRoot string
 

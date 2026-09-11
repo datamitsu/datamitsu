@@ -7986,7 +7986,7 @@ const trufflehogExcludePaths = [
 function escapeRegExp(string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
-const setup = {
+const managedConfigs = {
   ".datamitsu/scripts/check-empty-files.sh": {
     content: () => {
       return [
@@ -10811,7 +10811,7 @@ function getConfig(cfg) {
       ...(mapOfRuntimes?.uv ? { uv: { ...mapOfRuntimes.uv } } : {}),
     },
     ...(ociBundle ? { oci: ociBundle } : {}),
-    setup,
+    managedConfigs,
     sharedStorage: { ...cfg.sharedStorage },
     tools: toolsConfig,
   };

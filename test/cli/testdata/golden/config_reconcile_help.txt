@@ -1,0 +1,31 @@
+Reconcile managedConfigs entries by creating, replacing, patching, linking,
+or removing project-owned files for the detected project types. The command
+writes those changes and then runs "datamitsu fix" by default. Use --dry-run to
+preview without writing or running fix, or --skip-fix to reconcile files without
+the post-reconciliation fix.
+
+This command is intentionally separate from project initialization. After
+editing datamitsu.config.*, run "datamitsu init" to provision tools, runtimes,
+bundles, and .datamitsu links. Use "datamitsu config reconcile" only when you
+explicitly intend to rewrite managed project configuration files.
+
+Usage:
+  datamitsu config reconcile [flags]
+
+Flags:
+      --dry-run          Show what would be reconciled without writing files or running fix
+  -h, --help             help for reconcile
+      --no-verify-hash   Skip expectChainHash verification even when a pinned managed config drifted from its upstream chain
+      --opt-in-tools     Include an all-disabled .datamitsuignore in reconciliation so tools are opt-in (enable them by removing names from the list)
+      --skip-fix         Skip running fix after reconciling managed configuration files
+      --tools string     Comma-separated list of tools to scope reconciliation to (only their managed config files are considered)
+
+Global Flags:
+      --before-config strings   Configuration file(s) to load before auto-discovery (for wrappers/libraries)
+      --binary-command string   Override the binary command (for npm package wrappers, etc). Can also be set via DATAMITSU_BINARY_COMMAND env var
+      --config strings          Additional configuration file(s) to load and merge (can be specified multiple times)
+      --log-format string       Status output format: console or jsonl (also via DATAMITSU_LOG_FORMAT)
+      --no-auto-config          Disable auto-discovery of datamitsu.config.{js,mjs,ts} at git root
+      --no-oci                  Disable OCI bundle store seeding (also via DATAMITSU_NO_OCI)
+      --no-parse                Skip output parsers; show tools' raw output instead (also via DATAMITSU_NO_PARSE)
+  -v, --verbose                 Enable debug-level logging (default level is warn)

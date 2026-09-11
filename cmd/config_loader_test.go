@@ -212,7 +212,7 @@ func TestParseConfigResultLinkTarget(t *testing.T) {
 
 	_, err := vm.RunString(`
 		var result = {
-			setup: {
+			managedConfigs: {
 				"CLAUDE.md": {
 					scope: "git-root",
 					linkTarget: "AGENTS.md"
@@ -225,7 +225,7 @@ func TestParseConfigResultLinkTarget(t *testing.T) {
 		};
 	`)
 	if err != nil {
-		t.Fatalf("JS setup error: %v", err)
+		t.Fatalf("JS evaluation error: %v", err)
 	}
 
 	resultVal := vm.Get("result")
@@ -234,23 +234,23 @@ func TestParseConfigResultLinkTarget(t *testing.T) {
 		t.Fatalf("parseConfigResult error: %v", err)
 	}
 
-	claudeInit, ok := cfg.Setup["CLAUDE.md"]
+	claudeManagedConfig, ok := cfg.ManagedConfigs["CLAUDE.md"]
 	if !ok {
-		t.Fatal("CLAUDE.md init config not found")
+		t.Fatal("CLAUDE.md managed config not found")
 	}
-	if claudeInit.LinkTarget != "AGENTS.md" {
-		t.Errorf("CLAUDE.md LinkTarget = %q, want %q", claudeInit.LinkTarget, "AGENTS.md")
+	if claudeManagedConfig.LinkTarget != "AGENTS.md" {
+		t.Errorf("CLAUDE.md LinkTarget = %q, want %q", claudeManagedConfig.LinkTarget, "AGENTS.md")
 	}
-	if claudeInit.Scope != "git-root" {
-		t.Errorf("CLAUDE.md Scope = %q, want %q", claudeInit.Scope, "git-root")
+	if claudeManagedConfig.Scope != "git-root" {
+		t.Errorf("CLAUDE.md Scope = %q, want %q", claudeManagedConfig.Scope, "git-root")
 	}
 
-	cursorInit, ok := cfg.Setup[".cursorrules"]
+	cursorManagedConfig, ok := cfg.ManagedConfigs[".cursorrules"]
 	if !ok {
-		t.Fatal(".cursorrules init config not found")
+		t.Fatal(".cursorrules managed config not found")
 	}
-	if cursorInit.LinkTarget != "AGENTS.md" {
-		t.Errorf(".cursorrules LinkTarget = %q, want %q", cursorInit.LinkTarget, "AGENTS.md")
+	if cursorManagedConfig.LinkTarget != "AGENTS.md" {
+		t.Errorf(".cursorrules LinkTarget = %q, want %q", cursorManagedConfig.LinkTarget, "AGENTS.md")
 	}
 }
 
@@ -259,7 +259,7 @@ func TestParseConfigResultLinkTargetWithRelativePath(t *testing.T) {
 
 	_, err := vm.RunString(`
 		var result = {
-			setup: {
+			managedConfigs: {
 				".cursor/rules": {
 					scope: "git-root",
 					linkTarget: "../AGENTS.md"
@@ -268,7 +268,7 @@ func TestParseConfigResultLinkTargetWithRelativePath(t *testing.T) {
 		};
 	`)
 	if err != nil {
-		t.Fatalf("JS setup error: %v", err)
+		t.Fatalf("JS evaluation error: %v", err)
 	}
 
 	resultVal := vm.Get("result")
@@ -277,12 +277,12 @@ func TestParseConfigResultLinkTargetWithRelativePath(t *testing.T) {
 		t.Fatalf("parseConfigResult error: %v", err)
 	}
 
-	cursorInit, ok := cfg.Setup[".cursor/rules"]
+	cursorManagedConfig, ok := cfg.ManagedConfigs[".cursor/rules"]
 	if !ok {
-		t.Fatal(".cursor/rules init config not found")
+		t.Fatal(".cursor/rules managed config not found")
 	}
-	if cursorInit.LinkTarget != "../AGENTS.md" {
-		t.Errorf(".cursor/rules LinkTarget = %q, want %q", cursorInit.LinkTarget, "../AGENTS.md")
+	if cursorManagedConfig.LinkTarget != "../AGENTS.md" {
+		t.Errorf(".cursor/rules LinkTarget = %q, want %q", cursorManagedConfig.LinkTarget, "../AGENTS.md")
 	}
 }
 
@@ -291,7 +291,7 @@ func TestParseConfigResultLinkTargetNotSet(t *testing.T) {
 
 	_, err := vm.RunString(`
 		var result = {
-			setup: {
+			managedConfigs: {
 				".gitignore": {
 					scope: "git-root",
 					content: function(ctx) { return "node_modules/"; }
@@ -300,7 +300,7 @@ func TestParseConfigResultLinkTargetNotSet(t *testing.T) {
 		};
 	`)
 	if err != nil {
-		t.Fatalf("JS setup error: %v", err)
+		t.Fatalf("JS evaluation error: %v", err)
 	}
 
 	resultVal := vm.Get("result")
@@ -309,14 +309,14 @@ func TestParseConfigResultLinkTargetNotSet(t *testing.T) {
 		t.Fatalf("parseConfigResult error: %v", err)
 	}
 
-	gitignoreInit, ok := cfg.Setup[".gitignore"]
+	gitignoreManagedConfig, ok := cfg.ManagedConfigs[".gitignore"]
 	if !ok {
-		t.Fatal(".gitignore init config not found")
+		t.Fatal(".gitignore managed config not found")
 	}
-	if gitignoreInit.LinkTarget != "" {
-		t.Errorf(".gitignore LinkTarget = %q, want empty string", gitignoreInit.LinkTarget)
+	if gitignoreManagedConfig.LinkTarget != "" {
+		t.Errorf(".gitignore LinkTarget = %q, want empty string", gitignoreManagedConfig.LinkTarget)
 	}
-	if gitignoreInit.Content == nil {
+	if gitignoreManagedConfig.Content == nil {
 		t.Error(".gitignore Content should not be nil")
 	}
 }
@@ -326,7 +326,7 @@ func TestParseConfigResultLinkTargetWithContent(t *testing.T) {
 
 	_, err := vm.RunString(`
 		var result = {
-			setup: {
+			managedConfigs: {
 				"CLAUDE.md": {
 					scope: "git-root",
 					linkTarget: "AGENTS.md",
@@ -336,7 +336,7 @@ func TestParseConfigResultLinkTargetWithContent(t *testing.T) {
 		};
 	`)
 	if err != nil {
-		t.Fatalf("JS setup error: %v", err)
+		t.Fatalf("JS evaluation error: %v", err)
 	}
 
 	resultVal := vm.Get("result")
@@ -345,21 +345,21 @@ func TestParseConfigResultLinkTargetWithContent(t *testing.T) {
 		t.Fatalf("parseConfigResult error: %v", err)
 	}
 
-	claudeInit := cfg.Setup["CLAUDE.md"]
-	if claudeInit.LinkTarget != "AGENTS.md" {
-		t.Errorf("LinkTarget = %q, want %q", claudeInit.LinkTarget, "AGENTS.md")
+	claudeManagedConfig := cfg.ManagedConfigs["CLAUDE.md"]
+	if claudeManagedConfig.LinkTarget != "AGENTS.md" {
+		t.Errorf("LinkTarget = %q, want %q", claudeManagedConfig.LinkTarget, "AGENTS.md")
 	}
-	if claudeInit.Content == nil {
+	if claudeManagedConfig.Content == nil {
 		t.Error("Content should still be preserved even when linkTarget is set")
 	}
 }
 
-func TestParseConfigResultInitConfigPreservesAllFields(t *testing.T) {
+func TestParseConfigResultManagedConfigPreservesAllFields(t *testing.T) {
 	vm := newTestVM()
 
 	_, err := vm.RunString(`
 		var result = {
-			setup: {
+			managedConfigs: {
 				"test.json": {
 					projectTypes: ["node"],
 					scope: "git-root",
@@ -371,7 +371,7 @@ func TestParseConfigResultInitConfigPreservesAllFields(t *testing.T) {
 		};
 	`)
 	if err != nil {
-		t.Fatalf("JS setup error: %v", err)
+		t.Fatalf("JS evaluation error: %v", err)
 	}
 
 	resultVal := vm.Get("result")
@@ -380,21 +380,21 @@ func TestParseConfigResultInitConfigPreservesAllFields(t *testing.T) {
 		t.Fatalf("parseConfigResult error: %v", err)
 	}
 
-	testInit := cfg.Setup["test.json"]
-	if len(testInit.ProjectTypes) != 1 || testInit.ProjectTypes[0] != "node" {
-		t.Errorf("ProjectTypes = %v, want [node]", testInit.ProjectTypes)
+	testManagedConfig := cfg.ManagedConfigs["test.json"]
+	if len(testManagedConfig.ProjectTypes) != 1 || testManagedConfig.ProjectTypes[0] != "node" {
+		t.Errorf("ProjectTypes = %v, want [node]", testManagedConfig.ProjectTypes)
 	}
-	if testInit.Scope != "git-root" {
-		t.Errorf("Scope = %q, want %q", testInit.Scope, "git-root")
+	if testManagedConfig.Scope != "git-root" {
+		t.Errorf("Scope = %q, want %q", testManagedConfig.Scope, "git-root")
 	}
-	if testInit.DeleteOnly {
+	if testManagedConfig.DeleteOnly {
 		t.Error("DeleteOnly should be false")
 	}
-	if len(testInit.OtherFileNameList) != 2 {
-		t.Errorf("OtherFileNameList len = %d, want 2", len(testInit.OtherFileNameList))
+	if len(testManagedConfig.OtherFileNameList) != 2 {
+		t.Errorf("OtherFileNameList len = %d, want 2", len(testManagedConfig.OtherFileNameList))
 	}
-	if testInit.LinkTarget != "some-target" {
-		t.Errorf("LinkTarget = %q, want %q", testInit.LinkTarget, "some-target")
+	if testManagedConfig.LinkTarget != "some-target" {
+		t.Errorf("LinkTarget = %q, want %q", testManagedConfig.LinkTarget, "some-target")
 	}
 }
 
@@ -410,7 +410,7 @@ func TestParseConfigResultIgnoreRules(t *testing.T) {
 		};
 	`)
 	if err != nil {
-		t.Fatalf("JS setup error: %v", err)
+		t.Fatalf("JS evaluation error: %v", err)
 	}
 
 	resultVal := vm.Get("result")
@@ -435,7 +435,7 @@ func TestParseConfigResultIgnoreRulesEmpty(t *testing.T) {
 
 	_, err := vm.RunString(`var result = {};`)
 	if err != nil {
-		t.Fatalf("JS setup error: %v", err)
+		t.Fatalf("JS evaluation error: %v", err)
 	}
 
 	resultVal := vm.Get("result")
@@ -461,7 +461,7 @@ func TestIgnoreRulesMergeAppend(t *testing.T) {
 		};
 	`)
 	if err != nil {
-		t.Fatalf("JS setup error: %v", err)
+		t.Fatalf("JS evaluation error: %v", err)
 	}
 	cfg1, err := parseConfigResult(vm1, vm1.Get("result1"))
 	if err != nil {
@@ -475,7 +475,7 @@ func TestIgnoreRulesMergeAppend(t *testing.T) {
 		};
 	`)
 	if err != nil {
-		t.Fatalf("JS setup error: %v", err)
+		t.Fatalf("JS evaluation error: %v", err)
 	}
 	cfg2, err := parseConfigResult(vm2, vm2.Get("result2"))
 	if err != nil {
@@ -507,7 +507,7 @@ func TestIgnoreRulesMergeWithEmptyPrevious(t *testing.T) {
 	vm1 := newTestVM()
 	_, err := vm1.RunString(`var result1 = {};`)
 	if err != nil {
-		t.Fatalf("JS setup error: %v", err)
+		t.Fatalf("JS evaluation error: %v", err)
 	}
 	cfg1, err := parseConfigResult(vm1, vm1.Get("result1"))
 	if err != nil {
@@ -521,7 +521,7 @@ func TestIgnoreRulesMergeWithEmptyPrevious(t *testing.T) {
 		};
 	`)
 	if err != nil {
-		t.Fatalf("JS setup error: %v", err)
+		t.Fatalf("JS evaluation error: %v", err)
 	}
 	cfg2, err := parseConfigResult(vm2, vm2.Get("result2"))
 	if err != nil {
@@ -1005,7 +1005,7 @@ type effectiveSnapshot struct {
 	editorconfig string
 }
 
-func snapshotEffective(t *testing.T, cfg *config.Config, layerMap *config.SetupLayerMap) effectiveSnapshot {
+func snapshotEffective(t *testing.T, cfg *config.Config, layerMap *config.ManagedConfigLayerMap) effectiveSnapshot {
 	t.Helper()
 	snap := effectiveSnapshot{
 		ignoreRules: cfg.IgnoreRules,
@@ -1048,7 +1048,7 @@ function getConfig(input) {
     return {
         apps: apps,
         ignoreRules: ["from-shared: eslint"],
-        setup: { ".editorconfig": { scope: "git-root", content: function(ctx) { return "from-shared"; } } }
+        managedConfigs: { ".editorconfig": { scope: "git-root", content: function(ctx) { return "from-shared"; } } }
     };
 }`, mergeHelper, jvmApp("a", "1.0.0")))
 
@@ -1065,17 +1065,17 @@ function getConfig(input) {
     return {
         apps: apps,
         ignoreRules: ["from-auto: prettier"],
-        setup: { ".editorconfig": { scope: "git-root", content: function(ctx) { return (ctx.existingContent || "") + "\nfrom-auto"; } } }
+        managedConfigs: { ".editorconfig": { scope: "git-root", content: function(ctx) { return (ctx.existingContent || "") + "\nfrom-auto"; } } }
     };
 }`, mergeHelper, jvmApp("a", "2.0.0"), jvmApp("b", "1.0.0")))
 
 	// Run A: declared before-config via auto discovery.
-	cfgA, lmA, _, errA := loadConfigForTestWithSetupContent(context.Background(), nil, false, nil)
+	cfgA, lmA, _, errA := loadConfigForTestWithManagedConfigContent(context.Background(), nil, false, nil)
 	if errA != nil {
 		t.Fatalf("declared run error: %v", errA)
 	}
 	// Run B: explicit --before-config (shared) + --config (auto), auto-discovery off.
-	cfgB, lmB, _, errB := loadConfigForTestWithSetupContent(context.Background(), []string{sharedPath}, true, []string{autoPath})
+	cfgB, lmB, _, errB := loadConfigForTestWithManagedConfigContent(context.Background(), []string{sharedPath}, true, []string{autoPath})
 	if errB != nil {
 		t.Fatalf("flag run error: %v", errB)
 	}
@@ -2412,7 +2412,7 @@ func TestLoadConfigImplEvaluatesInitContent(t *testing.T) {
 function getMinVersion() { return "0.0.0"; }
 function getConfig(input) {
     return {
-        setup: {
+        managedConfigs: {
             ".editorconfig": {
                 scope: "git-root",
                 content: function(context) { return "root = true"; }
@@ -2424,7 +2424,7 @@ function getConfig(input) {
 		t.Fatal(err)
 	}
 
-	_, layerMap, _, err := loadConfigForTestWithSetupContent(context.Background(), nil, true, []string{configPath})
+	_, layerMap, _, err := loadConfigForTestWithManagedConfigContent(context.Background(), nil, true, []string{configPath})
 	if err != nil {
 		t.Fatalf("loadConfigWithPaths error: %v", err)
 	}
@@ -2454,7 +2454,7 @@ func TestLoadConfigImplMergesLayersAcrossSources(t *testing.T) {
 function getMinVersion() { return "0.0.0"; }
 function getConfig(input) {
     return {
-        setup: {
+        managedConfigs: {
             ".editorconfig": {
                 scope: "git-root",
                 content: function(context) { return "from-before"; }
@@ -2472,7 +2472,7 @@ function getConfig(input) {
 function getMinVersion() { return "0.0.0"; }
 function getConfig(input) {
     return {
-        setup: {
+        managedConfigs: {
             ".editorconfig": {
                 scope: "git-root",
                 content: function(context) {
@@ -2489,7 +2489,7 @@ function getConfig(input) {
 		t.Fatal(err)
 	}
 
-	_, layerMap, _, err := loadConfigForTestWithSetupContent(context.Background(), []string{beforePath}, true, []string{configPath})
+	_, layerMap, _, err := loadConfigForTestWithManagedConfigContent(context.Background(), []string{beforePath}, true, []string{configPath})
 	if err != nil {
 		t.Fatalf("loadConfigWithPaths error: %v", err)
 	}
@@ -2515,7 +2515,7 @@ func TestLoadConfigImplSkipsFailedContentEvaluation(t *testing.T) {
 function getMinVersion() { return "0.0.0"; }
 function getConfig(input) {
     return {
-        setup: {
+        managedConfigs: {
             "test-fail-eval.txt": {
                 scope: "git-root",
                 content: function(context) { throw new Error("content generation failed"); }
@@ -2527,7 +2527,7 @@ function getConfig(input) {
 		t.Fatal(err)
 	}
 
-	_, layerMap, _, err := loadConfigForTestWithSetupContent(context.Background(), nil, true, []string{configPath})
+	_, layerMap, _, err := loadConfigForTestWithManagedConfigContent(context.Background(), nil, true, []string{configPath})
 	if err != nil {
 		t.Fatalf("loadConfigWithPaths should not error on failed content(): %v", err)
 	}
@@ -2639,13 +2639,14 @@ function getConfig(input) { return {}; }`,
 	}
 }
 
-// loadConfigForTestWithSetupContent is loadConfigWithPaths with setup content
-// evaluation turned on. Evaluation is opt-in for production loads — only setup,
-// init and `config chain-hash` consume the layer map — so a test about the layer
-// map has to ask for it, exactly as those commands do.
-func loadConfigForTestWithSetupContent(ctx context.Context, beforeConfigPaths []string, noAutoConfig bool, configPaths []string) (*config.Config, *config.SetupLayerMap, *goja.Runtime, error) {
+// loadConfigForTestWithManagedConfigContent is loadConfigWithPaths with managed
+// config content evaluation turned on. Evaluation is opt-in for production
+// loads — only `config reconcile` and `config chain-hash` consume the layer map
+// — so a test about the layer map has to ask for it, exactly as those commands
+// do.
+func loadConfigForTestWithManagedConfigContent(ctx context.Context, beforeConfigPaths []string, noAutoConfig bool, configPaths []string) (*config.Config, *config.ManagedConfigLayerMap, *goja.Runtime, error) {
 	return loadConfigImpl(ctx, beforeConfigPaths, noAutoConfig, configPaths,
-		loadConfigOptions{evaluateSetupContent: true})
+		loadConfigOptions{evaluateManagedConfigContent: true})
 }
 
 // A config layer reads its input through Go maps, whose iteration order goja

@@ -6,9 +6,9 @@ added: 2026-08-27
 
 # A managed config file cannot be renamed without discarding its contents
 
-`otherFileNameList` is the only mechanism `dm setup` has for reacting to a config file that carries
-the wrong name, and it only deletes. For each alternate filename the installer removes the file
-outright:
+`otherFileNameList` is the only mechanism `dm config reconcile` has for
+reacting to a managed config file that carries the wrong name, and it only
+deletes. For each alternate filename the installer removes the file outright:
 
 ```go
 for _, altFilename := range cfg.OtherFileNameList {
@@ -46,14 +46,15 @@ the one file in this family whose contents datamitsu could never reproduce. The 
 ```
 
 deletes the project's task definitions and writes an empty replacement. Not a migration: a silent
-loss of hand-written work, on a routine `dm setup`.
+loss of hand-written work, on a reconciliation apply.
 
 Worth noting that Taskfile is not managed at all today — no entry under
 `src/datamitsu-config/setup/`, and no tool in the config matches it — so nothing is broken right
 now. The gap is that the capability needed to start managing it does not exist.
 
 The same wall stands in front of any future config where the file is authored by the project rather
-than generated: renaming it is off the table until setup can move a file instead of removing one.
+than generated: renaming it is off the table until reconciliation can move a
+file instead of removing one.
 
 ## Shape of a fix
 
@@ -70,8 +71,8 @@ move it".
 - Refuse to overwrite: if the canonical name already exists with different content, report both
   paths and leave the repository untouched. Two files that disagree is a question for a human, not
   something to resolve by picking one.
-- `--dry-run` must name the move, since this is the first setup action that can destroy authored
-  content if it is wrong.
+- The `--dry-run` preview must name the move, since this is the first
+  reconciliation action that can destroy authored content if it is wrong.
 
 ## Found
 

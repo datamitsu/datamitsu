@@ -116,7 +116,7 @@ const tools = {
 In your project's ESLint config, use `tools.Config.linkPath()` to reference the managed configuration:
 
 ```javascript
-// In a ConfigSetup content function
+// In a ManagedConfig content function
 const eslintConfigPath = tools.Path.forImport(
   tools.Config.linkPath("eslint", "eslint-config", context.cwdPath),
 );

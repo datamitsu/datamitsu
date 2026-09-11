@@ -24,22 +24,22 @@ type Installer struct {
 	projectTypes     []string
 	projectLocations []config.ProjectLocation // repo-wide detected {type, path}; exposed to content()
 	selectedTools    []string                 // nil/empty = no --tools filter (install all applicable)
-	configs          config.MapOfConfigSetup
+	configs          config.MapOfManagedConfigs
 	vm               *goja.Runtime
-	layerMap         *config.SetupLayerMap
+	layerMap         *config.ManagedConfigLayerMap
 }
 
 // NewInstaller creates a new configuration installer. selectedTools scopes
-// installation to configs associated with those tools (via ConfigSetup.Tools);
+// installation to configs associated with those tools (via ManagedConfig.Tools);
 // pass nil to install every applicable config.
 func NewInstaller(
 	rootPath string,
 	cwdPath string,
 	projectTypes []string,
 	selectedTools []string,
-	configs config.MapOfConfigSetup,
+	configs config.MapOfManagedConfigs,
 	vm *goja.Runtime,
-	layerMap *config.SetupLayerMap,
+	layerMap *config.ManagedConfigLayerMap,
 ) *Installer {
 	return &Installer{
 		rootPath:      rootPath,
@@ -54,7 +54,7 @@ func NewInstaller(
 
 // SetProjectLocations sets the repo-wide detected project locations (git-root
 // relative {type, path}) exposed to content() functions as
-// context.projectLocations. Optional; defaults to none. Used by setup to let
+// context.projectLocations. Optional; defaults to none. Used by reconciliation to let
 // configs (e.g. dependabot) build per-ecosystem output dynamically.
 func (i *Installer) SetProjectLocations(locations []config.ProjectLocation) {
 	i.projectLocations = locations
@@ -89,7 +89,7 @@ func (i *Installer) InstallAll(ctx context.Context, dryRun bool) ([]InstallResul
 }
 
 // installConfig installs a single configuration file
-func (i *Installer) installConfig(ctx context.Context, name string, cfg config.ConfigSetup, dryRun bool) InstallResult {
+func (i *Installer) installConfig(ctx context.Context, name string, cfg config.ManagedConfig, dryRun bool) InstallResult {
 	result := InstallResult{
 		ConfigName:   name,
 		DeletedFiles: []string{},
@@ -312,7 +312,7 @@ func (i *Installer) installSymlink(mainPath string, linkTarget string, dryRun bo
 }
 
 // isApplicable checks if the config applies to the current project types
-func (i *Installer) isApplicable(cfg config.ConfigSetup) bool {
+func (i *Installer) isApplicable(cfg config.ManagedConfig) bool {
 	// If no project types specified, applies to all
 	if len(cfg.ProjectTypes) == 0 {
 		return true
@@ -332,7 +332,7 @@ func (i *Installer) isApplicable(cfg config.ConfigSetup) bool {
 // filter. With no filter (selectedTools empty) every config passes. With a
 // filter, only configs whose Tools intersect the selected set pass; configs
 // with no Tools (unassociated infra) are always skipped.
-func (i *Installer) isToolSelected(cfg config.ConfigSetup) bool {
+func (i *Installer) isToolSelected(cfg config.ManagedConfig) bool {
 	if len(i.selectedTools) == 0 {
 		return true
 	}
@@ -355,7 +355,7 @@ func (i *Installer) isToolSelected(cfg config.ConfigSetup) bool {
 // in which case the caller skips the file rather than writing it.
 //
 //nolint:unparam // ctx reserved for cancellable JS execution; keeps the install chain uniform
-func (i *Installer) generateContent(ctx context.Context, cfg config.ConfigSetup, existingContent, originalContent, existingPath *string) (string, bool, error) {
+func (i *Installer) generateContent(ctx context.Context, cfg config.ManagedConfig, existingContent, originalContent, existingPath *string) (string, bool, error) {
 	// Content field should be a goja.Value representing a function
 	contentValue, ok := cfg.Content.(goja.Value)
 	if !ok {

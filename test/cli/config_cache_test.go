@@ -15,7 +15,7 @@ import (
 // autoDiscoveredMinimalConfigJS is the no-op config under the name discovery
 // looks for, so the load is a repository chain rather than a machine-level one.
 const autoDiscoveredMinimalConfigJS = `globalThis.getBeforeConfigs = () => [];
-globalThis.getConfig = (config) => ({ apps: {}, runtimes: {}, setup: {}, tools: {} });
+globalThis.getConfig = (config) => ({ apps: {}, runtimes: {}, managedConfigs: {}, tools: {} });
 globalThis.getMinVersion = () => "0.0.0";
 `
 

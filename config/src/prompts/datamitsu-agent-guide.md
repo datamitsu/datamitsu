@@ -14,6 +14,21 @@ options this version does not have.
 
 Start with `datamitsu llms`, then read the specific page you need.
 
+## Initialization vs managed config reconciliation
+
+These operations are intentionally separate. Never treat them as synonyms.
+
+- After editing `datamitsu.config.*`, run `datamitsu init`. It provisions
+  managed tools, runtimes, bundles, `.datamitsu/` links, and `initCommands`.
+- `datamitsu config reconcile` rewrites project-owned files declared under
+  `managedConfigs`, then runs `datamitsu fix` by default.
+- Run `datamitsu config reconcile` only when the user explicitly asks to
+  create, regenerate, replace, link, or remove managed project configuration
+  files. Use `--dry-run` to preview without writing or fixing. Use `--skip-fix`
+  to write the managed files without running the post-reconciliation fix.
+- `datamitsu setup` no longer exists. Do not infer reconciliation from a request
+  to update the datamitsu configuration or provision its toolchain.
+
 ## Common commands
 
 - `datamitsu check` - run fix then lint

@@ -4,8 +4,9 @@ Usage:
   datamitsu config [command]
 
 Available Commands:
-  chain-hash  Print the expectChainHash value for setup files
+  chain-hash  Print the expectChainHash value for managed config files
   lockfile    Generate lock file content for a runtime-managed app
+  reconcile   Reconcile managed configuration files
   runtime     Show the effective runtime configuration as JSON
   show        Show current configuration as JSON
   types       Show TypeScript type definitions (config.d.ts)

@@ -8,9 +8,9 @@ import (
 	"github.com/dop251/goja"
 )
 
-// layer is a tiny helper to build a SetupLayerEntry with generated content.
-func layer(name, content string) SetupLayerEntry {
-	return SetupLayerEntry{LayerName: name, GeneratedContent: &content}
+// layer is a tiny helper to build a ManagedConfigLayerEntry with generated content.
+func layer(name, content string) ManagedConfigLayerEntry {
+	return ManagedConfigLayerEntry{LayerName: name, GeneratedContent: &content}
 }
 
 func TestVerifyChainHashes(t *testing.T) {
@@ -20,10 +20,10 @@ func TestVerifyChainHashes(t *testing.T) {
 	upstreamHash := hashutil.XXH3Hex([]byte(upstream))
 
 	t.Run("no pin → no mismatch", func(t *testing.T) {
-		lm := SetupLayerMap{
+		lm := ManagedConfigLayerMap{
 			".golangci.yaml": {
 				FileName: ".golangci.yaml",
-				Layers:   []SetupLayerEntry{layer("base", upstream), layer("root", "out")},
+				Layers:   []ManagedConfigLayerEntry{layer("base", upstream), layer("root", "out")},
 			},
 		}
 		if got := VerifyChainHashes(lm); len(got) != 0 {
@@ -32,12 +32,12 @@ func TestVerifyChainHashes(t *testing.T) {
 	})
 
 	t.Run("matching pin → no mismatch", func(t *testing.T) {
-		lm := SetupLayerMap{
+		lm := ManagedConfigLayerMap{
 			".golangci.yaml": {
 				FileName:    ".golangci.yaml",
-				FinalConfig: ConfigSetup{ExpectChainHash: "xxh3:" + upstreamHash},
+				FinalConfig: ManagedConfig{ExpectChainHash: "xxh3:" + upstreamHash},
 				// root layer (last) is excluded; its input is the "base" output.
-				Layers: []SetupLayerEntry{layer("base", upstream), layer("root", "transformed")},
+				Layers: []ManagedConfigLayerEntry{layer("base", upstream), layer("root", "transformed")},
 			},
 		}
 		if got := VerifyChainHashes(lm); len(got) != 0 {
@@ -46,11 +46,11 @@ func TestVerifyChainHashes(t *testing.T) {
 	})
 
 	t.Run("bare hex pin (no prefix) accepted", func(t *testing.T) {
-		lm := SetupLayerMap{
+		lm := ManagedConfigLayerMap{
 			"x": {
 				FileName:    "x",
-				FinalConfig: ConfigSetup{ExpectChainHash: upstreamHash},
-				Layers:      []SetupLayerEntry{layer("base", upstream), layer("root", "t")},
+				FinalConfig: ManagedConfig{ExpectChainHash: upstreamHash},
+				Layers:      []ManagedConfigLayerEntry{layer("base", upstream), layer("root", "t")},
 			},
 		}
 		if got := VerifyChainHashes(lm); len(got) != 0 {
@@ -59,11 +59,11 @@ func TestVerifyChainHashes(t *testing.T) {
 	})
 
 	t.Run("drifted upstream → mismatch with details", func(t *testing.T) {
-		lm := SetupLayerMap{
+		lm := ManagedConfigLayerMap{
 			".golangci.yaml": {
 				FileName:    ".golangci.yaml",
-				FinalConfig: ConfigSetup{ExpectChainHash: "xxh3:1234567890abcdef1234567890abcdef"},
-				Layers:      []SetupLayerEntry{layer("base", upstream), layer("root", "t")},
+				FinalConfig: ManagedConfig{ExpectChainHash: "xxh3:1234567890abcdef1234567890abcdef"},
+				Layers:      []ManagedConfigLayerEntry{layer("base", upstream), layer("root", "t")},
 			},
 		}
 		got := VerifyChainHashes(lm)
@@ -86,10 +86,10 @@ func TestVerifyChainHashes(t *testing.T) {
 		// FinalConfig carries the root layer's config; a pin that would only have
 		// matched an intermediate layer must not be honoured. Here the root pin is
 		// empty, so despite multiple layers there is no check.
-		lm := SetupLayerMap{
+		lm := ManagedConfigLayerMap{
 			"x": {
 				FileName: "x",
-				Layers:   []SetupLayerEntry{layer("a", "one"), layer("b", "two"), layer("root", "three")},
+				Layers:   []ManagedConfigLayerEntry{layer("a", "one"), layer("b", "two"), layer("root", "three")},
 			},
 		}
 		if got := VerifyChainHashes(lm); len(got) != 0 {
@@ -99,12 +99,12 @@ func TestVerifyChainHashes(t *testing.T) {
 
 	t.Run("single root layer falls back to original disk content", func(t *testing.T) {
 		disk := "user file on disk\n"
-		lm := SetupLayerMap{
+		lm := ManagedConfigLayerMap{
 			"x": {
 				FileName:        "x",
 				OriginalContent: &disk,
-				FinalConfig:     ConfigSetup{ExpectChainHash: "xxh3:" + hashutil.XXH3Hex([]byte(disk))},
-				Layers:          []SetupLayerEntry{layer("root", "generated")},
+				FinalConfig:     ManagedConfig{ExpectChainHash: "xxh3:" + hashutil.XXH3Hex([]byte(disk))},
+				Layers:          []ManagedConfigLayerEntry{layer("root", "generated")},
 			},
 		}
 		if got := VerifyChainHashes(lm); len(got) != 0 {
@@ -117,9 +117,9 @@ func TestChainHashes(t *testing.T) {
 	upstream := "base output\n"
 	want := "xxh3:" + hashutil.XXH3Hex([]byte(upstream))
 
-	lm := SetupLayerMap{
-		"b.yaml": {Layers: []SetupLayerEntry{layer("base", upstream), layer("root", "x")}},
-		"a.yaml": {Layers: []SetupLayerEntry{layer("base", upstream), layer("root", "y")}},
+	lm := ManagedConfigLayerMap{
+		"b.yaml": {Layers: []ManagedConfigLayerEntry{layer("base", upstream), layer("root", "x")}},
+		"a.yaml": {Layers: []ManagedConfigLayerEntry{layer("base", upstream), layer("root", "y")}},
 		"nil":    nil,
 	}
 	got := ChainHashes(lm)
@@ -159,13 +159,13 @@ func TestVerifyChainHashes_Pipeline(t *testing.T) {
 	const baseOut = "version: 2\n"
 	goodPin := "xxh3:" + hashutil.XXH3Hex([]byte(baseOut))
 
-	build := func(rootPin string) SetupLayerMap {
-		lm := make(SetupLayerMap)
-		baseCfg := &Config{Setup: MapOfConfigSetup{".golangci.yaml": {Content: baseFn}}}
-		MergeSetupLayers(lm, "base", EvaluateInitContent(baseCfg, vm, "/root", "/root", lm), baseCfg.Setup)
+	build := func(rootPin string) ManagedConfigLayerMap {
+		lm := make(ManagedConfigLayerMap)
+		baseCfg := &Config{ManagedConfigs: MapOfManagedConfigs{".golangci.yaml": {Content: baseFn}}}
+		MergeManagedConfigLayers(lm, "base", EvaluateManagedConfigContent(baseCfg, vm, "/root", "/root", lm), baseCfg.ManagedConfigs)
 
-		rootCfg := &Config{Setup: MapOfConfigSetup{".golangci.yaml": {Content: rootFn, ExpectChainHash: rootPin}}}
-		MergeSetupLayers(lm, "root", EvaluateInitContent(rootCfg, vm, "/root", "/root", lm), rootCfg.Setup)
+		rootCfg := &Config{ManagedConfigs: MapOfManagedConfigs{".golangci.yaml": {Content: rootFn, ExpectChainHash: rootPin}}}
+		MergeManagedConfigLayers(lm, "root", EvaluateManagedConfigContent(rootCfg, vm, "/root", "/root", lm), rootCfg.ManagedConfigs)
 		return lm
 	}
 

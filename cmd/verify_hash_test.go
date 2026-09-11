@@ -10,12 +10,12 @@ import (
 // mkHistory builds a two-layer history (one upstream layer + a root layer that
 // pins `pin`), so the incoming content is `upstream` and the root layer's own
 // output is excluded from the hash.
-func mkHistory(upstream, pin string) *config.SetupLayerHistory {
+func mkHistory(upstream, pin string) *config.ManagedConfigLayerHistory {
 	up := upstream
 	out := "root-output"
-	return &config.SetupLayerHistory{
-		FinalConfig: config.ConfigSetup{ExpectChainHash: pin},
-		Layers: []config.SetupLayerEntry{
+	return &config.ManagedConfigLayerHistory{
+		FinalConfig: config.ManagedConfig{ExpectChainHash: pin},
+		Layers: []config.ManagedConfigLayerEntry{
 			{LayerName: "base", GeneratedContent: &up},
 			{LayerName: "root", GeneratedContent: &out},
 		},
@@ -30,7 +30,7 @@ func TestVerifyChainHashes_Gate(t *testing.T) {
 	})
 
 	t.Run("noVerify bypasses even on drift", func(t *testing.T) {
-		lm := config.SetupLayerMap{
+		lm := config.ManagedConfigLayerMap{
 			"x": mkHistory("upstream", "xxh3:1234567890abcdef1234567890abcdef"),
 		}
 		if err := verifyChainHashes(&lm, true); err != nil {
@@ -39,14 +39,14 @@ func TestVerifyChainHashes_Gate(t *testing.T) {
 	})
 
 	t.Run("no pins → nil", func(t *testing.T) {
-		lm := config.SetupLayerMap{"x": mkHistory("upstream", "")}
+		lm := config.ManagedConfigLayerMap{"x": mkHistory("upstream", "")}
 		if err := verifyChainHashes(&lm, false); err != nil {
 			t.Fatalf("expected nil, got %v", err)
 		}
 	})
 
 	t.Run("drift → error", func(t *testing.T) {
-		lm := config.SetupLayerMap{
+		lm := config.ManagedConfigLayerMap{
 			"x": mkHistory("upstream", "xxh3:1234567890abcdef1234567890abcdef"),
 		}
 		err := verifyChainHashes(&lm, false)

@@ -26,7 +26,7 @@ import (
 const explicitAppConfigJS = `globalThis.getBeforeConfigs = () => [];
 globalThis.getConfig = (config) => ({
   apps: { "machine-tool": { shell: { name: "true" } } },
-  runtimes: {}, setup: {}, tools: {}
+  runtimes: {}, managedConfigs: {}, tools: {}
 });
 globalThis.getMinVersion = () => "0.0.0";
 `
@@ -37,7 +37,7 @@ globalThis.getMinVersion = () => "0.0.0";
 const autoOnlyAppConfigJS = `globalThis.getBeforeConfigs = () => [];
 globalThis.getConfig = (config) => ({
   apps: { "auto-app": { shell: { name: "true" } } },
-  runtimes: {}, setup: {}, tools: {}
+  runtimes: {}, managedConfigs: {}, tools: {}
 });
 globalThis.getMinVersion = () => "0.0.0";
 `

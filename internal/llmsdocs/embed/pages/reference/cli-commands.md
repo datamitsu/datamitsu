@@ -295,72 +295,94 @@ datamitsu lint src/main.go
 datamitsu lint --explain detailed
 ```
 
-## setup
+## config
 
-Set up configuration files for detected project types.
+Configuration management commands.
+
+### config reconcile
+
+Reconcile project-owned configuration files declared under `managedConfigs`
+for the detected project types, then run `datamitsu fix`.
 
 ```bash
-datamitsu setup
+datamitsu config reconcile [flags]
 ```
 
 | Flag               | Description                                                                                                                                                                |
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--dry-run`        | Show what would be done without making changes                                                                                                                             |
-| `--skip-fix`       | Skip running fix after setup                                                                                                                                               |
-| `--opt-in-tools`   | Also generate an all-disabled `.datamitsuignore` so tools are opt-in (enable them by removing names from the list)                                                         |
-| `--tools`          | Comma-separated list of tools to scope setup to (only their config files are written)                                                                                      |
-| `--no-verify-hash` | Skip [`expectChainHash`](./configuration-api.md#pinning-the-upstream-chain-expectchainhash) verification (write even when a pinned config drifted from its upstream chain) |
+| `--dry-run`        | Preview reconciliation without writing files or running `datamitsu fix`                                                                                                    |
+| `--skip-fix`       | Reconcile managed files without running the post-reconciliation `datamitsu fix`                                                                                            |
+| `--opt-in-tools`   | Also reconcile an all-disabled `.datamitsuignore` so tools are opt-in (enable them by removing names from the list)                                                        |
+| `--tools`          | Comma-separated list of tools to scope reconciliation to (only their managed config files are considered)                                                                  |
+| `--no-verify-hash` | Skip [`expectChainHash`](./configuration-api.md#pinning-the-upstream-chain-expectchainhash) verification even when a pinned managed config drifted from its upstream chain |
 
-Setup detects project types, generates configuration files, and optionally runs fix afterward.
+With no flags, the command creates, replaces, patches, links, or removes the
+managed files and then runs `datamitsu fix`. Use `--dry-run` to inspect the plan
+without either action, or `--skip-fix` when the files should be reconciled but
+formatters should not run. There are deliberately no `--apply` or `--fix`
+switches: writing and the post-reconciliation fix are the default workflow.
+There is also no general `--force` flag; the one narrow safety-check bypass is
+`--no-verify-hash`.
 
-With `--tools`, setup is scoped to the named tools: it (re)generates only the
-config files associated with them (via each setup entry's [`tools`](./configuration-api.md#config-setup-setup) field)
+:::warning `init` and `config reconcile` are different operations
+
+After editing `datamitsu.config.*`, run `datamitsu init` to provision apps,
+runtimes, bundles, `.datamitsu` links, and init commands. Run
+`datamitsu config reconcile` only when you explicitly intend to rewrite
+project-owned files declared under `managedConfigs`.
+
+:::
+
+With `--tools`, reconciliation is scoped to the named tools: it considers only
+the config files associated with them (via each managed config entry's
+[`tools`](./configuration-api.md#managed-configs-managedconfigs) field)
 and leaves everything else untouched — other tools' configs and unassociated
 infrastructure files (`.gitignore`, `lefthook.yaml`, `pnpm-workspace.yaml`, …)
-are skipped. The post-setup fix is scoped to the same tools. This is the
-recommended way to iterate on a single tool's config without rewriting your whole
-project. Unknown tool names fail fast before anything is written; a selected tool
-that owns no config file is reported and skipped (not an error).
+are skipped. The default post-reconciliation fix is scoped to the same tools;
+pass `--skip-fix` to omit it. This is the recommended way to iterate on a single
+tool's config without rewriting your whole project. Unknown tool names fail
+fast before anything is written; a selected tool that owns no config file is
+reported and skipped (not an error).
 
-With `--opt-in-tools`, setup runs the normal flow and then writes a
+With `--opt-in-tools`, reconciliation also writes a
 `.datamitsuignore` at the git root that disables **every** configured tool via a
 single `**/*: <tool names>` rule. You then enable tools one at a time by removing
-their names from that list. The file is written before the post-setup fix (so fix
-respects the opt-in state), and setup refuses to overwrite an existing
-`.datamitsuignore`. See [Generating an all-disabled file](./ignore-rules.md#generating-an-all-disabled-file).
+their names from that list. The file is written before the default fix so that
+fix already respects the opt-in state. Reconciliation refuses to overwrite an
+existing `.datamitsuignore`; `--dry-run` previews the file without writing it.
+See [Generating an all-disabled file](./ignore-rules.md#generating-an-all-disabled-file).
 
 Any config file that pins [`expectChainHash`](./configuration-api.md#pinning-the-upstream-chain-expectchainhash)
-is verified before setup writes anything: if its upstream chain drifted from the
-pinned hash, setup aborts with a report (the expected/actual hash and the full
+is verified before reconciliation writes anything: if its upstream chain drifted from the
+pinned hash, reconciliation aborts with a report (the expected/actual hash and the full
 incoming content) and **no files are written**. Review the change against your
-overrides, update the pin, and re-run — or pass `--no-verify-hash` to write
-regardless. The check runs in `--dry-run` too.
+overrides, update the pin, and re-run — or explicitly pass `--no-verify-hash`
+to write regardless. The check also runs during `--dry-run`.
 
 **Examples:**
 
 ```bash
-# Set up configs
-datamitsu setup
+# Preview managed config changes without writing or fixing
+datamitsu config reconcile --dry-run
 
-# Preview changes
-datamitsu setup --dry-run
+# Reconcile managed files, then run fix (default)
+datamitsu config reconcile
 
-# Set up configs and start with all tools disabled (opt-in model)
-datamitsu setup --opt-in-tools
+# Reconcile managed files without running fix
+datamitsu config reconcile --skip-fix
+
+# Reconcile configs and start with all tools disabled (opt-in model)
+datamitsu config reconcile --opt-in-tools
 
 # Regenerate only golangci-lint's config (e.g. .golangci.yml); nothing else is touched
-datamitsu setup --tools golangci-lint
+datamitsu config reconcile --tools golangci-lint
 
-# Preview a tool-scoped setup
-datamitsu setup --tools golangci-lint --dry-run
+# Preview a tool-scoped reconciliation without writing or fixing
+datamitsu config reconcile --tools golangci-lint --dry-run
 
 # Scope to several tools at once
-datamitsu setup --tools golangci-lint,prettier
+datamitsu config reconcile --tools golangci-lint,prettier
 ```
-
-## config
-
-Configuration management commands.
 
 ### config show
 
@@ -399,18 +421,18 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
 
 ### config chain-hash
 
-Print the XXH3-128 chain hash that `datamitsu setup` verifies for managed config files — the hash of the content entering each file's root (topmost) config layer. Copy it into a setup entry's [`expectChainHash`](./configuration-api.md#pinning-the-upstream-chain-expectchainhash) to pin the upstream baseline your overrides were written against, without having to trigger a drift error to read it.
+Print the XXH3-128 chain hash that `datamitsu config reconcile` verifies for managed config files — the hash of the content entering each file's root (topmost) config layer. Copy it into a `managedConfigs` entry's [`expectChainHash`](./configuration-api.md#pinning-the-upstream-chain-expectchainhash) to pin the upstream baseline your overrides were written against, without having to trigger a drift error to read it.
 
 ```bash
 datamitsu config chain-hash [file...]
 ```
 
-The value is the input to the **topmost** layer, so declare your own entry for the file first (a placeholder `expectChainHash` is enough), then read the real hash here. With no arguments every setup file is listed as `file  hash`; with exactly one file only its bare hash is printed, which is convenient for scripting.
+The value is the input to the **topmost** layer, so declare your own entry for the file first (a placeholder `expectChainHash` is enough), then read the real hash here. With no arguments every managed config file is listed as `file  hash`; with exactly one file only its bare hash is printed, which is convenient for scripting.
 
 **Examples:**
 
 ```bash
-# List the chain hash of every setup file
+# List the chain hash of every managed config file
 datamitsu config chain-hash
 
 # Print just one file's hash (capture it into a variable / your config)

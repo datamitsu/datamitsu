@@ -14,7 +14,7 @@ import (
 
 func TestGetPriorLayerContent(t *testing.T) {
 	t.Run("empty priorLayers returns nil", func(t *testing.T) {
-		layerMap := make(SetupLayerMap)
+		layerMap := make(ManagedConfigLayerMap)
 		result := getPriorLayerContent(layerMap, ".editorconfig")
 		if result != nil {
 			t.Errorf("expected nil, got %q", *result)
@@ -23,10 +23,10 @@ func TestGetPriorLayerContent(t *testing.T) {
 
 	t.Run("single layer with content", func(t *testing.T) {
 		content := "root = true"
-		layerMap := SetupLayerMap{
-			".editorconfig": &SetupLayerHistory{
+		layerMap := ManagedConfigLayerMap{
+			".editorconfig": &ManagedConfigLayerHistory{
 				FileName: ".editorconfig",
-				Layers: []SetupLayerEntry{
+				Layers: []ManagedConfigLayerEntry{
 					{LayerName: "default", GeneratedContent: &content},
 				},
 			},
@@ -43,10 +43,10 @@ func TestGetPriorLayerContent(t *testing.T) {
 	t.Run("walks backward through multiple layers", func(t *testing.T) {
 		content1 := "first"
 		content2 := "second"
-		layerMap := SetupLayerMap{
-			".editorconfig": &SetupLayerHistory{
+		layerMap := ManagedConfigLayerMap{
+			".editorconfig": &ManagedConfigLayerHistory{
 				FileName: ".editorconfig",
-				Layers: []SetupLayerEntry{
+				Layers: []ManagedConfigLayerEntry{
 					{LayerName: "default", GeneratedContent: &content1},
 					{LayerName: "auto", GeneratedContent: &content2},
 				},
@@ -63,10 +63,10 @@ func TestGetPriorLayerContent(t *testing.T) {
 
 	t.Run("returns nil for unknown filename", func(t *testing.T) {
 		content := "some content"
-		layerMap := SetupLayerMap{
-			".editorconfig": &SetupLayerHistory{
+		layerMap := ManagedConfigLayerMap{
+			".editorconfig": &ManagedConfigLayerHistory{
 				FileName: ".editorconfig",
-				Layers: []SetupLayerEntry{
+				Layers: []ManagedConfigLayerEntry{
 					{LayerName: "default", GeneratedContent: &content},
 				},
 			},
@@ -78,10 +78,10 @@ func TestGetPriorLayerContent(t *testing.T) {
 	})
 
 	t.Run("returns nil when layers have no content", func(t *testing.T) {
-		layerMap := SetupLayerMap{
-			".editorconfig": &SetupLayerHistory{
+		layerMap := ManagedConfigLayerMap{
+			".editorconfig": &ManagedConfigLayerHistory{
 				FileName: ".editorconfig",
-				Layers: []SetupLayerEntry{
+				Layers: []ManagedConfigLayerEntry{
 					{LayerName: "default", GeneratedContent: nil},
 				},
 			},
@@ -94,22 +94,22 @@ func TestGetPriorLayerContent(t *testing.T) {
 }
 
 // ========================================
-// mergeInitLayers tests
+// MergeManagedConfigLayers tests
 // ========================================
 
-func TestMergeInitLayers(t *testing.T) {
+func TestMergeManagedConfigLayers(t *testing.T) {
 	t.Run("creates new history entry", func(t *testing.T) {
-		layerMap := make(SetupLayerMap)
+		layerMap := make(ManagedConfigLayerMap)
 		evaluatedContent := map[string]string{
 			".editorconfig": "root = true",
 		}
-		initConfigs := MapOfConfigSetup{
-			".editorconfig": ConfigSetup{
+		managedConfigs := MapOfManagedConfigs{
+			".editorconfig": ManagedConfig{
 				Scope: ScopeGitRoot,
 			},
 		}
 
-		MergeSetupLayers(layerMap, "default", evaluatedContent, initConfigs)
+		MergeManagedConfigLayers(layerMap, "default", evaluatedContent, managedConfigs)
 
 		history, ok := layerMap[".editorconfig"]
 		if !ok {
@@ -132,26 +132,26 @@ func TestMergeInitLayers(t *testing.T) {
 
 	t.Run("appends to existing history", func(t *testing.T) {
 		content1 := "first"
-		layerMap := SetupLayerMap{
-			".editorconfig": &SetupLayerHistory{
+		layerMap := ManagedConfigLayerMap{
+			".editorconfig": &ManagedConfigLayerHistory{
 				FileName: ".editorconfig",
-				Layers: []SetupLayerEntry{
+				Layers: []ManagedConfigLayerEntry{
 					{LayerName: "default", GeneratedContent: &content1},
 				},
-				FinalConfig: ConfigSetup{Scope: ScopeGitRoot},
+				FinalConfig: ManagedConfig{Scope: ScopeGitRoot},
 			},
 		}
 		evaluatedContent := map[string]string{
 			".editorconfig": "second",
 		}
-		initConfigs := MapOfConfigSetup{
-			".editorconfig": ConfigSetup{
+		managedConfigs := MapOfManagedConfigs{
+			".editorconfig": ManagedConfig{
 				Scope:        ScopeGitRoot,
 				ProjectTypes: []string{"go"},
 			},
 		}
 
-		MergeSetupLayers(layerMap, "auto", evaluatedContent, initConfigs)
+		MergeManagedConfigLayers(layerMap, "auto", evaluatedContent, managedConfigs)
 
 		history := layerMap[".editorconfig"]
 		if len(history.Layers) != 2 {
@@ -166,18 +166,18 @@ func TestMergeInitLayers(t *testing.T) {
 	})
 
 	t.Run("updates FinalConfig metadata", func(t *testing.T) {
-		layerMap := make(SetupLayerMap)
+		layerMap := make(ManagedConfigLayerMap)
 		evaluatedContent := map[string]string{
 			".editorconfig": "content",
 		}
-		initConfigs := MapOfConfigSetup{
-			".editorconfig": ConfigSetup{
+		managedConfigs := MapOfManagedConfigs{
+			".editorconfig": ManagedConfig{
 				Scope:        ScopeGitRoot,
 				ProjectTypes: []string{"go", "typescript"},
 			},
 		}
 
-		MergeSetupLayers(layerMap, "default", evaluatedContent, initConfigs)
+		MergeManagedConfigLayers(layerMap, "default", evaluatedContent, managedConfigs)
 
 		history := layerMap[".editorconfig"]
 		if history.FinalConfig.Scope != ScopeGitRoot {
@@ -190,8 +190,8 @@ func TestMergeInitLayers(t *testing.T) {
 
 	t.Run("preserves OriginalContent when merging layers", func(t *testing.T) {
 		originalContent := "original disk content"
-		layerMap := SetupLayerMap{
-			".editorconfig": &SetupLayerHistory{
+		layerMap := ManagedConfigLayerMap{
+			".editorconfig": &ManagedConfigLayerHistory{
 				FileName:        ".editorconfig",
 				OriginalContent: &originalContent,
 			},
@@ -199,13 +199,13 @@ func TestMergeInitLayers(t *testing.T) {
 		evaluatedContent := map[string]string{
 			".editorconfig": "generated content",
 		}
-		initConfigs := MapOfConfigSetup{
-			".editorconfig": ConfigSetup{
+		managedConfigs := MapOfManagedConfigs{
+			".editorconfig": ManagedConfig{
 				Scope: ScopeGitRoot,
 			},
 		}
 
-		MergeSetupLayers(layerMap, "default", evaluatedContent, initConfigs)
+		MergeManagedConfigLayers(layerMap, "default", evaluatedContent, managedConfigs)
 
 		history := layerMap[".editorconfig"]
 		if history.OriginalContent == nil {
@@ -219,14 +219,14 @@ func TestMergeInitLayers(t *testing.T) {
 	t.Run("later layers do not overwrite OriginalContent from first layer", func(t *testing.T) {
 		originalContent := "first layer original"
 		content1 := "layer1 generated"
-		layerMap := SetupLayerMap{
-			".editorconfig": &SetupLayerHistory{
+		layerMap := ManagedConfigLayerMap{
+			".editorconfig": &ManagedConfigLayerHistory{
 				FileName:        ".editorconfig",
 				OriginalContent: &originalContent,
-				Layers: []SetupLayerEntry{
+				Layers: []ManagedConfigLayerEntry{
 					{LayerName: "default", GeneratedContent: &content1},
 				},
-				FinalConfig: ConfigSetup{Scope: ScopeGitRoot},
+				FinalConfig: ManagedConfig{Scope: ScopeGitRoot},
 			},
 		}
 
@@ -234,13 +234,13 @@ func TestMergeInitLayers(t *testing.T) {
 		evaluatedContent := map[string]string{
 			".editorconfig": "layer2 generated",
 		}
-		initConfigs := MapOfConfigSetup{
-			".editorconfig": ConfigSetup{
+		managedConfigs := MapOfManagedConfigs{
+			".editorconfig": ManagedConfig{
 				Scope: ScopeGitRoot,
 			},
 		}
 
-		MergeSetupLayers(layerMap, "auto", evaluatedContent, initConfigs)
+		MergeManagedConfigLayers(layerMap, "auto", evaluatedContent, managedConfigs)
 
 		history := layerMap[".editorconfig"]
 		if history.OriginalContent == nil {
@@ -254,39 +254,39 @@ func TestMergeInitLayers(t *testing.T) {
 		}
 	})
 
-	t.Run("new entry in MergeSetupLayers without prior OriginalContent gets nil", func(t *testing.T) {
-		layerMap := make(SetupLayerMap)
+	t.Run("new entry in MergeManagedConfigLayers without prior OriginalContent gets nil", func(t *testing.T) {
+		layerMap := make(ManagedConfigLayerMap)
 		evaluatedContent := map[string]string{
 			"new-file.txt": "new content",
 		}
-		initConfigs := MapOfConfigSetup{
-			"new-file.txt": ConfigSetup{
+		managedConfigs := MapOfManagedConfigs{
+			"new-file.txt": ManagedConfig{
 				Scope: ScopeGitRoot,
 			},
 		}
 
-		MergeSetupLayers(layerMap, "default", evaluatedContent, initConfigs)
+		MergeManagedConfigLayers(layerMap, "default", evaluatedContent, managedConfigs)
 
 		history := layerMap["new-file.txt"]
 		if history == nil {
 			t.Fatal("expected new-file.txt in layerMap")
 		}
 		if history.OriginalContent != nil {
-			t.Errorf("expected nil OriginalContent for entry created by MergeSetupLayers, got %q", *history.OriginalContent)
+			t.Errorf("expected nil OriginalContent for entry created by MergeManagedConfigLayers, got %q", *history.OriginalContent)
 		}
 	})
 
 	t.Run("adds non-content layer for init entries without evaluated content", func(t *testing.T) {
-		layerMap := make(SetupLayerMap)
+		layerMap := make(ManagedConfigLayerMap)
 		evaluatedContent := map[string]string{} // no content evaluated
-		initConfigs := MapOfConfigSetup{
-			".editorconfig": ConfigSetup{
+		managedConfigs := MapOfManagedConfigs{
+			".editorconfig": ManagedConfig{
 				Scope:      ScopeGitRoot,
 				LinkTarget: "../some/path",
 			},
 		}
 
-		MergeSetupLayers(layerMap, "default", evaluatedContent, initConfigs)
+		MergeManagedConfigLayers(layerMap, "default", evaluatedContent, managedConfigs)
 
 		history, ok := layerMap[".editorconfig"]
 		if !ok {
@@ -305,11 +305,11 @@ func TestMergeInitLayers(t *testing.T) {
 // evaluateInitContent tests
 // ========================================
 
-func TestEvaluateInitContent(t *testing.T) {
+func TestEvaluateManagedConfigContent(t *testing.T) {
 	t.Run("no content functions returns empty map", func(t *testing.T) {
 		cfg := &Config{
-			Setup: MapOfConfigSetup{
-				".editorconfig": ConfigSetup{
+			ManagedConfigs: MapOfManagedConfigs{
+				".editorconfig": ManagedConfig{
 					Scope:      ScopeGitRoot,
 					LinkTarget: "../target",
 				},
@@ -317,7 +317,7 @@ func TestEvaluateInitContent(t *testing.T) {
 		}
 
 		vm := goja.New()
-		result := EvaluateInitContent(cfg, vm, "/root", "/root", make(SetupLayerMap))
+		result := EvaluateManagedConfigContent(cfg, vm, "/root", "/root", make(ManagedConfigLayerMap))
 		if len(result) != 0 {
 			t.Errorf("expected empty map, got %d entries", len(result))
 		}
@@ -333,15 +333,15 @@ func TestEvaluateInitContent(t *testing.T) {
 		}
 
 		cfg := &Config{
-			Setup: MapOfConfigSetup{
-				".editorconfig": ConfigSetup{
+			ManagedConfigs: MapOfManagedConfigs{
+				".editorconfig": ManagedConfig{
 					Scope:   ScopeGitRoot,
 					Content: fnVal,
 				},
 			},
 		}
 
-		result := EvaluateInitContent(cfg, vm, "/root", "/root", make(SetupLayerMap))
+		result := EvaluateManagedConfigContent(cfg, vm, "/root", "/root", make(ManagedConfigLayerMap))
 		if len(result) != 1 {
 			t.Fatalf("expected 1 entry, got %d", len(result))
 		}
@@ -365,25 +365,25 @@ func TestEvaluateInitContent(t *testing.T) {
 		}
 
 		priorContent := "root = true"
-		priorLayers := SetupLayerMap{
-			".editorconfig": &SetupLayerHistory{
+		priorLayers := ManagedConfigLayerMap{
+			".editorconfig": &ManagedConfigLayerHistory{
 				FileName: ".editorconfig",
-				Layers: []SetupLayerEntry{
+				Layers: []ManagedConfigLayerEntry{
 					{LayerName: "default", GeneratedContent: &priorContent},
 				},
 			},
 		}
 
 		cfg := &Config{
-			Setup: MapOfConfigSetup{
-				".editorconfig": ConfigSetup{
+			ManagedConfigs: MapOfManagedConfigs{
+				".editorconfig": ManagedConfig{
 					Scope:   ScopeGitRoot,
 					Content: fnVal,
 				},
 			},
 		}
 
-		result := EvaluateInitContent(cfg, vm, "/root", "/root", priorLayers)
+		result := EvaluateManagedConfigContent(cfg, vm, "/root", "/root", priorLayers)
 		expected := "root = true\nindent_size = 2"
 		if result[".editorconfig"] != expected {
 			t.Errorf("expected %q, got %q", expected, result[".editorconfig"])
@@ -399,15 +399,15 @@ func TestEvaluateInitContent(t *testing.T) {
 		}
 
 		cfg := &Config{
-			Setup: MapOfConfigSetup{
-				".editorconfig": ConfigSetup{
+			ManagedConfigs: MapOfManagedConfigs{
+				".editorconfig": ManagedConfig{
 					Scope:   ScopeGitRoot,
 					Content: fnVal,
 				},
 			},
 		}
 
-		result := EvaluateInitContent(cfg, vm, "/root", "/root", make(SetupLayerMap))
+		result := EvaluateManagedConfigContent(cfg, vm, "/root", "/root", make(ManagedConfigLayerMap))
 		if len(result) != 0 {
 			t.Errorf("expected empty map when content() throws, got %d entries", len(result))
 		}
@@ -417,15 +417,15 @@ func TestEvaluateInitContent(t *testing.T) {
 		vm := goja.New()
 
 		cfg := &Config{
-			Setup: MapOfConfigSetup{
-				".editorconfig": ConfigSetup{
+			ManagedConfigs: MapOfManagedConfigs{
+				".editorconfig": ManagedConfig{
 					Scope:      ScopeGitRoot,
 					DeleteOnly: true,
 				},
 			},
 		}
 
-		result := EvaluateInitContent(cfg, vm, "/root", "/root", make(SetupLayerMap))
+		result := EvaluateManagedConfigContent(cfg, vm, "/root", "/root", make(ManagedConfigLayerMap))
 		if len(result) != 0 {
 			t.Errorf("expected empty map for deleteOnly, got %d entries", len(result))
 		}
@@ -435,15 +435,15 @@ func TestEvaluateInitContent(t *testing.T) {
 		vm := goja.New()
 
 		cfg := &Config{
-			Setup: MapOfConfigSetup{
-				".editorconfig": ConfigSetup{
+			ManagedConfigs: MapOfManagedConfigs{
+				".editorconfig": ManagedConfig{
 					Scope:      ScopeGitRoot,
 					LinkTarget: "../target",
 				},
 			},
 		}
 
-		result := EvaluateInitContent(cfg, vm, "/root", "/root", make(SetupLayerMap))
+		result := EvaluateManagedConfigContent(cfg, vm, "/root", "/root", make(ManagedConfigLayerMap))
 		if len(result) != 0 {
 			t.Errorf("expected empty map for linkTarget, got %d entries", len(result))
 		}
@@ -460,15 +460,15 @@ func TestEvaluateInitContent(t *testing.T) {
 		}
 
 		cfg := &Config{
-			Setup: MapOfConfigSetup{
-				"test.txt": ConfigSetup{
+			ManagedConfigs: MapOfManagedConfigs{
+				"test.txt": ManagedConfig{
 					Scope:   ScopeGitRoot,
 					Content: fnVal,
 				},
 			},
 		}
 
-		result := EvaluateInitContent(cfg, vm, "/project", "/project/sub", make(SetupLayerMap))
+		result := EvaluateManagedConfigContent(cfg, vm, "/project", "/project/sub", make(ManagedConfigLayerMap))
 		if result["test.txt"] != "/project:/project/sub" {
 			t.Errorf("expected '/project:/project/sub', got %q", result["test.txt"])
 		}
@@ -487,13 +487,13 @@ func TestEvaluateInitContent(t *testing.T) {
 		}
 
 		cfg := &Config{
-			Setup: MapOfConfigSetup{
-				".editorconfig": ConfigSetup{Scope: ScopeGitRoot, Content: fn1},
-				"lefthook.yml":  ConfigSetup{Scope: ScopeGitRoot, Content: fn2},
+			ManagedConfigs: MapOfManagedConfigs{
+				".editorconfig": ManagedConfig{Scope: ScopeGitRoot, Content: fn1},
+				"lefthook.yml":  ManagedConfig{Scope: ScopeGitRoot, Content: fn2},
 			},
 		}
 
-		result := EvaluateInitContent(cfg, vm, "/root", "/root", make(SetupLayerMap))
+		result := EvaluateManagedConfigContent(cfg, vm, "/root", "/root", make(ManagedConfigLayerMap))
 		if len(result) != 2 {
 			t.Fatalf("expected 2 entries, got %d", len(result))
 		}
@@ -507,16 +507,16 @@ func TestEvaluateInitContent(t *testing.T) {
 }
 
 // ========================================
-// SetupLayerHistory OriginalContent tests
+// ManagedConfigLayerHistory OriginalContent tests
 // ========================================
 
-func TestInitLayerHistoryOriginalContent(t *testing.T) {
+func TestManagedConfigLayerHistoryOriginalContent(t *testing.T) {
 	t.Run("can store OriginalContent", func(t *testing.T) {
 		content := "existing file content"
-		history := &SetupLayerHistory{
+		history := &ManagedConfigLayerHistory{
 			FileName:        ".editorconfig",
 			OriginalContent: &content,
-			Layers:          []SetupLayerEntry{},
+			Layers:          []ManagedConfigLayerEntry{},
 		}
 		if history.OriginalContent == nil {
 			t.Fatal("expected OriginalContent to be non-nil")
@@ -527,10 +527,10 @@ func TestInitLayerHistoryOriginalContent(t *testing.T) {
 	})
 
 	t.Run("nil OriginalContent when file does not exist", func(t *testing.T) {
-		history := &SetupLayerHistory{
+		history := &ManagedConfigLayerHistory{
 			FileName:        "nonexistent.txt",
 			OriginalContent: nil,
-			Layers:          []SetupLayerEntry{},
+			Layers:          []ManagedConfigLayerEntry{},
 		}
 		if history.OriginalContent != nil {
 			t.Error("expected OriginalContent to be nil for nonexistent file")
@@ -540,10 +540,10 @@ func TestInitLayerHistoryOriginalContent(t *testing.T) {
 	t.Run("OriginalContent does not affect GetLastGeneratedContent", func(t *testing.T) {
 		original := "original disk content"
 		generated := "generated content"
-		history := &SetupLayerHistory{
+		history := &ManagedConfigLayerHistory{
 			FileName:        ".editorconfig",
 			OriginalContent: &original,
-			Layers: []SetupLayerEntry{
+			Layers: []ManagedConfigLayerEntry{
 				{LayerName: "default", GeneratedContent: &generated},
 			},
 		}
@@ -614,11 +614,11 @@ func TestReadFileContent(t *testing.T) {
 }
 
 // ========================================
-// EvaluateInitContent originalContent storage tests (Task 3)
+// EvaluateManagedConfigContent originalContent storage tests (Task 3)
 // ========================================
 
-func TestEvaluateInitContentReadsOriginalContent(t *testing.T) {
-	t.Run("reads file from disk and stores in SetupLayerMap", func(t *testing.T) {
+func TestEvaluateManagedConfigContentReadsOriginalContent(t *testing.T) {
+	t.Run("reads file from disk and stores in ManagedConfigLayerMap", func(t *testing.T) {
 		dir := t.TempDir()
 		filePath := filepath.Join(dir, "package.json")
 		if err := os.WriteFile(filePath, []byte(`{"name": "my-project"}`), 0o644); err != nil {
@@ -632,20 +632,20 @@ func TestEvaluateInitContentReadsOriginalContent(t *testing.T) {
 		}
 
 		cfg := &Config{
-			Setup: MapOfConfigSetup{
-				"package.json": ConfigSetup{
+			ManagedConfigs: MapOfManagedConfigs{
+				"package.json": ManagedConfig{
 					Scope:   ScopeGitRoot,
 					Content: fnVal,
 				},
 			},
 		}
 
-		layerMap := make(SetupLayerMap)
-		EvaluateInitContent(cfg, vm, dir, dir, layerMap)
+		layerMap := make(ManagedConfigLayerMap)
+		EvaluateManagedConfigContent(cfg, vm, dir, dir, layerMap)
 
 		history, ok := layerMap["package.json"]
 		if !ok {
-			t.Fatal("expected package.json in layerMap after EvaluateInitContent")
+			t.Fatal("expected package.json in layerMap after EvaluateManagedConfigContent")
 		}
 		if history.OriginalContent == nil {
 			t.Fatal("expected OriginalContent to be set")
@@ -676,16 +676,16 @@ func TestEvaluateInitContentReadsOriginalContent(t *testing.T) {
 		}
 
 		cfg := &Config{
-			Setup: MapOfConfigSetup{
-				"tsconfig.json": ConfigSetup{
+			ManagedConfigs: MapOfManagedConfigs{
+				"tsconfig.json": ManagedConfig{
 					Scope:   ScopeProject,
 					Content: fnVal,
 				},
 			},
 		}
 
-		layerMap := make(SetupLayerMap)
-		EvaluateInitContent(cfg, vm, rootDir, subDir, layerMap)
+		layerMap := make(ManagedConfigLayerMap)
+		EvaluateManagedConfigContent(cfg, vm, rootDir, subDir, layerMap)
 
 		history := layerMap["tsconfig.json"]
 		if history == nil {
@@ -709,16 +709,16 @@ func TestEvaluateInitContentReadsOriginalContent(t *testing.T) {
 		}
 
 		cfg := &Config{
-			Setup: MapOfConfigSetup{
-				"nonexistent.json": ConfigSetup{
+			ManagedConfigs: MapOfManagedConfigs{
+				"nonexistent.json": ManagedConfig{
 					Scope:   ScopeGitRoot,
 					Content: fnVal,
 				},
 			},
 		}
 
-		layerMap := make(SetupLayerMap)
-		EvaluateInitContent(cfg, vm, dir, dir, layerMap)
+		layerMap := make(ManagedConfigLayerMap)
+		EvaluateManagedConfigContent(cfg, vm, dir, dir, layerMap)
 
 		history := layerMap["nonexistent.json"]
 		if history == nil {
@@ -743,19 +743,19 @@ func TestEvaluateInitContentReadsOriginalContent(t *testing.T) {
 		}
 
 		cfg := &Config{
-			Setup: MapOfConfigSetup{
-				"config.json": ConfigSetup{
+			ManagedConfigs: MapOfManagedConfigs{
+				"config.json": ManagedConfig{
 					Scope:   ScopeGitRoot,
 					Content: fnVal,
 				},
 			},
 		}
 
-		layerMap := make(SetupLayerMap)
+		layerMap := make(ManagedConfigLayerMap)
 
 		// First call reads original content
-		EvaluateInitContent(cfg, vm, dir, dir, layerMap)
-		MergeSetupLayers(layerMap, "default", map[string]string{"config.json": "generated"}, cfg.Setup)
+		EvaluateManagedConfigContent(cfg, vm, dir, dir, layerMap)
+		MergeManagedConfigLayers(layerMap, "default", map[string]string{"config.json": "generated"}, cfg.ManagedConfigs)
 
 		// Modify the file on disk
 		if err := os.WriteFile(filePath, []byte("modified"), 0o644); err != nil {
@@ -763,7 +763,7 @@ func TestEvaluateInitContentReadsOriginalContent(t *testing.T) {
 		}
 
 		// Second call should NOT overwrite OriginalContent
-		EvaluateInitContent(cfg, vm, dir, dir, layerMap)
+		EvaluateManagedConfigContent(cfg, vm, dir, dir, layerMap)
 
 		history := layerMap["config.json"]
 		if history.OriginalContent == nil {
@@ -776,10 +776,10 @@ func TestEvaluateInitContentReadsOriginalContent(t *testing.T) {
 }
 
 // ========================================
-// EvaluateInitContent originalContent in JS context tests (Task 4)
+// EvaluateManagedConfigContent originalContent in JS context tests (Task 4)
 // ========================================
 
-func TestEvaluateInitContentPassesOriginalContentToJS(t *testing.T) {
+func TestEvaluateManagedConfigContentPassesOriginalContentToJS(t *testing.T) {
 	t.Run("originalContent available in JS context object", func(t *testing.T) {
 		dir := t.TempDir()
 		filePath := filepath.Join(dir, "package.json")
@@ -799,16 +799,16 @@ func TestEvaluateInitContentPassesOriginalContentToJS(t *testing.T) {
 		}
 
 		cfg := &Config{
-			Setup: MapOfConfigSetup{
-				"package.json": ConfigSetup{
+			ManagedConfigs: MapOfManagedConfigs{
+				"package.json": ManagedConfig{
 					Scope:   ScopeGitRoot,
 					Content: fnVal,
 				},
 			},
 		}
 
-		layerMap := make(SetupLayerMap)
-		result := EvaluateInitContent(cfg, vm, dir, dir, layerMap)
+		layerMap := make(ManagedConfigLayerMap)
+		result := EvaluateManagedConfigContent(cfg, vm, dir, dir, layerMap)
 
 		expected := `HAS_ORIGINAL:{"name": "test"}`
 		if result["package.json"] != expected {
@@ -836,16 +836,16 @@ func TestEvaluateInitContentPassesOriginalContentToJS(t *testing.T) {
 		}
 
 		cfg := &Config{
-			Setup: MapOfConfigSetup{
-				"package.json": ConfigSetup{
+			ManagedConfigs: MapOfManagedConfigs{
+				"package.json": ManagedConfig{
 					Scope:   ScopeGitRoot,
 					Content: fnVal,
 				},
 			},
 		}
 
-		layerMap := make(SetupLayerMap)
-		result := EvaluateInitContent(cfg, vm, dir, dir, layerMap)
+		layerMap := make(ManagedConfigLayerMap)
+		result := EvaluateManagedConfigContent(cfg, vm, dir, dir, layerMap)
 
 		// Verify the merged result contains both original and new fields
 		if result["package.json"] == "" {
@@ -889,16 +889,16 @@ func TestEvaluateInitContentPassesOriginalContentToJS(t *testing.T) {
 		}
 
 		cfg := &Config{
-			Setup: MapOfConfigSetup{
-				"nonexistent.json": ConfigSetup{
+			ManagedConfigs: MapOfManagedConfigs{
+				"nonexistent.json": ManagedConfig{
 					Scope:   ScopeGitRoot,
 					Content: fnVal,
 				},
 			},
 		}
 
-		layerMap := make(SetupLayerMap)
-		result := EvaluateInitContent(cfg, vm, dir, dir, layerMap)
+		layerMap := make(ManagedConfigLayerMap)
+		result := EvaluateManagedConfigContent(cfg, vm, dir, dir, layerMap)
 
 		if result["nonexistent.json"] != "UNDEFINED" {
 			t.Errorf("expected 'UNDEFINED' when file missing, got %q", result["nonexistent.json"])
@@ -930,17 +930,17 @@ func TestEdgeCaseRemoteConfigOverridesDefault(t *testing.T) {
 
 	// Layer 1: default config provides .editorconfig
 	defaultCfg := &Config{
-		Setup: MapOfConfigSetup{
-			".editorconfig": ConfigSetup{
+		ManagedConfigs: MapOfManagedConfigs{
+			".editorconfig": ManagedConfig{
 				Scope:   ScopeGitRoot,
 				Content: defaultFn,
 			},
 		},
 	}
-	layerMap := make(SetupLayerMap)
+	layerMap := make(ManagedConfigLayerMap)
 
-	evaluated1 := EvaluateInitContent(defaultCfg, vm, "/root", "/root", layerMap)
-	MergeSetupLayers(layerMap, "default", evaluated1, defaultCfg.Setup)
+	evaluated1 := EvaluateManagedConfigContent(defaultCfg, vm, "/root", "/root", layerMap)
+	MergeManagedConfigLayers(layerMap, "default", evaluated1, defaultCfg.ManagedConfigs)
 
 	if evaluated1[".editorconfig"] != "default content" {
 		t.Errorf("default layer: expected 'default content', got %q", evaluated1[".editorconfig"])
@@ -948,16 +948,16 @@ func TestEdgeCaseRemoteConfigOverridesDefault(t *testing.T) {
 
 	// Layer 2: remote config overrides .editorconfig, receives default's content
 	remoteCfg := &Config{
-		Setup: MapOfConfigSetup{
-			".editorconfig": ConfigSetup{
+		ManagedConfigs: MapOfManagedConfigs{
+			".editorconfig": ManagedConfig{
 				Scope:   ScopeGitRoot,
 				Content: remoteFn,
 			},
 		},
 	}
 
-	evaluated2 := EvaluateInitContent(remoteCfg, vm, "/root", "/root", layerMap)
-	MergeSetupLayers(layerMap, "remote", evaluated2, remoteCfg.Setup)
+	evaluated2 := EvaluateManagedConfigContent(remoteCfg, vm, "/root", "/root", layerMap)
+	MergeManagedConfigLayers(layerMap, "remote", evaluated2, remoteCfg.ManagedConfigs)
 
 	expected := "overridden: default content"
 	if evaluated2[".editorconfig"] != expected {
@@ -991,30 +991,30 @@ func TestEdgeCaseInitEntryRemovedInNextLayer(t *testing.T) {
 
 	// Layer 1: defines .editorconfig with content
 	layer1Cfg := &Config{
-		Setup: MapOfConfigSetup{
-			".editorconfig": ConfigSetup{
+		ManagedConfigs: MapOfManagedConfigs{
+			".editorconfig": ManagedConfig{
 				Scope:   ScopeGitRoot,
 				Content: fn,
 			},
 		},
 	}
-	layerMap := make(SetupLayerMap)
+	layerMap := make(ManagedConfigLayerMap)
 
-	evaluated1 := EvaluateInitContent(layer1Cfg, vm, "/root", "/root", layerMap)
-	MergeSetupLayers(layerMap, "default", evaluated1, layer1Cfg.Setup)
+	evaluated1 := EvaluateManagedConfigContent(layer1Cfg, vm, "/root", "/root", layerMap)
+	MergeManagedConfigLayers(layerMap, "default", evaluated1, layer1Cfg.ManagedConfigs)
 
 	// Layer 2: removes .editorconfig (marks as deleteOnly)
 	layer2Cfg := &Config{
-		Setup: MapOfConfigSetup{
-			".editorconfig": ConfigSetup{
+		ManagedConfigs: MapOfManagedConfigs{
+			".editorconfig": ManagedConfig{
 				Scope:      ScopeGitRoot,
 				DeleteOnly: true,
 			},
 		},
 	}
 
-	evaluated2 := EvaluateInitContent(layer2Cfg, vm, "/root", "/root", layerMap)
-	MergeSetupLayers(layerMap, "auto", evaluated2, layer2Cfg.Setup)
+	evaluated2 := EvaluateManagedConfigContent(layer2Cfg, vm, "/root", "/root", layerMap)
+	MergeManagedConfigLayers(layerMap, "auto", evaluated2, layer2Cfg.ManagedConfigs)
 
 	// DeleteOnly entry should not produce content
 	if len(evaluated2) != 0 {
@@ -1055,20 +1055,20 @@ func TestEdgeCaseContentThrowsDuringEvaluation(t *testing.T) {
 	}
 
 	cfg := &Config{
-		Setup: MapOfConfigSetup{
-			".editorconfig": ConfigSetup{
+		ManagedConfigs: MapOfManagedConfigs{
+			".editorconfig": ManagedConfig{
 				Scope:   ScopeGitRoot,
 				Content: throwFn,
 			},
-			"lefthook.yml": ConfigSetup{
+			"lefthook.yml": ManagedConfig{
 				Scope:   ScopeGitRoot,
 				Content: okFn,
 			},
 		},
 	}
 
-	// EvaluateInitContent should not fail overall - throwing entries are skipped
-	result := EvaluateInitContent(cfg, vm, "/root", "/root", make(SetupLayerMap))
+	// EvaluateManagedConfigContent should not fail overall - throwing entries are skipped
+	result := EvaluateManagedConfigContent(cfg, vm, "/root", "/root", make(ManagedConfigLayerMap))
 
 	// The throwing entry should be skipped, the ok entry should succeed
 	if _, hasEditor := result[".editorconfig"]; hasEditor {
@@ -1079,9 +1079,9 @@ func TestEdgeCaseContentThrowsDuringEvaluation(t *testing.T) {
 	}
 
 	// Merge: the throwing entry won't appear in evaluatedContent,
-	// but will still be tracked as a non-content layer via initConfigs
-	layerMap := make(SetupLayerMap)
-	MergeSetupLayers(layerMap, "default", result, cfg.Setup)
+	// but will still be tracked as a non-content layer via managedConfigs
+	layerMap := make(ManagedConfigLayerMap)
+	MergeManagedConfigLayers(layerMap, "default", result, cfg.ManagedConfigs)
 
 	editorHistory := layerMap[".editorconfig"]
 	if editorHistory == nil {
@@ -1106,12 +1106,12 @@ func TestEdgeCaseScopeFiltering(t *testing.T) {
 	}
 
 	cfg := &Config{
-		Setup: MapOfConfigSetup{
-			".editorconfig": ConfigSetup{
+		ManagedConfigs: MapOfManagedConfigs{
+			".editorconfig": ManagedConfig{
 				Scope:   ScopeGitRoot,
 				Content: gitRootFn,
 			},
-			"tsconfig.json": ConfigSetup{
+			"tsconfig.json": ManagedConfig{
 				Scope:        ScopeProject,
 				Content:      projectFn,
 				ProjectTypes: []string{"typescript"},
@@ -1119,9 +1119,9 @@ func TestEdgeCaseScopeFiltering(t *testing.T) {
 		},
 	}
 
-	// EvaluateInitContent evaluates ALL entries regardless of scope.
+	// EvaluateManagedConfigContent evaluates ALL entries regardless of scope.
 	// Scope filtering happens at install time, not at evaluation time.
-	result := EvaluateInitContent(cfg, vm, "/root", "/root/packages/web", make(SetupLayerMap))
+	result := EvaluateManagedConfigContent(cfg, vm, "/root", "/root/packages/web", make(ManagedConfigLayerMap))
 
 	if len(result) != 2 {
 		t.Fatalf("expected 2 entries (both scopes evaluated), got %d", len(result))
@@ -1134,8 +1134,8 @@ func TestEdgeCaseScopeFiltering(t *testing.T) {
 	}
 
 	// Merge preserves scope in FinalConfig
-	layerMap := make(SetupLayerMap)
-	MergeSetupLayers(layerMap, "default", result, cfg.Setup)
+	layerMap := make(ManagedConfigLayerMap)
+	MergeManagedConfigLayers(layerMap, "default", result, cfg.ManagedConfigs)
 
 	if layerMap[".editorconfig"].FinalConfig.Scope != ScopeGitRoot {
 		t.Errorf("expected git-root scope, got %q", layerMap[".editorconfig"].FinalConfig.Scope)
@@ -1176,17 +1176,17 @@ func TestOriginalContentReadsFromRootPathForGitRootScope(t *testing.T) {
 	}
 
 	cfg := &Config{
-		Setup: MapOfConfigSetup{
-			".editorconfig": ConfigSetup{
+		ManagedConfigs: MapOfManagedConfigs{
+			".editorconfig": ManagedConfig{
 				Scope:   ScopeGitRoot,
 				Content: fn,
 			},
 		},
 	}
 
-	layerMap := make(SetupLayerMap)
+	layerMap := make(ManagedConfigLayerMap)
 	// Pass different rootPath and cwdPath to simulate running from subdirectory
-	result := EvaluateInitContent(cfg, vm, rootDir, subDir, layerMap)
+	result := EvaluateManagedConfigContent(cfg, vm, rootDir, subDir, layerMap)
 
 	expected := "found: root content"
 	if result[".editorconfig"] != expected {

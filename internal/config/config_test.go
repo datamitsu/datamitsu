@@ -736,33 +736,33 @@ func TestToolSkipJSONOmitEmpty(t *testing.T) {
 	}
 }
 
-func TestConfigSetup(t *testing.T) {
-	setup := ConfigSetup{
+func TestManagedConfig(t *testing.T) {
+	managedConfig := ManagedConfig{
 		ProjectTypes:      []string{"node"},
 		Scope:             ScopeGitRoot,
 		OtherFileNameList: []string{".eslintrc.js", ".eslintrc.json"},
 		DeleteOnly:        false,
 	}
 
-	if len(setup.ProjectTypes) != 1 {
-		t.Errorf("len(ProjectTypes) = %d, want 1", len(setup.ProjectTypes))
+	if len(managedConfig.ProjectTypes) != 1 {
+		t.Errorf("len(ProjectTypes) = %d, want 1", len(managedConfig.ProjectTypes))
 	}
 
-	if setup.Scope != ScopeGitRoot {
-		t.Errorf("Scope = %q, want %q", setup.Scope, ScopeGitRoot)
+	if managedConfig.Scope != ScopeGitRoot {
+		t.Errorf("Scope = %q, want %q", managedConfig.Scope, ScopeGitRoot)
 	}
 
-	if len(setup.OtherFileNameList) != 2 {
-		t.Errorf("len(OtherFileNameList) = %d, want 2", len(setup.OtherFileNameList))
+	if len(managedConfig.OtherFileNameList) != 2 {
+		t.Errorf("len(OtherFileNameList) = %d, want 2", len(managedConfig.OtherFileNameList))
 	}
 
-	if setup.DeleteOnly {
+	if managedConfig.DeleteOnly {
 		t.Error("DeleteOnly should be false")
 	}
 }
 
-func TestConfigSetupLinkTarget(t *testing.T) {
-	ci := ConfigSetup{
+func TestManagedConfigLinkTarget(t *testing.T) {
+	ci := ManagedConfig{
 		Scope:      ScopeGitRoot,
 		LinkTarget: "AGENTS.md",
 	}
@@ -775,8 +775,8 @@ func TestConfigSetupLinkTarget(t *testing.T) {
 	}
 }
 
-func TestConfigSetupLinkTargetEmpty(t *testing.T) {
-	ci := ConfigSetup{
+func TestManagedConfigLinkTargetEmpty(t *testing.T) {
+	ci := ManagedConfig{
 		Scope: ScopeGitRoot,
 	}
 
@@ -785,8 +785,8 @@ func TestConfigSetupLinkTargetEmpty(t *testing.T) {
 	}
 }
 
-func TestConfigSetupLinkTargetJSON(t *testing.T) {
-	ci := ConfigSetup{
+func TestManagedConfigLinkTargetJSON(t *testing.T) {
+	ci := ManagedConfig{
 		Scope:      ScopeGitRoot,
 		LinkTarget: "../AGENTS.md",
 	}
@@ -796,7 +796,7 @@ func TestConfigSetupLinkTargetJSON(t *testing.T) {
 		t.Fatalf("json.Marshal error: %v", err)
 	}
 
-	var parsed ConfigSetup
+	var parsed ManagedConfig
 	if err := json.Unmarshal(data, &parsed); err != nil {
 		t.Fatalf("json.Unmarshal error: %v", err)
 	}
@@ -809,8 +809,8 @@ func TestConfigSetupLinkTargetJSON(t *testing.T) {
 	}
 }
 
-func TestConfigSetupLinkTargetJSONOmitEmpty(t *testing.T) {
-	ci := ConfigSetup{
+func TestManagedConfigLinkTargetJSONOmitEmpty(t *testing.T) {
+	ci := ManagedConfig{
 		Scope: ScopeGitRoot,
 	}
 
@@ -825,8 +825,8 @@ func TestConfigSetupLinkTargetJSONOmitEmpty(t *testing.T) {
 	}
 }
 
-func TestConfigSetupTools(t *testing.T) {
-	ci := ConfigSetup{
+func TestManagedConfigTools(t *testing.T) {
+	ci := ManagedConfig{
 		Tools: []string{"golangci-lint"},
 	}
 
@@ -838,8 +838,8 @@ func TestConfigSetupTools(t *testing.T) {
 	}
 }
 
-func TestConfigSetupToolsJSON(t *testing.T) {
-	ci := ConfigSetup{
+func TestManagedConfigToolsJSON(t *testing.T) {
+	ci := ManagedConfig{
 		Tools: []string{"golangci-lint", "prettier"},
 	}
 
@@ -848,7 +848,7 @@ func TestConfigSetupToolsJSON(t *testing.T) {
 		t.Fatalf("json.Marshal error: %v", err)
 	}
 
-	var parsed ConfigSetup
+	var parsed ManagedConfig
 	if err := json.Unmarshal(data, &parsed); err != nil {
 		t.Fatalf("json.Unmarshal error: %v", err)
 	}
@@ -858,8 +858,8 @@ func TestConfigSetupToolsJSON(t *testing.T) {
 	}
 }
 
-func TestConfigSetupToolsJSONOmitEmpty(t *testing.T) {
-	ci := ConfigSetup{
+func TestManagedConfigToolsJSONOmitEmpty(t *testing.T) {
+	ci := ManagedConfig{
 		Scope: ScopeGitRoot,
 	}
 
@@ -873,10 +873,10 @@ func TestConfigSetupToolsJSONOmitEmpty(t *testing.T) {
 	}
 }
 
-// TestConfigSetupToolsFromJS guards the real data flow: a JS `setup` entry's
-// `tools` array must populate ConfigSetup.Tools via the same goja json field
+// TestManagedConfigToolsFromJS guards the real data flow: a JS `managedConfigs` entry's
+// `tools` array must populate ManagedConfig.Tools via the same goja json field
 // mapper + ExportTo path the config loader uses (no special-case extraction).
-func TestConfigSetupToolsFromJS(t *testing.T) {
+func TestManagedConfigToolsFromJS(t *testing.T) {
 	vm := goja.New()
 	vm.SetFieldNameMapper(goja.TagFieldNameMapper("json", true))
 
@@ -885,7 +885,7 @@ func TestConfigSetupToolsFromJS(t *testing.T) {
 		t.Fatalf("RunString error: %v", err)
 	}
 
-	var ci ConfigSetup
+	var ci ManagedConfig
 	if err := vm.ExportTo(val, &ci); err != nil {
 		t.Fatalf("ExportTo error: %v", err)
 	}

@@ -45,8 +45,8 @@ func feasibilityConfigPath(tb testing.TB) string {
 }
 
 // loadFeasibilityConfig evaluates the chain once and returns the merged config
-// with the setup content functions dropped, which is the shape a cache artifact
-// could actually hold: ConfigSetup.Content is a live goja value and cannot be
+// with the managed config content functions dropped, which is the shape a cache artifact
+// could actually hold: ManagedConfig.Content is a live goja value and cannot be
 // serialized.
 func loadFeasibilityConfig(tb testing.TB) *config.Config {
 	tb.Helper()
@@ -56,9 +56,9 @@ func loadFeasibilityConfig(tb testing.TB) *config.Config {
 	if err != nil {
 		tb.Fatalf("loading %s: %v", path, err)
 	}
-	for name, entry := range cfg.Setup {
+	for name, entry := range cfg.ManagedConfigs {
 		entry.Content = nil
-		cfg.Setup[name] = entry
+		cfg.ManagedConfigs[name] = entry
 	}
 	return cfg
 }
@@ -161,8 +161,8 @@ func BenchmarkConfigCacheSerialize(b *testing.B) {
 	if err != nil {
 		b.Fatalf("json.Marshal: %v", err)
 	}
-	b.Logf("artifact size: msgpack %d B, json %d B (apps=%d tools=%d setup=%d)",
-		len(msgpackBytes), len(jsonBytes), len(cfg.Apps), len(cfg.Tools), len(cfg.Setup))
+	b.Logf("artifact size: msgpack %d B, json %d B (apps=%d tools=%d managed-configs=%d)",
+		len(msgpackBytes), len(jsonBytes), len(cfg.Apps), len(cfg.Tools), len(cfg.ManagedConfigs))
 
 	b.Run("msgpack-marshal", func(b *testing.B) {
 		for b.Loop() {
@@ -235,8 +235,8 @@ func TestConfigCacheRoundTripsThroughMsgpack(t *testing.T) {
 	if len(decoded.Tools) != len(cfg.Tools) {
 		t.Errorf("tools: decoded %d, want %d", len(decoded.Tools), len(cfg.Tools))
 	}
-	if len(decoded.Setup) != len(cfg.Setup) {
-		t.Errorf("setup: decoded %d, want %d", len(decoded.Setup), len(cfg.Setup))
+	if len(decoded.ManagedConfigs) != len(cfg.ManagedConfigs) {
+		t.Errorf("managedConfigs: decoded %d, want %d", len(decoded.ManagedConfigs), len(cfg.ManagedConfigs))
 	}
 	if len(decoded.Runtimes) != len(cfg.Runtimes) {
 		t.Errorf("runtimes: decoded %d, want %d", len(decoded.Runtimes), len(cfg.Runtimes))

@@ -63,16 +63,17 @@ type configCacheParams struct {
 // configCacheUsable reports whether a load with these options may consult the
 // cache at all.
 //
-//   - requireVM: only loadConfigForSetup uses the returned *goja.Runtime, and a
+//   - requireVM: only loadConfigForReconcile uses the returned *goja.Runtime, and a
 //     hit has no VM to return.
-//   - evaluateSetupContent: the layer map is built from live goja functions,
+//   - evaluateManagedConfigContent: the managed-config layer map is built from live
+//     goja functions,
 //     which an artifact cannot hold and must never fake.
 //   - skipLockfileValidation: this load validates less than every other one. An
 //     artifact it wrote would let a later, strict load skip the error it exists
 //     to raise — the one direction of this cache that could turn a refusal into
 //     a silent success.
 func configCacheUsable(opts loadConfigOptions) bool {
-	if opts.requireVM || opts.evaluateSetupContent || opts.skipLockfileValidation {
+	if opts.requireVM || opts.evaluateManagedConfigContent || opts.skipLockfileValidation {
 		return false
 	}
 	return effectiveRuntimeConfig().ConfigCache

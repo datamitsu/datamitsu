@@ -15,6 +15,7 @@ import (
 var expectedConfigSubcommands = []string{
 	"chain-hash",
 	"lockfile",
+	"reconcile",
 	"runtime",
 	"show",
 	"types",
@@ -179,14 +180,14 @@ func TestConfigRuntimeEnvOverride(t *testing.T) {
 	}
 }
 
-// chainHashConfigJS is a config with two setup files used to exercise
+// chainHashConfigJS is a config with two managed files used to exercise
 // `config chain-hash`. The files exist on disk with fixed content, so the
 // chain hashes (XXH3-128 of the content entering each file's root layer) are
 // deterministic across runs and machines.
 const chainHashConfigJS = `globalThis.getBeforeConfigs = () => [];
 globalThis.getConfig = (config) => ({
   apps: {}, runtimes: {}, tools: {},
-  setup: {
+  managedConfigs: {
     "alpha.txt": { content: () => "alpha\n" },
     "beta.config.json": { content: () => "{}\n" },
   },
@@ -194,7 +195,7 @@ globalThis.getConfig = (config) => ({
 globalThis.getMinVersion = () => "0.0.0";
 `
 
-// newChainHashProject writes the two-file setup config plus the on-disk files it
+// newChainHashProject writes the two-file managed config plus the on-disk files it
 // hashes, returning the project and the config path.
 func newChainHashProject(t *testing.T) (*clitest.Project, string) {
 	t.Helper()
@@ -205,7 +206,7 @@ func newChainHashProject(t *testing.T) (*clitest.Project, string) {
 	return p, cfg
 }
 
-// TestConfigChainHashTable freezes the no-args table: every setup file in a
+// TestConfigChainHashTable freezes the no-args table: every managed config file in a
 // left-aligned "file  hash" grid, sorted by filename.
 func TestConfigChainHashTable(t *testing.T) {
 	p, cfg := newChainHashProject(t)
@@ -259,7 +260,7 @@ func TestConfigChainHashUnknown(t *testing.T) {
 	if res.ExitCode == 0 {
 		t.Fatalf("expected non-zero exit for unknown file, got 0\nstdout:\n%s", res.Stdout)
 	}
-	if !strings.Contains(res.Stderr, "no setup config named") ||
+	if !strings.Contains(res.Stderr, "no managed config named") ||
 		!strings.Contains(res.Stderr, "does-not-exist.txt") {
 		t.Errorf("stderr should name the unknown file:\n%s", res.Stderr)
 	}

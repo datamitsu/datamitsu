@@ -285,7 +285,7 @@ globalThis.getConfig = () => ({
       },
     },
   },
-  setup: {},
+  managedConfigs: {},
   tools: {},
 });
 globalThis.getMinVersion = () => "0.0.0";

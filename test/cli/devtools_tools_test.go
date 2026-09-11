@@ -51,7 +51,7 @@ func TestDevtoolsToolsCommandSetDrift(t *testing.T) {
 const toolsListConfigJS = `globalThis.getBeforeConfigs = () => [];
 globalThis.getConfig = (config) => ({
   apps: { "a": { shell: { name: "true" } }, "b": { shell: { name: "true" } } },
-  runtimes: {}, setup: {}, bundles: {},
+  runtimes: {}, managedConfigs: {}, bundles: {},
   tools: {
     "alpha": { name: "Alpha", projectTypes: ["x"], operations: { lint: { app: "a", args: ["{file}"], scope: "per-file" } } },
     "beta": { name: "Beta", skip: true, skipReason: "demo", operations: { fix: { app: "b", args: [], scope: "repository" }, lint: { app: "b", args: [], scope: "repository" } } }

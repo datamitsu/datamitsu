@@ -337,7 +337,9 @@ declare global {
       ignoreRules?: string[];
 
       /**
-       * Init commands to run after setup
+       * Commands run by `datamitsu init` after managed tools, runtimes, bundles, and links have
+       * been provisioned. This is unrelated to `datamitsu config reconcile`, which manages
+       * project-owned configuration files.
        */
       initCommands?: MapOfInitCommands;
 
@@ -351,6 +353,13 @@ declare global {
        * entry name.
        */
       lsp?: MapOfLsp;
+
+      /**
+       * Project-owned configuration files managed by `datamitsu config reconcile`. The command
+       * writes these files and then runs `datamitsu fix` by default. Pass `--dry-run` to preview
+       * without writing or fixing, or `--skip-fix` to reconcile without the post-step.
+       */
+      managedConfigs?: MapOfManagedConfigs;
 
       /**
        * OCI bundle that seeds the tool store (pull without docker). Chains as a scalar: the last
@@ -387,11 +396,6 @@ declare global {
        * Runtime definitions for managed package managers (UV, PNPM)
        */
       runtimes?: BinManager.MapOfRuntimes;
-
-      /**
-       * Config-file setup (managed files written by dm setup)
-       */
-      setup?: MapOfConfigSetup;
 
       /**
        * Arbitrary key-value storage that flows through the config chain. Any config layer can
@@ -475,7 +479,7 @@ declare global {
        * git-root scoped generator build per-directory, per-ecosystem output (e.g. dependabot
        * updates).
        *
-       * Only populated during `dm setup` (empty for other commands).
+       * Only populated during `datamitsu config reconcile` (empty for other commands).
        *
        * @example
        *   [{ type: "npm-package", path: "." }, { type: "golang-package", path: "service" }]
@@ -483,8 +487,8 @@ declare global {
       projectLocations: { path: string; type: string }[];
 
       /**
-       * Detected project types (deduplicated). Only populated during `dm setup` (empty for other
-       * commands).
+       * Detected project types (deduplicated). Only populated during `datamitsu config reconcile`
+       * (empty for other commands).
        */
       projectTypes: string[];
 
@@ -495,9 +499,92 @@ declare global {
     }
 
     /**
-     * Configuration file setup (managed files written by dm setup)
+     * Initialization command to run after clone/install
      */
-    interface ConfigSetup {
+    interface InitCommand {
+      /**
+       * Arguments
+       */
+      args: string[];
+
+      /**
+       * Command to execute (app name from MapOfApps)
+       */
+      command: string;
+
+      /**
+       * Description
+       */
+      description?: string;
+
+      /**
+       * Which project types this applies to Empty = all project types
+       */
+      projectTypes?: string[];
+
+      /**
+       * Only run if this file/directory exists
+       */
+      when?: string;
+    }
+
+    /**
+     * LSP derived declaration: reuse an existing tool's projectTypes/globs and its `outputParser`
+     * instead of declaring a standalone server. RESERVED for Phase 3+ — declaration only, no
+     * runtime behavior in this release.
+     */
+    interface LspDerived {
+      /**
+       * Optional precedence. Ties break alphabetically by entry name.
+       */
+      order?: number;
+
+      /**
+       * Name of the tool (in `tools`) whose projectTypes/globs and `outputParser` this entry
+       * inherits. Must reference an existing tool.
+       */
+      tool: string;
+
+      /**
+       * Discriminator: this entry is derived from an existing tool.
+       */
+      type: "derived";
+    }
+
+    // ========================================
+    // Tool Execution Configuration
+    // ========================================
+
+    /**
+     * LSP proxy declaration: wrap a standalone language server `app`, scoped to one or more project
+     * types. RESERVED for Phase 3+ — declaration only, no runtime behavior in this release.
+     */
+    interface LspProxy {
+      /**
+       * Name of the app (in `apps`) that provides the language server.
+       */
+      app: string;
+
+      /**
+       * Optional precedence. Ties break alphabetically by entry name.
+       */
+      order?: number;
+
+      /**
+       * Project types this server applies to. Must be non-empty.
+       */
+      projectTypes: string[];
+
+      /**
+       * Discriminator: this is a proxy over a standalone language-server app.
+       */
+      type: "proxy";
+    }
+
+    /**
+     * A project-owned configuration file managed by `datamitsu config reconcile`.
+     */
+    interface ManagedConfig {
       /**
        * Function that generates file content Receives context about the project including existing
        * file content if present Optional when deleteOnly is true or linkTarget is set
@@ -519,9 +606,9 @@ declare global {
       /**
        * Pins the XXH3-128 hash of the content entering THIS (root/topmost) config layer — i.e. the
        * output of the whole upstream chain (remote/before layers) before this layer transforms it.
-       * `datamitsu setup` recomputes that hash and aborts with a drift report when it diverges, so
-       * an upstream change to a pinned file surfaces before any overwrite instead of silently
-       * clobbering local overrides.
+       * `datamitsu config reconcile` recomputes that hash and aborts with a drift report when it
+       * diverges, so an upstream change to a pinned file surfaces before any overwrite instead of
+       * silently clobbering local overrides.
        *
        * Opt-in per file and verified only on the root layer (intermediate layers are ignored). The
        * content is hashed byte-for-byte, with no normalization. Format: "xxh3:<32-hex>" (a bare
@@ -566,10 +653,10 @@ declare global {
       scope?: "git-root" | "project";
 
       /**
-       * Tool name(s) this config file belongs to (must match keys in `tools`). `datamitsu setup
-       * --tools <names>` regenerates only configs whose `tools` intersect the selected set; all
-       * others are left untouched. Omit for infrastructure files (.gitignore, lefthook.yaml) not
-       * tied to a single tool — those are skipped whenever `--tools` is passed.
+       * Tool name(s) this config file belongs to (must match keys in `tools`). `datamitsu config
+       * reconcile --tools <names>` considers only configs whose `tools` intersect the selected set;
+       * all others are left untouched. Omit for infrastructure files (.gitignore, lefthook.yaml)
+       * not tied to a single tool — those are skipped whenever `--tools` is passed.
        *
        * @example
        *   ["golangci-lint"];
@@ -577,91 +664,12 @@ declare global {
       tools?: string[];
     }
 
-    /**
-     * Initialization command to run after clone/install
-     */
-    interface InitCommand {
-      /**
-       * Arguments
-       */
-      args: string[];
+    type MapOfInitCommands = Record<string, InitCommand>;
 
-      /**
-       * Command to execute (app name from MapOfApps)
-       */
-      command: string;
-
-      /**
-       * Description
-       */
-      description?: string;
-
-      /**
-       * Which project types this applies to Empty = all project types
-       */
-      projectTypes?: string[];
-
-      /**
-       * Only run if this file/directory exists
-       */
-      when?: string;
-    }
-
-    // ========================================
-    // Tool Execution Configuration
-    // ========================================
+    type MapOfLsp = Record<string, LspDerived | LspProxy>;
 
     /**
-     * LSP derived declaration: reuse an existing tool's projectTypes/globs and its `outputParser`
-     * instead of declaring a standalone server. RESERVED for Phase 3+ — declaration only, no
-     * runtime behavior in this release.
-     */
-    interface LspDerived {
-      /**
-       * Optional precedence. Ties break alphabetically by entry name.
-       */
-      order?: number;
-
-      /**
-       * Name of the tool (in `tools`) whose projectTypes/globs and `outputParser` this entry
-       * inherits. Must reference an existing tool.
-       */
-      tool: string;
-
-      /**
-       * Discriminator: this entry is derived from an existing tool.
-       */
-      type: "derived";
-    }
-
-    /**
-     * LSP proxy declaration: wrap a standalone language server `app`, scoped to one or more project
-     * types. RESERVED for Phase 3+ — declaration only, no runtime behavior in this release.
-     */
-    interface LspProxy {
-      /**
-       * Name of the app (in `apps`) that provides the language server.
-       */
-      app: string;
-
-      /**
-       * Optional precedence. Ties break alphabetically by entry name.
-       */
-      order?: number;
-
-      /**
-       * Project types this server applies to. Must be non-empty.
-       */
-      projectTypes: string[];
-
-      /**
-       * Discriminator: this is a proxy over a standalone language-server app.
-       */
-      type: "proxy";
-    }
-
-    /**
-     * Map of configuration setup with mainFilename as key
+     * Map of managed project configuration files with mainFilename as key
      *
      * @example
      *   {
@@ -670,11 +678,7 @@ declare global {
      *   ".vscode/settings.json": { content: () => "..." }
      *   }
      */
-    type MapOfConfigSetup = Record<string, ConfigSetup>;
-
-    type MapOfInitCommands = Record<string, InitCommand>;
-
-    type MapOfLsp = Record<string, LspDerived | LspProxy>;
+    type MapOfManagedConfigs = Record<string, ManagedConfig>;
 
     type MapOfParsers = Record<string, Parser>;
 
