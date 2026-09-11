@@ -22,7 +22,7 @@
 - Any binary, archive, JAR file, or remote config loaded from a URL must include a `hash` field (SHA-256).
 - If a hash is missing or empty, **refuse to process and return an error immediately**. Do not download, do not fall back to "hash-less" mode.
 - This applies equally to: binary apps, managed runtimes, JVM JAR files, and remote config files (`getRemoteConfigs()`).
-- Lock files are mandatory for all UV and node apps. Hashes are always mandatory regardless of any flag.
+- Lock files are mandatory for all Bun, UV, Node, and Go apps. Hashes are always mandatory regardless of any flag.
 - When designing new features that download anything from the internet, always require a hash field in the data structure. Treat the absence of a hash as a configuration error, not a warning.
 
 ## Hashing Policy

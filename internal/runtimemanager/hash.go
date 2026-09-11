@@ -129,12 +129,12 @@ func calculateAppHash(appName string, version string, deps map[string]string, ru
 	return hashutil.XXH3Multi(parts...)
 }
 
-// calculateNodeAppHash hashes a node-kind npm app's identity. Node apps are
-// pnpm-installed npm packages, so the cache key folds in the package name,
-// version, binPath, dependencies, lockfile, files, and the runtime hash (which
-// already includes the node kind's {url, hash, nodeVersion, ...}). The app-env
-// path is additionally prefixed by kind ("node").
-func calculateNodeAppHash(appName string, packageName string, pkgVersion string, binPath string, deps map[string]string, runtimeHash string, lockHash string, filesHash string) string {
+// calculatePackageAppHash hashes a Node- or Bun-kind package app's identity.
+// The cache key folds in the package name, version, binPath, dependencies,
+// lockfile, files, and the runtime hash (which already includes the runtime's
+// archive and kind-specific version fields). The app-env path is additionally
+// prefixed by its runtime kind ("node" or "bun").
+func calculatePackageAppHash(appName string, packageName string, pkgVersion string, binPath string, deps map[string]string, runtimeHash string, lockHash string, filesHash string) string {
 	parts := [][]byte{
 		[]byte(appName),
 		[]byte(packageName),

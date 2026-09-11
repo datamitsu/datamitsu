@@ -17,11 +17,12 @@ Supported archive formats include: `tar.gz`, `tar.xz`, `tar.bz2`, `tar.zst`, `zi
 
 ### App Types
 
-datamitsu supports six types of applications:
+datamitsu supports seven types of applications:
 
 | Type     | Description                                | Example Tools                       |
 | -------- | ------------------------------------------ | ----------------------------------- |
 | `binary` | Self-managed binaries with URLs and hashes | golangci-lint, hadolint, shellcheck |
+| `bun`    | npm packages installed and run with Bun    | eslint                              |
 | `uv`     | Python packages via managed UV runtime     | yamllint, ruff                      |
 | `node`   | npm packages via managed Node.js + pnpm    | eslint, prettier, spectral          |
 | `jvm`    | JVM applications via managed JDK           | openapi-generator-cli               |
@@ -30,11 +31,11 @@ datamitsu supports six types of applications:
 
 ## Runtime Management
 
-For tools that need a language runtime (Python, Node.js, Java), datamitsu manages the runtime itself. This provides complete isolation — each app gets its own environment with pinned dependencies.
+For tools that need a language runtime (Bun, Python, Node.js, Java, or Go), datamitsu manages the runtime itself. This provides complete isolation — each app gets its own environment with pinned dependencies.
 
 ### How Runtimes Work
 
-1. **Managed mode** — datamitsu downloads the runtime binary (UV, Node.js, JDK, or Go SDK) with hash verification
+1. **Managed mode** — datamitsu downloads the runtime binary (Bun, UV, Node.js, JDK, or Go SDK) with hash verification
 2. **System mode** — Uses a runtime already installed on your system
 
 Each runtime-managed app gets an isolated directory at
@@ -45,6 +46,7 @@ change produces a fresh environment.
 
 ### Runtime Types
 
+- **Bun** — Downloads and verifies a pinned Bun archive, runs the shared pnpm installer with Bun, and executes JavaScript entrypoints with Bun
 - **UV** (Python) — Downloads UV, optionally pins a Python version, creates an isolated project environment with `pyproject.toml` + `uv sync`
 - **Node** (Node.js) — Downloads and verifies (SHA-256) a pinned Node.js archive and extracts it, downloads pnpm from the npm registry, runs `pnpm install` in isolated app directories
 - **JVM** (Java) — Downloads Temurin JDK, extracts the full JDK tree, downloads JAR files with hash verification, executes via `java -jar`
@@ -52,8 +54,8 @@ change produces a fresh environment.
 
 ### Lock Files
 
-Node, UV, and Go apps require lock files (`pnpm-lock.yaml`, `uv.lock`, or a
-`go.mod` + `go.sum` payload). Normal config loading rejects a runtime-managed
+Bun, Node, UV, and Go apps require lock files (`pnpm-lock.yaml` for both JavaScript runtimes,
+`uv.lock`, or a `go.mod` + `go.sum` payload). Normal config loading rejects a runtime-managed
 app without one. Lock content can be embedded compactly with brotli compression.
 
 Generate a lock file:
@@ -217,4 +219,4 @@ When running from a subdirectory, datamitsu restricts its scope to projects with
 
 - [Configuration Guide](../guides/configuration.md) — Deep dive into config files and options
 - [Binary Management Guide](../guides/binary-management.md) — Managing tool binaries in detail
-- [Runtime Management Guide](../guides/runtime-management.md) — UV, Node, JVM, and Go runtimes
+- [Runtime Management Guide](../guides/runtime-management.md) — Bun, UV, Node, JVM, and Go runtimes

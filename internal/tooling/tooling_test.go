@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -1701,6 +1702,19 @@ func TestBuildCommandEnvMerge(t *testing.T) {
 		}
 		if !found {
 			t.Error("expected APP_VAR=app_value in cmd.Env")
+		}
+	})
+
+	t.Run("bun command prepends runtime args", func(t *testing.T) {
+		cmdInfo := &binmanager.CommandInfo{
+			Type:    "bun",
+			Command: "/bin/echo",
+			Args:    []string{"--no-install", "cli.js"},
+		}
+		cmd := executor.buildCommand(context.Background(), cmdInfo, []string{"--fix"}, tmpDir, nil)
+		want := []string{"/bin/echo", "--no-install", "cli.js", "--fix"}
+		if !reflect.DeepEqual(cmd.Args, want) {
+			t.Errorf("bun command args = %v, want %v", cmd.Args, want)
 		}
 	})
 

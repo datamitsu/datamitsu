@@ -330,4 +330,42 @@ func TestGetNPMPackageInfoWithMinAge(t *testing.T) {
 			t.Errorf("expected 1.0.0, got %s", info.Version)
 		}
 	})
+
+	t.Run("major line ignores newer major and prereleases", func(t *testing.T) {
+		srv, _ := minAgeServer(t, "pnpm", "12.0.0", npmFullResponse{
+			Name: "pnpm",
+			Versions: map[string]npmVersionMeta{
+				"12.0.0": {}, "11.21.0": {}, "11.22.0-rc.1": {}, "11.20.0": {},
+			},
+			Time: map[string]string{
+				"12.0.0": rfc3339(old), "11.21.0": rfc3339(old), "11.22.0-rc.1": rfc3339(old), "11.20.0": rfc3339(old),
+			},
+		})
+		setup(t, srv)
+
+		info, err := GetNPMPackageInfoWithMinAgeMajor(context.Background(), "pnpm", 11, minAge)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if info == nil || info.Version != "11.21.0" {
+			t.Fatalf("expected highest stable pnpm 11 version 11.21.0, got %+v", info)
+		}
+	})
+
+	t.Run("major line still enforces minimum age", func(t *testing.T) {
+		srv, _ := minAgeServer(t, "pnpm", "12.0.0", npmFullResponse{
+			Name:     "pnpm",
+			Versions: map[string]npmVersionMeta{"12.0.0": {}, "11.21.0": {}, "11.20.0": {}},
+			Time:     map[string]string{"12.0.0": rfc3339(old), "11.21.0": rfc3339(fresh), "11.20.0": rfc3339(old)},
+		})
+		setup(t, srv)
+
+		info, err := GetNPMPackageInfoWithMinAgeMajor(context.Background(), "pnpm", 11, minAge)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if info == nil || info.Version != "11.20.0" {
+			t.Fatalf("expected old-enough pnpm 11 version 11.20.0, got %+v", info)
+		}
+	})
 }

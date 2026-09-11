@@ -7,17 +7,37 @@ import (
 	"github.com/datamitsu/datamitsu/internal/clitest"
 )
 
-// execToolsConfigJS is a minimal config declaring two shell apps. Shell apps
-// download nothing (their command resolves on PATH), so `exec` can list and run
-// them fully offline. "echo" is used so an actual run is deterministic and
-// portable, and the apps are named out of sort order to prove the listing sorts.
+// execToolsConfigJS is a minimal config declaring two shell apps and one Bun
+// app. Listing does not install apps, while "echo" keeps the actual execution
+// test deterministic and portable. The apps are named out of sort order to
+// prove the listing sorts.
 const execToolsConfigJS = `globalThis.getBeforeConfigs = () => [];
 globalThis.getConfig = (config) => ({
   apps: {
+    "bun-tool": {
+      bun: {
+        packageName: "semver",
+        version: "7.7.2",
+        binPath: "node_modules/semver/bin/semver.js",
+        lockFile: "lock"
+      }
+    },
     "hello-shell": { shell: { name: "echo" }, description: "say hi" },
     "ztool": { shell: { name: "true" } }
   },
-  runtimes: {}, managedConfigs: {}, tools: {}
+  runtimes: {
+    bun: {
+      kind: "bun",
+      mode: "system",
+      system: { command: "bun" },
+      bun: {
+        bunVersion: "1.4.2",
+        pnpmVersion: "11.33.0",
+        pnpmHash: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    }
+  },
+  managedConfigs: {}, tools: {}
 });
 globalThis.getMinVersion = () => "0.0.0";
 `
@@ -42,10 +62,10 @@ func TestExecListEmpty(t *testing.T) {
 	clitest.AssertGolden(t, "exec_list_empty", norm.Apply(res.Stdout))
 }
 
-// TestExecListGrouped freezes `exec` with no app name against a config with two
-// shell apps: the "[shell]" group header, both apps sorted by name, and the
-// optional detail column (command + description). Output is plain text with no
-// paths/versions/durations, so the golden is fully stable offline.
+// TestExecListGrouped freezes `exec` with no app name against a config with Bun
+// and shell apps: both group headers, apps sorted by name, and the optional
+// detail column (command + description). Output is plain text with no paths or
+// durations, so the golden is fully stable offline.
 func TestExecListGrouped(t *testing.T) {
 	p := clitest.NewProject(t)
 	cfg := p.WriteFile("tools.config.js", execToolsConfigJS)

@@ -58,7 +58,7 @@ func (d *Display) Spinner(name string) *Spinner {
 	// installs then show just the name + final line, slow ones update.
 	s.lastAt = now()
 
-	// Typed install boundary: a Spinner marks one app install (node/uv/go/pnpm/
+	// Typed install boundary: a Spinner marks one app install (bun/node/uv/go/pnpm/
 	// extract). Emit start now; Done/Fail emit the terminal event.
 	if sinkActive() {
 		s.opID = uievent.NextOpID("inst")

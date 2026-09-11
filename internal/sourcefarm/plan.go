@@ -48,8 +48,8 @@ const (
 	// StrategyShim routes the invocation back through the datamitsu executable,
 	// which re-resolves and execs the real target. It is required whenever the
 	// invocation cannot be expressed as "run this file with the user's argv":
-	// an argv prefix (jvm's `java -jar`), an environment overlay (node's PATH
-	// and npm_config_*, uv's cache dirs, any app carrying Env), or a target
+	// an argv prefix (jvm's `java -jar`, Bun's explicit script entrypoint), an
+	// environment overlay (Bun/Node PATH and cache vars, uv's cache dirs, any app carrying Env), or a target
 	// that does not exist yet.
 	StrategyShim Strategy = "shim"
 )
@@ -133,7 +133,7 @@ type Entry struct {
 	// was declared.
 	Provider string `json:"provider,omitempty"`
 
-	// Kind is the declared app kind ("binary", "go", "node", "uv", "jvm").
+	// Kind is the declared app kind ("binary", "bun", "go", "node", "uv", "jvm").
 	Kind string `json:"kind"`
 
 	// Strategy is symlink or shim, decided mechanically by strategyFor.
@@ -154,8 +154,8 @@ type Entry struct {
 	Artifact string `json:"artifact,omitempty"`
 
 	// RequiredPaths are the other files that must exist for the app to run as
-	// pinned — a uv app's venv interpreter, a node app's installed package and
-	// managed node binary, a managed JVM's java. They come from the resolver,
+	// pinned — a uv app's venv interpreter, a Bun/Node app's installed package
+	// and managed runtime binary, a managed JVM's java. They come from the resolver,
 	// which is the only side that knows a kind's health rule, and they are
 	// recorded because the shim decides "install first?" from the filesystem and
 	// must ask the same question the installer would. Checking Command alone lets
@@ -348,6 +348,8 @@ func kindOf(app binmanager.App) string {
 	switch {
 	case app.Binary != nil:
 		return "binary"
+	case app.Bun != nil:
+		return "bun"
 	case app.Go != nil:
 		return "go"
 	case app.Node != nil:

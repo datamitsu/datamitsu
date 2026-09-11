@@ -196,6 +196,7 @@ func TestRuntimeAppKind(t *testing.T) {
 		wantOK  bool
 		wantRef config.RuntimeKind
 	}{
+		{"bun", binmanager.App{Bun: &binmanager.AppConfigBun{Runtime: "bun"}}, true, config.RuntimeKindBun},
 		{"uv", binmanager.App{Uv: &binmanager.AppConfigUV{Runtime: "uv"}}, true, config.RuntimeKindUV},
 		{"node", binmanager.App{Node: &binmanager.AppConfigNode{Runtime: "node"}}, true, config.RuntimeKindNode},
 		{"jvm", binmanager.App{Jvm: &binmanager.AppConfigJVM{Runtime: "jvm"}}, true, config.RuntimeKindJVM},

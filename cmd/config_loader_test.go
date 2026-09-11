@@ -80,6 +80,39 @@ func TestLoadConfigRuntimes(t *testing.T) {
 		t.Fatal("config.Runtimes is nil")
 	}
 
+	bunRuntime, ok := cfg.Runtimes["bun"]
+	if !ok {
+		t.Fatal("bun runtime not found in config")
+	}
+	if bunRuntime.Kind != config.RuntimeKindBun {
+		t.Errorf("bun runtime kind = %q, want %q", bunRuntime.Kind, config.RuntimeKindBun)
+	}
+	if bunRuntime.Mode != config.RuntimeModeManaged {
+		t.Errorf("bun runtime mode = %q, want %q", bunRuntime.Mode, config.RuntimeModeManaged)
+	}
+	if bunRuntime.Bun == nil || bunRuntime.Bun.BunVersion == "" {
+		t.Fatal("bun runtime bunVersion is empty")
+	}
+	if bunRuntime.Bun.PNPMVersion == "" || bunRuntime.Bun.PNPMHash == "" {
+		t.Fatal("bun runtime pnpm pin is empty")
+	}
+	if bunRuntime.Managed == nil {
+		t.Fatal("bun runtime managed config is nil")
+	}
+	linuxBun := bunRuntime.Managed.Binaries["linux"]["amd64"]
+	if _, ok := linuxBun["glibc"]; !ok {
+		t.Error("bun runtime missing linux/amd64/glibc entry")
+	}
+	if _, ok := linuxBun["musl"]; !ok {
+		t.Error("bun runtime missing linux/amd64/musl entry")
+	}
+	if _, ok := bunRuntime.Managed.Binaries["darwin"]; !ok {
+		t.Error("bun runtime missing darwin binaries")
+	}
+	if _, ok := bunRuntime.Managed.Binaries["windows"]; !ok {
+		t.Error("bun runtime missing windows binaries")
+	}
+
 	uvRuntime, ok := cfg.Runtimes["uv"]
 	if !ok {
 		t.Fatal("uv runtime not found in config")
@@ -177,18 +210,34 @@ func TestLoadConfigRuntimeApps(t *testing.T) {
 	}
 
 	// Test Node app
-	jscowsay, ok := cfg.Apps["jscowsay"]
+	semverNode, ok := cfg.Apps["semver-node"]
 	if !ok {
-		t.Fatal("jscowsay app not found")
+		t.Fatal("semver-node app not found")
 	}
-	if jscowsay.Node == nil {
-		t.Fatal("jscowsay.Node is nil")
+	if semverNode.Node == nil {
+		t.Fatal("semverNode.Node is nil")
 	}
-	if jscowsay.Node.PackageName != "cowsay" {
-		t.Errorf("jscowsay packageName = %q, want %q", jscowsay.Node.PackageName, "cowsay")
+	if semverNode.Node.PackageName != "semver" {
+		t.Errorf("semver-node packageName = %q, want %q", semverNode.Node.PackageName, "semver")
 	}
-	if jscowsay.Node.BinPath == "" {
-		t.Error("jscowsay.Node.BinPath is empty")
+	if semverNode.Node.BinPath != "node_modules/.bin/semver" {
+		t.Errorf("semverNode.Node.BinPath = %q", semverNode.Node.BinPath)
+	}
+
+	// Test Bun app with the package's JavaScript entrypoint rather than pnpm's
+	// shell-based node_modules/.bin shim.
+	semverBun, ok := cfg.Apps["semver-bun"]
+	if !ok {
+		t.Fatal("semver-bun app not found")
+	}
+	if semverBun.Bun == nil {
+		t.Fatal("semverBun.Bun is nil")
+	}
+	if semverBun.Bun.PackageName != "semver" {
+		t.Errorf("semver-bun packageName = %q, want %q", semverBun.Bun.PackageName, "semver")
+	}
+	if semverBun.Bun.BinPath != "node_modules/semver/bin/semver.js" {
+		t.Errorf("semverBun.Bun.BinPath = %q", semverBun.Bun.BinPath)
 	}
 
 	// Test JVM app

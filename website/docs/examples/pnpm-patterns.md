@@ -113,7 +113,7 @@ const mapOfApps: BinManager.MapOfApps = {
 };
 ```
 
-For every node app:
+For every Bun or Node app:
 
 - PNPM runs with `--frozen-lockfile`, refusing to modify `pnpm-lock.yaml`
 - The lock file content is written to the app directory before installation
@@ -130,7 +130,7 @@ config load requires it.
 
 ## Workspace Overrides for Packages with Build Scripts
 
-datamitsu writes a secure `pnpm-workspace.yaml` automatically before every node-app
+datamitsu writes a secure `pnpm-workspace.yaml` automatically before every Bun- or Node-app
 install. When a package legitimately needs to run a build script — common
 offenders include `puppeteer`, `sharp`, `esbuild`, and native modules — installs
 fail with `ERR_PNPM_IGNORED_BUILDS`. Allowlist the package via
@@ -166,7 +166,7 @@ override the default — only do this if you fully trust every transitive depend
 
 For the full list of baseline settings, the rationale behind each, and the
 merged YAML format, see the
-[Supply Chain Security guide](../guides/supply-chain-security.md#pnpm-node-apps).
+[Supply Chain Security guide](../guides/supply-chain-security.md#pnpm-bun-and-node-apps).
 
 ## PNPM Store Isolation
 

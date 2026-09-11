@@ -24,7 +24,7 @@ const (
 	TypePhase Type = "phase"
 	// TypeDownload marks artifact download progress (binary/runtime/parser).
 	TypeDownload Type = "download"
-	// TypeInstall marks a per-app install boundary (node/uv/go/pnpm/extract).
+	// TypeInstall marks a per-app install boundary (bun/node/uv/go/pnpm/extract).
 	TypeInstall Type = "install"
 	// TypeChunk marks per-unit work progress (files processed by a tool).
 	TypeChunk Type = "chunk"

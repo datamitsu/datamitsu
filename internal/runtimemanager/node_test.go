@@ -286,9 +286,9 @@ func TestCollectRequiredRuntimesNode(t *testing.T) {
 	})
 }
 
-func TestGetNodeEnvVars(t *testing.T) {
+func TestGetPNPMEnvVars(t *testing.T) {
 	appEnvPath := "/cache/.apps/node/eslint/abc123"
-	vars := getNodeEnvVars(appEnvPath)
+	vars := getPNPMEnvVars(appEnvPath)
 
 	if vars["npm_config_virtual_store_dir"] != filepath.Join(appEnvPath, "node_modules", ".pnpm") {
 		t.Errorf("npm_config_virtual_store_dir = %q", vars["npm_config_virtual_store_dir"])
@@ -910,7 +910,7 @@ func TestResolveNodeAppEnvPath_CacheKeyUnchanged(t *testing.T) {
 				t.Fatalf("buildPNPMWorkspaceHashForm() error = %v", err)
 			}
 			filesForHash := filesWithWorkspaceYAML(tc.files, hashFormYAML)
-			wantPath, err := rm.GetAppPath("eslint", config.RuntimeKindNode, appConfig.Version, appConfig.Dependencies, lockFileHash(appConfig.LockFile), filesForHash, nil, "node", NodeAppPathExtra{PackageName: appConfig.PackageName, BinPath: appConfig.BinPath})
+			wantPath, err := rm.GetAppPath("eslint", config.RuntimeKindNode, appConfig.Version, appConfig.Dependencies, lockFileHash(appConfig.LockFile), filesForHash, nil, "node", PackageAppPathExtra{PackageName: appConfig.PackageName, BinPath: appConfig.BinPath})
 			if err != nil {
 				t.Fatalf("GetAppPath() error = %v", err)
 			}

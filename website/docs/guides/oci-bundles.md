@@ -39,7 +39,7 @@ The digest is mandatory — a tag never pins content. The declaration chains thr
 
 Two paths use the same machinery:
 
-- **Auto-seed (demand-driven).** Before `check`/`fix`/`lint` pre-install, `install`, and `init`, datamitsu computes the store paths the current operation needs (tools plus their runtime dependencies — the runtime of a runtime app, the shared CPython for uv apps, the pnpm runtime for node apps) and pulls **only those layers**. A bundle of 50 tools costs a project that needs 3 of them one cached manifest GET plus 3–5 blob downloads. If everything is already in the store, no network request is made at all.
+- **Auto-seed (demand-driven).** Before `check`/`fix`/`lint` pre-install, `install`, and `init`, datamitsu computes the store paths the current operation needs (tools plus their execution-time runtime dependencies, including shared CPython for uv apps) and pulls **only those layers**. pnpm is an install-time dependency for Bun and Node apps and is not bundled once an app environment has been built. A bundle of 50 tools costs a project that needs 3 of them one cached manifest GET plus 3–5 blob downloads. If everything is already in the store, no network request is made at all.
 - **`datamitsu store seed` (full pull).** Pulls every annotated layer — the airgap workflow. A completed full pull writes a marker inside the store, so repeating it is a no-op; `store clear` removes the marker together with the content.
 
 Multi-platform bundles are a single OCI index. os/arch are matched via the standard platform fields; **libc** (glibc vs musl) via the `com.datamitsu.libc` descriptor annotation inside the digest-verified index bytes. When libc detection fails (e.g. distroless hosts), datamitsu refuses to guess — set `DATAMITSU_LIBC=glibc` or `DATAMITSU_LIBC=musl`.
@@ -58,7 +58,7 @@ The bundle is **not a trust boundary by itself**:
 
 - Every manifest body and blob is verified against its SHA-256 descriptor **before** extraction — not a single unverified byte enters the chain. Trusting `oci.digest` is equivalent to trusting the config source that declares it (same as the per-binary `hash` fields today).
 - Single-file binaries and JVM jars are **re-hashed after extraction against the published SHA-256 from the config** — a bundle whose content was swapped relative to the config fails hard.
-- Runtime app directories (uv/node/go) have no published content hash (they are built, not downloaded); their integrity rests on the digest chain plus the mandatory lockfiles.
+- Runtime app directories (bun/uv/node/go) have no published content hash (they are built, not downloaded); their integrity rests on the digest chain plus the mandatory lockfiles.
 - Each layer may only write into the single store subtree it declares (`com.datamitsu.subtree`); content outside it — including hardlinks pointing elsewhere — fails the pull loudly.
 - `oci.signer` is **rejected at config load** — on the bundle's `oci` and on a parser's `oci` alike. This build carries no sigstore dependency and verifies **no signatures at all**, so a config that pins a signer would assert a guarantee the binary does not deliver; a loud error before any network beats silent non-verification. Integrity rests on the digest chain and the mandatory hashes above. (Breaking change: a config that set `signer` used to load and fail later, at seed time.)
 

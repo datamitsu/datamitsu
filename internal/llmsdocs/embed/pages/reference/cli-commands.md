@@ -96,7 +96,7 @@ Download concurrency is controlled via the `DATAMITSU_CONCURRENCY` env var (defa
 
 1. Detects project types in the repository
 2. Downloads required binaries and runtimes
-3. Installs runtime-managed apps (node/UV/JVM) that are referenced by tools
+3. Installs runtime-managed apps (Bun/Node/UV/JVM/Go) that are referenced by tools
 4. Creates `.datamitsu/` symlinks for the config files of installed link-apps — an app marked `lazy: true` is deferred and gets its links on first `datamitsu exec` instead
 5. Runs configured init commands (e.g., `lefthook install`)
 
@@ -442,7 +442,7 @@ pin=$(datamitsu config chain-hash eslint.config.mjs)
 
 ### config lockfile
 
-Generate lock file content for a runtime-managed app (node/UV/Go).
+Generate lock file content for a runtime-managed app (Bun/Node/UV/Go).
 
 ```bash
 datamitsu config lockfile [appName]
@@ -452,7 +452,7 @@ Without arguments, lists all apps that use lock files. With an app name, creates
 the package-manager lock data from scratch and outputs it as a brotli-compressed,
 base64-encoded JSON string ready to paste into configuration. The command uses a
 special config-load path that permits the selected app's initially missing
-`lockFile`; every normal config load requires lock files for node, UV, and Go
+`lockFile`; every normal config load requires lock files for Bun, Node, UV, and Go
 apps.
 
 **Examples:**
@@ -461,7 +461,7 @@ apps.
 # List apps that support lock files
 datamitsu config lockfile
 
-# Generate lock file for a node app
+# Generate lock file for a Bun or Node app
 datamitsu config lockfile eslint
 
 # Generate the go.mod + go.sum lock payload for a Go app
@@ -598,7 +598,7 @@ For the full UV app update workflow including lock file regeneration, see [Maint
 
 ### devtools pull-runtimes
 
-Pull runtime configurations (Node, UV, JVM, Go) with latest versions from upstream releases. Fetches latest releases from upstream, computes SHA-256 hashes, and writes the result to `<file>`.
+Pull runtime configurations (Bun, Node, UV, JVM, Go) with latest versions from upstream releases. Fetches latest releases from upstream, computes SHA-256 hashes, and writes the result to `<file>`.
 
 ```bash
 datamitsu devtools pull-runtimes --update <file>
@@ -608,13 +608,14 @@ datamitsu devtools pull-runtimes --update <file>
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `--update`            | Required. Fetch latest versions from upstream before updating                                                                                                                                                                                                                                                               |
 | `--dry-run`           | Show what would be updated without writing files                                                                                                                                                                                                                                                                            |
-| `--runtime <name>`    | Update only the specified runtime (`node`, `uv`, `jvm`, or `go`)                                                                                                                                                                                                                                                            |
+| `--runtime <name>`    | Update only the specified runtime (`bun`, `node`, `uv`, `jvm`, or `go`)                                                                                                                                                                                                                                                     |
 | `--min-age <minutes>` | Minimum release age before a version is eligible (`-1` = global default of `10080`, `0` = disable, positive = custom). Applies to specific-version sources (GitHub releases, npm pnpm), not major-version-line lookups. See [Minimum Release Age](/docs/guides/supply-chain-security#minimum-release-age-version-selection) |
 
 The command detects binaries for all platform combinations (OS/Arch/Libc). For Linux, both glibc and musl variants are detected when upstream provides separate binaries. If a musl binary is identical to the glibc variant (same URL and hash), the musl entry is deduplicated.
 
 **Version sources:**
 
+- **bun**: latest eligible Bun GitHub release; official archives and their SHA-256 digests from GitHub release metadata
 - **node**: latest Node.js LTS resolved automatically; archives + SHA-256 from nodejs.org/dist (glibc/darwin/windows, GPG-verified via SHASUMS256.txt.asc) and unofficial-builds.nodejs.org (musl); pnpm from the npm registry
 - **UV**: Python stable from endoflife.date, UV binary from GitHub
 - **JVM**: Java version from Adoptium API, Temurin JDK from GitHub
@@ -625,6 +626,9 @@ The command detects binaries for all platform combinations (OS/Arch/Libc). For L
 ```bash
 # Update all runtimes
 datamitsu devtools pull-runtimes --update config/src/runtimes.json
+
+# Update only Bun runtime
+datamitsu devtools pull-runtimes --update --runtime bun config/src/runtimes.json
 
 # Update only UV runtime
 datamitsu devtools pull-runtimes --update --runtime uv config/src/runtimes.json
@@ -663,7 +667,7 @@ datamitsu devtools dockerfile -o docker/Dockerfile
 | `--force-include <apps>` | Keep binary apps that lack a binary for the target libc (comma-separated, repeatable)                          |
 | `--emit-oci-map <path>`  | Also write the layer→subtree map JSON consumed by the OCI bundle annotation post-process                       |
 
-**libc filtering.** The generated image targets one libc — **musl** with `--alpine`, **glibc** otherwise — and binary apps are filtered to those that ship a binary for it on every arch they declare. A glibc-only binary can't execute on a musl image (and vice versa), so incompatible apps are dropped from the Dockerfile and listed in a warning. Runtime-managed apps (node/uv/jvm/go) are unaffected — their runtime carries the libc. Statically-linked tools that run on any libc but are under-declared in the registry (e.g. a static Go binary recorded as glibc-only) can be added back with `--force-include name1,name2`.
+**libc filtering.** The generated image targets one libc — **musl** with `--alpine`, **glibc** otherwise — and binary apps are filtered to those that ship a binary for it on every arch they declare. A glibc-only binary can't execute on a musl image (and vice versa), so incompatible apps are dropped from the Dockerfile and listed in a warning. Runtime-managed apps (bun/node/uv/jvm/go) are unaffected — their runtime carries the libc. Statically-linked tools that run on any libc but are under-declared in the registry (e.g. a static Go binary recorded as glibc-only) can be added back with `--force-include name1,name2`.
 
 The base image **repository and tag are baked into the datamitsu binary at release time**, so the `FROM` points at the exact image this build came from — including across release channels, where the stable image (`datamitsu/datamitsu:<version>`) and the unstable image (`datamitsu/datamitsu-unstable:<unstable-tag>`) live in different repositories under different tags. The registry host defaults to `ghcr.io` (override with `DATAMITSU_OCI_REGISTRY`); `--repo` overrides the repository for mirrors or forks. The tag is resolved to a SHA-256 digest and pinned as `FROM …@sha256:…`. Pinning is best-effort and never fails the command: `--offline`, an unreachable registry, or a non-release (`dev`/unstable) build leave the `FROM` unpinned with a warning. The output file is fully overwritten (no managed regions).
 

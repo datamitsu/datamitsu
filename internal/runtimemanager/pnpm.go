@@ -13,6 +13,7 @@ import (
 	"maps"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -23,6 +24,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/trace"
 	"github.com/datamitsu/datamitsu/internal/ui"
 	"github.com/goccy/go-yaml"
+	"go.uber.org/zap"
 )
 
 // pnpmReporter parses pnpm's --reporter=ndjson stream into live progress for a
@@ -104,16 +106,193 @@ func (p *pnpmReporter) errorOutput(stderr string) string {
 	return stderr
 }
 
-// pnpm.go holds the pnpm download + npm-app-install helpers shared by the node
-// runtime (node.go). pnpm is downloaded directly from the npm registry with a
-// pinned SHA-256 + the registry's SHA-512 integrity, and npm tools are installed
-// with `node <pnpm.cjs> install`.
+// pnpm.go holds the pnpm download and npm-app installation path shared by the
+// Node and Bun runtimes. pnpm is downloaded directly from the npm registry with
+// a pinned SHA-256 plus the registry's SHA-512 integrity. The selected app
+// runtime executes pnpm.cjs, so a Bun app never acquires Node merely to install
+// dependencies.
 
 // pnpmHTTPClient has no end-to-end deadline; the tarball transfer is bounded
 // by the progress guard below instead of a flat size/speed assumption.
 var pnpmHTTPClient = httpx.NewHardenedClient(0)
 
 const maxPNPMDownloadSize = 100 * 1024 * 1024 // 100 MiB
+
+// getPNPMEnvVars returns the per-app npm/pnpm environment shared by Node and
+// Bun apps.
+//
+// NOTE: pnpm 11 does NOT read store-dir / virtual-store-dir from these
+// npm_config_* env vars (nor from .npmrc) — it only honors the workspace
+// storeDir key, which buildPNPMWorkspaceForApp pins to GetPNPMStorePath(). The
+// store_dir entry here is retained so the installer can pre-create that
+// directory; virtual_store_dir already matches pnpm's default (node_modules/
+// .pnpm under the cwd, which is appEnvPath).
+func getPNPMEnvVars(appEnvPath string) map[string]string {
+	storePath := env.GetPNPMStorePath()
+	return map[string]string{
+		"npm_config_store_dir":         storePath,
+		"npm_config_virtual_store_dir": filepath.Join(appEnvPath, "node_modules", ".pnpm"),
+		"npm_config_global_dir":        filepath.Join(appEnvPath, "global"),
+	}
+}
+
+type pnpmAppInstallSpec struct {
+	appName        string
+	packageName    string
+	version        string
+	binPath        string
+	lockFile       string
+	dependencies   map[string]string
+	runtimeKind    string
+	runtimeName    string
+	runtimeVersion string
+	pnpmVersion    string
+	pnpmHash       string
+	appEnvPath     string
+}
+
+func (rm *RuntimeManager) installPNPMAppOnce(ctx context.Context, spec pnpmAppInstallSpec, customEnv map[string]string, files map[string]string, archives map[string]*binmanager.ArchiveSpec, mergedWorkspaceYAML string) error {
+	defer trace.Start(trace.CatInstall, spec.runtimeKind+".installApp").EndWith(trace.A("app", spec.appName))
+
+	if err := validateRelativePath(spec.binPath); err != nil {
+		return fmt.Errorf("app %q: unsafe binPath: %w", spec.appName, err)
+	}
+
+	appBinPath := filepath.Join(spec.appEnvPath, spec.binPath)
+	appModulePkg := filepath.Join(spec.appEnvPath, "node_modules", spec.packageName, "package.json")
+	if _, err := os.Stat(appBinPath); err == nil {
+		healthPaths := []string{appModulePkg}
+		if spec.runtimeKind == "bun" {
+			healthPaths = append(healthPaths, bunNodeAliasPath(spec.appEnvPath))
+		}
+		installHealthy := true
+		for _, path := range healthPaths {
+			if _, statErr := os.Stat(path); statErr != nil {
+				installHealthy = false
+				break
+			}
+		}
+		if installHealthy {
+			log.Debug(spec.runtimeKind+" app already installed", zap.String("app", spec.appName), zap.String("path", appBinPath))
+			return nil
+		}
+		log.Warn(spec.runtimeKind+" app entrypoint exists but its install is incomplete, reinstalling", zap.String("app", spec.appName))
+		if err := rm.removeAll(spec.appEnvPath); err != nil {
+			return fmt.Errorf("app %q: failed to remove stale install at %q before reinstall: %w", spec.appName, spec.appEnvPath, err)
+		}
+	}
+
+	// pnpm install spawns a child process whose network cannot be cut; refuse
+	// before acquiring a runtime or starting the installer.
+	if err := httpx.GuardOffline(spec.runtimeKind + " app install of " + spec.appName); err != nil {
+		return err
+	}
+
+	runtimeBinPath, err := rm.getRuntimePath(ctx, spec.runtimeName)
+	if err != nil {
+		return fmt.Errorf("failed to acquire %s runtime %q: %w", spec.runtimeKind, spec.runtimeName, err)
+	}
+
+	storeRoot := env.GetStorePath()
+	pnpmDir := filepath.Join(storeRoot, ".runtimes", "pnpm", spec.pnpmVersion, spec.pnpmHash)
+	if err := rm.installPNPM(ctx, spec.pnpmVersion, pnpmDir, spec.pnpmHash); err != nil {
+		return fmt.Errorf("failed to download pnpm: %w", err)
+	}
+
+	cleanupOnError := true
+	defer func() {
+		if cleanupOnError {
+			_ = os.RemoveAll(spec.appEnvPath)
+		}
+	}()
+	if spec.runtimeKind == "bun" {
+		if err := writeBunNodeAlias(spec.appEnvPath, runtimeBinPath); err != nil {
+			return fmt.Errorf("failed to create Bun node alias for %q: %w", spec.appName, err)
+		}
+	}
+
+	filesToWrite := filesWithoutWorkspaceYAML(files)
+	if len(filesToWrite) > 0 || len(archives) > 0 {
+		if err := binmanager.WriteAppFiles(ctx, spec.appEnvPath, filesToWrite, archives); err != nil {
+			return fmt.Errorf("failed to write app files/archives for %q: %w", spec.appName, err)
+		}
+	}
+
+	// Write pnpm-workspace.yaml after archives so the security defaults always
+	// win over content an archive might place at this path.
+	if err := writeAppWorkspaceFile(spec.appEnvPath, mergedWorkspaceYAML); err != nil {
+		return fmt.Errorf("failed to write pnpm-workspace.yaml for %q: %w", spec.appName, err)
+	}
+
+	packageJSON, err := buildPackageJSON(spec.packageName, spec.version, spec.dependencies)
+	if err != nil {
+		return fmt.Errorf("failed to build package.json: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(spec.appEnvPath, "package.json"), packageJSON, 0o644); err != nil {
+		return fmt.Errorf("failed to write package.json: %w", err)
+	}
+
+	if spec.lockFile != "" {
+		lockContent, decErr := DecompressLockFile(spec.lockFile)
+		if decErr != nil {
+			return fmt.Errorf("failed to decompress lock file for %q: %w", spec.appName, decErr)
+		}
+		if err := os.WriteFile(filepath.Join(spec.appEnvPath, "pnpm-lock.yaml"), []byte(lockContent), 0o644); err != nil {
+			return fmt.Errorf("failed to write pnpm-lock.yaml for %q: %w", spec.appName, err)
+		}
+	}
+
+	envVars := getPNPMEnvVars(spec.appEnvPath)
+	for _, dir := range []string{envVars["npm_config_store_dir"], envVars["npm_config_global_dir"]} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return fmt.Errorf("failed to create directory %q: %w", dir, err)
+		}
+	}
+
+	pnpmCjsPath := env.GetPNPMPath(storeRoot, spec.pnpmVersion, spec.pnpmHash)
+	args := buildPNPMInstallArgs(pnpmCjsPath, spec.lockFile != "")
+	if spec.runtimeKind == "bun" {
+		// `--bun` makes lifecycle scripts whose shebang or body invokes `node`
+		// resolve that command back to Bun. The config/env guards keep the target
+		// repository's bunfig.toml and .env files out of the installer process.
+		args = append([]string{"--config=" + os.DevNull, "--no-env-file", "run", "--bun", "--no-install"}, args...)
+	}
+	inheritedPath := os.Getenv("PATH") //nolint:forbidigo // standard PATH for child process env, not a datamitsu env var
+	pathParts := make([]string, 0, 3)
+	if spec.runtimeKind == "bun" {
+		pathParts = append(pathParts, filepath.Dir(bunNodeAliasPath(spec.appEnvPath)))
+	}
+	if runtimeBinDir := filepath.Dir(runtimeBinPath); filepath.IsAbs(runtimeBinDir) {
+		pathParts = append(pathParts, runtimeBinDir)
+	}
+	pathParts = append(pathParts, inheritedPath)
+	envVars["PATH"] = strings.Join(pathParts, string(os.PathListSeparator))
+	envVars = mergeInstallEnv(envVars, customEnv, spec.appEnvPath)
+
+	cmd := exec.CommandContext(ctx, runtimeBinPath, args...) //nolint:gosec // runtimeBinPath comes from the trusted runtime store and args are built from validated config
+	cmd.Dir = spec.appEnvPath
+	cmd.Env = buildEnvWithOverrides(os.Environ(), envVars)
+
+	log.Debug("installing "+spec.runtimeKind+" app",
+		zap.String("app", spec.appName),
+		zap.String("package", spec.packageName),
+		zap.String(spec.runtimeKind, spec.runtimeVersion),
+		zap.String("pnpm", spec.pnpmVersion),
+	)
+
+	sp := ui.Current().Spinner("Installing " + spec.appName)
+	rep := newPNPMReporter(sp)
+	stderr, err := runInstallCmdStreaming(ctx, cmd, rep.line)
+	if err != nil {
+		sp.Fail()
+		ui.Current().Errorln(rep.errorOutput(stderr))
+		return fmt.Errorf("failed to install %s app %q: %w", spec.runtimeKind, spec.appName, err)
+	}
+
+	sp.Done("Installed " + spec.appName)
+	cleanupOnError = false
+	return nil
+}
 
 type npmVersionMeta struct {
 	Dist struct {

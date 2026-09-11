@@ -869,6 +869,32 @@ func TestGetAppsList_NodeApp(t *testing.T) {
 	}
 }
 
+func TestGetAppsList_BunApp(t *testing.T) {
+	bm := New(MapOfApps{
+		"eslint": App{
+			Bun: &AppConfigBun{
+				PackageName: "eslint",
+				Version:     "10.9.0",
+				BinPath:     "node_modules/eslint/bin/eslint.js",
+			},
+		},
+	}, nil, nil)
+
+	apps := bm.GetAppsList()
+	if len(apps) != 1 {
+		t.Fatalf("expected 1 app, got %d", len(apps))
+	}
+	if apps[0].Type != "bun" {
+		t.Errorf("expected type 'bun', got %q", apps[0].Type)
+	}
+	if apps[0].Version != "10.9.0" {
+		t.Errorf("expected version '10.9.0', got %q", apps[0].Version)
+	}
+	if apps[0].PackageName != "eslint" {
+		t.Errorf("expected packageName 'eslint', got %q", apps[0].PackageName)
+	}
+}
+
 func TestGetAppsList_BinaryApp(t *testing.T) {
 	bm := New(MapOfApps{
 		"golangci-lint": App{

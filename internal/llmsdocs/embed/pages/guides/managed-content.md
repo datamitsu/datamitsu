@@ -170,14 +170,14 @@ datamitsu devtools bundles path my-bundle
 
 Bundles and apps serve different purposes:
 
-| Feature       | Bundle                      | App                                |
-| ------------- | --------------------------- | ---------------------------------- |
-| Executable    | No                          | Yes (`datamitsu exec`)             |
-| Runtime       | None                        | binary, UV, Node, JVM, Go, shell   |
-| Content       | Files + archives            | UV/Node content or managed package |
-| Links         | Yes (`.datamitsu/`)         | Yes (`.datamitsu/`)                |
-| Version check | No                          | Optional (`versionCheck`)          |
-| Use case      | Static content distribution | Tool/binary management             |
+| Feature       | Bundle                      | App                                    |
+| ------------- | --------------------------- | -------------------------------------- |
+| Executable    | No                          | Yes (`datamitsu exec`)                 |
+| Runtime       | None                        | binary, Bun, UV, Node, JVM, Go, shell  |
+| Content       | Files + archives            | Bun/UV/Node content or managed package |
+| Links         | Yes (`.datamitsu/`)         | Yes (`.datamitsu/`)                    |
+| Version check | No                          | Optional (`versionCheck`)              |
+| Use case      | Static content distribution | Tool/binary management                 |
 
 Link names must be unique across both apps and bundles since they share the `.datamitsu/` directory.
 

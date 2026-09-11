@@ -12,6 +12,7 @@ func TestLookupRuntimeKind_KnownKinds(t *testing.T) {
 		wantName      string
 		wantSystemCmd string
 	}{
+		{RuntimeKindBun, "bun", "bun"},
 		{RuntimeKindUV, "uv", "uv"},
 		{RuntimeKindNode, "node", "node"},
 		{RuntimeKindJVM, "jvm", "java"},
@@ -52,6 +53,15 @@ func TestRuntimeKindHashFields(t *testing.T) {
 			rc   RuntimeConfig
 			want []string
 		}{
+			{
+				kind: RuntimeKindBun,
+				rc: RuntimeConfig{Kind: RuntimeKindBun, Bun: &RuntimeConfigBun{
+					BunVersion:  "1.4.1",
+					PNPMVersion: "11.20.0",
+					PNPMHash:    "abc",
+				}},
+				want: []string{"1.4.1", "11.20.0", "abc"},
+			},
 			{
 				kind: RuntimeKindUV,
 				rc:   RuntimeConfig{Kind: RuntimeKindUV, UV: &RuntimeConfigUV{PythonVersion: "3.12"}},
@@ -115,6 +125,31 @@ func TestRuntimeKindValidate(t *testing.T) {
 		}
 	})
 
+	t.Run("bun missing config errors", func(t *testing.T) {
+		info, _ := LookupRuntimeKind(RuntimeKindBun)
+		errs := info.Validate("rt", RuntimeConfig{Kind: RuntimeKindBun})
+		if len(errs) == 0 {
+			t.Fatal("expected Bun validation error when bun config is nil")
+		}
+		if !strings.Contains(errs[0], "Bun runtime requires bun config") {
+			t.Errorf("unexpected error: %q", errs[0])
+		}
+	})
+
+	t.Run("bun requires pinned pnpm", func(t *testing.T) {
+		info, _ := LookupRuntimeKind(RuntimeKindBun)
+		errs := info.Validate("rt", RuntimeConfig{
+			Kind: RuntimeKindBun,
+			Bun:  &RuntimeConfigBun{BunVersion: "1.4.1"},
+		})
+		joined := strings.Join(errs, "\n")
+		for _, want := range []string{"bun.pnpmVersion is required", "bun.pnpmHash is required"} {
+			if !strings.Contains(joined, want) {
+				t.Errorf("validation errors %q do not contain %q", joined, want)
+			}
+		}
+	})
+
 	t.Run("go system mode tolerates missing goVersion", func(t *testing.T) {
 		info, _ := LookupRuntimeKind(RuntimeKindGo)
 		errs := info.Validate("rt", RuntimeConfig{Kind: RuntimeKindGo, Mode: RuntimeModeSystem})
@@ -135,7 +170,7 @@ func TestRuntimeKindValidate(t *testing.T) {
 func TestAllRuntimeKinds(t *testing.T) {
 	got := AllRuntimeKinds()
 	slices.Sort(got)
-	want := []RuntimeKind{RuntimeKindGo, RuntimeKindJVM, RuntimeKindNode, RuntimeKindUV}
+	want := []RuntimeKind{RuntimeKindBun, RuntimeKindGo, RuntimeKindJVM, RuntimeKindNode, RuntimeKindUV}
 	slices.Sort(want)
 	if len(got) != len(want) {
 		t.Fatalf("AllRuntimeKinds() = %v, want %v", got, want)

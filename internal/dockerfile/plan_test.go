@@ -25,6 +25,7 @@ func linuxBin(arches map[syslist.ArchType][]string) *binmanager.AppConfigBinary 
 
 func sampleApps() binmanager.MapOfApps {
 	return binmanager.MapOfApps{
+		"biome":      {Bun: &binmanager.AppConfigBun{}},
 		"shellcheck": {Binary: &binmanager.AppConfigBinary{}},
 		"prettier":   {Node: &binmanager.AppConfigNode{}},
 		"ruff":       {Uv: &binmanager.AppConfigUV{}},
@@ -36,6 +37,7 @@ func sampleApps() binmanager.MapOfApps {
 
 func sampleRuntimes() config.MapOfRuntimes {
 	return config.MapOfRuntimes{
+		"bun":  {Kind: config.RuntimeKindBun},
 		"node": {Kind: config.RuntimeKindNode},
 		"uv":   {Kind: config.RuntimeKindUV},
 		"go":   {Kind: config.RuntimeKindGo},
@@ -53,6 +55,7 @@ func TestBuildPlan_Classification(t *testing.T) {
 
 	// App stages are name-sorted.
 	wantApps := []RuntimeAppStage{
+		{App: "biome", Kind: config.RuntimeKindBun, Runtime: "bun"},
 		{App: "golangci", Kind: config.RuntimeKindGo, Runtime: "go"},
 		{App: "ktlint", Kind: config.RuntimeKindJVM, Runtime: "jvm"},
 		{App: "prettier", Kind: config.RuntimeKindNode, Runtime: "node"},
@@ -64,6 +67,7 @@ func TestBuildPlan_Classification(t *testing.T) {
 
 	// Runtime stages are name sorted.
 	wantRuntimes := []RuntimeStage{
+		{Name: "bun", Kind: config.RuntimeKindBun},
 		{Name: "go", Kind: config.RuntimeKindGo},
 		{Name: "jvm", Kind: config.RuntimeKindJVM},
 		{Name: "node", Kind: config.RuntimeKindNode},

@@ -282,6 +282,20 @@ func TestRuntimeHashFoldsSameFieldsForEveryKind(t *testing.T) {
 		fields []fieldCase
 	}{
 		{
+			kind: config.RuntimeKindBun,
+			fields: []fieldCase{
+				{"bunVersion", func(rc *config.RuntimeConfig, v string) {
+					rc.Bun = &config.RuntimeConfigBun{BunVersion: v, PNPMVersion: "11.20.0", PNPMHash: "h"}
+				}},
+				{"pnpmVersion", func(rc *config.RuntimeConfig, v string) {
+					rc.Bun = &config.RuntimeConfigBun{BunVersion: "1.4.1", PNPMVersion: v, PNPMHash: "h"}
+				}},
+				{"pnpmHash", func(rc *config.RuntimeConfig, v string) {
+					rc.Bun = &config.RuntimeConfigBun{BunVersion: "1.4.1", PNPMVersion: "11.20.0", PNPMHash: v}
+				}},
+			},
+		},
+		{
 			kind: config.RuntimeKindUV,
 			fields: []fieldCase{
 				{"pythonVersion", func(rc *config.RuntimeConfig, v string) { rc.UV = &config.RuntimeConfigUV{PythonVersion: v} }},
@@ -465,9 +479,9 @@ func TestCalculateAppHash(t *testing.T) {
 	})
 }
 
-func TestCalculateNodeAppHash(t *testing.T) {
+func TestCalculatePackageAppHash(t *testing.T) {
 	t.Run("basic hash has xxh3-128 length", func(t *testing.T) {
-		hash := calculateNodeAppHash("eslint", "eslint", "9.0.0", "node_modules/.bin/eslint", nil, "rthash", "", "")
+		hash := calculatePackageAppHash("eslint", "eslint", "9.0.0", "node_modules/.bin/eslint", nil, "rthash", "", "")
 		if hash == "" {
 			t.Error("hash is empty")
 		}
@@ -477,34 +491,34 @@ func TestCalculateNodeAppHash(t *testing.T) {
 	})
 
 	t.Run("stable / deterministic", func(t *testing.T) {
-		hash1 := calculateNodeAppHash("eslint", "eslint", "9.0.0", "node_modules/.bin/eslint", nil, "rthash", "", "")
-		hash2 := calculateNodeAppHash("eslint", "eslint", "9.0.0", "node_modules/.bin/eslint", nil, "rthash", "", "")
+		hash1 := calculatePackageAppHash("eslint", "eslint", "9.0.0", "node_modules/.bin/eslint", nil, "rthash", "", "")
+		hash2 := calculatePackageAppHash("eslint", "eslint", "9.0.0", "node_modules/.bin/eslint", nil, "rthash", "", "")
 		if hash1 != hash2 {
 			t.Errorf("hash not deterministic: %q != %q", hash1, hash2)
 		}
 	})
 
 	t.Run("package name affects hash", func(t *testing.T) {
-		hash1 := calculateNodeAppHash("myapp", "pkg-a", "1.0.0", "node_modules/.bin/myapp", nil, "rthash", "", "")
-		hash2 := calculateNodeAppHash("myapp", "pkg-b", "1.0.0", "node_modules/.bin/myapp", nil, "rthash", "", "")
+		hash1 := calculatePackageAppHash("myapp", "pkg-a", "1.0.0", "node_modules/.bin/myapp", nil, "rthash", "", "")
+		hash2 := calculatePackageAppHash("myapp", "pkg-b", "1.0.0", "node_modules/.bin/myapp", nil, "rthash", "", "")
 		if hash1 == hash2 {
 			t.Error("different package names produced same hash")
 		}
 	})
 
 	t.Run("runtime hash affects hash", func(t *testing.T) {
-		hash1 := calculateNodeAppHash("eslint", "eslint", "9.0.0", "node_modules/.bin/eslint", nil, "rthash1", "", "")
-		hash2 := calculateNodeAppHash("eslint", "eslint", "9.0.0", "node_modules/.bin/eslint", nil, "rthash2", "", "")
+		hash1 := calculatePackageAppHash("eslint", "eslint", "9.0.0", "node_modules/.bin/eslint", nil, "rthash1", "", "")
+		hash2 := calculatePackageAppHash("eslint", "eslint", "9.0.0", "node_modules/.bin/eslint", nil, "rthash2", "", "")
 		if hash1 == hash2 {
 			t.Error("different runtime hashes produced same hash")
 		}
 	})
 
 	t.Run("differs from calculateAppHash (the uv/jvm app hasher) with same base inputs", func(t *testing.T) {
-		nodeHash := calculateNodeAppHash("eslint", "eslint", "9.0.0", "node_modules/.bin/eslint", nil, "rthash", "", "")
+		packageHash := calculatePackageAppHash("eslint", "eslint", "9.0.0", "node_modules/.bin/eslint", nil, "rthash", "", "")
 		appHash := calculateAppHash("eslint", "9.0.0", nil, "rthash", "", "")
-		if nodeHash == appHash {
-			t.Error("node app hash should differ from plain app hash due to packageName and binPath inputs")
+		if packageHash == appHash {
+			t.Error("package app hash should differ from plain app hash due to packageName and binPath inputs")
 		}
 	})
 }

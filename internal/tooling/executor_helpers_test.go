@@ -82,6 +82,12 @@ func TestExecutorFormatCommandString(t *testing.T) {
 			args:    []string{"--fix"},
 			want:    "node cli.js --fix",
 		},
+		{
+			name:    "bun type prepends cmdInfo.Args",
+			cmdInfo: &binmanager.CommandInfo{Type: "bun", Command: "bun", Args: []string{"--no-install", "cli.js"}},
+			args:    []string{"--fix"},
+			want:    "bun --no-install cli.js --fix",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

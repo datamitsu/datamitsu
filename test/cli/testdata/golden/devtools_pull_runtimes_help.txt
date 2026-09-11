@@ -1,4 +1,4 @@
-Pull runtime configurations (UV, JVM, Node, Go) with latest versions from upstream.
+Pull runtime configurations (Bun, UV, JVM, Node, Go) with latest versions from upstream.
 
 Fetches latest releases from GitHub, computes SHA-256 hashes, and writes
 the result to the specified file. The Node runtime is pulled as a direct
@@ -7,11 +7,12 @@ unofficial-builds.nodejs.org (musl, unsigned). The Go runtime is pulled as a
 direct archive from go.dev/dl with its published SHA-256 (HTTPS, no GPG).
 
 Requires --update flag to fetch releases (safety guard).
-With --runtime: updates only the specified runtime (uv, jvm, node, or go)
+With --runtime: updates only the specified runtime (bun, uv, jvm, node, or go)
 With --dry-run: shows what would be updated without writing
 
 Example:
   datamitsu devtools pull-runtimes --update config/src/runtimes.json
+  datamitsu devtools pull-runtimes --update --runtime bun config/src/runtimes.json
   datamitsu devtools pull-runtimes --update --runtime uv config/src/runtimes.json
   datamitsu devtools pull-runtimes --update --runtime node config/src/runtimes.json
   datamitsu devtools pull-runtimes --update --runtime go config/src/runtimes.json
@@ -24,7 +25,7 @@ Flags:
       --dry-run          Show what would be updated without writing files
   -h, --help             help for pull-runtimes
       --min-age int      Minimum release age in minutes before a version is eligible (-1 = use global default of 10080, 0 = disable age filtering, positive = custom) (default -1)
-      --runtime string   Update only the specified runtime (uv, jvm, node, or go)
+      --runtime string   Update only the specified runtime (bun, uv, jvm, node, or go)
       --update           Fetch latest versions from upstream before updating
 
 Global Flags:

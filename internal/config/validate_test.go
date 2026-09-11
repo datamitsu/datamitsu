@@ -365,7 +365,7 @@ func TestValidateApps_BinaryAppWithFilesRejected(t *testing.T) {
 	if err == nil {
 		t.Fatal("ValidateApps() expected error for binary app with files/links, got nil")
 	}
-	if !strings.Contains(err.Error(), "files/links/archives are only supported on uv and node apps") {
+	if !strings.Contains(err.Error(), "files/links/archives are only supported on bun, uv, and node apps") {
 		t.Errorf("unexpected error message: %v", err)
 	}
 }
@@ -384,7 +384,7 @@ func TestValidateApps_ShellAppWithFilesRejected(t *testing.T) {
 	if err == nil {
 		t.Fatal("ValidateApps() expected error for shell app with files, got nil")
 	}
-	if !strings.Contains(err.Error(), "files/links/archives are only supported on uv and node apps") {
+	if !strings.Contains(err.Error(), "files/links/archives are only supported on bun, uv, and node apps") {
 		t.Errorf("unexpected error message: %v", err)
 	}
 }
@@ -1103,7 +1103,7 @@ func TestValidateApps_JVM_FilesLinksRejected(t *testing.T) {
 	if err == nil {
 		t.Fatal("ValidateApps() expected error for JVM app with files, got nil")
 	}
-	if !strings.Contains(err.Error(), "files/links/archives are only supported on uv and node apps") {
+	if !strings.Contains(err.Error(), "files/links/archives are only supported on bun, uv, and node apps") {
 		t.Errorf("unexpected error message: %v", err)
 	}
 }
@@ -1692,7 +1692,7 @@ func TestValidateApps_Go_FilesLinksArchivesRejected(t *testing.T) {
 	if err == nil {
 		t.Fatal("ValidateApps() expected error for Go app with files/links, got nil")
 	}
-	if !strings.Contains(err.Error(), "files/links/archives are only supported on uv and node apps") {
+	if !strings.Contains(err.Error(), "files/links/archives are only supported on bun, uv, and node apps") {
 		t.Errorf("unexpected error message: %v", err)
 	}
 }
@@ -2364,7 +2364,7 @@ func TestValidateApps_Archives_BinaryAppRejected(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for binary app with archives")
 	}
-	if !strings.Contains(err.Error(), "files/links/archives are only supported on uv and node apps") {
+	if !strings.Contains(err.Error(), "files/links/archives are only supported on bun, uv, and node apps") {
 		t.Errorf("unexpected error: %v", err)
 	}
 }

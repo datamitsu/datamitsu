@@ -74,7 +74,7 @@ func TestInstallTimeEnvNodeCustom(t *testing.T) {
 	appEnvPath := "/cache/.apps/node/eslint/abc123"
 	custom := map[string]string{"FOO": "${APP_DIR}/bar"}
 
-	reserved := getNodeEnvVars(appEnvPath)
+	reserved := getPNPMEnvVars(appEnvPath)
 	reserved["PATH"] = "/managed/node/bin"
 	merged := mergeInstallEnv(reserved, custom, appEnvPath)
 	result := buildEnvWithOverrides(os.Environ(), merged)
