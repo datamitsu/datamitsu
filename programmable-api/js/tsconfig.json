@@ -11,7 +11,13 @@
     "strict": true,
     "target": "ES2022"
   },
-  "exclude": ["node_modules", "dist", "**/*.test.ts"],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/*.test.ts"
+  ],
   "extends": "@shibanet0/datamitsu-config/tsconfig/base.json",
-  "include": ["src/**/*"]
+  "include": [
+    "src/**/*"
+  ]
 }

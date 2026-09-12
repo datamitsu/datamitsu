@@ -91,8 +91,7 @@ func MaterializeWithOptions(plan Plan, m Manifest, opts Options) error {
 		// live under the previous manifest, so "keeping the previous one" would
 		// be untrue. The stale watch set makes the next invocation rebake, but
 		// the message must not claim nothing happened.
-		var swapped farmSwappedError
-		if errors.As(err, &swapped) {
+		if _, ok := errors.AsType[farmSwappedError](err); ok {
 			warn("datamitsu: source farm replaced but its manifest could not be written; run `datamitsu source refresh --force`: " + err.Error())
 		} else {
 			warn("datamitsu: source farm not updated, keeping the previous one: " + err.Error())

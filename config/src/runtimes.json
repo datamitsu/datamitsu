@@ -1,7 +1,7 @@
 {
   "bun": {
     "bun": {
-      "bunVersion": "1.4.1",
+      "bunVersion": "1.4.2",
       "pnpmRuntime": "pnpm"
     },
     "kind": "bun",
@@ -13,8 +13,8 @@
               "binaryPath": "bun-darwin-x64/bun",
               "contentType": "zip",
               "extractDir": true,
-              "hash": "8f34239f276a3f0d27bfcd1ffecfe5d2127e74fb0aa4c0971a0cdec7b225c965",
-              "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.4.1/bun-darwin-x64.zip"
+              "hash": "80520d7e17526308c9185d261679ac6d27798d3803a0e9f7ff9121ab8affb012",
+              "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.4.2/bun-darwin-x64.zip"
             }
           },
           "arm64": {
@@ -22,8 +22,8 @@
               "binaryPath": "bun-darwin-aarch64/bun",
               "contentType": "zip",
               "extractDir": true,
-              "hash": "d8973ce835fa7867e5cc79afee6fc6f1ae0117aa4bd5fc2546fd00c512f71386",
-              "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.4.1/bun-darwin-aarch64.zip"
+              "hash": "90987a3a16d7db556d886ac3d551e7b6d3edf0a1cf43acaed622e8676be1d12f",
+              "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.4.2/bun-darwin-aarch64.zip"
             }
           }
         },
@@ -33,15 +33,15 @@
               "binaryPath": "bun-linux-x64/bun",
               "contentType": "zip",
               "extractDir": true,
-              "hash": "74c1c3bee7cd998500c8f969cd8972355ac6a07207e94a39eece1999b56ffabf",
-              "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.4.1/bun-linux-x64.zip"
+              "hash": "36368faef7527875d5ffa52e53cd48021741f2a83eb6208a8dd64068d422a913",
+              "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.4.2/bun-linux-x64.zip"
             },
             "musl": {
               "binaryPath": "bun-linux-x64-musl/bun",
               "contentType": "zip",
               "extractDir": true,
-              "hash": "ea116fe09f2f764c87b9bf735225b781d1f7674ca58d66040470f38a7943c8ab",
-              "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.4.1/bun-linux-x64-musl.zip"
+              "hash": "4835eca59d6da70f4674f5642f6e459dcadab773695b2ed9922d131057989742",
+              "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.4.2/bun-linux-x64-musl.zip"
             }
           },
           "arm64": {
@@ -49,15 +49,15 @@
               "binaryPath": "bun-linux-aarch64/bun",
               "contentType": "zip",
               "extractDir": true,
-              "hash": "580ce77533108dc6b10bec1721397e4f5aa44e909726da2451d483dfc5e581d6",
-              "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.4.1/bun-linux-aarch64.zip"
+              "hash": "54328bbc2d9c8e0c9f892c544d66c57a83b84139e34909e5ee81758f1ac8fda7",
+              "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.4.2/bun-linux-aarch64.zip"
             },
             "musl": {
               "binaryPath": "bun-linux-aarch64-musl/bun",
               "contentType": "zip",
               "extractDir": true,
-              "hash": "53895807a00508f70e76715947097aa533ec520aac066501c00fb77d2b1a7a6c",
-              "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.4.1/bun-linux-aarch64-musl.zip"
+              "hash": "71760b6c8ea30623b81a4907cb815d48e2ea266f2e73e751534a44a0607950df",
+              "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.4.2/bun-linux-aarch64-musl.zip"
             }
           }
         },
@@ -67,8 +67,8 @@
               "binaryPath": "bun-windows-x64/bun.exe",
               "contentType": "zip",
               "extractDir": true,
-              "hash": "52b1f3028b01f43d37fefdf669d034a1ee2e0d96c56bb13c393bdaf169b1af84",
-              "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.4.1/bun-windows-x64.zip"
+              "hash": "ce4c17497b2f29712a99d3d53f028de28cd42e3bacb8589599e7f000e49b6405",
+              "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.4.2/bun-windows-x64.zip"
             }
           },
           "arm64": {
@@ -76,8 +76,8 @@
               "binaryPath": "bun-windows-aarch64/bun.exe",
               "contentType": "zip",
               "extractDir": true,
-              "hash": "41ea66155baf0ac1f8545f8d54544bcaf4908104193c5db9aad85d6f53ae1bd7",
-              "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.4.1/bun-windows-aarch64.zip"
+              "hash": "a7a16b876a305fd1029c66dbd27007b4f6112ae896532f675878731a21e50cfd",
+              "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.4.2/bun-windows-aarch64.zip"
             }
           }
         }
@@ -87,7 +87,7 @@
   },
   "go": {
     "go": {
-      "goVersion": "1.26.5"
+      "goVersion": "1.27.1"
     },
     "kind": "go",
     "managed": {
@@ -98,8 +98,8 @@
               "binaryPath": "go/bin/go",
               "contentType": "tar.gz",
               "extractDir": true,
-              "hash": "6231d8d3b8f5552ec6cbf6d685bdd5482e1e703214b120e89b3bf0d7bf1ef725",
-              "url": "https://go.dev/dl/go1.26.5.darwin-amd64.tar.gz"
+              "hash": "8f8f52c6649542cf027bbc9b9c68d1ec042f9f34808a40413f0b8b3f66f3caa4",
+              "url": "https://go.dev/dl/go1.27.1.darwin-amd64.tar.gz"
             }
           },
           "arm64": {
@@ -107,8 +107,8 @@
               "binaryPath": "go/bin/go",
               "contentType": "tar.gz",
               "extractDir": true,
-              "hash": "efb87ff28af9a188d0536ef5d42e63dd52ba8263cd7344a993cc48dd11dedb6a",
-              "url": "https://go.dev/dl/go1.26.5.darwin-arm64.tar.gz"
+              "hash": "ee215d57e0ec269c60cc9ceca68e6bda321ba9ee5afe24f4b0988703c2d87d12",
+              "url": "https://go.dev/dl/go1.27.1.darwin-arm64.tar.gz"
             }
           }
         },
@@ -118,8 +118,8 @@
               "binaryPath": "go/bin/go",
               "contentType": "tar.gz",
               "extractDir": true,
-              "hash": "5c2c3b16caefa1d968a94c1daca04a7ca301a496d9b086e17ad77bb81393f053",
-              "url": "https://go.dev/dl/go1.26.5.linux-amd64.tar.gz"
+              "hash": "63d339f0da5ab53635a56f2490a7984dfe12dfcff22ad749f63edaf590168445",
+              "url": "https://go.dev/dl/go1.27.1.linux-amd64.tar.gz"
             }
           },
           "arm64": {
@@ -127,8 +127,8 @@
               "binaryPath": "go/bin/go",
               "contentType": "tar.gz",
               "extractDir": true,
-              "hash": "fe4789e92b1f33358680864bbe8704289e7bb5fc207d80623c308935bd696d49",
-              "url": "https://go.dev/dl/go1.26.5.linux-arm64.tar.gz"
+              "hash": "3450b45a3f9ee8568792736a5c5e70a1f2e9b36c35a8f74958c03e51d7d92bec",
+              "url": "https://go.dev/dl/go1.27.1.linux-arm64.tar.gz"
             }
           }
         },
@@ -138,8 +138,8 @@
               "binaryPath": "go/bin/go.exe",
               "contentType": "zip",
               "extractDir": true,
-              "hash": "97e6b2a833b6d89f9ff17d25419ac0a7e3b482a044e9ab18cdef834bd834fd38",
-              "url": "https://go.dev/dl/go1.26.5.windows-amd64.zip"
+              "hash": "a3911b5e0e1b1053f25ed0675f4c1c6aad1e2bfcf253df2b9be4caabd2edd95d",
+              "url": "https://go.dev/dl/go1.27.1.windows-amd64.zip"
             }
           },
           "arm64": {
@@ -147,8 +147,8 @@
               "binaryPath": "go/bin/go.exe",
               "contentType": "zip",
               "extractDir": true,
-              "hash": "f96ee46396d69f1e231c8d981ec6a70216238a646a1f2cd74aea0d0016bbc017",
-              "url": "https://go.dev/dl/go1.26.5.windows-arm64.zip"
+              "hash": "13b69b87bb0e83f96bc68560a8cace7f0343b1e03469f1110ea18d17e3234069",
+              "url": "https://go.dev/dl/go1.27.1.windows-arm64.zip"
             }
           }
         }
@@ -166,65 +166,65 @@
         "darwin": {
           "amd64": {
             "unknown": {
-              "binaryPath": "jdk-26.0.2+10/Contents/Home/bin/java",
+              "binaryPath": "jdk-26.0.2.1+1/Contents/Home/bin/java",
               "contentType": "tar.gz",
               "extractDir": true,
-              "hash": "def6874a01072031c2c850b03b4d29d4e97772af7cc2f564f6fae03f98eb6ea9",
-              "url": "https://github.com/adoptium/temurin26-binaries/releases/download/jdk-26.0.2%2B10/OpenJDK26U-jdk_x64_mac_hotspot_26.0.2_10.tar.gz"
+              "hash": "e1b58af4ef2089f6de66bdadd5c77a661adfad8340d5b8e19771a76ab5f02188",
+              "url": "https://github.com/adoptium/temurin26-binaries/releases/download/jdk-26.0.2.1%2B1/OpenJDK26U-jdk_x64_mac_hotspot_26.0.2.1_1.tar.gz"
             }
           },
           "arm64": {
             "unknown": {
-              "binaryPath": "jdk-26.0.2+10/Contents/Home/bin/java",
+              "binaryPath": "jdk-26.0.2.1+1/Contents/Home/bin/java",
               "contentType": "tar.gz",
               "extractDir": true,
-              "hash": "4c9255ed5a9fa84ad6e25675bac6ba6a4906fc7878169d7369a1424157b50256",
-              "url": "https://github.com/adoptium/temurin26-binaries/releases/download/jdk-26.0.2%2B10/OpenJDK26U-jdk_aarch64_mac_hotspot_26.0.2_10.tar.gz"
+              "hash": "8c77a069a150c5b1c80280269ba062463053ebb7619ddef38dcfe3921fc60bdd",
+              "url": "https://github.com/adoptium/temurin26-binaries/releases/download/jdk-26.0.2.1%2B1/OpenJDK26U-jdk_aarch64_mac_hotspot_26.0.2.1_1.tar.gz"
             }
           }
         },
         "linux": {
           "amd64": {
             "glibc": {
-              "binaryPath": "jdk-26.0.2+10/bin/java",
+              "binaryPath": "jdk-26.0.2.1+1/bin/java",
               "contentType": "tar.gz",
               "extractDir": true,
-              "hash": "56f768372f6ca1e2eb4c5f46b78f627949e8dcfe9c9723926cf45a45faf35802",
-              "url": "https://github.com/adoptium/temurin26-binaries/releases/download/jdk-26.0.2%2B10/OpenJDK26U-jdk_x64_linux_hotspot_26.0.2_10.tar.gz"
+              "hash": "451c12e68747bcfa2fb5a2c16b00483fedb9fa6d77bc962d30957f76ac17044d",
+              "url": "https://github.com/adoptium/temurin26-binaries/releases/download/jdk-26.0.2.1%2B1/OpenJDK26U-jdk_x64_linux_hotspot_26.0.2.1_1.tar.gz"
             },
             "musl": {
-              "binaryPath": "jdk-26.0.2+10/bin/java",
+              "binaryPath": "jdk-26.0.2.1+1/bin/java",
               "contentType": "tar.gz",
               "extractDir": true,
-              "hash": "88caf27ab9f2a15a52a114ea18fa20c518ccc325b5ba4bb5fd6c42c56b581498",
-              "url": "https://github.com/adoptium/temurin26-binaries/releases/download/jdk-26.0.2%2B10/OpenJDK26U-jdk_x64_alpine-linux_hotspot_26.0.2_10.tar.gz"
+              "hash": "7f0ebccd9a8b4a554f5caac8768f28ff9d1b1b74367db7d14639b11c9b3d9e41",
+              "url": "https://github.com/adoptium/temurin26-binaries/releases/download/jdk-26.0.2.1%2B1/OpenJDK26U-jdk_x64_alpine-linux_hotspot_26.0.2.1_1.tar.gz"
             }
           },
           "arm64": {
             "glibc": {
-              "binaryPath": "jdk-26.0.2+10/bin/java",
+              "binaryPath": "jdk-26.0.2.1+1/bin/java",
               "contentType": "tar.gz",
               "extractDir": true,
-              "hash": "f82aeb1d5b0ddb93d3bd81c20948bc560c0758993157202424c17e805e2effbb",
-              "url": "https://github.com/adoptium/temurin26-binaries/releases/download/jdk-26.0.2%2B10/OpenJDK26U-jdk_aarch64_linux_hotspot_26.0.2_10.tar.gz"
+              "hash": "9f6ad9856a7dd880061adaf88db3c4da0642113d59b7960a892f0e551c0c948c",
+              "url": "https://github.com/adoptium/temurin26-binaries/releases/download/jdk-26.0.2.1%2B1/OpenJDK26U-jdk_aarch64_linux_hotspot_26.0.2.1_1.tar.gz"
             },
             "musl": {
-              "binaryPath": "jdk-26.0.2+10/bin/java",
+              "binaryPath": "jdk-26.0.2.1+1/bin/java",
               "contentType": "tar.gz",
               "extractDir": true,
-              "hash": "bee481d4ba078ac1aaa741541bb0b99de876d679ccc80f9685710b72bc7b04f1",
-              "url": "https://github.com/adoptium/temurin26-binaries/releases/download/jdk-26.0.2%2B10/OpenJDK26U-jdk_aarch64_alpine-linux_hotspot_26.0.2_10.tar.gz"
+              "hash": "60186535f49539d060d6e523a714f04e32dcc72643d9eba24738e41323fca79d",
+              "url": "https://github.com/adoptium/temurin26-binaries/releases/download/jdk-26.0.2.1%2B1/OpenJDK26U-jdk_aarch64_alpine-linux_hotspot_26.0.2.1_1.tar.gz"
             }
           }
         },
         "windows": {
           "amd64": {
             "unknown": {
-              "binaryPath": "jdk-26.0.2+10/bin/java.exe",
+              "binaryPath": "jdk-26.0.2.1+1/bin/java.exe",
               "contentType": "zip",
               "extractDir": true,
-              "hash": "0b532502e29a5d2babe608069f6df2423ae5e1aa714b715b560217cf8c6ce8ff",
-              "url": "https://github.com/adoptium/temurin26-binaries/releases/download/jdk-26.0.2%2B10/OpenJDK26U-jdk_x64_windows_hotspot_26.0.2_10.zip"
+              "hash": "cf914bf4cc6bf9cedcabec216165bafd10331c5b4d4f2e424b55f6a2e68a1cf5",
+              "url": "https://github.com/adoptium/temurin26-binaries/releases/download/jdk-26.0.2.1%2B1/OpenJDK26U-jdk_x64_windows_hotspot_26.0.2.1_1.zip"
             }
           }
         }
@@ -239,74 +239,74 @@
         "darwin": {
           "amd64": {
             "unknown": {
-              "binaryPath": "node-v26.7.0-darwin-x64/bin/node",
+              "binaryPath": "node-v26.8.2-darwin-x64/bin/node",
               "contentType": "tar.xz",
               "extractDir": true,
-              "hash": "bd19c6b98d923fb049f64b547163b9f7d52ae73f16fdee09ecef9ab248c4d6ff",
-              "url": "https://nodejs.org/dist/v26.7.0/node-v26.7.0-darwin-x64.tar.xz"
+              "hash": "49950999366bf6cd47c8c8fd3593aa82fb5efed494937b380b85677338285ca0",
+              "url": "https://nodejs.org/dist/v26.8.2/node-v26.8.2-darwin-x64.tar.xz"
             }
           },
           "arm64": {
             "unknown": {
-              "binaryPath": "node-v26.7.0-darwin-arm64/bin/node",
+              "binaryPath": "node-v26.8.2-darwin-arm64/bin/node",
               "contentType": "tar.xz",
               "extractDir": true,
-              "hash": "595d2f934e081b82961d1a5fd41c6dbd0c5a952d9e8be5b4566ab754426968d2",
-              "url": "https://nodejs.org/dist/v26.7.0/node-v26.7.0-darwin-arm64.tar.xz"
+              "hash": "f58e5044b938a3174184de4aaf1d2bbfcfff812e88220ff08e9221c09f5c8677",
+              "url": "https://nodejs.org/dist/v26.8.2/node-v26.8.2-darwin-arm64.tar.xz"
             }
           }
         },
         "linux": {
           "amd64": {
             "glibc": {
-              "binaryPath": "node-v26.7.0-linux-x64/bin/node",
+              "binaryPath": "node-v26.8.2-linux-x64/bin/node",
               "contentType": "tar.xz",
               "extractDir": true,
-              "hash": "982aa24dd8be4c889c6a8ab337ddff3b0896645b20f4239356e80552c16277ee",
-              "url": "https://nodejs.org/dist/v26.7.0/node-v26.7.0-linux-x64.tar.xz"
+              "hash": "40e1d3225c1c9ae9a2671c98ecb9857e4d5555026394f348645676798840d5c5",
+              "url": "https://nodejs.org/dist/v26.8.2/node-v26.8.2-linux-x64.tar.xz"
             },
             "musl": {
-              "binaryPath": "node-v26.7.0-linux-x64-musl/bin/node",
+              "binaryPath": "node-v26.8.2-linux-x64-musl/bin/node",
               "contentType": "tar.xz",
               "extractDir": true,
-              "hash": "0608f9dcffe4daeef082255f5cba6047c7b82eb57a7ab168a0e9bd459823f74b",
-              "url": "https://unofficial-builds.nodejs.org/download/release/v26.7.0/node-v26.7.0-linux-x64-musl.tar.xz"
+              "hash": "d01f7592fa45b2af77ce5d1be23ba5095992f3ca870cfcbc5e0548d7cba9540c",
+              "url": "https://unofficial-builds.nodejs.org/download/release/v26.8.2/node-v26.8.2-linux-x64-musl.tar.xz"
             }
           },
           "arm64": {
             "glibc": {
-              "binaryPath": "node-v26.7.0-linux-arm64/bin/node",
+              "binaryPath": "node-v26.8.2-linux-arm64/bin/node",
               "contentType": "tar.xz",
               "extractDir": true,
-              "hash": "afc7a004018485092ac8985b817b0d5684472bd9472e0b57d2ab88737e50090d",
-              "url": "https://nodejs.org/dist/v26.7.0/node-v26.7.0-linux-arm64.tar.xz"
+              "hash": "81d8f0fdea9dcd3bfdcfeafc5f8359c151f097e9880b0007c0645ca670d07971",
+              "url": "https://nodejs.org/dist/v26.8.2/node-v26.8.2-linux-arm64.tar.xz"
             },
             "musl": {
-              "binaryPath": "node-v26.7.0-linux-arm64-musl/bin/node",
+              "binaryPath": "node-v26.8.2-linux-arm64-musl/bin/node",
               "contentType": "tar.xz",
               "extractDir": true,
-              "hash": "54392f06e0f2b21502d685ca5667ef0d96ea302ee56af12fb1a46e574e6931b0",
-              "url": "https://unofficial-builds.nodejs.org/download/release/v26.7.0/node-v26.7.0-linux-arm64-musl.tar.xz"
+              "hash": "6f8e4d950fc15c74dea36afb5da14695174b19cf123e3798c6f5a24b2afb5336",
+              "url": "https://unofficial-builds.nodejs.org/download/release/v26.8.2/node-v26.8.2-linux-arm64-musl.tar.xz"
             }
           }
         },
         "windows": {
           "amd64": {
             "unknown": {
-              "binaryPath": "node-v26.7.0-win-x64/node.exe",
+              "binaryPath": "node-v26.8.2-win-x64/node.exe",
               "contentType": "zip",
               "extractDir": true,
-              "hash": "d3bd72755141ed32bbcd841228ee81897c8a98d50dfa7dae2179399a0a7c90f8",
-              "url": "https://nodejs.org/dist/v26.7.0/node-v26.7.0-win-x64.zip"
+              "hash": "cf02f5d0c06c794b84f277177d5cf3743d0924ca49f6641cd435dd7cb6ee9085",
+              "url": "https://nodejs.org/dist/v26.8.2/node-v26.8.2-win-x64.zip"
             }
           },
           "arm64": {
             "unknown": {
-              "binaryPath": "node-v26.7.0-win-arm64/node.exe",
+              "binaryPath": "node-v26.8.2-win-arm64/node.exe",
               "contentType": "zip",
               "extractDir": true,
-              "hash": "be8775204cfceca5a73c30f91bf0de5e85274c01b776dc13f16b91aa251ebb01",
-              "url": "https://nodejs.org/dist/v26.7.0/node-v26.7.0-win-arm64.zip"
+              "hash": "a4e8362e268f1fcf1735f046e0adb088b28eeb400fb1c33fe5cc94d1a3d42570",
+              "url": "https://nodejs.org/dist/v26.8.2/node-v26.8.2-win-arm64.zip"
             }
           }
         }
@@ -314,7 +314,7 @@
     },
     "mode": "managed",
     "node": {
-      "nodeVersion": "26.7.0",
+      "nodeVersion": "26.8.2",
       "pnpmRuntime": "pnpm"
     }
   },
@@ -412,16 +412,16 @@
             "unknown": {
               "binaryPath": "uv",
               "contentType": "tar.gz",
-              "hash": "69d9f9a00337f25a50dcb13882052da08b8469bac11091c98c5694c3c6721467",
-              "url": "https://github.com/astral-sh/uv/releases/download/0.12.1/uv-x86_64-apple-darwin.tar.gz"
+              "hash": "5296d5aa2b9143360405eea866f8ef4d5dc8986b164eb0dc35e8f876a9304d30",
+              "url": "https://github.com/astral-sh/uv/releases/download/0.12.10/uv-x86_64-apple-darwin.tar.gz"
             }
           },
           "arm64": {
             "unknown": {
               "binaryPath": "uv",
               "contentType": "tar.gz",
-              "hash": "77d2906988e8074fd43f2f329ec452ebbf9b0c257ba1c66451c71de70a6baf42",
-              "url": "https://github.com/astral-sh/uv/releases/download/0.12.1/uv-aarch64-apple-darwin.tar.gz"
+              "hash": "51c6170e8e3a01cef9f33b94f582b7b81ac65046f55d40afb35f9cff5a68c179",
+              "url": "https://github.com/astral-sh/uv/releases/download/0.12.10/uv-aarch64-apple-darwin.tar.gz"
             }
           }
         },
@@ -430,28 +430,28 @@
             "glibc": {
               "binaryPath": "uv",
               "contentType": "tar.gz",
-              "hash": "90b2f223fb69d19db49e117da601f64978593417988530aa733d456141b4bcbb",
-              "url": "https://github.com/astral-sh/uv/releases/download/0.12.1/uv-x86_64-unknown-linux-gnu.tar.gz"
+              "hash": "173d95a0c32d18c896c46ba6fafbf3cf9c14ab74b033f81b76c883ef492a976b",
+              "url": "https://github.com/astral-sh/uv/releases/download/0.12.10/uv-x86_64-unknown-linux-gnu.tar.gz"
             },
             "musl": {
               "binaryPath": "uv",
               "contentType": "tar.gz",
-              "hash": "47823f814693bab8623308341369190de30b5c621eec5b1ee20352eae8c7982c",
-              "url": "https://github.com/astral-sh/uv/releases/download/0.12.1/uv-x86_64-unknown-linux-musl.tar.gz"
+              "hash": "848d0e261119e5b8f35db10164635e46a48bec29ceb1f8ec14a6fc76004973ee",
+              "url": "https://github.com/astral-sh/uv/releases/download/0.12.10/uv-x86_64-unknown-linux-musl.tar.gz"
             }
           },
           "arm64": {
             "glibc": {
               "binaryPath": "uv",
               "contentType": "tar.gz",
-              "hash": "769d373e146692c639b5fbaae33b331c297a32e03d30448772051902df52bbf4",
-              "url": "https://github.com/astral-sh/uv/releases/download/0.12.1/uv-aarch64-unknown-linux-gnu.tar.gz"
+              "hash": "9ff6b9d4665edcdd3a88dcc73cd1eb641754deb927f14e8c62ebfde6bf4f5f5e",
+              "url": "https://github.com/astral-sh/uv/releases/download/0.12.10/uv-aarch64-unknown-linux-gnu.tar.gz"
             },
             "musl": {
               "binaryPath": "uv",
               "contentType": "tar.gz",
-              "hash": "ce218dad9eb48a39dd86160bec6291fac7275f20a9cabcc4bc10dd2c757208f8",
-              "url": "https://github.com/astral-sh/uv/releases/download/0.12.1/uv-aarch64-unknown-linux-musl.tar.gz"
+              "hash": "3983cb642fae84eab33756109bb266f126eb61763d8d220dd662af589c5b3da5",
+              "url": "https://github.com/astral-sh/uv/releases/download/0.12.10/uv-aarch64-unknown-linux-musl.tar.gz"
             }
           }
         },
@@ -460,16 +460,16 @@
             "unknown": {
               "binaryPath": "uv.exe",
               "contentType": "zip",
-              "hash": "8fcb0cb46e1229065e344758980924e569bef5882ef45f46fada8fb24e06b74a",
-              "url": "https://github.com/astral-sh/uv/releases/download/0.12.1/uv-x86_64-pc-windows-msvc.zip"
+              "hash": "f65744f94072152b1f86ba2aace4d01f1124d9a8ecb235805039e3718c36cac2",
+              "url": "https://github.com/astral-sh/uv/releases/download/0.12.10/uv-x86_64-pc-windows-msvc.zip"
             }
           },
           "arm64": {
             "unknown": {
               "binaryPath": "uv.exe",
               "contentType": "zip",
-              "hash": "9bc7c18e616230fa2dc6fb24bc3afde18a95c2b5c9433de747e9502c66041568",
-              "url": "https://github.com/astral-sh/uv/releases/download/0.12.1/uv-aarch64-pc-windows-msvc.zip"
+              "hash": "ee985c51c0c9c1f82267a5d80f959b34a7ff888c109182bd3b2b35c4661bbcde",
+              "url": "https://github.com/astral-sh/uv/releases/download/0.12.10/uv-aarch64-pc-windows-msvc.zip"
             }
           }
         }
@@ -477,7 +477,7 @@
     },
     "mode": "managed",
     "uv": {
-      "pythonVersion": "3.14.6"
+      "pythonVersion": "3.14.7"
     }
   }
 }

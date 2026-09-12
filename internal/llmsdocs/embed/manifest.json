@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 53,
-  "pageSetHash": "571d29b35a3a113e25811f2345b633b1",
+  "pageSetHash": "1f98ce1571becb8cc24d3389225c2a33",
   "pages": [
     {
       "slug": "about",
@@ -31,8 +31,8 @@
       "url": "https://datamitsu.com/docs/contributing/creating-wrappers.md",
       "title": "Creating Wrapper Packages",
       "description": "Build your own datamitsu config distribution package for your team or organization",
-      "bytes": 15809,
-      "contentHash": "3b1a4137a32aad46e218f7c7ad6b5b06"
+      "bytes": 15781,
+      "contentHash": "f4c2e0e9a9cbb8361d439809826236e8"
     },
     {
       "slug": "contributing",

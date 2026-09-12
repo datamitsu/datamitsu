@@ -233,8 +233,7 @@ func Execute() {
 		// keeps exiting 1 unless it says otherwise, so existing pipelines are
 		// unaffected.
 		code := 1
-		var coded CodedError
-		if errors.As(err, &coded) {
+		if coded, ok := errors.AsType[CodedError](err); ok {
 			code = coded.ExitCode()
 		}
 

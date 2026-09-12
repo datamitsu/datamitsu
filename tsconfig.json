@@ -3,5 +3,7 @@
     "rootDir": "."
   },
   "extends": "@shibanet0/datamitsu-config/tsconfig/base.json",
-  "include": ["eslint.config.mjs"]
+  "include": [
+    "eslint.config.mjs"
+  ]
 }

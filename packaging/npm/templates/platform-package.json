@@ -3,13 +3,23 @@
   "bugs": {
     "url": "https://github.com/datamitsu/datamitsu/issues"
   },
-  "cpu": ["{{ARCH}}"],
+  "cpu": [
+    "{{ARCH}}"
+  ],
   "description": "The {{OS_NAME}} {{ARCH_NAME}} binary for datamitsu, configuration management and binary distribution tool",
   "homepage": "https://github.com/datamitsu/datamitsu#readme",
-  "keywords": ["datamitsu", "config", "binary", "tools", "linter"],
+  "keywords": [
+    "datamitsu",
+    "config",
+    "binary",
+    "tools",
+    "linter"
+  ],
   "license": "MIT",
   "name": "@datamitsu/datamitsu-{{PLATFORM}}-{{ARCH}}",
-  "os": ["{{PLATFORM}}"],
+  "os": [
+    "{{PLATFORM}}"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/datamitsu/datamitsu.git"

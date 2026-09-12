@@ -749,7 +749,6 @@ func TestConvertGojaValueCircularReference(t *testing.T) {
 	script := `
 		const obj = {};
 		obj.self = obj;
-		obj;
 	`
 
 	val, err := engine.vm.RunString(script)
