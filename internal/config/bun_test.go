@@ -14,8 +14,7 @@ func validBunRuntime() RuntimeConfig {
 		System: &RuntimeConfigSystem{Command: "bun"},
 		Bun: &RuntimeConfigBun{
 			BunVersion:  "1.4.1",
-			PNPMVersion: "11.20.0",
-			PNPMHash:    strings.Repeat("a", 64),
+			PNPMRuntime: "pnpm",
 		},
 	}
 }
@@ -90,7 +89,7 @@ func TestValidateBunAppRejectsRuntimeKindMismatch(t *testing.T) {
 		},
 	}
 	runtimes := MapOfRuntimes{
-		"node": {Kind: RuntimeKindNode, Mode: RuntimeModeSystem, System: &RuntimeConfigSystem{Command: "node"}, Node: &RuntimeConfigNode{NodeVersion: "26", PNPMVersion: "11", PNPMHash: strings.Repeat("a", 64)}},
+		"node": {Kind: RuntimeKindNode, Mode: RuntimeModeSystem, System: &RuntimeConfigSystem{Command: "node"}, Node: &RuntimeConfigNode{NodeVersion: "26", PNPMRuntime: "pnpm"}},
 	}
 	_, err := ValidateApps(apps, runtimes)
 	if err == nil || !strings.Contains(err.Error(), `expected "bun"`) {

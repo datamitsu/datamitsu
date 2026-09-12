@@ -8,15 +8,7 @@ version = "0.0.0"
 description = "Configuration management and binary distribution tool. JavaScript-configurable tool orchestration written in Go."
 readme = "README.md"
 requires-python = ">=3.9"
-keywords = [
-  "binary",
-  "config",
-  "datamitsu",
-  "golangci-lint",
-  "lefthook",
-  "linter",
-  "tools"
-]
+keywords = ["binary", "config", "datamitsu", "golangci-lint", "lefthook", "linter", "tools"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",
@@ -49,6 +41,9 @@ Issues = "https://github.com/datamitsu/datamitsu/issues"
 Repository = "https://github.com/datamitsu/datamitsu"
 
 [tool]
+[tool.deptry]
+extend_exclude = ["tests"]
+
 [tool.hatch]
 [tool.hatch.build]
 [tool.hatch.build.hooks]

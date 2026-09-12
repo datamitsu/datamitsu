@@ -23,34 +23,35 @@ func bunSystemRuntime(command string) config.MapOfRuntimes {
 			System: &config.RuntimeConfigSystem{Command: command, SystemVersion: "1.4.1"},
 			Bun: &config.RuntimeConfigBun{
 				BunVersion:  "1.4.1",
-				PNPMVersion: "11.20.0",
-				PNPMHash:    "test-pnpm-hash",
+				PNPMRuntime: testPNPMRuntimeName,
 			},
 		},
+		testPNPMRuntimeName: testPNPMRuntime(),
 	}
 }
 
-func seedBunTestPNPM(t *testing.T) string {
+// useFakePNPM swaps the fixture's pnpm runtime for a system-mode one whose
+// command is script, so an install runs the script instead of downloading
+// pnpm. It returns the script's path.
+func useFakePNPM(t *testing.T, runtimes config.MapOfRuntimes, script string) string {
 	t.Helper()
-	pnpmPath := env.GetPNPMPath(env.GetStorePath(), "11.20.0", "test-pnpm-hash")
-	if err := os.MkdirAll(filepath.Dir(pnpmPath), 0o755); err != nil {
-		t.Fatalf("mkdir pnpm dir: %v", err)
-	}
-	if err := os.WriteFile(pnpmPath, []byte("// fake pnpm\n"), 0o644); err != nil {
+	pnpmPath := filepath.Join(t.TempDir(), "pnpm")
+	if err := os.WriteFile(pnpmPath, []byte(script), 0o755); err != nil {
 		t.Fatalf("write fake pnpm: %v", err)
 	}
+	runtimes[testPNPMRuntimeName] = systemPNPMRuntime(pnpmPath)
 	return pnpmPath
 }
 
-// fakeBunExecutable stands in for the Bun binary the alias links to: the tests
-// that do not run it only care about its path.
-func fakeBunExecutable(t *testing.T) string {
+// writeFakeBun writes a Bun stand-in that records its arguments in the current
+// directory. The install only reaches it through the `node` alias.
+func writeFakeBun(t *testing.T) string {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "bun")
-	if err := os.WriteFile(path, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+	fakeBun := filepath.Join(t.TempDir(), "bun")
+	if err := os.WriteFile(fakeBun, []byte("#!/bin/sh\nprintf '%s\\n' \"$@\" > bun-args.txt\n"), 0o755); err != nil {
 		t.Fatalf("write fake Bun: %v", err)
 	}
-	return path
+	return fakeBun
 }
 
 func TestResolveBunCommandInfo(t *testing.T) {
@@ -99,28 +100,27 @@ func TestResolveBunCommandInfo(t *testing.T) {
 
 func TestInstallBunAppWithSystemRuntime(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("test uses a POSIX fake Bun executable")
+		t.Skip("test uses POSIX fake pnpm and Bun executables")
 	}
 
 	storeRoot := t.TempDir()
 	t.Setenv("DATAMITSU_CACHE_DIR", storeRoot)
 	t.Setenv("DATAMITSU_OFFLINE", "")
-	pnpmPath := seedBunTestPNPM(t)
-	fakeBun := filepath.Join(t.TempDir(), "bun")
-	script := `#!/bin/sh
+	runtimes := bunSystemRuntime(writeFakeBun(t))
+	// The trailing `node` stands in for a lifecycle script: it must resolve to
+	// Bun through the alias, never to a Node the host happens to have.
+	pnpmPath := useFakePNPM(t, runtimes, `#!/bin/sh
 set -eu
 mkdir -p node_modules/demo
 printf '{}\n' > node_modules/demo/package.json
 printf 'console.log("ok")\n' > node_modules/demo/cli.js
 printf 'lockfileVersion: 9.0\n' > pnpm-lock.yaml
-printf '%s\n' "$@" > bun-args.txt
-printf '%s\n' "${BUN_OPTIONS:-}" > bun-env.txt
-`
-	if err := os.WriteFile(fakeBun, []byte(script), 0o755); err != nil {
-		t.Fatalf("write fake Bun: %v", err)
-	}
+printf '%s\n' "$0" "$@" > pnpm-args.txt
+printf '%s\n' "${BUN_OPTIONS:-}" > pnpm-env.txt
+node lifecycle-probe
+`)
+	rm := New(runtimes)
 
-	rm := New(bunSystemRuntime(fakeBun))
 	app := &binmanager.AppConfigBun{
 		PackageName: "demo",
 		Version:     "1.0.0",
@@ -142,24 +142,30 @@ printf '%s\n' "${BUN_OPTIONS:-}" > bun-env.txt
 	if _, err := os.Stat(bunNodeAliasPath(appPath)); err != nil {
 		t.Errorf("Bun node alias was not installed: %v", err)
 	}
-	args, err := os.ReadFile(filepath.Join(appPath, "bun-args.txt"))
+
+	raw, err := os.ReadFile(filepath.Join(appPath, "pnpm-args.txt"))
 	if err != nil {
-		t.Fatalf("read fake Bun args: %v", err)
+		t.Fatalf("read fake pnpm args: %v", err)
 	}
-	for _, want := range []string{"--config=" + os.DevNull, "--no-env-file", "run", "--bun", "--no-install", pnpmPath, "install", "--reporter=ndjson"} {
-		if !strings.Contains(string(args), want) {
-			t.Errorf("install args %q do not contain %q", args, want)
-		}
+	args := strings.Split(strings.TrimSpace(string(raw)), "\n")
+	if want := []string{pnpmPath, "install", "--reporter=ndjson"}; !slices.Equal(args, want) {
+		t.Errorf("pnpm invocation = %q, want the pnpm runtime's command run directly as %q", args, want)
 	}
-	if strings.Contains(string(args), "--frozen-lockfile") {
-		t.Errorf("lockfile generation install unexpectedly used --frozen-lockfile: %q", args)
-	}
-	guards, err := os.ReadFile(filepath.Join(appPath, "bun-env.txt"))
+
+	bunArgs, err := os.ReadFile(filepath.Join(appPath, "bun-args.txt"))
 	if err != nil {
-		t.Fatalf("read installer BUN_OPTIONS: %v", err)
+		t.Fatalf("a lifecycle `node` did not reach Bun through the alias: %v", err)
+	}
+	if strings.TrimSpace(string(bunArgs)) != "lifecycle-probe" {
+		t.Errorf("Bun args = %q, want the lifecycle script's arguments", bunArgs)
+	}
+
+	guards, err := os.ReadFile(filepath.Join(appPath, "pnpm-env.txt"))
+	if err != nil {
+		t.Fatalf("read the installer's BUN_OPTIONS: %v", err)
 	}
 	if strings.TrimSpace(string(guards)) != bunGuardOptions {
-		t.Errorf("installer BUN_OPTIONS = %q, want %q", strings.TrimSpace(string(guards)), bunGuardOptions)
+		t.Errorf("installer BUN_OPTIONS = %q, want %q, which every Bun child inherits", strings.TrimSpace(string(guards)), bunGuardOptions)
 	}
 }
 
@@ -168,7 +174,7 @@ printf '%s\n' "${BUN_OPTIONS:-}" > bun-env.txt
 // the executable and not a wrapper that runs it under Bun's own name.
 func TestWriteBunNodeAliasKeepsNodeArgv0(t *testing.T) {
 	appEnvPath := t.TempDir()
-	target := fakeBunExecutable(t)
+	target := writeFakeBun(t)
 
 	if err := writeBunNodeAlias(appEnvPath, target); err != nil {
 		t.Fatalf("writeBunNodeAlias() error = %v", err)
@@ -216,7 +222,7 @@ func TestWriteBunNodeAliasResolvesSystemCommand(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("test uses a POSIX fake Bun executable")
 	}
-	target := fakeBunExecutable(t)
+	target := writeFakeBun(t)
 	t.Setenv("PATH", filepath.Dir(target))
 
 	appEnvPath := t.TempDir()
@@ -236,8 +242,8 @@ func TestWriteBunNodeAliasResolvesSystemCommand(t *testing.T) {
 // environment that still carries the alias of a previous runtime.
 func TestWriteBunNodeAliasReplacesStaleAlias(t *testing.T) {
 	appEnvPath := t.TempDir()
-	previous := fakeBunExecutable(t)
-	current := fakeBunExecutable(t)
+	previous := writeFakeBun(t)
+	current := writeFakeBun(t)
 
 	if err := writeBunNodeAlias(appEnvPath, previous); err != nil {
 		t.Fatalf("writeBunNodeAlias() previous error = %v", err)
@@ -261,30 +267,26 @@ func TestWriteBunNodeAliasReplacesStaleAlias(t *testing.T) {
 
 func TestInstallBunAppUsesFrozenLockfile(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("test uses a POSIX fake Bun executable")
+		t.Skip("test uses POSIX fake pnpm and Bun executables")
 	}
 
 	storeRoot := t.TempDir()
 	t.Setenv("DATAMITSU_CACHE_DIR", storeRoot)
 	t.Setenv("DATAMITSU_OFFLINE", "")
-	seedBunTestPNPM(t)
-	fakeBun := filepath.Join(t.TempDir(), "bun")
-	script := `#!/bin/sh
+	runtimes := bunSystemRuntime(writeFakeBun(t))
+	useFakePNPM(t, runtimes, `#!/bin/sh
 set -eu
 mkdir -p node_modules/demo
 printf '{}\n' > node_modules/demo/package.json
 printf 'console.log("ok")\n' > node_modules/demo/cli.js
-printf '%s\n' "$@" > bun-args.txt
-`
-	if err := os.WriteFile(fakeBun, []byte(script), 0o755); err != nil {
-		t.Fatalf("write fake Bun: %v", err)
-	}
+printf '%s\n' "$@" > pnpm-args.txt
+`)
+	rm := New(runtimes)
 
 	lock, err := CompressLockFile("lockfileVersion: '9.0'\n")
 	if err != nil {
 		t.Fatalf("CompressLockFile() error = %v", err)
 	}
-	rm := New(bunSystemRuntime(fakeBun))
 	app := &binmanager.AppConfigBun{
 		PackageName: "demo",
 		Version:     "1.0.0",
@@ -298,9 +300,9 @@ printf '%s\n' "$@" > bun-args.txt
 	if err != nil {
 		t.Fatalf("resolveBunAppEnvPath() error = %v", err)
 	}
-	args, err := os.ReadFile(filepath.Join(appPath, "bun-args.txt"))
+	args, err := os.ReadFile(filepath.Join(appPath, "pnpm-args.txt"))
 	if err != nil {
-		t.Fatalf("read fake Bun args: %v", err)
+		t.Fatalf("read fake pnpm args: %v", err)
 	}
 	if !strings.Contains(string(args), "--frozen-lockfile") {
 		t.Errorf("install args %q do not contain --frozen-lockfile", args)
@@ -341,7 +343,7 @@ func TestGetCommandInfoBunMergesWorkspaceOnceOnCacheHit(t *testing.T) {
 	if err := os.WriteFile(modulePackageJSON, []byte("{}\n"), 0o644); err != nil {
 		t.Fatalf("write module package.json: %v", err)
 	}
-	if err := writeBunNodeAlias(appEnvPath, fakeBunExecutable(t)); err != nil {
+	if err := writeBunNodeAlias(appEnvPath, writeFakeBun(t)); err != nil {
 		t.Fatalf("write Bun node alias: %v", err)
 	}
 

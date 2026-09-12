@@ -82,56 +82,11 @@ func runInstallCmd(ctx context.Context, cmd *exec.Cmd) error {
 	return nil
 }
 
-// runInstallCmdStreaming runs an install subprocess like runInstallCmd, but
-// streams stdout line by line to onLine (for live progress / event parsing)
-// while capturing stderr for error display. It returns the captured stderr and
-// the run error (with the same context-deadline wrapping as runInstallCmd).
-//
-// stdout is read to EOF before Wait is called (the canonical StdoutPipe order),
-// so onLine sees every line and there is no read/Wait race. stderr is the only
-// writer to the returned buffer and is joined by Wait, so a plain buffer is
-// safe.
-func runInstallCmdStreaming(ctx context.Context, cmd *exec.Cmd, onLine func([]byte)) (string, error) {
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return "", fmt.Errorf("install command stdout pipe: %w", err)
-	}
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-
-	if err := cmd.Start(); err != nil {
-		return stderr.String(), fmt.Errorf("install command failed: %w", err)
-	}
-
-	scanner := bufio.NewScanner(stdout)
-	scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
-	for scanner.Scan() {
-		if onLine != nil {
-			onLine(scanner.Bytes())
-		}
-	}
-	// A line past the scanner's limit ends the loop early. Keep draining, or the
-	// child blocks writing into a full pipe and Wait never returns: progress is
-	// lost from that point, the install is not.
-	if scanner.Err() != nil {
-		_, _ = io.Copy(io.Discard, stdout)
-	}
-
-	runErr := cmd.Wait()
-	if runErr != nil {
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return stderr.String(), fmt.Errorf("%w: %w", ctxErr, runErr)
-		}
-		return stderr.String(), fmt.Errorf("install command failed: %w", runErr)
-	}
-	return stderr.String(), nil
-}
-
-// runInstallCmdStreamingStderr is the mirror of runInstallCmdStreaming for tools
-// (uv) that emit their machine-readable summary on stdout and human progress on
-// stderr: it fully captures stdout (returned for parsing) while streaming stderr
-// line by line to onLine for live progress. Both pipes are drained concurrently
-// to avoid a full-pipe deadlock. The run error carries the same context-deadline
+// runInstallCmdStreamingStderr runs an install subprocess for tools that write
+// their progress stream to stderr (pnpm's ndjson events, uv's human progress):
+// it fully captures stdout (returned for parsing) while streaming stderr line
+// by line to onLine for live progress. Both pipes are drained concurrently to
+// avoid a full-pipe deadlock. The run error carries the same context-deadline
 // wrapping as runInstallCmd.
 func runInstallCmdStreamingStderr(ctx context.Context, cmd *exec.Cmd, onLine func(string)) (stdout, stderr string, err error) {
 	stdoutPipe, perr := cmd.StdoutPipe()
@@ -163,7 +118,9 @@ func runInstallCmdStreamingStderr(ctx context.Context, cmd *exec.Cmd, onLine fun
 			onLine(line)
 		}
 	}
-	// Same as above: a too-long line must not leave the child blocked on stderr.
+	// A line past the scanner's limit ends the loop early. Keep draining, or the
+	// child blocks writing into a full pipe and Wait never returns: progress is
+	// lost from that point, the install is not.
 	if scanner.Err() != nil {
 		_, _ = io.Copy(io.Discard, stderrPipe)
 	}

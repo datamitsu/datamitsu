@@ -157,7 +157,7 @@ func (rm *RuntimeManager) installBunAppOnce(ctx context.Context, appName string,
 		return err
 	}
 	if rc.Bun == nil {
-		return fmt.Errorf("runtime for %q has no bun config (bunVersion/pnpmVersion)", appName)
+		return fmt.Errorf("runtime for %q has no bun config (bunVersion/pnpmRuntime)", appName)
 	}
 
 	return rm.installPNPMAppOnce(ctx, pnpmAppInstallSpec{
@@ -170,8 +170,7 @@ func (rm *RuntimeManager) installBunAppOnce(ctx context.Context, appName string,
 		runtimeKind:    "bun",
 		runtimeName:    runtimeName,
 		runtimeVersion: rc.Bun.BunVersion,
-		pnpmVersion:    rc.Bun.PNPMVersion,
-		pnpmHash:       rc.Bun.PNPMHash,
+		pnpmRuntime:    rc.Bun.PNPMRuntime,
 		appEnvPath:     appEnvPath,
 	}, customEnv, files, archives, mergedWorkspaceYAML)
 }
@@ -212,7 +211,7 @@ func (rm *RuntimeManager) bunCommandInfo(appName string, appConfig *binmanager.A
 		return nil, "", err
 	}
 	if rc.Bun == nil {
-		return nil, "", fmt.Errorf("runtime for %q has no bun config (bunVersion/pnpmVersion)", appName)
+		return nil, "", fmt.Errorf("runtime for %q has no bun config (bunVersion/pnpmRuntime)", appName)
 	}
 	if err := validateRelativePath(appConfig.BinPath); err != nil {
 		return nil, "", fmt.Errorf("app %q: unsafe binPath: %w", appName, err)

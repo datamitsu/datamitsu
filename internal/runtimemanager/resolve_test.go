@@ -602,13 +602,13 @@ func TestResolveCommandInfo_NodeSystemBareCommand(t *testing.T) {
 	t.Setenv("DATAMITSU_OFFLINE", "1")
 
 	rm := New(config.MapOfRuntimes{
+		testPNPMRuntimeName: testPNPMRuntime(),
 		"node": {
 			Kind: config.RuntimeKindNode,
 			Mode: config.RuntimeModeSystem,
 			Node: &config.RuntimeConfigNode{
 				NodeVersion: "26.2.0",
-				PNPMVersion: "11.0.0",
-				PNPMHash:    "0000000000000000000000000000000000000000000000000000000000000000",
+				PNPMRuntime: testPNPMRuntimeName,
 			},
 			System: &config.RuntimeConfigSystem{Command: "node"},
 		},

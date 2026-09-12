@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 53,
-  "pageSetHash": "20308e5952e829081f6a296e84cfd8bb",
+  "pageSetHash": "1f98ce1571becb8cc24d3389225c2a33",
   "pages": [
     {
       "slug": "about",
@@ -31,8 +31,8 @@
       "url": "https://datamitsu.com/docs/contributing/creating-wrappers.md",
       "title": "Creating Wrapper Packages",
       "description": "Build your own datamitsu config distribution package for your team or organization",
-      "bytes": 15809,
-      "contentHash": "3b1a4137a32aad46e218f7c7ad6b5b06"
+      "bytes": 15781,
+      "contentHash": "f4c2e0e9a9cbb8361d439809826236e8"
     },
     {
       "slug": "contributing",
@@ -51,8 +51,8 @@
       "url": "https://datamitsu.com/docs/examples/multiple-versions.md",
       "title": "Multiple Tool Versions",
       "description": "Run multiple versions of the same tool side-by-side in a monorepo using isolated environments",
-      "bytes": 7520,
-      "contentHash": "d8bdb92239acdf2138af49377a0beb12"
+      "bytes": 7660,
+      "contentHash": "661754e2210344869f9bda158510d039"
     },
     {
       "slug": "examples/pnpm-patterns",
@@ -271,8 +271,8 @@
       "url": "https://datamitsu.com/docs/guides/configuration.md",
       "title": "Configuration",
       "description": "How to configure datamitsu with JavaScript config files, remote configs, and config layers",
-      "bytes": 11497,
-      "contentHash": "8a9f8c29f48bcb075522e5761734bef0"
+      "bytes": 11494,
+      "contentHash": "e1211d4acb317e5d7dc6a1b093b224af"
     },
     {
       "slug": "guides/managed-configs",
@@ -307,8 +307,8 @@
       "url": "https://datamitsu.com/docs/guides/runtime-management.md",
       "title": "Runtime Management",
       "description": "Managing Bun, UV (Python), Node.js, JVM, and Go runtimes with datamitsu",
-      "bytes": 15834,
-      "contentHash": "f09554587163b9e03ac42fd576bb379b"
+      "bytes": 18956,
+      "contentHash": "33fbb3165062458457b7a2410d76a5c7"
     },
     {
       "slug": "guides/source-mode",
@@ -325,8 +325,8 @@
       "url": "https://datamitsu.com/docs/guides/supply-chain-security.md",
       "title": "Supply Chain Security",
       "description": "How datamitsu enforces supply chain integrity for Bun, pnpm, UV, and Go dependencies",
-      "bytes": 19631,
-      "contentHash": "90dae75b72ea974ddabb5c2ffe8b976b"
+      "bytes": 20566,
+      "contentHash": "92ac4981e642b439d2fdc58fa842f78b"
     },
     {
       "slug": "guides/tooling-system",
@@ -379,8 +379,8 @@
       "url": "https://datamitsu.com/docs/how-to/maintain-wrapper.md",
       "title": "Maintaining Wrapper Packages",
       "description": "Workflows for keeping wrapper package tool versions, runtimes, and hashes up to date using devtools commands",
-      "bytes": 29281,
-      "contentHash": "72cf98a1d85a00c19d55c50e7fe74565"
+      "bytes": 30142,
+      "contentHash": "2d21f175df8f978433dac96732f729f6"
     },
     {
       "slug": "how-to/manage-cache",
@@ -433,8 +433,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 70147,
-      "contentHash": "d68f829c997a1fc9590d45292e720106"
+      "bytes": 70578,
+      "contentHash": "c1e52b5ad32d0500ec5f03b0990b32b4"
     },
     {
       "slug": "reference/comparison",
@@ -451,8 +451,8 @@
       "url": "https://datamitsu.com/docs/reference/configuration-api.md",
       "title": "Configuration API",
       "description": "Complete reference for the datamitsu configuration API",
-      "bytes": 55932,
-      "contentHash": "ce24d671c380e9470c8633a38cfeb38d"
+      "bytes": 57275,
+      "contentHash": "ce5c19499f95690bd8b891f95adb6790"
     },
     {
       "slug": "reference/ignore-rules",

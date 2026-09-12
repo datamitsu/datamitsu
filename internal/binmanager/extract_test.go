@@ -1474,11 +1474,18 @@ func writeTgz(t *testing.T, tarData []byte) string {
 	return path
 }
 
-// TestExtractArchiveToDir is the exported entry point pnpm uses to extract its
-// tarball through binmanager's single hardened tar walker. It must extract a
-// normal package layout directly into destDir while skipping path-traversal
-// entries, absolute symlinks, and symlinks that escape destDir.
-func TestExtractArchiveToDir(t *testing.T) {
+// extractFileToDir extracts an archive file straight into destDir through the
+// hardened tar walker.
+func extractFileToDir(archivePath string, format BinContentType, destDir string) error {
+	_, err := extractArchiveToPath(destDir, nil, archivePath, format)
+	return err
+}
+
+// TestExtractArchiveToPath_FileIntoDestDir pins the hardened tar walker on an
+// archive file: a normal package layout lands directly in destDir while
+// path-traversal entries, absolute symlinks, and symlinks that escape destDir
+// are skipped.
+func TestExtractArchiveToPath_FileIntoDestDir(t *testing.T) {
 	t.Run("extracts a normal package layout into destDir", func(t *testing.T) {
 		tgz := writeTgz(t, makeTestTar(t, map[string]string{
 			"package/bin/pnpm.cjs": "#!/usr/bin/env node\nconsole.log('pnpm');",
@@ -1486,8 +1493,8 @@ func TestExtractArchiveToDir(t *testing.T) {
 		}))
 
 		destDir := t.TempDir()
-		if err := ExtractArchiveToDir(tgz, BinContentTypeTarGz, destDir); err != nil {
-			t.Fatalf("ExtractArchiveToDir() error = %v", err)
+		if err := extractFileToDir(tgz, BinContentTypeTarGz, destDir); err != nil {
+			t.Fatalf("extractFileToDir() error = %v", err)
 		}
 
 		if _, err := os.Stat(filepath.Join(destDir, "package", "bin", "pnpm.cjs")); err != nil {
@@ -1504,8 +1511,8 @@ func TestExtractArchiveToDir(t *testing.T) {
 		}))
 
 		destDir := filepath.Join(t.TempDir(), "nested", "pnpm-store")
-		if err := ExtractArchiveToDir(tgz, BinContentTypeTarGz, destDir); err != nil {
-			t.Fatalf("ExtractArchiveToDir() error = %v", err)
+		if err := extractFileToDir(tgz, BinContentTypeTarGz, destDir); err != nil {
+			t.Fatalf("extractFileToDir() error = %v", err)
 		}
 		if _, err := os.Stat(filepath.Join(destDir, "package", "bin", "pnpm.cjs")); err != nil {
 			t.Errorf("file not extracted into freshly created destDir: %v", err)
@@ -1523,8 +1530,8 @@ func TestExtractArchiveToDir(t *testing.T) {
 		tgz := writeTgz(t, buf.Bytes())
 
 		destDir := t.TempDir()
-		if err := ExtractArchiveToDir(tgz, BinContentTypeTarGz, destDir); err != nil {
-			t.Fatalf("ExtractArchiveToDir() error = %v (expected skip, not error)", err)
+		if err := extractFileToDir(tgz, BinContentTypeTarGz, destDir); err != nil {
+			t.Fatalf("extractFileToDir() error = %v (expected skip, not error)", err)
 		}
 
 		if _, err := os.Stat(filepath.Join(filepath.Dir(destDir), "escape.txt")); !os.IsNotExist(err) {
@@ -1543,8 +1550,8 @@ func TestExtractArchiveToDir(t *testing.T) {
 		tgz := writeTgz(t, buf.Bytes())
 
 		destDir := t.TempDir()
-		if err := ExtractArchiveToDir(tgz, BinContentTypeTarGz, destDir); err != nil {
-			t.Fatalf("ExtractArchiveToDir() error = %v (expected skip, not error)", err)
+		if err := extractFileToDir(tgz, BinContentTypeTarGz, destDir); err != nil {
+			t.Fatalf("extractFileToDir() error = %v (expected skip, not error)", err)
 		}
 		if _, err := os.Lstat(filepath.Join(destDir, "abslink")); !os.IsNotExist(err) {
 			t.Error("absolute symlink should have been skipped")
@@ -1559,8 +1566,8 @@ func TestExtractArchiveToDir(t *testing.T) {
 		tgz := writeTgz(t, buf.Bytes())
 
 		destDir := t.TempDir()
-		if err := ExtractArchiveToDir(tgz, BinContentTypeTarGz, destDir); err != nil {
-			t.Fatalf("ExtractArchiveToDir() error = %v (expected skip, not error)", err)
+		if err := extractFileToDir(tgz, BinContentTypeTarGz, destDir); err != nil {
+			t.Fatalf("extractFileToDir() error = %v (expected skip, not error)", err)
 		}
 		if _, err := os.Lstat(filepath.Join(destDir, "link")); !os.IsNotExist(err) {
 			t.Error("escaping symlink should have been skipped")
@@ -1568,7 +1575,7 @@ func TestExtractArchiveToDir(t *testing.T) {
 	})
 
 	t.Run("nonexistent archive errors", func(t *testing.T) {
-		if err := ExtractArchiveToDir("/nonexistent/archive.tgz", BinContentTypeTarGz, t.TempDir()); err == nil {
+		if err := extractFileToDir("/nonexistent/archive.tgz", BinContentTypeTarGz, t.TempDir()); err == nil {
 			t.Error("expected error for nonexistent archive")
 		}
 	})

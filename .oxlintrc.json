@@ -4,8 +4,14 @@
     "correctness": "error",
     "pedantic": "error",
     "perf": "error",
-    "style": "warn",
+    "restriction": "error",
+    "style": "error",
     "suspicious": "error"
   },
-  "extends": ["./.datamitsu/.oxlintrc.json"]
+  "extends": [
+    "./.datamitsu/.oxlintrc.json"
+  ],
+  "rules": {
+    "unicorn/prefer-includes": "off"
+  }
 }

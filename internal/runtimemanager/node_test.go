@@ -98,13 +98,13 @@ func nodeRuntimeWith(t *testing.T, url, hash string, libcKeys ...string) config.
 			Mode: config.RuntimeModeManaged,
 			Node: &config.RuntimeConfigNode{
 				NodeVersion: "26.2.0",
-				PNPMVersion: "11.0.0",
-				PNPMHash:    "0000000000000000000000000000000000000000000000000000000000000000",
+				PNPMRuntime: testPNPMRuntimeName,
 			},
 			Managed: &config.RuntimeConfigManaged{
 				Binaries: binmanager.MapOfBinaries{osType: {archType: libcMap}},
 			},
 		},
+		testPNPMRuntimeName: testPNPMRuntime(),
 	}
 }
 
@@ -231,8 +231,9 @@ func TestCollectRequiredRuntimesNode(t *testing.T) {
 		"node": {
 			Kind: config.RuntimeKindNode,
 			Mode: config.RuntimeModeManaged,
-			Node: &config.RuntimeConfigNode{NodeVersion: "26.2.0", PNPMVersion: "11.0.0", PNPMHash: "h"},
+			Node: &config.RuntimeConfigNode{NodeVersion: "26.2.0", PNPMRuntime: testPNPMRuntimeName},
 		},
+		testPNPMRuntimeName: testPNPMRuntime(),
 	}
 
 	nodeApp := func(required bool, runtimeRef string) binmanager.App {
@@ -247,19 +248,20 @@ func TestCollectRequiredRuntimesNode(t *testing.T) {
 		}
 	}
 
+	// A node runtime always brings the pnpm runtime that installs its apps.
 	t.Run("required node app collects default node runtime", func(t *testing.T) {
 		apps := binmanager.MapOfApps{"eslint": nodeApp(true, "")}
 		result := CollectRequiredRuntimes(apps, runtimes, false)
-		if len(result) != 1 || result[0] != "node" {
-			t.Fatalf("expected [node], got %v", result)
+		if want := []string{"node", testPNPMRuntimeName}; !equalStringSlices(result, want) {
+			t.Fatalf("expected %v, got %v", want, result)
 		}
 	})
 
 	t.Run("node app with explicit runtime ref", func(t *testing.T) {
 		apps := binmanager.MapOfApps{"eslint": nodeApp(true, "node")}
 		result := CollectRequiredRuntimes(apps, runtimes, false)
-		if len(result) != 1 || result[0] != "node" {
-			t.Fatalf("expected [node], got %v", result)
+		if want := []string{"node", testPNPMRuntimeName}; !equalStringSlices(result, want) {
+			t.Fatalf("expected %v, got %v", want, result)
 		}
 	})
 
@@ -277,11 +279,8 @@ func TestCollectRequiredRuntimesNode(t *testing.T) {
 			"eslint":   nodeApp(true, "node"),
 		}
 		result := CollectRequiredRuntimes(apps, runtimes, false)
-		if len(result) != 2 {
-			t.Fatalf("expected 2 runtimes, got %v", result)
-		}
-		if result[0] != "node" || result[1] != "uv" {
-			t.Errorf("expected sorted [node uv], got %v", result)
+		if want := []string{"node", testPNPMRuntimeName, "uv"}; !equalStringSlices(result, want) {
+			t.Errorf("expected sorted %v, got %v", want, result)
 		}
 	})
 }
@@ -535,10 +534,11 @@ func TestInstallNodeApp_AlreadyInstalled(t *testing.T) {
 	osType, _ := syslist.GetOsTypeFromString(runtime.GOOS)
 	archType, _ := syslist.GetArchTypeFromString(runtime.GOARCH)
 	runtimes := config.MapOfRuntimes{
+		testPNPMRuntimeName: testPNPMRuntime(),
 		"node": {
 			Kind: config.RuntimeKindNode,
 			Mode: config.RuntimeModeManaged,
-			Node: &config.RuntimeConfigNode{NodeVersion: "26.2.0", PNPMVersion: "11.0.0", PNPMHash: "deadbeef"},
+			Node: &config.RuntimeConfigNode{NodeVersion: "26.2.0", PNPMRuntime: testPNPMRuntimeName},
 			Managed: &config.RuntimeConfigManaged{
 				Binaries: binmanager.MapOfBinaries{
 					osType: {
@@ -600,10 +600,11 @@ func nodeReinstallRuntimes(t *testing.T, url, hash string) config.MapOfRuntimes 
 	osType, _ := syslist.GetOsTypeFromString(runtime.GOOS)
 	archType, _ := syslist.GetArchTypeFromString(runtime.GOARCH)
 	return config.MapOfRuntimes{
+		testPNPMRuntimeName: testPNPMRuntime(),
 		"node": {
 			Kind: config.RuntimeKindNode,
 			Mode: config.RuntimeModeManaged,
-			Node: &config.RuntimeConfigNode{NodeVersion: "26.2.0", PNPMVersion: "11.0.0", PNPMHash: "deadbeef"},
+			Node: &config.RuntimeConfigNode{NodeVersion: "26.2.0", PNPMRuntime: testPNPMRuntimeName},
 			Managed: &config.RuntimeConfigManaged{
 				Binaries: binmanager.MapOfBinaries{
 					osType: {
@@ -765,10 +766,11 @@ func TestGetCommandInfoNode_MergesWorkspaceOnceOnCacheHit(t *testing.T) {
 	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 
 	runtimes := config.MapOfRuntimes{
+		testPNPMRuntimeName: testPNPMRuntime(),
 		"node": {
 			Kind:   config.RuntimeKindNode,
 			Mode:   config.RuntimeModeSystem,
-			Node:   &config.RuntimeConfigNode{NodeVersion: "26.2.0", PNPMVersion: "11.0.0", PNPMHash: "deadbeef"},
+			Node:   &config.RuntimeConfigNode{NodeVersion: "26.2.0", PNPMRuntime: testPNPMRuntimeName},
 			System: &config.RuntimeConfigSystem{Command: filepath.Join(t.TempDir(), "bin", "node")},
 		},
 	}

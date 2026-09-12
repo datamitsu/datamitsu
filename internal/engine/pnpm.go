@@ -8,7 +8,7 @@ import (
 
 // initPNPMWorkspaceDefaults injects pnpmWorkspaceDefaults as a JS global so
 // the bundled config.js (and downstream user configs) can read the recommended
-// pnpm 11 workspace security defaults from Go without redefining them.
+// pnpm workspace security defaults from Go without redefining them.
 //
 // The injected object is built from a fresh map with sorted keys (so
 // YAML.stringify produces deterministic output across runs) and deep-frozen

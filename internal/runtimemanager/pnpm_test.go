@@ -2,533 +2,411 @@ package runtimemanager
 
 import (
 	"archive/tar"
+	"bytes"
 	"compress/gzip"
 	"context"
 	"crypto/sha256"
-	"crypto/sha512"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
+	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
-
-	"github.com/datamitsu/datamitsu/internal/env"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/pnpmdefaults"
+	"github.com/datamitsu/datamitsu/internal/syslist"
 	"github.com/goccy/go-yaml"
 )
 
-func createTestTgz(t *testing.T, files map[string]string) string {
+// testPNPMRuntimeName is the pnpm runtime Node and Bun fixtures point at.
+const testPNPMRuntimeName = "pnpm"
+
+// testPNPMRuntime is a managed pnpm runtime shaped like the entry pull-runtimes
+// writes to config/src/runtimes.json.
+func testPNPMRuntime() config.RuntimeConfig {
+	return pnpmRuntimeWithVersion("12.4.1")
+}
+
+func pnpmRuntimeWithVersion(version string) config.RuntimeConfig {
+	return config.RuntimeConfig{
+		Kind:    config.RuntimeKindPNPM,
+		Mode:    config.RuntimeModeManaged,
+		Managed: &config.RuntimeConfigManaged{Binaries: testPNPMBinaries()},
+		PNPM:    &config.RuntimeConfigPNPM{PNPMVersion: version},
+	}
+}
+
+// systemPNPMRuntime is a pnpm runtime that runs command, the way a user relies
+// on the pnpm their host provides.
+func systemPNPMRuntime(command string) config.RuntimeConfig {
+	return config.RuntimeConfig{
+		Kind:   config.RuntimeKindPNPM,
+		Mode:   config.RuntimeModeSystem,
+		System: &config.RuntimeConfigSystem{Command: command},
+		PNPM:   &config.RuntimeConfigPNPM{PNPMVersion: "12.4.1"},
+	}
+}
+
+// testPNPMBinaries is a realistic pnpm binaries map for runtime fixtures: every
+// platform datamitsu pins, each with its own SHA-256, shaped like the entries in
+// config/src/runtimes.json.
+func testPNPMBinaries() binmanager.MapOfBinaries {
+	entry := func(file, binaryPath, hash string, contentType binmanager.BinContentType) binmanager.BinaryOsArchInfo {
+		return binmanager.BinaryOsArchInfo{
+			URL:         "https://github.com/pnpm/pnpm/releases/download/v12.4.1/" + file,
+			Hash:        hash,
+			ContentType: contentType,
+			BinaryPath:  new(binaryPath),
+			ExtractDir:  true,
+		}
+	}
+	tgz, zip := binmanager.BinContentTypeTarGz, binmanager.BinContentTypeZip
+	return binmanager.MapOfBinaries{
+		syslist.OsTypeDarwin: {
+			syslist.ArchTypeAmd64: {"unknown": entry("pnpm-darwin-x64.tar.gz", "pnpm", strings.Repeat("a1", 32), tgz)},
+			syslist.ArchTypeArm64: {"unknown": entry("pnpm-darwin-arm64.tar.gz", "pnpm", strings.Repeat("a2", 32), tgz)},
+		},
+		syslist.OsTypeLinux: {
+			syslist.ArchTypeAmd64: {
+				"glibc": entry("pnpm-linux-x64.tar.gz", "pnpm", strings.Repeat("b1", 32), tgz),
+				"musl":  entry("pnpm-linux-x64-musl.tar.gz", "pnpm", strings.Repeat("b2", 32), tgz),
+			},
+			syslist.ArchTypeArm64: {
+				"glibc": entry("pnpm-linux-arm64.tar.gz", "pnpm", strings.Repeat("b3", 32), tgz),
+				"musl":  entry("pnpm-linux-arm64-musl.tar.gz", "pnpm", strings.Repeat("b4", 32), tgz),
+			},
+		},
+		syslist.OsTypeWindows: {
+			syslist.ArchTypeAmd64: {"unknown": entry("pnpm-win32-x64.zip", "pnpm.exe", strings.Repeat("c1", 32), zip)},
+			syslist.ArchTypeArm64: {"unknown": entry("pnpm-win32-arm64.zip", "pnpm.exe", strings.Repeat("c2", 32), zip)},
+		},
+	}
+}
+
+// hostPNPMRuntime is a managed pnpm runtime pinning one archive for this host's
+// os/arch under the given libc keys.
+func hostPNPMRuntime(t *testing.T, url, hash string, libcKeys ...string) config.RuntimeConfig {
 	t.Helper()
-
-	tmpFile, err := os.CreateTemp(t.TempDir(), "test-*.tgz")
+	osType, err := syslist.GetOsTypeFromString(runtime.GOOS)
 	if err != nil {
-		t.Fatalf("failed to create temp file: %v", err)
+		t.Fatalf("detect os type: %v", err)
 	}
-	defer func() { _ = tmpFile.Close() }()
+	archType, err := syslist.GetArchTypeFromString(runtime.GOARCH)
+	if err != nil {
+		t.Fatalf("detect arch type: %v", err)
+	}
+	libcMap := map[string]binmanager.BinaryOsArchInfo{}
+	for _, k := range libcKeys {
+		libcMap[k] = binmanager.BinaryOsArchInfo{
+			URL:         url,
+			Hash:        hash,
+			ContentType: binmanager.BinContentTypeTarGz,
+			BinaryPath:  new("pnpm"),
+			ExtractDir:  true,
+		}
+	}
+	return config.RuntimeConfig{
+		Kind:    config.RuntimeKindPNPM,
+		Mode:    config.RuntimeModeManaged,
+		Managed: &config.RuntimeConfigManaged{Binaries: binmanager.MapOfBinaries{osType: {archType: libcMap}}},
+		PNPM:    &config.RuntimeConfigPNPM{PNPMVersion: "12.4.1"},
+	}
+}
 
-	gzw := gzip.NewWriter(tmpFile)
+const pnpmStubContent = "#!/bin/sh\necho pnpm-stub\n"
+
+// makePNPMArchive builds a tar.gz laid out like a pnpm 12 release archive: the
+// binary at the root beside dist/, which carries the node-gyp pnpm builds
+// native dependencies with. It returns the bytes and their SHA-256.
+func makePNPMArchive(t *testing.T) ([]byte, string) {
+	t.Helper()
+	var buf bytes.Buffer
+	gzw := gzip.NewWriter(&buf)
 	tw := tar.NewWriter(gzw)
-
-	for name, content := range files {
-		hdr := &tar.Header{
-			Name: name,
-			Mode: 0o644,
-			Size: int64(len(content)),
-		}
+	files := []struct {
+		name string
+		body string
+		mode int64
+	}{
+		{"pnpm", pnpmStubContent, 0o755},
+		{"dist/node_modules/node-gyp/package.json", `{"name":"node-gyp"}`, 0o644},
+	}
+	for _, f := range files {
+		hdr := &tar.Header{Name: f.name, Mode: f.mode, Size: int64(len(f.body)), Typeflag: tar.TypeReg}
 		if err := tw.WriteHeader(hdr); err != nil {
-			t.Fatalf("failed to write tar header: %v", err)
+			t.Fatalf("write tar header %s: %v", f.name, err)
 		}
-		if _, err := tw.Write([]byte(content)); err != nil {
-			t.Fatalf("failed to write tar content: %v", err)
+		if _, err := tw.Write([]byte(f.body)); err != nil {
+			t.Fatalf("write tar body %s: %v", f.name, err)
 		}
 	}
-
 	if err := tw.Close(); err != nil {
-		t.Fatalf("failed to close tar writer: %v", err)
+		t.Fatalf("close tar writer: %v", err)
 	}
 	if err := gzw.Close(); err != nil {
-		t.Fatalf("failed to close gzip writer: %v", err)
+		t.Fatalf("close gzip writer: %v", err)
 	}
-
-	return tmpFile.Name()
+	sum := sha256.Sum256(buf.Bytes())
+	return buf.Bytes(), hex.EncodeToString(sum[:])
 }
 
-// TestPNPMExtractionViaSharedExtractor pins that pnpm now extracts through
-// binmanager's shared hardened tar path (binmanager.ExtractArchiveToDir) rather
-// than a runtimemanager-local copy: a normal package layout extracts into
-// destDir, traversal entries are skipped, and a missing archive errors.
-func TestPNPMExtractionViaSharedExtractor(t *testing.T) {
-	t.Run("extracts files correctly", func(t *testing.T) {
-		archivePath := createTestTgz(t, map[string]string{
-			"package/bin/pnpm.cjs":  "#!/usr/bin/env node\nconsole.log('pnpm');",
-			"package/package.json":  `{"name":"pnpm","version":"9.0.0"}`,
-			"package/bin/pnpmx.cjs": "#!/usr/bin/env node\nconsole.log('pnpmx');",
-		})
+// TestPNPMRuntime_DownloadVerifyExtract pins that pnpm is acquired through the
+// generic managed-runtime path: SHA-256-verified, extracted whole into its
+// runtime store directory, and a cache hit afterwards.
+func TestPNPMRuntime_DownloadVerifyExtract(t *testing.T) {
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 
-		destDir := t.TempDir()
-		if err := binmanager.ExtractArchiveToDir(archivePath, binmanager.BinContentTypeTarGz, destDir); err != nil {
-			t.Fatalf("ExtractArchiveToDir() error = %v", err)
-		}
+	body, hash := makePNPMArchive(t)
+	var hits int32
+	server := nodeArchiveServer(t, body, "/pnpm.tar.gz", &hits)
+	defer server.Close()
 
-		pnpmPath := filepath.Join(destDir, "package", "bin", "pnpm.cjs")
-		if _, err := os.Stat(pnpmPath); err != nil {
-			t.Errorf("pnpm.cjs not found: %v", err)
-		}
-
-		pkgPath := filepath.Join(destDir, "package", "package.json")
-		if _, err := os.Stat(pkgPath); err != nil {
-			t.Errorf("package.json not found: %v", err)
-		}
-	})
-
-	t.Run("rejects path traversal", func(t *testing.T) {
-		archivePath := createTestTgz(t, map[string]string{
-			"../evil/file.txt": "malicious content",
-			"safe/file.txt":    "safe content",
-		})
-
-		destDir := t.TempDir()
-		if err := binmanager.ExtractArchiveToDir(archivePath, binmanager.BinContentTypeTarGz, destDir); err != nil {
-			t.Fatalf("ExtractArchiveToDir() error = %v", err)
-		}
-
-		evilPath := filepath.Join(destDir, "..", "evil", "file.txt")
-		if _, err := os.Stat(evilPath); err == nil {
-			t.Error("path traversal file should not have been extracted")
-		}
-
-		safePath := filepath.Join(destDir, "safe", "file.txt")
-		if _, err := os.Stat(safePath); err != nil {
-			t.Error("safe file should have been extracted")
-		}
-	})
-
-	t.Run("nonexistent archive", func(t *testing.T) {
-		err := binmanager.ExtractArchiveToDir("/nonexistent/archive.tgz", binmanager.BinContentTypeTarGz, t.TempDir())
-		if err == nil {
-			t.Error("expected error for nonexistent archive")
-		}
-	})
-}
-
-// pnpmRegistryServers spins up a mock npm registry over TLS: one server serves
-// the tarball at /tarball/pnpm.tgz and the version metadata on every other path,
-// returning a dist.tarball that points at its own https URL. It also swaps
-// pnpmHTTPClient for a client trusting the server's cert for the test's
-// duration, because the download path now requires an https tarball URL. It
-// returns the metadata base URL and the real SHA-256 of tgzData (the value a
-// correct pnpmHash must equal).
-func pnpmRegistryServers(t *testing.T, tgzData []byte, integrity string) (registryURL, pinnedHash string) {
-	t.Helper()
-
-	mux := http.NewServeMux()
-	var srv *httptest.Server
-	mux.HandleFunc("/tarball/pnpm.tgz", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/octet-stream")
-		_, _ = w.Write(tgzData)
-	})
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		meta := map[string]any{
-			"dist": map[string]any{
-				"tarball":   srv.URL + "/tarball/pnpm.tgz",
-				"integrity": integrity,
-			},
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(meta)
-	})
-	srv = httptest.NewTLSServer(mux)
-	t.Cleanup(srv.Close)
-	useTrustingPNPMClient(t, srv)
-
-	sha256Sum := sha256.Sum256(tgzData)
-	return srv.URL, hex.EncodeToString(sha256Sum[:])
-}
-
-// useTrustingPNPMClient swaps the package-level pnpmHTTPClient for a client that
-// trusts srv's self-signed cert for the duration of the test, restoring the
-// original afterwards. Needed because the https-only tarball guard requires the
-// mock registry to speak over a secure transport.
-func useTrustingPNPMClient(t *testing.T, srv *httptest.Server) {
-	t.Helper()
-	orig := pnpmHTTPClient
-	pnpmHTTPClient = srv.Client()
-	t.Cleanup(func() { pnpmHTTPClient = orig })
-}
-
-func TestDownloadPNPMFromRegistry(t *testing.T) {
-	tgzData := func(t *testing.T) []byte {
-		t.Helper()
-		path := createTestTgz(t, map[string]string{
-			"package/bin/pnpm.cjs": "#!/usr/bin/env node\nconsole.log('pnpm');",
-			"package/package.json": `{"name":"pnpm","version":"9.15.0"}`,
-		})
-		data, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatalf("failed to read tgz: %v", err)
-		}
-		return data
-	}
-
-	t.Run("downloads and extracts tarball", func(t *testing.T) {
-		data := tgzData(t)
-		sha512Sum := sha512.Sum512(data)
-		integrity := "sha512-" + base64.StdEncoding.EncodeToString(sha512Sum[:])
-		registryURL, pinnedHash := pnpmRegistryServers(t, data, integrity)
-
-		destDir := t.TempDir()
-		rm := New(config.MapOfRuntimes{})
-		if err := rm.downloadPNPMFromRegistryURL(context.Background(), registryURL, "9.15.0", destDir, pinnedHash); err != nil {
-			t.Fatalf("downloadPNPMFromRegistryURL() error = %v", err)
-		}
-
-		pnpmPath := filepath.Join(destDir, "package", "bin", "pnpm.cjs")
-		if _, err := os.Stat(pnpmPath); err != nil {
-			t.Errorf("pnpm.cjs not found after download: %v", err)
-		}
-	})
-
-	t.Run("skips if already downloaded", func(t *testing.T) {
-		destDir := t.TempDir()
-		pnpmDir := filepath.Join(destDir, "package", "bin")
-		if err := os.MkdirAll(pnpmDir, 0o755); err != nil {
-			t.Fatalf("failed to create dir: %v", err)
-		}
-		if err := os.WriteFile(filepath.Join(pnpmDir, "pnpm.cjs"), []byte("already here"), 0o644); err != nil {
-			t.Fatalf("failed to write file: %v", err)
-		}
-
-		rm := New(config.MapOfRuntimes{})
-		err := rm.downloadPNPMFromRegistry(context.Background(), "9.15.0", destDir, "test-pnpm-sha256-hash")
-		if err != nil {
-			t.Errorf("expected nil error for already downloaded, got %v", err)
-		}
-	})
-
-	t.Run("pinned SHA-256 mismatch returns error", func(t *testing.T) {
-		data := tgzData(t)
-		sha512Sum := sha512.Sum512(data)
-		integrity := "sha512-" + base64.StdEncoding.EncodeToString(sha512Sum[:])
-		registryURL, _ := pnpmRegistryServers(t, data, integrity)
-
-		wrongPinned := "0000000000000000000000000000000000000000000000000000000000000000"
-		destDir := t.TempDir()
-		rm := New(config.MapOfRuntimes{})
-		err := rm.downloadPNPMFromRegistryURL(context.Background(), registryURL, "9.15.0", destDir, wrongPinned)
-		if err == nil {
-			t.Fatal("expected error for pinned SHA-256 mismatch")
-		}
-		if !strings.Contains(err.Error(), "SHA-256 hash mismatch") {
-			t.Errorf("error should mention SHA-256 hash mismatch, got: %v", err)
-		}
-	})
-
-	t.Run("SHA-512 integrity mismatch returns error", func(t *testing.T) {
-		data := tgzData(t)
-		wrongIntegrity := "sha512-" + base64.StdEncoding.EncodeToString(make([]byte, 64))
-		registryURL, pinnedHash := pnpmRegistryServers(t, data, wrongIntegrity)
-
-		destDir := t.TempDir()
-		rm := New(config.MapOfRuntimes{})
-		err := rm.downloadPNPMFromRegistryURL(context.Background(), registryURL, "9.15.0", destDir, pinnedHash)
-		if err == nil {
-			t.Fatal("expected error for SHA-512 integrity mismatch")
-		}
-		if !strings.Contains(err.Error(), "SHA-512 integrity mismatch") {
-			t.Errorf("error should mention SHA-512 integrity mismatch, got: %v", err)
-		}
-	})
-
-	t.Run("sha1-only metadata rejected", func(t *testing.T) {
-		data := tgzData(t)
-		sha256Sum := sha256.Sum256(data)
-		pinnedHash := hex.EncodeToString(sha256Sum[:])
-
-		mux := http.NewServeMux()
-		var srv *httptest.Server
-		mux.HandleFunc("/tarball/pnpm.tgz", func(w http.ResponseWriter, r *http.Request) {
-			_, _ = w.Write(data)
-		})
-		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-			meta := map[string]any{
-				"dist": map[string]any{
-					"tarball": srv.URL + "/tarball/pnpm.tgz",
-					"shasum":  "0000000000000000000000000000000000000000",
-				},
-			}
-			_ = json.NewEncoder(w).Encode(meta)
-		})
-		srv = httptest.NewTLSServer(mux)
-		defer srv.Close()
-		useTrustingPNPMClient(t, srv)
-
-		destDir := t.TempDir()
-		rm := New(config.MapOfRuntimes{})
-		err := rm.downloadPNPMFromRegistryURL(context.Background(), srv.URL, "9.15.0", destDir, pinnedHash)
-		if err == nil {
-			t.Fatal("expected error when only SHA-1 shasum is available")
-		}
-		if !strings.Contains(err.Error(), "SHA-512 integrity required") {
-			t.Errorf("error should mention SHA-512 requirement, got: %v", err)
-		}
-	})
-
-	t.Run("registry error returns error", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusNotFound)
-		}))
-		defer server.Close()
-
-		destDir := t.TempDir()
-		rm := New(config.MapOfRuntimes{})
-		err := rm.downloadPNPMFromRegistryURL(context.Background(), server.URL, "0.0.0-nonexistent", destDir, "irrelevant-hash")
-		if err == nil {
-			t.Error("expected error for registry error")
-		}
-	})
-}
-
-func TestHasSHA512Prefix(t *testing.T) {
-	cases := []struct {
-		name      string
-		integrity string
-		want      bool
-	}{
-		{"valid sha512", "sha512-AAAA", true},
-		{"empty", "", false},
-		{"wrong algo sha1", "sha1-AAAA", false},
-		{"no prefix", "AAAA", false},
-		{"prefix only", "sha512-", true},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := hasSHA512Prefix(tc.integrity); got != tc.want {
-				t.Errorf("hasSHA512Prefix(%q) = %v, want %v", tc.integrity, got, tc.want)
-			}
-		})
-	}
-}
-
-func TestVerifyPNPMIntegrity(t *testing.T) {
-	testData := []byte("test tarball content")
-	sha512Sum := sha512.Sum512(testData)
-	sha512B64 := base64.StdEncoding.EncodeToString(sha512Sum[:])
-
-	t.Run("valid SHA-512 integrity", func(t *testing.T) {
-		meta := npmVersionMeta{}
-		meta.Dist.Integrity = "sha512-" + sha512B64
-		meta.Dist.Shasum = "ignored-sha1"
-		err := verifyPNPMIntegrity(meta, sha512Sum[:])
-		if err != nil {
-			t.Errorf("expected no error with valid SHA-512, got: %v", err)
-		}
-	})
-
-	t.Run("rejects SHA-1 only", func(t *testing.T) {
-		meta := npmVersionMeta{}
-		meta.Dist.Shasum = "abc123"
-		err := verifyPNPMIntegrity(meta, sha512Sum[:])
-		if err == nil {
-			t.Error("expected error when only SHA-1 shasum is available")
-		}
-		if !strings.Contains(err.Error(), "SHA-512 integrity required") {
-			t.Errorf("error should mention SHA-512 requirement, got: %v", err)
-		}
-	})
-
-	t.Run("SHA-512 mismatch returns error", func(t *testing.T) {
-		meta := npmVersionMeta{}
-		wrongHash := make([]byte, 64)
-		meta.Dist.Integrity = "sha512-" + base64.StdEncoding.EncodeToString(wrongHash)
-		err := verifyPNPMIntegrity(meta, sha512Sum[:])
-		if err == nil {
-			t.Error("expected error for SHA-512 mismatch")
-		}
-	})
-
-	t.Run("no integrity or shasum returns error", func(t *testing.T) {
-		meta := npmVersionMeta{}
-		err := verifyPNPMIntegrity(meta, sha512Sum[:])
-		if err == nil {
-			t.Error("expected error when no integrity or shasum")
-		}
-	})
-}
-
-func TestVerifyPNPMPinnedHash(t *testing.T) {
-	testData := []byte("test tarball content for sha256")
-	sha256Sum := sha256.Sum256(testData)
-	sha256Hex := hex.EncodeToString(sha256Sum[:])
-
-	t.Run("valid SHA-256 pinned hash", func(t *testing.T) {
-		err := verifyPNPMPinnedHash(sha256Hex, sha256Sum[:])
-		if err != nil {
-			t.Errorf("expected no error with valid SHA-256 pinned hash, got: %v", err)
-		}
-	})
-
-	t.Run("empty pinned hash returns error", func(t *testing.T) {
-		err := verifyPNPMPinnedHash("", sha256Sum[:])
-		if err == nil {
-			t.Error("expected error when pinned hash is empty")
-		}
-		if !strings.Contains(err.Error(), "pnpm tarball SHA-256 hash is required") {
-			t.Errorf("error should mention hash is required, got: %v", err)
-		}
-	})
-
-	t.Run("mismatched pinned hash returns error", func(t *testing.T) {
-		wrongHash := "0000000000000000000000000000000000000000000000000000000000000000"
-		err := verifyPNPMPinnedHash(wrongHash, sha256Sum[:])
-		if err == nil {
-			t.Error("expected error for hash mismatch")
-		}
-		if !strings.Contains(err.Error(), "SHA-256 hash mismatch") {
-			t.Errorf("error should mention hash mismatch, got: %v", err)
-		}
-	})
-}
-
-func TestDownloadPNPMWithIntegrity(t *testing.T) {
-	tgzPath := createTestTgz(t, map[string]string{
-		"package/bin/pnpm.cjs": "#!/usr/bin/env node\nconsole.log('pnpm');",
-		"package/package.json": `{"name":"pnpm","version":"9.15.0"}`,
-	})
-
-	tgzData, err := os.ReadFile(tgzPath)
+	rm := New(config.MapOfRuntimes{testPNPMRuntimeName: hostPNPMRuntime(t, server.URL+"/pnpm.tar.gz", hash, testLibc)})
+	want, err := rm.ResolveRuntimePath(testPNPMRuntimeName)
 	if err != nil {
-		t.Fatalf("failed to read tgz: %v", err)
+		t.Fatalf("ResolveRuntimePath() error = %v", err)
+	}
+	runtimeDir := filepath.Join(env.GetRuntimesPath(), testPNPMRuntimeName) + string(filepath.Separator)
+	if !strings.HasPrefix(want, runtimeDir) || filepath.Base(want) != "pnpm" {
+		t.Errorf("pnpm resolves to %q, want {store}/.runtimes/%s/<hash>/pnpm", want, testPNPMRuntimeName)
 	}
 
-	sha512Sum := sha512.Sum512(tgzData)
-	integrity := "sha512-" + base64.StdEncoding.EncodeToString(sha512Sum[:])
-	registryURL, pinnedHash := pnpmRegistryServers(t, tgzData, integrity)
-
-	destDir := t.TempDir()
-	rm := New(config.MapOfRuntimes{})
-	if err := rm.downloadPNPMFromRegistryURL(context.Background(), registryURL, "9.15.0", destDir, pinnedHash); err != nil {
-		t.Fatalf("downloadPNPMFromRegistryURL() with integrity error = %v", err)
+	got, err := rm.getRuntimePath(context.Background(), testPNPMRuntimeName)
+	if err != nil {
+		t.Fatalf("getRuntimePath() error = %v", err)
+	}
+	if got != want {
+		t.Errorf("getRuntimePath() = %q, want %q", got, want)
+	}
+	content, err := os.ReadFile(got)
+	if err != nil {
+		t.Fatalf("read pnpm binary: %v", err)
+	}
+	if string(content) != pnpmStubContent {
+		t.Errorf("pnpm binary content = %q, want %q", content, pnpmStubContent)
+	}
+	// pnpm finds node-gyp relative to its own binary, so the rest of the archive
+	// has to survive next to it.
+	nodeGyp := filepath.Join(filepath.Dir(got), "dist", "node_modules", "node-gyp", "package.json")
+	if _, err := os.Stat(nodeGyp); err != nil {
+		t.Errorf("node-gyp was not kept beside the pnpm binary: %v", err)
+	}
+	if n := atomic.LoadInt32(&hits); n != 1 {
+		t.Errorf("archive fetched %d times, want 1", n)
 	}
 
-	pnpmPath := filepath.Join(destDir, "package", "bin", "pnpm.cjs")
-	if _, err := os.Stat(pnpmPath); err != nil {
-		t.Errorf("pnpm.cjs not found after download: %v", err)
+	before := DownloaderConstructions()
+	again, err := rm.getRuntimePath(context.Background(), testPNPMRuntimeName)
+	if err != nil {
+		t.Fatalf("second getRuntimePath() error = %v", err)
+	}
+	if again != got {
+		t.Errorf("second getRuntimePath() = %q, want %q", again, got)
+	}
+	if DownloaderConstructions() != before {
+		t.Error("an installed pnpm must be a cache hit, but a downloader was constructed")
+	}
+	if n := atomic.LoadInt32(&hits); n != 1 {
+		t.Errorf("archive fetched %d times after a cache hit, want 1", n)
 	}
 }
 
-// TestDownloadPNPMFromRegistryURL_RejectsHTTPTarball pins review #9: even with a
-// valid pinned hash supplied, a registry response whose dist.tarball is a
-// plaintext http:// URL must be refused (no transport downgrade).
-func TestDownloadPNPMFromRegistryURL_RejectsHTTPTarball(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`{"dist":{"tarball":"http://insecure.example/pnpm.tgz","integrity":"sha512-AAAA"}}`))
-	})
-	srv := httptest.NewTLSServer(mux)
-	defer srv.Close()
-	useTrustingPNPMClient(t, srv)
+func TestPNPMRuntime_SHA256Mismatch(t *testing.T) {
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 
-	destDir := t.TempDir()
-	rm := New(config.MapOfRuntimes{})
-	pinned := "0000000000000000000000000000000000000000000000000000000000000000"
-	err := rm.downloadPNPMFromRegistryURL(context.Background(), srv.URL, "9.15.0", destDir, pinned)
+	body, _ := makePNPMArchive(t)
+	var hits int32
+	server := nodeArchiveServer(t, body, "/pnpm.tar.gz", &hits)
+	defer server.Close()
+
+	rm := New(config.MapOfRuntimes{
+		testPNPMRuntimeName: hostPNPMRuntime(t, server.URL+"/pnpm.tar.gz", strings.Repeat("11", 32), testLibc),
+	})
+	_, err := rm.getRuntimePath(context.Background(), testPNPMRuntimeName)
 	if err == nil {
-		t.Fatal("expected error for http (non-https) tarball URL")
+		t.Fatal("expected an error for a SHA-256 mismatch, got nil")
 	}
-	if !strings.Contains(err.Error(), "tarball URL is not https") {
-		t.Errorf("error should mention non-https tarball, got: %v", err)
+	if !strings.Contains(strings.ToLower(err.Error()), "hash") {
+		t.Errorf("error should report the hash mismatch, got: %v", err)
 	}
-}
-
-// TestDownloadPNPMFromRegistryURL_HTTPSTarballSucceeds is the success-path
-// counterpart: an https tarball still downloads, verifies, and extracts
-// end-to-end via the mock registry.
-func TestDownloadPNPMFromRegistryURL_HTTPSTarballSucceeds(t *testing.T) {
-	path := createTestTgz(t, map[string]string{
-		"package/bin/pnpm.cjs": "#!/usr/bin/env node\nconsole.log('pnpm');",
-		"package/package.json": `{"name":"pnpm","version":"9.15.0"}`,
-	})
-	data, err := os.ReadFile(path)
+	binPath, err := rm.ResolveRuntimePath(testPNPMRuntimeName)
 	if err != nil {
-		t.Fatalf("failed to read tgz: %v", err)
+		t.Fatalf("ResolveRuntimePath() error = %v", err)
 	}
-	sha512Sum := sha512.Sum512(data)
-	integrity := "sha512-" + base64.StdEncoding.EncodeToString(sha512Sum[:])
-	registryURL, pinnedHash := pnpmRegistryServers(t, data, integrity)
-
-	destDir := t.TempDir()
-	rm := New(config.MapOfRuntimes{})
-	if err := rm.downloadPNPMFromRegistryURL(context.Background(), registryURL, "9.15.0", destDir, pinnedHash); err != nil {
-		t.Fatalf("downloadPNPMFromRegistryURL() over https error = %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(destDir, "package", "bin", "pnpm.cjs")); err != nil {
-		t.Errorf("pnpm.cjs not found after https download: %v", err)
+	if _, statErr := os.Stat(binPath); statErr == nil {
+		t.Errorf("a pnpm build that failed verification was installed at %s", binPath)
 	}
 }
 
-func TestNpmVersionMeta(t *testing.T) {
-	t.Run("deserialization", func(t *testing.T) {
-		jsonData := `{"dist":{"tarball":"https://registry.npmjs.org/pnpm/-/pnpm-9.15.0.tgz","shasum":"abc123","integrity":"sha512-AAAA"}}`
-		var meta npmVersionMeta
-		if err := json.Unmarshal([]byte(jsonData), &meta); err != nil {
-			t.Fatalf("Unmarshal error = %v", err)
+// TestGetAppPath_PNPMRuntimeIdentity pins where the pnpm runtime's identity
+// lands: in the app hash of a Node app, never in the Node runtime's own store
+// path, and never as a store path.
+func TestGetAppPath_PNPMRuntimeIdentity(t *testing.T) {
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
+
+	extra := PackageAppPathExtra{PackageName: "eslint", BinPath: "node_modules/.bin/eslint"}
+	appPath := func(runtimes config.MapOfRuntimes) (string, error) {
+		return New(runtimes).GetAppPath("eslint", config.RuntimeKindNode, "9.0.0", nil, "", nil, nil, "node", extra)
+	}
+	base := nodeRuntimeWith(t, "https://example.com/node.tar.xz", "abc", testLibc)
+	bumped := nodeRuntimeWith(t, "https://example.com/node.tar.xz", "abc", testLibc)
+	bumped[testPNPMRuntimeName] = pnpmRuntimeWithVersion("12.5.0")
+
+	t.Run("a pnpm bump moves the app but not the node runtime", func(t *testing.T) {
+		basePath, err := appPath(base)
+		if err != nil {
+			t.Fatalf("GetAppPath() error = %v", err)
 		}
-		if meta.Dist.Tarball != "https://registry.npmjs.org/pnpm/-/pnpm-9.15.0.tgz" {
-			t.Errorf("Tarball = %q, want expected URL", meta.Dist.Tarball)
+		bumpedPath, err := appPath(bumped)
+		if err != nil {
+			t.Fatalf("GetAppPath() error = %v", err)
 		}
-		if meta.Dist.Shasum != "abc123" {
-			t.Errorf("Shasum = %q, want %q", meta.Dist.Shasum, "abc123")
+		if basePath == bumpedPath {
+			t.Error("a different pnpm runtime must produce a different app path")
 		}
-		if meta.Dist.Integrity != "sha512-AAAA" {
-			t.Errorf("Integrity = %q, want %q", meta.Dist.Integrity, "sha512-AAAA")
+
+		baseNode, err := New(base).ResolveRuntimePath("node")
+		if err != nil {
+			t.Fatalf("ResolveRuntimePath() error = %v", err)
+		}
+		bumpedNode, err := New(bumped).ResolveRuntimePath("node")
+		if err != nil {
+			t.Fatalf("ResolveRuntimePath() error = %v", err)
+		}
+		if baseNode != bumpedNode {
+			t.Errorf("a pnpm bump moved the node runtime (%q -> %q), which would re-download Node", baseNode, bumpedNode)
 		}
 	})
 
-	t.Run("deserialization without integrity", func(t *testing.T) {
-		jsonData := `{"dist":{"tarball":"https://registry.npmjs.org/pnpm/-/pnpm-9.15.0.tgz","shasum":"abc123"}}`
-		var meta npmVersionMeta
-		if err := json.Unmarshal([]byte(jsonData), &meta); err != nil {
-			t.Fatalf("Unmarshal error = %v", err)
+	t.Run("pnpmRuntime selects the pnpm runtime by name", func(t *testing.T) {
+		runtimes := nodeRuntimeWith(t, "https://example.com/node.tar.xz", "abc", testLibc)
+		runtimes["pnpm-next"] = pnpmRuntimeWithVersion("12.5.0")
+		node := runtimes["node"]
+		node.Node = &config.RuntimeConfigNode{NodeVersion: node.Node.NodeVersion, PNPMRuntime: "pnpm-next"}
+		runtimes["node"] = node
+
+		got, err := appPath(runtimes)
+		if err != nil {
+			t.Fatalf("GetAppPath() error = %v", err)
 		}
-		if meta.Dist.Integrity != "" {
-			t.Errorf("Integrity = %q, want empty string", meta.Dist.Integrity)
+		// The runtime's name is not part of its identity: the same pnpm under a
+		// different name is the same install.
+		want, err := appPath(bumped)
+		if err != nil {
+			t.Fatalf("GetAppPath() error = %v", err)
+		}
+		if got != want {
+			t.Errorf("GetAppPath() = %q, want the path of the referenced pnpm runtime %q", got, want)
 		}
 	})
+
+	t.Run("a missing pnpm runtime is an error", func(t *testing.T) {
+		runtimes := nodeRuntimeWith(t, "https://example.com/node.tar.xz", "abc", testLibc)
+		delete(runtimes, testPNPMRuntimeName)
+		if _, err := appPath(runtimes); err == nil || !strings.Contains(err.Error(), "pnpm runtime") {
+			t.Fatalf("GetAppPath() error = %v, want a pnpm runtime resolution error", err)
+		}
+	})
+
+	t.Run("the pnpm identity is path-free", func(t *testing.T) {
+		under := func(root string) string {
+			t.Setenv("DATAMITSU_CACHE_DIR", root)
+			got, err := appPath(base)
+			if err != nil {
+				t.Fatalf("GetAppPath() error = %v", err)
+			}
+			return got
+		}
+		first, second := under(t.TempDir()), under(t.TempDir())
+		if filepath.Base(first) != filepath.Base(second) {
+			t.Errorf("app hash depends on the store root: %q vs %q", first, second)
+		}
+	})
+}
+
+// TestCollectRequiredRuntimes_PNPM pins that a needed Node or Bun runtime pulls
+// in the pnpm runtime that installs its apps, and that nothing else does.
+func TestCollectRequiredRuntimes_PNPM(t *testing.T) {
+	nodeRef := func(ref string) config.RuntimeConfig {
+		return config.RuntimeConfig{
+			Kind: config.RuntimeKindNode,
+			Mode: config.RuntimeModeManaged,
+			Node: &config.RuntimeConfigNode{NodeVersion: "26.2.0", PNPMRuntime: ref},
+		}
+	}
+	runtimes := config.MapOfRuntimes{
+		"node-explicit": nodeRef("pnpm-b"),
+		"node-default":  nodeRef(""),
+		"node-dangling": nodeRef("ghost"),
+		"bun-explicit": {
+			Kind: config.RuntimeKindBun,
+			Mode: config.RuntimeModeManaged,
+			Bun:  &config.RuntimeConfigBun{BunVersion: "1.4.1", PNPMRuntime: "pnpm-b"},
+		},
+		"pnpm-a": pnpmRuntimeWithVersion("12.4.1"),
+		"pnpm-b": pnpmRuntimeWithVersion("12.5.0"),
+		"uv":     {Kind: config.RuntimeKindUV, Mode: config.RuntimeModeManaged},
+		"jvm":    {Kind: config.RuntimeKindJVM, Mode: config.RuntimeModeManaged, JVM: &config.RuntimeConfigJVM{JavaVersion: "21"}},
+		"go":     {Kind: config.RuntimeKindGo, Mode: config.RuntimeModeManaged, Go: &config.RuntimeConfigGo{GoVersion: "1.22.0"}},
+	}
+	nodeApp := func(runtimeRef string) binmanager.App {
+		return binmanager.App{Required: true, Node: &binmanager.AppConfigNode{PackageName: "x", Version: "1", BinPath: "b", Runtime: runtimeRef}}
+	}
+
+	tests := []struct {
+		name string
+		apps binmanager.MapOfApps
+		want []string
+	}{
+		{"explicit pnpmRuntime", binmanager.MapOfApps{"a": nodeApp("node-explicit")}, []string{"node-explicit", "pnpm-b"}},
+		{
+			"bun follows its pnpmRuntime",
+			binmanager.MapOfApps{"a": {Required: true, Bun: &binmanager.AppConfigBun{PackageName: "x", Version: "1", BinPath: "b", Runtime: "bun-explicit"}}},
+			[]string{"bun-explicit", "pnpm-b"},
+		},
+		{"empty pnpmRuntime falls back to the first pnpm runtime by name", binmanager.MapOfApps{"a": nodeApp("node-default")}, []string{"node-default", "pnpm-a"}},
+		{"dangling pnpmRuntime contributes nothing", binmanager.MapOfApps{"a": nodeApp("node-dangling")}, []string{"node-dangling"}},
+		{
+			"uv, jvm and go apps need no pnpm",
+			binmanager.MapOfApps{
+				"u": {Required: true, Uv: &binmanager.AppConfigUV{PackageName: "x", Version: "1", Runtime: "uv"}},
+				"j": {Required: true, Jvm: &binmanager.AppConfigJVM{JarURL: "https://x/x.jar", JarHash: "h", Version: "1", Runtime: "jvm"}},
+				"g": {Required: true, Go: &binmanager.AppConfigGo{PackageName: "x", Version: "1", Runtime: "go"}},
+			},
+			[]string{"go", "jvm", "uv"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := CollectRequiredRuntimes(tt.apps, runtimes, false); !slices.Equal(got, tt.want) {
+				t.Errorf("CollectRequiredRuntimes() = %v, want %v", got, tt.want)
+			}
+		})
+	}
 }
 
 func TestBuildPNPMInstallArgs(t *testing.T) {
-	t.Run("without lockfile", func(t *testing.T) {
-		args := buildPNPMInstallArgs("/path/to/pnpm.cjs", false)
-		expected := []string{"/path/to/pnpm.cjs", "install", "--reporter=ndjson"}
-		if len(args) != len(expected) {
-			t.Fatalf("args length = %d, want %d", len(args), len(expected))
-		}
-		for i, arg := range args {
-			if arg != expected[i] {
-				t.Errorf("args[%d] = %q, want %q", i, arg, expected[i])
+	tests := []struct {
+		name    string
+		hasLock bool
+		want    []string
+	}{
+		{"without lockfile", false, []string{"install", "--reporter=ndjson"}},
+		{"with lockfile includes --frozen-lockfile", true, []string{"install", "--reporter=ndjson", "--frozen-lockfile"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := buildPNPMInstallArgs(tt.hasLock); !slices.Equal(got, tt.want) {
+				t.Errorf("buildPNPMInstallArgs(%v) = %v, want %v", tt.hasLock, got, tt.want)
 			}
-		}
-	})
-
-	t.Run("with lockfile includes --frozen-lockfile", func(t *testing.T) {
-		args := buildPNPMInstallArgs("/path/to/pnpm.cjs", true)
-		expected := []string{"/path/to/pnpm.cjs", "install", "--reporter=ndjson", "--frozen-lockfile"}
-		if len(args) != len(expected) {
-			t.Fatalf("args length = %d, want %d", len(args), len(expected))
-		}
-		for i, arg := range args {
-			if arg != expected[i] {
-				t.Errorf("args[%d] = %q, want %q", i, arg, expected[i])
-			}
-		}
-	})
+		})
+	}
 }
 
 // TestBuildPackageJSON pins the package.json that drives `pnpm install`: the
@@ -1144,26 +1022,6 @@ func TestWriteAppWorkspaceFile(t *testing.T) {
 			t.Errorf("error should mention failed to create app directory, got: %v", err)
 		}
 	})
-}
-
-// TestVerifyPNPMIntegrity_DecodeError pins the base64 decode-error branch: an
-// integrity string with the required sha512- prefix but a non-base64 payload
-// must be rejected with a "failed to decode integrity hash" error rather than
-// silently treated as a mismatch.
-func TestVerifyPNPMIntegrity_DecodeError(t *testing.T) {
-	testData := []byte("test tarball content")
-	sha512Sum := sha512.Sum512(testData)
-
-	meta := npmVersionMeta{}
-	// "@" is outside the base64 alphabet, so StdEncoding.DecodeString errors.
-	meta.Dist.Integrity = "sha512-@@@@@@@@@@@@"
-	err := verifyPNPMIntegrity(meta, sha512Sum[:])
-	if err == nil {
-		t.Fatal("expected error for non-base64 integrity payload, got nil")
-	}
-	if !strings.Contains(err.Error(), "failed to decode integrity hash") {
-		t.Errorf("error should mention failed to decode integrity hash, got: %v", err)
-	}
 }
 
 // TestFilesWithMergedWorkspaceYAML_InvalidUserYAML pins the error path of

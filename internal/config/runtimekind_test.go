@@ -17,6 +17,7 @@ func TestLookupRuntimeKind_KnownKinds(t *testing.T) {
 		{RuntimeKindNode, "node", "node"},
 		{RuntimeKindJVM, "jvm", "java"},
 		{RuntimeKindGo, "go", "go"},
+		{RuntimeKindPNPM, "pnpm", "pnpm"},
 	}
 
 	for _, tt := range tests {
@@ -55,12 +56,13 @@ func TestRuntimeKindHashFields(t *testing.T) {
 		}{
 			{
 				kind: RuntimeKindBun,
+				// The pnpm runtime folds into the app hash, not the Bun
+				// runtime's, so a pnpm bump never re-downloads Bun.
 				rc: RuntimeConfig{Kind: RuntimeKindBun, Bun: &RuntimeConfigBun{
 					BunVersion:  "1.4.1",
-					PNPMVersion: "11.20.0",
-					PNPMHash:    "abc",
+					PNPMRuntime: "pnpm",
 				}},
-				want: []string{"1.4.1", "11.20.0", "abc"},
+				want: []string{"1.4.1"},
 			},
 			{
 				kind: RuntimeKindUV,
@@ -69,8 +71,13 @@ func TestRuntimeKindHashFields(t *testing.T) {
 			},
 			{
 				kind: RuntimeKindNode,
-				rc:   RuntimeConfig{Kind: RuntimeKindNode, Node: &RuntimeConfigNode{NodeVersion: "22.0.0", PNPMVersion: "10.7.0", PNPMHash: "abc"}},
-				want: []string{"22.0.0", "10.7.0", "abc"},
+				rc:   RuntimeConfig{Kind: RuntimeKindNode, Node: &RuntimeConfigNode{NodeVersion: "22.0.0", PNPMRuntime: "pnpm"}},
+				want: []string{"22.0.0"},
+			},
+			{
+				kind: RuntimeKindPNPM,
+				rc:   RuntimeConfig{Kind: RuntimeKindPNPM, PNPM: &RuntimeConfigPNPM{PNPMVersion: "12.4.1"}},
+				want: []string{"12.4.1"},
 			},
 			{
 				kind: RuntimeKindJVM,
@@ -136,17 +143,25 @@ func TestRuntimeKindValidate(t *testing.T) {
 		}
 	})
 
-	t.Run("bun requires pinned pnpm", func(t *testing.T) {
+	t.Run("bun requires a pnpm runtime", func(t *testing.T) {
 		info, _ := LookupRuntimeKind(RuntimeKindBun)
 		errs := info.Validate("rt", RuntimeConfig{
 			Kind: RuntimeKindBun,
 			Bun:  &RuntimeConfigBun{BunVersion: "1.4.1"},
 		})
-		joined := strings.Join(errs, "\n")
-		for _, want := range []string{"bun.pnpmVersion is required", "bun.pnpmHash is required"} {
-			if !strings.Contains(joined, want) {
-				t.Errorf("validation errors %q do not contain %q", joined, want)
-			}
+		if joined := strings.Join(errs, "\n"); !strings.Contains(joined, "bun.pnpmRuntime is required") {
+			t.Errorf("validation errors %q do not contain bun.pnpmRuntime is required", joined)
+		}
+	})
+
+	t.Run("node requires a pnpm runtime", func(t *testing.T) {
+		info, _ := LookupRuntimeKind(RuntimeKindNode)
+		errs := info.Validate("rt", RuntimeConfig{
+			Kind: RuntimeKindNode,
+			Node: &RuntimeConfigNode{NodeVersion: "26.2.0"},
+		})
+		if joined := strings.Join(errs, "\n"); !strings.Contains(joined, "node.pnpmRuntime is required") {
+			t.Errorf("validation errors %q do not contain node.pnpmRuntime is required", joined)
 		}
 	})
 
@@ -170,7 +185,7 @@ func TestRuntimeKindValidate(t *testing.T) {
 func TestAllRuntimeKinds(t *testing.T) {
 	got := AllRuntimeKinds()
 	slices.Sort(got)
-	want := []RuntimeKind{RuntimeKindBun, RuntimeKindGo, RuntimeKindJVM, RuntimeKindNode, RuntimeKindUV}
+	want := []RuntimeKind{RuntimeKindBun, RuntimeKindGo, RuntimeKindJVM, RuntimeKindNode, RuntimeKindPNPM, RuntimeKindUV}
 	slices.Sort(want)
 	if len(got) != len(want) {
 		t.Fatalf("AllRuntimeKinds() = %v, want %v", got, want)

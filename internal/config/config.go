@@ -247,6 +247,9 @@ const (
 	RuntimeKindNode RuntimeKind = "node"
 	RuntimeKindJVM  RuntimeKind = "jvm"
 	RuntimeKindGo   RuntimeKind = "go"
+	// RuntimeKindPNPM is the package manager that Node and Bun runtimes install
+	// their apps with. No app runs on it.
+	RuntimeKindPNPM RuntimeKind = "pnpm"
 )
 
 // RuntimeConfigManaged holds the managed-mode binaries for a runtime.
@@ -265,15 +268,22 @@ type RuntimeConfigSystem struct {
 // jvm-style.
 type RuntimeConfigNode struct {
 	NodeVersion string `json:"nodeVersion"`
-	PNPMVersion string `json:"pnpmVersion"`
-	PNPMHash    string `json:"pnpmHash"`
+	// PNPMRuntime names the runtime of kind "pnpm" that installs this
+	// runtime's apps.
+	PNPMRuntime string `json:"pnpmRuntime"`
 }
 
 // RuntimeConfigBun holds Bun-specific runtime configuration.
 type RuntimeConfigBun struct {
 	BunVersion  string `json:"bunVersion"`
+	PNPMRuntime string `json:"pnpmRuntime"`
+}
+
+// RuntimeConfigPNPM holds pnpm-specific runtime config. Since pnpm 12 ships
+// no JavaScript implementation, pnpm is a native binary acquired like any
+// managed runtime.
+type RuntimeConfigPNPM struct {
 	PNPMVersion string `json:"pnpmVersion"`
-	PNPMHash    string `json:"pnpmHash"`
 }
 
 // RuntimeConfigUV holds uv/Python-specific runtime config.
@@ -291,6 +301,18 @@ type RuntimeConfigGo struct {
 	GoVersion string `json:"goVersion"`
 }
 
+// PNPMRuntimeRef returns the pnpmRuntime a Node or Bun runtime references, and
+// "" for every other kind.
+func (rc RuntimeConfig) PNPMRuntimeRef() string {
+	switch {
+	case rc.Kind == RuntimeKindNode && rc.Node != nil:
+		return rc.Node.PNPMRuntime
+	case rc.Kind == RuntimeKindBun && rc.Bun != nil:
+		return rc.Bun.PNPMRuntime
+	}
+	return ""
+}
+
 // RuntimeConfig is a single runtime entry: its kind, mode and kind-specific sub-config.
 type RuntimeConfig struct {
 	Kind    RuntimeKind           `json:"kind"`
@@ -302,6 +324,7 @@ type RuntimeConfig struct {
 	UV      *RuntimeConfigUV      `json:"uv,omitempty"`
 	JVM     *RuntimeConfigJVM     `json:"jvm,omitempty"`
 	Go      *RuntimeConfigGo      `json:"go,omitempty"`
+	PNPM    *RuntimeConfigPNPM    `json:"pnpm,omitempty"`
 }
 
 // MapOfRuntimes maps a runtime name to its configuration.

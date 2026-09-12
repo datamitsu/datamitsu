@@ -246,8 +246,9 @@ func TestStoreImportArgValidation(t *testing.T) {
 }
 
 // refsConfigJS declares one of everything `store refs` reports: a bundle pin, a
-// registry-sourced parser, a url-sourced parser, a per-platform binary app and
-// a node app carrying an external archive. It exists to prove the traversal reaches every entity —
+// registry-sourced parser, a url-sourced parser, a per-platform binary app, a
+// node app carrying an external archive and a node runtime with its pnpm build.
+// It exists to prove the traversal reaches every entity —
 // the minimal config would exercise only the empty case.
 func refsConfigJS() string {
 	return `globalThis.getBeforeConfigs = () => [];
@@ -277,10 +278,20 @@ globalThis.getConfig = () => ({
     node: {
       kind: "node",
       mode: "managed",
-      node: { nodeVersion: "22.12.0", pnpmVersion: "11.20.0", pnpmHash: "` + strings.Repeat("88", 32) + `" },
+      node: { nodeVersion: "22.12.0", pnpmRuntime: "pnpm" },
       managed: {
         binaries: {
           linux: { amd64: { glibc: { url: "https://example.test/node-linux-amd64.tar.gz", hash: "` + strings.Repeat("99", 32) + `", contentType: "tar.gz", extractDir: true } } },
+        },
+      },
+    },
+    pnpm: {
+      kind: "pnpm",
+      mode: "managed",
+      pnpm: { pnpmVersion: "12.4.1" },
+      managed: {
+        binaries: {
+          linux: { amd64: { glibc: { url: "https://example.test/pnpm-linux-x64.tar.gz", hash: "` + strings.Repeat("88", 32) + `", contentType: "tar.gz", binaryPath: "pnpm", extractDir: true } } },
         },
       },
     },

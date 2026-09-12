@@ -3,6 +3,9 @@
     "ignoreDeprecations": "6.0",
     "skipLibCheck": true
   },
-  "exclude": [".docusaurus", "build"],
+  "exclude": [
+    ".docusaurus",
+    "build"
+  ],
   "extends": "@docusaurus/tsconfig"
 }

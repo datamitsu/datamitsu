@@ -194,7 +194,13 @@ func writeRuntimeStages(b *strings.Builder, plan Plan, opts RenderOptions) {
 		stage := stageName("rt-", rt.Name)
 		fmt.Fprintf(b, "FROM %s AS %s\n", opts.builderBase(), stage)
 		fmt.Fprintf(b, "%s\n", opts.copySlice(stage))
-		fmt.Fprintf(b, "%s\n\n", opts.installCmd("--runtime", rt.Name))
+		args := []string{"--runtime", rt.Name}
+		// Installing pnpm here, in the stage the app stages are built FROM,
+		// downloads it once instead of once per Node or Bun app.
+		if rt.PNPMRuntime != "" {
+			args = append(args, "--runtime", rt.PNPMRuntime)
+		}
+		fmt.Fprintf(b, "%s\n\n", opts.installCmd(args...))
 	}
 }
 

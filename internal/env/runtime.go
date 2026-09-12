@@ -34,11 +34,6 @@ func GetPNPMStorePath() string {
 	return filepath.Join(GetStorePath(), ".pnpm-store")
 }
 
-// GetPNPMPath returns the path to the pnpm CLI entrypoint within the given store root.
-func GetPNPMPath(storeRoot string, pnpmVersion string, pnpmHash string) string {
-	return filepath.Join(storeRoot, ".runtimes", "pnpm", pnpmVersion, pnpmHash, "package", "bin", "pnpm.cjs")
-}
-
 // HashProjectPath computes the XXH3-128 hash of a project path.
 // Used for cache directory naming. Shared between env and cache packages.
 func HashProjectPath(projectPath string) string {

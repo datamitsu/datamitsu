@@ -210,6 +210,7 @@ datamitsu devtools pull-runtimes runtimes/runtimes.json --update --runtime bun
 datamitsu devtools pull-runtimes runtimes/runtimes.json --update --runtime node
 datamitsu devtools pull-runtimes runtimes/runtimes.json --update --runtime uv
 datamitsu devtools pull-runtimes runtimes/runtimes.json --update --runtime jvm
+datamitsu devtools pull-runtimes runtimes/runtimes.json --update --runtime pnpm
 ```
 
 **Preview changes without writing:**
@@ -222,7 +223,7 @@ The command fetches versions from upstream sources:
 
 - **Bun**: latest eligible release and official archive SHA-256 digests from GitHub
 - **Node.js**: latest LTS version from endoflife.date API
-- **PNPM**: latest version from npm registry
+- **pnpm**: latest pnpm 12 release old enough for the minimum release age (judged by its npm publish date), with per-platform archive SHA-256 digests from the matching GitHub release
 - **Python**: latest stable (non-EOL) version from endoflife.date API
 - **Java (Temurin)**: latest major version from Adoptium API
 
@@ -234,7 +235,15 @@ It then downloads runtime binaries for all platform tuples, computes SHA-256 has
 datamitsu devtools pull-runtimes runtimes/runtimes.json --update --runtime bun
 ```
 
-The updater selects the latest Bun GitHub release and pnpm package allowed by the configured minimum release age. It records the official SHA-256 digest for each macOS, Linux glibc, Linux musl, and Windows Bun archive on amd64 and arm64, plus the SHA-256 pin for pnpm.
+The updater selects the latest Bun GitHub release allowed by the configured minimum release age and records the official SHA-256 digest for each macOS, Linux glibc, Linux musl, and Windows Bun archive on amd64 and arm64. The Bun entry points at the pnpm runtime with `pnpmRuntime: "pnpm"`.
+
+#### Bumping the pnpm runtime
+
+```bash
+datamitsu devtools pull-runtimes runtimes/runtimes.json --update --runtime pnpm
+```
+
+pnpm is a runtime of its own, shared by the Node and Bun runtimes through `pnpmRuntime`. The updater picks the newest pnpm 12 release whose npm publish date passes the configured minimum release age, then pins the native archive for each macOS, Linux glibc, Linux musl, and Windows platform on amd64 and arm64 with the SHA-256 digests published in the matching pnpm/pnpm GitHub release. A pnpm bump reinstalls Node and Bun apps on their next use without downloading Node or Bun again.
 
 #### Bumping the Node.js runtime
 
@@ -591,7 +600,7 @@ const eslint = {
 
 #### Apps that need build scripts (puppeteer, sharp, esbuild, etc.)
 
-pnpm 11 blocks lifecycle scripts by default. If install fails with `ERR_PNPM_IGNORED_BUILDS`, allowlist the package via `allowBuilds`:
+pnpm (11 and later) blocks lifecycle scripts by default. If install fails with `ERR_PNPM_IGNORED_BUILDS`, allowlist the package via `allowBuilds`:
 
 ```js
 const mmdc = {

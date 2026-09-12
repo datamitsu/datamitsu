@@ -31,7 +31,7 @@ var log = logger.Logger.With(zap.Namespace("runtimemanager"))
 
 // downloaderConstructions counts every point at which this package builds
 // something that fetches from the network — the throwaway binmanager used to
-// acquire a runtime archive, the pnpm tarball fetch, and the JAR fetch. It is
+// acquire a runtime archive (pnpm included) and the JAR fetch. It is
 // the runtimemanager half of the guard described on binmanager.NetworkDownloads:
 // ResolveCommandInfo must leave both counters untouched, so a future refactor
 // cannot silently reintroduce a network call on the resolution path.
@@ -59,7 +59,6 @@ type RuntimeManager struct {
 	// (so retry-after-error works naturally).
 	runtimeInstall singleflight.Group // key: runtimeName
 	appInstall     singleflight.Group // key: "kind/appName"
-	pnpmInstall    singleflight.Group // key: "pnpmVersion\x00pnpmHash"
 }
 
 // New creates a RuntimeManager for the given runtime configuration map.
@@ -217,23 +216,9 @@ func (rm *RuntimeManager) GetAppPath(appName string, kind config.RuntimeKind, ve
 
 	rc = rm.resolveEffectiveRuntimeConfig(runtimeName, rc)
 
-	var runtimeHash string
-	if rc.Mode == config.RuntimeModeManaged {
-		osType, err := syslist.GetOsTypeFromString(runtime.GOOS)
-		if err != nil {
-			return "", fmt.Errorf("failed to detect OS type: %w", err)
-		}
-		archType, err := syslist.GetArchTypeFromString(runtime.GOARCH)
-		if err != nil {
-			return "", fmt.Errorf("failed to detect architecture type: %w", err)
-		}
-		libc := string(rm.hostTarget.Libc)
-		runtimeHash, err = calculateRuntimeHash(rc, osType, archType, libc)
-		if err != nil {
-			return "", fmt.Errorf("failed to calculate runtime hash: %w", err)
-		}
-	} else {
-		runtimeHash = calculateSystemRuntimeHash(rc)
+	runtimeHash, err := rm.runtimeIdentityHash(rc)
+	if err != nil {
+		return "", err
 	}
 
 	var appHash string
@@ -245,8 +230,12 @@ func (rm *RuntimeManager) GetAppPath(appName string, kind config.RuntimeKind, ve
 		if extra.BinPath == "" {
 			return "", errors.New("PackageAppPathExtra.BinPath is required for package-based apps")
 		}
+		pnpmHash, err := rm.pnpmIdentityHash(rc)
+		if err != nil {
+			return "", err
+		}
 		filesHash := binmanager.HashFilesAndArchives(files, archives)
-		appHash = calculatePackageAppHash(appName, extra.PackageName, version, extra.BinPath, deps, runtimeHash, lockHash, filesHash)
+		appHash = calculatePackageAppHash(appName, extra.PackageName, version, extra.BinPath, deps, runtimeHash, pnpmHash, lockHash, filesHash)
 	} else {
 		appHash = calculateAppHash(appName, version, deps, runtimeHash, lockHash, binmanager.HashFilesAndArchives(files, archives))
 	}
@@ -446,6 +435,16 @@ func CollectRequiredRuntimes(apps binmanager.MapOfApps, runtimes config.MapOfRun
 				needed[name] = true
 				break
 			}
+		}
+	}
+
+	// A needed Node or Bun runtime installs its apps with a pnpm runtime.
+	for _, name := range sortedRuntimeNames {
+		if !needed[name] {
+			continue
+		}
+		if pnpmName, ok := runtimes.PNPMRuntimeName(runtimes[name]); ok {
+			needed[pnpmName] = true
 		}
 	}
 
@@ -776,6 +775,44 @@ func (rm *RuntimeManager) removeAll(path string) error {
 		return fmt.Errorf("failed to remove %q: %w", path, err)
 	}
 	return nil
+}
+
+// runtimeIdentityHash is a runtime's cache identity: its host archive entry and
+// kind fields when managed, its command and kind fields when system. It never
+// contains a store path, so the app hashes it feeds stay relocatable.
+func (rm *RuntimeManager) runtimeIdentityHash(rc config.RuntimeConfig) (string, error) {
+	if rc.Mode != config.RuntimeModeManaged {
+		return calculateSystemRuntimeHash(rc), nil
+	}
+	osType, err := syslist.GetOsTypeFromString(runtime.GOOS)
+	if err != nil {
+		return "", fmt.Errorf("failed to detect OS type: %w", err)
+	}
+	archType, err := syslist.GetArchTypeFromString(runtime.GOARCH)
+	if err != nil {
+		return "", fmt.Errorf("failed to detect architecture type: %w", err)
+	}
+	hash, err := calculateRuntimeHash(rc, osType, archType, string(rm.hostTarget.Libc))
+	if err != nil {
+		return "", fmt.Errorf("failed to calculate runtime hash: %w", err)
+	}
+	return hash, nil
+}
+
+// pnpmIdentityHash is the identity of the pnpm runtime a Node or Bun runtime
+// installs its apps with. It feeds the app hash rather than the Node or Bun
+// runtime's own hash, so a pnpm bump reinstalls the apps without re-downloading
+// the runtime they execute on.
+func (rm *RuntimeManager) pnpmIdentityHash(rc config.RuntimeConfig) (string, error) {
+	name, pnpmRC, err := rm.ResolveRuntime(rc.PNPMRuntimeRef(), config.RuntimeKindPNPM)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve pnpm runtime: %w", err)
+	}
+	hash, err := rm.runtimeIdentityHash(pnpmRC)
+	if err != nil {
+		return "", fmt.Errorf("pnpm runtime %q: %w", name, err)
+	}
+	return hash, nil
 }
 
 // resolveEffectiveRuntimeConfig automatically overrides managed mode to system mode

@@ -308,47 +308,6 @@ func TestGetPNPMStorePath(t *testing.T) {
 	}
 }
 
-func TestGetPNPMPath(t *testing.T) {
-	tests := []struct {
-		name        string
-		storeRoot   string
-		pnpmVersion string
-		pnpmHash    string
-		want        string
-	}{
-		{
-			name:        "standard version",
-			storeRoot:   "/tmp/test-cache",
-			pnpmVersion: "9.15.4",
-			pnpmHash:    "abc123",
-			want:        filepath.Join("/tmp/test-cache", ".runtimes", "pnpm", "9.15.4", "abc123", "package", "bin", "pnpm.cjs"),
-		},
-		{
-			name:        "different version",
-			storeRoot:   "/home/user/.cache/datamitsu",
-			pnpmVersion: "10.0.0",
-			pnpmHash:    "def456",
-			want:        filepath.Join("/home/user/.cache/datamitsu", ".runtimes", "pnpm", "10.0.0", "def456", "package", "bin", "pnpm.cjs"),
-		},
-		{
-			name:        "different hash same version gets different path",
-			storeRoot:   "/tmp/test-cache",
-			pnpmVersion: "9.15.4",
-			pnpmHash:    "different789",
-			want:        filepath.Join("/tmp/test-cache", ".runtimes", "pnpm", "9.15.4", "different789", "package", "bin", "pnpm.cjs"),
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := GetPNPMPath(tt.storeRoot, tt.pnpmVersion, tt.pnpmHash)
-			if got != tt.want {
-				t.Errorf("GetPNPMPath() = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-
 func TestGetProjectCachePath(t *testing.T) {
 	t.Setenv(cacheDir.Name, "/tmp/test-cache")
 

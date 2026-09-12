@@ -28,6 +28,13 @@
       "platform": "linux/amd64/glibc"
     },
     {
+      "kind": "runtime-binary",
+      "name": "pnpm",
+      "url": "https://example.test/pnpm-linux-x64.tar.gz",
+      "hash": "8888888888888888888888888888888888888888888888888888888888888888",
+      "platform": "linux/amd64/glibc"
+    },
+    {
       "kind": "app-archive",
       "name": "prettier:completions",
       "url": "https://example.test/prettier-completions.tar.gz",

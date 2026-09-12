@@ -125,21 +125,21 @@ datamitsu also validates the venv interpreter at install time. If `.venv/bin/pyt
 
 ## Bun Runtime
 
-Bun apps use [pnpm](https://pnpm.io/) for dependency installation and a managed [Bun](https://bun.sh/) runtime for JavaScript execution. Bun itself launches `pnpm.cjs`, so selecting Bun does not download Node merely to install dependencies. Bun remains a separate app kind: selecting it is an explicit configuration choice and does not change how Node apps run. Managed x64 targets use Bun's standard optimized archives and therefore require AVX2-capable hardware.
+Bun apps use [pnpm](https://pnpm.io/) for dependency installation and a managed [Bun](https://bun.sh/) runtime for JavaScript execution. pnpm is a native binary, and the lifecycle scripts it runs reach Bun through a `node` alias, so selecting Bun does not download Node merely to install dependencies. Bun remains a separate app kind: selecting it is an explicit configuration choice and does not change how Node apps run. Managed x64 targets use Bun's standard optimized archives and therefore require AVX2-capable hardware.
 
 ### How Bun Apps Work
 
 1. datamitsu downloads and verifies the SHA-256-pinned Bun release archive
 2. Creates an isolated environment at `{store}/.apps/bun/{appName}/{hash}/`
-3. Downloads the SHA-256-pinned pnpm package and writes `package.json`, `pnpm-workspace.yaml`, and the configured `pnpm-lock.yaml`
-4. Runs `bun run --bun --no-install <pnpm.cjs> install --frozen-lockfile`
+3. Acquires the pnpm runtime named by the Bun runtime's `pnpmRuntime` (a SHA-256-pinned native pnpm archive for the host platform) and writes `package.json`, `pnpm-workspace.yaml`, and the configured `pnpm-lock.yaml`
+4. Runs `pnpm install --frozen-lockfile` with datamitsu's `node` → Bun alias first on `PATH`, so lifecycle scripts that call `node` run on Bun
 5. Executes the configured JavaScript entrypoint with `bun run --bun --no-install`
 
-Both Bun and Node apps share pnpm's content-addressable store at `{store}/.pnpm-store/`, while every app keeps its own `node_modules` directory. `--bun` keeps Node-shebang commands launched by pnpm lifecycle scripts or by the tool itself on the selected runtime.
+Both Bun and Node apps share pnpm's content-addressable store at `{store}/.pnpm-store/`, while every app keeps its own `node_modules` directory. During execution, `--bun` and the same alias keep Node-shebang commands launched by the tool on the selected runtime.
 
-The app environment also carries a `node` link to the managed Bun at `.datamitsu-runtime-bin/node`, first on `PATH` during install and execution, so lifecycle scripts and tools that call `node` find one without datamitsu downloading Node. It is a link rather than a wrapper script because Bun emulates the node CLI only when it is invoked under the name `node` — called under its own name it would read `node build` as its bundler and `node install` as its package manager.
+The alias at `.datamitsu-runtime-bin/node` is a link to the Bun executable rather than a wrapper script, because Bun emulates the node CLI only when it is invoked under the name `node` — called under its own name it would read `node build` as its bundler and `node install` as its package manager.
 
-Runtime auto-install is disabled, and datamitsu passes `--no-env-file` plus an empty Bun config during install and execution, so a target repository's `.env` files and `bunfig.toml` cannot change a managed tool's behavior. The same guards travel in `BUN_OPTIONS`, which every Bun process started under the app inherits, so they hold for the `node` processes a tool or a lifecycle script starts itself.
+Runtime auto-install is disabled, and datamitsu passes `--no-env-file` plus an empty Bun config when it executes the tool, so a target repository's `.env` files and `bunfig.toml` cannot change a managed tool's behavior. The same guards travel in `BUN_OPTIONS`, which every Bun process started under the app inherits, so they hold for the `node` processes a lifecycle script or the tool starts itself too.
 
 ### Defining a Bun App
 
@@ -173,9 +173,9 @@ Node apps use a managed Node.js runtime — downloaded as a pinned, SHA-256-veri
 ### How Node Apps Work
 
 1. datamitsu downloads and verifies (SHA-256) the configured Node.js archive and extracts it
-2. Downloads pnpm from the npm registry
+2. Acquires the pnpm runtime named by the Node runtime's `pnpmRuntime` (a SHA-256-pinned native pnpm archive for the host platform)
 3. Creates an isolated environment at `{store}/.apps/node/{appName}/{hash}/`
-4. Runs `pnpm install` to set up the package
+4. Runs `pnpm install --frozen-lockfile` with the managed Node.js first on `PATH`, so lifecycle scripts run on the pinned interpreter
 5. Executes the tool via Node.js
 
 ### Defining a Node App
@@ -193,25 +193,59 @@ apps: {
 }
 ```
 
-### JavaScript Runtime and pnpm Versions
+### JavaScript Runtimes and the pnpm Runtime
 
-Each JavaScript runtime pins both its interpreter and the pnpm version used to install apps:
+Since pnpm 12, pnpm is a native binary with no JavaScript implementation, so it is a runtime of its own (kind `pnpm`), defined once and referenced by every Node and Bun runtime through `pnpmRuntime`:
 
 ```javascript
-node: {
-  nodeVersion: "26.2.0",
-  pnpmVersion: "11.20.0",
-  pnpmHash: "...",
-}
-
-bun: {
-  bunVersion: "1.4.1",
-  pnpmVersion: "11.20.0",
-  pnpmHash: "...",
+runtimes: {
+  pnpm: {
+    kind: "pnpm",
+    mode: "managed",
+    managed: {
+      binaries: {
+        linux: {
+          amd64: {
+            glibc: {
+              url: "https://github.com/pnpm/pnpm/releases/download/v12.4.1/pnpm-linux-x64.tar.gz",
+              hash: "66e98862...", // SHA-256 (mandatory)
+              contentType: "tar.gz",
+              binaryPath: "pnpm",
+              extractDir: true,
+            },
+          },
+        },
+        // ... other platforms — `datamitsu devtools pull-runtimes` generates the full map
+      },
+    },
+    pnpm: { pnpmVersion: "12.4.1" },
+  },
+  node: {
+    kind: "node",
+    mode: "managed",
+    managed: { binaries: { /* Node.js archives */ } },
+    node: { nodeVersion: "26.2.0", pnpmRuntime: "pnpm" },
+  },
+  bun: {
+    kind: "bun",
+    mode: "managed",
+    managed: { binaries: { /* Bun archives */ } },
+    bun: { bunVersion: "1.4.1", pnpmRuntime: "pnpm" },
+  },
 }
 ```
 
-Interpreter versions are stored under `{store}/.runtimes/{kind}/{configHash}/`, and pnpm is stored separately under `{store}/.runtimes/pnpm/`. A shared pnpm content-addressable store at `{store}/.pnpm-store/` deduplicates packages across Bun and Node apps.
+`pnpmRuntime` is required and must name a runtime of kind `pnpm`. Several Node and Bun runtimes can share one pnpm runtime or point at different ones. No app runs on a pnpm runtime: an app whose `runtime` names one fails validation.
+
+The archives come from the pnpm GitHub release and are extracted whole: besides the binary they carry the `node-gyp` that pnpm uses to build native dependencies. As with any managed runtime, datamitsu downloads only the entry for the host platform and falls back from musl to glibc; a system pnpm works too (`mode: "system", system: { command: "pnpm" }`, where `pnpmVersion` becomes optional). `datamitsu init` downloads the pnpm runtime along with the Node or Bun runtime whenever a required app needs it. pnpm is only needed to install apps, so it is not part of the runtimes a built Docker image or OCI bundle ships for execution.
+
+Runtimes, pnpm included, are stored under `{store}/.runtimes/{name}/{configHash}/`. The pnpm runtime's identity is part of every Node and Bun app's environment hash but not of the Node or Bun runtime's own hash, so a pnpm bump reinstalls the apps without downloading Node or Bun again. A shared pnpm content-addressable store at `{store}/.pnpm-store/` deduplicates packages across Bun and Node apps.
+
+:::warning Breaking change: pnpm moved into its own runtime
+
+A Node or Bun runtime that still pins pnpm with `pnpmVersion` and `pnpmHash` (the SHA-256 of the npm `pnpm` tarball, which only works for pnpm 11 and earlier) no longer loads, because it has no `pnpmRuntime`. Add a runtime of kind `pnpm` and point the Node and Bun runtimes at it — `datamitsu devtools pull-runtimes <file> --update` writes all three entries. Existing `pnpm-lock.yaml` lock files (`lockfileVersion: '9.0'`) keep working unchanged.
+
+:::
 
 ## JVM Runtime (Java)
 
@@ -313,7 +347,7 @@ eslint: {
 
 ### How Lock Files Work
 
-- **Bun and Node apps**: The lock file is written as `pnpm-lock.yaml` and pnpm runs with `--frozen-lockfile`, refusing to install if dependencies don't match. The selected Bun or Node runtime executes `pnpm.cjs`
+- **Bun and Node apps**: The lock file is written as `pnpm-lock.yaml` and pnpm runs with `--frozen-lockfile`, refusing to install if dependencies don't match. pnpm runs as the native binary of the referenced pnpm runtime, with the selected Bun or Node runtime serving lifecycle scripts
 - **UV apps**: The lock file is written as `uv.lock` and uv runs with `--locked --no-build`, ensuring exact version matching and permitting wheels only
 - **Go apps**: The JSON payload is expanded into `go.mod` and `go.sum`, and the tool is built with `go build -trimpath -mod=readonly`
 
@@ -359,6 +393,7 @@ datamitsu detects the host libc at startup using a multi-stage process (ldd outp
 Managed runtimes need extra handling on musl because their upstreams' default channels are glibc-oriented:
 
 - **Bun**: official releases provide separate glibc and musl archives for both amd64 and arm64; datamitsu pins and selects them directly
+- **pnpm**: releases provide glibc and musl builds for both amd64 and arm64; datamitsu pins both and selects by the detected libc
 - **Node.js**: the default `nodejs.org/dist` archives are glibc-only. The registry therefore carries static musl entries (url + SHA-256) sourced from [unofficial-builds.nodejs.org](https://unofficial-builds.nodejs.org/download/release). On a musl host datamitsu downloads and verifies the musl Node archive directly, so node apps work on Alpine out of the box. musl Node additionally requires `libstdc++` (`apk add libstdc++`). See [Use in Alpine Linux](../how-to/use-in-alpine) for details.
 - **Python** (UV): uv downloads glibc Python builds
 - **JDK** (JVM): Temurin JDK releases are glibc-only
@@ -371,7 +406,7 @@ The fallback logic works as follows:
 
 1. Detects the host is musl
 2. Checks if the runtime's managed binaries include a musl variant
-3. If no musl binary exists, looks for the system binary (`node`, `uv`, or `java`) via PATH
+3. If no musl binary exists, looks for the system binary (`node`, `uv`, `java`, or `pnpm`) via PATH
 4. If found, automatically switches to system mode using the system binary
 5. If not found, falls through to the existing glibc fallback behavior
 
@@ -398,7 +433,15 @@ runtimes: {
     kind: "node",
     mode: "system",
     system: { command: "node" },
-    node: { nodeVersion: "26.2.0", pnpmVersion: "11.20.0", pnpmHash: "..." },
+    node: { nodeVersion: "26.2.0", pnpmRuntime: "pnpm" },
+  },
+  pnpm: {
+    kind: "pnpm",
+    // pnpm can stay pinned and downloaded while Node comes from the system,
+    // or use mode: "system" with system: { command: "pnpm" }
+    mode: "managed",
+    managed: { binaries: { /* per-platform pnpm archives */ } },
+    pnpm: { pnpmVersion: "12.4.1" },
   },
   uv: {
     kind: "uv",

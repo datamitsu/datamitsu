@@ -1,5 +1,5 @@
 // Package pnpmdefaults is the single source of truth for the recommended
-// pnpm 11 workspace security defaults applied by datamitsu. Both the node app
+// pnpm workspace security defaults applied by datamitsu. Both the node app
 // installer (internal/runtimemanager) and the JS config engine
 // (internal/engine, which injects the map as a JS global so config.js can
 // publish it via sharedStorage) read from this package.
@@ -11,7 +11,7 @@ package pnpmdefaults
 
 import "github.com/datamitsu/datamitsu/internal/runtimeconfig"
 
-// Defaults returns a fresh copy of the recommended pnpm 11 workspace security
+// Defaults returns a fresh copy of the recommended pnpm workspace security
 // defaults. A new map is returned on each call so callers can mutate it
 // (e.g. merge user overrides on top) without affecting other callers.
 func Defaults() map[string]any {

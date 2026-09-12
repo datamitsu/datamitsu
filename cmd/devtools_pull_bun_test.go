@@ -70,21 +70,18 @@ func TestBuildBunRuntimeJSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("detectBunBinaries() error = %v", err)
 	}
-	runtimeJSON := buildBunRuntimeJSON(&BunRuntimeData{
-		BunVersion:  "1.4.1",
-		PNPMVersion: "11.20.0",
-		PNPMHash:    strings.Repeat("b", 64),
-	}, binaries)
+	runtimeJSON := buildBunRuntimeJSON(&BunRuntimeData{BunVersion: "1.4.1"}, binaries)
 	if runtimeJSON.Kind != "bun" || runtimeJSON.Mode != "managed" {
 		t.Errorf("runtime = %+v, want managed Bun", runtimeJSON)
 	}
 	if runtimeJSON.Bun == nil || runtimeJSON.Bun.BunVersion != "1.4.1" {
 		t.Errorf("Bun config = %+v", runtimeJSON.Bun)
 	}
-	if runtimeJSON.Bun.PNPMVersion != "11.20.0" || runtimeJSON.Bun.PNPMHash != strings.Repeat("b", 64) {
-		t.Errorf("Bun pnpm config = %+v", runtimeJSON.Bun)
+	if runtimeJSON.Bun.PNPMRuntime != defaultPNPMRuntimeName {
+		t.Errorf("Bun pnpmRuntime = %q, want %q", runtimeJSON.Bun.PNPMRuntime, defaultPNPMRuntimeName)
 	}
-	if got := runtimeVersion(runtimeJSON); !strings.Contains(got, "bun=1.4.1,pnpm=11.20.0") {
+	// The pnpm version belongs to the pnpm runtime entry, not to Bun's.
+	if got := runtimeVersion(runtimeJSON); !strings.Contains(got, "bun=1.4.1") || strings.Contains(got, "pnpm=") {
 		t.Errorf("runtimeVersion() = %q", got)
 	}
 }

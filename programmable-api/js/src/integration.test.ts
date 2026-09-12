@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
-import { resolve } from "node:path";
-import { describe, it, mock } from "node:test";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { after, describe, it, mock } from "node:test";
 
 const BINARY_PATH = resolve(import.meta.dirname, "../../../datamitsu");
-const PROJECT_ROOT = resolve(import.meta.dirname, "../../..");
 
 mock.module("@datamitsu/datamitsu/get-exe.js", {
   namedExports: {
@@ -16,10 +18,44 @@ const { exec } = await import("./commands/exec.ts");
 const { cache } = await import("./commands/cache.ts");
 const { version } = await import("./commands/version.ts");
 
+// The command tests run against a throwaway project instead of this checkout.
+// This repository's config chain pins a wrapper config version, so every core
+// schema change would fail them until the wrapper is republished — the same
+// reason the loadConfig contract test moved to an isolated repository. Written
+// as plain strings: a template literal would read "{file}" as a broken
+// interpolation.
+const MINIMAL_CONFIG = [
+  'globalThis.getMinVersion = () => "0.0.0";',
+  "globalThis.getBeforeConfigs = () => [];",
+  "globalThis.getConfig = () => ({",
+  '  apps: { "hello-shell": { description: "say hi", shell: { name: "echo" } } },',
+  "  managedConfigs: {},",
+  "  runtimes: {},",
+  "  tools: {",
+  "    hello: {",
+  '      name: "hello",',
+  "      operations: {",
+  '        fix: { app: "hello-shell", args: ["{file}"], globs: ["**/*.txt"], scope: "per-file" },',
+  "      },",
+  "    },",
+  "  },",
+  "});",
+].join("\n");
+
+const projectDirectory = mkdtempSync(join(tmpdir(), "datamitsu-api-"));
+// Planning resolves the git root first, so the throwaway project has to be one.
+execFileSync("git", ["init", "-q"], { cwd: projectDirectory });
+writeFileSync(join(projectDirectory, "datamitsu.config.js"), MINIMAL_CONFIG);
+writeFileSync(join(projectDirectory, "a.txt"), "hi\n");
+
+after(() => {
+  rmSync(projectDirectory, { force: true, recursive: true });
+});
+
 describe("integration: fix --explain=json", () => {
   it("returns valid PlanJSON structure", async () => {
     const result = await fix({
-      cwd: PROJECT_ROOT,
+      cwd: projectDirectory,
       explain: "json",
     });
 
@@ -51,7 +87,7 @@ describe("integration: fix --explain=json", () => {
 describe("integration: exec without args", () => {
   it("returns tool list with at least one tool", async () => {
     const result = await exec(undefined, {
-      cwd: PROJECT_ROOT,
+      cwd: projectDirectory,
     });
 
     assert.equal(result.success, true, `exec failed: ${result.error}`);
@@ -62,7 +98,7 @@ describe("integration: exec without args", () => {
     assert.ok(typeof tool.name === "string");
     assert.ok(typeof tool.type === "string");
     assert.ok(
-      ["binary", "go", "jvm", "node", "shell", "uv"].includes(tool.type),
+      ["binary", "bun", "go", "jvm", "node", "shell", "uv"].includes(tool.type),
       `unexpected tool type: ${tool.type}`,
     );
   });
