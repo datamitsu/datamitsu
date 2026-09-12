@@ -74,7 +74,7 @@ jobs:
         with:
           args: release ${{ needs.determine-release-type.outputs.is_unstable == 'true' && '--snapshot' || '' }} --clean
           distribution: goreleaser
-          version: "~> v2"
+          version: "v2.18.1"
       # 2b. Fail the build if the WASM parser module is not in checksums.txt
       #     (the signed file) — it would otherwise ship unverifiable.
       - name: Assert WASM is in checksums.txt

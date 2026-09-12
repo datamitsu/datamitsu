@@ -42,7 +42,7 @@ jobs:
         with:
           args: release --snapshot --clean --skip=sign
           distribution: goreleaser
-          version: "~> v2"
+          version: "v2.18.1"
       - name: Normalize binaries
         run: .github/scripts/normalize-binaries.sh "true"
       - name: Prepare npm packages
@@ -109,7 +109,7 @@ jobs:
         with:
           args: release --snapshot --clean --skip=sign
           distribution: goreleaser
-          version: "~> v2"
+          version: "v2.18.1"
       - name: Prepare binaries for Docker
         run: |
           # GoReleaser in snapshot mode creates binaries in dist/datamitsu_{OS}_{ARCH}_{MICROARCH}/
