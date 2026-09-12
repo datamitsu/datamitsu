@@ -136,7 +136,7 @@ func runInit(_ *cobra.Command, _ []string) error {
 		}
 		toolCount, failed = n, failed+f
 
-		// Install runtime-managed (node/UV) link-apps so their config links resolve
+		// Install runtime-managed (Bun/Node/UV) link-apps so their config links resolve
 		// below: those referenced by a tool, plus all non-lazy link-apps (whose
 		// links may be consumed by hooks/ManagedConfig, e.g. commitlint). Only apps
 		// marked Lazy (e.g. slidev) are deferred — they install on first `dm exec`.
@@ -639,7 +639,7 @@ func filterAppsForSmartInit(apps binmanager.MapOfApps, referencedApps []string) 
 	return result
 }
 
-// eagerRuntimeLinkApps returns runtime-managed (node/UV) apps that declare Links
+// eagerRuntimeLinkApps returns runtime-managed package apps that declare Links
 // and are NOT marked Lazy. These install at init even when no tool references
 // them, because their links may be consumed by hooks or ManagedConfig that
 // scanReferencedApps cannot see (e.g. commitlint's config, imported via a

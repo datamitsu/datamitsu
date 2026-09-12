@@ -87,11 +87,13 @@ type Plan struct {
 	RegistrySourcedParsers []string
 }
 
-// classifyApp mirrors runtimemanager.runtimeAppRef's precedence (uv → node → jvm
-// → go) without importing the unexported helper. ok is false for binary/shell/
+// classifyApp mirrors runtimemanager.runtimeAppRef's precedence without
+// importing the unexported helper. ok is false for binary/shell/
 // empty apps; callers then inspect app.Binary to split binary from shell.
 func classifyApp(app binmanager.App) (kind config.RuntimeKind, runtimeRef string, ok bool) {
 	switch {
+	case app.Bun != nil:
+		return config.RuntimeKindBun, app.Bun.Runtime, true
 	case app.Uv != nil:
 		return config.RuntimeKindUV, app.Uv.Runtime, true
 	case app.Node != nil:

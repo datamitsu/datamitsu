@@ -1,6 +1,6 @@
 ---
 title: Add a New Tool
-description: Step-by-step guide to adding binary, UV, Node, JVM, and Go tools to datamitsu
+description: Step-by-step guide to adding binary, Bun, UV, Node, JVM, and Go tools to datamitsu
 ---
 
 # Add a New Tool
@@ -156,6 +156,41 @@ yamllint: {
 ```bash
 datamitsu init
 datamitsu exec yamllint -- --version
+```
+
+## Adding a Bun App
+
+Bun apps are npm packages installed by pnpm and executed with an isolated Bun runtime. Bun launches the pnpm script directly, so no Node runtime is acquired for installation.
+
+### 1. Add the app definition
+
+```javascript
+apps: {
+  eslint: {
+    bun: {
+      packageName: "eslint",
+      version: "10.9.0",
+      binPath: "node_modules/eslint/bin/eslint.js",
+      lockFile: "", // generated next
+    },
+  },
+}
+```
+
+Use the package's JavaScript entrypoint for `binPath`. datamitsu invokes it explicitly with Bun rather than relying on an npm `.bin` shebang that may select Node.
+
+### 2. Generate the mandatory lock file
+
+```bash
+datamitsu config lockfile eslint
+```
+
+Paste the resulting `br:...` value into `lockFile`. It contains `pnpm-lock.yaml`; normal installs use pnpm's frozen lockfile and the shared hardened workspace policy.
+
+### 3. Test the tool
+
+```bash
+datamitsu exec eslint -- --version
 ```
 
 ## Adding a Node App (Node.js)

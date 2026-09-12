@@ -1102,19 +1102,20 @@ declare global {
       /**
        * Named archives to extract into the app's install directory. Archive names can be referenced
        * in Links to create symlinks. Archives are extracted before Files are written, allowing
-       * Files to override. Only valid for UV and Node apps; using this field on a binary, JVM, Go,
-       * or shell app is a configuration error.
+       * Files to override. Only valid for Bun, UV, and Node apps; using this field on a binary,
+       * JVM, Go, or shell app is a configuration error.
        */
       archives?: Record<string, ArchiveSpec>;
       binary?: AppConfigBinary;
+      bun?: AppConfigBun;
       /**
        * Human-readable description of the app, shown in exec listing.
        */
       description?: string;
       /**
-       * Custom environment variables for this app, applied to all app kinds (binary, uv, node, jvm,
-       * go, shell). Injected both at install time (uv/node/go dependency install) and at run time
-       * (every app type).
+       * Custom environment variables for this app, applied to all app kinds (binary, bun, uv, node,
+       * jvm, go, shell). Injected both at install time (bun/uv/node/go dependency install) and at
+       * run time (every app type).
        *
        * Values support placeholder expansion (done in Go, never written into the committed config):
        *
@@ -1133,15 +1134,15 @@ declare global {
       env?: Record<string, string>;
       /**
        * Static file contents to write into the app's install directory before the package manager
-       * runs. Keys are filenames; values are file contents. Only valid for UV and Node apps; using
-       * this field on a binary, JVM, Go, or shell app is a configuration error.
+       * runs. Keys are filenames; values are file contents. Only valid for Bun, UV, and Node apps;
+       * using this field on a binary, JVM, Go, or shell app is a configuration error.
        *
-       * Special handling for `pnpm-workspace.yaml` on node apps: the entry is NOT written verbatim.
-       * Instead, the installer parses it and shallow-merges it on top of the recommended pnpm 11
-       * workspace security defaults, then writes the merged result. User keys override defaults for
-       * the same top-level key. Use this to add `allowBuilds` for packages that need build scripts
-       * (e.g., puppeteer) without losing the security defaults. See the Supply Chain Security guide
-       * for the full default key list and rationale.
+       * Special handling for `pnpm-workspace.yaml` on Bun and Node apps: the entry is NOT written
+       * verbatim. Instead, the installer parses it and shallow-merges it on top of the recommended
+       * pnpm 11 workspace security defaults, then writes the merged result. User keys override
+       * defaults for the same top-level key. Use this to add `allowBuilds` for packages that need
+       * build scripts (e.g., puppeteer) without losing the security defaults. See the Supply Chain
+       * Security guide for the full default key list and rationale.
        *
        * @example
        *   // Allow puppeteer build scripts; defaults still apply
@@ -1162,8 +1163,8 @@ declare global {
       lazy?: boolean;
       /**
        * Symlinks to create in .datamitsu/ directory, mapping link name to relative path in install
-       * directory. Only valid for UV and Node apps; using this field on a binary, JVM, Go, or shell
-       * app is a configuration error.
+       * directory. Only valid for Bun, UV, and Node apps; using this field on a binary, JVM, Go, or
+       * shell app is a configuration error.
        */
       links?: Record<string, string>;
       node?: AppConfigNode;
@@ -1183,6 +1184,27 @@ declare global {
        * Version string for display purposes (e.g. from GitHub release tag).
        */
       version?: string;
+    }
+
+    interface AppConfigBun {
+      /**
+       * JavaScript entrypoint executed by Bun, relative to the app environment. Do not point this
+       * at a `node_modules/.bin` shell shim.
+       *
+       * @example
+       *   "node_modules/eslint/bin/eslint.js";
+       */
+      binPath: string;
+      dependencies?: Record<string, string>;
+      /**
+       * Pnpm-lock.yaml content for reproducible installs. Required for all Bun apps. When prefixed
+       * with "br:", the content is brotli-compressed and base64-encoded. Generate via: datamitsu
+       * config lockfile <appName>
+       */
+      lockFile: string;
+      packageName: string;
+      runtime?: string;
+      version: string;
     }
 
     interface AppConfigGo {
@@ -1381,6 +1403,11 @@ declare global {
 
     interface RuntimeConfig {
       /**
+       * Bun-specific runtime configuration (bunVersion, pnpmVersion, pnpmHash). Required when kind
+       * is "bun". pnpm installs dependencies while Bun executes both pnpm and the installed app.
+       */
+      bun?: RuntimeConfigBun;
+      /**
        * Go-specific runtime configuration (goVersion). Required when kind is "go".
        */
       go?: RuntimeConfigGo;
@@ -1402,6 +1429,16 @@ declare global {
        * UV-specific runtime configuration (pythonVersion). Optional when kind is "uv".
        */
       uv?: RuntimeConfigUV;
+    }
+
+    interface RuntimeConfigBun {
+      bunVersion: string;
+      /**
+       * SHA-256 hash of the pnpm tarball for integrity verification. Required per security policy:
+       * all downloads must have a pinned hash.
+       */
+      pnpmHash: string;
+      pnpmVersion: string;
     }
 
     interface RuntimeConfigGo {
@@ -1444,7 +1481,7 @@ declare global {
       pythonVersion?: string;
     }
 
-    type RuntimeKind = "go" | "jvm" | "node" | "uv";
+    type RuntimeKind = "bun" | "go" | "jvm" | "node" | "uv";
 
     type RuntimeMode = "managed" | "system";
   }

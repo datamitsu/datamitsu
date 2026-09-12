@@ -1,11 +1,11 @@
 ---
 title: Supply Chain Security
-description: How datamitsu enforces supply chain integrity for pnpm, UV, and Go dependencies
+description: How datamitsu enforces supply chain integrity for Bun, pnpm, UV, and Go dependencies
 ---
 
 # Supply Chain Security
 
-datamitsu treats supply chain integrity as a non-negotiable property of every install. This guide explains the defenses applied to pnpm (node apps), UV (Python apps), and Go dependencies, and how to configure overrides when a real workload requires them.
+datamitsu treats supply chain integrity as a non-negotiable property of every install. This guide explains the defenses applied to pnpm (Bun and Node apps), UV (Python apps), and Go dependencies, and how to configure overrides when a real workload requires them.
 
 ## Hash Verification (All Downloads)
 
@@ -15,8 +15,9 @@ archives, pnpm itself, remote config files, and WASM output parsers. If a hash i
 missing, datamitsu refuses to download — there is no permissive fallback mode.
 
 The hash is verified before the artifact is unpacked or executed. Lock files
-are mandatory for all Node, UV, and Go apps; their package managers then enforce
-the integrity values carried by `pnpm-lock.yaml`, `uv.lock`, or `go.sum`.
+are mandatory for all Bun, Node, UV, and Go apps; their package managers then
+enforce the integrity values carried by `pnpm-lock.yaml`, `uv.lock`,
+or `go.sum`.
 
 See the [Binary Management](./binary-management.md) guide for the verification pipeline applied to binary apps.
 
@@ -63,12 +64,12 @@ When you pin a tool or runtime version with the `devtools pull-*` commands, data
 
 The global default is **10080 minutes (7 days)**. It applies to every command that selects a concrete version from a registry:
 
-| Command         | Age-filtered registries                         |
-| --------------- | ----------------------------------------------- |
-| `pull-github`   | GitHub releases                                 |
-| `pull-node`     | npm                                             |
-| `pull-uv`       | PyPI                                            |
-| `pull-runtimes` | npm (pnpm), GitHub (uv and JVM binary releases) |
+| Command         | Age-filtered registries                               |
+| --------------- | ----------------------------------------------------- |
+| `pull-github`   | GitHub releases                                       |
+| `pull-node`     | npm                                                   |
+| `pull-uv`       | PyPI                                                  |
+| `pull-runtimes` | npm (pnpm), GitHub (Bun, uv, and JVM binary releases) |
 
 Major-version-line lookups are **not** age-filtered, because they select a release _line_ rather than a specific build: the Node.js LTS line and Python stable line (endoflife.date), the Temurin major version (Adoptium API), and the Go release listing (go.dev). Only the concrete binary release or package version chosen within those lines passes through the age filter.
 
@@ -120,18 +121,28 @@ DATAMITSU_MIN_RELEASE_AGE=20160 datamitsu config runtime | jq .minimumReleaseAge
 ```
 
 :::note Distinct from the pnpm `minimumReleaseAge` setting
-This version-selection filter — applied when _you_ pin versions with `pull-*` — is separate from the `minimumReleaseAge` key in `pnpm-workspace.yaml`, which pnpm applies when it resolves a node app's _transitive_ dependencies at install time. Both default to 7 days; see [pnpm (Node Apps)](#pnpm-node-apps) for the install-time setting.
+This version-selection filter — applied when _you_ pin versions with `pull-*` — is separate from the `minimumReleaseAge` key in `pnpm-workspace.yaml`, which pnpm applies when it resolves a Bun or Node app's _transitive_ dependencies at install time. Both default to 7 days; see [pnpm (Bun and Node Apps)](#pnpm-bun-and-node-apps) for the install-time setting.
 :::
 
-## pnpm (Node Apps)
+## Bun Apps
+
+The Bun runtime is downloaded from an official GitHub release archive and verified against the SHA-256 digest published in that release's asset metadata. Bun apps use the same mandatory `pnpm-lock.yaml` and hardened workspace policy as Node apps. Bun launches the pinned pnpm package directly:
+
+```bash
+bun run --bun --no-install <pnpm.cjs> install --frozen-lockfile
+```
+
+The workspace policy blocks unapproved dependency lifecycle scripts, and `--frozen-lockfile` rejects any dependency graph that would modify the configured lock. `--bun` keeps Node-shebang commands on the selected runtime during both installation and execution, and `--no-install` disables Bun's automatic dependency installation. datamitsu also disables Bun's automatic `.env` loading and supplies an empty Bun config, preventing a target repository's `.env` files or `bunfig.toml` from changing a managed tool process. The app therefore cannot turn a cache miss into an unpinned network fetch during tool execution.
+
+## pnpm (Bun and Node Apps)
 
 The Node.js runtime itself is acquired as a direct, SHA-256-pinned archive download (like the JVM runtime), and pnpm is pinned by SHA-256 as well — so the toolchain executing your installs is integrity-verified before any package is fetched.
 
-pnpm 11 introduces strict supply chain defaults that block lifecycle scripts for unapproved packages. datamitsu integrates with these defaults rather than disabling them: when a node app is installed, datamitsu writes a `pnpm-workspace.yaml` containing a secure baseline. Any per-app overrides supplied via `App.files["pnpm-workspace.yaml"]` are shallow-merged on top.
+pnpm 11 introduces strict supply chain defaults that block lifecycle scripts for unapproved packages. datamitsu integrates with these defaults rather than disabling them: when a Bun or Node app is installed, datamitsu writes a `pnpm-workspace.yaml` containing a secure baseline. Any per-app overrides supplied via `App.files["pnpm-workspace.yaml"]` are shallow-merged on top.
 
 ### Recommended Defaults
 
-The baseline `pnpm-workspace.yaml` that datamitsu writes for every node app:
+The baseline `pnpm-workspace.yaml` that datamitsu writes for every Bun and Node app:
 
 ```yaml
 strictDepBuilds: true
@@ -195,7 +206,7 @@ files: {
 
 ### Reusing Defaults in Project Repos via `sharedStorage`
 
-For users who want to write a secure `pnpm-workspace.yaml` into a project repository (not into a datamitsu-managed node app environment), the default `config.js` publishes the recommended defaults via `sharedStorage["pnpm-workspace-defaults"]`. Your config can read, extend, and write them.
+For users who want to write a secure `pnpm-workspace.yaml` into a project repository (not into a datamitsu-managed Bun or Node app environment), the default `config.js` publishes the recommended defaults via `sharedStorage["pnpm-workspace-defaults"]`. Your config can read, extend, and write them.
 
 ```typescript
 function getConfig(config: BinManager.Config): BinManager.Config {

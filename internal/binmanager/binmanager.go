@@ -77,6 +77,16 @@ type AppConfigNode struct {
 	Dependencies map[string]string `json:"dependencies,omitempty"`
 }
 
+// AppConfigBun configures an npm tool installed by pnpm and executed with Bun.
+type AppConfigBun struct {
+	PackageName  string            `json:"packageName"`
+	Version      string            `json:"version"`
+	BinPath      string            `json:"binPath"`
+	Runtime      string            `json:"runtime,omitempty"`
+	LockFile     string            `json:"lockFile,omitempty"`
+	Dependencies map[string]string `json:"dependencies,omitempty"`
+}
+
 // AppConfigJVM configures a JAR-based tool run under the managed JVM runtime.
 type AppConfigJVM struct {
 	JarURL    string `json:"jarUrl"`
@@ -124,6 +134,7 @@ type App struct {
 	VersionCheck *AppVersionCheck `json:"versionCheck,omitempty"`
 
 	Binary *AppConfigBinary `json:"binary,omitempty"`
+	Bun    *AppConfigBun    `json:"bun,omitempty"`
 	Uv     *AppConfigUV     `json:"uv,omitempty"`
 	Node   *AppConfigNode   `json:"node,omitempty"`
 	Jvm    *AppConfigJVM    `json:"jvm,omitempty"`
@@ -131,7 +142,7 @@ type App struct {
 	Shell  *AppConfigShell  `json:"shell,omitempty"`
 
 	// Env holds user-defined environment variables applied to all app kinds, both
-	// at install time (uv/node/go) and run time. Values support ${STORE} and
+	// at install time (bun/uv/node/go) and run time. Values support ${STORE} and
 	// ${APP_DIR} placeholders. Keys already set by datamitsu/the runtime win.
 	Env map[string]string `json:"env,omitempty"`
 
@@ -425,7 +436,7 @@ const ensureToolsConcurrency = 4
 // EnsureTools installs every distinct tool named in names before the caller
 // runs them, so that subsequent parallel execution never triggers a lazy,
 // racy install. Names are deduplicated; each distinct tool is resolved once via
-// GetCommandInfo, which installs binaries (through GetBinaryPath) and uv/node/
+// GetCommandInfo, which installs binaries (through GetBinaryPath) and bun/uv/node/
 // go/jvm runtime apps (through the single-flighted runtime manager). Shell apps
 // need no install and resolve cheaply.
 //
@@ -483,7 +494,7 @@ func (bm *BinManager) EnsureTools(ctx context.Context, names []string) error {
 }
 
 // GetCommandInfo returns command information for executing an application
-// Works with all application types: binary, shell, uv, node, jvm, go
+// Works with all application types: binary, shell, bun, uv, node, jvm, go
 func (bm *BinManager) GetCommandInfo(ctx context.Context, appName string) (*CommandInfo, error) {
 	app, ok := bm.mapOfApps[appName]
 	if !ok {
@@ -510,7 +521,7 @@ func (bm *BinManager) GetCommandInfo(ctx context.Context, appName string) (*Comm
 			Command: binPath,
 		}
 
-	case app.Uv != nil || app.Node != nil || app.Jvm != nil || app.Go != nil:
+	case app.Bun != nil || app.Uv != nil || app.Node != nil || app.Jvm != nil || app.Go != nil:
 		if bm.runtimeManager == nil {
 			return nil, fmt.Errorf("no runtime manager configured for runtime-managed app %q", appName)
 		}
@@ -574,7 +585,7 @@ func (bm *BinManager) ResolveCommandInfo(appName string) (*CommandInfo, bool, er
 		}
 		installed = pathExists(binPath)
 
-	case app.Uv != nil || app.Node != nil || app.Jvm != nil || app.Go != nil:
+	case app.Bun != nil || app.Uv != nil || app.Node != nil || app.Jvm != nil || app.Go != nil:
 		if bm.runtimeManager == nil {
 			return nil, false, fmt.Errorf("no runtime manager configured for runtime-managed app %q", appName)
 		}
@@ -643,7 +654,7 @@ func (bm *BinManager) ComputeInstallPath(appName string) (string, error) {
 		return bm.getBinaryPath(appName)
 	}
 
-	if app.Uv != nil || app.Node != nil || app.Jvm != nil || app.Go != nil {
+	if app.Bun != nil || app.Uv != nil || app.Node != nil || app.Jvm != nil || app.Go != nil {
 		if bm.runtimeManager == nil {
 			return "", fmt.Errorf("no runtime manager configured for runtime-managed app %q", appName)
 		}
@@ -926,6 +937,10 @@ func (bm *BinManager) GetAppsList() []AppInfo {
 		case app.Binary != nil:
 			info.Type = "binary"
 			info.Version = app.Binary.Version
+		case app.Bun != nil:
+			info.Type = "bun"
+			info.Version = app.Bun.Version
+			info.PackageName = app.Bun.PackageName
 		case app.Uv != nil:
 			info.Type = "uv"
 			info.Version = app.Uv.Version
@@ -1042,7 +1057,7 @@ func (bm *BinManager) ExecCaptured(ctx context.Context, appName string, args []s
 }
 
 // BinaryAvailable reports whether app can run on the current host. It only
-// resolves (no download): non-binary apps (shell/uv/node/jvm/go) always report
+// resolves (no download): non-binary apps (shell/bun/uv/node/jvm/go) always report
 // available since they have their own fallback paths; a binary app reports
 // unavailable, with the host string as detail, when no build matches this
 // os/arch/libc. Implements tooling.PlatformChecker, so the planner can mark

@@ -11,7 +11,7 @@ import "fmt"
 // runtimeKinds instead of edits fanned out across systemCommandForKind, the two
 // hash functions, and ValidateRuntimes.
 type RuntimeKindInfo struct {
-	// Name is the canonical kind string ("uv" | "node" | "jvm" | "go").
+	// Name is the canonical kind string ("bun" | "uv" | "node" | "jvm" | "go").
 	Name string
 	// SystemCommand is the system binary name used when falling back to system
 	// mode (e.g. on a musl host without a musl archive). Empty means the kind has
@@ -33,6 +33,17 @@ type RuntimeKindInfo struct {
 }
 
 var runtimeKinds = map[RuntimeKind]RuntimeKindInfo{
+	RuntimeKindBun: {
+		Name:          string(RuntimeKindBun),
+		SystemCommand: "bun",
+		HashFields: func(rc RuntimeConfig) []string {
+			if rc.Bun == nil {
+				return nil
+			}
+			return []string{rc.Bun.BunVersion, rc.Bun.PNPMVersion, rc.Bun.PNPMHash}
+		},
+		Validate: validateBunRuntimeKind,
+	},
 	RuntimeKindUV: {
 		Name:          string(RuntimeKindUV),
 		SystemCommand: "uv",
@@ -79,6 +90,29 @@ var runtimeKinds = map[RuntimeKind]RuntimeKindInfo{
 		},
 		Validate: validateGoRuntimeKind,
 	},
+}
+
+func validateBunRuntimeKind(name string, rc RuntimeConfig) []string {
+	if rc.Bun == nil {
+		return []string{fmt.Sprintf("runtime %q: Bun runtime requires bun config with bunVersion, pnpmVersion, and pnpmHash", name)}
+	}
+	var errs []string
+	if rc.Bun.BunVersion == "" {
+		errs = append(errs, fmt.Sprintf("runtime %q: bun.bunVersion is required", name))
+	} else if !isValidVersionString(rc.Bun.BunVersion) {
+		errs = append(errs, fmt.Sprintf("runtime %q: bun.bunVersion %q contains invalid characters (must be alphanumeric, dots, hyphens, underscores, or plus signs)", name, rc.Bun.BunVersion))
+	}
+	if rc.Bun.PNPMVersion == "" {
+		errs = append(errs, fmt.Sprintf("runtime %q: bun.pnpmVersion is required", name))
+	} else if !isValidVersionString(rc.Bun.PNPMVersion) {
+		errs = append(errs, fmt.Sprintf("runtime %q: bun.pnpmVersion %q contains invalid characters (must be alphanumeric, dots, hyphens, underscores, or plus signs)", name, rc.Bun.PNPMVersion))
+	}
+	if rc.Bun.PNPMHash == "" {
+		errs = append(errs, fmt.Sprintf("runtime %q: bun.pnpmHash is required (SHA-256 hash of pnpm tarball)", name))
+	} else if !isValidSHA256Hex(rc.Bun.PNPMHash) {
+		errs = append(errs, fmt.Sprintf("runtime %q: bun.pnpmHash must be a valid SHA-256 hex string (64 lowercase hex characters)", name))
+	}
+	return errs
 }
 
 // LookupRuntimeKind returns the registry entry for kind. The boolean is false for

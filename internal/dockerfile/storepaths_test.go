@@ -16,6 +16,9 @@ func TestStoreSubtrees(t *testing.T) {
 	if got := appEnvSubtree(config.RuntimeKindNode, "prettier"); got != ".apps/node/prettier" {
 		t.Errorf("appEnvSubtree(node) = %q", got)
 	}
+	if got := appEnvSubtree(config.RuntimeKindBun, "eslint"); got != ".apps/bun/eslint" {
+		t.Errorf("appEnvSubtree(bun) = %q", got)
+	}
 	if got := appEnvSubtree(config.RuntimeKindUV, "ruff"); got != ".apps/uv/ruff" {
 		t.Errorf("appEnvSubtree(uv) = %q", got)
 	}
@@ -26,6 +29,7 @@ func TestStoreSubtrees(t *testing.T) {
 
 func TestRuntimeCopiedToFinal(t *testing.T) {
 	cases := map[config.RuntimeKind]bool{
+		config.RuntimeKindBun:  true,
 		config.RuntimeKindNode: true,
 		config.RuntimeKindUV:   true,
 		config.RuntimeKindJVM:  true,

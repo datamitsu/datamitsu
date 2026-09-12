@@ -242,6 +242,7 @@ type RuntimeKind string
 
 // Supported runtime kinds.
 const (
+	RuntimeKindBun  RuntimeKind = "bun"
 	RuntimeKindUV   RuntimeKind = "uv"
 	RuntimeKindNode RuntimeKind = "node"
 	RuntimeKindJVM  RuntimeKind = "jvm"
@@ -268,6 +269,13 @@ type RuntimeConfigNode struct {
 	PNPMHash    string `json:"pnpmHash"`
 }
 
+// RuntimeConfigBun holds Bun-specific runtime configuration.
+type RuntimeConfigBun struct {
+	BunVersion  string `json:"bunVersion"`
+	PNPMVersion string `json:"pnpmVersion"`
+	PNPMHash    string `json:"pnpmHash"`
+}
+
 // RuntimeConfigUV holds uv/Python-specific runtime config.
 type RuntimeConfigUV struct {
 	PythonVersion string `json:"pythonVersion,omitempty"`
@@ -289,6 +297,7 @@ type RuntimeConfig struct {
 	Mode    RuntimeMode           `json:"mode"`
 	Managed *RuntimeConfigManaged `json:"managed,omitempty"`
 	System  *RuntimeConfigSystem  `json:"system,omitempty"`
+	Bun     *RuntimeConfigBun     `json:"bun,omitempty"`
 	Node    *RuntimeConfigNode    `json:"node,omitempty"`
 	UV      *RuntimeConfigUV      `json:"uv,omitempty"`
 	JVM     *RuntimeConfigJVM     `json:"jvm,omitempty"`

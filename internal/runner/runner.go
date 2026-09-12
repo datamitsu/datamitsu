@@ -880,7 +880,7 @@ func RunSequential(
 }
 
 // RunContinuation runs a single operation as a continuation of another command's
-// output (e.g. setup's post-fix). It reuses the banner already shown by the
+// output (e.g. config reconcile's post-fix). It reuses the banner already shown by the
 // caller instead of printing a second one.
 func RunContinuation(
 	operation config.OperationType,
@@ -890,7 +890,7 @@ func RunContinuation(
 	selectedToolsFlag string,
 	loadConfigFunc func() (*config.Config, string, error),
 ) error {
-	// Continuations (e.g. setup's post-fix) never harden on skips.
+	// Continuations (e.g. config reconcile's post-fix) never harden on skips.
 	return runSequential([]config.OperationType{operation}, args, explainMode, fileScoped, selectedToolsFlag, loadConfigFunc, false, false, Options{})
 }
 

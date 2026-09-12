@@ -18,10 +18,10 @@ import (
 var configLockfileCmd = &cobra.Command{
 	Use:   "lockfile [appName]",
 	Short: "Generate lock file content for a runtime-managed app",
-	Long: `Reinstalls a runtime-managed app (node/uv/go) and outputs its lock file content
+	Long: `Reinstalls a runtime-managed app (bun/node/uv/go) and outputs its lock file content
 as a JSON-escaped string ready to paste into configuration.
 
-When called without arguments, lists all apps that support lock files (node/uv/go).
+When called without arguments, lists all apps that support lock files (bun/node/uv/go).
 
 This command:
 1. Deletes the app's existing content-addressed store entry
@@ -68,7 +68,7 @@ func runConfigLockfile(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("app %q does not support lock files (%s apps have no dependency manifest)", appName, appType)
 	}
 
-	if app.Node == nil && app.Uv == nil && app.Go == nil {
+	if app.Bun == nil && app.Node == nil && app.Uv == nil && app.Go == nil {
 		return fmt.Errorf("app %q has no valid runtime configuration", appName)
 	}
 
@@ -163,7 +163,7 @@ func generateGoLockContent(appName string, app binmanager.App, generate func(wor
 }
 
 // clearAppLockFile returns a shallow copy of apps where the named app has its
-// Node/UV/Go LockFile field cleared. The original map and runtime configs are not
+// Bun/Node/UV/Go LockFile field cleared. The original map and runtime configs are not
 // mutated. App.Files (including any "pnpm-workspace.yaml" entry used to
 // configure allowBuilds) and App.Archives are preserved so the reinstall can
 // generate a fresh lock file under the same workspace policy as a normal run.
@@ -178,6 +178,11 @@ func clearAppLockFile(apps binmanager.MapOfApps, appName string) binmanager.MapO
 		nodeCopy := *appCopy.Node
 		nodeCopy.LockFile = ""
 		appCopy.Node = &nodeCopy
+	}
+	if appCopy.Bun != nil {
+		bunCopy := *appCopy.Bun
+		bunCopy.LockFile = ""
+		appCopy.Bun = &bunCopy
 	}
 	if appCopy.Uv != nil {
 		uvCopy := *appCopy.Uv
@@ -197,6 +202,21 @@ func printAppInfo(appName string, app binmanager.App) {
 	fmt.Fprintf(os.Stderr, "App: %s\n", appName)
 
 	switch {
+	case app.Bun != nil:
+		fmt.Fprintf(os.Stderr, "  Runtime:      bun\n")
+		fmt.Fprintf(os.Stderr, "  Package:      %s\n", app.Bun.PackageName)
+		fmt.Fprintf(os.Stderr, "  Version:      %s\n", app.Bun.Version)
+		if len(app.Bun.Dependencies) > 0 {
+			fmt.Fprintf(os.Stderr, "  Dependencies:\n")
+			keys := make([]string, 0, len(app.Bun.Dependencies))
+			for k := range app.Bun.Dependencies {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+			for _, k := range keys {
+				fmt.Fprintf(os.Stderr, "    %s: %s\n", k, app.Bun.Dependencies[k])
+			}
+		}
 	case app.Node != nil:
 		fmt.Fprintf(os.Stderr, "  Runtime:      node\n")
 		fmt.Fprintf(os.Stderr, "  Package:      %s\n", app.Node.PackageName)
@@ -234,10 +254,12 @@ func printAppInfo(appName string, app binmanager.App) {
 }
 
 func listLockfileApps(apps binmanager.MapOfApps) {
-	var nodeApps, uvApps, goApps []string
+	var bunApps, nodeApps, uvApps, goApps []string
 
 	for name, app := range apps {
 		switch {
+		case app.Bun != nil:
+			bunApps = append(bunApps, name)
 		case app.Node != nil:
 			nodeApps = append(nodeApps, name)
 		case app.Uv != nil:
@@ -247,16 +269,23 @@ func listLockfileApps(apps binmanager.MapOfApps) {
 		}
 	}
 
+	sort.Strings(bunApps)
 	sort.Strings(nodeApps)
 	sort.Strings(uvApps)
 	sort.Strings(goApps)
 
-	if len(nodeApps) == 0 && len(uvApps) == 0 && len(goApps) == 0 {
+	if len(bunApps) == 0 && len(nodeApps) == 0 && len(uvApps) == 0 && len(goApps) == 0 {
 		fmt.Fprintln(os.Stderr, "No apps with lock file support found.")
 		return
 	}
 
 	fmt.Fprintln(os.Stderr, "Apps with lock file support:")
+	if len(bunApps) > 0 {
+		fmt.Fprintln(os.Stderr, "\n  bun:")
+		for _, name := range bunApps {
+			fmt.Fprintf(os.Stderr, "    %s\n", name)
+		}
+	}
 
 	if len(nodeApps) > 0 {
 		fmt.Fprintln(os.Stderr, "\n  node:")
@@ -305,6 +334,8 @@ func readLockFile(installPath string, app binmanager.App) (string, error) {
 	var lockFilePath string
 
 	switch {
+	case app.Bun != nil:
+		lockFilePath = filepath.Join(installPath, "pnpm-lock.yaml")
 	case app.Node != nil:
 		lockFilePath = filepath.Join(installPath, "pnpm-lock.yaml")
 	case app.Uv != nil:

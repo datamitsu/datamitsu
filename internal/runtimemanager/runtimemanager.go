@@ -1,5 +1,5 @@
 // Package runtimemanager resolves, installs and caches managed language
-// runtimes (uv, node, jvm, go) and the apps that run on top of them.
+// runtimes (bun, uv, node, jvm, go) and the apps that run on top of them.
 package runtimemanager
 
 import (
@@ -43,7 +43,7 @@ var downloaderConstructions atomic.Int64
 func DownloaderConstructions() int64 { return downloaderConstructions.Load() }
 
 // RuntimeManager resolves, installs and caches managed language runtimes
-// (uv/node/jvm/go) and the apps that run on top of them.
+// (bun/uv/node/jvm/go) and the apps that run on top of them.
 type RuntimeManager struct {
 	mapOfRuntimes config.MapOfRuntimes
 	hostTarget    target.Target
@@ -201,15 +201,15 @@ func (rm *RuntimeManager) ResolveRuntimePath(runtimeName string) (string, error)
 	return resolved.binPath, nil
 }
 
-// NodeAppPathExtra holds npm-app-specific parameters for app hash calculation.
-type NodeAppPathExtra struct {
+// PackageAppPathExtra holds package-app-specific parameters for app hash calculation.
+type PackageAppPathExtra struct {
 	PackageName string
 	BinPath     string
 }
 
 // GetAppPath returns the cache path for an installed app environment.
-// For node apps, pass NodeAppPathExtra to include package-specific fields in the hash.
-func (rm *RuntimeManager) GetAppPath(appName string, kind config.RuntimeKind, version string, deps map[string]string, lockHash string, files map[string]string, archives map[string]*binmanager.ArchiveSpec, runtimeName string, nodeExtra ...NodeAppPathExtra) (string, error) {
+// For Node and Bun apps, pass PackageAppPathExtra to include package-specific fields in the hash.
+func (rm *RuntimeManager) GetAppPath(appName string, kind config.RuntimeKind, version string, deps map[string]string, lockHash string, files map[string]string, archives map[string]*binmanager.ArchiveSpec, runtimeName string, packageExtra ...PackageAppPathExtra) (string, error) {
 	rc, ok := rm.mapOfRuntimes[runtimeName]
 	if !ok {
 		return "", fmt.Errorf("runtime %q not found", runtimeName)
@@ -237,16 +237,16 @@ func (rm *RuntimeManager) GetAppPath(appName string, kind config.RuntimeKind, ve
 	}
 
 	var appHash string
-	if kind == config.RuntimeKindNode && len(nodeExtra) > 0 {
-		extra := nodeExtra[0]
+	if (kind == config.RuntimeKindNode || kind == config.RuntimeKindBun) && len(packageExtra) > 0 {
+		extra := packageExtra[0]
 		if extra.PackageName == "" {
-			return "", errors.New("NodeAppPathExtra.PackageName is required for npm-based apps")
+			return "", errors.New("PackageAppPathExtra.PackageName is required for package-based apps")
 		}
 		if extra.BinPath == "" {
-			return "", errors.New("NodeAppPathExtra.BinPath is required for npm-based apps")
+			return "", errors.New("PackageAppPathExtra.BinPath is required for package-based apps")
 		}
 		filesHash := binmanager.HashFilesAndArchives(files, archives)
-		appHash = calculateNodeAppHash(appName, extra.PackageName, version, extra.BinPath, deps, runtimeHash, lockHash, filesHash)
+		appHash = calculatePackageAppHash(appName, extra.PackageName, version, extra.BinPath, deps, runtimeHash, lockHash, filesHash)
 	} else {
 		appHash = calculateAppHash(appName, version, deps, runtimeHash, lockHash, binmanager.HashFilesAndArchives(files, archives))
 	}
@@ -257,13 +257,15 @@ func (rm *RuntimeManager) GetAppPath(appName string, kind config.RuntimeKind, ve
 // runtimeAppRef reports a runtime-managed app's kind and its explicit runtime
 // reference (the app's `runtime` field, empty when it relies on the default
 // runtime of its kind). It is the single place that encodes the App.* sub-config
-// precedence (uv → node → jvm → go) shared by all three dispatch chains:
+// precedence (bun → uv → node → jvm → go) shared by all three dispatch chains:
 // CollectRequiredRuntimes routes through it directly, and the typed dispatchers
 // (ComputeAppPath/GetCommandInfo) mirror the same ordering — each keeps its own
 // switch only because the kind's install/path method takes a differently-typed
 // AppConfig*. ok is false for non-runtime apps (binary/shell/empty).
 func runtimeAppRef(app binmanager.App) (kind config.RuntimeKind, runtimeRef string, ok bool) {
 	switch {
+	case app.Bun != nil:
+		return config.RuntimeKindBun, app.Bun.Runtime, true
 	case app.Uv != nil:
 		return config.RuntimeKindUV, app.Uv.Runtime, true
 	case app.Node != nil:
@@ -281,6 +283,8 @@ func runtimeAppRef(app binmanager.App) (kind config.RuntimeKind, runtimeRef stri
 // Satisfies binmanager.RuntimeAppManager interface.
 func (rm *RuntimeManager) ComputeAppPath(appName string, app binmanager.App) (string, error) {
 	switch {
+	case app.Bun != nil:
+		return rm.resolveBunAppEnvPath(appName, app.Bun, app.Files, app.Archives)
 	case app.Uv != nil:
 		runtimeName, _, err := rm.ResolveRuntime(app.Uv.Runtime, config.RuntimeKindUV)
 		if err != nil {
@@ -314,6 +318,15 @@ func (rm *RuntimeManager) ComputeAppPath(appName string, app binmanager.App) (st
 // Satisfies binmanager.RuntimeAppManager interface.
 func (rm *RuntimeManager) GetCommandInfo(ctx context.Context, appName string, app binmanager.App) (*binmanager.CommandInfo, error) {
 	switch {
+	case app.Bun != nil:
+		mergedWorkspaceYAML, err := buildPNPMWorkspace(app.Files)
+		if err != nil {
+			return nil, fmt.Errorf("failed to compute pnpm-workspace.yaml for %q: %w", appName, err)
+		}
+		if err := rm.installBunApp(ctx, appName, app.Bun, app.Env, app.Files, app.Archives, mergedWorkspaceYAML); err != nil {
+			return nil, err
+		}
+		return rm.GetBunCommandInfo(ctx, appName, app.Bun, app.Files, app.Archives)
 	case app.Uv != nil:
 		if err := rm.InstallUVApp(ctx, appName, app.Uv, app.Env, app.Files, app.Archives); err != nil {
 			return nil, err
@@ -348,7 +361,7 @@ func (rm *RuntimeManager) GetCommandInfo(ctx context.Context, appName string, ap
 // ResolveCommandInfo returns the same CommandInfo GetCommandInfo would return
 // for a runtime-managed app, without installing anything: no download, no
 // subprocess, no filesystem mutation. It composes the install-free halves of
-// the four per-kind resolvers, so the Command/Args/Env it reports are the ones
+// the five per-kind resolvers, so the Command/Args/Env it reports are the ones
 // the exec path will actually use once the app is installed.
 //
 // The app need not be installed — the returned Command is the path it will
@@ -358,6 +371,8 @@ func (rm *RuntimeManager) GetCommandInfo(ctx context.Context, appName string, ap
 // Satisfies binmanager.RuntimeAppManager interface.
 func (rm *RuntimeManager) ResolveCommandInfo(appName string, app binmanager.App) (*binmanager.CommandInfo, error) {
 	switch {
+	case app.Bun != nil:
+		return rm.resolveBunCommandInfo(appName, app.Bun, app.Files, app.Archives)
 	case app.Uv != nil:
 		return rm.GetUVCommandInfo(appName, app.Uv, app.Files, app.Archives)
 	case app.Node != nil:

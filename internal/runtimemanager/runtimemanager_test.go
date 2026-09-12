@@ -221,7 +221,7 @@ func TestGetAppPath(t *testing.T) {
 
 	t.Run("deps affect path", func(t *testing.T) {
 		deps := map[string]string{"plugin": "1.0.0"}
-		extra := NodeAppPathExtra{PackageName: "eslint", BinPath: "node_modules/.bin/eslint"}
+		extra := PackageAppPathExtra{PackageName: "eslint", BinPath: "node_modules/.bin/eslint"}
 		path1, _ := rm.GetAppPath("eslint", config.RuntimeKindNode, "9.0.0", nil, "", nil, nil, "node", extra)
 		path2, _ := rm.GetAppPath("eslint", config.RuntimeKindNode, "9.0.0", deps, "", nil, nil, "node", extra)
 
@@ -548,8 +548,8 @@ func TestGetAppPathNode(t *testing.T) {
 	runtimes := makeTestRuntimes()
 	rm := New(runtimes)
 
-	t.Run("node app path with NodeAppPathExtra", func(t *testing.T) {
-		path, err := rm.GetAppPath("mmdc", config.RuntimeKindNode, "11.4.2", nil, "", nil, nil, "node", NodeAppPathExtra{
+	t.Run("node app path with PackageAppPathExtra", func(t *testing.T) {
+		path, err := rm.GetAppPath("mmdc", config.RuntimeKindNode, "11.4.2", nil, "", nil, nil, "node", PackageAppPathExtra{
 			PackageName: "@mermaid-js/mermaid-cli",
 			BinPath:     "node_modules/.bin/mmdc",
 		})
@@ -562,7 +562,7 @@ func TestGetAppPathNode(t *testing.T) {
 	})
 
 	t.Run("node app path is deterministic", func(t *testing.T) {
-		extra := NodeAppPathExtra{PackageName: "@mermaid-js/mermaid-cli", BinPath: "node_modules/.bin/mmdc"}
+		extra := PackageAppPathExtra{PackageName: "@mermaid-js/mermaid-cli", BinPath: "node_modules/.bin/mmdc"}
 		path1, _ := rm.GetAppPath("mmdc", config.RuntimeKindNode, "11.4.2", nil, "", nil, nil, "node", extra)
 		path2, _ := rm.GetAppPath("mmdc", config.RuntimeKindNode, "11.4.2", nil, "", nil, nil, "node", extra)
 
@@ -585,7 +585,7 @@ func TestGetAppPathNode(t *testing.T) {
 			Managed: runtimesWithDiffNode["node"].Managed,
 		}
 		rmDiffNode := New(runtimesWithDiffNode)
-		extra := NodeAppPathExtra{PackageName: "@mermaid-js/mermaid-cli", BinPath: "node_modules/.bin/mmdc"}
+		extra := PackageAppPathExtra{PackageName: "@mermaid-js/mermaid-cli", BinPath: "node_modules/.bin/mmdc"}
 		path1, _ := rmDiffNode.GetAppPath("mmdc", config.RuntimeKindNode, "11.4.2", nil, "", nil, nil, "node", extra)
 		path2, _ := rmDiffNode.GetAppPath("mmdc", config.RuntimeKindNode, "11.4.2", nil, "", nil, nil, "node-alt", extra)
 
@@ -607,7 +607,7 @@ func TestGetAppPathNode(t *testing.T) {
 			Managed: runtimesWithDiffPNPM["node"].Managed,
 		}
 		rmDiffPNPM := New(runtimesWithDiffPNPM)
-		extra := NodeAppPathExtra{PackageName: "@mermaid-js/mermaid-cli", BinPath: "node_modules/.bin/mmdc"}
+		extra := PackageAppPathExtra{PackageName: "@mermaid-js/mermaid-cli", BinPath: "node_modules/.bin/mmdc"}
 		path1, _ := rmDiffPNPM.GetAppPath("mmdc", config.RuntimeKindNode, "11.4.2", nil, "", nil, nil, "node", extra)
 		path2, _ := rmDiffPNPM.GetAppPath("mmdc", config.RuntimeKindNode, "11.4.2", nil, "", nil, nil, "node-alt-pnpm", extra)
 
@@ -616,8 +616,8 @@ func TestGetAppPathNode(t *testing.T) {
 		}
 	})
 
-	t.Run("node without NodeAppPathExtra uses standard hash", func(t *testing.T) {
-		pathWithExtra, _ := rm.GetAppPath("mmdc", config.RuntimeKindNode, "11.4.2", nil, "", nil, nil, "node", NodeAppPathExtra{
+	t.Run("node without PackageAppPathExtra uses standard hash", func(t *testing.T) {
+		pathWithExtra, _ := rm.GetAppPath("mmdc", config.RuntimeKindNode, "11.4.2", nil, "", nil, nil, "node", PackageAppPathExtra{
 			PackageName: "@mermaid-js/mermaid-cli",
 			BinPath:     "node_modules/.bin/mmdc",
 		})
@@ -629,7 +629,7 @@ func TestGetAppPathNode(t *testing.T) {
 	})
 
 	t.Run("node deps affect path", func(t *testing.T) {
-		extra := NodeAppPathExtra{PackageName: "@mermaid-js/mermaid-cli", BinPath: "node_modules/.bin/mmdc"}
+		extra := PackageAppPathExtra{PackageName: "@mermaid-js/mermaid-cli", BinPath: "node_modules/.bin/mmdc"}
 		deps := map[string]string{"puppeteer": "21.0.0"}
 		path1, _ := rm.GetAppPath("mmdc", config.RuntimeKindNode, "11.4.2", nil, "", nil, nil, "node", extra)
 		path2, _ := rm.GetAppPath("mmdc", config.RuntimeKindNode, "11.4.2", deps, "", nil, nil, "node", extra)

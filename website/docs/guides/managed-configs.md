@@ -5,7 +5,7 @@ description: Using managed configuration files, symlinks, and the .datamitsu/ di
 
 # Managed Configs
 
-datamitsu can distribute configuration files from runtime-managed apps (node/UV) to your project via symlinks. This lets you share tool configurations like ESLint configs, Prettier configs, or any other files that tools need to find at your project root.
+datamitsu can distribute configuration files from runtime-managed apps (Bun/Node/UV) to your project via symlinks. This lets you share tool configurations like ESLint configs, Prettier configs, or any other files that tools need to find at your project root.
 
 ## The .datamitsu/ Directory
 

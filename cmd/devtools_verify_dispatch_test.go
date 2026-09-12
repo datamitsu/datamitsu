@@ -21,6 +21,14 @@ func TestRuntimeAppInfo(t *testing.T) {
 		wantOk  bool
 	}{
 		{
+			name:    "bun",
+			app:     binmanager.App{Bun: &binmanager.AppConfigBun{PackageName: "eslint", Version: "10.9.0", BinPath: "b", Runtime: "bun-rt"}},
+			wantK:   "bun",
+			wantVer: "10.9.0",
+			wantRef: "bun-rt",
+			wantOk:  true,
+		},
+		{
 			name:    "uv",
 			app:     binmanager.App{Uv: &binmanager.AppConfigUV{PackageName: "yamllint", Version: "1.35.0", Runtime: "uv-rt"}},
 			wantK:   "uv",
@@ -119,6 +127,7 @@ func TestRuntimeAppInfo_SubConfigMarshalsLikeTypedField(t *testing.T) {
 // changes the fingerprint) for uv, node, jvm and go.
 func TestRuntimeAppKeyAndFP_EveryKind(t *testing.T) {
 	runtimes := config.MapOfRuntimes{
+		"bun-rt":  {Kind: config.RuntimeKindBun},
 		"uv-rt":   {Kind: config.RuntimeKindUV},
 		"node-rt": {Kind: config.RuntimeKindNode},
 		"jvm-rt":  {Kind: config.RuntimeKindJVM},
@@ -130,6 +139,14 @@ func TestRuntimeAppKeyAndFP_EveryKind(t *testing.T) {
 		mkApp  func(version string) binmanager.App
 		v1, v2 string
 	}{
+		{
+			kind: "bun",
+			mkApp: func(v string) binmanager.App {
+				return binmanager.App{Bun: &binmanager.AppConfigBun{PackageName: "eslint", Version: v, BinPath: "b", Runtime: "bun-rt"}}
+			},
+			v1: "10.8.0",
+			v2: "10.9.0",
+		},
 		{
 			kind: "uv",
 			mkApp: func(v string) binmanager.App {
@@ -208,6 +225,7 @@ func TestRuntimeAppKeyAndFP_DefaultRuntimeFold(t *testing.T) {
 // an unknown kind.
 func TestResolveDefaultRuntimeName_AllKinds(t *testing.T) {
 	runtimes := config.MapOfRuntimes{
+		"bun-rt":  {Kind: config.RuntimeKindBun},
 		"uv-rt":   {Kind: config.RuntimeKindUV},
 		"node-rt": {Kind: config.RuntimeKindNode},
 		"jvm-rt":  {Kind: config.RuntimeKindJVM},
@@ -215,6 +233,7 @@ func TestResolveDefaultRuntimeName_AllKinds(t *testing.T) {
 	}
 
 	for kind, want := range map[string]string{
+		"bun":  "bun-rt",
 		"uv":   "uv-rt",
 		"node": "node-rt",
 		"jvm":  "jvm-rt",

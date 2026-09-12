@@ -35,7 +35,7 @@ var (
 	// compound duration collapses to a single placeholder.
 	durationRE = regexp.MustCompile(`\d+(\.\d+)?(ns|µs|us|ms|s|m|h)(\d+(\.\d+)?(ns|µs|us|ms|s|m|h))*`)
 	// ruleRE matches runs of box-drawing horizontal rule characters (banner
-	// borders and the init/setup phase header/footer fills) → <RULE>. These fills
+	// borders and the init/reconcile phase header/footer fills) → <RULE>. These fills
 	// pad a line to the detected width, so their length depends on the width of
 	// content that is itself masked away (version, duration), which would make
 	// goldens flaky run-to-run and build-to-build. A run of 3+ never appears in

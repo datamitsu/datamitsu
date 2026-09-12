@@ -1,7 +1,7 @@
 {
-  "jscowsay": {
-    "description": "cowsay is a configurable talking cow",
-    "packageName": "cowsay",
-    "version": "1.6.0"
+  "semver": {
+    "description": "The semantic version parser used by npm.",
+    "packageName": "semver",
+    "version": "7.7.2"
   }
 }

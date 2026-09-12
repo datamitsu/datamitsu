@@ -55,7 +55,7 @@ func doValidateApps(apps binmanager.MapOfApps, runtimes MapOfRuntimes, skipLockf
 		}
 
 		if (app.Binary != nil || app.Shell != nil || app.Jvm != nil || app.Go != nil) && (len(app.Files) > 0 || len(app.Links) > 0 || len(app.Archives) > 0) {
-			errs = append(errs, fmt.Sprintf("app %q: files/links/archives are only supported on uv and node apps", appName))
+			errs = append(errs, fmt.Sprintf("app %q: files/links/archives are only supported on bun, uv, and node apps", appName))
 			continue
 		}
 
@@ -109,6 +109,13 @@ func doValidateApps(apps binmanager.MapOfApps, runtimes MapOfRuntimes, skipLockf
 				errs = append(errs, fmt.Sprintf("app %q: %v", appName, err))
 			}
 		}
+		if app.Bun != nil {
+			if app.Bun.BinPath == "" {
+				errs = append(errs, fmt.Sprintf("app %q: bun.binPath is required", appName))
+			} else if err := validateBunBinPath(app.Bun.BinPath); err != nil {
+				errs = append(errs, fmt.Sprintf("app %q: %v", appName, err))
+			}
+		}
 
 		errs = append(errs, validateGoApp(appName, app.Go)...)
 
@@ -118,11 +125,19 @@ func doValidateApps(apps binmanager.MapOfApps, runtimes MapOfRuntimes, skipLockf
 		if !skipLockfileCheck && app.Node != nil && app.Node.LockFile == "" {
 			errs = append(errs, fmt.Sprintf("app %q: lockFile is required (run: datamitsu config lockfile %s)", appName, appName))
 		}
+		if !skipLockfileCheck && app.Bun != nil && app.Bun.LockFile == "" {
+			errs = append(errs, fmt.Sprintf("app %q: lockFile is required (run: datamitsu config lockfile %s)", appName, appName))
+		}
 		if !skipLockfileCheck && app.Go != nil && app.Go.LockFile == "" {
 			errs = append(errs, fmt.Sprintf("app %q: lockFile is required (run: datamitsu config lockfile %s)", appName, appName))
 		}
 
 		if runtimes != nil {
+			if app.Bun != nil {
+				if refErr := validateAppRuntimeRef(app.Bun.Runtime, RuntimeKindBun, appName, runtimes); refErr != nil {
+					errs = append(errs, refErr.Error())
+				}
+			}
 			if app.Uv != nil {
 				if refErr := validateAppRuntimeRef(app.Uv.Runtime, RuntimeKindUV, appName, runtimes); refErr != nil {
 					errs = append(errs, refErr.Error())
@@ -350,6 +365,16 @@ func validateSafeRelativePath(p string, fieldName string) error {
 	cleaned := filepath.Clean(p)
 	if cleaned == ".." || strings.HasPrefix(cleaned, ".."+string(filepath.Separator)) {
 		return fmt.Errorf("%s %q escapes parent directory", fieldName, p)
+	}
+	return nil
+}
+
+func validateBunBinPath(binPath string) error {
+	if err := validateSafeRelativePath(binPath, "binPath"); err != nil {
+		return err
+	}
+	if strings.Contains("/"+strings.ReplaceAll(binPath, "\\", "/")+"/", "/node_modules/.bin/") {
+		return errors.New("bun.binPath must name the package's JavaScript entrypoint, not a node_modules/.bin shim")
 	}
 	return nil
 }

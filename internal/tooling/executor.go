@@ -566,7 +566,7 @@ func (e *Executor) buildCommand(ctx context.Context, cmdInfo *binmanager.Command
 	var cmd *exec.Cmd
 
 	switch cmdInfo.Type {
-	case "shell", "uv", "node", "jvm":
+	case "shell", "bun", "uv", "node", "jvm":
 		allArgs := make([]string, 0, len(cmdInfo.Args)+len(args))
 		allArgs = append(allArgs, cmdInfo.Args...)
 		allArgs = append(allArgs, args...)
@@ -624,7 +624,7 @@ func mergeEnvLayers(base []string, layers ...map[string]string) []string {
 // formatCommandString formats a command for display (dry-run, logging)
 func (e *Executor) formatCommandString(cmdInfo *binmanager.CommandInfo, args []string) string {
 	switch cmdInfo.Type {
-	case "shell", "uv", "node", "jvm":
+	case "shell", "bun", "uv", "node", "jvm":
 		allArgs := make([]string, 0, len(cmdInfo.Args)+len(args))
 		allArgs = append(allArgs, cmdInfo.Args...)
 		allArgs = append(allArgs, args...)

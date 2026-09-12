@@ -196,7 +196,7 @@ datamitsu config lockfile yamllint
 
 ### Runtimes: `devtools pull-runtimes`
 
-Runtimes (Node.js, UV/Python, JVM/Temurin) need periodic updates too. Use `pull-runtimes` to fetch the latest runtime versions.
+Runtimes (Bun, Node.js, UV/Python, JVM/Temurin, and Go) need periodic updates too. Use `pull-runtimes` to fetch the latest runtime versions.
 
 **Update all runtimes:**
 
@@ -209,6 +209,7 @@ The `--update` flag is required as a safety guard — the command refuses to run
 **Update a specific runtime only:**
 
 ```bash
+datamitsu devtools pull-runtimes runtimes/runtimes.json --update --runtime bun
 datamitsu devtools pull-runtimes runtimes/runtimes.json --update --runtime node
 datamitsu devtools pull-runtimes runtimes/runtimes.json --update --runtime uv
 datamitsu devtools pull-runtimes runtimes/runtimes.json --update --runtime jvm
@@ -222,12 +223,21 @@ datamitsu devtools pull-runtimes runtimes/runtimes.json --update --dry-run
 
 The command fetches versions from upstream sources:
 
+- **Bun**: latest eligible release and official archive SHA-256 digests from GitHub
 - **Node.js**: latest LTS version from endoflife.date API
 - **PNPM**: latest version from npm registry
 - **Python**: latest stable (non-EOL) version from endoflife.date API
 - **Java (Temurin)**: latest major version from Adoptium API
 
 It then downloads runtime binaries for all platform tuples, computes SHA-256 hashes, and deduplicates musl entries that are identical to glibc.
+
+#### Bumping the Bun runtime
+
+```bash
+datamitsu devtools pull-runtimes runtimes/runtimes.json --update --runtime bun
+```
+
+The updater selects the latest Bun GitHub release and pnpm package allowed by the configured minimum release age. It records the official SHA-256 digest for each macOS, Linux glibc, Linux musl, and Windows Bun archive on amd64 and arm64, plus the SHA-256 pin for pnpm.
 
 #### Bumping the Node.js runtime
 
@@ -242,7 +252,7 @@ This resolves the latest Node.js LTS, builds the archive URLs for every os/arch/
 - **glibc, macOS, and Windows** hashes are taken from nodejs.org's clearsigned `SHASUMS256.txt.asc` and GPG-verified against the embedded official Node.js release public keys. An invalid or untrusted signature aborts the pull, giving a strong supply-chain anchor.
 - **musl** hashes come from unofficial-builds.nodejs.org's unsigned `SHASUMS256.txt` (Node publishes no signature for musl builds) and are pinned in git — the same trust model as the official `node:alpine` image.
 
-After a Node.js or pnpm version bump, regenerate the lock files for your node apps so they resolve against the new runtime, then commit the refreshed `runtimes.json`:
+After a Bun, Node.js, or pnpm version bump, regenerate the lock files for the affected Bun or Node apps so they resolve against the new runtime, then commit the refreshed `runtimes.json`:
 
 ```bash
 datamitsu config lockfile eslint
@@ -351,7 +361,7 @@ Do not pass tokens or other secrets via `--build-arg`: an `ARG` value lingers in
 Warning: excluded 47 app(s) with no musl binary (add via --force-include if universal): actionlint, age, … swag, …
 ```
 
-Runtime-managed apps (node/uv/jvm/go) are never filtered — their runtime provides the libc.
+Runtime-managed apps (bun/node/uv/jvm/go) are never filtered — their runtime provides the libc.
 
 Many dropped tools are actually **universal**: a statically-linked Go binary recorded as `glibc` (or a static-musl Rust binary recorded as `musl`) runs fine on the other libc, but the registry under-declares it. Triage the warning list and add the genuinely-universal ones back with `--force-include` (keep it in the generate invocation so it survives regeneration):
 
@@ -397,7 +407,7 @@ This command:
 
 1. Downloads and hash-verifies all binary apps for every configured platform
 2. Downloads and hash-verifies all managed runtime binaries
-3. Installs runtime-managed apps (node, UV, JVM) on the current platform
+3. Installs runtime-managed apps (Bun, Node, UV, JVM, Go) on the current platform
 4. Runs version checks to confirm tools execute correctly
 
 **Useful flags:**
@@ -544,7 +554,7 @@ Keep a changelog documenting what changed in each release:
 A typical update cycle looks like this:
 
 1. Run `devtools pull-*` commands to detect and apply updates
-2. Regenerate lock files for any updated Node, UV, or Go apps
+2. Regenerate lock files for any updated Bun, Node, UV, or Go apps
 3. Run `devtools verify-all` to check cross-platform integrity
 4. Run `datamitsu init && datamitsu check` locally
 5. Commit, push, and create a release
@@ -622,8 +632,8 @@ files: {
 }
 ```
 
-:::note Node and UV apps
-For node apps, any `package.json` included in `App.files` will be overwritten by the datamitsu core when it writes the managed `package.json`. Use `pnpm-workspace.yaml` for customization — the core merges that file with secure defaults rather than overwriting it.
+:::note Bun, Node, and UV apps
+For Bun and Node apps, any `package.json` included in `App.files` will be overwritten by the datamitsu core when it writes the managed `package.json`. Both app kinds can use `pnpm-workspace.yaml` for customization — the core merges that file with secure defaults rather than overwriting it.
 
 For UV apps, project-level settings are configured via `pyproject.toml`. However, any `pyproject.toml` included in `App.files` will be overwritten by the datamitsu core when it writes the managed `pyproject.toml`. This customization path is not available for UV apps.
 :::

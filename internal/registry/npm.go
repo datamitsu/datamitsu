@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/datamitsu/datamitsu/internal/httpx"
+	"golang.org/x/mod/semver"
 )
 
 // NPMPackageInfo holds the resolved name, version and description of an npm package.
@@ -131,6 +132,45 @@ func GetNPMPackageInfoWithMinAge(ctx context.Context, packageName string, minAge
 		return nil, nil //nolint:nilnil
 	}
 
+	return npmInfoFromFull(full, bestVersion), nil
+}
+
+// GetNPMPackageInfoWithMinAgeMajor returns the highest stable version in a
+// specific semver major that satisfies the release-age policy. It intentionally
+// fetches the full package metadata document even when minAgeMinutes is zero: the registry's
+// /latest endpoint may already point at the next unsupported major.
+func GetNPMPackageInfoWithMinAgeMajor(ctx context.Context, packageName string, major, minAgeMinutes int) (*NPMPackageInfo, error) {
+	full, err := getNPMFullResponse(ctx, packageName)
+	if err != nil {
+		return nil, err
+	}
+
+	majorPrefix := fmt.Sprintf("v%d", major)
+	cutoff := time.Now().Add(-time.Duration(minAgeMinutes) * time.Minute)
+	bestVersion := ""
+	for version := range full.Versions {
+		normalized := "v" + version
+		if !semver.IsValid(normalized) || semver.Prerelease(normalized) != "" || semver.Major(normalized) != majorPrefix {
+			continue
+		}
+		if minAgeMinutes > 0 {
+			ts, ok := full.Time[version]
+			if !ok {
+				continue
+			}
+			releasedAt, parseErr := time.Parse(time.RFC3339, ts)
+			if parseErr != nil || releasedAt.After(cutoff) {
+				continue
+			}
+		}
+		if bestVersion == "" || semver.Compare(normalized, "v"+bestVersion) > 0 {
+			bestVersion = version
+		}
+	}
+
+	if bestVersion == "" {
+		return nil, nil //nolint:nilnil // no version in the requested major satisfies the policy
+	}
 	return npmInfoFromFull(full, bestVersion), nil
 }
 

@@ -110,6 +110,12 @@ func runInstallCmdStreaming(ctx context.Context, cmd *exec.Cmd, onLine func([]by
 			onLine(scanner.Bytes())
 		}
 	}
+	// A line past the scanner's limit ends the loop early. Keep draining, or the
+	// child blocks writing into a full pipe and Wait never returns: progress is
+	// lost from that point, the install is not.
+	if scanner.Err() != nil {
+		_, _ = io.Copy(io.Discard, stdout)
+	}
 
 	runErr := cmd.Wait()
 	if runErr != nil {
@@ -156,6 +162,10 @@ func runInstallCmdStreamingStderr(ctx context.Context, cmd *exec.Cmd, onLine fun
 		if onLine != nil {
 			onLine(line)
 		}
+	}
+	// Same as above: a too-long line must not leave the child blocked on stderr.
+	if scanner.Err() != nil {
+		_, _ = io.Copy(io.Discard, stderrPipe)
 	}
 
 	wg.Wait()

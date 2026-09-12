@@ -417,6 +417,9 @@ func TestOperationTypeConstants(t *testing.T) {
 }
 
 func TestRuntimeKindConstants(t *testing.T) {
+	if RuntimeKindBun != "bun" {
+		t.Errorf("RuntimeKindBun = %q, want %q", RuntimeKindBun, "bun")
+	}
 	if RuntimeKindUV != "uv" {
 		t.Errorf("RuntimeKindUV = %q, want %q", RuntimeKindUV, "uv")
 	}
@@ -428,6 +431,31 @@ func TestRuntimeKindConstants(t *testing.T) {
 	}
 	if RuntimeKindGo != "go" {
 		t.Errorf("RuntimeKindGo = %q, want %q", RuntimeKindGo, "go")
+	}
+}
+
+func TestRuntimeConfig_BunField_JSONRoundTrip(t *testing.T) {
+	original := RuntimeConfig{
+		Kind: RuntimeKindBun,
+		Mode: RuntimeModeManaged,
+		Bun: &RuntimeConfigBun{
+			BunVersion:  "1.4.1",
+			PNPMVersion: "11.20.0",
+			PNPMHash:    strings.Repeat("a", 64),
+		},
+	}
+
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("json.Marshal error: %v", err)
+	}
+
+	var decoded RuntimeConfig
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("json.Unmarshal error: %v", err)
+	}
+	if decoded.Kind != RuntimeKindBun || decoded.Bun == nil || decoded.Bun.BunVersion != "1.4.1" || decoded.Bun.PNPMVersion != "11.20.0" {
+		t.Errorf("decoded runtime = %+v, want Bun 1.4.1", decoded)
 	}
 }
 

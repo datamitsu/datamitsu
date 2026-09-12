@@ -1,19 +1,20 @@
 # Runtime Management
 
-> Managing UV (Python), Node.js, JVM, and Go runtimes with datamitsu
+> Managing Bun, UV (Python), Node.js, JVM, and Go runtimes with datamitsu
 
-datamitsu manages language runtimes alongside your tools. Instead of requiring team members to install specific versions of Python, Node.js, Java, or Go, datamitsu downloads and manages these runtimes automatically, creating isolated environments for each tool.
+datamitsu manages language runtimes alongside your tools. Instead of requiring team members to install specific versions of Bun, Python, Node.js, Java, or Go, datamitsu downloads and manages these runtimes automatically, creating isolated environments for each tool.
 
 ## Runtime Types
 
-datamitsu supports four runtime types:
+datamitsu supports five runtime types:
 
-| Runtime  | Language | Package Manager | Use Case                                    |
-| -------- | -------- | --------------- | ------------------------------------------- |
-| **UV**   | Python   | uv              | Python tools like yamllint, ruff            |
-| **Node** | Node.js  | pnpm            | npm packages like ESLint, Prettier          |
-| **JVM**  | Java     | -               | JAR-based tools like openapi-generator      |
-| **Go**   | Go       | go modules      | Go tools built from source like govulncheck |
+| Runtime  | Language   | Package Manager | Use Case                                    |
+| -------- | ---------- | --------------- | ------------------------------------------- |
+| **Bun**  | JavaScript | pnpm            | npm packages executed directly with Bun     |
+| **UV**   | Python     | uv              | Python tools like yamllint, ruff            |
+| **Node** | Node.js    | pnpm            | npm packages like ESLint, Prettier          |
+| **JVM**  | Java       | -               | JAR-based tools like openapi-generator      |
+| **Go**   | Go         | go modules      | Go tools built from source like govulncheck |
 
 :::tip Updating Runtimes
 To update runtime versions using devtools workflows, see [Maintaining Wrapper Packages](../how-to/maintain-wrapper.md).
@@ -119,6 +120,49 @@ In managed mode, uv downloads a CPython interpreter and reuses it across uv apps
 
 datamitsu also validates the venv interpreter at install time. If `.venv/bin/python` dangles (for example, after restoring a partial or stale cache), the venv is treated as not installed and rebuilt, so a broken interpreter self-heals instead of being trusted forever.
 
+## Bun Runtime
+
+Bun apps use [pnpm](https://pnpm.io/) for dependency installation and a managed [Bun](https://bun.sh/) runtime for JavaScript execution. Bun itself launches `pnpm.cjs`, so selecting Bun does not download Node merely to install dependencies. Bun remains a separate app kind: selecting it is an explicit configuration choice and does not change how Node apps run. Managed x64 targets use Bun's standard optimized archives and therefore require AVX2-capable hardware.
+
+### How Bun Apps Work
+
+1. datamitsu downloads and verifies the SHA-256-pinned Bun release archive
+2. Creates an isolated environment at `{store}/.apps/bun/{appName}/{hash}/`
+3. Downloads the SHA-256-pinned pnpm package and writes `package.json`, `pnpm-workspace.yaml`, and the configured `pnpm-lock.yaml`
+4. Runs `bun run --bun --no-install <pnpm.cjs> install --frozen-lockfile`
+5. Executes the configured JavaScript entrypoint with `bun run --bun --no-install`
+
+Both Bun and Node apps share pnpm's content-addressable store at `{store}/.pnpm-store/`, while every app keeps its own `node_modules` directory. `--bun` keeps Node-shebang commands launched by pnpm lifecycle scripts or by the tool itself on the selected runtime.
+
+The app environment also carries a `node` link to the managed Bun at `.datamitsu-runtime-bin/node`, first on `PATH` during install and execution, so lifecycle scripts and tools that call `node` find one without datamitsu downloading Node. It is a link rather than a wrapper script because Bun emulates the node CLI only when it is invoked under the name `node` — called under its own name it would read `node build` as its bundler and `node install` as its package manager.
+
+Runtime auto-install is disabled, and datamitsu passes `--no-env-file` plus an empty Bun config during install and execution, so a target repository's `.env` files and `bunfig.toml` cannot change a managed tool's behavior. The same guards travel in `BUN_OPTIONS`, which every Bun process started under the app inherits, so they hold for the `node` processes a tool or a lifecycle script starts itself.
+
+### Defining a Bun App
+
+```javascript
+apps: {
+  eslint: {
+    bun: {
+      packageName: "eslint",
+      version: "10.9.0",
+      binPath: "node_modules/eslint/bin/eslint.js",
+      lockFile: "br:...", // required; generated with config lockfile
+    },
+  },
+}
+```
+
+### Bun Version
+
+The Bun version is configured on the runtime:
+
+```javascript
+bun: {
+  bunVersion: "1.4.1",
+}
+```
+
 ## Node Runtime (Node.js)
 
 Node apps use a managed Node.js runtime — downloaded as a pinned, SHA-256-verified archive (exactly like the JVM runtime downloads a JDK) — together with [pnpm](https://pnpm.io/) as the package manager.
@@ -146,9 +190,9 @@ apps: {
 }
 ```
 
-### Node.js and pnpm Versions
+### JavaScript Runtime and pnpm Versions
 
-Both versions are configured on the runtime:
+Each JavaScript runtime pins both its interpreter and the pnpm version used to install apps:
 
 ```javascript
 node: {
@@ -156,12 +200,15 @@ node: {
   pnpmVersion: "11.20.0",
   pnpmHash: "...",
 }
+
+bun: {
+  bunVersion: "1.4.1",
+  pnpmVersion: "11.20.0",
+  pnpmHash: "...",
+}
 ```
 
-Node.js versions are stored at `{store}/.runtimes/node/{configHash}/`, and pnpm
-is stored separately under `{store}/.runtimes/pnpm/`. A shared pnpm
-content-addressable store at `{store}/.pnpm-store/` deduplicates packages across
-apps.
+Interpreter versions are stored under `{store}/.runtimes/{kind}/{configHash}/`, and pnpm is stored separately under `{store}/.runtimes/pnpm/`. A shared pnpm content-addressable store at `{store}/.pnpm-store/` deduplicates packages across Bun and Node apps.
 
 ## JVM Runtime (Java)
 
@@ -236,7 +283,7 @@ A Go app's lock file is a JSON wrapper carrying both `go.mod` and `go.sum`. Beca
 
 ## Lock Files
 
-Node, UV, and Go apps require lock files. They pin exact dependencies and their
+Bun, Node, UV, and Go apps require lock files. They pin exact dependencies and their
 integrity data so installs and builds are reproducible across environments.
 
 ### Generating a Lock File
@@ -252,10 +299,10 @@ This outputs brotli-compressed, base64-encoded lock file content that you paste 
 
 ```javascript
 eslint: {
-  node: {
+  bun: {
     packageName: "eslint",
-    version: "9.0.0",
-    binPath: "node_modules/.bin/eslint",
+    version: "10.9.0",
+    binPath: "node_modules/eslint/bin/eslint.js",
     lockFile: "br:...",
   },
 }
@@ -263,13 +310,13 @@ eslint: {
 
 ### How Lock Files Work
 
-- **Node apps**: The lock file is written as `pnpm-lock.yaml` and pnpm runs with `--frozen-lockfile`, refusing to install if dependencies don't match
+- **Bun and Node apps**: The lock file is written as `pnpm-lock.yaml` and pnpm runs with `--frozen-lockfile`, refusing to install if dependencies don't match. The selected Bun or Node runtime executes `pnpm.cjs`
 - **UV apps**: The lock file is written as `uv.lock` and uv runs with `--locked --no-build`, ensuring exact version matching and permitting wheels only
 - **Go apps**: The JSON payload is expanded into `go.mod` and `go.sum`, and the tool is built with `go build -trimpath -mod=readonly`
 
 The generation command deliberately loads config without enforcing the missing
-field so it can create that field. Every normal config load rejects a node, UV,
-or Go app without `lockFile` before downloading or executing anything.
+field so it can create that field. Every normal config load rejects a Bun, Node,
+UV, or Go app without `lockFile` before downloading or executing anything.
 
 ## Isolated Environments
 
@@ -277,6 +324,8 @@ Each runtime-managed app gets its own isolated environment. This prevents versio
 
 ```
 {store}/.apps/
+├── bun/
+│   └── eslint/{hash}/       # isolated Bun app
 ├── uv/
 │   ├── yamllint/{hash}/     # isolated Python env
 │   └── ruff/{hash}/         # separate isolated env
@@ -306,6 +355,7 @@ datamitsu detects the host libc at startup using a multi-stage process (ldd outp
 
 Managed runtimes need extra handling on musl because their upstreams' default channels are glibc-oriented:
 
+- **Bun**: official releases provide separate glibc and musl archives for both amd64 and arm64; datamitsu pins and selects them directly
 - **Node.js**: the default `nodejs.org/dist` archives are glibc-only. The registry therefore carries static musl entries (url + SHA-256) sourced from [unofficial-builds.nodejs.org](https://unofficial-builds.nodejs.org/download/release). On a musl host datamitsu downloads and verifies the musl Node archive directly, so node apps work on Alpine out of the box. musl Node additionally requires `libstdc++` (`apk add libstdc++`). See [Use in Alpine Linux](../how-to/use-in-alpine) for details.
 - **Python** (UV): uv downloads glibc Python builds
 - **JDK** (JVM): Temurin JDK releases are glibc-only

@@ -159,6 +159,8 @@ func referencedParserModules(cfg *config.Config) map[string]struct{} {
 // reference, mirroring the App.* sub-config precedence used by runtimemanager.
 func runtimeAppKind(app binmanager.App) (kind config.RuntimeKind, runtimeRef string, ok bool) {
 	switch {
+	case app.Bun != nil:
+		return config.RuntimeKindBun, app.Bun.Runtime, true
 	case app.Uv != nil:
 		return config.RuntimeKindUV, app.Uv.Runtime, true
 	case app.Node != nil:

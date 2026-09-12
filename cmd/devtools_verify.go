@@ -1309,11 +1309,13 @@ func evaluateVersionCheck(expectedVersion, output string) (status, actual string
 // runtime-managed apps. It returns the canonical kind string, the configured
 // version, the explicit runtime reference, and the typed sub-config (as any, for
 // JSON fingerprinting), selecting on the App.* sub-config precedence
-// (uv → node → jvm → go). It replaces the per-kind switch chains that previously
+// (bun → uv → node → jvm → go). It replaces the per-kind switch chains that previously
 // lived in runtimeAppKeyAndFP, the phase-3 entry loop, version extraction, and
 // getAppVersion. ok is false for non-runtime apps (binary/shell/empty).
 func runtimeAppInfo(app binmanager.App) (kind, version, runtimeRef string, subConfig any, ok bool) {
 	switch {
+	case app.Bun != nil:
+		return string(config.RuntimeKindBun), app.Bun.Version, app.Bun.Runtime, app.Bun, true
 	case app.Uv != nil:
 		return string(config.RuntimeKindUV), app.Uv.Version, app.Uv.Runtime, app.Uv, true
 	case app.Node != nil:
@@ -1331,6 +1333,8 @@ func runtimeAppInfo(app binmanager.App) (kind, version, runtimeRef string, subCo
 // "" for a non-runtime app.
 func runtimeAppVersion(app binmanager.App) string {
 	switch {
+	case app.Bun != nil:
+		return app.Bun.Version
 	case app.Uv != nil:
 		return app.Uv.Version
 	case app.Node != nil:

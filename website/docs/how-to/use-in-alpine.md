@@ -112,10 +112,11 @@ machine.
 This prevents conflicts when switching between container environments or
 testing with different libc variants.
 
-## Managed Runtimes (Node, UV, JVM)
+## Managed Runtimes (Bun, Node, UV, JVM)
 
 datamitsu applies two distinct musl-specific mechanisms to managed runtimes:
 
+- **Bun** — the registry pins Bun's official musl archives for amd64 and arm64, selected directly on a musl host.
 - **The Node.js archive that datamitsu downloads** — the registry pins musl-linked Node.js archives directly, selected automatically on a musl host (see [Node.js (musl): static archive entries](#nodejs-musl-static-archive-entries)).
 - **A runtime's own binary** (`node`, `uv`, `java`) — when the managed config has no musl variant for that executable, datamitsu falls back to the system binary on PATH (see [Automatic Fallback](#automatic-fallback)).
 
@@ -248,7 +249,7 @@ The `devtools apps list` command shows which binary variant was resolved for eac
 
 ### `fcntl64: symbol not found` or similar errors
 
-This means a glibc binary is running on a musl system. For binary apps, check if a musl variant is available for the tool and add it to the config. For managed runtimes, the Node runtime uses its pinned musl archive automatically, and the JVM runtime auto-falls back to system `java` if installed (`apk add openjdk17`). For UV, configure system mode manually in your wrapper config since the `uv` binary is not available in Alpine's default repositories. If no musl variant or system binary exists, the tool cannot run on Alpine without a glibc compatibility layer.
+This means a glibc binary is running on a musl system. For binary apps, check if a musl variant is available for the tool and add it to the config. For managed runtimes, Bun and Node use their pinned musl archives automatically, and the JVM runtime auto-falls back to system `java` if installed (`apk add openjdk17`). For UV, configure system mode manually in your wrapper config since the `uv` binary is not available in Alpine's default repositories. If no musl variant or system binary exists, the tool cannot run on Alpine without a glibc compatibility layer.
 
 ### Detection returns `unknown`
 

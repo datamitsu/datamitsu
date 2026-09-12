@@ -75,13 +75,14 @@ final Config
 
 ## Apps (`apps`)
 
-Apps define the tools datamitsu manages. The app kind is determined by which sub-object is present (`binary`, `uv`, `node`, `jvm`, `go`, or `shell`).
+Apps define the tools datamitsu manages. The app kind is determined by which sub-object is present (`binary`, `bun`, `uv`, `node`, `jvm`, `go`, or `shell`).
 
 ### App Kinds
 
 | Kind     | Sub-object | Description                                       |
 | -------- | ---------- | ------------------------------------------------- |
 | `binary` | `binary`   | Self-managed binaries downloaded from URLs        |
+| `bun`    | `bun`      | npm packages installed and executed with Bun      |
 | `uv`     | `uv`       | Python packages installed via managed UV runtime  |
 | `node`   | `node`     | npm packages installed via managed Node.js + pnpm |
 | `jvm`    | `jvm`      | Java applications executed via managed JDK        |
@@ -107,16 +108,16 @@ source-mode-specific: a config using a name outside this set fails to load.
 
 All app kinds share metadata, environment, and version-check fields. The common
 schema also exposes managed-content fields, but config validation accepts
-`files`, `links`, and `archives` only on UV and Node apps.
+`files`, `links`, and `archives` only on Bun, UV, and Node apps.
 
 ```typescript
 interface AppCommon {
   description?: string; // Human-readable text shown in app listings
   required?: boolean; // Whether the app is required for init
   lazy?: boolean; // Defer installation and link creation until first exec
-  files?: Record<string, string>; // UV/Node only: filename → static content
-  links?: Record<string, string>; // UV/Node only: linkName → relativePath
-  archives?: Record<string, ArchiveSpec>; // UV/Node only: name → archive
+  files?: Record<string, string>; // Bun/UV/Node only: filename → static content
+  links?: Record<string, string>; // Bun/UV/Node only: linkName → relativePath
+  archives?: Record<string, ArchiveSpec>; // Bun/UV/Node only: name → archive
   env?: Record<string, string>; // Custom environment variables (all app kinds)
   versionCheck?: {
     disabled?: boolean; // Skip version check in verify-all
@@ -132,8 +133,8 @@ it to `false`).
 
 #### Custom environment variables (`env`)
 
-The optional `env` field applies to **every** app kind (binary, uv, node, jvm,
-go, shell). It is injected both at **install time** (for the uv/node/go
+The optional `env` field applies to **every** app kind (binary, bun, uv, node,
+jvm, go, shell). It is injected both at **install time** (for the bun/uv/node/go
 dependency-install phase) and at **run time** (every app type).
 
 Values support placeholder expansion, performed in Go and never written into the
@@ -254,6 +255,40 @@ interface AppConfigUV {
   runtime?: string; // Runtime name override
 }
 ```
+
+### Bun Apps
+
+Bun apps install npm packages with pnpm and execute their JavaScript entrypoint with the managed Bun runtime. Bun executes `pnpm.cjs` directly, so a Bun app does not require a Node runtime for installation.
+
+```javascript
+const apps = {
+  eslint: {
+    bun: {
+      packageName: "eslint",
+      version: "10.9.0",
+      binPath: "node_modules/eslint/bin/eslint.js",
+      dependencies: {
+        typescript: "6.0.2",
+      },
+      lockFile: "br:...", // brotli-compressed pnpm-lock.yaml (required)
+      runtime: "bun-default", // optional runtime override
+    },
+  },
+};
+```
+
+```typescript
+interface AppConfigBun {
+  binPath: string; // JavaScript entrypoint; node_modules/.bin shims are rejected
+  packageName: string;
+  version: string;
+  lockFile: string; // pnpm-lock.yaml, optionally compressed with "br:" (required)
+  dependencies?: Record<string, string>;
+  runtime?: string; // Runtime name override
+}
+```
+
+Installs use `bun <pnpm.cjs> install --frozen-lockfile` with the same hardened `pnpm-workspace.yaml` policy as Node apps. Execution uses `bun run --bun --no-install <binPath>` so Node-shebang commands stay on the selected Bun runtime and Bun cannot fetch dependencies on first run.
 
 ### Node Apps (Node.js/npm)
 
@@ -433,10 +468,11 @@ Runtimes define how language-specific package managers are provisioned.
 
 ```typescript
 interface RuntimeConfig {
-  kind: "node" | "uv" | "jvm" | "go";
+  kind: "bun" | "node" | "uv" | "jvm" | "go";
   mode: "managed" | "system";
   managed?: RuntimeConfigManaged; // Required for managed mode
   system?: RuntimeConfigSystem; // For system mode
+  bun?: RuntimeConfigBun; // Required when kind is "bun"
   node?: RuntimeConfigNode; // Required when kind is "node"
   uv?: RuntimeConfigUV; // When kind is "uv"
   jvm?: RuntimeConfigJVM; // Required when kind is "jvm"
@@ -499,6 +535,16 @@ const runtimes = {
 ```
 
 ### Runtime Kind Configuration
+
+**Bun Runtime:**
+
+```typescript
+interface RuntimeConfigBun {
+  bunVersion: string; // e.g., "1.4.1"
+  pnpmVersion: string; // e.g., "11.20.0"
+  pnpmHash: string; // SHA-256 of pnpm package (mandatory)
+}
+```
 
 **Node Runtime:**
 
@@ -1433,16 +1479,16 @@ values the config was allowed to observe.
 All content downloaded from the internet must have a SHA-256 hash specified:
 
 - Binary apps: `hash` field on each platform entry
-- Managed Node, UV/Python, JVM, and Go runtimes: `hash` on every downloaded platform entry
+- Managed Bun, Node, UV/Python, JVM, and Go runtimes: `hash` on every downloaded platform entry
 - JVM apps: `jarHash` field
 - External archives: `hash` field
-- Node runtime (pnpm): `pnpmHash` field
+- Bun and Node runtimes (pnpm): `pnpmHash` field
 - Remote configs: `hash` on every `getRemoteConfigs()` entry
 - Output parsers: `hash` field on each `parsers` entry, whichever source it declares
 - OCI-sourced parsers: `oci.digest` on the entry, **plus** the same mandatory `hash` — which the artifact's single layer must carry as its blob digest
 - OCI store bundles: mandatory `oci.digest`; unpacked artifacts are re-verified against their individual SHA-256 pins
 
-Node, UV, and Go apps also require lock files. These locks pin transitive package
+Bun, Node, UV, and Go apps also require lock files. These locks pin transitive package
 content and are installed in frozen/read-only modes. Missing or empty hashes and
 missing lock files are configuration errors, never warnings or hash-less
 fallbacks.

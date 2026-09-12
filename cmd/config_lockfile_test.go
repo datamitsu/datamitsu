@@ -84,6 +84,42 @@ func TestPrintAppInfo_Node(t *testing.T) {
 	}
 }
 
+func TestPrintAppInfo_Bun(t *testing.T) {
+	app := binmanager.App{
+		Bun: &binmanager.AppConfigBun{
+			PackageName: "eslint",
+			Version:     "10.9.0",
+			BinPath:     "node_modules/eslint/bin/eslint.js",
+			Dependencies: map[string]string{
+				"typescript": "6.0.2",
+			},
+		},
+	}
+
+	oldStderr := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stderr = w
+
+	printAppInfo("eslint", app)
+
+	_ = w.Close()
+	os.Stderr = oldStderr
+
+	buf := make([]byte, 4096)
+	n, _ := r.Read(buf)
+	output := string(buf[:n])
+
+	if !strings.Contains(output, "Runtime:      bun") {
+		t.Errorf("missing runtime in output: %s", output)
+	}
+	if !strings.Contains(output, "Package:      eslint") {
+		t.Errorf("missing package name in output: %s", output)
+	}
+	if !strings.Contains(output, "typescript: 6.0.2") {
+		t.Errorf("missing dependencies in output: %s", output)
+	}
+}
+
 func TestPrintAppInfo_UV(t *testing.T) {
 	app := binmanager.App{
 		Uv: &binmanager.AppConfigUV{
@@ -199,6 +235,12 @@ func TestPrintAppInfo_Shell(t *testing.T) {
 
 func TestListLockfileApps(t *testing.T) {
 	apps := binmanager.MapOfApps{
+		"biome": {
+			Bun: &binmanager.AppConfigBun{
+				PackageName: "@biomejs/biome",
+				Version:     "2.2.4",
+			},
+		},
 		"mermaid": {
 			Node: &binmanager.AppConfigNode{
 				PackageName: "@mermaid-js/mermaid-cli",
@@ -244,6 +286,9 @@ func TestListLockfileApps(t *testing.T) {
 	n, _ := r.Read(buf)
 	output := string(buf[:n])
 
+	if !strings.Contains(output, "bun:") {
+		t.Errorf("missing bun group header in output: %s", output)
+	}
 	if !strings.Contains(output, "node:") {
 		t.Errorf("missing node group header in output: %s", output)
 	}
@@ -255,6 +300,9 @@ func TestListLockfileApps(t *testing.T) {
 	}
 	if !strings.Contains(output, "govulncheck") {
 		t.Errorf("missing govulncheck in output: %s", output)
+	}
+	if !strings.Contains(output, "biome") {
+		t.Errorf("missing biome in output: %s", output)
 	}
 	if !strings.Contains(output, "eslint") {
 		t.Errorf("missing eslint in output: %s", output)
@@ -317,6 +365,30 @@ func TestReadLockFile_Node(t *testing.T) {
 		Node: &binmanager.AppConfigNode{
 			PackageName: "eslint",
 			Version:     "9.0.0",
+		},
+	}
+
+	content, err := readLockFile(tmpDir, app)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if content != lockContent {
+		t.Errorf("content = %q, want %q", content, lockContent)
+	}
+}
+
+func TestReadLockFile_Bun(t *testing.T) {
+	tmpDir := t.TempDir()
+	lockContent := "lockfileVersion: '9.0'\n"
+
+	if err := os.WriteFile(filepath.Join(tmpDir, "pnpm-lock.yaml"), []byte(lockContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	app := binmanager.App{
+		Bun: &binmanager.AppConfigBun{
+			PackageName: "eslint",
+			Version:     "10.9.0",
 		},
 	}
 
@@ -576,6 +648,38 @@ func TestClearAppLockFile_NodeClearsLockFilePreservesFiles(t *testing.T) {
 	}
 	if apps["mmdc"].Node.LockFile == "" {
 		t.Error("original apps map was mutated: LockFile should still be set on the source")
+	}
+}
+
+func TestClearAppLockFile_BunClearsLockFilePreservesFiles(t *testing.T) {
+	apps := binmanager.MapOfApps{
+		"eslint": {
+			Bun: &binmanager.AppConfigBun{
+				PackageName: "eslint",
+				Version:     "10.9.0",
+				BinPath:     "node_modules/eslint/bin/eslint.js",
+				Runtime:     "bun",
+				LockFile:    "bun-lock-content",
+			},
+			Files: map[string]string{
+				"eslint.config.js": "export default [];\n",
+			},
+		},
+	}
+
+	fresh := clearAppLockFile(apps, "eslint")
+
+	if fresh["eslint"].Bun.LockFile != "" {
+		t.Errorf("Bun LockFile = %q, want empty after clearing", fresh["eslint"].Bun.LockFile)
+	}
+	if fresh["eslint"].Bun.Runtime != "bun" {
+		t.Errorf("Bun Runtime = %q, want bun", fresh["eslint"].Bun.Runtime)
+	}
+	if fresh["eslint"].Files["eslint.config.js"] == "" {
+		t.Error("Files[eslint.config.js] should be preserved")
+	}
+	if apps["eslint"].Bun.LockFile == "" {
+		t.Error("original Bun LockFile was mutated; clearAppLockFile must be non-destructive")
 	}
 }
 

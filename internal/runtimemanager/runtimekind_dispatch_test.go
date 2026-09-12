@@ -22,6 +22,13 @@ func TestRuntimeAppRef(t *testing.T) {
 		wantOk  bool
 	}{
 		{
+			name:    "bun",
+			app:     binmanager.App{Bun: &binmanager.AppConfigBun{PackageName: "eslint", Version: "9", BinPath: "b", Runtime: "bun-rt"}},
+			wantK:   config.RuntimeKindBun,
+			wantRef: "bun-rt",
+			wantOk:  true,
+		},
+		{
 			name:    "uv with explicit ref",
 			app:     binmanager.App{Uv: &binmanager.AppConfigUV{PackageName: "yamllint", Version: "1", Runtime: "uv-rt"}},
 			wantK:   config.RuntimeKindUV,
@@ -104,6 +111,11 @@ func runtimeKindRoutingApps() []struct {
 		app        binmanager.App
 		wantErrSub string
 	}{
+		{
+			kind:       "bun",
+			app:        binmanager.App{Bun: &binmanager.AppConfigBun{PackageName: "eslint", Version: "9", BinPath: "b", Runtime: "nonexistent"}},
+			wantErrSub: "resolve Bun runtime",
+		},
 		{
 			kind:       "uv",
 			app:        binmanager.App{Uv: &binmanager.AppConfigUV{PackageName: "yamllint", Version: "1", Runtime: "nonexistent"}},
@@ -201,6 +213,7 @@ func TestGetCommandInfo_RoutesEveryKind(t *testing.T) {
 // dangling explicit reference contributes nothing.
 func TestCollectRequiredRuntimes_EveryKind(t *testing.T) {
 	runtimes := config.MapOfRuntimes{
+		"bun-rt":  {Kind: config.RuntimeKindBun, Mode: config.RuntimeModeManaged},
 		"uv-rt":   {Kind: config.RuntimeKindUV, Mode: config.RuntimeModeManaged},
 		"node-rt": {Kind: config.RuntimeKindNode, Mode: config.RuntimeModeManaged},
 		"jvm-rt":  {Kind: config.RuntimeKindJVM, Mode: config.RuntimeModeManaged},
@@ -209,13 +222,14 @@ func TestCollectRequiredRuntimes_EveryKind(t *testing.T) {
 
 	t.Run("default-by-kind for every kind", func(t *testing.T) {
 		apps := binmanager.MapOfApps{
+			"a-bun":  {Required: true, Bun: &binmanager.AppConfigBun{PackageName: "x", Version: "1", BinPath: "b"}},
 			"a-uv":   {Required: true, Uv: &binmanager.AppConfigUV{PackageName: "x", Version: "1"}},
 			"b-node": {Required: true, Node: &binmanager.AppConfigNode{PackageName: "x", Version: "1", BinPath: "b"}},
 			"c-jvm":  {Required: true, Jvm: &binmanager.AppConfigJVM{JarURL: "https://x/x.jar", JarHash: "h", Version: "1"}},
 			"d-go":   {Required: true, Go: &binmanager.AppConfigGo{PackageName: "x", Version: "1"}},
 		}
 		result := CollectRequiredRuntimes(apps, runtimes, false)
-		want := []string{"go-rt", "jvm-rt", "node-rt", "uv-rt"}
+		want := []string{"bun-rt", "go-rt", "jvm-rt", "node-rt", "uv-rt"}
 		if !equalStringSlices(result, want) {
 			t.Errorf("CollectRequiredRuntimes() = %v, want %v", result, want)
 		}
@@ -223,13 +237,14 @@ func TestCollectRequiredRuntimes_EveryKind(t *testing.T) {
 
 	t.Run("explicit ref for every kind", func(t *testing.T) {
 		apps := binmanager.MapOfApps{
+			"a-bun":  {Required: true, Bun: &binmanager.AppConfigBun{PackageName: "x", Version: "1", BinPath: "b", Runtime: "bun-rt"}},
 			"a-uv":   {Required: true, Uv: &binmanager.AppConfigUV{PackageName: "x", Version: "1", Runtime: "uv-rt"}},
 			"b-node": {Required: true, Node: &binmanager.AppConfigNode{PackageName: "x", Version: "1", BinPath: "b", Runtime: "node-rt"}},
 			"c-jvm":  {Required: true, Jvm: &binmanager.AppConfigJVM{JarURL: "https://x/x.jar", JarHash: "h", Version: "1", Runtime: "jvm-rt"}},
 			"d-go":   {Required: true, Go: &binmanager.AppConfigGo{PackageName: "x", Version: "1", Runtime: "go-rt"}},
 		}
 		result := CollectRequiredRuntimes(apps, runtimes, false)
-		want := []string{"go-rt", "jvm-rt", "node-rt", "uv-rt"}
+		want := []string{"bun-rt", "go-rt", "jvm-rt", "node-rt", "uv-rt"}
 		if !equalStringSlices(result, want) {
 			t.Errorf("CollectRequiredRuntimes() = %v, want %v", result, want)
 		}

@@ -36,8 +36,8 @@ func assertOrder(t *testing.T, got string, keys ...string) {
 	}
 }
 
-// TestYAMLSpreadMergeIsStable mirrors the real lefthook.yaml setup content
-// function (datamitsu-config cmdSetup.ts): parse the existing file, spread its
+// TestYAMLSpreadMergeIsStable mirrors the real lefthook.yaml managed-config content
+// function in datamitsu-config: parse the existing file, spread its
 // parsed commands into a new object, then re-stringify. This is the exact path
 // that drifted the chain-hash — the spread of YAML.parse output exposed Go
 // map-iteration order. With ordered parse it must be stable and source-ordered.

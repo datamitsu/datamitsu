@@ -121,7 +121,7 @@ func (m *mockInstallRootResolver) GetInstallRoot(appName string) (string, error)
 	return p, nil
 }
 
-func TestSetupConfigLinks_CreatesSymlinks(t *testing.T) {
+func TestReportConfigLinks_CreatesSymlinks(t *testing.T) {
 	tmpDir := t.TempDir()
 	gitRoot := filepath.Join(tmpDir, "repo")
 	installDir := filepath.Join(tmpDir, "cache", "eslint", "abc123")
@@ -176,7 +176,7 @@ func TestSetupConfigLinks_CreatesSymlinks(t *testing.T) {
 	}
 }
 
-func TestSetupConfigLinks_NoLinksSkipped(t *testing.T) {
+func TestReportConfigLinks_NoLinksSkipped(t *testing.T) {
 	cfg := &config.Config{
 		Apps: binmanager.MapOfApps{
 			"eslint": {Binary: &binmanager.AppConfigBinary{}},
@@ -379,7 +379,7 @@ func TestInitCommandRegistered(t *testing.T) {
 	}
 }
 
-func TestSetupConfigLinks_BundleLinksAppearInDatamitsu(t *testing.T) {
+func TestReportConfigLinks_BundleLinksAppearInDatamitsu(t *testing.T) {
 	tmpDir := t.TempDir()
 	gitRoot := filepath.Join(tmpDir, "repo")
 	bundleDir := filepath.Join(tmpDir, "bundles", "skills", "hash123")

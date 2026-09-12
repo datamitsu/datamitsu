@@ -81,7 +81,7 @@ func TestMultiVersionIsolatedCachePaths(t *testing.T) {
 	eslintPath, err := rm.GetAppPath(
 		"eslint", config.RuntimeKindNode,
 		eslintConfig.Version, eslintConfig.Dependencies, "", nil, nil, eslintConfig.Runtime,
-		NodeAppPathExtra{PackageName: eslintConfig.PackageName, BinPath: eslintConfig.BinPath},
+		PackageAppPathExtra{PackageName: eslintConfig.PackageName, BinPath: eslintConfig.BinPath},
 	)
 	if err != nil {
 		t.Fatalf("GetAppPath(eslint) error = %v", err)
@@ -90,7 +90,7 @@ func TestMultiVersionIsolatedCachePaths(t *testing.T) {
 	legacyPath, err := rm.GetAppPath(
 		"eslint-legacy", config.RuntimeKindNode,
 		legacyConfig.Version, legacyConfig.Dependencies, "", nil, nil, legacyConfig.Runtime,
-		NodeAppPathExtra{PackageName: legacyConfig.PackageName, BinPath: legacyConfig.BinPath},
+		PackageAppPathExtra{PackageName: legacyConfig.PackageName, BinPath: legacyConfig.BinPath},
 	)
 	if err != nil {
 		t.Fatalf("GetAppPath(eslint-legacy) error = %v", err)
@@ -204,8 +204,8 @@ func TestMultiVersionCacheKeyStability(t *testing.T) {
 	eslintConfig := apps["eslint"].Node
 	legacyConfig := apps["eslint-legacy"].Node
 
-	eslintExtra := NodeAppPathExtra{PackageName: eslintConfig.PackageName, BinPath: eslintConfig.BinPath}
-	legacyExtra := NodeAppPathExtra{PackageName: legacyConfig.PackageName, BinPath: legacyConfig.BinPath}
+	eslintExtra := PackageAppPathExtra{PackageName: eslintConfig.PackageName, BinPath: eslintConfig.BinPath}
+	legacyExtra := PackageAppPathExtra{PackageName: legacyConfig.PackageName, BinPath: legacyConfig.BinPath}
 
 	t.Run("same config produces same path across calls", func(t *testing.T) {
 		path1, _ := rm.GetAppPath("eslint", config.RuntimeKindNode,
