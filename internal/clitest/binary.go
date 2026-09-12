@@ -120,6 +120,12 @@ func buildInstrumented() (string, error) {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return "", fmt.Errorf("go build -cover failed: %w\n%s", err, out)
 	}
+	// `go build` honours the caller's umask, so a umask of 002 yields 0775 —
+	// group-writable, which source mode rejects as an unsafe shim target. Pin
+	// the mode so the suite behaves the same whatever umask the runner has.
+	if err := os.Chmod(bin, 0o755); err != nil {
+		return "", fmt.Errorf("chmod the built binary: %w", err)
+	}
 	return bin, nil
 }
 

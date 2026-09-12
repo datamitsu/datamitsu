@@ -1,0 +1,6 @@
+ignore:
+  - .git
+  - node_modules
+  - dist
+ls:
+  .dir: kebab-case | snake_case

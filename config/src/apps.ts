@@ -9,6 +9,9 @@ interface AppStateGithub {
   configHash: string;
 }
 
+const semverLockFile =
+  "br:G6QBABwHjtuALSOdyJNLypcG5tmXCnUYbZAaZA7NZSmADJ5Tn1P0I5oKb1EiB5Pr3JrFCtvHjzRRsCI4dhbXsR/sERQITNcXQ/aQ1nJV1Sj+76IGmjTUV1Rt8b0j8wjIMhYAUgSqUdyHxTSTDLKpxtYDqW6mRpaYzpBT1N9Zl+CdjB1flsqp+iDpUzfFu6jw6a+nNP2PmZT9sSHyNIP/OuRhGUvdo+X7/yAXw02ZOhdheXPsWF94smxsNzbaf/fjHvPs5cun+Wq95V8Rre045Y3uM4fKBdnKUlncmRwVpHfTn41GLZCevay/LqlNPzge0RS4VxfjuempOcoTg0P3RgUCeC0A";
+
 export const mapOfApps: BinManager.MapOfApps = {
   echo: {
     shell: {
@@ -44,8 +47,7 @@ export const mapOfApps: BinManager.MapOfApps = {
   "semver-bun": {
     bun: {
       binPath: "node_modules/semver/bin/semver.js",
-      lockFile:
-        "br:G6QBABwHdiz4goGDjYmgyaWBefalYh5i1AA1iAva3FIA2Z3v77+0zKMcqJWDkkvt9GmU53F8D51bo1hh+/iRiAKKQO6Yl1SCMkGBwDRFDPEhLT5pWpz8d1GBNg2Nf01bXsSBtwPEiiVAiVQtThSIGCbpP0tLvIJrXq7FHmIyZIuVYiLBBJGdNa9zigKSG4UN3qHCo2y2NP3HSitlYn54msEvC2pRoPGRH+91eT+uPpfXmhs/qLtr8+5+FT3K8n81rMfXKq/TVzD3vBdpO9Q02xQcyl6jOHgf5UdwN9HVL9tYeZ5uNG/c73dAZvaysmmpRQkO+jQFnmmfZGL5ag73P+Glu1HRAKEDAA==",
+      lockFile: semverLockFile,
       packageName: nodeApps.semver.packageName,
       version: nodeApps.semver.version,
     },
@@ -57,8 +59,7 @@ export const mapOfApps: BinManager.MapOfApps = {
     description: nodeApps.semver.description,
     node: {
       binPath: "node_modules/.bin/semver",
-      lockFile:
-        "br:G6QBABwHdiz4goGDjYmgyaWBefalYh5i1AA1iAva3FIA2Z3v77+0zKMcqJWDkkvt9GmU53F8D51bo1hh+/iRiAKKQO6Yl1SCMkGBwDRFDPEhLT5pWpz8d1GBNg2Nf01bXsSBtwPEiiVAiVQtThSIGCbpP0tLvIJrXq7FHmIyZIuVYiLBBJGdNa9zigKSG4UN3qHCo2y2NP3HSitlYn54msEvC2pRoPGRH+91eT+uPpfXmhs/qLtr8+5+FT3K8n81rMfXKq/TVzD3vBdpO9Q02xQcyl6jOHgf5UdwN9HVL9tYeZ5uNG/c73dAZvaysmmpRQkO+jQFnmmfZGL5ag73P+Glu1HRAKEDAA==",
+      lockFile: semverLockFile,
       packageName: nodeApps.semver.packageName,
       version: nodeApps.semver.version,
     },

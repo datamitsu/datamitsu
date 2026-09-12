@@ -1,6 +1,13 @@
 {
-  "errorLens.enabledDiagnosticLevels": ["warning", "error"],
-  "errorLens.excludeBySource": ["cSpell", "Grammarly", "eslint"],
+  "errorLens.enabledDiagnosticLevels": [
+    "warning",
+    "error"
+  ],
+  "errorLens.excludeBySource": [
+    "cSpell",
+    "Grammarly",
+    "eslint"
+  ],
   "explorer.fileNesting.enabled": true,
   "explorer.fileNesting.expand": false,
   "explorer.fileNesting.patterns": {
@@ -107,9 +114,15 @@
   "go.alternateTools": {
     "customFormatter": "golangci-lint-v2"
   },
-  "go.formatFlags": ["fmt", "--stdin"],
+  "go.formatFlags": [
+    "fmt",
+    "--stdin"
+  ],
   "go.formatTool": "custom",
-  "go.lintFlags": ["--path-mode=abs", "--fast-only"],
+  "go.lintFlags": [
+    "--path-mode=abs",
+    "--fast-only"
+  ],
   "go.lintTool": "golangci-lint-v2",
   "search.exclude": {
     "**/*.snap": true,

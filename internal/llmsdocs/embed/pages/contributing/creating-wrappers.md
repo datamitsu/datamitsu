@@ -256,9 +256,7 @@ function getConfig(prev) {
     apps: {
       ...prev.apps,
       // Add new tools
-      prettier: {
-        /* ... */
-      },
+      prettier: {/* ... */},
 
       // Override existing tool
       "golangci-lint": {
@@ -302,9 +300,7 @@ function getConfig(prev) {
 
   // Add tools based on environment
   if (process.env.CI === "true") {
-    config.apps["some-ci-tool"] = {
-      /* ... */
-    };
+    config.apps["some-ci-tool"] = {/* ... */};
   }
 
   // Adjust settings based on OS
