@@ -167,6 +167,9 @@ func runStoreSeed(ctx context.Context, args []string) error {
 	opts := ocibundle.Options{}
 	if len(storeSeedApps) > 0 {
 		opts.Needed = storeSeedApps
+		// The caller named these tools; a store that still cannot run them is a
+		// failed seed, not a quiet partial one.
+		opts.RequireRequested = true
 	}
 
 	d := ui.New(term.DetectMode())
