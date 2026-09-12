@@ -1,7 +1,6 @@
 import { join } from "node:path";
 
 import { defineConfig } from "../../.datamitsu/eslint.config.mjs";
-
 import packageJSON from "./package.json" with { type: "json" };
 
 const config = await defineConfig(

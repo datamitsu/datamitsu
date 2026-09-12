@@ -1,7 +1,6 @@
 import { join } from "node:path";
 
 import { defineConfig } from "../../.datamitsu/eslint.config.mjs";
-
 import packageJSON from "./package.json" with { type: "json" };
 
 const config = await defineConfig(
@@ -11,9 +10,9 @@ const config = await defineConfig(
   [
     {
       rules: {
+        "unicorn/consistent-class-member-order": "off",
         "unicorn/no-top-level-assignment-in-function": "off",
         "unicorn/prefer-await": "off",
-        "unicorn/consistent-class-member-order": "off",
       },
     },
   ],
