@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
@@ -1327,5 +1328,96 @@ func TestSeedBundle_MalformedRefIsRejected(t *testing.T) {
 		if err := SeedBundle(context.Background(), &config.Config{}, ref, Options{}); err == nil {
 			t.Errorf("SeedBundle(%+v) = nil, want validation error", ref)
 		}
+	}
+}
+
+// mismatchedSubtree swaps the identity hash of an app subtree, modelling a
+// bundle built from a config that computes a different app hash than the one
+// evaluating here.
+func mismatchedSubtree(subtree string) string {
+	return path.Dir(subtree) + "/00000000000000000000000000000000"
+}
+
+// annotateApp adds the app-level annotation the bundle postprocessor writes.
+func annotateApp(desc ocispec.Descriptor, app string) ocispec.Descriptor {
+	if desc.Annotations == nil {
+		desc.Annotations = map[string]string{}
+	}
+	desc.Annotations[AnnotationApp] = app
+	return desc
+}
+
+func TestSeed_RequestedAppUnderADifferentHashIsReported(t *testing.T) {
+	storeRoot := testStore(t)
+	payload := []byte("proxy payload")
+	cfg, subtrees := testBinaryConfig(t, map[string][]byte{"tool": payload})
+
+	// The bundle carries the app, but built from a config whose app hash differs.
+	stale := mismatchedSubtree(subtrees["tool"])
+	src := newFakeSource()
+	layer := annotateApp(src.addLayer(binaryLayer(t, stale, payload), stale), "tool")
+	digest := src.addManifest(t, []ocispec.Descriptor{layer}, nil)
+
+	err := seedFrom(context.Background(), cfg, src, "test/bundle", digest, nil,
+		Options{Needed: []string{"tool"}, RequireRequested: true})
+	if err == nil {
+		t.Fatal("seedFrom = nil, want an error: the requested tool was not seeded")
+	}
+	if !errors.Is(err, errIncomplete) {
+		t.Errorf("error = %v, want errIncomplete", err)
+	}
+	if IsFatalSeedError(err) {
+		t.Error("an uncovered request must not be fatal (AutoSeed still degrades to the network)")
+	}
+	for _, want := range []string{subtrees["tool"], stale, "differs from the one the bundle was built from"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not mention %q", err, want)
+		}
+	}
+	if _, statErr := os.Stat(filepath.Join(storeRoot, filepath.FromSlash(subtrees["tool"]))); statErr == nil {
+		t.Error("a layer whose identity hash disagrees must never be placed at the expected path")
+	}
+}
+
+func TestSeed_RequestedAppAbsentFromBundleIsReported(t *testing.T) {
+	testStore(t)
+	cfg, subtrees := testBinaryConfig(t, map[string][]byte{
+		"tool":  []byte("wanted"),
+		"other": []byte("carried"),
+	})
+
+	src := newFakeSource()
+	layer := annotateApp(
+		src.addLayer(binaryLayer(t, subtrees["other"], []byte("carried")), subtrees["other"]), "other")
+	digest := src.addManifest(t, []ocispec.Descriptor{layer}, nil)
+
+	err := seedFrom(context.Background(), cfg, src, "test/bundle", digest, nil,
+		Options{Needed: []string{"tool"}, RequireRequested: true})
+	if err == nil {
+		t.Fatal("seedFrom = nil, want an error: the bundle carries no layer for the tool")
+	}
+	if !errors.Is(err, errIncomplete) {
+		t.Errorf("error = %v, want errIncomplete", err)
+	}
+	if !strings.Contains(err.Error(), "does not carry") {
+		t.Errorf("error %q should say the bundle does not carry the subtree", err)
+	}
+}
+
+func TestSeed_UncoveredRequestWithoutRequireRequestedStillSucceeds(t *testing.T) {
+	testStore(t)
+	payload := []byte("proxy payload")
+	cfg, subtrees := testBinaryConfig(t, map[string][]byte{"tool": payload})
+
+	stale := mismatchedSubtree(subtrees["tool"])
+	src := newFakeSource()
+	layer := annotateApp(src.addLayer(binaryLayer(t, stale, payload), stale), "tool")
+	digest := src.addManifest(t, []ocispec.Descriptor{layer}, nil)
+
+	// AutoSeed's contract: the bundle is an accelerator, so a request it cannot
+	// cover is not an error — the network path installs the rest.
+	if err := seedFrom(context.Background(), cfg, src, "test/bundle", digest, nil,
+		Options{Needed: []string{"tool"}}); err != nil {
+		t.Fatalf("seedFrom without RequireRequested = %v, want nil", err)
 	}
 }
