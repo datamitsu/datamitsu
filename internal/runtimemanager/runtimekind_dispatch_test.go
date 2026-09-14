@@ -228,7 +228,10 @@ func TestCollectRequiredRuntimes_EveryKind(t *testing.T) {
 			"c-jvm":  {Required: true, Jvm: &binmanager.AppConfigJVM{JarURL: "https://x/x.jar", JarHash: "h", Version: "1"}},
 			"d-go":   {Required: true, Go: &binmanager.AppConfigGo{PackageName: "x", Version: "1"}},
 		}
-		result := CollectRequiredRuntimes(apps, runtimes, false)
+		result, err := CollectRequiredRuntimes(apps, runtimes, false)
+		if err != nil {
+			t.Fatal(err)
+		}
 		want := []string{"bun-rt", "go-rt", "jvm-rt", "node-rt", "uv-rt"}
 		if !equalStringSlices(result, want) {
 			t.Errorf("CollectRequiredRuntimes() = %v, want %v", result, want)
@@ -243,7 +246,10 @@ func TestCollectRequiredRuntimes_EveryKind(t *testing.T) {
 			"c-jvm":  {Required: true, Jvm: &binmanager.AppConfigJVM{JarURL: "https://x/x.jar", JarHash: "h", Version: "1", Runtime: "jvm-rt"}},
 			"d-go":   {Required: true, Go: &binmanager.AppConfigGo{PackageName: "x", Version: "1", Runtime: "go-rt"}},
 		}
-		result := CollectRequiredRuntimes(apps, runtimes, false)
+		result, err := CollectRequiredRuntimes(apps, runtimes, false)
+		if err != nil {
+			t.Fatal(err)
+		}
 		want := []string{"bun-rt", "go-rt", "jvm-rt", "node-rt", "uv-rt"}
 		if !equalStringSlices(result, want) {
 			t.Errorf("CollectRequiredRuntimes() = %v, want %v", result, want)
@@ -254,7 +260,10 @@ func TestCollectRequiredRuntimes_EveryKind(t *testing.T) {
 		apps := binmanager.MapOfApps{
 			"a-uv": {Required: true, Uv: &binmanager.AppConfigUV{PackageName: "x", Version: "1", Runtime: "ghost"}},
 		}
-		result := CollectRequiredRuntimes(apps, runtimes, false)
+		result, err := CollectRequiredRuntimes(apps, runtimes, false)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if len(result) != 0 {
 			t.Errorf("CollectRequiredRuntimes() = %v, want empty for dangling ref", result)
 		}
@@ -265,7 +274,10 @@ func TestCollectRequiredRuntimes_EveryKind(t *testing.T) {
 			"bin":   {Required: true, Binary: &binmanager.AppConfigBinary{Binaries: binmanager.MapOfBinaries{}}},
 			"shell": {Required: true, Shell: &binmanager.AppConfigShell{Name: "echo"}},
 		}
-		result := CollectRequiredRuntimes(apps, runtimes, false)
+		result, err := CollectRequiredRuntimes(apps, runtimes, false)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if len(result) != 0 {
 			t.Errorf("CollectRequiredRuntimes() = %v, want empty for non-runtime apps", result)
 		}

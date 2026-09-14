@@ -1,0 +1,5 @@
+exit: 1
+stdout:
+stderr:
+error: failed to load config: config validation failed:
+  app dependency cycle: a -> b -> c -> a

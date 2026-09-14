@@ -8,10 +8,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -120,6 +122,7 @@ type AppVersionCheck struct {
 type App struct {
 	// Required binary (downloaded during Install())
 	// Optional binaries are downloaded only on first access via GetBinaryPath()
+	// Dependencies are installed even when optional.
 	Required bool `json:"required,omitempty"`
 
 	// Lazy defers installation: the app is NOT installed during `datamitsu init`,
@@ -128,10 +131,12 @@ type App struct {
 	// CLIs (e.g. a presentation tool) whose deps/links aren't needed until run.
 	// Apps consumed by hooks, tools, or ManagedConfig must stay eager (Lazy=false),
 	// since smart-init can't otherwise see those references.
+	// A selected app's dependsOn closure overrides Lazy on its dependencies.
 	Lazy bool `json:"lazy,omitempty"`
 
 	Description  string           `json:"description,omitempty"`
 	VersionCheck *AppVersionCheck `json:"versionCheck,omitempty"`
+	DependsOn    []string         `json:"dependsOn,omitempty"`
 
 	Binary *AppConfigBinary `json:"binary,omitempty"`
 	Bun    *AppConfigBun    `json:"bun,omitempty"`
@@ -145,6 +150,8 @@ type App struct {
 	// at install time (bun/uv/node/go) and run time. Values support ${STORE} and
 	// ${APP_DIR} placeholders. Keys already set by datamitsu/the runtime win.
 	Env map[string]string `json:"env,omitempty"`
+
+	RuntimeEnv map[string]string `json:"runtimeEnv,omitempty"`
 
 	Files    map[string]string       `json:"files,omitempty"`
 	Links    map[string]string       `json:"links,omitempty"`
@@ -291,6 +298,7 @@ type SkippedBinary struct {
 }
 
 // InstallStats summarizes the results of an install run across all binaries.
+// The results also include the binaries' app dependencies, of any kind.
 type InstallStats struct {
 	Skipped       []SkippedBinary
 	AlreadyCached []string
@@ -300,6 +308,7 @@ type InstallStats struct {
 
 // InstallWithConcurrency installs binaries with specified concurrency level
 // Returns installation statistics
+// The selected binaries' dependsOn closure is installed too.
 func (bm *BinManager) InstallWithConcurrency(ctx context.Context, includeOptional bool, concurrency int, failOnError bool) (InstallStats, error) {
 	defer trace.Start(trace.CatInstall, "binmanager.installAll").EndWith(trace.A("concurrency", concurrency))
 
@@ -310,14 +319,20 @@ func (bm *BinManager) InstallWithConcurrency(ctx context.Context, includeOptiona
 		Failed:        []DownloadResult{},
 	}
 
+	names, err := bm.binaryInstallNames(includeOptional)
+	if err != nil {
+		return stats, err
+	}
 	var toDownload []string
-	for name, app := range bm.mapOfApps {
+	for _, name := range names {
+		app := bm.mapOfApps[name]
 		if app.Binary == nil {
-			continue
-		}
-
-		if !includeOptional && !app.Required {
-			log.Debug("skipping optional binary", zap.String("name", name))
+			_, installed, resolveErr := bm.ResolveCommandInfo(name)
+			if resolveErr == nil && installed {
+				stats.AlreadyCached = append(stats.AlreadyCached, name)
+			} else {
+				toDownload = append(toDownload, name)
+			}
 			continue
 		}
 
@@ -347,10 +362,10 @@ func (bm *BinManager) InstallWithConcurrency(ctx context.Context, includeOptiona
 
 	var wg sync.WaitGroup
 
-	for range concurrency {
+	for range max(1, concurrency) {
 		wg.Go(func() {
 			for name := range jobs {
-				err := bm.downloadWithTimeout(ctx, name)
+				_, err := bm.getCommandInfo(ctx, name)
 				results <- DownloadResult{
 					Name:  name,
 					Error: err,
@@ -386,46 +401,21 @@ func (bm *BinManager) InstallWithConcurrency(ctx context.Context, includeOptiona
 }
 
 // Install downloads and caches only required binaries (Required: true)
+// The required binaries' dependsOn closure is installed too.
 func (bm *BinManager) Install(ctx context.Context) error {
 	return bm.installInternal(ctx, false)
 }
 
 // GetBinaryPath returns the path to a binary, downloading it if necessary (lazy loading)
 func (bm *BinManager) GetBinaryPath(ctx context.Context, name string) (string, error) {
-	binPath, err := bm.getBinaryPath(name)
+	if _, err := bm.getBinaryPath(name); err != nil {
+		return "", err
+	}
+	info, err := bm.GetCommandInfo(ctx, name)
 	if err != nil {
 		return "", err
 	}
-
-	if _, err := os.Stat(binPath); err == nil {
-		log.Debug("binary found in cache", zap.String("name", name), zap.String("path", binPath))
-		return binPath, nil
-	}
-
-	log.Debug("binary not found in cache, downloading", zap.String("name", name))
-
-	// Coalesce concurrent downloads of the same binary: only one goroutine
-	// performs the download, the rest wait and share its result. Re-check the
-	// cache inside the critical section so a download that completed while we
-	// were blocked is a no-op.
-	_, err, _ = bm.downloadGroup.Do(name, func() (any, error) {
-		if _, statErr := os.Stat(binPath); statErr == nil {
-			return struct{}{}, nil
-		}
-
-		// Progress (a bar in a terminal, throttled lines in CI) is rendered by
-		// the download layer through the shared ui display.
-		if err := bm.downloadWithTimeout(ctx, name); err != nil {
-			return nil, fmt.Errorf("failed to download %s: %w", name, err)
-		}
-
-		return struct{}{}, nil
-	})
-	if err != nil {
-		return "", fmt.Errorf("download %s: %w", name, err)
-	}
-
-	return binPath, nil
+	return info.Command, nil
 }
 
 // ensureToolsConcurrency bounds how many distinct tools EnsureTools installs in
@@ -436,28 +426,20 @@ const ensureToolsConcurrency = 4
 // EnsureTools installs every distinct tool named in names before the caller
 // runs them, so that subsequent parallel execution never triggers a lazy,
 // racy install. Names are deduplicated; each distinct tool is resolved once via
-// GetCommandInfo, which installs binaries (through GetBinaryPath) and bun/uv/node/
+// getCommandInfo, which installs binaries (through getOrInstallBinaryPath) and bun/uv/node/
 // go/jvm runtime apps (through the single-flighted runtime manager). Shell apps
 // need no install and resolve cheaply.
 //
 // Errors are aggregated: a non-fatal failure on one tool does not abort the
 // rest of the set. An unknown tool name surfaces as a clear error. An empty
 // list is a no-op.
+// The selected tools' dependsOn closure is included too.
 func (bm *BinManager) EnsureTools(ctx context.Context, names []string) error {
-	// Deduplicate while preserving determinism.
-	seen := make(map[string]struct{}, len(names))
-	distinct := make([]string, 0, len(names))
-	for _, name := range names {
-		if _, ok := seen[name]; ok {
-			continue
-		}
-		seen[name] = struct{}{}
-		distinct = append(distinct, name)
-	}
-	sort.Strings(distinct)
+	// Expand dependencies and deduplicate while preserving determinism.
+	distinct, closureErr := AppDependencyClosure(bm.mapOfApps, names)
 
 	if len(distinct) == 0 {
-		return nil
+		return closureErr
 	}
 
 	concurrency := min(len(distinct), ensureToolsConcurrency)
@@ -477,7 +459,7 @@ func (bm *BinManager) EnsureTools(ctx context.Context, names []string) error {
 					errs[idxOf[name]] = err
 					continue
 				}
-				if _, err := bm.GetCommandInfo(ctx, name); err != nil {
+				if _, err := bm.getCommandInfo(ctx, name); err != nil {
 					errs[idxOf[name]] = fmt.Errorf("failed to ensure tool %q: %w", name, err)
 				}
 			}
@@ -490,124 +472,65 @@ func (bm *BinManager) EnsureTools(ctx context.Context, names []string) error {
 	close(jobs)
 	wg.Wait()
 
-	return errors.Join(errs...)
+	return errors.Join(closureErr, errors.Join(errs...))
 }
 
 // GetCommandInfo returns command information for executing an application
 // Works with all application types: binary, shell, bun, uv, node, jvm, go
 func (bm *BinManager) GetCommandInfo(ctx context.Context, appName string) (*CommandInfo, error) {
-	app, ok := bm.mapOfApps[appName]
-	if !ok {
-		return nil, fmt.Errorf("app '%s' not found in registry", appName)
+	names, err := AppDependencyClosure(bm.mapOfApps, []string{appName})
+	if err != nil {
+		return nil, err
 	}
-
-	var cmdInfo *CommandInfo
-
-	switch {
-	case app.Shell != nil:
-		cmdInfo = &CommandInfo{
-			Type:    "shell",
-			Command: app.Shell.Name,
-			Args:    app.Shell.Args,
-		}
-
-	case app.Binary != nil:
-		binPath, err := bm.GetBinaryPath(ctx, appName)
+	var info *CommandInfo
+	for _, name := range names {
+		info, err = bm.getCommandInfo(ctx, name)
 		if err != nil {
-			return nil, err
+			if name == appName {
+				return nil, err
+			}
+			return nil, fmt.Errorf("failed to prepare dependency %q: %w", name, err)
 		}
-		cmdInfo = &CommandInfo{
-			Type:    "binary",
-			Command: binPath,
-		}
-
-	case app.Bun != nil || app.Uv != nil || app.Node != nil || app.Jvm != nil || app.Go != nil:
-		if bm.runtimeManager == nil {
-			return nil, fmt.Errorf("no runtime manager configured for runtime-managed app %q", appName)
-		}
-		ci, err := bm.runtimeManager.GetCommandInfo(ctx, appName, app)
-		if err != nil {
-			return nil, err
-		}
-		cmdInfo = ci
-
-	default:
-		return nil, fmt.Errorf("app '%s' has no valid configuration", appName)
 	}
-
-	bm.mergeAppEnv(appName, app, cmdInfo)
-
-	return cmdInfo, nil
+	return info, nil
 }
 
 // ResolveCommandInfo answers "where would this app be, and is it there?"
 // without touching the network. It returns the same CommandInfo shape
-// GetCommandInfo does — including the merged app Env — plus whether the
-// resolved Command currently exists on disk.
+// GetCommandInfo does — including the merged app Env and RuntimeEnv — plus
+// whether the app and its dependencies currently exist on disk.
 //
 // This is an addition, not a replacement: GetCommandInfo still installs. The
 // two differ only in side effects, so an app that reports installed=true here
 // runs from exactly the path GetCommandInfo would hand the exec path.
 //
-// Shell apps resolve to their bare command name with installed=true: their
+// Shell commands need no store check: their
 // executable is found through the inherited PATH at spawn time, so there is no
 // store path to stat.
+// Dependency health paths are included even when dependencies have no farm entry.
 func (bm *BinManager) ResolveCommandInfo(appName string) (*CommandInfo, bool, error) {
-	app, ok := bm.mapOfApps[appName]
-	if !ok {
-		return nil, false, fmt.Errorf("app '%s' not found in registry", appName)
+	names, err := AppDependencyClosure(bm.mapOfApps, []string{appName})
+	if err != nil {
+		return nil, false, err
 	}
-
-	var (
-		cmdInfo   *CommandInfo
-		installed bool
-	)
-
-	switch {
-	case app.Shell != nil:
-		cmdInfo = &CommandInfo{
-			Type:    "shell",
-			Command: app.Shell.Name,
-			Args:    app.Shell.Args,
-		}
-		installed = true
-
-	case app.Binary != nil:
-		// getBinaryPath is the non-downloading half of GetBinaryPath: it does
-		// the same config-hash path math and stops before the fetch.
-		binPath, err := bm.getBinaryPath(appName)
+	var required []string
+	installed := true
+	for _, name := range names {
+		info, present, err := bm.resolveCommandInfo(name)
 		if err != nil {
-			return nil, false, err
+			if name == appName {
+				return nil, false, err
+			}
+			return nil, false, fmt.Errorf("resolve dependency %q: %w", name, err)
 		}
-		cmdInfo = &CommandInfo{
-			Type:    "binary",
-			Command: binPath,
+		installed = installed && present
+		if name == appName {
+			info.RequiredPaths = append(slices.Clone(info.RequiredPaths), required...)
+			return info, installed, nil
 		}
-		installed = pathExists(binPath)
-
-	case app.Bun != nil || app.Uv != nil || app.Node != nil || app.Jvm != nil || app.Go != nil:
-		if bm.runtimeManager == nil {
-			return nil, false, fmt.Errorf("no runtime manager configured for runtime-managed app %q", appName)
-		}
-		ci, err := bm.runtimeManager.ResolveCommandInfo(appName, app)
-		if err != nil {
-			return nil, false, err
-		}
-		cmdInfo = ci
-		// Every path the runtime declares required, not just the one that gets
-		// exec'd: the runtime installers treat a wrapper without its package, or
-		// a venv without its interpreter, as not installed, and an answer that
-		// disagreed with them would let the shim skip the repair they exist to
-		// trigger.
-		installed = allPathsExist(cmdInfo.HealthPaths())
-
-	default:
-		return nil, false, fmt.Errorf("app '%s' has no valid configuration", appName)
+		required = append(required, info.HealthPaths()...)
 	}
-
-	bm.mergeAppEnv(appName, app, cmdInfo)
-
-	return cmdInfo, installed, nil
+	return nil, false, fmt.Errorf("app '%s' not found in registry", appName)
 }
 
 // pathExists reports whether path names an existing filesystem entry. A
@@ -971,20 +894,20 @@ func (bm *BinManager) GetAppsList() []AppInfo {
 // For binary apps: ensures binary is cached (downloads if needed).
 // For runtime apps: delegates to runtimeManager.GetCommandInfo.
 // Returns (nil, nil) for shell apps — callers must handle nil.
+// Dependencies are provisioned for every app kind, including shell apps.
 func (bm *BinManager) GetExecCmd(ctx context.Context, name string, args []string) (*exec.Cmd, error) {
 	app, ok := bm.mapOfApps[name]
 	if !ok {
 		return nil, fmt.Errorf("app '%s' not found in registry", name)
 	}
 
-	if app.Shell != nil {
-		// Shell apps have no exec.Cmd; callers check for a nil cmd (documented contract).
-		return nil, nil //nolint:nilnil
-	}
-
 	cmdInfo, err := bm.GetCommandInfo(ctx, name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get command info for %s: %w", name, err)
+	}
+	if app.Shell != nil {
+		// Shell apps have no exec.Cmd; callers check for a nil cmd (documented contract).
+		return nil, nil //nolint:nilnil
 	}
 
 	allArgs := make([]string, 0, len(cmdInfo.Args)+len(args))
@@ -1076,6 +999,150 @@ func (bm *BinManager) BinaryAvailable(name string) (available bool, detail strin
 		return false, bm.resolver.Host().String()
 	}
 	return true, ""
+}
+
+func (bm *BinManager) resolveCommandInfo(appName string) (*CommandInfo, bool, error) {
+	app, ok := bm.mapOfApps[appName]
+	if !ok {
+		return nil, false, fmt.Errorf("app '%s' not found in registry", appName)
+	}
+
+	var (
+		cmdInfo   *CommandInfo
+		installed bool
+	)
+
+	switch {
+	case app.Shell != nil:
+		cmdInfo = &CommandInfo{
+			Type:    "shell",
+			Command: app.Shell.Name,
+			Args:    app.Shell.Args,
+		}
+		installed = true
+
+	case app.Binary != nil:
+		// getBinaryPath is the non-downloading half of GetBinaryPath: it does
+		// the same config-hash path math and stops before the fetch.
+		binPath, err := bm.getBinaryPath(appName)
+		if err != nil {
+			return nil, false, err
+		}
+		cmdInfo = &CommandInfo{
+			Type:    "binary",
+			Command: binPath,
+		}
+		installed = pathExists(binPath)
+
+	case app.Bun != nil || app.Uv != nil || app.Node != nil || app.Jvm != nil || app.Go != nil:
+		if bm.runtimeManager == nil {
+			return nil, false, fmt.Errorf("no runtime manager configured for runtime-managed app %q", appName)
+		}
+		ci, err := bm.runtimeManager.ResolveCommandInfo(appName, app)
+		if err != nil {
+			return nil, false, err
+		}
+		cmdInfo = ci
+		// Every path the runtime declares required, not just the one that gets
+		// exec'd: the runtime installers treat a wrapper without its package, or
+		// a venv without its interpreter, as not installed, and an answer that
+		// disagreed with them would let the shim skip the repair they exist to
+		// trigger.
+		installed = allPathsExist(cmdInfo.HealthPaths())
+
+	default:
+		return nil, false, fmt.Errorf("app '%s' has no valid configuration", appName)
+	}
+
+	if err := bm.mergeAppEnv(appName, app, cmdInfo); err != nil {
+		return nil, false, err
+	}
+
+	return cmdInfo, installed, nil
+}
+
+func (bm *BinManager) getOrInstallBinaryPath(ctx context.Context, name string) (string, error) {
+	binPath, err := bm.getBinaryPath(name)
+	if err != nil {
+		return "", err
+	}
+
+	if _, err := os.Stat(binPath); err == nil {
+		log.Debug("binary found in cache", zap.String("name", name), zap.String("path", binPath))
+		return binPath, nil
+	}
+
+	log.Debug("binary not found in cache, downloading", zap.String("name", name))
+
+	// Coalesce concurrent downloads of the same binary: only one goroutine
+	// performs the download, the rest wait and share its result. Re-check the
+	// cache inside the critical section so a download that completed while we
+	// were blocked is a no-op.
+	_, err, _ = bm.downloadGroup.Do(name, func() (any, error) {
+		if _, statErr := os.Stat(binPath); statErr == nil {
+			return struct{}{}, nil
+		}
+
+		// Progress (a bar in a terminal, throttled lines in CI) is rendered by
+		// the download layer through the shared ui display.
+		if err := bm.downloadWithTimeout(ctx, name); err != nil {
+			return nil, fmt.Errorf("failed to download %s: %w", name, err)
+		}
+
+		return struct{}{}, nil
+	})
+	if err != nil {
+		return "", fmt.Errorf("download %s: %w", name, err)
+	}
+
+	return binPath, nil
+}
+
+func (bm *BinManager) getCommandInfo(ctx context.Context, appName string) (*CommandInfo, error) {
+	app, ok := bm.mapOfApps[appName]
+	if !ok {
+		return nil, fmt.Errorf("app '%s' not found in registry", appName)
+	}
+
+	var cmdInfo *CommandInfo
+
+	switch {
+	case app.Shell != nil:
+		cmdInfo = &CommandInfo{
+			Type:    "shell",
+			Command: app.Shell.Name,
+			Args:    app.Shell.Args,
+		}
+
+	case app.Binary != nil:
+		binPath, err := bm.getOrInstallBinaryPath(ctx, appName)
+		if err != nil {
+			return nil, err
+		}
+		cmdInfo = &CommandInfo{
+			Type:    "binary",
+			Command: binPath,
+		}
+
+	case app.Bun != nil || app.Uv != nil || app.Node != nil || app.Jvm != nil || app.Go != nil:
+		if bm.runtimeManager == nil {
+			return nil, fmt.Errorf("no runtime manager configured for runtime-managed app %q", appName)
+		}
+		ci, err := bm.runtimeManager.GetCommandInfo(ctx, appName, app)
+		if err != nil {
+			return nil, err
+		}
+		cmdInfo = ci
+
+	default:
+		return nil, fmt.Errorf("app '%s' has no valid configuration", appName)
+	}
+
+	if err := bm.mergeAppEnv(appName, app, cmdInfo); err != nil {
+		return nil, err
+	}
+
+	return cmdInfo, nil
 }
 
 func (bm *BinManager) getBinaryInfo(name string) (*target.ResolvedTarget, BinaryOsArchInfo, error) {
@@ -1209,27 +1276,12 @@ func (bm *BinManager) downloadWithTimeout(ctx context.Context, name string) erro
 }
 
 func (bm *BinManager) installInternal(ctx context.Context, includeOptional bool) error {
-	for name := range bm.mapOfApps {
-		if bm.mapOfApps[name].Binary == nil {
-			continue
-		}
-
-		if !includeOptional && !bm.mapOfApps[name].Required {
-			log.Debug("skipping optional binary", zap.String("name", name))
-			continue
-		}
-
-		binPath, err := bm.getBinaryPath(name)
-		if err != nil {
-			return fmt.Errorf("failed to get binary path for %s: %w", name, err)
-		}
-
-		if _, err := os.Stat(binPath); err == nil {
-			log.Debug("binary already cached, skipping", zap.String("name", name), zap.String("path", binPath))
-			continue
-		}
-
-		if err := bm.downloadWithTimeout(ctx, name); err != nil {
+	names, err := bm.binaryInstallNames(includeOptional)
+	if err != nil {
+		return err
+	}
+	for _, name := range names {
+		if _, err := bm.getCommandInfo(ctx, name); err != nil {
 			return fmt.Errorf("failed to install %s: %w", name, err)
 		}
 	}
@@ -1240,9 +1292,10 @@ func (bm *BinManager) installInternal(ctx context.Context, includeOptional bool)
 // mergeAppEnv merges the app's user-defined Env into cmdInfo.Env, expanding
 // ${STORE}/${APP_DIR} placeholders. Keys already set by datamitsu/the runtime
 // take precedence — a user config can never override a reserved runtime key.
-func (bm *BinManager) mergeAppEnv(appName string, app App, cmdInfo *CommandInfo) {
-	if len(app.Env) == 0 {
-		return
+// RuntimeEnv is merged here so installers receive only Env.
+func (bm *BinManager) mergeAppEnv(appName string, app App, cmdInfo *CommandInfo) error {
+	if len(app.Env) == 0 && len(app.RuntimeEnv) == 0 {
+		return nil
 	}
 
 	// ${APP_DIR} is best-effort: if the install path can't be computed, appDir
@@ -1250,7 +1303,7 @@ func (bm *BinManager) mergeAppEnv(appName string, app App, cmdInfo *CommandInfo)
 	appDir, _ := bm.ComputeInstallPath(appName)
 
 	if cmdInfo.Env == nil {
-		cmdInfo.Env = make(map[string]string, len(app.Env))
+		cmdInfo.Env = make(map[string]string, len(app.Env)+len(app.RuntimeEnv))
 	}
 
 	for k, v := range app.Env {
@@ -1259,6 +1312,22 @@ func (bm *BinManager) mergeAppEnv(appName string, app App, cmdInfo *CommandInfo)
 		}
 		cmdInfo.Env[k] = env.ExpandPlaceholders(v, appDir)
 	}
+	paths := strings.NewReplacer("${STORE}", env.GetStorePath(), "${APP_DIR}", appDir)
+	for _, key := range slices.Sorted(maps.Keys(app.RuntimeEnv)) {
+		value, err := expandAppBindings(app.RuntimeEnv[key], func(name string) (string, error) {
+			if !slices.Contains(app.DependsOn, name) {
+				return "", fmt.Errorf("APP_BIN target %q must be listed in direct dependsOn", name)
+			}
+			return bm.getBinaryPath(name)
+		}, paths)
+		if err != nil {
+			return fmt.Errorf("app %q runtimeEnv.%s: %w", appName, key, err)
+		}
+		if _, exists := cmdInfo.Env[key]; !exists {
+			cmdInfo.Env[key] = value
+		}
+	}
+	return nil
 }
 
 // mergeExecEnv merges base environment variables with app-specific overrides.

@@ -2,13 +2,15 @@
 // multi-stage Dockerfile from a datamitsu config's app/runtime list.
 //
 // The layout is hierarchical (one builder stage per binary, per runtime+version,
-// and per runtime-managed app inheriting its runtime stage) so that changing a
-// single app invalidates and re-pulls only that app's layer. The planning here
-// is pure (no I/O, no network) so it is trivially testable; rendering and digest
-// resolution live in sibling files/packages.
+// and per runtime-managed app inheriting its runtime stage) so app contents
+// can be re-pulled independently. Dependency edits also invalidate dependent
+// build stages. The planning here is pure (no I/O, no network) so it is trivially
+// testable; rendering and digest resolution live in sibling files/packages.
 package dockerfile
 
 import (
+	"fmt"
+	"slices"
 	"sort"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
@@ -45,7 +47,7 @@ type RuntimeStage struct {
 }
 
 // RuntimeAppStage installs one runtime-managed app. It is built FROM the runtime
-// stage named Runtime, so only the app's own files become a new layer.
+// stage named Runtime, so its runtime is shared; app dependencies install here too.
 type RuntimeAppStage struct {
 	App     string
 	Kind    config.RuntimeKind
@@ -221,4 +223,37 @@ func BuildPlan(apps binmanager.MapOfApps, runtimes config.MapOfRuntimes, opts ..
 	}
 
 	return plan
+}
+
+// ValidateDependencies prevents final images from losing a dependency subtree
+// when its stage was filtered out of the plan.
+func (p Plan) ValidateDependencies(apps binmanager.MapOfApps) error {
+	included := make(map[string]bool)
+	for _, stage := range p.RuntimeAppStages {
+		included[stage.App] = true
+	}
+	for _, stage := range p.BinaryStages {
+		included[stage.App] = true
+	}
+	roots := make([]string, 0, len(included))
+	for name := range included {
+		roots = append(roots, name)
+	}
+	sort.Strings(roots)
+	for _, root := range roots {
+		names, err := binmanager.AppDependencyClosure(apps, []string{root})
+		if err != nil {
+			return fmt.Errorf("dockerfile app %q: %w", root, err)
+		}
+		for _, name := range names {
+			if !included[name] {
+				reason := "no installable stage"
+				if slices.Contains(p.LibcExcluded, name) {
+					reason = "binary unavailable for the target Linux/libc variant"
+				}
+				return fmt.Errorf("dockerfile app %q requires dependency %q: %s", root, name, reason)
+			}
+		}
+	}
+	return nil
 }

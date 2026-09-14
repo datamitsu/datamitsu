@@ -77,7 +77,9 @@ import (
 // as it was. Without the bump that manifest is still readable and still
 // UsableStale, so the shim would serve its entries back after every failed-to-
 // land rebake — silently, forever, from a farm nothing can update.
-const ManifestFormatVersion = 3
+//
+// Version 4 retires entries whose health paths omit app dependencies.
+const ManifestFormatVersion = 4
 
 // Origin records how the farm's root was established.
 type Origin string

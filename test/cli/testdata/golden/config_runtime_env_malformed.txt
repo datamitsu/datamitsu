@@ -1,0 +1,5 @@
+exit: 1
+stdout:
+stderr:
+error: failed to load config: config validation failed:
+  apps.proxy.runtimeEnv.BIN: malformed APP_BIN placeholder "${APP_BIN:}"

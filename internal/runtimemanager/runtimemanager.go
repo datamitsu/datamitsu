@@ -393,14 +393,31 @@ type RuntimeInstallStats struct {
 // CollectRequiredRuntimes returns the list of runtime names needed for installation.
 // When includeAll is true, all runtimes from the config are returned.
 // When false, only runtimes referenced by required apps are returned.
-func CollectRequiredRuntimes(apps binmanager.MapOfApps, runtimes config.MapOfRuntimes, includeAll bool) []string {
+// References from the required apps' dependsOn closure are included too.
+func CollectRequiredRuntimes(apps binmanager.MapOfApps, runtimes config.MapOfRuntimes, includeAll bool) ([]string, error) {
 	if includeAll {
 		names := make([]string, 0, len(runtimes))
 		for name := range runtimes {
 			names = append(names, name)
 		}
 		sort.Strings(names)
-		return names
+		return names, nil
+	}
+
+	var roots []string
+	for name, app := range apps {
+		if app.Required {
+			roots = append(roots, name)
+		}
+	}
+	return CollectAppRuntimes(apps, runtimes, roots)
+}
+
+// CollectAppRuntimes includes the runtimes and pnpm references of the app closure.
+func CollectAppRuntimes(apps binmanager.MapOfApps, runtimes config.MapOfRuntimes, roots []string) ([]string, error) {
+	names, err := binmanager.AppDependencyClosure(apps, roots)
+	if err != nil {
+		return nil, err
 	}
 
 	sortedRuntimeNames := make([]string, 0, len(runtimes))
@@ -410,10 +427,8 @@ func CollectRequiredRuntimes(apps binmanager.MapOfApps, runtimes config.MapOfRun
 	sort.Strings(sortedRuntimeNames)
 
 	needed := make(map[string]bool)
-	for _, app := range apps {
-		if !app.Required {
-			continue
-		}
+	for _, name := range names {
+		app := apps[name]
 
 		kind, ref, ok := runtimeAppRef(app)
 		if !ok {
@@ -453,7 +468,7 @@ func CollectRequiredRuntimes(apps binmanager.MapOfApps, runtimes config.MapOfRun
 		result = append(result, name)
 	}
 	sort.Strings(result)
-	return result
+	return result, nil
 }
 
 // InstallRuntimes downloads and caches managed runtimes with progress bars.

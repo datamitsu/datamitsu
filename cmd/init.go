@@ -117,10 +117,15 @@ func runInit(_ *cobra.Command, _ []string) error {
 		// Seed the install set from the declared OCI bundle first (demand-
 		// driven), so the runtime/binary/app installs below hit seeded store
 		// content instead of the network.
-		if err := ocibundle.AutoSeed(ctx, cfg,
-			initInstallAppNames(cfg, initAll),
-			runtimemanager.CollectRequiredRuntimes(cfg.Apps, cfg.Runtimes, initAll),
-		); err != nil {
+		apps, err := initInstallAppNames(cfg, initAll)
+		if err != nil {
+			return err
+		}
+		runtimes, err := initRuntimeNames(cfg, initAll)
+		if err != nil {
+			return err
+		}
+		if err := ocibundle.AutoSeed(ctx, cfg, apps, runtimes); err != nil {
 			return fmt.Errorf("failed to seed store from oci bundle: %w", err)
 		}
 
@@ -130,9 +135,9 @@ func runInit(_ *cobra.Command, _ []string) error {
 		}
 		runtimeCount, failed = n, failed+f
 
-		n, f, rErr = reportBinaries(ctx, disp, binMgr)
+		n, f, rErr = reportTools(ctx, disp, binMgr)
 		if rErr != nil {
-			return fmt.Errorf("failed to download binaries: %w", rErr)
+			return fmt.Errorf("failed to install tools: %w", rErr)
 		}
 		toolCount, failed = n, failed+f
 
@@ -261,7 +266,10 @@ func initLabelLine(disp *ui.Display, label, value string) {
 }
 
 func reportRuntimes(ctx context.Context, disp *ui.Display, rm *runtimemanager.RuntimeManager, cfg *config.Config, includeAll bool) (count, failed int, err error) {
-	names := runtimemanager.CollectRequiredRuntimes(cfg.Apps, cfg.Runtimes, includeAll)
+	names, err := initRuntimeNames(cfg, includeAll)
+	if err != nil {
+		return 0, 0, err
+	}
 	if len(names) == 0 {
 		return 0, 0, nil
 	}
@@ -285,7 +293,7 @@ func reportRuntimes(ctx context.Context, disp *ui.Display, rm *runtimemanager.Ru
 	return len(stats.Downloaded) + len(stats.AlreadyCached), len(stats.Failed), nil
 }
 
-func reportBinaries(ctx context.Context, disp *ui.Display, binMgr *binmanager.BinManager) (count, failed int, err error) {
+func reportTools(ctx context.Context, disp *ui.Display, binMgr *binmanager.BinManager) (count, failed int, err error) {
 	stats, err := binMgr.InstallWithConcurrency(ctx, initAll, env.GetConcurrency(), initFailOnDownloadErr)
 	if err != nil {
 		return 0, 0, err
@@ -546,7 +554,11 @@ type commandInfoGetter interface {
 }
 
 func installRuntimeAppsWithLinks(ctx context.Context, binMgr *binmanager.BinManager, cfg *config.Config, installAll bool) error {
-	return installSmartInitApps(ctx, binMgr, smartInitInstallSet(cfg, installAll))
+	names, err := smartInitInstallSet(cfg, installAll)
+	if err != nil {
+		return err
+	}
+	return installSmartInitApps(ctx, binMgr, names)
 }
 
 // smartInitInstallSet returns the runtime-managed link-apps init installs.
@@ -558,35 +570,51 @@ func installRuntimeAppsWithLinks(ctx context.Context, binMgr *binmanager.BinMana
 // by the commit-msg hook with its config imported via a `.datamitsu/` symlink).
 // Only apps explicitly marked Lazy (e.g. slidev) are deferred; they install on
 // first `dm exec`, which is when their links matter.
-func smartInitInstallSet(cfg *config.Config, installAll bool) []string {
+// The selected roots' dependsOn closure is included regardless of dependency flags.
+func smartInitInstallSet(cfg *config.Config, installAll bool) ([]string, error) {
+	var roots []string
 	if installAll {
-		return filterAppsForSmartInit(cfg.Apps, allAppNames(cfg.Apps))
+		roots = filterAppsForSmartInit(cfg.Apps, allAppNames(cfg.Apps))
+	} else {
+		referenced := filterAppsForSmartInit(cfg.Apps, scanReferencedApps(cfg))
+		roots = mergeUnique(referenced, eagerRuntimeLinkApps(cfg.Apps))
 	}
-	referenced := filterAppsForSmartInit(cfg.Apps, scanReferencedApps(cfg))
-	return mergeUnique(referenced, eagerRuntimeLinkApps(cfg.Apps))
+	return binmanager.AppDependencyClosure(cfg.Apps, roots)
 }
 
-// allAppNames returns all app names from the config (for --all mode).
 // initInstallAppNames approximates the set of apps the init download phase
 // installs (binaries under the required/optional gate plus smart-init runtime
 // apps), for demand-driven OCI bundle seeding. Over-approximation is harmless:
 // an extra name only pulls a layer init would download anyway.
-func initInstallAppNames(cfg *config.Config, includeAll bool) []string {
+// The selected apps' dependsOn closure is included too.
+func initInstallAppNames(cfg *config.Config, includeAll bool) ([]string, error) {
 	if includeAll {
-		return allAppNames(cfg.Apps)
+		return binmanager.AppDependencyClosure(cfg.Apps, allAppNames(cfg.Apps))
 	}
-	var names []string
+	names, err := smartInitInstallSet(cfg, false)
+	if err != nil {
+		return nil, err
+	}
 	for name, app := range cfg.Apps {
 		if app.Required {
 			names = append(names, name)
 		}
 	}
-	names = mergeUnique(names, filterAppsForSmartInit(cfg.Apps, scanReferencedApps(cfg)))
-	names = mergeUnique(names, eagerRuntimeLinkApps(cfg.Apps))
-	sort.Strings(names)
-	return names
+	return binmanager.AppDependencyClosure(cfg.Apps, names)
 }
 
+func initRuntimeNames(cfg *config.Config, includeAll bool) ([]string, error) {
+	if includeAll {
+		return runtimemanager.CollectRequiredRuntimes(cfg.Apps, cfg.Runtimes, true)
+	}
+	names, err := initInstallAppNames(cfg, false)
+	if err != nil {
+		return nil, err
+	}
+	return runtimemanager.CollectAppRuntimes(cfg.Apps, cfg.Runtimes, names)
+}
+
+// allAppNames returns all app names from the config (for --all mode).
 func allAppNames(apps binmanager.MapOfApps) []string {
 	result := make([]string, 0, len(apps))
 	for name := range apps {
@@ -680,8 +708,8 @@ func mergeUnique(a, b []string) []string {
 // installSmartInitApps installs the given list of runtime-managed apps. Per-app
 // download feedback is emitted by the runtime installers through the shared ui
 // display, so nothing is printed here.
+// The list includes dependencies of any kind and is not re-sorted, so prerequisites precede dependents.
 func installSmartInitApps(ctx context.Context, getter commandInfoGetter, appsToInstall []string) error {
-	sort.Strings(appsToInstall)
 	for _, name := range appsToInstall {
 		if _, err := getter.GetCommandInfo(ctx, name); err != nil {
 			return fmt.Errorf("failed to install %s: %w", name, err)

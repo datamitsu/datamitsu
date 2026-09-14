@@ -84,7 +84,11 @@ func expectedSubtrees(cfg *config.Config, storeRoot string, needed, neededRuntim
 		addRuntime(runtimeName)
 	}
 
-	for _, name := range needed {
+	names, closureErr := binmanager.AppDependencyClosure(cfg.Apps, needed)
+	if closureErr != nil {
+		log.Debug("cannot resolve every needed app", zap.Error(closureErr))
+	}
+	for _, name := range names {
 		app, ok := cfg.Apps[name]
 		if !ok || app.Shell != nil {
 			continue

@@ -251,7 +251,10 @@ func TestCollectRequiredRuntimesNode(t *testing.T) {
 	// A node runtime always brings the pnpm runtime that installs its apps.
 	t.Run("required node app collects default node runtime", func(t *testing.T) {
 		apps := binmanager.MapOfApps{"eslint": nodeApp(true, "")}
-		result := CollectRequiredRuntimes(apps, runtimes, false)
+		result, err := CollectRequiredRuntimes(apps, runtimes, false)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if want := []string{"node", testPNPMRuntimeName}; !equalStringSlices(result, want) {
 			t.Fatalf("expected %v, got %v", want, result)
 		}
@@ -259,7 +262,10 @@ func TestCollectRequiredRuntimesNode(t *testing.T) {
 
 	t.Run("node app with explicit runtime ref", func(t *testing.T) {
 		apps := binmanager.MapOfApps{"eslint": nodeApp(true, "node")}
-		result := CollectRequiredRuntimes(apps, runtimes, false)
+		result, err := CollectRequiredRuntimes(apps, runtimes, false)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if want := []string{"node", testPNPMRuntimeName}; !equalStringSlices(result, want) {
 			t.Fatalf("expected %v, got %v", want, result)
 		}
@@ -267,7 +273,10 @@ func TestCollectRequiredRuntimesNode(t *testing.T) {
 
 	t.Run("optional node app excluded", func(t *testing.T) {
 		apps := binmanager.MapOfApps{"eslint": nodeApp(false, "")}
-		result := CollectRequiredRuntimes(apps, runtimes, false)
+		result, err := CollectRequiredRuntimes(apps, runtimes, false)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if len(result) != 0 {
 			t.Errorf("expected 0 runtimes for optional node app, got %v", result)
 		}
@@ -278,7 +287,10 @@ func TestCollectRequiredRuntimesNode(t *testing.T) {
 			"yamllint": {Required: true, Uv: &binmanager.AppConfigUV{PackageName: "yamllint", Version: "1.37.0", Runtime: "uv"}},
 			"eslint":   nodeApp(true, "node"),
 		}
-		result := CollectRequiredRuntimes(apps, runtimes, false)
+		result, err := CollectRequiredRuntimes(apps, runtimes, false)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if want := []string{"node", testPNPMRuntimeName, "uv"}; !equalStringSlices(result, want) {
 			t.Errorf("expected sorted %v, got %v", want, result)
 		}

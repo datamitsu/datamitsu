@@ -1109,6 +1109,10 @@ declare global {
       binary?: AppConfigBinary;
       bun?: AppConfigBun;
       /**
+       * Managed apps required at run time, installed transitively even when lazy or optional.
+       */
+      dependsOn?: string[];
+      /**
        * Human-readable description of the app, shown in exec listing.
        */
       description?: string;
@@ -1121,6 +1125,7 @@ declare global {
        *
        * - `${STORE}` → the shared datamitsu store path (cleaned by `datamitsu store clear`).
        * - `${APP_DIR}` → this app's install directory (per-app, config-hashed).
+       * - `${APP_BIN:<name>}` is supported only in `runtimeEnv`, never in `env`.
        *
        * Precedence: any key already set by datamitsu or the runtime wins, so a user config can
        * never relocate the pnpm store, uv cache, GOPATH, etc.
@@ -1158,7 +1163,7 @@ declare global {
        * declares links) and installs only on first `datamitsu exec`, when its `.datamitsu/` links
        * are also materialized. Use for user-invoked CLIs whose deps are heavy and not needed until
        * run (e.g. slidev). Apps consumed by hooks, tools, or generated configs must stay eager
-       * (omit or false).
+       * (omit or false). Dependencies of selected apps are installed regardless of this flag.
        */
       lazy?: boolean;
       /**
@@ -1169,6 +1174,12 @@ declare global {
       links?: Record<string, string>;
       node?: AppConfigNode;
       required?: boolean;
+      /**
+       * Execution-only env, outside install identity; keys must not overlap `env`. Supports
+       * `${STORE}`, `${APP_DIR}`, and `${APP_BIN:<name>}` for the exact executable of a native
+       * binary in direct `dependsOn`. Datamitsu/runtime-owned keys win.
+       */
+      runtimeEnv?: Record<string, string>;
       shell?: AppConfigShell;
       uv?: AppConfigUV;
       /**

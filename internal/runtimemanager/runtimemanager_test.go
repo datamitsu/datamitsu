@@ -272,7 +272,10 @@ func TestCollectRequiredRuntimes(t *testing.T) {
 
 	t.Run("includeAll returns all runtimes sorted", func(t *testing.T) {
 		apps := binmanager.MapOfApps{}
-		result := CollectRequiredRuntimes(apps, runtimes, true)
+		result, err := CollectRequiredRuntimes(apps, runtimes, true)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if len(result) != 3 {
 			t.Fatalf("expected 3 runtimes, got %d", len(result))
 		}
@@ -291,7 +294,10 @@ func TestCollectRequiredRuntimes(t *testing.T) {
 				},
 			},
 		}
-		result := CollectRequiredRuntimes(apps, runtimes, false)
+		result, err := CollectRequiredRuntimes(apps, runtimes, false)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if len(result) != 1 {
 			t.Fatalf("expected 1 runtime, got %d: %v", len(result), result)
 		}
@@ -313,7 +319,10 @@ func TestCollectRequiredRuntimes(t *testing.T) {
 				},
 			},
 		}
-		result := CollectRequiredRuntimes(apps, runtimes, false)
+		result, err := CollectRequiredRuntimes(apps, runtimes, false)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if len(result) != 1 {
 			t.Fatalf("expected 1 runtime, got %d: %v", len(result), result)
 		}
@@ -333,7 +342,10 @@ func TestCollectRequiredRuntimes(t *testing.T) {
 				},
 			},
 		}
-		result := CollectRequiredRuntimes(apps, runtimes, false)
+		result, err := CollectRequiredRuntimes(apps, runtimes, false)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if len(result) != 1 {
 			t.Fatalf("expected 1 runtime, got %d: %v", len(result), result)
 		}
@@ -352,7 +364,10 @@ func TestCollectRequiredRuntimes(t *testing.T) {
 				},
 			},
 		}
-		result := CollectRequiredRuntimes(apps, runtimes, false)
+		result, err := CollectRequiredRuntimes(apps, runtimes, false)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if len(result) != 0 {
 			t.Errorf("expected 0 runtimes for optional app, got %d: %v", len(result), result)
 		}
@@ -367,7 +382,10 @@ func TestCollectRequiredRuntimes(t *testing.T) {
 				},
 			},
 		}
-		result := CollectRequiredRuntimes(apps, runtimes, false)
+		result, err := CollectRequiredRuntimes(apps, runtimes, false)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if len(result) != 0 {
 			t.Errorf("expected 0 runtimes for binary app, got %d: %v", len(result), result)
 		}
@@ -392,7 +410,10 @@ func TestCollectRequiredRuntimes(t *testing.T) {
 				},
 			},
 		}
-		result := CollectRequiredRuntimes(apps, runtimes, false)
+		result, err := CollectRequiredRuntimes(apps, runtimes, false)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if len(result) != 1 {
 			t.Fatalf("expected 1 deduplicated runtime, got %d: %v", len(result), result)
 		}
@@ -422,7 +443,10 @@ func TestCollectRequiredRuntimes(t *testing.T) {
 				},
 			},
 		}
-		result := CollectRequiredRuntimes(apps, runtimes, false)
+		result, err := CollectRequiredRuntimes(apps, runtimes, false)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if len(result) != 2 {
 			t.Fatalf("expected 2 runtimes, got %d: %v", len(result), result)
 		}
@@ -442,14 +466,20 @@ func TestCollectRequiredRuntimes(t *testing.T) {
 				},
 			},
 		}
-		result := CollectRequiredRuntimes(apps, runtimes, false)
+		result, err := CollectRequiredRuntimes(apps, runtimes, false)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if len(result) != 0 {
 			t.Errorf("expected 0 runtimes for nonexistent ref, got %d: %v", len(result), result)
 		}
 	})
 
 	t.Run("empty apps returns empty", func(t *testing.T) {
-		result := CollectRequiredRuntimes(binmanager.MapOfApps{}, runtimes, false)
+		result, err := CollectRequiredRuntimes(binmanager.MapOfApps{}, runtimes, false)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if len(result) != 0 {
 			t.Errorf("expected 0 runtimes for empty apps, got %d: %v", len(result), result)
 		}
@@ -465,7 +495,10 @@ func TestCollectRequiredRuntimes(t *testing.T) {
 				},
 			},
 		}
-		result := CollectRequiredRuntimes(apps, config.MapOfRuntimes{}, false)
+		result, err := CollectRequiredRuntimes(apps, config.MapOfRuntimes{}, false)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if len(result) != 0 {
 			t.Errorf("expected 0 runtimes when no runtimes defined, got %d: %v", len(result), result)
 		}
@@ -661,7 +694,10 @@ func TestCollectRequiredRuntimesJVM(t *testing.T) {
 				},
 			},
 		}
-		result := CollectRequiredRuntimes(apps, runtimes, false)
+		result, err := CollectRequiredRuntimes(apps, runtimes, false)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if len(result) != 1 {
 			t.Fatalf("expected 1 runtime, got %d: %v", len(result), result)
 		}
@@ -682,7 +718,10 @@ func TestCollectRequiredRuntimesJVM(t *testing.T) {
 				},
 			},
 		}
-		result := CollectRequiredRuntimes(apps, runtimes, false)
+		result, err := CollectRequiredRuntimes(apps, runtimes, false)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if len(result) != 1 {
 			t.Fatalf("expected 1 runtime, got %d: %v", len(result), result)
 		}
@@ -702,7 +741,10 @@ func TestCollectRequiredRuntimesJVM(t *testing.T) {
 				},
 			},
 		}
-		result := CollectRequiredRuntimes(apps, runtimes, false)
+		result, err := CollectRequiredRuntimes(apps, runtimes, false)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if len(result) != 0 {
 			t.Errorf("expected 0 runtimes for optional jvm app, got %d: %v", len(result), result)
 		}
@@ -728,7 +770,10 @@ func TestCollectRequiredRuntimesJVM(t *testing.T) {
 				},
 			},
 		}
-		result := CollectRequiredRuntimes(apps, runtimes, false)
+		result, err := CollectRequiredRuntimes(apps, runtimes, false)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if len(result) != 2 {
 			t.Fatalf("expected 2 runtimes, got %d: %v", len(result), result)
 		}
@@ -988,7 +1033,10 @@ func TestCollectRequiredRuntimesGo(t *testing.T) {
 				},
 			},
 		}
-		result := CollectRequiredRuntimes(apps, runtimes, false)
+		result, err := CollectRequiredRuntimes(apps, runtimes, false)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if len(result) != 1 {
 			t.Fatalf("expected 1 runtime, got %d: %v", len(result), result)
 		}
@@ -1009,7 +1057,10 @@ func TestCollectRequiredRuntimesGo(t *testing.T) {
 				},
 			},
 		}
-		result := CollectRequiredRuntimes(apps, runtimes, false)
+		result, err := CollectRequiredRuntimes(apps, runtimes, false)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if len(result) != 1 {
 			t.Fatalf("expected 1 runtime, got %d: %v", len(result), result)
 		}
@@ -1029,7 +1080,10 @@ func TestCollectRequiredRuntimesGo(t *testing.T) {
 				},
 			},
 		}
-		result := CollectRequiredRuntimes(apps, runtimes, false)
+		result, err := CollectRequiredRuntimes(apps, runtimes, false)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if len(result) != 0 {
 			t.Errorf("expected 0 runtimes for optional go app, got %d: %v", len(result), result)
 		}
@@ -1047,7 +1101,10 @@ func TestCollectRequiredRuntimesGo(t *testing.T) {
 				},
 			},
 		}
-		result := CollectRequiredRuntimes(apps, runtimes, false)
+		result, err := CollectRequiredRuntimes(apps, runtimes, false)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if len(result) != 0 {
 			t.Errorf("expected 0 runtimes for nonexistent ref, got %d: %v", len(result), result)
 		}
@@ -1073,7 +1130,10 @@ func TestCollectRequiredRuntimesGo(t *testing.T) {
 				},
 			},
 		}
-		result := CollectRequiredRuntimes(apps, runtimes, false)
+		result, err := CollectRequiredRuntimes(apps, runtimes, false)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if len(result) != 2 {
 			t.Fatalf("expected 2 runtimes, got %d: %v", len(result), result)
 		}
@@ -1103,7 +1163,10 @@ func TestCollectRequiredRuntimesGo(t *testing.T) {
 				},
 			},
 		}
-		result := CollectRequiredRuntimes(apps, runtimes, false)
+		result, err := CollectRequiredRuntimes(apps, runtimes, false)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if len(result) != 1 {
 			t.Fatalf("expected 1 deduplicated runtime, got %d: %v", len(result), result)
 		}

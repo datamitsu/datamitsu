@@ -63,6 +63,11 @@ func runInstall(ctx context.Context, apps, runtimes []string, verify bool) error
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
+	apps, err = binmanager.AppDependencyClosure(cfg.Apps, apps)
+	if err != nil {
+		return err
+	}
+
 	rm := runtimemanager.New(cfg.Runtimes)
 	binMgr := binmanager.New(cfg.Apps, cfg.Bundles, rm)
 
@@ -172,7 +177,7 @@ func versionCheckArgs(app binmanager.App) (args []string, verifiable bool) {
 // nothing, so naming one in `install` is a likely mistake.
 func warnShellApps(allApps binmanager.MapOfApps, names []string) {
 	for _, name := range names {
-		if app, ok := allApps[name]; ok && app.Shell != nil && !ui.Quiet() {
+		if app, ok := allApps[name]; ok && app.Shell != nil && len(app.DependsOn) == 0 && !ui.Quiet() {
 			fmt.Fprintf(os.Stderr, "Warning: %q is a shell command; nothing to install\n", name)
 		}
 	}

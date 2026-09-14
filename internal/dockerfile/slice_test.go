@@ -61,7 +61,7 @@ func TestBuildSlices_EverySliceLoads(t *testing.T) {
 	apps, runtimes, parsers := sampleConfigForSlicing()
 	plan := BuildPlan(apps, runtimes, PlanOptions{Parsers: parsers})
 
-	for _, s := range BuildSlices(plan, apps, runtimes, parsers) {
+	for _, s := range mustBuildSlices(t, plan, apps, runtimes, parsers) {
 		if err := config.ValidateRuntimes(s.Config.Runtimes); err != nil {
 			t.Errorf("stage %s cannot load its slice: %v", s.StageName, err)
 		}
@@ -77,7 +77,7 @@ func TestSliceFileName(t *testing.T) {
 func TestBuildSlices_OnePerStageMinimal(t *testing.T) {
 	apps, runtimes, parsers := sampleConfigForSlicing()
 	plan := BuildPlan(apps, runtimes, PlanOptions{Parsers: parsers})
-	slices := BuildSlices(plan, apps, runtimes, parsers)
+	slices := mustBuildSlices(t, plan, apps, runtimes, parsers)
 
 	// Runtime slice: only the runtime, no apps.
 	rt := findSlice(slices, "rt-node.js")
@@ -139,7 +139,7 @@ func TestBuildSlices_OnePerStageMinimal(t *testing.T) {
 func TestRenderSlice_LoadableModuleRoundTrips(t *testing.T) {
 	apps, runtimes, parsers := sampleConfigForSlicing()
 	plan := BuildPlan(apps, runtimes, PlanOptions{Parsers: parsers})
-	slices := BuildSlices(plan, apps, runtimes, parsers)
+	slices := mustBuildSlices(t, plan, apps, runtimes, parsers)
 	app := findSlice(slices, "app-prettier.js")
 	if app == nil {
 		t.Fatal("missing app-prettier.js slice")
@@ -184,7 +184,7 @@ func TestRenderSlice_LoadableModuleRoundTrips(t *testing.T) {
 func TestBuildSlices_PNPMRuntimeOnlyForNodeAndBun(t *testing.T) {
 	apps, runtimes, parsers := sampleConfigForSlicing()
 	plan := BuildPlan(apps, runtimes, PlanOptions{Parsers: parsers})
-	slices := BuildSlices(plan, apps, runtimes, parsers)
+	slices := mustBuildSlices(t, plan, apps, runtimes, parsers)
 
 	tests := []struct {
 		file     string
@@ -223,7 +223,7 @@ func TestBuildSlices_PNPMRuntimeFollowsReference(t *testing.T) {
 	runtimes["node"] = node
 
 	plan := BuildPlan(apps, runtimes, PlanOptions{Parsers: parsers})
-	s := findSlice(BuildSlices(plan, apps, runtimes, parsers), "app-prettier.js")
+	s := findSlice(mustBuildSlices(t, plan, apps, runtimes, parsers), "app-prettier.js")
 	if s == nil {
 		t.Fatal("missing app-prettier.js slice")
 	}
@@ -255,7 +255,7 @@ func TestRenderSlice_OCIParserRoundTrips(t *testing.T) {
 		t.Errorf("RegistrySourcedParsers = %v, want [core] so the CLI can warn about buildkit egress", got)
 	}
 
-	slices := BuildSlices(plan, apps, runtimes, parsers)
+	slices := mustBuildSlices(t, plan, apps, runtimes, parsers)
 	parserSlice := findSlice(slices, "parser-core.js")
 	if parserSlice == nil {
 		t.Fatal("missing parser-core.js slice")
@@ -293,4 +293,13 @@ func TestBuildPlan_URLParserIsNotFlaggedAsRegistrySourced(t *testing.T) {
 	if got := plan.RegistrySourcedParsers; len(got) != 0 {
 		t.Errorf("RegistrySourcedParsers = %v, want empty for a url-sourced parser", got)
 	}
+}
+
+func mustBuildSlices(t *testing.T, plan Plan, apps binmanager.MapOfApps, runtimes config.MapOfRuntimes, parsers config.MapOfParsers) []Slice {
+	t.Helper()
+	slices, err := BuildSlices(plan, apps, runtimes, parsers)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return slices
 }

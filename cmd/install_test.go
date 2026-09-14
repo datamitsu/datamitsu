@@ -66,8 +66,8 @@ func TestInstallSmartInitApps_InstallsEachApp(t *testing.T) {
 	if err := installSmartInitApps(context.Background(), getter, []string{"shellcheck", "prettier"}); err != nil {
 		t.Fatalf("installSmartInitApps: %v", err)
 	}
-	// installSmartInitApps sorts before installing.
-	want := []string{"prettier", "shellcheck"}
+	// Preserve the caller's dependency order.
+	want := []string{"shellcheck", "prettier"}
 	if len(getter.installed) != len(want) {
 		t.Fatalf("installed = %v, want %v", getter.installed, want)
 	}

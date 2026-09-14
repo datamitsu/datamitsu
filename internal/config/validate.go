@@ -42,6 +42,8 @@ func doValidateApps(apps binmanager.MapOfApps, runtimes MapOfRuntimes, skipLockf
 	// the pair, not of either name, so it cannot be reported from inside the
 	// per-app loop below.
 	errs = append(errs, findCaseFoldCollisions(appNames)...)
+	errs = append(errs, validateAppDependencies(apps, appNames)...)
+	errs = append(errs, validateAppRuntimeEnv(apps, appNames)...)
 
 	for _, appName := range appNames {
 		app := apps[appName]
