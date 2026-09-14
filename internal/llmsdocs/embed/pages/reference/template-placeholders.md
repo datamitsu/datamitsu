@@ -214,10 +214,10 @@ Multiple placeholders can appear in a single argument. All are resolved in the o
 
 App `env` and `runtimeEnv` use a separate syntax from tool operation templates:
 
-| Placeholder        | App `env` | App `runtimeEnv` | Resolves to                                        |
-| ------------------ | :-------: | :--------------: | -------------------------------------------------- |
-| `${STORE}`         |    Yes    |       Yes        | Shared store directory                             |
-| `${APP_DIR}`       |    Yes    |       Yes        | This app's install directory, when resolvable        |
+| Placeholder         | App `env` | App `runtimeEnv` | Resolves to                                         |
+| ------------------- | :-------: | :--------------: | --------------------------------------------------- |
+| `${STORE}`          |    Yes    |       Yes        | Shared store directory                              |
+| `${APP_DIR}`        |    Yes    |       Yes        | This app's install directory, when resolvable       |
 | `${APP_BIN:<name>}` |    No     |       Yes        | Exact executable path of a direct binary dependency |
 
 `runtimeEnv` applies only to execution and never enters installer environments

@@ -97,10 +97,11 @@ globalThis.getConfig = getConfig;
 The proxy package's `proxy.js` can forward the invocation directly:
 
 ```javascript
-const child = Bun.spawn(
-  [process.env.DATAMITSU_LEFTHOOK_UPSTREAM, ...process.argv.slice(2)],
-  { stdin: "inherit", stdout: "inherit", stderr: "inherit" },
-);
+const child = Bun.spawn([process.env.DATAMITSU_LEFTHOOK_UPSTREAM, ...process.argv.slice(2)], {
+  stdin: "inherit",
+  stdout: "inherit",
+  stderr: "inherit",
+});
 process.exit(await child.exited);
 ```
 

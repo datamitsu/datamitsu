@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 53,
-  "pageSetHash": "d5b1b37537452d3662e32f9162fa446e",
+  "pageSetHash": "b387d3681185611dbba616a6703814bd",
   "pages": [
     {
       "slug": "about",
@@ -380,7 +380,7 @@
       "title": "Maintaining Wrapper Packages",
       "description": "Workflows for keeping wrapper package tool versions, runtimes, and hashes up to date using devtools commands",
       "bytes": 33726,
-      "contentHash": "2b508fa365eb56aade14ead33cbdbf27"
+      "contentHash": "90cefa21539f3d141aac83295eebc2f6"
     },
     {
       "slug": "how-to/manage-cache",
@@ -487,8 +487,8 @@
       "url": "https://datamitsu.com/docs/reference/template-placeholders.md",
       "title": "Template Placeholders",
       "description": "Reference for template placeholders in tool operation arguments and environment values",
-      "bytes": 8899,
-      "contentHash": "ec836e556ff5548cb56cea24e4dfa439"
+      "bytes": 8905,
+      "contentHash": "56efaf7c3b764244b30d7c4940e91a61"
     }
   ]
 }
