@@ -4,7 +4,6 @@ package e2e_test
 
 import (
 	"encoding/json"
-	"strings"
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/clitest"
@@ -78,14 +77,12 @@ func TestOCIParserModulePull(t *testing.T) {
 		t.Fatalf("parser %q hash %q is not a bare 64-hex sha256", name, declared.Hash)
 	}
 
-	res := runOnline(t, p.Dir, cacheDir, "devtools", "parsers", "list")
+	res := runOnline(t, p.Dir, cacheDir, "devtools", "parsers", "list", "--json")
 	if res.ExitCode != 0 {
 		t.Fatalf("`devtools parsers list` against %s@%s: exit %d\nstderr:\n%s",
 			declared.OCI.Ref, declared.OCI.Digest, res.ExitCode, res.Stderr)
 	}
-	if !strings.Contains(res.Stdout, name) {
-		t.Errorf("`devtools parsers list` did not report the %q module:\n%s", name, res.Stdout)
-	}
+	requireToolsFromParser(t, res.Stdout, name)
 }
 
 // TestOCIParserOfflineAfterSeed is the only end-to-end proof of the airgap
@@ -107,11 +104,30 @@ func TestOCIParserOfflineAfterSeed(t *testing.T) {
 
 	// clitest.Run forces DATAMITSU_OFFLINE=1 and DATAMITSU_NO_OCI=1, which is
 	// exactly the environment being asserted: the module has to come off disk.
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, CacheDir: cacheDir}, "devtools", "parsers", "list")
+	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, CacheDir: cacheDir}, "devtools", "parsers", "list", "--json")
 	if res.ExitCode != 0 {
 		t.Fatalf("`devtools parsers list` offline after prefetch: exit %d\nstderr:\n%s", res.ExitCode, res.Stderr)
 	}
-	if !strings.Contains(res.Stdout, name) {
-		t.Errorf("offline run did not report the %q module:\n%s", name, res.Stdout)
+	requireToolsFromParser(t, res.Stdout, name)
+}
+
+// requireToolsFromParser fails unless the `parsers list --json` catalog holds at
+// least one tool provided by the named parser entry. The human listing prints
+// tool names, not the config entry, so only the JSON can attribute a tool.
+func requireToolsFromParser(t *testing.T, stdout, name string) {
+	t.Helper()
+	var cat struct {
+		Tools []struct {
+			Parser string `json:"parser"`
+		} `json:"tools"`
 	}
+	if err := json.Unmarshal([]byte(stdout), &cat); err != nil {
+		t.Fatalf("`devtools parsers list --json` did not emit valid JSON: %v\nstdout:\n%s", err, stdout)
+	}
+	for _, tool := range cat.Tools {
+		if tool.Parser == name {
+			return
+		}
+	}
+	t.Errorf("no tool in the parser catalog comes from the %q module:\n%s", name, stdout)
 }

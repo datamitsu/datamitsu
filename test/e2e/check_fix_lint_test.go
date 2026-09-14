@@ -80,7 +80,9 @@ func discoverFormatter(t *testing.T, cacheDir string) formatterSpec {
 // formatterOverlayJS builds the getConfig body that keeps the inherited apps but
 // replaces the tool set with a single tool ("formatter") whose fix and lint
 // operations drive the chosen formatter per-file on its glob. Caching is disabled
-// so each phase re-runs the tool against the current file content.
+// so each phase re-runs the tool against the current file content. The runner
+// plans nothing in a repository with no detected project type, so the overlay
+// adds one whose marker is the fixture glob.
 func formatterOverlayJS(t *testing.T, f formatterSpec) string {
 	t.Helper()
 	fixArgs, err := json.Marshal(f.fixArgs)
@@ -95,7 +97,9 @@ func formatterOverlayJS(t *testing.T, f formatterSpec) string {
 	if err != nil {
 		t.Fatalf("marshal globs: %v", err)
 	}
-	return `return Object.assign({}, config, { tools: { "formatter": { name: "formatter", operations: {` +
+	return `return Object.assign({}, config, {` +
+		`projectTypes: Object.assign({}, config.projectTypes, { "e2e-fixture": { description: "e2e fixture", markers: ` + string(globs) + ` } }),` +
+		`tools: { "formatter": { name: "formatter", operations: {` +
 		`fix: { app: ` + jsQuote(f.app) + `, args: ` + string(fixArgs) + `, scope: "per-file", globs: ` + string(globs) + `, cache: false },` +
 		`lint: { app: ` + jsQuote(f.app) + `, args: ` + string(lintArgs) + `, scope: "per-file", globs: ` + string(globs) + `, cache: false }` +
 		`} } } });`
