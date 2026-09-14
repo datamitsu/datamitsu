@@ -9,7 +9,7 @@ File discovery is the first stage of datamitsu's execution pipeline. It walks th
 
 ## .gitignore-Aware Traversal
 
-The file walker respects `.gitignore` rules at every directory level. This means datamitsu never processes files your version control system ignores — `node_modules/`, `dist/`, `.venv/`, build artifacts, and any other ignored paths are automatically excluded.
+The file walker respects `.gitignore` rules at every directory level, plus the two repository-wide exclude files git reads: `.git/info/exclude` and your personal `core.excludesFile` (by default `~/.config/git/ignore`). This means datamitsu never processes files your version control system ignores — `node_modules/`, `dist/`, `.venv/`, build artifacts, and any other ignored paths are automatically excluded.
 
 ### How It Works
 
@@ -28,7 +28,7 @@ project detection, glob matching, unit membership, and both halves of
 
 ```mermaid
 graph TD
-    R["Git Root"] --> G["Collect .gitignore rules"]
+    R["Git Root"] --> G["Collect excludes and .gitignore rules"]
     G --> W["Walk directory tree"]
     W --> C{".gitignore match?"}
     C -->|"Yes"| S["Skip file/directory"]
@@ -48,6 +48,7 @@ graph TD
 - **No wasted work:** Ignored directories like `node_modules/` (which can contain hundreds of thousands of files) are skipped entirely, not entered and then filtered
 - **Correct behavior:** The same files your `git status` sees are the files datamitsu processes — no surprising lint errors from generated code or vendored dependencies
 - **Cascading rules:** A `.gitignore` in a subdirectory extends (not replaces) the parent's rules, matching how git itself handles ignore patterns
+- **Git's precedence:** `core.excludesFile` is weakest, `.git/info/exclude` overrides it, and any `.gitignore` overrides both. In a linked worktree, `info/exclude` is read from the main repository, as git does
 
 ## Project Auto-Detection
 
