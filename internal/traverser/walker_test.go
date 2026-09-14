@@ -187,6 +187,28 @@ func TestFindFilesSkipsGitDir(t *testing.T) {
 	}
 }
 
+func TestFindFilesSkipsGitFile(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// A linked worktree root and a submodule both carry a `.git` file.
+	gitLink := []byte("gitdir: /elsewhere/.git/worktrees/wt\n")
+	_ = os.WriteFile(filepath.Join(tmpDir, ".git"), gitLink, 0o644)
+	_ = os.MkdirAll(filepath.Join(tmpDir, "sub"), 0o755)
+	_ = os.WriteFile(filepath.Join(tmpDir, "sub", ".git"), []byte("gitdir: ../.git/modules/sub\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "sub", "file.txt"), []byte(""), 0o644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "file.txt"), []byte(""), 0o644)
+
+	files, err := FindFiles(context.Background(), tmpDir)
+	if err != nil {
+		t.Fatalf("FindFiles() error = %v", err)
+	}
+
+	want := []string{filepath.Join(tmpDir, "file.txt"), filepath.Join(tmpDir, "sub", "file.txt")}
+	if !slices.Equal(files, want) {
+		t.Errorf("FindFiles() = %v, want %v", files, want)
+	}
+}
+
 func TestFindFilesNestedGitignore(t *testing.T) {
 	tmpDir := t.TempDir()
 
