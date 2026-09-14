@@ -71,7 +71,9 @@ func (w *Walker) walk(ctx context.Context, results *[]string, mu *sync.Mutex) er
 
 		name := d.Name()
 
-		if d.IsDir() && name == ".git" {
+		// A linked worktree or a submodule has a `.git` file, not a directory.
+		// Git never tracks either, so neither is a repository file.
+		if name == ".git" {
 			continue
 		}
 

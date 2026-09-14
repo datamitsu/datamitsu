@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 53,
-  "pageSetHash": "1f98ce1571becb8cc24d3389225c2a33",
+  "pageSetHash": "531f33fe1a46f52faa40b8ff6388e9b2",
   "pages": [
     {
       "slug": "about",
@@ -206,8 +206,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/discovery.md",
       "title": "File Discovery & Project Detection",
       "description": "How datamitsu walks the repository tree respecting .gitignore rules and detects project boundaries for monorepo-aware tool execution",
-      "bytes": 7079,
-      "contentHash": "954a9bdbcdcd0bfe9f66d6ae04a98ce0"
+      "bytes": 7451,
+      "contentHash": "933f2b81221d07e8267d447df2bd8490"
     },
     {
       "slug": "guides/architecture/execution",

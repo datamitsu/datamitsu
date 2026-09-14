@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/go-git/go-git/v6/plumbing/format/gitignore"
@@ -17,6 +18,9 @@ import (
 type gitIgnoreFile struct {
 	content []byte
 	absPath string
+	// repoWide marks an exclude file whose patterns are relative to the root
+	// wherever the file itself lives (core.excludesFile, info/exclude).
+	repoWide bool
 }
 
 // GitIgnore accumulates .gitignore files for a repository and compiles them
@@ -38,14 +42,15 @@ func NewGitIgnore(root string) *GitIgnore {
 // Compile parses all collected .gitignore files into gitignore patterns.
 func (g *GitIgnore) Compile() error {
 	for _, res := range g.list {
-		relPath, err := filepath.Rel(g.root, filepath.Dir(res.absPath))
-		if err != nil {
-			continue
-		}
-
 		domain := []string{}
-		if relPath != "." {
-			domain = strings.Split(relPath, string(filepath.Separator))
+		if !res.repoWide {
+			relPath, err := filepath.Rel(g.root, filepath.Dir(res.absPath))
+			if err != nil {
+				continue
+			}
+			if relPath != "." {
+				domain = strings.Split(relPath, string(filepath.Separator))
+			}
 		}
 
 		scanner := bufio.NewScanner(bytes.NewReader(res.content))
@@ -127,8 +132,9 @@ func (g *GitIgnore) IsIgnored(path string, isDir bool) bool {
 	return matcher.Match(parts, isDir)
 }
 
-// CollectRules reads all .gitignore files from the root down to target and
-// adds them to the GitIgnore. Targets outside the root are ignored.
+// CollectRules reads git's repository-wide exclude files and all .gitignore
+// files from the root down to target, and adds them to the GitIgnore in
+// increasing precedence. Targets outside the root are ignored.
 func (g *GitIgnore) CollectRules(ctx context.Context, target string) error {
 	if g.isCompiled {
 		panic("already compiled")
@@ -143,7 +149,8 @@ func (g *GitIgnore) CollectRules(ctx context.Context, target string) error {
 		}
 	}
 
-	paths := collectGitignorePaths(g.root, target)
+	excludes := repoExcludeFiles(ctx, g.root)
+	paths := slices.Concat(excludes, collectGitignorePaths(g.root, target))
 
 	type result struct {
 		index int
@@ -190,8 +197,9 @@ func (g *GitIgnore) CollectRules(ctx context.Context, target string) error {
 			// }
 
 			file := gitIgnoreFile{
-				content: content,
-				absPath: path,
+				content:  content,
+				absPath:  path,
+				repoWide: i < len(excludes),
 			}
 
 			resultCh <- result{index: i, file: file}

@@ -13,6 +13,25 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
+func TestConfigHome(t *testing.T) {
+	t.Run("XDG_CONFIG_HOME wins", func(t *testing.T) {
+		t.Setenv("XDG_CONFIG_HOME", "/xdg/config")
+		if got := ConfigHome(); got != "/xdg/config" {
+			t.Errorf("ConfigHome() = %q, want %q", got, "/xdg/config")
+		}
+	})
+
+	t.Run("empty XDG_CONFIG_HOME falls back to ~/.config", func(t *testing.T) {
+		home := t.TempDir()
+		t.Setenv("XDG_CONFIG_HOME", "")
+		t.Setenv("HOME", home)
+		t.Setenv("USERPROFILE", home)
+		if got, want := ConfigHome(), filepath.Join(home, ".config"); got != want {
+			t.Errorf("ConfigHome() = %q, want %q", got, want)
+		}
+	})
+}
+
 func TestGetCachePath(t *testing.T) {
 	// t.Setenv registers cleanup that restores cacheDir.Name even though
 	// subtests below os.Unsetenv it mid-test.

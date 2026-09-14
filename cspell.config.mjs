@@ -74,6 +74,11 @@ export default defineConfig((config) => ({
     "gitindex",
     "gitlink",
     "gitlinks",
+    // The file in a linked worktree's git directory that names the main
+    // repository (internal/traverser/excludes.go), and the test helper package
+    // that isolates git config for fixtures.
+    "commondir",
+    "gittest",
     // Tool names dispatched by the WASM parser modules (one Rust module each
     // under parsers/datamitsu-parsers/src/tools).
     "ansiblelint",

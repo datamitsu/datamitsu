@@ -34,6 +34,20 @@ func getBasePath() string {
 	return filepath.Join(os.TempDir(), ldflags.PackageName+"-cache")
 }
 
+// ConfigHome returns the XDG base directory for user configuration:
+// $XDG_CONFIG_HOME when set, otherwise ~/.config. It is "" when neither is
+// known.
+func ConfigHome() string {
+	if dir := os.Getenv("XDG_CONFIG_HOME"); dir != "" {
+		return dir
+	}
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(homeDir, ".config")
+}
+
 // GetCachePath returns the cache directory ({base}/cache) for ephemeral data.
 func GetCachePath() string {
 	return filepath.Join(getBasePath(), "cache")
