@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/datamitsu/datamitsu/internal/gittest"
 )
 
 // DefaultTimeout bounds a single CLI invocation so a hung subprocess fails the
@@ -107,7 +109,8 @@ func BaseEnv(cacheDir string) []string {
 		env = append(env, kv)
 	}
 	// Deterministic, hermetic, offline. GOCOVERDIR routes counters to the shared
-	// cover dir; NO_COLOR + piped (non-TTY) streams force plain output.
+	// cover dir; NO_COLOR + piped (non-TTY) streams force plain output. A
+	// developer's personal git ignore file must not change what the binary walks.
 	env = append(env,
 		"GOCOVERDIR="+CoverDir(),
 		"NO_COLOR=1",
@@ -115,19 +118,20 @@ func BaseEnv(cacheDir string) []string {
 		"DATAMITSU_OFFLINE=1",
 		"DATAMITSU_NO_OCI=1",
 	)
-	return env
+	return append(env, gittest.Env()...)
 }
 
 // strippedKey reports whether an inherited environment variable must be dropped
 // from the clean base env. We strip every DATAMITSU_* var (so the harness is the
 // only source of datamitsu config), CI/TERM (which steer mode/output detection),
-// and the keys BaseEnv sets explicitly (avoid duplicate, ambiguous entries).
+// inherited command-scope git config (which would outrank gittest.Env), and the
+// keys BaseEnv sets explicitly (avoid duplicate, ambiguous entries).
 func strippedKey(key string) bool {
 	switch key {
 	case "CI", "TERM", "NO_COLOR", "GOCOVERDIR":
 		return true
 	}
-	return strings.HasPrefix(key, "DATAMITSU_")
+	return strings.HasPrefix(key, "DATAMITSU_") || gittest.IsCommandScopeKey(key)
 }
 
 // ExitCodeOf extracts the process exit code from an error returned by
