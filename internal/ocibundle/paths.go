@@ -40,6 +40,11 @@ func subtreeRel(storeRoot, abs string) (string, error) {
 	return filepath.ToSlash(rel), nil
 }
 
+// parserOwnerPrefix labels the parser entries of expectedSubtrees. They are an
+// over-pull rather than a requirement — a tool runs without its output parser —
+// so completeness checks skip them; see the parser loop below.
+const parserOwnerPrefix = "parser "
+
 // expectedSubtrees computes the store-relative subtrees the given tools (and
 // their transitive store dependencies: the runtime of a runtime app, the
 // shared CPython for uv) are expected to occupy.
@@ -137,7 +142,7 @@ func expectedSubtrees(cfg *config.Config, storeRoot string, needed, neededRuntim
 		if !ok {
 			continue // a dangling outputParser reference is a config-validation concern
 		}
-		addPath(parsermanager.ModuleStorePath(module, p), "parser "+module)
+		addPath(parsermanager.ModuleStorePath(module, p), parserOwnerPrefix+module)
 	}
 
 	return expected

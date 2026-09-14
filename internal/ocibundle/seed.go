@@ -30,6 +30,11 @@ import (
 // They are always fatal — never downgraded to a warn-and-fall-through.
 var errIntegrity = errors.New("bundle integrity violation")
 
+// errIncomplete marks a seed that finished without covering everything the
+// caller explicitly asked for. Deliberately NOT fatal: AutoSeed still degrades
+// to the network path, and only a caller that set RequireRequested sees it.
+var errIncomplete = errors.New("bundle does not cover the requested tools")
+
 // IsFatalSeedError reports whether a seed failure must abort the operation
 // (an attack or corruption indicator) rather than degrade to the network
 // path. Everything else — transient network trouble, missing platform — is a
@@ -55,6 +60,12 @@ type Options struct {
 	// NeededRuntimes adds standalone runtime targets (install --runtime) to
 	// the demand-driven set.
 	NeededRuntimes []string
+	// RequireRequested turns an unsatisfied request into an error instead of a
+	// quietly partial seed. Set it for an explicit `store seed --apps`, where
+	// the caller named the tools and a store that still cannot run them is a
+	// failed command. AutoSeed leaves it off: there the bundle is an
+	// accelerator, and whatever it does not cover the network path installs.
+	RequireRequested bool
 }
 
 // demandDriven reports whether the run is limited to a needed set.
@@ -195,6 +206,12 @@ func seedFrom(ctx context.Context, cfg *config.Config, src blobSource, refLabel,
 			// No marker on partial failure; subtrees already laid out remain
 			// a valid partial seed.
 			return fmt.Errorf("seed layers: %w", err)
+		}
+	}
+
+	if opts.RequireRequested {
+		if err := verifyRequested(storeRoot, expected, manifest); err != nil {
+			return err
 		}
 	}
 
@@ -388,6 +405,68 @@ func removeStaged(staged string) error {
 		return fmt.Errorf("drop staged copy: %w", err)
 	}
 	return nil
+}
+
+// verifyRequested fails a seed that left an explicitly requested tool absent.
+//
+// Layers are matched on the app's full identity hash, so a config that computes
+// a different hash than the one the bundle was built from matches nothing at
+// all. Without this check that seed reports success and the store silently
+// still has to install the tool — which surfaces much later, and under
+// DATAMITSU_OFFLINE surfaces as a network error naming neither the bundle nor
+// the mismatch. The bundle's app-level annotation is what makes the difference
+// between the two causes visible: absent from the bundle, or present under
+// another identity. It only ever sharpens the message — a layer whose hash
+// disagrees is never accepted, since an app name identifies the tool, not the
+// configured build of it.
+func verifyRequested(storeRoot string, expected map[string]string, manifest *ocispec.Manifest) error {
+	missing := make([]string, 0)
+	for subtree, owner := range expected {
+		if strings.HasPrefix(owner, parserOwnerPrefix) {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(storeRoot, filepath.FromSlash(subtree))); err != nil {
+			missing = append(missing, subtree)
+		}
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+	sort.Strings(missing)
+
+	carried := bundleSubtreesByApp(manifest)
+	details := make([]string, 0, len(missing))
+	for _, subtree := range missing {
+		// The bundle annotates a layer with the same name this path segment
+		// carries, so the expected path yields the key to look up.
+		if inBundle := carried[path.Base(path.Dir(subtree))]; len(inBundle) > 0 {
+			details = append(details, fmt.Sprintf(
+				"%s: expected %s, but the bundle carries %s — this config differs from the one the bundle was built from",
+				expected[subtree], subtree, strings.Join(inBundle, ", ")))
+			continue
+		}
+		details = append(details, fmt.Sprintf(
+			"%s: expected %s, which the bundle does not carry", expected[subtree], subtree))
+	}
+	return fmt.Errorf("%w:\n  %s", errIncomplete, strings.Join(details, "\n  "))
+}
+
+// bundleSubtreesByApp indexes the bundle's annotated layers by the app (or
+// runtime) name they belong to, for diagnostics only.
+func bundleSubtreesByApp(manifest *ocispec.Manifest) map[string][]string {
+	byApp := make(map[string][]string)
+	for _, desc := range manifest.Layers {
+		app := desc.Annotations[AnnotationApp]
+		subtree, ok := desc.Annotations[AnnotationSubtree]
+		if app == "" || !ok {
+			continue
+		}
+		byApp[app] = append(byApp[app], subtree)
+	}
+	for app := range byApp {
+		sort.Strings(byApp[app])
+	}
+	return byApp
 }
 
 func allSubtreesPresent(storeRoot string, expected map[string]string) bool {
