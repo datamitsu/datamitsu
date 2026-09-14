@@ -887,6 +887,7 @@ func (d *Dispatcher) failRetired(name string, manifest sourcefarm.Manifest) int 
 // invocation of a lazily installed tool back through a full `datamitsu install`
 // child process — a config load per exec, against this package's ~10 ms budget.
 // The store path is the truth; the flag is only a hint for `source status`.
+// Installing the root also repairs dependencies recorded in RequiredPaths.
 func (d *Dispatcher) ensureInstalled(manifestPath, name string, manifest sourcefarm.Manifest, entry sourcefarm.Entry) (sourcefarm.Entry, error) {
 	if d.entryHealthy(entry) {
 		return entry, nil

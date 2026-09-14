@@ -1,0 +1,37 @@
+exit: 0
+stdout:
+{
+  "apps": {
+    "a": {
+      "dependsOn": [
+        "b",
+        "c"
+      ],
+      "binary": {
+        "binaries": null
+      }
+    },
+    "b": {
+      "dependsOn": [
+        "d"
+      ],
+      "binary": {
+        "binaries": null
+      }
+    },
+    "c": {
+      "dependsOn": [
+        "d"
+      ],
+      "binary": {
+        "binaries": null
+      }
+    },
+    "d": {
+      "binary": {
+        "binaries": null
+      }
+    }
+  }
+}
+stderr:

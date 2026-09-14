@@ -209,3 +209,24 @@ Placeholders are resolved in this order:
 5. `{toolCache}` — computed and replaced
 
 Multiple placeholders can appear in a single argument. All are resolved in the order above.
+
+## App environment placeholders
+
+App `env` and `runtimeEnv` use a separate syntax from tool operation templates:
+
+| Placeholder        | App `env` | App `runtimeEnv` | Resolves to                                        |
+| ------------------ | :-------: | :--------------: | -------------------------------------------------- |
+| `${STORE}`         |    Yes    |       Yes        | Shared store directory                             |
+| `${APP_DIR}`       |    Yes    |       Yes        | This app's install directory, when resolvable        |
+| `${APP_BIN:<name>}` |    No     |       Yes        | Exact executable path of a direct binary dependency |
+
+`runtimeEnv` applies only to execution and never enters installer environments
+or install hashes. The APP_BIN target must be a native `binary` app listed in
+the same app's direct `dependsOn`; runtime-managed and shell targets are rejected.
+Missing or platform-unsupported targets produce an error without fetching them.
+Malformed bindings and unknown colon forms in `runtimeEnv` values are errors.
+App `env` rejects `${APP_BIN` values; other config data and environment keys
+remain literal for APP_BIN purposes.
+
+See [App environments](./configuration-api.md#execution-only-environment-runtimeenv)
+and [Wrapping a private binary](../how-to/maintain-wrapper.md#wrapping-a-private-binary).

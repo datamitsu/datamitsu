@@ -1,0 +1,5 @@
+exit: 1
+stdout:
+stderr:
+error: failed to load config: config validation failed:
+  app "a": dependency "missing" not found in apps

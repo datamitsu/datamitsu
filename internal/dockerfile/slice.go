@@ -3,6 +3,7 @@ package dockerfile
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
@@ -16,13 +17,13 @@ import (
 const sliceDir = "/slices"
 
 // Slice is one stage's minimal config: just the app (and its runtime) that stage
-// installs, nothing else. Each stage loads only its slice, so editing one app
-// changes only that app's slice — and therefore busts only that app's build
-// cache, not the whole image.
+// installs, including its dependency closure and their runtimes. Each stage
+// loads only its slice, so editing an app busts its build cache and those of
+// its dependents, not the whole image.
 type Slice struct {
 	StageName string         // e.g. "rt-node", "app-prettier"
 	FileName  string         // SliceFileName(StageName)
-	Config    *config.Config // minimal config containing only this stage's target
+	Config    *config.Config // minimal config containing this stage's target and dependencies
 }
 
 // SliceFileName is the slice file name for a stage. Shared by the generator's
@@ -31,13 +32,15 @@ func SliceFileName(stage string) string { return stage + ".js" }
 
 // BuildSlices returns one minimal config slice per stage in the plan: a runtime
 // stage gets its runtime plus, for Node and Bun, the pnpm runtime it references
-// (which that stage installs for the app stages built FROM it); a binary stage
-// only its binary; a runtime-managed
-// app gets its app plus the runtime it installs under (so install can resolve the
-// runtime reference) and, for Node and Bun, the pnpm runtime that installs it; a
-// parser stage gets only its `parsers` entry. Order mirrors the plan for
-// deterministic output.
-func BuildSlices(plan Plan, apps binmanager.MapOfApps, runtimes config.MapOfRuntimes, parsers config.MapOfParsers) []Slice {
+// (which that stage installs for the app stages built FROM it); each app stage
+// gets its dependency closure plus the runtimes and pnpm references needed to
+// install it. A parser stage gets only its `parsers` entry. Order mirrors the
+// plan for deterministic output.
+func BuildSlices(plan Plan, apps binmanager.MapOfApps, runtimes config.MapOfRuntimes, parsers config.MapOfParsers) ([]Slice, error) {
+	if err := plan.ValidateDependencies(apps); err != nil {
+		return nil, err
+	}
+
 	slices := make([]Slice, 0, len(plan.RuntimeStages)+len(plan.RuntimeAppStages)+len(plan.BinaryStages)+len(plan.ParserStages))
 
 	for _, rt := range plan.RuntimeStages {
@@ -56,29 +59,20 @@ func BuildSlices(plan Plan, apps binmanager.MapOfApps, runtimes config.MapOfRunt
 		})
 	}
 
+	appNames := make([]string, 0, len(plan.RuntimeAppStages)+len(plan.BinaryStages))
 	for _, ts := range plan.RuntimeAppStages {
-		stage := stageName("app-", ts.App)
-		sliceRuntimes := config.MapOfRuntimes{ts.Runtime: runtimes[ts.Runtime]}
-		if pnpmName, ok := runtimes.PNPMRuntimeName(runtimes[ts.Runtime]); ok {
-			sliceRuntimes[pnpmName] = runtimes[pnpmName]
-		}
-		slices = append(slices, Slice{
-			StageName: stage,
-			FileName:  SliceFileName(stage),
-			Config: &config.Config{
-				Apps:     binmanager.MapOfApps{ts.App: apps[ts.App]},
-				Runtimes: sliceRuntimes,
-			},
-		})
+		appNames = append(appNames, ts.App)
 	}
-
 	for _, bs := range plan.BinaryStages {
-		stage := stageName("app-", bs.App)
-		slices = append(slices, Slice{
-			StageName: stage,
-			FileName:  SliceFileName(stage),
-			Config:    &config.Config{Apps: binmanager.MapOfApps{bs.App: apps[bs.App]}},
-		})
+		appNames = append(appNames, bs.App)
+	}
+	for _, name := range appNames {
+		cfg, err := appSlice(name, apps, runtimes)
+		if err != nil {
+			return nil, fmt.Errorf("slice for app %q: %w", name, err)
+		}
+		stage := stageName("app-", name)
+		slices = append(slices, Slice{StageName: stage, FileName: SliceFileName(stage), Config: cfg})
 	}
 
 	for _, ps := range plan.ParserStages {
@@ -90,13 +84,42 @@ func BuildSlices(plan Plan, apps binmanager.MapOfApps, runtimes config.MapOfRunt
 		})
 	}
 
-	return slices
+	return slices, nil
+}
+
+func appSlice(root string, apps binmanager.MapOfApps, runtimes config.MapOfRuntimes) (*config.Config, error) {
+	names, err := binmanager.AppDependencyClosure(apps, []string{root})
+	if err != nil {
+		return nil, err
+	}
+	runtimeNames := make([]string, 0, len(runtimes))
+	for name := range runtimes {
+		runtimeNames = append(runtimeNames, name)
+	}
+	sort.Strings(runtimeNames)
+	cfg := &config.Config{Apps: make(binmanager.MapOfApps), Runtimes: make(config.MapOfRuntimes)}
+	for _, name := range names {
+		app := apps[name]
+		cfg.Apps[name] = app
+		if kind, ref, ok := classifyApp(app); ok {
+			runtimeName := resolveRuntimeName(kind, ref, runtimes, runtimeNames)
+			if runtimeName == "" {
+				return nil, fmt.Errorf("app %q has no resolved %s runtime", name, kind)
+			}
+			rc := runtimes[runtimeName]
+			cfg.Runtimes[runtimeName] = rc
+			if pnpmName, ok := runtimes.PNPMRuntimeName(rc); ok {
+				cfg.Runtimes[pnpmName] = runtimes[pnpmName]
+			}
+		}
+	}
+	return cfg, nil
 }
 
 // RenderSlice serializes a minimal config into a self-contained JS config module
 // that `datamitsu install --config` can load. getMinVersion returns "0.0.0" so a
 // slice never trips the wrapper's version gate, and getConfig ignores its input
-// and returns exactly this stage's app/runtime.
+// and returns exactly this stage's app/runtime and dependency closure.
 //
 // The output is a projection of the Go struct, not a round-trip of the author's
 // config: json.Marshal writes the fields this binary knows about, with this

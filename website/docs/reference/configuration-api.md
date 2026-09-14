@@ -115,10 +115,12 @@ interface AppCommon {
   description?: string; // Human-readable text shown in app listings
   required?: boolean; // Whether the app is required for init
   lazy?: boolean; // Defer installation and link creation until first exec
+  dependsOn?: string[]; // Apps that must be available when this app runs
   files?: Record<string, string>; // Bun/UV/Node only: filename → static content
   links?: Record<string, string>; // Bun/UV/Node only: linkName → relativePath
   archives?: Record<string, ArchiveSpec>; // Bun/UV/Node only: name → archive
-  env?: Record<string, string>; // Custom environment variables (all app kinds)
+  env?: Record<string, string>; // Install-time and run-time environment
+  runtimeEnv?: Record<string, string>; // Execution-only environment (all app kinds)
   versionCheck?: {
     disabled?: boolean; // Skip version check in verify-all
     args?: string[]; // Override default ["--version"] args
@@ -129,7 +131,27 @@ interface AppCommon {
 `lazy: true` keeps a user-invoked app out of `datamitsu init`; its environment
 and `.datamitsu/` links are created on the first `datamitsu exec`. Apps consumed
 by tools, hooks, or managed config files must remain eager (omit `lazy` or set
-it to `false`).
+it to `false`). A selected app's dependencies are still installed even when
+they are `lazy: true` or not `required`.
+
+#### App dependencies (`dependsOn`)
+
+`dependsOn` names other apps that must be installed before this app runs.
+Provisioning expands selected roots to their transitive dependency closure,
+installs dependencies before dependents, and deduplicates shared dependencies.
+This applies to `init`, `install`, `exec`, planner tools (`check`, `lint`, `fix`),
+LSP tools, and OCI seeding (`store seed --apps`). Init still selects its normal
+roots; a dependency need not have `required: true` and cannot opt out with `lazy`.
+
+Every name must exist in `apps`. Self-references, duplicate names in one list,
+and cycles are validation errors; cycle errors show the dependency chain.
+Shell apps may declare dependencies but cannot be dependency targets, because
+core cannot install a host PATH command.
+
+A dependency is a run-time availability contract. Neither `dependsOn` nor
+`runtimeEnv` changes the app's install identity: changing either does not
+reinstall otherwise unchanged app contents. Execution caches include the full
+config, so these changes still invalidate cached tool results.
 
 #### Custom environment variables (`env`)
 
@@ -142,6 +164,7 @@ committed config:
 
 - `${STORE}` → the shared datamitsu store path (cleaned by `datamitsu store clear`).
 - `${APP_DIR}` → this app's install directory (per-app, config-hashed).
+- `${APP_BIN:<name>}` is available only in `runtimeEnv`, as described below.
 
 **Precedence:** any key already set by datamitsu or the runtime wins. A user
 config can never relocate the pnpm store, uv cache, `GOPATH`, etc.
@@ -163,6 +186,40 @@ const apps = {
 > `AppConfigShell` (`shell.env`). It has moved to the top-level `env` field
 > shared by all app kinds. Move any `shell: { env: {...} }` up one level to
 > `env: {...}` on the app.
+
+#### Execution-only environment (`runtimeEnv`)
+
+Use `runtimeEnv` for values needed when the app executes, including version
+checks, shims, `exec`, planner tools, and LSP tools. Installers never receive it.
+As with `env`, keys already set by datamitsu or the runtime win. A key present
+in both `env` and `runtimeEnv` on the same app is a validation error.
+
+Values support `${STORE}` and `${APP_DIR}`, plus `${APP_BIN:<name>}`: the exact
+executable path of a native binary app. The target must be in this app's
+**direct** `dependsOn` list. A transitive edge alone is insufficient. Runtime
+apps and shell apps are rejected as binding targets: a runtime app needs a
+command and arguments, not just a binary path.
+
+```javascript
+runtimeEnv: {
+  UPSTREAM: "${APP_BIN:dm-internal-lefthook-upstream}",
+  DATA_DIR: "${APP_DIR}/data",
+}
+```
+
+Bindings remain symbolic in the evaluated-config cache. Resolution computes
+paths without downloading, installing, or spawning a process; an unresolved
+binary or an unsupported platform is an error. `${APP_DIR}` keeps its existing
+best-effort behavior when an app has no managed install directory.
+
+Empty or unterminated `${APP_BIN:...}` bindings and unknown colon forms such as
+`${FOO:bar}` are validation errors in `runtimeEnv` values. `${APP_BIN` in app
+`env` values is rejected with a message directing you to `runtimeEnv`. Other
+config data and environment keys are not APP_BIN expansion sites; documentation
+or file contents can contain the literal syntax.
+
+See [Wrapping a private binary](../how-to/maintain-wrapper.md#wrapping-a-private-binary)
+for a complete binding example and the source-farm repair contract.
 
 ### Binary Apps
 

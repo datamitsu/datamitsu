@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 53,
-  "pageSetHash": "531f33fe1a46f52faa40b8ff6388e9b2",
+  "pageSetHash": "d5b1b37537452d3662e32f9162fa446e",
   "pages": [
     {
       "slug": "about",
@@ -197,8 +197,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/caching.md",
       "title": "Caching Strategy",
       "description": "How datamitsu caches file-level results and unit or repository verdicts, computes XXH3-128 keys, and persists them safely",
-      "bytes": 20329,
-      "contentHash": "0b15d36f7b5cf989f0e925da0c42789b"
+      "bytes": 20893,
+      "contentHash": "70e29c33159eba1a4cb1c8faa8a7b6d4"
     },
     {
       "slug": "guides/architecture/discovery",
@@ -215,8 +215,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/execution.md",
       "title": "Parallel Execution",
       "description": "How datamitsu runs task groups sequentially while parallelizing tasks within each group, with fail-fast semantics",
-      "bytes": 10198,
-      "contentHash": "4b9c91790e66c440ffa0f3814f13d330"
+      "bytes": 10471,
+      "contentHash": "c9988c71c1d35e3bf2b505ab0c515cbc"
     },
     {
       "slug": "guides/architecture",
@@ -379,8 +379,8 @@
       "url": "https://datamitsu.com/docs/how-to/maintain-wrapper.md",
       "title": "Maintaining Wrapper Packages",
       "description": "Workflows for keeping wrapper package tool versions, runtimes, and hashes up to date using devtools commands",
-      "bytes": 30142,
-      "contentHash": "2d21f175df8f978433dac96732f729f6"
+      "bytes": 33726,
+      "contentHash": "2b508fa365eb56aade14ead33cbdbf27"
     },
     {
       "slug": "how-to/manage-cache",
@@ -433,8 +433,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 70578,
-      "contentHash": "c1e52b5ad32d0500ec5f03b0990b32b4"
+      "bytes": 70587,
+      "contentHash": "b2fe7c46dd54a0406b3ff429593b0eb2"
     },
     {
       "slug": "reference/comparison",
@@ -451,8 +451,8 @@
       "url": "https://datamitsu.com/docs/reference/configuration-api.md",
       "title": "Configuration API",
       "description": "Complete reference for the datamitsu configuration API",
-      "bytes": 57275,
-      "contentHash": "ce5c19499f95690bd8b891f95adb6790"
+      "bytes": 60335,
+      "contentHash": "5d673c3eefd896cc0b7c5082a025d579"
     },
     {
       "slug": "reference/ignore-rules",
@@ -487,8 +487,8 @@
       "url": "https://datamitsu.com/docs/reference/template-placeholders.md",
       "title": "Template Placeholders",
       "description": "Reference for template placeholders in tool operation arguments and environment values",
-      "bytes": 7556,
-      "contentHash": "aae310b00716bdf25d0dfb4353de3bce"
+      "bytes": 8899,
+      "contentHash": "ec836e556ff5548cb56cea24e4dfa439"
     }
   ]
 }

@@ -38,6 +38,15 @@ graph LR
 | **Full configuration** | The complete `Config` serialized as JSON      | Any effective config change invalidates results                              |
 | **--tools selection**  | Selected tool names, sorted deterministically | A subset run must not claim the cache state produced by a different tool set |
 
+App `dependsOn` and `runtimeEnv` are run-time contracts and stay outside binary
+and runtime-app install identities. They are included in the full configuration
+above, so changing either still invalidates execution results. Evaluated-config
+caching preserves symbolic bindings; `${APP_BIN:<name>}` is resolved against
+the current store when constructing an execution command. Docker build slices
+include dependency definitions, so a dependency change also invalidates its
+dependents' build stages without folding dependency identity into their app
+install hashes.
+
 ### Where `invalidateOn` fits
 
 `invalidateOn` is not part of the top-level key. It adds inputs to the verdict

@@ -10,6 +10,10 @@ Before any task runs, the runner installs **every app the plan needs** up front.
 Immediately after planning and before the executor starts, it calls `EnsureTools`
 with the plan's sorted, deduplicated app names. An operation's tool key and
 `app` can differ, so installation follows the app reference carried by the task.
+Planner names remain roots. Both OCI auto-seeding and installation expand those
+roots to their transitive `dependsOn` closure, including dependencies that are
+lazy or not required. A missing or unsupported dependency aborts provisioning
+before the dependent tool executes.
 
 This is a hard invariant: **all plan apps are installed before parallel execution
 begins.** Installing ahead of time means no task triggers an on-demand install

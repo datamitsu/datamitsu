@@ -159,6 +159,26 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
 - Use **typed structs with `json` tags** for public runtime-config surfaces, not `map[string]any` — compile-time checking, stable serialization, no accidental key drift.
 - New runtime parameters must surface in `datamitsu config runtime` automatically (a new `Effective` field does this for free), never as a hidden value readable only from Go.
 
+## App Dependencies
+
+- `apps.<name>.dependsOn` is a runtime availability contract. Use
+  `binmanager.AppDependencyClosure` at provisioning boundaries; planner app names
+  remain roots. Dependencies do not affect binary or runtime-app install hashes.
+- Shell apps may declare dependencies but cannot be dependency targets: they
+  resolve through host PATH and have no managed installation.
+- Init selects binary and smart-link roots before expanding dependencies; a
+  dependency's `lazy` or `required` flag never removes it from that closure.
+- `ResolveCommandInfo` stays read-only.
+- `runtimeEnv` is execution-only and never affects install identity or installer
+  environments. Runtime-owned environment keys retain precedence.
+- `${APP_BIN:<name>}` expands only in `runtimeEnv`, requires a direct
+  `dependsOn` edge, and supports only native binary targets. Reject it in app
+  `env` values; other config data and environment keys remain literal.
+
+- Docker app slices carry the dependency closure and all referenced runtimes
+  (including pnpm). Each stage installs its closure; the final image copies each
+  app's subtree. Reject plans that filter out a dependency of an included app.
+
 ## Product Stage
 
 - Project is in `alpha`.

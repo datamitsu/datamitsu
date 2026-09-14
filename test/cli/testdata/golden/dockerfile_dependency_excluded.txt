@@ -1,0 +1,4 @@
+exit: 1
+stdout:
+stderr:
+error: dockerfile app "mytool" requires dependency "upstream": binary unavailable for the target Linux/libc variant

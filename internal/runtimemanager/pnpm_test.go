@@ -384,7 +384,11 @@ func TestCollectRequiredRuntimes_PNPM(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := CollectRequiredRuntimes(tt.apps, runtimes, false); !slices.Equal(got, tt.want) {
+			got, err := CollectRequiredRuntimes(tt.apps, runtimes, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !slices.Equal(got, tt.want) {
 				t.Errorf("CollectRequiredRuntimes() = %v, want %v", got, tt.want)
 			}
 		})

@@ -19,11 +19,11 @@ var splitConfigCmd = &cobra.Command{
 	Long: `Write one minimal config slice per app and per runtime into a directory.
 
 Each slice is a self-contained config that defines exactly one stage's target —
-a single binary, a single runtime, or a single runtime-managed app plus the
-runtime it installs under. A generated Dockerfile (see "devtools dockerfile")
+an app and its transitive dependencies plus their runtimes, or a runtime and
+its pnpm reference. A generated Dockerfile (see "devtools dockerfile")
 runs this in a build stage and has every other stage load only its own slice, so
-editing one app changes only that app's slice and invalidates only that app's
-build cache instead of the entire image.
+editing one app invalidates its build cache and those of its dependents
+instead of the entire image.
 
 The config is read from the same sources as every other command (--config /
 --before-config / auto-discovery).`,
@@ -50,7 +50,10 @@ func runSplitConfig(ctx context.Context) error {
 	}
 
 	plan := dockerfile.BuildPlan(cfg.Apps, cfg.Runtimes, dockerfile.PlanOptions{Parsers: cfg.Parsers})
-	slices := dockerfile.BuildSlices(plan, cfg.Apps, cfg.Runtimes, cfg.Parsers)
+	slices, err := dockerfile.BuildSlices(plan, cfg.Apps, cfg.Runtimes, cfg.Parsers)
+	if err != nil {
+		return err
+	}
 	for _, slice := range slices {
 		text, renderErr := dockerfile.RenderSlice(slice.Config)
 		if renderErr != nil {

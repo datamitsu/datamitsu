@@ -127,6 +127,9 @@ func runDockerfile(ctx context.Context, cmd *cobra.Command) error {
 		ForceInclude: forceInclude,
 		Parsers:      cfg.Parsers,
 	})
+	if err := plan.ValidateDependencies(cfg.Apps); err != nil {
+		return err
+	}
 	if len(plan.LibcExcluded) > 0 {
 		fmt.Fprintf(os.Stderr, "Warning: excluded %d app(s) with no %s binary (add via --force-include if universal): %s\n",
 			len(plan.LibcExcluded), targetLibc, strings.Join(plan.LibcExcluded, ", "))

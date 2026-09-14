@@ -161,6 +161,7 @@ type Entry struct {
 	// must ask the same question the installer would. Checking Command alone lets
 	// a half-present store entry exec: the tool fails in its own voice, or a node
 	// .bin shim finds a system node through PATH and runs unpinned.
+	// Transitive dependencies are included even when they have no farm entry.
 	RequiredPaths []string `json:"requiredPaths,omitempty"`
 
 	// Env is the overlay merged into the environment by the shim.

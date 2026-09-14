@@ -572,13 +572,19 @@ func TestSmartInitInstallSet(t *testing.T) {
 	}
 
 	t.Run("smart mode: referenced + non-lazy link-apps, Lazy excluded", func(t *testing.T) {
-		got := smartInitInstallSet(cfg, false)
+		got, err := smartInitInstallSet(cfg, false)
+		if err != nil {
+			t.Fatal(err)
+		}
 		want := []string{"commitlint-like", "tool-referenced"}
 		assertStringsEqual(t, got, want)
 	})
 
 	t.Run("--all installs every runtime link-app, including Lazy", func(t *testing.T) {
-		got := smartInitInstallSet(cfg, true)
+		got, err := smartInitInstallSet(cfg, true)
+		if err != nil {
+			t.Fatal(err)
+		}
 		want := []string{"commitlint-like", "slidev-like", "tool-referenced"}
 		assertStringsEqual(t, got, want)
 	})

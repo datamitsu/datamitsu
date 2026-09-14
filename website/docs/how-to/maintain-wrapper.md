@@ -60,6 +60,75 @@ A few rules to keep in mind:
 
 See [Configuration → Declared Before-Configs](../guides/configuration.md#declared-before-configs-getbeforeconfigs) for the full reference.
 
+## Wrapping a private binary
+
+A Bun proxy can call a managed native executable through an explicit app
+binding. Keep the upstream's existing SHA-256-pinned binary declaration and
+supported-platform map. The example below assumes your config build supplies
+`upstreamBinary` (that declaration) and `proxyLockFile` (the generated pnpm
+lockfile for your published proxy package, here named
+`@example/lefthook-proxy`). It also retains the existing managed Bun runtime and
+its pinned pnpm runtime.
+
+```javascript
+function getConfig(config) {
+  return {
+    ...config,
+    apps: {
+      ...config.apps,
+      "dm-internal-lefthook-upstream": {
+        binary: upstreamBinary,
+      },
+      lefthook: {
+        bun: {
+          packageName: "@example/lefthook-proxy",
+          version: "1.0.0",
+          binPath: "node_modules/@example/lefthook-proxy/proxy.js",
+          lockFile: proxyLockFile,
+        },
+        dependsOn: ["dm-internal-lefthook-upstream"],
+        runtimeEnv: {
+          DATAMITSU_LEFTHOOK_UPSTREAM: "${APP_BIN:dm-internal-lefthook-upstream}",
+        },
+      },
+    },
+  };
+}
+globalThis.getConfig = getConfig;
+```
+
+The proxy package's `proxy.js` can forward the invocation directly:
+
+```javascript
+const child = Bun.spawn([process.env.DATAMITSU_LEFTHOOK_UPSTREAM, ...process.argv.slice(2)], {
+  stdin: "inherit",
+  stdout: "inherit",
+  stderr: "inherit",
+});
+process.exit(await child.exited);
+```
+
+The child receives one exact, version-specific executable path. Avoid scanning
+`${STORE}/.bin/<name>` and probing candidate versions; `required: true` on the
+upstream is unnecessary. The `dm-internal-` prefix is a naming convention, not
+an access-control or shim-exclusion setting.
+
+When `init` selects `lefthook`, it installs the upstream too. `install lefthook`,
+`exec lefthook`, and tools using it through `check`, `lint`, `fix`, or LSP all
+provision its transitive closure, regardless of the dependency's `required` or
+`lazy` flags. `store seed --apps lefthook` includes the dependency's store
+subtree and the runtimes needed by the selected apps; automatic seeding uses
+the same closure. This selects expected seed content without changing the
+bundle's existing coverage/failure policy.
+
+Source-mode activation stays download-free. Its farm records dependency health
+paths even for names excluded from the shim farm. If an upstream file is later
+removed, invoking the root shim delegates repair to `datamitsu install lefthook`
+and restores the dependency before execution. Neither `dependsOn` nor
+`runtimeEnv` changes the proxy's install hash. A binding must target a direct
+native binary dependency; a runtime-managed dependency needs its full command
+and cannot be represented by `${APP_BIN:...}`.
+
 ## Updating Tool Versions
 
 ### Minimum release age (`--min-age`)
@@ -287,6 +356,19 @@ datamitsu devtools dockerfile -o docker/Dockerfile
 **What it generates.** A config-free shared base, then a `config-split` stage, then one build stage per binary app, per managed runtime, and per runtime-managed app (each inheriting its runtime stage). The final stage assembles the populated datamitsu store with `COPY --link`, one layer per app, and carries the full config for the entrypoint.
 
 **Two layers of cache isolation.** Each app is its own `COPY --link` layer, so bumping a single app re-pulls only that layer instead of the whole image (pull-time, for your users). The generator also isolates the **build**: the base never carries the config, and the `config-split` stage slices the config into one minimal per-stage file (via [`devtools split-config`](../reference/cli-commands.md#devtools-split-config)) that each stage loads on its own. So editing one app — or regenerating/reformatting the whole config — re-runs only the cheap split plus the stages whose slice actually changed, instead of reinstalling every tool from scratch. Changing a runtime rebuilds that runtime and every app under it; changing the base datamitsu image rebuilds everything.
+
+Each app slice defines its entire dependency closure and every referenced
+runtime, including pnpm. The stage's normal `install <app>` installs that
+closure, so verification can execute the app safely. Each app still has its own
+stage, including conventionally private names, and the final image copies each
+app's own store subtree with `COPY --link`. A dependency edit rebuilds dependent
+slices as well as the dependency's stage. Build-only Go and pnpm runtimes remain
+out of the final image; run-time interpreters and UV's Python tree remain in it.
+
+If Linux/libc filtering would remove a dependency of an included app, generation
+fails with the root and missing dependency named. Unsupported architectures
+fail the stage's install with the binary name and target platform, including
+with `--no-verify`; no successfully built image can omit that dependency.
 
 **Base image and digest pinning.** The base image is `ghcr.io/datamitsu/datamitsu` at the version of the datamitsu binary you run the command with — _not_ your `package.json`. That tag is resolved to a SHA-256 digest and pinned as `FROM …@sha256:…` so builds are reproducible.
 

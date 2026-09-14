@@ -265,7 +265,10 @@ func TestMultiVersionCacheKeyStability(t *testing.T) {
 func TestMultiVersionRuntimeCollectsForBothApps(t *testing.T) {
 	runtimes, apps, _ := makeMultiVersionConfig()
 
-	collected := CollectRequiredRuntimes(apps, runtimes, false)
+	collected, err := CollectRequiredRuntimes(apps, runtimes, false)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Both eslint apps share the node runtime and the pnpm runtime it installs
 	// them with.
