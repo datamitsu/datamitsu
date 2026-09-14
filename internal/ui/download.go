@@ -66,8 +66,16 @@ func (d *Display) Download(name string, total int64, r io.Reader) io.ReadCloser 
 				decor.EwmaSpeed(decor.SizeB1024(0), " % .2f", 60),
 			),
 		)
-		rc = &barReader{ReadCloser: bar.ProxyReader(r), bar: bar, d: d}
-	} else {
+		if proxy, err := bar.ProxyReader(r); err == nil {
+			rc = &barReader{ReadCloser: proxy, bar: bar, d: d}
+		} else {
+			// Only a completed or aborted bar refuses a proxy; release it so
+			// the active-bar count cannot leak.
+			bar.Abort(true)
+			d.barEnded()
+		}
+	}
+	if rc == nil {
 		rc = &plainDownload{d: d, name: name, total: total, r: r, lastPct: -1}
 	}
 

@@ -145,7 +145,7 @@ jobs:
         with:
           platforms: linux/amd64,linux/arm64
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
       - id: version
         name: Normalize version (remove v prefix for labels)
         run: |
@@ -369,7 +369,7 @@ jobs:
         with:
           platforms: linux/amd64,linux/arm64
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
       - name: Install cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
       - id: version
@@ -776,7 +776,7 @@ jobs:
           ref: ${{ needs.determine-release-type.outputs.checkout_ref }}
       - uses: ./.github/actions/setup-environment
       - name: Install uv
-        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           enable-cache: true
       - if: ${{ !env.ACT }}
@@ -902,7 +902,7 @@ jobs:
           path: dist
       - if: ${{ !env.ACT }}
         name: Azure login (federated OIDC for Marketplace)
-        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
+        uses: azure/login@7ddb5af1ef8758cf1353cf3b42f940aee27ba21c # v3.0.2
         with:
           allow-no-subscriptions: true
           client-id: ${{ vars.AZURE_CLIENT_ID }}
