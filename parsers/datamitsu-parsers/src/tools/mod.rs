@@ -45,6 +45,7 @@ pub mod golangci_lint;
 pub mod hadolint;
 pub mod haml_lint;
 pub mod harper_cli;
+pub mod knip;
 pub mod ktlint;
 pub mod kube_linter;
 pub mod ltrs;
@@ -144,6 +145,7 @@ pub fn dispatch(tool: &str, stdout: &[u8], stderr: &[u8], exit_code: i32) -> Opt
 		"hadolint" => Some(hadolint::parse(stdout, stderr, exit_code)),
 		"haml_lint" => Some(haml_lint::parse(stdout, stderr, exit_code)),
 		"harper_cli" => Some(harper_cli::parse(stdout, stderr, exit_code)),
+		"knip" => Some(knip::parse(stdout, stderr, exit_code)),
 		"ktlint" => Some(ktlint::parse(stdout, stderr, exit_code)),
 		"kube_linter" => Some(kube_linter::parse(stdout, stderr, exit_code)),
 		"ltrs" => Some(ltrs::parse(stdout, stderr, exit_code)),
