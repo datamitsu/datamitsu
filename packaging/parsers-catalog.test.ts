@@ -40,7 +40,11 @@ test("renderCatalogMarkdown: frontmatter, auto-gen note, module + count", () => 
   assert.ok(md.startsWith("---\n# AUTO-GENERATED"), "marker leads the frontmatter");
   assert.match(md, /\ntitle: Parser Catalog\n/);
   assert.match(md, /AUTO-GENERATED/);
-  assert.match(md, /`datamitsu-parsers`, version `0\.1\.0`/);
+  assert.match(md, /`datamitsu-parsers`/);
+  // The build-injected module version is deliberately not rendered: a local
+  // regeneration and a release build would write different values into a
+  // committed file. `devtools parsers list` still reports it.
+  assert.ok(!md.includes("0.1.0"), "module version stays out of the page");
   // echo is excluded, so the count is 2, not 3.
   assert.match(md, /\*\*2 tools\*\*/);
 });

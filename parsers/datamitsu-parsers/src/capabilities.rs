@@ -104,6 +104,7 @@ const TOOLS: &[&ToolCapability] = &[
 	&tools::hadolint::DESCRIPTOR,
 	&tools::haml_lint::DESCRIPTOR,
 	&tools::harper_cli::DESCRIPTOR,
+	&tools::knip::DESCRIPTOR,
 	&tools::ktlint::DESCRIPTOR,
 	&tools::kube_linter::DESCRIPTOR,
 	&tools::ltrs::DESCRIPTOR,

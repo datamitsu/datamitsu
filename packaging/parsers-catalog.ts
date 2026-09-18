@@ -38,8 +38,13 @@ export function renderCatalogMarkdown(cat: ParserCatalog): string {
     .filter((t) => t.name !== "echo")
     .sort((a, b) => a.name.localeCompare(b.name));
 
+  // The module version is deliberately absent from the page. It is injected at
+  // build time (`DATAMITSU_PARSERS_VERSION`, falling back to the crate version),
+  // so a contributor regenerating the page locally would rewrite it to `0.1.0`
+  // and a release would rewrite it back — churn in a committed file that says
+  // nothing a reader of the catalogue needs. `devtools parsers list` still
+  // reports it, from the module itself.
   const module = cat.tools?.[0]?.module ?? "datamitsu-parsers";
-  const version = cat.tools?.[0]?.version ?? "";
 
   const lines: string[] = [
     "---",
@@ -57,9 +62,8 @@ export function renderCatalogMarkdown(cat: ParserCatalog): string {
     "`packaging/parsers-catalog.ts`, run from `task build:parsers`. Do not edit by hand.",
     ":::",
     "",
-    `datamitsu ships a single signed Rust → WASM module (\`${module}\`${
-      version ? `, version \`${version}\`` : ""
-    }) that turns these **${tools.length} tools**' raw output into structured ` +
+    `datamitsu ships a single signed Rust → WASM module (\`${module}\`)` +
+      ` that turns these **${tools.length} tools**' raw output into structured ` +
       "diagnostics. Wire one to a tool with " +
       "[`outputParser`](./configuration-api.md#output-parser-outputparser) — the " +
       "**Parser** name below is its `parser` field.",
