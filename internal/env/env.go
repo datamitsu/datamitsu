@@ -63,6 +63,12 @@ func GetBinPath() string {
 	return filepath.Join(GetStorePath(), ".bin")
 }
 
+// GetDependencyPathRoot returns the directory holding the per-app PATH directories that expose
+// an app's binary dependencies under their app names ({store}/.dependency-path).
+func GetDependencyPathRoot() string {
+	return filepath.Join(GetStorePath(), ".dependency-path")
+}
+
 // GetParsersPath returns the directory holding downloaded WASM parser modules
 // ({store}/.parsers), or the DATAMITSU_PARSERS_DIR override when set.
 func GetParsersPath() string {

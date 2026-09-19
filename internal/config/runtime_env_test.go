@@ -36,6 +36,21 @@ func TestValidateRuntimeEnv(t *testing.T) {
 			app.Env = map[string]string{"BAD": "${APP_BIN:dep}"}
 			a["root"] = app
 		}},
+		{name: "runtimeEnv PATH", value: "ok", want: "apps.root.runtimeEnv.PATH: PATH cannot be set", mutate: func(a binmanager.MapOfApps) {
+			app := a["root"]
+			app.RuntimeEnv = map[string]string{"PATH": "${STORE}/bin"}
+			a["root"] = app
+		}},
+		{name: "env PATH in any case", value: "ok", want: "apps.root.env.Path: PATH cannot be set", mutate: func(a binmanager.MapOfApps) {
+			app := a["root"]
+			app.Env = map[string]string{"Path": "/usr/bin"}
+			a["root"] = app
+		}},
+		{name: "PATH-like names stay allowed", value: "ok", mutate: func(a binmanager.MapOfApps) {
+			app := a["root"]
+			app.Env = map[string]string{"PLAYWRIGHT_BROWSERS_PATH": "${STORE}/browsers", "PATHS": "x"}
+			a["root"] = app
+		}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			apps := binmanager.MapOfApps{"root": {Binary: &binmanager.AppConfigBinary{}, DependsOn: []string{"dep"}, RuntimeEnv: map[string]string{"BINDING": tt.value}}, "dep": {Binary: &binmanager.AppConfigBinary{}}}
