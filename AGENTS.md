@@ -174,6 +174,21 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
 - `${APP_BIN:<name>}` expands only in `runtimeEnv`, requires a direct
   `dependsOn` edge, and supports only native binary targets. Reject it in app
   `env` values; other config data and environment keys remain literal.
+- Every native binary app in an app's `dependsOn` closure is on its `PATH` under
+  its app name, through a content-addressed `{store}/.dependency-path/<hash>/`
+  of symlinks (`binmanager/dependency_path.go`). `getCommandInfo` creates it;
+  `ResolveCommandInfo` only computes it, records it as a `PATH` prefix, and
+  lists the root app's entries as health paths so the shim repairs a missing
+  one. It goes after runtime-owned `PATH` entries, never before them. Never
+  remove or replace an existing one: repair adds missing entries in place,
+  because a running tool may hold it. Targets and the directory are absolute
+  (a relative `DATAMITSU_CACHE_DIR` would leave links dangling). Docker slices
+  do not copy it: it is created at first run, so the store must stay writable
+  in images. A change to what a farm entry records needs a
+  `ManifestFormatVersion` bump: two development builds share a version string.
+- `PATH` is rejected in app `env` and `runtimeEnv` in any case: values are not
+  expanded against the inherited environment, so it would replace `PATH`
+  wholesale. Only runtime-owned keys win over app env; inherited ones do not.
 
 - Docker app slices carry the dependency closure and all referenced runtimes
   (including pnpm). Each stage installs its closure; the final image copies each

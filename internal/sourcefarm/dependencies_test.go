@@ -1,10 +1,12 @@
 package sourcefarm
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
@@ -53,6 +55,13 @@ func TestPlanDependencyHealthAndRuntimeEnv(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
+			if installed {
+				// The dependency PATH directory is created on the exec path, which is also what
+				// the shim's repair runs; resolution alone never writes it.
+				if _, err := bm.GetCommandInfo(context.Background(), "root"); err != nil {
+					t.Fatal(err)
+				}
+			}
 			before := binmanager.NetworkDownloads()
 			plan := BuildPlan(t.TempDir(), "", apps, bm, nil)
 			if len(plan.Entries) != 2 || len(plan.Excluded) != 1 || plan.Excluded[0].Name != "git" {
@@ -68,8 +77,22 @@ func TestPlanDependencyHealthAndRuntimeEnv(t *testing.T) {
 				if entry.Env["UPSTREAM"] != dependency.Command {
 					t.Fatalf("env = %v", entry.Env)
 				}
-				if len(entry.RequiredPaths) != 2 {
+				if len(entry.RequiredPaths) != len(slices.Compact(slices.Sorted(slices.Values(entry.RequiredPaths)))) {
 					t.Fatalf("diamond health paths duplicated: %v", entry.RequiredPaths)
+				}
+				// Two dependency binaries plus the root's PATH entries for both; `dep`'s own PATH
+				// directory is not a health path, since `dep` is reached through the root's.
+				if len(entry.RequiredPaths) != 4 {
+					t.Fatalf("health paths = %v", entry.RequiredPaths)
+				}
+				pathDir, _, _ := strings.Cut(entry.Env["PATH"], string(os.PathListSeparator))
+				for _, name := range []string{"dep", "git"} {
+					if runtime.GOOS == "windows" {
+						name += ".exe"
+					}
+					if !slices.Contains(entry.RequiredPaths, filepath.Join(pathDir, name)) {
+						t.Fatalf("PATH entry %q missing from health paths %v", name, entry.RequiredPaths)
+					}
 				}
 			}
 			if binmanager.NetworkDownloads() != before {
