@@ -79,7 +79,11 @@ import (
 // land rebake — silently, forever, from a farm nothing can update.
 //
 // Version 4 retires entries whose health paths omit app dependencies.
-const ManifestFormatVersion = 4
+//
+// Version 5 retires entries that lack the dependency PATH prefix and its health paths. A release
+// changes DatamitsuVersion anyway, but two development builds share one version string, and a
+// format-4 entry would otherwise keep serving a tool that cannot find its helpers.
+const ManifestFormatVersion = 5
 
 // Origin records how the farm's root was established.
 type Origin string
