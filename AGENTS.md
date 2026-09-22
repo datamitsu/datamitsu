@@ -212,7 +212,7 @@ datamitsu is a configuration management and binary distribution tool written in 
 
 ## Build Constraints
 
-- **`go install` does NOT work** for this project. The build requires a preliminary JS compilation step (`pnpm build` compiles TypeScript which is then embedded via Go embed). Always use `go build` or `pnpm build` after the JS artifacts are generated.
+- **`go install` does NOT work** for this project. The build requires a preliminary JS compilation step: `task build:lib` (run by `pnpm build`, and by `postinstall` on every `pnpm install`) writes the two git-ignored artifacts Go embeds — `internal/config/config.js` and `internal/inspector/inspector.html`. Always use `go build` or `pnpm build` after the JS artifacts are generated.
 
 ## Build and Development Commands
 
@@ -362,9 +362,11 @@ not part of the artifact. Names, descriptions and patterns remain user-provided 
 
 The Svelte/Vite workspace is `inspector/`. `pnpm --filter @datamitsu/inspector dev`
 opens an empty development shell; use an exported snapshot to inspect real data.
-`task build:inspector` emits `internal/inspector/inspector.html`, which is embedded
-by Go and checked in like `internal/config/config.js` so Go-only builds work.
-Never edit the generated HTML. `build:lib` rebuilds it before compiling the CLI.
+`task build:inspector` emits `internal/inspector/inspector.html`, which Go embeds.
+Like `internal/config/config.js` it is generated, git-ignored, and produced by
+`build:lib` — which every `pnpm install` runs through `postinstall` — so a Go
+build needs the JS toolchain to have run first, exactly as it already does for
+the config library. Never edit the generated HTML; rebuild it instead.
 The header and favicon import `website/static/img/icon.png?inline`, the square
 brand icon. Keep it embedded and reuse that source rather than copying the asset.
 The build rejects external assets or additional JavaScript chunks. Release builds
