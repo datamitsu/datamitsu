@@ -64,7 +64,7 @@ export async function exec(appName?: string, options: ExecOptions = {}): Promise
   };
 }
 
-const ESC = String.fromCodePoint(0x1b);
+const ESC = String.fromCharCode(0x1b);
 const ANSI_PATTERN = new RegExp(`${ESC}\\[[0-9;]*m`, "g");
 
 export function parseToolList(output: string): ToolInfo[] {
@@ -75,7 +75,7 @@ export function parseToolList(output: string): ToolInfo[] {
   const tools: ToolInfo[] = [];
   let currentType: null | string = null;
   const typePattern = /^\[(binary|uv|node|jvm|go|shell)\]$/;
-  const toolPattern = /^ {2}(\S+)(?:[ \t]{2,}([^\s].*))?$/;
+  const toolPattern = /^ {2}(\S+)(?:[ \t]{2,}(\S.*))?$/;
 
   const lines = output.split("\n").map((line) => line.replace(ANSI_PATTERN, ""));
   for (const line of lines) {
