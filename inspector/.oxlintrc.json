@@ -1,0 +1,14 @@
+{
+  "$schema": "../.datamitsu/oxlint_configuration_schema.json",
+  "categories": {
+    "correctness": "error",
+    "pedantic": "error",
+    "perf": "error",
+    "restriction": "error",
+    "style": "error",
+    "suspicious": "error"
+  },
+  "extends": [
+    "../.datamitsu/.oxlintrc.json"
+  ]
+}

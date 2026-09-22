@@ -179,3 +179,6 @@ packaging/npm/datamitsu-windows-*/
 packaging/npm/datamitsu-win32-*/
 packaging/npm/datamitsu-freebsd-*/
 packaging/npm/datamitsu-openbsd-*/
+
+# Built from the frozen reference snapshot and embedded inspector template.
+website/static/atlas.html

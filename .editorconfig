@@ -14,3 +14,7 @@ indent_style = tab
 [Makefile]
 indent_size  = 2
 indent_style = tab
+
+# The generated bundle contains whitespace inside JavaScript template literals.
+[internal/inspector/inspector.html]
+trim_trailing_whitespace = false

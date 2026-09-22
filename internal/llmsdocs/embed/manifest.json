@@ -4,8 +4,8 @@
   "license": "MIT",
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
-  "pageCount": 53,
-  "pageSetHash": "6b4513b98b12d1c36bc4c741969e4bf4",
+  "pageCount": 54,
+  "pageSetHash": "9f57a1b20dd955e37813d2215a8731ee",
   "pages": [
     {
       "slug": "about",
@@ -266,13 +266,22 @@
       "contentHash": "4356e0c39a5e65b8d3ed0e324c648255"
     },
     {
+      "slug": "guides/config-inspector",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/guides/config-inspector.md",
+      "title": "Config Inspector",
+      "description": "Open the resolved configuration for your repository, inspect a tool's scope and file patterns,",
+      "bytes": 17163,
+      "contentHash": "d6d13ee2ade40f7176f4b8295847693d"
+    },
+    {
       "slug": "guides/configuration",
       "aliases": [],
       "url": "https://datamitsu.com/docs/guides/configuration.md",
       "title": "Configuration",
       "description": "How to configure datamitsu with JavaScript config files, remote configs, and config layers",
-      "bytes": 11494,
-      "contentHash": "e1211d4acb317e5d7dc6a1b093b224af"
+      "bytes": 12069,
+      "contentHash": "57f86e17914a1b932a978bb490f0f7a3"
     },
     {
       "slug": "guides/managed-configs",
@@ -307,8 +316,8 @@
       "url": "https://datamitsu.com/docs/guides/runtime-management.md",
       "title": "Runtime Management",
       "description": "Managing Bun, UV (Python), Node.js, JVM, and Go runtimes with datamitsu",
-      "bytes": 18956,
-      "contentHash": "33fbb3165062458457b7a2410d76a5c7"
+      "bytes": 19423,
+      "contentHash": "f1142ff9153ac8f75169acfcfe8f5de2"
     },
     {
       "slug": "guides/source-mode",
@@ -343,8 +352,8 @@
       "url": "https://datamitsu.com/docs/guides/using-wrappers.md",
       "title": "Using Wrapper Packages",
       "description": "How to install and use datamitsu wrapper packages in your projects",
-      "bytes": 13531,
-      "contentHash": "7a8718f308c09fb8aa962c8dcedd66a6"
+      "bytes": 14101,
+      "contentHash": "46bf65fba2266adc666a414b01d6e8d1"
     },
     {
       "slug": "how-to/add-new-tool",
@@ -433,8 +442,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 70587,
-      "contentHash": "b2fe7c46dd54a0406b3ff429593b0eb2"
+      "bytes": 72004,
+      "contentHash": "6fd91a4d4432ada7b2ce2293830fbb6a"
     },
     {
       "slug": "reference/comparison",

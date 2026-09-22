@@ -1,0 +1,81 @@
+{
+  "$schema": "https://datamitsu.com/schemas/inspector-theme.schema.json",
+  "dark": {
+    "accent": {
+      "base": "#d4a855",
+      "display": "#e5c073",
+      "glow": "#d4a855"
+    },
+    "focus": {
+      "ring": "#d4a855"
+    },
+    "line": {
+      "base": "#d4a85526",
+      "orbit": "#d4a8551f"
+    },
+    "runtime": {
+      "binary": "#d4a855",
+      "bun": "#e6a17d",
+      "go": "#55d7cd",
+      "jvm": "#ee8fb6",
+      "node": "#afd098",
+      "python": "#75b8ff",
+      "shell": "#bba1f1",
+      "unknown": "#b9c0b6"
+    },
+    "status": {
+      "enabled": "#afd098",
+      "skipped": "#e6a17d"
+    },
+    "surface": {
+      "base": "#2a2419",
+      "panel": "#16120d",
+      "raised": "#1f1912",
+      "scrim": "#00000088",
+      "shadow": "#00000055"
+    },
+    "text": {
+      "base": "#f5efe3",
+      "muted": "#c9b99a"
+    }
+  },
+  "light": {
+    "accent": {
+      "base": "#7b5e28",
+      "display": "#a16f12",
+      "glow": "#d4a855"
+    },
+    "focus": {
+      "ring": "#7b5e28"
+    },
+    "line": {
+      "base": "#d4a85533",
+      "orbit": "#7b5e2866"
+    },
+    "runtime": {
+      "binary": "#7b5e28",
+      "bun": "#9c4b2c",
+      "go": "#206f70",
+      "jvm": "#9b4058",
+      "node": "#427039",
+      "python": "#2463a6",
+      "shell": "#70509d",
+      "unknown": "#6b706b"
+    },
+    "status": {
+      "enabled": "#427039",
+      "skipped": "#9c4b2c"
+    },
+    "surface": {
+      "base": "#eee8db",
+      "panel": "#e7e0d1",
+      "raised": "#ded5c2",
+      "scrim": "#03030a99",
+      "shadow": "#3d281712"
+    },
+    "text": {
+      "base": "#3d2817",
+      "muted": "#6b543f"
+    }
+  }
+}

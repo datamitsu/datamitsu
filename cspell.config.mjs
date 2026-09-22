@@ -5,6 +5,8 @@ export default defineConfig((config) => ({
   ignorePaths: [
     ...(config.ignorePaths ?? []),
     "**/*.asc",
+    // Captured config descriptions and app names belong to the pinned wrapper.
+    "website/src/data/reference-config.json",
     "**/*.golangci.yaml",
     // Vendored third-party OCI config fixture (single source of truth is the
     // upstream release; not our prose to spell-check).
@@ -26,15 +28,29 @@ export default defineConfig((config) => ({
   // suggester, whose whole job is to map a typo back to the right page. They are
   // ignored rather than added to `words` because they are genuinely wrong — this
   // says "expected here", not "correct spelling".
-  ignoreWords: [...(config.ignoreWords ?? []), "aboutt", "cachng", "instalation"],
+  ignoreWords: [
+    ...(config.ignoreWords ?? []),
+    "aboutt",
+    "cachng",
+    "instalation",
+    // The misspelt keys the inspector theme guide and its tests show, to say what
+    // a typo looks like when the parser rejects it.
+    "runtme",
+    "darkk",
+  ],
   words: [
     ...config.words,
+    "nosniff",
     // The file name of the officialUrl derivation and its tests.
     "officialurl",
     // The forges and package hosts an app's derived officialUrl can point at.
     "codeberg",
     "gitea",
     "sonatype",
+    // The accessibility guidelines the inspector theme checks contrast against,
+    // and the Go package that does it.
+    "WCAG",
+    "inspectortheme",
     // A shell-literal expectation in internal/shellquote: `$'a\xffb'`. The
     // trailing "b" is load-bearing — it is a hex digit, and the test asserts
     // that a shell stops the \x escape after exactly two digits rather than

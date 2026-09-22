@@ -3,6 +3,8 @@ title: Runtime Management
 description: Managing Bun, UV (Python), Node.js, JVM, and Go runtimes with datamitsu
 ---
 
+import ConfigEmbed from "@site/src/components/ConfigEmbed";
+
 # Runtime Management
 
 datamitsu manages language runtimes alongside your tools. Instead of requiring team members to install specific versions of Bun, Python, Node.js, Java, or Go, datamitsu downloads and manages these runtimes automatically, creating isolated environments for each tool.
@@ -459,3 +461,14 @@ runtimes: {
 ```
 
 Binary apps (type `binary`) are not affected by this limitation. They use target-based resolution with automatic libc detection and will select musl-specific builds when available. See [Use in Alpine Linux](../how-to/use-in-alpine) for details.
+
+## See the runtime distribution
+
+The reference wrapper `@shibanet0/datamitsu-config`, `0.0.0-unstable.20260912.f201136`,
+captured on 2026-09-22, contains 111 apps: native binary 75, Node.js 20,
+Python 11, JVM 3, Go 1 and Shell 1. This is a real configuration, not a default.
+
+<ConfigEmbed view="blueprints" />
+
+[Open the full atlas](https://datamitsu.com/atlas.html).
+See the [Config Inspector guide](config-inspector.md) to inspect or embed your own configuration.

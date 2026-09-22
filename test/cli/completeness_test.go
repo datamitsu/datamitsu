@@ -20,6 +20,7 @@ import (
 // run no work of their own and are covered by their `--help` goldens and
 // command-set drift guards.
 var testedLeafCommands = map[string]string{
+	"inspect":                      "TestInspectHelp / TestInspectExport / TestInspectInvalidFlags",
 	"cache clear":                  "TestCacheClearDryRun",
 	"cache path project":           "TestCachePathProject",
 	"check":                        "TestExplainPlanGolden / TestCheckFixLintHelpGolden",

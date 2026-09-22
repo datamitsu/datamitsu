@@ -335,3 +335,151 @@ import TabItem from "@theme/TabItem";
 ````
 
 **When to use:** Any documentation page that shows how to install an npm package managed by datamitsu's Node runtime. This includes packages listed as node apps in the configuration.
+
+## Config Inspector
+
+`datamitsu inspect` serves a loopback-only snapshot; `--output <file|->` exports the
+same standalone HTML. Config loading uses the normal config-show path, without
+managed content evaluation or tool provisioning. `internal/inspector` projects a
+typed, sorted display manifest from the resolved config. Do not export raw config:
+archives, lockfiles, environment values, command arguments and download URLs are
+not part of the artifact. Names, descriptions and patterns remain user-provided text.
+
+The Svelte/Vite workspace is `inspector/`. `pnpm --filter @datamitsu/inspector dev`
+opens an empty development shell; use an exported snapshot to inspect real data.
+`task build:inspector` emits `internal/inspector/inspector.html`, which is embedded
+by Go and checked in like `internal/config/config.js` so Go-only builds work.
+Never edit the generated HTML. `build:lib` rebuilds it before compiling the CLI.
+The header and favicon import `website/static/img/icon.png?inline`, the square
+brand icon. Keep it embedded and reuse that source rather than copying the asset.
+The build rejects external assets or additional JavaScript chunks. Release builds
+consume the embedded artifact; after UI edits rebuild it before Go tests or releases.
+
+An app may say where a reader learns about it with `officialUrl`: an absolute
+http(s) URL, validated for shape and never fetched, that takes no part in any
+install. An app that declares none gets one derived at config resolution from
+what it already declares — a forge release URL, a package name, a module path, a
+Maven Central JAR — reported as `officialUrl` with `officialUrlDerived: true` so a
+surface can distinguish a maintainer's choice from an address worked out from a
+download URL. Derivation is `binmanager.DeriveOfficialURL`: a pure function of the
+declaration, no network and no guessing, and a shape it does not recognize yields
+nothing rather than a link that might be wrong. It runs once, in the loader beside
+validation and before the config-eval cache is written, so a hit and a fresh
+evaluation agree. Adding a rule means adding it there, to the table in
+`config/config.d.ts` and the configuration API reference, and to the
+tests beside it (`internal/binmanager/officialurl_test.go`,
+`internal/config/officialurl_test.go`).
+
+A configuration names itself with the top-level `name` field: a scalar that chains
+like any other, validated by `config.ValidateName` (one line, 80 characters, a
+blank string is an error), and stored unset rather than defaulted so naming a
+configuration is what moves the cache key. Read it through `Config.DisplayName`,
+which falls back to `config.DefaultName` — `datamitsu.config`. It shows wherever a
+reader needs to know which configuration they are looking at: `config show` (the
+field itself, present when a layer set one), the execution plan header and its
+JSON (`configuration`), and the inspector's snapshot caption. The snapshot
+manifest carries the already-defaulted name, and no surface — inspector, website
+or documentation copy — types a person's or package's name to describe a
+configuration.
+
+The display document is the **inspector manifest** everywhere it is named: the
+`inspector-manifest` script element, the `datamitsu-inspector-manifest.json` the
+Dataset button downloads, and the dataset a showcase entry publishes. Never call it
+just "the manifest" in a user-facing surface — the word already means several other
+things in this repository.
+
+`internal/inspector/protocol.json` owns the manifest schema version and placeholder.
+The placeholder must occur exactly once in the generated HTML. Import only the
+schema version into browser code so tree-shaking cannot leave a second placeholder
+in the JavaScript. Go inserts `json.Marshal` output into an inert JSON script element;
+never disable its HTML escaping, which prevents config strings containing script
+closing tags from escaping into executable HTML. Svelte renders text normally;
+do not use raw HTML for config data.
+
+The public embed/share contract lives in `inspector/src/embedding.ts`: query
+parameters select view, theme, tool, runtime and project type. Existing `#/view?...`
+bookmarks override query view/filter values; theme/embed remain query-only. Keep
+file URLs and subdirectory hosting functional without network access. `embed=1`
+renders `EmbeddedView` without navigation or download controls. Named modes
+`embed=universe|runtimes|operations` select independent sections and ignore hash routes.
+Universe is the default full view. The Embed dialog selects a section before copying,
+and the snippet it produces is the `<iframe>` alone: numbers printed beside the frame
+are a second copy of what the frame shows and disagree with it at the first config
+change. Every select in the inspector wears the one styled `.select` wrapper, sized
+and weighted like the buttons beside it, in both themes.
+`preset=minimal` applies to `embed=universe` only: the orbit plus its runtime strip,
+without headline, statistics, search, project-type filter, view switcher, layout and
+zoom controls or inspector panel. It auto-rotates, centres the sphere instead of
+offsetting it for absent copy, names the hovered app with its runtime and pinned
+version, filters by the strip, and opens an app in the full inspector in a new tab
+when the host grants `allow-popups` — otherwise nothing happens: an embed never
+navigates itself to the full site. It carries no visible chrome beyond the strip,
+the configuration's name and that link; the app directory stays for a screen reader
+and the keyboard. Its generated snippet asks for the extra popup tokens and a height,
+not an aspect ratio.
+Its runtime strip sits on the documentation site's rail (1560px, the same gutters),
+so a full-bleed frame aligns with the page around it. A host page keeps the frame
+in step with its own theme toggle by posting `datamitsu:theme`; the frame applies
+the mode and answers the sender with `datamitsu:theme-ack`, which is how the host
+knows it need not reload. Any origin may send it — it chooses colors and nothing
+else, and a sandboxed frame cannot check an origin against its own.
+Test it in an opaque
+`sandbox="allow-scripts"` frame: storage and history access may throw. Auto theme
+listens to prefers-color-scheme, which inherits the host iframe color-scheme.
+Refresh the media value after subscribing on mount: the first layout can resolve
+an inherited preference between component initialization and listener installation.
+
+Every color the inspector draws is a theme token: no literal and no documentation
+token is left in a component or a stylesheet. The website reads the same file: the
+`config-atlas` plugin injects the rendered palette into every page, so the landing
+page's own tokens, the runtime bars on the showcase and the terminal theme are all
+defined by `internal/inspector/theme.json` and never copied into a stylesheet. `internal/inspector/theme.json` holds
+the built-in palette for both modes and is the only place those values exist — Go
+embeds it, `inspector/src/theme.ts` renders it for the dev server and for the
+website's atlas plugin, and `internal/inspectortheme` parses, merges, validates and
+emits it. Go is authoritative: a theme file is parsed strictly, naming the full key
+path of the first key it cannot apply, colors are `#rgb`/`#rrggbb`/`#rrggbbaa`, and
+`Schema()` generates the published JSON Schema (regenerate the committed copy with
+`go test ./internal/inspectortheme -update`). Adding a token means adding it to
+`Groups`, to `theme.json` for both modes, and to the guide's token table; anything
+that assembles the template itself must fill the theme placeholder as well as the
+manifest one. Contrast below WCAG AA warns and still applies — a theme is the user's
+decision; body text and `accent.base` are held to 4.5:1 and `accent.display`,
+which only ever appears at heading sizes, to the 3:1 large-text minimum. The two
+accents exist because one color cannot be both: on cream, an accent readable as
+body text is olive, and an accent that reads as amber is only large-text legible. Canvas colors and SVG exports read the same variables.
+Runtime categories use distinct hues from the inspector variables across every view;
+keep distribution segments opaque and indicate selection with an outline. In light
+mode surfaces step slightly _darker_ than the background, never lighter, and the
+background token is the one the homepage reads, so the two never disagree about what
+cream is. `inspector/src/orbit.ts` is the single description of the orbit — the
+sphere's geometry, the depth fade and how solidly it is inked on a given surface —
+and both the canvas and the documentation site's poster read it. On a light surface
+points are nearly solid and carry no glow; the dark theme's fade and glow would only
+make them pale. Colors stay in the theme file and opacities in `orbitInk`: the rings
+and the ring around the center are one token, `line.orbit`, which carries its own
+alpha, so a light theme can draw them in warm brown at whatever opacity reads on
+cream without either render path branching on the mode. The sphere is scaled to fit the frame's height as well as its width:
+an embed is as tall as its host page decided.
+At widths up to 1000px, `DetailDrawer` uses a native modal dialog for focus handling;
+an empty route selection must not open it automatically. Dispose Canvas observers,
+event listeners and animation frames when leaving Universe. Clipboard and storage
+may be unavailable for local files: retain manual-copy and system-theme fallbacks.
+
+The search text, the project type and the runtime strip are one selection, computed
+in `inspector/src/selection.ts` and read by every view and every number on screen —
+counters, legend, strip, directory, tables, diagrams and the embed alike. A view
+never filters the snapshot for itself: that is how the counters came to disagree
+with the app directory, and `selection.test.ts` fails on the pattern rather than on
+the symptom. Universe dims what the filters leave out instead of removing it, so the
+sphere keeps its shape and a reader sees how much of the whole is lit; a dimmed point
+answers neither hover nor click. Operations and Blueprints remove what does not
+match, because a table row and a bar have to be exactly what they claim.
+
+`inspector-types` runs svelte-check through `pnpm dm check`, covering component
+accessibility plus TypeScript; tsc does not separately check this workspace.
+`pnpm --filter @datamitsu/inspector test` verifies routing and filters. Go tests in
+`internal/inspector` cover projection, script escaping and server lifecycle; the CLI
+blackbox suite covers export, help and argument errors. UI changes also require
+browser checks of both themes, file exports, hash back/forward navigation and
+mobile overflow. Screenshots live in `website/static/img/inspector-*.png`.
