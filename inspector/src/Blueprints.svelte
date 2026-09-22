@@ -94,12 +94,12 @@
         role="img"
         aria-label={`${route.diagram} diagram`}
       >
-        <rect width="100%" height="100%" fill="var(--background)" />
+        <rect width="100%" height="100%" fill="var(--surface-base)" />
         {#if route.diagram === "configuration"}
           <path
             d="M580 122 V185 M145 185 H1015 M145 185 V235 M435 185 V235 M725 185 V235 M1015 185 V235"
             fill="none"
-            stroke="var(--accent)"
+            stroke="var(--accent-base)"
             stroke-width="1.5"
           />
           <rect
@@ -108,8 +108,8 @@
             width="340"
             height="88"
             rx="16"
-            fill="var(--raised)"
-            stroke="var(--accent)"
+            fill="var(--surface-raised)"
+            stroke="var(--accent-base)"
           />
           <text x="580" y="74" text-anchor="middle" class="diagram-title">datamitsu config</text
           ><text x="580" y="101" text-anchor="middle" class="diagram-caption"
@@ -121,8 +121,8 @@
                 width="250"
                 height="158"
                 rx="14"
-                fill="var(--panel)"
-                stroke="var(--line)"
+                fill="var(--surface-panel)"
+                stroke="var(--line-base)"
               /><text x="22" y="36" class="diagram-caption">{group.label}</text><text
                 x="22"
                 y="103"
@@ -140,8 +140,8 @@
                 width="1080"
                 height="80"
                 rx="12"
-                fill="var(--panel)"
-                stroke="var(--line)"
+                fill="var(--surface-panel)"
+                stroke="var(--line-base)"
               /><circle cx="30" cy="40" r="5" fill={runtimeColor(runtime)} /><text
                 x="48"
                 y="46"
