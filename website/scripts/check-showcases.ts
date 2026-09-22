@@ -20,7 +20,10 @@ const schemaPath = resolve(import.meta.dirname, "..", "static", "schemas", "show
 const offline = process.argv.includes("--offline");
 const failures: string[] = [];
 
-const publishedSchema = `${JSON.stringify(showcaseFileSchema, null, 2)}\n`;
+// Keys are sorted recursively because the repository's JSON formatter sorts them:
+// written in TypeBox's construction order, the artifact would be rewritten by the
+// first `dm fix` and never match this check again.
+const publishedSchema = `${JSON.stringify(sortKeys(showcaseFileSchema), null, 2)}\n`;
 if (process.argv.includes("--write-schema")) {
   writeFileSync(schemaPath, publishedSchema);
   console.log(`Wrote ${schemaPath}`);
@@ -137,4 +140,25 @@ function describe(path: string, data: unknown): string {
     value = (value as Record<string, unknown>)?.[segment];
   }
   return value === undefined ? "" : ` (${JSON.stringify(value)})`;
+}
+
+/**
+ * The same value with every object's keys in alphabetical order, so the published schema is written
+ * the way the formatter would leave it.
+ */
+function sortKeys(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => sortKeys(item));
+  }
+  if (value === null || typeof value !== "object") {
+    return value;
+  }
+  const source = value as Record<string, unknown>;
+  return Object.fromEntries(
+    Object.keys(source)
+      // Compared by code point, not by locale: the formatter puts "$id" before
+      // "additionalProperties", which a locale that ignores punctuation would not.
+      .sort((first, second) => (first < second ? -1 : Number(first > second)))
+      .map((key) => [key, sortKeys(source[key])]),
+  );
 }
