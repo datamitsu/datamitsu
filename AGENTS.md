@@ -501,6 +501,43 @@ blackbox suite covers export, help and argument errors. UI changes also require
 browser checks of both themes, file exports, hash back/forward navigation and
 mobile overflow. Screenshots live in `website/static/img/inspector-*.png`.
 
+## Showcase
+
+Two files, and they never mix. `website/src/data/showcases.json` is curated: only
+what a person supplies, validated against `website/src/data/showcase-schema.ts`,
+the TypeBox source that also generates the published JSON Schema
+(`node scripts/check-showcases.ts --write-schema`). `showcases.generated.json` is
+written only by `pnpm --filter website pull:showcases`, so the site build reads
+both and never touches the network. Never invent a URL or a hash: every value in
+an entry comes from the real repository, release or registry listing, and a field
+that cannot be verified is left out.
+
+The refresh job runs weekly and on demand, honours a six-day per-entry interval
+unless `--force`, sends stored ETags so an unchanged repository costs no rate
+limit, and opens a pull request instead of pushing to the default branch — the
+diff is the point. It never evaluates or runs a third-party config: composition
+comes only from a published dataset. An entry whose fetch fails keeps its previous
+derived values and records the error; it is never dropped.
+
+The dataset is display data — parsed, rendered as text and numbers, never
+executed — so it is a plain URL and the job records the SHA-256 it observed. A
+`consume` entry of kind `remote` is the opposite case and keeps its mandatory
+hash, which the pull-request check verifies by downloading the file.
+
+The page has no screenshots: an entry's picture is its runtime fingerprint, drawn
+from the dataset in the inspector's own `--runtime-*` hues so the color-to-runtime
+mapping carries over from the orbit. No dataset means no bar — never a placeholder
+with invented proportions. The grid fills the viewport with as many columns as fit.
+Star counts are collected and never shown, and nothing sorts on them: this is a
+directory, not a ranking. Search, sorting (recently released, name) and the tag
+chips all appear only at six entries or more; below that the page is the entries
+and the invitation. The reference entry leads every ordering and is labelled, never
+recommended. Each consume snippet is labelled with its kind and scrolls inside its
+own block, with the copy control in the block's header row. Freshness is what protects a reader
+from inheriting an abandoned configuration: an entry with no release in twelve
+months is marked rather than removed. The disclaimer line about inheriting someone
+else's choices stays at the top.
+
 ## Homepage and hosted atlas
 
 The homepage is a sequence: seven scattered files, one arrow, and the single

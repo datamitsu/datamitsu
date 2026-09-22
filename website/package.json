@@ -8,6 +8,7 @@
     "deploy": "docusaurus deploy",
     "dev": "docusaurus start --host 0.0.0.0 --no-open",
     "docusaurus": "docusaurus",
+    "pull:showcases": "node scripts/refresh-showcases.ts",
     "serve": "docusaurus serve --host 0.0.0.0 --no-open",
     "swizzle": "docusaurus swizzle",
     "typecheck": "tsc",
@@ -38,7 +39,8 @@
     "clsx": "2.1.1",
     "prism-react-renderer": "2.4.1",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "typebox": "1.3.30"
   },
   "devDependencies": {
     "@docusaurus/faster": "3.10.2",

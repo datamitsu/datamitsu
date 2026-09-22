@@ -1,0 +1,250 @@
+{
+  "$id": "https://datamitsu.com/schemas/showcase.schema.json",
+  "additionalProperties": false,
+  "description": "Configurations listed on the datamitsu showcase. Each entry is maintained by its author; the derived half lives in showcases.generated.json.",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "configs": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "added": {
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "type": "string"
+          },
+          "author": {
+            "additionalProperties": false,
+            "properties": {
+              "github": {
+                "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$",
+                "type": "string"
+              },
+              "name": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "github",
+              "name"
+            ],
+            "type": "object"
+          },
+          "consume": {
+            "items": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "kind": {
+                      "anyOf": [
+                        {
+                          "const": "npm",
+                          "type": "string"
+                        },
+                        {
+                          "const": "pypi",
+                          "type": "string"
+                        },
+                        {
+                          "const": "gem",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "package": {
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "package"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "hash": {
+                      "description": "SHA-256 of the file, as 64 hexadecimal characters.",
+                      "pattern": "^[0-9a-f]{64}$",
+                      "type": "string"
+                    },
+                    "kind": {
+                      "const": "remote",
+                      "type": "string"
+                    },
+                    "url": {
+                      "format": "uri",
+                      "pattern": "^https://",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "hash",
+                    "kind",
+                    "url"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "kind": {
+                      "const": "oci",
+                      "type": "string"
+                    },
+                    "ref": {
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "ref"
+                  ],
+                  "type": "object"
+                }
+              ]
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "dataset": {
+            "format": "uri",
+            "pattern": "^https://",
+            "type": "string"
+          },
+          "description": {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
+            "type": "string"
+          },
+          "links": {
+            "additionalProperties": false,
+            "properties": {
+              "inspector": {
+                "format": "uri",
+                "pattern": "^https://",
+                "type": "string"
+              },
+              "repository": {
+                "format": "uri",
+                "pattern": "^https://",
+                "type": "string"
+              },
+              "site": {
+                "format": "uri",
+                "pattern": "^https://",
+                "type": "string"
+              }
+            },
+            "required": [
+              "repository"
+            ],
+            "type": "object"
+          },
+          "name": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "reference": {
+            "type": "boolean"
+          },
+          "tags": {
+            "items": {
+              "anyOf": [
+                {
+                  "const": "docker",
+                  "type": "string"
+                },
+                {
+                  "const": "github-actions",
+                  "type": "string"
+                },
+                {
+                  "const": "go",
+                  "type": "string"
+                },
+                {
+                  "const": "helm",
+                  "type": "string"
+                },
+                {
+                  "const": "java",
+                  "type": "string"
+                },
+                {
+                  "const": "kubernetes",
+                  "type": "string"
+                },
+                {
+                  "const": "node",
+                  "type": "string"
+                },
+                {
+                  "const": "python",
+                  "type": "string"
+                },
+                {
+                  "const": "ruby",
+                  "type": "string"
+                },
+                {
+                  "const": "rust",
+                  "type": "string"
+                },
+                {
+                  "const": "shell",
+                  "type": "string"
+                },
+                {
+                  "const": "sql",
+                  "type": "string"
+                },
+                {
+                  "const": "terraform",
+                  "type": "string"
+                },
+                {
+                  "const": "typescript",
+                  "type": "string"
+                },
+                {
+                  "const": "typst",
+                  "type": "string"
+                }
+              ]
+            },
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "added",
+          "author",
+          "consume",
+          "description",
+          "id",
+          "links",
+          "name",
+          "tags"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "configs"
+  ],
+  "title": "datamitsu showcase",
+  "type": "object"
+}

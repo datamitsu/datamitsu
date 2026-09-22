@@ -1,0 +1,43 @@
+{
+  "$schema": "https://datamitsu.com/schemas/showcase.schema.json",
+  "configs": [
+    {
+      "added": "2026-09-21",
+      "author": {
+        "github": "shibanet0",
+        "name": "Alexander Svinarev"
+      },
+      "consume": [
+        {
+          "kind": "npm",
+          "package": "@shibanet0/datamitsu-config"
+        },
+        {
+          "hash": "6fcd9a1edfaf713683380caa7fee64b9d5d40a2adec41db153ede44e230c74f7",
+          "kind": "remote",
+          "url": "https://github.com/shibanet0/datamitsu-config/releases/download/v0.2.0/datamitsu.config.js"
+        }
+      ],
+      "description": "Batteries-included configuration for polyglot repositories: linting, formatting, security scanning and build tooling.",
+      "id": "shibanet0-datamitsu-config",
+      "links": {
+        "repository": "https://github.com/shibanet0/datamitsu-config",
+        "site": "https://datamitsu-config.shibanet0.com"
+      },
+      "name": "@shibanet0/datamitsu-config",
+      "reference": true,
+      "tags": [
+        "docker",
+        "github-actions",
+        "go",
+        "helm",
+        "node",
+        "python",
+        "rust",
+        "terraform",
+        "typescript",
+        "typst"
+      ]
+    }
+  ]
+}
