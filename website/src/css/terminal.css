@@ -1,0 +1,73 @@
+/* The terminal recordings' palette: one theme class for both color modes, built
+   from the tokens in internal/inspector/theme.json so a recording sits on the
+   same code surface as the install block beside it.
+
+   asciinema-player 3.17 samples these custom properties once, when its canvas
+   mounts, so the player is remounted on a color-mode change rather than
+   recoloring in place — but the colors it reads are the page's own either way.
+
+   datamitsu writes its duration heatmap in xterm 256-color codes, not the 16
+   ANSI colors, so the player is created with `adaptivePalette: true`: every
+   index above 15 is interpolated from the sixteen below and the foreground and
+   background here, instead of the fixed xterm palette that put bright yellow
+   timings on cream. Every color the recordings use was checked against
+   --term-color-background for the 4.5:1 WCAG AA minimum in both modes. */
+div.ap-player.asciinema-player-theme-datamitsu {
+  --term-color-background: var(--surface-raised);
+  --term-color-foreground: var(--text-base);
+  --term-color-0: #2b2119;
+  --term-color-1: #8f3520;
+  --term-color-2: #33612d;
+  --term-color-3: #6f5420;
+  --term-color-4: #1d5691;
+  --term-color-5: #83334b;
+  --term-color-6: #1b5f60;
+  --term-color-7: #5a4029;
+  --term-color-8: #4c4034;
+  --term-color-9: #a1381b;
+  --term-color-10: #326729;
+  --term-color-11: #745721;
+  --term-color-12: #1e5da0;
+  --term-color-13: #973c54;
+  --term-color-14: #166566;
+  --term-color-15: #3d2817;
+}
+
+/* Bright on a dark ground may be bright; on cream it may not, which is why the
+   two halves are stated separately rather than derived from one another. */
+[data-theme="dark"] div.ap-player.asciinema-player-theme-datamitsu {
+  --term-color-0: #1f1912;
+  --term-color-1: #e08a6a;
+  --term-color-2: #8fbd7a;
+  --term-color-3: #d4a855;
+  --term-color-4: #75b8ff;
+  --term-color-5: #ee8fb6;
+  --term-color-6: #55d7cd;
+  --term-color-7: #c9b99a;
+  --term-color-8: #8d8271;
+  --term-color-9: #e6a17d;
+  --term-color-10: #afd098;
+  --term-color-11: #e5c073;
+  --term-color-12: #9acaff;
+  --term-color-13: #f4a9c8;
+  --term-color-14: #7fe3db;
+  --term-color-15: #f5efe3;
+}
+
+/* The start overlay's play button is red in the stock themes; here it is the
+   page's own accent, and the control bar sits on the terminal's own surface. */
+div.ap-player.asciinema-player-theme-datamitsu
+  .ap-overlay-start
+  .ap-play-button
+  svg
+  .ap-play-btn-fill {
+  fill: var(--accent-base);
+}
+
+div.ap-player.asciinema-player-theme-datamitsu
+  .ap-overlay-start
+  .ap-play-button
+  svg
+  .ap-play-btn-stroke {
+  stroke: var(--accent-base);
+}

@@ -70,8 +70,7 @@ const AsciinemaPlayer = forwardRef<AsciinemaPlayerHandle, AsciinemaPlayerPropert
     const theme =
       options.theme ||
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ((siteConfig.themeConfig as any)?.asciinema?.themes?.[docusaurusTheme] ??
-        (docusaurusTheme === "light" ? "solarized-light" : "monokai")); // cspell:disable-line
+      ((siteConfig.themeConfig as any)?.asciinema?.themes?.[docusaurusTheme] ?? "datamitsu");
 
     // Retry handler
     const retryLoad = useCallback(() => {
@@ -122,7 +121,11 @@ const AsciinemaPlayer = forwardRef<AsciinemaPlayerHandle, AsciinemaPlayerPropert
             player = (module_ as any).create(
               { parser: parseAsciicastByLines, url: src },
               containerReference.current,
-              { ...options, theme },
+              // datamitsu colors its duration heatmap with xterm 256-color
+              // codes; adaptivePalette derives those from the sixteen the theme
+              // class sets, so a recording never shows a color the page did not
+              // choose. See src/css/terminal.css.
+              { adaptivePalette: true, ...options, theme },
             ) as AsciinemaPlayerInstance;
 
             playerInstance.current = player;
@@ -159,7 +162,10 @@ const AsciinemaPlayer = forwardRef<AsciinemaPlayerHandle, AsciinemaPlayerPropert
         player?.dispose?.();
         playerInstance.current = null;
       };
-    }, [src, theme, options, onLoad, onError]);
+      // The player samples the theme class's custom properties once, when its
+      // canvas mounts, so a color-mode change recreates it rather than
+      // recoloring what is already drawn.
+    }, [src, theme, docusaurusTheme, options, onLoad, onError]);
 
     const containerOpacityStyle = useMemo(
       () => ({

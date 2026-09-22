@@ -1,3 +1,22 @@
+.caption {
+  margin: 16px 0 0;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.caption a {
+  white-space: nowrap;
+}
+.meta {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.7;
+  opacity: 0.75;
+}
+.meta code {
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
 /* ── Accessibility ── */
 /* Screen reader only - visually hidden but accessible */
 .srOnly {
