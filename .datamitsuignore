@@ -21,3 +21,6 @@ internal/inspector/inspector.html: *
 
 # svelte-check owns the inspector TypeScript and Svelte component checks.
 inspector/**/*: tsc
+
+# Preserve the bundled font's upstream license verbatim.
+website/static/fonts/ibm-plex-mono-OFL.txt: *

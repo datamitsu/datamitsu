@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 54,
-  "pageSetHash": "9f57a1b20dd955e37813d2215a8731ee",
+  "pageSetHash": "443d05a651cad1aee5d036320f2a6fde",
   "pages": [
     {
       "slug": "about",
@@ -13,8 +13,8 @@
       "url": "https://datamitsu.com/docs/about.md",
       "title": "About datamitsu",
       "description": "Learn why datamitsu exists and how it helps teams standardize their development toolchains",
-      "bytes": 9019,
-      "contentHash": "1ea99331d9531c6f6679b12bfaf73efa"
+      "bytes": 9476,
+      "contentHash": "778cda156890852b15ffbb8bb63e9ac8"
     },
     {
       "slug": "contributing/brand-guidelines",
@@ -22,8 +22,8 @@
       "url": "https://datamitsu.com/docs/contributing/brand-guidelines.md",
       "title": "Brand Guidelines",
       "description": "Voice, tone, and style guidelines for datamitsu documentation and communications",
-      "bytes": 6725,
-      "contentHash": "c042b195b8253addfdc1111c3751145e"
+      "bytes": 8293,
+      "contentHash": "3511b339576fb7dfb24b6cd1900020a8"
     },
     {
       "slug": "contributing/creating-wrappers",

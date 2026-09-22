@@ -29,7 +29,9 @@
   "dependencies": {
     "@docusaurus/core": "3.10.2",
     "@docusaurus/preset-classic": "3.10.2",
+    "@docusaurus/theme-common": "3.10.2",
     "@docusaurus/theme-mermaid": "3.10.2",
+    "@fontsource/ibm-plex-mono": "5.3.0",
     "@mdx-js/react": "3.1.1",
     "@ovineko/docusaurus-config": "0.0.1",
     "asciinema-player": "3.17.0",

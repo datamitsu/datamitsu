@@ -483,3 +483,123 @@ accessibility plus TypeScript; tsc does not separately check this workspace.
 blackbox suite covers export, help and argument errors. UI changes also require
 browser checks of both themes, file exports, hash back/forward navigation and
 mobile overflow. Screenshots live in `website/static/img/inspector-*.png`.
+
+## Homepage and hosted atlas
+
+The homepage is a sequence: seven scattered files, one arrow, and the single
+`datamitsu.config.js` they become; that file then opens into the live orbit of
+everything it holds. After it come the three statements of what changes, the
+recordings, where things stand, and the footer. The tagline — "Your toolchain
+deserves a home." — is the eyebrow above the H1 and the last line of the footer.
+The configuration-tax metaphor is retired: it appears nowhere on the site, in the
+docs, in the README or in a package description. Every heading passes the
+literal-translation test in the brand guidelines: translate it word for word, and if
+the sense collapses the heading was leaning on an idiom and gets rewritten. Sections
+differ in weight on purpose, and none carries reference material — no config keys,
+layer diagrams, trust grids or runtime tables; those live in the docs. Nothing may
+capture or slow the scroll, and the orbit is the only motion: no
+fade-up-on-scroll, no staggered reveals, no hover lifts. Every number comes from the
+captured manifest or is absent, `init` and `install` are never synonyms, and nothing
+implies Node is required. Read the page top to bottom and count the
+ecosystem-specific names: outside the config's own filename and the install channel
+list, a reader meets none before the recordings. The answer to a page that reads as
+a JavaScript tool is in its examples, never in a disclaimer — which is what
+`RuntimeFamilies` is: the runtime families the reference configuration manages, with
+their sizes and a few of the tools each carries, all read from the snapshot. The one
+editorial input is `showcaseTools` in `src/data/landing.ts`, a list of names a reader
+can place without looking them up; membership of a family, and whether a name is
+there at all, stays the dataset's answer, and among the eligible ones the
+configuration's own tool definitions decide the order. How often a tool is referenced
+says how the config is wired, not whether a reader knows the name, so it never
+selects on its own. Shell apps are never examples: they resolve through the host PATH,
+so naming one would claim an installation that does not happen — that family shows
+its count instead. Every example on the page has to be a tool a reader can name.
+The seven files are static: seven rows on a light surface in light mode, one
+vertical arrow, and the `datamitsu.config.js` card the arrow points at. A reader
+coming from Go, Python, Rust or Typst has to see their own repository in those
+rows — and in the rest of the page. The card is
+not optional — without it the section has no conclusion. There is no collapse
+animation: it did not reverse and left the space behind it empty. The filename
+appears once on the page, never repeated as a second heading.
+`UniverseEmbed` is that orbit: the inspector's `preset=minimal` frame, full-bleed,
+behind `OrbitPoster` — an inline SVG built from the same snapshot, mirroring the
+sphere layout and camera of `inspector/src/scene.js` so the still and the live frame
+show one orbit. An IntersectionObserver mounts the frame only as it approaches the
+viewport, and the page never waits on it. Below the tablet breakpoint, or without
+hover, the poster stays and a control loads the frame: a drag inside the canvas must
+never fight a thumb scrolling the page. An `error`, or twelve seconds without `load`,
+falls back to the runtime distribution bar and its counts. Nothing is printed under
+the frame: the configuration's name and the link to the full inspector live in the
+embed's own footer, inside the frame, where they cannot disagree with what it shows.
+The page runs inside `@theme/Layout/Provider` although it draws its own header, so
+its toggle is the site's color mode: the choice is shared with the docs, Docusaurus
+stamps `data-theme` before first paint, and the page's tokens key off that attribute
+rather than `prefers-color-scheme`. The orbit frame loads with the resolved theme and
+follows a toggle by message, reloading only if the frame does not acknowledge it.
+Install channels are native radio inputs with full-label
+44px targets, not a compact dropdown. Each channel copies one line that runs when
+pasted into that channel's own shell — Homebrew taps as part of the install, Scoop
+joins its two steps with `;` because Windows PowerShell 5.1 has neither `&&` nor a
+backslash continuation. Verify every string against the installation guides. No fact about a particular
+configuration — its name, its counts, its versions, its author — belongs in homepage
+copy, derived from the snapshot or not: the copy describes the mechanism, and the
+numbers live inside the embed, which reads them from the dataset it draws and so
+cannot fall out of step with itself. The one place counts are allowed outside the
+frame is its fallback, and only rendered from that same dataset. Never invent a
+timing: every number a recording shows comes from that recording.
+`task demo:capture` records all three casts in one Docker run from a fresh
+`ovineko/ovineko` checkout with the datamitsu that repository pins: a cold start
+against an empty `DATAMITSU_CACHE_DIR`, the same command again on that store, and a
+narrowed `lint … --widen-to=target --explain` from a workspace package that shows a
+repository-scope tool skipped. All three are recorded at the terminal size pinned in `scripts/capture-demo.ts` —
+the script refuses to write anything at another size — and that size is wide enough
+that no line in any cast wraps; check a new recording for wrapped lines rather than
+trusting it. Nothing is hand-edited or assembled from text.
+`website/src/data/recordings.json` is written by that same run and carries each
+recording's command, working directory, poster frame, date, terminal size and the
+recorded revision; the homepage reads its captions, posters and player size from it.
+The player wears one theme class for both color modes (`src/css/terminal.css`),
+built from the same theme tokens as the page, and is created with
+`adaptivePalette: true` because datamitsu writes its duration heatmap in xterm
+256-color codes: every index above 15 is then interpolated from the sixteen the
+class sets. Check any color a recording uses against `--term-color-background` for
+WCAG AA in both modes. The canvas samples those properties once at mount, so a
+color-mode change recreates the player rather than recoloring it.
+The hero uses the original full bee logo, including its lettering, at
+`website/static/img/logo.png`. Its height is bound to the text block, not to a
+number: the cell stretches to the hero row and the image is taken out of flow, so
+it can never push that row taller than the copy — 17rem is only a ceiling, and
+rewriting the copy shorter cannot leave the logo towering over it. Stacked under
+the copy on narrow screens the wrapper takes an explicit 9.5rem, because a
+percentage height has nothing to resolve against there. Keep that asset unchanged.
+The amber half of the H1 is one unbreakable phrase (`display: inline-block;
+white-space: nowrap`): it drops to the second line whole, never leaving a word of
+it stranded. When it cannot fit a phone's width, the H1 size comes down — the
+phrase never wraps. The square `icon.png` belongs in navigation and favicons,
+not in place of the full hero logo. Keep hero copy first in DOM order, aligned with
+the page left edge, and the logo on the right. On narrow screens, stack the logo
+immediately after the copy.
+`TerminalDemo` orders its tabs cold start · cached · scope plan and opens on the cold
+start; the section heading stays general and each tab carries its own caption, with
+the narrowing explanation and its link on the scope plan. Recordings play only on
+explicit Play, including after changing tabs, and each opens on its own poster frame:
+the completed final screen, which is the run summary and names no ecosystem. That is
+half a second past the last event, because seeking to its timestamp stops just short
+of applying it — and the frame before it shows whatever project types the recorded
+repository happens to have. The homepage names no configuration at all; the configuration's own name, its
+package and its version stay inside the embed, the atlas and the guides.
+
+`website/src/data/reference-config.json` is a frozen export of the pinned published
+wrapper: the manifest plus the capture date and the installed package's name and
+version, each read from data rather than written down. To deliberately refresh it, build the
+Go binary, then run `node website/scripts/capture-atlas.ts` from the repository root.
+Update the adjacent plain-Markdown facts in the four consuming guides at the same
+time. Normal website builds never refresh the snapshot or its date. The Docusaurus
+`config-atlas` plugin combines it with the committed inspector template to produce
+`website/static/atlas.html` (ignored); JSON escaping must prevent script termination.
+`ConfigEmbed` derives visible text fallbacks from the same snapshot and shares URL
+parsing and aspect ratios with the inspector. Every frame needs static facts and
+source/version/date text outside it for bundled snapshots. External `ConfigEmbed src`
+frames link to their own artifact and must not inherit the bundled snapshot metadata.
+Use a stable hosted HTML URL to update embeds independently of the docs build. Plain Markdown links use the public atlas URL so they also work in the offline
+docs export. React links to the standalone artifact use native anchors, not SPA routing.
