@@ -47,6 +47,8 @@ export default defineConfig((config) => ({
     "codeberg",
     "gitea",
     "sonatype",
+    // Kotlin's formatter, named on the homepage's runtime families row.
+    "ktfmt",
     // The asciicast recording format the homepage's terminal player reads, and
     // the frame-by-frame stepping its line parser makes possible.
     "asciicast",

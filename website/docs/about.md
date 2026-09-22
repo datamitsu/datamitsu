@@ -7,11 +7,17 @@ description: Learn why datamitsu exists and how it helps teams standardize their
 
 ## Your toolchain deserves a home
 
-Every stack comes with a configuration tax. You pay it on the first project, then the second, then every time a tool updates—and it breaks differently in each repo.
+Stop setting up the same tools in every repository. Linters, formatters, git hooks and the runtimes they need go into one `datamitsu.config.js` you carry from project to project.
 
-**datamitsu exists so you pay this tax only once.**
+**Define them once. Inherit them everywhere.**
 
 Not a boilerplate, not scattered across projects, not reinvented from scratch every time. datamitsu gives your toolchain one home — versioned, composable, and always one command away.
+
+## Why it exists
+
+> Dozens of repositories, all on different stacks — a Typst document with scripts, a frontend, a backend, a CLI, a slide deck. Every new project meant weeks of setting up the same tools, and every setup came out slightly different. Updating twenty repositories was hell, so they went years without updating their linters — until eslint started getting in the way of the product.
+>
+> — Alexander Svinarev, author of datamitsu
 
 ## What is datamitsu?
 
