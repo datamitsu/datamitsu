@@ -21,6 +21,7 @@ import type {
 } from "./types";
 
 import styles from "./AsciinemaPlayer.module.css";
+import { parseAsciicastByLines } from "./lineFrames";
 
 // Hook: Detect Docusaurus theme (light/dark)
 function useDocusaurusTheme(): "dark" | "light" {
@@ -114,11 +115,15 @@ const AsciinemaPlayer = forwardRef<AsciinemaPlayerHandle, AsciinemaPlayerPropert
           }
 
           try {
+            // A source object rather than a bare URL, so the recording goes
+            // through the line-splitting parser: one output event per terminal
+            // line, which is what the player's `.` / `,` frame stepping walks.
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            player = (module_ as any).create(src, containerReference.current, {
-              ...options,
-              theme,
-            }) as AsciinemaPlayerInstance;
+            player = (module_ as any).create(
+              { parser: parseAsciicastByLines, url: src },
+              containerReference.current,
+              { ...options, theme },
+            ) as AsciinemaPlayerInstance;
 
             playerInstance.current = player;
 
