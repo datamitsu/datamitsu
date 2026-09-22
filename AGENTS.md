@@ -568,9 +568,12 @@ color-mode change recreates the player rather than recoloring it.
 The hero uses the original full bee logo, including its lettering, at
 `website/static/img/logo.png`. Its height is bound to the text block, not to a
 number: the cell stretches to the hero row and the image is taken out of flow, so
-it can never push that row taller than the copy — 17rem is only a ceiling, and
-rewriting the copy shorter cannot leave the logo towering over it. Stacked under
-the copy on narrow screens the wrapper takes an explicit 9.5rem, because a
+it can never push that row taller than the copy — `--hero-logo-size` is only a
+ceiling, and rewriting the copy shorter cannot leave the logo towering over it.
+That custom property is the single knob for the logo's size: it caps the hero
+column and the image's height alike, so no rule repeats the number and no prose
+here restates it. Stacked under the copy on narrow screens the wrapper takes the
+same property as an explicit height, turned down for that layout, because a
 percentage height has nothing to resolve against there. Keep that asset unchanged.
 The amber half of the H1 is one unbreakable phrase (`display: inline-block;
 white-space: nowrap`): it drops to the second line whole, never leaving a word of
