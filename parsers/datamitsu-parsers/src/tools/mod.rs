@@ -29,9 +29,11 @@ pub mod cppcheck;
 pub mod credo;
 pub mod cspell;
 pub mod cue_fmt;
+pub mod dclint;
 pub mod deadnix;
 pub mod djlint;
 pub mod dotenv_linter;
+pub mod droast;
 pub mod editorconfig_checker;
 pub mod erb_lint;
 pub mod eslint;
@@ -129,9 +131,11 @@ pub fn dispatch(tool: &str, stdout: &[u8], stderr: &[u8], exit_code: i32) -> Opt
 		"credo" => Some(credo::parse(stdout, stderr, exit_code)),
 		"cspell" => Some(cspell::parse(stdout, stderr, exit_code)),
 		"cue_fmt" => Some(cue_fmt::parse(stdout, stderr, exit_code)),
+		"dclint" => Some(dclint::parse(stdout, stderr, exit_code)),
 		"deadnix" => Some(deadnix::parse(stdout, stderr, exit_code)),
 		"djlint" => Some(djlint::parse(stdout, stderr, exit_code)),
 		"dotenv_linter" => Some(dotenv_linter::parse(stdout, stderr, exit_code)),
+		"droast" => Some(droast::parse(stdout, stderr, exit_code)),
 		"editorconfig_checker" => Some(editorconfig_checker::parse(stdout, stderr, exit_code)),
 		"erb_lint" => Some(erb_lint::parse(stdout, stderr, exit_code)),
 		"eslint" => Some(eslint::parse(stdout, stderr, exit_code)),

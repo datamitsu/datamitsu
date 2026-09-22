@@ -40,6 +40,25 @@ func validateAppRuntimeEnv(apps binmanager.MapOfApps, names []string) []string {
 				errs = append(errs, fmt.Sprintf("apps.%s.env.%s: APP_BIN placeholders are allowed only in runtimeEnv", name, key))
 			}
 		}
+		errs = append(errs, pathKeyErrors(name, "env", app.Env)...)
+		errs = append(errs, pathKeyErrors(name, "runtimeEnv", app.RuntimeEnv)...)
+	}
+	return errs
+}
+
+// pathKeyErrors rejects PATH in an app environment. The value is not expanded, so setting it
+// replaces the inherited PATH wholesale, and a tool that looks anything up by name then fails
+// far from the cause. The supported way to put a binary on PATH is to list it in dependsOn.
+// Windows spells the variable in any case, so the comparison ignores it.
+func pathKeyErrors(app, field string, values map[string]string) []string {
+	var errs []string
+	for _, key := range slices.Sorted(maps.Keys(values)) {
+		if strings.EqualFold(key, "PATH") {
+			errs = append(errs, fmt.Sprintf(
+				"apps.%s.%s.%s: PATH cannot be set, it would replace the inherited PATH; list the binary in dependsOn to put it on PATH",
+				app, field, key,
+			))
+		}
 	}
 	return errs
 }
