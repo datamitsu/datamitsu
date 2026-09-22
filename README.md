@@ -22,7 +22,7 @@
 
 > **Alpha**: This project is in alpha. The configuration API is not yet stabilized and may change between versions.
 
-Every stack comes with a configuration tax. You pay it on the first project, then the second, then every time a tool updates—and it breaks differently in each repo. **datamitsu exists so you pay this tax only once.**
+Stop setting up the same tools in every repository. Linters, formatters, git hooks and the runtimes they need live in one `datamitsu.config.js` you carry from project to project. **Define them once. Inherit them everywhere.**
 
 A platform for building reproducible, security-first development tool distributions. It downloads, verifies (SHA-256), and manages binaries and runtime-managed tools across platforms, using JavaScript-powered configuration with inheritance and chaining. Install one package, get everything configured.
 

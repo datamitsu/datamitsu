@@ -33,6 +33,7 @@ const sidebars: SidebarsConfig = {
     {
       items: [
         "guides/configuration",
+        "guides/config-inspector",
         "guides/binary-management",
         "guides/runtime-management",
         "guides/source-mode",

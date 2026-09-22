@@ -14,6 +14,7 @@ Standard llms.txt form: `datamitsu llms --web`.
 - [Brand Guidelines](contributing/brand-guidelines): Voice, tone, and style guidelines for datamitsu documentation and communications
 - [Creating Wrapper Packages](contributing/creating-wrappers): Build your own datamitsu config distribution package for your team or organization
 - [Contributing to datamitsu](contributing): How to contribute to datamitsu development, documentation, and ecosystem
+- [List your configuration](contributing/showcase): How to add a datamitsu configuration to the showcase, and what is checked before it is merged
 - [Multiple Tool Versions](examples/multiple-versions): Run multiple versions of the same tool side-by-side in a monorepo using isolated environments
 - [PNPM Patterns](examples/pnpm-patterns): Managing Node.js tools that require plugins or peer dependencies with PNPM isolation
 - [UV Isolation](examples/uv-isolation): Managing Python tools with UV runtime isolation for conflict-free environments
@@ -38,6 +39,7 @@ Standard llms.txt form: `datamitsu llms --web`.
 - [Task Planning](guides/architecture/planner): How datamitsu groups files into prioritized task batches with overlap detection and CWD-subtree restriction
 - [Startup and Config Load](guides/architecture/startup): What every datamitsu invocation pays before the first tool runs - the config-load cost model, the git-root memo, and how to measure it
 - [Binary Management](guides/binary-management): How datamitsu downloads, verifies, and stores binary apps
+- [Config Inspector](guides/config-inspector): Open the resolved configuration for your repository, inspect a tool's scope and file patterns,
 - [Configuration](guides/configuration): How to configure datamitsu with JavaScript config files, remote configs, and config layers
 - [Managed Configs](guides/managed-configs): Using managed configuration files, symlinks, and the .datamitsu/ directory
 - [Managed Content (Bundles)](guides/managed-content): Using content-addressed bundles to distribute managed files through symlinks

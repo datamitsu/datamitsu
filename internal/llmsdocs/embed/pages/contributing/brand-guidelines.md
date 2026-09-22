@@ -8,7 +8,7 @@ Others run tools. **datamitsu defines what those tools are.**
 
 datamitsu is the only tool that packages and distributes complete, configured toolchains. Not a task runner. Not a version manager. **Toolchain distribution as code.**
 
-We exist so you pay the configuration tax only once.
+We exist so you set your tools up once, and every repository inherits them.
 
 ## Brand Personality
 
@@ -47,6 +47,22 @@ We exist so you pay the configuration tax only once.
 - **Use vague security claims** — No "military-grade" or "blockchain-enabled"
 - **Bash competitors** — Explain differences, never attack
 - **Apologize for scope** — "datamitsu is for X, not Y" (confident, not "sorry, but...")
+
+### Headings pass the literal-translation test
+
+Translate a heading word for word into another language. If the sense survives, the heading says
+something. If it collapses into nonsense or into a phrase that means nothing in particular, the
+heading was leaning on an English idiom rather than on an idea — rewrite it.
+
+| Heading                                                | Literally                                            | Verdict                                                       |
+| ------------------------------------------------------ | ---------------------------------------------------- | ------------------------------------------------------------- |
+| ❌ "Make tuning worthwhile."                           | "Make adjustment worth the cost."                    | An idiom carries the whole meaning; nothing concrete survives |
+| ✅ "One evening of tuning. Every repository benefits." | "One evening of adjustment. Every repository gains." | Two plain facts, and the relation between them is the point   |
+| ❌ "Upgrade deliberately."                             | "Upgrade with intent."                               | True of anything; says nothing about who decides or when      |
+| ✅ "Upgrade on your terms."                            | "Upgrade when and how you decide."                   | Names the actor and the choice                                |
+
+The test is not about being translated in practice — the site is English only. It is a check that a
+heading carries an idea instead of a turn of phrase.
 
 ## Example Voice
 
@@ -165,7 +181,7 @@ When discussing similar tools, use this framework:
 
 ### For Platform Engineers
 
-"Pay the configuration tax once. Distribute everywhere. Not scattered across 50 repos."
+"Define the toolchain once. Distribute everywhere. Not scattered across 50 repos."
 
 **Emphasize:** Toolchain distribution via npm/gem/pypi. Security policies (mandatory SHA-256). Version control as packages.
 

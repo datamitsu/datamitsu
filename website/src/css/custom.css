@@ -1,108 +1,5 @@
-:root {
-  /* Warm Color Palette - Light Mode */
-  --datamitsu-cream: #faf6ed;
-  --datamitsu-cream-dark: #f5efe3;
-  --datamitsu-brown: #3d2817;
-  --datamitsu-brown-light: #5a4029;
-  --datamitsu-brown-muted: #6b543f;
-  --datamitsu-gold: #d4a855;
-  --datamitsu-gold-light: #e5c073;
-  --datamitsu-gold-dark: #b8923d;
-
-  /* Card-specific variables */
-  --card-background: #faf8f3;
-  --card-header-background: rgba(212, 168, 85, 0.15);
-  --card-border-color: rgba(212, 168, 85, 0.2);
-  --card-shadow-light: 0 8px 32px rgba(61, 40, 23, 0.12);
-  --card-shadow-dark: 0 20px 60px rgba(0, 0, 0, 0.3);
-
-  /* Card tabs */
-  --card-tabs-background: rgba(212, 168, 85, 0.12);
-  --card-tab-color: #b8923d;
-  --card-tab-color-hover: #d4a855;
-  --card-tab-color-active: #8a6c2c;
-  --card-tab-background-active: rgba(212, 168, 85, 0.35);
-
-  /* Card header text */
-  --card-header-text-color: #b8923d;
-
-  /* Docusaurus theme mappings */
-  --ifm-background-color: #faf6ed;
-  --ifm-font-color-base: #3d2817;
-  --ifm-color-primary: #d4a855;
-  --ifm-color-primary-dark: #b8923d;
-  --ifm-color-primary-darker: #a88436;
-  --ifm-color-primary-darkest: #8a6c2c;
-  --ifm-color-primary-light: #e5c073;
-  --ifm-color-primary-lighter: #ebd091;
-  --ifm-color-primary-lightest: #f5e5c3;
-
-  /* Hexagon design tokens */
-  --hex-border-width: 3px;
-  --hex-shadow: 0 4px 20px rgba(212, 168, 85, 0.2);
-  --hex-shadow-hover: 0 8px 30px rgba(212, 168, 85, 0.4);
-
-  /* Gradients */
-  --gradient-hero: linear-gradient(135deg, #faf6ed 0%, #f5efe3 100%);
-  --gradient-gold: linear-gradient(135deg, #d4a855 0%, #e5c073 100%);
-  --gradient-overlay: linear-gradient(180deg, transparent 0%, rgba(250, 246, 237, 0.8) 100%);
-
-  /* Code and typography */
-  --ifm-code-font-size: 95%;
-  --docusaurus-highlighted-code-line-bg: rgba(61, 40, 23, 0.1);
-}
-
-[data-theme="dark"] {
-  /* Warm Color Palette - Dark Mode */
-  --datamitsu-cream: #2a2419;
-  --datamitsu-cream-dark: #1f1912;
-  --datamitsu-brown: #f5efe3;
-  --datamitsu-brown-light: #e5ddcc;
-  --datamitsu-brown-muted: #c9b99a;
-  --datamitsu-gold: #d4a855;
-  --datamitsu-gold-light: #e5c073;
-  --datamitsu-gold-dark: #b8923d;
-
-  /* Card-specific variables - darker than section backgrounds for contrast */
-  --card-background: #16120d;
-  --card-header-background: #211c15;
-  --card-border-color: rgba(212, 168, 85, 0.15);
-  --card-shadow-light: 0 8px 32px rgba(61, 40, 23, 0.12);
-  --card-shadow-dark: 0 20px 60px rgba(0, 0, 0, 0.3);
-
-  /* Card tabs - same colors work in dark theme */
-  --card-tabs-background: rgba(212, 168, 85, 0.18);
-  --card-tab-color: rgba(212, 168, 85, 0.75);
-  --card-tab-color-hover: rgba(212, 168, 85, 0.9);
-  --card-tab-color-active: #d4a855;
-  --card-tab-background-active: rgba(212, 168, 85, 0.5);
-
-  /* Card header text */
-  --card-header-text-color: rgba(212, 168, 85, 0.85);
-
-  /* Docusaurus theme mappings */
-  --ifm-background-color: #2a2419;
-  --ifm-font-color-base: #f5efe3;
-  --ifm-color-primary: #e5c073;
-  --ifm-color-primary-dark: #d4a855;
-  --ifm-color-primary-darker: #c89e4a;
-  --ifm-color-primary-darkest: #b8923d;
-  --ifm-color-primary-light: #ebd091;
-  --ifm-color-primary-lighter: #f0dba5;
-  --ifm-color-primary-lightest: #f5e5c3;
-
-  /* Hexagon design tokens */
-  --hex-shadow: 0 4px 20px rgba(229, 192, 115, 0.2);
-  --hex-shadow-hover: 0 8px 30px rgba(229, 192, 115, 0.4);
-
-  /* Gradients */
-  --gradient-hero: linear-gradient(135deg, #2a2419 0%, #1f1912 100%);
-  --gradient-gold: linear-gradient(135deg, #d4a855 0%, #e5c073 100%);
-  --gradient-overlay: linear-gradient(180deg, transparent 0%, rgba(42, 36, 25, 0.8) 100%);
-
-  /* Code */
-  --docusaurus-highlighted-code-line-bg: rgba(245, 239, 227, 0.1);
-}
+@import "./theme.css";
+@import "./terminal.css";
 
 /* Navbar styling */
 :root {
@@ -375,3 +272,7 @@ div[class*="codeBlockContainer"] {
 [data-theme="dark"] :not(pre) > code {
   border-color: rgba(212, 168, 85, 0.25);
 }
+
+/* Runtime hues, surfaces and text colors arrive as custom properties built from
+   internal/inspector/theme.json — see website/plugins/config-atlas.ts. Nothing
+   here repeats a color that file already states. */

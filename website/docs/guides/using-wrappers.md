@@ -3,6 +3,8 @@ title: Using Wrapper Packages
 description: How to install and use datamitsu wrapper packages in your projects
 ---
 
+import ConfigEmbed from "@site/src/components/ConfigEmbed";
+
 # Using Wrapper Packages
 
 Wrapper packages are pre-configured bundles of tools and configurations distributed via package managers (npm, gem, pypi). They allow teams to standardize development tooling across all projects with a single dependency.
@@ -560,4 +562,16 @@ datamitsu store clear
 - [CLI Commands](../reference/cli-commands.md) — Complete command reference
 - [Core Concepts](../getting-started/core-concepts.md) — Understand datamitsu architecture
 
-Wrapper packages are the key to datamitsu's value: install once, get everything configured. Build your team's wrapper to pay the configuration tax only once.
+Wrapper packages are the key to datamitsu's value: install once, get everything configured. Build your team's wrapper to set the toolchain up once, for every repository that inherits it.
+
+## Explore the reference wrapper
+
+The reference wrapper `@shibanet0/datamitsu-config`, `0.0.0-unstable.20260912.f201136`,
+captured on 2026-09-22: 111 apps across six runtime families - native binary 75,
+Node.js 20, Python 11, JVM 3, Go 1 and Shell 1. These are one maintainer's choices.
+The orbit is illustrative; colors represent runtime membership.
+
+<ConfigEmbed view="universe" />
+
+[Open the full atlas](https://datamitsu.com/atlas.html).
+See the [Config Inspector guide](config-inspector.md) to inspect or embed your own configuration.

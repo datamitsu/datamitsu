@@ -1,24 +1,40 @@
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 
 import BrowserOnly from "@docusaurus/BrowserOnly";
+import Link from "@docusaurus/Link";
 
-import type { AsciinemaPlayerHandle } from "../common/AsciinemaPlayer/types";
 import type { CodeCardTab } from "../ui/CodeCard";
 
+import recordings from "../../data/recordings.json";
 import AsciinemaPlayer from "../common/AsciinemaPlayer";
 import { CodeCard, CodeCardHeader, CodeCardTabs } from "../ui/CodeCard";
 import styles from "./TerminalDemo.module.css";
 
-type RunKind = "cold" | "warm";
+type RunKind = "cold" | "scope" | "warm";
+const runKinds: RunKind[] = ["cold", "warm", "scope"];
 
 const CAST_FILES: Record<RunKind, string> = {
   cold: "/cold.cast",
+  scope: "/scope.cast",
   warm: "/warm.cast",
 };
 
 const LABELS: Record<RunKind, string> = {
   cold: "cold start",
+  scope: "scope plan",
   warm: "cached",
+};
+
+const CAPTIONS: Record<RunKind, ReactNode> = {
+  cold: "A first run against an empty store: every pinned tool is downloaded and verified before anything runs.",
+  scope: (
+    <>
+      From a subdirectory, ask about one file. The plan includes prettier and skips syncpack: its
+      verdict needs the whole repository.{" "}
+      <Link to="/docs/reference/cli-commands#narrowed-runs">How narrowing works ↗</Link>
+    </>
+  ),
+  warm: "The same command immediately after, reusing that store: nothing to download, and the tools whose verdicts still hold are not run again.",
 };
 
 const FALLBACK_STYLE = { minHeight: 320 };
@@ -40,64 +56,36 @@ export default function TerminalDemo(): ReactNode {
   );
 }
 
-// Helper: Debounce function to avoid excessive re-renders
-function debounce<T extends (...arguments_: any[]) => any>(
-  function_: T,
-  wait: number,
-): (...arguments_: Parameters<T>) => void {
-  let timeoutId: null | ReturnType<typeof setTimeout> = null;
-
-  return (...arguments_: Parameters<T>) => {
-    if (timeoutId !== null) {
-      clearTimeout(timeoutId);
-    }
-    timeoutId = setTimeout(() => function_(...arguments_), wait);
-  };
-}
-
-// Helper: Get terminal dimensions based on viewport width
-function getBreakpointDimensions(width: number): { cols: number; rows: number } {
-  if (width <= 480) {
-    return { cols: 60, rows: 18 };
-  }
-  if (width <= 768) {
-    return { cols: 80, rows: 24 };
-  }
-  if (width <= 1024) {
-    return { cols: 100, rows: 28 };
-  }
-  return { cols: 120, rows: 30 };
-}
-
 function TerminalDemoInner(): ReactNode {
   const [activeKind, setActiveKind] = useState<RunKind>("cold");
   const [announcement, setAnnouncement] = useState("");
-  const { cols, rows } = useTerminalDimensions();
-  const docusaurusTheme = useDocusaurusTheme();
-  const playerReference = useRef<AsciinemaPlayerHandle>(null);
-  const isFirstRender = useRef(true);
 
   const playerOptions = useMemo(
     () => ({
       autoPlay: false,
-      cols,
-      controls: "auto" as const,
+      // The size the run was recorded at, from the capture itself: a player
+      // narrower than the recording wraps lines that never wrapped.
+      cols: recordings[activeKind].cols,
+      controls: true,
       fit: "width" as const,
       loop: false,
+      // The last frame of each recording, so a tab opens on its result rather
+      // than on an empty prompt. The cold start's result carries a red 55s
+      // beside eslint; that is what a first run costs, and the tab beside it
+      // says what the second one costs.
+      poster: recordings[activeKind].poster,
       preload: true,
-      rows,
+      rows: recordings[activeKind].rows,
       speed: 1,
     }),
-    [cols, rows],
+    [activeKind],
   );
 
-  // Announce tab changes to screen readers
   useEffect(() => {
     if (!activeKind) {
       return;
     }
 
-    // Use setTimeout to defer state update and avoid synchronous setState in effect
     const announceTimer = setTimeout(() => {
       setAnnouncement(`Switched to ${LABELS[activeKind]} demo`);
     }, 0);
@@ -109,25 +97,8 @@ function TerminalDemoInner(): ReactNode {
     };
   }, [activeKind]);
 
-  // Auto-play when tab changes (but not on initial render)
-  useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      if (playerReference.current?.isReady()) {
-        playerReference.current.play();
-      }
-    }, 100);
-
-    return () => clearTimeout(timer);
-  }, [activeKind]);
-
-  // Keyboard navigation handler
   const handleKeyDown = useCallback((e: React.KeyboardEvent, currentKind: string) => {
-    const kinds: RunKind[] = ["cold", "warm"];
+    const kinds = runKinds;
     const currentIndex = kinds.indexOf(currentKind as RunKind);
 
     switch (e.key) {
@@ -179,10 +150,8 @@ function TerminalDemoInner(): ReactNode {
   }, []);
 
   const tabs = useMemo(
-    (): CodeCardTab[] => [
-      { active: activeKind === "cold", id: "cold", label: LABELS.cold },
-      { active: activeKind === "warm", id: "warm", label: LABELS.warm },
-    ],
+    (): CodeCardTab[] =>
+      runKinds.map((id) => ({ active: activeKind === id, id, label: LABELS[id] })),
     [activeKind],
   );
 
@@ -195,100 +164,45 @@ function TerminalDemoInner(): ReactNode {
     />
   );
 
-  const headerRightContent = <span aria-label="Repository name">ovineko/ovineko</span>;
+  const recording = recordings[activeKind];
+  const headerRightContent = <span aria-label="Recording source">ovineko/ovineko</span>;
 
   return (
-    <CodeCard
-      header={
-        <CodeCardHeader
-          leftContent={headerLeftContent}
-          rightContent={headerRightContent}
-          theme="auto"
-        />
-      }
-      theme="auto"
-    >
-      {/* Screen reader announcements */}
-      <div aria-atomic="true" aria-live="polite" className={styles.srOnly} role="status">
-        {announcement}
-      </div>
-
-      {/* key forces remount+replay when switching tabs or dimensions change */}
-      <div
-        aria-labelledby={`tab-${activeKind}`}
-        aria-live="polite"
-        id={`panel-${activeKind}`}
-        role="tabpanel"
-      >
-        <AsciinemaPlayer
-          key={`${activeKind}-${cols}-${rows}-${docusaurusTheme}`}
-          options={playerOptions}
-          ref={playerReference}
-          src={CAST_FILES[activeKind]}
-        />
-      </div>
-    </CodeCard>
-  );
-}
-
-// Hook: Detect Docusaurus theme (light/dark)
-function useDocusaurusTheme(): "dark" | "light" {
-  const [theme, setTheme] = useState<"dark" | "light">(() => {
-    if (typeof document === "undefined") {
-      return "dark"; // SSR fallback
-    }
-    return document.documentElement.dataset.theme === "light" ? "light" : "dark";
-  });
-
-  useEffect(() => {
-    // Listen for theme changes via MutationObserver
-    const observer = new MutationObserver((mutations) => {
-      for (const mutation of mutations) {
-        // `return` here was a `forEach` early-exit, i.e. skip this mutation.
-        if (mutation.type !== "attributes" || mutation.attributeName !== "data-theme") {
-          continue;
+    <>
+      <CodeCard
+        header={
+          <CodeCardHeader
+            leftContent={headerLeftContent}
+            rightContent={headerRightContent}
+            theme="auto"
+          />
         }
+        theme="auto"
+      >
+        <div aria-atomic="true" aria-live="polite" className={styles.srOnly} role="status">
+          {announcement}
+        </div>
 
-        const updatedTheme = document.documentElement.dataset.theme;
-        setTheme(updatedTheme === "light" ? "light" : "dark");
-      }
-    });
-
-    observer.observe(document.documentElement, {
-      attributeFilter: ["data-theme"],
-      attributes: true,
-    });
-
-    return () => observer.disconnect();
-  }, []);
-
-  return theme;
-}
-
-// Hook: Responsive terminal dimensions based on viewport
-function useTerminalDimensions(): { cols: number; rows: number } {
-  const [dimensions, setDimensions] = useState(() => {
-    if (globalThis.window === undefined) {
-      return { cols: 80, rows: 24 }; // SSR fallback
-    }
-    return getBreakpointDimensions(window.innerWidth);
-  });
-
-  const handleResize = useMemo(
-    () =>
-      debounce(() => {
-        setDimensions(getBreakpointDimensions(window.innerWidth));
-      }, 300),
-    [],
+        <div
+          aria-labelledby={`tab-${activeKind}`}
+          aria-live="polite"
+          id={`panel-${activeKind}`}
+          role="tabpanel"
+        >
+          <AsciinemaPlayer key={activeKind} options={playerOptions} src={CAST_FILES[activeKind]} />
+        </div>
+      </CodeCard>
+      <p className={styles.caption}>{CAPTIONS[activeKind]}</p>
+      <p className={styles.meta}>
+        Recorded output, not live · <code>{recording.command}</code>
+        {recording.cwd ? (
+          <>
+            {" "}
+            in <code>{recording.cwd}</code>
+          </>
+        ) : null}{" "}
+        · ovineko/ovineko@{recording.revision.slice(0, 7)} · {recording.recordedAt}
+      </p>
+    </>
   );
-
-  // eslint-disable-next-line fsecond/valid-event-listener -- Custom debounced handler requires direct addEventListener
-  useEffect(() => {
-    window.addEventListener("resize", handleResize);
-    return () => {
-      window.removeEventListener("resize", handleResize);
-    };
-  }, [handleResize]);
-
-  return dimensions;
 }

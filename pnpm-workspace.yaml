@@ -38,6 +38,7 @@ packageExtensions:
       vscode-languageserver-protocol: "*"
       vscode-languageserver-types: "*"
 packages:
+  - inspector
   - packaging/action
   - editors/*
   - programmable-api/js

@@ -12,6 +12,10 @@ tasks:
     deps:
       - "build:lib"
     desc: Build datamitsu binary and prepare packages
+  build:inspector:
+    cmds:
+      - pnpm --filter @datamitsu/inspector build
+    desc: Build the single-file inspector artifact embedded by internal/inspector
   build:lib:
     cmds:
       - pnpm exec tsdown --config ./config/tsdown.config.ts
@@ -19,7 +23,8 @@ tasks:
       - cp ./config/config.d.ts ./internal/config/config.d.ts
     deps:
       - "generate:prompts"
-    desc: Build config library (generate prompts, compile, copy)
+      - "build:inspector"
+    desc: Build the embedded JS artifacts — config library and inspector — before any Go build
   build:parsers:
     cmds:
       - cargo build --release --target wasm32-unknown-unknown --manifest-path parsers/Cargo.toml
@@ -35,7 +40,10 @@ tasks:
           --volume "$(pwd)/website/static:/output" \
           node:26.7.0-trixie-slim \
           sh /scripts/docker-capture.sh
-    desc: Run datamitsu check in ovineko/ovineko inside Docker (linux/amd64), write website/static/cold.cast + warm.cast
+      # The capture writes its metadata beside the casts, the only directory the
+      # container is given; the website reads it from its data folder.
+      - mv website/static/recordings.json website/src/data/recordings.json
+    desc: Record cold.cast, warm.cast and scope.cast in ovineko/ovineko inside Docker (linux/amd64) with that repository's own datamitsu
   # ── Docker ──
 
   # ── Dev ──

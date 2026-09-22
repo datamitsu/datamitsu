@@ -1,0 +1,53 @@
+jobs:
+  refresh:
+    name: Refresh
+    permissions:
+      contents: write
+      pull-requests: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-environment
+      - env:
+          # Conditional requests that answer 304 do not count against the rate
+          # limit, and the workflow token lifts it anyway.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        name: Refresh derived showcase data
+        run: node scripts/refresh-showcases.ts ${{ inputs.force && '--force' || '' }}
+        working-directory: website
+      - env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # A human reads the diff: a composition that changed, a repository that
+        # stopped releasing. Nothing here pushes to the default branch.
+        name: Open a pull request when something changed
+        run: |
+          if git diff --quiet -- website/src/data/showcases.generated.json; then
+            echo "Nothing changed."
+            exit 0
+          fi
+          branch="chore/showcases-$(date -u +%Y%m%d)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add website/src/data/showcases.generated.json
+          git commit -m "chore(showcase): refresh derived configuration data"
+          git push --force origin "$branch"
+          gh pr create --base main --head "$branch" \
+            --title "chore(showcase): refresh derived configuration data" \
+            --body "Weekly refresh of \`website/src/data/showcases.generated.json\`. Review the diff: a changed composition, a repository that stopped releasing, or a new error is the point of this pull request." \
+            || gh pr edit "$branch" --body "Weekly refresh of \`website/src/data/showcases.generated.json\`."
+name: Showcase Refresh
+# GitHub disables a scheduled workflow in a public repository after 60 days
+# without repository activity. If the weekly pull request stops arriving, someone
+# has to re-enable it here.
+on:
+  schedule:
+    - cron: "0 5 * * 1"
+  workflow_dispatch:
+    inputs:
+      force:
+        default: false
+        description: Refetch every entry, ignoring the per-entry interval
+        type: boolean
+permissions:
+  contents: read

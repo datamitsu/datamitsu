@@ -295,6 +295,32 @@ datamitsu lint src/main.go
 datamitsu lint --explain detailed
 ```
 
+## inspect
+
+Explore the resolved configuration in a browser or export a portable HTML artifact.
+
+```bash
+datamitsu inspect                         # Local server on loopback port 7744
+datamitsu inspect --port 0                # Choose an available port
+datamitsu inspect --output atlas.html     # Export a self-contained HTML file
+datamitsu inspect --output - > atlas.html # Write HTML to stdout
+datamitsu inspect --theme theme.json      # Apply color overrides
+datamitsu inspect --print-theme           # Print the theme that would be applied
+```
+
+`--output` (`-o`) and `--port` are mutually exclusive, and so is `--print-theme` with
+either of them. The inspector loads the usual configuration chain and serves a fixed
+snapshot until restarted. Exported HTML works offline and on static hosts, with
+light/dark themes and hash-based links to views, filters, and selections.
+
+`--theme` merges a JSON file of color overrides onto the built-in theme, token by
+token and mode by mode; an export bakes the result in. An unknown key or a value that
+is not a color is an error naming the full key path, and colors that fall below WCAG
+AA contrast against their surface produce a warning, not an error. `--print-theme`
+writes the merged theme — the complete built-in one when no `--theme` is given. See
+[Config Inspector](../guides/config-inspector.md) for navigation, artifact contents,
+theming, and publishing examples.
+
 ## config
 
 Configuration management commands.

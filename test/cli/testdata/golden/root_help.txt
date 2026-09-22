@@ -17,6 +17,7 @@ Available Commands:
   fix         Run fix operations on files
   help        Help about any command
   init        Initialize project - download binaries and run init commands
+  inspect     Explore the resolved config or export a standalone HTML inspector
   install     Install managed apps and/or runtimes without executing them
   lint        Run lint operations on files
   llms        Print project documentation as LLM-friendly markdown
