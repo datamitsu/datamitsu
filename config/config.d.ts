@@ -362,6 +362,16 @@ declare global {
       managedConfigs?: MapOfManagedConfigs;
 
       /**
+       * How this configuration names itself wherever one is displayed: the inspector header, an
+       * exported snapshot, a listing. Chains as a scalar — the last layer that sets it wins. Unset
+       * means `datamitsu.config`. A single line of at most 80 characters.
+       *
+       * @example
+       *   return { ...input, name: "@acme/datamitsu-config" };
+       */
+      name?: string;
+
+      /**
        * OCI bundle that seeds the tool store (pull without docker). Chains as a scalar: the last
        * config layer that set or spread it wins; a layer that rebuilds its output without
        * `{...input}` silently drops it. Reset with `oci: undefined` or `oci: null`.
@@ -1173,6 +1183,34 @@ declare global {
        */
       links?: Record<string, string>;
       node?: AppConfigNode;
+      /**
+       * Where a person reads about this app: its documentation, its repository, its package page. A
+       * link for people — nothing downloads it, runs it or verifies it, and it never takes part in
+       * an install. It must be an absolute `http`/`https` URL, checked for shape only: the URL is
+       * never fetched.
+       *
+       * Leave it out and datamitsu derives one from what the app already declares, marking it
+       * `officialUrlDerived` so a reader can tell the two apart:
+       *
+       * | Declaration                                   | Derived link                           |
+       * | --------------------------------------------- | -------------------------------------- |
+       * | `binary` whose download URLs are on one forge | that repository's page                 |
+       * | `node`, `bun` with a package name             | `https://www.npmjs.com/package/<name>` |
+       * | `uv` with a package name                      | `https://pypi.org/project/<name>/`     |
+       * | `go` with a module path                       | `https://pkg.go.dev/<module>`          |
+       * | `jvm` with a Maven Central JAR                | that artifact's Maven Central page     |
+       * | `jvm` with a forge-hosted JAR                 | that repository's page                 |
+       * | `shell`, or anything else                     | none                                   |
+       *
+       * The forges whose release paths name a repository unambiguously are github.com, gitlab.com,
+       * codeberg.org and gitea.com. Platforms that point at different repositories derive nothing.
+       * Set this field to point somewhere better — eslint at eslint.org, an internal tool at its
+       * wiki — and it wins over the derived link.
+       *
+       * @example
+       *   officialUrl: "https://eslint.org/docs/latest/";
+       */
+      officialUrl?: string;
       required?: boolean;
       /**
        * Execution-only env, outside install identity; keys must not overlap `env`. Supports

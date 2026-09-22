@@ -4,16 +4,101 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net/url"
 	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/ociref"
 	"github.com/datamitsu/datamitsu/internal/target"
 )
+
+// MaxNameLength caps the configuration name: it is a label for one line of a
+// header or a listing, not a description.
+const MaxNameLength = 80
+
+// ValidateName rejects a configuration name that no display surface could show
+// as written. An unset name is valid and resolves to DefaultName.
+func ValidateName(name string) error {
+	if strings.TrimSpace(name) == "" {
+		if name == "" {
+			return nil
+		}
+		return errors.New("config validation failed:\n  name: set to blank; remove it to use the default name")
+	}
+	if len([]rune(name)) > MaxNameLength {
+		return fmt.Errorf("config validation failed:\n  name: %d characters exceeds the %d allowed", len([]rune(name)), MaxNameLength)
+	}
+	for _, r := range name {
+		if r == '\n' || r == '\r' || r == '\t' || unicode.IsControl(r) {
+			return errors.New("config validation failed:\n  name: contains a control character; use a single line of text")
+		}
+	}
+	return nil
+}
+
+// validateAppOfficialURLs checks every app's declared link. Kept out of the
+// per-app loop, like the other set-level checks, so doValidateApps stays under
+// the cyclomatic-complexity ceiling.
+func validateAppOfficialURLs(apps binmanager.MapOfApps, appNames []string) []string {
+	var errs []string
+	for _, appName := range appNames {
+		if err := ValidateOfficialURL(apps[appName].OfficialURL); err != nil {
+			errs = append(errs, fmt.Sprintf("app %q: %v", appName, err))
+		}
+	}
+	return errs
+}
+
+// ValidateOfficialURL rejects an app's officialUrl that no reader could follow.
+// It checks the shape and nothing else: the URL is never fetched, so whether the
+// page exists is not this program's business.
+func ValidateOfficialURL(value string) error {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	if value != strings.TrimSpace(value) {
+		return fmt.Errorf("officialUrl %q has leading or trailing whitespace", value)
+	}
+	parsed, err := url.Parse(value)
+	if err != nil {
+		return fmt.Errorf("officialUrl %q is not a URL: %w", value, err)
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return fmt.Errorf("officialUrl %q must be an absolute http or https URL", value)
+	}
+	if parsed.Host == "" {
+		return fmt.Errorf("officialUrl %q must name a host", value)
+	}
+	return nil
+}
+
+// ApplyDerivedOfficialURLs fills in an officialUrl for every app that declares
+// none, from what the app already says about where it comes from. It runs once,
+// at config resolution, so every surface reads the same answer instead of
+// deriving its own — and marks what it filled in, because "the maintainer chose
+// this page" and "we worked this out from a download URL" are different claims.
+//
+// An app that declares its own URL is left alone; so is one whose declaration
+// yields nothing to derive from.
+func ApplyDerivedOfficialURLs(apps binmanager.MapOfApps) {
+	for name, app := range apps {
+		if strings.TrimSpace(app.OfficialURL) != "" {
+			app.OfficialURL = strings.TrimSpace(app.OfficialURL)
+			app.OfficialURLDerived = false
+			apps[name] = app
+			continue
+		}
+		derived := binmanager.DeriveOfficialURL(app)
+		app.OfficialURL = derived
+		app.OfficialURLDerived = derived != ""
+		apps[name] = app
+	}
+}
 
 // ValidateApps validates app configurations including mandatory lockfile checks.
 func ValidateApps(apps binmanager.MapOfApps, runtimes MapOfRuntimes) ([]string, error) {
@@ -44,6 +129,7 @@ func doValidateApps(apps binmanager.MapOfApps, runtimes MapOfRuntimes, skipLockf
 	errs = append(errs, findCaseFoldCollisions(appNames)...)
 	errs = append(errs, validateAppDependencies(apps, appNames)...)
 	errs = append(errs, validateAppRuntimeEnv(apps, appNames)...)
+	errs = append(errs, validateAppOfficialURLs(apps, appNames)...)
 
 	for _, appName := range appNames {
 		app := apps[appName]

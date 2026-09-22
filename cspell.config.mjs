@@ -29,6 +29,12 @@ export default defineConfig((config) => ({
   ignoreWords: [...(config.ignoreWords ?? []), "aboutt", "cachng", "instalation"],
   words: [
     ...config.words,
+    // The file name of the officialUrl derivation and its tests.
+    "officialurl",
+    // The forges and package hosts an app's derived officialUrl can point at.
+    "codeberg",
+    "gitea",
+    "sonatype",
     // A shell-literal expectation in internal/shellquote: `$'a\xffb'`. The
     // trailing "b" is load-bearing — it is a hex digit, and the test asserts
     // that a shell stops the \x escape after exactly two digits rather than

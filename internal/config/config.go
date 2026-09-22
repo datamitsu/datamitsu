@@ -6,6 +6,7 @@ package config
 import (
 	_ "embed"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
@@ -464,8 +465,17 @@ type MapOfParsers map[string]Parser
 // Main Config (ENHANCED)
 // ========================================
 
+// DefaultName labels a configuration that no layer named.
+const DefaultName = "datamitsu.config"
+
 // Config is the fully resolved datamitsu configuration produced by the JS config layer.
 type Config struct {
+	// Name labels the configuration wherever one is displayed — the inspector
+	// header, an exported snapshot, a listing. It resolves like any other scalar:
+	// the last layer that sets it wins. Unset stays empty rather than defaulted,
+	// so naming a configuration is what changes the cache key, not upgrading to a
+	// core that knows about names; read it through DisplayName.
+	Name           string                  `json:"name,omitempty"`
 	Apps           binmanager.MapOfApps    `json:"apps,omitempty"`
 	Bundles        binmanager.MapOfBundles `json:"bundles,omitempty"`
 	Runtimes       MapOfRuntimes           `json:"runtimes,omitempty"`
@@ -490,6 +500,14 @@ type Config struct {
 	// Lsp declares LSP servers (reserved for Phase 3+; structurally validated
 	// at load time but with no runtime behavior in this release).
 	Lsp MapOfLsp `json:"lsp,omitempty"`
+}
+
+// DisplayName returns the configured name, or DefaultName when no layer set one.
+func (c *Config) DisplayName() string {
+	if c == nil || strings.TrimSpace(c.Name) == "" {
+		return DefaultName
+	}
+	return strings.TrimSpace(c.Name)
 }
 
 // GetDefaultConfig returns the embedded default config JS.

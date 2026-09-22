@@ -1,4 +1,5 @@
 {
+  "configuration": "datamitsu.config",
   "operation": "lint",
   "rootPath": "<TMP>",
   "cwdPath": "<TMP>",
