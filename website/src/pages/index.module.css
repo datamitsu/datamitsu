@@ -121,8 +121,11 @@
   border-color: var(--honey);
 }
 .hero {
+  /* The one knob for how large the logo may get: it caps the column and the
+     image alike, so the two can never drift apart. */
+  --hero-logo-size: 25rem;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 17rem);
+  grid-template-columns: minmax(0, 1fr) minmax(0, var(--hero-logo-size));
   gap: 32px 40px;
   align-items: center;
   padding: 32px 0 60px;
@@ -140,7 +143,7 @@
 }
 /* The logo's height is the text block's height, not a number: the cell stretches
    to the hero row, and the image is taken out of flow so it can never push that
-   row taller than the copy beside it. 17rem is only the ceiling. */
+   row taller than the copy beside it. --hero-logo-size is only the ceiling. */
 .heroLogoWrap {
   position: relative;
   align-self: stretch;
@@ -156,7 +159,7 @@
   width: auto;
   height: 100%;
   max-width: 100%;
-  max-height: 17rem;
+  max-height: var(--hero-logo-size);
   object-fit: contain;
   filter: drop-shadow(0 18px 30px #80541925);
 }
@@ -621,6 +624,7 @@
     font-size: 12px;
   }
   .hero {
+    --hero-logo-size: 20rem;
     grid-template-columns: 1fr;
     padding: 32px 0 42px;
     gap: 28px;
@@ -631,9 +635,9 @@
     font-size: clamp(30px, 10.6vw, 64px);
   }
   /* Stacked under the text, the logo has no row height to resolve against, so
-     it takes an explicit one — small enough not to own the first screen. */
+     it takes an explicit one — the same knob, turned down for the narrow layout. */
   .heroLogoWrap {
-    height: 9.5rem;
+    height: var(--hero-logo-size);
   }
   .heroLogo {
     max-height: 100%;
