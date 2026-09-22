@@ -19,8 +19,9 @@ Taskfile.yaml: oxfmt
 # Minified HTML is generated from inspector/ and embedded byte-for-byte.
 internal/inspector/inspector.html: *
 
-# svelte-check owns the inspector TypeScript and Svelte component checks.
-inspector/**/*: tsc
+# Vendored verbatim from a datamitsu-config release (see test/cli/README.md); it
+# is a bundle, re-fetched rather than edited, so no tool may rewrite or judge it.
+test/e2e/testdata/datamitsu.config.oci-ghcr.js: *
 
 # Preserve the bundled font's upstream license verbatim.
 website/static/fonts/ibm-plex-mono-OFL.txt: *
