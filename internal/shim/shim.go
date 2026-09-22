@@ -39,6 +39,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"sort"
 	"strings"
@@ -1231,6 +1232,11 @@ func lookupEntry(m sourcefarm.Manifest, name string) (sourcefarm.Entry, bool) {
 // when that shell exits. The entry records only the directories the runtime
 // itself owns (a managed node's bin/, say) and they go in front of whatever the
 // caller actually has.
+//
+// Windows environment names are case-insensitive, and the inherited PATH is usually spelled `Path`.
+// An overlay key therefore takes over the inherited spelling: kept as a separate `PATH`, it would
+// sort before `Path`, and os/exec keeps the last of two case-insensitive duplicates, so the
+// inherited value would win and the prefix would be dropped without a trace.
 func mergeEnv(base []string, overlay map[string]string) []string {
 	if len(overlay) == 0 {
 		return base
@@ -1251,7 +1257,10 @@ func mergeEnv(base []string, overlay map[string]string) []string {
 		set(key, value)
 	}
 	for k, v := range overlay {
-		if k == "PATH" {
+		if envKeysFoldCase {
+			k = inheritedSpelling(merged, k)
+		}
+		if k == "PATH" || envKeysFoldCase && strings.EqualFold(k, "PATH") {
 			v = prependPath(v, merged[k])
 		}
 		set(k, v)
@@ -1263,6 +1272,23 @@ func mergeEnv(base []string, overlay map[string]string) []string {
 		out = append(out, k+"="+merged[k])
 	}
 	return out
+}
+
+// envKeysFoldCase is whether environment names are case-insensitive on this platform. A variable
+// rather than a constant so the Windows merge is testable on every platform.
+var envKeysFoldCase = runtime.GOOS == "windows"
+
+// inheritedSpelling returns the spelling under which merged already holds key, or key itself.
+func inheritedSpelling(merged map[string]string, key string) string {
+	if _, ok := merged[key]; ok {
+		return key
+	}
+	for existing := range merged {
+		if strings.EqualFold(existing, key) {
+			return existing
+		}
+	}
+	return key
 }
 
 // spawnDatamitsu runs datamitsu as a child for a rebake or an install.

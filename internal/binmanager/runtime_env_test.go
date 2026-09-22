@@ -66,7 +66,10 @@ func TestRuntimeEnvCommandResolution(t *testing.T) {
 				t.Fatal("read-only resolution changed store or downloaded")
 			}
 			dir, _ := bm.ComputeInstallPath("root")
-			want := map[string]string{"EXACT": depPath, "PATHS": env.GetStorePath() + ":" + dir, "COMMON": env.GetStorePath() + "/common", "RESERVED": "user"}
+			depDir := mustDependencyPathDir(t, dependencyLink{name: commandName("dep"), target: depPath})
+			// Read-only resolution records the dependency directory as a PATH prefix only; the
+			// source-mode shim prepends it to the caller's PATH.
+			want := map[string]string{"EXACT": depPath, "PATHS": env.GetStorePath() + ":" + dir, "COMMON": env.GetStorePath() + "/common", "RESERVED": "user", "PATH": depDir}
 			if kind == "runtime" {
 				want["RESERVED"] = "runtime"
 			}
@@ -92,6 +95,7 @@ func TestRuntimeEnvCommandResolution(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			want["PATH"] = depDir + string(os.PathListSeparator) + os.Getenv("PATH")
 			if !maps.Equal(got.Env, want) {
 				t.Fatalf("execution env = %v, want %v", got.Env, want)
 			}
@@ -227,7 +231,11 @@ func TestRuntimeEnvPreservesLiteralPaths(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			want := map[string]string{"BINDING": depPath, "DIR": rootPath, "STORE": env.GetStorePath(), "MIXED": strings.Join([]string{depPath, env.GetStorePath(), rootPath, depPath}, "|")}
+			want := map[string]string{
+				"BINDING": depPath, "DIR": rootPath, "STORE": env.GetStorePath(),
+				"MIXED": strings.Join([]string{depPath, env.GetStorePath(), rootPath, depPath}, "|"),
+				"PATH":  mustDependencyPathDir(t, dependencyLink{name: commandName("dep"), target: depPath}),
+			}
 			if !maps.Equal(info.Env, want) {
 				t.Fatalf("env = %v, want %v", info.Env, want)
 			}

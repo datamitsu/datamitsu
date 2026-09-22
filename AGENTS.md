@@ -174,6 +174,21 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
 - `${APP_BIN:<name>}` expands only in `runtimeEnv`, requires a direct
   `dependsOn` edge, and supports only native binary targets. Reject it in app
   `env` values; other config data and environment keys remain literal.
+- Every native binary app in an app's `dependsOn` closure is on its `PATH` under
+  its app name, through a content-addressed `{store}/.dependency-path/<hash>/`
+  of symlinks (`binmanager/dependency_path.go`). `getCommandInfo` creates it;
+  `ResolveCommandInfo` only computes it, records it as a `PATH` prefix, and
+  lists the root app's entries as health paths so the shim repairs a missing
+  one. It goes after runtime-owned `PATH` entries, never before them. Never
+  remove or replace an existing one: repair adds missing entries in place,
+  because a running tool may hold it. Targets and the directory are absolute
+  (a relative `DATAMITSU_CACHE_DIR` would leave links dangling). Docker slices
+  do not copy it: it is created at first run, so the store must stay writable
+  in images. A change to what a farm entry records needs a
+  `ManifestFormatVersion` bump: two development builds share a version string.
+- `PATH` is rejected in app `env` and `runtimeEnv` in any case: values are not
+  expanded against the inherited environment, so it would replace `PATH`
+  wholesale. Only runtime-owned keys win over app env; inherited ones do not.
 
 - Docker app slices carry the dependency closure and all referenced runtimes
   (including pnpm). Each stage installs its closure; the final image copies each
@@ -605,9 +620,12 @@ color-mode change recreates the player rather than recoloring it.
 The hero uses the original full bee logo, including its lettering, at
 `website/static/img/logo.png`. Its height is bound to the text block, not to a
 number: the cell stretches to the hero row and the image is taken out of flow, so
-it can never push that row taller than the copy — 17rem is only a ceiling, and
-rewriting the copy shorter cannot leave the logo towering over it. Stacked under
-the copy on narrow screens the wrapper takes an explicit 9.5rem, because a
+it can never push that row taller than the copy — `--hero-logo-size` is only a
+ceiling, and rewriting the copy shorter cannot leave the logo towering over it.
+That custom property is the single knob for the logo's size: it caps the hero
+column and the image's height alike, so no rule repeats the number and no prose
+here restates it. Stacked under the copy on narrow screens the wrapper takes the
+same property as an explicit height, turned down for that layout, because a
 percentage height has nothing to resolve against there. Keep that asset unchanged.
 The amber half of the H1 is one unbreakable phrase (`display: inline-block;
 white-space: nowrap`): it drops to the second line whole, never leaving a word of

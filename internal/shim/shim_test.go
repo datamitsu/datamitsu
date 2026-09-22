@@ -1180,6 +1180,20 @@ func TestMergeEnv(t *testing.T) {
 	}
 }
 
+func TestMergeEnvTakesTheInheritedSpellingWhereNamesFoldCase(t *testing.T) {
+	previous := envKeysFoldCase
+	envKeysFoldCase = true
+	t.Cleanup(func() { envKeysFoldCase = previous })
+
+	// Windows spells the inherited variable `Path`. A second `PATH` key would sort before it and
+	// lose to it in os/exec's case-insensitive deduplication, dropping the entry's prefix.
+	got := mergeEnv([]string{"Path=/usr/bin", "HOME=/h"}, map[string]string{"PATH": "/store/bin", "home": "/x"})
+	want := []string{"HOME=/x", "Path=/store/bin:/usr/bin"}
+	if !equalStrings(got, want) {
+		t.Errorf("mergeEnv() = %q, want %q", got, want)
+	}
+}
+
 func equalStrings(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
