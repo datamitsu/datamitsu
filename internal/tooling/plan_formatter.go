@@ -21,11 +21,14 @@ type PlanFormatter interface {
 
 // PlanJSON represents the JSON structure for execution plan
 type PlanJSON struct {
-	Operation string            `json:"operation"`
-	RootPath  string            `json:"rootPath"`
-	CwdPath   string            `json:"cwdPath"`
-	Groups    []GroupJSON       `json:"groups"`
-	Skipped   []SkippedToolJSON `json:"skipped"`
+	// Configuration names the config this plan came from, so a reader of a stored
+	// plan knows which one they are looking at.
+	Configuration string            `json:"configuration,omitempty"`
+	Operation     string            `json:"operation"`
+	RootPath      string            `json:"rootPath"`
+	CwdPath       string            `json:"cwdPath"`
+	Groups        []GroupJSON       `json:"groups"`
+	Skipped       []SkippedToolJSON `json:"skipped"`
 }
 
 // SkippedToolJSON represents a skipped tool in JSON format. Emitting skips here
@@ -158,6 +161,15 @@ func formatSkippedSection(skipped []SkippedTool) string {
 // SummaryFormatter formats the plan in human-readable summary format (without file lists)
 type SummaryFormatter struct{}
 
+// planConfigSuffix names the configuration in a plan header, when the plan knows
+// it. A plan read on its own says nothing about which configuration produced it.
+func planConfigSuffix(plan *ExecutionPlan) string {
+	if plan == nil || plan.ConfigName == "" {
+		return ""
+	}
+	return " (" + plan.ConfigName + ")"
+}
+
 // NewSummaryFormatter creates a new summary formatter
 func NewSummaryFormatter() *SummaryFormatter {
 	return &SummaryFormatter{}
@@ -171,7 +183,7 @@ func (f *SummaryFormatter) Format(plan *ExecutionPlan, rootPath, cwdPath string,
 
 	var buf strings.Builder
 
-	fmt.Fprintf(&buf, "\nExecution Plan for '%s' operation:\n", operation)
+	fmt.Fprintf(&buf, "\nExecution Plan for '%s' operation%s:\n", operation, planConfigSuffix(plan))
 
 	for i, group := range plan.Groups {
 		fmt.Fprintf(&buf, "\nPriority Group %d (priority: %d):\n", i+1, group.Priority)
@@ -245,7 +257,7 @@ func (f *DetailedFormatter) Format(plan *ExecutionPlan, rootPath, cwdPath string
 
 	var buf strings.Builder
 
-	fmt.Fprintf(&buf, "\nExecution Plan for '%s' operation:\n", operation)
+	fmt.Fprintf(&buf, "\nExecution Plan for '%s' operation%s:\n", operation, planConfigSuffix(plan))
 
 	for i, group := range plan.Groups {
 		fmt.Fprintf(&buf, "\nPriority Group %d (priority: %d):\n", i+1, group.Priority)
@@ -318,11 +330,12 @@ func NewJSONFormatter() *JSONFormatter {
 // Format formats the execution plan in JSON mode
 func (f *JSONFormatter) Format(plan *ExecutionPlan, rootPath, cwdPath string, operation config.OperationType) string {
 	planJSON := PlanJSON{
-		Operation: string(operation),
-		RootPath:  rootPath,
-		CwdPath:   cwdPath,
-		Groups:    make([]GroupJSON, 0, len(plan.Groups)),
-		Skipped:   make([]SkippedToolJSON, 0, len(plan.Skipped)),
+		Configuration: plan.ConfigName,
+		Operation:     string(operation),
+		RootPath:      rootPath,
+		CwdPath:       cwdPath,
+		Groups:        make([]GroupJSON, 0, len(plan.Groups)),
+		Skipped:       make([]SkippedToolJSON, 0, len(plan.Skipped)),
 	}
 
 	for _, s := range plan.Skipped {

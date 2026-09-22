@@ -447,6 +447,14 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 		return nil, nil, nil, err
 	}
 
+	if err := config.ValidateName(currentConfig.Name); err != nil {
+		return nil, nil, nil, err
+	}
+
+	// Once, here: the stored config carries the links it derived, so a cache hit
+	// and a fresh evaluation show a reader the same thing.
+	config.ApplyDerivedOfficialURLs(currentConfig.Apps)
+
 	if err := config.ValidateBundles(currentConfig.Bundles, currentConfig.Apps); err != nil {
 		return nil, nil, nil, err
 	}

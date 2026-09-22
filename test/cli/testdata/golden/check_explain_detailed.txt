@@ -1,5 +1,5 @@
 
-Execution Plan for 'fix' operation:
+Execution Plan for 'fix' operation (datamitsu.config):
 
 Priority Group 1 (priority: 0):
   ┌─ alpha
@@ -11,7 +11,7 @@ Priority Group 1 (priority: 0):
   Parallelization: Single task (sequential)
 
 
-Execution Plan for 'lint' operation:
+Execution Plan for 'lint' operation (datamitsu.config):
 
 Priority Group 1 (priority: 0):
   ┌─ alpha

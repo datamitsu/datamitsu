@@ -326,6 +326,9 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	}
 
 	// Get detected project types from planner cache
+	if plan != nil {
+		plan.ConfigName = sc.cfg.DisplayName()
+	}
 	projectTypes := sc.planner.GetDetectedProjectTypes()
 
 	// Explain mode (json/summary/detailed): print the formatted plan, which now

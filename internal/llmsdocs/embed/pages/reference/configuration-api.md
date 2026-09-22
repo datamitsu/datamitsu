@@ -28,6 +28,7 @@ The `getConfig()` function returns a `Config` object:
 
 ```typescript
 interface Config {
+  name?: string;
   apps?: BinManager.MapOfApps;
   runtimes?: BinManager.MapOfRuntimes;
   bundles?: Record<string, Bundle>;
@@ -69,6 +70,21 @@ final Config
 - The auto git-root config can export `getBeforeConfigs()` returning `Array<{path: string}>` to load local files as under-layers (parity with `--before-config`). It is honoured only at the git-root layer and skipped entirely when a `--before-config` flag is present; relative paths resolve against the git-root config's directory, no hash is required (local files are not downloads)
 - `ignoreRules` use append semantics across config layers
 - Circular remote config dependencies are detected and produce an error
+
+## Name (`name`)
+
+How the configuration names itself wherever one is displayed — the inspector header, an exported
+snapshot, a listing. It chains as a scalar: the last layer that sets it wins.
+
+```javascript
+export function getConfig(input) {
+  return { ...input, name: "@acme/datamitsu-config" };
+}
+```
+
+When no layer sets it, the name is `datamitsu.config`. A name is one line of at most 80 characters;
+a blank string is a config error rather than a silent fallback, so a layer cannot half-clear it.
+The field is display metadata: it never affects what is installed or executed.
 
 ## Apps (`apps`)
 
@@ -113,6 +129,7 @@ interface AppCommon {
   required?: boolean; // Whether the app is required for init
   lazy?: boolean; // Defer installation and link creation until first exec
   dependsOn?: string[]; // Apps that must be available when this app runs
+  officialUrl?: string; // Where a person reads about this app (never fetched)
   files?: Record<string, string>; // Bun/UV/Node only: filename → static content
   links?: Record<string, string>; // Bun/UV/Node only: linkName → relativePath
   archives?: Record<string, ArchiveSpec>; // Bun/UV/Node only: name → archive
@@ -130,6 +147,50 @@ and `.datamitsu/` links are created on the first `datamitsu exec`. Apps consumed
 by tools, hooks, or managed config files must remain eager (omit `lazy` or set
 it to `false`). A selected app's dependencies are still installed even when
 they are `lazy: true` or not `required`.
+
+#### Where to read about an app (`officialUrl`)
+
+`officialUrl` is a link for people: the app's documentation, its repository, its
+package page. Nothing downloads it, runs it, or verifies it, and it takes no part
+in an install. It must be an absolute `http` or `https` URL; validation checks
+the shape and nothing else, because the URL is never fetched.
+
+It inherits like any other scalar — a child layer overrides it, and removing it
+uses the config's existing undefined semantics.
+
+Leave it out and datamitsu derives one at config resolution from what the app
+already declares. A derived link is reported as `officialUrl` alongside
+`officialUrlDerived: true`, so `datamitsu config show`, the inspector dataset and
+the inspector's app panel can tell a maintainer's choice from an address worked
+out from a download URL:
+
+| Declaration                                           | Derived link                           |
+| ----------------------------------------------------- | -------------------------------------- |
+| `binary` whose download URLs are on one forge         | that repository's page                 |
+| `node` or `bun` with a package name                   | `https://www.npmjs.com/package/<name>` |
+| `uv` with a package name                              | `https://pypi.org/project/<name>/`     |
+| `go` with a module path                               | `https://pkg.go.dev/<module>`          |
+| `jvm` with a Maven Central JAR URL                    | that artifact's Maven Central page     |
+| `jvm` with a forge-hosted JAR URL                     | that repository's page                 |
+| `shell`, or anything the rules above do not recognize | none                                   |
+
+The forges whose release paths name a repository unambiguously are `github.com`,
+`gitlab.com`, `codeberg.org` and `gitea.com`. A binary whose platforms point at
+different repositories derives nothing: there is no single page to send a reader
+to. There is no network lookup and no guessing — a shape the rules do not
+recognize yields no link rather than one that might be wrong.
+
+Set the field to point somewhere better than the default:
+
+```javascript
+apps: {
+  eslint: {
+    node: { packageName: "eslint", version: "9.0.0", binPath: "node_modules/.bin/eslint" },
+    // Without this, the derived link is the npm page.
+    officialUrl: "https://eslint.org/docs/latest/",
+  },
+}
+```
 
 #### App dependencies (`dependsOn`)
 
