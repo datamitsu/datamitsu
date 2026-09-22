@@ -64,7 +64,7 @@ export async function exec(appName?: string, options: ExecOptions = {}): Promise
   };
 }
 
-const ESC = String.fromCharCode(0x1b);
+const ESC = String.fromCodePoint(0x1b);
 const ANSI_PATTERN = new RegExp(`${ESC}\\[[0-9;]*m`, "g");
 
 export function parseToolList(output: string): ToolInfo[] {
