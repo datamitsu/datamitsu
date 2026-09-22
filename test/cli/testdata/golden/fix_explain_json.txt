@@ -1,4 +1,5 @@
 {
+  "configuration": "datamitsu.config",
   "operation": "fix",
   "rootPath": "<TMP>",
   "cwdPath": "<TMP>",

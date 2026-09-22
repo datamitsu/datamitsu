@@ -52,7 +52,11 @@ type TaskGroup struct {
 
 // ExecutionPlan represents the full execution plan with ordered task groups
 type ExecutionPlan struct {
-	Groups []TaskGroup
+	// ConfigName is the configuration this plan came out of, already defaulted.
+	// A plan is only readable against the configuration that produced it, and a
+	// machine may hold several.
+	ConfigName string
+	Groups     []TaskGroup
 	// Skipped lists tools that were deliberately not planned, with the reason.
 	// These never run but are reported so the user sees what was left out and why.
 	Skipped []SkippedTool

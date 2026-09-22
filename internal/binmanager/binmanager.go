@@ -138,6 +138,15 @@ type App struct {
 	VersionCheck *AppVersionCheck `json:"versionCheck,omitempty"`
 	DependsOn    []string         `json:"dependsOn,omitempty"`
 
+	// OfficialURL is where a person reads about this app: its documentation, its
+	// repository, its package page. It is a link for people — nothing downloads
+	// it, runs it, or verifies it, and it never takes part in an install. Leave it
+	// out and config resolution derives one from what the app already declares
+	// (DeriveOfficialURL), marking it with OfficialURLDerived so a surface can say
+	// which kind of link it is showing.
+	OfficialURL        string `json:"officialUrl,omitempty"`
+	OfficialURLDerived bool   `json:"officialUrlDerived,omitempty"`
+
 	Binary *AppConfigBinary `json:"binary,omitempty"`
 	Bun    *AppConfigBun    `json:"bun,omitempty"`
 	Uv     *AppConfigUV     `json:"uv,omitempty"`
