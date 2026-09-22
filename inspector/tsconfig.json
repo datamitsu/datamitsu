@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "allowJs": true,
+    "checkJs": false,
+    "lib": [
+      "ESNext",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "noEmit": true,
+    "rootDir": "..",
+    "types": [
+      "svelte",
+      "node",
+      "vite/client"
+    ],
+    "verbatimModuleSyntax": true
+  },
+  "extends": "@shibanet0/datamitsu-config/tsconfig/base.json",
+  "include": [
+    "src/**/*",
+    "vite.config.ts",
+    "../internal/inspector/protocol.json"
+  ]
+}

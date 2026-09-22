@@ -1,0 +1,339 @@
+{
+  "$id": "https://datamitsu.com/schemas/inspector-theme.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Color overrides for the datamitsu config inspector. Every mode, group and token is optional; what a file omits keeps its built-in value.",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "dark": {
+      "additionalProperties": false,
+      "properties": {
+        "accent": {
+          "additionalProperties": false,
+          "properties": {
+            "base": {
+              "description": "Color of the accent base token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            },
+            "display": {
+              "description": "Color of the accent display token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            },
+            "glow": {
+              "description": "Color of the accent glow token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "focus": {
+          "additionalProperties": false,
+          "properties": {
+            "ring": {
+              "description": "Color of the focus ring token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "line": {
+          "additionalProperties": false,
+          "properties": {
+            "base": {
+              "description": "Color of the line base token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            },
+            "orbit": {
+              "description": "Color of the line orbit token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "runtime": {
+          "additionalProperties": false,
+          "properties": {
+            "binary": {
+              "description": "Color of the runtime binary token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            },
+            "bun": {
+              "description": "Color of the runtime bun token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            },
+            "go": {
+              "description": "Color of the runtime go token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            },
+            "jvm": {
+              "description": "Color of the runtime jvm token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            },
+            "node": {
+              "description": "Color of the runtime node token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            },
+            "python": {
+              "description": "Color of the runtime python token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            },
+            "shell": {
+              "description": "Color of the runtime shell token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            },
+            "unknown": {
+              "description": "Color of the runtime unknown token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "status": {
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "description": "Color of the status enabled token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            },
+            "skipped": {
+              "description": "Color of the status skipped token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "surface": {
+          "additionalProperties": false,
+          "properties": {
+            "base": {
+              "description": "Color of the surface base token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            },
+            "panel": {
+              "description": "Color of the surface panel token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            },
+            "raised": {
+              "description": "Color of the surface raised token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            },
+            "scrim": {
+              "description": "Color of the surface scrim token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            },
+            "shadow": {
+              "description": "Color of the surface shadow token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "text": {
+          "additionalProperties": false,
+          "properties": {
+            "base": {
+              "description": "Color of the text base token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            },
+            "muted": {
+              "description": "Color of the text muted token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "light": {
+      "additionalProperties": false,
+      "properties": {
+        "accent": {
+          "additionalProperties": false,
+          "properties": {
+            "base": {
+              "description": "Color of the accent base token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            },
+            "display": {
+              "description": "Color of the accent display token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            },
+            "glow": {
+              "description": "Color of the accent glow token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "focus": {
+          "additionalProperties": false,
+          "properties": {
+            "ring": {
+              "description": "Color of the focus ring token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "line": {
+          "additionalProperties": false,
+          "properties": {
+            "base": {
+              "description": "Color of the line base token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            },
+            "orbit": {
+              "description": "Color of the line orbit token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "runtime": {
+          "additionalProperties": false,
+          "properties": {
+            "binary": {
+              "description": "Color of the runtime binary token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            },
+            "bun": {
+              "description": "Color of the runtime bun token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            },
+            "go": {
+              "description": "Color of the runtime go token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            },
+            "jvm": {
+              "description": "Color of the runtime jvm token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            },
+            "node": {
+              "description": "Color of the runtime node token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            },
+            "python": {
+              "description": "Color of the runtime python token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            },
+            "shell": {
+              "description": "Color of the runtime shell token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            },
+            "unknown": {
+              "description": "Color of the runtime unknown token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "status": {
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "description": "Color of the status enabled token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            },
+            "skipped": {
+              "description": "Color of the status skipped token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "surface": {
+          "additionalProperties": false,
+          "properties": {
+            "base": {
+              "description": "Color of the surface base token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            },
+            "panel": {
+              "description": "Color of the surface panel token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            },
+            "raised": {
+              "description": "Color of the surface raised token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            },
+            "scrim": {
+              "description": "Color of the surface scrim token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            },
+            "shadow": {
+              "description": "Color of the surface shadow token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "text": {
+          "additionalProperties": false,
+          "properties": {
+            "base": {
+              "description": "Color of the text base token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            },
+            "muted": {
+              "description": "Color of the text muted token.",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "title": "datamitsu inspector theme",
+  "type": "object"
+}

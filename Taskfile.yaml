@@ -12,6 +12,10 @@ tasks:
     deps:
       - "build:lib"
     desc: Build datamitsu binary and prepare packages
+  build:inspector:
+    cmds:
+      - pnpm --filter @datamitsu/inspector build
+    desc: Build the single-file inspector artifact embedded by internal/inspector
   build:lib:
     cmds:
       - pnpm exec tsdown --config ./config/tsdown.config.ts
@@ -19,7 +23,8 @@ tasks:
       - cp ./config/config.d.ts ./internal/config/config.d.ts
     deps:
       - "generate:prompts"
-    desc: Build config library (generate prompts, compile, copy)
+      - "build:inspector"
+    desc: Build the embedded JS artifacts — config library and inspector — before any Go build
   build:parsers:
     cmds:
       - cargo build --release --target wasm32-unknown-unknown --manifest-path parsers/Cargo.toml

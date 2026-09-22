@@ -1,0 +1,48 @@
+.figure {
+  margin: 2rem 0 0;
+}
+.frame {
+  display: block;
+  width: 100%;
+  aspect-ratio: var(--embed-ratio);
+  min-height: var(--embed-min);
+  border: 1px solid var(--card-border-color);
+  border-radius: 12px;
+  color-scheme: inherit;
+}
+.caption {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.caption code {
+  font-size: 10px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  overflow-wrap: anywhere;
+}
+.caption a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.fallback {
+  margin: 12px 0 0;
+  font-size: 12px;
+  line-height: 1.9;
+  overflow-wrap: anywhere;
+}
+.fallback summary {
+  cursor: pointer;
+}
+:global([data-theme="light"]) .frame {
+  color-scheme: light;
+}
+:global([data-theme="dark"]) .frame {
+  color-scheme: dark;
+}

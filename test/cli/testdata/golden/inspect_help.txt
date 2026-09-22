@@ -1,0 +1,34 @@
+Explore tools, apps and managed files in a local configuration inspector.
+The server binds to the loopback interface and serves a snapshot of the loaded config.
+Use --output to export the same inspector as one self-contained HTML file, or
+--output - to write HTML to stdout. No Node.js or network is needed to view it.
+
+The artifact contains display metadata, not environment values, command arguments,
+managed file contents or download URLs. Filters show declared applicability, not
+an execution plan. Restart the command to refresh the snapshot.
+
+Usage:
+  datamitsu inspect [flags]
+
+Examples:
+  datamitsu inspect
+  datamitsu inspect --port 0
+  datamitsu inspect --output atlas.html
+  datamitsu inspect --output - > atlas.html
+
+Flags:
+  -h, --help            help for inspect
+  -o, --output string   Write standalone HTML to a file, or - for stdout
+      --port int        Local server port (0 chooses an available port) (default 7744)
+      --print-theme     Print the theme that would be applied as JSON and exit
+      --theme string    Color overrides to merge onto the built-in theme (JSON)
+
+Global Flags:
+      --before-config strings   Configuration file(s) to load before auto-discovery (for wrappers/libraries)
+      --binary-command string   Override the binary command (for npm package wrappers, etc). Can also be set via DATAMITSU_BINARY_COMMAND env var
+      --config strings          Additional configuration file(s) to load and merge (can be specified multiple times)
+      --log-format string       Status output format: console or jsonl (also via DATAMITSU_LOG_FORMAT)
+      --no-auto-config          Disable auto-discovery of datamitsu.config.{js,mjs,ts} at git root
+      --no-oci                  Disable OCI bundle store seeding (also via DATAMITSU_NO_OCI)
+      --no-parse                Skip output parsers; show tools' raw output instead (also via DATAMITSU_NO_PARSE)
+  -v, --verbose                 Enable debug-level logging (default level is warn)

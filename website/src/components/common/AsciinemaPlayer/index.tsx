@@ -22,6 +22,13 @@ import type {
 
 import styles from "./AsciinemaPlayer.module.css";
 
+// Result of a single initialization run, tagged with the run that produced it.
+interface LoadOutcome {
+  error: Error | null;
+  runKey: string;
+  state: "error" | "loaded";
+}
+
 // Hook: Detect Docusaurus theme (light/dark)
 function useDocusaurusTheme(): "dark" | "light" {
   const [theme, setTheme] = useState<"dark" | "light">(() => {
@@ -61,8 +68,11 @@ const AsciinemaPlayer = forwardRef<AsciinemaPlayerHandle, AsciinemaPlayerPropert
     const { siteConfig } = useDocusaurusContext();
     const containerReference = useRef<HTMLDivElement>(null);
     const playerInstance = useRef<AsciinemaPlayerInstance | null>(null);
-    const [loadingState, setLoadingState] = useState<LoadingState>("idle");
-    const [errorState, setErrorState] = useState<Error | null>(null);
+    const [attempt, setAttempt] = useState(0);
+    // The outcome of one load, tagged with the run that produced it. Anything the
+    // current run has not settled yet reads as "loading" during render, so the
+    // effect never has to reset the state synchronously.
+    const [outcome, setOutcome] = useState<LoadOutcome | null>(null);
 
     // Theme detection (fallback to Docusaurus theme)
     const docusaurusTheme = useDocusaurusTheme();
@@ -72,10 +82,14 @@ const AsciinemaPlayer = forwardRef<AsciinemaPlayerHandle, AsciinemaPlayerPropert
       ((siteConfig.themeConfig as any)?.asciinema?.themes?.[docusaurusTheme] ??
         (docusaurusTheme === "light" ? "solarized-light" : "monokai")); // cspell:disable-line
 
-    // Retry handler
+    const runKey = `${attempt}\u{0}${theme}\u{0}${src}`;
+    const settled = outcome?.runKey === runKey ? outcome : null;
+    const loadingState: LoadingState = settled?.state ?? "loading";
+    const errorState = settled?.error ?? null;
+
+    // Retry handler: a new attempt re-runs the initialization effect.
     const retryLoad = useCallback(() => {
-      setErrorState(null);
-      setLoadingState("loading");
+      setAttempt((previous) => previous + 1);
     }, []);
 
     // Imperative handle
@@ -104,9 +118,6 @@ const AsciinemaPlayer = forwardRef<AsciinemaPlayerHandle, AsciinemaPlayerPropert
       let isMounted = true;
       let player: AsciinemaPlayerInstance | undefined;
 
-      setLoadingState("loading");
-      setErrorState(null);
-
       import("asciinema-player")
         .then((module_) => {
           if (!isMounted || !containerReference.current) {
@@ -124,15 +135,14 @@ const AsciinemaPlayer = forwardRef<AsciinemaPlayerHandle, AsciinemaPlayerPropert
 
             // Player creation success
             if (isMounted) {
-              setLoadingState("loaded");
+              setOutcome({ error: null, runKey, state: "loaded" });
               onLoad?.();
             }
           } catch (error) {
             if (isMounted) {
               const errorObject =
                 error instanceof Error ? error : new Error("Failed to create player");
-              setErrorState(errorObject);
-              setLoadingState("error");
+              setOutcome({ error: errorObject, runKey, state: "error" });
               onError?.(errorObject);
             }
           }
@@ -144,8 +154,7 @@ const AsciinemaPlayer = forwardRef<AsciinemaPlayerHandle, AsciinemaPlayerPropert
 
           const errorObject =
             error instanceof Error ? error : new Error("Failed to load player module");
-          setErrorState(errorObject);
-          setLoadingState("error");
+          setOutcome({ error: errorObject, runKey, state: "error" });
           onError?.(errorObject);
         });
 
@@ -154,7 +163,7 @@ const AsciinemaPlayer = forwardRef<AsciinemaPlayerHandle, AsciinemaPlayerPropert
         player?.dispose?.();
         playerInstance.current = null;
       };
-    }, [src, theme, options, onLoad, onError]);
+    }, [runKey, src, theme, options, onLoad, onError]);
 
     const containerOpacityStyle = useMemo(
       () => ({

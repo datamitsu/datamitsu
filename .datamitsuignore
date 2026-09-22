@@ -15,3 +15,10 @@ packaging/python/pyproject.toml: oxfmt
 Taskfile.yaml: oxfmt
 .github/workflows/pr-checks.yml: oxfmt
 .github/workflows/release.yml: oxfmt
+
+# Minified HTML is generated from inspector/ and embedded byte-for-byte.
+internal/inspector/inspector.html: *
+
+# Vendored verbatim from a datamitsu-config release (see test/cli/README.md); it
+# is a bundle, re-fetched rather than edited, so no tool may rewrite or judge it.
+test/e2e/testdata/datamitsu.config.oci-ghcr.js: *

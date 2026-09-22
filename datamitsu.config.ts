@@ -35,6 +35,34 @@ const applyBench = (config: config.Config): config.Config => {
 };
 
 const getConfig = (config: config.Config) => {
+  config.apps ??= {};
+  config.apps["inspector-types"] = {
+    shell: {
+      args: [
+        "--filter",
+        "@datamitsu/inspector",
+        "exec",
+        "svelte-check",
+        "--tsconfig",
+        "./tsconfig.json",
+        "--fail-on-warnings",
+      ],
+      name: "pnpm",
+    },
+    versionCheck: { disabled: true },
+  };
+  config.tools ??= {};
+  config.tools["inspector-types"] = {
+    name: "Svelte inspector type and accessibility checks",
+    operations: {
+      lint: {
+        app: "inspector-types",
+        args: [],
+        globs: ["inspector/**/*.{ts,js,svelte,json}"],
+        scope: "repository",
+      },
+    },
+  };
   if (facts().env.DATAMITSU_BENCH === "1") {
     return applyBench(config);
   }

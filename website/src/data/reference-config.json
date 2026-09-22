@@ -1,0 +1,3235 @@
+{
+  "capturedAt": "2026-09-22T10:17:46.000Z",
+  "manifest": {
+    "apps": [
+      {
+        "dependsOn": [],
+        "description": ":octocat: Static checker for GitHub Actions workflow files",
+        "name": "actionlint",
+        "officialUrl": "https://github.com/rhysd/actionlint",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v1.7.12"
+      },
+      {
+        "dependsOn": [],
+        "description": "A simple, modern and secure encryption tool (and Go library) with small explicit keys, no config options, and UNIX-style composability.",
+        "name": "age",
+        "officialUrl": "https://github.com/FiloSottile/age",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v1.3.1"
+      },
+      {
+        "dependsOn": [],
+        "description": "☁️ Live reload for Go apps",
+        "name": "air",
+        "officialUrl": "https://github.com/air-verse/air",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v1.67.4"
+      },
+      {
+        "dependsOn": [],
+        "description": "Language-agnostic linter for repository structure, files, and content",
+        "name": "alint",
+        "officialUrl": "https://github.com/asamarts/alint",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v0.15.1"
+      },
+      {
+        "dependsOn": [],
+        "description": "Allure TestOps Command line tool",
+        "name": "allurectl",
+        "officialUrl": "https://github.com/allure-framework/allurectl",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "2.22.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "⚡A CLI tool for code structural search, lint and rewriting. Written in Rust",
+        "name": "ast-grep",
+        "officialUrl": "https://github.com/ast-grep/ast-grep",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "0.45.1"
+      },
+      {
+        "dependsOn": [],
+        "description": "Security oriented static analyser for python code.",
+        "name": "bandit",
+        "officialUrl": "https://pypi.org/project/bandit/",
+        "officialUrlDerived": true,
+        "runtime": "python",
+        "version": "1.9.4"
+      },
+      {
+        "dependsOn": [],
+        "description": "Code security scanning tool (SAST) to discover, filter and prioritize security and privacy risks.",
+        "name": "bearer",
+        "officialUrl": "https://github.com/Bearer/bearer",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v2.1.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "Linter and SBOM generator for binary files.",
+        "name": "blint",
+        "officialUrl": "https://pypi.org/project/blint/",
+        "officialUrlDerived": true,
+        "runtime": "python",
+        "version": "3.2.4"
+      },
+      {
+        "dependsOn": [],
+        "description": "The best way of working with Protocol Buffers.",
+        "name": "buf",
+        "officialUrl": "https://github.com/bufbuild/buf",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v1.72.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "❌ Cargo plugin for linting your dependencies 🦀",
+        "name": "cargo-deny",
+        "officialUrl": "https://github.com/EmbarkStudios/cargo-deny",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "0.20.2"
+      },
+      {
+        "dependsOn": [],
+        "description": "Linter/analyzer for Makefiles",
+        "name": "checkmake",
+        "officialUrl": "https://github.com/checkmake/checkmake",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v0.3.2"
+      },
+      {
+        "dependsOn": [],
+        "description": "Infrastructure as code static analysis",
+        "name": "checkov",
+        "officialUrl": "https://pypi.org/project/checkov/",
+        "officialUrlDerived": true,
+        "runtime": "python",
+        "version": "3.3.13"
+      },
+      {
+        "dependsOn": [],
+        "description": "Lint your commit messages",
+        "name": "commitlint",
+        "officialUrl": "https://www.npmjs.com/package/@commitlint/cli",
+        "officialUrlDerived": true,
+        "runtime": "node",
+        "version": "21.2.2"
+      },
+      {
+        "dependsOn": [],
+        "description": "Write tests against structured configuration data using the Open Policy Agent Rego query language",
+        "name": "conftest",
+        "officialUrl": "https://github.com/open-policy-agent/conftest",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v0.69.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "Generate a changelog from git metadata.",
+        "name": "conventional-changelog",
+        "officialUrl": "https://www.npmjs.com/package/conventional-changelog",
+        "officialUrlDerived": true,
+        "runtime": "node",
+        "version": "8.1.3"
+      },
+      {
+        "dependsOn": [],
+        "description": "Code signing and transparency for containers and binaries",
+        "name": "cosign",
+        "officialUrl": "https://github.com/sigstore/cosign",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v3.1.3"
+      },
+      {
+        "dependsOn": [],
+        "description": "Go library and CLIs for working with container registries",
+        "name": "crane",
+        "officialUrl": "https://github.com/google/go-containerregistry",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v0.21.9"
+      },
+      {
+        "dependsOn": [],
+        "description": "A Spelling Checker for Code!",
+        "name": "cspell",
+        "officialUrl": "https://www.npmjs.com/package/cspell",
+        "officialUrlDerived": true,
+        "runtime": "node",
+        "version": "10.0.1"
+      },
+      {
+        "dependsOn": [],
+        "description": "D2 is a modern diagram scripting language that turns text to diagrams.",
+        "name": "d2",
+        "officialUrl": "https://github.com/d2lang/d2",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v0.7.1"
+      },
+      {
+        "dependsOn": [],
+        "description": "Unified querying, transformation, and modification of JSON, TOML, YAML, XML, INI, HCL, KDL and CSV.",
+        "name": "dasel",
+        "officialUrl": "https://github.com/TomWright/dasel",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v3.11.2"
+      },
+      {
+        "dependsOn": [],
+        "description": "A command-line tool for validating and enforcing best practices in Docker Compose files.",
+        "name": "dclint",
+        "officialUrl": "https://www.npmjs.com/package/dclint",
+        "officialUrlDerived": true,
+        "runtime": "node",
+        "version": "3.1.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "A command line utility to check for unused, missing and transitive dependencies in a Python project.",
+        "name": "deptry",
+        "officialUrl": "https://pypi.org/project/deptry/",
+        "officialUrlDerived": true,
+        "runtime": "python",
+        "version": "0.25.1"
+      },
+      {
+        "dependsOn": [],
+        "description": "Tool for detecting secrets in the codebase",
+        "name": "detect-secrets",
+        "officialUrl": "https://pypi.org/project/detect-secrets/",
+        "officialUrlDerived": true,
+        "runtime": "python",
+        "version": "1.5.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "⚡️Lightning-fast linter for .env files. Written in Rust 🦀",
+        "name": "dotenv-linter",
+        "officialUrl": "https://github.com/dotenv-linter/dotenv-linter",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v4.0.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "droast - a dockerfile linter that actually has opinions 🔥",
+        "name": "droast",
+        "officialUrl": "https://github.com/immanuwell/dockerfile-roast",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "1.6.1"
+      },
+      {
+        "dependsOn": [],
+        "description": "A tool to verify that your files are in harmony with your .editorconfig",
+        "name": "editorconfig-checker",
+        "officialUrl": "https://github.com/editorconfig-checker/editorconfig-checker",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v3.11.1"
+      },
+      {
+        "dependsOn": [],
+        "description": "An AST-based pattern checker for JavaScript.",
+        "name": "eslint",
+        "officialUrl": "https://www.npmjs.com/package/eslint",
+        "officialUrlDerived": true,
+        "runtime": "node",
+        "version": "10.9.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "Terminal JSON viewer & processor",
+        "name": "fx",
+        "officialUrl": "https://github.com/antonmedv/fx",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "39.2.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "Go library and CLIs for working with container registries",
+        "name": "gcrane",
+        "officialUrl": "https://github.com/google/go-containerregistry",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v0.21.9"
+      },
+      {
+        "dependsOn": [],
+        "description": "A highly customizable Changelog Generator that follows Conventional Commit specifications ⛰️ ",
+        "name": "git-cliff",
+        "officialUrl": "https://github.com/orhun/git-cliff",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v2.13.1"
+      },
+      {
+        "dependsOn": [],
+        "description": "Find secrets with Gitleaks 🔑",
+        "name": "gitleaks",
+        "officialUrl": "https://github.com/gitleaks/gitleaks",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v8.30.1"
+      },
+      {
+        "dependsOn": [],
+        "description": "Database migrations. CLI and Golang library.",
+        "name": "golang-migrate",
+        "officialUrl": "https://github.com/golang-migrate/migrate",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v4.19.1"
+      },
+      {
+        "dependsOn": [],
+        "description": "Fast linters runner for Go",
+        "name": "golangci-lint",
+        "officialUrl": "https://github.com/golangci/golangci-lint",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v2.13.1"
+      },
+      {
+        "dependsOn": [],
+        "description": "A database migration tool. Supports SQL migrations and Go functions. ",
+        "name": "goose",
+        "officialUrl": "https://github.com/pressly/goose",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v3.27.3"
+      },
+      {
+        "dependsOn": [],
+        "description": "Govulncheck reports known vulnerabilities that affect Go code.",
+        "name": "govulncheck",
+        "officialUrl": "https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck",
+        "officialUrlDerived": true,
+        "runtime": "go",
+        "version": "v1.3.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "A vulnerability scanner for container images and filesystems",
+        "name": "grype",
+        "officialUrl": "https://github.com/anchore/grype",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v0.117.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "Dockerfile linter, validate inline bash, written in Haskell",
+        "name": "hadolint",
+        "officialUrl": "https://github.com/hadolint/hadolint",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v2.15.1"
+      },
+      {
+        "dependsOn": [],
+        "description": "Offline, privacy-first grammar checker. Fast, open-source, Rust-powered",
+        "name": "harper-cli",
+        "officialUrl": "https://github.com/Automattic/harper",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v2.8.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "The Kubernetes Package Manager",
+        "name": "helm",
+        "runtime": "binary",
+        "version": "v4.2.4"
+      },
+      {
+        "dependsOn": [],
+        "description": "Command-line JSON processor",
+        "name": "jq",
+        "officialUrl": "https://github.com/jqlang/jq",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "jq-1.8.2"
+      },
+      {
+        "dependsOn": [],
+        "description": "🤖 Just a command runner",
+        "name": "just",
+        "officialUrl": "https://github.com/casey/just",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "1.58.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "Find and fix unused dependencies, exports and files in your TypeScript and JavaScript projects",
+        "name": "knip",
+        "officialUrl": "https://www.npmjs.com/package/knip",
+        "officialUrlDerived": true,
+        "runtime": "node",
+        "version": "6.32.2"
+      },
+      {
+        "dependsOn": [],
+        "description": "A program that reformats Kotlin source code to comply with the common community standard for Kotlin code conventions.",
+        "name": "ktfmt",
+        "officialUrl": "https://github.com/facebook/ktfmt",
+        "officialUrlDerived": true,
+        "runtime": "jvm",
+        "version": "v0.62"
+      },
+      {
+        "dependsOn": [],
+        "description": "An anti-bikeshedding Kotlin linter with built-in formatter",
+        "name": "ktlint",
+        "officialUrl": "https://github.com/pinterest/ktlint",
+        "officialUrlDerived": true,
+        "runtime": "jvm",
+        "version": "1.8.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "KubeLinter is a static analysis tool that checks Kubernetes YAML files and Helm charts to ensure the applications represented in them adhere to best practices.",
+        "name": "kube-linter",
+        "officialUrl": "https://github.com/stackrox/kube-linter",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v0.8.3"
+      },
+      {
+        "dependsOn": [],
+        "description": "A FAST Kubernetes manifests validator, with support for Custom Resources!",
+        "name": "kubeconform",
+        "officialUrl": "https://github.com/yannh/kubeconform",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v0.8.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "Kubernetes command-line tool",
+        "name": "kubectl",
+        "runtime": "binary",
+        "version": "v1.37.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "Fast and powerful Git hooks manager for any type of projects.",
+        "name": "lefthook",
+        "officialUrl": "https://github.com/evilmartians/lefthook",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v2.1.11"
+      },
+      {
+        "dependsOn": [],
+        "description": "JavaScript parser and stringifier for YAML",
+        "name": "lefthook-sort",
+        "officialUrl": "https://www.npmjs.com/package/yaml",
+        "officialUrlDerived": true,
+        "runtime": "node",
+        "version": "2.9.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "An extremely fast directory and filename linter - Bring some structure to your project filesystem",
+        "name": "ls-lint",
+        "officialUrl": "https://github.com/loeffel-io/ls-lint",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v2.3.1"
+      },
+      {
+        "dependsOn": [],
+        "description": "⚡ Fast, async, stream-based link checker written in Rust. Finds broken URLs and mail addresses inside Markdown, HTML, reStructuredText, websites and more!",
+        "name": "lychee",
+        "officialUrl": "https://github.com/lycheeverse/lychee",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "lychee-v0.24.2"
+      },
+      {
+        "dependsOn": [],
+        "description": "checks the all of the hyperlinks in a markdown text to determine if they are alive or dead",
+        "name": "markdown-link-check",
+        "officialUrl": "https://www.npmjs.com/package/markdown-link-check",
+        "officialUrlDerived": true,
+        "runtime": "node",
+        "version": "3.15.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "A fast, flexible, configuration-based command-line interface for linting Markdown/CommonMark files with the `markdownlint` library",
+        "name": "markdownlint-cli2",
+        "officialUrl": "https://www.npmjs.com/package/markdownlint-cli2",
+        "officialUrlDerived": true,
+        "runtime": "node",
+        "version": "0.23.2"
+      },
+      {
+        "dependsOn": [],
+        "description": "Format markdown code blocks using your favorite tools",
+        "name": "mdsf",
+        "officialUrl": "https://github.com/hougesen/mdsf",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v0.12.1"
+      },
+      {
+        "dependsOn": [],
+        "description": "Command-line interface for mermaid",
+        "name": "mmdc",
+        "officialUrl": "https://www.npmjs.com/package/@mermaid-js/mermaid-cli",
+        "officialUrlDerived": true,
+        "runtime": "node",
+        "version": "11.16.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "Optional static typing for Python",
+        "name": "mypy",
+        "officialUrl": "https://pypi.org/project/mypy/",
+        "officialUrlDerived": true,
+        "runtime": "python",
+        "version": "2.3.1"
+      },
+      {
+        "dependsOn": [],
+        "description": "OpenAPI Generator allows generation of API client libraries (SDK generation), server stubs, documentation and configuration automatically given an OpenAPI Spec (v2, v3)",
+        "name": "openapi-generator",
+        "officialUrl": "https://central.sonatype.com/artifact/org.openapitools/openapi-generator-cli",
+        "officialUrlDerived": true,
+        "runtime": "jvm",
+        "version": "7.20.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "Vulnerability scanner written in Go which uses the data provided by https://osv.dev",
+        "name": "osv-scanner",
+        "officialUrl": "https://github.com/google/osv-scanner",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v2.5.1"
+      },
+      {
+        "dependsOn": [],
+        "description": "Formatter for the JavaScript Oxidation Compiler",
+        "name": "oxfmt",
+        "officialUrl": "https://www.npmjs.com/package/oxfmt",
+        "officialUrlDerived": true,
+        "runtime": "node",
+        "version": "0.64.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "Multithreaded PNG optimizer written in Rust",
+        "name": "oxipng",
+        "officialUrl": "https://github.com/oxipng/oxipng",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v10.2.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "Linter for the JavaScript Oxidation Compiler",
+        "name": "oxlint",
+        "officialUrl": "https://www.npmjs.com/package/oxlint",
+        "officialUrlDerived": true,
+        "runtime": "node",
+        "version": "1.79.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "pinact is a CLI to edit GitHub Workflow and Composite action files and pin versions of Actions and Reusable Workflows. pinact can also update their versions and verify version annotations.",
+        "name": "pinact",
+        "officialUrl": "https://github.com/suzuki-shunsuke/pinact",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v4.1.1"
+      },
+      {
+        "dependsOn": [],
+        "description": "Fast, disk space efficient package manager",
+        "name": "pnpm",
+        "officialUrl": "https://www.npmjs.com/package/pnpm",
+        "officialUrlDerived": true,
+        "runtime": "node",
+        "version": "11.22.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "A framework for managing and maintaining multi-language pre-commit hooks.",
+        "name": "pre-commit",
+        "officialUrl": "https://pypi.org/project/pre-commit/",
+        "officialUrlDerived": true,
+        "runtime": "python",
+        "version": "4.6.2"
+      },
+      {
+        "dependsOn": [],
+        "description": "Prettier is an opinionated code formatter",
+        "name": "prettier",
+        "officialUrl": "https://www.npmjs.com/package/prettier",
+        "officialUrlDerived": true,
+        "runtime": "node",
+        "version": "3.9.6"
+      },
+      {
+        "dependsOn": [],
+        "description": "Protocol Buffers - Google's data interchange format",
+        "name": "protoc",
+        "officialUrl": "https://github.com/protocolbuffers/protobuf",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v36.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "A pluggable linter and fixer to enforce Protocol Buffer style and conventions. ",
+        "name": "protolint",
+        "officialUrl": "https://github.com/yoheimuta/protolint",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v0.57.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "Generate types and converters from JSON, Schema, and GraphQL",
+        "name": "quicktype",
+        "officialUrl": "https://www.npmjs.com/package/quicktype",
+        "officialUrlDerived": true,
+        "runtime": "node",
+        "version": "26.0.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "An extremely fast Python linter and code formatter, written in Rust.",
+        "name": "ruff",
+        "officialUrl": "https://github.com/astral-sh/ruff",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "0.16.4"
+      },
+      {
+        "dependsOn": [],
+        "description": "Rust formatter (cargo fmt) — system toolchain; skipped when rust is absent",
+        "name": "rustfmt",
+        "runtime": "shell",
+        "version": ""
+      },
+      {
+        "dependsOn": [],
+        "description": "OpenSSF Scorecard - Security health metrics for Open Source",
+        "name": "scorecard",
+        "officialUrl": "https://github.com/ossf/scorecard",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v5.5.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "Lightweight static analysis for many languages. Find bug variants with patterns that look like source code.",
+        "name": "semgrep",
+        "officialUrl": "https://pypi.org/project/semgrep/",
+        "officialUrlDerived": true,
+        "runtime": "python",
+        "version": "1.174.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "ShellCheck, a static analysis tool for shell scripts",
+        "name": "shellcheck",
+        "officialUrl": "https://github.com/koalaman/shellcheck",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v0.11.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "A shell parser, formatter, and interpreter with bash and zsh support; includes shfmt",
+        "name": "shfmt",
+        "officialUrl": "https://github.com/mvdan/sh",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v3.13.1"
+      },
+      {
+        "dependsOn": [],
+        "description": "Presentation slides for developers",
+        "name": "slidev",
+        "officialUrl": "https://www.npmjs.com/package/@slidev/cli",
+        "officialUrlDerived": true,
+        "runtime": "node",
+        "version": "52.19.1"
+      },
+      {
+        "dependsOn": [],
+        "description": "Snyk CLI scans and monitors your projects for security vulnerabilities.",
+        "name": "snyk",
+        "officialUrl": "https://github.com/snyk/cli",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v1.1306.4"
+      },
+      {
+        "dependsOn": [],
+        "description": "Simple and flexible tool for managing secrets",
+        "name": "sops",
+        "officialUrl": "https://github.com/getsops/sops",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v3.13.3"
+      },
+      {
+        "dependsOn": [],
+        "description": "Sort an Object or package.json based on the well-known package.json keys",
+        "name": "sort-package-json",
+        "officialUrl": "https://www.npmjs.com/package/sort-package-json",
+        "officialUrlDerived": true,
+        "runtime": "node",
+        "version": "4.0.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "A flexible JSON/YAML linter for creating automated style guides, with baked in support for OpenAPI (v3.1, v3.0, and v2.0), Arazzo v1.0, as well as AsyncAPI v2.x.",
+        "name": "spectral",
+        "officialUrl": "https://www.npmjs.com/package/@stoplight/spectral-cli",
+        "officialUrlDerived": true,
+        "runtime": "node",
+        "version": "6.16.3"
+      },
+      {
+        "dependsOn": [],
+        "description": "Generate type-safe code from SQL",
+        "name": "sqlc",
+        "officialUrl": "https://github.com/sqlc-dev/sqlc",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v1.31.1"
+      },
+      {
+        "dependsOn": [],
+        "description": "The SQL Linter for Humans",
+        "name": "sqlfluff",
+        "officialUrl": "https://pypi.org/project/sqlfluff/",
+        "officialUrlDerived": true,
+        "runtime": "python",
+        "version": "4.3.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "Fast SQL formatter/linter",
+        "name": "sqruff",
+        "officialUrl": "https://github.com/quarylabs/sqruff",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v0.40.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "Automatically generate RESTful API documentation with Swagger 2.0 for Go.",
+        "name": "swag",
+        "officialUrl": "https://github.com/swaggo/swag",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v2.0.0-rc5"
+      },
+      {
+        "dependsOn": [],
+        "description": "CLI tool and library for generating a Software Bill of Materials from container images and filesystems",
+        "name": "syft",
+        "officialUrl": "https://github.com/anchore/syft",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v1.51.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "Consistent dependency versions in large JavaScript Monorepos",
+        "name": "syncpack",
+        "officialUrl": "https://www.npmjs.com/package/syncpack",
+        "officialUrlDerived": true,
+        "runtime": "node",
+        "version": "15.3.3"
+      },
+      {
+        "dependsOn": [],
+        "description": "A fast, cross-platform build tool inspired by Make, designed for modern workflows.",
+        "name": "task",
+        "officialUrl": "https://github.com/go-task/task",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v3.53.1"
+      },
+      {
+        "dependsOn": [],
+        "description": "",
+        "name": "terraform-docs",
+        "officialUrl": "https://github.com/terraform-docs/terraform-docs",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v0.24.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "Terragrunt is a flexible orchestration tool that allows Infrastructure as Code written in OpenTofu/Terraform to scale.",
+        "name": "terragrunt",
+        "officialUrl": "https://github.com/gruntwork-io/terragrunt",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v1.1.3"
+      },
+      {
+        "dependsOn": [],
+        "description": "A Pluggable Terraform Linter",
+        "name": "tflint",
+        "officialUrl": "https://github.com/terraform-linters/tflint",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v0.64.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "Update version constraints in your Terraform / OpenTofu configurations",
+        "name": "tfupdate",
+        "officialUrl": "https://github.com/minamijoyo/tfupdate",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v0.10.2"
+      },
+      {
+        "dependsOn": [],
+        "description": "OpenTofu lets you declaratively manage your cloud infrastructure.",
+        "name": "tofu",
+        "officialUrl": "https://github.com/opentofu/opentofu",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v1.12.6"
+      },
+      {
+        "dependsOn": [],
+        "description": "TOML Formatter / Linter / Language Server",
+        "name": "tombi",
+        "officialUrl": "https://github.com/tombi-toml/tombi",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v1.5.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "Find vulnerabilities, misconfigurations, secrets, SBOM in containers, Kubernetes, code repositories, clouds and more",
+        "name": "trivy",
+        "officialUrl": "https://github.com/aquasecurity/trivy",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v0.74.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "Find, verify, and analyze leaked credentials",
+        "name": "trufflehog",
+        "officialUrl": "https://github.com/trufflesecurity/trufflehog",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v3.97.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "TypeScript is a language for application scale JavaScript development",
+        "name": "tsc",
+        "officialUrl": "https://www.npmjs.com/package/typescript",
+        "officialUrlDerived": true,
+        "runtime": "node",
+        "version": "7.0.2"
+      },
+      {
+        "dependsOn": [],
+        "description": "An extremely fast Python type checker and language server, written in Rust.",
+        "name": "ty",
+        "officialUrl": "https://github.com/astral-sh/ty",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "0.0.73"
+      },
+      {
+        "dependsOn": [],
+        "description": "Source code spell checker",
+        "name": "typos",
+        "officialUrl": "https://github.com/crate-ci/typos",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v1.49.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "A markup-based typesetting system that is powerful and easy to learn.",
+        "name": "typst",
+        "officialUrl": "https://github.com/typst/typst",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v0.15.1"
+      },
+      {
+        "dependsOn": [],
+        "description": "Beautiful and reliable typst code formatter",
+        "name": "typstyle",
+        "officialUrl": "https://github.com/typstyle-rs/typstyle",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v0.15.1"
+      },
+      {
+        "dependsOn": [],
+        "description": "converts all comments inside go functions to lowercase",
+        "name": "unfuck-ai-comments",
+        "officialUrl": "https://github.com/umputun/unfuck-ai-comments",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v0.9.3"
+      },
+      {
+        "dependsOn": [],
+        "description": "A package manager for local and remote Typst packages. ",
+        "name": "utpm",
+        "officialUrl": "https://github.com/typst-community/utpm",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v0.3.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "vacuum is the worlds fastest and most versatile OpenAPI, AsyncAPI & JSON Schema linter, docs generator and toolkit. It tears through API specs at light speed. 100% compatible with Spectral rulesets, and OpenAPI 3.0, 3.1 and 3.2",
+        "name": "vacuum",
+        "officialUrl": "https://github.com/daveshanley/vacuum",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v0.30.0"
+      },
+      {
+        "dependsOn": [],
+        "description": ":pencil: A markup-aware linter for prose built with speed and extensibility in mind.",
+        "name": "vale",
+        "officialUrl": "https://github.com/vale-cli/vale",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v3.18.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "Worktrunk is a CLI for Git worktree management, designed for parallel AI agent workflows",
+        "name": "wt",
+        "officialUrl": "https://github.com/max-sixty/worktrunk",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v0.75.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "Friendly and fast tool for sending HTTP requests",
+        "name": "xh",
+        "officialUrl": "https://github.com/ducaale/xh",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v0.26.2"
+      },
+      {
+        "dependsOn": [],
+        "description": "An extensible command line tool or library to format yaml files.",
+        "name": "yamlfmt",
+        "officialUrl": "https://github.com/google/yamlfmt",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v0.21.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "A linter for YAML files.",
+        "name": "yamllint",
+        "officialUrl": "https://pypi.org/project/yamllint/",
+        "officialUrlDerived": true,
+        "runtime": "python",
+        "version": "1.38.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "yq is a portable command-line YAML, JSON, XML, CSV, TOML, HCL  and properties processor",
+        "name": "yq",
+        "officialUrl": "https://github.com/mikefarah/yq",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v4.53.6"
+      },
+      {
+        "dependsOn": [],
+        "description": "A modern static site generator built by the creators of Material for MkDocs",
+        "name": "zensical",
+        "officialUrl": "https://pypi.org/project/zensical/",
+        "officialUrlDerived": true,
+        "runtime": "python",
+        "version": "0.0.57"
+      },
+      {
+        "dependsOn": [],
+        "description": "Static analysis for GitHub Actions",
+        "name": "zizmor",
+        "officialUrl": "https://github.com/zizmorcore/zizmor",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v1.29.0"
+      }
+    ],
+    "managedConfigs": [
+      {
+        "deleteOnly": false,
+        "name": ".alint.yml",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": [
+          "alint"
+        ]
+      },
+      {
+        "deleteOnly": false,
+        "name": ".claude/skills/backlog/SKILL.md",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": []
+      },
+      {
+        "deleteOnly": false,
+        "name": ".claude/skills/cleanup-agents-md/SKILL.md",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": []
+      },
+      {
+        "deleteOnly": false,
+        "name": ".claude/skills/scaffold-stack/SKILL.md",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": []
+      },
+      {
+        "deleteOnly": false,
+        "name": ".claude/skills/setup-tsconfig/SKILL.md",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": []
+      },
+      {
+        "deleteOnly": false,
+        "name": ".codex/prompts/backlog.md",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": []
+      },
+      {
+        "deleteOnly": false,
+        "name": ".codex/prompts/cleanup-agents-md.md",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": []
+      },
+      {
+        "deleteOnly": false,
+        "name": ".codex/prompts/scaffold-stack.md",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": []
+      },
+      {
+        "deleteOnly": false,
+        "name": ".codex/prompts/setup-tsconfig.md",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": []
+      },
+      {
+        "deleteOnly": false,
+        "name": ".cursor/rules",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": []
+      },
+      {
+        "deleteOnly": false,
+        "name": ".cursorrules",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": []
+      },
+      {
+        "deleteOnly": false,
+        "name": ".datamitsu/scripts/check-empty-files.sh",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": []
+      },
+      {
+        "deleteOnly": false,
+        "name": ".datamitsu/scripts/format-terraform-spacing.sh",
+        "projectTypes": [
+          "terraform-project",
+          "terragrunt-project"
+        ],
+        "scope": "git-root",
+        "tools": []
+      },
+      {
+        "deleteOnly": false,
+        "name": ".dclint.yaml",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": [
+          "dclint"
+        ]
+      },
+      {
+        "deleteOnly": false,
+        "name": ".dockerignore",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": []
+      },
+      {
+        "deleteOnly": false,
+        "name": ".editorconfig",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": [
+          "editorconfig-checker"
+        ]
+      },
+      {
+        "deleteOnly": false,
+        "name": ".editorconfig-checker.json",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": [
+          "editorconfig-checker"
+        ]
+      },
+      {
+        "deleteOnly": false,
+        "name": ".github/copilot-instructions.md",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": []
+      },
+      {
+        "deleteOnly": false,
+        "name": ".github/dependabot.yml",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": []
+      },
+      {
+        "deleteOnly": false,
+        "name": ".github/zizmor.yml",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": [
+          "zizmor"
+        ]
+      },
+      {
+        "deleteOnly": false,
+        "name": ".gitignore",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": []
+      },
+      {
+        "deleteOnly": false,
+        "name": ".gitleaks.toml",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": [
+          "gitleaks"
+        ]
+      },
+      {
+        "deleteOnly": false,
+        "name": ".golangci.yaml",
+        "projectTypes": [
+          "golang-package"
+        ],
+        "scope": "",
+        "tools": [
+          "golangci-lint",
+          "golangci-lint-fmt"
+        ]
+      },
+      {
+        "deleteOnly": false,
+        "name": ".ls-lint.yml",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": [
+          "ls-lint"
+        ]
+      },
+      {
+        "deleteOnly": false,
+        "name": ".node-version",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": []
+      },
+      {
+        "deleteOnly": false,
+        "name": ".npmrc",
+        "projectTypes": [
+          "npm-package"
+        ],
+        "scope": "git-root",
+        "tools": []
+      },
+      {
+        "deleteOnly": false,
+        "name": ".oxlintrc.json",
+        "projectTypes": [
+          "npm-package"
+        ],
+        "scope": "",
+        "tools": [
+          "oxlint"
+        ]
+      },
+      {
+        "deleteOnly": false,
+        "name": ".pinact.yaml",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": [
+          "pinact"
+        ]
+      },
+      {
+        "deleteOnly": false,
+        "name": ".sqruff",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": [
+          "sqruff"
+        ]
+      },
+      {
+        "deleteOnly": false,
+        "name": ".syncpackrc.json",
+        "projectTypes": [
+          "npm-package"
+        ],
+        "scope": "git-root",
+        "tools": [
+          "syncpack"
+        ]
+      },
+      {
+        "deleteOnly": false,
+        "name": ".tflint.hcl",
+        "projectTypes": [
+          "terraform-project"
+        ],
+        "scope": "git-root",
+        "tools": [
+          "tflint"
+        ]
+      },
+      {
+        "deleteOnly": false,
+        "name": ".tombi.toml",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": [
+          "tombi"
+        ]
+      },
+      {
+        "deleteOnly": false,
+        "name": ".trufflehog-exclude-paths.txt",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": [
+          "trufflehog"
+        ]
+      },
+      {
+        "deleteOnly": false,
+        "name": ".vale.ini",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": [
+          "vale"
+        ]
+      },
+      {
+        "deleteOnly": false,
+        "name": ".vscode/extensions.json",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": []
+      },
+      {
+        "deleteOnly": false,
+        "name": ".vscode/settings.json",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": []
+      },
+      {
+        "deleteOnly": false,
+        "name": ".windsurfrules",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": []
+      },
+      {
+        "deleteOnly": false,
+        "name": ".yamlfmt.yaml",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": [
+          "yamlfmt"
+        ]
+      },
+      {
+        "deleteOnly": false,
+        "name": ".yamllint.yaml",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": [
+          "yamllint"
+        ]
+      },
+      {
+        "deleteOnly": false,
+        "name": "AGENTS.md",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": []
+      },
+      {
+        "deleteOnly": false,
+        "name": "CLAUDE.md",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": []
+      },
+      {
+        "deleteOnly": false,
+        "name": "GEMINI.md",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": []
+      },
+      {
+        "deleteOnly": false,
+        "name": "commitlint.config.mjs",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": []
+      },
+      {
+        "deleteOnly": false,
+        "name": "cspell.config.mjs",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": [
+          "cspell"
+        ]
+      },
+      {
+        "deleteOnly": false,
+        "name": "deny.toml",
+        "projectTypes": [
+          "rust-project"
+        ],
+        "scope": "project",
+        "tools": [
+          "cargo-deny"
+        ]
+      },
+      {
+        "deleteOnly": true,
+        "name": "deprecated-configs",
+        "projectTypes": [],
+        "scope": "",
+        "tools": []
+      },
+      {
+        "deleteOnly": false,
+        "name": "eslint.config.mjs",
+        "projectTypes": [
+          "npm-package"
+        ],
+        "scope": "",
+        "tools": [
+          "eslint"
+        ]
+      },
+      {
+        "deleteOnly": false,
+        "name": "hadolint.yaml",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": [
+          "hadolint"
+        ]
+      },
+      {
+        "deleteOnly": false,
+        "name": "knip.config.js",
+        "projectTypes": [
+          "npm-package"
+        ],
+        "scope": "git-root",
+        "tools": [
+          "knip"
+        ]
+      },
+      {
+        "deleteOnly": false,
+        "name": "lefthook.yaml",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": []
+      },
+      {
+        "deleteOnly": false,
+        "name": "mdsf.json",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": [
+          "mdsf"
+        ]
+      },
+      {
+        "deleteOnly": false,
+        "name": "oxfmt.config.ts",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": [
+          "oxfmt"
+        ]
+      },
+      {
+        "deleteOnly": false,
+        "name": "package.json",
+        "projectTypes": [
+          "npm-package"
+        ],
+        "scope": "",
+        "tools": []
+      },
+      {
+        "deleteOnly": false,
+        "name": "pnpm-workspace.yaml",
+        "projectTypes": [
+          "pnpm-package"
+        ],
+        "scope": "git-root",
+        "tools": []
+      },
+      {
+        "deleteOnly": false,
+        "name": "prettier.config.mjs",
+        "projectTypes": [
+          "npm-package"
+        ],
+        "scope": "",
+        "tools": [
+          "prettier"
+        ]
+      },
+      {
+        "deleteOnly": false,
+        "name": "pyproject.toml",
+        "projectTypes": [
+          "python-package"
+        ],
+        "scope": "",
+        "tools": []
+      },
+      {
+        "deleteOnly": false,
+        "name": "rustfmt.toml",
+        "projectTypes": [
+          "rust-project"
+        ],
+        "scope": "project",
+        "tools": [
+          "rustfmt"
+        ]
+      },
+      {
+        "deleteOnly": false,
+        "name": "turbo.json",
+        "projectTypes": [
+          "turbo-package"
+        ],
+        "scope": "git-root",
+        "tools": []
+      },
+      {
+        "deleteOnly": false,
+        "name": "ty.toml",
+        "projectTypes": [
+          "python-package"
+        ],
+        "scope": "project",
+        "tools": [
+          "ty"
+        ]
+      }
+    ],
+    "name": "datamitsu.config",
+    "projectTypes": [
+      {
+        "description": "Docker image (Dockerfile)",
+        "id": "docker-project",
+        "markers": [
+          "**/Dockerfile",
+          "**/Dockerfile.*",
+          "**/*.Dockerfile"
+        ]
+      },
+      {
+        "description": "GitHub Actions workflows",
+        "id": "github-actions",
+        "markers": [
+          ".github/workflows/*.yml",
+          ".github/workflows/*.yaml"
+        ]
+      },
+      {
+        "description": "Go module",
+        "id": "golang-package",
+        "markers": [
+          "**/go.mod"
+        ]
+      },
+      {
+        "description": "Helm chart",
+        "id": "helm-chart",
+        "markers": [
+          "**/Chart.yaml"
+        ]
+      },
+      {
+        "description": "Node.js/npm project",
+        "id": "npm-package",
+        "markers": [
+          "**/package.json"
+        ]
+      },
+      {
+        "description": "pnpm project",
+        "id": "pnpm-package",
+        "markers": [
+          "pnpm-lock.yaml"
+        ]
+      },
+      {
+        "description": "Project using pre-commit framework",
+        "id": "pre-commit-project",
+        "markers": [
+          ".pre-commit-config.yaml"
+        ]
+      },
+      {
+        "description": "Python project",
+        "id": "python-package",
+        "markers": [
+          "**/pyproject.toml"
+        ]
+      },
+      {
+        "description": "Rust crate",
+        "id": "rust-project",
+        "markers": [
+          "**/Cargo.toml"
+        ]
+      },
+      {
+        "description": "Terraform infrastructure",
+        "id": "terraform-project",
+        "markers": [
+          "**/*.tf"
+        ]
+      },
+      {
+        "description": "Terragrunt infrastructure",
+        "id": "terragrunt-project",
+        "markers": [
+          "**/terragrunt.hcl"
+        ]
+      },
+      {
+        "description": "turbo project",
+        "id": "turbo-package",
+        "markers": [
+          "turbo.json"
+        ]
+      },
+      {
+        "description": "TypeScript project",
+        "id": "typescript-project",
+        "markers": [
+          "**/tsconfig.json"
+        ]
+      },
+      {
+        "description": "Typst document",
+        "id": "typst-project",
+        "markers": [
+          "**/*.typ"
+        ]
+      }
+    ],
+    "schemaVersion": 2,
+    "tools": [
+      {
+        "id": "actionlint",
+        "name": "actionlint - GitHub Actions Workflow Linter",
+        "operations": [
+          {
+            "app": "actionlint",
+            "excludeGlobs": [],
+            "globs": [
+              "**/.github/workflows/*.yml",
+              "**/.github/workflows/*.yaml"
+            ],
+            "kind": "lint",
+            "priority": 4,
+            "scope": "per-file"
+          }
+        ],
+        "projectTypes": [],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "alint",
+        "name": "alint - language-agnostic repository structure linter",
+        "operations": [
+          {
+            "app": "alint",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*"
+            ],
+            "kind": "lint",
+            "priority": 0,
+            "scope": "repository"
+          }
+        ],
+        "projectTypes": [],
+        "skipReason": "opt-in: pending manual review & config tuning",
+        "skipped": true
+      },
+      {
+        "id": "bearer",
+        "name": "Bearer - Static Application Security Testing",
+        "operations": [
+          {
+            "app": "bearer",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*"
+            ],
+            "kind": "lint",
+            "priority": 34,
+            "scope": "repository"
+          }
+        ],
+        "projectTypes": [],
+        "skipReason": "runs in CI only",
+        "skipped": true
+      },
+      {
+        "id": "blint",
+        "name": "blint - binary linter & SBOM generator",
+        "operations": [
+          {
+            "app": "blint",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*"
+            ],
+            "kind": "lint",
+            "priority": 0,
+            "scope": "repository"
+          }
+        ],
+        "projectTypes": [],
+        "skipReason": "opt-in: pending manual review & config tuning",
+        "skipped": true
+      },
+      {
+        "id": "cargo-deny",
+        "name": "cargo-deny - Rust dependency linter",
+        "operations": [
+          {
+            "app": "cargo-deny",
+            "excludeGlobs": [],
+            "globs": [
+              "**/Cargo.toml",
+              "**/Cargo.lock",
+              "**/*.rs"
+            ],
+            "kind": "lint",
+            "priority": 0,
+            "scope": "per-project"
+          }
+        ],
+        "projectTypes": [
+          "rust-project"
+        ],
+        "skipReason": "opt-in: pending manual review & config tuning",
+        "skipped": true
+      },
+      {
+        "id": "checkmake",
+        "name": "checkmake - Makefile Linter",
+        "operations": [
+          {
+            "app": "checkmake",
+            "excludeGlobs": [],
+            "globs": [
+              "**/Makefile",
+              "**/GNUmakefile",
+              "**/*.mk"
+            ],
+            "kind": "lint",
+            "priority": 22,
+            "scope": "per-file"
+          }
+        ],
+        "projectTypes": [],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "cspell",
+        "name": "CSpell - A Spelling Checker for Code!",
+        "operations": [
+          {
+            "app": "cspell",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*"
+            ],
+            "kind": "lint",
+            "priority": 6,
+            "scope": "per-project"
+          }
+        ],
+        "projectTypes": [],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "dclint",
+        "name": "dclint - Docker Compose linter",
+        "operations": [
+          {
+            "app": "dclint",
+            "excludeGlobs": [],
+            "globs": [
+              "**/docker-compose.yml",
+              "**/docker-compose.yaml",
+              "**/docker-compose.*.yml",
+              "**/docker-compose.*.yaml",
+              "**/compose.yml",
+              "**/compose.yaml",
+              "**/compose.*.yml",
+              "**/compose.*.yaml"
+            ],
+            "kind": "fix",
+            "priority": 0,
+            "scope": "repository"
+          },
+          {
+            "app": "dclint",
+            "excludeGlobs": [],
+            "globs": [
+              "**/docker-compose.yml",
+              "**/docker-compose.yaml",
+              "**/docker-compose.*.yml",
+              "**/docker-compose.*.yaml",
+              "**/compose.yml",
+              "**/compose.yaml",
+              "**/compose.*.yml",
+              "**/compose.*.yaml"
+            ],
+            "kind": "lint",
+            "priority": 0,
+            "scope": "repository"
+          }
+        ],
+        "projectTypes": [],
+        "skipReason": "opt-in: pending manual review & config tuning",
+        "skipped": true
+      },
+      {
+        "id": "deptry",
+        "name": "deptry - find unused/missing Python dependencies",
+        "operations": [
+          {
+            "app": "deptry",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.py",
+              "**/pyproject.toml"
+            ],
+            "kind": "lint",
+            "priority": 0,
+            "scope": "per-project"
+          }
+        ],
+        "projectTypes": [
+          "python-package"
+        ],
+        "skipReason": "opt-in: pending manual review & config tuning",
+        "skipped": true
+      },
+      {
+        "id": "dotenv-linter",
+        "name": "dotenv-linter",
+        "operations": [
+          {
+            "app": "dotenv-linter",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.env",
+              "**/.env",
+              "**/*.env.*",
+              "**/.env.*"
+            ],
+            "kind": "fix",
+            "priority": 14,
+            "scope": "per-file"
+          },
+          {
+            "app": "dotenv-linter",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.env",
+              "**/.env",
+              "**/*.env.*",
+              "**/.env.*"
+            ],
+            "kind": "lint",
+            "priority": 17,
+            "scope": "per-file"
+          }
+        ],
+        "projectTypes": [],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "droast",
+        "name": "dockerfile-roast - opinionated Dockerfile linter",
+        "operations": [
+          {
+            "app": "droast",
+            "excludeGlobs": [],
+            "globs": [
+              "**/Dockerfile",
+              "**/Dockerfile.*",
+              "**/*.dockerfile"
+            ],
+            "kind": "lint",
+            "priority": 0,
+            "scope": "repository"
+          }
+        ],
+        "projectTypes": [],
+        "skipReason": "opt-in: pending manual review & config tuning",
+        "skipped": true
+      },
+      {
+        "id": "editorconfig-checker",
+        "name": "EditorConfig Checker",
+        "operations": [
+          {
+            "app": "editorconfig-checker",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*"
+            ],
+            "kind": "lint",
+            "priority": 16,
+            "scope": "repository"
+          }
+        ],
+        "projectTypes": [],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "eslint",
+        "name": "Eslint",
+        "operations": [
+          {
+            "app": "eslint",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.js",
+              "**/*.jsx",
+              "**/*.mjs",
+              "**/*.cjs",
+              "**/*.ts",
+              "**/*.mts",
+              "**/*.cts",
+              "**/*.tsx",
+              "**/*.html",
+              "**/*.json",
+              "**/*.jsonc",
+              "**/*.json5"
+            ],
+            "kind": "fix",
+            "priority": 6,
+            "scope": "per-project"
+          },
+          {
+            "app": "eslint",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.js",
+              "**/*.jsx",
+              "**/*.mjs",
+              "**/*.cjs",
+              "**/*.ts",
+              "**/*.mts",
+              "**/*.cts",
+              "**/*.tsx",
+              "**/*.html",
+              "**/*.json",
+              "**/*.jsonc",
+              "**/*.json5"
+            ],
+            "kind": "lint",
+            "priority": 9,
+            "scope": "per-project"
+          }
+        ],
+        "projectTypes": [
+          "npm-package"
+        ],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "gitleaks",
+        "name": "gitleaks",
+        "operations": [
+          {
+            "app": "gitleaks",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*"
+            ],
+            "kind": "lint",
+            "priority": 0,
+            "scope": "repository"
+          }
+        ],
+        "projectTypes": [],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "golangci-lint",
+        "name": "golangci-lint - Go Linter",
+        "operations": [
+          {
+            "app": "golangci-lint",
+            "excludeGlobs": [],
+            "globs": [],
+            "kind": "fix",
+            "priority": 10,
+            "scope": "per-project"
+          },
+          {
+            "app": "golangci-lint",
+            "excludeGlobs": [],
+            "globs": [],
+            "kind": "lint",
+            "priority": 13,
+            "scope": "per-project"
+          }
+        ],
+        "projectTypes": [
+          "golang-package"
+        ],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "golangci-lint-fmt",
+        "name": "golangci-lint - Go Linter",
+        "operations": [
+          {
+            "app": "golangci-lint",
+            "excludeGlobs": [],
+            "globs": [],
+            "kind": "fix",
+            "priority": 0,
+            "scope": "per-project"
+          }
+        ],
+        "projectTypes": [
+          "golang-package"
+        ],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "govulncheck",
+        "name": "govulncheck - Go vulnerability scanner",
+        "operations": [
+          {
+            "app": "govulncheck",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.go",
+              "**/go.mod"
+            ],
+            "kind": "lint",
+            "priority": 0,
+            "scope": "per-project"
+          }
+        ],
+        "projectTypes": [
+          "golang-package"
+        ],
+        "skipReason": "opt-in: pending manual review & config tuning",
+        "skipped": true
+      },
+      {
+        "id": "grype",
+        "name": "Grype - Vulnerability Scanner",
+        "operations": [
+          {
+            "app": "grype",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*"
+            ],
+            "kind": "lint",
+            "priority": 31,
+            "scope": "repository"
+          }
+        ],
+        "projectTypes": [],
+        "skipReason": "runs in CI only",
+        "skipped": true
+      },
+      {
+        "id": "hadolint",
+        "name": "hadolint - Dockerfile Linter",
+        "operations": [
+          {
+            "app": "hadolint",
+            "excludeGlobs": [],
+            "globs": [
+              "**/Dockerfile",
+              "**/Dockerfile.*",
+              "**/*.dockerfile"
+            ],
+            "kind": "lint",
+            "priority": 21,
+            "scope": "per-file"
+          }
+        ],
+        "projectTypes": [],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "harper-cli",
+        "name": "Harper - The Grammar Checker for Developers",
+        "operations": [
+          {
+            "app": "harper-cli",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.md",
+              "**/*.markdown"
+            ],
+            "kind": "lint",
+            "priority": 7,
+            "scope": "repository"
+          }
+        ],
+        "projectTypes": [],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "helm",
+        "name": "Helm - The Kubernetes Package Manager",
+        "operations": [
+          {
+            "app": "helm",
+            "excludeGlobs": [],
+            "globs": [
+              "**/Chart.yaml",
+              "**/values.yaml",
+              "**/templates/**/*.yaml",
+              "**/templates/**/*.yml",
+              "**/templates/**/*.tpl"
+            ],
+            "kind": "lint",
+            "priority": 23,
+            "scope": "per-project"
+          }
+        ],
+        "projectTypes": [
+          "helm-chart"
+        ],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "knip",
+        "name": "Knip - Find unused files, dependencies, and exports",
+        "operations": [
+          {
+            "app": "knip",
+            "excludeGlobs": [],
+            "globs": [],
+            "kind": "lint",
+            "priority": 0,
+            "scope": "repository"
+          }
+        ],
+        "projectTypes": [
+          "npm-package",
+          "typescript-project"
+        ],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "kubeconform",
+        "name": "kubeconform - Kubernetes manifest validation",
+        "operations": [
+          {
+            "app": "kubeconform",
+            "excludeGlobs": [],
+            "globs": [
+              "**/Chart.yaml",
+              "**/values.yaml",
+              "**/templates/**/*.yaml",
+              "**/templates/**/*.yml",
+              "**/templates/**/*.tpl"
+            ],
+            "kind": "lint",
+            "priority": 0,
+            "scope": "per-project"
+          }
+        ],
+        "projectTypes": [
+          "helm-chart"
+        ],
+        "skipReason": "opt-in: pending manual review & config tuning",
+        "skipped": true
+      },
+      {
+        "id": "lefthook-sort",
+        "name": "lefthook - Config Sorter",
+        "operations": [
+          {
+            "app": "lefthook-sort",
+            "excludeGlobs": [],
+            "globs": [
+              "**/lefthook.y*ml",
+              "**/.lefthook.y*ml",
+              "**/.config/lefthook.y*ml"
+            ],
+            "kind": "fix",
+            "priority": 23,
+            "scope": "per-file"
+          }
+        ],
+        "projectTypes": [],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "lefthook-validate",
+        "name": "lefthook - Config Validator",
+        "operations": [
+          {
+            "app": "lefthook",
+            "excludeGlobs": [],
+            "globs": [
+              "**/lefthook.y*ml",
+              "**/.lefthook.y*ml",
+              "**/.config/lefthook.y*ml"
+            ],
+            "kind": "lint",
+            "priority": 29,
+            "scope": "repository"
+          }
+        ],
+        "projectTypes": [],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "ls-lint",
+        "name": "ls-lint - directory & filename linter",
+        "operations": [
+          {
+            "app": "ls-lint",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*"
+            ],
+            "kind": "lint",
+            "priority": 0,
+            "scope": "repository"
+          }
+        ],
+        "projectTypes": [],
+        "skipReason": "opt-in: pending manual review & config tuning",
+        "skipped": true
+      },
+      {
+        "id": "lychee",
+        "name": "lychee - Link Checker",
+        "operations": [
+          {
+            "app": "lychee",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.md",
+              "**/*.markdown"
+            ],
+            "kind": "lint",
+            "priority": 30,
+            "scope": "repository"
+          }
+        ],
+        "projectTypes": [],
+        "skipReason": "runs in CI only (network access)",
+        "skipped": true
+      },
+      {
+        "id": "mdsf",
+        "name": "mdsf - format code blocks inside Markdown",
+        "operations": [
+          {
+            "app": "mdsf",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.md",
+              "**/*.markdown"
+            ],
+            "kind": "fix",
+            "priority": 0,
+            "scope": "repository"
+          },
+          {
+            "app": "mdsf",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.md",
+              "**/*.markdown"
+            ],
+            "kind": "lint",
+            "priority": 0,
+            "scope": "repository"
+          }
+        ],
+        "projectTypes": [],
+        "skipReason": "opt-in: pending manual review & config tuning",
+        "skipped": true
+      },
+      {
+        "id": "osv-scanner",
+        "name": "OSV-Scanner - Vulnerability Scanner",
+        "operations": [
+          {
+            "app": "osv-scanner",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*"
+            ],
+            "kind": "lint",
+            "priority": 33,
+            "scope": "repository"
+          }
+        ],
+        "projectTypes": [],
+        "skipReason": "runs in CI only",
+        "skipped": true
+      },
+      {
+        "id": "oxfmt",
+        "name": "oxfmt - The JavaScript Oxidation Compiler Formatter",
+        "operations": [
+          {
+            "app": "oxfmt",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.js",
+              "**/*.jsx",
+              "**/*.mjs",
+              "**/*.cjs",
+              "**/*.ts",
+              "**/*.tsx",
+              "**/*.mts",
+              "**/*.cts",
+              "**/*.d.ts",
+              "**/*.json",
+              "**/*.jsonc",
+              "**/*.json5",
+              "**/*.css",
+              "**/*.scss",
+              "**/*.less",
+              "**/*.html",
+              "**/*.vue",
+              "**/*.graphql",
+              "**/*.gql",
+              "**/*.md",
+              "**/*.mdx",
+              "**/*.yaml",
+              "**/*.yml",
+              "**/*.toml"
+            ],
+            "kind": "fix",
+            "priority": 8,
+            "scope": "repository"
+          },
+          {
+            "app": "oxfmt",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.js",
+              "**/*.jsx",
+              "**/*.mjs",
+              "**/*.cjs",
+              "**/*.ts",
+              "**/*.tsx",
+              "**/*.mts",
+              "**/*.cts",
+              "**/*.d.ts",
+              "**/*.json",
+              "**/*.jsonc",
+              "**/*.json5",
+              "**/*.css",
+              "**/*.scss",
+              "**/*.less",
+              "**/*.html",
+              "**/*.vue",
+              "**/*.graphql",
+              "**/*.gql",
+              "**/*.md",
+              "**/*.mdx",
+              "**/*.yaml",
+              "**/*.yml",
+              "**/*.toml"
+            ],
+            "kind": "lint",
+            "priority": 11,
+            "scope": "repository"
+          }
+        ],
+        "projectTypes": [],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "oxlint",
+        "name": "Oxlint",
+        "operations": [
+          {
+            "app": "oxlint",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.js",
+              "**/*.mjs",
+              "**/*.cjs",
+              "**/*.ts",
+              "**/*.mts",
+              "**/*.cts",
+              "**/*.tsx",
+              "**/*.jsx",
+              "**/*.vue",
+              "**/*.astro",
+              "**/*.svelte"
+            ],
+            "kind": "fix",
+            "priority": 2,
+            "scope": "per-project"
+          },
+          {
+            "app": "oxlint",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.js",
+              "**/*.mjs",
+              "**/*.cjs",
+              "**/*.ts",
+              "**/*.mts",
+              "**/*.cts",
+              "**/*.tsx",
+              "**/*.jsx",
+              "**/*.vue",
+              "**/*.astro",
+              "**/*.svelte"
+            ],
+            "kind": "lint",
+            "priority": 2,
+            "scope": "per-project"
+          }
+        ],
+        "projectTypes": [
+          "npm-package",
+          "typescript-project"
+        ],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "pinact",
+        "name": "pinact - pin GitHub Actions to commit SHAs",
+        "operations": [
+          {
+            "app": "pinact",
+            "excludeGlobs": [],
+            "globs": [
+              "**/.github/workflows/*.yml",
+              "**/.github/workflows/*.yaml"
+            ],
+            "kind": "fix",
+            "priority": 0,
+            "scope": "repository"
+          },
+          {
+            "app": "pinact",
+            "excludeGlobs": [],
+            "globs": [
+              "**/.github/workflows/*.yml",
+              "**/.github/workflows/*.yaml"
+            ],
+            "kind": "lint",
+            "priority": 0,
+            "scope": "repository"
+          }
+        ],
+        "projectTypes": [],
+        "skipReason": "opt-in: pending manual review & config tuning",
+        "skipped": true
+      },
+      {
+        "id": "pre-commit",
+        "name": "pre-commit - Multi-language pre-commit hooks",
+        "operations": [
+          {
+            "app": "pre-commit",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*"
+            ],
+            "kind": "fix",
+            "priority": 25,
+            "scope": "repository"
+          }
+        ],
+        "projectTypes": [
+          "pre-commit-project"
+        ],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "prettier",
+        "name": "Prettier - Code Formatter",
+        "operations": [
+          {
+            "app": "prettier",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.js",
+              "**/*.jsx",
+              "**/*.mjs",
+              "**/*.cjs",
+              "**/*.ts",
+              "**/*.mts",
+              "**/*.cts",
+              "**/*.tsx",
+              "**/*.html",
+              "**/*.json",
+              "**/*.jsonc",
+              "**/*.json5",
+              "**/*.d.ts",
+              "**/*.md"
+            ],
+            "kind": "fix",
+            "priority": 7,
+            "scope": "per-project"
+          },
+          {
+            "app": "prettier",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.js",
+              "**/*.jsx",
+              "**/*.mjs",
+              "**/*.cjs",
+              "**/*.ts",
+              "**/*.mts",
+              "**/*.cts",
+              "**/*.tsx",
+              "**/*.html",
+              "**/*.json",
+              "**/*.jsonc",
+              "**/*.json5",
+              "**/*.d.ts",
+              "**/*.md"
+            ],
+            "kind": "lint",
+            "priority": 10,
+            "scope": "per-project"
+          }
+        ],
+        "projectTypes": [
+          "npm-package",
+          "typescript-project"
+        ],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "protolint",
+        "name": "protolint - Protocol Buffer Linter",
+        "operations": [
+          {
+            "app": "protolint",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.proto"
+            ],
+            "kind": "fix",
+            "priority": 3,
+            "scope": "per-file"
+          },
+          {
+            "app": "protolint",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.proto"
+            ],
+            "kind": "lint",
+            "priority": 3,
+            "scope": "per-file"
+          }
+        ],
+        "projectTypes": [],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "ruff",
+        "name": "Ruff - Python Linter",
+        "operations": [
+          {
+            "app": "ruff",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.py",
+              "**/*.pyi"
+            ],
+            "kind": "fix",
+            "priority": 11,
+            "scope": "per-project"
+          },
+          {
+            "app": "ruff",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.py",
+              "**/*.pyi"
+            ],
+            "kind": "lint",
+            "priority": 0,
+            "scope": "per-project"
+          }
+        ],
+        "projectTypes": [
+          "python-package"
+        ],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "ruff-format",
+        "name": "Ruff Format",
+        "operations": [
+          {
+            "app": "ruff",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.py",
+              "**/*.pyi"
+            ],
+            "kind": "fix",
+            "priority": 12,
+            "scope": "per-project"
+          },
+          {
+            "app": "ruff",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.py",
+              "**/*.pyi"
+            ],
+            "kind": "lint",
+            "priority": 0,
+            "scope": "per-project"
+          }
+        ],
+        "projectTypes": [
+          "python-package"
+        ],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "rustfmt",
+        "name": "rustfmt - Rust formatter (cargo fmt)",
+        "operations": [
+          {
+            "app": "rustfmt",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.rs"
+            ],
+            "kind": "fix",
+            "priority": 16,
+            "scope": "per-project"
+          },
+          {
+            "app": "rustfmt",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.rs"
+            ],
+            "kind": "lint",
+            "priority": 19,
+            "scope": "per-project"
+          }
+        ],
+        "projectTypes": [
+          "rust-project"
+        ],
+        "skipReason": "rustfmt runs via a POSIX shell guard (sh), unavailable on Windows by default",
+        "skipped": false
+      },
+      {
+        "id": "shellcheck",
+        "name": "ShellCheck - Shell Script Linter",
+        "operations": [
+          {
+            "app": "shellcheck",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.sh",
+              "**/*.bash"
+            ],
+            "kind": "lint",
+            "priority": 20,
+            "scope": "per-file"
+          }
+        ],
+        "projectTypes": [],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "shfmt",
+        "name": "shfmt - Shell Script Formatter",
+        "operations": [
+          {
+            "app": "shfmt",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.sh",
+              "**/*.bash"
+            ],
+            "kind": "fix",
+            "priority": 15,
+            "scope": "per-file"
+          },
+          {
+            "app": "shfmt",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.sh",
+              "**/*.bash"
+            ],
+            "kind": "lint",
+            "priority": 18,
+            "scope": "per-file"
+          }
+        ],
+        "projectTypes": [],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "sort-package-json",
+        "name": "sort-package-json",
+        "operations": [
+          {
+            "app": "sort-package-json",
+            "excludeGlobs": [],
+            "globs": [
+              "**/package.json"
+            ],
+            "kind": "fix",
+            "priority": 9,
+            "scope": "per-file"
+          },
+          {
+            "app": "sort-package-json",
+            "excludeGlobs": [],
+            "globs": [
+              "**/package.json"
+            ],
+            "kind": "lint",
+            "priority": 12,
+            "scope": "per-file"
+          }
+        ],
+        "projectTypes": [
+          "npm-package",
+          "typescript-project"
+        ],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "sqruff",
+        "name": "sqruff - SQL linter & formatter",
+        "operations": [
+          {
+            "app": "sqruff",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.sql"
+            ],
+            "kind": "fix",
+            "priority": 0,
+            "scope": "per-project"
+          },
+          {
+            "app": "sqruff",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.sql"
+            ],
+            "kind": "lint",
+            "priority": 0,
+            "scope": "per-project"
+          }
+        ],
+        "projectTypes": [],
+        "skipReason": "opt-in: pending manual review & config tuning",
+        "skipped": true
+      },
+      {
+        "id": "syncpack",
+        "name": "syncpack",
+        "operations": [
+          {
+            "app": "syncpack",
+            "excludeGlobs": [],
+            "globs": [
+              "**/package.json"
+            ],
+            "kind": "fix",
+            "priority": 1,
+            "scope": "repository"
+          },
+          {
+            "app": "syncpack",
+            "excludeGlobs": [],
+            "globs": [
+              "**/package.json"
+            ],
+            "kind": "lint",
+            "priority": 1,
+            "scope": "repository"
+          }
+        ],
+        "projectTypes": [
+          "npm-package",
+          "typescript-project"
+        ],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "terraform-docs",
+        "name": "terraform-docs",
+        "operations": [
+          {
+            "app": "terraform-docs",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.tf"
+            ],
+            "kind": "fix",
+            "priority": 21,
+            "scope": "per-project"
+          }
+        ],
+        "projectTypes": [
+          "terraform-project"
+        ],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "terragrunt-fmt",
+        "name": "Terragrunt HCL Format",
+        "operations": [
+          {
+            "app": "terragrunt",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.hcl"
+            ],
+            "kind": "fix",
+            "priority": 20,
+            "scope": "repository"
+          }
+        ],
+        "projectTypes": [
+          "terragrunt-project"
+        ],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "tflint",
+        "name": "TFLint - Terraform Linter",
+        "operations": [
+          {
+            "app": "tflint",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.tf"
+            ],
+            "kind": "fix",
+            "priority": 18,
+            "scope": "per-project"
+          },
+          {
+            "app": "tflint",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.tf"
+            ],
+            "kind": "lint",
+            "priority": 25,
+            "scope": "per-project"
+          }
+        ],
+        "projectTypes": [
+          "terraform-project"
+        ],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "tofu-fmt",
+        "name": "OpenTofu fmt",
+        "operations": [
+          {
+            "app": "tofu",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.tf",
+              "**/*.tfvars"
+            ],
+            "kind": "fix",
+            "priority": 19,
+            "scope": "per-project"
+          },
+          {
+            "app": "tofu",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.tf",
+              "**/*.tfvars"
+            ],
+            "kind": "lint",
+            "priority": 26,
+            "scope": "per-project"
+          }
+        ],
+        "projectTypes": [
+          "terraform-project"
+        ],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "tombi",
+        "name": "🦅 TOML Toolkit 🦅",
+        "operations": [
+          {
+            "app": "tombi",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.toml"
+            ],
+            "kind": "fix",
+            "priority": 17,
+            "scope": "repository"
+          },
+          {
+            "app": "tombi",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.toml"
+            ],
+            "kind": "lint",
+            "priority": 24,
+            "scope": "repository"
+          }
+        ],
+        "projectTypes": [],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "trivy",
+        "name": "Trivy - Vulnerability and Misconfiguration Scanner",
+        "operations": [
+          {
+            "app": "trivy",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*"
+            ],
+            "kind": "lint",
+            "priority": 32,
+            "scope": "repository"
+          }
+        ],
+        "projectTypes": [],
+        "skipReason": "runs in CI only",
+        "skipped": true
+      },
+      {
+        "id": "trufflehog",
+        "name": "trufflehog",
+        "operations": [
+          {
+            "app": "trufflehog",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*"
+            ],
+            "kind": "lint",
+            "priority": 0,
+            "scope": "repository"
+          }
+        ],
+        "projectTypes": [],
+        "skipReason": "runs in CI only",
+        "skipped": true
+      },
+      {
+        "id": "tsc",
+        "name": "Tsc",
+        "operations": [
+          {
+            "app": "tsc",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.d.ts",
+              "**/*.ts",
+              "**/*.mts",
+              "**/*.cts",
+              "**/*.tsx"
+            ],
+            "kind": "lint",
+            "priority": 5,
+            "scope": "per-project"
+          }
+        ],
+        "projectTypes": [
+          "typescript-project"
+        ],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "ty",
+        "name": "ty - Astral's Python type checker",
+        "operations": [
+          {
+            "app": "ty",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.py",
+              "**/*.pyi",
+              "**/*.ipynb"
+            ],
+            "kind": "lint",
+            "priority": 0,
+            "scope": "per-project"
+          }
+        ],
+        "projectTypes": [
+          "python-package"
+        ],
+        "skipReason": "opt-in: pending manual review & config tuning",
+        "skipped": true
+      },
+      {
+        "id": "typos",
+        "name": "typos - Source Code Spell Checker",
+        "operations": [
+          {
+            "app": "typos",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*"
+            ],
+            "kind": "lint",
+            "priority": 0,
+            "scope": "repository"
+          }
+        ],
+        "projectTypes": [],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "typstyle",
+        "name": "typstyle - Typst Code Formatter",
+        "operations": [
+          {
+            "app": "typstyle",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.typ"
+            ],
+            "kind": "fix",
+            "priority": 13,
+            "scope": "per-file"
+          },
+          {
+            "app": "typstyle",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.typ"
+            ],
+            "kind": "lint",
+            "priority": 15,
+            "scope": "per-file"
+          }
+        ],
+        "projectTypes": [],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "vale",
+        "name": "Vale - A Syntax-Aware Linter for Prose",
+        "operations": [
+          {
+            "app": "vale",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.md",
+              "**/*.markdown"
+            ],
+            "kind": "lint",
+            "priority": 8,
+            "scope": "repository"
+          }
+        ],
+        "projectTypes": [],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "yamlfmt",
+        "name": "yamlfmt - YAML Formatter",
+        "operations": [
+          {
+            "app": "yamlfmt",
+            "excludeGlobs": [
+              "**/pnpm-lock.yaml"
+            ],
+            "globs": [
+              "**/*.yaml",
+              "**/*.yml"
+            ],
+            "kind": "fix",
+            "priority": 24,
+            "scope": "repository"
+          },
+          {
+            "app": "yamlfmt",
+            "excludeGlobs": [
+              "**/pnpm-lock.yaml"
+            ],
+            "globs": [
+              "**/*.yaml",
+              "**/*.yml"
+            ],
+            "kind": "lint",
+            "priority": 27,
+            "scope": "repository"
+          }
+        ],
+        "projectTypes": [],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "yamllint",
+        "name": "yamllint - YAML Linter",
+        "operations": [
+          {
+            "app": "yamllint",
+            "excludeGlobs": [
+              "**/pnpm-lock.yaml"
+            ],
+            "globs": [
+              "**/*.yaml",
+              "**/*.yml"
+            ],
+            "kind": "lint",
+            "priority": 28,
+            "scope": "repository"
+          }
+        ],
+        "projectTypes": [],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "yq-json",
+        "name": "yq - JSON Key Sorter",
+        "operations": [
+          {
+            "app": "yq",
+            "excludeGlobs": [
+              "**/package.json",
+              "**/package-lock.json"
+            ],
+            "globs": [
+              "**/*.json"
+            ],
+            "kind": "fix",
+            "priority": 4,
+            "scope": "per-file"
+          }
+        ],
+        "projectTypes": [],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "yq-properties",
+        "name": "yq - Properties Key Sorter",
+        "operations": [
+          {
+            "app": "yq",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.properties"
+            ],
+            "kind": "fix",
+            "priority": 5,
+            "scope": "per-file"
+          }
+        ],
+        "projectTypes": [],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "yq-yaml",
+        "name": "yq - YAML Key Sorter",
+        "operations": [
+          {
+            "app": "yq",
+            "excludeGlobs": [
+              "**/pnpm-lock.yaml",
+              "**/lefthook.y*ml",
+              "**/.lefthook.y*ml",
+              "**/.config/lefthook.y*ml"
+            ],
+            "globs": [
+              "**/*.yaml",
+              "**/*.yml"
+            ],
+            "kind": "fix",
+            "priority": 22,
+            "scope": "per-file"
+          }
+        ],
+        "projectTypes": [],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "zizmor",
+        "name": "zizmor - static analysis for GitHub Actions",
+        "operations": [
+          {
+            "app": "zizmor",
+            "excludeGlobs": [],
+            "globs": [
+              "**/.github/workflows/*.yml",
+              "**/.github/workflows/*.yaml"
+            ],
+            "kind": "lint",
+            "priority": 0,
+            "scope": "repository"
+          }
+        ],
+        "projectTypes": [],
+        "skipReason": "opt-in: pending manual review & config tuning",
+        "skipped": true
+      }
+    ],
+    "version": "dev"
+  },
+  "package": "@shibanet0/datamitsu-config",
+  "version": "0.0.0-unstable.20260912.f201136"
+}

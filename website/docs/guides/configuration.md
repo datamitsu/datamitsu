@@ -3,6 +3,8 @@ title: Configuration
 description: How to configure datamitsu with JavaScript config files, remote configs, and config layers
 ---
 
+import ConfigEmbed from "@site/src/components/ConfigEmbed";
+
 # Configuration
 
 datamitsu uses JavaScript configuration files to define your tools, runtimes, and project settings. The configuration system supports layered composition, remote inheritance, and dynamic generation through a full JavaScript runtime.
@@ -243,3 +245,16 @@ for the complete list and effective defaults.
 | `DATAMITSU_NO_SPONSOR`           | Suppress sponsor messages                  | -                                            |
 | `NO_COLOR`                       | Disable color output                       | -                                            |
 | `FORCE_COLOR`                    | Force color output                         | -                                            |
+
+## Inspect a resolved tool
+
+This reference snapshot selects ESLint from the wrapper `@shibanet0/datamitsu-config`,
+`0.0.0-unstable.20260912.f201136`, captured on 2026-09-22. It is enabled,
+runs per project, and declares fix priority 6 and lint priority 9. These are
+the wrapper's choices, not core defaults. The inspector shows the merged result,
+not layer provenance.
+
+<ConfigEmbed view="operations" tool="eslint" />
+
+[Open the full atlas](https://datamitsu.com/atlas.html).
+See the [Config Inspector guide](config-inspector.md) to inspect or embed your own configuration.
