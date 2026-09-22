@@ -56,10 +56,12 @@ const config: Config = {
       indexName: "datamitsu documentation website",
     },
 
+    // One theme class for both color modes: its colors are the site's own
+    // tokens, which already follow data-theme. See src/css/terminal.css.
     asciinema: {
       themes: {
-        dark: "monokai", // cspell:disable-line
-        light: "solarized-light",
+        dark: "datamitsu",
+        light: "datamitsu",
       },
     },
     colorMode: {

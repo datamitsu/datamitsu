@@ -21,6 +21,7 @@ import type {
 } from "./types";
 
 import styles from "./AsciinemaPlayer.module.css";
+import { parseAsciicastByLines } from "./lineFrames";
 
 // Result of a single initialization run, tagged with the run that produced it.
 interface LoadOutcome {
@@ -79,10 +80,12 @@ const AsciinemaPlayer = forwardRef<AsciinemaPlayerHandle, AsciinemaPlayerPropert
     const theme =
       options.theme ||
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ((siteConfig.themeConfig as any)?.asciinema?.themes?.[docusaurusTheme] ??
-        (docusaurusTheme === "light" ? "solarized-light" : "monokai")); // cspell:disable-line
+      ((siteConfig.themeConfig as any)?.asciinema?.themes?.[docusaurusTheme] ?? "datamitsu");
 
-    const runKey = `${attempt}\u{0}${theme}\u{0}${src}`;
+    // The canvas samples the theme class's custom properties once, when it mounts,
+    // and one class serves both color modes — so the mode is part of a run's
+    // identity: flipping it starts a new run rather than recoloring what is drawn.
+    const runKey = `${attempt}\u{0}${theme}\u{0}${docusaurusTheme}\u{0}${src}`;
     const settled = outcome?.runKey === runKey ? outcome : null;
     const loadingState: LoadingState = settled?.state ?? "loading";
     const errorState = settled?.error ?? null;
@@ -125,11 +128,19 @@ const AsciinemaPlayer = forwardRef<AsciinemaPlayerHandle, AsciinemaPlayerPropert
           }
 
           try {
+            // A source object rather than a bare URL, so the recording goes
+            // through the line-splitting parser: one output event per terminal
+            // line, which is what the player's `.` / `,` frame stepping walks.
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            player = (module_ as any).create(src, containerReference.current, {
-              ...options,
-              theme,
-            }) as AsciinemaPlayerInstance;
+            player = (module_ as any).create(
+              { parser: parseAsciicastByLines, url: src },
+              containerReference.current,
+              // datamitsu colors its duration heatmap with xterm 256-color
+              // codes; adaptivePalette derives those from the sixteen the theme
+              // class sets, so a recording never shows a color the page did not
+              // choose. See src/css/terminal.css.
+              { adaptivePalette: true, ...options, theme },
+            ) as AsciinemaPlayerInstance;
 
             playerInstance.current = player;
 

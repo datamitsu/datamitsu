@@ -31,6 +31,7 @@ export interface AsciinemaPlayerOptions {
   controls?: "auto" | boolean;
   fit?: "both" | "height" | "none" | "width";
   loop?: boolean | number;
+  poster?: string;
   preload?: boolean;
   rows?: number;
   speed?: number;

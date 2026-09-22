@@ -1,0 +1,8 @@
+{
+  "command": "datamitsu lint package.json --tools syncpack --widen-to=target --explain",
+  "cwd": "website",
+  "output": "No applicable tools found for this operation.\n\nSkipped (1):\n  ⊘ syncpack — whole-repository verdict — cannot narrow",
+  "recordedAt": "2026-09-20",
+  "repository": "https://github.com/datamitsu/datamitsu",
+  "revision": "ffc2042f35746e305fa661ab24409070b8f194d9"
+}

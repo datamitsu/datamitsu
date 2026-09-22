@@ -47,6 +47,10 @@ export default defineConfig((config) => ({
     "codeberg",
     "gitea",
     "sonatype",
+    // The asciicast recording format the homepage's terminal player reads, and
+    // the frame-by-frame stepping its line parser makes possible.
+    "asciicast",
+    "steppable",
     // The accessibility guidelines the inspector theme checks contrast against,
     // and the Go package that does it.
     "WCAG",

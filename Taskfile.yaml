@@ -40,7 +40,10 @@ tasks:
           --volume "$(pwd)/website/static:/output" \
           node:26.7.0-trixie-slim \
           sh /scripts/docker-capture.sh
-    desc: Run datamitsu check in ovineko/ovineko inside Docker (linux/amd64), write website/static/cold.cast + warm.cast
+      # The capture writes its metadata beside the casts, the only directory the
+      # container is given; the website reads it from its data folder.
+      - mv website/static/recordings.json website/src/data/recordings.json
+    desc: Record cold.cast, warm.cast and scope.cast in ovineko/ovineko inside Docker (linux/amd64) with that repository's own datamitsu
   # ── Docker ──
 
   # ── Dev ──
