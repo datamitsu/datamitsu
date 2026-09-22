@@ -211,6 +211,44 @@ A dependency is a run-time availability contract. Neither `dependsOn` nor
 reinstall otherwise unchanged app contents. Execution caches include the full
 config, so these changes still invalidate cached tool results.
 
+**Dependencies on `PATH`.** When an app runs, every native binary app in its
+`dependsOn` closure is on `PATH` under its app name, ahead of the inherited
+`PATH` and behind the directories a runtime owns (a managed node's `bin/`), so
+a dependency can never displace the app's own interpreter. A tool that looks a
+helper up by name therefore finds the pinned one:
+
+```javascript
+const apps = {
+  // a Dockerfile linter that runs ShellCheck by looking up `shellcheck` on PATH
+  "dockerfile-lint": { binary: dockerfileLintBinary, dependsOn: ["shellcheck"] },
+  shellcheck: { binary: shellcheckBinary },
+};
+```
+
+The store names each binary by its config hash, so datamitsu links them under
+their app names in a directory of their own
+(`{store}/.dependency-path/<hash>/`), with `.exe` appended on Windows. The
+directory is named after the exact set of links it holds, so a dependency bump
+produces a new directory rather than rewriting one a running process uses.
+
+- The **whole closure** is linked, not only direct dependencies: a dependency
+  invoked by name runs straight from the store, without a directory of its own,
+  so it would otherwise miss its own helpers.
+- Only **native binary** apps are linked, the same targets `${APP_BIN:…}`
+  accepts. A runtime-managed app needs a command and arguments that a `PATH`
+  entry cannot carry, and a shell app already resolves through the inherited
+  `PATH`.
+- A dependency called by name runs with the calling app's environment; its own
+  `env` and `runtimeEnv` apply only when datamitsu runs it directly.
+- A tool operation's own `env` is applied last and can still override `PATH`.
+- On Windows the entries are symbolic links where the account may create them
+  (Developer Mode or elevation) and hard links otherwise.
+- In source mode the directory is a health path of the app's shim: if it is
+  missing (for example after `datamitsu store clear`), the shim repairs it
+  through an install instead of running a tool that cannot find its helpers.
+  A repair adds the missing entries in place and never replaces the directory,
+  since a running tool may still be using it.
+
 #### Custom environment variables (`env`)
 
 The optional `env` field applies to **every** app kind (binary, bun, uv, node,
@@ -224,8 +262,15 @@ committed config:
 - `${APP_DIR}` → this app's install directory (per-app, config-hashed).
 - `${APP_BIN:<name>}` is available only in `runtimeEnv`, as described below.
 
-**Precedence:** any key already set by datamitsu or the runtime wins. A user
-config can never relocate the pnpm store, uv cache, `GOPATH`, etc.
+**Precedence:** any key the runtime itself sets for the app wins. A user
+config can never relocate the pnpm store, uv cache, `GOPATH`, etc. Variables
+merely inherited from the calling environment are not protected: an `env` or
+`runtimeEnv` key replaces the inherited value.
+
+`PATH` is rejected in both `env` and `runtimeEnv`, in any letter case. Values
+are not expanded against the inherited environment, so a `PATH` entry would
+replace the inherited `PATH` wholesale. To put a binary on `PATH`, list it in
+`dependsOn` (see above).
 
 ```javascript
 const apps = {
@@ -249,8 +294,9 @@ const apps = {
 
 Use `runtimeEnv` for values needed when the app executes, including version
 checks, shims, `exec`, planner tools, and LSP tools. Installers never receive it.
-As with `env`, keys already set by datamitsu or the runtime win. A key present
-in both `env` and `runtimeEnv` on the same app is a validation error.
+As with `env`, keys the runtime sets for the app win, inherited values do not,
+and `PATH` is rejected. A key present in both `env` and `runtimeEnv` on the same
+app is a validation error.
 
 Values support `${STORE}` and `${APP_DIR}`, plus `${APP_BIN:<name>}`: the exact
 executable path of a native binary app. The target must be in this app's

@@ -534,8 +534,16 @@ func (bm *BinManager) ResolveCommandInfo(appName string) (*CommandInfo, bool, er
 		}
 		installed = installed && present
 		if name == appName {
+			// Only the root's dependency PATH directory is a health path: the dependencies are
+			// reached through it and never run with directories of their own.
+			pathEntries, err := bm.addDependencyPath(appName, &CommandInfo{}, bm.getBinaryPath, false)
+			if err != nil {
+				return nil, false, fmt.Errorf("app %q: %w", appName, err)
+			}
+			required = append(required, pathEntries...)
 			info.RequiredPaths = append(slices.Clone(info.RequiredPaths), required...)
-			return info, installed, nil
+			pathPresent := len(pathEntries) == 0 || allPathsExist(pathEntries)
+			return info, installed && pathPresent, nil
 		}
 		required = append(required, info.HealthPaths()...)
 	}
@@ -1066,6 +1074,9 @@ func (bm *BinManager) resolveCommandInfo(appName string) (*CommandInfo, bool, er
 	if err := bm.mergeAppEnv(appName, app, cmdInfo); err != nil {
 		return nil, false, err
 	}
+	if _, err := bm.addDependencyPath(appName, cmdInfo, bm.getBinaryPath, false); err != nil {
+		return nil, false, fmt.Errorf("app %q: %w", appName, err)
+	}
 
 	return cmdInfo, installed, nil
 }
@@ -1149,6 +1160,10 @@ func (bm *BinManager) getCommandInfo(ctx context.Context, appName string) (*Comm
 
 	if err := bm.mergeAppEnv(appName, app, cmdInfo); err != nil {
 		return nil, err
+	}
+	installDependency := func(dep string) (string, error) { return bm.getOrInstallBinaryPath(ctx, dep) }
+	if _, err := bm.addDependencyPath(appName, cmdInfo, installDependency, true); err != nil {
+		return nil, fmt.Errorf("app %q: %w", appName, err)
 	}
 
 	return cmdInfo, nil
