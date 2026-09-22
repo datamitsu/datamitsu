@@ -212,6 +212,19 @@ jobs:
             ci
             chore
             revert
+  showcase:
+    name: Showcase Entries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-environment
+      # Shape only: the schema, the tag vocabulary, unique ids, every link
+      # reachable, every `remote` hash verified by downloading it, and a dataset
+      # that parses as a display manifest. Whether a configuration belongs on the
+      # page stays a maintainer's decision.
+      - name: Check showcase entries
+        run: node scripts/check-showcases.ts
+        working-directory: website
   test:
     name: Test
     runs-on: ubuntu-latest
@@ -224,6 +237,8 @@ jobs:
         # current config. config.js is checked in, but the contract goldens
         # depend on it being fresh.
         run: pnpm dm exec task -- build:lib
+      - name: Test inspector routing and filters
+        run: pnpm --filter @datamitsu/inspector test
       - name: Run Go tests (unit + blackbox CLI tier, merged coverage)
         # coverage-all.sh runs ./... — including the test/cli subprocess blackbox
         # tier — and merges in-process unit covdata with the blackbox GOCOVERDIR

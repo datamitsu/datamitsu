@@ -4,8 +4,8 @@
   "license": "MIT",
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
-  "pageCount": 54,
-  "pageSetHash": "443d05a651cad1aee5d036320f2a6fde",
+  "pageCount": 55,
+  "pageSetHash": "1df7ca2b95becb0ff5da9b0335869eb2",
   "pages": [
     {
       "slug": "about",
@@ -44,6 +44,15 @@
       "description": "How to contribute to datamitsu development, documentation, and ecosystem",
       "bytes": 6660,
       "contentHash": "e91388c8cf927e629d027e70ff14b999"
+    },
+    {
+      "slug": "contributing/showcase",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/contributing/showcase.md",
+      "title": "List your configuration",
+      "description": "How to add a datamitsu configuration to the showcase, and what is checked before it is merged",
+      "bytes": 4678,
+      "contentHash": "2fd12b4b4bf4c7c0e0ee02c5f5645ed0"
     },
     {
       "slug": "examples/multiple-versions",

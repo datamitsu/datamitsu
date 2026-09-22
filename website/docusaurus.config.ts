@@ -111,6 +111,11 @@ const config: Config = {
           type: "docSidebar",
         },
         {
+          label: "Showcase",
+          position: "left",
+          to: "/showcase",
+        },
+        {
           label: "Blog",
           position: "left",
           to: "/blog",
