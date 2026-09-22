@@ -24,6 +24,7 @@ const config: Config = {
   onBrokenLinks: "throw",
   organizationName: "datamitsu",
 
+  plugins: ["./plugins/config-atlas.ts"],
   presets: [
     [
       "classic",
