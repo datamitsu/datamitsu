@@ -12,7 +12,7 @@
 //
 // The `lib/` directory (programmable API) is built by CI workflow, not by this script.
 
-import { execSync, spawn } from "node:child_process";
+import { spawn } from "node:child_process";
 import {
   cpSync,
   existsSync,
@@ -285,11 +285,6 @@ function cleanRuby() {
       console.log(`✓ Cleaned ${entry}`);
     }
   }
-}
-
-function exec(command: string, cwd?: string): void {
-  console.log(`$ ${command}`);
-  execSync(command, { cwd, stdio: "inherit" });
 }
 
 function execSafe(

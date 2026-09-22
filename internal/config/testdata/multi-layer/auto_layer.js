@@ -7,7 +7,7 @@ export function getConfig(input) {
       ".editorconfig": {
         content(context) {
           // Verify upstream content exists before overriding
-          if (context.existingContent && context.existingContent.indexOf("indent_style") === -1) {
+          if (context.existingContent && !context.existingContent.includes("indent_style")) {
             throw new Error("upstream .editorconfig missing indent_style");
           }
           // Override with custom indentation

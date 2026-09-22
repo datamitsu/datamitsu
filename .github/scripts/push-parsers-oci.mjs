@@ -193,6 +193,9 @@ async function main() {
   const { hash, name } = resolveModule("dist/checksums.txt");
   const module = readFileSync(`dist/${name}`);
   const actual = sha256Hex(module);
+  // Both sides are published checksums of a public artifact, not secrets: there is
+  // nothing for a timing difference to leak, and an integrity check must stay exact.
+  // eslint-disable-next-line security/detect-possible-timing-attacks
   if (actual !== hash) {
     throw new Error(`dist/${name} hashes ${actual}, but checksums.txt records ${hash}`);
   }

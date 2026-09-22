@@ -81,6 +81,16 @@ export function embedMode(search: string): "" | keyof typeof embedViews {
   return "";
 }
 
+// The address the inspector writes back to the address bar: the query it was
+// opened with, the theme, and the route in the hash. URL assembly lives here
+// rather than in a component, which may hold no mutable URL of its own.
+export function historyURL(href: string, route: Route, theme: ThemePreference): string {
+  const url = new URL(href);
+  url.searchParams.set("theme", theme);
+  url.hash = routeHash(route);
+  return url.href;
+}
+
 export function readLocation(search: string, hash: string, data: Manifest): Route {
   const mode = embedMode(search);
   if (!mode && hash.startsWith("#/")) {
