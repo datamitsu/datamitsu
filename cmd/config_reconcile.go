@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -15,6 +16,7 @@ import (
 	enginetools "github.com/datamitsu/datamitsu/internal/engine/tools"
 	"github.com/datamitsu/datamitsu/internal/install"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
+	"github.com/datamitsu/datamitsu/internal/managedconfig"
 	"github.com/datamitsu/datamitsu/internal/project"
 	"github.com/datamitsu/datamitsu/internal/runner"
 	"github.com/datamitsu/datamitsu/internal/term"
@@ -45,6 +47,11 @@ or removing project-owned files for the detected project types. The command
 writes those changes and then runs "datamitsu fix" by default. Use --dry-run to
 preview without writing or running fix, or --skip-fix to reconcile files without
 the post-reconciliation fix.
+
+An ejectable config whose tool is not named in ejectConfigs lives in
+.datamitsu/configs/, which init writes. Reconciliation removes its repository
+copy, but never one holding changes the configuration would not render again:
+the run is refused before anything is written, and the file is named.
 
 This command is intentionally separate from project initialization. After
 editing datamitsu.config.*, run "datamitsu init" to provision tools, runtimes,
@@ -180,12 +187,36 @@ func runConfigReconcile(_ *cobra.Command, _ []string) error {
 		disp.PhaseBody(clr.Cyan("dry-run") + clr.Faint(" — no files will be written and fix will not run"))
 	}
 
-	var allResults []install.InstallResult
+	var repoProjectTypes []string
+	for _, loc := range locations {
+		if !slices.Contains(repoProjectTypes, loc.Type) {
+			repoProjectTypes = append(repoProjectTypes, loc.Type)
+		}
+	}
+
+	installers := make([]*install.Installer, 0, len(sortedPaths))
+	var conflicts []*install.EjectConflictError
 	for _, projectPath := range sortedPaths {
-		projectTypes := locationMap[projectPath]
-		installer := install.NewInstaller(rootPath, projectPath, projectTypes, selectedTools, cfg.ManagedConfigs, vm, layerMap)
+		installer := install.NewInstaller(rootPath, projectPath, locationMap[projectPath], selectedTools, cfg.ManagedConfigs, vm, layerMap)
 		installer.SetProjectLocations(projectLocations)
-		results, err := installer.InstallAll(ctx, dryRun)
+		installer.SetRepoProjectTypes(repoProjectTypes)
+		installers = append(installers, installer)
+		conflicts = append(conflicts, installer.EjectConflicts()...)
+	}
+	// Refused as a whole, before the first write: a run that deleted half of
+	// what it planned would leave the repository in a state nobody chose.
+	if len(conflicts) > 0 {
+		rows := make([]reconcileRow, 0, len(conflicts))
+		for _, c := range conflicts {
+			rows = append(rows, reconcileRow{clr.Red("✗"), c.Error()})
+		}
+		reconcileSection(disp, "conflicts", rows)
+		return fmt.Errorf("configuration reconciliation refused: %d file(s) would be deleted with changes datamitsu did not write", len(conflicts))
+	}
+
+	var allResults []install.InstallResult
+	for i, projectPath := range sortedPaths {
+		results, err := installers[i].InstallAll(ctx, dryRun)
 		if err != nil {
 			return fmt.Errorf("failed to reconcile managed configs in %s: %w", projectPath, err)
 		}
@@ -197,7 +228,7 @@ func runConfigReconcile(_ *cobra.Command, _ []string) error {
 	// (created/replaced/linked/removed/errors) are always listed; the bulk of
 	// routine patches is collapsed to a count outside dry-run, where the full
 	// list is itself the preview.
-	var created, replaced, linked, patched, removed, failedRows []reconcileRow
+	var created, replaced, linked, patched, removed, internal, failedRows []reconcileRow
 	var installErrors []error
 	fileCount := 0
 	for _, result := range results {
@@ -215,6 +246,8 @@ func runConfigReconcile(_ *cobra.Command, _ []string) error {
 		case "replaced":
 			replaced = append(replaced, reconcileRow{clr.Yellow("±"), relPath})
 			fileCount++
+		case "internal":
+			internal = append(internal, reconcileRow{clr.Faint("·"), relPath})
 		case "linked":
 			text := relPath
 			if result.LinkTarget != "" {
@@ -241,6 +274,12 @@ func runConfigReconcile(_ *cobra.Command, _ []string) error {
 	reconcileSection(disp, "replaced", replaced)
 	reconcileSection(disp, "linked", linked)
 	reconcileSection(disp, "removed", removed)
+	if dryRun {
+		reconcileSection(disp, "internal", internal)
+	} else if len(internal) > 0 {
+		disp.PhaseBody("")
+		disp.PhaseBody(clr.Bold("internal") + clr.Faint(fmt.Sprintf("  %d files in %s/%s/", len(internal), config.DatamitsuDirName, config.InternalConfigsDir)))
+	}
 	if dryRun {
 		reconcileSection(disp, "patched", patched)
 	} else if len(patched) > 0 {
@@ -277,6 +316,14 @@ func runConfigReconcile(_ *cobra.Command, _ []string) error {
 
 	if len(installErrors) > 0 {
 		return fmt.Errorf("configuration reconciliation completed with %d error(s)", len(installErrors))
+	}
+
+	// The post-reconciliation fix runs the tools, and a file that just left the
+	// repository must already be in .datamitsu/configs/ when it does.
+	if !dryRun {
+		if _, err := managedconfig.WriteInternalConfigs(rootPath, cfg.ManagedConfigs, false); err != nil {
+			return fmt.Errorf("failed to write internal configs: %w", err)
+		}
 	}
 
 	// Tear down the reconciliation frame before a possible fix continuation

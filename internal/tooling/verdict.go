@@ -475,6 +475,14 @@ func (p *Planner) unitGuards(task Task, unitDir string) []string {
 		}
 	}
 
+	// A managed config an operation reads is an input wherever its path appears
+	// — a --config=PATH argument or an env value, which the loop above skips.
+	for _, ref := range task.OpConfig.ManagedConfigRefs {
+		expanded := strings.ReplaceAll(ref.Path, "{root}", p.rootPath)
+		expanded = strings.ReplaceAll(expanded, "{cwd}", unitDir)
+		add(filepath.FromSlash(expanded))
+	}
+
 	// invalidateOn names extra inputs for this operation. Resolved against the
 	// unit and every ancestor up to the git root — without the ancestor walk a
 	// monorepo package could not name a config that lives above it, which is

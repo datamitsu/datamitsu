@@ -108,6 +108,15 @@ When the executor considers running a tool on a file, it checks:
 
 All three must be true for a cache hit. If any check fails, the tool runs.
 
+### Managed config content in the tool name
+
+An operation that names a managed config through `{managedConfig:<key>}` records
+its passes under the tool name plus a digest of that config's current content —
+`yamlfmt@<xxh3>`, not `yamlfmt`. Editing `.yamlfmt.yaml`, or `datamitsu init`
+rewriting its copy in `.datamitsu/configs/`, is then a miss for that tool on every
+file, while every other tool's entries stay valid. Folding the digest into the
+cache-wide invalidation key instead would discard all of them.
+
 ### Why separate Lint and Fix tracking
 
 Lint and fix are independent operations with different semantics. A file can pass lint without needing a fix, or be fixed without being re-linted yet. Tracking them separately enables precise cache behavior:
@@ -146,8 +155,9 @@ Per-file tracking answers "has this file changed?". A tool whose `granularity` i
 inferred for every `scope: "per-project"` operation — asks a coarser question: "has anything in this
 unit changed?" — and the answer is a **verdict**, keyed by a hash over every member of the unit plus
 every guard: the ancestor configs and lock files the unit inherits, any config path the operation's
-`args` names as an absolute path, and its `invalidateOn` entries resolved against the unit and each
-ancestor. The input hash also includes selected inherited environment variables whose names start
+`args` names as an absolute path, every managed config it names through `{managedConfig:<key>}` —
+wherever that appears, including a `--config=PATH` argument or an `env` value — and its
+`invalidateOn` entries resolved against the unit and each ancestor. The input hash also includes selected inherited environment variables whose names start
 with `GO`, `CARGO`, `RUST`, `NODE_`, `NPM_`, `PYTHON`, `PIP_`, `UV_`, `JAVA_`, `TS_`,
 `ESLINT_`, `RUFF_`, `TF_`, or `TFLINT_`.
 

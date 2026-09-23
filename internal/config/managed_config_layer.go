@@ -14,6 +14,15 @@ type ManagedConfigLayerHistory struct {
 	OriginalContent *string // original disk content, read once during first evaluation
 	Layers          []ManagedConfigLayerEntry
 	FinalConfig     ManagedConfig
+	// PristineContent is an ejectable entry's repository render from scratch —
+	// no originalContent — which reconciliation compares a repository file
+	// against before deleting it. nil when the entry is not ejectable or no layer
+	// rendered anything.
+	PristineContent *string
+	// RenderFailed records that some layer's content() threw during the eager
+	// pass. The pass skips such a layer and carries on, so the last generated
+	// content no longer says what reconciliation would write for the file.
+	RenderFailed bool
 }
 
 // ManagedConfigLayerMap maps filename to layer history.

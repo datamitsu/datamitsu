@@ -57,6 +57,27 @@ func TestSnapshotCarriesTheConfigurationName(t *testing.T) {
 	}
 }
 
+func TestSnapshotReportsPlacementOfEjectableConfigsOnly(t *testing.T) {
+	cfg := &config.Config{ManagedConfigs: config.MapOfManagedConfigs{
+		".gitleaks.toml": {Ejectable: true, Placement: config.PlacementInternal, Render: &config.ManagedConfigRender{Content: "secret-render"}},
+		"lefthook.yaml":  {Placement: config.PlacementRepo},
+	}}
+	m := Snapshot(cfg, "test")
+	if got := m.ManagedConfigs[0]; !got.Ejectable || got.Placement != "internal" {
+		t.Errorf("ejectable entry = %+v", got)
+	}
+	if got := m.ManagedConfigs[1]; got.Ejectable || got.Placement != "" {
+		t.Errorf("an entry that is always in the repository carries placement: %+v", got)
+	}
+	raw, err := json.Marshal(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), "secret-render") {
+		t.Fatal("export includes rendered content")
+	}
+}
+
 func TestRenderEscapesScriptTermination(t *testing.T) {
 	m := Snapshot(&config.Config{}, "test")
 	hostile := "</script><script>globalThis.pwned=true</script>\u2028&<>"

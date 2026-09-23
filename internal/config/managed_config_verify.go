@@ -90,7 +90,10 @@ func VerifyChainHashes(layerMap ManagedConfigLayerMap) []ChainHashMismatch {
 			continue
 		}
 		pin := strings.TrimSpace(history.FinalConfig.ExpectChainHash)
-		if pin == "" {
+		// A pin protects repository overrides from upstream drift. An internal
+		// file carries no overrides, and the pin was taken over the repository
+		// render, which an internal render does not equal.
+		if pin == "" || history.FinalConfig.Placement == PlacementInternal {
 			continue
 		}
 

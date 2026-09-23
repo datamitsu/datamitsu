@@ -24,6 +24,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/diagnostic"
 	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/hashutil"
 	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/textdiff"
 	"github.com/datamitsu/datamitsu/internal/trace"
@@ -444,6 +445,10 @@ func (e *Executor) executeTask(ctx context.Context, task Task) ExecutionResult {
 		zap.String("app", task.OpConfig.App),
 		zap.Int("fileCount", len(task.Files)))
 
+	// Taken before the tool runs: a config saved while it runs must not have
+	// this run's result recorded under its digest.
+	task.perFileCache = e.perFileCacheTool(task)
+
 	// Determine working directory early for callback and result population
 	workingDir := e.getWorkingDir(task)
 	relativeDir := e.getRelativeDir(workingDir)
@@ -672,10 +677,14 @@ func (e *Executor) filterFilesByCache(task Task) []string {
 		cacheOp = cache.OperationFix
 	}
 
+	cacheTool := task.perFileCache
+	if cacheTool == "" {
+		cacheTool = e.perFileCacheTool(task)
+	}
 	filterSpan := trace.Start(trace.CatCache, "filterFilesByCache")
 	var filesToProcess []string
 	for _, file := range task.Files {
-		if e.cache.ShouldRun(file, task.ToolName, cacheOp, toolCacheEnabled) {
+		if e.cache.ShouldRun(file, cacheTool, cacheOp, toolCacheEnabled) {
 			filesToProcess = append(filesToProcess, file)
 		}
 	}
@@ -687,6 +696,28 @@ func (e *Executor) filterFilesByCache(task Task) []string {
 	)
 
 	return filesToProcess
+}
+
+// perFileCacheTool is the name a per-file cache entry records a pass under.
+// For an operation that reads managed configs it carries a digest of their
+// content, so editing .yamlfmt.yaml — or init rewriting its internal copy —
+// re-runs that tool on every file without discarding any other tool's entries,
+// which folding the digest into the cache-wide invalidation key would.
+func (e *Executor) perFileCacheTool(task Task) string {
+	refs := task.OpConfig.ManagedConfigRefs
+	if len(refs) == 0 {
+		return task.ToolName
+	}
+	parts := make([][]byte, 0, 2*len(refs))
+	for _, ref := range refs {
+		path := e.expandPathPlaceholders(ref.Path, task.ProjectPath, task.ToolName)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			data = []byte("\x00missing")
+		}
+		parts = append(parts, []byte(ref.Key), data)
+	}
+	return task.ToolName + "@" + hashutil.XXH3Multi(parts...)
 }
 
 // updateCacheAfterSuccess updates cache after successful tool execution
@@ -706,12 +737,18 @@ func (e *Executor) updateCacheAfterSuccess(task Task, files []string) {
 		toolCacheEnabled = *task.OpConfig.Cache
 	}
 
+	cacheTool := e.perFileCacheTool(task)
+	if task.perFileCache != "" && task.perFileCache != cacheTool {
+		log.Debug("managed config changed while the tool ran; not caching its result",
+			zap.String("tool", task.ToolName))
+		return
+	}
 	for _, file := range files {
 		var err error
 		if task.Operation == config.OpLint {
-			err = e.cache.AfterLint(file, task.ToolName, toolCacheEnabled)
+			err = e.cache.AfterLint(file, cacheTool, toolCacheEnabled)
 		} else {
-			err = e.cache.AfterFix(file, task.ToolName, toolCacheEnabled)
+			err = e.cache.AfterFix(file, cacheTool, toolCacheEnabled)
 		}
 
 		if err != nil {

@@ -19,7 +19,15 @@ export interface Manifest {
   capture?: { capturedAt: string; package?: string; version?: string };
   managedConfigs: {
     deleteOnly: boolean;
+    /**
+     * Present only for an entry that may live in .datamitsu/configs/ until a project ejects it.
+     */
+    ejectable?: boolean;
     name: string;
+    /**
+     * Where an ejectable entry lives in the captured configuration.
+     */
+    placement?: "internal" | "repo";
     projectTypes: string[];
     scope: string;
     tools: string[];

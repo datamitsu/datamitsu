@@ -1149,7 +1149,7 @@ func TestGenerateContentWithContext(t *testing.T) {
 	originalContent := "old"
 	existingPath := "/tmp/old.yml"
 
-	content, skip, err := installer.generateContent(context.Background(), cfg, &existingContent, &originalContent, &existingPath)
+	content, skip, err := installer.generateContent(context.Background(), cfg, "", &existingContent, &originalContent, &existingPath)
 	if err != nil {
 		t.Fatalf("generateContent() error = %v", err)
 	}
@@ -1211,7 +1211,7 @@ func TestGenerateContentExposesProjectContext(t *testing.T) {
 	})
 	cfg := config.ManagedConfig{Content: contentFunc}
 
-	content, skip, err := installer.generateContent(context.Background(), cfg, nil, nil, nil)
+	content, skip, err := installer.generateContent(context.Background(), cfg, "", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("generateContent() error = %v", err)
 	}
@@ -1492,7 +1492,7 @@ func TestGenerateContentDatamitsuDir(t *testing.T) {
 				Content: contentFunc,
 			}
 
-			content, skip, err := installer.generateContent(context.Background(), cfg, nil, nil, nil)
+			content, skip, err := installer.generateContent(context.Background(), cfg, "", nil, nil, nil)
 			if err != nil {
 				t.Fatalf("generateContent() error = %v", err)
 			}

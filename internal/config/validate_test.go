@@ -2679,42 +2679,42 @@ func TestValidateInitToolRefs(t *testing.T) {
 		"prettier":      {Name: "prettier"},
 	}
 
-	t.Run("known tool refs produce no warnings", func(t *testing.T) {
+	t.Run("known tool refs pass", func(t *testing.T) {
 		managedConfigs := MapOfManagedConfigs{
 			".golangci.yml": {Tools: []string{"golangci-lint"}},
 			".prettierrc":   {Tools: []string{"prettier"}},
-			".gitignore":    {}, // no tools is fine
+			".gitignore":    {},
 		}
-		if w := ValidateManagedConfigToolRefs(managedConfigs, tools); len(w) != 0 {
-			t.Errorf("expected no warnings, got %v", w)
+		if err := ValidateManagedConfigToolRefs(managedConfigs, tools); err != nil {
+			t.Errorf("expected no error, got %v", err)
 		}
 	})
 
-	t.Run("unknown tool ref produces a warning", func(t *testing.T) {
+	t.Run("unknown tool ref is an error", func(t *testing.T) {
 		managedConfigs := MapOfManagedConfigs{
-			".golangci.yml": {Tools: []string{"golangci"}}, // typo
+			".golangci.yml": {Tools: []string{"golangci"}},
 		}
-		w := ValidateManagedConfigToolRefs(managedConfigs, tools)
-		if len(w) != 1 {
-			t.Fatalf("expected 1 warning, got %d: %v", len(w), w)
+		err := ValidateManagedConfigToolRefs(managedConfigs, tools)
+		if err == nil {
+			t.Fatal("expected an error for an unknown tool")
 		}
-		if !strings.Contains(w[0], "golangci") || !strings.Contains(w[0], ".golangci.yml") {
-			t.Errorf("warning should name the file and unknown tool, got: %q", w[0])
+		if !strings.Contains(err.Error(), `"golangci"`) || !strings.Contains(err.Error(), ".golangci.yml") {
+			t.Errorf("error should name the file and unknown tool, got: %v", err)
 		}
 	})
 
-	t.Run("multiple unknown refs are reported deterministically", func(t *testing.T) {
+	t.Run("multiple unknown refs are reported in config-name order", func(t *testing.T) {
 		managedConfigs := MapOfManagedConfigs{
 			"b.yml": {Tools: []string{"nope"}},
 			"a.yml": {Tools: []string{"bogus"}},
 		}
-		w := ValidateManagedConfigToolRefs(managedConfigs, tools)
-		if len(w) != 2 {
-			t.Fatalf("expected 2 warnings, got %d: %v", len(w), w)
+		err := ValidateManagedConfigToolRefs(managedConfigs, tools)
+		if err == nil {
+			t.Fatal("expected an error")
 		}
-		// Sorted by config name: a.yml before b.yml.
-		if !strings.Contains(w[0], "a.yml") || !strings.Contains(w[1], "b.yml") {
-			t.Errorf("warnings should be sorted by config name, got: %v", w)
+		msg := err.Error()
+		if a, b := strings.Index(msg, "a.yml"), strings.Index(msg, "b.yml"); a < 0 || b < 0 || a > b {
+			t.Errorf("errors should be sorted by config name, got: %v", msg)
 		}
 	})
 }

@@ -126,6 +126,19 @@ type ToolOperation struct {
 	// combined stdout+stderr, tool mutates files) or "stdout" (capture stdout
 	// separately as the candidate formatted content).
 	Output ToolOutputMode `json:"output,omitempty"`
+	// ManagedConfigRefs lists the managed configs this operation's args and env
+	// named through {managedConfig:<key>}, recorded when the loader resolves
+	// them. Hidden from config JS and from the config JSON: the resolved paths are
+	// already in Args/Env, and this is only the index the executor uses to find
+	// the files whose content its caches and preflight depend on.
+	ManagedConfigRefs []ManagedConfigOpRef `json:"-"`
+}
+
+// ManagedConfigOpRef is a managed config an operation reads: its key and the
+// path it resolved to, still carrying {root}/{cwd}.
+type ManagedConfigOpRef struct {
+	Key  string
+	Path string
 }
 
 // Tool groups the fix and lint operations of a single development tool.
@@ -218,8 +231,26 @@ type ManagedConfig struct {
 	// pinned file surface before any overwrite. Opt-in per file; only the root
 	// layer's value is consulted. Bypass with --no-verify-hash.
 	ExpectChainHash string `json:"expectChainHash,omitempty"`
+	// Ejectable lets the file live in .datamitsu/configs/ until a project names
+	// one of its Tools in Config.EjectConfigs. Without it the file is always
+	// written to the repository.
+	Ejectable bool `json:"ejectable,omitempty"`
+	// Placement is derived by the loader once the whole chain is known; a value
+	// set by config JS is overwritten.
+	Placement ManagedConfigPlacement `json:"placement,omitempty"`
+	// Render is the internal-placement content, rendered by the loader. Kept out
+	// of the config JSON (the file's content is not config), but stored in the
+	// config-evaluation cache, which encodes by field name.
+	Render *ManagedConfigRender `json:"-"`
 	// Content function will be called from JavaScript
 	Content any `json:"-"`
+}
+
+// ManagedConfigRender is the content an internal-placement entry renders to,
+// with its XXH3-128 digest for freshness checks.
+type ManagedConfigRender struct {
+	Content string
+	Hash    string
 }
 
 // MapOfManagedConfigs maps a config-file name to its generation definition.
@@ -480,8 +511,11 @@ type Config struct {
 	Bundles        binmanager.MapOfBundles `json:"bundles,omitempty"`
 	Runtimes       MapOfRuntimes           `json:"runtimes,omitempty"`
 	ManagedConfigs MapOfManagedConfigs     `json:"managedConfigs,omitempty"`
-	ProjectTypes   MapOfProjectTypes       `json:"projectTypes,omitempty"`
-	Tools          MapOfTools              `json:"tools,omitempty"`
+	// EjectConfigs names the tools whose ejectable managed configs the project
+	// keeps in the repository.
+	EjectConfigs []string          `json:"ejectConfigs,omitempty"`
+	ProjectTypes MapOfProjectTypes `json:"projectTypes,omitempty"`
+	Tools        MapOfTools        `json:"tools,omitempty"`
 	// Execution holds run-shaping policy not tied to a single tool. A pointer so
 	// omitempty actually elides it: the whole config is marshalled into the cache
 	// invalidation key, and a struct value would serialize as {} for every config

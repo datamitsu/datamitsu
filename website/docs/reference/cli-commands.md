@@ -101,7 +101,8 @@ Download concurrency is controlled via the `DATAMITSU_CONCURRENCY` env var (defa
 2. Downloads required binaries and runtimes
 3. Installs runtime-managed apps (Bun/Node/UV/JVM/Go) that are referenced by tools
 4. Creates `.datamitsu/` symlinks for the config files of installed link-apps — an app marked `lazy: true` is deferred and gets its links on first `datamitsu exec` instead
-5. Runs configured init commands (e.g., `lefthook install`)
+5. Writes `.datamitsu/configs/`: every [ejectable managed config](./configuration-api.md#keeping-configs-out-of-the-repository-ejectable--ejectconfigs) the project has not ejected, removing any that no longer belong there
+6. Runs configured init commands (e.g., `lefthook install`)
 
 **Examples:**
 
@@ -380,6 +381,15 @@ their names from that list. The file is written before the default fix so that
 fix already respects the opt-in state. Reconciliation refuses to overwrite an
 existing `.datamitsuignore`; `--dry-run` previews the file without writing it.
 See [Generating an all-disabled file](./ignore-rules.md#generating-an-all-disabled-file).
+
+An [ejectable](./configuration-api.md#keeping-configs-out-of-the-repository-ejectable--ejectconfigs)
+config the project has not ejected lives in `.datamitsu/configs/`, not in the
+repository: reconciliation removes its repository copy — and writes
+`.datamitsu/configs/` so the post-reconciliation fix finds it — but only when the
+copy holds nothing the configuration would not render again. A copy with changes
+of the project's own is never deleted; reconciliation refuses before writing
+anything and names the file, to be kept by adding its tool to `ejectConfigs` or
+deleted by hand.
 
 Any config file that pins [`expectChainHash`](./configuration-api.md#pinning-the-upstream-chain-expectchainhash)
 is verified before reconciliation writes anything: if its upstream chain drifted from the

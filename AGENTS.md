@@ -194,6 +194,31 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
   (including pnpm). Each stage installs its closure; the final image copies each
   app's subtree. Reject plans that filter out a dependency of an included app.
 
+## Managed Config Placement
+
+- An `ejectable` managed config lives in `.datamitsu/configs/<key>` until a
+  project names one of its `tools` in `ejectConfigs`. Placement is decided in
+  `finalizeManagedConfigPlacement` (`cmd/config_loader_managed.go`) after the
+  whole chain, never per layer: a base layer declares entries before a later
+  layer ejects them. `{managedConfig:<key>}` is resolved there too, into a
+  `{root}`/`{cwd}` path, so no JS helper can know the placement.
+- Internal renders are part of the evaluated config (`ManagedConfig.Render`,
+  `json:"-"` but stored by the config-eval cache, which encodes by field name).
+  A change to `Render`, `Placement` or `ToolOperation.ManagedConfigRefs` needs a
+  `configcache.FormatVersion` bump.
+- `.datamitsu/configs/` has one writer, `managedconfig.WriteInternalConfigs`
+  (init, and reconcile before its post-fix), which replaces files one by one,
+  never the directory. Every rebuild of `.datamitsu/` must copy `configs/` into
+  the tree it swaps in (`copyInternalConfigs`) under `lockDatamitsuDir`; `exec`
+  has no renders to restore it from. `configs` is a reserved link name.
+- Reconcile never deletes a repository copy of an ejectable entry (or its
+  `otherFileNameList` file) that holds anything the configuration would not
+  render again — byte-equal to the pristine render, or re-rendering from itself
+  gives the pristine render — and checks the whole plan before its first write.
+- The preflight (`managedconfig.CheckConfigFiles`) runs before any cache is
+  consulted, in the runner and the language server.
+- An unknown name in `ManagedConfig.tools` is a load error.
+
 ## Product Stage
 
 - Project is in `alpha`.
@@ -203,6 +228,8 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
 **Breaking change: Cache/Store path separation** — `GetCachePath()` now returns `{base}/cache` and `GetStorePath()` returns `{base}/store` instead of both pointing to `{base}`. Users upgrading need to either move existing directories into the new structure or run `datamitsu store clear && datamitsu init` to re-download.
 
 **Breaking change: App names are validated** — a key in `apps` must match `^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`, must not be a Windows reserved device name, and must not case-fold-collide with another name in the same config. This is enforced by `ValidateApps` on every config load, so a previously accepted config with e.g. `my/tool` or both `Task` and `task` now fails to load for every command, not just `source`. The rule lives in `internal/config/app-name` validation; app names become file names in the store and in the source-mode farm.
+
+**Breaking change: dangling managed config tools fail the load** — `ManagedConfig.tools` naming a tool that is not configured was a warning and is now a config error, because the association decides what `ejectConfigs` moves. A config that deletes a tool but keeps its managed config fails to load; declare the tool with `skip: true` instead.
 
 **Breaking change: pnpm is its own runtime** — pnpm 12 ships no JavaScript implementation, so pnpm became a runtime of kind `pnpm` (`managed.binaries` per platform from the pnpm/pnpm GitHub release archives, `pnpm.pnpmVersion`), and the `node` and `bun` sub-configs replaced `pnpmVersion` + `pnpmHash` with `pnpmRuntime`, the name of that runtime. A config that defines its own Node or Bun runtime the old way fails validation; regenerate it with `datamitsu devtools pull-runtimes` (which now also writes the `pnpm` entry). The pnpm runtime's identity folds into the app hash of Node and Bun apps, not into the Node or Bun runtime hash, so a pnpm bump reinstalls apps without re-downloading Node or Bun; `CollectRequiredRuntimes`, the Dockerfile app slices and the verify fingerprint follow the `pnpmRuntime` reference (`MapOfRuntimes.PNPMRuntimeName`). The native pnpm writes its `--reporter=ndjson` stream to stderr and reports failures as plain text rather than ndjson error events, so `pnpmReporter` keeps non-JSON lines for the error message.
 

@@ -304,7 +304,7 @@ func TestLockfileGenLoadNeverTouchesTheCache(t *testing.T) {
 func TestConfigCacheReplaysWarningsOnAHit(t *testing.T) {
 	isolateCacheTree(t)
 	path := writeStandaloneConfig(t, `
-		return { managedConfigs: { ".prettierrc": { tools: ["no-such-tool"] } } };`)
+		return { runtimes: { py: { kind: "uv", mode: "system", system: { command: "uv" } } } };`)
 
 	coldLogs := swapLoggerWithObserver(t, zapcore.WarnLevel)
 	if _, _, vm := loadCached(t, path); servedFromCache(vm) {

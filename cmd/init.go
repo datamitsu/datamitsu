@@ -164,6 +164,10 @@ func runInit(_ *cobra.Command, _ []string) error {
 		return fmt.Errorf("failed to set up config links: %w", err)
 	}
 
+	if err := reportInternalConfigs(disp, rootPath, cfg, initDryRun); err != nil {
+		return fmt.Errorf("failed to write internal configs: %w", err)
+	}
+
 	hookErr := reportInitCommands(ctx, disp, rootPath, projectTypes, cfg, binMgr, initDryRun)
 
 	printInitFooter(disp, initFooterCounts{
@@ -342,6 +346,37 @@ func reportConfigLinks(disp *ui.Display, rootPath string, cfg *config.Config, bi
 		initLabelLine(disp, "links", value+clr.Faint(" → .datamitsu/"))
 	}
 	return n, nil
+}
+
+// reportInternalConfigs writes .datamitsu/configs/ — the managed configs that
+// live outside the repository until a project ejects them — and prints one
+// line when there are any.
+func reportInternalConfigs(disp *ui.Display, rootPath string, cfg *config.Config, dryRun bool) error {
+	res, err := managedconfig.WriteInternalConfigs(rootPath, cfg.ManagedConfigs, dryRun)
+	if err != nil {
+		return err
+	}
+	n := len(res.Written) + len(res.Unchanged)
+	if n == 0 && len(res.Removed) == 0 {
+		return nil
+	}
+	value := fmt.Sprintf("%d rendered", n)
+	if dryRun {
+		value = fmt.Sprintf("would render %d", n)
+	}
+	var changes []string
+	if len(res.Written) > 0 && len(res.Unchanged) > 0 {
+		changes = append(changes, fmt.Sprintf("%d updated", len(res.Written)))
+	}
+	if len(res.Removed) > 0 {
+		changes = append(changes, fmt.Sprintf("%d removed", len(res.Removed)))
+	}
+	suffix := " → " + config.DatamitsuDirName + "/" + config.InternalConfigsDir + "/"
+	if len(changes) > 0 {
+		suffix += " · " + strings.Join(changes, " · ")
+	}
+	initLabelLine(disp, "configs", value+clr.Faint(suffix))
+	return nil
 }
 
 // materializeInstalledLinks (re)builds .datamitsu/ symlinks for every link-app
