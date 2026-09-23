@@ -119,6 +119,27 @@ type chainObservations struct {
 	// warnings are the evaluation-time warnings a hit must replay, in the order
 	// they were produced.
 	warnings []string
+	// engines is every engine the chain created, remote layers included. A
+	// managed config render after the chain calls content functions that may
+	// belong to any of them, so each is observed again once it has run.
+	engines []*engine.Engine
+}
+
+// track remembers an engine for recordAll.
+func (o *chainObservations) track(e *engine.Engine) {
+	if o != nil && e != nil {
+		o.engines = append(o.engines, e)
+	}
+}
+
+// recordAll observes every tracked engine again.
+func (o *chainObservations) recordAll() {
+	if o == nil {
+		return
+	}
+	for _, e := range o.engines {
+		o.record(e)
+	}
 }
 
 func (o *chainObservations) record(e *engine.Engine) {
@@ -394,12 +415,16 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 		return projectLocationsToConfig(rootPath, locs)
 	}
 
+	var managedLayers []config.ManagedConfigLayer
 	for _, source := range sources {
 		result, resultEngine, processErr := processConfigSource(ctx, currentConfig, source, resolved, stack, opts, obs)
 		if processErr != nil {
 			return nil, nil, nil, processErr
 		}
 		resultVM := resultEngine.VM()
+		if result.ManagedConfigs != nil {
+			managedLayers = append(managedLayers, config.ManagedConfigLayer{Name: source.name, Configs: result.ManagedConfigs, VM: resultVM})
+		}
 
 		if result.ManagedConfigs != nil && opts.evaluateManagedConfigContent {
 			evalSpan := trace.Start(trace.CatConfig, "evaluateManagedConfigContent")
@@ -413,6 +438,10 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 
 		currentConfig = result
 		lastVM = resultVM
+	}
+	// Before publish: rendering calls content(), which the verdict must observe.
+	if err := finalizeManagedConfigPlacement(currentConfig, managedLayers, rootPath, layerMap, opts, obs); err != nil {
+		return nil, nil, nil, err
 	}
 	obs.publish()
 	publishConfigWarnings(obs.warnings)
@@ -466,9 +495,9 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 	if err := config.ValidateManagedConfigs(currentConfig.ManagedConfigs); err != nil {
 		return nil, nil, nil, err
 	}
-	managedConfigToolWarnings := config.ValidateManagedConfigToolRefs(currentConfig.ManagedConfigs, currentConfig.Tools)
-	configWarnings = append(configWarnings, managedConfigToolWarnings...)
-	publishConfigWarnings(managedConfigToolWarnings)
+	if err := config.ResolveManagedConfigPlaceholders(currentConfig); err != nil {
+		return nil, nil, nil, err
+	}
 
 	if err := config.ValidateTools(currentConfig.Tools, currentConfig.Parsers); err != nil {
 		return nil, nil, nil, err
@@ -652,6 +681,7 @@ func processConfigSource(ctx context.Context, input *config.Config, source confi
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create engine: %w", err)
 	}
+	obs.track(e)
 	vm := e.VM()
 
 	// Load JS into VM

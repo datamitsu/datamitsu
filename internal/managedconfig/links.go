@@ -139,7 +139,7 @@ func CreateDatamitsuLinks(gitRoot string, apps binmanager.MapOfApps, resolver In
 	if dryRun {
 		for _, e := range entries {
 			cleanedLinkName := filepath.Clean(e.linkName)
-			if cleanedLinkName == ".gitignore" || cleanedLinkName == "datamitsu.config.d.ts" {
+			if isReservedLinkName(cleanedLinkName) {
 				return nil, fmt.Errorf("link name %q is reserved for internal use", e.linkName)
 			}
 			if filepath.IsAbs(cleanedLinkName) || cleanedLinkName == ".." || strings.HasPrefix(cleanedLinkName, ".."+string(filepath.Separator)) {
@@ -175,6 +175,12 @@ func CreateDatamitsuLinks(gitRoot string, apps binmanager.MapOfApps, resolver In
 		return nil, fmt.Errorf("failed to create git root directory: %w", err)
 	}
 
+	release, err := lockDatamitsuDir(gitRoot)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+
 	// Build symlinks in a temp directory first, then atomically swap via rename.
 	// This avoids leaving .datamitsu missing or partially built on error.
 	tmpDir, err := os.MkdirTemp(gitRoot, ".datamitsu-tmp-*")
@@ -195,7 +201,7 @@ func CreateDatamitsuLinks(gitRoot string, apps binmanager.MapOfApps, resolver In
 	linkTargets := make(map[string]string)
 	for _, e := range entries {
 		cleanedLinkName := filepath.Clean(e.linkName)
-		if cleanedLinkName == ".gitignore" || cleanedLinkName == "datamitsu.config.d.ts" {
+		if isReservedLinkName(cleanedLinkName) {
 			return nil, fmt.Errorf("link name %q is reserved for internal use", e.linkName)
 		}
 		if filepath.IsAbs(cleanedLinkName) || cleanedLinkName == ".." || strings.HasPrefix(cleanedLinkName, ".."+string(filepath.Separator)) {
@@ -231,6 +237,10 @@ func CreateDatamitsuLinks(gitRoot string, apps binmanager.MapOfApps, resolver In
 		}
 		createdLinks = append(createdLinks, e.linkName)
 		linkTargets[e.linkName] = relTarget
+	}
+
+	if err := copyInternalConfigs(datamitsuDir, tmpDir); err != nil {
+		return nil, err
 	}
 
 	backupDir := datamitsuDir + ".bak"
@@ -291,6 +301,12 @@ func CreateDatamitsuTypeDefinitions(gitRoot string, dryRun bool) error {
 		return fmt.Errorf("failed to create git root directory: %w", err)
 	}
 
+	release, err := lockDatamitsuDir(gitRoot)
+	if err != nil {
+		return err
+	}
+	defer release()
+
 	tmpDir, err := os.MkdirTemp(gitRoot, ".datamitsu-tmp-*")
 	if err != nil {
 		return fmt.Errorf("failed to create temp directory for .datamitsu: %w", err)
@@ -303,6 +319,10 @@ func CreateDatamitsuTypeDefinitions(gitRoot string, dryRun bool) error {
 
 	if err := writeTypeDefinitions(tmpDir); err != nil {
 		return fmt.Errorf("failed to write type definitions: %w", err)
+	}
+
+	if err := copyInternalConfigs(datamitsuDir, tmpDir); err != nil {
+		return err
 	}
 
 	// Atomically swap using backup-and-restore pattern (same as CreateDatamitsuLinks)
@@ -347,4 +367,18 @@ func writeTypeDefinitions(dir string) error {
 		return fmt.Errorf("write datamitsu.config.d.ts in %q: %w", dir, err)
 	}
 	return nil
+}
+
+// isReservedLinkName reports whether a cleaned link name would shadow a file
+// datamitsu itself keeps in .datamitsu/.
+//
+// Compared without case: on a case-insensitive filesystem a link named
+// Configs is the configs/ directory, and copying internal configs into the
+// rebuilt tree would then write through it into an app's install root.
+func isReservedLinkName(cleaned string) bool {
+	name := strings.ToLower(filepath.ToSlash(cleaned))
+	if name == ".gitignore" || name == "datamitsu.config.d.ts" {
+		return true
+	}
+	return name == config.InternalConfigsDir || strings.HasPrefix(name, config.InternalConfigsDir+"/")
 }

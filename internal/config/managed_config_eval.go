@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -184,31 +185,31 @@ func EvaluateManagedConfigContentWithProjects(cfg *Config, vm *goja.Runtime, roo
 			continue
 		}
 
-		contextObj := vm.NewObject()
-		ApplyProjectContext(contextObj, projectTypes, projectLocations)
-		_ = contextObj.Set("rootPath", rootPath)
-		_ = contextObj.Set("cwdPath", cwdPath)
-		_ = contextObj.Set("isRoot", rootPath == cwdPath)
-
-		datamitsuAbsDir := filepath.Join(rootPath, ".datamitsu")
-		datamitsuRelDir := ".datamitsu"
-		if relDir, err := filepath.Rel(cwdPath, datamitsuAbsDir); err == nil {
-			datamitsuRelDir = relDir
+		basePath := cwdPath
+		if managedCfg.Scope == ScopeGitRoot {
+			basePath = rootPath
 		}
-		_ = contextObj.Set("datamitsuDir", datamitsuRelDir)
-
-		priorContent := getPriorLayerContent(priorLayers, name)
-		if priorContent != nil {
-			_ = contextObj.Set("existingContent", *priorContent)
+		cc := ContentContext{
+			RootPath:         rootPath,
+			CwdPath:          cwdPath,
+			ProjectTypes:     projectTypes,
+			ProjectLocations: projectLocations,
+			Placement:        PlacementRepo,
+			OutputPath:       filepath.Join(basePath, name),
+			ExistingContent:  getPriorLayerContent(priorLayers, name),
 		}
-
-		if history, ok := priorLayers[name]; ok && history.OriginalContent != nil {
-			_ = contextObj.Set("originalContent", *history.OriginalContent)
+		if managedCfg.Ejectable {
+			cc.ProjectTypes, cc.ProjectLocations = nil, nil
 		}
+		if history, ok := priorLayers[name]; ok {
+			cc.OriginalContent = history.OriginalContent
+		}
+		contextObj := NewContentContextObject(vm, cc)
 
 		cntManagedConfigCalls.Add(1)
 		callResult, err := contentFunc(goja.Undefined(), contextObj)
 		if err != nil {
+			priorLayers[name].RenderFailed = true
 			continue
 		}
 
@@ -220,4 +221,126 @@ func EvaluateManagedConfigContentWithProjects(cfg *Config, vm *goja.Runtime, roo
 	}
 
 	return result
+}
+
+// ContentContext is the input of one content() call. OutputPath is the
+// absolute path the result is written to; it differs from CwdPath/name only
+// for an internal-placement render.
+type ContentContext struct {
+	RootPath         string
+	CwdPath          string
+	ProjectTypes     []string
+	ProjectLocations []ProjectLocation
+	Placement        ManagedConfigPlacement
+	OutputPath       string
+	ExistingContent  *string
+	OriginalContent  *string
+	ExistingPath     *string
+}
+
+// NewContentContextObject builds the object a content() function receives.
+//
+// Two path conventions meet here. datamitsuDir is relative to cwdPath, which is
+// where a tool runs and what a CWD-relative reference (gitleaks' extend.path)
+// resolves against. datamitsuDirFromOutput is relative to the file's own
+// directory, which is what a relative import inside the file resolves against.
+// They coincide for a file written into the repository and diverge for one
+// rendered into .datamitsu/configs/.
+func NewContentContextObject(vm *goja.Runtime, c ContentContext) *goja.Object {
+	obj := vm.NewObject()
+	ApplyProjectContext(obj, c.ProjectTypes, c.ProjectLocations)
+	_ = obj.Set("rootPath", c.RootPath)
+	_ = obj.Set("cwdPath", c.CwdPath)
+	_ = obj.Set("isRoot", c.RootPath == c.CwdPath)
+
+	datamitsuAbsDir := filepath.Join(c.RootPath, DatamitsuDirName)
+	_ = obj.Set("datamitsuDir", relOr(c.CwdPath, datamitsuAbsDir, DatamitsuDirName))
+
+	placement := c.Placement
+	if placement == "" {
+		placement = PlacementRepo
+	}
+	_ = obj.Set("placement", string(placement))
+	if c.OutputPath != "" {
+		outputDir := filepath.Dir(c.OutputPath)
+		_ = obj.Set("outputPath", c.OutputPath)
+		_ = obj.Set("outputDir", outputDir)
+		_ = obj.Set("datamitsuDirFromOutput", relOr(outputDir, datamitsuAbsDir, DatamitsuDirName))
+	}
+
+	if c.ExistingContent != nil {
+		_ = obj.Set("existingContent", *c.ExistingContent)
+	}
+	if c.OriginalContent != nil {
+		_ = obj.Set("originalContent", *c.OriginalContent)
+	}
+	if c.ExistingPath != nil {
+		_ = obj.Set("existingPath", *c.ExistingPath)
+	}
+	return obj
+}
+
+func relOr(base, target, fallback string) string {
+	if rel, err := filepath.Rel(base, target); err == nil {
+		return rel
+	}
+	return fallback
+}
+
+// ManagedConfigLayer is one evaluated config layer's managed configs, with the
+// VM that created the context objects its content functions receive.
+type ManagedConfigLayer struct {
+	Name    string
+	Configs MapOfManagedConfigs
+	VM      *goja.Runtime
+}
+
+// RenderManagedConfigFromScratch replays one git-root entry's content functions
+// through the ordered layers the way the eager pass does — an inherited
+// function runs again in every later layer, fed what the layers before it
+// produced — but for the given placement and as if no file existed: there is
+// no originalContent. It returns nil when no layer produced content.
+//
+// A throwing content() is an error here rather than a skipped layer, because
+// the result decides what is written and what is deleted.
+func RenderManagedConfigFromScratch(layers []ManagedConfigLayer, key, rootPath string, placement ManagedConfigPlacement) (*string, error) {
+	outputPath := filepath.Join(rootPath, filepath.FromSlash(key))
+	if placement == PlacementInternal {
+		outputPath = filepath.Join(rootPath, filepath.FromSlash(InternalConfigRelPath(key)))
+	}
+
+	var prior *string
+	for _, layer := range layers {
+		mc, ok := layer.Configs[key]
+		if !ok || mc.DeleteOnly || mc.LinkTarget != "" || mc.Content == nil {
+			continue
+		}
+		contentValue, ok := mc.Content.(goja.Value)
+		if !ok {
+			continue
+		}
+		contentFunc, ok := goja.AssertFunction(contentValue)
+		if !ok {
+			continue
+		}
+
+		contextObj := NewContentContextObject(layer.VM, ContentContext{
+			RootPath:        rootPath,
+			CwdPath:         rootPath,
+			Placement:       placement,
+			OutputPath:      outputPath,
+			ExistingContent: prior,
+		})
+		cntManagedConfigCalls.Add(1)
+		result, err := contentFunc(goja.Undefined(), contextObj)
+		if err != nil {
+			return nil, fmt.Errorf("managed config %q: content() failed in %s: %w", key, layer.Name, err)
+		}
+		if result == nil || goja.IsUndefined(result) || goja.IsNull(result) {
+			continue
+		}
+		rendered := result.String()
+		prior = &rendered
+	}
+	return prior, nil
 }

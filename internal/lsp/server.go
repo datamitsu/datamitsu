@@ -20,6 +20,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"github.com/datamitsu/datamitsu/internal/logger"
+	"github.com/datamitsu/datamitsu/internal/managedconfig"
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 	"github.com/datamitsu/datamitsu/internal/textdiff"
@@ -42,6 +43,10 @@ type Server struct {
 	// clamped to it: a session default must not out-scope what the repository
 	// asked for.
 	fixWidenTo config.WidenTo
+
+	// managedConfigs is what the preflight check compares the files a fix reads
+	// against, from the config the session was started with.
+	managedConfigs config.MapOfManagedConfigs
 
 	docs map[string][]byte // open documents: uri -> current full text
 
@@ -94,6 +99,8 @@ func NewServer(r io.Reader, w io.Writer, cfg *config.Config, root string) *Serve
 		docs:     make(map[string][]byte),
 
 		fixWidenTo: cfg.Execution.ResolveWidenTo(config.OpFix, ""),
+
+		managedConfigs: cfg.ManagedConfigs,
 	}
 }
 
@@ -172,6 +179,10 @@ func (s *Server) FormatFile(ctx context.Context, absPath string, content []byte)
 	apps := planApps(plan)
 	if len(apps) == 0 {
 		return []TextEdit{}, nil // no fix tool applies to this file
+	}
+
+	if err := managedconfig.CheckConfigFiles(s.root, s.managedConfigs, plan.ManagedConfigRefs()); err != nil {
+		return nil, err
 	}
 
 	// Auto-install/verify the tools the plan needs (download progress streams to

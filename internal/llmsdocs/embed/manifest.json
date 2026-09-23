@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 55,
-  "pageSetHash": "c3c3747bb1149b83700202830b16f3f3",
+  "pageSetHash": "66a87839329c5057c1d2906459d2b047",
   "pages": [
     {
       "slug": "about",
@@ -206,8 +206,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/caching.md",
       "title": "Caching Strategy",
       "description": "How datamitsu caches file-level results and unit or repository verdicts, computes XXH3-128 keys, and persists them safely",
-      "bytes": 20893,
-      "contentHash": "70e29c33159eba1a4cb1c8faa8a7b6d4"
+      "bytes": 21553,
+      "contentHash": "b688cc68f44ee442d9bcba5352e595e0"
     },
     {
       "slug": "guides/architecture/discovery",
@@ -298,8 +298,8 @@
       "url": "https://datamitsu.com/docs/guides/managed-configs.md",
       "title": "Managed Configs",
       "description": "Using managed configuration files, symlinks, and the .datamitsu/ directory",
-      "bytes": 11196,
-      "contentHash": "d8a6cfbd3c76e6b54b3ed46ae32a6780"
+      "bytes": 13850,
+      "contentHash": "949b0dfd78cc6f5ba0b717c54249b1c9"
     },
     {
       "slug": "guides/managed-content",
@@ -451,8 +451,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 72004,
-      "contentHash": "6fd91a4d4432ada7b2ce2293830fbb6a"
+      "bytes": 72815,
+      "contentHash": "c90aec8b22d2d2c91a2fdc631399dea2"
     },
     {
       "slug": "reference/comparison",
@@ -469,8 +469,8 @@
       "url": "https://datamitsu.com/docs/reference/configuration-api.md",
       "title": "Configuration API",
       "description": "Complete reference for the datamitsu configuration API",
-      "bytes": 65959,
-      "contentHash": "c14a96e49b82dbd9369d2437d9c494a9"
+      "bytes": 69729,
+      "contentHash": "d0df1f79085b4ca4706ac501fec3ca2c"
     },
     {
       "slug": "reference/ignore-rules",

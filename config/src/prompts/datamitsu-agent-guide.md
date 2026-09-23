@@ -29,6 +29,17 @@ These operations are intentionally separate. Never treat them as synonyms.
 - `datamitsu setup` no longer exists. Do not infer reconciliation from a request
   to update the datamitsu configuration or provision its toolchain.
 
+## Tool configs outside the repository
+
+- A managed config its author declares `ejectable` lives in `.datamitsu/configs/`
+  until the project names its tool in `ejectConfigs` in `datamitsu.config.*`.
+  `datamitsu init` writes that directory; never edit files under `.datamitsu/`.
+- To change such a config, add the tool to `ejectConfigs` and run
+  `datamitsu config reconcile --tools <tool>` — that is an explicit request to
+  create the file — then edit the copy it writes into the repository.
+- When lint reports a managed config file missing, stale or out of place, run
+  the command the message names.
+
 ## Common commands
 
 - `datamitsu check` - run fix then lint

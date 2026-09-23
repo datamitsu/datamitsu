@@ -28,6 +28,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/gitenv"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"github.com/datamitsu/datamitsu/internal/logger"
+	"github.com/datamitsu/datamitsu/internal/managedconfig"
 	"github.com/datamitsu/datamitsu/internal/ocibundle"
 	"github.com/datamitsu/datamitsu/internal/parsermanager"
 	"github.com/datamitsu/datamitsu/internal/runtimemanager"
@@ -364,6 +365,12 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 			}
 		}
 		return nil
+	}
+
+	if refs := plan.ManagedConfigRefs(); len(refs) > 0 && sc.cfg != nil {
+		if err := managedconfig.CheckConfigFiles(sc.rootPath, sc.cfg.ManagedConfigs, refs); err != nil {
+			return err
+		}
 	}
 
 	// Seed the store from the declared OCI bundle before anything reads it

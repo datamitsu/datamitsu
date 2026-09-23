@@ -71,6 +71,11 @@ type ManagedConfig struct {
 	ProjectTypes []string `json:"projectTypes"`
 	Scope        string   `json:"scope"`
 	DeleteOnly   bool     `json:"deleteOnly"`
+	// Ejectable and Placement are set only for an ejectable entry: every other
+	// entry is always in the repository, and leaving them out keeps snapshots
+	// of configurations without one byte-identical.
+	Ejectable bool   `json:"ejectable,omitempty"`
+	Placement string `json:"placement,omitempty"`
 }
 
 // Snapshot omits executable content, environment values, arguments and download
@@ -98,7 +103,11 @@ func Snapshot(cfg *config.Config, version string) Manifest {
 		m.ProjectTypes = append(m.ProjectTypes, ProjectType{ID: id, Description: p.Description, Markers: list(p.Markers)})
 	}
 	for name, c := range cfg.ManagedConfigs {
-		m.ManagedConfigs = append(m.ManagedConfigs, ManagedConfig{Name: name, Tools: list(c.Tools), ProjectTypes: list(c.ProjectTypes), Scope: c.Scope, DeleteOnly: c.DeleteOnly})
+		mc := ManagedConfig{Name: name, Tools: list(c.Tools), ProjectTypes: list(c.ProjectTypes), Scope: c.Scope, DeleteOnly: c.DeleteOnly}
+		if c.Ejectable {
+			mc.Ejectable, mc.Placement = true, string(c.Placement)
+		}
+		m.ManagedConfigs = append(m.ManagedConfigs, mc)
 	}
 	slices.SortFunc(m.Apps, func(a, b App) int { return cmp.Compare(a.Name, b.Name) })
 	slices.SortFunc(m.Tools, func(a, b Tool) int { return cmp.Compare(a.ID, b.ID) })

@@ -4,6 +4,11 @@ writes those changes and then runs "datamitsu fix" by default. Use --dry-run to
 preview without writing or running fix, or --skip-fix to reconcile files without
 the post-reconciliation fix.
 
+An ejectable config whose tool is not named in ejectConfigs lives in
+.datamitsu/configs/, which init writes. Reconciliation removes its repository
+copy, but never one holding changes the configuration would not render again:
+the run is refused before anything is written, and the file is named.
+
 This command is intentionally separate from project initialization. After
 editing datamitsu.config.*, run "datamitsu init" to provision tools, runtimes,
 bundles, and .datamitsu links. Use "datamitsu config reconcile" only when you

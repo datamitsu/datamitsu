@@ -40,6 +40,7 @@ interface Config {
   lsp?: Record<string, LspProxy | LspDerived>;
   projectTypes?: MapOfProjectTypes;
   managedConfigs?: MapOfManagedConfigs;
+  ejectConfigs?: string[];
   initCommands?: MapOfInitCommands;
   ignoreRules?: string[];
   sharedStorage?: Record<string, string>;
@@ -791,7 +792,7 @@ interface Tool {
 
 interface ToolOperation {
   app: string; // App name from apps
-  args: string[]; // Supports template placeholders ({file}, {files}, {root}, {cwd}, {toolCache})
+  args: string[]; // Supports template placeholders ({file}, {files}, {root}, {cwd}, {toolCache}, {managedConfig:<key>})
   globs?: string[]; // File patterns (doublestar syntax; `!` negation not supported). Omit to match all discovered files.
   excludeGlobs?: string[]; // Patterns removed from the matched set (doublestar syntax)
   scope: "repository" | "per-project" | "per-file";
@@ -800,7 +801,7 @@ interface ToolOperation {
   priority?: number; // Execution order (lower = first, default: 0)
   cache?: boolean; // Disable file/unit caching, or opt a repo verdict in
   invalidateOn?: string[]; // Additional unit/repo verdict inputs
-  env?: Record<string, string>; // Extra environment variables; values support {root}, {cwd}, {toolCache}
+  env?: Record<string, string>; // Extra environment variables; values support {root}, {cwd}, {toolCache}, {managedConfig:<key>}
   input?: "file" | "stdin"; // How file content reaches the tool (default: "file")
   output?: "inplace" | "stdout"; // How the result is captured (default: "inplace")
 }
@@ -1117,6 +1118,7 @@ to preview without either action.
 interface ManagedConfig {
   content?: (context: ConfigContext) => string;
   deleteOnly?: boolean; // Only delete, don't create
+  ejectable?: boolean; // Live in .datamitsu/configs/ until a project ejects the tool
   expectChainHash?: string; // Pin the upstream-chain hash; abort reconciliation on drift
   linkTarget?: string; // Create symlink instead of writing content
   otherFileNameList?: string[]; // Conflicting files to delete
@@ -1131,7 +1133,68 @@ name, matching keys in [`tools`](#tools-tools)). `datamitsu config reconcile --t
 then regenerates only the config files whose `tools` intersect the selected set —
 every other config, including unassociated infrastructure files, is left
 untouched. Omit `tools` for files not tied to a single tool (`.gitignore`,
-`lefthook.yaml`); those are skipped whenever `--tools` is passed.
+`lefthook.yaml`); those are skipped whenever `--tools` is passed. A name that is
+not a configured tool is a load error: declare a tool that should not run with
+[`skip: true`](#skipping-a-tool-skip--skipreason) instead of removing it.
+
+### Keeping configs out of the repository (`ejectable` / `ejectConfigs`)
+
+An entry marked `ejectable` does not have to live in the repository. Until a
+project asks for it, datamitsu renders it into `.datamitsu/configs/<key>` —
+git-ignored, written by `datamitsu init` — and the tool reads it from there:
+
+```javascript
+// shared config
+tools: {
+  gitleaks: {
+    name: "gitleaks",
+    operations: {
+      lint: { app: "gitleaks", args: ["dir", "--config", "{managedConfig:.gitleaks.toml}", "{target}"], scope: "repository" },
+    },
+  },
+},
+managedConfigs: {
+  ".gitleaks.toml": { scope: "git-root", tools: ["gitleaks"], ejectable: true, content: (ctx) => "..." },
+},
+```
+
+```javascript
+// project config: keep gitleaks' config in the repository to edit it
+return { ...input, ejectConfigs: ["gitleaks"] };
+```
+
+- **`{managedConfig:<key>}`** is resolved once the whole chain is known, so a
+  shared layer never needs to know whether a later layer ejects the file. It
+  becomes `{root}/<key>` (`{cwd}/<key>` for a project-scoped entry) when the file
+  is in the repository and `{root}/.datamitsu/configs/<key>` when it is not. The
+  key must exist and must list the tool in its `tools`. It works for every
+  managed config, ejectable or not.
+- **`ejectable`** requires `content`, a non-empty `tools` and `scope: "git-root"`,
+  and cannot be combined with `linkTarget` or `deleteOnly`. Declare it only for a
+  file nothing but the tool needs: the tool must receive the path explicitly, and
+  an editor extension, CI action, `datamitsu exec` or another tool that discovers
+  the file by name will not find it.
+- **`ejectConfigs`** names tools, not files; every ejectable entry whose `tools`
+  include a named tool moves into the repository. Each name must be a configured
+  tool that owns at least one ejectable entry. Duplicates are an error.
+- **Rendering.** An internal render has no `originalContent` and an empty project
+  context; `context.placement` is `"internal"`. Build a path that the file itself
+  resolves (a JavaScript import, a file-relative `extends`) from
+  `datamitsuDirFromOutput`, and one the tool resolves against its working
+  directory (gitleaks' `extend.path`) from `datamitsuDir`. A `content` that
+  throws or renders nothing for an ejectable entry fails the config load.
+- **Moving back.** When an entry stops being ejected, `datamitsu config reconcile`
+  deletes the repository copy — and any `otherFileNameList` file — only if it
+  holds nothing the configuration would not render again: re-rendering it from
+  its own content must equal rendering it from nothing, so formatting does not
+  count and a key the project added does. Otherwise reconciliation refuses before
+  writing anything and names the file.
+- **Preflight.** `lint`, `fix`, `check` and the language server refuse to run a
+  tool whose ejectable config is missing, stale, or — for an internal entry —
+  also present in the repository, where the tool would silently ignore it. Each
+  message names the command that fixes it (`datamitsu init` or
+  `datamitsu config reconcile --tools <tool>`).
+- `expectChainHash` is verified only for entries in the repository.
 
 ### Pinning the upstream chain (`expectChainHash`)
 
@@ -1192,6 +1255,10 @@ interface ConfigContext {
   cwdPath: string; // Current working directory
   rootPath: string; // Git repository root
   datamitsuDir: string; // Relative path from cwdPath to .datamitsu/
+  datamitsuDirFromOutput?: string; // Relative path from outputDir to .datamitsu/
+  outputPath?: string; // Absolute path the result is written to
+  outputDir?: string; // Directory of outputPath
+  placement: "repo" | "internal"; // Repository file, or .datamitsu/configs/ render
   isRoot: boolean; // Is cwdPath the git root?
   projectTypes: string[]; // Detected project types
   projectLocations: Array<{ type: string; path: string }>; // Git-root-relative markers

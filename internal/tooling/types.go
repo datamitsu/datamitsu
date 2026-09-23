@@ -11,6 +11,10 @@ import (
 
 // Task represents a single tool execution task
 type Task struct {
+	// perFileCache is the name per-file cache entries are read and written
+	// under, fixed before the tool starts (see perFileCacheTool).
+	perFileCache string
+
 	ToolName    string
 	Tool        config.Tool
 	Operation   config.OperationType
@@ -60,6 +64,22 @@ type ExecutionPlan struct {
 	// Skipped lists tools that were deliberately not planned, with the reason.
 	// These never run but are reported so the user sees what was left out and why.
 	Skipped []SkippedTool
+}
+
+// ManagedConfigRefs lists the managed configs the plan's tasks read.
+func (p *ExecutionPlan) ManagedConfigRefs() []config.ManagedConfigRef {
+	if p == nil {
+		return nil
+	}
+	var refs []config.ManagedConfigRef
+	for _, group := range p.Groups {
+		for _, task := range group.Tasks {
+			for _, ref := range task.OpConfig.ManagedConfigRefs {
+				refs = append(refs, config.ManagedConfigRef{Tool: task.ToolName, Key: ref.Key})
+			}
+		}
+	}
+	return refs
 }
 
 // SkipReason classifies why a tool was skipped (vs. silently not applicable).

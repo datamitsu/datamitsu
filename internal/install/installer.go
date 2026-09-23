@@ -24,6 +24,7 @@ type Installer struct {
 	projectTypes     []string
 	projectLocations []config.ProjectLocation // repo-wide detected {type, path}; exposed to content()
 	selectedTools    []string                 // nil/empty = no --tools filter (install all applicable)
+	repoProjectTypes []string                 // every type detected anywhere in the repository
 	configs          config.MapOfManagedConfigs
 	vm               *goja.Runtime
 	layerMap         *config.ManagedConfigLayerMap
@@ -58,6 +59,15 @@ func NewInstaller(
 // configs (e.g. dependabot) build per-ecosystem output dynamically.
 func (i *Installer) SetProjectLocations(locations []config.ProjectLocation) {
 	i.projectLocations = locations
+}
+
+// SetRepoProjectTypes sets every project type detected anywhere in the
+// repository. An ejectable git-root entry applies when any of them matches:
+// it is written once at the root for the whole repository, so a Docker project
+// in docker/ is what makes droast.toml apply, and the root's own types would
+// leave an ejected file unwritten while its tool still reads it.
+func (i *Installer) SetRepoProjectTypes(types []string) {
+	i.repoProjectTypes = types
 }
 
 // InstallResult represents the result of a single config file installation
@@ -96,8 +106,7 @@ func (i *Installer) installConfig(ctx context.Context, name string, cfg config.M
 		Scope:        cfg.Scope,
 	}
 
-	// Check if config applies to current project types
-	if !i.isApplicable(cfg) {
+	if !i.applies(cfg) {
 		result.Action = "skipped"
 		return result
 	}
@@ -120,6 +129,17 @@ func (i *Installer) installConfig(ctx context.Context, name string, cfg config.M
 	// Use the map key as mainFilename
 	mainPath := filepath.Join(targetDir, name)
 	result.FilePath = mainPath
+
+	if cfg.Ejectable {
+		if conflicts := i.ejectConflicts(name, cfg); len(conflicts) > 0 {
+			result.Error = conflicts[0]
+			return result
+		}
+	}
+
+	if cfg.Placement == config.PlacementInternal {
+		return i.internalize(name, cfg, dryRun, result)
+	}
 
 	// Delete other known config file variants before reading main file state
 	for _, altFilename := range cfg.OtherFileNameList {
@@ -190,7 +210,7 @@ func (i *Installer) installConfig(ctx context.Context, name string, cfg config.M
 	if !usedLayerContent {
 		var skip bool
 		var err error
-		newContent, skip, err = i.generateContent(ctx, cfg, existingContent, originalContent, existingPath)
+		newContent, skip, err = i.generateContent(ctx, cfg, mainPath, existingContent, originalContent, existingPath)
 		if err != nil {
 			result.Error = fmt.Errorf("failed to generate content: %w", err)
 			return result
@@ -355,7 +375,7 @@ func (i *Installer) isToolSelected(cfg config.ManagedConfig) bool {
 // in which case the caller skips the file rather than writing it.
 //
 //nolint:unparam // ctx reserved for cancellable JS execution; keeps the install chain uniform
-func (i *Installer) generateContent(ctx context.Context, cfg config.ManagedConfig, existingContent, originalContent, existingPath *string) (string, bool, error) {
+func (i *Installer) generateContent(ctx context.Context, cfg config.ManagedConfig, outputPath string, existingContent, originalContent, existingPath *string) (string, bool, error) {
 	// Content field should be a goja.Value representing a function
 	contentValue, ok := cfg.Content.(goja.Value)
 	if !ok {
@@ -368,29 +388,21 @@ func (i *Installer) generateContent(ctx context.Context, cfg config.ManagedConfi
 		return "", false, errors.New("content is not a callable function")
 	}
 
-	// Prepare context object
-	contextObj := i.vm.NewObject()
-	config.ApplyProjectContext(contextObj, i.projectTypes, i.projectLocations)
-	_ = contextObj.Set("rootPath", i.rootPath)
-	_ = contextObj.Set("cwdPath", i.cwdPath)
-	_ = contextObj.Set("isRoot", i.rootPath == i.cwdPath)
-
-	datamitsuAbsDir := filepath.Join(i.rootPath, ".datamitsu")
-	datamitsuRelDir := ".datamitsu"
-	if relDir, err := filepath.Rel(i.cwdPath, datamitsuAbsDir); err == nil {
-		datamitsuRelDir = relDir
+	cc := config.ContentContext{
+		RootPath:         i.rootPath,
+		CwdPath:          i.cwdPath,
+		ProjectTypes:     i.projectTypes,
+		ProjectLocations: i.projectLocations,
+		Placement:        config.PlacementRepo,
+		OutputPath:       outputPath,
+		ExistingContent:  existingContent,
+		OriginalContent:  originalContent,
+		ExistingPath:     existingPath,
 	}
-	_ = contextObj.Set("datamitsuDir", datamitsuRelDir)
-
-	if existingContent != nil {
-		_ = contextObj.Set("existingContent", *existingContent)
+	if cfg.Ejectable {
+		cc.ProjectTypes, cc.ProjectLocations = nil, nil
 	}
-	if originalContent != nil {
-		_ = contextObj.Set("originalContent", *originalContent)
-	}
-	if existingPath != nil {
-		_ = contextObj.Set("existingPath", *existingPath)
-	}
+	contextObj := config.NewContentContextObject(i.vm, cc)
 
 	result, err := contentFunc(goja.Undefined(), contextObj)
 	if err != nil {

@@ -702,15 +702,13 @@ func ValidateManagedConfigs(managedConfigs MapOfManagedConfigs) error {
 	return nil
 }
 
-// ValidateManagedConfigToolRefs returns warnings for any ManagedConfig.Tools entry that does
-// not reference a configured tool. Such a config can never be selected via
-// `config reconcile --tools` (the name won't intersect any selection), so it would be
-// silently excluded — almost always an authoring typo. This mirrors the
-// unknown-tool warning emitted for .datamitsuignore rules. It warns rather than
-// errors so a config that conditionally omits a tool in some environment still
-// loads.
-func ValidateManagedConfigToolRefs(managedConfigs MapOfManagedConfigs, tools MapOfTools) []string {
-	var warnings []string
+// ValidateManagedConfigToolRefs fails on any ManagedConfig.Tools entry that does
+// not name a configured tool. The association decides which files
+// `config reconcile --tools` and ejectConfigs move, so a dangling name silently
+// detaches a file from its tool. A tool that should not run in some environment
+// is declared with skip: true rather than removed.
+func ValidateManagedConfigToolRefs(managedConfigs MapOfManagedConfigs, tools MapOfTools) error {
+	var errs []string
 
 	names := make([]string, 0, len(managedConfigs))
 	for name := range managedConfigs {
@@ -721,15 +719,18 @@ func ValidateManagedConfigToolRefs(managedConfigs MapOfManagedConfigs, tools Map
 	for _, name := range names {
 		for _, toolName := range managedConfigs[name].Tools {
 			if _, ok := tools[toolName]; !ok {
-				warnings = append(warnings, fmt.Sprintf(
-					"managed config %q: tools references unknown tool %q (it will never match `config reconcile --tools %s`)",
-					name, toolName, toolName,
+				errs = append(errs, fmt.Sprintf(
+					"managed config %q: tools references unknown tool %q (declare the tool with skip: true instead of removing it)",
+					name, toolName,
 				))
 			}
 		}
 	}
 
-	return warnings
+	if len(errs) > 0 {
+		return fmt.Errorf("config validation failed:\n  %s", strings.Join(errs, "\n  "))
+	}
+	return nil
 }
 
 // ToolArgPlaceholders and ToolEnvPlaceholders are the substitution placeholders

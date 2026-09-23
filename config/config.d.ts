@@ -311,6 +311,17 @@ declare global {
       bundles?: BinManager.MapOfBundles;
 
       /**
+       * Tools whose ejectable managed configs this project keeps in the repository, to edit them or
+       * to let an editor or another tool find them. Every other ejectable config lives in
+       * `.datamitsu/configs/`. Each name must be a configured tool that owns at least one
+       * `ejectable` entry. After changing it, run `datamitsu config reconcile` to move the files.
+       *
+       * @example
+       *   return { ...input, ejectConfigs: ["gitleaks"] };
+       */
+      ejectConfigs?: string[];
+
+      /**
        * How far the core may widen work beyond the selection you asked for, per operation. An
        * operation left unset takes the core default ("unit").
        *
@@ -462,6 +473,18 @@ declare global {
       datamitsuDir: string;
 
       /**
+       * Relative path from `outputDir` to the .datamitsu/ directory at git root: what a relative
+       * reference inside the file (a JavaScript import, a file-relative `extends`) must use. Equal
+       * to `datamitsuDir` for a file written into the repository; different for an internal render.
+       * Keep `datamitsuDir` for paths a tool resolves against its working directory — gitleaks'
+       * `extend.path` is one.
+       *
+       * @example
+       *   ".."; // from .datamitsu/configs/
+       */
+      datamitsuDirFromOutput?: string;
+
+      /**
        * Content of existing file (if it exists) This may be modified content from previous merge
        * operations
        */
@@ -482,6 +505,24 @@ declare global {
        * even when existingContent has been transformed
        */
       originalContent?: string;
+
+      /**
+       * Absolute directory of `outputPath`.
+       */
+      outputDir?: string;
+
+      /**
+       * Absolute path the returned content is written to. For a `placement: "internal"` render this
+       * is under `.datamitsu/configs/`, not `cwdPath`.
+       */
+      outputPath?: string;
+
+      /**
+       * Where this render goes: `"repo"` for a file written into the repository, `"internal"` for
+       * an ejectable entry rendered into `.datamitsu/configs/`. An internal render never has
+       * `originalContent`.
+       */
+      placement: "internal" | "repo";
 
       /**
        * Detected project locations: one entry per detected project type and the directory that
@@ -614,6 +655,22 @@ declare global {
       deleteOnly?: boolean;
 
       /**
+       * Lets the file live outside the repository, in `.datamitsu/configs/<key>`, until a project
+       * names one of its `tools` in `ejectConfigs`. `datamitsu init` writes the internal copy;
+       * `datamitsu config reconcile` writes the repository copy of an ejected entry and removes it
+       * again when the entry stops being ejected — only if it is still exactly what datamitsu
+       * rendered, never a file with changes of the project's.
+       *
+       * Declare it only for a file nothing but the tool needs: the tool must receive the path
+       * explicitly (see `{managedConfig:<key>}`), and an editor, CI action or another tool that
+       * discovers the file by name will not find it. Requires `content`, a non-empty `tools` and
+       * `scope: "git-root"`.
+       *
+       * @default false
+       */
+      ejectable?: boolean;
+
+      /**
        * Pins the XXH3-128 hash of the content entering THIS (root/topmost) config layer — i.e. the
        * output of the whole upstream chain (remote/before layers) before this layer transforms it.
        * `datamitsu config reconcile` recomputes that hash and aborts with a drift report when it
@@ -663,10 +720,12 @@ declare global {
       scope?: "git-root" | "project";
 
       /**
-       * Tool name(s) this config file belongs to (must match keys in `tools`). `datamitsu config
+       * Tool name(s) this config file belongs to (must match keys in `tools`; an unknown name is a
+       * load error — declare a tool with `skip: true` rather than removing it). `datamitsu config
        * reconcile --tools <names>` considers only configs whose `tools` intersect the selected set;
-       * all others are left untouched. Omit for infrastructure files (.gitignore, lefthook.yaml)
-       * not tied to a single tool — those are skipped whenever `--tools` is passed.
+       * all others are left untouched. `ejectConfigs` selects ejectable files through the same
+       * association. Omit for infrastructure files (.gitignore, lefthook.yaml) not tied to a single
+       * tool — those are skipped whenever `--tools` is passed.
        *
        * @example
        *   ["golangci-lint"];
@@ -921,7 +980,14 @@ declare global {
        * execution: - {file} - single file path (per-file scope) - {files} - space-separated file
        * list, one argument per file - {root} - git repository root (or cwd if not in a git repo) -
        * {cwd} - per-project working directory - {toolCache} - per-project, per-tool cache directory
-       * (cache/{projectPath}/{toolName}/) - {target} - the single directory a scanner should scan
+       * (cache/{projectPath}/{toolName}/) - {target} - the single directory a scanner should scan -
+       * {managedConfig:<key>} - the path of the `managedConfigs` entry `<key>`
+       *
+       * `{managedConfig:<key>}` is resolved once the whole config chain is known, so a base layer
+       * never needs to know whether a later layer ejects the file: it becomes `{root}/<key>` (or
+       * `{cwd}/<key>` for a project-scoped entry) when the file lives in the repository, and
+       * `{root}/.datamitsu/configs/<key>` when it does not. The entry must exist and must list this
+       * tool in its `tools`. Also accepted in `env` values.
        *
        * @example
        *   ["--fix", "{file}"];
@@ -931,6 +997,9 @@ declare global {
        *
        * @example
        *   ["--cache-location", "{toolCache}/eslint"];
+       *
+       * @example
+       *   ["--config", "{managedConfig:.gitleaks.toml}", "{target}"];
        */
       args: string[];
 
