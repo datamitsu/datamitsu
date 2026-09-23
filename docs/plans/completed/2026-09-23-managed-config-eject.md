@@ -1,8 +1,10 @@
 # Plan: Keep tool configs out of the repository until a project ejects them
 
-**Status:** implemented in the core; the wrapper's adoption is prepared on its own branch and waits
-for an unstable core release. See "Implementation notes" for where the build departs from the first
-design.
+**Status:** implemented. The core shipped in `0.0.0-unstable.20260923.38e96c5`, and the wrapper was
+verified on that build: init renders nine configs into `.datamitsu/configs/`, reconcile is at rest,
+and the full lint passes. See "Implementation notes" for where the build departs from the first
+design; the remote-layer limitation it did not take on is in
+`docs/backlog/remote-config-layers-are-invisible-to-managed-config-layering.md`.
 **Date:** 2026-09-23.
 **Related:** `internal/install`, `internal/managedconfig`, `internal/config` (`managed_config_*`,
 `validate.go`), `cmd/config_loader.go`, `cmd/config_reconcile.go`, `cmd/init.go`,

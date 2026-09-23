@@ -31,4 +31,4 @@ in chain order, and feed that one list to the eager pass and to the replay alike
 point to weigh: every existing `expectChainHash` pin taken over a remote chain was computed on the
 current behaviour and would report drift once.
 
-Found by an external review of the ejectable managed config change (docs/plans/2026-09-23-managed-config-eject.md).
+Found by an external review of the ejectable managed config change (docs/plans/completed/2026-09-23-managed-config-eject.md).
