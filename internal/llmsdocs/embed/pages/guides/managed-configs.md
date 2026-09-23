@@ -12,6 +12,7 @@ When you run `datamitsu init`, it creates a `.datamitsu/` directory at your git 
 project-root/
 ├── .datamitsu/
 │   ├── datamitsu.config.d.ts  # auto-generated type definitions
+│   ├── configs/               # ejectable managed configs the project has not ejected
 │   ├── eslint-config → {store}/.apps/node/my-eslint-config/{hash}/dist/eslint.config.js
 │   └── prettier-config → {store}/.apps/node/my-prettier-config/{hash}/.prettierrc.json
 ├── eslint.config.js          # imports from .datamitsu/eslint-config
@@ -20,7 +21,7 @@ project-root/
 
 The `.datamitsu/` directory is:
 
-- Recreated atomically on each `datamitsu init` run
+- Recreated atomically on each `datamitsu init` run; `configs/` is carried over, and rewritten by init itself
 - Listed in `.gitignore` (not committed to the repository)
 - Contains an auto-generated `.gitignore` file with `*` as a defensive measure — prevents accidental commits if `.datamitsu/` is not listed in your root `.gitignore`
 - Contains a `datamitsu.config.d.ts` file with TypeScript type definitions for IDE autocomplete when editing `datamitsu.config.js`/`.ts`/`.mjs` files
@@ -209,6 +210,56 @@ The `content()` function receives a context object with:
 - `existingContent` - previous config layer's generated content for this file (undefined if no prior layer generated content)
 - `originalContent` - unmodified content of the file as it exists on disk during reconciliation
 - `existingPath` - path to the existing file on disk during reconciliation, if it exists
+- `placement` - `"repo"` for a file written into the repository, `"internal"` for a render into `.datamitsu/configs/`
+- `outputPath`, `outputDir` - where the returned content is written
+- `datamitsuDirFromOutput` - relative path from `outputDir` to `{rootPath}/.datamitsu/`, for references the file resolves against its own location
+
+### Keeping tool configs out of the repository
+
+Most tools need their config only to run. An entry marked `ejectable` lives in
+`.datamitsu/configs/` instead of the repository, and the tool is handed its path
+through the `{managedConfig:<key>}` placeholder:
+
+```javascript
+const managedConfigs = {
+  ".yamlfmt.yaml": {
+    scope: "git-root",
+    tools: ["yamlfmt"],
+    ejectable: true,
+    content: () => "formatter:\n  type: basic\n",
+  },
+};
+// tools.yamlfmt.operations.fix.args: ["-conf", "{managedConfig:.yamlfmt.yaml}", "{files}"]
+```
+
+Who writes the file depends on where it lives:
+
+| Placement                                | Written by                   | Changed by                                 |
+| ---------------------------------------- | ---------------------------- | ------------------------------------------ |
+| `.datamitsu/configs/<key>` (not ejected) | `datamitsu init`             | the configuration; never edit it           |
+| `<key>` in the repository (ejected)      | `datamitsu config reconcile` | you, and reconcile's merge on the next run |
+
+A project that needs to change the file — to allow a gitleaks finding, say — ejects
+it by naming the tool:
+
+```javascript
+return { ...input, ejectConfigs: ["gitleaks"] };
+```
+
+then runs `datamitsu config reconcile --tools gitleaks` to write
+`.gitleaks.toml` into the repository, where the tool now reads it. Removing the
+tool from `ejectConfigs` reverses it: reconciliation deletes the repository copy
+if it holds nothing of the project's own, and refuses — naming the file —
+if it does. Until the file is where the configuration says, `lint` and `fix`
+report which command to run instead of running the tool against a missing or
+ignored file.
+
+Only tool operations receive the path. `datamitsu exec <app>`, source-mode
+shims, CI actions and editor extensions that run a tool themselves do not, so an
+author keeps every file those read by name — `.editorconfig`, ESLint and Prettier
+configs, `lefthook.yaml` — in the repository. See the
+[configuration reference](../reference/configuration-api.md#keeping-configs-out-of-the-repository-ejectable--ejectconfigs)
+for the exact rules.
 
 ### Detecting upstream drift (`expectChainHash`)
 
