@@ -122,6 +122,10 @@ type ToolOperation struct {
 	// Input selects how the file content reaches the tool: "file" (default,
 	// path via {file}/{files}) or "stdin" (pipe the file's content to stdin).
 	Input ToolInputMode `json:"input,omitempty"`
+	// LSP is the author's veto on running this operation from the language
+	// server: false keeps it out of the editor; true or unset lets the editor's
+	// session policy decide.
+	LSP *bool `json:"lsp,omitempty"`
 	// Output selects how the tool's result is captured: "inplace" (default,
 	// combined stdout+stderr, tool mutates files) or "stdout" (capture stdout
 	// separately as the candidate formatted content).

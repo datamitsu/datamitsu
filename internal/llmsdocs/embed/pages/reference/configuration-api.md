@@ -801,6 +801,7 @@ interface ToolOperation {
   env?: Record<string, string>; // Extra environment variables; values support {root}, {cwd}, {toolCache}, {managedConfig:<key>}
   input?: "file" | "stdin"; // How file content reaches the tool (default: "file")
   output?: "inplace" | "stdout"; // How the result is captured (default: "inplace")
+  lsp?: boolean; // false keeps the operation out of the language server (format on save)
 }
 ```
 
@@ -968,9 +969,47 @@ Default `unit` for both operations. Under it, `datamitsu fix ./one.ts` may run a
 project-wide tool over that project — including one that rewrites files you did
 not name, if it takes no file arguments. Set `fix: "target"` if that blast radius
 is not what you want. `--widen-to` overrides it for a single run, in either
-direction. The narrow-only rule applies to the LSP session policy
-(`DATAMITSU_LSP_FORMAT_WIDEN_TO`) instead: that one is ambient and applies to
-every save, so an editor must not be able to out-scope the project.
+direction. The narrow-only rule applies to the editor's session policy instead —
+`datamitsu.format.widenTo` in VS Code, `format.widenTo` in the language server's
+[`initializationOptions`](./cli-commands.md#lsp-initialization-options), or
+`DATAMITSU_LSP_FORMAT_WIDEN_TO`: that one is ambient and applies to every save,
+so an editor must not be able to out-scope the project. Not even a per-tool
+opt-in (`format.tools`) runs a tool beyond the project's `fix` level.
+
+### Keeping an operation out of the editor (`lsp`)
+
+`lsp: false` is the author's veto on running an operation from the language
+server. The editor never runs it — not on save, not on "Format Document" — whatever
+the editor's settings say, including a `format.tools` opt-in for that tool.
+`lsp: true` is the same as leaving the field unset: the editor's session policy
+decides, as described in
+[What runs on save](../getting-started/installation/vscode.md#what-runs-on-save).
+
+```javascript
+const toolsConfig = {
+  "go-mod-tidy": {
+    name: "go-mod-tidy",
+    operations: {
+      fix: {
+        app: "go",
+        args: ["mod", "tidy"],
+        scope: "per-project",
+        lsp: false, // rewrites go.sum and may reach the network: not on every save
+      },
+    },
+    projectTypes: ["golang"],
+  },
+};
+```
+
+A project-wide operation without `globs`, like this one, is
+[already left out of the editor](../getting-started/installation/vscode.md#project-wide-tools-without-globs)
+unless a user opts it in with `format.tools`; `lsp: false` takes that choice
+away.
+
+Only fix operations run in the editor today; the field is accepted on any
+operation. It is unrelated to the top-level [`lsp`](#lsp-servers-lsp--reserved)
+record, which declares language servers.
 
 ### Skipping a tool (`skip` / `skipReason`)
 

@@ -25,6 +25,10 @@ const (
 
 	// InstallTimeoutSeconds is the default per-app install timeout in seconds.
 	InstallTimeoutSeconds = 600
+
+	// LspFormatTimeoutMs is the default format-on-save watchdog: once it has
+	// elapsed no further tool group starts. 0 disables it.
+	LspFormatTimeoutMs = 15000
 )
 
 // Effective is the full effective runtime configuration snapshot. It is the
@@ -38,6 +42,7 @@ type Effective struct {
 	InstallTimeoutSeconds    int    `json:"installTimeoutSeconds"`
 	Libc                     string `json:"libc"`
 	LogFormat                string `json:"logFormat"`
+	LspFormatTimeoutMs       int    `json:"lspFormatTimeoutMs"`
 	LspFormatWidenTo         string `json:"lspFormatWidenTo"`
 	LogLevel                 string `json:"logLevel"`
 	MaxCmdLength             int    `json:"maxCmdLength"`
@@ -67,6 +72,7 @@ func Compute() Effective {
 		InstallTimeoutSeconds:    env.InstallTimeoutSeconds(),
 		Libc:                     string(target.HostTarget().Libc),
 		LogFormat:                env.GetLogFormat(),
+		LspFormatTimeoutMs:       env.GetLspFormatTimeoutMs(),
 		LspFormatWidenTo:         env.GetLspFormatWidenTo(),
 		LogLevel:                 env.GetLogLevel().String(),
 		MaxCmdLength:             env.GetMaxCommandLength(),

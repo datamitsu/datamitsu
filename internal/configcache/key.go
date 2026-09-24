@@ -25,7 +25,7 @@ import (
 // FormatVersion is the schema version of the stored artifact. Bump it whenever
 // the encoded artifact's shape changes; every old entry then misses rather than
 // decoding into a struct that no longer means the same thing.
-const FormatVersion = 3
+const FormatVersion = 4
 
 // ChainFile is one on-disk file of the resolved config chain. A file that does
 // not exist is recorded with Exists=false and an empty hash: its appearance is

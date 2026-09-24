@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 55,
-  "pageSetHash": "66a87839329c5057c1d2906459d2b047",
+  "pageSetHash": "e085816efa66655b7dd4ba6d0ed62a12",
   "pages": [
     {
       "slug": "about",
@@ -179,8 +179,8 @@
       "url": "https://datamitsu.com/docs/getting-started/installation/vscode.md",
       "title": "VS Code Extension",
       "description": "Install the Datamitsu Toolkit extension for VS Code, Cursor, VSCodium, and other VS Code-based editors",
-      "bytes": 3779,
-      "contentHash": "c380ec91e61043541106ae1d79d1e5a4"
+      "bytes": 10715,
+      "contentHash": "7b361e1653ab3cb65b2eedcfc710b3fd"
     },
     {
       "slug": "getting-started/installation/winget",
@@ -206,8 +206,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/caching.md",
       "title": "Caching Strategy",
       "description": "How datamitsu caches file-level results and unit or repository verdicts, computes XXH3-128 keys, and persists them safely",
-      "bytes": 21553,
-      "contentHash": "b688cc68f44ee442d9bcba5352e595e0"
+      "bytes": 22400,
+      "contentHash": "95c6c78ebee382a7befe594f3ef222b2"
     },
     {
       "slug": "guides/architecture/discovery",
@@ -289,8 +289,8 @@
       "url": "https://datamitsu.com/docs/guides/configuration.md",
       "title": "Configuration",
       "description": "How to configure datamitsu with JavaScript config files, remote configs, and config layers",
-      "bytes": 12069,
-      "contentHash": "57f86e17914a1b932a978bb490f0f7a3"
+      "bytes": 12209,
+      "contentHash": "8551cc1a836f77516d04a4d65c91a9b5"
     },
     {
       "slug": "guides/managed-configs",
@@ -451,8 +451,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 72815,
-      "contentHash": "c90aec8b22d2d2c91a2fdc631399dea2"
+      "bytes": 83476,
+      "contentHash": "69dcd64e7111cb18fa7389abe7e852d8"
     },
     {
       "slug": "reference/comparison",
@@ -469,8 +469,8 @@
       "url": "https://datamitsu.com/docs/reference/configuration-api.md",
       "title": "Configuration API",
       "description": "Complete reference for the datamitsu configuration API",
-      "bytes": 69729,
-      "contentHash": "d0df1f79085b4ca4706ac501fec3ca2c"
+      "bytes": 71336,
+      "contentHash": "464af89ca87601c091746b0d95054575"
     },
     {
       "slug": "reference/ignore-rules",

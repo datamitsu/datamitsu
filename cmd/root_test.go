@@ -3,8 +3,13 @@ package cmd
 import (
 	"bytes"
 	"errors"
+	"io"
 	"strings"
+	"sync"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/ui"
+	"github.com/datamitsu/datamitsu/internal/uievent"
 
 	"github.com/spf13/cobra"
 )
@@ -53,5 +58,38 @@ func TestSilenceUsagePreventsUsageOnRuntimeError(t *testing.T) {
 	}
 	if strings.Contains(combined, "runtime error occurred") {
 		t.Errorf("SilenceErrors should prevent error message from appearing in cobra output, got: %q", combined)
+	}
+}
+
+type eventRecorder struct {
+	mu     sync.Mutex
+	events []uievent.Event
+}
+
+func (r *eventRecorder) Emit(e uievent.Event) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.events = append(r.events, e)
+}
+
+// A diagnostic report on a JSON-L stream is one log event, not lines of text
+// that no consumer of the stream can parse.
+func TestReportToStderrIsOneLogEventInJSONLMode(t *testing.T) {
+	sink := &eventRecorder{}
+	ui.SetEventSink(sink, true)
+	t.Cleanup(func() { ui.SetEventSink(nil, false) })
+
+	reportToStderr(func(w io.Writer) { _, _ = io.WriteString(w, "\n⏱  report\n  row one\n  row two\n") })
+	reportToStderr(func(io.Writer) {})
+
+	if len(sink.events) != 1 {
+		t.Fatalf("events = %+v, want one for the report and none for an empty one", sink.events)
+	}
+	e := sink.events[0]
+	if e.Type != uievent.TypeLog || e.Level != uievent.LevelInfo || !strings.HasPrefix(e.OpID, "log-") {
+		t.Errorf("event = %+v, want an info log event with a log- op id", e)
+	}
+	if want := "⏱  report\n  row one\n  row two"; e.Msg != want {
+		t.Errorf("msg = %q, want %q", e.Msg, want)
 	}
 }

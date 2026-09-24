@@ -209,6 +209,13 @@ type formattingParams struct {
 	TextDocument textDocumentIdentifier `json:"textDocument"`
 }
 
+// initializeParams keeps only what the server reads from initialize: the
+// initializationOptions object, which per the LSP specification belongs to the
+// server. Decoded leniently by resolveFormatPolicy.
+type initializeParams struct {
+	InitializationOptions json.RawMessage `json:"initializationOptions"`
+}
+
 type initializeResult struct {
 	Capabilities serverCapabilities `json:"capabilities"`
 	ServerInfo   serverInfo         `json:"serverInfo"`
@@ -220,9 +227,28 @@ type serverInfo struct {
 }
 
 type serverCapabilities struct {
-	PositionEncoding           string                  `json:"positionEncoding"`
-	TextDocumentSync           textDocumentSyncOptions `json:"textDocumentSync"`
-	DocumentFormattingProvider bool                    `json:"documentFormattingProvider"`
+	PositionEncoding           string                   `json:"positionEncoding"`
+	TextDocumentSync           textDocumentSyncOptions  `json:"textDocumentSync"`
+	DocumentFormattingProvider bool                     `json:"documentFormattingProvider"`
+	Experimental               experimentalCapabilities `json:"experimental"`
+}
+
+// experimentalCapabilities echoes the session policy the server runs with. The
+// environment is invisible to the client and initializationOptions may have
+// been partly rejected, so this is the only place an editor can read the
+// effective values back.
+type experimentalCapabilities struct {
+	Datamitsu datamitsuCapabilities `json:"datamitsu"`
+}
+
+type datamitsuCapabilities struct {
+	Format formatPolicyEcho `json:"format"`
+}
+
+type formatPolicyEcho struct {
+	WidenTo   string          `json:"widenTo"`
+	TimeoutMs int             `json:"timeoutMs"`
+	Tools     map[string]bool `json:"tools"`
 }
 
 type textDocumentSyncOptions struct {

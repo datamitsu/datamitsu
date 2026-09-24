@@ -44,6 +44,23 @@ const (
 	cacheFileName = "toolstate.msgpack"
 )
 
+// ErrForeignKey reports a save that found the cache file owned by a different
+// configuration and, in yield mode, left it untouched.
+var ErrForeignKey = errors.New("cache file belongs to a different configuration")
+
+// ForeignKeyError is the ErrForeignKey a yield-mode save returns. DiskVersion
+// is the datamitsu version that wrote the file ("" for a file written before
+// the field existed): a different binary is a cause that restarting the
+// process cannot fix, so the caller reports it differently.
+type ForeignKeyError struct {
+	DiskVersion string
+}
+
+func (e *ForeignKeyError) Error() string { return ErrForeignKey.Error() }
+
+// Is makes errors.Is(err, ErrForeignKey) hold.
+func (e *ForeignKeyError) Is(target error) bool { return target == ErrForeignKey }
+
 // FileEntry represents cache data for a single file
 type FileEntry struct {
 	ContentHash string   // xxh3-128 hash of file contents
@@ -54,6 +71,7 @@ type FileEntry struct {
 // File represents the entire cache for a project
 type File struct {
 	InvalidationKey string               // hash(datamitsuVersion + fullConfigHash + selectedTools)
+	Version         string               // datamitsu version that last wrote the file
 	ProjectPath     string               // for debugging
 	LastPruned      time.Time            // when we last cleaned up deleted files
 	Entries         map[string]FileEntry // relativePath -> entry
@@ -85,10 +103,18 @@ type Cache struct {
 	deletedVerdicts map[string]struct{}
 	saveMu          sync.Mutex // Protects Save() from concurrent calls
 
+	// yieldToForeignKey makes every write leave a file keyed by another
+	// configuration alone (see SetYieldToForeignKey).
+	yieldToForeignKey atomic.Bool
+
 	// Async save support
-	dirty        atomic.Bool
-	saveTimer    *time.Timer
-	saveTimerMu  sync.Mutex
+	dirty       atomic.Bool
+	saveTimer   *time.Timer
+	saveTimerMu sync.Mutex
+	// flushMu is held by a debounced flush from its dirty check to the end of its
+	// save, so Shutdown waits for one already running: a process that exits
+	// mid-write leaves a temp file behind.
+	flushMu      sync.Mutex
 	shutdownCh   chan struct{}
 	shutdownOnce sync.Once
 }
@@ -121,6 +147,7 @@ func NewCache(
 		return nil, fmt.Errorf("failed to create project tool cache directory: %w", err)
 	}
 	cachePath := filepath.Join(projectDir, cacheFileName)
+	removeStaleTempFiles(cachePath, time.Now().Add(-staleTempAge))
 
 	// Calculate invalidation key
 	invalidationKey, err := calculateInvalidationKey(cfg, selectedTools)
@@ -224,6 +251,18 @@ func (c *Cache) Load() error {
 	return nil
 }
 
+// SetYieldToForeignKey is for long-lived processes. Such a process holds the
+// configuration it started with; after a config edit the CLI writes a new key,
+// and a stale process replacing it would reset the CLI's cache, which would
+// reset the process's in turn — forever. In yield mode no write replaces a file
+// whose key differs from ours: Save returns ErrForeignKey instead, and the
+// debounced and shutdown flushes skip. The CLI keeps the default (replace),
+// because nothing else ever rewrites the on-disk key; once it writes the key
+// this process holds, the two merge again.
+func (c *Cache) SetYieldToForeignKey(yield bool) {
+	c.yieldToForeignKey.Store(yield)
+}
+
 // Save saves the cache to disk atomically
 func (c *Cache) Save() error {
 	defer trace.Start(trace.CatCache, "cache.Save").End()
@@ -246,48 +285,86 @@ func (c *Cache) Save() error {
 		return errors.New("cache data is nil")
 	}
 
-	// Ensure directory exists
-	if err := os.MkdirAll(filepath.Dir(c.path), 0o755); err != nil {
-		c.mu.RUnlock()
-		return fmt.Errorf("failed to create cache directory: %w", err)
-	}
-
-	// Write to temporary file first
-	tmpPath := c.path + ".tmp"
-	f, err := os.Create(tmpPath)
-	if err != nil {
-		c.mu.RUnlock()
-		return fmt.Errorf("failed to create temp file: %w", err)
-	}
-
-	// Encode cache data
-	encodedData, err := msgpack.Marshal(c.data)
+	snapshot := *c.data
+	snapshot.Version = ldflags.Version
+	encodedData, err := msgpack.Marshal(snapshot)
 	c.mu.RUnlock()
-
 	if err != nil {
-		_ = f.Close()
-		_ = os.Remove(tmpPath)
 		return fmt.Errorf("failed to encode cache: %w", err)
 	}
 
-	// Write encoded data to file
-	if _, err := f.Write(encodedData); err != nil {
-		_ = f.Close()
-		_ = os.Remove(tmpPath)
+	return writeFileAtomic(c.path, encodedData)
+}
+
+// staleTempAge is how old a temp file must be before it counts as abandoned. A
+// save takes well under a second, so an hour never races a live writer.
+const staleTempAge = time.Hour
+
+// removeStaleTempFiles deletes the temp files of saves that never reached their
+// rename, last modified before cutoff. Each save names its own, so nothing else
+// ever overwrites one, and a large repository's cache is megabytes per file. The
+// fixed name older builds used goes the same way. Failures are ignored: this is
+// housekeeping and must not fail a cache load.
+func removeStaleTempFiles(path string, cutoff time.Time) {
+	dir := filepath.Dir(path)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	prefix, legacy := tempPrefix(path), filepath.Base(path)+".tmp"
+	for _, e := range entries {
+		name := e.Name()
+		temp := name == legacy || (strings.HasPrefix(name, prefix) && strings.HasSuffix(name, ".tmp"))
+		if !temp || !e.Type().IsRegular() {
+			continue
+		}
+		if info, err := e.Info(); err == nil && info.ModTime().Before(cutoff) {
+			_ = os.Remove(filepath.Join(dir, name))
+		}
+	}
+}
+
+// tempPrefix starts the name of every temp file writeFileAtomic makes for path.
+func tempPrefix(path string) string {
+	base := filepath.Base(path)
+	return strings.TrimSuffix(base, filepath.Ext(base)) + "-"
+}
+
+// writeFileAtomic replaces path with data through a temp file of its own. An
+// editor session and a CLI run write the same cache file concurrently; with one
+// fixed temp name their bytes could interleave and the rename would publish the
+// mix.
+func writeFileAtomic(path string, data []byte) (err error) {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("failed to create cache directory: %w", err)
+	}
+
+	f, err := os.CreateTemp(dir, tempPrefix(path)+"*.tmp")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %w", err)
+	}
+	tmpPath := f.Name()
+	defer func() {
+		if err != nil {
+			_ = f.Close()
+			_ = os.Remove(tmpPath)
+		}
+	}()
+
+	// CreateTemp makes the file 0600; the cache keeps the mode os.Create gave it.
+	if err := f.Chmod(0o644); err != nil {
+		return fmt.Errorf("failed to set temp file mode: %w", err)
+	}
+	if _, err := f.Write(data); err != nil {
 		return fmt.Errorf("failed to write cache: %w", err)
 	}
-
 	if err := f.Close(); err != nil {
-		_ = os.Remove(tmpPath)
 		return fmt.Errorf("failed to close temp file: %w", err)
 	}
-
-	// Atomic rename
-	if err := os.Rename(tmpPath, c.path); err != nil {
-		_ = os.Remove(tmpPath)
+	if err := os.Rename(tmpPath, path); err != nil {
 		return fmt.Errorf("failed to rename cache file: %w", err)
 	}
-
 	return nil
 }
 
@@ -620,12 +697,24 @@ func (c *Cache) Shutdown() {
 		}
 		c.saveTimerMu.Unlock()
 
+		c.flushMu.Lock()
+		defer c.flushMu.Unlock()
 		if c.dirty.Swap(false) {
 			if err := c.Save(); err != nil {
-				c.log().Warn("final save failed", zap.Error(err))
+				c.logSaveError("final save failed", err)
 			}
 		}
 	})
+}
+
+// logSaveError logs a failed background save. A yield is the mode working, and
+// the process that turned it on reports it itself, so it stays at debug.
+func (c *Cache) logSaveError(msg string, err error) {
+	if errors.Is(err, ErrForeignKey) {
+		c.log().Debug(msg, zap.Error(err))
+		return
+	}
+	c.log().Warn(msg, zap.Error(err))
 }
 
 // markPassed marks a tool as having passed for a file
@@ -692,9 +781,11 @@ func (c *Cache) debounceSave() {
 	}
 
 	c.saveTimer = time.AfterFunc(100*time.Millisecond, func() {
+		c.flushMu.Lock()
+		defer c.flushMu.Unlock()
 		if c.dirty.Swap(false) {
 			if err := c.Save(); err != nil {
-				c.log().Warn("async save failed", zap.Error(err))
+				c.logSaveError("async save failed", err)
 			}
 		}
 	})
@@ -729,8 +820,12 @@ func (c *Cache) mergeFromDisk() error {
 	// discarded it in memory, so this process owns the file now: skip the merge
 	// and let our data replace it. Refusing instead would wedge every later save,
 	// because nothing ever rewrites the on-disk key — one version bump or config
-	// edit and the cache never warms again.
+	// edit and the cache never warms again. A long-lived process opts out: its
+	// key is the stale one, and the CLI owns the file (SetYieldToForeignKey).
 	if disk.InvalidationKey != "" && disk.InvalidationKey != c.invalidationKey {
+		if c.yieldToForeignKey.Load() {
+			return &ForeignKeyError{DiskVersion: disk.Version}
+		}
 		return nil
 	}
 

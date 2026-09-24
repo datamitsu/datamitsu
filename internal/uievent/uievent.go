@@ -34,6 +34,22 @@ const (
 	TypeError Type = "error"
 	// TypeDone marks the completion of an operation, with a summary.
 	TypeDone Type = "done"
+	// TypeLog is a human-readable line: a notice from a long-lived command (the
+	// language server), which has no terminal to print it to, or a log line
+	// while stderr is a JSON-L stream. Level says how loud it is.
+	TypeLog Type = "log"
+)
+
+// Level values for the optional Level field of a log event.
+const (
+	// LevelDebug is detail for diagnosing datamitsu itself (--verbose).
+	LevelDebug = "debug"
+	// LevelInfo is a notice worth recording but not worth interrupting for.
+	LevelInfo = "info"
+	// LevelWarn is a notice the user should act on.
+	LevelWarn = "warn"
+	// LevelError is a failure the command reports without stopping.
+	LevelError = "error"
 )
 
 // Status values for the optional Status field.
@@ -75,7 +91,8 @@ type Event struct {
 	// distinguishable from an event that carries no success field at all.
 	Success    *bool  `json:"success,omitempty"`
 	DurationMs int64  `json:"duration_ms,omitempty"`
-	Msg        string `json:"msg,omitempty"` // error / diagnostic text
+	Msg        string `json:"msg,omitempty"`   // error / diagnostic / log text
+	Level      string `json:"level,omitempty"` // debug | info | warn | error, for log events
 
 	// done summary.
 	Tools   int `json:"tools,omitempty"`

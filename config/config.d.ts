@@ -1106,6 +1106,18 @@ declare global {
       invalidateOn?: string[];
 
       /**
+       * Whether the language server (`datamitsu lsp`) may run this operation on format-on-save.
+       * `false` keeps it out of the editor whatever the editor's session policy says — use it for
+       * an operation that mutates lock files, reaches the network, or is too slow to run on every
+       * save. `true` or unset lets the editor's policy (`format.widenTo`, `format.tools`) decide.
+       * Only fix operations run in the editor today; the field is accepted on any operation.
+       *
+       * @example
+       *   lsp: false;
+       */
+      lsp?: boolean;
+
+      /**
        * How the tool's result is captured. - "inplace" (default): combined stdout+stderr is
        * captured for reporting and the tool mutates files directly - "stdout": capture the tool's
        * stdout separately (kept apart from stderr) as the candidate formatted content for the

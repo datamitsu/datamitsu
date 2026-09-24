@@ -60,6 +60,33 @@
           "default": "auto",
           "description": "How to locate the datamitsu binary that runs the language server."
         },
+        "datamitsu.format.timeoutMs": {
+          "type": "integer",
+          "default": 15000,
+          "minimum": 0,
+          "markdownDescription": "Watchdog for format-on-save, in milliseconds: once it has elapsed, no further group of fix tools starts. A running tool is never stopped, and tool downloads do not count. `0` disables it. Unset, the language server uses `DATAMITSU_LSP_FORMAT_TIMEOUT_MS` or its default, `15000`."
+        },
+        "datamitsu.format.tools": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "boolean"
+          },
+          "default": {},
+          "markdownDescription": "Per-tool override for format-on-save, keyed by tool name in the datamitsu config. `false` keeps a tool out of the editor; `true` runs a project-wide tool on save even when `#datamitsu.format.widenTo#` is `target` or its operation declares no `globs`, up to the project's own `execution.widenTo`. Neither brings in a repository-wide tool or an operation the config marks `lsp: false`."
+        },
+        "datamitsu.format.widenTo": {
+          "type": "string",
+          "enum": [
+            "target",
+            "unit"
+          ],
+          "enumDescriptions": [
+            "Only file-level fix tools run on save.",
+            "File-level fix tools, plus project-wide fix tools that declare globs, over the saved file's project."
+          ],
+          "default": "unit",
+          "markdownDescription": "How far format-on-save reaches beyond the saved file. Project-wide tools never go beyond the project's own `execution.widenTo`, and one whose operation declares no `globs` runs only when `#datamitsu.format.tools#` opts it in. Repository-wide tools never run on save. Unset, the language server uses `DATAMITSU_LSP_FORMAT_WIDEN_TO` or its default, `unit`."
+        },
         "datamitsu.path": {
           "type": "string",
           "default": "",

@@ -10,6 +10,9 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/uievent"
 )
 
 // readFrame parses one Content-Length-framed JSON-RPC message body into a map.
@@ -330,5 +333,82 @@ func TestURIToPath(t *testing.T) {
 	}
 	if _, err := uriToPath("http://example.com/x"); err == nil {
 		t.Error("expected error for non-file scheme")
+	}
+}
+
+// The environment is invisible to the client and initializationOptions may be
+// partly rejected, so initialize echoes the policy the session actually runs
+// with, and logs it along with every rejected option.
+func TestInitializeEchoesTheFormatPolicy(t *testing.T) {
+	t.Setenv("DATAMITSU_LSP_FORMAT_WIDEN_TO", "")
+	t.Setenv("DATAMITSU_LSP_FORMAT_TIMEOUT_MS", "")
+
+	tests := []struct {
+		name      string
+		params    any
+		want      string // capabilities.experimental, as JSON
+		wantInfo  string
+		wantWarns int
+	}{
+		{
+			name:     "no options",
+			params:   map[string]any{},
+			want:     `{"datamitsu":{"format":{"widenTo":"unit","timeoutMs":15000,"tools":{}}}}`,
+			wantInfo: "format policy: widenTo=unit timeoutMs=15000 tools={} (from initializationOptions: none)",
+		},
+		{
+			name: "options override, rejected entries are left out",
+			params: map[string]any{"initializationOptions": map[string]any{"format": map[string]any{
+				"widenTo":   "target",
+				"timeoutMs": 0,
+				"tools":     map[string]any{"eslint": false, "nonesuch": true},
+			}}},
+			want:      `{"datamitsu":{"format":{"widenTo":"target","timeoutMs":0,"tools":{"eslint":false}}}}`,
+			wantInfo:  `format policy: widenTo=target timeoutMs=0 tools={"eslint":false} (from initializationOptions: timeoutMs, tools, widenTo)`,
+			wantWarns: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sink := captureEvents(t)
+			var buf bytes.Buffer
+			s := newTestServer(&buf)
+			s.tools = config.MapOfTools{"eslint": {Name: "eslint"}}
+
+			s.handle(context.Background(), msg(t, "1", "initialize", tt.params))
+
+			frame := readFrame(t, bufio.NewReader(bytes.NewReader(buf.Bytes())))
+			var res struct {
+				Capabilities struct {
+					Experimental json.RawMessage `json:"experimental"`
+				} `json:"capabilities"`
+			}
+			if err := json.Unmarshal(frame["result"], &res); err != nil {
+				t.Fatalf("decode initialize result: %v", err)
+			}
+			if got := string(res.Capabilities.Experimental); got != tt.want {
+				t.Errorf("capabilities.experimental =\n  %s\nwant\n  %s", got, tt.want)
+			}
+
+			var infos, warns []string
+			for _, e := range sink.ofType(uievent.TypeLog) {
+				if e.OpID == "" {
+					t.Errorf("log event without an op id: %+v", e)
+				}
+				switch e.Level {
+				case uievent.LevelInfo:
+					infos = append(infos, e.Msg)
+				case uievent.LevelWarn:
+					warns = append(warns, e.Msg)
+				}
+			}
+			if len(infos) != 1 || infos[0] != tt.wantInfo {
+				t.Errorf("info logs = %q, want [%q]", infos, tt.wantInfo)
+			}
+			if len(warns) != tt.wantWarns {
+				t.Errorf("warn logs = %q, want %d", warns, tt.wantWarns)
+			}
+		})
 	}
 }

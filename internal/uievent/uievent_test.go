@@ -122,3 +122,44 @@ func TestJSONLSinkDoesNotThrottlePhaseOrToolRun(t *testing.T) {
 		t.Fatalf("got %d lines, want 5", len(lines))
 	}
 }
+
+// A log event carries its level so a consumer can route a warning differently
+// from a record; every other event leaves the field off the wire.
+func TestJSONLSinkLogLevel(t *testing.T) {
+	tests := []struct {
+		name  string
+		event Event
+		want  any // nil = key absent
+	}{
+		{"debug log", Event{Type: TypeLog, OpID: "log-1", Level: LevelDebug, Msg: "detail"}, "debug"},
+		{"info log", Event{Type: TypeLog, OpID: "lsp-1", Level: LevelInfo, Msg: "policy"}, "info"},
+		{"warn log", Event{Type: TypeLog, OpID: "lsp-2", Level: LevelWarn, Msg: "timeout"}, "warn"},
+		{"error log", Event{Type: TypeLog, OpID: "log-2", Level: LevelError, Msg: "failed"}, "error"},
+		{"non-log event omits level", Event{Type: TypeDone, OpID: "fmt-1", Op: "format"}, nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			NewJSONLSink(&buf).Emit(tt.event)
+
+			lines := decodeLines(t, &buf)
+			if len(lines) != 1 {
+				t.Fatalf("got %d lines, want 1", len(lines))
+			}
+			got, present := lines[0]["level"]
+			if tt.want == nil {
+				if present {
+					t.Errorf("level = %v, want the key absent", got)
+				}
+				return
+			}
+			if got != tt.want {
+				t.Errorf("level = %v, want %v", got, tt.want)
+			}
+			if lines[0]["type"] != string(TypeLog) {
+				t.Errorf("type = %v, want %q", lines[0]["type"], TypeLog)
+			}
+		})
+	}
+}

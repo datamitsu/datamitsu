@@ -6,8 +6,6 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/lsp"
 	"github.com/datamitsu/datamitsu/internal/traverser"
-	"github.com/datamitsu/datamitsu/internal/ui"
-	"github.com/datamitsu/datamitsu/internal/uievent"
 
 	"github.com/spf13/cobra"
 )
@@ -21,15 +19,25 @@ tool's own project/config detection matches "datamitsu fix"), then returning the
 diff as edits. A format persists the buffer to disk first, so it also saves the
 file. It implements only textDocument/formatting — no diagnostics, no parsers.
 
-stdout carries ONLY LSP JSON-RPC; all status/progress (including tool downloads)
-is emitted as JSON-L on stderr. (--verbose additionally writes plain-text debug
-lines to stderr, so stderr is line-delimited JSON only when --verbose is off.)`,
+What runs on save is the session's format policy, read once at initialize from
+initializationOptions.format {widenTo: "target"|"unit", timeoutMs, tools:
+{<tool>: bool}}, falling back per key to DATAMITSU_LSP_FORMAT_WIDEN_TO and
+DATAMITSU_LSP_FORMAT_TIMEOUT_MS, then to unit and 15000. The effective policy is
+echoed in the initialize result under capabilities.experimental.datamitsu.
+A repository-wide fix never runs on save, nor does an operation marked
+lsp: false; a project-wide fix that declares no globs runs only when
+format.tools opts it in.
+
+stdout carries ONLY LSP JSON-RPC. stderr is line-delimited JSON: status and
+progress (including tool downloads), the server's notices and every log line,
+as log events with a level of debug, info, warn or error. --verbose lowers the
+log level to debug, so info and debug log events appear as well.`,
 	Args: cobra.NoArgs,
 	// Force JSON-L quiet mode on stderr for the whole process. The server owns
 	// stdout for framed JSON-RPC, so nothing human/log may reach it. This runs
 	// after cobra.OnInitialize, so it unconditionally overrides --log-format.
 	PersistentPreRun: func(_ *cobra.Command, _ []string) {
-		ui.SetEventSink(uievent.NewJSONLSink(os.Stderr), true)
+		setJSONLStderr(true)
 	},
 	RunE: runLsp,
 }

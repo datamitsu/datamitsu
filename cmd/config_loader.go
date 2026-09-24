@@ -293,7 +293,7 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 	// site — every startup phase is recorded within this call, and commands
 	// that os.Exit (exec) would never reach a process-exit one anyway.
 	// PrintStartup prints at most once per process.
-	defer timing.PrintStartup(os.Stderr)
+	defer reportToStderr(timing.PrintStartup)
 	defer timing.StartStartupPhase(timing.PhaseLoadConfig)()
 	defer trace.Start(trace.CatConfig, "loadConfig").End()
 	defer func() {

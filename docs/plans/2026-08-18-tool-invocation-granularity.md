@@ -1307,6 +1307,58 @@ pre-existing on `main`, so neither was a regression, but both are silent losses:
 `Paths(P) × file` applied the cwd filter to explicitly named paths, and
 `Subtree(D) × unit` dropped the project containing the subtree.
 
+## 11c. S4 completed (2026-09-24)
+
+The R5 entry above shipped only part of §6: the `widenTo` session policy from
+the environment and the removal of `scopeTasksToFile`. Branch
+`feat/lsp-format-policy` completes it:
+
+- `initializationOptions.format` (`widenTo`, `timeoutMs`, `tools`), read once at
+  `initialize`, over `DATAMITSU_LSP_FORMAT_WIDEN_TO` /
+  `DATAMITSU_LSP_FORMAT_TIMEOUT_MS`, over the defaults; lenient validation, so no
+  option fails `initialize`; the effective policy echoed in
+  `capabilities.experimental.datamitsu.format` and as an info `log` event.
+  `lspFormatTimeoutMs` joins `runtimeconfig.Effective`.
+- The per-operation author veto `lsp: false`; `configcache.FormatVersion` 3 → 4.
+- The watchdog: one `Execute` per priority group, checked only between groups.
+- The planner plans at `unit` and the editor filter is the one place the
+  project's `execution.widenTo.fix` clamp applies, so what the project policy
+  leaves out is reported rather than silently missing.
+- §5.8 for the long-lived process: `Cache.SetYieldToForeignKey` — the session
+  never overwrites a cache file keyed by another configuration; the CLI keeps
+  replacing it. Every save writes through a temp file of its own.
+- The server's stderr is JSON-L only: its own notices and every zap line are
+  `log` events (`debug|info|warn|error`); a format request emits
+  `phase`/`tool_run`/`error`/`done`, so a failing formatter is visible.
+- The VS Code extension sends `datamitsu.format.*` as `initializationOptions`
+  and restarts the server when they change.
+
+**Three deviations from §6, from running the server on this repository:**
+
+- **A project-wide operation without `globs` does not run on save** unless
+  `format.tools` opts it in. The planner plans such an operation for every path
+  in its unit, so saving a `.ts` file ran the wrapper's glob-less
+  `golangci-lint fmt` over the whole Go module — 152 s here, against 0.31 s for
+  one file — and the watchdog then left out the formatters the file needed. The
+  remedy belongs to the author: `globs`, or better `{files}` so the operation
+  becomes file-granular. Until the wrapper declares one, §6.2's premise —
+  format-on-save for Go under the `unit` default — does not hold for it.
+- **The watchdog default is 15000 ms, not §6.1's 3000.** On this repository
+  eslint alone takes about 2.6 s, so 3000 left the formatters after it to machine
+  load — exactly the nondeterminism §6.2 warns against. Raised by the owner.
+- **A cache written by another datamitsu version is an info, not a warning**:
+  an editor running a different binary than the CLI is a normal setup, and
+  restarting cannot fix it. The cache file records the version that wrote it.
+
+**The deferred list above is out of date** (audited 2026-09-24, outside S4):
+the `batch` field was deleted rather than kept as a warning, exit 4 exists but
+`--fail-on-skip` still exits 1, the `--tools` conflict is rejected up front with
+exit 1 rather than 2, the `◑ target:` header and §5.5's torn-read re-hash ship.
+Still open: `PlanJSON.complete`/`coverage`/`target`, the run-level `uievent`
+fields, the three extra `SkipReason` values, collapsed skip counters, the
+`partial` footer and advisory block, the granularity badge, and a blackbox test
+for exit 4. §13.9's key is `unitCacheTtlMinutes`, not `unitCacheTTLMinutes`.
+
 ## 12. Non-goals
 
 Not deferred versions — explicit refusals or genuine impossibilities.

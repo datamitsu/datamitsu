@@ -3,21 +3,35 @@ import type { Readable } from "node:stream";
 import * as readline from "node:readline";
 import * as vscode from "vscode";
 
-import { parseEvent, toStatusUpdate } from "./events";
+import {
+  alertText,
+  isAlertLevel,
+  isEmptyFormat,
+  type Notice,
+  parseEvent,
+  toNotice,
+  toStatusUpdate,
+} from "./events";
+
+const SHOW_OUTPUT = "Show Output";
 
 // JsonlProgress consumes the language server's JSON-L stderr stream and reflects
 // long-running work (tool downloads, installs, runs) in a status-bar item. It
 // tracks active ops by op_id and shows the most recently updated one; the item is
-// hidden when nothing is active. Non-JSON lines (e.g. `--verbose` debug output)
-// are ignored.
+// hidden when nothing is active. Non-JSON lines are ignored. The server's notices
+// and failed tools go to the output channel at their level; the first warning or
+// error and the first format that ran no tool of each server session also pop up
+// once.
 export class JsonlProgress implements vscode.Disposable {
   private readonly active = new Map<string, string>();
+  private isAlertShown = false;
+  private isEmptyFormatHintShown = false;
   private readonly item: vscode.StatusBarItem;
   private order: string[] = [];
-  private readonly output: vscode.OutputChannel;
+  private readonly output: vscode.LogOutputChannel;
   private reader: readline.Interface | undefined;
 
-  constructor(output: vscode.OutputChannel) {
+  constructor(output: vscode.LogOutputChannel) {
     this.output = output;
     this.item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
     this.item.name = "datamitsu";
@@ -30,6 +44,8 @@ export class JsonlProgress implements vscode.Disposable {
   attach(stderr: Readable): void {
     this.reader?.close();
     this.clearAll();
+    this.isAlertShown = false;
+    this.isEmptyFormatHintShown = false;
 
     const reader = readline.createInterface({ input: stderr });
     this.reader = reader;
@@ -62,6 +78,37 @@ export class JsonlProgress implements vscode.Disposable {
     }
   }
 
+  private notify({ level, message }: Notice): void {
+    switch (level) {
+      case "debug": {
+        this.output.debug(message);
+        break;
+      }
+      case "error": {
+        this.output.error(message);
+        break;
+      }
+      case "info": {
+        this.output.info(message);
+        break;
+      }
+      case "warn": {
+        this.output.warn(message);
+        break;
+      }
+    }
+    if (!isAlertLevel(level) || this.isAlertShown) {
+      return;
+    }
+    this.isAlertShown = true;
+    const text = alertText(message);
+    this.popUp(
+      level === "error"
+        ? vscode.window.showErrorMessage(text, SHOW_OUTPUT)
+        : vscode.window.showWarningMessage(text, SHOW_OUTPUT),
+    );
+  }
+
   private onLine(line: string): void {
     const event = parseEvent(line);
     if (event === undefined) {
@@ -69,10 +116,23 @@ export class JsonlProgress implements vscode.Disposable {
     }
     const update = toStatusUpdate(event);
 
-    if (update.error !== undefined) {
-      // Logged, not popped up: the failing LSP request already surfaces its own
-      // error to the editor, so a second modal would be noise.
-      this.output.appendLine(`error: ${update.error}`);
+    const notice = toNotice(update);
+    if (notice !== undefined) {
+      this.notify(notice);
+    }
+    if (update.log !== undefined) {
+      return;
+    }
+
+    if (isEmptyFormat(event) && !this.isEmptyFormatHintShown) {
+      this.isEmptyFormatHintShown = true;
+      this.popUp(
+        vscode.window.showInformationMessage(
+          "datamitsu: no fix tool ran for this file — none in the config applies to its " +
+            "type, or the editor's format policy left them out. See the datamitsu output channel.",
+          SHOW_OUTPUT,
+        ),
+      );
     }
 
     if (update.label === undefined) {
@@ -81,6 +141,18 @@ export class JsonlProgress implements vscode.Disposable {
       this.set(update.opId, update.label);
     }
     this.render();
+  }
+
+  // popUp opens the output channel when the notification's action is chosen,
+  // without blocking the stream reader on the user's answer.
+  private popUp(choice: Thenable<string | undefined>): void {
+    Promise.resolve(choice)
+      .then((picked) => {
+        if (picked === SHOW_OUTPUT) {
+          this.output.show();
+        }
+      })
+      .catch(() => {});
   }
 
   private render(): void {

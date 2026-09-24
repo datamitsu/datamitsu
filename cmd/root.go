@@ -2,9 +2,11 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -101,11 +103,7 @@ func init() {
 		// stdout stays clean. Done here (after flag parse, post-runtimeconfig.Init)
 		// so the --log-format flag overrides the effective env value; both resolve
 		// to the same console|jsonl vocabulary.
-		if resolveLogFormat() == "jsonl" {
-			ui.SetEventSink(uievent.NewJSONLSink(os.Stderr), true)
-		} else {
-			ui.SetEventSink(nil, false)
-		}
+		setJSONLStderr(resolveLogFormat() == "jsonl")
 	})
 
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false,
@@ -124,6 +122,19 @@ func init() {
 		"Skip output parsers; show tools' raw output instead (also via DATAMITSU_NO_PARSE)")
 	rootCmd.PersistentFlags().StringVar(&logFormat, "log-format", "",
 		"Status output format: console or jsonl (also via DATAMITSU_LOG_FORMAT)")
+}
+
+// setJSONLStderr makes stderr a JSON-L event stream, or restores human output.
+// Log lines join the stream as log events: one plain-text line breaks every
+// consumer that parses it.
+func setJSONLStderr(on bool) {
+	if on {
+		ui.SetEventSink(uievent.NewJSONLSink(os.Stderr), true)
+		logger.Route(ui.Emit)
+		return
+	}
+	ui.SetEventSink(nil, false)
+	logger.Route(nil)
 }
 
 // resolveLogFormat returns the effective status output format. The --log-format
@@ -169,16 +180,33 @@ func flushTrace() {
 	if !trace.Enabled() {
 		return
 	}
-	trace.Flush(trace.FlushOptions{
-		Dir:     env.GetTracePath(),
-		Slug:    traceSlug(),
-		Summary: os.Stderr,
-		Meta: map[string]string{
-			"command": strings.Join(os.Args[1:], " "),
-			"version": ldflags.Version,
-			"cwd":     tracedCwd(),
-		},
+	reportToStderr(func(w io.Writer) {
+		trace.Flush(trace.FlushOptions{
+			Dir:     env.GetTracePath(),
+			Slug:    traceSlug(),
+			Summary: w,
+			Meta: map[string]string{
+				"command": strings.Join(os.Args[1:], " "),
+				"version": ldflags.Version,
+				"cwd":     tracedCwd(),
+			},
+		})
 	})
+}
+
+// reportToStderr prints a diagnostic report on stderr; on a JSON-L stream the
+// whole report becomes one info log event, since a plain-text line there breaks
+// every consumer that parses it.
+func reportToStderr(write func(io.Writer)) {
+	if !ui.Quiet() {
+		write(os.Stderr)
+		return
+	}
+	var buf bytes.Buffer
+	write(&buf)
+	if report := strings.Trim(buf.String(), "\n"); strings.TrimSpace(report) != "" {
+		ui.Emit(uievent.Event{Type: uievent.TypeLog, OpID: uievent.NextOpID("log"), Level: uievent.LevelInfo, Msg: report})
+	}
 }
 
 // traceSlug names the repository in the trace file name. The git root is already
