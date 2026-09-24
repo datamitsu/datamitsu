@@ -130,6 +130,10 @@ Binaries live in the global content-addressed store:
 {store}/.bin/{name}/{configHash}/
 ```
 
+On Windows a single-file binary is stored as `{configHash}.exe`: Windows starts a program only by its
+extension, so a file without one could be downloaded and verified but never run. Archives extracted
+as a directory keep the bare hash on every platform.
+
 The store key (`configHash`) is computed from:
 
 - The binary's URL, hash, format, and extraction metadata
