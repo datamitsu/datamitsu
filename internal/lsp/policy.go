@@ -13,10 +13,12 @@ import (
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 )
 
-// formatPolicy is the editor's session policy for format-on-save. It is read
-// once at initialize and fixed for the session. It is deliberately not part of
-// config.Config: the whole config is hashed into the cache invalidation key, and
-// an editor latency preference must not reset the shared cache.
+// formatPolicy is the editor's session policy for format-on-save. It comes from
+// initialize's options and is resolved again only when the configuration
+// reloads, since format.tools is checked against the configured tools. It is
+// deliberately not part of config.Config: the whole config is hashed into the
+// cache invalidation key, and an editor latency preference must not reset the
+// shared cache.
 type formatPolicy struct {
 	WidenTo   config.WidenTo
 	TimeoutMs int

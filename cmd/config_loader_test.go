@@ -790,12 +790,16 @@ func TestDiscoverBeforeConfigsNonExistentFileErrors(t *testing.T) {
 	dir := t.TempDir()
 	autoPath := writeBeforeConfigAuto(t, dir, `[{ path: "./does-not-exist.js" }]`)
 
-	_, err := discoverBeforeConfigs(context.Background(), autoPath)
+	got, err := discoverBeforeConfigs(context.Background(), autoPath)
 	if err == nil {
 		t.Fatal("expected error for non-existent before config file")
 	}
 	if !strings.Contains(err.Error(), "does-not-exist.js") {
 		t.Errorf("error = %q, want it to mention the missing file", err.Error())
+	}
+	// Returned with the error, so a watcher of the chain sees the file appear.
+	if want := []string{filepath.Join(dir, "does-not-exist.js")}; !slices.Equal(got, want) {
+		t.Errorf("paths = %v, want %v", got, want)
 	}
 }
 

@@ -7,58 +7,70 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/url"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
-	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/cache"
 	"github.com/datamitsu/datamitsu/internal/config"
-	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
-	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/managedconfig"
-	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 	"github.com/datamitsu/datamitsu/internal/textdiff"
 	"github.com/datamitsu/datamitsu/internal/tooling"
 	"github.com/datamitsu/datamitsu/internal/ui"
 	"github.com/datamitsu/datamitsu/internal/uievent"
 )
 
-// Server is a minimal, formatting-only LSP server. It is single-threaded: the
-// read loop handles one message to completion (including any tool download) before
-// reading the next, so the document store and lifecycle flags need no locking.
-// This matches Step 2's "minimal residency" — no incremental project model.
+// errRequestCancelled ends a format that stopped at a checkpoint because its
+// request was cancelled or the session is ending.
+var errRequestCancelled = errors.New("cancelled")
+
+// Server is a minimal, formatting-only LSP server for one repository: the
+// datamitsu root of the workspace initialize names. Messages that touch the
+// session run on one worker goroutine (see Run), so the fields below need no
+// locking; the reader goroutine owns only docs.
 type Server struct {
-	conn     *conn
-	root     string
-	planner  *tooling.Planner
-	binMgr   *binmanager.BinManager
-	executor *tooling.Executor
-	cache    *cache.Cache // nil when the cache could not be built (formatting still works)
+	conn *conn
 
-	// fixWidenTo is the project's execution.widenTo for fix. The editor policy is
-	// clamped to it: a session default must not out-scope what the repository
-	// asked for.
-	fixWidenTo config.WidenTo
+	// loader resolves the root and loads its configuration; nil for a server
+	// built around a fixed session, which never reloads.
+	loader Loader
+	// launchDir is where the server was started: the workspace when initialize
+	// names none.
+	launchDir string
 
-	// managedConfigs is what the preflight check compares the files a fix reads
-	// against, from the config the session was started with.
-	managedConfigs config.MapOfManagedConfigs
+	// root is the served repository, canonical; empty until initialize resolved
+	// one.
+	root string
+	// loaded is the session built from the configuration; nil while none loads.
+	loaded *session
+	// supersededKeys are the execution-cache keys of the sessions reloads
+	// replaced.
+	supersededKeys []string
+	// watch are the files the configuration was loaded from; loadedInputs and
+	// failedInputs fingerprint their content at the last successful and the
+	// last failed load.
+	watch        []string
+	loadedInputs string
+	failedInputs string
+	// noSession says why nothing is formatted; noSessionReported is the cause a
+	// format request last repeated.
+	noSession         string
+	noSessionReported string
+	// refused are the documents outside root already reported.
+	refused map[string]struct{}
 
-	// tools is the configured tool set, which initializationOptions.format.tools
-	// is checked against.
-	tools config.MapOfTools
-
+	// options are initialize's initializationOptions, kept to resolve the policy
+	// again when the configuration reloads; optionsInvalid when initialize's
+	// params were not an object.
+	options        json.RawMessage
+	optionsInvalid bool
 	// policy is the editor's session policy: the environment until initialize,
-	// then initializationOptions over it, fixed for the rest of the session.
+	// then initializationOptions over it.
 	policy formatPolicy
-
-	// foreignCacheReported keeps the "cache belongs to another configuration"
-	// notice to one per session: it holds until the server restarts.
-	foreignCacheReported bool
 
 	// now is the watchdog's clock; nil means time.Now.
 	now func() time.Time
@@ -68,62 +80,26 @@ type Server struct {
 	initialized      bool
 	shutdownReceived bool
 	exitCode         int
+
+	// active is the request the worker is running, nil outside Run.
+	active *request
+
+	runMu     sync.Mutex
+	stopping  bool
+	transport *transport
 }
 
-// NewServer builds a formatting-only server over r/w using cfg. It assembles its
-// OWN lightweight planner+binManager+executor (no parser, no UI) so a format
-// request never parses diagnostics or prints to stdout.
-//
-// The planner's cwd is set to the git root, NOT the process launch directory: an
-// editor selects which file to format from anywhere in the workspace, so the
-// CLI's CWD-subtree restriction (which would silently drop files outside the
-// launch dir) is wrong here — any file under the repo root is formattable.
-//
-// It shares the SAME execution cache the CLI uses (keyed on the git root, with
-// matching invalidation key), so formatting a file in the editor warms the
-// per-file fix cache and a later `datamitsu fix`/`check` can skip that unchanged
-// file. Only per-file/globbed tools benefit — whole-project tools (e.g.
-// golangci-lint fmt) the CLI always runs in bulk and never looks up per file.
-func NewServer(r io.Reader, w io.Writer, cfg *config.Config, root string) *Server {
-	rm := runtimemanager.New(cfg.Runtimes)
-	binMgr := binmanager.New(cfg.Apps, cfg.Bundles, rm)
-
-	planner := tooling.NewPlanner(root, root, nil, cfg.Tools, cfg.ProjectTypes, cfg.IgnoreRules)
-	planner.SetPlatformChecker(binMgr)
-	// Planned at unit, the widest level a save can reach; editorDecision applies
-	// the project's own fix policy, because a task the planner drops reaches no
-	// left-out notice and no skipped count.
-	planner.SetWidenPolicy(cfg.Execution, config.WidenToUnit)
-
-	// Build the same cache the CLI runner does so keys/paths align. selectedTools
-	// is nil — the LSP, like the lefthook `check`, runs the full tool set, so the
-	// invalidation keys match and entries are shared. A build failure is non-fatal:
-	// formatting just runs without caching.
-	projectCache, err := cache.NewCache(env.GetCachePath(), root, *cfg, nil, logger.Logger)
-	if err != nil {
-		emitLog(uievent.NextOpID("lsp"), uievent.LevelWarn, "cache unavailable, formatting without it: "+err.Error())
-		projectCache = nil
-	} else {
-		// The session keeps the config it started with; once the CLI writes a
-		// newer key, overwriting it would reset both caches in a loop.
-		projectCache.SetYieldToForeignKey(true)
-	}
-
+// New builds a server that takes its root from initialize and loads the
+// configuration through loader. launchDir is the workspace when initialize
+// names none.
+func New(r io.Reader, w io.Writer, loader Loader, launchDir string) *Server {
 	return &Server{
-		conn:     newConn(r, w),
-		root:     root,
-		planner:  planner,
-		binMgr:   binMgr,
-		executor: tooling.NewExecutor(root, false, false, binMgr, projectCache),
-		cache:    projectCache,
-		docs:     make(map[string][]byte),
-
-		fixWidenTo: cfg.Execution.ResolveWidenTo(config.OpFix, ""),
-
-		managedConfigs: cfg.ManagedConfigs,
-		tools:          cfg.Tools,
-		policy:         envFormatPolicy(),
-		now:            time.Now,
+		conn:      newConn(r, w),
+		loader:    loader,
+		launchDir: launchDir,
+		docs:      make(map[string][]byte),
+		policy:    envFormatPolicy(),
+		now:       time.Now,
 	}
 }
 
@@ -131,39 +107,6 @@ func NewServer(r io.Reader, w io.Writer, cfg *config.Config, root string) *Serve
 // 0 on clean shutdown or stdin EOF, 1 if `exit` arrived before `shutdown` (per
 // the LSP spec).
 func (s *Server) ExitCode() int { return s.exitCode }
-
-// Run reads and dispatches messages until `exit`, stdin EOF, or a fatal transport
-// error. A frame whose body is read in full but is not valid JSON is recoverable:
-// per JSON-RPC 2.0 the server replies Parse Error and keeps serving (one corrupt
-// message must not tear down the language server). It never writes anything but
-// framed JSON-RPC to its writer.
-func (s *Server) Run(ctx context.Context) error {
-	// Flush + stop the cache's debounce goroutine when the session ends.
-	if s.cache != nil {
-		defer s.cache.Shutdown()
-	}
-	for {
-		body, err := s.conn.readFrame()
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				return nil // client closed the connection
-			}
-			return fmt.Errorf("lsp read: %w", err) // fatal: stream out of sync
-		}
-
-		var m message
-		if err := json.Unmarshal(body, &m); err != nil {
-			// The frame was fully consumed, so the stream stays framed; only this
-			// message is bad. id is unknown for invalid JSON, so reply id:null.
-			_ = s.conn.replyError(nil, codeParseError, "parse error: "+err.Error())
-			continue
-		}
-
-		if s.handle(ctx, &m) {
-			return nil // `exit` received; caller honors ExitCode()
-		}
-	}
-}
 
 // FormatFile formats one file by running the project's configured fix on the
 // REAL file, on disk, in its real location, then reflecting the result back to
@@ -173,7 +116,8 @@ func (s *Server) Run(ctx context.Context) error {
 // would resolve against the wrong location and behave differently or skip the
 // file. datamitsu resolves each tool's working directory from the file's project
 // itself (the planner's cwd is the git root, so no subtree is dropped and
-// repository-scope tools still run), so the caller only passes the path.
+// repository-scope tools still run), so the caller only passes the path, which
+// must be canonical (see canonicalPath).
 //
 // In-place tools must see the file on disk, so the result is delivered one of two
 // ways depending on whether the editor buffer already matches disk:
@@ -186,9 +130,14 @@ func (s *Server) Run(ctx context.Context) error {
 //
 // Returns an empty (non-nil) slice when no tool applies or nothing changed.
 //
+// A cancelled request stops at the next checkpoint and returns
+// errRequestCancelled, as does one cancelled while its last group ran. A running
+// tool is never interrupted: killing an in-place formatter can truncate the
+// user's file.
+//
 // Every request is one `format` phase on the JSON-L stream: tool_run and error
-// events for its tasks, notices for what the policy or the watchdog left out,
-// and a closing done event on every path, success or error.
+// events for its tasks, notices for what the policy, the watchdog or a cancel
+// left out, and a closing done event on every path, success or error.
 func (s *Server) FormatFile(ctx context.Context, absPath string, content []byte) (edits []TextEdit, err error) {
 	opID := uievent.NextOpID("fmt")
 	started := time.Now()
@@ -196,45 +145,76 @@ func (s *Server) FormatFile(ctx context.Context, absPath string, content []byte)
 	var tally formatTally
 	defer func() { emitFormatDone(opID, started, tally, err) }()
 
+	ss := s.loaded
+	if ss == nil {
+		return nil, errors.New("no configuration is loaded")
+	}
+	// Defense in depth: the handler refuses such a document before calling here.
+	if !within(s.root, absPath) {
+		return nil, fmt.Errorf("refusing to format %s: outside workspace root", absPath)
+	}
 	display := s.displayPath(absPath)
+
+	var plan *tooling.ExecutionPlan
+	checkpoint := func() error {
+		if !s.stopRequested() {
+			return nil
+		}
+		var notRun []tooling.TaskGroup
+		if plan != nil {
+			notRun = plan.Groups
+		}
+		tally.skipped += countTasks(notRun)
+		emitLog(opID, uievent.LevelInfo, cancelNotice(display, 0, len(notRun), notRun))
+		return errRequestCancelled
+	}
+	if err := checkpoint(); err != nil {
+		return nil, err
+	}
 
 	// One planner serves the whole session, and its file list is walked once. A
 	// file created after the server started would otherwise stay invisible to
 	// unit member lists, leaving a unit's verdict inputs unchanged and taking a
 	// cached pass the new file invalidates — a formatter silently not running.
 	// Correctness over the saved walk: an editor formats one file per request.
-	s.planner.Invalidate()
+	ss.planner.Invalidate()
 
-	plan, err := s.planner.Plan(ctx, config.OpFix, tooling.Selection{Mode: tooling.SelectionPaths, Paths: []string{absPath}}, nil)
+	plan, err = ss.planner.Plan(ctx, config.OpFix, tooling.Selection{Mode: tooling.SelectionPaths, Paths: []string{absPath}}, nil)
 	if err != nil {
 		return nil, fmt.Errorf("plan fix for %s: %w", absPath, err)
 	}
-	left := filterPlanForEditor(plan, absPath, s.fixWidenTo, s.policy)
+	left := filterPlanForEditor(plan, absPath, ss.fixWidenTo, s.policy)
 	tally.skipped += len(left)
 	if msg := leftOutNotice(display, left); msg != "" {
 		emitLog(opID, uievent.LevelInfo, msg)
 	}
-
-	apps := planApps(plan)
-	if len(apps) == 0 {
-		return []TextEdit{}, nil // no fix tool applies to this file
+	if err := checkpoint(); err != nil {
+		return nil, err
 	}
 
-	if err := managedconfig.CheckConfigFiles(s.root, s.managedConfigs, plan.ManagedConfigRefs()); err != nil {
+	apps := planApps(plan)
+	if len(apps) == 0 { // no fix tool applies to this file
+		if !s.settle() {
+			return nil, checkpoint() // stopped since the last one
+		}
+		return []TextEdit{}, nil
+	}
+
+	if err := managedconfig.CheckConfigFiles(s.root, ss.managedConfigs, plan.ManagedConfigRefs()); err != nil {
+		return nil, err
+	}
+	if err := checkpoint(); err != nil {
 		return nil, err
 	}
 
 	// Auto-install/verify the tools the plan needs (download progress streams to
-	// stderr as JSON-L for the status bar).
-	if err := s.binMgr.EnsureTools(ctx, apps); err != nil {
+	// stderr as JSON-L for the status bar). A cancel does not interrupt it: the
+	// next save needs the same tools.
+	if err := ss.binMgr.EnsureTools(ctx, apps); err != nil {
 		return nil, fmt.Errorf("ensure tools installed: %w", err)
 	}
-
-	// Defense in depth: never touch a path outside the workspace root, whatever
-	// URI the editor sent (the planner would also yield no tasks for it).
-	rel, relErr := filepath.Rel(s.root, absPath)
-	if relErr != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return nil, fmt.Errorf("refusing to format %s: outside workspace root", absPath)
+	if err := checkpoint(); err != nil {
+		return nil, err
 	}
 
 	// clean = the editor's buffer already matches the file on disk; then the editor
@@ -243,27 +223,23 @@ func (s *Server) FormatFile(ctx context.Context, absPath string, content []byte)
 	clean := bytes.Equal(content, diskBefore)
 
 	if !clean {
-		// Persist the unsaved buffer (preserving mode) so in-place tools operate on
-		// the live content rather than the stale on-disk version.
-		perm := os.FileMode(0o644)
-		if info, statErr := os.Stat(absPath); statErr == nil {
-			perm = info.Mode().Perm()
+		if err := checkpoint(); err != nil {
+			return nil, err
 		}
-		//nolint:gosec // absPath is the editor's document URI, validated just above to be inside the workspace root
-		if err := os.WriteFile(absPath, content, perm); err != nil {
-			return nil, fmt.Errorf("write buffer to %s: %w", absPath, err)
+		// Persist the unsaved buffer so in-place tools operate on the live content
+		// rather than the stale on-disk version.
+		if err := persistBuffer(absPath, content); err != nil {
+			return nil, err
 		}
 	}
 
 	// failFast is off, so each group runs to completion and returns a nil error
 	// even when individual tools fail; we surface whatever ended up on disk.
 	s.wireToolEvents(opID)
-	results, ran, err := s.executeWithWatchdog(ctx, plan, time.Duration(s.policy.TimeoutMs)*time.Millisecond)
+	results, ran, stop, err := s.executeGroups(ctx, plan, time.Duration(s.policy.TimeoutMs)*time.Millisecond, s.stopRequested)
 	tally.addResults(results)
-	if skipped := plan.Groups[ran:]; len(skipped) > 0 {
-		tally.skipped += countTasks(skipped)
-		emitLog(opID, uievent.LevelWarn, watchdogNotice(display, ran, len(plan.Groups), s.policy.TimeoutMs, skipped))
-	}
+	notRun := plan.Groups[ran:]
+	tally.skipped += countTasks(notRun)
 	if err != nil {
 		return nil, fmt.Errorf("fix %s: %w", absPath, err)
 	}
@@ -272,6 +248,16 @@ func (s *Server) FormatFile(ctx context.Context, absPath string, content []byte)
 	// so don't rely on the 100ms debounce (the server may exit before it fires).
 	// Best-effort — a failed save only costs a redundant re-run later.
 	s.saveCache(opID)
+
+	// A cancel that arrived while the last group ran found no checkpoint after
+	// it, but the request is still answered as cancelled, so the stream says so.
+	if stop == stoppedByCancel || !s.settle() {
+		emitLog(opID, uievent.LevelInfo, cancelNotice(display, ran, len(plan.Groups), notRun))
+		return nil, errRequestCancelled
+	}
+	if stop == stoppedByWatchdog {
+		emitLog(opID, uievent.LevelWarn, watchdogNotice(display, ran, len(plan.Groups), s.policy.TimeoutMs, notRun))
+	}
 
 	if clean {
 		// The editor reloads the fixed file into its clean buffer; returning edits
@@ -286,41 +272,54 @@ func (s *Server) FormatFile(ctx context.Context, absPath string, content []byte)
 	return toTextEdits(textdiff.ComputeEdits(string(content), string(fixed)))
 }
 
-// executeWithWatchdog runs the plan one priority group at a time and starts no
-// further group once limit has elapsed. The first group always runs, and a
-// running tool is never cancelled: a chain cut mid-way leaves a file with one
-// formatter's edits and not the next one's, so the same save would produce
-// different bytes depending on machine load. limit <= 0 disables the watchdog.
-// ran is how many groups started.
-func (s *Server) executeWithWatchdog(
-	ctx context.Context, plan *tooling.ExecutionPlan, limit time.Duration,
-) (results []tooling.GroupExecutionResult, ran int, err error) {
+// groupsStop is why executeGroups started no further group.
+type groupsStop int
+
+const (
+	ranAll groupsStop = iota
+	stoppedByWatchdog
+	stoppedByCancel
+)
+
+// executeGroups runs the plan one priority group at a time. Before each group,
+// the first included, it stops when cancelled reports true; before each later
+// group, once limit has elapsed. A running tool is never cancelled: a chain cut
+// mid-way leaves a file with one formatter's edits and not the next one's, so
+// the same save would produce different bytes depending on machine load, and
+// killing an in-place formatter can truncate the file. limit <= 0 disables the
+// watchdog. ran is how many groups started.
+func (s *Server) executeGroups(
+	ctx context.Context, plan *tooling.ExecutionPlan, limit time.Duration, cancelled func() bool,
+) (results []tooling.GroupExecutionResult, ran int, stop groupsStop, err error) {
 	now := s.now
 	if now == nil {
 		now = time.Now
 	}
 	start := now()
 	for i, group := range plan.Groups {
-		if i > 0 && limit > 0 && now().Sub(start) >= limit {
-			break
+		if cancelled != nil && cancelled() {
+			return results, ran, stoppedByCancel, nil
 		}
-		groupResults, execErr := s.executor.Execute(ctx, &tooling.ExecutionPlan{
+		if i > 0 && limit > 0 && now().Sub(start) >= limit {
+			return results, ran, stoppedByWatchdog, nil
+		}
+		groupResults, execErr := s.loaded.executor.Execute(ctx, &tooling.ExecutionPlan{
 			ConfigName: plan.ConfigName,
 			Groups:     []tooling.TaskGroup{group},
 		})
 		results = append(results, groupResults...)
 		ran++
 		if execErr != nil {
-			return results, ran, fmt.Errorf("execute priority group %d: %w", group.Priority, execErr)
+			return results, ran, ranAll, fmt.Errorf("execute priority group %d: %w", group.Priority, execErr)
 		}
 	}
-	return results, ran, nil
+	return results, ran, ranAll, nil
 }
 
 // wireToolEvents points the executor's callbacks at this request's op id. The
 // server handles one request at a time, so rewiring per request is safe.
 func (s *Server) wireToolEvents(opID string) {
-	s.executor.SetTaskStartCallback(func(tool, dir string) {
+	s.loaded.executor.SetTaskStartCallback(func(tool, dir string) {
 		ui.Emit(uievent.Event{
 			Type:   uievent.TypeToolRun,
 			OpID:   toolRunOpID(opID, tool, dir),
@@ -329,7 +328,7 @@ func (s *Server) wireToolEvents(opID string) {
 			Dir:    dir,
 		})
 	})
-	s.executor.SetResultCallback(func(result tooling.ExecutionResult) {
+	s.loaded.executor.SetResultCallback(func(result tooling.ExecutionResult) {
 		if cancelled(result) {
 			return
 		}
@@ -358,19 +357,21 @@ func (s *Server) wireToolEvents(opID string) {
 }
 
 // saveCache flushes the execution cache. A cache owned by another configuration
-// is left alone and reported once per session; formatting is unaffected.
+// is left alone and reported once per loaded configuration; formatting is
+// unaffected.
 func (s *Server) saveCache(opID string) {
-	if s.cache == nil {
+	ss := s.loaded
+	if ss.cache == nil {
 		return
 	}
-	err := s.cache.Save()
+	err := ss.cache.Save()
 	switch {
 	case err == nil:
 	case errors.Is(err, cache.ErrForeignKey):
-		if s.foreignCacheReported {
+		if ss.foreignCacheReported {
 			return
 		}
-		s.foreignCacheReported = true
+		ss.foreignCacheReported = true
 		emitForeignCache(opID, err)
 	default:
 		emitLog(opID, uievent.LevelWarn, "cache save failed: "+err.Error())
@@ -380,7 +381,7 @@ func (s *Server) saveCache(opID string) {
 // emitForeignCache explains a cache file this session does not write. A file
 // written by another datamitsu is an info: an editor running a different binary
 // than the CLI is a normal setup, and a warning would pop up every session with
-// advice (restart) that cannot help.
+// advice that cannot help.
 func emitForeignCache(opID string, err error) {
 	var fk *cache.ForeignKeyError
 	if errors.As(err, &fk) && fk.DiskVersion != "" && fk.DiskVersion != ldflags.Version {
@@ -391,17 +392,20 @@ func emitForeignCache(opID string, err error) {
 		return
 	}
 	emitLog(opID, uievent.LevelWarn,
-		"the execution cache on disk was written for a different configuration (the config changed, "+
-			"or a run used --tools). Formatting still works but does not warm the cache until the CLI "+
-			"writes it with this session's configuration; if the config changed after this session "+
-			"started, restart the language server")
+		"the execution cache on disk was written for a different configuration (a run used --tools, or "+
+			"the CLI loaded a configuration this session has not yet reloaded). Formatting still works but "+
+			"does not warm the cache until the CLI writes it with this session's configuration; the language "+
+			"server reloads a changed configuration on the next format")
 }
 
 // displayPath names a file for a notice: relative to the workspace root when it
 // is inside it.
 func (s *Server) displayPath(absPath string) string {
+	if s.root == "" || !within(s.root, absPath) {
+		return absPath
+	}
 	rel, err := filepath.Rel(s.root, absPath)
-	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+	if err != nil {
 		return absPath
 	}
 	return filepath.ToSlash(rel)
@@ -553,10 +557,77 @@ func planApps(plan *tooling.ExecutionPlan) []string {
 	return apps
 }
 
-// handle dispatches one message and reports whether the loop should stop.
+// persistBuffer writes the editor's unsaved text to path atomically: a temp
+// file in the same directory, given the file's mode, renamed over it. A process
+// killed mid-write leaves the old file, never a truncated one, and because path
+// is canonical a symlinked document keeps its link.
+func persistBuffer(path string, content []byte) error {
+	fail := func(err error) error { return fmt.Errorf("write buffer to %s: %w", path, err) }
+	info, err := os.Lstat(path)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		// Created in place: there is no old content for a crash to lose, and the
+		// umask applies as it does to any file the user creates.
+		f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+		if err != nil {
+			return fail(err)
+		}
+		_, err = f.Write(content)
+		if closeErr := f.Close(); err == nil {
+			err = closeErr
+		}
+		if err != nil {
+			return fail(err)
+		}
+		return nil
+	case err != nil:
+		return fail(err)
+	case !info.Mode().IsRegular():
+		// Renaming over a symlink, a FIFO or a device would replace the entry
+		// itself, not write to what it stands for.
+		return fail(errors.New("not a regular file"))
+	}
+	// A rename needs only the directory to be writable: without this, a
+	// read-only file, or one this user may not write, would be replaced.
+	f, err := os.OpenFile(path, os.O_WRONLY, 0)
+	if err != nil {
+		return fail(err)
+	}
+	_ = f.Close()
+
+	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".dm-lsp-*")
+	if err != nil {
+		return fail(err)
+	}
+	_, err = tmp.Write(content)
+	if err == nil {
+		err = tmp.Chmod(info.Mode().Perm())
+	}
+	if closeErr := tmp.Close(); err == nil {
+		err = closeErr
+	}
+	if err == nil {
+		err = renameOver(tmp.Name(), path)
+	}
+	if err != nil {
+		_ = os.Remove(tmp.Name())
+		return fail(err)
+	}
+	return nil
+}
+
+// handle dispatches one message synchronously and reports whether the session
+// should end. Run does the same through its reader and worker.
 func (s *Server) handle(ctx context.Context, m *message) (stop bool) {
+	return s.dispatch(ctx, m, nil)
+}
+
+// dispatch runs one message. snap is the document text a formatting request
+// was read with; nil reads the document store, which only a synchronous caller
+// owns.
+func (s *Server) dispatch(ctx context.Context, m *message, snap *docSnapshot) (stop bool) {
 	// Per spec, requests other than initialize/shutdown before initialization get
-	// ServerNotInitialized; pre-init notifications are dropped.
+	// ServerNotInitialized.
 	if !s.initialized && m.isRequest() && m.Method != "initialize" {
 		_ = s.conn.replyError(m.ID, codeServerNotReady, "server not initialized")
 		return false
@@ -572,7 +643,7 @@ func (s *Server) handle(ctx context.Context, m *message) (stop bool) {
 
 	switch m.Method {
 	case "initialize":
-		s.onInitialize(m)
+		s.onInitialize(ctx, m)
 	case "initialized":
 		// notification — nothing to do
 	case "textDocument/didOpen":
@@ -582,7 +653,7 @@ func (s *Server) handle(ctx context.Context, m *message) (stop bool) {
 	case "textDocument/didClose":
 		s.onDidClose(m)
 	case "textDocument/formatting":
-		s.onFormatting(ctx, m)
+		s.onFormatting(ctx, m, snap)
 	case "shutdown":
 		s.shutdownReceived = true
 		_ = s.conn.reply(m.ID, nil) // result: null
@@ -602,24 +673,15 @@ func (s *Server) handle(ctx context.Context, m *message) (stop bool) {
 	return false
 }
 
-func (s *Server) onInitialize(m *message) {
+func (s *Server) onInitialize(ctx context.Context, m *message) {
 	s.initialized = true
 
-	// initializationOptions are read once: the policy is fixed for the session,
-	// so a client that changes them restarts the server.
-	var params initializeParams
-	var res policyResolution
-	if isNull(m.Params) || json.Unmarshal(m.Params, &params) == nil {
-		res = resolveFormatPolicy(params.InitializationOptions, envFormatPolicy(), s.isTool)
-	} else {
-		res = policyResolution{Policy: envFormatPolicy()}
-		res.warn("initialize params are not an object; initializationOptions ignored")
+	params, ok := decodeInitializeParams(m.Params)
+	s.options, s.optionsInvalid = params.InitializationOptions, !ok
+	if s.loader != nil {
+		s.openSession(ctx, params)
 	}
-	s.policy = res.Policy
-	emitLog(uievent.NextOpID("lsp"), uievent.LevelInfo, res.summary())
-	for _, w := range res.Warnings {
-		emitLog(uievent.NextOpID("lsp"), uievent.LevelWarn, w)
-	}
+	s.resolvePolicy()
 
 	_ = s.conn.reply(m.ID, initializeResult{
 		Capabilities: serverCapabilities{
@@ -629,18 +691,62 @@ func (s *Server) onInitialize(m *message) {
 				Change:    textDocumentSyncFull,
 			},
 			DocumentFormattingProvider: true,
-			Experimental: experimentalCapabilities{Datamitsu: datamitsuCapabilities{Format: formatPolicyEcho{
-				WidenTo:   string(s.policy.WidenTo),
-				TimeoutMs: s.policy.TimeoutMs,
-				Tools:     s.policy.Tools,
-			}}},
+			Experimental: experimentalCapabilities{Datamitsu: datamitsuCapabilities{
+				Format: formatPolicyEcho{
+					WidenTo:   string(s.policy.WidenTo),
+					TimeoutMs: s.policy.TimeoutMs,
+					Tools:     s.policy.Tools,
+				},
+				Root: s.root,
+			}},
 		},
 		ServerInfo: serverInfo{Name: ldflags.PackageName + "-lsp", Version: ldflags.Version},
 	})
 }
 
+// decodeInitializeParams reads initialize's params. A field of the wrong type
+// is skipped and the rest still decode: one malformed location must not discard
+// initializationOptions. ok is false only when params is not an object.
+func decodeInitializeParams(raw json.RawMessage) (params initializeParams, ok bool) {
+	if isNull(raw) {
+		return params, true
+	}
+	if trimmed := bytes.TrimSpace(raw); trimmed[0] != '{' {
+		return params, false
+	}
+	if err := json.Unmarshal(raw, &params); err != nil {
+		var typeErr *json.UnmarshalTypeError
+		return params, errors.As(err, &typeErr)
+	}
+	return params, true
+}
+
+// resolvePolicy applies the initializationOptions kept from initialize over the
+// environment, and says what it resolved to. It runs again after a reload: a
+// tool the new configuration adds may now be known.
+func (s *Server) resolvePolicy() {
+	var res policyResolution
+	if s.optionsInvalid {
+		res = policyResolution{Policy: envFormatPolicy()}
+		res.warn("initialize params are not an object; initializationOptions ignored")
+	} else {
+		res = resolveFormatPolicy(s.options, envFormatPolicy(), s.isTool)
+	}
+	s.policy = res.Policy
+	emitLog(uievent.NextOpID("lsp"), uievent.LevelInfo, res.summary())
+	for _, w := range res.Warnings {
+		emitLog(uievent.NextOpID("lsp"), uievent.LevelWarn, w)
+	}
+}
+
+// isTool reports whether name is a configured tool. With no configuration
+// loaded every name is kept as given; the policy is checked again once one
+// loads.
 func (s *Server) isTool(name string) bool {
-	_, ok := s.tools[name]
+	if s.loaded == nil {
+		return true
+	}
+	_, ok := s.loaded.tools[name]
 	return ok
 }
 
@@ -671,25 +777,47 @@ func (s *Server) onDidClose(m *message) {
 	delete(s.docs, p.TextDocument.URI)
 }
 
-func (s *Server) onFormatting(ctx context.Context, m *message) {
+// onFormatting answers a formatting request. What this server does not format —
+// a document outside its root, or anything while no configuration is loaded —
+// gets no edits rather than an error, so a save does not pop one up every time.
+func (s *Server) onFormatting(ctx context.Context, m *message, snap *docSnapshot) {
 	var p formattingParams
 	if err := json.Unmarshal(m.Params, &p); err != nil {
-		_ = s.conn.replyError(m.ID, codeInvalidParams, "invalid params: "+err.Error())
+		s.replyFormat(m.ID, nil, &requestError{codeInvalidParams, "invalid params: " + err.Error()})
 		return
 	}
-	absPath, err := uriToPath(p.TextDocument.URI)
+	path, err := uriToPath(p.TextDocument.URI)
 	if err != nil {
-		_ = s.conn.replyError(m.ID, codeInvalidParams, err.Error())
+		s.replyFormat(m.ID, nil, &requestError{codeInvalidParams, err.Error()})
+		return
+	}
+	absPath := canonicalPath(path)
+
+	// Refused before planning: a plan for a foreign file could download tools
+	// only to throw the result away.
+	if s.root != "" && !within(s.root, absPath) {
+		s.reportOutsideRoot(absPath)
+		s.replyFormat(m.ID, []TextEdit{}, nil)
+		return
+	}
+	s.refreshSession(ctx)
+	if s.loaded == nil {
+		s.reportNoSession()
+		s.replyFormat(m.ID, []TextEdit{}, nil)
 		return
 	}
 
 	// Prefer the live (possibly unsaved) buffer; fall back to disk if the client
 	// formats a document it never opened.
-	content, ok := s.docs[p.TextDocument.URI]
-	if !ok {
+	if snap == nil {
+		text, open := s.docs[p.TextDocument.URI]
+		snap = &docSnapshot{text: text, open: open}
+	}
+	content := snap.text
+	if !snap.open {
 		b, readErr := os.ReadFile(absPath)
 		if readErr != nil {
-			_ = s.conn.replyError(m.ID, codeInvalidParams, "document not open and unreadable: "+readErr.Error())
+			s.replyFormat(m.ID, nil, &requestError{codeInvalidParams, "document not open and unreadable: " + readErr.Error()})
 			return
 		}
 		content = b
@@ -697,24 +825,28 @@ func (s *Server) onFormatting(ctx context.Context, m *message) {
 
 	edits, err := s.FormatFile(ctx, absPath, content)
 	if err != nil {
-		_ = s.conn.replyError(m.ID, codeRequestFailed, err.Error())
+		s.replyFormat(m.ID, nil, &requestError{codeRequestFailed, err.Error()})
 		return
 	}
-	_ = s.conn.reply(m.ID, edits)
+	s.replyFormat(m.ID, edits, nil)
 }
 
-// uriToPath converts a file:// LSP document URI to an absolute filesystem path.
-// url.Parse already percent-decodes the path (e.g. %20 -> space).
-func uriToPath(uri string) (string, error) {
-	u, err := url.Parse(uri)
-	if err != nil {
-		return "", fmt.Errorf("parse uri %q: %w", uri, err)
+type requestError struct {
+	code int
+	msg  string
+}
+
+// replyFormat answers a formatting request. A cancelled one is answered
+// RequestCancelled, whatever it ended with: vscode-languageclient drops that
+// silently, and pops up an error for any other code. A format that settled is
+// no longer cancellable, so its result stands.
+func (s *Server) replyFormat(id json.RawMessage, edits []TextEdit, failure *requestError) {
+	switch {
+	case s.stopRequested():
+		_ = s.conn.replyError(id, codeRequestCancelled, "request cancelled")
+	case failure != nil:
+		_ = s.conn.replyError(id, failure.code, failure.msg)
+	default:
+		_ = s.conn.reply(id, edits)
 	}
-	if u.Scheme != "file" {
-		return "", fmt.Errorf("unsupported uri scheme %q (only file:// is supported)", u.Scheme)
-	}
-	if u.Path == "" {
-		return "", fmt.Errorf("uri %q has no path", uri)
-	}
-	return u.Path, nil
 }

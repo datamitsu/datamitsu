@@ -210,17 +210,18 @@ func resetGitRootCache() {
 // hierarchy, memoized for the lifetime of the process and keyed by the working
 // directory the lookup starts from.
 //
-// The memo is sound because datamitsu is a short-lived process that does not
-// chdir mid-run, so cwd -> git root is constant for one invocation. A single
-// `datamitsu exec` asks for the root five times (once in the config loader,
-// once per engine.New), so the memo removes four of the five — including, for
-// the layouts gitRootPure declines to answer for, four pairs of forked git
+// The memo is sound because it is keyed by the directory, and which repository
+// holds a directory does not change during a run. A single `datamitsu exec`
+// asks for the root five times (once in the config loader, once per
+// engine.New), so the memo removes four of the five — including, for the
+// layouts gitRootPure declines to answer for, four pairs of forked git
 // processes.
 //
-// The one long-lived command is `datamitsu lsp` (cmd/lsp.go): it resolves the
-// root once at startup via traverser.GetGitRoot — not this function — and loads
-// config once for the whole session, so it does not depend on re-resolution
-// within a session either.
+// Most commands never chdir. The one long-lived command, `datamitsu lsp`
+// (cmd/lsp.go), does: into the workspace initialize names to resolve the root
+// through this function, then into the root for every configuration load. Each
+// directory is a key of its own, so the memo still answers for the directory
+// the process is in.
 //
 // Errors are memoized alongside successes: a directory that is not a repository
 // does not become one mid-run. The exception is a failure caused by a cancelled

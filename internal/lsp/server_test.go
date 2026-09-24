@@ -46,9 +46,9 @@ func readFrame(t *testing.T, r *bufio.Reader) map[string]json.RawMessage {
 	return m
 }
 
-// newTestServer builds a Server wired to read nothing and write into buf. The
-// planner/binMgr/executor are nil — fine for protocol/lifecycle tests that never
-// reach formatting.
+// newTestServer builds a Server wired to read nothing and write into buf, with
+// no loader and no session — fine for protocol/lifecycle tests that never reach
+// formatting.
 func newTestServer(buf *bytes.Buffer) *Server {
 	return &Server{conn: newConn(strings.NewReader(""), buf), docs: make(map[string][]byte)}
 }
@@ -374,7 +374,7 @@ func TestInitializeEchoesTheFormatPolicy(t *testing.T) {
 			sink := captureEvents(t)
 			var buf bytes.Buffer
 			s := newTestServer(&buf)
-			s.tools = config.MapOfTools{"eslint": {Name: "eslint"}}
+			s.loaded = &session{tools: config.MapOfTools{"eslint": {Name: "eslint"}}}
 
 			s.handle(context.Background(), msg(t, "1", "initialize", tt.params))
 

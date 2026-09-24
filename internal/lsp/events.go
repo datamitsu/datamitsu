@@ -1,6 +1,7 @@
 package lsp
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -26,7 +27,7 @@ type formatTally struct {
 	tools   map[string]struct{}
 	failed  map[string]struct{}
 	runs    int
-	skipped int // tasks left out by the editor policy or by the watchdog
+	skipped int // tasks left out by the editor policy, the watchdog or a cancel
 }
 
 // addResults counts executed tasks. Cancelled ones are fail-fast noise, as in
@@ -51,9 +52,15 @@ func (t *formatTally) addResults(groups []tooling.GroupExecutionResult) {
 }
 
 // emitFormatDone closes a request's format phase. Like the runner's done event,
-// tools and failed count distinct tools and runs counts tasks.
+// tools and failed count distinct tools and runs counts tasks. A cancelled
+// format is a fail with msg "cancelled", not a status of its own: a client that
+// predates cancellation treats only done and fail as terminal.
 func emitFormatDone(opID string, started time.Time, tally formatTally, err error) {
 	success := err == nil && len(tally.failed) == 0
+	var msg string
+	if errors.Is(err, errRequestCancelled) {
+		msg = errRequestCancelled.Error()
+	}
 	ui.Emit(uievent.Event{
 		Type:       uievent.TypeDone,
 		OpID:       opID,
@@ -61,6 +68,7 @@ func emitFormatDone(opID string, started time.Time, tally formatTally, err error
 		Op:         formatOp,
 		Success:    new(success),
 		DurationMs: time.Since(started).Milliseconds(),
+		Msg:        msg,
 		Tools:      len(tally.tools),
 		Runs:       tally.runs,
 		Failed:     len(tally.failed),
@@ -92,6 +100,19 @@ func watchdogNotice(file string, ran, total, limitMs int, notRun []tooling.TaskG
 		"format %s: stopped after %d of %d tool groups: the %dms format timeout elapsed; did not run: %s. "+
 			"Raise datamitsu.format.timeoutMs / DATAMITSU_LSP_FORMAT_TIMEOUT_MS, or narrow format.widenTo",
 		file, ran, total, limitMs, strings.Join(groupTools(notRun), ", "))
+}
+
+// cancelNotice says how far a cancelled save got. Every group that started ran
+// to completion: a running tool is never interrupted.
+func cancelNotice(file string, ran, total int, notRun []tooling.TaskGroup) string {
+	switch {
+	case ran == 0:
+		return fmt.Sprintf("format %s: cancelled before any tool ran", file)
+	case len(notRun) == 0:
+		return fmt.Sprintf("format %s: cancelled after %d of %d tool groups; every group ran", file, ran, total)
+	}
+	return fmt.Sprintf("format %s: cancelled after %d of %d tool groups; did not run: %s",
+		file, ran, total, strings.Join(groupTools(notRun), ", "))
 }
 
 func groupTools(groups []tooling.TaskGroup) []string {

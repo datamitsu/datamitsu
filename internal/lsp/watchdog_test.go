@@ -76,21 +76,62 @@ func TestExecuteWithWatchdog(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			root := t.TempDir()
 			s := &Server{
-				root:     root,
-				executor: tooling.NewExecutor(root, false, false, shellApps{}, nil),
-				now:      steppingClock(tt.elapsed),
+				root:   root,
+				loaded: &session{executor: tooling.NewExecutor(root, false, false, shellApps{}, nil)},
+				now:    steppingClock(tt.elapsed),
 			}
 			plan := recordingPlan(root, "g1", "g2", "g3")
 
-			results, ran, err := s.executeWithWatchdog(context.Background(), plan, tt.limit)
+			results, ran, _, err := s.executeGroups(context.Background(), plan, tt.limit, nil)
 			if err != nil {
-				t.Fatalf("executeWithWatchdog: %v", err)
+				t.Fatalf("executeGroups: %v", err)
 			}
 			if ran != len(tt.wantRan) || len(results) != len(tt.wantRan) {
 				t.Errorf("ran = %d with %d results, want %d", ran, len(results), len(tt.wantRan))
 			}
 			if got := ranLog(t, root); !slices.Equal(got, tt.wantRan) {
 				t.Errorf("groups that ran = %v, want %v", got, tt.wantRan)
+			}
+		})
+	}
+}
+
+// A cancel is checked before every group, the first included — unlike the
+// watchdog, which always lets the first run — and wins over the watchdog when
+// both apply. The group that is running is never interrupted.
+func TestExecuteGroupsStopsWhenCancelled(t *testing.T) {
+	tests := []struct {
+		name     string
+		after    int // groups that have run when the cancel arrives
+		limit    time.Duration
+		wantRan  []string
+		wantStop groupsStop
+	}{
+		{name: "before the first group", after: 0, wantStop: stoppedByCancel},
+		{name: "after the first group", after: 1, wantRan: []string{"g1"}, wantStop: stoppedByCancel},
+		{name: "over the watchdog", after: 1, limit: time.Nanosecond, wantRan: []string{"g1"}, wantStop: stoppedByCancel},
+		{name: "never", after: 99, wantRan: []string{"g1", "g2", "g3"}, wantStop: ranAll},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			s := &Server{
+				root:   root,
+				loaded: &session{executor: tooling.NewExecutor(root, false, false, shellApps{}, nil)},
+				now:    steppingClock(time.Hour),
+			}
+			cancelled := func() bool { return len(ranLog(t, root)) >= tt.after }
+
+			_, ran, stop, err := s.executeGroups(context.Background(), recordingPlan(root, "g1", "g2", "g3"), tt.limit, cancelled)
+			if err != nil {
+				t.Fatalf("executeGroups: %v", err)
+			}
+			if got := ranLog(t, root); !slices.Equal(got, tt.wantRan) || ran != len(tt.wantRan) {
+				t.Errorf("groups that ran = %v (ran %d), want %v", got, ran, tt.wantRan)
+			}
+			if stop != tt.wantStop {
+				t.Errorf("stop = %v, want %v", stop, tt.wantStop)
 			}
 		})
 	}
