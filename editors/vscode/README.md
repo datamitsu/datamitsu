@@ -63,14 +63,39 @@ A save must not hang the editor: once `datamitsu.format.timeoutMs` has elapsed, 
 further group of tools starts. A running tool is never stopped, and downloads do
 not count.
 
-The status bar shows downloads, installs and each running tool. The **datamitsu**
-output channel records the policy the server runs with, the tools a save left out
-and why, failed tools and every warning, each at its level (`debug`, `info`,
-`warn`, `error`); the first warning or error of a session also pops up once. A
-save that ran no fix tool at all shows a one-time hint.
+VS Code can also cancel a format: when you type or move the cursor during
+**Format Document**, press `Esc`, or cancel a slow save. The server then stops at
+its next checkpoint, which, unlike the watchdog's, can come before the first
+group. A running tool finishes — killing it could leave the file half written —
+and so does a download, which the next save needs anyway; nothing after them
+starts. A format cancelled after it wrote your unsaved changes leaves the file
+holding them, with the groups that already ran applied. The output channel logs
+`format: cancelled`; once a tool group has run, the server also names the tools
+that did not, and before that it says no tool ran.
+**datamitsu: Restart Language Server**, or closing the window, cancels a running
+format the same way; a restart after a settings change waits for it to finish
+instead.
 
-The language server reads the datamitsu config once, when it starts: after editing
-it, run **datamitsu: Restart Language Server**. The extension restarts the server
+The server serves one repository, the one that holds the window's first folder,
+and the output channel names it when the server starts. A file outside it — in
+another folder of a multi-root workspace, say — is not formatted, and the output
+channel says so.
+
+The status bar shows downloads, installs and each running tool. The **datamitsu**
+output channel records the repository the server serves, the policy it runs with,
+configuration reloads, the tools a save left out and why, failed tools and every
+warning, each at its level (`debug`, `info`, `warn`, `error`); the first warning
+or error of a session also pops up once. A save that ran no fix tool at all shows
+a one-time hint.
+
+A change to the datamitsu config needs no restart: before each format the server
+checks whether the config changed and reloads it, and the output channel logs
+`configuration reloaded`. A config that fails to load — one you are still editing,
+say — leaves the server on the previous one, with a warning; the first format after
+you fix it picks it up. A server that finds no repository, or no config it can
+load when it starts, keeps running, formats nothing and says why. A reload does
+not run `datamitsu init`: when the change alters a tool config that datamitsu
+generates, run it yourself; the server says so. The extension restarts the server
 by itself only when `datamitsu.format.*`, `datamitsu.path` or
 `datamitsu.binaryMode` change.
 

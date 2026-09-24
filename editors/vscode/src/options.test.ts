@@ -4,6 +4,7 @@ import { test } from "node:test";
 import {
   buildInitializationOptions,
   describeEffectiveFormat,
+  describeServedRoot,
   isExplicitlySet,
   type SettingInspection,
   type SettingsReader,
@@ -88,4 +89,15 @@ test("describeEffectiveFormat: renders the echoed policy, ignores anything else"
   assert.equal(describeEffectiveFormat({}), undefined);
   assert.equal(describeEffectiveFormat({ datamitsu: {} }), undefined);
   assert.equal(describeEffectiveFormat({ datamitsu: { format: "unit" } }), undefined);
+});
+
+test("describeServedRoot: returns the echoed root, ignores anything else", () => {
+  assert.equal(
+    describeServedRoot({ datamitsu: { format: {}, root: "/home/me/repo" } }),
+    "/home/me/repo",
+  );
+  assert.equal(describeServedRoot(null), undefined);
+  assert.equal(describeServedRoot({ datamitsu: { format: {} } }), undefined);
+  assert.equal(describeServedRoot({ datamitsu: { root: "" } }), undefined);
+  assert.equal(describeServedRoot({ datamitsu: { root: 42 } }), undefined);
 });

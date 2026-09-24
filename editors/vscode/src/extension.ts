@@ -8,8 +8,9 @@ import {
 } from "vscode-languageclient/node";
 
 import { type BinaryMode, resolveBinary } from "./binary";
+import { reportFormat } from "./format";
 import { InFlight } from "./inflight";
-import { buildInitializationOptions, describeEffectiveFormat } from "./options";
+import { buildInitializationOptions, describeEffectiveFormat, describeServedRoot } from "./options";
 import { JsonlProgress } from "./progress";
 
 // The server reads these once per session (binary location, initializationOptions),
@@ -61,7 +62,8 @@ export async function deactivate(): Promise<void> {
 // reads the settings when it starts, so a burst of changes restarts once. A
 // restart that is not immediate waits until no format runs: stopping the server
 // mid-format would cut its chain of fix tools short. The restart command is
-// immediate, so it still recovers a server stuck in a tool.
+// immediate: it cancels a running format and starts a fresh server even while a
+// tool hangs.
 function requestRestart(context: vscode.ExtensionContext, isImmediate: boolean): Promise<void> {
   if (queuedRestart !== undefined) {
     queuedRestart.isImmediate ||= isImmediate;
@@ -180,18 +182,18 @@ async function start(context: vscode.ExtensionContext): Promise<void> {
     connectionOptions: { maxRestartCount: 0 },
     documentSelector: [{ scheme: "file" }],
     middleware: {
-      // Log every format request to the output channel. A count of 0 is not "no
-      // change": when the buffer already matched disk the server fixes the file
-      // in place and returns no edits, and the editor reloads it. A format that
-      // ran no tool is reported from the server's event stream instead. The
-      // session counts each request so a settings restart can wait for it.
+      // Log every format request to the output channel. The session tracks each
+      // request, on a token of its own, so a settings restart can wait for it and
+      // a stop can cancel it.
       provideDocumentFormattingEdits: (document, options, token, next) =>
-        session.track(async () => {
-          output?.appendLine(`format: ${document.uri.fsPath}`);
-          const edits = await next(document, options, token);
-          output?.appendLine(`format: ${edits?.length ?? 0} edit(s)`);
-          return edits;
-        }),
+        session.track(token, (linked) =>
+          reportFormat(
+            document.uri.fsPath,
+            linked,
+            (line) => output?.appendLine(line),
+            () => next(document, options, linked),
+          ),
+        ),
     },
   };
   if (initializationOptions !== undefined) {
@@ -217,12 +219,19 @@ async function start(context: vscode.ExtensionContext): Promise<void> {
   }
   context.subscriptions.push(client);
 
-  const effective = describeEffectiveFormat(client.initializeResult?.capabilities.experimental);
+  const experimental: unknown = client.initializeResult?.capabilities.experimental;
+  const root = describeServedRoot(experimental);
+  if (root !== undefined) {
+    output?.info(`served root: ${root}`);
+  }
+  const effective = describeEffectiveFormat(experimental);
   if (effective !== undefined) {
     output?.info(`effective format policy: ${effective}`);
   }
 }
 
+// stop cancels the running formats before the shutdown request, so the server
+// stops them at their next checkpoint and answers the shutdown in time.
 async function stop(): Promise<void> {
   const current = client;
   client = undefined;
