@@ -17,6 +17,13 @@ These flags apply to all commands:
 | `--no-parse`              | Skip output parsers and show raw tool output. Also settable via `DATAMITSU_NO_PARSE`                   |
 | `-v`, `--verbose`         | Enable debug-level logging for this invocation                                                         |
 
+With `--log-format=jsonl`, status and progress go to stderr as typed JSON events,
+one per line, and log lines arrive the same way: each is a
+[`log` event](#lsp-events) whose `level` is `debug`, `info`, `warn` or `error`,
+with the message and its fields in `msg`. Which levels appear follows
+`DATAMITSU_LOG_LEVEL` (`warn` by default) and `--verbose` (`debug`), exactly as
+in console mode.
+
 ## exec
 
 Execute a managed binary with all environment variables passed through.
@@ -1159,6 +1166,172 @@ This is normally launched by an editor rather than by hand — see the
 [VS Code extension](../getting-started/installation/vscode.md) for the packaged
 integration.
 
+The server answers document formatting and nothing else. It locates the
+repository and its config from the directory it is started in, and reads the
+config once: after editing `datamitsu.config.*`, restart the server.
+
+A format request runs the project's fix tools on the real file, in place, so a
+format also saves the file. A buffer with unsaved changes is written to disk
+first, and the response holds the edits from that buffer to the fixed result. A
+buffer that already matches the file on disk gets an empty edit list: the fix is
+only on disk, and the client has to reload the file. VS Code does so by itself.
+In Neovim, run `:edit` after formatting; until then the buffer still shows the
+text from before the format.
+
+stdout carries only JSON-RPC. stderr carries only [JSON-L events](#lsp-events),
+whatever `--log-format` says: status, progress, and log lines alike. `--verbose`
+sets the log level to `debug`, so datamitsu's `info` and `debug` lines join the
+stream as `log` events, never as plain text.
+
+### lsp format policy
+
+A format request plans `fix` for the saved file, then decides for each operation
+whether it runs from the editor. The first matching rule wins; the reason is what
+the server logs for a tool it leaves out:
+
+| Rule                                                 | Result                                 | Logged reason                                                         |
+| ---------------------------------------------------- | -------------------------------------- | --------------------------------------------------------------------- |
+| The operation has `lsp: false`                       | Left out                               | `lsp: false in config`                                                |
+| `format.tools[name]` is `false`                      | Left out                               | `disabled by format.tools`                                            |
+| Granularity `repo`                                   | Left out, whatever `format.tools` says | `repository-wide, never on save`                                      |
+| Granularity `unit`, a project without the saved file | Left out                               | Not logged                                                            |
+| Granularity `unit`, no `globs`, no opt-in            | Left out                               | `declares no globs, so it cannot tell which files it formats`         |
+| Granularity `unit`, level below `unit`               | Left out                               | `project-wide, editor policy is target` or `project policy is target` |
+| Granularity `unit`, otherwise                        | Runs over the saved file's project     | —                                                                     |
+| Granularity `file`                                   | Runs on the saved file                 | —                                                                     |
+
+A `unit` operation that declares no `globs` is planned for every file of its
+project, so it would claim every save there, whatever the file's type: saving a
+TypeScript file that lives in a Go module would run a glob-less
+`golangci-lint fmt` over the whole module. It is left out unless
+`format.tools[name]` is `true`. An author fixes it at the source by adding
+`globs` (such as `["**/*.go"]`), so only the files it formats bring it in. A tool
+whose result for one file does not depend on its neighbours can also take
+`{files}` and declare `granularity: "file"`, so a save runs it on the saved file
+alone.
+
+The level of a `unit` operation is the project's
+[`execution.widenTo.fix`](configuration-api.md#executionwidento) when
+`format.tools[name]` is `true`, and otherwise the narrower of that and
+`format.widenTo`. An opt-in therefore lifts the session's `target`, never the
+project's. `lsp: true` on an operation is the same as leaving it unset. A tool
+the policy leaves out is never downloaded.
+
+`format.timeoutMs` is a watchdog, not a deadline. The plan runs one
+[priority group](../guides/architecture/execution.md#two-layer-execution-model)
+at a time, and once the limit has elapsed no further group starts. The first
+group always runs, a running tool is never interrupted, and downloads and
+installs happen before the clock starts. When it fires, a warning names the file,
+how many groups ran, and the tools that did not; the response still reflects
+what is on disk.
+
+### lsp initialization options
+
+The server reads `initializationOptions` once, at `initialize`:
+
+```ts
+interface DatamitsuInitializationOptions {
+  format?: {
+    widenTo?: "target" | "unit";
+    timeoutMs?: number; // non-negative integer; 0 disables the watchdog
+    tools?: Record<string, boolean>; // keyed by tool name in the config's `tools`
+  };
+}
+```
+
+Each key is resolved on its own, highest first: `initializationOptions`, then the
+environment, then the default.
+
+| Key                | Values                                  | Environment variable              | Default |
+| ------------------ | --------------------------------------- | --------------------------------- | ------- |
+| `format.widenTo`   | `target` or `unit`                      | `DATAMITSU_LSP_FORMAT_WIDEN_TO`   | `unit`  |
+| `format.timeoutMs` | Milliseconds, integer `>= 0`; `0` = off | `DATAMITSU_LSP_FORMAT_TIMEOUT_MS` | `15000` |
+| `format.tools`     | Tool name to `true` or `false`          | —                                 | `{}`    |
+
+- **`widenTo`** — `repo` is refused: a repository-wide fix never runs on save.
+  The environment variable set to `repo` or to an unknown value means `unit`.
+- **`timeoutMs`** — a negative or unparsable environment value means `15000`.
+- **`tools`** — `false` keeps a tool out. `true` runs a project-wide tool under
+  `widenTo: "target"`, or one that declares no `globs`, but never beyond the
+  project's `execution.widenTo.fix`, never for a repository-wide tool, and never
+  against `lsp: false`.
+
+A bad option never fails `initialize`. A value of the wrong type, a `widenTo`
+of `repo`, a negative or fractional `timeoutMs`, a non-boolean `tools` entry, a
+`tools` entry naming no configured tool, or an unknown key inside `format` is
+ignored with a warning: a rejected `widenTo` or `timeoutMs` falls back to the
+environment or the default, and a rejected `tools` entry has no effect. Unknown
+top-level keys are ignored silently.
+
+The `initialize` result echoes the policy the session runs with, under
+`capabilities.experimental`. `tools` holds the entries the server accepted:
+
+```json
+{
+  "capabilities": {
+    "experimental": {
+      "datamitsu": {
+        "format": { "widenTo": "unit", "timeoutMs": 15000, "tools": {} }
+      }
+    }
+  }
+}
+```
+
+In Neovim 0.11 or later, `init_options` is sent as `initializationOptions`:
+
+```lua
+vim.lsp.config("datamitsu", {
+  cmd = { "datamitsu", "lsp" },
+  root_markers = { "datamitsu.config.ts", "datamitsu.config.mjs", "datamitsu.config.js" },
+  init_options = {
+    format = { widenTo = "target", timeoutMs = 5000, tools = { eslint = false } },
+  },
+})
+vim.lsp.enable("datamitsu")
+```
+
+### lsp events
+
+Every stderr line is one JSON object carrying `type` and `op_id`, with
+`--verbose` or without. The language server emits:
+
+| `type`                | Meaning                                                                                             |
+| --------------------- | --------------------------------------------------------------------------------------------------- |
+| `log`                 | A human-readable notice in `msg`, with `level` `debug`, `info`, `warn` or `error`                   |
+| `phase`               | `op: "format"`, `status: "start"`: one per format request, opening it; no `phase` event closes it   |
+| `download`, `install` | Tool provisioning progress                                                                          |
+| `tool_run`            | A tool task starting and ending: `tool`, `dir` (relative to the git root), `success`, `duration_ms` |
+| `error`               | A tool task that failed: `tool`, `dir`, `msg`                                                       |
+| `done`                | Closes the request's phase, under its `op_id`, failed requests included: `status` `done` or `fail`  |
+
+`done` also carries `op: "format"`, `success`, `duration_ms`, `tools`, `runs`,
+`failed` and `skipped`. `tools` counts the distinct tools that ran and `failed`
+the distinct tools with a failed task; `runs` counts the tasks that ran and
+`skipped` the tasks the policy or the watchdog left out. One tool failing in two
+projects therefore gives `runs: 2` and `failed: 1`. A counter or `duration_ms`
+that is zero is left out of the line rather than written as `0`: read a missing
+one as zero. A `tool_run` op id is the format request's op id followed by
+`:<tool>:<dir>`, so a consumer can attribute every task to its request.
+
+`log` events carry the session's own notices. At `initialize`: one `info` with
+the effective policy (`format policy: widenTo=unit timeoutMs=15000 tools={}`),
+naming the keys that came from `initializationOptions`, and one `warn` per
+rejected option. Per format request: one `info` listing the tools the policy
+left out and why, when there are any. A `warn` also marks a save the watchdog
+stopped. Once per session, a cache on disk that the session will not write is
+reported too. Written by a different `datamitsu` version — the editor runs
+another binary than the CLI — it is an `info`: the two simply do not share cache
+entries. Written for a different configuration — the config changed, or a run
+used `--tools` — it is a `warn`, and if the config changed after the session
+started, restart the server to pick it up. Formatting works in both cases; it
+just does not warm the cache.
+
+Log lines from the rest of datamitsu — config loading, tool provisioning — are
+`log` events too, each with its own op id, at its own level: `warn` and `error`
+by default, `debug` and `info` as well with `--verbose` or a lower
+`DATAMITSU_LOG_LEVEL`. `msg` carries the line's message followed by its fields.
+
 ## source
 
 Put the project's declared toolchain on `PATH` for the current shell, so every
@@ -1323,8 +1496,9 @@ from the same shell function that runs an activation through `eval`.
 | `DATAMITSU_UNIT_CACHE_TTL`        | Minutes a cached unit-level verdict stays trusted; `0` disables verdict caching                      | `1440` (24h)                                        |
 | `DATAMITSU_CONFIG_CACHE`          | Serve evaluated config chains from disk (`0`/`false`/`off`/`no` disables it)                         | `1`                                                 |
 | `DATAMITSU_LSP_FORMAT_WIDEN_TO`   | How far editor format-on-save may widen: `target` or `unit`                                          | `unit`                                              |
+| `DATAMITSU_LSP_FORMAT_TIMEOUT_MS` | Format-on-save watchdog in ms: no further tool group starts once it has elapsed (`0` = disabled)     | `15000`                                             |
 | `DATAMITSU_LOG_LEVEL`             | Log level (`debug`, `info`, `warn`, `error`)                                                         | `warn`                                              |
-| `DATAMITSU_LOG_FORMAT`            | Status output format (`console` or newline-delimited `jsonl`)                                        | `console`                                           |
+| `DATAMITSU_LOG_FORMAT`            | Status output format (`console`, or newline-delimited `jsonl` with log lines as `log` events)        | `console`                                           |
 | `DATAMITSU_TIMINGS`               | Enable detailed planner/runner timings (`1` = enabled)                                               | `0`                                                 |
 | `DATAMITSU_STARTUP_TIMINGS`       | Report per-phase startup/config-load durations to stderr (`1` = enabled)                             | `0`                                                 |
 | `DATAMITSU_TRACE`                 | Record a full execution trace and print its summary (`1` = enabled)                                  | `0`                                                 |

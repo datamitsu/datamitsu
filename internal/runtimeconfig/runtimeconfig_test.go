@@ -14,6 +14,9 @@ func TestConstants(t *testing.T) {
 	if InstallTimeoutSeconds != 600 {
 		t.Errorf("InstallTimeoutSeconds = %d, want 600", InstallTimeoutSeconds)
 	}
+	if LspFormatTimeoutMs != 15000 {
+		t.Errorf("LspFormatTimeoutMs = %d, want 15000", LspFormatTimeoutMs)
+	}
 }
 
 func TestEffectiveJSONRoundTrip(t *testing.T) {
@@ -23,6 +26,7 @@ func TestEffectiveJSONRoundTrip(t *testing.T) {
 		Libc:                     "glibc",
 		LogFormat:                "console",
 		LogLevel:                 "info",
+		LspFormatTimeoutMs:       15000,
 		MaxCmdLength:             32000,
 		MaxErrorCmdDisplay:       120,
 		MaxParallelWorkers:       12,
@@ -50,6 +54,7 @@ func TestEffectiveJSONRoundTrip(t *testing.T) {
 		"libc",
 		"logFormat",
 		"logLevel",
+		"lspFormatTimeoutMs",
 		"maxCmdLength",
 		"maxErrorCmdDisplay",
 		"maxParallelWorkers",
@@ -199,5 +204,23 @@ func TestComputeConfigCache(t *testing.T) {
 	t.Setenv("DATAMITSU_CONFIG_CACHE", "0")
 	if eff := Compute(); eff.ConfigCache {
 		t.Error("ConfigCache = true with DATAMITSU_CONFIG_CACHE=0")
+	}
+}
+
+// The format-on-save watchdog is a runtime parameter an editor session runs
+// with, so `datamitsu config runtime` must report it: the default when unset,
+// the override when set.
+func TestComputeLspFormatTimeout(t *testing.T) {
+	t.Setenv("DATAMITSU_LSP_FORMAT_TIMEOUT_MS", "")
+	if eff := Compute(); eff.LspFormatTimeoutMs != LspFormatTimeoutMs {
+		t.Errorf("LspFormatTimeoutMs = %d by default, want %d", eff.LspFormatTimeoutMs, LspFormatTimeoutMs)
+	}
+	if env.GetLspFormatTimeoutMs() != LspFormatTimeoutMs {
+		t.Errorf("env.GetLspFormatTimeoutMs() = %d, want the canonical %d", env.GetLspFormatTimeoutMs(), LspFormatTimeoutMs)
+	}
+
+	t.Setenv("DATAMITSU_LSP_FORMAT_TIMEOUT_MS", "0")
+	if eff := Compute(); eff.LspFormatTimeoutMs != 0 {
+		t.Errorf("LspFormatTimeoutMs = %d with the override 0, want 0", eff.LspFormatTimeoutMs)
 	}
 }

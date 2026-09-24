@@ -8,12 +8,25 @@ import {
 } from "vscode-languageclient/node";
 
 import { type BinaryMode, resolveBinary } from "./binary";
+import { InFlight } from "./inflight";
+import { buildInitializationOptions, describeEffectiveFormat } from "./options";
 import { JsonlProgress } from "./progress";
 
+// The server reads these once per session (binary location, initializationOptions),
+// so a change to any of them takes a restart to apply.
+const RESTART_SECTIONS = ["datamitsu.binaryMode", "datamitsu.format", "datamitsu.path"];
+
 let client: LanguageClient | undefined;
+// The running session's formatting requests; replaced on every start.
+let formatting: InFlight | undefined;
 let serverProcess: ChildProcess | undefined;
 let progress: JsonlProgress | undefined;
 let output: undefined | vscode.LogOutputChannel;
+
+// Lifecycle transitions run one after another, so two quick setting changes
+// cannot interleave a stop with a start and leave two servers running.
+let lifecycle: Promise<void> = Promise.resolve();
+let queuedRestart: undefined | { isImmediate: boolean };
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   // A LogOutputChannel (vscode-languageclient 10 requires one for outputChannel)
@@ -26,19 +39,57 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("datamitsu.showOutput", () => {
       output?.show();
     }),
-    vscode.commands.registerCommand("datamitsu.restartServer", () => restart(context)),
+    vscode.commands.registerCommand("datamitsu.restartServer", () => requestRestart(context, true)),
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      const changed = RESTART_SECTIONS.filter((section) => event.affectsConfiguration(section));
+      if (changed.length === 0) {
+        return;
+      }
+      output?.info(`${changed.join(", ")} changed; restarting the language server`);
+      requestRestart(context, false).then(undefined, () => {});
+    }),
   );
 
-  await start(context);
+  await serialize(() => start(context));
 }
 
 export async function deactivate(): Promise<void> {
-  await stop();
+  await serialize(stop);
 }
 
-async function restart(context: vscode.ExtensionContext): Promise<void> {
-  await stop();
-  await start(context);
+// requestRestart queues at most one restart behind the running transition; it
+// reads the settings when it starts, so a burst of changes restarts once. A
+// restart that is not immediate waits until no format runs: stopping the server
+// mid-format would cut its chain of fix tools short. The restart command is
+// immediate, so it still recovers a server stuck in a tool.
+function requestRestart(context: vscode.ExtensionContext, isImmediate: boolean): Promise<void> {
+  if (queuedRestart !== undefined) {
+    queuedRestart.isImmediate ||= isImmediate;
+    return lifecycle;
+  }
+  const request = { isImmediate };
+  queuedRestart = request;
+  return serialize(async () => {
+    queuedRestart = undefined;
+    const session = formatting;
+    if (session !== undefined && !request.isImmediate && session.size > 0) {
+      output?.info("a format is running; the restart waits for it to finish");
+      session
+        .idle()
+        // A different session means another restart already read the settings.
+        .then(() => (session === formatting ? requestRestart(context, false) : undefined))
+        .then(undefined, () => {});
+      return;
+    }
+    await stop();
+    await start(context);
+  });
+}
+
+function serialize(transition: () => Promise<void>): Promise<void> {
+  const run = lifecycle.then(transition);
+  lifecycle = run.catch(() => {});
+  return run;
 }
 
 // showError surfaces an error popup without blocking activation. Attaching a
@@ -46,14 +97,6 @@ async function restart(context: vscode.ExtensionContext): Promise<void> {
 function showError(message: string): void {
   vscode.window.showErrorMessage(message).then(undefined, () => {});
 }
-
-function showInfo(message: string): void {
-  vscode.window.showInformationMessage(message).then(undefined, () => {});
-}
-
-// formatHintShown gates the one-time "no changes" hint so it isn't repeated on
-// every format that produces no edits.
-let isFormatHintShown = false;
 
 // spawnServer launches `datamitsu lsp` and returns its stdio as an LSP stream
 // pair. We spawn it ourselves (rather than let the client own a ChildProcess) so
@@ -123,7 +166,13 @@ async function start(context: vscode.ExtensionContext): Promise<void> {
   }
   output?.appendLine(`using datamitsu: ${binaryPath}`);
 
+  const initializationOptions = buildInitializationOptions(config);
+  if (initializationOptions !== undefined) {
+    output?.appendLine(`initializationOptions: ${JSON.stringify(initializationOptions)}`);
+  }
+
   const serverOptions: ServerOptions = () => spawnServer(binaryPath);
+  const session = new InFlight();
   const clientOptions: LanguageClientOptions = {
     // The extension owns the process lifecycle (we returned a StreamInfo, not a
     // ChildProcess), so disable the client's own crash-restart: a dead binary
@@ -131,30 +180,28 @@ async function start(context: vscode.ExtensionContext): Promise<void> {
     connectionOptions: { maxRestartCount: 0 },
     documentSelector: [{ scheme: "file" }],
     middleware: {
-      // Log every format and its outcome to the output channel so a no-op format
-      // is visible (not silent). On the first format that yields no edits, hint
-      // once that a stdin->stdout formatter may be missing from the config — a
-      // bare 0-edit result is otherwise indistinguishable from "already formatted".
-      provideDocumentFormattingEdits: async (document, options, token, next) => {
-        output?.appendLine(`format: ${document.uri.fsPath}`);
-        const edits = await next(document, options, token);
-        const count = edits?.length ?? 0;
-        output?.appendLine(`format: ${count} edit(s)`);
-        if (count === 0 && !isFormatHintShown) {
-          isFormatHintShown = true;
-          showInfo(
-            "datamitsu: no formatting changes — the file is already formatted, or no " +
-              "datamitsu fix tool applies to this file type. See the datamitsu output channel.",
-          );
-        }
-        return edits;
-      },
+      // Log every format request to the output channel. A count of 0 is not "no
+      // change": when the buffer already matched disk the server fixes the file
+      // in place and returns no edits, and the editor reloads it. A format that
+      // ran no tool is reported from the server's event stream instead. The
+      // session counts each request so a settings restart can wait for it.
+      provideDocumentFormattingEdits: (document, options, token, next) =>
+        session.track(async () => {
+          output?.appendLine(`format: ${document.uri.fsPath}`);
+          const edits = await next(document, options, token);
+          output?.appendLine(`format: ${edits?.length ?? 0} edit(s)`);
+          return edits;
+        }),
     },
   };
+  if (initializationOptions !== undefined) {
+    clientOptions.initializationOptions = initializationOptions;
+  }
   if (output !== undefined) {
     clientOptions.outputChannel = output;
   }
   client = new LanguageClient("datamitsu", "datamitsu", serverOptions, clientOptions);
+  formatting = session;
   try {
     await client.start();
   } catch (error) {
@@ -162,16 +209,25 @@ async function start(context: vscode.ExtensionContext): Promise<void> {
     output?.appendLine(`language server failed to start: ${message}`);
     showError(`datamitsu: language server failed to start: ${message}`);
     client = undefined;
+    formatting = undefined;
+    session.close();
     serverProcess?.kill();
     serverProcess = undefined;
     return;
   }
   context.subscriptions.push(client);
+
+  const effective = describeEffectiveFormat(client.initializeResult?.capabilities.experimental);
+  if (effective !== undefined) {
+    output?.info(`effective format policy: ${effective}`);
+  }
 }
 
 async function stop(): Promise<void> {
   const current = client;
   client = undefined;
+  formatting?.close();
+  formatting = undefined;
   if (current !== undefined) {
     try {
       await current.stop();

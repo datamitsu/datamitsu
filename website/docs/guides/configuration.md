@@ -235,16 +235,17 @@ Frequently used variables are below. See the
 [CLI environment reference](/docs/reference/cli-commands#environment-variables)
 for the complete list and effective defaults.
 
-| Variable                         | Description                                | Default                                      |
-| -------------------------------- | ------------------------------------------ | -------------------------------------------- |
-| `DATAMITSU_CONCURRENCY`          | Concurrent downloads during `init`         | 3                                            |
-| `DATAMITSU_MAX_PARALLEL_WORKERS` | Max parallel tool workers                  | `max(4, floor(NumCPU * 0.75))`, capped at 16 |
-| `DATAMITSU_UNIT_CACHE_TTL`       | Minutes a project-level verdict is trusted | `1440` (24h)                                 |
-| `DATAMITSU_LSP_FORMAT_WIDEN_TO`  | Editor format-on-save widening             | `unit`                                       |
-| `DATAMITSU_CONFIG_CACHE`         | Serve the evaluated config chain from disk | `1` (`0`/`false`/`off`/`no` disables)        |
-| `DATAMITSU_NO_SPONSOR`           | Suppress sponsor messages                  | -                                            |
-| `NO_COLOR`                       | Disable color output                       | -                                            |
-| `FORCE_COLOR`                    | Force color output                         | -                                            |
+| Variable                          | Description                                | Default                                      |
+| --------------------------------- | ------------------------------------------ | -------------------------------------------- |
+| `DATAMITSU_CONCURRENCY`           | Concurrent downloads during `init`         | 3                                            |
+| `DATAMITSU_MAX_PARALLEL_WORKERS`  | Max parallel tool workers                  | `max(4, floor(NumCPU * 0.75))`, capped at 16 |
+| `DATAMITSU_UNIT_CACHE_TTL`        | Minutes a project-level verdict is trusted | `1440` (24h)                                 |
+| `DATAMITSU_LSP_FORMAT_WIDEN_TO`   | Editor format-on-save widening             | `unit`                                       |
+| `DATAMITSU_LSP_FORMAT_TIMEOUT_MS` | Editor format-on-save watchdog, in ms      | `15000` (`0` disables)                       |
+| `DATAMITSU_CONFIG_CACHE`          | Serve the evaluated config chain from disk | `1` (`0`/`false`/`off`/`no` disables)        |
+| `DATAMITSU_NO_SPONSOR`            | Suppress sponsor messages                  | -                                            |
+| `NO_COLOR`                        | Disable color output                       | -                                            |
+| `FORCE_COLOR`                     | Force color output                         | -                                            |
 
 ## Inspect a resolved tool
 

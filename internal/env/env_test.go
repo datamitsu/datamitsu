@@ -718,6 +718,40 @@ func TestInstallTimeoutSeconds(t *testing.T) {
 	}
 }
 
+// Zero is a meaningful setting (no watchdog), so a malformed or negative value
+// must fall back to the default rather than silently disabling it. So must one
+// too large for a time.Duration, which would wrap to a negative or tiny limit.
+func TestGetLspFormatTimeoutMs(t *testing.T) {
+	if lspFormatTimeoutMs.Name != "DATAMITSU_LSP_FORMAT_TIMEOUT_MS" {
+		t.Fatalf("variable name = %q, want DATAMITSU_LSP_FORMAT_TIMEOUT_MS", lspFormatTimeoutMs.Name)
+	}
+
+	tests := []struct {
+		name string
+		set  string
+		want int
+	}{
+		{"unset uses the default", "", 15000},
+		{"override", "1500", 1500},
+		{"zero disables the watchdog", "0", 0},
+		{"negative falls back", "-1", 15000},
+		{"garbage falls back", "fast", 15000},
+		{"float falls back", "2.5", 15000},
+		{"the largest representable limit", "9223372036854", 9223372036854},
+		{"a limit a Duration cannot hold falls back", "9223372036855", 15000},
+		{"a limit that would wrap to microseconds falls back", "18446744073710", 15000},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv(lspFormatTimeoutMs.Name, tt.set)
+			if got := GetLspFormatTimeoutMs(); got != tt.want {
+				t.Errorf("GetLspFormatTimeoutMs() = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestMinimumReleaseAgeMinutes(t *testing.T) {
 	// t.Setenv registers cleanup that restores minimumReleaseAge.Name even
 	// though subtests below os.Unsetenv it mid-test.

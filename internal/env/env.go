@@ -3,10 +3,12 @@
 package env
 
 import (
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 
@@ -117,6 +119,27 @@ func GetLspFormatWidenTo() string {
 		return v
 	}
 	return lspFormatWidenTo.DefaultValue
+}
+
+// MaxLspFormatTimeoutMs is the longest format-on-save watchdog a time.Duration
+// holds: past it the limit wraps to a negative or near-zero duration.
+const MaxLspFormatTimeoutMs = int64(math.MaxInt64 / time.Millisecond)
+
+// GetLspFormatTimeoutMs returns the format-on-save watchdog in milliseconds.
+// Zero disables it. Returns the default on parse error, a negative value or one
+// above MaxLspFormatTimeoutMs.
+func GetLspFormatTimeoutMs() int {
+	valueStr := lspFormatTimeoutMs.DefaultValue
+	if envValue := os.Getenv(lspFormatTimeoutMs.Name); envValue != "" {
+		valueStr = envValue
+	}
+
+	value, err := strconv.Atoi(valueStr)
+	if err != nil || value < 0 || int64(value) > MaxLspFormatTimeoutMs {
+		defaultValue, _ := strconv.Atoi(lspFormatTimeoutMs.DefaultValue)
+		return defaultValue
+	}
+	return value
 }
 
 // GetUnitCacheTTLMinutes returns how long a unit-level verdict stays trusted.

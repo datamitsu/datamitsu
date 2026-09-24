@@ -365,7 +365,7 @@ This reduces I/O significantly when many files are processed in quick succession
 
 ### Atomic writes
 
-Cache persistence uses the temp-file-and-rename pattern: data is written to a temporary file, then atomically renamed to the final path. This prevents corruption if the process crashes mid-write — the cache file is either the old version or the new version, never a partial write.
+Cache persistence uses the temp-file-and-rename pattern: data is written to a temporary file, then atomically renamed to the final path. This prevents corruption if the process crashes mid-write — the cache file is either the old version or the new version, never a partial write. Every write gets a temporary file of its own, so two processes saving at once — a `datamitsu lsp` session and a CLI run — cannot interleave their bytes; the later rename wins.
 
 Before saving, a process merges entries that another process has already written.
 Matching file-content entries union their successful tool lists; conflicting
@@ -374,6 +374,16 @@ keep the latest validation timestamp, while deletions and pruning leave
 tombstones so the merge cannot resurrect them. The read-modify-write sequence is
 not locked across processes, so an unlucky interleaving can still lose a warm
 entry; that costs a later rerun, not an incorrect cache hit.
+
+A file whose invalidation key differs from the process's own is not merged. A
+command replaces it: the file belongs to a configuration this process has
+already discarded, and refusing to write would leave the cache cold for good. A
+long-lived `datamitsu lsp` server does the opposite. It holds the config it
+started with, so after a config edit its key is the stale one, and every write
+path — the debounced flush, an explicit save, the shutdown flush — leaves such a
+file alone and warns once per session. Otherwise the server and the CLI would
+reset each other's cache on every run. Once the CLI writes the key the server
+holds again, the two merge as before.
 
 ### Shutdown safety
 

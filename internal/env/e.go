@@ -39,13 +39,19 @@ var (
 	logFormat = envVar{
 		Name:         strings.ToUpper(ldflags.PackageName) + "_LOG_FORMAT",
 		DefaultValue: "console",
-		Description:  "Status output format (console, jsonl); jsonl emits one typed JSON event per line to stderr",
+		Description:  "Status output format (console, jsonl); jsonl emits one typed JSON event per line to stderr, log lines as log events",
 	}
 
 	lspFormatWidenTo = envVar{
 		Name:         strings.ToUpper(ldflags.PackageName) + "_LSP_FORMAT_WIDEN_TO",
 		DefaultValue: "unit",
 		Description:  "How far LSP format-on-save may widen: target (this file only) or unit (its project)",
+	}
+
+	lspFormatTimeoutMs = envVar{
+		Name:         strings.ToUpper(ldflags.PackageName) + "_LSP_FORMAT_TIMEOUT_MS",
+		DefaultValue: "15000",
+		Description:  "Watchdog for LSP format-on-save in milliseconds: no further tool group starts once it has elapsed (0=disabled)",
 	}
 
 	unitCacheTTLMinutes = envVar{
