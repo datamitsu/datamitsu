@@ -375,16 +375,18 @@ entry; that costs a later rerun, not an incorrect cache hit.
 A file whose invalidation key differs from the process's own is not merged. A
 command replaces it: the file belongs to a configuration this process has
 already discarded, and refusing to write would leave the cache cold for good. A
-long-lived `datamitsu lsp` server does the opposite. It holds the config it
-started with, so after a config edit its key is the stale one, and every write
-path — the debounced flush, an explicit save, the shutdown flush — leaves such a
-file alone and warns once per session. Otherwise the server and the CLI would
-reset each other's cache on every run. Once the CLI writes the key the server
-holds again, the two merge as before.
+long-lived `datamitsu lsp` server does the opposite. It reloads its config only
+when a format request finds the config's inputs changed, and keeps the previous
+config while a changed one fails to load, so its key can be the stale one. Every
+write path — the debounced flush, an explicit save, the shutdown flush — then
+leaves such a file alone and warns once per session, and once more after each
+reload. Otherwise the server and the CLI would reset each other's cache on every
+run. Once the two hold the same key again, because the server reloaded or the
+CLI wrote the key the server holds, they merge as before.
 
 ### Shutdown safety
 
-On process exit, the cache performs a final flush: any pending debounce timer is cancelled and a synchronous save executes if the dirty flag is set. This ensures no results are lost, even if the process exits immediately after the last tool completes.
+On process exit, the cache performs a final flush: any pending debounce timer is cancelled and a synchronous save executes if the dirty flag is set. This ensures no results are lost, even if the process exits immediately after the last tool completes. A `datamitsu lsp` server that reloads its config flushes the cache it replaces the same way, before building the new one.
 
 ### Pruning
 

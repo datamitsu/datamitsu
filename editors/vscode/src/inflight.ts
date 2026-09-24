@@ -1,25 +1,35 @@
-// InFlight counts one server session's requests still awaiting a response. The
-// server handles one request at a time and cannot read a shutdown until a format
-// returns, so a stop during a long format times out and kills it between two
-// groups of fix tools. An automatic restart waits for idle() instead.
+import { CancellationSource, type CancellationToken } from "./cancellation";
+
+// InFlight tracks one server session's formatting requests still awaiting a
+// response. Each runs on a token of its own, linked to VS Code's, so close() can
+// cancel them when the server stops: the server stops a cancelled format at its
+// next checkpoint, so the shutdown request that follows fits inside the client's
+// stop window. A running tool is never stopped. One that outlasts the window
+// survives the kill that follows too: it runs in its own process group and
+// finishes on its own. A restart after a settings change waits for idle()
+// instead, so it does not cut a save's chain of fix tools short.
 export class InFlight {
   get size(): number {
-    return this.count;
+    return this.requests.size;
   }
-  private count = 0;
   private isClosed = false;
+  private readonly requests = new Set<CancellationSource>();
 
   private waiters: (() => void)[] = [];
 
-  // close releases every idle() waiter: the session is gone, and a request its
-  // stopped client never settles must not hold them forever.
+  // close cancels every request still in flight, and any tracked later, and
+  // releases every idle() waiter: the session is gone, and a request its stopped
+  // client never settles must not hold them forever.
   close(): void {
     this.isClosed = true;
+    for (const request of this.requests) {
+      request.cancel();
+    }
     this.release();
   }
 
   idle(): Promise<void> {
-    if (this.count === 0 || this.isClosed) {
+    if (this.requests.size === 0 || this.isClosed) {
       return Promise.resolve();
     }
     return new Promise((resolve) => {
@@ -27,13 +37,21 @@ export class InFlight {
     });
   }
 
-  async track<T>(request: () => PromiseLike<T> | T): Promise<T> {
-    this.count++;
+  async track<T>(
+    token: CancellationToken | undefined,
+    request: (token: CancellationToken) => PromiseLike<T> | T,
+  ): Promise<T> {
+    const source = new CancellationSource(token);
+    if (this.isClosed) {
+      source.cancel();
+    }
+    this.requests.add(source);
     try {
-      return await request();
+      return await request(source.token);
     } finally {
-      this.count--;
-      if (this.count === 0) {
+      source.dispose();
+      this.requests.delete(source);
+      if (this.requests.size === 0) {
         this.release();
       }
     }

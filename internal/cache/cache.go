@@ -106,6 +106,9 @@ type Cache struct {
 	// yieldToForeignKey makes every write leave a file keyed by another
 	// configuration alone (see SetYieldToForeignKey).
 	yieldToForeignKey atomic.Bool
+	// supersededKeys are the keys yield mode still replaces (see
+	// SetSupersededKeys). Protected by mu.
+	supersededKeys map[string]struct{}
 
 	// Async save support
 	dirty       atomic.Bool
@@ -262,6 +265,24 @@ func (c *Cache) Load() error {
 func (c *Cache) SetYieldToForeignKey(yield bool) {
 	c.yieldToForeignKey.Store(yield)
 }
+
+// SetSupersededKeys names keys yield mode replaces rather than yields to: the
+// ones this process held under a configuration it has since reloaded. Such a
+// key is the stale one, and no process holding the current configuration
+// writes it, so yielding would only keep the cache cold until the CLI runs.
+func (c *Cache) SetSupersededKeys(keys []string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.supersededKeys = make(map[string]struct{}, len(keys))
+	for _, key := range keys {
+		if key != c.invalidationKey {
+			c.supersededKeys[key] = struct{}{}
+		}
+	}
+}
+
+// InvalidationKey is the key this cache reads and writes under.
+func (c *Cache) InvalidationKey() string { return c.invalidationKey }
 
 // Save saves the cache to disk atomically
 func (c *Cache) Save() error {
@@ -823,7 +844,7 @@ func (c *Cache) mergeFromDisk() error {
 	// edit and the cache never warms again. A long-lived process opts out: its
 	// key is the stale one, and the CLI owns the file (SetYieldToForeignKey).
 	if disk.InvalidationKey != "" && disk.InvalidationKey != c.invalidationKey {
-		if c.yieldToForeignKey.Load() {
+		if _, superseded := c.supersededKeys[disk.InvalidationKey]; c.yieldToForeignKey.Load() && !superseded {
 			return &ForeignKeyError{DiskVersion: disk.Version}
 		}
 		return nil

@@ -140,6 +140,44 @@ func TestYieldModeStillWritesItsOwnFile(t *testing.T) {
 	})
 }
 
+// A process that reloaded its configuration takes over a file keyed by one it
+// held before, and still yields to any other key.
+func TestYieldModeReplacesASupersededKey(t *testing.T) {
+	for _, tt := range []struct {
+		name       string
+		superseded bool
+	}{{"superseded key", true}, {"any other key", false}} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir, project := t.TempDir(), t.TempDir()
+			before, _ := NewCache(dir, project, config.Config{IgnoreRules: []string{"before"}}, nil, zap.NewNop())
+			if err := before.Save(); err != nil {
+				t.Fatalf("save: %v", err)
+			}
+			before.Shutdown()
+
+			after, _ := NewCache(dir, project, config.Config{IgnoreRules: []string{"after"}}, nil, zap.NewNop())
+			t.Cleanup(after.Shutdown)
+			after.SetYieldToForeignKey(true)
+			if tt.superseded {
+				after.SetSupersededKeys([]string{before.InvalidationKey()})
+			}
+			after.AfterVerdict("k", VerdictEntry{Tool: "tsc", InputHash: "x"})
+
+			err := after.Save()
+			onDisk := decodeOnDisk(t, after.path)
+			if tt.superseded {
+				if err != nil || onDisk.InvalidationKey != after.InvalidationKey() {
+					t.Errorf("Save() = %v, key on disk %q; want the file taken over", err, onDisk.InvalidationKey)
+				}
+				return
+			}
+			if !errors.Is(err, ErrForeignKey) || onDisk.InvalidationKey != before.InvalidationKey() {
+				t.Errorf("Save() = %v, key on disk %q; want a yield", err, onDisk.InvalidationKey)
+			}
+		})
+	}
+}
+
 func decodeOnDisk(t *testing.T, path string) *File {
 	t.Helper()
 	raw, err := os.ReadFile(path)

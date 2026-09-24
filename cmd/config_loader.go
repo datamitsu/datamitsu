@@ -349,10 +349,14 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 	}
 
 	sources, srcErr := buildConfigSources(ctx, beforeConfigPaths, autoConfigPath, configPaths)
+	if sources != nil {
+		// Recorded when the load fails too: a declared before-config that is
+		// missing is part of the chain, and a watcher must see it appear.
+		setConfigChainFiles(sources)
+	}
 	if srcErr != nil {
 		return nil, nil, nil, srcErr
 	}
-	setConfigChainFiles(sources)
 
 	cache := newConfigCache(ctx, configCacheParams{
 		sources:       sources,
@@ -616,7 +620,8 @@ func projectLocationsToConfig(rootPath string, locs []project.ProjectLocation) (
 // honoured only when no --before-config flag was passed — the flag wins, which
 // avoids double-loading the shared config when the pnpm wrapper is used.
 // autoConfigPath is empty when there is no git-root config or --no-auto-config
-// was given.
+// was given. A declared before-config that does not exist is an error returned
+// with the whole chain, the missing file included.
 func buildConfigSources(ctx context.Context, beforeConfigPaths []string, autoConfigPath string, configPaths []string) ([]configSource, error) {
 	var sources []configSource
 	sources = append(sources, configSource{name: "default", isDefault: true})
@@ -643,11 +648,13 @@ func buildConfigSources(ctx context.Context, beforeConfigPaths []string, autoCon
 	}
 
 	// Declared before-configs from the auto config — only when no flag overrides.
+	var missing error
 	if autoConfigPath != "" && len(beforeConfigPaths) == 0 {
 		declared, err := discoverBeforeConfigs(ctx, autoConfigPath)
-		if err != nil {
+		if err != nil && declared == nil {
 			return nil, err
 		}
+		missing = err
 		for _, p := range declared {
 			sources = append(sources, configSource{name: p, path: p})
 		}
@@ -663,7 +670,7 @@ func buildConfigSources(ctx context.Context, beforeConfigPaths []string, autoCon
 		sources = append(sources, configSource{name: p, path: p})
 	}
 
-	return sources, nil
+	return sources, missing
 }
 
 // processConfigSource loads a single config source, resolves any remote configs
@@ -938,9 +945,11 @@ func discoverAutoConfig(gitRoot string) (string, error) {
 // isolated VM and reads its getBeforeConfigs() declaration, returning the
 // resolved absolute paths in declared order (deduped). Relative paths are
 // resolved against the config file's directory; absolute paths are used as-is.
-// Each declared path must exist. An absent getBeforeConfigs function returns
-// (nil, nil) — only the auto config is consulted, so nested declarations in
-// other layers are never read (scope is enforced structurally).
+// Each declared path must exist; when one does not, every declared path comes
+// back with the error, so a caller watching the chain sees the file appear. An
+// absent getBeforeConfigs function returns (nil, nil) — only the auto config is
+// consulted, so nested declarations in other layers are never read (scope is
+// enforced structurally).
 func discoverBeforeConfigs(ctx context.Context, autoConfigPath string) ([]string, error) {
 	defer timing.StartStartupPhase(timing.PhaseDiscoverBeforeConfigs)()
 	defer trace.Start(trace.CatConfig, "discoverBeforeConfigs").End()
@@ -972,6 +981,7 @@ func discoverBeforeConfigs(ctx context.Context, autoConfigPath string) ([]string
 	baseDir := filepath.Dir(autoConfigPath)
 	seen := make(map[string]bool)
 	var paths []string
+	var missing error
 	for _, entry := range entries {
 		if entry.Path == "" {
 			return nil, fmt.Errorf("before config entry in %s: path is required", autoConfigPath)
@@ -984,13 +994,13 @@ func discoverBeforeConfigs(ctx context.Context, autoConfigPath string) ([]string
 		if seen[resolved] {
 			continue
 		}
-		if _, statErr := os.Stat(resolved); statErr != nil {
-			return nil, fmt.Errorf("before config %s: %w", resolved, statErr)
+		if _, statErr := os.Stat(resolved); statErr != nil && missing == nil {
+			missing = fmt.Errorf("before config %s: %w", resolved, statErr)
 		}
 		seen[resolved] = true
 		paths = append(paths, resolved)
 	}
-	return paths, nil
+	return paths, missing
 }
 
 // isPlainJavaScriptSource reports whether a config source is already plain

@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 55,
-  "pageSetHash": "e085816efa66655b7dd4ba6d0ed62a12",
+  "pageSetHash": "fdf1e77d1defe76f37e068f5a09a0d2a",
   "pages": [
     {
       "slug": "about",
@@ -179,8 +179,8 @@
       "url": "https://datamitsu.com/docs/getting-started/installation/vscode.md",
       "title": "VS Code Extension",
       "description": "Install the Datamitsu Toolkit extension for VS Code, Cursor, VSCodium, and other VS Code-based editors",
-      "bytes": 10715,
-      "contentHash": "7b361e1653ab3cb65b2eedcfc710b3fd"
+      "bytes": 13966,
+      "contentHash": "94e0f6a0b0ac1b0fa790b1caaccc5ae2"
     },
     {
       "slug": "getting-started/installation/winget",
@@ -206,8 +206,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/caching.md",
       "title": "Caching Strategy",
       "description": "How datamitsu caches file-level results and unit or repository verdicts, computes XXH3-128 keys, and persists them safely",
-      "bytes": 22400,
-      "contentHash": "95c6c78ebee382a7befe594f3ef222b2"
+      "bytes": 22706,
+      "contentHash": "92c08dbf83a24cdec4bc4703259a8130"
     },
     {
       "slug": "guides/architecture/discovery",
@@ -262,8 +262,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/startup.md",
       "title": "Startup and Config Load",
       "description": "What every datamitsu invocation pays before the first tool runs - the config-load cost model, the git-root memo, and how to measure it",
-      "bytes": 19669,
-      "contentHash": "e242543ffd2bafcf62b2f0049164dd02"
+      "bytes": 19941,
+      "contentHash": "e62386088a50c776f91de4ab5e8cd460"
     },
     {
       "slug": "guides/binary-management",
@@ -451,8 +451,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 83476,
-      "contentHash": "69dcd64e7111cb18fa7389abe7e852d8"
+      "bytes": 93817,
+      "contentHash": "a5a37d8a0fa32ede4435cba750512c30"
     },
     {
       "slug": "reference/comparison",

@@ -107,13 +107,18 @@ func newFormatServer(t *testing.T) (s *Server, root, file string) {
 	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	s = NewServer(strings.NewReader(""), io.Discard, formatConfig(), root)
-	t.Cleanup(func() {
-		if s.cache != nil {
-			s.cache.Shutdown()
-		}
-	})
-	return s, root, file
+	return newConfiguredServer(t, formatConfig(), root), root, file
+}
+
+// newConfiguredServer is a server built around one fixed configuration and
+// root, as if initialize had loaded it. It has no loader, so it never reloads.
+func newConfiguredServer(t *testing.T, cfg *config.Config, root string) *Server {
+	t.Helper()
+	s := New(strings.NewReader(""), io.Discard, nil, root)
+	s.root = root
+	s.loaded = newSession(cfg, root)
+	t.Cleanup(s.closeSession)
+	return s
 }
 
 // One save is one format phase: a tool_run pair per task, an error event for
@@ -285,12 +290,7 @@ func TestFormatFileReportsWhatTheProjectPolicyLeavesOut(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			s := NewServer(strings.NewReader(""), io.Discard, unitFixConfig(tt.project, tt.globs), root)
-			t.Cleanup(func() {
-				if s.cache != nil {
-					s.cache.Shutdown()
-				}
-			})
+			s := newConfiguredServer(t, unitFixConfig(tt.project, tt.globs), root)
 			s.policy = formatPolicy{WidenTo: config.WidenToUnit, Tools: tt.tools}
 
 			if _, err := s.FormatFile(context.Background(), file, []byte("x")); err != nil {

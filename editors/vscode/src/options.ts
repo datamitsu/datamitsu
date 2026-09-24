@@ -52,6 +52,14 @@ export function describeEffectiveFormat(experimental: unknown): string | undefin
   return JSON.stringify(format);
 }
 
+// describeServedRoot returns the repository root the server echoes in
+// capabilities.experimental.datamitsu.root, or undefined when it echoes none (an
+// older server, or one that found no repository to serve).
+export function describeServedRoot(experimental: unknown): string | undefined {
+  const root = property(property(experimental, "datamitsu"), "root");
+  return typeof root === "string" && root !== "" ? root : undefined;
+}
+
 export function isExplicitlySet(inspection: SettingInspection | undefined): boolean {
   return (
     inspection !== undefined &&

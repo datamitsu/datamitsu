@@ -1,9 +1,10 @@
 // Package lsp implements a minimal, formatting-only Language Server Protocol
 // server over stdio. It speaks just enough LSP to register as a document
 // formatter — initialize/initialized/shutdown/exit, didOpen/didChange/didClose
-// document tracking, and textDocument/formatting — and delegates the actual
-// formatting to datamitsu's existing fix tools (stdin->stdout) plus the in-core
-// line diff. It deliberately implements NO diagnostics and loads NO WASM parsers.
+// document tracking, textDocument/formatting and $/cancelRequest — and formats
+// by running the project's configured fix on the real file, then returning the
+// in-core line diff as edits. It deliberately implements NO diagnostics and
+// loads NO WASM parsers.
 //
 // The transport is hand-rolled Content-Length-framed JSON-RPC 2.0 (no external
 // dependency). stdout carries ONLY framed JSON-RPC; all human/status output is
@@ -28,7 +29,10 @@ const (
 	codeMethodNotFound = -32601
 	codeInvalidParams  = -32602
 	codeRequestFailed  = -32803 // LSP-specific: a request failed but the server is healthy
-	codeServerNotReady = -32002 // ServerNotInitialized
+	// codeRequestCancelled answers every cancelled request: vscode-languageclient
+	// drops it silently, and shows an error popup for any other code.
+	codeRequestCancelled = -32800
+	codeServerNotReady   = -32002 // ServerNotInitialized
 )
 
 // maxMessageBytes caps an advertised Content-Length so a bogus or out-of-sync
@@ -75,7 +79,7 @@ type responseError struct {
 type conn struct {
 	r   *bufio.Reader
 	w   io.Writer
-	wmu sync.Mutex // serializes writes; reads are single-threaded by the server loop
+	wmu sync.Mutex // serializes writes: the reader and the worker both reply
 }
 
 func newConn(r io.Reader, w io.Writer) *conn {
@@ -209,11 +213,24 @@ type formattingParams struct {
 	TextDocument textDocumentIdentifier `json:"textDocument"`
 }
 
-// initializeParams keeps only what the server reads from initialize: the
-// initializationOptions object, which per the LSP specification belongs to the
-// server. Decoded leniently by resolveFormatPolicy.
+// initializeParams keeps only what the server reads from initialize: where the
+// workspace is, and the initializationOptions object, which per the LSP
+// specification belongs to the server and is decoded leniently by
+// resolveFormatPolicy.
 type initializeParams struct {
-	InitializationOptions json.RawMessage `json:"initializationOptions"`
+	WorkspaceFolders      []workspaceFolder `json:"workspaceFolders"`
+	RootURI               *string           `json:"rootUri"`
+	RootPath              *string           `json:"rootPath"`
+	InitializationOptions json.RawMessage   `json:"initializationOptions"`
+}
+
+type workspaceFolder struct {
+	URI  string `json:"uri"`
+	Name string `json:"name"`
+}
+
+type cancelParams struct {
+	ID json.RawMessage `json:"id"`
 }
 
 type initializeResult struct {
@@ -243,6 +260,9 @@ type experimentalCapabilities struct {
 
 type datamitsuCapabilities struct {
 	Format formatPolicyEcho `json:"format"`
+	// Root is the repository the server formats, empty when none could be
+	// resolved.
+	Root string `json:"root,omitempty"`
 }
 
 type formatPolicyEcho struct {

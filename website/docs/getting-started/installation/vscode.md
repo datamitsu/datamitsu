@@ -41,6 +41,22 @@ verifies it by SHA-256 before running it.
 The extension activates only in a workspace that has a datamitsu config
 (`datamitsu.config.js`, `datamitsu.config.mjs`, or `datamitsu.config.ts`).
 
+## The repository it serves
+
+The language server serves one repository: the one that holds the window's
+first folder. A folder inside a submodule is served by its superproject, as the
+CLI does. The output channel names the repository when the server starts, next
+to the format policy.
+
+- In a multi-root window, a folder that belongs to another repository is not
+  formatted, and the output channel says so once for each such folder.
+- A file outside the served repository is left alone: formatting it makes no
+  edits, and the output channel notes it once per file.
+
+If the server finds no repository, or the config does not load, it keeps
+running: the output channel shows the error, and formatting makes no edits. Once
+the config is fixed, the next format picks it up.
+
 ## Usage
 
 Both triggers run your project's fix tools on the real file — which ones is
@@ -137,15 +153,40 @@ group starts. The first group always runs, a running tool is never interrupted �
 a formatter killed halfway would leave a file carrying some tools' edits but not
 others' — and time spent downloading or installing a tool does not count. When
 the watchdog stops a save, a warning names the tools that did not run. `0`
-disables it.
+disables it. A cancelled format, unlike the watchdog, can stop before the first
+group: see [When a format is cancelled](#when-a-format-is-cancelled).
+
+### When a format is cancelled
+
+VS Code cancels a format it no longer needs, for example when the document
+changes before the format finishes. The server then stops at its next
+checkpoint instead of running the rest of the plan. A tool that is already
+running always finishes, since killing a formatter in the middle of a write can
+leave the file truncated, and a tool download or install that has started
+completes, so the next save does not repeat it. What is on disk afterwards
+depends on when the cancel arrived:
+
+- **Before your unsaved changes were written** — the file is unchanged.
+- **Before the first tool group** — the file holds your unsaved text,
+  unformatted.
+- **While a tool group runs** — that group and the ones before it have fixed the
+  file; the later ones did not run.
+
+The output channel logs `format: cancelled`. Once a tool group has run, the
+server's notice also names the tools that did not; a cancel before the first
+group only says that no tool ran. **datamitsu: Restart Language Server**, or
+closing the window, cancels a running format the same way: the running tool
+finishes and nothing after it starts. A restart after a settings change waits
+for the format to finish instead.
 
 ### Where notices appear
 
 - The **status bar** shows downloads, installs, and each tool while it runs.
 - The **datamitsu output channel** (**datamitsu: Show Output Channel**) records
-  the policy the server runs with, the tools a save left out and why, failed
-  tools, and every warning — the server's own and those datamitsu logs while it
-  loads the config or installs a tool. Each line appears at its level: `debug`,
+  the repository the server serves, the policy it runs with, configuration
+  reloads, the tools a save left out and why, failed tools, and every warning —
+  the server's own and those datamitsu logs while it loads the config or
+  installs a tool. Each line appears at its level: `debug`,
   `info`, `warn` or `error`. Debug lines need both sides lowered: the server's
   level (`DATAMITSU_LOG_LEVEL=debug` in the environment VS Code starts from) and
   the channel's (**Developer: Set Log Level...**).
@@ -156,18 +197,34 @@ disables it.
 
 ### After a config change
 
-The language server reads `datamitsu.config.*` once, when it starts. After
-editing the config, run **datamitsu: Restart Language Server**. The extension
-restarts the server by itself only when its own settings change:
-`datamitsu.format.*`, `datamitsu.path`, or `datamitsu.binaryMode`.
+There is nothing to restart. Before each format, the server checks whether the
+configuration changed — an edited config file, a shared config package updated
+by an install, a branch switch — and loads it again. The output channel records
+`configuration reloaded`, followed by the policy the session now runs with. The
+[`lsp` reference](../../reference/cli-commands.md#lsp-configuration-reload)
+lists exactly what is checked.
 
-Until it is restarted, a session keeps formatting with the config it started
-with. Once a `datamitsu` command has cached results under a different
-configuration, the session stops writing the shared cache — so it cannot
-discard those results — and warns once. The same happens, as a note in the
-output channel rather than a warning, when the CLI runs another `datamitsu`
-version than the editor: point `datamitsu.path` at the project's binary to
-share one cache.
+A config that does not load — the usual state halfway through an edit — leaves
+the session on the configuration that last loaded: one warning names the cause,
+and saves keep formatting with the previous configuration until the config loads
+again. The same broken content is not reported again on every save.
+
+A reload does not run `datamitsu init`. When the new config changes a tool
+config that datamitsu generates for you, formatting a file that tool covers
+fails until that file is brought up to date, and the error names the command to
+run, usually `datamitsu init`.
+
+The extension restarts the server by itself only when its own settings change:
+`datamitsu.format.*`, `datamitsu.path`, or `datamitsu.binaryMode`. Run
+**datamitsu: Restart Language Server** for what a reload does not cover, such as
+a new `datamitsu` binary installed at the same path.
+
+When a `datamitsu` command has cached results under a different configuration
+than the session's (a run with `--tools` counts as one), the session stops
+writing the shared cache, so it cannot discard those results, and warns once for
+each configuration it loads. The same happens, as a note in the output channel
+rather than a warning, when the CLI runs another `datamitsu` version than the
+editor: point `datamitsu.path` at the project's binary to share one cache.
 
 ## Settings
 
@@ -183,9 +240,10 @@ share one cache.
 The `datamitsu.format.*` settings reach the server only when you set them — in
 user or workspace settings. In a single-folder window, the folder's
 `.vscode/settings.json` is the workspace settings. In a multi-root workspace the
-extension starts one server for the whole window, so a folder's own settings
-file cannot set them: put them in the `.code-workspace` file. An unset one
-leaves the server on `DATAMITSU_LSP_FORMAT_WIDEN_TO` or
+extension starts one server for the whole window, serving the
+[first folder's repository](#the-repository-it-serves), so a folder's own
+settings file cannot set them: put them in the `.code-workspace` file. An unset
+one leaves the server on `DATAMITSU_LSP_FORMAT_WIDEN_TO` or
 `DATAMITSU_LSP_FORMAT_TIMEOUT_MS` from its environment, and then on the default
 above. The output channel shows the values the session actually runs with.
 
