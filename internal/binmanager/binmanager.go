@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"sort"
 	"strings"
@@ -1209,8 +1210,21 @@ func (bm *BinManager) getBinaryPath(name string) (string, error) {
 
 	configHash := calculateConfigHash(binaryInfo, *resolved)
 
-	binPath := filepath.Join(env.GetBinPath(), name, configHash)
-	return binPath, nil
+	return binaryStorePath(name, configHash, binaryInfo.ExtractDir, runtime.GOOS), nil
+}
+
+// binaryStorePath is where a binary app lives in the store; the install writes there and every
+// lookup reads there, so the two cannot disagree. On Windows a single file is stored as
+// <hash>.exe: Windows starts a program by its extension, and exec.Command runs exec.LookPath
+// first, which rejects a path without one outright — a bare hash downloads and verifies there,
+// and then can never be executed. An extracted directory is never executed itself and
+// keeps the bare hash on every platform.
+func binaryStorePath(name, configHash string, extractDir bool, goos string) string {
+	file := configHash
+	if goos == "windows" && !extractDir {
+		file += ".exe"
+	}
+	return filepath.Join(env.GetBinPath(), name, file)
 }
 
 func (bm *BinManager) downloadInternal(ctx context.Context, name string) error {
@@ -1234,7 +1248,7 @@ func (bm *BinManager) downloadInternal(ctx context.Context, name string) error {
 	)
 
 	configHash := calculateConfigHash(binaryInfo, *resolved)
-	binPath := filepath.Join(env.GetBinPath(), name, configHash)
+	binPath := binaryStorePath(name, configHash, binaryInfo.ExtractDir, runtime.GOOS)
 
 	tmpDir := filepath.Join(env.GetStorePath(), "tmp")
 	if err := os.MkdirAll(tmpDir, 0o755); err != nil {

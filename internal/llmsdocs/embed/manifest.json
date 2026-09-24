@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 55,
-  "pageSetHash": "fdf1e77d1defe76f37e068f5a09a0d2a",
+  "pageSetHash": "8789de68848af3b968deafebf3d7706c",
   "pages": [
     {
       "slug": "about",
@@ -271,8 +271,8 @@
       "url": "https://datamitsu.com/docs/guides/binary-management.md",
       "title": "Binary Management",
       "description": "How datamitsu downloads, verifies, and stores binary apps",
-      "bytes": 7540,
-      "contentHash": "4356e0c39a5e65b8d3ed0e324c648255"
+      "bytes": 7796,
+      "contentHash": "faf7ec064c06c64c78b77f6fdef94c46"
     },
     {
       "slug": "guides/config-inspector",

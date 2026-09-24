@@ -55,7 +55,7 @@ func (bm *BinManager) dependencyLinks(appName string, resolve func(string) (stri
 }
 
 // commandName is the file name under which a dependency is found on PATH. Windows resolves a bare
-// command through PATHEXT, so the entry needs the extension a store binary's hash name lacks.
+// command through PATHEXT, so the entry carries .exe, like the store file it links to.
 func commandName(app string) string {
 	if runtime.GOOS == "windows" && !strings.EqualFold(filepath.Ext(app), ".exe") {
 		return app + ".exe"

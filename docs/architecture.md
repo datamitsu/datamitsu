@@ -32,7 +32,7 @@
 - `ExtractDir` mode: when `BinaryOsArchInfo.ExtractDir` is true, extracts entire archive to a directory (used by JVM runtimes for full JDK trees) instead of a single binary file
 - Platform-specific binaries for darwin/linux/freebsd/openbsd/windows across amd64/arm64/aarch64
 - **Target-aware resolution**: Uses `target.Resolver` to select best binary candidate from nested storage (os → arch → libc → BinaryInfo); `parseBinaryCandidates()` converts nested map to `[]target.Candidate`; `getBinaryInfo()` calls `resolver.Resolve()` and emits fallback warnings
-- Stores binaries in `{store}/.bin/{name}/{configHash}` with lazy loading; config hash includes resolved target (OS, Arch, Libc) for isolation between glibc and musl variants
+- Stores binaries in `{store}/.bin/{name}/{configHash}` (`{configHash}.exe` for a single file on Windows, see `binaryStorePath`) with lazy loading; config hash includes resolved target (OS, Arch, Libc) for isolation between glibc and musl variants
 - Can execute binaries through `Exec()` method with env passthrough
 - `GetExecCmd(name, args)` returns a prepared `*exec.Cmd` without executing it. Returns `(nil, nil)` for shell apps. Used by `devtools verify-all` for version checks
 - `App.VersionCheck *AppVersionCheck`: optional per-app version check configuration. `Disabled: true` skips version check; `Args` overrides default `["--version"]`. Used by `devtools verify-all`

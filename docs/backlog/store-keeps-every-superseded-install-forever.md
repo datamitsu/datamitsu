@@ -10,7 +10,7 @@ An installed app lives at a content-addressed path, `{store}/.apps/<kind>/<app>/
 hash covers everything that identifies the installation: version, dependency map, lockfile hash,
 runtime hash (node version + os/arch/libc) and the hashed files and archives
 (`internal/runtimemanager/runtimemanager.go:254`). Binaries follow the same shape under
-`{store}/.bin/<app>/<hash>`.
+`{store}/.bin/<app>/<hash>` (`<hash>.exe` for a single file on Windows).
 
 That is correct, and it is why two projects on different versions do not fight over one directory.
 The missing half is that **nothing ever removes the previous copy after a successful install**.

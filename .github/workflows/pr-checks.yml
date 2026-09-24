@@ -261,6 +261,23 @@ jobs:
         run: go build -o datamitsu .
       - name: Run JavaScript tests
         run: pnpm --filter @datamitsu/programmable-api-js test
+  test-windows:
+    name: Test (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Go only. `pnpm install` would run the `prepare` script, `datamitsu init` from the released
+      # build, which cannot start its own binary apps on Windows before this fix ships; and
+      # internal/binmanager embeds none of the JS build output, so it needs nothing else.
+      - uses: ./.github/actions/setup-environment
+        with:
+          cache-datamitsu: "false"
+          install-dependencies: "false"
+          setup-node: "false"
+      - name: Run a downloaded binary app on Windows
+        # Only these tests: the other fixtures in the package are POSIX shell scripts and file
+        # modes (docs/backlog/binmanager-and-shim-tests-assume-posix.md).
+        run: go test ./internal/binmanager -run '^(TestBinaryStorePath|TestExecDownloadedBinary)$' -count=1 -v
 name: CI
 on:
   pull_request:
