@@ -1169,22 +1169,118 @@ This is normally launched by an editor rather than by hand — see the
 [VS Code extension](../getting-started/installation/vscode.md) for the packaged
 integration.
 
-The server answers document formatting and nothing else. It locates the
-repository and its config from the directory it is started in, and reads the
-config once: after editing `datamitsu.config.*`, restart the server.
+The server answers document formatting and nothing else. It serves one
+repository, which it takes from the editor at `initialize` (see
+[lsp root](#lsp-root)), and it picks up a changed configuration by itself, with
+no restart (see [lsp configuration reload](#lsp-configuration-reload)).
 
 A format request runs the project's fix tools on the real file, in place, so a
 format also saves the file. A buffer with unsaved changes is written to disk
-first, and the response holds the edits from that buffer to the fixed result. A
-buffer that already matches the file on disk gets an empty edit list: the fix is
-only on disk, and the client has to reload the file. VS Code does so by itself.
-In Neovim, run `:edit` after formatting; until then the buffer still shows the
-text from before the format.
+first, and the response holds the edits from that buffer to the fixed result.
+That write goes through a temporary file, with the original's permissions,
+renamed over the original, so it never leaves a truncated file behind, and it
+replaces the file a symlink points to, not the symlink. A buffer that already
+matches the file on disk gets an empty edit list: the fix is only on disk, and
+the client has to reload the file. VS Code does so by itself. In Neovim, run
+`:edit` after formatting; until then the buffer still shows the text from
+before the format.
 
 stdout carries only JSON-RPC. stderr carries only [JSON-L events](#lsp-events),
 whatever `--log-format` says: status, progress, and log lines alike. `--verbose`
 sets the log level to `debug`, so datamitsu's `info` and `debug` lines join the
 stream as `log` events, never as plain text.
+
+### lsp root
+
+One server serves one repository for its whole life. At `initialize` it starts
+from the first of these that the editor sends:
+
+1. the first entry of `workspaceFolders`;
+2. `rootUri`;
+3. `rootPath`;
+4. none of them: the directory the server was started in.
+
+From there it resolves the repository root the way the CLI does — the git root,
+climbing out of a submodule to its topmost superproject — changes into that
+root, and loads the configuration there. The `initialize` result names the root
+in `capabilities.experimental.datamitsu.root` (see the
+[echo](#lsp-initialization-options)). Relative `--config` and `--before-config`
+paths are resolved once, against the directory the server was started in,
+before it changes directory.
+
+File URIs are percent-decoded, and on Windows `file:///C:/x` is read as `C:\x`.
+The root and every document path are compared after resolving symlinks, so a
+workspace opened through a symlink formats like any other. A document outside
+the served repository is not formatted: the server answers with an empty edit
+list before planning or installing anything, and logs one `info` notice per
+document per session.
+
+The first workspace folder decides the repository, and every folder inside that
+repository is served with it. For each other folder whose repository differs,
+the server logs one `info` notice saying it does not format that folder. The
+server does not advertise workspace-folder support, so an editor does not add
+folders to a running server: one that wants several repositories formatted
+starts one server for each.
+
+Neither a missing repository nor a configuration that does not load stops the
+server or fails `initialize`. `initialize` succeeds, one `log` event at level
+`error` names the cause, and the session serves nothing: a format request gets
+an empty edit list rather than an error, so the editor does not raise one on
+every save, and the `error` is repeated once per distinct cause rather than on
+every request. Once the configuration is fixed, the next format request loads
+it.
+
+### lsp configuration reload
+
+The server picks up a changed configuration by itself. At the start of every
+format request — before planning, because formatting the config file itself
+changes it — it compares the contents of the configuration's inputs with what
+it read at the last load:
+
+- every file of the configuration chain: the discovered `datamitsu.config.*`,
+  the configs it layers on (a shared config package in `node_modules`
+  included), and any `--config` or `--before-config` file;
+- the checkout's `HEAD` (`.git/HEAD`, or a linked worktree's own), so a branch
+  switch counts;
+- `pnpm-lock.yaml` at the root, so an install that bumps a shared config
+  package counts;
+- every auto-config file name at the root, present or not, so a second
+  `datamitsu.config.*` appearing counts.
+
+A server started with `--no-auto-config` discovers no config at the root, so it
+compares only the files of its `--config` chain.
+
+It compares content, not modification times, so an edit within the same second
+counts, and a file reached through a symlink is compared by what it points to.
+A file that appears or disappears counts as a change too. When nothing changed,
+the request proceeds. When something did, the server loads the configuration
+again:
+
+- **It loads.** The server replaces everything it built from the old
+  configuration — tools, planner, execution cache (the old cache is flushed
+  first) — and resolves the
+  [`initializationOptions`](#lsp-initialization-options) the editor sent at
+  `initialize` again, so a `format.tools` entry for a tool the new configuration
+  adds now applies. It logs `configuration reloaded` at `info`, followed by the
+  policy line, and logs the option warnings again.
+- **It fails.** Saving a half-edited config is the normal case. The session
+  keeps the configuration that last loaded, logs one `warn` saying the
+  configuration changed but failed to load, with the cause, and keeps
+  formatting with the previous configuration. The same content is not loaded or
+  reported again on the next save; only a further change is.
+- **No session yet**, because the configuration did not load at `initialize`: a
+  successful load starts one.
+
+A reload writes nothing: it does not run `datamitsu init`. When the new
+configuration changes an
+[ejectable config](configuration-api.md#keeping-configs-out-of-the-repository-ejectable--ejectconfigs)
+— what it renders to, or whether the project ejects it — a format that would run
+a tool reading that config fails the managed-config preflight until the files
+match the configuration again. The error names the command to run:
+`datamitsu init` for a changed render. A tool the new configuration adds is
+installed by the first format that needs it, like any other. The repository the
+server serves, its command-line flags and its environment stay as they were
+when it started.
 
 ### lsp format policy
 
@@ -1226,11 +1322,68 @@ at a time, and once the limit has elapsed no further group starts. The first
 group always runs, a running tool is never interrupted, and downloads and
 installs happen before the clock starts. When it fires, a warning names the file,
 how many groups ran, and the tools that did not; the response still reflects
-what is on disk.
+what is on disk. A cancel, unlike the watchdog, can stop a format before its
+first group: see [lsp cancellation](#lsp-cancellation).
+
+### lsp cancellation
+
+The server keeps reading messages while a format runs, so it sees a
+`$/cancelRequest` at once. Requests still run one at a time, in the order they
+arrived. Document changes that arrive during a format are applied as they come
+in, and a format request works on the text the document had when the request
+arrived.
+
+A cancelled request is always answered with `RequestCancelled` (`-32800`), never
+with an error an editor would show. A request still waiting its turn never runs.
+A running format stops at its next checkpoint: at the start, after planning,
+after the managed-config preflight, after its tools are installed, before the
+unsaved buffer is written, and before each priority group, the first one
+included. A cancel never interrupts a running tool: killing a formatter that
+rewrites a file in place can leave that file truncated. It does not abort a
+download or install already under way either — the next save needs that tool
+anyway — so the request stops once it is done.
+
+What a cancelled format leaves on disk depends on when the cancel arrived:
+
+| The cancel arrives                                  | The file on disk                                                   |
+| --------------------------------------------------- | ------------------------------------------------------------------ |
+| Before the unsaved buffer is written                | Unchanged; the unsaved text stays in the editor only               |
+| After the buffer is written, before the first group | The unsaved text, unformatted                                      |
+| While a priority group runs                         | Fixed by that group and every group before it; no later group runs |
+
+Each `tool_run` that started still gets its closing event, since the tool ran to
+completion. One `info` notice names the file and, once a tool group has run, how
+many ran and the tools that did not; a cancel before the first group only says
+that no tool ran. `done` closes the request with `status: "fail"`,
+`success: false` and `msg: "cancelled"`. The results of the tools that ran are
+cached as usual.
+
+Stopping the server uses the same checkpoints:
+
+- **`shutdown`** — the running format stops at its next checkpoint, every
+  format request still waiting is answered `RequestCancelled`, and any other
+  request still waiting is handled as usual, so a queued `initialize` still
+  initializes. `shutdown` is answered once nothing runs. Requests after it are
+  answered `InvalidRequest` (`-32600`). `exit` ends the process: status `0`
+  after `shutdown`, `1` without it.
+- **stdin closes, or its framing breaks** (a header without a valid
+  `Content-Length`, for example) — the running format stops at its next
+  checkpoint, waiting requests are dropped without a reply, the execution cache
+  is flushed, and the server exits. A message whose body is not valid JSON is
+  not a framing error: it is answered with a parse error, and the server keeps
+  serving.
+- **`SIGTERM` or an interrupt** — the first one does the same as stdin closing.
+  A second one stops the running tool as well and exits at once, which can leave
+  a file that tool was rewriting incomplete.
+
+On Unix the server ignores `SIGPIPE`, so an editor that goes away in the middle
+of a format cannot kill the server through a closed stdout or stderr.
 
 ### lsp initialization options
 
-The server reads `initializationOptions` once, at `initialize`:
+The server reads `initializationOptions` at `initialize` and keeps them: a
+[configuration reload](#lsp-configuration-reload) resolves them again against
+the new configuration.
 
 ```ts
 interface DatamitsuInitializationOptions {
@@ -1263,23 +1416,31 @@ A bad option never fails `initialize`. A value of the wrong type, a `widenTo`
 of `repo`, a negative or fractional `timeoutMs`, a non-boolean `tools` entry, a
 `tools` entry naming no configured tool, or an unknown key inside `format` is
 ignored with a warning: a rejected `widenTo` or `timeoutMs` falls back to the
-environment or the default, and a rejected `tools` entry has no effect. Unknown
+environment or the default, and a rejected `tools` entry has no effect. A
+`tools` entry naming a tool the configuration does not have yet applies once a
+reload adds that tool; the warnings are logged again with each reload. Unknown
 top-level keys are ignored silently.
 
-The `initialize` result echoes the policy the session runs with, under
-`capabilities.experimental`. `tools` holds the entries the server accepted:
+The `initialize` result echoes the policy the session runs with and the
+repository it serves, under `capabilities.experimental`. `tools` holds the
+entries the server accepted, and `root` is the
+[resolved repository root](#lsp-root), absent when the server found none:
 
 ```json
 {
   "capabilities": {
     "experimental": {
       "datamitsu": {
-        "format": { "widenTo": "unit", "timeoutMs": 15000, "tools": {} }
+        "format": { "widenTo": "unit", "timeoutMs": 15000, "tools": {} },
+        "root": "/work/example"
       }
     }
   }
 }
 ```
+
+The echo is not repeated after a reload; the policy line the reload logs is the
+current one.
 
 In Neovim 0.11 or later, `init_options` is sent as `initializationOptions`:
 
@@ -1294,41 +1455,60 @@ vim.lsp.config("datamitsu", {
 vim.lsp.enable("datamitsu")
 ```
 
+Neovim sends the directory `root_markers` finds as the workspace folder, and the
+server serves that directory's repository, wherever Neovim itself was started.
+When no marker is found, Neovim sends no folder, and the server falls back to
+the directory it was started in.
+
 ### lsp events
 
 Every stderr line is one JSON object carrying `type` and `op_id`, with
 `--verbose` or without. The language server emits:
 
-| `type`                | Meaning                                                                                             |
-| --------------------- | --------------------------------------------------------------------------------------------------- |
-| `log`                 | A human-readable notice in `msg`, with `level` `debug`, `info`, `warn` or `error`                   |
-| `phase`               | `op: "format"`, `status: "start"`: one per format request, opening it; no `phase` event closes it   |
-| `download`, `install` | Tool provisioning progress                                                                          |
-| `tool_run`            | A tool task starting and ending: `tool`, `dir` (relative to the git root), `success`, `duration_ms` |
-| `error`               | A tool task that failed: `tool`, `dir`, `msg`                                                       |
-| `done`                | Closes the request's phase, under its `op_id`, failed requests included: `status` `done` or `fail`  |
+| `type`                | Meaning                                                                                                            |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `log`                 | A human-readable notice in `msg`, with `level` `debug`, `info`, `warn` or `error`                                  |
+| `phase`               | `op: "format"`, `status: "start"`: opens each format request the server starts running; no `phase` event closes it |
+| `download`, `install` | Tool provisioning progress                                                                                         |
+| `tool_run`            | A tool task starting and ending: `tool`, `dir` (relative to the git root), `success`, `duration_ms`                |
+| `error`               | A tool task that failed: `tool`, `dir`, `msg`                                                                      |
+| `done`                | Closes the request's phase, under its `op_id`, failed and cancelled requests included: `status` `done` or `fail`   |
 
 `done` also carries `op: "format"`, `success`, `duration_ms`, `tools`, `runs`,
 `failed` and `skipped`. `tools` counts the distinct tools that ran and `failed`
 the distinct tools with a failed task; `runs` counts the tasks that ran and
-`skipped` the tasks the policy or the watchdog left out. One tool failing in two
+`skipped` the tasks the policy, the watchdog or a cancel left out. One tool failing in two
 projects therefore gives `runs: 2` and `failed: 1`. A counter or `duration_ms`
 that is zero is left out of the line rather than written as `0`: read a missing
 one as zero. A `tool_run` op id is the format request's op id followed by
-`:<tool>:<dir>`, so a consumer can attribute every task to its request.
+`:<tool>:<dir>`, so a consumer can attribute every task to its request. Every
+task that starts also gets its closing `tool_run`, in a cancelled request too. A
+cancelled request's `done` has `status: "fail"`, `success: false` and
+`msg: "cancelled"`: there is no separate status for it.
 
-`log` events carry the session's own notices. At `initialize`: one `info` with
-the effective policy (`format policy: widenTo=unit timeoutMs=15000 tools={}`),
-naming the keys that came from `initializationOptions`, and one `warn` per
-rejected option. Per format request: one `info` listing the tools the policy
-left out and why, when there are any. A `warn` also marks a save the watchdog
-stopped. Once per session, a cache on disk that the session will not write is
-reported too. Written by a different `datamitsu` version — the editor runs
-another binary than the CLI — it is an `info`: the two simply do not share cache
-entries. Written for a different configuration — the config changed, or a run
-used `--tools` — it is a `warn`, and if the config changed after the session
-started, restart the server to pick it up. Formatting works in both cases; it
-just does not warm the cache.
+`log` events carry the session's own notices:
+
+- **At `initialize`:** one `info` with the effective policy
+  (`format policy: widenTo=unit timeoutMs=15000 tools={}`), naming the keys that
+  came from `initializationOptions`; one `warn` per rejected option; one `info`
+  for each other workspace folder in a different repository; and an `error` when
+  there is no repository or the configuration does not load.
+- **Per format request:** one `info` listing the tools the policy left out and
+  why, when there are any. A `warn` also marks a save the watchdog stopped, and
+  an `info` a cancelled one. A document outside the served repository gets one
+  `info`, once per session. With no session, the `error` from `initialize` is
+  repeated, once per distinct cause.
+- **On a configuration change:** `configuration reloaded` at `info`, followed by
+  the policy line, with the option warnings logged again; or one `warn` when the
+  changed configuration fails to load.
+
+Once per session, and once more after each reload, a cache on disk that the
+session will not write is reported too. Written by a different `datamitsu`
+version — the editor runs another binary than the CLI — it is an `info`: the two
+simply do not share cache entries. Written for a different configuration — for
+example by a run with `--tools`, or while a changed configuration fails to load
+in the session — it is a `warn`. Formatting works in both cases; it just does
+not warm the cache.
 
 Log lines from the rest of datamitsu — config loading, tool provisioning — are
 `log` events too, each with its own op id, at its own level: `warn` and `error`
