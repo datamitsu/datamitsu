@@ -586,48 +586,49 @@ func TestUVVersionForHash(t *testing.T) {
 }
 
 func TestBuildUVInstallArgs(t *testing.T) {
+	base := []string{"sync", "--output-format=json", "--no-install-project", "--no-config"}
+	withBase := func(extra ...string) []string {
+		return append(slices.Clone(base), extra...)
+	}
+	noWindow := uvWindow{}
+
 	t.Run("no lockfile: no --locked and no --no-build", func(t *testing.T) {
-		args := buildUVInstallArgs("", nil)
-		want := []string{"sync", "--output-format=json", "--no-install-project"}
-		if !equalStringSlices(args, want) {
+		args := buildUVInstallArgs("", "", noWindow, nil)
+		if want := withBase(); !equalStringSlices(args, want) {
 			t.Errorf("args = %v, want %v", args, want)
 		}
 	})
 
 	t.Run("with lockfile: adds --locked and --no-build", func(t *testing.T) {
-		args := buildUVInstallArgs("version = 1\n", nil)
-		want := []string{"sync", "--output-format=json", "--no-install-project", "--locked", "--no-build"}
-		if !equalStringSlices(args, want) {
+		args := buildUVInstallArgs("version = 1\n", "", noWindow, nil)
+		if want := withBase("--locked", "--no-build"); !equalStringSlices(args, want) {
 			t.Errorf("args = %v, want %v", args, want)
 		}
 	})
 
 	t.Run("lockfile + python version: appends --python", func(t *testing.T) {
-		args := buildUVInstallArgs("version = 1\n", &config.RuntimeConfigUV{PythonVersion: "3.12.1"})
-		want := []string{"sync", "--output-format=json", "--no-install-project", "--locked", "--no-build", "--python", "3.12.1"}
-		if !equalStringSlices(args, want) {
+		args := buildUVInstallArgs("version = 1\n", "", noWindow, &config.RuntimeConfigUV{PythonVersion: "3.12.1"})
+		if want := withBase("--locked", "--no-build", "--python", "3.12.1"); !equalStringSlices(args, want) {
 			t.Errorf("args = %v, want %v", args, want)
 		}
 	})
 
 	t.Run("no lockfile + python version: --python without --no-build", func(t *testing.T) {
-		args := buildUVInstallArgs("", &config.RuntimeConfigUV{PythonVersion: "3.12.1"})
-		want := []string{"sync", "--output-format=json", "--no-install-project", "--python", "3.12.1"}
-		if !equalStringSlices(args, want) {
+		args := buildUVInstallArgs("", "", noWindow, &config.RuntimeConfigUV{PythonVersion: "3.12.1"})
+		if want := withBase("--python", "3.12.1"); !equalStringSlices(args, want) {
 			t.Errorf("args = %v, want %v", args, want)
 		}
 	})
 
 	t.Run("empty python version: no --python flag", func(t *testing.T) {
-		args := buildUVInstallArgs("version = 1\n", &config.RuntimeConfigUV{PythonVersion: ""})
-		want := []string{"sync", "--output-format=json", "--no-install-project", "--locked", "--no-build"}
-		if !equalStringSlices(args, want) {
+		args := buildUVInstallArgs("version = 1\n", "", noWindow, &config.RuntimeConfigUV{PythonVersion: ""})
+		if want := withBase("--locked", "--no-build"); !equalStringSlices(args, want) {
 			t.Errorf("args = %v, want %v", args, want)
 		}
 	})
 
 	t.Run("no lockfile: --no-build must NOT be present", func(t *testing.T) {
-		args := buildUVInstallArgs("", nil)
+		args := buildUVInstallArgs("", "", noWindow, nil)
 		for _, a := range args {
 			if a == "--no-build" {
 				t.Error("--no-build should not be present without a lockfile (would block all sdist builds without security justification)")
@@ -636,10 +637,37 @@ func TestBuildUVInstallArgs(t *testing.T) {
 	})
 
 	t.Run("with lockfile: --no-build must be present", func(t *testing.T) {
-		args := buildUVInstallArgs("version = 1\n", nil)
+		args := buildUVInstallArgs("version = 1\n", "", noWindow, nil)
 		found := slices.Contains(args, "--no-build")
 		if !found {
 			t.Error("--no-build must be present when a lockfile is supplied (supply chain hardening)")
+		}
+	})
+
+	t.Run("span window", func(t *testing.T) {
+		args := buildUVInstallArgs("version = 1\n", "", uvWindow{excludeNewer: "P7D"}, nil)
+		if want := withBase("--locked", "--no-build", "--exclude-newer", "P7D"); !equalStringSlices(args, want) {
+			t.Errorf("args = %v, want %v", args, want)
+		}
+	})
+
+	t.Run("absolute window with package cutoffs", func(t *testing.T) {
+		w := uvWindow{excludeNewer: "2026-09-01T00:00:00Z", packages: []string{"certifi=P1D", "idna=false"}}
+		args := buildUVInstallArgs("version = 1\n", "", w, nil)
+		want := withBase("--locked", "--no-build",
+			"--exclude-newer", "2026-09-01T00:00:00Z",
+			"--exclude-newer-package", "certifi=P1D",
+			"--exclude-newer-package", "idna=false")
+		if !equalStringSlices(args, want) {
+			t.Errorf("args = %v, want %v", args, want)
+		}
+	})
+
+	t.Run("app uv.toml replaces --no-config", func(t *testing.T) {
+		args := buildUVInstallArgs("", "/store/app/uv.toml", uvWindow{excludeNewer: "P7D"}, nil)
+		want := []string{"sync", "--output-format=json", "--no-install-project", "--config-file", "/store/app/uv.toml", "--exclude-newer", "P7D"}
+		if !equalStringSlices(args, want) {
+			t.Errorf("args = %v, want %v", args, want)
 		}
 	})
 }

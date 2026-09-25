@@ -150,7 +150,7 @@ datamitsu devtools pull-node apps/nodeApps.json --update --min-age 43200
 datamitsu devtools pull-github apps/githubApps.json --update --min-age 0
 ```
 
-Set `DATAMITSU_MIN_RELEASE_AGE` (minutes) to change the default for every command. When no release is old enough, `pull-github` keeps an existing app's current tag (with a warning) but hard-errors on a brand-new app; `pull-node`/`pull-uv` skip the package with a warning; `pull-runtimes` hard-errors. See [Supply Chain Security → Minimum Release Age](../guides/supply-chain-security.md#minimum-release-age-version-selection) for the full behavior table and the registries it covers.
+Set `DATAMITSU_MIN_RELEASE_AGE` (minutes) to change the default for every command, including the check `config lockfile` runs on a Go app's resolved modules. When no release is old enough, `pull-github` keeps an existing app's current tag (with a warning) but hard-errors on a brand-new app; `pull-node`/`pull-uv` skip the package with a warning; `pull-runtimes` hard-errors. See [Supply Chain Security → Minimum Release Age](../guides/supply-chain-security.md#minimum-release-age-version-selection) for the full behavior table and the registries it covers.
 
 ### Inspecting the effective runtime config (`datamitsu config runtime`)
 
@@ -262,6 +262,8 @@ This queries PyPI for each configured package, compares versions, and updates th
 ```bash
 datamitsu config lockfile yamllint
 ```
+
+`pull-uv` ages only the package itself. Its dependencies are resolved here, under the 7-day window uv records in the lock: a regenerated lock carries that window, and an older lock without one keeps installing unchanged. See [Release Age of Transitive Dependencies](../guides/supply-chain-security.md#release-age-of-transitive-dependencies).
 
 ### Runtimes: `devtools pull-runtimes`
 

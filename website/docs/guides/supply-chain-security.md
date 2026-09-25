@@ -106,7 +106,7 @@ The error message always points at the `--min-age 0` escape hatch.
 
 ### Overriding the global default
 
-Set `DATAMITSU_MIN_RELEASE_AGE` (in minutes) to change the effective default for all commands without passing `--min-age` each time. `0` disables filtering globally.
+Set `DATAMITSU_MIN_RELEASE_AGE` (in minutes) to change the effective default for all commands without passing `--min-age` each time. It also moves the [Go lock-file check](#release-age-at-lock-generation). `0` disables filtering globally.
 
 ```bash
 # Require 14 days globally
@@ -120,9 +120,20 @@ datamitsu config runtime | jq .minimumReleaseAgeMinutes                         
 DATAMITSU_MIN_RELEASE_AGE=20160 datamitsu config runtime | jq .minimumReleaseAgeMinutes   # -> 20160
 ```
 
-:::note Distinct from the pnpm `minimumReleaseAge` setting
-This version-selection filter — applied when _you_ pin versions with `pull-*` — is separate from the `minimumReleaseAge` key in `pnpm-workspace.yaml`, which pnpm applies when it resolves a Bun or Node app's _transitive_ dependencies at install time. Both default to 7 days; see [pnpm (Bun and Node Apps)](#pnpm-bun-and-node-apps) for the install-time setting.
+:::note Distinct from the install-time filters
+This version-selection filter — applied when _you_ pin versions with `pull-*` — is separate from the windows the package managers apply to an app's _transitive_ dependencies when they resolve them: the `minimumReleaseAge` key in `pnpm-workspace.yaml`, which pnpm applies to Bun and Node apps, and `exclude-newer`, which uv applies to UV apps. Both are 7 days, and `DATAMITSU_MIN_RELEASE_AGE` does not change them: what they resolve is written into a lock file, and a lock file has to come out the same whichever machine generates it. Change them per app instead; see [pnpm (Bun and Node Apps)](#pnpm-bun-and-node-apps) and [Release Age of Transitive Dependencies](#release-age-of-transitive-dependencies).
 :::
+
+### Transitive dependencies
+
+`pull-*` ages only the version an app names. Everything that version depends on is resolved later, when `datamitsu config lockfile` generates the app's lock file, and each runtime covers it differently:
+
+| App         | Transitive versions picked by | How the minimum release age reaches them                                                                                                                                                                       |
+| ----------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bun, Node   | pnpm                          | `minimumReleaseAge: 10080` in the app's `pnpm-workspace.yaml` filters the whole tree, top-level package included. See [pnpm (Bun and Node Apps)](#pnpm-bun-and-node-apps).                                     |
+| UV          | uv                            | `--exclude-newer P7D` filters the whole tree; the lock records the window and every install reuses it. See [Release Age of Transitive Dependencies](#release-age-of-transitive-dependencies).                  |
+| Go          | minimal version selection     | Go has no such setting. `config lockfile` checks every resolved module against the effective minimum release age. See [Release Age at Lock Generation](#release-age-at-lock-generation).                       |
+| JVM, binary | nothing — one file            | The artifact is a single file pinned by SHA-256, with no dependency tree. The age applies where its version is chosen: `pull-github` for binary apps. JAR versions are pinned by hand and are not age-checked. |
 
 ## Bun Apps
 
@@ -210,6 +221,12 @@ files: {
 }
 ```
 
+### Your Environment Cannot Override the Workspace
+
+pnpm lets a `pnpm_config_<setting>` environment variable, in lower or upper case, win over `pnpm-workspace.yaml`. Exported for your own work, `pnpm_config_minimum_release_age=0` would drop the release-age window from every lock file you generate, and `pnpm_config_dangerously_allow_all_builds=true` would run dependency scripts at every install.
+
+datamitsu therefore removes two groups of variables from the environment pnpm inherits: the one for every setting the merged `pnpm-workspace.yaml` holds, and the whole `pnpm_config_minimum_release_age*` family, whose exclude list loosens the window without touching `minimumReleaseAge` itself. Every other `pnpm_config_*` variable passes through — pnpm 12 reads its registry from `pnpm_config_registry`, not `npm_config_registry`. To change a setting for one app, set it in `App.files["pnpm-workspace.yaml"]`.
+
 ### Reusing Defaults in Project Repos via `sharedStorage`
 
 For users who want to write a secure `pnpm-workspace.yaml` into a project repository (not into a datamitsu-managed Bun or Node app environment), the default `config.js` publishes the recommended defaults via `sharedStorage["pnpm-workspace-defaults"]`. Your config can read, extend, and write them.
@@ -246,7 +263,7 @@ Node apps require a `lockFile` field. datamitsu runs `pnpm install --frozen-lock
 
 ## UV (Python Apps)
 
-UV apps use [uv](https://github.com/astral-sh/uv) to install Python packages into isolated environments. Two install-time defenses are layered:
+UV apps use [uv](https://github.com/astral-sh/uv) to install Python packages into isolated environments. Several defenses are layered:
 
 ### `--locked` Enforces the Lock File
 
@@ -277,6 +294,44 @@ const mapOfApps: BinManager.MapOfApps = {
   },
 };
 ```
+
+### Release Age of Transitive Dependencies
+
+`devtools pull-uv` ages only the package an app names. Everything that package depends on is resolved when `datamitsu config lockfile` generates the lock, and without a window uv takes the newest release it finds, including one uploaded minutes earlier. datamitsu passes one: `--exclude-newer P7D`, the built-in 7-day minimum release age. uv records it in the lock:
+
+```toml
+[options]
+exclude-newer = "0001-01-01T00:00:00Z" # This has no effect and is included for backwards compatibility when using relative exclude-newer values.
+exclude-newer-span = "P7D"
+```
+
+`uv sync --locked` accepts a lock only when it is given the same window again, in the same unit: `P7D` and `10080 minutes` count as different. So an install never passes the current default. It reads the window back from the lock's `[options]` and passes exactly that:
+
+- a lock generated before datamitsu passed a window has no `[options]` and keeps installing without one;
+- a lock generated since carries its window;
+- changing the built-in default never invalidates a lock that is already published.
+
+Configs that ship uv lock files adopt the window by regenerating them with `datamitsu config lockfile <appName>`. The window is the built-in default rather than `DATAMITSU_MIN_RELEASE_AGE`, because the lock records it and must come out the same whichever machine generates it.
+
+A version younger than the window cannot resolve. `pull-uv` never selects one, but a hand-pinned version can; the error then names the minimum release age as the reason.
+
+#### Per-App Window via `uv.toml`
+
+An app that ships a `uv.toml`, through `App.files` or an archive, gets it as its uv configuration, for generating the lock and for installing it alike. `exclude-newer` there replaces the default window for that app. `exclude-newer-package` sets a cutoff for one package, which is the way out when a fix exists only in a release younger than the window: a timestamp, a duration, or `false` to exempt the package. The lock records both, and an install passes them back the same way.
+
+```typescript
+files: {
+  "uv.toml": TOML.stringify({
+    "exclude-newer-package": { "example-package": false },
+  }),
+}
+```
+
+Regenerate the lock file after changing it.
+
+#### Your Own uv Settings Stay Out
+
+uv runs with `--no-config`, or with `--config-file` pointing at the app's own `uv.toml`, so a user- or system-level `uv.toml` cannot change what a managed install resolves or checks the lock against. `UV_CONFIG_FILE`, `UV_EXCLUDE_NEWER` and `UV_EXCLUDE_NEWER_PACKAGE` are removed from the environment uv inherits; exported for your own work, any of them would otherwise make `uv sync --locked` reject every managed lock. Settings for reaching the network, such as `UV_NATIVE_TLS`, `SSL_CERT_FILE` or the proxy variables, still pass through, so set them in the environment rather than in a `uv.toml`.
 
 ### Hash Verification
 
@@ -309,6 +364,22 @@ const mapOfApps: BinManager.MapOfApps = {
 ### Reproducible Builds
 
 The build runs `go build -trimpath -mod=readonly`. `-trimpath` strips local filesystem paths so the output is reproducible, and `-mod=readonly` forbids any `go.mod`/`go.sum` mutation. Regenerate the lock file after a version bump via `datamitsu config lockfile <appName>`.
+
+### Release Age at Lock Generation
+
+Go has no setting that makes resolution skip recent releases, but minimal version selection does most of the work: `go get` only takes versions that some `go.mod` in the graph names, so a dependency is normally older than the module that requires it. What remains is the version you pin — there is no `pull-*` command for Go apps — and an import that no `go.mod` requires, which `go get` resolves to the newest release.
+
+`datamitsu config lockfile` therefore checks the result. After `go get`, it lists every module in the build (`go list -m -json all`) and fails if any is younger than the effective minimum release age, or reports no time at all:
+
+```text
+modules resolved for "tool" are younger than the minimum release age of 10080 minutes:
+  example.com/tool v1.4.0 (2026-09-20T10:00:00Z)
+pin an older version, or set DATAMITSU_MIN_RELEASE_AGE=0 to skip this check
+```
+
+Unlike the pnpm and uv windows, this check follows `DATAMITSU_MIN_RELEASE_AGE`, like the `pull-*` commands do. It only accepts or rejects a result, and nothing records the value, so the lock file comes out the same whatever it is set to.
+
+The times come from the Go module proxy and are commit times, not publish times. The check stops an accidentally fresh pin. It cannot stop an attacker who backdates a commit.
 
 ### Securing Your Own Repository's Go Code
 
@@ -345,6 +416,16 @@ The 7-day default catches typosquats and rushed compromised releases. For higher
 files: {
   "pnpm-workspace.yaml": YAML.stringify({
     minimumReleaseAge: 43200, // 30 days
+  }),
+}
+```
+
+For a UV app, set `exclude-newer` in the app's `uv.toml`, then regenerate its lock file:
+
+```typescript
+files: {
+  "uv.toml": TOML.stringify({
+    "exclude-newer": "30 days",
   }),
 }
 ```

@@ -6,12 +6,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
 	"runtime"
+	"strings"
+	"time"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
@@ -332,7 +335,11 @@ func removeStaleGoModFiles(workDir string) error {
 // itself cannot be produced by a normal reinstall. The config lockfile command
 // calls this to resolve transitive dependencies and write the checksums, then
 // reads the resulting files back. The files are left in workDir for the caller.
-func (rm *RuntimeManager) GenerateGoLockFiles(ctx context.Context, appName string, appConfig *binmanager.AppConfigGo, workDir string) error {
+//
+// Go has no release-age setting to resolve with, so the resolved modules are
+// checked afterwards against minAgeMinutes (0 skips the check). Unlike uv's
+// window, nothing records the value, so it can follow the effective setting.
+func (rm *RuntimeManager) GenerateGoLockFiles(ctx context.Context, appName string, appConfig *binmanager.AppConfigGo, workDir string, minAgeMinutes int) error {
 	if appConfig.PackageName == "" {
 		return fmt.Errorf("app %q has no packageName; cannot generate lock file", appName)
 	}
@@ -367,11 +374,11 @@ func (rm *RuntimeManager) GenerateGoLockFiles(ctx context.Context, appName strin
 	}
 	fullEnv := buildEnvWithOverrides(os.Environ(), envVars)
 
-	runGo := func(args ...string) error {
+	runGo := func(stdout io.Writer, args ...string) error {
 		cmd := exec.CommandContext(ctx, goPath, args...) //nolint:gosec // G204: goPath comes from the trusted managed runtime store and args are built from validated config
 		cmd.Dir = workDir
 		cmd.Env = fullEnv
-		cmd.Stdout = os.Stderr
+		cmd.Stdout = stdout
 		cmd.Stderr = os.Stderr
 		return cmd.Run()
 	}
@@ -383,15 +390,64 @@ func (rm *RuntimeManager) GenerateGoLockFiles(ctx context.Context, appName strin
 		zap.String("go_path", goPath),
 	)
 
-	if err := runGo("mod", "init", "datamitsu-"+appName); err != nil {
+	if err := runGo(os.Stderr, "mod", "init", "datamitsu-"+appName); err != nil {
 		return fmt.Errorf("failed to init go module for %q: %w", appName, err)
 	}
 
-	if err := runGo("get", appConfig.PackageName+"@"+appConfig.Version); err != nil {
+	if err := runGo(os.Stderr, "get", appConfig.PackageName+"@"+appConfig.Version); err != nil {
 		return fmt.Errorf("failed to resolve %s@%s for %q: %w", appConfig.PackageName, appConfig.Version, appName, err)
 	}
 
-	return nil
+	if minAgeMinutes <= 0 {
+		return nil
+	}
+	var modules bytes.Buffer
+	if err := runGo(&modules, "list", "-m", "-json", "all"); err != nil {
+		return fmt.Errorf("failed to list the modules resolved for %q: %w", appName, err)
+	}
+	return checkGoModuleAge(appName, &modules, time.Now(), minAgeMinutes)
+}
+
+type goListModule struct {
+	Path    string     `json:"Path"`
+	Version string     `json:"Version"`
+	Time    *time.Time `json:"Time"`
+	Main    bool       `json:"Main"`
+}
+
+// checkGoModuleAge fails when a module in `go list -m -json all` output is
+// younger than minAgeMinutes. Minimal version selection only takes versions an
+// upstream go.mod names, so a young module normally means a young top-level
+// version; the exception is an import no go.mod requires, which `go get`
+// resolves to the newest release. A module without a time cannot be shown to be
+// old enough and fails too.
+func checkGoModuleAge(appName string, list io.Reader, now time.Time, minAgeMinutes int) error {
+	cutoff := now.Add(-time.Duration(minAgeMinutes) * time.Minute)
+	var young []string
+	dec := json.NewDecoder(list)
+	for {
+		var m goListModule
+		if err := dec.Decode(&m); errors.Is(err, io.EOF) {
+			break
+		} else if err != nil {
+			return fmt.Errorf("failed to parse the modules resolved for %q: %w", appName, err)
+		}
+		if m.Main {
+			continue
+		}
+		switch {
+		case m.Time == nil:
+			young = append(young, fmt.Sprintf("%s %s (no release time)", m.Path, m.Version))
+		case m.Time.After(cutoff):
+			young = append(young, fmt.Sprintf("%s %s (%s)", m.Path, m.Version, m.Time.UTC().Format(time.RFC3339)))
+		}
+	}
+	if len(young) == 0 {
+		return nil
+	}
+	return fmt.Errorf("modules resolved for %q are younger than the minimum release age of %d minutes:\n  %s\n"+
+		"pin an older version, or set DATAMITSU_MIN_RELEASE_AGE=0 to skip this check",
+		appName, minAgeMinutes, strings.Join(young, "\n  "))
 }
 
 // GetGoCommandInfo returns command info for running a Go app. The built binary
