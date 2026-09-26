@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -178,10 +179,15 @@ func (p *Project) Markers() []string {
 	return tools
 }
 
-// RequireShell skips the test when no POSIX sh is on PATH (Windows), naming
-// the property the skip leaves unverified.
+// RequireShell skips the test on Windows, and wherever no POSIX sh is on PATH,
+// naming the property the skip leaves unverified. Windows is skipped even with
+// an sh installed: the scripts and the expectations around them assume POSIX
+// paths.
 func RequireShell(tb testing.TB, unverified string) {
 	tb.Helper()
+	if runtime.GOOS == "windows" {
+		tb.Skipf("clitest: shell tools are POSIX-only; skipping on Windows (leaves unverified: %s)", unverified)
+	}
 	if _, err := exec.LookPath("sh"); err != nil {
 		tb.Skipf("clitest: no sh on PATH; skipping (leaves unverified: %s)", unverified)
 	}

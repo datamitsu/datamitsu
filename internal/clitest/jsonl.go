@@ -87,17 +87,22 @@ func MustParseJSONL(tb testing.TB, stderr string) []Event {
 //     orphaned, which must have at least one start left without a terminal (a
 //     task cancelled after it started);
 //   - an operation's phase start precedes every tool_run of that operation;
-//   - an operation's done reports as runs the number of terminal tool_run
-//     events of that operation.
+//   - every operation that started ends with exactly one done, which follows
+//     all of the operation's tool_run events and reports as runs the number
+//     of its terminal tool_run events.
 //
 // A tool_run belongs to the operation whose phase op_id prefixes its own.
 func AssertChains(tb testing.TB, events []Event, orphaned ...string) {
 	tb.Helper()
 
 	phaseAt := map[string]int{}
+	doneAt := map[string][]int{}
 	for i, e := range events {
-		if e.Type == "phase" && e.Status == "start" {
+		switch {
+		case e.Type == "phase" && e.Status == "start":
 			phaseAt[e.OpID] = i
+		case e.Type == "done":
+			doneAt[e.OpID] = append(doneAt[e.OpID], i)
 		}
 	}
 	operationOf := func(opID string) (string, bool) {
@@ -120,10 +125,13 @@ func AssertChains(tb testing.TB, events []Event, orphaned ...string) {
 			continue
 		}
 		run, ok := operationOf(e.OpID)
-		if !ok {
+		switch done := doneAt[run]; {
+		case !ok:
 			tb.Errorf("clitest: tool_run %q belongs to no phase", e.OpID)
-		} else if phaseAt[run] > i {
+		case phaseAt[run] > i:
 			tb.Errorf("clitest: tool_run %q precedes the phase start of %q", e.OpID, run)
+		case len(done) > 0 && done[0] < i:
+			tb.Errorf("clitest: tool_run %q follows the done of %q", e.OpID, run)
 		}
 		c := chains[e.OpID]
 		if c == nil {
@@ -164,6 +172,11 @@ func AssertChains(tb testing.TB, events []Event, orphaned ...string) {
 		}
 	}
 
+	for run := range phaseAt {
+		if n := len(doneAt[run]); n != 1 {
+			tb.Errorf("clitest: operation %q ends with %d done event(s), want 1", run, n)
+		}
+	}
 	for _, e := range events {
 		if e.Type != "done" {
 			continue

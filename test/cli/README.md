@@ -83,15 +83,16 @@ stderr of one run.
   `.markers/<tool>`, so a test asserts whether a process ran with
   `Project.Marker` instead of reading logs. The marker directory ignores its
   own content, so markers never enter a later run's file set or cache keys.
-  Every scenario skips when no `sh` is on `PATH` (Windows).
-- **A scenario that records a known defect says so.** Its comment names the
-  plan of `docs/plans/2026-09-26-unified-results.md` that changes the
-  behaviour; that plan flips the assertion and regenerates the golden in the
-  same change.
+  Every scenario skips on Windows and wherever no `sh` is on `PATH`.
+- **A scenario that a later plan changes says so.** Its comment names the plan
+  of `docs/plans/2026-09-26-unified-results.md` that changes the behaviour;
+  that plan changes the assertion, or adds a twin beside it (a
+  `--fail-fast=false` run, say), and regenerates the golden in the same change.
 - **Event streams are asserted causally.** `clitest.AssertChains` checks that
   every `tool_run` start has a terminal event (except for the tools a scenario
   names as orphaned), that an operation's `phase` precedes its `tool_run`
-  events, and that `done.runs` counts the terminal `tool_run` events. Parallel
+  events, and that each operation ends with exactly one `done`, after all its
+  `tool_run` events, whose `runs` counts the terminal ones. Parallel
   scenarios never assert line order: `NormalizeJSONL` sets `ts` to `0` and a
   present `duration_ms` to `1`, and the golden's lines are sorted.
 - **What the goldens leave out.** Progress lines (`→ …`) are dropped: they are

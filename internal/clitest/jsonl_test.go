@@ -124,6 +124,9 @@ func TestAssertChains(t *testing.T) {
 		{"tool_run before phase", []string{aStart, phase, aDone, doneOne}, nil, "precedes the phase start"},
 		{"no phase", []string{aStart, aDone}, nil, "belongs to no phase"},
 		{"runs mismatch", []string{phase, aStart, aDone, doneTwo}, nil, "reports runs=2"},
+		{"done before tool_run", []string{phase, doneOne, aStart, aDone}, nil, "follows the done"},
+		{"missing done", []string{phase, aStart, aDone}, nil, "ends with 0 done event(s)"},
+		{"two done events", []string{phase, aStart, aDone, doneOne, doneOne}, nil, "ends with 2 done event(s)"},
 		{"done without phase", []string{doneOne}, nil, "has no phase start"},
 		{"progress status", []string{phase, `{"type":"tool_run","op_id":"run-1:a:","status":"progress","tool":"a"}`}, nil, `status "progress"`},
 	}

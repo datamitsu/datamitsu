@@ -2,8 +2,8 @@ package clitest
 
 import (
 	"encoding/json"
+	"path/filepath"
 	"reflect"
-	"strings"
 	"testing"
 )
 
@@ -108,8 +108,8 @@ func TestShellToolDeclaration(t *testing.T) {
 func TestShellToolRecordsRuns(t *testing.T) {
 	RequireShell(t, "the marker convention of ShellTool")
 	p := NewProject(t)
-	if dir := MarkerDir(p); !strings.HasSuffix(dir, "/"+MarkerDirName) {
-		t.Errorf("MarkerDir = %q, want it under the project as %s", dir, MarkerDirName)
+	if dir, want := MarkerDir(p), filepath.Join(p.Dir, MarkerDirName); dir != want {
+		t.Errorf("MarkerDir = %q, want %q", dir, want)
 	}
 	p.WriteFile("fixture.marker", "")
 	p.WriteFile("a.txt", "a\n")
@@ -126,7 +126,7 @@ func TestShellToolRecordsRuns(t *testing.T) {
 	if res.ExitCode != 0 {
 		t.Fatalf("lint exit = %d\nstdout:\n%s\nstderr:\n%s", res.ExitCode, res.Stdout, res.Stderr)
 	}
-	if ran, got := p.Marker("alpha"); !ran || got != "alpha "+p.Dir+"/a.txt\n" {
+	if ran, got := p.Marker("alpha"); !ran || got != "alpha "+filepath.Join(p.Dir, "a.txt")+"\n" {
 		t.Errorf("Marker(alpha) = %v, %q", ran, got)
 	}
 	if ran, _ := p.Marker("beta"); ran {

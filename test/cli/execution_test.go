@@ -16,10 +16,10 @@ import (
 // This file freezes what check, fix and lint do when tools actually run: where
 // fail-fast stops a run, what a failure prints, the JSON-L stream, the cache
 // footer and the exit codes. The tools are sh scripts (clitest.ShellTool) that
-// record every run in the project's marker directory. Where a scenario records a
-// known defect, its comment names the plan of docs/plans/2026-09-26-unified-results.md
-// that changes the behaviour; that plan flips the assertion and regenerates the
-// golden in the same change.
+// record every run in the project's marker directory. Where later plans of
+// docs/plans/2026-09-26-unified-results.md change a scenario, its comment names
+// them; each such plan changes the assertion, or adds a twin beside it, and
+// regenerates the golden in the same change.
 
 // settle keeps every tool process above one millisecond. A faster one reports a
 // duration of 0, which omitempty drops from its JSON-L event, so whether the
@@ -62,7 +62,6 @@ func newExecProject(t *testing.T, files map[string]string, spec clitest.ShellCon
 	}
 }
 
-// run invokes the binary from dir, relative to the repository root.
 func (e *execProject) run(dir string, env []string, args ...string) clitest.Result {
 	e.t.Helper()
 	full := append([]string{"--no-auto-config", "--config", e.cfg}, args...)
@@ -97,15 +96,14 @@ func (e *execProject) normalize(s string, extra ...func(string) string) string {
 	return s
 }
 
-// golden freezes a console run: its exit code, stdout and stderr.
 func (e *execProject) golden(name string, res clitest.Result, extra ...func(string) string) {
 	e.t.Helper()
 	clitest.AssertGolden(e.t, "execution_"+name, fmt.Sprintf("exit code: %d\n===STDOUT===\n%s\n===STDERR===\n%s",
 		res.ExitCode, e.normalize(res.Stdout, extra...), e.normalize(res.Stderr, extra...)))
 }
 
-// goldenJSONL freezes a JSON-L run. Parallel events arrive in no fixed order,
-// so the lines are sorted; the causal order is asserted by AssertChains.
+// goldenJSONL sorts the lines: parallel events arrive in no fixed order, and
+// their causal order is asserted by AssertChains instead.
 func (e *execProject) goldenJSONL(name string, res clitest.Result, extra ...func(string) string) {
 	e.t.Helper()
 	stream := clitest.NormalizeJSONL(res.Stderr)
@@ -209,7 +207,8 @@ func TestExecutionTwoToolsPass(t *testing.T) {
 }
 
 // TestExecutionFailFastBetweenPriorities is S2 (and S12 on it): a failure at
-// priority 10 stops the run before priority 20. Plan 2 runs priority 20 anyway.
+// priority 10 stops the run before priority 20. Plan 2 keeps this default,
+// reports beta as not started, and adds a --fail-fast=false twin that runs it.
 func TestExecutionFailFastBetweenPriorities(t *testing.T) {
 	files := map[string]string{"fixture.marker": ""}
 	tools := []string{
@@ -250,7 +249,8 @@ func TestExecutionFailFastBetweenPriorities(t *testing.T) {
 
 // TestExecutionFailFastBetweenSubGroups is S3: repository-scoped tasks always
 // overlap, so two of them at one priority run one after the other, and a failure
-// of the first stops the second. Plan 2 runs the second anyway.
+// of the first stops the second. Plan 2 keeps this default and adds a
+// --fail-fast=false twin that runs the second.
 func TestExecutionFailFastBetweenSubGroups(t *testing.T) {
 	e := newExecProject(t, map[string]string{"fixture.marker": ""}, fixtureSpec,
 		clitest.ShellTool("alpha", failScript, clitest.ToolOpSpec{}),
@@ -301,8 +301,9 @@ const killWindow = 3500 * time.Millisecond
 // TestExecutionFailFastKillsSiblings is S4 (and S12 on it): a failing task
 // cancels its running parallel sibling. The sibling is killed and vanishes
 // from the results, and its tool_run start is left without a terminal event.
-// Plan 2 reports the cancelled sibling as skipped; plan 3 gives each task its
-// own invocation ID.
+// Plan 2 keeps this default but prints the sibling as cancelled, with a
+// terminal event, and adds a --fail-fast=false twin in which it finishes; plan 3
+// gives each task its own invocation ID.
 func TestExecutionFailFastKillsSiblings(t *testing.T) {
 	tools := []string{
 		clitest.ShellTool("alpha", alphaFailsOnceBetaStarted,
@@ -356,8 +357,9 @@ func maskPkgDir(s string) string { return pkgDirRE.ReplaceAllString(s, "pkg/<FIR
 
 // TestExecutionFailFastBeforeWorker is S4b: with a single worker, the sibling
 // still waiting for the slot when the first task fails is cancelled before it
-// starts and leaves no trace — no process, no result, no event. Plan 2 reports
-// it as skipped.
+// starts and leaves no trace — no process, no result, no event. Plan 2 keeps
+// this default but prints the sibling as not started, and adds a
+// --fail-fast=false twin in which it runs.
 func TestExecutionFailFastBeforeWorker(t *testing.T) {
 	files, spec := packagesFiles, packagesSpec
 	tool := clitest.ShellTool("claim", claimFirst, clitest.ToolOpSpec{Scope: "per-project"})
@@ -416,7 +418,8 @@ var perFileLoopFiles = map[string]string{
 }
 
 // TestExecutionFailFastBetweenFiles is S5 (and S12 on it): the per-file loop of
-// one task stops at the first failing file. Plan 2 lets the loop finish.
+// one task stops at the first failing file. Plan 2 keeps this default and adds
+// a --fail-fast=false twin that runs all three files.
 func TestExecutionFailFastBetweenFiles(t *testing.T) {
 	t.Run("console", func(t *testing.T) {
 		e := newExecProject(t, perFileLoopFiles, fixtureSpec, perFileLoopTool)
@@ -448,7 +451,9 @@ func TestExecutionFailFastBetweenFiles(t *testing.T) {
 }
 
 // TestExecutionCheckStopsAfterFix is S6: when fix fails, check never starts
-// lint — no lint block, no lint phase event. Plan 2 runs lint anyway.
+// lint — no lint block, no lint phase event, and no closing line for the
+// whole check. Plan 2 adds that closing line and a --fail-fast=false twin that
+// runs lint after the failed fix.
 func TestExecutionCheckStopsAfterFix(t *testing.T) {
 	files := map[string]string{"fixture.marker": ""}
 	tools := []string{
@@ -517,6 +522,9 @@ func TestExecutionPerFileCache(t *testing.T) {
 
 	events := e.run("", nil, jsonl("lint")...)
 	e.wantExit(events, 0)
+	if _, again := e.p.Marker("alpha"); again != recorded {
+		t.Errorf("the warm JSON-L run ran the tool again:\n%s", again)
+	}
 	clitest.AssertChains(t, clitest.MustParseJSONL(t, events.Stderr))
 	e.goldenJSONL("s7_jsonl_cache_warm", events, dropDurations)
 }
