@@ -26,7 +26,7 @@ func TestDetectBinaryCandidates_ArchiveRankedBeforeRawFallback(t *testing.T) {
 		asset("checksums.txt"),
 	}
 
-	candidates, err := DetectBinaryCandidates(assets, syslist.OsTypeLinux, syslist.ArchTypeAmd64, "glibc")
+	candidates, err := DetectBinaryCandidates("", assets, syslist.OsTypeLinux, syslist.ArchTypeAmd64, "glibc")
 	if err != nil {
 		t.Fatalf("DetectBinaryCandidates error = %v", err)
 	}
@@ -58,7 +58,7 @@ func TestDetectBinaryCandidates_ArchiveRankedBeforeRawFallback(t *testing.T) {
 	}
 
 	// DetectBinary must agree with the top-ranked candidate.
-	best, err := DetectBinary(assets, syslist.OsTypeLinux, syslist.ArchTypeAmd64, "glibc")
+	best, err := DetectBinary("", assets, syslist.OsTypeLinux, syslist.ArchTypeAmd64, "glibc")
 	if err != nil {
 		t.Fatalf("DetectBinary error = %v", err)
 	}
@@ -79,7 +79,7 @@ func TestDetectBinaryCandidates_Errors(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := DetectBinaryCandidates(tt.assets, syslist.OsTypeLinux, syslist.ArchTypeArm64, "glibc")
+			_, err := DetectBinaryCandidates("", tt.assets, syslist.OsTypeLinux, syslist.ArchTypeArm64, "glibc")
 			if err == nil {
 				t.Fatalf("expected error containing %q, got nil", tt.wantSub)
 			}
@@ -119,7 +119,7 @@ func TestDetectBinary_AlpineOnlyNamesLinux(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(string(tt.os)+"/"+string(tt.arch)+"/"+tt.libc, func(t *testing.T) {
-			got, err := DetectBinary(assets, tt.os, tt.arch, tt.libc)
+			got, err := DetectBinary("", assets, tt.os, tt.arch, tt.libc)
 			if err != nil {
 				t.Fatalf("DetectBinary error = %v", err)
 			}
@@ -129,7 +129,7 @@ func TestDetectBinary_AlpineOnlyNamesLinux(t *testing.T) {
 		})
 	}
 
-	candidates, err := DetectBinaryCandidates(assets, syslist.OsTypeDarwin, syslist.ArchTypeAmd64, "unknown")
+	candidates, err := DetectBinaryCandidates("", assets, syslist.OsTypeDarwin, syslist.ArchTypeAmd64, "unknown")
 	if err != nil {
 		t.Fatalf("DetectBinaryCandidates error = %v", err)
 	}
@@ -147,4 +147,127 @@ func indexOf(names []string, target string) int {
 		}
 	}
 	return -1
+}
+
+// harperAssets is Automattic/harper v2.11.0 as published: the CLI, the language
+// server, the desktop app with its installer and disk image, and editor plugins.
+var harperAssets = []string{
+	"harper-alpine-arm64-2.11.0.vsix",
+	"harper-alpine-x64-2.11.0.vsix",
+	"harper-chrome-plugin.zip",
+	"harper-cli-aarch64-apple-darwin.tar.gz",
+	"harper-cli-aarch64-unknown-linux-gnu.tar.gz",
+	"harper-cli-aarch64-unknown-linux-musl.tar.gz",
+	"harper-cli-x86_64-apple-darwin.tar.gz",
+	"harper-cli-x86_64-pc-windows-msvc.zip",
+	"harper-cli-x86_64-unknown-linux-gnu.tar.gz",
+	"harper-cli-x86_64-unknown-linux-musl.tar.gz",
+	"harper-darwin-arm64-2.11.0.vsix",
+	"harper-darwin-x64-2.11.0.vsix",
+	"harper-firefox-plugin.zip",
+	"harper-linux-arm64-2.11.0.vsix",
+	"harper-linux-armhf-2.11.0.vsix",
+	"harper-linux-x64-2.11.0.vsix",
+	"harper-ls-aarch64-apple-darwin.tar.gz",
+	"harper-ls-aarch64-unknown-linux-gnu.tar.gz",
+	"harper-ls-aarch64-unknown-linux-musl.tar.gz",
+	"harper-ls-x86_64-apple-darwin.tar.gz",
+	"harper-ls-x86_64-pc-windows-msvc.zip",
+	"harper-ls-x86_64-unknown-linux-gnu.tar.gz",
+	"harper-ls-x86_64-unknown-linux-musl.tar.gz",
+	"harper-win32-arm64-2.11.0.vsix",
+	"harper-win32-x64-2.11.0.vsix",
+	"Harper.app.tar.gz",
+	"Harper.app.tar.gz.sig",
+	"harper.zip",
+	"Harper_2.11.0_universal.dmg",
+	"Harper_2.11.0_x64-setup.exe",
+}
+
+// One release, three programs: the app's own name decides between them, and
+// the desktop app's installer is never a candidate at all.
+func TestDetectBinaryCandidates_HarperPrefersTheNamedTool(t *testing.T) {
+	assets := make([]github.Asset, 0, len(harperAssets))
+	for _, name := range harperAssets {
+		assets = append(assets, makeAsset(name))
+	}
+
+	tests := []struct {
+		app  string
+		os   syslist.OsType
+		arch syslist.ArchType
+		libc string
+		want string
+	}{
+		{"harper-cli", syslist.OsTypeWindows, syslist.ArchTypeAmd64, "", "harper-cli-x86_64-pc-windows-msvc.zip"},
+		{"harper-ls", syslist.OsTypeWindows, syslist.ArchTypeAmd64, "", "harper-ls-x86_64-pc-windows-msvc.zip"},
+		{"harper-cli", syslist.OsTypeDarwin, syslist.ArchTypeArm64, "", "harper-cli-aarch64-apple-darwin.tar.gz"},
+		{"harper-cli", syslist.OsTypeDarwin, syslist.ArchTypeAmd64, "", "harper-cli-x86_64-apple-darwin.tar.gz"},
+		{"harper-cli", syslist.OsTypeLinux, syslist.ArchTypeAmd64, "musl", "harper-cli-x86_64-unknown-linux-musl.tar.gz"},
+		{"harper-cli", syslist.OsTypeLinux, syslist.ArchTypeArm64, "glibc", "harper-cli-aarch64-unknown-linux-gnu.tar.gz"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.app+" "+string(tt.os)+"/"+string(tt.arch)+"/"+tt.libc, func(t *testing.T) {
+			candidates, err := DetectBinaryCandidates(tt.app, assets, tt.os, tt.arch, tt.libc)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if candidates[0].Name != tt.want {
+				t.Errorf("first candidate = %q, want %q", candidates[0].Name, tt.want)
+			}
+			for _, c := range candidates {
+				if IsNonExecutableFile(c.Name) || IsAttestationFile(c.Name) || IsInstallerFile(tt.app, c.Name) {
+					t.Errorf("%q is a candidate", c.Name)
+				}
+			}
+		})
+	}
+}
+
+// The name preference outranks format: a sibling tool's raw Windows executable
+// does not beat the app's own archive.
+func TestDetectBinaryCandidates_NameOutranksFormat(t *testing.T) {
+	assets := []github.Asset{
+		makeAsset("harper-ls-x86_64-pc-windows-msvc.exe"),
+		makeAsset("harper-cli-x86_64-pc-windows-msvc.zip"),
+	}
+	candidates, err := DetectBinaryCandidates("harper-cli", assets, syslist.OsTypeWindows, syslist.ArchTypeAmd64, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if candidates[0].Name != "harper-cli-x86_64-pc-windows-msvc.zip" {
+		t.Errorf("first candidate = %q, want the app's own archive", candidates[0].Name)
+	}
+	// Without an app name the executable keeps its priority.
+	candidates, err = DetectBinaryCandidates("", assets, syslist.OsTypeWindows, syslist.ArchTypeAmd64, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if candidates[0].Name != "harper-ls-x86_64-pc-windows-msvc.exe" {
+		t.Errorf("first candidate without an app name = %q, want the executable", candidates[0].Name)
+	}
+}
+
+// The right libc outranks the app's name: a build that names musl is the
+// musl build even when only the glibc one carries the app's name, and a
+// glibc binary recorded for musl fails at run time.
+func TestDetectBinaryCandidates_LibcOutranksName(t *testing.T) {
+	assets := []github.Asset{
+		makeAsset("tool-cli-linux-amd64.tar.gz"),
+		makeAsset("tool-alpine-amd64.tar.gz"),
+	}
+	candidates, err := DetectBinaryCandidates("tool-cli", assets, syslist.OsTypeLinux, syslist.ArchTypeAmd64, "musl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if candidates[0].Name != "tool-alpine-amd64.tar.gz" {
+		t.Errorf("musl candidate = %q, want the alpine build", candidates[0].Name)
+	}
+	candidates, err = DetectBinaryCandidates("tool-cli", assets, syslist.OsTypeLinux, syslist.ArchTypeAmd64, "glibc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if candidates[0].Name != "tool-cli-linux-amd64.tar.gz" {
+		t.Errorf("glibc candidate = %q, want the libc-neutral build named after the app", candidates[0].Name)
+	}
 }

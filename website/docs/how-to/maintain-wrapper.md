@@ -150,7 +150,24 @@ datamitsu devtools pull-node apps/nodeApps.json --update --min-age 43200
 datamitsu devtools pull-github apps/githubApps.json --update --min-age 0
 ```
 
-Set `DATAMITSU_MIN_RELEASE_AGE` (minutes) to change the default for every command, including the check `config lockfile` runs on a Go app's resolved modules. When no release is old enough, `pull-github` keeps an existing app's current tag (with a warning) but hard-errors on a brand-new app; `pull-node`/`pull-uv` skip the package with a warning; `pull-runtimes` hard-errors. See [Supply Chain Security → Minimum Release Age](../guides/supply-chain-security.md#minimum-release-age-version-selection) for the full behavior table and the registries it covers.
+Set `DATAMITSU_MIN_RELEASE_AGE` (minutes) to change the default for every command, including the check `config lockfile` runs on a Go app's resolved modules. When no release is old enough, `pull-github` keeps an existing app's current tag (with a warning) but records a failure for a brand-new app; `pull-node`/`pull-uv` skip the package with a warning; `pull-runtimes` hard-errors. See [Supply Chain Security → Minimum Release Age](../guides/supply-chain-security.md#minimum-release-age-version-selection) for the full behavior table and the registries it covers.
+
+### Failures, retries and exit codes
+
+A registry pull is how versions and hashes enter a configuration, so an app that is silently skipped is a version that silently stays behind. Every `pull-*` command therefore:
+
+- **retries transient failures** — network errors, timeouts, 5xx responses and rate limits that name a short wait — making up to four attempts with backoff, printing each retry with the request, the attempt and the reason; under `--verify-extraction` the asset downloads retry the same way;
+- **keeps going** past an app or package that fails, so one bad entry does not cost the run;
+- **ends with a report** naming every failure, the stage it failed at and the error, with a hint when the fix is a setting (a GitHub rate limit → set `GITHUB_TOKEN`);
+- **exits with status 1** when anything failed after the retries, so a script or a CI job sees it.
+
+Permanent failures — a 404, a release whose assets carry no digest, a validation error, a rate limit that resets later than two minutes — are not retried, but they are in the report and in the exit code all the same.
+
+Under `--verify-extraction`, only a fault in the asset itself — a hash mismatch, an archive that does not extract, a file that is not an executable — makes `pull-github` fall back to the next-ranked asset for the platform. A download that fails is not the asset's fault, so the platform is not handed to whatever ranks below (an attestation file, or a variant that happens to verify): it fails the app, whose previous entry is kept, and the report names the platform and the asset (`verify linux/amd64/glibc`).
+
+What the file holds after a failed run differs by command. `pull-github` saves after every app that succeeds, replacing the file whole each time, so each entry is either the previous state of an app that failed or the complete new state of one that succeeded, never a partial one; rerun the command to pick up the failed apps. A save that fails stops the run. `pull-node` and `pull-uv` write the successful lookups and keep the previous entry of a failed package. `pull-runtimes` writes nothing when any runtime failed, because the entries reference each other (`pnpmRuntime`) and must move together.
+
+Run large pulls with `GITHUB_TOKEN` set: the unauthenticated GitHub API allows 60 requests an hour, which a registry of a few dozen apps exhausts part-way.
 
 ### Inspecting the effective runtime config (`datamitsu config runtime`)
 
@@ -202,9 +219,11 @@ With `--update`, the command fetches the latest release tags, downloads binaries
 datamitsu devtools pull-github apps/githubApps.json --update --verify-extraction
 ```
 
-The `--verify-extraction` flag additionally downloads each binary, extracts it, and checks that the result is an executable: an ELF, Mach-O or PE file, or a script starting with `#!`. This catches changed archive structures, renamed binaries inside archives, and a `binaryPath` that picks a completion script or a man page instead of the binary.
+The `--verify-extraction` flag additionally downloads each binary (retrying a failed download like any other request), extracts it, and checks that the result is an executable: an ELF, Mach-O or PE file, or a script starting with `#!`. This catches changed archive structures, renamed binaries inside archives, and a `binaryPath` that picks a completion script or a man page instead of the binary.
 
-`pull-github` learns `binaryPath` from the entries already in the file. An asset published under the same name as before keeps the `binaryPath` recorded for it, and an asset name without a version keeps a path that every entry for that OS shares when it names no version or platform. A `binaryPath` you corrected by hand therefore survives the next release instead of being guessed again.
+`pull-github` learns `binaryPath` from the entries already in the file. An asset published under the same name as before keeps the `binaryPath` recorded for it. Otherwise the closest entry lends its layout — the same OS, architecture and libc first, then the same OS and architecture, then the same OS — with the new asset's name substituted into the path component named after the old asset (`tombi-cli-1.5.0-x86_64-apple-darwin/tombi` becomes `tombi-cli-1.5.5-x86_64-apple-darwin/tombi`), or else only the version. A layout that names another architecture or libc than the asset is never borrowed. A `binaryPath` you corrected by hand therefore survives the next release instead of being guessed again.
+
+An asset that names an operating system datamitsu does not run on — illumos, Solaris, NetBSD, DragonFly, Haiku, Android, AIX, Plan 9 — is never recorded for Linux, even when it carries an `x86_64` token and no other. On Windows, `win64` counts as amd64 and `win32` as 32-bit, and a bare `win` token or a `.exe` suffix is enough to name the OS.
 
 :::note Releases with mixed asset types
 Some tools publish VS Code extensions (`.vsix`), Linux packages (`.deb`, `.rpm`), NuGet packages (`.nupkg`), Python wheels (`.whl`), Windows installers (`.msi`), or macOS installer packages (`.pkg`) alongside binary archives in the same GitHub release. datamitsu automatically excludes these non-executable formats before scoring, so only actual binaries compete for selection. No configuration is needed — the filtering is automatic.

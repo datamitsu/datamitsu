@@ -10,12 +10,13 @@ import (
 	"github.com/datamitsu/datamitsu/internal/syslist"
 )
 
-// DetectBinary finds the best matching asset for given OS, architecture, and libc type.
-// Uses scoring-based selection: each asset is scored by OS, Arch, Libc match quality,
-// archive format preference, and priority patterns. The highest-scoring asset wins.
-// Ties are broken alphabetically by asset name for determinism.
-func DetectBinary(assets []github.Asset, osType syslist.OsType, archType syslist.ArchType, libcType string) (*github.Asset, error) {
-	candidates, err := DetectBinaryCandidates(assets, osType, archType, libcType)
+// DetectBinary finds the best matching asset of appName for given OS,
+// architecture, and libc type. Uses scoring-based selection: each asset is
+// scored by OS, Arch, Libc match quality, whether its name carries the app's
+// name, archive format preference, and priority patterns. The highest-scoring
+// asset wins. Ties are broken alphabetically by asset name for determinism.
+func DetectBinary(appName string, assets []github.Asset, osType syslist.OsType, archType syslist.ArchType, libcType string) (*github.Asset, error) {
+	candidates, err := DetectBinaryCandidates(appName, assets, osType, archType, libcType)
 	if err != nil {
 		return nil, err
 	}
@@ -28,17 +29,17 @@ func DetectBinary(assets []github.Asset, osType syslist.OsType, archType syslist
 // the list lets callers fall back to a lower-ranked asset — e.g. a raw binary
 // when a preferred archive fails extraction verification — instead of dropping
 // the platform. The error cases mirror DetectBinary exactly.
-func DetectBinaryCandidates(assets []github.Asset, osType syslist.OsType, archType syslist.ArchType, libcType string) ([]github.Asset, error) {
+func DetectBinaryCandidates(appName string, assets []github.Asset, osType syslist.OsType, archType syslist.ArchType, libcType string) ([]github.Asset, error) {
 	if len(assets) == 0 {
 		return nil, errors.New("no assets available")
 	}
 
-	validAssets := filterValidAssets(assets)
+	validAssets := filterValidAssets(appName, assets)
 	if len(validAssets) == 0 {
-		return nil, errors.New("no valid assets found (all were checksum or non-executable package files)")
+		return nil, errors.New("no valid assets found (all were checksum, attestation, installer or non-executable package files)")
 	}
 
-	ranked := rankAssets(validAssets, osType, archType, libcType)
+	ranked := rankAssets(appName, validAssets, osType, archType, libcType)
 	if len(ranked) == 0 {
 		return nil, fmt.Errorf("no matching binary found for %s/%s", osType, archType)
 	}
@@ -50,25 +51,29 @@ func DetectBinaryCandidates(assets []github.Asset, osType syslist.OsType, archTy
 	return out, nil
 }
 
-// filterValidAssets removes checksum and non-executable package files
-func filterValidAssets(assets []github.Asset) []github.Asset {
+// filterValidAssets removes checksum, attestation, installer and
+// non-executable package files
+func filterValidAssets(appName string, assets []github.Asset) []github.Asset {
 	var valid []github.Asset
 	for _, asset := range assets {
-		if !IsChecksumFile(asset.Name) && !IsNonExecutableFile(asset.Name) {
-			valid = append(valid, asset)
+		if IsChecksumFile(asset.Name) || IsAttestationFile(asset.Name) || IsNonExecutableFile(asset.Name) || IsInstallerFile(appName, asset.Name) {
+			continue
 		}
+		valid = append(valid, asset)
 	}
 	return valid
 }
 
-// HasAnyOSIndicator checks if the filename contains ANY OS indicator
+// HasAnyOSIndicator checks if the filename contains ANY OS indicator — either
+// a target datamitsu selects (OSPatterns) or a foreign one it only needs to
+// recognise (ForeignOSPattern). Both gate the implicit-Linux rule in scoring.go.
 func HasAnyOSIndicator(filename string) bool {
 	for osType := range OSPatterns {
 		if MatchOS(filename, osType) {
 			return true
 		}
 	}
-	return false
+	return ForeignOSPattern.MatchString(filename)
 }
 
 // HasAnyArchIndicator checks if the filename contains ANY architecture

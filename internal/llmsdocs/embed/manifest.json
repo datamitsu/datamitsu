@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 55,
-  "pageSetHash": "3aa2e2c8993d30c023dcd8818df65cb0",
+  "pageSetHash": "826dc83a97942828ca595161bf13ff96",
   "pages": [
     {
       "slug": "about",
@@ -271,8 +271,8 @@
       "url": "https://datamitsu.com/docs/guides/binary-management.md",
       "title": "Binary Management",
       "description": "How datamitsu downloads, verifies, and stores binary apps",
-      "bytes": 7796,
-      "contentHash": "faf7ec064c06c64c78b77f6fdef94c46"
+      "bytes": 9278,
+      "contentHash": "e39289ddbf991c3357e9ee89235eb250"
     },
     {
       "slug": "guides/config-inspector",
@@ -397,8 +397,8 @@
       "url": "https://datamitsu.com/docs/how-to/maintain-wrapper.md",
       "title": "Maintaining Wrapper Packages",
       "description": "Workflows for keeping wrapper package tool versions, runtimes, and hashes up to date using devtools commands",
-      "bytes": 34681,
-      "contentHash": "e5026caa8cb06e85f2a83579fc3668ad"
+      "bytes": 37778,
+      "contentHash": "518a70c6564433c720475551dfe467f2"
     },
     {
       "slug": "how-to/manage-cache",
@@ -451,8 +451,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 94544,
-      "contentHash": "0e4a2f896620b4ec16c2ae04c7726c85"
+      "bytes": 98039,
+      "contentHash": "f5c8ce01b5ae93128f8669c865b320f3"
     },
     {
       "slug": "reference/comparison",
@@ -469,8 +469,8 @@
       "url": "https://datamitsu.com/docs/reference/configuration-api.md",
       "title": "Configuration API",
       "description": "Complete reference for the datamitsu configuration API",
-      "bytes": 72943,
-      "contentHash": "869b82c3b47e8708d0689987ebd39851"
+      "bytes": 73052,
+      "contentHash": "d8ff81b71e1afaf5a207ad2dd47b74ab"
     },
     {
       "slug": "reference/ignore-rules",

@@ -495,3 +495,49 @@ func TestComputeConfigHash(t *testing.T) {
 		}
 	})
 }
+
+// A registry reached through a symlink is updated in place: the link stays a
+// link and its target holds the new state, as it did when Save wrote the
+// file directly.
+func TestSave_FollowsSymlink(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "shared", "githubApps.json")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(target, []byte("{\"apps\":{},\"binaries\":{}}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "githubApps.json")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	state := &State{
+		Apps:     map[string]*AppMetadata{"tool": {Owner: "o", Repo: "tool", Tag: "v1"}},
+		Binaries: map[string]*BinariesEntry{},
+	}
+	if err := Save(link, state); err != nil {
+		t.Fatalf("Save() = %v", err)
+	}
+
+	if info, err := os.Lstat(link); err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Errorf("the link was replaced by a file (lstat: %v, mode %v)", err, info.Mode())
+	}
+	saved, err := Load(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved.Apps["tool"] == nil {
+		t.Errorf("the link's target was not updated: %+v", saved.Apps)
+	}
+	entries, err := os.ReadDir(filepath.Dir(target))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), ".tmp") {
+			t.Errorf("temporary file %q left behind", e.Name())
+		}
+	}
+}

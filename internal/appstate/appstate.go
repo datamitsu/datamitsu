@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/hashutil"
@@ -64,7 +65,34 @@ func Save(path string, state *State) error {
 	// Add trailing newline
 	data = append(data, '\n')
 
-	if err := os.WriteFile(path, data, 0o644); err != nil {
+	// Written beside the file and renamed into place: pull-github saves after
+	// every app, and a reader must find either the previous file or the whole
+	// new one, never a truncated one from a write that failed part-way. A
+	// symlink to a shared registry is followed, so the registry is what gets
+	// updated and the link survives.
+	if target, err := filepath.EvalSymlinks(path); err == nil {
+		path = target
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".*.tmp")
+	if err != nil {
+		return fmt.Errorf("failed to write githubApps.json: %w", err)
+	}
+	tmpPath := tmp.Name()
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("failed to write githubApps.json: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("failed to write githubApps.json: %w", err)
+	}
+	if err := os.Chmod(tmpPath, 0o644); err != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("failed to write githubApps.json: %w", err)
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		_ = os.Remove(tmpPath)
 		return fmt.Errorf("failed to write githubApps.json: %w", err)
 	}
 

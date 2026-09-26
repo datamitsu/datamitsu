@@ -31,8 +31,11 @@ var OSPatterns = map[syslist.OsType]*OSPattern{
 		PriorityPattern: regexp.MustCompile(`(?i)\.appimage$`),
 	},
 	syslist.OsTypeWindows: {
+		// A ".exe" suffix names Windows on its own ("snyk-win.exe" carries no
+		// other token), and so does a "win" token between separators — bounded
+		// so "darwin" does not qualify.
 		Name:            syslist.OsTypeWindows,
-		Pattern:         regexp.MustCompile(`(?i)(windows|win64|win32|msvc|mingw)`),
+		Pattern:         regexp.MustCompile(`(?i)(windows|win64|win32|msvc|mingw|(?:^|[-_.])win(?:$|[-_.])|\.exe$)`),
 		PriorityPattern: regexp.MustCompile(`(?i)\.exe$`),
 	},
 	syslist.OsTypeFreebsd: {
@@ -44,6 +47,17 @@ var OSPatterns = map[syslist.OsType]*OSPattern{
 		Pattern: regexp.MustCompile(`(?i)(openbsd)`),
 	},
 }
+
+// ForeignOSPattern matches operating systems datamitsu does not run on but
+// which appear in release assets next to the ones it selects. It exists so
+// HasAnyOSIndicator recognises them and the implicit-Linux rule in ScoreAsset
+// never claims e.g. tombi-cli-1.5.5-x86_64-unknown-illumos.tar.gz for
+// linux/amd64: the file is an ELF, so extraction verification passes, and it
+// fails only at run time. Bounded by separators so "aix" cannot fire inside a
+// longer word. Never used for selection — only as an indicator.
+var ForeignOSPattern = regexp.MustCompile(
+	`(?i)(?:^|[^a-z0-9])(illumos|solaris|sunos|netbsd|dragonfly|haiku|android|aix|plan9)(?:$|[^a-z0-9])`,
+)
 
 // MatchOS checks if filename matches the OS pattern
 func MatchOS(filename string, osType syslist.OsType) bool {

@@ -560,7 +560,9 @@ The command scans releases for all platform combinations using OS/Arch/Libc targ
 
 Non-Linux platforms use `unknown` as the libc key. If a musl variant is not found for a Linux target, that entry is simply omitted.
 
-Before scoring, the detector filters out two categories of assets: checksum files (`.sha256`, `.md5`, `.sha512`, etc.) and non-executable package formats (`.vsix`, `.deb`, `.rpm`, `.nupkg`, `.whl`, `.msi`, `.pkg`). This prevents IDE extensions or package-manager bundles from outscoring actual binaries when releases mix executable and non-executable assets.
+Before scoring, the detector filters out three categories of assets: checksum files (`.sha256`, `.md5`, `.sha512`, etc.), attestations published beside an asset (`.proof`, `.sig`, `.asc`, `.minisig`, `.pem`, `.crt`, `.sigstore.json`, `.intoto.jsonl`, `.sbom`, `.spdx.json`, `.cdx.json`) and non-executable package formats and installers (`.vsix`, `.deb`, `.rpm`, `.nupkg`, `.whl`, `.msi`, `.msix`, `.appx`, `.pkg`, `.dmg`, and a name in which `setup` or `installer` stands as a word of its own, such as `Harper_2.11.0_x64-setup.exe` — unless the app's own name says so). This prevents IDE extensions, package-manager bundles, a desktop app's installer or a signature file from outscoring — or standing in for — actual binaries when releases mix them.
+
+When a release holds several programs — harper publishes `harper-cli-*`, `harper-ls-*` and the `Harper` desktop app together — the asset whose name carries the app's name as whole tokens (case and separators aside) outranks the others of the same platform, whatever their format. An asset that names the requested libc still ranks above it: a `tool-alpine-*` build is the musl build even when only `tool-cli-linux-*` carries the app's name.
 
 **Examples:**
 
@@ -574,6 +576,14 @@ datamitsu devtools pull-github config/src/githubApps.json --update
 # Update and verify that archives extract correctly
 datamitsu devtools pull-github config/src/githubApps.json --update --verify-extraction
 ```
+
+**Failures, retries and the exit code:**
+
+Every app is attempted; one that fails does not stop the others. A request that fails for a transient reason — a network error, a timeout, a 5xx, a rate limit that names a short wait — is made up to four times with backoff, and each retry is printed with the app's request, the attempt and the reason. A 404, a release whose assets carry no digest, or a rate limit with no wait in sight is not retried. The run ends with a report naming every failed app, the stage it failed at (`metadata`, `latest release`, `release <tag>`, `binaries for <tag>`, `verify <platform>`) and the error, plus a hint when the cause is a GitHub rate limit, and exits with status 1 when any app failed.
+
+With `--verify-extraction`, the download of each asset retries the same way. A platform whose asset turns out to be at fault — a hash mismatch, an archive that does not extract, a file that is not an executable — falls back to the next-ranked asset; a download that fails does not, since it says nothing about the asset, and a platform that still cannot be verified fails the app: its previous entry is kept, the report names the platform and the asset (`verify linux/amd64/glibc`), and the run exits with status 1.
+
+The file is saved after each app that succeeds, and each save replaces the file whole. Every entry in it is therefore either the previous state of an app that failed or was not reached, or the complete new state of one that succeeded; a failed app never gets a partial entry. A save that fails stops the run, since nothing after it could be recorded either.
 
 :::tip See also
 For a complete workflow including CI automation, see [Maintaining Wrapper Packages — Binary Apps](/docs/how-to/maintain-wrapper#binary-apps-devtools-pull-github).
@@ -609,6 +619,8 @@ datamitsu config lockfile prettier
 datamitsu config lockfile eslint
 ```
 
+Registry requests that fail for a transient reason are made up to four times, each retry printed. A package that still fails keeps its previous entry; the run lists every failed package after the summary and exits with status 1.
+
 :::tip See also
 For the full node app update workflow including lock file regeneration, see [Maintaining Wrapper Packages — Node Apps](/docs/how-to/maintain-wrapper#node-apps-npm-devtools-pull-node).
 :::
@@ -641,6 +653,8 @@ datamitsu devtools pull-uv config/src/uvApps.json --update
 # After updating, regenerate lock files for affected apps
 datamitsu config lockfile yamllint
 ```
+
+Registry requests that fail for a transient reason are made up to four times, each retry printed. A package that still fails keeps its previous entry; the run lists every failed package after the summary and exits with status 1.
 
 :::tip See also
 For the full UV app update workflow including lock file regeneration, see [Maintaining Wrapper Packages — UV Apps](/docs/how-to/maintain-wrapper#uv-apps-python-devtools-pull-uv).
@@ -693,6 +707,8 @@ datamitsu devtools pull-runtimes --update --runtime pnpm config/src/runtimes.jso
 # Preview changes without writing
 datamitsu devtools pull-runtimes --update --dry-run config/src/runtimes.json
 ```
+
+Upstream requests that fail for a transient reason are made up to four times, each retry printed. Every runtime is attempted; when any fails, the summary marks it, the file is left unchanged — a failed runtime must not be recorded at its old version beside updated ones — and the run exits with status 1.
 
 :::tip See also
 For the full runtime update workflow and CI automation, see [Maintaining Wrapper Packages — Runtimes](/docs/how-to/maintain-wrapper#runtimes-devtools-pull-runtimes).
@@ -913,7 +929,7 @@ If the JSON file argument doesn't exist, `pull-github`, `pull-node`, and `pull-u
 
 **GitHub API rate limits:**
 
-When `pull-github` or `pull-runtimes` fails with HTTP 403 or 429 errors, set the `GITHUB_TOKEN` environment variable to authenticate and increase the rate limit:
+Without a token the GitHub API allows 60 requests an hour, and a registry pull of a few dozen apps uses more. A rate limit that asks for a short wait (a `Retry-After` header, or a reset within two minutes) is waited out and retried; one that resets later is reported at once, with the reset time, and the run goes on with the next app and exits non-zero. Set the `GITHUB_TOKEN` environment variable to authenticate and raise the limit:
 
 ```bash
 export GITHUB_TOKEN=ghp_your_token_here

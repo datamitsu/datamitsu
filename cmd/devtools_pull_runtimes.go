@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"maps"
 	"net/http"
 	"os"
@@ -115,6 +114,7 @@ func runPullRuntimes(cmd *cobra.Command, args []string) error {
 	}
 	minAge := resolveMinAge(*pullRuntimesMinAge, eff)
 	fmt.Printf("Minimum release age: %s\n", minAgeBanner(minAge))
+	enableRetryNotices()
 
 	existing, err := readRuntimesJSON(outputPath)
 	if err != nil {
@@ -188,10 +188,7 @@ func runPullRuntimes(cmd *cobra.Command, args []string) error {
 		result := runtimePullResult{name: name}
 		if updateErr != nil {
 			result.err = updateErr
-			fmt.Fprintf(os.Stderr, "Error updating %s: %v\n", name, updateErr)
-			if strings.Contains(updateErr.Error(), "rate limit") || strings.Contains(updateErr.Error(), "403") {
-				fmt.Fprintf(os.Stderr, "Hint: set GITHUB_TOKEN env var to increase rate limits\n")
-			}
+			fmt.Fprintf(os.Stderr, "✗ %s: %v\n", name, updateErr)
 			results = append(results, result)
 			continue
 		}
@@ -209,10 +206,8 @@ func runPullRuntimes(cmd *cobra.Command, args []string) error {
 
 	printPullSummary(results)
 
-	for _, r := range results {
-		if r.err != nil {
-			return errors.New("some runtimes failed to update")
-		}
+	if err := reportFailedRuntimes(outputPath, results); err != nil {
+		return err
 	}
 
 	if err := validatePNPMRuntimeRefs(runtimes); err != nil {
@@ -315,6 +310,29 @@ func runtimeVersion(r *RuntimeJSON) string {
 		parts = append(parts, fmt.Sprintf("binaries=%d", binCount))
 	}
 	return strings.Join(parts, ",")
+}
+
+// reportFailedRuntimes returns an error naming every runtime that failed, so
+// the command exits non-zero. The file is not written at all in that case: a
+// runtime that failed would otherwise be recorded at its old version next to
+// updated ones, and the pnpm reference between runtimes must stay consistent.
+func reportFailedRuntimes(outputPath string, results []runtimePullResult) error {
+	var failed []string
+	rateLimited := false
+	for _, r := range results {
+		if r.err != nil {
+			failed = append(failed, r.name)
+			rateLimited = rateLimited || isRateLimited(r.err)
+		}
+	}
+	if len(failed) == 0 {
+		return nil
+	}
+	fmt.Fprintf(os.Stderr, "\n✗ %d of %d runtimes failed; %s is left unchanged\n", len(failed), len(results), outputPath)
+	if rateLimited {
+		fmt.Fprintf(os.Stderr, "Hint: set GITHUB_TOKEN to raise the GitHub API rate limit, then run the command again.\n")
+	}
+	return fmt.Errorf("%d of %d runtimes failed: %s", len(failed), len(results), strings.Join(failed, ", "))
 }
 
 func printPullSummary(results []runtimePullResult) {
@@ -599,7 +617,7 @@ func detectBunBinaries(release *github.Release) (binmanager.MapOfBinaries, error
 }
 
 func pullBunRuntime(ctx context.Context, minAge int) (*BunRuntimeData, binmanager.MapOfBinaries, error) {
-	client := github.NewClient()
+	client := newGitHubClient()
 	release, err := client.GetLatestReleaseWithMinAge(ctx, "oven-sh", "bun", minAge)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to fetch Bun release: %w", err)
@@ -757,7 +775,7 @@ func pullUVRuntime(ctx context.Context, minAge int) (*UVRuntimeData, binmanager.
 	data.PythonVersion = pythonVersion
 
 	// The UV binary is a specific GitHub release, so age filtering applies.
-	client := github.NewClient()
+	client := newGitHubClient()
 	release, err := client.GetLatestReleaseWithMinAge(ctx, "astral-sh", "uv", minAge)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to fetch UV release: %w", err)
@@ -812,7 +830,7 @@ func pullJVMRuntime(ctx context.Context, minAge int) (*JVMRuntimeData, binmanage
 	data.JavaVersion = javaVersion
 
 	// The JDK binary is a specific GitHub release, so age filtering applies.
-	client := github.NewClient()
+	client := newGitHubClient()
 
 	repo := fmt.Sprintf("temurin%s-binaries", data.JavaVersion)
 	release, err := client.GetLatestReleaseWithMinAge(ctx, "adoptium", repo, minAge)
@@ -878,7 +896,7 @@ func detectJVMBinaries(release *github.Release) (binmanager.MapOfBinaries, error
 	deduplicatedCount := 0
 
 	for _, platform := range platforms {
-		asset, err := detector.DetectBinary(jdkAssets, platform.os, platform.arch, platform.libc)
+		asset, err := detector.DetectBinary("jdk", jdkAssets, platform.os, platform.arch, platform.libc)
 		if err != nil {
 			continue
 		}
@@ -990,7 +1008,7 @@ func pullPNPMRuntime(ctx context.Context, minAge int) (*PNPMRuntimeData, binmana
 		return nil, nil, noReleaseOldEnoughErr(fmt.Sprintf("pnpm %d", supportedPNPMMajor), minAge)
 	}
 
-	release, err := github.NewClient().GetRelease(ctx, "pnpm", "pnpm", "v"+pnpmInfo.Version)
+	release, err := newGitHubClient().GetRelease(ctx, "pnpm", "pnpm", "v"+pnpmInfo.Version)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to fetch pnpm %s GitHub release: %w", pnpmInfo.Version, err)
 	}
@@ -1071,30 +1089,6 @@ func parseSHASUMS(content string) map[string]string {
 		out[name] = fields[0]
 	}
 	return out
-}
-
-// httpGetLimited GETs url and returns up to maxSize bytes of the body.
-func httpGetLimited(ctx context.Context, client *http.Client, url string, maxSize int64) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("build request %s: %w", url, err)
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("GET %s: %w", url, err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("GET %s: status %d", url, resp.StatusCode)
-	}
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxSize+1))
-	if err != nil {
-		return nil, fmt.Errorf("reading %s: %w", url, err)
-	}
-	if int64(len(data)) > maxSize {
-		return nil, fmt.Errorf("%s exceeds maximum size of %d bytes", url, maxSize)
-	}
-	return data, nil
 }
 
 // fetchVerifiedShasums downloads the clearsigned SHASUMS256.txt.asc, verifies
@@ -1417,7 +1411,7 @@ func detectRuntimeBinaries(name string, release *github.Release) (binmanager.Map
 	deduplicatedCount := 0
 
 	for _, platform := range platforms {
-		asset, err := detector.DetectBinary(release.Assets, platform.os, platform.arch, platform.libc)
+		asset, err := detector.DetectBinary(name, release.Assets, platform.os, platform.arch, platform.libc)
 		if err != nil {
 			continue
 		}
@@ -1437,6 +1431,8 @@ func detectRuntimeBinaries(name string, release *github.Release) (binmanager.Map
 			asset.Name,
 			contentType,
 			platform.os,
+			platform.arch,
+			platform.libc,
 			nil,
 		)
 

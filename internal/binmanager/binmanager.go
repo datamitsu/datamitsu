@@ -592,7 +592,7 @@ func (bm *BinManager) ComputeInstallPath(appName string) (string, error) {
 	}
 
 	if app.Binary != nil {
-		return bm.getBinaryPath(appName)
+		return bm.getInstallPath(appName)
 	}
 
 	if app.Bun != nil || app.Uv != nil || app.Node != nil || app.Jvm != nil || app.Go != nil {
@@ -1202,15 +1202,31 @@ func (bm *BinManager) getBinaryInfo(name string) (*target.ResolvedTarget, Binary
 	return resolved, *binInfo, nil
 }
 
+// getBinaryPath is the command a binary app runs as: the stored file, or for an extractDir
+// entry the binaryPath inside the extracted directory. Everything that runs, links or checks
+// the app reads this; ComputeInstallPath is the installation it lives in.
 func (bm *BinManager) getBinaryPath(name string) (string, error) {
-	resolved, binaryInfo, err := bm.getBinaryInfo(name)
+	installPath, binaryInfo, err := bm.binaryInstall(name)
 	if err != nil {
 		return "", err
 	}
+	return binaryCommandPath(installPath, binaryInfo)
+}
 
+// getInstallPath is where the app's installation lives in the store: the binary itself, or the
+// directory an extractDir entry unpacks into.
+func (bm *BinManager) getInstallPath(name string) (string, error) {
+	installPath, _, err := bm.binaryInstall(name)
+	return installPath, err
+}
+
+func (bm *BinManager) binaryInstall(name string) (string, BinaryOsArchInfo, error) {
+	resolved, binaryInfo, err := bm.getBinaryInfo(name)
+	if err != nil {
+		return "", BinaryOsArchInfo{}, err
+	}
 	configHash := calculateConfigHash(binaryInfo, *resolved)
-
-	return binaryStorePath(name, configHash, binaryInfo.ExtractDir, runtime.GOOS), nil
+	return binaryStorePath(name, configHash, binaryInfo.ExtractDir, runtime.GOOS), binaryInfo, nil
 }
 
 // binaryStorePath is where a binary app lives in the store; the install writes there and every
@@ -1225,6 +1241,67 @@ func binaryStorePath(name, configHash string, extractDir bool, goos string) stri
 		file += ".exe"
 	}
 	return filepath.Join(env.GetBinPath(), name, file)
+}
+
+// binaryCommandPath is what runs from an installation: the stored file, or for an extractDir
+// entry its binaryPath inside the extracted directory. The directory itself cannot be executed,
+// and a tool like protoc finds its include/ relative to the file inside it. Config validation
+// already rejects a binaryPath that leaves the directory; the check here covers a manager built
+// without it.
+func binaryCommandPath(installPath string, info BinaryOsArchInfo) (string, error) {
+	if !info.ExtractDir || info.BinaryPath == nil {
+		return installPath, nil
+	}
+	rel := filepath.Clean(filepath.FromSlash(*info.BinaryPath))
+	if filepath.IsAbs(rel) || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("binaryPath %q leaves the extracted directory", *info.BinaryPath)
+	}
+	if rel == "." {
+		return "", fmt.Errorf("binaryPath %q names the extracted directory itself, not a file inside it", *info.BinaryPath)
+	}
+	return filepath.Join(installPath, rel), nil
+}
+
+// checkExtractedCommand confirms that the command an extractDir entry names exists in the
+// extracted tree and can be executed. Extraction keeps the archive's own modes, and a zip built
+// on Windows carries none.
+func checkExtractedCommand(extractedDir string, info BinaryOsArchInfo) error {
+	if !info.ExtractDir || info.BinaryPath == nil {
+		return nil
+	}
+	command, err := binaryCommandPath(extractedDir, info)
+	if err != nil {
+		return err
+	}
+	stat, err := os.Stat(command)
+	if err != nil {
+		return fmt.Errorf("binaryPath %q not found in the extracted archive: %w", *info.BinaryPath, err)
+	}
+	if stat.IsDir() {
+		return fmt.Errorf("binaryPath %q is a directory in the extracted archive", *info.BinaryPath)
+	}
+	if err := os.Chmod(command, stat.Mode().Perm()|0o755); err != nil {
+		return fmt.Errorf("failed to set executable permissions on %q: %w", *info.BinaryPath, err)
+	}
+	return nil
+}
+
+// checkInstalledCommand confirms that an installed directory holds the command its entry names.
+// moveDir keeps whatever it finds at the destination, so a directory left without its command —
+// files moved out by hand, or by a runtime move that was interrupted — would otherwise be
+// skipped over on every install and fail the same way at every run.
+func checkInstalledCommand(installPath string, info BinaryOsArchInfo) error {
+	if !info.ExtractDir || info.BinaryPath == nil {
+		return nil
+	}
+	command, err := binaryCommandPath(installPath, info)
+	if err != nil {
+		return err
+	}
+	if !pathExists(command) {
+		return fmt.Errorf("installed directory %s does not contain binaryPath %q; remove the directory and retry", installPath, *info.BinaryPath)
+	}
+	return nil
 }
 
 func (bm *BinManager) downloadInternal(ctx context.Context, name string) error {
@@ -1277,10 +1354,28 @@ func (bm *BinManager) downloadInternal(ctx context.Context, name string) error {
 			return fmt.Errorf("failed to extract archive to directory: %w", err)
 		}
 
+		// A wrong binaryPath is a configuration error; leaving the tree in the store
+		// would only make every later run skip the move and fail the same way.
+		if err := checkExtractedCommand(extractedDir, binaryInfo); err != nil {
+			sp.Fail()
+			_ = os.RemoveAll(extractedDir)
+			return err
+		}
+
+		// An emptied directory would make moveDir keep it in place of the fresh tree.
+		// Removing a directory succeeds only while it is empty, so a live installation,
+		// which moveDir publishes whole, can never be taken by mistake.
+		_ = os.Remove(binPath)
+
 		if err := moveDir(extractedDir, binPath); err != nil {
 			sp.Fail()
 			_ = os.RemoveAll(extractedDir)
 			return fmt.Errorf("failed to move extracted directory to cache: %w", err)
+		}
+
+		if err := checkInstalledCommand(binPath, binaryInfo); err != nil {
+			sp.Fail()
+			return err
 		}
 
 		sp.Done("")

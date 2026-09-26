@@ -192,7 +192,7 @@ Set `versionCheck: { disabled: true }` to skip version checking for tools that d
 
 ## ExtractDir Mode
 
-Some tools (like JDK distributions) need their entire archive extracted as a directory tree rather than a single binary. Set `extractDir: true` in the OS/arch info to enable this:
+Some tools need their entire archive extracted as a directory tree rather than a single binary: a JDK distribution, or `protoc`, which finds its well-known types in the `include/` directory beside its own binary and fails on `import "google/protobuf/timestamp.proto"` when only the executable is installed. Set `extractDir: true` in the OS/arch info, and name the command inside the tree with `binaryPath`:
 
 ```javascript
 binary: {
@@ -200,13 +200,29 @@ binary: {
     linux: {
       amd64: {
         glibc: {
-          url: "https://example.com/jdk-21_linux-x64.tar.gz",
+          url: "https://github.com/protocolbuffers/protobuf/releases/download/v36.2/protoc-36.2-linux-x86_64.zip",
           hash: "0000000000000000000000000000000000000000000000000000000000000000", // replace with the expected SHA-256
-          contentType: "tar.gz",
+          contentType: "zip",
+          binaryPath: "bin/protoc",
           extractDir: true,
         },
       },
     },
   },
+}
+```
+
+The whole tree is installed under one store directory and `binaryPath` is what runs, so the binary sees its files where the archive put them. `binaryPath` is required with `extractDir`, must be exact, and the `contentType` must be a tar or zip archive. Install fails when the archive does not contain the path, and `devtools verify-all` checks that the path is an executable.
+
+Exact means more than it does for a single-file entry. Extracting one file finds `binaryPath` by its last component when the full path is not in the archive, so a guessed path like `protoc-36.2/protoc` extracts `bin/protoc` and passes `--verify-extraction`; an extracted directory is not searched, so the same guess fails the install. `devtools pull-github` writes neither `extractDir` nor a path it could not guess, so set both after loading a registry, per operating system:
+
+```javascript
+for (const [os, archMap] of Object.entries(apps.protoc.binary.binaries)) {
+  for (const libcMap of Object.values(archMap)) {
+    for (const entry of Object.values(libcMap)) {
+      entry.extractDir = true;
+      entry.binaryPath = os === "windows" ? "bin/protoc.exe" : "bin/protoc";
+    }
+  }
 }
 ```
