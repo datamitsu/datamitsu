@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 55,
-  "pageSetHash": "826dc83a97942828ca595161bf13ff96",
+  "pageSetHash": "aec7548b7eaa8494d3e5f66b7bc1c87e",
   "pages": [
     {
       "slug": "about",
@@ -397,8 +397,8 @@
       "url": "https://datamitsu.com/docs/how-to/maintain-wrapper.md",
       "title": "Maintaining Wrapper Packages",
       "description": "Workflows for keeping wrapper package tool versions, runtimes, and hashes up to date using devtools commands",
-      "bytes": 37778,
-      "contentHash": "518a70c6564433c720475551dfe467f2"
+      "bytes": 38308,
+      "contentHash": "529c41f89b54897e5109ff1ae00893c4"
     },
     {
       "slug": "how-to/manage-cache",

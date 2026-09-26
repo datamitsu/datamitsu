@@ -10,6 +10,7 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/hashutil"
+	"github.com/datamitsu/datamitsu/internal/jsonsort"
 )
 
 // AppMetadata represents GitHub app metadata
@@ -57,7 +58,8 @@ func Load(path string) (*State, error) {
 
 // Save writes the state to githubApps.json with proper formatting
 func Save(path string, state *State) error {
-	data, err := json.MarshalIndent(state, "", "  ")
+	// Keys sorted, so a pull's diff shows what changed and nothing else.
+	data, err := jsonsort.MarshalIndent(state, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal state: %w", err)
 	}

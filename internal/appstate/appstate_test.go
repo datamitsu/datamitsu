@@ -541,3 +541,38 @@ func TestSave_FollowsSymlink(t *testing.T) {
 		}
 	}
 }
+
+// Every object is written with its keys sorted, whatever the order of the
+// struct fields: "binaries" before "configHash" before "description", and
+// "binaryPath" before "contentType" before "hash" before "url".
+func TestSave_SortedKeys(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "githubApps.json")
+	bp := "bin/tool"
+	state := &State{
+		Apps: map[string]*AppMetadata{"tool": {Owner: "o", Repo: "tool", Tag: "v1"}},
+		Binaries: map[string]*BinariesEntry{"tool": {
+			ConfigHash:  "hash",
+			Description: "a tool",
+			Binaries: binmanager.MapOfBinaries{"linux": {"amd64": {"glibc": binmanager.BinaryOsArchInfo{
+				URL: "https://example.test/tool.tar.gz", Hash: strings.Repeat("a", 64), ContentType: binmanager.BinContentTypeTarGz, BinaryPath: &bp,
+			}}}},
+		}},
+	}
+	if err := Save(path, state); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	keys := []string{`"apps"`, `"owner"`, `"repo"`, `"tag"`, `"binaries"`, `"binaries": {`, `"binaryPath"`, `"contentType"`, `"hash"`, `"url"`, `"configHash"`, `"description"`}
+	last := -1
+	for _, k := range keys {
+		at := strings.Index(text[last+1:], k)
+		if at < 0 {
+			t.Fatalf("%s missing or out of order:\n%s", k, text)
+		}
+		last += 1 + at
+	}
+}
