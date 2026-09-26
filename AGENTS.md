@@ -239,6 +239,21 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
   consulted, in the runner and the language server.
 - An unknown name in `ManagedConfig.tools` is a load error.
 
+## Agent Guides
+
+- `config/src/prompts/` holds the two guides the default config publishes in
+  `sharedStorage`. `datamitsu-agent-guide.md` (`datamitsu-agent-prompt`) is for
+  repositories that use a configuration; wrappers ship it to every consumer.
+  `datamitsu-config-author-guide.md` (`datamitsu-config-author-prompt`) is for
+  repositories that write one; nothing writes it by default.
+- A change that alters what a configuration author writes or must do — a new
+  field, a new validation error, a breaking change, a changed `devtools`
+  workflow — updates the author guide in the same change: any rule that no
+  longer holds, and an entry under "Recent changes to review" naming the first
+  release that has it (`after v<latest tag>` until one does) and what a
+  configuration should do. Drop entries older than the two latest minor releases.
+- Rules in both guides point at `datamitsu llms` pages instead of copying them.
+
 ## Product Stage
 
 - Project is in `alpha`.

@@ -1769,11 +1769,13 @@ func TestSharedStorageDefaultEntries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadConfigWithPaths error: %v", err)
 	}
-	if len(cfg.SharedStorage) != 2 {
-		t.Errorf("SharedStorage should have 2 entries by default, got %d: %v", len(cfg.SharedStorage), cfg.SharedStorage)
+	if len(cfg.SharedStorage) != 3 {
+		t.Errorf("SharedStorage should have 3 entries by default, got %d: %v", len(cfg.SharedStorage), cfg.SharedStorage)
 	}
-	if _, ok := cfg.SharedStorage["datamitsu-agent-prompt"]; !ok {
-		t.Errorf("SharedStorage should contain datamitsu-agent-prompt by default")
+	for _, key := range []string{"datamitsu-agent-prompt", "datamitsu-config-author-prompt"} {
+		if strings.TrimSpace(cfg.SharedStorage[key]) == "" {
+			t.Errorf("SharedStorage[%q] should hold a non-empty guide by default", key)
+		}
 	}
 	if _, ok := cfg.SharedStorage["pnpm-workspace-defaults"]; !ok {
 		t.Errorf("SharedStorage should contain pnpm-workspace-defaults by default")

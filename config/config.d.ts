@@ -424,12 +424,15 @@ declare global {
        * that doesn't fit the typed config structure.
        *
        * Well-known keys published by the default config: - `"datamitsu-agent-prompt"`: Markdown
-       * guide for AI agents working in datamitsu-managed repos. - `"pnpm-workspace-defaults"`: YAML
-       * string of the recommended pnpm workspace security defaults. Parse with `YAML.parse()`,
-       * extend with org/repo-specific settings, and write into a project repo via a Bundle to
-       * produce a secure `pnpm-workspace.yaml`. Separate from the auto-merge applied to
-       * `App.files["pnpm-workspace.yaml"]` for node apps. See the Supply Chain Security guide for
-       * the full key list and rationale.
+       * guide for AI agents working in datamitsu-managed repos. -
+       * `"datamitsu-config-author-prompt"`: Markdown guide for AI agents writing a datamitsu
+       * configuration (a wrapper or a project's own config). Nothing uses it by default; link it
+       * into the authoring repository's agent instructions, never into consumers'. -
+       * `"pnpm-workspace-defaults"`: YAML string of the recommended pnpm workspace security
+       * defaults. Parse with `YAML.parse()`, extend with org/repo-specific settings, and write into
+       * a project repo via a Bundle to produce a secure `pnpm-workspace.yaml`. Separate from the
+       * auto-merge applied to `App.files["pnpm-workspace.yaml"]` for node apps. See the Supply
+       * Chain Security guide for the full key list and rationale.
        *
        * @example
        *   return { ...input, sharedStorage: { ...input.sharedStorage, "my-key": "my-value" } };
