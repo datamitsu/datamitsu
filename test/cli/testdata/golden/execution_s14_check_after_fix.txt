@@ -1,0 +1,19 @@
+exit code: 0
+===STDOUT===
+╭<RULE>╮
+│ datamitsu  <VERSION> │
+╰<RULE>╯
+
+┏━ fix <RULE>
+┃ fixture
+┃
+┃ ✓ appender  <DUR>
+┗━ 1 tools · 1 runs · done in <DUR> · cache 100% <RULE>
+
+┏━ lint <RULE>
+┃ fixture
+┃
+┃ ✓ linter    <DUR>
+┗━ 1 tools · 1 runs · done in <DUR> · cache 50% <RULE>
+
+===STDERR===

@@ -1,0 +1,15 @@
+exit code: 0
+===STDOUT===
+
+===STDERR===
+{"index":1,"op_id":"run-1:alpha:","status":"done","success":true,"tool":"alpha","total":1,"ts":0,"type":"chunk"}
+{"index":1,"op_id":"run-1:alpha:","status":"done","success":true,"tool":"alpha","total":1,"ts":0,"type":"chunk"}
+{"index":1,"op_id":"run-1:alpha:","status":"done","success":true,"tool":"alpha","total":1,"ts":0,"type":"chunk"}
+{"op":"lint","op_id":"run-1","runs":3,"status":"done","tools":1,"ts":0,"type":"done"}
+{"op":"lint","op_id":"run-1","status":"start","ts":0,"type":"phase"}
+{"op_id":"run-1:alpha:","status":"done","success":true,"tool":"alpha","ts":0,"type":"tool_run"}
+{"op_id":"run-1:alpha:","status":"done","success":true,"tool":"alpha","ts":0,"type":"tool_run"}
+{"op_id":"run-1:alpha:","status":"done","success":true,"tool":"alpha","ts":0,"type":"tool_run"}
+{"op_id":"run-1:alpha:","status":"start","tool":"alpha","ts":0,"type":"tool_run"}
+{"op_id":"run-1:alpha:","status":"start","tool":"alpha","ts":0,"type":"tool_run"}
+{"op_id":"run-1:alpha:","status":"start","tool":"alpha","ts":0,"type":"tool_run"}

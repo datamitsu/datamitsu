@@ -67,6 +67,43 @@ Always review the resulting `git diff` of the golden files — `-update` accepts
 whatever the binary currently prints, so an unintended behavior change will show
 up as a golden diff to inspect, not a silent pass.
 
+## Execution characterization
+
+[`execution_test.go`](execution_test.go) freezes what `check`, `fix` and `lint`
+do when tools actually run — where fail-fast stops a run, what a failure
+prints, the JSON-L stream, the cache footer and the exit codes — so a change to
+the executor or the runner shows up as a reviewable golden diff. Its goldens are
+`testdata/golden/execution_*.txt`, each holding the exit code, stdout and
+stderr of one run.
+
+- **Tools are `sh` scripts.** `clitest.ShellTool(name, script, spec)` declares
+  a tool whose app is `sh -c <script> <name>`: the script sees its tool name as
+  `$0`, the operation's arguments from `$1`, and the marker directory as
+  `$MARKERS`. `clitest.RecordRun` appends `<tool> <first argument>` to
+  `.markers/<tool>`, so a test asserts whether a process ran with
+  `Project.Marker` instead of reading logs. The marker directory ignores its
+  own content, so markers never enter a later run's file set or cache keys.
+  Every scenario skips when no `sh` is on `PATH` (Windows).
+- **A scenario that records a known defect says so.** Its comment names the
+  plan of `docs/plans/2026-09-26-unified-results.md` that changes the
+  behaviour; that plan flips the assertion and regenerates the golden in the
+  same change.
+- **Event streams are asserted causally.** `clitest.AssertChains` checks that
+  every `tool_run` start has a terminal event (except for the tools a scenario
+  names as orphaned), that an operation's `phase` precedes its `tool_run`
+  events, and that `done.runs` counts the terminal `tool_run` events. Parallel
+  scenarios never assert line order: `NormalizeJSONL` sets `ts` to `0` and a
+  present `duration_ms` to `1`, and the golden's lines are sorted.
+- **What the goldens leave out.** Progress lines (`→ …`) are dropped: they are
+  throttled display that carries whichever label the last parallel callback
+  set. Duration text is masked including the padding after it. Every script
+  sleeps 10ms first, because a process faster than a millisecond reports a
+  duration of 0, which `omitempty` drops from its JSON-L event.
+- **Parser modules are seeded, not fetched.** `clitest.SeedParserModule` copies
+  a module into the run's store at its content-addressed path and returns the
+  `parsers` declaration carrying its real SHA-256; the offline run loads it
+  from there.
+
 ## Contract completeness gate
 
 `TestContractCompletenessGate` walks the binary's live `--help` tree and asserts
