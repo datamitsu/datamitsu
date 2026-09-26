@@ -65,6 +65,8 @@ export default defineConfig((config) => ({
     "msix",
     "msixbundle",
     "appxbundle",
+    // The package that writes the pull commands' files with sorted keys.
+    "jsonsort",
     // A shell-literal expectation in internal/shellquote: `$'a\xffb'`. The
     // trailing "b" is load-bearing — it is a hex digit, and the test asserts
     // that a shell stops the \x escape after exactly two digits rather than

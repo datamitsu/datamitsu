@@ -221,8 +221,58 @@ func TestRunPullGithub_AllSucceedExitsZero(t *testing.T) {
 	if err != nil {
 		t.Fatalf("runPullGithub() = %v", err)
 	}
-	if !strings.Contains(stdout, "✓ Processed 1 apps") {
-		t.Errorf("stdout lacks the success summary:\n%s", stdout)
+	for _, want := range []string{"=== Processing fine [1/1] ===", "✓ Processed 1 apps"} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("stdout lacks %q:\n%s", want, stdout)
+		}
+	}
+}
+
+// Apps are processed in alphabetical order with a counter, whatever order
+// the file lists them in.
+func TestRunPullGithub_ProcessesAppsAlphabetically(t *testing.T) {
+	if err := runtimeconfig.Init(); err != nil {
+		t.Fatalf("runtimeconfig.Init: %v", err)
+	}
+	api := &fakeGitHub{attempts: map[string]int{}, handle: func(_ string, _ int, w http.ResponseWriter) {
+		releaseJSON(w, "v1", true)
+	}}
+	srv := httptest.NewServer(api)
+	defer srv.Close()
+	githubBaseURL = srv.URL
+	defer func() { githubBaseURL = "" }()
+
+	path := filepath.Join(t.TempDir(), "githubApps.json")
+	if err := os.WriteFile(path, []byte(`{"apps":{"zeta":{"owner":"o","repo":"zeta","tag":"v1"},"alpha":{"owner":"o","repo":"alpha","tag":"v1"},"mid":{"owner":"o","repo":"mid","tag":"v1"}},"binaries":{}}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var err error
+	stdout := captureStdout(func() { err = runPullGithub(pullGithubCmd, []string{path}) })
+	if err != nil {
+		t.Fatalf("runPullGithub() = %v", err)
+	}
+	headers := []string{"=== Processing alpha [1/3] ===", "=== Processing mid [2/3] ===", "=== Processing zeta [3/3] ==="}
+	last := -1
+	for _, h := range headers {
+		at := strings.Index(stdout, h)
+		if at < 0 || at < last {
+			t.Fatalf("headers out of order or missing (%q):\n%s", h, stdout)
+		}
+		last = at
+	}
+
+	saved, readErr := os.ReadFile(path)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	// Keys of every object are sorted: "binaries" before "configHash" in an
+	// entry, and the entries themselves alphabetical.
+	text := string(saved)
+	for _, pair := range [][2]string{{`"apps"`, `"binaries"`}, {`"alpha"`, `"mid"`}, {`"mid"`, `"zeta"`}, {`"binaries": {`, `"configHash"`}, {`"contentType"`, `"hash"`}, {`"hash"`, `"url"`}} {
+		if strings.Index(text, pair[0]) > strings.Index(text, pair[1]) {
+			t.Errorf("%s written after %s:\n%s", pair[0], pair[1], text)
+		}
 	}
 }
 

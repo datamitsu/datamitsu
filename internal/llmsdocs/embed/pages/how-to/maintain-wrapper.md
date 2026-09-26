@@ -149,6 +149,10 @@ datamitsu devtools pull-github apps/githubApps.json --update --min-age 0
 
 Set `DATAMITSU_MIN_RELEASE_AGE` (minutes) to change the default for every command, including the check `config lockfile` runs on a Go app's resolved modules. When no release is old enough, `pull-github` keeps an existing app's current tag (with a warning) but records a failure for a brand-new app; `pull-node`/`pull-uv` skip the package with a warning; `pull-runtimes` hard-errors. See [Supply Chain Security → Minimum Release Age](../guides/supply-chain-security.md#minimum-release-age-version-selection) for the full behavior table and the registries it covers.
 
+### Order and progress
+
+Every `pull-*` command works through its entries in alphabetical order — apps, packages and runtimes alike — and prints a counter with each (`=== Processing snyk [12/80] ===`, `[12/80] snyk  1.0.0  up-to-date`), so a long run says how far along it is. The file it writes has the keys of every object sorted, whatever the order they were declared in, so the diff of a pull shows what changed and nothing else. A file written by an older build is rewritten in that order the first time a pull saves it.
+
 ### Failures, retries and exit codes
 
 A registry pull is how versions and hashes enter a configuration, so an app that is silently skipped is a version that silently stays behind. Every `pull-*` command therefore:

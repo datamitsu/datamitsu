@@ -133,8 +133,9 @@ func runPullGithub(cmd *cobra.Command, args []string) error {
 	// Every app is attempted; a failure is recorded and reported at the end,
 	// and the run exits non-zero. Sorted so two runs read the same way.
 	var failures []pullFailure
-	for _, appName := range slices.Sorted(maps.Keys(state.Apps)) {
-		fmt.Printf("\n=== Processing %s ===\n", appName)
+	names := slices.Sorted(maps.Keys(state.Apps))
+	for i, appName := range names {
+		fmt.Printf("\n=== Processing %s [%d/%d] ===\n", appName, i+1, len(names))
 		for _, failure := range pullGithubApp(ctx, client, state, githubAppsPath, appName, minAge) {
 			fmt.Fprintf(os.Stderr, "✗ %s: %s: %v\n", appName, failure.stage, failure.err)
 			if failure.fatal {
