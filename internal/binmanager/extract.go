@@ -227,15 +227,15 @@ func extractZip(zipPath string, binaryPath *string, destDir string) (string, err
 	// Pick the strongest match across all entries rather than the first, so an
 	// exact path wins over an unrelated entry that only shares a basename.
 	var best *zip.File
-	bestRank := matchNone
+	bestMatch := entryMatch{rank: matchNone}
 	for _, file := range reader.File {
 		if file.FileInfo().IsDir() {
 			continue
 		}
-		rank := matchRank(file.Name, targetPath)
-		if rank > bestRank {
-			best, bestRank = file, rank
-			if bestRank == matchExact {
+		m := matchEntry(file.Name, targetPath, file.Mode()&0o111 != 0)
+		if m.beats(bestMatch) {
+			best, bestMatch = file, m
+			if bestMatch.rank == matchExact {
 				break
 			}
 		}
@@ -357,7 +357,7 @@ func isRegularTarEntry(t byte) bool {
 }
 
 func extractFromTar(tarReader *tar.Reader, targetPath, archiveType, archivePath, destDir string) (string, error) {
-	bestRank := matchNone
+	best := entryMatch{rank: matchNone}
 	bestPath := ""
 	bestName := ""
 
@@ -375,11 +375,11 @@ func extractFromTar(tarReader *tar.Reader, targetPath, archiveType, archivePath,
 			continue
 		}
 
-		// Only extract an entry if it beats the best match so far; equal ranks
-		// keep the first one seen. tar.Reader.Next() skips the unread body, so
-		// non-improving entries cost nothing to pass over.
-		rank := matchRank(header.Name, targetPath)
-		if rank <= bestRank {
+		// Only extract an entry if it beats the best match so far; equal
+		// matches keep the first one seen. tar.Reader.Next() skips the unread
+		// body, so non-improving entries cost nothing to pass over.
+		m := matchEntry(header.Name, targetPath, header.Mode&0o111 != 0)
+		if !m.beats(best) {
 			continue
 		}
 
@@ -389,14 +389,14 @@ func extractFromTar(tarReader *tar.Reader, targetPath, archiveType, archivePath,
 			return "", err
 		}
 		removeTemp(bestPath)
-		bestRank, bestPath, bestName = rank, tmpPath, header.Name
+		best, bestPath, bestName = m, tmpPath, header.Name
 
-		if bestRank == matchExact {
+		if best.rank == matchExact {
 			break // nothing can beat an exact match
 		}
 	}
 
-	if bestRank == matchNone {
+	if best.rank == matchNone {
 		return "", fmt.Errorf("file '%s' not found in %s archive", targetPath, archiveType)
 	}
 
@@ -1041,6 +1041,39 @@ func matchRank(archivePath, targetPath string) int {
 		return matchBasename
 	default:
 		return matchNone
+	}
+}
+
+// entryMatch is how well one archive entry answers a binaryPath.
+type entryMatch struct {
+	rank       int
+	executable bool
+	inBinDir   bool
+}
+
+func matchEntry(archivePath, targetPath string, executable bool) entryMatch {
+	return entryMatch{
+		rank:       matchRank(archivePath, targetPath),
+		executable: executable,
+		inBinDir:   filepath.Base(filepath.Dir(archivePath)) == "bin",
+	}
+}
+
+// beats reports whether m is a strictly better entry to extract than best. The
+// match rank decides; between entries that match equally well, an executable
+// one beats a plain file, then one in a bin/ directory beats one elsewhere.
+// A bare binaryPath "buf" is a suffix of both "buf/etc/bash_completion.d/buf"
+// and "buf/bin/buf", and archive order must not choose the completion script.
+func (m entryMatch) beats(best entryMatch) bool {
+	switch {
+	case m.rank != best.rank:
+		return m.rank > best.rank
+	case m.rank == matchNone:
+		return false
+	case m.executable != best.executable:
+		return m.executable
+	default:
+		return m.inBinDir && !best.inBinDir
 	}
 }
 

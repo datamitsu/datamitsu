@@ -281,6 +281,149 @@ func TestExtractTarGz_BestMatch(t *testing.T) {
 	}
 }
 
+type archiveEntry struct {
+	name    string
+	content string
+	mode    os.FileMode
+}
+
+// TestExtract_EqualRankPrefersExecutable covers a bare binaryPath that is a
+// suffix of several entries: buf's archive lists its bash completion script
+// "buf/etc/bash_completion.d/buf" before "buf/bin/buf", and "buf" matches both.
+// Archive order must not decide; the executable entry, then the one in bin/, wins.
+func TestExtract_EqualRankPrefersExecutable(t *testing.T) {
+	tests := []struct {
+		name       string
+		entries    []archiveEntry
+		targetPath string
+		want       string
+	}{
+		{
+			name: "executable beats an earlier plain file",
+			entries: []archiveEntry{
+				{"buf/etc/bash_completion.d/buf", "# bash completion for buf", 0o644},
+				{"buf/bin/buf", "ELF-BINARY", 0o755},
+			},
+			targetPath: "buf",
+			want:       "ELF-BINARY",
+		},
+		{
+			name: "bin/ breaks a tie between executables",
+			entries: []archiveEntry{
+				{"buf/etc/bash_completion.d/buf", "# bash completion for buf", 0o755},
+				{"buf/bin/buf", "ELF-BINARY", 0o755},
+			},
+			targetPath: "buf",
+			want:       "ELF-BINARY",
+		},
+		{
+			name: "executable outside bin/ beats a plain file in bin/",
+			entries: []archiveEntry{
+				{"tool/bin/tool", "stub", 0o644},
+				{"tool/libexec/tool", "ELF-BINARY", 0o755},
+			},
+			targetPath: "tool",
+			want:       "ELF-BINARY",
+		},
+		{
+			name: "a stronger rank still wins over an executable",
+			entries: []archiveEntry{
+				{"tool/bin/tool", "ELF-BINARY", 0o755},
+				{"tool/share/tool", "exact but plain", 0o644},
+			},
+			targetPath: "tool/share/tool",
+			want:       "exact but plain",
+		},
+		{
+			name: "equal entries keep the first",
+			entries: []archiveEntry{
+				{"a/bin/tool", "FIRST", 0o755},
+				{"b/bin/tool", "SECOND", 0o755},
+			},
+			targetPath: "tool",
+			want:       "FIRST",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run("tar.gz/"+tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			archivePath := filepath.Join(tmpDir, "archive.tar.gz")
+			writeTarGzWithModes(t, archivePath, tt.entries)
+			assertExtracted(t, extractTarGz, archivePath, tt.targetPath, tt.want)
+		})
+		t.Run("zip/"+tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			archivePath := filepath.Join(tmpDir, "archive.zip")
+			writeZipWithModes(t, archivePath, tt.entries)
+			assertExtracted(t, extractZip, archivePath, tt.targetPath, tt.want)
+		})
+	}
+}
+
+func assertExtracted(t *testing.T, extract func(string, *string, string) (string, error), archivePath, targetPath, want string) {
+	t.Helper()
+	extractedPath, err := extract(archivePath, &targetPath, t.TempDir())
+	if err != nil {
+		t.Fatalf("extract error = %v", err)
+	}
+	content, err := os.ReadFile(extractedPath)
+	if err != nil {
+		t.Fatalf("read extracted: %v", err)
+	}
+	if string(content) != want {
+		t.Errorf("extracted %q, want %q", string(content), want)
+	}
+}
+
+func writeTarGzWithModes(t *testing.T, path string, entries []archiveEntry) {
+	t.Helper()
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("create tar.gz: %v", err)
+	}
+	gzWriter := gzip.NewWriter(file)
+	tarWriter := tar.NewWriter(gzWriter)
+	for _, e := range entries {
+		if err := tarWriter.WriteHeader(&tar.Header{
+			Name:     e.name,
+			Typeflag: tar.TypeReg,
+			Mode:     int64(e.mode),
+			Size:     int64(len(e.content)),
+		}); err != nil {
+			t.Fatalf("write header %q: %v", e.name, err)
+		}
+		if _, err := tarWriter.Write([]byte(e.content)); err != nil {
+			t.Fatalf("write body %q: %v", e.name, err)
+		}
+	}
+	_ = tarWriter.Close()
+	_ = gzWriter.Close()
+	_ = file.Close()
+}
+
+func writeZipWithModes(t *testing.T, path string, entries []archiveEntry) {
+	t.Helper()
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("create zip: %v", err)
+	}
+	zipWriter := zip.NewWriter(file)
+	for _, e := range entries {
+		header := &zip.FileHeader{Name: e.name, Method: zip.Deflate}
+		header.SetMode(e.mode)
+		w, err := zipWriter.CreateHeader(header)
+		if err != nil {
+			t.Fatalf("create entry %q: %v", e.name, err)
+		}
+		if _, err := w.Write([]byte(e.content)); err != nil {
+			t.Fatalf("write entry %q: %v", e.name, err)
+		}
+	}
+	_ = zipWriter.Close()
+	_ = file.Close()
+}
+
 func TestExtractTarXz(t *testing.T) {
 	t.Run("successful extraction", func(t *testing.T) {
 		tmpDir := t.TempDir()

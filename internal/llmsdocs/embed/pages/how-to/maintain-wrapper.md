@@ -199,7 +199,9 @@ With `--update`, the command fetches the latest release tags, downloads binaries
 datamitsu devtools pull-github apps/githubApps.json --update --verify-extraction
 ```
 
-The `--verify-extraction` flag additionally downloads each binary and verifies it can be extracted correctly. This catches issues like changed archive structures or renamed binaries inside archives.
+The `--verify-extraction` flag additionally downloads each binary, extracts it, and checks that the result is an executable: an ELF, Mach-O or PE file, or a script starting with `#!`. This catches changed archive structures, renamed binaries inside archives, and a `binaryPath` that picks a completion script or a man page instead of the binary.
+
+`pull-github` learns `binaryPath` from the entries already in the file. An asset published under the same name as before keeps the `binaryPath` recorded for it, and an asset name without a version keeps a path that every entry for that OS shares when it names no version or platform. A `binaryPath` you corrected by hand therefore survives the next release instead of being guessed again.
 
 :::note Releases with mixed asset types
 Some tools publish VS Code extensions (`.vsix`), Linux packages (`.deb`, `.rpm`), NuGet packages (`.nupkg`), Python wheels (`.whl`), Windows installers (`.msi`), or macOS installer packages (`.pkg`) alongside binary archives in the same GitHub release. datamitsu automatically excludes these non-executable formats before scoring, so only actual binaries compete for selection. No configuration is needed — the filtering is automatic.

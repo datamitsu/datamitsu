@@ -391,6 +391,8 @@ The `binaries` map uses a three-level nested structure: `os → arch → libc �
 
 **Supported archive types:** `tar.gz`, `tar.xz`, `tar.bz2`, `tar.zst`, `tar`, `zip`, `gz`, `bz2`, `xz`, `zst`, `binary`
 
+**How `binaryPath` selects an archive entry:** an entry whose path equals `binaryPath` wins, then one whose path ends in `/<binaryPath>`, then one with the same file name. Among entries that match equally well, an executable entry beats a plain file, and an entry in a `bin/` directory beats one elsewhere; only then does archive order decide. A bare `binaryPath: "buf"` therefore extracts `buf/bin/buf`, not `buf/etc/bash_completion.d/buf`. Prefer the full path all the same: it leaves nothing to choose.
+
 ### UV Apps (Python)
 
 UV apps install Python packages in isolated environments using the managed UV runtime.

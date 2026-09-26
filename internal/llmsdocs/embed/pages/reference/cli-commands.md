@@ -535,10 +535,10 @@ datamitsu devtools pull-github config/src/githubApps.json --update
 | Flag                  | Description                                                                                                                                                                                                                |
 | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `--update`            | Fetch latest release tags before updating                                                                                                                                                                                  |
-| `--verify-extraction` | Verify that downloaded archives extract correctly                                                                                                                                                                          |
+| `--verify-extraction` | Verify that each downloaded asset extracts to an executable (ELF, Mach-O, PE or a `#!` script)                                                                                                                             |
 | `--min-age <minutes>` | Minimum release age before a version is eligible (`-1` = global default of `10080`, `0` = disable, positive = custom). See [Minimum Release Age](/docs/guides/supply-chain-security#minimum-release-age-version-selection) |
 
-The command scans releases for all platform combinations using OS/Arch/Libc target tuples. For Linux, both glibc and musl variants are detected separately. The output JSON uses a nested three-level storage structure:
+The command scans releases for all platform combinations using OS/Arch/Libc target tuples. For Linux, both glibc and musl variants are detected separately; an asset whose name says `alpine` or `musl` counts as a Linux build even without `linux` in it, so `tool-alpine` lands on `linux/amd64/musl`. The output JSON uses a nested three-level storage structure:
 
 ```json
 {
@@ -759,7 +759,7 @@ This is the build-cache primitive behind [devtools dockerfile](#devtools-dockerf
 
 ### devtools verify-all
 
-Cross-platform config integrity checker. Downloads and hash-verifies binary apps and managed runtimes for all configured platforms.
+Cross-platform config integrity checker. Downloads and hash-verifies binary apps and managed runtimes for all configured platforms. Every single file it extracts (all but `extractDir` archives) must be an executable: an ELF, Mach-O or PE file, or a script starting with `#!`.
 
 ```bash
 datamitsu devtools verify-all

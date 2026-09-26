@@ -129,6 +129,10 @@ func TestFindCommonPattern(t *testing.T) {
 		{"same version returns path", []string{"app-1.2.3/app"}, "app-1.2.3.tar.gz", "app-1.2.3/app"},
 		{"different version substitutes", []string{"app-1.0.0/bin/app"}, "app-2.0.0.tar.gz", "app-2.0.0/bin/app"},
 		{"no version in any path falls back to first", []string{"bin/app"}, "app-2.0.0.tar.gz", "bin/app"},
+		{"no version anywhere reuses the agreed path", []string{"buf/bin/buf", "buf/bin/buf"}, "buf-Linux-x86_64.tar.gz", "buf/bin/buf"},
+		{"no version, paths disagree", []string{"app/app", "app/bin/app"}, "app-Linux-x86_64.tar.gz", ""},
+		{"no version, path names a platform", []string{"yq_linux_amd64"}, "yq_linux_arm64.tar.gz", ""},
+		{"no version, path names an os", []string{"app-linux/app"}, "app-Linux-x86_64.tar.gz", ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -267,4 +271,91 @@ func TestExtractBinaryPathPattern(t *testing.T) {
 			t.Errorf("got %q, want nil", *got)
 		}
 	})
+}
+
+// buf's release assets carry no version ("buf-Linux-x86_64.tar.gz"), so a tag
+// bump has no version to substitute into the historical path. That path must
+// survive rather than fall through to the bare app name, which matches the bash
+// completion script "buf/etc/bash_completion.d/buf" as well as "buf/bin/buf".
+func TestDetectBinaryPathWithHistory_UnversionedAssetKeepsPath(t *testing.T) {
+	entry := func(asset string) binmanager.BinaryOsArchInfo {
+		return binmanager.BinaryOsArchInfo{
+			URL:         "https://example.test/releases/download/v1.72.0/" + asset,
+			ContentType: binmanager.BinContentTypeTarGz,
+			BinaryPath:  new("buf/bin/buf"),
+		}
+	}
+	history := binmanager.MapOfBinaries{
+		syslist.OsTypeLinux: {
+			syslist.ArchTypeAmd64: {"glibc": entry("buf-Linux-x86_64.tar.gz")},
+			syslist.ArchTypeArm64: {"glibc": entry("buf-Linux-aarch64.tar.gz")},
+		},
+	}
+
+	tests := []struct {
+		name     string
+		filename string
+	}{
+		{"same asset name", "buf-Linux-x86_64.tar.gz"},
+		{"renamed asset", "buf-linux-amd64.tar.gz"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := DetectBinaryPathWithHistory("buf", tt.filename,
+				binmanager.BinContentTypeTarGz, syslist.OsTypeLinux, history)
+			if derefOr(got, "<nil>") != "buf/bin/buf" {
+				t.Errorf("DetectBinaryPathWithHistory = %q, want %q", derefOr(got, "<nil>"), "buf/bin/buf")
+			}
+		})
+	}
+}
+
+// When each architecture's archive names its binary after the asset, the path
+// recorded for the asset with the same name is the one to keep, not another
+// architecture's.
+func TestDetectBinaryPathWithHistory_SameAssetNameWins(t *testing.T) {
+	entry := func(arch string) binmanager.BinaryOsArchInfo {
+		return binmanager.BinaryOsArchInfo{
+			URL:         "https://example.test/v4.1.0/yq_linux_" + arch + ".tar.gz",
+			ContentType: binmanager.BinContentTypeTarGz,
+			BinaryPath:  new("./yq_linux_" + arch),
+		}
+	}
+	history := binmanager.MapOfBinaries{
+		syslist.OsTypeLinux: {
+			syslist.ArchTypeAmd64: {"glibc": entry("amd64")},
+			syslist.ArchTypeArm64: {"glibc": entry("arm64")},
+		},
+	}
+
+	for _, arch := range []string{"amd64", "arm64"} {
+		got := DetectBinaryPathWithHistory("yq", "yq_linux_"+arch+".tar.gz",
+			binmanager.BinContentTypeTarGz, syslist.OsTypeLinux, history)
+		if want := "./yq_linux_" + arch; derefOr(got, "<nil>") != want {
+			t.Errorf("%s: DetectBinaryPathWithHistory = %q, want %q", arch, derefOr(got, "<nil>"), want)
+		}
+	}
+
+	got := DetectBinaryPathWithHistory("yq", "yq_linux_riscv64.tar.gz",
+		binmanager.BinContentTypeTarGz, syslist.OsTypeLinux, history)
+	if derefOr(got, "<nil>") != "yq" {
+		t.Errorf("new asset with per-arch history = %q, want heuristic %q", derefOr(got, "<nil>"), "yq")
+	}
+}
+
+func TestAssetName(t *testing.T) {
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{"https://example.test/releases/download/v1.0.0/tool-linux.tar.gz", "tool-linux.tar.gz"},
+		{"https://example.test/tool.zip?raw=1", "tool.zip"},
+		{"", ""},
+		{"://bad", ""},
+	}
+	for _, tt := range tests {
+		if got := assetName(tt.in); got != tt.want {
+			t.Errorf("assetName(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
 }

@@ -15,14 +15,19 @@ func fingerprintFields(fields ...string) string {
 	return hashutil.XXH3Multi(parts...)
 }
 
+// extractionCheck names what verifying a download checks. A result recorded
+// under a weaker check must not be skipped as passed, so it changes whenever
+// the check gets stricter: "executable" added the executable-format check.
+const extractionCheck = "executable"
+
 // FingerprintBinary returns the verification fingerprint for a managed binary.
 func FingerprintBinary(url, hash, hashType, contentType, binaryPath string, extractDir bool, os, arch, libc string) string {
-	return fingerprintFields("binary", url, hash, hashType, contentType, binaryPath, strconv.FormatBool(extractDir), os, arch, libc)
+	return fingerprintFields("binary", extractionCheck, url, hash, hashType, contentType, binaryPath, strconv.FormatBool(extractDir), os, arch, libc)
 }
 
 // FingerprintRuntime returns the verification fingerprint for a managed runtime.
 func FingerprintRuntime(url, hash, hashType, contentType, binaryPath string, extractDir bool, os, arch, libc string) string {
-	return fingerprintFields("runtime", url, hash, hashType, contentType, binaryPath, strconv.FormatBool(extractDir), os, arch, libc)
+	return fingerprintFields("runtime", extractionCheck, url, hash, hashType, contentType, binaryPath, strconv.FormatBool(extractDir), os, arch, libc)
 }
 
 // FingerprintRuntimeApp returns the verification fingerprint for a runtime app.

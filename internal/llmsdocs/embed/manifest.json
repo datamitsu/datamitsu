@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 55,
-  "pageSetHash": "32c0af8f2ac1888d7e51196d632d0639",
+  "pageSetHash": "3aa2e2c8993d30c023dcd8818df65cb0",
   "pages": [
     {
       "slug": "about",
@@ -397,8 +397,8 @@
       "url": "https://datamitsu.com/docs/how-to/maintain-wrapper.md",
       "title": "Maintaining Wrapper Packages",
       "description": "Workflows for keeping wrapper package tool versions, runtimes, and hashes up to date using devtools commands",
-      "bytes": 34144,
-      "contentHash": "b447828bce06113a44744153187e3706"
+      "bytes": 34681,
+      "contentHash": "e5026caa8cb06e85f2a83579fc3668ad"
     },
     {
       "slug": "how-to/manage-cache",
@@ -451,8 +451,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 94258,
-      "contentHash": "8af170c55a588c94721e608064ed5044"
+      "bytes": 94544,
+      "contentHash": "0e4a2f896620b4ec16c2ae04c7726c85"
     },
     {
       "slug": "reference/comparison",
@@ -469,8 +469,8 @@
       "url": "https://datamitsu.com/docs/reference/configuration-api.md",
       "title": "Configuration API",
       "description": "Complete reference for the datamitsu configuration API",
-      "bytes": 72436,
-      "contentHash": "d3c9eece451b2e7381f7d5746e92d15e"
+      "bytes": 72943,
+      "contentHash": "869b82c3b47e8708d0689987ebd39851"
     },
     {
       "slug": "reference/ignore-rules",

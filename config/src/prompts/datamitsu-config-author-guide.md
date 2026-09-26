@@ -84,6 +84,12 @@ writes the configuration; never ship it to consumers.
 Newest first. Each entry names the first version that has it and what a
 configuration should do about it.
 
+- **after v0.3.1** - `devtools verify-all` and `pull-github --verify-extraction`
+  fail when a `binaryPath` extracts something other than an executable, such as
+  a completion script. `pull-github` keeps a `binaryPath` fixed by hand when the
+  asset's name does not change, and detects builds named only `alpine`. Point
+  any failing `binaryPath` at the real binary; drop hand-added entries that the
+  next `pull-github` now detects.
 - **after v0.3.1** - `datamitsu config lockfile` resolves transitive
   dependencies within the minimum release age: uv records the window in the
   lock, and a Go app fails on a module younger than it. Existing locks still
