@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"testing"
 )
@@ -100,6 +101,10 @@ func AssertChains(tb testing.TB, events []Event, orphaned ...string) {
 	for i, e := range events {
 		switch {
 		case e.Type == "phase" && e.Status == "start":
+			if _, seen := phaseAt[e.OpID]; seen {
+				tb.Errorf("clitest: operation %q starts twice", e.OpID)
+				continue
+			}
 			phaseAt[e.OpID] = i
 		case e.Type == "done":
 			doneAt[e.OpID] = append(doneAt[e.OpID], i)
@@ -172,9 +177,13 @@ func AssertChains(tb testing.TB, events []Event, orphaned ...string) {
 		}
 	}
 
-	for run := range phaseAt {
-		if n := len(doneAt[run]); n != 1 {
-			tb.Errorf("clitest: operation %q ends with %d done event(s), want 1", run, n)
+	for run, start := range phaseAt {
+		done := doneAt[run]
+		switch {
+		case len(done) != 1:
+			tb.Errorf("clitest: operation %q ends with %d done event(s), want 1", run, len(done))
+		case done[0] < start:
+			tb.Errorf("clitest: operation %q is done before its phase start", run)
 		}
 	}
 	for _, e := range events {
@@ -228,7 +237,6 @@ func NormalizeJSONL(stderr string) string {
 	return b.String()
 }
 
-// decodeLine decodes one JSON object, keeping numbers as written.
 func decodeLine(line string) (map[string]any, error) {
 	dec := json.NewDecoder(strings.NewReader(line))
 	dec.UseNumber()
@@ -239,7 +247,11 @@ func decodeLine(line string) (map[string]any, error) {
 	if fields == nil {
 		return nil, errors.New("null")
 	}
-	if dec.More() {
+	// More reports only another element of an enclosing array or object, so a
+	// stray "]" or "}" after the object would pass it; only EOF proves the line
+	// held one object and nothing else.
+	var extra json.RawMessage
+	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
 		return nil, errors.New("trailing data")
 	}
 	return fields, nil

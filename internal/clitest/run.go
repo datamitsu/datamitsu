@@ -153,7 +153,6 @@ var ambientKeys = map[string]struct{}{
 	"FORCE_COLOR": {}, "CLICOLOR_FORCE": {},
 }
 
-// ambientPrefixes are stripped as whole families.
 var ambientPrefixes = []string{"DATAMITSU_", "CODEX_", "COPILOT_", "JUNIE_"}
 
 // ExitCodeOf extracts the process exit code from an error returned by

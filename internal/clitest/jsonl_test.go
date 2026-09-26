@@ -48,6 +48,8 @@ func TestParseJSONLRejects(t *testing.T) {
 		"no type":        `{"op_id":"run-1"}`,
 		"no op_id":       `{"type":"done"}`,
 		"trailing data":  `{"type":"done","op_id":"run-1"} {}`,
+		"stray bracket":  `{"type":"done","op_id":"run-1"}]`,
+		"stray brace":    `{"type":"done","op_id":"run-1"}}`,
 		"null":           `null`,
 		"wrong type":     `{"type":"done","op_id":"run-1","runs":"two"}`,
 		"after a good 1": "{\"type\":\"done\",\"op_id\":\"run-1\"}\nnot json\n",
@@ -66,11 +68,13 @@ func TestNormalizeJSONL(t *testing.T) {
 {"ts":1737000000124,"type":"chunk","op_id":"run-1:a:","index":1,"total":3}
 
 error: not an event
+{"type":"done","op_id":"run-1","ts":7}]
 {"type":"log","op_id":"log-1","ts":5,"msg":"<a> & <b>","duration_ms":0}
 `
 	want := `{"duration_ms":1,"op_id":"run-1:a:","status":"done","tool":"a","ts":0,"type":"tool_run"}
 {"index":1,"op_id":"run-1:a:","total":3,"ts":0,"type":"chunk"}
 error: not an event
+{"type":"done","op_id":"run-1","ts":7}]
 {"duration_ms":1,"msg":"<a> & <b>","op_id":"log-1","ts":0,"type":"log"}
 `
 	got := NormalizeJSONL(in)
@@ -127,6 +131,8 @@ func TestAssertChains(t *testing.T) {
 		{"done before tool_run", []string{phase, doneOne, aStart, aDone}, nil, "follows the done"},
 		{"missing done", []string{phase, aStart, aDone}, nil, "ends with 0 done event(s)"},
 		{"two done events", []string{phase, aStart, aDone, doneOne, doneOne}, nil, "ends with 2 done event(s)"},
+		{"done before phase", []string{`{"type":"done","op_id":"run-1","status":"done"}`, phase}, nil, "done before its phase start"},
+		{"phase twice", []string{phase, phase, aStart, aDone, doneOne}, nil, "starts twice"},
 		{"done without phase", []string{doneOne}, nil, "has no phase start"},
 		{"progress status", []string{phase, `{"type":"tool_run","op_id":"run-1:a:","status":"progress","tool":"a"}`}, nil, `status "progress"`},
 	}
