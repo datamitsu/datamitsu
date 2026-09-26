@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 55,
-  "pageSetHash": "8789de68848af3b968deafebf3d7706c",
+  "pageSetHash": "8b8e07f62b26361c9222527d91004537",
   "pages": [
     {
       "slug": "about",
@@ -78,8 +78,8 @@
       "url": "https://datamitsu.com/docs/examples/uv-isolation.md",
       "title": "UV Isolation",
       "description": "Managing Python tools with UV runtime isolation for conflict-free environments",
-      "bytes": 3374,
-      "contentHash": "b1d73d12fe47a08645363ccd47107f6e"
+      "bytes": 3672,
+      "contentHash": "214c2ec4a07a80459ddf357aec75d020"
     },
     {
       "slug": "getting-started/core-concepts",
@@ -343,8 +343,8 @@
       "url": "https://datamitsu.com/docs/guides/supply-chain-security.md",
       "title": "Supply Chain Security",
       "description": "How datamitsu enforces supply chain integrity for Bun, pnpm, UV, and Go dependencies",
-      "bytes": 20566,
-      "contentHash": "92ac4981e642b439d2fdc58fa842f78b"
+      "bytes": 28057,
+      "contentHash": "4f5f6940fc943db5c20461a65b083242"
     },
     {
       "slug": "guides/tooling-system",
@@ -397,8 +397,8 @@
       "url": "https://datamitsu.com/docs/how-to/maintain-wrapper.md",
       "title": "Maintaining Wrapper Packages",
       "description": "Workflows for keeping wrapper package tool versions, runtimes, and hashes up to date using devtools commands",
-      "bytes": 33726,
-      "contentHash": "90cefa21539f3d141aac83295eebc2f6"
+      "bytes": 34144,
+      "contentHash": "b447828bce06113a44744153187e3706"
     },
     {
       "slug": "how-to/manage-cache",
@@ -451,8 +451,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 93817,
-      "contentHash": "a5a37d8a0fa32ede4435cba750512c30"
+      "bytes": 94258,
+      "contentHash": "8af170c55a588c94721e608064ed5044"
     },
     {
       "slug": "reference/comparison",

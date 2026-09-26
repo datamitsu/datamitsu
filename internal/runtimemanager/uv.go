@@ -155,6 +155,12 @@ func (rm *RuntimeManager) installUVAppOnce(ctx context.Context, appName string, 
 		return fmt.Errorf("failed to write pyproject.toml for %q: %w", appName, err)
 	}
 
+	configPath, err := uvAppConfigPath(appEnvPath)
+	if err != nil {
+		return fmt.Errorf("app %q: %w", appName, err)
+	}
+
+	var window uvWindow
 	if appConfig.LockFile != "" {
 		lockContent, decErr := DecompressLockFile(appConfig.LockFile)
 		if decErr != nil {
@@ -164,15 +170,21 @@ func (rm *RuntimeManager) installUVAppOnce(ctx context.Context, appName string, 
 		if err := os.WriteFile(lockFilePath, []byte(lockContent), 0o644); err != nil {
 			return fmt.Errorf("failed to write uv.lock for %q: %w", appName, err)
 		}
+		window, err = uvLockWindow(lockContent)
+	} else {
+		window, err = uvResolveWindow(configPath)
+	}
+	if err != nil {
+		return fmt.Errorf("app %q: %w", appName, err)
 	}
 
-	args := buildUVInstallArgs(appConfig.LockFile, rc.UV)
+	args := buildUVInstallArgs(appConfig.LockFile, configPath, window, rc.UV)
 
 	// Capture uv's combined output instead of inheriting the terminal so its
 	// reporter never corrupts an active progress bar; surface it only on failure.
 	cmd := exec.CommandContext(ctx, uvPath, args...) //nolint:gosec // G204: uvPath comes from the trusted managed runtime store and args are built from validated config
 	cmd.Dir = appEnvPath
-	cmd.Env = buildEnvWithOverrides(os.Environ(), envVars)
+	cmd.Env = buildEnvWithOverrides(withoutEnv(os.Environ(), uvInheritedOverride), envVars)
 
 	packageSpec := appConfig.PackageName
 	if appConfig.Version != "" {
@@ -198,6 +210,11 @@ func (rm *RuntimeManager) installUVAppOnce(ctx context.Context, appName string, 
 			stderr = stdout
 		}
 		ui.Current().Errorln(stderr)
+		if appConfig.LockFile == "" {
+			if hint := uvReleaseAgeHint(stderr, window); hint != "" {
+				return fmt.Errorf("failed to install UV app %q: %w\n%s", appName, err, hint)
+			}
+		}
 		return fmt.Errorf("failed to install UV app %q: %w", appName, err)
 	}
 
@@ -272,15 +289,27 @@ func uvInstalledCount(stdout string) int {
 // no wheel for the current platform, install fails — intentional for supply
 // chain security; users must pre-resolve to wheel-available versions in
 // their lockfile.
-func buildUVInstallArgs(lockFile string, uvRC *config.RuntimeConfigUV) []string {
+//
+// Only the app's own uv.toml (configPath) is read, never a user- or
+// system-level one: those could inject resolver settings, such as an index or
+// an exclude-newer, into an install that has to be the same on every machine.
+func buildUVInstallArgs(lockFile, configPath string, window uvWindow, uvRC *config.RuntimeConfigUV) []string {
 	// --output-format=json emits a final machine-readable summary on stdout
 	// (parsed for the installed-package count). uv's per-phase progress lines
 	// still go to stderr and are streamed for a live spinner label.
 	args := []string{"sync", "--output-format=json", "--no-install-project"}
 
+	if configPath != "" {
+		args = append(args, "--config-file", configPath)
+	} else {
+		args = append(args, "--no-config")
+	}
+
 	if lockFile != "" {
 		args = append(args, "--locked", "--no-build")
 	}
+
+	args = append(args, window.args()...)
 
 	if uvRC != nil && uvRC.PythonVersion != "" {
 		args = append(args, "--python", uvRC.PythonVersion)
@@ -364,6 +393,17 @@ func mergeInstallEnv(reserved, custom map[string]string, appDir string) map[stri
 	}
 	maps.Copy(merged, reserved)
 	return merged
+}
+
+func withoutEnv(base []string, drop func(key string) bool) []string {
+	kept := make([]string, 0, len(base))
+	for _, e := range base {
+		if key, _, _ := strings.Cut(e, "="); drop(key) {
+			continue
+		}
+		kept = append(kept, e)
+	}
+	return kept
 }
 
 func buildEnvWithOverrides(base []string, overrides map[string]string) []string {

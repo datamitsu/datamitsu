@@ -10,6 +10,7 @@ import (
 	"sort"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 
 	"github.com/spf13/cobra"
@@ -97,13 +98,17 @@ func runConfigLockfile(cmd *cobra.Command, args []string) error {
 
 	var lockContent string
 	if app.Go != nil {
+		eff, effErr := runtimeconfig.Get()
+		if effErr != nil {
+			return fmt.Errorf("failed to read runtime config: %w", effErr)
+		}
 		// Go apps cannot regenerate a lockfile via reinstall: the build is
 		// mandatory-lockfile and refuses without one. Resolve dependencies with
 		// `go mod init` + `go get` in an isolated temp workdir — generation pulls
 		// 100+MiB of module cache we must not leave behind in the install path —
 		// then read go.mod + go.sum back from there.
 		lockContent, err = generateGoLockContent(appName, app, func(workDir string) error {
-			return freshRM.GenerateGoLockFiles(ctx, appName, freshApps[appName].Go, workDir)
+			return freshRM.GenerateGoLockFiles(ctx, appName, freshApps[appName].Go, workDir, eff.MinimumReleaseAgeMinutes)
 		})
 		if err != nil {
 			return err

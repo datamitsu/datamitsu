@@ -159,6 +159,26 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
 - Use **typed structs with `json` tags** for public runtime-config surfaces, not `map[string]any` — compile-time checking, stable serialization, no accidental key drift.
 - New runtime parameters must surface in `datamitsu config runtime` automatically (a new `Effective` field does this for free), never as a hidden value readable only from Go.
 
+## Minimum Release Age
+
+- Wherever a version is chosen, the minimum release age applies. `pull-*` and
+  the Go lock-file check (`checkGoModuleAge`) use the effective value
+  (`runtimeconfig.Get()`). The windows pnpm and uv resolve transitive
+  dependencies with use the constant `runtimeconfig.MinimumReleaseAgeMinutes`:
+  what they resolve is written into a lock file, which must not depend on the
+  environment that generated it.
+- A uv install passes back the window its lock recorded (`uvLockWindow`), never
+  the constant: `uv sync --locked` rejects a lock given any other window, or the
+  same one in another unit. A lock without `[options]` installs with none.
+- An inherited setting must not override one datamitsu gives a package
+  manager. uv runs with `--no-config` (or `--config-file` for the app's own
+  `uv.toml`) and without `UV_CONFIG_FILE`/`UV_EXCLUDE_NEWER*`; pnpm runs without
+  the `pnpm_config_*` variable of any key in the merged `pnpm-workspace.yaml`
+  or of the `minimum_release_age` family. Strip only those: pnpm 12 reads its
+  registry from `pnpm_config_registry` alone.
+- Go reports commit times, so its check catches a fresh pin, not a backdated
+  commit. JVM and binary apps have no dependency tree to filter.
+
 ## App Dependencies
 
 - `apps.<name>.dependsOn` is a runtime availability contract. Use

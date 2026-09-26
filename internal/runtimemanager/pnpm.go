@@ -276,9 +276,14 @@ func (rm *RuntimeManager) installPNPMAppOnce(ctx context.Context, spec pnpmAppIn
 	envVars["PATH"] = strings.Join(pathParts, string(os.PathListSeparator))
 	envVars = mergeInstallEnv(envVars, customEnv, spec.appEnvPath)
 
+	overridesWorkspace, err := pnpmWorkspaceEnvOverride(mergedWorkspaceYAML)
+	if err != nil {
+		return fmt.Errorf("app %q: %w", spec.appName, err)
+	}
+
 	cmd := exec.CommandContext(ctx, pnpmBinPath, buildPNPMInstallArgs(spec.lockFile != "")...) //nolint:gosec // pnpmBinPath comes from the configured pnpm runtime and the args are fixed
 	cmd.Dir = spec.appEnvPath
-	cmd.Env = buildEnvWithOverrides(os.Environ(), envVars)
+	cmd.Env = buildEnvWithOverrides(withoutEnv(os.Environ(), overridesWorkspace), envVars)
 
 	log.Debug("installing "+spec.runtimeKind+" app",
 		zap.String("app", spec.appName),
@@ -324,6 +329,48 @@ func filesWithWorkspaceYAML(files map[string]string, mergedYAML string) map[stri
 	maps.Copy(out, files)
 	out["pnpm-workspace.yaml"] = mergedYAML
 	return out
+}
+
+// pnpmWorkspaceEnvOverride reports the inherited variables that would override
+// the app's pnpm-workspace.yaml. pnpm lets pnpm_config_<snake_case> (in either
+// case) win over the workspace file, so an exported
+// pnpm_config_minimum_release_age=0 would drop the release-age window from a
+// lock generation, and pnpm_config_dangerously_allow_all_builds would run
+// dependency scripts at every install. The whole minimum_release_age family is
+// dropped as well, because its exclude list loosens the window without naming
+// minimumReleaseAge. Variables for settings the file does not hold, such as the
+// registry, pass through.
+func pnpmWorkspaceEnvOverride(mergedYAML string) (func(key string) bool, error) {
+	var settings map[string]any
+	if err := yaml.Unmarshal([]byte(mergedYAML), &settings); err != nil {
+		return nil, fmt.Errorf("failed to parse the merged pnpm-workspace.yaml: %w", err)
+	}
+	owned := make(map[string]bool, len(settings))
+	for key := range settings {
+		owned[pnpmEnvSettingName(key)] = true
+	}
+	return func(key string) bool {
+		setting, ok := strings.CutPrefix(strings.ToLower(key), "pnpm_config_")
+		return ok && (owned[setting] || strings.HasPrefix(setting, "minimum_release_age"))
+	}, nil
+}
+
+func pnpmEnvSettingName(key string) string {
+	var b strings.Builder
+	for i, r := range key {
+		switch {
+		case r == '-':
+			b.WriteByte('_')
+		case r >= 'A' && r <= 'Z':
+			if i > 0 {
+				b.WriteByte('_')
+			}
+			b.WriteRune(r + ('a' - 'A'))
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
 
 func buildPNPMInstallArgs(hasLockFile bool) []string {

@@ -498,6 +498,13 @@ special config-load path that permits the selected app's initially missing
 `lockFile`; every normal config load requires lock files for Bun, Node, UV, and Go
 apps.
 
+Transitive dependencies are subject to the minimum release age: pnpm resolves
+Bun and Node apps with `minimumReleaseAge`, uv resolves UV apps with
+`--exclude-newer P7D` and records the window in the lock, and a Go app fails
+when any resolved module is younger than the effective minimum release age
+(`DATAMITSU_MIN_RELEASE_AGE=0` skips that check). See
+[Transitive dependencies](/docs/guides/supply-chain-security#transitive-dependencies).
+
 **Examples:**
 
 ```bash
@@ -1669,7 +1676,7 @@ from the same shell function that runs an activation through `eval`.
 | `DATAMITSU_CACHE_DIR`             | Custom base directory; ephemeral data goes in `{base}/cache`, downloaded artifacts in `{base}/store` | `$XDG_CACHE_HOME/datamitsu` or `~/.cache/datamitsu` |
 | `DATAMITSU_CONCURRENCY`           | Number of concurrent download workers                                                                | `3`                                                 |
 | `DATAMITSU_INSTALL_TIMEOUT`       | Per-app install timeout in seconds (`0` = disabled)                                                  | `600`                                               |
-| `DATAMITSU_MIN_RELEASE_AGE`       | Minimum release age in minutes for `pull-*` version selection (`0` = disabled)                       | `10080`                                             |
+| `DATAMITSU_MIN_RELEASE_AGE`       | Minimum release age in minutes for `pull-*` and the Go lock-file check (`0` = disabled)              | `10080`                                             |
 | `DATAMITSU_MAX_CMD_LENGTH`        | Maximum command-line length before a list-taking operation is split into chunks                      | `32000`                                             |
 | `DATAMITSU_MAX_ERROR_CMD_DISPLAY` | Maximum command length shown in an error before truncation                                           | `120`                                               |
 | `DATAMITSU_MAX_PARALLEL_WORKERS`  | Maximum parallel tool execution workers                                                              | `max(4, floor(NumCPU * 0.75))`, capped at 16        |

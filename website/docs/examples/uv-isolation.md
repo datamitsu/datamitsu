@@ -59,6 +59,10 @@ For every UV app:
 3. Content prefixed with `br:` is brotli-compressed and base64-encoded
 4. The lock records hashes for the resolved artifacts, catching changes where the same version resolves to
    different transitive dependencies
+5. The install passes back the release-age window the lock recorded, and runs
+   with `--no-config` (or the app's own `uv.toml`), so a user's uv settings
+   cannot change it. See
+   [Release Age of Transitive Dependencies](../guides/supply-chain-security.md#release-age-of-transitive-dependencies)
 
 To bootstrap one, first declare the package name and version, then run
 `datamitsu config lockfile <appName>` and paste its output into `lockFile`. That

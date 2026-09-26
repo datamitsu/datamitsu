@@ -559,7 +559,7 @@ func TestGenerateGoLockFiles_MissingPackageName(t *testing.T) {
 	rm := New(makeTestGoRuntimes())
 	appConfig := &binmanager.AppConfigGo{Version: "v1.1.4", Runtime: "go"}
 
-	err := rm.GenerateGoLockFiles(context.Background(), "govulncheck", appConfig, t.TempDir())
+	err := rm.GenerateGoLockFiles(context.Background(), "govulncheck", appConfig, t.TempDir(), 0)
 	if err == nil {
 		t.Fatal("expected error when packageName is empty")
 	}
@@ -572,7 +572,7 @@ func TestGenerateGoLockFiles_MissingVersion(t *testing.T) {
 	rm := New(makeTestGoRuntimes())
 	appConfig := &binmanager.AppConfigGo{PackageName: "golang.org/x/vuln/cmd/govulncheck", Runtime: "go"}
 
-	err := rm.GenerateGoLockFiles(context.Background(), "govulncheck", appConfig, t.TempDir())
+	err := rm.GenerateGoLockFiles(context.Background(), "govulncheck", appConfig, t.TempDir(), 0)
 	if err == nil {
 		t.Fatal("expected error when version is empty")
 	}
@@ -589,7 +589,7 @@ func TestGenerateGoLockFiles_InvalidRuntime(t *testing.T) {
 		Runtime:     "nonexistent",
 	}
 
-	err := rm.GenerateGoLockFiles(context.Background(), "govulncheck", appConfig, t.TempDir())
+	err := rm.GenerateGoLockFiles(context.Background(), "govulncheck", appConfig, t.TempDir(), 0)
 	if err == nil {
 		t.Fatal("expected error for nonexistent runtime")
 	}
