@@ -47,6 +47,21 @@ var (
 // errCancelled is a sentinel error used when tasks are cancelled due to fail-fast context cancellation.
 var errCancelled = errors.New("cancelled")
 
+// errFailFast is the cause the executor cancels a run with when a task fails
+// under fail-fast. Any other cause — a signal the caller turned into a
+// cancellation, an editor withdrawing a request — is an interruption, and the
+// two are reported differently: a fail-fast cancel is a consequence of the
+// failure shown beside it, an interruption is not.
+var errFailFast = errors.New("fail-fast")
+
+// cancelReason classifies a task stopped because ctx was cancelled.
+func cancelReason(ctx context.Context) FailureReason {
+	if errors.Is(context.Cause(ctx), errFailFast) {
+		return FailureReasonCancelled
+	}
+	return FailureReasonInterrupted
+}
+
 // Executor executes tool tasks
 type Executor struct {
 	rootPath             string
@@ -139,9 +154,9 @@ func (e *Executor) Execute(ctx context.Context, plan *ExecutionPlan) ([]GroupExe
 	e.cmdInfos.Store(newCommandInfoMemo())
 	defer e.cmdInfos.Store(nil)
 
-	// Create a cancellable context for fail-fast propagation
-	execCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	execCtx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
+	failFast := func() { cancel(errFailFast) }
 
 	for _, group := range plan.Groups {
 		// Check if already cancelled before starting next group
@@ -151,7 +166,7 @@ func (e *Executor) Execute(ctx context.Context, plan *ExecutionPlan) ([]GroupExe
 		}
 
 		log.Debug("executing group", zap.Int("priority", group.Priority), zap.Int("taskCount", len(group.Tasks)))
-		groupResult := e.executeGroup(execCtx, group, cancel)
+		groupResult := e.executeGroup(execCtx, group, failFast)
 		results = append(results, groupResult)
 
 		log.Debug("group execution completed",
@@ -162,11 +177,11 @@ func (e *Executor) Execute(ctx context.Context, plan *ExecutionPlan) ([]GroupExe
 		// Fail-fast: stop on first group failure
 		if e.failFast && !groupResult.Success {
 			log.Debug("fail-fast triggered", zap.Int("priority", group.Priority))
-			cancel()
+			failFast()
 			// Collect failed tool errors, skip cancelled tasks (noise from fail-fast)
 			var errorMessages []string
 			for _, r := range groupResult.Results {
-				if !r.Success && !errors.Is(r.Error, errCancelled) && r.FailureReason != FailureReasonCancelled {
+				if !r.Success && !errors.Is(r.Error, errCancelled) && !r.IsCancelled() {
 					// Create identifier with directory for clarity in monorepos
 					toolIdentifier := r.ToolName
 					if r.RelativeDir != "" {
@@ -213,8 +228,15 @@ func (e *Executor) Execute(ctx context.Context, plan *ExecutionPlan) ([]GroupExe
 	return results, nil
 }
 
-// executeGroup executes a task group
-func (e *Executor) executeGroup(ctx context.Context, group TaskGroup, cancel context.CancelFunc) (result GroupExecutionResult) {
+// TaskDir is the directory a task runs in, relative to the git root, as its
+// results report it in RelativeDir ("" is the root).
+func (e *Executor) TaskDir(task Task) string {
+	return e.getRelativeDir(e.getWorkingDir(task))
+}
+
+// executeGroup executes a task group. failFast cancels the whole run; it is
+// called only when the executor runs with fail-fast.
+func (e *Executor) executeGroup(ctx context.Context, group TaskGroup, failFast func()) (result GroupExecutionResult) {
 	startTime := time.Now()
 	log.Debug("executeGroup start", zap.Int("priority", group.Priority), zap.Int("tasks", len(group.Tasks)))
 	result = GroupExecutionResult{
@@ -259,14 +281,14 @@ func (e *Executor) executeGroup(ctx context.Context, group TaskGroup, cancel con
 			if !taskResult.Success {
 				result.Success = false
 				if e.failFast {
-					cancel()
+					failFast()
 					return result
 				}
 			}
 		} else {
 			// Multiple non-overlapping tasks - execute in parallel
 			log.Debug("executing tasks in parallel", zap.Int("parallelTaskCount", len(parallelTasks)))
-			taskResults := e.executeTasksParallel(ctx, parallelTasks, cancel)
+			taskResults := e.executeTasksParallel(ctx, parallelTasks, failFast)
 			result.Results = append(result.Results, taskResults...)
 			log.Debug("parallel execution completed", zap.Int("resultCount", len(taskResults)))
 
@@ -281,7 +303,7 @@ func (e *Executor) executeGroup(ctx context.Context, group TaskGroup, cancel con
 				if !tr.Success {
 					result.Success = false
 					if e.failFast {
-						cancel()
+						failFast()
 						return result
 					}
 				}
@@ -342,9 +364,9 @@ func (e *Executor) detectParallelGroups(tasks []Task) [][]Task {
 }
 
 // executeTasksParallel executes multiple tasks in parallel with worker pool limiting.
-// cancel is called on first failure when failFast is enabled, so that sibling tasks
+// failFast is called on first failure when fail-fast is enabled, so that sibling tasks
 // waiting for the semaphore (or running via exec.CommandContext) are stopped promptly.
-func (e *Executor) executeTasksParallel(ctx context.Context, tasks []Task, cancel context.CancelFunc) []ExecutionResult {
+func (e *Executor) executeTasksParallel(ctx context.Context, tasks []Task, failFast func()) []ExecutionResult {
 	maxWorkers := env.GetMaxParallelWorkers()
 	log.Debug("executeTasksParallel start",
 		zap.Int("taskCount", len(tasks)),
@@ -382,13 +404,7 @@ func (e *Executor) executeTasksParallel(ctx context.Context, tasks []Task, cance
 			case <-ctx.Done():
 				log.Debug("parallel task skipped due to cancellation",
 					zap.Int("index", idx), zap.String("toolName", t.ToolName))
-				results[idx] = ExecutionResult{
-					ToolName:      t.ToolName,
-					Success:       false,
-					Error:         errCancelled,
-					Cancelled:     true,
-					FailureReason: FailureReasonCancelled,
-				}
+				results[idx] = e.unstartedResult(ctx, t)
 				return
 			case semaphore <- struct{}{}:
 				// Acquired semaphore slot
@@ -399,13 +415,7 @@ func (e *Executor) executeTasksParallel(ctx context.Context, tasks []Task, cance
 			if ctx.Err() != nil {
 				log.Debug("parallel task skipped after semaphore due to cancellation",
 					zap.Int("index", idx), zap.String("toolName", t.ToolName))
-				results[idx] = ExecutionResult{
-					ToolName:      t.ToolName,
-					Success:       false,
-					Error:         errCancelled,
-					Cancelled:     true,
-					FailureReason: FailureReasonCancelled,
-				}
+				results[idx] = e.unstartedResult(ctx, t)
 				return
 			}
 
@@ -419,7 +429,7 @@ func (e *Executor) executeTasksParallel(ctx context.Context, tasks []Task, cance
 			if e.failFast && !results[idx].Success {
 				log.Debug("fail-fast: cancelling sibling parallel tasks",
 					zap.Int("index", idx), zap.String("toolName", t.ToolName))
-				cancel()
+				failFast()
 			}
 		}(i, task)
 	}
@@ -427,6 +437,23 @@ func (e *Executor) executeTasksParallel(ctx context.Context, tasks []Task, cance
 	wg.Wait()
 	log.Debug("executeTasksParallel completed", zap.Int("taskCount", len(tasks)))
 	return results
+}
+
+// unstartedResult is the result of a task cancelled while it waited for a
+// worker. It carries the task's directory like any other result, so a caller can
+// tell which planned task it stands for; it has no timing because nothing ran.
+func (e *Executor) unstartedResult(ctx context.Context, task Task) ExecutionResult {
+	workingDir := e.getWorkingDir(task)
+	return ExecutionResult{
+		ToolName:      task.ToolName,
+		Success:       false,
+		Error:         errCancelled,
+		WorkingDir:    workingDir,
+		RelativeDir:   e.getRelativeDir(workingDir),
+		Scope:         task.OpConfig.Scope,
+		Cancelled:     true,
+		FailureReason: cancelReason(ctx),
+	}
 }
 
 // executeTask executes a single task
@@ -858,6 +885,9 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 	var outputs []string
 	var lastExitCode int
 	var processedFiles []string
+	// The failure a frame shows is the last failing file's: its exit code and
+	// its command, not those of a later file that passed.
+	var failedCommand string
 
 	for i, file := range filesToProcess {
 		// Check if context is cancelled before processing next file
@@ -868,7 +898,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 			result.Success = false
 			result.Error = fmt.Errorf("%w: %d files remaining", errCancelled, len(filesToProcess)-i)
 			result.Cancelled = true
-			result.FailureReason = FailureReasonCancelled
+			result.FailureReason = cancelReason(ctx)
 			break
 		}
 
@@ -995,9 +1025,10 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 			result.Success = false
 			result.ExitCode = exitCode
 			result.Error = fmt.Errorf("failed to execute for file %s (exit code %d): %w", file, exitCode, err)
+			failedCommand = cmdString
 			if ctx.Err() != nil {
 				result.Cancelled = true
-				result.FailureReason = FailureReasonCancelled
+				result.FailureReason = cancelReason(ctx)
 				if e.fileProgressCallback != nil {
 					e.fileProgressCallback(task.ToolName, cachedCount+i+1, totalFiles, fileSuccess)
 				}
@@ -1033,6 +1064,9 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 	} else if result.ExitCode == 0 {
 		// If marked as failed but no exit code set, use last exit code
 		result.ExitCode = lastExitCode
+	}
+	if failedCommand != "" {
+		result.Command = failedCommand
 	}
 
 	result.Output = strings.Join(outputs, "\n")
@@ -1214,7 +1248,7 @@ func (e *Executor) executeBatchChunk(ctx context.Context, task Task, cmdInfo *bi
 		result.Error = fmt.Errorf("failed to execute (exit code %d): %w", exitCode, err)
 		if ctx.Err() != nil {
 			result.Cancelled = true
-			result.FailureReason = FailureReasonCancelled
+			result.FailureReason = cancelReason(ctx)
 		}
 	} else {
 		log.Debug("batch execution succeeded")
@@ -1264,7 +1298,7 @@ func (e *Executor) executeBatchChunksParallel(ctx context.Context, task Task, cm
 					Success:       false,
 					Error:         errCancelled,
 					Cancelled:     true,
-					FailureReason: FailureReasonCancelled,
+					FailureReason: cancelReason(ctx),
 				}
 				mu.Lock()
 				result.Success = false
@@ -1283,7 +1317,7 @@ func (e *Executor) executeBatchChunksParallel(ctx context.Context, task Task, cm
 					Success:       false,
 					Error:         errCancelled,
 					Cancelled:     true,
-					FailureReason: FailureReasonCancelled,
+					FailureReason: cancelReason(ctx),
 				}
 				mu.Lock()
 				result.Success = false
@@ -1323,7 +1357,7 @@ func (e *Executor) executeBatchChunksParallel(ctx context.Context, task Task, cm
 			errors = append(errors, fmt.Errorf("chunk %d: %w", i+1, chunkResult.Error))
 		}
 		result.Diagnostics = append(result.Diagnostics, chunkResult.Diagnostics...)
-		if !chunkResult.Success && chunkResult.FailureReason != FailureReasonCancelled {
+		if !chunkResult.Success && !chunkResult.IsCancelled() {
 			allCancelled = false
 		}
 	}
@@ -1335,7 +1369,7 @@ func (e *Executor) executeBatchChunksParallel(ctx context.Context, task Task, cm
 
 	if !result.Success && allCancelled {
 		result.Cancelled = true
-		result.FailureReason = FailureReasonCancelled
+		result.FailureReason = cancelReason(ctx)
 	}
 
 	result.recordTiming(startTime)

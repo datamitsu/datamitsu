@@ -159,6 +159,25 @@ func TestCanonicalEnviron_ResolvesDuplicatesLastWins(t *testing.T) {
 	}
 }
 
+// An execution-only variable changes how far one command goes, not what a farm
+// contains: it must not make an activated shell re-bake its farm, yet config JS
+// can still read it, so the config-eval fingerprint keeps it.
+func TestEnviron_ExcludesExecutionOnlyVariables(t *testing.T) {
+	t.Setenv(failFast.Name, "false")
+
+	for _, kv := range Environ() {
+		if strings.HasPrefix(kv, failFast.Name+"=") {
+			t.Errorf("Environ() contains %q; an execution-only variable must not enter the staleness key", kv)
+		}
+	}
+	if !slices.Contains(EnvironAll(), failFast.Name+"=false") {
+		t.Errorf("EnvironAll() dropped %s; config JS can read it through facts().env", failFast.Name)
+	}
+	if ObservationOnly(failFast.Name) {
+		t.Errorf("%s is execution-only, not observation-only", failFast.Name)
+	}
+}
+
 // An entry without '=' is not a variable and must not enter the fingerprint.
 func TestCanonicalEnviron_SkipsMalformedEntries(t *testing.T) {
 	got := canonicalEnviron([]string{"NOEQUALS", "OK=1"}, func(string) bool { return false })

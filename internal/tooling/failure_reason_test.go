@@ -74,41 +74,66 @@ func TestFailureReasonIndependent_ToolExitError(t *testing.T) {
 	}
 }
 
+// A task that never got a worker is reported with the cause of the
+// cancellation: fail-fast when the executor stopped the run, an interruption when
+// the caller did. It carries its directory, so a caller can match it to the
+// planned task, and no timing, because nothing ran.
 func TestFailureReasonCancelled_ParallelTaskSkipped(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // Cancel immediately so all tasks see cancellation
+	tests := []struct {
+		name  string
+		cause error
+		want  FailureReason
+	}{
+		{name: "fail-fast", cause: errFailFast, want: FailureReasonCancelled},
+		{name: "interrupted", cause: errors.New("interrupt signal received"), want: FailureReasonInterrupted},
+		{name: "plain cancel", cause: nil, want: FailureReasonInterrupted},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancelCause(context.Background())
+			cancel(tt.cause)
 
-	appManager := &mockAppManager{
-		binaries: map[string]string{
-			"tool1": "/bin/true",
-		},
-	}
-	executor := NewExecutor("/tmp", false, true, appManager, nil)
+			appManager := &mockAppManager{
+				binaries: map[string]string{
+					"tool1": "/bin/true",
+				},
+			}
+			executor := NewExecutor("/root", false, true, appManager, nil)
 
-	tasks := []Task{
-		{
-			ToolName:  "tool1",
-			Operation: config.OpLint,
-			OpConfig: config.ToolOperation{
-				App:   "tool1",
-				Scope: config.ToolScopeRepository,
-			},
-		},
-	}
+			tasks := []Task{
+				{
+					ToolName:    "tool1",
+					Operation:   config.OpLint,
+					ProjectPath: "/root/pkg/a",
+					OpConfig: config.ToolOperation{
+						App:   "tool1",
+						Scope: config.ToolScopePerProject,
+					},
+				},
+			}
 
-	results := executor.executeTasksParallel(ctx, tasks, cancel)
+			results := executor.executeTasksParallel(ctx, tasks, func() { t.Error("a cancelled task triggered fail-fast") })
 
-	if len(results) != 1 {
-		t.Fatalf("expected 1 result, got %d", len(results))
-	}
-	if results[0].Success {
-		t.Fatal("expected failure")
-	}
-	if !results[0].Cancelled {
-		t.Error("expected Cancelled = true")
-	}
-	if results[0].FailureReason != FailureReasonCancelled {
-		t.Errorf("FailureReason = %d, want FailureReasonCancelled (%d)", results[0].FailureReason, FailureReasonCancelled)
+			if len(results) != 1 {
+				t.Fatalf("expected 1 result, got %d", len(results))
+			}
+			r := results[0]
+			if r.Success {
+				t.Fatal("expected failure")
+			}
+			if !r.Cancelled || !r.IsCancelled() {
+				t.Error("expected the result to be cancelled")
+			}
+			if r.FailureReason != tt.want {
+				t.Errorf("FailureReason = %d, want %d", r.FailureReason, tt.want)
+			}
+			if r.Started() {
+				t.Error("a task that never got a worker reports that it started")
+			}
+			if r.RelativeDir != "pkg/a" || r.RelativeDir != executor.TaskDir(tasks[0]) {
+				t.Errorf("RelativeDir = %q, want pkg/a, the task's directory", r.RelativeDir)
+			}
+		})
 	}
 }
 
@@ -161,10 +186,13 @@ func TestFailureReasonCancelled_PerFileCancellation(t *testing.T) {
 	if result.Success {
 		t.Fatal("expected failure due to cancellation")
 	}
-	// The result should be classified as cancelled (the cancellation path in executePerFile
-	// sets FailureReasonCancelled, and executeTask preserves it since it's not FailureReasonNone)
-	if result.FailureReason != FailureReasonCancelled {
-		t.Errorf("FailureReason = %d, want FailureReasonCancelled (%d)", result.FailureReason, FailureReasonCancelled)
+	// The caller cancelled the context, not fail-fast: the run was interrupted.
+	// executeTask keeps the classification because it is not FailureReasonNone.
+	if result.FailureReason != FailureReasonInterrupted {
+		t.Errorf("FailureReason = %d, want FailureReasonInterrupted (%d)", result.FailureReason, FailureReasonInterrupted)
+	}
+	if !result.IsCancelled() || !result.Started() {
+		t.Errorf("IsCancelled() = %v, Started() = %v; want a started task that was cancelled", result.IsCancelled(), result.Started())
 	}
 }
 

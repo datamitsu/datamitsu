@@ -1,6 +1,6 @@
 Runs fix followed by lint on specified files or the entire project,
 reusing shared context (config, file listing, caches) for efficiency.
-If fix fails, lint is skipped.
+If fix fails, lint is skipped, unless --fail-fast=false runs it anyway.
 
 Use --explain to see the execution plan without running:
   --explain          Show brief plan (summary mode, default)
@@ -13,6 +13,7 @@ Usage:
 
 Flags:
       --explain string[="summary"]   Show execution plan without running (summary|detailed|json)
+      --fail-fast                    Stop at the first failing tool; --fail-fast=false runs everything to the end (also via DATAMITSU_FAIL_FAST) (default true)
       --fail-on-skip                 Exit non-zero if any tool is skipped because its binary is unavailable for this platform
       --file-scoped                  Only process git staged files
   -h, --help                         help for check

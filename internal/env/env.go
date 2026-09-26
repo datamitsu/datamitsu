@@ -3,6 +3,7 @@
 package env
 
 import (
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
@@ -392,6 +393,42 @@ func ConfigCacheEnabled() bool {
 	default:
 		return true
 	}
+}
+
+// FailFast reports whether a failing tool stops a fix, lint or check run, and
+// whether DATAMITSU_FAIL_FAST decided it. The variable takes true or 1 and false
+// or 0, case-insensitive; unset, empty or any other value yields the default
+// with set false. CheckFailFast tells an invalid value apart from an unset one.
+func FailFast() (value, set bool) {
+	if v, ok := parseFailFast(os.Getenv(failFast.Name)); ok {
+		return v, true
+	}
+	v, _ := parseFailFast(failFast.DefaultValue)
+	return v, false
+}
+
+// CheckFailFast returns an error naming DATAMITSU_FAIL_FAST when it holds a
+// value FailFast does not accept. The command layer turns it into a usage error;
+// FailFast itself falls back to the default, as every getter here does.
+func CheckFailFast() error {
+	raw := os.Getenv(failFast.Name)
+	if raw == "" {
+		return nil
+	}
+	if _, ok := parseFailFast(raw); ok {
+		return nil
+	}
+	return fmt.Errorf("invalid %s value: %q (must be true, false, 1 or 0)", failFast.Name, raw)
+}
+
+func parseFailFast(raw string) (value, ok bool) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "true", "1":
+		return true, true
+	case "false", "0":
+		return false, true
+	}
+	return false, false
 }
 
 // NoParse returns true if output parsing is disabled (tools' raw output is shown

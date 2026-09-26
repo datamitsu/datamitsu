@@ -21,7 +21,7 @@ datamitsu supports three operations that you run through CLI commands:
 | `datamitsu lint`  | lint      | Report code issues without modifying files        |
 | `datamitsu check` | check     | Run fix then lint in sequence                     |
 
-`datamitsu check` is the most common command -- it fixes what it can, then reports remaining issues. If fix fails, lint is skipped.
+`datamitsu check` is the most common command -- it fixes what it can, then reports remaining issues. If fix fails, lint is skipped, unless `--fail-fast=false` runs it anyway.
 
 ## Defining Tools
 
@@ -195,14 +195,14 @@ datamitsu runs tools in parallel across projects. The maximum number of parallel
 
 ## Fail-Fast Behavior
 
-When a tool fails, datamitsu immediately cancels all remaining tasks:
+By default, when a tool fails, datamitsu cancels all remaining tasks:
 
 1. The failing tool's error is captured
 2. A cancellation signal is sent to prevent new tasks from starting
 3. Already-running processes are cleaned up via process group signals
-4. Only the independent failure is shown -- cascading cancellations are filtered out
+4. The failure is shown in full; the tasks it stopped are listed as `cancelled` or `not started`, never as failures
 
-This means you see the actual error without noise from tasks that were cancelled as a side effect.
+`--fail-fast=false` (or `DATAMITSU_FAIL_FAST=false`) turns this off and runs every tool, file and operation to the end, so one run reports every failure. The exit code is still non-zero when anything failed. See [Keep-going runs](../reference/cli-commands.md#keep-going-runs).
 
 ## Output Handling
 

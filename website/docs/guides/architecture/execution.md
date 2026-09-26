@@ -1,11 +1,11 @@
 ---
 title: Parallel Execution
-description: How datamitsu runs task groups sequentially while parallelizing tasks within each group, with fail-fast semantics
+description: How datamitsu runs task groups sequentially while parallelizing tasks within each group, with fail-fast by default and a keep-going mode
 ---
 
 # Parallel Execution
 
-The executor is the third stage of datamitsu's execution pipeline. It takes the ordered task groups from the [planner](./planner.md) and runs them — sequentially between groups, in parallel within groups — while enforcing fail-fast behavior so errors surface immediately.
+The executor is the third stage of datamitsu's execution pipeline. It takes the ordered task groups from the [planner](./planner.md) and runs them — sequentially between groups, in parallel within groups — stopping at the first failure by default so errors surface immediately, or running everything to the end when fail-fast is off.
 
 ## Pre-Install Phase
 
@@ -91,35 +91,49 @@ A fully sequential approach would be too slow in large monorepos. A fully parall
 
 ## Fail-Fast Semantics
 
-When any task fails, datamitsu cancels all remaining work immediately rather than continuing to run tools that are likely to fail or produce misleading results.
+Fail-fast is the default: when any task fails, datamitsu cancels all remaining work rather than continuing to run tools that are likely to fail or produce misleading results.
 
 The mechanism works in three steps:
 
 1. **Failure detected:** A task in the current group exits with a non-zero status.
-2. **Context cancelled:** The executor calls the context cancellation function, signaling all in-flight and pending tasks.
-3. **Cleanup:** Running tasks receive the cancellation signal. Tasks that haven't started yet skip execution immediately.
+2. **Context cancelled:** The executor cancels the run's context with a fail-fast cause, signaling all in-flight and pending tasks.
+3. **Cleanup:** Running tasks receive the cancellation signal and their process groups are stopped. Tasks that haven't started yet skip execution immediately.
+
+Fail-fast stops a run at five levels. `--fail-fast=false` (or `DATAMITSU_FAIL_FAST=false`) turns every one of them off:
+
+| Level                    | Fail-fast (default)                                  | `--fail-fast=false`                                                                            |
+| ------------------------ | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Priority groups          | Stop after the first failing group                   | Every group runs in order                                                                      |
+| Sequential sub-groups    | The sub-groups after the failure do not start        | All run                                                                                        |
+| Parallel siblings        | Waiting ones are cancelled, running ones are stopped | All finish; no process is stopped because another failed                                       |
+| Files of a per-file task | Stop at the first failing file                       | Every file runs; the task fails with the last failing file's exit code and every file's output |
+| Operations of `check`    | Lint is not run after a failed fix                   | Lint runs after the failed fix, and its footer says so                                         |
+
+The exit code is 1 when any task failed, in both modes. Ctrl-C and `SIGTERM` stop a run in both modes: the first signal cancels the run's context with an interruption cause, so every running tool is stopped and the run reports what it did not finish, then exits 130 or 143. A second signal ends the process at once.
 
 ### FailureReason Classification
 
 Not all failures are equal. The executor classifies each failed task:
 
-| FailureReason   | Meaning                                           | Shown to User? |
-| --------------- | ------------------------------------------------- | -------------- |
-| **Independent** | The tool failed on its own merit (real failure)   | Yes            |
-| **Cancelled**   | The task was terminated by another task's failure | No             |
+| FailureReason   | Meaning                                                     | Shown to User?                  |
+| --------------- | ----------------------------------------------------------- | ------------------------------- |
+| **Independent** | The tool failed on its own merit (real failure)             | Yes, with its output            |
+| **Cancelled**   | The task was stopped by fail-fast after another task failed | As `cancelled` or `not started` |
+| **Interrupted** | The task was stopped because the run was interrupted        | As `cancelled` or `not started` |
 
-This distinction is critical for usable error output. If eslint fails and causes tsc to be cancelled, the user sees only the eslint error — not a confusing cascade of cancellation messages. The runner filters out cancelled results when displaying output, so you only see the root cause.
+A cancelled task is not a failure: it never counts toward `(N failed)`, and its output is not shown. It is not hidden either. The runner lists every planned task the run stopped — `cancelled (fail-fast)` if it had started, `not started (fail-fast)` if it had not, including the tasks of groups the run never reached — and counts them in the footer, so a reader never takes "no output" for "clean". The JSON-L stream ends each such task with a `tool_run` event of status `skip`.
 
 **Example scenario:**
 
 ```
 Group 2 contains: eslint (checking .ts files), tsc (checking .ts files)
-Both start in parallel.
+Both start in parallel. Group 3 contains custom-check.
 
 1. eslint finds errors → exits with code 1 → marked as Independent failure
-2. Context cancelled
+2. Context cancelled with the fail-fast cause
 3. tsc receives cancellation → marked as Cancelled
-4. User sees: only eslint errors (tsc result hidden)
+4. User sees: eslint's errors, then "⊘ tsc  cancelled (fail-fast)"
+   and "⊘ custom-check  not started (fail-fast)"
 ```
 
 ## Tool Ordering Best Practices
@@ -189,7 +203,7 @@ export function getConfig(input) {
 }
 ```
 
-**Why this order matters with fail-fast:**
+**Why this order matters with fail-fast (the default):**
 
 - If prettier fails at priority 10, eslint and tsc never run — there's no point linting unformatted code.
 - If eslint fails at priority 20, custom-check at priority 30 never starts — it would likely fail too.

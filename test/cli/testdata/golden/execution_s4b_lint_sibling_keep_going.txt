@@ -7,7 +7,7 @@ exit code: 1
 ┏━ lint <RULE>
 ┃ pkg
 ┃
-┃ ✗ claim  <DUR> (1 failed)
+┃ ✗ claim  <DUR> ×2  (1 failed)
   ┌─ claim [per-project] (run #1) <RULE>
   │  Dir:       pkg/<FIRST>
   │  Cwd:       <TMP>/pkg/<FIRST>
@@ -18,8 +18,7 @@ exit code: 1
   │  claim: failed
   └<RULE>
 
-┃ ⊘ claim [pkg/<FIRST>]  not started (fail-fast)
-┗━ 1 tools · 1 runs · done in <DUR> · 1 failed · 1 cancelled · cache 0% <RULE>
+┗━ 1 tools · 2 runs · done in <DUR> · 1 failed · cache 0% <RULE>
 
 ===STDERR===
 error: operation failed

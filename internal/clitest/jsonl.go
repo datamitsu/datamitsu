@@ -28,9 +28,11 @@ type Event struct {
 	Runs    int    `json:"runs"`
 	Failed  int    `json:"failed"`
 	Skipped int    `json:"skipped"`
-	// Success is nil when the line carries no success field.
-	Success *bool          `json:"success"`
-	Fields  map[string]any `json:"-"`
+	// Success, Cancelled and Complete are nil when the line does not carry them.
+	Success   *bool          `json:"success"`
+	Cancelled *int           `json:"cancelled"`
+	Complete  *bool          `json:"complete"`
+	Fields    map[string]any `json:"-"`
 }
 
 // Has reports whether the line carried key.
@@ -39,9 +41,16 @@ func (e Event) Has(key string) bool {
 	return ok
 }
 
-// Terminal reports whether e ends a correlated chain.
+// Terminal reports whether e ends a correlated chain: done, fail, or skip for a
+// task the run stopped before it finished.
 func (e Event) Terminal() bool {
-	return e.Status == "done" || e.Status == "fail"
+	return e.Status == "done" || e.Status == "fail" || e.Status == "skip"
+}
+
+// NotStarted reports whether e is the one event of a task the run stopped
+// before it started: a skip that opens and closes its chain at once.
+func (e Event) NotStarted() bool {
+	return e.Type == "tool_run" && e.Status == "skip" && strings.HasPrefix(e.Msg, "not started: ")
 }
 
 // ParseJSONL decodes a JSON-L stream. Every non-blank line must be a JSON object
@@ -84,16 +93,20 @@ func MustParseJSONL(tb testing.TB, stderr string) []Event {
 // the order in which parallel events arrive:
 //
 //   - a terminal tool_run never precedes a start with the same op_id, and each
-//     op_id has as many terminals as starts — except for the tools named in
-//     orphaned, which must have at least one start left without a terminal (a
-//     task cancelled after it started);
+//     op_id has as many terminals as starts, not counting the skip events of
+//     tasks that never started, which stand alone;
+//   - a skip that closes a start says the task was cancelled, one that stands
+//     alone says it was not started;
 //   - an operation's phase start precedes every tool_run of that operation;
 //   - every operation that started ends with exactly one done, which follows
-//     all of the operation's tool_run events and reports as runs the number
-//     of its terminal tool_run events.
+//     all of the operation's tool_run events, reports as runs the number of its
+//     done and fail tool_run events, and as cancelled (absent meaning zero) the
+//     number of its skip ones.
 //
-// A tool_run belongs to the operation whose phase op_id prefixes its own.
-func AssertChains(tb testing.TB, events []Event, orphaned ...string) {
+// A tool_run belongs to the operation whose phase op_id prefixes its own. Tasks
+// of one tool in one directory share an op_id, so which start a terminal closes
+// is not asserted — only that the counts agree.
+func AssertChains(tb testing.TB, events []Event) {
 	tb.Helper()
 
 	phaseAt := map[string]int{}
@@ -120,11 +133,11 @@ func AssertChains(tb testing.TB, events []Event, orphaned ...string) {
 	}
 
 	type chain struct {
-		tool             string
 		starts, terminal int
 	}
 	chains := map[string]*chain{}
-	terminals := map[string]int{}
+	runs := map[string]int{}
+	skips := map[string]int{}
 	for i, e := range events {
 		if e.Type != "tool_run" {
 			continue
@@ -140,40 +153,35 @@ func AssertChains(tb testing.TB, events []Event, orphaned ...string) {
 		}
 		c := chains[e.OpID]
 		if c == nil {
-			c = &chain{tool: e.Tool}
+			c = &chain{}
 			chains[e.OpID] = c
 		}
 		switch {
 		case e.Status == "start":
 			c.starts++
+		case e.NotStarted():
+			skips[run]++
 		case e.Terminal():
 			c.terminal++
 			if c.terminal > c.starts {
 				tb.Errorf("clitest: terminal tool_run %q (%s) has no preceding start", e.OpID, e.Status)
 			}
-			terminals[run]++
+			if e.Status == "skip" {
+				skips[run]++
+				if !strings.HasPrefix(e.Msg, "cancelled: ") {
+					tb.Errorf("clitest: skip tool_run %q closes a start but says %q", e.OpID, e.Msg)
+				}
+				continue
+			}
+			runs[run]++
 		default:
 			tb.Errorf("clitest: tool_run %q has status %q", e.OpID, e.Status)
 		}
 	}
 
-	expectOrphan := map[string]bool{}
-	for _, tool := range orphaned {
-		expectOrphan[tool] = true
-	}
-	orphanSeen := map[string]bool{}
 	for opID, c := range chains {
-		switch {
-		case c.terminal == c.starts:
-		case expectOrphan[c.tool]:
-			orphanSeen[c.tool] = true
-		default:
+		if c.terminal != c.starts {
 			tb.Errorf("clitest: tool_run %q has %d start(s) and %d terminal(s)", opID, c.starts, c.terminal)
-		}
-	}
-	for _, tool := range orphaned {
-		if !orphanSeen[tool] {
-			tb.Errorf("clitest: expected an orphaned tool_run start for %q, found none", tool)
 		}
 	}
 
@@ -194,9 +202,17 @@ func AssertChains(tb testing.TB, events []Event, orphaned ...string) {
 			tb.Errorf("clitest: done %q has no phase start", e.OpID)
 			continue
 		}
-		if e.Runs != terminals[e.OpID] {
-			tb.Errorf("clitest: done %q reports runs=%d, the stream has %d terminal tool_run event(s)",
-				e.OpID, e.Runs, terminals[e.OpID])
+		if e.Runs != runs[e.OpID] {
+			tb.Errorf("clitest: done %q reports runs=%d, the stream has %d done or fail tool_run event(s)",
+				e.OpID, e.Runs, runs[e.OpID])
+		}
+		cancelled := 0
+		if e.Cancelled != nil {
+			cancelled = *e.Cancelled
+		}
+		if cancelled != skips[e.OpID] {
+			tb.Errorf("clitest: done %q reports cancelled=%d, the stream has %d skip tool_run event(s)",
+				e.OpID, cancelled, skips[e.OpID])
 		}
 	}
 }

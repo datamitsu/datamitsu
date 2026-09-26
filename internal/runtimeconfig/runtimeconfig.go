@@ -29,6 +29,16 @@ const (
 	// LspFormatTimeoutMs is the default format-on-save watchdog: once it has
 	// elapsed no further tool group starts. 0 disables it.
 	LspFormatTimeoutMs = 15000
+
+	// FailFast is the default of fix, lint and check: the first failing tool
+	// stops the run.
+	FailFast = true
+)
+
+// Values of Effective.FailFastSource.
+const (
+	FailFastSourceDefault = "default"
+	FailFastSourceEnv     = "env"
 )
 
 // Effective is the full effective runtime configuration snapshot. It is the
@@ -38,6 +48,8 @@ const (
 type Effective struct {
 	Concurrency              int    `json:"concurrency"`
 	ConfigCache              bool   `json:"configCache"`
+	FailFast                 bool   `json:"failFast"`
+	FailFastSource           string `json:"failFastSource"`
 	ForceGitSubprocess       bool   `json:"forceGitSubprocess"`
 	InstallTimeoutSeconds    int    `json:"installTimeoutSeconds"`
 	Libc                     string `json:"libc"`
@@ -65,9 +77,16 @@ type Effective struct {
 // (DATAMITSU_LIBC override or detection) so seed-miss diagnostics can see the
 // dimension that selects OCI bundle entries and store paths.
 func Compute() Effective {
+	failFast, failFastSet := env.FailFast()
+	failFastSource := FailFastSourceDefault
+	if failFastSet {
+		failFastSource = FailFastSourceEnv
+	}
 	return Effective{
 		Concurrency:              env.GetConcurrency(),
 		ConfigCache:              env.ConfigCacheEnabled(),
+		FailFast:                 failFast,
+		FailFastSource:           failFastSource,
 		ForceGitSubprocess:       env.IsForceGitSubprocessEnabled(),
 		InstallTimeoutSeconds:    env.InstallTimeoutSeconds(),
 		Libc:                     string(target.HostTarget().Libc),

@@ -62,6 +62,10 @@ const (
 	StatusDone = "done"
 	// StatusFail marks failed completion of a chain.
 	StatusFail = "fail"
+	// StatusSkip ends the chain of a task that did not run to completion and did
+	// not fail either: cancelled after it started, or never started. Its msg
+	// says which, and why.
+	StatusSkip = "skip"
 )
 
 // Event is the single envelope written as one JSON object per line. Type and
@@ -72,7 +76,7 @@ type Event struct {
 	Type   Type   `json:"type"`             // discriminator, always set
 	OpID   string `json:"op_id"`            // correlation id, always set
 	TS     int64  `json:"ts"`               // unix milliseconds
-	Status string `json:"status,omitempty"` // start | progress | done | fail
+	Status string `json:"status,omitempty"` // start | progress | done | fail | skip
 
 	// Identity.
 	Op   string `json:"op,omitempty"`   // operation name for phase/done (fix, lint)
@@ -99,6 +103,10 @@ type Event struct {
 	Runs    int `json:"runs,omitempty"`
 	Failed  int `json:"failed,omitempty"`
 	Skipped int `json:"skipped,omitempty"`
+	// Cancelled counts the tasks a run stopped before they finished — cancelled
+	// after they started or never started — apart from Skipped, which counts the
+	// tools the planner left out. A pointer, so that zero can be written.
+	Cancelled *int `json:"cancelled,omitempty"`
 }
 
 // Sink consumes typed events. Implementations MUST be safe for concurrent use

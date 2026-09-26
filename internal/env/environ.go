@@ -23,8 +23,19 @@ var observationExcluded = map[string]bool{
 	configCache.Name: true,
 }
 
+// executionOnly lists the variables that change what a fix, lint or check run
+// prints or how far it goes, never what datamitsu installs or what a farm
+// contains. An activated shell must not re-bake its farm because one command set
+// one of them, so they leave the source-mode staleness key. They are not
+// observation-only: config JS may read them through facts().env, so they stay in
+// EnvironAll and move the config-eval key.
+var executionOnly = map[string]bool{
+	failFast.Name: true,
+}
+
 // environExcluded is the source-mode staleness key's exclusion list: the
-// observation-only variables, plus the activation markers.
+// observation-only variables, the execution-only ones, plus the activation
+// markers.
 //
 // The activation markers describe *which* farm a shell activated rather than
 // *how* datamitsu behaves. Including them would make the source-mode staleness
@@ -44,6 +55,9 @@ var environExcluded = func() map[string]bool {
 		sourceFarmConfig.Name: true,
 	}
 	for name := range observationExcluded {
+		m[name] = true
+	}
+	for name := range executionOnly {
 		m[name] = true
 	}
 	return m

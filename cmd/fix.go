@@ -16,6 +16,7 @@ var (
 	fixFailOnSkip    bool
 	fixWidenTo       string
 	fixRequireCov    string
+	fixFailFast      bool
 )
 
 var fixCmd = &cobra.Command{
@@ -42,12 +43,17 @@ func init() {
 	fixCmd.Flags().BoolVar(&fixFailOnSkip, "fail-on-skip", false, "Exit non-zero if any tool is skipped because its binary is unavailable for this platform")
 	fixCmd.Flags().StringVar(&fixWidenTo, "widen-to", "", "Limit how far work may widen beyond the selection (target|unit|repo)")
 	fixCmd.Flags().StringVar(&fixRequireCov, "require-coverage", "", "Exit non-zero unless the run answered completely (unit|repo)")
+	addFailFastFlag(fixCmd, &fixFailFast)
 	rootCmd.AddCommand(fixCmd)
 }
 
 func runFix(cmd *cobra.Command, args []string) error {
+	opts := runner.Options{WidenTo: fixWidenTo, RequireCoverage: fixRequireCov}
+	if err := applyFailFast(cmd, fixFailFast, &opts); err != nil {
+		return err
+	}
 	err := runner.Run(config.OpFix, args, fixExplain, fixFileScoped, fixSelectedTools, fixFailOnSkip,
-		runner.Options{WidenTo: fixWidenTo, RequireCoverage: fixRequireCov},
+		opts,
 		func() (*config.Config, string, error) {
 			cfg, _, _, err := loadConfig()
 			return cfg, "", err
