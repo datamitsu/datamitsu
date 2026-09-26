@@ -170,6 +170,29 @@ func TestConfigReconcileWriteAndFixModes(t *testing.T) {
 		}
 	})
 
+	// The post-reconciliation fix belongs to reconcile: it prints no closing line
+	// and emits no run-level done of its own.
+	t.Run("post-fix has no run-level report", func(t *testing.T) {
+		p := clitest.NewProject(t)
+		p.WriteFile("fixture.marker", "fixture\n")
+		cfg := p.WriteFile("reconcile.config.js", reconcileWritesConfigJS)
+
+		res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+			"--log-format", "jsonl", "--no-auto-config", "--config", cfg, "config", "reconcile")
+		if res.ExitCode != 0 {
+			t.Fatalf("reconcile exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
+		}
+		events := clitest.MustParseJSONL(t, res.Stderr)
+		for _, e := range events {
+			if e.Type == "done" && strings.HasPrefix(e.OpID, "cmd-") {
+				t.Errorf("the post-fix emitted a run-level done: %+v", e.Fields)
+			}
+		}
+		if len(events) == 0 {
+			t.Error("the post-fix emitted no events at all")
+		}
+	})
+
 	t.Run("skip-fix writes without running fix", func(t *testing.T) {
 		p := clitest.NewProject(t)
 		p.WriteFile("fixture.marker", "fixture\n")

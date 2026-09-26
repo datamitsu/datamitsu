@@ -1,6 +1,7 @@
 package cli_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -198,6 +199,36 @@ func wantStopped(t *testing.T, events []clitest.Event, tool, dir, msg string) {
 	}
 }
 
+// operationDone matches the done event of one operation; the run-level done
+// of the whole command has an op_id starting with "cmd-".
+func operationDone(e clitest.Event) bool {
+	return e.Type == "done" && strings.HasPrefix(e.OpID, "run-")
+}
+
+// runDone returns the one run-level done event of the stream.
+func runDone(t *testing.T, events []clitest.Event) clitest.Event {
+	t.Helper()
+	done := eventsOf(events, func(e clitest.Event) bool { return e.Type == "done" && strings.HasPrefix(e.OpID, "cmd-") })
+	if len(done) != 1 {
+		t.Fatalf("run-level done events = %+v, want one", done)
+	}
+	return done[0]
+}
+
+// wantRunDone asserts the run-level done of a command: its op, outcome, totals
+// and completeness.
+func wantRunDone(t *testing.T, events []clitest.Event, op string, success bool, runs, cancelled int, complete bool) {
+	t.Helper()
+	d := runDone(t, events)
+	switch {
+	case d.Op != op, d.Success == nil, *d.Success != success, d.Runs != runs,
+		d.Cancelled == nil, *d.Cancelled != cancelled, d.Complete == nil, *d.Complete != complete,
+		!d.Has("duration_ms"):
+		t.Errorf("run-level done = %+v, want op %s, success %v, runs %d, cancelled %d, complete %v and a duration",
+			d.Fields, op, success, runs, cancelled, complete)
+	}
+}
+
 // wantDone asserts the one per-operation done event's run and cancelled counts.
 func wantDone(t *testing.T, events []clitest.Event, op string, runs, cancelled int) {
 	t.Helper()
@@ -249,9 +280,13 @@ func TestExecutionTwoToolsPass(t *testing.T) {
 				t.Errorf("tool_run events of %s = %+v, want a start and a done", tool, runs)
 			}
 		}
-		done := eventsOf(events, func(e clitest.Event) bool { return e.Type == "done" })
+		done := eventsOf(events, operationDone)
 		if len(done) != 1 || done[0].Status != "done" || done[0].Tools != 2 || done[0].Runs != 2 {
 			t.Errorf("done events = %+v, want one done with tools 2 and runs 2", done)
+		}
+		wantRunDone(t, events, "lint", true, 2, 0, true)
+		if d := runDone(t, events); d.Tools != 2 || d.Status != "done" {
+			t.Errorf("run-level done = %+v, want status done and tools 2", d.Fields)
 		}
 	})
 }
@@ -292,10 +327,11 @@ func TestExecutionFailFastBetweenPriorities(t *testing.T) {
 			alpha[1].Success == nil || *alpha[1].Success || !alpha[1].Has("duration_ms") {
 			t.Errorf("tool_run events of alpha = %+v, want a start and a fail with success false and a duration", alpha)
 		}
-		done := eventsOf(events, func(e clitest.Event) bool { return e.Type == "done" })
+		done := eventsOf(events, operationDone)
 		if len(done) != 1 || done[0].Status != "fail" || done[0].Tools != 1 || done[0].Runs != 1 || done[0].Failed != 1 {
 			t.Errorf("done events = %+v, want one fail with tools 1, runs 1, failed 1", done)
 		}
+		wantRunDone(t, events, "lint", false, 1, 1, false)
 		e.goldenJSONL("s12_jsonl_s2", res)
 	})
 
@@ -318,6 +354,7 @@ func TestExecutionFailFastBetweenPriorities(t *testing.T) {
 			t.Errorf("tool_run events of beta = %+v, want a start and a done", beta)
 		}
 		wantDone(t, events, "lint", 2, 0)
+		wantRunDone(t, events, "lint", false, 2, 0, true)
 	})
 
 	t.Run("env", func(t *testing.T) {
@@ -607,8 +644,9 @@ func TestExecutionFailFastBetweenFiles(t *testing.T) {
 }
 
 // TestExecutionCheckStopsAfterFix is S6: when fix fails, check never starts
-// lint — no lint block and no lint phase event. With --fail-fast=false lint
-// runs after the failed fix, its footer says so, and the run still fails.
+// lint — no lint block and no lint phase event — and its closing line says lint
+// did not run. With --fail-fast=false lint runs after the failed fix, its footer
+// says so, and the run still fails.
 func TestExecutionCheckStopsAfterFix(t *testing.T) {
 	files := map[string]string{"fixture.marker": ""}
 	tools := []string{
@@ -625,6 +663,9 @@ func TestExecutionCheckStopsAfterFix(t *testing.T) {
 		if strings.Contains(res.Stdout, "┏━ lint") {
 			t.Errorf("check opened a lint block after a failed fix:\n%s", res.Stdout)
 		}
+		if !checkClosingRE.MatchString(res.Stdout) || !strings.Contains(res.Stdout, "· lint not run ·") {
+			t.Errorf("check should close with its wall clock and say lint did not run:\n%s", res.Stdout)
+		}
 		e.golden("s6_check_fix_fails", res)
 	})
 
@@ -638,6 +679,7 @@ func TestExecutionCheckStopsAfterFix(t *testing.T) {
 			phases[0].Op != "fix" {
 			t.Errorf("phase events = %+v, want the fix phase only", phases)
 		}
+		wantRunDone(t, events, "check", false, 1, 0, false)
 	})
 
 	t.Run("keep_going", func(t *testing.T) {
@@ -662,7 +704,85 @@ func TestExecutionCheckStopsAfterFix(t *testing.T) {
 			phases[0].Op != "fix" || phases[1].Op != "lint" {
 			t.Errorf("phase events = %+v, want fix then lint", phases)
 		}
+		wantRunDone(t, events, "check", false, 2, 0, true)
 	})
+}
+
+// checkClosingRE matches check's closing line, durations masked.
+var checkClosingRE = regexp.MustCompile(`(?m)^┗━ check · done in \S+ · fix (\S+|not run) · lint (\S+|not run) · setup \S+ ━+$`)
+
+// TestExecutionCheckTotalTime: check closes with the wall clock of the whole
+// command, each operation's execution time and the setup around them, and every
+// fix, lint and check ends its event stream with a run-level done. Neither
+// appears for fix or lint alone on the terminal, nor under --explain.
+func TestExecutionCheckTotalTime(t *testing.T) {
+	files := map[string]string{"fixture.marker": ""}
+	tools := []string{
+		clitest.ShellTool("fixer", passScript, clitest.ToolOpSpec{Operation: "fix"}),
+		clitest.ShellTool("linter", passScript, clitest.ToolOpSpec{}),
+	}
+
+	t.Run("console", func(t *testing.T) {
+		e := newExecProject(t, files, fixtureSpec, tools...)
+		res := e.run("", nil, "check")
+		e.wantExit(res, 0)
+		if !checkClosingRE.MatchString(res.Stdout) || strings.Contains(res.Stdout, "not run") {
+			t.Errorf("check should close with its wall clock and both operations' times:\n%s", res.Stdout)
+		}
+		e.golden("check_total_time", res)
+	})
+
+	t.Run("jsonl", func(t *testing.T) {
+		e := newExecProject(t, files, fixtureSpec, tools...)
+		res := e.run("", nil, jsonl("check")...)
+		e.wantExit(res, 0)
+		events := clitest.MustParseJSONL(t, res.Stderr)
+		clitest.AssertChains(t, events)
+		wantRunDone(t, events, "check", true, 2, 0, true)
+		var operations int64
+		for _, d := range eventsOf(events, operationDone) {
+			ms, err := d.Fields["duration_ms"].(json.Number).Int64()
+			if err != nil {
+				t.Fatalf("done %s carries no duration: %+v", d.Op, d.Fields)
+			}
+			operations += ms
+		}
+		total, err := runDone(t, events).Fields["duration_ms"].(json.Number).Int64()
+		if err != nil || total < operations {
+			t.Errorf("run-level duration_ms = %d, want at least the operations' %d", total, operations)
+		}
+		e.goldenJSONL("s12_jsonl_check_total_time", res)
+	})
+
+	for _, op := range []string{"fix", "lint"} {
+		t.Run(op+"_alone", func(t *testing.T) {
+			e := newExecProject(t, files, fixtureSpec, tools...)
+			res := e.run("", nil, op)
+			e.wantExit(res, 0)
+			if strings.Contains(res.Stdout, "┗━ check") || strings.Contains(res.Stdout, "setup") {
+				t.Errorf("%s alone printed check's closing line:\n%s", op, res.Stdout)
+			}
+			events := e.run("", nil, jsonl(op)...)
+			e.wantExit(events, 0)
+			parsed := clitest.MustParseJSONL(t, events.Stderr)
+			clitest.AssertChains(t, parsed)
+			wantRunDone(t, parsed, op, true, 1, 0, true)
+		})
+	}
+
+	for _, mode := range []string{"summary", "detailed", "json"} {
+		t.Run("explain_"+mode, func(t *testing.T) {
+			e := newExecProject(t, files, fixtureSpec, tools...)
+			res := e.run("", nil, jsonl("check", "--explain="+mode)...)
+			e.wantExit(res, 0)
+			if strings.Contains(res.Stdout, "┗━ check") {
+				t.Errorf("check --explain=%s printed the closing line:\n%s", mode, res.Stdout)
+			}
+			if done := eventsOf(clitest.MustParseJSONL(t, res.Stderr), func(e clitest.Event) bool { return e.Type == "done" }); len(done) != 0 {
+				t.Errorf("check --explain=%s emitted done events: %+v", mode, done)
+			}
+		})
+	}
 }
 
 // dropDurations removes duration_ms from a normalized JSON-L golden. A task
@@ -954,6 +1074,7 @@ func TestExecutionInterrupted(t *testing.T) {
 		wantStopped(t, events, "sleeper", "", "cancelled: interrupted")
 		wantStopped(t, events, "later", "", "not started: interrupted")
 		wantDone(t, events, "lint", 0, 2)
+		wantRunDone(t, events, "lint", false, 0, 2, false)
 		errs := eventsOf(events, func(e clitest.Event) bool { return e.Type == "error" && e.Tool == "" })
 		if len(errs) != 1 || errs[0].Msg != "interrupted by SIGINT" {
 			t.Errorf("run error events = %+v, want one saying the run was interrupted by SIGINT", errs)

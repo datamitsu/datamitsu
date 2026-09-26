@@ -118,6 +118,11 @@ func TestAssertChains(t *testing.T) {
 		bNotStarted  = `{"type":"tool_run","op_id":"run-1:b:x","status":"skip","tool":"b","dir":"x","msg":"not started: fail-fast"}`
 		doneOneStop  = `{"type":"done","op_id":"run-1","status":"fail","runs":1,"cancelled":1}`
 		doneOneStop2 = `{"type":"done","op_id":"run-1","status":"fail","runs":1,"cancelled":2}`
+		// The run-level done of the whole command.
+		cmdDone         = `{"type":"done","op_id":"cmd-2","op":"lint","status":"done","runs":2,"cancelled":0,"complete":true}`
+		cmdDoneStopped  = `{"type":"done","op_id":"cmd-2","op":"lint","status":"fail","runs":1,"cancelled":1,"complete":false}`
+		cmdDoneWrong    = `{"type":"done","op_id":"cmd-2","op":"lint","status":"done","runs":1,"cancelled":0,"complete":true}`
+		cmdDoneComplete = `{"type":"done","op_id":"cmd-2","op":"lint","status":"fail","runs":1,"cancelled":1,"complete":true}`
 	)
 	cases := []struct {
 		name    string
@@ -125,6 +130,12 @@ func TestAssertChains(t *testing.T) {
 		wantErr string
 	}{
 		{"complete chains", []string{phase, aStart, bStart, bFail, aDone, doneTwo, runError}, ""},
+		{"run-level done", []string{phase, aStart, bStart, bFail, aDone, doneTwo, cmdDone, runError}, ""},
+		{"run-level done of a stopped run", []string{phase, aStart, bStart, aDone, bCancelled, doneOneStop, cmdDoneStopped}, ""},
+		{"run-level done with wrong totals", []string{phase, aStart, bStart, bFail, aDone, doneTwo, cmdDoneWrong}, "run-level done reports runs=1"},
+		{"run-level done complete despite a stop", []string{phase, aStart, bStart, aDone, bCancelled, doneOneStop, cmdDoneComplete}, "complete="},
+		{"run-level done too early", []string{phase, aStart, bStart, bFail, aDone, cmdDone, doneTwo}, "precedes an operation event"},
+		{"two run-level done events", []string{phase, aStart, bStart, bFail, aDone, doneTwo, cmdDone, cmdDone}, "2 run-level done events"},
 		{"cancelled after start", []string{phase, aStart, bStart, aDone, bCancelled, doneOneStop}, ""},
 		{"never started", []string{phase, aStart, aDone, bNotStarted, doneOneStop}, ""},
 		{"both stopped kinds", []string{phase, aStart, bStart, aDone, bCancelled, bNotStarted, doneOneStop2}, ""},

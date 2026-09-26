@@ -140,6 +140,9 @@ type sharedContext struct {
 	// afterFailedFix marks the lint operation of a check that runs although its
 	// fix failed, which only keep-going allows.
 	afterFailedFix bool
+	// summaries holds what each operation that ran reported, for check's
+	// closing line and the run-level done event.
+	summaries []opSummary
 }
 
 func initSharedContext(
@@ -373,6 +376,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	// any explicit skips — recording unsupported-platform ones for --fail-on-skip
 	// — instead of leaving them invisible.
 	if len(projectTypes) == 0 || len(plan.Groups) == 0 {
+		sc.recordOp(opSummary{op: operation, skipped: len(plan.Skipped)})
 		if len(plan.Skipped) > 0 {
 			renderSkipOnlyBlock(string(operation), sc.targetLine(), plan.Skipped, sc.nameWidth)
 			sc.recordSkips(plan.Skipped)
@@ -725,6 +729,15 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		Cancelled:  nonZero(len(stopped)),
 		DurationMs: totalWallClockTime,
 	})
+	sc.recordOp(opSummary{
+		op:         operation,
+		tools:      len(toolGroups),
+		runs:       totalRuns,
+		failed:     failedTools,
+		skipped:    len(plan.Skipped),
+		cancelled:  len(stopped),
+		durationMs: totalWallClockTime,
+	})
 
 	sc.recordSkips(plan.Skipped)
 	sc.recordCoverage(plan)
@@ -930,7 +943,7 @@ func RunSequential(
 	opts Options,
 	loadConfigFunc func() (*config.Config, string, error),
 ) error {
-	return runSequential(operations, args, explainMode, fileScoped, selectedToolsFlag, loadConfigFunc, true, failOnSkip, opts)
+	return runSequential(operations, args, explainMode, fileScoped, selectedToolsFlag, loadConfigFunc, commandName(operations), failOnSkip, opts)
 }
 
 // RunContinuation runs a single operation as a continuation of another command's
@@ -944,8 +957,9 @@ func RunContinuation(
 	selectedToolsFlag string,
 	loadConfigFunc func() (*config.Config, string, error),
 ) error {
-	// Continuations (e.g. config reconcile's post-fix) never harden on skips.
-	return runSequential([]config.OperationType{operation}, args, explainMode, fileScoped, selectedToolsFlag, loadConfigFunc, false, false, Options{})
+	// Continuations (e.g. config reconcile's post-fix) never harden on skips,
+	// and belong to their command: no banner, no run-level report.
+	return runSequential([]config.OperationType{operation}, args, explainMode, fileScoped, selectedToolsFlag, loadConfigFunc, "", false, Options{})
 }
 
 func runSequential(
@@ -955,10 +969,11 @@ func runSequential(
 	fileScoped bool,
 	selectedToolsFlag string,
 	loadConfigFunc func() (*config.Config, string, error),
-	showBanner bool,
+	command string,
 	failOnSkip bool,
 	opts Options,
 ) error {
+	showBanner := command != ""
 	sc, err := initSharedContext(args, explainMode, fileScoped, selectedToolsFlag, failOnSkip, opts, loadConfigFunc)
 	if err != nil {
 		return err
@@ -1020,7 +1035,18 @@ func runSequential(
 		}
 	}
 
-	return sc.outcome(ctx, opErr)
+	if sc.explainLevel != "" {
+		return sc.outcome(ctx, opErr)
+	}
+	elapsedMs := sc.timings.Elapsed().Milliseconds()
+	if len(operations) > 1 {
+		sc.printRunClosing(command, operations, elapsedMs)
+	}
+	err = sc.outcome(ctx, opErr)
+	if command != "" {
+		sc.emitRunDone(command, operations, elapsedMs, err == nil)
+	}
+	return err
 }
 
 // outcome picks the error a run returns. An interruption wins, because the run

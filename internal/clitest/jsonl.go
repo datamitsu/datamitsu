@@ -101,7 +101,10 @@ func MustParseJSONL(tb testing.TB, stderr string) []Event {
 //   - every operation that started ends with exactly one done, which follows
 //     all of the operation's tool_run events, reports as runs the number of its
 //     done and fail tool_run events, and as cancelled (absent meaning zero) the
-//     number of its skip ones.
+//     number of its skip ones;
+//   - the run-level done (op_id "cmd-…") appears at most once, after every
+//     phase, tool_run and operation done, and reports the stream's totals of
+//     runs and cancelled tasks, with complete false when any task was stopped.
 //
 // A tool_run belongs to the operation whose phase op_id prefixes its own. Tasks
 // of one tool in one directory share an op_id, so which start a terminal closes
@@ -111,8 +114,15 @@ func AssertChains(tb testing.TB, events []Event) {
 
 	phaseAt := map[string]int{}
 	doneAt := map[string][]int{}
+	var runDone []int
+	lastOperationEvent := -1
 	for i, e := range events {
+		if e.Type == "phase" || e.Type == "tool_run" || (e.Type == "done" && !isRunDone(e)) {
+			lastOperationEvent = i
+		}
 		switch {
+		case e.Type == "done" && isRunDone(e):
+			runDone = append(runDone, i)
 		case e.Type == "phase" && e.Status == "start":
 			if _, seen := phaseAt[e.OpID]; seen {
 				tb.Errorf("clitest: operation %q starts twice", e.OpID)
@@ -194,8 +204,9 @@ func AssertChains(tb testing.TB, events []Event) {
 			tb.Errorf("clitest: operation %q is done before its phase start", run)
 		}
 	}
+	assertRunDone(tb, events, runDone, lastOperationEvent, runs, skips)
 	for _, e := range events {
-		if e.Type != "done" {
+		if e.Type != "done" || isRunDone(e) {
 			continue
 		}
 		if _, ok := phaseAt[e.OpID]; !ok {
@@ -214,6 +225,43 @@ func AssertChains(tb testing.TB, events []Event) {
 			tb.Errorf("clitest: done %q reports cancelled=%d, the stream has %d skip tool_run event(s)",
 				e.OpID, cancelled, skips[e.OpID])
 		}
+	}
+}
+
+// isRunDone reports whether e is the run-level done event of a whole command.
+func isRunDone(e Event) bool {
+	return e.Type == "done" && strings.HasPrefix(e.OpID, "cmd-")
+}
+
+func assertRunDone(tb testing.TB, events []Event, at []int, lastOperationEvent int, runs, skips map[string]int) {
+	tb.Helper()
+	switch {
+	case len(at) == 0:
+		return
+	case len(at) > 1:
+		tb.Errorf("clitest: the stream has %d run-level done events, want at most 1", len(at))
+		return
+	case at[0] < lastOperationEvent:
+		tb.Errorf("clitest: the run-level done precedes an operation event")
+	}
+	e := events[at[0]]
+	totalRuns, totalSkips := 0, 0
+	for _, n := range runs {
+		totalRuns += n
+	}
+	for _, n := range skips {
+		totalSkips += n
+	}
+	cancelled := -1
+	if e.Cancelled != nil {
+		cancelled = *e.Cancelled
+	}
+	if e.Runs != totalRuns || cancelled != totalSkips {
+		tb.Errorf("clitest: run-level done reports runs=%d cancelled=%d, the stream has %d run(s) and %d stopped task(s)",
+			e.Runs, cancelled, totalRuns, totalSkips)
+	}
+	if e.Complete == nil || (totalSkips > 0 && *e.Complete) {
+		tb.Errorf("clitest: run-level done reports complete=%v with %d stopped task(s)", e.Complete, totalSkips)
 	}
 }
 

@@ -107,6 +107,9 @@ type Event struct {
 	// after they started or never started — apart from Skipped, which counts the
 	// tools the planner left out. A pointer, so that zero can be written.
 	Cancelled *int `json:"cancelled,omitempty"`
+	// Complete, on the run-level done, says the run executed everything it
+	// planned: every operation ran and no task was cancelled or left unstarted.
+	Complete *bool `json:"complete,omitempty"`
 }
 
 // Sink consumes typed events. Implementations MUST be safe for concurrent use

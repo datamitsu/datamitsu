@@ -166,6 +166,34 @@ datamitsu check --fail-on-skip
 datamitsu check --fail-fast=false
 ```
 
+`check` closes with the wall clock of the whole command:
+
+```console
+$ datamitsu check
+┏━ fix ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ golang · typescript
+┃
+┃ ✓ gofmt          120ms
+┃ ✓ prettier       1.10s
+┗━ 2 tools · 2 runs · done in 1.10s · cache 80% ━━━━━━━━━━━
+
+┏━ lint ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ golang · typescript
+┃
+┃ ✓ golangci-lint  7.90s
+┃ ✓ eslint         3.20s
+┗━ 2 tools · 2 runs · done in 7.90s ━━━━━━━━━━━━━━━━━━━━━━━
+
+┗━ check · done in 9.40s · fix 1.10s · lint 7.90s · setup 400ms ━━━
+```
+
+`done in` runs from the start of the command to the end of the last
+operation. `fix` and `lint` repeat their own footers' times, and `setup` is the
+rest: loading the configuration, walking the repository, planning, installing
+tools. An operation that did not run is named — `lint not run` after a failed
+fix under fail-fast. The line is printed for `check` only, never under
+`--explain`, and on failure too; `fix` and `lint` end with their footer.
+
 ### Keep-going runs
 
 By default a run stops at the first failing tool: nothing at a later priority
@@ -241,6 +269,33 @@ An operation's `done` carries `op`, `status` (`done` or `fail`), `duration_ms`,
 task), `skipped` (tools the planner left out, see
 [Skipped tools](#skipped-tools)) and `cancelled` (tasks the run stopped, present
 when there were any). A counter or `duration_ms` that is zero is left out.
+
+The stream ends with one more `done`, for the whole command: its `op_id` starts
+with `cmd-` where an operation's starts with `run-`, and its `op` is `fix`,
+`lint` or `check`. It carries `status`, `success` (whether the command
+succeeded), `duration_ms` (the wall clock of the whole command), the sums of the
+operations' `tools`, `runs`, `failed` and `skipped`, `cancelled` (always
+present, zero included) and `complete`: `true` when every planned operation ran
+and no task was cancelled or left unstarted. `check` whose fix failed under
+fail-fast reports `complete: false`. It is emitted for every execution of `fix`,
+`lint` and `check`, never under `--explain`, and not for the fix that
+`config reconcile` runs after writing its files.
+
+```json
+{
+  "type": "done",
+  "op_id": "cmd-7",
+  "op": "check",
+  "status": "fail",
+  "success": false,
+  "duration_ms": 9400,
+  "tools": 3,
+  "runs": 4,
+  "failed": 1,
+  "cancelled": 1,
+  "complete": false
+}
+```
 
 ### Skipped tools
 

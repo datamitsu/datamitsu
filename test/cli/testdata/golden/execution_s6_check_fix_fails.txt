@@ -19,5 +19,7 @@ exit code: 1
 
 ┗━ 1 tools · 1 runs · done in <DUR> · 1 failed <RULE>
 
+┗━ check · done in <DUR> · fix <DUR> · lint not run · setup <DUR> <RULE>
+
 ===STDERR===
 error: operation failed

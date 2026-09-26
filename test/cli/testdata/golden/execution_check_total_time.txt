@@ -7,14 +7,14 @@ exit code: 0
 ┏━ fix <RULE>
 ┃ fixture
 ┃
-┃ ✓ appender  <DUR>
-┗━ 1 tools · 1 runs · done in <DUR> · cache 100% <RULE>
+┃ ✓ fixer   <DUR>
+┗━ 1 tools · 1 runs · done in <DUR> <RULE>
 
 ┏━ lint <RULE>
 ┃ fixture
 ┃
-┃ ✓ linter    <DUR>
-┗━ 1 tools · 1 runs · done in <DUR> · cache 50% <RULE>
+┃ ✓ linter  <DUR>
+┗━ 1 tools · 1 runs · done in <DUR> <RULE>
 
 ┗━ check · done in <DUR> · fix <DUR> · lint <DUR> · setup <DUR> <RULE>
 
