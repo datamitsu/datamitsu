@@ -1,0 +1,13 @@
+exit code: 1
+===STDOUT===
+
+===STDERR===
+{"dir":"pkg/a","duration_ms":1,"op_id":"run-1:alpha:pkg/a","status":"fail","success":false,"tool":"alpha","ts":0,"type":"tool_run"}
+{"dir":"pkg/a","index":1,"op_id":"run-1:alpha:pkg/a","status":"done","success":false,"tool":"alpha","total":1,"ts":0,"type":"chunk"}
+{"dir":"pkg/a","msg":"failed to execute (exit code 1): exit status 1","op_id":"run-1:alpha:pkg/a","tool":"alpha","ts":0,"type":"error"}
+{"dir":"pkg/a","op_id":"run-1:alpha:pkg/a","status":"start","tool":"alpha","ts":0,"type":"tool_run"}
+{"dir":"pkg/b","index":1,"op_id":"run-1:beta:pkg/b","status":"done","success":false,"tool":"beta","total":1,"ts":0,"type":"chunk"}
+{"dir":"pkg/b","op_id":"run-1:beta:pkg/b","status":"start","tool":"beta","ts":0,"type":"tool_run"}
+{"duration_ms":1,"failed":1,"op":"lint","op_id":"run-1","runs":1,"status":"fail","tools":1,"ts":0,"type":"done"}
+{"msg":"operation failed","op_id":"run-2","status":"fail","ts":0,"type":"error"}
+{"op":"lint","op_id":"run-1","status":"start","ts":0,"type":"phase"}

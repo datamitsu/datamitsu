@@ -1,0 +1,15 @@
+exit code: 4
+===STDOUT===
+╭<RULE>╮
+│ datamitsu  <VERSION> │
+╰<RULE>╯
+
+┏━ lint <RULE>
+┃ ◑ target: pkg/a · narrowed run
+┃ pkg
+┃
+┃ ✓ alpha  <DUR>
+┗━ 1 tools · 1 runs · done in <DUR> · cache 0% <RULE>
+
+===STDERR===
+error: --require-coverage=repo: the run targeted subtree, not the whole repository

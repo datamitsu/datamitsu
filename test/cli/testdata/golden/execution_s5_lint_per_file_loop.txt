@@ -1,0 +1,23 @@
+exit code: 1
+===STDOUT===
+╭<RULE>╮
+│ datamitsu  <VERSION> │
+╰<RULE>╯
+
+┏━ lint <RULE>
+┃ fixture
+┃
+┃ ✗ alpha  <DUR> (1 failed)
+  ┌─ alpha [per-project] (run #1) <RULE>
+  │  Cwd:       <TMP>
+  │  Command:   sh -c sleep 0.01; echo "$0 $1" >> "$MARKERS/$0"; case "${1##*/}" in bad*) echo "$0: ${1##*/} failed"; exit 1;; esac alpha <TMP>/bad1.txt
+  │  Exit code: 1
+  │  Duration:  <DUR>
+  │
+  │  alpha: bad1.txt failed
+  └<RULE>
+
+┗━ 1 tools · 1 runs · done in <DUR> · 1 failed · cache 0% <RULE>
+
+===STDERR===
+error: operation failed

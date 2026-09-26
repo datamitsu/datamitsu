@@ -1,0 +1,11 @@
+exit code: 1
+===STDOUT===
+
+===STDERR===
+{"duration_ms":1,"failed":1,"op":"lint","op_id":"run-1","runs":1,"status":"fail","tools":1,"ts":0,"type":"done"}
+{"duration_ms":1,"op_id":"run-1:alpha:","status":"fail","success":false,"tool":"alpha","ts":0,"type":"tool_run"}
+{"index":1,"op_id":"run-1:alpha:","status":"done","success":false,"tool":"alpha","total":1,"ts":0,"type":"chunk"}
+{"msg":"failed to execute (exit code 1): exit status 1","op_id":"run-1:alpha:","tool":"alpha","ts":0,"type":"error"}
+{"msg":"operation failed","op_id":"run-2","status":"fail","ts":0,"type":"error"}
+{"op":"lint","op_id":"run-1","status":"start","ts":0,"type":"phase"}
+{"op_id":"run-1:alpha:","status":"start","tool":"alpha","ts":0,"type":"tool_run"}

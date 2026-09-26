@@ -1,7 +1,6 @@
 # Plan 1: Execution characterization — freeze `check|fix|lint` behaviour before changing it
 
-**Status:** ready for implementation. Plan 1 of `2026-09-26-unified-results.md`; no decisions
-open.
+**Status:** completed 2026-09-27. Plan 1 of `../2026-09-26-unified-results.md`.
 **Date:** 2026-09-26.
 **Depends on:** nothing. **Unblocks:** every other plan in the index.
 **Related:** `test/cli` (`check_fix_lint_test.go`, `lsp_test.go`, `devtools_parsers_test.go`),

@@ -1,0 +1,14 @@
+exit code: 0
+===STDOUT===
+╭<RULE>╮
+│ datamitsu  <VERSION> │
+╰<RULE>╯
+
+┏━ lint <RULE>
+┃ fixture
+┃
+┃ ✓ alpha  <DUR>
+┃ ✓ beta   <DUR>
+┗━ 2 tools · 2 runs · done in <DUR> <RULE>
+
+===STDERR===

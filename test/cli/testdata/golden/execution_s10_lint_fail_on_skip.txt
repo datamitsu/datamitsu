@@ -1,0 +1,15 @@
+exit code: 1
+===STDOUT===
+╭<RULE>╮
+│ datamitsu  <VERSION> │
+╰<RULE>╯
+
+┏━ lint <RULE>
+┃ fixture
+┃
+┃ ✓ alpha   <DUR>
+┃ ⊘ native  skipped (no binary for <HOST>)
+┗━ 1 tools · 1 runs · done in <DUR> · 1 skipped <RULE>
+
+===STDERR===
+error: --fail-on-skip: 1 tool(s) have no binary for this host: native
