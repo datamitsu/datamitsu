@@ -18,6 +18,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/detector"
 	"github.com/datamitsu/datamitsu/internal/github"
 	"github.com/datamitsu/datamitsu/internal/httpx"
+	"github.com/datamitsu/datamitsu/internal/jsonsort"
 	"github.com/datamitsu/datamitsu/internal/nodekeys"
 	"github.com/datamitsu/datamitsu/internal/registry"
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
@@ -127,15 +128,12 @@ func runPullRuntimes(cmd *cobra.Command, args []string) error {
 	runtimes := make(RuntimesJSON)
 	maps.Copy(runtimes, existing)
 
-	runtimesToUpdate := validRuntimeNames
-	if runtimeFilter != "" {
-		runtimesToUpdate = []string{runtimeFilter}
-	}
+	runtimesToUpdate := runtimesToPull(runtimeFilter)
 
 	var results []runtimePullResult
 
-	for _, name := range runtimesToUpdate {
-		fmt.Printf("\n=== Updating %s ===\n", name)
+	for i, name := range runtimesToUpdate {
+		fmt.Printf("\n=== Updating %s [%d/%d] ===\n", name, i+1, len(runtimesToUpdate))
 
 		var runtimeJSON *RuntimeJSON
 		var updateErr error
@@ -224,6 +222,16 @@ func runPullRuntimes(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+// runtimesToPull is the list a run works through: the one runtime asked for,
+// or every runtime in alphabetical order, so two runs read the same way and
+// a counter says how far along the run is.
+func runtimesToPull(filter string) []string {
+	if filter != "" {
+		return []string{filter}
+	}
+	return slices.Sorted(slices.Values(validRuntimeNames))
 }
 
 func isValidRuntime(name string) bool {
@@ -421,7 +429,7 @@ type RuntimesJSON map[string]*RuntimeJSON
 // writeRuntimesJSON marshals the runtimes map to JSON with 2-space indentation
 // and writes it atomically (temp file + rename) to the given path.
 func writeRuntimesJSON(path string, runtimes RuntimesJSON) error {
-	data, err := json.MarshalIndent(runtimes, "", "  ")
+	data, err := jsonsort.MarshalIndent(runtimes, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshaling runtimes JSON: %w", err)
 	}

@@ -1881,3 +1881,37 @@ func TestIntegration_JSONGeneration(t *testing.T) {
 		}
 	}
 }
+
+func TestRuntimesToPull(t *testing.T) {
+	got := runtimesToPull("")
+	want := []string{"bun", "go", "jvm", "node", "pnpm", "uv"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("runtimesToPull(\"\") = %v, want %v", got, want)
+	}
+	if got := runtimesToPull("node"); len(got) != 1 || got[0] != "node" {
+		t.Errorf("runtimesToPull(\"node\") = %v, want [node]", got)
+	}
+}
+
+// The runtimes file is written with the keys of every object sorted.
+func TestWriteRuntimesJSON_SortedKeys(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "runtimes.json")
+	runtimes := RuntimesJSON{
+		"uv":  {Kind: "uv", Mode: "managed"},
+		"bun": {Kind: "bun", Mode: "managed"},
+	}
+	if err := writeRuntimesJSON(path, runtimes); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	if strings.Index(text, `"bun"`) > strings.Index(text, `"uv"`) {
+		t.Errorf("runtimes not in alphabetical order:\n%s", text)
+	}
+	if strings.Index(text, `"kind"`) > strings.Index(text, `"mode"`) {
+		t.Errorf("keys of an entry not sorted:\n%s", text)
+	}
+}

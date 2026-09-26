@@ -6,7 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 
+	"github.com/datamitsu/datamitsu/internal/jsonsort"
 	"github.com/datamitsu/datamitsu/internal/registry"
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 
@@ -99,7 +101,9 @@ func runPullNode(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	for _, name := range names {
+	counterWidth := len(strconv.Itoa(len(names)))
+	for i, name := range names {
+		counter := fmt.Sprintf("[%*d/%d]", counterWidth, i+1, len(names))
 		entry := apps[name]
 		result := npmVersionResult{
 			Name:           name,
@@ -111,13 +115,13 @@ func runPullNode(cmd *cobra.Command, args []string) error {
 		switch {
 		case err != nil:
 			result.Error = err.Error()
-			fmt.Printf("  %-*s  %s  -> error: %v\n", maxNameLen, name, result.CurrentVersion, err)
+			fmt.Printf("  %s %-*s  %s  -> error: %v\n", counter, maxNameLen, name, result.CurrentVersion, err)
 		case info == nil:
 			// No version is old enough under the active min-age cutoff: skip with
 			// a warning and keep the current version (no error, no update).
 			fmt.Fprintf(os.Stderr,
-				"  %-*s  %s  -> warning: no version at least %d minutes old; keeping current\n",
-				maxNameLen, name, result.CurrentVersion, minAge)
+				"  %s %-*s  %s  -> warning: no version at least %d minutes old; keeping current\n",
+				counter, maxNameLen, name, result.CurrentVersion, minAge)
 		default:
 			result.LatestVersion = info.Version
 			result.UpdateNeeded = info.Version != entry.Version
@@ -127,7 +131,7 @@ func runPullNode(cmd *cobra.Command, args []string) error {
 			if result.UpdateNeeded {
 				status = "-> " + info.Version
 			}
-			line := fmt.Sprintf("  %-*s  %s  %s", maxNameLen, name, result.CurrentVersion, status)
+			line := fmt.Sprintf("  %s %-*s  %s  %s", counter, maxNameLen, name, result.CurrentVersion, status)
 			if info.Description != "" {
 				line += "  " + info.Description
 			}
@@ -240,7 +244,7 @@ func readNodeAppsJSON(path string) (nodeAppsJSON, error) {
 }
 
 func writeNodeAppsJSON(path string, apps nodeAppsJSON) error {
-	data, err := json.MarshalIndent(apps, "", "  ")
+	data, err := jsonsort.MarshalIndent(apps, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshaling: %w", err)
 	}

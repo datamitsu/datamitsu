@@ -84,6 +84,10 @@ writes the configuration; never ship it to consumers.
 Newest first. Each entry names the first version that has it and what a
 configuration should do about it.
 
+- **after v0.3.1** - Every `devtools pull-*` command works through its entries in
+  alphabetical order with a `[n/N]` counter and writes its file with the keys
+  of every object sorted. The first pull after upgrading rewrites an existing
+  registry in that order; commit that diff on its own.
 - **after v0.3.1** - Every `devtools pull-*` command retries transient failures,
   prints each retry, reports every app or package that still failed and exits
   with status 1 when any did. `pull-github` no longer stops at a brand-new app
