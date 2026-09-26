@@ -1414,6 +1414,14 @@ globalThis.getConfig = getConfig;
 
 See [Managed Content - Shared Storage](../guides/managed-content.md#shared-storage) for usage examples.
 
+The default configuration publishes these keys:
+
+| Key                              | Value                                                                                                                                                                      |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `datamitsu-agent-prompt`         | Markdown guide for agents in a repository that uses datamitsu ([Agent Prompts](../contributing/creating-wrappers.md#agent-prompts))                                        |
+| `datamitsu-config-author-prompt` | Markdown guide for agents writing a datamitsu configuration; opt-in ([Agent Prompts](../contributing/creating-wrappers.md#agent-prompts))                                  |
+| `pnpm-workspace-defaults`        | YAML of the recommended pnpm workspace security settings ([Supply Chain Security](../guides/supply-chain-security.md#reusing-defaults-in-project-repos-via-sharedstorage)) |
+
 ## OCI Bundle (`oci`)
 
 Pins the [OCI bundle](/docs/guides/oci-bundles) that seeds the tool store: the registry repository plus the mandatory SHA-256 digest.

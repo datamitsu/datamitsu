@@ -147,6 +147,7 @@ Apps can bundle full directory trees via the `Archives map[string]*ArchiveSpec` 
 - No Go-level merge semantics — relies on JS to spread correctly (a config that replaces `sharedStorage` without spreading will drop previous keys)
 - Well-known keys published by the embedded default config (`internal/config/config.js`):
   - `"datamitsu-agent-prompt"` — markdown guide for AI agents working in datamitsu-managed repos
+  - `"datamitsu-config-author-prompt"` — markdown guide for AI agents writing a datamitsu configuration (a wrapper or a project's own config); opt-in, never written anywhere by default
   - `"pnpm-workspace-defaults"` — YAML string of the pnpm security defaults sourced from `pnpmdefaults.Defaults()` (the single source of truth shared with the Bun/Node app auto-merge; Go injects the map as a JS global so `config.js` can stringify it). Intended for downstream configs that want to write a hardened `pnpm-workspace.yaml` into a project repo (e.g., via a Bundle) — distinct from the auto-merge applied to per-app `files["pnpm-workspace.yaml"]`. See [supply-chain-security](../website/docs/guides/supply-chain-security.md#pnpm-bun-and-node-apps) for the full key list
 
 **Config Links JS API** ([internal/engine/tools/config.go](internal/engine/tools/config.go))

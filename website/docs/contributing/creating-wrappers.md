@@ -348,13 +348,18 @@ globalThis.getMinVersion = () => "0.0.1";
 
 Remote configs are resolved depth-first before your config is evaluated.
 
-## Using the Standard Agent Prompt
+## Agent Prompts
 
-datamitsu core provides a standard agent prompt (AGENTS.md content) that wrapper packages can reference and customize. This ensures consistent AI assistant instructions across all projects using datamitsu while allowing wrappers to extend them with company-specific guidance.
+datamitsu publishes two Markdown guides for AI agents through `sharedStorage`. The binary that evaluates the configuration produces both, so they always describe the version that loads it. The default configuration writes neither of them anywhere: your configuration decides where each one goes.
 
-### Accessing the Prompt
+| Key                              | Written for                                                                                                                           | Where it belongs                                               |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `datamitsu-agent-prompt`         | Agents working in a repository that **uses** a datamitsu configuration                                                                | The agent instructions your wrapper ships to its consumers     |
+| `datamitsu-config-author-prompt` | Agents working in a repository that **writes** one: a wrapper, or a project configuration that defines its own apps, tools or configs | The authoring repository only — never shipped to its consumers |
 
-The prompt is available via shared storage:
+### Shipping the Consumer Prompt
+
+Write the prompt into a project file through a managed config:
 
 ```javascript
 function getConfig(input) {
@@ -374,20 +379,7 @@ function getConfig(input) {
 globalThis.getConfig = getConfig;
 ```
 
-### Pattern 1: Use Directly
-
-The simplest approach is to use the default prompt as-is:
-
-```javascript
-function getConfig(input) {
-  // Prompt is already in AGENTS.md by default
-  // No changes needed unless you want to customize
-  return input;
-}
-globalThis.getConfig = getConfig;
-```
-
-### Pattern 2: Extend with Custom Instructions
+### Extending It with Custom Instructions
 
 Create a bundle that combines the base prompt with company-specific guidance:
 
@@ -408,6 +400,7 @@ function getConfig(input) {
   return {
     ...input,
     bundles: {
+      ...input.bundles,
       "company-agents": {
         version: "1.0.0",
         files: {
@@ -430,19 +423,28 @@ function getConfig(input) {
 globalThis.getConfig = getConfig;
 ```
 
-### Pattern 3: Reference Core Bundle
+When datamitsu updates the prompt, `datamitsu init` rebuilds the bundle, so every project picks up the change without anyone syncing text by hand.
 
-For demo purposes, datamitsu core creates a bundle with the agent prompt. You can reference it directly:
+### Adding the Configuration-Author Guide
+
+The configuration-author guide tells an agent how to write a layer correctly for this version of datamitsu: the JavaScript runtime, mandatory hashes and lock files, the `devtools pull-*` workflow, validation rules, and a list of recent changes a configuration should review. Because `datamitsu init` refreshes it on every upgrade, an agent working on your wrapper learns about new features from the binary itself.
+
+Add it where the configuration is written. For a wrapper, that is the `datamitsu.config.*` at the wrapper repository's own git root — not the configuration the wrapper publishes, which would ship the guide to every consumer. Merge the bundle into that file's `getConfig`; the file keeps its own `getMinVersion()`, which every configuration must export:
 
 ```javascript
 function getConfig(input) {
   return {
     ...input,
-    managedConfigs: {
-      ...input.managedConfigs,
-      "AGENTS.md": {
-        linkTarget: ".datamitsu/datamitsu-guide",
-        scope: "git-root",
+    bundles: {
+      ...input.bundles,
+      "config-author-guide": {
+        files: {
+          "datamitsu-config-author.md":
+            input.sharedStorage?.["datamitsu-config-author-prompt"] ?? "",
+        },
+        links: {
+          "ai/agents/datamitsu-config-author.md": "datamitsu-config-author.md",
+        },
       },
     },
   };
@@ -450,21 +452,13 @@ function getConfig(input) {
 globalThis.getConfig = getConfig;
 ```
 
-After running `datamitsu init`, users will see `.datamitsu/datamitsu-guide.md` with the standard prompt.
+After `datamitsu init`, point the repository's own agent instructions at it once:
 
-### Benefits
+```markdown
+Before changing the datamitsu configuration, read [.datamitsu/ai/agents/datamitsu-config-author.md](.datamitsu/ai/agents/datamitsu-config-author.md).
+```
 
-- **Consistency**: All projects get the same base agent instructions
-- **Extensibility**: Wrappers can add company/team-specific guidance
-- **Automatic updates**: When datamitsu updates the prompt, wrappers inherit changes automatically
-- **Zero maintenance**: No need to duplicate or manually sync prompt content
-
-### Example Use Cases
-
-1. **Startup defaults**: Use the default prompt for standard projects
-2. **Enterprise standards**: Extend with company coding policies and tool requirements
-3. **Team workflows**: Customize with team-specific git workflow or review processes
-4. **Multi-environment**: Different prompts for development vs. production contexts
+A project whose own `datamitsu.config.*` defines apps, tools or managed configs can adopt it the same way.
 
 ## Testing Your Wrapper
 

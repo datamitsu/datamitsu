@@ -1,5 +1,5 @@
 import { mapOfApps } from "./apps";
-import { DATAMITSU_AGENT_GUIDE } from "./prompts/generated";
+import { DATAMITSU_AGENT_GUIDE, DATAMITSU_CONFIG_AUTHOR_GUIDE } from "./prompts/generated";
 import { mapOfRuntimes } from "./runtimes";
 
 function getConfig(config: config.Config): config.Config {
@@ -19,6 +19,7 @@ function getConfig(config: config.Config): config.Config {
     sharedStorage: {
       ...config.sharedStorage,
       "datamitsu-agent-prompt": DATAMITSU_AGENT_GUIDE,
+      "datamitsu-config-author-prompt": DATAMITSU_CONFIG_AUTHOR_GUIDE,
       "pnpm-workspace-defaults": YAML.stringify(pnpmWorkspaceDefaults),
     },
   };

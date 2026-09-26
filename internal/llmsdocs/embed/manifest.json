@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 55,
-  "pageSetHash": "8b8e07f62b26361c9222527d91004537",
+  "pageSetHash": "32c0af8f2ac1888d7e51196d632d0639",
   "pages": [
     {
       "slug": "about",
@@ -31,8 +31,8 @@
       "url": "https://datamitsu.com/docs/contributing/creating-wrappers.md",
       "title": "Creating Wrapper Packages",
       "description": "Build your own datamitsu config distribution package for your team or organization",
-      "bytes": 15781,
-      "contentHash": "f4c2e0e9a9cbb8361d439809826236e8"
+      "bytes": 17059,
+      "contentHash": "07da8a7fc59b16c491e3e107808af48e"
     },
     {
       "slug": "contributing",
@@ -469,8 +469,8 @@
       "url": "https://datamitsu.com/docs/reference/configuration-api.md",
       "title": "Configuration API",
       "description": "Complete reference for the datamitsu configuration API",
-      "bytes": 71336,
-      "contentHash": "464af89ca87601c091746b0d95054575"
+      "bytes": 72436,
+      "contentHash": "d3c9eece451b2e7381f7d5746e92d15e"
     },
     {
       "slug": "reference/ignore-rules",

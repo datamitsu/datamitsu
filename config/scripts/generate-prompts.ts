@@ -1,44 +1,43 @@
 #!/usr/bin/env node
 
-import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-const __filename = import.meta.filename;
 const __dirname = import.meta.dirname;
 
 const CONFIG_ROOT = join(__dirname, "..");
 const PROMPTS_DIR = join(CONFIG_ROOT, "src", "prompts");
-const INPUT_FILE = join(PROMPTS_DIR, "datamitsu-agent-guide.md");
 const OUTPUT_FILE = join(PROMPTS_DIR, "generated.ts");
+
+const PROMPTS = [
+  {
+    doc: "Agent guide for repositories that use a datamitsu configuration",
+    exportName: "DATAMITSU_AGENT_GUIDE",
+    file: "datamitsu-agent-guide.md",
+  },
+  {
+    doc: "Agent guide for repositories that write a datamitsu configuration; opt-in only",
+    exportName: "DATAMITSU_CONFIG_AUTHOR_GUIDE",
+    file: "datamitsu-config-author-guide.md",
+  },
+];
 
 function generatePromptsFile() {
   try {
-    const markdownContent = readFileSync(INPUT_FILE, "utf8");
-
-    const escapedContent = markdownContent
-      .replaceAll("\\", "\\\\")
-      .replaceAll("`", "\\`")
-      .replaceAll("$", "\\$");
-
-    const contentHash = createHash("sha256").update(markdownContent).digest("hex");
+    const exports = PROMPTS.map(({ doc, exportName, file }) => {
+      const markdown = readFileSync(join(PROMPTS_DIR, file), "utf8");
+      return `/**
+ * ${doc}
+ * Generated from: ${file}
+ */
+export const ${exportName} = \`${toTemplateLiteral(markdown)}\`;
+`;
+    });
 
     const tsContent = `// AUTO-GENERATED - DO NOT EDIT
-// Generated from: datamitsu-agent-guide.md
-// Run: pnpm generate:prompts
+// Run: task generate:prompts
 
-/**
- * Standard agent prompt content for AGENTS.md
- * This content is distributed via sharedStorage to wrapper packages
- */
-export const DATAMITSU_AGENT_GUIDE = \`${escapedContent}\`;
-
-/**
- * SHA-256 hash of the agent prompt content
- * Used as bundle version for automatic cache invalidation
- */
-export const DATAMITSU_AGENT_GUIDE_HASH = "${contentHash}";
-`;
+${exports.join("\n")}`;
 
     mkdirSync(PROMPTS_DIR, { recursive: true });
 
@@ -49,6 +48,10 @@ export const DATAMITSU_AGENT_GUIDE_HASH = "${contentHash}";
     console.error("✗ Failed to generate prompts file:", error);
     process.exit(1);
   }
+}
+
+function toTemplateLiteral(markdown: string): string {
+  return markdown.replaceAll("\\", "\\\\").replaceAll("`", "\\`").replaceAll("$", "\\$");
 }
 
 generatePromptsFile();
