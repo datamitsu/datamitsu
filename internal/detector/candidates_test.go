@@ -90,6 +90,56 @@ func TestDetectBinaryCandidates_Errors(t *testing.T) {
 	}
 }
 
+// snyk names its Alpine builds "snyk-alpine" and "snyk-alpine-arm64": no
+// "linux", and no arch token on the amd64 one. Alpine must count as Linux, or
+// "snyk-alpine" matches neither implicit rule and linux/amd64/musl is dropped.
+func TestDetectBinary_AlpineOnlyNamesLinux(t *testing.T) {
+	assets := []github.Asset{
+		asset("snyk-alpine"),
+		asset("snyk-alpine-arm64"),
+		asset("snyk-linux"),
+		asset("snyk-linux-arm64"),
+		asset("snyk-macos"),
+		asset("snyk-macos-arm64"),
+		asset("snyk-win.exe"),
+	}
+
+	tests := []struct {
+		os   syslist.OsType
+		arch syslist.ArchType
+		libc string
+		want string
+	}{
+		{syslist.OsTypeLinux, syslist.ArchTypeAmd64, "musl", "snyk-alpine"},
+		{syslist.OsTypeLinux, syslist.ArchTypeArm64, "musl", "snyk-alpine-arm64"},
+		{syslist.OsTypeLinux, syslist.ArchTypeAmd64, "glibc", "snyk-linux"},
+		{syslist.OsTypeLinux, syslist.ArchTypeArm64, "glibc", "snyk-linux-arm64"},
+		{syslist.OsTypeDarwin, syslist.ArchTypeAmd64, "unknown", "snyk-macos"},
+		{syslist.OsTypeDarwin, syslist.ArchTypeArm64, "unknown", "snyk-macos-arm64"},
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.os)+"/"+string(tt.arch)+"/"+tt.libc, func(t *testing.T) {
+			got, err := DetectBinary(assets, tt.os, tt.arch, tt.libc)
+			if err != nil {
+				t.Fatalf("DetectBinary error = %v", err)
+			}
+			if got.Name != tt.want {
+				t.Errorf("DetectBinary = %q, want %q", got.Name, tt.want)
+			}
+		})
+	}
+
+	candidates, err := DetectBinaryCandidates(assets, syslist.OsTypeDarwin, syslist.ArchTypeAmd64, "unknown")
+	if err != nil {
+		t.Fatalf("DetectBinaryCandidates error = %v", err)
+	}
+	for _, c := range candidates {
+		if strings.Contains(c.Name, "alpine") {
+			t.Errorf("darwin/amd64 candidates include %q", c.Name)
+		}
+	}
+}
+
 func indexOf(names []string, target string) int {
 	for i, n := range names {
 		if n == target {

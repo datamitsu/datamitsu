@@ -3,6 +3,9 @@
 package detector
 
 import (
+	"net/url"
+	"path"
+	"slices"
 	"strings"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
@@ -80,38 +83,35 @@ func detectBinaryPathHeuristic(appName string, filename string, osType syslist.O
 // extractBinaryPathPattern analyzes historical binaries for the same app
 // and extracts a common pattern to use for new versions
 func extractBinaryPathPattern(historicalBinaries binmanager.MapOfBinaries, osType syslist.OsType, filename string) *string {
-	if len(historicalBinaries) == 0 {
-		return nil
-	}
-
-	var paths []string
-	var hasNilPath bool
-
-	for os, archMap := range historicalBinaries {
-		if os != osType {
-			continue
-		}
-		for _, libcMap := range archMap {
-			for _, binInfo := range libcMap {
-				if binInfo.BinaryPath == nil {
-					hasNilPath = true
-				} else {
-					paths = append(paths, *binInfo.BinaryPath)
-				}
+	var paths, sameAsset []string
+	for _, libcMap := range historicalBinaries[osType] {
+		for _, binInfo := range libcMap {
+			if binInfo.BinaryPath == nil {
+				continue
+			}
+			paths = append(paths, *binInfo.BinaryPath)
+			if assetName(binInfo.URL) == filename {
+				sameAsset = append(sameAsset, *binInfo.BinaryPath)
 			}
 		}
 	}
 
-	if hasNilPath && len(paths) == 0 {
-		return nil
+	// An asset published under the same name as before keeps its layout.
+	if len(sameAsset) > 0 {
+		slices.Sort(sameAsset)
+		return &sameAsset[0]
 	}
 
-	if len(paths) == 0 {
-		return nil
-	}
+	slices.Sort(paths)
+	return findCommonPattern(paths, filename)
+}
 
-	commonPattern := findCommonPattern(paths, filename)
-	return commonPattern
+func assetName(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Path == "" {
+		return ""
+	}
+	return path.Base(u.Path)
 }
 
 // findCommonPattern finds a common pattern among historical paths
@@ -123,29 +123,47 @@ func findCommonPattern(paths []string, newFilename string) *string {
 
 	newVersion := extractVersion(newFilename)
 	if newVersion == "" {
-		return nil
+		return stableUnversionedPath(paths)
 	}
 
-	for _, path := range paths {
-		oldVersion, oldPart := extractVersionFromPath(path)
+	for _, p := range paths {
+		oldVersion, oldPart := extractVersionFromPath(p)
 		if oldVersion == "" {
 			continue
 		}
 
 		if oldVersion == newVersion {
-			return &path
+			return &p
 		}
 
 		newPart := strings.Replace(oldPart, oldVersion, newVersion, 1)
-		pattern := strings.Replace(path, oldPart, newPart, 1)
+		pattern := strings.Replace(p, oldPart, newPart, 1)
 		return &pattern
 	}
 
-	if len(paths) > 0 {
-		return &paths[0]
-	}
+	return &paths[0]
+}
 
-	return nil
+// stableUnversionedPath returns the one path all historical entries agree on,
+// provided it names neither a version nor a platform. Such a path, like
+// "buf/bin/buf", describes a layout that holds across releases and across the
+// architectures of one OS, so it applies to an asset name that carries no
+// version to substitute. A path naming a platform ("tool_linux_amd64") belongs
+// to one asset only.
+func stableUnversionedPath(paths []string) *string {
+	stable := paths[0]
+	for _, p := range paths {
+		if p != stable {
+			return nil
+		}
+	}
+	if version, _ := extractVersionFromPath(stable); version != "" {
+		return nil
+	}
+	if HasAnyOSIndicator(stable) || HasAnyArchIndicator(stable) {
+		return nil
+	}
+	return &stable
 }
 
 // extractVersionFromPath extracts version string from a path

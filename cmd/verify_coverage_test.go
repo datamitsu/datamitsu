@@ -108,7 +108,7 @@ func TestVerifyBinaryOrDir(t *testing.T) {
 	})
 
 	t.Run("explicit hashType is honored", func(t *testing.T) {
-		body := []byte("payload-with-explicit-hashtype")
+		body := []byte("\x7fELF payload-with-explicit-hashtype")
 		srv := vcServe(t, body)
 		ht := binmanager.BinHashTypeSHA256
 		info := binmanager.BinaryOsArchInfo{

@@ -93,7 +93,7 @@ func TestVerifyBinaryExtraction(t *testing.T) {
 	})
 
 	t.Run("tar.gz member verifies", func(t *testing.T) {
-		archive := cpTarGzBytes(t, map[string]string{"bin/tool": "ELF-ish binary payload"})
+		archive := cpTarGzBytes(t, map[string]string{"bin/tool": "\x7fELF binary payload"})
 		srv := cpServeBytes(t, archive)
 		bp := "bin/tool"
 		if err := VerifyBinaryExtraction(ctx, srv.URL, cpSHA256Hex(archive), BinHashTypeSHA256, BinContentTypeTarGz, &bp); err != nil {
@@ -136,6 +136,49 @@ func TestVerifyBinaryExtraction(t *testing.T) {
 			t.Fatalf("VerifyBinaryExtraction(bad archive) = %v, want extraction error", err)
 		}
 	})
+
+	t.Run("text file under the binary path is rejected", func(t *testing.T) {
+		archive := cpTarGzBytes(t, map[string]string{
+			"buf/etc/bash_completion.d/buf": "# bash completion for buf\n",
+		})
+		srv := cpServeBytes(t, archive)
+		bp := "buf/etc/bash_completion.d/buf"
+		err := VerifyBinaryExtraction(ctx, srv.URL, cpSHA256Hex(archive), BinHashTypeSHA256, BinContentTypeTarGz, &bp)
+		if err == nil || !strings.Contains(err.Error(), "not an executable") {
+			t.Fatalf("VerifyBinaryExtraction(text file) = %v, want not-an-executable error", err)
+		}
+	})
+}
+
+func TestCheckExecutableFormat(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		wantErr bool
+	}{
+		{"ELF", "\x7fELF\x02\x01\x01", false},
+		{"Mach-O 64-bit", "\xcf\xfa\xed\xfe\x07\x00\x00\x01", false},
+		{"Mach-O 32-bit", "\xce\xfa\xed\xfe", false},
+		{"Mach-O big-endian", "\xfe\xed\xfa\xcf", false},
+		{"Mach-O universal", "\xca\xfe\xba\xbe\x00\x00\x00\x02", false},
+		{"PE", "MZ\x90\x00", false},
+		{"shebang script", "#!/bin/sh\necho ok\n", false},
+		{"bash completion", "# bash completion for buf\n", true},
+		{"man page", ".TH BUF 1\n", true},
+		{"single byte", "M", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := filepath.Join(t.TempDir(), "file")
+			if err := os.WriteFile(p, []byte(tt.content), 0o600); err != nil {
+				t.Fatalf("write: %v", err)
+			}
+			err := checkExecutableFormat(p)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("checkExecutableFormat(%q) error = %v, wantErr %v", tt.content, err, tt.wantErr)
+			}
+		})
+	}
 }
 
 func TestDownloadFileForVerify(t *testing.T) {

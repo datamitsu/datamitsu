@@ -14,7 +14,10 @@ type OSPattern struct {
 	PriorityPattern *regexp.Regexp
 }
 
-// OSPatterns maps OS types to their detection patterns
+// OSPatterns maps OS types to their detection patterns. An Alpine or musl
+// build is a Linux build, and some releases name nothing else: an asset like
+// "tool-alpine" carries neither "linux" nor an arch token, and without an OS
+// indicator neither implicit rule in ScoreAsset would claim it.
 var OSPatterns = map[syslist.OsType]*OSPattern{
 	syslist.OsTypeDarwin: {
 		Name:        syslist.OsTypeDarwin,
@@ -23,7 +26,7 @@ var OSPatterns = map[syslist.OsType]*OSPattern{
 	},
 	syslist.OsTypeLinux: {
 		Name:            syslist.OsTypeLinux,
-		Pattern:         regexp.MustCompile(`(?i)(linux|ubuntu)`),
+		Pattern:         regexp.MustCompile(`(?i)(linux|ubuntu|alpine|musl)`),
 		AntiPattern:     regexp.MustCompile(`(?i)(android)`),
 		PriorityPattern: regexp.MustCompile(`(?i)\.appimage$`),
 	},

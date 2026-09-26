@@ -69,6 +69,20 @@ func TestFingerprintBinary(t *testing.T) {
 	})
 }
 
+// A pass recorded before extraction checked the executable format only proved
+// the file was non-empty; --skip-passed must not carry it over.
+func TestFingerprint_ExtractionCheckInvalidatesOlderPasses(t *testing.T) {
+	fields := []string{"https://example.com/bin", "sha256hash", "sha256", "tar.gz", "bin", "false", "linux", "amd64", "glibc"}
+	for kind, fp := range map[string]string{
+		"binary":  FingerprintBinary(fields[0], fields[1], fields[2], fields[3], fields[4], false, fields[6], fields[7], fields[8]),
+		"runtime": FingerprintRuntime(fields[0], fields[1], fields[2], fields[3], fields[4], false, fields[6], fields[7], fields[8]),
+	} {
+		if before := fingerprintFields(append([]string{kind}, fields...)...); fp == before {
+			t.Errorf("%s fingerprint equals the one recorded before the executable check", kind)
+		}
+	}
+}
+
 func TestFingerprintRuntime(t *testing.T) {
 	t.Run("same inputs produce same output", func(t *testing.T) {
 		fp1 := FingerprintRuntime("https://example.com/runtime", "sha256hash", "sha256", "application/gzip", "runtime", true, "linux", "amd64", "glibc")
