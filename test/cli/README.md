@@ -15,6 +15,12 @@ The reusable harness lives in [`internal/clitest`](../../internal/clitest):
 - `project.go` — temp git repo + config writers (`NewProject`,
   `WriteMinimalConfig`, `WriteOverlayConfig`, `WriteDatamitsuIgnore`).
 - `golden.go` — output normalization + golden compare (`AssertGolden`).
+- `shell.go` — `sh` scripts as tools (`ShellTool`, `ShellConfig`) and the
+  marker files they record their runs in (`MarkerDir`, `Project.Marker`).
+- `jsonl.go` — the `--log-format jsonl` stream: `ParseJSONL`, causal chain
+  checks (`AssertChains`) and golden normalization (`NormalizeJSONL`).
+- `parsers.go` — `SeedParserModule`, which places a WASM parser module in a
+  run's store so an offline run loads it without a fetch.
 
 A second, **gated** OCI-seeded tier lives in [`test/e2e`](../e2e) — see below.
 
@@ -33,8 +39,12 @@ go test ./test/cli/ -run TestVersionGolden
 
 The suite is fully offline and hermetic: each run gets a clean env
 (`DATAMITSU_OFFLINE=1`, `DATAMITSU_NO_OCI=1`, `NO_COLOR=1`, no inherited
-`DATAMITSU_*`/`CI`/`TERM`), an isolated `DATAMITSU_CACHE_DIR`, and a `git init`-ed
-temp CWD. No network is required.
+`DATAMITSU_*`, `CI`, `TERM`, CI-system markers such as `GITHUB_ACTIONS`,
+agent-session markers such as `CLAUDECODE` or `CODEX_*`, `FORCE_COLOR` or
+`CLICOLOR_FORCE`), an isolated `DATAMITSU_CACHE_DIR`, and a `git init`-ed temp
+CWD. No network is required. A golden recorded in a CI job or an agent session
+is therefore the same as one recorded in a plain shell; a test that needs one
+of those variables sets it through `RunOptions.Env`.
 
 > The embedded `internal/config/config.js` is checked in, so `go build` (and
 > therefore the harness's instrumented build) works without a prior `pnpm build`.

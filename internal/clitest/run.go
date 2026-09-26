@@ -94,10 +94,11 @@ func Run(tb testing.TB, opts RunOptions, args ...string) Result {
 }
 
 // BaseEnv returns a clean, deterministic environment for a subprocess run.
-// Inherited DATAMITSU_* vars (plus CI and TERM) are stripped so configuration
-// and mode detection are fully controlled by the harness, and the binary runs
-// offline with an isolated cache rooted at cacheDir. The returned slice is
-// freshly allocated; callers may append overrides to it.
+// Inherited variables that steer datamitsu or the tools it runs are stripped
+// (see strippedKey), so configuration and mode detection are fully controlled
+// by the harness, and the binary runs offline with an isolated cache rooted at
+// cacheDir. The returned slice is freshly allocated; callers may append
+// overrides to it.
 func BaseEnv(cacheDir string) []string {
 	const sep = "="
 	env := make([]string, 0, len(os.Environ())+8)
@@ -122,17 +123,38 @@ func BaseEnv(cacheDir string) []string {
 }
 
 // strippedKey reports whether an inherited environment variable must be dropped
-// from the clean base env. We strip every DATAMITSU_* var (so the harness is the
-// only source of datamitsu config), CI/TERM (which steer mode/output detection),
+// from the clean base env: every DATAMITSU_* var (so the harness is the only
+// source of datamitsu config), the variables that steer mode, color or output
+// detection in datamitsu or in the tools it runs (ambientKeys, ambientPrefixes),
 // inherited command-scope git config (which would outrank gittest.Env), and the
-// keys BaseEnv sets explicitly (avoid duplicate, ambiguous entries).
+// keys BaseEnv sets explicitly (avoid duplicate, ambiguous entries). A golden
+// recorded inside a CI job or an agent session would otherwise differ from one
+// recorded in a plain shell; a scenario that needs one of these variables sets
+// it through RunOptions.Env.
 func strippedKey(key string) bool {
-	switch key {
-	case "CI", "TERM", "NO_COLOR", "GOCOVERDIR":
+	if _, ok := ambientKeys[key]; ok {
 		return true
 	}
-	return strings.HasPrefix(key, "DATAMITSU_") || gittest.IsCommandScopeKey(key)
+	for _, prefix := range ambientPrefixes {
+		if strings.HasPrefix(key, prefix) {
+			return true
+		}
+	}
+	return gittest.IsCommandScopeKey(key)
 }
+
+// ambientKeys are stripped by exact name: CI and terminal detection, the
+// CI-system markers, the agent-session markers and the color overrides.
+var ambientKeys = map[string]struct{}{
+	"CI": {}, "TERM": {}, "NO_COLOR": {}, "GOCOVERDIR": {},
+	"GITHUB_ACTIONS": {}, "TF_BUILD": {}, "TEAMCITY_VERSION": {},
+	"AI_AGENT": {}, "AGENT": {}, "CLAUDECODE": {}, "CLAUDE_CODE": {}, "CLAUDE_CODE_CHILD_SESSION": {},
+	"GEMINI_CLI": {}, "CURSOR_AGENT": {}, "OPENCODE": {}, "AUGMENT_AGENT": {},
+	"FORCE_COLOR": {}, "CLICOLOR_FORCE": {},
+}
+
+// ambientPrefixes are stripped as whole families.
+var ambientPrefixes = []string{"DATAMITSU_", "CODEX_", "COPILOT_", "JUNIE_"}
 
 // ExitCodeOf extracts the process exit code from an error returned by
 // (*exec.Cmd).Run: 0 for nil, the real code for an *exec.ExitError, and -1 for
