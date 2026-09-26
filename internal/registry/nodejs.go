@@ -2,10 +2,8 @@ package registry
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"time"
 
@@ -33,24 +31,9 @@ func getLatestNodeLTSVersionFromURL(ctx context.Context, url string) (string, er
 	if err := httpx.GuardOffline("Node.js release lookup"); err != nil {
 		return nodejsFallbackLTSVersion, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nodejsFallbackLTSVersion, fmt.Errorf("failed to build request: %w", err)
-	}
-	resp, err := nodejsHTTPClient.Do(req)
-	if err != nil {
-		return nodejsFallbackLTSVersion, fmt.Errorf("failed to fetch Node.js releases: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-		return nodejsFallbackLTSVersion, fmt.Errorf("endoflife.date returned status %d for nodejs: %s", resp.StatusCode, string(body))
-	}
-
 	var releases []nodejsRelease
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 10<<20)).Decode(&releases); err != nil {
-		return nodejsFallbackLTSVersion, fmt.Errorf("failed to decode Node.js releases: %w", err)
+	if err := getJSON(ctx, nodejsHTTPClient, "endoflife.date", url, 10<<20, &releases); err != nil {
+		return nodejsFallbackLTSVersion, fmt.Errorf("failed to fetch Node.js releases: %w", err)
 	}
 
 	version := filterLatestLTS(releases)

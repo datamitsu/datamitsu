@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -90,6 +89,7 @@ func runPullUV(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Minimum release age: %s\n", minAgeBanner(minAge))
 	fmt.Printf("Checking %d PyPI packages...\n\n", len(names))
+	enableRetryNotices()
 
 	var results []pypiVersionResult
 	maxNameLen := 0
@@ -145,12 +145,13 @@ func runPullUV(cmd *cobra.Command, args []string) error {
 
 	printUVSummary(results)
 
+	var failed []failedPackage
 	for _, r := range results {
 		if r.Error != "" {
-			return errors.New("some packages failed to fetch from registry")
+			failed = append(failed, failedPackage{name: r.Name, pkg: r.PackageName, err: r.Error})
 		}
 	}
-	return nil
+	return reportFailedPackages(file, len(results), failed)
 }
 
 func printUVSummary(results []pypiVersionResult) {

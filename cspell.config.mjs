@@ -57,6 +57,14 @@ export default defineConfig((config) => ({
     // and the Go package that does it.
     "WCAG",
     "inspectortheme",
+    // Operating systems the release detector recognises only to leave alone,
+    // and the attestation and installer formats it filters out of a release.
+    "illumos",
+    "minisig",
+    "intoto",
+    "msix",
+    "msixbundle",
+    "appxbundle",
     // A shell-literal expectation in internal/shellquote: `$'a\xffb'`. The
     // trailing "b" is load-bearing — it is a hex digit, and the test asserts
     // that a shell stops the \x escape after exactly two digits rather than

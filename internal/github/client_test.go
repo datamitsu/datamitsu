@@ -8,9 +8,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/datamitsu/datamitsu/internal/httpretry"
 )
 
 func TestNewClient(t *testing.T) {
@@ -201,7 +204,17 @@ func TestGetReleaseByTag(t *testing.T) {
 	})
 }
 
+// fastRetries shrinks the retry backoff for the duration of a test.
+func fastRetries(t *testing.T) {
+	t.Helper()
+	base, maxDelay, maxAfter := httpretry.RetryBase, httpretry.RetryMax, httpretry.MaxRetryAfter
+	httpretry.RetryBase, httpretry.RetryMax, httpretry.MaxRetryAfter = time.Millisecond, 4*time.Millisecond, 2*time.Second
+	t.Cleanup(func() { httpretry.RetryBase, httpretry.RetryMax, httpretry.MaxRetryAfter = base, maxDelay, maxAfter })
+}
+
 func TestFetchReleaseRetry(t *testing.T) {
+	fastRetries(t)
+
 	t.Run("retries on server error", func(t *testing.T) {
 		attempts := 0
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -296,10 +309,178 @@ func TestFetchReleaseRetry(t *testing.T) {
 			t.Error("expected error after max retries")
 		}
 
-		if attempts != 3 {
-			t.Errorf("expected 3 attempts (max retries), got %d", attempts)
+		if attempts != httpretry.DefaultMaxAttempts {
+			t.Errorf("expected %d attempts (max retries), got %d", httpretry.DefaultMaxAttempts, attempts)
+		}
+		if !strings.Contains(err.Error(), "giving up after") {
+			t.Errorf("error should say the attempts ran out: %v", err)
 		}
 	})
+
+	t.Run("retries a rate limit that names a short wait", func(t *testing.T) {
+		attempts := 0
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			attempts++
+			if attempts == 1 {
+				w.Header().Set("Retry-After", "1")
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(&Release{TagName: "v1.0.0"})
+		}))
+		defer server.Close()
+
+		var seen []httpretry.Attempt
+		client := NewClient()
+		client.httpClient = server.Client()
+		client.RetryNotifier = func(a httpretry.Attempt) { seen = append(seen, a) }
+
+		release, err := client.fetchRelease(context.Background(), server.URL)
+		if err != nil {
+			t.Fatalf("fetchRelease() error = %v", err)
+		}
+		if release.TagName != "v1.0.0" || attempts != 2 {
+			t.Errorf("got tag %q after %d attempts, want v1.0.0 after 2", release.TagName, attempts)
+		}
+		if len(seen) != 1 || seen[0].Delay < time.Second || !isRateLimit(seen[0].Err) {
+			t.Errorf("notifier saw %+v, want one rate-limited attempt waiting the second asked for", seen)
+		}
+	})
+
+	t.Run("a 503 waits out its Retry-After", func(t *testing.T) {
+		attempts := 0
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			attempts++
+			if attempts == 1 {
+				w.Header().Set("Retry-After", "1")
+				w.WriteHeader(http.StatusServiceUnavailable)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(&Release{TagName: "v1.0.0"})
+		}))
+		defer server.Close()
+
+		var seen []httpretry.Attempt
+		client := NewClient()
+		client.httpClient = server.Client()
+		client.RetryNotifier = func(a httpretry.Attempt) { seen = append(seen, a) }
+
+		if _, err := client.fetchRelease(context.Background(), server.URL); err != nil || attempts != 2 {
+			t.Fatalf("fetchRelease() = %v after %d attempts", err, attempts)
+		}
+		if len(seen) != 1 || seen[0].Delay != time.Second {
+			t.Errorf("notifier saw %+v, want one attempt waiting the second asked for", seen)
+		}
+	})
+
+	t.Run("a 503 asking for a wait beyond the cap is not retried", func(t *testing.T) {
+		attempts := 0
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			attempts++
+			w.Header().Set("Retry-After", "3600")
+			w.WriteHeader(http.StatusServiceUnavailable)
+		}))
+		defer server.Close()
+
+		client := NewClient()
+		client.httpClient = server.Client()
+
+		_, err := client.fetchRelease(context.Background(), server.URL)
+		if err == nil || attempts != 1 || !strings.Contains(err.Error(), "asks to wait 1h0m0s") {
+			t.Fatalf("fetchRelease() = %v after %d attempts", err, attempts)
+		}
+	})
+
+	t.Run("does not wait for a reset beyond the cap", func(t *testing.T) {
+		attempts := 0
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			attempts++
+			w.Header().Set("X-Ratelimit-Remaining", "0")
+			w.Header().Set("X-Ratelimit-Reset", strconv.FormatInt(time.Now().Add(time.Hour).Unix(), 10))
+			w.WriteHeader(http.StatusForbidden)
+		}))
+		defer server.Close()
+
+		client := NewClient()
+		client.httpClient = server.Client()
+
+		_, err := client.fetchRelease(context.Background(), server.URL)
+		if !isRateLimit(err) || attempts != 1 {
+			t.Fatalf("fetchRelease() = %v after %d attempts, want a rate limit error after 1", err, attempts)
+		}
+		if !strings.Contains(err.Error(), "GITHUB_TOKEN") || !strings.Contains(err.Error(), "resets at") {
+			t.Errorf("error should say when the limit resets and name GITHUB_TOKEN: %v", err)
+		}
+	})
+
+	t.Run("retries a body cut short", func(t *testing.T) {
+		attempts := 0
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			attempts++
+			if attempts == 1 {
+				_, _ = w.Write([]byte(`{"tag_name":`))
+				return
+			}
+			_ = json.NewEncoder(w).Encode(&Release{TagName: "v1.0.0"})
+		}))
+		defer server.Close()
+
+		client := NewClient()
+		client.httpClient = server.Client()
+
+		release, err := client.fetchRelease(context.Background(), server.URL)
+		if err != nil || attempts != 2 || release.TagName != "v1.0.0" {
+			t.Fatalf("fetchRelease() = %v after %d attempts", err, attempts)
+		}
+	})
+
+	t.Run("does not retry a 400", func(t *testing.T) {
+		attempts := 0
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			attempts++
+			w.WriteHeader(http.StatusBadRequest)
+		}))
+		defer server.Close()
+
+		client := NewClient()
+		client.httpClient = server.Client()
+
+		if _, err := client.fetchRelease(context.Background(), server.URL); err == nil || attempts != 1 {
+			t.Fatalf("fetchRelease() = %v after %d attempts, want an error after 1", err, attempts)
+		}
+	})
+}
+
+func isRateLimit(err error) bool {
+	var limit *RateLimitError
+	return errors.As(err, &limit)
+}
+
+func TestRateLimitFromResponse(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	tests := []struct {
+		name     string
+		headers  map[string]string
+		wantWait time.Duration
+	}{
+		{"no headers", nil, 0},
+		{"retry-after", map[string]string{"Retry-After": "60"}, time.Minute},
+		{"reset with remaining", map[string]string{"X-Ratelimit-Remaining": "0", "X-Ratelimit-Reset": "1700000090"}, 90 * time.Second},
+		{"reset in the past", map[string]string{"X-Ratelimit-Remaining": "0", "X-Ratelimit-Reset": "1600000000"}, time.Second},
+		{"reset but requests remain", map[string]string{"X-Ratelimit-Remaining": "5", "X-Ratelimit-Reset": "1700000090"}, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp := &http.Response{Header: http.Header{}}
+			for k, v := range tt.headers {
+				resp.Header.Set(k, v)
+			}
+			if got := rateLimitFromResponse(resp, now).Wait; got != tt.wantWait {
+				t.Errorf("Wait = %v, want %v", got, tt.wantWait)
+			}
+		})
+	}
 }
 
 func TestDoRequest(t *testing.T) {
@@ -493,39 +674,6 @@ func TestGetRepository(t *testing.T) {
 			t.Error("expected error for invalid JSON, got nil")
 		}
 	})
-}
-
-func TestIsNonRetryableError(t *testing.T) {
-	tests := []struct {
-		name     string
-		err      error
-		expected bool
-	}{
-		{
-			name:     "NotFoundError is non-retryable",
-			err:      &NotFoundError{URL: "test"},
-			expected: true,
-		},
-		{
-			name:     "RateLimitError is non-retryable",
-			err:      &RateLimitError{},
-			expected: true,
-		},
-		{
-			name:     "generic error is retryable",
-			err:      &genericError{},
-			expected: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := isNonRetryableError(tt.err)
-			if result != tt.expected {
-				t.Errorf("isNonRetryableError() = %v, want %v", result, tt.expected)
-			}
-		})
-	}
 }
 
 func TestReleaseFieldParsing(t *testing.T) {
@@ -839,12 +987,6 @@ func TestGetLatestReleaseWithMinAge(t *testing.T) {
 			t.Fatalf("expected nil release, got %v", r)
 		}
 	})
-}
-
-type genericError struct{}
-
-func (e *genericError) Error() string {
-	return "generic error"
 }
 
 func TestGitHubClientRefusesOffline(t *testing.T) {

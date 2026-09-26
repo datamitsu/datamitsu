@@ -583,7 +583,7 @@ func (rm *RuntimeManager) InstallRuntimes(ctx context.Context, names []string, c
 	for _, name := range dlStats.Downloaded {
 		meta := metaMap[name]
 
-		binCachePath, pathErr := tmpBm.GetBinaryPath(ctx, name)
+		binCachePath, pathErr := tmpBm.GetInstallRoot(name)
 		if pathErr != nil {
 			stats.Failed = append(stats.Failed, RuntimeInstallResult{Name: name, Error: pathErr})
 			continue
@@ -603,7 +603,7 @@ func (rm *RuntimeManager) InstallRuntimes(ctx context.Context, names []string, c
 	for _, name := range dlStats.AlreadyCached {
 		meta := metaMap[name]
 
-		binCachePath, pathErr := tmpBm.GetBinaryPath(ctx, name)
+		binCachePath, pathErr := tmpBm.GetInstallRoot(name)
 		if pathErr != nil {
 			stats.Failed = append(stats.Failed, RuntimeInstallResult{Name: name, Error: pathErr})
 			continue
@@ -1061,7 +1061,7 @@ func (rm *RuntimeManager) downloadRuntime(ctx context.Context, runtimeName strin
 
 	runtimeCachePath := env.GetRuntimeBinaryPath(runtimeName, configHash)
 
-	binCachePath, err := tmpBinManager.GetBinaryPath(ctx, runtimeName)
+	binCachePath, err := tmpBinManager.GetInstallRoot(runtimeName)
 	if err != nil {
 		return fmt.Errorf("failed to get binary path for runtime %q: %w", runtimeName, err)
 	}

@@ -1421,7 +1421,7 @@ func TestRunPullRuntimes_NodeLookupFailureNonZeroExit(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected non-zero exit (error) when the node LTS lookup fails")
 	}
-	if !strings.Contains(err.Error(), "some runtimes failed to update") {
+	if err.Error() != "1 of 1 runtimes failed: node" {
 		t.Errorf("unexpected error: %v", err)
 	}
 

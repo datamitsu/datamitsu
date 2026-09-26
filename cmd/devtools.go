@@ -5,8 +5,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/datamitsu/datamitsu/internal/appstate"
@@ -125,119 +127,198 @@ func runPullGithub(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Minimum release age: %s\n", minAgeBanner(minAge))
 
-	// Create GitHub client
-	client := github.NewClient()
+	client := newGitHubClient()
+	enableRetryNotices()
 
-	// Process each app
-	for appName, metadata := range state.Apps {
+	// Every app is attempted; a failure is recorded and reported at the end,
+	// and the run exits non-zero. Sorted so two runs read the same way.
+	var failures []pullFailure
+	for _, appName := range slices.Sorted(maps.Keys(state.Apps)) {
 		fmt.Printf("\n=== Processing %s ===\n", appName)
-
-		// Validate metadata
-		if err := appstate.Validate(appName, metadata); err != nil {
-			fmt.Fprintf(os.Stderr, "Skipping %s: %v\n", appName, err)
-			continue
-		}
-
-		fmt.Printf("App: %s (%s/%s)\n", appName, metadata.Owner, metadata.Repo)
-		fmt.Printf("Current tag: %s\n", metadata.Tag)
-
-		// If --update flag is set, fetch latest release first
-		var release *github.Release
-		effectiveTag := metadata.Tag
-		if updateFlag {
-			if minAge > 0 {
-				fmt.Printf("Fetching latest release at least %d minutes old...\n", minAge)
-			} else {
-				fmt.Printf("Fetching latest release...\n")
+		for _, failure := range pullGithubApp(ctx, client, state, githubAppsPath, appName, minAge) {
+			fmt.Fprintf(os.Stderr, "✗ %s: %s: %v\n", appName, failure.stage, failure.err)
+			if failure.fatal {
+				fmt.Fprintf(os.Stderr, "The run stopped at %s; the apps after it were not attempted.\n", appName)
+				return failure.err
 			}
-			// GetLatestReleaseWithMinAge falls through to GetLatestRelease when
-			// minAge <= 0, so a nil release only happens under an active cutoff.
-			release, err = client.GetLatestReleaseWithMinAge(ctx, metadata.Owner, metadata.Repo, minAge)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error fetching latest release: %v\n", err)
-				continue
-			}
-			switch {
-			case release == nil:
-				// No release is old enough under the active min-age cutoff.
-				if state.Binaries[appName] != nil {
-					// Existing app: warn and keep the current tag.
-					fmt.Fprintf(os.Stderr,
-						"Warning: no release for %s is at least %d minutes old; keeping current tag %s\n",
-						appName, minAge, metadata.Tag)
-				} else {
-					// New app: nothing safe to install — hard error.
-					return noReleaseOldEnoughErr(appName, minAge)
-				}
-			case release.TagName != metadata.Tag:
-				fmt.Printf("Latest release: %s (updating from %s)\n", release.TagName, metadata.Tag)
-				effectiveTag = release.TagName
-			default:
-				fmt.Printf("Latest release: %s (already up to date)\n", release.TagName)
-			}
-		}
-
-		// Compute config hash using effective tag (not yet committed to state)
-		hashMetadata := &appstate.AppMetadata{
-			Owner: metadata.Owner,
-			Repo:  metadata.Repo,
-			Tag:   effectiveTag,
-		}
-		currentHash := appstate.ComputeConfigHash(hashMetadata)
-
-		// Check if binaries already exist and config hasn't changed
-		if state.Binaries[appName] != nil && state.Binaries[appName].ConfigHash == currentHash {
-			fmt.Printf("Config unchanged (hash: %s), skipping binary detection\n", currentHash[:8])
-			continue
-		}
-
-		// Fetch release if not already fetched
-		if release == nil {
-			fmt.Printf("Fetching release %s...\n", effectiveTag)
-			release, err = client.GetRelease(ctx, metadata.Owner, metadata.Repo, effectiveTag)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error fetching release: %v\n", err)
-				continue
-			}
-		}
-
-		// Build binaries into a temporary entry to avoid mutating shared state on failure
-		binariesEntry, err := buildBinariesForApp(ctx, appName, release, currentHash, state)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error updating binaries for %s: %v\n", appName, err)
-			continue
-		}
-
-		// Fetch repository description (matches node/UV pattern: use fetched if non-empty, else preserve existing)
-		desc := ""
-		repoInfo, err := client.GetRepository(ctx, metadata.Owner, metadata.Repo)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to fetch repository description for %s: %v\n", appName, err)
-		} else if repoInfo != nil {
-			desc = repoInfo.Description
-		}
-		if desc == "" {
-			if existing := state.Binaries[appName]; existing != nil {
-				desc = existing.Description
-			}
-		}
-		binariesEntry.Description = desc
-
-		// Commit changes to state only after full success
-		metadata.Tag = effectiveTag
-		state.Binaries[appName] = binariesEntry
-
-		// Save immediately after each app update to prevent data loss
-		fmt.Printf("Saving %s...\n", githubAppsPath)
-		if err := appstate.Save(githubAppsPath, state); err != nil {
-			return fmt.Errorf("failed to save after %s: %w", appName, err)
+			failures = append(failures, failure)
 		}
 	}
 
-	// Final summary
-	fmt.Printf("\n✓ Processed %d apps\n", len(state.Apps))
-	fmt.Printf("✓ Configuration saved to %s\n", githubAppsPath)
+	return reportPullGithub(githubAppsPath, len(state.Apps), failures)
+}
+
+// pullFailure is one app pull-github could not finish: the stage that failed
+// and why. A fatal failure — the file cannot be written — ends the run.
+type pullFailure struct {
+	app   string
+	stage string
+	err   error
+	fatal bool
+}
+
+// pullGithubApp brings one app up to date and saves the file when it did. It
+// returns nothing on success; on failure it leaves the app's entry as it was
+// and returns what failed — one entry, or one per platform whose asset could
+// not be verified.
+func pullGithubApp(ctx context.Context, client *github.Client, state *appstate.State, githubAppsPath, appName string, minAge int) []pullFailure {
+	metadata := state.Apps[appName]
+	fail := func(stage string, err error) []pullFailure {
+		return []pullFailure{{app: appName, stage: stage, err: err}}
+	}
+
+	if err := appstate.Validate(appName, metadata); err != nil {
+		return fail("metadata", err)
+	}
+
+	fmt.Printf("App: %s (%s/%s)\n", appName, metadata.Owner, metadata.Repo)
+	fmt.Printf("Current tag: %s\n", metadata.Tag)
+
+	// If --update flag is set, fetch latest release first
+	var release *github.Release
+	effectiveTag := metadata.Tag
+	if updateFlag {
+		if minAge > 0 {
+			fmt.Printf("Fetching latest release at least %d minutes old...\n", minAge)
+		} else {
+			fmt.Printf("Fetching latest release...\n")
+		}
+		// GetLatestReleaseWithMinAge falls through to GetLatestRelease when
+		// minAge <= 0, so a nil release only happens under an active cutoff.
+		var err error
+		release, err = client.GetLatestReleaseWithMinAge(ctx, metadata.Owner, metadata.Repo, minAge)
+		if err != nil {
+			return fail("latest release", err)
+		}
+		switch {
+		case release == nil:
+			// No release is old enough under the active min-age cutoff.
+			if state.Binaries[appName] == nil {
+				// New app: nothing safe to install.
+				return fail("latest release", noReleaseOldEnoughErr(appName, minAge))
+			}
+			// Existing app: warn and keep the current tag.
+			fmt.Fprintf(os.Stderr,
+				"Warning: no release for %s is at least %d minutes old; keeping current tag %s\n",
+				appName, minAge, metadata.Tag)
+		case release.TagName != metadata.Tag:
+			fmt.Printf("Latest release: %s (updating from %s)\n", release.TagName, metadata.Tag)
+			effectiveTag = release.TagName
+		default:
+			fmt.Printf("Latest release: %s (already up to date)\n", release.TagName)
+		}
+	}
+
+	// Compute config hash using effective tag (not yet committed to state)
+	hashMetadata := &appstate.AppMetadata{
+		Owner: metadata.Owner,
+		Repo:  metadata.Repo,
+		Tag:   effectiveTag,
+	}
+	currentHash := appstate.ComputeConfigHash(hashMetadata)
+
+	// Check if binaries already exist and config hasn't changed
+	if state.Binaries[appName] != nil && state.Binaries[appName].ConfigHash == currentHash {
+		fmt.Printf("Config unchanged (hash: %s), skipping binary detection\n", currentHash[:8])
+		return nil
+	}
+
+	// Fetch release if not already fetched
+	if release == nil {
+		fmt.Printf("Fetching release %s...\n", effectiveTag)
+		var err error
+		release, err = client.GetRelease(ctx, metadata.Owner, metadata.Repo, effectiveTag)
+		if err != nil {
+			return fail("release "+effectiveTag, err)
+		}
+	}
+
+	// Build binaries into a temporary entry to avoid mutating shared state on failure
+	binariesEntry, err := buildBinariesForApp(ctx, appName, release, currentHash, state)
+	if err != nil {
+		if unverified, ok := errors.AsType[*verificationError](err); ok {
+			failures := make([]pullFailure, 0, len(unverified.platforms))
+			for _, p := range unverified.platforms {
+				failures = append(failures, pullFailure{app: appName, stage: "verify " + p.platform, err: p.err})
+			}
+			return failures
+		}
+		return fail("binaries for "+release.TagName, err)
+	}
+
+	// Fetch repository description (matches node/UV pattern: use fetched if non-empty, else preserve existing)
+	desc := ""
+	repoInfo, err := client.GetRepository(ctx, metadata.Owner, metadata.Repo)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to fetch repository description for %s: %v\n", appName, err)
+	} else if repoInfo != nil {
+		desc = repoInfo.Description
+	}
+	if desc == "" {
+		if existing := state.Binaries[appName]; existing != nil {
+			desc = existing.Description
+		}
+	}
+	binariesEntry.Description = desc
+
+	// Commit changes to state only after full success
+	metadata.Tag = effectiveTag
+	state.Binaries[appName] = binariesEntry
+
+	// Save immediately after each app update to prevent data loss
+	fmt.Printf("Saving %s...\n", githubAppsPath)
+	if err := appstate.Save(githubAppsPath, state); err != nil {
+		return []pullFailure{{app: appName, stage: "save", err: fmt.Errorf("failed to save after %s: %w", appName, err), fatal: true}}
+	}
 	return nil
+}
+
+// verificationError is an app whose binaries were detected but could not all
+// be verified: the platforms whose asset failed, each with the error named
+// after the asset it belongs to. The app is not recorded, since an entry
+// without those platforms would silently lose what the previous one had.
+type verificationError struct {
+	platforms []platformVerification
+}
+
+type platformVerification struct {
+	platform string
+	err      error
+}
+
+func (e *verificationError) Error() string {
+	names := make([]string, 0, len(e.platforms))
+	for _, p := range e.platforms {
+		names = append(names, p.platform)
+	}
+	return fmt.Sprintf("verification failed for %d platform(s): %s", len(e.platforms), strings.Join(names, ", "))
+}
+
+// reportPullGithub prints the run's outcome. With failures it lists each app,
+// the stage and the error, so nobody reads the log for them, and returns an
+// error so the command exits non-zero. Every failed app is left as it was.
+func reportPullGithub(githubAppsPath string, total int, failures []pullFailure) error {
+	if len(failures) == 0 {
+		fmt.Printf("\n✓ Processed %d apps\n", total)
+		fmt.Printf("✓ Configuration saved to %s\n", githubAppsPath)
+		return nil
+	}
+
+	// An app can fail on several platforms at once; it is still one app.
+	failedApps := make(map[string]bool, len(failures))
+	rateLimited := false
+	for _, f := range failures {
+		failedApps[f.app] = true
+		rateLimited = rateLimited || isRateLimited(f.err)
+	}
+	fmt.Fprintf(os.Stderr, "\n✗ %d of %d apps failed and are left as they were in %s:\n", len(failedApps), total, githubAppsPath)
+	for _, f := range failures {
+		fmt.Fprintf(os.Stderr, "  %s (%s): %v\n", f.app, f.stage, f.err)
+	}
+	if rateLimited {
+		fmt.Fprintf(os.Stderr, "Hint: set GITHUB_TOKEN to raise the GitHub API rate limit, then run the command again.\n")
+	}
+	return fmt.Errorf("%d of %d apps failed", len(failedApps), total)
 }
 
 type platformTuple struct {
@@ -310,9 +391,9 @@ func buildBinariesForApp(ctx context.Context, appName string, release *github.Re
 	// in-archive path is wrong. Left nil (no verification) when the flag is off.
 	var verify extractionVerifier
 	if verifyExtractionFlag {
-		verify = func(ctx context.Context, url, hash string, contentType binmanager.BinContentType, binaryPath *string) error {
+		verify = memoizedVerifier(func(ctx context.Context, url, hash string, contentType binmanager.BinContentType, binaryPath *string) error {
 			return binmanager.VerifyBinaryExtraction(ctx, url, hash, binmanager.BinHashTypeSHA256, contentType, binaryPath)
-		}
+		})
 	}
 
 	var results []detectionResult
@@ -323,7 +404,7 @@ func buildBinariesForApp(ctx context.Context, appName string, release *github.Re
 	deduplicatedCount := 0
 
 	for _, platform := range platforms {
-		candidates, err := detector.DetectBinaryCandidates(release.Assets, platform.os, platform.arch, platform.libc)
+		candidates, err := detector.DetectBinaryCandidates(appName, release.Assets, platform.os, platform.arch, platform.libc)
 		if err != nil {
 			results = append(results, detectionResult{
 				os:     platform.os,
@@ -351,10 +432,14 @@ func buildBinariesForApp(ctx context.Context, appName string, release *github.Re
 			noHashCount++
 			continue
 		case "verification_failed":
-			results = append(results, detectionResult{
+			result := detectionResult{
 				os: platform.os, arch: platform.arch, libc: platform.libc,
 				status: "verification_failed", assetName: candidates[0].Name, err: pickErr,
-			})
+			}
+			if failure, ok := errors.AsType[*candidateError](pickErr); ok {
+				result.assetName, result.err = failure.asset, failure.err
+			}
+			results = append(results, result)
 			verificationFailedCount++
 			continue
 		default: // "not_available" — e.g. every candidate was a libc mismatch
@@ -429,20 +514,36 @@ func buildBinariesForApp(ctx context.Context, appName string, release *github.Re
 
 	printDetectionResults(results, verifyExtractionFlag)
 
-	if successCount == 0 {
-		return nil, errors.New("no binaries were detected")
+	// A platform whose asset could not be verified fails the app: recording
+	// the others would drop that platform from the entry without a word.
+	if verificationFailedCount > 0 {
+		fmt.Printf("\nSummary: %d detected, %d not available, %d deduplicated, %d verification failed\n",
+			successCount, notAvailableCount, deduplicatedCount, verificationFailedCount)
+		unverified := &verificationError{}
+		for _, r := range results {
+			if r.status == "verification_failed" {
+				unverified.platforms = append(unverified.platforms, platformVerification{
+					platform: formatPlatformLabel(r),
+					err:      fmt.Errorf("%s: %w", r.assetName, r.err),
+				})
+			}
+		}
+		return nil, unverified
 	}
 
-	if noHashCount > 0 {
+	switch {
+	case noHashCount > 0 && successCount == 0:
+		// The assets were found; what they lack is the digest the registry needs.
+		return nil, fmt.Errorf("assets were detected for %d platform(s) but none carries a SHA-256 digest (mandatory per security policy)", noHashCount)
+	case noHashCount > 0:
 		return nil, fmt.Errorf("%d platform(s) missing SHA-256 hash (mandatory per security policy)", noHashCount)
+	case successCount == 0:
+		return nil, errors.New("no binaries were detected")
 	}
 
 	entry.ConfigHash = configHash
 
 	switch {
-	case verifyExtractionFlag && verificationFailedCount > 0:
-		fmt.Printf("\nSummary: %d detected, %d not available, %d deduplicated, %d verification failed\n",
-			successCount, notAvailableCount, deduplicatedCount, verificationFailedCount)
 	case deduplicatedCount > 0:
 		fmt.Printf("\nSummary: %d detected, %d not available, %d deduplicated\n",
 			successCount, notAvailableCount, deduplicatedCount)
@@ -457,6 +558,38 @@ func buildBinariesForApp(ctx context.Context, appName string, release *github.Re
 // candidate-selection loop is unit-testable without network access; nil means
 // verification is disabled.
 type extractionVerifier func(ctx context.Context, url, hash string, contentType binmanager.BinContentType, binaryPath *string) error
+
+// memoizedVerifier verifies each asset once per run. The glibc and musl tuples
+// of one architecture usually pick the same archive, and the platforms of one
+// asset must agree: a second download of an asset that already verified could
+// fail on the network and take the app down with it.
+func memoizedVerifier(verify extractionVerifier) extractionVerifier {
+	results := map[string]error{}
+	return func(ctx context.Context, url, hash string, contentType binmanager.BinContentType, binaryPath *string) error {
+		key := url + "\x00" + hash + "\x00" + string(contentType)
+		if binaryPath != nil {
+			key += "\x00" + *binaryPath
+		}
+		if err, seen := results[key]; seen {
+			return err
+		}
+		err := verify(ctx, url, hash, contentType, binaryPath)
+		results[key] = err
+		return err
+	}
+}
+
+// candidateError is the verification error of one candidate, named after the
+// asset it belongs to.
+type candidateError struct {
+	asset string
+	err   error
+}
+
+func (e *candidateError) Error() string { return e.asset + ": " + e.err.Error() }
+
+// Unwrap exposes the wrapped error for errors.Is/As chains.
+func (e *candidateError) Unwrap() error { return e.err }
 
 // candidatePick is the asset chosen for one platform plus the derived metadata
 // needed to record it.
@@ -501,7 +634,7 @@ func pickBinaryForPlatform(
 		}
 
 		contentType := detector.DetectContentType(asset.Name)
-		binaryPath := detector.DetectBinaryPathWithHistory(appName, asset.Name, contentType, platform.os, historical)
+		binaryPath := detector.DetectBinaryPathWithHistory(appName, asset.Name, contentType, platform.os, platform.arch, platform.libc, historical)
 
 		hash, err := extractHashFromDigest(asset.Digest)
 		if err != nil {
@@ -511,7 +644,13 @@ func pickBinaryForPlatform(
 
 		if verify != nil {
 			if err := verify(ctx, asset.BrowserDownloadURL, hash, contentType, binaryPath); err != nil {
-				verifyErr = err
+				verifyErr = &candidateError{asset: asset.Name, err: err}
+				if binmanager.IsDownloadError(err) {
+					// The asset was never seen, so the candidate is not what failed;
+					// trying the next one would hand the platform to whatever ranks
+					// below it — an attestation file, or a variant that happens to verify.
+					return nil, "verification_failed", verifyErr
+				}
 				continue
 			}
 		}

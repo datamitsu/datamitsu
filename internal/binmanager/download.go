@@ -2,6 +2,7 @@ package binmanager
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -218,7 +219,7 @@ func downloadFileInternal(ctx context.Context, url string, destDir string, name 
 		}
 		statusErr := fmt.Errorf("bad status: %s", resp.Status)
 		if retryableStatus(resp.StatusCode) {
-			return "", statusErr
+			return "", httpretry.WithRetryAfter(statusErr, resp)
 		}
 		return "", permanent(statusErr)
 	}
@@ -320,6 +321,14 @@ func downloadAndVerifyInternal(ctx context.Context, url string, expectedHash str
 		}
 
 		delay := retryDelay(attempt)
+		// A server that names its own wait (Retry-After) is taken at its word,
+		// up to the cap; beyond it the download is not worth sitting through.
+		if asked, ok := errors.AsType[httpretry.RetryAfterError](err); ok && asked.RetryAfter() > 0 {
+			if asked.RetryAfter() > httpretry.MaxRetryAfter {
+				return "", fmt.Errorf("not retried, the server asks to wait %s: %w", asked.RetryAfter().Round(time.Second), err)
+			}
+			delay = asked.RetryAfter()
+		}
 		log.Warn("download failed, retrying",
 			zap.String("url", url),
 			zap.Int("attempt", attempt),

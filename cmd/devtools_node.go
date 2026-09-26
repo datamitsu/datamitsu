@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -90,6 +89,7 @@ func runPullNode(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Minimum release age: %s\n", minAgeBanner(minAge))
 	fmt.Printf("Checking %d npm packages...\n\n", len(names))
+	enableRetryNotices()
 
 	var results []npmVersionResult
 	maxNameLen := 0
@@ -145,12 +145,31 @@ func runPullNode(cmd *cobra.Command, args []string) error {
 
 	printNodeSummary(results)
 
+	var failed []failedPackage
 	for _, r := range results {
 		if r.Error != "" {
-			return errors.New("some packages failed to fetch from registry")
+			failed = append(failed, failedPackage{name: r.Name, pkg: r.PackageName, err: r.Error})
 		}
 	}
-	return nil
+	return reportFailedPackages(file, len(results), failed)
+}
+
+// failedPackage is one registry lookup a pull-node or pull-uv run could not finish.
+type failedPackage struct {
+	name, pkg, err string
+}
+
+// reportFailedPackages lists every failed lookup after the summary, says what
+// the file holds for them, and returns an error so the command exits non-zero.
+func reportFailedPackages(file string, total int, failed []failedPackage) error {
+	if len(failed) == 0 {
+		return nil
+	}
+	fmt.Fprintf(os.Stderr, "\n✗ %d of %d packages failed and are left as they were in %s:\n", len(failed), total, file)
+	for _, f := range failed {
+		fmt.Fprintf(os.Stderr, "  %s (%s): %s\n", f.name, f.pkg, f.err)
+	}
+	return fmt.Errorf("%d of %d packages failed", len(failed), total)
 }
 
 func printNodeSummary(results []npmVersionResult) {

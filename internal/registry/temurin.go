@@ -2,10 +2,8 @@ package registry
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -32,24 +30,9 @@ func getLatestTemurinMajorVersionFromURL(ctx context.Context, url string) (strin
 	if err := httpx.GuardOffline("Temurin release lookup"); err != nil {
 		return temurinFallbackMajorVersion, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return temurinFallbackMajorVersion, fmt.Errorf("failed to build request: %w", err)
-	}
-	resp, err := temurinHTTPClient.Do(req)
-	if err != nil {
-		return temurinFallbackMajorVersion, fmt.Errorf("failed to fetch Temurin releases: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-		return temurinFallbackMajorVersion, fmt.Errorf("adoptium API returned status %d: %s", resp.StatusCode, string(body))
-	}
-
 	var releases temurinReleaseVersions
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 10<<20)).Decode(&releases); err != nil {
-		return temurinFallbackMajorVersion, fmt.Errorf("failed to decode Temurin releases: %w", err)
+	if err := getJSON(ctx, temurinHTTPClient, "adoptium API", url, 10<<20, &releases); err != nil {
+		return temurinFallbackMajorVersion, fmt.Errorf("failed to fetch Temurin releases: %w", err)
 	}
 
 	version := extractMajorVersion(releases)

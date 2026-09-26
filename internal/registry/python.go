@@ -2,10 +2,8 @@ package registry
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"time"
 
@@ -32,24 +30,9 @@ func getLatestPythonStableVersionFromURL(ctx context.Context, url string) (strin
 	if err := httpx.GuardOffline("Python release lookup"); err != nil {
 		return pythonFallbackStableVersion, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return pythonFallbackStableVersion, fmt.Errorf("failed to build request: %w", err)
-	}
-	resp, err := pythonHTTPClient.Do(req)
-	if err != nil {
-		return pythonFallbackStableVersion, fmt.Errorf("failed to fetch Python releases: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-		return pythonFallbackStableVersion, fmt.Errorf("endoflife.date returned status %d for python: %s", resp.StatusCode, string(body))
-	}
-
 	var releases []pythonRelease
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 10<<20)).Decode(&releases); err != nil {
-		return pythonFallbackStableVersion, fmt.Errorf("failed to decode Python releases: %w", err)
+	if err := getJSON(ctx, pythonHTTPClient, "endoflife.date", url, 10<<20, &releases); err != nil {
+		return pythonFallbackStableVersion, fmt.Errorf("failed to fetch Python releases: %w", err)
 	}
 
 	version := filterLatestStablePython(releases)
