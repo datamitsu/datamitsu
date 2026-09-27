@@ -93,7 +93,7 @@ func TestStartCleanupStopsTheTools(t *testing.T) {
 				t.Fatalf("parse the tool's pid %q: %v", data, err)
 			}
 			for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
-				if err := syscall.Kill(pid, 0); errors.Is(err, syscall.ESRCH) {
+				if ended(pid) {
 					return
 				}
 			}
@@ -101,4 +101,19 @@ func TestStartCleanupStopsTheTools(t *testing.T) {
 			t.Errorf("the tool (pid %d) is still running after its test ended", pid)
 		})
 	}
+}
+
+// ended reports whether pid is gone or a zombie: a killed orphan stays one
+// until the host's init reaps it, which a container's may never do.
+func ended(pid int) bool {
+	if err := syscall.Kill(pid, 0); errors.Is(err, syscall.ESRCH) {
+		return true
+	}
+	stat, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
+	if err != nil {
+		return false
+	}
+	// The command name before the state may itself hold ") ".
+	i := strings.LastIndex(string(stat), ") ")
+	return i >= 0 && strings.HasPrefix(string(stat)[i+2:], "Z")
 }
