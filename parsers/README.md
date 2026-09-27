@@ -7,11 +7,31 @@ structured, **nullable** diagnostics for the datamitsu Go core.
 
 A parser extracts **only what the tool actually emitted**. Every diagnostic field
 but `message` is optional; `None` means "the tool did not provide this", not an
-error. The Go core fills defaults (column, severity fallback, range completion)
-and computes diffs — the WASM module owns **only extraction**. Do not invent data
-in a parser, and do not finalize the diagnostic shape here: `RawDiagnostic`
-(`datamitsu-parsers/src/diagnostic.rs`) is a Phase-1 placeholder, finalized in
-Phase 2.
+error. The Go core fills defaults (column, the level of a finding without one,
+range completion) and computes diffs — the WASM module owns **only extraction**.
+Do not invent data in a parser, and do not finalize the diagnostic shape here:
+`RawDiagnostic` (`datamitsu-parsers/src/diagnostic.rs`) is a Phase-1 placeholder,
+finalized in Phase 2.
+
+The rules every parser keeps, which `src/contract.rs` checks for all of them:
+
+- **Levels.** A parser sets `severity` only from a token the tool printed — a
+  level word, a numeric level, a `severity` field, a key such as `errors[]` — and
+  reads it with `severity::of` from its descriptor's `severities`, which list
+  those tokens and the level each maps to. A finding without a token has no
+  level, whatever the stream it came from; the core decides one from the exit
+  code. Outside its tests a parser names a level constant only in a `Level(..)`
+  entry.
+- **Rule identity.** `source` is the tool's name or `None`; `code` is the rule
+  whenever the tool prints one, and nothing else; `url` is the rule's
+  documentation where the tool prints it.
+- **Positions.** Rows and columns are 1-based, and `end_col` is exclusive: a
+  parser adds 1 to what its tool counts from 0 or prints as the span's last
+  column, and never invents an end the tool did not print. `POSITIONS` records
+  what each tool prints.
+- **Column unit.** A descriptor's `column_unit` (`utf-8`, `utf-16`, `utf-32`) is
+  measured on the tool, on a line holding multi-byte characters; an unmeasured
+  tool is on `UNKNOWN_COLUMN_UNITS`.
 
 ## Call contract (host ABI)
 
@@ -38,7 +58,8 @@ host loses multiline cases (e.g. `cue_fmt`); the parser decides whether to split
 
 `parse` returns a JSON array of diagnostics. Each object always has `message`;
 every other field (`row`, `col`, `end_row`, `end_col`, `severity`, `source`,
-`code`) is present only if the tool emitted it. An unknown tool name returns `[]`.
+`code`, `url`, `file`) is present only if the tool emitted it. An unknown tool
+name returns `[]`.
 
 ```json
 [{ "message": "missing newline", "row": 12, "col": 1, "code": "DL3000" }]
@@ -48,11 +69,14 @@ every other field (`row`, `col`, `end_row`, `end_col`, `severity`, `source`,
 
 Each tool is one module under `datamitsu-parsers/src/tools/`. To add one:
 
-1. Add `src/tools/<tool>.rs` with its `DESCRIPTOR` and
+1. Add `src/tools/<tool>.rs` with its `DESCRIPTOR` — the level vocabulary in
+   `severities`, `column_unit` (or an entry on `UNKNOWN_COLUMN_UNITS`),
+   `category` and `kind` — and
    `pub fn parse(stdout: &[u8], stderr: &[u8], exit_code: i32) -> Vec<RawDiagnostic>`,
-   and `cargo test` cases beside it.
-2. Register it: `pub mod <tool>;` and a dispatch arm in `src/tools/mod.rs`, and its
-   descriptor in `TOOLS` in `src/capabilities.rs`. The core checks a configuration's
+   with `cargo test` cases beside it and its `SAMPLES`.
+2. Register it: `pub mod <tool>;`, a dispatch arm and a `samples` entry in
+   `src/tools/mod.rs`, its descriptor in `TOOLS` in `src/capabilities.rs`, and its
+   row in `POSITIONS` in `src/contract.rs`. The core checks a configuration's
    parser key against `describe` before it parses, so a parser missing from `TOOLS`
    is treated as unknown even though it dispatches.
 3. When a configuration wires the parser, record a clean and a finding-bearing run

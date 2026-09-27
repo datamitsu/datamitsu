@@ -1,22 +1,24 @@
 //! pydoclint — Python docstring linter checking docstring sections against
 //! signatures. Ported from the none-ls diagnostics/pydoclint builtin.
+//!
+//! pydoclint prints no level, so its findings carry none.
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
-    name: "pydoclint",
-    description: "Pydoclint is a Python docstring linter to check whether a docstring's sections (arguments, returns, raises, ...) match the function signature or function implementation. To see all violation codes go to [pydoclint](https://jsh9.github.io/pydoclint/violation_codes.html)",
-    url: "https://github.com/jsh9/pydoclint",
-    // generator_opts: to_temp_file + from_stderr; diagnostics read from stderr.
-    operations: &[Operation {
-        mode: "lint",
-        args: &[
-            "--show-filenames-in-every-violation-message=true",
-            "-q",
-            "{file}",
-        ],
-        stdin: false,
-    }],
+	name: "pydoclint",
+	description: "Pydoclint is a Python docstring linter to check whether a docstring's sections (arguments, returns, raises, ...) match the function signature or function implementation. To see all violation codes go to [pydoclint](https://jsh9.github.io/pydoclint/violation_codes.html)",
+	url: "https://github.com/jsh9/pydoclint",
+	severities: &[],
+	column_unit: "",
+	category: "",
+	kind: "tool",
+	// generator_opts: to_temp_file + from_stderr; diagnostics read from stderr.
+	operations: &[Operation {
+		mode: "lint",
+		args: &["--show-filenames-in-every-violation-message=true", "-q", "{file}"],
+		stdin: false,
+	}],
 };
 
 pub fn parse(_stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic> {
@@ -37,17 +39,15 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 	}
 	let row: u32 = row_str.parse().ok()?;
 
-	let message = rest.strip_prefix(": ")?;
-	// message begins with `DOC<digits>: ...`; require the DOC code shape.
-	let code_end = message.find(':')?;
-	let code = &message[..code_end];
-	if !code.starts_with("DOC") || !code[3..].bytes().all(|b| b.is_ascii_digit()) || code.len() <= 3 {
+	let (code, message) = rest.strip_prefix(": ")?.split_once(": ")?;
+	if code.len() <= 3 || !code.starts_with("DOC") || !code[3..].bytes().all(|b| b.is_ascii_digit()) {
 		return None;
 	}
 
 	Some(RawDiagnostic {
 		message: message.to_string(),
 		row: Some(row),
+		code: Some(code.to_string()),
 		..RawDiagnostic::default()
 	})
 }
@@ -58,16 +58,24 @@ mod tests {
 
 	#[test]
 	fn parses_violation() {
-		let stderr = b"src/foo.py:42: DOC101: Docstring contains fewer arguments than in function signature.\n";
-		let diags = parse(b"", stderr, 1);
+		let diags = parse(b"", SAMPLES[0].stderr, 1);
 		assert_eq!(diags.len(), 1);
 		assert_eq!(diags[0].row, Some(42));
+		assert_eq!(diags[0].code.as_deref(), Some("DOC101"));
 		assert_eq!(
 			diags[0].message,
-			"DOC101: Docstring contains fewer arguments than in function signature."
+			"Docstring contains fewer arguments than in function signature."
 		);
-		assert_eq!(diags[0].severity, None);
 		assert_eq!(diags[0].col, None);
+	}
+
+	#[test]
+	fn never_sets_a_severity() {
+		for s in SAMPLES {
+			let diags = parse(s.stdout, s.stderr, s.exit);
+			assert!(!diags.is_empty());
+			assert!(diags.iter().all(|d| d.severity.is_none()), "{diags:?}");
+		}
 	}
 
 	#[test]
@@ -76,5 +84,23 @@ mod tests {
 		let diags = parse(b"", stderr, 1);
 		assert_eq!(diags.len(), 1);
 		assert_eq!(diags[0].row, Some(7));
+		assert_eq!(diags[0].code.as_deref(), Some("DOC201"));
+		assert_eq!(diags[0].message, "does not have a return section");
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[
+	crate::contract::Sample {
+		stdout: b"",
+		stderr: b"src/foo.py:42: DOC101: Docstring contains fewer arguments than in function signature.\n",
+		exit: 1,
+	},
+	crate::contract::Sample {
+		stdout: b"",
+		stderr: b"src/a.py:7: DOC201: Function `f` does not have a return section in docstring \n\
+src/a.py:12: DOC501: Function `g` has raise statements, but the docstring does not have a \"Raises\" section \n",
+		exit: 1,
+	},
+];

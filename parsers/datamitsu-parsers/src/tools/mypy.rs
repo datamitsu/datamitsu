@@ -2,27 +2,35 @@
 //! diagnostics/mypy builtin.
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity;
+use crate::severity::{self, Level};
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
-    name: "mypy",
-    description: "Mypy is an optional static type checker for Python that aims to combine the benefits of dynamic (or \"duck\") typing and static typing.",
-    url: "https://github.com/python/mypy",
-    operations: &[Operation {
-        mode: "lint",
-        args: &[
-            "--hide-error-codes",
-            "--hide-error-context",
-            "--no-color-output",
-            "--show-absolute-path",
-            "--show-column-numbers",
-            "--show-error-codes",
-            "--no-error-summary",
-            "--no-pretty",
-            "{file}",
-        ],
-        stdin: false,
-    }],
+	name: "mypy",
+	description: "Mypy is an optional static type checker for Python that aims to combine the benefits of dynamic (or \"duck\") typing and static typing.",
+	url: "https://github.com/python/mypy",
+	severities: &[
+		Level("error", severity::ERROR),
+		Level("warning", severity::WARNING),
+		Level("note", severity::INFO),
+	],
+	column_unit: "",
+	category: "",
+	kind: "tool",
+	operations: &[Operation {
+		mode: "lint",
+		args: &[
+			"--hide-error-codes",
+			"--hide-error-context",
+			"--no-color-output",
+			"--show-absolute-path",
+			"--show-column-numbers",
+			"--show-error-codes",
+			"--no-error-summary",
+			"--no-pretty",
+			"{file}",
+		],
+		stdin: false,
+	}],
 };
 
 pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic> {
@@ -88,12 +96,7 @@ fn split_code(message: &str) -> (&str, Option<String>) {
 }
 
 fn severity_of(level: &str) -> Option<u8> {
-	match level {
-		"error" => Some(severity::ERROR),
-		"warning" => Some(severity::WARNING),
-		"note" => Some(severity::INFO),
-		_ => None,
-	}
+	severity::of(DESCRIPTOR.severities, level)
 }
 
 #[cfg(test)]
@@ -138,3 +141,21 @@ mod tests {
 		assert_eq!(diags[0].message, "unused 'type: ignore' comment");
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[
+	crate::contract::Sample {
+		stdout:
+			b"/src/app.py:10:5: error: Incompatible return value type (got \"int\", expected \"str\")  [return-value]\n\
+/src/app.py:3: warning: unused 'type: ignore' comment\n\
+/src/app.py:12:9: note: Revealed type is \"builtins.int\"\n",
+		stderr: b"",
+		exit: 1,
+	},
+	crate::contract::Sample {
+		stdout: b"/src/app.py:12:9: note: Revealed type is \"builtins.int\"\n",
+		stderr: b"",
+		exit: 0,
+	},
+];

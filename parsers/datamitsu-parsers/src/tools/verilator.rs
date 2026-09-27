@@ -2,12 +2,16 @@
 //! Ported from the none-ls diagnostics/verilator builtin.
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity;
+use crate::severity::{self, Level};
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "verilator",
 	description: "Verilog and SystemVerilog linter power by Verilator",
 	url: "https://www.veripool.org/verilator/",
+	severities: &[Level("Error", severity::ERROR), Level("Warning", severity::WARNING)],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		args: &["-lint-only", "-Wno-fatal", "{file}"],
@@ -17,9 +21,10 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 
 // Diagnostics come from stderr (from_stderr = true). Upstream Lua pattern:
 //   %%(%w+).*<bufname>:(%d+):(%d+): (.*)
-// e.g. "%Error: top.sv:10:5: syntax error". We match the leading "%<Word>"
-// severity token, then the trailing "<file>:row:col: message" tail; the path
-// segment between is matched loosely (".*") since the bufname is not known here.
+// e.g. "%Error: top.sv:10:5: syntax error" or "%Warning-WIDTH: top.sv:22:13: …".
+// We match the leading "%<Word>" level token and the optional "-<CODE>" after it,
+// then the trailing "<file>:row:col: message" tail; the path segment between is
+// matched loosely (".*") since the bufname is not known here.
 pub fn parse(_stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic> {
 	String::from_utf8_lossy(stderr).lines().filter_map(parse_line).collect()
 }
@@ -32,6 +37,11 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 		return None;
 	}
 	let sev_token = &rest[..sev_end];
+	let code = rest[sev_end..]
+		.strip_prefix('-')
+		.and_then(|s| s.split_once(':'))
+		.map(|(code, _)| code)
+		.filter(|code| !code.is_empty() && code.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'));
 
 	// Find the trailing "<file>:row:col: message" by scanning from the right.
 	// Locate the ": " separating "col:" from the message.
@@ -42,7 +52,8 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 		message: message.to_string(),
 		row: Some(row),
 		col: Some(col),
-		severity: severity_of(sev_token),
+		severity: severity::of(DESCRIPTOR.severities, sev_token),
+		code: code.map(str::to_string),
 		..RawDiagnostic::default()
 	})
 }
@@ -75,14 +86,6 @@ fn parse_row_col(locus: &str) -> Option<(u32, u32)> {
 	Some((row, col))
 }
 
-fn severity_of(token: &str) -> Option<u8> {
-	match token {
-		"Error" => Some(severity::ERROR),
-		"Warning" => Some(severity::WARNING),
-		_ => None,
-	}
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -98,12 +101,23 @@ mod tests {
 		assert_eq!(diags[0].row, Some(10));
 		assert_eq!(diags[0].col, Some(5));
 		assert_eq!(diags[0].severity, Some(severity::ERROR));
+		assert_eq!(diags[0].code, None);
 
 		assert_eq!(diags[1].row, Some(22));
 		assert_eq!(diags[1].col, Some(13));
 		// "Warning-WIDTH" is not exactly "Warning"; the %w+ token is "Warning".
 		assert_eq!(diags[1].severity, Some(severity::WARNING));
+		assert_eq!(diags[1].code.as_deref(), Some("WIDTH"));
 		assert_eq!(diags[1].message, "Operator has a width mismatch");
+	}
+
+	#[test]
+	fn reads_the_code_of_an_error_and_leaves_an_unlisted_level_unset() {
+		let d = parse_line("%Error-PROCASSWIRE: top.sv:4:9: Procedural assignment to wire").unwrap();
+		assert_eq!(d.severity, Some(severity::ERROR));
+		assert_eq!(d.code.as_deref(), Some("PROCASSWIRE"));
+		let d = parse_line("%Info: top.sv:1:1: note").unwrap();
+		assert_eq!(d.severity, None);
 	}
 
 	#[test]
@@ -112,3 +126,18 @@ mod tests {
 		assert!(parse(b"", stderr, 0).is_empty());
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[
+	crate::contract::Sample {
+		stdout: b"",
+		stderr: b"%Warning-WIDTHTRUNC: top.sv:22:13: Operator ASSIGNW expects 4 bits on the Assign RHS, but Assign RHS's VARREF 'b' generates 8 bits.\n                                   : ... note: In instance 'top'\n   22 |   assign a = b;\n      |             ^\n                     ... For warning description see https://verilator.org/warn/WIDTHTRUNC?v=5.030\n                     ... Use \"/* verilator lint_off WIDTHTRUNC */\" and lint_on around source to disable this message.\n%Error: top.sv:30:1: syntax error, unexpected endmodule\n   30 | endmodule\n      | ^~~~~~~~~\n%Error: Exiting due to 1 error(s)\n",
+		exit: 1,
+	},
+	crate::contract::Sample {
+		stdout: b"",
+		stderr: b"%Warning-UNUSEDSIGNAL: top.sv:5:15: Signal is not used: 'unused'\n                                    : ... note: In instance 'top'\n    5 |   logic [3:0] unused;\n      |               ^~~~~~\n                        ... For warning description see https://verilator.org/warn/UNUSEDSIGNAL?v=5.030\n",
+		exit: 0,
+	},
+];

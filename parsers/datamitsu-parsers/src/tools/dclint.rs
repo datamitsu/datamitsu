@@ -15,6 +15,8 @@
 //! finding fails the run. A `minor` finding is an error when its rule is set to
 //! error. Reading `severity` would misreport both ways, so it is never read.
 //!
+//! Each rule's documentation link (`meta.url`) becomes the finding's `url`.
+//!
 //! A file that is not valid YAML or not a valid Compose document is reported as
 //! one finding under the pseudo-rules `invalid-yaml` / `invalid-schema` /
 //! `unknown-error`, and its real rules do not run. Those arrive like any other
@@ -28,12 +30,16 @@ use tinyjson::JsonValue;
 
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity;
+use crate::severity::{self, Level};
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "dclint",
 	description: "A command-line tool for validating and enforcing best practices in Docker Compose files.",
 	url: "https://github.com/zavoloklom/docker-compose-linter",
+	severities: &[Level("error", severity::ERROR), Level("warning", severity::WARNING)],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		args: &["--formatter", "json"],
@@ -78,19 +84,15 @@ fn from_message(value: &JsonValue, file: &Option<String>) -> Option<RawDiagnosti
 		col: position(m, "column"),
 		end_row: position(m, "endLine"),
 		end_col: position(m, "endColumn"),
-		severity: string_field(m, "type").and_then(|t| level_of(&t)),
+		severity: string_field(m, "type").and_then(|t| severity::of(DESCRIPTOR.severities, &t)),
 		code: string_field(m, "rule"),
+		url: match m.get("meta") {
+			Some(JsonValue::Object(meta)) => string_field(meta, "url"),
+			_ => None,
+		},
 		file: file.clone(),
 		..RawDiagnostic::default()
 	})
-}
-
-fn level_of(kind: &str) -> Option<u8> {
-	match kind {
-		"error" => Some(severity::ERROR),
-		"warning" => Some(severity::WARNING),
-		_ => None,
-	}
 }
 
 fn string_field(m: &HashMap<String, JsonValue>, key: &str) -> Option<String> {
@@ -114,7 +116,7 @@ mod tests {
 	// Verbatim `dclint --formatter json` over four Compose files (`meta`
 	// shortened): rule findings at both levels, a file that is not YAML, a file
 	// that is not a Compose document, and a clean file.
-	const REPORT: &str = r##"[
+	pub(super) const REPORT: &str = r##"[
   {
     "filePath": "compose.yaml",
     "messages": [
@@ -227,6 +229,24 @@ mod tests {
 	}
 
 	#[test]
+	fn links_a_finding_to_its_rule_documentation() {
+		let out = parse(
+			br#"[{"filePath":"c.yaml","messages":[{"rule":"no-version-field","type":"error","message":"m","line":1,"column":1,
+                "meta":{"description":"d","url":"https://github.com/zavoloklom/docker-compose-linter/blob/main/docs/rules/no-version-field-rule.md"}}]}]"#,
+			b"",
+			1,
+		);
+		assert_eq!(
+			out[0].url.as_deref(),
+			Some("https://github.com/zavoloklom/docker-compose-linter/blob/main/docs/rules/no-version-field-rule.md")
+		);
+		assert_eq!(out[0].message, "m");
+
+		// The pseudo-rules for an unreadable file carry no `meta`.
+		assert_eq!(find(&parse(REPORT.as_bytes(), b"", 1), "invalid-yaml").url, None);
+	}
+
+	#[test]
 	fn keeps_an_end_position_when_a_rule_reports_one() {
 		let out = parse(
 			br#"[{"filePath":"c.yaml","messages":[{"rule":"r","type":"error","message":"m","line":3,"column":5,"endLine":4,"endColumn":2}]}]"#,
@@ -322,3 +342,18 @@ mod tests {
 		assert_eq!(out[0].message, "Service \"naïve\"");
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[
+	crate::contract::Sample {
+		stdout: tests::REPORT.as_bytes(),
+		stderr: b"",
+		exit: 1,
+	},
+	crate::contract::Sample {
+		stdout: br#"[{"filePath":"compose.yaml","messages":[],"errorCount":0,"warningCount":0}]"#,
+		stderr: b"",
+		exit: 0,
+	},
+];

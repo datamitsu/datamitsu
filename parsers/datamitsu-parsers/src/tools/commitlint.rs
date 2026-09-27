@@ -12,12 +12,16 @@ use tinyjson::JsonValue;
 
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity;
+use crate::severity::{self, Level};
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "commitlint",
 	description: "commitlint checks if your commit messages meet the conventional commit format.",
 	url: "https://commitlint.js.org",
+	severities: &[Level("1", severity::WARNING), Level("2", severity::ERROR)],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		args: &["--format", "commitlint-format-json"],
@@ -95,11 +99,8 @@ fn level_severity(level: &JsonValue) -> Option<u8> {
 		JsonValue::Number(n) => *n,
 		_ => return None,
 	};
-	match crate::numconv::json_int(n) {
-		Some(1) => Some(severity::WARNING),
-		Some(2) => Some(severity::ERROR),
-		_ => None,
-	}
+	let token = crate::numconv::json_int(n)?.to_string();
+	severity::of(DESCRIPTOR.severities, &token)
 }
 
 #[cfg(test)]
@@ -133,8 +134,28 @@ mod tests {
 	}
 
 	#[test]
+	fn a_missing_or_unknown_level_sets_none() {
+		let json = br#"{"results":[{"errors":[
+                {"name":"type-empty","message":"no level"},
+                {"level":0,"name":"type-case","message":"disabled level"},
+                {"level":2.5,"name":"scope-empty","message":"not an integer"}
+            ]}]}"#;
+		let out = parse(json, b"", 1);
+		assert_eq!(out.len(), 3);
+		assert!(out.iter().all(|d| d.severity.is_none()));
+	}
+
+	#[test]
 	fn no_results_yields_nothing() {
 		assert!(parse(br#"{"results":[]}"#, b"", 0).is_empty());
 		assert!(parse(b"not json", b"", 0).is_empty());
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[crate::contract::Sample {
+	stdout: br#"{"valid":false,"errorCount":2,"warningCount":1,"results":[{"valid":false,"errors":[{"level":2,"valid":false,"name":"type-empty","message":"type may not be empty"},{"level":2,"valid":false,"name":"subject-empty","message":"subject may not be empty"}],"warnings":[{"level":1,"valid":false,"name":"body-leading-blank","message":"body must have leading blank line"}],"input":"foo bar\nbody text"}]}"#,
+	stderr: b"",
+	exit: 1,
+}];

@@ -3,25 +3,29 @@
 //!
 //! kube-linter emits `{"Reports":[ … ]}` where each report nests its message,
 //! remediation, check id, and file path. The builtin's custom `on_output`
-//! concatenates `Diagnostic.Message` + "\n" + `Remediation`, takes `Check` as the
-//! code, and pins severity to error. There is no row/column in the output.
+//! concatenates `Diagnostic.Message` + "\n" + `Remediation` and takes `Check` as
+//! the code. A report carries no level, so no finding has one, and there is no
+//! row/column in the output.
 
 use tinyjson::JsonValue;
 
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity;
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
-    name: "kube_linter",
-    description: "KubeLinter is a static analysis tool that checks Kubernetes YAML files and Helm charts to ensure the applications represented in them adhere to best practices.",
-    url: "https://github.com/stackrox/kube-linter",
-    // Upstream runs against $ROOT (a directory of manifests), not stdin.
-    operations: &[Operation {
-        mode: "lint",
-        args: &["lint", "--format", "json", "{file}"],
-        stdin: false,
-    }],
+	name: "kube_linter",
+	description: "KubeLinter is a static analysis tool that checks Kubernetes YAML files and Helm charts to ensure the applications represented in them adhere to best practices.",
+	url: "https://github.com/stackrox/kube-linter",
+	severities: &[],
+	column_unit: "",
+	category: "",
+	kind: "tool",
+	// Upstream runs against $ROOT (a directory of manifests), not stdin.
+	operations: &[Operation {
+		mode: "lint",
+		args: &["lint", "--format", "json", "{file}"],
+		stdin: false,
+	}],
 };
 
 pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic> {
@@ -58,7 +62,6 @@ fn report_to_diag(report: &JsonValue) -> Option<RawDiagnostic> {
 
 	Some(RawDiagnostic {
 		message,
-		severity: Some(severity::ERROR),
 		source: Some("kube-linter".to_string()),
 		code,
 		..RawDiagnostic::default()
@@ -85,27 +88,22 @@ mod tests {
 
 	#[test]
 	fn parses_report() {
-		let json = br#"{
-            "Reports": [
-                {
-                    "Check": "unset-cpu-requirements",
-                    "Diagnostic": { "Message": "container \"app\" does not have a CPU request" },
-                    "Remediation": "Set the CPU request for your container.",
-                    "Object": { "Metadata": { "FilePath": "deploy.yaml" } }
-                }
-            ]
-        }"#;
-		let out = parse(json, b"", 1);
+		let out = parse(SAMPLES[0].stdout, b"", 1);
 		assert_eq!(out.len(), 1);
 		assert_eq!(
 			out[0].message,
 			"container \"app\" does not have a CPU request\nSet the CPU request for your container."
 		);
 		assert_eq!(out[0].code.as_deref(), Some("unset-cpu-requirements"));
-		assert_eq!(out[0].severity, Some(severity::ERROR));
 		assert_eq!(out[0].source.as_deref(), Some("kube-linter"));
 		assert_eq!(out[0].row, None);
 		assert_eq!(out[0].col, None);
+	}
+
+	#[test]
+	fn never_sets_a_severity() {
+		let out = parse(SAMPLES[0].stdout, b"", 1);
+		assert!(out.iter().all(|d| d.severity.is_none()), "{out:?}");
 	}
 
 	#[test]
@@ -118,3 +116,20 @@ mod tests {
 		assert!(parse(b"not json", b"", 1).is_empty());
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[crate::contract::Sample {
+	stdout: br#"{
+    "Reports": [
+        {
+            "Check": "unset-cpu-requirements",
+            "Diagnostic": { "Message": "container \"app\" does not have a CPU request" },
+            "Remediation": "Set the CPU request for your container.",
+            "Object": { "Metadata": { "FilePath": "deploy.yaml" } }
+        }
+    ]
+}"#,
+	stderr: b"",
+	exit: 1,
+}];

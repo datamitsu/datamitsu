@@ -11,12 +11,16 @@ use tinyjson::JsonValue;
 
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity;
+use crate::severity::{self, Level};
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "haml_lint",
 	description: "Tool for writing clean and consistent HAML.",
 	url: "https://github.com/sds/haml-lint",
+	severities: &[Level("error", severity::ERROR), Level("warning", severity::WARNING)],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	// to_stdin=true + to_temp_file=true: stdin is piped but the tool reads a temp
 	// file path ($FILENAME), so args carry {file} and stdin stays true.
 	operations: &[Operation {
@@ -92,20 +96,14 @@ fn json_u32(v: &JsonValue) -> Option<u32> {
 }
 
 fn severity_of(level: &str) -> Option<u8> {
-	match level {
-		"error" => Some(severity::ERROR),
-		"warning" => Some(severity::WARNING),
-		_ => None,
-	}
+	severity::of(DESCRIPTOR.severities, level)
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
 
-	#[test]
-	fn parses_offenses() {
-		let json = br#"{
+	pub(super) const REPORT: &[u8] = br#"{
             "files": [
                 {
                     "path": "app/views/foo.haml",
@@ -127,7 +125,10 @@ mod tests {
             ],
             "summary": { "offense_count": 2 }
         }"#;
-		let out = parse(json, b"", 0);
+
+	#[test]
+	fn parses_offenses() {
+		let out = parse(REPORT, b"", 0);
 		assert_eq!(out.len(), 2);
 		assert_eq!(out[0].message, "Line is too long. [120/80]");
 		assert_eq!(out[0].row, Some(12));
@@ -136,6 +137,13 @@ mod tests {
 		assert_eq!(out[0].col, None);
 		assert_eq!(out[1].severity, Some(severity::ERROR));
 		assert_eq!(out[1].code.as_deref(), Some("Syntax"));
+	}
+
+	#[test]
+	fn a_level_haml_lint_does_not_have_is_left_unset() {
+		let json =
+			br#"{"files":[{"offenses":[{"severity":"fatal","message":"m","location":{"line":1},"linter_name":"X"}]}]}"#;
+		assert_eq!(parse(json, b"", 1)[0].severity, None);
 	}
 
 	#[test]
@@ -149,3 +157,18 @@ mod tests {
 		assert!(parse(b"not json", b"", 0).is_empty());
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[
+	crate::contract::Sample {
+		stdout: tests::REPORT,
+		stderr: b"",
+		exit: 65,
+	},
+	crate::contract::Sample {
+		stdout: b"",
+		stderr: tests::REPORT,
+		exit: 65,
+	},
+];

@@ -7,6 +7,10 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "bean_check",
 	description: "Beancount: text-based double-entry accounting tool",
 	url: "https://github.com/beancount/beancount",
+	severities: &[],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		args: &["-"],
@@ -87,3 +91,11 @@ mod tests {
 		assert!(diags.is_empty());
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[crate::contract::Sample {
+	stdout: b"",
+	stderr: b"/work/ledger.beancount:42:  Transaction does not balance: (1.00 USD)\n\n   2024-01-05 * \"Coffee\"\n     Expenses:Food   1.00 USD\n\n/work/ledger.beancount:57:  Invalid reference to unknown account 'Assets:Cash'\n",
+	exit: 1,
+}];

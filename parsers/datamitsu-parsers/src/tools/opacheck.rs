@@ -3,18 +3,23 @@
 //!
 //! OPA's `check -f json` emits `{"errors":[{message, code, location:{file,row,col}}]}`.
 //! The builtin keeps only entries that carry a `location` (others are global,
-//! non-diagnostic errors) and pins every diagnostic to ERROR severity.
+//! non-diagnostic errors). The `errors` key is the level: every entry under it is
+//! an error.
 
 use tinyjson::JsonValue;
 
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity;
+use crate::severity::{self, Level};
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "opacheck",
 	description: "Check Rego source files for parse and compilation errors.",
 	url: "https://www.openpolicyagent.org/docs/latest/cli/#opa-check",
+	severities: &[Level(ERRORS, severity::ERROR)],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		args: &[
@@ -32,6 +37,9 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	}],
 };
 
+/// The report's key for its findings, which is also their level token.
+const ERRORS: &str = "errors";
+
 pub fn parse(stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic> {
 	// from_stderr = true: OPA reports check failures on stderr.
 	let mut out = parse_bytes(stderr);
@@ -48,16 +56,17 @@ fn parse_bytes(bytes: &[u8]) -> Vec<RawDiagnostic> {
 		Err(_) => return Vec::new(),
 	};
 	let errors = match &value {
-		JsonValue::Object(m) => match m.get("errors") {
+		JsonValue::Object(m) => match m.get(ERRORS) {
 			Some(JsonValue::Array(items)) => items,
 			_ => return Vec::new(),
 		},
 		_ => return Vec::new(),
 	};
-	errors.iter().filter_map(diag_from_error).collect()
+	let level = severity::of(DESCRIPTOR.severities, ERRORS);
+	errors.iter().filter_map(|e| diag_from_error(e, level)).collect()
 }
 
-fn diag_from_error(value: &JsonValue) -> Option<RawDiagnostic> {
+fn diag_from_error(value: &JsonValue, severity: Option<u8>) -> Option<RawDiagnostic> {
 	let map = match value {
 		JsonValue::Object(m) => m,
 		_ => return None,
@@ -81,7 +90,7 @@ fn diag_from_error(value: &JsonValue) -> Option<RawDiagnostic> {
 		message,
 		row,
 		col,
-		severity: Some(severity::ERROR),
+		severity,
 		source: Some("opacheck".to_string()),
 		code,
 		..RawDiagnostic::default()
@@ -101,15 +110,22 @@ mod tests {
 
 	#[test]
 	fn parses_error_with_location() {
-		let json = br#"{"errors":[{"message":"rego_parse_error: unexpected eof","code":"rego_parse_error","location":{"file":"policy.rego","row":4,"col":1}}]}"#;
-		let out = parse(&[], json, 1);
+		let out = parse(&[], SAMPLES[0].stderr, 1);
 		assert_eq!(out.len(), 1);
 		assert_eq!(out[0].message, "rego_parse_error: unexpected eof");
 		assert_eq!(out[0].row, Some(4));
 		assert_eq!(out[0].col, Some(1));
-		assert_eq!(out[0].severity, Some(severity::ERROR));
+		assert_eq!(out[0].end_col, None);
 		assert_eq!(out[0].code.as_deref(), Some("rego_parse_error"));
 		assert_eq!(out[0].source.as_deref(), Some("opacheck"));
+	}
+
+	#[test]
+	fn an_entry_under_errors_is_an_error() {
+		let out = parse(&[], SAMPLES[0].stderr, 1);
+		assert_eq!(out[0].severity, Some(severity::ERROR));
+		let from_stdout = parse(SAMPLES[0].stderr, &[], 1);
+		assert_eq!(from_stdout[0].severity, Some(severity::ERROR));
 	}
 
 	#[test]
@@ -125,3 +141,23 @@ mod tests {
 		assert!(parse(&[], b"not json", 1).is_empty());
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[crate::contract::Sample {
+	stdout: b"",
+	stderr: br#"{
+  "errors": [
+    {
+      "message": "rego_parse_error: unexpected eof",
+      "code": "rego_parse_error",
+      "location": {
+        "file": "policy.rego",
+        "row": 4,
+        "col": 1
+      }
+    }
+  ]
+}"#,
+	exit: 1,
+}];

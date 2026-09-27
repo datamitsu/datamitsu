@@ -4,24 +4,36 @@
 //! `--template=gcc`, reads from **stderr**, and each diagnostic line looks like:
 //!
 //! ```text
-//! <file>:<row>:<col>: <severity>: <message>
+//! <file>:<row>:<col>: <severity>: <message> [<id>]
 //! ```
 //!
-//! e.g. `main.c:5:7: error: Array 'a[10]' accessed at index 10, which is out of bounds.`
+//! e.g. `main.c:5:7: error: Array 'a[10]' accessed at index 10, which is out of bounds. [arrayIndexOutOfBounds]`
 //!
 //! The none-ls Lua pattern `(%d+):(%d+): (%w+): (.*)` matches the `row:col: sev: msg`
-//! tail anywhere in the line (so a path with colons doesn't break parsing). Severity
-//! mapping (with none-ls's default-to-error fallback): error→error, warning→warning,
-//! note→info, style→hint, performance→warning, portability→info.
+//! tail anywhere in the line (so a path with colons doesn't break parsing). The
+//! severity word is read through the vocabulary; a word it does not list sets no
+//! level. The trailing `[<id>]` is the check. Positions are 1-based, with no end.
 
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity;
+use crate::severity::{self, Level};
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "cppcheck",
 	description: "A tool for fast static analysis of C/C++ code.",
 	url: "https://github.com/danmar/cppcheck",
+	severities: &[
+		Level("error", severity::ERROR),
+		Level("warning", severity::WARNING),
+		Level("performance", severity::WARNING),
+		Level("note", severity::INFO),
+		Level("portability", severity::INFO),
+		Level("information", severity::INFO),
+		Level("style", severity::HINT),
+	],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		args: &[
@@ -85,27 +97,33 @@ fn try_match(line: &str, row_start: usize, first_colon: usize) -> Option<RawDiag
 	let severity_token = &rest[..sev_len];
 	let rest = &rest[sev_len..];
 	let message = rest.strip_prefix(": ")?;
+	let (message, code) = split_id(message);
 
 	Some(RawDiagnostic {
 		message: message.to_string(),
 		row: Some(row),
 		col: Some(col),
-		severity: severity_of(severity_token),
+		severity: severity::of(DESCRIPTOR.severities, severity_token),
+		code,
 		..RawDiagnostic::default()
 	})
 }
 
-/// none-ls maps known tokens, falling back to ERROR for anything unrecognized.
-fn severity_of(token: &str) -> Option<u8> {
-	Some(match token {
-		"error" => severity::ERROR,
-		"warning" => severity::WARNING,
-		"note" => severity::INFO,
-		"style" => severity::HINT,
-		"performance" => severity::WARNING,
-		"portability" => severity::INFO,
-		_ => severity::ERROR,
-	})
+/// Split the template's trailing ` [<id>]` off the message.
+fn split_id(message: &str) -> (&str, Option<String>) {
+	let Some(open) = message.strip_suffix(']').and_then(|m| m.rfind(" [")) else {
+		return (message, None);
+	};
+	let id = &message[open + 2..message.len() - 1];
+	let is_id = !id.is_empty()
+		&& id
+			.bytes()
+			.all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b'.');
+	if is_id {
+		(message[..open].trim_end(), Some(id.to_string()))
+	} else {
+		(message, None)
+	}
 }
 
 #[cfg(test)]
@@ -119,6 +137,18 @@ mod tests {
 		assert_eq!(d.col, Some(7));
 		assert_eq!(d.severity, Some(severity::ERROR));
 		assert_eq!(d.message, "Array 'a[10]' accessed at index 10, which is out of bounds.");
+		assert_eq!(d.code, None);
+	}
+
+	#[test]
+	fn reads_the_trailing_id_as_the_code() {
+		let d = parse_line(
+			"src/main.c:5:7: warning: Array 'a[10]' accessed at index 10, which is out of bounds. [arrayIndexOutOfBounds]",
+		)
+		.unwrap();
+		assert_eq!(d.code.as_deref(), Some("arrayIndexOutOfBounds"));
+		assert_eq!(d.message, "Array 'a[10]' accessed at index 10, which is out of bounds.");
+		assert_eq!(d.severity, Some(severity::WARNING));
 	}
 
 	#[test]
@@ -128,6 +158,12 @@ mod tests {
 
 		let port = parse_line("a.cpp:2:3: portability: Non reentrant function used.").unwrap();
 		assert_eq!(port.severity, Some(severity::INFO));
+	}
+
+	#[test]
+	fn an_unknown_severity_word_sets_no_level() {
+		let d = parse_line("a.cpp:3:1: debug: ValueFlow bailout").unwrap();
+		assert_eq!(d.severity, None);
 	}
 
 	#[test]
@@ -145,3 +181,18 @@ mod tests {
 		assert!(parse_line("Checking src/main.c ...").is_none());
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[
+	crate::contract::Sample {
+		stdout: b"Checking src/main.c ...\n",
+		stderr: b"src/main.c:5:7: warning: Array 'a[10]' accessed at index 10, which is out of bounds. [arrayIndexOutOfBounds]\n    a[10] = 0;\n     ^\nsrc/main.c:3:9: note: Assignment 'p=0', assigned value is 0\n    p = 0;\n        ^\n",
+		exit: 0,
+	},
+	crate::contract::Sample {
+		stdout: b"Checking a.cpp ...\n",
+		stderr: b"a.cpp:1:10: style: The scope of the variable 'i' can be reduced. [variableScope]\na.cpp:2:3: portability: Non reentrant function 'localtime' called. [localtimeCalled]\na.cpp:4:5: error: Null pointer dereference: p [nullPointer]\n",
+		exit: 1,
+	},
+];

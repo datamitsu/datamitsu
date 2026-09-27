@@ -17,6 +17,10 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "buf",
 	description: "A new way of working with Protocol Buffers.",
 	url: "https://github.com/bufbuild/buf",
+	severities: &[],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		args: &["lint", "{file}#include_package_files=true"],
@@ -91,3 +95,11 @@ mod tests {
 		assert_eq!(out[1].row, Some(2));
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[crate::contract::Sample {
+	stdout: b"",
+	stderr: b"foo.proto:3:1:Field name \"Foo\" should be lower_snake_case.\nfoo.proto:10:5:Import \"x:y\" is unused.\n",
+	exit: 100,
+}];

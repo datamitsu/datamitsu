@@ -4,8 +4,9 @@
 //! erb_lint emits a nested JSON document `{ "files": [ { "offenses": [...] } ] }`.
 //! The builtin reads only the first file's offenses; each offense carries a
 //! `message`, a `linter` (rule id), and a `location` with start/last line+column.
-//! `endColumn` is `last_column + 1` (none-ls makes the span end exclusive). The
-//! tool emits no severity token, so `severity` stays `None`.
+//! The columns are a `Parser::Source::Range`'s: counted from 0, `last_column`
+//! already exclusive, so both get +1. The tool emits no severity token, so
+//! `severity` stays `None`.
 
 use tinyjson::JsonValue;
 
@@ -16,6 +17,10 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "erb_lint",
 	description: "Lint your ERB or HTML files",
 	url: "https://github.com/Shopify/erb-lint",
+	severities: &[],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		args: &["--format", "json", "--stdin", "{file}"],
@@ -67,10 +72,9 @@ fn from_offense(value: &JsonValue) -> Option<RawDiagnostic> {
 	let (mut row, mut col, mut end_row, mut end_col) = (None, None, None, None);
 	if let Some(JsonValue::Object(loc)) = map.get("location") {
 		row = get_u32(loc, "start_line");
-		col = get_u32(loc, "start_column");
+		col = get_u32(loc, "start_column").and_then(|c| c.checked_add(1));
 		end_row = get_u32(loc, "last_line");
-		// none-ls makes the end column exclusive: last_column + 1.
-		end_col = get_u32(loc, "last_column").map(|c| c + 1);
+		end_col = get_u32(loc, "last_column").and_then(|c| c.checked_add(1));
 	}
 
 	Some(RawDiagnostic {
@@ -102,9 +106,7 @@ fn get_u32(map: &HashMapJson, key: &str) -> Option<u32> {
 mod tests {
 	use super::*;
 
-	#[test]
-	fn parses_offense_from_first_file() {
-		let json = br#"{
+	pub(super) const REPORT: &[u8] = br#"{
             "files": [
                 {
                     "path": "app/views/x.html.erb",
@@ -123,12 +125,15 @@ mod tests {
                 }
             ]
         }"#;
-		let out = parse(json, b"", 1);
+
+	#[test]
+	fn parses_offense_from_first_file() {
+		let out = parse(REPORT, b"", 1);
 		assert_eq!(out.len(), 1);
 		assert_eq!(out[0].message, "Extra space detected where there should be no space.");
 		assert_eq!(out[0].code.as_deref(), Some("SpaceInHtmlTag"));
 		assert_eq!(out[0].row, Some(2));
-		assert_eq!(out[0].col, Some(5));
+		assert_eq!(out[0].col, Some(6)); // start_column 5 + 1
 		assert_eq!(out[0].end_row, Some(2));
 		assert_eq!(out[0].end_col, Some(7)); // last_column 6 + 1
 		assert_eq!(out[0].severity, None); // erb_lint emits no level
@@ -145,3 +150,11 @@ mod tests {
 		assert!(parse(b"not json", b"", 1).is_empty());
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[crate::contract::Sample {
+	stdout: tests::REPORT,
+	stderr: b"",
+	exit: 1,
+}];

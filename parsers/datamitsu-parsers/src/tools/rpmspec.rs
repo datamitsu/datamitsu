@@ -1,12 +1,19 @@
 //! rpmspec — Command line tool to parse RPM spec files. Ported from the none-ls diagnostics/rpmspec builtin.
+//!
+//! rpm prefixes each message with its level (`error:`, `warning:`); the lines
+//! carry a 1-based line number and no column.
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity;
+use crate::severity::{self, Level};
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "rpmspec",
 	description: "Command line tool to parse RPM spec files.",
 	url: "https://rpm.org/",
+	severities: &[Level("error", severity::ERROR), Level("warning", severity::WARNING)],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		args: &["-P", "{file}"],
@@ -20,13 +27,7 @@ pub fn parse(_stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 }
 
 fn severity_of(level: &str) -> Option<u8> {
-	match level {
-		"error" => Some(severity::ERROR),
-		"warning" => Some(severity::WARNING),
-		"information" => Some(severity::INFO),
-		"hint" => Some(severity::HINT),
-		_ => None,
-	}
+	severity::of(DESCRIPTOR.severities, level)
 }
 
 fn parse_line(line: &str) -> Option<RawDiagnostic> {
@@ -99,8 +100,7 @@ mod tests {
 
 	#[test]
 	fn parses_error() {
-		let stderr = b"error: foo.spec: line 12: Unknown tag: Frobnicate\n";
-		let d = parse(b"", stderr, 1);
+		let d = parse(b"", SAMPLES[1].stderr, 1);
 		assert_eq!(d.len(), 1);
 		assert_eq!(d[0].message, "Unknown tag: Frobnicate");
 		assert_eq!(d[0].row, Some(12));
@@ -109,12 +109,18 @@ mod tests {
 
 	#[test]
 	fn parses_warning() {
-		let stderr = b"warning: bogus date in line 5:\n";
-		let d = parse(b"", stderr, 1);
+		let d = parse(b"", SAMPLES[0].stderr, 0);
 		assert_eq!(d.len(), 1);
 		assert_eq!(d[0].message, "bogus date");
 		assert_eq!(d[0].row, Some(5));
 		assert_eq!(d[0].severity, Some(severity::WARNING));
+	}
+
+	#[test]
+	fn an_unknown_level_word_has_no_level() {
+		let d = parse(b"", b"note: foo.spec: line 3: something\n", 0);
+		assert_eq!(d.len(), 1);
+		assert_eq!(d[0].severity, None);
 	}
 
 	#[test]
@@ -123,3 +129,18 @@ mod tests {
 		assert_eq!(parse(b"", stderr, 0).len(), 0);
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[
+	crate::contract::Sample {
+		stdout: b"",
+		stderr: b"warning: bogus date in line 5:\n",
+		exit: 0,
+	},
+	crate::contract::Sample {
+		stdout: b"",
+		stderr: b"error: foo.spec: line 12: Unknown tag: Frobnicate\n",
+		exit: 1,
+	},
+];

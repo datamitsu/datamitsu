@@ -3,21 +3,25 @@
 //!
 //! proselint's JSON is nested and custom, so this does not use `json_diag`:
 //! `output.result` is a map of file → `{ diagnostics: [ ... ] }`, and each
-//! diagnostic carries `pos` ([line, col]), `span` ([start_col, end_col]),
-//! `check_path` (the rule), and `message`. The builtin bails out when the
-//! top-level `output.error` is set and otherwise hardcodes severity to warning
-//! (proselint no longer emits a per-diagnostic level).
+//! diagnostic carries `pos` ([line, col], 1-based), `span` ([start, end), offsets
+//! into the whole text), `check_path` (the rule), and `message`. The span's
+//! length gives the end column. The builtin bails out when the top-level
+//! `output.error` is set. proselint prints no per-diagnostic level, so no finding
+//! carries one.
 
 use tinyjson::JsonValue;
 
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity;
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "proselint",
 	description: "An English prose linter.",
 	url: "https://github.com/amperser/proselint",
+	severities: &[],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		args: &["check", "--output-format=json"],
@@ -80,8 +84,13 @@ fn from_diag(value: &JsonValue) -> Option<RawDiagnostic> {
 	let row = pos.and_then(|a| number_at(a, 0));
 	let col = pos.and_then(|a| number_at(a, 1));
 
-	// span = [start_col, end_col]; the builtin only takes span[2] (end_col).
-	let end_col = array_of(map, "span").and_then(|a| number_at(a, 1));
+	// `pos` is where `span` starts, so the span's length is its extent on that line.
+	let span = array_of(map, "span");
+	let length = match (span.and_then(|a| number_at(a, 0)), span.and_then(|a| number_at(a, 1))) {
+		(Some(start), Some(end)) => end.checked_sub(start),
+		_ => None,
+	};
+	let end_col = col.zip(length).and_then(|(c, l)| c.checked_add(l));
 
 	let code = match map.get("check_path") {
 		Some(JsonValue::String(s)) => Some(s.clone()),
@@ -94,8 +103,6 @@ fn from_diag(value: &JsonValue) -> Option<RawDiagnostic> {
 		col,
 		end_col,
 		code,
-		// proselint no longer includes a severity -> the builtin chooses warning.
-		severity: Some(severity::WARNING),
 		..RawDiagnostic::default()
 	})
 }
@@ -120,29 +127,28 @@ mod tests {
 
 	#[test]
 	fn parses_nested_diagnostics() {
-		let json = br#"{
-            "status": "success",
-            "result": {
-                "stdin": {
-                    "diagnostics": [
-                        {
-                            "check_path": "typography.symbols.curly_quotes",
-                            "message": "Use the curly quote.",
-                            "pos": [3, 5],
-                            "span": [5, 12]
-                        }
-                    ]
-                }
-            }
-        }"#;
-		let out = parse(json, b"", 0);
-		assert_eq!(out.len(), 1);
+		let out = parse(SAMPLES[0].stdout, b"", 1);
+		assert_eq!(out.len(), 2);
 		assert_eq!(out[0].message, "Use the curly quote.");
 		assert_eq!(out[0].row, Some(3));
 		assert_eq!(out[0].col, Some(5));
+		assert_eq!(out[0].end_row, None);
 		assert_eq!(out[0].end_col, Some(12));
 		assert_eq!(out[0].code.as_deref(), Some("typography.symbols.curly_quotes"));
-		assert_eq!(out[0].severity, Some(severity::WARNING));
+	}
+
+	#[test]
+	fn the_end_column_comes_from_the_span_length() {
+		let out = parse(SAMPLES[0].stdout, b"", 1);
+		assert_eq!(out[1].row, Some(7));
+		assert_eq!(out[1].col, Some(1));
+		assert_eq!(out[1].end_col, Some(12));
+	}
+
+	#[test]
+	fn never_sets_a_severity() {
+		let out = parse(SAMPLES[0].stdout, b"", 1);
+		assert!(out.iter().all(|d| d.severity.is_none()), "{out:?}");
 	}
 
 	#[test]
@@ -157,3 +163,32 @@ mod tests {
 		assert!(parse(b"not json", b"", 1).is_empty());
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[crate::contract::Sample {
+	stdout: br#"{
+    "result": {
+        "<stdin>": {
+            "diagnostics": [
+                {
+                    "check_path": "typography.symbols.curly_quotes",
+                    "message": "Use the curly quote.",
+                    "pos": [3, 5],
+                    "replacements": null,
+                    "span": [45, 52]
+                },
+                {
+                    "check_path": "uncomparables",
+                    "message": "Comparison of an uncomparable: 'very unique' is not comparable.",
+                    "pos": [7, 1],
+                    "replacements": null,
+                    "span": [120, 131]
+                }
+            ]
+        }
+    }
+}"#,
+	stderr: b"",
+	exit: 1,
+}];

@@ -1,13 +1,20 @@
 //! solhint — Solidity linter (security + style). Ported from the none-ls diagnostics/solhint builtin.
+//!
+//! The `unix` formatter prints `<file>:<line>:<col>: <message> [<Level>/<rule>]`
+//! with a 1-based line and column and no end.
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity;
+use crate::severity::{self, Level};
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "solhint",
 	description:
 		"An open source project for linting Solidity code. It provides both security and style guide validations.",
 	url: "https://protofire.github.io/solhint/",
+	severities: &[Level("Error", severity::ERROR), Level("Warning", severity::WARNING)],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		args: &["{file}", "--formatter", "unix"],
@@ -53,18 +60,10 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 		message,
 		row: Some(row),
 		col: Some(col),
-		severity: severity_of(sev_token),
+		severity: severity::of(DESCRIPTOR.severities, sev_token),
 		code: Some(code.to_string()),
 		..RawDiagnostic::default()
 	})
-}
-
-fn severity_of(level: &str) -> Option<u8> {
-	match level {
-		"Error" => Some(severity::ERROR),
-		"Warning" => Some(severity::WARNING),
-		_ => None,
-	}
 }
 
 #[cfg(test)]
@@ -73,8 +72,7 @@ mod tests {
 
 	#[test]
 	fn parses_warning_and_error() {
-		let out = b"contracts/Foo.sol:12:5: Avoid using inline assembly [Warning/no-inline-assembly]\ncontracts/Foo.sol:3:1: Compiler version must be fixed [Error/compiler-version]\n";
-		let diags = parse(out, b"", 1);
+		let diags = parse(SAMPLES[1].stdout, b"", 1);
 		assert_eq!(diags.len(), 2);
 
 		assert_eq!(diags[0].message, "Avoid using inline assembly");
@@ -89,8 +87,34 @@ mod tests {
 	}
 
 	#[test]
+	fn an_unknown_level_has_none() {
+		let diags = parse(b"a.sol:1:1: m [Info/some-rule]\n", b"", 0);
+		assert_eq!(diags.len(), 1);
+		assert_eq!(diags[0].severity, None);
+		assert_eq!(diags[0].code.as_deref(), Some("some-rule"));
+	}
+
+	#[test]
 	fn ignores_non_matching_lines() {
 		let out = b"3 problems (1 error, 2 warnings)\n";
 		assert!(parse(out, b"", 1).is_empty());
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[
+	crate::contract::Sample {
+		stdout: b"contracts/Foo.sol:8:5: Explicitly mark visibility of state [Warning/state-visibility]\n\
+\n1 problem\n",
+		stderr: b"",
+		exit: 0,
+	},
+	crate::contract::Sample {
+		stdout: b"contracts/Foo.sol:12:5: Avoid using inline assembly [Warning/no-inline-assembly]\n\
+contracts/Foo.sol:3:1: Compiler version must be fixed [Error/compiler-version]\n\
+\n2 problems\n",
+		stderr: b"",
+		exit: 1,
+	},
+];

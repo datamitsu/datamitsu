@@ -4,20 +4,28 @@
 //! textlint `-f json` emits an array of per-file results, each shaped like
 //! `{"filePath": "...", "messages": [...]}`. The builtin reads `output[1].messages`
 //! (the first file's messages) and maps each message object with the default JSON
-//! attributes plus `severity` as a numeric token: per the builtin's `severities`
-//! table the values map `1 -> warning`, `2 -> error`. textlint messages carry
-//! `line`, `column`, `ruleId` and `message`; it emits no end span, so those stay
-//! unset.
+//! attributes plus `severity` as a numeric token: textlint's severity levels are
+//! `1 -> warning`, `2 -> error`, `3 -> info`. textlint messages carry 1-based
+//! `line` and `column`, `ruleId` and `message`; the end span is not read, so it
+//! stays unset.
 use super::json_diag::{self, Attrs};
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity;
+use crate::severity::{self, Level};
 use tinyjson::JsonValue;
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "textlint",
 	description: "The pluggable linting tool for text and Markdown.",
 	url: "https://github.com/textlint/textlint",
+	severities: &[
+		Level("1", severity::WARNING),
+		Level("2", severity::ERROR),
+		Level("3", severity::INFO),
+	],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		args: &["-f", "json", "--stdin", "--stdin-filename", "{file}"],
@@ -69,13 +77,8 @@ pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 	out
 }
 
-/// textlint's numeric severity: 1 = warning, 2 = error (builtin `severities` order).
 fn severity_of(level: i64) -> Option<u8> {
-	match level {
-		1 => Some(severity::WARNING),
-		2 => Some(severity::ERROR),
-		_ => None,
-	}
+	severity::of(DESCRIPTOR.severities, &level.to_string())
 }
 
 #[cfg(test)]
@@ -105,6 +108,17 @@ mod tests {
 	}
 
 	#[test]
+	fn reads_info_and_leaves_an_unlisted_level_unset() {
+		let json = br#"[{"filePath":"doc.md","messages":[
+            {"ruleId":"a","message":"m","line":1,"column":1,"severity":3},
+            {"ruleId":"b","message":"m","line":2,"column":1,"severity":0}
+        ]}]"#;
+		let out = parse(json, b"", 0);
+		assert_eq!(out[0].severity, Some(severity::INFO));
+		assert_eq!(out[1].severity, None);
+	}
+
+	#[test]
 	fn empty_messages_yields_nothing() {
 		let json = br#"[{"filePath":"doc.md","messages":[]}]"#;
 		assert!(parse(json, b"", 0).is_empty());
@@ -115,3 +129,18 @@ mod tests {
 		assert!(parse(b"not json", b"", 1).is_empty());
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[
+	crate::contract::Sample {
+		stdout: br#"[{"messages":[{"type":"lint","ruleId":"no-todo","message":"Found TODO: '- [ ] write the intro'","index":2,"line":3,"column":5,"range":[2,6],"loc":{"start":{"line":3,"column":5},"end":{"line":3,"column":9}},"severity":2},{"type":"lint","ruleId":"sentence-length","message":"Line 10 sentence length(112) exceeds the maximum sentence length of 100.","index":40,"line":10,"column":1,"range":[40,152],"loc":{"start":{"line":10,"column":1},"end":{"line":10,"column":113}},"severity":1}],"filePath":"/work/textlint/doc.md"}]"#,
+		stderr: b"",
+		exit: 1,
+	},
+	crate::contract::Sample {
+		stdout: br#"[{"messages":[{"type":"lint","ruleId":"terminology","message":"Incorrect term: 'javascript', use 'JavaScript' instead","index":0,"line":1,"column":1,"range":[0,10],"loc":{"start":{"line":1,"column":1},"end":{"line":1,"column":11}},"severity":3}],"filePath":"/work/textlint/doc.md"}]"#,
+		stderr: b"",
+		exit: 0,
+	},
+];

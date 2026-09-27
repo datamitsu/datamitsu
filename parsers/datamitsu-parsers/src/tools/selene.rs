@@ -5,19 +5,23 @@
 //! builtin keeps only objects with `type == "Diagnostic"`, lifts the span out of
 //! `primary_label.span` (`start_line`/`start_column`/`end_line`/`end_column`),
 //! appends the joined `notes` to the message, and maps `severity` (`Warning` /
-//! `Error`) and `code`. selene reports 0-based positions; none-ls adds an offset
-//! of 1 to row/col/end_row/end_col to make them 1-based.
+//! `Error`) and `code`. selene reports 0-based positions with an exclusive end;
+//! 1 is added to row/col/end_row/end_col to make them 1-based.
 
 use tinyjson::JsonValue;
 
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity;
+use crate::severity::{self, Level};
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "selene",
 	description: "Command line tool designed to help write correct and idiomatic Lua code.",
 	url: "https://kampfkarren.github.io/selene/",
+	severities: &[Level("Error", severity::ERROR), Level("Warning", severity::WARNING)],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		args: &["--display-style", "json2", "-"],
@@ -87,18 +91,10 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 		col,
 		end_row,
 		end_col,
-		severity: get_str(map, "severity").as_deref().and_then(severity_of),
+		severity: get_str(map, "severity").and_then(|s| severity::of(DESCRIPTOR.severities, &s)),
 		code: get_str(map, "code"),
 		..RawDiagnostic::default()
 	})
-}
-
-fn severity_of(level: &str) -> Option<u8> {
-	match level {
-		"Error" => Some(severity::ERROR),
-		"Warning" => Some(severity::WARNING),
-		_ => None,
-	}
 }
 
 fn get_str(map: &std::collections::HashMap<String, JsonValue>, key: &str) -> Option<String> {
@@ -121,10 +117,7 @@ mod tests {
 
 	#[test]
 	fn parses_diagnostic_with_span_and_notes() {
-		// Two NDJSON lines: a non-Diagnostic summary plus a real Diagnostic.
-		let stdout = br#"{"type":"Summary","errors":1,"warnings":0}
-{"type":"Diagnostic","severity":"Error","code":"undefined_variable","message":"`foo` is not defined","notes":["help: did you mean `for`?"],"primary_label":{"span":{"start_line":2,"start_column":4,"end_line":2,"end_column":7}}}"#;
-		let out = parse(stdout, b"", 1);
+		let out = parse(SAMPLES[0].stdout, b"", 1);
 		assert_eq!(out.len(), 1);
 		let d = &out[0];
 		assert_eq!(d.message, "`foo` is not defined\nhelp: did you mean `for`?");
@@ -138,13 +131,18 @@ mod tests {
 
 	#[test]
 	fn warning_without_notes_appends_trailing_newline() {
-		let stdout = br#"{"type":"Diagnostic","severity":"Warning","code":"unused_variable","message":"unused","notes":[],"primary_label":{"span":{"start_line":0,"start_column":0,"end_line":0,"end_column":3}}}"#;
-		let out = parse(stdout, b"", 1);
+		let out = parse(SAMPLES[1].stdout, b"", 0);
 		assert_eq!(out.len(), 1);
 		assert_eq!(out[0].message, "unused\n");
-		assert_eq!(out[0].row, Some(1));
-		assert_eq!(out[0].col, Some(1));
+		assert_eq!((out[0].row, out[0].col), (Some(1), Some(7)));
+		assert_eq!((out[0].end_row, out[0].end_col), (Some(1), Some(10)));
 		assert_eq!(out[0].severity, Some(severity::WARNING));
+	}
+
+	#[test]
+	fn an_unknown_severity_has_no_level() {
+		let stdout = br#"{"type":"Diagnostic","severity":"Allow","code":"c","message":"m","notes":[]}"#;
+		assert_eq!(parse(stdout, b"", 0)[0].severity, None);
 	}
 
 	#[test]
@@ -153,3 +151,22 @@ mod tests {
 		assert!(out.is_empty());
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[
+	crate::contract::Sample {
+		stdout: br#"{"type":"Diagnostic","severity":"Error","code":"undefined_variable","message":"`foo` is not defined","notes":["help: did you mean `for`?"],"primary_label":{"filename":"-","span":{"start":20,"start_line":2,"start_column":4,"end":23,"end_line":2,"end_column":7},"message":""},"secondary_labels":[]}
+{"type":"Summary","errors":1,"warnings":0,"parse_errors":0}
+"#,
+		stderr: b"",
+		exit: 1,
+	},
+	crate::contract::Sample {
+		stdout: br#"{"type":"Diagnostic","severity":"Warning","code":"unused_variable","message":"unused","notes":[],"primary_label":{"filename":"-","span":{"start":6,"start_line":0,"start_column":6,"end":9,"end_line":0,"end_column":9},"message":""},"secondary_labels":[]}
+{"type":"Summary","errors":0,"warnings":1,"parse_errors":0}
+"#,
+		stderr: b"",
+		exit: 0,
+	},
+];

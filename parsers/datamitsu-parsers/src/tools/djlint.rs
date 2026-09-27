@@ -1,12 +1,18 @@
 //! djlint — HTML Template Linter and Formatter. Ported from the none-ls diagnostics/djlint builtin.
+//!
+//! djlint prints no level (a code's letter names the language its rule checks),
+//! so severity stays None.
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity;
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "djlint",
 	description: "✨ 📜 🪄 ✨ HTML Template Linter and Formatter.",
 	url: "https://github.com/Riverside-Healthcare/djLint",
+	severities: &[],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		args: &["--quiet", "-"],
@@ -19,7 +25,7 @@ pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 }
 
 /// Lua pattern: `(%w+) (%d+):(%d+) (.*).`
-/// groups: code, row, col, message ; offsets col +1 ; severity always INFO.
+/// groups: code, row, col, message ; djlint counts columns from 0, so col +1.
 fn parse_line(line: &str) -> Option<RawDiagnostic> {
 	let line = line.trim_end();
 	let (code, rest) = line.split_once(' ')?;
@@ -42,8 +48,7 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 	Some(RawDiagnostic {
 		message,
 		row: Some(row),
-		col: Some(col + 1),
-		severity: Some(severity::INFO),
+		col: col.checked_add(1),
 		code: Some(code.to_string()),
 		..RawDiagnostic::default()
 	})
@@ -52,6 +57,8 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	pub(super) const OUTPUT: &[u8] = b"H006 1:0 Img tag should have height and width attributes.\nnot a diagnostic line at all\nH025 3:2 Tag seems to be orphaned.\n";
 
 	#[test]
 	fn parses_diagnostic_line() {
@@ -62,18 +69,31 @@ mod tests {
 		assert_eq!(d.code.as_deref(), Some("T001"));
 		assert_eq!(d.row, Some(12));
 		assert_eq!(d.col, Some(6)); // col 5 + offset 1
-		assert_eq!(d.severity, Some(severity::INFO));
 		assert_eq!(d.message, "Variables should be wrapped in a single whitespace");
 	}
 
 	#[test]
 	fn parses_multiple_and_skips_noise() {
-		let out = b"H006 1:0 Img tag should have height and width attributes.\nnot a diagnostic line at all\nH025 3:2 Tag seems to be orphaned.\n";
-		let diags = parse(out, b"", 0);
+		let diags = parse(OUTPUT, b"", 0);
 		assert_eq!(diags.len(), 2);
 		assert_eq!(diags[0].code.as_deref(), Some("H006"));
 		assert_eq!(diags[0].col, Some(1));
 		assert_eq!(diags[1].code.as_deref(), Some("H025"));
 		assert_eq!(diags[1].row, Some(3));
 	}
+
+	#[test]
+	fn never_sets_a_severity() {
+		let diags = parse(OUTPUT, b"", 1);
+		assert_eq!(diags.len(), 2);
+		assert!(diags.iter().all(|d| d.severity.is_none()));
+	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[crate::contract::Sample {
+	stdout: tests::OUTPUT,
+	stderr: b"",
+	exit: 1,
+}];

@@ -8,12 +8,16 @@
 //! The filename group is intentionally dropped (it's the temp file path).
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity;
+use crate::severity::{self, Level};
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "glslc",
 	description: "Shader to SPIR-V compiler.",
 	url: "https://github.com/google/shaderc",
+	severities: &[Level("error", severity::ERROR), Level("warning", severity::WARNING)],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		args: &["-o", "-", "{file}"],
@@ -25,16 +29,8 @@ pub fn parse(_stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 	String::from_utf8_lossy(stderr).lines().filter_map(parse_line).collect()
 }
 
-/// none-ls maps severity tokens via its default `severities` table:
-/// error→1, warning→2, information→3, hint→4. glslc emits `error`/`warning`.
 fn severity_of(token: &str) -> Option<u8> {
-	match token {
-		"error" => Some(severity::ERROR),
-		"warning" => Some(severity::WARNING),
-		"information" | "info" => Some(severity::INFO),
-		"hint" => Some(severity::HINT),
-		_ => None,
-	}
+	severity::of(DESCRIPTOR.severities, token)
 }
 
 /// A Lua `%l+` run: one or more lowercase ASCII letters.
@@ -133,4 +129,31 @@ mod tests {
 		assert_eq!(diags[0].message, "parse error");
 		assert_eq!(diags[0].row, None);
 	}
+
+	#[test]
+	fn a_word_glslc_does_not_use_as_a_level_sets_none() {
+		let diags = parse(b"", b"shader.frag:3: note: something\n", 0);
+		assert_eq!(diags.len(), 1);
+		assert_eq!(diags[0].severity, None);
+	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[
+	crate::contract::Sample {
+		stdout: b"",
+		stderr: b"shader.frag:12: error: 'foo' : undeclared identifier\nshader.frag:12: error: '' : compilation terminated\n2 errors generated.\n",
+		exit: 1,
+	},
+	crate::contract::Sample {
+		stdout: b"",
+		stderr: b"shader.frag: warning: version 460 is not yet complete\n1 warning generated.\n",
+		exit: 0,
+	},
+	crate::contract::Sample {
+		stdout: b"",
+		stderr: b"glslc: error: cannot open input file: 'missing.frag': No such file or directory\n",
+		exit: 2,
+	},
+];

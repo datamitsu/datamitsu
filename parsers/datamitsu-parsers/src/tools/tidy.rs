@@ -3,17 +3,25 @@
 //! diagnostics/tidy builtin.
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity;
+use crate::severity::{self, Level};
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
-    name: "tidy",
-    description: "Tidy corrects and cleans up HTML and XML documents by fixing markup errors and upgrading legacy code to modern standards.",
-    url: "https://www.html-tidy.org/",
-    operations: &[Operation {
-        mode: "lint",
-        args: &["-quiet", "-errors", "-lang", "en"],
-        stdin: true,
-    }],
+	name: "tidy",
+	description: "Tidy corrects and cleans up HTML and XML documents by fixing markup errors and upgrading legacy code to modern standards.",
+	url: "https://www.html-tidy.org/",
+	severities: &[
+		Level("Error", severity::ERROR),
+		Level("Warning", severity::WARNING),
+		Level("Info", severity::INFO),
+	],
+	column_unit: "",
+	category: "",
+	kind: "tool",
+	operations: &[Operation {
+		mode: "lint",
+		args: &["-quiet", "-errors", "-lang", "en"],
+		stdin: true,
+	}],
 };
 
 pub fn parse(stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic> {
@@ -41,17 +49,9 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 		message: message.to_string(),
 		row: Some(row),
 		col: Some(col),
-		severity: severity_of(level),
+		severity: severity::of(DESCRIPTOR.severities, level),
 		..RawDiagnostic::default()
 	})
-}
-
-fn severity_of(level: &str) -> Option<u8> {
-	match level {
-		"Warning" => Some(severity::WARNING),
-		"Error" => Some(severity::ERROR),
-		_ => None,
-	}
 }
 
 #[cfg(test)]
@@ -74,8 +74,32 @@ mod tests {
 	}
 
 	#[test]
+	fn reads_info_and_leaves_other_levels_unset() {
+		let stderr = b"line 3 column 1 - Info: <head> previously mentioned\nline 4 column 1 - Access: [1.1.1.1]: <img> missing 'alt' text.\n";
+		let diags = parse(b"", stderr, 1);
+		assert_eq!(diags.len(), 2);
+		assert_eq!(diags[0].severity, Some(severity::INFO));
+		assert_eq!(diags[1].severity, None);
+	}
+
+	#[test]
 	fn ignores_non_matching_lines() {
 		let stderr = b"Info: Document content looks like HTML5\nTidy found 1 warning and 0 errors!\n";
 		assert!(parse(b"", stderr, 1).is_empty());
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[
+	crate::contract::Sample {
+		stdout: b"",
+		stderr: b"line 1 column 1 - Warning: missing <!DOCTYPE> declaration\nline 5 column 10 - Error: <foo> is not recognized!\nline 5 column 10 - Warning: discarding unexpected <foo>\nline 3 column 1 - Info: <head> previously mentioned\n",
+		exit: 2,
+	},
+	crate::contract::Sample {
+		stdout: b"",
+		stderr: b"line 1 column 1 - Warning: missing <!DOCTYPE> declaration\nline 8 column 5 - Warning: <img> lacks \"alt\" attribute\n",
+		exit: 1,
+	},
+];

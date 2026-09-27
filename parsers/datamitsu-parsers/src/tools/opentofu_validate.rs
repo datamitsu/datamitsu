@@ -1,10 +1,11 @@
 //! opentofu_validate — OpenTofu `validate` JSON output. Ported from the none-ls
 //! diagnostics/opentofu_validate builtin.
 //!
-//! `tofu validate -json` emits (on stderr) a top-level object with a
-//! `diagnostics` array. Each entry carries `summary`, an optional `detail`, a
-//! `severity` token ("error"/"warning"), and an optional `range` of
-//! `{ start: {line, column}, end: {line, column} }`. The message is the summary,
+//! `tofu validate -json` emits (on stdout; the builtin reads stderr, so both are
+//! tried) a top-level object with a `diagnostics` array. Each entry carries
+//! `summary`, an optional `detail`, a `severity` token ("error"/"warning"), and
+//! an optional `range` of `{ start: {line, column}, end: {line, column} }` — an
+//! HCL range, 1-based with the end column past the span. The message is the summary,
 //! with `" - <detail>"` appended when a detail is present (per the builtin's
 //! `on_output`). The builtin's directory-keeping / filename plumbing is
 //! vim-runtime state we intentionally drop.
@@ -13,7 +14,7 @@ use tinyjson::JsonValue;
 
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity;
+use crate::severity::{self, Level};
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "opentofu_validate",
@@ -21,6 +22,10 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
         in a directory, referring only to the configuration and not accessing any remote services \
         such as remote state, provider APIs, etc.",
 	url: "https://opentofu.org/docs/cli/commands/validate",
+	severities: &[Level("error", severity::ERROR), Level("warning", severity::WARNING)],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	// from_stderr=true, to_stdin=false, multiple_files=true: tofu validates the
 	// directory, not a single file fed on stdin.
 	operations: &[Operation {
@@ -99,11 +104,7 @@ fn position(value: Option<&JsonValue>) -> (Option<u32>, Option<u32>) {
 }
 
 fn severity_of(level: &str) -> Option<u8> {
-	match level {
-		"error" => Some(severity::ERROR),
-		"warning" => Some(severity::WARNING),
-		_ => None,
-	}
+	severity::of(DESCRIPTOR.severities, level)
 }
 
 fn get_str(map: &std::collections::HashMap<String, JsonValue>, key: &str) -> Option<String> {
@@ -182,7 +183,88 @@ mod tests {
 	}
 
 	#[test]
+	fn reads_a_recorded_stdout_report() {
+		let out = parse(SAMPLES[0].stdout, SAMPLES[0].stderr, SAMPLES[0].exit);
+		assert_eq!(out.len(), 1);
+		assert_eq!(out[0].severity, Some(severity::ERROR));
+		assert_eq!((out[0].row, out[0].col), (Some(2), Some(11)));
+		assert_eq!((out[0].end_row, out[0].end_col), (Some(2), Some(18)));
+
+		let out = parse(SAMPLES[1].stdout, SAMPLES[1].stderr, SAMPLES[1].exit);
+		assert_eq!(out.len(), 1);
+		assert_eq!(out[0].severity, Some(severity::WARNING));
+	}
+
+	#[test]
 	fn invalid_json_yields_nothing() {
 		assert!(parse(b"", b"not json", 1).is_empty());
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[
+	// OpenTofu v1.12.6 on `output "x" { value = var.foo }`.
+	crate::contract::Sample {
+		stdout: br#"{
+  "format_version": "1.0",
+  "valid": false,
+  "error_count": 1,
+  "warning_count": 0,
+  "diagnostics": [
+    {
+      "severity": "error",
+      "summary": "Reference to undeclared input variable",
+      "detail": "An input variable with the name \"foo\" has not been declared. This variable can be declared with a variable \"foo\" {} block.",
+      "range": {
+        "filename": "main.tf",
+        "start": {
+          "line": 2,
+          "column": 11,
+          "byte": 23
+        },
+        "end": {
+          "line": 2,
+          "column": 18,
+          "byte": 30
+        }
+      },
+      "snippet": {
+        "context": "output \"x\"",
+        "code": "  value = var.foo",
+        "start_line": 2,
+        "highlight_start_offset": 10,
+        "highlight_end_offset": 17,
+        "values": []
+      }
+    }
+  ]
+}
+"#,
+		stderr: b"",
+		exit: 1,
+	},
+	crate::contract::Sample {
+		stdout: br#"{
+  "format_version": "1.0",
+  "valid": true,
+  "error_count": 0,
+  "warning_count": 1,
+  "diagnostics": [
+    {
+      "severity": "warning",
+      "summary": "Deprecated attribute",
+      "detail": "The attribute \"name\" is deprecated.",
+      "range": {
+        "filename": "main.tf",
+        "start": { "line": 3, "column": 3, "byte": 40 },
+        "end": { "line": 3, "column": 7, "byte": 44 }
+      }
+    }
+  ]
+}
+"#,
+		stderr: b"",
+		exit: 0,
+	},
+];

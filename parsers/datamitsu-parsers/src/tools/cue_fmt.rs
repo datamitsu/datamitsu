@@ -11,16 +11,21 @@
 //! none-ls pairs them (even line = location, the line before = message). This is
 //! exactly why the host hands the parser the **whole raw output** rather than
 //! pre-splitting it per line: a line-at-a-time generator cannot pair the two.
-//! `cue vet` writes to stderr, so we read stderr (falling back to stdout).
+//! `cue vet` writes to stderr, so we read stderr (falling back to stdout). The
+//! location is a 1-based start with no end, and cue prints no level, so a
+//! finding has none.
 
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity;
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "cue_fmt",
 	description: "Reports formatting/vet errors in .cue files.",
 	url: "https://github.com/cue-lang/cue",
+	severities: &[],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		args: &["vet", "{file}"],
@@ -44,8 +49,6 @@ pub fn parse(stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic
 				message: lines[i - 1].trim().to_string(),
 				row: Some(row),
 				col: Some(col),
-				end_col: Some(col + 1),
-				severity: Some(severity::ERROR),
 				source: Some("cue_fmt".to_string()),
 				..RawDiagnostic::default()
 			});
@@ -74,11 +77,16 @@ mod tests {
 		assert_eq!(out.len(), 2);
 		assert_eq!(out[0].message, "some constraint failed");
 		assert_eq!((out[0].row, out[0].col), (Some(3), Some(5)));
-		assert_eq!(out[0].end_col, Some(6));
-		assert_eq!(out[0].severity, Some(severity::ERROR));
+		assert_eq!(out[0].end_col, None);
 		assert_eq!(out[0].source.as_deref(), Some("cue_fmt"));
 		assert_eq!(out[1].message, "another problem");
 		assert_eq!((out[1].row, out[1].col), (Some(7), Some(1)));
+	}
+
+	#[test]
+	fn never_sets_a_severity() {
+		let stderr = b"some constraint failed\n    ./x.cue:3:5\nanother problem\n    ./x.cue:7:1\n";
+		assert!(parse(b"", stderr, 1).iter().all(|d| d.severity.is_none()));
 	}
 
 	#[test]
@@ -101,3 +109,11 @@ mod tests {
 		assert!(parse(b"", b"", 0).is_empty());
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[crate::contract::Sample {
+	stdout: b"",
+	stderr: b"a: conflicting values 1 and \"x\" (mismatched types int and string):\n    ./config.cue:3:4\nb: incomplete value int:\n    ./config.cue:5:4\n",
+	exit: 1,
+}];

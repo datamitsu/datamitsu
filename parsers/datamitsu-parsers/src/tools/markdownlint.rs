@@ -1,13 +1,22 @@
 //! markdownlint — Markdown style and syntax checker. Ported from the none-ls
 //! diagnostics/markdownlint builtin.
+//!
+//! markdownlint-cli prints `<file>:<row>[:<col>] [<level>] <rules> <message>` on
+//! stderr. Releases since severities were introduced print the level word
+//! (`error` or `warning`); older ones print none, and their findings carry no
+//! level.
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity;
+use crate::severity::{self, Level};
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "markdownlint",
 	description: "Markdown style and syntax checker.",
 	url: "https://github.com/DavidAnson/markdownlint",
+	severities: &[Level("error", severity::ERROR), Level("warning", severity::WARNING)],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	// to_stdin = true, args = { "--stdin" }
 	operations: &[Operation {
 		mode: "lint",
@@ -21,11 +30,11 @@ pub fn parse(_stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 	String::from_utf8_lossy(stderr).lines().filter_map(parse_line).collect()
 }
 
-// Two Lua patterns, both severity = 2 (WARNING):
+// Two Lua patterns, each anchored to a leading ':' (the filename precedes it):
 //   :(%d+):(%d+) ([%w-/]+) (.*)   -> row, col, code, message
 //   :(%d+) ([%w-/]+) (.*)         -> row, code, message
-// Each is anchored to a leading ':' (the filename precedes it). We locate the
-// first ":<digits>" boundary and parse the remainder.
+// with an optional level word before the code. We locate the first ":<digits>"
+// boundary and parse the remainder.
 fn parse_line(line: &str) -> Option<RawDiagnostic> {
 	// Find a ':' immediately followed by a digit (the ":<row>" boundary).
 	let bytes = line.as_bytes();
@@ -43,32 +52,34 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 	let row: u32 = rest[..row_end].parse().ok()?;
 	let after_row = &rest[row_end..];
 
-	if let Some(after_colon) = after_row.strip_prefix(':') {
-		// Pattern 1: :row:col code message
-		let col_end = after_colon.find(|c: char| !c.is_ascii_digit())?;
-		let col: u32 = after_colon[..col_end].parse().ok()?;
-		let tail = after_colon[col_end..].strip_prefix(' ')?;
-		let (code, message) = split_code_message(tail)?;
-		return Some(RawDiagnostic {
-			message,
-			row: Some(row),
-			col: Some(col),
-			code: Some(code),
-			severity: Some(severity::WARNING),
-			..RawDiagnostic::default()
-		});
-	}
-
-	// Pattern 2: :row code message
-	let tail = after_row.strip_prefix(' ')?;
+	let (col, tail) = match after_row.strip_prefix(':') {
+		Some(after_colon) => {
+			let col_end = after_colon.find(|c: char| !c.is_ascii_digit())?;
+			let col: u32 = after_colon[..col_end].parse().ok()?;
+			(Some(col), after_colon[col_end..].strip_prefix(' ')?)
+		}
+		None => (None, after_row.strip_prefix(' ')?),
+	};
+	let (severity, tail) = split_level(tail);
 	let (code, message) = split_code_message(tail)?;
 	Some(RawDiagnostic {
 		message,
 		row: Some(row),
+		col,
 		code: Some(code),
-		severity: Some(severity::WARNING),
+		severity,
 		..RawDiagnostic::default()
 	})
+}
+
+// A leading level word, when the tool printed one.
+fn split_level(tail: &str) -> (Option<u8>, &str) {
+	if let Some((word, rest)) = tail.split_once(' ') {
+		if let Some(level) = severity::of(DESCRIPTOR.severities, word) {
+			return (Some(level), rest);
+		}
+	}
+	(None, tail)
 }
 
 // "([%w-/]+) (.*)": code is one run of word chars, '-' or '/'; message is the rest.
@@ -93,9 +104,9 @@ mod tests {
 		assert_eq!(out.len(), 1);
 		assert_eq!(out[0].row, Some(18));
 		assert_eq!(out[0].col, Some(3));
+		assert_eq!(out[0].end_col, None);
 		assert_eq!(out[0].code.as_deref(), Some("MD009/no-trailing-spaces"));
 		assert_eq!(out[0].message, "Trailing spaces [Expected: 0]");
-		assert_eq!(out[0].severity, Some(severity::WARNING));
 	}
 
 	#[test]
@@ -107,6 +118,31 @@ mod tests {
 		assert_eq!(out[0].col, None);
 		assert_eq!(out[0].code.as_deref(), Some("MD041/first-line-heading"));
 		assert_eq!(out[0].message, "First line in a file should be a top-level heading");
+	}
+
+	#[test]
+	fn without_a_level_word_sets_no_severity() {
+		let out = parse(&[], SAMPLES[0].stderr, 1);
+		assert_eq!(out.len(), 2);
+		assert!(out.iter().all(|d| d.severity.is_none()), "{out:?}");
+	}
+
+	#[test]
+	fn reads_the_printed_level() {
+		let out = parse(&[], SAMPLES[1].stderr, 1);
+		assert_eq!(out.len(), 2);
+		assert_eq!(out[0].severity, Some(severity::ERROR));
+		assert_eq!(out[0].row, Some(18));
+		assert_eq!(out[0].col, Some(3));
+		assert_eq!(out[0].code.as_deref(), Some("MD009/no-trailing-spaces"));
+		assert_eq!(out[0].message, "Trailing spaces [Expected: 0; Actual: 1]");
+		assert_eq!(out[1].severity, Some(severity::WARNING));
+		assert_eq!(out[1].row, Some(1));
+		assert_eq!(out[1].col, None);
+		assert_eq!(out[1].code.as_deref(), Some("MD041/first-line-heading/first-line-h1"));
+
+		let out = parse(&[], SAMPLES[2].stderr, 0);
+		assert_eq!(out.len(), 1);
 		assert_eq!(out[0].severity, Some(severity::WARNING));
 	}
 
@@ -116,3 +152,25 @@ mod tests {
 		assert!(out.is_empty());
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[
+	crate::contract::Sample {
+		stdout: b"",
+		stderr: b"stdin:18:3 MD009/no-trailing-spaces Trailing spaces [Expected: 0; Actual: 1]\n\
+stdin:1 MD041/first-line-heading/first-line-h1 First line in a file should be a top-level heading\n",
+		exit: 1,
+	},
+	crate::contract::Sample {
+		stdout: b"",
+		stderr: b"stdin:18:3 error MD009/no-trailing-spaces Trailing spaces [Expected: 0; Actual: 1]\n\
+stdin:1 warning MD041/first-line-heading/first-line-h1 First line in a file should be a top-level heading\n",
+		exit: 1,
+	},
+	crate::contract::Sample {
+		stdout: b"",
+		stderr: b"stdin:4:81 warning MD013/line-length Line length [Expected: 80; Actual: 96]\n",
+		exit: 0,
+	},
+];

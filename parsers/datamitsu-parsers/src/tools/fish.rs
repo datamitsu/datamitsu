@@ -17,6 +17,10 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "fish",
 	description: "Basic linting is available for fish scripts using `fish --no-execute`.",
 	url: "https://github.com/fish-shell/fish-shell",
+	severities: &[],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		args: &["--no-execute", "{file}"],
@@ -69,3 +73,11 @@ mod tests {
 		assert_eq!(out[1].message, "bang");
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[crate::contract::Sample {
+	stdout: b"",
+	stderr: b"a.fish (line 2): Missing end to balance this if statement\nif true\n^^\nwarning: Error while reading file a.fish\n\n",
+	exit: 127,
+}];

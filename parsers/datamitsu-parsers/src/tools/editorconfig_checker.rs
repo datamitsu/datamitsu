@@ -12,6 +12,10 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "editorconfig_checker",
 	description: "A tool to verify that your files are in harmony with your `.editorconfig`.",
 	url: "https://github.com/editorconfig-checker/editorconfig-checker",
+	severities: &[],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	// none-ls: args ["-no-color", "$FILENAME"], to_stdin=true, from_stderr=true.
 	operations: &[Operation {
 		mode: "lint",
@@ -80,3 +84,11 @@ mod tests {
 		assert!(diags.is_empty());
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[crate::contract::Sample {
+	stdout: b"f.txt:\n\tFinal newline expected\n\t2: Trailing whitespace\n\t3: Wrong indent style found (tabs instead of spaces)\n\n3 errors found\n",
+	stderr: b"",
+	exit: 1,
+}];

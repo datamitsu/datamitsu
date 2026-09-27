@@ -5,18 +5,27 @@
 //! the none-ls builtin composes a custom message (`<message> Try: "a", "b"`) and
 //! computes the span from `line_offset`/`length`. The shared `json_diag` helper
 //! cannot express that nested/computed shape, so the navigation is hand-written.
+//! A match carries no level (its `issueType` names a kind of issue, not how
+//! serious it is), so no finding has one.
 
 use tinyjson::JsonValue;
 
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity;
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
-    name: "ltrs",
-    description: "LanguageTool-Rust (LTRS) is both an executable and a Rust library that aims to provide correct and safe bindings for the LanguageTool API.",
-    url: "https://github.com/jeertmans/languagetool-rust",
-    operations: &[Operation { mode: "lint", args: &["check", "-r", "{file}"], stdin: false }],
+	name: "ltrs",
+	description: "LanguageTool-Rust (LTRS) is both an executable and a Rust library that aims to provide correct and safe bindings for the LanguageTool API.",
+	url: "https://github.com/jeertmans/languagetool-rust",
+	severities: &[],
+	column_unit: "",
+	category: "",
+	kind: "tool",
+	operations: &[Operation {
+		mode: "lint",
+		args: &["check", "-r", "{file}"],
+		stdin: false,
+	}],
 };
 
 pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic> {
@@ -83,8 +92,6 @@ fn from_match(m: &JsonValue) -> Option<RawDiagnostic> {
 		col,
 		end_row: line,
 		end_col,
-		// Builtin hard-codes level = "ERROR" for every match.
-		severity: Some(severity::ERROR),
 		code,
 		..RawDiagnostic::default()
 	})
@@ -110,18 +117,7 @@ mod tests {
 
 	#[test]
 	fn parses_match_with_replacements_and_context() {
-		let json = br#"{
-            "matches": [
-                {
-                    "message": "Possible spelling mistake found.",
-                    "length": 4,
-                    "rule": { "id": "MORFOLOGIK_RULE_EN_US" },
-                    "replacements": [ { "value": "test" }, { "value": "text" } ],
-                    "moreContext": { "line_number": 12, "line_offset": 5 }
-                }
-            ]
-        }"#;
-		let out = parse(json, b"", 0);
+		let out = parse(SAMPLES[0].stdout, b"", 0);
 		assert_eq!(out.len(), 1);
 		let d = &out[0];
 		assert_eq!(
@@ -132,8 +128,13 @@ mod tests {
 		assert_eq!(d.end_row, Some(12));
 		assert_eq!(d.col, Some(6));
 		assert_eq!(d.end_col, Some(10));
-		assert_eq!(d.severity, Some(severity::ERROR));
 		assert_eq!(d.code.as_deref(), Some("MORFOLOGIK_RULE_EN_US"));
+	}
+
+	#[test]
+	fn never_sets_a_severity() {
+		let out = parse(SAMPLES[0].stdout, b"", 0);
+		assert!(out.iter().all(|d| d.severity.is_none()), "{out:?}");
 	}
 
 	#[test]
@@ -151,3 +152,22 @@ mod tests {
 		assert_eq!(out[0].col, Some(1));
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[crate::contract::Sample {
+	stdout: br#"{
+    "matches": [
+        {
+            "message": "Possible spelling mistake found.",
+            "offset": 131,
+            "length": 4,
+            "rule": { "id": "MORFOLOGIK_RULE_EN_US", "issueType": "misspelling" },
+            "replacements": [ { "value": "test" }, { "value": "text" } ],
+            "moreContext": { "line_number": 12, "line_offset": 5 }
+        }
+    ]
+}"#,
+	stderr: b"",
+	exit: 0,
+}];

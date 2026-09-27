@@ -14,12 +14,16 @@ use tinyjson::JsonValue;
 
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity;
+use crate::severity::{self, Level};
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "eslint",
 	description: "Pluggable linter for JavaScript and TypeScript.",
 	url: "https://eslint.org",
+	severities: &[Level("2", severity::ERROR), Level("1", severity::WARNING)],
+	column_unit: "utf-16",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		args: &["--format", "json", "{file}"],
@@ -96,11 +100,9 @@ fn num(m: &HashMap<String, JsonValue>, key: &str) -> Option<u32> {
 
 fn severity_of(v: Option<&JsonValue>) -> Option<u8> {
 	match v {
-		Some(JsonValue::Number(n)) => match crate::numconv::json_int(*n) {
-			Some(2) => Some(severity::ERROR),
-			Some(1) => Some(severity::WARNING),
-			_ => None,
-		},
+		Some(JsonValue::Number(n)) => {
+			crate::numconv::json_int(*n).and_then(|n| severity::of(DESCRIPTOR.severities, &n.to_string()))
+		}
 		_ => None,
 	}
 }
@@ -110,7 +112,7 @@ mod tests {
 	use super::*;
 
 	// Real `eslint --format json` output (trimmed).
-	const SAMPLE: &[u8] = br#"[{"filePath":"/x/broken.js","messages":[
+	pub(super) const SAMPLE: &[u8] = br#"[{"filePath":"/x/broken.js","messages":[
         {"ruleId":"no-unused-vars","severity":2,"message":"'x' is assigned a value but never used.","line":1,"column":5,"endLine":1,"endColumn":6},
         {"ruleId":"semi","severity":1,"message":"Missing semicolon.","line":1,"column":10,"endLine":2,"endColumn":1},
         {"ruleId":null,"severity":2,"message":"Parsing error: Unexpected token","line":3,"column":1}
@@ -136,6 +138,14 @@ mod tests {
 	}
 
 	#[test]
+	fn a_severity_outside_eslints_two_levels_is_left_unset() {
+		for severity in ["0", "3", "2.5", r#""2""#, "null"] {
+			let json = format!(r#"[{{"filePath":"/x/a.js","messages":[{{"severity":{severity},"message":"m"}}]}}]"#);
+			assert_eq!(parse(json.as_bytes(), b"", 1)[0].severity, None, "severity {severity}");
+		}
+	}
+
+	#[test]
 	fn attributes_each_message_to_its_file() {
 		let out = parse(SAMPLE, b"", 1);
 		assert!(out.iter().all(|d| d.file.as_deref() == Some("/x/broken.js")));
@@ -154,3 +164,18 @@ mod tests {
 		assert!(parse(br#"[{"filePath":"/x/ok.js","messages":[]}]"#, b"", 0).is_empty());
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[
+	crate::contract::Sample {
+		stdout: tests::SAMPLE,
+		stderr: b"",
+		exit: 1,
+	},
+	crate::contract::Sample {
+		stdout: br#"[{"filePath":"/x/ok.js","messages":[]}]"#,
+		stderr: b"",
+		exit: 0,
+	},
+];

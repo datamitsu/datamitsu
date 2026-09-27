@@ -5,10 +5,10 @@
 //! one entry per linted file; only the first file's `errors` array is consumed
 //! (mirroring the builtin's `vim.tbl_keys(...)[1]`). Each error carries
 //! `msg`/`rule`/`severity`/`line`, plus an optional `range` whose
-//! `start`/`end.{line,character}` become the span — with `endColumn` forced to 0
-//! when the range straddles multiple lines, exactly as the builtin does. The flat
-//! `json_diag::from_json` mapper can't reach the nested shape, so we navigate with
-//! `tinyjson`.
+//! `start`/`end.{line,character}` become the span. Range lines count from 1 and
+//! characters from 0 (a string index), with the end character past the span, so
+//! both characters get 1 added. The flat `json_diag::from_json` mapper can't
+//! reach the nested shape, so we navigate with `tinyjson`.
 
 use std::collections::HashMap;
 
@@ -16,12 +16,20 @@ use tinyjson::JsonValue;
 
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity;
+use crate::severity::{self, Level};
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "npm_groovy_lint",
 	description: "Lint, format and auto-fix Groovy, Jenkinsfile, and Gradle files.",
 	url: "https://github.com/nvuillam/npm-groovy-lint",
+	severities: &[
+		Level("error", severity::ERROR),
+		Level("warning", severity::WARNING),
+		Level("info", severity::INFO),
+	],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	// to_temp_file=true: npm-groovy-lint reads a real path ($FILENAME), not stdin.
 	operations: &[Operation {
 		mode: "lint",
@@ -64,34 +72,23 @@ fn from_error(value: &JsonValue) -> Option<RawDiagnostic> {
 		message,
 		row: get_u32_v(map.get("line")),
 		code: get_str(map, "rule"),
-		severity: get_str(map, "severity").and_then(|s| severity_of(&s)),
+		severity: get_str(map, "severity").and_then(|s| severity::of(DESCRIPTOR.severities, &s)),
 		..RawDiagnostic::default()
 	};
 	if let Some(range) = map.get("range").and_then(as_obj) {
 		let start = range.get("start").and_then(as_obj);
 		let end = range.get("end").and_then(as_obj);
-		let start_line = start.and_then(|s| get_u32_v(s.get("line")));
-		let end_line = end.and_then(|e| get_u32_v(e.get("line")));
-		diag.row = start_line;
-		diag.end_row = end_line;
-		diag.col = start.and_then(|s| get_u32_v(s.get("character")));
-		// Multi-line range -> endColumn 0; same line -> end character.
-		diag.end_col = if start_line != end_line {
-			Some(0)
-		} else {
-			end.and_then(|e| get_u32_v(e.get("character")))
-		};
+		diag.row = start.and_then(|s| get_u32_v(s.get("line")));
+		diag.end_row = end.and_then(|e| get_u32_v(e.get("line")));
+		diag.col = start.and_then(|s| character(s.get("character")));
+		diag.end_col = end.and_then(|e| character(e.get("character")));
 	}
 	Some(diag)
 }
 
-fn severity_of(level: &str) -> Option<u8> {
-	match level {
-		"error" => Some(severity::ERROR),
-		"warning" => Some(severity::WARNING),
-		"info" => Some(severity::INFO),
-		_ => None,
-	}
+/// A 0-based range character as a 1-based column.
+fn character(v: Option<&JsonValue>) -> Option<u32> {
+	get_u32_v(v)?.checked_add(1)
 }
 
 fn as_obj(value: &JsonValue) -> Option<&HashMap<String, JsonValue>> {
@@ -121,86 +118,41 @@ mod tests {
 
 	#[test]
 	fn parses_error_without_range() {
-		let json = br#"{
-            "files": {
-                "0": {
-                    "errors": [
-                        {
-                            "id": 1,
-                            "line": 7,
-                            "rule": "UnnecessarySemicolon",
-                            "severity": "warning",
-                            "msg": "Semicolons as line endings can be removed safely"
-                        }
-                    ]
-                }
-            }
-        }"#;
-		let out = parse(json, b"", 0);
+		let out = parse(SAMPLES[0].stdout, b"", 0);
 		assert_eq!(out.len(), 1);
 		assert_eq!(out[0].message, "Semicolons as line endings can be removed safely");
 		assert_eq!(out[0].row, Some(7));
 		assert_eq!(out[0].col, None);
+		assert_eq!(out[0].end_col, None);
 		assert_eq!(out[0].code.as_deref(), Some("UnnecessarySemicolon"));
 		assert_eq!(out[0].severity, Some(severity::WARNING));
 	}
 
 	#[test]
-	fn same_line_range_keeps_end_character() {
-		let json = br#"{
-            "files": {
-                "f": {
-                    "errors": [
-                        {
-                            "line": 3,
-                            "rule": "SpaceAfterComma",
-                            "severity": "error",
-                            "msg": "Missing space",
-                            "range": {
-                                "start": { "line": 3, "character": 10 },
-                                "end": { "line": 3, "character": 14 }
-                            }
-                        }
-                    ]
-                }
-            }
-        }"#;
-		let out = parse(json, b"", 1);
-		assert_eq!(out.len(), 1);
+	fn same_line_range_shifts_characters_to_columns() {
+		let out = parse(SAMPLES[1].stdout, b"", 1);
+		assert_eq!(out.len(), 2);
 		assert_eq!(out[0].row, Some(3));
 		assert_eq!(out[0].end_row, Some(3));
-		assert_eq!(out[0].col, Some(10));
-		assert_eq!(out[0].end_col, Some(14));
+		assert_eq!(out[0].col, Some(11));
+		assert_eq!(out[0].end_col, Some(15));
 		assert_eq!(out[0].severity, Some(severity::ERROR));
 	}
 
 	#[test]
-	fn multi_line_range_zeroes_end_column() {
-		let json = br#"{
-            "files": {
-                "f": {
-                    "errors": [
-                        {
-                            "line": 5,
-                            "rule": "ClassSize",
-                            "severity": "info",
-                            "msg": "Class is too large",
-                            "range": {
-                                "start": { "line": 5, "character": 0 },
-                                "end": { "line": 40, "character": 1 }
-                            }
-                        }
-                    ]
-                }
-            }
-        }"#;
-		let out = parse(json, b"", 0);
-		assert_eq!(out.len(), 1);
-		assert_eq!(out[0].row, Some(5));
-		assert_eq!(out[0].end_row, Some(40));
-		assert_eq!(out[0].col, Some(0));
-		assert_eq!(out[0].end_col, Some(0));
-		assert_eq!(out[0].severity, Some(severity::INFO));
+	fn multi_line_range_keeps_its_end_character() {
+		let out = parse(SAMPLES[1].stdout, b"", 1);
+		assert_eq!(out[1].row, Some(5));
+		assert_eq!(out[1].end_row, Some(40));
+		assert_eq!(out[1].col, Some(1));
+		assert_eq!(out[1].end_col, Some(2));
+		assert_eq!(out[1].severity, Some(severity::INFO));
+	}
+
+	#[test]
+	fn an_unknown_level_sets_none() {
+		let json = br#"{"files":{"f":{"errors":[{"line":1,"rule":"R","severity":"fatal","msg":"x"}]}}}"#;
+		assert_eq!(parse(json, b"", 1)[0].severity, None);
 	}
 
 	#[test]
@@ -209,3 +161,61 @@ mod tests {
 		assert!(parse(br#"{"files":{}}"#, b"", 0).is_empty());
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[
+	crate::contract::Sample {
+		stdout: br#"{
+    "files": {
+        "Jenkinsfile": {
+            "errors": [
+                {
+                    "id": 1,
+                    "line": 7,
+                    "rule": "UnnecessarySemicolon",
+                    "severity": "warning",
+                    "msg": "Semicolons as line endings can be removed safely"
+                }
+            ]
+        }
+    }
+}"#,
+		stderr: b"",
+		exit: 0,
+	},
+	crate::contract::Sample {
+		stdout: br#"{
+    "files": {
+        "build.gradle": {
+            "errors": [
+                {
+                    "id": 0,
+                    "line": 3,
+                    "rule": "SpaceAfterComma",
+                    "severity": "error",
+                    "msg": "Missing space",
+                    "range": {
+                        "start": { "line": 3, "character": 10 },
+                        "end": { "line": 3, "character": 14 }
+                    }
+                },
+                {
+                    "id": 1,
+                    "line": 5,
+                    "rule": "ClassSize",
+                    "severity": "info",
+                    "msg": "Class is too large",
+                    "range": {
+                        "start": { "line": 5, "character": 0 },
+                        "end": { "line": 40, "character": 1 }
+                    }
+                }
+            ]
+        }
+    }
+}"#,
+		stderr: b"",
+		exit: 1,
+	},
+];

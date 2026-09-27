@@ -1,13 +1,27 @@
 //! clazy — Qt-oriented static code analyzer based on the Clang framework.
 //! Ported from the none-ls diagnostics/clazy builtin.
+//!
+//! clang's diagnostic lines, `<file>:<row>:<col>: <level>: <message> [-W<group>]`,
+//! 1-based with no end. The level word is read through the vocabulary; a word it
+//! does not list sets no level. The trailing `[-W<group>]` names the check.
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity;
+use crate::severity::{self, Level};
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "clazy",
 	description: "Qt-oriented static code analyzer based on the Clang framework",
 	url: "https://github.com/KDE/clazy",
+	severities: &[
+		Level("error", severity::ERROR),
+		Level("fatal error", severity::ERROR),
+		Level("warning", severity::WARNING),
+		Level("note", severity::INFO),
+		Level("remark", severity::INFO),
+	],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		args: &["--ignore-included-files", "--header-filter=$ROOT/.*", "{file}"],
@@ -44,24 +58,34 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 		return None;
 	}
 	let msg = after_col[c3 + 1..].strip_prefix(' ').unwrap_or(&after_col[c3 + 1..]);
+	let (message, code) = split_flag(msg);
 
 	Some(RawDiagnostic {
-		message: msg.to_string(),
+		message: message.to_string(),
 		row: Some(row),
 		col: Some(col),
-		severity: severity_of(sev_tok),
+		severity: severity::of(DESCRIPTOR.severities, sev_tok),
 		source: Some("clazy".to_string()),
+		code,
 		..RawDiagnostic::default()
 	})
 }
 
-fn severity_of(sev: &str) -> Option<u8> {
-	match sev {
-		"error" | "fatal error" => Some(severity::ERROR),
-		"warning" => Some(severity::WARNING),
-		"note" | "remark" => Some(severity::INFO),
-		// none-ls default is warning for unknown tokens.
-		_ => Some(severity::WARNING),
+/// Split a trailing ` [-W<group>]` (or `[-Werror,-W<group>]`) off the message;
+/// the group is the check's identity.
+fn split_flag(msg: &str) -> (&str, Option<String>) {
+	let Some(open) = msg.strip_suffix(']').and_then(|m| m.rfind(" [")) else {
+		return (msg, None);
+	};
+	let flags = &msg[open + 2..msg.len() - 1];
+	let group = flags
+		.rsplit(',')
+		.next()
+		.and_then(|f| f.strip_prefix("-W"))
+		.filter(|g| !g.is_empty() && !g.starts_with("error"));
+	match group {
+		Some(g) => (msg[..open].trim_end(), Some(g.to_string())),
+		None => (msg, None),
 	}
 }
 
@@ -79,7 +103,17 @@ mod tests {
 		assert_eq!(d.col, Some(9));
 		assert_eq!(d.severity, Some(severity::WARNING));
 		assert_eq!(d.source.as_deref(), Some("clazy"));
-		assert_eq!(d.message, "Missing reference in range-for [-Wclazy-range-loop]");
+		assert_eq!(d.code.as_deref(), Some("clazy-range-loop"));
+		assert_eq!(d.message, "Missing reference in range-for");
+	}
+
+	#[test]
+	fn a_warning_promoted_by_werror_keeps_its_group() {
+		let stderr = b"/src/main.cpp:7:3: error: Use QStringLiteral [-Werror,-Wclazy-qstring-allocations]\n";
+		let d = &parse(b"", stderr, 1)[0];
+		assert_eq!(d.severity, Some(severity::ERROR));
+		assert_eq!(d.code.as_deref(), Some("clazy-qstring-allocations"));
+		assert_eq!(d.message, "Use QStringLiteral");
 	}
 
 	#[test]
@@ -90,7 +124,23 @@ mod tests {
 		assert_eq!(diags.len(), 2);
 		assert_eq!(diags[0].severity, Some(severity::ERROR));
 		assert_eq!(diags[0].message, "'QWidget' file not found");
+		assert_eq!(diags[0].code, None);
 		assert_eq!(diags[1].severity, Some(severity::INFO));
+	}
+
+	#[test]
+	fn an_unknown_level_token_sets_no_severity() {
+		let stderr = b"/src/main.cpp:3:1: ignored: something odd\n";
+		let diags = parse(b"", stderr, 0);
+		assert_eq!(diags.len(), 1);
+		assert_eq!(diags[0].severity, None);
+	}
+
+	#[test]
+	fn a_bracket_that_is_not_a_flag_stays_in_the_message() {
+		let d = parse_line("/src/a.cpp:1:1: warning: index is out of range [0, 3]").unwrap();
+		assert_eq!(d.message, "index is out of range [0, 3]");
+		assert_eq!(d.code, None);
 	}
 
 	#[test]
@@ -99,3 +149,18 @@ mod tests {
 		assert!(parse(b"", stderr, 0).is_empty());
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[
+	crate::contract::Sample {
+		stdout: b"",
+		stderr: b"/work/src/main.cpp:42:9: warning: Missing reference in range-for with non trivial type (QString) [-Wclazy-range-loop-reference]\n    for (auto s : list) {\n        ^\n/work/src/main.cpp:51:15: warning: Use multi-arg instead [-Wclazy-qstring-arg]\n    auto t = QString(\"%1 %2\").arg(a).arg(b);\n              ^\n2 warnings generated.\n",
+		exit: 0,
+	},
+	crate::contract::Sample {
+		stdout: b"",
+		stderr: b"/work/src/widget.cpp:1:10: fatal error: 'QWidget' file not found\n#include <QWidget>\n         ^~~~~~~~~\n/work/src/widget.cpp:5:3: note: expanded from macro 'Q_OBJECT'\n1 error generated.\n",
+		exit: 1,
+	},
+];

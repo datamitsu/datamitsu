@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -124,6 +125,36 @@ func TestRuntime_DescribeReportsCapabilities(t *testing.T) {
 		if !got[want] {
 			t.Errorf("describe missing tool %q; got %+v", want, caps.Tools)
 		}
+	}
+}
+
+// TestRuntime_DescribeCarriesTheSeverityContract: the current crate build is a
+// schema-2 module, so every tool declares a level vocabulary (empty for a tool
+// that prints none), and a measured tool its column unit.
+func TestRuntime_DescribeCarriesTheSeverityContract(t *testing.T) {
+	caps, err := DescribeLocal(context.Background(), echoWASM(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !caps.SeverityContract() {
+		t.Fatalf("schemaVersion = %d, want the severity contract", caps.SchemaVersion)
+	}
+	byName := make(map[string]ToolCapability, len(caps.Tools))
+	for _, tool := range caps.Tools {
+		if tool.Severities == nil {
+			t.Errorf("%s: no severities under schema %d", tool.Name, caps.SchemaVersion)
+		}
+		byName[tool.Name] = tool
+	}
+	tfsec := byName["tfsec"]
+	if !slices.Equal(tfsec.Severities, []string{"CRITICAL", "HIGH", "MEDIUM", "LOW"}) || tfsec.Category != "security" {
+		t.Errorf("tfsec = %+v, want its four levels and the security category", tfsec)
+	}
+	if knip := byName["knip"]; knip.Severities == nil || len(knip.Severities) != 0 {
+		t.Errorf("knip severities = %#v, want an empty vocabulary", knip.Severities)
+	}
+	if unit := byName["yamllint"].ColumnUnit; unit != "utf-32" {
+		t.Errorf("yamllint columnUnit = %q, want the measured utf-32", unit)
 	}
 }
 

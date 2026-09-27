@@ -17,20 +17,30 @@
 pub struct RawDiagnostic {
 	/// The human-readable message. The one mandatory field.
 	pub message: String,
-	/// 1-based line, if the tool reported one.
+	/// 1-based line, if the tool reported one. A parser whose tool counts from
+	/// 0 adds 1: the core cannot tell the two apart.
 	pub row: Option<u32>,
-	/// 1-based column, if the tool reported one.
+	/// 1-based column, if the tool reported one, counted in the descriptor's
+	/// `column_unit`.
 	pub col: Option<u32>,
-	/// End line of the span, if any.
+	/// 1-based end line of the span, if the tool reported one.
 	pub end_row: Option<u32>,
-	/// End column of the span, if any.
+	/// 1-based **exclusive** end column — the span stops before it. A tool
+	/// that prints the last column of the span has 1 added; one that prints no
+	/// end leaves this `None` rather than having one invented.
 	pub end_col: Option<u32>,
-	/// Severity code as emitted (the core maps it to its own scale later).
+	/// The level on the shared scale, read through the tool's descriptor
+	/// vocabulary from a token the tool printed (`crate::severity::of`); `None`
+	/// when it printed none.
 	pub severity: Option<u8>,
-	/// The originating tool/source label, if the tool names one.
+	/// The tool's name, when the parser names it; never a rule.
 	pub source: Option<String>,
-	/// A rule/diagnostic code, if any.
+	/// The rule the finding breaks, whenever the tool prints one. It is part of
+	/// a finding's identity, so it carries the rule id alone — no location, no
+	/// message text.
 	pub code: Option<String>,
+	/// A URL documenting the rule, where the tool prints one.
+	pub url: Option<String>,
 	/// The file the diagnostic belongs to, when the tool's format names one
 	/// (eslint's `filePath`, …). Batch tools lint many files per run, so without
 	/// this the core cannot attribute a diagnostic; per-file tools leave it `None`
@@ -86,6 +96,9 @@ impl RawDiagnostic {
 		}
 		if let Some(v) = &self.code {
 			parts.push(format!(r#""code":{}"#, json_string(v)));
+		}
+		if let Some(v) = &self.url {
+			parts.push(format!(r#""url":{}"#, json_string(v)));
 		}
 		if let Some(v) = &self.file {
 			parts.push(format!(r#""file":{}"#, json_string(v)));
@@ -148,6 +161,20 @@ mod tests {
 		assert_eq!(
 			d.to_json(),
 			r#"{"message":"x","row":3,"col":7,"severity":1,"source":"hadolint","code":"DL3008"}"#
+		);
+	}
+
+	#[test]
+	fn a_rule_url_serializes_after_the_code() {
+		let d = RawDiagnostic {
+			message: "x".to_string(),
+			code: Some("R1".to_string()),
+			url: Some("https://example.test/R1".to_string()),
+			..Default::default()
+		};
+		assert_eq!(
+			d.to_json(),
+			r#"{"message":"x","code":"R1","url":"https://example.test/R1"}"#
 		);
 	}
 

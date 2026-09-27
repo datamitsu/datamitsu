@@ -1,22 +1,28 @@
 //! terragrunt_validate — validate Terragrunt configuration files in a directory.
 //! Ported from the none-ls diagnostics/terragrunt_validate builtin.
 //!
-//! Runs `terragrunt hclvalidate --terragrunt-hclvalidate-json` and reads JSON from
-//! stderr (`from_stderr = true`). Each diagnostic has `summary` (the message),
-//! an optional `detail` (appended as `summary - detail`), a string `severity`, and
-//! an optional `range` with `start`/`end` `{line, column}` positions. none-ls
-//! defaults row/col to 0 when no `range` is present; we leave them `None` and let
-//! the core supply its fallback.
+//! The builtin runs `terragrunt hclvalidate --terragrunt-hclvalidate-json` and
+//! reads JSON from stderr (`from_stderr = true`); terragrunt 1.x prints it on
+//! stdout (`hcl validate --json`) and logs to stderr, so either stream is
+//! accepted. Each diagnostic has `summary` (the message), an optional `detail`
+//! (appended as `summary - detail`), a string `severity`, and an optional `range`
+//! with `start`/`end` `{line, column}` positions: HCL positions, 1-based with an
+//! exclusive end. none-ls defaults row/col to 0 when no `range` is present; we
+//! leave them `None` and let the core supply its fallback.
 use tinyjson::JsonValue;
 
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity;
+use crate::severity::{self, Level};
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "terragrunt_validate",
 	description: "Terragrunt validate is is a subcommand of terragrunt to validate configuration files in a directory",
 	url: "https://terragrunt.gruntwork.io/docs/reference/cli-options/#validate-inputs",
+	severities: &[Level("error", severity::ERROR), Level("warning", severity::WARNING)],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		args: &["hclvalidate", "--terragrunt-hclvalidate-json"],
@@ -24,13 +30,22 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	}],
 };
 
-pub fn parse(_stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic> {
-	let text = String::from_utf8_lossy(stderr);
+pub fn parse(stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic> {
+	let primary = parse_bytes(stderr);
+	if primary.is_empty() {
+		parse_bytes(stdout)
+	} else {
+		primary
+	}
+}
+
+fn parse_bytes(bytes: &[u8]) -> Vec<RawDiagnostic> {
+	let text = String::from_utf8_lossy(bytes);
 	let value: JsonValue = match text.parse() {
 		Ok(v) => v,
 		Err(_) => return Vec::new(),
 	};
-	// terragrunt emits `{"diagnostics":[...]}`; tolerate a bare array too.
+	// `{"diagnostics":[...]}`, or a bare array (terragrunt 1.x).
 	let items = match &value {
 		JsonValue::Object(root) => match root.get("diagnostics") {
 			Some(JsonValue::Array(a)) => a,
@@ -52,7 +67,7 @@ fn parse_diagnostic(value: &JsonValue) -> Option<RawDiagnostic> {
 		Some(detail) => format!("{summary} - {detail}"),
 		None => summary,
 	};
-	let severity = str_field(obj, "severity").and_then(|s| severity_of(&s));
+	let severity = str_field(obj, "severity").and_then(|s| severity::of(DESCRIPTOR.severities, &s));
 
 	// Positions only exist when a `range` is present.
 	let (row, col, end_row, end_col) = match obj.get("range") {
@@ -97,17 +112,6 @@ fn u32_field(map: &std::collections::HashMap<String, JsonValue>, key: &str) -> O
 	}
 }
 
-/// none-ls `h.diagnostics.severities`: error=1, warning=2, information=3, hint=4.
-fn severity_of(level: &str) -> Option<u8> {
-	match level {
-		"error" => Some(severity::ERROR),
-		"warning" => Some(severity::WARNING),
-		"information" => Some(severity::INFO),
-		"hint" => Some(severity::HINT),
-		_ => None,
-	}
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -147,7 +151,39 @@ mod tests {
 	}
 
 	#[test]
+	fn reads_the_bare_array_terragrunt_prints_on_stdout() {
+		let s = &SAMPLES[0];
+		let out = parse(s.stdout, s.stderr, s.exit);
+		assert_eq!(out.len(), 1);
+		assert_eq!(out[0].severity, Some(severity::ERROR));
+		assert_eq!((out[0].row, out[0].col), (Some(5), Some(7)));
+		assert_eq!((out[0].end_row, out[0].end_col), (Some(5), Some(14)));
+	}
+
+	#[test]
+	fn an_unlisted_severity_sets_no_level() {
+		let json = br#"[{"severity":"fatal","summary":"x"}]"#;
+		assert_eq!(parse(json, b"", 1)[0].severity, None);
+	}
+
+	#[test]
 	fn empty_diagnostics_yields_nothing() {
 		assert!(parse(b"", br#"{"diagnostics":[]}"#, 0).is_empty());
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[
+	crate::contract::Sample {
+		stdout: br#"[{"range":{"filename":"/work/terragrunt/terragrunt.hcl","start":{"line":5,"column":7,"byte":36},"end":{"line":5,"column":14,"byte":43}},"snippet":{"context":"locals","code":"  x = foo.bar","values":null,"start_line":5,"highlight_start_offset":6,"highlight_end_offset":13},"summary":"Can't evaluate expression","detail":"You can only reference to other local variables here, but it looks like you're referencing something else (\"foo\" is not defined)","severity":"error"}]
+"#,
+		stderr: b"19:24:38.002 INFO   TIP (debugging-docs): For help troubleshooting errors, visit https://docs.terragrunt.com/troubleshooting/debugging\n19:24:38.002 ERROR  1 HCL validation error(s) found\n",
+		exit: 1,
+	},
+	crate::contract::Sample {
+		stdout: b"",
+		stderr: br#"{"diagnostics":[{"severity":"warning","summary":"Deprecated attribute","detail":"The attribute \"skip\" is deprecated.","range":{"filename":"terragrunt.hcl","start":{"line":2,"column":1,"byte":14},"end":{"line":2,"column":5,"byte":18}}}]}"#,
+		exit: 0,
+	},
+];

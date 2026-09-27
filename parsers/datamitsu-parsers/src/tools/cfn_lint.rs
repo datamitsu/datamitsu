@@ -8,19 +8,28 @@
 //! <file>:<row>:<col>:<end_row>:<end_col>:<code>:<message>
 //! ```
 //!
-//! e.g. `template.yaml:3:7:3:25:E3012:E3012: Property is not a string`. The
+//! e.g. `template.yaml:3:7:3:25:E3012:Property is not a string`. The
 //! none-ls Lua pattern `:(%d+):(%d+):(%d+):(%d+):(([IEW]).*):(.*)` captures the
-//! four positions, then a `code` field whose first character (`I`/`E`/`W`) is the
-//! severity, then the trailing message.
+//! four positions, then a `code` field whose first character (`I`/`E`/`W`) is
+//! cfn-lint's level for the rule, then the trailing message. Positions are
+//! 1-based and the end names the column after the span.
 
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity;
+use crate::severity::{self, Level};
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "cfn_lint",
 	description: "Validate AWS CloudFormation yaml/json templates against the AWS CloudFormation Resource Specification",
 	url: "https://github.com/aws-cloudformation/cfn-lint",
+	severities: &[
+		Level("E", severity::ERROR),
+		Level("W", severity::WARNING),
+		Level("I", severity::INFO),
+	],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		args: &["--format", "parseable"],
@@ -49,8 +58,8 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 
 	// Severity is the leading I/E/W of the code field; non-conforming -> skip
 	// (the Lua pattern requires the code to start with [IEW]).
-	let level = code.chars().next()?;
-	let sev = level_severity(level)?;
+	let level = code.get(..1)?;
+	let sev = severity::of(DESCRIPTOR.severities, level)?;
 
 	Some(RawDiagnostic {
 		message: message.to_string(),
@@ -110,15 +119,6 @@ fn find_positions(line: &str) -> Option<(usize, u32, u32, u32, u32)> {
 	None
 }
 
-fn level_severity(level: char) -> Option<u8> {
-	match level {
-		'E' => Some(severity::ERROR),
-		'W' => Some(severity::WARNING),
-		'I' => Some(severity::INFO),
-		_ => None,
-	}
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -143,6 +143,12 @@ mod tests {
 	}
 
 	#[test]
+	fn a_code_without_a_level_letter_is_skipped() {
+		assert!(parse_line("t.json:1:1:1:1:X1001:unknown class").is_none());
+		assert!(parse_line("t.json:1:1:1:1::empty code").is_none());
+	}
+
+	#[test]
 	fn parse_reads_stderr_and_skips_noise() {
 		let stderr = b"a.yaml:2:1:2:8:E1001:E1001: Top level template error\nnot a diagnostic line\n";
 		let out = parse(b"", stderr, 1);
@@ -150,3 +156,11 @@ mod tests {
 		assert_eq!(out[0].code.as_deref(), Some("E1001"));
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[crate::contract::Sample {
+	stdout: b"",
+	stderr: b"template.yaml:3:7:3:25:E3012:Property Resources/Bucket/Properties/BucketName should be of type String\ntemplate.yaml:1:1:1:1:W2001:Parameter Foo not used.\ntemplate.yaml:10:5:10:9:I3011:The default action when replacing/removing a resource is to delete it\n",
+	exit: 14,
+}];

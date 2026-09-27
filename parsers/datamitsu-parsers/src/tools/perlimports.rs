@@ -1,13 +1,18 @@
 //! perlimports — A command line utility for cleaning up imports in your Perl code.
 //! Ported from the none-ls diagnostics/perlimports builtin.
+//!
+//! A lint line carries no level, so no finding has one.
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity;
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "perlimports",
 	description: "A command line utility for cleaning up imports in your Perl code",
 	url: "https://metacpan.org/dist/App-perlimports/view/script/perlimports",
+	severities: &[],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		// to_stdin=true, $FILENAME passed via --filename
@@ -46,7 +51,6 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 	Some(RawDiagnostic {
 		message,
 		row: Some(row),
-		severity: Some(severity::ERROR),
 		..RawDiagnostic::default()
 	})
 }
@@ -62,7 +66,14 @@ mod tests {
 		assert_eq!(diags.len(), 1);
 		assert_eq!(diags[0].message, "Carp is unused");
 		assert_eq!(diags[0].row, Some(12));
-		assert_eq!(diags[0].severity, Some(severity::ERROR));
+		assert_eq!(diags[0].col, None);
+	}
+
+	#[test]
+	fn never_sets_a_severity() {
+		let diags = parse(SAMPLES[0].stdout, SAMPLES[0].stderr, SAMPLES[0].exit);
+		assert_eq!(diags.len(), 2);
+		assert!(diags.iter().all(|d| d.severity.is_none()), "{diags:?}");
 	}
 
 	#[test]
@@ -71,3 +82,11 @@ mod tests {
 		assert!(diags.is_empty());
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[crate::contract::Sample {
+	stdout: b"",
+	stderr: b"(Carp is unused) at lib/Foo.pm line 12\n(POSIX imports floor, ceil) at lib/Foo.pm line 14\n",
+	exit: 1,
+}];

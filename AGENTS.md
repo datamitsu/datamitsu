@@ -254,6 +254,22 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
   configuration should do. Drop entries older than the two latest minor releases.
 - Rules in both guides point at `datamitsu llms` pages instead of copying them.
 
+## Output Parsers
+
+- A parser in `parsers/datamitsu-parsers` never invents a level: it sets
+  `severity` only from a token the tool printed, read with `severity::of` from
+  its descriptor's `severities` — not for every finding, not for stderr text or
+  output that would not decode. A finding without a token stays `None`; the core
+  resolves it from the exit code. `source` is the tool's name, `code` the rule and
+  nothing else, positions 1-based with an exclusive end column, and
+  `column_unit` measured on the real tool or the parser listed in
+  `UNKNOWN_COLUMN_UNITS`. `src/contract.rs` checks every parser against its
+  `SAMPLES` and recorded fixtures, and requires its `POSITIONS` row.
+- A change under `parsers/` rebuilds `internal/parsermanager/testdata/echo.wasm`
+  and regenerates `website/docs/reference/parser-catalog.md` in the same change
+  (`internal/parsermanager/testdata/README.md`); the released module in
+  `testdata/released` is never rebuilt.
+
 ## Product Stage
 
 - Project is in `alpha`.

@@ -1,13 +1,26 @@
 //! clj_kondo — A linter for clojure code that sparks joy. Ported from the
 //! none-ls diagnostics/clj_kondo builtin.
+//!
+//! Text output, `<file>:<row>:<col>: <level>: <message>`, 1-based with no end.
+//! The level word is clj-kondo's (`error`, `warning`, `info`, or `Exception`
+//! when linting itself failed).
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity;
+use crate::severity::{self, Level};
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "clj_kondo",
 	description: "A linter for clojure code that sparks joy",
 	url: "https://github.com/clj-kondo/clj-kondo",
+	severities: &[
+		Level("error", severity::ERROR),
+		Level("Exception", severity::ERROR),
+		Level("warning", severity::WARNING),
+		Level("info", severity::INFO),
+	],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		args: &["--cache", "--lint", "-", "--filename", "{file}"],
@@ -17,14 +30,6 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 
 pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic> {
 	String::from_utf8_lossy(stdout).lines().filter_map(parse_line).collect()
-}
-
-fn severity_of(level: &str) -> Option<u8> {
-	match level {
-		"error" | "Exception" => Some(severity::ERROR),
-		"warning" => Some(severity::WARNING),
-		_ => None,
-	}
 }
 
 /// Ports `:(%d+):(%d+): (%w+): (.*)` — matched against the line after the
@@ -62,7 +67,7 @@ fn try_match(rest: &str) -> Option<RawDiagnostic> {
 		message: message.to_string(),
 		row: row_str.parse().ok(),
 		col: col_str.parse().ok(),
-		severity: severity_of(sev_str),
+		severity: severity::of(DESCRIPTOR.severities, sev_str),
 		..RawDiagnostic::default()
 	})
 }
@@ -117,6 +122,15 @@ mod tests {
 	}
 
 	#[test]
+	fn reads_info_and_leaves_an_unknown_level_unset() {
+		let stdout = b"<stdin>:2:1: info: Redundant do\n<stdin>:4:1: note: odd\n";
+		let out = parse(stdout, b"", 0);
+		assert_eq!(out.len(), 2);
+		assert_eq!(out[0].severity, Some(severity::INFO));
+		assert_eq!(out[1].severity, None);
+	}
+
+	#[test]
 	fn maps_exception_to_error() {
 		let stdout = b"<stdin>:1:1: Exception: something blew up\n";
 		let out = parse(stdout, b"", 3);
@@ -124,3 +138,11 @@ mod tests {
 		assert_eq!(out[0].severity, Some(severity::ERROR));
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[crate::contract::Sample {
+	stdout: b"src/app/core.clj:3:1: error: Unresolved symbol: foo\nsrc/app/core.clj:10:5: warning: unused binding x\nsrc/app/core.clj:12:3: info: Redundant do\nlinting took 12ms, errors: 1, warnings: 1\n",
+	stderr: b"",
+	exit: 3,
+}];

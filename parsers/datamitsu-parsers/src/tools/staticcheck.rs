@@ -3,16 +3,13 @@
 //! `staticcheck -f json ./...` emits NDJSON: one JSON object per line, e.g.
 //! `{"code":"ST1003","severity":"error","location":{"file":"a.go","line":3,"column":5},
 //!   "end":{"file":"a.go","line":3,"column":9},"message":"..."}`.
-//! none-ls (`format = "line"`) decodes each line and reads `location.line` /
-//! `location.column`, `end.line`, `code`, `message`, and maps `severity`
-//! (error/warning/ignored).
-//!
-//! Faithful quirk: upstream reads `decoded["end"]["culumn"]` (typo) for end_col,
-//! a key staticcheck never emits, so end_col is always absent. We mirror that —
-//! end_col stays None.
+//! Positions are go/token ones: 1-based, with `end` just past the span
+//! (exclusive). A diagnostic without a range prints a zero `end`, which is no end.
+//! `severity` is `error`, `warning` or `ignored` (the last only under
+//! `-show-ignored`).
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity;
+use crate::severity::{self, Level};
 
 use tinyjson::JsonValue;
 
@@ -20,6 +17,14 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "staticcheck",
 	description: "Advanced Go linter.",
 	url: "https://staticcheck.io/",
+	severities: &[
+		Level("error", severity::ERROR),
+		Level("warning", severity::WARNING),
+		Level("ignored", severity::INFO),
+	],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	// to_stdin = false, multiple_files = true: staticcheck runs against the package
 	// tree (`./...`), not a single file or stdin. No {file}/stdin placeholder.
 	operations: &[Operation {
@@ -49,19 +54,11 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 		_ => return None,
 	};
 
-	let (row, col) = match map.get("location") {
-		Some(JsonValue::Object(loc)) => (get_u32(loc, "line"), get_u32(loc, "column")),
-		_ => (None, None),
-	};
-
-	// Upstream reads end.line (and the misspelled end.culumn, hence no end_col).
-	let end_row = match map.get("end") {
-		Some(JsonValue::Object(end)) => get_u32(end, "line"),
-		_ => None,
-	};
+	let (row, col) = position(map.get("location"));
+	let (end_row, end_col) = position(map.get("end"));
 
 	let severity = match map.get("severity") {
-		Some(JsonValue::String(s)) => severity_of(s),
+		Some(JsonValue::String(s)) => severity::of(DESCRIPTOR.severities, s),
 		_ => None,
 	};
 
@@ -75,6 +72,7 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 		row,
 		col,
 		end_row,
+		end_col,
 		severity,
 		source: Some("staticcheck".to_string()),
 		code,
@@ -82,12 +80,16 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 	})
 }
 
-fn severity_of(level: &str) -> Option<u8> {
-	match level {
-		"error" => Some(severity::ERROR),
-		"warning" => Some(severity::WARNING),
-		"ignored" => Some(severity::INFO),
-		_ => None,
+/// The `line` and `column` of a location object; go/token's zero value (line
+/// 0) is an absent position.
+fn position(value: Option<&JsonValue>) -> (Option<u32>, Option<u32>) {
+	match value {
+		Some(JsonValue::Object(loc)) => {
+			let line = get_u32(loc, "line").filter(|&l| l > 0);
+			let column = line.and(get_u32(loc, "column")).filter(|&c| c > 0);
+			(line, column)
+		}
+		_ => (None, None),
 	}
 }
 
@@ -104,16 +106,17 @@ mod tests {
 
 	#[test]
 	fn parses_ndjson_lines() {
-		let stdout = br#"{"code":"ST1003","severity":"error","location":{"file":"a.go","line":3,"column":5},"end":{"file":"a.go","line":3,"column":9},"message":"should not use underscores in Go names"}
-{"code":"U1000","severity":"warning","location":{"file":"b.go","line":10,"column":2},"end":{"file":"b.go","line":10,"column":7},"message":"func unused is unused"}"#;
-		let out = parse(stdout, b"", 1);
+		let out = parse(SAMPLES[0].stdout, b"", 1);
 		assert_eq!(out.len(), 2);
 
-		assert_eq!(out[0].message, "should not use underscores in Go names");
+		assert_eq!(
+			out[0].message,
+			"should not use underscores in Go names; var foo_bar should be fooBar"
+		);
 		assert_eq!(out[0].row, Some(3));
 		assert_eq!(out[0].col, Some(5));
 		assert_eq!(out[0].end_row, Some(3));
-		assert_eq!(out[0].end_col, None); // upstream typo: end.culumn never present
+		assert_eq!(out[0].end_col, Some(12));
 		assert_eq!(out[0].severity, Some(severity::ERROR));
 		assert_eq!(out[0].code.as_deref(), Some("ST1003"));
 		assert_eq!(out[0].source.as_deref(), Some("staticcheck"));
@@ -124,12 +127,39 @@ mod tests {
 	}
 
 	#[test]
-	fn ignored_maps_to_info_and_blank_lines_skipped() {
+	fn a_zero_end_is_no_end() {
+		let out = parse(SAMPLES[1].stdout, b"", 0);
+		assert_eq!(out.len(), 1);
+		assert_eq!((out[0].row, out[0].col), (Some(1), Some(1)));
+		assert_eq!((out[0].end_row, out[0].end_col), (None, None));
+		assert_eq!(out[0].severity, Some(severity::INFO));
+	}
+
+	#[test]
+	fn an_unknown_severity_has_no_level_and_blank_lines_are_skipped() {
 		let stdout = br#"
-{"code":"S1000","severity":"ignored","location":{"file":"c.go","line":1,"column":1},"message":"redundant"}
+{"code":"S1000","severity":"note","location":{"file":"c.go","line":1,"column":1},"message":"redundant"}
 "#;
 		let out = parse(stdout, b"", 0);
 		assert_eq!(out.len(), 1);
-		assert_eq!(out[0].severity, Some(severity::INFO));
+		assert_eq!(out[0].severity, None);
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[
+	crate::contract::Sample {
+		stdout: br#"{"code":"ST1003","severity":"error","location":{"file":"/src/a.go","line":3,"column":5},"end":{"file":"/src/a.go","line":3,"column":12},"message":"should not use underscores in Go names; var foo_bar should be fooBar"}
+{"code":"U1000","severity":"warning","location":{"file":"/src/b.go","line":10,"column":6},"end":{"file":"/src/b.go","line":10,"column":12},"message":"func unused is unused"}
+"#,
+		stderr: b"",
+		exit: 1,
+	},
+	crate::contract::Sample {
+		stdout: br#"{"code":"S1000","severity":"ignored","location":{"file":"/src/c.go","line":1,"column":1},"end":{"file":"","line":0,"column":0},"message":"should use for range instead of for { select {} }"}
+"#,
+		stderr: b"",
+		exit: 0,
+	},
+];
