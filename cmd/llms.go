@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/datamitsu/datamitsu/internal/exitcode"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"github.com/datamitsu/datamitsu/internal/llmsdocs"
 	"github.com/datamitsu/datamitsu/internal/version"
@@ -19,7 +20,7 @@ import (
 // asked for a page that does not exist" (recoverable: list the pages and retry)
 // from "I called this wrong" (a bug in the caller) without parsing English.
 const (
-	exitLlmsUsage       = 2
+	exitLlmsUsage       = exitcode.Usage
 	exitLlmsUnknownPage = 3
 )
 
