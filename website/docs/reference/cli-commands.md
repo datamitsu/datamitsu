@@ -294,6 +294,14 @@ stderr as typed events, one JSON object per line:
 | `error`    | A tool failed: `tool`, `dir`, `msg`                                                                     |
 | `done`     | The operation ended, with its summary                                                                   |
 
+Every task — one tool in one directory, or one file of a tool that runs once
+per file — has an `op_id` of its own: the operation's `op_id` followed by
+`:<tool>:<dir>:<seq>`, where `dir` is relative to the repository root (empty for
+the root) and `seq` numbers the operation's planned tasks from 1 in plan order,
+for example `run-1:eslint:packages/web:3`. A task's `tool_run` start, its `chunk`
+events, its `error` and its closing `tool_run` share it, and no other task's
+events do.
+
 A `tool_run` with `status: "skip"` ends the chain of a tool the run stopped,
 and is never a failure. Its `msg` says what happened and why:
 `cancelled: fail-fast` or `cancelled: interrupted` closes the `start` of a tool
@@ -1669,7 +1677,8 @@ the distinct tools with a failed task; `runs` counts the tasks that ran and
 projects therefore gives `runs: 2` and `failed: 1`. A counter or `duration_ms`
 that is zero is left out of the line rather than written as `0`: read a missing
 one as zero. A `tool_run` op id is the format request's op id followed by
-`:<tool>:<dir>`, so a consumer can attribute every task to its request. Every
+`:<tool>:<dir>:<seq>`, `seq` numbering the tasks of one priority group from 1,
+so a consumer can attribute every task to its request. Every
 task that starts also gets its closing `tool_run`, in a cancelled request too. A
 cancelled request's `done` has `status: "fail"`, `success: false` and
 `msg: "cancelled"`: there is no separate status for it.

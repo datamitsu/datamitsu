@@ -319,10 +319,10 @@ func (s *Server) executeGroups(
 // wireToolEvents points the executor's callbacks at this request's op id. The
 // server handles one request at a time, so rewiring per request is safe.
 func (s *Server) wireToolEvents(opID string) {
-	s.loaded.executor.SetTaskStartCallback(func(tool, dir string) {
+	s.loaded.executor.SetTaskStartCallback(func(taskID, tool, dir string) {
 		ui.Emit(uievent.Event{
 			Type:   uievent.TypeToolRun,
-			OpID:   toolRunOpID(opID, tool, dir),
+			OpID:   toolRunOpID(opID, taskID),
 			Status: uievent.StatusStart,
 			Tool:   tool,
 			Dir:    dir,
@@ -332,7 +332,7 @@ func (s *Server) wireToolEvents(opID string) {
 		if cancelled(result) {
 			return
 		}
-		runID := toolRunOpID(opID, result.ToolName, result.RelativeDir)
+		runID := toolRunOpID(opID, result.TaskID)
 		ui.Emit(uievent.Event{
 			Type:       uievent.TypeToolRun,
 			OpID:       runID,

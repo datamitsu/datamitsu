@@ -89,9 +89,11 @@ stderr of one run.
   that plan changes the assertion, or adds a twin beside it (a
   `--fail-fast=false` run, say), and regenerates the golden in the same change.
 - **Event streams are asserted causally.** `clitest.AssertChains` checks that
-  every `tool_run` start has a terminal event (`done`, `fail`, or `skip` with
-  `cancelled: …` for a task the run stopped while it ran), that a task that
-  never started has a lone `skip` with `not started: …`, that an operation's
+  every task has an `op_id` of its own, that its one `tool_run` start has one
+  terminal event (`done`, `fail`, or `skip` with `cancelled: …` for a task the
+  run stopped while it ran), that a task that never started has a lone `skip`
+  with `not started: …`, that a `chunk` belongs to a task that started and has
+  not yet ended, that an operation's
   `phase` precedes its `tool_run` events, and that each operation ends with
   exactly one `done`, after all its `tool_run` events, whose `runs` counts the
   `done` and `fail` ones and whose `cancelled` counts the `skip` ones. Parallel

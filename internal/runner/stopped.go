@@ -26,6 +26,7 @@ const (
 // every output says which of the two it is, so that a consumer never reads
 // "no output" as "clean".
 type stoppedTask struct {
+	taskID     string
 	tool       string
 	dir        string
 	started    bool
@@ -59,6 +60,7 @@ func stoppedFromResult(result tooling.ExecutionResult) stoppedTask {
 		cause = stopInterrupted
 	}
 	return stoppedTask{
+		taskID:     result.TaskID,
 		tool:       result.ToolName,
 		dir:        result.RelativeDir,
 		started:    result.Started(),
@@ -67,30 +69,24 @@ func stoppedFromResult(result tooling.ExecutionResult) stoppedTask {
 	}
 }
 
-// taskKey identifies a planned task by what its result reports. Tasks of one
-// per-file tool in one directory share a key; they are interchangeable here,
-// so a count per key is enough to tell how many of them were never reached.
-type taskKey struct{ tool, dir string }
-
 // unreachedTasks lists, in plan order, the planned tasks the executor returned
 // no result for: those in a priority group or a sequential sub-group the run
-// never got to.
+// never got to. Execute names every planned task before it runs any, and every
+// result carries the name of its task.
 func unreachedTasks(plan *tooling.ExecutionPlan, results []tooling.GroupExecutionResult, taskDir func(tooling.Task) string, cause stopCause) []stoppedTask {
-	reached := map[taskKey]int{}
+	reached := map[string]bool{}
 	for _, group := range results {
 		for _, r := range group.Results {
-			reached[taskKey{r.ToolName, r.RelativeDir}]++
+			reached[r.TaskID] = true
 		}
 	}
 	var out []stoppedTask
 	for _, group := range plan.Groups {
 		for _, task := range group.Tasks {
-			key := taskKey{task.ToolName, taskDir(task)}
-			if reached[key] > 0 {
-				reached[key]--
+			if reached[task.ID] {
 				continue
 			}
-			out = append(out, stoppedTask{tool: key.tool, dir: key.dir, cause: cause})
+			out = append(out, stoppedTask{taskID: task.ID, tool: task.ToolName, dir: taskDir(task), cause: cause})
 		}
 	}
 	return out
@@ -102,7 +98,7 @@ func unreachedTasks(plan *tooling.ExecutionPlan, results []tooling.GroupExecutio
 func emitStopped(runOpID string, t stoppedTask) {
 	ui.Emit(uievent.Event{
 		Type:       uievent.TypeToolRun,
-		OpID:       toolOpID(runOpID, t.tool, t.dir),
+		OpID:       toolOpID(runOpID, t.taskID),
 		Status:     uievent.StatusSkip,
 		Tool:       t.tool,
 		Dir:        t.dir,

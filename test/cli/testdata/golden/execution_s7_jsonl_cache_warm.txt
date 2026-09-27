@@ -3,14 +3,14 @@ exit code: 0
 
 ===STDERR===
 {"cancelled":0,"complete":true,"op":"lint","op_id":"cmd-2","runs":3,"status":"done","success":true,"tools":1,"ts":0,"type":"done"}
-{"index":1,"op_id":"run-1:alpha:","status":"done","success":true,"tool":"alpha","total":1,"ts":0,"type":"chunk"}
-{"index":1,"op_id":"run-1:alpha:","status":"done","success":true,"tool":"alpha","total":1,"ts":0,"type":"chunk"}
-{"index":1,"op_id":"run-1:alpha:","status":"done","success":true,"tool":"alpha","total":1,"ts":0,"type":"chunk"}
+{"index":1,"op_id":"run-1:alpha::1","status":"done","success":true,"tool":"alpha","total":1,"ts":0,"type":"chunk"}
+{"index":1,"op_id":"run-1:alpha::2","status":"done","success":true,"tool":"alpha","total":1,"ts":0,"type":"chunk"}
+{"index":1,"op_id":"run-1:alpha::3","status":"done","success":true,"tool":"alpha","total":1,"ts":0,"type":"chunk"}
 {"op":"lint","op_id":"run-1","runs":3,"status":"done","tools":1,"ts":0,"type":"done"}
 {"op":"lint","op_id":"run-1","status":"start","ts":0,"type":"phase"}
-{"op_id":"run-1:alpha:","status":"done","success":true,"tool":"alpha","ts":0,"type":"tool_run"}
-{"op_id":"run-1:alpha:","status":"done","success":true,"tool":"alpha","ts":0,"type":"tool_run"}
-{"op_id":"run-1:alpha:","status":"done","success":true,"tool":"alpha","ts":0,"type":"tool_run"}
-{"op_id":"run-1:alpha:","status":"start","tool":"alpha","ts":0,"type":"tool_run"}
-{"op_id":"run-1:alpha:","status":"start","tool":"alpha","ts":0,"type":"tool_run"}
-{"op_id":"run-1:alpha:","status":"start","tool":"alpha","ts":0,"type":"tool_run"}
+{"op_id":"run-1:alpha::1","status":"done","success":true,"tool":"alpha","ts":0,"type":"tool_run"}
+{"op_id":"run-1:alpha::1","status":"start","tool":"alpha","ts":0,"type":"tool_run"}
+{"op_id":"run-1:alpha::2","status":"done","success":true,"tool":"alpha","ts":0,"type":"tool_run"}
+{"op_id":"run-1:alpha::2","status":"start","tool":"alpha","ts":0,"type":"tool_run"}
+{"op_id":"run-1:alpha::3","status":"done","success":true,"tool":"alpha","ts":0,"type":"tool_run"}
+{"op_id":"run-1:alpha::3","status":"start","tool":"alpha","ts":0,"type":"tool_run"}

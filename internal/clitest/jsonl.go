@@ -92,11 +92,12 @@ func MustParseJSONL(tb testing.TB, stderr string) []Event {
 // AssertChains checks the causal shape of an event stream without relying on
 // the order in which parallel events arrive:
 //
-//   - a terminal tool_run never precedes a start with the same op_id, and each
-//     op_id has as many terminals as starts, not counting the skip events of
-//     tasks that never started, which stand alone;
+//   - every task has an op_id of its own: an op_id opens with at most one
+//     start and ends with exactly one terminal tool_run after it, and the skip
+//     event of a task that never started is its op_id's only event;
 //   - a skip that closes a start says the task was cancelled, one that stands
 //     alone says it was not started;
+//   - a chunk event belongs to a task that started and has not yet ended;
 //   - an operation's phase start precedes every tool_run of that operation;
 //   - every operation that started ends with exactly one done, which follows
 //     all of the operation's tool_run events, reports as runs the number of its
@@ -106,9 +107,7 @@ func MustParseJSONL(tb testing.TB, stderr string) []Event {
 //     phase, tool_run and operation done, and reports the stream's totals of
 //     runs and cancelled tasks, with complete false when any task was stopped.
 //
-// A tool_run belongs to the operation whose phase op_id prefixes its own. Tasks
-// of one tool in one directory share an op_id, so which start a terminal closes
-// is not asserted — only that the counts agree.
+// A tool_run belongs to the operation whose phase op_id prefixes its own.
 func AssertChains(tb testing.TB, events []Event) {
 	tb.Helper()
 
@@ -143,7 +142,8 @@ func AssertChains(tb testing.TB, events []Event) {
 	}
 
 	type chain struct {
-		starts, terminal int
+		starts, terminal, notStarted int
+		ended                        bool
 	}
 	chains := map[string]*chain{}
 	runs := map[string]int{}
@@ -166,13 +166,22 @@ func AssertChains(tb testing.TB, events []Event) {
 			c = &chain{}
 			chains[e.OpID] = c
 		}
+		if c.ended {
+			tb.Errorf("clitest: tool_run %q (%s) follows the end of its task", e.OpID, e.Status)
+		}
 		switch {
 		case e.Status == "start":
 			c.starts++
+			if c.starts > 1 {
+				tb.Errorf("clitest: tool_run %q starts twice; two tasks share an op_id", e.OpID)
+			}
 		case e.NotStarted():
 			skips[run]++
+			c.notStarted++
+			c.ended = true
 		case e.Terminal():
 			c.terminal++
+			c.ended = true
 			if c.terminal > c.starts {
 				tb.Errorf("clitest: terminal tool_run %q (%s) has no preceding start", e.OpID, e.Status)
 			}
@@ -190,10 +199,14 @@ func AssertChains(tb testing.TB, events []Event) {
 	}
 
 	for opID, c := range chains {
-		if c.terminal != c.starts {
-			tb.Errorf("clitest: tool_run %q has %d start(s) and %d terminal(s)", opID, c.starts, c.terminal)
+		switch {
+		case c.notStarted > 0 && (c.starts > 0 || c.terminal > 0 || c.notStarted > 1):
+			tb.Errorf("clitest: the not-started task %q has other tool_run events", opID)
+		case c.notStarted == 0 && (c.starts != 1 || c.terminal != 1):
+			tb.Errorf("clitest: tool_run %q has %d start(s) and %d terminal(s), want one of each", opID, c.starts, c.terminal)
 		}
 	}
+	assertChunks(tb, events)
 
 	for run, start := range phaseAt {
 		done := doneAt[run]
@@ -224,6 +237,29 @@ func AssertChains(tb testing.TB, events []Event) {
 		if cancelled != skips[e.OpID] {
 			tb.Errorf("clitest: done %q reports cancelled=%d, the stream has %d skip tool_run event(s)",
 				e.OpID, cancelled, skips[e.OpID])
+		}
+	}
+}
+
+// assertChunks checks that every chunk event reports progress of a task that
+// has started and not yet ended.
+func assertChunks(tb testing.TB, events []Event) {
+	tb.Helper()
+	started := map[string]bool{}
+	ended := map[string]bool{}
+	for _, e := range events {
+		switch {
+		case e.Type == "tool_run" && e.Status == "start":
+			started[e.OpID] = true
+		case e.Type == "tool_run" && e.Terminal():
+			ended[e.OpID] = true
+		case e.Type == "chunk":
+			if !started[e.OpID] {
+				tb.Errorf("clitest: chunk %q (%d/%d) belongs to no started task", e.OpID, e.Index, e.Total)
+			}
+			if ended[e.OpID] {
+				tb.Errorf("clitest: chunk %q (%d/%d) follows the end of its task", e.OpID, e.Index, e.Total)
+			}
 		}
 	}
 }

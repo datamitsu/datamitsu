@@ -113,11 +113,13 @@ type DiagnosticParser interface {
 // ResultCallback is called when a task completes
 type ResultCallback func(result ExecutionResult)
 
-// TaskStartCallback is called when a task starts executing
-type TaskStartCallback func(toolName string, relativeDir string)
+// TaskStartCallback is called when a task starts executing. taskID is the
+// task's ID, which its progress callbacks and its result carry too.
+type TaskStartCallback func(taskID, toolName, relativeDir string)
 
-// FileProgressCallback is called after each file is processed
-type FileProgressCallback func(toolName string, fileIndex, totalFiles int, success bool)
+// FileProgressCallback is called after each file, or each whole-task run, of
+// the task taskID is processed.
+type FileProgressCallback func(taskID, toolName string, fileIndex, totalFiles int, success bool)
 
 // NewExecutor creates a new tool executor
 func NewExecutor(
@@ -173,6 +175,8 @@ func (e *Executor) Execute(ctx context.Context, plan *ExecutionPlan) ([]GroupExe
 	// re-resolved, and only within one run is the answer constant.
 	e.cmdInfos.Store(newCommandInfoMemo())
 	defer e.cmdInfos.Store(nil)
+
+	e.assignTaskIDs(plan)
 
 	execCtx, cancel := context.WithCancelCause(ctx)
 	defer cancel(nil)
@@ -252,6 +256,22 @@ func (e *Executor) Execute(ctx context.Context, plan *ExecutionPlan) ([]GroupExe
 // results report it in RelativeDir ("" is the root).
 func (e *Executor) TaskDir(task Task) string {
 	return e.getRelativeDir(e.getWorkingDir(task))
+}
+
+// assignTaskIDs names every task of plan "<tool>:<dir>:<seq>", seq counting the
+// plan's tasks from 1 in plan order. The names are written into plan itself,
+// so a caller can tell which planned task a result, an event or a stopped task
+// stands for: tasks of one tool in one directory are otherwise
+// indistinguishable.
+func (e *Executor) assignTaskIDs(plan *ExecutionPlan) {
+	seq := 0
+	for g := range plan.Groups {
+		for t := range plan.Groups[g].Tasks {
+			seq++
+			task := &plan.Groups[g].Tasks[t]
+			task.ID = fmt.Sprintf("%s:%s:%d", task.ToolName, e.TaskDir(*task), seq)
+		}
+	}
 }
 
 // executeGroup executes a task group. failFast cancels the whole run; it is
@@ -466,6 +486,7 @@ func (e *Executor) unstartedResult(ctx context.Context, task Task) ExecutionResu
 	workingDir := e.getWorkingDir(task)
 	result := ExecutionResult{
 		ToolName:      task.ToolName,
+		TaskID:        task.ID,
 		Success:       false,
 		Error:         errCancelled,
 		WorkingDir:    workingDir,
@@ -504,11 +525,12 @@ func (e *Executor) executeTask(ctx context.Context, task Task) ExecutionResult {
 
 	// Call task start callback if set
 	if e.taskStartCallback != nil {
-		e.taskStartCallback(task.ToolName, relativeDir)
+		e.taskStartCallback(task.ID, task.ToolName, relativeDir)
 	}
 
 	result := ExecutionResult{
 		ToolName: task.ToolName,
+		TaskID:   task.ID,
 		Success:  true,
 	}
 
@@ -541,11 +563,11 @@ func (e *Executor) executeTask(ctx context.Context, task Task) ExecutionResult {
 		if e.fileProgressCallback != nil {
 			if !config.RunsPerFile(task.OpConfig, len(task.Files)) {
 				// One process for the whole task: count as 1 unit
-				e.fileProgressCallback(task.ToolName, 1, 1, false)
+				e.fileProgressCallback(task.ID, task.ToolName, 1, 1, false)
 			} else {
 				// Per-file mode: count each file
 				for i := range task.Files {
-					e.fileProgressCallback(task.ToolName, i+1, len(task.Files), false)
+					e.fileProgressCallback(task.ID, task.ToolName, i+1, len(task.Files), false)
 				}
 			}
 		}
@@ -589,7 +611,7 @@ func (e *Executor) executeTask(ctx context.Context, task Task) ExecutionResult {
 		result.recordTiming(startTime)
 		describeVerdictHit(task, &result)
 		if e.fileProgressCallback != nil {
-			e.fileProgressCallback(task.ToolName, 1, 1, true)
+			e.fileProgressCallback(task.ID, task.ToolName, 1, 1, true)
 		}
 		return result
 	}
@@ -613,6 +635,7 @@ func (e *Executor) executeTask(ctx context.Context, task Task) ExecutionResult {
 	if !result.Success && result.FailureReason == FailureReasonNone {
 		result.FailureReason = FailureReasonIndependent
 	}
+	result.TaskID = task.ID
 	describeFiles(task, &result, FileNotStarted)
 
 	log.Debug("executeTask completed",
@@ -917,7 +940,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 		// Even when all cached, call progress callback for each file
 		for i := range task.Files {
 			if e.fileProgressCallback != nil {
-				e.fileProgressCallback(task.ToolName, i+1, len(task.Files), true)
+				e.fileProgressCallback(task.ID, task.ToolName, i+1, len(task.Files), true)
 			}
 		}
 		return result
@@ -927,7 +950,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 	totalFiles := len(task.Files)
 	if e.fileProgressCallback != nil && cachedCount > 0 {
 		for i := range cachedCount {
-			e.fileProgressCallback(task.ToolName, i+1, totalFiles, true)
+			e.fileProgressCallback(task.ID, task.ToolName, i+1, totalFiles, true)
 		}
 	}
 
@@ -983,7 +1006,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 
 			// Call progress callback for dry-run files (offset by cached count)
 			if e.fileProgressCallback != nil {
-				e.fileProgressCallback(task.ToolName, cachedCount+i+1, totalFiles, true)
+				e.fileProgressCallback(task.ID, task.ToolName, cachedCount+i+1, totalFiles, true)
 			}
 			continue
 		}
@@ -1019,7 +1042,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 				OutputTail: outputTail([]byte(stdinFailure.Error())),
 			})
 			if e.fileProgressCallback != nil {
-				e.fileProgressCallback(task.ToolName, cachedCount+i+1, totalFiles, false)
+				e.fileProgressCallback(task.ID, task.ToolName, cachedCount+i+1, totalFiles, false)
 			}
 			if e.failFast {
 				result.FilesNotRun = len(filesToProcess) - i - 1
@@ -1122,7 +1145,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 					result.FailureReason = cancelReason(ctx)
 				}
 				if e.fileProgressCallback != nil {
-					e.fileProgressCallback(task.ToolName, cachedCount+i+1, totalFiles, fileSuccess)
+					e.fileProgressCallback(task.ID, task.ToolName, cachedCount+i+1, totalFiles, fileSuccess)
 				}
 				result.addNotStarted(filesToProcess[i+1:])
 				break
@@ -1148,7 +1171,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 				log.Debug("fail-fast triggered in per-file execution")
 				// Call progress callback before breaking (offset by cached count)
 				if e.fileProgressCallback != nil {
-					e.fileProgressCallback(task.ToolName, cachedCount+i+1, totalFiles, fileSuccess)
+					e.fileProgressCallback(task.ID, task.ToolName, cachedCount+i+1, totalFiles, fileSuccess)
 				}
 				result.FilesNotRun = len(filesToProcess) - i - 1
 				result.addNotStarted(filesToProcess[i+1:])
@@ -1161,7 +1184,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 
 		// Call progress callback after processing each file (offset by cached count)
 		if e.fileProgressCallback != nil {
-			e.fileProgressCallback(task.ToolName, cachedCount+i+1, totalFiles, fileSuccess)
+			e.fileProgressCallback(task.ID, task.ToolName, cachedCount+i+1, totalFiles, fileSuccess)
 		}
 	}
 
@@ -1224,7 +1247,7 @@ func (e *Executor) executeBatch(ctx context.Context, task Task, cmdInfo *binmana
 		result.recordTiming(startTime)
 		// Call file progress callback for batch mode (counts as 1 unit of work)
 		if e.fileProgressCallback != nil {
-			e.fileProgressCallback(task.ToolName, 1, 1, true)
+			e.fileProgressCallback(task.ID, task.ToolName, 1, 1, true)
 		}
 		return result
 	}
@@ -1239,7 +1262,7 @@ func (e *Executor) executeBatch(ctx context.Context, task Task, cmdInfo *binmana
 		chunkResult := e.executeBatchChunk(ctx, task, cmdInfo, workingDir, nil, startTime)
 		chunkResult.cached = cached
 		if e.fileProgressCallback != nil {
-			e.fileProgressCallback(task.ToolName, 1, 1, chunkResult.Success)
+			e.fileProgressCallback(task.ID, task.ToolName, 1, 1, chunkResult.Success)
 		}
 		return chunkResult
 	}
@@ -1254,7 +1277,7 @@ func (e *Executor) executeBatch(ctx context.Context, task Task, cmdInfo *binmana
 		chunkResult := e.executeBatchChunk(ctx, task, cmdInfo, workingDir, nil, startTime)
 		chunkResult.cached = cached
 		if e.fileProgressCallback != nil {
-			e.fileProgressCallback(task.ToolName, 1, 1, chunkResult.Success)
+			e.fileProgressCallback(task.ID, task.ToolName, 1, 1, chunkResult.Success)
 		}
 		if chunkResult.Success {
 			e.updateCacheAfterSuccess(task, batchPasses(task.Operation, chunkResult.Processes, filesToProcess), seen)
@@ -1271,7 +1294,7 @@ func (e *Executor) executeBatch(ctx context.Context, task Task, cmdInfo *binmana
 		chunkResult := e.executeBatchChunk(ctx, task, cmdInfo, workingDir, chunks[0], startTime)
 		chunkResult.cached = cached
 		if e.fileProgressCallback != nil {
-			e.fileProgressCallback(task.ToolName, 1, 1, chunkResult.Success)
+			e.fileProgressCallback(task.ID, task.ToolName, 1, 1, chunkResult.Success)
 		}
 		if chunkResult.Success {
 			e.updateCacheAfterSuccess(task, batchPasses(task.Operation, chunkResult.Processes, nil), seen)
@@ -1283,7 +1306,7 @@ func (e *Executor) executeBatch(ctx context.Context, task Task, cmdInfo *binmana
 	result = e.executeBatchChunksParallel(ctx, task, cmdInfo, workingDir, chunks, startTime)
 	result.cached = cached
 	if e.fileProgressCallback != nil {
-		e.fileProgressCallback(task.ToolName, 1, 1, result.Success)
+		e.fileProgressCallback(task.ID, task.ToolName, 1, 1, result.Success)
 	}
 	if result.Success {
 		e.updateCacheAfterSuccess(task, batchPasses(task.Operation, result.Processes, nil), seen)

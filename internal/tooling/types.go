@@ -15,6 +15,11 @@ type Task struct {
 	// under, fixed before the tool starts (see perFileCacheTool).
 	perFileCache string
 
+	// ID is "<tool>:<dir>:<seq>", assigned by Execute before anything runs; seq
+	// counts the tasks of that Execute from 1 in plan order. Unique within one
+	// Execute, it is what tells two tasks of one tool in one directory apart.
+	ID string
+
 	ToolName    string
 	Tool        config.Tool
 	Operation   config.OperationType
@@ -225,8 +230,7 @@ const outputTailBytes = 4 << 10
 // ProcessResult is one process a task planned to spawn: one per file in
 // per-file mode, one per chunk in batch mode. Cached files have none.
 type ProcessResult struct {
-	// ID names the process within its task: "#<n>", n counting the task's
-	// processes from 1.
+	// ID is "<TaskID>#<n>", n counting the task's processes from 1.
 	ID string
 	// Files are the absolute, cleaned paths the process was given; empty for a
 	// process given no path.
@@ -268,7 +272,9 @@ type FileResult struct {
 // Processes and FileResults say what each process and each file did.
 type ExecutionResult struct {
 	ToolName string
-	Success  bool
+	// TaskID is the ID of the task this result is for.
+	TaskID  string
+	Success bool
 	// Output is the joined output of every process.
 	Output   string
 	Error    error

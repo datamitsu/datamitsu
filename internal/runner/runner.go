@@ -75,8 +75,8 @@ type executionInstance struct {
 // Progress tracking variables
 var (
 	progressMu  sync.Mutex
-	currentTask *ui.Task                   // shared file-processing task for the active operation
-	activeTools map[string]map[string]bool // currently running tools (tool -> set of active dirs)
+	currentTask *ui.Task          // shared file-processing task for the active operation
+	activeTasks map[string]string // running tasks: task ID -> directory relative to the git root
 )
 
 // toolPlanner is the planning surface used by runSingleOperation (satisfied by *tooling.Planner).
@@ -489,7 +489,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 
 	// Track progress
 	progressTracker := make(map[string]*toolExecutionGroup)
-	activeTools = make(map[string]map[string]bool) // Initialize active tools tracker (tool -> set of active dirs)
+	activeTasks = make(map[string]string)
 
 	// Initialize tracker with all expected tools
 	toolOrder := 0
@@ -548,20 +548,17 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	}
 
 	// Set up task start callback
-	sc.executor.SetTaskStartCallback(func(toolName string, relativeDir string) {
+	sc.executor.SetTaskStartCallback(func(taskID, toolName, relativeDir string) {
 		ui.Emit(uievent.Event{
 			Type:   uievent.TypeToolRun,
-			OpID:   toolOpID(runOpID, toolName, relativeDir),
+			OpID:   toolOpID(runOpID, taskID),
 			Status: uievent.StatusStart,
 			Tool:   toolName,
 			Dir:    relativeDir,
 		})
 
 		progressMu.Lock()
-		if activeTools[toolName] == nil {
-			activeTools[toolName] = make(map[string]bool)
-		}
-		activeTools[toolName][relativeDir] = true
+		activeTasks[taskID] = relativeDir
 		t := ensureTask()
 		progressMu.Unlock()
 
@@ -569,7 +566,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	})
 
 	// Set up file progress callback
-	sc.executor.SetFileProgressCallback(func(toolName string, fileIndex, totalFiles int, success bool) {
+	sc.executor.SetFileProgressCallback(func(taskID, toolName string, fileIndex, totalFiles int, success bool) {
 		status := "✓"
 		if !success {
 			status = "✗"
@@ -577,12 +574,12 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 
 		progressMu.Lock()
 		t := ensureTask()
-		dir := activeToolDir(toolName)
+		dir := activeTasks[taskID]
 		progressMu.Unlock()
 
 		ui.Emit(uievent.Event{
 			Type:    uievent.TypeChunk,
-			OpID:    toolOpID(runOpID, toolName, dir),
+			OpID:    toolOpID(runOpID, taskID),
 			Status:  chunkStatus(fileIndex, totalFiles),
 			Tool:    toolName,
 			Dir:     dir,
@@ -612,7 +609,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 			stopped = append(stopped, task)
 			emitStopped(runOpID, task)
 		} else {
-			opID := toolOpID(runOpID, result.ToolName, result.RelativeDir)
+			opID := toolOpID(runOpID, result.TaskID)
 			ui.Emit(uievent.Event{
 				Type:       uievent.TypeToolRun,
 				OpID:       opID,
@@ -642,12 +639,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 			}
 
 			progressMu.Lock()
-			if dirs, ok := activeTools[result.ToolName]; ok {
-				delete(dirs, result.RelativeDir)
-				if len(dirs) == 0 {
-					delete(activeTools, result.ToolName)
-				}
-			}
+			delete(activeTasks, result.TaskID)
 			progressMu.Unlock()
 		}
 	})
@@ -1227,39 +1219,12 @@ func formatToolWithDir(toolName, relativeDir string) string {
 	return "⏳ " + toolName
 }
 
-// activeToolDir returns any active directory for a tool (for progress display).
-// Must be called while holding progressMu.
-func activeToolDir(toolName string) string {
-	if dirs, ok := activeTools[toolName]; ok {
-		for dir := range dirs {
-			return dir
-		}
-	}
-	return ""
-}
-
-// toolOpID derives a per-tool-run correlation id from the run id, tool name and
-// project-relative dir. A derived id (not a generated one stored on the task) is
-// deliberate: executor tasks are value-copied, so a generated id would duplicate;
-// deriving from already-stable identity keeps a tool's start/chunk/done events
-// correlated without threading an id through the copy.
-//
-// KNOWN LIMITATION (deferred to the diagnostics phase, when the LSP consumer
-// fixes the required granularity): because the id is tool+dir, it is NOT unique
-// per individual task. Three cases break strict start->terminal chain pairing,
-// all sharing this root cause and all requiring the executor's FileProgressCallback
-// to carry per-task identity (dir + a per-task discriminant) to fix properly:
-//   - per-file-scope tools matching several files in ONE dir emit N start/done
-//     pairs under one op_id (indistinguishable);
-//   - the same tool running concurrently in two sibling dirs has its chunk events
-//     attributed to the wrong dir (the chunk callback recovers an arbitrary one);
-//   - a task stopped by fail-fast or an interruption ends with a skip event
-//     under the same id, so which of several starts it closes is ambiguous too.
-//
-// These only affect machine-consumer event-stream fidelity, never lint/fix
-// execution or exit codes; the common repository/per-project case is correct.
-func toolOpID(runOpID, tool, dir string) string {
-	return runOpID + ":" + tool + ":" + dir
+// toolOpID is the correlation id of one task's events: the operation's run id
+// and the task's ID, which the executor makes unique within the operation. A
+// task's start, its progress chunks and its terminal event share it, and no
+// other task's do.
+func toolOpID(runOpID, taskID string) string {
+	return runOpID + ":" + taskID
 }
 
 // chunkStatus reports a chunk event's status: done once a tool's last file unit

@@ -75,7 +75,7 @@ func describeFiles(task Task, result *ExecutionResult, fallback FileState) {
 	result.Files = cleanPaths(planned)
 
 	for i := range result.Processes {
-		result.Processes[i].ID = fmt.Sprintf("#%d", i+1)
+		result.Processes[i].ID = fmt.Sprintf("%s#%d", result.TaskID, i+1)
 	}
 
 	cached := make(map[string]bool, len(result.cached))

@@ -1765,7 +1765,7 @@ func TestFailFastStopsNewTasks(t *testing.T) {
 
 	var startedTools []string
 	var mu sync.Mutex
-	executor.SetTaskStartCallback(func(toolName string, relativeDir string) {
+	executor.SetTaskStartCallback(func(_, toolName, relativeDir string) {
 		mu.Lock()
 		startedTools = append(startedTools, toolName)
 		mu.Unlock()
@@ -1856,7 +1856,7 @@ func TestFailFastPerFileSkipsRemainingFiles(t *testing.T) {
 
 	var fileProgressCalls []int
 	var mu sync.Mutex
-	executor.SetFileProgressCallback(func(toolName string, fileIndex, totalFiles int, success bool) {
+	executor.SetFileProgressCallback(func(_, toolName string, fileIndex, totalFiles int, success bool) {
 		mu.Lock()
 		fileProgressCalls = append(fileProgressCalls, fileIndex)
 		mu.Unlock()
@@ -2006,7 +2006,7 @@ func TestFailFastContextCancelsRunningPerFileLoop(t *testing.T) {
 
 	var processedCount int
 	var mu sync.Mutex
-	executor.SetFileProgressCallback(func(toolName string, fileIndex, totalFiles int, success bool) {
+	executor.SetFileProgressCallback(func(_, toolName string, fileIndex, totalFiles int, success bool) {
 		mu.Lock()
 		processedCount++
 		mu.Unlock()

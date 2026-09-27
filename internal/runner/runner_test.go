@@ -103,13 +103,6 @@ func TestFormatToolWithDir(t *testing.T) {
 
 func TestNonCIProgressDescriptionWithDir(t *testing.T) {
 	t.Run("file progress description includes directory", func(t *testing.T) {
-		savedActiveTools := activeTools
-		defer func() { activeTools = savedActiveTools }()
-
-		activeTools = map[string]map[string]bool{
-			"eslint": {"packages/web": true},
-		}
-
 		result := formatToolWithDir("eslint", "packages/web")
 		if !strings.Contains(result, "packages/web") {
 			t.Errorf("non-CI progress description should include directory, got: %q", result)

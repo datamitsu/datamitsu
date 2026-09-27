@@ -64,15 +64,15 @@ func TestParseJSONLRejects(t *testing.T) {
 }
 
 func TestNormalizeJSONL(t *testing.T) {
-	in := `{"type":"tool_run","op_id":"run-1:a:","ts":1737000000123,"status":"done","duration_ms":245,"tool":"a"}
-{"ts":1737000000124,"type":"chunk","op_id":"run-1:a:","index":1,"total":3}
+	in := `{"type":"tool_run","op_id":"run-1:a::1","ts":1737000000123,"status":"done","duration_ms":245,"tool":"a"}
+{"ts":1737000000124,"type":"chunk","op_id":"run-1:a::1","index":1,"total":3}
 
 error: not an event
 {"type":"done","op_id":"run-1","ts":7}]
 {"type":"log","op_id":"log-1","ts":5,"msg":"<a> & <b>","duration_ms":0}
 `
-	want := `{"duration_ms":1,"op_id":"run-1:a:","status":"done","tool":"a","ts":0,"type":"tool_run"}
-{"index":1,"op_id":"run-1:a:","total":3,"ts":0,"type":"chunk"}
+	want := `{"duration_ms":1,"op_id":"run-1:a::1","status":"done","tool":"a","ts":0,"type":"tool_run"}
+{"index":1,"op_id":"run-1:a::1","total":3,"ts":0,"type":"chunk"}
 error: not an event
 {"type":"done","op_id":"run-1","ts":7}]
 {"duration_ms":1,"msg":"<a> & <b>","op_id":"log-1","ts":0,"type":"log"}
@@ -106,16 +106,20 @@ func (r *errorsTB) Errorf(format string, args ...any) {
 func TestAssertChains(t *testing.T) {
 	const (
 		phase    = `{"type":"phase","op_id":"run-1","status":"start","op":"lint"}`
-		aStart   = `{"type":"tool_run","op_id":"run-1:a:","status":"start","tool":"a"}`
-		aDone    = `{"type":"tool_run","op_id":"run-1:a:","status":"done","tool":"a"}`
-		bStart   = `{"type":"tool_run","op_id":"run-1:b:x","status":"start","tool":"b","dir":"x"}`
-		bFail    = `{"type":"tool_run","op_id":"run-1:b:x","status":"fail","tool":"b","dir":"x"}`
+		aStart   = `{"type":"tool_run","op_id":"run-1:a::1","status":"start","tool":"a"}`
+		aDone    = `{"type":"tool_run","op_id":"run-1:a::1","status":"done","tool":"a"}`
+		bStart   = `{"type":"tool_run","op_id":"run-1:b:x:2","status":"start","tool":"b","dir":"x"}`
+		bFail    = `{"type":"tool_run","op_id":"run-1:b:x:2","status":"fail","tool":"b","dir":"x"}`
 		doneTwo  = `{"type":"done","op_id":"run-1","status":"done","runs":2}`
 		doneOne  = `{"type":"done","op_id":"run-1","status":"fail","runs":1}`
 		runError = `{"type":"error","op_id":"run-2","status":"fail","msg":"operation failed"}`
 		// b is stopped: cancelled after it started, or never started at all.
-		bCancelled   = `{"type":"tool_run","op_id":"run-1:b:x","status":"skip","tool":"b","dir":"x","msg":"cancelled: fail-fast"}`
-		bNotStarted  = `{"type":"tool_run","op_id":"run-1:b:x","status":"skip","tool":"b","dir":"x","msg":"not started: fail-fast"}`
+		bCancelled  = `{"type":"tool_run","op_id":"run-1:b:x:2","status":"skip","tool":"b","dir":"x","msg":"cancelled: fail-fast"}`
+		bNotStarted = `{"type":"tool_run","op_id":"run-1:b:x:2","status":"skip","tool":"b","dir":"x","msg":"not started: fail-fast"}`
+		cNotStarted = `{"type":"tool_run","op_id":"run-1:c::3","status":"skip","tool":"c","msg":"not started: fail-fast"}`
+		// Progress of a task, by its op_id.
+		aChunk       = `{"type":"chunk","op_id":"run-1:a::1","status":"progress","tool":"a","index":1,"total":2}`
+		bStart2      = `{"type":"tool_run","op_id":"run-1:a::1","status":"start","tool":"a"}`
 		doneOneStop  = `{"type":"done","op_id":"run-1","status":"fail","runs":1,"cancelled":1}`
 		doneOneStop2 = `{"type":"done","op_id":"run-1","status":"fail","runs":1,"cancelled":2}`
 		// The run-level done of the whole command.
@@ -138,10 +142,14 @@ func TestAssertChains(t *testing.T) {
 		{"two run-level done events", []string{phase, aStart, bStart, bFail, aDone, doneTwo, cmdDone, cmdDone}, "2 run-level done events"},
 		{"cancelled after start", []string{phase, aStart, bStart, aDone, bCancelled, doneOneStop}, ""},
 		{"never started", []string{phase, aStart, aDone, bNotStarted, doneOneStop}, ""},
-		{"both stopped kinds", []string{phase, aStart, bStart, aDone, bCancelled, bNotStarted, doneOneStop2}, ""},
+		{"both stopped kinds", []string{phase, aStart, bStart, aDone, bCancelled, cNotStarted, doneOneStop2}, ""},
 		{"orphaned start", []string{phase, aStart, bStart, aDone, doneOne}, "1 start(s) and 0 terminal(s)"},
 		{"cancelled without start", []string{phase, aStart, aDone, bCancelled, doneOneStop}, "no preceding start"},
-		{"not started closing a start", []string{phase, aStart, bStart, aDone, bNotStarted, doneOneStop}, "1 start(s) and 0 terminal(s)"},
+		{"not started closing a start", []string{phase, aStart, bStart, aDone, bNotStarted, doneOneStop}, "has other tool_run events"},
+		{"two tasks share an op_id", []string{phase, aStart, bStart2, aDone, aDone, doneTwo}, "starts twice"},
+		{"chunk of a started task", []string{phase, aStart, aChunk, aDone, doneOne}, ""},
+		{"chunk of no started task", []string{phase, aChunk, aStart, aDone, doneOne}, "belongs to no started task"},
+		{"chunk after its task ended", []string{phase, aStart, aDone, aChunk, doneOne}, "follows the end of its task"},
 		{"cancelled uncounted", []string{phase, aStart, bStart, aDone, bCancelled, doneOne}, "reports cancelled=0"},
 		{"skip counted as a run", []string{phase, aStart, bStart, aDone, bCancelled, doneTwo}, "reports runs=2"},
 		{"terminal before start", []string{phase, aDone, aStart, doneOne}, "no preceding start"},
@@ -154,7 +162,7 @@ func TestAssertChains(t *testing.T) {
 		{"done before phase", []string{`{"type":"done","op_id":"run-1","status":"done"}`, phase}, "done before its phase start"},
 		{"phase twice", []string{phase, phase, aStart, aDone, doneOne}, "starts twice"},
 		{"done without phase", []string{doneOne}, "has no phase start"},
-		{"progress status", []string{phase, `{"type":"tool_run","op_id":"run-1:a:","status":"progress","tool":"a"}`}, `status "progress"`},
+		{"progress status", []string{phase, `{"type":"tool_run","op_id":"run-1:a::1","status":"progress","tool":"a"}`}, `status "progress"`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

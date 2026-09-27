@@ -2,8 +2,11 @@ package tooling
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
+	"sync"
 	"testing"
 	"time"
 
@@ -269,4 +272,65 @@ func equalStates(got, want []FileState) bool {
 		}
 	}
 	return true
+}
+
+// TestTaskIdentity: Execute names every task before it runs, two tasks of one
+// tool in one directory apart, and every callback and result of a task carries
+// its name.
+func TestTaskIdentity(t *testing.T) {
+	e, _, root, files := resultsProject(t, false, `exit 0`, "a.txt", "b.txt")
+	pkg := filepath.Join(root, "pkg")
+	if err := os.MkdirAll(pkg, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	plan := &ExecutionPlan{Groups: []TaskGroup{
+		{Priority: 1, Tasks: []Task{loopTask(root, files[:1])}},
+		{Priority: 2, Tasks: []Task{loopTask(root, files[1:]), loopTask(pkg, files[:1])}},
+	}}
+
+	var mu sync.Mutex
+	started := map[string]string{}
+	progress := map[string]int{}
+	e.SetTaskStartCallback(func(taskID, _, dir string) {
+		mu.Lock()
+		started[taskID] = dir
+		mu.Unlock()
+	})
+	e.SetFileProgressCallback(func(taskID, _ string, _, _ int, _ bool) {
+		mu.Lock()
+		progress[taskID]++
+		mu.Unlock()
+	})
+	results, err := e.Execute(context.Background(), plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := []string{"tool::1", "tool::2", "tool:pkg:3"}
+	var got []string
+	for _, g := range plan.Groups {
+		for _, task := range g.Tasks {
+			got = append(got, task.ID)
+		}
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("task IDs = %v, want %v", got, want)
+	}
+	for _, id := range want {
+		if _, ok := started[id]; !ok || progress[id] != 1 {
+			t.Errorf("task %s: started = %v, progress calls = %d", id, ok, progress[id])
+		}
+	}
+	for _, g := range results {
+		for _, r := range g.Results {
+			if !slices.Contains(want, r.TaskID) {
+				t.Errorf("result for an unknown task %q", r.TaskID)
+			}
+			for i, proc := range r.Processes {
+				if wantID := fmt.Sprintf("%s#%d", r.TaskID, i+1); proc.ID != wantID {
+					t.Errorf("process ID = %q, want %q", proc.ID, wantID)
+				}
+			}
+		}
+	}
 }
