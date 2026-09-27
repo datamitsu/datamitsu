@@ -29,20 +29,26 @@ func SetParsingDisabledByFlag(disabled bool) { parsingDisabledByFlag.Store(disab
 // findings (flag or env).
 func parsingDisabled() bool { return parsingDisabledByFlag.Load() || env.NoParse() }
 
+// parserModules is the part of *parsermanager.Manager a diagnosticParser uses.
+type parserModules interface {
+	HasParser(ctx context.Context, module, parser string) (bool, error)
+	ParseOutput(ctx context.Context, module, parser string, stdout, stderr []byte, exitCode int32) ([]parsermanager.RawDiagnostic, error)
+}
+
 // diagnosticParser adapts the parser manager and the defaults-in-core resolution
 // to the tooling.DiagnosticParser interface the executor calls: it runs the WASM
 // module for a tool's output and resolves the nullable result into finalized
 // diagnostics. What it could not parse it records in problems, for the run to
 // report once.
 type diagnosticParser struct {
-	mgr      *parsermanager.Manager
+	mgr      parserModules
 	problems *parseProblems
 }
 
 // newDiagnosticParser adapts a parser Manager to the executor's parser. The
 // runner owns the Manager's lifecycle (it must be Closed on shutdown) so the
 // compile-once runtime is shared across every per-file parse.
-func newDiagnosticParser(mgr *parsermanager.Manager, problems *parseProblems) diagnosticParser {
+func newDiagnosticParser(mgr parserModules, problems *parseProblems) diagnosticParser {
 	return diagnosticParser{mgr: mgr, problems: problems}
 }
 

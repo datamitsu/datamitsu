@@ -44,21 +44,20 @@ every other field (`row`, `col`, `end_row`, `end_col`, `severity`, `source`,
 [{ "message": "missing newline", "row": 12, "col": 1, "code": "DL3000" }]
 ```
 
-## Adding a parser (Phase 2 onward)
+## Adding a parser
 
-The dispatcher in `datamitsu-parsers/src/lib.rs` is a single `match` on the tool
-name. To add a tool:
+Each tool is one module under `datamitsu-parsers/src/tools/`. To add one:
 
-1. Add a module function `fn <tool>(stdout: &[u8], stderr: &[u8], exit_code: i32) -> String`
-   that parses the raw bytes and returns `diagnostic::to_json_array(&diags)`.
-2. Add one `match` arm: `"<tool>" => <tool>(stdout, stderr, exit_code),`.
-3. Add `cargo test` cases for the new branch.
-4. When a configuration wires the parser, record a clean and a finding-bearing run
+1. Add `src/tools/<tool>.rs` with its `DESCRIPTOR` and
+   `pub fn parse(stdout: &[u8], stderr: &[u8], exit_code: i32) -> Vec<RawDiagnostic>`,
+   and `cargo test` cases beside it.
+2. Register it: `pub mod <tool>;` and a dispatch arm in `src/tools/mod.rs`, and its
+   descriptor in `TOOLS` in `src/capabilities.rs`. The core checks a configuration's
+   parser key against `describe` before it parses, so a parser missing from `TOOLS`
+   is treated as unknown even though it dispatches.
+3. When a configuration wires the parser, record a clean and a finding-bearing run
    of the real tool under `datamitsu-parsers/fixtures/<tool>/` and assert them in
    `src/tools/fixtures.rs` ([fixtures/README.md](datamitsu-parsers/fixtures/README.md)).
-
-That is the whole mechanism — hadolint, yamllint, dotenv_linter, and cue_fmt all
-plug in this way.
 
 ## Build & test
 

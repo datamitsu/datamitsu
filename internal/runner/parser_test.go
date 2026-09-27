@@ -13,10 +13,15 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/cache"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/diagnostic"
+	"github.com/datamitsu/datamitsu/internal/hashutil"
 	"github.com/datamitsu/datamitsu/internal/parsermanager"
 	"github.com/datamitsu/datamitsu/internal/tooling"
+
+	"go.uber.org/zap"
 )
 
 func TestParsingDisabled(t *testing.T) {
@@ -163,4 +168,92 @@ func TestParseProblems_FailedParseOncePerTool(t *testing.T) {
 	if got := problems.pending(); len(got) != 0 {
 		t.Errorf("a tool already reported this run is not reported again, got %q", got)
 	}
+}
+
+// failingModules loads every module and knows every key, and fails every parse
+// the way a module does whose output the core cannot decode.
+type failingModules struct{}
+
+func (failingModules) HasParser(context.Context, string, string) (bool, error) { return true, nil }
+
+func (failingModules) ParseOutput(context.Context, string, string, []byte, []byte, int32) ([]parsermanager.RawDiagnostic, error) {
+	return nil, errors.New("decode parser output: unexpected end of JSON input")
+}
+
+type shellApps map[string]*binmanager.CommandInfo
+
+func (a shellApps) GetBinaryPath(context.Context, string) (string, error) { return "", os.ErrNotExist }
+
+func (a shellApps) GetCommandInfo(_ context.Context, app string) (*binmanager.CommandInfo, error) {
+	return a[app], nil
+}
+
+// TestParseFailureThroughTheExecutor follows a parse that fails in a loaded
+// module through the whole path: the process is parse-failed, the task reports
+// ParseFailed, no pass is cached, and the run warns once for the tool however
+// many of its invocations failed.
+func TestParseFailureThroughTheExecutor(t *testing.T) {
+	root := t.TempDir()
+	files := make([]string, 0, 2)
+	for _, name := range []string{"a.txt", "b.txt"} {
+		path := filepath.Join(root, name)
+		if err := os.WriteFile(path, []byte(name), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		files = append(files, path)
+	}
+	c, err := cache.NewCache(t.TempDir(), root, config.Config{}, nil, zap.NewNop())
+	if err != nil {
+		t.Fatal(err)
+	}
+	executor := tooling.NewExecutor(root, false, false, shellApps{
+		"hadolint": {Type: "shell", Command: "/bin/sh", Args: []string{"-c", "exit 0"}},
+	}, c)
+	problems := newParseProblems()
+	executor.SetParser(newDiagnosticParser(failingModules{}, problems))
+
+	plan := &tooling.ExecutionPlan{Groups: []tooling.TaskGroup{{Tasks: []tooling.Task{{
+		ToolName:    "hadolint",
+		Tool:        config.Tool{Name: "hadolint", OutputParser: &config.OutputParser{Module: "core", Parser: "hadolint"}},
+		Operation:   config.OpLint,
+		OpConfig:    config.ToolOperation{App: "hadolint", Scope: config.ToolScopePerFile, Args: []string{"{file}"}},
+		Files:       files,
+		ProjectPath: root,
+	}}}}}
+	results, err := executor.Execute(context.Background(), plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := results[0].Results[0]
+	if !result.Success || !result.ParseFailed {
+		t.Errorf("Success = %v, ParseFailed = %v, want a passing task whose output was not parsed", result.Success, result.ParseFailed)
+	}
+	for _, proc := range result.Processes {
+		if proc.Extraction != tooling.ExtractionParseFailed || !strings.Contains(proc.ParseError, "unexpected end of JSON input") {
+			t.Errorf("process %s: Extraction = %s, ParseError = %q", proc.ID, proc.Extraction, proc.ParseError)
+		}
+	}
+	for _, file := range files {
+		if !c.Check(file, "hadolint", cache.OperationLint, observeFile(t, file), true) {
+			t.Errorf("%s: a pass was cached for output that was not parsed", file)
+		}
+	}
+	want := []string{"output parser failed for hadolint: decode parser output: unexpected end of JSON input"}
+	if got := problems.pending(); !slices.Equal(got, want) {
+		t.Errorf("warnings = %q, want %q", got, want)
+	}
+}
+
+func observeFile(t *testing.T, path string) cache.Seen {
+	t.Helper()
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	hash, err := hashutil.XXH3Reader(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cache.Seen{Hash: hash}
 }
