@@ -84,6 +84,13 @@ writes the configuration; never ship it to consumers.
 Newest first. Each entry names the first version that has it and what a
 configuration should do about it.
 
+- **after v0.3.1** - Every `devtools pull-*` command that writes its file saves
+  it after each entry that changed, so a failed or interrupted run keeps what it
+  already pulled; `pull-runtimes` no longer discards the runtimes that succeeded
+  when one fails, and pulls pnpm first. The JVM runtime takes the previous
+  Temurin feature release while the newest has no build past the minimum
+  release age, and a GitHub release lookup reads past a first page of
+  prereleases. Commit the successful part of a failed pull and rerun the rest.
 - **after v0.3.1** - Every `devtools pull-*` command works through its entries in
   alphabetical order with a `[n/N]` counter and writes its file with the keys
   of every object sorted. The first pull after upgrading rewrites an existing
@@ -96,9 +103,8 @@ configuration should do about it.
   app instead of being dropped or handed to the next asset, and signature,
   certificate, provenance and SBOM files are never candidates. Let a CI job
   fail on the exit code instead of grepping the log, run large pulls with
-  `GITHUB_TOKEN` set, and rerun a failed pull: `pull-github` and
-  `pull-node`/`pull-uv` keep a failed entry's previous state, `pull-runtimes`
-  writes nothing on failure.
+  `GITHUB_TOKEN` set, and rerun a failed pull: every `pull-*` command keeps a
+  failed entry's previous state.
 - **after v0.3.1** - `extractDir: true` on a binary app runs `binaryPath` inside
   the extracted directory instead of failing on the directory itself, and
   requires `binaryPath` and a tar or zip `contentType`; `devtools verify-all`

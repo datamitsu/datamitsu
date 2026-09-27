@@ -101,6 +101,11 @@ func runPullNode(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// With --update, a package whose entry changes is saved before the next
+	// lookup, so a later failure or an interrupted run costs nothing already
+	// pulled; a package that fails keeps its previous entry.
+	write := nodeUpdateFlag && !nodeDryRunFlag
+	updatedCount := 0
 	counterWidth := len(strconv.Itoa(len(names)))
 	for i, name := range names {
 		counter := fmt.Sprintf("[%*d/%d]", counterWidth, i+1, len(names))
@@ -139,11 +144,29 @@ func runPullNode(cmd *cobra.Command, args []string) error {
 		}
 
 		results = append(results, result)
+
+		if !write || result.Error != "" {
+			continue
+		}
+		next := applyNodeResult(entry, result)
+		if next == entry {
+			continue
+		}
+		apps[name] = next
+		if err := writeNodeAppsJSON(file, apps); err != nil {
+			fmt.Fprintf(os.Stderr, "The run stopped at %s; the packages after it were not attempted.\n", name)
+			return fmt.Errorf("error updating %s after %s: %w", file, name, err)
+		}
+		if result.UpdateNeeded {
+			updatedCount++
+		}
 	}
 
-	if nodeUpdateFlag && !nodeDryRunFlag {
-		if err := updateNodeAppsJSON(file, results); err != nil {
-			return fmt.Errorf("error updating %s: %w", file, err)
+	if write {
+		if updatedCount > 0 {
+			fmt.Printf("\n✓ Updated %d versions in %s\n", updatedCount, file)
+		} else {
+			fmt.Printf("\nNo updates to write to %s\n", file)
 		}
 	}
 
@@ -274,39 +297,14 @@ func writeNodeAppsJSON(path string, apps nodeAppsJSON) error {
 	return nil
 }
 
-func updateNodeAppsJSON(path string, results []npmVersionResult) error {
-	existing, err := readNodeAppsJSON(path)
-	if err != nil {
-		return fmt.Errorf("failed to read existing %s: %w", path, err)
+// applyNodeResult is the entry a successful lookup leaves: the latest version
+// when it moved, and the registry's description unless the registry has none.
+func applyNodeResult(entry nodeAppEntry, r npmVersionResult) nodeAppEntry {
+	if r.UpdateNeeded {
+		entry.Version = r.LatestVersion
 	}
-	apps := make(nodeAppsJSON, len(results))
-	updatedCount := 0
-	for _, r := range results {
-		version := r.CurrentVersion
-		if r.Error == "" && r.UpdateNeeded {
-			version = r.LatestVersion
-			updatedCount++
-		}
-		desc := r.Description
-		if desc == "" && existing != nil {
-			if e, ok := existing[r.Name]; ok {
-				desc = e.Description
-			}
-		}
-		apps[r.Name] = nodeAppEntry{
-			PackageName: r.PackageName,
-			Version:     version,
-			Description: desc,
-		}
+	if r.Description != "" {
+		entry.Description = r.Description
 	}
-
-	if err := writeNodeAppsJSON(path, apps); err != nil {
-		return err
-	}
-	if updatedCount > 0 {
-		fmt.Printf("\n✓ Updated %d versions in %s\n", updatedCount, path)
-	} else {
-		fmt.Printf("\nNo updates to write to %s\n", path)
-	}
-	return nil
+	return entry
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -985,6 +986,86 @@ func TestGetLatestReleaseWithMinAge(t *testing.T) {
 		}
 		if r != nil {
 			t.Fatalf("expected nil release, got %v", r)
+		}
+	})
+
+	// A full page of early-access builds hides the stable release on the next
+	// page; the lookup reads on instead of reporting nothing old enough.
+	fullPage := func(tag func(int) string, published string, prerelease bool) string {
+		items := make([]string, releasePageSize)
+		for i := range items {
+			items[i] = fmt.Sprintf(`{"tag_name":%q,"published_at":%q,"prerelease":%t,"assets":[]}`, tag(i), published, prerelease)
+		}
+		return "[" + strings.Join(items, ",") + "]"
+	}
+	pagedClient := func(pages map[string]string, requested *[]string) *Client {
+		client := NewClient()
+		client.httpClient = &http.Client{
+			Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				page := req.URL.Query().Get("page")
+				*requested = append(*requested, page)
+				body, ok := pages[page]
+				if !ok {
+					body = `[]`
+				}
+				return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body))}, nil
+			}),
+		}
+		return client
+	}
+
+	t.Run("reads the next page when nothing on the first qualifies", func(t *testing.T) {
+		var requested []string
+		client := pagedClient(map[string]string{
+			"":  fullPage(func(i int) string { return fmt.Sprintf("jdk-26.0.3+%d-ea-beta", i) }, old, true),
+			"2": `[{"tag_name":"jdk-26.0.2+10","published_at":"` + old + `","assets":[]}]`,
+		}, &requested)
+
+		r, err := client.GetLatestReleaseWithMinAge(context.Background(), "o", "r", 60)
+		if err != nil {
+			t.Fatalf("error = %v", err)
+		}
+		if r == nil || r.TagName != "jdk-26.0.2+10" {
+			t.Fatalf("expected jdk-26.0.2+10, got %v", r)
+		}
+		if strings.Join(requested, ",") != ",2" {
+			t.Errorf("requested pages %q, want the first (no page parameter) and then 2", requested)
+		}
+	})
+
+	t.Run("stops at a short page", func(t *testing.T) {
+		var requested []string
+		client := pagedClient(map[string]string{
+			"": `[{"tag_name":"v2.0.0","published_at":"` + fresh + `","assets":[]}]`,
+		}, &requested)
+
+		r, err := client.GetLatestReleaseWithMinAge(context.Background(), "o", "r", 60)
+		if err != nil || r != nil {
+			t.Fatalf("GetLatestReleaseWithMinAge() = %v, %v; want nil, nil", r, err)
+		}
+		if len(requested) != 1 {
+			t.Errorf("requested %d pages, want 1: a short page is the last", len(requested))
+		}
+	})
+
+	t.Run("gives up after maxReleasePages", func(t *testing.T) {
+		pages := map[string]string{}
+		for page := 1; page <= maxReleasePages+1; page++ {
+			key := strconv.Itoa(page)
+			if page == 1 {
+				key = ""
+			}
+			pages[key] = fullPage(func(i int) string { return fmt.Sprintf("v%d.%d.0", page, i) }, fresh, false)
+		}
+		var requested []string
+		client := pagedClient(pages, &requested)
+
+		r, err := client.GetLatestReleaseWithMinAge(context.Background(), "o", "r", 60)
+		if err != nil || r != nil {
+			t.Fatalf("GetLatestReleaseWithMinAge() = %v, %v; want nil, nil", r, err)
+		}
+		if len(requested) != maxReleasePages {
+			t.Errorf("requested %d pages, want %d", len(requested), maxReleasePages)
 		}
 	})
 }

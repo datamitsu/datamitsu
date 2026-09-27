@@ -1884,7 +1884,7 @@ func TestIntegration_JSONGeneration(t *testing.T) {
 
 func TestRuntimesToPull(t *testing.T) {
 	got := runtimesToPull("")
-	want := []string{"bun", "go", "jvm", "node", "pnpm", "uv"}
+	want := []string{"pnpm", "bun", "go", "jvm", "node", "uv"}
 	if strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Errorf("runtimesToPull(\"\") = %v, want %v", got, want)
 	}

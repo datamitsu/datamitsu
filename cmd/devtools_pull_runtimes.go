@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"time"
@@ -130,108 +131,121 @@ func runPullRuntimes(cmd *cobra.Command, args []string) error {
 
 	runtimesToUpdate := runtimesToPull(runtimeFilter)
 
+	// Every runtime is attempted. One whose entry changes is saved before the
+	// next starts, so a later failure or an interrupted run costs nothing
+	// already pulled; one that fails keeps its previous entry.
 	var results []runtimePullResult
-
+	saved := false
 	for i, name := range runtimesToUpdate {
 		fmt.Printf("\n=== Updating %s [%d/%d] ===\n", name, i+1, len(runtimesToUpdate))
 
-		var runtimeJSON *RuntimeJSON
-		var updateErr error
-
-		switch name {
-		case "bun":
-			var data *BunRuntimeData
-			var binaries binmanager.MapOfBinaries
-			data, binaries, updateErr = pullBunRuntime(ctx, minAge)
-			if updateErr == nil {
-				runtimeJSON = buildBunRuntimeJSON(data, binaries)
-			}
-		case "uv":
-			var data *UVRuntimeData
-			var binaries binmanager.MapOfBinaries
-			data, binaries, updateErr = pullUVRuntime(ctx, minAge)
-			if updateErr == nil {
-				runtimeJSON = buildUVRuntimeJSON(data, binaries)
-			}
-		case "jvm":
-			var data *JVMRuntimeData
-			var binaries binmanager.MapOfBinaries
-			data, binaries, updateErr = pullJVMRuntime(ctx, minAge)
-			if updateErr == nil {
-				runtimeJSON = buildJVMRuntimeJSON(data, binaries)
-			}
-		case "node":
-			var data *NodeRuntimeData
-			var binaries binmanager.MapOfBinaries
-			data, binaries, updateErr = pullNodeRuntime(ctx)
-			if updateErr == nil {
-				runtimeJSON = buildNodeRuntimeJSON(data, binaries)
-			}
-		case "go":
-			var data *GoRuntimeData
-			var binaries binmanager.MapOfBinaries
-			data, binaries, updateErr = pullGoRuntime(ctx)
-			if updateErr == nil {
-				runtimeJSON = buildGoRuntimeJSON(data, binaries)
-			}
-		case "pnpm":
-			var data *PNPMRuntimeData
-			var binaries binmanager.MapOfBinaries
-			data, binaries, updateErr = pullPNPMRuntime(ctx, minAge)
-			if updateErr == nil {
-				runtimeJSON = buildPNPMRuntimeJSON(data, binaries)
-			}
-		}
-
 		result := runtimePullResult{name: name}
-		if updateErr != nil {
-			result.err = updateErr
-			fmt.Fprintf(os.Stderr, "✗ %s: %v\n", name, updateErr)
+		old := runtimes[name]
+		runtimeJSON, err := pullOneRuntime(ctx, name, minAge)
+		if err == nil {
+			preservePNPMRuntimeRef(old, runtimeJSON)
+			err = validatePNPMRuntimeRef(runtimes, name, runtimeJSON)
+		}
+		if err != nil {
+			result.err = err
+			fmt.Fprintf(os.Stderr, "✗ %s: %v\n", name, err)
 			results = append(results, result)
 			continue
 		}
 
+		result.oldVersion = runtimeVersion(old)
 		result.newVersion = runtimeVersion(runtimeJSON)
-		if old, ok := runtimes[name]; ok {
-			result.oldVersion = runtimeVersion(old)
-			preservePNPMRuntimeRef(old, runtimeJSON)
-		}
 		result.updated = result.oldVersion != result.newVersion
-
-		runtimes[name] = runtimeJSON
 		results = append(results, result)
+		if reflect.DeepEqual(old, runtimeJSON) {
+			continue
+		}
+		runtimes[name] = runtimeJSON
+
+		if pullRuntimesDryRunFlag {
+			continue
+		}
+		fmt.Printf("Saving %s...\n", outputPath)
+		if err := writeRuntimesJSON(outputPath, runtimes); err != nil {
+			fmt.Fprintf(os.Stderr, "✗ %s: save: %v\n", name, err)
+			fmt.Fprintf(os.Stderr, "The run stopped at %s; the runtimes after it were not attempted.\n", name)
+			return fmt.Errorf("failed to write %s after %s: %w", outputPath, name, err)
+		}
+		saved = true
 	}
 
 	printPullSummary(results)
 
-	if err := reportFailedRuntimes(outputPath, results); err != nil {
-		return err
-	}
-
-	if err := validatePNPMRuntimeRefs(runtimes); err != nil {
-		return err
-	}
-
-	if !pullRuntimesDryRunFlag {
-		if err := writeRuntimesJSON(outputPath, runtimes); err != nil {
-			return fmt.Errorf("failed to write %s: %w", outputPath, err)
-		}
-		fmt.Printf("\nWritten to %s\n", outputPath)
-	} else {
+	switch {
+	case pullRuntimesDryRunFlag:
 		fmt.Printf("\nDry run - no files written\n")
+	case saved:
+		fmt.Printf("\nWritten to %s\n", outputPath)
+	default:
+		fmt.Printf("\nNothing changed in %s\n", outputPath)
 	}
 
-	return nil
+	return reportFailedRuntimes(outputPath, results)
+}
+
+// pullOneRuntime is the injectable seam that pulls one runtime's entry; tests
+// replace it to drive runPullRuntimes without network.
+var pullOneRuntime = pullRuntime
+
+// pullRuntime fetches the named runtime from upstream and builds its entry.
+func pullRuntime(ctx context.Context, name string, minAge int) (*RuntimeJSON, error) {
+	switch name {
+	case "bun":
+		data, binaries, err := pullBunRuntime(ctx, minAge)
+		if err != nil {
+			return nil, err
+		}
+		return buildBunRuntimeJSON(data, binaries), nil
+	case "uv":
+		data, binaries, err := pullUVRuntime(ctx, minAge)
+		if err != nil {
+			return nil, err
+		}
+		return buildUVRuntimeJSON(data, binaries), nil
+	case "jvm":
+		data, binaries, err := pullJVMRuntime(ctx, minAge)
+		if err != nil {
+			return nil, err
+		}
+		return buildJVMRuntimeJSON(data, binaries), nil
+	case "node":
+		data, binaries, err := pullNodeRuntime(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return buildNodeRuntimeJSON(data, binaries), nil
+	case "go":
+		data, binaries, err := pullGoRuntime(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return buildGoRuntimeJSON(data, binaries), nil
+	case "pnpm":
+		data, binaries, err := pullPNPMRuntime(ctx, minAge)
+		if err != nil {
+			return nil, err
+		}
+		return buildPNPMRuntimeJSON(data, binaries), nil
+	}
+	return nil, fmt.Errorf("unknown runtime %q", name)
 }
 
 // runtimesToPull is the list a run works through: the one runtime asked for,
-// or every runtime in alphabetical order, so two runs read the same way and
-// a counter says how far along the run is.
+// or pnpm and then every other runtime in alphabetical order, so two runs read
+// the same way and a counter says how far along the run is. pnpm leads because
+// the Node and Bun entries name it, and an entry is saved only once the
+// runtime it names is in the file.
 func runtimesToPull(filter string) []string {
 	if filter != "" {
 		return []string{filter}
 	}
-	return slices.Sorted(slices.Values(validRuntimeNames))
+	rest := slices.DeleteFunc(slices.Clone(validRuntimeNames), func(name string) bool { return name == defaultPNPMRuntimeName })
+	return append([]string{defaultPNPMRuntimeName}, slices.Sorted(slices.Values(rest))...)
 }
 
 func isValidRuntime(name string) bool {
@@ -254,33 +268,29 @@ func preservePNPMRuntimeRef(existing, updated *RuntimeJSON) {
 	}
 }
 
-// validatePNPMRuntimeRefs refuses to write a file whose Node or Bun entry names
-// a pnpm runtime the file does not define: every later config load would fail
+// validatePNPMRuntimeRef refuses to record a Node or Bun entry that names a
+// pnpm runtime the file does not define: every later config load would fail
 // validation, and a filtered pull into a file without a pnpm entry is the easy
-// way to produce one.
-func validatePNPMRuntimeRefs(runtimes RuntimesJSON) error {
-	for _, name := range slices.Sorted(maps.Keys(runtimes)) {
-		entry := runtimes[name]
-		if entry == nil {
-			continue
-		}
-		var ref string
-		switch {
-		case entry.Node != nil:
-			ref = entry.Node.PNPMRuntime
-		case entry.Bun != nil:
-			ref = entry.Bun.PNPMRuntime
-		}
-		if ref == "" {
-			continue
-		}
-		target, ok := runtimes[ref]
-		if !ok || target == nil {
-			return fmt.Errorf("runtime %q names pnpm runtime %q, which this file does not define; pull it too (--runtime pnpm, or drop --runtime to update every runtime)", name, ref)
-		}
-		if target.Kind != "pnpm" {
-			return fmt.Errorf("runtime %q names pnpm runtime %q, which is kind %q", name, ref, target.Kind)
-		}
+// way to produce one. The runtime then fails and keeps its previous entry.
+func validatePNPMRuntimeRef(runtimes RuntimesJSON, name string, entry *RuntimeJSON) error {
+	var ref string
+	switch {
+	case entry == nil:
+		return nil
+	case entry.Node != nil:
+		ref = entry.Node.PNPMRuntime
+	case entry.Bun != nil:
+		ref = entry.Bun.PNPMRuntime
+	}
+	if ref == "" {
+		return nil
+	}
+	target, ok := runtimes[ref]
+	if !ok || target == nil {
+		return fmt.Errorf("runtime %q names pnpm runtime %q, which this file does not define; pull it too (--runtime pnpm, or drop --runtime to update every runtime)", name, ref)
+	}
+	if target.Kind != "pnpm" {
+		return fmt.Errorf("runtime %q names pnpm runtime %q, which is kind %q", name, ref, target.Kind)
 	}
 	return nil
 }
@@ -320,27 +330,31 @@ func runtimeVersion(r *RuntimeJSON) string {
 	return strings.Join(parts, ",")
 }
 
-// reportFailedRuntimes returns an error naming every runtime that failed, so
-// the command exits non-zero. The file is not written at all in that case: a
-// runtime that failed would otherwise be recorded at its old version next to
-// updated ones, and the pnpm reference between runtimes must stay consistent.
+// reportFailedRuntimes lists every runtime that failed with its error and
+// returns an error naming them, so the command exits non-zero. Each failed
+// runtime keeps its previous entry; the ones that succeeded are already saved.
 func reportFailedRuntimes(outputPath string, results []runtimePullResult) error {
-	var failed []string
+	var failed []runtimePullResult
 	rateLimited := false
 	for _, r := range results {
 		if r.err != nil {
-			failed = append(failed, r.name)
+			failed = append(failed, r)
 			rateLimited = rateLimited || isRateLimited(r.err)
 		}
 	}
 	if len(failed) == 0 {
 		return nil
 	}
-	fmt.Fprintf(os.Stderr, "\n✗ %d of %d runtimes failed; %s is left unchanged\n", len(failed), len(results), outputPath)
+	fmt.Fprintf(os.Stderr, "\n✗ %d of %d runtimes failed and are left as they were in %s:\n", len(failed), len(results), outputPath)
+	names := make([]string, 0, len(failed))
+	for _, r := range failed {
+		fmt.Fprintf(os.Stderr, "  %s: %v\n", r.name, r.err)
+		names = append(names, r.name)
+	}
 	if rateLimited {
 		fmt.Fprintf(os.Stderr, "Hint: set GITHUB_TOKEN to raise the GitHub API rate limit, then run the command again.\n")
 	}
-	return fmt.Errorf("%d of %d runtimes failed: %s", len(failed), len(results), strings.Join(failed, ", "))
+	return fmt.Errorf("%d of %d runtimes failed: %s", len(failed), len(results), strings.Join(names, ", "))
 }
 
 func printPullSummary(results []runtimePullResult) {
@@ -814,49 +828,49 @@ type JVMRuntimeData struct {
 	JavaVersion string
 }
 
-// getLatestTemurinMajorVersion is the injectable seam for resolving the latest
-// Temurin (Java) major version; tests override it to exercise the failure path
-// without network. registry.GetLatestTemurinMajorVersion returns a hardcoded
-// fallback alongside the error, which pullJVMRuntime deliberately discards.
-var getLatestTemurinMajorVersion = registry.GetLatestTemurinMajorVersion
+// getTemurinMajorVersions is the injectable seam for resolving the Temurin
+// (Java) feature releases, newest first; tests override it to exercise the
+// failure and fallback paths without network.
+var getTemurinMajorVersions = registry.GetTemurinMajorVersions
 
 func pullJVMRuntime(ctx context.Context, minAge int) (*JVMRuntimeData, binmanager.MapOfBinaries, error) {
-	data := &JVMRuntimeData{}
-
 	// The Java major version is a major-version selection from the adoptium API,
 	// so it is NOT subject to age filtering (see the plan's age-filtering table).
-	// Fail loud on a lookup error rather than baking the registry's hardcoded
-	// fallback into the generated config. This matters most for JVM: the resolved
-	// major version is interpolated into the upstream repo name
-	// ("temurin<ver>-binaries") below, so a silent stale fallback would pin the
-	// generated config to an outdated JDK major (same rationale as
-	// resolveLatestNodeLTS).
-	javaVersion, err := getLatestTemurinMajorVersion(ctx)
+	// Fail loud on a lookup error rather than guessing a major: it is
+	// interpolated into the upstream repo name ("temurin<ver>-binaries") below,
+	// so a stale guess would pin the generated config to an outdated JDK major
+	// (same rationale as resolveLatestNodeLTS).
+	majors, err := getTemurinMajorVersions(ctx)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to look up latest Temurin (Java) version: %w", err)
 	}
-	data.JavaVersion = javaVersion
 
-	// The JDK binary is a specific GitHub release, so age filtering applies.
+	// The JDK binary is a specific GitHub release, so age filtering applies. In
+	// the days after a feature release ships, its only GA build is younger than
+	// the window; the previous feature release is then the newest JDK allowed.
 	client := newGitHubClient()
+	for i, major := range majors {
+		repo := fmt.Sprintf("temurin%s-binaries", major)
+		release, err := client.GetLatestReleaseWithMinAge(ctx, "adoptium", repo, minAge)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to fetch JVM release from adoptium/%s: %w", repo, err)
+		}
+		if release == nil {
+			if i+1 < len(majors) {
+				fmt.Printf("No Java %s release is at least %d minutes old; trying Java %s\n", major, minAge, majors[i+1])
+			}
+			continue
+		}
 
-	repo := fmt.Sprintf("temurin%s-binaries", data.JavaVersion)
-	release, err := client.GetLatestReleaseWithMinAge(ctx, "adoptium", repo, minAge)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to fetch JVM release from adoptium/%s: %w", repo, err)
+		fmt.Printf("JVM release: %s (%d assets)\n", release.TagName, len(release.Assets))
+
+		binaries, err := detectJVMBinaries(release)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to detect JVM binaries: %w", err)
+		}
+		return &JVMRuntimeData{JavaVersion: major}, binaries, nil
 	}
-	if release == nil {
-		return nil, nil, noReleaseOldEnoughErr("adoptium/"+repo, minAge)
-	}
-
-	fmt.Printf("JVM release: %s (%d assets)\n", release.TagName, len(release.Assets))
-
-	binaries, err := detectJVMBinaries(release)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to detect JVM binaries: %w", err)
-	}
-
-	return data, binaries, nil
+	return nil, nil, noReleaseOldEnoughErr("Temurin (Java "+strings.Join(majors, ", ")+")", minAge)
 }
 
 // jvmBinaryPath returns the path to the java binary within the extracted JDK tree.

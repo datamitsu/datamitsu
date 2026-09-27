@@ -73,25 +73,26 @@ func (c *Client) GetLatestRelease(ctx context.Context, owner, repo string) (*Rel
 	return c.fetchRelease(ctx, url)
 }
 
+// releasePageSize is the page size of a release listing. maxReleasePages is
+// how many pages GetLatestReleaseWithMinAge reads before it gives up: a
+// repository that publishes nightly or early-access builds as prereleases can
+// push its last stable release off the first page.
+const (
+	releasePageSize = 30
+	maxReleasePages = 10
+)
+
 // ListReleases fetches up to perPage releases for a repo, with retry logic.
 func (c *Client) ListReleases(ctx context.Context, owner, repo string, perPage int) ([]Release, error) {
-	if perPage <= 0 {
-		perPage = 30
-	}
-	url := fmt.Sprintf("%s/repos/%s/%s/releases?per_page=%d", c.BaseURL, owner, repo, perPage)
-
-	var releases []Release
-	if err := c.getJSON(ctx, url, &releases); err != nil {
-		return nil, err
-	}
-	return releases, nil
+	return c.listReleasesPage(ctx, owner, repo, perPage, 1)
 }
 
 // GetLatestReleaseWithMinAge returns the highest-semver stable release that is
 // at least minAgeMinutes old. It lists recent releases and selects by semantic
 // version (never by publish date) via selectLatestStableRelease, so a patch
 // backported to an older branch cannot mask a newer minor/major. Prereleases,
-// drafts, and releases with a zero PublishedAt are skipped.
+// drafts, and releases with a zero PublishedAt are skipped. When a page holds
+// no qualifying release it reads the next, up to maxReleasePages.
 //
 // When minAgeMinutes <= 0 the age cutoff is disabled but selection stays
 // semver-based; if the list yields no stable release at all (degenerate repo)
@@ -99,13 +100,20 @@ func (c *Client) ListReleases(ctx context.Context, owner, repo string, perPage i
 // that excludes every release it returns (nil, nil) — a documented, non-error
 // outcome callers branch on.
 func (c *Client) GetLatestReleaseWithMinAge(ctx context.Context, owner, repo string, minAgeMinutes int) (*Release, error) {
-	releases, err := c.ListReleases(ctx, owner, repo, 30)
-	if err != nil {
-		return nil, err
-	}
-
-	if sel := selectLatestStableRelease(releases, minAgeMinutes, time.Now()); sel != nil {
-		return sel, nil
+	now := time.Now()
+	for page := 1; page <= maxReleasePages; page++ {
+		releases, err := c.listReleasesPage(ctx, owner, repo, releasePageSize, page)
+		if err != nil {
+			return nil, err
+		}
+		// Nothing on the earlier pages qualified, so selecting within this
+		// page is the same as selecting over every release read so far.
+		if sel := selectLatestStableRelease(releases, minAgeMinutes, now); sel != nil {
+			return sel, nil
+		}
+		if len(releases) < releasePageSize {
+			break
+		}
 	}
 
 	if minAgeMinutes <= 0 {
@@ -155,6 +163,24 @@ type Repository struct {
 func (c *Client) GetRepository(ctx context.Context, owner, repo string) (*Repository, error) {
 	url := fmt.Sprintf("%s/repos/%s/%s", c.BaseURL, owner, repo)
 	return c.fetchRepository(ctx, url)
+}
+
+// listReleasesPage fetches one page of a repo's releases. The first page's URL
+// carries no page parameter, the same request ListReleases has always made.
+func (c *Client) listReleasesPage(ctx context.Context, owner, repo string, perPage, page int) ([]Release, error) {
+	if perPage <= 0 {
+		perPage = releasePageSize
+	}
+	url := fmt.Sprintf("%s/repos/%s/%s/releases?per_page=%d", c.BaseURL, owner, repo, perPage)
+	if page > 1 {
+		url += "&page=" + strconv.Itoa(page)
+	}
+
+	var releases []Release
+	if err := c.getJSON(ctx, url, &releases); err != nil {
+		return nil, err
+	}
+	return releases, nil
 }
 
 func (c *Client) fetchRepository(ctx context.Context, url string) (*Repository, error) {
