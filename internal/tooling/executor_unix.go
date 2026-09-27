@@ -38,7 +38,7 @@ func setupProcessGroupCleanup(cmd *exec.Cmd) {
 // datamitsu started, so a descendant that ignores SIGTERM would outlive the run.
 func killGroupAfterGrace(pgid int, stoppedAt time.Time) {
 	for deadline := stoppedAt.Add(stopGrace); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
-		if syscall.Kill(-pgid, 0) != nil {
+		if !groupAlive(pgid) {
 			return
 		}
 	}
