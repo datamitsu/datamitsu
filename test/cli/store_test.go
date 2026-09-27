@@ -179,6 +179,12 @@ func TestStoreSeedArgValidation(t *testing.T) {
 			wantExit: 2,
 		},
 		{
+			name:     "malformed-digest",
+			args:     []string{"store", "seed", "example.invalid/owner/repo@bad"},
+			want:     `reference "example.invalid/owner/repo@bad"`,
+			wantExit: 2,
+		},
+		{
 			name:     "malformed-reference-with-resolve-tag",
 			args:     []string{"store", "seed", "--resolve-tag", "bad:latest"},
 			want:     `reference "bad"`,

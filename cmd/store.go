@@ -128,6 +128,9 @@ func resolveSeedRef(ctx context.Context, cfg *config.Config, args []string) (*co
 
 	arg := args[0]
 	if ref, digest, ok := strings.Cut(arg, "@"); ok {
+		if _, err := extractHashFromDigest(digest); err != nil {
+			return nil, exitcode.UsageErrorf("reference %q: %w", arg, err)
+		}
 		return &config.OCIRef{Ref: ref, Digest: digest}, nil
 	}
 
