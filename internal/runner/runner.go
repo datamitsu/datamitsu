@@ -1398,8 +1398,9 @@ func printGroupedResults(toolGroups []toolExecutionGroup, nameWidth int, detaile
 		// Reserve a fixed-width slot for the duration so anything after it (the run
 		// count) stays in a stable column instead of floating with the duration
 		// width. Pad only when something follows, to avoid trailing whitespace.
+		views, hidden := groupViews(group)
 		durStr := ui.FormatDurationShort(group.wallTime)
-		if group.totalRuns > 1 || group.failedRuns > 0 || detailed {
+		if group.totalRuns > 1 || group.failedRuns > 0 || detailed || hidden.total() > 0 {
 			durStr = fmt.Sprintf("%-*s", durationColWidth, durStr)
 		}
 		line := clr.Faint("┃ ") + status + " " + nameDisplay + strings.Repeat(" ", pad) + heatDuration(group.wallTime, maxMs, durStr)
@@ -1409,22 +1410,37 @@ func printGroupedResults(toolGroups []toolExecutionGroup, nameWidth int, detaile
 		if group.failedRuns > 0 {
 			line += "  " + clr.Red(fmt.Sprintf("(%d failed)", group.failedRuns))
 		}
+		if hidden.total() > 0 {
+			line += "  " + clr.Faint("· "+hidden.String())
+		}
 		if detailed {
 			line += "  " + clr.Faint(toolDetail(group))
 		}
 		fmt.Println(line)
 
-		// Show failed runs details
-		if group.failedRuns > 0 {
-			runNum := 0
-			for _, exec := range group.executions {
-				if !exec.result.Success {
-					runNum++
-					printFailedExecution(runNum, exec)
-				}
+		runNum := 0
+		for i, exec := range group.executions {
+			switch {
+			case !exec.result.Success:
+				runNum++
+				printFailedExecution(runNum, exec)
+			case views[i].unenforced:
+				printUnenforcedExecution(exec, views[i])
 			}
 		}
 	}
+}
+
+// groupViews is viewOf for every execution of a tool, and the findings they
+// leave out between them.
+func groupViews(group toolExecutionGroup) ([]taskView, levelCounts) {
+	views := make([]taskView, len(group.executions))
+	var hidden levelCounts
+	for i, exec := range group.executions {
+		views[i] = viewOf(exec.result)
+		hidden.merge(views[i].hidden)
+	}
+	return views, hidden
 }
 
 // heatFloorMs is the duration below which a tool is always shown "cool" (faint):
@@ -1550,6 +1566,7 @@ func usableDiagnostics(result tooling.ExecutionResult) bool {
 // showing all context needed to interpret error output in monorepo setups
 func printFailedExecution(runNum int, exec executionInstance) {
 	result := exec.result
+	view := viewOf(result)
 
 	// Build header with tool name and scope
 	header := "─ " + clr.Red(result.ToolName)
@@ -1562,14 +1579,7 @@ func printFailedExecution(runNum int, exec executionInstance) {
 	label := clr.Faint
 
 	fmt.Printf("  %s%s%s\n", border("┌"), header, border(strings.Repeat("─", 20)))
-
-	// Directory context for interpreting relative paths in tool output
-	if exec.relativeDir != "" {
-		fmt.Printf("  %s  %s %s\n", border("│"), label("Dir:      "), exec.relativeDir)
-	}
-	if result.WorkingDir != "" {
-		fmt.Printf("  %s  %s %s\n", border("│"), label("Cwd:      "), result.WorkingDir)
-	}
+	printFrameContext(exec, border)
 
 	// Command details
 	if result.Command != "" {
@@ -1578,22 +1588,28 @@ func printFailedExecution(runNum int, exec executionInstance) {
 
 	// Exit info
 	fmt.Printf("  %s  %s %s\n", border("│"), label("Exit code:"), clr.Red(strconv.Itoa(result.ExitCode)))
+	if gating := gatingFindings(result); gating > 0 {
+		noun := "findings"
+		if gating == 1 {
+			noun = "finding"
+		}
+		fmt.Printf("  %s  %s %s\n", border("│"), label("Failed on:"),
+			clr.Red(fmt.Sprintf("%d %s at or above failOn=%s", gating, noun, failOnOf(result))))
+	}
 	fmt.Printf("  %s  %s %s\n", border("│"), label("Duration: "), formatDuration(result.Duration))
 
 	switch {
 	// Parsed diagnostics, when the tool has an outputParser, are clearer than the
 	// raw output (often JSON) and take its place.
-	case usableDiagnostics(result):
-		fmt.Printf("  %s\n", border("│"))
-		for _, d := range result.Diagnostics {
-			fmt.Printf("  %s  %s\n", border("│"), formatDiagnosticRelativeTo(d, result.WorkingDir))
-		}
+	case !view.raw:
+		printFindings(view, result, border)
 		for _, failure := range result.UnparsedFailures {
 			fmt.Printf("  %s\n", border("│"))
 			for line := range strings.SplitSeq(failure, "\n") {
 				fmt.Printf("  %s  %s\n", border("│"), line)
 			}
 		}
+		printHiddenLine(view, result, border)
 	case strings.TrimSpace(result.Output) != "":
 		fmt.Printf("  %s\n", border("│"))
 		lines := strings.SplitSeq(strings.TrimRight(result.Output, "\n"), "\n")
@@ -1611,6 +1627,81 @@ func printFailedExecution(runNum int, exec executionInstance) {
 
 	fmt.Printf("  %s%s\n", border("└"), border(strings.Repeat("─", 57)))
 	fmt.Println()
+}
+
+// printUnenforcedExecution prints the findings of a passed task at or above a
+// threshold nobody enforced, in a yellow frame: the parser module predates the
+// severity contract, so the exit code decided, and a user who asked for the
+// threshold sees what it would have caught.
+func printUnenforcedExecution(exec executionInstance, view taskView) {
+	result := exec.result
+	border := clr.Yellow
+	header := "─ " + clr.Yellow(result.ToolName)
+	if result.Scope != "" {
+		header += " " + clr.Faint("["+string(result.Scope)+"]")
+	}
+	header += fmt.Sprintf(" (failOn=%s not enforced) ", failOnOf(result))
+
+	fmt.Printf("  %s%s%s\n", border("┌"), header, border(strings.Repeat("─", 20)))
+	printFrameContext(exec, border)
+	fmt.Printf("  %s  %s\n", border("│"), clr.Faint("its parser module predates the severity contract; the exit code decided"))
+	if view.raw {
+		fmt.Printf("  %s\n", border("│"))
+		for line := range strings.SplitSeq(strings.TrimRight(result.Output, "\n"), "\n") {
+			fmt.Printf("  %s  %s\n", border("│"), line)
+		}
+	} else {
+		printFindings(view, result, border)
+		printHiddenLine(view, result, border)
+	}
+	fmt.Printf("  %s%s\n", border("└"), border(strings.Repeat("─", 57)))
+	fmt.Println()
+}
+
+// printFrameContext prints the directories a frame's paths are relative to.
+func printFrameContext(exec executionInstance, border func(a ...any) string) {
+	if exec.relativeDir != "" {
+		fmt.Printf("  %s  %s %s\n", border("│"), clr.Faint("Dir:      "), exec.relativeDir)
+	}
+	if exec.result.WorkingDir != "" {
+		fmt.Printf("  %s  %s %s\n", border("│"), clr.Faint("Cwd:      "), exec.result.WorkingDir)
+	}
+}
+
+func printFindings(view taskView, result tooling.ExecutionResult, border func(a ...any) string) {
+	if len(view.shown) == 0 {
+		return
+	}
+	fmt.Printf("  %s\n", border("│"))
+	for _, d := range view.shown {
+		fmt.Printf("  %s  %s\n", border("│"), formatDiagnosticRelativeTo(d, result.WorkingDir))
+	}
+}
+
+// printHiddenLine closes a frame with what it left out: the findings below the
+// threshold, counted rather than dropped.
+func printHiddenLine(view taskView, result tooling.ExecutionResult, border func(a ...any) string) {
+	if view.hidden.total() == 0 {
+		return
+	}
+	fmt.Printf("  %s  %s\n", border("│"),
+		clr.Faint(fmt.Sprintf("+ %s hidden (failOn=%s)", view.hidden.String(), failOnOf(result))))
+}
+
+// gatingFindings counts the findings that failed a process that exited 0.
+func gatingFindings(result tooling.ExecutionResult) int {
+	n := 0
+	for _, proc := range result.Processes {
+		if !proc.ThresholdFailed {
+			continue
+		}
+		for _, d := range proc.Diagnostics {
+			if d.Gates {
+				n++
+			}
+		}
+	}
+	return n
 }
 
 // durationColWidth reserves a fixed slot for the per-tool duration (covers
@@ -1650,6 +1741,16 @@ func printOperationFooter(toolGroups []toolExecutionGroup, wallClockTime int64, 
 		cancelText := fmt.Sprintf(" · %d cancelled", cancelled)
 		plain += cancelText
 		colored += clr.Faint(cancelText)
+	}
+	var hidden levelCounts
+	for _, group := range toolGroups {
+		_, groupHidden := groupViews(group)
+		hidden.merge(groupHidden)
+	}
+	if hidden.total() > 0 {
+		hiddenText := fmt.Sprintf(" · %s hidden", hidden.String())
+		plain += hiddenText
+		colored += clr.Faint(hiddenText)
 	}
 	if skipped > 0 {
 		skipText := fmt.Sprintf(" · %d skipped", skipped)

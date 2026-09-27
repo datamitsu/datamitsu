@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 56,
-  "pageSetHash": "82a5ed6230f09475ac2b4b9154e5f46f",
+  "pageSetHash": "7fd28eb0860ae9016ca7ddfa473aa007",
   "pages": [
     {
       "slug": "about",
@@ -451,8 +451,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 115074,
-      "contentHash": "3ec53e5c5db41dddb405b00cdc6a9937"
+      "bytes": 117010,
+      "contentHash": "57f252dca8e550cfb3cccafc8e87b64b"
     },
     {
       "slug": "reference/comparison",
@@ -469,8 +469,8 @@
       "url": "https://datamitsu.com/docs/reference/configuration-api.md",
       "title": "Configuration API",
       "description": "Complete reference for the datamitsu configuration API",
-      "bytes": 77105,
-      "contentHash": "b243876508f98f564b5e902cee2b659a"
+      "bytes": 77182,
+      "contentHash": "6fde9560fa3070404de220ec1815be0c"
     },
     {
       "slug": "reference/ignore-rules",

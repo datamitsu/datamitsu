@@ -7,7 +7,7 @@ exit code: 0
 ┏━ lint <RULE>
 ┃ fixture
 ┃
-┃ ✓ hadolint  <DUR> · 1 error
-┗━ 1 tools · 1 runs · done in <DUR> · 1 error hidden · cache 0% <RULE>
+┃ ✓ hadolint  <DUR> · 1 info, 1 hint
+┗━ 1 tools · 1 runs · done in <DUR> · 1 info, 1 hint hidden · cache 0% <RULE>
 
 ===STDERR===

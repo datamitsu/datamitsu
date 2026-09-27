@@ -92,8 +92,9 @@ configuration should do about it.
   run (semgrep without `--error`, trivy without `--exit-code`): pass the tool's
   own gate flag, or accept the failure. Set `failOn` only where a stricter gate
   than the tool's own is wanted. A parser module older than descriptor schema 2
-  gates nothing, and a run warns once when a threshold was asked for. Every
-  cache is cold once.
+  gates nothing, and a run warns once when a threshold was asked for. The
+  terminal shows findings at or above `failOn` and counts the rest. Every cache
+  is cold once.
 - **after v0.3.1** - A finding a tool printed no level for is an error when the
   tool failed and a warning when it passed (it was always a warning). The parser
   module released with this core (descriptor schema 2) sets levels only from

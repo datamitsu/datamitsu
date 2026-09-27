@@ -12,6 +12,7 @@ exit code: 1
   │  Cwd:       <TMP>
   │  Command:   sh -c sleep 0.01; echo "$0 $1" >> "$MARKERS/$0"; echo '[{"file":"Dockerfile","line":1,"column":1,"level":"warning","code":"DL3006","message":"Always tag the version of an image explicitly"}]'; exit 0 hadolint <TMP>/Dockerfile
   │  Exit code: 0
+  │  Failed on: 1 finding at or above failOn=warning
   │  Duration:  <DUR>
   │
   │  Dockerfile:1:1 warning Always tag the version of an image explicitly [DL3006]

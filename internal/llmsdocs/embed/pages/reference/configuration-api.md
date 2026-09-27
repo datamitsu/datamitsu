@@ -1079,7 +1079,8 @@ lint: {
 ```
 
 What gates is what the terminal shows: a run prints the findings at or above the
-operation's threshold and counts the rest.
+operation's threshold and counts the rest (see
+[findings in the terminal](./cli-commands.md#findings-in-the-terminal)).
 [`--fail-on`](./cli-commands.md#failing-on-findings---fail-on) and
 `DATAMITSU_FAIL_ON` raise every operation's threshold for one run; they never
 lower one.

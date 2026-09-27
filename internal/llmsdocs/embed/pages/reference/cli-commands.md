@@ -290,7 +290,44 @@ WARN failOn ignored for hadolint: parser module predates the severity contract
 With the default threshold, a tool that exits 0 on a finding its parser reads
 as an error fails the run — semgrep without `--error`, trivy without
 `--exit-code`. A tool that failed because of the threshold shows exit code 0 in
-its frame.
+its frame, with a `Failed on:` line naming the threshold.
+
+### Findings in the terminal
+
+What the terminal shows is what gates: for every tool it prints the findings at
+or above the operation's threshold, sorted by level, file, line, column and
+rule, and counts the rest.
+
+- A failed tool prints them in its red frame. A tool that failed although none
+  of its findings reaches the threshold — one that fails on warnings, such as
+  `yamllint --strict` or `eslint --max-warnings 0` — prints every finding, so a
+  failure always explains itself; one that failed without findings prints its
+  output.
+- The findings below the threshold are never dropped: the tool line counts them
+  per level, the frame ends with one line saying what it left out, and the
+  footer sums them.
+- A passed tool prints no frame, except when a threshold other than `error` was
+  asked for and its parser module predates the severity contract: its findings
+  at or above that threshold then print in a yellow frame, since nothing
+  enforced it.
+
+An abridged run, the frame without its directory, command and duration lines:
+
+```console
+┃ ✗ eslint        1.20s  (1 failed)  · 5 warnings
+  ┌─ eslint [per-project] (run #1) ────────────────────
+  │  Exit code: 1
+  │
+  │  src/a.ts:3:7 error 'x' is assigned a value but never used. [no-unused-vars]
+  │  src/b.ts:9:1 error Unexpected var, use let or const instead. [no-var]
+  │  + 5 warnings hidden (failOn=error)
+  └─────────────────────────────────────────────────────────
+┃ ✓ yamllint      310ms  · 2 warnings
+┗━ 2 tools · 2 runs · done in 1.20s · 1 failed · 7 warnings hidden
+```
+
+`--fail-on hint` shows every finding and fails on any of them. `--no-parse`
+prints each failed tool's output instead of findings and counts nothing.
 
 A tool the run stopped is neither a pass nor a failure, and it is listed rather
 than left out:

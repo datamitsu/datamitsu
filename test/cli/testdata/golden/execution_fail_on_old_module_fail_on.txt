@@ -9,6 +9,13 @@ exit code: 0
 ┃ fixture
 ┃
 ┃ ✓ hadolint  <DUR>
+  ┌─ hadolint [per-file] (failOn=warning not enforced) <RULE>
+  │  Cwd:       <TMP>
+  │  its parser module predates the severity contract; the exit code decided
+  │
+  │  Dockerfile:1:1 warning Always tag the version of an image explicitly [DL3006]
+  └<RULE>
+
 ┗━ 1 tools · 1 runs · done in <DUR> · cache 0% <RULE>
 
 ┗━ check · done in <DUR> · fix <DUR> · lint <DUR> · setup <DUR> <RULE>

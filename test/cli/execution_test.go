@@ -1056,9 +1056,10 @@ func TestExecutionParsedFailure(t *testing.T) {
 }
 
 // TestExecutionParsedPassKeepsFindingsUncached is S9: a tool that reports a
-// finding but exits 0 passes and prints nothing about the finding (plan 5
-// shows it), and records no cache pass (C1): every later run runs it again.
-// --no-parse changes only what a failure shows, so it records by the same rule.
+// warning but exits 0 passes under the default threshold, prints no frame and
+// counts the warning on its tool line and in the footer, and records no cache
+// pass (C1): every later run runs it again. --no-parse changes only what a
+// failure shows, so it records by the same rule.
 func TestExecutionParsedPassKeepsFindingsUncached(t *testing.T) {
 	e := newParsedProject(t, hadolintFinding, 0)
 
@@ -1122,6 +1123,12 @@ var (
 	releasedParserModule = filepath.Join("..", "..", "internal", "parsermanager", "testdata", "released", "v1", "b5425355.wasm")
 )
 
+// hadolintInfoAndStyle is two findings below warning: hadolint's info and
+// style levels, which its parser maps to info and hint.
+const hadolintInfoAndStyle = `[{"file":"Dockerfile","line":1,"column":1,"level":"info","code":"DL3059",` +
+	`"message":"Multiple consecutive RUN instructions"},` +
+	`{"file":"Dockerfile","line":2,"column":1,"level":"style","code":"DL3015","message":"Avoid additional packages"}]`
+
 // hadolintError is one finding at hadolint's error level.
 const hadolintError = `[{"file":"Dockerfile","line":1,"column":1,"level":"error","code":"DL3000",` +
 	`"message":"Use absolute WORKDIR"}]`
@@ -1167,6 +1174,8 @@ func TestExecutionFailOn(t *testing.T) {
 		{name: "old_module_fail_on", module: releasedParserModule, output: hadolintFinding, failOn: "warning", args: []string{"check"}, exit: 0, warnIgnored: true},
 		{name: "old_module_flag", module: releasedParserModule, output: hadolintFinding, args: []string{"lint", "--fail-on=warning"}, exit: 0, warnIgnored: true},
 		{name: "old_module_default", module: releasedParserModule, output: hadolintError, args: []string{"lint"}, exit: 0},
+		{name: "hint_env", module: currentParserModule, output: hadolintInfoAndStyle, env: []string{"DATAMITSU_FAIL_ON=hint"}, args: []string{"lint"}, exit: 1},
+		{name: "info_and_style_at_the_default", module: currentParserModule, output: hadolintInfoAndStyle, args: []string{"lint"}, exit: 0},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
