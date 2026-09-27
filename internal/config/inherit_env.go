@@ -11,10 +11,12 @@ import (
 var envNameRE = regexp.MustCompile(`^[A-Z_][A-Z0-9_]*$`)
 
 // inheritEnvErrors checks an operation's inheritEnv. A name nothing strips is
-// accepted: it changes nothing today and keeps working if the stripped list
-// grows. PATH is refused because an inherited host PATH would compete with the
-// one the runtime owns, and DATAMITSU_* because datamitsu's own variables are
-// read through internal/env, never handed to a tool.
+// accepted: the tool sees it anyway, naming it only puts its value in the
+// cache identities, and it keeps working if the stripped list grows. PATH is
+// refused because an inherited host PATH would compete with the one the
+// runtime owns, and DATAMITSU_* because resolving one would have
+// internal/tooling read datamitsu's own variables outside internal/env; a tool
+// sees them unchanged in any case.
 func inheritEnvErrors(toolName, opType string, names []string) []string {
 	var errs []string
 	seen := make(map[string]bool, len(names))
@@ -30,7 +32,7 @@ func inheritEnvErrors(toolName, opType string, names []string) []string {
 		case name == "PATH":
 			errs = append(errs, field+": PATH cannot be inherited, it would replace the PATH the runtime sets; list the binary in the app's dependsOn to put it on PATH")
 		case strings.HasPrefix(name, "DATAMITSU_"):
-			errs = append(errs, field+": datamitsu's own variables are not handed to tools")
+			errs = append(errs, field+": datamitsu's own variables cannot be named; a tool sees them unchanged")
 		}
 		seen[name] = true
 	}

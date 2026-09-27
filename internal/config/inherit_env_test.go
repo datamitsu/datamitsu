@@ -25,7 +25,7 @@ func TestValidateToolsInheritEnv(t *testing.T) {
 		{"duplicate", ToolOperation{InheritEnv: []string{"AI_AGENT", "AI_AGENT"}}, "listed more than once"},
 		{"NO_COLOR", ToolOperation{InheritEnv: []string{"NO_COLOR"}}, "cannot be inherited"},
 		{"PATH", ToolOperation{InheritEnv: []string{"PATH"}}, "PATH cannot be inherited"},
-		{"datamitsu's own", ToolOperation{InheritEnv: []string{"DATAMITSU_CACHE_DIR"}}, "datamitsu's own variables"},
+		{"datamitsu's own", ToolOperation{InheritEnv: []string{"DATAMITSU_CACHE_DIR"}}, "datamitsu's own variables cannot be named"},
 		{"NO_COLOR in env", ToolOperation{Env: map[string]string{"NO_COLOR": ""}}, `env "NO_COLOR"`},
 		{"NO_COLOR in env, any case", ToolOperation{Env: map[string]string{"No_Color": "1"}}, `env "No_Color"`},
 		{"other env", ToolOperation{Env: map[string]string{"GITHUB_ACTIONS": "false"}}, ""},

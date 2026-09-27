@@ -99,12 +99,14 @@ func TestWarmPerFileCacheRerunsWhenAnInheritedValueChanges(t *testing.T) {
 		t.Fatal(err)
 	}
 	e := NewExecutor(root, false, false, &mockAppManager{commands: map[string]*binmanager.CommandInfo{
-		"probe": shellApp(`printf '%s\n' "${` + probeVar + `-absent}" >> ` + seen),
+		"probe": shellApp(`printf '%s\n' "${` + probeVar + `-absent}" >> "$SEEN"`),
 	}}, c)
 
 	run := func() {
 		t.Helper()
-		if result := e.executeTask(context.Background(), inheritingTask(root, file)); !result.Success {
+		task := inheritingTask(root, file)
+		task.OpConfig.Env = map[string]string{"SEEN": seen}
+		if result := e.executeTask(context.Background(), task); !result.Success {
 			t.Fatalf("the probe failed: %v", result.Error)
 		}
 	}
