@@ -134,7 +134,8 @@ func (p *parseProblems) pending(users map[string]int) []string {
 	for _, module := range sortedKeys(p.modules) {
 		if p.claim("module\x00" + module) {
 			out = append(out, fmt.Sprintf(
-				"parser module %q could not be loaded, so %d tool(s) that use it ran without parsing; "+
+				"parser module %q could not be loaded, so %d tool(s) that use it ran without parsing "+
+					"and their lint passes are not cached; "+
 					"\"datamitsu devtools parsers prefetch\" fetches it ahead of a run: %s",
 				module, users[module], p.modules[module]))
 		}
@@ -151,7 +152,8 @@ func (p *parseProblems) pending(users map[string]int) []string {
 	})
 	for _, key := range keys {
 		if p.claim("parser\x00" + key[0] + "\x00" + key[1]) {
-			out = append(out, fmt.Sprintf("parser module %q has no parser %q, so the output of %s is not parsed",
+			out = append(out, fmt.Sprintf("parser module %q has no parser %q, so the output of %s is not parsed "+
+				"and its lint passes are not cached",
 				key[0], key[1], strings.Join(sortedKeys(p.unknown[key]), ", ")))
 		}
 	}

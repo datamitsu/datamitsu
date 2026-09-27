@@ -75,11 +75,11 @@ func TestVerdictIdentityIgnoresAbsolutePaths(t *testing.T) {
 		},
 	}
 	// Raw args are hashed, so the same operation in two checkouts agrees.
-	app, appAgain := verdictIdentity(task, "packages/app"), verdictIdentity(task, "packages/app")
+	app, appAgain := verdictIdentity(task, "packages/app", ""), verdictIdentity(task, "packages/app", "")
 	if app != appAgain {
 		t.Error("identity is not stable for one task")
 	}
-	if web := verdictIdentity(task, "packages/web"); app == web {
+	if web := verdictIdentity(task, "packages/web", ""); app == web {
 		t.Error("two units must not share an identity")
 	}
 }

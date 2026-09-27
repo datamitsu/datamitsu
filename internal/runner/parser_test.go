@@ -134,11 +134,13 @@ func TestDiagnosticParser_Unavailable(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("pending = %q, want one warning for the module and one for the key", got)
 	}
-	if !strings.HasPrefix(got[0], `parser module "broken" could not be loaded, so 2 tool(s) that use it ran without parsing; `+
+	if !strings.HasPrefix(got[0], `parser module "broken" could not be loaded, so 2 tool(s) that use it ran without parsing `+
+		`and their lint passes are not cached; `+
 		`"datamitsu devtools parsers prefetch" fetches it ahead of a run: `) {
 		t.Errorf("module warning = %q", got[0])
 	}
-	if want := `parser module "core" has no parser "no-such-parser", so the output of alpha, beta is not parsed`; got[1] != want {
+	if want := `parser module "core" has no parser "no-such-parser", so the output of alpha, beta is not parsed ` +
+		`and its lint passes are not cached`; got[1] != want {
 		t.Errorf("key warning = %q, want %q", got[1], want)
 	}
 	if again := problems.pending(nil); len(again) != 0 {

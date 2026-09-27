@@ -618,7 +618,10 @@ func (c *Cache) Clear() error {
 //
 //   - c2v1: a per-file pass is recorded against the bytes the tool was handed,
 //     never against whatever the file holds afterwards.
-const cacheSemantics = "c2v1"
+//   - c1v1: a lint pass means "nothing to report": for a tool with an output
+//     parser it is recorded only when the parser ran and found nothing, at any
+//     level, whatever the exit code.
+const cacheSemantics = "c1v1"
 
 // calculateInvalidationKey calculates an XXH3-128 hash from the datamitsu
 // version, the cache semantics, the full config JSON and the selected tools.

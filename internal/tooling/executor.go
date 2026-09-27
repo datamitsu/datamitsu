@@ -82,6 +82,7 @@ type Executor struct {
 	fileProgressCallback FileProgressCallback // Optional callback for per-file progress
 	cache                *cache.Cache         // Cache for storing execution results
 	parser               DiagnosticParser     // Optional: parses tool output into diagnostics
+	parserModules        config.MapOfParsers  // the declared parser modules, for the verdict identity
 
 	// cmdInfos memoizes command resolution for the lifetime of one Execute; it is
 	// nil outside one (FormatContent), which resolves directly.
@@ -151,6 +152,13 @@ func (e *Executor) SetFileProgressCallback(callback FileProgressCallback) {
 // outputParser. Without it, tool output is never parsed.
 func (e *Executor) SetParser(parser DiagnosticParser) {
 	e.parser = parser
+}
+
+// SetParserModules tells the executor which parser modules the configuration
+// declares. A unit verdict names the module its tool's output was parsed with,
+// so every executor sharing a cache has to be told the same modules.
+func (e *Executor) SetParserModules(parsers config.MapOfParsers) {
+	e.parserModules = parsers
 }
 
 // Execute runs an execution plan
@@ -588,7 +596,7 @@ func (e *Executor) executeTask(ctx context.Context, task Task) ExecutionResult {
 	// One write point per task, after every process it spawned has succeeded.
 	// The three per-process updateCacheAfterSuccess calls would otherwise let the
 	// first success of an N-process task record a verdict a later failure refutes.
-	if result.Success {
+	if result.Success && verdictEligible(task, result) {
 		e.recordVerdict(task, verdictKey, verdictSnap, verdictApplies)
 	}
 
@@ -726,7 +734,7 @@ func (e *Executor) filterFilesByCache(task Task) (filesToProcess []string, seen 
 		observed := observe(file)
 		if e.cache.Check(file, cacheTool, cacheOp, observed, true) {
 			filesToProcess = append(filesToProcess, file)
-			seen[file] = observed
+			seen[filepath.Clean(file)] = observed
 		}
 	}
 	cntCacheSkipped.Add(int64(len(task.Files) - len(filesToProcess)))
@@ -779,7 +787,7 @@ func (e *Executor) updateCacheAfterSuccess(task Task, files []string, seen map[s
 	for _, file := range files {
 		var err error
 		if task.Operation == config.OpLint {
-			observed, ok := seen[file]
+			observed, ok := seen[filepath.Clean(file)]
 			unchanged := ok && unchangedSince(file, observed)
 			if ok && !unchanged {
 				log.Debug("file changed while the tool ran; not recording its pass",
@@ -915,7 +923,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 	var outputs []fileOutput
 	var failures []error
 	var lastExitCode int
-	var processedFiles []string
+	var passed []string
 	// The failure a frame shows is the last failing file's: its exit code and
 	// its command, not those of a later file that passed.
 	var failedCommand string
@@ -956,7 +964,6 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 		if e.dryRun {
 			log.Debug("dry-run mode", zap.String("file", file), zap.Strings("args", args))
 			outputs = append(outputs, fileOutput{text: "[DRY-RUN] " + cmdString})
-			processedFiles = append(processedFiles, file)
 
 			// Call progress callback for dry-run files (offset by cached count)
 			if e.fileProgressCallback != nil {
@@ -1022,7 +1029,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 		exitCode := getExitCode(err)
 		lastExitCode = exitCode
 
-		proc := ProcessResult{Files: []string{file}, Extraction: ExtractionNone}
+		proc := ProcessResult{Files: []string{filepath.Clean(file)}, Extraction: ExtractionNone}
 		if parseMode {
 			e.parseFileDiagnostics(ctx, &proc, task, workingDir, stdoutBytes, stderrBytes, exitCode)
 		}
@@ -1116,7 +1123,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 			}
 		} else {
 			log.Debug("per-file execution succeeded", zap.String("file", file))
-			processedFiles = append(processedFiles, file)
+			passed = append(passed, passesOf(task.Operation, proc, proc.Files)...)
 		}
 
 		// Call progress callback after processing each file (offset by cached count)
@@ -1125,9 +1132,8 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 		}
 	}
 
-	// Update cache for successfully processed files
-	if len(processedFiles) > 0 {
-		e.updateCacheAfterSuccess(task, processedFiles, seen)
+	if len(passed) > 0 {
+		e.updateCacheAfterSuccess(task, passed, seen)
 	}
 
 	// If all succeeded, use exit code 0
@@ -1213,7 +1219,7 @@ func (e *Executor) executeBatch(ctx context.Context, task Task, cmdInfo *binmana
 			e.fileProgressCallback(task.ToolName, 1, 1, chunkResult.Success)
 		}
 		if chunkResult.Success {
-			e.updateCacheAfterSuccess(task, filesToProcess, seen)
+			e.updateCacheAfterSuccess(task, batchPasses(task.Operation, chunkResult.Processes, filesToProcess), seen)
 		}
 		return chunkResult
 	}
@@ -1228,9 +1234,8 @@ func (e *Executor) executeBatch(ctx context.Context, task Task, cmdInfo *binmana
 		if e.fileProgressCallback != nil {
 			e.fileProgressCallback(task.ToolName, 1, 1, chunkResult.Success)
 		}
-		// Update cache on success
 		if chunkResult.Success {
-			e.updateCacheAfterSuccess(task, filesToProcess, seen)
+			e.updateCacheAfterSuccess(task, batchPasses(task.Operation, chunkResult.Processes, nil), seen)
 		}
 		return chunkResult
 	}
@@ -1240,11 +1245,29 @@ func (e *Executor) executeBatch(ctx context.Context, task Task, cmdInfo *binmana
 	if e.fileProgressCallback != nil {
 		e.fileProgressCallback(task.ToolName, 1, 1, result.Success)
 	}
-	// Update cache on success
 	if result.Success {
-		e.updateCacheAfterSuccess(task, filesToProcess, seen)
+		e.updateCacheAfterSuccess(task, batchPasses(task.Operation, result.Processes, nil), seen)
 	}
 	return result
+}
+
+// batchPasses returns the files the processes of a successful batch task let a
+// pass be recorded for. Each process answers for the files it was given; a
+// process given none (argv-less, one run for the whole list) answers for
+// covered.
+func batchPasses(op config.OperationType, processes []ProcessResult, covered []string) []string {
+	passes := make([]string, 0, len(covered))
+	for _, proc := range processes {
+		files := proc.Files
+		if len(files) == 0 {
+			files = make([]string, len(covered))
+			for i, file := range covered {
+				files[i] = filepath.Clean(file)
+			}
+		}
+		passes = append(passes, passesOf(op, proc, files)...)
+	}
+	return passes
 }
 
 // argsReferenceFiles reports whether an operation's args place the matched files

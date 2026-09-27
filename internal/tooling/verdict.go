@@ -39,15 +39,27 @@ var guardNames = []string{
 // are deterministic functions of unitDir and the root, both already in the
 // vector, so expanding first would only bake absolute paths in and orphan every
 // entry when the repository moves.
-func verdictIdentity(task Task, unitDirRel string) string {
-	parts := make([][]byte, 0, 6+len(task.OpConfig.Args)+len(task.OpConfig.Env))
+//
+// The parser is part of the question: a lint verdict records that the parser
+// found nothing, so the SHA-256 of the module the tool's outputParser names and
+// the key it dispatches to are in the key — empty for a tool without one. The
+// whole configuration is also hashed into the cache's invalidation key, but
+// that covers them only as long as it hashes everything.
+func verdictIdentity(task Task, unitDirRel, parserModuleHash string) string {
+	parserKey := ""
+	if task.Tool.OutputParser != nil {
+		parserKey = task.Tool.OutputParser.Parser
+	}
+	parts := make([][]byte, 0, 8+len(task.OpConfig.Args)+len(task.OpConfig.Env))
 	parts = append(parts,
-		[]byte("dmv1"),
+		[]byte("dmv2"),
 		[]byte(task.ToolName),
 		[]byte(task.Operation),
 		[]byte(unitDirRel),
 		[]byte(config.InferGranularity(task.OpConfig)),
 		[]byte(config.EffectiveArity(task.OpConfig)),
+		[]byte(parserModuleHash),
+		[]byte(parserKey),
 	)
 	for _, arg := range task.OpConfig.Args {
 		parts = append(parts, []byte(arg))
@@ -634,7 +646,7 @@ func (e *Executor) verdictKeys(task Task) (key string, snap *verdictSnapshot, by
 	if len(task.UnitMembers) == 0 {
 		return "", nil, 0, false
 	}
-	key = verdictIdentity(task, task.UnitDir)
+	key = verdictIdentity(task, task.UnitDir, e.parserModuleHash(task))
 	snap, bytesRead = verdictSnapshotOf(task.UnitMembers, task.UnitGuards, e.rootPath)
 	return key, snap, bytesRead, true
 }
@@ -697,6 +709,16 @@ func (e *Executor) recordVerdict(task Task, key string, snap *verdictSnapshot, o
 		sibling := task
 		sibling.Operation = config.OpLint
 		sibling.OpConfig = lintOp
-		e.cache.DeleteVerdict(verdictIdentity(sibling, sibling.UnitDir))
+		e.cache.DeleteVerdict(verdictIdentity(sibling, sibling.UnitDir, e.parserModuleHash(sibling)))
 	}
+}
+
+// parserModuleHash is the SHA-256 of the parser module a task's outputParser
+// names, "" for a tool without one or a module the executor was not told about.
+func (e *Executor) parserModuleHash(task Task) string {
+	op := task.Tool.OutputParser
+	if op == nil {
+		return ""
+	}
+	return e.parserModules[op.Module].Hash
 }

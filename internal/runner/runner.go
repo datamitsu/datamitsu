@@ -93,6 +93,7 @@ type planExecutor interface {
 	SetTaskStartCallback(cb tooling.TaskStartCallback)
 	SetFileProgressCallback(cb tooling.FileProgressCallback)
 	SetParser(parser tooling.DiagnosticParser)
+	SetParserModules(parsers config.MapOfParsers)
 	Execute(ctx context.Context, plan *tooling.ExecutionPlan) ([]tooling.GroupExecutionResult, error)
 	TaskDir(task tooling.Task) string
 }
@@ -283,6 +284,7 @@ func initSharedContext(
 	// and so they appear in --explain, which never reaches the install step.
 	planner.SetPlatformChecker(binMgr)
 	sc.executor = tooling.NewExecutor(sc.rootPath, false, sc.failFast, binMgr, sc.projectCache)
+	sc.executor.SetParserModules(sc.cfg.Parsers)
 	// Wire output-parsing whenever parsers are declared. --no-parse only changes
 	// what a failure frame shows: what the run records must not depend on it.
 	if len(sc.cfg.Parsers) > 0 {

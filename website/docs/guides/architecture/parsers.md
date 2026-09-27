@@ -77,14 +77,18 @@ the positions that module reported.
 process a tool runs therefore records an **extraction outcome** next to its exit
 code:
 
-| Outcome              | When                                                                      |
-| -------------------- | ------------------------------------------------------------------------- |
-| `parsed-clean`       | the parser ran without error and returned no diagnostic                   |
-| `parsed-findings`    | the parser returned at least one diagnostic                               |
-| `parser-unavailable` | the module did not load, or its `describe` does not list the declared key |
-| `parse-failed`       | the module returned an error for this output                              |
-| `truncated`          | reserved for an output or finding count over a cap; no cap exists yet     |
-| `none`               | the tool declares no `outputParser`, so nothing was attempted             |
+| Outcome              | When                                                                      | Lint pass cached        |
+| -------------------- | ------------------------------------------------------------------------- | ----------------------- |
+| `parsed-clean`       | the parser ran without error and returned no diagnostic                   | yes                     |
+| `parsed-findings`    | the parser returned at least one diagnostic                               | for the files it spared |
+| `parser-unavailable` | the module did not load, or its `describe` does not list the declared key | no                      |
+| `parse-failed`       | the module returned an error for this output                              | no                      |
+| `truncated`          | reserved for an output or finding count over a cap; no cap exists yet     | no                      |
+| `none`               | the tool declares no `outputParser`, so nothing was attempted             | on success              |
+
+The last column is the [caching rule](./caching.md#a-lint-pass-means-nothing-to-report):
+a cached lint pass is replayed as "nothing to report", so it is recorded only where
+the parser said so.
 
 A module answers a parser key it does not know with an empty list, which would
 read as a clean run, so the core checks the key against the module's `describe`
@@ -103,7 +107,7 @@ run warns once, however many invocations hit the same problem:
   once per key.
 
 The tool's own exit code decides whether it passed, whatever its extraction
-outcome.
+outcome; the outcome decides what the cache may record.
 
 ### Noise tolerance
 

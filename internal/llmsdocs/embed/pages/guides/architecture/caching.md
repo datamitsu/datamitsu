@@ -145,6 +145,33 @@ Now step 2 replaces the entry with `{Y, [B]}`, and step 3 runs B. A fix pass is
 recorded against the content the fixer produced, as described
 [below](#fix-resets-lint-cache).
 
+### A lint pass means "nothing to report"
+
+A cache hit is replayed as "this tool found nothing here" — by the terminal, and by
+anything that reads a run's results after it. So for a tool that declares an
+[`outputParser`](./parsers.md#extraction-outcomes), a lint pass follows what the
+parser read, not the exit code:
+
+- A file gets a pass only when the process that checked it succeeded, its output
+  was parsed, no finding names the file, and every finding the process reported
+  names one of the files it was given. A finding that names no file, or a file
+  the process was not given, could be about any of them, and no file of that
+  process gets a pass.
+- Output that could not be parsed — the module did not load, does not know the
+  parser key, or failed — records nothing.
+- Every finding counts, at every level: a `hint` blocks a pass as much as an
+  `error` does.
+- A tool without an `outputParser` keeps the exit-status rule: a success is a
+  pass.
+- A fix pass follows success alone. The parser also reads a fixer's output, which
+  is not what it was written for.
+
+The consequence is deliberate: a file with findings of a tool that exits 0 on them
+— hadolint below its `failure-threshold`, a linter configured not to fail on
+warnings — is checked again on every run, while every file the tool found nothing
+in stays cached. `--no-parse` only changes what a failure prints, so it records
+by the same rule.
+
 ### Managed config content in the tool name
 
 An operation that names a managed config through `{managedConfig:<key>}` records
@@ -198,10 +225,18 @@ wherever that appears, including a `--config=PATH` argument or an `env` value �
 with `GO`, `CARGO`, `RUST`, `NODE_`, `NPM_`, `PYTHON`, `PIP_`, `UV_`, `JAVA_`, `TS_`,
 `ESLINT_`, `RUFF_`, `TF_`, or `TFLINT_`.
 
+A verdict is stored under the operation's identity: the tool, the operation, the unit, the
+granularity and arity, the raw `args`, the declared `env`, and — because the parser decides
+whether a lint run reported anything — the SHA-256 of the parser module the tool's
+`outputParser` names and the parser key. Pinning another module misses every verdict it did not
+decide.
+
 A `repo`-granularity operation gets a verdict too, but only when it opts in with `cache: true`.
 `file` granularity and an explicit `cache: false` never produce one.
 
-Only a successful task with **complete unit coverage** may write a verdict. A
+Only a successful task with **complete unit coverage** may write a verdict, and for
+a lint operation only when the task reported nothing: every process parsed without
+a finding, or run without an `outputParser`. A
 narrowed partial task can consume an earlier full verdict when its inputs still
 match, but it cannot mint a new whole-unit pass. Verdict hits also have a TTL,
 controlled by `DATAMITSU_UNIT_CACHE_TTL` (`1440` minutes by default; `0`
