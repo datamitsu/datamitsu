@@ -183,6 +183,9 @@ mod tests {
         ]}"#;
 		let files: Vec<_> = parse(json, b"", 0).into_iter().map(|d| d.file).collect();
 		assert_eq!(files, [Some(" a.py".to_string()), Some("a.py".to_string())]);
+
+		let json = br#"{"results":[{"check_id":"r","path":"stdin.py","start":{"line":1,"col":1},"end":{"line":1,"col":2},"extra":{"message":"m","severity":"WARNING"}}]}"#;
+		assert_eq!(parse(json, b"", 0)[0].file.as_deref(), Some("stdin.py"));
 	}
 }
 

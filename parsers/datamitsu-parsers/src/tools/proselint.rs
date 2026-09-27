@@ -5,8 +5,10 @@
 //! `output.result` is a map of file → `{ diagnostics: [ ... ] }` (the key names
 //! each diagnostic's file; `<stdin>` for piped text), and each
 //! diagnostic carries `pos` ([line, col], 1-based), `span` ([start, end), offsets
-//! into the whole text), `check_path` (the rule), and `message`. The span's
-//! length gives the end column. The builtin bails out when the top-level
+//! into the whole text), `check_path` (the rule), and `message`. The span may
+//! cross a line break (lexical illusions match across one), and the report does
+//! not say where the lines break, so no end is reported. The builtin bails out
+//! when the top-level
 //! `output.error` is set. proselint prints no per-diagnostic level, so no finding
 //! carries one.
 
@@ -87,14 +89,6 @@ fn from_diag(value: &JsonValue) -> Option<RawDiagnostic> {
 	let row = pos.and_then(|a| number_at(a, 0));
 	let col = pos.and_then(|a| number_at(a, 1));
 
-	// `pos` is where `span` starts, so the span's length is its extent on that line.
-	let span = array_of(map, "span");
-	let length = match (span.and_then(|a| number_at(a, 0)), span.and_then(|a| number_at(a, 1))) {
-		(Some(start), Some(end)) => end.checked_sub(start),
-		_ => None,
-	};
-	let end_col = col.zip(length).and_then(|(c, l)| c.checked_add(l));
-
 	let code = match map.get("check_path") {
 		Some(JsonValue::String(s)) => Some(s.clone()),
 		_ => None,
@@ -104,7 +98,6 @@ fn from_diag(value: &JsonValue) -> Option<RawDiagnostic> {
 		message,
 		row,
 		col,
-		end_col,
 		code,
 		..RawDiagnostic::default()
 	})
@@ -136,16 +129,19 @@ mod tests {
 		assert_eq!(out[0].row, Some(3));
 		assert_eq!(out[0].col, Some(5));
 		assert_eq!(out[0].end_row, None);
-		assert_eq!(out[0].end_col, Some(12));
+		assert_eq!(out[0].end_col, None);
 		assert_eq!(out[0].code.as_deref(), Some("typography.symbols.curly_quotes"));
 	}
 
 	#[test]
-	fn the_end_column_comes_from_the_span_length() {
-		let out = parse(SAMPLES[0].stdout, b"", 1);
-		assert_eq!(out[1].row, Some(7));
-		assert_eq!(out[1].col, Some(1));
-		assert_eq!(out[1].end_col, Some(12));
+	fn a_span_across_a_line_break_reports_only_its_start() {
+		// "the\nthe": the report cannot tell that the span ends on line 2.
+		let json = br#"{"result":{"a.md":{"diagnostics":[{"check_path":"lexical_illusions","message":"m","pos":[1,1],"span":[0,7]}]}}}"#;
+		let out = parse(json, b"", 1);
+		assert_eq!(
+			(out[0].row, out[0].col, out[0].end_row, out[0].end_col),
+			(Some(1), Some(1), None, None)
+		);
 	}
 
 	#[test]

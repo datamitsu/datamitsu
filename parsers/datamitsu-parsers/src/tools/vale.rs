@@ -48,6 +48,12 @@ pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 	crate::tools::json_diag::extract_lenient(stdout, from_report)
 }
 
+/// vale names the buffer it read from stdin `stdin.<ext>`; a file of that name
+/// at the root of a batch is indistinguishable and loses its name too.
+fn is_stdin_buffer(name: &str) -> bool {
+	name.starts_with("stdin.") && !name.contains(['/', '\\'])
+}
+
 fn from_report(value: &JsonValue) -> Vec<RawDiagnostic> {
 	let mut out = Vec::new();
 	// Top level is an object keyed by filename; iterate every file's array.
@@ -59,7 +65,7 @@ fn from_report(value: &JsonValue) -> Vec<RawDiagnostic> {
 						if let Some(mut d) = from_obj(obj) {
 							// The key is the only place the path appears, and one
 							// vale run covers many files.
-							d.file = crate::diagnostic::exact_file_field(name);
+							d.file = crate::diagnostic::exact_file_field(name).filter(|f| !is_stdin_buffer(f));
 							out.push(d);
 						}
 					}

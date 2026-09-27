@@ -194,7 +194,7 @@ const POSITIONS: &[(&str, &str)] = &[
 	("phpmd", "1-based beginLine and endLine, no column"),
 	("phpstan", "1-based line only"),
 	("pmd", "1-based begin/end line and column; PMD 7's end column is exclusive"),
-	("proselint", "1-based line and column; end column = column + span length (the span stays on its line)"),
+	("proselint", "1-based line and column, no end (the span may cross a line break)"),
 	("protolint", "1-based line and column, no end"),
 	("puppet_lint", "1-based line and column, no end"),
 	("pydoclint", "1-based line only"),

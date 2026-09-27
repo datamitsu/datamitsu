@@ -74,9 +74,14 @@ pub fn file_field(raw: &str) -> Option<String> {
 
 /// [`file_field`] for a name a structured format delimits (a JSON string or key,
 /// a decoded URI): kept byte for byte, since trimming could turn ` a.py` into
-/// another file of the same batch.
+/// another file of the same batch. Only the generic stdin names are dropped; a
+/// `stdin.py` is a real file here, so a tool that names its buffer that way
+/// filters the name itself.
 pub fn exact_file_field(raw: &str) -> Option<String> {
-	file_field(raw).map(|_| raw.to_string())
+	match raw.trim() {
+		"" | "-" | "<stdin>" | "stdin" => None,
+		_ => Some(raw.to_string()),
+	}
 }
 
 impl RawDiagnostic {
@@ -222,10 +227,10 @@ mod tests {
 
 	#[test]
 	fn exact_file_field_keeps_the_name_as_printed() {
-		for placeholder in ["", "  ", "-", "<stdin>", "stdin.md"] {
+		for placeholder in ["", "  ", "-", "<stdin>", "stdin"] {
 			assert_eq!(exact_file_field(placeholder), None, "{placeholder:?} is not a file");
 		}
-		for path in [" a.py", "a.py ", "src/a.ts"] {
+		for path in [" a.py", "a.py ", "src/a.ts", "stdin.py"] {
 			assert_eq!(exact_file_field(path).as_deref(), Some(path));
 		}
 	}
