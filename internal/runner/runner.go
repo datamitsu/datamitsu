@@ -299,8 +299,6 @@ func initSharedContext(
 	return sc, nil
 }
 
-// resolveFailFast applies the precedence of the fail-fast setting: the flag,
-// then DATAMITSU_FAIL_FAST, then the default.
 func resolveFailFast(flag *bool) bool {
 	if flag != nil {
 		return *flag

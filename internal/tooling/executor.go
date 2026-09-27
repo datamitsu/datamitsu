@@ -60,8 +60,6 @@ var errFailFast = errors.New("fail-fast")
 // failure it reported is not taken for a cancellation.
 var errStopped = errors.New("stopped by cancellation")
 
-// stoppedByCancellation reports whether err comes from a cancellation: a
-// process the context stopped, or work refused because the context was done.
 func stoppedByCancellation(err error) bool {
 	return errors.Is(err, errStopped) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
 }

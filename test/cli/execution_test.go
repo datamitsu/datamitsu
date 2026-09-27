@@ -205,7 +205,6 @@ func operationDone(e clitest.Event) bool {
 	return e.Type == "done" && strings.HasPrefix(e.OpID, "run-")
 }
 
-// runDone returns the one run-level done event of the stream.
 func runDone(t *testing.T, events []clitest.Event) clitest.Event {
 	t.Helper()
 	done := eventsOf(events, func(e clitest.Event) bool { return e.Type == "done" && strings.HasPrefix(e.OpID, "cmd-") })
@@ -215,8 +214,6 @@ func runDone(t *testing.T, events []clitest.Event) clitest.Event {
 	return done[0]
 }
 
-// wantRunDone asserts the run-level done of a command: its op, outcome, totals
-// and completeness.
 func wantRunDone(t *testing.T, events []clitest.Event, op string, success bool, runs, cancelled int, complete bool) {
 	t.Helper()
 	d := runDone(t, events)
@@ -229,7 +226,6 @@ func wantRunDone(t *testing.T, events []clitest.Event, op string, success bool, 
 	}
 }
 
-// wantDone asserts the one per-operation done event's run and cancelled counts.
 func wantDone(t *testing.T, events []clitest.Event, op string, runs, cancelled int) {
 	t.Helper()
 	done := eventsOf(events, func(e clitest.Event) bool { return e.Type == "done" && e.Op == op && strings.HasPrefix(e.OpID, "run-") })
@@ -855,7 +851,6 @@ func TestExecutionRunThatCannotStart(t *testing.T) {
 	})
 }
 
-// checkClosingRE matches check's closing line, durations masked.
 var checkClosingRE = regexp.MustCompile(`(?m)^┗━ check · done in \S+ · fix (\S+|not run) · lint (\S+|not run) · setup \S+ ━+$`)
 
 // TestExecutionCheckTotalTime: check closes with the wall clock of the whole

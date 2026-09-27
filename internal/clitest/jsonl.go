@@ -228,7 +228,6 @@ func AssertChains(tb testing.TB, events []Event) {
 	}
 }
 
-// isRunDone reports whether e is the run-level done event of a whole command.
 func isRunDone(e Event) bool {
 	return e.Type == "done" && strings.HasPrefix(e.OpID, "cmd-")
 }

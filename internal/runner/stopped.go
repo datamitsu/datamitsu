@@ -11,7 +11,6 @@ import (
 	"github.com/datamitsu/datamitsu/internal/uievent"
 )
 
-// stopCause says why a run stopped before every planned task finished.
 type stopCause string
 
 const (

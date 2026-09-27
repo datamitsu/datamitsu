@@ -8,7 +8,6 @@ import (
 	"syscall"
 )
 
-// interruptSignals are the signals that stop a run: Ctrl-C and a polite kill.
 var interruptSignals = []os.Signal{os.Interrupt, syscall.SIGTERM}
 
 // interruptedError is the cause a run's context is cancelled with when a signal
