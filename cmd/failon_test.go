@@ -10,9 +10,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// TestApplyFailOn: the flag wins over DATAMITSU_FAIL_ON, and an invalid value
+// TestResolveFailOn: the flag wins over DATAMITSU_FAIL_ON, and an invalid value
 // of either is a usage error even when the other is given.
-func TestApplyFailOn(t *testing.T) {
+func TestResolveFailOn(t *testing.T) {
 	cases := []struct {
 		name    string
 		env     string
@@ -30,7 +30,6 @@ func TestApplyFailOn(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Setenv("DATAMITSU_FAIL_ON", tc.env)
 			c := &cobra.Command{}
 			var value string
 			addFailOnFlag(c, &value)
@@ -40,15 +39,15 @@ func TestApplyFailOn(t *testing.T) {
 				}
 			}
 			var opts runner.Options
-			err := applyFailOn(c, value, &opts)
+			err := resolveFailOn(c, value, tc.env, &opts)
 			if tc.wantErr {
 				if _, ok := errors.AsType[exitcode.UsageError](err); !ok {
-					t.Fatalf("applyFailOn() = %v, want a usage error", err)
+					t.Fatalf("resolveFailOn() = %v, want a usage error", err)
 				}
 				return
 			}
 			if err != nil || opts.FailOn != tc.want {
-				t.Errorf("applyFailOn() = %v with FailOn %q, want %q", err, opts.FailOn, tc.want)
+				t.Errorf("resolveFailOn() = %v with FailOn %q, want %q", err, opts.FailOn, tc.want)
 			}
 		})
 	}

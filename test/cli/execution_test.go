@@ -1173,6 +1173,7 @@ func TestExecutionFailOn(t *testing.T) {
 		{name: "warning_env", module: currentParserModule, output: hadolintFinding, env: []string{"DATAMITSU_FAIL_ON=warning"}, args: []string{"lint"}, exit: 1},
 		{name: "old_module_fail_on", module: releasedParserModule, output: hadolintFinding, failOn: "warning", args: []string{"check"}, exit: 0, warnIgnored: true},
 		{name: "old_module_flag", module: releasedParserModule, output: hadolintFinding, args: []string{"lint", "--fail-on=warning"}, exit: 0, warnIgnored: true},
+		{name: "old_module_flag_no_parse", module: releasedParserModule, output: hadolintFinding, args: []string{"lint", "--fail-on=warning", "--no-parse"}, exit: 0, warnIgnored: true},
 		{name: "old_module_default", module: releasedParserModule, output: hadolintError, args: []string{"lint"}, exit: 0},
 		{name: "hint_env", module: currentParserModule, output: hadolintInfoAndStyle, env: []string{"DATAMITSU_FAIL_ON=hint"}, args: []string{"lint"}, exit: 1},
 		{name: "info_and_style_at_the_default", module: currentParserModule, output: hadolintInfoAndStyle, args: []string{"lint"}, exit: 0},
