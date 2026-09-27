@@ -12,6 +12,8 @@ import (
 	"github.com/datamitsu/datamitsu/internal/exitcode"
 	"github.com/datamitsu/datamitsu/internal/timing"
 	"github.com/datamitsu/datamitsu/internal/tooling"
+	"github.com/datamitsu/datamitsu/internal/ui"
+	"github.com/datamitsu/datamitsu/internal/uievent"
 )
 
 func task(tool, projectPath string) tooling.Task {
@@ -193,6 +195,61 @@ func TestOutcomePrecedence(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// An interruption between two groups that passed leaves no failed result, yet
+// the operation did not complete: its done event fails.
+func TestInterruptedOperationFails(t *testing.T) {
+	t.Setenv("CI", "true")
+	sink := &recordingSink{}
+	ui.SetEventSink(sink, true)
+	defer ui.SetEventSink(nil, false)
+
+	var order []string
+	plan := &tooling.ExecutionPlan{Groups: []tooling.TaskGroup{
+		{Priority: 10, Tasks: []tooling.Task{task("alpha", "")}},
+		{Priority: 20, Tasks: []tooling.Task{task("beta", "")}},
+	}}
+	executor := &fakeExecutor{order: &order, results: []tooling.GroupExecutionResult{
+		{Priority: 10, Success: true, Results: []tooling.ExecutionResult{{ToolName: "alpha", Success: true}}},
+	}}
+	sc := &sharedContext{
+		planner:         &fakePlanner{plan: plan},
+		executor:        executor,
+		binMgr:          &fakeEnsurer{order: &order},
+		timings:         timing.New(),
+		platformSkipped: map[string]struct{}{},
+		narrowed:        map[string]struct{}{},
+	}
+	ctx, cancel := context.WithCancelCause(context.Background())
+	cancel(interruptedError{sig: syscall.SIGINT})
+
+	if err := runSingleOperation(ctx, sc, config.OpLint); err == nil {
+		t.Error("runSingleOperation() = nil, want the interrupted operation to fail")
+	}
+	var done []uievent.Event
+	for _, e := range sink.events {
+		if e.Type == uievent.TypeDone {
+			done = append(done, e)
+		}
+	}
+	if len(done) != 1 || done[0].Status != uievent.StatusFail || done[0].Cancelled == nil || *done[0].Cancelled != 1 {
+		t.Errorf("done events = %+v, want one fail counting beta as cancelled", done)
+	}
+}
+
+// A failure whose joined output holds only blank lines shows its error, not an
+// empty frame.
+func TestFailedExecutionShowsTheErrorOverBlankOutput(t *testing.T) {
+	t.Setenv("CI", "true")
+	out := captureStdout(t, func() {
+		printFailedExecution(1, executionInstance{result: tooling.ExecutionResult{
+			ToolName: "alpha", ExitCode: 1, Output: "\n\n", Error: errors.New("failed to execute for file a.txt (exit code 1)"),
+		}})
+	})
+	if !strings.Contains(out, "failed to execute for file a.txt") {
+		t.Errorf("the frame lacks the error:\n%s", out)
 	}
 }
 

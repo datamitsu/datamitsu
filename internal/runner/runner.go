@@ -686,6 +686,10 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		stopped = append(stopped, task)
 		emitStopped(runOpID, task)
 	}
+	// An interruption can stop a run between two groups that passed, with no
+	// failed result to show for it; the tasks it stopped still fail the
+	// operation.
+	incomplete := len(stopped) > 0
 
 	// Cache hit/miss feeds the footer.
 	cacheHits, cacheMisses := 0, 0
@@ -695,7 +699,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	}
 
 	// Calculate total wall-clock time and failure state.
-	hasFailures := execErr != nil
+	hasFailures := execErr != nil || incomplete
 	var totalWallClockTime int64
 	for _, groupResult := range results {
 		totalWallClockTime += groupResult.WallClockDuration
@@ -1567,7 +1571,7 @@ func printFailedExecution(runNum int, exec executionInstance) {
 		for _, d := range result.Diagnostics {
 			fmt.Printf("  %s  %s\n", border("│"), formatDiagnosticRelativeTo(d, result.WorkingDir))
 		}
-	case result.Output != "":
+	case strings.TrimSpace(result.Output) != "":
 		fmt.Printf("  %s\n", border("│"))
 		lines := strings.SplitSeq(strings.TrimRight(result.Output, "\n"), "\n")
 		for line := range lines {
@@ -1643,7 +1647,6 @@ func printOperationFooter(toolGroups []toolExecutionGroup, wallClockTime int64, 
 	fmt.Println(ui.RuleLine("┗", plain, colored))
 }
 
-// partialTasks counts the tasks that failed with files fail-fast left unrun.
 func partialTasks(results []tooling.GroupExecutionResult) int {
 	n := 0
 	for _, group := range results {

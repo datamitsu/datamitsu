@@ -26,11 +26,10 @@ const (
 // every output says which of the two it is, so that a consumer never reads
 // "no output" as "clean".
 type stoppedTask struct {
-	tool    string
-	dir     string
-	started bool
-	cause   stopCause
-	// durationMs is how long a started task ran before it was stopped.
+	tool       string
+	dir        string
+	started    bool
+	cause      stopCause
 	durationMs int64
 }
 
