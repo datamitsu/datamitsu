@@ -53,7 +53,8 @@ pub struct RawDiagnostic {
 /// Returns `None` for anything that does not name a real file — an empty string,
 /// or one of the placeholders tools print when they read stdin (`-`, `stdin`,
 /// `stdin.md`, `<stdin>`). Those must stay absent so the core stamps the file it
-/// actually linted instead of showing a placeholder.
+/// actually linted instead of showing a placeholder. The name is trimmed, as a
+/// name cut from a line of text carries the layout around it.
 pub fn file_field(raw: &str) -> Option<String> {
 	let s = raw.trim();
 	if s.is_empty() {
@@ -69,6 +70,13 @@ pub fn file_field(raw: &str) -> Option<String> {
 		return None;
 	}
 	Some(s.to_string())
+}
+
+/// [`file_field`] for a name a structured format delimits (a JSON string or key,
+/// a decoded URI): kept byte for byte, since trimming could turn ` a.py` into
+/// another file of the same batch.
+pub fn exact_file_field(raw: &str) -> Option<String> {
+	file_field(raw).map(|_| raw.to_string())
 }
 
 impl RawDiagnostic {
@@ -210,5 +218,15 @@ mod tests {
 			assert_eq!(file_field(path).as_deref(), Some(path));
 		}
 		assert_eq!(file_field("  src/a.ts  ").as_deref(), Some("src/a.ts"));
+	}
+
+	#[test]
+	fn exact_file_field_keeps_the_name_as_printed() {
+		for placeholder in ["", "  ", "-", "<stdin>", "stdin.md"] {
+			assert_eq!(exact_file_field(placeholder), None, "{placeholder:?} is not a file");
+		}
+		for path in [" a.py", "a.py ", "src/a.ts"] {
+			assert_eq!(exact_file_field(path).as_deref(), Some(path));
+		}
 	}
 }

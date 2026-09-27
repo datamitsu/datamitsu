@@ -85,7 +85,7 @@ fn from_violation(violation: &JsonValue) -> Option<RawDiagnostic> {
 		url: documentation(map),
 		file: get_str(location, "file")
 			.as_deref()
-			.and_then(crate::diagnostic::file_field),
+			.and_then(crate::diagnostic::exact_file_field),
 	})
 }
 

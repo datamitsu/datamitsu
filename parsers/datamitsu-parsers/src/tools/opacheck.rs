@@ -94,7 +94,7 @@ fn diag_from_error(value: &JsonValue, severity: Option<u8>) -> Option<RawDiagnos
 		source: Some("opacheck".to_string()),
 		code,
 		file: match location.get("file") {
-			Some(JsonValue::String(s)) => crate::diagnostic::file_field(s),
+			Some(JsonValue::String(s)) => crate::diagnostic::exact_file_field(s),
 			_ => None,
 		},
 		..RawDiagnostic::default()

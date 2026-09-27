@@ -89,7 +89,7 @@ fn issue_to_diag(issue: &JsonValue) -> Option<RawDiagnostic> {
 			get_u32(pos, "Line"),
 			get_u32(pos, "Column"),
 			match pos.get("Filename") {
-				Some(JsonValue::String(s)) => crate::diagnostic::file_field(s),
+				Some(JsonValue::String(s)) => crate::diagnostic::exact_file_field(s),
 				_ => None,
 			},
 		),

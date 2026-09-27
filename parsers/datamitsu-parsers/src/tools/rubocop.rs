@@ -57,7 +57,9 @@ pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 		let Some(file) = file.get::<HashMap<String, JsonValue>>() else {
 			continue;
 		};
-		let path = get_str(file, "path").as_deref().and_then(crate::diagnostic::file_field);
+		let path = get_str(file, "path")
+			.as_deref()
+			.and_then(crate::diagnostic::exact_file_field);
 		let Some(offenses) = file.get("offenses").and_then(|o| o.get::<Vec<JsonValue>>()) else {
 			continue;
 		};

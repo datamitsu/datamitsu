@@ -78,7 +78,7 @@ fn from_diag(value: &JsonValue) -> Option<RawDiagnostic> {
 	let file = match map.get("range") {
 		Some(JsonValue::Object(range)) => get_str(range, "filename")
 			.as_deref()
-			.and_then(crate::diagnostic::file_field),
+			.and_then(crate::diagnostic::exact_file_field),
 		_ => None,
 	};
 	let (row, col, end_row, end_col) = match map.get("range") {

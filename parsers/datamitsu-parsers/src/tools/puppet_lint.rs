@@ -74,7 +74,7 @@ fn from_finding(value: &JsonValue) -> Option<RawDiagnostic> {
 		file: get_str(map, "path")
 			.or_else(|| get_str(map, "fullpath"))
 			.as_deref()
-			.and_then(crate::diagnostic::file_field),
+			.and_then(crate::diagnostic::exact_file_field),
 		..RawDiagnostic::default()
 	})
 }

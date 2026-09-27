@@ -71,7 +71,7 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 	let file = label
 		.and_then(|l| get_str(l, "filename"))
 		.as_deref()
-		.and_then(crate::diagnostic::file_field);
+		.and_then(crate::diagnostic::exact_file_field);
 	let span = label.and_then(|l| l.get("span")).and_then(|sp| match sp {
 		JsonValue::Object(m) => Some(m),
 		_ => None,

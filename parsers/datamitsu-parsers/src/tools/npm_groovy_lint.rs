@@ -57,7 +57,7 @@ pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 		let Some(JsonValue::Array(errors)) = as_obj(file).and_then(|f| f.get("errors")) else {
 			continue;
 		};
-		let path = crate::diagnostic::file_field(path);
+		let path = crate::diagnostic::exact_file_field(path);
 		for error in errors {
 			if let Some(mut d) = from_error(error) {
 				d.file.clone_from(&path);

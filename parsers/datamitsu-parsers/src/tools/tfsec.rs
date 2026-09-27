@@ -90,7 +90,7 @@ fn result_to_diag(result: &JsonValue) -> Option<RawDiagnostic> {
 		file: location
 			.and_then(|l| get_str(l, "filename"))
 			.as_deref()
-			.and_then(crate::diagnostic::file_field),
+			.and_then(crate::diagnostic::exact_file_field),
 		..RawDiagnostic::default()
 	})
 }

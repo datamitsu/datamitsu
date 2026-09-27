@@ -53,7 +53,7 @@ pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 					if let Some(JsonValue::Array(messages)) = file_obj.get("messages") {
 						for msg in messages {
 							if let Some(mut d) = json_diag::from_obj(msg, &attrs, severity_of) {
-								d.file = crate::diagnostic::file_field(path);
+								d.file = crate::diagnostic::exact_file_field(path);
 								out.push(d);
 							}
 						}

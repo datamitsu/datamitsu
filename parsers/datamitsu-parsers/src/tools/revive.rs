@@ -57,7 +57,7 @@ fn failure_to_diag(item: &JsonValue) -> Option<RawDiagnostic> {
 		Some(JsonValue::Object(pos)) => match pos.get("Start") {
 			Some(JsonValue::Object(s)) => get_str(s, "Filename")
 				.as_deref()
-				.and_then(crate::diagnostic::file_field),
+				.and_then(crate::diagnostic::exact_file_field),
 			_ => None,
 		},
 		_ => None,

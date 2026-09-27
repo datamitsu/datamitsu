@@ -69,7 +69,9 @@ fn from_result(value: &JsonValue) -> Option<RawDiagnostic> {
 	let end = obj(map.get("end"));
 	Some(RawDiagnostic {
 		message,
-		file: get_str(map, "path").as_deref().and_then(crate::diagnostic::file_field),
+		file: get_str(map, "path")
+			.as_deref()
+			.and_then(crate::diagnostic::exact_file_field),
 		code: get_str(map, "check_id"),
 		severity: extra
 			.and_then(|e| get_str(e, "severity"))
@@ -171,6 +173,16 @@ mod tests {
 		let out = parse(json, b"", 1);
 		assert_eq!(out[0].file.as_deref(), Some("src/a.py"));
 		assert_eq!(out[1].file.as_deref(), Some("src/b.py"));
+	}
+
+	#[test]
+	fn keeps_a_path_as_printed() {
+		let json = br#"{"results":[
+            {"check_id":"r","path":" a.py","start":{"line":1,"col":1},"end":{"line":1,"col":2},"extra":{"message":"m","severity":"WARNING"}},
+            {"check_id":"r","path":"a.py","start":{"line":1,"col":1},"end":{"line":1,"col":2},"extra":{"message":"m","severity":"WARNING"}}
+        ]}"#;
+		let files: Vec<_> = parse(json, b"", 0).into_iter().map(|d| d.file).collect();
+		assert_eq!(files, [Some(" a.py".to_string()), Some("a.py".to_string())]);
 	}
 }
 

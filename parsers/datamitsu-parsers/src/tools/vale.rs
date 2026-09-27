@@ -59,7 +59,7 @@ fn from_report(value: &JsonValue) -> Vec<RawDiagnostic> {
 						if let Some(mut d) = from_obj(obj) {
 							// The key is the only place the path appears, and one
 							// vale run covers many files.
-							d.file = crate::diagnostic::file_field(name);
+							d.file = crate::diagnostic::exact_file_field(name);
 							out.push(d);
 						}
 					}

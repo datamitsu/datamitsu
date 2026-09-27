@@ -72,7 +72,7 @@ fn parse_diagnostic(value: &JsonValue) -> Option<RawDiagnostic> {
 	let file = match obj.get("range") {
 		Some(JsonValue::Object(range)) => str_field(range, "filename")
 			.as_deref()
-			.and_then(crate::diagnostic::file_field),
+			.and_then(crate::diagnostic::exact_file_field),
 		_ => None,
 	};
 	// Positions only exist when a `range` is present.

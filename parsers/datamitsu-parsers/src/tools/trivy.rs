@@ -66,7 +66,7 @@ fn parse_stream(bytes: &[u8]) -> Vec<RawDiagnostic> {
 		let target = get_str(result, "Target")
 			.filter(|t| t != ".")
 			.as_deref()
-			.and_then(crate::diagnostic::file_field);
+			.and_then(crate::diagnostic::exact_file_field);
 		for m in miscfgs {
 			if let Some(mut d) = from_misconfiguration(m) {
 				d.file.clone_from(&target);

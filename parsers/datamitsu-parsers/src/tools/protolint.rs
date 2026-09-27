@@ -89,7 +89,7 @@ fn from_lint(lint: &JsonValue) -> Option<RawDiagnostic> {
 		source: Some("protolint".to_string()),
 		file: get_str(map, "filename")
 			.as_deref()
-			.and_then(crate::diagnostic::file_field),
+			.and_then(crate::diagnostic::exact_file_field),
 		..RawDiagnostic::default()
 	})
 }

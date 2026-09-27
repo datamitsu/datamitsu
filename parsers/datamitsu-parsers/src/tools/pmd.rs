@@ -58,7 +58,7 @@ pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 		};
 		let path = get_str(file, "filename")
 			.as_deref()
-			.and_then(crate::diagnostic::file_field);
+			.and_then(crate::diagnostic::exact_file_field);
 		for v in violations {
 			if let Some(mut d) = violation_to_diag(v) {
 				d.file.clone_from(&path);

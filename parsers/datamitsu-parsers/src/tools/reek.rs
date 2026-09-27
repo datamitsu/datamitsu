@@ -60,7 +60,7 @@ fn expand_record(record: &JsonValue, out: &mut Vec<RawDiagnostic>) {
 	// reek names piped source "STDIN" unless --stdin-filename names it.
 	let file = get_str(map, "source")
 		.as_deref()
-		.and_then(crate::diagnostic::file_field)
+		.and_then(crate::diagnostic::exact_file_field)
 		.filter(|f| f != "STDIN");
 
 	let lines = match map.get("lines") {

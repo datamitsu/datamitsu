@@ -79,7 +79,7 @@ fn from_diag(value: &JsonValue) -> Option<RawDiagnostic> {
 	if let Some(JsonValue::Object(range)) = map.get("range") {
 		diag.file = get_str(range, "filename")
 			.as_deref()
-			.and_then(crate::diagnostic::file_field);
+			.and_then(crate::diagnostic::exact_file_field);
 		if let Some(JsonValue::Object(start)) = range.get("start") {
 			diag.row = get_u32(start, "line");
 			diag.col = get_u32(start, "column");

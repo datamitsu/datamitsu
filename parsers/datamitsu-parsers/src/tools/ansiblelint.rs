@@ -65,7 +65,7 @@ fn from_obj(value: &JsonValue) -> Option<RawDiagnostic> {
 			.and_then(as_obj)
 			.and_then(|l| get_str(l, "path"))
 			.as_deref()
-			.and_then(crate::diagnostic::file_field),
+			.and_then(crate::diagnostic::exact_file_field),
 		..RawDiagnostic::default()
 	})
 }

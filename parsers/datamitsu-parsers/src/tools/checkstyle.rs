@@ -118,7 +118,7 @@ fn parse_sarif(stdout: &[u8], out: &mut Vec<RawDiagnostic>) {
 				.and_then(as_str)
 				.and_then(|uri| uri_path(&uri))
 				.as_deref()
-				.and_then(crate::diagnostic::file_field);
+				.and_then(crate::diagnostic::exact_file_field);
 			out.push(RawDiagnostic {
 				message: message.clone(),
 				row,
