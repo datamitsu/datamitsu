@@ -66,7 +66,7 @@ fn report_to_diag(report: &JsonValue) -> Option<RawDiagnostic> {
 		.and_then(as_object)
 		.and_then(|m| get_str(m, "FilePath"))
 		.as_deref()
-		.and_then(crate::diagnostic::exact_file_field);
+		.and_then(crate::diagnostic::file_field);
 
 	Some(RawDiagnostic {
 		message,

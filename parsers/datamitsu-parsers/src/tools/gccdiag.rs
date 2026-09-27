@@ -151,6 +151,13 @@ mod tests {
 		let files: Vec<_> = parse(&[], stderr, 1).into_iter().map(|d| d.file).collect();
 		assert_eq!(files, [Some("src/a.c".to_string()), Some("include/b.h".to_string())]);
 	}
+
+	#[test]
+	fn keeps_a_file_name_as_printed() {
+		let out = parse(b"", b" a.c:1:1: warning: m\na.c:2:1: warning: n\n", 0);
+		let files: Vec<_> = out.into_iter().map(|d| d.file).collect();
+		assert_eq!(files, [Some(" a.c".to_string()), Some("a.c".to_string())]);
+	}
 }
 
 /// Recorded or representative outputs every parser check runs over (`crate::contract`).

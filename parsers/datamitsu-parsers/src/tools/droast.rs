@@ -86,7 +86,7 @@ fn from_result(value: &JsonValue) -> Vec<RawDiagnostic> {
 		return Vec::new();
 	};
 	let file = match result.get("file") {
-		Some(JsonValue::String(s)) => crate::diagnostic::exact_file_field(s),
+		Some(JsonValue::String(s)) => crate::diagnostic::file_field(s),
 		_ => None,
 	};
 	findings

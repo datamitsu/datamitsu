@@ -40,7 +40,7 @@ pub fn parse(stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic
 					if let Some(JsonValue::Array(warnings)) = f.get(key) {
 						let level = severity::of(DESCRIPTOR.severities, key);
 						let filename = match f.get("filename") {
-							Some(JsonValue::String(s)) => crate::diagnostic::exact_file_field(s),
+							Some(JsonValue::String(s)) => crate::diagnostic::file_field(s),
 							_ => None,
 						};
 						for w in warnings {

@@ -69,9 +69,7 @@ fn from_result(value: &JsonValue) -> Option<RawDiagnostic> {
 	let end = obj(map.get("end"));
 	Some(RawDiagnostic {
 		message,
-		file: get_str(map, "path")
-			.as_deref()
-			.and_then(crate::diagnostic::exact_file_field),
+		file: get_str(map, "path").as_deref().and_then(crate::diagnostic::file_field),
 		code: get_str(map, "check_id"),
 		severity: extra
 			.and_then(|e| get_str(e, "severity"))

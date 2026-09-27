@@ -49,7 +49,7 @@ pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 			.get::<HashMapJson>()
 			.and_then(|m| get_str(m, "path"))
 			.as_deref()
-			.and_then(crate::diagnostic::exact_file_field);
+			.and_then(crate::diagnostic::file_field);
 		for off in offenses {
 			if let Some(mut d) = from_offense(off) {
 				d.file.clone_from(&path);

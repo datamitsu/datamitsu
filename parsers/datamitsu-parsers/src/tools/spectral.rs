@@ -94,7 +94,7 @@ fn parse_result(item: &JsonValue) -> Option<RawDiagnostic> {
 		source: Some("Spectral".to_string()),
 		code,
 		file: match obj.get("source") {
-			Some(JsonValue::String(s)) => crate::diagnostic::exact_file_field(s),
+			Some(JsonValue::String(s)) => crate::diagnostic::file_field(s),
 			_ => None,
 		},
 		..RawDiagnostic::default()

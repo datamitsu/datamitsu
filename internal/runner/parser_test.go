@@ -380,6 +380,53 @@ func TestThresholdFailsTheNamedFileOfABatch(t *testing.T) {
 	}
 }
 
+// TestThresholdKeepsAFileNameAsPrinted: a finding in " a.py" belongs to that
+// file, not to a.py beside it, which would otherwise record a pass it has not
+// earned and fail for a finding it does not have.
+func TestThresholdKeepsAFileNameAsPrinted(t *testing.T) {
+	mgr := coreModule(t)
+	root := t.TempDir()
+	files := make([]string, 0, 2)
+	for _, name := range []string{" a.py", "a.py"} {
+		path := filepath.Join(root, name)
+		if err := os.WriteFile(path, []byte("x = 1\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		files = append(files, path)
+	}
+	executor := tooling.NewExecutor(root, false, false, shellApps{
+		"tool": {Type: "shell", Command: "/bin/sh", Args: []string{"-c", "printf ' a.py:1:1: warning: m\\n' >&2"}},
+	}, nil)
+	executor.SetParser(newDiagnosticParser(mgr, newParseProblems()))
+	executor.SetGate(tooling.ThresholdGate(config.SeverityWarning, func(module string) bool {
+		ok, err := mgr.SeverityContract(context.Background(), module)
+		return err == nil && ok
+	}, nil))
+	plan := &tooling.ExecutionPlan{Groups: []tooling.TaskGroup{{Tasks: []tooling.Task{{
+		ToolName:    "gccdiag",
+		Tool:        config.Tool{Name: "gccdiag", OutputParser: &config.OutputParser{Module: "core", Parser: "gccdiag"}},
+		Operation:   config.OpLint,
+		OpConfig:    config.ToolOperation{App: "tool", Scope: config.ToolScopeRepository, Args: []string{"{files}"}},
+		Files:       files,
+		ProjectPath: root,
+	}}}}}
+	results, err := executor.Execute(context.Background(), plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := results[0].Results[0]
+	if result.FailureReason != tooling.FailureReasonThreshold {
+		t.Fatalf("FailureReason = %v, want a threshold failure", result.FailureReason)
+	}
+	got := make([]bool, 0, len(result.FileResults))
+	for _, fr := range result.FileResults {
+		got = append(got, fr.Success)
+	}
+	if !slices.Equal(got, []bool{false, true}) {
+		t.Errorf("file success = %v, want only \" a.py\" failed", got)
+	}
+}
+
 func observeFile(t *testing.T, path string) cache.Seen {
 	t.Helper()
 	f, err := os.Open(path)

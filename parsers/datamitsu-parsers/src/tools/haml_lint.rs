@@ -58,7 +58,7 @@ pub fn parse(stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic
 		let path = file
 			.get("path")
 			.and_then(|p| p.get::<String>())
-			.and_then(|p| crate::diagnostic::exact_file_field(p));
+			.and_then(|p| crate::diagnostic::file_field(p));
 		for offense in offenses {
 			if let Some(mut d) = from_offense(offense) {
 				d.file.clone_from(&path);

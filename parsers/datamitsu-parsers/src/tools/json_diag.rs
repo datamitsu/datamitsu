@@ -178,7 +178,7 @@ pub fn from_obj(value: &JsonValue, attrs: &Attrs, sev: SeverityMap) -> Option<Ra
 		severity: get_string_only(map, attrs.severity).and_then(|s| sev(&s)),
 		file: get_str(map, attrs.file)
 			.as_deref()
-			.and_then(crate::diagnostic::exact_file_field),
+			.and_then(crate::diagnostic::file_field),
 		..RawDiagnostic::default()
 	})
 }

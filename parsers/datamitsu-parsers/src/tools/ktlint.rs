@@ -56,7 +56,7 @@ pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 			continue;
 		};
 		let path = match file.get("file") {
-			Some(JsonValue::String(s)) => crate::diagnostic::exact_file_field(s),
+			Some(JsonValue::String(s)) => crate::diagnostic::file_field(s),
 			_ => None,
 		};
 		for err in errors {

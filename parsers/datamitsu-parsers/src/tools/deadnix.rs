@@ -57,7 +57,7 @@ fn collect(value: &JsonValue, attrs: &Attrs, out: &mut Vec<RawDiagnostic>) {
 		}
 		JsonValue::Object(map) => {
 			let file = match map.get("file") {
-				Some(JsonValue::String(s)) => crate::diagnostic::exact_file_field(s),
+				Some(JsonValue::String(s)) => crate::diagnostic::file_field(s),
 				_ => None,
 			};
 			if let Some(JsonValue::Array(results)) = map.get("results") {

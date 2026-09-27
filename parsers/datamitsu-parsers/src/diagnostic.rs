@@ -50,34 +50,16 @@ pub struct RawDiagnostic {
 
 /// Normalize a path a tool printed into the `file` field.
 ///
-/// Returns `None` for anything that does not name a real file — an empty string,
-/// or one of the placeholders tools print when they read stdin (`-`, `stdin`,
-/// `stdin.md`, `<stdin>`). Those must stay absent so the core stamps the file it
-/// actually linted instead of showing a placeholder. The name is trimmed, as a
-/// name cut from a line of text carries the layout around it.
+/// Returns `None` for anything that does not name a real file — a blank string,
+/// or one of the names tools print when they read stdin (`-`, `stdin`,
+/// `<stdin>`). Those must stay absent so the core stamps the file it actually
+/// linted instead of showing a placeholder. A tool that names its buffer another
+/// way (vale's `stdin.<ext>`) filters that name itself.
+///
+/// A real name is kept byte for byte: trimming could turn ` a.py` into another
+/// file of the same batch. A parser whose format pads the name with layout (cue's
+/// indented location lines) strips that layout before calling this.
 pub fn file_field(raw: &str) -> Option<String> {
-	let s = raw.trim();
-	if s.is_empty() {
-		return None;
-	}
-	// Match the placeholder against the last segment only: a real `docs/stdin.md`
-	// is a file and must be kept, while vale's `stdin.md` buffer name is not.
-	// A placeholder never carries a directory, so requiring the whole path to be
-	// one keeps the check from swallowing genuine paths.
-	let is_placeholder =
-		s == "-" || s == "<stdin>" || s == "stdin" || (s.starts_with("stdin.") && !s.contains('/') && !s.contains('\\'));
-	if is_placeholder {
-		return None;
-	}
-	Some(s.to_string())
-}
-
-/// [`file_field`] for a name a structured format delimits (a JSON string or key,
-/// a decoded URI): kept byte for byte, since trimming could turn ` a.py` into
-/// another file of the same batch. Only the generic stdin names are dropped; a
-/// `stdin.py` is a real file here, so a tool that names its buffer that way
-/// filters the name itself.
-pub fn exact_file_field(raw: &str) -> Option<String> {
 	match raw.trim() {
 		"" | "-" | "<stdin>" | "stdin" => None,
 		_ => Some(raw.to_string()),
@@ -214,24 +196,12 @@ mod tests {
 		assert_eq!(to_json_array(&[]), "[]");
 	}
 	#[test]
-	fn file_field_drops_placeholders_but_keeps_real_paths() {
-		for placeholder in ["", "  ", "-", "<stdin>", "stdin", "stdin.md", "stdin.yaml"] {
+	fn file_field_drops_placeholders_but_keeps_real_paths_as_printed() {
+		for placeholder in ["", "  ", "-", "<stdin>", "stdin"] {
 			assert_eq!(file_field(placeholder), None, "{placeholder:?} is not a file");
 		}
-		// A path that merely ends in a placeholder-looking segment is a real file.
-		for path in ["docs/stdin.md", "stdin.d/x.yaml", "a/stdin", "src/a.ts"] {
+		for path in ["docs/stdin.md", "stdin.py", "a/stdin", "src/a.ts", " a.py", "a.py "] {
 			assert_eq!(file_field(path).as_deref(), Some(path));
-		}
-		assert_eq!(file_field("  src/a.ts  ").as_deref(), Some("src/a.ts"));
-	}
-
-	#[test]
-	fn exact_file_field_keeps_the_name_as_printed() {
-		for placeholder in ["", "  ", "-", "<stdin>", "stdin"] {
-			assert_eq!(exact_file_field(placeholder), None, "{placeholder:?} is not a file");
-		}
-		for path in [" a.py", "a.py ", "src/a.ts", "stdin.py"] {
-			assert_eq!(exact_file_field(path).as_deref(), Some(path));
 		}
 	}
 }

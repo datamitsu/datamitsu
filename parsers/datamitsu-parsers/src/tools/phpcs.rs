@@ -59,7 +59,7 @@ pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 		if let Some(JsonValue::Object(files)) = root.get("files") {
 			for (path, file) in files {
 				// phpcs keys what it read from stdin without --stdin-path as "STDIN".
-				let path = crate::diagnostic::exact_file_field(path).filter(|p| p != "STDIN");
+				let path = crate::diagnostic::file_field(path).filter(|p| p != "STDIN");
 				if let JsonValue::Object(fmap) = file {
 					if let Some(JsonValue::Array(messages)) = fmap.get("messages") {
 						for msg in messages {

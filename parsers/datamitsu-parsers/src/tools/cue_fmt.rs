@@ -44,7 +44,8 @@ pub fn parse(stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic
 	// the line immediately before it.
 	let mut i = 1;
 	while i < lines.len() {
-		if let Some((file, row, col)) = crate::location::file_row_col(lines[i]) {
+		// A location line is indented under its message.
+		if let Some((file, row, col)) = crate::location::file_row_col(lines[i].trim_start()) {
 			out.push(RawDiagnostic {
 				message: lines[i - 1].trim().to_string(),
 				row: Some(row),

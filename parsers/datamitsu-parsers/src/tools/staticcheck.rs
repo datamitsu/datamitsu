@@ -57,7 +57,7 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 	let (row, col) = position(map.get("location"));
 	let file = match map.get("location") {
 		Some(JsonValue::Object(l)) => match l.get("file") {
-			Some(JsonValue::String(f)) => crate::diagnostic::exact_file_field(f),
+			Some(JsonValue::String(f)) => crate::diagnostic::file_field(f),
 			_ => None,
 		},
 		_ => None,

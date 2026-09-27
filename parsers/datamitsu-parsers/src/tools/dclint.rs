@@ -65,7 +65,7 @@ fn from_report(value: &JsonValue) -> Vec<RawDiagnostic> {
 			continue;
 		};
 		let file = match result.get("filePath") {
-			Some(JsonValue::String(s)) => crate::diagnostic::exact_file_field(s),
+			Some(JsonValue::String(s)) => crate::diagnostic::file_field(s),
 			_ => None,
 		};
 		out.extend(messages.iter().filter_map(|message| from_message(message, &file)));
