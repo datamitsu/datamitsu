@@ -53,6 +53,9 @@ name. To add a tool:
    that parses the raw bytes and returns `diagnostic::to_json_array(&diags)`.
 2. Add one `match` arm: `"<tool>" => <tool>(stdout, stderr, exit_code),`.
 3. Add `cargo test` cases for the new branch.
+4. When a configuration wires the parser, record a clean and a finding-bearing run
+   of the real tool under `datamitsu-parsers/fixtures/<tool>/` and assert them in
+   `src/tools/fixtures.rs` ([fixtures/README.md](datamitsu-parsers/fixtures/README.md)).
 
 That is the whole mechanism — hadolint, yamllint, dotenv_linter, and cue_fmt all
 plug in this way.

@@ -1,0 +1,7 @@
+Checking findings.env
+findings.env:1 LowercaseKey: The b key should be in uppercase
+findings.env:2 SpaceCharacter: The line has spaces around equal sign
+findings.env:2 UnorderedKey: The A  key should go before the b key
+findings.env:3 UnorderedKey: The A key should go before the A  key
+
+Found 4 problems

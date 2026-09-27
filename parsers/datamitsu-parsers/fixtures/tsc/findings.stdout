@@ -1,0 +1,2 @@
+index.ts(1,14): error TS2322: Type 'string' is not assignable to type 'number'.
+index.ts(2,26): error TS2304: Cannot find name 'missing'.

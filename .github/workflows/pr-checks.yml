@@ -35,6 +35,10 @@ jobs:
         run: |
           cargo build --release --target wasm32-unknown-unknown --manifest-path parsers/Cargo.toml
           echo "wasm size: $(wc -c < parsers/target/wasm32-unknown-unknown/release/datamitsu_parsers.wasm) bytes"
+      # Natively: the parsers' own tests and the tool output recorded under
+      # parsers/datamitsu-parsers/fixtures.
+      - name: Test WASM parser modules
+        run: cargo test --manifest-path parsers/Cargo.toml
       - env:
           GORELEASER_CURRENT_TAG: 0.0.0-pr.${{ github.event.pull_request.number }}
         name: Build binaries with GoReleaser

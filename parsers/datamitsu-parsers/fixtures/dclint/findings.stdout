@@ -1,0 +1,103 @@
+[
+  {
+    "filePath": "findings.yml",
+    "messages": [
+      {
+        "rule": "no-unbound-port-interfaces",
+        "type": "error",
+        "category": "security",
+        "severity": "major",
+        "message": "Service \"web\" is exporting port \"8080:80\" without specifying the interface to listen on.",
+        "line": 5,
+        "column": 1,
+        "meta": {
+          "description": "Exported ports must be bound to specific interfaces to avoid unintentional exposure.",
+          "url": "https://github.com/zavoloklom/docker-compose-linter/blob/main/docs/rules/no-unbound-port-interfaces-rule.md"
+        },
+        "fixable": false,
+        "data": {
+          "serviceName": "web",
+          "portItem": "8080:80"
+        }
+      },
+      {
+        "rule": "no-version-field",
+        "type": "error",
+        "category": "best-practice",
+        "severity": "minor",
+        "message": "The \"version\" field should not be present.",
+        "line": 1,
+        "column": 1,
+        "meta": {
+          "description": "The `version` field must be absent in the configuration.",
+          "url": "https://github.com/zavoloklom/docker-compose-linter/blob/main/docs/rules/no-version-field-rule.md"
+        },
+        "fixable": true,
+        "data": {}
+      },
+      {
+        "rule": "require-project-name-field",
+        "type": "warning",
+        "category": "best-practice",
+        "severity": "minor",
+        "message": "The \"name\" field should be present.",
+        "line": 1,
+        "column": 1,
+        "meta": {
+          "description": "The `name` field should be included in the configuration.",
+          "url": "https://github.com/zavoloklom/docker-compose-linter/blob/main/docs/rules/require-project-name-field-rule.md"
+        },
+        "fixable": false,
+        "data": {}
+      },
+      {
+        "rule": "require-quotes-in-ports",
+        "type": "warning",
+        "category": "best-practice",
+        "severity": "minor",
+        "message": "Ports in `ports` and `expose` sections should be enclosed in quotes.",
+        "line": 6,
+        "column": 1,
+        "meta": {
+          "description": "Ports in `ports` and `expose` sections should be enclosed in quotes.",
+          "url": "https://github.com/zavoloklom/docker-compose-linter/blob/main/docs/rules/require-quotes-in-ports-rule.md"
+        },
+        "fixable": true,
+        "data": {
+          "service": {
+            "web": {
+              "image": "nginx",
+              "ports": [
+                "8080:80"
+              ]
+            }
+          },
+          "port": "8080:80",
+          "section": "ports"
+        }
+      },
+      {
+        "rule": "service-image-require-explicit-tag",
+        "type": "error",
+        "category": "security",
+        "severity": "major",
+        "message": "Service \"web\" is using the image \"nginx\", which does not have a concrete version tag. Specify a concrete version tag.",
+        "line": 4,
+        "column": 1,
+        "meta": {
+          "description": "Services must use a specific image tag instead of \"latest\", \"stable\" or similar or no tag.",
+          "url": "https://github.com/zavoloklom/docker-compose-linter/blob/main/docs/rules/service-image-require-explicit-tag-rule.md"
+        },
+        "fixable": false,
+        "data": {
+          "image": "nginx",
+          "serviceName": "web"
+        }
+      }
+    ],
+    "errorCount": 3,
+    "warningCount": 2,
+    "fixableErrorCount": 1,
+    "fixableWarningCount": 1
+  }
+]
