@@ -132,24 +132,22 @@ fn parse_sarif(stdout: &[u8], out: &mut Vec<RawDiagnostic>) {
 	}
 }
 
-/// The path of a SARIF artifact URI. checkstyle writes `file:` plus the absolute
-/// path with spaces as `%20` (`file:/C:/…` on Windows); a URI without a scheme is
+/// The path of a SARIF artifact URI: the inverse of checkstyle's
+/// `SarifLogger.renderFileNameUri`, which writes `file:` and the path with every
+/// backslash as `/`, a space as `%20`, a quote as `%22`, and a `/` before a drive
+/// letter. A UNC path arrives as `file://server/share/…` and stays one. Only those
+/// two escapes are decoded, as checkstyle escapes nothing else: any other `%` is
+/// part of the name. A name holding a literal `%20` or `%22` cannot be told from
+/// an escaped one and reads back as a space or a quote. A URI without a scheme is
 /// a path already, and one with another scheme names no local file.
 fn uri_path(uri: &str) -> Option<String> {
-	let path = if let Some(rest) = uri.strip_prefix("file://") {
-		// `file:///abs` or `file://localhost/abs`; a remote host's share is not a
-		// path on this machine.
-		let slash = rest.find('/')?;
-		if !matches!(&rest[..slash], "" | "localhost") {
-			return None;
-		}
-		&rest[slash..]
-	} else if let Some(rest) = uri.strip_prefix("file:") {
-		rest
-	} else if uri.contains("://") {
-		return None;
-	} else {
-		uri
+	let Some(rest) = uri.strip_prefix("file:") else {
+		return (!uri.contains("://")).then(|| uri.to_string());
+	};
+	let path = match rest.strip_prefix("//") {
+		Some(after) if after.starts_with('/') => after,
+		Some(after) if after.starts_with("localhost/") => &after["localhost".len()..],
+		_ => rest,
 	};
 	let bytes = path.as_bytes();
 	let path = if bytes.len() >= 3 && bytes[0] == b'/' && bytes[1].is_ascii_alphabetic() && bytes[2] == b':' {
@@ -157,30 +155,7 @@ fn uri_path(uri: &str) -> Option<String> {
 	} else {
 		path
 	};
-	Some(percent_decode(path))
-}
-
-fn percent_decode(s: &str) -> String {
-	let bytes = s.as_bytes();
-	let mut out = Vec::with_capacity(bytes.len());
-	let mut i = 0;
-	while i < bytes.len() {
-		let hex = bytes
-			.get(i + 1..i + 3)
-			.and_then(|h| std::str::from_utf8(h).ok())
-			.and_then(|h| u8::from_str_radix(h, 16).ok());
-		match (bytes[i], hex) {
-			(b'%', Some(b)) => {
-				out.push(b);
-				i += 3;
-			}
-			(b, _) => {
-				out.push(b);
-				i += 1;
-			}
-		}
-	}
-	String::from_utf8_lossy(&out).into_owned()
+	Some(path.replace("%20", " ").replace("%22", "\""))
 }
 
 fn get<'a>(v: &'a JsonValue, key: &str) -> Option<&'a JsonValue> {
@@ -307,13 +282,15 @@ mod tests {
 			("file:/C:/src/C.java", Some("C:/src/C.java")),
 			("src/D.java", Some("src/D.java")),
 			("https://example.test/E.java", None),
+			("file://server/share/F.java", Some("//server/share/F.java")),
+			("file:/lit%41.java", Some("/lit%41.java")),
 		] {
 			let sarif = SARIF.replace("file:/src/Main.java", uri);
 			assert_eq!(parse(sarif.as_bytes(), b"", 1)[0].file.as_deref(), want, "{uri}");
 		}
 	}
 	#[test]
-	fn a_uri_names_a_local_file_or_none() {
+	fn a_uri_reads_back_as_checkstyle_wrote_it() {
 		assert_eq!(uri_path("file:///work/A.java").as_deref(), Some("/work/A.java"));
 		assert_eq!(
 			uri_path("file://localhost/work/A.java").as_deref(),
@@ -323,7 +300,18 @@ mod tests {
 			uri_path("file:///C:/work/A%20B.java").as_deref(),
 			Some("C:/work/A B.java")
 		);
-		assert_eq!(uri_path("file://server/share/A.java"), None);
+		assert_eq!(
+			uri_path("file://server/share/A.java").as_deref(),
+			Some("//server/share/A.java")
+		);
+		assert_eq!(
+			uri_path("file:/work/Say%22Hi%22.java").as_deref(),
+			Some("/work/Say\"Hi\".java")
+		);
+		assert_eq!(
+			uri_path("file:/work/a%41%2F.java").as_deref(),
+			Some("/work/a%41%2F.java")
+		);
 		assert_eq!(uri_path("https://example.test/A.java"), None);
 	}
 }
