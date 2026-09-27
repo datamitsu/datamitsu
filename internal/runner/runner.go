@@ -379,7 +379,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	if len(projectTypes) == 0 || len(plan.Groups) == 0 {
 		sc.recordOp(opSummary{op: operation, skipped: len(plan.Skipped)})
 		if len(plan.Skipped) > 0 {
-			renderSkipOnlyBlock(string(operation), sc.targetLine(), plan.Skipped, sc.nameWidth)
+			renderSkipOnlyBlock(string(operation), sc.targetLine(), plan.Skipped, sc.nameWidth, sc.footerNote(operation))
 			sc.recordSkips(plan.Skipped)
 			sc.recordCoverage(plan)
 			return nil
@@ -712,15 +712,11 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	// summary footer (the footer doubles as the "complete" marker, so no separate
 	// line is printed). The print helpers self-suppress in JSON-L mode.
 	toolGroups := groupResultsByTool(results)
-	var note string
-	if operation == config.OpLint && sc.afterFailedFix {
-		note = "lint ran after a failed fix"
-	}
 	if len(toolGroups) > 0 || len(plan.Skipped) > 0 || len(stopped) > 0 {
 		printGroupedResults(toolGroups, sc.nameWidth, env.IsTimingsEnabled())
 		printStoppedTasks(stopped, sc.nameWidth)
 		printSkippedTools(plan.Skipped, sc.nameWidth)
-		printOperationFooter(toolGroups, totalWallClockTime, cacheHits, cacheMisses, len(plan.Skipped), len(stopped), note)
+		printOperationFooter(toolGroups, totalWallClockTime, cacheHits, cacheMisses, len(plan.Skipped), len(stopped), sc.footerNote(operation))
 	}
 
 	// Typed completion event for this operation (the JSON-L twin of the footer).
@@ -922,7 +918,7 @@ func printSkippedTools(skipped []tooling.SkippedTool, nameWidth int) {
 
 // renderSkipOnlyBlock prints a minimal operation block containing only skipped
 // tools, used when planning produced skips but nothing runnable.
-func renderSkipOnlyBlock(operation, targetLine string, skipped []tooling.SkippedTool, nameWidth int) {
+func renderSkipOnlyBlock(operation, targetLine string, skipped []tooling.SkippedTool, nameWidth int, note string) {
 	if ui.Quiet() {
 		return
 	}
@@ -933,7 +929,14 @@ func renderSkipOnlyBlock(operation, targetLine string, skipped []tooling.Skipped
 	}
 	fmt.Println(clr.Faint("┃"))
 	printSkippedTools(skipped, nameWidth)
-	printOperationFooter(nil, 0, 0, 0, len(skipped), 0, "")
+	printOperationFooter(nil, 0, 0, 0, len(skipped), 0, note)
+}
+
+func (sc *sharedContext) footerNote(operation config.OperationType) string {
+	if operation == config.OpLint && sc.afterFailedFix {
+		return "lint ran after a failed fix"
+	}
+	return ""
 }
 
 // shortProjectType trims the redundant "-package"/"-project" suffix from a
