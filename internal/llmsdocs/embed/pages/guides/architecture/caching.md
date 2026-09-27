@@ -12,12 +12,13 @@ For context on how tasks reach the cache layer, see [Parallel Execution](./execu
 ## Cache Invalidation Keys
 
 Every project cache has a top-level **invalidation key**: an XXH3-128 hash of
-three process inputs. If it changes, both the file entries and stored verdicts
-are discarded and rebuilt.
+four inputs. If it changes, both the file entries and stored verdicts are
+discarded and rebuilt.
 
 ```mermaid
 graph LR
     V["datamitsu version"] --> H["XXH3-128"]
+    S["Cache semantics"] --> H
     C["Full config (JSON)"] --> H
     T["--tools selection"] --> H
     H --> K["Invalidation Key"]
@@ -35,6 +36,7 @@ graph LR
 | Input                  | What it captures                              | Why it matters                                                               |
 | ---------------------- | --------------------------------------------- | ---------------------------------------------------------------------------- |
 | **datamitsu version**  | The release version string                    | A new core may change planning, execution, or parsing                        |
+| **Cache semantics**    | A constant naming what a stored pass means    | Every development build reports the same version, `dev`                      |
 | **Full configuration** | The complete `Config` serialized as JSON      | Any effective config change invalidates results                              |
 | **--tools selection**  | Selected tool names, sorted deterministically | A subset run must not claim the cache state produced by a different tool set |
 
@@ -46,6 +48,12 @@ the current store when constructing an execution command. Docker build slices
 include dependency definitions, so a dependency change also invalidates its
 dependents' build stages without folding dependency identity into their app
 install hashes.
+
+The cache semantics change whenever the rule for recording a pass changes, so an
+entry recorded under the old rule is never read as if the new one had recorded
+it. The version alone cannot guarantee that: a locally built binary is always
+`dev`. The price is that **every cache is cold once** after an upgrade that
+changes the rule.
 
 ### Where `invalidateOn` fits
 
@@ -97,13 +105,45 @@ Within a valid cache (invalidation key matches), each file is tracked individual
 
 ### Cache hit decision
 
-When the executor considers running a tool on a file, it checks:
+Before running a tool on a file, the executor reads the file — through the
+[content-hash memo](#the-memo), so a file another tool already hashed in this run
+costs a `stat` — and keeps the hash together with the `stat` it was taken under.
+It then checks:
 
 1. Does a cache entry exist for this file path?
-2. Does the stored ContentHash match the file's current XXH3-128?
+2. Does the stored ContentHash match the hash just taken?
 3. Is this tool name in the operation's list (Lint or Fix)?
 
-All three must be true for a cache hit. If any check fails, the tool runs.
+All three must be true for a cache hit. If any check fails, the tool runs. The
+lookup compares hashes under the cache's read lock; it never reads a file there,
+so one slow disk read does not stall every other lookup.
+
+### Recording a pass against the bytes the tool saw
+
+A lint pass is recorded against the hash taken **before** the run: the bytes the
+tool was handed, not whatever the file holds afterwards. After the tool exits, the
+executor checks the file again with the same probe the
+[unit verdict](#the-post-run-probe-bypasses-the-memo) uses: a `stat` settles it
+when it can, and a file whose size, modification time or inode identity moved, or
+that was written inside the current modification-time tick, is read again. Then:
+
+| After the run                          | What is recorded                                       |
+| -------------------------------------- | ------------------------------------------------------ |
+| Unchanged, the entry holds other bytes | The entry is replaced: this content, this one tool     |
+| Unchanged, the entry holds these bytes | The tool joins the entry's list                        |
+| Changed while the tool ran             | Nothing — the pass would vouch for bytes it never read |
+| The bytes could not be read before     | Nothing                                                |
+
+The replace rule closes a gap the earlier writer had. It appended a tool to an
+existing entry without comparing hashes, so:
+
+1. A passes on content X — the entry is `{X, [A]}`.
+2. The file becomes Y and B passes — the entry became `{X, [A, B]}`.
+3. The file goes back to X — B was skipped on content it had never seen.
+
+Now step 2 replaces the entry with `{Y, [B]}`, and step 3 runs B. A fix pass is
+recorded against the content the fixer produced, as described
+[below](#fix-resets-lint-cache).
 
 ### Managed config content in the tool name
 
@@ -176,7 +216,8 @@ even though the content does not depend on which tool asks for it.
 
 datamitsu keeps a **process-scoped content-hash memo** — a
 `path -> (hash, size, modification time, inode identity)` map, shared by every task of a run and safe
-under the executor's worker pool. The first tool to need a file reads and hashes it; every later
+under the executor's worker pool. The unit verdict's pre-run pass and the per-file hash taken before
+each run both read through it. The first tool to need a file reads and hashes it; every later
 tool over the same file gets the hash back without touching the disk.
 
 The scope is the _process_, not the run: a one-shot CLI invocation discards the memo when it exits,
@@ -347,7 +388,7 @@ datamitsu runs tools in parallel (see [Parallel Execution](./execution.md)), whi
 
 ### Read-write locking
 
-Cache lookups (`ShouldRun`) acquire a read lock — multiple goroutines can check the cache concurrently with no blocking. Cache updates (`AfterLint`, `AfterFix`) acquire an exclusive write lock. Hit/miss counters use lock-free atomic operations to avoid contention on the hot path.
+Cache lookups (`Check`) acquire a read lock — multiple goroutines can check the cache concurrently with no blocking — and only compare hashes the executor took before asking. Cache updates (`AfterLint`, `AfterFix`) acquire an exclusive write lock; `AfterFix` hashes the fixed file before it takes the lock. No file is read while a lock is held. Hit/miss counters use lock-free atomic operations to avoid contention on the hot path.
 
 ### Debounced persistence
 

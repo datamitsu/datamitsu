@@ -688,10 +688,14 @@ func (e *Executor) getRelativeDir(workingDir string) string {
 	return relPath
 }
 
-// filterFilesByCache filters files based on cache, returns files that need to be processed
-func (e *Executor) filterFilesByCache(task Task) []string {
+// filterFilesByCache returns the files the tool must run on, and for each of
+// them the bytes it is about to be handed. A pass is recorded against those
+// bytes (C2), so they are hashed before the run, through the process-wide
+// content memo, for a file the cache has never seen as much as for one it has.
+// seen is nil when no per-file pass can be recorded for the task.
+func (e *Executor) filterFilesByCache(task Task) (filesToProcess []string, seen map[string]cache.Seen) {
 	if e.cache == nil {
-		return task.Files
+		return task.Files, nil
 	}
 
 	// Per-file entries record "this file passed", which is only a verdict when a
@@ -700,21 +704,16 @@ func (e *Executor) filterFilesByCache(task Task) []string {
 	// it left every content hash unchanged and the whole task was skipped with a
 	// tick. Those granularities use the verdict cache instead.
 	if config.InferGranularity(task.OpConfig) != config.GranularityFile {
-		return task.Files
+		return task.Files, nil
 	}
 
-	// Check if caching is enabled for this tool (default: true)
-	toolCacheEnabled := true
-	if task.OpConfig.Cache != nil {
-		toolCacheEnabled = *task.OpConfig.Cache
+	if task.OpConfig.Cache != nil && !*task.OpConfig.Cache {
+		return task.Files, nil
 	}
 
-	// Convert operation type
-	var cacheOp cache.Operation
+	cacheOp := cache.OperationFix
 	if task.Operation == config.OpLint {
 		cacheOp = cache.OperationLint
-	} else {
-		cacheOp = cache.OperationFix
 	}
 
 	cacheTool := task.perFileCache
@@ -722,10 +721,12 @@ func (e *Executor) filterFilesByCache(task Task) []string {
 		cacheTool = e.perFileCacheTool(task)
 	}
 	filterSpan := trace.Start(trace.CatCache, "filterFilesByCache")
-	var filesToProcess []string
+	seen = make(map[string]cache.Seen, len(task.Files))
 	for _, file := range task.Files {
-		if e.cache.ShouldRun(file, cacheTool, cacheOp, toolCacheEnabled) {
+		observed := observe(file)
+		if e.cache.Check(file, cacheTool, cacheOp, observed, true) {
 			filesToProcess = append(filesToProcess, file)
+			seen[file] = observed
 		}
 	}
 	cntCacheSkipped.Add(int64(len(task.Files) - len(filesToProcess)))
@@ -735,7 +736,7 @@ func (e *Executor) filterFilesByCache(task Task) []string {
 		trace.A("out", len(filesToProcess)),
 	)
 
-	return filesToProcess
+	return filesToProcess, seen
 }
 
 // perFileCacheTool is the name a per-file cache entry records a pass under.
@@ -760,21 +761,13 @@ func (e *Executor) perFileCacheTool(task Task) string {
 	return task.ToolName + "@" + hashutil.XXH3Multi(parts...)
 }
 
-// updateCacheAfterSuccess updates cache after successful tool execution
-func (e *Executor) updateCacheAfterSuccess(task Task, files []string) {
-	if e.cache == nil {
+// updateCacheAfterSuccess records the passes of files a tool succeeded on. A
+// lint pass is recorded against the bytes filterFilesByCache saw before the
+// run, and only when the file still holds them: a file edited while the tool
+// ran would otherwise be marked as passing content the tool never read.
+func (e *Executor) updateCacheAfterSuccess(task Task, files []string, seen map[string]cache.Seen) {
+	if e.cache == nil || seen == nil {
 		return
-	}
-	// filterFilesByCache only reads these for file granularity; writing them for
-	// unit and repo tasks stores entries nothing consults.
-	if config.InferGranularity(task.OpConfig) != config.GranularityFile {
-		return
-	}
-
-	// Check if caching is enabled for this tool (default: true)
-	toolCacheEnabled := true
-	if task.OpConfig.Cache != nil {
-		toolCacheEnabled = *task.OpConfig.Cache
 	}
 
 	cacheTool := e.perFileCacheTool(task)
@@ -786,9 +779,15 @@ func (e *Executor) updateCacheAfterSuccess(task Task, files []string) {
 	for _, file := range files {
 		var err error
 		if task.Operation == config.OpLint {
-			err = e.cache.AfterLint(file, cacheTool, toolCacheEnabled)
+			observed, ok := seen[file]
+			unchanged := ok && unchangedSince(file, observed)
+			if ok && !unchanged {
+				log.Debug("file changed while the tool ran; not recording its pass",
+					zap.String("file", file), zap.String("tool", task.ToolName))
+			}
+			err = e.cache.AfterLint(file, cacheTool, observed, unchanged, true)
 		} else {
-			err = e.cache.AfterFix(file, cacheTool, toolCacheEnabled)
+			err = e.cache.AfterFix(file, cacheTool, true)
 		}
 
 		if err != nil {
@@ -876,8 +875,7 @@ func (e *Executor) parseFileDiagnostics(ctx context.Context, proc *ProcessResult
 func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binmanager.CommandInfo, workingDir string, startTime time.Time) ExecutionResult {
 	log.Debug("executePerFile start", zap.String("toolName", task.ToolName), zap.Int("fileCount", len(task.Files)))
 
-	// Filter files by cache
-	filesToProcess := e.filterFilesByCache(task)
+	filesToProcess, seen := e.filterFilesByCache(task)
 	cachedCount := len(task.Files) - len(filesToProcess)
 
 	if cachedCount > 0 {
@@ -1129,7 +1127,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 
 	// Update cache for successfully processed files
 	if len(processedFiles) > 0 {
-		e.updateCacheAfterSuccess(task, processedFiles)
+		e.updateCacheAfterSuccess(task, processedFiles, seen)
 	}
 
 	// If all succeeded, use exit code 0
@@ -1164,8 +1162,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 func (e *Executor) executeBatch(ctx context.Context, task Task, cmdInfo *binmanager.CommandInfo, workingDir string, startTime time.Time) ExecutionResult {
 	log.Debug("executeBatch start", zap.String("toolName", task.ToolName), zap.Int("fileCount", len(task.Files)))
 
-	// Filter files by cache
-	filesToProcess := e.filterFilesByCache(task)
+	filesToProcess, seen := e.filterFilesByCache(task)
 	cachedCount := len(task.Files) - len(filesToProcess)
 
 	if cachedCount > 0 {
@@ -1216,7 +1213,7 @@ func (e *Executor) executeBatch(ctx context.Context, task Task, cmdInfo *binmana
 			e.fileProgressCallback(task.ToolName, 1, 1, chunkResult.Success)
 		}
 		if chunkResult.Success {
-			e.updateCacheAfterSuccess(task, filesToProcess)
+			e.updateCacheAfterSuccess(task, filesToProcess, seen)
 		}
 		return chunkResult
 	}
@@ -1233,7 +1230,7 @@ func (e *Executor) executeBatch(ctx context.Context, task Task, cmdInfo *binmana
 		}
 		// Update cache on success
 		if chunkResult.Success {
-			e.updateCacheAfterSuccess(task, filesToProcess)
+			e.updateCacheAfterSuccess(task, filesToProcess, seen)
 		}
 		return chunkResult
 	}
@@ -1245,7 +1242,7 @@ func (e *Executor) executeBatch(ctx context.Context, task Task, cmdInfo *binmana
 	}
 	// Update cache on success
 	if result.Success {
-		e.updateCacheAfterSuccess(task, filesToProcess)
+		e.updateCacheAfterSuccess(task, filesToProcess, seen)
 	}
 	return result
 }

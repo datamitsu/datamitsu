@@ -70,7 +70,7 @@ type FileEntry struct {
 
 // File represents the entire cache for a project
 type File struct {
-	InvalidationKey string               // hash(datamitsuVersion + fullConfigHash + selectedTools)
+	InvalidationKey string               // hash(datamitsuVersion + cacheSemantics + fullConfigHash + selectedTools)
 	Version         string               // datamitsu version that last wrote the file
 	ProjectPath     string               // for debugging
 	LastPruned      time.Time            // when we last cleaned up deleted files
@@ -422,26 +422,34 @@ func (c *Cache) Prune() {
 	}
 }
 
-// ShouldRun checks if a tool should run for a file
-// Returns true if the tool should run, false if it can be skipped (cache hit)
-// toolCacheEnabled controls whether caching is enabled for this specific tool
-func (c *Cache) ShouldRun(file, tool string, op Operation, toolCacheEnabled bool) bool {
+// Seen is what the executor read of a file before a tool ran: the hash of its
+// bytes and the stat of the handle they were read through, stamped with the
+// moment just before the read. A pass is recorded against exactly these bytes,
+// and the stat lets the executor tell after the run, usually without reading
+// the file again, whether they are still what is on disk.
+type Seen struct {
+	Hash     string // XXH3-128 of the bytes; "" when they could not be read
+	Size     int64
+	ModTime  time.Time
+	Identity FileIdentity // inode number and change time, where the platform has them
+	At       time.Time
+}
+
+// Check reports whether tool must run on file for op, given the bytes the
+// executor is about to hand it. It compares hashes under the read lock and
+// never reads the file itself: seen was taken outside the lock, and is what a
+// later AfterLint records against. A seen without a hash always runs.
+func (c *Cache) Check(file, tool string, op Operation, seen Seen, enabled bool) bool {
 	cntShouldRun.Add(1)
 
-	// Cache disabled for this tool - always run
-	if !toolCacheEnabled {
+	if !enabled {
 		return true
 	}
-
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	if c.data == nil {
+	if seen.Hash == "" {
 		c.misses.Add(1)
 		return true
 	}
 
-	// Convert to relative path
 	relPath, err := filepath.Rel(c.projectPath, file)
 	if err != nil {
 		c.log().Debug("failed to get relative path",
@@ -451,50 +459,64 @@ func (c *Cache) ShouldRun(file, tool string, op Operation, toolCacheEnabled bool
 		return true
 	}
 
-	// Check if entry exists
-	entry, ok := c.data.Entries[relPath]
-	if !ok {
+	c.mu.RLock()
+	var entry FileEntry
+	ok := false
+	if c.data != nil {
+		entry, ok = c.data.Entries[relPath]
+	}
+	c.mu.RUnlock()
+
+	if !ok || entry.ContentHash != seen.Hash {
 		c.misses.Add(1)
 		return true
 	}
 
-	// Check if file content has changed
-	currentHash, err := hashFile(file)
-	if err != nil {
-		c.log().Debug("failed to hash file",
-			zap.String("file", file),
-			zap.Error(err))
-		c.misses.Add(1)
-		return true
-	}
-
-	if entry.ContentHash != currentHash {
-		c.misses.Add(1)
-		return true
-	}
-
-	// Check if tool has already passed
 	passed := entry.Lint
 	if op == OperationFix {
 		passed = entry.Fix
 	}
-
 	if slices.Contains(passed, tool) {
 		c.hits.Add(1)
-		return false // Cache hit - skip execution
+		return false
 	}
 
 	c.misses.Add(1)
 	return true
 }
 
-// AfterLint marks a tool as having successfully passed lint for a file
-// toolCacheEnabled controls whether to save the result in cache
-func (c *Cache) AfterLint(file, tool string, toolCacheEnabled bool) error {
-	if !toolCacheEnabled {
-		return nil // Don't save to cache
+// AfterLint records that tool passed lint on the bytes seen describes. The
+// executor checks after the run whether file still holds them and says so in
+// unchanged; a file that changed while the tool ran, or bytes that could not be
+// read, record nothing, because the pass would describe content the tool never
+// saw. An entry for other content is replaced, not extended: its passes were
+// earned by bytes the file no longer holds.
+func (c *Cache) AfterLint(file, tool string, seen Seen, unchanged bool, enabled bool) error {
+	if !enabled || !unchanged || seen.Hash == "" {
+		return nil
 	}
-	return c.markPassed(file, tool, OperationLint)
+
+	relPath, err := filepath.Rel(c.projectPath, file)
+	if err != nil {
+		return fmt.Errorf("failed to get relative path: %w", err)
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.data == nil {
+		return errors.New("cache data is nil")
+	}
+
+	entry, exists := c.data.Entries[relPath]
+	if !exists || entry.ContentHash != seen.Hash {
+		entry = FileEntry{ContentHash: seen.Hash, Lint: []string{}, Fix: []string{}}
+	}
+	if !slices.Contains(entry.Lint, tool) {
+		entry.Lint = append(entry.Lint, tool)
+	}
+	c.data.Entries[relPath] = entry
+	return nil
 }
 
 // AfterFix marks a tool as having successfully passed fix for a file
@@ -505,22 +527,23 @@ func (c *Cache) AfterFix(file, tool string, toolCacheEnabled bool) error {
 		return nil // Don't save to cache
 	}
 
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.data == nil {
-		return errors.New("cache data is nil")
-	}
-
 	relPath, err := filepath.Rel(c.projectPath, file)
 	if err != nil {
 		return fmt.Errorf("failed to get relative path: %w", err)
 	}
 
-	// Hash file to check if it changed
+	// Hashed before the lock is taken: every other goroutine's lookup waits
+	// for as long as the lock is held.
 	newHash, err := hashFile(file)
 	if err != nil {
 		return fmt.Errorf("failed to hash file: %w", err)
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.data == nil {
+		return errors.New("cache data is nil")
 	}
 
 	entry, exists := c.data.Entries[relPath]
@@ -588,8 +611,17 @@ func (c *Cache) Clear() error {
 	return c.Save()
 }
 
+// cacheSemantics names what a stored pass means. It changes whenever the rule
+// for recording one changes: every local build reports the version "dev", so
+// the version alone would let an entry recorded under the old rule be read as
+// if the new one had recorded it.
+//
+//   - c2v1: a per-file pass is recorded against the bytes the tool was handed,
+//     never against whatever the file holds afterwards.
+const cacheSemantics = "c2v1"
+
 // calculateInvalidationKey calculates an XXH3-128 hash from the datamitsu
-// version, the full config JSON and the selected tools.
+// version, the cache semantics, the full config JSON and the selected tools.
 //
 // invalidateOn used to be folded in here and no longer is. It was broken —
 // paths resolved against the git root, so packages/*/tsconfig.json read as
@@ -604,8 +636,7 @@ func calculateInvalidationKey(
 	// Build a single byte slice with all components separated by \0
 	var parts [][]byte
 
-	// Add version
-	parts = append(parts, []byte(ldflags.Version))
+	parts = append(parts, []byte(ldflags.Version), []byte(cacheSemantics))
 
 	// Add config hash (serialize entire config)
 	configBytes, err := json.Marshal(cfg)
@@ -736,49 +767,6 @@ func (c *Cache) logSaveError(msg string, err error) {
 		return
 	}
 	c.log().Warn(msg, zap.Error(err))
-}
-
-// markPassed marks a tool as having passed for a file
-func (c *Cache) markPassed(file, tool string, op Operation) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.data == nil {
-		return errors.New("cache data is nil")
-	}
-
-	relPath, err := filepath.Rel(c.projectPath, file)
-	if err != nil {
-		return fmt.Errorf("failed to get relative path: %w", err)
-	}
-
-	// Get or create entry
-	entry, exists := c.data.Entries[relPath]
-	if !exists {
-		contentHash, err := hashFile(file)
-		if err != nil {
-			return fmt.Errorf("failed to hash file: %w", err)
-		}
-		entry = FileEntry{
-			ContentHash: contentHash,
-			Lint:        []string{},
-			Fix:         []string{},
-		}
-	}
-
-	// Add tool to appropriate list
-	if op == OperationLint {
-		if !slices.Contains(entry.Lint, tool) {
-			entry.Lint = append(entry.Lint, tool)
-		}
-	} else {
-		if !slices.Contains(entry.Fix, tool) {
-			entry.Fix = append(entry.Fix, tool)
-		}
-	}
-
-	c.data.Entries[relPath] = entry
-	return nil
 }
 
 // log returns the cache logger, falling back to a no-op logger when the Cache

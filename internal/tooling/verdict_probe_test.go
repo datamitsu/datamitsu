@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/datamitsu/datamitsu/internal/cache"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/trace"
 )
@@ -169,7 +170,7 @@ func TestVerdictProbeCatchesARewriteInsideOneMtimeTick(t *testing.T) {
 
 // testIdent is a synthetic identity for the unit-level memo tests, which never
 // touch a real file. Its known flag is what makes a lookup answerable at all.
-var testIdent = fileIdent{ino: 1, ctimeNano: 1, known: true}
+var testIdent = cache.FileIdentity{Ino: 1, ChangeTimeNano: 1, Known: true}
 
 // identReported says whether this platform's stat carries the inode-change time.
 // Where it does not, no stat comparison is trusted at all, so the tests that
@@ -182,7 +183,7 @@ func identReported(t *testing.T) bool {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return identOf(fi).known
+	return cache.IdentityOf(fi).Known
 }
 
 // requireIdent skips a test whose subject is the read a stat comparison saves.

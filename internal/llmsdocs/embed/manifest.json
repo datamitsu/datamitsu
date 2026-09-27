@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 55,
-  "pageSetHash": "de9558125ae124aed0f7aba123b5f396",
+  "pageSetHash": "08f3383dfc3d03cdd4512e8c0f9f2638",
   "pages": [
     {
       "slug": "about",
@@ -206,8 +206,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/caching.md",
       "title": "Caching Strategy",
       "description": "How datamitsu caches file-level results and unit or repository verdicts, computes XXH3-128 keys, and persists them safely",
-      "bytes": 22706,
-      "contentHash": "92c08dbf83a24cdec4bc4703259a8130"
+      "bytes": 25414,
+      "contentHash": "3bd0627c047ca5bf5eb726f004dbaabe"
     },
     {
       "slug": "guides/architecture/discovery",

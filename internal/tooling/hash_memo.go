@@ -4,6 +4,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/datamitsu/datamitsu/internal/cache"
 	"github.com/datamitsu/datamitsu/internal/trace"
 )
 
@@ -59,7 +60,7 @@ type memoEntry struct {
 	hash  string
 	size  int64
 	mod   time.Time
-	ident fileIdent
+	ident cache.FileIdentity
 	// taken is the instant just before the bytes were read, which is what the
 	// modification time has to be old relative to.
 	taken time.Time
@@ -80,7 +81,7 @@ var contentMemo = newHashMemo()
 
 // lookup returns the memoized hash for a path whose current stat is (size, mod).
 // Every uncertain answer is a miss.
-func (h *hashMemo) lookup(path string, size int64, mod time.Time, ident fileIdent) (string, bool) {
+func (h *hashMemo) lookup(path string, size int64, mod time.Time, ident cache.FileIdentity) (string, bool) {
 	h.mu.RLock()
 	e, ok := h.m[path]
 	h.mu.RUnlock()
@@ -92,8 +93,8 @@ func (h *hashMemo) lookup(path string, size int64, mod time.Time, ident fileIden
 	// extraction — can rewrite the same number of bytes without moving anything
 	// the comparison above looks at. The inode-change time is the part it cannot
 	// put back. Where the platform reports none, that rewrite is unprovable, so
-	// the entry is never handed out at all; see fileIdent.
-	if !ident.known || e.ident != ident {
+	// the entry is never handed out at all; see cache.FileIdentity.
+	if !ident.Known || e.ident != ident {
 		cntMemoMiss.Add(1)
 		return "", false
 	}
@@ -113,7 +114,7 @@ func (h *hashMemo) lookup(path string, size int64, mod time.Time, ident fileIden
 //
 // The nil receiver is load-bearing: hashedState stores unconditionally, and the
 // passes that must bypass the memo hand it a nil one.
-func (h *hashMemo) store(path, hash string, size int64, mod time.Time, ident fileIdent, taken time.Time) {
+func (h *hashMemo) store(path, hash string, size int64, mod time.Time, ident cache.FileIdentity, taken time.Time) {
 	if h == nil {
 		return
 	}
