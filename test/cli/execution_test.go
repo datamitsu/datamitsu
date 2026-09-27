@@ -1120,6 +1120,25 @@ func TestExecutionParsedPositions(t *testing.T) {
 	e.golden("lint_parsed_positions", res)
 }
 
+// TestExecutionParsedANSI: a tool that colours its finding into a pipe is still
+// parsed, because the parser reads its output without the escapes.
+func TestExecutionParsedANSI(t *testing.T) {
+	e := newExecProject(t, map[string]string{"fixture.marker": "", "a.yaml": "a: 1\n"}, fixtureSpec)
+	module := filepath.Join("..", "..", "internal", "parsermanager", "testdata", "echo.wasm")
+	spec := fixtureSpec
+	spec.Parsers = clitest.SeedParserModule(t, e.cache, module)
+	e.p.WriteFile("exec.config.js", clitest.ShellConfig(spec, clitest.ShellTool("yamllint",
+		settle+clitest.RecordRun+`; printf 'stdin:3:0: [\033[31merror\033[0m] too many blank lines (3 > 0) (empty-lines)\n'; exit 1`,
+		clitest.ToolOpSpec{Globs: []string{"**/*.yaml"}, Args: []string{"{files}"}, Parser: "yamllint"})))
+
+	res := e.run("", nil, "lint")
+	e.wantExit(res, 1)
+	if !strings.Contains(res.Stdout, "a.yaml:3:1 error too many blank lines (3 > 0) [empty-lines]") {
+		t.Errorf("the frame should show the coloured finding parsed:\n%s", res.Stdout)
+	}
+	e.golden("lint_parsed_ansi", res)
+}
+
 // TestExecutionParserProblems freezes how a run reports output it could not
 // parse: a parser key the module does not list, and a module that does not
 // load, each warn once per run however many invocations hit them, and neither
