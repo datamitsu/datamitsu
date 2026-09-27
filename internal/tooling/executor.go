@@ -1697,7 +1697,7 @@ func (e *Executor) runCommandIO(cmd *exec.Cmd, stdinContent []byte, separate boo
 		trace.A("argv0", cmd.Path),
 		trace.A("exit", getExitCode(err)),
 	)
-	if err != nil && stopped.Load() {
+	if err != nil && stopped.Load() && !endedOnItsOwn(cmd.ProcessState) {
 		err = fmt.Errorf("%w: %w", errStopped, err)
 	}
 	if separate {
