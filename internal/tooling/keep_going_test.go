@@ -219,8 +219,10 @@ func TestInterruptedPerFileTaskKeepsItsFailure(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	// sh -c hands the first argument after the script to it as $0.
-	script := `case "$0" in *bad*) echo "bad failed"; exit 3;; *slow*) sleep 5;; esac`
+	// sh -c hands the first argument after the script to it as $0. The loop
+	// runs the files in order, so slow.txt starting proves bad.txt has failed.
+	started := filepath.Join(root, "slow-started")
+	script := `case "$0" in *bad*) echo "bad failed"; exit 3;; *slow*) touch ` + started + `; sleep 5;; esac`
 	appManager := &mockAppManager{commands: map[string]*binmanager.CommandInfo{"alpha": shellApp(script)}}
 	task := lintTask(t, "alpha", config.ToolScopePerProject, root, "{file}")
 	task.Files = files
@@ -228,7 +230,11 @@ func TestInterruptedPerFileTaskKeepsItsFailure(t *testing.T) {
 	ctx, cancel := context.WithCancelCause(context.Background())
 	defer cancel(nil)
 	go func() {
-		time.Sleep(300 * time.Millisecond)
+		for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+			if _, err := os.Stat(started); err == nil {
+				break
+			}
+		}
 		cancel(errors.New("interrupt signal received"))
 	}()
 	result := NewExecutor(root, false, false, appManager, nil).executeTask(ctx, task)
@@ -244,6 +250,46 @@ func TestInterruptedPerFileTaskKeepsItsFailure(t *testing.T) {
 	}
 }
 
+// A batch task whose chunks ended differently is a failure when one chunk failed
+// on its own, with the files of its cancelled chunks left unchecked, and a
+// cancellation when every failed chunk was cancelled.
+func TestMergeChunkResults(t *testing.T) {
+	chunks := [][]string{{"a.go", "b.go"}, {"c.go"}, {"d.go", "e.go", "f.go"}}
+	passed := ExecutionResult{Success: true}
+	failed := ExecutionResult{Success: false, Error: errors.New("exit status 1"), FailureReason: FailureReasonIndependent}
+	cancelled := ExecutionResult{Success: false, Error: errCancelled, Cancelled: true, FailureReason: FailureReasonCancelled}
+
+	tests := []struct {
+		name          string
+		chunks        []ExecutionResult
+		wantSuccess   bool
+		wantCancelled bool
+		wantNotRun    int
+	}{
+		{name: "all passed", chunks: []ExecutionResult{passed, passed, passed}, wantSuccess: true},
+		{name: "a failure beside a cancellation", chunks: []ExecutionResult{failed, cancelled, passed}, wantNotRun: 1},
+		{name: "failures beside cancellations", chunks: []ExecutionResult{cancelled, failed, cancelled}, wantNotRun: 5},
+		{name: "only cancellations failed", chunks: []ExecutionResult{passed, cancelled, cancelled}, wantCancelled: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancelCause(context.Background())
+			cancel(errFailFast)
+			result := ExecutionResult{Success: true}
+			for _, c := range tt.chunks {
+				if !c.Success {
+					result.Success = false
+				}
+			}
+			mergeChunkResults(ctx, &result, chunks, tt.chunks)
+			if result.Success != tt.wantSuccess || result.IsCancelled() != tt.wantCancelled || result.FilesNotRun != tt.wantNotRun {
+				t.Errorf("result = success %v, cancelled %v, FilesNotRun %d; want %v, %v, %d",
+					result.Success, result.IsCancelled(), result.FilesNotRun, tt.wantSuccess, tt.wantCancelled, tt.wantNotRun)
+			}
+		})
+	}
+}
+
 // A sibling killed because another task failed is a fail-fast cancellation, and
 // it had started: the two facts a caller needs to report it as cancelled rather
 // than as never started.
@@ -252,9 +298,11 @@ func TestFailFastKilledSiblingIsStartedAndCancelled(t *testing.T) {
 		t.Skip("the tools are sh scripts")
 	}
 	root := t.TempDir()
+	// fails waits, at most five seconds, for slow's process to start.
+	started := filepath.Join(root, "slow-started")
 	appManager := &mockAppManager{commands: map[string]*binmanager.CommandInfo{
-		"fails": shellApp("sleep 0.2; exit 1"),
-		"slow":  shellApp("sleep 5"),
+		"fails": shellApp(`i=0; while [ ! -f ` + started + ` ] && [ $i -lt 250 ]; do sleep 0.02; i=$((i+1)); done; exit 1`),
+		"slow":  shellApp("touch " + started + "; sleep 5"),
 	}}
 	t.Setenv("DATAMITSU_MAX_PARALLEL_WORKERS", "2")
 	e := NewExecutor(root, false, true, appManager, nil)

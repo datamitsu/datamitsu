@@ -1363,32 +1363,7 @@ func (e *Executor) executeBatchChunksParallel(ctx context.Context, task Task, cm
 
 	wg.Wait()
 
-	// Combine outputs from all chunks and propagate cancellation status
-	var outputs []string
-	var errors []error
-	allCancelled := !result.Success
-	for i, chunkResult := range chunkResults {
-		if chunkResult.Output != "" {
-			outputs = append(outputs, fmt.Sprintf("=== Chunk %d/%d ===\n%s", i+1, len(chunks), chunkResult.Output))
-		}
-		if chunkResult.Error != nil {
-			errors = append(errors, fmt.Errorf("chunk %d: %w", i+1, chunkResult.Error))
-		}
-		result.Diagnostics = append(result.Diagnostics, chunkResult.Diagnostics...)
-		if !chunkResult.Success && !chunkResult.IsCancelled() {
-			allCancelled = false
-		}
-	}
-
-	result.Output = strings.Join(outputs, "\n")
-	if len(errors) > 0 {
-		result.Error = fmt.Errorf("batch execution had %d failures: %v", len(errors), errors)
-	}
-
-	if !result.Success && allCancelled {
-		result.Cancelled = true
-		result.FailureReason = cancelReason(ctx)
-	}
+	mergeChunkResults(ctx, &result, chunks, chunkResults)
 
 	result.recordTiming(startTime)
 	log.Debug("executeBatchChunksParallel completed",
@@ -1398,6 +1373,45 @@ func (e *Executor) executeBatchChunksParallel(ctx context.Context, task Task, cm
 		zap.Int64("durationMs", result.Duration))
 
 	return result
+}
+
+// mergeChunkResults folds the chunks of one batch task into its result. A task
+// whose every failed chunk was cancelled is itself cancelled. One with a chunk
+// that failed on its own is a failure, and the files of its cancelled chunks
+// count in FilesNotRun: it did not check everything it was given.
+func mergeChunkResults(ctx context.Context, result *ExecutionResult, chunks [][]string, chunkResults []ExecutionResult) {
+	var outputs []string
+	var errs []error
+	allCancelled := !result.Success
+	notRun := 0
+	for i, chunkResult := range chunkResults {
+		if chunkResult.Output != "" {
+			outputs = append(outputs, fmt.Sprintf("=== Chunk %d/%d ===\n%s", i+1, len(chunks), chunkResult.Output))
+		}
+		if chunkResult.Error != nil {
+			errs = append(errs, fmt.Errorf("chunk %d: %w", i+1, chunkResult.Error))
+		}
+		result.Diagnostics = append(result.Diagnostics, chunkResult.Diagnostics...)
+		if chunkResult.IsCancelled() {
+			notRun += len(chunks[i])
+		} else if !chunkResult.Success {
+			allCancelled = false
+		}
+	}
+
+	result.Output = strings.Join(outputs, "\n")
+	if len(errs) > 0 {
+		result.Error = fmt.Errorf("batch execution had %d failures: %v", len(errs), errs)
+	}
+
+	switch {
+	case result.Success:
+	case allCancelled:
+		result.Cancelled = true
+		result.FailureReason = cancelReason(ctx)
+	default:
+		result.FilesNotRun = notRun
+	}
 }
 
 // replacePlaceholders replaces placeholders in arguments
