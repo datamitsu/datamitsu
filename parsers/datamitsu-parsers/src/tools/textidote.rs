@@ -73,7 +73,8 @@ fn try_marker(line: &str, open: usize) -> Option<RawDiagnostic> {
 		row: Some(row),
 		col: Some(col),
 		end_row: Some(end_row),
-		end_col: Some(end_col),
+		// textidote's end names the last character of the span.
+		end_col: end_col.checked_add(1),
 		file: crate::diagnostic::file_field(&line[..open]),
 		..RawDiagnostic::default()
 	})
@@ -95,7 +96,7 @@ mod tests {
 		let d = parse_line(r#"Possible spelling mistake found. (L12C5-L12C10): "teh" -> "the""#).unwrap();
 		assert_eq!(d.message, r#""teh" -> "the""#);
 		assert_eq!((d.row, d.col), (Some(12), Some(5)));
-		assert_eq!((d.end_row, d.end_col), (Some(12), Some(10)));
+		assert_eq!((d.end_row, d.end_col), (Some(12), Some(11)));
 	}
 
 	#[test]
@@ -117,7 +118,7 @@ mod tests {
 		assert_eq!(out.len(), 2);
 		assert_eq!(out[1].message, "b");
 		assert_eq!((out[1].row, out[1].col), (Some(2), Some(4)));
-		assert_eq!((out[1].end_row, out[1].end_col), (Some(3), Some(2)));
+		assert_eq!((out[1].end_row, out[1].end_col), (Some(3), Some(3)));
 	}
 
 	#[test]

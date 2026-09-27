@@ -137,8 +137,13 @@ fn parse_sarif(stdout: &[u8], out: &mut Vec<RawDiagnostic>) {
 /// a path already, and one with another scheme names no local file.
 fn uri_path(uri: &str) -> Option<String> {
 	let path = if let Some(rest) = uri.strip_prefix("file://") {
-		// `file:///abs` or `file://host/abs`: the path starts at the next slash.
-		&rest[rest.find('/')?..]
+		// `file:///abs` or `file://localhost/abs`; a remote host's share is not a
+		// path on this machine.
+		let slash = rest.find('/')?;
+		if !matches!(&rest[..slash], "" | "localhost") {
+			return None;
+		}
+		&rest[slash..]
 	} else if let Some(rest) = uri.strip_prefix("file:") {
 		rest
 	} else if uri.contains("://") {
@@ -306,6 +311,20 @@ mod tests {
 			let sarif = SARIF.replace("file:/src/Main.java", uri);
 			assert_eq!(parse(sarif.as_bytes(), b"", 1)[0].file.as_deref(), want, "{uri}");
 		}
+	}
+	#[test]
+	fn a_uri_names_a_local_file_or_none() {
+		assert_eq!(uri_path("file:///work/A.java").as_deref(), Some("/work/A.java"));
+		assert_eq!(
+			uri_path("file://localhost/work/A.java").as_deref(),
+			Some("/work/A.java")
+		);
+		assert_eq!(
+			uri_path("file:///C:/work/A%20B.java").as_deref(),
+			Some("C:/work/A B.java")
+		);
+		assert_eq!(uri_path("file://server/share/A.java"), None);
+		assert_eq!(uri_path("https://example.test/A.java"), None);
 	}
 }
 

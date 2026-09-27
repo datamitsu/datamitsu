@@ -35,6 +35,7 @@ pub fn parse(stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic
 	let attrs = Attrs {
 		code: "kind",
 		end_col: "end_column",
+		file: "filepath",
 		..Attrs::defaults()
 	};
 	let mut out = json_diag::from_json(bytes, &attrs, no_level);
@@ -96,6 +97,12 @@ mod tests {
 	#[test]
 	fn empty_output_yields_nothing() {
 		assert!(parse(b"", b"", 0).is_empty());
+	}
+	#[test]
+	fn names_the_workflow_file_but_not_stdin() {
+		let json = br#"[{"message":"m","filepath":".github/workflows/a.yaml","line":1,"column":1,"kind":"k"},{"message":"n","filepath":"<stdin>","line":2,"column":1,"kind":"k"}]"#;
+		let files: Vec<_> = parse(json, b"", 1).into_iter().map(|d| d.file).collect();
+		assert_eq!(files, [Some(".github/workflows/a.yaml".to_string()), None]);
 	}
 }
 

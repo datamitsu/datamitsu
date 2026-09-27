@@ -139,7 +139,7 @@ const UNKNOWN_COLUMN_UNITS: &[&str] = &[
 /// "Unverified" marks a convention taken from the tool's documentation or the
 /// ported builtin without a run of the tool.
 const POSITIONS: &[(&str, &str)] = &[
-	("actionlint", "1-based line and column; end_column is the last column of the span (inclusive), +1"),
+	("actionlint", "1-based line and column; end_column is the last column of the span (inclusive), +1; filepath names the file"),
 	("alex", "1-based line and column with an end line and an exclusive end column"),
 	("ansiblelint", "1-based line, optional 1-based column, no end"),
 	("bean_check", "1-based line only"),
@@ -169,7 +169,7 @@ const POSITIONS: &[(&str, &str)] = &[
 	("fish", "1-based line only"),
 	("gccdiag", "1-based line and column, no end"),
 	("gdlint", "1-based line only (unverified)"),
-	("gitleaks", "1-based line; StartColumn/EndColumn inclusive on line 1 and one too high after it: end +1 on line 1, start -1 after (off by one on the first line of a later ~100 KB fragment)"),
+	("gitleaks", "1-based absolute line; columns count within a scanned fragment: kept on line 1 (inclusive end +1), dropped after it"),
 	("gitlint", "1-based line only (unverified)"),
 	("glslc", "1-based line only"),
 	("golangci_lint", "1-based line and byte column, no end"),
@@ -220,7 +220,7 @@ const POSITIONS: &[(&str, &str)] = &[
 	("teal", "1-based line and column, no end"),
 	("terraform_validate", "1-based line and column with an exclusive end"),
 	("terragrunt_validate", "1-based line and column with an exclusive end"),
-	("textidote", "L<row>C<col> taken as 1-based; the printed end passed through (unverified)"),
+	("textidote", "L<row>C<col> 1-based; the end names the last character (inclusive), +1"),
 	("textlint", "1-based line and column, no end"),
 	("tfsec", "1-based start_line and end_line (the last line), no column"),
 	("tidy", "1-based line and column, no end"),

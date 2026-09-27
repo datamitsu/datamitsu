@@ -10,15 +10,14 @@
 //! stdout first and fall back to stderr. Source is the static label "gitleaks";
 //! gitleaks emits no severity token.
 //!
-//! Its columns name the first and last character of the secret, but only on the
-//! first line of the input: on every later line it counts from the newline that
-//! precedes the line, so both come out one too high (gitleaks 8.30.1 prints
-//! `StartColumn` 8, `EndColumn` 27 for a 20-character secret at column 7 of line
-//! 3). The parser undoes that, which leaves an exclusive end either way.
-//! gitleaks counts columns within the fragment it scans, about 100 KB at a
-//! time, and reports absolute lines, so on the first line of a later fragment
-//! the correction is one column off at both ends; the report carries nothing
-//! that would tell such a line apart.
+//! Its columns name the first and last character of the secret, counted within
+//! the fragment gitleaks scanned (about 100 KB of a file, or a diff hunk) from
+//! the newline before the line — except on the fragment's first line, which has
+//! none (gitleaks 8.30.1 prints `StartColumn` 8, `EndColumn` 27 for a
+//! 20-character secret at column 7 of line 3, and 15/34 for one at column 15 of
+//! line 1). Lines are absolute, so only line 1 is known to open a fragment: its
+//! columns are kept, the end made exclusive; any later line keeps its row and
+//! drops columns the report cannot pin down.
 
 use super::json_diag::{self, Attrs};
 use crate::capabilities::{Operation, ToolCapability};
@@ -65,11 +64,15 @@ pub fn parse(stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic
 	let mut diags = json_diag::from_json(bytes, &attrs, |_| None);
 	for d in &mut diags {
 		d.source = Some("gitleaks".to_string());
-		if d.row.is_some_and(|row| row > 1) {
-			d.col = d.col.and_then(|c| c.checked_sub(1)).filter(|&c| c > 0);
-		}
-		if d.end_row.or(d.row) == Some(1) {
-			d.end_col = d.end_col.and_then(|c| c.checked_add(1));
+		match (d.row, d.end_row) {
+			(Some(1), None | Some(1)) => d.end_col = d.end_col.and_then(|c| c.checked_add(1)),
+			// The end sits on a later line of the fragment line 1 opened: counted
+			// from its newline, one too high, which makes it exclusive already.
+			(Some(1), Some(_)) => {}
+			_ => {
+				d.col = None;
+				d.end_col = None;
+			}
 		}
 	}
 	diags
@@ -147,11 +150,11 @@ mod tests {
 			(out[0].row, out[0].col, out[0].end_row, out[0].end_col),
 			(Some(1), Some(15), Some(1), Some(35))
 		);
-		// Line 3: both printed one too high, so the start is corrected and the end
-		// is already exclusive.
+		// Line 3 may open a later fragment, where its columns would not be off by
+		// one: the report cannot tell, so only the row is kept.
 		assert_eq!(
 			(out[1].row, out[1].col, out[1].end_row, out[1].end_col),
-			(Some(3), Some(7), Some(3), Some(27))
+			(Some(3), None, Some(3), None)
 		);
 	}
 

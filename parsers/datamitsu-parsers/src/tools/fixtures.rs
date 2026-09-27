@@ -117,6 +117,7 @@ fn actionlint_findings() {
 				end_col: Some(9),
 				source: Some("actionlint".into()),
 				code: Some("job-needs".into()),
+				file: Some(".github/workflows/findings.yml".into()),
 				..RawDiagnostic::default()
 			},
 			RawDiagnostic {
@@ -126,6 +127,7 @@ fn actionlint_findings() {
 				end_col: Some(47),
 				source: Some("actionlint".into()),
 				code: Some("expression".into()),
+				file: Some(".github/workflows/findings.yml".into()),
 				..RawDiagnostic::default()
 			},
 			RawDiagnostic {
@@ -135,6 +137,7 @@ fn actionlint_findings() {
 				end_col: Some(15),
 				source: Some("actionlint".into()),
 				code: Some("action".into()),
+				file: Some(".github/workflows/findings.yml".into()),
 				..RawDiagnostic::default()
 			},
 		],
@@ -453,6 +456,7 @@ fn protolint_findings() {
 				severity: Some(severity::ERROR),
 				source: Some("protolint".into()),
 				code: Some("FIELD_NAMES_LOWER_SNAKE_CASE".into()),
+				file: Some("findings.proto".into()),
 				..RawDiagnostic::default()
 			},
 			RawDiagnostic {
@@ -462,6 +466,7 @@ fn protolint_findings() {
 				severity: Some(severity::ERROR),
 				source: Some("protolint".into()),
 				code: Some("MESSAGE_NAMES_UPPER_CAMEL_CASE".into()),
+				file: Some("findings.proto".into()),
 				..RawDiagnostic::default()
 			},
 		],

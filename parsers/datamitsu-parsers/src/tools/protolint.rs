@@ -90,6 +90,9 @@ fn from_lint(lint: &JsonValue) -> Option<RawDiagnostic> {
 		code: rule,
 		severity: get_str(map, "severity").and_then(|s| severity::of(DESCRIPTOR.severities, &s)),
 		source: Some("protolint".to_string()),
+		file: get_str(map, "filename")
+			.as_deref()
+			.and_then(crate::diagnostic::file_field),
 		..RawDiagnostic::default()
 	})
 }
@@ -176,6 +179,12 @@ mod tests {
 			assert_eq!(out[0].severity, None);
 			assert_eq!(out[0].source.as_deref(), Some("protolint"));
 		}
+	}
+	#[test]
+	fn names_the_file_of_each_lint() {
+		let stderr =
+			br#"{"lints":[{"filename":"api/v1/a.proto","line":1,"column":1,"message":"m","rule":"R","severity":"error"}]}"#;
+		assert_eq!(parse(b"", stderr, 1)[0].file.as_deref(), Some("api/v1/a.proto"));
 	}
 }
 
