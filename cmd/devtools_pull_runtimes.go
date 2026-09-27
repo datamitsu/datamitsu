@@ -197,42 +197,33 @@ func pullRuntime(ctx context.Context, name string, minAge int) (*RuntimeJSON, er
 	switch name {
 	case "bun":
 		data, binaries, err := pullBunRuntime(ctx, minAge)
-		if err != nil {
-			return nil, err
-		}
-		return buildBunRuntimeJSON(data, binaries), nil
+		return runtimeEntry(data, binaries, err, buildBunRuntimeJSON)
 	case "uv":
 		data, binaries, err := pullUVRuntime(ctx, minAge)
-		if err != nil {
-			return nil, err
-		}
-		return buildUVRuntimeJSON(data, binaries), nil
+		return runtimeEntry(data, binaries, err, buildUVRuntimeJSON)
 	case "jvm":
 		data, binaries, err := pullJVMRuntime(ctx, minAge)
-		if err != nil {
-			return nil, err
-		}
-		return buildJVMRuntimeJSON(data, binaries), nil
+		return runtimeEntry(data, binaries, err, buildJVMRuntimeJSON)
 	case "node":
 		data, binaries, err := pullNodeRuntime(ctx)
-		if err != nil {
-			return nil, err
-		}
-		return buildNodeRuntimeJSON(data, binaries), nil
+		return runtimeEntry(data, binaries, err, buildNodeRuntimeJSON)
 	case "go":
 		data, binaries, err := pullGoRuntime(ctx)
-		if err != nil {
-			return nil, err
-		}
-		return buildGoRuntimeJSON(data, binaries), nil
+		return runtimeEntry(data, binaries, err, buildGoRuntimeJSON)
 	case "pnpm":
 		data, binaries, err := pullPNPMRuntime(ctx, minAge)
-		if err != nil {
-			return nil, err
-		}
-		return buildPNPMRuntimeJSON(data, binaries), nil
+		return runtimeEntry(data, binaries, err, buildPNPMRuntimeJSON)
 	}
 	return nil, fmt.Errorf("unknown runtime %q", name)
+}
+
+// runtimeEntry builds the entry of a runtime that was pulled, or passes on
+// the error of one that was not.
+func runtimeEntry[D any](data D, binaries binmanager.MapOfBinaries, err error, build func(D, binmanager.MapOfBinaries) *RuntimeJSON) (*RuntimeJSON, error) {
+	if err != nil {
+		return nil, err
+	}
+	return build(data, binaries), nil
 }
 
 // runtimesToPull is the list a run works through: the one runtime asked for,
@@ -275,8 +266,6 @@ func preservePNPMRuntimeRef(existing, updated *RuntimeJSON) {
 func validatePNPMRuntimeRef(runtimes RuntimesJSON, name string, entry *RuntimeJSON) error {
 	var ref string
 	switch {
-	case entry == nil:
-		return nil
 	case entry.Node != nil:
 		ref = entry.Node.PNPMRuntime
 	case entry.Bun != nil:

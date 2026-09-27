@@ -378,6 +378,184 @@ func TestRunPullRuntimes_UnchangedRuntimeIsNotRewritten(t *testing.T) {
 	}
 }
 
+// A save that fails stops the run: nothing after it could be recorded either.
+func TestRunPullRuntimes_SaveFailureStopsTheRun(t *testing.T) {
+	setPullRuntimesFlags(t, "", false)
+	path := filepath.Join(t.TempDir(), "missing", "runtimes.json")
+
+	var pulled []string
+	answer := func(name string, r *RuntimeJSON) func() (*RuntimeJSON, error) {
+		return func() (*RuntimeJSON, error) {
+			pulled = append(pulled, name)
+			return r, nil
+		}
+	}
+	fakeRuntimePulls(t, map[string]func() (*RuntimeJSON, error){
+		"pnpm": answer("pnpm", buildPNPMRuntimeJSON(&PNPMRuntimeData{PNPMVersion: "12.3.4"}, testPNPMBinaries())),
+		"bun":  answer("bun", buildBunRuntimeJSON(&BunRuntimeData{BunVersion: "1.4.1"}, nil)),
+	})
+
+	var err error
+	stderr := captureStderr(func() {
+		_ = captureStdout(func() { err = runPullRuntimes(nil, []string{path}) })
+	})
+	if err == nil || !strings.Contains(err.Error(), "failed to write "+path+" after pnpm") {
+		t.Fatalf("runPullRuntimes() = %v, want the save failure after pnpm", err)
+	}
+	if !strings.Contains(stderr, "The run stopped at pnpm; the runtimes after it were not attempted.") {
+		t.Errorf("stderr does not say where the run stopped:\n%s", stderr)
+	}
+	if strings.Join(pulled, ",") != "pnpm" {
+		t.Errorf("pulled %v after the failed save, want only pnpm", pulled)
+	}
+}
+
+// pull-node stops at a save that fails and says where.
+func TestRunPullNode_SaveFailureStopsTheRun(t *testing.T) {
+	if err := runtimeconfig.Init(); err != nil {
+		t.Fatalf("runtimeconfig.Init: %v", err)
+	}
+	dir := filepath.Join(t.TempDir(), "registry")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := writeNodeApps(t, dir, nodeAppsJSON{
+		"alpha": {PackageName: "alpha", Version: "0.9.0"},
+		"beta":  {PackageName: "beta", Version: "0.9.0"},
+	})
+
+	var mu sync.Mutex
+	var asked []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		name, _, _ := strings.Cut(strings.TrimPrefix(r.URL.Path, "/"), "/")
+		mu.Lock()
+		asked = append(asked, name)
+		mu.Unlock()
+		// The file is read already; taking its directory away makes the save fail.
+		_ = os.RemoveAll(dir)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"name": name, "dist-tags": map[string]string{"latest": "1.0.0"},
+			"versions": map[string]any{"1.0.0": map[string]string{}},
+			"time":     map[string]string{"1.0.0": "2020-01-01T00:00:00Z"},
+		})
+	}))
+	t.Cleanup(srv.Close)
+
+	*pullNodeMinAge = 0
+	defer func() { *pullNodeMinAge = minAgeFlagDefault }()
+	nodeUpdateFlag = true
+	defer func() { nodeUpdateFlag = false }()
+
+	var err error
+	var stderr string
+	withNPMRegistry(t, srv, func() {
+		stderr = captureStderr(func() {
+			_ = captureStdout(func() { err = runPullNode(pullNodeCmd, []string{path}) })
+		})
+	})
+	if err == nil || !strings.Contains(err.Error(), "after alpha") {
+		t.Fatalf("runPullNode() = %v, want the save failure after alpha", err)
+	}
+	if !strings.Contains(stderr, "The run stopped at alpha") {
+		t.Errorf("stderr does not say where the run stopped:\n%s", stderr)
+	}
+	for _, name := range asked {
+		if name == "beta" {
+			t.Error("beta was looked up after the failed save")
+		}
+	}
+}
+
+// pull-uv stops at a save that fails and says where.
+func TestRunPullUV_SaveFailureStopsTheRun(t *testing.T) {
+	if err := runtimeconfig.Init(); err != nil {
+		t.Fatalf("runtimeconfig.Init: %v", err)
+	}
+	dir := filepath.Join(t.TempDir(), "registry")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := writeUVApps(t, dir, uvAppsJSON{
+		"alpha": {PackageName: "alpha", Version: "0.9.0"},
+		"beta":  {PackageName: "beta", Version: "0.9.0"},
+	})
+
+	var mu sync.Mutex
+	var asked []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+		name := parts[len(parts)-2]
+		mu.Lock()
+		asked = append(asked, name)
+		mu.Unlock()
+		_ = os.RemoveAll(dir)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"info":     map[string]string{"name": name, "version": "1.0.0"},
+			"releases": map[string]any{"1.0.0": []map[string]any{{"upload_time_iso_8601": "2020-01-01T00:00:00Z"}}},
+		})
+	}))
+	t.Cleanup(srv.Close)
+
+	*pullUVMinAge = 0
+	defer func() { *pullUVMinAge = minAgeFlagDefault }()
+	uvUpdateFlag = true
+	defer func() { uvUpdateFlag = false }()
+
+	var err error
+	var stderr string
+	withPyPIRegistry(t, srv, func() {
+		stderr = captureStderr(func() {
+			_ = captureStdout(func() { err = runPullUV(pullUVCmd, []string{path}) })
+		})
+	})
+	if err == nil || !strings.Contains(err.Error(), "after alpha") {
+		t.Fatalf("runPullUV() = %v, want the save failure after alpha", err)
+	}
+	if !strings.Contains(stderr, "The run stopped at alpha") {
+		t.Errorf("stderr does not say where the run stopped:\n%s", stderr)
+	}
+	for _, name := range asked {
+		if name == "beta" {
+			t.Error("beta was looked up after the failed save")
+		}
+	}
+}
+
+// Every runtime name reaches its own puller. Each is made to fail at its first
+// lookup, so the test needs no network.
+func TestPullRuntime_DispatchesEveryRuntime(t *testing.T) {
+	srv := httptest.NewServer(http.NotFoundHandler())
+	t.Cleanup(srv.Close)
+	githubBaseURL = srv.URL
+	t.Cleanup(func() { githubBaseURL = "" })
+
+	origPython, origTemurin, origLTS := getLatestPythonStableVersion, getTemurinMajorVersions, getLatestNodeLTSVersion
+	t.Cleanup(func() {
+		getLatestPythonStableVersion, getTemurinMajorVersions, getLatestNodeLTSVersion = origPython, origTemurin, origLTS
+	})
+	simulated := errors.New("simulated lookup failure")
+	getLatestPythonStableVersion = func(context.Context) (string, error) { return "", simulated }
+	getTemurinMajorVersions = func(context.Context) ([]string, error) { return nil, simulated }
+	getLatestNodeLTSVersion = func(context.Context) (string, error) { return "", simulated }
+
+	tests := map[string]string{
+		"bun":  "failed to fetch Bun release",
+		"uv":   "failed to look up latest Python version",
+		"jvm":  "failed to look up latest Temurin (Java) version",
+		"node": "simulated lookup failure",
+		"pnpm": "failed to fetch pnpm 12 version",
+		"nope": `unknown runtime "nope"`,
+	}
+	withNPMRegistry(t, srv, func() {
+		for name, want := range tests {
+			entry, err := pullRuntime(context.Background(), name, 0)
+			if entry != nil || err == nil || !strings.Contains(err.Error(), want) {
+				t.Errorf("pullRuntime(%q) = %v, %v; want an error mentioning %q", name, entry, err, want)
+			}
+		}
+	})
+}
+
 // temurinGitHub serves release listings for adoptium/temurin<major>-binaries:
 // each major answers with one release of the given tag and age.
 func temurinGitHub(t *testing.T, releases map[string]map[string]any) {
@@ -433,6 +611,40 @@ func TestPullJVMRuntime_FallsBackToPreviousFeatureRelease(t *testing.T) {
 	}
 	if !strings.Contains(stdout, "No Java 27 release is at least 10080 minutes old; trying Java 26") {
 		t.Errorf("stdout does not say why Java 27 was passed over:\n%s", stdout)
+	}
+}
+
+func TestPullJVMRuntime_ReleaseLookupAndDetectionFailures(t *testing.T) {
+	orig := getTemurinMajorVersions
+	t.Cleanup(func() { getTemurinMajorVersions = orig })
+	getTemurinMajorVersions = func(context.Context) ([]string, error) { return []string{"27", "26"}, nil }
+
+	old := time.Now().Add(-60 * 24 * time.Hour)
+	tests := []struct {
+		name     string
+		releases map[string]map[string]any
+		want     string
+	}{
+		{
+			name:     "a listing that fails is not stepped over",
+			releases: map[string]map[string]any{"temurin26-binaries": temurinRelease("jdk-26.0.2+10", "OpenJDK26U-jdk_x64_linux_hotspot_26.0.2_10.tar.gz", old)},
+			want:     "failed to fetch JVM release from adoptium/temurin27-binaries",
+		},
+		{
+			name:     "a release without a JDK archive",
+			releases: map[string]map[string]any{"temurin27-binaries": temurinRelease("jdk-27+35", "OpenJDK27U-jre_x64_linux_hotspot_27_35.tar.gz", old)},
+			want:     "failed to detect JVM binaries",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			temurinGitHub(t, tt.releases)
+			var err error
+			_ = captureStdout(func() { _, _, err = pullJVMRuntime(context.Background(), 24*60) })
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("pullJVMRuntime() error = %v, want one mentioning %q", err, tt.want)
+			}
+		})
 	}
 }
 

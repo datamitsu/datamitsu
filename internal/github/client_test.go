@@ -1033,6 +1033,21 @@ func TestGetLatestReleaseWithMinAge(t *testing.T) {
 		}
 	})
 
+	t.Run("a listing that fails is an error", func(t *testing.T) {
+		client := NewClient()
+		client.httpClient = &http.Client{
+			Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+				return &http.Response{StatusCode: http.StatusNotFound, Body: io.NopCloser(strings.NewReader(""))}, nil
+			}),
+		}
+
+		r, err := client.GetLatestReleaseWithMinAge(context.Background(), "o", "r", 60)
+		var notFound *NotFoundError
+		if r != nil || !errors.As(err, &notFound) {
+			t.Fatalf("GetLatestReleaseWithMinAge() = %v, %v; want nil and a NotFoundError", r, err)
+		}
+	})
+
 	t.Run("stops at a short page", func(t *testing.T) {
 		var requested []string
 		client := pagedClient(map[string]string{
