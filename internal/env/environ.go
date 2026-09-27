@@ -31,6 +31,7 @@ var observationExcluded = map[string]bool{
 // EnvironAll and move the config-eval key.
 var executionOnly = map[string]bool{
 	failFast.Name: true,
+	failOn.Name:   true,
 }
 
 // environExcluded is the source-mode staleness key's exclusion list: the

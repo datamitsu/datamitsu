@@ -22,7 +22,8 @@
               "coverage": "complete",
               "workingDir": "<TMP>",
               "files": [],
-              "fileCount": 0
+              "fileCount": 0,
+              "failOn": "error"
             }
           ]
         },
@@ -41,7 +42,8 @@
               "coverage": "complete",
               "workingDir": "<TMP>",
               "files": [],
-              "fileCount": 0
+              "fileCount": 0,
+              "failOn": "error"
             }
           ]
         }

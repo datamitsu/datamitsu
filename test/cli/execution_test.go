@@ -1307,6 +1307,9 @@ func TestExecutionUsageErrors(t *testing.T) {
 		{"fail_fast_env_invalid", []string{"DATAMITSU_FAIL_FAST=yes"}, []string{"lint"}},
 		{"fail_fast_env_invalid_with_flag", []string{"DATAMITSU_FAIL_FAST=yes"}, []string{"lint", "--fail-fast=false"}},
 		{"fail_fast_flag_invalid", nil, []string{"lint", "--fail-fast=maybe"}},
+		{"fail_on_env_invalid", []string{"DATAMITSU_FAIL_ON=warnings"}, []string{"lint"}},
+		{"fail_on_env_invalid_with_flag", []string{"DATAMITSU_FAIL_ON=warnings"}, []string{"lint", "--fail-on=warning"}},
+		{"fail_on_flag_invalid", nil, []string{"check", "--fail-on=Error"}},
 		{"explain_invalid", nil, []string{"lint", "--explain=bogus"}},
 	}
 	for _, tc := range cases {

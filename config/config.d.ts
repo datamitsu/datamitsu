@@ -1056,6 +1056,19 @@ declare global {
       excludeGlobs?: string[];
 
       /**
+       * The lowest severity that fails the run: "error" (default), "warning", "info" or "hint". The
+       * tool's own exit code always fails the run too; failOn only adds failures, never removes
+       * them. The terminal shows findings at this severity and above. It needs a parser module that
+       * reads levels only from what the tool printed (descriptor schema 2); with an older module
+       * the exit code alone decides, and a run warns once. `--fail-on` raises it for every
+       * operation of a run, never lowers it.
+       *
+       * @example
+       *   failOn: "warning";
+       */
+      failOn?: "error" | "hint" | "info" | "warning";
+
+      /**
        * File glob patterns this tool operates on Uses doublestar glob syntax: `*`, `**`, `?`,
        * `[...]`, `{alt1,alt2}` Note: `!` negation is NOT supported — use `excludeGlobs` for
        * exclusions Optional: omit/empty to match all discovered files

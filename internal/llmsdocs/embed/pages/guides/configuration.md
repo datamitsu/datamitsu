@@ -236,6 +236,7 @@ for the complete list and effective defaults.
 | `DATAMITSU_MAX_PARALLEL_WORKERS`  | Max parallel tool workers                  | `max(4, floor(NumCPU * 0.75))`, capped at 16 |
 | `DATAMITSU_UNIT_CACHE_TTL`        | Minutes a project-level verdict is trusted | `1440` (24h)                                 |
 | `DATAMITSU_FAIL_FAST`             | Stop at the first failing tool             | `true` (`false` runs everything)             |
+| `DATAMITSU_FAIL_ON`               | Raise every operation's `failOn`           | - (`warning`, `info` or `hint` raises it)    |
 | `DATAMITSU_LSP_FORMAT_WIDEN_TO`   | Editor format-on-save widening             | `unit`                                       |
 | `DATAMITSU_LSP_FORMAT_TIMEOUT_MS` | Editor format-on-save watchdog, in ms      | `15000` (`0` disables)                       |
 | `DATAMITSU_CONFIG_CACHE`          | Serve the evaluated config chain from disk | `1` (`0`/`false`/`off`/`no` disables)        |

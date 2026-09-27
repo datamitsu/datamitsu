@@ -67,6 +67,7 @@ type TaskJSON struct {
 	ExcludeGlobs []string `json:"excludeGlobs,omitempty"`
 	Files        []string `json:"files"`
 	FileCount    int      `json:"fileCount"`
+	FailOn       string   `json:"failOn"`
 }
 
 // ========================================
@@ -197,6 +198,9 @@ func (f *SummaryFormatter) Format(plan *ExecutionPlan, rootPath, cwdPath string,
 
 			fmt.Fprintf(&buf, "  ┌─ %s\n", task.ToolName)
 			fmt.Fprintf(&buf, "  │  Scope: %s\n", task.OpConfig.Scope)
+			if failOn := config.EffectiveFailOn(task.OpConfig, plan.FailOn); failOn != config.DefaultFailOn {
+				fmt.Fprintf(&buf, "  │  Fail on: %s\n", failOn)
+			}
 			fmt.Fprintf(&buf, "  │  Command: %s\n", commandTemplate)
 			fmt.Fprintf(&buf, "  │  Working Dir: %s\n", workingDir)
 
@@ -271,6 +275,9 @@ func (f *DetailedFormatter) Format(plan *ExecutionPlan, rootPath, cwdPath string
 
 			fmt.Fprintf(&buf, "  ┌─ %s\n", task.ToolName)
 			fmt.Fprintf(&buf, "  │  Scope: %s\n", task.OpConfig.Scope)
+			if failOn := config.EffectiveFailOn(task.OpConfig, plan.FailOn); failOn != config.DefaultFailOn {
+				fmt.Fprintf(&buf, "  │  Fail on: %s\n", failOn)
+			}
 			fmt.Fprintf(&buf, "  │  Command: %s\n", commandTemplate)
 			fmt.Fprintf(&buf, "  │  Working Dir: %s\n", workingDir)
 
@@ -376,6 +383,7 @@ func (f *JSONFormatter) Format(plan *ExecutionPlan, rootPath, cwdPath string, op
 					ExcludeGlobs: task.OpConfig.ExcludeGlobs,
 					Files:        task.Files,
 					FileCount:    len(task.Files),
+					FailOn:       string(config.EffectiveFailOn(task.OpConfig, plan.FailOn)),
 				}
 				pgJSON.Tasks = append(pgJSON.Tasks, taskJSON)
 			}

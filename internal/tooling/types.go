@@ -70,7 +70,10 @@ type ExecutionPlan struct {
 	// A plan is only readable against the configuration that produced it, and a
 	// machine may hold several.
 	ConfigName string
-	Groups     []TaskGroup
+	// FailOn is the run's global failOn raise (--fail-on), empty when none; a
+	// task's threshold is config.EffectiveFailOn of its operation and this.
+	FailOn config.Severity
+	Groups []TaskGroup
 	// Skipped lists tools that were deliberately not planned, with the reason.
 	// These never run but are reported so the user sees what was left out and why.
 	Skipped []SkippedTool

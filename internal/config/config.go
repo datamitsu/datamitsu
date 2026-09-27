@@ -125,6 +125,12 @@ type ToolOperation struct {
 	// operation's cache identities: they are what the tool sees, and a host
 	// value is not configuration.
 	InheritEnv []string `json:"inheritEnv,omitempty"`
+	// FailOn is the lowest level of finding that fails the operation, on top
+	// of the tool's own exit code; unset means DefaultFailOn. It also decides
+	// which findings the terminal shows. It enters no cache identity: a pass is
+	// recorded only for output with no finding at all, which holds at every
+	// threshold.
+	FailOn Severity `json:"failOn,omitempty"`
 	// Input selects how the file content reaches the tool: "file" (default,
 	// path via {file}/{files}) or "stdin" (pipe the file's content to stdin).
 	Input ToolInputMode `json:"input,omitempty"`

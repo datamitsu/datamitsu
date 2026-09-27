@@ -14,6 +14,7 @@ Usage:
 Flags:
       --explain string[="summary"]   Show execution plan without running (summary|detailed|json)
       --fail-fast                    Stop at the first failing tool; --fail-fast=false runs everything to the end (also via DATAMITSU_FAIL_FAST) (default true)
+      --fail-on string               Fail on findings at this level or above in every operation (error|warning|info|hint); raises an operation's failOn, never lowers it (also via DATAMITSU_FAIL_ON)
       --fail-on-skip                 Exit non-zero if any tool is skipped because its binary is unavailable for this platform
       --file-scoped                  Only process git staged files
   -h, --help                         help for lint

@@ -84,6 +84,13 @@ writes the configuration; never ship it to consumers.
 Newest first. Each entry names the first version that has it and what a
 configuration should do about it.
 
+- **after v0.3.1** - A tool operation takes `failOn` (`error` by default,
+  `warning`, `info`, `hint`): the lowest level of parsed finding that fails the
+  run on top of the tool's exit code (`datamitsu llms
+reference/configuration-api`). `--fail-on`/`DATAMITSU_FAIL_ON` raise it for
+  one run. Set it only where a stricter gate than the tool's own is wanted; the
+  config-eval cache is cold once.
+
 - **after v0.3.1** - A finding a tool printed no level for is an error when the
   tool failed and a warning when it passed (it was always a warning). The parser
   module released with this core (descriptor schema 2) sets levels only from

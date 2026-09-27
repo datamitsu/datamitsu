@@ -802,6 +802,7 @@ interface ToolOperation {
   invalidateOn?: string[]; // Additional unit/repo verdict inputs
   env?: Record<string, string>; // Extra environment variables; values support {root}, {cwd}, {toolCache}, {managedConfig:<key>}
   inheritEnv?: string[]; // Host variables handed to the tool with the host's value, even stripped ones
+  failOn?: "error" | "warning" | "info" | "hint"; // Lowest finding level that fails the run (default: "error")
   input?: "file" | "stdin"; // How file content reaches the tool (default: "file")
   output?: "inplace" | "stdout"; // How the result is captured (default: "inplace")
   lsp?: boolean; // false keeps the operation out of the language server (format on save)
@@ -1058,6 +1059,43 @@ The field is per operation, because a tool's lint and fix can need different
 things. Each name must be an uppercase variable name (`^[A-Z_][A-Z0-9_]*$`),
 listed once; `NO_COLOR`, `PATH` (which would compete with the `PATH` the runtime
 sets) and every `DATAMITSU_*` name are rejected.
+
+### Failing on findings (`failOn`)
+
+`failOn` is the lowest level of finding that fails an operation: `"error"` (the
+default), `"warning"`, `"info"` or `"hint"`. It adds failures to the tool's own
+exit code and never removes one: a tool that exits non-zero fails at any
+threshold, and a tool that exits 0 fails when its parsed output holds a finding
+at or above `failOn`. It applies to `fix` and `lint` alike — a fixer that leaves a
+finding above the threshold behind has not fixed it.
+
+```javascript
+lint: {
+  app: "yamllint",
+  args: ["-f", "parsable", "{files}"],
+  scope: "repository",
+  failOn: "warning", // a warning fails the run, even when yamllint exits 0
+},
+```
+
+What gates is what the terminal shows: a run prints the findings at or above the
+operation's threshold and counts the rest.
+[`--fail-on`](./cli-commands.md#failing-on-findings---fail-on) and
+`DATAMITSU_FAIL_ON` raise every operation's threshold for one run; they never
+lower one.
+
+A finding's level comes from its [parser](../guides/architecture/parsers.md#levels):
+the level the tool printed, or — for a finding the tool printed no level for —
+error when the tool failed and warning when it passed. A threshold is therefore
+only meaningful with a parser module whose levels come from what the tool
+printed: descriptor schema 2 or later, which
+[`devtools parsers list`](./cli-commands.md#devtools-parsers) shows as a `levels`
+line. With an older module the exit code alone decides, and a run whose threshold
+is not the default warns once, naming the tools:
+`failOn ignored for <tool>: parser module predates the severity contract`.
+
+`failOn` is part of no cache identity: a pass is recorded only for output with no
+finding of any level, which holds at every threshold.
 
 ### Skipping a tool (`skip` / `skipReason`)
 

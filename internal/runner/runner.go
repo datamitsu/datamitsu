@@ -358,6 +358,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	// Get detected project types from planner cache
 	if plan != nil {
 		plan.ConfigName = sc.cfg.DisplayName()
+		plan.FailOn = config.Severity(sc.opts.FailOn)
 	}
 	projectTypes := sc.planner.GetDetectedProjectTypes()
 
@@ -1170,6 +1171,9 @@ type Options struct {
 	// FailFast overrides whether the first failing tool stops the run; nil defers
 	// to DATAMITSU_FAIL_FAST and the default.
 	FailFast *bool
+	// FailOn raises every operation's failOn to this level (a config.Severity
+	// name); empty raises nothing. It never lowers an operation's own.
+	FailOn string
 }
 
 // validate rejects unknown flag values. Rank() reads an unvalidated string
@@ -1179,6 +1183,9 @@ type Options struct {
 // the assertion while never matching the level that carries the selection
 // clause.
 func (o Options) validate() error {
+	if o.FailOn != "" && !config.Severity(o.FailOn).Valid() {
+		return exitcode.UsageErrorf("invalid --fail-on value: %q (must be %s)", o.FailOn, config.SeverityChoices())
+	}
 	if o.WidenTo != "" && !config.ValidWidenTo(config.WidenTo(o.WidenTo)) {
 		return exitcode.UsageErrorf("invalid --widen-to value: %s (must be target, unit or repo)", o.WidenTo)
 	}

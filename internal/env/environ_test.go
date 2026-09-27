@@ -163,18 +163,22 @@ func TestCanonicalEnviron_ResolvesDuplicatesLastWins(t *testing.T) {
 // contains: it must not make an activated shell re-bake its farm, yet config JS
 // can still read it, so the config-eval fingerprint keeps it.
 func TestEnviron_ExcludesExecutionOnlyVariables(t *testing.T) {
-	t.Setenv(failFast.Name, "false")
+	for _, v := range []struct{ name, value string }{{failFast.Name, "false"}, {failOn.Name, "warning"}} {
+		t.Run(v.name, func(t *testing.T) {
+			t.Setenv(v.name, v.value)
 
-	for _, kv := range Environ() {
-		if strings.HasPrefix(kv, failFast.Name+"=") {
-			t.Errorf("Environ() contains %q; an execution-only variable must not enter the staleness key", kv)
-		}
-	}
-	if !slices.Contains(EnvironAll(), failFast.Name+"=false") {
-		t.Errorf("EnvironAll() dropped %s; config JS can read it through facts().env", failFast.Name)
-	}
-	if ObservationOnly(failFast.Name) {
-		t.Errorf("%s is execution-only, not observation-only", failFast.Name)
+			for _, kv := range Environ() {
+				if strings.HasPrefix(kv, v.name+"=") {
+					t.Errorf("Environ() contains %q; an execution-only variable must not enter the staleness key", kv)
+				}
+			}
+			if !slices.Contains(EnvironAll(), v.name+"="+v.value) {
+				t.Errorf("EnvironAll() dropped %s; config JS can read it through facts().env", v.name)
+			}
+			if ObservationOnly(v.name) {
+				t.Errorf("%s is execution-only, not observation-only", v.name)
+			}
+		})
 	}
 }
 
