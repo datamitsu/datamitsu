@@ -2,6 +2,7 @@ package tooling
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -202,6 +203,44 @@ func TestKeepGoingPerFileRunsEveryFile(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// A per-file task that failed on its own and is then interrupted stays a
+// failure: the interruption only leaves the rest of its files unchecked.
+func TestInterruptedPerFileTaskKeepsItsFailure(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the tools are sh scripts")
+	}
+	root := t.TempDir()
+	files := []string{filepath.Join(root, "bad.txt"), filepath.Join(root, "slow.txt"), filepath.Join(root, "last.txt")}
+	for _, f := range files {
+		if err := os.WriteFile(f, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// sh -c hands the first argument after the script to it as $0.
+	script := `case "$0" in *bad*) echo "bad failed"; exit 3;; *slow*) sleep 5;; esac`
+	appManager := &mockAppManager{commands: map[string]*binmanager.CommandInfo{"alpha": shellApp(script)}}
+	task := lintTask(t, "alpha", config.ToolScopePerProject, root, "{file}")
+	task.Files = files
+
+	ctx, cancel := context.WithCancelCause(context.Background())
+	defer cancel(nil)
+	go func() {
+		time.Sleep(300 * time.Millisecond)
+		cancel(errors.New("interrupt signal received"))
+	}()
+	result := NewExecutor(root, false, false, appManager, nil).executeTask(ctx, task)
+
+	if result.Success || result.IsCancelled() {
+		t.Fatalf("result = %+v, want the failure of bad.txt, not a cancellation", result)
+	}
+	if result.ExitCode != 3 || !strings.Contains(result.Output, "bad failed") {
+		t.Errorf("ExitCode = %d, Output = %q; want bad.txt's failure", result.ExitCode, result.Output)
+	}
+	if result.FilesNotRun != 2 {
+		t.Errorf("FilesNotRun = %d, want 2 (slow.txt was stopped, last.txt never ran)", result.FilesNotRun)
 	}
 }
 

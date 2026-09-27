@@ -658,6 +658,16 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		err := sc.binMgr.EnsureTools(ctx, plan.GetAppNames())
 		ensureSpan.EndWith(trace.A("apps", len(plan.GetAppNames())))
 		if err != nil {
+			finalizeProgress()
+			if !ui.Quiet() {
+				fmt.Println(ui.RuleLine("┗", "setup failed", clr.Red("setup failed")))
+			}
+			ui.Emit(uievent.Event{
+				Type:   uievent.TypeDone,
+				OpID:   runOpID,
+				Status: uievent.StatusFail,
+				Op:     string(operation),
+			})
 			return fmt.Errorf("failed to pre-install tools: %w", err)
 		}
 	}
@@ -976,8 +986,15 @@ func runSequential(
 	opts Options,
 ) error {
 	showBanner := command != ""
+	started := time.Now()
 	sc, err := initSharedContext(args, explainMode, fileScoped, selectedToolsFlag, failOnSkip, opts, loadConfigFunc)
 	if err != nil {
+		// A run that could not start — no git root, a config that does not load
+		// — still ends its event stream with a failed, incomplete summary. A
+		// usage error is not a run: it is refused before one begins.
+		if _, usage := errors.AsType[exitcode.UsageError](err); command != "" && explainMode == "" && !usage {
+			(&sharedContext{}).emitRunDone(command, operations, time.Since(started).Milliseconds(), false)
+		}
 		return err
 	}
 	defer func() {
@@ -1048,17 +1065,21 @@ func (sc *sharedContext) runOperations(ctx context.Context, operations []config.
 		log.Warn("bundled lint error (non-lint mode, continuing)", zap.Error(lintErr))
 	}
 
-	var opErr error
+	// Under keep-going a later operation can fail for a different reason than
+	// an earlier one — lint's install after fix's tool failure — and that
+	// reason must not be lost behind the first.
+	var errs []error
 	for _, op := range operations {
-		if ctx.Err() != nil || (opErr != nil && sc.failFast) {
+		if ctx.Err() != nil || (len(errs) > 0 && sc.failFast) {
 			break
 		}
-		sc.afterFailedFix = op == config.OpLint && opErr != nil
-		if err := runSingleOperation(ctx, sc, op); err != nil && opErr == nil {
-			opErr = err
+		sc.afterFailedFix = op == config.OpLint && len(errs) > 0
+		err := runSingleOperation(ctx, sc, op)
+		if err != nil && !slices.ContainsFunc(errs, func(e error) bool { return e.Error() == err.Error() }) {
+			errs = append(errs, err)
 		}
 	}
-	return opErr
+	return errors.Join(errs...)
 }
 
 // outcome picks the error a run returns. An interruption wins, because the run
@@ -1070,17 +1091,30 @@ func (sc *sharedContext) outcome(ctx context.Context, opErr error) error {
 	if err := interruption(ctx); err != nil {
 		return err
 	}
-	if opErr != nil {
+	var incomplete []error
+	if err := sc.skipFailure(); err != nil {
+		incomplete = append(incomplete, err)
+	}
+	if err := sc.coverageFailure(); err != nil {
+		incomplete = append(incomplete, err)
+	}
+	switch {
+	case opErr != nil && len(incomplete) > 0:
+		// The tool failure decides the exit code; the assertions that also
+		// failed are still reported, but not wrapped, so their code cannot win.
+		msgs := make([]string, 0, len(incomplete))
+		for _, err := range incomplete {
+			msgs = append(msgs, err.Error())
+		}
+		return fmt.Errorf("%w\n%s", opErr, strings.Join(msgs, "\n"))
+	case opErr != nil:
 		return opErr
+	case len(incomplete) > 1:
+		return exitcode.CoverageError{Err: errors.Join(incomplete...)}
+	case len(incomplete) == 1:
+		return incomplete[0]
 	}
-	skipErr, covErr := sc.skipFailure(), sc.coverageFailure()
-	if skipErr != nil && covErr != nil {
-		return exitcode.CoverageError{Err: errors.Join(skipErr, covErr)}
-	}
-	if skipErr != nil {
-		return skipErr
-	}
-	return covErr
+	return nil
 }
 
 // skipFailure returns a non-nil error when --fail-on-skip is set and at least one

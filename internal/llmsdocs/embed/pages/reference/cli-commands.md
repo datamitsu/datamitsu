@@ -35,10 +35,12 @@ in console mode.
 | `4`          | The run did not cover what it was asked to: `--require-coverage` (see [Narrowed runs](#narrowed-runs)) or `--fail-on-skip` (see [Skipped tools](#skipped-tools)); when both fail, both messages are printed                                                                                                  |
 | `130`, `143` | `fix`, `lint` or `check` interrupted by `SIGINT` or `SIGTERM` (see [Keep-going runs](#keep-going-runs))                                                                                                                                                                                                      |
 
-When several apply, a tool failure (`1`) wins over an incomplete run (`4`). A
-usage error is found before anything runs and combines with nothing. A script
-that tells "you called it wrong" from "the code is bad" checks for `2` and `1`
-apart.
+When several apply, a tool failure (`1`) wins over an incomplete run (`4`),
+whose messages are still printed after the failure. A usage error is found
+before anything runs and combines with nothing. A script that tells "you called
+it wrong" from "the code is bad" checks for `2` and `1` apart. An unknown command
+(`datamitsu bogus`) and a few checks that other commands make on their own
+arguments still exit `1`.
 
 ## exec
 
@@ -234,7 +236,11 @@ effective value as `failFast`, and where it came from as `failFastSource`
 `false`, `1` or `0` is refused.
 
 In CI, run `datamitsu lint --fail-fast=false`: one run then reports every
-failing tool. CI runs `lint`, not `fix` or `check`, which change the working
+failing tool. When a later operation fails for another reason than an earlier
+one — lint cannot install its tools after fix failed — both reasons are
+reported. A tool that runs once per file and is interrupted after one of its
+files failed stays a failure; the files it did not reach make the run
+incomplete. CI runs `lint`, not `fix` or `check`, which change the working
 tree.
 
 A formatter that fails at a low priority leaves its files unformatted for the
@@ -282,7 +288,9 @@ An operation's `done` carries `op`, `status` (`done` or `fail`), `duration_ms`,
 `tools` (tools that ran), `runs` (tasks that ran), `failed` (tools with a failed
 task), `skipped` (tools the planner left out, see
 [Skipped tools](#skipped-tools)) and `cancelled` (tasks the run stopped, present
-when there were any). A counter or `duration_ms` that is zero is left out.
+when there were any). A counter or `duration_ms` that is zero is left out. An
+operation whose tools could not be installed ends with a `done` of status
+`fail` and no counters.
 
 The stream ends with one more `done`, for the whole command: its `op_id` starts
 with `cmd-` where an operation's starts with `run-`, and its `op` is `fix`,
@@ -293,8 +301,9 @@ present, zero included) and `complete`: `true` when every planned operation ran,
 no task was cancelled or left unstarted, and no tool that runs once per file
 stopped at a failing file with files left to check. `check` whose fix failed under
 fail-fast reports `complete: false`. It is emitted for every execution of `fix`,
-`lint` and `check`, never under `--explain`, and not for the fix that
-`config reconcile` runs after writing its files.
+`lint` and `check` — also when the run could not start, for example because the
+configuration does not load — never under `--explain` or for a usage error, and
+not for the fix that `config reconcile` runs after writing its files.
 
 ```json
 {

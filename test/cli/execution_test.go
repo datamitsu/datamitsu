@@ -752,6 +752,77 @@ func TestExecutionSetupErrorIsReported(t *testing.T) {
 	})
 }
 
+// hostUninstallable declares a binary app built for this host whose download
+// the offline harness refuses, so installing it fails: a setup error of the
+// operation that plans it.
+func hostUninstallable(tool, operation string) string {
+	build := `{ url: "https://example.invalid/unreachable", contentType: "raw",
+  hash: "3f79bb7b435b05321651daefd374cdc681dc06faa65e374e38337b88ca046dea" }`
+	return fmt.Sprintf(`c.apps["unreachable"] = { binary: { binaries: { %s: { %s: { glibc: %s, musl: %s, unknown: %s } } } } };
+c.tools[%q] = { name: %q, operations: { %s: { app: "unreachable", args: [], scope: "repository" } } };
+`, runtime.GOOS, runtime.GOARCH, build, build, build, tool, tool, operation)
+}
+
+// TestExecutionKeepGoingKeepsLaterErrors: under keep-going, lint can fail to
+// install its tools after fix failed on a tool. Both reasons are reported, the
+// lint block is closed, and the exit code is still 1.
+func TestExecutionKeepGoingKeepsLaterErrors(t *testing.T) {
+	spec := clitest.ShellConfigSpec{ProjectTypes: fixtureTypes, Extra: hostUninstallable("installer", "lint")}
+	fixer := clitest.ShellTool("fixer", failScript, clitest.ToolOpSpec{Operation: "fix"})
+
+	t.Run("console", func(t *testing.T) {
+		e := newExecProject(t, map[string]string{"fixture.marker": ""}, spec, fixer)
+		res := e.run("", nil, "check", keepGoing)
+		e.wantExit(res, 1)
+		failed, install := strings.Index(res.Stderr, "operation failed"), strings.Index(res.Stderr, "failed to pre-install tools")
+		if failed < 0 || install < failed {
+			t.Errorf("stderr should report fix's failure, then lint's install error:\n%s", res.Stderr)
+		}
+		if !strings.Contains(res.Stdout, "┗━ setup failed") || !strings.Contains(res.Stdout, "· lint not run ·") {
+			t.Errorf("the lint block should close as a failed setup, and check's line say lint did not run:\n%s", res.Stdout)
+		}
+	})
+
+	t.Run("jsonl", func(t *testing.T) {
+		e := newExecProject(t, map[string]string{"fixture.marker": ""}, spec, fixer)
+		res := e.run("", nil, jsonl("check", keepGoing)...)
+		e.wantExit(res, 1)
+		events := clitest.MustParseJSONL(t, res.Stderr)
+		clitest.AssertChains(t, events)
+		lint := eventsOf(events, func(e clitest.Event) bool { return operationDone(e) && e.Op == "lint" })
+		if len(lint) != 1 || lint[0].Status != "fail" {
+			t.Errorf("lint's done events = %+v, want one fail", lint)
+		}
+		wantRunDone(t, events, "check", false, 1, 0, false)
+	})
+}
+
+// TestExecutionRunThatCannotStart: a config that does not load stops the run
+// before anything is planned; the event stream still ends with a failed,
+// incomplete run-level done. A usage error is refused before a run begins and
+// ends with none.
+func TestExecutionRunThatCannotStart(t *testing.T) {
+	t.Run("config_error", func(t *testing.T) {
+		e := newExecProject(t, map[string]string{"fixture.marker": ""}, fixtureSpec)
+		e.p.WriteFile("exec.config.js", "throw new Error('broken config');\n")
+		res := e.run("", nil, jsonl("lint")...)
+		e.wantExit(res, 1)
+		events := clitest.MustParseJSONL(t, res.Stderr)
+		clitest.AssertChains(t, events)
+		wantRunDone(t, events, "lint", false, 0, 0, false)
+	})
+
+	t.Run("usage_error", func(t *testing.T) {
+		e := newExecProject(t, map[string]string{"fixture.marker": ""}, fixtureSpec,
+			clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{}))
+		res := e.run("", nil, jsonl("lint", "--widen-to=Repo")...)
+		e.wantExit(res, 2)
+		if done := eventsOf(clitest.MustParseJSONL(t, res.Stderr), func(e clitest.Event) bool { return e.Type == "done" }); len(done) != 0 {
+			t.Errorf("a usage error emitted done events: %+v", done)
+		}
+	})
+}
+
 // checkClosingRE matches check's closing line, durations masked.
 var checkClosingRE = regexp.MustCompile(`(?m)^┗━ check · done in \S+ · fix (\S+|not run) · lint (\S+|not run) · setup \S+ ━+$`)
 
@@ -991,8 +1062,9 @@ func TestExecutionFailOnSkip(t *testing.T) {
 			clitest.ShellTool("alpha", failScript, clitest.ToolOpSpec{}))
 		res := e.run("", nil, "lint", "--fail-on-skip")
 		e.wantExit(res, 1)
-		if strings.Contains(res.Stderr, "--fail-on-skip") {
-			t.Errorf("a tool failure should be the reported outcome:\n%s", res.Stderr)
+		failed, skipped := strings.Index(res.Stderr, "operation failed"), strings.Index(res.Stderr, "--fail-on-skip:")
+		if failed < 0 || skipped < failed {
+			t.Errorf("stderr should report the tool failure, then the skip it also found:\n%s", res.Stderr)
 		}
 	})
 

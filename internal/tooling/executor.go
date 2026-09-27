@@ -887,6 +887,10 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 	// The failure a frame shows is the last failing file's: its exit code and
 	// its command, not those of a later file that passed.
 	var failedCommand string
+	// A task that already failed on its own stays a failure when the run is
+	// then cancelled: the cancellation only leaves the rest of its files
+	// unchecked, and hiding the failure would hide what the run found.
+	failedOnOwn := false
 
 	for i, file := range filesToProcess {
 		// Check if context is cancelled before processing next file
@@ -894,6 +898,10 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 			log.Debug("per-file execution cancelled, skipping remaining files",
 				zap.String("toolName", task.ToolName),
 				zap.Int("remainingFiles", len(filesToProcess)-i))
+			if failedOnOwn {
+				result.FilesNotRun = len(filesToProcess) - i
+				break
+			}
 			result.Success = false
 			result.Error = fmt.Errorf("%w: %d files remaining", errCancelled, len(filesToProcess)-i)
 			result.Cancelled = true
@@ -929,6 +937,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 
 		stdinContent, stdinErr := stdinForOperation(task.OpConfig, file)
 		if stdinErr != nil {
+			failedOnOwn = true
 			result.Success = false
 			result.Error = fmt.Errorf("failed to prepare stdin for file %s: %w", file, stdinErr)
 			if e.fileProgressCallback != nil {
@@ -1022,18 +1031,26 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 				zap.String("file", file),
 				zap.Int("exitCode", exitCode),
 				zap.Error(err))
-			result.Success = false
-			result.ExitCode = exitCode
-			result.Error = fmt.Errorf("failed to execute for file %s (exit code %d): %w", file, exitCode, err)
-			failedCommand = cmdString
 			if ctx.Err() != nil {
-				result.Cancelled = true
-				result.FailureReason = cancelReason(ctx)
+				if failedOnOwn {
+					result.FilesNotRun = len(filesToProcess) - i
+				} else {
+					result.Success = false
+					result.ExitCode = exitCode
+					result.Error = fmt.Errorf("failed to execute for file %s (exit code %d): %w", file, exitCode, err)
+					result.Cancelled = true
+					result.FailureReason = cancelReason(ctx)
+				}
 				if e.fileProgressCallback != nil {
 					e.fileProgressCallback(task.ToolName, cachedCount+i+1, totalFiles, fileSuccess)
 				}
 				break
 			}
+			failedOnOwn = true
+			result.Success = false
+			result.ExitCode = exitCode
+			result.Error = fmt.Errorf("failed to execute for file %s (exit code %d): %w", file, exitCode, err)
+			failedCommand = cmdString
 			if e.failFast {
 				log.Debug("fail-fast triggered in per-file execution")
 				// Call progress callback before breaking (offset by cached count)
