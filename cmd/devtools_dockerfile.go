@@ -82,11 +82,6 @@ func init() {
 }
 
 func runDockerfile(ctx context.Context, cmd *cobra.Command) error {
-	cfg, _, _, err := loadConfigWithPaths(ctx, BeforeConfigPaths, NoAutoConfig, ConfigPaths)
-	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
-	}
-
 	labels, err := parseLabels(dockerfileLabels)
 	if err != nil {
 		return err
@@ -105,6 +100,11 @@ func runDockerfile(ctx context.Context, cmd *cobra.Command) error {
 	envVars, err := parseEnv(dockerfileEnv)
 	if err != nil {
 		return err
+	}
+
+	cfg, _, _, err := loadConfigWithPaths(ctx, BeforeConfigPaths, NoAutoConfig, ConfigPaths)
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
 	}
 
 	// The image targets musl on Alpine and glibc otherwise; binary apps without a

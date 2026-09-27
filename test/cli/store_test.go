@@ -159,13 +159,22 @@ func TestStoreClearRefusesDangerousPath(t *testing.T) {
 func TestStoreSeedArgValidation(t *testing.T) {
 	p := clitest.NewProject(t)
 	cfg := clitest.WriteMinimalConfig(p)
+	broken := p.WriteFile("broken.config.js", "export default {")
 
 	cases := []struct {
 		name     string
+		cfg      string
 		args     []string
 		want     string
 		wantExit int
 	}{
+		{
+			name:     "malformed-digest-with-broken-config",
+			cfg:      broken,
+			args:     []string{"store", "seed", "example.invalid/owner/repo@bad"},
+			want:     `reference "example.invalid/owner/repo@bad"`,
+			wantExit: 2,
+		},
 		{
 			name:     "bare-tag-without-resolve",
 			args:     []string{"store", "seed", "ghcr.io/owner/repo:latest"},
@@ -211,7 +220,11 @@ func TestStoreSeedArgValidation(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			args := append([]string{"--no-auto-config", "--config", cfg}, tc.args...)
+			config := cfg
+			if tc.cfg != "" {
+				config = tc.cfg
+			}
+			args := append([]string{"--no-auto-config", "--config", config}, tc.args...)
 			res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, args...)
 			if res.ExitCode != tc.wantExit {
 				t.Fatalf("`%s` exit = %d, want %d\nstdout:\n%s\nstderr:\n%s",

@@ -127,12 +127,37 @@ func resolveSeedRef(ctx context.Context, cfg *config.Config, args []string) (*co
 	}
 
 	arg := args[0]
+	a, err := parseSeedArg(arg)
+	if err != nil {
+		return nil, err
+	}
+	if a.pinned != nil {
+		return a.pinned, nil
+	}
+	digest, err := ocidigest.NewResolverForHost(a.host).Resolve(ctx, a.repo, a.tag)
+	if err != nil {
+		return nil, fmt.Errorf("resolve tag %q: %w", arg, err)
+	}
+	fmt.Printf("Resolved %s -> %s\nPin it in the config as oci: { ref: %q, digest: %q }\n", arg, digest, a.ref, digest)
+	return &config.OCIRef{Ref: a.ref, Digest: digest}, nil
+}
+
+// seedArg is an explicit store seed reference that passed its checks: pinned
+// for <ref>@<digest>, or the parts of a <ref>:<tag> for --resolve-tag.
+type seedArg struct {
+	pinned               *config.OCIRef
+	ref, tag, host, repo string
+}
+
+// parseSeedArg checks an explicit reference without the config or the
+// network, so a malformed one is refused before either is touched.
+func parseSeedArg(arg string) (seedArg, error) {
 	if ref, digest, ok := strings.Cut(arg, "@"); ok {
 		pinned := &config.OCIRef{Ref: ref, Digest: digest}
 		if err := config.ValidateOCI(pinned); err != nil {
-			return nil, exitcode.UsageErrorf("reference %q: %w", arg, err)
+			return seedArg{}, exitcode.UsageErrorf("reference %q: %w", arg, err)
 		}
-		return pinned, nil
+		return seedArg{pinned: pinned}, nil
 	}
 
 	// The tag separator is the last colon after the last "/", so a ported
@@ -142,24 +167,24 @@ func resolveSeedRef(ctx context.Context, cfg *config.Config, args []string) (*co
 	// could never work against a registry on a port.
 	ref, tag, ok := ociref.SplitTag(arg)
 	if !ok {
-		return nil, exitcode.UsageErrorf("reference %q must be pinned as <ref>@sha256:<digest> (or <ref>:<tag> with --resolve-tag)", arg)
+		return seedArg{}, exitcode.UsageErrorf("reference %q must be pinned as <ref>@sha256:<digest> (or <ref>:<tag> with --resolve-tag)", arg)
 	}
 	if !storeSeedResolveTag {
-		return nil, exitcode.UsageErrorf("a tag reference does not pin content; pass <ref>@sha256:<digest>, or use --resolve-tag to resolve %q and print the digest", arg)
+		return seedArg{}, exitcode.UsageErrorf("a tag reference does not pin content; pass <ref>@sha256:<digest>, or use --resolve-tag to resolve %q and print the digest", arg)
 	}
 	host, repo, err := ociref.Parse(ref)
 	if err != nil {
-		return nil, exitcode.UsageErrorf("reference %q %w", ref, err)
+		return seedArg{}, exitcode.UsageErrorf("reference %q %w", ref, err)
 	}
-	digest, err := ocidigest.NewResolverForHost(host).Resolve(ctx, repo, tag)
-	if err != nil {
-		return nil, fmt.Errorf("resolve tag %q: %w", arg, err)
-	}
-	fmt.Printf("Resolved %s -> %s\nPin it in the config as oci: { ref: %q, digest: %q }\n", arg, digest, ref, digest)
-	return &config.OCIRef{Ref: ref, Digest: digest}, nil
+	return seedArg{ref: ref, tag: tag, host: host, repo: repo}, nil
 }
 
 func runStoreSeed(ctx context.Context, args []string) error {
+	if len(args) > 0 {
+		if _, err := parseSeedArg(args[0]); err != nil {
+			return err
+		}
+	}
 	cfg, err := loadConfigForStore(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)

@@ -121,6 +121,11 @@ func TestDevtoolsArgValidation(t *testing.T) {
 			wantMsg: `required flag(s) "output" not set`,
 		},
 		{
+			name:    "dockerfile-invalid-env-with-broken-config",
+			args:    []string{"--no-auto-config", "--config", "broken.config.js", "devtools", "dockerfile", "--output", "Dockerfile", "--env", "bad"},
+			wantMsg: `invalid --env "bad": want key=value`,
+		},
+		{
 			name:    "split-config-missing-output",
 			args:    []string{"devtools", "split-config"},
 			wantMsg: `required flag(s) "output" not set`,
@@ -169,8 +174,10 @@ func TestDevtoolsArgValidation(t *testing.T) {
 	}
 
 	// A real file so the pack-inline-archive "not a directory" case reaches its
-	// stat check rather than failing earlier.
+	// stat check rather than failing earlier; a config that does not load, so
+	// a flag refused before loading it is told apart from one refused after.
 	clitest.WriteMinimalConfig(p)
+	p.WriteFile("broken.config.js", "export default {")
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
