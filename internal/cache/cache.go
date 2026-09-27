@@ -630,6 +630,34 @@ func (c *Cache) Clear() error {
 //     threshold would hide it from a stricter one.
 const cacheSemantics = "d20v1"
 
+// withoutThresholds returns cfg with no operation's failOn. A pass is recorded
+// only for output with no finding of any level, which holds at every
+// threshold, so editing one must not cool the cache. cfg is returned as it is
+// when no operation sets one, so its key does not move.
+func withoutThresholds(cfg config.Config) config.Config {
+	set := false
+	for _, tool := range cfg.Tools {
+		for _, op := range tool.Operations {
+			set = set || op.FailOn != ""
+		}
+	}
+	if !set {
+		return cfg
+	}
+	tools := make(config.MapOfTools, len(cfg.Tools))
+	for name, tool := range cfg.Tools {
+		ops := make(map[config.OperationType]config.ToolOperation, len(tool.Operations))
+		for kind, op := range tool.Operations {
+			op.FailOn = ""
+			ops[kind] = op
+		}
+		tool.Operations = ops
+		tools[name] = tool
+	}
+	cfg.Tools = tools
+	return cfg
+}
+
 // calculateInvalidationKey calculates an XXH3-128 hash from the datamitsu
 // version, the cache semantics, the full config JSON and the selected tools.
 //
@@ -649,7 +677,7 @@ func calculateInvalidationKey(
 	parts = append(parts, []byte(ldflags.Version), []byte(cacheSemantics))
 
 	// Add config hash (serialize entire config)
-	configBytes, err := json.Marshal(cfg)
+	configBytes, err := json.Marshal(withoutThresholds(cfg))
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal config: %w", err)
 	}

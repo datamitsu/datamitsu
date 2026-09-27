@@ -66,13 +66,15 @@ func TestThresholdGate(t *testing.T) {
 			reported: []bool{true}, gates: []bool{false},
 		},
 		{
-			name: "output nobody parsed", own: config.SeverityWarning, extraction: ExtractionParserUnavailable,
+			name: "output nobody parsed", own: config.SeverityWarning, contract: true, extraction: ExtractionParserUnavailable,
 		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			var ignored []string
+			asked := 0
 			gate := ThresholdGate(c.global, func(module string) bool {
+				asked++
 				if module != "core" {
 					t.Errorf("contract asked about module %q", module)
 				}
@@ -100,8 +102,14 @@ func TestThresholdGate(t *testing.T) {
 					t.Errorf("finding %d: gates %v but Gating = %v", i, d.Gates, decision.Gating)
 				}
 			}
-			if proc.GateActive != c.contract || proc.FailOn != config.EffectiveFailOn(task.OpConfig, c.global) {
+			parsed := extraction == ExtractionParsedFindings
+			if proc.GateActive != (c.contract && parsed) || proc.FailOn != config.EffectiveFailOn(task.OpConfig, c.global) {
 				t.Errorf("GateActive %v FailOn %q", proc.GateActive, proc.FailOn)
+			}
+			// A module that did not parse was never described; asking would
+			// load it again.
+			if want := map[bool]int{true: 1, false: 0}[parsed]; asked != want {
+				t.Errorf("contract asked %d times, want %d", asked, want)
 			}
 			if (len(ignored) > 0) != c.ignored {
 				t.Errorf("ignored = %v, want a report: %v", ignored, c.ignored)
