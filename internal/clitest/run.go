@@ -18,6 +18,10 @@ import (
 // test instead of blocking the whole suite.
 const DefaultTimeout = 60 * time.Second
 
+// interruptGrace is how long an interrupted binary has to stop its tools, which
+// it gives five seconds, before it is killed.
+const interruptGrace = 10 * time.Second
+
 // RunOptions configures a single subprocess invocation of the datamitsu binary.
 type RunOptions struct {
 	// Dir is the working directory for the process. Empty means inherit the
@@ -96,6 +100,16 @@ func Start(tb testing.TB, opts RunOptions, args ...string) *Process {
 	// G204: bin is the harness-built binary and args come from test code, not
 	// untrusted input.
 	p.cmd = exec.CommandContext(ctx, bin, args...) //nolint:gosec
+	// The tools run in process groups of their own, so killing the binary
+	// would orphan them: a timeout or an early cleanup interrupts it, which
+	// makes it stop them, and kills it only if it has not exited by then.
+	p.cmd.Cancel = func() error {
+		if err := p.cmd.Process.Signal(os.Interrupt); err != nil {
+			return p.cmd.Process.Kill()
+		}
+		return nil
+	}
+	p.cmd.WaitDelay = interruptGrace
 	p.cmd.Dir = opts.Dir
 	p.cmd.Env = append(BaseEnv(cacheDir), opts.Env...)
 	if opts.Stdin != "" {
@@ -108,28 +122,11 @@ func Start(tb testing.TB, opts RunOptions, args ...string) *Process {
 		cancel()
 		tb.Fatalf("clitest: start `datamitsu %s`: %v", strings.Join(args, " "), err)
 	}
-	// A test that fails between Start and Wait must not leave the binary or its
-	// tools running. The tools run in process groups of their own, so killing
-	// the binary would orphan them; an interrupt makes it stop them first, and
-	// the kill is the fallback for a binary that does not exit.
 	tb.Cleanup(func() {
-		if p.waited {
-			return
-		}
-		done := make(chan struct{})
-		go func() {
+		if !p.waited {
+			cancel()
 			_ = p.cmd.Wait()
-			close(done)
-		}()
-		if p.cmd.Process.Signal(os.Interrupt) == nil {
-			select {
-			case <-done:
-				return
-			case <-time.After(10 * time.Second):
-			}
 		}
-		cancel()
-		<-done
 	})
 	return p
 }
