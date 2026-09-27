@@ -1675,8 +1675,13 @@ func (e *Executor) runCommandIO(cmd *exec.Cmd, stdinContent []byte, separate boo
 	var stopped atomic.Bool
 	if cancel := cmd.Cancel; cancel != nil {
 		cmd.Cancel = func() error {
-			stopped.Store(true)
-			return cancel()
+			// A process that had already ended when the context was cancelled
+			// is not stopped by it: only a delivered signal counts.
+			err := cancel()
+			if err == nil {
+				stopped.Store(true)
+			}
+			return err
 		}
 	}
 
