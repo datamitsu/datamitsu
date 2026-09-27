@@ -1485,6 +1485,7 @@ func (f *fakeExecutor) SetTaskStartCallback(tooling.TaskStartCallback)       {}
 func (f *fakeExecutor) SetFileProgressCallback(tooling.FileProgressCallback) {}
 func (f *fakeExecutor) SetParser(tooling.DiagnosticParser)                   {}
 func (f *fakeExecutor) SetParserModules(config.MapOfParsers)                 {}
+func (f *fakeExecutor) SetGate(tooling.Gate)                                 {}
 func (f *fakeExecutor) Execute(_ context.Context, plan *tooling.ExecutionPlan) ([]tooling.GroupExecutionResult, error) {
 	f.called = true
 	*f.order = append(*f.order, "execute")

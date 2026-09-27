@@ -1,0 +1,14 @@
+exit code: 0
+===STDOUT===
+╭<RULE>╮
+│ datamitsu  <VERSION> │
+╰<RULE>╯
+
+┏━ lint <RULE>
+┃ fixture
+┃
+┃ ✓ hadolint  <DUR>
+┗━ 1 tools · 1 runs · done in <DUR> · cache 0% <RULE>
+
+===STDERR===
+WARN failOn ignored for hadolint: parser module predates the severity contract

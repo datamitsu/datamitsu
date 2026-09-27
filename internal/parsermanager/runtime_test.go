@@ -234,6 +234,38 @@ func TestHasParser(t *testing.T) {
 	}
 }
 
+// TestSeverityContract tells the current crate build, whose levels come only
+// from what its tools printed, from the released v1 module, which predates
+// the contract, and answers from the describe HasParser already made.
+func TestSeverityContract(t *testing.T) {
+	t.Setenv("DATAMITSU_PARSERS_DIR", t.TempDir())
+	ctx := context.Background()
+	current, released := echoWASM(t), releasedV1(t)
+	currentSrv, currentHits := serveWASM(t, current)
+	releasedSrv, _ := serveWASM(t, released)
+	m := New(config.MapOfParsers{
+		"current":  {URL: currentSrv.URL, Hash: sha256Hex(current)},
+		"released": {URL: releasedSrv.URL, Hash: sha256Hex(released)},
+	})
+	t.Cleanup(func() { _ = m.Close(context.Background()) })
+
+	if _, err := m.HasParser(ctx, "current", "hadolint"); err != nil {
+		t.Fatal(err)
+	}
+	for module, want := range map[string]bool{"current": true, "released": false} {
+		got, err := m.SeverityContract(ctx, module)
+		if err != nil || got != want {
+			t.Errorf("SeverityContract(%s) = %v, %v; want %v", module, got, err, want)
+		}
+	}
+	if n := atomic.LoadInt64(currentHits); n != 1 {
+		t.Errorf("current module fetched %d times, want once", n)
+	}
+	if _, err := m.SeverityContract(ctx, "undeclared"); !errors.Is(err, ErrModuleUnavailable) {
+		t.Errorf("an undeclared module: err = %v, want ErrModuleUnavailable", err)
+	}
+}
+
 // TestHasParserDescribesOnce: concurrent callers share one describe per
 // module, including one that misses the answer while another stores it.
 func TestHasParserDescribesOnce(t *testing.T) {

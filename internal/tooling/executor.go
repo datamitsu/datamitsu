@@ -86,6 +86,7 @@ type Executor struct {
 	cache                *cache.Cache         // Cache for storing execution results
 	parser               DiagnosticParser     // Optional: parses tool output into diagnostics
 	parserModules        config.MapOfParsers  // the declared parser modules, for the verdict identity
+	gate                 Gate                 // Optional: fails a process on its parsed findings
 
 	// cmdInfos memoizes command resolution for the lifetime of one Execute; it is
 	// nil outside one (FormatContent), which resolves directly.
@@ -628,7 +629,7 @@ func (e *Executor) executeTask(ctx context.Context, task Task) ExecutionResult {
 	// One write point per task, after every process it spawned has succeeded.
 	// The three per-process updateCacheAfterSuccess calls would otherwise let the
 	// first success of an N-process task record a verdict a later failure refutes.
-	if result.Success && verdictEligible(task, result) {
+	if result.Success && verdictEligible(result) {
 		e.recordVerdict(task, verdictKey, verdictSnap, verdictApplies)
 	}
 
@@ -946,6 +947,8 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 	// then cancelled: the cancellation only leaves the rest of its files
 	// unchecked, and hiding the failure would hide what the run found.
 	failedOnOwn := false
+	// gatedOnly stays true while every failure is a threshold failure.
+	gatedOnly := true
 
 	formatMode := task.OpConfig.Output == config.ToolOutputStdout
 	// A formatter's stdout is the formatted file content, not diagnostics, so it
@@ -1010,6 +1013,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 			result.ExitCode = -1
 			stdinFailure := fmt.Errorf("failed to prepare stdin for file %s: %w", file, stdinErr)
 			failures = append(failures, stdinFailure)
+			gatedOnly = false
 			// The frame shows the joined output, not Error, once any file wrote
 			// some: without this line a later file's output would stand in for
 			// a failure no process reported.
@@ -1061,6 +1065,9 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 		proc.Extraction, proc.ParseError = e.unparsed(task, formatMode)
 		if parseMode {
 			e.parseFileDiagnostics(ctx, &proc, task, workingDir, stdoutBytes, stderrBytes, exitCode)
+			if gateErr := e.applyGate(task, &proc, err == nil); gateErr != nil {
+				err = gateErr
+			}
 		}
 
 		// Formatting pipeline (diff-in-core): in stdout-output mode a successful
@@ -1134,6 +1141,11 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 			result.Success = false
 			result.ExitCode = exitCode
 			fileFailure := fmt.Errorf("failed to execute for file %s (exit code %d): %w", file, exitCode, err)
+			if proc.ThresholdFailed {
+				fileFailure = fmt.Errorf("file %s: %w", file, err)
+			} else {
+				gatedOnly = false
+			}
 			failures = append(failures, fileFailure)
 			label, explained := failureLabel(workingDir, file, exitCode, err)
 			outputs[len(outputs)-1].failed = true
@@ -1159,7 +1171,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 			}
 		} else {
 			log.Debug("per-file execution succeeded", zap.String("file", file))
-			passed = append(passed, passesOf(task.Operation, proc, proc.Files)...)
+			passed = append(passed, passesOf(proc, proc.Files)...)
 		}
 
 		// Call progress callback after processing each file (offset by cached count)
@@ -1189,6 +1201,9 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 		result.Error = failures[0]
 	default:
 		result.Error = errors.Join(failures...)
+	}
+	if len(failures) > 0 && gatedOnly && !result.Cancelled {
+		result.FailureReason = FailureReasonThreshold
 	}
 	result.Output = joinFileOutputs(outputs)
 	result.recordTiming(startTime)
@@ -1259,7 +1274,7 @@ func (e *Executor) executeBatch(ctx context.Context, task Task, cmdInfo *binmana
 		if e.fileProgressCallback != nil {
 			e.fileProgressCallback(task.ID, task.ToolName, 1, 1, chunkResult.Success)
 		}
-		e.updateCacheAfterSuccess(task, batchPasses(task.Operation, chunkResult.Processes, filesToProcess), seen)
+		e.updateCacheAfterSuccess(task, batchPasses(chunkResult.Processes, filesToProcess), seen)
 		return chunkResult
 	}
 
@@ -1274,7 +1289,7 @@ func (e *Executor) executeBatch(ctx context.Context, task Task, cmdInfo *binmana
 		if e.fileProgressCallback != nil {
 			e.fileProgressCallback(task.ID, task.ToolName, 1, 1, chunkResult.Success)
 		}
-		e.updateCacheAfterSuccess(task, batchPasses(task.Operation, chunkResult.Processes, nil), seen)
+		e.updateCacheAfterSuccess(task, batchPasses(chunkResult.Processes, nil), seen)
 		return chunkResult
 	}
 
@@ -1284,7 +1299,7 @@ func (e *Executor) executeBatch(ctx context.Context, task Task, cmdInfo *binmana
 	if e.fileProgressCallback != nil {
 		e.fileProgressCallback(task.ID, task.ToolName, 1, 1, result.Success)
 	}
-	e.updateCacheAfterSuccess(task, batchPasses(task.Operation, result.Processes, nil), seen)
+	e.updateCacheAfterSuccess(task, batchPasses(result.Processes, nil), seen)
 	return result
 }
 
@@ -1293,7 +1308,7 @@ func (e *Executor) executeBatch(ctx context.Context, task Task, cmdInfo *binmana
 // per-file process does, so a chunk that passed keeps its passes when another
 // failed; a process given none (argv-less, one run for the whole list) answers
 // for covered.
-func batchPasses(op config.OperationType, processes []ProcessResult, covered []string) []string {
+func batchPasses(processes []ProcessResult, covered []string) []string {
 	passes := make([]string, 0, len(covered))
 	for _, proc := range processes {
 		if proc.State != ProcessRan || !proc.Success {
@@ -1306,7 +1321,7 @@ func batchPasses(op config.OperationType, processes []ProcessResult, covered []s
 				files[i] = filepath.Clean(file)
 			}
 		}
-		passes = append(passes, passesOf(op, proc, files)...)
+		passes = append(passes, passesOf(proc, files)...)
 	}
 	return passes
 }
@@ -1393,6 +1408,10 @@ func (e *Executor) executeBatchChunk(ctx context.Context, task Task, cmdInfo *bi
 	}
 	if parseMode {
 		e.parseFileDiagnostics(ctx, &proc, task, workingDir, stdoutBytes, stderrBytes, exitCode)
+		if gateErr := e.applyGate(task, &proc, err == nil); gateErr != nil {
+			err = gateErr
+			proc.Success = false
+		}
 		if err != nil && !stoppedByCancellation(err) && len(proc.Diagnostics) == 0 {
 			result.UnparsedFailures = append(result.UnparsedFailures, unparsedFailure(exitCode, err, output))
 		}
@@ -1403,9 +1422,13 @@ func (e *Executor) executeBatchChunk(ctx context.Context, task Task, cmdInfo *bi
 		log.Debug("batch execution failed", zap.Int("exitCode", exitCode), zap.Error(err))
 		result.Success = false
 		result.Error = fmt.Errorf("failed to execute (exit code %d): %w", exitCode, err)
-		if stoppedByCancellation(err) {
+		switch {
+		case stoppedByCancellation(err):
 			result.Cancelled = true
 			result.FailureReason = cancelReason(ctx)
+		case proc.ThresholdFailed:
+			result.Error = err
+			result.FailureReason = FailureReasonThreshold
 		}
 	} else {
 		log.Debug("batch execution succeeded")
@@ -1559,12 +1582,14 @@ func mergeChunkResults(ctx context.Context, result *ExecutionResult, chunks [][]
 	// The frame names one command and one exit code: the last chunk that failed
 	// on its own, as a per-file task names its last failing file.
 	failedCommand, failedExit := "", 0
+	gatedOnly := true
 	for i, chunkResult := range chunkResults {
 		if chunkResult.Command != "" {
 			result.Command = chunkResult.Command
 		}
 		if !chunkResult.Success && !chunkResult.IsCancelled() {
 			failedCommand, failedExit = chunkResult.Command, chunkResult.ExitCode
+			gatedOnly = gatedOnly && chunkResult.FailureReason == FailureReasonThreshold
 		}
 		if chunkResult.Output != "" {
 			outputs = append(outputs, fmt.Sprintf("=== Chunk %d/%d ===\n%s", i+1, len(chunks), chunkResult.Output))
@@ -1600,6 +1625,9 @@ func mergeChunkResults(ctx context.Context, result *ExecutionResult, chunks [][]
 		result.FailureReason = cancelReason(ctx)
 	default:
 		result.FilesNotRun = notRun
+		if gatedOnly {
+			result.FailureReason = FailureReasonThreshold
+		}
 	}
 }
 

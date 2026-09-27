@@ -29,7 +29,7 @@ in console mode.
 | Code         | Meaning                                                                                                                                                                                                                                                                                                      |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `0`          | Success                                                                                                                                                                                                                                                                                                      |
-| `1`          | A tool failed, or any error without a code of its own                                                                                                                                                                                                                                                        |
+| `1`          | A tool failed — it exited non-zero, or its parsed output held a finding at or above its operation's `failOn` (see [Failing on findings](#failing-on-findings---fail-on)) — or any error without a code of its own                                                                                            |
 | `2`          | Usage: an unknown flag, a flag or `DATAMITSU_*` value the command does not accept (`--widen-to=Repo`, `DATAMITSU_FAIL_FAST=yes`), a missing required flag, flags that cannot be combined, the wrong number of arguments, or a combination refused before anything runs (`--require-coverage` with `--tools`) |
 | `3`          | `llms`: an unknown or ambiguous page                                                                                                                                                                                                                                                                         |
 | `4`          | The run did not cover what it was asked to: `--require-coverage` (see [Narrowed runs](#narrowed-runs)) or `--fail-on-skip` (see [Skipped tools](#skipped-tools)); when both fail, both messages are printed                                                                                                  |
@@ -277,6 +277,20 @@ variable as `failOn` (empty when it is not set), and `--explain` shows each
 task's threshold: `failOn` in the JSON, a `Fail on:` line when it is not
 `error`. A value of either that is not `error`, `warning`, `info` or `hint`
 exits 2 before anything runs — a mistyped gate is refused, not ignored.
+
+The threshold gates only output a parser module with the severity contract
+(descriptor schema 2) read: its levels are what the tool printed. Under an
+older module the exit code alone decides, and a run that asked for a threshold
+other than `error` says so once, after its last operation:
+
+```console
+WARN failOn ignored for hadolint: parser module predates the severity contract
+```
+
+With the default threshold, a tool that exits 0 on a finding its parser reads
+as an error fails the run — semgrep without `--error`, trivy without
+`--exit-code`. A tool that failed because of the threshold shows exit code 0 in
+its frame.
 
 A tool the run stopped is neither a pass nor a failure, and it is listed rather
 than left out:

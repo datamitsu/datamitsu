@@ -106,6 +106,9 @@ func describeFiles(task Task, result *ExecutionResult, fallback FileState) {
 			fr.State = FileState(proc.State)
 			if proc.State == ProcessRan {
 				fr.ProcessID, fr.Success, fr.ExitCode = proc.ID, proc.Success, proc.ExitCode
+				if proc.ThresholdFailed {
+					fr.Success = !gatesFile(proc, file)
+				}
 				if len(proc.Files) == 1 {
 					fr.Edits = proc.edits
 				}
@@ -115,6 +118,25 @@ func describeFiles(task Task, result *ExecutionResult, fallback FileState) {
 	}
 
 	result.Cached = len(result.Processes) == 0 && len(result.cached) > 0 && len(result.cached) == len(result.Files)
+}
+
+// gatesFile reports whether a finding that gates proc belongs to file. One
+// that names no file, or a file the process was not given, could be about any
+// of its files.
+func gatesFile(proc ProcessResult, file string) bool {
+	given := make(map[string]bool, len(proc.Files))
+	for _, f := range proc.Files {
+		given[f] = true
+	}
+	for _, d := range proc.Diagnostics {
+		if !d.Gates {
+			continue
+		}
+		if d.File == file || d.File == "" || (len(proc.Files) > 0 && !given[d.File]) {
+			return true
+		}
+	}
+	return false
 }
 
 // describeVerdictHit is describeFiles for a unit whose verdict held: the verdict

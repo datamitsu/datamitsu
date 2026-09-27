@@ -1117,6 +1117,70 @@ func TestExecutionParsedCleanPassIsCached(t *testing.T) {
 	}
 }
 
+var (
+	currentParserModule  = filepath.Join("..", "..", "internal", "parsermanager", "testdata", "echo.wasm")
+	releasedParserModule = filepath.Join("..", "..", "internal", "parsermanager", "testdata", "released", "v1", "b5425355.wasm")
+)
+
+// hadolintError is one finding at hadolint's error level.
+const hadolintError = `[{"file":"Dockerfile","line":1,"column":1,"level":"error","code":"DL3000",` +
+	`"message":"Use absolute WORKDIR"}]`
+
+// newGatedProject is newParsedProject with the module to seed and the
+// operation's failOn.
+func newGatedProject(t *testing.T, module, output string, exitCode int, failOn string) *execProject {
+	t.Helper()
+	e := newExecProject(t, map[string]string{"fixture.marker": "", "Dockerfile": "FROM debian\n"}, fixtureSpec)
+	spec := fixtureSpec
+	spec.Parsers = clitest.SeedParserModule(t, e.cache, module)
+	e.p.WriteFile("exec.config.js", clitest.ShellConfig(spec, clitest.ShellTool("hadolint",
+		fmt.Sprintf("%s%s; echo '%s'; exit %d", settle, clitest.RecordRun, output, exitCode),
+		clitest.ToolOpSpec{
+			Scope: "per-file", Globs: []string{"**/Dockerfile"}, Args: []string{"{file}"},
+			Parser: "hadolint", FailOn: failOn,
+		})))
+	return e
+}
+
+// TestExecutionFailOn freezes the failOn gate: a finding at or above an
+// operation's threshold fails a tool that exited 0, --fail-on and
+// DATAMITSU_FAIL_ON raise the threshold for a run, and a parser module that
+// predates the severity contract leaves the exit code to decide, saying so once
+// when a threshold was asked for.
+func TestExecutionFailOn(t *testing.T) {
+	const ignored = "failOn ignored for hadolint: parser module predates the severity contract"
+	cases := []struct {
+		name        string
+		module      string
+		output      string
+		failOn      string
+		env         []string
+		args        []string
+		exit        int
+		warnIgnored bool
+	}{
+		{name: "error_at_exit_zero", module: currentParserModule, output: hadolintError, args: []string{"lint"}, exit: 1},
+		{name: "warning_at_the_default", module: currentParserModule, output: hadolintFinding, args: []string{"lint"}, exit: 0},
+		{name: "warning_fail_on_warning", module: currentParserModule, output: hadolintFinding, failOn: "warning", args: []string{"lint"}, exit: 1},
+		{name: "warning_flag", module: currentParserModule, output: hadolintFinding, args: []string{"lint", "--fail-on", "warning"}, exit: 1},
+		{name: "warning_env", module: currentParserModule, output: hadolintFinding, env: []string{"DATAMITSU_FAIL_ON=warning"}, args: []string{"lint"}, exit: 1},
+		{name: "old_module_fail_on", module: releasedParserModule, output: hadolintFinding, failOn: "warning", args: []string{"check"}, exit: 0, warnIgnored: true},
+		{name: "old_module_flag", module: releasedParserModule, output: hadolintFinding, args: []string{"lint", "--fail-on=warning"}, exit: 0, warnIgnored: true},
+		{name: "old_module_default", module: releasedParserModule, output: hadolintError, args: []string{"lint"}, exit: 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			e := newGatedProject(t, tc.module, tc.output, 0, tc.failOn)
+			res := e.run("", tc.env, tc.args...)
+			e.wantExit(res, tc.exit)
+			if n := strings.Count(res.Stderr, ignored); n != map[bool]int{true: 1, false: 0}[tc.warnIgnored] {
+				t.Errorf("stderr carries the ignored-threshold warning %d times, want it: %v\n%s", n, tc.warnIgnored, res.Stderr)
+			}
+			e.golden("fail_on_"+tc.name, res)
+		})
+	}
+}
+
 // TestExecutionParsedPositions freezes the position and path contract a list-
 // taking tool meets: handed one file, the findings its parser leaves without a
 // file are about that file, so the frame shows them parsed instead of the raw

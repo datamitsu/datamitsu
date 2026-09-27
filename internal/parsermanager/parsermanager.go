@@ -76,11 +76,17 @@ type Manager struct {
 	// per concurrent parse rather than once per parse. Guarded by mu.
 	idle map[string][]*ParserRuntime
 
-	// keys holds, per content key, the parser keys a module's describe lists,
-	// described once per Manager. Guarded by mu; describeGroup coalesces the
-	// first callers.
-	keys          map[string]map[string]bool
+	// described holds, per content key, what a module's describe said, asked
+	// once per Manager. Guarded by mu; describeGroup coalesces the first
+	// callers.
+	described     map[string]moduleFacts
 	describeGroup singleflight.Group
+}
+
+// moduleFacts is what the core keeps of a module's describe.
+type moduleFacts struct {
+	parsers  map[string]bool
+	contract bool
 }
 
 // ErrModuleUnavailable marks a parse that never reached the module: it could
@@ -112,10 +118,10 @@ var errClosed = errors.New("parser manager is closed")
 // (yields not-found for every name).
 func New(parsers config.MapOfParsers) *Manager {
 	return &Manager{
-		parsers:  parsers,
-		compiled: map[string]wazero.CompiledModule{},
-		idle:     map[string][]*ParserRuntime{},
-		keys:     map[string]map[string]bool{},
+		parsers:   parsers,
+		compiled:  map[string]wazero.CompiledModule{},
+		idle:      map[string][]*ParserRuntime{},
+		described: map[string]moduleFacts{},
 	}
 }
 
@@ -125,51 +131,23 @@ func New(parsers config.MapOfParsers) *Manager {
 // answer is described once per module and Manager. An error wraps
 // ErrModuleUnavailable when the module could not be loaded.
 func (m *Manager) HasParser(ctx context.Context, module, parser string) (bool, error) {
-	key, ok := m.instanceKey(module)
-	if !ok {
-		return false, moduleUnavailableError{fmt.Errorf("parser %q is not declared", module)}
+	facts, err := m.describeOnce(ctx, module)
+	if err != nil {
+		return false, err
 	}
-	m.mu.Lock()
-	known, described := m.keys[key]
-	m.mu.Unlock()
-	if !described {
-		v, err, _ := m.describeGroup.Do(key, func() (any, error) {
-			// A caller that missed the map may arrive after another one's group
-			// has finished and stored the answer.
-			m.mu.Lock()
-			names, done := m.keys[key]
-			m.mu.Unlock()
-			if done {
-				return names, nil
-			}
-			cntDescribe.Add(1)
-			inst, _, err := m.acquirePooled(ctx, module)
-			if err != nil {
-				return nil, moduleUnavailableError{err}
-			}
-			caps, err := inst.Describe(ctx)
-			if err != nil {
-				_ = inst.Close(ctx)
-				return nil, moduleUnavailableError{err}
-			}
-			m.releaseReset(ctx, module, inst)
-			names = make(map[string]bool, len(caps.Tools))
-			for _, t := range caps.Tools {
-				names[t.Name] = true
-			}
-			m.mu.Lock()
-			if m.keys != nil {
-				m.keys[key] = names
-			}
-			m.mu.Unlock()
-			return names, nil
-		})
-		if err != nil {
-			return false, err //nolint:wrapcheck // marked moduleUnavailableError inside the group
-		}
-		known, _ = v.(map[string]bool)
+	return facts.parsers[parser], nil
+}
+
+// SeverityContract reports whether module's levels come only from what its
+// tools printed (descriptor schema 2 or later), which is what a failOn
+// threshold needs to be trusted. It shares HasParser's single describe per
+// module and Manager, and its error.
+func (m *Manager) SeverityContract(ctx context.Context, module string) (bool, error) {
+	facts, err := m.describeOnce(ctx, module)
+	if err != nil {
+		return false, err
 	}
-	return known[parser], nil
+	return facts.contract, nil
 }
 
 // LoadWASMBytes returns the verified bytes of the named parser's WASM module,
@@ -357,6 +335,56 @@ func (m *Manager) Prefetch(ctx context.Context, names []string) error {
 		}
 	}
 	return nil
+}
+
+// describeOnce is what module's describe said, asked once per content key.
+func (m *Manager) describeOnce(ctx context.Context, module string) (moduleFacts, error) {
+	key, ok := m.instanceKey(module)
+	if !ok {
+		return moduleFacts{}, moduleUnavailableError{fmt.Errorf("parser %q is not declared", module)}
+	}
+	m.mu.Lock()
+	facts, described := m.described[key]
+	m.mu.Unlock()
+	if described {
+		return facts, nil
+	}
+	v, err, _ := m.describeGroup.Do(key, func() (any, error) {
+		// A caller that missed the map may arrive after another one's group
+		// has finished and stored the answer.
+		m.mu.Lock()
+		facts, done := m.described[key]
+		m.mu.Unlock()
+		if done {
+			return facts, nil
+		}
+		cntDescribe.Add(1)
+		inst, _, err := m.acquirePooled(ctx, module)
+		if err != nil {
+			return nil, moduleUnavailableError{err}
+		}
+		caps, err := inst.Describe(ctx)
+		if err != nil {
+			_ = inst.Close(ctx)
+			return nil, moduleUnavailableError{err}
+		}
+		m.releaseReset(ctx, module, inst)
+		facts = moduleFacts{parsers: make(map[string]bool, len(caps.Tools)), contract: caps.SeverityContract()}
+		for _, t := range caps.Tools {
+			facts.parsers[t.Name] = true
+		}
+		m.mu.Lock()
+		if m.described != nil {
+			m.described[key] = facts
+		}
+		m.mu.Unlock()
+		return facts, nil
+	})
+	if err != nil {
+		return moduleFacts{}, err //nolint:wrapcheck // marked moduleUnavailableError inside the group
+	}
+	facts, _ = v.(moduleFacts)
+	return facts, nil
 }
 
 // releaseReset pools inst only after its state has been cleared. A module that

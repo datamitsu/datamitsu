@@ -94,6 +94,7 @@ type planExecutor interface {
 	SetFileProgressCallback(cb tooling.FileProgressCallback)
 	SetParser(parser tooling.DiagnosticParser)
 	SetParserModules(parsers config.MapOfParsers)
+	SetGate(gate tooling.Gate)
 	Execute(ctx context.Context, plan *tooling.ExecutionPlan) ([]tooling.GroupExecutionResult, error)
 	TaskDir(task tooling.Task) string
 }
@@ -127,6 +128,10 @@ type sharedContext struct {
 	// parseProblems collects what the parsers could not parse, reported once
 	// per run; nil when no parser is wired.
 	parseProblems *parseProblems
+	// ignoredFailOn collects the tools whose threshold was not the default but
+	// whose output a module that predates the severity contract parsed, for
+	// one warning per run; nil when no parser is wired.
+	ignoredFailOn *toolSet
 	// nameWidth is the widest configured tool name, computed once so every
 	// operation's result block (fix, lint, …) aligns on the same columns.
 	nameWidth int
@@ -291,6 +296,8 @@ func initSharedContext(
 		sc.parserMgr = parsermanager.New(sc.cfg.Parsers)
 		sc.parseProblems = newParseProblems()
 		sc.executor.SetParser(newDiagnosticParser(sc.parserMgr, sc.parseProblems))
+		sc.ignoredFailOn = &toolSet{}
+		sc.executor.SetGate(tooling.ThresholdGate(config.Severity(opts.FailOn), sc.severityContract, sc.ignoredFailOn.add))
 	}
 
 	// All configured tools are known here, so the result column width is fixed
@@ -764,8 +771,9 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 // reportParseProblems warns about what the parsers could not parse: each module
 // that did not load, each parser key its module does not list, and each tool
 // whose output failed to parse, once per run however many invocations and
-// operations hit it. It runs once every operation has, so a warning names every
-// tool the problem reached.
+// operations hit it; and, in one line, the tools whose failOn threshold a
+// module that predates the severity contract left unenforced. It runs once
+// every operation has, so a warning names every tool the problem reached.
 func (sc *sharedContext) reportParseProblems() {
 	if sc.parseProblems == nil {
 		return
@@ -773,6 +781,18 @@ func (sc *sharedContext) reportParseProblems() {
 	for _, msg := range sc.parseProblems.pending() {
 		logger.Logger.Warn(msg)
 	}
+	if tools := sc.ignoredFailOn.names(); len(tools) > 0 {
+		logger.Logger.Warn("failOn ignored for " + strings.Join(tools, ", ") +
+			": parser module predates the severity contract")
+	}
+}
+
+// severityContract reports whether module's levels come only from what its
+// tools printed; a module that cannot be described does not, and its failure
+// is reported with the parse problems.
+func (sc *sharedContext) severityContract(module string) bool {
+	ok, err := sc.parserMgr.SeverityContract(context.Background(), module)
+	return err == nil && ok
 }
 
 // recordSkips accumulates unsupported-platform skips (deduped by tool name) so

@@ -1,0 +1,23 @@
+exit code: 1
+===STDOUT===
+╭<RULE>╮
+│ datamitsu  <VERSION> │
+╰<RULE>╯
+
+┏━ lint <RULE>
+┃ fixture
+┃
+┃ ✗ hadolint  <DUR> (1 failed)
+  ┌─ hadolint [per-file] (run #1) <RULE>
+  │  Cwd:       <TMP>
+  │  Command:   sh -c sleep 0.01; echo "$0 $1" >> "$MARKERS/$0"; echo '[{"file":"Dockerfile","line":1,"column":1,"level":"error","code":"DL3000","message":"Use absolute WORKDIR"}]'; exit 0 hadolint <TMP>/Dockerfile
+  │  Exit code: 0
+  │  Duration:  <DUR>
+  │
+  │  Dockerfile:1:1 error Use absolute WORKDIR [DL3000]
+  └<RULE>
+
+┗━ 1 tools · 1 runs · done in <DUR> · 1 failed · cache 0% <RULE>
+
+===STDERR===
+error: operation failed

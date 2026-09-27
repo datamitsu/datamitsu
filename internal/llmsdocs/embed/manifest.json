@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 56,
-  "pageSetHash": "e165e2a63dfdbf634276727e72fe64eb",
+  "pageSetHash": "82a5ed6230f09475ac2b4b9154e5f46f",
   "pages": [
     {
       "slug": "about",
@@ -206,8 +206,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/caching.md",
       "title": "Caching Strategy",
       "description": "How datamitsu caches file-level results and unit or repository verdicts, computes XXH3-128 keys, and persists them safely",
-      "bytes": 28036,
-      "contentHash": "2cd0b031edacbe531e700e32c7b7d9a2"
+      "bytes": 28386,
+      "contentHash": "6126735a6fbaccb01b18540499321756"
     },
     {
       "slug": "guides/architecture/discovery",
@@ -224,8 +224,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/execution.md",
       "title": "Parallel Execution",
       "description": "How datamitsu runs task groups sequentially while parallelizing tasks within each group, with fail-fast by default and a keep-going mode",
-      "bytes": 16569,
-      "contentHash": "65ddf8df55a127e2bde96324e66af900"
+      "bytes": 17095,
+      "contentHash": "0b253b67eeb9d22e406e59a6c33d6cfb"
     },
     {
       "slug": "guides/architecture",
@@ -451,8 +451,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 114445,
-      "contentHash": "7d7e7515d4dceceefb277b05bccd4010"
+      "bytes": 115074,
+      "contentHash": "3ec53e5c5db41dddb405b00cdc6a9937"
     },
     {
       "slug": "reference/comparison",

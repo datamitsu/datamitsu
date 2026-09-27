@@ -183,6 +183,31 @@ func (p *parseProblems) claim(key string) bool {
 	return true
 }
 
+// toolSet is a set of tool names concurrent tasks add to.
+type toolSet struct {
+	mu    sync.Mutex
+	tools map[string]bool
+}
+
+func (s *toolSet) add(tool string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.tools == nil {
+		s.tools = map[string]bool{}
+	}
+	s.tools[tool] = true
+}
+
+// names returns the tools in order; none for a nil set.
+func (s *toolSet) names() []string {
+	if s == nil {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return sortedKeys(s.tools)
+}
+
 func sortedKeys[V any](m map[string]V) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {

@@ -85,12 +85,15 @@ Newest first. Each entry names the first version that has it and what a
 configuration should do about it.
 
 - **after v0.3.1** - A tool operation takes `failOn` (`error` by default,
-  `warning`, `info`, `hint`): the lowest level of parsed finding that fails the
-  run on top of the tool's exit code (`datamitsu llms
-reference/configuration-api`). `--fail-on`/`DATAMITSU_FAIL_ON` raise it for
-  one run. Set it only where a stricter gate than the tool's own is wanted; the
-  config-eval cache is cold once.
-
+  `warning`, `info`, `hint`), the lowest level of parsed finding that fails the
+  run on top of the tool's exit code; `--fail-on`/`DATAMITSU_FAIL_ON` raise it
+  for one run (`datamitsu llms reference/configuration-api`). With the default,
+  a tool that exits 0 on a finding its parser reads as an error now fails the
+  run (semgrep without `--error`, trivy without `--exit-code`): pass the tool's
+  own gate flag, or accept the failure. Set `failOn` only where a stricter gate
+  than the tool's own is wanted. A parser module older than descriptor schema 2
+  gates nothing, and a run warns once when a threshold was asked for. Every
+  cache is cold once.
 - **after v0.3.1** - A finding a tool printed no level for is an error when the
   tool failed and a warning when it passed (it was always a warning). The parser
   module released with this core (descriptor schema 2) sets levels only from

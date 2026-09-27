@@ -625,7 +625,10 @@ func (c *Cache) Clear() error {
 //     output format and with NO_COLOR=1 (internal/toolenv), whose output the
 //     parser read without ANSI sequences. A pass recorded before could stand
 //     for findings printed in a format the parser read as clean.
-const cacheSemantics = "d3v1"
+//   - d20v1: a fix pass follows the lint rule too: the failOn gate judges what
+//     a fixer leaves behind, so a fix pass recorded over a finding below one
+//     threshold would hide it from a stricter one.
+const cacheSemantics = "d20v1"
 
 // calculateInvalidationKey calculates an XXH3-128 hash from the datamitsu
 // version, the cache semantics, the full config JSON and the selected tools.

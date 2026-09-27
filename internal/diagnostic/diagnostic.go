@@ -76,6 +76,14 @@ type Diagnostic struct {
 	Source   string   `json:"source"`   // originating tool (e.g. "hadolint")
 	Code     string   `json:"code,omitempty"`
 	URL      string   `json:"url,omitempty"` // the rule's documentation, where the tool prints it
+	// Reported marks a finding at or above its operation's effective failOn:
+	// what the terminal shows. The failOn gate sets it; without one it stays
+	// false.
+	Reported bool `json:"reported,omitempty"`
+	// Gates marks a reported finding whose process the gate was active for —
+	// what fails a run on its own. A process parsed by a module that predates
+	// the severity contract has none.
+	Gates bool `json:"gates,omitempty"`
 }
 
 // Resolve fills the core's defaults over a parser's nullable RawDiagnostic. source
