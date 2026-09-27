@@ -10,8 +10,8 @@ import (
 )
 
 // The flag is passed on only when it was given, so the runner can tell an
-// explicit value from the default; without it DATAMITSU_FAIL_FAST decides, and
-// a value the variable does not accept is refused here.
+// explicit value from the default; without it DATAMITSU_FAIL_FAST decides. A
+// value the variable does not accept is refused here, flag or not.
 func TestFailFastOption(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -26,7 +26,7 @@ func TestFailFastOption(t *testing.T) {
 		{name: "env defers to the runner", env: "false", want: nil},
 		{name: "flag wins over env", args: []string{"--fail-fast"}, env: "false", want: new(true)},
 		{name: "invalid env", env: "yes", wantErr: "DATAMITSU_FAIL_FAST"},
-		{name: "flag ignores invalid env", args: []string{"--fail-fast=false"}, env: "yes", want: new(false)},
+		{name: "flag does not excuse invalid env", args: []string{"--fail-fast=false"}, env: "yes", wantErr: "DATAMITSU_FAIL_FAST"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

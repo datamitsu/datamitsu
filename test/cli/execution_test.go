@@ -1131,6 +1131,7 @@ func TestExecutionUsageErrors(t *testing.T) {
 		{"widen_to_invalid", nil, []string{"lint", "--widen-to=Repo"}},
 		{"require_coverage_with_tools", nil, []string{"lint", "--require-coverage=unit", "--tools", "alpha"}},
 		{"fail_fast_env_invalid", []string{"DATAMITSU_FAIL_FAST=yes"}, []string{"lint"}},
+		{"fail_fast_env_invalid_with_flag", []string{"DATAMITSU_FAIL_FAST=yes"}, []string{"lint", "--fail-fast=false"}},
 		{"fail_fast_flag_invalid", nil, []string{"lint", "--fail-fast=maybe"}},
 		{"explain_invalid", nil, []string{"lint", "--explain=bogus"}},
 	}

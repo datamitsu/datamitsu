@@ -17,15 +17,14 @@ func addFailFastFlag(cmd *cobra.Command, value *bool) {
 
 // applyFailFast sets the runner's FailFast option to the flag's value when the
 // flag was given, and otherwise leaves it nil so the runner defers to
-// DATAMITSU_FAIL_FAST. The variable is checked here because its getter falls
-// back to the default on a value it does not accept.
+// DATAMITSU_FAIL_FAST. The variable is checked here, flag or not, because its
+// getter falls back to the default on a value it does not accept.
 func applyFailFast(cmd *cobra.Command, value bool, opts *runner.Options) error {
-	if cmd.Flags().Changed("fail-fast") {
-		opts.FailFast = &value
-		return nil
-	}
 	if err := env.CheckFailFast(); err != nil {
 		return exitcode.UsageError{Err: err}
+	}
+	if cmd.Flags().Changed("fail-fast") {
+		opts.FailFast = &value
 	}
 	return nil
 }
