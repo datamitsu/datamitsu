@@ -1,6 +1,6 @@
 # Plan 4: Tool environment hygiene — what a tool is allowed to learn from the environment
 
-**Status:** ready for implementation. Plan 4 of `2026-09-26-unified-results.md`; implements D3,
+**Status:** completed 2026-09-27. Plan 4 of `../2026-09-26-unified-results.md`; implements D3,
 R1 and R2. No decisions open.
 **Date:** 2026-09-26.
 **Depends on:** plan 1 (goldens; the harness strips the same variables). **Unblocks:** plan 7
