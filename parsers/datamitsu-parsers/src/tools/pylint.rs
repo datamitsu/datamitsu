@@ -41,8 +41,8 @@ pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 	};
 	let mut out = json_diag::from_json(stdout, &attrs, severity_of);
 	for d in &mut out {
-		d.col = d.col.map(|c| c + 1);
-		d.end_col = d.end_col.map(|c| c + 1);
+		d.col = d.col.and_then(|c| c.checked_add(1));
+		d.end_col = d.end_col.and_then(|c| c.checked_add(1));
 	}
 	out
 }
@@ -91,6 +91,12 @@ mod tests {
 	fn an_unknown_type_has_no_level() {
 		let json = br#"[{"type":"information","line":2,"column":0,"symbol":"s","message":"m"}]"#;
 		assert_eq!(parse(json, b"", 0)[0].severity, None);
+	}
+	#[test]
+	fn a_column_without_a_successor_is_dropped() {
+		let json = br#"[{"type":"error","line":1,"column":4294967295,"endLine":1,"endColumn":4294967295,"path":"a.py","symbol":"s","message":"m","message-id":"E0001"}]"#;
+		let out = parse(json, b"", 2);
+		assert_eq!((out[0].col, out[0].end_col), (None, None));
 	}
 }
 

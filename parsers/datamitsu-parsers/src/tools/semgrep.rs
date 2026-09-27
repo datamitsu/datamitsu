@@ -69,6 +69,7 @@ fn from_result(value: &JsonValue) -> Option<RawDiagnostic> {
 	let end = obj(map.get("end"));
 	Some(RawDiagnostic {
 		message,
+		file: get_str(map, "path").as_deref().and_then(crate::diagnostic::file_field),
 		code: get_str(map, "check_id"),
 		severity: extra
 			.and_then(|e| get_str(e, "severity"))
@@ -160,6 +161,16 @@ mod tests {
 	fn no_results_yields_nothing() {
 		assert!(parse(br#"{"results": []}"#, b"", 0).is_empty());
 		assert!(parse(b"not json", b"", 1).is_empty());
+	}
+	#[test]
+	fn names_the_file_each_result_is_about() {
+		let json = br#"{"results":[
+            {"check_id":"r.a","path":"src/a.py","start":{"line":1,"col":1},"end":{"line":1,"col":2},"extra":{"message":"m","severity":"ERROR"}},
+            {"check_id":"r.b","path":"src/b.py","start":{"line":2,"col":1},"end":{"line":2,"col":2},"extra":{"message":"m","severity":"INFO"}}
+        ]}"#;
+		let out = parse(json, b"", 1);
+		assert_eq!(out[0].file.as_deref(), Some("src/a.py"));
+		assert_eq!(out[1].file.as_deref(), Some("src/b.py"));
 	}
 }
 

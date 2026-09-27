@@ -55,6 +55,13 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 	};
 
 	let (row, col) = position(map.get("location"));
+	let file = match map.get("location") {
+		Some(JsonValue::Object(l)) => match l.get("file") {
+			Some(JsonValue::String(f)) => crate::diagnostic::file_field(f),
+			_ => None,
+		},
+		_ => None,
+	};
 	let (end_row, end_col) = position(map.get("end"));
 
 	let severity = match map.get("severity") {
@@ -76,6 +83,7 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 		severity,
 		source: Some("staticcheck".to_string()),
 		code,
+		file,
 		..RawDiagnostic::default()
 	})
 }
@@ -143,6 +151,11 @@ mod tests {
 		let out = parse(stdout, b"", 0);
 		assert_eq!(out.len(), 1);
 		assert_eq!(out[0].severity, None);
+	}
+	#[test]
+	fn names_the_file_of_each_finding() {
+		let json = br#"{"code":"U1000","severity":"warning","location":{"file":"/src/b.go","line":10,"column":6},"message":"func unused is unused"}"#;
+		assert_eq!(parse(json, b"", 1)[0].file.as_deref(), Some("/src/b.go"));
 	}
 }
 

@@ -86,7 +86,7 @@ fn offense_to_diagnostic(offense: &JsonValue) -> Option<RawDiagnostic> {
 		row: start_line,
 		col: start_col,
 		end_row: last_line,
-		end_col: last_col.map(|c| c + 1),
+		end_col: last_col.and_then(|c| c.checked_add(1)),
 		code: get_str(map, "cop_name"),
 		severity: get_str(map, "severity").and_then(|s| severity::of(DESCRIPTOR.severities, &s)),
 		..RawDiagnostic::default()
@@ -163,6 +163,12 @@ mod tests {
 	fn no_files_yields_nothing() {
 		assert!(parse(br#"{"files":[]}"#, b"", 0).is_empty());
 		assert!(parse(b"not json", b"", 0).is_empty());
+	}
+	#[test]
+	fn an_end_without_a_successor_is_dropped() {
+		let json = br#"{"files":[{"path":"a.rb","offenses":[{"severity":"warning","message":"m","cop_name":"X/Y",
+            "location":{"start_line":1,"start_column":1,"last_line":1,"last_column":4294967295}}]}]}"#;
+		assert_eq!(parse(json, b"", 1)[0].end_col, None);
 	}
 }
 

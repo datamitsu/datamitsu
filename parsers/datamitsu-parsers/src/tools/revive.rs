@@ -53,6 +53,15 @@ fn failure_to_diag(item: &JsonValue) -> Option<RawDiagnostic> {
 
 	let message = get_str(map, "Failure")?;
 
+	let file = match map.get("Position") {
+		Some(JsonValue::Object(pos)) => match pos.get("Start") {
+			Some(JsonValue::Object(s)) => get_str(s, "Filename")
+				.as_deref()
+				.and_then(crate::diagnostic::file_field),
+			_ => None,
+		},
+		_ => None,
+	};
 	let (row, col, end_row, end_col) = match map.get("Position") {
 		Some(JsonValue::Object(pos)) => {
 			let (row, col) = match pos.get("Start") {
@@ -77,6 +86,7 @@ fn failure_to_diag(item: &JsonValue) -> Option<RawDiagnostic> {
 		severity: get_str(map, "Severity").and_then(|s| severity::of(DESCRIPTOR.severities, &s)),
 		source: Some("revive".to_string()),
 		code: get_str(map, "RuleName").filter(|r| !r.is_empty()),
+		file,
 		..RawDiagnostic::default()
 	})
 }
@@ -134,6 +144,11 @@ mod tests {
 	#[test]
 	fn invalid_json_yields_nothing() {
 		assert!(parse(b"not json", b"", 1).is_empty());
+	}
+	#[test]
+	fn names_the_file_of_each_failure() {
+		let json = br#"[{"Severity":"warning","Failure":"f","RuleName":"exported","Position":{"Start":{"Filename":"pkg/a.go","Line":3,"Column":1},"End":{"Filename":"pkg/a.go","Line":3,"Column":4}}}]"#;
+		assert_eq!(parse(json, b"", 1)[0].file.as_deref(), Some("pkg/a.go"));
 	}
 }
 

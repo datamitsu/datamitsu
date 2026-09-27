@@ -63,8 +63,13 @@ fn parse_stream(bytes: &[u8]) -> Vec<RawDiagnostic> {
 		let Some(JsonValue::Array(miscfgs)) = get(result, "Misconfigurations") else {
 			continue;
 		};
+		let target = get_str(result, "Target")
+			.filter(|t| t != ".")
+			.as_deref()
+			.and_then(crate::diagnostic::file_field);
 		for m in miscfgs {
-			if let Some(d) = from_misconfiguration(m) {
+			if let Some(mut d) = from_misconfiguration(m) {
+				d.file.clone_from(&target);
 				diags.push(d);
 			}
 		}
@@ -196,6 +201,16 @@ mod tests {
 	fn no_results_yields_nothing() {
 		assert!(parse(br#"{"Results":[]}"#, b"", 0).is_empty());
 		assert!(parse(b"not json", b"", 0).is_empty());
+	}
+	#[test]
+	fn names_the_target_file_but_not_the_scanned_directory() {
+		let json = br#"{"Results":[
+            {"Target":"infra/main.tf","Misconfigurations":[{"ID":"AVD-1","Title":"t","Severity":"HIGH","CauseMetadata":{"StartLine":2,"EndLine":3}}]},
+            {"Target":".","Misconfigurations":[{"ID":"AVD-2","Title":"u","Severity":"LOW","CauseMetadata":{"StartLine":1,"EndLine":1}}]}
+        ]}"#;
+		let out = parse(json, b"", 1);
+		assert_eq!(out[0].file.as_deref(), Some("infra/main.tf"));
+		assert_eq!(out[1].file, None);
 	}
 }
 

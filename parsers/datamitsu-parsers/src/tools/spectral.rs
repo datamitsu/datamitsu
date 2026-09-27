@@ -83,7 +83,7 @@ fn parse_result(item: &JsonValue) -> Option<RawDiagnostic> {
 		_ => None,
 	});
 
-	let one_based = |v: Option<u32>| v.map(|v| v + 1);
+	let one_based = |v: Option<u32>| v.and_then(|v| v.checked_add(1));
 	Some(RawDiagnostic {
 		message,
 		row: one_based(row),
@@ -169,6 +169,12 @@ mod tests {
 	fn ignores_non_array_or_garbage() {
 		assert!(parse(b"not json", b"", 0).is_empty());
 		assert!(parse(br#"{"message":"x"}"#, b"", 0).is_empty());
+	}
+	#[test]
+	fn a_position_without_a_successor_is_dropped() {
+		let json = br#"[{"code":"c","message":"m","severity":0,"range":{"start":{"line":4294967295,"character":4294967295},"end":{"line":0,"character":0}}}]"#;
+		let out = parse(json, b"", 1);
+		assert_eq!((out[0].row, out[0].col), (None, None));
 	}
 }
 
