@@ -108,13 +108,28 @@ func Start(tb testing.TB, opts RunOptions, args ...string) *Process {
 		cancel()
 		tb.Fatalf("clitest: start `datamitsu %s`: %v", strings.Join(args, " "), err)
 	}
-	// A test that fails between Start and Wait must not leave the process
-	// running: cancelling the context kills it, and Wait reaps it.
+	// A test that fails between Start and Wait must not leave the binary or its
+	// tools running. The tools run in process groups of their own, so killing
+	// the binary would orphan them; an interrupt makes it stop them first, and
+	// the kill is the fallback for a binary that does not exit.
 	tb.Cleanup(func() {
-		if !p.waited {
-			cancel()
-			_ = p.cmd.Wait()
+		if p.waited {
+			return
 		}
+		done := make(chan struct{})
+		go func() {
+			_ = p.cmd.Wait()
+			close(done)
+		}()
+		if p.cmd.Process.Signal(os.Interrupt) == nil {
+			select {
+			case <-done:
+				return
+			case <-time.After(10 * time.Second):
+			}
+		}
+		cancel()
+		<-done
 	})
 	return p
 }
