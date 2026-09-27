@@ -32,7 +32,7 @@ func TestTrackStop(t *testing.T) {
 			ready := filepath.Join(t.TempDir(), "ready")
 			cmd := exec.CommandContext(context.Background(), "/bin/sh", "-c", tt.script, ready)
 			setupProcessGroupCleanup(cmd)
-			stopped := trackStop(cmd)
+			stop := trackStop(cmd)
 			if err := cmd.Start(); err != nil {
 				t.Fatal(err)
 			}
@@ -47,8 +47,11 @@ func TestTrackStop(t *testing.T) {
 				t.Fatalf("Cancel() = %v, want the stop delivered", err)
 			}
 			err := cmd.Wait()
-			if got := stopped.Load(); got != tt.wantStopped {
+			if got := stop.stopped.Load(); got != tt.wantStopped {
 				t.Errorf("stopped = %v, want %v", got, tt.wantStopped)
+			}
+			if stop.requested.Load() == 0 {
+				t.Error("the stop was not recorded as sent")
 			}
 			var exitErr *exec.ExitError
 			if !errors.As(err, &exitErr) || exitErr.ExitCode() != tt.wantExit {

@@ -8,6 +8,10 @@ import (
 	"time"
 )
 
+// stopGrace is how long a stopped tool has to exit after SIGTERM before it,
+// and every process of its group, is killed.
+var stopGrace = 5 * time.Second
+
 func setupProcessGroupCleanup(cmd *exec.Cmd) {
 	if cmd.SysProcAttr == nil {
 		cmd.SysProcAttr = &syscall.SysProcAttr{}
@@ -26,5 +30,17 @@ func setupProcessGroupCleanup(cmd *exec.Cmd) {
 		}
 		return nil
 	}
-	cmd.WaitDelay = 5 * time.Second
+	cmd.WaitDelay = stopGrace
+}
+
+// killGroupAfterGrace kills what is left of a stopped tool's process group once
+// the grace of its SIGTERM has passed. WaitDelay kills only the process
+// datamitsu started, so a descendant that ignores SIGTERM would outlive the run.
+func killGroupAfterGrace(pgid int, stoppedAt time.Time) {
+	for deadline := stoppedAt.Add(stopGrace); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
+		if syscall.Kill(-pgid, 0) != nil {
+			return
+		}
+	}
+	_ = syscall.Kill(-pgid, syscall.SIGKILL)
 }

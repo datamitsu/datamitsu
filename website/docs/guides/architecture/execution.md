@@ -109,7 +109,7 @@ Fail-fast stops a run at five levels. `--fail-fast=false` (or `DATAMITSU_FAIL_FA
 | Files of a per-file task | Stop at the first failing file                       | Every file runs; the task fails with the last failing file's exit code and every file's output |
 | Operations of `check`    | Lint is not run after a failed fix                   | Lint runs after the failed fix, and its footer says so                                         |
 
-The exit code is 1 when any task failed, in both modes. Ctrl-C and `SIGTERM` stop a run in both modes: the first signal cancels the run's context with an interruption cause, so every running tool is stopped and the run reports what it did not finish, then exits 130 or 143. A second signal ends the process at once.
+The exit code is 1 when any task failed, in both modes. Ctrl-C and `SIGTERM` stop a run in both modes: the first signal cancels the run's context with an interruption cause, so every running tool is stopped and the run reports what it did not finish, then exits 130 or 143. A second signal ends the process at once. A stopped tool gets `SIGTERM`; five seconds later whatever is left of it, the processes it started included, is killed.
 
 ### FailureReason Classification
 

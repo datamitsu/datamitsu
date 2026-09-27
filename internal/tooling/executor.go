@@ -1670,7 +1670,7 @@ func (e *Executor) runCommandIO(cmd *exec.Cmd, stdinContent []byte, separate boo
 	}
 
 	setupProcessGroupCleanup(cmd)
-	stopped := trackStop(cmd)
+	stop := trackStop(cmd)
 
 	cntSpawn.Add(1)
 	spawnSpan := trace.Start(trace.CatExec, "spawn")
@@ -1684,7 +1684,10 @@ func (e *Executor) runCommandIO(cmd *exec.Cmd, stdinContent []byte, separate boo
 		trace.A("argv0", cmd.Path),
 		trace.A("exit", getExitCode(err)),
 	)
-	if err != nil && stopped.Load() {
+	if at := stop.requested.Load(); at != 0 {
+		killGroupAfterGrace(cmd.Process.Pid, time.Unix(0, at))
+	}
+	if err != nil && stop.stopped.Load() {
 		err = fmt.Errorf("%w: %w", errStopped, err)
 	}
 	if separate {
