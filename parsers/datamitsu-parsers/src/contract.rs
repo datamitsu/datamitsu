@@ -10,9 +10,11 @@
 //! - **Rule identity.** `source` is the tool's name — the same string for every
 //!   finding of a tool — never the rule, which goes into `code`.
 //! - **Positions.** Rows and columns are 1-based, and an end column is
-//!   exclusive: an end never precedes its start. [`POSITIONS`] records, for
-//!   every parser, what its tool prints and what the parser does about it, so a
-//!   new parser cannot skip the audit.
+//!   exclusive. No sample can tell a 0-based column from a 1-based one, so the
+//!   module-wide check is only that an end never precedes its start; each
+//!   parser's own tests pin the coordinates its tool's convention gives, and
+//!   [`POSITIONS`] records that convention for every parser, so a new parser
+//!   cannot skip the audit.
 //! - **Descriptor.** Every tool declares a column unit or sits on
 //!   [`UNKNOWN_COLUMN_UNITS`], and every category and kind is a known one.
 
@@ -364,7 +366,7 @@ fn the_source_names_the_tool_never_the_rule() {
 }
 
 #[test]
-fn positions_are_one_based_with_an_exclusive_end() {
+fn an_end_never_precedes_its_start() {
 	let mut v = Violations::default();
 	for t in real_tools() {
 		for (i, s) in samples_of(t.name).iter().enumerate() {

@@ -13,25 +13,11 @@ Do not invent data in a parser, and do not finalize the diagnostic shape here:
 `RawDiagnostic` (`datamitsu-parsers/src/diagnostic.rs`) is a Phase-1 placeholder,
 finalized in Phase 2.
 
-The rules every parser keeps, which `src/contract.rs` checks for all of them:
-
-- **Levels.** A parser sets `severity` only from a token the tool printed — a
-  level word, a numeric level, a `severity` field, a key such as `errors[]` — and
-  reads it with `severity::of` from its descriptor's `severities`, which list
-  those tokens and the level each maps to. A finding without a token has no
-  level, whatever the stream it came from; the core decides one from the exit
-  code. Outside its tests a parser names a level constant only in a `Level(..)`
-  entry.
-- **Rule identity.** `source` is the tool's name or `None`; `code` is the rule
-  whenever the tool prints one, and nothing else; `url` is the rule's
-  documentation where the tool prints it.
-- **Positions.** Rows and columns are 1-based, and `end_col` is exclusive: a
-  parser adds 1 to what its tool counts from 0 or prints as the span's last
-  column, and never invents an end the tool did not print. `POSITIONS` records
-  what each tool prints.
-- **Column unit.** A descriptor's `column_unit` (`utf-8`, `utf-16`, `utf-32`) is
-  measured on the tool, on a line holding multi-byte characters; an unmeasured
-  tool is on `UNKNOWN_COLUMN_UNITS`.
+Every parser also keeps the rules `src/contract.rs` checks for all of them: a
+level only from a token the tool printed, the tool's name in `source` and the
+rule in `code`, 1-based positions with an exclusive end, and a measured column
+unit. The [output parser guide](../website/docs/guides/architecture/parsers.md)
+explains each.
 
 ## Call contract (host ABI)
 
