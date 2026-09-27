@@ -89,12 +89,11 @@ configuration should do about it.
   `NO_COLOR=1`; `CI` still passes through and `exec` changes nothing
   (`datamitsu llms reference/tool-environment`). A tool that needs one of them
   names it in `inheritEnv`; an `env: { GITHUB_ACTIONS: "false" }` kept only to
-  stop annotations can go.
+  stop annotations can go. Every execution cache is cold once.
 - **after v0.3.1** - A tool operation can name host variables in `inheritEnv`;
   the tool gets the host's value, and the value is part of the operation's cache
   identity (`datamitsu llms reference/configuration-api`). `NO_COLOR` is
   rejected in an operation's `env` and in `inheritEnv`: drop it from any `env`.
-  Unit verdicts are cold once.
 - **after v0.3.1** - A lint pass is cached only where the tool's
   `outputParser` ran and reported nothing, at any level: files with findings of
   a tool that exits 0 on them run again every time. A `parser` key its module
