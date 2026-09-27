@@ -57,6 +57,7 @@ Every position the core hands on follows one contract, whatever the tool printed
 | `row`, `col`     | 1-based; missing or `0` becomes `1`                                          |
 | `endRow`         | 1-based; missing means the start row                                         |
 | `endCol`         | 1-based and **exclusive**: the span stops before the column it names         |
+| a partial end    | an end row without an end column gives a point at the start                  |
 | an end before it | an end that precedes the start, after the rules above, becomes a point there |
 
 A point is an end equal to the start. Several tools print `0` for "no position"

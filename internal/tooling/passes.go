@@ -56,11 +56,16 @@ func passesOf(op config.OperationType, proc ProcessResult, covered []string) []s
 	return lintPasses(proc, covered)
 }
 
-// verdictEligible reports whether a successful task may record a unit verdict.
-// For a lint operation that takes every process parsed without a finding, or
-// run without a parser under the exit-status rule, and no finding anywhere in
-// the task.
+// verdictEligible reports whether a successful task may record a unit verdict:
+// every process ran — a dry run spawns none — and, for a lint operation, every
+// one was parsed without a finding, or ran without an outputParser under the
+// exit-status rule, and the task found nothing at all.
 func verdictEligible(task Task, result ExecutionResult) bool {
+	for _, proc := range result.Processes {
+		if proc.State != ProcessRan {
+			return false
+		}
+	}
 	if task.Operation != config.OpLint {
 		return true
 	}

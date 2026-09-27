@@ -61,20 +61,22 @@ func TestVerdictEligible(t *testing.T) {
 		result ExecutionResult
 		want   bool
 	}{
-		{"parsed clean", lint, ExecutionResult{Processes: []ProcessResult{{Extraction: ExtractionParsedClean}}}, true},
-		{"no parser", lint, ExecutionResult{Processes: []ProcessResult{{Extraction: ExtractionNone}}}, true},
+		{"parsed clean", lint, ExecutionResult{Processes: []ProcessResult{{State: ProcessRan, Extraction: ExtractionParsedClean}}}, true},
+		{"no parser", lint, ExecutionResult{Processes: []ProcessResult{{State: ProcessRan, Extraction: ExtractionNone}}}, true},
 		{"a finding of a passing tool", lint, ExecutionResult{
-			Processes:   []ProcessResult{{Extraction: ExtractionParsedFindings}},
+			Processes:   []ProcessResult{{State: ProcessRan, Extraction: ExtractionParsedFindings}},
 			Diagnostics: []diagnostic.Diagnostic{{Message: "m", Severity: diagnostic.SeverityHint}},
 		}, false},
 		{"one unparsed process", lint, ExecutionResult{Processes: []ProcessResult{
-			{Extraction: ExtractionParsedClean}, {Extraction: ExtractionParseFailed},
+			{State: ProcessRan, Extraction: ExtractionParsedClean}, {State: ProcessRan, Extraction: ExtractionParseFailed},
 		}}, false},
-		{"an unavailable parser", lint, ExecutionResult{Processes: []ProcessResult{{Extraction: ExtractionParserUnavailable}}}, false},
+		{"an unavailable parser", lint, ExecutionResult{Processes: []ProcessResult{{State: ProcessRan, Extraction: ExtractionParserUnavailable}}}, false},
 		{"a fix with findings", fix, ExecutionResult{
-			Processes:   []ProcessResult{{Extraction: ExtractionParsedFindings}},
+			Processes:   []ProcessResult{{State: ProcessRan, Extraction: ExtractionParsedFindings}},
 			Diagnostics: []diagnostic.Diagnostic{{Message: "m"}},
 		}, true},
+		{"a dry run", fix, ExecutionResult{Processes: []ProcessResult{{State: ProcessNotStarted, Extraction: ExtractionNone}}}, false},
+		{"a lint dry run", lint, ExecutionResult{Processes: []ProcessResult{{State: ProcessNotStarted, Extraction: ExtractionNone}}}, false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

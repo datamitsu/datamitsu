@@ -23,6 +23,7 @@ func TestResolve_PositionContract(t *testing.T) {
 		{"end row before start", parsermanager.RawDiagnostic{Row: u(3), Col: u(5), EndRow: u(2), EndCol: u(9)}, 3, 5, 3, 5},
 		{"end column before start", parsermanager.RawDiagnostic{Row: u(3), Col: u(5), EndRow: u(3), EndCol: u(4)}, 3, 5, 3, 5},
 		{"end column only, before start", parsermanager.RawDiagnostic{Row: u(3), Col: u(5), EndCol: u(2)}, 3, 5, 3, 5},
+		{"end row only", parsermanager.RawDiagnostic{Row: u(3), Col: u(5), EndRow: u(4)}, 3, 5, 3, 5},
 		{"0 end", parsermanager.RawDiagnostic{Row: u(1), Col: u(1), EndRow: u(0), EndCol: u(0)}, 1, 1, 1, 1},
 		{"0 start with an end", parsermanager.RawDiagnostic{Row: u(0), Col: u(0), EndRow: u(1), EndCol: u(3)}, 1, 1, 1, 3},
 	}

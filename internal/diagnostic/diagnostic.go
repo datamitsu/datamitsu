@@ -82,7 +82,10 @@ type Diagnostic struct {
 // is the tool name the parser ran for; a Source the parser set itself (e.g.
 // cue_fmt) takes precedence. Defaults follow the none-ls/efm intersection:
 //   - a missing or 0 row/col → 1 (several parsers emit 0 for "no position");
-//   - a missing end, or one before the start, → a point at the start;
+//   - an end column without an end row → on the start row, the span most
+//     tools mean by a column range;
+//   - an end without a column, or one before the start, → a point at the
+//     start: a column the tool did not print would be invented;
 //   - a 0 end row/col → 1, before that comparison;
 //   - missing/out-of-range severity → fallbackSeverity.
 //
@@ -92,7 +95,7 @@ func Resolve(raw parsermanager.RawDiagnostic, source string) Diagnostic {
 	row := position(raw.Row, 1)
 	col := position(raw.Col, 1)
 	endRow, endCol := row, col
-	if raw.EndRow != nil || raw.EndCol != nil {
+	if raw.EndCol != nil {
 		endRow = position(raw.EndRow, row)
 		endCol = position(raw.EndCol, col)
 		if endRow < row || (endRow == row && endCol < col) {
@@ -152,8 +155,6 @@ func ResolveAll(raws []parsermanager.RawDiagnostic, source string) []Diagnostic 
 	return out
 }
 
-// position reads a 1-based position the parser may have left out: def when it
-// did, 1 when it reported 0, which is below the scale.
 func position(p *uint32, def int) int {
 	switch {
 	case p == nil:
