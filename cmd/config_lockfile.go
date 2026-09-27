@@ -29,7 +29,7 @@ This command:
 2. Reinstalls the app from scratch (for go, resolves deps with go mod init + go get)
 3. Reads the generated lock file (pnpm-lock.yaml, uv.lock, or go.mod + go.sum)
 4. Outputs the content as a JSON string for use in lockFile config field`,
-	Args: cobra.RangeArgs(0, 1),
+	Args: usageArgs(cobra.RangeArgs(0, 1)),
 	RunE: runConfigLockfile,
 }
 

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/exitcode"
 	"github.com/datamitsu/datamitsu/internal/runner"
 
 	"github.com/spf13/cobra"
@@ -24,5 +25,8 @@ func applyFailFast(cmd *cobra.Command, value bool, opts *runner.Options) error {
 		opts.FailFast = &value
 		return nil
 	}
-	return env.CheckFailFast()
+	if err := env.CheckFailFast(); err != nil {
+		return exitcode.UsageError{Err: err}
+	}
+	return nil
 }

@@ -14,11 +14,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Exit codes specific to `llms`. The rest of the CLI only ever exits 0 or 1;
-// this command separates its two failure modes because its consumer is a
-// program, which must be able to tell "I asked for a page that does not exist"
-// (recoverable: list the pages and retry) from "I called this wrong"
-// (a bug in the caller) without parsing English.
+// Exit codes specific to `llms`. Its usage code is the CLI's (exitcode.Usage);
+// it adds 3 because its consumer is a program, which must be able to tell "I
+// asked for a page that does not exist" (recoverable: list the pages and retry)
+// from "I called this wrong" (a bug in the caller) without parsing English.
 const (
 	exitLlmsUsage       = 2
 	exitLlmsUnknownPage = 3
@@ -166,10 +165,10 @@ func printLlmsJSON(v any) error {
 
 // llmsUsageError reports a caller mistake on stderr and exits 2.
 //
-// The exit happens here rather than by returning an error because Execute maps
-// every returned error to exit 1, which would collapse this command's three
-// outcomes into one. Returning nil afterwards keeps the signature honest for
-// the compiler; the process is already gone.
+// The exit happens here rather than by returning an error so the message keeps
+// this command's "llms:" form instead of Execute's "error:" prefix. Returning
+// nil afterwards keeps the signature honest for the compiler; the process is
+// already gone.
 func llmsUsageError(format string, a ...any) error {
 	fmt.Fprintf(os.Stderr, "llms: %s\n", fmt.Sprintf(format, a...))
 	os.Exit(exitLlmsUsage)

@@ -30,7 +30,7 @@ The artifact contains display metadata, not environment values, command argument
 managed file contents or download URLs. Filters show declared applicability, not
 an execution plan. Restart the command to refresh the snapshot.`,
 		Example: "  datamitsu inspect\n  datamitsu inspect --port 0\n  datamitsu inspect --output atlas.html\n  datamitsu inspect --output - > atlas.html",
-		Args:    cobra.NoArgs,
+		Args:    usageArgs(cobra.NoArgs),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if port < 0 || port > 65535 {
 				return errors.New("port must be between 0 and 65535")

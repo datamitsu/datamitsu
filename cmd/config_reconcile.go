@@ -57,7 +57,7 @@ This command is intentionally separate from project initialization. After
 editing datamitsu.config.*, run "datamitsu init" to provision tools, runtimes,
 bundles, and .datamitsu links. Use "datamitsu config reconcile" only when you
 explicitly intend to rewrite managed project configuration files.`,
-	Args: cobra.NoArgs,
+	Args: usageArgs(cobra.NoArgs),
 	RunE: runConfigReconcile,
 }
 

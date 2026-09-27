@@ -949,8 +949,10 @@ func TestExecutionRequireCoverage(t *testing.T) {
 	e.golden("s11_lint_require_coverage", res)
 }
 
-// TestExecutionUsageErrors is S13: a malformed invocation exits 1 with an error
-// line. Plan 2 gives usage errors exit code 2.
+// TestExecutionUsageErrors is S13: a malformed invocation — an unknown flag, a
+// flag value or DATAMITSU_* value it does not accept, a combination it refuses
+// before running — exits 2 with an error line, apart from the 1 of a failed
+// tool.
 func TestExecutionUsageErrors(t *testing.T) {
 	cases := []struct {
 		name string
@@ -962,13 +964,14 @@ func TestExecutionUsageErrors(t *testing.T) {
 		{"require_coverage_with_tools", nil, []string{"lint", "--require-coverage=unit", "--tools", "alpha"}},
 		{"fail_fast_env_invalid", []string{"DATAMITSU_FAIL_FAST=yes"}, []string{"lint"}},
 		{"fail_fast_flag_invalid", nil, []string{"lint", "--fail-fast=maybe"}},
+		{"explain_invalid", nil, []string{"lint", "--explain=bogus"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			e := newExecProject(t, map[string]string{"fixture.marker": ""}, fixtureSpec,
 				clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{}))
 			res := e.run("", tc.env, tc.args...)
-			e.wantExit(res, 1)
+			e.wantExit(res, 2)
 			e.wantMarker("alpha", "")
 			if !strings.Contains(res.Stderr, "error:") {
 				t.Errorf("stderr should carry an error line:\n%s", res.Stderr)

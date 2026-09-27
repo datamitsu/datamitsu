@@ -50,7 +50,7 @@ stdout carries ONLY LSP JSON-RPC. stderr is line-delimited JSON: status and
 progress (including tool downloads), the server's notices and every log line,
 as log events with a level of debug, info, warn or error. --verbose lowers the
 log level to debug, so info and debug log events appear as well.`,
-	Args: cobra.NoArgs,
+	Args: usageArgs(cobra.NoArgs),
 	// Force JSON-L quiet mode on stderr for the whole process. The server owns
 	// stdout for framed JSON-RPC, so nothing human/log may reach it. This runs
 	// after cobra.OnInitialize, so it unconditionally overrides --log-format.

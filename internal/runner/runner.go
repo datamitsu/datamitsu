@@ -24,6 +24,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/diagnostic"
 	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/exitcode"
 	"github.com/datamitsu/datamitsu/internal/facts"
 	"github.com/datamitsu/datamitsu/internal/gitenv"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
@@ -222,7 +223,7 @@ func initSharedContext(
 		case "json", "j":
 			sc.explainLevel = "json"
 		default:
-			return nil, fmt.Errorf("invalid --explain value: %s (must be summary, detailed, or json)", explainMode)
+			return nil, exitcode.UsageErrorf("invalid --explain value: %s (must be summary, detailed, or json)", explainMode)
 		}
 	}
 
@@ -836,14 +837,14 @@ func (sc *sharedContext) coverageFailure() error {
 	if len(reasons) == 0 {
 		return nil
 	}
-	return coverageError{fmt.Errorf("--require-coverage=%s: %s", level, strings.Join(reasons, "; "))}
+	return exitcode.CoverageErrorf("--require-coverage=%s: %s", level, strings.Join(reasons, "; "))
 }
 
 // errRequireCoverageWithTools rejects a combination that cannot mean anything:
 // --tools drops the skip entries of unselected tools before anything can observe
 // them, so the assertion would be trivially true over a debug subset.
-var errRequireCoverageWithTools = errors.New(
-	"--require-coverage cannot be combined with --tools: the assertion would only cover the selected subset")
+var errRequireCoverageWithTools = exitcode.UsageError{Err: errors.New(
+	"--require-coverage cannot be combined with --tools: the assertion would only cover the selected subset")}
 
 // targetLine announces that the run covers less than the repository, so a green
 // result is not mistaken for a full one. Empty for a whole-repository run, which
@@ -1104,18 +1105,18 @@ type Options struct {
 // clause.
 func (o Options) validate() error {
 	if o.WidenTo != "" && !config.ValidWidenTo(config.WidenTo(o.WidenTo)) {
-		return fmt.Errorf("invalid --widen-to value: %s (must be target, unit or repo)", o.WidenTo)
+		return exitcode.UsageErrorf("invalid --widen-to value: %s (must be target, unit or repo)", o.WidenTo)
 	}
 	switch config.WidenTo(o.RequireCoverage) {
 	case "", config.WidenToUnit, config.WidenToRepo:
 		return nil
 	case config.WidenToTarget:
-		return fmt.Errorf("invalid --require-coverage value: %s (must be unit or repo; "+
+		return exitcode.UsageErrorf("invalid --require-coverage value: %s (must be unit or repo; "+
 			"target asserts only what was named, which is always true)", o.RequireCoverage)
 	default:
 		// "target" is excluded on purpose: it asserts only what was named, which
 		// is always true and so never fails.
-		return fmt.Errorf("invalid --require-coverage value: %s (must be unit or repo)", o.RequireCoverage)
+		return exitcode.UsageErrorf("invalid --require-coverage value: %s (must be unit or repo)", o.RequireCoverage)
 	}
 }
 

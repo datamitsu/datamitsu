@@ -24,6 +24,22 @@ with the message and its fields in `msg`. Which levels appear follows
 `DATAMITSU_LOG_LEVEL` (`warn` by default) and `--verbose` (`debug`), exactly as
 in console mode.
 
+## Exit codes
+
+| Code         | Meaning                                                                                                                                                                                                                                              |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `0`          | Success                                                                                                                                                                                                                                              |
+| `1`          | A tool failed, or any error without a code of its own                                                                                                                                                                                                |
+| `2`          | Usage: an unknown flag, a flag or `DATAMITSU_*` value the command does not accept (`--widen-to=Repo`, `DATAMITSU_FAIL_FAST=yes`), the wrong number of arguments, or a combination refused before anything runs (`--require-coverage` with `--tools`) |
+| `3`          | `llms`: an unknown or ambiguous page                                                                                                                                                                                                                 |
+| `4`          | The run did not cover what it was asked to: `--require-coverage` (see [Narrowed runs](#narrowed-runs))                                                                                                                                               |
+| `130`, `143` | `fix`, `lint` or `check` interrupted by `SIGINT` or `SIGTERM` (see [Keep-going runs](#keep-going-runs))                                                                                                                                              |
+
+When several apply, a tool failure (`1`) wins over an incomplete run (`4`). A
+usage error is found before anything runs and combines with nothing. A script
+that tells "you called it wrong" from "the code is bad" checks for `2` and `1`
+apart.
+
 ## exec
 
 Execute a managed binary with all environment variables passed through.

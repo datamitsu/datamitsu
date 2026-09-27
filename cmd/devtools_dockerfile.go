@@ -57,7 +57,7 @@ binary, pinned by digest when it can be resolved (best-effort: --offline, an
 unreachable registry, or a non-release build leave the FROM line unpinned with a
 warning). The output file is fully overwritten on each run — it is a generated
 artifact you own and may hand-edit, but hand-edits are lost on regeneration.`,
-	Args: cobra.NoArgs,
+	Args: usageArgs(cobra.NoArgs),
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		return runDockerfile(commandContext(cmd), cmd)
 	},

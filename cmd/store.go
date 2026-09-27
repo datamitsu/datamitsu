@@ -60,7 +60,7 @@ overrides the declaration. A bare ":<tag>" reference is refused unless
 
 By default the WHOLE bundle is pulled (airgap seeding). With --apps only the
 layers of the named tools plus their runtime dependencies are pulled.`,
-	Args: cobra.MaximumNArgs(1),
+	Args: usageArgs(cobra.MaximumNArgs(1)),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runStoreSeed(commandContext(cmd), args)
 	},
@@ -71,7 +71,7 @@ var storeStatusCmd = &cobra.Command{
 	Short: "Show OCI bundle contents and store coverage",
 	Long: `Show what the declared OCI bundle contains for this platform and which of
 the configured apps it covers (vs which require the network).`,
-	Args: cobra.NoArgs,
+	Args: usageArgs(cobra.NoArgs),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runStoreStatus(commandContext(cmd))
 	},
@@ -85,7 +85,7 @@ var storeImportCmd = &cobra.Command{
 fully offline bundle transfer. The bundle digest is taken from the effective
 config or from --digest; every blob is verified against the digest chain
 exactly like a registry pull.`,
-	Args: cobra.ExactArgs(1),
+	Args: usageArgs(cobra.ExactArgs(1)),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runStoreImport(commandContext(cmd), args[0])
 	},

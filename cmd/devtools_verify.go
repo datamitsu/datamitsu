@@ -45,7 +45,7 @@ Results are persisted to a state file after each check completes. Use
 whose last status was "ok". Skipped entries appear as "cached" in output.
 
 Data source: the same aggregated config used at runtime (loadConfig()).`,
-	Args: cobra.NoArgs,
+	Args: usageArgs(cobra.NoArgs),
 	RunE: runVerifyAll,
 }
 

@@ -72,14 +72,14 @@ binaries this shadows — go to stderr, so the output is always safe to eval.`,
 var sourceBashCmd = &cobra.Command{
 	Use:   "bash",
 	Short: "Print bash activation code",
-	Args:  cobra.NoArgs,
+	Args:  usageArgs(cobra.NoArgs),
 	RunE:  func(cmd *cobra.Command, _ []string) error { return runSource(cmd, renderBash) },
 }
 
 var sourceZshCmd = &cobra.Command{
 	Use:   "zsh",
 	Short: "Print zsh activation code",
-	Args:  cobra.NoArgs,
+	Args:  usageArgs(cobra.NoArgs),
 	// zsh implements every construct the bash renderer uses (the ${var//pat/rep}
 	// substitution with a quoted pattern, and `hash -r`), so it shares the
 	// renderer rather than carrying a near-copy that can drift.
@@ -89,7 +89,7 @@ var sourceZshCmd = &cobra.Command{
 var sourceFishCmd = &cobra.Command{
 	Use:   "fish",
 	Short: "Print fish activation code",
-	Args:  cobra.NoArgs,
+	Args:  usageArgs(cobra.NoArgs),
 	RunE:  func(cmd *cobra.Command, _ []string) error { return runSource(cmd, renderFish) },
 }
 

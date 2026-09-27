@@ -33,7 +33,7 @@ fetched yet stays a shim entry and installs on its first real use.
 
 The summary goes to stderr. stdout stays empty, so this is safe to call from the
 same shell function that runs an activation through eval.`,
-	Args: cobra.NoArgs,
+	Args: usageArgs(cobra.NoArgs),
 	RunE: func(cmd *cobra.Command, _ []string) error { return runSourceRefresh(cmd) },
 }
 

@@ -23,21 +23,21 @@ var appsCmd = &cobra.Command{
 var appsListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all configured apps with their type and install status",
-	Args:  cobra.NoArgs,
+	Args:  usageArgs(cobra.NoArgs),
 	RunE:  runAppsList,
 }
 
 var appsInspectCmd = &cobra.Command{
 	Use:   "inspect <name>",
 	Short: "Show install path and file tree for an installed app",
-	Args:  cobra.ExactArgs(1),
+	Args:  usageArgs(cobra.ExactArgs(1)),
 	RunE:  runAppsInspect,
 }
 
 var appsPathCmd = &cobra.Command{
 	Use:   "path <name>",
 	Short: "Print the install directory path for an app",
-	Args:  cobra.ExactArgs(1),
+	Args:  usageArgs(cobra.ExactArgs(1)),
 	RunE:  runAppsPath,
 }
 

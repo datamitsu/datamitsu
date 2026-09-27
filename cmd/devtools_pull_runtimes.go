@@ -78,7 +78,7 @@ Example:
   datamitsu devtools pull-runtimes --update --runtime go config/src/runtimes.json
   datamitsu devtools pull-runtimes --update --runtime pnpm config/src/runtimes.json
   datamitsu devtools pull-runtimes --update --dry-run config/src/runtimes.json`,
-	Args: cobra.ExactArgs(1),
+	Args: usageArgs(cobra.ExactArgs(1)),
 	RunE: runPullRuntimes,
 }
 

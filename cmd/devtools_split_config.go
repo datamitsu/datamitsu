@@ -27,7 +27,7 @@ instead of the entire image.
 
 The config is read from the same sources as every other command (--config /
 --before-config / auto-discovery).`,
-	Args: cobra.NoArgs,
+	Args: usageArgs(cobra.NoArgs),
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		return runSplitConfig(commandContext(cmd))
 	},

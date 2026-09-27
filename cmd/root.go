@@ -106,6 +106,8 @@ func init() {
 		setJSONLStderr(resolveLogFormat() == "jsonl")
 	})
 
+	rootCmd.SetFlagErrorFunc(flagUsageError)
+
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false,
 		"Enable debug-level logging (default level is warn)")
 	rootCmd.PersistentFlags().StringVar(&BinaryCommandOverride, "binary-command", "",
@@ -256,10 +258,10 @@ func Execute() {
 	flushTrace()
 
 	if err != nil {
-		// A tool failing and a run that did not cover what it was asked to cover
-		// are different outcomes, and CI needs to tell them apart. Everything
-		// keeps exiting 1 unless it says otherwise, so existing pipelines are
-		// unaffected.
+		// A tool failing, a caller mistake and a run that did not cover what it
+		// was asked to cover are different outcomes, and CI needs to tell them
+		// apart. An error exits 1 unless it carries its own code
+		// (internal/exitcode).
 		code := 1
 		if coded, ok := errors.AsType[CodedError](err); ok {
 			code = coded.ExitCode()
