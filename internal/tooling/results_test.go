@@ -2,10 +2,12 @@ package tooling
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -333,4 +335,77 @@ func TestTaskIdentity(t *testing.T) {
 			}
 		}
 	}
+}
+
+// TestChunkedFailureNamesItsCommand: a task split into chunks reports, like a
+// per-file task, the exit code and command of its last failing process.
+func TestChunkedFailureNamesItsCommand(t *testing.T) {
+	t.Setenv("DATAMITSU_MAX_CMD_LENGTH", "1")
+	cases := []struct {
+		name     string
+		script   string
+		wantExit int
+		wantFile string
+	}{
+		{"one failing chunk", `case "$1" in *b.txt) exit 7;; esac`, 7, "b.txt"},
+		{"two failing chunks", `case "$1" in *b.txt) exit 7;; *c.txt) exit 9;; esac`, 9, "c.txt"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			e, _, root, files := resultsProject(t, false, c.script, "a.txt", "b.txt", "c.txt")
+			task := loopTask(root, files)
+			task.OpConfig.Scope = config.ToolScopeRepository
+			task.OpConfig.Args = []string{"{files}"}
+
+			result := e.executeTask(context.Background(), task)
+			if result.Success {
+				t.Fatal("the task passed")
+			}
+			if result.ExitCode != c.wantExit {
+				t.Errorf("ExitCode = %d, want %d", result.ExitCode, c.wantExit)
+			}
+			if !strings.HasSuffix(result.Command, c.wantFile) {
+				t.Errorf("Command = %q, want the failing chunk's, ending in %s", result.Command, c.wantFile)
+			}
+		})
+	}
+}
+
+func TestProcessState(t *testing.T) {
+	startRefused := fmt.Errorf("%w: %w", errStart, context.Canceled)
+	cases := []struct {
+		name string
+		err  error
+		want ProcessState
+	}{
+		{"exited 0", nil, ProcessRan},
+		{"exited non-zero", errors.New("exit status 1"), ProcessRan},
+		{"stopped while it ran", fmt.Errorf("%w: signal: terminated", errStopped), ProcessCancelled},
+		{"could not start", fmt.Errorf("%w: %w", errStart, os.ErrNotExist), ProcessSetupFailed},
+		{"start refused by a cancelled run", startRefused, ProcessNotStarted},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := processState(c.err); got != c.want {
+				t.Errorf("processState(%v) = %s, want %s", c.err, got, c.want)
+			}
+		})
+	}
+
+	t.Run("a batch whose run is cancelled before its spawn", func(t *testing.T) {
+		e, _, root, files := resultsProject(t, false, `exit 0`, "a.txt")
+		task := loopTask(root, files)
+		task.OpConfig.Scope = config.ToolScopeRepository
+		task.OpConfig.Args = []string{"{files}"}
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		result := e.executeTask(ctx, task)
+		if proc := result.Processes[0]; proc.State != ProcessNotStarted {
+			t.Errorf("process = %+v, want not-started", proc)
+		}
+		if got := fileStates(result); !equalStates(got, []FileState{FileNotStarted}) {
+			t.Errorf("file states = %v", got)
+		}
+	})
 }

@@ -151,17 +151,35 @@ func TestCheckNeedsAHash(t *testing.T) {
 	}
 }
 
-// TestEntriesRecordedUnderTheOldRuleMiss: a cache file written before the
-// cache-semantics component existed carries a key the new writer never
-// produces, so its passes — recorded without comparing hashes — are dropped.
+// TestEntriesRecordedUnderTheOldRuleMiss: a cache file written under an
+// earlier rule carries a key the current writer never produces, so its passes
+// are dropped: those recorded before the cache-semantics component existed,
+// without comparing hashes, and those recorded under c2v1, from the exit code
+// alone.
 func TestEntriesRecordedUnderTheOldRuleMiss(t *testing.T) {
+	for _, c := range []struct {
+		name      string
+		semantics []byte
+	}{{"before the semantics component", nil}, {"c2v1", []byte("c2v1")}} {
+		t.Run(c.name, func(t *testing.T) {
+			entriesRecordedUnderAnOldRuleMiss(t, c.semantics)
+		})
+	}
+}
+
+func entriesRecordedUnderAnOldRuleMiss(t *testing.T, semantics []byte) {
+	t.Helper()
 	cacheDir, projectPath, file := newProject(t)
 	cfg := config.Config{}
 	configJSON, err := json.Marshal(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
-	oldKey := hashutil.XXH3Multi([]byte(ldflags.Version), configJSON)
+	parts := [][]byte{[]byte(ldflags.Version)}
+	if semantics != nil {
+		parts = append(parts, semantics)
+	}
+	oldKey := hashutil.XXH3Multi(append(parts, configJSON)...)
 	rel, _ := filepath.Rel(projectPath, file)
 	old := File{
 		InvalidationKey: oldKey,

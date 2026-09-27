@@ -1536,12 +1536,15 @@ func unstartedChunk(ctx context.Context, task Task, workingDir string, files []s
 	return result
 }
 
-// processState classifies how a spawned process ended from the error its run
-// returned.
+// processState classifies how a process ended from the error its run
+// returned. A start refused because the run was already cancelled is a process
+// that never started, not one that failed to.
 func processState(err error) ProcessState {
 	switch {
 	case err == nil:
 		return ProcessRan
+	case errors.Is(err, errStart) && stoppedByCancellation(err):
+		return ProcessNotStarted
 	case errors.Is(err, errStart):
 		return ProcessSetupFailed
 	case stoppedByCancellation(err):
@@ -1560,7 +1563,16 @@ func mergeChunkResults(ctx context.Context, result *ExecutionResult, chunks [][]
 	var errs []error
 	allCancelled := !result.Success
 	notRun := 0
+	// The frame names one command and one exit code: the last chunk that failed
+	// on its own, as a per-file task names its last failing file.
+	failedCommand, failedExit := "", 0
 	for i, chunkResult := range chunkResults {
+		if chunkResult.Command != "" {
+			result.Command = chunkResult.Command
+		}
+		if !chunkResult.Success && !chunkResult.IsCancelled() {
+			failedCommand, failedExit = chunkResult.Command, chunkResult.ExitCode
+		}
 		if chunkResult.Output != "" {
 			outputs = append(outputs, fmt.Sprintf("=== Chunk %d/%d ===\n%s", i+1, len(chunks), chunkResult.Output))
 		}
@@ -1580,6 +1592,9 @@ func mergeChunkResults(ctx context.Context, result *ExecutionResult, chunks [][]
 	result.Output = strings.Join(outputs, "\n")
 	if len(errs) > 0 {
 		result.Error = fmt.Errorf("batch execution had %d failures: %v", len(errs), errs)
+	}
+	if failedCommand != "" {
+		result.Command, result.ExitCode = failedCommand, failedExit
 	}
 
 	switch {

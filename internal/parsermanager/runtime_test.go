@@ -170,6 +170,7 @@ func TestHasParser(t *testing.T) {
 		"core":   {URL: srv.URL, Hash: sha256Hex(wasm)},
 		"broken": {URL: srv.URL, Hash: strings.Repeat("0", 64)},
 	})
+	t.Cleanup(func() { _ = m.Close(context.Background()) })
 
 	for _, c := range []struct {
 		parser string
