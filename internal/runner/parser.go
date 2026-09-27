@@ -56,7 +56,7 @@ func (p diagnosticParser) Parse(
 	// read as a clean run.
 	known, err := p.mgr.HasParser(ctx, module, parser)
 	if err != nil {
-		p.problems.moduleUnavailable(module, err)
+		p.problems.moduleUnavailable(module, toolName, err)
 		return nil, &tooling.ParserUnavailableError{Err: err}
 	}
 	if !known {
@@ -68,7 +68,7 @@ func (p diagnosticParser) Parse(
 	raws, err := p.mgr.ParseOutput(ctx, module, parser, stdout, stderr, exitCode)
 	if err != nil {
 		if errors.Is(err, parsermanager.ErrModuleUnavailable) {
-			p.problems.moduleUnavailable(module, err)
+			p.problems.moduleUnavailable(module, toolName, err)
 			return nil, &tooling.ParserUnavailableError{Err: err}
 		}
 		p.problems.parseFailed(toolName, err)
@@ -82,28 +82,32 @@ func (p diagnosticParser) Parse(
 // parse that failed. Each is reported once per run however many invocations
 // hit it; the first error seen is the one reported.
 type parseProblems struct {
-	mu       sync.Mutex
-	modules  map[string]string             // module -> first load error
-	unknown  map[[2]string]map[string]bool // (module, parser) -> tools naming it
-	failed   map[string]string             // tool -> first parse error
-	reported map[string]bool               // problems already reported this run
+	mu          sync.Mutex
+	modules     map[string]string             // module -> first load error
+	moduleTools map[string]map[string]bool    // module -> tools whose output it did not parse
+	unknown     map[[2]string]map[string]bool // (module, parser) -> tools naming it
+	failed      map[string]string             // tool -> first parse error
+	reported    map[string]bool               // problems already reported this run
 }
 
 func newParseProblems() *parseProblems {
 	return &parseProblems{
-		modules:  map[string]string{},
-		unknown:  map[[2]string]map[string]bool{},
-		failed:   map[string]string{},
-		reported: map[string]bool{},
+		modules:     map[string]string{},
+		moduleTools: map[string]map[string]bool{},
+		unknown:     map[[2]string]map[string]bool{},
+		failed:      map[string]string{},
+		reported:    map[string]bool{},
 	}
 }
 
-func (p *parseProblems) moduleUnavailable(module string, err error) {
+func (p *parseProblems) moduleUnavailable(module, tool string, err error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if _, seen := p.modules[module]; !seen {
 		p.modules[module] = err.Error()
+		p.moduleTools[module] = map[string]bool{}
 	}
+	p.moduleTools[module][tool] = true
 }
 
 func (p *parseProblems) unknownParser(module, parser, tool string) {
@@ -125,9 +129,8 @@ func (p *parseProblems) parseFailed(tool string, err error) {
 }
 
 // pending returns the warnings not yet reported, in a stable order: modules
-// that did not load, then unknown parser keys, then failed parses. users
-// counts, per module, the planned tools that parse with it.
-func (p *parseProblems) pending(users map[string]int) []string {
+// that did not load, then unknown parser keys, then failed parses.
+func (p *parseProblems) pending() []string {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	var out []string
@@ -137,7 +140,7 @@ func (p *parseProblems) pending(users map[string]int) []string {
 				"parser module %q could not be loaded, so %d tool(s) that use it ran without parsing "+
 					"and their lint passes are not cached; "+
 					"\"datamitsu devtools parsers prefetch\" fetches it ahead of a run: %s",
-				module, users[module], p.modules[module]))
+				module, len(p.moduleTools[module]), p.modules[module]))
 		}
 	}
 	keys := make([][2]string, 0, len(p.unknown))
@@ -180,28 +183,5 @@ func sortedKeys[V any](m map[string]V) []string {
 		out = append(out, k)
 	}
 	sort.Strings(out)
-	return out
-}
-
-// parserUsers counts, per parser module, the distinct tools of plan that parse
-// their output with it.
-func parserUsers(plan *tooling.ExecutionPlan) map[string]int {
-	tools := map[string]map[string]bool{}
-	for _, group := range plan.Groups {
-		for _, task := range group.Tasks {
-			op := task.Tool.OutputParser
-			if op == nil || op.Module == "" {
-				continue
-			}
-			if tools[op.Module] == nil {
-				tools[op.Module] = map[string]bool{}
-			}
-			tools[op.Module][task.ToolName] = true
-		}
-	}
-	out := make(map[string]int, len(tools))
-	for module, names := range tools {
-		out[module] = len(names)
-	}
 	return out
 }

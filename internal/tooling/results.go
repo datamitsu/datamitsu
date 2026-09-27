@@ -8,8 +8,6 @@ import (
 	"github.com/datamitsu/datamitsu/internal/config"
 )
 
-// addNotStarted records a process for each file the per-file loop never
-// reached.
 func (r *ExecutionResult) addNotStarted(files []string) {
 	for _, file := range files {
 		r.addProcess(ProcessResult{Files: []string{filepath.Clean(file)}, State: ProcessNotStarted, Extraction: ExtractionNone})
@@ -25,7 +23,6 @@ func outputTail(output []byte) []byte {
 	return bytes.Clone(output)
 }
 
-// cachedOf returns the files of planned the per-file cache filtered out.
 func cachedOf(planned, toProcess []string) []string {
 	if len(planned) == len(toProcess) {
 		return nil
@@ -120,8 +117,8 @@ func describeFiles(task Task, result *ExecutionResult, fallback FileState) {
 	result.Cached = len(result.Processes) == 0 && len(result.cached) > 0 && len(result.cached) == len(result.Files)
 }
 
-// describeVerdictHit fills the file description of a task whose unit verdict
-// held: every member of the unit is answered by it, and nothing ran.
+// describeVerdictHit is describeFiles for a unit whose verdict held: the verdict
+// answers for every member, not only for the files that selected the task.
 func describeVerdictHit(task Task, result *ExecutionResult) {
 	result.WholeUnit = wholeUnit(task)
 	result.UnitDir = task.UnitDir

@@ -1144,6 +1144,20 @@ func TestExecutionParserProblems(t *testing.T) {
 			t.Errorf("%s recorded %q; output that was not parsed must not be cached", tool, recorded)
 		}
 	}
+
+	// check reports once, after both operations, naming every tool the
+	// module failed: the fixer and the linter alike.
+	fixer := clitest.ShellTool("fixer", passScript, clitest.ToolOpSpec{
+		Operation: "fix", Scope: "per-file", Globs: []string{"**/Dockerfile"}, Args: []string{"{file}"},
+		Parser: "hadolint", ParserModule: "missing",
+	})
+	e.p.WriteFile("exec.config.js", clitest.ShellConfig(spec, fixer, perFile("beta", "hadolint", "missing")))
+	checked := e.run("", nil, "check")
+	e.wantExit(checked, 0)
+	want := `parser module "missing" could not be loaded, so 2 tool(s) that use it ran without parsing`
+	if n := strings.Count(checked.Stderr, want); n != 1 {
+		t.Errorf("check's stderr carries %q %d times, want once:\n%s", want, n, checked.Stderr)
+	}
 }
 
 var hostRE = regexp.MustCompile(`no binary for [a-z0-9]+/[a-z0-9_]+/[a-z0-9_]+`)

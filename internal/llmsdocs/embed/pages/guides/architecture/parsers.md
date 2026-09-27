@@ -94,7 +94,7 @@ the module, and loading a configuration never touches the network.
 
 When any process of a task is `parse-failed` or `parser-unavailable`, the task
 reports `ParseFailed`: its missing diagnostics mean "unknown", not "none". The
-run warns once, however many invocations hit the same problem:
+run warns once, after its last operation, however many invocations hit the same problem:
 
 - `output parser failed for <tool>: <first error>`, once per tool;
 - `parser module "<module>" could not be loaded, so <n> tool(s) that use it ran without parsing`,

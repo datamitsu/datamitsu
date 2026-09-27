@@ -675,7 +675,6 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	execSpan.EndWith(trace.A("groups", len(plan.Groups)))
 	// Finalize progress before printing any summaries/errors to avoid interleaved output.
 	finalizeProgress()
-	sc.reportParseProblems(plan)
 
 	cause := stopFailFast
 	if interruption(ctx) != nil {
@@ -761,15 +760,16 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	return nil
 }
 
-// reportParseProblems warns about what the parsers could not parse and the run
-// has not reported yet: each module that did not load, each parser key its
-// module does not list, and each tool whose output failed to parse, once per
-// run however many invocations hit it.
-func (sc *sharedContext) reportParseProblems(plan *tooling.ExecutionPlan) {
+// reportParseProblems warns about what the parsers could not parse: each module
+// that did not load, each parser key its module does not list, and each tool
+// whose output failed to parse, once per run however many invocations and
+// operations hit it. It runs once every operation has, so a warning names every
+// tool the problem reached.
+func (sc *sharedContext) reportParseProblems() {
 	if sc.parseProblems == nil {
 		return
 	}
-	for _, msg := range sc.parseProblems.pending(parserUsers(plan)) {
+	for _, msg := range sc.parseProblems.pending() {
 		logger.Logger.Warn(msg)
 	}
 }
@@ -1041,6 +1041,7 @@ func runSequential(
 	defer stopInterrupt()
 
 	opErr := sc.runOperations(ctx, operations)
+	sc.reportParseProblems()
 
 	if sc.explainLevel != "" {
 		return sc.outcome(ctx, opErr)

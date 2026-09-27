@@ -1076,9 +1076,9 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 		lastExitCode = exitCode
 
 		proc := ProcessResult{
-			Files: []string{filepath.Clean(file)}, Extraction: ExtractionNone,
-			OutputTail: outputTail(output), DurationMs: procDuration,
+			Files: []string{filepath.Clean(file)}, OutputTail: outputTail(output), DurationMs: procDuration,
 		}
+		proc.Extraction, proc.ParseError = e.unparsed(task, formatMode)
 		if parseMode {
 			e.parseFileDiagnostics(ctx, &proc, task, workingDir, stdoutBytes, stderrBytes, exitCode)
 		}
@@ -1279,9 +1279,7 @@ func (e *Executor) executeBatch(ctx context.Context, task Task, cmdInfo *binmana
 		if e.fileProgressCallback != nil {
 			e.fileProgressCallback(task.ID, task.ToolName, 1, 1, chunkResult.Success)
 		}
-		if chunkResult.Success {
-			e.updateCacheAfterSuccess(task, batchPasses(task.Operation, chunkResult.Processes, filesToProcess), seen)
-		}
+		e.updateCacheAfterSuccess(task, batchPasses(task.Operation, chunkResult.Processes, filesToProcess), seen)
 		return chunkResult
 	}
 
@@ -1296,9 +1294,7 @@ func (e *Executor) executeBatch(ctx context.Context, task Task, cmdInfo *binmana
 		if e.fileProgressCallback != nil {
 			e.fileProgressCallback(task.ID, task.ToolName, 1, 1, chunkResult.Success)
 		}
-		if chunkResult.Success {
-			e.updateCacheAfterSuccess(task, batchPasses(task.Operation, chunkResult.Processes, nil), seen)
-		}
+		e.updateCacheAfterSuccess(task, batchPasses(task.Operation, chunkResult.Processes, nil), seen)
 		return chunkResult
 	}
 
@@ -1308,19 +1304,21 @@ func (e *Executor) executeBatch(ctx context.Context, task Task, cmdInfo *binmana
 	if e.fileProgressCallback != nil {
 		e.fileProgressCallback(task.ID, task.ToolName, 1, 1, result.Success)
 	}
-	if result.Success {
-		e.updateCacheAfterSuccess(task, batchPasses(task.Operation, result.Processes, nil), seen)
-	}
+	e.updateCacheAfterSuccess(task, batchPasses(task.Operation, result.Processes, nil), seen)
 	return result
 }
 
-// batchPasses returns the files the processes of a successful batch task let a
-// pass be recorded for. Each process answers for the files it was given; a
-// process given none (argv-less, one run for the whole list) answers for
-// covered.
+// batchPasses returns the files the successful processes of a batch task let a
+// pass be recorded for. Each process answers for the files it was given, as a
+// per-file process does, so a chunk that passed keeps its passes when another
+// failed; a process given none (argv-less, one run for the whole list) answers
+// for covered.
 func batchPasses(op config.OperationType, processes []ProcessResult, covered []string) []string {
 	passes := make([]string, 0, len(covered))
 	for _, proc := range processes {
+		if proc.State != ProcessRan || !proc.Success {
+			continue
+		}
 		files := proc.Files
 		if len(files) == 0 {
 			files = make([]string, len(covered))
@@ -1408,8 +1406,9 @@ func (e *Executor) executeBatchChunk(ctx context.Context, task Task, cmdInfo *bi
 
 	proc := ProcessResult{
 		Files: absolutePaths(files, workingDir), State: processState(err), Success: err == nil,
-		Extraction: ExtractionNone, OutputTail: outputTail(output), DurationMs: procDuration,
+		OutputTail: outputTail(output), DurationMs: procDuration,
 	}
+	proc.Extraction, proc.ParseError = e.unparsed(task, formatMode)
 	if proc.State == ProcessRan {
 		proc.ExitCode = new(exitCode)
 	}
@@ -1534,6 +1533,18 @@ func unstartedChunk(ctx context.Context, task Task, workingDir string, files []s
 	}
 	result.addProcess(ProcessResult{Files: absolutePaths(files, workingDir), State: ProcessNotStarted, Extraction: ExtractionNone})
 	return result
+}
+
+// unparsed is a spawned process's extraction before any parse. A formatter's
+// stdout is file content, which no parser reads, and a tool without an
+// outputParser has nothing to extract: none, the exit-status rule. A tool that
+// declares a parser this executor was not given is another matter — its
+// findings were never extracted, so its output proves nothing.
+func (e *Executor) unparsed(task Task, formatMode bool) (Extraction, string) {
+	if task.Tool.OutputParser == nil || formatMode || e.parser != nil {
+		return ExtractionNone, ""
+	}
+	return ExtractionParserUnavailable, "no output parser is wired"
 }
 
 // processState classifies how a process ended from the error its run

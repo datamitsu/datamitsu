@@ -120,6 +120,8 @@ func TestDiagnosticParser_Unavailable(t *testing.T) {
 		{"core", "no-such-parser", "alpha"},
 		{"core", "no-such-parser", "beta"},
 		{"broken", "hadolint", "gamma"},
+		{"broken", "hadolint", "gamma"},
+		{"broken", "yamllint", "delta"},
 	} {
 		diags, err := parser.Parse(context.Background(), c.module, c.key, c.tool, []byte("x"), nil, 1)
 		if _, ok := errors.AsType[*tooling.ParserUnavailableError](err); !ok {
@@ -130,7 +132,7 @@ func TestDiagnosticParser_Unavailable(t *testing.T) {
 		}
 	}
 
-	got := problems.pending(map[string]int{"broken": 2})
+	got := problems.pending()
 	if len(got) != 2 {
 		t.Fatalf("pending = %q, want one warning for the module and one for the key", got)
 	}
@@ -143,7 +145,7 @@ func TestDiagnosticParser_Unavailable(t *testing.T) {
 		`and its lint passes are not cached`; got[1] != want {
 		t.Errorf("key warning = %q, want %q", got[1], want)
 	}
-	if again := problems.pending(nil); len(again) != 0 {
+	if again := problems.pending(); len(again) != 0 {
 		t.Errorf("a problem is reported once per run, got %q again", again)
 	}
 }
@@ -154,25 +156,11 @@ func TestParseProblems_FailedParseOncePerTool(t *testing.T) {
 	problems.parseFailed("hadolint", errors.New("second"))
 	problems.parseFailed("eslint", errors.New("boom"))
 	want := []string{"output parser failed for eslint: boom", "output parser failed for hadolint: first"}
-	if got := problems.pending(nil); !slices.Equal(got, want) {
+	if got := problems.pending(); !slices.Equal(got, want) {
 		t.Errorf("pending = %q, want %q", got, want)
 	}
 	problems.parseFailed("hadolint", errors.New("third"))
-	if got := problems.pending(nil); len(got) != 0 {
+	if got := problems.pending(); len(got) != 0 {
 		t.Errorf("a tool already reported this run is not reported again, got %q", got)
-	}
-}
-
-func TestParserUsers(t *testing.T) {
-	parsed := func(tool, module string) tooling.Task {
-		return tooling.Task{ToolName: tool, Tool: config.Tool{OutputParser: &config.OutputParser{Module: module, Parser: tool}}}
-	}
-	plan := &tooling.ExecutionPlan{Groups: []tooling.TaskGroup{
-		{Tasks: []tooling.Task{parsed("a", "core"), parsed("a", "core"), parsed("b", "core")}},
-		{Tasks: []tooling.Task{parsed("c", "other"), {ToolName: "plain"}}},
-	}}
-	got := parserUsers(plan)
-	if got["core"] != 2 || got["other"] != 1 || len(got) != 2 {
-		t.Errorf("parserUsers = %v, want core:2 other:1", got)
 	}
 }

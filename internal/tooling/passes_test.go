@@ -259,3 +259,51 @@ func TestUnitVerdictNamesItsParserModule(t *testing.T) {
 		t.Error("a verdict recorded with one parser module was replayed for another")
 	}
 }
+
+// TestMissingParserRecordsNoLintPass: a tool whose declared parser this
+// executor was not given had its output read by nobody, so neither a per-file
+// pass nor a verdict may say it found nothing.
+func TestMissingParserRecordsNoLintPass(t *testing.T) {
+	e, c, root, files := c1Project(t, nil)
+
+	perFile := c1Task(config.OpLint, config.ToolScopePerFile, []string{"{file}"}, files, root)
+	result := e.executeTask(context.Background(), perFile)
+	if !result.Success || !result.ParseFailed {
+		t.Fatalf("Success = %v, ParseFailed = %v", result.Success, result.ParseFailed)
+	}
+	if proc := result.Processes[0]; proc.Extraction != ExtractionParserUnavailable {
+		t.Errorf("Extraction = %s, want parser-unavailable", proc.Extraction)
+	}
+	if got := cachedFiles(t, c, cache.OperationLint, files); len(got) != 0 {
+		t.Errorf("cached = %v, want nothing", got)
+	}
+
+	unit := c1Task(config.OpLint, config.ToolScopePerProject, []string{"--check"}, files, root)
+	unit.UnitMembers = files
+	unit.Coverage = CoverageComplete
+	e.executeTask(context.Background(), unit)
+	key, snap, _, _ := e.verdictKeys(unit)
+	if !e.cache.ShouldRunVerdict(key, snap.hash(), e.verdictTTL()) {
+		t.Error("a verdict was recorded for output nobody parsed")
+	}
+}
+
+// TestChunkPassesSurviveAFailingChunk: each chunk answers for its own files,
+// so a failure in one chunk does not cost the others their passes.
+func TestChunkPassesSurviveAFailingChunk(t *testing.T) {
+	t.Setenv("DATAMITSU_MAX_CMD_LENGTH", "1")
+	e, c, root, files := resultsProject(t, false, `case "$1" in *bad*) exit 1;; esac`, "good.txt", "bad.txt")
+	task := loopTask(root, files)
+	task.OpConfig.Scope = config.ToolScopeRepository
+	task.OpConfig.Args = []string{"{files}"}
+
+	if result := e.executeTask(context.Background(), task); result.Success {
+		t.Fatal("the task passed")
+	}
+	if !c.Check(files[1], "tool", cache.OperationLint, observe(files[1]), true) {
+		t.Error("the failing chunk's file was cached")
+	}
+	if c.Check(files[0], "tool", cache.OperationLint, observe(files[0]), true) {
+		t.Error("the passing chunk's file lost its pass")
+	}
+}

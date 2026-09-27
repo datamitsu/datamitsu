@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 55,
-  "pageSetHash": "3a19684a91ac24199d633e9dc1b75e05",
+  "pageSetHash": "84bc45d6d76c030cfabd6c0a9d08190a",
   "pages": [
     {
       "slug": "about",
@@ -244,8 +244,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/parsers.md",
       "title": "WASM Output Parsers",
       "description": "How datamitsu declares, builds, delivers over two channels, verifies, and loads sandboxed Rust→WASM output parsers, and how the line-based diff-in-core powers formatting",
-      "bytes": 32236,
-      "contentHash": "32891ae3a58fed4c88c56760e9f56e73"
+      "bytes": 32262,
+      "contentHash": "65cedfc12d83fe19e0693a25aed98d68"
     },
     {
       "slug": "guides/architecture/planner",
