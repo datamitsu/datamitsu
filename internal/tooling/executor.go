@@ -1000,8 +1000,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 			log.Debug("dry-run mode", zap.String("file", file), zap.Strings("args", args))
 			outputs = append(outputs, fileOutput{text: "[DRY-RUN] " + cmdString})
 			result.addProcess(ProcessResult{
-				Files: []string{filepath.Clean(file)}, State: ProcessRan, ExitCode: new(0),
-				Success: true, Extraction: ExtractionNone,
+				Files: []string{filepath.Clean(file)}, State: ProcessNotStarted, Extraction: ExtractionNone,
 			})
 
 			// Call progress callback for dry-run files (offset by cached count)
@@ -1364,8 +1363,7 @@ func (e *Executor) executeBatchChunk(ctx context.Context, task Task, cmdInfo *bi
 		log.Debug("dry-run mode", zap.Strings("args", args))
 		result.Output = "[DRY-RUN] " + cmdString
 		result.addProcess(ProcessResult{
-			Files: absolutePaths(files, workingDir), State: ProcessRan, ExitCode: new(0),
-			Success: true, Extraction: ExtractionNone,
+			Files: absolutePaths(files, workingDir), State: ProcessNotStarted, Extraction: ExtractionNone,
 		})
 		result.recordTiming(startTime)
 		return result
@@ -1414,6 +1412,9 @@ func (e *Executor) executeBatchChunk(ctx context.Context, task Task, cmdInfo *bi
 	}
 	if parseMode {
 		e.parseFileDiagnostics(ctx, &proc, task, workingDir, stdoutBytes, stderrBytes, exitCode)
+		if err != nil && !stoppedByCancellation(err) && len(proc.Diagnostics) == 0 {
+			result.UnparsedFailures = append(result.UnparsedFailures, unparsedFailure(exitCode, err, output))
+		}
 	}
 	result.addProcess(proc)
 
@@ -1592,6 +1593,9 @@ func mergeChunkResults(ctx context.Context, result *ExecutionResult, chunks [][]
 		}
 		for _, proc := range chunkResult.Processes {
 			result.addProcess(proc)
+		}
+		for _, failure := range chunkResult.UnparsedFailures {
+			result.UnparsedFailures = append(result.UnparsedFailures, fmt.Sprintf("chunk %d/%d: %s", i+1, len(chunks), failure))
 		}
 		if chunkResult.IsCancelled() {
 			notRun += len(chunks[i])
@@ -1972,6 +1976,20 @@ func stdinForOperation(op config.ToolOperation, file string) ([]byte, error) {
 		return nil, fmt.Errorf("read stdin content for %s: %w", file, err)
 	}
 	return content, nil
+}
+
+// unparsedFailure describes a failed batch process whose output held no
+// finding: once another process's findings take the frame's place, this is all
+// that is left of it.
+func unparsedFailure(exitCode int, err error, output []byte) string {
+	label := fmt.Sprintf("exit code %d", exitCode)
+	if _, ok := errors.AsType[*exec.ExitError](err); !ok {
+		label = err.Error()
+	}
+	if text := strings.TrimSpace(string(output)); text != "" {
+		label += "\n" + text
+	}
+	return label
 }
 
 // fileOutput is what one file of a per-file task printed. label names a file

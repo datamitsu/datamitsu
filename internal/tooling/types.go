@@ -178,8 +178,9 @@ const (
 	// ExtractionTruncated: the output or the findings exceeded a cap. No cap
 	// exists yet; the value is reserved so every consumer knows it.
 	ExtractionTruncated Extraction = "truncated"
-	// ExtractionNone: the tool declares no parser (or none is wired), so
-	// nothing was attempted.
+	// ExtractionNone: nothing was attempted — the tool declares no parser, or
+	// the output is a formatter's file content, which no parser reads. A
+	// declared parser the executor was not given is ExtractionParserUnavailable.
 	ExtractionNone Extraction = "none"
 )
 
@@ -296,10 +297,11 @@ type ExecutionResult struct {
 	// when it stopped the loop at a failing file: the task failed on its own,
 	// yet did not check everything it was given.
 	FilesNotRun int
-	// UnparsedFailures are the failed invocations of a per-file task with an
-	// output parser that left no diagnostic: a file whose input could not be
-	// prepared, or a run whose output held no finding. A failure frame shows
-	// diagnostics instead of the raw output, so it shows these beside them.
+	// UnparsedFailures are the failed invocations of a task with an output
+	// parser that left no diagnostic: a file whose input could not be prepared,
+	// or a run — of one file, or of one chunk of a list — whose output held no
+	// finding. A failure frame shows diagnostics instead of the raw output, so
+	// it shows these beside them.
 	UnparsedFailures []string
 	// CapturedStdout holds the tool's stdout captured separately from stderr,
 	// set only when the operation uses output mode "stdout" (the candidate

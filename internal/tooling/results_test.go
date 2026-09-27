@@ -409,3 +409,58 @@ func TestProcessState(t *testing.T) {
 		}
 	})
 }
+
+// TestChunkWithoutFindingsKeepsItsOutput: once one chunk's findings take the
+// frame's place, a chunk that failed without any is still shown.
+func TestChunkWithoutFindingsKeepsItsOutput(t *testing.T) {
+	t.Setenv("DATAMITSU_MAX_CMD_LENGTH", "1")
+	e, _, root, files := resultsProject(t, false, `case "$1" in *found*) echo finding; exit 1;; *) echo crashed; exit 2;; esac`, "found.txt", "crash.txt")
+	e.SetParser(fileParser{findings: func(stdout string) []diagnostic.Diagnostic {
+		if stdout == "finding" {
+			return []diagnostic.Diagnostic{{Message: "m"}}
+		}
+		return nil
+	}})
+	task := loopTask(root, files)
+	task.Tool.OutputParser = &config.OutputParser{Module: "core", Parser: "tool"}
+	task.OpConfig.Scope = config.ToolScopeRepository
+	task.OpConfig.Args = []string{"{files}"}
+
+	result := e.executeTask(context.Background(), task)
+	if len(result.Diagnostics) != 1 || result.Diagnostics[0].File != files[0] {
+		t.Fatalf("Diagnostics = %+v, want the stamped finding of found.txt", result.Diagnostics)
+	}
+	want := []string{"chunk 2/2: exit code 2\ncrashed"}
+	if !slices.Equal(result.UnparsedFailures, want) {
+		t.Errorf("UnparsedFailures = %q, want %q", result.UnparsedFailures, want)
+	}
+}
+
+// TestDryRunSpawnsNothing: a dry run reports what it would run as processes
+// that never started, and records no pass.
+func TestDryRunSpawnsNothing(t *testing.T) {
+	for _, scope := range []config.ToolScope{config.ToolScopePerFile, config.ToolScopeRepository} {
+		t.Run(string(scope), func(t *testing.T) {
+			_, c, root, files := resultsProject(t, false, `exit 0`, "a.txt")
+			e := NewExecutor(root, true, false, &mockAppManager{commands: map[string]*binmanager.CommandInfo{
+				"tool": {Type: "shell", Command: "/bin/sh", Args: []string{"-c", "exit 0", "tool"}},
+			}}, c)
+			task := loopTask(root, files)
+			task.OpConfig.Scope = scope
+			if scope == config.ToolScopeRepository {
+				task.OpConfig.Args = []string{"{files}"}
+			}
+
+			result := e.executeTask(context.Background(), task)
+			if proc := result.Processes[0]; proc.State != ProcessNotStarted || proc.ExitCode != nil {
+				t.Errorf("process = %+v, want not-started", proc)
+			}
+			if got := fileStates(result); !equalStates(got, []FileState{FileNotStarted}) {
+				t.Errorf("file states = %v", got)
+			}
+			if !c.Check(files[0], "tool", cache.OperationLint, observe(files[0]), true) {
+				t.Error("a dry run recorded a pass")
+			}
+		})
+	}
+}
