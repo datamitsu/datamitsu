@@ -79,7 +79,6 @@ func visibleMask(proc tooling.ProcessResult) []bool {
 	return mask
 }
 
-// sortFindings orders findings by level, file, row, column, source and code.
 func sortFindings(ds []diagnostic.Diagnostic) {
 	sort.SliceStable(ds, func(i, j int) bool {
 		a, b := ds[i], ds[j]

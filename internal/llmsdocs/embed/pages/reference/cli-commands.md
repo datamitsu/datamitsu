@@ -327,7 +327,10 @@ An abridged run, the frame without its directory, command and duration lines:
 ```
 
 `--fail-on hint` shows every finding and fails on any of them. `--no-parse`
-prints each failed tool's output instead of findings and counts nothing.
+prints each framed tool's output instead of findings and counts nothing, and so
+does a tool run once over many files whose parser names no file for its
+findings: a finding that cannot say which file it is about reads worse than the
+output it came from.
 
 A tool the run stopped is neither a pass nor a failure, and it is listed rather
 than left out:

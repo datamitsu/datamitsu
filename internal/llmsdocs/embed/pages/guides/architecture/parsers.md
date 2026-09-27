@@ -169,8 +169,11 @@ run warns once, after its last operation, however many invocations hit the same 
 - `parser module "<module>" has no parser "<key>", so the output of <tools> is not parsed`,
   once per key.
 
-The tool's own exit code decides whether it passed, whatever its extraction
-outcome; the outcome decides what the cache may record.
+Whether a tool passed is decided by its exit code and, when a module at
+descriptor schema 2 parsed its output, by its operation's
+[`failOn`](../../reference/configuration-api.md#failing-on-findings-failon): a
+finding at or above it fails a tool that exited 0. The extraction outcome decides
+what the cache may record.
 
 ### Noise tolerance
 

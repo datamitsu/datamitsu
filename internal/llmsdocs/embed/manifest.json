@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 56,
-  "pageSetHash": "7fd28eb0860ae9016ca7ddfa473aa007",
+  "pageSetHash": "9201b3c582bcc871cfe7efbb31ab8a11",
   "pages": [
     {
       "slug": "about",
@@ -244,8 +244,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/parsers.md",
       "title": "WASM Output Parsers",
       "description": "How datamitsu declares, builds, delivers over two channels, verifies, and loads sandboxed Rust→WASM output parsers, and how the line-based diff-in-core powers formatting",
-      "bytes": 37520,
-      "contentHash": "b3a4a1f0b5295520ce5fba4cbf5af18a"
+      "bytes": 37706,
+      "contentHash": "69bdd9bd98a150a95b83997676c7589c"
     },
     {
       "slug": "guides/architecture/planner",
@@ -451,8 +451,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 117010,
-      "contentHash": "57f252dca8e550cfb3cccafc8e87b64b"
+      "bytes": 117190,
+      "contentHash": "fbec9fdb51b384745f32be5d5b990dbe"
     },
     {
       "slug": "reference/comparison",

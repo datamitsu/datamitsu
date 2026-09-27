@@ -76,7 +76,6 @@ func EffectiveFailOn(op ToolOperation, global Severity) Severity {
 	return own
 }
 
-// failOnErrors checks an operation's failOn.
 func failOnErrors(toolName, opType string, failOn Severity) []string {
 	if failOn == "" || failOn.Valid() {
 		return nil
