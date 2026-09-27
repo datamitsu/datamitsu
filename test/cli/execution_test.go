@@ -1209,7 +1209,7 @@ func TestExecutionInterrupted(t *testing.T) {
 		clitest.ShellTool("later", passScript, clitest.ToolOpSpec{Priority: 20}),
 	}
 
-	interrupt := func(t *testing.T, args ...string) (*execProject, clitest.Result) {
+	interrupt := func(t *testing.T, sig syscall.Signal, wantExit int, args ...string) (*execProject, clitest.Result) {
 		t.Helper()
 		e := newExecProject(t, files, fixtureSpec, tools...)
 		start := time.Now()
@@ -1224,20 +1224,22 @@ func TestExecutionInterrupted(t *testing.T) {
 				t.Fatalf("sleeper never started:\n%+v", proc.Wait())
 			}
 		}
-		if err := proc.Signal(syscall.SIGINT); err != nil {
-			t.Fatalf("send SIGINT: %v", err)
+		if err := proc.Signal(sig); err != nil {
+			t.Fatalf("send %s: %v", sig, err)
 		}
 		res := proc.Wait()
 		time.Sleep(time.Until(start.Add(killWindow)))
-		e.wantExit(res, 130)
+		e.wantExit(res, wantExit)
 		e.wantMarker("sleeper", "sleeper started\n")
 		e.wantMarker("later", "")
 		return e, res
 	}
 
+	stoppedLines := []string{"⊘ sleeper  cancelled (interrupted)", "⊘ later    not started (interrupted)"}
+
 	t.Run("console", func(t *testing.T) {
-		e, res := interrupt(t, "lint")
-		for _, want := range []string{"⊘ sleeper  cancelled (interrupted)", "⊘ later    not started (interrupted)"} {
+		e, res := interrupt(t, syscall.SIGINT, 130, "lint")
+		for _, want := range stoppedLines {
 			if !strings.Contains(res.Stdout, want) {
 				t.Errorf("stdout should list %q:\n%s", want, res.Stdout)
 			}
@@ -1245,8 +1247,33 @@ func TestExecutionInterrupted(t *testing.T) {
 		e.golden("s4_lint_interrupted", res)
 	})
 
+	// SIGTERM stops a keep-going run the same way and exits 143: keep-going
+	// only keeps a run going past failures, never past an interruption.
+	t.Run("sigterm_keep_going", func(t *testing.T) {
+		e, res := interrupt(t, syscall.SIGTERM, 143, "lint", keepGoing)
+		for _, want := range stoppedLines {
+			if !strings.Contains(res.Stdout, want) {
+				t.Errorf("stdout should list %q:\n%s", want, res.Stdout)
+			}
+		}
+		e.golden("s4_lint_interrupted_sigterm_keep_going", res)
+	})
+
+	t.Run("sigterm_keep_going_jsonl", func(t *testing.T) {
+		_, res := interrupt(t, syscall.SIGTERM, 143, jsonl("lint", keepGoing)...)
+		events := clitest.MustParseJSONL(t, res.Stderr)
+		clitest.AssertChains(t, events)
+		wantStopped(t, events, "sleeper", "", "cancelled: interrupted")
+		wantStopped(t, events, "later", "", "not started: interrupted")
+		wantRunDone(t, events, "lint", false, 0, 2, false)
+		errs := eventsOf(events, func(e clitest.Event) bool { return e.Type == "error" && e.Tool == "" })
+		if len(errs) != 1 || errs[0].Msg != "interrupted by SIGTERM" {
+			t.Errorf("run error events = %+v, want one saying the run was interrupted by SIGTERM", errs)
+		}
+	})
+
 	t.Run("jsonl", func(t *testing.T) {
-		_, res := interrupt(t, jsonl("lint")...)
+		_, res := interrupt(t, syscall.SIGINT, 130, jsonl("lint")...)
 		events := clitest.MustParseJSONL(t, res.Stderr)
 		clitest.AssertChains(t, events)
 		wantStopped(t, events, "sleeper", "", "cancelled: interrupted")
