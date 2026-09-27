@@ -1,6 +1,7 @@
 package toolenv
 
 import (
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -153,5 +154,29 @@ func TestEntriesAreCopies(t *testing.T) {
 	Kept()[0].Name = "Z"
 	if exactNames[0].Name == "X" || prefixes[0].Name == "Y" || kept[0].Name == "Z" {
 		t.Error("a caller rewrote the lists through their accessors")
+	}
+}
+
+// Windows reads variable names in any letter case, so there a differently
+// spelled name is the same variable and is stripped, inherited and replaced
+// like the canonical one; elsewhere it is another variable and passes through.
+func TestLetterCaseFollowsTheHost(t *testing.T) {
+	windows := runtime.GOOS == "windows"
+	base := []string{"github_actions=true", "Force_Color=1", "No_Color=0", "mode=host"}
+	got := Apply(base, Capture(base, []string{"MODE"}))
+
+	for _, kv := range []string{"github_actions=true", "Force_Color=1", "No_Color=0"} {
+		if slices.Contains(got, kv) == windows {
+			t.Errorf("%s reached the tool = %v on %s", kv, !windows, runtime.GOOS)
+		}
+	}
+	if !slices.Contains(got, "NO_COLOR=1") {
+		t.Errorf("NO_COLOR=1 missing from %q", got)
+	}
+	if !slices.Contains(got, "mode=host") {
+		t.Errorf("mode=host missing from %q: inherited on Windows, untouched elsewhere", got)
+	}
+	if pairs := Capture(base, []string{"MODE"}).Pairs(); (len(pairs) == 1) != windows {
+		t.Errorf("Capture matched %q for MODE on %s", pairs, runtime.GOOS)
 	}
 }

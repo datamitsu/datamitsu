@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -203,6 +204,9 @@ func TestExecuteBatchChunkParses(t *testing.T) {
 // A tool that colours its output into a pipe: the parser reads both streams
 // without the escapes, and the frame keeps what the tool printed.
 func TestParserReadsOutputWithoutANSI(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the tool is an sh script")
+	}
 	tmpDir := t.TempDir()
 	fp := &fakeParser{}
 	executor := NewExecutor(tmpDir, false, false, &mockAppManager{commands: map[string]*binmanager.CommandInfo{

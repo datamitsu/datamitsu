@@ -64,12 +64,14 @@ var kept = []Entry{
 // layer. Parsed output must carry no colour.
 const NoColor = "NO_COLOR=1"
 
-// Entries returns the stripped names and prefixes.
+// Entries returns copies of the stripped names and prefixes: the lists stay
+// what list.go says whatever a caller does with the result.
 func Entries() (exact, prefix []Entry) {
 	return slices.Clone(exactNames), slices.Clone(prefixes)
 }
 
-// Kept returns the variables left alone on purpose, with the reason.
+// Kept returns a copy of the variables left alone on purpose, each with the
+// reason, for the same reason Entries copies.
 func Kept() []Entry {
 	return slices.Clone(kept)
 }

@@ -23,8 +23,6 @@ const (
 	oxlintAgentHeuristics = "PATH EDITOR TERM_PROGRAM"
 )
 
-// uncovered returns the names neither stripped by exact and prefix nor listed
-// in keep.
 func uncovered(names []string, exact, prefix, keep []Entry) []string {
 	var out []string
 	for _, name := range names {
