@@ -17,7 +17,6 @@ type Entry struct {
 
 const agentFormat = "oxlint switches to its one-line agent output format"
 
-// exactNames are removed from a tool's environment by exact name.
 var exactNames = []Entry{
 	{"GITHUB_ACTIONS", "Set in every GitHub Actions job. editorconfig-checker, oxlint, sqruff, pinact and yamllint (without `-f`) switch to `::error` workflow commands, which a parser reading their usual format takes for clean output."},
 	{"AI_AGENT", "Names the AI agent running the session; " + agentFormat + "."},
@@ -33,7 +32,6 @@ var exactNames = []Entry{
 	{"CLICOLOR_FORCE", "Forces ANSI colour into a pipe. Removed from the host environment, and datamitsu no longer adds it."},
 }
 
-// prefixes are removed from a tool's environment by name prefix.
 var prefixes = []Entry{
 	{"CODEX_", "OpenAI Codex CLI (`CODEX_SANDBOX`, `CODEX_THREAD_ID`); " + agentFormat + "."},
 	{"COPILOT_", "GitHub Copilot CLI (`COPILOT_CLI`); " + agentFormat + "."},

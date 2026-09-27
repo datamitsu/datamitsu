@@ -39,9 +39,8 @@ type ToolOpSpec struct {
 	// the module ParserModule (SeededParserModule when empty).
 	Parser       string
 	ParserModule string
-	// Env is added to the operation's env, beside MARKERS.
-	Env map[string]string
-	// InheritEnv is the operation's inheritEnv.
+	// Env joins MARKERS in the operation's env and may override it.
+	Env        map[string]string
 	InheritEnv []string
 }
 
