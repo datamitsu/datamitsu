@@ -993,7 +993,11 @@ func runSequential(
 		// — still ends its event stream with a failed, incomplete summary. A
 		// usage error is not a run: it is refused before one begins.
 		if _, usage := errors.AsType[exitcode.UsageError](err); command != "" && explainMode == "" && !usage {
-			(&sharedContext{}).emitRunDone(command, operations, time.Since(started).Milliseconds(), false)
+			elapsedMs := time.Since(started).Milliseconds()
+			if len(operations) > 1 {
+				(&sharedContext{}).printRunClosing(command, operations, elapsedMs)
+			}
+			(&sharedContext{}).emitRunDone(command, operations, elapsedMs, false)
 		}
 		return err
 	}

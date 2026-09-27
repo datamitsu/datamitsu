@@ -812,6 +812,16 @@ func TestExecutionRunThatCannotStart(t *testing.T) {
 		wantRunDone(t, events, "lint", false, 0, 0, false)
 	})
 
+	t.Run("config_error_check", func(t *testing.T) {
+		e := newExecProject(t, map[string]string{"fixture.marker": ""}, fixtureSpec)
+		e.p.WriteFile("exec.config.js", "throw new Error('broken config');\n")
+		res := e.run("", nil, "check")
+		e.wantExit(res, 1)
+		if !strings.Contains(res.Stdout, "· fix not run · lint not run ·") {
+			t.Errorf("check should close with neither operation run:\n%s", res.Stdout)
+		}
+	})
+
 	t.Run("usage_error", func(t *testing.T) {
 		e := newExecProject(t, map[string]string{"fixture.marker": ""}, fixtureSpec,
 			clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{}))

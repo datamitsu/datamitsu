@@ -938,8 +938,14 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 		stdinContent, stdinErr := stdinForOperation(task.OpConfig, file)
 		if stdinErr != nil {
 			failedOnOwn = true
+			failedCommand = cmdString
 			result.Success = false
+			result.ExitCode = -1
 			result.Error = fmt.Errorf("failed to prepare stdin for file %s: %w", file, stdinErr)
+			// The frame shows the joined output, not Error, once any file wrote
+			// some: without this line a later file's output would stand in for
+			// a failure no process reported.
+			outputs = append(outputs, result.Error.Error())
 			if e.fileProgressCallback != nil {
 				e.fileProgressCallback(task.ToolName, cachedCount+i+1, totalFiles, false)
 			}

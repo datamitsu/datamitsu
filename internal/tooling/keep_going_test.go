@@ -206,6 +206,37 @@ func TestKeepGoingPerFileRunsEveryFile(t *testing.T) {
 	}
 }
 
+// A file whose content cannot be read for a stdin tool fails without a
+// process. Under keep-going the task goes on to the next file, and the failure
+// keeps its own command and its explanation even when a later file passes.
+func TestKeepGoingStdinFailureKeepsItsCommand(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the tools are sh scripts")
+	}
+	root := t.TempDir()
+	ok := filepath.Join(root, "ok.txt")
+	if err := os.WriteFile(ok, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	missing := filepath.Join(root, "missing.txt")
+	appManager := &mockAppManager{commands: map[string]*binmanager.CommandInfo{"alpha": shellApp(`cat >/dev/null; echo "$0 checked"`)}}
+	task := lintTask(t, "alpha", config.ToolScopePerProject, root, "{file}")
+	task.OpConfig.Input = config.ToolInputStdin
+	task.Files = []string{missing, ok}
+
+	result := NewExecutor(root, false, false, appManager, nil).executeTask(context.Background(), task)
+
+	if result.Success || result.IsCancelled() {
+		t.Fatalf("result = %+v, want the stdin failure", result)
+	}
+	if !strings.HasSuffix(result.Command, "missing.txt") || result.ExitCode != -1 {
+		t.Errorf("Command = %q, ExitCode = %d; want missing.txt's command and no exit code", result.Command, result.ExitCode)
+	}
+	if !strings.Contains(result.Output, "failed to prepare stdin for file") || !strings.Contains(result.Output, "ok.txt checked") {
+		t.Errorf("Output = %q, want the stdin failure beside ok.txt's output", result.Output)
+	}
+}
+
 // A per-file task that failed on its own and is then interrupted stays a
 // failure: the interruption only leaves the rest of its files unchecked.
 func TestInterruptedPerFileTaskKeepsItsFailure(t *testing.T) {
