@@ -909,29 +909,60 @@ var hostRE = regexp.MustCompile(`no binary for [a-z0-9]+/[a-z0-9_]+/[a-z0-9_]+`)
 
 func maskHost(s string) string { return hostRE.ReplaceAllString(s, "no binary for <HOST>") }
 
-// TestExecutionFailOnSkip is S10: --fail-on-skip turns a tool whose binary has
-// no build for this host into exit 1. Plan 2 gives it its own exit code.
-func TestExecutionFailOnSkip(t *testing.T) {
+// nativeSkipped declares a binary app built only for another OS, so the host
+// skips its tool: the platform skip --fail-on-skip reports.
+func nativeSkipped() string {
 	otherOS := "windows"
 	if runtime.GOOS == otherOS {
 		otherOS = "linux"
 	}
-	binary := fmt.Sprintf(`c.apps["native"] = { binary: { binaries: { %s: { amd64: { unknown: {
+	return fmt.Sprintf(`c.apps["native"] = { binary: { binaries: { %s: { amd64: { unknown: {
   url: "https://example.invalid/native", contentType: "raw",
   hash: "3f79bb7b435b05321651daefd374cdc681dc06faa65e374e38337b88ca046dea" } } } } } };
 c.tools["native"] = { name: "native", operations: { lint: { app: "native", args: [], scope: "repository" } } };
 `, otherOS)
-	e := newExecProject(t, map[string]string{"fixture.marker": ""},
-		clitest.ShellConfigSpec{ProjectTypes: fixtureTypes, Extra: binary},
-		clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{}),
-	)
-	res := e.run("", nil, "lint", "--fail-on-skip")
-	e.wantExit(res, 1)
-	e.wantMarker("alpha", "alpha \n")
-	if !strings.Contains(res.Stdout, "⊘ native") {
-		t.Errorf("the skipped tool should be listed:\n%s", res.Stdout)
-	}
-	e.golden("s10_lint_fail_on_skip", res, maskHost)
+}
+
+// TestExecutionFailOnSkip is S10: --fail-on-skip turns a tool whose binary has
+// no build for this host into exit 4, the code of a run that did not look at
+// everything. A tool failure still exits 1, and a run that fails both
+// --fail-on-skip and --require-coverage prints both and exits 4 once.
+func TestExecutionFailOnSkip(t *testing.T) {
+	spec := clitest.ShellConfigSpec{ProjectTypes: fixtureTypes, Extra: nativeSkipped()}
+
+	t.Run("skip", func(t *testing.T) {
+		e := newExecProject(t, map[string]string{"fixture.marker": ""}, spec,
+			clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{}))
+		res := e.run("", nil, "lint", "--fail-on-skip")
+		e.wantExit(res, 4)
+		e.wantMarker("alpha", "alpha \n")
+		if !strings.Contains(res.Stdout, "⊘ native") {
+			t.Errorf("the skipped tool should be listed:\n%s", res.Stdout)
+		}
+		e.golden("s10_lint_fail_on_skip", res, maskHost)
+	})
+
+	t.Run("tool_failure_wins", func(t *testing.T) {
+		e := newExecProject(t, map[string]string{"fixture.marker": ""}, spec,
+			clitest.ShellTool("alpha", failScript, clitest.ToolOpSpec{}))
+		res := e.run("", nil, "lint", "--fail-on-skip")
+		e.wantExit(res, 1)
+		if strings.Contains(res.Stderr, "--fail-on-skip") {
+			t.Errorf("a tool failure should be the reported outcome:\n%s", res.Stderr)
+		}
+	})
+
+	t.Run("with_require_coverage", func(t *testing.T) {
+		e := newExecProject(t, map[string]string{"fixture.marker": "", "sub/file.txt": "x\n"}, spec,
+			clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{Scope: "per-project"}))
+		res := e.run("sub", nil, "lint", "--fail-on-skip", "--require-coverage=repo")
+		e.wantExit(res, 4)
+		skip, cov := strings.Index(res.Stderr, "--fail-on-skip:"), strings.Index(res.Stderr, "--require-coverage=repo:")
+		if skip < 0 || cov < skip {
+			t.Errorf("stderr should report --fail-on-skip, then --require-coverage:\n%s", res.Stderr)
+		}
+		e.golden("s10_lint_fail_on_skip_and_require_coverage", res, maskHost)
+	})
 }
 
 // TestExecutionRequireCoverage is S11: --require-coverage=repo from a

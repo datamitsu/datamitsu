@@ -1051,8 +1051,9 @@ func runSequential(
 }
 
 // outcome picks the error a run returns. An interruption wins, because the run
-// did not finish; then a tool failure (exit 1), then --fail-on-skip, then
-// --require-coverage. Only unsupported-platform skips count for --fail-on-skip;
+// did not finish; then a tool failure (exit 1); then what the run did not cover
+// (exit 4): --fail-on-skip and --require-coverage, both reported, in that order,
+// when both fail. Only unsupported-platform skips count for --fail-on-skip;
 // intentional config skips (skip: true) never fail the run.
 func (sc *sharedContext) outcome(ctx context.Context, opErr error) error {
 	if err := interruption(ctx); err != nil {
@@ -1061,10 +1062,14 @@ func (sc *sharedContext) outcome(ctx context.Context, opErr error) error {
 	if opErr != nil {
 		return opErr
 	}
-	if err := sc.skipFailure(); err != nil {
-		return err
+	skipErr, covErr := sc.skipFailure(), sc.coverageFailure()
+	if skipErr != nil && covErr != nil {
+		return exitcode.CoverageError{Err: errors.Join(skipErr, covErr)}
 	}
-	return sc.coverageFailure()
+	if skipErr != nil {
+		return skipErr
+	}
+	return covErr
 }
 
 // skipFailure returns a non-nil error when --fail-on-skip is set and at least one
@@ -1079,7 +1084,7 @@ func (sc *sharedContext) skipFailure() error {
 		names = append(names, n)
 	}
 	sort.Strings(names)
-	return fmt.Errorf("--fail-on-skip: %d tool(s) have no binary for this host: %s",
+	return exitcode.CoverageErrorf("--fail-on-skip: %d tool(s) have no binary for this host: %s",
 		len(names), strings.Join(names, ", "))
 }
 

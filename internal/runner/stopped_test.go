@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/exitcode"
 	"github.com/datamitsu/datamitsu/internal/timing"
 	"github.com/datamitsu/datamitsu/internal/tooling"
 )
@@ -138,7 +139,8 @@ func TestOutcomePrecedence(t *testing.T) {
 		{name: "clean"},
 		{name: "interruption wins", interrupted: true, opErr: opErr, skip: true, coverage: true, want: "interrupted by SIGINT"},
 		{name: "tool failure before skip", opErr: opErr, skip: true, coverage: true, want: "operation failed"},
-		{name: "skip before coverage", skip: true, coverage: true, want: "--fail-on-skip"},
+		{name: "skip and coverage both reported", skip: true, coverage: true, want: "--fail-on-skip: 1 tool(s) have no binary for this host: typstyle\n--require-coverage=unit"},
+		{name: "skip", skip: true, want: "--fail-on-skip"},
 		{name: "coverage", coverage: true, want: "--require-coverage=unit"},
 	}
 	for _, tt := range tests {
@@ -163,6 +165,14 @@ func TestOutcomePrecedence(t *testing.T) {
 				t.Errorf("outcome() = %v, want nil", err)
 			case tt.want != "" && (err == nil || !strings.Contains(err.Error(), tt.want)):
 				t.Errorf("outcome() = %v, want an error containing %q", err, tt.want)
+			}
+			if tt.opErr == nil && !tt.interrupted && (tt.skip || tt.coverage) {
+				if coded, ok := errors.AsType[interface {
+					error
+					ExitCode() int
+				}](err); !ok || coded.ExitCode() != exitcode.Coverage {
+					t.Errorf("outcome() = %v, want exit %d for an incomplete run", err, exitcode.Coverage)
+				}
 			}
 		})
 	}

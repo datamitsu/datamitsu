@@ -38,7 +38,7 @@ reported reasons, all decided during [planning](./planner.md) so they appear in
 
 Skipped tools render as faint `⊘ <tool> skipped (<reason>)` lines, contribute a `· N skipped` count to the operation footer, and surface as a `skipped` array in `--explain=json`. Other non-runs — a tool that matched no files, doesn't apply to the detected project types, or is disabled by `.datamitsuignore` — stay silent, as before.
 
-The `--fail-on-skip` flag (on `check`/`lint`/`fix`) makes the run exit non-zero
+The `--fail-on-skip` flag (on `check`/`lint`/`fix`) makes the run exit 4
 **only** for platform skips — a tool you expected to run had no binary for the
 runner. Intentional config skips and not-narrowable skips do not fail that flag.
 Use `--require-coverage=unit` or `--require-coverage=repo` when an incomplete

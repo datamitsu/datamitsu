@@ -32,7 +32,7 @@ in console mode.
 | `1`          | A tool failed, or any error without a code of its own                                                                                                                                                                                                |
 | `2`          | Usage: an unknown flag, a flag or `DATAMITSU_*` value the command does not accept (`--widen-to=Repo`, `DATAMITSU_FAIL_FAST=yes`), the wrong number of arguments, or a combination refused before anything runs (`--require-coverage` with `--tools`) |
 | `3`          | `llms`: an unknown or ambiguous page                                                                                                                                                                                                                 |
-| `4`          | The run did not cover what it was asked to: `--require-coverage` (see [Narrowed runs](#narrowed-runs))                                                                                                                                               |
+| `4`          | The run did not cover what it was asked to: `--require-coverage` (see [Narrowed runs](#narrowed-runs)) or `--fail-on-skip` (see [Skipped tools](#skipped-tools)); when both fail, both messages are printed                                          |
 | `130`, `143` | `fix`, `lint` or `check` interrupted by `SIGINT` or `SIGTERM` (see [Keep-going runs](#keep-going-runs))                                                                                                                                              |
 
 When several apply, a tool failure (`1`) wins over an incomplete run (`4`). A
@@ -324,9 +324,10 @@ A tool is reported as **skipped** (not run, not failed) for one of three reasons
 Skipped tools appear as `⊘ <tool> skipped (<reason>)` lines and a `· N skipped`
 count in the summary footer, and as a `skipped` array in `--explain=json`.
 
-`--fail-on-skip` makes the run exit non-zero **only** for platform skips (a tool
-you expected to run had no binary). Intentional `skip: true` and narrowing skips
-never fail that flag; use `--require-coverage` to enforce complete narrowed runs.
+`--fail-on-skip` makes the run exit 4 **only** for platform skips (a tool you
+expected to run had no binary), the code of a run that did not look at
+everything. Intentional `skip: true` and narrowing skips never fail that flag;
+use `--require-coverage` to enforce complete narrowed runs.
 :::
 
 ### Narrowed runs

@@ -14,7 +14,7 @@ const (
 	// flags, a refusal known before anything runs.
 	Usage = 2
 	// Coverage is the code of a run that did not cover what it was asked to
-	// (--require-coverage).
+	// (--require-coverage, --fail-on-skip).
 	Coverage = 4
 )
 
