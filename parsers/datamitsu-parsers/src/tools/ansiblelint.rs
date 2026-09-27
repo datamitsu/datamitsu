@@ -7,10 +7,9 @@
 //! builtin's `on_output`. We navigate both with `tinyjson` (the standard
 //! `json_diag::from_json` flat mapper can't reach the nested fields).
 //!
-//! The level is ansible-lint's own `level` field (`error`, or `warning` for a
-//! rule on the warn list). The Code Climate `severity` (`info` … `blocker`) is
-//! the rule's impact rating, which says nothing about whether the finding fails
-//! the run, so it is never read. `url` is the rule's documentation page.
+//! The level is the Code Climate `severity`, which the formatter derives from
+//! ansible-lint's own level: `minor` for a rule on the warn list, `major` for
+//! every other. `url` is the rule's documentation page.
 
 use std::collections::HashMap;
 
@@ -24,7 +23,7 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "ansiblelint",
 	description: "Linter for Ansible playbooks, roles and collections.",
 	url: "https://github.com/ansible-community/ansible-lint",
-	severities: &[Level("error", severity::ERROR), Level("warning", severity::WARNING)],
+	severities: &[Level("major", severity::ERROR), Level("minor", severity::WARNING)],
 	column_unit: "",
 	category: "",
 	kind: "tool",
@@ -60,7 +59,7 @@ fn from_obj(value: &JsonValue) -> Option<RawDiagnostic> {
 		col,
 		code: get_str(map, "check_name"),
 		url: get_str(map, "url"),
-		severity: get_str(map, "level").and_then(|s| severity::of(DESCRIPTOR.severities, &s)),
+		severity: get_str(map, "severity").and_then(|s| severity::of(DESCRIPTOR.severities, &s)),
 		file: map
 			.get("location")
 			.and_then(as_obj)
@@ -132,7 +131,6 @@ mod tests {
                 "url": "https://ansible.readthedocs.io/projects/lint/rules/name/",
                 "description": "All names should start with an uppercase letter.",
                 "severity": "minor",
-                "level": "warning",
                 "location": {
                     "path": "playbook.yml",
                     "lines": { "begin": 12 }
@@ -158,8 +156,7 @@ mod tests {
             {
                 "check_name": "yaml[trailing-spaces]",
                 "description": "Trailing spaces",
-                "severity": "minor",
-                "level": "error",
+                "severity": "major",
                 "location": {
                     "path": "roles/x/tasks/main.yml",
                     "positions": { "begin": { "line": 4, "column": 9 } }
@@ -175,10 +172,10 @@ mod tests {
 	}
 
 	#[test]
-	fn the_impact_severity_is_never_a_level() {
+	fn a_severity_the_formatter_never_prints_is_no_level() {
 		let json = br#"[
-            {"check_name": "a", "description": "no level", "severity": "blocker", "location": {"lines": {"begin": 1}}},
-            {"check_name": "b", "description": "odd level", "level": "fatal", "location": {"lines": {"begin": 2}}}
+            {"check_name": "a", "description": "no level", "location": {"lines": {"begin": 1}}},
+            {"check_name": "b", "description": "odd level", "severity": "blocker", "location": {"lines": {"begin": 2}}}
         ]"#;
 		let out = parse(json, b"", 2);
 		assert_eq!(out.len(), 2);
@@ -204,7 +201,7 @@ mod tests {
 /// Recorded or representative outputs every parser check runs over (`crate::contract`).
 #[cfg(test)]
 pub(crate) const SAMPLES: &[crate::contract::Sample] = &[crate::contract::Sample {
-	stdout: br#"[{"type":"issue","check_name":"name[casing]","categories":["idiom"],"url":"https://ansible.readthedocs.io/projects/lint/rules/name/","severity":"minor","level":"warning","description":"All names should start with an uppercase letter.","fingerprint":"1f0e","location":{"path":"playbook.yml","lines":{"begin":3}}},{"type":"issue","check_name":"yaml[trailing-spaces]","categories":["formatting","yaml"],"url":"https://ansible.readthedocs.io/projects/lint/rules/yaml/","severity":"minor","level":"error","description":"Trailing spaces","fingerprint":"9ab2","location":{"path":"playbook.yml","positions":{"begin":{"line":7,"column":21}}}}]"#,
+	stdout: br#"[{"type":"issue","check_name":"name[casing]","categories":["idiom"],"url":"https://ansible.readthedocs.io/projects/lint/rules/name/","severity":"minor","description":"All names should start with an uppercase letter.","fingerprint":"1f0e","location":{"path":"playbook.yml","lines":{"begin":3}}},{"type":"issue","check_name":"yaml[trailing-spaces]","categories":["formatting","yaml"],"url":"https://ansible.readthedocs.io/projects/lint/rules/yaml/","severity":"major","description":"Trailing spaces","fingerprint":"9ab2","location":{"path":"playbook.yml","positions":{"begin":{"line":7,"column":21}}}}]"#,
 	stderr: b"",
 	exit: 2,
 }];

@@ -83,7 +83,6 @@ type Manager struct {
 	describeGroup singleflight.Group
 }
 
-// moduleFacts is what the core keeps of a module's describe.
 type moduleFacts struct {
 	parsers  map[string]bool
 	contract bool

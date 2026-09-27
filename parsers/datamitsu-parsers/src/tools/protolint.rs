@@ -6,8 +6,9 @@
 //! (used as `code`) and the rule's configured `severity` (`error`, `warning` or
 //! `note`). The builtin slices from the first `{` and, when no `{` is found or
 //! JSON decoding fails, reports the whole output as one generic issue, which
-//! carries neither a level nor a position. The `FILE_NAMES_LOWER_SNAKE_CASE` rule
-//! is skipped — it is a false positive caused by linting via a temp file.
+//! carries neither a level nor a position. The builtin skipped
+//! `FILE_NAMES_LOWER_SNAKE_CASE`, a false positive of its temp file; datamitsu
+//! lints the file itself, so that rule is reported like any other.
 
 use tinyjson::JsonValue;
 
@@ -78,10 +79,6 @@ fn from_lint(lint: &JsonValue) -> Option<RawDiagnostic> {
 		_ => return None,
 	};
 	let rule = get_str(map, "rule");
-	// Skip the temp-file false positive (see module docs).
-	if rule.as_deref() == Some("FILE_NAMES_LOWER_SNAKE_CASE") {
-		return None;
-	}
 	let message = get_str(map, "message")?;
 	Some(RawDiagnostic {
 		message,
@@ -149,14 +146,15 @@ mod tests {
 	}
 
 	#[test]
-	fn skips_file_names_lower_snake_case() {
+	fn reports_the_file_name_rule() {
 		let json = br#"{"lints":[
-            {"message":"File name should be lower_snake_case.proto","line":1,"column":1,"rule":"FILE_NAMES_LOWER_SNAKE_CASE"},
+            {"filename":"Api.proto","message":"File name should be lower_snake_case.proto","line":1,"column":1,"rule":"FILE_NAMES_LOWER_SNAKE_CASE","severity":"warning"},
             {"message":"real issue","line":2,"column":1,"rule":"INDENT"}
         ]}"#;
-		let out = parse(b"", json, 1);
-		assert_eq!(out.len(), 1);
-		assert_eq!(out[0].message, "real issue");
+		let out = parse(b"", json, 0);
+		assert_eq!(out.len(), 2);
+		assert_eq!(out[0].code.as_deref(), Some("FILE_NAMES_LOWER_SNAKE_CASE"));
+		assert_eq!(out[0].severity, Some(severity::WARNING));
 	}
 
 	#[test]
@@ -180,6 +178,7 @@ mod tests {
 			assert_eq!(out[0].source.as_deref(), Some("protolint"));
 		}
 	}
+
 	#[test]
 	fn names_the_file_of_each_lint() {
 		let stderr =

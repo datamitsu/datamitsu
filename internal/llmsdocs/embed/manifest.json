@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 56,
-  "pageSetHash": "9201b3c582bcc871cfe7efbb31ab8a11",
+  "pageSetHash": "d0572bb24b8f9d293265a28c4917d454",
   "pages": [
     {
       "slug": "about",
@@ -497,7 +497,7 @@
       "title": "Parser Catalog",
       "description": "Tools whose output the bundled datamitsu WASM parser module turns into diagnostics",
       "bytes": 49600,
-      "contentHash": "4cbd2f41f5e7450d4f2ef6e02ac60b49"
+      "contentHash": "49e7da87aaf3ab2d5eadc289d1e07d5f"
     },
     {
       "slug": "reference/template-placeholders",

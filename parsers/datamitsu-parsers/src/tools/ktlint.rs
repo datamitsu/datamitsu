@@ -4,18 +4,19 @@
 //! ktlint's `--reporter=json` emits a per-file array, each entry holding a nested
 //! `errors` array — not the flat none-ls default JSON — so the navigation is
 //! hand-written over `tinyjson` rather than via `json_diag::from_json`.
-//! The reporter prints no level, so no finding carries one.
+//! The `errors` key is the level: every entry under it is an error.
 
 use tinyjson::JsonValue;
 
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
+use crate::severity::{self, Level};
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "ktlint",
 	description: "An anti-bikeshedding Kotlin linter with built-in formatter.",
 	url: "https://ktlint.github.io/",
-	severities: &[],
+	severities: &[Level(ERRORS, severity::ERROR)],
 	column_unit: "",
 	category: "",
 	kind: "tool",
@@ -32,6 +33,8 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	}],
 };
 
+const ERRORS: &str = "errors";
+
 pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic> {
 	let text = String::from_utf8_lossy(stdout);
 	let value: JsonValue = match text.parse() {
@@ -43,12 +46,13 @@ pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 		_ => return Vec::new(),
 	};
 
+	let level = severity::of(DESCRIPTOR.severities, ERRORS);
 	let mut out = Vec::new();
 	for file in files {
 		let JsonValue::Object(file) = file else {
 			continue;
 		};
-		let Some(JsonValue::Array(errors)) = file.get("errors") else {
+		let Some(JsonValue::Array(errors)) = file.get(ERRORS) else {
 			continue;
 		};
 		let path = match file.get("file") {
@@ -58,6 +62,7 @@ pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 		for err in errors {
 			if let Some(mut d) = from_error(err) {
 				d.file.clone_from(&path);
+				d.severity = level;
 				out.push(d);
 			}
 		}
@@ -117,9 +122,11 @@ mod tests {
 	}
 
 	#[test]
-	fn never_sets_a_severity() {
-		let out = parse(SAMPLES[0].stdout, b"", 1);
-		assert!(out.iter().all(|d| d.severity.is_none()), "{out:?}");
+	fn an_entry_under_errors_is_an_error() {
+		for exit in [0, 1] {
+			let out = parse(SAMPLES[0].stdout, b"", exit);
+			assert!(out.iter().all(|d| d.severity == Some(severity::ERROR)), "{out:?}");
+		}
 	}
 
 	#[test]

@@ -99,7 +99,6 @@ func sortFindings(ds []diagnostic.Diagnostic) {
 	})
 }
 
-// taskView is what the terminal makes of one task's findings.
 type taskView struct {
 	// shown are the findings a frame prints, sorted.
 	shown []diagnostic.Diagnostic

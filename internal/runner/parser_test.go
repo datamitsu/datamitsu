@@ -331,7 +331,8 @@ func TestThresholdFailsTheNamedFileOfABatch(t *testing.T) {
 			`"message":"m","cop_name":"X/Y","corrected":false,"location":{"start_line":1,"start_column":1,` +
 			`"last_line":1,"last_column":2}}]}]}`,
 		"actionlint": `[{"message":"m","filepath":"a.py","line":1,"column":1,"kind":"expression"}]`,
-		"protolint":  `{"lints":[{"filename":"a.py","line":1,"column":1,"message":"m","rule":"R","severity":"error"}]}`,
+		"protolint": `{"lints":[{"filename":"a.py","line":1,"column":1,"message":"m",` +
+			`"rule":"FILE_NAMES_LOWER_SNAKE_CASE","severity":"warning"}]}`,
 	}
 	for parser, report := range reports {
 		t.Run(parser, func(t *testing.T) {
