@@ -19,6 +19,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/datamitsuignore"
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/project"
+	"github.com/datamitsu/datamitsu/internal/toolenv"
 )
 
 type mockAppManager struct {
@@ -1563,7 +1564,7 @@ func TestBuildCommandEnvMerge(t *testing.T) {
 			Type:    "binary",
 			Command: "/bin/echo",
 		}
-		cmd := executor.buildCommand(context.Background(), cmdInfo, []string{"hello"}, tmpDir, nil, nil)
+		cmd := executor.buildCommand(context.Background(), cmdInfo, []string{"hello"}, tmpDir, nil, toolenv.Inherited{})
 		if !slices.Contains(cmd.Env, "TOOLENV_KEPT=k") || !slices.Contains(cmd.Env, "NO_COLOR=1") {
 			t.Errorf("cmd.Env = %v, want the process environment and NO_COLOR=1", cmd.Env)
 		}
@@ -1577,9 +1578,29 @@ func TestBuildCommandEnvMerge(t *testing.T) {
 	t.Run("inherited pairs come back", func(t *testing.T) {
 		t.Setenv("GITHUB_ACTIONS", "true")
 		cmdInfo := &binmanager.CommandInfo{Type: "binary", Command: "/bin/echo"}
-		cmd := executor.buildCommand(context.Background(), cmdInfo, nil, tmpDir, nil, []string{"GITHUB_ACTIONS=true"})
+		inherited := toolenv.Capture(os.Environ(), []string{"GITHUB_ACTIONS"})
+		cmd := executor.buildCommand(context.Background(), cmdInfo, nil, tmpDir, nil, inherited)
 		if !slices.Contains(cmd.Env, "GITHUB_ACTIONS=true") {
 			t.Errorf("cmd.Env = %v, want the inherited GITHUB_ACTIONS", cmd.Env)
+		}
+	})
+
+	// The cache identities are taken from the capture, so a process must get
+	// the captured state even when the environment moved since.
+	t.Run("the capture wins over a later environment", func(t *testing.T) {
+		t.Setenv("TOOLENV_MODE", "early")
+		inherited := toolenv.Capture(os.Environ(), []string{"TOOLENV_MODE", "TOOLENV_LATE"})
+		t.Setenv("TOOLENV_MODE", "late")
+		t.Setenv("TOOLENV_LATE", "1")
+		cmdInfo := &binmanager.CommandInfo{Type: "binary", Command: "/bin/echo"}
+		cmd := executor.buildCommand(context.Background(), cmdInfo, nil, tmpDir, nil, inherited)
+		if !slices.Contains(cmd.Env, "TOOLENV_MODE=early") {
+			t.Errorf("cmd.Env = %v, want the captured TOOLENV_MODE", cmd.Env)
+		}
+		for _, kv := range cmd.Env {
+			if strings.HasPrefix(kv, "TOOLENV_LATE=") {
+				t.Errorf("cmd.Env carries %s, absent when captured", kv)
+			}
 		}
 	})
 
@@ -1589,7 +1610,7 @@ func TestBuildCommandEnvMerge(t *testing.T) {
 			Command: "/bin/echo",
 			Env:     map[string]string{"APP_VAR": "app_value"},
 		}
-		cmd := executor.buildCommand(context.Background(), cmdInfo, nil, tmpDir, nil, nil)
+		cmd := executor.buildCommand(context.Background(), cmdInfo, nil, tmpDir, nil, toolenv.Inherited{})
 		found := false
 		for _, e := range cmd.Env {
 			if e == "APP_VAR=app_value" {
@@ -1607,7 +1628,7 @@ func TestBuildCommandEnvMerge(t *testing.T) {
 			Command: "/bin/echo",
 			Args:    []string{"--no-install", "cli.js"},
 		}
-		cmd := executor.buildCommand(context.Background(), cmdInfo, []string{"--fix"}, tmpDir, nil, nil)
+		cmd := executor.buildCommand(context.Background(), cmdInfo, []string{"--fix"}, tmpDir, nil, toolenv.Inherited{})
 		want := []string{"/bin/echo", "--no-install", "cli.js", "--fix"}
 		if !reflect.DeepEqual(cmd.Args, want) {
 			t.Errorf("bun command args = %v, want %v", cmd.Args, want)
@@ -1621,7 +1642,7 @@ func TestBuildCommandEnvMerge(t *testing.T) {
 			Env:     map[string]string{"SHARED": "app"},
 		}
 		toolOpEnv := map[string]string{"SHARED": "tool"}
-		cmd := executor.buildCommand(context.Background(), cmdInfo, nil, tmpDir, toolOpEnv, nil)
+		cmd := executor.buildCommand(context.Background(), cmdInfo, nil, tmpDir, toolOpEnv, toolenv.Inherited{})
 		for _, e := range cmd.Env {
 			if e == "SHARED=app" {
 				t.Error("app env SHARED should be overridden by tool op env")

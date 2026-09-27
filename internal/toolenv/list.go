@@ -97,11 +97,16 @@ func strippedBy(name string, exact, prefix []Entry) bool {
 
 // Apply returns the environment of a tool of fix, lint or check. base is the
 // environment datamitsu would start it with; every Stripped variable is
-// dropped from it. inherited (Resolve) is added back, the layers — the app's
-// env, then the operation's — are applied in order, a later value winning, and
-// NO_COLOR=1 is set last.
-func Apply(base, inherited []string, layers ...map[string]string) []string {
-	extra := len(inherited) + 1
+// dropped from it, and so is every name inherited asked for, whose captured
+// state replaces what base holds. The layers — the app's env, then the
+// operation's — are applied in order, a later value winning, and NO_COLOR=1 is
+// set last.
+func Apply(base []string, inherited Inherited, layers ...map[string]string) []string {
+	owned := make(map[string]bool, len(inherited.names))
+	for _, name := range inherited.names {
+		owned[canonical(name)] = true
+	}
+	extra := len(inherited.pairs) + 1
 	for _, layer := range layers {
 		extra += len(layer)
 	}
@@ -124,11 +129,11 @@ func Apply(base, inherited []string, layers ...map[string]string) []string {
 			env = append(env, kv)
 			continue
 		}
-		if !Stripped(name) {
+		if !Stripped(name) && !owned[canonical(name)] {
 			set(name, kv)
 		}
 	}
-	for _, kv := range inherited {
+	for _, kv := range inherited.pairs {
 		name, _, _ := strings.Cut(kv, "=")
 		set(name, kv)
 	}

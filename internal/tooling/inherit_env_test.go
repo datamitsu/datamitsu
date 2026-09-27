@@ -11,6 +11,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/cache"
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/toolenv"
 
 	"go.uber.org/zap"
 )
@@ -37,7 +38,7 @@ func TestInheritedValuesArePartOfTheIdentities(t *testing.T) {
 	e := &Executor{rootPath: root}
 	withValue := func(pairs ...string) Task {
 		task := inheritingTask(root)
-		task.inherited = pairs
+		task.inherited = toolenv.Capture(pairs, []string{probeVar})
 		return task
 	}
 	base := withValue(probeVar + "=a")

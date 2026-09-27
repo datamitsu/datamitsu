@@ -28,7 +28,7 @@ func TestApply(t *testing.T) {
 	}
 
 	t.Run("strips the listed names and prefixes, and nothing else", func(t *testing.T) {
-		got := envMap(t, Apply(host, nil))
+		got := envMap(t, Apply(host, Inherited{}))
 		for _, name := range []string{"GITHUB_ACTIONS", "AI_AGENT", "AGENT", "CLAUDECODE", "CODEX_SANDBOX", "COPILOT_CLI", "JUNIE_DATA", "FORCE_COLOR", "CLICOLOR_FORCE"} {
 			if v, ok := got[name]; ok {
 				t.Errorf("%s=%s reached the tool", name, v)
@@ -46,14 +46,14 @@ func TestApply(t *testing.T) {
 	})
 
 	t.Run("NO_COLOR=1 wins over every layer", func(t *testing.T) {
-		got := envMap(t, Apply(host, []string{"NO_COLOR="}, map[string]string{"NO_COLOR": ""}, map[string]string{"NO_COLOR": "0"}))
+		got := envMap(t, Apply(host, Capture(host, []string{"NO_COLOR"}), map[string]string{"NO_COLOR": ""}, map[string]string{"NO_COLOR": "0"}))
 		if got["NO_COLOR"] != "1" {
 			t.Errorf("NO_COLOR = %q, want 1", got["NO_COLOR"])
 		}
 	})
 
 	t.Run("inherited pairs come back with the host's value", func(t *testing.T) {
-		inherited := Resolve(host, []string{"GITHUB_ACTIONS", "FORCE_COLOR", "EMPTY", "ABSENT"})
+		inherited := Capture(host, []string{"GITHUB_ACTIONS", "FORCE_COLOR", "EMPTY", "ABSENT"})
 		got := envMap(t, Apply(host, inherited))
 		if got["GITHUB_ACTIONS"] != "true" || got["FORCE_COLOR"] != "3" {
 			t.Errorf("inherited values = %q, %q, want the host's", got["GITHUB_ACTIONS"], got["FORCE_COLOR"])
@@ -72,14 +72,28 @@ func TestApply(t *testing.T) {
 	t.Run("env wins over an inherited value, the operation over the app", func(t *testing.T) {
 		app := map[string]string{"GITHUB_ACTIONS": "app", "APP_ONLY": "a", "CI": "app"}
 		op := map[string]string{"GITHUB_ACTIONS": "false", "CI": "op"}
-		got := envMap(t, Apply(host, []string{"GITHUB_ACTIONS=true"}, app, op))
+		got := envMap(t, Apply(host, Capture(host, []string{"GITHUB_ACTIONS"}), app, op))
 		if got["GITHUB_ACTIONS"] != "false" || got["CI"] != "op" || got["APP_ONLY"] != "a" {
 			t.Errorf("GITHUB_ACTIONS=%q CI=%q APP_ONLY=%q, want false, op, a", got["GITHUB_ACTIONS"], got["CI"], got["APP_ONLY"])
 		}
 	})
 
+	t.Run("the captured state wins over a later environment", func(t *testing.T) {
+		captured := Capture([]string{"MODE=early"}, []string{"MODE", "LATE"})
+		got := envMap(t, Apply([]string{"MODE=late", "LATE=1", "OTHER=1"}, captured))
+		if got["MODE"] != "early" {
+			t.Errorf("MODE = %q, want the captured early", got["MODE"])
+		}
+		if v, ok := got["LATE"]; ok {
+			t.Errorf("LATE=%s reached the tool, although it was absent when captured", v)
+		}
+		if got["OTHER"] != "1" {
+			t.Errorf("OTHER = %q, want the base value of a name nobody inherits", got["OTHER"])
+		}
+	})
+
 	t.Run("an env layer can set a stripped name", func(t *testing.T) {
-		got := envMap(t, Apply(host, nil, nil, map[string]string{"FORCE_COLOR": "0"}))
+		got := envMap(t, Apply(host, Inherited{}, nil, map[string]string{"FORCE_COLOR": "0"}))
 		if got["FORCE_COLOR"] != "0" {
 			t.Errorf("FORCE_COLOR = %q, want the operation's 0", got["FORCE_COLOR"])
 		}
@@ -88,7 +102,7 @@ func TestApply(t *testing.T) {
 	t.Run("base is not modified and entries without a name are kept", func(t *testing.T) {
 		base := []string{"GITHUB_ACTIONS=true", "=C:=C:\\dir", "A=1"}
 		raw := slices.Clone(base)
-		got := Apply(base, nil, map[string]string{"A": "2"})
+		got := Apply(base, Inherited{}, map[string]string{"A": "2"})
 		if !slices.Equal(base, raw) {
 			t.Errorf("Apply rewrote base to %q", base)
 		}

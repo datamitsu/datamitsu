@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestResolve(t *testing.T) {
+func TestCapture(t *testing.T) {
 	environ := []string{"GITHUB_ACTIONS=true", "EMPTY=", "CI=1", "AI_AGENT=codex", "WITH_EQ=a=b", "=C:=C:\\"}
 	tests := []struct {
 		name  string
@@ -20,9 +20,17 @@ func TestResolve(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := Resolve(environ, tt.names); !slices.Equal(got, tt.want) {
-				t.Errorf("Resolve(%v) = %q, want %q", tt.names, got, tt.want)
+			if got := Capture(environ, tt.names).Pairs(); !slices.Equal(got, tt.want) {
+				t.Errorf("Capture(%v).Pairs() = %q, want %q", tt.names, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestPairsIsACopy(t *testing.T) {
+	in := Capture([]string{"A=1"}, []string{"A"})
+	in.Pairs()[0] = "A=2"
+	if got := in.Pairs(); !slices.Equal(got, []string{"A=1"}) {
+		t.Errorf("Pairs() = %q after a caller wrote to its result", got)
 	}
 }

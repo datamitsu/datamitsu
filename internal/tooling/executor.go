@@ -515,7 +515,7 @@ func (e *Executor) executeTask(ctx context.Context, task Task) ExecutionResult {
 		zap.String("app", task.OpConfig.App),
 		zap.Int("fileCount", len(task.Files)))
 
-	task.inherited = toolenv.Resolve(os.Environ(), task.OpConfig.InheritEnv)
+	task.inherited = toolenv.Capture(os.Environ(), task.OpConfig.InheritEnv)
 	// Taken before the tool runs: a config saved while it runs must not have
 	// this run's result recorded under its digest.
 	task.perFileCache = e.perFileCacheTool(task)
@@ -651,7 +651,7 @@ func (e *Executor) executeTask(ctx context.Context, task Task) ExecutionResult {
 // environment is toolenv.Apply's: the process environment without the stripped
 // variables, then the inherited host pairs, the app env (cmdInfo.Env) and the
 // operation env (ToolOperation.Env), and NO_COLOR=1 last.
-func (e *Executor) buildCommand(ctx context.Context, cmdInfo *binmanager.CommandInfo, args []string, workingDir string, toolOpEnv map[string]string, inherited []string) *exec.Cmd {
+func (e *Executor) buildCommand(ctx context.Context, cmdInfo *binmanager.CommandInfo, args []string, workingDir string, toolOpEnv map[string]string, inherited toolenv.Inherited) *exec.Cmd {
 	var cmd *exec.Cmd
 
 	switch cmdInfo.Type {
@@ -767,9 +767,9 @@ func (e *Executor) perFileCacheTool(task Task) string {
 		}
 		name += "@" + hashutil.XXH3Multi(parts...)
 	}
-	if len(task.inherited) > 0 {
-		parts := make([][]byte, 0, len(task.inherited))
-		for _, kv := range task.inherited {
+	if pairs := task.inherited.Pairs(); len(pairs) > 0 {
+		parts := make([][]byte, 0, len(pairs))
+		for _, kv := range pairs {
 			parts = append(parts, []byte(kv))
 		}
 		name += "+env:" + hashutil.XXH3Multi(parts...)

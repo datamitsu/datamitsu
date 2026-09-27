@@ -55,7 +55,8 @@ func verdictIdentity(task Task, unitDirRel, parserModuleHash string) string {
 	if task.Tool.OutputParser != nil {
 		parserKey = task.Tool.OutputParser.Parser
 	}
-	parts := make([][]byte, 0, 9+len(task.OpConfig.Args)+len(task.OpConfig.Env)+len(task.inherited))
+	inherited := task.inherited.Pairs()
+	parts := make([][]byte, 0, 9+len(task.OpConfig.Args)+len(task.OpConfig.Env)+len(inherited))
 	parts = append(parts,
 		[]byte("dmv3"),
 		[]byte(task.ToolName),
@@ -74,7 +75,7 @@ func verdictIdentity(task Task, unitDirRel, parserModuleHash string) string {
 	}
 	// Every pair carries "=", so the marker cannot be mistaken for one.
 	parts = append(parts, []byte("inherit"))
-	for _, kv := range task.inherited {
+	for _, kv := range inherited {
 		parts = append(parts, []byte(kv))
 	}
 	return hashutil.XXH3Multi(parts...)
@@ -720,7 +721,7 @@ func (e *Executor) recordVerdict(task Task, key string, snap *verdictSnapshot, o
 		sibling := task
 		sibling.Operation = config.OpLint
 		sibling.OpConfig = lintOp
-		sibling.inherited = toolenv.Resolve(os.Environ(), lintOp.InheritEnv)
+		sibling.inherited = toolenv.Capture(os.Environ(), lintOp.InheritEnv)
 		e.cache.DeleteVerdict(verdictIdentity(sibling, sibling.UnitDir, e.parserModuleHash(sibling)))
 	}
 }

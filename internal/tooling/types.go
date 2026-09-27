@@ -7,6 +7,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/diagnostic"
 	"github.com/datamitsu/datamitsu/internal/textdiff"
+	"github.com/datamitsu/datamitsu/internal/toolenv"
 )
 
 // Task represents a single tool execution task
@@ -14,10 +15,10 @@ type Task struct {
 	// perFileCache is the name per-file cache entries are read and written
 	// under, fixed before the tool starts (see perFileCacheTool).
 	perFileCache string
-	// inherited is OpConfig.InheritEnv resolved against the host environment
+	// inherited is OpConfig.InheritEnv captured from the host environment
 	// once, before anything runs, so the cache identities and every process of
-	// the task see the same values.
-	inherited []string
+	// the task see the same values and the same absences.
+	inherited toolenv.Inherited
 
 	// ID is "<tool>:<dir>:<seq>", assigned by Execute before anything runs; seq
 	// counts the tasks of that Execute from 1 in plan order. Unique within one
