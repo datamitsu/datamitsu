@@ -120,7 +120,7 @@ Not all failures are equal. The executor classifies each failed task:
 
 A cancelled task is not a failure: it never counts toward `(N failed)`, and its output is not shown. It is not hidden either. The runner lists every planned task the run stopped — `cancelled (fail-fast)` if it had started, `not started (fail-fast)` if it had not, including the tasks of groups the run never reached — and counts them in the footer, so a reader never takes "no output" for "clean". The JSON-L stream ends each such task with a `tool_run` event of status `skip`.
 
-A task counts as stopped when the stop reached it while it was still running, whatever it then exits with: a tool that catches the signal and exits 1 is cancelled, not failed. A tool that had already exited when the stop went out keeps its own result. Only Linux can tell whether a process has exited without collecting it; on other systems a delivered stop counts.
+A task counts as stopped when the stop reached it while it was still running, whatever it then exits with: a tool that catches the signal and exits 1 is cancelled, not failed. A tool that had already exited when the stop went out keeps its own result.
 
 **Example scenario:**
 

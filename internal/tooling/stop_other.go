@@ -1,9 +1,9 @@
-//go:build !linux
+//go:build !linux && !darwin && !freebsd
 
 package tooling
 
-// stillRunning cannot ask whether a child has exited without reaping it here,
-// so a delivered stop counts.
+// stillRunning needs no check on Windows: TerminateProcess refuses a process
+// that has exited, so a stop that was delivered reached a running one.
 func stillRunning(int) bool {
 	return true
 }
