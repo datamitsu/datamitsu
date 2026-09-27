@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -182,7 +183,10 @@ func TestKeepGoingPerFileRunsEveryFile(t *testing.T) {
 			_ = os.Remove(marker)
 			task := lintTask(t, "alpha", config.ToolScopePerProject, root, "{file}")
 			task.Files = files
-			result := NewExecutor(root, false, tt.failFast, appManager, nil).executeTask(context.Background(), task)
+			task.Tool.OutputParser = &config.OutputParser{Module: "core", Parser: "alpha"}
+			e := NewExecutor(root, false, tt.failFast, appManager, nil)
+			e.SetParser(lineParser{})
+			result := e.executeTask(context.Background(), task)
 			if result.Success || result.IsCancelled() {
 				t.Fatalf("result = %+v, want a failure of its own", result)
 			}
@@ -204,8 +208,27 @@ func TestKeepGoingPerFileRunsEveryFile(t *testing.T) {
 					t.Errorf("Output lacks %q:\n%s", want, result.Output)
 				}
 			}
+			var found []string
+			for _, d := range result.Diagnostics {
+				found = append(found, d.Message)
+			}
+			if !slices.Equal(found, tt.wantOut) {
+				t.Errorf("Diagnostics = %q, want every run file's findings %q", found, tt.wantOut)
+			}
 		})
 	}
+}
+
+type lineParser struct{}
+
+func (lineParser) Parse(_ context.Context, _, _, _ string, stdout, _ []byte, _ int32) ([]diagnostic.Diagnostic, error) {
+	var found []diagnostic.Diagnostic
+	for line := range strings.Lines(string(stdout)) {
+		if line = strings.TrimSpace(line); line != "" {
+			found = append(found, diagnostic.Diagnostic{Message: line, Row: 1})
+		}
+	}
+	return found, nil
 }
 
 // A file whose content cannot be read for a stdin tool fails without a
