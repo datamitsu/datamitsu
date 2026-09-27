@@ -45,6 +45,44 @@ func TestFlagErrorsAreUsageErrors(t *testing.T) {
 	}
 }
 
+// A missing required flag and flags that cannot be combined are refused with
+// the usage code; cobra would return both without one.
+func TestValidateFlagConstraints(t *testing.T) {
+	newCmd := func() *cobra.Command {
+		c := &cobra.Command{Use: "x"}
+		c.Flags().String("output", "", "")
+		c.Flags().Int("port", 0, "")
+		c.Flags().Bool("print", false, "")
+		_ = c.MarkFlagRequired("output")
+		c.MarkFlagsMutuallyExclusive("port", "print")
+		return c
+	}
+	tests := []struct {
+		name string
+		args []string
+		want int
+	}{
+		{name: "satisfied", args: []string{"--output", "x"}, want: 0},
+		{name: "required flag missing", args: nil, want: exitcode.Usage},
+		{name: "exclusive flags", args: []string{"--output", "x", "--port", "1", "--print"}, want: exitcode.Usage},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := newCmd()
+			if err := c.ParseFlags(tt.args); err != nil {
+				t.Fatalf("ParseFlags: %v", err)
+			}
+			err := validateFlagConstraints(c, nil)
+			switch {
+			case tt.want == 0 && err != nil:
+				t.Errorf("validateFlagConstraints() = %v, want nil", err)
+			case tt.want != 0 && exitCodeOf(err) != tt.want:
+				t.Errorf("validateFlagConstraints() = %v (exit %d), want exit %d", err, exitCodeOf(err), tt.want)
+			}
+		})
+	}
+}
+
 // An invalid DATAMITSU_FAIL_FAST is a caller mistake, refused with the usage code.
 func TestApplyFailFastInvalidEnvIsAUsageError(t *testing.T) {
 	t.Setenv("DATAMITSU_FAIL_FAST", "maybe")

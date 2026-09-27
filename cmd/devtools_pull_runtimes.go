@@ -17,6 +17,7 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/detector"
+	"github.com/datamitsu/datamitsu/internal/exitcode"
 	"github.com/datamitsu/datamitsu/internal/github"
 	"github.com/datamitsu/datamitsu/internal/httpx"
 	"github.com/datamitsu/datamitsu/internal/nodekeys"
@@ -94,7 +95,7 @@ func runPullRuntimes(cmd *cobra.Command, args []string) error {
 	ctx := commandContext(cmd)
 
 	if !pullRuntimesUpdateFlag {
-		return errors.New("--update flag is required to fetch releases from upstream")
+		return exitcode.UsageError{Err: errors.New("--update flag is required to fetch releases from upstream")}
 	}
 
 	runtimeFilter := pullRuntimesRuntimeFlag

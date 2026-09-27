@@ -48,11 +48,12 @@ func TestInspectExport(t *testing.T) {
 	}
 }
 
+// Every one of these is a caller mistake, refused with the usage code.
 func TestInspectInvalidFlags(t *testing.T) {
 	for _, args := range [][]string{{"inspect", "--port", "-1"}, {"inspect", "--port", "65536"}, {"inspect", "--output", ""}, {"inspect", "--output", "-", "--port", "0"}, {"inspect", "unexpected"}} {
 		result := clitest.Run(t, clitest.RunOptions{}, args...)
-		if result.ExitCode == 0 {
-			t.Fatalf("accepted invalid args: %v", args)
+		if result.ExitCode != 2 {
+			t.Fatalf("%v exit = %d, want 2\nstderr:\n%s", args, result.ExitCode, result.Stderr)
 		}
 	}
 }

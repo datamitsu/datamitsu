@@ -73,11 +73,12 @@ const agentHelpNotice = "AI agents: this binary ships documentation for its exac
 	" describe a different version."
 
 var rootCmd = &cobra.Command{
-	Use:           ldflags.PackageName,
-	Short:         ldflags.PackageName + " - configuration management tool",
-	Long:          "A tool for managing configuration and binaries\n\n" + agentHelpNotice + "\n\n" + sponsor.StaticLine(),
-	SilenceUsage:  true,
-	SilenceErrors: true,
+	Use:               ldflags.PackageName,
+	Short:             ldflags.PackageName + " - configuration management tool",
+	Long:              "A tool for managing configuration and binaries\n\n" + agentHelpNotice + "\n\n" + sponsor.StaticLine(),
+	SilenceUsage:      true,
+	SilenceErrors:     true,
+	PersistentPreRunE: validateFlagConstraints,
 }
 
 func init() {

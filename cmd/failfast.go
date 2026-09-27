@@ -4,6 +4,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/exitcode"
 	"github.com/datamitsu/datamitsu/internal/runner"
+	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 
 	"github.com/spf13/cobra"
 )
@@ -13,7 +14,7 @@ const failFastUsage = "Stop at the first failing tool; --fail-fast=false runs ev
 // addFailFastFlag binds --fail-fast. A bool flag parses both the bare
 // --fail-fast and --fail-fast=false.
 func addFailFastFlag(cmd *cobra.Command, value *bool) {
-	cmd.Flags().BoolVar(value, "fail-fast", true, failFastUsage)
+	cmd.Flags().BoolVar(value, "fail-fast", runtimeconfig.FailFast, failFastUsage)
 }
 
 // applyFailFast sets the runner's FailFast option to the flag's value when the
