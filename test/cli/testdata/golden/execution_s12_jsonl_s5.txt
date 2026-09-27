@@ -2,7 +2,7 @@ exit code: 1
 ===STDOUT===
 
 ===STDERR===
-{"cancelled":0,"complete":true,"duration_ms":1,"failed":1,"op":"lint","op_id":"cmd-2","runs":1,"status":"fail","success":false,"tools":1,"ts":0,"type":"done"}
+{"cancelled":0,"complete":false,"duration_ms":1,"failed":1,"op":"lint","op_id":"cmd-2","runs":1,"status":"fail","success":false,"tools":1,"ts":0,"type":"done"}
 {"duration_ms":1,"failed":1,"op":"lint","op_id":"run-1","runs":1,"status":"fail","tools":1,"ts":0,"type":"done"}
 {"duration_ms":1,"op_id":"run-1:alpha:","status":"fail","success":false,"tool":"alpha","ts":0,"type":"tool_run"}
 {"index":1,"op_id":"run-1:alpha:","status":"progress","success":false,"tool":"alpha","total":3,"ts":0,"type":"chunk"}

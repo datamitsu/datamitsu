@@ -66,7 +66,6 @@ func notifyInterrupt(parent context.Context) (context.Context, func()) {
 	}
 }
 
-// interruption returns the interruptedError ctx was cancelled with, if any.
 func interruption(ctx context.Context) error {
 	if interrupted, ok := errors.AsType[interruptedError](context.Cause(ctx)); ok {
 		return interrupted

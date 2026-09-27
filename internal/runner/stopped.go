@@ -41,7 +41,6 @@ func (t stoppedTask) state() string {
 	return "not started"
 }
 
-// eventMsg is the msg of the task's terminal tool_run event.
 func (t stoppedTask) eventMsg() string {
 	return t.state() + ": " + string(t.cause)
 }

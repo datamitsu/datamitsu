@@ -21,11 +21,12 @@ type opSummary struct {
 	failed    int
 	skipped   int
 	cancelled int
+	// partial counts the tasks that failed with files fail-fast left unrun.
+	partial int
 	// durationMs is the operation's execution time, the "done in" of its footer.
 	durationMs int64
 }
 
-// recordOp keeps an operation's summary for the run-level report.
 func (sc *sharedContext) recordOp(s opSummary) {
 	sc.summaries = append(sc.summaries, s)
 }
@@ -78,8 +79,9 @@ func (sc *sharedContext) printRunClosing(command string, operations []config.Ope
 
 // emitRunDone writes the run-level done event: the sums over the operations
 // that ran, the command's wall clock, and whether the run was complete — every
-// planned operation ran and no task was cancelled or left unstarted. Its op_id
-// starts with "cmd-", an operation's with "run-".
+// planned operation ran, no task was cancelled or left unstarted, and no task
+// stopped at a failing file with files left to run. Its op_id starts with
+// "cmd-", an operation's with "run-".
 func (sc *sharedContext) emitRunDone(command string, operations []config.OperationType, elapsedMs int64, success bool) {
 	var total opSummary
 	complete := true
@@ -94,8 +96,9 @@ func (sc *sharedContext) emitRunDone(command string, operations []config.Operati
 		total.failed += s.failed
 		total.skipped += s.skipped
 		total.cancelled += s.cancelled
+		total.partial += s.partial
 	}
-	if total.cancelled > 0 {
+	if total.cancelled > 0 || total.partial > 0 {
 		complete = false
 	}
 	ui.Emit(uievent.Event{

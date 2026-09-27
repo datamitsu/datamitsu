@@ -737,6 +737,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		failed:     failedTools,
 		skipped:    len(plan.Skipped),
 		cancelled:  len(stopped),
+		partial:    partialTasks(results),
 		durationMs: totalWallClockTime,
 	})
 
@@ -998,6 +999,27 @@ func runSequential(
 	ctx, stopInterrupt := notifyInterrupt(context.Background())
 	defer stopInterrupt()
 
+	opErr := sc.runOperations(ctx, operations)
+
+	if sc.explainLevel != "" {
+		return sc.outcome(ctx, opErr)
+	}
+	elapsedMs := sc.timings.Elapsed().Milliseconds()
+	if len(operations) > 1 {
+		sc.printRunClosing(command, operations, elapsedMs)
+	}
+	err = sc.outcome(ctx, opErr)
+	if command != "" {
+		sc.emitRunDone(command, operations, elapsedMs, err == nil)
+	}
+	return err
+}
+
+// runOperations walks the repository once, runs the bundled checks, then the
+// operations, and returns the first error. A failed walk or bundled check stops
+// the run in both modes: it is a setup error, not a tool failure. The caller
+// reports the run whatever this returns.
+func (sc *sharedContext) runOperations(ctx context.Context, operations []config.OperationType) error {
 	hasFix := slices.Contains(operations, config.OpFix)
 
 	// One walk, three consumers: bundled fix, bundled lint, and the planner.
@@ -1025,6 +1047,7 @@ func runSequential(
 		}
 		log.Warn("bundled lint error (non-lint mode, continuing)", zap.Error(lintErr))
 	}
+
 	var opErr error
 	for _, op := range operations {
 		if ctx.Err() != nil || (opErr != nil && sc.failFast) {
@@ -1035,19 +1058,7 @@ func runSequential(
 			opErr = err
 		}
 	}
-
-	if sc.explainLevel != "" {
-		return sc.outcome(ctx, opErr)
-	}
-	elapsedMs := sc.timings.Elapsed().Milliseconds()
-	if len(operations) > 1 {
-		sc.printRunClosing(command, operations, elapsedMs)
-	}
-	err = sc.outcome(ctx, opErr)
-	if command != "" {
-		sc.emitRunDone(command, operations, elapsedMs, err == nil)
-	}
-	return err
+	return opErr
 }
 
 // outcome picks the error a run returns. An interruption wins, because the run
@@ -1594,7 +1605,19 @@ func printOperationFooter(toolGroups []toolExecutionGroup, wallClockTime int64, 
 	fmt.Println(ui.RuleLine("┗", plain, colored))
 }
 
-// nonZero returns n for an event counter that is written only when it is set.
+// partialTasks counts the tasks that failed with files fail-fast left unrun.
+func partialTasks(results []tooling.GroupExecutionResult) int {
+	n := 0
+	for _, group := range results {
+		for _, r := range group.Results {
+			if r.FilesNotRun > 0 {
+				n++
+			}
+		}
+	}
+	return n
+}
+
 func nonZero(n int) *int {
 	if n == 0 {
 		return nil

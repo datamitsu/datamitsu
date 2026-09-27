@@ -169,9 +169,10 @@ func TestKeepGoingPerFileRunsEveryFile(t *testing.T) {
 		wantExit int
 		wantFile string
 		wantOut  []string
+		notRun   int
 	}{
 		{failFast: false, wantRuns: 3, wantExit: 4, wantFile: "bad2.txt", wantOut: []string{"bad1 failed", "bad2 failed"}},
-		{failFast: true, wantRuns: 1, wantExit: 3, wantFile: "bad1.txt", wantOut: []string{"bad1 failed"}},
+		{failFast: true, wantRuns: 1, wantExit: 3, wantFile: "bad1.txt", wantOut: []string{"bad1 failed"}, notRun: 2},
 	}
 	for _, tt := range tests {
 		t.Run(map[bool]string{true: "fail-fast", false: "keep-going"}[tt.failFast], func(t *testing.T) {
@@ -184,6 +185,9 @@ func TestKeepGoingPerFileRunsEveryFile(t *testing.T) {
 			}
 			if result.ExitCode != tt.wantExit {
 				t.Errorf("ExitCode = %d, want %d (the last failing file's)", result.ExitCode, tt.wantExit)
+			}
+			if result.FilesNotRun != tt.notRun {
+				t.Errorf("FilesNotRun = %d, want %d", result.FilesNotRun, tt.notRun)
 			}
 			if !strings.HasSuffix(result.Command, tt.wantFile) {
 				t.Errorf("Command = %q, want the last failing file's, %s", result.Command, tt.wantFile)

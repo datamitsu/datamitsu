@@ -626,6 +626,9 @@ func TestExecutionFailFastBetweenFiles(t *testing.T) {
 		if len(errs) != 1 || !strings.Contains(errs[0].Msg, "bad1.txt") {
 			t.Errorf("error events of alpha = %+v, want one naming bad1.txt", errs)
 		}
+		// No task was stopped, yet two files were never checked: the run is not
+		// complete.
+		wantRunDone(t, events, "lint", false, 1, 0, false)
 		e.goldenJSONL("s12_jsonl_s5", res)
 	})
 
@@ -640,6 +643,15 @@ func TestExecutionFailFastBetweenFiles(t *testing.T) {
 			}
 		}
 		e.golden("s5_lint_per_file_keep_going", res)
+	})
+
+	t.Run("keep_going_jsonl", func(t *testing.T) {
+		e := newExecProject(t, perFileLoopFiles, fixtureSpec, perFileLoopTool)
+		res := e.run("", nil, jsonl("lint", keepGoing)...)
+		e.wantExit(res, 1)
+		events := clitest.MustParseJSONL(t, res.Stderr)
+		clitest.AssertChains(t, events)
+		wantRunDone(t, events, "lint", false, 1, 0, true)
 	})
 }
 
@@ -705,6 +717,38 @@ func TestExecutionCheckStopsAfterFix(t *testing.T) {
 			t.Errorf("phase events = %+v, want fix then lint", phases)
 		}
 		wantRunDone(t, events, "check", false, 2, 0, true)
+	})
+}
+
+// TestExecutionSetupErrorIsReported: a setup error — here a .datamitsuignore
+// line the bundled check rejects — stops the run before any operation, and the
+// run is still reported: check's closing line names both operations as not
+// run, and the run-level done says the run failed and is incomplete.
+func TestExecutionSetupErrorIsReported(t *testing.T) {
+	files := map[string]string{"fixture.marker": "", ".datamitsuignore": "no separator here\n"}
+	tools := []string{
+		clitest.ShellTool("fixer", passScript, clitest.ToolOpSpec{Operation: "fix"}),
+		clitest.ShellTool("linter", passScript, clitest.ToolOpSpec{}),
+	}
+
+	t.Run("console", func(t *testing.T) {
+		e := newExecProject(t, files, fixtureSpec, tools...)
+		res := e.run("", nil, "check")
+		e.wantExit(res, 1)
+		e.wantMarker("fixer", "")
+		if !strings.Contains(res.Stdout, "· fix not run · lint not run ·") || !strings.Contains(res.Stderr, "missing colon separator") {
+			t.Errorf("check should report the setup error and close with neither operation run:\nstdout:\n%s\nstderr:\n%s", res.Stdout, res.Stderr)
+		}
+		e.golden("setup_error", res)
+	})
+
+	t.Run("jsonl", func(t *testing.T) {
+		e := newExecProject(t, files, fixtureSpec, tools...)
+		res := e.run("", nil, jsonl("check")...)
+		e.wantExit(res, 1)
+		events := clitest.MustParseJSONL(t, res.Stderr)
+		clitest.AssertChains(t, events)
+		wantRunDone(t, events, "check", false, 0, 0, false)
 	})
 }
 

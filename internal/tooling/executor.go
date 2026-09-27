@@ -54,7 +54,6 @@ var errCancelled = errors.New("cancelled")
 // failure shown beside it, an interruption is not.
 var errFailFast = errors.New("fail-fast")
 
-// cancelReason classifies a task stopped because ctx was cancelled.
 func cancelReason(ctx context.Context) FailureReason {
 	if errors.Is(context.Cause(ctx), errFailFast) {
 		return FailureReasonCancelled
@@ -936,6 +935,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 				e.fileProgressCallback(task.ToolName, cachedCount+i+1, totalFiles, false)
 			}
 			if e.failFast {
+				result.FilesNotRun = len(filesToProcess) - i - 1
 				break
 			}
 			continue
@@ -1040,6 +1040,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 				if e.fileProgressCallback != nil {
 					e.fileProgressCallback(task.ToolName, cachedCount+i+1, totalFiles, fileSuccess)
 				}
+				result.FilesNotRun = len(filesToProcess) - i - 1
 				break
 			}
 		} else {

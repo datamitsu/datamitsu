@@ -101,6 +101,14 @@ func TestEmitRunDone(t *testing.T) {
 			wantRuns:  1,
 		},
 		{
+			name: "a per-file task stopped at a failing file",
+			summaries: []opSummary{
+				{op: config.OpFix, tools: 1, runs: 1},
+				{op: config.OpLint, tools: 1, runs: 1, failed: 1, partial: 1},
+			},
+			wantRuns: 2,
+		},
+		{
 			name: "a task was stopped",
 			summaries: []opSummary{
 				{op: config.OpFix, tools: 1, runs: 1},

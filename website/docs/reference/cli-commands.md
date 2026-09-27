@@ -207,8 +207,9 @@ $ datamitsu check
 operation. `fix` and `lint` repeat their own footers' times, and `setup` is the
 rest: loading the configuration, walking the repository, planning, installing
 tools. An operation that did not run is named — `lint not run` after a failed
-fix under fail-fast. The line is printed for `check` only, never under
-`--explain`, and on failure too; `fix` and `lint` end with their footer.
+fix under fail-fast, both when a setup step such as the `.datamitsuignore`
+check failed. The line is printed for `check` only, never under `--explain`,
+and on failure too; `fix` and `lint` end with their footer.
 
 ### Keep-going runs
 
@@ -291,8 +292,9 @@ with `cmd-` where an operation's starts with `run-`, and its `op` is `fix`,
 `lint` or `check`. It carries `status`, `success` (whether the command
 succeeded), `duration_ms` (the wall clock of the whole command), the sums of the
 operations' `tools`, `runs`, `failed` and `skipped`, `cancelled` (always
-present, zero included) and `complete`: `true` when every planned operation ran
-and no task was cancelled or left unstarted. `check` whose fix failed under
+present, zero included) and `complete`: `true` when every planned operation ran,
+no task was cancelled or left unstarted, and no tool that runs once per file
+stopped at a failing file with files left to check. `check` whose fix failed under
 fail-fast reports `complete: false`. It is emitted for every execution of `fix`,
 `lint` and `check`, never under `--explain`, and not for the fix that
 `config reconcile` runs after writing its files.

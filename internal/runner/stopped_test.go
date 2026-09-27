@@ -57,6 +57,16 @@ func TestUnreachedTasks(t *testing.T) {
 	}
 }
 
+func TestPartialTasks(t *testing.T) {
+	results := []tooling.GroupExecutionResult{
+		{Results: []tooling.ExecutionResult{{ToolName: "a", FilesNotRun: 2}, {ToolName: "b"}}},
+		{Results: []tooling.ExecutionResult{{ToolName: "c", FilesNotRun: 1}}},
+	}
+	if got := partialTasks(results); got != 2 {
+		t.Errorf("partialTasks() = %d, want 2", got)
+	}
+}
+
 func TestStoppedFromResult(t *testing.T) {
 	started := time.Now()
 	tests := []struct {

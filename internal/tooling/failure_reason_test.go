@@ -104,7 +104,7 @@ func TestFailureReasonCancelled_ParallelTaskSkipped(t *testing.T) {
 				{
 					ToolName:    "tool1",
 					Operation:   config.OpLint,
-					ProjectPath: "/root/pkg/a",
+					ProjectPath: filepath.Join("/root", "pkg", "a"),
 					OpConfig: config.ToolOperation{
 						App:   "tool1",
 						Scope: config.ToolScopePerProject,
@@ -130,8 +130,8 @@ func TestFailureReasonCancelled_ParallelTaskSkipped(t *testing.T) {
 			if r.Started() {
 				t.Error("a task that never got a worker reports that it started")
 			}
-			if r.RelativeDir != "pkg/a" || r.RelativeDir != executor.TaskDir(tasks[0]) {
-				t.Errorf("RelativeDir = %q, want pkg/a, the task's directory", r.RelativeDir)
+			if want := filepath.Join("pkg", "a"); r.RelativeDir != want || r.RelativeDir != executor.TaskDir(tasks[0]) {
+				t.Errorf("RelativeDir = %q, want %q, the task's directory", r.RelativeDir, want)
 			}
 		})
 	}
