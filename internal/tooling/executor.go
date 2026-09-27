@@ -1672,18 +1672,7 @@ func (e *Executor) runCommandIO(cmd *exec.Cmd, stdinContent []byte, separate boo
 	}
 
 	setupProcessGroupCleanup(cmd)
-	var stopped atomic.Bool
-	if cancel := cmd.Cancel; cancel != nil {
-		cmd.Cancel = func() error {
-			// A process that had already ended when the context was cancelled
-			// is not stopped by it: only a delivered signal counts.
-			err := cancel()
-			if err == nil {
-				stopped.Store(true)
-			}
-			return err
-		}
-	}
+	stopped := trackStop(cmd)
 
 	cntSpawn.Add(1)
 	spawnSpan := trace.Start(trace.CatExec, "spawn")
@@ -1697,7 +1686,7 @@ func (e *Executor) runCommandIO(cmd *exec.Cmd, stdinContent []byte, separate boo
 		trace.A("argv0", cmd.Path),
 		trace.A("exit", getExitCode(err)),
 	)
-	if err != nil && stopped.Load() && !endedOnItsOwn(cmd.ProcessState) {
+	if err != nil && stopped.Load() {
 		err = fmt.Errorf("%w: %w", errStopped, err)
 	}
 	if separate {

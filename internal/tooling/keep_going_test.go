@@ -415,36 +415,56 @@ func TestMergeChunkResults(t *testing.T) {
 
 // A sibling killed because another task failed is a fail-fast cancellation, and
 // it had started: the two facts a caller needs to report it as cancelled rather
-// than as never started.
+// than as never started. A tool that handles the stop signal and exits with a
+// status of its own was stopped all the same.
 func TestFailFastKilledSiblingIsStartedAndCancelled(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("the tools are sh scripts")
 	}
-	root := t.TempDir()
-	// fails waits, at most five seconds, for slow's process to start.
-	started := filepath.Join(root, "slow-started")
-	appManager := &mockAppManager{commands: map[string]*binmanager.CommandInfo{
-		"fails": shellApp(`i=0; while [ ! -f ` + started + ` ] && [ $i -lt 250 ]; do sleep 0.02; i=$((i+1)); done; exit 1`),
-		"slow":  shellApp("touch " + started + "; sleep 5"),
-	}}
-	t.Setenv("DATAMITSU_MAX_PARALLEL_WORKERS", "2")
-	e := NewExecutor(root, false, true, appManager, nil)
-	start := time.Now()
-	groups, err := e.Execute(context.Background(), &ExecutionPlan{Groups: []TaskGroup{{Priority: 1, Tasks: []Task{
-		lintTask(t, "fails", config.ToolScopePerProject, filepath.Join(root, "a")),
-		lintTask(t, "slow", config.ToolScopePerProject, filepath.Join(root, "b")),
-	}}}})
-	if err == nil {
-		t.Fatal("Execute() = nil, want the fail-fast error")
+	tests := []struct {
+		name string
+		slow func(started string) string
+	}{
+		{
+			name: "dies to the signal",
+			slow: func(started string) string { return "touch " + started + "; sleep 5" },
+		},
+		{
+			name: "handles the signal and exits 1",
+			slow: func(started string) string {
+				return "trap 'exit 1' TERM; touch " + started + "; i=0; while [ $i -lt 100 ]; do sleep 0.05; i=$((i+1)); done"
+			},
+		},
 	}
-	if elapsed := time.Since(start); elapsed > 4*time.Second {
-		t.Errorf("the run took %s; the sibling was not killed", elapsed)
-	}
-	slow := resultsByTool(groups)["slow"]
-	if !slow.IsCancelled() || slow.FailureReason != FailureReasonCancelled || !slow.Started() {
-		t.Errorf("slow = %+v, want a started task cancelled by fail-fast", slow)
-	}
-	if slow.RelativeDir != "b" {
-		t.Errorf("slow.RelativeDir = %q, want b", slow.RelativeDir)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			// fails waits, at most five seconds, for slow's process to start.
+			started := filepath.Join(root, "slow-started")
+			appManager := &mockAppManager{commands: map[string]*binmanager.CommandInfo{
+				"fails": shellApp(`i=0; while [ ! -f ` + started + ` ] && [ $i -lt 250 ]; do sleep 0.02; i=$((i+1)); done; exit 1`),
+				"slow":  shellApp(tt.slow(started)),
+			}}
+			t.Setenv("DATAMITSU_MAX_PARALLEL_WORKERS", "2")
+			e := NewExecutor(root, false, true, appManager, nil)
+			start := time.Now()
+			groups, err := e.Execute(context.Background(), &ExecutionPlan{Groups: []TaskGroup{{Priority: 1, Tasks: []Task{
+				lintTask(t, "fails", config.ToolScopePerProject, filepath.Join(root, "a")),
+				lintTask(t, "slow", config.ToolScopePerProject, filepath.Join(root, "b")),
+			}}}})
+			if err == nil {
+				t.Fatal("Execute() = nil, want the fail-fast error")
+			}
+			if elapsed := time.Since(start); elapsed > 4*time.Second {
+				t.Errorf("the run took %s; the sibling was not killed", elapsed)
+			}
+			slow := resultsByTool(groups)["slow"]
+			if !slow.IsCancelled() || slow.FailureReason != FailureReasonCancelled || !slow.Started() {
+				t.Errorf("slow = %+v, want a started task cancelled by fail-fast", slow)
+			}
+			if slow.RelativeDir != "b" {
+				t.Errorf("slow.RelativeDir = %q, want b", slow.RelativeDir)
+			}
+		})
 	}
 }
