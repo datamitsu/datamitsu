@@ -3,9 +3,11 @@ package tooling
 import "bytes"
 
 // stripCSI returns b without its ANSI control sequences (ESC [ parameters,
-// intermediates, final byte). A sequence cut off by the end of the stream is
-// dropped as well. b itself is never modified: callers keep the raw stream for
-// the failure frame, and it can share memory with what they display.
+// intermediates, final byte). A sequence that never reaches a final byte loses
+// what it had consumed and nothing more: the text after a malformed escape can
+// be the finding a parser must see. b itself is never modified: callers keep
+// the raw stream for the failure frame, and it can share memory with what they
+// display.
 func stripCSI(b []byte) []byte {
 	i := bytes.IndexByte(b, 0x1b)
 	if i < 0 {
@@ -28,8 +30,8 @@ func stripCSI(b []byte) []byte {
 	}
 }
 
-// csiLen is the length of the sequence b starts with, ESC and '[' included,
-// or len(b) when it has no final byte.
+// csiLen is the length of the sequence b starts with, ESC and '[' included.
+// Without a final byte it ends before the first byte that cannot belong to it.
 func csiLen(b []byte) int {
 	n := 2
 	for n < len(b) && b[n] >= 0x30 && b[n] <= 0x3f {
@@ -41,5 +43,5 @@ func csiLen(b []byte) int {
 	if n < len(b) && b[n] >= 0x40 && b[n] <= 0x7e {
 		return n + 1
 	}
-	return len(b)
+	return n
 }
