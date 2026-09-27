@@ -262,7 +262,8 @@ than left out:
 never ran. `(interrupted)` replaces `(fail-fast)` when the run was stopped by
 Ctrl-C or `SIGTERM`: datamitsu then stops every running tool, prints what it
 did not finish and exits 130 (SIGINT) or 143 (SIGTERM). A second Ctrl-C ends the
-process at once. The `(N failed)` counts never include stopped tools, and a
+process at once. A signal that arrives while the configuration is still loading,
+before the run has started, ends the process at once too, with no report. The `(N failed)` counts never include stopped tools, and a
 tool stopped in several places of one kind shares one line with a `×N` count.
 
 ### Run events
@@ -302,8 +303,9 @@ no task was cancelled or left unstarted, and no tool that runs once per file
 stopped at a failing file with files left to check. `check` whose fix failed under
 fail-fast reports `complete: false`. It is emitted for every execution of `fix`,
 `lint` and `check` — also when the run could not start, for example because the
-configuration does not load — never under `--explain` or for a usage error, and
-not for the fix that `config reconcile` runs after writing its files.
+configuration does not load — never under `--explain`, for a usage error, or for
+a run a signal ended while its configuration was loading, and not for the fix
+that `config reconcile` runs after writing its files.
 
 ```json
 {
