@@ -184,7 +184,7 @@ cache-wide invalidation key instead would discard all of them.
 An operation that hands its tool host variables through
 [`inheritEnv`](../../reference/configuration-api.md#inheriting-host-variables-inheritenv)
 records its passes the same way, under the tool name plus a digest of the
-`NAME=value` pairs the tool was started with — `pinact+env:<xxh3>`. The
+`NAME=value` pairs the tool was started with — `reporter+env:<xxh3>`. The
 invalidation key hashes the configuration, which names the variables but never
 holds their values, so without it a pass recorded under one value would answer
 for another. A variable the host does not set adds nothing to the name.

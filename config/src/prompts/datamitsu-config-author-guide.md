@@ -84,6 +84,12 @@ writes the configuration; never ship it to consumers.
 Newest first. Each entry names the first version that has it and what a
 configuration should do about it.
 
+- **after v0.3.1** - Tools run by `fix`, `lint` and `check` no longer see
+  `GITHUB_ACTIONS`, AI agent markers or `FORCE_COLOR`, and always get
+  `NO_COLOR=1`; `CI` still passes through and `exec` changes nothing
+  (`datamitsu llms reference/tool-environment`). A tool that needs one of them
+  names it in `inheritEnv`; an `env: { GITHUB_ACTIONS: "false" }` kept only to
+  stop annotations can go.
 - **after v0.3.1** - A tool operation can name host variables in `inheritEnv`;
   the tool gets the host's value, and the value is part of the operation's cache
   identity (`datamitsu llms reference/configuration-api`). `NO_COLOR` is

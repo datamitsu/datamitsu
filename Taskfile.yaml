@@ -84,6 +84,15 @@ tasks:
       # pre-commit hook expects (idempotent → no drift, no .prettierignore needed).
       - pnpm dm fix ./website/docs/reference/parser-catalog.md
     desc: Regenerate the parser-catalog docs page from the built WASM module (run by build:parsers)
+  gen:toolenv-doc:
+    cmds:
+      - go run ./packaging/toolenv-doc > website/docs/reference/tool-environment.md
+      # The page is rendered already formatted, so this must change nothing:
+      # internal/toolenv's freshness test compares the rendering with the
+      # committed page byte for byte. Only the formatters that own Markdown run;
+      # a plain `dm fix` would also format the whole Go project.
+      - pnpm dm fix --tools prettier,oxfmt ./website/docs/reference/tool-environment.md
+    desc: Regenerate the tool-environment reference page from internal/toolenv
   generate:prompts:
     cmds:
       - node config/scripts/generate-prompts.ts

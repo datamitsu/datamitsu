@@ -20,7 +20,6 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/cache"
-	clr "github.com/datamitsu/datamitsu/internal/color"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/diagnostic"
 	"github.com/datamitsu/datamitsu/internal/env"
@@ -648,9 +647,10 @@ func (e *Executor) executeTask(ctx context.Context, task Task) ExecutionResult {
 	return result
 }
 
-// buildCommand creates an exec.Cmd from CommandInfo and arguments.
-// Environment merge order: OS env -> inherited host pairs -> color hints -> app
-// env (cmdInfo.Env) -> toolOpEnv (ToolOperation.Env).
+// buildCommand creates an exec.Cmd from CommandInfo and arguments. The tool's
+// environment is toolenv.Apply's: the process environment without the stripped
+// variables, then the inherited host pairs, the app env (cmdInfo.Env) and the
+// operation env (ToolOperation.Env), and NO_COLOR=1 last.
 func (e *Executor) buildCommand(ctx context.Context, cmdInfo *binmanager.CommandInfo, args []string, workingDir string, toolOpEnv map[string]string, inherited []string) *exec.Cmd {
 	var cmd *exec.Cmd
 
@@ -665,59 +665,11 @@ func (e *Executor) buildCommand(ctx context.Context, cmdInfo *binmanager.Command
 	}
 
 	cmd.Dir = workingDir
-
-	colorHints := clr.ChildEnvHints()
-	if len(inherited) > 0 || len(cmdInfo.Env) > 0 || len(toolOpEnv) > 0 || len(colorHints) > 0 {
-		cmd.Env = mergeEnvLayers(cmd.Environ(), pairsLayer(inherited), colorHints, cmdInfo.Env, toolOpEnv)
-	}
+	cmd.Env = toolenv.Apply(cmd.Environ(), inherited, cmdInfo.Env, toolOpEnv)
 
 	log.Debug("buildCommand", zap.Int("countOfArgs", len(cmd.Args)), zap.String("dir", cmd.Dir), zap.String("path", cmd.Path), zap.Strings("args", cmd.Args))
 
 	return cmd
-}
-
-func pairsLayer(pairs []string) map[string]string {
-	if len(pairs) == 0 {
-		return nil
-	}
-	layer := make(map[string]string, len(pairs))
-	for _, kv := range pairs {
-		name, value, _ := strings.Cut(kv, "=")
-		layer[name] = value
-	}
-	return layer
-}
-
-// mergeEnvLayers merges environment variable layers with later layers overriding earlier ones.
-// Order: base (OS env) -> layers[0] (app env) -> layers[1] (tool operation env) -> ...
-func mergeEnvLayers(base []string, layers ...map[string]string) []string {
-	extra := 0
-	for _, layer := range layers {
-		extra += len(layer)
-	}
-	env := make([]string, 0, len(base)+extra)
-	env = append(env, base...)
-
-	keyToIdx := make(map[string]int, len(env))
-	for i, e := range env {
-		if j := strings.IndexByte(e, '='); j > 0 {
-			keyToIdx[e[:j]] = i
-		}
-	}
-
-	for _, layer := range layers {
-		for key, value := range layer {
-			envVar := fmt.Sprintf("%s=%s", key, value)
-			if idx, ok := keyToIdx[key]; ok {
-				env[idx] = envVar
-			} else {
-				keyToIdx[key] = len(env)
-				env = append(env, envVar)
-			}
-		}
-	}
-
-	return env
 }
 
 // formatCommandString formats a command for display (dry-run, logging)

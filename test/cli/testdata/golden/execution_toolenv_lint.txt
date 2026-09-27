@@ -1,0 +1,23 @@
+exit code: 1
+===STDOUT===
+╭<RULE>╮
+│ datamitsu  <VERSION> │
+╰<RULE>╯
+
+┏━ lint <RULE>
+┃ fixture
+┃
+┃ ✗ probe  <DUR> (1 failed)
+  ┌─ probe [repository] (run #1) <RULE>
+  │  Cwd:       <TMP>
+  │  Command:   sh -c sleep 0.01; printf 'CI=%s GITHUB_ACTIONS=%s AI_AGENT=%s FORCE_COLOR=%s NO_COLOR=%s\n' "$CI" "$GITHUB_ACTIONS" "$AI_AGENT" "$FORCE_COLOR" "$NO_COLOR"; exit 1 probe
+  │  Exit code: 1
+  │  Duration:  <DUR>
+  │
+  │  CI=true GITHUB_ACTIONS= AI_AGENT= FORCE_COLOR= NO_COLOR=1
+  └<RULE>
+
+┗━ 1 tools · 1 runs · done in <DUR> · 1 failed <RULE>
+
+===STDERR===
+error: operation failed

@@ -24,7 +24,7 @@ func Resolve(environ, names []string) []string {
 			continue
 		}
 		for _, want := range names {
-			if sameName(name, want) {
+			if canonical(name) == canonical(want) {
 				out = append(out, kv)
 				break
 			}
@@ -34,11 +34,11 @@ func Resolve(environ, names []string) []string {
 	return out
 }
 
-// sameName compares variable names the way the host does: Windows reads them
-// in any letter case.
-func sameName(a, b string) bool {
+// canonical spells a variable name the way the host compares it: Windows reads
+// names in any letter case.
+func canonical(name string) string {
 	if runtime.GOOS == "windows" {
-		return strings.EqualFold(a, b)
+		return strings.ToUpper(name)
 	}
-	return a == b
+	return name
 }

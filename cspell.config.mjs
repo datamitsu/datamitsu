@@ -57,6 +57,9 @@ export default defineConfig((config) => ({
     // and the Go package that does it.
     "WCAG",
     "inspectortheme",
+    // The Docusaurus anchor of the inheritEnv heading, which the generated
+    // tool-environment page links to from Go.
+    "inheritenv",
     // A shell-literal expectation in internal/shellquote: `$'a\xffb'`. The
     // trailing "b" is load-bearing — it is a hex digit, and the test asserts
     // that a shell stops the \x escape after exactly two digits rather than

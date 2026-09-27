@@ -187,7 +187,7 @@ operations: {
 }
 ```
 
-Environment variables are merged in layers: OS env -> color hints -> app env -> operation env. Later layers override earlier ones.
+Environment variables are merged in layers: OS env without the variables datamitsu strips -> the operation's `inheritEnv` -> app env -> operation env -> `NO_COLOR=1`. Later layers override earlier ones, and nothing overrides `NO_COLOR=1`. The stripped variables (`GITHUB_ACTIONS`, AI agent markers, `FORCE_COLOR`) are listed on the [Tool Environment](../reference/tool-environment.md) page.
 
 ## Parallel Execution
 

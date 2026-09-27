@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -1547,127 +1548,6 @@ func TestGroupByPriority(t *testing.T) {
 	}
 }
 
-func TestMergeEnvLayers(t *testing.T) {
-	t.Run("empty layers", func(t *testing.T) {
-		base := []string{"PATH=/usr/bin", "HOME=/root"}
-		result := mergeEnvLayers(base)
-		if len(result) != 2 {
-			t.Errorf("expected 2 entries, got %d", len(result))
-		}
-	})
-
-	t.Run("app env overrides OS env", func(t *testing.T) {
-		base := []string{"FOO=os_value", "PATH=/usr/bin"}
-		appEnv := map[string]string{"FOO": "app_value"}
-		result := mergeEnvLayers(base, appEnv)
-		found := false
-		for _, e := range result {
-			if e == "FOO=app_value" {
-				found = true
-			}
-			if e == "FOO=os_value" {
-				t.Error("OS FOO should have been overridden by app env")
-			}
-		}
-		if !found {
-			t.Errorf("expected FOO=app_value in result, got %v", result)
-		}
-	})
-
-	t.Run("tool op env overrides app env", func(t *testing.T) {
-		base := []string{"FOO=os_value", "PATH=/usr/bin"}
-		appEnv := map[string]string{"FOO": "app_value", "BAR": "app_bar"}
-		toolOpEnv := map[string]string{"FOO": "tool_value"}
-		result := mergeEnvLayers(base, appEnv, toolOpEnv)
-		found := false
-		for _, e := range result {
-			if e == "FOO=tool_value" {
-				found = true
-			}
-			if e == "FOO=app_value" || e == "FOO=os_value" {
-				t.Errorf("FOO should be tool_value, found %s", e)
-			}
-		}
-		if !found {
-			t.Errorf("expected FOO=tool_value in result, got %v", result)
-		}
-		// BAR from app env should still be present
-		barFound := false
-		for _, e := range result {
-			if e == "BAR=app_bar" {
-				barFound = true
-			}
-		}
-		if !barFound {
-			t.Errorf("expected BAR=app_bar from app env in result, got %v", result)
-		}
-	})
-
-	t.Run("full merge priority: OS < app < tool op", func(t *testing.T) {
-		base := []string{"A=os", "B=os", "C=os"}
-		appEnv := map[string]string{"B": "app", "C": "app"}
-		toolOpEnv := map[string]string{"C": "tool"}
-		result := mergeEnvLayers(base, appEnv, toolOpEnv)
-		expect := map[string]string{"A": "os", "B": "app", "C": "tool"}
-		for _, e := range result {
-			parts := strings.SplitN(e, "=", 2)
-			if len(parts) != 2 {
-				continue
-			}
-			if expected, ok := expect[parts[0]]; ok {
-				if parts[1] != expected {
-					t.Errorf("expected %s=%s, got %s=%s", parts[0], expected, parts[0], parts[1])
-				}
-			}
-		}
-	})
-
-	t.Run("new keys are added", func(t *testing.T) {
-		base := []string{"PATH=/usr/bin"}
-		appEnv := map[string]string{"NEW_APP": "val1"}
-		toolOpEnv := map[string]string{"NEW_TOOL": "val2"}
-		result := mergeEnvLayers(base, appEnv, toolOpEnv)
-		foundApp := false
-		foundTool := false
-		for _, e := range result {
-			if e == "NEW_APP=val1" {
-				foundApp = true
-			}
-			if e == "NEW_TOOL=val2" {
-				foundTool = true
-			}
-		}
-		if !foundApp {
-			t.Errorf("expected NEW_APP=val1, got %v", result)
-		}
-		if !foundTool {
-			t.Errorf("expected NEW_TOOL=val2, got %v", result)
-		}
-	})
-
-	t.Run("base is not mutated", func(t *testing.T) {
-		base := []string{"PATH=/usr/bin", "HOME=/root"}
-		original := make([]string, len(base))
-		copy(original, base)
-		mergeEnvLayers(base, map[string]string{"NEW": "val"})
-		for i, v := range base {
-			if v != original[i] {
-				t.Errorf("base was mutated at index %d: got %q, want %q", i, v, original[i])
-			}
-		}
-	})
-
-	t.Run("CI is not forced", func(t *testing.T) {
-		base := []string{"PATH=/usr/bin"}
-		result := mergeEnvLayers(base, nil, nil)
-		for _, e := range result {
-			if e == "CI=true" {
-				t.Errorf("CI=true should not be forced, got %v", result)
-			}
-		}
-	})
-}
-
 func TestBuildCommandEnvMerge(t *testing.T) {
 	tmpDir := t.TempDir()
 	appManager := &mockAppManager{
@@ -1675,15 +1555,31 @@ func TestBuildCommandEnvMerge(t *testing.T) {
 	}
 	executor := NewExecutor(tmpDir, false, false, appManager, nil)
 
-	t.Run("no extra env - inherits OS env", func(t *testing.T) {
+	t.Run("no extra env: the process environment, stripped, with NO_COLOR=1", func(t *testing.T) {
+		t.Setenv("TOOLENV_KEPT", "k")
+		t.Setenv("GITHUB_ACTIONS", "true")
+		t.Setenv("FORCE_COLOR", "1")
 		cmdInfo := &binmanager.CommandInfo{
 			Type:    "binary",
 			Command: "/bin/echo",
 		}
 		cmd := executor.buildCommand(context.Background(), cmdInfo, []string{"hello"}, tmpDir, nil, nil)
-		// When no env layers provided, cmd.Env should be nil (inherits OS env)
-		if cmd.Env != nil {
-			t.Errorf("expected nil cmd.Env when no extra env, got %v", cmd.Env)
+		if !slices.Contains(cmd.Env, "TOOLENV_KEPT=k") || !slices.Contains(cmd.Env, "NO_COLOR=1") {
+			t.Errorf("cmd.Env = %v, want the process environment and NO_COLOR=1", cmd.Env)
+		}
+		for _, kv := range cmd.Env {
+			if strings.HasPrefix(kv, "GITHUB_ACTIONS=") || strings.HasPrefix(kv, "FORCE_COLOR=") {
+				t.Errorf("cmd.Env carries %s", kv)
+			}
+		}
+	})
+
+	t.Run("inherited pairs come back", func(t *testing.T) {
+		t.Setenv("GITHUB_ACTIONS", "true")
+		cmdInfo := &binmanager.CommandInfo{Type: "binary", Command: "/bin/echo"}
+		cmd := executor.buildCommand(context.Background(), cmdInfo, nil, tmpDir, nil, []string{"GITHUB_ACTIONS=true"})
+		if !slices.Contains(cmd.Env, "GITHUB_ACTIONS=true") {
+			t.Errorf("cmd.Env = %v, want the inherited GITHUB_ACTIONS", cmd.Env)
 		}
 	})
 

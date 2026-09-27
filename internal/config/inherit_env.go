@@ -26,7 +26,7 @@ func inheritEnvErrors(toolName, opType string, names []string) []string {
 		case seen[name]:
 			errs = append(errs, field+": listed more than once")
 		case name == "NO_COLOR":
-			errs = append(errs, field+": NO_COLOR is reserved for datamitsu; it cannot be inherited")
+			errs = append(errs, field+": datamitsu sets NO_COLOR=1 for every tool fix, lint and check run; it cannot be inherited")
 		case name == "PATH":
 			errs = append(errs, field+": PATH cannot be inherited, it would replace the PATH the runtime sets; list the binary in the app's dependsOn to put it on PATH")
 		case strings.HasPrefix(name, "DATAMITSU_"):
@@ -44,7 +44,7 @@ func noColorEnvErrors(toolName, opType string, env map[string]string) []string {
 	for _, key := range slices.Sorted(maps.Keys(env)) {
 		if strings.EqualFold(key, "NO_COLOR") {
 			errs = append(errs, fmt.Sprintf(
-				"tool %q operation %q: env %q: NO_COLOR is reserved for datamitsu; it cannot be set",
+				"tool %q operation %q: env %q: datamitsu sets NO_COLOR=1 for every tool fix, lint and check run; it cannot be set",
 				toolName, opType, key,
 			))
 		}

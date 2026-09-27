@@ -804,7 +804,7 @@ interface ToolOperation {
   cache?: boolean; // Disable file/unit caching, or opt a repo verdict in
   invalidateOn?: string[]; // Additional unit/repo verdict inputs
   env?: Record<string, string>; // Extra environment variables; values support {root}, {cwd}, {toolCache}, {managedConfig:<key>}
-  inheritEnv?: string[]; // Host variables handed to the tool with the host's value
+  inheritEnv?: string[]; // Host variables handed to the tool with the host's value, even stripped ones
   input?: "file" | "stdin"; // How file content reaches the tool (default: "file")
   output?: "inplace" | "stdout"; // How the result is captured (default: "inplace")
   lsp?: boolean; // false keeps the operation out of the language server (format on save)
@@ -1024,21 +1024,29 @@ record, which declares language servers.
 `env` sets fixed values for one operation. They are layered over the app's own
 `env`, which is layered over the environment datamitsu was started with, so the
 operation's value wins. Values support `{root}`, `{cwd}`, `{toolCache}` and
-`{managedConfig:<key>}`. `NO_COLOR` cannot be set, in any letter case: it is
-reserved for datamitsu.
+`{managedConfig:<key>}`.
+
+Tools run by `fix`, `lint` and `check` do not see `GITHUB_ACTIONS`, the AI agent
+markers or `FORCE_COLOR`: several tools switch their output format on them, and
+datamitsu reads that output with a parser. They do see `CI` and every other CI
+variable, and they always get `NO_COLOR=1`, which `env` cannot set, in any letter
+case. Return a stripped variable with `inheritEnv`. The full list, with what
+each variable changes, is the generated
+[Tool Environment](./tool-environment.md) page. `datamitsu exec` strips nothing.
 
 #### Inheriting host variables (`inheritEnv`)
 
 `inheritEnv` names host environment variables the tool is handed with the
-host's value — the value is read when the task starts, never written in the
-config. A variable the host sets to the empty string is handed as empty, and one
-the host does not set adds nothing. `env` is layered after it, so a fixed value
-in `env` wins over an inherited one.
+host's value, even the ones datamitsu strips — the value is read when the task
+starts, never written in the config. A variable the host sets to the empty
+string is handed as empty, and one the host does not set adds nothing. `env` is
+layered after it, so a fixed value in `env` wins over an inherited one. A name
+datamitsu does not strip is accepted too.
 
 ```javascript
 lint: {
-  app: "pinact",
-  args: ["run", "--check"],
+  app: "my-reporter", // writes GitHub annotations on purpose, and has no parser
+  args: ["check"],
   scope: "repository",
   inheritEnv: ["GITHUB_ACTIONS"],
 },
