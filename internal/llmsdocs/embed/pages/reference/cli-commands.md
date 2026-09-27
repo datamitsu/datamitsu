@@ -567,7 +567,7 @@ When a release holds several programs — harper publishes `harper-cli-*`, `harp
 **Examples:**
 
 ```bash
-# Check for new releases without modifying the file
+# Detect binaries for the tags the file already pins (apps added or re-pinned by hand)
 datamitsu devtools pull-github config/src/githubApps.json
 
 # Update to latest releases
@@ -619,7 +619,7 @@ datamitsu config lockfile prettier
 datamitsu config lockfile eslint
 ```
 
-Registry requests that fail for a transient reason are made up to four times, each retry printed. A package that still fails keeps its previous entry; the run lists every failed package after the summary and exits with status 1.
+Registry requests that fail for a transient reason are made up to four times, each retry printed. With `--update`, a package whose entry changes is saved before the next one is looked up, so a later failure or an interrupted run keeps everything already pulled. A package that still fails keeps its previous entry; the run lists every failed package after the summary and exits with status 1. Without `--update` (or with `--dry-run`) the file is not written.
 
 :::tip See also
 For the full node app update workflow including lock file regeneration, see [Maintaining Wrapper Packages — Node Apps](/docs/how-to/maintain-wrapper#node-apps-npm-devtools-pull-node).
@@ -654,7 +654,7 @@ datamitsu devtools pull-uv config/src/uvApps.json --update
 datamitsu config lockfile yamllint
 ```
 
-Registry requests that fail for a transient reason are made up to four times, each retry printed. A package that still fails keeps its previous entry; the run lists every failed package after the summary and exits with status 1.
+Registry requests that fail for a transient reason are made up to four times, each retry printed. With `--update`, a package whose entry changes is saved before the next one is looked up, so a later failure or an interrupted run keeps everything already pulled. A package that still fails keeps its previous entry; the run lists every failed package after the summary and exits with status 1. Without `--update` (or with `--dry-run`) the file is not written.
 
 :::tip See also
 For the full UV app update workflow including lock file regeneration, see [Maintaining Wrapper Packages — UV Apps](/docs/how-to/maintain-wrapper#uv-apps-python-devtools-pull-uv).
@@ -683,7 +683,7 @@ The command detects binaries for all platform combinations (OS/Arch/Libc). For L
 - **node**: latest Node.js LTS resolved automatically; archives + SHA-256 from nodejs.org/dist (glibc/darwin/windows, GPG-verified via SHASUMS256.txt.asc) and unofficial-builds.nodejs.org (musl)
 - **pnpm**: newest pnpm 12 release old enough for the minimum release age (judged by its npm publish date), with per-platform archive SHA-256 digests from the matching pnpm/pnpm GitHub release; the Node and Bun entries reference it with `pnpmRuntime: "pnpm"`
 - **UV**: Python stable from endoflife.date, UV binary from GitHub
-- **JVM**: Java version from Adoptium API, Temurin JDK from GitHub
+- **JVM**: Java version from Adoptium API, Temurin JDK from GitHub; when the newest feature release has no build old enough for the minimum release age yet, the previous feature release
 - **go**: latest stable Go release + per-file SHA-256 from go.dev (`https://go.dev/dl/?mode=json`); HTTPS with published SHA-256, no GPG (the git-pinned hash is the integrity anchor, same trust model as the musl Node path)
 
 **Examples:**
@@ -708,7 +708,7 @@ datamitsu devtools pull-runtimes --update --runtime pnpm config/src/runtimes.jso
 datamitsu devtools pull-runtimes --update --dry-run config/src/runtimes.json
 ```
 
-Upstream requests that fail for a transient reason are made up to four times, each retry printed. Every runtime is attempted; when any fails, the summary marks it, the file is left unchanged — a failed runtime must not be recorded at its old version beside updated ones — and the run exits with status 1.
+Upstream requests that fail for a transient reason are made up to four times, each retry printed. Every runtime is attempted, pnpm first and then the rest in alphabetical order, and a runtime whose entry changes is saved before the next one starts, so a later failure or an interrupted run keeps everything already pulled. A runtime that fails keeps its previous entry — so does a Node or Bun entry that would name a pnpm runtime the file does not define — and the run lists every failed runtime with its error and exits with status 1. A save that fails stops the run.
 
 :::tip See also
 For the full runtime update workflow and CI automation, see [Maintaining Wrapper Packages — Runtimes](/docs/how-to/maintain-wrapper#runtimes-devtools-pull-runtimes).

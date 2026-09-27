@@ -154,7 +154,7 @@ Set `DATAMITSU_MIN_RELEASE_AGE` (minutes) to change the default for every comman
 
 ### Order and progress
 
-Every `pull-*` command works through its entries in alphabetical order — apps, packages and runtimes alike — and prints a counter with each (`=== Processing snyk [12/80] ===`, `[12/80] snyk  1.0.0  up-to-date`), so a long run says how far along it is. The file it writes has the keys of every object sorted, whatever the order they were declared in, so the diff of a pull shows what changed and nothing else. A file written by an older build is rewritten in that order the first time a pull saves it.
+Every `pull-*` command works through its entries in alphabetical order — apps, packages and runtimes alike, except that `pull-runtimes` takes pnpm first because the Node and Bun entries name it — and prints a counter with each (`=== Processing snyk [12/80] ===`, `[12/80] snyk  1.0.0  up-to-date`), so a long run says how far along it is. The file it writes has the keys of every object sorted, whatever the order they were declared in, so the diff of a pull shows what changed and nothing else. A file written by an older build is rewritten in that order the first time a pull saves it.
 
 ### Failures, retries and exit codes
 
@@ -169,7 +169,7 @@ Permanent failures — a 404, a release whose assets carry no digest, a validati
 
 Under `--verify-extraction`, only a fault in the asset itself — a hash mismatch, an archive that does not extract, a file that is not an executable — makes `pull-github` fall back to the next-ranked asset for the platform. A download that fails is not the asset's fault, so the platform is not handed to whatever ranks below (an attestation file, or a variant that happens to verify): it fails the app, whose previous entry is kept, and the report names the platform and the asset (`verify linux/amd64/glibc`).
 
-What the file holds after a failed run differs by command. `pull-github` saves after every app that succeeds, replacing the file whole each time, so each entry is either the previous state of an app that failed or the complete new state of one that succeeded, never a partial one; rerun the command to pick up the failed apps. A save that fails stops the run. `pull-node` and `pull-uv` write the successful lookups and keep the previous entry of a failed package. `pull-runtimes` writes nothing when any runtime failed, because the entries reference each other (`pnpmRuntime`) and must move together.
+Every `pull-*` command that writes its file saves it after each entry that changed, before it starts the next, and replaces the file whole each time. After a failed or interrupted run every entry is therefore either the previous state of one that failed or was not reached, or the complete new state of one that succeeded, never a partial one; rerun the command to pick up the rest. A save that fails stops the run. `pull-runtimes` pulls pnpm before the runtimes that name it, and does not record a Node or Bun entry whose `pnpmRuntime` the file does not define: that runtime fails and keeps its previous entry.
 
 Run large pulls with `GITHUB_TOKEN` set: the unauthenticated GitHub API allows 60 requests an hour, which a registry of a few dozen apps exhausts part-way.
 
@@ -324,7 +324,7 @@ The command fetches versions from upstream sources:
 - **Node.js**: latest LTS version from endoflife.date API
 - **pnpm**: latest pnpm 12 release old enough for the minimum release age (judged by its npm publish date), with per-platform archive SHA-256 digests from the matching GitHub release
 - **Python**: latest stable (non-EOL) version from endoflife.date API
-- **Java (Temurin)**: latest major version from Adoptium API
+- **Java (Temurin)**: latest major version from Adoptium API, or the previous one while the latest has no build old enough for the minimum release age
 
 It then downloads runtime binaries for all platform tuples, computes SHA-256 hashes, and deduplicates musl entries that are identical to glibc.
 

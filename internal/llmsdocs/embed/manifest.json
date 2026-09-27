@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 55,
-  "pageSetHash": "aec7548b7eaa8494d3e5f66b7bc1c87e",
+  "pageSetHash": "356c9a64a86bb2fdc56592b05f7d171a",
   "pages": [
     {
       "slug": "about",
@@ -343,8 +343,8 @@
       "url": "https://datamitsu.com/docs/guides/supply-chain-security.md",
       "title": "Supply Chain Security",
       "description": "How datamitsu enforces supply chain integrity for Bun, pnpm, UV, and Go dependencies",
-      "bytes": 28057,
-      "contentHash": "4f5f6940fc943db5c20461a65b083242"
+      "bytes": 28623,
+      "contentHash": "62602daf8c95ba0f8114c40bed3f8e7a"
     },
     {
       "slug": "guides/tooling-system",
@@ -397,8 +397,8 @@
       "url": "https://datamitsu.com/docs/how-to/maintain-wrapper.md",
       "title": "Maintaining Wrapper Packages",
       "description": "Workflows for keeping wrapper package tool versions, runtimes, and hashes up to date using devtools commands",
-      "bytes": 38308,
-      "contentHash": "529c41f89b54897e5109ff1ae00893c4"
+      "bytes": 38496,
+      "contentHash": "23e44648d8e47cbd1006ba1ca9b27591"
     },
     {
       "slug": "how-to/manage-cache",
@@ -451,8 +451,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 98039,
-      "contentHash": "f5c8ce01b5ae93128f8669c865b320f3"
+      "bytes": 98917,
+      "contentHash": "acb48f5572bb9503c3523b3190b221d7"
     },
     {
       "slug": "reference/comparison",
