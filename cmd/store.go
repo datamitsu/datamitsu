@@ -128,10 +128,11 @@ func resolveSeedRef(ctx context.Context, cfg *config.Config, args []string) (*co
 
 	arg := args[0]
 	if ref, digest, ok := strings.Cut(arg, "@"); ok {
-		if _, err := extractHashFromDigest(digest); err != nil {
+		pinned := &config.OCIRef{Ref: ref, Digest: digest}
+		if err := config.ValidateOCI(pinned); err != nil {
 			return nil, exitcode.UsageErrorf("reference %q: %w", arg, err)
 		}
-		return &config.OCIRef{Ref: ref, Digest: digest}, nil
+		return pinned, nil
 	}
 
 	// The tag separator is the last colon after the last "/", so a ported

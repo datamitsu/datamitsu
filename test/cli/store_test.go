@@ -185,6 +185,18 @@ func TestStoreSeedArgValidation(t *testing.T) {
 			wantExit: 2,
 		},
 		{
+			name:     "digest-reference-without-host",
+			args:     []string{"store", "seed", "owner/repo@sha256:" + strings.Repeat("a", 64)},
+			want:     `oci: ref "owner/repo"`,
+			wantExit: 2,
+		},
+		{
+			name:     "uppercase-digest",
+			args:     []string{"store", "seed", "example.invalid/owner/repo@sha256:" + strings.Repeat("A", 64)},
+			want:     "64 lowercase hex characters",
+			wantExit: 2,
+		},
+		{
 			name:     "malformed-reference-with-resolve-tag",
 			args:     []string{"store", "seed", "--resolve-tag", "bad:latest"},
 			want:     `reference "bad"`,
