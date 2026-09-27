@@ -59,11 +59,20 @@ fn report_to_diag(report: &JsonValue) -> Option<RawDiagnostic> {
 	let message = format!("{diag_message}\n{remediation}");
 
 	let code = get_str(map, "Check");
+	let file = map
+		.get("Object")
+		.and_then(as_object)
+		.and_then(|o| o.get("Metadata"))
+		.and_then(as_object)
+		.and_then(|m| get_str(m, "FilePath"))
+		.as_deref()
+		.and_then(crate::diagnostic::file_field);
 
 	Some(RawDiagnostic {
 		message,
 		source: Some("kube-linter".to_string()),
 		code,
+		file,
 		..RawDiagnostic::default()
 	})
 }
@@ -114,6 +123,11 @@ mod tests {
 	#[test]
 	fn invalid_json_yields_nothing() {
 		assert!(parse(b"not json", b"", 1).is_empty());
+	}
+	#[test]
+	fn names_the_file_of_each_report() {
+		let json = br#"{"Reports":[{"Diagnostic":{"Message":"m"},"Check":"c","Remediation":"r","Object":{"Metadata":{"FilePath":"deploy/app.yaml"}}}]}"#;
+		assert_eq!(parse(json, b"", 1)[0].file.as_deref(), Some("deploy/app.yaml"));
 	}
 }
 

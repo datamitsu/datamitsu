@@ -69,6 +69,12 @@ fn parse_diagnostic(value: &JsonValue) -> Option<RawDiagnostic> {
 	};
 	let severity = str_field(obj, "severity").and_then(|s| severity::of(DESCRIPTOR.severities, &s));
 
+	let file = match obj.get("range") {
+		Some(JsonValue::Object(range)) => str_field(range, "filename")
+			.as_deref()
+			.and_then(crate::diagnostic::file_field),
+		_ => None,
+	};
 	// Positions only exist when a `range` is present.
 	let (row, col, end_row, end_col) = match obj.get("range") {
 		Some(JsonValue::Object(range)) => {
@@ -87,6 +93,7 @@ fn parse_diagnostic(value: &JsonValue) -> Option<RawDiagnostic> {
 		end_col,
 		severity,
 		source: Some("terragrunt validate".to_string()),
+		file,
 		..RawDiagnostic::default()
 	})
 }
@@ -169,6 +176,11 @@ mod tests {
 	#[test]
 	fn empty_diagnostics_yields_nothing() {
 		assert!(parse(b"", br#"{"diagnostics":[]}"#, 0).is_empty());
+	}
+	#[test]
+	fn names_the_file_of_each_diagnostic() {
+		let json = br#"[{"severity":"error","summary":"s","range":{"filename":"live/terragrunt.hcl","start":{"line":1,"column":1},"end":{"line":1,"column":2}}}]"#;
+		assert_eq!(parse(json, b"", 1)[0].file.as_deref(), Some("live/terragrunt.hcl"));
 	}
 }
 

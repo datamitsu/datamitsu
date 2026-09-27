@@ -311,51 +311,63 @@ func TestLevelsAndRuleURLThroughTheExecutor(t *testing.T) {
 	}
 }
 
-// TestThresholdFailsTheNamedFileOfABatch runs the real module over one semgrep
-// batch: an error at exit 0 fails the run, and only the file it names.
+// TestThresholdFailsTheNamedFileOfABatch runs the real module over one batch
+// of each list-taking tool: a finding at or above --fail-on=warning at exit 0
+// fails the run, and only the file it names.
 func TestThresholdFailsTheNamedFileOfABatch(t *testing.T) {
 	mgr := coreModule(t)
-	root := t.TempDir()
-	files := make([]string, 0, 2)
-	for _, name := range []string{"a.py", "b.py"} {
-		path := filepath.Join(root, name)
-		if err := os.WriteFile(path, []byte("x = 1\n"), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		files = append(files, path)
+	reports := map[string]string{
+		"semgrep": `{"results":[{"check_id":"r.eval","path":"a.py","start":{"line":1,"col":1},` +
+			`"end":{"line":1,"col":6},"extra":{"message":"eval is dangerous","severity":"ERROR"}}]}`,
+		"tfsec": `{"results":[{"rule_id":"r","description":"d","severity":"HIGH","status":0,` +
+			`"location":{"filename":"a.py","start_line":1,"end_line":1}}]}`,
+		"buildifier": `{"files":[{"filename":"a.py","warnings":[{"start":{"line":1,"column":1},` +
+			`"end":{"line":1,"column":2},"category":"load","message":"m"}]}]}`,
+		"phpstan": `{"files":{"a.py":{"errors":1,"messages":[{"message":"m","line":1}]}}}`,
 	}
-	const report = `{"results":[{"check_id":"r.eval","path":"a.py","start":{"line":1,"col":1},` +
-		`"end":{"line":1,"col":6},"extra":{"message":"eval is dangerous","severity":"ERROR"}}]}`
-	executor := tooling.NewExecutor(root, false, false, shellApps{
-		"semgrep": {Type: "shell", Command: "/bin/sh", Args: []string{"-c", "printf '%s' '" + report + "'"}},
-	}, nil)
-	executor.SetParser(newDiagnosticParser(mgr, newParseProblems()))
-	executor.SetGate(tooling.ThresholdGate("", func(module string) bool {
-		ok, err := mgr.SeverityContract(context.Background(), module)
-		return err == nil && ok
-	}, nil))
-	plan := &tooling.ExecutionPlan{Groups: []tooling.TaskGroup{{Tasks: []tooling.Task{{
-		ToolName:    "semgrep",
-		Tool:        config.Tool{Name: "semgrep", OutputParser: &config.OutputParser{Module: "core", Parser: "semgrep"}},
-		Operation:   config.OpLint,
-		OpConfig:    config.ToolOperation{App: "semgrep", Scope: config.ToolScopeRepository, Args: []string{"{files}"}},
-		Files:       files,
-		ProjectPath: root,
-	}}}}}
-	results, err := executor.Execute(context.Background(), plan)
-	if err != nil {
-		t.Fatal(err)
-	}
-	result := results[0].Results[0]
-	if result.Success || result.FailureReason != tooling.FailureReasonThreshold {
-		t.Fatalf("Success = %v, FailureReason = %v; want a threshold failure", result.Success, result.FailureReason)
-	}
-	got := make([]bool, 0, len(result.FileResults))
-	for _, fr := range result.FileResults {
-		got = append(got, fr.Success)
-	}
-	if !slices.Equal(got, []bool{false, true}) {
-		t.Errorf("file success = %v, want only a.py failed", got)
+	for parser, report := range reports {
+		t.Run(parser, func(t *testing.T) {
+			root := t.TempDir()
+			files := make([]string, 0, 2)
+			for _, name := range []string{"a.py", "b.py"} {
+				path := filepath.Join(root, name)
+				if err := os.WriteFile(path, []byte("x = 1\n"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				files = append(files, path)
+			}
+			executor := tooling.NewExecutor(root, false, false, shellApps{
+				"tool": {Type: "shell", Command: "/bin/sh", Args: []string{"-c", "printf '%s' '" + report + "'"}},
+			}, nil)
+			executor.SetParser(newDiagnosticParser(mgr, newParseProblems()))
+			executor.SetGate(tooling.ThresholdGate(config.SeverityWarning, func(module string) bool {
+				ok, err := mgr.SeverityContract(context.Background(), module)
+				return err == nil && ok
+			}, nil))
+			plan := &tooling.ExecutionPlan{Groups: []tooling.TaskGroup{{Tasks: []tooling.Task{{
+				ToolName:    parser,
+				Tool:        config.Tool{Name: parser, OutputParser: &config.OutputParser{Module: "core", Parser: parser}},
+				Operation:   config.OpLint,
+				OpConfig:    config.ToolOperation{App: "tool", Scope: config.ToolScopeRepository, Args: []string{"{files}"}},
+				Files:       files,
+				ProjectPath: root,
+			}}}}}
+			results, err := executor.Execute(context.Background(), plan)
+			if err != nil {
+				t.Fatal(err)
+			}
+			result := results[0].Results[0]
+			if result.Success || result.FailureReason != tooling.FailureReasonThreshold {
+				t.Fatalf("Success = %v, FailureReason = %v; want a threshold failure", result.Success, result.FailureReason)
+			}
+			got := make([]bool, 0, len(result.FileResults))
+			for _, fr := range result.FileResults {
+				got = append(got, fr.Success)
+			}
+			if !slices.Equal(got, []bool{false, true}) {
+				t.Errorf("file success = %v, want only a.py failed", got)
+			}
+		})
 	}
 }
 

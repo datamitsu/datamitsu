@@ -39,8 +39,13 @@ pub fn parse(stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic
 					let key = "warnings";
 					if let Some(JsonValue::Array(warnings)) = f.get(key) {
 						let level = severity::of(DESCRIPTOR.severities, key);
+						let filename = match f.get("filename") {
+							Some(JsonValue::String(s)) => crate::diagnostic::file_field(s),
+							_ => None,
+						};
 						for w in warnings {
-							if let Some(d) = parse_warning(w, level) {
+							if let Some(mut d) = parse_warning(w, level) {
+								d.file.clone_from(&filename);
 								out.push(d);
 							}
 						}
@@ -190,6 +195,12 @@ mod tests {
 	fn empty_when_no_warnings() {
 		let out = parse(br#"{"files":[{"filename":"BUILD","warnings":[]}]}"#, b"", 0);
 		assert!(out.is_empty());
+	}
+	#[test]
+	fn names_the_file_of_each_warning() {
+		let json = br#"{"files":[{"filename":"pkg/BUILD","formatted":true,"valid":true,"warnings":[
+            {"start":{"line":1,"column":1},"end":{"line":1,"column":5},"category":"load","message":"m","url":"https://example.test/load"}]}]}"#;
+		assert_eq!(parse(json, b"", 4)[0].file.as_deref(), Some("pkg/BUILD"));
 	}
 }
 

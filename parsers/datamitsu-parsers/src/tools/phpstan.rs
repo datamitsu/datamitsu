@@ -48,11 +48,12 @@ pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 	// Navigate {"files": {"<path>": {"messages": [...]}}}.
 	if let JsonValue::Object(root) = &value {
 		if let Some(JsonValue::Object(files)) = root.get("files") {
-			for file in files.values() {
+			for (path, file) in files {
 				if let JsonValue::Object(file_obj) = file {
 					if let Some(JsonValue::Array(messages)) = file_obj.get("messages") {
 						for msg in messages {
-							if let Some(d) = json_diag::from_obj(msg, &attrs, severity_of) {
+							if let Some(mut d) = json_diag::from_obj(msg, &attrs, severity_of) {
+								d.file = crate::diagnostic::file_field(path);
 								out.push(d);
 							}
 						}
@@ -101,6 +102,11 @@ mod tests {
 	#[test]
 	fn invalid_json_yields_nothing() {
 		assert!(parse(b"not json", b"", 1).is_empty());
+	}
+	#[test]
+	fn names_the_file_each_message_is_under() {
+		let json = br#"{"files":{"src/A.php":{"errors":1,"messages":[{"message":"m","line":3}]}}}"#;
+		assert_eq!(parse(json, b"", 1)[0].file.as_deref(), Some("src/A.php"));
 	}
 }
 

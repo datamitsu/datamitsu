@@ -63,6 +63,11 @@ fn result_to_diag(result: &JsonValue) -> Option<RawDiagnostic> {
 		JsonValue::Object(m) => m,
 		_ => return None,
 	};
+	// With --include-passed tfsec lists the checks that passed (status 1) or
+	// were ignored (2) with their severity: only a failed one is a finding.
+	if matches!(map.get("status"), Some(JsonValue::Number(n)) if *n != 0.0) {
+		return None;
+	}
 	// message = description (the one required field).
 	let message = get_str(map, "description")?;
 	let location = map.get("location").and_then(as_object);
@@ -82,6 +87,10 @@ fn result_to_diag(result: &JsonValue) -> Option<RawDiagnostic> {
 		url,
 		severity: get_str(map, "severity").and_then(|s| severity::of(DESCRIPTOR.severities, &s)),
 		source: Some("tfsec".to_string()),
+		file: location
+			.and_then(|l| get_str(l, "filename"))
+			.as_deref()
+			.and_then(crate::diagnostic::file_field),
 		..RawDiagnostic::default()
 	})
 }
@@ -195,6 +204,18 @@ mod tests {
 	fn null_results_yield_nothing() {
 		assert!(parse(br#"{"results":null}"#, b"", 0).is_empty());
 		assert!(parse(b"no json here", b"", 1).is_empty());
+	}
+	#[test]
+	fn a_check_that_passed_or_was_ignored_is_no_finding() {
+		let json = br#"{"results":[
+            {"rule_id":"a","description":"passed","severity":"HIGH","status":1,"location":{"filename":"a.tf","start_line":1,"end_line":1}},
+            {"rule_id":"b","description":"ignored","severity":"HIGH","status":2,"location":{"filename":"a.tf","start_line":2,"end_line":2}},
+            {"rule_id":"c","description":"failed","severity":"HIGH","status":0,"location":{"filename":"infra/b.tf","start_line":3,"end_line":3}}
+        ]}"#;
+		let out = parse(json, b"", 0);
+		assert_eq!(out.len(), 1, "{out:?}");
+		assert_eq!(out[0].code.as_deref(), Some("c"));
+		assert_eq!(out[0].file.as_deref(), Some("infra/b.tf"));
 	}
 }
 

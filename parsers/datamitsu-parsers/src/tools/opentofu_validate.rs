@@ -75,6 +75,12 @@ fn from_diag(value: &JsonValue) -> Option<RawDiagnostic> {
 	};
 	let severity = get_str(map, "severity").as_deref().and_then(severity_of);
 
+	let file = match map.get("range") {
+		Some(JsonValue::Object(range)) => get_str(range, "filename")
+			.as_deref()
+			.and_then(crate::diagnostic::file_field),
+		_ => None,
+	};
 	let (row, col, end_row, end_col) = match map.get("range") {
 		Some(JsonValue::Object(range)) => {
 			let (row, col) = position(range.get("start"));
@@ -92,6 +98,7 @@ fn from_diag(value: &JsonValue) -> Option<RawDiagnostic> {
 		end_col,
 		severity,
 		source: Some("opentofu validate".to_string()),
+		file,
 		..RawDiagnostic::default()
 	})
 }
@@ -198,6 +205,11 @@ mod tests {
 	#[test]
 	fn invalid_json_yields_nothing() {
 		assert!(parse(b"", b"not json", 1).is_empty());
+	}
+	#[test]
+	fn names_the_file_of_each_diagnostic() {
+		let json = br#"{"valid":false,"diagnostics":[{"severity":"error","summary":"s","range":{"filename":"mod/main.tf","start":{"line":1,"column":1},"end":{"line":1,"column":2}}}]}"#;
+		assert_eq!(parse(b"", json, 1)[0].file.as_deref(), Some("mod/main.tf"));
 	}
 }
 

@@ -33,6 +33,7 @@ pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 		code: "policy_name",
 		message: "description",
 		severity: "severity",
+		file: "file_path",
 		..Attrs::defaults()
 	};
 	json_diag::from_json(stdout, &attrs, severity_of)
@@ -73,6 +74,11 @@ mod tests {
 		let json = br#"[{"line_number":1,"column_number":1,"severity":"fatal","description":"x"}]"#;
 		let out = parse(json, b"", 1);
 		assert_eq!(out[0].severity, None);
+	}
+	#[test]
+	fn names_the_file_of_each_problem() {
+		let json = br#"[{"file_path":"plugin/a.vim","line_number":1,"column_number":1,"policy_name":"P","description":"d","severity":"warning"}]"#;
+		assert_eq!(parse(json, b"", 1)[0].file.as_deref(), Some("plugin/a.vim"));
 	}
 }
 

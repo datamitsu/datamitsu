@@ -77,6 +77,9 @@ fn from_diag(value: &JsonValue) -> Option<RawDiagnostic> {
 	};
 
 	if let Some(JsonValue::Object(range)) = map.get("range") {
+		diag.file = get_str(range, "filename")
+			.as_deref()
+			.and_then(crate::diagnostic::file_field);
 		if let Some(JsonValue::Object(start)) = range.get("start") {
 			diag.row = get_u32(start, "line");
 			diag.col = get_u32(start, "column");
@@ -173,6 +176,11 @@ mod tests {
 	fn valid_output_yields_nothing() {
 		let stderr = br#"{"valid": true, "diagnostics": []}"#;
 		assert!(parse(b"", stderr, 0).is_empty());
+	}
+	#[test]
+	fn names_the_file_of_each_diagnostic() {
+		let json = br#"{"valid":false,"diagnostics":[{"severity":"error","summary":"s","range":{"filename":"mod/main.tf","start":{"line":1,"column":1},"end":{"line":1,"column":2}}}]}"#;
+		assert_eq!(parse(b"", json, 1)[0].file.as_deref(), Some("mod/main.tf"));
 	}
 }
 
