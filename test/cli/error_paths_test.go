@@ -75,18 +75,38 @@ func TestConfigUnreadableFile(t *testing.T) {
 }
 
 // TestSubcommandUnknownFlag confirms an unknown flag attached to a leaf command
-// (not the root) is rejected at parse time: exit non-zero, "unknown flag" on
-// stderr, and — because flag errors set SilenceUsage — no usage block.
+// (not the root) is rejected at parse time: exit 2, the usage code, "unknown
+// flag" on stderr, and — because flag errors set SilenceUsage — no usage block.
 func TestSubcommandUnknownFlag(t *testing.T) {
 	res := clitest.Run(t, clitest.RunOptions{}, "config", "show", "--definitely-not-a-flag")
-	if res.ExitCode == 0 {
-		t.Fatalf("unknown subcommand flag exit = 0, want non-zero\nstdout:\n%s", res.Stdout)
+	if res.ExitCode != 2 {
+		t.Fatalf("unknown subcommand flag exit = %d, want 2\nstdout:\n%s", res.ExitCode, res.Stdout)
 	}
 	if !strings.Contains(res.Stderr, "unknown flag") {
 		t.Errorf("stderr missing %q:\n%s", "unknown flag", res.Stderr)
 	}
 	if strings.Contains(res.Stderr, "Usage:") {
 		t.Errorf("flag error printed usage block (SilenceUsage broken):\n%s", res.Stderr)
+	}
+}
+
+// TestPositionalArgumentUsageError: a command given the wrong number of
+// arguments is called wrong, like a bad flag, and exits 2.
+func TestPositionalArgumentUsageError(t *testing.T) {
+	cases := [][]string{
+		{"devtools", "apps", "inspect"},
+		{"store", "seed", "one", "two"},
+	}
+	for _, args := range cases {
+		t.Run(strings.Join(args, "_"), func(t *testing.T) {
+			res := clitest.Run(t, clitest.RunOptions{}, args...)
+			if res.ExitCode != 2 {
+				t.Fatalf("`datamitsu %s` exit = %d, want 2\nstderr:\n%s", strings.Join(args, " "), res.ExitCode, res.Stderr)
+			}
+			if !strings.Contains(res.Stderr, "arg") {
+				t.Errorf("stderr should name the argument count:\n%s", res.Stderr)
+			}
+		})
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"strconv"
 
+	"github.com/datamitsu/datamitsu/internal/exitcode"
 	"github.com/datamitsu/datamitsu/internal/inspector"
 	"github.com/datamitsu/datamitsu/internal/inspectortheme"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
@@ -30,13 +31,13 @@ The artifact contains display metadata, not environment values, command argument
 managed file contents or download URLs. Filters show declared applicability, not
 an execution plan. Restart the command to refresh the snapshot.`,
 		Example: "  datamitsu inspect\n  datamitsu inspect --port 0\n  datamitsu inspect --output atlas.html\n  datamitsu inspect --output - > atlas.html",
-		Args:    cobra.NoArgs,
+		Args:    usageArgs(cobra.NoArgs),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if port < 0 || port > 65535 {
-				return errors.New("port must be between 0 and 65535")
+				return exitcode.UsageError{Err: errors.New("port must be between 0 and 65535")}
 			}
 			if cmd.Flags().Changed("output") && output == "" {
-				return errors.New("output must be a file path or -")
+				return exitcode.UsageError{Err: errors.New("output must be a file path or -")}
 			}
 			theme, err := inspectorTheme(themePath)
 			if err != nil {

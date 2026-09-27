@@ -47,6 +47,30 @@ var (
 // errCancelled is a sentinel error used when tasks are cancelled due to fail-fast context cancellation.
 var errCancelled = errors.New("cancelled")
 
+// errFailFast is the cause the executor cancels a run with when a task fails
+// under fail-fast. Any other cause — a signal the caller turned into a
+// cancellation, an editor withdrawing a request — is an interruption, and the
+// two are reported differently: a fail-fast cancel is a consequence of the
+// failure shown beside it, an interruption is not.
+var errFailFast = errors.New("fail-fast")
+
+// errStopped marks a process the executor's context stopped while it ran. A
+// process that ended on its own keeps its own error even when the context is
+// cancelled a moment later — while its output is being parsed, say — so the
+// failure it reported is not taken for a cancellation.
+var errStopped = errors.New("stopped by cancellation")
+
+func stoppedByCancellation(err error) bool {
+	return errors.Is(err, errStopped) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
+}
+
+func cancelReason(ctx context.Context) FailureReason {
+	if errors.Is(context.Cause(ctx), errFailFast) {
+		return FailureReasonCancelled
+	}
+	return FailureReasonInterrupted
+}
+
 // Executor executes tool tasks
 type Executor struct {
 	rootPath             string
@@ -139,9 +163,9 @@ func (e *Executor) Execute(ctx context.Context, plan *ExecutionPlan) ([]GroupExe
 	e.cmdInfos.Store(newCommandInfoMemo())
 	defer e.cmdInfos.Store(nil)
 
-	// Create a cancellable context for fail-fast propagation
-	execCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	execCtx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
+	failFast := func() { cancel(errFailFast) }
 
 	for _, group := range plan.Groups {
 		// Check if already cancelled before starting next group
@@ -151,7 +175,7 @@ func (e *Executor) Execute(ctx context.Context, plan *ExecutionPlan) ([]GroupExe
 		}
 
 		log.Debug("executing group", zap.Int("priority", group.Priority), zap.Int("taskCount", len(group.Tasks)))
-		groupResult := e.executeGroup(execCtx, group, cancel)
+		groupResult := e.executeGroup(execCtx, group, failFast)
 		results = append(results, groupResult)
 
 		log.Debug("group execution completed",
@@ -162,11 +186,11 @@ func (e *Executor) Execute(ctx context.Context, plan *ExecutionPlan) ([]GroupExe
 		// Fail-fast: stop on first group failure
 		if e.failFast && !groupResult.Success {
 			log.Debug("fail-fast triggered", zap.Int("priority", group.Priority))
-			cancel()
+			failFast()
 			// Collect failed tool errors, skip cancelled tasks (noise from fail-fast)
 			var errorMessages []string
 			for _, r := range groupResult.Results {
-				if !r.Success && !errors.Is(r.Error, errCancelled) && r.FailureReason != FailureReasonCancelled {
+				if !r.Success && !errors.Is(r.Error, errCancelled) && !r.IsCancelled() {
 					// Create identifier with directory for clarity in monorepos
 					toolIdentifier := r.ToolName
 					if r.RelativeDir != "" {
@@ -213,8 +237,15 @@ func (e *Executor) Execute(ctx context.Context, plan *ExecutionPlan) ([]GroupExe
 	return results, nil
 }
 
-// executeGroup executes a task group
-func (e *Executor) executeGroup(ctx context.Context, group TaskGroup, cancel context.CancelFunc) (result GroupExecutionResult) {
+// TaskDir is the directory a task runs in, relative to the git root, as its
+// results report it in RelativeDir ("" is the root).
+func (e *Executor) TaskDir(task Task) string {
+	return e.getRelativeDir(e.getWorkingDir(task))
+}
+
+// executeGroup executes a task group. failFast cancels the whole run; it is
+// called only when the executor runs with fail-fast.
+func (e *Executor) executeGroup(ctx context.Context, group TaskGroup, failFast func()) (result GroupExecutionResult) {
 	startTime := time.Now()
 	log.Debug("executeGroup start", zap.Int("priority", group.Priority), zap.Int("tasks", len(group.Tasks)))
 	result = GroupExecutionResult{
@@ -259,14 +290,14 @@ func (e *Executor) executeGroup(ctx context.Context, group TaskGroup, cancel con
 			if !taskResult.Success {
 				result.Success = false
 				if e.failFast {
-					cancel()
+					failFast()
 					return result
 				}
 			}
 		} else {
 			// Multiple non-overlapping tasks - execute in parallel
 			log.Debug("executing tasks in parallel", zap.Int("parallelTaskCount", len(parallelTasks)))
-			taskResults := e.executeTasksParallel(ctx, parallelTasks, cancel)
+			taskResults := e.executeTasksParallel(ctx, parallelTasks, failFast)
 			result.Results = append(result.Results, taskResults...)
 			log.Debug("parallel execution completed", zap.Int("resultCount", len(taskResults)))
 
@@ -281,7 +312,7 @@ func (e *Executor) executeGroup(ctx context.Context, group TaskGroup, cancel con
 				if !tr.Success {
 					result.Success = false
 					if e.failFast {
-						cancel()
+						failFast()
 						return result
 					}
 				}
@@ -342,9 +373,9 @@ func (e *Executor) detectParallelGroups(tasks []Task) [][]Task {
 }
 
 // executeTasksParallel executes multiple tasks in parallel with worker pool limiting.
-// cancel is called on first failure when failFast is enabled, so that sibling tasks
+// failFast is called on first failure when fail-fast is enabled, so that sibling tasks
 // waiting for the semaphore (or running via exec.CommandContext) are stopped promptly.
-func (e *Executor) executeTasksParallel(ctx context.Context, tasks []Task, cancel context.CancelFunc) []ExecutionResult {
+func (e *Executor) executeTasksParallel(ctx context.Context, tasks []Task, failFast func()) []ExecutionResult {
 	maxWorkers := env.GetMaxParallelWorkers()
 	log.Debug("executeTasksParallel start",
 		zap.Int("taskCount", len(tasks)),
@@ -382,13 +413,7 @@ func (e *Executor) executeTasksParallel(ctx context.Context, tasks []Task, cance
 			case <-ctx.Done():
 				log.Debug("parallel task skipped due to cancellation",
 					zap.Int("index", idx), zap.String("toolName", t.ToolName))
-				results[idx] = ExecutionResult{
-					ToolName:      t.ToolName,
-					Success:       false,
-					Error:         errCancelled,
-					Cancelled:     true,
-					FailureReason: FailureReasonCancelled,
-				}
+				results[idx] = e.unstartedResult(ctx, t)
 				return
 			case semaphore <- struct{}{}:
 				// Acquired semaphore slot
@@ -399,13 +424,7 @@ func (e *Executor) executeTasksParallel(ctx context.Context, tasks []Task, cance
 			if ctx.Err() != nil {
 				log.Debug("parallel task skipped after semaphore due to cancellation",
 					zap.Int("index", idx), zap.String("toolName", t.ToolName))
-				results[idx] = ExecutionResult{
-					ToolName:      t.ToolName,
-					Success:       false,
-					Error:         errCancelled,
-					Cancelled:     true,
-					FailureReason: FailureReasonCancelled,
-				}
+				results[idx] = e.unstartedResult(ctx, t)
 				return
 			}
 
@@ -419,7 +438,7 @@ func (e *Executor) executeTasksParallel(ctx context.Context, tasks []Task, cance
 			if e.failFast && !results[idx].Success {
 				log.Debug("fail-fast: cancelling sibling parallel tasks",
 					zap.Int("index", idx), zap.String("toolName", t.ToolName))
-				cancel()
+				failFast()
 			}
 		}(i, task)
 	}
@@ -427,6 +446,23 @@ func (e *Executor) executeTasksParallel(ctx context.Context, tasks []Task, cance
 	wg.Wait()
 	log.Debug("executeTasksParallel completed", zap.Int("taskCount", len(tasks)))
 	return results
+}
+
+// unstartedResult is the result of a task cancelled while it waited for a
+// worker. It carries the task's directory like any other result, so a caller can
+// tell which planned task it stands for; it has no timing because nothing ran.
+func (e *Executor) unstartedResult(ctx context.Context, task Task) ExecutionResult {
+	workingDir := e.getWorkingDir(task)
+	return ExecutionResult{
+		ToolName:      task.ToolName,
+		Success:       false,
+		Error:         errCancelled,
+		WorkingDir:    workingDir,
+		RelativeDir:   e.getRelativeDir(workingDir),
+		Scope:         task.OpConfig.Scope,
+		Cancelled:     true,
+		FailureReason: cancelReason(ctx),
+	}
 }
 
 // executeTask executes a single task
@@ -480,6 +516,10 @@ func (e *Executor) executeTask(ctx context.Context, task Task) ExecutionResult {
 		result.WorkingDir = workingDir
 		result.RelativeDir = relativeDir
 		result.FailureReason = FailureReasonIndependent
+		if ctx.Err() != nil && stoppedByCancellation(err) {
+			result.Cancelled = true
+			result.FailureReason = cancelReason(ctx)
+		}
 
 		// Call file progress callback even on error to maintain progress tracking
 		if e.fileProgressCallback != nil {
@@ -855,9 +895,26 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 		}
 	}
 
-	var outputs []string
+	var outputs []fileOutput
+	var failures []error
 	var lastExitCode int
 	var processedFiles []string
+	// The failure a frame shows is the last failing file's: its exit code and
+	// its command, not those of a later file that passed.
+	var failedCommand string
+	// A task that already failed on its own stays a failure when the run is
+	// then cancelled: the cancellation only leaves the rest of its files
+	// unchecked, and hiding the failure would hide what the run found.
+	failedOnOwn := false
+
+	formatMode := task.OpConfig.Output == config.ToolOutputStdout
+	// A formatter's stdout is the formatted file content, not diagnostics, so it
+	// must never be fed to the parser. Validation already limits output:stdout to
+	// the fix op, but a tool could still pair it with a tool-level outputParser;
+	// !formatMode keeps the parser off the formatted text in that case.
+	parseMode := e.parser != nil && task.Tool.OutputParser != nil && !formatMode
+	// Both formatting and parsing need stdout and stderr kept apart.
+	separate := formatMode || parseMode
 
 	for i, file := range filesToProcess {
 		// Check if context is cancelled before processing next file
@@ -865,10 +922,14 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 			log.Debug("per-file execution cancelled, skipping remaining files",
 				zap.String("toolName", task.ToolName),
 				zap.Int("remainingFiles", len(filesToProcess)-i))
+			if failedOnOwn {
+				result.FilesNotRun = len(filesToProcess) - i
+				break
+			}
 			result.Success = false
 			result.Error = fmt.Errorf("%w: %d files remaining", errCancelled, len(filesToProcess)-i)
 			result.Cancelled = true
-			result.FailureReason = FailureReasonCancelled
+			result.FailureReason = cancelReason(ctx)
 			break
 		}
 
@@ -877,7 +938,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 
 		if e.dryRun {
 			log.Debug("dry-run mode", zap.String("file", file), zap.Strings("args", args))
-			outputs = append(outputs, "[DRY-RUN] "+cmdString)
+			outputs = append(outputs, fileOutput{text: "[DRY-RUN] " + cmdString})
 			processedFiles = append(processedFiles, file)
 
 			// Call progress callback for dry-run files (offset by cached count)
@@ -900,25 +961,29 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 
 		stdinContent, stdinErr := stdinForOperation(task.OpConfig, file)
 		if stdinErr != nil {
+			failedOnOwn = true
+			failedCommand = cmdString
 			result.Success = false
-			result.Error = fmt.Errorf("failed to prepare stdin for file %s: %w", file, stdinErr)
+			result.ExitCode = -1
+			stdinFailure := fmt.Errorf("failed to prepare stdin for file %s: %w", file, stdinErr)
+			failures = append(failures, stdinFailure)
+			// The frame shows the joined output, not Error, once any file wrote
+			// some: without this line a later file's output would stand in for
+			// a failure no process reported.
+			outputs = append(outputs, fileOutput{text: stdinFailure.Error(), failed: true})
+			if parseMode {
+				result.UnparsedFailures = append(result.UnparsedFailures, stdinFailure.Error())
+			}
 			if e.fileProgressCallback != nil {
 				e.fileProgressCallback(task.ToolName, cachedCount+i+1, totalFiles, false)
 			}
 			if e.failFast {
+				result.FilesNotRun = len(filesToProcess) - i - 1
 				break
 			}
 			continue
 		}
 
-		formatMode := task.OpConfig.Output == config.ToolOutputStdout
-		// A formatter's stdout is the formatted file content, not diagnostics, so it
-		// must never be fed to the parser. Validation already limits output:stdout to
-		// the fix op, but a tool could still pair it with a tool-level outputParser;
-		// !formatMode keeps the parser off the formatted text in that case.
-		parseMode := e.parser != nil && task.Tool.OutputParser != nil && !formatMode
-		// Both formatting and parsing need stdout and stderr kept apart.
-		separate := formatMode || parseMode
 		stdoutBytes, stderrBytes, err := e.runCommandIO(cmd, stdinContent, separate)
 
 		var output []byte
@@ -935,7 +1000,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 		default:
 			output = stdoutBytes
 		}
-		outputs = append(outputs, string(output))
+		outputs = append(outputs, fileOutput{text: string(output)})
 
 		exitCode := getExitCode(err)
 		lastExitCode = exitCode
@@ -943,6 +1008,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 		// Parse this file's output into structured diagnostics when the tool
 		// declares an outputParser. Per-file mode means each invocation lints one
 		// file, so the diagnostics belong to it.
+		diagnosticsBefore := len(result.Diagnostics)
 		if parseMode {
 			e.parseFileDiagnostics(ctx, &result, task, file, stdoutBytes, stderrBytes, exitCode)
 		}
@@ -992,23 +1058,45 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 				zap.String("file", file),
 				zap.Int("exitCode", exitCode),
 				zap.Error(err))
-			result.Success = false
-			result.ExitCode = exitCode
-			result.Error = fmt.Errorf("failed to execute for file %s (exit code %d): %w", file, exitCode, err)
-			if ctx.Err() != nil {
-				result.Cancelled = true
-				result.FailureReason = FailureReasonCancelled
+			if stoppedByCancellation(err) {
+				if failedOnOwn {
+					result.FilesNotRun = len(filesToProcess) - i
+				} else {
+					result.Success = false
+					result.ExitCode = exitCode
+					result.Error = fmt.Errorf("failed to execute for file %s (exit code %d): %w", file, exitCode, err)
+					result.Cancelled = true
+					result.FailureReason = cancelReason(ctx)
+				}
 				if e.fileProgressCallback != nil {
 					e.fileProgressCallback(task.ToolName, cachedCount+i+1, totalFiles, fileSuccess)
 				}
 				break
 			}
+			failedOnOwn = true
+			result.Success = false
+			result.ExitCode = exitCode
+			fileFailure := fmt.Errorf("failed to execute for file %s (exit code %d): %w", file, exitCode, err)
+			failures = append(failures, fileFailure)
+			label, explained := failureLabel(workingDir, file, exitCode, err)
+			outputs[len(outputs)-1].failed = true
+			outputs[len(outputs)-1].label = label
+			outputs[len(outputs)-1].explained = explained
+			if parseMode && len(result.Diagnostics) == diagnosticsBefore {
+				unparsed := label
+				if text := strings.TrimSpace(string(output)); text != "" {
+					unparsed += "\n" + text
+				}
+				result.UnparsedFailures = append(result.UnparsedFailures, unparsed)
+			}
+			failedCommand = cmdString
 			if e.failFast {
 				log.Debug("fail-fast triggered in per-file execution")
 				// Call progress callback before breaking (offset by cached count)
 				if e.fileProgressCallback != nil {
 					e.fileProgressCallback(task.ToolName, cachedCount+i+1, totalFiles, fileSuccess)
 				}
+				result.FilesNotRun = len(filesToProcess) - i - 1
 				break
 			}
 		} else {
@@ -1034,8 +1122,18 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 		// If marked as failed but no exit code set, use last exit code
 		result.ExitCode = lastExitCode
 	}
+	if failedCommand != "" {
+		result.Command = failedCommand
+	}
 
-	result.Output = strings.Join(outputs, "\n")
+	switch len(failures) {
+	case 0:
+	case 1:
+		result.Error = failures[0]
+	default:
+		result.Error = errors.Join(failures...)
+	}
+	result.Output = joinFileOutputs(outputs)
 	result.recordTiming(startTime)
 	log.Debug("executePerFile completed",
 		zap.String("toolName", task.ToolName),
@@ -1212,9 +1310,9 @@ func (e *Executor) executeBatchChunk(ctx context.Context, task Task, cmdInfo *bi
 		log.Debug("batch execution failed", zap.Int("exitCode", exitCode), zap.Error(err))
 		result.Success = false
 		result.Error = fmt.Errorf("failed to execute (exit code %d): %w", exitCode, err)
-		if ctx.Err() != nil {
+		if stoppedByCancellation(err) {
 			result.Cancelled = true
-			result.FailureReason = FailureReasonCancelled
+			result.FailureReason = cancelReason(ctx)
 		}
 	} else {
 		log.Debug("batch execution succeeded")
@@ -1264,7 +1362,7 @@ func (e *Executor) executeBatchChunksParallel(ctx context.Context, task Task, cm
 					Success:       false,
 					Error:         errCancelled,
 					Cancelled:     true,
-					FailureReason: FailureReasonCancelled,
+					FailureReason: cancelReason(ctx),
 				}
 				mu.Lock()
 				result.Success = false
@@ -1283,7 +1381,7 @@ func (e *Executor) executeBatchChunksParallel(ctx context.Context, task Task, cm
 					Success:       false,
 					Error:         errCancelled,
 					Cancelled:     true,
-					FailureReason: FailureReasonCancelled,
+					FailureReason: cancelReason(ctx),
 				}
 				mu.Lock()
 				result.Success = false
@@ -1311,32 +1409,7 @@ func (e *Executor) executeBatchChunksParallel(ctx context.Context, task Task, cm
 
 	wg.Wait()
 
-	// Combine outputs from all chunks and propagate cancellation status
-	var outputs []string
-	var errors []error
-	allCancelled := !result.Success
-	for i, chunkResult := range chunkResults {
-		if chunkResult.Output != "" {
-			outputs = append(outputs, fmt.Sprintf("=== Chunk %d/%d ===\n%s", i+1, len(chunks), chunkResult.Output))
-		}
-		if chunkResult.Error != nil {
-			errors = append(errors, fmt.Errorf("chunk %d: %w", i+1, chunkResult.Error))
-		}
-		result.Diagnostics = append(result.Diagnostics, chunkResult.Diagnostics...)
-		if !chunkResult.Success && chunkResult.FailureReason != FailureReasonCancelled {
-			allCancelled = false
-		}
-	}
-
-	result.Output = strings.Join(outputs, "\n")
-	if len(errors) > 0 {
-		result.Error = fmt.Errorf("batch execution had %d failures: %v", len(errors), errors)
-	}
-
-	if !result.Success && allCancelled {
-		result.Cancelled = true
-		result.FailureReason = FailureReasonCancelled
-	}
+	mergeChunkResults(ctx, &result, chunks, chunkResults)
 
 	result.recordTiming(startTime)
 	log.Debug("executeBatchChunksParallel completed",
@@ -1346,6 +1419,45 @@ func (e *Executor) executeBatchChunksParallel(ctx context.Context, task Task, cm
 		zap.Int64("durationMs", result.Duration))
 
 	return result
+}
+
+// mergeChunkResults folds the chunks of one batch task into its result. A task
+// whose every failed chunk was cancelled is itself cancelled. One with a chunk
+// that failed on its own is a failure, and the files of its cancelled chunks
+// count in FilesNotRun: it did not check everything it was given.
+func mergeChunkResults(ctx context.Context, result *ExecutionResult, chunks [][]string, chunkResults []ExecutionResult) {
+	var outputs []string
+	var errs []error
+	allCancelled := !result.Success
+	notRun := 0
+	for i, chunkResult := range chunkResults {
+		if chunkResult.Output != "" {
+			outputs = append(outputs, fmt.Sprintf("=== Chunk %d/%d ===\n%s", i+1, len(chunks), chunkResult.Output))
+		}
+		if chunkResult.Error != nil {
+			errs = append(errs, fmt.Errorf("chunk %d: %w", i+1, chunkResult.Error))
+		}
+		result.Diagnostics = append(result.Diagnostics, chunkResult.Diagnostics...)
+		if chunkResult.IsCancelled() {
+			notRun += len(chunks[i])
+		} else if !chunkResult.Success {
+			allCancelled = false
+		}
+	}
+
+	result.Output = strings.Join(outputs, "\n")
+	if len(errs) > 0 {
+		result.Error = fmt.Errorf("batch execution had %d failures: %v", len(errs), errs)
+	}
+
+	switch {
+	case result.Success:
+	case allCancelled:
+		result.Cancelled = true
+		result.FailureReason = cancelReason(ctx)
+	default:
+		result.FilesNotRun = notRun
+	}
 }
 
 // replacePlaceholders replaces placeholders in arguments
@@ -1584,6 +1696,7 @@ func (e *Executor) runCommandIO(cmd *exec.Cmd, stdinContent []byte, separate boo
 	}
 
 	setupProcessGroupCleanup(cmd)
+	stop := trackStop(cmd)
 
 	cntSpawn.Add(1)
 	spawnSpan := trace.Start(trace.CatExec, "spawn")
@@ -1597,6 +1710,12 @@ func (e *Executor) runCommandIO(cmd *exec.Cmd, stdinContent []byte, separate boo
 		trace.A("argv0", cmd.Path),
 		trace.A("exit", getExitCode(err)),
 	)
+	if at := stop.requested.Load(); at != 0 {
+		killGroupAfterGrace(cmd.Process.Pid, time.Unix(0, at))
+	}
+	if err != nil && stop.stopped.Load() {
+		err = fmt.Errorf("%w: %w", errStopped, err)
+	}
 	if separate {
 		return outBuf.Bytes(), errBuf.Bytes(), err
 	}
@@ -1682,4 +1801,51 @@ func stdinForOperation(op config.ToolOperation, file string) ([]byte, error) {
 		return nil, fmt.Errorf("read stdin content for %s: %w", file, err)
 	}
 	return content, nil
+}
+
+// fileOutput is what one file of a per-file task printed. label names a file
+// whose run failed on its own, and explained marks a label that gives a reason
+// no exit code does; a file whose input could not be prepared is failed with
+// its error as the text.
+type fileOutput struct {
+	text      string
+	label     string
+	failed    bool
+	explained bool
+}
+
+// joinFileOutputs joins what the files of a per-file task printed. A frame
+// names one failing command and exit code, so a failing file's output is
+// headed by its label when more than one file failed, or when the failure is
+// not an exit code; a file that failed silently is then still listed.
+func joinFileOutputs(outputs []fileOutput) string {
+	failures := 0
+	for _, o := range outputs {
+		if o.failed {
+			failures++
+		}
+	}
+	parts := make([]string, 0, len(outputs))
+	for _, o := range outputs {
+		if o.label != "" && (failures > 1 || o.explained) {
+			parts = append(parts, o.label+"\n"+o.text)
+			continue
+		}
+		parts = append(parts, o.text)
+	}
+	return strings.Join(parts, "\n")
+}
+
+// failureLabel names a failed file with its exit code, or with the error when
+// the failure is not the tool's exit — a formatter's empty output, a command
+// that could not start — which reports itself as explained.
+func failureLabel(workingDir, file string, exitCode int, err error) (string, bool) {
+	name := file
+	if rel, relErr := filepath.Rel(workingDir, file); relErr == nil && !strings.HasPrefix(rel, "..") {
+		name = rel
+	}
+	if _, ok := errors.AsType[*exec.ExitError](err); ok {
+		return fmt.Sprintf("%s: exit code %d", name, exitCode), false
+	}
+	return fmt.Sprintf("%s: %v", name, err), true
 }

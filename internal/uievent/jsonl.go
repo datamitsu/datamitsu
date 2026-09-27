@@ -52,7 +52,7 @@ func (s *JSONLSink) Emit(e Event) {
 	}
 
 	// Terminal events end a chain — forget the op's throttle state.
-	if e.Status == StatusDone || e.Status == StatusFail {
+	if e.Status == StatusDone || e.Status == StatusFail || e.Status == StatusSkip {
 		delete(s.lastProgress, e.OpID)
 	}
 

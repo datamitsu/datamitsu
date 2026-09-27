@@ -17,6 +17,7 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/detector"
+	"github.com/datamitsu/datamitsu/internal/exitcode"
 	"github.com/datamitsu/datamitsu/internal/github"
 	"github.com/datamitsu/datamitsu/internal/httpx"
 	"github.com/datamitsu/datamitsu/internal/nodekeys"
@@ -78,7 +79,7 @@ Example:
   datamitsu devtools pull-runtimes --update --runtime go config/src/runtimes.json
   datamitsu devtools pull-runtimes --update --runtime pnpm config/src/runtimes.json
   datamitsu devtools pull-runtimes --update --dry-run config/src/runtimes.json`,
-	Args: cobra.ExactArgs(1),
+	Args: usageArgs(cobra.ExactArgs(1)),
 	RunE: runPullRuntimes,
 }
 
@@ -94,13 +95,13 @@ func runPullRuntimes(cmd *cobra.Command, args []string) error {
 	ctx := commandContext(cmd)
 
 	if !pullRuntimesUpdateFlag {
-		return errors.New("--update flag is required to fetch releases from upstream")
+		return exitcode.UsageError{Err: errors.New("--update flag is required to fetch releases from upstream")}
 	}
 
 	runtimeFilter := pullRuntimesRuntimeFlag
 	if runtimeFilter != "" {
 		if !isValidRuntime(runtimeFilter) {
-			return fmt.Errorf("invalid runtime %q: must be one of %s", runtimeFilter, strings.Join(validRuntimeNames, ", "))
+			return exitcode.UsageErrorf("invalid runtime %q: must be one of %s", runtimeFilter, strings.Join(validRuntimeNames, ", "))
 		}
 	}
 

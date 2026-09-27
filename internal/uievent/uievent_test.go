@@ -123,6 +123,42 @@ func TestJSONLSinkDoesNotThrottlePhaseOrToolRun(t *testing.T) {
 	}
 }
 
+// A done event carries cancelled only when it is set, and then even at zero:
+// a pointer is what lets a summary say "nothing was cancelled" explicitly.
+func TestJSONLSinkCancelledCounter(t *testing.T) {
+	tests := []struct {
+		name      string
+		cancelled *int
+		want      any // nil = key absent
+	}{
+		{"unset", nil, nil},
+		{"zero", new(0), json.Number("0")},
+		{"two", new(2), json.Number("2")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			NewJSONLSink(&buf).Emit(Event{Type: TypeDone, OpID: "run-1", Status: StatusFail, Cancelled: tt.cancelled})
+			dec := json.NewDecoder(&buf)
+			dec.UseNumber()
+			var m map[string]any
+			if err := dec.Decode(&m); err != nil {
+				t.Fatal(err)
+			}
+			got, present := m["cancelled"]
+			if tt.want == nil {
+				if present {
+					t.Errorf("cancelled = %v, want the key absent", got)
+				}
+				return
+			}
+			if got != tt.want {
+				t.Errorf("cancelled = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 // A log event carries its level so a consumer can route a warning differently
 // from a record; every other event leaves the field off the wire.
 func TestJSONLSinkLogLevel(t *testing.T) {

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/exitcode"
 	"github.com/datamitsu/datamitsu/internal/timing"
 	"github.com/datamitsu/datamitsu/internal/tooling"
 )
@@ -33,7 +34,7 @@ func captureStdout(t *testing.T, fn func()) string {
 }
 
 func TestPrintOperationFooterShowsSkipped(t *testing.T) {
-	out := captureStdout(t, func() { printOperationFooter(nil, 0, 0, 0, 2) })
+	out := captureStdout(t, func() { printOperationFooter(nil, 0, 0, 0, 2, 0, "") })
 	if !strings.Contains(out, "2 skipped") {
 		t.Errorf("footer missing skipped count: %q", out)
 	}
@@ -233,8 +234,8 @@ func TestCoverageFailure(t *testing.T) {
 		if !errors.As(err, &coded) {
 			t.Fatalf("expected a coded error, got: %v", err)
 		}
-		if coded.ExitCode() != ExitCoverage {
-			t.Errorf("exit code = %d, want %d", coded.ExitCode(), ExitCoverage)
+		if coded.ExitCode() != exitcode.Coverage {
+			t.Errorf("exit code = %d, want %d", coded.ExitCode(), exitcode.Coverage)
 		}
 	})
 }

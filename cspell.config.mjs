@@ -486,6 +486,12 @@ export default defineConfig((config) => ({
     "deptry",
     "droast",
     "zizmor",
+    // The system calls and kernel names the executor asks whether a tool has
+    // exited without reaping it (internal/tooling/stop_*.go).
+    "waitid",
+    "kinfo",
+    "szomb",
+    "idtype",
     // Terms the granularity design leans on: a git worktree; a scope value that
     // no validator checks; re-pointing a call site at a moved symbol; and a
     // hash vector whose part boundaries an attacker could forge.

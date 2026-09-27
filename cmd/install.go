@@ -11,6 +11,7 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/exitcode"
 	"github.com/datamitsu/datamitsu/internal/ocibundle"
 	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 	"github.com/datamitsu/datamitsu/internal/term"
@@ -55,7 +56,7 @@ func init() {
 
 func runInstall(ctx context.Context, apps, runtimes []string, verify bool) error {
 	if len(apps) == 0 && len(runtimes) == 0 {
-		return errors.New("specify at least one app name or --runtime <name>")
+		return exitcode.UsageError{Err: errors.New("specify at least one app name or --runtime <name>")}
 	}
 
 	cfg, _, _, err := loadConfigWithPaths(ctx, BeforeConfigPaths, NoAutoConfig, ConfigPaths)

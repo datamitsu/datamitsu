@@ -102,21 +102,28 @@ func TestDevtoolsCommandSetDrift(t *testing.T) {
 }
 
 // TestDevtoolsArgValidation locks the offline arg/flag-validation contract:
-// every misuse exits non-zero with a descriptive message on stderr and — because
-// the root sets SilenceUsage — never prints the usage block. None of these touch
-// the network (validation happens before any command body runs).
+// every misuse exits 2, the usage code, with a descriptive message on stderr
+// and — because the root sets SilenceUsage — never prints the usage block;
+// an argument that names something unusable exits 1. None of these touch the
+// network (validation happens before any command body runs).
 func TestDevtoolsArgValidation(t *testing.T) {
 	p := clitest.NewProject(t)
 
 	cases := []struct {
-		name    string
-		args    []string
-		wantMsg string
+		name     string
+		args     []string
+		wantMsg  string
+		wantExit int
 	}{
 		{
 			name:    "dockerfile-missing-output",
 			args:    []string{"devtools", "dockerfile"},
 			wantMsg: `required flag(s) "output" not set`,
+		},
+		{
+			name:    "dockerfile-invalid-env-with-broken-config",
+			args:    []string{"--no-auto-config", "--config", "broken.config.js", "devtools", "dockerfile", "--output", "Dockerfile", "--env", "bad"},
+			wantMsg: `invalid --env "bad": want key=value`,
 		},
 		{
 			name:    "split-config-missing-output",
@@ -132,6 +139,11 @@ func TestDevtoolsArgValidation(t *testing.T) {
 			name:    "pull-runtimes-requires-update",
 			args:    []string{"devtools", "pull-runtimes", "runtimes.json"},
 			wantMsg: "--update flag is required",
+		},
+		{
+			name:    "pull-runtimes-invalid-runtime",
+			args:    []string{"devtools", "pull-runtimes", "--update", "--runtime", "bogus", "runtimes.json"},
+			wantMsg: `invalid runtime "bogus"`,
 		},
 		{
 			name:    "pull-github-no-arg",
@@ -154,22 +166,29 @@ func TestDevtoolsArgValidation(t *testing.T) {
 			wantMsg: "accepts 1 arg(s), received 0",
 		},
 		{
-			name:    "pack-inline-archive-not-a-dir",
-			args:    []string{"devtools", "pack-inline-archive", "minimal.config.js"},
-			wantMsg: "is not a directory",
+			name:     "pack-inline-archive-not-a-dir",
+			args:     []string{"devtools", "pack-inline-archive", "minimal.config.js"},
+			wantMsg:  "is not a directory",
+			wantExit: 1,
 		},
 	}
 
 	// A real file so the pack-inline-archive "not a directory" case reaches its
-	// stat check rather than failing earlier.
+	// stat check rather than failing earlier; a config that does not load, so
+	// a flag refused before loading it is told apart from one refused after.
 	clitest.WriteMinimalConfig(p)
+	p.WriteFile("broken.config.js", "export default {")
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, tc.args...)
-			if res.ExitCode == 0 {
-				t.Fatalf("`%s` exit = 0, want non-zero\nstdout:\n%s",
-					strings.Join(tc.args, " "), res.Stdout)
+			want := tc.wantExit
+			if want == 0 {
+				want = 2
+			}
+			if res.ExitCode != want {
+				t.Fatalf("`%s` exit = %d, want %d\nstdout:\n%s\nstderr:\n%s",
+					strings.Join(tc.args, " "), res.ExitCode, want, res.Stdout, res.Stderr)
 			}
 			if !strings.Contains(res.Stderr, tc.wantMsg) {
 				t.Errorf("`%s` stderr = %q, want to contain %q",

@@ -1,0 +1,17 @@
+exit code: 4
+===STDOUT===
+╭<RULE>╮
+│ datamitsu  <VERSION> │
+╰<RULE>╯
+
+┏━ lint <RULE>
+┃ ◑ target: sub · narrowed run
+┃ fixture
+┃
+┃ ✓ alpha   <DUR>
+┃ ⊘ native  skipped (no binary for <HOST>)
+┗━ 1 tools · 1 runs · done in <DUR> · 1 skipped · cache 0% <RULE>
+
+===STDERR===
+error: --fail-on-skip: 1 tool(s) have no binary for this host: native
+--require-coverage=repo: 1 tool(s) did not answer completely: native; the run targeted subtree, not the whole repository

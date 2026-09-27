@@ -16,6 +16,7 @@ var (
 	checkFailOnSkip    bool
 	checkWidenTo       string
 	checkRequireCov    string
+	checkFailFast      bool
 )
 
 var checkCmd = &cobra.Command{
@@ -23,7 +24,7 @@ var checkCmd = &cobra.Command{
 	Short: "Run fix then lint operations on files",
 	Long: `Runs fix followed by lint on specified files or the entire project,
 reusing shared context (config, file listing, caches) for efficiency.
-If fix fails, lint is skipped.
+If fix fails, lint is skipped, unless --fail-fast=false runs it anyway.
 
 Use --explain to see the execution plan without running:
   --explain          Show brief plan (summary mode, default)
@@ -42,14 +43,19 @@ func init() {
 	checkCmd.Flags().StringVar(&checkWidenTo, "widen-to", "", "Limit how far work may widen beyond the selection (target|unit|repo)")
 	checkCmd.Flags().StringVar(&checkRequireCov, "require-coverage", "", "Exit non-zero unless the run answered completely (unit|repo)")
 	checkCmd.Flags().BoolVar(&checkFailOnSkip, "fail-on-skip", false, "Exit non-zero if any tool is skipped because its binary is unavailable for this platform")
+	addFailFastFlag(checkCmd, &checkFailFast)
 	rootCmd.AddCommand(checkCmd)
 }
 
 func runCheck(cmd *cobra.Command, args []string) error {
+	opts := runner.Options{WidenTo: checkWidenTo, RequireCoverage: checkRequireCov}
+	if err := applyFailFast(cmd, checkFailFast, &opts); err != nil {
+		return err
+	}
 	err := runner.RunSequential(
 		[]config.OperationType{config.OpFix, config.OpLint},
 		args, checkExplain, checkFileScoped, checkSelectedTools, checkFailOnSkip,
-		runner.Options{WidenTo: checkWidenTo, RequireCoverage: checkRequireCov},
+		opts,
 		func() (*config.Config, string, error) {
 			cfg, _, _, err := loadConfig()
 			return cfg, "", err

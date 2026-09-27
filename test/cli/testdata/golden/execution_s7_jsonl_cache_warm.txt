@@ -2,6 +2,7 @@ exit code: 0
 ===STDOUT===
 
 ===STDERR===
+{"cancelled":0,"complete":true,"op":"lint","op_id":"cmd-2","runs":3,"status":"done","success":true,"tools":1,"ts":0,"type":"done"}
 {"index":1,"op_id":"run-1:alpha:","status":"done","success":true,"tool":"alpha","total":1,"ts":0,"type":"chunk"}
 {"index":1,"op_id":"run-1:alpha:","status":"done","success":true,"tool":"alpha","total":1,"ts":0,"type":"chunk"}
 {"index":1,"op_id":"run-1:alpha:","status":"done","success":true,"tool":"alpha","total":1,"ts":0,"type":"chunk"}

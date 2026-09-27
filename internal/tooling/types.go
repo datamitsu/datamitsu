@@ -150,6 +150,7 @@ const (
 	FailureReasonNone        FailureReason = iota // Task succeeded or not yet classified
 	FailureReasonIndependent                      // Tool failed on its own
 	FailureReasonCancelled                        // Tool terminated by fail-fast cascade
+	FailureReasonInterrupted                      // Tool terminated because the caller cancelled the run (a signal, a withdrawn request)
 )
 
 // ExecutionResult represents the result of a task execution
@@ -165,10 +166,19 @@ type ExecutionResult struct {
 	RelativeDir   string           // Working directory relative to git root (for display)
 	Scope         config.ToolScope // Tool scope (repository, per-project, per-file)
 	Batch         bool             // Whether files were processed in batch mode
-	Cancelled     bool             // Whether this task was cancelled by fail-fast
+	Cancelled     bool             // Whether this task was cancelled, by fail-fast or an interruption (FailureReason says which)
 	FailureReason FailureReason    // Why the task failed (independent error vs cascading cancellation)
 	StartedAt     time.Time        // Absolute start of this run (zero if not timed)
 	EndedAt       time.Time        // Absolute end of this run (zero if not timed)
+	// FilesNotRun counts the files of a per-file task that fail-fast left unrun
+	// when it stopped the loop at a failing file: the task failed on its own,
+	// yet did not check everything it was given.
+	FilesNotRun int
+	// UnparsedFailures are the failed invocations of a per-file task with an
+	// output parser that left no diagnostic: a file whose input could not be
+	// prepared, or a run whose output held no finding. A failure frame shows
+	// diagnostics instead of the raw output, so it shows these beside them.
+	UnparsedFailures []string
 	// CapturedStdout holds the tool's stdout captured separately from stderr,
 	// set only when the operation uses output mode "stdout" (the candidate
 	// formatted content consumed by the diff-in-core formatting path). Empty for
@@ -185,6 +195,19 @@ type ExecutionResult struct {
 	// tools without a parser — the common case. Populated per-file in per-file
 	// mode, each entry's File set to the file it came from.
 	Diagnostics []diagnostic.Diagnostic
+}
+
+// IsCancelled reports whether the task was stopped by a cancellation — fail-fast
+// or an interruption — rather than failing on its own.
+func (r *ExecutionResult) IsCancelled() bool {
+	return r.Cancelled || r.FailureReason == FailureReasonCancelled || r.FailureReason == FailureReasonInterrupted
+}
+
+// Started reports whether the task reached execution. Every task that did has
+// its timing recorded, whatever became of it; one cancelled while it waited for
+// a worker has none.
+func (r *ExecutionResult) Started() bool {
+	return !r.StartedAt.IsZero()
 }
 
 // recordTiming stamps the run's absolute wall-clock window and elapsed Duration

@@ -1,12 +1,14 @@
 package cli_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -164,6 +166,81 @@ func jsonl(args ...string) []string {
 	return append([]string{"--log-format", "jsonl"}, args...)
 }
 
+const keepGoing = "--fail-fast=false"
+
+// wantStopped asserts that a tool's only terminal event in dir is a skip with
+// msg, and that it has a start event exactly when it was cancelled after it
+// started.
+func wantStopped(t *testing.T, events []clitest.Event, tool, dir, msg string) {
+	t.Helper()
+	var starts, skips int
+	for _, e := range toolRuns(events, tool) {
+		if e.Dir != dir {
+			continue
+		}
+		switch e.Status {
+		case "start":
+			starts++
+		case "skip":
+			skips++
+			if e.Msg != msg || e.Has("success") {
+				t.Errorf("skip event of %s in %q = %+v, want msg %q and no success field", tool, dir, e, msg)
+			}
+		default:
+			t.Errorf("%s in %q was stopped, yet it has a %s event: %+v", tool, dir, e.Status, e)
+		}
+	}
+	wantStarts := 0
+	if strings.HasPrefix(msg, "cancelled: ") {
+		wantStarts = 1
+	}
+	if skips != 1 || starts != wantStarts {
+		t.Errorf("%s in %q has %d start(s) and %d skip(s), want %d and 1", tool, dir, starts, skips, wantStarts)
+	}
+}
+
+// operationDone matches the done event of one operation; the run-level done
+// of the whole command has an op_id starting with "cmd-".
+func operationDone(e clitest.Event) bool {
+	return e.Type == "done" && strings.HasPrefix(e.OpID, "run-")
+}
+
+func runDone(t *testing.T, events []clitest.Event) clitest.Event {
+	t.Helper()
+	done := eventsOf(events, func(e clitest.Event) bool { return e.Type == "done" && strings.HasPrefix(e.OpID, "cmd-") })
+	if len(done) != 1 {
+		t.Fatalf("run-level done events = %+v, want one", done)
+	}
+	return done[0]
+}
+
+func wantRunDone(t *testing.T, events []clitest.Event, op string, success bool, runs, cancelled int, complete bool) {
+	t.Helper()
+	d := runDone(t, events)
+	switch {
+	case d.Op != op, d.Success == nil, *d.Success != success, d.Runs != runs,
+		d.Cancelled == nil, *d.Cancelled != cancelled, d.Complete == nil, *d.Complete != complete,
+		!d.Has("duration_ms"):
+		t.Errorf("run-level done = %+v, want op %s, success %v, runs %d, cancelled %d, complete %v and a duration",
+			d.Fields, op, success, runs, cancelled, complete)
+	}
+}
+
+func wantDone(t *testing.T, events []clitest.Event, op string, runs, cancelled int) {
+	t.Helper()
+	done := eventsOf(events, func(e clitest.Event) bool { return e.Type == "done" && e.Op == op && strings.HasPrefix(e.OpID, "run-") })
+	if len(done) != 1 {
+		t.Fatalf("done events of %s = %+v, want one", op, done)
+	}
+	got := 0
+	if done[0].Cancelled != nil {
+		got = *done[0].Cancelled
+	}
+	if done[0].Runs != runs || got != cancelled || (cancelled == 0 && done[0].Has("cancelled")) {
+		t.Errorf("done of %s = %+v, want runs %d and cancelled %d", op, done[0], runs, cancelled)
+	}
+}
+
 // TestExecutionTwoToolsPass is S1: two repository-scoped tools that both pass.
 func TestExecutionTwoToolsPass(t *testing.T) {
 	files := map[string]string{"fixture.marker": ""}
@@ -199,16 +276,21 @@ func TestExecutionTwoToolsPass(t *testing.T) {
 				t.Errorf("tool_run events of %s = %+v, want a start and a done", tool, runs)
 			}
 		}
-		done := eventsOf(events, func(e clitest.Event) bool { return e.Type == "done" })
+		done := eventsOf(events, operationDone)
 		if len(done) != 1 || done[0].Status != "done" || done[0].Tools != 2 || done[0].Runs != 2 {
 			t.Errorf("done events = %+v, want one done with tools 2 and runs 2", done)
+		}
+		wantRunDone(t, events, "lint", true, 2, 0, true)
+		if d := runDone(t, events); d.Tools != 2 || d.Status != "done" {
+			t.Errorf("run-level done = %+v, want status done and tools 2", d.Fields)
 		}
 	})
 }
 
 // TestExecutionFailFastBetweenPriorities is S2 (and S12 on it): a failure at
-// priority 10 stops the run before priority 20. Plan 2 keeps this default,
-// reports beta as not started, and adds a --fail-fast=false twin that runs it.
+// priority 10 stops the run before priority 20, and beta is reported as not
+// started. --fail-fast=false, or DATAMITSU_FAIL_FAST=false, runs it; the flag
+// wins over the variable.
 func TestExecutionFailFastBetweenPriorities(t *testing.T) {
 	files := map[string]string{"fixture.marker": ""}
 	tools := []string{
@@ -222,6 +304,9 @@ func TestExecutionFailFastBetweenPriorities(t *testing.T) {
 		e.wantExit(res, 1)
 		e.wantMarker("alpha", "alpha \n")
 		e.wantMarker("beta", "")
+		if !strings.Contains(res.Stdout, "⊘ beta   not started (fail-fast)") || !strings.Contains(res.Stdout, "· 1 cancelled") {
+			t.Errorf("beta should be listed as not started and counted as cancelled:\n%s", res.Stdout)
+		}
 		e.golden("s2_lint_priority_fail_fast", res)
 	})
 
@@ -232,35 +317,85 @@ func TestExecutionFailFastBetweenPriorities(t *testing.T) {
 		e.wantMarker("beta", "")
 		events := clitest.MustParseJSONL(t, res.Stderr)
 		clitest.AssertChains(t, events)
-		if beta := eventsOf(events, func(e clitest.Event) bool { return e.Tool == "beta" }); len(beta) != 0 {
-			t.Errorf("beta never runs, yet it has events: %+v", beta)
-		}
+		wantStopped(t, events, "beta", "", "not started: fail-fast")
+		wantDone(t, events, "lint", 1, 1)
 		if alpha := toolRuns(events, "alpha"); len(alpha) != 2 || alpha[1].Status != "fail" ||
 			alpha[1].Success == nil || *alpha[1].Success || !alpha[1].Has("duration_ms") {
 			t.Errorf("tool_run events of alpha = %+v, want a start and a fail with success false and a duration", alpha)
 		}
-		done := eventsOf(events, func(e clitest.Event) bool { return e.Type == "done" })
+		done := eventsOf(events, operationDone)
 		if len(done) != 1 || done[0].Status != "fail" || done[0].Tools != 1 || done[0].Runs != 1 || done[0].Failed != 1 {
 			t.Errorf("done events = %+v, want one fail with tools 1, runs 1, failed 1", done)
 		}
+		wantRunDone(t, events, "lint", false, 1, 1, false)
 		e.goldenJSONL("s12_jsonl_s2", res)
+	})
+
+	t.Run("keep_going", func(t *testing.T) {
+		e := newExecProject(t, files, fixtureSpec, tools...)
+		res := e.run("", nil, "lint", keepGoing)
+		e.wantExit(res, 1)
+		e.wantMarker("alpha", "alpha \n")
+		e.wantMarker("beta", "beta \n")
+		e.golden("s2_lint_priority_keep_going", res)
+	})
+
+	t.Run("keep_going_jsonl", func(t *testing.T) {
+		e := newExecProject(t, files, fixtureSpec, tools...)
+		res := e.run("", nil, jsonl("lint", keepGoing)...)
+		e.wantExit(res, 1)
+		events := clitest.MustParseJSONL(t, res.Stderr)
+		clitest.AssertChains(t, events)
+		if beta := toolRuns(events, "beta"); len(beta) != 2 || beta[1].Status != "done" {
+			t.Errorf("tool_run events of beta = %+v, want a start and a done", beta)
+		}
+		wantDone(t, events, "lint", 2, 0)
+		wantRunDone(t, events, "lint", false, 2, 0, true)
+	})
+
+	t.Run("env", func(t *testing.T) {
+		e := newExecProject(t, files, fixtureSpec, tools...)
+		res := e.run("", []string{"DATAMITSU_FAIL_FAST=false"}, "lint")
+		e.wantExit(res, 1)
+		e.wantMarker("beta", "beta \n")
+	})
+
+	t.Run("flag_wins_over_env", func(t *testing.T) {
+		e := newExecProject(t, files, fixtureSpec, tools...)
+		res := e.run("", []string{"DATAMITSU_FAIL_FAST=false"}, "lint", "--fail-fast")
+		e.wantExit(res, 1)
+		e.wantMarker("beta", "")
 	})
 }
 
 // TestExecutionFailFastBetweenSubGroups is S3: repository-scoped tasks always
 // overlap, so two of them at one priority run one after the other, and a failure
-// of the first stops the second. Plan 2 keeps this default and adds a
-// --fail-fast=false twin that runs the second.
+// of the first stops the second, which is reported as not started.
+// --fail-fast=false runs it.
 func TestExecutionFailFastBetweenSubGroups(t *testing.T) {
-	e := newExecProject(t, map[string]string{"fixture.marker": ""}, fixtureSpec,
+	files := map[string]string{"fixture.marker": ""}
+	tools := []string{
 		clitest.ShellTool("alpha", failScript, clitest.ToolOpSpec{}),
 		clitest.ShellTool("beta", passScript, clitest.ToolOpSpec{}),
-	)
-	res := e.run("", nil, "lint")
-	e.wantExit(res, 1)
-	e.wantMarker("alpha", "alpha \n")
-	e.wantMarker("beta", "")
-	e.golden("s3_lint_subgroup_fail_fast", res)
+	}
+
+	t.Run("fail_fast", func(t *testing.T) {
+		e := newExecProject(t, files, fixtureSpec, tools...)
+		res := e.run("", nil, "lint")
+		e.wantExit(res, 1)
+		e.wantMarker("alpha", "alpha \n")
+		e.wantMarker("beta", "")
+		e.golden("s3_lint_subgroup_fail_fast", res)
+	})
+
+	t.Run("keep_going", func(t *testing.T) {
+		e := newExecProject(t, files, fixtureSpec, tools...)
+		res := e.run("", nil, "lint", keepGoing)
+		e.wantExit(res, 1)
+		e.wantMarker("alpha", "alpha \n")
+		e.wantMarker("beta", "beta \n")
+		e.golden("s3_lint_subgroup_keep_going", res)
+	})
 }
 
 // packagesSpec detects two packages of one project type, pkg/a and pkg/b. Tasks
@@ -290,8 +425,8 @@ const alphaFailsOnceBetaStarted = settle + clitest.RecordRun +
 	`; echo "$0: failed"; exit 1`
 
 // betaResultRE matches beta's result line or failure frame, not the mention of
-// its marker in alpha's command.
-var betaResultRE = regexp.MustCompile(`(?m)^┃ . beta\b|─ beta\b`)
+// its marker in alpha's command nor its cancelled line.
+var betaResultRE = regexp.MustCompile(`(?m)^┃ [✓✗] beta\b|─ beta\b`)
 
 // killWindow is how long after a run's start beta would have written its done
 // marker had it survived; looking earlier could not tell a kill from a process
@@ -299,11 +434,10 @@ var betaResultRE = regexp.MustCompile(`(?m)^┃ . beta\b|─ beta\b`)
 const killWindow = 3500 * time.Millisecond
 
 // TestExecutionFailFastKillsSiblings is S4 (and S12 on it): a failing task
-// cancels its running parallel sibling. The sibling is killed and vanishes
-// from the results, and its tool_run start is left without a terminal event.
-// Plan 2 keeps this default but prints the sibling as cancelled, with a
-// terminal event, and adds a --fail-fast=false twin in which it finishes; plan 3
-// gives each task its own invocation ID.
+// cancels its running parallel sibling. The sibling is killed, listed as
+// cancelled rather than as a result, and its tool_run start is closed by a skip
+// event. With --fail-fast=false it finishes. Plan 3 gives each task its own
+// invocation ID.
 func TestExecutionFailFastKillsSiblings(t *testing.T) {
 	tools := []string{
 		clitest.ShellTool("alpha", alphaFailsOnceBetaStarted,
@@ -327,8 +461,12 @@ func TestExecutionFailFastKillsSiblings(t *testing.T) {
 
 	t.Run("console", func(t *testing.T) {
 		e, res := runKilled(t, "lint")
-		if out := e.normalize(res.Stdout); betaResultRE.MatchString(out) {
+		out := e.normalize(res.Stdout)
+		if betaResultRE.MatchString(out) {
 			t.Errorf("the killed sibling appears in the results:\n%s", out)
+		}
+		if !strings.Contains(out, "⊘ beta [pkg/b]  cancelled (fail-fast)") {
+			t.Errorf("the killed sibling should be listed as cancelled:\n%s", out)
 		}
 		e.golden("s4_lint_sibling_killed", res)
 	})
@@ -336,11 +474,35 @@ func TestExecutionFailFastKillsSiblings(t *testing.T) {
 	t.Run("jsonl", func(t *testing.T) {
 		e, res := runKilled(t, jsonl("lint")...)
 		events := clitest.MustParseJSONL(t, res.Stderr)
-		clitest.AssertChains(t, events, "beta")
-		if beta := toolRuns(events, "beta"); len(beta) != 1 || beta[0].Status != "start" || beta[0].Dir != "pkg/b" {
-			t.Errorf("tool_run events of beta = %+v, want a single start in pkg/b", beta)
-		}
+		clitest.AssertChains(t, events)
+		wantStopped(t, events, "beta", "pkg/b", "cancelled: fail-fast")
+		wantDone(t, events, "lint", 1, 1)
 		e.goldenJSONL("s12_jsonl_s4", res)
+	})
+
+	runFinished := func(t *testing.T, args ...string) (*execProject, clitest.Result) {
+		t.Helper()
+		e := newExecProject(t, packagesFiles, packagesSpec, tools...)
+		res := e.run("", workers, args...)
+		e.wantExit(res, 1)
+		e.wantMarker("alpha", "alpha \n")
+		e.wantMarker("beta", "beta started\nbeta done\n")
+		return e, res
+	}
+
+	t.Run("keep_going", func(t *testing.T) {
+		e, res := runFinished(t, "lint", keepGoing)
+		e.golden("s4_lint_sibling_keep_going", res)
+	})
+
+	t.Run("keep_going_jsonl", func(t *testing.T) {
+		_, res := runFinished(t, jsonl("lint", keepGoing)...)
+		events := clitest.MustParseJSONL(t, res.Stderr)
+		clitest.AssertChains(t, events)
+		if beta := toolRuns(events, "beta"); len(beta) != 2 || beta[1].Status != "done" || beta[1].Dir != "pkg/b" {
+			t.Errorf("tool_run events of beta = %+v, want a start and a done in pkg/b", beta)
+		}
+		wantDone(t, events, "lint", 2, 0)
 	})
 }
 
@@ -357,9 +519,8 @@ func maskPkgDir(s string) string { return pkgDirRE.ReplaceAllString(s, "pkg/<FIR
 
 // TestExecutionFailFastBeforeWorker is S4b: with a single worker, the sibling
 // still waiting for the slot when the first task fails is cancelled before it
-// starts and leaves no trace — no process, no result, no event. Plan 2 keeps
-// this default but prints the sibling as not started, and adds a
-// --fail-fast=false twin in which it runs.
+// starts — no process, no start event — and is reported as not started by a
+// single skip event. With --fail-fast=false it runs.
 func TestExecutionFailFastBeforeWorker(t *testing.T) {
 	files, spec := packagesFiles, packagesSpec
 	tool := clitest.ShellTool("claim", claimFirst, clitest.ToolOpSpec{Scope: "per-project"})
@@ -382,8 +543,8 @@ func TestExecutionFailFastBeforeWorker(t *testing.T) {
 		e := newExecProject(t, files, spec, tool)
 		res := e.run("", workers, "lint")
 		e.wantExit(res, 1)
-		if _, other := onlyFirst(e); strings.Contains(e.normalize(res.Stdout), other) {
-			t.Errorf("the cancelled sibling (%s) appears in the results:\n%s", other, res.Stdout)
+		if _, other := onlyFirst(e); !strings.Contains(res.Stdout, "⊘ claim ["+other+"]  not started (fail-fast)") {
+			t.Errorf("the cancelled sibling (%s) should be listed as not started:\n%s", other, res.Stdout)
 		}
 		e.golden("s4b_lint_sibling_never_started", res, maskPkgDir)
 	})
@@ -395,12 +556,27 @@ func TestExecutionFailFastBeforeWorker(t *testing.T) {
 		first, other := onlyFirst(e)
 		events := clitest.MustParseJSONL(t, res.Stderr)
 		clitest.AssertChains(t, events)
-		if got := eventsOf(events, func(e clitest.Event) bool { return e.Dir == other }); len(got) != 0 {
-			t.Errorf("the sibling in %s never started, yet it has events: %+v", other, got)
+		if got := eventsOf(events, func(e clitest.Event) bool { return e.Dir == other && e.Type != "tool_run" }); len(got) != 0 {
+			t.Errorf("the sibling in %s never started, yet it has events other than its skip: %+v", other, got)
 		}
-		if runs := toolRuns(events, "claim"); len(runs) != 2 || runs[0].Dir != first || runs[1].Status != "fail" {
-			t.Errorf("tool_run events = %+v, want a start and a fail in %s", runs, first)
+		wantStopped(t, events, "claim", other, "not started: fail-fast")
+		ran := eventsOf(toolRuns(events, "claim"), func(e clitest.Event) bool { return e.Dir == first })
+		if len(ran) != 2 || ran[0].Status != "start" || ran[1].Status != "fail" {
+			t.Errorf("tool_run events in %s = %+v, want a start and a fail", first, ran)
 		}
+		wantDone(t, events, "lint", 1, 1)
+	})
+
+	t.Run("keep_going", func(t *testing.T) {
+		e := newExecProject(t, files, spec, tool)
+		res := e.run("", workers, "lint", keepGoing)
+		e.wantExit(res, 1)
+		switch _, got := e.p.Marker("claim"); got {
+		case "claim a first\nclaim b later\n", "claim b first\nclaim a later\n":
+		default:
+			t.Errorf("claim recorded %q, want a first run in one package and a later one in the other", got)
+		}
+		e.golden("s4b_lint_sibling_keep_going", res, maskPkgDir)
 	})
 }
 
@@ -418,8 +594,8 @@ var perFileLoopFiles = map[string]string{
 }
 
 // TestExecutionFailFastBetweenFiles is S5 (and S12 on it): the per-file loop of
-// one task stops at the first failing file. Plan 2 keeps this default and adds
-// a --fail-fast=false twin that runs all three files.
+// one task stops at the first failing file. --fail-fast=false runs all three
+// files and reports both failures.
 func TestExecutionFailFastBetweenFiles(t *testing.T) {
 	t.Run("console", func(t *testing.T) {
 		e := newExecProject(t, perFileLoopFiles, fixtureSpec, perFileLoopTool)
@@ -446,14 +622,40 @@ func TestExecutionFailFastBetweenFiles(t *testing.T) {
 		if len(errs) != 1 || !strings.Contains(errs[0].Msg, "bad1.txt") {
 			t.Errorf("error events of alpha = %+v, want one naming bad1.txt", errs)
 		}
+		// No task was stopped, yet two files were never checked: the run is not
+		// complete.
+		wantRunDone(t, events, "lint", false, 1, 0, false)
 		e.goldenJSONL("s12_jsonl_s5", res)
+	})
+
+	t.Run("keep_going", func(t *testing.T) {
+		e := newExecProject(t, perFileLoopFiles, fixtureSpec, perFileLoopTool)
+		res := e.run("", nil, "lint", keepGoing)
+		e.wantExit(res, 1)
+		e.wantMarker("alpha", "alpha <TMP>/bad1.txt\nalpha <TMP>/bad2.txt\nalpha <TMP>/ok.txt\n")
+		for _, want := range []string{"alpha: bad1.txt failed", "alpha: bad2.txt failed"} {
+			if !strings.Contains(res.Stdout, want) {
+				t.Errorf("the frame should show %q:\n%s", want, res.Stdout)
+			}
+		}
+		e.golden("s5_lint_per_file_keep_going", res)
+	})
+
+	t.Run("keep_going_jsonl", func(t *testing.T) {
+		e := newExecProject(t, perFileLoopFiles, fixtureSpec, perFileLoopTool)
+		res := e.run("", nil, jsonl("lint", keepGoing)...)
+		e.wantExit(res, 1)
+		events := clitest.MustParseJSONL(t, res.Stderr)
+		clitest.AssertChains(t, events)
+		wantRunDone(t, events, "lint", false, 1, 0, true)
 	})
 }
 
 // TestExecutionCheckStopsAfterFix is S6: when fix fails, check never starts
-// lint — no lint block, no lint phase event, and no closing line for the
-// whole check. Plan 2 adds that closing line and a --fail-fast=false twin that
-// runs lint after the failed fix.
+// lint — no lint block and no lint phase event — and its closing line says lint
+// did not run. With --fail-fast=false lint runs after the failed fix, its footer
+// says so — also when every lint tool is skipped or none applies — and the run
+// still fails.
 func TestExecutionCheckStopsAfterFix(t *testing.T) {
 	files := map[string]string{"fixture.marker": ""}
 	tools := []string{
@@ -470,6 +672,9 @@ func TestExecutionCheckStopsAfterFix(t *testing.T) {
 		if strings.Contains(res.Stdout, "┏━ lint") {
 			t.Errorf("check opened a lint block after a failed fix:\n%s", res.Stdout)
 		}
+		if !checkClosingRE.MatchString(res.Stdout) || !strings.Contains(res.Stdout, "· lint not run ·") {
+			t.Errorf("check should close with its wall clock and say lint did not run:\n%s", res.Stdout)
+		}
 		e.golden("s6_check_fix_fails", res)
 	})
 
@@ -483,7 +688,253 @@ func TestExecutionCheckStopsAfterFix(t *testing.T) {
 			phases[0].Op != "fix" {
 			t.Errorf("phase events = %+v, want the fix phase only", phases)
 		}
+		wantRunDone(t, events, "check", false, 1, 0, false)
 	})
+
+	t.Run("keep_going", func(t *testing.T) {
+		e := newExecProject(t, files, fixtureSpec, tools...)
+		res := e.run("", nil, "check", keepGoing)
+		e.wantExit(res, 1)
+		e.wantMarker("fixer", "fixer \n")
+		e.wantMarker("linter", "linter \n")
+		if !strings.Contains(res.Stdout, "lint ran after a failed fix") {
+			t.Errorf("the lint footer should say it ran after a failed fix:\n%s", res.Stdout)
+		}
+		e.golden("s6_check_fix_fails_keep_going", res)
+	})
+
+	t.Run("keep_going_lint_skipped", func(t *testing.T) {
+		spec := clitest.ShellConfigSpec{ProjectTypes: fixtureTypes, Extra: nativeSkipped()}
+		e := newExecProject(t, files, spec, tools[0])
+		res := e.run("", nil, "check", keepGoing)
+		e.wantExit(res, 1)
+		if !strings.Contains(res.Stdout, "⊘ native") || !strings.Contains(res.Stdout, "lint ran after a failed fix") {
+			t.Errorf("a lint of skipped tools only should still say it ran after a failed fix:\n%s", res.Stdout)
+		}
+		e.golden("s6_check_fix_fails_keep_going_lint_skipped", res, maskHost)
+	})
+
+	t.Run("keep_going_no_lint_tools", func(t *testing.T) {
+		e := newExecProject(t, files, fixtureSpec, tools[0])
+		res := e.run("", nil, "check", keepGoing)
+		e.wantExit(res, 1)
+		if !strings.Contains(res.Stdout, "No applicable tools found · lint ran after a failed fix") {
+			t.Errorf("a lint with nothing to run should still say it ran after a failed fix:\n%s", res.Stdout)
+		}
+	})
+
+	t.Run("keep_going_jsonl", func(t *testing.T) {
+		e := newExecProject(t, files, fixtureSpec, tools...)
+		res := e.run("", nil, jsonl("check", keepGoing)...)
+		e.wantExit(res, 1)
+		events := clitest.MustParseJSONL(t, res.Stderr)
+		clitest.AssertChains(t, events)
+		if phases := eventsOf(events, func(e clitest.Event) bool { return e.Type == "phase" }); len(phases) != 2 ||
+			phases[0].Op != "fix" || phases[1].Op != "lint" {
+			t.Errorf("phase events = %+v, want fix then lint", phases)
+		}
+		wantRunDone(t, events, "check", false, 2, 0, true)
+	})
+}
+
+// TestExecutionSetupErrorIsReported: a setup error — here a .datamitsuignore
+// line the bundled check rejects — stops the run before any operation, and the
+// run is still reported: check's closing line names both operations as not
+// run, and the run-level done says the run failed and is incomplete.
+func TestExecutionSetupErrorIsReported(t *testing.T) {
+	files := map[string]string{"fixture.marker": "", ".datamitsuignore": "no separator here\n"}
+	tools := []string{
+		clitest.ShellTool("fixer", passScript, clitest.ToolOpSpec{Operation: "fix"}),
+		clitest.ShellTool("linter", passScript, clitest.ToolOpSpec{}),
+	}
+
+	t.Run("console", func(t *testing.T) {
+		e := newExecProject(t, files, fixtureSpec, tools...)
+		res := e.run("", nil, "check")
+		e.wantExit(res, 1)
+		e.wantMarker("fixer", "")
+		if !strings.Contains(res.Stdout, "· fix not run · lint not run ·") || !strings.Contains(res.Stderr, "missing colon separator") {
+			t.Errorf("check should report the setup error and close with neither operation run:\nstdout:\n%s\nstderr:\n%s", res.Stdout, res.Stderr)
+		}
+		e.golden("setup_error", res)
+	})
+
+	t.Run("jsonl", func(t *testing.T) {
+		e := newExecProject(t, files, fixtureSpec, tools...)
+		res := e.run("", nil, jsonl("check")...)
+		e.wantExit(res, 1)
+		events := clitest.MustParseJSONL(t, res.Stderr)
+		clitest.AssertChains(t, events)
+		wantRunDone(t, events, "check", false, 0, 0, false)
+	})
+}
+
+// hostUninstallable declares a binary app built for this host whose download
+// the offline harness refuses, so installing it fails: a setup error of the
+// operation that plans it.
+func hostUninstallable(tool, operation string) string {
+	build := `{ url: "https://example.invalid/unreachable", contentType: "raw",
+  hash: "3f79bb7b435b05321651daefd374cdc681dc06faa65e374e38337b88ca046dea" }`
+	return fmt.Sprintf(`c.apps["unreachable"] = { binary: { binaries: { %s: { %s: { glibc: %s, musl: %s, unknown: %s } } } } };
+c.tools[%q] = { name: %q, operations: { %s: { app: "unreachable", args: [], scope: "repository" } } };
+`, runtime.GOOS, runtime.GOARCH, build, build, build, tool, tool, operation)
+}
+
+// TestExecutionKeepGoingKeepsLaterErrors: under keep-going, lint can fail to
+// install its tools after fix failed on a tool. Both reasons are reported, the
+// lint block is closed, and the exit code is still 1.
+func TestExecutionKeepGoingKeepsLaterErrors(t *testing.T) {
+	spec := clitest.ShellConfigSpec{ProjectTypes: fixtureTypes, Extra: hostUninstallable("installer", "lint")}
+	fixer := clitest.ShellTool("fixer", failScript, clitest.ToolOpSpec{Operation: "fix"})
+
+	t.Run("console", func(t *testing.T) {
+		e := newExecProject(t, map[string]string{"fixture.marker": ""}, spec, fixer)
+		res := e.run("", nil, "check", keepGoing)
+		e.wantExit(res, 1)
+		failed, install := strings.Index(res.Stderr, "operation failed"), strings.Index(res.Stderr, "failed to pre-install tools")
+		if failed < 0 || install < failed {
+			t.Errorf("stderr should report fix's failure, then lint's install error:\n%s", res.Stderr)
+		}
+		if !strings.Contains(res.Stdout, "┗━ setup failed") || !strings.Contains(res.Stdout, "· lint not run ·") {
+			t.Errorf("the lint block should close as a failed setup, and check's line say lint did not run:\n%s", res.Stdout)
+		}
+	})
+
+	t.Run("jsonl", func(t *testing.T) {
+		e := newExecProject(t, map[string]string{"fixture.marker": ""}, spec, fixer)
+		res := e.run("", nil, jsonl("check", keepGoing)...)
+		e.wantExit(res, 1)
+		events := clitest.MustParseJSONL(t, res.Stderr)
+		clitest.AssertChains(t, events)
+		lint := eventsOf(events, func(e clitest.Event) bool { return operationDone(e) && e.Op == "lint" })
+		if len(lint) != 1 || lint[0].Status != "fail" {
+			t.Errorf("lint's done events = %+v, want one fail", lint)
+		}
+		wantRunDone(t, events, "check", false, 1, 0, false)
+	})
+}
+
+// TestExecutionRunThatCannotStart: a config that does not load stops the run
+// before anything is planned; the event stream still ends with a failed,
+// incomplete run-level done. A usage error is refused before a run begins and
+// ends with none.
+func TestExecutionRunThatCannotStart(t *testing.T) {
+	t.Run("config_error", func(t *testing.T) {
+		e := newExecProject(t, map[string]string{"fixture.marker": ""}, fixtureSpec)
+		e.p.WriteFile("exec.config.js", "throw new Error('broken config');\n")
+		res := e.run("", nil, jsonl("lint")...)
+		e.wantExit(res, 1)
+		events := clitest.MustParseJSONL(t, res.Stderr)
+		clitest.AssertChains(t, events)
+		wantRunDone(t, events, "lint", false, 0, 0, false)
+	})
+
+	t.Run("config_error_check", func(t *testing.T) {
+		e := newExecProject(t, map[string]string{"fixture.marker": ""}, fixtureSpec)
+		e.p.WriteFile("exec.config.js", "throw new Error('broken config');\n")
+		res := e.run("", nil, "check")
+		e.wantExit(res, 1)
+		if !strings.Contains(res.Stdout, "· fix not run · lint not run ·") {
+			t.Errorf("check should close with neither operation run:\n%s", res.Stdout)
+		}
+	})
+
+	t.Run("usage_error", func(t *testing.T) {
+		e := newExecProject(t, map[string]string{"fixture.marker": ""}, fixtureSpec,
+			clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{}))
+		res := e.run("", nil, jsonl("lint", "--widen-to=Repo")...)
+		e.wantExit(res, 2)
+		if done := eventsOf(clitest.MustParseJSONL(t, res.Stderr), func(e clitest.Event) bool { return e.Type == "done" }); len(done) != 0 {
+			t.Errorf("a usage error emitted done events: %+v", done)
+		}
+	})
+
+	// A caller mistake is refused before the repository and the configuration
+	// are looked at, so it is a usage error even where neither exists.
+	t.Run("usage_error_outside_a_repository", func(t *testing.T) {
+		for _, args := range [][]string{{"lint", "--widen-to=Repo"}, {"check", "--explain=bogus"}, {"fix", "--require-coverage=unit", "--tools", "alpha"}} {
+			res := clitest.Run(t, clitest.RunOptions{Dir: t.TempDir()}, args...)
+			if res.ExitCode != 2 {
+				t.Errorf("%v outside a repository exit = %d, want 2\nstderr:\n%s", args, res.ExitCode, res.Stderr)
+			}
+		}
+	})
+}
+
+var checkClosingRE = regexp.MustCompile(`(?m)^┗━ check · done in \S+ · fix (\S+|not run) · lint (\S+|not run) · setup \S+ ━+$`)
+
+// TestExecutionCheckTotalTime: check closes with the wall clock of the whole
+// command, each operation's execution time and the setup around them, and every
+// fix, lint and check ends its event stream with a run-level done. Neither
+// appears for fix or lint alone on the terminal, nor under --explain.
+func TestExecutionCheckTotalTime(t *testing.T) {
+	files := map[string]string{"fixture.marker": ""}
+	tools := []string{
+		clitest.ShellTool("fixer", passScript, clitest.ToolOpSpec{Operation: "fix"}),
+		clitest.ShellTool("linter", passScript, clitest.ToolOpSpec{}),
+	}
+
+	t.Run("console", func(t *testing.T) {
+		e := newExecProject(t, files, fixtureSpec, tools...)
+		res := e.run("", nil, "check")
+		e.wantExit(res, 0)
+		if !checkClosingRE.MatchString(res.Stdout) || strings.Contains(res.Stdout, "not run") {
+			t.Errorf("check should close with its wall clock and both operations' times:\n%s", res.Stdout)
+		}
+		e.golden("check_total_time", res)
+	})
+
+	t.Run("jsonl", func(t *testing.T) {
+		e := newExecProject(t, files, fixtureSpec, tools...)
+		res := e.run("", nil, jsonl("check")...)
+		e.wantExit(res, 0)
+		events := clitest.MustParseJSONL(t, res.Stderr)
+		clitest.AssertChains(t, events)
+		wantRunDone(t, events, "check", true, 2, 0, true)
+		var operations int64
+		for _, d := range eventsOf(events, operationDone) {
+			ms, err := d.Fields["duration_ms"].(json.Number).Int64()
+			if err != nil {
+				t.Fatalf("done %s carries no duration: %+v", d.Op, d.Fields)
+			}
+			operations += ms
+		}
+		total, err := runDone(t, events).Fields["duration_ms"].(json.Number).Int64()
+		if err != nil || total < operations {
+			t.Errorf("run-level duration_ms = %d, want at least the operations' %d", total, operations)
+		}
+		e.goldenJSONL("s12_jsonl_check_total_time", res)
+	})
+
+	for _, op := range []string{"fix", "lint"} {
+		t.Run(op+"_alone", func(t *testing.T) {
+			e := newExecProject(t, files, fixtureSpec, tools...)
+			res := e.run("", nil, op)
+			e.wantExit(res, 0)
+			if strings.Contains(res.Stdout, "┗━ check") || strings.Contains(res.Stdout, "setup") {
+				t.Errorf("%s alone printed check's closing line:\n%s", op, res.Stdout)
+			}
+			events := e.run("", nil, jsonl(op)...)
+			e.wantExit(events, 0)
+			parsed := clitest.MustParseJSONL(t, events.Stderr)
+			clitest.AssertChains(t, parsed)
+			wantRunDone(t, parsed, op, true, 1, 0, true)
+		})
+	}
+
+	for _, mode := range []string{"summary", "detailed", "json"} {
+		t.Run("explain_"+mode, func(t *testing.T) {
+			e := newExecProject(t, files, fixtureSpec, tools...)
+			res := e.run("", nil, jsonl("check", "--explain="+mode)...)
+			e.wantExit(res, 0)
+			if strings.Contains(res.Stdout, "┗━ check") {
+				t.Errorf("check --explain=%s printed the closing line:\n%s", mode, res.Stdout)
+			}
+			if done := eventsOf(clitest.MustParseJSONL(t, res.Stderr), func(e clitest.Event) bool { return e.Type == "done" }); len(done) != 0 {
+				t.Errorf("check --explain=%s emitted done events: %+v", mode, done)
+			}
+		})
+	}
 }
 
 // dropDurations removes duration_ms from a normalized JSON-L golden. A task
@@ -610,29 +1061,61 @@ var hostRE = regexp.MustCompile(`no binary for [a-z0-9]+/[a-z0-9_]+/[a-z0-9_]+`)
 
 func maskHost(s string) string { return hostRE.ReplaceAllString(s, "no binary for <HOST>") }
 
-// TestExecutionFailOnSkip is S10: --fail-on-skip turns a tool whose binary has
-// no build for this host into exit 1. Plan 2 gives it its own exit code.
-func TestExecutionFailOnSkip(t *testing.T) {
+// nativeSkipped declares a binary app built only for another OS, so the host
+// skips its tool: the platform skip --fail-on-skip reports.
+func nativeSkipped() string {
 	otherOS := "windows"
 	if runtime.GOOS == otherOS {
 		otherOS = "linux"
 	}
-	binary := fmt.Sprintf(`c.apps["native"] = { binary: { binaries: { %s: { amd64: { unknown: {
+	return fmt.Sprintf(`c.apps["native"] = { binary: { binaries: { %s: { amd64: { unknown: {
   url: "https://example.invalid/native", contentType: "raw",
   hash: "3f79bb7b435b05321651daefd374cdc681dc06faa65e374e38337b88ca046dea" } } } } } };
 c.tools["native"] = { name: "native", operations: { lint: { app: "native", args: [], scope: "repository" } } };
 `, otherOS)
-	e := newExecProject(t, map[string]string{"fixture.marker": ""},
-		clitest.ShellConfigSpec{ProjectTypes: fixtureTypes, Extra: binary},
-		clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{}),
-	)
-	res := e.run("", nil, "lint", "--fail-on-skip")
-	e.wantExit(res, 1)
-	e.wantMarker("alpha", "alpha \n")
-	if !strings.Contains(res.Stdout, "⊘ native") {
-		t.Errorf("the skipped tool should be listed:\n%s", res.Stdout)
-	}
-	e.golden("s10_lint_fail_on_skip", res, maskHost)
+}
+
+// TestExecutionFailOnSkip is S10: --fail-on-skip turns a tool whose binary has
+// no build for this host into exit 4, the code of a run that did not look at
+// everything. A tool failure still exits 1, and a run that fails both
+// --fail-on-skip and --require-coverage prints both and exits 4 once.
+func TestExecutionFailOnSkip(t *testing.T) {
+	spec := clitest.ShellConfigSpec{ProjectTypes: fixtureTypes, Extra: nativeSkipped()}
+
+	t.Run("skip", func(t *testing.T) {
+		e := newExecProject(t, map[string]string{"fixture.marker": ""}, spec,
+			clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{}))
+		res := e.run("", nil, "lint", "--fail-on-skip")
+		e.wantExit(res, 4)
+		e.wantMarker("alpha", "alpha \n")
+		if !strings.Contains(res.Stdout, "⊘ native") {
+			t.Errorf("the skipped tool should be listed:\n%s", res.Stdout)
+		}
+		e.golden("s10_lint_fail_on_skip", res, maskHost)
+	})
+
+	t.Run("tool_failure_wins", func(t *testing.T) {
+		e := newExecProject(t, map[string]string{"fixture.marker": ""}, spec,
+			clitest.ShellTool("alpha", failScript, clitest.ToolOpSpec{}))
+		res := e.run("", nil, "lint", "--fail-on-skip")
+		e.wantExit(res, 1)
+		failed, skipped := strings.Index(res.Stderr, "operation failed"), strings.Index(res.Stderr, "--fail-on-skip:")
+		if failed < 0 || skipped < failed {
+			t.Errorf("stderr should report the tool failure, then the skip it also found:\n%s", res.Stderr)
+		}
+	})
+
+	t.Run("with_require_coverage", func(t *testing.T) {
+		e := newExecProject(t, map[string]string{"fixture.marker": "", "sub/file.txt": "x\n"}, spec,
+			clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{Scope: "per-project"}))
+		res := e.run("sub", nil, "lint", "--fail-on-skip", "--require-coverage=repo")
+		e.wantExit(res, 4)
+		skip, cov := strings.Index(res.Stderr, "--fail-on-skip:"), strings.Index(res.Stderr, "--require-coverage=repo:")
+		if skip < 0 || cov < skip {
+			t.Errorf("stderr should report --fail-on-skip, then --require-coverage:\n%s", res.Stderr)
+		}
+		e.golden("s10_lint_fail_on_skip_and_require_coverage", res, maskHost)
+	})
 }
 
 // TestExecutionRequireCoverage is S11: --require-coverage=repo from a
@@ -650,23 +1133,30 @@ func TestExecutionRequireCoverage(t *testing.T) {
 	e.golden("s11_lint_require_coverage", res)
 }
 
-// TestExecutionUsageErrors is S13: a malformed invocation exits 1 with an error
-// line. Plan 2 gives usage errors exit code 2.
+// TestExecutionUsageErrors is S13: a malformed invocation — an unknown flag, a
+// flag value or DATAMITSU_* value it does not accept, a combination it refuses
+// before running — exits 2 with an error line, apart from the 1 of a failed
+// tool.
 func TestExecutionUsageErrors(t *testing.T) {
 	cases := []struct {
 		name string
+		env  []string
 		args []string
 	}{
-		{"bogus_flag", []string{"lint", "--bogus-flag"}},
-		{"widen_to_invalid", []string{"lint", "--widen-to=Repo"}},
-		{"require_coverage_with_tools", []string{"lint", "--require-coverage=unit", "--tools", "alpha"}},
+		{"bogus_flag", nil, []string{"lint", "--bogus-flag"}},
+		{"widen_to_invalid", nil, []string{"lint", "--widen-to=Repo"}},
+		{"require_coverage_with_tools", nil, []string{"lint", "--require-coverage=unit", "--tools", "alpha"}},
+		{"fail_fast_env_invalid", []string{"DATAMITSU_FAIL_FAST=yes"}, []string{"lint"}},
+		{"fail_fast_env_invalid_with_flag", []string{"DATAMITSU_FAIL_FAST=yes"}, []string{"lint", "--fail-fast=false"}},
+		{"fail_fast_flag_invalid", nil, []string{"lint", "--fail-fast=maybe"}},
+		{"explain_invalid", nil, []string{"lint", "--explain=bogus"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			e := newExecProject(t, map[string]string{"fixture.marker": ""}, fixtureSpec,
 				clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{}))
-			res := e.run("", nil, tc.args...)
-			e.wantExit(res, 1)
+			res := e.run("", tc.env, tc.args...)
+			e.wantExit(res, 2)
 			e.wantMarker("alpha", "")
 			if !strings.Contains(res.Stderr, "error:") {
 				t.Errorf("stderr should carry an error line:\n%s", res.Stderr)
@@ -712,4 +1202,97 @@ func TestExecutionFixCache(t *testing.T) {
 	e.wantMarker("appender", "appender <TMP>/a.txt\n")
 	e.wantMarker("linter", "linter <TMP>/a.txt\n")
 	e.golden("s14_check_after_fix", check)
+}
+
+// TestExecutionInterrupted: SIGINT stops a run the way fail-fast does, and is
+// reported as its own cause. The running tool is killed and listed as
+// cancelled, the tool of a later priority as not started, and the run exits
+// 130, the status a shell reported when the signal simply killed datamitsu.
+func TestExecutionInterrupted(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("SIGINT cannot be sent to a process on Windows; the interrupted-run report is left unverified")
+	}
+	files := map[string]string{"fixture.marker": ""}
+	tools := []string{
+		clitest.ShellTool("sleeper", `echo "$0 started" >> "$MARKERS/$0"; sleep 3; echo "$0 done" >> "$MARKERS/$0"`,
+			clitest.ToolOpSpec{Priority: 10}),
+		clitest.ShellTool("later", passScript, clitest.ToolOpSpec{Priority: 20}),
+	}
+
+	interrupt := func(t *testing.T, sig syscall.Signal, wantExit int, args ...string) (*execProject, clitest.Result) {
+		t.Helper()
+		e := newExecProject(t, files, fixtureSpec, tools...)
+		start := time.Now()
+		proc := clitest.Start(t, clitest.RunOptions{Dir: e.p.Dir, CacheDir: e.cache},
+			append([]string{"--no-auto-config", "--config", e.cfg}, args...)...)
+		for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(20 * time.Millisecond) {
+			if ran, _ := e.p.Marker("sleeper"); ran {
+				break
+			}
+			if time.Now().After(deadline) {
+				_ = proc.Signal(syscall.SIGKILL)
+				t.Fatalf("sleeper never started:\n%+v", proc.Wait())
+			}
+		}
+		if err := proc.Signal(sig); err != nil {
+			t.Fatalf("send %s: %v", sig, err)
+		}
+		res := proc.Wait()
+		time.Sleep(time.Until(start.Add(killWindow)))
+		e.wantExit(res, wantExit)
+		e.wantMarker("sleeper", "sleeper started\n")
+		e.wantMarker("later", "")
+		return e, res
+	}
+
+	stoppedLines := []string{"⊘ sleeper  cancelled (interrupted)", "⊘ later    not started (interrupted)"}
+
+	t.Run("console", func(t *testing.T) {
+		e, res := interrupt(t, syscall.SIGINT, 130, "lint")
+		for _, want := range stoppedLines {
+			if !strings.Contains(res.Stdout, want) {
+				t.Errorf("stdout should list %q:\n%s", want, res.Stdout)
+			}
+		}
+		e.golden("s4_lint_interrupted", res)
+	})
+
+	// SIGTERM stops a keep-going run the same way and exits 143: keep-going
+	// only keeps a run going past failures, never past an interruption.
+	t.Run("sigterm_keep_going", func(t *testing.T) {
+		e, res := interrupt(t, syscall.SIGTERM, 143, "lint", keepGoing)
+		for _, want := range stoppedLines {
+			if !strings.Contains(res.Stdout, want) {
+				t.Errorf("stdout should list %q:\n%s", want, res.Stdout)
+			}
+		}
+		e.golden("s4_lint_interrupted_sigterm_keep_going", res)
+	})
+
+	t.Run("sigterm_keep_going_jsonl", func(t *testing.T) {
+		_, res := interrupt(t, syscall.SIGTERM, 143, jsonl("lint", keepGoing)...)
+		events := clitest.MustParseJSONL(t, res.Stderr)
+		clitest.AssertChains(t, events)
+		wantStopped(t, events, "sleeper", "", "cancelled: interrupted")
+		wantStopped(t, events, "later", "", "not started: interrupted")
+		wantRunDone(t, events, "lint", false, 0, 2, false)
+		errs := eventsOf(events, func(e clitest.Event) bool { return e.Type == "error" && e.Tool == "" })
+		if len(errs) != 1 || errs[0].Msg != "interrupted by SIGTERM" {
+			t.Errorf("run error events = %+v, want one saying the run was interrupted by SIGTERM", errs)
+		}
+	})
+
+	t.Run("jsonl", func(t *testing.T) {
+		_, res := interrupt(t, syscall.SIGINT, 130, jsonl("lint")...)
+		events := clitest.MustParseJSONL(t, res.Stderr)
+		clitest.AssertChains(t, events)
+		wantStopped(t, events, "sleeper", "", "cancelled: interrupted")
+		wantStopped(t, events, "later", "", "not started: interrupted")
+		wantDone(t, events, "lint", 0, 2)
+		wantRunDone(t, events, "lint", false, 0, 2, false)
+		errs := eventsOf(events, func(e clitest.Event) bool { return e.Type == "error" && e.Tool == "" })
+		if len(errs) != 1 || errs[0].Msg != "interrupted by SIGINT" {
+			t.Errorf("run error events = %+v, want one saying the run was interrupted by SIGINT", errs)
+		}
+	})
 }

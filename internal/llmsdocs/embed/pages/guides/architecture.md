@@ -44,7 +44,7 @@ Each stage has its own detailed documentation:
 | ------------------------------------- | ---------------------------------------------- | ---------------------------------------------------------------------- |
 | [Startup & Config Load](./startup.md) | Resolves the repo root, evaluates config       | Config-evaluation cache, git-root memo, extension-based type stripping |
 | [Task Planning](./planner.md)         | Groups inventory into prioritized tasks        | Granularity, widening, overlap detection, CWD selection                |
-| [Parallel Execution](./execution.md)  | Runs tasks with fail-fast semantics            | Two-layer model, context cancellation, progress tracking               |
+| [Parallel Execution](./execution.md)  | Runs tasks, fail-fast by default               | Two-layer model, context cancellation, progress tracking               |
 | [File Discovery](./discovery.md)      | Builds one shared, sorted repository inventory | .gitignore traversal, project auto-detection, inventory reuse          |
 | [Caching Strategy](./caching.md)      | Tracks file passes and unit/repo verdicts      | XXH3-128 keys, guards, TTL, concurrent persistence                     |
 | [WASM Output Parsers](./parsers.md)   | Sandboxed parsers + formatting diff-in-core    | Rust→WASM, SHA-256 trust, https or OCI source, wazero, Myers diff      |

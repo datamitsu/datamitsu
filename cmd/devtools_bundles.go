@@ -20,21 +20,21 @@ var bundlesCmd = &cobra.Command{
 var bundlesListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all configured bundles with their version and install status",
-	Args:  cobra.NoArgs,
+	Args:  usageArgs(cobra.NoArgs),
 	RunE:  runBundlesList,
 }
 
 var bundlesInspectCmd = &cobra.Command{
 	Use:   "inspect <name>",
 	Short: "Show install path and file tree for an installed bundle",
-	Args:  cobra.ExactArgs(1),
+	Args:  usageArgs(cobra.ExactArgs(1)),
 	RunE:  runBundlesInspect,
 }
 
 var bundlesPathCmd = &cobra.Command{
 	Use:   "path <name>",
 	Short: "Print the install directory path for a bundle",
-	Args:  cobra.ExactArgs(1),
+	Args:  usageArgs(cobra.ExactArgs(1)),
 	RunE:  runBundlesPath,
 }
 

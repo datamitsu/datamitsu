@@ -1,0 +1,10 @@
+exit code: 1
+===STDOUT===
+╭<RULE>╮
+│ datamitsu  <VERSION> │
+╰<RULE>╯
+
+┗━ check · done in <DUR> · fix not run · lint not run · setup <DUR> <RULE>
+
+===STDERR===
+error: datamitsuignore: .datamitsuignore:1: missing colon separator: "no separator here"

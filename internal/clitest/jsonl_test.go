@@ -113,28 +113,48 @@ func TestAssertChains(t *testing.T) {
 		doneTwo  = `{"type":"done","op_id":"run-1","status":"done","runs":2}`
 		doneOne  = `{"type":"done","op_id":"run-1","status":"fail","runs":1}`
 		runError = `{"type":"error","op_id":"run-2","status":"fail","msg":"operation failed"}`
+		// b is stopped: cancelled after it started, or never started at all.
+		bCancelled   = `{"type":"tool_run","op_id":"run-1:b:x","status":"skip","tool":"b","dir":"x","msg":"cancelled: fail-fast"}`
+		bNotStarted  = `{"type":"tool_run","op_id":"run-1:b:x","status":"skip","tool":"b","dir":"x","msg":"not started: fail-fast"}`
+		doneOneStop  = `{"type":"done","op_id":"run-1","status":"fail","runs":1,"cancelled":1}`
+		doneOneStop2 = `{"type":"done","op_id":"run-1","status":"fail","runs":1,"cancelled":2}`
+		// The run-level done of the whole command.
+		cmdDone         = `{"type":"done","op_id":"cmd-2","op":"lint","status":"done","runs":2,"cancelled":0,"complete":true}`
+		cmdDoneStopped  = `{"type":"done","op_id":"cmd-2","op":"lint","status":"fail","runs":1,"cancelled":1,"complete":false}`
+		cmdDoneWrong    = `{"type":"done","op_id":"cmd-2","op":"lint","status":"done","runs":1,"cancelled":0,"complete":true}`
+		cmdDoneComplete = `{"type":"done","op_id":"cmd-2","op":"lint","status":"fail","runs":1,"cancelled":1,"complete":true}`
 	)
 	cases := []struct {
-		name     string
-		lines    []string
-		orphaned []string
-		wantErr  string
+		name    string
+		lines   []string
+		wantErr string
 	}{
-		{"complete chains", []string{phase, aStart, bStart, bFail, aDone, doneTwo, runError}, nil, ""},
-		{"expected orphan", []string{phase, aStart, bStart, aDone, doneOne}, []string{"b"}, ""},
-		{"unexpected orphan", []string{phase, aStart, bStart, aDone, doneOne}, nil, "1 start(s) and 0 terminal(s)"},
-		{"missing orphan", []string{phase, aStart, aDone, doneOne}, []string{"b"}, `orphaned tool_run start for "b"`},
-		{"terminal before start", []string{phase, aDone, aStart, doneOne}, nil, "no preceding start"},
-		{"tool_run before phase", []string{aStart, phase, aDone, doneOne}, nil, "precedes the phase start"},
-		{"no phase", []string{aStart, aDone}, nil, "belongs to no phase"},
-		{"runs mismatch", []string{phase, aStart, aDone, doneTwo}, nil, "reports runs=2"},
-		{"done before tool_run", []string{phase, doneOne, aStart, aDone}, nil, "follows the done"},
-		{"missing done", []string{phase, aStart, aDone}, nil, "ends with 0 done event(s)"},
-		{"two done events", []string{phase, aStart, aDone, doneOne, doneOne}, nil, "ends with 2 done event(s)"},
-		{"done before phase", []string{`{"type":"done","op_id":"run-1","status":"done"}`, phase}, nil, "done before its phase start"},
-		{"phase twice", []string{phase, phase, aStart, aDone, doneOne}, nil, "starts twice"},
-		{"done without phase", []string{doneOne}, nil, "has no phase start"},
-		{"progress status", []string{phase, `{"type":"tool_run","op_id":"run-1:a:","status":"progress","tool":"a"}`}, nil, `status "progress"`},
+		{"complete chains", []string{phase, aStart, bStart, bFail, aDone, doneTwo, runError}, ""},
+		{"run-level done", []string{phase, aStart, bStart, bFail, aDone, doneTwo, cmdDone, runError}, ""},
+		{"run-level done of a stopped run", []string{phase, aStart, bStart, aDone, bCancelled, doneOneStop, cmdDoneStopped}, ""},
+		{"run-level done with wrong totals", []string{phase, aStart, bStart, bFail, aDone, doneTwo, cmdDoneWrong}, "run-level done reports runs=1"},
+		{"run-level done complete despite a stop", []string{phase, aStart, bStart, aDone, bCancelled, doneOneStop, cmdDoneComplete}, "complete="},
+		{"run-level done too early", []string{phase, aStart, bStart, bFail, aDone, cmdDone, doneTwo}, "precedes an operation event"},
+		{"two run-level done events", []string{phase, aStart, bStart, bFail, aDone, doneTwo, cmdDone, cmdDone}, "2 run-level done events"},
+		{"cancelled after start", []string{phase, aStart, bStart, aDone, bCancelled, doneOneStop}, ""},
+		{"never started", []string{phase, aStart, aDone, bNotStarted, doneOneStop}, ""},
+		{"both stopped kinds", []string{phase, aStart, bStart, aDone, bCancelled, bNotStarted, doneOneStop2}, ""},
+		{"orphaned start", []string{phase, aStart, bStart, aDone, doneOne}, "1 start(s) and 0 terminal(s)"},
+		{"cancelled without start", []string{phase, aStart, aDone, bCancelled, doneOneStop}, "no preceding start"},
+		{"not started closing a start", []string{phase, aStart, bStart, aDone, bNotStarted, doneOneStop}, "1 start(s) and 0 terminal(s)"},
+		{"cancelled uncounted", []string{phase, aStart, bStart, aDone, bCancelled, doneOne}, "reports cancelled=0"},
+		{"skip counted as a run", []string{phase, aStart, bStart, aDone, bCancelled, doneTwo}, "reports runs=2"},
+		{"terminal before start", []string{phase, aDone, aStart, doneOne}, "no preceding start"},
+		{"tool_run before phase", []string{aStart, phase, aDone, doneOne}, "precedes the phase start"},
+		{"no phase", []string{aStart, aDone}, "belongs to no phase"},
+		{"runs mismatch", []string{phase, aStart, aDone, doneTwo}, "reports runs=2"},
+		{"done before tool_run", []string{phase, doneOne, aStart, aDone}, "follows the done"},
+		{"missing done", []string{phase, aStart, aDone}, "ends with 0 done event(s)"},
+		{"two done events", []string{phase, aStart, aDone, doneOne, doneOne}, "ends with 2 done event(s)"},
+		{"done before phase", []string{`{"type":"done","op_id":"run-1","status":"done"}`, phase}, "done before its phase start"},
+		{"phase twice", []string{phase, phase, aStart, aDone, doneOne}, "starts twice"},
+		{"done without phase", []string{doneOne}, "has no phase start"},
+		{"progress status", []string{phase, `{"type":"tool_run","op_id":"run-1:a:","status":"progress","tool":"a"}`}, `status "progress"`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -143,7 +163,7 @@ func TestAssertChains(t *testing.T) {
 				t.Fatalf("ParseJSONL: %v", err)
 			}
 			rec := &errorsTB{}
-			AssertChains(rec, events, tc.orphaned...)
+			AssertChains(rec, events)
 			got := strings.Join(rec.errs, "\n")
 			switch {
 			case tc.wantErr == "" && got != "":

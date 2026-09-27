@@ -43,6 +43,10 @@ These operations are intentionally separate. Never treat them as synonyms.
 ## Common commands
 
 - `datamitsu check` - run fix then lint
+  - Local work: `datamitsu check --fail-fast=false` runs every tool to the end,
+    so one run shows every failure at once
+  - In CI: `datamitsu lint --fail-fast=false` — CI runs `lint`; `fix` and
+    `check` change the working tree
 - `datamitsu exec <app>` - run a managed tool
   - List apps: `datamitsu exec`
   - Pass args to the app: `datamitsu exec <app> -- [app-args]`

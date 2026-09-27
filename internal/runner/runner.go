@@ -24,6 +24,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/diagnostic"
 	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/exitcode"
 	"github.com/datamitsu/datamitsu/internal/facts"
 	"github.com/datamitsu/datamitsu/internal/gitenv"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
@@ -31,6 +32,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/managedconfig"
 	"github.com/datamitsu/datamitsu/internal/ocibundle"
 	"github.com/datamitsu/datamitsu/internal/parsermanager"
+	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 	"github.com/datamitsu/datamitsu/internal/term"
 	"github.com/datamitsu/datamitsu/internal/timing"
@@ -92,6 +94,7 @@ type planExecutor interface {
 	SetFileProgressCallback(cb tooling.FileProgressCallback)
 	SetParser(parser tooling.DiagnosticParser)
 	Execute(ctx context.Context, plan *tooling.ExecutionPlan) ([]tooling.GroupExecutionResult, error)
+	TaskDir(task tooling.Task) string
 }
 
 // toolEnsurer pre-installs every tool a plan needs before parallel execution
@@ -132,6 +135,15 @@ type sharedContext struct {
 	// narrowed collects why the run did not answer completely: tools dropped for
 	// narrowing, and tasks that covered only part of their unit.
 	narrowed map[string]struct{}
+	// failFast stops the run at the first failing tool; without it every group,
+	// task, file and operation runs to the end.
+	failFast bool
+	// afterFailedFix marks the lint operation of a check that runs although its
+	// fix failed, which only keep-going allows.
+	afterFailedFix bool
+	// summaries holds what each operation that ran reported, for check's
+	// closing line and the run-level done event.
+	summaries []opSummary
 }
 
 func initSharedContext(
@@ -150,6 +162,7 @@ func initSharedContext(
 		failOnSkip:      failOnSkip,
 		platformSkipped: make(map[string]struct{}),
 		narrowed:        make(map[string]struct{}),
+		failFast:        resolveFailFast(opts.FailFast),
 	}
 
 	// Parse selected tools flag
@@ -162,6 +175,30 @@ func initSharedContext(
 				seen[tool] = true
 				sc.selectedTools = append(sc.selectedTools, tool)
 			}
+		}
+	}
+
+	// Caller mistakes are refused before anything is loaded: they exit 2 whether
+	// or not the directory is a repository and the configuration loads.
+	if err := opts.validate(); err != nil {
+		return nil, err
+	}
+	// Rejected before anything runs: --tools drops the skip entries of unselected
+	// tools before they can be observed, so the assertion would be trivially true
+	// over a debug subset. Failing after the run would waste it.
+	if opts.RequireCoverage != "" && len(sc.selectedTools) > 0 {
+		return nil, errRequireCoverageWithTools
+	}
+	if explainMode != "" {
+		switch strings.ToLower(explainMode) {
+		case "summary", "s":
+			sc.explainLevel = "summary"
+		case "detailed", "detail", "d":
+			sc.explainLevel = "detailed"
+		case "json", "j":
+			sc.explainLevel = "json"
+		default:
+			return nil, exitcode.UsageErrorf("invalid --explain value: %s (must be summary, detailed, or json)", explainMode)
 		}
 	}
 
@@ -200,20 +237,6 @@ func initSharedContext(
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
-	// Validate and normalize explain mode
-	if explainMode != "" {
-		switch strings.ToLower(explainMode) {
-		case "summary", "s":
-			sc.explainLevel = "summary"
-		case "detailed", "detail", "d":
-			sc.explainLevel = "detailed"
-		case "json", "j":
-			sc.explainLevel = "json"
-		default:
-			return nil, fmt.Errorf("invalid --explain value: %s (must be summary, detailed, or json)", explainMode)
-		}
-	}
-
 	// Determine files to process
 	sc.files = args
 	if fileScoped {
@@ -226,16 +249,6 @@ func initSharedContext(
 
 	// Normalize all file paths to absolute paths to prevent filepath.Rel errors in cache.
 	sc.files = normalizeFilePaths(sc.files, sc.cwdPath)
-
-	if err := opts.validate(); err != nil {
-		return nil, err
-	}
-	// Rejected before anything runs: --tools drops the skip entries of unselected
-	// tools before they can be observed, so the assertion would be trivially true
-	// over a debug subset. Failing after the run would waste it.
-	if opts.RequireCoverage != "" && len(sc.selectedTools) > 0 {
-		return nil, errRequireCoverageWithTools
-	}
 
 	sc.selection = tooling.NewSelection(sc.rootPath, sc.cwdPath, sc.files, fileScoped)
 
@@ -266,7 +279,7 @@ func initSharedContext(
 	// skipped (reported, not fatal) rather than letting EnsureTools hard-fail —
 	// and so they appear in --explain, which never reaches the install step.
 	planner.SetPlatformChecker(binMgr)
-	sc.executor = tooling.NewExecutor(sc.rootPath, false, true, binMgr, sc.projectCache)
+	sc.executor = tooling.NewExecutor(sc.rootPath, false, sc.failFast, binMgr, sc.projectCache)
 	// Wire output-parsing only when parsers are declared and not disabled via
 	// --no-parse / DATAMITSU_NO_PARSE; otherwise the executor never parses (tools
 	// without an outputParser are unaffected either way).
@@ -284,6 +297,17 @@ func initSharedContext(
 	}
 
 	return sc, nil
+}
+
+func resolveFailFast(flag *bool) bool {
+	if flag != nil {
+		return *flag
+	}
+	eff, err := runtimeconfig.Get()
+	if err != nil {
+		eff = runtimeconfig.Compute()
+	}
+	return eff.FailFast
 }
 
 func (sc *sharedContext) shutdown() {
@@ -351,18 +375,22 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	// any explicit skips — recording unsupported-platform ones for --fail-on-skip
 	// — instead of leaving them invisible.
 	if len(projectTypes) == 0 || len(plan.Groups) == 0 {
+		sc.recordOp(opSummary{op: operation, skipped: len(plan.Skipped)})
 		if len(plan.Skipped) > 0 {
-			renderSkipOnlyBlock(string(operation), sc.targetLine(), plan.Skipped, sc.nameWidth)
+			renderSkipOnlyBlock(string(operation), sc.targetLine(), plan.Skipped, sc.nameWidth, sc.footerNote(operation))
 			sc.recordSkips(plan.Skipped)
 			sc.recordCoverage(plan)
 			return nil
 		}
 		if !ui.Quiet() {
+			msg := "ℹ️  No applicable tools found"
 			if len(projectTypes) == 0 {
-				fmt.Println("⚠️  No project types detected")
-			} else {
-				fmt.Println("ℹ️  No applicable tools found")
+				msg = "⚠️  No project types detected"
 			}
+			if note := sc.footerNote(operation); note != "" {
+				msg += " · " + note
+			}
+			fmt.Println(msg)
 		}
 		return nil
 	}
@@ -566,13 +594,19 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		t.Increment()
 	})
 
+	// Tasks the run stopped before they finished: cancelled after they started,
+	// never started, or never reached at all.
+	var stopped []stoppedTask
+
 	// Set up progress tracking callback
 	sc.executor.SetResultCallback(func(result tooling.ExecutionResult) {
-		// Cancelled tasks are fail-fast noise (mirrors groupResultsByTool); don't
-		// surface them as tool_run/error events. NOTE: a task cancelled AFTER it
-		// emitted its start thus leaves an orphaned start — a known event-stream
-		// fidelity gap documented at toolOpID, deferred to the diagnostics phase.
-		if !result.Cancelled && result.FailureReason != tooling.FailureReasonCancelled {
+		// A cancelled task is not a failure: it ends its chain with a skip event
+		// and is listed apart from the results, never as a failed run.
+		if result.IsCancelled() {
+			task := stoppedFromResult(result)
+			stopped = append(stopped, task)
+			emitStopped(runOpID, task)
+		} else {
 			opID := toolOpID(runOpID, result.ToolName, result.RelativeDir)
 			ui.Emit(uievent.Event{
 				Type:       uievent.TypeToolRun,
@@ -625,6 +659,16 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		err := sc.binMgr.EnsureTools(ctx, plan.GetAppNames())
 		ensureSpan.EndWith(trace.A("apps", len(plan.GetAppNames())))
 		if err != nil {
+			finalizeProgress()
+			if !ui.Quiet() {
+				fmt.Println(ui.RuleLine("┗", "setup failed", clr.Red("setup failed")))
+			}
+			ui.Emit(uievent.Event{
+				Type:   uievent.TypeDone,
+				OpID:   runOpID,
+				Status: uievent.StatusFail,
+				Op:     string(operation),
+			})
 			return fmt.Errorf("failed to pre-install tools: %w", err)
 		}
 	}
@@ -635,6 +679,19 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	// Finalize progress before printing any summaries/errors to avoid interleaved output.
 	finalizeProgress()
 
+	cause := stopFailFast
+	if interruption(ctx) != nil {
+		cause = stopInterrupted
+	}
+	for _, task := range unreachedTasks(plan, results, sc.executor.TaskDir, cause) {
+		stopped = append(stopped, task)
+		emitStopped(runOpID, task)
+	}
+	// An interruption can stop a run between two groups that passed, with no
+	// failed result to show for it; the tasks it stopped still fail the
+	// operation.
+	incomplete := len(stopped) > 0
+
 	// Cache hit/miss feeds the footer.
 	cacheHits, cacheMisses := 0, 0
 	if sc.projectCache != nil {
@@ -643,7 +700,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	}
 
 	// Calculate total wall-clock time and failure state.
-	hasFailures := execErr != nil
+	hasFailures := execErr != nil || incomplete
 	var totalWallClockTime int64
 	for _, groupResult := range results {
 		totalWallClockTime += groupResult.WallClockDuration
@@ -656,10 +713,11 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	// summary footer (the footer doubles as the "complete" marker, so no separate
 	// line is printed). The print helpers self-suppress in JSON-L mode.
 	toolGroups := groupResultsByTool(results)
-	if len(toolGroups) > 0 || len(plan.Skipped) > 0 {
+	if len(toolGroups) > 0 || len(plan.Skipped) > 0 || len(stopped) > 0 {
 		printGroupedResults(toolGroups, sc.nameWidth, env.IsTimingsEnabled())
+		printStoppedTasks(stopped, sc.nameWidth)
 		printSkippedTools(plan.Skipped, sc.nameWidth)
-		printOperationFooter(toolGroups, totalWallClockTime, cacheHits, cacheMisses, len(plan.Skipped))
+		printOperationFooter(toolGroups, totalWallClockTime, cacheHits, cacheMisses, len(plan.Skipped), len(stopped), sc.footerNote(operation))
 	}
 
 	// Typed completion event for this operation (the JSON-L twin of the footer).
@@ -680,7 +738,18 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		Runs:       totalRuns,
 		Failed:     failedTools,
 		Skipped:    len(plan.Skipped),
+		Cancelled:  nonZero(len(stopped)),
 		DurationMs: totalWallClockTime,
+	})
+	sc.recordOp(opSummary{
+		op:         operation,
+		tools:      len(toolGroups),
+		runs:       totalRuns,
+		failed:     failedTools,
+		skipped:    len(plan.Skipped),
+		cancelled:  len(stopped),
+		partial:    partialTasks(results),
+		durationMs: totalWallClockTime,
 	})
 
 	sc.recordSkips(plan.Skipped)
@@ -780,14 +849,14 @@ func (sc *sharedContext) coverageFailure() error {
 	if len(reasons) == 0 {
 		return nil
 	}
-	return coverageError{fmt.Errorf("--require-coverage=%s: %s", level, strings.Join(reasons, "; "))}
+	return exitcode.CoverageErrorf("--require-coverage=%s: %s", level, strings.Join(reasons, "; "))
 }
 
 // errRequireCoverageWithTools rejects a combination that cannot mean anything:
 // --tools drops the skip entries of unselected tools before anything can observe
 // them, so the assertion would be trivially true over a debug subset.
-var errRequireCoverageWithTools = errors.New(
-	"--require-coverage cannot be combined with --tools: the assertion would only cover the selected subset")
+var errRequireCoverageWithTools = exitcode.UsageError{Err: errors.New(
+	"--require-coverage cannot be combined with --tools: the assertion would only cover the selected subset")}
 
 // targetLine announces that the run covers less than the repository, so a green
 // result is not mistaken for a full one. Empty for a whole-repository run, which
@@ -850,7 +919,7 @@ func printSkippedTools(skipped []tooling.SkippedTool, nameWidth int) {
 
 // renderSkipOnlyBlock prints a minimal operation block containing only skipped
 // tools, used when planning produced skips but nothing runnable.
-func renderSkipOnlyBlock(operation, targetLine string, skipped []tooling.SkippedTool, nameWidth int) {
+func renderSkipOnlyBlock(operation, targetLine string, skipped []tooling.SkippedTool, nameWidth int, note string) {
 	if ui.Quiet() {
 		return
 	}
@@ -861,7 +930,14 @@ func renderSkipOnlyBlock(operation, targetLine string, skipped []tooling.Skipped
 	}
 	fmt.Println(clr.Faint("┃"))
 	printSkippedTools(skipped, nameWidth)
-	printOperationFooter(nil, 0, 0, 0, len(skipped))
+	printOperationFooter(nil, 0, 0, 0, len(skipped), 0, note)
+}
+
+func (sc *sharedContext) footerNote(operation config.OperationType) string {
+	if operation == config.OpLint && sc.afterFailedFix {
+		return "lint ran after a failed fix"
+	}
+	return ""
 }
 
 // shortProjectType trims the redundant "-package"/"-project" suffix from a
@@ -874,8 +950,9 @@ func shortProjectType(s string) string {
 }
 
 // RunSequential runs multiple operations in sequence, reusing shared context
-// (config, git root, file listing, planner, cache, executor).
-// If any operation fails, subsequent operations are skipped.
+// (config, git root, file listing, planner, cache, executor). Under fail-fast
+// an operation that fails stops the ones after it; otherwise every operation
+// runs and the first failure is returned.
 func RunSequential(
 	operations []config.OperationType,
 	args []string,
@@ -886,7 +963,7 @@ func RunSequential(
 	opts Options,
 	loadConfigFunc func() (*config.Config, string, error),
 ) error {
-	return runSequential(operations, args, explainMode, fileScoped, selectedToolsFlag, loadConfigFunc, true, failOnSkip, opts)
+	return runSequential(operations, args, explainMode, fileScoped, selectedToolsFlag, loadConfigFunc, commandName(operations), failOnSkip, opts)
 }
 
 // RunContinuation runs a single operation as a continuation of another command's
@@ -900,8 +977,9 @@ func RunContinuation(
 	selectedToolsFlag string,
 	loadConfigFunc func() (*config.Config, string, error),
 ) error {
-	// Continuations (e.g. config reconcile's post-fix) never harden on skips.
-	return runSequential([]config.OperationType{operation}, args, explainMode, fileScoped, selectedToolsFlag, loadConfigFunc, false, false, Options{})
+	// Continuations (e.g. config reconcile's post-fix) never harden on skips,
+	// and belong to their command: no banner, no run-level report.
+	return runSequential([]config.OperationType{operation}, args, explainMode, fileScoped, selectedToolsFlag, loadConfigFunc, "", false, Options{})
 }
 
 func runSequential(
@@ -911,12 +989,24 @@ func runSequential(
 	fileScoped bool,
 	selectedToolsFlag string,
 	loadConfigFunc func() (*config.Config, string, error),
-	showBanner bool,
+	command string,
 	failOnSkip bool,
 	opts Options,
 ) error {
+	showBanner := command != ""
+	started := time.Now()
 	sc, err := initSharedContext(args, explainMode, fileScoped, selectedToolsFlag, failOnSkip, opts, loadConfigFunc)
 	if err != nil {
+		// A run that could not start — no git root, a config that does not load
+		// — still ends its event stream with a failed, incomplete summary. A
+		// usage error is not a run: it is refused before one begins.
+		if _, usage := errors.AsType[exitcode.UsageError](err); command != "" && explainMode == "" && !usage {
+			elapsedMs := time.Since(started).Milliseconds()
+			if len(operations) > 1 {
+				(&sharedContext{}).printRunClosing(command, operations, elapsedMs)
+			}
+			(&sharedContext{}).emitRunDone(command, operations, elapsedMs, false)
+		}
 		return err
 	}
 	defer func() {
@@ -935,8 +1025,30 @@ func runSequential(
 		ui.Current().Banner(ldflags.PackageName, ldflags.Version)
 	}
 
-	ctx := context.Background()
+	ctx, stopInterrupt := notifyInterrupt(context.Background())
+	defer stopInterrupt()
 
+	opErr := sc.runOperations(ctx, operations)
+
+	if sc.explainLevel != "" {
+		return sc.outcome(ctx, opErr)
+	}
+	elapsedMs := sc.timings.Elapsed().Milliseconds()
+	if len(operations) > 1 {
+		sc.printRunClosing(command, operations, elapsedMs)
+	}
+	err = sc.outcome(ctx, opErr)
+	if command != "" {
+		sc.emitRunDone(command, operations, elapsedMs, err == nil)
+	}
+	return err
+}
+
+// runOperations walks the repository once, runs the bundled checks, then the
+// operations, and returns the first error. A failed walk or bundled check stops
+// the run in both modes: it is a setup error, not a tool failure. The caller
+// reports the run whatever this returns.
+func (sc *sharedContext) runOperations(ctx context.Context, operations []config.OperationType) error {
 	hasFix := slices.Contains(operations, config.OpFix)
 
 	// One walk, three consumers: bundled fix, bundled lint, and the planner.
@@ -964,22 +1076,56 @@ func runSequential(
 		}
 		log.Warn("bundled lint error (non-lint mode, continuing)", zap.Error(lintErr))
 	}
+
+	// Under keep-going a later operation can fail for a different reason than
+	// an earlier one — lint's install after fix's tool failure — and that
+	// reason must not be lost behind the first.
+	var errs []error
 	for _, op := range operations {
-		if err := runSingleOperation(ctx, sc, op); err != nil {
-			return err
+		if ctx.Err() != nil || (len(errs) > 0 && sc.failFast) {
+			break
+		}
+		sc.afterFailedFix = op == config.OpLint && len(errs) > 0
+		err := runSingleOperation(ctx, sc, op)
+		if err != nil && !slices.ContainsFunc(errs, func(e error) bool { return e.Error() == err.Error() }) {
+			errs = append(errs, err)
 		}
 	}
+	return errors.Join(errs...)
+}
 
-	// --fail-on-skip: only unsupported-platform skips are treated as failures;
-	// intentional config skips (skip: true) never fail the run.
+// outcome picks the error a run returns. An interruption wins, because the run
+// did not finish; then a tool failure (exit 1); then what the run did not cover
+// (exit 4): --fail-on-skip and --require-coverage, both reported, in that order,
+// when both fail. Only unsupported-platform skips count for --fail-on-skip;
+// intentional config skips (skip: true) never fail the run.
+func (sc *sharedContext) outcome(ctx context.Context, opErr error) error {
+	if err := interruption(ctx); err != nil {
+		return err
+	}
+	var incomplete []error
 	if err := sc.skipFailure(); err != nil {
-		return err
+		incomplete = append(incomplete, err)
 	}
-
 	if err := sc.coverageFailure(); err != nil {
-		return err
+		incomplete = append(incomplete, err)
 	}
-
+	switch {
+	case opErr != nil && len(incomplete) > 0:
+		// The tool failure decides the exit code; the assertions that also
+		// failed are still reported, but not wrapped, so their code cannot win.
+		msgs := make([]string, 0, len(incomplete))
+		for _, err := range incomplete {
+			msgs = append(msgs, err.Error())
+		}
+		return fmt.Errorf("%w\n%s", opErr, strings.Join(msgs, "\n"))
+	case opErr != nil:
+		return opErr
+	case len(incomplete) > 1:
+		return exitcode.CoverageError{Err: errors.Join(incomplete...)}
+	case len(incomplete) == 1:
+		return incomplete[0]
+	}
 	return nil
 }
 
@@ -995,7 +1141,7 @@ func (sc *sharedContext) skipFailure() error {
 		names = append(names, n)
 	}
 	sort.Strings(names)
-	return fmt.Errorf("--fail-on-skip: %d tool(s) have no binary for this host: %s",
+	return exitcode.CoverageErrorf("--fail-on-skip: %d tool(s) have no binary for this host: %s",
 		len(names), strings.Join(names, ", "))
 }
 
@@ -1008,6 +1154,9 @@ type Options struct {
 	// RequireCoverage asserts the run answered completely: "unit" for every unit
 	// it touched, "repo" for the repository. Empty disables the assertion.
 	RequireCoverage string
+	// FailFast overrides whether the first failing tool stops the run; nil defers
+	// to DATAMITSU_FAIL_FAST and the default.
+	FailFast *bool
 }
 
 // validate rejects unknown flag values. Rank() reads an unvalidated string
@@ -1018,18 +1167,18 @@ type Options struct {
 // clause.
 func (o Options) validate() error {
 	if o.WidenTo != "" && !config.ValidWidenTo(config.WidenTo(o.WidenTo)) {
-		return fmt.Errorf("invalid --widen-to value: %s (must be target, unit or repo)", o.WidenTo)
+		return exitcode.UsageErrorf("invalid --widen-to value: %s (must be target, unit or repo)", o.WidenTo)
 	}
 	switch config.WidenTo(o.RequireCoverage) {
 	case "", config.WidenToUnit, config.WidenToRepo:
 		return nil
 	case config.WidenToTarget:
-		return fmt.Errorf("invalid --require-coverage value: %s (must be unit or repo; "+
+		return exitcode.UsageErrorf("invalid --require-coverage value: %s (must be unit or repo; "+
 			"target asserts only what was named, which is always true)", o.RequireCoverage)
 	default:
 		// "target" is excluded on purpose: it asserts only what was named, which
 		// is always true and so never fails.
-		return fmt.Errorf("invalid --require-coverage value: %s (must be unit or repo)", o.RequireCoverage)
+		return exitcode.UsageErrorf("invalid --require-coverage value: %s (must be unit or repo)", o.RequireCoverage)
 	}
 }
 
@@ -1084,8 +1233,8 @@ func activeToolDir(toolName string) string {
 //     pairs under one op_id (indistinguishable);
 //   - the same tool running concurrently in two sibling dirs has its chunk events
 //     attributed to the wrong dir (the chunk callback recovers an arbitrary one);
-//   - a task cancelled by fail-fast AFTER it started has its terminal suppressed
-//     (see SetResultCallback), leaving an orphaned start.
+//   - a task stopped by fail-fast or an interruption ends with a skip event
+//     under the same id, so which of several starts it closes is ambiguous too.
 //
 // These only affect machine-consumer event-stream fidelity, never lint/fix
 // execution or exit codes; the common repository/per-project case is correct.
@@ -1126,8 +1275,8 @@ func groupResultsByTool(groupResults []tooling.GroupExecutionResult) []toolExecu
 
 	for _, groupResult := range groupResults {
 		for _, result := range groupResult.Results {
-			// Skip cancelled tasks (noise from fail-fast cancellation)
-			if result.Cancelled || result.FailureReason == tooling.FailureReasonCancelled {
+			// Cancelled tasks are listed apart (printStoppedTasks), never as runs.
+			if result.IsCancelled() {
 				continue
 			}
 			if _, exists := toolMap[result.ToolName]; !exists {
@@ -1426,10 +1575,20 @@ func printFailedExecution(runNum int, exec executionInstance) {
 		for _, d := range result.Diagnostics {
 			fmt.Printf("  %s  %s\n", border("│"), formatDiagnosticRelativeTo(d, result.WorkingDir))
 		}
-	case result.Output != "":
+		for _, failure := range result.UnparsedFailures {
+			fmt.Printf("  %s\n", border("│"))
+			for line := range strings.SplitSeq(failure, "\n") {
+				fmt.Printf("  %s  %s\n", border("│"), line)
+			}
+		}
+	case strings.TrimSpace(result.Output) != "":
 		fmt.Printf("  %s\n", border("│"))
 		lines := strings.SplitSeq(strings.TrimRight(result.Output, "\n"), "\n")
 		for line := range lines {
+			if strings.TrimSpace(line) == "" {
+				fmt.Printf("  %s\n", border("│"))
+				continue
+			}
 			fmt.Printf("  %s  %s\n", border("│"), line)
 		}
 	case result.Error != nil:
@@ -1451,8 +1610,9 @@ func phaseTop(operation string) string {
 }
 
 // printOperationFooter renders the closing bracket rule that summarizes the
-// operation (tool/run counts, wall-clock time, failures, skips and cache hit rate).
-func printOperationFooter(toolGroups []toolExecutionGroup, wallClockTime int64, cacheHits, cacheMisses, skipped int) {
+// operation (tool/run counts, wall-clock time, failures, cancelled tasks, skips,
+// cache hit rate and an optional note).
+func printOperationFooter(toolGroups []toolExecutionGroup, wallClockTime int64, cacheHits, cacheMisses, skipped, cancelled int, note string) {
 	if ui.Quiet() {
 		return
 	}
@@ -1473,6 +1633,11 @@ func printOperationFooter(toolGroups []toolExecutionGroup, wallClockTime int64, 
 		plain += fmt.Sprintf(" · %d failed", failedTools)
 		colored += " · " + clr.Red(fmt.Sprintf("%d failed", failedTools))
 	}
+	if cancelled > 0 {
+		cancelText := fmt.Sprintf(" · %d cancelled", cancelled)
+		plain += cancelText
+		colored += clr.Faint(cancelText)
+	}
 	if skipped > 0 {
 		skipText := fmt.Sprintf(" · %d skipped", skipped)
 		plain += skipText
@@ -1484,8 +1649,31 @@ func printOperationFooter(toolGroups []toolExecutionGroup, wallClockTime int64, 
 		plain += cacheText
 		colored += clr.Faint(cacheText)
 	}
+	if note != "" {
+		plain += " · " + note
+		colored += " · " + clr.Yellow(note)
+	}
 
 	fmt.Println(ui.RuleLine("┗", plain, colored))
+}
+
+func partialTasks(results []tooling.GroupExecutionResult) int {
+	n := 0
+	for _, group := range results {
+		for _, r := range group.Results {
+			if r.FilesNotRun > 0 {
+				n++
+			}
+		}
+	}
+	return n
+}
+
+func nonZero(n int) *int {
+	if n == 0 {
+		return nil
+	}
+	return &n
 }
 
 func normalizeFilePaths(files []string, cwdPath string) []string {

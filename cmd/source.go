@@ -13,6 +13,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/exitcode"
 	"github.com/datamitsu/datamitsu/internal/facts"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"github.com/datamitsu/datamitsu/internal/runtimemanager"
@@ -63,23 +64,23 @@ binaries this shadows — go to stderr, so the output is always safe to eval.`,
 	Args: cobra.ArbitraryArgs,
 	RunE: func(_ *cobra.Command, args []string) error {
 		if len(args) > 0 {
-			return fmt.Errorf("unsupported shell %q: %s source supports bash, zsh and fish", args[0], ldflags.PackageName)
+			return exitcode.UsageErrorf("unsupported shell %q: %s source supports bash, zsh and fish", args[0], ldflags.PackageName)
 		}
-		return fmt.Errorf("%s source needs a shell: bash, zsh or fish", ldflags.PackageName)
+		return exitcode.UsageErrorf("%s source needs a shell: bash, zsh or fish", ldflags.PackageName)
 	},
 }
 
 var sourceBashCmd = &cobra.Command{
 	Use:   "bash",
 	Short: "Print bash activation code",
-	Args:  cobra.NoArgs,
+	Args:  usageArgs(cobra.NoArgs),
 	RunE:  func(cmd *cobra.Command, _ []string) error { return runSource(cmd, renderBash) },
 }
 
 var sourceZshCmd = &cobra.Command{
 	Use:   "zsh",
 	Short: "Print zsh activation code",
-	Args:  cobra.NoArgs,
+	Args:  usageArgs(cobra.NoArgs),
 	// zsh implements every construct the bash renderer uses (the ${var//pat/rep}
 	// substitution with a quoted pattern, and `hash -r`), so it shares the
 	// renderer rather than carrying a near-copy that can drift.
@@ -89,7 +90,7 @@ var sourceZshCmd = &cobra.Command{
 var sourceFishCmd = &cobra.Command{
 	Use:   "fish",
 	Short: "Print fish activation code",
-	Args:  cobra.NoArgs,
+	Args:  usageArgs(cobra.NoArgs),
 	RunE:  func(cmd *cobra.Command, _ []string) error { return runSource(cmd, renderFish) },
 }
 
@@ -779,7 +780,7 @@ func sourceProjectRoot(ctx context.Context) (string, error) {
 	// already-activated shell for this root would then get exit 127 for every
 	// tool the project actually declares.
 	if NoAutoConfig {
-		return "", fmt.Errorf("%s source cannot use --no-auto-config without a config.\n"+
+		return "", exitcode.UsageErrorf("%s source cannot use --no-auto-config without a config.\n"+
 			"Drop the flag to use the config at %s, or pass one explicitly:\n"+
 			"  %s --config /path/to/%s.config.ts source bash",
 			ldflags.PackageName, root, ldflags.PackageName, ldflags.PackageName)

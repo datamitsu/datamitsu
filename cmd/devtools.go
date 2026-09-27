@@ -45,7 +45,7 @@ With --update: fetches latest release tags and updates binaries
 Example:
   datamitsu devtools pull-github config/src/githubApps.json
   datamitsu devtools pull-github config/src/githubApps.json --update`,
-	Args: cobra.ExactArgs(1),
+	Args: usageArgs(cobra.ExactArgs(1)),
 	RunE: runPullGithub,
 }
 

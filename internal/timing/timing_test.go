@@ -37,6 +37,25 @@ func TestNew(t *testing.T) {
 	})
 }
 
+// The closing line of check reads Elapsed whatever DATAMITSU_TIMINGS says, so
+// it must measure from New in both modes.
+func TestElapsed(t *testing.T) {
+	for _, enabled := range []string{"1", "0"} {
+		t.Run("DATAMITSU_TIMINGS="+enabled, func(t *testing.T) {
+			t.Setenv("DATAMITSU_TIMINGS", enabled)
+			timings := New()
+			time.Sleep(20 * time.Millisecond)
+			first := timings.Elapsed()
+			if first < 20*time.Millisecond {
+				t.Errorf("Elapsed() = %s after sleeping 20ms", first)
+			}
+			if second := timings.Elapsed(); second < first {
+				t.Errorf("Elapsed() went backwards: %s then %s", first, second)
+			}
+		})
+	}
+}
+
 func TestIsEnabled(t *testing.T) {
 	t.Run("returns enabled state", func(t *testing.T) {
 		t.Setenv("DATAMITSU_TIMINGS", "1")
