@@ -895,7 +895,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 		}
 	}
 
-	var outputs []string
+	var outputs []fileOutput
 	var lastExitCode int
 	var processedFiles []string
 	// The failure a frame shows is the last failing file's: its exit code and
@@ -937,7 +937,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 
 		if e.dryRun {
 			log.Debug("dry-run mode", zap.String("file", file), zap.Strings("args", args))
-			outputs = append(outputs, "[DRY-RUN] "+cmdString)
+			outputs = append(outputs, fileOutput{text: "[DRY-RUN] " + cmdString})
 			processedFiles = append(processedFiles, file)
 
 			// Call progress callback for dry-run files (offset by cached count)
@@ -969,7 +969,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 			// The frame shows the joined output, not Error, once any file wrote
 			// some: without this line a later file's output would stand in for
 			// a failure no process reported.
-			outputs = append(outputs, stdinFailure.Error())
+			outputs = append(outputs, fileOutput{text: stdinFailure.Error(), failed: true})
 			if parseMode {
 				result.UnparsedFailures = append(result.UnparsedFailures, stdinFailure.Error())
 			}
@@ -999,7 +999,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 		default:
 			output = stdoutBytes
 		}
-		outputs = append(outputs, string(output))
+		outputs = append(outputs, fileOutput{text: string(output)})
 
 		exitCode := getExitCode(err)
 		lastExitCode = exitCode
@@ -1077,8 +1077,11 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 			result.ExitCode = exitCode
 			fileFailure := fmt.Errorf("failed to execute for file %s (exit code %d): %w", file, exitCode, err)
 			result.Error = errors.Join(result.Error, fileFailure)
+			label := failureLabel(workingDir, file, exitCode)
+			outputs[len(outputs)-1].failed = true
+			outputs[len(outputs)-1].label = label
 			if parseMode && len(result.Diagnostics) == diagnosticsBefore {
-				unparsed := fileFailure.Error()
+				unparsed := label
 				if text := strings.TrimSpace(string(output)); text != "" {
 					unparsed += "\n" + text
 				}
@@ -1121,7 +1124,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 		result.Command = failedCommand
 	}
 
-	result.Output = strings.Join(outputs, "\n")
+	result.Output = joinFileOutputs(outputs)
 	result.recordTiming(startTime)
 	log.Debug("executePerFile completed",
 		zap.String("toolName", task.ToolName),
@@ -1789,4 +1792,43 @@ func stdinForOperation(op config.ToolOperation, file string) ([]byte, error) {
 		return nil, fmt.Errorf("read stdin content for %s: %w", file, err)
 	}
 	return content, nil
+}
+
+// fileOutput is what one file of a per-file task printed. label names a file
+// whose run failed on its own; a file whose input could not be prepared is
+// failed with its error as the text.
+type fileOutput struct {
+	text   string
+	label  string
+	failed bool
+}
+
+// joinFileOutputs joins what the files of a per-file task printed. A frame
+// names one failing command and exit code, so when more than one file failed,
+// each failing file's output is headed by its name and exit code; a file that
+// failed silently is then still listed.
+func joinFileOutputs(outputs []fileOutput) string {
+	failures := 0
+	for _, o := range outputs {
+		if o.failed {
+			failures++
+		}
+	}
+	parts := make([]string, 0, len(outputs))
+	for _, o := range outputs {
+		if failures > 1 && o.label != "" {
+			parts = append(parts, o.label+"\n"+o.text)
+			continue
+		}
+		parts = append(parts, o.text)
+	}
+	return strings.Join(parts, "\n")
+}
+
+func failureLabel(workingDir, file string, exitCode int) string {
+	name := file
+	if rel, err := filepath.Rel(workingDir, file); err == nil && !strings.HasPrefix(rel, "..") {
+		name = rel
+	}
+	return fmt.Sprintf("%s: exit code %d", name, exitCode)
 }

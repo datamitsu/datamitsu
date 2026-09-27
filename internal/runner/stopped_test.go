@@ -262,10 +262,10 @@ func TestFailedExecutionShowsFailuresWithoutFindings(t *testing.T) {
 		printFailedExecution(1, executionInstance{result: tooling.ExecutionResult{
 			ToolName: "alpha", ExitCode: 1, Output: "finding\ncrashed",
 			Diagnostics:      []diagnostic.Diagnostic{{File: "found.txt", Row: 1, Message: "finding"}},
-			UnparsedFailures: []string{"failed to execute for file crash.txt (exit code 2): exit status 2\ncrashed"},
+			UnparsedFailures: []string{"crash.txt: exit code 2\ncrashed"},
 		}})
 	})
-	for _, want := range []string{"finding", "crash.txt (exit code 2)", "crashed"} {
+	for _, want := range []string{"finding", "crash.txt: exit code 2", "crashed"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("the frame lacks %q:\n%s", want, out)
 		}

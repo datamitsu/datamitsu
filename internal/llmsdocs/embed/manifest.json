@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 55,
-  "pageSetHash": "f296b5262c5aa0466fe938bd458c376c",
+  "pageSetHash": "fde39578dd9355ccb8a91054d13bd78a",
   "pages": [
     {
       "slug": "about",
@@ -224,8 +224,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/execution.md",
       "title": "Parallel Execution",
       "description": "How datamitsu runs task groups sequentially while parallelizing tasks within each group, with fail-fast by default and a keep-going mode",
-      "bytes": 13242,
-      "contentHash": "ede89d4958e48efb77e5749435e6c88e"
+      "bytes": 13606,
+      "contentHash": "a31798d763a8e5cd5cb6dc618f07a0e3"
     },
     {
       "slug": "guides/architecture",
@@ -451,8 +451,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 106582,
-      "contentHash": "47b479a4c451eb11a862405b973d60fc"
+      "bytes": 106574,
+      "contentHash": "6edc5beb5300db797620fb207e90ea4c"
     },
     {
       "slug": "reference/comparison",

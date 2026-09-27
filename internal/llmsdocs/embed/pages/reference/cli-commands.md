@@ -220,14 +220,14 @@ fixes one thing and runs again.
 
 `--fail-fast=false` (or `DATAMITSU_FAIL_FAST=false`) runs everything to the end:
 
-| Level                    | Default (fail-fast)                                  | `--fail-fast=false`                                                                 |
-| ------------------------ | ---------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| Priority groups          | Stop after the first failing group                   | Every group runs, in order                                                          |
-| Overlapping tools        | The ones after the failure do not start              | All run, one after another                                                          |
-| Parallel tools           | Waiting ones are cancelled, running ones are stopped | All finish                                                                          |
-| Files of a per-file tool | Stop at the first failing file                       | Every file runs; the frame shows each failure and the last failing file's exit code |
-| `check`'s fix, then lint | Lint is not run after a failed fix                   | Lint runs, and its footer says `lint ran after a failed fix`                        |
-| Exit code                | 1 when anything failed                               | 1 when anything failed                                                              |
+| Level                    | Default (fail-fast)                                  | `--fail-fast=false`                                                                |
+| ------------------------ | ---------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Priority groups          | Stop after the first failing group                   | Every group runs, in order                                                         |
+| Overlapping tools        | The ones after the failure do not start              | All run, one after another                                                         |
+| Parallel tools           | Waiting ones are cancelled, running ones are stopped | All finish                                                                         |
+| Files of a per-file tool | Stop at the first failing file                       | Every file runs; when more than one fails, the frame names each with its exit code |
+| `check`'s fix, then lint | Lint is not run after a failed fix                   | Lint runs, and its footer says `lint ran after a failed fix`                       |
+| Exit code                | 1 when anything failed                               | 1 when anything failed                                                             |
 
 The flag wins over the variable; `--fail-fast` restores the default when
 `DATAMITSU_FAIL_FAST=false` is set. `datamitsu config runtime` reports the

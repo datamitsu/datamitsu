@@ -208,12 +208,58 @@ func TestKeepGoingPerFileRunsEveryFile(t *testing.T) {
 					t.Errorf("Output lacks %q:\n%s", want, result.Output)
 				}
 			}
+			labels := []string{"bad1.txt: exit code 3", "bad2.txt: exit code 4"}
+			for _, label := range labels {
+				if got := strings.Contains(result.Output, label); got != !tt.failFast {
+					t.Errorf("Output names %q: %v, want %v (only when more than one file failed):\n%s", label, got, !tt.failFast, result.Output)
+				}
+			}
 			var found []string
 			for _, d := range result.Diagnostics {
 				found = append(found, d.Message)
 			}
 			if !slices.Equal(found, tt.wantOut) {
 				t.Errorf("Diagnostics = %q, want every run file's findings %q", found, tt.wantOut)
+			}
+		})
+	}
+}
+
+// A frame names one failing command and exit code, so the output of a task
+// with several failing files names each of them, a silent one included; a
+// single failure needs no such line.
+func TestJoinFileOutputs(t *testing.T) {
+	tests := []struct {
+		name    string
+		outputs []fileOutput
+		want    string
+	}{
+		{
+			name:    "one failure",
+			outputs: []fileOutput{{text: "warned"}, {text: "broken", label: "b.txt: exit code 1", failed: true}},
+			want:    "warned\nbroken",
+		},
+		{
+			name: "a silent failure before a noisy one",
+			outputs: []fileOutput{
+				{text: "", label: "a.txt: exit code 7", failed: true},
+				{text: "broken", label: "b.txt: exit code 4", failed: true},
+			},
+			want: "a.txt: exit code 7\n\nb.txt: exit code 4\nbroken",
+		},
+		{
+			name: "a stdin failure and a failing run",
+			outputs: []fileOutput{
+				{text: "failed to prepare stdin for file a.txt", failed: true},
+				{text: "broken", label: "b.txt: exit code 1", failed: true},
+			},
+			want: "failed to prepare stdin for file a.txt\nb.txt: exit code 1\nbroken",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := joinFileOutputs(tt.outputs); got != tt.want {
+				t.Errorf("joinFileOutputs() = %q, want %q", got, tt.want)
 			}
 		})
 	}
@@ -306,7 +352,7 @@ func TestKeepGoingKeepsFailuresWithoutFindings(t *testing.T) {
 	}
 	if len(result.UnparsedFailures) != 2 ||
 		!strings.Contains(result.UnparsedFailures[0], "failed to prepare stdin for file") ||
-		!strings.Contains(result.UnparsedFailures[1], "crash.txt (exit code 2)") ||
+		!strings.Contains(result.UnparsedFailures[1], "crash.txt: exit code 2") ||
 		!strings.Contains(result.UnparsedFailures[1], "crashed") {
 		t.Errorf("UnparsedFailures = %q, want the stdin failure and the crash with its output", result.UnparsedFailures)
 	}

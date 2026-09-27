@@ -14,8 +14,10 @@ exit code: 1
   │  Exit code: 1
   │  Duration:  <DUR>
   │
+  │  bad1.txt: exit code 1
   │  alpha: bad1.txt failed
   │
+  │  bad2.txt: exit code 1
   │  alpha: bad2.txt failed
   └<RULE>
 
