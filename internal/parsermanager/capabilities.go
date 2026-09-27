@@ -18,13 +18,38 @@ type Capabilities struct {
 	Tools         []ToolCapability `json:"tools"`
 }
 
+// SchemaSeverityContract is the first descriptor schema whose tools declare
+// their level vocabulary, column unit, category and kind. A module at it or
+// later sets a severity only from a level the tool printed, which is what lets
+// a failOn threshold trust the levels it compares.
+const SchemaSeverityContract = 2
+
+// SeverityContract reports whether the module's levels come only from what its
+// tools printed (schema 2 or later).
+func (c Capabilities) SeverityContract() bool {
+	return c.SchemaVersion >= SchemaSeverityContract
+}
+
 // ToolCapability describes one tool a module can parse: what it is, where it
-// lives upstream, and how to invoke it per operation mode.
+// lives upstream, how to invoke it per operation mode, and — from schema 2 —
+// what its output says about levels and columns.
 type ToolCapability struct {
 	Name        string                     `json:"name"`
 	Description string                     `json:"description"`
 	URL         string                     `json:"url"`
 	Operations  map[string]OperationRecipe `json:"operations"`
+	// Severities are the level words the tool prints, which its parser maps
+	// onto error, warning, info and hint. Empty means the tool prints none, so
+	// none of its findings carries a level; nil means the module predates the
+	// field and says nothing either way.
+	Severities []string `json:"severities"`
+	// ColumnUnit is what the tool counts columns in: "utf-8" (bytes), "utf-16"
+	// (code units) or "utf-32" (code points). Empty when it was not measured.
+	ColumnUnit string `json:"columnUnit,omitempty"`
+	// Category is "security" for a security scanner; empty otherwise.
+	Category string `json:"category,omitempty"`
+	// Kind is what the parser reads: "tool" for one tool's own output format.
+	Kind string `json:"kind,omitempty"`
 }
 
 // OperationRecipe is the recommended invocation of a tool in one mode (e.g.

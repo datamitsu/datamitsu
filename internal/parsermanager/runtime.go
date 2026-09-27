@@ -132,7 +132,22 @@ func (p *ParserRuntime) Describe(ctx context.Context) (Capabilities, error) {
 	if err := json.Unmarshal(out, &caps); err != nil {
 		return Capabilities{}, fmt.Errorf("decode describe output: %w", err)
 	}
+	normalizeSeverities(&caps)
 	return caps, nil
+}
+
+// normalizeSeverities keeps nil for "not declared" apart from an empty list for
+// "the tool prints no level": a schema-1 module cannot declare a vocabulary, and
+// a later one that leaves the field out for a tool declares an empty one.
+func normalizeSeverities(caps *Capabilities) {
+	for i := range caps.Tools {
+		switch {
+		case !caps.SeverityContract():
+			caps.Tools[i].Severities = nil
+		case caps.Tools[i].Severities == nil:
+			caps.Tools[i].Severities = []string{}
+		}
+	}
 }
 
 // Reset returns the instance to its post-instantiation state by invoking the

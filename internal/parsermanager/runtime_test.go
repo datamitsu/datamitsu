@@ -104,8 +104,10 @@ func TestRuntime_DescribeReportsCapabilities(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Describe() error = %v", err)
 	}
-	if caps.SchemaVersion != 1 {
-		t.Errorf("schemaVersion = %d, want 1", caps.SchemaVersion)
+	// The released module in testdata/released pins schema 1 exactly; the
+	// current build may be any schema the core reads.
+	if caps.SchemaVersion < 1 {
+		t.Errorf("schemaVersion = %d, want >= 1", caps.SchemaVersion)
 	}
 	if caps.Module != "datamitsu-parsers" {
 		t.Errorf("module = %q, want %q", caps.Module, "datamitsu-parsers")

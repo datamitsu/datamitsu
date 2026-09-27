@@ -1041,7 +1041,12 @@ its build-injected version — so this is the source of truth, not the config.
 
 `list` aggregates every configured parser into a **deduplicated** catalog (a module
 declared by N tools is described once); `inspect` shows the full detail for one
-tool. Both accept:
+tool. A module built with descriptor schema 2 or later also says, per tool, which
+level words the tool prints (`levels`, `none` when it prints none), the unit it
+counts columns in where that was measured (`columns`), and whether it is a
+security scanner (`category`); an older module shows none of these lines, which
+is how to tell which contract a pinned module carries (see
+[levels](../guides/architecture/parsers.md#levels)). Both accept:
 
 - `--json` — machine-readable output, for driving configs or build pipelines.
 - `--wasm <path>` — describe a local `.wasm` file directly, with no config or

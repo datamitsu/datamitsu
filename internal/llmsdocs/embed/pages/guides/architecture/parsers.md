@@ -69,6 +69,15 @@ whose tool counts from 0 (spectral, vacuum, pylint) or reports an inclusive end
 are corrected in the module, so a configuration pinned to an older module keeps
 the positions that module reported.
 
+### Levels
+
+The core's scale has four levels: error, warning, info and hint. From descriptor
+schema 2 a module declares, for every tool, the level words that tool prints —
+its `severities` vocabulary, which the parser maps onto that scale. An empty
+vocabulary says the tool prints no level at all. A module at schema 1 declares
+nothing, and [`devtools parsers list`](../../reference/cli-commands.md#devtools-parsers)
+shows no `levels` for its tools.
+
 ### Extraction outcomes
 
 "No diagnostics" is only an answer when a parser actually read the output. Every
@@ -462,6 +471,19 @@ parse, how to invoke each (args + stdin), the upstream URL, and the module's
 **build-injected version**. The version is baked at compile time like a Go ldflags
 `-X` (CI sets `DATAMITSU_PARSERS_VERSION`); the module is the single source of
 truth, which is why the `parsers` config entity carries **no `version` field**.
+
+The manifest carries a `schemaVersion`. From schema 2 every tool also declares:
+
+| Field        | Meaning                                                                                  |
+| ------------ | ---------------------------------------------------------------------------------------- |
+| `severities` | the level words the tool prints; `[]` when it prints none ([Levels](#levels))            |
+| `columnUnit` | what the tool counts columns in — `utf-8`, `utf-16` or `utf-32`; empty when not measured |
+| `category`   | `security` for a security scanner; empty otherwise                                       |
+| `kind`       | what the parser reads: `tool`, one tool's own output format                              |
+
+The core reads schema 1 and schema 2 modules alike and ignores fields it does not
+know, so a configuration pinned to an older module keeps working; its tools simply
+declare none of the above.
 
 To debug a parser against a real `datamitsu lint` run, pass **`--no-parse`** (or set
 `DATAMITSU_NO_PARSE`): a failure frame shows each tool's raw output instead of its
