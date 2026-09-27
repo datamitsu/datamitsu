@@ -65,6 +65,7 @@ type Process struct {
 	timeout        time.Duration
 	args           []string
 	stdout, stderr bytes.Buffer
+	waited         bool
 }
 
 // Start runs the binary like Run without waiting for it, so a test can act on
@@ -107,6 +108,14 @@ func Start(tb testing.TB, opts RunOptions, args ...string) *Process {
 		cancel()
 		tb.Fatalf("clitest: start `datamitsu %s`: %v", strings.Join(args, " "), err)
 	}
+	// A test that fails between Start and Wait must not leave the process
+	// running: cancelling the context kills it, and Wait reaps it.
+	tb.Cleanup(func() {
+		if !p.waited {
+			cancel()
+			_ = p.cmd.Wait()
+		}
+	})
 	return p
 }
 
@@ -124,6 +133,7 @@ func (p *Process) Wait() Result {
 	p.tb.Helper()
 	defer p.cancel()
 
+	p.waited = true
 	err := p.cmd.Wait()
 	if p.timedOut() {
 		p.tb.Fatalf("clitest: `datamitsu %s` timed out after %s\n--- stdout ---\n%s\n--- stderr ---\n%s",
