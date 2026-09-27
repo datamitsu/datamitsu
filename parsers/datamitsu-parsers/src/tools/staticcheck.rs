@@ -5,8 +5,8 @@
 //!   "end":{"file":"a.go","line":3,"column":9},"message":"..."}`.
 //! Positions are go/token ones: 1-based, with `end` just past the span
 //! (exclusive). A diagnostic without a range prints a zero `end`, which is no end.
-//! `severity` is `error`, `warning` or `ignored` (the last only under
-//! `-show-ignored`).
+//! `severity` is `error` or `warning`; `ignored`, printed only under
+//! `-show-ignored`, marks a problem a directive suppressed, which is no finding.
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
 use crate::severity::{self, Level};
@@ -17,11 +17,7 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "staticcheck",
 	description: "Advanced Go linter.",
 	url: "https://staticcheck.io/",
-	severities: &[
-		Level("error", severity::ERROR),
-		Level("warning", severity::WARNING),
-		Level("ignored", severity::INFO),
-	],
+	severities: &[Level("error", severity::ERROR), Level("warning", severity::WARNING)],
 	column_unit: "",
 	category: "",
 	kind: "tool",
@@ -65,6 +61,7 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 	let (end_row, end_col) = position(map.get("end"));
 
 	let severity = match map.get("severity") {
+		Some(JsonValue::String(s)) if s == "ignored" => return None,
 		Some(JsonValue::String(s)) => severity::of(DESCRIPTOR.severities, s),
 		_ => None,
 	};
@@ -140,7 +137,18 @@ mod tests {
 		assert_eq!(out.len(), 1);
 		assert_eq!((out[0].row, out[0].col), (Some(1), Some(1)));
 		assert_eq!((out[0].end_row, out[0].end_col), (None, None));
-		assert_eq!(out[0].severity, Some(severity::INFO));
+		assert_eq!(out[0].severity, Some(severity::WARNING));
+	}
+
+	#[test]
+	fn a_suppressed_problem_is_no_finding() {
+		let stdout =
+			br#"{"code":"S1000","severity":"ignored","location":{"file":"c.go","line":1,"column":1},"message":"suppressed"}
+{"code":"S1001","severity":"warning","location":{"file":"c.go","line":2,"column":1},"message":"kept"}
+"#;
+		let out = parse(stdout, b"", 0);
+		assert_eq!(out.len(), 1);
+		assert_eq!(out[0].code.as_deref(), Some("S1001"));
 	}
 
 	#[test]
@@ -170,7 +178,7 @@ pub(crate) const SAMPLES: &[crate::contract::Sample] = &[
 		exit: 1,
 	},
 	crate::contract::Sample {
-		stdout: br#"{"code":"S1000","severity":"ignored","location":{"file":"/src/c.go","line":1,"column":1},"end":{"file":"","line":0,"column":0},"message":"should use for range instead of for { select {} }"}
+		stdout: br#"{"code":"S1000","severity":"warning","location":{"file":"/src/c.go","line":1,"column":1},"end":{"file":"","line":0,"column":0},"message":"should use for range instead of for { select {} }"}
 "#,
 		stderr: b"",
 		exit: 0,

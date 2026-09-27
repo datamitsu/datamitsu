@@ -3,10 +3,11 @@
 //!
 //! Expects the `commitlint-format-json` formatter output:
 //! `{"results":[{"errors":[{name,message,level},…],"warnings":[…]}]}`.
-//! Each violation carries an integer `level` (1 = warning, 2 = error). The
-//! builtin synthesizes a `line` from the rule name: a `body-leading-blank` rule
-//! points at line 2, any other `body*` rule at line 3, everything else has no
-//! line (commit-message subject diagnostics aren't positioned upstream).
+//! Each violation carries an integer `level` (1 = warning, 2 = error).
+//! commitlint prints no position. `body-leading-blank` is about line 2 by its
+//! definition, so it gets that row; the builtin also put every other `body*`
+//! rule on line 3, which names a line the finding may not be on, so those have
+//! none.
 
 use tinyjson::JsonValue;
 
@@ -74,15 +75,7 @@ fn violation_to_diagnostic(value: &JsonValue) -> Option<RawDiagnostic> {
 		_ => None,
 	};
 
-	let row = name.and_then(|n| {
-		if n == "body-leading-blank" {
-			Some(2)
-		} else if n.starts_with("body") {
-			Some(3)
-		} else {
-			None
-		}
-	});
+	let row = name.and_then(|n| if n == "body-leading-blank" { Some(2) } else { None });
 
 	Some(RawDiagnostic {
 		message,
@@ -128,8 +121,8 @@ mod tests {
 
 		// body-leading-blank -> line 2
 		assert_eq!(out[1].row, Some(2));
-		// other body* rule -> line 3
-		assert_eq!(out[2].row, Some(3));
+		// No other rule says which line it is about.
+		assert_eq!(out[2].row, None);
 		assert_eq!(out[2].severity, Some(severity::WARNING));
 	}
 

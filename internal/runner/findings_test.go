@@ -180,6 +180,14 @@ func TestFramesFollowTheThreshold(t *testing.T) {
 		}
 	})
 
+	t.Run("--no-parse keeps the counters of a pass it prints no frame for", func(t *testing.T) {
+		t.Setenv("DATAMITSU_NO_PARSE", "1")
+		out := frameOf(t, withProcesses(true, e, process(true, true, e, finding(diagnostic.SeverityWarning, e, true, "w"))))
+		if strings.Contains(out, "┌") || !strings.Contains(out, "· 1 warning") || !strings.Contains(out, "· 1 warning hidden") {
+			t.Errorf("want no frame and the warning counted on the tool line and in the footer:\n%s", out)
+		}
+	})
+
 	t.Run("a threshold failure says so", func(t *testing.T) {
 		proc := process(false, true, e, finding(diagnostic.SeverityError, e, true, "err"))
 		proc.ThresholdFailed = true

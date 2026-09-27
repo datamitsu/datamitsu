@@ -114,7 +114,8 @@ type taskView struct {
 }
 
 // viewOf decides what a frame shows of one task. --no-parse switches every
-// frame to the tool's output, the yellow one included, and counts nothing.
+// frame to the tool's output, the yellow one included; a task that prints no
+// frame keeps its counters, as nothing else shows its findings.
 func viewOf(result tooling.ExecutionResult) taskView {
 	var v taskView
 	for _, proc := range result.Processes {
@@ -128,7 +129,7 @@ func viewOf(result tooling.ExecutionResult) taskView {
 	}
 	sortFindings(v.shown)
 	v.unenforced = result.Success && len(v.shown) > 0
-	if parsingDisabled() || ((!result.Success || v.unenforced) && !usableDiagnostics(result)) {
+	if (!result.Success || v.unenforced) && (parsingDisabled() || !usableDiagnostics(result)) {
 		v.raw, v.shown, v.hidden = true, nil, levelCounts{}
 	}
 	return v

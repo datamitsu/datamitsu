@@ -153,7 +153,7 @@ const POSITIONS: &[(&str, &str)] = &[
 	("clj_kondo", "1-based line and column, no end"),
 	("cmake_lint", "1-based line, 0-based column: +1 to the column; no end"),
 	("codespell", "1-based line only"),
-	("commitlint", "no position printed; a row derived from the rule name, as the ported builtin does (unverified)"),
+	("commitlint", "no position printed; body-leading-blank is on line 2 by definition, every other rule has no row"),
 	("cppcheck", "1-based line and column, no end; 0:0 for a finding without a location"),
 	("credo", "1-based line and column; column_end is exclusive; no end line"),
 	("cspell", "1-based line and column, no end"),

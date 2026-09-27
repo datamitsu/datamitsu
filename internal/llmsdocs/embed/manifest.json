@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 56,
-  "pageSetHash": "d0572bb24b8f9d293265a28c4917d454",
+  "pageSetHash": "1cb68ff666739e8f46347229b96c7ee8",
   "pages": [
     {
       "slug": "about",
@@ -451,8 +451,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 117190,
-      "contentHash": "fbec9fdb51b384745f32be5d5b990dbe"
+      "bytes": 117256,
+      "contentHash": "f27d596660d9e64eed04f111fa400ceb"
     },
     {
       "slug": "reference/comparison",
@@ -497,7 +497,7 @@
       "title": "Parser Catalog",
       "description": "Tools whose output the bundled datamitsu WASM parser module turns into diagnostics",
       "bytes": 49600,
-      "contentHash": "49e7da87aaf3ab2d5eadc289d1e07d5f"
+      "contentHash": "c24f15c379b05d9ebfe47e42df7b5a00"
     },
     {
       "slug": "reference/template-placeholders",
