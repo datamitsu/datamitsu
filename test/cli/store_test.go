@@ -179,6 +179,12 @@ func TestStoreSeedArgValidation(t *testing.T) {
 			wantExit: 2,
 		},
 		{
+			name:     "malformed-reference-with-resolve-tag",
+			args:     []string{"store", "seed", "--resolve-tag", "bad:latest"},
+			want:     `reference "bad"`,
+			wantExit: 2,
+		},
+		{
 			name:     "no-arg-no-oci",
 			args:     []string{"store", "seed"},
 			want:     "no oci bundle declared in the effective config",

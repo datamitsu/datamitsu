@@ -145,7 +145,7 @@ func resolveSeedRef(ctx context.Context, cfg *config.Config, args []string) (*co
 	}
 	host, repo, err := ociref.Parse(ref)
 	if err != nil {
-		return nil, fmt.Errorf("reference %q %w", ref, err)
+		return nil, exitcode.UsageErrorf("reference %q %w", ref, err)
 	}
 	digest, err := ocidigest.NewResolverForHost(host).Resolve(ctx, repo, tag)
 	if err != nil {
