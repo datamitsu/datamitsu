@@ -4,15 +4,19 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/diagnostic"
 	"github.com/datamitsu/datamitsu/internal/parsermanager"
+	"github.com/datamitsu/datamitsu/internal/tooling"
 )
 
 func TestParsingDisabled(t *testing.T) {
@@ -58,7 +62,7 @@ func TestDiagnosticParser_EndToEnd(t *testing.T) {
 		"core": {URL: srv.URL, Hash: hex.EncodeToString(sum[:])},
 	})
 	t.Cleanup(func() { _ = mgr.Close(context.Background()) })
-	parser := newDiagnosticParser(mgr)
+	parser := newDiagnosticParser(mgr, newParseProblems())
 
 	eslintJSON := []byte(`[{"filePath":"a.js","messages":[` +
 		`{"ruleId":"no-undef","severity":2,"message":"'z' is not defined.","line":2,"column":25,"endLine":2,"endColumn":26},` +
@@ -87,5 +91,86 @@ func TestDiagnosticParser_EndToEnd(t *testing.T) {
 	}
 	if diags[1].Source != "eslint" {
 		t.Errorf("source = %q, want eslint", diags[1].Source)
+	}
+}
+
+// TestDiagnosticParser_Unavailable: a key the module does not list, and a
+// module that cannot load, are reported as unavailable — never as an empty,
+// clean parse — and recorded for the run's warnings.
+func TestDiagnosticParser_Unavailable(t *testing.T) {
+	t.Setenv("DATAMITSU_PARSERS_DIR", t.TempDir())
+	wasm, err := os.ReadFile(filepath.Join("..", "parsermanager", "testdata", "echo.wasm"))
+	if err != nil {
+		t.Fatalf("read wasm fixture: %v", err)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(wasm)
+	}))
+	t.Cleanup(srv.Close)
+	sum := sha256.Sum256(wasm)
+	mgr := parsermanager.New(config.MapOfParsers{
+		"core":   {URL: srv.URL, Hash: hex.EncodeToString(sum[:])},
+		"broken": {URL: srv.URL, Hash: strings.Repeat("0", 64)},
+	})
+	t.Cleanup(func() { _ = mgr.Close(context.Background()) })
+	problems := newParseProblems()
+	parser := newDiagnosticParser(mgr, problems)
+
+	for _, c := range []struct{ module, key, tool string }{
+		{"core", "no-such-parser", "alpha"},
+		{"core", "no-such-parser", "beta"},
+		{"broken", "hadolint", "gamma"},
+	} {
+		diags, err := parser.Parse(context.Background(), c.module, c.key, c.tool, []byte("x"), nil, 1)
+		if _, ok := errors.AsType[*tooling.ParserUnavailableError](err); !ok {
+			t.Errorf("%s/%s: err = %v, want a ParserUnavailableError", c.module, c.key, err)
+		}
+		if len(diags) != 0 {
+			t.Errorf("%s/%s: diagnostics = %+v, want none", c.module, c.key, diags)
+		}
+	}
+
+	got := problems.pending(map[string]int{"broken": 2})
+	if len(got) != 2 {
+		t.Fatalf("pending = %q, want one warning for the module and one for the key", got)
+	}
+	if !strings.HasPrefix(got[0], `parser module "broken" could not be loaded, so 2 tool(s) that use it ran without parsing; `+
+		`"datamitsu devtools parsers prefetch" fetches it ahead of a run: `) {
+		t.Errorf("module warning = %q", got[0])
+	}
+	if want := `parser module "core" has no parser "no-such-parser", so the output of alpha, beta is not parsed`; got[1] != want {
+		t.Errorf("key warning = %q, want %q", got[1], want)
+	}
+	if again := problems.pending(nil); len(again) != 0 {
+		t.Errorf("a problem is reported once per run, got %q again", again)
+	}
+}
+
+func TestParseProblems_FailedParseOncePerTool(t *testing.T) {
+	problems := newParseProblems()
+	problems.parseFailed("hadolint", errors.New("first"))
+	problems.parseFailed("hadolint", errors.New("second"))
+	problems.parseFailed("eslint", errors.New("boom"))
+	want := []string{"output parser failed for eslint: boom", "output parser failed for hadolint: first"}
+	if got := problems.pending(nil); !slices.Equal(got, want) {
+		t.Errorf("pending = %q, want %q", got, want)
+	}
+	problems.parseFailed("hadolint", errors.New("third"))
+	if got := problems.pending(nil); len(got) != 0 {
+		t.Errorf("a tool already reported this run is not reported again, got %q", got)
+	}
+}
+
+func TestParserUsers(t *testing.T) {
+	parsed := func(tool, module string) tooling.Task {
+		return tooling.Task{ToolName: tool, Tool: config.Tool{OutputParser: &config.OutputParser{Module: module, Parser: tool}}}
+	}
+	plan := &tooling.ExecutionPlan{Groups: []tooling.TaskGroup{
+		{Tasks: []tooling.Task{parsed("a", "core"), parsed("a", "core"), parsed("b", "core")}},
+		{Tasks: []tooling.Task{parsed("c", "other"), {ToolName: "plain"}}},
+	}}
+	got := parserUsers(plan)
+	if got["core"] != 2 || got["other"] != 1 || len(got) != 2 {
+		t.Errorf("parserUsers = %v, want core:2 other:1", got)
 	}
 }

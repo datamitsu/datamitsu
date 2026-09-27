@@ -120,9 +120,12 @@ type sharedContext struct {
 	binMgr        toolEnsurer
 	timings       *timing.Timings
 	// parserMgr owns the WASM output-parser runtime (compile-once, instantiate
-	// per parse). nil when no parsers are declared or parsing is disabled; Closed
-	// in shutdown to release the shared runtime.
+	// per parse). nil when no parsers are declared; Closed in shutdown to
+	// release the shared runtime.
 	parserMgr *parsermanager.Manager
+	// parseProblems collects what the parsers could not parse, reported once
+	// per run; nil when no parser is wired.
+	parseProblems *parseProblems
 	// nameWidth is the widest configured tool name, computed once so every
 	// operation's result block (fix, lint, …) aligns on the same columns.
 	nameWidth int
@@ -280,12 +283,12 @@ func initSharedContext(
 	// and so they appear in --explain, which never reaches the install step.
 	planner.SetPlatformChecker(binMgr)
 	sc.executor = tooling.NewExecutor(sc.rootPath, false, sc.failFast, binMgr, sc.projectCache)
-	// Wire output-parsing only when parsers are declared and not disabled via
-	// --no-parse / DATAMITSU_NO_PARSE; otherwise the executor never parses (tools
-	// without an outputParser are unaffected either way).
-	if len(sc.cfg.Parsers) > 0 && !parsingDisabled() {
+	// Wire output-parsing whenever parsers are declared. --no-parse only changes
+	// what a failure frame shows: what the run records must not depend on it.
+	if len(sc.cfg.Parsers) > 0 {
 		sc.parserMgr = parsermanager.New(sc.cfg.Parsers)
-		sc.executor.SetParser(newDiagnosticParser(sc.parserMgr))
+		sc.parseProblems = newParseProblems()
+		sc.executor.SetParser(newDiagnosticParser(sc.parserMgr, sc.parseProblems))
 	}
 
 	// All configured tools are known here, so the result column width is fixed
@@ -678,6 +681,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	execSpan.EndWith(trace.A("groups", len(plan.Groups)))
 	// Finalize progress before printing any summaries/errors to avoid interleaved output.
 	finalizeProgress()
+	sc.reportParseProblems(plan)
 
 	cause := stopFailFast
 	if interruption(ctx) != nil {
@@ -760,6 +764,19 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	}
 
 	return nil
+}
+
+// reportParseProblems warns about what the parsers could not parse and the run
+// has not reported yet: each module that did not load, each parser key its
+// module does not list, and each tool whose output failed to parse, once per
+// run however many invocations hit it.
+func (sc *sharedContext) reportParseProblems(plan *tooling.ExecutionPlan) {
+	if sc.parseProblems == nil {
+		return
+	}
+	for _, msg := range sc.parseProblems.pending(parserUsers(plan)) {
+		logger.Logger.Warn(msg)
+	}
 }
 
 // recordSkips accumulates unsupported-platform skips (deduped by tool name) so
@@ -1510,7 +1527,7 @@ func severityColor(s diagnostic.Severity) func(a ...any) string {
 }
 
 // usableDiagnostics reports whether the parsed diagnostics are worth showing in
-// place of the tool's raw output.
+// place of the tool's raw output. --no-parse asks for the raw output.
 //
 // One batch invocation covers many files, so a diagnostic without a file is
 // unattributable — and the raw output the parsed view replaces almost always did
@@ -1519,7 +1536,7 @@ func severityColor(s diagnostic.Severity) func(a ...any) string {
 // of one file, are unaffected: the executor stamps the one file the process was
 // given, and even unstamped they are read in the context of a single file.
 func usableDiagnostics(result tooling.ExecutionResult) bool {
-	if len(result.Diagnostics) == 0 {
+	if len(result.Diagnostics) == 0 || parsingDisabled() {
 		return false
 	}
 	if !result.Batch {

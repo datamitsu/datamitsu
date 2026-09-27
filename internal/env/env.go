@@ -431,8 +431,9 @@ func parseFailFast(raw string) (value, ok bool) {
 	return false, false
 }
 
-// NoParse returns true if output parsing is disabled (tools' raw output is shown
-// instead of structured diagnostics) — the env twin of the --no-parse flag.
+// NoParse reports whether a failure shows the tools' raw output instead of
+// their parsed findings — the env twin of the --no-parse flag. Parsing itself
+// still runs.
 func NoParse() bool {
 	return os.Getenv(noParse.Name) != ""
 }

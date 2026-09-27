@@ -153,6 +153,54 @@ const (
 	FailureReasonInterrupted                      // Tool terminated because the caller cancelled the run (a signal, a withdrawn request)
 )
 
+// Extraction is what became of one process's output: whether findings were
+// extracted from it, and whether "no finding" can be believed. A consumer that
+// replays a result as "nothing to report" needs more than the exit code, which
+// is why every process records one.
+type Extraction string
+
+// Extraction outcomes of one process.
+const (
+	// ExtractionParsedClean: a parser ran without error and found nothing.
+	ExtractionParsedClean Extraction = "parsed-clean"
+	// ExtractionParsedFindings: a parser returned at least one finding.
+	ExtractionParsedFindings Extraction = "parsed-findings"
+	// ExtractionParserUnavailable: the declared module did not load, or does not
+	// know the declared parser key, so nothing was parsed.
+	ExtractionParserUnavailable Extraction = "parser-unavailable"
+	// ExtractionParseFailed: the module returned an error for this output.
+	ExtractionParseFailed Extraction = "parse-failed"
+	// ExtractionTruncated: the output or the findings exceeded a cap. No cap
+	// exists yet; the value is reserved so every consumer knows it.
+	ExtractionTruncated Extraction = "truncated"
+	// ExtractionNone: the tool declares no parser (or none is wired), so
+	// nothing was attempted.
+	ExtractionNone Extraction = "none"
+)
+
+// ParserUnavailableError is what a DiagnosticParser returns when it could not
+// parse at all — the module did not load, or it does not list the parser key —
+// as opposed to a module that parsed and failed.
+type ParserUnavailableError struct {
+	Err error
+}
+
+func (e *ParserUnavailableError) Error() string { return e.Err.Error() }
+
+// Unwrap exposes the cause.
+func (e *ParserUnavailableError) Unwrap() error { return e.Err }
+
+// ProcessResult is one process a task spawned: the files it was given and what
+// its output yielded.
+type ProcessResult struct {
+	// Files are the absolute, cleaned paths the process was given; empty for a
+	// process given no path.
+	Files       []string
+	Extraction  Extraction
+	ParseError  string // the module's error for parse-failed and parser-unavailable
+	Diagnostics []diagnostic.Diagnostic
+}
+
 // ExecutionResult represents the result of a task execution
 type ExecutionResult struct {
 	ToolName      string
@@ -191,10 +239,16 @@ type ExecutionResult struct {
 	// Command reports the last command.
 	FormatEdits []textdiff.Edit
 	// Diagnostics holds the structured diagnostics parsed from this tool's output
-	// when the tool declares an outputParser (and a parser is wired in). Nil for
-	// tools without a parser — the common case. Populated per-file in per-file
-	// mode, each entry's File set to the file it came from.
+	// when the tool declares an outputParser (and a parser is wired in): the
+	// concatenation of every process's. Nil for tools without a parser — the
+	// common case.
 	Diagnostics []diagnostic.Diagnostic
+	// Processes lists every process the task spawned, in the order they ran.
+	Processes []ProcessResult
+	// ParseFailed reports that the output of at least one process could not be
+	// parsed (parse-failed or parser-unavailable): an empty Diagnostics then
+	// does not mean the tool found nothing.
+	ParseFailed bool
 }
 
 // IsCancelled reports whether the task was stopped by a cancellation — fail-fast
@@ -208,6 +262,16 @@ func (r *ExecutionResult) IsCancelled() bool {
 // a worker has none.
 func (r *ExecutionResult) Started() bool {
 	return !r.StartedAt.IsZero()
+}
+
+// addProcess records one process the task spawned and folds its outcome into
+// the task's aggregates.
+func (r *ExecutionResult) addProcess(proc ProcessResult) {
+	r.Processes = append(r.Processes, proc)
+	r.Diagnostics = append(r.Diagnostics, proc.Diagnostics...)
+	if proc.Extraction == ExtractionParseFailed || proc.Extraction == ExtractionParserUnavailable {
+		r.ParseFailed = true
+	}
 }
 
 // recordTiming stamps the run's absolute wall-clock window and elapsed Duration

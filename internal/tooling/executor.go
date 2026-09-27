@@ -820,14 +820,16 @@ func joinStreams(stdout, stderr []byte) []byte {
 	}
 }
 
-// parseFileDiagnostics runs the tool's declared parser over one invocation's
-// captured output and appends the resolved diagnostics to result. A path the
-// tool reported is made absolute against workingDir, the directory the process
-// ran in. files are the absolute paths the process was handed: when there is
-// exactly one, a diagnostic the parser left without a file is about it; a
-// process given several files, or none, leaves such a diagnostic file-less.
-// A parse failure is logged, not fatal — the tool's own pass/fail is unaffected.
-func (e *Executor) parseFileDiagnostics(ctx context.Context, result *ExecutionResult, task Task, workingDir string, files []string, stdout, stderr []byte, exitCode int) {
+// parseFileDiagnostics runs the tool's declared parser over one process's
+// captured output and records on proc what it yielded: its diagnostics and its
+// extraction outcome. A path the tool reported is made absolute against
+// workingDir, the directory the process ran in. When proc was given exactly one
+// file, a diagnostic the parser left without a file is about it; a process
+// given several files, or none, leaves such a diagnostic file-less. A parse
+// failure is not fatal — the tool's own pass/fail is unaffected — and is
+// reported once per run by the caller that wired the parser, so it is logged
+// here at debug only.
+func (e *Executor) parseFileDiagnostics(ctx context.Context, proc *ProcessResult, task Task, workingDir string, stdout, stderr []byte, exitCode int) {
 	op := task.Tool.OutputParser
 	cntParse.Add(1)
 	parseSpan := trace.Start(trace.CatParse, "parseDiagnostics")
@@ -840,17 +842,23 @@ func (e *Executor) parseFileDiagnostics(ctx context.Context, result *ExecutionRe
 		trace.A("diagnostics", len(diags)),
 	)
 	if err != nil {
-		log.Warn("output parser failed",
+		proc.Extraction = ExtractionParseFailed
+		if _, unavailable := errors.AsType[*ParserUnavailableError](err); unavailable {
+			proc.Extraction = ExtractionParserUnavailable
+		}
+		proc.ParseError = err.Error()
+		log.Debug("output parser failed",
 			zap.String("tool", task.ToolName),
 			zap.String("module", op.Module),
 			zap.String("parser", op.Parser),
-			zap.Strings("files", files),
+			zap.String("extraction", string(proc.Extraction)),
+			zap.Strings("files", proc.Files),
 			zap.Error(err))
 		return
 	}
 	stamp := ""
-	if len(files) == 1 {
-		stamp = files[0]
+	if len(proc.Files) == 1 {
+		stamp = proc.Files[0]
 	}
 	for i := range diags {
 		if diags[i].File == "" {
@@ -858,7 +866,11 @@ func (e *Executor) parseFileDiagnostics(ctx context.Context, result *ExecutionRe
 		}
 		diags[i].File = diagnostic.AbsPath(diags[i].File, workingDir)
 	}
-	result.Diagnostics = append(result.Diagnostics, diags...)
+	proc.Diagnostics = diags
+	proc.Extraction = ExtractionParsedClean
+	if len(diags) > 0 {
+		proc.Extraction = ExtractionParsedFindings
+	}
 }
 
 func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binmanager.CommandInfo, workingDir string, startTime time.Time) ExecutionResult {
@@ -1012,13 +1024,11 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 		exitCode := getExitCode(err)
 		lastExitCode = exitCode
 
-		// Parse this file's output into structured diagnostics when the tool
-		// declares an outputParser. Per-file mode means each invocation lints one
-		// file, so the diagnostics belong to it.
-		diagnosticsBefore := len(result.Diagnostics)
+		proc := ProcessResult{Files: []string{file}, Extraction: ExtractionNone}
 		if parseMode {
-			e.parseFileDiagnostics(ctx, &result, task, workingDir, []string{file}, stdoutBytes, stderrBytes, exitCode)
+			e.parseFileDiagnostics(ctx, &proc, task, workingDir, stdoutBytes, stderrBytes, exitCode)
 		}
+		result.addProcess(proc)
 
 		// Formatting pipeline (diff-in-core): in stdout-output mode a successful
 		// run yields the full new file text on stdout. Treat the original file as
@@ -1089,7 +1099,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 			outputs[len(outputs)-1].failed = true
 			outputs[len(outputs)-1].label = label
 			outputs[len(outputs)-1].explained = explained
-			if parseMode && len(result.Diagnostics) == diagnosticsBefore {
+			if parseMode && len(proc.Diagnostics) == 0 {
 				unparsed := label
 				if text := strings.TrimSpace(string(output)); text != "" {
 					unparsed += "\n" + text
@@ -1307,9 +1317,11 @@ func (e *Executor) executeBatchChunk(ctx context.Context, task Task, cmdInfo *bi
 	exitCode := getExitCode(err)
 	result.ExitCode = exitCode
 
+	proc := ProcessResult{Files: absolutePaths(files, workingDir), Extraction: ExtractionNone}
 	if parseMode {
-		e.parseFileDiagnostics(ctx, &result, task, workingDir, absolutePaths(files, workingDir), stdoutBytes, stderrBytes, exitCode)
+		e.parseFileDiagnostics(ctx, &proc, task, workingDir, stdoutBytes, stderrBytes, exitCode)
 	}
+	result.addProcess(proc)
 
 	if err != nil {
 		log.Debug("batch execution failed", zap.Int("exitCode", exitCode), zap.Error(err))
@@ -1442,7 +1454,9 @@ func mergeChunkResults(ctx context.Context, result *ExecutionResult, chunks [][]
 		if chunkResult.Error != nil {
 			errs = append(errs, fmt.Errorf("chunk %d: %w", i+1, chunkResult.Error))
 		}
-		result.Diagnostics = append(result.Diagnostics, chunkResult.Diagnostics...)
+		for _, proc := range chunkResult.Processes {
+			result.addProcess(proc)
+		}
 		if chunkResult.IsCancelled() {
 			notRun += len(chunks[i])
 		} else if !chunkResult.Success {

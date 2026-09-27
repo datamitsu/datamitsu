@@ -122,7 +122,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&noOCI, "no-oci", false,
 		"Disable OCI bundle store seeding (also via DATAMITSU_NO_OCI)")
 	rootCmd.PersistentFlags().BoolVar(&noParse, "no-parse", false,
-		"Skip output parsers; show tools' raw output instead (also via DATAMITSU_NO_PARSE)")
+		"Show tools' raw output instead of parsed findings; parsing still runs (also via DATAMITSU_NO_PARSE)")
 	rootCmd.PersistentFlags().StringVar(&logFormat, "log-format", "",
 		"Status output format: console or jsonl (also via DATAMITSU_LOG_FORMAT)")
 }

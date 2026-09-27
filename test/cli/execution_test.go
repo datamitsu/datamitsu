@@ -1078,6 +1078,42 @@ func TestExecutionParsedPositions(t *testing.T) {
 	e.golden("lint_parsed_positions", res)
 }
 
+// TestExecutionParserProblems freezes how a run reports output it could not
+// parse: a parser key the module does not list, and a module that does not
+// load, each warn once per run however many invocations hit them, and neither
+// reads as a clean parse.
+func TestExecutionParserProblems(t *testing.T) {
+	e := newExecProject(t, map[string]string{
+		"fixture.marker": "", "a/Dockerfile": "FROM debian\n", "b/Dockerfile": "FROM debian\n",
+	}, fixtureSpec)
+	module := filepath.Join("..", "..", "internal", "parsermanager", "testdata", "echo.wasm")
+	spec := fixtureSpec
+	spec.Parsers = strings.Replace(clitest.SeedParserModule(t, e.cache, module), "{",
+		`{"missing":{"url":"https://parsers.example.invalid/missing.wasm","hash":"`+strings.Repeat("1", 64)+`"},`, 1)
+	perFile := func(name, parser, parserModule string) string {
+		return clitest.ShellTool(name, passScript+"; echo finding", clitest.ToolOpSpec{
+			Scope: "per-file", Globs: []string{"**/Dockerfile"}, Args: []string{"{file}"},
+			Parser: parser, ParserModule: parserModule,
+		})
+	}
+	e.p.WriteFile("exec.config.js", clitest.ShellConfig(spec,
+		perFile("alpha", "no-such-parser", ""),
+		perFile("beta", "hadolint", "missing"),
+	))
+
+	res := e.run("", nil, "lint")
+	e.wantExit(res, 0)
+	for _, want := range []string{
+		`parser module "core" has no parser "no-such-parser", so the output of alpha is not parsed`,
+		`parser module "missing" could not be loaded, so 1 tool(s) that use it ran without parsing`,
+	} {
+		if n := strings.Count(res.Stderr, want); n != 1 {
+			t.Errorf("stderr carries %q %d times, want once:\n%s", want, n, res.Stderr)
+		}
+	}
+	e.golden("lint_parser_problems", res)
+}
+
 var hostRE = regexp.MustCompile(`no binary for [a-z0-9]+/[a-z0-9_]+/[a-z0-9_]+`)
 
 func maskHost(s string) string { return hostRE.ReplaceAllString(s, "no binary for <HOST>") }

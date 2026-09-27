@@ -8,13 +8,8 @@ tool's free-form text output into structured results, it loads small,
 This page explains the parser pipeline end to end, and the line-based
 **diff-in-core** that the formatting path is built on.
 
-:::info Phase boundary
-This is the parser _plumbing_: declare, build, sign, deliver, fetch, load,
-invoke. It ships with a trivial `echo` parser that proves the whole pipe; real diagnostic
-parsers (hadolint, yamllint, …) arrive in a later phase. The architectural
-invariant that governs the design: **a parser extracts only what the tool
-actually emitted; the Go core fills defaults.**
-:::
+The architectural invariant that governs the design: **a parser extracts only
+what the tool actually emitted; the Go core fills defaults.**
 
 ## The Architectural Invariant
 
@@ -72,6 +67,40 @@ an inclusive end from an exclusive one: column 5 is column 5 either way. Parsers
 whose tool counts from 0 (spectral, vacuum, pylint) or reports an inclusive end
 are corrected in the module, so a configuration pinned to an older module keeps
 the positions that module reported.
+
+### Extraction outcomes
+
+"No diagnostics" is only an answer when a parser actually read the output. Every
+process a tool runs therefore records an **extraction outcome** next to its exit
+code:
+
+| Outcome              | When                                                                      |
+| -------------------- | ------------------------------------------------------------------------- |
+| `parsed-clean`       | the parser ran without error and returned no diagnostic                   |
+| `parsed-findings`    | the parser returned at least one diagnostic                               |
+| `parser-unavailable` | the module did not load, or its `describe` does not list the declared key |
+| `parse-failed`       | the module returned an error for this output                              |
+| `truncated`          | reserved for an output or finding count over a cap; no cap exists yet     |
+| `none`               | the tool declares no `outputParser`, so nothing was attempted             |
+
+A module answers a parser key it does not know with an empty list, which would
+read as a clean run, so the core checks the key against the module's `describe`
+before it parses. An unknown key is not a configuration error: checking it needs
+the module, and loading a configuration never touches the network.
+
+When any process of a task is `parse-failed` or `parser-unavailable`, the task
+reports `ParseFailed`: its missing diagnostics mean "unknown", not "none". The
+run warns once, however many invocations hit the same problem:
+
+- `output parser failed for <tool>: <first error>`, once per tool;
+- `parser module "<module>" could not be loaded, so <n> tool(s) that use it ran without parsing`,
+  once per module, with the cause and a pointer to
+  [`datamitsu devtools parsers prefetch`](../../reference/cli-commands.md#devtools-parsers);
+- `parser module "<module>" has no parser "<key>", so the output of <tools> is not parsed`,
+  once per key.
+
+The tool's own exit code decides whether it passed, whatever its extraction
+outcome.
 
 ### Noise tolerance
 
@@ -425,9 +454,12 @@ parse, how to invoke each (args + stdin), the upstream URL, and the module's
 truth, which is why the `parsers` config entity carries **no `version` field**.
 
 To debug a parser against a real `datamitsu lint` run, pass **`--no-parse`** (or set
-`DATAMITSU_NO_PARSE`): the executor skips parsing and shows each tool's raw output,
-so you can see exactly what the parser was given. `devtools parsers run` is the
-complementary tool for iterating on a parser against piped output.
+`DATAMITSU_NO_PARSE`): a failure frame shows each tool's raw output instead of its
+parsed findings, so you can see exactly what the parser was given. The flag changes
+only what is displayed. Parsing still runs, and parser modules are still fetched
+and compiled, because what a run records must not depend on how it is shown.
+`devtools parsers run` is the complementary tool for iterating on a parser against
+piped output.
 
 [`datamitsu devtools parsers list`](../../reference/cli-commands.md#devtools-parsers)
 aggregates `describe` across every configured parser into a **deduplicated** view:

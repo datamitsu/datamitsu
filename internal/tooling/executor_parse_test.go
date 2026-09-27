@@ -39,16 +39,16 @@ func parseTask(module, parser string) Task {
 func TestParseFileDiagnostics_PassesTheOutputThrough(t *testing.T) {
 	fp := &fakeParser{diags: []diagnostic.Diagnostic{{Message: "a", Row: 1}}}
 	e := &Executor{parser: fp}
-	var result ExecutionResult
+	var proc ProcessResult
 
-	e.parseFileDiagnostics(context.Background(), &result, parseTask("core", "eslint"), t.TempDir(), nil, []byte("OUT"), []byte("ERR"), 1)
+	e.parseFileDiagnostics(context.Background(), &proc, parseTask("core", "eslint"), t.TempDir(), []byte("OUT"), []byte("ERR"), 1)
 
 	if fp.gotModule != "core" || fp.gotParser != "eslint" || fp.gotTool != "eslint" ||
 		string(fp.gotStdout) != "OUT" || string(fp.gotStderr) != "ERR" || fp.gotExit != 1 {
 		t.Fatalf("parser called with unexpected args: %+v", fp)
 	}
-	if len(result.Diagnostics) != 1 {
-		t.Fatalf("got %d diagnostics, want 1", len(result.Diagnostics))
+	if len(proc.Diagnostics) != 1 {
+		t.Fatalf("got %d diagnostics, want 1", len(proc.Diagnostics))
 	}
 }
 
@@ -77,25 +77,73 @@ func TestParseFileDiagnostics_Paths(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			e := &Executor{parser: &fakeParser{diags: []diagnostic.Diagnostic{{Message: "m", File: c.reported}}}}
-			var result ExecutionResult
-			e.parseFileDiagnostics(context.Background(), &result, parseTask("core", "tsc"), dir, c.files, nil, nil, 1)
-			if len(result.Diagnostics) != 1 {
-				t.Fatalf("got %d diagnostics, want 1", len(result.Diagnostics))
+			proc := ProcessResult{Files: c.files}
+			e.parseFileDiagnostics(context.Background(), &proc, parseTask("core", "tsc"), dir, nil, nil, 1)
+			if len(proc.Diagnostics) != 1 {
+				t.Fatalf("got %d diagnostics, want 1", len(proc.Diagnostics))
 			}
-			if got := result.Diagnostics[0].File; got != c.want {
+			if got := proc.Diagnostics[0].File; got != c.want {
 				t.Errorf("File = %q, want %q", got, c.want)
 			}
 		})
 	}
 }
 
-func TestParseFileDiagnostics_ParseErrorIsNonFatal(t *testing.T) {
-	e := &Executor{parser: &fakeParser{err: errors.New("boom")}}
-	var result ExecutionResult
-	// Must not panic and must leave Diagnostics empty.
-	e.parseFileDiagnostics(context.Background(), &result, parseTask("core", "eslint"), t.TempDir(), []string{"f.js"}, nil, nil, 0)
-	if len(result.Diagnostics) != 0 {
-		t.Errorf("a parse error must yield no diagnostics, got %+v", result.Diagnostics)
+// TestParseFileDiagnostics_Extraction pins the outcome each parse answer
+// records: only a parser that ran without error says anything about findings.
+func TestParseFileDiagnostics_Extraction(t *testing.T) {
+	unavailable := &ParserUnavailableError{Err: errors.New("module did not load")}
+	cases := []struct {
+		name      string
+		parser    *fakeParser
+		want      Extraction
+		wantError string
+	}{
+		{"no finding", &fakeParser{}, ExtractionParsedClean, ""},
+		{"a finding", &fakeParser{diags: []diagnostic.Diagnostic{{Message: "m"}}}, ExtractionParsedFindings, ""},
+		{"a parse error", &fakeParser{err: errors.New("boom")}, ExtractionParseFailed, "boom"},
+		{"an unavailable parser", &fakeParser{err: fmt.Errorf("parse: %w", unavailable)}, ExtractionParserUnavailable, "parse: module did not load"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			e := &Executor{parser: c.parser}
+			proc := ProcessResult{Files: []string{"/w/f.js"}, Extraction: ExtractionNone}
+			e.parseFileDiagnostics(context.Background(), &proc, parseTask("core", "eslint"), "/w", nil, nil, 0)
+			if proc.Extraction != c.want {
+				t.Errorf("Extraction = %q, want %q", proc.Extraction, c.want)
+			}
+			if proc.ParseError != c.wantError {
+				t.Errorf("ParseError = %q, want %q", proc.ParseError, c.wantError)
+			}
+			if c.parser.err != nil && len(proc.Diagnostics) != 0 {
+				t.Errorf("a failed parse must yield no diagnostics, got %+v", proc.Diagnostics)
+			}
+		})
+	}
+}
+
+// TestExecutionResultParseFailed: a task whose every process was parsed says
+// so; one process whose output could not be parsed makes an empty
+// Diagnostics unbelievable, and the task says that instead.
+func TestExecutionResultParseFailed(t *testing.T) {
+	for _, c := range []struct {
+		outcomes []Extraction
+		want     bool
+	}{
+		{[]Extraction{ExtractionParsedClean, ExtractionParsedFindings, ExtractionNone}, false},
+		{[]Extraction{ExtractionParsedClean, ExtractionParseFailed}, true},
+		{[]Extraction{ExtractionParserUnavailable}, true},
+	} {
+		var r ExecutionResult
+		for _, o := range c.outcomes {
+			r.addProcess(ProcessResult{Extraction: o})
+		}
+		if r.ParseFailed != c.want {
+			t.Errorf("outcomes %v: ParseFailed = %v, want %v", c.outcomes, r.ParseFailed, c.want)
+		}
+		if len(r.Processes) != len(c.outcomes) {
+			t.Errorf("outcomes %v: %d processes recorded", c.outcomes, len(r.Processes))
+		}
 	}
 }
 

@@ -14,7 +14,7 @@ These flags apply to all commands:
 | `--binary-command <name>` | Override the binary command name. Also settable via `DATAMITSU_BINARY_COMMAND`                         |
 | `--log-format <format>`   | Status output format: `console` or newline-delimited `jsonl`. Also settable via `DATAMITSU_LOG_FORMAT` |
 | `--no-oci`                | Disable OCI bundle store seeding. Also settable via `DATAMITSU_NO_OCI`                                 |
-| `--no-parse`              | Skip output parsers and show raw tool output. Also settable via `DATAMITSU_NO_PARSE`                   |
+| `--no-parse`              | Show raw tool output instead of parsed findings; parsing still runs. Also via `DATAMITSU_NO_PARSE`     |
 | `-v`, `--verbose`         | Enable debug-level logging for this invocation                                                         |
 
 With `--log-format=jsonl`, status and progress go to stderr as typed JSON events,
@@ -1865,7 +1865,7 @@ from the same shell function that runs an activation through `eval`.
 | `DATAMITSU_NO_SPONSOR`            | Suppress sponsor messages (any non-empty value)                                                       | -                                                   |
 | `DATAMITSU_OFFLINE`               | Refuse all network access (any non-empty value; requires a pre-seeded store)                          | -                                                   |
 | `DATAMITSU_NO_OCI`                | Disable OCI bundle store **seeding** (any non-empty value; twin of `--no-oci`)                        | -                                                   |
-| `DATAMITSU_NO_PARSE`              | Skip output parsers and show tools' raw output (any non-empty value; twin of `--no-parse`)            | -                                                   |
+| `DATAMITSU_NO_PARSE`              | Show tools' raw output instead of parsed findings; parsing still runs (twin of `--no-parse`)          | -                                                   |
 | `DATAMITSU_LIBC`                  | Override host libc detection (`glibc` or `musl`); affects store paths and OCI bundle selection        | auto-detected                                       |
 | `DATAMITSU_OCI_REGISTRY`          | Registry host for base-image digest resolution in `devtools dockerfile`                               | `ghcr.io`                                           |
 | `DATAMITSU_PARSERS_DIR`           | Override directory for downloaded WASM output-parser modules                                          | `{store}/.parsers`                                  |

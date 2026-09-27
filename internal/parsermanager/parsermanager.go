@@ -73,7 +73,28 @@ type Manager struct {
 	// key, so a run that parses N tool invocations of one module instantiates once
 	// per concurrent parse rather than once per parse. Guarded by mu.
 	idle map[string][]*ParserRuntime
+
+	// keys holds, per content key, the parser keys a module's describe lists,
+	// described once per Manager. Guarded by mu; describeGroup coalesces the
+	// first callers.
+	keys          map[string]map[string]bool
+	describeGroup singleflight.Group
 }
+
+// ErrModuleUnavailable marks a parse that never reached the module: it could
+// not be fetched, verified, compiled or instantiated. The tool's output was not
+// parsed at all, which a caller reports differently from a module that parsed
+// and failed.
+var ErrModuleUnavailable = errors.New("parser module unavailable")
+
+// moduleUnavailableError marks err as ErrModuleUnavailable without prefixing its
+// message: the cause already says what went wrong, and a caller that reports it
+// names the module itself.
+type moduleUnavailableError struct{ err error }
+
+func (e moduleUnavailableError) Error() string        { return e.err.Error() }
+func (e moduleUnavailableError) Unwrap() error        { return e.err }
+func (e moduleUnavailableError) Is(target error) bool { return target == ErrModuleUnavailable }
 
 // maxIdleInstances bounds how many instances of one module are kept per Manager.
 // Instances are only ever pooled after a parse returned, so this caps the pool at
@@ -92,7 +113,52 @@ func New(parsers config.MapOfParsers) *Manager {
 		parsers:  parsers,
 		compiled: map[string]wazero.CompiledModule{},
 		idle:     map[string][]*ParserRuntime{},
+		keys:     map[string]map[string]bool{},
 	}
+}
+
+// HasParser reports whether module's describe lists parser. A module answers
+// an unknown key with an empty result, which reads as a clean run, so a caller
+// that must not take "nothing parsed" for "nothing found" asks first. The
+// answer is described once per module and Manager. An error wraps
+// ErrModuleUnavailable when the module could not be loaded.
+func (m *Manager) HasParser(ctx context.Context, module, parser string) (bool, error) {
+	key, ok := m.instanceKey(module)
+	if !ok {
+		return false, moduleUnavailableError{fmt.Errorf("parser %q is not declared", module)}
+	}
+	m.mu.Lock()
+	known, described := m.keys[key]
+	m.mu.Unlock()
+	if !described {
+		v, err, _ := m.describeGroup.Do(key, func() (any, error) {
+			inst, _, err := m.acquirePooled(ctx, module)
+			if err != nil {
+				return nil, moduleUnavailableError{err}
+			}
+			caps, err := inst.Describe(ctx)
+			if err != nil {
+				_ = inst.Close(ctx)
+				return nil, moduleUnavailableError{err}
+			}
+			m.releaseReset(ctx, module, inst)
+			names := make(map[string]bool, len(caps.Tools))
+			for _, t := range caps.Tools {
+				names[t.Name] = true
+			}
+			m.mu.Lock()
+			if m.keys != nil {
+				m.keys[key] = names
+			}
+			m.mu.Unlock()
+			return names, nil
+		})
+		if err != nil {
+			return false, err //nolint:wrapcheck // marked moduleUnavailableError inside the group
+		}
+		known, _ = v.(map[string]bool)
+	}
+	return known[parser], nil
 }
 
 // LoadWASMBytes returns the verified bytes of the named parser's WASM module,
@@ -147,7 +213,7 @@ func (m *Manager) ParseOutput(
 ) ([]RawDiagnostic, error) {
 	inst, reused, err := m.acquirePooled(ctx, module)
 	if err != nil {
-		return nil, err
+		return nil, moduleUnavailableError{err}
 	}
 
 	diags, parseErr := inst.Parse(ctx, parser, stdout, stderr, exitCode)

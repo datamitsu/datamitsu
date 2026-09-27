@@ -1,0 +1,16 @@
+exit code: 0
+===STDOUT===
+╭<RULE>╮
+│ datamitsu  <VERSION> │
+╰<RULE>╯
+
+┏━ lint <RULE>
+┃ fixture
+┃
+┃ ✓ alpha  <DUR> ×2
+┃ ✓ beta   <DUR> ×2
+┗━ 2 tools · 4 runs · done in <DUR> · cache 0% <RULE>
+
+===STDERR===
+WARN parser module "missing" could not be loaded, so 1 tool(s) that use it ran without parsing; "datamitsu devtools parsers prefetch" fetches it ahead of a run: parser "missing": download+verify: download parser module: offline mode: network access is disabled by DATAMITSU_OFFLINE (blocked: download of missing); unset DATAMITSU_OFFLINE or pre-seed the store while online (datamitsu store seed)
+WARN parser module "core" has no parser "no-such-parser", so the output of alpha is not parsed

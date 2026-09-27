@@ -110,3 +110,17 @@ func TestUsableDiagnostics(t *testing.T) {
 		})
 	}
 }
+
+// TestUsableDiagnosticsNoParse: --no-parse switches the frame to the raw
+// output; the diagnostics are still there for everything else the run does.
+func TestUsableDiagnosticsNoParse(t *testing.T) {
+	t.Cleanup(func() { SetParsingDisabledByFlag(false) })
+	result := tooling.ExecutionResult{Diagnostics: []diagnostic.Diagnostic{{File: "a.md", Message: "m"}}}
+	if !usableDiagnostics(result) {
+		t.Fatal("parsed diagnostics should be shown by default")
+	}
+	SetParsingDisabledByFlag(true)
+	if usableDiagnostics(result) {
+		t.Error("--no-parse should show the raw output instead")
+	}
+}
