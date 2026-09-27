@@ -1572,6 +1572,12 @@ func printFailedExecution(runNum int, exec executionInstance) {
 		for _, d := range result.Diagnostics {
 			fmt.Printf("  %s  %s\n", border("│"), formatDiagnosticRelativeTo(d, result.WorkingDir))
 		}
+		for _, failure := range result.UnparsedFailures {
+			fmt.Printf("  %s\n", border("│"))
+			for line := range strings.SplitSeq(failure, "\n") {
+				fmt.Printf("  %s  %s\n", border("│"), line)
+			}
+		}
 	case strings.TrimSpace(result.Output) != "":
 		fmt.Printf("  %s\n", border("│"))
 		lines := strings.SplitSeq(strings.TrimRight(result.Output, "\n"), "\n")

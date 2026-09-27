@@ -262,6 +262,56 @@ func TestKeepGoingStdinFailureKeepsItsCommand(t *testing.T) {
 	}
 }
 
+// Under keep-going every failure of a per-file task is kept: its error names
+// each one, and those that left no finding — a file whose input could not be
+// prepared, a run whose output did not parse — are kept for the frame, which
+// shows the diagnostics in place of the raw output.
+func TestKeepGoingKeepsFailuresWithoutFindings(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the tools are sh scripts")
+	}
+	root := t.TempDir()
+	names := []string{"crash.txt", "found.txt"}
+	files := make([]string, 0, 1+len(names))
+	files = append(files, filepath.Join(root, "missing.txt"))
+	for _, name := range names {
+		path := filepath.Join(root, name)
+		if err := os.WriteFile(path, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		files = append(files, path)
+	}
+	// lineParser reports stdout lines; the crash writes only to stderr.
+	script := `cat >/dev/null; case "$0" in *crash*) echo "crashed" >&2; exit 2;; *found*) echo "finding"; exit 1;; esac`
+	appManager := &mockAppManager{commands: map[string]*binmanager.CommandInfo{"alpha": shellApp(script)}}
+	task := lintTask(t, "alpha", config.ToolScopePerProject, root, "{file}")
+	task.OpConfig.Input = config.ToolInputStdin
+	task.Files = files
+	task.Tool.OutputParser = &config.OutputParser{Module: "core", Parser: "alpha"}
+	e := NewExecutor(root, false, false, appManager, nil)
+	e.SetParser(lineParser{})
+
+	result := e.executeTask(context.Background(), task)
+
+	if result.Success || result.IsCancelled() {
+		t.Fatalf("result = %+v, want a failure", result)
+	}
+	for _, want := range []string{"failed to prepare stdin for file", "crash.txt (exit code 2)", "found.txt (exit code 1)"} {
+		if result.Error == nil || !strings.Contains(result.Error.Error(), want) {
+			t.Errorf("Error = %v, want it to name %q", result.Error, want)
+		}
+	}
+	if len(result.Diagnostics) != 1 || result.Diagnostics[0].Message != "finding" {
+		t.Errorf("Diagnostics = %+v, want found.txt's finding", result.Diagnostics)
+	}
+	if len(result.UnparsedFailures) != 2 ||
+		!strings.Contains(result.UnparsedFailures[0], "failed to prepare stdin for file") ||
+		!strings.Contains(result.UnparsedFailures[1], "crash.txt (exit code 2)") ||
+		!strings.Contains(result.UnparsedFailures[1], "crashed") {
+		t.Errorf("UnparsedFailures = %q, want the stdin failure and the crash with its output", result.UnparsedFailures)
+	}
+}
+
 // A per-file task that failed on its own and is then interrupted stays a
 // failure: the interruption only leaves the rest of its files unchecked.
 func TestInterruptedPerFileTaskKeepsItsFailure(t *testing.T) {

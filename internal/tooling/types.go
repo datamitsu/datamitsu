@@ -174,6 +174,11 @@ type ExecutionResult struct {
 	// when it stopped the loop at a failing file: the task failed on its own,
 	// yet did not check everything it was given.
 	FilesNotRun int
+	// UnparsedFailures are the failed invocations of a per-file task with an
+	// output parser that left no diagnostic: a file whose input could not be
+	// prepared, or a run whose output held no finding. A failure frame shows
+	// diagnostics instead of the raw output, so it shows these beside them.
+	UnparsedFailures []string
 	// CapturedStdout holds the tool's stdout captured separately from stderr,
 	// set only when the operation uses output mode "stdout" (the candidate
 	// formatted content consumed by the diff-in-core formatting path). Empty for

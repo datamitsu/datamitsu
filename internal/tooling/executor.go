@@ -906,6 +906,15 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 	// unchecked, and hiding the failure would hide what the run found.
 	failedOnOwn := false
 
+	formatMode := task.OpConfig.Output == config.ToolOutputStdout
+	// A formatter's stdout is the formatted file content, not diagnostics, so it
+	// must never be fed to the parser. Validation already limits output:stdout to
+	// the fix op, but a tool could still pair it with a tool-level outputParser;
+	// !formatMode keeps the parser off the formatted text in that case.
+	parseMode := e.parser != nil && task.Tool.OutputParser != nil && !formatMode
+	// Both formatting and parsing need stdout and stderr kept apart.
+	separate := formatMode || parseMode
+
 	for i, file := range filesToProcess {
 		// Check if context is cancelled before processing next file
 		if ctx.Err() != nil {
@@ -955,11 +964,15 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 			failedCommand = cmdString
 			result.Success = false
 			result.ExitCode = -1
-			result.Error = fmt.Errorf("failed to prepare stdin for file %s: %w", file, stdinErr)
+			stdinFailure := fmt.Errorf("failed to prepare stdin for file %s: %w", file, stdinErr)
+			result.Error = errors.Join(result.Error, stdinFailure)
 			// The frame shows the joined output, not Error, once any file wrote
 			// some: without this line a later file's output would stand in for
 			// a failure no process reported.
-			outputs = append(outputs, result.Error.Error())
+			outputs = append(outputs, stdinFailure.Error())
+			if parseMode {
+				result.UnparsedFailures = append(result.UnparsedFailures, stdinFailure.Error())
+			}
 			if e.fileProgressCallback != nil {
 				e.fileProgressCallback(task.ToolName, cachedCount+i+1, totalFiles, false)
 			}
@@ -970,14 +983,6 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 			continue
 		}
 
-		formatMode := task.OpConfig.Output == config.ToolOutputStdout
-		// A formatter's stdout is the formatted file content, not diagnostics, so it
-		// must never be fed to the parser. Validation already limits output:stdout to
-		// the fix op, but a tool could still pair it with a tool-level outputParser;
-		// !formatMode keeps the parser off the formatted text in that case.
-		parseMode := e.parser != nil && task.Tool.OutputParser != nil && !formatMode
-		// Both formatting and parsing need stdout and stderr kept apart.
-		separate := formatMode || parseMode
 		stdoutBytes, stderrBytes, err := e.runCommandIO(cmd, stdinContent, separate)
 
 		var output []byte
@@ -1002,6 +1007,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 		// Parse this file's output into structured diagnostics when the tool
 		// declares an outputParser. Per-file mode means each invocation lints one
 		// file, so the diagnostics belong to it.
+		diagnosticsBefore := len(result.Diagnostics)
 		if parseMode {
 			e.parseFileDiagnostics(ctx, &result, task, file, stdoutBytes, stderrBytes, exitCode)
 		}
@@ -1069,7 +1075,15 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 			failedOnOwn = true
 			result.Success = false
 			result.ExitCode = exitCode
-			result.Error = fmt.Errorf("failed to execute for file %s (exit code %d): %w", file, exitCode, err)
+			fileFailure := fmt.Errorf("failed to execute for file %s (exit code %d): %w", file, exitCode, err)
+			result.Error = errors.Join(result.Error, fileFailure)
+			if parseMode && len(result.Diagnostics) == diagnosticsBefore {
+				unparsed := fileFailure.Error()
+				if text := strings.TrimSpace(string(output)); text != "" {
+					unparsed += "\n" + text
+				}
+				result.UnparsedFailures = append(result.UnparsedFailures, unparsed)
+			}
 			failedCommand = cmdString
 			if e.failFast {
 				log.Debug("fail-fast triggered in per-file execution")

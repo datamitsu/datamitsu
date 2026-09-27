@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/diagnostic"
 	"github.com/datamitsu/datamitsu/internal/exitcode"
 	"github.com/datamitsu/datamitsu/internal/timing"
 	"github.com/datamitsu/datamitsu/internal/tooling"
@@ -250,6 +251,24 @@ func TestFailedExecutionShowsTheErrorOverBlankOutput(t *testing.T) {
 	})
 	if !strings.Contains(out, "failed to execute for file a.txt") {
 		t.Errorf("the frame lacks the error:\n%s", out)
+	}
+}
+
+// Diagnostics take the place of a failure's raw output, so the failures that
+// left none are shown beside them.
+func TestFailedExecutionShowsFailuresWithoutFindings(t *testing.T) {
+	t.Setenv("CI", "true")
+	out := captureStdout(t, func() {
+		printFailedExecution(1, executionInstance{result: tooling.ExecutionResult{
+			ToolName: "alpha", ExitCode: 1, Output: "finding\ncrashed",
+			Diagnostics:      []diagnostic.Diagnostic{{File: "found.txt", Row: 1, Message: "finding"}},
+			UnparsedFailures: []string{"failed to execute for file crash.txt (exit code 2): exit status 2\ncrashed"},
+		}})
+	})
+	for _, want := range []string{"finding", "crash.txt (exit code 2)", "crashed"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the frame lacks %q:\n%s", want, out)
+		}
 	}
 }
 
