@@ -722,6 +722,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	if len(toolGroups) > 0 || len(plan.Skipped) > 0 || len(stopped) > 0 {
 		printGroupedResults(toolGroups, sc.nameWidth, env.IsTimingsEnabled())
 		printStoppedTasks(stopped, sc.nameWidth)
+		printUnrunFiles(results, sc.rootPath, sc.nameWidth, cause)
 		printSkippedTools(plan.Skipped, sc.nameWidth)
 		printOperationFooter(toolGroups, totalWallClockTime, cacheHits, cacheMisses, len(plan.Skipped), len(stopped), sc.footerNote(operation))
 	}

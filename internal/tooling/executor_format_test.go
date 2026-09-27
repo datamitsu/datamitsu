@@ -132,10 +132,10 @@ func TestFormattingPipelineEndToEnd(t *testing.T) {
 	}
 
 	// Minimal diff: only the single changed line region, never the whole 4 lines.
-	if len(result.FormatEdits) == 0 {
-		t.Fatalf("expected format edits, got none")
+	if len(result.FileResults) != 1 || len(result.FileResults[0].Edits) == 0 {
+		t.Fatalf("expected format edits on the file's result, got %+v", result.FileResults)
 	}
-	for _, e := range result.FormatEdits {
+	for _, e := range result.FileResults[0].Edits {
 		if span := e.Range.End.Line - e.Range.Start.Line; span > 1 {
 			t.Errorf("non-minimal edit spanning %d lines: %+v", span, e)
 		}
@@ -194,8 +194,8 @@ func TestFormattingPipelineNoChange(t *testing.T) {
 	if !result.Success {
 		t.Fatalf("executeTask failed: %v", result.Error)
 	}
-	if result.FormatEdits != nil {
-		t.Errorf("expected nil edits for no-op formatter, got %+v", result.FormatEdits)
+	if len(result.FileResults) != 1 || result.FileResults[0].Edits != nil {
+		t.Errorf("expected nil edits for no-op formatter, got %+v", result.FileResults)
 	}
 	got, err := os.ReadFile(file)
 	if err != nil {

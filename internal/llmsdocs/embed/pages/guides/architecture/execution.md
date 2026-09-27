@@ -122,6 +122,14 @@ A cancelled task is not a failure: it never counts toward `(N failed)`, and its 
 
 A task counts as stopped when the stop reached it while it was still running, whatever it then exits with: a tool that catches the signal and exits 1 is cancelled, not failed. A tool that had already exited when the stop went out keeps its own result.
 
+### What a result records
+
+A task's result is more than one exit code. It lists **every process** the task planned to spawn — one per file for a tool that runs once per file, one per chunk for a list-taking tool — each with the files it was given, its state (`ran`, `cancelled`, `not-started`, `setup-failed` when its input could not be prepared or its command did not start), its exit code when it ran, its duration, the last 4 KiB of its output, its [extraction outcome](./parsers.md#extraction-outcomes) and its findings. It also has **one entry per file** the task was planned with: `ran` (with the process that checked it and that process's exit code), `cached` when the per-file cache answered, `verdict-hit` for every member of a unit whose [verdict](./caching.md#unit-verdicts-and-the-content-hash-memo) held, `cancelled`, `not-started` or `setup-failed`. The edits a formatter applied are recorded on the file they changed.
+
+A tool whose arguments name no file — `tsc` reading `tsconfig.json` — answers for its unit, not for the files that selected the task, so its result lists the unit's members, each checked by its one process. The frame, the counts and the exit code still read the task's aggregate: every process's output joined, the last failing process's exit code and command, every finding.
+
+A task that failed on its own and stopped short — the rest of a per-file loop after a failing file under fail-fast, the chunks a cancellation reached before they started — names the files it never checked, under its failure: `⊘ alpha  2 files not run (fail-fast): src/b.txt, src/c.txt`.
+
 **Example scenario:**
 
 ```

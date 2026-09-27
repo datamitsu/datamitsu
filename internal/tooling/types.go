@@ -190,26 +190,95 @@ func (e *ParserUnavailableError) Error() string { return e.Err.Error() }
 // Unwrap exposes the cause.
 func (e *ParserUnavailableError) Unwrap() error { return e.Err }
 
-// ProcessResult is one process a task spawned: the files it was given and what
-// its output yielded.
+// ProcessState is what became of one process a task planned to spawn.
+type ProcessState string
+
+// Process states.
+const (
+	// ProcessRan: the process ran and exited on its own, successfully or not.
+	ProcessRan ProcessState = "ran"
+	// ProcessCancelled: a cancellation stopped the process while it ran.
+	ProcessCancelled ProcessState = "cancelled"
+	// ProcessNotStarted: the task stopped before the process was spawned.
+	ProcessNotStarted ProcessState = "not-started"
+	// ProcessSetupFailed: the process could not be spawned — its input could not
+	// be prepared, or the command did not start.
+	ProcessSetupFailed ProcessState = "setup-failed"
+)
+
+// FileState is what became of one file a task was planned with.
+type FileState string
+
+// File states.
+const (
+	FileRan         FileState = "ran"
+	FileCached      FileState = "cached"      // skipped: the per-file cache holds a pass for these bytes
+	FileVerdictHit  FileState = "verdict-hit" // skipped: the unit's verdict holds for these inputs
+	FileCancelled   FileState = "cancelled"
+	FileNotStarted  FileState = "not-started"
+	FileSetupFailed FileState = "setup-failed"
+)
+
+// outputTailBytes bounds ProcessResult.OutputTail.
+const outputTailBytes = 4 << 10
+
+// ProcessResult is one process a task planned to spawn: one per file in
+// per-file mode, one per chunk in batch mode. Cached files have none.
 type ProcessResult struct {
+	// ID names the process within its task: "#<n>", n counting the task's
+	// processes from 1.
+	ID string
 	// Files are the absolute, cleaned paths the process was given; empty for a
 	// process given no path.
-	Files       []string
+	Files []string
+	State ProcessState
+	// ExitCode is nil unless State is ProcessRan.
+	ExitCode *int
+	// Success is whether the process did what it was run for: a zero exit and,
+	// for a formatter, a formatted file written.
+	Success     bool
 	Extraction  Extraction
 	ParseError  string // the module's error for parse-failed and parser-unavailable
+	OutputTail  []byte // the last 4 KiB of the output the frame would show
 	Diagnostics []diagnostic.Diagnostic
+	DurationMs  int64
+
+	edits []textdiff.Edit // the formatting edits a per-file process applied
 }
 
-// ExecutionResult represents the result of a task execution
+// FileResult is what became of one file a task was planned with.
+type FileResult struct {
+	File  string
+	State FileState
+	// ProcessID names the process that checked the file; "" unless State is
+	// FileRan.
+	ProcessID string
+	// Success is the process's success for a file that ran, and true for a file
+	// a cache answered.
+	Success bool
+	// ExitCode is nil unless State is FileRan.
+	ExitCode *int
+	// Edits are the diff-in-core edits applied to the file; nil when it was left
+	// unchanged.
+	Edits []textdiff.Edit
+}
+
+// ExecutionResult represents the result of a task execution. Its aggregate
+// fields speak for the task as a whole, the way a failure frame shows it;
+// Processes and FileResults say what each process and each file did.
 type ExecutionResult struct {
-	ToolName      string
-	Success       bool
-	Output        string
-	Error         error
-	Duration      int64            // milliseconds
-	Command       string           // Full command that was executed
-	ExitCode      int              // Exit code of the command (0 if success, -1 if not available)
+	ToolName string
+	Success  bool
+	// Output is the joined output of every process.
+	Output   string
+	Error    error
+	Duration int64 // milliseconds
+	// Command is the command line of the last failing process, or of the last
+	// process when none failed.
+	Command string
+	// ExitCode is the last failing process's exit code: 0 on success, -1 when a
+	// failure has none.
+	ExitCode      int
 	WorkingDir    string           // Working directory where command was executed
 	RelativeDir   string           // Working directory relative to git root (for display)
 	Scope         config.ToolScope // Tool scope (repository, per-project, per-file)
@@ -232,23 +301,36 @@ type ExecutionResult struct {
 	// formatted content consumed by the diff-in-core formatting path). Empty for
 	// the default combined-capture behavior.
 	CapturedStdout string
-	// FormatEdits records the minimal line-based edits applied to a file by the
-	// diff-in-core formatting path (output mode "stdout"). Nil when the candidate
-	// content equalled the original (no change → no edits → file untouched). In
-	// per-file mode it holds the edits for the last formatted file, mirroring how
-	// Command reports the last command.
-	FormatEdits []textdiff.Edit
 	// Diagnostics holds the structured diagnostics parsed from this tool's output
 	// when the tool declares an outputParser (and a parser is wired in): the
 	// concatenation of every process's. Nil for tools without a parser — the
 	// common case.
 	Diagnostics []diagnostic.Diagnostic
-	// Processes lists every process the task spawned, in the order they ran.
+	// Processes lists every process the task planned to spawn, in order: one
+	// per file in per-file mode, one per chunk in batch mode.
 	Processes []ProcessResult
 	// ParseFailed reports that the output of at least one process could not be
 	// parsed (parse-failed or parser-unavailable): an empty Diagnostics then
 	// does not mean the tool found nothing.
 	ParseFailed bool
+
+	// Files are the task's files as planned, absolute and cleaned, run or
+	// cached alike; for a WholeUnit task and for a verdict hit, the unit's
+	// members.
+	Files []string
+	// FileResults has one entry per Files entry, in the same order.
+	FileResults []FileResult
+	// Cached reports that no process ran: the unit's verdict held, or every
+	// file's per-file pass did.
+	Cached bool
+	// WholeUnit reports that argv carried no file path, so the result speaks for
+	// UnitDir rather than for the files that selected the task.
+	WholeUnit bool
+	// UnitDir is the directory a WholeUnit result speaks for, relative to the
+	// git root ("" is the root).
+	UnitDir string
+
+	cached []string // the files the per-file cache answered
 }
 
 // IsCancelled reports whether the task was stopped by a cancellation — fail-fast

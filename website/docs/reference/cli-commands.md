@@ -269,6 +269,18 @@ process at once. A signal that arrives while the configuration is still loading,
 before the run has started, ends the process at once too, with no report. The `(N failed)` counts never include stopped tools, and a
 tool stopped in several places of one kind shares one line with a `×N` count.
 
+A tool that runs once per file stops at its first failing file under fail-fast,
+and the files it never reached are named under its failure:
+
+```console
+┃ ✗ alpha  12ms  (1 failed)
+  …
+┃ ⊘ alpha  2 files not run (fail-fast): src/b.txt, src/c.txt
+```
+
+The line names up to three files, relative to the repository root, and counts
+the rest.
+
 ### Run events
 
 With `--log-format=jsonl`, `fix`, `lint` and `check` write their progress to

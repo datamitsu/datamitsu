@@ -136,6 +136,32 @@ func TestPrintStoppedTasks(t *testing.T) {
 	}
 }
 
+// TestPrintUnrunFiles: a task that ran and stopped short names the files it
+// never checked; a task the run stopped as a whole is listed elsewhere.
+func TestPrintUnrunFiles(t *testing.T) {
+	t.Setenv("CI", "true")
+	files := func(states ...tooling.FileState) []tooling.FileResult {
+		out := make([]tooling.FileResult, len(states))
+		for i, s := range states {
+			out[i] = tooling.FileResult{File: "/repo/src/f" + string(rune('0'+i)) + ".txt", State: s}
+		}
+		return out
+	}
+	results := []tooling.GroupExecutionResult{{Results: []tooling.ExecutionResult{
+		{ToolName: "alpha", FileResults: files(tooling.FileRan, tooling.FileNotStarted)},
+		{ToolName: "beta", RelativeDir: "pkg", FileResults: files(
+			tooling.FileRan, tooling.FileCancelled, tooling.FileNotStarted, tooling.FileNotStarted, tooling.FileNotStarted)},
+		{ToolName: "gamma", Cancelled: true, FileResults: files(tooling.FileNotStarted)},
+		{ToolName: "delta", FileResults: files(tooling.FileRan, tooling.FileCached)},
+	}}}
+	out := captureStdout(t, func() { printUnrunFiles(results, "/repo", 5, stopInterrupted) })
+	want := "┃ ⊘ alpha  1 file not run (interrupted): src/f1.txt\n" +
+		"┃ ⊘ beta [pkg]  4 files not run (interrupted): src/f1.txt, src/f2.txt, src/f3.txt +1 more\n"
+	if out != want {
+		t.Errorf("printUnrunFiles() printed\n%q\nwant\n%q", out, want)
+	}
+}
+
 // A run returns one error: an interruption wins because the run did not
 // finish; then a tool failure (exit 1), then --fail-on-skip, then
 // --require-coverage.

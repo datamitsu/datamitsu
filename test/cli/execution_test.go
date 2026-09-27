@@ -602,6 +602,9 @@ func TestExecutionFailFastBetweenFiles(t *testing.T) {
 		res := e.run("", nil, "lint")
 		e.wantExit(res, 1)
 		e.wantMarker("alpha", "alpha <TMP>/bad1.txt\n")
+		if !strings.Contains(res.Stdout, "alpha  2 files not run (fail-fast): bad2.txt, ok.txt") {
+			t.Errorf("the block should name the files the loop left unchecked:\n%s", res.Stdout)
+		}
 		e.golden("s5_lint_per_file_loop", res)
 	})
 
