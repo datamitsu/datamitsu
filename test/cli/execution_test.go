@@ -1062,7 +1062,9 @@ func TestExecutionParsedPassKeepsFindingsUncached(t *testing.T) {
 
 	third := e.run("", nil, "lint", "--no-parse")
 	e.wantExit(third, 0)
-	e.wantMarker("hadolint", "hadolint <TMP>/Dockerfile\nhadolint <TMP>/Dockerfile\nhadolint <TMP>/Dockerfile\n")
+	fourth := e.run("", nil, "lint")
+	e.wantExit(fourth, 0)
+	e.wantMarker("hadolint", strings.Repeat("hadolint <TMP>/Dockerfile\n", 4))
 }
 
 // TestExecutionParsedCleanPassIsCached: a parsed run that reported nothing is a
@@ -1079,6 +1081,22 @@ func TestExecutionParsedCleanPassIsCached(t *testing.T) {
 		t.Errorf("the second run's footer should report cache 100%%:\n%s", second.Stdout)
 	}
 	e.golden("lint_parsed_clean_cached", second)
+
+	// --no-parse only changes what a failure shows: a clean run under it is
+	// cached like any other, and so is one under DATAMITSU_NO_PARSE.
+	for _, run := range []struct {
+		env  []string
+		args []string
+	}{
+		{nil, []string{"lint", "--no-parse"}},
+		{[]string{"DATAMITSU_NO_PARSE=1"}, []string{"lint"}},
+	} {
+		fresh := newParsedProject(t, "[]", 0)
+		fresh.wantExit(fresh.run("", run.env, run.args...), 0)
+		again := fresh.run("", run.env, run.args...)
+		fresh.wantExit(again, 0)
+		fresh.wantMarker("hadolint", "hadolint <TMP>/Dockerfile\n")
+	}
 }
 
 // TestExecutionParsedPositions freezes the position and path contract a list-

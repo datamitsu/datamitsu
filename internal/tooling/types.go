@@ -192,7 +192,6 @@ type ParserUnavailableError struct {
 
 func (e *ParserUnavailableError) Error() string { return e.Err.Error() }
 
-// Unwrap exposes the cause.
 func (e *ParserUnavailableError) Unwrap() error { return e.Err }
 
 // ProcessState is what became of one process a task planned to spawn.

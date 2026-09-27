@@ -6,10 +6,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/trace"
 )
 
 // echoWASM reads the committed echo.wasm fixture. It is the real Rust→WASM module
@@ -196,6 +198,37 @@ func TestHasParser(t *testing.T) {
 	}
 	if _, err := m.HasParser(ctx, "undeclared", "hadolint"); !errors.Is(err, ErrModuleUnavailable) {
 		t.Errorf("an undeclared module: err = %v, want ErrModuleUnavailable", err)
+	}
+}
+
+// TestHasParserDescribesOnce: concurrent callers share one describe per
+// module, including one that misses the answer while another stores it.
+func TestHasParserDescribesOnce(t *testing.T) {
+	t.Setenv("DATAMITSU_PARSERS_DIR", t.TempDir())
+	prev := trace.Enabled()
+	trace.Reset()
+	trace.SetEnabled(true)
+	t.Cleanup(func() {
+		trace.SetEnabled(prev)
+		trace.Reset()
+	})
+	ctx := context.Background()
+	wasm := echoWASM(t)
+	srv, _ := serveWASM(t, wasm)
+	m := New(config.MapOfParsers{"core": {URL: srv.URL, Hash: sha256Hex(wasm)}})
+	t.Cleanup(func() { _ = m.Close(ctx) })
+
+	var wg sync.WaitGroup
+	for range 16 {
+		wg.Go(func() {
+			if ok, err := m.HasParser(ctx, "core", "hadolint"); err != nil || !ok {
+				t.Errorf("HasParser = %v, %v", ok, err)
+			}
+		})
+	}
+	wg.Wait()
+	if n := cntDescribe.Value(); n != 1 {
+		t.Errorf("the module was described %d times, want once", n)
 	}
 }
 

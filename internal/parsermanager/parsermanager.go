@@ -40,6 +40,8 @@ var (
 	// state could not be cleared — a module without a `reset` export parses at the
 	// pre-pooling cost, and this is how that shows up.
 	cntNoReuse = trace.NewCounter("parser.unresettable_discards")
+	// cntDescribe counts the describe calls HasParser makes: one per module.
+	cntDescribe = trace.NewCounter("parser.key_describes")
 )
 
 // wasmFileName is the fixed name of the module inside its content-addressed dir.
@@ -132,6 +134,15 @@ func (m *Manager) HasParser(ctx context.Context, module, parser string) (bool, e
 	m.mu.Unlock()
 	if !described {
 		v, err, _ := m.describeGroup.Do(key, func() (any, error) {
+			// A caller that missed the map may arrive after another one's group
+			// has finished and stored the answer.
+			m.mu.Lock()
+			names, done := m.keys[key]
+			m.mu.Unlock()
+			if done {
+				return names, nil
+			}
+			cntDescribe.Add(1)
 			inst, _, err := m.acquirePooled(ctx, module)
 			if err != nil {
 				return nil, moduleUnavailableError{err}
@@ -142,7 +153,7 @@ func (m *Manager) HasParser(ctx context.Context, module, parser string) (bool, e
 				return nil, moduleUnavailableError{err}
 			}
 			m.releaseReset(ctx, module, inst)
-			names := make(map[string]bool, len(caps.Tools))
+			names = make(map[string]bool, len(caps.Tools))
 			for _, t := range caps.Tools {
 				names[t.Name] = true
 			}
