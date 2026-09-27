@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/diagnostic"
@@ -248,6 +249,31 @@ func TestGateStopsAPerFileLoop(t *testing.T) {
 	}
 	if got := fileStates(result); !slices.Equal(got, []FileState{FileRan, FileNotStarted}) {
 		t.Errorf("file states = %v", got)
+	}
+}
+
+// TestAThresholdFailureKeepsItsExitCode: a file the threshold failed exited
+// 0, and a later file the run then cancelled does not lend it its exit code.
+func TestAThresholdFailureKeepsItsExitCode(t *testing.T) {
+	e, root, files := gatedProject(t, false, true, `case "$1" in *a.txt) echo "$1" ;; *) sleep 5 ;; esac`,
+		map[string][]diagnostic.Severity{"a.txt": {diagnostic.SeverityError}}, "a.txt", "b.txt")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	gate := e.gate
+	e.SetGate(func(task Task, proc *ProcessResult) GateDecision {
+		decision := gate(task, proc)
+		if decision.Failed {
+			time.AfterFunc(200*time.Millisecond, cancel)
+		}
+		return decision
+	})
+	result := e.executeTask(ctx, gatedTask(root, files, ""))
+	if result.Success || result.FailureReason != FailureReasonThreshold || result.ExitCode != 0 {
+		t.Fatalf("Success = %v, FailureReason = %v, ExitCode = %d; want the threshold failure of a.txt, exit 0",
+			result.Success, result.FailureReason, result.ExitCode)
+	}
+	if !strings.Contains(result.Command, "a.txt") {
+		t.Errorf("Command = %q, want a.txt's", result.Command)
 	}
 }
 

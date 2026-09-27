@@ -941,8 +941,9 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 	var lastExitCode int
 	var passed []string
 	// The failure a frame shows is the last failing file's: its exit code and
-	// its command, not those of a later file that passed.
+	// its command, not those of a later file that passed or was cancelled.
 	var failedCommand string
+	var failedExit int
 	// A task that already failed on its own stays a failure when the run is
 	// then cancelled: the cancellation only leaves the rest of its files
 	// unchecked, and hiding the failure would hide what the run found.
@@ -1008,7 +1009,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 		stdinContent, stdinErr := stdinForOperation(task.OpConfig, file)
 		if stdinErr != nil {
 			failedOnOwn = true
-			failedCommand = cmdString
+			failedCommand, failedExit = cmdString, -1
 			result.Success = false
 			result.ExitCode = -1
 			stdinFailure := fmt.Errorf("failed to prepare stdin for file %s: %w", file, stdinErr)
@@ -1158,7 +1159,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 				}
 				result.UnparsedFailures = append(result.UnparsedFailures, unparsed)
 			}
-			failedCommand = cmdString
+			failedCommand, failedExit = cmdString, exitCode
 			if e.failFast {
 				log.Debug("fail-fast triggered in per-file execution")
 				// Call progress callback before breaking (offset by cached count)
@@ -1184,15 +1185,15 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 		e.updateCacheAfterSuccess(task, passed, seen)
 	}
 
-	// If all succeeded, use exit code 0
-	if result.Success {
+	// A threshold failure exits 0, so a zero exit code says nothing about
+	// whether a failure recorded one.
+	switch {
+	case result.Success:
 		result.ExitCode = 0
-	} else if result.ExitCode == 0 {
-		// If marked as failed but no exit code set, use last exit code
+	case failedCommand != "":
+		result.Command, result.ExitCode = failedCommand, failedExit
+	case result.ExitCode == 0:
 		result.ExitCode = lastExitCode
-	}
-	if failedCommand != "" {
-		result.Command = failedCommand
 	}
 
 	switch len(failures) {
