@@ -1,6 +1,7 @@
 package tooling
 
 import (
+	"os"
 	"os/exec"
 	"sync/atomic"
 	"time"
@@ -30,10 +31,17 @@ func trackStop(cmd *exec.Cmd) *stopTracker {
 		t.requested.Store(time.Now().UnixNano())
 		running := cmd.Process != nil && stillRunning(cmd.Process.Pid)
 		err := cancel()
-		if err == nil && running {
-			t.stopped.Store(true)
+		switch {
+		case err != nil:
+			return err
+		case !running:
+			// The signal still reaches what the process left in its group, but
+			// its own exit stands: without ErrProcessDone, os/exec would turn a
+			// success into the context's error.
+			return os.ErrProcessDone
 		}
-		return err
+		t.stopped.Store(true)
+		return nil
 	}
 	return t
 }
