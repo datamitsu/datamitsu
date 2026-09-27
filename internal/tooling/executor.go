@@ -54,6 +54,18 @@ var errCancelled = errors.New("cancelled")
 // failure shown beside it, an interruption is not.
 var errFailFast = errors.New("fail-fast")
 
+// errStopped marks a process the executor's context stopped while it ran. A
+// process that ended on its own keeps its own error even when the context is
+// cancelled a moment later — while its output is being parsed, say — so the
+// failure it reported is not taken for a cancellation.
+var errStopped = errors.New("stopped by cancellation")
+
+// stoppedByCancellation reports whether err comes from a cancellation: a
+// process the context stopped, or work refused because the context was done.
+func stoppedByCancellation(err error) bool {
+	return errors.Is(err, errStopped) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
+}
+
 func cancelReason(ctx context.Context) FailureReason {
 	if errors.Is(context.Cause(ctx), errFailFast) {
 		return FailureReasonCancelled
@@ -506,6 +518,10 @@ func (e *Executor) executeTask(ctx context.Context, task Task) ExecutionResult {
 		result.WorkingDir = workingDir
 		result.RelativeDir = relativeDir
 		result.FailureReason = FailureReasonIndependent
+		if ctx.Err() != nil && stoppedByCancellation(err) {
+			result.Cancelled = true
+			result.FailureReason = cancelReason(ctx)
+		}
 
 		// Call file progress callback even on error to maintain progress tracking
 		if e.fileProgressCallback != nil {
@@ -1037,7 +1053,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 				zap.String("file", file),
 				zap.Int("exitCode", exitCode),
 				zap.Error(err))
-			if ctx.Err() != nil {
+			if stoppedByCancellation(err) {
 				if failedOnOwn {
 					result.FilesNotRun = len(filesToProcess) - i
 				} else {
@@ -1270,7 +1286,7 @@ func (e *Executor) executeBatchChunk(ctx context.Context, task Task, cmdInfo *bi
 		log.Debug("batch execution failed", zap.Int("exitCode", exitCode), zap.Error(err))
 		result.Success = false
 		result.Error = fmt.Errorf("failed to execute (exit code %d): %w", exitCode, err)
-		if ctx.Err() != nil {
+		if stoppedByCancellation(err) {
 			result.Cancelled = true
 			result.FailureReason = cancelReason(ctx)
 		}
@@ -1656,6 +1672,13 @@ func (e *Executor) runCommandIO(cmd *exec.Cmd, stdinContent []byte, separate boo
 	}
 
 	setupProcessGroupCleanup(cmd)
+	var stopped atomic.Bool
+	if cancel := cmd.Cancel; cancel != nil {
+		cmd.Cancel = func() error {
+			stopped.Store(true)
+			return cancel()
+		}
+	}
 
 	cntSpawn.Add(1)
 	spawnSpan := trace.Start(trace.CatExec, "spawn")
@@ -1669,6 +1692,9 @@ func (e *Executor) runCommandIO(cmd *exec.Cmd, stdinContent []byte, separate boo
 		trace.A("argv0", cmd.Path),
 		trace.A("exit", getExitCode(err)),
 	)
+	if err != nil && stopped.Load() {
+		err = fmt.Errorf("%w: %w", errStopped, err)
+	}
 	if separate {
 		return outBuf.Bytes(), errBuf.Bytes(), err
 	}

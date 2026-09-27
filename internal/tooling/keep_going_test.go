@@ -3,6 +3,7 @@ package tooling
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/diagnostic"
 )
 
 func shellApp(script string) *binmanager.CommandInfo {
@@ -278,6 +280,96 @@ func TestInterruptedPerFileTaskKeepsItsFailure(t *testing.T) {
 	}
 	if result.FilesNotRun != 2 {
 		t.Errorf("FilesNotRun = %d, want 2 (slow.txt was stopped, last.txt never ran)", result.FilesNotRun)
+	}
+}
+
+// cancellingParser cancels the run while it parses, as a sibling failing under
+// fail-fast would while a finished tool's output is still being parsed.
+type cancellingParser struct{ cancel context.CancelCauseFunc }
+
+func (p cancellingParser) Parse(context.Context, string, string, string, []byte, []byte, int32) ([]diagnostic.Diagnostic, error) {
+	p.cancel(errFailFast)
+	return []diagnostic.Diagnostic{{Message: "found it", Row: 1}}, nil
+}
+
+// A tool that failed on its own stays a failure, with its findings, when the
+// run is cancelled after its process ended; only a process the cancellation
+// stopped is a cancellation.
+func TestFailureBeforeCancellationStaysAFailure(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the tools are sh scripts")
+	}
+	root := t.TempDir()
+	appManager := &mockAppManager{commands: map[string]*binmanager.CommandInfo{"alpha": shellApp("exit 1")}}
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{name: "batch", args: nil},
+		{name: "per-file", args: []string{"{file}"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			file := filepath.Join(root, "a.txt")
+			if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithCancelCause(context.Background())
+			defer cancel(nil)
+			e := NewExecutor(root, false, true, appManager, nil)
+			e.SetParser(cancellingParser{cancel: cancel})
+			task := lintTask(t, "alpha", config.ToolScopePerProject, root, tt.args...)
+			task.Files = []string{file}
+			task.Tool = config.Tool{Name: "alpha", OutputParser: &config.OutputParser{Module: "core", Parser: "alpha"}}
+
+			result := e.executeTask(ctx, task)
+
+			if result.Success || result.IsCancelled() || result.FailureReason != FailureReasonIndependent {
+				t.Errorf("result = cancelled %v, reason %d; want an independent failure", result.IsCancelled(), result.FailureReason)
+			}
+			if len(result.Diagnostics) != 1 {
+				t.Errorf("Diagnostics = %+v, want the parsed finding kept", result.Diagnostics)
+			}
+		})
+	}
+}
+
+// ctxAppManager resolves a command only after the context is done, as a
+// provisioning step would that the cancellation interrupted.
+type ctxAppManager struct{}
+
+func (ctxAppManager) GetBinaryPath(ctx context.Context, _ string) (string, error) {
+	<-ctx.Done()
+	return "", ctx.Err()
+}
+
+func (ctxAppManager) GetCommandInfo(ctx context.Context, _ string) (*binmanager.CommandInfo, error) {
+	<-ctx.Done()
+	return nil, fmt.Errorf("provision: %w", ctx.Err())
+}
+
+// A task whose command resolution the cancellation interrupted is cancelled,
+// not a failure of its own.
+func TestCancelledCommandResolutionIsACancellation(t *testing.T) {
+	tests := []struct {
+		name  string
+		cause error
+		want  FailureReason
+	}{
+		{name: "fail-fast", cause: errFailFast, want: FailureReasonCancelled},
+		{name: "interrupted", cause: errors.New("interrupt signal received"), want: FailureReasonInterrupted},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancelCause(context.Background())
+			cancel(tt.cause)
+			result := NewExecutor("/root", false, true, ctxAppManager{}, nil).
+				executeTask(ctx, lintTask(t, "alpha", config.ToolScopeRepository, ""))
+			if !result.IsCancelled() || result.FailureReason != tt.want || !result.Started() {
+				t.Errorf("result = cancelled %v, reason %d, started %v; want a started task cancelled with reason %d",
+					result.IsCancelled(), result.FailureReason, result.Started(), tt.want)
+			}
+		})
 	}
 }
 
