@@ -90,7 +90,9 @@ configuration should do about it.
   does not list, or a module that cannot be fetched, now warns once per run and
   leaves the tool's output unparsed and uncached; check keys against
   `datamitsu devtools parsers list`. `--no-parse` only changes what a failure
-  shows. Every execution cache is cold once.
+  shows. Every execution cache is cold once. A bump of a tool whose output is
+  parsed records the tool's fixture pair again first
+  (`datamitsu llms how-to/maintain-wrapper`).
 - **after v0.3.1** - Usage errors exit 2 and `--fail-on-skip` exits 4, both
   once 1; a failed tool still exits 1. `fix`, `lint` and `check` take
   `--fail-fast=false` (`DATAMITSU_FAIL_FAST=false`) to run every tool to the
