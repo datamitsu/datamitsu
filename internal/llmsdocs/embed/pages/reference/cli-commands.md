@@ -175,7 +175,7 @@ datamitsu check --file-scoped
 datamitsu check --explain
 
 # In CI: fail if a tool you rely on has no binary for the runner's platform
-datamitsu check --fail-on-skip
+datamitsu lint --fail-on-skip
 
 # See every failure at once instead of stopping at the first
 datamitsu check --fail-fast=false
