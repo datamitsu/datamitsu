@@ -101,7 +101,7 @@ func runPullRuntimes(cmd *cobra.Command, args []string) error {
 	runtimeFilter := pullRuntimesRuntimeFlag
 	if runtimeFilter != "" {
 		if !isValidRuntime(runtimeFilter) {
-			return fmt.Errorf("invalid runtime %q: must be one of %s", runtimeFilter, strings.Join(validRuntimeNames, ", "))
+			return exitcode.UsageErrorf("invalid runtime %q: must be one of %s", runtimeFilter, strings.Join(validRuntimeNames, ", "))
 		}
 	}
 

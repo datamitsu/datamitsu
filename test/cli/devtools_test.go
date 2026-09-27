@@ -136,6 +136,11 @@ func TestDevtoolsArgValidation(t *testing.T) {
 			wantMsg: "--update flag is required",
 		},
 		{
+			name:    "pull-runtimes-invalid-runtime",
+			args:    []string{"devtools", "pull-runtimes", "--update", "--runtime", "bogus", "runtimes.json"},
+			wantMsg: `invalid runtime "bogus"`,
+		},
+		{
 			name:    "pull-github-no-arg",
 			args:    []string{"devtools", "pull-github"},
 			wantMsg: "accepts 1 arg(s), received 0",
