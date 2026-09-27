@@ -15,6 +15,11 @@ type Task struct {
 	// under, fixed before the tool starts (see perFileCacheTool).
 	perFileCache string
 
+	// ID is "<tool>:<dir>:<seq>", assigned by Execute before anything runs; seq
+	// counts the tasks of that Execute from 1 in plan order. Unique within one
+	// Execute, it is what tells two tasks of one tool in one directory apart.
+	ID string
+
 	ToolName    string
 	Tool        config.Tool
 	Operation   config.OperationType
@@ -153,15 +158,133 @@ const (
 	FailureReasonInterrupted                      // Tool terminated because the caller cancelled the run (a signal, a withdrawn request)
 )
 
-// ExecutionResult represents the result of a task execution
+// Extraction is what became of one process's output: whether findings were
+// extracted from it, and whether "no finding" can be believed. A consumer that
+// replays a result as "nothing to report" needs more than the exit code, which
+// is why every process records one.
+type Extraction string
+
+// Extraction outcomes of one process.
+const (
+	// ExtractionParsedClean: a parser ran without error and found nothing.
+	ExtractionParsedClean Extraction = "parsed-clean"
+	// ExtractionParsedFindings: a parser returned at least one finding.
+	ExtractionParsedFindings Extraction = "parsed-findings"
+	// ExtractionParserUnavailable: the declared module did not load, or does not
+	// know the declared parser key, so nothing was parsed.
+	ExtractionParserUnavailable Extraction = "parser-unavailable"
+	// ExtractionParseFailed: the module returned an error for this output.
+	ExtractionParseFailed Extraction = "parse-failed"
+	// ExtractionTruncated: the output or the findings exceeded a cap. No cap
+	// exists yet; the value is reserved so every consumer knows it.
+	ExtractionTruncated Extraction = "truncated"
+	// ExtractionNone: nothing was attempted — the tool declares no parser, or
+	// the output is a formatter's file content, which no parser reads. A
+	// declared parser the executor was not given is ExtractionParserUnavailable.
+	ExtractionNone Extraction = "none"
+)
+
+// ParserUnavailableError is what a DiagnosticParser returns when it could not
+// parse at all — the module did not load, or it does not list the parser key —
+// as opposed to a module that parsed and failed.
+type ParserUnavailableError struct {
+	Err error
+}
+
+func (e *ParserUnavailableError) Error() string { return e.Err.Error() }
+
+func (e *ParserUnavailableError) Unwrap() error { return e.Err }
+
+// ProcessState is what became of one process a task planned to spawn.
+type ProcessState string
+
+// Process states.
+const (
+	// ProcessRan: the process ran and exited on its own, successfully or not.
+	ProcessRan ProcessState = "ran"
+	// ProcessCancelled: a cancellation stopped the process while it ran.
+	ProcessCancelled ProcessState = "cancelled"
+	// ProcessNotStarted: the task stopped before the process was spawned.
+	ProcessNotStarted ProcessState = "not-started"
+	// ProcessSetupFailed: the process could not be spawned — its input could not
+	// be prepared, or the command did not start.
+	ProcessSetupFailed ProcessState = "setup-failed"
+)
+
+// FileState is what became of one file a task was planned with.
+type FileState string
+
+// File states.
+const (
+	FileRan         FileState = "ran"
+	FileCached      FileState = "cached"      // skipped: the per-file cache holds a pass for these bytes
+	FileVerdictHit  FileState = "verdict-hit" // skipped: the unit's verdict holds for these inputs
+	FileCancelled   FileState = "cancelled"
+	FileNotStarted  FileState = "not-started"
+	FileSetupFailed FileState = "setup-failed"
+)
+
+// outputTailBytes bounds ProcessResult.OutputTail.
+const outputTailBytes = 4 << 10
+
+// ProcessResult is one process a task planned to spawn: one per file in
+// per-file mode, one per chunk in batch mode. Cached files have none.
+type ProcessResult struct {
+	// ID is "<TaskID>#<n>", n counting the task's processes from 1.
+	ID string
+	// Files are the absolute, cleaned paths the process was given; empty for a
+	// process given no path.
+	Files []string
+	State ProcessState
+	// ExitCode is nil unless State is ProcessRan.
+	ExitCode *int
+	// Success is whether the process did what it was run for: a zero exit and,
+	// for a formatter, a formatted file written.
+	Success     bool
+	Extraction  Extraction
+	ParseError  string // the module's error for parse-failed and parser-unavailable
+	OutputTail  []byte // the last 4 KiB of the output the frame would show
+	Diagnostics []diagnostic.Diagnostic
+	DurationMs  int64
+
+	edits []textdiff.Edit // the formatting edits a per-file process applied
+}
+
+// FileResult is what became of one file a task was planned with.
+type FileResult struct {
+	File  string
+	State FileState
+	// ProcessID names the process that checked the file; "" unless State is
+	// FileRan.
+	ProcessID string
+	// Success is the process's success for a file that ran, and true for a file
+	// a cache answered.
+	Success bool
+	// ExitCode is nil unless State is FileRan.
+	ExitCode *int
+	// Edits are the diff-in-core edits applied to the file; nil when it was left
+	// unchanged.
+	Edits []textdiff.Edit
+}
+
+// ExecutionResult represents the result of a task execution. Its aggregate
+// fields speak for the task as a whole, the way a failure frame shows it;
+// Processes and FileResults say what each process and each file did.
 type ExecutionResult struct {
-	ToolName      string
-	Success       bool
-	Output        string
-	Error         error
-	Duration      int64            // milliseconds
-	Command       string           // Full command that was executed
-	ExitCode      int              // Exit code of the command (0 if success, -1 if not available)
+	ToolName string
+	// TaskID is the ID of the task this result is for.
+	TaskID  string
+	Success bool
+	// Output is the joined output of every process.
+	Output   string
+	Error    error
+	Duration int64 // milliseconds
+	// Command is the command line of the last failing process, or of the last
+	// process when none failed.
+	Command string
+	// ExitCode is the last failing process's exit code: 0 on success, -1 when a
+	// failure has none.
+	ExitCode      int
 	WorkingDir    string           // Working directory where command was executed
 	RelativeDir   string           // Working directory relative to git root (for display)
 	Scope         config.ToolScope // Tool scope (repository, per-project, per-file)
@@ -174,27 +297,47 @@ type ExecutionResult struct {
 	// when it stopped the loop at a failing file: the task failed on its own,
 	// yet did not check everything it was given.
 	FilesNotRun int
-	// UnparsedFailures are the failed invocations of a per-file task with an
-	// output parser that left no diagnostic: a file whose input could not be
-	// prepared, or a run whose output held no finding. A failure frame shows
-	// diagnostics instead of the raw output, so it shows these beside them.
+	// UnparsedFailures are the failed invocations of a task with an output
+	// parser that left no diagnostic: a file whose input could not be prepared,
+	// or a run — of one file, or of one chunk of a list — whose output held no
+	// finding. A failure frame shows diagnostics instead of the raw output, so
+	// it shows these beside them.
 	UnparsedFailures []string
 	// CapturedStdout holds the tool's stdout captured separately from stderr,
 	// set only when the operation uses output mode "stdout" (the candidate
 	// formatted content consumed by the diff-in-core formatting path). Empty for
 	// the default combined-capture behavior.
 	CapturedStdout string
-	// FormatEdits records the minimal line-based edits applied to a file by the
-	// diff-in-core formatting path (output mode "stdout"). Nil when the candidate
-	// content equalled the original (no change → no edits → file untouched). In
-	// per-file mode it holds the edits for the last formatted file, mirroring how
-	// Command reports the last command.
-	FormatEdits []textdiff.Edit
 	// Diagnostics holds the structured diagnostics parsed from this tool's output
-	// when the tool declares an outputParser (and a parser is wired in). Nil for
-	// tools without a parser — the common case. Populated per-file in per-file
-	// mode, each entry's File set to the file it came from.
+	// when the tool declares an outputParser (and a parser is wired in): the
+	// concatenation of every process's. Nil for tools without a parser — the
+	// common case.
 	Diagnostics []diagnostic.Diagnostic
+	// Processes lists every process the task planned to spawn, in order: one
+	// per file in per-file mode, one per chunk in batch mode.
+	Processes []ProcessResult
+	// ParseFailed reports that the output of at least one process could not be
+	// parsed (parse-failed or parser-unavailable): an empty Diagnostics then
+	// does not mean the tool found nothing.
+	ParseFailed bool
+
+	// Files are the task's files as planned, absolute and cleaned, run or
+	// cached alike; for a WholeUnit task and for a verdict hit, the unit's
+	// members.
+	Files []string
+	// FileResults has one entry per Files entry, in the same order.
+	FileResults []FileResult
+	// Cached reports that no process ran: the unit's verdict held, or every
+	// file's per-file pass did.
+	Cached bool
+	// WholeUnit reports that argv carried no file path, so the result speaks for
+	// UnitDir rather than for the files that selected the task.
+	WholeUnit bool
+	// UnitDir is the directory a WholeUnit result speaks for, relative to the
+	// git root ("" is the root).
+	UnitDir string
+
+	cached []string // the files the per-file cache answered
 }
 
 // IsCancelled reports whether the task was stopped by a cancellation — fail-fast
@@ -208,6 +351,16 @@ func (r *ExecutionResult) IsCancelled() bool {
 // a worker has none.
 func (r *ExecutionResult) Started() bool {
 	return !r.StartedAt.IsZero()
+}
+
+// addProcess records one process the task spawned and folds its outcome into
+// the task's aggregates.
+func (r *ExecutionResult) addProcess(proc ProcessResult) {
+	r.Processes = append(r.Processes, proc)
+	r.Diagnostics = append(r.Diagnostics, proc.Diagnostics...)
+	if proc.Extraction == ExtractionParseFailed || proc.Extraction == ExtractionParserUnavailable {
+		r.ParseFailed = true
+	}
 }
 
 // recordTiming stamps the run's absolute wall-clock window and elapsed Duration

@@ -1,7 +1,7 @@
 # Plan 3: Diagnostics foundation — a result the cache, the editor and every report can trust
 
-**Status:** ready for implementation. Plan 3 of `2026-09-26-unified-results.md`; owns Stage 0 of
-`2026-09-24-lsp-diagnostics.md` (moved here, see the index §7) and implements R5, D7 and the
+**Status:** completed 2026-09-27. Plan 3 of `../2026-09-26-unified-results.md`; owns Stage 0 of
+`../2026-09-24-lsp-diagnostics.md` (moved here, see the index §7) and implements R5, D7 and the
 verdict-identity half of R12. No decisions open.
 **Date:** 2026-09-26.
 **Depends on:** plan 1 (goldens), plan 2 (the per-file loop and the cancelled-task representation

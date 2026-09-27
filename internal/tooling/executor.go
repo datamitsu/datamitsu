@@ -54,6 +54,9 @@ var errCancelled = errors.New("cancelled")
 // failure shown beside it, an interruption is not.
 var errFailFast = errors.New("fail-fast")
 
+// errStart marks a command that could not be started at all.
+var errStart = errors.New("start command")
+
 // errStopped marks a process the executor's context stopped while it ran. A
 // process that ended on its own keeps its own error even when the context is
 // cancelled a moment later — while its output is being parsed, say — so the
@@ -82,6 +85,7 @@ type Executor struct {
 	fileProgressCallback FileProgressCallback // Optional callback for per-file progress
 	cache                *cache.Cache         // Cache for storing execution results
 	parser               DiagnosticParser     // Optional: parses tool output into diagnostics
+	parserModules        config.MapOfParsers  // the declared parser modules, for the verdict identity
 
 	// cmdInfos memoizes command resolution for the lifetime of one Execute; it is
 	// nil outside one (FormatContent), which resolves directly.
@@ -109,11 +113,13 @@ type DiagnosticParser interface {
 // ResultCallback is called when a task completes
 type ResultCallback func(result ExecutionResult)
 
-// TaskStartCallback is called when a task starts executing
-type TaskStartCallback func(toolName string, relativeDir string)
+// TaskStartCallback is called when a task starts executing. taskID is the
+// task's ID, which its progress callbacks and its result carry too.
+type TaskStartCallback func(taskID, toolName, relativeDir string)
 
-// FileProgressCallback is called after each file is processed
-type FileProgressCallback func(toolName string, fileIndex, totalFiles int, success bool)
+// FileProgressCallback is called after each file, or each whole-task run, of
+// the task taskID is processed.
+type FileProgressCallback func(taskID, toolName string, fileIndex, totalFiles int, success bool)
 
 // NewExecutor creates a new tool executor
 func NewExecutor(
@@ -153,6 +159,13 @@ func (e *Executor) SetParser(parser DiagnosticParser) {
 	e.parser = parser
 }
 
+// SetParserModules tells the executor which parser modules the configuration
+// declares. A unit verdict names the module its tool's output was parsed with,
+// so every executor sharing a cache has to be told the same modules.
+func (e *Executor) SetParserModules(parsers config.MapOfParsers) {
+	e.parserModules = parsers
+}
+
 // Execute runs an execution plan
 func (e *Executor) Execute(ctx context.Context, plan *ExecutionPlan) ([]GroupExecutionResult, error) {
 	log.Debug("starting execution plan", zap.Int("groupCount", len(plan.Groups)))
@@ -162,6 +175,8 @@ func (e *Executor) Execute(ctx context.Context, plan *ExecutionPlan) ([]GroupExe
 	// re-resolved, and only within one run is the answer constant.
 	e.cmdInfos.Store(newCommandInfoMemo())
 	defer e.cmdInfos.Store(nil)
+
+	e.assignTaskIDs(plan)
 
 	execCtx, cancel := context.WithCancelCause(ctx)
 	defer cancel(nil)
@@ -241,6 +256,22 @@ func (e *Executor) Execute(ctx context.Context, plan *ExecutionPlan) ([]GroupExe
 // results report it in RelativeDir ("" is the root).
 func (e *Executor) TaskDir(task Task) string {
 	return e.getRelativeDir(e.getWorkingDir(task))
+}
+
+// assignTaskIDs names every task of plan "<tool>:<dir>:<seq>", seq counting the
+// plan's tasks from 1 in plan order. The names are written into plan itself,
+// so a caller can tell which planned task a result, an event or a stopped task
+// stands for: tasks of one tool in one directory are otherwise
+// indistinguishable.
+func (e *Executor) assignTaskIDs(plan *ExecutionPlan) {
+	seq := 0
+	for g := range plan.Groups {
+		for t := range plan.Groups[g].Tasks {
+			seq++
+			task := &plan.Groups[g].Tasks[t]
+			task.ID = fmt.Sprintf("%s:%s:%d", task.ToolName, e.TaskDir(*task), seq)
+		}
+	}
 }
 
 // executeGroup executes a task group. failFast cancels the whole run; it is
@@ -453,8 +484,9 @@ func (e *Executor) executeTasksParallel(ctx context.Context, tasks []Task, failF
 // tell which planned task it stands for; it has no timing because nothing ran.
 func (e *Executor) unstartedResult(ctx context.Context, task Task) ExecutionResult {
 	workingDir := e.getWorkingDir(task)
-	return ExecutionResult{
+	result := ExecutionResult{
 		ToolName:      task.ToolName,
+		TaskID:        task.ID,
 		Success:       false,
 		Error:         errCancelled,
 		WorkingDir:    workingDir,
@@ -463,6 +495,8 @@ func (e *Executor) unstartedResult(ctx context.Context, task Task) ExecutionResu
 		Cancelled:     true,
 		FailureReason: cancelReason(ctx),
 	}
+	describeFiles(task, &result, FileNotStarted)
+	return result
 }
 
 // executeTask executes a single task
@@ -491,11 +525,12 @@ func (e *Executor) executeTask(ctx context.Context, task Task) ExecutionResult {
 
 	// Call task start callback if set
 	if e.taskStartCallback != nil {
-		e.taskStartCallback(task.ToolName, relativeDir)
+		e.taskStartCallback(task.ID, task.ToolName, relativeDir)
 	}
 
 	result := ExecutionResult{
 		ToolName: task.ToolName,
+		TaskID:   task.ID,
 		Success:  true,
 	}
 
@@ -516,20 +551,23 @@ func (e *Executor) executeTask(ctx context.Context, task Task) ExecutionResult {
 		result.WorkingDir = workingDir
 		result.RelativeDir = relativeDir
 		result.FailureReason = FailureReasonIndependent
+		fileState := FileSetupFailed
 		if ctx.Err() != nil && stoppedByCancellation(err) {
 			result.Cancelled = true
 			result.FailureReason = cancelReason(ctx)
+			fileState = FileNotStarted
 		}
+		describeFiles(task, &result, fileState)
 
 		// Call file progress callback even on error to maintain progress tracking
 		if e.fileProgressCallback != nil {
 			if !config.RunsPerFile(task.OpConfig, len(task.Files)) {
 				// One process for the whole task: count as 1 unit
-				e.fileProgressCallback(task.ToolName, 1, 1, false)
+				e.fileProgressCallback(task.ID, task.ToolName, 1, 1, false)
 			} else {
 				// Per-file mode: count each file
 				for i := range task.Files {
-					e.fileProgressCallback(task.ToolName, i+1, len(task.Files), false)
+					e.fileProgressCallback(task.ID, task.ToolName, i+1, len(task.Files), false)
 				}
 			}
 		}
@@ -571,8 +609,9 @@ func (e *Executor) executeTask(ctx context.Context, task Task) ExecutionResult {
 		result.RelativeDir = relativeDir
 		result.Scope = task.OpConfig.Scope
 		result.recordTiming(startTime)
+		describeVerdictHit(task, &result)
 		if e.fileProgressCallback != nil {
-			e.fileProgressCallback(task.ToolName, 1, 1, true)
+			e.fileProgressCallback(task.ID, task.ToolName, 1, 1, true)
 		}
 		return result
 	}
@@ -588,7 +627,7 @@ func (e *Executor) executeTask(ctx context.Context, task Task) ExecutionResult {
 	// One write point per task, after every process it spawned has succeeded.
 	// The three per-process updateCacheAfterSuccess calls would otherwise let the
 	// first success of an N-process task record a verdict a later failure refutes.
-	if result.Success {
+	if result.Success && verdictEligible(task, result) {
 		e.recordVerdict(task, verdictKey, verdictSnap, verdictApplies)
 	}
 
@@ -596,6 +635,8 @@ func (e *Executor) executeTask(ctx context.Context, task Task) ExecutionResult {
 	if !result.Success && result.FailureReason == FailureReasonNone {
 		result.FailureReason = FailureReasonIndependent
 	}
+	result.TaskID = task.ID
+	describeFiles(task, &result, FileNotStarted)
 
 	log.Debug("executeTask completed",
 		zap.String("toolName", task.ToolName),
@@ -688,10 +729,14 @@ func (e *Executor) getRelativeDir(workingDir string) string {
 	return relPath
 }
 
-// filterFilesByCache filters files based on cache, returns files that need to be processed
-func (e *Executor) filterFilesByCache(task Task) []string {
+// filterFilesByCache returns the files the tool must run on, and for each of
+// them the bytes it is about to be handed. A pass is recorded against those
+// bytes (C2), so they are hashed before the run, through the process-wide
+// content memo, for a file the cache has never seen as much as for one it has.
+// seen is nil when no per-file pass can be recorded for the task.
+func (e *Executor) filterFilesByCache(task Task) (filesToProcess []string, seen map[string]cache.Seen) {
 	if e.cache == nil {
-		return task.Files
+		return task.Files, nil
 	}
 
 	// Per-file entries record "this file passed", which is only a verdict when a
@@ -700,21 +745,16 @@ func (e *Executor) filterFilesByCache(task Task) []string {
 	// it left every content hash unchanged and the whole task was skipped with a
 	// tick. Those granularities use the verdict cache instead.
 	if config.InferGranularity(task.OpConfig) != config.GranularityFile {
-		return task.Files
+		return task.Files, nil
 	}
 
-	// Check if caching is enabled for this tool (default: true)
-	toolCacheEnabled := true
-	if task.OpConfig.Cache != nil {
-		toolCacheEnabled = *task.OpConfig.Cache
+	if task.OpConfig.Cache != nil && !*task.OpConfig.Cache {
+		return task.Files, nil
 	}
 
-	// Convert operation type
-	var cacheOp cache.Operation
+	cacheOp := cache.OperationFix
 	if task.Operation == config.OpLint {
 		cacheOp = cache.OperationLint
-	} else {
-		cacheOp = cache.OperationFix
 	}
 
 	cacheTool := task.perFileCache
@@ -722,10 +762,12 @@ func (e *Executor) filterFilesByCache(task Task) []string {
 		cacheTool = e.perFileCacheTool(task)
 	}
 	filterSpan := trace.Start(trace.CatCache, "filterFilesByCache")
-	var filesToProcess []string
+	seen = make(map[string]cache.Seen, len(task.Files))
 	for _, file := range task.Files {
-		if e.cache.ShouldRun(file, cacheTool, cacheOp, toolCacheEnabled) {
+		observed := observe(file)
+		if e.cache.Check(file, cacheTool, cacheOp, observed, true) {
 			filesToProcess = append(filesToProcess, file)
+			seen[filepath.Clean(file)] = observed
 		}
 	}
 	cntCacheSkipped.Add(int64(len(task.Files) - len(filesToProcess)))
@@ -735,7 +777,7 @@ func (e *Executor) filterFilesByCache(task Task) []string {
 		trace.A("out", len(filesToProcess)),
 	)
 
-	return filesToProcess
+	return filesToProcess, seen
 }
 
 // perFileCacheTool is the name a per-file cache entry records a pass under.
@@ -760,21 +802,13 @@ func (e *Executor) perFileCacheTool(task Task) string {
 	return task.ToolName + "@" + hashutil.XXH3Multi(parts...)
 }
 
-// updateCacheAfterSuccess updates cache after successful tool execution
-func (e *Executor) updateCacheAfterSuccess(task Task, files []string) {
-	if e.cache == nil {
+// updateCacheAfterSuccess records the passes of files a tool succeeded on. A
+// lint pass is recorded against the bytes filterFilesByCache saw before the
+// run, and only when the file still holds them: a file edited while the tool
+// ran would otherwise be marked as passing content the tool never read.
+func (e *Executor) updateCacheAfterSuccess(task Task, files []string, seen map[string]cache.Seen) {
+	if e.cache == nil || seen == nil {
 		return
-	}
-	// filterFilesByCache only reads these for file granularity; writing them for
-	// unit and repo tasks stores entries nothing consults.
-	if config.InferGranularity(task.OpConfig) != config.GranularityFile {
-		return
-	}
-
-	// Check if caching is enabled for this tool (default: true)
-	toolCacheEnabled := true
-	if task.OpConfig.Cache != nil {
-		toolCacheEnabled = *task.OpConfig.Cache
 	}
 
 	cacheTool := e.perFileCacheTool(task)
@@ -786,9 +820,15 @@ func (e *Executor) updateCacheAfterSuccess(task Task, files []string) {
 	for _, file := range files {
 		var err error
 		if task.Operation == config.OpLint {
-			err = e.cache.AfterLint(file, cacheTool, toolCacheEnabled)
+			observed, ok := seen[filepath.Clean(file)]
+			unchanged := ok && unchangedSince(file, observed)
+			if ok && !unchanged {
+				log.Debug("file changed while the tool ran; not recording its pass",
+					zap.String("file", file), zap.String("tool", task.ToolName))
+			}
+			err = e.cache.AfterLint(file, cacheTool, observed, unchanged, true)
 		} else {
-			err = e.cache.AfterFix(file, cacheTool, toolCacheEnabled)
+			err = e.cache.AfterFix(file, cacheTool, true)
 		}
 
 		if err != nil {
@@ -820,12 +860,16 @@ func joinStreams(stdout, stderr []byte) []byte {
 	}
 }
 
-// parseFileDiagnostics runs the tool's declared parser over one invocation's
-// captured output and appends the resolved diagnostics to result. Diagnostics the
-// parser left without a file are stamped with `file`; batch callers pass "" and
-// rely on the parser reporting a path per diagnostic (eslint's JSON does).
-// A parse failure is logged, not fatal — the tool's own pass/fail is unaffected.
-func (e *Executor) parseFileDiagnostics(ctx context.Context, result *ExecutionResult, task Task, file string, stdout, stderr []byte, exitCode int) {
+// parseFileDiagnostics runs the tool's declared parser over one process's
+// captured output and records on proc what it yielded: its diagnostics and its
+// extraction outcome. A path the tool reported is made absolute against
+// workingDir, the directory the process ran in. When proc was given exactly one
+// file, a diagnostic the parser left without a file is about it; a process
+// given several files, or none, leaves such a diagnostic file-less. A parse
+// failure is not fatal — the tool's own pass/fail is unaffected — and is
+// reported once per run by the caller that wired the parser, so it is logged
+// here at debug only.
+func (e *Executor) parseFileDiagnostics(ctx context.Context, proc *ProcessResult, task Task, workingDir string, stdout, stderr []byte, exitCode int) {
 	op := task.Tool.OutputParser
 	cntParse.Add(1)
 	parseSpan := trace.Start(trace.CatParse, "parseDiagnostics")
@@ -838,27 +882,41 @@ func (e *Executor) parseFileDiagnostics(ctx context.Context, result *ExecutionRe
 		trace.A("diagnostics", len(diags)),
 	)
 	if err != nil {
-		log.Warn("output parser failed",
+		proc.Extraction = ExtractionParseFailed
+		if _, unavailable := errors.AsType[*ParserUnavailableError](err); unavailable {
+			proc.Extraction = ExtractionParserUnavailable
+		}
+		proc.ParseError = err.Error()
+		log.Debug("output parser failed",
 			zap.String("tool", task.ToolName),
 			zap.String("module", op.Module),
 			zap.String("parser", op.Parser),
-			zap.String("file", file),
+			zap.String("extraction", string(proc.Extraction)),
+			zap.Strings("files", proc.Files),
 			zap.Error(err))
 		return
 	}
+	stamp := ""
+	if len(proc.Files) == 1 {
+		stamp = proc.Files[0]
+	}
 	for i := range diags {
 		if diags[i].File == "" {
-			diags[i].File = file
+			diags[i].File = stamp
 		}
+		diags[i].File = diagnostic.AbsPath(diags[i].File, workingDir)
 	}
-	result.Diagnostics = append(result.Diagnostics, diags...)
+	proc.Diagnostics = diags
+	proc.Extraction = ExtractionParsedClean
+	if len(diags) > 0 {
+		proc.Extraction = ExtractionParsedFindings
+	}
 }
 
 func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binmanager.CommandInfo, workingDir string, startTime time.Time) ExecutionResult {
 	log.Debug("executePerFile start", zap.String("toolName", task.ToolName), zap.Int("fileCount", len(task.Files)))
 
-	// Filter files by cache
-	filesToProcess := e.filterFilesByCache(task)
+	filesToProcess, seen := e.filterFilesByCache(task)
 	cachedCount := len(task.Files) - len(filesToProcess)
 
 	if cachedCount > 0 {
@@ -873,6 +931,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 		ExitCode:    0,
 		Scope:       task.OpConfig.Scope,
 		Batch:       false,
+		cached:      cachedOf(task.Files, filesToProcess),
 	}
 
 	// If all files are cached, return success immediately
@@ -881,7 +940,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 		// Even when all cached, call progress callback for each file
 		for i := range task.Files {
 			if e.fileProgressCallback != nil {
-				e.fileProgressCallback(task.ToolName, i+1, len(task.Files), true)
+				e.fileProgressCallback(task.ID, task.ToolName, i+1, len(task.Files), true)
 			}
 		}
 		return result
@@ -891,14 +950,14 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 	totalFiles := len(task.Files)
 	if e.fileProgressCallback != nil && cachedCount > 0 {
 		for i := range cachedCount {
-			e.fileProgressCallback(task.ToolName, i+1, totalFiles, true)
+			e.fileProgressCallback(task.ID, task.ToolName, i+1, totalFiles, true)
 		}
 	}
 
 	var outputs []fileOutput
 	var failures []error
 	var lastExitCode int
-	var processedFiles []string
+	var passed []string
 	// The failure a frame shows is the last failing file's: its exit code and
 	// its command, not those of a later file that passed.
 	var failedCommand string
@@ -922,6 +981,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 			log.Debug("per-file execution cancelled, skipping remaining files",
 				zap.String("toolName", task.ToolName),
 				zap.Int("remainingFiles", len(filesToProcess)-i))
+			result.addNotStarted(filesToProcess[i:])
 			if failedOnOwn {
 				result.FilesNotRun = len(filesToProcess) - i
 				break
@@ -939,11 +999,13 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 		if e.dryRun {
 			log.Debug("dry-run mode", zap.String("file", file), zap.Strings("args", args))
 			outputs = append(outputs, fileOutput{text: "[DRY-RUN] " + cmdString})
-			processedFiles = append(processedFiles, file)
+			result.addProcess(ProcessResult{
+				Files: []string{filepath.Clean(file)}, State: ProcessNotStarted, Extraction: ExtractionNone,
+			})
 
 			// Call progress callback for dry-run files (offset by cached count)
 			if e.fileProgressCallback != nil {
-				e.fileProgressCallback(task.ToolName, cachedCount+i+1, totalFiles, true)
+				e.fileProgressCallback(task.ID, task.ToolName, cachedCount+i+1, totalFiles, true)
 			}
 			continue
 		}
@@ -974,17 +1036,24 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 			if parseMode {
 				result.UnparsedFailures = append(result.UnparsedFailures, stdinFailure.Error())
 			}
+			result.addProcess(ProcessResult{
+				Files: []string{filepath.Clean(file)}, State: ProcessSetupFailed, Extraction: ExtractionNone,
+				OutputTail: outputTail([]byte(stdinFailure.Error())),
+			})
 			if e.fileProgressCallback != nil {
-				e.fileProgressCallback(task.ToolName, cachedCount+i+1, totalFiles, false)
+				e.fileProgressCallback(task.ID, task.ToolName, cachedCount+i+1, totalFiles, false)
 			}
 			if e.failFast {
 				result.FilesNotRun = len(filesToProcess) - i - 1
+				result.addNotStarted(filesToProcess[i+1:])
 				break
 			}
 			continue
 		}
 
+		procStart := time.Now()
 		stdoutBytes, stderrBytes, err := e.runCommandIO(cmd, stdinContent, separate)
+		procDuration := time.Since(procStart).Milliseconds()
 
 		var output []byte
 		switch {
@@ -1005,12 +1074,12 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 		exitCode := getExitCode(err)
 		lastExitCode = exitCode
 
-		// Parse this file's output into structured diagnostics when the tool
-		// declares an outputParser. Per-file mode means each invocation lints one
-		// file, so the diagnostics belong to it.
-		diagnosticsBefore := len(result.Diagnostics)
+		proc := ProcessResult{
+			Files: []string{filepath.Clean(file)}, OutputTail: outputTail(output), DurationMs: procDuration,
+		}
+		proc.Extraction, proc.ParseError = e.unparsed(task, formatMode)
 		if parseMode {
-			e.parseFileDiagnostics(ctx, &result, task, file, stdoutBytes, stderrBytes, exitCode)
+			e.parseFileDiagnostics(ctx, &proc, task, workingDir, stdoutBytes, stderrBytes, exitCode)
 		}
 
 		// Formatting pipeline (diff-in-core): in stdout-output mode a successful
@@ -1039,7 +1108,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 				if fmtErr != nil {
 					err = fmtErr
 				} else {
-					result.FormatEdits = edits
+					proc.edits = edits
 				}
 			}
 		}
@@ -1051,6 +1120,12 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 				zap.String("file", file),
 				zap.String("output", string(output)))
 		}
+
+		proc.State, proc.Success = processState(err), err == nil
+		if proc.State == ProcessRan {
+			proc.ExitCode = new(exitCode)
+		}
+		result.addProcess(proc)
 
 		fileSuccess := err == nil
 		if err != nil {
@@ -1069,8 +1144,9 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 					result.FailureReason = cancelReason(ctx)
 				}
 				if e.fileProgressCallback != nil {
-					e.fileProgressCallback(task.ToolName, cachedCount+i+1, totalFiles, fileSuccess)
+					e.fileProgressCallback(task.ID, task.ToolName, cachedCount+i+1, totalFiles, fileSuccess)
 				}
+				result.addNotStarted(filesToProcess[i+1:])
 				break
 			}
 			failedOnOwn = true
@@ -1082,7 +1158,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 			outputs[len(outputs)-1].failed = true
 			outputs[len(outputs)-1].label = label
 			outputs[len(outputs)-1].explained = explained
-			if parseMode && len(result.Diagnostics) == diagnosticsBefore {
+			if parseMode && len(proc.Diagnostics) == 0 {
 				unparsed := label
 				if text := strings.TrimSpace(string(output)); text != "" {
 					unparsed += "\n" + text
@@ -1094,25 +1170,25 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 				log.Debug("fail-fast triggered in per-file execution")
 				// Call progress callback before breaking (offset by cached count)
 				if e.fileProgressCallback != nil {
-					e.fileProgressCallback(task.ToolName, cachedCount+i+1, totalFiles, fileSuccess)
+					e.fileProgressCallback(task.ID, task.ToolName, cachedCount+i+1, totalFiles, fileSuccess)
 				}
 				result.FilesNotRun = len(filesToProcess) - i - 1
+				result.addNotStarted(filesToProcess[i+1:])
 				break
 			}
 		} else {
 			log.Debug("per-file execution succeeded", zap.String("file", file))
-			processedFiles = append(processedFiles, file)
+			passed = append(passed, passesOf(task.Operation, proc, proc.Files)...)
 		}
 
 		// Call progress callback after processing each file (offset by cached count)
 		if e.fileProgressCallback != nil {
-			e.fileProgressCallback(task.ToolName, cachedCount+i+1, totalFiles, fileSuccess)
+			e.fileProgressCallback(task.ID, task.ToolName, cachedCount+i+1, totalFiles, fileSuccess)
 		}
 	}
 
-	// Update cache for successfully processed files
-	if len(processedFiles) > 0 {
-		e.updateCacheAfterSuccess(task, processedFiles)
+	if len(passed) > 0 {
+		e.updateCacheAfterSuccess(task, passed, seen)
 	}
 
 	// If all succeeded, use exit code 0
@@ -1147,8 +1223,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 func (e *Executor) executeBatch(ctx context.Context, task Task, cmdInfo *binmanager.CommandInfo, workingDir string, startTime time.Time) ExecutionResult {
 	log.Debug("executeBatch start", zap.String("toolName", task.ToolName), zap.Int("fileCount", len(task.Files)))
 
-	// Filter files by cache
-	filesToProcess := e.filterFilesByCache(task)
+	filesToProcess, seen := e.filterFilesByCache(task)
 	cachedCount := len(task.Files) - len(filesToProcess)
 
 	if cachedCount > 0 {
@@ -1162,6 +1237,7 @@ func (e *Executor) executeBatch(ctx context.Context, task Task, cmdInfo *binmana
 		Batch:       true,
 		WorkingDir:  workingDir,
 		RelativeDir: e.getRelativeDir(workingDir),
+		cached:      cachedOf(task.Files, filesToProcess),
 	}
 
 	// If files were specified but all are cached, return success immediately.
@@ -1170,7 +1246,7 @@ func (e *Executor) executeBatch(ctx context.Context, task Task, cmdInfo *binmana
 		result.recordTiming(startTime)
 		// Call file progress callback for batch mode (counts as 1 unit of work)
 		if e.fileProgressCallback != nil {
-			e.fileProgressCallback(task.ToolName, 1, 1, true)
+			e.fileProgressCallback(task.ID, task.ToolName, 1, 1, true)
 		}
 		return result
 	}
@@ -1178,11 +1254,14 @@ func (e *Executor) executeBatch(ctx context.Context, task Task, cmdInfo *binmana
 	// Convert files to relative paths relative to workingDir
 	relativeFiles := e.makeRelativePaths(filesToProcess, workingDir)
 
+	cached := result.cached
+
 	// Whole-project mode: no files to chunk, execute once with no file args
 	if len(relativeFiles) == 0 {
 		chunkResult := e.executeBatchChunk(ctx, task, cmdInfo, workingDir, nil, startTime)
+		chunkResult.cached = cached
 		if e.fileProgressCallback != nil {
-			e.fileProgressCallback(task.ToolName, 1, 1, chunkResult.Success)
+			e.fileProgressCallback(task.ID, task.ToolName, 1, 1, chunkResult.Success)
 		}
 		return chunkResult
 	}
@@ -1195,12 +1274,11 @@ func (e *Executor) executeBatch(ctx context.Context, task Task, cmdInfo *binmana
 		log.Debug("batch args do not reference files; running once",
 			zap.String("toolName", task.ToolName), zap.Int("fileCount", len(relativeFiles)))
 		chunkResult := e.executeBatchChunk(ctx, task, cmdInfo, workingDir, nil, startTime)
+		chunkResult.cached = cached
 		if e.fileProgressCallback != nil {
-			e.fileProgressCallback(task.ToolName, 1, 1, chunkResult.Success)
+			e.fileProgressCallback(task.ID, task.ToolName, 1, 1, chunkResult.Success)
 		}
-		if chunkResult.Success {
-			e.updateCacheAfterSuccess(task, filesToProcess)
-		}
+		e.updateCacheAfterSuccess(task, batchPasses(task.Operation, chunkResult.Processes, filesToProcess), seen)
 		return chunkResult
 	}
 
@@ -1211,26 +1289,45 @@ func (e *Executor) executeBatch(ctx context.Context, task Task, cmdInfo *binmana
 	// If only one chunk, execute sequentially (no need for parallelization)
 	if len(chunks) == 1 {
 		chunkResult := e.executeBatchChunk(ctx, task, cmdInfo, workingDir, chunks[0], startTime)
+		chunkResult.cached = cached
 		if e.fileProgressCallback != nil {
-			e.fileProgressCallback(task.ToolName, 1, 1, chunkResult.Success)
+			e.fileProgressCallback(task.ID, task.ToolName, 1, 1, chunkResult.Success)
 		}
-		// Update cache on success
-		if chunkResult.Success {
-			e.updateCacheAfterSuccess(task, filesToProcess)
-		}
+		e.updateCacheAfterSuccess(task, batchPasses(task.Operation, chunkResult.Processes, nil), seen)
 		return chunkResult
 	}
 
 	// Multiple chunks - execute in parallel
 	result = e.executeBatchChunksParallel(ctx, task, cmdInfo, workingDir, chunks, startTime)
+	result.cached = cached
 	if e.fileProgressCallback != nil {
-		e.fileProgressCallback(task.ToolName, 1, 1, result.Success)
+		e.fileProgressCallback(task.ID, task.ToolName, 1, 1, result.Success)
 	}
-	// Update cache on success
-	if result.Success {
-		e.updateCacheAfterSuccess(task, filesToProcess)
-	}
+	e.updateCacheAfterSuccess(task, batchPasses(task.Operation, result.Processes, nil), seen)
 	return result
+}
+
+// batchPasses returns the files the successful processes of a batch task let a
+// pass be recorded for. Each process answers for the files it was given, as a
+// per-file process does, so a chunk that passed keeps its passes when another
+// failed; a process given none (argv-less, one run for the whole list) answers
+// for covered.
+func batchPasses(op config.OperationType, processes []ProcessResult, covered []string) []string {
+	passes := make([]string, 0, len(covered))
+	for _, proc := range processes {
+		if proc.State != ProcessRan || !proc.Success {
+			continue
+		}
+		files := proc.Files
+		if len(files) == 0 {
+			files = make([]string, len(covered))
+			for i, file := range covered {
+				files[i] = filepath.Clean(file)
+			}
+		}
+		passes = append(passes, passesOf(op, proc, files)...)
+	}
+	return passes
 }
 
 // argsReferenceFiles reports whether an operation's args place the matched files
@@ -1265,6 +1362,9 @@ func (e *Executor) executeBatchChunk(ctx context.Context, task Task, cmdInfo *bi
 	if e.dryRun {
 		log.Debug("dry-run mode", zap.Strings("args", args))
 		result.Output = "[DRY-RUN] " + cmdString
+		result.addProcess(ProcessResult{
+			Files: absolutePaths(files, workingDir), State: ProcessNotStarted, Extraction: ExtractionNone,
+		})
 		result.recordTiming(startTime)
 		return result
 	}
@@ -1281,7 +1381,9 @@ func (e *Executor) executeBatchChunk(ctx context.Context, task Task, cmdInfo *bi
 	// tool could still pair output:stdout with a tool-level parser).
 	formatMode := task.OpConfig.Output == config.ToolOutputStdout
 	parseMode := e.parser != nil && task.Tool.OutputParser != nil && !formatMode
+	procStart := time.Now()
 	stdoutBytes, stderrBytes, err := e.runCommandIO(cmd, nil, parseMode)
+	procDuration := time.Since(procStart).Milliseconds()
 
 	output := stdoutBytes
 	if parseMode {
@@ -1300,11 +1402,21 @@ func (e *Executor) executeBatchChunk(ctx context.Context, task Task, cmdInfo *bi
 	exitCode := getExitCode(err)
 	result.ExitCode = exitCode
 
-	// Batch mode lints many files per invocation, so diagnostics carry their own
-	// paths from the parser; nothing to stamp.
-	if parseMode {
-		e.parseFileDiagnostics(ctx, &result, task, "", stdoutBytes, stderrBytes, exitCode)
+	proc := ProcessResult{
+		Files: absolutePaths(files, workingDir), State: processState(err), Success: err == nil,
+		OutputTail: outputTail(output), DurationMs: procDuration,
 	}
+	proc.Extraction, proc.ParseError = e.unparsed(task, formatMode)
+	if proc.State == ProcessRan {
+		proc.ExitCode = new(exitCode)
+	}
+	if parseMode {
+		e.parseFileDiagnostics(ctx, &proc, task, workingDir, stdoutBytes, stderrBytes, exitCode)
+		if err != nil && !stoppedByCancellation(err) && len(proc.Diagnostics) == 0 {
+			result.UnparsedFailures = append(result.UnparsedFailures, unparsedFailure(exitCode, err, output))
+		}
+	}
+	result.addProcess(proc)
 
 	if err != nil {
 		log.Debug("batch execution failed", zap.Int("exitCode", exitCode), zap.Error(err))
@@ -1357,13 +1469,7 @@ func (e *Executor) executeBatchChunksParallel(ctx context.Context, task Task, cm
 			select {
 			case <-ctx.Done():
 				log.Debug("chunk execution skipped due to cancellation", zap.Int("chunkIndex", idx))
-				chunkResults[idx] = ExecutionResult{
-					ToolName:      task.ToolName,
-					Success:       false,
-					Error:         errCancelled,
-					Cancelled:     true,
-					FailureReason: cancelReason(ctx),
-				}
+				chunkResults[idx] = unstartedChunk(ctx, task, workingDir, files)
 				mu.Lock()
 				result.Success = false
 				mu.Unlock()
@@ -1376,13 +1482,7 @@ func (e *Executor) executeBatchChunksParallel(ctx context.Context, task Task, cm
 			// Check again after acquiring semaphore
 			if ctx.Err() != nil {
 				log.Debug("chunk execution skipped after semaphore due to cancellation", zap.Int("chunkIndex", idx))
-				chunkResults[idx] = ExecutionResult{
-					ToolName:      task.ToolName,
-					Success:       false,
-					Error:         errCancelled,
-					Cancelled:     true,
-					FailureReason: cancelReason(ctx),
-				}
+				chunkResults[idx] = unstartedChunk(ctx, task, workingDir, files)
 				mu.Lock()
 				result.Success = false
 				mu.Unlock()
@@ -1421,6 +1521,51 @@ func (e *Executor) executeBatchChunksParallel(ctx context.Context, task Task, cm
 	return result
 }
 
+// unstartedChunk is the result of a chunk cancelled while it waited for a
+// worker: a process that was never spawned, over the files it would have been
+// given.
+func unstartedChunk(ctx context.Context, task Task, workingDir string, files []string) ExecutionResult {
+	result := ExecutionResult{
+		ToolName:      task.ToolName,
+		Success:       false,
+		Error:         errCancelled,
+		Cancelled:     true,
+		FailureReason: cancelReason(ctx),
+	}
+	result.addProcess(ProcessResult{Files: absolutePaths(files, workingDir), State: ProcessNotStarted, Extraction: ExtractionNone})
+	return result
+}
+
+// unparsed is a spawned process's extraction before any parse. A formatter's
+// stdout is file content, which no parser reads, and a tool without an
+// outputParser has nothing to extract: none, the exit-status rule. A tool that
+// declares a parser this executor was not given is another matter — its
+// findings were never extracted, so its output proves nothing.
+func (e *Executor) unparsed(task Task, formatMode bool) (Extraction, string) {
+	if task.Tool.OutputParser == nil || formatMode || e.parser != nil {
+		return ExtractionNone, ""
+	}
+	return ExtractionParserUnavailable, "no output parser is wired"
+}
+
+// processState classifies how a process ended from the error its run
+// returned. A start refused because the run was already cancelled is a process
+// that never started, not one that failed to.
+func processState(err error) ProcessState {
+	switch {
+	case err == nil:
+		return ProcessRan
+	case errors.Is(err, errStart) && stoppedByCancellation(err):
+		return ProcessNotStarted
+	case errors.Is(err, errStart):
+		return ProcessSetupFailed
+	case stoppedByCancellation(err):
+		return ProcessCancelled
+	default:
+		return ProcessRan
+	}
+}
+
 // mergeChunkResults folds the chunks of one batch task into its result. A task
 // whose every failed chunk was cancelled is itself cancelled. One with a chunk
 // that failed on its own is a failure, and the files of its cancelled chunks
@@ -1430,14 +1575,28 @@ func mergeChunkResults(ctx context.Context, result *ExecutionResult, chunks [][]
 	var errs []error
 	allCancelled := !result.Success
 	notRun := 0
+	// The frame names one command and one exit code: the last chunk that failed
+	// on its own, as a per-file task names its last failing file.
+	failedCommand, failedExit := "", 0
 	for i, chunkResult := range chunkResults {
+		if chunkResult.Command != "" {
+			result.Command = chunkResult.Command
+		}
+		if !chunkResult.Success && !chunkResult.IsCancelled() {
+			failedCommand, failedExit = chunkResult.Command, chunkResult.ExitCode
+		}
 		if chunkResult.Output != "" {
 			outputs = append(outputs, fmt.Sprintf("=== Chunk %d/%d ===\n%s", i+1, len(chunks), chunkResult.Output))
 		}
 		if chunkResult.Error != nil {
 			errs = append(errs, fmt.Errorf("chunk %d: %w", i+1, chunkResult.Error))
 		}
-		result.Diagnostics = append(result.Diagnostics, chunkResult.Diagnostics...)
+		for _, proc := range chunkResult.Processes {
+			result.addProcess(proc)
+		}
+		for _, failure := range chunkResult.UnparsedFailures {
+			result.UnparsedFailures = append(result.UnparsedFailures, fmt.Sprintf("chunk %d/%d: %s", i+1, len(chunks), failure))
+		}
 		if chunkResult.IsCancelled() {
 			notRun += len(chunks[i])
 		} else if !chunkResult.Success {
@@ -1448,6 +1607,9 @@ func mergeChunkResults(ctx context.Context, result *ExecutionResult, chunks [][]
 	result.Output = strings.Join(outputs, "\n")
 	if len(errs) > 0 {
 		result.Error = fmt.Errorf("batch execution had %d failures: %v", len(errs), errs)
+	}
+	if failedCommand != "" {
+		result.Command, result.ExitCode = failedCommand, failedExit
 	}
 
 	switch {
@@ -1608,6 +1770,19 @@ func (e *Executor) makeRelativePaths(files []string, baseDir string) []string {
 	return result
 }
 
+// absolutePaths undoes makeRelativePaths: the paths a batch process was handed,
+// as the absolute, cleaned paths the rest of the core names files by.
+func absolutePaths(files []string, baseDir string) []string {
+	if len(files) == 0 {
+		return nil
+	}
+	out := make([]string, len(files))
+	for i, file := range files {
+		out[i] = diagnostic.AbsPath(file, baseDir)
+	}
+	return out
+}
+
 // chunkFilesByCommandLength splits files into chunks that fit within command line length limits
 func (e *Executor) chunkFilesByCommandLength(files []string, baseArgs []string, cmdInfo *binmanager.CommandInfo) [][]string {
 	if len(files) == 0 {
@@ -1702,7 +1877,7 @@ func (e *Executor) runCommandIO(cmd *exec.Cmd, stdinContent []byte, separate boo
 	spawnSpan := trace.Start(trace.CatExec, "spawn")
 	if startErr := cmd.Start(); startErr != nil {
 		spawnSpan.EndWith(trace.A("error", startErr.Error()))
-		return nil, nil, fmt.Errorf("start command: %w", startErr)
+		return nil, nil, fmt.Errorf("%w: %w", errStart, startErr)
 	}
 
 	err = cmd.Wait()
@@ -1745,7 +1920,7 @@ func applyStdoutFormat(file string, original, candidate []byte) ([]textdiff.Edit
 	// Write the formatter's actual stdout (candidate), not a reconstruction from
 	// the edits: candidate is the ground truth, and round-tripping through
 	// textdiff.Apply could diverge on a diff edge case and silently corrupt the
-	// file. The edits are returned only for FormatEdits (LSP/undo reuse later).
+	// file. The edits are returned for the file's FileResult.
 	if err := writeFileAtomic(file, candidate, info.Mode().Perm()); err != nil {
 		return nil, fmt.Errorf("write formatted content to %s: %w", file, err)
 	}
@@ -1801,6 +1976,20 @@ func stdinForOperation(op config.ToolOperation, file string) ([]byte, error) {
 		return nil, fmt.Errorf("read stdin content for %s: %w", file, err)
 	}
 	return content, nil
+}
+
+// unparsedFailure describes a failed batch process whose output held no
+// finding: once another process's findings take the frame's place, this is all
+// that is left of it.
+func unparsedFailure(exitCode int, err error, output []byte) string {
+	label := fmt.Sprintf("exit code %d", exitCode)
+	if _, ok := errors.AsType[*exec.ExitError](err); !ok {
+		label = err.Error()
+	}
+	if text := strings.TrimSpace(string(output)); text != "" {
+		label += "\n" + text
+	}
+	return label
 }
 
 // fileOutput is what one file of a per-file task printed. label names a file

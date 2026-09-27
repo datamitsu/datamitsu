@@ -117,12 +117,12 @@ func TestFilterFilesByCacheSkipsNonFileGranularity(t *testing.T) {
 	}
 	// Mark both files as passed, the way a per-file tool would.
 	for _, f := range files {
-		if err := c.AfterLint(f, "tsc", true); err != nil {
+		if err := c.AfterLint(f, "tsc", observe(f), true, true); err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	if got := e.filterFilesByCache(unit); len(got) != len(files) {
+	if got, _ := e.filterFilesByCache(unit); len(got) != len(files) {
 		t.Errorf("filterFilesByCache dropped %d of %d files for a unit task; per-file "+
 			"entries do not speak for a whole-unit verdict", len(files)-len(got), len(files))
 	}
@@ -133,7 +133,7 @@ func TestFilterFilesByCacheSkipsNonFileGranularity(t *testing.T) {
 		Scope: config.ToolScopePerFile,
 	}
 	perFile.ToolName = "tsc"
-	if got := e.filterFilesByCache(perFile); len(got) != 0 {
+	if got, _ := e.filterFilesByCache(perFile); len(got) != 0 {
 		t.Errorf("filterFilesByCache kept %v; a file-granularity task must honour the per-file cache", got)
 	}
 }

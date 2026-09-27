@@ -8,6 +8,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/datamitsu/datamitsu/internal/cache"
 )
 
 // The point of Task 3: the second tool planning a task over the same unit reads
@@ -108,7 +110,7 @@ func TestPostRunProbeDoesNotConsultTheMemo(t *testing.T) {
 		t.Fatal(err)
 	}
 	poison := strings.Repeat("0f", 16)
-	memo.store(member, poison, fi.Size(), fi.ModTime(), identOf(fi), time.Now())
+	memo.store(member, poison, fi.Size(), fi.ModTime(), cache.IdentityOf(fi), time.Now())
 
 	after, bytesRead := snap.refresh()
 	if bytesRead == 0 {

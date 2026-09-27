@@ -20,7 +20,7 @@ func TestAfterFixResetsLintOnChange(t *testing.T) {
 		t.Fatalf("NewCache() error = %v", err)
 	}
 
-	if err := c.AfterLint(file, "tool", true); err != nil {
+	if err := c.AfterLint(file, "tool", observeFile(file), true, true); err != nil {
 		t.Fatalf("AfterLint() error = %v", err)
 	}
 
@@ -82,7 +82,7 @@ func TestAfterDisabledToolIsNoOp(t *testing.T) {
 		t.Fatalf("NewCache() error = %v", err)
 	}
 
-	if err := c.AfterLint(file, "tool", false); err != nil {
+	if err := c.AfterLint(file, "tool", observeFile(file), true, false); err != nil {
 		t.Fatalf("AfterLint(disabled) error = %v", err)
 	}
 	if err := c.AfterFix(file, "tool", false); err != nil {
@@ -94,7 +94,7 @@ func TestAfterDisabledToolIsNoOp(t *testing.T) {
 }
 
 // TestNilDataErrors covers the "cache data is nil" guard branches in Save,
-// AfterFix, and markPassed (via AfterLint).
+// AfterFix, and AfterLint.
 func TestNilDataErrors(t *testing.T) {
 	c := &Cache{
 		projectPath: t.TempDir(),
@@ -107,7 +107,7 @@ func TestNilDataErrors(t *testing.T) {
 	if err := c.AfterFix("/some/file", "tool", true); err == nil {
 		t.Error("AfterFix with nil data expected error, got nil")
 	}
-	if err := c.AfterLint("/some/file", "tool", true); err == nil {
+	if err := c.AfterLint("/some/file", "tool", Seen{Hash: "h"}, true, true); err == nil {
 		t.Error("AfterLint with nil data expected error, got nil")
 	}
 }
@@ -122,7 +122,7 @@ func TestDebounceSaveFlushesOnTimer(t *testing.T) {
 	}
 	t.Cleanup(c.Shutdown)
 
-	if err := c.AfterLint(file, "tool", true); err != nil {
+	if err := c.AfterLint(file, "tool", observeFile(file), true, true); err != nil {
 		t.Fatalf("AfterLint() error = %v", err)
 	}
 	// Remove any existing file so we can observe the debounced write.

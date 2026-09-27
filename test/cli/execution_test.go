@@ -602,6 +602,9 @@ func TestExecutionFailFastBetweenFiles(t *testing.T) {
 		res := e.run("", nil, "lint")
 		e.wantExit(res, 1)
 		e.wantMarker("alpha", "alpha <TMP>/bad1.txt\n")
+		if !strings.Contains(res.Stdout, "alpha  2 files not run (fail-fast): bad2.txt, ok.txt") {
+			t.Errorf("the block should name the files the loop left unchecked:\n%s", res.Stdout)
+		}
 		e.golden("s5_lint_per_file_loop", res)
 	})
 
@@ -984,11 +987,11 @@ func TestExecutionPerFileCache(t *testing.T) {
 const hadolintFinding = `[{"file":"Dockerfile","line":1,"column":1,"level":"warning","code":"DL3006",` +
 	`"message":"Always tag the version of an image explicitly"}]`
 
-// parsedTool lints each Dockerfile, prints hadolintFinding and exits with
-// exitCode; its output goes through the hadolint parser of the seeded module.
-func parsedTool(exitCode int) string {
+// parsedTool lints each Dockerfile, prints output and exits with exitCode; its
+// output goes through the hadolint parser of the seeded module.
+func parsedTool(output string, exitCode int) string {
 	return clitest.ShellTool("hadolint",
-		fmt.Sprintf("%s%s; echo '%s'; exit %d", settle, clitest.RecordRun, hadolintFinding, exitCode),
+		fmt.Sprintf("%s%s; echo '%s'; exit %d", settle, clitest.RecordRun, output, exitCode),
 		clitest.ToolOpSpec{
 			Scope:  "per-file",
 			Globs:  []string{"**/Dockerfile"},
@@ -999,13 +1002,13 @@ func parsedTool(exitCode int) string {
 
 // newParsedProject seeds the committed crate build of the parser module into
 // the scenario's cache before writing a config that declares it.
-func newParsedProject(t *testing.T, exitCode int) *execProject {
+func newParsedProject(t *testing.T, output string, exitCode int) *execProject {
 	t.Helper()
 	e := newExecProject(t, map[string]string{"fixture.marker": "", "Dockerfile": "FROM debian\n"}, fixtureSpec)
 	module := filepath.Join("..", "..", "internal", "parsermanager", "testdata", "echo.wasm")
 	spec := fixtureSpec
 	spec.Parsers = clitest.SeedParserModule(t, e.cache, module)
-	e.p.WriteFile("exec.config.js", clitest.ShellConfig(spec, parsedTool(exitCode)))
+	e.p.WriteFile("exec.config.js", clitest.ShellConfig(spec, parsedTool(output, exitCode)))
 	return e
 }
 
@@ -1014,7 +1017,7 @@ func newParsedProject(t *testing.T, exitCode int) *execProject {
 // changes how a parsed result is recorded.
 func TestExecutionParsedFailure(t *testing.T) {
 	t.Run("parsed", func(t *testing.T) {
-		e := newParsedProject(t, 1)
+		e := newParsedProject(t, hadolintFinding, 1)
 		res := e.run("", nil, "lint")
 		e.wantExit(res, 1)
 		if !strings.Contains(res.Stdout, "Dockerfile:1:1 warning Always tag the version of an image explicitly [DL3006]") {
@@ -1024,7 +1027,7 @@ func TestExecutionParsedFailure(t *testing.T) {
 	})
 
 	t.Run("no-parse", func(t *testing.T) {
-		e := newParsedProject(t, 1)
+		e := newParsedProject(t, hadolintFinding, 1)
 		res := e.run("", nil, "lint", "--no-parse")
 		e.wantExit(res, 1)
 		if !strings.Contains(res.Stdout, hadolintFinding) {
@@ -1034,11 +1037,12 @@ func TestExecutionParsedFailure(t *testing.T) {
 	})
 }
 
-// TestExecutionParsedPassHidesFindings is S9: a tool that reports a finding but
-// exits 0 prints nothing about it, and its second run is a cache hit that does
-// not run it at all. Plan 3 (C1) keeps the findings of a passing run.
-func TestExecutionParsedPassHidesFindings(t *testing.T) {
-	e := newParsedProject(t, 0)
+// TestExecutionParsedPassKeepsFindingsUncached is S9: a tool that reports a
+// finding but exits 0 passes and prints nothing about the finding (plan 5
+// shows it), and records no cache pass (C1): every later run runs it again.
+// --no-parse changes only what a failure shows, so it records by the same rule.
+func TestExecutionParsedPassKeepsFindingsUncached(t *testing.T) {
+	e := newParsedProject(t, hadolintFinding, 0)
 
 	first := e.run("", nil, "lint")
 	e.wantExit(first, 0)
@@ -1050,11 +1054,128 @@ func TestExecutionParsedPassHidesFindings(t *testing.T) {
 
 	second := e.run("", nil, "lint")
 	e.wantExit(second, 0)
+	e.wantMarker("hadolint", "hadolint <TMP>/Dockerfile\nhadolint <TMP>/Dockerfile\n")
+	if !strings.Contains(second.Stdout, "cache 0%") {
+		t.Errorf("the second run's footer should report cache 0%%:\n%s", second.Stdout)
+	}
+	e.golden("s9_lint_parsed_pass_rerun", second)
+
+	third := e.run("", nil, "lint", "--no-parse")
+	e.wantExit(third, 0)
+	fourth := e.run("", nil, "lint")
+	e.wantExit(fourth, 0)
+	e.wantMarker("hadolint", strings.Repeat("hadolint <TMP>/Dockerfile\n", 4))
+}
+
+// TestExecutionParsedCleanPassIsCached: a parsed run that reported nothing is a
+// pass the cache can replay as "nothing to report", so the next run skips it.
+func TestExecutionParsedCleanPassIsCached(t *testing.T) {
+	e := newParsedProject(t, "[]", 0)
+
+	first := e.run("", nil, "lint")
+	e.wantExit(first, 0)
+	second := e.run("", nil, "lint")
+	e.wantExit(second, 0)
 	e.wantMarker("hadolint", "hadolint <TMP>/Dockerfile\n")
 	if !strings.Contains(second.Stdout, "cache 100%") {
 		t.Errorf("the second run's footer should report cache 100%%:\n%s", second.Stdout)
 	}
-	e.golden("s9_lint_parsed_pass_cached", second)
+	e.golden("lint_parsed_clean_cached", second)
+
+	// --no-parse only changes what a failure shows: a clean run under it is
+	// cached like any other, and so is one under DATAMITSU_NO_PARSE.
+	for _, run := range []struct {
+		env  []string
+		args []string
+	}{
+		{nil, []string{"lint", "--no-parse"}},
+		{[]string{"DATAMITSU_NO_PARSE=1"}, []string{"lint"}},
+	} {
+		fresh := newParsedProject(t, "[]", 0)
+		fresh.wantExit(fresh.run("", run.env, run.args...), 0)
+		again := fresh.run("", run.env, run.args...)
+		fresh.wantExit(again, 0)
+		fresh.wantMarker("hadolint", "hadolint <TMP>/Dockerfile\n")
+	}
+}
+
+// TestExecutionParsedPositions freezes the position and path contract a list-
+// taking tool meets: handed one file, the findings its parser leaves without a
+// file are about that file, so the frame shows them parsed instead of the raw
+// output, and a column the tool printed as 0 is shown as 1.
+func TestExecutionParsedPositions(t *testing.T) {
+	e := newExecProject(t, map[string]string{"fixture.marker": "", "a.yaml": "a: 1\n"}, fixtureSpec)
+	module := filepath.Join("..", "..", "internal", "parsermanager", "testdata", "echo.wasm")
+	spec := fixtureSpec
+	spec.Parsers = clitest.SeedParserModule(t, e.cache, module)
+	e.p.WriteFile("exec.config.js", clitest.ShellConfig(spec, clitest.ShellTool("yamllint",
+		settle+clitest.RecordRun+"; echo 'stdin:3:0: [error] too many blank lines (3 > 0) (empty-lines)'; exit 1",
+		clitest.ToolOpSpec{Globs: []string{"**/*.yaml"}, Args: []string{"{files}"}, Parser: "yamllint"})))
+
+	res := e.run("", nil, "lint")
+	e.wantExit(res, 1)
+	if !strings.Contains(res.Stdout, "a.yaml:3:1 error too many blank lines (3 > 0) [empty-lines]") {
+		t.Errorf("the frame should show the finding parsed, stamped and clamped:\n%s", res.Stdout)
+	}
+	e.golden("lint_parsed_positions", res)
+}
+
+// TestExecutionParserProblems freezes how a run reports output it could not
+// parse: a parser key the module does not list, and a module that does not
+// load, each warn once per run however many invocations hit them, and neither
+// reads as a clean parse.
+func TestExecutionParserProblems(t *testing.T) {
+	e := newExecProject(t, map[string]string{
+		"fixture.marker": "", "a/Dockerfile": "FROM debian\n", "b/Dockerfile": "FROM debian\n",
+	}, fixtureSpec)
+	module := filepath.Join("..", "..", "internal", "parsermanager", "testdata", "echo.wasm")
+	spec := fixtureSpec
+	spec.Parsers = strings.Replace(clitest.SeedParserModule(t, e.cache, module), "{",
+		`{"missing":{"url":"https://parsers.example.invalid/missing.wasm","hash":"`+strings.Repeat("1", 64)+`"},`, 1)
+	perFile := func(name, parser, parserModule string) string {
+		return clitest.ShellTool(name, passScript+"; echo finding", clitest.ToolOpSpec{
+			Scope: "per-file", Globs: []string{"**/Dockerfile"}, Args: []string{"{file}"},
+			Parser: parser, ParserModule: parserModule,
+		})
+	}
+	e.p.WriteFile("exec.config.js", clitest.ShellConfig(spec,
+		perFile("alpha", "no-such-parser", ""),
+		perFile("beta", "hadolint", "missing"),
+	))
+
+	res := e.run("", nil, "lint")
+	e.wantExit(res, 0)
+	for _, want := range []string{
+		`parser module "core" has no parser "no-such-parser", so the output of alpha is not parsed and its lint passes are not cached`,
+		`parser module "missing" could not be loaded, so 1 tool(s) that use it ran without parsing and their lint passes are not cached`,
+	} {
+		if n := strings.Count(res.Stderr, want); n != 1 {
+			t.Errorf("stderr carries %q %d times, want once:\n%s", want, n, res.Stderr)
+		}
+	}
+	e.golden("lint_parser_problems", res)
+
+	again := e.run("", nil, "lint")
+	e.wantExit(again, 0)
+	for _, tool := range []string{"alpha", "beta"} {
+		if _, recorded := e.p.Marker(tool); strings.Count(recorded, "\n") != 4 {
+			t.Errorf("%s recorded %q; output that was not parsed must not be cached", tool, recorded)
+		}
+	}
+
+	// check reports once, after both operations, naming every tool the
+	// module failed: the fixer and the linter alike.
+	fixer := clitest.ShellTool("fixer", passScript, clitest.ToolOpSpec{
+		Operation: "fix", Scope: "per-file", Globs: []string{"**/Dockerfile"}, Args: []string{"{file}"},
+		Parser: "hadolint", ParserModule: "missing",
+	})
+	e.p.WriteFile("exec.config.js", clitest.ShellConfig(spec, fixer, perFile("beta", "hadolint", "missing")))
+	checked := e.run("", nil, "check")
+	e.wantExit(checked, 0)
+	want := `parser module "missing" could not be loaded, so 2 tool(s) that use it ran without parsing`
+	if n := strings.Count(checked.Stderr, want); n != 1 {
+		t.Errorf("check's stderr carries %q %d times, want once:\n%s", want, n, checked.Stderr)
+	}
 }
 
 var hostRE = regexp.MustCompile(`no binary for [a-z0-9]+/[a-z0-9_]+/[a-z0-9_]+`)

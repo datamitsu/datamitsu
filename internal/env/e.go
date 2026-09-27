@@ -181,7 +181,7 @@ var (
 	noParse = envVar{
 		Name:         strings.ToUpper(ldflags.PackageName) + "_NO_PARSE",
 		DefaultValue: "",
-		Description:  "Skip output parsers and show tools' raw output (set to any non-empty value)",
+		Description:  "Show tools' raw output instead of parsed findings; parsing still runs (set to any non-empty value)",
 	}
 
 	libcOverride = envVar{

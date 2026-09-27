@@ -146,12 +146,12 @@ func TestExecutorFilterFilesByCacheNilCache(t *testing.T) {
 		OpConfig: config.ToolOperation{Scope: config.ToolScopePerFile},
 	}
 	// With no cache, every file passes through unchanged.
-	got := e.filterFilesByCache(task)
+	got, _ := e.filterFilesByCache(task)
 	if !reflect.DeepEqual(got, task.Files) {
 		t.Errorf("filterFilesByCache(nil cache) = %v, want %v", got, task.Files)
 	}
 	// updateCacheAfterSuccess must be a no-op (not panic) with a nil cache.
-	e.updateCacheAfterSuccess(task, task.Files)
+	e.updateCacheAfterSuccess(task, task.Files, nil)
 }
 
 func TestGetExitCode(t *testing.T) {

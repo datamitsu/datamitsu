@@ -106,6 +106,9 @@ pub mod write_good;
 pub mod yamllint;
 pub mod zsh;
 
+#[cfg(test)]
+mod fixtures;
+
 use crate::diagnostic::RawDiagnostic;
 
 /// Dispatch a real tool parser by name. Returns `None` when this module has no

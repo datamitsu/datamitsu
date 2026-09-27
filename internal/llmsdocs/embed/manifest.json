@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 55,
-  "pageSetHash": "35370af7977d960c5a6deabec6b65df0",
+  "pageSetHash": "c4f825fc99cdb884573789e8a0c9e976",
   "pages": [
     {
       "slug": "about",
@@ -206,8 +206,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/caching.md",
       "title": "Caching Strategy",
       "description": "How datamitsu caches file-level results and unit or repository verdicts, computes XXH3-128 keys, and persists them safely",
-      "bytes": 22706,
-      "contentHash": "92c08dbf83a24cdec4bc4703259a8130"
+      "bytes": 27352,
+      "contentHash": "f159fa7425623e3aa8356c0391f9b981"
     },
     {
       "slug": "guides/architecture/discovery",
@@ -224,8 +224,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/execution.md",
       "title": "Parallel Execution",
       "description": "How datamitsu runs task groups sequentially while parallelizing tasks within each group, with fail-fast by default and a keep-going mode",
-      "bytes": 13722,
-      "contentHash": "58327231ad49dbda81806913ff08aeff"
+      "bytes": 15663,
+      "contentHash": "fb5d87b9e26e5b1419bb738323703180"
     },
     {
       "slug": "guides/architecture",
@@ -244,8 +244,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/parsers.md",
       "title": "WASM Output Parsers",
       "description": "How datamitsu declares, builds, delivers over two channels, verifies, and loads sandboxed Rust→WASM output parsers, and how the line-based diff-in-core powers formatting",
-      "bytes": 28010,
-      "contentHash": "a2a3b73cc0a6d593ae76485f086c6270"
+      "bytes": 32362,
+      "contentHash": "80e3f21d1695263776985a955105790b"
     },
     {
       "slug": "guides/architecture/planner",
@@ -397,8 +397,8 @@
       "url": "https://datamitsu.com/docs/how-to/maintain-wrapper.md",
       "title": "Maintaining Wrapper Packages",
       "description": "Workflows for keeping wrapper package tool versions, runtimes, and hashes up to date using devtools commands",
-      "bytes": 34681,
-      "contentHash": "e5026caa8cb06e85f2a83579fc3668ad"
+      "bytes": 35881,
+      "contentHash": "cddf0994e9f7661df4aaeaecd3ad90e0"
     },
     {
       "slug": "how-to/manage-cache",
@@ -451,8 +451,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 106775,
-      "contentHash": "3482d2782b3b448ceac83f3ba4161368"
+      "bytes": 107673,
+      "contentHash": "a65773c2146e25d82fbbead5c707db18"
     },
     {
       "slug": "reference/comparison",

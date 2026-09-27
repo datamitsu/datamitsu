@@ -165,7 +165,7 @@ func TestCacheClearAndPrune(t *testing.T) {
 	}
 
 	// Record a pass, then Prune must keep it (file still exists).
-	if err := c.AfterLint(file, "tool", true); err != nil {
+	if err := c.AfterLint(file, "tool", observeFile(file), true, true); err != nil {
 		t.Fatalf("AfterLint() error = %v", err)
 	}
 	c.Prune()

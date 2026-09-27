@@ -103,13 +103,6 @@ func TestFormatToolWithDir(t *testing.T) {
 
 func TestNonCIProgressDescriptionWithDir(t *testing.T) {
 	t.Run("file progress description includes directory", func(t *testing.T) {
-		savedActiveTools := activeTools
-		defer func() { activeTools = savedActiveTools }()
-
-		activeTools = map[string]map[string]bool{
-			"eslint": {"packages/web": true},
-		}
-
 		result := formatToolWithDir("eslint", "packages/web")
 		if !strings.Contains(result, "packages/web") {
 			t.Errorf("non-CI progress description should include directory, got: %q", result)
@@ -1491,6 +1484,7 @@ func (f *fakeExecutor) SetResultCallback(cb tooling.ResultCallback)          { f
 func (f *fakeExecutor) SetTaskStartCallback(tooling.TaskStartCallback)       {}
 func (f *fakeExecutor) SetFileProgressCallback(tooling.FileProgressCallback) {}
 func (f *fakeExecutor) SetParser(tooling.DiagnosticParser)                   {}
+func (f *fakeExecutor) SetParserModules(config.MapOfParsers)                 {}
 func (f *fakeExecutor) Execute(_ context.Context, plan *tooling.ExecutionPlan) ([]tooling.GroupExecutionResult, error) {
 	f.called = true
 	*f.order = append(*f.order, "execute")

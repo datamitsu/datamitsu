@@ -51,7 +51,7 @@ func TestCacheConcurrentAccess(t *testing.T) {
 			defer wg.Done()
 			for j := range numOperations {
 				file := filepath.Join(projectPath, testFiles[j%len(testFiles)])
-				cache.ShouldRun(file, "test-tool", OperationLint, true)
+				cache.Check(file, "test-tool", OperationLint, observeFile(file), true)
 			}
 		}(i)
 	}
@@ -62,7 +62,7 @@ func TestCacheConcurrentAccess(t *testing.T) {
 			defer wg.Done()
 			for j := range numOperations {
 				file := filepath.Join(projectPath, testFiles[j%len(testFiles)])
-				_ = cache.AfterLint(file, "test-tool", true)
+				_ = cache.AfterLint(file, "test-tool", observeFile(file), true, true)
 			}
 		}(i)
 	}
@@ -127,7 +127,7 @@ func TestCacheConcurrentSave(t *testing.T) {
 			defer wg.Done()
 
 			// Update cache
-			_ = cache.AfterLint(testFile, fmt.Sprintf("tool-%d", id), true)
+			_ = cache.AfterLint(testFile, fmt.Sprintf("tool-%d", id), observeFile(testFile), true, true)
 
 			// Try to save (this was causing the race condition)
 			if err := cache.Save(); err != nil {

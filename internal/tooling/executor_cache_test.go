@@ -36,20 +36,21 @@ func TestExecutorCacheFilterRoundTrip(t *testing.T) {
 	}
 
 	// Nothing cached yet → the file is returned for processing.
-	if got := e.filterFilesByCache(task); len(got) != 1 {
+	got, seen := e.filterFilesByCache(task)
+	if len(got) != 1 {
 		t.Fatalf("uncached filter = %v, want the one file", got)
 	}
 
 	// Record success, then the same file is filtered out (cache hit).
-	e.updateCacheAfterSuccess(task, task.Files)
-	if got := e.filterFilesByCache(task); len(got) != 0 {
+	e.updateCacheAfterSuccess(task, task.Files, seen)
+	if got, _ := e.filterFilesByCache(task); len(got) != 0 {
 		t.Errorf("post-success filter = %v, want empty (cache hit)", got)
 	}
 
 	// With caching disabled for the tool, the file passes through again.
 	disabled := false
 	task.OpConfig.Cache = &disabled
-	if got := e.filterFilesByCache(task); len(got) != 1 {
+	if got, _ := e.filterFilesByCache(task); len(got) != 1 {
 		t.Errorf("cache-disabled filter = %v, want the file", got)
 	}
 }

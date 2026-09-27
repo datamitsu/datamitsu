@@ -4,12 +4,12 @@ exit code: 1
 ===STDERR===
 {"cancelled":1,"complete":false,"duration_ms":1,"failed":1,"op":"lint","op_id":"cmd-2","runs":1,"status":"fail","success":false,"tools":1,"ts":0,"type":"done"}
 {"cancelled":1,"duration_ms":1,"failed":1,"op":"lint","op_id":"run-1","runs":1,"status":"fail","tools":1,"ts":0,"type":"done"}
-{"dir":"pkg/a","duration_ms":1,"op_id":"run-1:alpha:pkg/a","status":"fail","success":false,"tool":"alpha","ts":0,"type":"tool_run"}
-{"dir":"pkg/a","index":1,"op_id":"run-1:alpha:pkg/a","status":"done","success":false,"tool":"alpha","total":1,"ts":0,"type":"chunk"}
-{"dir":"pkg/a","msg":"failed to execute (exit code 1): exit status 1","op_id":"run-1:alpha:pkg/a","tool":"alpha","ts":0,"type":"error"}
-{"dir":"pkg/a","op_id":"run-1:alpha:pkg/a","status":"start","tool":"alpha","ts":0,"type":"tool_run"}
-{"dir":"pkg/b","duration_ms":1,"msg":"cancelled: fail-fast","op_id":"run-1:beta:pkg/b","status":"skip","tool":"beta","ts":0,"type":"tool_run"}
-{"dir":"pkg/b","index":1,"op_id":"run-1:beta:pkg/b","status":"done","success":false,"tool":"beta","total":1,"ts":0,"type":"chunk"}
-{"dir":"pkg/b","op_id":"run-1:beta:pkg/b","status":"start","tool":"beta","ts":0,"type":"tool_run"}
+{"dir":"pkg/a","duration_ms":1,"op_id":"run-1:alpha:pkg/a:1","status":"fail","success":false,"tool":"alpha","ts":0,"type":"tool_run"}
+{"dir":"pkg/a","index":1,"op_id":"run-1:alpha:pkg/a:1","status":"done","success":false,"tool":"alpha","total":1,"ts":0,"type":"chunk"}
+{"dir":"pkg/a","msg":"failed to execute (exit code 1): exit status 1","op_id":"run-1:alpha:pkg/a:1","tool":"alpha","ts":0,"type":"error"}
+{"dir":"pkg/a","op_id":"run-1:alpha:pkg/a:1","status":"start","tool":"alpha","ts":0,"type":"tool_run"}
+{"dir":"pkg/b","duration_ms":1,"msg":"cancelled: fail-fast","op_id":"run-1:beta:pkg/b:2","status":"skip","tool":"beta","ts":0,"type":"tool_run"}
+{"dir":"pkg/b","index":1,"op_id":"run-1:beta:pkg/b:2","status":"done","success":false,"tool":"beta","total":1,"ts":0,"type":"chunk"}
+{"dir":"pkg/b","op_id":"run-1:beta:pkg/b:2","status":"start","tool":"beta","ts":0,"type":"tool_run"}
 {"msg":"operation failed","op_id":"run-3","status":"fail","ts":0,"type":"error"}
 {"op":"lint","op_id":"run-1","status":"start","ts":0,"type":"phase"}

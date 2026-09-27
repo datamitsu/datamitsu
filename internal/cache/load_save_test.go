@@ -31,25 +31,25 @@ func TestShouldRunCacheHitAndChange(t *testing.T) {
 	}
 
 	// Disabled cache → always run.
-	if !c.ShouldRun(file, "tool", OperationLint, false) {
+	if !c.Check(file, "tool", OperationLint, observeFile(file), false) {
 		t.Error("disabled tool cache should always run")
 	}
 
 	// First check → miss → should run.
-	if !c.ShouldRun(file, "tool", OperationLint, true) {
+	if !c.Check(file, "tool", OperationLint, observeFile(file), true) {
 		t.Error("uncached file should run")
 	}
 
 	// Record success → subsequent check is a hit → skip.
-	if err := c.AfterLint(file, "tool", true); err != nil {
+	if err := c.AfterLint(file, "tool", observeFile(file), true, true); err != nil {
 		t.Fatalf("AfterLint() error = %v", err)
 	}
-	if c.ShouldRun(file, "tool", OperationLint, true) {
+	if c.Check(file, "tool", OperationLint, observeFile(file), true) {
 		t.Error("passed file should be skipped (cache hit)")
 	}
 
 	// A different tool on the same file is still a miss.
-	if !c.ShouldRun(file, "other", OperationLint, true) {
+	if !c.Check(file, "other", OperationLint, observeFile(file), true) {
 		t.Error("untracked tool should run")
 	}
 
@@ -57,12 +57,13 @@ func TestShouldRunCacheHitAndChange(t *testing.T) {
 	if err := os.WriteFile(file, []byte("package main // changed\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if !c.ShouldRun(file, "tool", OperationLint, true) {
+	if !c.Check(file, "tool", OperationLint, observeFile(file), true) {
 		t.Error("changed file should run again")
 	}
 
 	// A nonexistent file cannot be hashed → run.
-	if !c.ShouldRun(filepath.Join(projectPath, "missing.go"), "tool", OperationLint, true) {
+	missing := filepath.Join(projectPath, "missing.go")
+	if !c.Check(missing, "tool", OperationLint, observeFile(missing), true) {
 		t.Error("missing file should run")
 	}
 }
@@ -74,7 +75,7 @@ func TestLoadRoundTripAndInvalidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
 	}
-	if err := c.AfterLint(file, "tool", true); err != nil {
+	if err := c.AfterLint(file, "tool", observeFile(file), true, true); err != nil {
 		t.Fatal(err)
 	}
 	if err := c.Save(); err != nil {
@@ -86,7 +87,7 @@ func TestLoadRoundTripAndInvalidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reopen NewCache() error = %v", err)
 	}
-	if c2.ShouldRun(file, "tool", OperationLint, true) {
+	if c2.Check(file, "tool", OperationLint, observeFile(file), true) {
 		t.Error("persisted hit not restored after Load")
 	}
 
@@ -96,7 +97,7 @@ func TestLoadRoundTripAndInvalidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reopen-with-tools NewCache() error = %v", err)
 	}
-	if !c3.ShouldRun(file, "tool", OperationLint, true) {
+	if !c3.Check(file, "tool", OperationLint, observeFile(file), true) {
 		t.Error("key mismatch should reset cache and force a run")
 	}
 }
@@ -126,7 +127,7 @@ func TestLoadCorruptFileFallsBack(t *testing.T) {
 		t.Error("corrupt-file fallback should produce an empty entry map")
 	}
 	// Fresh cache → file runs.
-	if !c2.ShouldRun(file, "tool", OperationLint, true) {
+	if !c2.Check(file, "tool", OperationLint, observeFile(file), true) {
 		t.Error("fresh cache should run the file")
 	}
 }

@@ -8,13 +8,8 @@ tool's free-form text output into structured results, it loads small,
 This page explains the parser pipeline end to end, and the line-based
 **diff-in-core** that the formatting path is built on.
 
-:::info Phase boundary
-This is the parser _plumbing_: declare, build, sign, deliver, fetch, load,
-invoke. It ships with a trivial `echo` parser that proves the whole pipe; real diagnostic
-parsers (hadolint, yamllint, …) arrive in a later phase. The architectural
-invariant that governs the design: **a parser extracts only what the tool
-actually emitted; the Go core fills defaults.**
-:::
+The architectural invariant that governs the design: **a parser extracts only
+what the tool actually emitted; the Go core fills defaults.**
 
 ## The Architectural Invariant
 
@@ -36,13 +31,81 @@ Which file a diagnostic belongs to has two possible sources, and they compose:
 
 - **The parser**, for formats that name a path per diagnostic (eslint's
   `filePath`). It fills `file` on the raw diagnostic.
-- **The core**, otherwise. Most tool formats drop the filename, so the executor
-  stamps the file it just linted — but only where the parser left `file` empty.
+- **The core**, otherwise. Most tool formats drop the filename, so when a process
+  was handed exactly one file — a per-file run, or a list-taking tool whose
+  `{files}` held one path — the executor stamps that file on every diagnostic the
+  parser left without one.
 
 This ordering is what makes list-taking tools work. A tool given `{files}`
 (eslint over a whole project, one invocation, dozens of files) gives the core no
-single file to stamp, so a parser that does not report paths yields unattributed
-diagnostics. Tools in that class must extract the path.
+single file to stamp, and neither does a tool given no file at all (`tsc` reads
+`tsconfig.json`), so a parser that does not report paths yields unattributed
+diagnostics there. Tools in that class must extract the path.
+
+Whatever spelling the tool printed, the core makes the path **absolute**, against
+the working directory of the process that printed it, and cleans it: `./a.ts`,
+`a.ts` and `/repo/pkg/a.ts` from a process run in `/repo/pkg` name one file. The
+terminal shows a path relative to the failure frame's `Cwd`, and one outside it in
+full, since `../../x` reads worse than the path it came from.
+
+### Positions
+
+Every position the core hands on follows one contract, whatever the tool printed:
+
+| Field            | Contract                                                                     |
+| ---------------- | ---------------------------------------------------------------------------- |
+| `row`, `col`     | 1-based; missing or `0` becomes `1`                                          |
+| `endRow`         | 1-based; missing means the start row                                         |
+| `endCol`         | 1-based and **exclusive**: the span stops before the column it names         |
+| a partial end    | an end row without an end column gives a point at the start                  |
+| an end before it | an end that precedes the start, after the rules above, becomes a point there |
+
+A point is an end equal to the start. Several tools print `0` for "no position"
+(trivy, reek, npm-groovy-lint), which is why `0` is read as `1` rather than kept.
+
+What the core cannot do is tell a 0-based positive column from a 1-based one, or
+an inclusive end from an exclusive one: column 5 is column 5 either way. Parsers
+whose tool counts from 0 (spectral, vacuum, pylint) or reports an inclusive end
+are corrected in the module, so a configuration pinned to an older module keeps
+the positions that module reported.
+
+### Extraction outcomes
+
+"No diagnostics" is only an answer when a parser actually read the output. Every
+process a tool runs therefore records an **extraction outcome** next to its exit
+code:
+
+| Outcome              | When                                                                      | Lint pass cached        |
+| -------------------- | ------------------------------------------------------------------------- | ----------------------- |
+| `parsed-clean`       | the parser ran without error and returned no diagnostic                   | yes                     |
+| `parsed-findings`    | the parser returned at least one diagnostic                               | for the files it spared |
+| `parser-unavailable` | the module did not load, or its `describe` does not list the declared key | no                      |
+| `parse-failed`       | the module returned an error for this output                              | no                      |
+| `truncated`          | reserved for an output or finding count over a cap; no cap exists yet     | no                      |
+| `none`               | the tool declares no `outputParser`, so nothing was attempted             | on success              |
+
+The last column is the [caching rule](./caching.md#a-lint-pass-means-nothing-to-report):
+a cached lint pass is replayed as "nothing to report", so it is recorded only where
+the parser said so.
+
+A module answers a parser key it does not know with an empty list, which would
+read as a clean run, so the core checks the key against the module's `describe`
+before it parses. An unknown key is not a configuration error: checking it needs
+the module, and loading a configuration never touches the network.
+
+When any process of a task is `parse-failed` or `parser-unavailable`, the task
+reports `ParseFailed`: its missing diagnostics mean "unknown", not "none". The
+run warns once, after its last operation, however many invocations hit the same problem:
+
+- `output parser failed for <tool>: <first error>`, once per tool;
+- `parser module "<module>" could not be loaded, so <n> tool(s) that use it ran without parsing`,
+  once per module, with the cause and a pointer to
+  [`datamitsu devtools parsers prefetch`](../../reference/cli-commands.md#devtools-parsers);
+- `parser module "<module>" has no parser "<key>", so the output of <tools> is not parsed`,
+  once per key.
+
+The tool's own exit code decides whether it passed, whatever its extraction
+outcome; the outcome decides what the cache may record.
 
 ### Noise tolerance
 
@@ -396,9 +459,12 @@ parse, how to invoke each (args + stdin), the upstream URL, and the module's
 truth, which is why the `parsers` config entity carries **no `version` field**.
 
 To debug a parser against a real `datamitsu lint` run, pass **`--no-parse`** (or set
-`DATAMITSU_NO_PARSE`): the executor skips parsing and shows each tool's raw output,
-so you can see exactly what the parser was given. `devtools parsers run` is the
-complementary tool for iterating on a parser against piped output.
+`DATAMITSU_NO_PARSE`): a failure frame shows each tool's raw output instead of its
+parsed findings, so you can see exactly what the parser was given. The flag changes
+only what is displayed. Parsing still runs, and parser modules are still fetched
+and compiled, because what a run records must not depend on how it is shown.
+`devtools parsers run` is the complementary tool for iterating on a parser against
+piped output.
 
 [`datamitsu devtools parsers list`](../../reference/cli-commands.md#devtools-parsers)
 aggregates `describe` across every configured parser into a **deduplicated** view:
