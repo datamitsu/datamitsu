@@ -1680,7 +1680,7 @@ func TestBuildCommandEnvMerge(t *testing.T) {
 			Type:    "binary",
 			Command: "/bin/echo",
 		}
-		cmd := executor.buildCommand(context.Background(), cmdInfo, []string{"hello"}, tmpDir, nil)
+		cmd := executor.buildCommand(context.Background(), cmdInfo, []string{"hello"}, tmpDir, nil, nil)
 		// When no env layers provided, cmd.Env should be nil (inherits OS env)
 		if cmd.Env != nil {
 			t.Errorf("expected nil cmd.Env when no extra env, got %v", cmd.Env)
@@ -1693,7 +1693,7 @@ func TestBuildCommandEnvMerge(t *testing.T) {
 			Command: "/bin/echo",
 			Env:     map[string]string{"APP_VAR": "app_value"},
 		}
-		cmd := executor.buildCommand(context.Background(), cmdInfo, nil, tmpDir, nil)
+		cmd := executor.buildCommand(context.Background(), cmdInfo, nil, tmpDir, nil, nil)
 		found := false
 		for _, e := range cmd.Env {
 			if e == "APP_VAR=app_value" {
@@ -1711,7 +1711,7 @@ func TestBuildCommandEnvMerge(t *testing.T) {
 			Command: "/bin/echo",
 			Args:    []string{"--no-install", "cli.js"},
 		}
-		cmd := executor.buildCommand(context.Background(), cmdInfo, []string{"--fix"}, tmpDir, nil)
+		cmd := executor.buildCommand(context.Background(), cmdInfo, []string{"--fix"}, tmpDir, nil, nil)
 		want := []string{"/bin/echo", "--no-install", "cli.js", "--fix"}
 		if !reflect.DeepEqual(cmd.Args, want) {
 			t.Errorf("bun command args = %v, want %v", cmd.Args, want)
@@ -1725,7 +1725,7 @@ func TestBuildCommandEnvMerge(t *testing.T) {
 			Env:     map[string]string{"SHARED": "app"},
 		}
 		toolOpEnv := map[string]string{"SHARED": "tool"}
-		cmd := executor.buildCommand(context.Background(), cmdInfo, nil, tmpDir, toolOpEnv)
+		cmd := executor.buildCommand(context.Background(), cmdInfo, nil, tmpDir, toolOpEnv, nil)
 		for _, e := range cmd.Env {
 			if e == "SHARED=app" {
 				t.Error("app env SHARED should be overridden by tool op env")

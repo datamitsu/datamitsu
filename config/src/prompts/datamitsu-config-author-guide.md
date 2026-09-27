@@ -84,6 +84,11 @@ writes the configuration; never ship it to consumers.
 Newest first. Each entry names the first version that has it and what a
 configuration should do about it.
 
+- **after v0.3.1** - A tool operation can name host variables in `inheritEnv`;
+  the tool gets the host's value, and the value is part of the operation's cache
+  identity (`datamitsu llms reference/configuration-api`). `NO_COLOR` is
+  rejected in an operation's `env` and in `inheritEnv`: drop it from any `env`.
+  Unit verdicts are cold once.
 - **after v0.3.1** - A lint pass is cached only where the tool's
   `outputParser` ran and reported nothing, at any level: files with findings of
   a tool that exits 0 on them run again every time. A `parser` key its module

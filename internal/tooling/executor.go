@@ -27,6 +27,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/hashutil"
 	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/textdiff"
+	"github.com/datamitsu/datamitsu/internal/toolenv"
 	"github.com/datamitsu/datamitsu/internal/trace"
 
 	"go.uber.org/zap"
@@ -515,6 +516,7 @@ func (e *Executor) executeTask(ctx context.Context, task Task) ExecutionResult {
 		zap.String("app", task.OpConfig.App),
 		zap.Int("fileCount", len(task.Files)))
 
+	task.inherited = toolenv.Resolve(os.Environ(), task.OpConfig.InheritEnv)
 	// Taken before the tool runs: a config saved while it runs must not have
 	// this run's result recorded under its digest.
 	task.perFileCache = e.perFileCacheTool(task)
@@ -647,8 +649,9 @@ func (e *Executor) executeTask(ctx context.Context, task Task) ExecutionResult {
 }
 
 // buildCommand creates an exec.Cmd from CommandInfo and arguments.
-// Environment merge order: OS env -> app env (cmdInfo.Env) -> toolOpEnv (ToolOperation.Env).
-func (e *Executor) buildCommand(ctx context.Context, cmdInfo *binmanager.CommandInfo, args []string, workingDir string, toolOpEnv map[string]string) *exec.Cmd {
+// Environment merge order: OS env -> inherited host pairs -> color hints -> app
+// env (cmdInfo.Env) -> toolOpEnv (ToolOperation.Env).
+func (e *Executor) buildCommand(ctx context.Context, cmdInfo *binmanager.CommandInfo, args []string, workingDir string, toolOpEnv map[string]string, inherited []string) *exec.Cmd {
 	var cmd *exec.Cmd
 
 	switch cmdInfo.Type {
@@ -663,16 +666,26 @@ func (e *Executor) buildCommand(ctx context.Context, cmdInfo *binmanager.Command
 
 	cmd.Dir = workingDir
 
-	// Apply environment with proper merge order:
-	// OS env -> color hints -> app env -> tool operation env
 	colorHints := clr.ChildEnvHints()
-	if len(cmdInfo.Env) > 0 || len(toolOpEnv) > 0 || len(colorHints) > 0 {
-		cmd.Env = mergeEnvLayers(cmd.Environ(), colorHints, cmdInfo.Env, toolOpEnv)
+	if len(inherited) > 0 || len(cmdInfo.Env) > 0 || len(toolOpEnv) > 0 || len(colorHints) > 0 {
+		cmd.Env = mergeEnvLayers(cmd.Environ(), pairsLayer(inherited), colorHints, cmdInfo.Env, toolOpEnv)
 	}
 
 	log.Debug("buildCommand", zap.Int("countOfArgs", len(cmd.Args)), zap.String("dir", cmd.Dir), zap.String("path", cmd.Path), zap.Strings("args", cmd.Args))
 
 	return cmd
+}
+
+func pairsLayer(pairs []string) map[string]string {
+	if len(pairs) == 0 {
+		return nil
+	}
+	layer := make(map[string]string, len(pairs))
+	for _, kv := range pairs {
+		name, value, _ := strings.Cut(kv, "=")
+		layer[name] = value
+	}
+	return layer
 }
 
 // mergeEnvLayers merges environment variable layers with later layers overriding earlier ones.
@@ -784,22 +797,32 @@ func (e *Executor) filterFilesByCache(task Task) (filesToProcess []string, seen 
 // For an operation that reads managed configs it carries a digest of their
 // content, so editing .yamlfmt.yaml — or init rewriting its internal copy —
 // re-runs that tool on every file without discarding any other tool's entries,
-// which folding the digest into the cache-wide invalidation key would.
+// which folding the digest into the cache-wide invalidation key would. For an
+// operation that inherits host variables it carries a digest of the values it
+// was handed, for the same reason: the invalidation key hashes configuration,
+// and a host value is not configuration.
 func (e *Executor) perFileCacheTool(task Task) string {
-	refs := task.OpConfig.ManagedConfigRefs
-	if len(refs) == 0 {
-		return task.ToolName
-	}
-	parts := make([][]byte, 0, 2*len(refs))
-	for _, ref := range refs {
-		path := e.expandPathPlaceholders(ref.Path, task.ProjectPath, task.ToolName)
-		data, err := os.ReadFile(path)
-		if err != nil {
-			data = []byte("\x00missing")
+	name := task.ToolName
+	if refs := task.OpConfig.ManagedConfigRefs; len(refs) > 0 {
+		parts := make([][]byte, 0, 2*len(refs))
+		for _, ref := range refs {
+			path := e.expandPathPlaceholders(ref.Path, task.ProjectPath, task.ToolName)
+			data, err := os.ReadFile(path)
+			if err != nil {
+				data = []byte("\x00missing")
+			}
+			parts = append(parts, []byte(ref.Key), data)
 		}
-		parts = append(parts, []byte(ref.Key), data)
+		name += "@" + hashutil.XXH3Multi(parts...)
 	}
-	return task.ToolName + "@" + hashutil.XXH3Multi(parts...)
+	if len(task.inherited) > 0 {
+		parts := make([][]byte, 0, len(task.inherited))
+		for _, kv := range task.inherited {
+			parts = append(parts, []byte(kv))
+		}
+		name += "+env:" + hashutil.XXH3Multi(parts...)
+	}
+	return name
 }
 
 // updateCacheAfterSuccess records the passes of files a tool succeeded on. A
@@ -1019,7 +1042,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 			zap.Strings("args", args))
 
 		opEnv := e.replaceEnvPlaceholders(task.OpConfig.Env, task.ProjectPath, task.ToolName)
-		cmd := e.buildCommand(ctx, cmdInfo, args, workingDir, opEnv)
+		cmd := e.buildCommand(ctx, cmdInfo, args, workingDir, opEnv, task.inherited)
 
 		stdinContent, stdinErr := stdinForOperation(task.OpConfig, file)
 		if stdinErr != nil {
@@ -1371,7 +1394,7 @@ func (e *Executor) executeBatchChunk(ctx context.Context, task Task, cmdInfo *bi
 
 	log.Debug("executing batch command", zap.Strings("args", args), zap.String("workingDir", workingDir))
 	opEnv := e.replaceEnvPlaceholders(task.OpConfig.Env, task.ProjectPath, task.ToolName)
-	cmd := e.buildCommand(ctx, cmdInfo, args, workingDir, opEnv)
+	cmd := e.buildCommand(ctx, cmdInfo, args, workingDir, opEnv, task.inherited)
 
 	// A batch tool with an outputParser (eslint --format=json, …) emits machine
 	// output on stdout while wrappers and the runtime write noise to stderr, so the

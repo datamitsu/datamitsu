@@ -3,9 +3,11 @@ package tooling
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/textdiff"
+	"github.com/datamitsu/datamitsu/internal/toolenv"
 )
 
 // FormatContent runs a single stdin->stdout formatter task against in-memory
@@ -37,7 +39,7 @@ func (e *Executor) FormatContent(ctx context.Context, task Task, absPath string,
 	workingDir := e.getWorkingDir(task)
 	args := e.replacePlaceholders(task.OpConfig.Args, absPath, []string{absPath}, task.ProjectPath, task.ToolName)
 	opEnv := e.replaceEnvPlaceholders(task.OpConfig.Env, task.ProjectPath, task.ToolName)
-	cmd := e.buildCommand(ctx, cmdInfo, args, workingDir, opEnv)
+	cmd := e.buildCommand(ctx, cmdInfo, args, workingDir, opEnv, toolenv.Resolve(os.Environ(), task.OpConfig.InheritEnv))
 
 	// separate=true keeps the candidate (stdout) apart from diagnostics (stderr),
 	// exactly as the format path does; stderr is discarded here.

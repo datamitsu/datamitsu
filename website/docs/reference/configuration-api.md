@@ -804,6 +804,7 @@ interface ToolOperation {
   cache?: boolean; // Disable file/unit caching, or opt a repo verdict in
   invalidateOn?: string[]; // Additional unit/repo verdict inputs
   env?: Record<string, string>; // Extra environment variables; values support {root}, {cwd}, {toolCache}, {managedConfig:<key>}
+  inheritEnv?: string[]; // Host variables handed to the tool with the host's value
   input?: "file" | "stdin"; // How file content reaches the tool (default: "file")
   output?: "inplace" | "stdout"; // How the result is captured (default: "inplace")
   lsp?: boolean; // false keeps the operation out of the language server (format on save)
@@ -909,8 +910,10 @@ file.
 `invalidateOn` does not participate in file-granularity cache entries. If one
 file's result can change because a shared config changes, declare
 `granularity: "unit"` and list that config instead of claiming file independence.
-File entries also do not fold in inherited process environment; use unit
-granularity or `cache: false` when such a value affects the result.
+File entries fold in the values of the variables an operation names in
+[`inheritEnv`](#inheriting-host-variables-inheritenv), and nothing else from the
+inherited process environment; name such a variable there, use unit granularity
+or `cache: false` when its value affects the result.
 Unit and repository verdicts expire after `DATAMITSU_UNIT_CACHE_TTL` minutes
 (`1440` by default; `0` disables them).
 
@@ -1015,6 +1018,41 @@ away.
 Only fix operations run in the editor today; the field is accepted on any
 operation. It is unrelated to the top-level [`lsp`](#lsp-servers-lsp--reserved)
 record, which declares language servers.
+
+### Operation environment (`env`)
+
+`env` sets fixed values for one operation. They are layered over the app's own
+`env`, which is layered over the environment datamitsu was started with, so the
+operation's value wins. Values support `{root}`, `{cwd}`, `{toolCache}` and
+`{managedConfig:<key>}`. `NO_COLOR` cannot be set, in any letter case: it is
+reserved for datamitsu.
+
+#### Inheriting host variables (`inheritEnv`)
+
+`inheritEnv` names host environment variables the tool is handed with the
+host's value — the value is read when the task starts, never written in the
+config. A variable the host sets to the empty string is handed as empty, and one
+the host does not set adds nothing. `env` is layered after it, so a fixed value
+in `env` wins over an inherited one.
+
+```javascript
+lint: {
+  app: "pinact",
+  args: ["run", "--check"],
+  scope: "repository",
+  inheritEnv: ["GITHUB_ACTIONS"],
+},
+```
+
+The values are part of the operation's cache identity, for its per-file entries
+and its unit verdicts alike: the configuration names the variables but never
+holds their values, so a run under another value runs the tool again instead of
+replaying a result recorded under the old one.
+
+The field is per operation, because a tool's lint and fix can need different
+things. Each name must be an uppercase variable name (`^[A-Z_][A-Z0-9_]*$`),
+listed once; `NO_COLOR`, `PATH` (which would compete with the `PATH` the runtime
+sets) and every `DATAMITSU_*` name are rejected.
 
 ### Skipping a tool (`skip` / `skipReason`)
 

@@ -12,6 +12,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/hashutil"
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
+	"github.com/datamitsu/datamitsu/internal/toolenv"
 	"github.com/datamitsu/datamitsu/internal/trace"
 
 	"go.uber.org/zap"
@@ -45,14 +46,18 @@ var guardNames = []string{
 // the key it dispatches to are in the key — empty for a tool without one. The
 // whole configuration is also hashed into the cache's invalidation key, but
 // that covers them only as long as it hashes everything.
+//
+// The host values an operation inherits (inheritEnv) are in it as the pairs
+// the task captured: they change what the tool does as much as env does, and
+// the invalidation key, which hashes configuration, never sees them.
 func verdictIdentity(task Task, unitDirRel, parserModuleHash string) string {
 	parserKey := ""
 	if task.Tool.OutputParser != nil {
 		parserKey = task.Tool.OutputParser.Parser
 	}
-	parts := make([][]byte, 0, 8+len(task.OpConfig.Args)+len(task.OpConfig.Env))
+	parts := make([][]byte, 0, 9+len(task.OpConfig.Args)+len(task.OpConfig.Env)+len(task.inherited))
 	parts = append(parts,
-		[]byte("dmv2"),
+		[]byte("dmv3"),
 		[]byte(task.ToolName),
 		[]byte(task.Operation),
 		[]byte(unitDirRel),
@@ -65,6 +70,11 @@ func verdictIdentity(task Task, unitDirRel, parserModuleHash string) string {
 		parts = append(parts, []byte(arg))
 	}
 	for _, kv := range sortedEnv(task.OpConfig.Env) {
+		parts = append(parts, []byte(kv))
+	}
+	// Every pair carries "=", so the marker cannot be mistaken for one.
+	parts = append(parts, []byte("inherit"))
+	for _, kv := range task.inherited {
 		parts = append(parts, []byte(kv))
 	}
 	return hashutil.XXH3Multi(parts...)
@@ -709,6 +719,7 @@ func (e *Executor) recordVerdict(task Task, key string, snap *verdictSnapshot, o
 		sibling := task
 		sibling.Operation = config.OpLint
 		sibling.OpConfig = lintOp
+		sibling.inherited = toolenv.Resolve(os.Environ(), lintOp.InheritEnv)
 		e.cache.DeleteVerdict(verdictIdentity(sibling, sibling.UnitDir, e.parserModuleHash(sibling)))
 	}
 }

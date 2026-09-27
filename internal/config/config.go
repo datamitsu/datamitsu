@@ -119,6 +119,11 @@ type ToolOperation struct {
 	// InvalidateOn adds unit/repository verdict guards resolved through ancestors.
 	InvalidateOn []string          `json:"invalidateOn,omitempty"`
 	Env          map[string]string `json:"env,omitempty"` // Extra environment variables for this operation
+	// InheritEnv names host variables the tool is handed with their host
+	// values; Env is layered over them. The resolved pairs are part of the
+	// operation's cache identities: they are what the tool sees, and a host
+	// value is not configuration.
+	InheritEnv []string `json:"inheritEnv,omitempty"`
 	// Input selects how the file content reaches the tool: "file" (default,
 	// path via {file}/{files}) or "stdin" (pipe the file's content to stdin).
 	Input ToolInputMode `json:"input,omitempty"`

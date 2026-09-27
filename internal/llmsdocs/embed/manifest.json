@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 55,
-  "pageSetHash": "c4f825fc99cdb884573789e8a0c9e976",
+  "pageSetHash": "de68e31e80e0628ef23c94a588d5fa80",
   "pages": [
     {
       "slug": "about",
@@ -206,8 +206,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/caching.md",
       "title": "Caching Strategy",
       "description": "How datamitsu caches file-level results and unit or repository verdicts, computes XXH3-128 keys, and persists them safely",
-      "bytes": 27352,
-      "contentHash": "f159fa7425623e3aa8356c0391f9b981"
+      "bytes": 28034,
+      "contentHash": "153a80091256ab0bf90141d5586ae34c"
     },
     {
       "slug": "guides/architecture/discovery",
@@ -469,8 +469,8 @@
       "url": "https://datamitsu.com/docs/reference/configuration-api.md",
       "title": "Configuration API",
       "description": "Complete reference for the datamitsu configuration API",
-      "bytes": 72943,
-      "contentHash": "869b82c3b47e8708d0689987ebd39851"
+      "bytes": 74643,
+      "contentHash": "d0756c54ac2aa2aec116ce7fd29d370a"
     },
     {
       "slug": "reference/ignore-rules",

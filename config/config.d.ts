@@ -1032,8 +1032,9 @@ declare global {
       cache?: boolean;
 
       /**
-       * Extra environment variables for this operation Merge priority: OS env < app env < tool
-       * operation env
+       * Extra environment variables for this operation Merge priority: OS env < inherited
+       * (`inheritEnv`) < app env < tool operation env. `NO_COLOR` cannot be set: it is reserved for
+       * datamitsu.
        *
        * @example
        *   { "NODE_ENV": "production", "ESLINT_USE_FLAT_CONFIG": "true" }
@@ -1081,6 +1082,18 @@ declare global {
        *   granularity: "file";
        */
       granularity?: "file" | "repo" | "unit";
+
+      /**
+       * Host environment variables to hand to the tool with the host's value. Names only: the tool
+       * sees the host's real value, and nothing when the host has none. The values are part of the
+       * operation's cache identity, so a change of value runs the tool again. Use `env` to set a
+       * fixed value instead; `env` wins over an inherited value. `NO_COLOR`, `PATH` and
+       * `DATAMITSU_*` names are rejected.
+       *
+       * @example
+       *   inheritEnv: ["GITHUB_ACTIONS"];
+       */
+      inheritEnv?: string[];
 
       /**
        * How the file content reaches the tool. - "file" (default): pass file paths as arguments via
