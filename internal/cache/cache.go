@@ -646,6 +646,10 @@ func withoutThresholds(cfg config.Config) config.Config {
 	}
 	tools := make(config.MapOfTools, len(cfg.Tools))
 	for name, tool := range cfg.Tools {
+		if tool.Operations == nil {
+			tools[name] = tool
+			continue
+		}
 		ops := make(map[config.OperationType]config.ToolOperation, len(tool.Operations))
 		for kind, op := range tool.Operations {
 			op.FailOn = ""

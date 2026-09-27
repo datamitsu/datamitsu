@@ -207,9 +207,13 @@ func TestInvalidationKeyFormat(t *testing.T) {
 // operation's failOn is not part of the key, while any other edit is.
 func TestInvalidationKeyIgnoresFailOn(t *testing.T) {
 	cfg := func(failOn config.Severity, args ...string) config.Config {
-		return config.Config{Tools: config.MapOfTools{"lint": {Name: "lint", Operations: map[config.OperationType]config.ToolOperation{
-			config.OpLint: {App: "lint", Args: args, FailOn: failOn},
-		}}}}
+		return config.Config{Tools: config.MapOfTools{
+			"lint": {Name: "lint", Operations: map[config.OperationType]config.ToolOperation{
+				config.OpLint: {App: "lint", Args: args, FailOn: failOn},
+			}},
+			// A tool kept only to be skipped declares no operations at all.
+			"placeholder": {Name: "placeholder", Skip: true},
+		}}
 	}
 	key := func(c config.Config) string {
 		t.Helper()
