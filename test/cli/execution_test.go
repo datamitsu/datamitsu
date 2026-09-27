@@ -831,6 +831,17 @@ func TestExecutionRunThatCannotStart(t *testing.T) {
 			t.Errorf("a usage error emitted done events: %+v", done)
 		}
 	})
+
+	// A caller mistake is refused before the repository and the configuration
+	// are looked at, so it is a usage error even where neither exists.
+	t.Run("usage_error_outside_a_repository", func(t *testing.T) {
+		for _, args := range [][]string{{"lint", "--widen-to=Repo"}, {"check", "--explain=bogus"}, {"fix", "--require-coverage=unit", "--tools", "alpha"}} {
+			res := clitest.Run(t, clitest.RunOptions{Dir: t.TempDir()}, args...)
+			if res.ExitCode != 2 {
+				t.Errorf("%v outside a repository exit = %d, want 2\nstderr:\n%s", args, res.ExitCode, res.Stderr)
+			}
+		}
+	})
 }
 
 // checkClosingRE matches check's closing line, durations masked.

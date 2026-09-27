@@ -11,8 +11,6 @@ import (
 
 const failFastUsage = "Stop at the first failing tool; --fail-fast=false runs everything to the end (also via DATAMITSU_FAIL_FAST)"
 
-// addFailFastFlag binds --fail-fast. A bool flag parses both the bare
-// --fail-fast and --fail-fast=false.
 func addFailFastFlag(cmd *cobra.Command, value *bool) {
 	cmd.Flags().BoolVar(value, "fail-fast", runtimeconfig.FailFast, failFastUsage)
 }

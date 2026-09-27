@@ -39,8 +39,6 @@ func (sc *sharedContext) summaryOf(op config.OperationType) (opSummary, bool) {
 	return sc.summaries[i], true
 }
 
-// commandName is the command a list of operations was run by: check runs fix
-// then lint, fix and lint run themselves.
 func commandName(operations []config.OperationType) string {
 	if len(operations) > 1 {
 		return "check"

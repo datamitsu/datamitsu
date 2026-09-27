@@ -178,6 +178,30 @@ func initSharedContext(
 		}
 	}
 
+	// Caller mistakes are refused before anything is loaded: they exit 2 whether
+	// or not the directory is a repository and the configuration loads.
+	if err := opts.validate(); err != nil {
+		return nil, err
+	}
+	// Rejected before anything runs: --tools drops the skip entries of unselected
+	// tools before they can be observed, so the assertion would be trivially true
+	// over a debug subset. Failing after the run would waste it.
+	if opts.RequireCoverage != "" && len(sc.selectedTools) > 0 {
+		return nil, errRequireCoverageWithTools
+	}
+	if explainMode != "" {
+		switch strings.ToLower(explainMode) {
+		case "summary", "s":
+			sc.explainLevel = "summary"
+		case "detailed", "detail", "d":
+			sc.explainLevel = "detailed"
+		case "json", "j":
+			sc.explainLevel = "json"
+		default:
+			return nil, exitcode.UsageErrorf("invalid --explain value: %s (must be summary, detailed, or json)", explainMode)
+		}
+	}
+
 	// Get cwd
 	var err error
 	sc.cwdPath, err = os.Getwd()
@@ -213,20 +237,6 @@ func initSharedContext(
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
-	// Validate and normalize explain mode
-	if explainMode != "" {
-		switch strings.ToLower(explainMode) {
-		case "summary", "s":
-			sc.explainLevel = "summary"
-		case "detailed", "detail", "d":
-			sc.explainLevel = "detailed"
-		case "json", "j":
-			sc.explainLevel = "json"
-		default:
-			return nil, exitcode.UsageErrorf("invalid --explain value: %s (must be summary, detailed, or json)", explainMode)
-		}
-	}
-
 	// Determine files to process
 	sc.files = args
 	if fileScoped {
@@ -239,16 +249,6 @@ func initSharedContext(
 
 	// Normalize all file paths to absolute paths to prevent filepath.Rel errors in cache.
 	sc.files = normalizeFilePaths(sc.files, sc.cwdPath)
-
-	if err := opts.validate(); err != nil {
-		return nil, err
-	}
-	// Rejected before anything runs: --tools drops the skip entries of unselected
-	// tools before they can be observed, so the assertion would be trivially true
-	// over a debug subset. Failing after the run would waste it.
-	if opts.RequireCoverage != "" && len(sc.selectedTools) > 0 {
-		return nil, errRequireCoverageWithTools
-	}
 
 	sc.selection = tooling.NewSelection(sc.rootPath, sc.cwdPath, sc.files, fileScoped)
 
