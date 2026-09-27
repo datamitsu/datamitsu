@@ -85,10 +85,11 @@ Newest first. Each entry names the first version that has it and what a
 configuration should do about it.
 
 - **after v0.3.1** - Usage errors exit 2 and `--fail-on-skip` exits 4, both
-  once 1; `fix`, `lint` and `check` take `--fail-fast=false`
-  (`DATAMITSU_FAIL_FAST=false`) to run every tool to the end. A CI step or
-  script of the configuration's repository that compares an exit code with 1
-  compares with 2 or 4 instead; CI runs `datamitsu lint --fail-fast=false`.
+  once 1; a failed tool still exits 1. `fix`, `lint` and `check` take
+  `--fail-fast=false` (`DATAMITSU_FAIL_FAST=false`) to run every tool to the
+  end. A CI step or script of the configuration's repository that expects 1
+  from a mistaken invocation or from `--fail-on-skip` expects 2 or 4 instead;
+  CI runs `datamitsu lint --fail-fast=false`.
 - **after v0.3.1** - `devtools verify-all` and `pull-github --verify-extraction`
   fail when a `binaryPath` extracts something other than an executable, such as
   a completion script. `pull-github` keeps a `binaryPath` fixed by hand when the

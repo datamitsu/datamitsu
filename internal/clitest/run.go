@@ -119,7 +119,8 @@ func Start(tb testing.TB, opts RunOptions, args ...string) *Process {
 	return p
 }
 
-// Signal sends sig to the running process.
+// Signal delivers sig to the binary alone, not to the tools it started: they
+// run in their own process groups, as they do under a terminal's Ctrl-C.
 func (p *Process) Signal(sig os.Signal) error {
 	if err := p.cmd.Process.Signal(sig); err != nil {
 		return fmt.Errorf("clitest: signal %s: %w", sig, err)
