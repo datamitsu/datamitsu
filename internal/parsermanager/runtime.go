@@ -28,6 +28,9 @@ type RawDiagnostic struct {
 	Severity *uint8  `json:"severity,omitempty"`
 	Source   *string `json:"source,omitempty"`
 	Code     *string `json:"code,omitempty"`
+	// URL documents the rule, where the tool prints one; a schema-1 module
+	// never sets it.
+	URL *string `json:"url,omitempty"`
 	// File is set only by parsers whose format names the file per diagnostic
 	// (eslint's filePath). Batch runs cover many files at once, so this is the
 	// only way to attribute them; per-file parsers leave it nil and the executor

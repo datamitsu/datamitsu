@@ -1035,6 +1035,24 @@ func TestExecutionParsedFailure(t *testing.T) {
 		}
 		e.golden("s8_lint_parsed_failure_no_parse", res)
 	})
+
+	// checkmake prints no level, so the exit code is the only thing it says
+	// about seriousness: its findings under a failed run are errors.
+	t.Run("no-level", func(t *testing.T) {
+		e := newExecProject(t, map[string]string{"fixture.marker": "", "Makefile": "all:\n\ttrue\n"}, fixtureSpec)
+		module := filepath.Join("..", "..", "internal", "parsermanager", "testdata", "echo.wasm")
+		spec := fixtureSpec
+		spec.Parsers = clitest.SeedParserModule(t, e.cache, module)
+		e.p.WriteFile("exec.config.js", clitest.ShellConfig(spec, clitest.ShellTool("checkmake",
+			settle+clitest.RecordRun+`; echo '1:minphony:Required target "all" is missing from the Makefile.'; exit 1`,
+			clitest.ToolOpSpec{Scope: "per-file", Globs: []string{"**/Makefile"}, Args: []string{"{file}"}, Parser: "checkmake"})))
+		res := e.run("", nil, "lint")
+		e.wantExit(res, 1)
+		if !strings.Contains(res.Stdout, `Makefile:1:1 error Required target "all" is missing from the Makefile. [minphony]`) {
+			t.Errorf("a finding without a level under a failed run should show as an error:\n%s", res.Stdout)
+		}
+		e.golden("s8_lint_parsed_failure_no_level", res)
+	})
 }
 
 // TestExecutionParsedPassKeepsFindingsUncached is S9: a tool that reports a

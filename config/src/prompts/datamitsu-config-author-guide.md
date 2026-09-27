@@ -84,6 +84,14 @@ writes the configuration; never ship it to consumers.
 Newest first. Each entry names the first version that has it and what a
 configuration should do about it.
 
+- **after v0.3.1** - A finding a tool printed no level for is an error when the
+  tool failed and a warning when it passed (it was always a warning). The parser
+  module released with this core (descriptor schema 2) sets levels only from
+  what a tool printed, reports golangci-lint's linter as the rule, and adds rule
+  URLs (`datamitsu llms guides/architecture/parsers`). Bump the `parsers` pin to
+  it and check the pin with `datamitsu devtools parsers list`: a module that has
+  the contract shows a `levels` line per tool.
+
 - **after v0.3.1** - Tools run by `fix`, `lint` and `check` no longer see
   `GITHUB_ACTIONS`, AI agent markers or `FORCE_COLOR`, and always get
   `NO_COLOR=1`; `CI` still passes through and `exec` changes nothing

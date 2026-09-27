@@ -1,6 +1,7 @@
 package diagnostic
 
 import (
+	"fmt"
 	"path/filepath"
 	"testing"
 
@@ -30,7 +31,7 @@ func TestResolve_PositionContract(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			c.raw.Message = "m"
-			d := Resolve(c.raw, "t")
+			d := Resolve(c.raw, "t", false)
 			if d.Row != c.row || d.Col != c.col || d.EndRow != c.endRow || d.EndCol != c.endCol {
 				t.Errorf("got %d:%d-%d:%d, want %d:%d-%d:%d",
 					d.Row, d.Col, d.EndRow, d.EndCol, c.row, c.col, c.endRow, c.endCol)
@@ -62,7 +63,7 @@ func TestAbsPath(t *testing.T) {
 
 func TestResolve_FillsDefaultsForAbsentFields(t *testing.T) {
 	// Only message present — every other field defaulted.
-	d := Resolve(parsermanager.RawDiagnostic{Message: "boom"}, "dotenv_linter")
+	d := Resolve(parsermanager.RawDiagnostic{Message: "boom"}, "dotenv_linter", false)
 	if d.Message != "boom" {
 		t.Errorf("message = %q", d.Message)
 	}
@@ -73,7 +74,7 @@ func TestResolve_FillsDefaultsForAbsentFields(t *testing.T) {
 		t.Errorf("end defaults to start, got %d/%d", d.EndRow, d.EndCol)
 	}
 	if d.Severity != SeverityWarning {
-		t.Errorf("severity = %v, want fallback Warning", d.Severity)
+		t.Errorf("severity = %v, want Warning for a passing process", d.Severity)
 	}
 	if d.Source != "dotenv_linter" {
 		t.Errorf("source = %q, want the tool name", d.Source)
@@ -92,7 +93,7 @@ func TestResolve_UsesProvidedFields(t *testing.T) {
 		EndCol:   new(uint32(9)),
 		Severity: new(uint8(SeverityError)),
 		Code:     new("DL3008"),
-	}, "hadolint")
+	}, "hadolint", false)
 	if d.Row != 3 || d.Col != 7 || d.EndRow != 3 || d.EndCol != 9 {
 		t.Errorf("positions not preserved: %+v", d)
 	}
@@ -105,7 +106,7 @@ func TestResolve_UsesProvidedFields(t *testing.T) {
 }
 
 func TestResolve_EndDefaultsToStartWhenOnlyStartGiven(t *testing.T) {
-	d := Resolve(parsermanager.RawDiagnostic{Message: "m", Row: new(uint32(5)), Col: new(uint32(2))}, "t")
+	d := Resolve(parsermanager.RawDiagnostic{Message: "m", Row: new(uint32(5)), Col: new(uint32(2))}, "t", false)
 	if d.EndRow != 5 || d.EndCol != 2 {
 		t.Errorf("end should default to start (5/2), got %d/%d", d.EndRow, d.EndCol)
 	}
@@ -113,28 +114,65 @@ func TestResolve_EndDefaultsToStartWhenOnlyStartGiven(t *testing.T) {
 
 func TestResolve_ParserSourceOverridesToolName(t *testing.T) {
 	// cue_fmt sets its own source; it wins over the dispatch tool name.
-	d := Resolve(parsermanager.RawDiagnostic{Message: "m", Source: new("cue_fmt")}, "cue")
+	d := Resolve(parsermanager.RawDiagnostic{Message: "m", Source: new("cue_fmt")}, "cue", false)
 	if d.Source != "cue_fmt" {
 		t.Errorf("source = %q, want parser-provided cue_fmt", d.Source)
 	}
 }
 
-func TestResolve_OutOfRangeSeverityFallsBack(t *testing.T) {
-	d := Resolve(parsermanager.RawDiagnostic{Message: "m", Severity: new(uint8(9))}, "t")
-	if d.Severity != SeverityWarning {
-		t.Errorf("out-of-range severity should fall back to Warning, got %v", d.Severity)
+// TestResolve_LevelFromTheExitCode: a finding its tool printed no level for is
+// an error under a failed process and a warning under a passing one; a printed
+// level stays what it is either way, and an out-of-range one counts as none.
+func TestResolve_LevelFromTheExitCode(t *testing.T) {
+	type levelCase struct {
+		name   string
+		level  *uint8
+		failed bool
+		want   Severity
+	}
+	printed := []Severity{SeverityError, SeverityWarning, SeverityInfo, SeverityHint}
+	cases := make([]levelCase, 0, 5+2*len(printed))
+	cases = append(cases,
+		levelCase{"none, failed", nil, true, SeverityError},
+		levelCase{"none, passed", nil, false, SeverityWarning},
+		levelCase{"out of range, failed", new(uint8(9)), true, SeverityError},
+		levelCase{"out of range, passed", new(uint8(9)), false, SeverityWarning},
+		levelCase{"zero, failed", new(uint8(0)), true, SeverityError},
+	)
+	for _, level := range printed {
+		for _, failed := range []bool{true, false} {
+			cases = append(cases, levelCase{fmt.Sprintf("%s, failed=%v", level, failed), new(uint8(level)), failed, level})
+		}
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			d := Resolve(parsermanager.RawDiagnostic{Message: "m", Severity: c.level}, "t", c.failed)
+			if d.Severity != c.want {
+				t.Errorf("severity = %v, want %v", d.Severity, c.want)
+			}
+		})
+	}
+}
+
+func TestResolve_CopiesTheRuleURL(t *testing.T) {
+	d := Resolve(parsermanager.RawDiagnostic{Message: "m", URL: new("https://example.test/rule")}, "t", false)
+	if d.URL != "https://example.test/rule" {
+		t.Errorf("url = %q, want the parser-reported URL", d.URL)
+	}
+	if got := Resolve(parsermanager.RawDiagnostic{Message: "m"}, "t", false); got.URL != "" {
+		t.Errorf("url = %q, want empty when the parser reported none", got.URL)
 	}
 }
 
 // A batch parser (eslint) names the file per diagnostic; the core must keep it,
 // since the executor has no single file to stamp on a many-file run.
 func TestResolve_CarriesParserReportedFile(t *testing.T) {
-	d := Resolve(parsermanager.RawDiagnostic{Message: "m", File: new("src/a.ts")}, "eslint")
+	d := Resolve(parsermanager.RawDiagnostic{Message: "m", File: new("src/a.ts")}, "eslint", false)
 	if d.File != "src/a.ts" {
 		t.Errorf("file = %q, want the parser-reported path", d.File)
 	}
 	// Absent stays empty so the executor's own stamping still applies.
-	if got := Resolve(parsermanager.RawDiagnostic{Message: "m"}, "eslint"); got.File != "" {
+	if got := Resolve(parsermanager.RawDiagnostic{Message: "m"}, "eslint", false); got.File != "" {
 		t.Errorf("file = %q, want empty when the parser reported none", got.File)
 	}
 }
@@ -152,10 +190,10 @@ func TestSeverity_String(t *testing.T) {
 }
 
 func TestResolveAll(t *testing.T) {
-	if got := ResolveAll(nil, "t"); got != nil {
+	if got := ResolveAll(nil, "t", false); got != nil {
 		t.Errorf("ResolveAll(nil) = %v, want nil", got)
 	}
-	out := ResolveAll([]parsermanager.RawDiagnostic{{Message: "a"}, {Message: "b", Row: new(uint32(2))}}, "yamllint")
+	out := ResolveAll([]parsermanager.RawDiagnostic{{Message: "a"}, {Message: "b", Row: new(uint32(2))}}, "yamllint", false)
 	if len(out) != 2 || out[0].Message != "a" || out[1].Row != 2 {
 		t.Fatalf("unexpected: %+v", out)
 	}

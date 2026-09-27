@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -48,7 +49,10 @@ func TestParsingDisabled(t *testing.T) {
 // module: serve the committed parser fixture, resolve a parsers config entry,
 // run eslint's actual --format json output through it, and assert finalized
 // diagnostics (defaults filled, eslint's numeric severity normalized).
-func TestDiagnosticParser_EndToEnd(t *testing.T) {
+// coreModule serves the committed crate build as the parsers entry "core" and
+// returns a Manager over it.
+func coreModule(t *testing.T) *parsermanager.Manager {
+	t.Helper()
 	t.Setenv("DATAMITSU_PARSERS_DIR", t.TempDir())
 
 	wasm, err := os.ReadFile(filepath.Join("..", "parsermanager", "testdata", "echo.wasm"))
@@ -67,7 +71,11 @@ func TestDiagnosticParser_EndToEnd(t *testing.T) {
 		"core": {URL: srv.URL, Hash: hex.EncodeToString(sum[:])},
 	})
 	t.Cleanup(func() { _ = mgr.Close(context.Background()) })
-	parser := newDiagnosticParser(mgr, newParseProblems())
+	return mgr
+}
+
+func TestDiagnosticParser_EndToEnd(t *testing.T) {
+	parser := newDiagnosticParser(coreModule(t), newParseProblems())
 
 	eslintJSON := []byte(`[{"filePath":"a.js","messages":[` +
 		`{"ruleId":"no-undef","severity":2,"message":"'z' is not defined.","line":2,"column":25,"endLine":2,"endColumn":26},` +
@@ -241,6 +249,65 @@ func TestParseFailureThroughTheExecutor(t *testing.T) {
 	want := []string{"output parser failed for hadolint: decode parser output: unexpected end of JSON input"}
 	if got := problems.pending(); !slices.Equal(got, want) {
 		t.Errorf("warnings = %q, want %q", got, want)
+	}
+}
+
+// TestLevelsAndRuleURLThroughTheExecutor follows findings from the real module
+// to the task result: the rule URL tfsec prints survives decoding, resolution
+// and aggregation; a level the tool printed stays what it said whatever the
+// exit code; and a finding without one (checkmake prints none) is an error when
+// the tool failed and a warning when it passed.
+func TestLevelsAndRuleURLThroughTheExecutor(t *testing.T) {
+	const tfsecJSON = `{"results":[{"rule_id":"aws-s3-enable-bucket-logging",` +
+		`"description":"Bucket has logging disabled","severity":"LOW",` +
+		`"links":["https://example.test/checks/aws-s3-enable-bucket-logging"],` +
+		`"location":{"filename":"main.tf","start_line":4,"end_line":6}}]}`
+	const checkmakeLine = `1:minphony:Required target "all" is missing from the Makefile.`
+	mgr := coreModule(t)
+
+	cases := []struct {
+		name, parser, output string
+		exit                 int
+		want                 diagnostic.Severity
+		wantURL              string
+	}{
+		{"printed level, passed", "tfsec", tfsecJSON, 0, diagnostic.SeverityInfo, "https://example.test/checks/aws-s3-enable-bucket-logging"},
+		{"printed level, failed", "tfsec", tfsecJSON, 1, diagnostic.SeverityInfo, "https://example.test/checks/aws-s3-enable-bucket-logging"},
+		{"no level, passed", "checkmake", checkmakeLine, 0, diagnostic.SeverityWarning, ""},
+		{"no level, failed", "checkmake", checkmakeLine, 1, diagnostic.SeverityError, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			file := filepath.Join(root, "input")
+			if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			script := fmt.Sprintf("printf '%%s\\n' '%s'; exit %d", tc.output, tc.exit)
+			executor := tooling.NewExecutor(root, false, false, shellApps{
+				"tool": {Type: "shell", Command: "/bin/sh", Args: []string{"-c", script}},
+			}, nil)
+			executor.SetParser(newDiagnosticParser(mgr, newParseProblems()))
+			plan := &tooling.ExecutionPlan{Groups: []tooling.TaskGroup{{Tasks: []tooling.Task{{
+				ToolName:    tc.parser,
+				Tool:        config.Tool{Name: tc.parser, OutputParser: &config.OutputParser{Module: "core", Parser: tc.parser}},
+				Operation:   config.OpLint,
+				OpConfig:    config.ToolOperation{App: "tool", Scope: config.ToolScopePerFile, Args: []string{"{file}"}},
+				Files:       []string{file},
+				ProjectPath: root,
+			}}}}}
+			results, err := executor.Execute(context.Background(), plan)
+			if err != nil {
+				t.Fatal(err)
+			}
+			diags := results[0].Results[0].Diagnostics
+			if len(diags) != 1 {
+				t.Fatalf("diagnostics = %+v, want one", diags)
+			}
+			if diags[0].Severity != tc.want || diags[0].URL != tc.wantURL {
+				t.Errorf("severity %v, url %q; want %v, %q", diags[0].Severity, diags[0].URL, tc.want, tc.wantURL)
+			}
+		})
 	}
 }
 

@@ -80,7 +80,7 @@ func (p diagnosticParser) Parse(
 		p.problems.parseFailed(toolName, err)
 		return nil, err
 	}
-	return diagnostic.ResolveAll(raws, toolName), nil
+	return diagnostic.ResolveAll(raws, toolName, exitCode != 0), nil
 }
 
 // parseProblems gathers, across the parses of a run, what could not be parsed:

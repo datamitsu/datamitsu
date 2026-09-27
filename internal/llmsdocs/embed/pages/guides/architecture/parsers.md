@@ -112,6 +112,13 @@ a token has no level. The module's contract test holds every parser to this over
 its samples and its recorded fixtures, and the
 [parser catalogue](../../reference/parser-catalog.md) lists each vocabulary.
 
+The core resolves a finding without a level from the exit code of the process
+that printed it: **error when the tool failed, warning when it passed**. For a
+tool with no level vocabulary the exit code is the only thing it says about
+seriousness, so a checkmake finding under a failed run shows as an error and the
+same finding under a passing run as a warning. A level the tool printed is never
+changed by the exit code; a value outside the 1–4 scale counts as none.
+
 A schema-1 module predates the rule: more than twenty of its parsers set a level
 the tool never printed — "warning" for every finding of markdownlint, codespell or
 golangci-lint, "error" for every finding of knip, kube-linter or cue — and its
