@@ -892,8 +892,14 @@ func joinStreams(stdout, stderr []byte) []byte {
 // failure is not fatal — the tool's own pass/fail is unaffected — and is
 // reported once per run by the caller that wired the parser, so it is logged
 // here at debug only.
+//
+// The parser reads the streams without their ANSI sequences: a tool that
+// colours its output even into a pipe would otherwise hide a position or a
+// level from a line parser behind an escape. The caller keeps the raw streams
+// for the frame.
 func (e *Executor) parseFileDiagnostics(ctx context.Context, proc *ProcessResult, task Task, workingDir string, stdout, stderr []byte, exitCode int) {
 	op := task.Tool.OutputParser
+	stdout, stderr = stripCSI(stdout), stripCSI(stderr)
 	cntParse.Add(1)
 	parseSpan := trace.Start(trace.CatParse, "parseDiagnostics")
 	//nolint:gosec // G115: a process exit code is small; the int32 cast is intentional.

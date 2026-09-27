@@ -200,6 +200,32 @@ func TestExecuteBatchChunkParses(t *testing.T) {
 	}
 }
 
+// A tool that colours its output into a pipe: the parser reads both streams
+// without the escapes, and the frame keeps what the tool printed.
+func TestParserReadsOutputWithoutANSI(t *testing.T) {
+	tmpDir := t.TempDir()
+	fp := &fakeParser{}
+	executor := NewExecutor(tmpDir, false, false, &mockAppManager{commands: map[string]*binmanager.CommandInfo{
+		"yamllint": shellApp(`printf 'a.yaml:3:1: [\033[31merror\033[0m] x\n'; printf '\033[33m[note]\033[0m\n' >&2; exit 1`),
+	}}, nil)
+	executor.SetParser(fp)
+	task := parseTask("core", "yamllint")
+	task.ToolName, task.Operation = "yamllint", config.OpLint
+	task.OpConfig = config.ToolOperation{App: "yamllint", Scope: config.ToolScopePerProject}
+	task.ProjectPath = tmpDir
+
+	result := executor.executeTask(context.Background(), task)
+	if got := string(fp.gotStdout); got != "a.yaml:3:1: [error] x\n" {
+		t.Errorf("parser stdout = %q, want it without escapes", got)
+	}
+	if got := string(fp.gotStderr); got != "[note]\n" {
+		t.Errorf("parser stderr = %q, want it without escapes", got)
+	}
+	if !strings.Contains(result.Output, "\x1b[31merror\x1b[0m") || !strings.Contains(result.Output, "\x1b[33m[note]") {
+		t.Errorf("Output = %q, want the raw streams kept for the frame", result.Output)
+	}
+}
+
 // TestExecuteBatchStampsASingleFile drives a list-taking tool whose parser
 // names no file: handed one file, the process's findings are about it; handed
 // two, nothing says which.
