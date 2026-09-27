@@ -8,8 +8,9 @@ added: 2026-09-27
 
 Usage errors exit 2 (`internal/exitcode`): cobra flag errors through `SetFlagErrorFunc`,
 positional-argument checks through `usageArgs`, required flags and flag groups through the
-root's `PersistentPreRunE`, and the value checks of `fix`, `lint`, `check`, `inspect` and
-`devtools pull-runtimes`. Two kinds still exit 1:
+root's `PersistentPreRunE`, and the argument checks of `fix`, `lint`, `check`, `install`,
+`inspect`, `source`, `store seed`, `devtools dockerfile` and `devtools pull-runtimes`. Two kinds
+still exit 1:
 
 - **An unknown command.** `datamitsu bogus` fails inside cobra's command lookup, before any hook
   or flag parsing, with a plain `unknown command "bogus" for "datamitsu"` error. Telling it apart

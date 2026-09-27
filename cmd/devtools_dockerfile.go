@@ -9,6 +9,7 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/dockerfile"
 	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/exitcode"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"github.com/datamitsu/datamitsu/internal/ocidigest"
 	"github.com/datamitsu/datamitsu/internal/target"
@@ -262,7 +263,7 @@ func parseArgs(flag string, pairs []string) (map[string]string, error) {
 	for _, pair := range pairs {
 		key, value, _ := strings.Cut(pair, "=")
 		if key == "" {
-			return nil, fmt.Errorf("invalid --%s %q: want name or name=value", flag, pair)
+			return nil, exitcode.UsageErrorf("invalid --%s %q: want name or name=value", flag, pair)
 		}
 		m[key] = value
 	}
@@ -276,7 +277,7 @@ func parseKeyValues(flag string, pairs []string) (map[string]string, error) {
 	for _, pair := range pairs {
 		key, value, ok := strings.Cut(pair, "=")
 		if !ok || key == "" {
-			return nil, fmt.Errorf("invalid --%s %q: want key=value", flag, pair)
+			return nil, exitcode.UsageErrorf("invalid --%s %q: want key=value", flag, pair)
 		}
 		m[key] = value
 	}

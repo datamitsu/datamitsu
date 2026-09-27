@@ -11,6 +11,7 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/exitcode"
 	"github.com/datamitsu/datamitsu/internal/ocibundle"
 	"github.com/datamitsu/datamitsu/internal/ocidigest"
 	"github.com/datamitsu/datamitsu/internal/ociref"
@@ -137,10 +138,10 @@ func resolveSeedRef(ctx context.Context, cfg *config.Config, args []string) (*co
 	// could never work against a registry on a port.
 	ref, tag, ok := ociref.SplitTag(arg)
 	if !ok {
-		return nil, fmt.Errorf("reference %q must be pinned as <ref>@sha256:<digest> (or <ref>:<tag> with --resolve-tag)", arg)
+		return nil, exitcode.UsageErrorf("reference %q must be pinned as <ref>@sha256:<digest> (or <ref>:<tag> with --resolve-tag)", arg)
 	}
 	if !storeSeedResolveTag {
-		return nil, fmt.Errorf("a tag reference does not pin content; pass <ref>@sha256:<digest>, or use --resolve-tag to resolve %q and print the digest", arg)
+		return nil, exitcode.UsageErrorf("a tag reference does not pin content; pass <ref>@sha256:<digest>, or use --resolve-tag to resolve %q and print the digest", arg)
 	}
 	host, repo, err := ociref.Parse(ref)
 	if err != nil {

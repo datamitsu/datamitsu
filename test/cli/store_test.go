@@ -161,33 +161,37 @@ func TestStoreSeedArgValidation(t *testing.T) {
 	cfg := clitest.WriteMinimalConfig(p)
 
 	cases := []struct {
-		name string
-		args []string
-		want string
+		name     string
+		args     []string
+		want     string
+		wantExit int
 	}{
 		{
-			name: "bare-tag-without-resolve",
-			args: []string{"store", "seed", "ghcr.io/owner/repo:latest"},
-			want: "a tag reference does not pin content",
+			name:     "bare-tag-without-resolve",
+			args:     []string{"store", "seed", "ghcr.io/owner/repo:latest"},
+			want:     "a tag reference does not pin content",
+			wantExit: 2,
 		},
 		{
-			name: "unpinned-reference",
-			args: []string{"store", "seed", "ghcr.io-owner-repo"},
-			want: "must be pinned as <ref>@sha256:<digest>",
+			name:     "unpinned-reference",
+			args:     []string{"store", "seed", "ghcr.io-owner-repo"},
+			want:     "must be pinned as <ref>@sha256:<digest>",
+			wantExit: 2,
 		},
 		{
-			name: "no-arg-no-oci",
-			args: []string{"store", "seed"},
-			want: "no oci bundle declared in the effective config",
+			name:     "no-arg-no-oci",
+			args:     []string{"store", "seed"},
+			want:     "no oci bundle declared in the effective config",
+			wantExit: 1,
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			args := append([]string{"--no-auto-config", "--config", cfg}, tc.args...)
 			res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, args...)
-			if res.ExitCode == 0 {
-				t.Fatalf("`%s` exit = 0, want non-zero\nstdout:\n%s",
-					strings.Join(tc.args, " "), res.Stdout)
+			if res.ExitCode != tc.wantExit {
+				t.Fatalf("`%s` exit = %d, want %d\nstdout:\n%s\nstderr:\n%s",
+					strings.Join(tc.args, " "), res.ExitCode, tc.wantExit, res.Stdout, res.Stderr)
 			}
 			if !strings.Contains(res.Stderr, tc.want) {
 				t.Errorf("stderr should contain %q:\n%s", tc.want, res.Stderr)
