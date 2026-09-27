@@ -248,6 +248,11 @@ func TestJoinFileOutputs(t *testing.T) {
 			want: "a.txt: exit code 7\n\nb.txt: exit code 4\nbroken",
 		},
 		{
+			name:    "a failure no exit code explains",
+			outputs: []fileOutput{{text: "warned"}, {label: "b.txt: formatter produced empty stdout", failed: true, explained: true}},
+			want:    "warned\nb.txt: formatter produced empty stdout\n",
+		},
+		{
 			name: "a stdin failure and a failing run",
 			outputs: []fileOutput{
 				{text: "failed to prepare stdin for file a.txt", failed: true},
@@ -262,6 +267,44 @@ func TestJoinFileOutputs(t *testing.T) {
 				t.Errorf("joinFileOutputs() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+// A per-file failure that is not the tool's exit — here a formatter that
+// printed nothing for a file that has content — is named with its reason,
+// which a frame's exit code could not give.
+func TestKeepGoingNamesFailuresWithoutAnExitCode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the tools are sh scripts")
+	}
+	root := t.TempDir()
+	names := []string{"a.txt", "b.txt"}
+	files := make([]string, 0, len(names))
+	for _, name := range names {
+		path := filepath.Join(root, name)
+		if err := os.WriteFile(path, []byte("content\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		files = append(files, path)
+	}
+	appManager := &mockAppManager{commands: map[string]*binmanager.CommandInfo{"fmt": shellApp("exit 0")}}
+	task := lintTask(t, "fmt", config.ToolScopePerProject, root, "{file}")
+	task.Operation = config.OpFix
+	task.OpConfig.Output = config.ToolOutputStdout
+	task.Files = files
+
+	result := NewExecutor(root, false, false, appManager, nil).executeTask(context.Background(), task)
+
+	if result.Success {
+		t.Fatalf("result = %+v, want a failure", result)
+	}
+	for _, want := range []string{"a.txt: formatter produced empty stdout", "b.txt: formatter produced empty stdout"} {
+		if !strings.Contains(result.Output, want) {
+			t.Errorf("Output lacks %q:\n%s", want, result.Output)
+		}
+	}
+	if strings.Contains(result.Output, "exit code 0") {
+		t.Errorf("Output names an exit code for a failure that has none:\n%s", result.Output)
 	}
 }
 

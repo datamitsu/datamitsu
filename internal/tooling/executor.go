@@ -896,6 +896,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 	}
 
 	var outputs []fileOutput
+	var failures []error
 	var lastExitCode int
 	var processedFiles []string
 	// The failure a frame shows is the last failing file's: its exit code and
@@ -965,7 +966,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 			result.Success = false
 			result.ExitCode = -1
 			stdinFailure := fmt.Errorf("failed to prepare stdin for file %s: %w", file, stdinErr)
-			result.Error = errors.Join(result.Error, stdinFailure)
+			failures = append(failures, stdinFailure)
 			// The frame shows the joined output, not Error, once any file wrote
 			// some: without this line a later file's output would stand in for
 			// a failure no process reported.
@@ -1076,10 +1077,11 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 			result.Success = false
 			result.ExitCode = exitCode
 			fileFailure := fmt.Errorf("failed to execute for file %s (exit code %d): %w", file, exitCode, err)
-			result.Error = errors.Join(result.Error, fileFailure)
-			label := failureLabel(workingDir, file, exitCode)
+			failures = append(failures, fileFailure)
+			label, explained := failureLabel(workingDir, file, exitCode, err)
 			outputs[len(outputs)-1].failed = true
 			outputs[len(outputs)-1].label = label
+			outputs[len(outputs)-1].explained = explained
 			if parseMode && len(result.Diagnostics) == diagnosticsBefore {
 				unparsed := label
 				if text := strings.TrimSpace(string(output)); text != "" {
@@ -1124,6 +1126,13 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 		result.Command = failedCommand
 	}
 
+	switch len(failures) {
+	case 0:
+	case 1:
+		result.Error = failures[0]
+	default:
+		result.Error = errors.Join(failures...)
+	}
 	result.Output = joinFileOutputs(outputs)
 	result.recordTiming(startTime)
 	log.Debug("executePerFile completed",
@@ -1795,18 +1804,20 @@ func stdinForOperation(op config.ToolOperation, file string) ([]byte, error) {
 }
 
 // fileOutput is what one file of a per-file task printed. label names a file
-// whose run failed on its own; a file whose input could not be prepared is
-// failed with its error as the text.
+// whose run failed on its own, and explained marks a label that gives a reason
+// no exit code does; a file whose input could not be prepared is failed with
+// its error as the text.
 type fileOutput struct {
-	text   string
-	label  string
-	failed bool
+	text      string
+	label     string
+	failed    bool
+	explained bool
 }
 
 // joinFileOutputs joins what the files of a per-file task printed. A frame
-// names one failing command and exit code, so when more than one file failed,
-// each failing file's output is headed by its name and exit code; a file that
-// failed silently is then still listed.
+// names one failing command and exit code, so a failing file's output is
+// headed by its label when more than one file failed, or when the failure is
+// not an exit code; a file that failed silently is then still listed.
 func joinFileOutputs(outputs []fileOutput) string {
 	failures := 0
 	for _, o := range outputs {
@@ -1816,7 +1827,7 @@ func joinFileOutputs(outputs []fileOutput) string {
 	}
 	parts := make([]string, 0, len(outputs))
 	for _, o := range outputs {
-		if failures > 1 && o.label != "" {
+		if o.label != "" && (failures > 1 || o.explained) {
 			parts = append(parts, o.label+"\n"+o.text)
 			continue
 		}
@@ -1825,10 +1836,16 @@ func joinFileOutputs(outputs []fileOutput) string {
 	return strings.Join(parts, "\n")
 }
 
-func failureLabel(workingDir, file string, exitCode int) string {
+// failureLabel names a failed file with its exit code, or with the error when
+// the failure is not the tool's exit — a formatter's empty output, a command
+// that could not start — which reports itself as explained.
+func failureLabel(workingDir, file string, exitCode int, err error) (string, bool) {
 	name := file
-	if rel, err := filepath.Rel(workingDir, file); err == nil && !strings.HasPrefix(rel, "..") {
+	if rel, relErr := filepath.Rel(workingDir, file); relErr == nil && !strings.HasPrefix(rel, "..") {
 		name = rel
 	}
-	return fmt.Sprintf("%s: exit code %d", name, exitCode)
+	if _, ok := errors.AsType[*exec.ExitError](err); ok {
+		return fmt.Sprintf("%s: exit code %d", name, exitCode), false
+	}
+	return fmt.Sprintf("%s: %v", name, err), true
 }
