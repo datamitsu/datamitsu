@@ -1057,6 +1057,27 @@ func TestExecutionParsedPassHidesFindings(t *testing.T) {
 	e.golden("s9_lint_parsed_pass_cached", second)
 }
 
+// TestExecutionParsedPositions freezes the position and path contract a list-
+// taking tool meets: handed one file, the findings its parser leaves without a
+// file are about that file, so the frame shows them parsed instead of the raw
+// output, and a column the tool printed as 0 is shown as 1.
+func TestExecutionParsedPositions(t *testing.T) {
+	e := newExecProject(t, map[string]string{"fixture.marker": "", "a.yaml": "a: 1\n"}, fixtureSpec)
+	module := filepath.Join("..", "..", "internal", "parsermanager", "testdata", "echo.wasm")
+	spec := fixtureSpec
+	spec.Parsers = clitest.SeedParserModule(t, e.cache, module)
+	e.p.WriteFile("exec.config.js", clitest.ShellConfig(spec, clitest.ShellTool("yamllint",
+		settle+clitest.RecordRun+"; echo 'stdin:3:0: [error] too many blank lines (3 > 0) (empty-lines)'; exit 1",
+		clitest.ToolOpSpec{Globs: []string{"**/*.yaml"}, Args: []string{"{files}"}, Parser: "yamllint"})))
+
+	res := e.run("", nil, "lint")
+	e.wantExit(res, 1)
+	if !strings.Contains(res.Stdout, "a.yaml:3:1 error too many blank lines (3 > 0) [empty-lines]") {
+		t.Errorf("the frame should show the finding parsed, stamped and clamped:\n%s", res.Stdout)
+	}
+	e.golden("lint_parsed_positions", res)
+}
+
 var hostRE = regexp.MustCompile(`no binary for [a-z0-9]+/[a-z0-9_]+/[a-z0-9_]+`)
 
 func maskHost(s string) string { return hostRE.ReplaceAllString(s, "no binary for <HOST>") }

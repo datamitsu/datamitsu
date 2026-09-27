@@ -1,10 +1,63 @@
 package diagnostic
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/parsermanager"
 )
+
+func TestResolve_PositionContract(t *testing.T) {
+	u := func(v uint32) *uint32 { return &v }
+	cases := []struct {
+		name                     string
+		raw                      parsermanager.RawDiagnostic
+		row, col, endRow, endCol int
+	}{
+		{"nil positions", parsermanager.RawDiagnostic{}, 1, 1, 1, 1},
+		{"0 row", parsermanager.RawDiagnostic{Row: u(0), Col: u(4)}, 1, 4, 1, 4},
+		{"0 col", parsermanager.RawDiagnostic{Row: u(3), Col: u(0)}, 3, 1, 3, 1},
+		{"missing end", parsermanager.RawDiagnostic{Row: u(3), Col: u(5)}, 3, 5, 3, 5},
+		{"end kept", parsermanager.RawDiagnostic{Row: u(3), Col: u(5), EndRow: u(4), EndCol: u(2)}, 3, 5, 4, 2},
+		{"end column on the start row", parsermanager.RawDiagnostic{Row: u(3), Col: u(5), EndCol: u(9)}, 3, 5, 3, 9},
+		{"end row before start", parsermanager.RawDiagnostic{Row: u(3), Col: u(5), EndRow: u(2), EndCol: u(9)}, 3, 5, 3, 5},
+		{"end column before start", parsermanager.RawDiagnostic{Row: u(3), Col: u(5), EndRow: u(3), EndCol: u(4)}, 3, 5, 3, 5},
+		{"end column only, before start", parsermanager.RawDiagnostic{Row: u(3), Col: u(5), EndCol: u(2)}, 3, 5, 3, 5},
+		{"0 end", parsermanager.RawDiagnostic{Row: u(1), Col: u(1), EndRow: u(0), EndCol: u(0)}, 1, 1, 1, 1},
+		{"0 start with an end", parsermanager.RawDiagnostic{Row: u(0), Col: u(0), EndRow: u(1), EndCol: u(3)}, 1, 1, 1, 3},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			c.raw.Message = "m"
+			d := Resolve(c.raw, "t")
+			if d.Row != c.row || d.Col != c.col || d.EndRow != c.endRow || d.EndCol != c.endCol {
+				t.Errorf("got %d:%d-%d:%d, want %d:%d-%d:%d",
+					d.Row, d.Col, d.EndRow, d.EndCol, c.row, c.col, c.endRow, c.endCol)
+			}
+		})
+	}
+}
+
+func TestAbsPath(t *testing.T) {
+	root := string(filepath.Separator) + "repo"
+	dir := filepath.Join(root, "pkg")
+	cases := []struct {
+		name, file, want string
+	}{
+		{"relative joins the working directory", "src/a.ts", filepath.Join(dir, "src", "a.ts")},
+		{"dot-relative is cleaned", "./a.ts", filepath.Join(dir, "a.ts")},
+		{"climbing out stays climbed out", "../b/a.ts", filepath.Join(root, "b", "a.ts")},
+		{"absolute is cleaned", filepath.Join(dir, "src") + string(filepath.Separator) + ".." + string(filepath.Separator) + "a.ts", filepath.Join(dir, "a.ts")},
+		{"empty stays empty", "", ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := AbsPath(c.file, dir); got != c.want {
+				t.Errorf("AbsPath(%q, %q) = %q, want %q", c.file, dir, got, c.want)
+			}
+		})
+	}
+}
 
 func TestResolve_FillsDefaultsForAbsentFields(t *testing.T) {
 	// Only message present — every other field defaulted.

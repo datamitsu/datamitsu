@@ -36,28 +36,56 @@ func parseTask(module, parser string) Task {
 	}
 }
 
-func TestParseFileDiagnostics_StampsFileAndAppends(t *testing.T) {
-	fp := &fakeParser{diags: []diagnostic.Diagnostic{
-		{Message: "a", Row: 1},
-		{Message: "b", Row: 2, File: "already.js"}, // pre-set file is kept
-	}}
+func TestParseFileDiagnostics_PassesTheOutputThrough(t *testing.T) {
+	fp := &fakeParser{diags: []diagnostic.Diagnostic{{Message: "a", Row: 1}}}
 	e := &Executor{parser: fp}
 	var result ExecutionResult
 
-	e.parseFileDiagnostics(context.Background(), &result, parseTask("core", "eslint"), "broken.js", []byte("OUT"), []byte("ERR"), 1)
+	e.parseFileDiagnostics(context.Background(), &result, parseTask("core", "eslint"), t.TempDir(), nil, []byte("OUT"), []byte("ERR"), 1)
 
 	if fp.gotModule != "core" || fp.gotParser != "eslint" || fp.gotTool != "eslint" ||
-		string(fp.gotStdout) != "OUT" || fp.gotExit != 1 {
+		string(fp.gotStdout) != "OUT" || string(fp.gotStderr) != "ERR" || fp.gotExit != 1 {
 		t.Fatalf("parser called with unexpected args: %+v", fp)
 	}
-	if len(result.Diagnostics) != 2 {
-		t.Fatalf("got %d diagnostics, want 2", len(result.Diagnostics))
+	if len(result.Diagnostics) != 1 {
+		t.Fatalf("got %d diagnostics, want 1", len(result.Diagnostics))
 	}
-	if result.Diagnostics[0].File != "broken.js" {
-		t.Errorf("first diag file = %q, want stamped broken.js", result.Diagnostics[0].File)
+}
+
+// TestParseFileDiagnostics_Paths pins the path contract: every file a
+// diagnostic names is absolute and cleaned, and a file-less diagnostic is
+// attributed only when its process was handed exactly one file.
+func TestParseFileDiagnostics_Paths(t *testing.T) {
+	dir := t.TempDir()
+	abs := func(rel string) string { return filepath.Join(dir, rel) }
+	cases := []struct {
+		name     string
+		files    []string
+		reported string
+		want     string
+	}{
+		{"per-file run stamps its file", []string{abs("broken.js")}, "", abs("broken.js")},
+		{"one-file batch stamps its file", []string{abs("only.md")}, "", abs("only.md")},
+		{"two-file batch leaves it file-less", []string{abs("a.md"), abs("b.md")}, "", ""},
+		{"a process given no file leaves it file-less", nil, "", ""},
+		{"a relative path resolves against the working directory", nil, "src/x.ts", abs("src/x.ts")},
+		{"an absolute path is kept, cleaned", nil, abs("src") + "/../src/a.ts", abs("src/a.ts")},
+		{"a dot-relative path names the same file", []string{abs("x")}, "./x", abs("x")},
+		{"a reported path wins over the stamp", []string{abs("a.md")}, "b.md", abs("b.md")},
+		{"climbing out stays outside", nil, "../elsewhere.ts", filepath.Join(filepath.Dir(dir), "elsewhere.ts")},
 	}
-	if result.Diagnostics[1].File != "already.js" {
-		t.Errorf("parser-provided file overwritten: %q", result.Diagnostics[1].File)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			e := &Executor{parser: &fakeParser{diags: []diagnostic.Diagnostic{{Message: "m", File: c.reported}}}}
+			var result ExecutionResult
+			e.parseFileDiagnostics(context.Background(), &result, parseTask("core", "tsc"), dir, c.files, nil, nil, 1)
+			if len(result.Diagnostics) != 1 {
+				t.Fatalf("got %d diagnostics, want 1", len(result.Diagnostics))
+			}
+			if got := result.Diagnostics[0].File; got != c.want {
+				t.Errorf("File = %q, want %q", got, c.want)
+			}
+		})
 	}
 }
 
@@ -65,7 +93,7 @@ func TestParseFileDiagnostics_ParseErrorIsNonFatal(t *testing.T) {
 	e := &Executor{parser: &fakeParser{err: errors.New("boom")}}
 	var result ExecutionResult
 	// Must not panic and must leave Diagnostics empty.
-	e.parseFileDiagnostics(context.Background(), &result, parseTask("core", "eslint"), "f.js", nil, nil, 0)
+	e.parseFileDiagnostics(context.Background(), &result, parseTask("core", "eslint"), t.TempDir(), []string{"f.js"}, nil, nil, 0)
 	if len(result.Diagnostics) != 0 {
 		t.Errorf("a parse error must yield no diagnostics, got %+v", result.Diagnostics)
 	}
@@ -115,12 +143,53 @@ func TestExecuteBatchChunkParses(t *testing.T) {
 	if fp.gotExit != 1 {
 		t.Errorf("parser exit code = %d, want 1", fp.gotExit)
 	}
-	if len(result.Diagnostics) != 1 || result.Diagnostics[0].File != "src/a.ts" {
+	if len(result.Diagnostics) != 1 || result.Diagnostics[0].File != filepath.Join(tmpDir, "src", "a.ts") {
 		t.Fatalf("Diagnostics = %+v, want the parsed diagnostic", result.Diagnostics)
 	}
 	// The textual fallback still carries both streams for tools whose parse is empty.
 	if !strings.Contains(result.Output, "catalog warning") || !strings.Contains(result.Output, "filePath") {
 		t.Errorf("Output = %q, want both streams", result.Output)
+	}
+}
+
+// TestExecuteBatchStampsASingleFile drives a list-taking tool whose parser
+// names no file: handed one file, the process's findings are about it; handed
+// two, nothing says which.
+func TestExecuteBatchStampsASingleFile(t *testing.T) {
+	for _, n := range []int{1, 2} {
+		t.Run(fmt.Sprintf("%d files", n), func(t *testing.T) {
+			tmpDir := t.TempDir()
+			files := make([]string, n)
+			for i := range files {
+				files[i] = filepath.Join(tmpDir, fmt.Sprintf("f%d.md", i))
+				if err := os.WriteFile(files[i], []byte("x\n"), 0o600); err != nil {
+					t.Fatalf("write fixture: %v", err)
+				}
+			}
+			appManager := &mockAppManager{commands: map[string]*binmanager.CommandInfo{
+				"vale": {Type: "shell", Command: "/bin/sh", Args: []string{"-c", "exit 1"}},
+			}}
+			executor := NewExecutor(tmpDir, false, false, appManager, nil)
+			executor.SetParser(&fakeParser{diags: []diagnostic.Diagnostic{{Message: "m"}}})
+			result := executor.executeTask(context.Background(), Task{
+				ToolName:    "vale",
+				Operation:   config.OpLint,
+				Tool:        config.Tool{Name: "vale", OutputParser: &config.OutputParser{Module: "core", Parser: "vale"}},
+				OpConfig:    config.ToolOperation{App: "vale", Scope: config.ToolScopeRepository, Args: []string{"{files}"}},
+				Files:       files,
+				ProjectPath: tmpDir,
+			})
+			if len(result.Diagnostics) != 1 {
+				t.Fatalf("Diagnostics = %+v, want one", result.Diagnostics)
+			}
+			want := ""
+			if n == 1 {
+				want = files[0]
+			}
+			if got := result.Diagnostics[0].File; got != want {
+				t.Errorf("File = %q, want %q", got, want)
+			}
+		})
 	}
 }
 

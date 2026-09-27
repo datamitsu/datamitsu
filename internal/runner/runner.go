@@ -1464,9 +1464,9 @@ func formatDiagnostic(d diagnostic.Diagnostic) string {
 }
 
 // formatDiagnosticRelativeTo is formatDiagnostic with paths shortened against
-// baseDir. Batch parsers report absolute paths (eslint's filePath), which in a
-// monorepo push the useful part of the line off-screen; the box already prints
-// the Cwd these are relative to.
+// baseDir. Every path the executor hands over is absolute, which in a monorepo
+// pushes the useful part of the line off-screen; the box already prints the Cwd
+// these are relative to.
 func formatDiagnosticRelativeTo(d diagnostic.Diagnostic, baseDir string) string {
 	loc := fmt.Sprintf("%d:%d", d.Row, d.Col)
 	if d.File != "" {
@@ -1515,9 +1515,9 @@ func severityColor(s diagnostic.Severity) func(a ...any) string {
 // One batch invocation covers many files, so a diagnostic without a file is
 // unattributable — and the raw output the parsed view replaces almost always did
 // name the file. Rather than silently degrade whenever a batch tool's parser
-// does not report paths, fall back to the raw text. Per-file runs are unaffected:
-// the executor stamps the file it linted, and even unstamped they are read in the
-// context of a single file.
+// does not report paths, fall back to the raw text. Per-file runs, and batches
+// of one file, are unaffected: the executor stamps the one file the process was
+// given, and even unstamped they are read in the context of a single file.
 func usableDiagnostics(result tooling.ExecutionResult) bool {
 	if len(result.Diagnostics) == 0 {
 		return false

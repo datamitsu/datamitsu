@@ -46,7 +46,8 @@ func TestRelativeToBase(t *testing.T) {
 		{"sibling of the base", "/repo/pkg/other/a.ts", "/repo/pkg/cli", "/repo/pkg/other/a.ts"},
 		{"unrelated base", "/repo/pkg/cli/src/a.ts", "/somewhere/else", "/repo/pkg/cli/src/a.ts"},
 		{"no base", "/repo/pkg/cli/src/a.ts", "", "/repo/pkg/cli/src/a.ts"},
-		// Already relative: the parser reported it against the tool's own cwd.
+		// The executor makes every path absolute; a relative one is shown as is
+		// rather than guessed at.
 		{"relative input", "src/b.ts", "/repo", "src/b.ts"},
 	}
 	for _, c := range cases {
@@ -70,6 +71,14 @@ func TestFormatDiagnosticRelativeTo(t *testing.T) {
 	}
 	if strings.Contains(got, "/repo/pkg/cli/src/a.ts") {
 		t.Errorf("the absolute path survived shortening: %q", got)
+	}
+
+	// A path outside the working directory reads better whole than as "../..".
+	outside := formatDiagnosticRelativeTo(diagnostic.Diagnostic{
+		File: "/repo/pkg/other/b.ts", Row: 1, Col: 1, Severity: diagnostic.SeverityError, Message: "m",
+	}, "/repo/pkg/cli")
+	if !strings.Contains(outside, "/repo/pkg/other/b.ts:1:1") {
+		t.Errorf("a path climbing out of the cwd should print absolute: %q", outside)
 	}
 }
 

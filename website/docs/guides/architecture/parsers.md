@@ -39,13 +39,42 @@ Which file a diagnostic belongs to has two possible sources, and they compose:
 
 - **The parser**, for formats that name a path per diagnostic (eslint's
   `filePath`). It fills `file` on the raw diagnostic.
-- **The core**, otherwise. Most tool formats drop the filename, so the executor
-  stamps the file it just linted — but only where the parser left `file` empty.
+- **The core**, otherwise. Most tool formats drop the filename, so when a process
+  was handed exactly one file — a per-file run, or a list-taking tool whose
+  `{files}` held one path — the executor stamps that file on every diagnostic the
+  parser left without one.
 
 This ordering is what makes list-taking tools work. A tool given `{files}`
 (eslint over a whole project, one invocation, dozens of files) gives the core no
-single file to stamp, so a parser that does not report paths yields unattributed
-diagnostics. Tools in that class must extract the path.
+single file to stamp, and neither does a tool given no file at all (`tsc` reads
+`tsconfig.json`), so a parser that does not report paths yields unattributed
+diagnostics there. Tools in that class must extract the path.
+
+Whatever spelling the tool printed, the core makes the path **absolute**, against
+the working directory of the process that printed it, and cleans it: `./a.ts`,
+`a.ts` and `/repo/pkg/a.ts` from a process run in `/repo/pkg` name one file. The
+terminal shows a path relative to the failure frame's `Cwd`, and one outside it in
+full, since `../../x` reads worse than the path it came from.
+
+### Positions
+
+Every position the core hands on follows one contract, whatever the tool printed:
+
+| Field            | Contract                                                                     |
+| ---------------- | ---------------------------------------------------------------------------- |
+| `row`, `col`     | 1-based; missing or `0` becomes `1`                                          |
+| `endRow`         | 1-based; missing means the start row                                         |
+| `endCol`         | 1-based and **exclusive**: the span stops before the column it names         |
+| an end before it | an end that precedes the start, after the rules above, becomes a point there |
+
+A point is an end equal to the start. Several tools print `0` for "no position"
+(trivy, reek, npm-groovy-lint), which is why `0` is read as `1` rather than kept.
+
+What the core cannot do is tell a 0-based positive column from a 1-based one, or
+an inclusive end from an exclusive one: column 5 is column 5 either way. Parsers
+whose tool counts from 0 (spectral, vacuum, pylint) or reports an inclusive end
+are corrected in the module, so a configuration pinned to an older module keeps
+the positions that module reported.
 
 ### Noise tolerance
 

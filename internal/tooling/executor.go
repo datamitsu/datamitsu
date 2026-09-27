@@ -821,11 +821,13 @@ func joinStreams(stdout, stderr []byte) []byte {
 }
 
 // parseFileDiagnostics runs the tool's declared parser over one invocation's
-// captured output and appends the resolved diagnostics to result. Diagnostics the
-// parser left without a file are stamped with `file`; batch callers pass "" and
-// rely on the parser reporting a path per diagnostic (eslint's JSON does).
+// captured output and appends the resolved diagnostics to result. A path the
+// tool reported is made absolute against workingDir, the directory the process
+// ran in. files are the absolute paths the process was handed: when there is
+// exactly one, a diagnostic the parser left without a file is about it; a
+// process given several files, or none, leaves such a diagnostic file-less.
 // A parse failure is logged, not fatal — the tool's own pass/fail is unaffected.
-func (e *Executor) parseFileDiagnostics(ctx context.Context, result *ExecutionResult, task Task, file string, stdout, stderr []byte, exitCode int) {
+func (e *Executor) parseFileDiagnostics(ctx context.Context, result *ExecutionResult, task Task, workingDir string, files []string, stdout, stderr []byte, exitCode int) {
 	op := task.Tool.OutputParser
 	cntParse.Add(1)
 	parseSpan := trace.Start(trace.CatParse, "parseDiagnostics")
@@ -842,14 +844,19 @@ func (e *Executor) parseFileDiagnostics(ctx context.Context, result *ExecutionRe
 			zap.String("tool", task.ToolName),
 			zap.String("module", op.Module),
 			zap.String("parser", op.Parser),
-			zap.String("file", file),
+			zap.Strings("files", files),
 			zap.Error(err))
 		return
 	}
+	stamp := ""
+	if len(files) == 1 {
+		stamp = files[0]
+	}
 	for i := range diags {
 		if diags[i].File == "" {
-			diags[i].File = file
+			diags[i].File = stamp
 		}
+		diags[i].File = diagnostic.AbsPath(diags[i].File, workingDir)
 	}
 	result.Diagnostics = append(result.Diagnostics, diags...)
 }
@@ -1010,7 +1017,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 		// file, so the diagnostics belong to it.
 		diagnosticsBefore := len(result.Diagnostics)
 		if parseMode {
-			e.parseFileDiagnostics(ctx, &result, task, file, stdoutBytes, stderrBytes, exitCode)
+			e.parseFileDiagnostics(ctx, &result, task, workingDir, []string{file}, stdoutBytes, stderrBytes, exitCode)
 		}
 
 		// Formatting pipeline (diff-in-core): in stdout-output mode a successful
@@ -1300,10 +1307,8 @@ func (e *Executor) executeBatchChunk(ctx context.Context, task Task, cmdInfo *bi
 	exitCode := getExitCode(err)
 	result.ExitCode = exitCode
 
-	// Batch mode lints many files per invocation, so diagnostics carry their own
-	// paths from the parser; nothing to stamp.
 	if parseMode {
-		e.parseFileDiagnostics(ctx, &result, task, "", stdoutBytes, stderrBytes, exitCode)
+		e.parseFileDiagnostics(ctx, &result, task, workingDir, absolutePaths(files, workingDir), stdoutBytes, stderrBytes, exitCode)
 	}
 
 	if err != nil {
@@ -1606,6 +1611,19 @@ func (e *Executor) makeRelativePaths(files []string, baseDir string) []string {
 		zap.Strings("relativePaths", result))
 
 	return result
+}
+
+// absolutePaths undoes makeRelativePaths: the paths a batch process was handed,
+// as the absolute, cleaned paths the rest of the core names files by.
+func absolutePaths(files []string, baseDir string) []string {
+	if len(files) == 0 {
+		return nil
+	}
+	out := make([]string, len(files))
+	for i, file := range files {
+		out[i] = diagnostic.AbsPath(file, baseDir)
+	}
+	return out
 }
 
 // chunkFilesByCommandLength splits files into chunks that fit within command line length limits
