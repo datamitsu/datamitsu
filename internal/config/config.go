@@ -120,7 +120,8 @@ type ToolOperation struct {
 	InvalidateOn []string          `json:"invalidateOn,omitempty"`
 	Env          map[string]string `json:"env,omitempty"` // Extra environment variables for this operation
 	// InheritEnv names host variables the tool is handed with their host
-	// values; Env is layered over them. The resolved pairs are part of the
+	// values, the ones internal/toolenv strips included; Env is layered over
+	// them. The resolved pairs are part of the
 	// operation's cache identities: they are what the tool sees, and a host
 	// value is not configuration.
 	InheritEnv []string `json:"inheritEnv,omitempty"`

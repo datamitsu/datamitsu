@@ -81,7 +81,8 @@ func verdictIdentity(task Task, unitDirRel, parserModuleHash string) string {
 }
 
 // envPrefixes are the inherited environment variables that can change a tool's
-// answer. Tools inherit the whole environment (executor.go mergeEnvLayers), so
+// answer. Tools inherit the process environment (toolenv.Apply strips only the
+// variables that switch output formats), so
 // without this GOFLAGS=-tags=integration would change golangci-lint's package
 // graph with no effect on the key. Hashing the whole environment instead is not
 // an option: TERM, session ids and TMPDIR would prevent every hit.
