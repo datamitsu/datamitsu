@@ -53,7 +53,7 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 	}
 
 	let mut parts = locus.split(':');
-	let _file = parts.next()?;
+	let file = parts.next()?;
 	let row: u32 = parts.next()?.parse().ok()?;
 	let col: Option<u32> = match parts.next() {
 		Some(c) => Some(c.parse().ok()?),
@@ -69,6 +69,7 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 		col,
 		severity,
 		code: Some(code.to_string()),
+		file: crate::diagnostic::file_field(file),
 		..RawDiagnostic::default()
 	})
 }
@@ -145,6 +146,13 @@ mod tests {
 		let stderr = b"Finding: *.md\nLinting: 1 file(s)\nSummary: 2 error(s)";
 		let d = parse(b"", stderr, 1);
 		assert!(d.is_empty());
+	}
+
+	#[test]
+	fn each_finding_names_its_file() {
+		let stderr = b"README.md:1:1 MD001/x first\ndocs/b.md:2 MD002/y second\n";
+		let files: Vec<_> = parse(b"", stderr, 1).into_iter().map(|d| d.file).collect();
+		assert_eq!(files, [Some("README.md".to_string()), Some("docs/b.md".to_string())]);
 	}
 }
 

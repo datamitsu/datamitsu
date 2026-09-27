@@ -5,7 +5,8 @@
 //!   1. `glslc: <severity>: ...: <message>`              (tool-level errors)
 //!   2. `<file>:<row>: <severity>: <message>`            (line diagnostics)
 //!   3. `<file>: <severity>: <message>`                  (file diagnostics)
-//! The filename group is intentionally dropped (it's the temp file path).
+//!
+//! The file of patterns 2 and 3 names the finding's file.
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
 use crate::severity::{self, Level};
@@ -74,6 +75,7 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 						message: message.to_string(),
 						row: Some(row),
 						severity: severity_of(sev),
+						file: crate::diagnostic::file_field(file),
 						..RawDiagnostic::default()
 					});
 				}
@@ -89,6 +91,8 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 		return Some(RawDiagnostic {
 			message: message.to_string(),
 			severity: severity_of(sev),
+			// A tool-level line pattern 1 did not take still starts with `glslc:`.
+			file: crate::diagnostic::file_field(file).filter(|f| f != "glslc"),
 			..RawDiagnostic::default()
 		});
 	}
@@ -135,6 +139,16 @@ mod tests {
 		let diags = parse(b"", b"shader.frag:3: note: something\n", 0);
 		assert_eq!(diags.len(), 1);
 		assert_eq!(diags[0].severity, None);
+	}
+
+	#[test]
+	fn each_finding_names_its_file() {
+		let stderr = b"a.frag:1: error: first\nshaders/b.vert: warning: second\nglslc: error: no input files\n";
+		let files: Vec<_> = parse(b"", stderr, 1).into_iter().map(|d| d.file).collect();
+		assert_eq!(
+			files,
+			[Some("a.frag".to_string()), Some("shaders/b.vert".to_string()), None]
+		);
 	}
 }
 

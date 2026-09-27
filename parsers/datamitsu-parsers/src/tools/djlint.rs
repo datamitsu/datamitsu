@@ -21,7 +21,26 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 };
 
 pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic> {
-	String::from_utf8_lossy(stdout).lines().filter_map(parse_line).collect()
+	let text = String::from_utf8_lossy(stdout);
+	let lines: Vec<&str> = text.lines().collect();
+	let mut out = Vec::new();
+	// Linting files (not stdin), djlint heads each file's findings with its path
+	// over a rule of `─`.
+	let mut file = None;
+	for (i, line) in lines.iter().enumerate() {
+		if lines.get(i + 1).is_some_and(|next| is_rule(next)) {
+			file = crate::diagnostic::file_field(line);
+		} else if let Some(mut d) = parse_line(line) {
+			d.file.clone_from(&file);
+			out.push(d);
+		}
+	}
+	out
+}
+
+fn is_rule(line: &str) -> bool {
+	let line = line.trim();
+	!line.is_empty() && line.chars().all(|c| c == '─')
 }
 
 /// Lua pattern: `(%w+) (%d+):(%d+) (.*).`
@@ -87,6 +106,26 @@ mod tests {
 		let diags = parse(OUTPUT, b"", 1);
 		assert_eq!(diags.len(), 2);
 		assert!(diags.iter().all(|d| d.severity.is_none()));
+	}
+
+	#[test]
+	fn each_finding_names_the_file_of_its_header() {
+		let out = "\ntemplates/a.html\n──────────\nH006 1:0 first.\nH025 2:0 second.\n\n\
+templates/b.html\n──────────\nT001 3:1 third.\n\nLinted 2 files, found 3 errors.\n";
+		let got: Vec<_> = parse(out.as_bytes(), b"", 1)
+			.into_iter()
+			.map(|d| (d.message, d.file))
+			.collect();
+		assert_eq!(
+			got,
+			[
+				("first".to_string(), Some("templates/a.html".to_string())),
+				("second".to_string(), Some("templates/a.html".to_string())),
+				("third".to_string(), Some("templates/b.html".to_string())),
+			]
+		);
+		// Linting stdin prints no header.
+		assert!(parse(OUTPUT, b"", 1).iter().all(|d| d.file.is_none()));
 	}
 }
 

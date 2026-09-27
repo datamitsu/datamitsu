@@ -1,7 +1,7 @@
 //! haml_lint — tool for writing clean and consistent HAML. Ported from the
 //! none-ls diagnostics/haml_lint builtin.
 //!
-//! haml-lint's JSON reporter emits `{ "files": [ { "offenses": [ … ] } ] }`,
+//! haml-lint's JSON reporter emits `{ "files": [ { "path", "offenses": [ … ] } ] }`,
 //! where each offense is `{ message, location: { line }, linter_name, severity }`.
 //! The builtin walks `files[1].offenses` and maps message←message, line←location.line,
 //! ruleId←linter_name, level←severity. There is no column. Severity tokens are
@@ -49,15 +49,19 @@ pub fn parse(stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic
 	};
 
 	for file in files {
-		let Some(offenses) = file
-			.get::<std::collections::HashMap<String, JsonValue>>()
-			.and_then(|m| m.get("offenses"))
-			.and_then(|o| o.get::<Vec<JsonValue>>())
-		else {
+		let Some(file) = file.get::<std::collections::HashMap<String, JsonValue>>() else {
 			continue;
 		};
+		let Some(offenses) = file.get("offenses").and_then(|o| o.get::<Vec<JsonValue>>()) else {
+			continue;
+		};
+		let path = file
+			.get("path")
+			.and_then(|p| p.get::<String>())
+			.and_then(|p| crate::diagnostic::file_field(p));
 		for offense in offenses {
-			if let Some(d) = from_offense(offense) {
+			if let Some(mut d) = from_offense(offense) {
+				d.file.clone_from(&path);
 				out.push(d);
 			}
 		}
@@ -67,6 +71,10 @@ pub fn parse(stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic
 
 fn from_offense(value: &JsonValue) -> Option<RawDiagnostic> {
 	let map = value.get::<std::collections::HashMap<String, JsonValue>>()?;
+	// With --auto-correct haml-lint also lists what it corrected.
+	if matches!(map.get("corrected"), Some(JsonValue::Boolean(true))) {
+		return None;
+	}
 	let message = map.get("message").and_then(|m| m.get::<String>())?.clone();
 	let row = map
 		.get("location")
@@ -155,6 +163,26 @@ mod tests {
 	#[test]
 	fn invalid_json_yields_nothing() {
 		assert!(parse(b"not json", b"", 0).is_empty());
+	}
+
+	#[test]
+	fn each_finding_names_its_file() {
+		let json = br#"{"files":[
+            {"path":"a.haml","offenses":[{"severity":"warning","message":"first","location":{"line":1}}]},
+            {"path":"views/b.haml","offenses":[{"severity":"error","message":"second","location":{"line":2}}]}]}"#;
+		let out = parse(json, b"", 65);
+		let got: Vec<_> = out.iter().map(|d| (d.message.as_str(), d.file.as_deref())).collect();
+		assert_eq!(got, [("first", Some("a.haml")), ("second", Some("views/b.haml"))]);
+	}
+
+	#[test]
+	fn a_corrected_offense_is_not_a_finding() {
+		let json = br#"{"files":[{"path":"a.haml","offenses":[
+            {"severity":"warning","message":"fixed","corrected":true,"location":{"line":1}},
+            {"severity":"warning","message":"left","corrected":false,"location":{"line":2}}]}]}"#;
+		let out = parse(json, b"", 65);
+		assert_eq!(out.len(), 1);
+		assert_eq!(out[0].message, "left");
 	}
 }
 

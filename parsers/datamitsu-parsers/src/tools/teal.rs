@@ -5,7 +5,8 @@
 //! or `1 syntax error:`, then lines of the form `<file>:<row>:<col>: <message>`.
 //! The header's category is the level token for the lines that follow it; a line
 //! before any header, or under a header the vocabulary does not list, has no
-//! level. The upstream builtin also filtered by temp_path and derived `end_col`
+//! level. The file before the position names the finding's file. The upstream
+//! builtin also filtered by temp_path and derived `end_col`
 //! from the buffer quote — both require the vim runtime/buffer content, which is
 //! unavailable here, so they are intentionally dropped.
 use crate::capabilities::{Operation, ToolCapability};
@@ -94,6 +95,7 @@ fn parse_diag(line: &str, severity: Option<u8>) -> Option<RawDiagnostic> {
 		row: Some(row),
 		col: Some(col),
 		severity,
+		file: crate::diagnostic::file_field(file),
 		..RawDiagnostic::default()
 	})
 }
@@ -149,6 +151,13 @@ mod tests {
 		assert_eq!(diags.len(), 2);
 		assert_eq!(diags[0].severity, Some(severity::ERROR));
 		assert_eq!(diags[1].severity, None);
+	}
+
+	#[test]
+	fn each_finding_names_its_file() {
+		let stderr = b"1 error:\nsrc/a.tl:1:1: first\n1 warning:\nsrc/b.tl:2:3: second\n";
+		let files: Vec<_> = parse(b"", stderr, 1).into_iter().map(|d| d.file).collect();
+		assert_eq!(files, [Some("src/a.tl".to_string()), Some("src/b.tl".to_string())]);
 	}
 }
 

@@ -45,7 +45,8 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 			break;
 		}
 	}
-	let rest = &line[idx? + 1..]; // after the ':'
+	let idx = idx?;
+	let rest = &line[idx + 1..]; // after the ':'
 
 	// row: leading digits
 	let row_end = rest.find(|c: char| !c.is_ascii_digit())?;
@@ -68,6 +69,8 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 		col,
 		code: Some(code),
 		severity,
+		// `stdin` for what --stdin read.
+		file: crate::diagnostic::file_field(&line[..idx]),
 		..RawDiagnostic::default()
 	})
 }
@@ -150,6 +153,16 @@ mod tests {
 	fn ignores_unrelated_lines() {
 		let out = parse(&[], b"A configuration error message without coordinates", 1);
 		assert!(out.is_empty());
+	}
+
+	#[test]
+	fn each_finding_names_its_file() {
+		let stderr = b"README.md:1:1 MD001/x first\ndocs/b.md:2 MD002/y second\nstdin:3 MD003/z piped\n";
+		let files: Vec<_> = parse(&[], stderr, 1).into_iter().map(|d| d.file).collect();
+		assert_eq!(
+			files,
+			[Some("README.md".to_string()), Some("docs/b.md".to_string()), None]
+		);
 	}
 }
 

@@ -2,7 +2,8 @@
 //! diagnostics/proselint builtin.
 //!
 //! proselint's JSON is nested and custom, so this does not use `json_diag`:
-//! `output.result` is a map of file → `{ diagnostics: [ ... ] }`, and each
+//! `output.result` is a map of file → `{ diagnostics: [ ... ] }` (the key names
+//! each diagnostic's file; `<stdin>` for piped text), and each
 //! diagnostic carries `pos` ([line, col], 1-based), `span` ([start, end), offsets
 //! into the whole text), `check_path` (the rule), and `message`. The span's
 //! length gives the end column. The builtin bails out when the top-level
@@ -51,7 +52,7 @@ pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 	};
 
 	let mut out = Vec::new();
-	for file_output in result.values() {
+	for (path, file_output) in result {
 		let file_obj = match file_output {
 			JsonValue::Object(m) => m,
 			_ => continue,
@@ -60,8 +61,10 @@ pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 			Some(JsonValue::Array(a)) => a,
 			_ => continue,
 		};
+		let path = crate::diagnostic::file_field(path);
 		for d in diags {
-			if let Some(diag) = from_diag(d) {
+			if let Some(mut diag) = from_diag(d) {
+				diag.file.clone_from(&path);
 				out.push(diag);
 			}
 		}
@@ -161,6 +164,22 @@ mod tests {
 	#[test]
 	fn invalid_json_yields_nothing() {
 		assert!(parse(b"not json", b"", 1).is_empty());
+	}
+
+	#[test]
+	fn each_finding_names_the_file_it_is_keyed_under() {
+		let json = br#"{"result":{
+            "docs/a.md":{"diagnostics":[{"check_path":"c1","message":"first","pos":[1,1],"span":[0,1]}]},
+            "<stdin>":{"diagnostics":[{"check_path":"c2","message":"piped","pos":[2,1],"span":[3,4]}]}}}"#;
+		let mut got: Vec<_> = parse(json, b"", 1).into_iter().map(|d| (d.message, d.file)).collect();
+		got.sort();
+		assert_eq!(
+			got,
+			[
+				("first".to_string(), Some("docs/a.md".to_string())),
+				("piped".to_string(), None),
+			]
+		);
 	}
 }
 

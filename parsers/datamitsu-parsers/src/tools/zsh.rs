@@ -53,6 +53,8 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 				message: message.to_string(),
 				row: Some(row),
 				severity: severity_of(message),
+				// A script read from stdin is named after the shell itself.
+				file: crate::diagnostic::file_field(&line[..colon]).filter(|f| f != "zsh"),
 				..RawDiagnostic::default()
 			});
 		}
@@ -113,6 +115,16 @@ mod tests {
 		assert_eq!(diags.len(), 1);
 		assert_eq!(diags[0].row, Some(12));
 		assert_eq!(diags[0].message, "missing end of string");
+	}
+
+	#[test]
+	fn each_finding_names_its_file() {
+		let stderr = b"script.zsh:5: parse error near `done'\nlib/b.zsh:6: unmatched '\nzsh:7: parse error\n";
+		let files: Vec<_> = parse(b"", stderr, 1).into_iter().map(|d| d.file).collect();
+		assert_eq!(
+			files,
+			[Some("script.zsh".to_string()), Some("lib/b.zsh".to_string()), None]
+		);
 	}
 }
 

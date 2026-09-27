@@ -55,7 +55,7 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 	// "<row>," digits may be preceded by an unanchored "<file>:" prefix, so scan
 	// from the marker ": [" and read row/col backwards from there.
 	let marker = line.find(": [")?;
-	let (row, col) = row_col(&line[..marker])?;
+	let (file, row, col) = row_col(&line[..marker])?;
 
 	let rest = &line[marker + 3..]; // after ": ["
 	let rb = rest.find(']')?;
@@ -79,17 +79,20 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 		col: col.checked_add(1),
 		severity: severity::of(DESCRIPTOR.severities, &code[..1]),
 		code: Some(code.to_string()),
+		file: file.and_then(crate::diagnostic::file_field),
 		..RawDiagnostic::default()
 	})
 }
 
 /// Read the last two `,`/`:`-separated numeric fields of the prefix as
-/// `<row>,<col>` (right-to-left so a path with colons doesn't interfere).
-fn row_col(prefix: &str) -> Option<(u32, u32)> {
+/// `<row>,<col>` (right-to-left so a path with colons doesn't interfere), and
+/// the `<file>` before a `:` separator, when there is one.
+fn row_col(prefix: &str) -> Option<(Option<&str>, u32, u32)> {
 	let (head, col) = prefix.rsplit_once(',')?;
 	let col: u32 = col.trim().parse().ok()?;
 	let row: u32 = head.rsplit(|c| c == ':' || c == ' ').next()?.trim().parse().ok()?;
-	Some((row, col))
+	let file = head.rsplit_once(':').map(|(file, _)| file);
+	Some((file, row, col))
 }
 
 #[cfg(test)]
@@ -136,6 +139,20 @@ mod tests {
 		let out = parse(b"", b"1,0: [C0113] a\n2,0: [E0001] b\n", 1);
 		assert_eq!(out.len(), 2);
 		assert_eq!(out[1].message, "b");
+	}
+
+	#[test]
+	fn each_finding_names_its_file() {
+		let stderr = b"CMakeLists.txt:1,00: [C0113] first\ncmake/deps.cmake:2,00: [E0001] second\n3,0: [W0106] bare\n";
+		let files: Vec<_> = parse(b"", stderr, 1).into_iter().map(|d| d.file).collect();
+		assert_eq!(
+			files,
+			[
+				Some("CMakeLists.txt".to_string()),
+				Some("cmake/deps.cmake".to_string()),
+				None
+			]
+		);
 	}
 }
 

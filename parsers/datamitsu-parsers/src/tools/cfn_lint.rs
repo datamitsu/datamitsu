@@ -49,7 +49,7 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 	// suffix layout after the filename is:
 	//   row : col : end_row : end_col : code : message
 	// where `message` is the remainder (may contain `:`) and `code` is one field.
-	let (idx, row, col, end_row, end_col) = find_positions(line)?;
+	let (file, idx, row, col, end_row, end_col) = find_positions(line)?;
 	// `rest` = "<code>:<message>"
 	let rest = &line[idx..];
 	let colon = rest.find(':')?;
@@ -69,15 +69,18 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 		end_col: Some(end_col),
 		severity: Some(sev),
 		code: Some(code.to_string()),
+		// Empty for a template read from stdin.
+		file: crate::diagnostic::file_field(file),
 		..RawDiagnostic::default()
 	})
 }
 
 /// Locate the four `:<digits>:<digits>:<digits>:<digits>:` position fields and
-/// return the byte index in `line` just past the fourth field's trailing colon,
-/// along with (row, col, end_row, end_col). The four numbers are the first run
-/// of four consecutive colon-separated integers — found by scanning each colon.
-fn find_positions(line: &str) -> Option<(usize, u32, u32, u32, u32)> {
+/// return the file before them, the byte index in `line` just past the fourth
+/// field's trailing colon, and (row, col, end_row, end_col). The four numbers are
+/// the first run of four consecutive colon-separated integers — found by scanning
+/// each colon.
+fn find_positions(line: &str) -> Option<(&str, usize, u32, u32, u32, u32)> {
 	let bytes = line.as_bytes();
 	for (i, &b) in bytes.iter().enumerate() {
 		if b != b':' {
@@ -113,7 +116,7 @@ fn find_positions(line: &str) -> Option<(usize, u32, u32, u32, u32)> {
 		}
 		// After four numbers, the next char must be ':' (start of code field).
 		if ok && bytes.get(pos) == Some(&b':') {
-			return Some((pos + 1, nums[0], nums[1], nums[2], nums[3]));
+			return Some((&line[..i], pos + 1, nums[0], nums[1], nums[2], nums[3]));
 		}
 	}
 	None
@@ -154,6 +157,16 @@ mod tests {
 		let out = parse(b"", stderr, 1);
 		assert_eq!(out.len(), 1);
 		assert_eq!(out[0].code.as_deref(), Some("E1001"));
+	}
+
+	#[test]
+	fn each_finding_names_its_file() {
+		let stderr = b"a.yaml:2:1:2:8:E1001:first\nstacks/b.json:3:1:3:2:W2001:second\n:4:1:4:2:E3012:piped\n";
+		let files: Vec<_> = parse(b"", stderr, 2).into_iter().map(|d| d.file).collect();
+		assert_eq!(
+			files,
+			[Some("a.yaml".to_string()), Some("stacks/b.json".to_string()), None]
+		);
 	}
 }
 

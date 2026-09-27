@@ -62,7 +62,12 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 			row_start -= 1;
 		}
 		if row_start < first_colon {
-			if let Some(diag) = try_match(line, row_start, first_colon) {
+			if let Some(mut diag) = try_match(line, row_start, first_colon) {
+				// The gcc template prints `nofile` for a finding with no location.
+				diag.file = line[..row_start]
+					.strip_suffix(':')
+					.and_then(crate::diagnostic::file_field)
+					.filter(|f| f != "nofile");
 				return Some(diag);
 			}
 		}
@@ -179,6 +184,17 @@ mod tests {
 	#[test]
 	fn non_matching_line_is_skipped() {
 		assert!(parse_line("Checking src/main.c ...").is_none());
+	}
+
+	#[test]
+	fn each_finding_names_its_file() {
+		let stderr =
+			b"src/a.c:1:1: error: first [e1]\nlib/b12.h:2:3: style: second [s1]\nnofile:0:0: information: no location [x]\n";
+		let files: Vec<_> = parse(b"", stderr, 1).into_iter().map(|d| d.file).collect();
+		assert_eq!(
+			files,
+			[Some("src/a.c".to_string()), Some("lib/b12.h".to_string()), None]
+		);
 	}
 }
 

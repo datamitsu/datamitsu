@@ -31,6 +31,7 @@ const ATTRS: Attrs = Attrs {
 	row: "line",
 	code: "rule",
 	message: "description",
+	file: "filename",
 	..Attrs::defaults()
 };
 
@@ -43,6 +44,10 @@ pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 
 fn from_result(value: &JsonValue) -> Option<RawDiagnostic> {
 	let mut d = json_diag::from_obj(value, &ATTRS, |level| severity::of(DESCRIPTOR.severities, level))?;
+	// mdl names what it read from stdin "(stdin)".
+	if d.file.as_deref() == Some("(stdin)") {
+		d.file = None;
+	}
 	if let JsonValue::Object(m) = value {
 		d.url = match m.get("docs") {
 			Some(JsonValue::String(url)) if !url.is_empty() => Some(url.clone()),
@@ -82,6 +87,17 @@ mod tests {
 	#[test]
 	fn empty_output_yields_nothing() {
 		assert!(parse(b"[]", b"", 0).is_empty());
+	}
+
+	#[test]
+	fn each_finding_names_its_file_but_not_the_stdin_placeholder() {
+		let json = br#"[
+            {"filename":"docs/a.md","line":1,"rule":"MD001","description":"first"},
+            {"filename":"b.md","line":2,"rule":"MD002","description":"second"}]"#;
+		let out = parse(json, b"", 1);
+		let got: Vec<_> = out.iter().map(|d| (d.message.as_str(), d.file.as_deref())).collect();
+		assert_eq!(got, [("first", Some("docs/a.md")), ("second", Some("b.md"))]);
+		assert!(parse(SAMPLES[0].stdout, b"", 1).iter().all(|d| d.file.is_none()));
 	}
 }
 

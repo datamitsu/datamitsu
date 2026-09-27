@@ -43,7 +43,6 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 			if !row_str.is_empty() && row_str.bytes().all(|b| b.is_ascii_digit()) {
 				let filename = &head[..row_colon];
 				if !filename.is_empty() {
-					let _ = filename;
 					let row: u32 = row_str.parse().ok()?;
 					let message = message.trim_start().to_string(); // %s* before message
 					if message.is_empty() {
@@ -52,6 +51,8 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 					return Some(RawDiagnostic {
 						message,
 						row: Some(row),
+						// An error in an included ledger names that ledger.
+						file: crate::diagnostic::file_field(filename),
 						..RawDiagnostic::default()
 					});
 				}
@@ -89,6 +90,19 @@ mod tests {
 	fn ignores_non_matching() {
 		let diags = parse(b"", b"some unrelated banner line\n", 1);
 		assert!(diags.is_empty());
+	}
+
+	#[test]
+	fn each_finding_names_its_file() {
+		let stderr = b"main.beancount:10: Invalid account: Assets:Cash\nincludes/2024.beancount:3:  Duplicate entry\n";
+		let files: Vec<_> = parse(b"", stderr, 1).into_iter().map(|d| d.file).collect();
+		assert_eq!(
+			files,
+			[
+				Some("main.beancount".to_string()),
+				Some("includes/2024.beancount".to_string())
+			]
+		);
 	}
 }
 

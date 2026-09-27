@@ -1,8 +1,10 @@
 //! erb_lint — Lint your ERB or HTML files. Ported from the none-ls
 //! diagnostics/erb_lint builtin.
 //!
-//! erb_lint emits a nested JSON document `{ "files": [ { "offenses": [...] } ] }`.
-//! The builtin reads only the first file's offenses; each offense carries a
+//! erb_lint emits a nested JSON document
+//! `{ "files": [ { "path": ..., "offenses": [...] } ] }`. The builtin reads only
+//! the first file's offenses; a run over several files lists each, so every entry
+//! is read and names its offenses. Each offense carries a
 //! `message`, a `linter` (rule id), and a `location` with start/last line+column.
 //! The columns are a `Parser::Source::Range`'s: counted from 0, `last_column`
 //! already exclusive, so both get +1. The tool emits no severity token, so
@@ -39,15 +41,20 @@ pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 	let Some(files) = get_array(&value, "files") else {
 		return out;
 	};
-	let Some(first) = files.first() else {
-		return out;
-	};
-	let Some(offenses) = get_array(first, "offenses") else {
-		return out;
-	};
-	for off in offenses {
-		if let Some(d) = from_offense(off) {
-			out.push(d);
+	for file in files {
+		let Some(offenses) = get_array(file, "offenses") else {
+			continue;
+		};
+		let path = file
+			.get::<HashMapJson>()
+			.and_then(|m| get_str(m, "path"))
+			.as_deref()
+			.and_then(crate::diagnostic::file_field);
+		for off in offenses {
+			if let Some(mut d) = from_offense(off) {
+				d.file.clone_from(&path);
+				out.push(d);
+			}
 		}
 	}
 	out
@@ -148,6 +155,16 @@ mod tests {
 	#[test]
 	fn invalid_json_yields_nothing() {
 		assert!(parse(b"not json", b"", 1).is_empty());
+	}
+
+	#[test]
+	fn every_file_is_read_and_names_its_findings() {
+		let json = br#"{"files":[
+            {"path":"a.erb","offenses":[{"linter":"L1","message":"first"}]},
+            {"path":"views/b.erb","offenses":[{"linter":"L2","message":"second"}]}]}"#;
+		let out = parse(json, b"", 1);
+		let got: Vec<_> = out.iter().map(|d| (d.message.as_str(), d.file.as_deref())).collect();
+		assert_eq!(got, [("first", Some("a.erb")), ("second", Some("views/b.erb"))]);
 	}
 }
 

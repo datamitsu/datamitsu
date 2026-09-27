@@ -46,7 +46,7 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 	// Find the trailing "<file>:row:col: message" by scanning from the right.
 	// Locate the ": " separating "col:" from the message.
 	let (locus, message) = split_locus(rest)?;
-	let (row, col) = parse_row_col(locus)?;
+	let (file, row, col) = parse_row_col(locus)?;
 
 	Some(RawDiagnostic {
 		message: message.to_string(),
@@ -54,6 +54,7 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 		col: Some(col),
 		severity: severity::of(DESCRIPTOR.severities, sev_token),
 		code: code.map(str::to_string),
+		file: file.and_then(crate::diagnostic::file_field),
 		..RawDiagnostic::default()
 	})
 }
@@ -77,13 +78,13 @@ fn split_locus(s: &str) -> Option<(&str, &str)> {
 	Some((&s[..abs], &s[abs + 2..]))
 }
 
-/// Parses the trailing ":row:col" out of "<file>:row:col".
-fn parse_row_col(locus: &str) -> Option<(u32, u32)> {
+/// Parses "<Level[-CODE]>: <file>:row:col" into the file and the position.
+fn parse_row_col(locus: &str) -> Option<(Option<&str>, u32, u32)> {
 	let (head, col_str) = locus.rsplit_once(':')?;
-	let (_, row_str) = head.rsplit_once(':')?;
+	let (head, row_str) = head.rsplit_once(':')?;
 	let col = col_str.parse().ok()?;
 	let row = row_str.parse().ok()?;
-	Some((row, col))
+	Some((head.split_once(": ").map(|(_, file)| file), row, col))
 }
 
 #[cfg(test)]
@@ -124,6 +125,13 @@ mod tests {
 	fn ignores_non_diagnostic_lines() {
 		let stderr = b"some banner line without locus\n";
 		assert!(parse(b"", stderr, 0).is_empty());
+	}
+
+	#[test]
+	fn each_finding_names_its_file() {
+		let stderr = b"%Error: rtl/top.sv:1:1: first\n%Warning-WIDTH: rtl/alu.sv:2:3: second\n";
+		let files: Vec<_> = parse(b"", stderr, 1).into_iter().map(|d| d.file).collect();
+		assert_eq!(files, [Some("rtl/top.sv".to_string()), Some("rtl/alu.sv".to_string())]);
 	}
 }
 

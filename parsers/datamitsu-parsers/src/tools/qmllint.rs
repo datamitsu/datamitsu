@@ -36,7 +36,7 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 	// Only a line headed by a level word is a finding.
 	let severity = severity::of(DESCRIPTOR.severities, level)?;
 	let (loc, message) = rest.split_once(": ")?;
-	let (_file, row, col) = location::file_row_col(loc)?;
+	let (file, row, col) = location::file_row_col(loc)?;
 	let (message, code) = split_category(message);
 
 	Some(RawDiagnostic {
@@ -45,6 +45,7 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 		col: Some(col),
 		severity: Some(severity),
 		code: code.map(str::to_string),
+		file: crate::diagnostic::file_field(file),
 		..RawDiagnostic::default()
 	})
 }
@@ -112,6 +113,17 @@ mod tests {
 		let diags = parse(b"", stderr, 1);
 		assert_eq!(diags.len(), 1);
 		assert_eq!(diags[0].message, "boom");
+	}
+
+	#[test]
+	fn each_finding_names_its_file() {
+		let files: Vec<_> = parse(b"", SAMPLES[0].stderr, 255).into_iter().map(|d| d.file).collect();
+		assert_eq!(
+			files,
+			[Some("/src/Main.qml".to_string()), Some("/src/Main.qml".to_string())]
+		);
+		let d = parse(b"", b"Error: ui/Other.qml:1:1: boom\n", 255);
+		assert_eq!(d[0].file.as_deref(), Some("ui/Other.qml"));
 	}
 }
 

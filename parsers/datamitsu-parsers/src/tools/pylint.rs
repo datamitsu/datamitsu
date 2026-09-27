@@ -37,6 +37,7 @@ pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 		col: "column",
 		code: "symbol",
 		severity: "type",
+		file: "path",
 		..Attrs::defaults()
 	};
 	let mut out = json_diag::from_json(stdout, &attrs, severity_of);
@@ -97,6 +98,16 @@ mod tests {
 		let json = br#"[{"type":"error","line":1,"column":4294967295,"endLine":1,"endColumn":4294967295,"path":"a.py","symbol":"s","message":"m","message-id":"E0001"}]"#;
 		let out = parse(json, b"", 2);
 		assert_eq!((out[0].col, out[0].end_col), (None, None));
+	}
+
+	#[test]
+	fn each_finding_names_its_file() {
+		let json = br#"[
+            {"type":"error","line":1,"column":0,"path":"pkg/a.py","symbol":"s","message":"first"},
+            {"type":"error","line":2,"column":0,"path":"pkg/b.py","symbol":"s","message":"second"}]"#;
+		let out = parse(json, b"", 2);
+		let got: Vec<_> = out.iter().map(|d| (d.message.as_str(), d.file.as_deref())).collect();
+		assert_eq!(got, [("first", Some("pkg/a.py")), ("second", Some("pkg/b.py"))]);
 	}
 }
 

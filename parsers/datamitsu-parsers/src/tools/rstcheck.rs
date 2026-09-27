@@ -39,7 +39,7 @@ pub fn parse(_stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 fn parse_line(line: &str) -> Option<RawDiagnostic> {
 	// ([^:]+):(%d+): %((.+)/%d%) (.+)
 	// First ":" splits filename from the rest.
-	let (_file, rest) = line.split_once(':')?;
+	let (file, rest) = line.split_once(':')?;
 	// Next field is the row number, terminated by ": ".
 	let (row_str, rest) = rest.split_once(": ")?;
 	let row: u32 = row_str.trim().parse().ok()?;
@@ -58,6 +58,7 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 		message: message.to_string(),
 		row: Some(row),
 		severity: severity::of(DESCRIPTOR.severities, level),
+		file: crate::diagnostic::file_field(file),
 		..RawDiagnostic::default()
 	})
 }
@@ -98,6 +99,13 @@ mod tests {
 		let stderr = b"some unrelated output\nWARNING: rstcheck banner\n";
 		let out = parse(b"", stderr, 0);
 		assert!(out.is_empty());
+	}
+
+	#[test]
+	fn each_finding_names_its_file() {
+		let stderr = b"a.rst:1: (WARNING/2) first\ndocs/b.rst:2: (ERROR/3) second\n";
+		let files: Vec<_> = parse(b"", stderr, 1).into_iter().map(|d| d.file).collect();
+		assert_eq!(files, [Some("a.rst".to_string()), Some("docs/b.rst".to_string())]);
 	}
 }
 

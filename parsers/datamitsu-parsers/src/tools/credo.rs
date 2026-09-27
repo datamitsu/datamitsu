@@ -95,6 +95,10 @@ fn from_issue(issue: &JsonValue) -> Option<RawDiagnostic> {
 			Some(JsonValue::String(s)) if !s.is_empty() => Some(s.clone()),
 			_ => None,
 		},
+		file: match map.get("filename") {
+			Some(JsonValue::String(s)) => crate::diagnostic::file_field(s),
+			_ => None,
+		},
 		..RawDiagnostic::default()
 	})
 }
@@ -199,6 +203,16 @@ mod tests {
 		assert_eq!(out[0].row, None);
 		assert_eq!(out[0].severity, None);
 		assert!(out[0].message.contains("could not be found"));
+	}
+
+	#[test]
+	fn each_issue_names_its_file() {
+		let json = br#"{"issues":[
+            {"message":"first","filename":"lib/a.ex","line_no":1,"priority":1},
+            {"message":"second","filename":"lib/b.ex","line_no":2,"priority":1}]}"#;
+		let out = parse(json, b"", 2);
+		let got: Vec<_> = out.iter().map(|d| (d.message.as_str(), d.file.as_deref())).collect();
+		assert_eq!(got, [("first", Some("lib/a.ex")), ("second", Some("lib/b.ex"))]);
 	}
 }
 

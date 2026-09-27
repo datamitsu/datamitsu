@@ -37,22 +37,22 @@ pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 	};
 
 	let mut out = Vec::new();
-	// Navigate to results[0]; the builtin only ever reads the first result.
-	let result = value
+	// The builtin reads only results[0], but a range (`--from`/`--to`) lints one
+	// commit message per result.
+	let results = value
 		.get::<std::collections::HashMap<String, JsonValue>>()
 		.and_then(|m| m.get("results"))
-		.and_then(|r| r.get::<Vec<JsonValue>>())
-		.and_then(|arr| arr.first());
-	let result = match result {
-		Some(JsonValue::Object(m)) => m,
-		_ => return out,
-	};
-
-	for key in ["errors", "warnings"] {
-		if let Some(JsonValue::Array(items)) = result.get(key) {
-			for it in items {
-				if let Some(d) = violation_to_diagnostic(it) {
-					out.push(d);
+		.and_then(|r| r.get::<Vec<JsonValue>>());
+	for result in results.into_iter().flatten() {
+		let JsonValue::Object(result) = result else {
+			continue;
+		};
+		for key in ["errors", "warnings"] {
+			if let Some(JsonValue::Array(items)) = result.get(key) {
+				for it in items {
+					if let Some(d) = violation_to_diagnostic(it) {
+						out.push(d);
+					}
 				}
 			}
 		}
@@ -149,6 +149,15 @@ mod tests {
 	fn no_results_yields_nothing() {
 		assert!(parse(br#"{"results":[]}"#, b"", 0).is_empty());
 		assert!(parse(b"not json", b"", 0).is_empty());
+	}
+
+	#[test]
+	fn every_linted_message_is_read() {
+		let json = br#"{"results":[
+            {"errors":[{"level":2,"name":"type-empty","message":"first"}],"warnings":[]},
+            {"errors":[{"level":2,"name":"subject-empty","message":"second"}],"warnings":[]}]}"#;
+		let messages: Vec<_> = parse(json, b"", 1).into_iter().map(|d| d.message).collect();
+		assert_eq!(messages, ["first", "second"]);
 	}
 }
 

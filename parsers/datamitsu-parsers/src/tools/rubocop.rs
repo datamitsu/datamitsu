@@ -2,7 +2,7 @@
 //! none-ls diagnostics/rubocop builtin.
 //!
 //! Unlike the flat JSON tools, rubocop nests its diagnostics under
-//! `output.files[0].offenses[]`, and each offense carries its span in a nested
+//! `output.files[].offenses[]`, and each offense carries its span in a nested
 //! `location` object (`start_line`/`start_column`/`last_line`/`last_column`),
 //! so this walks the JSON with tinyjson directly. `start_column` is 1-based;
 //! `last_column` is the parser gem's 0-based exclusive end, which is the 1-based
@@ -46,19 +46,24 @@ pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 	};
 
 	let mut out = Vec::new();
-	// output.files[0].offenses[]
-	let offenses = value
+	let Some(files) = value
 		.get::<HashMap<String, JsonValue>>()
 		.and_then(|root| root.get("files"))
 		.and_then(|f| f.get::<Vec<JsonValue>>())
-		.and_then(|files| files.first())
-		.and_then(|f| f.get::<HashMap<String, JsonValue>>())
-		.and_then(|file| file.get("offenses"))
-		.and_then(|o| o.get::<Vec<JsonValue>>());
-
-	if let Some(offenses) = offenses {
+	else {
+		return out;
+	};
+	for file in files {
+		let Some(file) = file.get::<HashMap<String, JsonValue>>() else {
+			continue;
+		};
+		let path = get_str(file, "path").as_deref().and_then(crate::diagnostic::file_field);
+		let Some(offenses) = file.get("offenses").and_then(|o| o.get::<Vec<JsonValue>>()) else {
+			continue;
+		};
 		for offense in offenses {
-			if let Some(d) = offense_to_diagnostic(offense) {
+			if let Some(mut d) = offense_to_diagnostic(offense) {
+				d.file.clone_from(&path);
 				out.push(d);
 			}
 		}
@@ -68,6 +73,10 @@ pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 
 fn offense_to_diagnostic(offense: &JsonValue) -> Option<RawDiagnostic> {
 	let map = offense.get::<HashMap<String, JsonValue>>()?;
+	// With -a/-A rubocop also lists what it corrected; only what is left is a finding.
+	if matches!(map.get("corrected"), Some(JsonValue::Boolean(true))) {
+		return None;
+	}
 	let message = get_str(map, "message")?;
 
 	let loc = map.get("location").and_then(|l| l.get::<HashMap<String, JsonValue>>());
@@ -169,6 +178,26 @@ mod tests {
 		let json = br#"{"files":[{"path":"a.rb","offenses":[{"severity":"warning","message":"m","cop_name":"X/Y",
             "location":{"start_line":1,"start_column":1,"last_line":1,"last_column":4294967295}}]}]}"#;
 		assert_eq!(parse(json, b"", 1)[0].end_col, None);
+	}
+
+	#[test]
+	fn every_file_is_read_and_names_its_findings() {
+		let json = br#"{"files":[
+            {"path":"a.rb","offenses":[{"severity":"warning","message":"first","cop_name":"X/A"}]},
+            {"path":"lib/b.rb","offenses":[{"severity":"error","message":"second","cop_name":"X/B"}]}]}"#;
+		let out = parse(json, b"", 1);
+		let got: Vec<_> = out.iter().map(|d| (d.message.as_str(), d.file.as_deref())).collect();
+		assert_eq!(got, [("first", Some("a.rb")), ("second", Some("lib/b.rb"))]);
+	}
+
+	#[test]
+	fn a_corrected_offense_is_not_a_finding() {
+		let json = br#"{"files":[{"path":"a.rb","offenses":[
+            {"severity":"convention","message":"fixed","cop_name":"X/A","corrected":true},
+            {"severity":"convention","message":"left","cop_name":"X/B","corrected":false}]}]}"#;
+		let out = parse(json, b"", 1);
+		assert_eq!(out.len(), 1);
+		assert_eq!(out[0].message, "left");
 	}
 }
 

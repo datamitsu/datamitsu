@@ -45,15 +45,19 @@ pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 
 	let mut out = Vec::new();
 	for file in files {
-		let errors = match file {
-			JsonValue::Object(m) => match m.get("errors") {
-				Some(JsonValue::Array(errs)) => errs,
-				_ => continue,
-			},
-			_ => continue,
+		let JsonValue::Object(file) = file else {
+			continue;
+		};
+		let Some(JsonValue::Array(errors)) = file.get("errors") else {
+			continue;
+		};
+		let path = match file.get("file") {
+			Some(JsonValue::String(s)) => crate::diagnostic::file_field(s),
+			_ => None,
 		};
 		for err in errors {
-			if let Some(d) = from_error(err) {
+			if let Some(mut d) = from_error(err) {
+				d.file.clone_from(&path);
 				out.push(d);
 			}
 		}
@@ -124,6 +128,20 @@ mod tests {
 		assert!(parse(b"not json", b"", 1).is_empty());
 		// file with no errors array.
 		assert!(parse(br#"[{"file":"a.kt"}]"#, b"", 0).is_empty());
+	}
+
+	#[test]
+	fn each_finding_names_its_file() {
+		let json = br#"[
+            {"file":"a.kt","errors":[{"line":1,"column":1,"message":"first","rule":"r1"}]},
+            {"file":"src/b.kts","errors":[{"line":2,"column":1,"message":"second","rule":"r2"}]},
+            {"file":"<stdin>","errors":[{"line":3,"column":1,"message":"piped","rule":"r3"}]}]"#;
+		let out = parse(json, b"", 1);
+		let got: Vec<_> = out.iter().map(|d| (d.message.as_str(), d.file.as_deref())).collect();
+		assert_eq!(
+			got,
+			[("first", Some("a.kt")), ("second", Some("src/b.kts")), ("piped", None)]
+		);
 	}
 }
 

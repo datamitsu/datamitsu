@@ -51,6 +51,7 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 		row: Some(row),
 		severity,
 		code,
+		file: crate::diagnostic::file_field(&line[..colon]),
 		..RawDiagnostic::default()
 	})
 }
@@ -109,6 +110,16 @@ mod tests {
 		assert_eq!(diags.len(), 1);
 		assert_eq!(diags[0].row, Some(3));
 		assert_eq!(diags[0].message, "unused variable");
+	}
+
+	#[test]
+	fn each_finding_names_its_file() {
+		let stderr = b"player.gd:3: Error: first (function-name)\nscenes/enemy.gd:4: Error: second (max-line-length)\n";
+		let files: Vec<_> = parse(b"", stderr, 1).into_iter().map(|d| d.file).collect();
+		assert_eq!(
+			files,
+			[Some("player.gd".to_string()), Some("scenes/enemy.gd".to_string())]
+		);
 	}
 }
 

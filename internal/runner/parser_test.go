@@ -324,6 +324,12 @@ func TestThresholdFailsTheNamedFileOfABatch(t *testing.T) {
 		"buildifier": `{"files":[{"filename":"a.py","warnings":[{"start":{"line":1,"column":1},` +
 			`"end":{"line":1,"column":2},"category":"load","message":"m"}]}]}`,
 		"phpstan": `{"files":{"a.py":{"errors":1,"messages":[{"message":"m","line":1}]}}}`,
+		"phpcs": `{"files":{"a.py":{"errors":1,"warnings":0,"messages":[{"message":"m","source":"S.R",` +
+			`"severity":5,"type":"ERROR","line":1,"column":1}]}}}`,
+		// The finding sits in the second file of the report, behind a clean one.
+		"rubocop": `{"files":[{"path":"b.py","offenses":[]},{"path":"a.py","offenses":[{"severity":"error",` +
+			`"message":"m","cop_name":"X/Y","corrected":false,"location":{"start_line":1,"start_column":1,` +
+			`"last_line":1,"last_column":2}}]}]}`,
 	}
 	for parser, report := range reports {
 		t.Run(parser, func(t *testing.T) {

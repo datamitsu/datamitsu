@@ -55,11 +55,11 @@ fn parse_error(line: &str) -> Option<RawDiagnostic> {
 	if message.is_empty() {
 		return None;
 	}
-	let _ = filename;
 	Some(RawDiagnostic {
 		message: message.to_string(),
 		row: Some(row),
 		severity: severity_of(sev_word),
+		file: crate::diagnostic::file_field(filename),
 		..RawDiagnostic::default()
 	})
 }
@@ -127,6 +127,14 @@ mod tests {
 	fn ignores_unmatched() {
 		let stderr = b"some unrelated banner output\n";
 		assert_eq!(parse(b"", stderr, 0).len(), 0);
+	}
+
+	#[test]
+	fn an_error_names_its_file() {
+		let d = parse(b"", b"error: SPECS/foo.spec: line 12: Unknown tag: X\n", 1);
+		assert_eq!(d[0].file.as_deref(), Some("SPECS/foo.spec"));
+		// The warning form prints no file.
+		assert_eq!(parse(b"", SAMPLES[0].stderr, 0)[0].file, None);
 	}
 }
 

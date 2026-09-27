@@ -50,15 +50,18 @@ pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 		_ => return out,
 	};
 	for file in files {
-		let violations = match file {
-			JsonValue::Object(m) => match m.get("violations") {
-				Some(JsonValue::Array(vs)) => vs,
-				_ => continue,
-			},
-			_ => continue,
+		let JsonValue::Object(file) = file else {
+			continue;
 		};
+		let Some(JsonValue::Array(violations)) = file.get("violations") else {
+			continue;
+		};
+		let path = get_str(file, "filename")
+			.as_deref()
+			.and_then(crate::diagnostic::file_field);
 		for v in violations {
-			if let Some(d) = violation_to_diag(v) {
+			if let Some(mut d) = violation_to_diag(v) {
+				d.file.clone_from(&path);
 				out.push(d);
 			}
 		}
@@ -151,6 +154,16 @@ mod tests {
 	#[test]
 	fn invalid_json_yields_nothing() {
 		assert!(parse(b"not json", b"", 0).is_empty());
+	}
+
+	#[test]
+	fn each_finding_names_its_file() {
+		let json = br#"{"files":[
+            {"filename":"src/A.java","violations":[{"priority":3,"description":"first"}]},
+            {"filename":"src/B.java","violations":[{"priority":1,"description":"second"}]}]}"#;
+		let out = parse(json, b"", 4);
+		let got: Vec<_> = out.iter().map(|d| (d.message.as_str(), d.file.as_deref())).collect();
+		assert_eq!(got, [("first", Some("src/A.java")), ("second", Some("src/B.java"))]);
 	}
 }
 

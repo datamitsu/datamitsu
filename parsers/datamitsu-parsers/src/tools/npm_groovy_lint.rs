@@ -2,8 +2,8 @@
 //! files. Ported from the none-ls diagnostics/npm_groovy_lint builtin.
 //!
 //! npm-groovy-lint's `-o json` output is a single object whose `files` map holds
-//! one entry per linted file; only the first file's `errors` array is consumed
-//! (mirroring the builtin's `vim.tbl_keys(...)[1]`). Each error carries
+//! one entry per linted file, keyed by its path. The builtin consumed only the
+//! first (`vim.tbl_keys(...)[1]`); every entry is read here. Each error carries
 //! `msg`/`rule`/`severity`/`line`, plus an optional `range` whose
 //! `start`/`end.{line,character}` become the span. Range lines count from 1 and
 //! characters from 0 (a string index), with the end character past the span, so
@@ -52,21 +52,28 @@ pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 		Some(m) => m,
 		None => return Vec::new(),
 	};
-	// Builtin takes only the first file key. HashMap iteration order is arbitrary,
-	// but npm-groovy-lint lints a single file per invocation here, so there is one.
-	let file = match files.values().next().and_then(as_obj) {
-		Some(m) => m,
-		None => return Vec::new(),
-	};
-	let errors = match file.get("errors") {
-		Some(JsonValue::Array(items)) => items,
-		_ => return Vec::new(),
-	};
-	errors.iter().filter_map(from_error).collect()
+	let mut out = Vec::new();
+	for (path, file) in files {
+		let Some(JsonValue::Array(errors)) = as_obj(file).and_then(|f| f.get("errors")) else {
+			continue;
+		};
+		let path = crate::diagnostic::file_field(path);
+		for error in errors {
+			if let Some(mut d) = from_error(error) {
+				d.file.clone_from(&path);
+				out.push(d);
+			}
+		}
+	}
+	out
 }
 
 fn from_error(value: &JsonValue) -> Option<RawDiagnostic> {
 	let map = as_obj(value)?;
+	// A --fix run keeps what it corrected in the report, marked `fixed`.
+	if matches!(map.get("fixed"), Some(JsonValue::Boolean(true))) {
+		return None;
+	}
 	let message = get_str(map, "msg")?;
 	let mut diag = RawDiagnostic {
 		message,
@@ -159,6 +166,32 @@ mod tests {
 	fn invalid_and_empty_yield_nothing() {
 		assert!(parse(b"not json", b"", 1).is_empty());
 		assert!(parse(br#"{"files":{}}"#, b"", 0).is_empty());
+	}
+
+	#[test]
+	fn every_file_is_read_and_names_its_findings() {
+		let json = br#"{"files":{
+            "Jenkinsfile":{"errors":[{"line":1,"rule":"R1","severity":"error","msg":"first"}]},
+            "ci/build.gradle":{"errors":[{"line":2,"rule":"R2","severity":"warning","msg":"second"}]}}}"#;
+		let mut got: Vec<_> = parse(json, b"", 1).into_iter().map(|d| (d.message, d.file)).collect();
+		got.sort();
+		assert_eq!(
+			got,
+			[
+				("first".to_string(), Some("Jenkinsfile".to_string())),
+				("second".to_string(), Some("ci/build.gradle".to_string())),
+			]
+		);
+	}
+
+	#[test]
+	fn a_fixed_error_is_not_a_finding() {
+		let json = br#"{"files":{"Jenkinsfile":{"errors":[
+            {"line":1,"rule":"R1","severity":"warning","msg":"fixed","fixed":true},
+            {"line":2,"rule":"R2","severity":"warning","msg":"left"}]}}}"#;
+		let out = parse(json, b"", 1);
+		assert_eq!(out.len(), 1);
+		assert_eq!(out[0].message, "left");
 	}
 }
 

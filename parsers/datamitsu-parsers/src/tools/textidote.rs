@@ -4,15 +4,14 @@
 //! with `--output singleline`, producing lines of the form:
 //!
 //! ```text
-//! <message>(L<row>C<col>-L<end_row>C<end_col>): <message>
+//! <file>(L<row>C<col>-L<end_row>C<end_col>): <message>
 //! ```
 //!
 //! The none-ls Lua pattern is
 //! `(.*)%(L(%d+)C(%d+)-L(%d+)C(%d+)%): (.*)` with groups
-//! `filename, row, col, end_row, end_col, message`. The first `(.*)` (greedy
-//! prefix, captured as "filename") is discarded — the actual diagnostic text is
-//! the trailing `(.*)` after the colon. textidote prints no level, so a finding
-//! has none.
+//! `filename, row, col, end_row, end_col, message`. The first `(.*)` names the
+//! finding's file; the diagnostic text is the trailing `(.*)` after the colon.
+//! textidote prints no level, so a finding has none.
 
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
@@ -75,6 +74,7 @@ fn try_marker(line: &str, open: usize) -> Option<RawDiagnostic> {
 		col: Some(col),
 		end_row: Some(end_row),
 		end_col: Some(end_col),
+		file: crate::diagnostic::file_field(&line[..open]),
 		..RawDiagnostic::default()
 	})
 }
@@ -118,6 +118,16 @@ mod tests {
 		assert_eq!(out[1].message, "b");
 		assert_eq!((out[1].row, out[1].col), (Some(2), Some(4)));
 		assert_eq!((out[1].end_row, out[1].end_col), (Some(3), Some(2)));
+	}
+
+	#[test]
+	fn each_finding_names_its_file() {
+		let out = b"paper.tex(L1C1-L1C3): first\nchapters/intro.tex(L2C1-L2C4): second\n";
+		let files: Vec<_> = parse(out, b"", 2).into_iter().map(|d| d.file).collect();
+		assert_eq!(
+			files,
+			[Some("paper.tex".to_string()), Some("chapters/intro.tex".to_string())]
+		);
 	}
 }
 

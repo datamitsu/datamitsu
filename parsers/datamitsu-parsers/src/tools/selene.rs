@@ -63,16 +63,19 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 		message.push_str(&joined.join(", "));
 	}
 
-	let span = map
-		.get("primary_label")
-		.and_then(|pl| match pl {
-			JsonValue::Object(m) => m.get("span"),
-			_ => None,
-		})
-		.and_then(|sp| match sp {
-			JsonValue::Object(m) => Some(m),
-			_ => None,
-		});
+	let label = match map.get("primary_label") {
+		Some(JsonValue::Object(m)) => Some(m),
+		_ => None,
+	};
+	// `-` when selene read stdin.
+	let file = label
+		.and_then(|l| get_str(l, "filename"))
+		.as_deref()
+		.and_then(crate::diagnostic::file_field);
+	let span = label.and_then(|l| l.get("span")).and_then(|sp| match sp {
+		JsonValue::Object(m) => Some(m),
+		_ => None,
+	});
 
 	// none-ls applies a +1 offset to every coordinate (selene is 0-based).
 	let (row, col, end_row, end_col) = match span {
@@ -93,6 +96,7 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 		end_col,
 		severity: get_str(map, "severity").and_then(|s| severity::of(DESCRIPTOR.severities, &s)),
 		code: get_str(map, "code"),
+		file,
 		..RawDiagnostic::default()
 	})
 }
@@ -149,6 +153,14 @@ mod tests {
 	fn ignores_blank_and_non_object_lines() {
 		let out = parse(b"\n123\n{\"type\":\"Summary\"}\n", b"", 0);
 		assert!(out.is_empty());
+	}
+
+	#[test]
+	fn each_finding_names_its_file() {
+		let stdout = br#"{"type":"Diagnostic","severity":"Warning","code":"c","message":"m","notes":[],"primary_label":{"filename":"src/init.lua","span":{"start_line":0,"start_column":0,"end_line":0,"end_column":1},"message":""},"secondary_labels":[]}"#;
+		assert_eq!(parse(stdout, b"", 0)[0].file.as_deref(), Some("src/init.lua"));
+		// `-` is stdin.
+		assert_eq!(parse(SAMPLES[0].stdout, b"", 1)[0].file, None);
 	}
 }
 

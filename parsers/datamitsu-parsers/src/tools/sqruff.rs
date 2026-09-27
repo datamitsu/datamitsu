@@ -64,10 +64,7 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 
 	let row = field_after(header, ",line=")?;
 	let col = field_after(header, ",col=")?;
-	// file= must be present (the pattern requires it) but is unused downstream.
-	if !header.contains(",file=") {
-		return None;
-	}
+	let file = file_after(header)?;
 
 	Some(RawDiagnostic {
 		message: message.to_string(),
@@ -75,8 +72,17 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 		col: Some(col),
 		severity: severity::of(DESCRIPTOR.severities, severity_tok),
 		code: Some(code.to_string()),
+		file: crate::diagnostic::file_field(&file),
 		..RawDiagnostic::default()
 	})
+}
+
+/// The `file=` property, which the pattern requires. It runs to the next
+/// property; a workflow command escapes `,` `:` and `%` inside a value.
+fn file_after(header: &str) -> Option<String> {
+	let start = header.find(",file=")? + ",file=".len();
+	let value = header[start..].split(',').next()?;
+	Some(value.replace("%2C", ",").replace("%3A", ":").replace("%25", "%"))
 }
 
 /// Splits the Lua `(%w+: .*)` message capture into the rule and its text.
@@ -134,6 +140,14 @@ mod tests {
 		assert!(parse_line("some unrelated output").is_none());
 		// message without the `word: ` rule prefix fails the pattern.
 		assert!(parse_line("::error file=a.sql,line=1,col=1::just a message").is_none());
+	}
+
+	#[test]
+	fn each_finding_names_its_file() {
+		let stderr = b"::error title=sqruff,file=models/a.sql,line=1,col=1::LT01: first\n\
+::warning title=sqruff,file=b%2Cc.sql,line=2,col=1::LT02: second\n";
+		let files: Vec<_> = parse(b"", stderr, 1).into_iter().map(|d| d.file).collect();
+		assert_eq!(files, [Some("models/a.sql".to_string()), Some("b,c.sql".to_string())]);
 	}
 }
 

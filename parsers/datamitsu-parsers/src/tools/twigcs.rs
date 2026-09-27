@@ -1,11 +1,11 @@
 //! twigcs — Runs Twigcs against Twig files. Ported from the none-ls
 //! diagnostics/twigcs builtin.
 //!
-//! Twigcs emits `{"files":[{"violations":[...]}],...}`. Each violation carries
+//! Twigcs emits `{"files":[{"file":...,"violations":[...]}],...}`. Each violation carries
 //! `line`, `column`, a human `message`, and a NUMERIC `severity`: twigcs's own
 //! levels 1 (info), 2 (warning) and 3 (error). Because the severity is a number
-//! (not a string token) and the diagnostics are nested under
-//! `files[1].violations`, this needs a bespoke navigator rather than the shared
+//! (not a string token) and the diagnostics are nested under each
+//! `files[].violations`, this needs a bespoke navigator rather than the shared
 //! `json_diag::from_json` string path.
 
 use tinyjson::JsonValue;
@@ -41,20 +41,27 @@ pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 		Err(_) => return Vec::new(),
 	};
 
-	// Navigate output.files[0].violations (none-ls uses files[1] = first in Lua).
-	let violations = value
+	// none-ls reads only files[1]; a run over several templates lists each one.
+	let files = value
 		.get::<std::collections::HashMap<String, JsonValue>>()
 		.and_then(|root| root.get("files"))
-		.and_then(|files| files.get::<Vec<JsonValue>>())
-		.and_then(|files| files.first())
-		.and_then(|f| f.get::<std::collections::HashMap<String, JsonValue>>())
-		.and_then(|f| f.get("violations"))
-		.and_then(|v| v.get::<Vec<JsonValue>>());
+		.and_then(|files| files.get::<Vec<JsonValue>>());
 
 	let mut out = Vec::new();
-	if let Some(items) = violations {
+	for file in files.into_iter().flatten() {
+		let Some(file) = file.get::<std::collections::HashMap<String, JsonValue>>() else {
+			continue;
+		};
+		let path = match file.get("file") {
+			Some(JsonValue::String(s)) => crate::diagnostic::file_field(s),
+			_ => None,
+		};
+		let Some(items) = file.get("violations").and_then(|v| v.get::<Vec<JsonValue>>()) else {
+			continue;
+		};
 		for it in items {
-			if let Some(d) = violation_to_diag(it) {
+			if let Some(mut d) = violation_to_diag(it) {
+				d.file.clone_from(&path);
 				out.push(d);
 			}
 		}
@@ -146,6 +153,16 @@ mod tests {
 	#[test]
 	fn invalid_json_yields_nothing() {
 		assert!(parse(b"not json", b"", 1).is_empty());
+	}
+
+	#[test]
+	fn every_file_is_read_and_names_its_findings() {
+		let json = br#"{"files":[
+            {"file":"a.twig","violations":[{"line":1,"column":1,"severity":3,"message":"first"}]},
+            {"file":"views/b.twig","violations":[{"line":2,"column":1,"severity":2,"message":"second"}]}]}"#;
+		let out = parse(json, b"", 1);
+		let got: Vec<_> = out.iter().map(|d| (d.message.as_str(), d.file.as_deref())).collect();
+		assert_eq!(got, [("first", Some("a.twig")), ("second", Some("views/b.twig"))]);
 	}
 }
 

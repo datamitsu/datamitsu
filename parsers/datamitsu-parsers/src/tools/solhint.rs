@@ -30,7 +30,7 @@ pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 // e.g. "contracts/Foo.sol:12:5: Avoid using inline assembly [Warning/no-inline-assembly]"
 fn parse_line(line: &str) -> Option<RawDiagnostic> {
 	// filename: up to the first colon ([^:]*)
-	let (_filename, rest) = line.split_once(':')?;
+	let (filename, rest) = line.split_once(':')?;
 
 	// row: digits up to next colon
 	let (row_str, rest) = rest.split_once(':')?;
@@ -62,6 +62,7 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 		col: Some(col),
 		severity: severity::of(DESCRIPTOR.severities, sev_token),
 		code: Some(code.to_string()),
+		file: crate::diagnostic::file_field(filename),
 		..RawDiagnostic::default()
 	})
 }
@@ -98,6 +99,16 @@ mod tests {
 	fn ignores_non_matching_lines() {
 		let out = b"3 problems (1 error, 2 warnings)\n";
 		assert!(parse(out, b"", 1).is_empty());
+	}
+
+	#[test]
+	fn each_finding_names_its_file() {
+		let out = b"contracts/A.sol:1:1: first [Error/r1]\nlib/B.sol:2:3: second [Warning/r2]\n";
+		let files: Vec<_> = parse(out, b"", 1).into_iter().map(|d| d.file).collect();
+		assert_eq!(
+			files,
+			[Some("contracts/A.sol".to_string()), Some("lib/B.sol".to_string())]
+		);
 	}
 }
 

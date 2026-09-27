@@ -61,6 +61,12 @@ fn from_obj(value: &JsonValue) -> Option<RawDiagnostic> {
 		code: get_str(map, "check_name"),
 		url: get_str(map, "url"),
 		severity: get_str(map, "level").and_then(|s| severity::of(DESCRIPTOR.severities, &s)),
+		file: map
+			.get("location")
+			.and_then(as_obj)
+			.and_then(|l| get_str(l, "path"))
+			.as_deref()
+			.and_then(crate::diagnostic::file_field),
 		..RawDiagnostic::default()
 	})
 }
@@ -183,6 +189,15 @@ mod tests {
 	fn empty_array_and_invalid_yield_nothing() {
 		assert!(parse(b"[]", b"", 0).is_empty());
 		assert!(parse(b"not json", b"", 1).is_empty());
+	}
+
+	#[test]
+	fn each_issue_names_its_file() {
+		let out = parse(SAMPLES[0].stdout, b"", 2);
+		assert!(out.iter().all(|d| d.file.as_deref() == Some("playbook.yml")));
+		let json =
+			br#"[{"check_name":"a","description":"m","location":{"path":"roles/x/tasks/main.yml","lines":{"begin":1}}}]"#;
+		assert_eq!(parse(json, b"", 2)[0].file.as_deref(), Some("roles/x/tasks/main.yml"));
 	}
 }
 

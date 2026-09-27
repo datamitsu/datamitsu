@@ -46,7 +46,8 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 	let mut search_from = 0;
 	while let Some(rel) = line[search_from..].find(':') {
 		let colon = search_from + rel;
-		if let Some(d) = try_match(&line[colon + 1..]) {
+		if let Some(mut d) = try_match(&line[colon + 1..]) {
+			d.file = crate::diagnostic::file_field(&line[..colon]);
 			return Some(d);
 		}
 		search_from = colon + 1;
@@ -136,6 +137,16 @@ mod tests {
 		let out = parse(stdout, b"", 3);
 		assert_eq!(out.len(), 1);
 		assert_eq!(out[0].severity, Some(severity::ERROR));
+	}
+
+	#[test]
+	fn each_finding_names_its_file() {
+		let stdout = b"src/a.clj:1:1: error: first\nsrc/b.cljs:2:1: warning: second\n<stdin>:3:1: info: piped\n";
+		let files: Vec<_> = parse(stdout, b"", 3).into_iter().map(|d| d.file).collect();
+		assert_eq!(
+			files,
+			[Some("src/a.clj".to_string()), Some("src/b.cljs".to_string()), None]
+		);
 	}
 }
 

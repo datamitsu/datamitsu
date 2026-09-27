@@ -67,6 +67,7 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 		severity: severity::of(DESCRIPTOR.severities, sev_tok),
 		source: Some("clazy".to_string()),
 		code,
+		file: crate::diagnostic::file_field(&line[..first_colon]),
 		..RawDiagnostic::default()
 	})
 }
@@ -147,6 +148,13 @@ mod tests {
 	fn ignores_unmatched_lines() {
 		let stderr = b"some progress output without diagnostics\n";
 		assert!(parse(b"", stderr, 0).is_empty());
+	}
+
+	#[test]
+	fn each_finding_names_its_file() {
+		let stderr = b"/src/a.cpp:1:1: warning: first [-Wclazy-x]\n/src/b.h:2:3: note: second\n";
+		let files: Vec<_> = parse(b"", stderr, 0).into_iter().map(|d| d.file).collect();
+		assert_eq!(files, [Some("/src/a.cpp".to_string()), Some("/src/b.h".to_string())]);
 	}
 }
 

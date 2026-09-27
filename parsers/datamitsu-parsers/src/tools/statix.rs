@@ -3,9 +3,10 @@
 //!
 //! statix runs `check --stdin --format=errfmt` and writes to stderr. Each
 //! diagnostic line is vim's `%f>%l:%c:%t:%n:%m` — `<file>>row:col:level:code:message`
-//! with a 1-based row and column and no end — and, like the builtin's unanchored
-//! Lua pattern `>(%d+):(%d+):(.):(%d+):(.*)`, the file is skipped. The level
-//! is `E`, `W` or `I` (statix's hint); the numeric code is the lint.
+//! with a 1-based row and column and no end — matched, like the builtin's
+//! unanchored Lua pattern `>(%d+):(%d+):(.):(%d+):(.*)`, after the file, which
+//! names the finding's file. The level is `E`, `W` or `I` (statix's hint); the
+//! numeric code is the lint.
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
 use crate::severity::{self, Level};
@@ -35,7 +36,12 @@ pub fn parse(_stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 }
 
 fn parse_line(line: &str) -> Option<RawDiagnostic> {
-	line.match_indices('>').find_map(|(i, _)| parse_fields(&line[i + 1..]))
+	line.match_indices('>').find_map(|(i, _)| {
+		let mut d = parse_fields(&line[i + 1..])?;
+		// `<stdin>` for what --stdin read.
+		d.file = crate::diagnostic::file_field(&line[..i]);
+		Some(d)
+	})
 }
 
 /// `row:col:level:code:message`, the part after the file's `>`.
@@ -81,7 +87,7 @@ mod tests {
 	}
 
 	#[test]
-	fn reads_the_hint_level_and_skips_the_file() {
+	fn reads_the_hint_level() {
 		let out = parse(b"", SAMPLES[1].stderr, 1);
 		assert_eq!(out.len(), 1);
 		assert_eq!(out[0].severity, Some(severity::INFO));
@@ -113,6 +119,16 @@ mod tests {
 	fn ignores_non_diagnostic_lines() {
 		let out = parse(b"", b"some other output\nx -> y\n", 0);
 		assert!(out.is_empty());
+	}
+
+	#[test]
+	fn each_finding_names_its_file() {
+		let stderr = b"flake.nix>1:1:W:4:first\nnix/b.nix>2:3:E:0:second\n<stdin>>3:1:I:20:piped\n";
+		let files: Vec<_> = parse(b"", stderr, 1).into_iter().map(|d| d.file).collect();
+		assert_eq!(
+			files,
+			[Some("flake.nix".to_string()), Some("nix/b.nix".to_string()), None]
+		);
 	}
 }
 

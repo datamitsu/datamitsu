@@ -10,7 +10,7 @@
 //!
 //! e.g. `source/main.brs:10:5 - error LINT1001: Unsafe usage`. The `<type>`
 //! token (alpha-only) maps to severity; `<CODE>` is alphanumeric. The filename
-//! is dropped (the core knows the file). `col` is reported.
+//! becomes the finding's file. `col` is reported.
 
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
@@ -46,11 +46,7 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 	let dash = line.find(" - ")?;
 	let (loc, rest) = (&line[..dash], &line[dash + 3..]);
 
-	// loc = "<file>:<row>:<col>" — split the last two colon-separated numbers off.
-	let (loc_rest, col_str) = loc.rsplit_once(':')?;
-	let (_file, row_str) = loc_rest.rsplit_once(':')?;
-	let row: u32 = row_str.parse().ok()?;
-	let col: u32 = col_str.parse().ok()?;
+	let (file, row, col) = crate::location::file_row_col(loc)?;
 
 	// rest = "<type> <CODE>: <message>"
 	let colon = rest.find(": ")?;
@@ -78,6 +74,7 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 		severity: severity::of(DESCRIPTOR.severities, err_type),
 		source: Some("bslint".to_string()),
 		code: Some(code.to_string()),
+		file: crate::diagnostic::file_field(file),
 		..RawDiagnostic::default()
 	})
 }
@@ -115,6 +112,19 @@ mod tests {
 		let out = parse(b"", b"Found issues:\nsource/main.brs:10:5 - error LINT1001: bad\n\n", 1);
 		assert_eq!(out.len(), 1);
 		assert_eq!(out[0].row, Some(10));
+	}
+
+	#[test]
+	fn each_finding_names_its_file() {
+		let files: Vec<_> = parse(b"", SAMPLES[0].stderr, 1).into_iter().map(|d| d.file).collect();
+		assert_eq!(
+			files,
+			[
+				Some("source/main.brs".to_string()),
+				Some("source/main.brs".to_string()),
+				Some("source/util.brs".to_string())
+			]
+		);
 	}
 }
 

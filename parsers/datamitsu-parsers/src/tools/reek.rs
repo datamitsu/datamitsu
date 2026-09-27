@@ -57,6 +57,11 @@ fn expand_record(record: &JsonValue, out: &mut Vec<RawDiagnostic>) {
 		return;
 	};
 	let url = get_str(map, "documentation_link");
+	// reek names piped source "STDIN" unless --stdin-filename names it.
+	let file = get_str(map, "source")
+		.as_deref()
+		.and_then(crate::diagnostic::file_field)
+		.filter(|f| f != "STDIN");
 
 	let lines = match map.get("lines") {
 		Some(JsonValue::Array(items)) => items,
@@ -75,6 +80,7 @@ fn expand_record(record: &JsonValue, out: &mut Vec<RawDiagnostic>) {
 			row: Some(row),
 			code: Some(smell_type.clone()),
 			url: url.clone(),
+			file: file.clone(),
 			..RawDiagnostic::default()
 		});
 	}
@@ -133,6 +139,24 @@ mod tests {
 	#[test]
 	fn invalid_json_yields_nothing() {
 		assert!(parse(b"", b"not json", 0).is_empty());
+	}
+
+	#[test]
+	fn each_finding_names_its_source_file() {
+		let json = br#"[
+            {"lines":[1],"message":"first","smell_type":"S","source":"lib/a.rb"},
+            {"lines":[2],"message":"second","smell_type":"S","source":"lib/b.rb"},
+            {"lines":[3],"message":"piped","smell_type":"S","source":"STDIN"}]"#;
+		let out = parse(b"", json, 2);
+		let got: Vec<_> = out.iter().map(|d| (d.message.as_str(), d.file.as_deref())).collect();
+		assert_eq!(
+			got,
+			[
+				("first", Some("lib/a.rb")),
+				("second", Some("lib/b.rb")),
+				("piped", None)
+			]
+		);
 	}
 }
 

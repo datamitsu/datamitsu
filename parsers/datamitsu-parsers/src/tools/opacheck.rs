@@ -93,6 +93,10 @@ fn diag_from_error(value: &JsonValue, severity: Option<u8>) -> Option<RawDiagnos
 		severity,
 		source: Some("opacheck".to_string()),
 		code,
+		file: match location.get("file") {
+			Some(JsonValue::String(s)) => crate::diagnostic::file_field(s),
+			_ => None,
+		},
 		..RawDiagnostic::default()
 	})
 }
@@ -139,6 +143,16 @@ mod tests {
 	fn empty_or_missing_errors_yields_nothing() {
 		assert!(parse(&[], br#"{"errors":null}"#, 0).is_empty());
 		assert!(parse(&[], b"not json", 1).is_empty());
+	}
+
+	#[test]
+	fn each_error_names_its_file() {
+		let json = br#"{"errors":[
+            {"message":"first","code":"c","location":{"file":"a.rego","row":1,"col":1}},
+            {"message":"second","code":"c","location":{"file":"lib/b.rego","row":2,"col":1}}]}"#;
+		let out = parse(&[], json, 1);
+		let got: Vec<_> = out.iter().map(|d| (d.message.as_str(), d.file.as_deref())).collect();
+		assert_eq!(got, [("first", Some("a.rego")), ("second", Some("lib/b.rego"))]);
 	}
 }
 

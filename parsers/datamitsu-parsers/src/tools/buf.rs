@@ -55,6 +55,8 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 				message,
 				row: Some(row),
 				col: Some(col),
+				// `#include_package_files` reports the other files of the package too.
+				file: crate::diagnostic::file_field(&line[..c1]),
 				..RawDiagnostic::default()
 			});
 		}
@@ -93,6 +95,13 @@ mod tests {
 		assert_eq!(out.len(), 2);
 		assert_eq!(out[0].message, "problem one");
 		assert_eq!(out[1].row, Some(2));
+	}
+
+	#[test]
+	fn each_finding_names_its_file() {
+		let out = parse(b"", b"foo.proto:1:1:one\nsub/bar.proto:2:3:two\n", 100);
+		let files: Vec<_> = out.iter().map(|d| d.file.as_deref()).collect();
+		assert_eq!(files, [Some("foo.proto"), Some("sub/bar.proto")]);
 	}
 }
 

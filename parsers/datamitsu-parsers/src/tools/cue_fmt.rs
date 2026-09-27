@@ -44,26 +44,19 @@ pub fn parse(stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic
 	// the line immediately before it.
 	let mut i = 1;
 	while i < lines.len() {
-		if let Some((row, col)) = trailing_row_col(lines[i]) {
+		if let Some((file, row, col)) = crate::location::file_row_col(lines[i]) {
 			out.push(RawDiagnostic {
 				message: lines[i - 1].trim().to_string(),
 				row: Some(row),
 				col: Some(col),
 				source: Some("cue_fmt".to_string()),
+				file: crate::diagnostic::file_field(file),
 				..RawDiagnostic::default()
 			});
 		}
 		i += 2;
 	}
 	out
-}
-
-/// Trailing `:<row>:<col>` of a location line, read right-to-left.
-fn trailing_row_col(line: &str) -> Option<(u32, u32)> {
-	let mut it = line.rsplit(':');
-	let col = it.next()?.trim().parse().ok()?;
-	let row = it.next()?.trim().parse().ok()?;
-	Some((row, col))
 }
 
 #[cfg(test)]
@@ -107,6 +100,13 @@ mod tests {
 	#[test]
 	fn empty_output_yields_nothing() {
 		assert!(parse(b"", b"", 0).is_empty());
+	}
+
+	#[test]
+	fn each_finding_names_its_file() {
+		let stderr = b"first\n    ./a.cue:1:1\nsecond\n    ./pkg/b.cue:2:3\n";
+		let files: Vec<_> = parse(b"", stderr, 1).into_iter().map(|d| d.file).collect();
+		assert_eq!(files, [Some("./a.cue".to_string()), Some("./pkg/b.cue".to_string())]);
 	}
 }
 

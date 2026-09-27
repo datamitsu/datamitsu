@@ -43,7 +43,7 @@ pub fn parse(_stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 // fields: filename, row, col, severity, message
 fn parse_line(line: &str) -> Option<RawDiagnostic> {
 	// filename: up to first ':'
-	let (_filename, rest) = line.split_once(':')?;
+	let (filename, rest) = line.split_once(':')?;
 	// row: digits up to ':'
 	let (row_s, rest) = rest.split_once(':')?;
 	let row: u32 = row_s.parse().ok()?;
@@ -65,6 +65,7 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 		col: Some(col),
 		severity: severity::of(DESCRIPTOR.severities, sev_s),
 		code: warning_option(message),
+		file: crate::diagnostic::file_field(filename),
 		..RawDiagnostic::default()
 	})
 }
@@ -142,6 +143,13 @@ mod tests {
 	fn ignores_non_diagnostic_lines() {
 		let stderr = b"some unrelated build chatter\n";
 		assert!(parse(&[], stderr, 1).is_empty());
+	}
+
+	#[test]
+	fn each_finding_names_its_file() {
+		let stderr = b"src/a.c:1:1: error: first\ninclude/b.h:2:3: note: second\n";
+		let files: Vec<_> = parse(&[], stderr, 1).into_iter().map(|d| d.file).collect();
+		assert_eq!(files, [Some("src/a.c".to_string()), Some("include/b.h".to_string())]);
 	}
 }
 

@@ -3,7 +3,7 @@
 //! regal emits a JSON object `{"violations":[…]}` (on stderr; the builtin sets
 //! `from_stderr = true`). Each violation carries `description`, `level`, `title`
 //! (used as the code), `related_resources` (the first `ref` is the rule's
-//! documentation) and a nested `location` object with 1-based `row` and `col`,
+//! documentation) and a nested `location` object with its `file`, 1-based `row` and `col`,
 //! the source line as `text`, and — since regal 0.24 — an exclusive `end`
 //! `{row, col}`. A violation without a `location` is skipped; one without a
 //! `level` has none.
@@ -83,7 +83,9 @@ fn from_violation(violation: &JsonValue) -> Option<RawDiagnostic> {
 		source: Some("regal".to_string()),
 		code: get_str(map, "title"),
 		url: documentation(map),
-		..RawDiagnostic::default()
+		file: get_str(location, "file")
+			.as_deref()
+			.and_then(crate::diagnostic::file_field),
 	})
 }
 
@@ -158,6 +160,19 @@ mod tests {
 		let json = br#"{"violations":[{"description":"orphan","level":"error","title":"r"}]}"#;
 		let out = parse(b"", json, 0);
 		assert!(out.is_empty());
+	}
+
+	#[test]
+	fn each_violation_names_its_file() {
+		let json = br#"{"violations":[
+            {"description":"first","title":"a","location":{"file":"policy/a.rego","row":1,"col":1}},
+            {"description":"second","title":"b","location":{"file":"policy/b.rego","row":2,"col":1}}]}"#;
+		let out = parse(b"", json, 3);
+		let got: Vec<_> = out.iter().map(|d| (d.message.as_str(), d.file.as_deref())).collect();
+		assert_eq!(
+			got,
+			[("first", Some("policy/a.rego")), ("second", Some("policy/b.rego"))]
+		);
 	}
 }
 

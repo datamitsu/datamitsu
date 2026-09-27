@@ -57,6 +57,12 @@ fn from_finding(value: &JsonValue) -> Option<RawDiagnostic> {
 		JsonValue::Object(m) => m,
 		_ => return None,
 	};
+	let kind = get_str(map, "kind");
+	// `fixed` (under --fix) and `ignored` (under --show-ignored) are reported
+	// beside the problems but are not problems.
+	if matches!(kind.as_deref(), Some("fixed" | "ignored")) {
+		return None;
+	}
 	let message = get_str(map, "message")?;
 	Some(RawDiagnostic {
 		message,
@@ -64,7 +70,11 @@ fn from_finding(value: &JsonValue) -> Option<RawDiagnostic> {
 		col: get_u32(map, "column"),
 		source: Some("puppet-lint".to_string()),
 		code: get_str(map, "check"),
-		severity: get_str(map, "kind").and_then(|k| severity::of(DESCRIPTOR.severities, &k)),
+		severity: kind.and_then(|k| severity::of(DESCRIPTOR.severities, &k)),
+		file: get_str(map, "path")
+			.or_else(|| get_str(map, "fullpath"))
+			.as_deref()
+			.and_then(crate::diagnostic::file_field),
 		..RawDiagnostic::default()
 	})
 }
@@ -116,6 +126,25 @@ mod tests {
 	fn empty_and_invalid_yield_nothing() {
 		assert!(parse(b"[]", b"", 0).is_empty());
 		assert!(parse(b"not json", b"", 0).is_empty());
+	}
+
+	#[test]
+	fn each_finding_names_its_file() {
+		let out = parse(SAMPLES[0].stdout, b"", 0);
+		assert_eq!(out[0].file.as_deref(), Some("init.pp"));
+		let out = parse(SAMPLES[1].stdout, b"", 1);
+		assert_eq!(out[0].file.as_deref(), Some("/x/init.pp"));
+	}
+
+	#[test]
+	fn fixed_and_ignored_problems_are_not_findings() {
+		let stdout = br#"[[
+            {"line":1,"column":1,"check":"a","kind":"fixed","message":"fixed","path":"a.pp"},
+            {"line":2,"column":1,"check":"b","kind":"ignored","message":"ignored","path":"a.pp"},
+            {"line":3,"column":1,"check":"c","kind":"error","message":"left","path":"a.pp"}]]"#;
+		let out = parse(stdout, b"", 1);
+		assert_eq!(out.len(), 1);
+		assert_eq!(out[0].message, "left");
 	}
 }
 

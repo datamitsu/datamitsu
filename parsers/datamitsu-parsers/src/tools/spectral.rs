@@ -12,8 +12,8 @@
 //! so 1 is added to all four. `severity` is a number, 0 (error) … 3 (hint);
 //! `code` is the rule (string or number).
 //!
-//! The builtin also carries `path`, but RawDiagnostic has no path field, so it is
-//! dropped (the Go core fills positional context).
+//! `path` is the JSON path inside the document, not a file, and is dropped;
+//! `source` is the document the result is in, which becomes the file.
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
 use crate::severity::{self, Level};
@@ -93,6 +93,10 @@ fn parse_result(item: &JsonValue) -> Option<RawDiagnostic> {
 		severity,
 		source: Some("Spectral".to_string()),
 		code,
+		file: match obj.get("source") {
+			Some(JsonValue::String(s)) => crate::diagnostic::file_field(s),
+			_ => None,
+		},
 		..RawDiagnostic::default()
 	})
 }
@@ -175,6 +179,22 @@ mod tests {
 		let json = br#"[{"code":"c","message":"m","severity":0,"range":{"start":{"line":4294967295,"character":4294967295},"end":{"line":0,"character":0}}}]"#;
 		let out = parse(json, b"", 1);
 		assert_eq!((out[0].row, out[0].col), (None, None));
+	}
+
+	#[test]
+	fn each_finding_names_its_source_document() {
+		let json = br#"[
+            {"code":"a","message":"first","severity":0,"source":"/w/openapi.yaml"},
+            {"code":"b","message":"second","severity":1,"source":"/w/schemas/pet.yaml"}]"#;
+		let out = parse(json, b"", 1);
+		let got: Vec<_> = out.iter().map(|d| (d.message.as_str(), d.file.as_deref())).collect();
+		assert_eq!(
+			got,
+			[
+				("first", Some("/w/openapi.yaml")),
+				("second", Some("/w/schemas/pet.yaml"))
+			]
+		);
 	}
 }
 

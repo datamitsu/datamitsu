@@ -44,7 +44,7 @@ pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 // filename uses Lua [^:]+ (stops at first colon).
 fn parse_line(line: &str) -> Option<RawDiagnostic> {
 	// filename: up to first ':'
-	let (_filename, rest) = line.split_once(':')?;
+	let (filename, rest) = line.split_once(':')?;
 	// row: digits up to ':'
 	let (row_s, rest) = rest.split_once(':')?;
 	let row: u32 = row_s.trim().parse().ok()?;
@@ -77,6 +77,7 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 		col,
 		severity: severity_of(sev_s),
 		code,
+		file: crate::diagnostic::file_field(filename),
 		..RawDiagnostic::default()
 	})
 }
@@ -139,6 +140,16 @@ mod tests {
 		assert_eq!(diags[0].col, None);
 		assert_eq!(diags[0].severity, Some(severity::WARNING));
 		assert_eq!(diags[0].message, "unused 'type: ignore' comment");
+	}
+
+	#[test]
+	fn each_finding_names_its_file() {
+		let stdout = b"/src/a.py:1:1: error: first  [misc]\n/src/pkg/b.py:2: note: second\n";
+		let files: Vec<_> = parse(stdout, &[], 1).into_iter().map(|d| d.file).collect();
+		assert_eq!(
+			files,
+			[Some("/src/a.py".to_string()), Some("/src/pkg/b.py".to_string())]
+		);
 	}
 }
 

@@ -37,6 +37,7 @@ pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 		code: "id",
 		message: "message",
 		severity: "severity",
+		file: "filename",
 		..Attrs::defaults()
 	};
 	json_diag::from_json(stdout, &attrs, severity_of)
@@ -81,6 +82,16 @@ mod tests {
 		let json = br#"[{"id":"1","message":"x","linenumber":1,"severity":"NOTICE"}]"#;
 		let out = parse(json, b"", 2);
 		assert_eq!(out[0].severity, None);
+	}
+
+	#[test]
+	fn each_finding_names_its_file() {
+		let json = br#"[
+            {"id":"201","message":"first","filename":"a.sls","linenumber":1,"severity":"INFO"},
+            {"id":"207","message":"second","filename":"states/b.sls","linenumber":2,"severity":"HIGH"}]"#;
+		let out = parse(json, b"", 2);
+		let got: Vec<_> = out.iter().map(|d| (d.message.as_str(), d.file.as_deref())).collect();
+		assert_eq!(got, [("first", Some("a.sls")), ("second", Some("states/b.sls"))]);
 	}
 }
 

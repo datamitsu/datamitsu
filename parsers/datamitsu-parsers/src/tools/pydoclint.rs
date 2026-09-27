@@ -48,6 +48,9 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 		message: message.to_string(),
 		row: Some(row),
 		code: Some(code.to_string()),
+		file: head
+			.rsplit_once(':')
+			.and_then(|(file, _)| crate::diagnostic::file_field(file)),
 		..RawDiagnostic::default()
 	})
 }
@@ -86,6 +89,13 @@ mod tests {
 		assert_eq!(diags[0].row, Some(7));
 		assert_eq!(diags[0].code.as_deref(), Some("DOC201"));
 		assert_eq!(diags[0].message, "does not have a return section");
+	}
+
+	#[test]
+	fn each_finding_names_its_file() {
+		let stderr = b"src/a.py:1: DOC101: first\nsrc/pkg/b.py:2: DOC201: second\n";
+		let files: Vec<_> = parse(b"", stderr, 1).into_iter().map(|d| d.file).collect();
+		assert_eq!(files, [Some("src/a.py".to_string()), Some("src/pkg/b.py".to_string())]);
 	}
 }
 

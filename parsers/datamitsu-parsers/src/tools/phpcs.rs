@@ -57,11 +57,14 @@ pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 	let mut out = Vec::new();
 	if let JsonValue::Object(root) = &value {
 		if let Some(JsonValue::Object(files)) = root.get("files") {
-			for file in files.values() {
+			for (path, file) in files {
+				// phpcs keys what it read from stdin without --stdin-path as "STDIN".
+				let path = crate::diagnostic::file_field(path).filter(|p| p != "STDIN");
 				if let JsonValue::Object(fmap) = file {
 					if let Some(JsonValue::Array(messages)) = fmap.get("messages") {
 						for msg in messages {
-							if let Some(d) = json_diag::from_obj(msg, &attrs, severity_of) {
+							if let Some(mut d) = json_diag::from_obj(msg, &attrs, severity_of) {
+								d.file.clone_from(&path);
 								out.push(d);
 							}
 						}
@@ -110,6 +113,24 @@ mod tests {
 	#[test]
 	fn invalid_json_yields_nothing() {
 		assert!(parse(b"phpcs status message", b"", 0).is_empty());
+	}
+
+	#[test]
+	fn each_finding_names_the_file_it_is_keyed_under() {
+		let json = br#"{"files":{
+            "src/a.php":{"messages":[{"message":"first","type":"ERROR","line":1,"column":1}]},
+            "src/b.php":{"messages":[{"message":"second","type":"WARNING","line":2,"column":1}]},
+            "STDIN":{"messages":[{"message":"piped","type":"ERROR","line":3,"column":1}]}}}"#;
+		let mut got: Vec<_> = parse(json, b"", 0).into_iter().map(|d| (d.message, d.file)).collect();
+		got.sort();
+		assert_eq!(
+			got,
+			[
+				("first".to_string(), Some("src/a.php".to_string())),
+				("piped".to_string(), None),
+				("second".to_string(), Some("src/b.php".to_string())),
+			]
+		);
 	}
 }
 

@@ -2,7 +2,8 @@
 //! diagnostics/checkstyle builtin.
 //!
 //! checkstyle is invoked with `-f sarif`; the parser navigates the SARIF tree
-//! (`runs[0].results[].locations[].physicalLocation.region`) rather than the flat
+//! (`runs[0].results[].locations[].physicalLocation`, whose `artifactLocation.uri`
+//! names the file and whose `region` the position) rather than the flat
 //! none-ls `from_json` shape, so the JSON is walked by hand here. The level is
 //! the SARIF `level` checkstyle derives from the check's severity (`error`,
 //! `warning`, `note` for info). The region carries only a 1-based start. stderr
@@ -107,19 +108,74 @@ fn parse_sarif(stdout: &[u8], out: &mut Vec<RawDiagnostic>) {
 			continue;
 		};
 		for location in locations {
-			let region = get(location, "physicalLocation").and_then(|p| get(p, "region"));
+			let physical = get(location, "physicalLocation");
+			let region = physical.and_then(|p| get(p, "region"));
 			let col = region.and_then(|r| get(r, "startColumn")).and_then(as_u32);
 			let row = region.and_then(|r| get(r, "startLine")).and_then(as_u32);
+			let file = physical
+				.and_then(|p| get(p, "artifactLocation"))
+				.and_then(|a| get(a, "uri"))
+				.and_then(as_str)
+				.and_then(|uri| uri_path(&uri))
+				.as_deref()
+				.and_then(crate::diagnostic::file_field);
 			out.push(RawDiagnostic {
 				message: message.clone(),
 				row,
 				col,
 				code: code.clone(),
 				severity,
+				file,
 				..RawDiagnostic::default()
 			});
 		}
 	}
+}
+
+/// The path of a SARIF artifact URI. checkstyle writes `file:` plus the absolute
+/// path with spaces as `%20` (`file:/C:/…` on Windows); a URI without a scheme is
+/// a path already, and one with another scheme names no local file.
+fn uri_path(uri: &str) -> Option<String> {
+	let path = if let Some(rest) = uri.strip_prefix("file://") {
+		// `file:///abs` or `file://host/abs`: the path starts at the next slash.
+		&rest[rest.find('/')?..]
+	} else if let Some(rest) = uri.strip_prefix("file:") {
+		rest
+	} else if uri.contains("://") {
+		return None;
+	} else {
+		uri
+	};
+	let bytes = path.as_bytes();
+	let path = if bytes.len() >= 3 && bytes[0] == b'/' && bytes[1].is_ascii_alphabetic() && bytes[2] == b':' {
+		&path[1..]
+	} else {
+		path
+	};
+	Some(percent_decode(path))
+}
+
+fn percent_decode(s: &str) -> String {
+	let bytes = s.as_bytes();
+	let mut out = Vec::with_capacity(bytes.len());
+	let mut i = 0;
+	while i < bytes.len() {
+		let hex = bytes
+			.get(i + 1..i + 3)
+			.and_then(|h| std::str::from_utf8(h).ok())
+			.and_then(|h| u8::from_str_radix(h, 16).ok());
+		match (bytes[i], hex) {
+			(b'%', Some(b)) => {
+				out.push(b);
+				i += 3;
+			}
+			(b, _) => {
+				out.push(b);
+				i += 1;
+			}
+		}
+	}
+	String::from_utf8_lossy(&out).into_owned()
 }
 
 fn get<'a>(v: &'a JsonValue, key: &str) -> Option<&'a JsonValue> {
@@ -234,6 +290,22 @@ mod tests {
 			out[0].message,
 			"com.puppycrawl.tools.checkstyle.api.CheckstyleException: unable to parse"
 		);
+	}
+
+	#[test]
+	fn each_result_names_its_file() {
+		let out = parse(SAMPLES[0].stdout, b"", 1);
+		assert!(out.iter().all(|d| d.file.as_deref() == Some("/work/src/Main.java")));
+		for (uri, want) in [
+			("file:/my%20src/A.java", Some("/my src/A.java")),
+			("file:///abs/B.java", Some("/abs/B.java")),
+			("file:/C:/src/C.java", Some("C:/src/C.java")),
+			("src/D.java", Some("src/D.java")),
+			("https://example.test/E.java", None),
+		] {
+			let sarif = SARIF.replace("file:/src/Main.java", uri);
+			assert_eq!(parse(sarif.as_bytes(), b"", 1)[0].file.as_deref(), want, "{uri}");
+		}
 	}
 }
 

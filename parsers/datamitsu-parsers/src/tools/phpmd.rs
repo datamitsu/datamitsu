@@ -2,9 +2,10 @@
 //!
 //! Ported from the none-ls `diagnostics/phpmd` builtin (the JSON class). It runs
 //! `phpmd {file} json` and emits a nested object
-//! `{"files":[{"violations":[…]}]}`. Unlike the flat JSON tools, the diagnostics
-//! live under `files[0].violations`, so this parser navigates there itself and
-//! reuses the shared field mapping. Each violation maps `description → message`,
+//! `{"files":[{"file":…,"violations":[…]}]}`. Unlike the flat JSON tools, the
+//! diagnostics live under each `files[].violations`, named by the entry's `file`,
+//! so this parser navigates there itself and reuses the shared field mapping.
+//! Each violation maps `description → message`,
 //! `beginLine → row`, `endLine → end_row`, `rule → code`, `externalInfoUrl → url`,
 //! and a numeric `priority` (1–5) → severity (1,2 → error/warning; 3 →
 //! information; 4,5 → hint).
@@ -53,21 +54,35 @@ pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 		}
 	};
 
-	// phpmd nests violations under files[0].violations.
-	let violations = value
+	let files = match value
 		.get::<std::collections::HashMap<String, JsonValue>>()
 		.and_then(|root| root.get("files"))
 		.and_then(|f| f.get::<Vec<JsonValue>>())
-		.and_then(|files| files.first())
-		.and_then(|f0| f0.get::<std::collections::HashMap<String, JsonValue>>())
-		.and_then(|f0| f0.get("violations"))
-		.and_then(|v| v.get::<Vec<JsonValue>>());
-
-	let violations = match violations {
-		Some(v) => v,
+	{
+		Some(files) => files,
 		None => return Vec::new(),
 	};
 
+	let mut out = Vec::new();
+	for file in files {
+		let Some(file) = file.get::<std::collections::HashMap<String, JsonValue>>() else {
+			continue;
+		};
+		let path = match file.get("file") {
+			Some(JsonValue::String(s)) => crate::diagnostic::file_field(s),
+			_ => None,
+		};
+		if let Some(violations) = file.get("violations").and_then(|v| v.get::<Vec<JsonValue>>()) {
+			out.extend(violations.iter().filter_map(violation_to_diag).map(|mut d| {
+				d.file.clone_from(&path);
+				d
+			}));
+		}
+	}
+	out
+}
+
+fn violation_to_diag(v: &JsonValue) -> Option<RawDiagnostic> {
 	let attrs = Attrs {
 		message: "description",
 		row: "beginLine",
@@ -78,19 +93,14 @@ pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 		..Attrs::defaults()
 	};
 
-	violations
-		.iter()
-		.filter_map(|v| {
-			let mut d = json_diag::from_obj(v, &attrs, |_| None)?;
-			let map = v.get::<std::collections::HashMap<String, JsonValue>>()?;
-			d.severity = priority_severity(map.get("priority"));
-			d.url = match map.get("externalInfoUrl") {
-				Some(JsonValue::String(url)) if !url.is_empty() => Some(url.clone()),
-				_ => None,
-			};
-			Some(d)
-		})
-		.collect()
+	let mut d = json_diag::from_obj(v, &attrs, |_| None)?;
+	let map = v.get::<std::collections::HashMap<String, JsonValue>>()?;
+	d.severity = priority_severity(map.get("priority"));
+	d.url = match map.get("externalInfoUrl") {
+		Some(JsonValue::String(url)) if !url.is_empty() => Some(url.clone()),
+		_ => None,
+	};
+	Some(d)
 }
 
 /// phpmd's numeric `priority` (1 = most severe … 5 = least), read as its decimal
@@ -166,6 +176,16 @@ mod tests {
 		assert_eq!(out.len(), 1);
 		assert_eq!(out[0].message, "phpmd error: cannot parse output as JSON.");
 		assert_eq!(out[0].severity, None);
+	}
+
+	#[test]
+	fn every_file_is_read_and_names_its_findings() {
+		let json = br#"{"files":[
+            {"file":"/src/A.php","violations":[{"beginLine":1,"description":"first","rule":"R1","priority":3}]},
+            {"file":"/src/B.php","violations":[{"beginLine":2,"description":"second","rule":"R2","priority":1}]}]}"#;
+		let out = parse(json, b"", 2);
+		let got: Vec<_> = out.iter().map(|d| (d.message.as_str(), d.file.as_deref())).collect();
+		assert_eq!(got, [("first", Some("/src/A.php")), ("second", Some("/src/B.php"))]);
 	}
 }
 

@@ -51,6 +51,7 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 	Some(RawDiagnostic {
 		message,
 		row: Some(row),
+		file: crate::diagnostic::file_field(&head[at_idx + ") at ".len()..]),
 		..RawDiagnostic::default()
 	})
 }
@@ -80,6 +81,16 @@ mod tests {
 	fn ignores_non_matching_lines() {
 		let diags = parse(b"", b"some unrelated output\n", 0);
 		assert!(diags.is_empty());
+	}
+
+	#[test]
+	fn each_finding_names_its_file() {
+		let stderr = b"(Carp is unused) at lib/Foo.pm line 12\n(POSIX is unused) at script/run.pl line 3\n";
+		let files: Vec<_> = parse(b"", stderr, 1).into_iter().map(|d| d.file).collect();
+		assert_eq!(
+			files,
+			[Some("lib/Foo.pm".to_string()), Some("script/run.pl".to_string())]
+		);
 	}
 }
 
