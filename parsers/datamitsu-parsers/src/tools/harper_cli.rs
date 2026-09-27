@@ -17,6 +17,10 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "harper_cli",
 	description: "A grammar and style checker.",
 	url: "https://writewithharper.com",
+	severities: &[],
+	column_unit: "utf-32",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		args: &["lint", "--format", "compact", "{files}"],
@@ -100,3 +104,11 @@ mod tests {
 		assert_eq!((d.row, d.col), (Some(1), Some(24)));
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[crate::contract::Sample {
+	stdout: b"t.md:1:9: Miscellaneous::AnA: Incorrect indefinite article.\nt.md:2:9: Miscellaneous::AnA: Incorrect indefinite article.\n",
+	stderr: b"Note: There is no user dictionary at /home/user/.config/harper-ls/dictionary.txt\nError: Lints were found\n",
+	exit: 1,
+}];

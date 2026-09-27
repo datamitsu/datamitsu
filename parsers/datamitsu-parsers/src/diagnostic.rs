@@ -17,20 +17,30 @@
 pub struct RawDiagnostic {
 	/// The human-readable message. The one mandatory field.
 	pub message: String,
-	/// 1-based line, if the tool reported one.
+	/// 1-based line, if the tool reported one. A parser whose tool counts from
+	/// 0 adds 1: the core cannot tell the two apart.
 	pub row: Option<u32>,
-	/// 1-based column, if the tool reported one.
+	/// 1-based column, if the tool reported one, counted in the descriptor's
+	/// `column_unit`.
 	pub col: Option<u32>,
-	/// End line of the span, if any.
+	/// 1-based end line of the span, if the tool reported one.
 	pub end_row: Option<u32>,
-	/// End column of the span, if any.
+	/// 1-based **exclusive** end column — the span stops before it. A tool
+	/// that prints the last column of the span has 1 added; one that prints no
+	/// end leaves this `None` rather than having one invented.
 	pub end_col: Option<u32>,
-	/// Severity code as emitted (the core maps it to its own scale later).
+	/// The level on the shared scale, read through the tool's descriptor
+	/// vocabulary from a token the tool printed (`crate::severity::of`); `None`
+	/// when it printed none.
 	pub severity: Option<u8>,
-	/// The originating tool/source label, if the tool names one.
+	/// The tool's name, when the parser names it; never a rule.
 	pub source: Option<String>,
-	/// A rule/diagnostic code, if any.
+	/// The rule the finding breaks, whenever the tool prints one. It is part of
+	/// a finding's identity, so it carries the rule id alone — no location, no
+	/// message text.
 	pub code: Option<String>,
+	/// A URL documenting the rule, where the tool prints one.
+	pub url: Option<String>,
 	/// The file the diagnostic belongs to, when the tool's format names one
 	/// (eslint's `filePath`, …). Batch tools lint many files per run, so without
 	/// this the core cannot attribute a diagnostic; per-file tools leave it `None`
@@ -40,25 +50,20 @@ pub struct RawDiagnostic {
 
 /// Normalize a path a tool printed into the `file` field.
 ///
-/// Returns `None` for anything that does not name a real file — an empty string,
-/// or one of the placeholders tools print when they read stdin (`-`, `stdin`,
-/// `stdin.md`, `<stdin>`). Those must stay absent so the core stamps the file it
-/// actually linted instead of showing a placeholder.
+/// Returns `None` for anything that does not name a real file — a blank string,
+/// or one of the names tools print when they read stdin (`-`, `stdin`,
+/// `<stdin>`). Those must stay absent so the core stamps the file it actually
+/// linted instead of showing a placeholder. A tool that names its buffer another
+/// way (vale's `stdin.<ext>`) filters that name itself.
+///
+/// A real name is kept byte for byte: trimming could turn ` a.py` into another
+/// file of the same batch. A parser whose format pads the name with layout (cue's
+/// indented location lines) strips that layout before calling this.
 pub fn file_field(raw: &str) -> Option<String> {
-	let s = raw.trim();
-	if s.is_empty() {
-		return None;
+	match raw.trim() {
+		"" | "-" | "<stdin>" | "stdin" => None,
+		_ => Some(raw.to_string()),
 	}
-	// Match the placeholder against the last segment only: a real `docs/stdin.md`
-	// is a file and must be kept, while vale's `stdin.md` buffer name is not.
-	// A placeholder never carries a directory, so requiring the whole path to be
-	// one keeps the check from swallowing genuine paths.
-	let is_placeholder =
-		s == "-" || s == "<stdin>" || s == "stdin" || (s.starts_with("stdin.") && !s.contains('/') && !s.contains('\\'));
-	if is_placeholder {
-		return None;
-	}
-	Some(s.to_string())
 }
 
 impl RawDiagnostic {
@@ -86,6 +91,9 @@ impl RawDiagnostic {
 		}
 		if let Some(v) = &self.code {
 			parts.push(format!(r#""code":{}"#, json_string(v)));
+		}
+		if let Some(v) = &self.url {
+			parts.push(format!(r#""url":{}"#, json_string(v)));
 		}
 		if let Some(v) = &self.file {
 			parts.push(format!(r#""file":{}"#, json_string(v)));
@@ -152,6 +160,20 @@ mod tests {
 	}
 
 	#[test]
+	fn a_rule_url_serializes_after_the_code() {
+		let d = RawDiagnostic {
+			message: "x".to_string(),
+			code: Some("R1".to_string()),
+			url: Some("https://example.test/R1".to_string()),
+			..Default::default()
+		};
+		assert_eq!(
+			d.to_json(),
+			r#"{"message":"x","code":"R1","url":"https://example.test/R1"}"#
+		);
+	}
+
+	#[test]
 	fn strings_are_json_escaped() {
 		let d = RawDiagnostic {
 			message: "a\"b\\c\nd\te".to_string(),
@@ -174,14 +196,12 @@ mod tests {
 		assert_eq!(to_json_array(&[]), "[]");
 	}
 	#[test]
-	fn file_field_drops_placeholders_but_keeps_real_paths() {
-		for placeholder in ["", "  ", "-", "<stdin>", "stdin", "stdin.md", "stdin.yaml"] {
+	fn file_field_drops_placeholders_but_keeps_real_paths_as_printed() {
+		for placeholder in ["", "  ", "-", "<stdin>", "stdin"] {
 			assert_eq!(file_field(placeholder), None, "{placeholder:?} is not a file");
 		}
-		// A path that merely ends in a placeholder-looking segment is a real file.
-		for path in ["docs/stdin.md", "stdin.d/x.yaml", "a/stdin", "src/a.ts"] {
+		for path in ["docs/stdin.md", "stdin.py", "a/stdin", "src/a.ts", " a.py", "a.py "] {
 			assert_eq!(file_field(path).as_deref(), Some(path));
 		}
-		assert_eq!(file_field("  src/a.ts  ").as_deref(), Some("src/a.ts"));
 	}
 }

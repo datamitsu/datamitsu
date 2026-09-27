@@ -28,6 +28,7 @@ func TestShellToolDeclaration(t *testing.T) {
 			Priority:     7,
 			ProjectTypes: []string{"fixture"},
 			Parser:       "hadolint",
+			FailOn:       "warning",
 		}),
 		ShellTool("beta", "true", ToolOpSpec{}),
 	))
@@ -78,6 +79,7 @@ func TestShellToolDeclaration(t *testing.T) {
 		"globs":    []any{"**/*.txt"},
 		"priority": float64(7),
 		"env":      map[string]any{"MARKERS": "{root}/" + MarkerDirName},
+		"failOn":   "warning",
 	}
 	for key, value := range want {
 		if !reflect.DeepEqual(fix[key], value) {

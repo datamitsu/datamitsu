@@ -13,12 +13,16 @@
 
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity;
+use crate::severity::{self, Level};
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "yamllint",
 	description: "A linter for YAML files.",
 	url: "https://github.com/adrienverge/yamllint",
+	severities: &[Level("error", severity::ERROR), Level("warning", severity::WARNING)],
+	column_unit: "utf-32",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		args: &["--format", "parsable", "-"],
@@ -70,11 +74,7 @@ fn split_message_rule(after: &str) -> (String, Option<String>) {
 }
 
 fn level_severity(level: &str) -> Option<u8> {
-	match level {
-		"error" => Some(severity::ERROR),
-		"warning" => Some(severity::WARNING),
-		_ => None,
-	}
+	severity::of(DESCRIPTOR.severities, level)
 }
 
 #[cfg(test)]
@@ -107,6 +107,11 @@ mod tests {
 	}
 
 	#[test]
+	fn an_unlisted_level_sets_none() {
+		assert_eq!(parse_line("stdin:1:1: [notice] x (r)").unwrap().severity, None);
+	}
+
+	#[test]
 	fn non_matching_line_is_skipped() {
 		assert!(parse_line("not a yamllint line").is_none());
 	}
@@ -136,3 +141,18 @@ mod tests {
 		assert_eq!(d.file, None);
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[
+	crate::contract::Sample {
+		stdout: b"config/app.yaml:1:1: [warning] missing document start \"---\" (document-start)\nconfig/app.yaml:3:1: [error] too many blank lines (3 > 0) (empty-lines)\nconfig/app.yaml:10:81: [error] line too long (90 > 80 characters) (line-length)\n",
+		stderr: b"",
+		exit: 1,
+	},
+	crate::contract::Sample {
+		stdout: b"stdin:1:1: [warning] missing document start \"---\" (document-start)\n",
+		stderr: b"",
+		exit: 0,
+	},
+];

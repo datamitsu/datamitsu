@@ -15,6 +15,10 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "cspell",
 	description: "A spell checker for code.",
 	url: "https://cspell.org",
+	severities: &[],
+	column_unit: "utf-16",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		args: &["lint", "{files}"],
@@ -92,3 +96,11 @@ mod tests {
 		assert_eq!(d.file, None, "no path in the location -> the core stamps it");
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[crate::contract::Sample {
+	stdout: b"docs/guide.md:3:6 - Unknown word (sentense) fix: (sentence)\ndocs/guide.md:3:21 - Unknown word (mispelled) fix: (misspelled)\n",
+	stderr: b"CSpell: Files checked: 1, Issues found: 2 in 1 file.\n",
+	exit: 1,
+}];

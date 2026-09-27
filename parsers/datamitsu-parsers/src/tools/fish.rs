@@ -17,6 +17,10 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "fish",
 	description: "Basic linting is available for fish scripts using `fish --no-execute`.",
 	url: "https://github.com/fish-shell/fish-shell",
+	severities: &[],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		args: &["--no-execute", "{file}"],
@@ -39,6 +43,8 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 	Some(RawDiagnostic {
 		message,
 		row: Some(row),
+		// fish names a script it read from stdin "Standard input".
+		file: crate::diagnostic::file_field(&line[..lp]).filter(|f| f != "Standard input"),
 		..RawDiagnostic::default()
 	})
 }
@@ -68,4 +74,22 @@ mod tests {
 		assert_eq!(out[1].row, Some(22));
 		assert_eq!(out[1].message, "bang");
 	}
+
+	#[test]
+	fn each_finding_names_its_file() {
+		let stderr = b"/a.fish (line 1): boom\nconf.d/b.fish (line 2): bang\nStandard input (line 3): piped\n";
+		let files: Vec<_> = parse(b"", stderr, 1).into_iter().map(|d| d.file).collect();
+		assert_eq!(
+			files,
+			[Some("/a.fish".to_string()), Some("conf.d/b.fish".to_string()), None]
+		);
+	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[crate::contract::Sample {
+	stdout: b"",
+	stderr: b"a.fish (line 2): Missing end to balance this if statement\nif true\n^^\nwarning: Error while reading file a.fish\n\n",
+	exit: 127,
+}];

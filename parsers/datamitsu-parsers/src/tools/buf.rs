@@ -17,6 +17,10 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "buf",
 	description: "A new way of working with Protocol Buffers.",
 	url: "https://github.com/bufbuild/buf",
+	severities: &[],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		args: &["lint", "{file}#include_package_files=true"],
@@ -51,6 +55,8 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 				message,
 				row: Some(row),
 				col: Some(col),
+				// `#include_package_files` reports the other files of the package too.
+				file: crate::diagnostic::file_field(&line[..c1]),
 				..RawDiagnostic::default()
 			});
 		}
@@ -90,4 +96,19 @@ mod tests {
 		assert_eq!(out[0].message, "problem one");
 		assert_eq!(out[1].row, Some(2));
 	}
+
+	#[test]
+	fn each_finding_names_its_file() {
+		let out = parse(b"", b"foo.proto:1:1:one\nsub/bar.proto:2:3:two\n", 100);
+		let files: Vec<_> = out.iter().map(|d| d.file.as_deref()).collect();
+		assert_eq!(files, [Some("foo.proto"), Some("sub/bar.proto")]);
+	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[crate::contract::Sample {
+	stdout: b"",
+	stderr: b"foo.proto:3:1:Field name \"Foo\" should be lower_snake_case.\nfoo.proto:10:5:Import \"x:y\" is unused.\n",
+	exit: 100,
+}];

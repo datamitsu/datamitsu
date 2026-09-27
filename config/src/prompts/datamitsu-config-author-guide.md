@@ -84,6 +84,25 @@ writes the configuration; never ship it to consumers.
 Newest first. Each entry names the first version that has it and what a
 configuration should do about it.
 
+- **after v0.3.1** - A tool operation takes `failOn` (`error` by default,
+  `warning`, `info`, `hint`), the lowest level of parsed finding that fails the
+  run on top of the tool's exit code; `--fail-on`/`DATAMITSU_FAIL_ON` raise it
+  for one run (`datamitsu llms reference/configuration-api`). With the default,
+  a tool that exits 0 on a finding its parser reads as an error now fails the
+  run (semgrep without `--error`, trivy without `--exit-code`): pass the tool's
+  own gate flag, or accept the failure. Set `failOn` only where a stricter gate
+  than the tool's own is wanted. A parser module older than descriptor schema 2
+  gates nothing, and a run warns once when a threshold was asked for. The
+  terminal shows findings at or above `failOn` and counts the rest. Every cache
+  is cold once.
+- **after v0.3.1** - A finding a tool printed no level for is an error when the
+  tool failed and a warning when it passed (it was always a warning). The parser
+  module released with this core (descriptor schema 2) sets levels only from
+  what a tool printed, reports golangci-lint's linter as the rule, and adds rule
+  URLs (`datamitsu llms guides/architecture/parsers`). Bump the `parsers` pin to
+  it and check the pin with `datamitsu devtools parsers list`: a module that has
+  the contract shows a `levels` line per tool.
+
 - **after v0.3.1** - Tools run by `fix`, `lint` and `check` no longer see
   `GITHUB_ACTIONS`, AI agent markers or `FORCE_COLOR`, and always get
   `NO_COLOR=1`; `CI` still passes through and `exec` changes nothing

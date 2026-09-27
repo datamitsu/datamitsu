@@ -17,6 +17,7 @@ var (
 	fixWidenTo       string
 	fixRequireCov    string
 	fixFailFast      bool
+	fixFailOn        string
 )
 
 var fixCmd = &cobra.Command{
@@ -44,11 +45,15 @@ func init() {
 	fixCmd.Flags().StringVar(&fixWidenTo, "widen-to", "", "Limit how far work may widen beyond the selection (target|unit|repo)")
 	fixCmd.Flags().StringVar(&fixRequireCov, "require-coverage", "", "Exit non-zero unless the run answered completely (unit|repo)")
 	addFailFastFlag(fixCmd, &fixFailFast)
+	addFailOnFlag(fixCmd, &fixFailOn)
 	rootCmd.AddCommand(fixCmd)
 }
 
 func runFix(cmd *cobra.Command, args []string) error {
 	opts := runner.Options{WidenTo: fixWidenTo, RequireCoverage: fixRequireCov}
+	if err := applyFailOn(cmd, fixFailOn, &opts); err != nil {
+		return err
+	}
 	if err := applyFailFast(cmd, fixFailFast, &opts); err != nil {
 		return err
 	}

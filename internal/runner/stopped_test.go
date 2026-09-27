@@ -290,6 +290,9 @@ func TestFailedExecutionShowsFailuresWithoutFindings(t *testing.T) {
 	out := captureStdout(t, func() {
 		printFailedExecution(1, executionInstance{result: tooling.ExecutionResult{
 			ToolName: "alpha", ExitCode: 1, Output: "finding\ncrashed",
+			Processes: []tooling.ProcessResult{{
+				State: tooling.ProcessRan, Diagnostics: []diagnostic.Diagnostic{{File: "found.txt", Row: 1, Message: "finding"}},
+			}},
 			Diagnostics:      []diagnostic.Diagnostic{{File: "found.txt", Row: 1, Message: "finding"}},
 			UnparsedFailures: []string{"crash.txt: exit code 2\ncrashed"},
 		}})

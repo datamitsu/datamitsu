@@ -75,6 +75,14 @@ func TestReleasedV1Describe(t *testing.T) {
 	if caps.SchemaVersion != 1 {
 		t.Errorf("schemaVersion = %d, want 1", caps.SchemaVersion)
 	}
+	if caps.SeverityContract() {
+		t.Error("the released v1 module must not read as carrying the severity contract")
+	}
+	for _, tool := range caps.Tools {
+		if tool.Severities != nil || tool.ColumnUnit != "" || tool.Category != "" || tool.Kind != "" {
+			t.Errorf("%s declares schema-2 fields in a schema-1 module: %+v", tool.Name, tool)
+		}
+	}
 	if caps.Module != "datamitsu-parsers" || caps.Version != releasedV1Version {
 		t.Errorf("module %q version %q, want datamitsu-parsers %s", caps.Module, caps.Version, releasedV1Version)
 	}

@@ -107,7 +107,118 @@ pub mod yamllint;
 pub mod zsh;
 
 #[cfg(test)]
-mod fixtures;
+pub(crate) mod fixtures;
+
+/// A tool module's contract samples (`SAMPLES`), by dispatch name, for the
+/// checks every parser must pass (`crate::contract`).
+#[cfg(test)]
+pub(crate) fn samples(tool: &str) -> Option<&'static [crate::contract::Sample]> {
+	macro_rules! by_name {
+		($($m:ident),* $(,)?) => {
+			match tool {
+				$(stringify!($m) => Some($m::SAMPLES),)*
+				_ => None,
+			}
+		};
+	}
+	by_name!(
+		actionlint,
+		alex,
+		ansiblelint,
+		bean_check,
+		bslint,
+		buf,
+		buildifier,
+		cfn_lint,
+		checkmake,
+		checkstyle,
+		clazy,
+		clj_kondo,
+		cmake_lint,
+		codespell,
+		commitlint,
+		cppcheck,
+		credo,
+		cspell,
+		cue_fmt,
+		dclint,
+		deadnix,
+		djlint,
+		dotenv_linter,
+		droast,
+		editorconfig_checker,
+		erb_lint,
+		eslint,
+		fish,
+		gccdiag,
+		gdlint,
+		gitleaks,
+		gitlint,
+		glslc,
+		golangci_lint,
+		hadolint,
+		haml_lint,
+		harper_cli,
+		knip,
+		ktlint,
+		kube_linter,
+		ltrs,
+		markdownlint,
+		markdownlint_cli2,
+		markuplint,
+		mdl,
+		mlint,
+		mypy,
+		npm_groovy_lint,
+		opacheck,
+		opentofu_validate,
+		perlimports,
+		phpcs,
+		phpmd,
+		phpstan,
+		pmd,
+		proselint,
+		protolint,
+		puppet_lint,
+		pydoclint,
+		pylint,
+		qmllint,
+		reek,
+		regal,
+		revive,
+		rpmspec,
+		rstcheck,
+		rubocop,
+		saltlint,
+		selene,
+		semgrep,
+		solhint,
+		spectral,
+		sqlfluff,
+		sqruff,
+		staticcheck,
+		statix,
+		stylint,
+		swiftlint,
+		teal,
+		terraform_validate,
+		terragrunt_validate,
+		textidote,
+		textlint,
+		tfsec,
+		tidy,
+		trivy,
+		tsc,
+		twigcs,
+		vacuum,
+		vale,
+		verilator,
+		vint,
+		write_good,
+		yamllint,
+		zsh,
+	)
+}
 
 use crate::diagnostic::RawDiagnostic;
 

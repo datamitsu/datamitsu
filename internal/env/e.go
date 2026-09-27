@@ -178,6 +178,14 @@ var (
 		Description:  "Stop fix/lint/check at the first failing tool (true) or run everything to the end (false); the --fail-fast flag wins",
 	}
 
+	// failOn is execution-only: it decides which findings fail a run and which
+	// the terminal shows, never what datamitsu installs or produces.
+	failOn = envVar{
+		Name:         strings.ToUpper(ldflags.PackageName) + "_FAIL_ON",
+		DefaultValue: "",
+		Description:  "Raise every fix/lint/check operation's failOn to this level (error, warning, info or hint); never lowers one; the --fail-on flag wins",
+	}
+
 	noParse = envVar{
 		Name:         strings.ToUpper(ldflags.PackageName) + "_NO_PARSE",
 		DefaultValue: "",

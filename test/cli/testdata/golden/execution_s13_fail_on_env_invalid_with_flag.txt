@@ -1,0 +1,5 @@
+exit code: 2
+===STDOUT===
+
+===STDERR===
+error: invalid DATAMITSU_FAIL_ON value: "warnings" (must be error, warning, info or hint)

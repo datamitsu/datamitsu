@@ -38,6 +38,7 @@ func TestEffectiveJSONRoundTrip(t *testing.T) {
 		Timings:                  false,
 		FailFast:                 true,
 		FailFastSource:           FailFastSourceDefault,
+		FailOn:                   "warning",
 	}
 
 	data, err := json.Marshal(in)
@@ -70,6 +71,7 @@ func TestEffectiveJSONRoundTrip(t *testing.T) {
 		"timings",
 		"failFast",
 		"failFastSource",
+		"failOn",
 	}
 	for _, k := range requiredKeys {
 		if _, ok := m[k]; !ok {
@@ -251,6 +253,20 @@ func TestComputeFailFast(t *testing.T) {
 			eff := Compute()
 			if eff.FailFast != tt.wantValue || eff.FailFastSource != tt.wantSource {
 				t.Errorf("FailFast = %v from %q, want %v from %q", eff.FailFast, eff.FailFastSource, tt.wantValue, tt.wantSource)
+			}
+		})
+	}
+}
+
+// The global failOn raise is a runtime parameter of every fix, lint and check:
+// `datamitsu config runtime` reports DATAMITSU_FAIL_ON as set, "" when it is
+// not. The command layer refuses a value that is not a level.
+func TestComputeFailOn(t *testing.T) {
+	for _, raw := range []string{"", "error", "warning", "info", "hint", "warnings"} {
+		t.Run(raw, func(t *testing.T) {
+			t.Setenv("DATAMITSU_FAIL_ON", raw)
+			if eff := Compute(); eff.FailOn != raw {
+				t.Errorf("FailOn = %q, want %q", eff.FailOn, raw)
 			}
 		})
 	}

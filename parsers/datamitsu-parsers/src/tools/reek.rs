@@ -2,21 +2,27 @@
 //! builtin.
 //!
 //! reek emits a JSON array of records; each record carries a `lines` array (the
-//! source lines the smell touches), a `smell_type`, a `message`, and a `source`
-//! filename. The builtin expands every record into one diagnostic per entry in
-//! `lines`: message is `"{smell_type}: {message}"`, severity is always warning,
-//! col is 0 and end_col 1. Output is read from stderr (`from_stderr = true`).
+//! source lines the smell touches), a `smell_type` (the rule), a `message`, a
+//! `documentation_link` and a `source` filename. Like the builtin, every record
+//! expands into one diagnostic per entry in `lines`. reek prints no level and no
+//! column, so findings carry neither. Output is read from stderr
+//! (`from_stderr = true`).
+
+use std::collections::HashMap;
 
 use tinyjson::JsonValue;
 
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity;
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "reek",
 	description: "Code smell detector for Ruby",
 	url: "https://github.com/troessner/reek",
+	severities: &[],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		args: &["--format", "json", "--stdin-filename", "{file}"],
@@ -47,15 +53,15 @@ fn expand_record(record: &JsonValue, out: &mut Vec<RawDiagnostic>) {
 		JsonValue::Object(m) => m,
 		_ => return,
 	};
-	let smell_type = match map.get("smell_type") {
-		Some(JsonValue::String(s)) => s.as_str(),
-		_ => return,
+	let (Some(smell_type), Some(message)) = (get_str(map, "smell_type"), get_str(map, "message")) else {
+		return;
 	};
-	let message = match map.get("message") {
-		Some(JsonValue::String(s)) => s.as_str(),
-		_ => return,
-	};
-	let full_message = format!("{smell_type}: {message}");
+	let url = get_str(map, "documentation_link");
+	// reek names piped source "STDIN" unless --stdin-filename names it.
+	let file = get_str(map, "source")
+		.as_deref()
+		.and_then(crate::diagnostic::file_field)
+		.filter(|f| f != "STDIN");
 
 	let lines = match map.get("lines") {
 		Some(JsonValue::Array(items)) => items,
@@ -70,13 +76,20 @@ fn expand_record(record: &JsonValue, out: &mut Vec<RawDiagnostic>) {
 			_ => continue,
 		};
 		out.push(RawDiagnostic {
-			message: full_message.clone(),
+			message: message.clone(),
 			row: Some(row),
-			col: Some(0),
-			end_col: Some(1),
-			severity: Some(severity::WARNING),
+			code: Some(smell_type.clone()),
+			url: url.clone(),
+			file: file.clone(),
 			..RawDiagnostic::default()
 		});
+	}
+}
+
+fn get_str(map: &HashMap<String, JsonValue>, key: &str) -> Option<String> {
+	match map.get(key) {
+		Some(JsonValue::String(s)) => Some(s.clone()),
+		_ => None,
 	}
 }
 
@@ -86,22 +99,36 @@ mod tests {
 
 	#[test]
 	fn expands_one_diagnostic_per_line() {
-		let json = br#"[
-            {"context":"Dirty","lines":[3,5],"message":"has the variable name 'x'",
-             "smell_type":"UncommunicativeVariableName","source":"dirty.rb"},
-            {"context":"Dirty#foo","lines":[7],"message":"has approx 6 statements",
-             "smell_type":"TooManyStatements","source":"dirty.rb"}
-        ]"#;
-		let out = parse(b"", json, 0);
+		let out = parse(b"", SAMPLES[0].stderr, 2);
 		assert_eq!(out.len(), 3);
-		assert_eq!(out[0].message, "UncommunicativeVariableName: has the variable name 'x'");
+		assert_eq!(out[0].message, "has the variable name '@x'");
+		assert_eq!(out[0].code.as_deref(), Some("UncommunicativeVariableName"));
+		assert_eq!(
+			out[0].url.as_deref(),
+			Some("https://github.com/troessner/reek/blob/v6.3.0/docs/Uncommunicative-Variable-Name.md")
+		);
 		assert_eq!(out[0].row, Some(3));
-		assert_eq!(out[0].col, Some(0));
-		assert_eq!(out[0].end_col, Some(1));
-		assert_eq!(out[0].severity, Some(severity::WARNING));
+		assert_eq!(out[0].col, None);
+		assert_eq!(out[0].end_col, None);
 		assert_eq!(out[1].row, Some(5));
-		assert_eq!(out[2].message, "TooManyStatements: has approx 6 statements");
+		assert_eq!(out[2].message, "has approx 6 statements");
+		assert_eq!(out[2].code.as_deref(), Some("TooManyStatements"));
 		assert_eq!(out[2].row, Some(7));
+	}
+
+	#[test]
+	fn never_sets_a_severity() {
+		let out = parse(b"", SAMPLES[0].stderr, 2);
+		assert!(!out.is_empty());
+		assert!(out.iter().all(|d| d.severity.is_none()), "{out:?}");
+	}
+
+	#[test]
+	fn a_record_without_a_documentation_link_has_no_url() {
+		let json = br#"[{"lines":[1],"message":"m","smell_type":"S"}]"#;
+		let out = parse(b"", json, 2);
+		assert_eq!(out.len(), 1);
+		assert_eq!(out[0].url, None);
 	}
 
 	#[test]
@@ -113,4 +140,37 @@ mod tests {
 	fn invalid_json_yields_nothing() {
 		assert!(parse(b"", b"not json", 0).is_empty());
 	}
+
+	#[test]
+	fn each_finding_names_its_source_file() {
+		let json = br#"[
+            {"lines":[1],"message":"first","smell_type":"S","source":"lib/a.rb"},
+            {"lines":[2],"message":"second","smell_type":"S","source":"lib/b.rb"},
+            {"lines":[3],"message":"piped","smell_type":"S","source":"STDIN"}]"#;
+		let out = parse(b"", json, 2);
+		let got: Vec<_> = out.iter().map(|d| (d.message.as_str(), d.file.as_deref())).collect();
+		assert_eq!(
+			got,
+			[
+				("first", Some("lib/a.rb")),
+				("second", Some("lib/b.rb")),
+				("piped", None)
+			]
+		);
+	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[crate::contract::Sample {
+	stdout: b"",
+	stderr: br#"[
+            {"context":"Dirty","lines":[3,5],"message":"has the variable name '@x'",
+             "smell_type":"UncommunicativeVariableName","source":"dirty.rb","name":"@x",
+             "documentation_link":"https://github.com/troessner/reek/blob/v6.3.0/docs/Uncommunicative-Variable-Name.md"},
+            {"context":"Dirty#foo","lines":[7],"message":"has approx 6 statements",
+             "smell_type":"TooManyStatements","source":"dirty.rb","count":6,
+             "documentation_link":"https://github.com/troessner/reek/blob/v6.3.0/docs/Too-Many-Statements.md"}
+        ]"#,
+	exit: 2,
+}];

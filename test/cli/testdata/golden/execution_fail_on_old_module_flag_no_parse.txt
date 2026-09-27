@@ -1,0 +1,21 @@
+exit code: 0
+===STDOUT===
+╭<RULE>╮
+│ datamitsu  <VERSION> │
+╰<RULE>╯
+
+┏━ lint <RULE>
+┃ fixture
+┃
+┃ ✓ hadolint  <DUR>
+  ┌─ hadolint [per-file] (failOn=warning not enforced) <RULE>
+  │  Cwd:       <TMP>
+  │  its parser module predates the severity contract; the exit code decided
+  │
+  │  [{"file":"Dockerfile","line":1,"column":1,"level":"warning","code":"DL3006","message":"Always tag the version of an image explicitly"}]
+  └<RULE>
+
+┗━ 1 tools · 1 runs · done in <DUR> · cache 0% <RULE>
+
+===STDERR===
+WARN failOn ignored for hadolint: parser module predates the severity contract

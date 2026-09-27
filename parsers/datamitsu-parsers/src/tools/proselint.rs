@@ -2,22 +2,29 @@
 //! diagnostics/proselint builtin.
 //!
 //! proselint's JSON is nested and custom, so this does not use `json_diag`:
-//! `output.result` is a map of file → `{ diagnostics: [ ... ] }`, and each
-//! diagnostic carries `pos` ([line, col]), `span` ([start_col, end_col]),
-//! `check_path` (the rule), and `message`. The builtin bails out when the
-//! top-level `output.error` is set and otherwise hardcodes severity to warning
-//! (proselint no longer emits a per-diagnostic level).
+//! `output.result` is a map of file → `{ diagnostics: [ ... ] }` (the key names
+//! each diagnostic's file; `<stdin>` for piped text), and each
+//! diagnostic carries `pos` ([line, col], 1-based), `span` ([start, end), offsets
+//! into the whole text), `check_path` (the rule), and `message`. The span may
+//! cross a line break (lexical illusions match across one), and the report does
+//! not say where the lines break, so no end is reported. The builtin bails out
+//! when the top-level
+//! `output.error` is set. proselint prints no per-diagnostic level, so no finding
+//! carries one.
 
 use tinyjson::JsonValue;
 
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity;
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "proselint",
 	description: "An English prose linter.",
 	url: "https://github.com/amperser/proselint",
+	severities: &[],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		args: &["check", "--output-format=json"],
@@ -47,7 +54,7 @@ pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 	};
 
 	let mut out = Vec::new();
-	for file_output in result.values() {
+	for (path, file_output) in result {
 		let file_obj = match file_output {
 			JsonValue::Object(m) => m,
 			_ => continue,
@@ -56,8 +63,10 @@ pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 			Some(JsonValue::Array(a)) => a,
 			_ => continue,
 		};
+		let path = crate::diagnostic::file_field(path);
 		for d in diags {
-			if let Some(diag) = from_diag(d) {
+			if let Some(mut diag) = from_diag(d) {
+				diag.file.clone_from(&path);
 				out.push(diag);
 			}
 		}
@@ -80,9 +89,6 @@ fn from_diag(value: &JsonValue) -> Option<RawDiagnostic> {
 	let row = pos.and_then(|a| number_at(a, 0));
 	let col = pos.and_then(|a| number_at(a, 1));
 
-	// span = [start_col, end_col]; the builtin only takes span[2] (end_col).
-	let end_col = array_of(map, "span").and_then(|a| number_at(a, 1));
-
 	let code = match map.get("check_path") {
 		Some(JsonValue::String(s)) => Some(s.clone()),
 		_ => None,
@@ -92,10 +98,7 @@ fn from_diag(value: &JsonValue) -> Option<RawDiagnostic> {
 		message,
 		row,
 		col,
-		end_col,
 		code,
-		// proselint no longer includes a severity -> the builtin chooses warning.
-		severity: Some(severity::WARNING),
 		..RawDiagnostic::default()
 	})
 }
@@ -120,29 +123,31 @@ mod tests {
 
 	#[test]
 	fn parses_nested_diagnostics() {
-		let json = br#"{
-            "status": "success",
-            "result": {
-                "stdin": {
-                    "diagnostics": [
-                        {
-                            "check_path": "typography.symbols.curly_quotes",
-                            "message": "Use the curly quote.",
-                            "pos": [3, 5],
-                            "span": [5, 12]
-                        }
-                    ]
-                }
-            }
-        }"#;
-		let out = parse(json, b"", 0);
-		assert_eq!(out.len(), 1);
+		let out = parse(SAMPLES[0].stdout, b"", 1);
+		assert_eq!(out.len(), 2);
 		assert_eq!(out[0].message, "Use the curly quote.");
 		assert_eq!(out[0].row, Some(3));
 		assert_eq!(out[0].col, Some(5));
-		assert_eq!(out[0].end_col, Some(12));
+		assert_eq!(out[0].end_row, None);
+		assert_eq!(out[0].end_col, None);
 		assert_eq!(out[0].code.as_deref(), Some("typography.symbols.curly_quotes"));
-		assert_eq!(out[0].severity, Some(severity::WARNING));
+	}
+
+	#[test]
+	fn a_span_across_a_line_break_reports_only_its_start() {
+		// "the\nthe": the report cannot tell that the span ends on line 2.
+		let json = br#"{"result":{"a.md":{"diagnostics":[{"check_path":"lexical_illusions","message":"m","pos":[1,1],"span":[0,7]}]}}}"#;
+		let out = parse(json, b"", 1);
+		assert_eq!(
+			(out[0].row, out[0].col, out[0].end_row, out[0].end_col),
+			(Some(1), Some(1), None, None)
+		);
+	}
+
+	#[test]
+	fn never_sets_a_severity() {
+		let out = parse(SAMPLES[0].stdout, b"", 1);
+		assert!(out.iter().all(|d| d.severity.is_none()), "{out:?}");
 	}
 
 	#[test]
@@ -156,4 +161,49 @@ mod tests {
 	fn invalid_json_yields_nothing() {
 		assert!(parse(b"not json", b"", 1).is_empty());
 	}
+
+	#[test]
+	fn each_finding_names_the_file_it_is_keyed_under() {
+		let json = br#"{"result":{
+            "docs/a.md":{"diagnostics":[{"check_path":"c1","message":"first","pos":[1,1],"span":[0,1]}]},
+            "<stdin>":{"diagnostics":[{"check_path":"c2","message":"piped","pos":[2,1],"span":[3,4]}]}}}"#;
+		let mut got: Vec<_> = parse(json, b"", 1).into_iter().map(|d| (d.message, d.file)).collect();
+		got.sort();
+		assert_eq!(
+			got,
+			[
+				("first".to_string(), Some("docs/a.md".to_string())),
+				("piped".to_string(), None),
+			]
+		);
+	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[crate::contract::Sample {
+	stdout: br#"{
+    "result": {
+        "<stdin>": {
+            "diagnostics": [
+                {
+                    "check_path": "typography.symbols.curly_quotes",
+                    "message": "Use the curly quote.",
+                    "pos": [3, 5],
+                    "replacements": null,
+                    "span": [45, 52]
+                },
+                {
+                    "check_path": "uncomparables",
+                    "message": "Comparison of an uncomparable: 'very unique' is not comparable.",
+                    "pos": [7, 1],
+                    "replacements": null,
+                    "span": [120, 131]
+                }
+            ]
+        }
+    }
+}"#,
+	stderr: b"",
+	exit: 1,
+}];

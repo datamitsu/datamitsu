@@ -155,13 +155,14 @@ func TestCheckNeedsAHash(t *testing.T) {
 // earlier rule carries a key the current writer never produces, so its passes
 // are dropped: those recorded before the cache-semantics component existed,
 // without comparing hashes, those recorded under c2v1, from the exit code
-// alone, and those recorded under c1v1, from a tool that could have printed a
-// format its parser read as clean.
+// alone, those recorded under c1v1, from a tool that could have printed a
+// format its parser read as clean, and those recorded under d3v1, where a fix
+// pass followed success alone.
 func TestEntriesRecordedUnderTheOldRuleMiss(t *testing.T) {
 	for _, c := range []struct {
 		name      string
 		semantics []byte
-	}{{"before the semantics component", nil}, {"c2v1", []byte("c2v1")}, {"c1v1", []byte("c1v1")}} {
+	}{{"before the semantics component", nil}, {"c2v1", []byte("c2v1")}, {"c1v1", []byte("c1v1")}, {"d3v1", []byte("d3v1")}} {
 		t.Run(c.name, func(t *testing.T) {
 			entriesRecordedUnderAnOldRuleMiss(t, c.semantics)
 		})

@@ -7,11 +7,13 @@
 //!
 //! ```text
 //! L 5 (C 10): message text
+//! L 21 (C 1-9): message text
 //! ```
 //!
 //! The none-ls Lua pattern is `L (%d+) .C (%d+).*: (.*)`: `L`, the row, a single
 //! char then `C`, the column, then anything up to the first `: ` and the message
-//! as the remainder. No severity/code are emitted, so both stay `None`.
+//! as the remainder. A column range names the span's last column. No
+//! severity/code are emitted, so both stay `None`.
 
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
@@ -20,6 +22,10 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "mlint",
 	description: "Linter for MATLAB files",
 	url: "https://www.mathworks.com/help/matlab/ref/mlint.html",
+	severities: &[],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		args: &["{file}"],
@@ -52,6 +58,14 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 	let col_end = after_c.find(|c: char| !c.is_ascii_digit()).unwrap_or(after_c.len());
 	let col: u32 = after_c[..col_end].parse().ok()?;
 	let tail = &after_c[col_end..];
+	let (end_col, tail) = match tail.strip_prefix('-') {
+		Some(range) => {
+			let end = range.find(|c: char| !c.is_ascii_digit()).unwrap_or(range.len());
+			let last = range[..end].parse::<u32>().ok();
+			(last.and_then(|c| c.checked_add(1)), &range[end..])
+		}
+		None => (None, tail),
+	};
 
 	// .*: (.*) — message is everything after the first ": ".
 	let sep = tail.find(": ")?;
@@ -64,6 +78,7 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 		message,
 		row: Some(row),
 		col: Some(col),
+		end_col,
 		..RawDiagnostic::default()
 	})
 }
@@ -83,8 +98,23 @@ mod tests {
 			diags[0].message,
 			"Terminate statement with semicolon to suppress output."
 		);
+		assert_eq!(diags[0].end_col, None);
 		assert_eq!(diags[0].severity, None);
 		assert_eq!(diags[0].code, None);
+	}
+
+	#[test]
+	fn a_column_range_ends_after_its_last_column() {
+		let diags = parse(b"", SAMPLES[0].stderr, 0);
+		assert_eq!(diags.len(), 2);
+		assert_eq!(diags[0].row, Some(21));
+		assert_eq!(diags[0].col, Some(1));
+		assert_eq!(diags[0].end_row, None);
+		assert_eq!(diags[0].end_col, Some(10));
+		assert_eq!(diags[0].message, "Value assigned to variable might be unused.");
+		assert_eq!(diags[1].col, Some(5));
+		assert_eq!(diags[1].end_col, None);
+		assert!(diags.iter().all(|d| d.severity.is_none()));
 	}
 
 	#[test]
@@ -96,3 +126,12 @@ mod tests {
 		assert_eq!(diags[0].col, Some(3));
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[crate::contract::Sample {
+	stdout: b"",
+	stderr: b"L 21 (C 1-9): Value assigned to variable might be unused.\n\
+L 23 (C 5): Terminate statement with semicolon to suppress output (in functions).\n",
+	exit: 0,
+}];

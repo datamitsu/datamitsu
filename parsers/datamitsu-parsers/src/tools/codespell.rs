@@ -8,16 +8,18 @@
 //! full second (message) line. The builtin then derives col/end_col by locating
 //! the misspelled token inside the ORIGINAL buffer line (`content[row]`) — buffer
 //! content the WASM parser does not receive, so col/end_col are left None and the
-//! Go core fills defaults. Row, message, and severity (always WARNING) are ported
-//! faithfully.
+//! Go core fills defaults. codespell prints no level, so a finding has none.
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity;
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "codespell",
 	description: "Codespell finds common misspellings in text files.",
 	url: "https://github.com/codespell-project/codespell",
+	severities: &[],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		args: &["-"],
@@ -39,7 +41,6 @@ pub fn parse(_stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 				out.push(RawDiagnostic {
 					message,
 					row: Some(row),
-					severity: Some(severity::WARNING),
 					source: Some("codespell".to_string()),
 					..RawDiagnostic::default()
 				});
@@ -94,7 +95,6 @@ mod tests {
 		assert_eq!(d.len(), 1);
 		assert_eq!(d[0].row, Some(3));
 		assert_eq!(d[0].message, "helllo ==> hello");
-		assert_eq!(d[0].severity, Some(severity::WARNING));
 		assert_eq!(d[0].source.as_deref(), Some("codespell"));
 		assert_eq!(d[0].col, None);
 	}
@@ -110,8 +110,22 @@ mod tests {
 	}
 
 	#[test]
+	fn never_sets_a_severity() {
+		let stderr = b"1: - teh cat\n\tteh ==> the\n10: - recieve it\n\trecieve ==> receive\n";
+		assert!(parse(b"", stderr, 65).iter().all(|d| d.severity.is_none()));
+	}
+
+	#[test]
 	fn ignores_non_matching() {
 		let stderr = b"some preamble\nnot a record\n";
 		assert!(parse(b"", stderr, 0).is_empty());
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[crate::contract::Sample {
+	stdout: b"",
+	stderr: b"1: - teh cat sat\n\tteh ==> the\n10: - we recieve it\n\trecieve ==> receive\n",
+	exit: 65,
+}];

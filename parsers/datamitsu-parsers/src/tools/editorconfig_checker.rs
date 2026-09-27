@@ -12,6 +12,10 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "editorconfig_checker",
 	description: "A tool to verify that your files are in harmony with your `.editorconfig`.",
 	url: "https://github.com/editorconfig-checker/editorconfig-checker",
+	severities: &[],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	// none-ls: args ["-no-color", "$FILENAME"], to_stdin=true, from_stderr=true.
 	operations: &[Operation {
 		mode: "lint",
@@ -24,12 +28,26 @@ pub fn parse(stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic
 	// stdout-first: editorconfig-checker writes diagnostics to stdout, with a
 	// stderr fallback for robustness.
 	let bytes = if stdout.is_empty() { stderr } else { stdout };
-	String::from_utf8_lossy(bytes).lines().filter_map(parse_line).collect()
+	let mut out = Vec::new();
+	// Each file's findings follow an unindented `<path>:` header.
+	let mut file = None;
+	for line in String::from_utf8_lossy(bytes).lines() {
+		if let Some(mut d) = parse_line(line) {
+			d.file.clone_from(&file);
+			out.push(d);
+		} else if let Some(path) = line
+			.strip_suffix(':')
+			.filter(|_| !line.starts_with(char::is_whitespace))
+		{
+			file = crate::diagnostic::file_field(path);
+		}
+	}
+	out
 }
 
 /// Port of the Lua pattern `(%d+): (.+)`: leading run of digits, then `": "`,
 /// then the (non-empty) rest of the line as the message. Lines that do not
-/// match (e.g. the file-name header) are skipped.
+/// match are skipped.
 fn parse_line(line: &str) -> Option<RawDiagnostic> {
 	let trimmed = line.trim_start();
 	let digits_end = trimmed.find(|c: char| !c.is_ascii_digit())?;
@@ -79,4 +97,26 @@ mod tests {
 		let diags = parse(b"path/to/file.txt:\n", b"", 1);
 		assert!(diags.is_empty());
 	}
+
+	#[test]
+	fn each_finding_names_the_file_of_its_header() {
+		let stdout = b"src/a.txt:\n\t1: first\n\t2: second\ndocs/b.md:\n\t3: third\n\n3 errors found\n";
+		let got: Vec<_> = parse(stdout, b"", 1).into_iter().map(|d| (d.message, d.file)).collect();
+		assert_eq!(
+			got,
+			[
+				("first".to_string(), Some("src/a.txt".to_string())),
+				("second".to_string(), Some("src/a.txt".to_string())),
+				("third".to_string(), Some("docs/b.md".to_string())),
+			]
+		);
+	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[crate::contract::Sample {
+	stdout: b"f.txt:\n\tFinal newline expected\n\t2: Trailing whitespace\n\t3: Wrong indent style found (tabs instead of spaces)\n\n3 errors found\n",
+	stderr: b"",
+	exit: 1,
+}];

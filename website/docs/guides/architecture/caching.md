@@ -152,8 +152,8 @@ recorded against the content the fixer produced, as described
 
 A cache hit is replayed as "this tool found nothing here" — by the terminal, and by
 anything that reads a run's results after it. So for a tool that declares an
-[`outputParser`](./parsers.md#extraction-outcomes), a lint pass follows what the
-parser read, not the exit code:
+[`outputParser`](./parsers.md#extraction-outcomes), a pass — of `lint` and of
+`fix` alike — follows what the parser read, not the exit code:
 
 - A file gets a pass only when the process that checked it succeeded, its output
   was parsed, no finding names the file, and every finding the process reported
@@ -166,8 +166,13 @@ parser read, not the exit code:
   `error` does.
 - A tool without an `outputParser` keeps the exit-status rule: a success is a
   pass.
-- A fix pass follows success alone. The parser also reads a fixer's output, which
-  is not what it was written for.
+- A fix pass follows the same rule. The
+  [`failOn`](../../reference/configuration-api.md#failing-on-findings-failon) gate
+  judges what a fixer leaves behind as it judges a linter's findings, so a fix pass
+  recorded over a finding below one threshold would hide it from a stricter one.
+
+Because a pass needs a run with no finding at any level, it holds at every
+threshold: neither `failOn` nor `--fail-on` is part of any cache key.
 
 The consequence is deliberate: a file with findings of a tool that exits 0 on them
 — hadolint below its `failure-threshold`, a linter configured not to fail on

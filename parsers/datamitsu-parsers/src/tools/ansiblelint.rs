@@ -6,6 +6,10 @@
 //! the older `location.positions.begin.{line,column}` shape — mirroring the
 //! builtin's `on_output`. We navigate both with `tinyjson` (the standard
 //! `json_diag::from_json` flat mapper can't reach the nested fields).
+//!
+//! The level is the Code Climate `severity`, which the formatter derives from
+//! ansible-lint's own level: `minor` for a rule on the warn list, `major` for
+//! every other. `url` is the rule's documentation page.
 
 use std::collections::HashMap;
 
@@ -13,12 +17,16 @@ use tinyjson::JsonValue;
 
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity;
+use crate::severity::{self, Level};
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "ansiblelint",
 	description: "Linter for Ansible playbooks, roles and collections.",
 	url: "https://github.com/ansible-community/ansible-lint",
+	severities: &[Level("major", severity::ERROR), Level("minor", severity::WARNING)],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		// to_temp_file=true: ansible-lint reads a real path, not stdin.
@@ -50,7 +58,14 @@ fn from_obj(value: &JsonValue) -> Option<RawDiagnostic> {
 		row,
 		col,
 		code: get_str(map, "check_name"),
-		severity: get_str(map, "severity").and_then(|s| severity_of(&s)),
+		url: get_str(map, "url"),
+		severity: get_str(map, "severity").and_then(|s| severity::of(DESCRIPTOR.severities, &s)),
+		file: map
+			.get("location")
+			.and_then(as_obj)
+			.and_then(|l| get_str(l, "path"))
+			.as_deref()
+			.and_then(crate::diagnostic::file_field),
 		..RawDiagnostic::default()
 	})
 }
@@ -80,15 +95,6 @@ fn location_pos(loc: Option<&JsonValue>) -> (Option<u32>, Option<u32>) {
 		}
 	}
 	(None, None)
-}
-
-fn severity_of(level: &str) -> Option<u8> {
-	match level {
-		"blocker" | "critical" | "major" => Some(severity::ERROR),
-		"minor" => Some(severity::WARNING),
-		"info" => Some(severity::INFO),
-		_ => None,
-	}
 }
 
 fn as_obj(value: &JsonValue) -> Option<&HashMap<String, JsonValue>> {
@@ -122,6 +128,7 @@ mod tests {
             {
                 "type": "issue",
                 "check_name": "name[casing]",
+                "url": "https://ansible.readthedocs.io/projects/lint/rules/name/",
                 "description": "All names should start with an uppercase letter.",
                 "severity": "minor",
                 "location": {
@@ -134,13 +141,17 @@ mod tests {
 		assert_eq!(out.len(), 1);
 		assert_eq!(out[0].message, "All names should start with an uppercase letter.");
 		assert_eq!(out[0].code.as_deref(), Some("name[casing]"));
+		assert_eq!(
+			out[0].url.as_deref(),
+			Some("https://ansible.readthedocs.io/projects/lint/rules/name/")
+		);
 		assert_eq!(out[0].row, Some(12));
 		assert_eq!(out[0].col, None);
 		assert_eq!(out[0].severity, Some(severity::WARNING));
 	}
 
 	#[test]
-	fn parses_positions_begin_shape_and_maps_major_to_error() {
+	fn parses_positions_begin_shape_and_reads_the_level() {
 		let json = br#"[
             {
                 "check_name": "yaml[trailing-spaces]",
@@ -161,8 +172,36 @@ mod tests {
 	}
 
 	#[test]
+	fn a_severity_the_formatter_never_prints_is_no_level() {
+		let json = br#"[
+            {"check_name": "a", "description": "no level", "location": {"lines": {"begin": 1}}},
+            {"check_name": "b", "description": "odd level", "severity": "blocker", "location": {"lines": {"begin": 2}}}
+        ]"#;
+		let out = parse(json, b"", 2);
+		assert_eq!(out.len(), 2);
+		assert!(out.iter().all(|d| d.severity.is_none()));
+	}
+
+	#[test]
 	fn empty_array_and_invalid_yield_nothing() {
 		assert!(parse(b"[]", b"", 0).is_empty());
 		assert!(parse(b"not json", b"", 1).is_empty());
 	}
+
+	#[test]
+	fn each_issue_names_its_file() {
+		let out = parse(SAMPLES[0].stdout, b"", 2);
+		assert!(out.iter().all(|d| d.file.as_deref() == Some("playbook.yml")));
+		let json =
+			br#"[{"check_name":"a","description":"m","location":{"path":"roles/x/tasks/main.yml","lines":{"begin":1}}}]"#;
+		assert_eq!(parse(json, b"", 2)[0].file.as_deref(), Some("roles/x/tasks/main.yml"));
+	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[crate::contract::Sample {
+	stdout: br#"[{"type":"issue","check_name":"name[casing]","categories":["idiom"],"url":"https://ansible.readthedocs.io/projects/lint/rules/name/","severity":"minor","description":"All names should start with an uppercase letter.","fingerprint":"1f0e","location":{"path":"playbook.yml","lines":{"begin":3}}},{"type":"issue","check_name":"yaml[trailing-spaces]","categories":["formatting","yaml"],"url":"https://ansible.readthedocs.io/projects/lint/rules/yaml/","severity":"major","description":"Trailing spaces","fingerprint":"9ab2","location":{"path":"playbook.yml","positions":{"begin":{"line":7,"column":21}}}}]"#,
+	stderr: b"",
+	exit: 2,
+}];

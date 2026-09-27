@@ -52,9 +52,54 @@ test("renderCatalogMarkdown: frontmatter, auto-gen note, module + count", () => 
 test("renderCatalogMarkdown: table rows, echo excluded, pipes escaped", () => {
   const md = renderCatalogMarkdown(sample);
   assert.ok(!md.includes("`echo`"), "echo excluded from the table");
-  assert.match(md, /\| `eslint` \| lint \| JS linter \| \[link\]\(https:\/\/eslint\.org\) \|/);
+  assert.match(
+    md,
+    /\| `eslint` \| lint \| — \| — \| — \| JS linter \| \[link\]\(https:\/\/eslint\.org\) \|/,
+  );
   // The pipe inside hadolint's description is escaped so it doesn't break the table.
   assert.ok(md.includes("Dockerfile \\| linter"), "pipe escaped");
+});
+
+test("renderCatalogMarkdown: levels, column unit and category from a schema-2 module", () => {
+  const md = renderCatalogMarkdown({
+    tools: [
+      {
+        category: "security",
+        columnUnit: "utf8",
+        description: "d",
+        kind: "tool",
+        module: "m",
+        name: "scanner",
+        operations: {},
+        severities: ["HIGH", "LOW"],
+        url: "",
+        version: "1",
+      },
+      {
+        description: "d",
+        kind: "tool",
+        module: "m",
+        name: "plain",
+        operations: {},
+        severities: [],
+        url: "",
+        version: "1",
+      },
+      // A schema-1 module decodes its missing vocabulary as null.
+      {
+        description: "d",
+        module: "m",
+        name: "old",
+        operations: {},
+        severities: null,
+        url: "",
+        version: "1",
+      },
+    ],
+  });
+  assert.match(md, /\| `scanner` \| — \| `HIGH`, `LOW` \| utf-8 \| security \| d \| — \|/);
+  assert.match(md, /\| `plain` \| — \| none \| — \| — \| d \| — \|/);
+  assert.match(md, /\| `old` \| — \| — \| — \| — \| d \| — \|/);
 });
 
 test("renderCatalogMarkdown: deterministic (no timestamp)", () => {
@@ -81,5 +126,5 @@ test("renderCatalogMarkdown: tool with no operations shows an em dash", () => {
   const md = renderCatalogMarkdown({
     tools: [{ description: "d", module: "m", name: "x", operations: {}, url: "", version: "1" }],
   });
-  assert.match(md, /\| `x` \| — \| d \| — \|/);
+  assert.match(md, /\| `x` \| — \| — \| — \| — \| d \| — \|/);
 });

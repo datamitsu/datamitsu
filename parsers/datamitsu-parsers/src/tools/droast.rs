@@ -38,12 +38,25 @@ use tinyjson::JsonValue;
 
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity;
+use crate::severity::{self, Level};
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "droast",
 	description: "An opinionated Dockerfile linter with governed suppressions, build-context and ShellCheck awareness.",
 	url: "https://github.com/immanuwell/dockerfile-roast",
+	// The JSON `severity`, compared uppercased; `WARNING` is how droast's config and
+	// CLI spell `WARN`. `x` and `!` are its stderr markers for an error and a warning.
+	severities: &[
+		Level("ERROR", severity::ERROR),
+		Level("WARN", severity::WARNING),
+		Level("WARNING", severity::WARNING),
+		Level("INFO", severity::INFO),
+		Level("x", severity::ERROR),
+		Level("!", severity::WARNING),
+	],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		args: &["--format", "json", "--no-roast"],
@@ -101,14 +114,7 @@ fn from_finding(value: &JsonValue, file: &Option<String>) -> Option<RawDiagnosti
 }
 
 fn severity_of(level: &str) -> Option<u8> {
-	match level.to_ascii_uppercase().as_str() {
-		"ERROR" => Some(severity::ERROR),
-		// `WARN` is what droast prints; `WARNING` is how its config and CLI spell
-		// the same level, so a later release printing that would mean the same.
-		"WARN" | "WARNING" => Some(severity::WARNING),
-		"INFO" => Some(severity::INFO),
-		_ => None,
-	}
+	severity::of(DESCRIPTOR.severities, &level.to_ascii_uppercase())
 }
 
 /// droast prefixes its own stderr lines with `x` for an error and `!` for a
@@ -120,14 +126,14 @@ fn from_stderr(stderr: &[u8]) -> Vec<RawDiagnostic> {
 		.lines()
 		.filter_map(|line| {
 			let line = strip_ansi(line);
-			let (level, message) = match line.strip_prefix("x ") {
-				Some(rest) => (severity::ERROR, rest),
-				None => (severity::WARNING, line.strip_prefix("! ")?),
+			let (marker, message) = match line.strip_prefix("x ") {
+				Some(rest) => ("x", rest),
+				None => ("!", line.strip_prefix("! ")?),
 			};
 			let message = message.trim();
 			(!message.is_empty()).then(|| RawDiagnostic {
 				message: message.to_string(),
-				severity: Some(level),
+				severity: severity::of(DESCRIPTOR.severities, marker),
 				..RawDiagnostic::default()
 			})
 		})
@@ -177,7 +183,7 @@ mod tests {
 	// Verbatim `droast --format json --no-roast --shellcheck required .` over two
 	// Dockerfiles (fingerprints and roasts shortened): DF and SC findings, a
 	// whole-file finding at line 0, and a span with an exclusive end column.
-	const REPOSITORY: &str = r#"[
+	pub(super) const REPOSITORY: &str = r#"[
   {
     "file": "Dockerfile",
     "total": 4,
@@ -210,7 +216,7 @@ mod tests {
 ]"#;
 
 	// One Dockerfile: the result object on its own, not wrapped in an array.
-	const SINGLE: &str = r#"{
+	pub(super) const SINGLE: &str = r#"{
   "file": "svc/Dockerfile",
   "total": 1,
   "errors": 0,
@@ -423,3 +429,23 @@ mod tests {
 		assert_eq!(out[0].message, "WORKDIR 'naïve' is relative");
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[
+	crate::contract::Sample {
+		stdout: tests::REPOSITORY.as_bytes(),
+		stderr: b"",
+		exit: 1,
+	},
+	crate::contract::Sample {
+		stdout: tests::SINGLE.as_bytes(),
+		stderr: b"x Failed to read 'broken/Dockerfile'\n",
+		exit: 1,
+	},
+	crate::contract::Sample {
+		stdout: tests::SINGLE.as_bytes(),
+		stderr: b"! Compose service \"api\" in 'compose.yaml' has an unresolved Dockerfile path\n",
+		exit: 0,
+	},
+];

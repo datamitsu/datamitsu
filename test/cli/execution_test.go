@@ -1035,12 +1035,31 @@ func TestExecutionParsedFailure(t *testing.T) {
 		}
 		e.golden("s8_lint_parsed_failure_no_parse", res)
 	})
+
+	// checkmake prints no level, so the exit code is the only thing it says
+	// about seriousness: its findings under a failed run are errors.
+	t.Run("no-level", func(t *testing.T) {
+		e := newExecProject(t, map[string]string{"fixture.marker": "", "Makefile": "all:\n\ttrue\n"}, fixtureSpec)
+		module := filepath.Join("..", "..", "internal", "parsermanager", "testdata", "echo.wasm")
+		spec := fixtureSpec
+		spec.Parsers = clitest.SeedParserModule(t, e.cache, module)
+		e.p.WriteFile("exec.config.js", clitest.ShellConfig(spec, clitest.ShellTool("checkmake",
+			settle+clitest.RecordRun+`; echo '1:minphony:Required target "all" is missing from the Makefile.'; exit 1`,
+			clitest.ToolOpSpec{Scope: "per-file", Globs: []string{"**/Makefile"}, Args: []string{"{file}"}, Parser: "checkmake"})))
+		res := e.run("", nil, "lint")
+		e.wantExit(res, 1)
+		if !strings.Contains(res.Stdout, `Makefile:1:1 error Required target "all" is missing from the Makefile. [minphony]`) {
+			t.Errorf("a finding without a level under a failed run should show as an error:\n%s", res.Stdout)
+		}
+		e.golden("s8_lint_parsed_failure_no_level", res)
+	})
 }
 
 // TestExecutionParsedPassKeepsFindingsUncached is S9: a tool that reports a
-// finding but exits 0 passes and prints nothing about the finding (plan 5
-// shows it), and records no cache pass (C1): every later run runs it again.
-// --no-parse changes only what a failure shows, so it records by the same rule.
+// warning but exits 0 passes under the default threshold, prints no frame and
+// counts the warning on its tool line and in the footer, and records no cache
+// pass (C1): every later run runs it again. --no-parse changes only what a
+// failure shows, so it records by the same rule.
 func TestExecutionParsedPassKeepsFindingsUncached(t *testing.T) {
 	e := newParsedProject(t, hadolintFinding, 0)
 
@@ -1096,6 +1115,79 @@ func TestExecutionParsedCleanPassIsCached(t *testing.T) {
 		again := fresh.run("", run.env, run.args...)
 		fresh.wantExit(again, 0)
 		fresh.wantMarker("hadolint", "hadolint <TMP>/Dockerfile\n")
+	}
+}
+
+var (
+	currentParserModule  = filepath.Join("..", "..", "internal", "parsermanager", "testdata", "echo.wasm")
+	releasedParserModule = filepath.Join("..", "..", "internal", "parsermanager", "testdata", "released", "v1", "b5425355.wasm")
+)
+
+// hadolintInfoAndStyle is two findings below warning: hadolint's info and
+// style levels, which its parser maps to info and hint.
+const hadolintInfoAndStyle = `[{"file":"Dockerfile","line":1,"column":1,"level":"info","code":"DL3059",` +
+	`"message":"Multiple consecutive RUN instructions"},` +
+	`{"file":"Dockerfile","line":2,"column":1,"level":"style","code":"DL3015","message":"Avoid additional packages"}]`
+
+// hadolintError is one finding at hadolint's error level.
+const hadolintError = `[{"file":"Dockerfile","line":1,"column":1,"level":"error","code":"DL3000",` +
+	`"message":"Use absolute WORKDIR"}]`
+
+// newGatedProject is newParsedProject with the module to seed and the
+// operation's failOn.
+func newGatedProject(t *testing.T, module, output string, exitCode int, failOn string) *execProject {
+	t.Helper()
+	e := newExecProject(t, map[string]string{"fixture.marker": "", "Dockerfile": "FROM debian\n"}, fixtureSpec)
+	spec := fixtureSpec
+	spec.Parsers = clitest.SeedParserModule(t, e.cache, module)
+	e.p.WriteFile("exec.config.js", clitest.ShellConfig(spec, clitest.ShellTool("hadolint",
+		fmt.Sprintf("%s%s; echo '%s'; exit %d", settle, clitest.RecordRun, output, exitCode),
+		clitest.ToolOpSpec{
+			Scope: "per-file", Globs: []string{"**/Dockerfile"}, Args: []string{"{file}"},
+			Parser: "hadolint", FailOn: failOn,
+		})))
+	return e
+}
+
+// TestExecutionFailOn freezes the failOn gate: a finding at or above an
+// operation's threshold fails a tool that exited 0, --fail-on and
+// DATAMITSU_FAIL_ON raise the threshold for a run, and a parser module that
+// predates the severity contract leaves the exit code to decide, saying so once
+// when a threshold was asked for.
+func TestExecutionFailOn(t *testing.T) {
+	const ignored = "failOn ignored for hadolint: parser module predates the severity contract"
+	cases := []struct {
+		name        string
+		module      string
+		output      string
+		failOn      string
+		env         []string
+		args        []string
+		exit        int
+		warnIgnored bool
+	}{
+		{name: "error_at_exit_zero", module: currentParserModule, output: hadolintError, args: []string{"lint"}, exit: 1},
+		{name: "warning_at_the_default", module: currentParserModule, output: hadolintFinding, args: []string{"lint"}, exit: 0},
+		{name: "warning_fail_on_warning", module: currentParserModule, output: hadolintFinding, failOn: "warning", args: []string{"lint"}, exit: 1},
+		{name: "warning_flag", module: currentParserModule, output: hadolintFinding, args: []string{"lint", "--fail-on", "warning"}, exit: 1},
+		{name: "warning_env", module: currentParserModule, output: hadolintFinding, env: []string{"DATAMITSU_FAIL_ON=warning"}, args: []string{"lint"}, exit: 1},
+		{name: "old_module_fail_on", module: releasedParserModule, output: hadolintFinding, failOn: "warning", args: []string{"check"}, exit: 0, warnIgnored: true},
+		{name: "old_module_flag", module: releasedParserModule, output: hadolintFinding, args: []string{"lint", "--fail-on=warning"}, exit: 0, warnIgnored: true},
+		{name: "old_module_flag_no_parse", module: releasedParserModule, output: hadolintFinding, args: []string{"lint", "--fail-on=warning", "--no-parse"}, exit: 0, warnIgnored: true},
+		{name: "old_module_default", module: releasedParserModule, output: hadolintError, args: []string{"lint"}, exit: 0},
+		{name: "hint_env", module: currentParserModule, output: hadolintInfoAndStyle, env: []string{"DATAMITSU_FAIL_ON=hint"}, args: []string{"lint"}, exit: 1},
+		{name: "info_and_style_at_the_default", module: currentParserModule, output: hadolintInfoAndStyle, args: []string{"lint"}, exit: 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			e := newGatedProject(t, tc.module, tc.output, 0, tc.failOn)
+			res := e.run("", tc.env, tc.args...)
+			e.wantExit(res, tc.exit)
+			if n := strings.Count(res.Stderr, ignored); n != map[bool]int{true: 1, false: 0}[tc.warnIgnored] {
+				t.Errorf("stderr carries the ignored-threshold warning %d times, want it: %v\n%s", n, tc.warnIgnored, res.Stderr)
+			}
+			e.golden("fail_on_"+tc.name, res)
+		})
 	}
 }
 
@@ -1289,6 +1381,9 @@ func TestExecutionUsageErrors(t *testing.T) {
 		{"fail_fast_env_invalid", []string{"DATAMITSU_FAIL_FAST=yes"}, []string{"lint"}},
 		{"fail_fast_env_invalid_with_flag", []string{"DATAMITSU_FAIL_FAST=yes"}, []string{"lint", "--fail-fast=false"}},
 		{"fail_fast_flag_invalid", nil, []string{"lint", "--fail-fast=maybe"}},
+		{"fail_on_env_invalid", []string{"DATAMITSU_FAIL_ON=warnings"}, []string{"lint"}},
+		{"fail_on_env_invalid_with_flag", []string{"DATAMITSU_FAIL_ON=warnings"}, []string{"lint", "--fail-on=warning"}},
+		{"fail_on_flag_invalid", nil, []string{"check", "--fail-on=Error"}},
 		{"explain_invalid", nil, []string{"lint", "--explain=bogus"}},
 	}
 	for _, tc := range cases {

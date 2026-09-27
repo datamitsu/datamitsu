@@ -8,19 +8,28 @@
 //! <file>:<row>:<col>:<end_row>:<end_col>:<code>:<message>
 //! ```
 //!
-//! e.g. `template.yaml:3:7:3:25:E3012:E3012: Property is not a string`. The
+//! e.g. `template.yaml:3:7:3:25:E3012:Property is not a string`. The
 //! none-ls Lua pattern `:(%d+):(%d+):(%d+):(%d+):(([IEW]).*):(.*)` captures the
-//! four positions, then a `code` field whose first character (`I`/`E`/`W`) is the
-//! severity, then the trailing message.
+//! four positions, then a `code` field whose first character (`I`/`E`/`W`) is
+//! cfn-lint's level for the rule, then the trailing message. Positions are
+//! 1-based and the end names the column after the span.
 
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity;
+use crate::severity::{self, Level};
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "cfn_lint",
 	description: "Validate AWS CloudFormation yaml/json templates against the AWS CloudFormation Resource Specification",
 	url: "https://github.com/aws-cloudformation/cfn-lint",
+	severities: &[
+		Level("E", severity::ERROR),
+		Level("W", severity::WARNING),
+		Level("I", severity::INFO),
+	],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		args: &["--format", "parseable"],
@@ -40,7 +49,7 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 	// suffix layout after the filename is:
 	//   row : col : end_row : end_col : code : message
 	// where `message` is the remainder (may contain `:`) and `code` is one field.
-	let (idx, row, col, end_row, end_col) = find_positions(line)?;
+	let (file, idx, row, col, end_row, end_col) = find_positions(line)?;
 	// `rest` = "<code>:<message>"
 	let rest = &line[idx..];
 	let colon = rest.find(':')?;
@@ -49,8 +58,8 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 
 	// Severity is the leading I/E/W of the code field; non-conforming -> skip
 	// (the Lua pattern requires the code to start with [IEW]).
-	let level = code.chars().next()?;
-	let sev = level_severity(level)?;
+	let level = code.get(..1)?;
+	let sev = severity::of(DESCRIPTOR.severities, level)?;
 
 	Some(RawDiagnostic {
 		message: message.to_string(),
@@ -60,15 +69,18 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 		end_col: Some(end_col),
 		severity: Some(sev),
 		code: Some(code.to_string()),
+		// Empty for a template read from stdin.
+		file: crate::diagnostic::file_field(file),
 		..RawDiagnostic::default()
 	})
 }
 
 /// Locate the four `:<digits>:<digits>:<digits>:<digits>:` position fields and
-/// return the byte index in `line` just past the fourth field's trailing colon,
-/// along with (row, col, end_row, end_col). The four numbers are the first run
-/// of four consecutive colon-separated integers — found by scanning each colon.
-fn find_positions(line: &str) -> Option<(usize, u32, u32, u32, u32)> {
+/// return the file before them, the byte index in `line` just past the fourth
+/// field's trailing colon, and (row, col, end_row, end_col). The four numbers are
+/// the first run of four consecutive colon-separated integers — found by scanning
+/// each colon.
+fn find_positions(line: &str) -> Option<(&str, usize, u32, u32, u32, u32)> {
 	let bytes = line.as_bytes();
 	for (i, &b) in bytes.iter().enumerate() {
 		if b != b':' {
@@ -104,19 +116,10 @@ fn find_positions(line: &str) -> Option<(usize, u32, u32, u32, u32)> {
 		}
 		// After four numbers, the next char must be ':' (start of code field).
 		if ok && bytes.get(pos) == Some(&b':') {
-			return Some((pos + 1, nums[0], nums[1], nums[2], nums[3]));
+			return Some((&line[..i], pos + 1, nums[0], nums[1], nums[2], nums[3]));
 		}
 	}
 	None
-}
-
-fn level_severity(level: char) -> Option<u8> {
-	match level {
-		'E' => Some(severity::ERROR),
-		'W' => Some(severity::WARNING),
-		'I' => Some(severity::INFO),
-		_ => None,
-	}
 }
 
 #[cfg(test)]
@@ -143,10 +146,34 @@ mod tests {
 	}
 
 	#[test]
+	fn a_code_without_a_level_letter_is_skipped() {
+		assert!(parse_line("t.json:1:1:1:1:X1001:unknown class").is_none());
+		assert!(parse_line("t.json:1:1:1:1::empty code").is_none());
+	}
+
+	#[test]
 	fn parse_reads_stderr_and_skips_noise() {
 		let stderr = b"a.yaml:2:1:2:8:E1001:E1001: Top level template error\nnot a diagnostic line\n";
 		let out = parse(b"", stderr, 1);
 		assert_eq!(out.len(), 1);
 		assert_eq!(out[0].code.as_deref(), Some("E1001"));
 	}
+
+	#[test]
+	fn each_finding_names_its_file() {
+		let stderr = b"a.yaml:2:1:2:8:E1001:first\nstacks/b.json:3:1:3:2:W2001:second\n:4:1:4:2:E3012:piped\n";
+		let files: Vec<_> = parse(b"", stderr, 2).into_iter().map(|d| d.file).collect();
+		assert_eq!(
+			files,
+			[Some("a.yaml".to_string()), Some("stacks/b.json".to_string()), None]
+		);
+	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[crate::contract::Sample {
+	stdout: b"",
+	stderr: b"template.yaml:3:7:3:25:E3012:Property Resources/Bucket/Properties/BucketName should be of type String\ntemplate.yaml:1:1:1:1:W2001:Parameter Foo not used.\ntemplate.yaml:10:5:10:9:I3011:The default action when replacing/removing a resource is to delete it\n",
+	exit: 14,
+}];

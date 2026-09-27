@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 56,
-  "pageSetHash": "ac36b6317e0501d5d80b30d8c23599f6",
+  "pageSetHash": "1cb68ff666739e8f46347229b96c7ee8",
   "pages": [
     {
       "slug": "about",
@@ -206,8 +206,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/caching.md",
       "title": "Caching Strategy",
       "description": "How datamitsu caches file-level results and unit or repository verdicts, computes XXH3-128 keys, and persists them safely",
-      "bytes": 28036,
-      "contentHash": "2cd0b031edacbe531e700e32c7b7d9a2"
+      "bytes": 28386,
+      "contentHash": "6126735a6fbaccb01b18540499321756"
     },
     {
       "slug": "guides/architecture/discovery",
@@ -224,8 +224,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/execution.md",
       "title": "Parallel Execution",
       "description": "How datamitsu runs task groups sequentially while parallelizing tasks within each group, with fail-fast by default and a keep-going mode",
-      "bytes": 16569,
-      "contentHash": "65ddf8df55a127e2bde96324e66af900"
+      "bytes": 17095,
+      "contentHash": "0b253b67eeb9d22e406e59a6c33d6cfb"
     },
     {
       "slug": "guides/architecture",
@@ -244,8 +244,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/parsers.md",
       "title": "WASM Output Parsers",
       "description": "How datamitsu declares, builds, delivers over two channels, verifies, and loads sandboxed Rust→WASM output parsers, and how the line-based diff-in-core powers formatting",
-      "bytes": 32695,
-      "contentHash": "55d3a0914f3f43ef13a08ce311cec3e1"
+      "bytes": 37706,
+      "contentHash": "69bdd9bd98a150a95b83997676c7589c"
     },
     {
       "slug": "guides/architecture/planner",
@@ -289,8 +289,8 @@
       "url": "https://datamitsu.com/docs/guides/configuration.md",
       "title": "Configuration",
       "description": "How to configure datamitsu with JavaScript config files, remote configs, and config layers",
-      "bytes": 12339,
-      "contentHash": "39e9971c978ef92e88fe029b0e962e1b"
+      "bytes": 12469,
+      "contentHash": "fc9117c989727f1720dea2632f1de9d8"
     },
     {
       "slug": "guides/managed-configs",
@@ -451,8 +451,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 108464,
-      "contentHash": "666b11d4ccefaa3bf1ba48b49bff0822"
+      "bytes": 117256,
+      "contentHash": "f27d596660d9e64eed04f111fa400ceb"
     },
     {
       "slug": "reference/comparison",
@@ -469,8 +469,8 @@
       "url": "https://datamitsu.com/docs/reference/configuration-api.md",
       "title": "Configuration API",
       "description": "Complete reference for the datamitsu configuration API",
-      "bytes": 75244,
-      "contentHash": "69f152d172100b4ab10d59d6cf8ac11a"
+      "bytes": 77182,
+      "contentHash": "6fde9560fa3070404de220ec1815be0c"
     },
     {
       "slug": "reference/ignore-rules",
@@ -496,8 +496,8 @@
       "url": "https://datamitsu.com/docs/reference/parser-catalog.md",
       "title": "Parser Catalog",
       "description": "Tools whose output the bundled datamitsu WASM parser module turns into diagnostics",
-      "bytes": 38808,
-      "contentHash": "c83856d2b3e4ddbf5a312fc2127c9460"
+      "bytes": 49600,
+      "contentHash": "c24f15c379b05d9ebfe47e42df7b5a00"
     },
     {
       "slug": "reference/template-placeholders",

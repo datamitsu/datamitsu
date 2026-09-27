@@ -92,6 +92,7 @@ func describeFiles(task Task, result *ExecutionResult, fallback FileState) {
 	}
 
 	result.FileResults = make([]FileResult, 0, len(result.Files))
+	gated := make(map[int]gatedFiles)
 	for _, file := range result.Files {
 		fr := FileResult{File: file, State: fallback}
 		idx, ok := byFile[file]
@@ -106,6 +107,14 @@ func describeFiles(task Task, result *ExecutionResult, fallback FileState) {
 			fr.State = FileState(proc.State)
 			if proc.State == ProcessRan {
 				fr.ProcessID, fr.Success, fr.ExitCode = proc.ID, proc.Success, proc.ExitCode
+				if proc.ThresholdFailed {
+					g, seen := gated[idx]
+					if !seen {
+						g = gatedFilesOf(proc)
+						gated[idx] = g
+					}
+					fr.Success = !g.all && !g.files[file]
+				}
 				if len(proc.Files) == 1 {
 					fr.Edits = proc.edits
 				}
@@ -115,6 +124,32 @@ func describeFiles(task Task, result *ExecutionResult, fallback FileState) {
 	}
 
 	result.Cached = len(result.Processes) == 0 && len(result.cached) > 0 && len(result.cached) == len(result.Files)
+}
+
+// gatedFiles are the files of a process its gating findings belong to; all
+// is set when one names no file, or a file the process was not given, and so
+// could be about any of them.
+type gatedFiles struct {
+	files map[string]bool
+	all   bool
+}
+
+func gatedFilesOf(proc ProcessResult) gatedFiles {
+	given := make(map[string]bool, len(proc.Files))
+	for _, f := range proc.Files {
+		given[f] = true
+	}
+	g := gatedFiles{files: make(map[string]bool)}
+	for _, d := range proc.Diagnostics {
+		if !d.Gates {
+			continue
+		}
+		if d.File == "" || (len(proc.Files) > 0 && !given[d.File]) {
+			g.all = true
+		}
+		g.files[d.File] = true
+	}
+	return g
 }
 
 // describeVerdictHit is describeFiles for a unit whose verdict held: the verdict

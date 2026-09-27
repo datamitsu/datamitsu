@@ -23,6 +23,8 @@ use std::alloc::{self, Layout};
 use std::ptr;
 
 mod capabilities;
+#[cfg(test)]
+mod contract;
 mod diagnostic;
 mod location;
 mod numconv;

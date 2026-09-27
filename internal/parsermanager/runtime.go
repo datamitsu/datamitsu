@@ -28,6 +28,9 @@ type RawDiagnostic struct {
 	Severity *uint8  `json:"severity,omitempty"`
 	Source   *string `json:"source,omitempty"`
 	Code     *string `json:"code,omitempty"`
+	// URL documents the rule, where the tool prints one; a schema-1 module
+	// never sets it.
+	URL *string `json:"url,omitempty"`
 	// File is set only by parsers whose format names the file per diagnostic
 	// (eslint's filePath). Batch runs cover many files at once, so this is the
 	// only way to attribute them; per-file parsers leave it nil and the executor
@@ -132,7 +135,22 @@ func (p *ParserRuntime) Describe(ctx context.Context) (Capabilities, error) {
 	if err := json.Unmarshal(out, &caps); err != nil {
 		return Capabilities{}, fmt.Errorf("decode describe output: %w", err)
 	}
+	normalizeSeverities(&caps)
 	return caps, nil
+}
+
+// normalizeSeverities keeps nil for "not declared" apart from an empty list for
+// "the tool prints no level": a schema-1 module cannot declare a vocabulary, and
+// a later one that leaves the field out for a tool declares an empty one.
+func normalizeSeverities(caps *Capabilities) {
+	for i := range caps.Tools {
+		switch {
+		case !caps.SeverityContract():
+			caps.Tools[i].Severities = nil
+		case caps.Tools[i].Severities == nil:
+			caps.Tools[i].Severities = []string{}
+		}
+	}
 }
 
 // Reset returns the instance to its post-instantiation state by invoking the

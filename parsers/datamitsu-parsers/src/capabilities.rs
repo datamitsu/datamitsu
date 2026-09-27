@@ -16,11 +16,14 @@
 //! with that tool's parser, and is referenced from [`TOOLS`] below.
 
 use crate::diagnostic::json_string;
+use crate::severity::Level;
 use crate::tools;
 
 /// Capabilities schema version. Bump on an incompatible shape change so the Go
-/// decoder can refuse or adapt.
-const SCHEMA_VERSION: u32 = 1;
+/// decoder can refuse or adapt. Schema 2 adds each tool's level vocabulary,
+/// column unit, category and kind, and with them the promise that a level comes
+/// only from a token the tool printed.
+const SCHEMA_VERSION: u32 = 2;
 
 /// The build-injected module version. `DATAMITSU_PARSERS_VERSION` is read at
 /// compile time (like an ldflags `-X`); when unset — a plain local `cargo build`
@@ -52,6 +55,19 @@ pub(crate) struct ToolCapability {
 	/// Recommended invocations per mode; empty when the parser ships no canonical
 	/// recipe yet.
 	pub(crate) operations: &'static [Operation],
+	/// The level tokens the tool prints and the level each maps to — the only
+	/// source of a finding's severity ([`crate::severity::of`]). Empty for a
+	/// tool that prints none.
+	pub(crate) severities: &'static [Level],
+	/// The unit the tool counts columns in — "utf-8" (bytes), "utf-16" (code
+	/// units) or "utf-32" (code points) — measured on the tool; empty when
+	/// it has not been measured (the tool is then on the module test's list of
+	/// unknowns).
+	pub(crate) column_unit: &'static str,
+	/// "security" for a security scanner; empty otherwise.
+	pub(crate) category: &'static str,
+	/// What the parser reads: "tool" for the tool's own output format.
+	pub(crate) kind: &'static str,
 }
 
 /// The `echo` pipe-test parser's descriptor (defined here since `echo` lives in
@@ -63,11 +79,15 @@ const ECHO: ToolCapability = ToolCapability {
         pipe end to end; not a real tool.",
 	url: "",
 	operations: &[],
+	severities: &[],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 };
 
 /// The capability table: the pipe-test `echo` plus one entry per real tool. A new
 /// tool adds its module's `DESCRIPTOR` here (and a `tools::dispatch` arm).
-const TOOLS: &[&ToolCapability] = &[
+pub(crate) const TOOLS: &[&ToolCapability] = &[
 	&ECHO,
 	&tools::actionlint::DESCRIPTOR,
 	&tools::alex::DESCRIPTOR,
@@ -180,12 +200,23 @@ pub fn describe_json() -> String {
 
 fn tool_json(t: &ToolCapability) -> String {
 	let ops: Vec<String> = t.operations.iter().map(operation_json).collect();
+	let severities: Vec<String> = t.severities.iter().map(|l| json_string(l.0)).collect();
+	let mut optional = String::new();
+	if !t.column_unit.is_empty() {
+		optional.push_str(&format!(r#","columnUnit":{}"#, json_string(t.column_unit)));
+	}
+	if !t.category.is_empty() {
+		optional.push_str(&format!(r#","category":{}"#, json_string(t.category)));
+	}
 	format!(
-		r#"{{"name":{},"description":{},"url":{},"operations":{{{}}}}}"#,
+		r#"{{"name":{},"description":{},"url":{},"operations":{{{}}},"severities":[{}]{},"kind":{}}}"#,
 		json_string(t.name),
 		json_string(t.description),
 		json_string(t.url),
 		ops.join(","),
+		severities.join(","),
+		optional,
+		json_string(t.kind),
 	)
 }
 
@@ -206,7 +237,7 @@ mod tests {
 	#[test]
 	fn describe_advertises_schema_module_and_version() {
 		let json = describe_json();
-		assert!(json.contains(r#""schemaVersion":1"#), "json: {json}");
+		assert!(json.contains(r#""schemaVersion":2"#), "json: {json}");
 		assert!(json.contains(r#""module":"datamitsu-parsers""#), "json: {json}");
 	}
 

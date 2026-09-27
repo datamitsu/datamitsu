@@ -18,11 +18,10 @@
 //!   * knip reports no severity at all, and `line`/`col` are absent for
 //!     whole-file findings such as an unused file.
 //!
-//! Every finding is an error. knip's exit code does not distinguish between its
-//! issue types — anything it reports fails the run — so leaving severity unset
-//! would render a failing run as a page of warnings. Whether a kind of finding is
-//! worth failing on is decided upstream, by which issue types the project
-//! reports at all (knip's `rules`), not by a level the tool never emitted.
+//! A finding has no level: knip prints none. The core takes it from knip's exit
+//! code, which fails the run on anything reported, so the findings of a failing
+//! run read as errors. Whether a kind of finding is worth failing on is decided
+//! upstream, by which issue types the project reports at all (knip's `rules`).
 //!
 //! The wording is knip's own, taken from its `ISSUE_TYPE_TITLE` singularized the
 //! way its reporters do (`ies` → `y`, then a trailing `s` dropped), so a
@@ -40,12 +39,15 @@ use tinyjson::JsonValue;
 
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity;
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "knip",
 	description: "Find unused files, dependencies and exports in JavaScript and TypeScript projects.",
 	url: "https://knip.dev",
+	severities: &[],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		args: &["--reporter", "json"],
@@ -149,7 +151,6 @@ fn item_diag(
 		message,
 		row: num(m, "line"),
 		col: num(m, "col"),
-		severity: Some(severity::ERROR),
 		code: Some(issue_type.to_string()),
 		file: file.clone(),
 		..RawDiagnostic::default()
@@ -179,7 +180,6 @@ fn group_diag(members: &[JsonValue], title: &str, issue_type: &str, file: &Optio
 		message: with_namespace(format!("{title}: {}", names.join(separator)), head),
 		row: num(head, "line"),
 		col: num(head, "col"),
-		severity: Some(severity::ERROR),
 		code: Some(issue_type.to_string()),
 		file: file.clone(),
 		..RawDiagnostic::default()
@@ -215,7 +215,7 @@ mod tests {
 
 	// Shaped like real `knip --reporter json` output: findings grouped per file,
 	// the empty arrays knip emits for every reported type, and a group type.
-	const SAMPLE: &[u8] = br#"{"issues":[
+	pub(super) const SAMPLE: &[u8] = br#"{"issues":[
         {"file":"src/dead.ts","files":[{"name":"src/dead.ts"}],"exports":[],"unlisted":[]},
         {"file":"src/a.ts","exports":[{"name":"helper","line":4,"col":14,"pos":120}],
          "types":[{"name":"Props","line":9,"col":13}]},
@@ -242,10 +242,14 @@ mod tests {
 		let out = parse(SAMPLE, b"", 1);
 		assert_eq!(out.len(), 6);
 		assert!(out.iter().all(|d| d.file.is_some()));
-		// Every finding is an error. Left unset, the core's fallback renders a
-		// failing run — knip exits non-zero on any finding — as a page of
-		// warnings, which is what this looked like end to end before the fix.
-		assert!(out.iter().all(|d| d.severity == Some(severity::ERROR)));
+	}
+
+	#[test]
+	fn never_sets_a_severity() {
+		// knip prints no level; the core takes one from its exit code.
+		let out = parse(SAMPLE, b"", 1);
+		assert_eq!(out.len(), 6);
+		assert!(out.iter().all(|d| d.severity.is_none()));
 	}
 
 	#[test]
@@ -441,3 +445,18 @@ mod tests {
 		assert!(out.iter().all(|d| d.file.as_deref() == Some("src/a.ts")));
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[
+	crate::contract::Sample {
+		stdout: tests::SAMPLE,
+		stderr: b"",
+		exit: 1,
+	},
+	crate::contract::Sample {
+		stdout: br#"{"issues":[]}"#,
+		stderr: b"",
+		exit: 0,
+	},
+];

@@ -12,12 +12,16 @@
 
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity;
+use crate::severity::{self, Level};
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "tsc",
 	description: "TypeScript compiler type diagnostics (also covers tsgo).",
 	url: "https://www.typescriptlang.org",
+	severities: &[Level("error", severity::ERROR), Level("warning", severity::WARNING)],
+	column_unit: "utf-16",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		// --pretty false keeps the format stable (no color/leading gutter).
@@ -60,11 +64,7 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 }
 
 fn severity_of(s: &str) -> Option<u8> {
-	match s {
-		"error" => Some(severity::ERROR),
-		"warning" => Some(severity::WARNING),
-		_ => None,
-	}
+	severity::of(DESCRIPTOR.severities, s)
 }
 
 #[cfg(test)]
@@ -97,6 +97,14 @@ mod tests {
 		assert_eq!(out[1].severity, Some(severity::WARNING));
 		assert_eq!(out[1].code.as_deref(), Some("TS6133"));
 	}
+
+	#[test]
+	fn an_unlisted_category_sets_no_level() {
+		let d = parse_line("a.ts(1,1): message TS6032: File change detected.").unwrap();
+		assert_eq!(d.severity, None);
+		assert_eq!(d.code.as_deref(), Some("TS6032"));
+	}
+
 	#[test]
 	fn reports_the_path() {
 		let d = parse_line("src/x.ts(1,7): error TS2322: Type mismatch.").unwrap();
@@ -107,3 +115,11 @@ mod tests {
 		assert_eq!((abs.row, abs.col), (Some(9), Some(2)));
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[crate::contract::Sample {
+	stdout: b"a.ts(2,23): error TS2304: Cannot find name 'z'.\nb.ts(9,1): warning TS6133: 'x' is declared but never used.\n\nFound 2 errors in 2 files.\n",
+	stderr: b"",
+	exit: 1,
+}];

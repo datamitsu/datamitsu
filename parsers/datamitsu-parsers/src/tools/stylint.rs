@@ -10,18 +10,22 @@
 //!
 //! e.g. `10  Warning  Hashes should not...  hashEnd` or
 //! `10:5  Warning  Hashes should not...  hashEnd`. The trailing `  +%w` is the
-//! rule name column, which the builtin does not capture into a diagnostic field,
-//! so it is dropped here. The severity token (`Warning`/`Error`) is lowercased
-//! and mapped; the column is reported only by the second pattern.
+//! rule name column, reported as the code. The severity token (`Warning`/`Error`)
+//! is lowercased and read through the vocabulary; the column is reported only by
+//! the second pattern.
 
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity;
+use crate::severity::{self, Level};
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "stylint",
 	description: "A linter for the Stylus CSS preprocessor.",
 	url: "https://github.com/SimenB/stylint",
+	severities: &[Level("error", severity::ERROR), Level("warning", severity::WARNING)],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		args: &["-"],
@@ -34,14 +38,7 @@ pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 }
 
 fn severity_of(level: &str) -> Option<u8> {
-	// none-ls lowercases the matched token before lookup in default_severities.
-	match level.to_ascii_lowercase().as_str() {
-		"error" => Some(severity::ERROR),
-		"warning" => Some(severity::WARNING),
-		"information" => Some(severity::INFO),
-		"hint" => Some(severity::HINT),
-		_ => None,
-	}
+	severity::of(DESCRIPTOR.severities, &level.to_ascii_lowercase())
 }
 
 fn parse_line(line: &str) -> Option<RawDiagnostic> {
@@ -64,7 +61,7 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 	// The Lua `(.+)  +%w` is greedy: message is everything up to the LAST run of
 	// 2+ spaces followed by a word char (the rule-name column). Find that split
 	// from the right.
-	let message = strip_trailing_rule(after_sev)?;
+	let (message, rule) = split_trailing_rule(after_sev)?;
 	if message.is_empty() {
 		return None;
 	}
@@ -86,13 +83,14 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 		col,
 		severity: severity_of(sev),
 		source: Some("stylint".to_string()),
+		code: Some(rule.to_string()),
 		..RawDiagnostic::default()
 	})
 }
 
-/// Port of the greedy `(.+)  +%w` tail: drop the rightmost run of 2+ spaces that
-/// is followed by a word character (the rule-name column), returning the message.
-fn strip_trailing_rule(s: &str) -> Option<&str> {
+/// Port of the greedy `(.+)  +%w` tail: split at the rightmost run of 2+ spaces
+/// that is followed by a word character, returning the message and the rule name.
+fn split_trailing_rule(s: &str) -> Option<(&str, &str)> {
 	let bytes = s.as_bytes();
 	// Scan from the right for a position where >=2 spaces precede a word char.
 	let mut i = bytes.len();
@@ -109,7 +107,7 @@ fn strip_trailing_rule(s: &str) -> Option<&str> {
 			if i - sp >= 2 {
 				let msg = &s[..sp];
 				if !msg.is_empty() {
-					return Some(msg);
+					return Some((msg, s[i..].trim_end()));
 				}
 			}
 		}
@@ -128,6 +126,7 @@ mod tests {
 		assert_eq!(d.col, None);
 		assert_eq!(d.severity, Some(severity::WARNING));
 		assert_eq!(d.source.as_deref(), Some("stylint"));
+		assert_eq!(d.code.as_deref(), Some("hashEnd"));
 		assert_eq!(d.message, "Hashes should not have a key after them");
 	}
 
@@ -137,7 +136,14 @@ mod tests {
 		assert_eq!(d.row, Some(12));
 		assert_eq!(d.col, Some(5));
 		assert_eq!(d.severity, Some(severity::ERROR));
+		assert_eq!(d.code.as_deref(), Some("semicolons"));
 		assert_eq!(d.message, "Missing semicolon");
+	}
+
+	#[test]
+	fn an_unknown_level_word_sets_no_severity() {
+		let d = parse_line("12:5  Information  Missing semicolon  semicolons").unwrap();
+		assert_eq!(d.severity, None);
 	}
 
 	#[test]
@@ -152,3 +158,18 @@ mod tests {
 		assert_eq!(out[0].message, "bad thing happened here");
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[
+	crate::contract::Sample {
+		stdout: b"stylint v2.0.0\n10  Warning  Hashes should not have a key after them  hashEnd\n12:5  Error  Missing semicolon  semicolons\n\n1 Warning\n1 Error\n",
+		stderr: b"",
+		exit: 1,
+	},
+	crate::contract::Sample {
+		stdout: b"3:1  Warning  prefer 0 over none  none\n\n1 Warning\n",
+		stderr: b"",
+		exit: 0,
+	},
+];
