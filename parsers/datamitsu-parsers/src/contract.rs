@@ -169,7 +169,7 @@ const POSITIONS: &[(&str, &str)] = &[
 	("fish", "1-based line only"),
 	("gccdiag", "1-based line and column, no end"),
 	("gdlint", "1-based line only (unverified)"),
-	("gitleaks", "1-based line; StartColumn/EndColumn inclusive on line 1 and one too high after it: end +1 on line 1, start -1 after"),
+	("gitleaks", "1-based line; StartColumn/EndColumn inclusive on line 1 and one too high after it: end +1 on line 1, start -1 after (off by one on the first line of a later ~100 KB fragment)"),
 	("gitlint", "1-based line only (unverified)"),
 	("glslc", "1-based line only"),
 	("golangci_lint", "1-based line and byte column, no end"),

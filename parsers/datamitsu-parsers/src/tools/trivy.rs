@@ -78,6 +78,11 @@ fn parse_stream(bytes: &[u8]) -> Vec<RawDiagnostic> {
 }
 
 fn from_misconfiguration(m: &JsonValue) -> Option<RawDiagnostic> {
+	// --include-non-failures adds the checks that passed, with their severity:
+	// only a failed one is a finding.
+	if get_str(m, "Status").is_some_and(|status| status != "FAIL") {
+		return None;
+	}
 	// Title is the message; the builtin maps it unconditionally (message is
 	// mandatory), so skip an entry without one.
 	let message = get_str(m, "Title")?;
@@ -211,6 +216,18 @@ mod tests {
 		let out = parse(json, b"", 1);
 		assert_eq!(out[0].file.as_deref(), Some("infra/main.tf"));
 		assert_eq!(out[1].file, None);
+	}
+	#[test]
+	fn a_check_that_passed_is_no_finding() {
+		let json = br#"{"Results":[{"Target":"main.tf","Misconfigurations":[
+            {"ID":"AVD-1","Title":"passed","Severity":"HIGH","Status":"PASS","CauseMetadata":{"StartLine":1,"EndLine":1}},
+            {"ID":"AVD-2","Title":"excepted","Severity":"HIGH","Status":"EXCEPTION","CauseMetadata":{"StartLine":2,"EndLine":2}},
+            {"ID":"AVD-3","Title":"failed","Severity":"HIGH","Status":"FAIL","CauseMetadata":{"StartLine":3,"EndLine":3}}
+        ]}]}"#;
+		let out = parse(json, b"", 0);
+		assert_eq!(out.len(), 1, "{out:?}");
+		assert_eq!(out[0].code.as_deref(), Some("AVD-3"));
+		assert_eq!(out[0].severity, Some(severity::ERROR));
 	}
 }
 

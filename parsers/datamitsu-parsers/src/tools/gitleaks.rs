@@ -15,6 +15,10 @@
 //! precedes the line, so both come out one too high (gitleaks 8.30.1 prints
 //! `StartColumn` 8, `EndColumn` 27 for a 20-character secret at column 7 of line
 //! 3). The parser undoes that, which leaves an exclusive end either way.
+//! gitleaks counts columns within the fragment it scans, about 100 KB at a
+//! time, and reports absolute lines, so on the first line of a later fragment
+//! the correction is one column off at both ends; the report carries nothing
+//! that would tell such a line apart.
 
 use super::json_diag::{self, Attrs};
 use crate::capabilities::{Operation, ToolCapability};
@@ -55,6 +59,7 @@ pub fn parse(stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic
 		end_col: "EndColumn",
 		code: "RuleID",
 		message: "Description",
+		file: "File",
 		..Attrs::defaults()
 	};
 	let mut diags = json_diag::from_json(bytes, &attrs, |_| None);
@@ -175,6 +180,11 @@ mod tests {
 	#[test]
 	fn empty_report_yields_nothing() {
 		assert!(parse(b"", b"[]", 0).is_empty());
+	}
+	#[test]
+	fn names_the_file_of_each_finding() {
+		let json = br#"[{"RuleID":"r","Description":"d","StartLine":2,"EndLine":2,"StartColumn":5,"EndColumn":9,"File":"conf/app.env"}]"#;
+		assert_eq!(parse(json, b"", 0)[0].file.as_deref(), Some("conf/app.env"));
 	}
 }
 
