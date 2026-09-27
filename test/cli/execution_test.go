@@ -654,7 +654,8 @@ func TestExecutionFailFastBetweenFiles(t *testing.T) {
 // TestExecutionCheckStopsAfterFix is S6: when fix fails, check never starts
 // lint — no lint block and no lint phase event — and its closing line says lint
 // did not run. With --fail-fast=false lint runs after the failed fix, its footer
-// says so — also when every lint tool is skipped — and the run still fails.
+// says so — also when every lint tool is skipped or none applies — and the run
+// still fails.
 func TestExecutionCheckStopsAfterFix(t *testing.T) {
 	files := map[string]string{"fixture.marker": ""}
 	tools := []string{
@@ -711,6 +712,15 @@ func TestExecutionCheckStopsAfterFix(t *testing.T) {
 			t.Errorf("a lint of skipped tools only should still say it ran after a failed fix:\n%s", res.Stdout)
 		}
 		e.golden("s6_check_fix_fails_keep_going_lint_skipped", res, maskHost)
+	})
+
+	t.Run("keep_going_no_lint_tools", func(t *testing.T) {
+		e := newExecProject(t, files, fixtureSpec, tools[0])
+		res := e.run("", nil, "check", keepGoing)
+		e.wantExit(res, 1)
+		if !strings.Contains(res.Stdout, "No applicable tools found · lint ran after a failed fix") {
+			t.Errorf("a lint with nothing to run should still say it ran after a failed fix:\n%s", res.Stdout)
+		}
 	})
 
 	t.Run("keep_going_jsonl", func(t *testing.T) {

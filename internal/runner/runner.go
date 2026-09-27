@@ -383,11 +383,14 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 			return nil
 		}
 		if !ui.Quiet() {
+			msg := "ℹ️  No applicable tools found"
 			if len(projectTypes) == 0 {
-				fmt.Println("⚠️  No project types detected")
-			} else {
-				fmt.Println("ℹ️  No applicable tools found")
+				msg = "⚠️  No project types detected"
 			}
+			if note := sc.footerNote(operation); note != "" {
+				msg += " · " + note
+			}
+			fmt.Println(msg)
 		}
 		return nil
 	}
