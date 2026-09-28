@@ -467,6 +467,7 @@ export default defineConfig((config) => ({
     "textdiff",
     "langserver",
     "rustup",
+    "RUSTFLAGS",
     "fooding",
     "Ints",
     "serde",

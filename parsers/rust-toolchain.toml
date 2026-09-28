@@ -1,0 +1,8 @@
+# The one statement of the Rust release that builds the parser modules: CI,
+# the release workflow and the embedded module's container build
+# (embedded.Dockerfile, embedded.lock) all install from it.
+[toolchain]
+channel = "1.98.0"
+components = ["rustfmt"]
+profile = "minimal"
+targets = ["wasm32-unknown-unknown"]

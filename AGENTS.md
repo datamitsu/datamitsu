@@ -272,9 +272,15 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
   `UNKNOWN_COLUMN_UNITS`. `src/contract.rs` checks every parser against its
   `SAMPLES` and recorded fixtures, and requires its `POSITIONS` row.
 - A change under `parsers/` rebuilds `internal/parsermanager/testdata/echo.wasm`
-  and regenerates `website/docs/reference/parser-catalog.md` in the same change
+  and regenerates `website/docs/reference/parser-catalog.md` in the same change,
+  both through `task build:parsers:fixture`
   (`internal/parsermanager/testdata/README.md`); the released module in
   `testdata/released` is never rebuilt.
+- The Rust release is `parsers/rust-toolchain.toml`: CI and the release install
+  it with `rustup toolchain install` and run cargo in `parsers/`, where rustup
+  finds the file. `parsers/embedded.lock` and the digest in
+  `parsers/embedded.Dockerfile` name the same release; a Rust upgrade changes
+  the three together.
 
 ## Reports
 

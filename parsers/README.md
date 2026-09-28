@@ -78,7 +78,16 @@ cargo test --manifest-path parsers/Cargo.toml
 # Build the WASM artifact and report its size
 task build:parsers
 # -> parsers/target/wasm32-unknown-unknown/release/datamitsu_parsers.wasm
+
+# Build it into the fixture the core's tests run (after any change here)
+task build:parsers:fixture
+# -> internal/parsermanager/testdata/echo.wasm
 ```
+
+`rust-toolchain.toml` pins the Rust release. rustup reads it from the directory
+cargo runs in, so run cargo from `parsers/` (the tasks do) to build with it;
+`embedded.lock` and `embedded.Dockerfile` name the same release for the
+container build.
 
 The release profile (workspace `parsers/Cargo.toml`) uses `opt-level = "s"`, LTO,
 strip, `codegen-units = 1`, and `panic = "abort"` to minimize artifact size.

@@ -27,10 +27,23 @@ tasks:
     desc: Build the embedded JS artifacts — config library and inspector — before any Go build
   build:parsers:
     cmds:
-      - cargo build --release --target wasm32-unknown-unknown --manifest-path parsers/Cargo.toml
-      - "echo \"wasm size: $(wc -c < parsers/target/wasm32-unknown-unknown/release/datamitsu_parsers.wasm) bytes\""
+      # From parsers/, where rustup finds rust-toolchain.toml.
+      - cargo build --release --target wasm32-unknown-unknown
+      - "echo \"wasm size: $(wc -c < target/wasm32-unknown-unknown/release/datamitsu_parsers.wasm) bytes\""
       - task: gen:parsers-doc
     desc: Build the Rust→WASM parser modules, report size, and regenerate the catalog doc
+    dir: parsers
+  build:parsers:fixture:
+    cmds:
+      # The remapped prefixes keep the home directory, the cargo home and the
+      # toolchain's install path out of a module that is committed.
+      - |
+        RUSTFLAGS="--remap-path-prefix=${CARGO_HOME:-$HOME/.cargo}=/cargo --remap-path-prefix=$(rustc --print sysroot)/lib/rustlib/src/rust=/rustc/$(rustc -vV | sed -n 's/^commit-hash: //p') --remap-path-prefix=$PWD=/src" \
+          cargo build --release --target wasm32-unknown-unknown
+      - cp target/wasm32-unknown-unknown/release/datamitsu_parsers.wasm ../internal/parsermanager/testdata/echo.wasm
+      - task: gen:parsers-doc
+    desc: Build the public parser module into internal/parsermanager/testdata/echo.wasm, the module the core's tests run, and regenerate the catalog doc
+    dir: parsers
   # ── Demo ──
   demo:capture:
     cmds:
@@ -82,7 +95,7 @@ tasks:
       - go run . devtools parsers list --wasm parsers/target/wasm32-unknown-unknown/release/datamitsu_parsers.wasm --json | ./node_modules/.bin/tsx packaging/parsers-catalog.ts > website/docs/reference/parser-catalog.md
       # Format the generated page with the repo's own tools so it matches what the
       # pre-commit hook expects (idempotent → no drift, no .prettierignore needed).
-      - pnpm dm fix ./website/docs/reference/parser-catalog.md
+      - pnpm dm fix --tools prettier,oxfmt ./website/docs/reference/parser-catalog.md
     desc: Regenerate the parser-catalog docs page from the built WASM module (run by build:parsers)
   gen:toolenv-doc:
     cmds:
