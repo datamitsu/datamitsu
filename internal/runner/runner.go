@@ -35,6 +35,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/parsermanager"
 	"github.com/datamitsu/datamitsu/internal/report"
 	"github.com/datamitsu/datamitsu/internal/report/render"
+	"github.com/datamitsu/datamitsu/internal/report/render/patch"
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 	"github.com/datamitsu/datamitsu/internal/term"
@@ -95,10 +96,9 @@ type planExecutor interface {
 	SetResultCallback(cb tooling.ResultCallback)
 	SetTaskStartCallback(cb tooling.TaskStartCallback)
 	SetFileProgressCallback(cb tooling.FileProgressCallback)
-	SetParser(parser tooling.DiagnosticParser)
-	SetParserModules(parsers config.MapOfParsers)
 	SetGate(gate tooling.Gate)
 	SetEnvObserver(observe func(environ []string))
+	SetStepCallback(cb tooling.StepCallback)
 	AssignTaskIDs(plan *tooling.ExecutionPlan)
 	Execute(ctx context.Context, plan *tooling.ExecutionPlan) ([]tooling.GroupExecutionResult, error)
 	TaskDir(task tooling.Task) string
@@ -243,6 +243,10 @@ func initSharedContext(
 	}
 	stdoutDocument := sc.explainLevel == "json" || slices.ContainsFunc(opts.Reports, render.Spec.Stdout)
 	sc.annotations = resolveAnnotations(opts.Annotations, sc.ci.Vendor, ui.Quiet(), stdoutDocument)
+	toolText = neutralizerOf(sc.annotations.mode, sc.ci.Vendor)
+	if commandPrefixes(sc.annotations.mode, sc.ci.Vendor) != nil {
+		logger.SetConsoleFilter(toolText)
+	}
 
 	// Get cwd
 	var err error
@@ -324,14 +328,16 @@ func initSharedContext(
 	// skipped (reported, not fatal) rather than letting EnsureTools hard-fail —
 	// and so they appear in --explain, which never reaches the install step.
 	planner.SetPlatformChecker(binMgr)
-	sc.executor = tooling.NewExecutor(sc.rootPath, false, sc.failFast, binMgr, sc.projectCache)
-	sc.executor.SetParserModules(sc.cfg.Parsers)
+	executor := tooling.NewExecutor(sc.rootPath, false, sc.failFast, binMgr, sc.projectCache)
+	executor.SetParserModules(sc.cfg.Parsers)
 	// Output is always parsed: by a declared parser, and otherwise by the
 	// fallback built into the binary. --no-parse only changes what a failure
 	// frame shows: what the run records must not depend on it.
 	sc.parserMgr = parsermanager.New(sc.cfg.Parsers)
 	sc.parseProblems = newParseProblems()
-	sc.executor.SetParser(newDiagnosticParser(sc.parserMgr, sc.parseProblems))
+	executor.SetParser(newDiagnosticParser(sc.parserMgr, sc.parseProblems))
+	executor.SetCapturePatches(slices.ContainsFunc(opts.Reports, func(s render.Spec) bool { return s.Format == patch.Name }))
+	sc.executor = executor
 	sc.ignoredFailOn = &toolSet{}
 	sc.startReport()
 	sc.executor.SetGate(sc.gate())
@@ -421,6 +427,11 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		sc.recordCoverage(plan)
 
 		output := formatExecutionPlan(plan, sc.rootPath, sc.cwdPath, operation, sc.explainLevel)
+		if guard := CommandGuard(sc.annotations.mode, sc.ci.Vendor); guard != nil && sc.explainLevel == "json" {
+			output = string(guard("json", []byte(output)))
+		} else {
+			output = toolText(output)
+		}
 		fmt.Println(output)
 		return nil
 	}
@@ -429,6 +440,9 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	// planned task with the identity a report and an event refer to it by.
 	sc.executor.AssignTaskIDs(plan)
 	opRecord := sc.beginReportOperation(operation, plan)
+	if operation == config.OpFix && len(plan.Groups) > 0 {
+		opRecord.ChangesNotObserved(report.ChangesNotExecuted, "")
+	}
 	opDuration := int64(0)
 	defer func() { opRecord.End(retErr == nil, opDuration) }()
 
@@ -621,7 +635,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		t := ensureTask()
 		progressMu.Unlock()
 
-		t.SetLabel(formatToolWithDir(toolName, relativeDir))
+		t.SetLabel(toolText(formatToolWithDir(toolName, relativeDir)))
 	})
 
 	// Set up file progress callback
@@ -648,7 +662,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		})
 
 		if dir != "" {
-			t.SetLabel(fmt.Sprintf("%s %s (%s) [%d/%d]", status, toolName, dir, fileIndex, totalFiles))
+			t.SetLabel(toolText(fmt.Sprintf("%s %s (%s) [%d/%d]", status, toolName, dir, fileIndex, totalFiles)))
 		} else {
 			t.SetLabel(fmt.Sprintf("%s %s [%d/%d]", status, toolName, fileIndex, totalFiles))
 		}
@@ -744,6 +758,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		}
 	}
 
+	sc.executor.SetStepCallback(sc.stepCallback(ctx, operation, opRecord))
 	execSpan := trace.Start(trace.CatExec, "executePlan")
 	results, execErr := sc.executor.Execute(ctx, plan)
 	execSpan.EndWith(trace.A("groups", len(plan.Groups)))
@@ -993,14 +1008,14 @@ func (sc *sharedContext) targetLine() string {
 		if len(names) > 3 {
 			shown = strings.Join(names[:3], " ") + fmt.Sprintf(" +%d more", len(names)-3)
 		}
-		return clr.Faint(fmt.Sprintf("┃ ◑ target: %d %s · %s · narrowed run",
-			len(names), noun, shown))
+		return clr.Faint(toolText(fmt.Sprintf("┃ ◑ target: %d %s · %s · narrowed run",
+			len(names), noun, shown)))
 	case tooling.SelectionSubtree:
 		dir := sc.selection.Dir
 		if rel, err := filepath.Rel(sc.rootPath, dir); err == nil {
 			dir = rel
 		}
-		return clr.Faint(fmt.Sprintf("┃ ◑ target: %s · narrowed run", dir))
+		return clr.Faint(toolText(fmt.Sprintf("┃ ◑ target: %s · narrowed run", dir)))
 	}
 	return ""
 }
@@ -1311,6 +1326,9 @@ type Options struct {
 	// Output is how the run shows its results: human, or agent for a program
 	// that reads them; empty is human.
 	Output string
+	// Baseline holds the fingerprints of findings the run neither reports nor
+	// gates on; nil matches none.
+	Baseline report.BaselineSet
 }
 
 // validate rejects unknown flag values. Rank() reads an unvalidated string
@@ -1515,9 +1533,9 @@ func printGroupedResults(toolGroups []toolExecutionGroup, nameWidth int, detaile
 		// Reserve a fixed-width slot for the duration so anything after it (the run
 		// count) stays in a stable column instead of floating with the duration
 		// width. Pad only when something follows, to avoid trailing whitespace.
-		views, hidden := groupViews(group)
+		views, hidden, baselined := groupViews(group)
 		durStr := ui.FormatDurationShort(group.wallTime)
-		if group.totalRuns > 1 || group.failedRuns > 0 || detailed || hidden.total() > 0 {
+		if group.totalRuns > 1 || group.failedRuns > 0 || detailed || hidden.total() > 0 || baselined > 0 {
 			durStr = fmt.Sprintf("%-*s", durationColWidth, durStr)
 		}
 		line := clr.Faint("┃ ") + status + " " + nameDisplay + strings.Repeat(" ", pad) + heatDuration(group.wallTime, maxMs, durStr)
@@ -1529,6 +1547,9 @@ func printGroupedResults(toolGroups []toolExecutionGroup, nameWidth int, detaile
 		}
 		if hidden.total() > 0 {
 			line += "  " + clr.Faint("· "+hidden.String())
+		}
+		if baselined > 0 {
+			line += "  " + clr.Faint(fmt.Sprintf("· %d baselined", baselined))
 		}
 		if detailed {
 			line += "  " + clr.Faint(toolDetail(group))
@@ -1549,15 +1570,17 @@ func printGroupedResults(toolGroups []toolExecutionGroup, nameWidth int, detaile
 }
 
 // groupViews is viewOf for every execution of a tool, and the findings they
-// leave out between them.
-func groupViews(group toolExecutionGroup) ([]taskView, levelCounts) {
+// leave out between them: below the threshold, and held by the baseline.
+func groupViews(group toolExecutionGroup) ([]taskView, levelCounts, int) {
 	views := make([]taskView, len(group.executions))
 	var hidden levelCounts
+	baselined := 0
 	for i, exec := range group.executions {
 		views[i] = viewOf(exec.result)
 		hidden.merge(views[i].hidden)
+		baselined += views[i].baselined
 	}
-	return views, hidden
+	return views, hidden, baselined
 }
 
 // heatFloorMs is the duration below which a tool is always shown "cool" (faint):
@@ -1621,6 +1644,9 @@ func formatDiagnosticRelativeTo(d diagnostic.Diagnostic, baseDir string) string 
 	line := fmt.Sprintf("%s %s %s", clr.Faint(loc), severityColor(d.Severity)(d.Severity.String()), d.Message)
 	if d.Code != "" {
 		line += " " + clr.Faint("["+d.Code+"]")
+	}
+	if d.Baselined {
+		line += " " + clr.Faint("(baselined)")
 	}
 	return line
 }
@@ -1767,10 +1793,10 @@ func printUnenforcedExecution(exec executionInstance, view taskView) {
 // printFrameContext prints the directories a frame's paths are relative to.
 func printFrameContext(exec executionInstance, border func(a ...any) string) {
 	if exec.relativeDir != "" {
-		fmt.Printf("  %s  %s %s\n", border("│"), clr.Faint("Dir:      "), exec.relativeDir)
+		fmt.Printf("  %s  %s %s\n", border("│"), clr.Faint("Dir:      "), toolText(exec.relativeDir))
 	}
 	if exec.result.WorkingDir != "" {
-		fmt.Printf("  %s  %s %s\n", border("│"), clr.Faint("Cwd:      "), exec.result.WorkingDir)
+		fmt.Printf("  %s  %s %s\n", border("│"), clr.Faint("Cwd:      "), toolText(exec.result.WorkingDir))
 	}
 }
 
@@ -1800,18 +1826,20 @@ func printFramed(border func(a ...any) string, label, text string) {
 			fmt.Printf("  %s\n", border("│"))
 			continue
 		}
-		fmt.Printf("  %s  %s\n", border("│"), line)
+		fmt.Printf("  %s  %s\n", border("│"), toolText(line))
 	}
 }
 
 // printHiddenLine closes a frame with what it left out: the findings below the
-// threshold, counted rather than dropped.
+// threshold and those the baseline held, counted rather than dropped.
 func printHiddenLine(view taskView, result tooling.ExecutionResult, border func(a ...any) string) {
-	if view.hidden.total() == 0 {
-		return
+	if view.hidden.total() > 0 {
+		fmt.Printf("  %s  %s\n", border("│"),
+			clr.Faint(fmt.Sprintf("+ %s hidden (failOn=%s)", view.hidden.String(), failOnOf(result))))
 	}
-	fmt.Printf("  %s  %s\n", border("│"),
-		clr.Faint(fmt.Sprintf("+ %s hidden (failOn=%s)", view.hidden.String(), failOnOf(result))))
+	if view.baselined > 0 {
+		fmt.Printf("  %s  %s\n", border("│"), clr.Faint(fmt.Sprintf("+ %d baselined", view.baselined)))
+	}
 }
 
 // gatingFindings counts the findings that failed a process that exited 0.
@@ -1869,14 +1897,21 @@ func printOperationFooter(toolGroups []toolExecutionGroup, wallClockTime int64, 
 		colored += clr.Faint(cancelText)
 	}
 	var hidden levelCounts
+	baselined := 0
 	for _, group := range toolGroups {
-		_, groupHidden := groupViews(group)
+		_, groupHidden, groupBaselined := groupViews(group)
 		hidden.merge(groupHidden)
+		baselined += groupBaselined
 	}
 	if hidden.total() > 0 {
 		hiddenText := fmt.Sprintf(" · %s hidden", hidden.String())
 		plain += hiddenText
 		colored += clr.Faint(hiddenText)
+	}
+	if baselined > 0 {
+		baselinedText := fmt.Sprintf(" · %d baselined", baselined)
+		plain += baselinedText
+		colored += clr.Faint(baselinedText)
 	}
 	if skipped > 0 {
 		skipText := fmt.Sprintf(" · %d skipped", skipped)

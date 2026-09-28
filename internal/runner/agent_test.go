@@ -67,7 +67,8 @@ func TestAgentInvocation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var b strings.Builder
 			var shown, hidden levelCounts
-			agentInvocation(&b, tool, tt.inv, &shown, &hidden)
+			baselined := 0
+			agentInvocation(&b, tool, tt.inv, &shown, &hidden, &baselined)
 			if b.String() != tt.want {
 				t.Errorf("records =\n%q\nwant\n%q", b.String(), tt.want)
 			}
@@ -111,7 +112,8 @@ func TestAgentTailIsMaskedBeforeItIsSplit(t *testing.T) {
 	report.MaskAll(&op, []string{secret})
 	var b strings.Builder
 	var shown, hidden levelCounts
-	agentInvocation(&b, op.Tools[0], op.Tools[0].Invocations[0], &shown, &hidden)
+	baselined := 0
+	agentInvocation(&b, op.Tools[0], op.Tools[0].Invocations[0], &shown, &hidden, &baselined)
 	if strings.Contains(b.String(), "half-of-it") || !strings.Contains(b.String(), "token: ***") {
 		t.Errorf("records =\n%s\nwant the secret masked whole", b.String())
 	}

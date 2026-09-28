@@ -62,9 +62,19 @@ func failedWithoutFindings(inv Invocation) bool {
 // Revise applies to a document read back the completeness rules an earlier
 // build did not know, from the invocation facts the document records: a tool
 // with a process that failed while its parser found nothing was complete
-// before failed-without-findings existed. A document this build wrote is left
-// as it is.
+// before failed-without-findings existed. It also names what an earlier
+// document leaves unsaid: its fingerprints are the first version's, and an
+// operation whose changes it does not state was not-recorded. A document this
+// build wrote is left as it is.
 func Revise(run *Run) {
+	if run.Fingerprint == "" {
+		run.Fingerprint = FingerprintVersion
+	}
+	for i := range run.Operations {
+		if op := &run.Operations[i]; !op.ChangesObserved && op.ChangesReason == "" {
+			op.ChangesReason = ChangesNotRecorded
+		}
+	}
 	for i := range run.Operations {
 		for j := range run.Operations[i].Tools {
 			tr := &run.Operations[i].Tools[j]

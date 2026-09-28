@@ -2,4 +2,4 @@ exit code: 2
 ===STDOUT===
 
 ===STDERR===
-error: invalid DATAMITSU_ANNOTATIONS value: "on" (must be auto, github, off)
+error: invalid DATAMITSU_ANNOTATIONS value: "on" (must be auto, github, azure, teamcity, off)

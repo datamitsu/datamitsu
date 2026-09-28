@@ -1,0 +1,23 @@
+{
+  "schema": "datamitsu.baseline/1",
+  "fingerprint": "dmfp1",
+  "createdAt": "<TS>",
+  "datamitsu": {
+    "version": "<VERSION>",
+    "configuration": "datamitsu.config"
+  },
+  "source": {
+    "startedAt": "<TS>",
+    "ci": {
+      "sha": "",
+      "ref": ""
+    },
+    "complete": false,
+    "incomplete": [
+      "no-extraction"
+    ]
+  },
+  "fingerprints": [
+    "fcff1b2e7127660b2c50aaea21d7a741b3ed1cd70fa9ce70ce7e705fcb183f38"
+  ]
+}

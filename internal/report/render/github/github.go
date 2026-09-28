@@ -54,9 +54,15 @@ type Annotation struct {
 	Source, Code  string
 	Message       string
 	Fingerprint   string
-
-	// severity is the finding's level, which a duplicate is weighed by.
-	severity string
+	// Tool is the tool that reported the finding, and RuleURL its rule's
+	// documentation when the tool names one.
+	Tool, RuleURL string
+	// Severity is the finding's level, which a duplicate is weighed by and a
+	// format with more types than GitHub's maps.
+	Severity string
+	// Synthetic marks the finding that stands for a tool that failed without
+	// one.
+	Synthetic bool
 }
 
 // Title is how GitHub heads the annotation: "<source>(<code>)", or the source
@@ -134,7 +140,7 @@ func Candidates(run *report.Run) []Annotation {
 			return
 		}
 		if i, seen := at[f.Fingerprint]; seen {
-			if levelRank(f.Severity) < levelRank(out[i].severity) {
+			if levelRank(f.Severity) < levelRank(out[i].Severity) {
 				out[i] = a
 			}
 			return
@@ -172,7 +178,10 @@ func fromFinding(f report.Finding) Annotation {
 		Code:        f.Code,
 		Message:     f.Message,
 		Fingerprint: f.Fingerprint,
-		severity:    f.Severity,
+		Tool:        f.Tool,
+		RuleURL:     f.RuleURL,
+		Severity:    f.Severity,
+		Synthetic:   f.Kind == "synthetic",
 	}
 	if a.Source == "" {
 		a.Source = f.Tool
@@ -240,9 +249,9 @@ func Select(candidates []Annotation, touched map[string]bool) Selection {
 		buckets[a.Level] = append(buckets[a.Level], a)
 	}
 	sel := Selection{Candidates: len(candidates)}
-	errors := order(buckets[LevelError], touched)
-	warnings := order(buckets[LevelWarning], touched)
-	notices := order(buckets[LevelNotice], touched)
+	errors := Order(buckets[LevelError], touched)
+	warnings := Order(buckets[LevelWarning], touched)
+	notices := Order(buckets[LevelNotice], touched)
 	noticeBudget := Budget
 	if len(errors) > Budget || len(warnings) > Budget || len(notices) > Budget {
 		noticeBudget--
@@ -258,7 +267,11 @@ func Select(candidates []Annotation, touched map[string]bool) Selection {
 	return sel
 }
 
-func order(list []Annotation, touched map[string]bool) []Annotation {
+// Order is the order a budget takes list in: the findings of touched files
+// first, then one finding of every other file before a second of any, each
+// file's by line, column, source, code and fingerprint, then the findings
+// without a file.
+func Order(list []Annotation, touched map[string]bool) []Annotation {
 	byFile := map[string][]Annotation{}
 	var noFile []Annotation
 	for _, a := range list {
@@ -281,14 +294,14 @@ func order(list []Annotation, touched map[string]bool) []Annotation {
 	slices.Sort(far)
 	sort.Slice(noFile, func(i, j int) bool { return less(noFile[i], noFile[j]) })
 	out := make([]Annotation, 0, len(list))
-	out = append(out, roundRobin(near, byFile)...)
-	out = append(out, roundRobin(far, byFile)...)
+	out = append(out, RoundRobin(near, byFile)...)
+	out = append(out, RoundRobin(far, byFile)...)
 	return append(out, noFile...)
 }
 
-// roundRobin takes the first finding of every file, then the second of every
+// RoundRobin takes the first finding of every file, then the second of every
 // file that has one, and so on.
-func roundRobin(files []string, byFile map[string][]Annotation) []Annotation {
+func RoundRobin(files []string, byFile map[string][]Annotation) []Annotation {
 	var out []Annotation
 	for round := 0; ; round++ {
 		took := false

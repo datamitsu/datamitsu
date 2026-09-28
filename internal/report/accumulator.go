@@ -11,6 +11,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/diagnostic"
+	"github.com/datamitsu/datamitsu/internal/gitutil"
 	"github.com/datamitsu/datamitsu/internal/parsermanager"
 	"github.com/datamitsu/datamitsu/internal/textpos"
 	"github.com/datamitsu/datamitsu/internal/tooling"
@@ -64,9 +65,21 @@ type OperationRecord struct {
 	// arrived; flushed marks the tools whose findings were handed out.
 	pending map[string]int
 	flushed map[string]bool
+	// steps is the step each task ran in, for an operation that records
+	// them; changes what the observation of its changes found.
+	steps   map[string]int
+	changes changeLog
 
 	success  bool
 	duration int64
+}
+
+// changeLog is what the observation of an operation's changes recorded: the
+// files each step changed, and why observation never began or stopped.
+type changeLog struct {
+	observed       bool
+	reason, detail string
+	byStep         map[int][]gitutil.Change
 }
 
 // BeginOperation records that an operation started with plan, whose task IDs
@@ -169,6 +182,57 @@ func (o *OperationRecord) Stopped(c Cancel) {
 	o.stopped = append(o.stopped, c)
 }
 
+// Step records that the tasks named by taskIDs ran together as step of the
+// operation, after every lower step.
+func (o *OperationRecord) Step(step int, taskIDs []string) {
+	if o == nil {
+		return
+	}
+	o.acc.mu.Lock()
+	defer o.acc.mu.Unlock()
+	if o.steps == nil {
+		o.steps = map[string]int{}
+	}
+	for _, id := range taskIDs {
+		o.steps[id] = step
+	}
+}
+
+// ObserveChanges records that the operation's changes are observed from its
+// first step on: the working tree was snapshotted before it.
+func (o *OperationRecord) ObserveChanges() {
+	if o == nil {
+		return
+	}
+	o.acc.mu.Lock()
+	defer o.acc.mu.Unlock()
+	o.changes.observed, o.changes.reason, o.changes.detail = true, "", ""
+}
+
+// Changed records the files the tasks of step changed.
+func (o *OperationRecord) Changed(step int, changes []gitutil.Change) {
+	if o == nil || len(changes) == 0 {
+		return
+	}
+	o.acc.mu.Lock()
+	defer o.acc.mu.Unlock()
+	if o.changes.byStep == nil {
+		o.changes.byStep = map[int][]gitutil.Change{}
+	}
+	o.changes.byStep[step] = append(o.changes.byStep[step], changes...)
+}
+
+// ChangesNotObserved records why the operation's changes are not observed —
+// never were, or no longer are; what was observed before is kept.
+func (o *OperationRecord) ChangesNotObserved(reason, detail string) {
+	if o == nil {
+		return
+	}
+	o.acc.mu.Lock()
+	defer o.acc.mu.Unlock()
+	o.changes.observed, o.changes.reason, o.changes.detail = false, reason, detail
+}
+
 // Operation is the operation as a report lists it, built from what was
 // recorded so far, for a consumer that shows an operation as soon as its
 // tasks have ended; its success and duration are those End recorded, if it
@@ -228,15 +292,16 @@ func (a *Accumulator) Build(info BuildInfo) *Run {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	run := &Run{
-		Schema:     SchemaVersion,
-		Datamitsu:  Producer{Version: info.Version, Configuration: info.Configuration},
-		StartedAt:  info.StartedAt.UTC(),
-		EndedAt:    info.EndedAt.UTC(),
-		Selection:  info.Selection,
-		FailFast:   info.FailFast,
-		Operations: make([]Operation, 0, len(a.ops)),
-		Exports:    append([]Export{}, info.Exports...),
-		CI:         info.CI,
+		Schema:      SchemaVersion,
+		Fingerprint: FingerprintVersion,
+		Datamitsu:   Producer{Version: info.Version, Configuration: info.Configuration},
+		StartedAt:   info.StartedAt.UTC(),
+		EndedAt:     info.EndedAt.UTC(),
+		Selection:   info.Selection,
+		FailFast:    info.FailFast,
+		Operations:  make([]Operation, 0, len(a.ops)),
+		Exports:     append([]Export{}, info.Exports...),
+		CI:          info.CI,
 	}
 	names := make([]string, 0, len(a.ops))
 	for _, op := range a.ops {
@@ -259,6 +324,7 @@ func (a *Accumulator) buildOperation(o *OperationRecord) Operation {
 		Tools:     []ToolRun{},
 	}
 	if o.plan == nil {
+		recordChanges(o, &op)
 		return op
 	}
 	for _, s := range o.plan.Skipped {
@@ -298,7 +364,64 @@ func (a *Accumulator) buildOperation(o *OperationRecord) Operation {
 		op.Tools = append(op.Tools, *tr)
 	}
 	sort.Slice(op.Tools, func(i, j int) bool { return op.Tools[i].Name < op.Tools[j].Name })
+	recordChanges(o, &op)
 	return op
+}
+
+// recordChanges fills in what the operation observed of its changes, each
+// changed file attributed to the invocation of the step that changed it whose
+// files hold it — the file sets of one step are disjoint — and to the
+// operation when none does.
+func recordChanges(o *OperationRecord, op *Operation) {
+	log := o.changes
+	op.ChangesObserved, op.ChangesReason, op.ChangesDetail = log.observed, log.reason, log.detail
+	if !log.observed && log.reason == "" {
+		op.ChangesReason = ChangesNoFixTask
+		if !o.ran {
+			op.ChangesReason = ChangesNotRun
+		}
+	}
+	if log.observed || len(log.byStep) > 0 {
+		scope := ObservedScope
+		op.ChangesScope = &scope
+	}
+	for ti := range op.Tools {
+		for ii := range op.Tools[ti].Invocations {
+			inv := &op.Tools[ti].Invocations[ii]
+			inv.Step = o.steps[inv.TaskID]
+		}
+	}
+	steps := make([]int, 0, len(log.byStep))
+	for step := range log.byStep {
+		steps = append(steps, step)
+	}
+	sort.Ints(steps)
+	for _, step := range steps {
+		for _, c := range log.byStep[step] {
+			if !attributeChange(op, step, c) {
+				op.Changes = append(op.Changes, Change{Path: c.Path, Kind: c.Kind, Step: step})
+			}
+		}
+	}
+}
+
+func attributeChange(op *Operation, step int, c gitutil.Change) bool {
+	for ti := range op.Tools {
+		for ii := range op.Tools[ti].Invocations {
+			inv := &op.Tools[ti].Invocations[ii]
+			started := inv.State == string(tooling.ProcessRan) || inv.State == string(tooling.ProcessCancelled)
+			if inv.Step != step || !started {
+				continue
+			}
+			for _, f := range inv.Files {
+				if f.Path == c.Path {
+					inv.Changes = append(inv.Changes, Change{Path: c.Path, Kind: c.Kind, Patch: f.Patch != "", Step: step})
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 // buildTool is everything one tool did in an operation: an invocation per
@@ -530,7 +653,7 @@ func standInState(result *tooling.ExecutionResult, rest []tooling.FileResult) st
 }
 
 func (a *Accumulator) fileResult(fr tooling.FileResult) FileResult {
-	return FileResult{Path: a.rel(fr.File), State: string(fr.State), Success: fr.Success, ExitCode: fr.ExitCode}
+	return FileResult{Path: a.rel(fr.File), State: string(fr.State), Success: fr.Success, ExitCode: fr.ExitCode, Patch: fr.Patch}
 }
 
 func (a *Accumulator) finding(tool string, d diagnostic.Diagnostic, tr *ToolRun) Finding {
@@ -543,6 +666,7 @@ func (a *Accumulator) finding(tool string, d diagnostic.Diagnostic, tr *ToolRun)
 		Severity:         d.Severity.String(),
 		Reported:         d.Reported,
 		Gates:            d.Gates,
+		Baselined:        d.Baselined,
 		Kind:             kindIssue,
 		Message:          string(tooling.StripCSI([]byte(d.Message))),
 		Provenance:       provenanceParser,

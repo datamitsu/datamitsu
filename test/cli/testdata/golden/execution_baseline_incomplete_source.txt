@@ -1,0 +1,29 @@
+exit code: 0
+===STDOUT===
+{
+  "schema": "datamitsu.baseline/1",
+  "fingerprint": "dmfp1",
+  "createdAt": "<TS>",
+  "datamitsu": {
+    "version": "<VERSION>",
+    "configuration": "datamitsu.config"
+  },
+  "source": {
+    "startedAt": "<TS>",
+    "ci": {
+      "sha": "",
+      "ref": ""
+    },
+    "complete": false,
+    "incomplete": [
+      "narrowed-selection",
+      "no-extraction"
+    ]
+  },
+  "fingerprints": [
+    "fcff1b2e7127660b2c50aaea21d7a741b3ed1cd70fa9ce70ce7e705fcb183f38"
+  ]
+}
+
+===STDERR===
+WARN report baseline: the run of out/run.json is incomplete (narrowed-selection, no-extraction): the baseline holds only the fingerprints it found, and suppresses no finding it missed

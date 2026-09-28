@@ -17,9 +17,11 @@ import (
 	"github.com/datamitsu/datamitsu/internal/report/render/checkstyle"
 	"github.com/datamitsu/datamitsu/internal/report/render/codequality"
 	"github.com/datamitsu/datamitsu/internal/report/render/common"
+	"github.com/datamitsu/datamitsu/internal/report/render/history"
 	"github.com/datamitsu/datamitsu/internal/report/render/json"
 	"github.com/datamitsu/datamitsu/internal/report/render/junit"
 	"github.com/datamitsu/datamitsu/internal/report/render/markdown"
+	"github.com/datamitsu/datamitsu/internal/report/render/patch"
 	"github.com/datamitsu/datamitsu/internal/report/render/rdjsonl"
 	"github.com/datamitsu/datamitsu/internal/report/render/sarif"
 )
@@ -45,6 +47,8 @@ var renderers = []Renderer{
 	codequality.Renderer{},
 	checkstyle.Renderer{},
 	rdjsonl.Renderer{},
+	history.Renderer{},
+	patch.Renderer{},
 }
 
 // Lookup finds a format by the name --report spells it with.
@@ -69,11 +73,11 @@ func Names() []string {
 
 // Listing returns the formats among specs that list findings: those a run
 // narrowed at plan time may not write without --allow-partial, where a format
-// that omits incomplete tools is written anyway.
+// that omits incomplete tools, or lists no finding, is written anyway.
 func Listing(specs []Spec) []string {
 	var out []string
 	for _, s := range specs {
-		if r, ok := Lookup(s.Format); ok && !r.OmitsIncompleteTools() {
+		if r, ok := Lookup(s.Format); ok && !r.OmitsIncompleteTools() && !listsNoFindings(r) {
 			out = append(out, s.Format)
 		}
 	}

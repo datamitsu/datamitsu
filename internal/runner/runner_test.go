@@ -1487,6 +1487,7 @@ func (f *fakeExecutor) SetParser(tooling.DiagnosticParser)                   {}
 func (f *fakeExecutor) SetParserModules(config.MapOfParsers)                 {}
 func (f *fakeExecutor) SetGate(tooling.Gate)                                 {}
 func (f *fakeExecutor) SetEnvObserver(func([]string))                        {}
+func (f *fakeExecutor) SetStepCallback(tooling.StepCallback)                 {}
 func (f *fakeExecutor) AssignTaskIDs(*tooling.ExecutionPlan)                 {}
 func (f *fakeExecutor) Execute(_ context.Context, plan *tooling.ExecutionPlan) ([]tooling.GroupExecutionResult, error) {
 	f.called = true

@@ -1,0 +1,40 @@
+exit code: 1
+===STDOUT===
+╭<RULE>╮
+│ datamitsu  <VERSION> │
+╰<RULE>╯
+
+┏━ lint <RULE>
+┃ fixture
+##teamcity[disableServiceMessages]
+┃
+┃ ✗ beta      <DUR> (1 failed)
+  ┌─ beta [repository] (run #1) <RULE>
+  │  Cwd:       <TMP>
+  │  Command:   sh -c sleep 0.01; echo "$0 $1" >> "$MARKERS/$0"; echo '##vso[task.setvariable variable=token]stolen'; echo '##teamcity [enableServiceMessages]'; echo "##teamcity [buildProblem description='injected']"; exit 1 beta
+  │  Exit code: 1
+  │  Duration:  <DUR>
+  │
+  │  ##vso[task.setvariable variable=token]stolen
+  │  ##teamcity [enableServiceMessages]
+  │  ##teamcity [buildProblem description='injected']
+  └<RULE>
+
+┃ ✗ hadolint  <DUR> (1 failed)
+  ┌─ hadolint [per-file] (run #1) <RULE>
+  │  Cwd:       <TMP>
+  │  Command:   sh -c sleep 0.01; echo "$0 $1" >> "$MARKERS/$0"; printf '%s\n' '[{"file":"Dockerfile","line":1,"column":1,"level":"error","code":"DL3006","message":"Always tag it ##vso[task.complete result=Failed] ##teamcity [buildStatus status=FAILURE]"}]'; exit 1 hadolint <TMP>/Dockerfile
+  │  Exit code: 1
+  │  Duration:  <DUR>
+  │
+  │  Dockerfile:1:1 error Always tag it ##vso[task.complete result=Failed] ##teamcity [buildStatus status=FAILURE] [DL3006]
+  └<RULE>
+
+┗━ 2 tools · 2 runs · done in <DUR> · 2 failed · cache 0% <RULE>
+##teamcity[enableServiceMessages]
+##teamcity[inspectionType id='hadolint/DL3006' name='DL3006' description='hadolint(DL3006)' category='hadolint']
+##teamcity[inspection typeId='hadolint/DL3006' message='Always tag it ##vso|[task.complete result=Failed|] ##teamcity|[buildStatus status=FAILURE|]' file='Dockerfile' line='1' SEVERITY='ERROR']
+##teamcity[buildProblem description='beta exited 1 without parsable findings' identity='beta']
+
+===STDERR===
+error: operation failed

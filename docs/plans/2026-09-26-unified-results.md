@@ -212,7 +212,7 @@ marked imprecise and omitted by renderers.
 | 7   | `completed/2026-09-26-github-and-agent-output.md`     | `internal/cienv`, D16, D2, R10, step summary, Markdown, `--output agent`                                                                                      | 6, 4                                |
 | 8   | `completed/2026-09-26-interchange-formats.md`         | SARIF first, then JUnit (R6), GitLab CQ, Checkstyle, rdjsonl, `report render`                                                                                 | 6                                   |
 | 9   | `completed/2026-09-26-parser-formats-and-fallback.md` | D8, ABI v2, format keys, embedded module, R12                                                                                                                 | 3, 5; build infrastructure any time |
-| 10  | `2026-09-26-run-analytics.md`                         | `history`, `report diff`, `report baseline`, `--baseline`, R13 (`Changes`, `patch`), Azure and TeamCity                                                       | 6, 7                                |
+| 10  | `completed/2026-09-26-run-analytics.md`               | `history`, `report diff`, `report baseline`, `--baseline`, R13 (`Changes`, `patch`), Azure and TeamCity                                                       | 6, 7                                |
 
 ```mermaid
 flowchart LR

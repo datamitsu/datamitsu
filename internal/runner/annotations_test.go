@@ -19,31 +19,59 @@ func TestResolveAnnotations(t *testing.T) {
 		quiet, stdout bool
 		mode, why     string
 		recorded      bool
+		export        string
 	}{
-		{name: "auto on GitHub", requested: AnnotationsAuto, vendor: cienv.VendorGitHub, mode: AnnotationsGitHub, recorded: true},
-		{name: "auto elsewhere", requested: AnnotationsAuto, vendor: cienv.VendorGitLab, mode: AnnotationsOff, why: "not a GitHub Actions job"},
-		{name: "auto on Gitea", requested: AnnotationsAuto, vendor: cienv.VendorGitea, mode: AnnotationsOff, why: "not a GitHub Actions job"},
+		{name: "auto on GitHub", requested: AnnotationsAuto, vendor: cienv.VendorGitHub, mode: AnnotationsGitHub, recorded: true, export: "github-annotations"},
+		{name: "auto on Azure", requested: AnnotationsAuto, vendor: cienv.VendorAzure, mode: AnnotationsAzure, recorded: true, export: "azure-annotations"},
+		{name: "auto on TeamCity", requested: AnnotationsAuto, vendor: cienv.VendorTeamCity, mode: AnnotationsTeamCity, recorded: true, export: "teamcity-annotations"},
+		{name: "auto elsewhere", requested: AnnotationsAuto, vendor: cienv.VendorGitLab, mode: AnnotationsOff, why: "not a CI job that reads annotations"},
+		{name: "auto on Gitea", requested: AnnotationsAuto, vendor: cienv.VendorGitea, mode: AnnotationsOff, why: "not a CI job that reads annotations"},
 		{
 			name: "auto beside a document", requested: AnnotationsAuto, vendor: cienv.VendorGitHub, quiet: true, stdout: true,
-			mode: AnnotationsOff, why: "stdout carries a document", recorded: true,
+			mode: AnnotationsOff, why: "stdout carries a document", recorded: true, export: "github-annotations",
 		},
 		{
-			name: "auto beside a stream", requested: AnnotationsAuto, vendor: cienv.VendorGitHub, quiet: true,
-			mode: AnnotationsOff, why: "the run writes a JSON-L event stream", recorded: true,
+			name: "auto beside a stream", requested: AnnotationsAuto, vendor: cienv.VendorTeamCity, quiet: true,
+			mode: AnnotationsOff, why: "the run writes a JSON-L event stream", recorded: true, export: "teamcity-annotations",
 		},
-		{name: "github anywhere", requested: AnnotationsGitHub, quiet: true, mode: AnnotationsGitHub, recorded: true},
-		{name: "off on GitHub", requested: AnnotationsOff, vendor: cienv.VendorGitHub, mode: AnnotationsOff, why: "--annotations off", recorded: true},
+		{name: "github anywhere", requested: AnnotationsGitHub, quiet: true, mode: AnnotationsGitHub, recorded: true, export: "github-annotations"},
+		{name: "azure on GitHub", requested: AnnotationsAzure, vendor: cienv.VendorGitHub, mode: AnnotationsAzure, recorded: true, export: "azure-annotations"},
+		{name: "off on GitHub", requested: AnnotationsOff, vendor: cienv.VendorGitHub, mode: AnnotationsOff, why: "--annotations off", recorded: true, export: "github-annotations"},
 		{name: "off elsewhere", requested: AnnotationsOff, mode: AnnotationsOff, why: "--annotations off"},
-		{name: "a continuation asks for none", vendor: cienv.VendorGitHub, mode: AnnotationsOff},
+		{name: "a continuation asks for none", vendor: cienv.VendorGitHub, mode: AnnotationsOff, export: "github-annotations"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			st := resolveAnnotations(tt.requested, tt.vendor, tt.quiet, tt.stdout)
-			if st.mode != tt.mode || st.why != tt.why || st.recorded != tt.recorded {
-				t.Errorf("resolveAnnotations = mode %q, why %q, recorded %v; want %q, %q, %v",
-					st.mode, st.why, st.recorded, tt.mode, tt.why, tt.recorded)
+			if st.mode != tt.mode || st.why != tt.why || st.recorded != tt.recorded || st.export != tt.export {
+				t.Errorf("resolveAnnotations = mode %q, why %q, recorded %v, export %q; want %q, %q, %v, %q",
+					st.mode, st.why, st.recorded, st.export, tt.mode, tt.why, tt.recorded, tt.export)
 			}
 		})
+	}
+}
+
+// TestNeutralizerOf: a CI that reads commands anywhere in a line gets them
+// broken in tool text, whether the run prints its annotations or not.
+func TestNeutralizerOf(t *testing.T) {
+	const line = "x ##vso[task.setvariable variable=a]1 ##teamcity[buildProblem description='b'] ::error::c"
+	const azureBroken = "x ##vso [task.setvariable variable=a]1 ##teamcity[buildProblem description='b'] ::error::c"
+	const teamcityBroken = "x ##vso[task.setvariable variable=a]1 ##teamcity [buildProblem description='b'] ::error::c"
+	tests := []struct {
+		mode, vendor, want string
+	}{
+		{AnnotationsAzure, "", azureBroken},
+		{AnnotationsOff, cienv.VendorAzure, azureBroken},
+		{AnnotationsTeamCity, "", teamcityBroken},
+		{AnnotationsOff, cienv.VendorTeamCity, teamcityBroken},
+		{AnnotationsAzure, cienv.VendorTeamCity, "x ##vso [task.setvariable variable=a]1 ##teamcity [buildProblem description='b'] ::error::c"},
+		{AnnotationsGitHub, cienv.VendorGitHub, line},
+		{AnnotationsOff, "", line},
+	}
+	for _, tt := range tests {
+		if got := neutralizerOf(tt.mode, tt.vendor)(line); got != tt.want {
+			t.Errorf("%s under %q: %q, want %q", tt.mode, tt.vendor, got, tt.want)
+		}
 	}
 }
 
@@ -174,4 +202,26 @@ func TestTouchedFiles(t *testing.T) {
 			t.Errorf("why = %q", why)
 		}
 	})
+}
+
+// TestAzureTouchedFiles: an Azure pull request build diffs HEAD against its
+// merge base with the target branch's remote-tracking ref.
+func TestAzureTouchedFiles(t *testing.T) {
+	repo, _, _ := fixtureRepo(t)
+	ctx := context.Background()
+	cmd := exec.Command("git", "update-ref", "refs/remotes/origin/main", "HEAD^1")
+	cmd.Dir = repo
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("update-ref: %v\n%s", err, out)
+	}
+	touched, why := AzureTouchedFiles(ctx, repo, cienv.Info{BaseRef: "refs/heads/main"})
+	if why != "" || len(touched) != 1 || !touched["b.txt"] {
+		t.Errorf("touched = %v, why %q; want only the branch's b.txt", touched, why)
+	}
+	if _, why := AzureTouchedFiles(ctx, repo, cienv.Info{BaseRef: "refs/heads/release"}); why != "origin/release not fetched" {
+		t.Errorf("why = %q", why)
+	}
+	if _, why := AzureTouchedFiles(ctx, repo, cienv.Info{}); why != "not a pull request build" {
+		t.Errorf("why = %q", why)
+	}
 }

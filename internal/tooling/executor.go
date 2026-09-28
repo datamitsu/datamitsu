@@ -90,6 +90,9 @@ type Executor struct {
 	parserModules        config.MapOfParsers  // the declared parser modules, for the verdict identity
 	gate                 Gate                 // Optional: fails a process on its parsed findings
 	envObserver          func(environ []string)
+	stepCallback         StepCallback
+	steps                int
+	capturePatches       bool
 	limits               ParseLimits
 
 	// cmdInfos memoizes command resolution for the lifetime of one Execute; it is
@@ -150,6 +153,14 @@ type TaskStartCallback func(taskID, toolName, relativeDir string)
 // the task taskID is processed.
 type FileProgressCallback func(taskID, toolName string, fileIndex, totalFiles int, success bool)
 
+// StepCallback is called after each step of an execution: the tasks of one
+// parallel group, which ran together — alone, or at once over disjoint file
+// sets — and after every earlier step had ended. step counts the steps of one
+// Execute from 1. It is called after the step's result callbacks, also when a
+// task of the step failed or was cancelled; a step the run never reached is
+// not reported.
+type StepCallback func(step int, tasks []Task)
+
 // NewExecutor creates a new tool executor
 func NewExecutor(
 	rootPath string,
@@ -175,6 +186,19 @@ func (e *Executor) SetResultCallback(callback ResultCallback) {
 // SetTaskStartCallback sets a callback to be called when each task starts
 func (e *Executor) SetTaskStartCallback(callback TaskStartCallback) {
 	e.taskStartCallback = callback
+}
+
+// SetStepCallback sets the callback called after each step of an execution.
+func (e *Executor) SetStepCallback(callback StepCallback) {
+	e.stepCallback = callback
+}
+
+// SetCapturePatches makes a formatter that writes its result on stdout keep a
+// unified diff of each file it changed (FileResult.Patch). It costs a diff per
+// changed file and holds source text, so only a run that writes the patches
+// asks for it.
+func (e *Executor) SetCapturePatches(capture bool) {
+	e.capturePatches = capture
 }
 
 // SetFileProgressCallback sets a callback to be called after each file is processed
@@ -241,6 +265,7 @@ func (e *Executor) Execute(ctx context.Context, plan *ExecutionPlan) ([]GroupExe
 	// re-resolved, and only within one run is the answer constant.
 	e.cmdInfos.Store(newCommandInfoMemo())
 	defer e.cmdInfos.Store(nil)
+	e.steps = 0
 
 	e.assignTaskIDs(plan)
 
@@ -338,6 +363,14 @@ func (e *Executor) TaskDir(task Task) string {
 	return e.getRelativeDir(e.getWorkingDir(task))
 }
 
+// endStep reports that the tasks of one parallel group have ended.
+func (e *Executor) endStep(tasks []Task) {
+	e.steps++
+	if e.stepCallback != nil {
+		e.stepCallback(e.steps, tasks)
+	}
+}
+
 // assignTaskIDs names every task of plan "<tool>:<dir>:<seq>", seq counting the
 // plan's tasks from 1 in plan order. The names are written into plan itself,
 // so a caller can tell which planned task a result, an event or a stopped task
@@ -397,6 +430,7 @@ func (e *Executor) executeGroup(ctx context.Context, group TaskGroup, failFast f
 			if e.resultCallback != nil {
 				e.resultCallback(taskResult)
 			}
+			e.endStep(parallelTasks)
 
 			if !taskResult.Success {
 				result.Success = false
@@ -418,6 +452,7 @@ func (e *Executor) executeGroup(ctx context.Context, group TaskGroup, failFast f
 					e.resultCallback(tr)
 				}
 			}
+			e.endStep(parallelTasks)
 
 			for _, tr := range taskResults {
 				if !tr.Success {
@@ -1381,6 +1416,9 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 					err = fmtErr
 				} else {
 					proc.edits = edits
+					if e.capturePatches && len(edits) > 0 {
+						proc.patch = textdiff.Unified(e.patchPath(file), string(original), string(stdoutBytes))
+					}
 				}
 			}
 		}
@@ -2219,6 +2257,16 @@ func applyStdoutFormat(file string, original, candidate []byte) ([]textdiff.Edit
 		return nil, fmt.Errorf("write formatted content to %s: %w", file, err)
 	}
 	return edits, nil
+}
+
+// patchPath is the name a patch gives file: relative to the repository root
+// with "/", or absolute outside it.
+func (e *Executor) patchPath(file string) string {
+	rel, err := filepath.Rel(e.rootPath, file)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return filepath.ToSlash(file)
+	}
+	return filepath.ToSlash(rel)
 }
 
 // writeFileAtomic writes data to a temp file in path's directory then renames it

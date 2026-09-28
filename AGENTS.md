@@ -354,9 +354,39 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
   declared one or the embedded fallback — is never complete, nor one with a
   process that exited non-zero while the parser that recognized its output found
   nothing in it (`failed-without-findings`). A report that lists findings (every renderer whose
-  `OmitsIncompleteTools` is false) is refused with exit 2 for a run narrowed at
-  plan time unless `--allow-partial`, and any report turns fail-fast off; an
-  explicit `--fail-fast=true` or `DATAMITSU_FAIL_FAST=true` with a report exits 2.
+  `OmitsIncompleteTools` is false and that is not `render.NoFindings`) is refused
+  with exit 2 for a run narrowed at plan time unless `--allow-partial`. Every
+  format that lists findings — `render.ListsFindings`, SARIF included — turns
+  fail-fast off, and an explicit `--fail-fast=true` or
+  `DATAMITSU_FAIL_FAST=true` beside one exits 2; a `NoFindings` format
+  (`history`, `patch`) does neither.
+- A baseline (`report.Baseline`, `datamitsu.baseline/1`, loaded by
+  `report.LoadBaseline` in `cmd` before anything runs) is matched in the gate
+  hook, after `report.Annotator` and before `tooling.ThresholdGate`:
+  `Diagnostic.Baselined` makes the threshold neither report nor gate the
+  finding. `report.BaselineMatcher` matches by count, not by the hook's
+  per-process fingerprint: at most as many distinct findings of a rule on a
+  line per operation as the baseline holds ordinals of. It never
+  touches an exit code. `internal/report/diff` compares two own reports by
+  fingerprint per tool; a disappearance is `fixed` only where the second run's
+  tool is complete over the whole repository.
+- A fix operation's changes (R13) come from `internal/gitutil` snapshots
+  (`git --no-optional-locks status --porcelain=v2 -z`, XXH3 of every dirty
+  file) taken by `runner.stepCallback`: before the first step and after every
+  step `Executor.SetStepCallback` reports — a step is one parallel group,
+  whose tasks' file sets are disjoint — with `context.WithoutCancel`, so a
+  cancelled step is observed too. `OperationRecord.Step/Changed` feed the
+  report, which attributes a change to the step's invocation whose files hold
+  it (`Invocation.Changes`) or to the operation. A snapshot that fails leaves
+  `changesObserved: false` with a reason; never write an empty list for
+  "unobserved". Patches exist only when `--report patch` sets
+  `Executor.SetCapturePatches`: the stdout-formatter path diffs while both
+  versions exist (`textdiff.Unified`), because `textdiff.Edit` keeps only the
+  new text.
+- `history` is `render.Appending`: `Target` opens its file with `O_APPEND` and
+  writes the run's line in one write, never replacing the file. A line
+  (`report.HistoryLine`, `datamitsu.history/1`) holds counts and durations
+  only — no finding, no path, none of a selection's paths.
 - Under `--log-format jsonl` the runner emits one flat `diagnostic` event per
   reported finding (every finding under `--events diagnostics=all`) once the
   finding's tool has finished in the operation — `OperationRecord.AddTask`
@@ -387,6 +417,24 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
   which of them still match framed output. The step summary is the `markdown`
   renderer's `Write` with a budget — 1 MiB less what the file already holds —
   appended best-effort before the annotations, so their notice can name it.
+- Azure Pipelines (`render/azure`, logging commands) and TeamCity
+  (`render/teamcity`, service messages) are annotation modes beside GitHub:
+  `runner.nativeMode` maps a CI vendor to its mode for `auto`, and both reuse
+  `github.Candidates` (Azure also `github.Order` and a ten-per-type budget).
+  Both CIs read a command anywhere in a line, on stdout and stderr, so under
+  either vendor or in either mode every line the runner prints that holds
+  tool output or a repository path goes through `runner.toolText`, which
+  breaks `##vso[` or `##teamcity[` with a space — frames, frame context,
+  stopped and unrun lines, the target line, progress labels, agent records and
+  tails, `--explain` plans, the console log (`logger.SetConsoleFilter`), another
+  CI's annotations (`foreignCommandsBroken`), and every JSON-L event through the
+  event mask; new output of that kind must too. Before any run, `cmd` installs
+  the vendor's filter on the console log, the stream's event mask and the final
+  error line (`runner.CINeutralizer`), since a warning may name a path. A document on stdout cannot take a space: `render.Target.Guard`
+  (`runner.CommandGuard`, `render.GuardCommands`) spells the bracket `\u005b`
+  in JSON and `&#91;` in XML, which decode to the same text. TeamCity's results block is
+  also wrapped in `disableServiceMessages` … `enableServiceMessages` by
+  `openCommandRegion`/`closeCommandRegion`.
 - The interchange formats share `internal/report/render/common`: a format
   that lists one operation writes lint, or fix for a fix-only run
   (`common.ListedOperation`); columns come only from the model's precomputed

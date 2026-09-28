@@ -33,8 +33,37 @@ var route atomic.Pointer[func(uievent.Event)]
 // Logger is the package-level zap logger; use it for all structured logging.
 var Logger *zap.Logger
 
+// consoleFilter, when set, rewrites each entry the console writes.
+var consoleFilter atomic.Pointer[func(string) string]
+
 func init() {
-	Logger = zap.New(&switchCore{console: newConsoleCore(zapcore.Lock(os.Stderr))})
+	Logger = zap.New(&switchCore{console: newConsoleCore(zapcore.Lock(zapcore.AddSync(filteredWriter{os.Stderr})))})
+}
+
+// SetConsoleFilter rewrites every entry written to the console from now on —
+// a CI that reads commands anywhere in a line reads them in log lines too,
+// and a debug line may carry a tool's output; nil writes entries as they are.
+func SetConsoleFilter(filter func(string) string) {
+	if filter == nil {
+		consoleFilter.Store(nil)
+		return
+	}
+	consoleFilter.Store(&filter)
+}
+
+// filteredWriter passes what it writes through the console filter. The
+// console encoder writes one entry per call.
+type filteredWriter struct{ w io.Writer }
+
+func (f filteredWriter) Write(p []byte) (int, error) {
+	filter := consoleFilter.Load()
+	if filter == nil {
+		return f.w.Write(p) //nolint:wrapcheck // the writer's own error is the log's
+	}
+	if _, err := io.WriteString(f.w, (*filter)(string(p))); err != nil {
+		return 0, fmt.Errorf("write log entry: %w", err)
+	}
+	return len(p), nil
 }
 
 func newConsoleCore(w io.Writer) zapcore.Core {

@@ -56,6 +56,7 @@ func (sc *sharedContext) printAgentOperation(a agentOperation) {
 	report.MaskAll(&op, sc.secretValues())
 	var b strings.Builder
 	var shown, hidden levelCounts
+	baselined := 0
 	stopped := map[string]bool{}
 	for _, c := range op.Cancelled {
 		stopped[c.TaskID] = true
@@ -64,7 +65,7 @@ func (sc *sharedContext) printAgentOperation(a agentOperation) {
 		unrun := map[string][]string{}
 		var order []string
 		for _, inv := range tr.Invocations {
-			agentInvocation(&b, tr, inv, &shown, &hidden)
+			agentInvocation(&b, tr, inv, &shown, &hidden, &baselined)
 			notRun := inv.State == string(tooling.ProcessNotStarted) || inv.State == string(tooling.ProcessCancelled)
 			if !notRun || stopped[inv.TaskID] {
 				continue
@@ -94,17 +95,53 @@ func (sc *sharedContext) printAgentOperation(a agentOperation) {
 	for _, s := range op.Skipped {
 		record(&b, fmt.Sprintf("%s: skipped (%s)", s.Tool, skipText(s)))
 	}
+	if line := agentChanges(op); line != "" {
+		record(&b, line)
+	}
 	summary := fmt.Sprintf("%s: %d tools · %d runs · %d failed · %d errors %d warnings", a.op, a.summary.tools, a.summary.runs,
 		a.summary.failed, shown[0], shown[1])
 	if shown[2]+shown[3] > 0 {
 		summary += fmt.Sprintf(" %d info %d hints", shown[2], shown[3])
 	}
 	summary += fmt.Sprintf(" · %d hidden", hidden.total())
+	if baselined > 0 {
+		summary += fmt.Sprintf(" · %d baselined", baselined)
+	}
 	if a.note != "" {
 		summary += " · " + a.note
 	}
 	record(&b, summary)
 	fmt.Print(b.String())
+}
+
+// agentChanges is the record of the files a fix changed, which an agent has to
+// read again, or of why they were not observed; "" for an operation that
+// observes none — lint, or a fix that planned nothing.
+func agentChanges(op report.Operation) string {
+	if op.Name != string(config.OpFix) || !op.Ran || op.ChangesReason == report.ChangesNoFixTask {
+		return ""
+	}
+	changes := op.AllChanges()
+	paths := make([]string, len(changes))
+	for i, c := range changes {
+		paths[i] = c.Path
+	}
+	listed := ""
+	if len(paths) > 0 {
+		listed = ": " + strings.Join(paths, ", ")
+	}
+	if op.ChangesObserved {
+		return fmt.Sprintf("fix changed %d %s%s", len(paths), plural(len(paths), "file", "files"), listed)
+	}
+	why := op.ChangesReason
+	if op.ChangesDetail != "" {
+		why += " (" + op.ChangesDetail + ")"
+	}
+	line := "fix changes not observed: " + why
+	if len(paths) > 0 {
+		line += fmt.Sprintf("; changed at least %d %s%s", len(paths), plural(len(paths), "file", "files"), listed)
+	}
+	return line
 }
 
 // skipText is why the planner left a tool out, in the words of the human
@@ -117,14 +154,18 @@ func skipText(s report.Skip) string {
 	return tooling.SkippedTool{ToolName: s.Tool, Reason: reasons[s.Reason], Detail: s.Detail}.ReasonText()
 }
 
-func agentInvocation(b *strings.Builder, tr report.ToolRun, inv report.Invocation, shown, hidden *levelCounts) {
+func agentInvocation(b *strings.Builder, tr report.ToolRun, inv report.Invocation, shown, hidden *levelCounts, baselined *int) {
 	visible, below := report.Visible(inv)
 	for _, f := range visible {
 		shown.add(severityOf(f.Severity))
 		record(b, agentFinding(f))
 	}
 	for _, f := range below {
-		hidden.add(severityOf(f.Severity))
+		if f.Baselined {
+			*baselined++
+		} else {
+			hidden.add(severityOf(f.Severity))
+		}
 	}
 	label := agentLabel(tr.Name, inv.Dir)
 	var failure string
@@ -148,14 +189,14 @@ func agentInvocation(b *strings.Builder, tr report.ToolRun, inv report.Invocatio
 	}
 	record(b, failure)
 	for _, line := range tailLines(inv.OutputTail, agentTailLines) {
-		b.WriteString(frameIndent + line + "\n")
+		b.WriteString(frameIndent + toolText(line) + "\n")
 	}
 }
 
 // record writes one record on one line: a line break in anything it names —
 // a message, a path, a directory — is written as the two characters \n.
 func record(b *strings.Builder, text string) {
-	b.WriteString(lineBreaks.Replace(text) + "\n")
+	b.WriteString(toolText(lineBreaks.Replace(text)) + "\n")
 }
 
 var lineBreaks = strings.NewReplacer("\r\n", `\n`, "\r", `\n`, "\n", `\n`)

@@ -35,10 +35,11 @@ func now() time.Time {
 
 // startReport begins recording the run when something reads what it found: a
 // report to write, a JSON-L stream to carry diagnostic events, annotations, a
-// step summary or an agent's records to print.
+// step summary or an agent's records to print, or a baseline to match
+// fingerprints against.
 func (sc *sharedContext) startReport() {
-	reads := len(sc.opts.Reports) > 0 || ui.Quiet() || sc.annotations.mode == AnnotationsGitHub ||
-		sc.wantsStepSummary() || sc.agentOutput()
+	reads := len(sc.opts.Reports) > 0 || ui.Quiet() || sc.annotations.mode != AnnotationsOff ||
+		sc.wantsStepSummary() || sc.agentOutput() || sc.opts.Baseline != nil
 	if !reads {
 		return
 	}
@@ -54,7 +55,11 @@ func (sc *sharedContext) startReport() {
 	}
 	// The stream is masked as a report is, every event alike: a task's op_id
 	// names its directory, and the events of one task must still correlate.
-	ui.SetEventMask(func(e *uievent.Event) { report.MaskAll(e, sc.secrets.Values()) })
+	// A CI that reads commands anywhere in a line reads them on stderr too.
+	ui.SetEventMask(func(e *uievent.Event) {
+		report.MaskAll(e, sc.secrets.Values())
+		report.RewriteAll(e, toolText)
+	})
 	sc.report = report.NewAccumulator(opts)
 	sc.annotator = report.NewAnnotator(sc.rootPath, opts.Parsers)
 }
@@ -86,15 +91,21 @@ func (sc *sharedContext) collectSecrets() *report.Secrets {
 
 // gate is the hook the executor runs over every parsed process: it anchors the
 // process's findings — fingerprints and columns, while the files are on disk —
-// and then applies the failOn threshold, so that a fingerprint exists before
-// the threshold decides.
+// marks those the baseline holds (report.BaselineMatcher), and then applies
+// the failOn threshold, so that a baselined finding fails nothing and cancels
+// nothing under fail-fast.
 func (sc *sharedContext) gate() tooling.Gate {
 	threshold := tooling.ThresholdGate(config.Severity(sc.opts.FailOn), sc.severityContract, sc.ignoredFailOn.add)
 	if sc.annotator == nil {
 		return threshold
 	}
+	var baseline *report.BaselineMatcher
+	if sc.opts.Baseline != nil {
+		baseline = report.NewBaselineMatcher(sc.opts.Baseline, sc.rootPath)
+	}
 	return func(task tooling.Task, proc *tooling.ProcessResult) tooling.GateDecision {
 		sc.annotator.Annotate(task, proc)
+		baseline.Mark(task, proc)
 		return threshold(task, proc)
 	}
 }
@@ -201,6 +212,7 @@ func (sc *sharedContext) emitDiagnostics(runOpID string, found []report.ToolFind
 			Provenance:  f.Provenance,
 			Reported:    new(f.Reported),
 			Gates:       new(f.Gates),
+			Baselined:   f.Baselined,
 		}
 		ui.Emit(e)
 	}
@@ -220,6 +232,7 @@ func (sc *sharedContext) buildReport(operations []config.OperationType) (*report
 	exports := make([]report.Export, 0, len(targets)+1)
 	for i, spec := range sc.opts.Reports {
 		targets[i] = render.Open(spec, os.Stdout)
+		targets[i].Guard = CommandGuard(sc.annotations.mode, sc.ci.Vendor)
 		e := report.Export{Format: spec.Format, Path: spec.Path, Status: report.ExportWritten}
 		if err := targets[i].Err; err != nil {
 			e.Status, e.Detail = report.ExportFailed, err.Error()
@@ -281,7 +294,7 @@ func (sc *sharedContext) writeReports(run *report.Run, targets []*render.Target,
 	}
 	if !ui.Quiet() {
 		for _, f := range failures[:last] {
-			fmt.Fprintf(os.Stderr, "%s %s\n", clr.Red("error:"), f)
+			fmt.Fprintf(os.Stderr, "%s %s\n", clr.Red("error:"), toolText(f.Error()))
 		}
 	}
 	if err != nil {

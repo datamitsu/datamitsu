@@ -1,5 +1,6 @@
 {
   "schema": "datamitsu.report/1",
+  "fingerprint": "dmfp1",
   "datamitsu": {
     "version": "<VERSION>",
     "configuration": "datamitsu.config"
@@ -112,7 +113,9 @@
             }
           ]
         }
-      ]
+      ],
+      "changesObserved": false,
+      "changesReason": "no-fix-task"
     }
   ],
   "exports": [

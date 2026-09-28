@@ -199,3 +199,18 @@ func TestFramesFollowTheThreshold(t *testing.T) {
 		}
 	})
 }
+
+// TestViewCountsBaselined: a finding the baseline held is counted apart from
+// those below the threshold, and a passed process shows none of them.
+func TestViewCountsBaselined(t *testing.T) {
+	e := config.SeverityError
+	held := diagnostic.Diagnostic{File: "/w/a.txt", Row: 1, Severity: diagnostic.SeverityError, Message: "old", Baselined: true}
+	proc := process(true, true, e, held, finding(diagnostic.SeverityWarning, e, true, "warn"))
+	v := viewOf(tooling.ExecutionResult{Success: true, Processes: []tooling.ProcessResult{proc}})
+	if len(v.shown) != 0 || v.baselined != 1 || v.hidden.total() != 1 {
+		t.Errorf("view = %+v, want nothing shown, one baselined and one hidden", v)
+	}
+	if got := formatDiagnostic(held); !strings.HasSuffix(got, "(baselined)") {
+		t.Errorf("formatDiagnostic = %q, want it marked baselined", got)
+	}
+}

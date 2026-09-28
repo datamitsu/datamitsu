@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/datamitsu/datamitsu/internal/cienv"
 	clr "github.com/datamitsu/datamitsu/internal/color"
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/exitcode"
@@ -105,6 +106,12 @@ func init() {
 		}
 		ocibundle.SetDisabledByFlag(noOCI)
 		runner.SetParsingDisabledByFlag(noParse)
+		// A CI that reads commands anywhere in a line reads them in warnings
+		// and errors too, which may name a path.
+		if ci, _ := cienv.Current(); ci.Vendor == cienv.VendorAzure || ci.Vendor == cienv.VendorTeamCity {
+			ciText = runner.CINeutralizer(ci.Vendor)
+			logger.SetConsoleFilter(ciText)
+		}
 
 		// JSON-L mode: install a process-global typed event sink writing
 		// newline-delimited JSON to stderr, and suppress human line output so
@@ -154,7 +161,10 @@ func setJSONLStderr(on bool) {
 		// own secrets — a config that does not load — still quotes paths and
 		// values. A run extends the masker with its configuration's.
 		hostSecrets := report.SecretValues(env.EnvironAll())
-		ui.SetEventMask(func(e *uievent.Event) { report.MaskAll(e, hostSecrets) })
+		ui.SetEventMask(func(e *uievent.Event) {
+			report.MaskAll(e, hostSecrets)
+			report.RewriteAll(e, ciText)
+		})
 		logger.Route(ui.Emit)
 		return
 	}
@@ -378,7 +388,11 @@ func Execute() {
 			})
 			os.Exit(code)
 		}
-		fmt.Fprintf(os.Stderr, "%s %s\n", clr.Red("error:"), err)
+		fmt.Fprintf(os.Stderr, "%s %s\n", clr.Red("error:"), ciText(err.Error()))
 		os.Exit(code)
 	}
 }
+
+// ciText is what a line of stderr becomes in the CI the process runs in: with
+// every command broken where the CI reads them anywhere in a line.
+var ciText = func(line string) string { return line }

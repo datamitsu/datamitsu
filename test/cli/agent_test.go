@@ -106,7 +106,8 @@ func TestAgentOutput(t *testing.T) {
 		}
 	})
 
-	// check keeps its closing wall-clock line, plain.
+	// check keeps its closing wall-clock line, plain; its fix says which
+	// files it changed, here none.
 	t.Run("check", func(t *testing.T) {
 		e := newExecProject(t, map[string]string{"fixture.marker": ""}, fixtureSpec,
 			clitest.ShellTool("gamma", passScript, clitest.ToolOpSpec{Operation: "fix"}),
@@ -114,10 +115,10 @@ func TestAgentOutput(t *testing.T) {
 		res := e.run("", nil, "check", agentOutput)
 		e.wantExit(res, 0)
 		lines := strings.Split(strings.TrimSuffix(res.Stdout, "\n"), "\n")
-		if len(lines) != 3 || !strings.HasPrefix(lines[0], "fix: 1 tools · 1 runs · 0 failed") ||
-			!strings.HasPrefix(lines[1], "lint: 1 tools · 1 runs · 0 failed") ||
-			!regexp.MustCompile(`^check · done in \S+ · fix \S+ · lint \S+ · setup \S+$`).MatchString(lines[2]) {
-			t.Errorf("stdout =\n%s\nwant a summary per operation and check's closing line", res.Stdout)
+		if len(lines) != 4 || lines[0] != "fix changed 0 files" || !strings.HasPrefix(lines[1], "fix: 1 tools · 1 runs · 0 failed") ||
+			!strings.HasPrefix(lines[2], "lint: 1 tools · 1 runs · 0 failed") ||
+			!regexp.MustCompile(`^check · done in \S+ · fix \S+ · lint \S+ · setup \S+$`).MatchString(lines[3]) {
+			t.Errorf("stdout =\n%s\nwant the fix's changes, a summary per operation and check's closing line", res.Stdout)
 		}
 	})
 }
