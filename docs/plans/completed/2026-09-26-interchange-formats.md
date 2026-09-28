@@ -1,6 +1,6 @@
 # Plan 8: Interchange formats — SARIF, JUnit, GitLab Code Quality, Checkstyle, reviewdog
 
-**Status:** ready for implementation. Plan 8 of `2026-09-26-unified-results.md`; implements D5/R6,
+**Status:** completed 2026-09-28. Plan 8 of `../2026-09-26-unified-results.md`; implements D5/R6,
 D6 (the file-format rows), the format side of R8, and the SARIF requirements measured in the
 index §6. No decisions open.
 **Date:** 2026-09-26.
