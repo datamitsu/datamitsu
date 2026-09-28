@@ -36,13 +36,14 @@ func syntheticFinding(tool string, proc tooling.ProcessResult, category string) 
 	}, true
 }
 
-// outputTail is what a failed invocation printed last, for the own JSON. A
-// security tool's output is withheld: it may hold what the tool found. A tail
-// cut from a longer output loses the start a secret the cut went through could
-// have left (withoutFragment).
-func outputTail(proc tooling.ProcessResult, category string, secrets []string) string {
+// outputTail is what a failed invocation printed last, for the own JSON. The
+// output of a tool that may hold secrets is withheld: a security tool's may
+// hold what it found, and a tool whose category the run could not learn may be
+// one. A tail cut from a longer output loses the start a secret the cut went
+// through could have left (withoutFragment).
+func outputTail(proc tooling.ProcessResult, withhold bool, secrets []string) string {
 	failed := (proc.State == tooling.ProcessRan && !proc.Success) || proc.State == tooling.ProcessSetupFailed
-	if !failed || category == categorySecurity || len(proc.OutputTail) == 0 {
+	if !failed || withhold || len(proc.OutputTail) == 0 {
 		return ""
 	}
 	text := string(tooling.StripCSI(proc.OutputTail))

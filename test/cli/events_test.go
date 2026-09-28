@@ -227,8 +227,9 @@ func runWithFullStderr(t *testing.T, e *execProject, args ...string) ([]byte, in
 	return stdout.Bytes(), code
 }
 
-// A secret value is masked in every field of a diagnostic event but its op_id,
-// not only in its message: here it is a directory name.
+// A secret value is masked everywhere in the stream, as it is in a report —
+// here it is a directory name, which every event of the task carries in its
+// op_id — and the events of one task still share one op_id.
 func TestEventsMaskSecrets(t *testing.T) {
 	const secret = "abcdefgh12"
 	e := newExecProject(t, map[string]string{"fixture.marker": "", secret + "/Dockerfile": "FROM debian\n"}, fixtureSpec)
@@ -246,8 +247,8 @@ func TestEventsMaskSecrets(t *testing.T) {
 	if run := toolRuns(events, "hadolint"); diags[0].OpID != run[0].OpID {
 		t.Errorf("diagnostic op_id = %s, want its task's %s", diags[0].OpID, run[0].OpID)
 	}
-	if strings.Contains(e.read("run.json"), secret) {
-		t.Errorf("the report holds the secret:\n%s", e.read("run.json"))
+	if strings.Contains(res.Stderr, secret) || strings.Contains(e.read("run.json"), secret) {
+		t.Errorf("the stream or the report holds the secret:\n%s", res.Stderr)
 	}
 }
 

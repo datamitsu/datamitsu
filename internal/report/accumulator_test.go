@@ -99,7 +99,7 @@ func TestInvocationsOfATask(t *testing.T) {
 	wantTool := ToolRun{
 		Name: "hadolint", App: AppRef{Name: "hadolint", Kind: "binary", Version: "2.12.0"},
 		Parser: &ParserRef{Module: "core", Parser: "hadolint", Version: "0.3.0", Schema: 2, ColumnUnit: "utf-32"},
-		FailOn: "warning", GateActive: true, Category: "security", Incomplete: []Reason{ReasonNotStarted},
+		FailOn: "warning", GateActive: true, Category: "security", Incomplete: []Reason{ReasonNotStarted}, mayHoldSecrets: true,
 	}
 	tr.Invocations = nil
 	if !reflect.DeepEqual(tr, wantTool) {

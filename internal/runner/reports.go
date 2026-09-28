@@ -47,6 +47,9 @@ func (sc *sharedContext) startReport() {
 	sc.secrets = sc.collectSecrets()
 	opts.Secrets = sc.secrets
 	sc.executor.SetEnvObserver(func(environ []string) { sc.secrets.Add(environ) })
+	// The stream is masked as a report is, every event alike: a task's op_id
+	// names its directory, and the events of one task must still correlate.
+	ui.SetEventMask(func(e *uievent.Event) { report.MaskAll(e, sc.secrets.Values()) })
 	sc.report = report.NewAccumulator(opts)
 	sc.annotator = report.NewAnnotator(sc.rootPath, opts.Parsers)
 }
@@ -164,13 +167,12 @@ func refuseNarrowedReports(opts Options, sel tooling.Selection, fileScoped bool,
 
 // emitDiagnostics writes a diagnostic event for each finding of a tool that
 // finished: those at or above the operation's failOn, or every one under
-// --events diagnostics=all. Its op_id is the task's. The message is masked as
-// a report's would be.
+// --events diagnostics=all. Its op_id is the task's; the stream's masker masks
+// it as a report would be.
 func (sc *sharedContext) emitDiagnostics(runOpID string, found []report.ToolFinding) {
 	if len(found) == 0 || !ui.Quiet() {
 		return
 	}
-	secrets := sc.secretValues()
 	for _, tf := range found {
 		f := tf.Finding
 		if !f.Reported && !sc.opts.AllDiagnostics {
@@ -195,10 +197,6 @@ func (sc *sharedContext) emitDiagnostics(runOpID string, found []report.ToolFind
 			Reported:    new(f.Reported),
 			Gates:       new(f.Gates),
 		}
-		// The op_id ties the event to its task's events, which carry the same
-		// directory unmasked: it is an identity, not content.
-		report.MaskAll(&e, secrets)
-		e.OpID = toolOpID(runOpID, tf.TaskID)
 		ui.Emit(e)
 	}
 }

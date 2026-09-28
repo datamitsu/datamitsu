@@ -442,8 +442,9 @@ the task that reported it:
 
 `file` is relative to the repository root, rows and columns are 1-based and
 `end_col` is exclusive; `fingerprint` is the finding's
-[report fingerprint](#reports); every field but `op_id` is masked like a
-report's. By
+[report fingerprint](#reports). While a run records findings — a report was asked
+for, or the stream is on — every event of the stream is masked as a report is,
+`op_id` included, so a task's events still share one. By
 default only the findings at or above the operation's `failOn` are emitted —
 what the terminal shows. `--events diagnostics=all` (or
 `DATAMITSU_EVENTS=diagnostics=all`) emits every finding, with `reported` and

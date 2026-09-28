@@ -319,6 +319,7 @@ func (a *Accumulator) newToolRun(op, name string) *ToolRun {
 	}
 	if p := tool.OutputParser; p != nil {
 		tr.Parser = &ParserRef{Module: p.Module, Parser: p.Parser}
+		tr.mayHoldSecrets = true
 		if a.opts.Parsers != nil {
 			if facts, ok := a.opts.Parsers(p.Module, p.Parser); ok {
 				tr.Parser.Version = facts.Version
@@ -326,6 +327,7 @@ func (a *Accumulator) newToolRun(op, name string) *ToolRun {
 				tr.Parser.ColumnUnit = facts.Tool.ColumnUnit
 				tr.GateActive = facts.Contract
 				tr.Category = facts.Tool.Category
+				tr.mayHoldSecrets = facts.Tool.Category == categorySecurity
 			}
 		}
 	}
@@ -403,7 +405,7 @@ func (a *Accumulator) invocations(task tooling.Task, result *tooling.ExecutionRe
 		if f, ok := syntheticFinding(task.ToolName, proc, tr.Category); ok {
 			inv.Findings = append(inv.Findings, f)
 		}
-		inv.OutputTail = outputTail(proc, tr.Category, a.opts.Secrets.Values())
+		inv.OutputTail = outputTail(proc, tr.mayHoldSecrets, a.opts.Secrets.Values())
 		out = append(out, inv)
 	}
 	// A process given no path answers for every file no other process and no

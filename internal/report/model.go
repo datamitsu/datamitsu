@@ -144,6 +144,11 @@ type ToolRun struct {
 	Complete    bool         `json:"complete"`
 	Incomplete  []Reason     `json:"incomplete"`
 	Invocations []Invocation `json:"invocations"`
+
+	// mayHoldSecrets is set for a security tool, and for a tool with a parser
+	// the run never described, whose category is unknown: its output is
+	// withheld.
+	mayHoldSecrets bool
 }
 
 // AppRef is the app a tool ran, as configured.

@@ -68,7 +68,8 @@ it is stamped with comes from `SOURCE_DATE_EPOCH` when that is set.
 - **No output of a security tool.** A failed invocation keeps the last 4 KiB of
   its output in the own JSON (`outputTail`), without colour codes and masked —
   except for a tool whose parser module puts it in the `security` category,
-  whose output is never kept.
+  whose output is never kept, nor that of a tool whose parser module the run
+  could not load, which may be one.
 - **Nothing from a cache.** A report is never stored and never replayed; each is
   written from the run that produced it.
 
