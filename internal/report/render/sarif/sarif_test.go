@@ -191,7 +191,7 @@ func TestRender(t *testing.T) {
 	}
 
 	inv := eslint.Invocations[0]
-	if inv.ExecutionSuccessful || *inv.ExitCode != 1 || *inv.WorkingDirectory != (ArtifactLocation{URI: "packages/api/", URIBaseID: "%SRCROOT%"}) ||
+	if !inv.ExecutionSuccessful || *inv.ExitCode != 1 || *inv.WorkingDirectory != (ArtifactLocation{URI: "packages/api/", URIBaseID: "%SRCROOT%"}) ||
 		inv.Properties.Datamitsu != (InvocationFacts{ID: "eslint:packages/api:1#1", State: "ran", Extraction: "parsed-findings"}) {
 		t.Errorf("invocation = %+v", inv)
 	}
@@ -203,7 +203,7 @@ func TestRender(t *testing.T) {
 	}
 
 	tsc := log.Runs[1]
-	if len(tsc.Results) != 0 || len(tsc.Invocations[0].ToolExecutionNotifications) != 1 ||
+	if tsc.Invocations[0].ExecutionSuccessful || len(tsc.Results) != 0 || len(tsc.Invocations[0].ToolExecutionNotifications) != 1 ||
 		tsc.Invocations[0].ToolExecutionNotifications[0] != (Notification{Level: "error", Message: Message{Text: "tsc exited 1 without parsable findings"}}) {
 		t.Errorf("a tool that failed without a parsable finding = %+v", tsc)
 	}
@@ -367,6 +367,32 @@ func TestLevel(t *testing.T) {
 	for severity, want := range map[string]string{"error": "error", "warning": "warning", "info": "note", "hint": "note"} {
 		if got := Level(severity); got != want {
 			t.Errorf("Level(%s) = %s, want %s", severity, got, want)
+		}
+	}
+}
+
+// An invocation that ran to the end analyzed, whatever its gate said: a tool
+// that exits non-zero on its findings, or fails the threshold, did its work.
+func TestExecutionSuccessful(t *testing.T) {
+	zero, one := 0, 1
+	synthetic := report.Finding{Kind: "synthetic", Severity: "error", Message: "x exited 1 without parsable findings"}
+	for _, tc := range []struct {
+		name string
+		inv  report.Invocation
+		want bool
+	}{
+		{name: "passed", inv: report.Invocation{State: "ran", ExitCode: &zero, Success: true}, want: true},
+		{name: "failed the threshold", inv: report.Invocation{State: "ran", ExitCode: &zero, FailureKind: "threshold"}, want: true},
+		{
+			name: "exited on its findings", want: true,
+			inv: report.Invocation{State: "ran", ExitCode: &one, FailureKind: "exit", Findings: []report.Finding{finding("x", "R", "a.go", 1, "error", "m")}},
+		},
+		{name: "failed without a finding", inv: report.Invocation{State: "ran", ExitCode: &one, FailureKind: "exit", Findings: []report.Finding{synthetic}}},
+		{name: "cached", inv: report.Invocation{State: "cached", Success: true}, want: true},
+		{name: "cancelled", inv: report.Invocation{State: "cancelled"}},
+	} {
+		if got := invocation(tc.inv).ExecutionSuccessful; got != tc.want {
+			t.Errorf("%s: executionSuccessful = %v, want %v", tc.name, got, tc.want)
 		}
 	}
 }

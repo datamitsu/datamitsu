@@ -18,22 +18,15 @@ import (
 	"github.com/datamitsu/datamitsu/internal/textpos"
 )
 
-// Operation names as a report spells them.
-const (
-	OpFix  = "fix"
-	OpLint = "lint"
-)
-
 // ListedOperationName is the operation a format that lists one operation
 // writes from a run of operations: lint when the run has one — a check would
 // otherwise hold each tool twice, and lint's findings are the state after the
 // fix — otherwise fix; "" when there is neither.
 func ListedOperationName(operations []string) string {
-	switch {
-	case slices.Contains(operations, OpLint):
-		return OpLint
-	case slices.Contains(operations, OpFix):
-		return OpFix
+	for _, op := range []config.OperationType{config.OpLint, config.OpFix} {
+		if slices.Contains(operations, string(op)) {
+			return string(op)
+		}
 	}
 	return ""
 }

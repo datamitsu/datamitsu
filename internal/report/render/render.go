@@ -137,7 +137,6 @@ func ParseSpec(raw string) (Spec, error) {
 	return spec, checkOptions(r, spec)
 }
 
-// checkOptions lets a format refuse an option value it cannot use.
 func checkOptions(r Renderer, spec Spec) error {
 	c, ok := r.(OptionChecker)
 	if !ok {

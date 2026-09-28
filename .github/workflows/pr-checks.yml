@@ -185,14 +185,31 @@ jobs:
           DATAMITSU_REPORT: sarif=lint-sarif/
         name: Run datamitsu lint
         run: pnpm dm lint
-      # Uploaded whatever the lint step's outcome, when it wrote anything: a run
-      # refused before it started writes nothing. A pull request from a fork
-      # gets a read-only token and cannot upload.
-      - if: always() && hashFiles('lint-sarif/*.sarif') != '' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
-        name: Upload SARIF to code scanning
+      # One upload per file, whatever the lint step's outcome, of each file it
+      # wrote: the action combines the files of a directory into one upload,
+      # which GitHub refuses above twenty runs. A run refused before it started
+      # writes nothing, and a pull request from a fork gets a read-only token.
+      - if: always() && hashFiles('lint-sarif/datamitsu-1.sarif') != '' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
+        name: Upload SARIF to code scanning (tools 1-20)
         uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
         with:
-          sarif_file: lint-sarif
+          sarif_file: lint-sarif/datamitsu-1.sarif
+      - if: always() && hashFiles('lint-sarif/datamitsu-2.sarif') != '' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
+        name: Upload SARIF to code scanning (tools 21-40)
+        uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
+        with:
+          sarif_file: lint-sarif/datamitsu-2.sarif
+      - if: always() && hashFiles('lint-sarif/datamitsu-3.sarif') != '' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
+        name: Upload SARIF to code scanning (tools 41-60)
+        uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
+        with:
+          sarif_file: lint-sarif/datamitsu-3.sarif
+      # A fourth file would go unread: fail rather than leave tools out.
+      - if: always() && hashFiles('lint-sarif/datamitsu-4.sarif') != ''
+        name: Check every SARIF file was uploaded
+        run: |
+          echo "::error::lint-sarif holds more than three files; add an upload step for each one"
+          exit 1
   llms-docs-drift:
     name: Embedded Docs Drift
     runs-on: ubuntu-latest

@@ -56,7 +56,6 @@ func escapeXML(s string, attr bool) string {
 	return b.String()
 }
 
-// xmlChar reports a character XML 1.0 can carry.
 func xmlChar(r rune) bool {
 	return r == 0x9 || r == 0xA || r == 0xD ||
 		(r >= 0x20 && r <= 0xD7FF) ||

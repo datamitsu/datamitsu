@@ -142,6 +142,46 @@ func TestTargetDirectory(t *testing.T) {
 	}
 }
 
+// A split write that fails while writing leaves the directory as it was: no
+// file of this run beside the files of an earlier one.
+func TestTargetDirectoryFailureKeepsTheOldFiles(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "sarif") + "/"
+	if err := os.MkdirAll(filepath.Join(dir, "datamitsu-2.sarif"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"datamitsu-1.sarif", "datamitsu-3.sarif"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("old"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run := &report.Run{Selection: report.Selection{Mode: "all"}, Operations: []report.Operation{{Name: "lint", Ran: true}}}
+	for i := range 21 {
+		name := "tool" + strings.Repeat("x", i)
+		run.Operations[0].Tools = append(run.Operations[0].Tools, report.ToolRun{
+			Name: name, Complete: true,
+			Invocations: []report.Invocation{{ID: name + "::1#1", State: "ran", Success: true}},
+		})
+	}
+	target := Open(Spec{Format: "sarif", Path: dir}, nil)
+	if target.Err != nil {
+		t.Fatal(target.Err)
+	}
+	if err := target.Write(run); err == nil || !strings.Contains(err.Error(), "datamitsu-2.sarif: is a directory") {
+		t.Fatalf("Write error = %v, want datamitsu-2.sarif in the way", err)
+	}
+	entries, _ := os.ReadDir(dir)
+	got := make([]string, 0, len(entries))
+	for _, e := range entries {
+		got = append(got, e.Name())
+		if data, _ := os.ReadFile(filepath.Join(dir, e.Name())); e.Type().IsRegular() && string(data) != "old" {
+			t.Errorf("%s was replaced by a write that failed", e.Name())
+		}
+	}
+	if !reflect.DeepEqual(got, []string{"datamitsu-1.sarif", "datamitsu-2.sarif", "datamitsu-3.sarif"}) {
+		t.Errorf("directory = %v, want it as it was", got)
+	}
+}
+
 func TestCheckCapacity(t *testing.T) {
 	tests := []struct {
 		spec  Spec

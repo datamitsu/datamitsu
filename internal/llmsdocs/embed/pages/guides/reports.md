@@ -260,10 +260,15 @@ jobs:
           fetch-depth: 2
       - run: rm -rf sarif
       - run: datamitsu lint --fail-fast=false --report sarif=sarif/
-      - if: always() && hashFiles('sarif/*.sarif') != ''
+      # One step per file, each uploaded on its own.
+      - if: always() && hashFiles('sarif/datamitsu-1.sarif') != ''
         uses: github/codeql-action/upload-sarif@v4
         with:
-          sarif_file: sarif
+          sarif_file: sarif/datamitsu-1.sarif
+      - if: always() && hashFiles('sarif/datamitsu-2.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: sarif/datamitsu-2.sarif
 ```
 
 - **One run per tool, of `lint`.** A file holds one run per tool of the lint
@@ -282,7 +287,11 @@ jobs:
   path that ends in `/` names a directory: `datamitsu-1.sarif`,
   `datamitsu-2.sarif` and so on, twenty tools each, sorted by name, and the
   `datamitsu-<n>.sarif` files an earlier run left there that this one did not
-  write are removed. `upload-sarif` takes the directory. A file, or `-`, for a
+  write are removed. Upload each file in a step of its own: `upload-sarif`
+  combines the files of a directory into one upload, which GitHub refuses
+  above twenty runs just the same. A configuration of up to twenty tools
+  writes `datamitsu-1.sarif` alone, and needs one more step for every twenty
+  more. A file, or `-`, for a
   run that plans more than twenty tools exits 2 before anything runs. GitHub
   refuses an upload of more than 10 MB gzipped.
 - **The category is in the file.** Every run is written under the category
@@ -365,6 +374,9 @@ GitLab reads the report from `artifacts:reports:junit`:
 lint:
   script:
     - datamitsu lint --fail-fast=false --report junit=reports/junit.xml
+  after_script:
+    # GitLab reads a test missing from the report as fixed.
+    - jq -e .complete reports/junit.xml.completeness.json > /dev/null || rm -f reports/junit.xml
   artifacts:
     when: always
     reports:
@@ -373,8 +385,11 @@ lint:
       - reports/
 ```
 
-Jenkins' JUnit plugin: `junit 'reports/junit.xml'` in a `post { always { … } }`
-block. Azure Pipelines: a `PublishTestResults@2` task with
+Every consumer below compares runs or fails builds on what the report lists,
+so a job publishes it only when its companion says it is complete — the
+GitLab recipe above and the Jenkins one under [Checkstyle](#checkstyle) show
+the check. Jenkins' JUnit plugin: `junit 'reports/junit.xml'` in a
+`post { always { … } }` block. Azure Pipelines: a `PublishTestResults@2` task with
 `testResultsFormat: JUnit` and `condition: always()`. CircleCI:
 `store_test_results` with `path: reports`. Buildkite: upload the file to Test
 Engine as a JUnit report. Bitbucket Pipelines: write it under
@@ -394,7 +409,10 @@ lint:
     - datamitsu lint --fail-fast=false --report codequality=gl-code-quality.json --report junit=junit.xml
   after_script:
     # An incomplete report would show every finding it misses as fixed.
-    - jq -e .complete gl-code-quality.json.completeness.json > /dev/null || rm -f gl-code-quality.json
+    - |
+      for companion in *.completeness.json; do
+        jq -e .complete "$companion" > /dev/null || rm -f "${companion%.completeness.json}"
+      done
   artifacts:
     when: always
     reports:
@@ -419,7 +437,8 @@ lint:
 - GitLab compares the merged report of the merge request's pipeline with the
   target branch's, so a finding a report misses reads as fixed. A tool that is
   not complete is kept, with the findings it has, and the companion says it is
-  not; the `after_script` above keeps GitLab from comparing such a report.
+  not; the `after_script` above keeps GitLab from comparing such a report, and
+  from reading tests missing from an incomplete JUnit report as fixed.
 
 ### Checkstyle
 
@@ -439,12 +458,20 @@ flagged in the companion rather than left out:
 ```groovy
 stage('Lint') {
   steps {
+    sh 'rm -rf reports'
     sh 'datamitsu lint --fail-fast=false --report checkstyle=reports/checkstyle.xml --report junit=reports/junit.xml'
   }
   post {
     always {
-      recordIssues tools: [checkStyle(pattern: 'reports/checkstyle.xml')]
-      junit 'reports/junit.xml'
+      script {
+        // An incomplete report would show what it misses as fixed.
+        if (sh(returnStatus: true, script: 'jq -e .complete reports/checkstyle.xml.completeness.json') == 0) {
+          recordIssues tools: [checkStyle(pattern: 'reports/checkstyle.xml')]
+        }
+        if (sh(returnStatus: true, script: 'jq -e .complete reports/junit.xml.completeness.json') == 0) {
+          junit 'reports/junit.xml'
+        }
+      }
     }
   }
 }

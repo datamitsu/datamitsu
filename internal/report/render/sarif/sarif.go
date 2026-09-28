@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -35,6 +36,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/report"
 	"github.com/datamitsu/datamitsu/internal/report/render/common"
+	"github.com/datamitsu/datamitsu/internal/tooling"
 )
 
 // SARIF constants and the limits GitHub code scanning applies to an upload.
@@ -137,7 +139,6 @@ func (Renderer) Omitted(run *report.Run, _ map[string]string) []report.OmittedTo
 	return out
 }
 
-// omission says whether a tool run is left out, and why.
 func omission(tr *report.ToolRun) ([]string, bool) {
 	if !tr.Complete {
 		reasons := make([]string, len(tr.Incomplete))
@@ -267,7 +268,7 @@ func ruleID(f report.Finding) string {
 // one.
 func invocation(inv report.Invocation) Invocation {
 	out := Invocation{
-		ExecutionSuccessful: inv.Success,
+		ExecutionSuccessful: analyzed(inv),
 		ExitCode:            inv.ExitCode,
 		WorkingDirectory:    workingDirectory(inv.Dir),
 		Properties:          InvocationProperties{Datamitsu: InvocationFacts{ID: inv.ID, State: inv.State, Extraction: inv.Extraction}},
@@ -283,6 +284,20 @@ func invocation(inv report.Invocation) Invocation {
 		}
 	}
 	return out
+}
+
+// analyzed reports an invocation that did its analysis: one a cache answered,
+// or a process that ran to the end with a result its parser read. A tool that
+// exits non-zero on its findings, or fails the threshold, analyzed; one that
+// failed without a parsable finding did not.
+func analyzed(inv report.Invocation) bool {
+	switch inv.State {
+	case string(tooling.FileCached), string(tooling.FileVerdictHit):
+		return true
+	case string(tooling.ProcessRan):
+		return !slices.ContainsFunc(inv.Findings, common.Synthetic)
+	}
+	return false
 }
 
 func workingDirectory(dir string) *ArtifactLocation {

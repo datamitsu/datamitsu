@@ -100,7 +100,6 @@ func (t *Target) Write(run *report.Run) error {
 	return nil
 }
 
-// fill writes into f through render and closes it.
 func fill(f *os.File, render func(io.Writer) error) error {
 	w := bufio.NewWriter(f)
 	err := render(w)
@@ -113,10 +112,13 @@ func fill(f *os.File, render func(io.Writer) error) error {
 	return err
 }
 
-// writeDir writes the files of a format split over a directory, each through
-// a temporary file of its own, then removes the files of the format an
-// earlier run left there that this one did not write: an upload of the
-// directory would read them as part of this run.
+// writeDir writes the files of a format split over a directory. Every file
+// is written under a temporary name before any is moved into place, so a
+// failure while writing leaves the directory as it was; then the files of the
+// format an earlier run left there that this one did not write are removed.
+// Once the first file has replaced an earlier one, a failure removes every
+// file of the format instead: half of this run's files beside the rest of an
+// earlier run's would pass for one run to whatever uploads the directory.
 func (t *Target) writeDir(run *report.Run) error {
 	dirRenderer, ok := t.renderer.(DirRenderer)
 	if !ok {
@@ -126,43 +128,65 @@ func (t *Target) writeDir(run *report.Run) error {
 	if err != nil {
 		return err
 	}
-	written := map[string]bool{}
+	temps := make([]string, 0, len(files))
+	discard := func() {
+		for _, tmp := range temps {
+			_ = os.Remove(tmp)
+		}
+	}
 	for _, file := range files {
-		path := filepath.Join(t.Spec.Path, file.Name)
-		tmp, err := createBeside(path)
+		tmp, err := createBeside(filepath.Join(t.Spec.Path, file.Name))
 		if err != nil {
+			discard()
 			return fmt.Errorf("%s: %w", file.Name, err)
 		}
+		temps = append(temps, tmp.Name())
 		err = fill(tmp, func(w io.Writer) error {
 			if _, err := w.Write(file.Data); err != nil {
 				return fmt.Errorf("write report: %w", err)
 			}
 			return nil
 		})
-		if err == nil {
-			err = os.Rename(tmp.Name(), path)
-		}
 		if err != nil {
-			_ = os.Remove(tmp.Name())
+			discard()
+			return fmt.Errorf("%s: %w", file.Name, unwrapPathError(err))
+		}
+	}
+	written := map[string]bool{}
+	for i, file := range files {
+		if err := os.Rename(temps[i], filepath.Join(t.Spec.Path, file.Name)); err != nil {
+			discard()
+			_ = t.removeOwned(dirRenderer, nil)
 			return fmt.Errorf("%s: %w", file.Name, unwrapPathError(err))
 		}
 		written[file.Name] = true
 	}
-	entries, err := os.ReadDir(t.Spec.Path)
-	if err != nil {
-		return unwrapPathError(err)
-	}
-	for _, e := range entries {
-		if e.Type().IsRegular() && dirRenderer.Owns(e.Name()) && !written[e.Name()] {
-			if err := os.Remove(filepath.Join(t.Spec.Path, e.Name())); err != nil {
-				return fmt.Errorf("remove %s, left by an earlier run: %w", e.Name(), unwrapPathError(err))
-			}
-		}
+	if err := t.removeOwned(dirRenderer, written); err != nil {
+		_ = t.removeOwned(dirRenderer, nil)
+		return err
 	}
 	return nil
 }
 
-// makeDir creates the directory a split format writes into.
+// removeOwned removes the files of the format in the directory, except those
+// in keep; it returns the first failure and goes on past it.
+func (t *Target) removeOwned(r DirRenderer, keep map[string]bool) error {
+	entries, err := os.ReadDir(t.Spec.Path)
+	if err != nil {
+		return unwrapPathError(err)
+	}
+	var first error
+	for _, e := range entries {
+		if !e.Type().IsRegular() || !r.Owns(e.Name()) || keep[e.Name()] {
+			continue
+		}
+		if err := os.Remove(filepath.Join(t.Spec.Path, e.Name())); err != nil && first == nil {
+			first = fmt.Errorf("remove %s, left by an earlier run: %w", e.Name(), unwrapPathError(err))
+		}
+	}
+	return first
+}
+
 func makeDir(path string) error {
 	if err := os.MkdirAll(path, 0o755); err != nil {
 		return unwrapPathError(err)
