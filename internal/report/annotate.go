@@ -31,7 +31,7 @@ func (a *Annotator) Annotate(task tooling.Task, proc *tooling.ProcessResult) {
 	if len(proc.Diagnostics) == 0 {
 		return
 	}
-	unit := a.columnUnit(task)
+	unit := a.columnUnit(task, proc)
 	in := make([]fingerprintInput, len(proc.Diagnostics))
 	for i := range proc.Diagnostics {
 		d := &proc.Diagnostics[i]
@@ -43,9 +43,12 @@ func (a *Annotator) Annotate(task tooling.Task, proc *tooling.ProcessResult) {
 	}
 }
 
-func (a *Annotator) columnUnit(task tooling.Task) textpos.Unit {
+// columnUnit is the unit the parser that read proc's findings counts columns
+// in: the declared parser's, when it did; none for the fallback's formats,
+// which count in whatever unit the tool that printed them does.
+func (a *Annotator) columnUnit(task tooling.Task, proc *tooling.ProcessResult) textpos.Unit {
 	p := task.Tool.OutputParser
-	if p == nil || a.facts == nil {
+	if p == nil || a.facts == nil || proc.ParserModule != p.Module {
 		return ""
 	}
 	facts, ok := a.facts(p.Module, p.Parser)

@@ -352,9 +352,9 @@ parsed it as <format>`. Its findings gate like any other — the embedded module
 levels only from what the tool printed — and block a cached pass like any other.
 
 The fallback reads a stdout-mode formatter's stderr only: its stdout is the file's
-new content, which no parser ever reads. It reads a tool without a declared parser
-as the tool's frame shows it, stdout and stderr together; empty output is not read
-at all. One rule applies to the **line** formats it recognizes (`gcc`, `msvc`,
+new content, which no parser ever reads. Every other tool's stdout and stderr are
+captured apart, parser declared or not, so progress written to stderr never lands
+inside a document on stdout; empty output is not read at all. One rule applies to the **line** formats it recognizes (`gcc`, `msvc`,
 `github-annotations`, `azure-logissue`) and to no structured one: a line naming a
 path that is not a file on disk — relative to the process's working directory, or
 absolute — is not a match, so prose that happens to look like `path:1:2:` is not a
@@ -385,16 +385,22 @@ own is parsed by naming the format its flag selects:
 A structured format is recognized by its envelope, whatever it holds: a SARIF log
 without a result, an ESLint report whose files have no message, a `<checkstyle/>`
 without a file are recognized and clean. A bare `[]` or `{}` has no envelope and is
-not. A line format is recognized when one line matches. Each parser reads stdout,
-and stderr when stdout does not hold its format; noise around a JSON document is
-skipped as it is for the tool parsers, and a truncated XML document yields the
-findings before the cut. The [parser catalog](../../reference/parser-catalog.md#format-parsers)
+not, nor is a document cut off before it closes, JSON or XML: its findings may be
+missing. An XML root counts only where it opens a line or follows the XML
+declaration, so a message that quotes `<checkstyle/>` is not a document. A line
+format is recognized when one line matches. Each parser reads stdout, and stderr
+when stdout does not hold its format; noise around a document is skipped as it is
+for the tool parsers. The [parser catalog](../../reference/parser-catalog.md#format-parsers)
 names the flag of each tool that prints each shape.
 
-A **declared** parser — a tool's or a format's — recognized a run that exited 0,
-whatever it printed: a clean run may print nothing or a summary no format
-describes, and neither is an unknown shape. What it did not recognize is a failed
-run whose output held nothing of its format.
+A **declared** parser — a tool's or a format's — that found something recognized
+the output. One that found nothing did not when the output holds findings in a
+standard format (the tool printed another format than the parser reads, and the
+fallback reads it); otherwise it recognized the output when its own format was
+there — its envelope, or for a JSON tool parser any JSON document — or when the
+run exited 0: a clean run may print nothing, or a summary no format describes. What
+remains, a failed run whose output held nothing either parser reads, is not
+recognized.
 
 The key `fallback` is the **sniffer**: it tries the formats in the order of the
 table and answers with the first that recognizes the output, named by its format.

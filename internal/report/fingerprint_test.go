@@ -68,9 +68,28 @@ func annotated(t *testing.T, root string, tool string, unit string, ds ...diagno
 		return parsermanager.ParserFacts{Tool: parsermanager.ToolCapability{ColumnUnit: unit}}, true
 	}
 	task := tooling.Task{ToolName: tool, Tool: config.Tool{OutputParser: &config.OutputParser{Module: "m", Parser: tool}}}
-	proc := tooling.ProcessResult{Diagnostics: ds}
+	proc := tooling.ProcessResult{Diagnostics: ds, ParserModule: "m"}
 	NewAnnotator(root, facts).Annotate(task, &proc)
 	return proc.Diagnostics
+}
+
+// The fallback's findings are not counted in the declared parser's unit: a
+// format carries whatever unit the tool that printed it counts in.
+func TestTheFallbacksColumnsHaveNoUnit(t *testing.T) {
+	root := t.TempDir()
+	path := writeFile(t, root, "src/a.js", "const café = 1;\n")
+	facts := func(string, string) (parsermanager.ParserFacts, bool) {
+		return parsermanager.ParserFacts{Tool: parsermanager.ToolCapability{ColumnUnit: "utf-16"}}, true
+	}
+	task := tooling.Task{ToolName: "eslint", Tool: config.Tool{OutputParser: &config.OutputParser{Module: "m", Parser: "eslint"}}}
+	proc := tooling.ProcessResult{
+		ParserModule: tooling.EmbeddedParserModule, Provenance: "fallback:gcc",
+		Diagnostics: []diagnostic.Diagnostic{{File: path, Row: 1, EndRow: 1, Col: 7, EndCol: 11, Message: "m"}},
+	}
+	NewAnnotator(root, facts).Annotate(task, &proc)
+	if got := proc.Diagnostics[0].Anchor; got.Precision != textpos.Unknown || got.Chars != nil {
+		t.Errorf("anchor = %+v, want no columns of an unknown unit on a non-ASCII line", got)
+	}
 }
 
 func writeFile(t *testing.T, root, rel, content string) string {

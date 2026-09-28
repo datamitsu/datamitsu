@@ -958,7 +958,7 @@ func (e *Executor) parseFileDiagnostics(ctx context.Context, proc *ProcessResult
 	if x.outcome == ExtractionParsedClean && len(diags) > 0 {
 		proc.Extraction = ExtractionParsedFindings
 	}
-	if (cutOut || cutErr || dropped) && x.module != "" && x.outcome != ExtractionParserUnavailable {
+	if (cutOut || cutErr || dropped) && x.outcome != ExtractionParserUnavailable {
 		proc.Extraction = ExtractionTruncated
 		log.Debug("tool output exceeded a parse limit",
 			zap.String("tool", task.ToolName),
@@ -1199,9 +1199,9 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 	// case, and only its stderr reaches the fallback.
 	declared := e.parser != nil && task.Tool.OutputParser != nil && !formatMode
 	parseMode := e.parser != nil
-	// Formatting and a declared parser need stdout and stderr kept apart; the
-	// fallback reads a tool without a parser the way its frame shows it.
-	separate := formatMode || declared
+	// Formatting and every parser need stdout and stderr kept apart: a line of
+	// stderr landing inside a JSON document on stdout would break it.
+	separate := formatMode || parseMode
 
 	for i, file := range filesToProcess {
 		// Check if context is cancelled before processing next file
@@ -1627,11 +1627,11 @@ func (e *Executor) executeBatchChunk(ctx context.Context, task Task, cmdInfo *bi
 	declared := e.parser != nil && task.Tool.OutputParser != nil && !formatMode
 	parseMode := e.parser != nil && !formatMode
 	procStart := time.Now()
-	stdoutBytes, stderrBytes, err := e.runCommandIO(cmd, nil, declared)
+	stdoutBytes, stderrBytes, err := e.runCommandIO(cmd, nil, parseMode)
 	procDuration := time.Since(procStart).Milliseconds()
 
 	output := stdoutBytes
-	if declared {
+	if parseMode {
 		// Keep both streams in the textual fallback shown when parsing yields nothing.
 		output = joinStreams(stdoutBytes, stderrBytes)
 	}

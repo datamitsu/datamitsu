@@ -134,6 +134,23 @@ func TestTheParsersReadAnOutputInTurn(t *testing.T) {
 	}
 }
 
+// TestOutputCutShortIsTruncatedWhateverReadIt: output over a parse limit is
+// truncated even when nothing recognized the part a parser read, so a pass is
+// never recorded over what the cut left unread.
+func TestOutputCutShortIsTruncatedWhateverReadIt(t *testing.T) {
+	for _, declared := range []bool{false, true} {
+		fp := &fakeParser{unrecognized: true}
+		e := &Executor{parser: fp}
+		e.SetParseLimits(ParseLimits{InputBytes: 8, Findings: 10})
+		var proc ProcessResult
+		e.parseFileDiagnostics(context.Background(), &proc, parseTask("core", "eslint"), t.TempDir(),
+			[]byte("progress 10%\nreal.c:1:1: error: m\n"), nil, 0, declared)
+		if proc.Extraction != ExtractionTruncated {
+			t.Errorf("declared %v: extraction %q, want truncated", declared, proc.Extraction)
+		}
+	}
+}
+
 // TestAFormattersStdoutReachesNoParser: the formatted file content is never
 // sniffed, whatever it holds; the formatter's stderr is.
 func TestAFormattersStdoutReachesNoParser(t *testing.T) {

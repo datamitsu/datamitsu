@@ -341,18 +341,15 @@ pub(crate) const DESCRIPTORS: &[&ToolCapability] = &[
 
 /// The answer of the tool parser `tool`; `None` when this module has none.
 ///
-/// A tool parser recognized its tool's output when it found a finding, when
-/// the tool exited 0 — a clean run may print a summary or nothing, and neither
-/// is an unknown shape — or, for a JSON tool, when it found a JSON document at
-/// all. What remains, a failed run whose output held nothing it reads, is not
-/// recognized, and the core then hands the output to the sniffer.
+/// A JSON tool parser's own format is there when it found a JSON document at
+/// all; a line tool parser has no envelope to find. `crate::fallback::declared`
+/// settles the rest: a parser that found nothing did not recognize output
+/// holding another format's findings, and did recognize a clean exit.
 pub fn answer(tool: &str, stdout: &[u8], stderr: &[u8], exit_code: i32) -> Option<Response> {
 	crate::json_diag::begin_parse();
 	let diags = dispatch(tool, stdout, stderr, exit_code)?;
-	if diags.is_empty() && exit_code != 0 && !crate::json_diag::document_seen() {
-		return Some(Response::unrecognized(tool));
-	}
-	Some(Response::recognized(tool, diags))
+	let own = crate::json_diag::document_seen();
+	Some(crate::fallback::declared(tool, diags, own, stdout, stderr, exit_code))
 }
 
 /// Dispatch a real tool parser by name. Returns `None` when this module has no

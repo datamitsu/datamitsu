@@ -79,6 +79,19 @@ func TestTheCurrentModuleAnswersWithItsOwnKeys(t *testing.T) {
 	if err != nil || resp.ABI != 2 || resp.Recognized || resp.Format != "hadolint" {
 		t.Errorf("core hadolint on prose = %+v, %v; want an ABI 2 answer that recognized nothing", resp, err)
 	}
+	// A JSON tool parser given another format's findings leaves them to the
+	// fallback, even though the output is JSON.
+	sarif := []byte(`{"version":"2.1.0","runs":[{"results":[{"level":"error","message":{"text":"m"}}]}]}`)
+	for _, exit := range []int32{0, 1} {
+		resp, err = m.ParseOutput(ctx, "core", "hadolint", sarif, nil, exit)
+		if err != nil || resp.Recognized {
+			t.Errorf("core hadolint on SARIF, exit %d = %+v, %v; want not recognized", exit, resp, err)
+		}
+	}
+	resp, err = m.ParseOutput(ctx, "core", "yamllint", []byte("Success: nothing to report\n"), nil, 0)
+	if err != nil || !resp.Recognized {
+		t.Errorf("core yamllint on a clean summary = %+v, %v; want recognized", resp, err)
+	}
 }
 
 func TestAModuleFromALaterReleaseIsReadAsTheNewestKnown(t *testing.T) {

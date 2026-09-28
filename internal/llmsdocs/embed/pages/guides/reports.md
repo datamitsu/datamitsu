@@ -116,6 +116,11 @@ non-zero while the parser that recognized its output found nothing in it
 that listed the tool would read it as clean — code scanning would close every
 alert the tool had.
 
+A cached pass carries no record of what read the output it stands for, so a
+cache hit of a tool without a declared parser is `unparsed-cache-hit` even when
+the fallback had read that output clean: warm runs of such a tool are incomplete
+until a parser is declared for it.
+
 The run is `complete` when every tool is, every operation ran, and the run left
 nothing out: a narrowed selection, a `--tools` filter (the tools it left out are
 listed as `selection.excludedTools`; the selected tools can still be complete),

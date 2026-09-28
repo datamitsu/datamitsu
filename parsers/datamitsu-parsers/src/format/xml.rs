@@ -192,6 +192,24 @@ fn reference(name: &str) -> Option<char> {
 	}
 }
 
+/// The places in `text` where a document whose root is `root` may begin: the
+/// start tag opening a line (after indentation) or following an XML
+/// declaration. A tag in the middle of other text is quoted, not a document.
+pub(crate) fn roots<'a>(text: &'a str, root: &'a str) -> impl Iterator<Item = &'a str> + 'a {
+	let open = format!("<{root}");
+	text
+		.match_indices(&open)
+		.map(|(i, _)| i)
+		.filter(move |&i| {
+			let line_start = text[..i].rfind('\n').map_or(0, |n| n + 1);
+			let before = text[line_start..i].trim();
+			before.is_empty() || before.ends_with("?>")
+		})
+		.map(move |i| &text[i..])
+		.collect::<Vec<_>>()
+		.into_iter()
+}
+
 /// The value of attribute `name`, if the tag has one.
 pub(crate) fn attr<'t>(attrs: &'t [(&str, String)], name: &str) -> Option<&'t str> {
 	attrs.iter().find(|(k, _)| *k == name).map(|(_, v)| v.as_str())

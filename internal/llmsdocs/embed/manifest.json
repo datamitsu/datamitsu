@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 57,
-  "pageSetHash": "3c057c5e39f216ee5046a0cd8f5c16f2",
+  "pageSetHash": "c70aa6decda34be1c29a4dfa6c2a1425",
   "pages": [
     {
       "slug": "about",
@@ -244,8 +244,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/parsers.md",
       "title": "WASM Output Parsers",
       "description": "How datamitsu declares, builds, delivers over two channels, verifies, and loads sandboxed Rust→WASM output parsers, and how the line-based diff-in-core powers formatting",
-      "bytes": 50951,
-      "contentHash": "1b7b748e5efb885ae8d93728f6042e8c"
+      "bytes": 51450,
+      "contentHash": "06448152a69dc7a69282dded89193731"
     },
     {
       "slug": "guides/architecture/planner",
@@ -325,8 +325,8 @@
       "url": "https://datamitsu.com/docs/guides/reports.md",
       "title": "Reports",
       "description": "One record of a fix, lint or check run — what it holds, what it never contains, how complete it says it is, and how its findings keep their identity across runs",
-      "bytes": 33286,
-      "contentHash": "50c74e2be16e71c13606c3d592b92315"
+      "bytes": 33559,
+      "contentHash": "cbf46dbe236c25305d8331211bfed3e7"
     },
     {
       "slug": "guides/runtime-management",

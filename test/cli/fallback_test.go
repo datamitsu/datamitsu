@@ -54,6 +54,21 @@ func TestFallbackReadsAToolWithoutAParser(t *testing.T) {
 	}
 }
 
+// TestFallbackReadsTheStreamsApart: a tool without a parser that writes
+// progress to stderr while its SARIF goes to stdout keeps the document whole.
+func TestFallbackReadsTheStreamsApart(t *testing.T) {
+	half := len(sarifLog) / 2
+	script := settle + clitest.RecordRun + "; echo 'scanning' >&2; printf '%s' '" + sarifLog[:half] +
+		"'; echo 'still scanning' >&2; printf '%s\\n' '" + sarifLog[half:] + "'; exit 1"
+	e := fallbackProject(t, map[string]string{"a.py": "import os\n"}, clitest.ShellTool("ruff", script, clitest.ToolOpSpec{}))
+
+	res := e.run("", nil, "lint", "--report", "json=run.json")
+	e.wantExit(res, 1)
+	if doc := e.read("run.json"); !strings.Contains(doc, `"provenance": "fallback:sarif"`) {
+		t.Errorf("the SARIF was not read apart from the progress on stderr:\n%s\n%s", doc, res.Stdout)
+	}
+}
+
 // TestFallbackStandsInForADeclaredParser: a declared parser that does not
 // recognize the output hands it to the fallback, and the run says so once.
 func TestFallbackStandsInForADeclaredParser(t *testing.T) {

@@ -452,3 +452,16 @@ func observeFile(t *testing.T, path string) cache.Seen {
 	}
 	return cache.Seen{Hash: hash}
 }
+
+func TestPlannedParserModulesIncludeTheFallback(t *testing.T) {
+	plan := &tooling.ExecutionPlan{Groups: []tooling.TaskGroup{{Tasks: []tooling.Task{
+		{Tool: config.Tool{OutputParser: &config.OutputParser{Module: "core", Parser: "eslint"}}},
+		{Tool: config.Tool{}},
+	}}}}
+	if got := plannedParserModules(plan); !slices.Equal(got, []string{parsermanager.EmbeddedModule, "core"}) {
+		t.Errorf("plannedParserModules() = %v, want the fallback and core", got)
+	}
+	if got := plannedParserModules(&tooling.ExecutionPlan{}); len(got) != 0 {
+		t.Errorf("an empty plan prewarms %v", got)
+	}
+}

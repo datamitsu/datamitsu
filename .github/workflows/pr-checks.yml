@@ -41,7 +41,9 @@ jobs:
       # Natively: the parsers' own tests and the tool output recorded under
       # parsers/datamitsu-parsers/fixtures.
       - name: Test WASM parser modules
-        run: cargo test
+        run: |
+          cargo test
+          cargo test --no-default-features --features format
         working-directory: parsers
       - env:
           GORELEASER_CURRENT_TAG: 0.0.0-pr.${{ github.event.pull_request.number }}

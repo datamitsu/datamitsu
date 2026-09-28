@@ -95,7 +95,10 @@ func TestThresholdGate(t *testing.T) {
 			if extraction == "" {
 				extraction = ExtractionParsedFindings
 			}
-			proc := ProcessResult{Extraction: extraction, Diagnostics: slices.Clone(c.findings), ParserModule: "core"}
+			proc := ProcessResult{Extraction: extraction, Diagnostics: slices.Clone(c.findings)}
+			if extraction == ExtractionParsedFindings || extraction == ExtractionTruncated {
+				proc.ParserModule = "core"
+			}
 			decision := gate(task, &proc)
 			if decision.Failed != c.wantFailed || decision.Reason != c.wantReason {
 				t.Errorf("decision = %+v, want failed %v with %q", decision, c.wantFailed, c.wantReason)
@@ -163,21 +166,25 @@ func fileSuccess(result ExecutionResult) []bool {
 // it does not, a non-zero exit fails at any threshold, and a module before the
 // contract leaves the exit code alone to decide.
 // TestThresholdGateAsksTheModuleThatParsed: findings the embedded fallback
-// read gate by its contract, whatever module the tool declares, or none.
+// read gate by its contract, whatever module the tool declares, or none — and
+// so do the fallback's findings under a declared parser the run could not use.
 func TestThresholdGateAsksTheModuleThatParsed(t *testing.T) {
-	var asked []string
-	gate := ThresholdGate("", func(module string) bool {
-		asked = append(asked, module)
-		return module == EmbeddedParserModule
-	}, nil)
-	task := Task{ToolName: "ruff", Tool: config.Tool{Name: "ruff"}}
-	proc := ProcessResult{
-		Extraction: ExtractionParsedFindings, Provenance: "fallback:sarif", ParserModule: EmbeddedParserModule,
-		Diagnostics: findingsAt(diagnostic.SeverityError),
-	}
-	decision := gate(task, &proc)
-	if !decision.Failed || !proc.GateActive || !slices.Equal(asked, []string{EmbeddedParserModule}) {
-		t.Errorf("decision %+v, active %v, asked %v; want the embedded module's contract to gate", decision, proc.GateActive, asked)
+	for _, extraction := range []Extraction{ExtractionParsedFindings, ExtractionParserUnavailable} {
+		var asked []string
+		gate := ThresholdGate("", func(module string) bool {
+			asked = append(asked, module)
+			return module == EmbeddedParserModule
+		}, nil)
+		task := Task{ToolName: "ruff", Tool: config.Tool{Name: "ruff"}}
+		proc := ProcessResult{
+			Extraction: extraction, Provenance: "fallback:sarif", ParserModule: EmbeddedParserModule,
+			Diagnostics: findingsAt(diagnostic.SeverityError),
+		}
+		decision := gate(task, &proc)
+		if !decision.Failed || !proc.GateActive || !slices.Equal(asked, []string{EmbeddedParserModule}) {
+			t.Errorf("%s: decision %+v, active %v, asked %v; want the embedded module's contract to gate",
+				extraction, decision, proc.GateActive, asked)
+		}
 	}
 }
 

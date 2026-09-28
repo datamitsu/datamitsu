@@ -1,13 +1,13 @@
 //! Checkstyle XML: a `<checkstyle>` root holding `<file name="…">` elements,
 //! each holding `<error line column severity message source/>` findings. The
-//! `source` is the rule. Many linters print it on request, which is what makes
+//! `source` is the rule, and a `link` (tflint writes one) its URL. Many linters print it on request, which is what makes
 //! it the most common interchange format after SARIF.
 use crate::capabilities::ToolCapability;
 use crate::diagnostic::RawDiagnostic;
 use crate::response::Response;
 use crate::severity::{self, Level};
 
-use super::xml::{attr, Token, Tokenizer};
+use super::xml::{attr, roots, Token, Tokenizer};
 
 const LEVELS: &[Level] = &[
 	Level("error", severity::ERROR),
@@ -38,17 +38,20 @@ pub fn parse(stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Response {
 }
 
 /// The findings of the Checkstyle document in `text`, which starts at a
-/// `<checkstyle>` tag; `None` when there is none. A truncated document yields
-/// the findings before the cut.
+/// `<checkstyle>` tag opening a line; `None` when there is none, or it is cut
+/// off before its root closes.
 fn document(text: &str) -> Option<Vec<RawDiagnostic>> {
-	text
-		.match_indices("<checkstyle")
-		.find_map(|(start, _)| from(&text[start..]))
+	roots(text, "checkstyle").find_map(from)
 }
 
 fn from(text: &str) -> Option<Vec<RawDiagnostic>> {
 	let mut tokens = Tokenizer::new(text);
 	match tokens.next()? {
+		Token::Start {
+			name: "checkstyle",
+			self_closing: true,
+			..
+		} => return Some(Vec::new()),
 		Token::Start { name: "checkstyle", .. } => {}
 		_ => return None,
 	}
@@ -74,15 +77,16 @@ fn from(text: &str) -> Option<Vec<RawDiagnostic>> {
 					col: attr(&attrs, "column").and_then(|v| v.trim().parse().ok()),
 					severity: attr(&attrs, "severity").and_then(|s| severity::of(LEVELS, s)),
 					code: attr(&attrs, "source").filter(|s| !s.is_empty()).map(str::to_string),
+					url: attr(&attrs, "link").filter(|s| !s.is_empty()).map(str::to_string),
 					file: file.clone(),
 					..RawDiagnostic::default()
 				});
 			}
-			Token::End { name: "checkstyle" } => break,
+			Token::End { name: "checkstyle" } => return Some(out),
 			_ => {}
 		}
 	}
-	Some(out)
+	None
 }
 
 #[cfg(test)]
@@ -137,11 +141,20 @@ mod tests {
 	}
 
 	#[test]
-	fn a_truncated_document_keeps_the_errors_before_the_cut() {
+	fn a_truncated_document_is_not_recognized() {
 		let cut = &SHELLCHECK[..SHELLCHECK.len() / 2];
-		let r = parse(cut, b"", 1);
-		assert!(r.recognized);
-		assert_eq!(r.diagnostics.len(), 1);
+		assert!(!parse(cut, b"", 1).recognized);
+	}
+
+	#[test]
+	fn a_root_quoted_in_other_text_is_no_document() {
+		for out in [
+			&b"a.xml:1:1: error: unexpected <checkstyle/>\n"[..],
+			br#"{"message":"<checkstyle version='4.3'></checkstyle>"}"#,
+		] {
+			assert!(!parse(out, b"", 1).recognized, "{}", String::from_utf8_lossy(out));
+		}
+		assert!(parse(b"  <checkstyle/>\n", b"", 0).recognized);
 	}
 
 	#[test]

@@ -41,11 +41,14 @@ fn findings() -> Vec<(&'static str, Recording)> {
 	vec![
 		recording!("azure-logissue", "ruff-findings"),
 		recording!("checkstyle-xml", "hadolint-findings"),
+		recording!("checkstyle-xml", "oxlint-findings"),
 		recording!("checkstyle-xml", "shellcheck-findings"),
+		recording!("checkstyle-xml", "tflint-findings"),
 		recording!("codeclimate", "ruff-findings"),
 		recording!("gcc", "shellcheck-findings"),
 		recording!("gcc", "typos-findings"),
 		recording!("github-annotations", "ruff-findings"),
+		recording!("junit-xml", "golangci-lint-findings"),
 		recording!("junit-xml", "ruff-findings"),
 		recording!("sarif", "ruff-findings"),
 	]
@@ -232,4 +235,47 @@ fn ruff_junit() {
 	assert_eq!((d.file.as_deref(), d.row, d.col), (None, Some(1), Some(8)));
 	assert_eq!(d.code.as_deref(), Some("org.ruff.F401"));
 	assert_eq!(d.message, "/work/bad: `os` imported but unused");
+}
+
+#[test]
+fn tflint_checkstyle() {
+	let (key, r) = recording!("checkstyle-xml", "tflint-findings");
+	let diags = parse(key, &r);
+	assert_eq!(diags.len(), 3);
+	let d = find(&diags, "terraform_deprecated_interpolation");
+	assert_eq!((d.file.as_deref(), d.row, d.col), (Some("main.tf"), Some(3), Some(11)));
+	assert_eq!(d.severity, Some(severity::WARNING));
+	assert!(
+		d.url
+			.as_deref()
+			.is_some_and(|u| u.contains("terraform_deprecated_interpolation")),
+		"{:?}",
+		d.url
+	);
+	assert_eq!(
+		find(&diags, "terraform_required_version").message,
+		"terraform \"required_version\" attribute is required"
+	);
+}
+
+#[test]
+fn oxlint_checkstyle() {
+	let (key, r) = recording!("checkstyle-xml", "oxlint-findings");
+	let diags = parse(key, &r);
+	assert_eq!(diags.len(), 2);
+	let d = find(&diags, "eslint(no-debugger)");
+	assert_eq!(
+		(d.file.as_deref(), d.row, d.col, d.severity),
+		(Some("/work/a.js"), Some(2), Some(1), Some(severity::ERROR))
+	);
+}
+
+#[test]
+fn golangci_lint_junit() {
+	let (key, r) = recording!("junit-xml", "golangci-lint-findings");
+	let d = &parse(key, &r)[0];
+	assert_eq!((d.file.as_deref(), d.row, d.col), (Some("x.go"), Some(6), Some(11)));
+	assert_eq!(d.code.as_deref(), Some("errcheck"));
+	assert_eq!(d.severity, None);
+	assert_eq!(d.message, "x.go:6:11: Error return value of `os.Remove` is not checked");
 }

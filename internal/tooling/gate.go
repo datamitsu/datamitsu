@@ -49,12 +49,12 @@ func ThresholdGate(global config.Severity, contract func(module string) bool, ig
 	return func(task Task, proc *ProcessResult) GateDecision {
 		failOn := config.EffectiveFailOn(task.OpConfig, global)
 		level := diagnostic.Severity(failOn.Level())
-		// Only a module that parsed has been described; asking about any other
-		// would load it again. A truncated process was parsed too, and its
-		// findings are real.
-		parsed := proc.Extraction == ExtractionParsedClean || proc.Extraction == ExtractionParsedFindings ||
-			proc.Extraction == ExtractionTruncated
-		active := parsed && proc.ParserModule != "" && contract(proc.ParserModule)
+		// Only a module that answered has been described; asking about any
+		// other would load it again. The findings of a truncated output are
+		// real, and so are the fallback's under a declared parser the run could
+		// not use.
+		parsed := proc.ParserModule != ""
+		active := parsed && contract(proc.ParserModule)
 		proc.FailOn, proc.GateActive = failOn, active
 
 		var gating []int

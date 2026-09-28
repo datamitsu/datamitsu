@@ -369,13 +369,18 @@ func (sc *sharedContext) shutdown() {
 	}
 }
 
-// plannedParserModules returns the distinct WASM parser modules referenced by the
-// tools in plan (via their outputParser), for prewarming their one-time
-// compilation before execution.
+// plannedParserModules returns the distinct WASM parser modules the tools in
+// plan may be parsed with, for prewarming their one-time compilation before
+// execution: those their outputParser names, and the embedded fallback any
+// output may reach.
 func plannedParserModules(plan *tooling.ExecutionPlan) []string {
 	seen := make(map[string]bool)
 	var mods []string
 	for _, group := range plan.Groups {
+		if len(group.Tasks) > 0 && !seen[parsermanager.EmbeddedModule] {
+			seen[parsermanager.EmbeddedModule] = true
+			mods = append(mods, parsermanager.EmbeddedModule)
+		}
 		for _, task := range group.Tasks {
 			op := task.Tool.OutputParser
 			if op == nil || op.Module == "" || seen[op.Module] {

@@ -15,7 +15,7 @@ use crate::diagnostic::RawDiagnostic;
 use crate::response::Response;
 use crate::severity::{self, Level};
 
-use super::xml::{attr, Token, Tokenizer};
+use super::xml::{attr, roots, Token, Tokenizer};
 
 const LEVELS: &[Level] = &[
 	Level("error", severity::ERROR),
@@ -62,18 +62,25 @@ struct Open {
 	text: String,
 }
 
+/// The findings of the JUnit document in `text`, whose root opens a line;
+/// `None` when there is none, or it is cut off before its root closes.
 fn document(text: &str) -> Option<Vec<RawDiagnostic>> {
-	text
-		.match_indices("<testsuite")
-		.find_map(|(start, _)| from(&text[start..]))
+	roots(text, "testsuite").find_map(from)
 }
 
 fn from(text: &str) -> Option<Vec<RawDiagnostic>> {
 	let mut tokens = Tokenizer::new(text);
 	let root = match tokens.next()? {
+		Token::Start {
+			name,
+			self_closing: true,
+			..
+		} if name == "testsuites" || name == "testsuite" => return Some(Vec::new()),
 		Token::Start { name, .. } if name == "testsuites" || name == "testsuite" => name,
 		_ => return None,
 	};
+	// A testsuite root may hold testsuites of its own.
+	let mut depth = 1;
 	let mut case = Case::default();
 	let mut open: Option<Open> = None;
 	let mut out = Vec::new();
@@ -122,11 +129,21 @@ fn from(text: &str) -> Option<Vec<RawDiagnostic>> {
 					out.extend(finding(&case, o));
 				}
 			}
-			Token::End { name } if name == root => break,
+			Token::Start {
+				name,
+				self_closing: false,
+				..
+			} if name == root => depth += 1,
+			Token::End { name } if name == root => {
+				depth -= 1;
+				if depth == 0 {
+					return Some(out);
+				}
+			}
 			_ => {}
 		}
 	}
-	Some(out)
+	None
 }
 
 fn finding(case: &Case, failure: Open) -> Option<RawDiagnostic> {
@@ -230,11 +247,21 @@ at open()</error></testcase><testcase classname="tests.test_b" name="test_skip">
 	}
 
 	#[test]
-	fn a_truncated_suite_keeps_the_failures_before_the_cut() {
+	fn a_truncated_suite_is_not_recognized() {
 		let cut = &PYTEST[..PYTEST.len() - 150];
-		let r = parse(cut, b"", 1);
+		assert!(!parse(cut, b"", 1).recognized);
+	}
+
+	#[test]
+	fn a_suite_of_suites_keeps_every_failure() {
+		let nested = br#"<testsuite name="all">
+<testsuite name="a"><testcase name="t1"><failure message="one"/></testcase></testsuite>
+<testsuite name="b"><testcase name="t2"><failure message="two"/></testcase></testsuite>
+</testsuite>"#;
+		let r = parse(nested, b"", 1);
 		assert!(r.recognized);
-		assert_eq!(r.diagnostics.len(), 1);
+		let codes: Vec<_> = r.diagnostics.iter().map(|d| d.code.as_deref()).collect();
+		assert_eq!(codes, [Some("t1"), Some("t2")]);
 	}
 
 	#[test]

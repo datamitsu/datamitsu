@@ -65,21 +65,23 @@ pub(crate) const PARSERS: &[(&str, Parser)] = &[
 /// Run the format parser `key` a configuration declared, or the sniffer for
 /// `fallback`; `None` for a key that is neither.
 ///
-/// A declared format recognized a run that exited 0 whatever it printed, as a
-/// tool parser does (`crate::tools::answer`): a clean run may print nothing, or
-/// a summary no format describes, and neither is an unknown shape. The sniffer
-/// recognizes only what one of the formats matched, exit code or not: it guesses,
-/// and a guess needs evidence.
+/// A declared format answers as `crate::fallback::declared` settles it. The
+/// sniffer recognizes only what one of the formats matched, exit code or not:
+/// it guesses, and a guess needs evidence.
 pub fn dispatch(key: &str, stdout: &[u8], stderr: &[u8], exit_code: i32) -> Option<Response> {
 	if key == crate::fallback::DESCRIPTOR.name {
 		return Some(crate::fallback::sniff(stdout, stderr, exit_code));
 	}
 	let (_, parse) = PARSERS.iter().find(|(name, _)| *name == key)?;
 	let answer = parse(stdout, stderr, exit_code);
-	if !answer.recognized && exit_code == 0 {
-		return Some(Response::recognized(key, Vec::new()));
-	}
-	Some(answer)
+	Some(crate::fallback::declared(
+		key,
+		answer.diagnostics,
+		answer.recognized,
+		stdout,
+		stderr,
+		exit_code,
+	))
 }
 
 /// A format parser's contract samples (`SAMPLES`), by key.
@@ -131,6 +133,13 @@ mod tests {
 				.expect("the sniffer")
 				.recognized
 		);
+	}
+
+	#[test]
+	fn a_declared_format_leaves_another_formats_findings_to_the_fallback() {
+		let sarif = br#"{"version":"2.1.0","runs":[{"results":[{"level":"error","message":{"text":"m"}}]}]}"#;
+		let r = dispatch("gcc", sarif, b"", 0).expect("a format");
+		assert!(!r.recognized, "a clean exit must not hide another format's findings");
 	}
 
 	#[test]

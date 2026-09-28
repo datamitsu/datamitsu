@@ -42,28 +42,14 @@ host loses multiline cases (e.g. `cue_fmt`); the parser decides whether to split
 
 ## Output form
 
-`parse` returns the answer of response ABI 2: whether the parser recognized the
-output, the format it read (a format key, or the tool name for a tool parser), and
-the diagnostics. Each diagnostic always has `message`; every other field (`row`,
-`col`, `end_row`, `end_col`, `severity`, `source`, `code`, `url`, `file`) is present
-only if the tool emitted it. An unknown key recognizes nothing.
+`parse` answers in response ABI 2 — `{"recognized", "format", "diagnostics"}` —
+where every diagnostic field but `message` is present only if the tool emitted it.
+The [output parser guide](../website/docs/guides/architecture/parsers.md) describes
+the answer, the `describe` schema, the format parsers and the fallback.
 
-```json
-{
-  "recognized": true,
-  "format": "hadolint",
-  "diagnostics": [{ "message": "missing newline", "row": 12, "col": 1, "code": "DL3000" }]
-}
-```
-
-`describe` (schema 3) says `"abi": 2` and names the build's `features`.
-
-## Two builds
-
-The crate has two features: `tools` (one parser per tool) and `format` (the
-standard-format parsers under `src/format/` and the sniffer in `src/fallback.rs`).
-The public module is the default, both; the fallback the core embeds is
-`--no-default-features --features format`. `cargo test` runs either build.
+The crate builds two ways: the public module (the default features, `tools` and
+`format`) and the fallback the core embeds (`--no-default-features --features
+format`); `cargo test` passes either.
 
 ## Adding a parser
 
