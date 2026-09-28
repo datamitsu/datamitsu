@@ -76,6 +76,7 @@
                   "severity": "error",
                   "reported": false,
                   "gates": true,
+                  "shown": false,
                   "kind": "synthetic",
                   "message": "alpha exited 1 without parsable findings",
                   "location": {

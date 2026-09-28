@@ -33,29 +33,30 @@ func Unenforced(gateActive bool, failOn string) bool {
 	return !gateActive && failOn != "" && failOn != string(config.DefaultFailOn)
 }
 
-// Visible returns the findings of inv the terminal shows, by ShownMask, and
+// Visible returns the findings of inv the terminal shows (Finding.Shown) and
 // the ones it counts instead. Synthetic findings are in neither: the terminal
 // prints the tool's output in their place.
-func Visible(tr ToolRun, inv Invocation) (shown, hidden []Finding) {
-	var issues []Finding
+func Visible(inv Invocation) (shown, hidden []Finding) {
 	for _, f := range inv.Findings {
-		if f.Kind != kindSynthetic {
-			issues = append(issues, f)
-		}
-	}
-	reported := make([]bool, len(issues))
-	for i, f := range issues {
-		reported[i] = f.Reported
-	}
-	failed := inv.State == string(tooling.ProcessRan) && !inv.Success
-	for i, show := range ShownMask(failed, Unenforced(tr.GateActive, tr.FailOn), reported) {
-		if show {
-			shown = append(shown, issues[i])
-		} else {
-			hidden = append(hidden, issues[i])
+		switch {
+		case f.Kind == kindSynthetic:
+		case f.Shown:
+			shown = append(shown, f)
+		default:
+			hidden = append(hidden, f)
 		}
 	}
 	return shown, hidden
+}
+
+// ShownOf is ShownMask over the findings of one process.
+func ShownOf(proc tooling.ProcessResult) []bool {
+	reported := make([]bool, len(proc.Diagnostics))
+	for i, d := range proc.Diagnostics {
+		reported[i] = d.Reported
+	}
+	failed := proc.State == tooling.ProcessRan && !proc.Success
+	return ShownMask(failed, Unenforced(proc.GateActive, string(proc.FailOn)), reported)
 }
 
 // Synthetic returns the synthetic finding of inv, which stands for a failure

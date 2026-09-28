@@ -82,6 +82,7 @@
                   "severity": "error",
                   "reported": false,
                   "gates": true,
+                  "shown": false,
                   "kind": "synthetic",
                   "message": "creds exited 4 without parsable findings",
                   "location": {
@@ -152,6 +153,7 @@
                   "severity": "warning",
                   "reported": false,
                   "gates": false,
+                  "shown": false,
                   "kind": "issue",
                   "message": "token *** in the image",
                   "location": {
@@ -241,6 +243,7 @@
                   "severity": "error",
                   "reported": false,
                   "gates": true,
+                  "shown": false,
                   "kind": "synthetic",
                   "message": "leaky exited 3 without parsable findings",
                   "location": {

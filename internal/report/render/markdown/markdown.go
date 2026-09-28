@@ -230,8 +230,10 @@ func operation(op report.Operation) []part {
 	return parts
 }
 
-// status is what a tool's invocations came to.
 func status(tr report.ToolRun) string {
+	if len(tr.Invocations) == 0 {
+		return "⊘ skipped"
+	}
 	failed, stopped := false, false
 	for _, inv := range tr.Invocations {
 		switch inv.FailureKind {
@@ -314,7 +316,7 @@ func levelsOf(tr report.ToolRun) levels {
 func findings(op report.Operation) (shown []report.Finding, hidden levels) {
 	for _, tr := range op.Tools {
 		for _, inv := range tr.Invocations {
-			s, h := report.Visible(tr, inv)
+			s, h := report.Visible(inv)
 			shown = append(shown, s...)
 			for _, f := range h {
 				hidden.add(f.Severity)

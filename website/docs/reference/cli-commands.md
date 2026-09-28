@@ -640,7 +640,11 @@ Each tool lists its app as configured, its parser module and its threshold, and
 one invocation per process: its task, state, exit code, extraction outcome, the
 files it answered for and the findings it reported, with paths relative to the
 repository root. The files a cache answered appear as one `cached` or
-`verdict-hit` invocation of their task.
+`verdict-hit` invocation of their task. A finding says whether it is at or above
+the threshold (`reported`), whether it failed its tool (`gates`) and whether the
+terminal shows it (`shown`, see
+[Findings in the terminal](#findings-in-the-terminal)), which is what the
+annotations, `markdown` and `--output agent` list.
 
 Every finding carries a `fingerprint` that identifies it across runs: SHA-256
 over the tool, the rule, the path and the text of the finding's first line, and

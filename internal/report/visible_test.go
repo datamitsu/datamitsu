@@ -3,66 +3,106 @@ package report
 import (
 	"slices"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/diagnostic"
+	"github.com/datamitsu/datamitsu/internal/tooling"
 )
 
-func TestVisible(t *testing.T) {
+func TestShownOf(t *testing.T) {
 	code := 1
-	f := func(msg string, reported bool) Finding {
-		return Finding{Kind: kindIssue, Message: msg, Reported: reported}
-	}
-	synthetic := Finding{Kind: kindSynthetic, Message: "t exited 1 without parsable findings"}
+	d := func(reported bool) diagnostic.Diagnostic { return diagnostic.Diagnostic{Reported: reported} }
 	tests := []struct {
-		name          string
-		tool          ToolRun
-		inv           Invocation
-		shown, hidden []string
+		name string
+		proc tooling.ProcessResult
+		want []bool
 	}{
 		{
-			name:  "a failed invocation shows what reaches the threshold",
-			tool:  ToolRun{FailOn: "error", GateActive: true},
-			inv:   Invocation{State: "ran", ExitCode: &code, Findings: []Finding{f("e", true), f("w", false)}},
-			shown: []string{"e"}, hidden: []string{"w"},
+			name: "a failed process shows what reaches the threshold",
+			proc: tooling.ProcessResult{
+				State: tooling.ProcessRan, ExitCode: &code, FailOn: "error", GateActive: true,
+				Diagnostics: []diagnostic.Diagnostic{d(true), d(false)},
+			},
+			want: []bool{true, false},
 		},
 		{
-			name:  "a failure none of whose findings reaches it shows them all",
-			tool:  ToolRun{FailOn: "error", GateActive: true},
-			inv:   Invocation{State: "ran", ExitCode: &code, Findings: []Finding{f("w1", false), f("w2", false)}},
-			shown: []string{"w1", "w2"},
+			name: "a failure none of whose findings reaches it shows them all",
+			proc: tooling.ProcessResult{
+				State: tooling.ProcessRan, ExitCode: &code, FailOn: "error", GateActive: true,
+				Diagnostics: []diagnostic.Diagnostic{d(false), d(false)},
+			},
+			want: []bool{true, true},
 		},
 		{
-			name:   "a passed invocation shows nothing",
-			tool:   ToolRun{FailOn: "error", GateActive: true},
-			inv:    Invocation{State: "ran", Success: true, Findings: []Finding{f("w", false)}},
-			hidden: []string{"w"},
+			name: "a passed process shows nothing",
+			proc: tooling.ProcessResult{
+				State: tooling.ProcessRan, Success: true, FailOn: "error", GateActive: true,
+				Diagnostics: []diagnostic.Diagnostic{d(true)},
+			},
+			want: []bool{false},
 		},
 		{
-			name:  "an unenforced threshold shows what it would have caught",
-			tool:  ToolRun{FailOn: "warning"},
-			inv:   Invocation{State: "ran", Success: true, Findings: []Finding{f("w", true), f("i", false)}},
-			shown: []string{"w"}, hidden: []string{"i"},
+			name: "an unenforced threshold shows what it would have caught",
+			proc: tooling.ProcessResult{
+				State: tooling.ProcessRan, Success: true, FailOn: "warning",
+				Diagnostics: []diagnostic.Diagnostic{d(true), d(false)},
+			},
+			want: []bool{true, false},
 		},
-		{
-			name: "a synthetic finding is in neither",
-			tool: ToolRun{FailOn: "error", GateActive: true},
-			inv:  Invocation{State: "ran", ExitCode: &code, Findings: []Finding{synthetic}},
-		},
-	}
-	messages := func(fs []Finding) []string {
-		out := make([]string, 0, len(fs))
-		for _, f := range fs {
-			out = append(out, f.Message)
-		}
-		return out
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			shown, hidden := Visible(tt.tool, tt.inv)
-			if !slices.Equal(messages(shown), tt.shown) || !slices.Equal(messages(hidden), tt.hidden) {
-				t.Errorf("shown %v, hidden %v; want %v, %v", messages(shown), messages(hidden), tt.shown, tt.hidden)
+			if got := ShownOf(tt.proc); !slices.Equal(got, tt.want) {
+				t.Errorf("ShownOf() = %v, want %v", got, tt.want)
 			}
 		})
 	}
-	if got, ok := Synthetic(Invocation{Findings: []Finding{f("e", true), synthetic}}); !ok || got.Message != synthetic.Message {
+}
+
+func TestVisible(t *testing.T) {
+	inv := Invocation{Findings: []Finding{
+		{Kind: kindIssue, Message: "shown", Shown: true},
+		{Kind: kindIssue, Message: "hidden"},
+		{Kind: kindSynthetic, Message: "t exited 1 without parsable findings"},
+	}}
+	shown, hidden := Visible(inv)
+	if len(shown) != 1 || shown[0].Message != "shown" || len(hidden) != 1 || hidden[0].Message != "hidden" {
+		t.Errorf("Visible() = %v, %v; want the shown finding and the hidden one, the synthetic in neither", shown, hidden)
+	}
+	if got, ok := Synthetic(inv); !ok || got.Kind != kindSynthetic {
 		t.Errorf("Synthetic() = %v, %v", got, ok)
+	}
+}
+
+// A finding two processes of a tool both reported is listed once, and is
+// shown when either process showed it: dropping the duplicate never changes
+// what the other findings of its process show.
+func TestSettleKeepsWhatWasShown(t *testing.T) {
+	code := 1
+	dup := func(shown bool) Finding {
+		return Finding{
+			Tool: "t", Source: "t", Code: "c", Severity: "error", Reported: true, Kind: kindIssue, Shown: shown,
+			Message: "m", Location: Location{Path: "a.go", Row: 1},
+		}
+	}
+	warning := Finding{
+		Tool: "t", Source: "t", Code: "w", Severity: "warning", Kind: kindIssue, Message: "below",
+		Location: Location{Path: "a.go", Row: 2},
+	}
+	tr := &ToolRun{Name: "t", Invocations: []Invocation{
+		{ID: "t::1#1", State: "ran", ExitCode: &code, Findings: []Finding{dup(false)}},
+		{ID: "t::1#2", State: "ran", ExitCode: &code, Findings: []Finding{dup(true), warning}},
+	}}
+	settleFindings(tr)
+	var listed, shown []string
+	for _, inv := range tr.Invocations {
+		for _, f := range inv.Findings {
+			listed = append(listed, f.Code)
+			if f.Shown {
+				shown = append(shown, f.Code)
+			}
+		}
+	}
+	if !slices.Equal(listed, []string{"c", "w"}) || !slices.Equal(shown, []string{"c"}) {
+		t.Errorf("listed %v, shown %v; want the error once and shown, the warning hidden", listed, shown)
 	}
 }

@@ -328,9 +328,11 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
   command settled after the stream opened (`streamAnnotations`) — and absorbs `SIGPIPE`, so a closed reader fails
   a write instead of killing the run; a stream the sink could not write fails the run with exit
   1 and the error on stdout (`JSONLSink.Failed`, `ui.EventStreamFailed`).
-- What a person sees is one rule, `report.ShownMask` (`report.Visible` over the
-  model, `visibleMask` over a process): the terminal, the annotations and every
-  later "what is shown" output apply it, never a filter of their own.
+- What a person sees is one rule, `report.ShownMask`, applied per process
+  (`report.ShownOf`, which the terminal's `visibleMask` is): the report records
+  it as `Finding.Shown` before duplicates across processes collapse, and the
+  annotations, Markdown, agent output and every later "what is shown" output
+  read it through `report.Visible`, never a filter of their own.
 - GitHub annotations (`internal/report/render/github`, `runner/annotations.go`)
   are printed once, after the last operation, from the built `report.Run`;
   `openCommandRegion` opens one `::stop-commands::<token>` region (a

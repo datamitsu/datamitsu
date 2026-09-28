@@ -117,9 +117,8 @@ func skipText(s report.Skip) string {
 	return tooling.SkippedTool{ToolName: s.Tool, Reason: reasons[s.Reason], Detail: s.Detail}.ReasonText()
 }
 
-// agentInvocation writes the records of one invocation of tr.
 func agentInvocation(b *strings.Builder, tr report.ToolRun, inv report.Invocation, shown, hidden *levelCounts) {
-	visible, below := report.Visible(tr, inv)
+	visible, below := report.Visible(inv)
 	for _, f := range visible {
 		shown.add(severityOf(f.Severity))
 		record(b, agentFinding(f))
@@ -137,7 +136,9 @@ func agentInvocation(b *strings.Builder, tr report.ToolRun, inv report.Invocatio
 		failure = label + strings.TrimPrefix(synthetic.Message, tr.Name)
 	case inv.FailureKind == "setup":
 		failure = label + " failed before it ran"
-	case inv.FailureKind == "exit" && len(visible)+len(below) == 0:
+	case inv.FailureKind == "exit" && inv.ExitCode != nil && *inv.ExitCode == 0 && len(visible)+len(below) == 0:
+		// An exit-0 failure is a formatter that wrote nothing: it never had findings,
+		// where one of another exit code without any lost them to a duplicate.
 		failure = label + " failed without parsable findings"
 	default:
 		return

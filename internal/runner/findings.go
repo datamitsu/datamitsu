@@ -64,14 +64,10 @@ func visibleFindings(proc tooling.ProcessResult) []diagnostic.Diagnostic {
 }
 
 // visibleMask is report.ShownMask over a process, the one rule every output
-// that shows what a person sees applies.
+// that shows what a person sees applies; the report records it per finding as
+// Shown.
 func visibleMask(proc tooling.ProcessResult) []bool {
-	reported := make([]bool, len(proc.Diagnostics))
-	for i, d := range proc.Diagnostics {
-		reported[i] = d.Reported
-	}
-	failed := proc.State == tooling.ProcessRan && !proc.Success
-	return report.ShownMask(failed, report.Unenforced(proc.GateActive, string(proc.FailOn)), reported)
+	return report.ShownOf(proc)
 }
 
 func sortFindings(ds []diagnostic.Diagnostic) {

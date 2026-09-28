@@ -82,6 +82,7 @@
                   "severity": "warning",
                   "reported": false,
                   "gates": false,
+                  "shown": false,
                   "kind": "issue",
                   "message": "Always tag the version of an image explicitly",
                   "location": {

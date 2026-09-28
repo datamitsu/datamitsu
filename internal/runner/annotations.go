@@ -37,7 +37,6 @@ func AnnotationModes() []string {
 	return []string{AnnotationsAuto, AnnotationsGitHub, AnnotationsOff}
 }
 
-// annotationsExport is how a report's exports name the annotations.
 const annotationsExport = "github-annotations"
 
 // annotationState is what the run decided about annotations and what it has

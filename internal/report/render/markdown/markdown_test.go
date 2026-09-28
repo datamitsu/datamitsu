@@ -13,7 +13,7 @@ import (
 
 func issue(path string, row int, severity string, reported bool, msg string) report.Finding {
 	return report.Finding{
-		Tool: "eslint", Source: "eslint", Code: "no-var", Severity: severity, Reported: reported, Kind: "issue", Message: msg,
+		Tool: "eslint", Source: "eslint", Code: "no-var", Severity: severity, Reported: reported, Shown: reported, Kind: "issue", Message: msg,
 		Location: report.Location{Path: path, Row: row, EndRow: row, Chars: &textpos.Span{Start: 3, End: 4}, Precision: "exact"},
 	}
 }
@@ -151,6 +151,20 @@ func TestWriteExactFit(t *testing.T) {
 	cut, err := Write(&out, sampleRun(), full.Len())
 	if err != nil || cut != 0 || out.String() != full.String() {
 		t.Errorf("Write at an exact fit cut %d (%v):\n%s", cut, err, out.String())
+	}
+}
+
+// A tool with no binary for the host is listed without a run: it did not pass.
+func TestPlatformSkippedToolIsNotPassed(t *testing.T) {
+	run := sampleRun()
+	run.Operations[0].Tools = append(run.Operations[0].Tools,
+		report.ToolRun{Name: "trivy", Incomplete: []report.Reason{"platform-skip"}, Invocations: []report.Invocation{}})
+	var out bytes.Buffer
+	if err := (Renderer{}).Render(&out, run, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "| `trivy` | ⊘ skipped | 0 | 0 |") {
+		t.Errorf("the skipped tool's row:\n%s", out.String())
 	}
 }
 

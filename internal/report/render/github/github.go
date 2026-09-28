@@ -144,7 +144,7 @@ func Candidates(run *report.Run) []Annotation {
 	for _, op := range run.Operations {
 		for _, tr := range op.Tools {
 			for _, inv := range tr.Invocations {
-				shown, _ := report.Visible(tr, inv)
+				shown, _ := report.Visible(inv)
 				for _, f := range shown {
 					add(f)
 				}
@@ -269,7 +269,6 @@ func Select(candidates []Annotation, touched map[string]bool) Selection {
 	return sel
 }
 
-// order is one type's candidates in print order.
 func order(list []Annotation, touched map[string]bool) []Annotation {
 	byFile := map[string][]Annotation{}
 	var noFile []Annotation

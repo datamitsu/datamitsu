@@ -50,9 +50,10 @@ graph TD
   it reported. The files a cache answered appear as one `cached` or
   `verdict-hit` invocation of their task.
 - **Findings** — the rule, the level, whether it is at or above the threshold
-  (`reported`) and whether it failed its tool (`gates`), the message, where it
-  is — the path relative to the repository root, 1-based rows and columns with
-  an exclusive end — and its fingerprint.
+  (`reported`), whether it failed its tool (`gates`) and whether the terminal
+  shows it (`shown`, which the annotations, `markdown` and `--output agent`
+  follow), the message, where it is — the path relative to the repository
+  root, 1-based rows and columns with an exclusive end — and its fingerprint.
 
 Everything is sorted, so one run gives one document byte for byte, and the time
 it is stamped with comes from `SOURCE_DATE_EPOCH` when that is set.

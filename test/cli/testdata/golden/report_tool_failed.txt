@@ -137,6 +137,7 @@
                   "severity": "error",
                   "reported": false,
                   "gates": true,
+                  "shown": false,
                   "kind": "synthetic",
                   "message": "beta exited 1 without parsable findings",
                   "location": {
@@ -207,6 +208,7 @@
                   "severity": "warning",
                   "reported": false,
                   "gates": false,
+                  "shown": false,
                   "kind": "issue",
                   "message": "Always tag the version of an image explicitly",
                   "location": {

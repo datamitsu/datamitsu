@@ -144,7 +144,7 @@ func TestFileIsRelativeToTheRepositoryRoot(t *testing.T) {
 func finding(file string, row int, severity string) report.Finding {
 	return report.Finding{
 		Fingerprint: fmt.Sprintf("%s:%d:%s", file, row, severity), Tool: "t", Source: "t", Code: "c",
-		Severity: severity, Reported: true, Kind: "issue", Message: "m",
+		Severity: severity, Reported: true, Shown: true, Kind: "issue", Message: "m",
 		Location: report.Location{Path: file, Row: row, EndRow: row, Precision: "unknown"},
 	}
 }
@@ -235,7 +235,7 @@ func TestSelectNoticeSlot(t *testing.T) {
 // or above its threshold, and a synthetic finding, once each.
 func TestCandidates(t *testing.T) {
 	warn := finding("a.go", 2, "warning")
-	warn.Reported = false
+	warn.Reported, warn.Shown = false, false
 	dup := finding("a.go", 1, "error")
 	synthetic := report.Finding{
 		Tool: "t", Source: "t", Severity: "error", Kind: "synthetic", Gates: true,

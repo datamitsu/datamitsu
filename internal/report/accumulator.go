@@ -429,8 +429,11 @@ func (a *Accumulator) invocations(task tooling.Task, result *tooling.ExecutionRe
 				inv.Files = append(inv.Files, a.fileResult(fr))
 			}
 		}
-		for _, d := range proc.Diagnostics {
-			inv.Findings = append(inv.Findings, a.finding(task.ToolName, d, tr))
+		shown := ShownOf(proc)
+		for i, d := range proc.Diagnostics {
+			f := a.finding(task.ToolName, d, tr)
+			f.Shown = shown[i]
+			inv.Findings = append(inv.Findings, f)
 		}
 		if f, ok := syntheticFinding(task.ToolName, proc, tr.Category); ok {
 			inv.Findings = append(inv.Findings, f)
@@ -578,12 +581,17 @@ func settleFindings(tr *ToolRun) {
 	// failed: the one listed is the strongest, in the invocation that reported
 	// it, and the first of equals.
 	best := map[fingerprintInput][2]int{}
+	// A finding the terminal showed in any of its invocations is shown once,
+	// wherever it is listed: what is shown does not depend on which duplicate
+	// was kept.
+	shown := map[fingerprintInput]bool{}
 	for i, inv := range tr.Invocations {
 		for j, f := range inv.Findings {
 			if f.Kind == kindSynthetic {
 				continue
 			}
 			input := f.input()
+			shown[input] = shown[input] || f.Shown
 			if pos, seen := best[input]; !seen || stronger(f, tr.Invocations[pos[0]].Findings[pos[1]]) {
 				best[input] = [2]int{i, j}
 			}
@@ -599,6 +607,9 @@ func settleFindings(tr *ToolRun) {
 			// another's, however alike their failures read.
 			if f.Kind != kindSynthetic && best[f.input()] != [2]int{i, j} {
 				continue
+			}
+			if f.Kind != kindSynthetic {
+				f.Shown = shown[f.input()]
 			}
 			kept = append(kept, f)
 		}

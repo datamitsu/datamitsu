@@ -20,7 +20,7 @@ func TestAgentInvocation(t *testing.T) {
 		{
 			name: "a finding whose message spans lines is one record",
 			inv: report.Invocation{State: "ran", ExitCode: &one, Findings: []report.Finding{{
-				Tool: "tsc", Source: "tsc", Code: "TS2322", Severity: "error", Reported: true, Kind: "issue",
+				Tool: "tsc", Source: "tsc", Code: "TS2322", Severity: "error", Reported: true, Shown: true, Kind: "issue",
 				Message: "first\r\nsecond\nthird", Location: report.Location{Path: "src/a.ts", Row: 3, Col: 7},
 			}}},
 			want: "src/a.ts:3:7: error tsc(TS2322): first\\nsecond\\nthird\n",
@@ -28,7 +28,7 @@ func TestAgentInvocation(t *testing.T) {
 		{
 			name: "a path with a line break is one record too",
 			inv: report.Invocation{State: "ran", ExitCode: &one, Findings: []report.Finding{{
-				Tool: "tsc", Source: "tsc", Severity: "error", Reported: true, Kind: "issue",
+				Tool: "tsc", Source: "tsc", Severity: "error", Reported: true, Shown: true, Kind: "issue",
 				Message: "m", Location: report.Location{Path: "odd\nname.ts", Row: 1},
 			}}},
 			want: "odd\\nname.ts:1: error tsc: m\n",

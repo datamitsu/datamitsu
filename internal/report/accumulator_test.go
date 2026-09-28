@@ -128,7 +128,7 @@ func TestInvocationsOfATask(t *testing.T) {
 		Fingerprint:      Fingerprint("hadolint", "DL3000", "b/Dockerfile", "row:3", 0),
 		FingerprintBasis: "row",
 		Tool:             "hadolint", Source: "hadolint", Code: "DL3000", RuleURL: "https://example.test/DL3000",
-		Severity: "error", Reported: true, Gates: true, Kind: "security", Message: "m", Provenance: "parser",
+		Severity: "error", Reported: true, Gates: true, Shown: true, Kind: "security", Message: "m", Provenance: "parser",
 		Location: Location{Path: "b/Dockerfile", Row: 3, EndRow: 3, Col: 1, EndCol: 5, Unit: "utf-32", Precision: "unknown"},
 		lineHash: "row:3",
 	}

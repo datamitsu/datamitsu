@@ -251,6 +251,10 @@ type Finding struct {
 	Reported bool `json:"reported"`
 	// Gates marks a finding that made its invocation fail.
 	Gates bool `json:"gates"`
+	// Shown marks a finding the terminal shows, and so what agent output,
+	// the annotations and Markdown list (ShownMask): decided in the process
+	// that reported it, before duplicates across processes were dropped.
+	Shown bool `json:"shown"`
 	// Kind is issue, security for a tool whose category is security, or
 	// synthetic for the one finding that stands for a tool that failed
 	// without a parsable one.
