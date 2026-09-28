@@ -358,7 +358,9 @@ failed:
   named after the directory it ran in (`.` for the repository root), with the
   process's ID after it when several of the tool's ran there: a process that
   exited non-zero on findings below the threshold is a `<failure type="exit">`
-  listing them, and one that failed without any is an `<error type="exit">`
+  listing them — unless a file it answered for already fails on a gating
+  finding, which says the same — and one that failed without any is an
+  `<error type="exit">`
   carrying the last lines of its output, masked — never a `security` tool's.
   A process that could not be set up is an `<error type="setup">`, and a
   finding without a file is on its process's case too. A failed tsc run over a

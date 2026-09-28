@@ -236,9 +236,10 @@ type invocationCase struct {
 	tc      *testCase
 }
 
-// settledFailure is an invocation that exited non-zero on findings the
-// report lists with another invocation of the tool.
-type settledFailure struct {
+// exitFailure is an invocation that failed on its own on findings: those it
+// lists, or those the report lists with another invocation of the tool once
+// duplicates collapsed.
+type exitFailure struct {
 	inv   report.Invocation
 	code  int
 	count int
@@ -257,20 +258,20 @@ func toolCases(tr *report.ToolRun, cancelled []report.Cancel) []*testCase {
 		return files[path]
 	}
 	var invocations []invocationCase
-	var settled []settledFailure
+	byID := map[string]*testCase{}
+	caseOf := func(inv report.Invocation) *testCase {
+		if byID[inv.ID] == nil {
+			byID[inv.ID] = &testCase{className: tr.Name}
+			invocations = append(invocations, invocationCase{dir: dirName(inv.Dir), id: inv.ID, tc: byID[inv.ID]})
+		}
+		return byID[inv.ID]
+	}
+	var onFindings []exitFailure
 	withhold := common.Security(tr)
 
 	for _, inv := range tr.Invocations {
-		var own *testCase
-		ownCase := func() *testCase {
-			if own == nil {
-				own = &testCase{className: tr.Name}
-				invocations = append(invocations, invocationCase{dir: dirName(inv.Dir), id: inv.ID, tc: own})
-			}
-			return own
-		}
 		if inv.State == string(tooling.ProcessSetupFailed) {
-			tc := ownCase()
+			tc := caseOf(inv)
 			tc.time += inv.Duration
 			tc.failure = &caseFailure{kind: "setup", message: "setup failed", tail: tail(inv, withhold)}
 			continue
@@ -302,7 +303,7 @@ func toolCases(tr *report.ToolRun, cancelled []report.Cancel) []*testCase {
 			case common.Synthetic(f):
 				synthetic = &f
 			case f.Location.Path == "":
-				ownCase().add(f, tr.FailOn)
+				caseOf(inv).add(f, tr.FailOn)
 				gating = gating || f.Gates
 			default:
 				fileCase(f.Location.Path).add(f, tr.FailOn)
@@ -320,39 +321,31 @@ func toolCases(tr *report.ToolRun, cancelled []report.Cancel) []*testCase {
 		if inv.ExitCode != nil {
 			code = *inv.ExitCode
 		}
-		if synthetic == nil && len(inv.Findings) == 0 && code != 0 {
-			// It exited on findings another invocation lists: decided once
-			// every file's case is known.
-			settled = append(settled, settledFailure{inv: inv, code: code, count: count})
+		if synthetic != nil || (len(inv.Findings) == 0 && code == 0) {
+			// Failed without a finding: its output tail says why — or, for
+			// a result the executor rejected after it exited 0, is all there
+			// is.
+			tc := caseOf(inv)
+			if count != 1 {
+				tc.time += inv.Duration
+			}
+			tc.failure = &caseFailure{kind: "exit", message: fmt.Sprintf("exit %d", code), tail: tail(inv, withhold)}
+			if synthetic != nil {
+				tc.failure.text = synthetic.Message
+			}
 			continue
 		}
-		tc := ownCase()
-		if count != 1 {
-			tc.time += inv.Duration
-		}
-		fail := &caseFailure{kind: "exit", message: fmt.Sprintf("exit %d", code)}
-		for _, f := range inv.Findings {
-			if !common.Synthetic(f) {
-				fail.findings = append(fail.findings, line(f))
-			}
-		}
-		switch {
-		case synthetic != nil:
-			fail.text, fail.tail = synthetic.Message, tail(inv, withhold)
-		case len(fail.findings) > 0:
-			fail.onFindings = true
-		default:
-			// Rejected after it exited 0, without a finding.
-			fail.tail = tail(inv, withhold)
-		}
-		tc.failure = fail
+		// It exited on findings, some of which may be listed with another
+		// invocation since duplicates collapsed: decided once every file's
+		// case is known.
+		onFindings = append(onFindings, exitFailure{inv: inv, code: code, count: count})
 	}
-	// A process whose findings another invocation lists failed on them: when
-	// one gates, a file it answered for fails already; otherwise it is a
-	// failure of its own, with its findings listed there.
-	for _, s := range settled {
+	// A process that exited on findings failed on them: when one of them, or
+	// the duplicate of one, gates, a file it answered for fails already;
+	// otherwise it is a failure of its own, listing the findings it holds.
+	for _, e := range onFindings {
 		gated := false
-		for _, fr := range s.inv.Files {
+		for _, fr := range e.inv.Files {
 			if tc := files[fr.Path]; answered(fr.State) && tc != nil && len(tc.gating) > 0 {
 				gated = true
 			}
@@ -360,11 +353,15 @@ func toolCases(tr *report.ToolRun, cancelled []report.Cancel) []*testCase {
 		if gated {
 			continue
 		}
-		tc := &testCase{className: tr.Name, failure: &caseFailure{kind: "exit", message: fmt.Sprintf("exit %d", s.code), onFindings: true}}
-		if s.count != 1 {
-			tc.time = s.inv.Duration
+		fail := &caseFailure{kind: "exit", message: fmt.Sprintf("exit %d", e.code), onFindings: true}
+		for _, f := range e.inv.Findings {
+			fail.findings = append(fail.findings, line(f))
 		}
-		invocations = append(invocations, invocationCase{dir: dirName(s.inv.Dir), id: s.inv.ID, tc: tc})
+		tc := caseOf(e.inv)
+		if e.count != 1 {
+			tc.time += e.inv.Duration
+		}
+		tc.failure = fail
 	}
 
 	// An invocation's case is named after its directory, told apart by the

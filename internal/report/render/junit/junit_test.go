@@ -384,6 +384,32 @@ func TestExitFailureAfterDedupe(t *testing.T) {
 	}
 }
 
+// A process that exited 1 on a gating finding now listed with another
+// invocation, and on a warning of its own, fails through the file the gating
+// finding is on; its warning is that file's output, not a second failure.
+func TestExitFailureAfterPartialDedupe(t *testing.T) {
+	one := 1
+	run := &report.Run{Operations: []report.Operation{{Name: "lint", Ran: true, Tools: []report.ToolRun{{
+		Name: "eslint", FailOn: "error", Complete: true,
+		Invocations: []report.Invocation{
+			{
+				ID: "eslint:pkg:1#1", Dir: "pkg", State: "ran", ExitCode: &one, FailureKind: "exit", Files: files("pkg/a.ts"),
+				Findings: []report.Finding{issue("pkg/a.ts", 3, "error", true, "Unexpected var")},
+			},
+			{
+				ID: "eslint:pkg:2#1", Dir: "pkg", State: "ran", ExitCode: &one, FailureKind: "exit", Files: files("pkg/a.ts"),
+				Findings: []report.Finding{issue("pkg/a.ts", 7, "warning", false, "a warning")},
+			},
+		},
+	}}}}}
+	doc, _ := decode(t, run)
+	s := doc.suite(t, "lint/eslint")
+	c := s.testCase(t, "pkg/a.ts")
+	if s.Tests != 1 || s.Failures != 1 || c.Failure == nil || !strings.Contains(c.SystemOut, "a warning") {
+		t.Errorf("suite = %+v, want the file failing once with the warning as its output", s)
+	}
+}
+
 // A process the executor failed after it exited 0 — a formatter that printed
 // nothing for a file that is not empty — failed on its own: an error case,
 // not a pass.
