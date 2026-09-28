@@ -59,7 +59,7 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	if err := applyFailFast(cmd, checkFailFast, &opts); err != nil {
 		return err
 	}
-	if err := applyReports(checkReports, &opts); err != nil {
+	if err := applyReports(cmd, checkReports, &opts); err != nil {
 		return err
 	}
 	err := runner.RunSequential(

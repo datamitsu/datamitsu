@@ -59,7 +59,7 @@ func runLint(cmd *cobra.Command, args []string) error {
 	if err := applyFailFast(cmd, lintFailFast, &opts); err != nil {
 		return err
 	}
-	if err := applyReports(lintReports, &opts); err != nil {
+	if err := applyReports(cmd, lintReports, &opts); err != nil {
 		return err
 	}
 	err := runner.Run(config.OpLint, args, lintExplain, lintFileScoped, lintSelectedTools, lintFailOnSkip,

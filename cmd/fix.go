@@ -59,7 +59,7 @@ func runFix(cmd *cobra.Command, args []string) error {
 	if err := applyFailFast(cmd, fixFailFast, &opts); err != nil {
 		return err
 	}
-	if err := applyReports(fixReports, &opts); err != nil {
+	if err := applyReports(cmd, fixReports, &opts); err != nil {
 		return err
 	}
 	err := runner.Run(config.OpFix, args, fixExplain, fixFileScoped, fixSelectedTools, fixFailOnSkip,

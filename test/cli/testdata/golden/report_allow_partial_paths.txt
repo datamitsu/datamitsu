@@ -7,17 +7,22 @@
   "startedAt": "<TS>",
   "endedAt": "<TS>",
   "selection": {
-    "mode": "all",
+    "mode": "paths",
+    "paths": [
+      "Dockerfile"
+    ],
     "fileScoped": false
   },
   "failFast": false,
   "complete": false,
-  "incomplete": [],
+  "incomplete": [
+    "narrowed-selection"
+  ],
   "operations": [
     {
       "name": "lint",
       "ran": true,
-      "success": false,
+      "success": true,
       "durationMs": <DUR>,
       "skipped": [],
       "cancelled": [],
@@ -34,6 +39,7 @@
           "category": "",
           "complete": false,
           "incomplete": [
+            "narrowed-selection",
             "no-extraction"
           ],
           "invocations": [
@@ -71,61 +77,12 @@
                   "state": "ran",
                   "success": true,
                   "exitCode": 0
-                }
-              ],
-              "findings": []
-            }
-          ]
-        },
-        {
-          "name": "beta",
-          "app": {
-            "name": "beta",
-            "kind": "shell"
-          },
-          "parser": null,
-          "failOn": "error",
-          "gateActive": false,
-          "category": "",
-          "complete": false,
-          "incomplete": [
-            "no-extraction"
-          ],
-          "invocations": [
-            {
-              "id": "beta::2#1",
-              "taskId": "beta::2",
-              "dir": "",
-              "scope": "repository",
-              "granularity": "repo",
-              "arity": "none",
-              "coverage": "complete",
-              "wholeUnit": true,
-              "state": "ran",
-              "exitCode": 1,
-              "success": false,
-              "failureKind": "exit",
-              "durationMs": <DUR>,
-              "extraction": "none",
-              "provenance": "none",
-              "files": [
-                {
-                  "path": "Dockerfile",
-                  "state": "ran",
-                  "success": false,
-                  "exitCode": 1
                 },
                 {
-                  "path": "exec.config.js",
+                  "path": "sub/keep.txt",
                   "state": "ran",
-                  "success": false,
-                  "exitCode": 1
-                },
-                {
-                  "path": "fixture.marker",
-                  "state": "ran",
-                  "success": false,
-                  "exitCode": 1
+                  "success": true,
+                  "exitCode": 0
                 }
               ],
               "findings": []
@@ -147,12 +104,14 @@
           "failOn": "error",
           "gateActive": true,
           "category": "",
-          "complete": true,
-          "incomplete": [],
+          "complete": false,
+          "incomplete": [
+            "narrowed-selection"
+          ],
           "invocations": [
             {
-              "id": "hadolint::3#1",
-              "taskId": "hadolint::3",
+              "id": "hadolint::2#1",
+              "taskId": "hadolint::2",
               "dir": "",
               "scope": "per-file",
               "granularity": "file",

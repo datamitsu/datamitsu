@@ -150,9 +150,13 @@ func (a *Accumulator) Build(info BuildInfo) *Run {
 		Operations: make([]Operation, 0, len(a.ops)),
 		Exports:    append([]Export{}, info.Exports...),
 	}
+	names := make([]string, 0, len(a.ops))
 	for _, op := range a.ops {
 		run.Operations = append(run.Operations, a.buildOperation(op))
+		names = append(names, op.name)
 	}
+	run.Selection.ExcludedTools = excludedTools(a.opts.Tools, names, run.Selection.Tools)
+	judge(run, a.opts.Tools)
 	return run
 }
 
@@ -198,6 +202,16 @@ func (a *Accumulator) buildOperation(o *OperationRecord) Operation {
 			}
 			tr.Invocations = append(tr.Invocations, a.invocations(task, result, o.taskDir, tr)...)
 		}
+	}
+	// A tool with no binary for this host did not run where it was asked to:
+	// its run is listed, incomplete, so no consumer reads its absence as clean.
+	for _, s := range o.plan.Skipped {
+		if s.Reason != tooling.SkipReasonUnsupportedPlatform || tools[s.ToolName] != nil {
+			continue
+		}
+		tr := a.newToolRun(o.name, s.ToolName)
+		tr.Incomplete = []Reason{ReasonPlatformSkip}
+		tools[s.ToolName] = tr
 	}
 	for _, tr := range tools {
 		sortInvocations(tr.Invocations)

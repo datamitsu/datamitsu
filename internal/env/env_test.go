@@ -1440,6 +1440,40 @@ func TestReport(t *testing.T) {
 	}
 }
 
+func TestAllowPartial(t *testing.T) {
+	t.Setenv(allowPartial.Name, os.Getenv(allowPartial.Name))
+
+	_ = os.Unsetenv(allowPartial.Name)
+	if got := AllowPartial(); got != "" {
+		t.Errorf("AllowPartial() unset = %q, want empty", got)
+	}
+	for _, raw := range []string{"true", "0", "yes", " TRUE "} {
+		t.Setenv(allowPartial.Name, raw)
+		if got := AllowPartial(); got != raw {
+			t.Errorf("AllowPartial() = %q, want %q returned raw", got, raw)
+		}
+	}
+}
+
+func TestParseBool(t *testing.T) {
+	for _, tt := range []struct {
+		raw       string
+		value, ok bool
+	}{
+		{"true", true, true},
+		{" 1 ", true, true},
+		{"TRUE", true, true},
+		{"false", false, true},
+		{"0", false, true},
+		{"yes", false, false},
+		{"", false, false},
+	} {
+		if value, ok := ParseBool(tt.raw); value != tt.value || ok != tt.ok {
+			t.Errorf("ParseBool(%q) = %v, %v; want %v, %v", tt.raw, value, ok, tt.value, tt.ok)
+		}
+	}
+}
+
 func TestSourceDateEpoch(t *testing.T) {
 	tests := []struct {
 		raw  string

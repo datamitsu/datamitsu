@@ -10,7 +10,9 @@
     "mode": "all",
     "fileScoped": false
   },
-  "failFast": true,
+  "failFast": false,
+  "complete": false,
+  "incomplete": [],
   "operations": [
     {
       "name": "fix",
@@ -30,6 +32,10 @@
           "failOn": "error",
           "gateActive": false,
           "category": "",
+          "complete": false,
+          "incomplete": [
+            "no-extraction"
+          ],
           "invocations": [
             {
               "id": "gamma::1#1",
@@ -91,6 +97,10 @@
           "failOn": "error",
           "gateActive": false,
           "category": "",
+          "complete": false,
+          "incomplete": [
+            "no-extraction"
+          ],
           "invocations": [
             {
               "id": "alpha::1#1",
@@ -147,6 +157,8 @@
           "failOn": "error",
           "gateActive": true,
           "category": "",
+          "complete": true,
+          "incomplete": [],
           "invocations": [
             {
               "id": "hadolint::2#1",

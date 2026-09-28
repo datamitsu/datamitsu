@@ -1,0 +1,5 @@
+exit code: 2
+===STDOUT===
+
+===STDERR===
+error: --report cannot be combined with --fail-fast=true: a run that stops at the first failing tool cannot list every finding

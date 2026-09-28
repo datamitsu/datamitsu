@@ -30,9 +30,10 @@ var observationExcluded = map[string]bool{
 // observation-only: config JS may read them through facts().env, so they stay in
 // EnvironAll and move the config-eval key.
 var executionOnly = map[string]bool{
-	failFast.Name: true,
-	failOn.Name:   true,
-	report.Name:   true,
+	failFast.Name:     true,
+	failOn.Name:       true,
+	report.Name:       true,
+	allowPartial.Name: true,
 }
 
 // environExcluded is the source-mode staleness key's exclusion list: the

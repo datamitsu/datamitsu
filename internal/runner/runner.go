@@ -249,6 +249,9 @@ func initSharedContext(
 	if err != nil {
 		return nil, fmt.Errorf("failed to get git root: %w", err)
 	}
+	if err := refuseNarrowedReports(opts, tooling.NewSelection(sc.rootPath, sc.cwdPath, args, fileScoped), fileScoped, sc.selectedTools); err != nil {
+		return nil, err
+	}
 
 	// Load configuration
 	func() {
@@ -1226,6 +1229,9 @@ type Options struct {
 	// Reports are written once the last operation has ended, whether or not
 	// its tools failed.
 	Reports []render.Spec
+	// AllowPartial writes a report that lists findings for a narrowed run
+	// instead of refusing the run.
+	AllowPartial bool
 }
 
 // validate rejects unknown flag values. Rank() reads an unvalidated string

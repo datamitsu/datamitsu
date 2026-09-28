@@ -24,7 +24,13 @@ type Run struct {
 	EndedAt   time.Time `json:"endedAt"`
 	Selection Selection `json:"selection"`
 	// FailFast is the value the run used; a report turns it off.
-	FailFast   bool        `json:"failFast"`
+	FailFast bool `json:"failFast"`
+	// Complete is true when every tool run is complete, every operation ran
+	// and Incomplete is empty. A document without it is never complete.
+	Complete bool `json:"complete"`
+	// Incomplete are the run-level reasons: narrowed-selection, tools-filter,
+	// not-narrowable, operation-skipped.
+	Incomplete []Reason    `json:"incomplete"`
 	Operations []Operation `json:"operations"`
 	// Exports lists every report the run was asked for, with the status each
 	// had when this document was written.
@@ -49,7 +55,37 @@ type Selection struct {
 	// Tools is the --tools filter; empty when the run selected every tool.
 	Tools      []string `json:"tools,omitempty"`
 	FileScoped bool     `json:"fileScoped"`
+	// ExcludedTools are the configured tools of the run's operations that
+	// --tools left out.
+	ExcludedTools []string `json:"excludedTools,omitempty"`
 }
+
+// Reason says why a tool run or a run is not complete.
+type Reason string
+
+// Reasons, by the fact that failed. Scope: the run was narrowed or a task
+// covered part of its unit. Execution: a planned task did not run to the end.
+// Extraction: an output was not read into findings. Run level: what the run as
+// a whole left out.
+const (
+	ReasonNarrowedSelection Reason = "narrowed-selection"
+	ReasonPartialUnit       Reason = "partial-unit"
+
+	ReasonCancelled    Reason = "cancelled"
+	ReasonNotStarted   Reason = "not-started"
+	ReasonSetupFailed  Reason = "setup-failed"
+	ReasonPlatformSkip Reason = "platform-skip"
+
+	ReasonNoExtraction      Reason = "no-extraction"
+	ReasonParserUnavailable Reason = "parser-unavailable"
+	ReasonParseFailed       Reason = "parse-failed"
+	ReasonTruncated         Reason = "truncated"
+	ReasonUnparsedCacheHit  Reason = "unparsed-cache-hit"
+
+	ReasonToolsFilter      Reason = "tools-filter"
+	ReasonNotNarrowable    Reason = "not-narrowable"
+	ReasonOperationSkipped Reason = "operation-skipped"
+)
 
 // Operation is one operation of a run: fix or lint.
 type Operation struct {
@@ -97,7 +133,12 @@ type ToolRun struct {
 	GateActive bool `json:"gateActive"`
 	// Category is the tool's category as its parser module describes it: ""
 	// or security.
-	Category    string       `json:"category"`
+	Category string `json:"category"`
+	// Complete is true when Incomplete is empty: the tool covered the whole
+	// repository, every planned task ran to the end, and every output was
+	// read into findings.
+	Complete    bool         `json:"complete"`
+	Incomplete  []Reason     `json:"incomplete"`
 	Invocations []Invocation `json:"invocations"`
 }
 

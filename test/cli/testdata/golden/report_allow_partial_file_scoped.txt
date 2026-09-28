@@ -1,0 +1,36 @@
+{
+  "schema": "datamitsu.report/1",
+  "datamitsu": {
+    "version": "<VERSION>",
+    "configuration": "datamitsu.config"
+  },
+  "startedAt": "<TS>",
+  "endedAt": "<TS>",
+  "selection": {
+    "mode": "empty",
+    "fileScoped": true
+  },
+  "failFast": false,
+  "complete": false,
+  "incomplete": [
+    "narrowed-selection"
+  ],
+  "operations": [
+    {
+      "name": "lint",
+      "ran": true,
+      "success": true,
+      "durationMs": <DUR>,
+      "skipped": [],
+      "cancelled": [],
+      "tools": []
+    }
+  ],
+  "exports": [
+    {
+      "format": "json",
+      "path": "run.json",
+      "status": "written"
+    }
+  ]
+}

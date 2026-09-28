@@ -448,6 +448,20 @@ func Report() string {
 	return os.Getenv(report.Name)
 }
 
+// AllowPartial returns DATAMITSU_ALLOW_PARTIAL exactly as set, "" when unset.
+// The command layer reads it as true, 1, false or 0 and exits 2 on anything
+// else: a mistyped value must not decide silently whether a narrowed run's
+// report is written.
+func AllowPartial() string {
+	return os.Getenv(allowPartial.Name)
+}
+
+// ParseBool reads the boolean spelling datamitsu's variables accept: true or
+// 1, false or 0, case-insensitive and trimmed.
+func ParseBool(raw string) (value, ok bool) {
+	return parseFailFast(raw)
+}
+
 // sourceDateEpoch is the reproducible-builds convention naming the time an
 // artifact is stamped with.
 const sourceDateEpoch = "SOURCE_DATE_EPOCH"

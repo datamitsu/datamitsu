@@ -195,6 +195,104 @@ func TestReportUsage(t *testing.T) {
 	}
 }
 
+// TestReportNarrowedRun: a report that lists findings is refused, before
+// anything runs, for a run narrowed at plan time; --allow-partial writes it
+// with every reason it is incomplete, and never makes it complete.
+func TestReportNarrowedRun(t *testing.T) {
+	cases := []struct {
+		name string
+		dir  string
+		args []string
+	}{
+		{name: "paths", args: []string{"lint", "Dockerfile"}},
+		{name: "subtree", dir: "sub", args: []string{"lint"}},
+		{name: "tools", args: []string{"lint", "--tools", "hadolint"}},
+		{name: "file_scoped", args: []string{"lint", "--file-scoped"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			e := reportProject(t)
+			e.p.WriteFile("sub/keep.txt", "")
+			refused := e.run(tc.dir, nil, append(tc.args, "--report", "json=run.json")...)
+			e.wantExit(refused, 2)
+			e.wantMarker("alpha", "")
+			e.wantMarker("hadolint", "")
+			e.golden("report_refused_"+tc.name, refused)
+
+			events := e.run(tc.dir, nil, jsonl(append(tc.args, "--report", "json=run.json")...)...)
+			e.wantExit(events, 2)
+			wantReportEvent(t, clitest.MustParseJSONL(t, events.Stderr), "json", "run.json", "refused", "the run is narrowed")
+
+			allowed := e.run(tc.dir, nil, append(tc.args, "--report", "json=run.json", "--allow-partial")...)
+			e.wantExit(allowed, 0)
+			doc, decoded := e.report(filepath.Join(tc.dir, "run.json"))
+			if decoded["complete"] != false {
+				t.Errorf("--allow-partial made the run complete:\n%s", doc)
+			}
+			e.goldenReport("allow_partial_"+tc.name, doc)
+		})
+	}
+
+	t.Run("env", func(t *testing.T) {
+		e := reportProject(t)
+		res := e.run("", []string{"DATAMITSU_ALLOW_PARTIAL=1"}, "lint", "Dockerfile", "--report", "json=run.json")
+		e.wantExit(res, 0)
+		res = e.run("", []string{"DATAMITSU_ALLOW_PARTIAL=1"}, "lint", "Dockerfile", "--report", "json=run.json", "--allow-partial=false")
+		e.wantExit(res, 2)
+		res = e.run("", []string{"DATAMITSU_ALLOW_PARTIAL=yes"}, "lint", "--report", "json=run.json")
+		e.wantExit(res, 2)
+		e.golden("report_allow_partial_invalid_env", res)
+	})
+}
+
+// TestReportKeepsGoing: a report turns fail-fast off, so a failing tool does
+// not stop the ones after it (S2's twin); fail-fast asked for explicitly is a
+// usage error.
+func TestReportKeepsGoing(t *testing.T) {
+	files := map[string]string{"fixture.marker": ""}
+	tools := []string{
+		clitest.ShellTool("alpha", failScript, clitest.ToolOpSpec{Priority: 10}),
+		clitest.ShellTool("beta", passScript, clitest.ToolOpSpec{Priority: 20}),
+	}
+
+	t.Run("fail_fast_off", func(t *testing.T) {
+		e := newExecProject(t, files, fixtureSpec, tools...)
+		res := e.run("", nil, "lint", "--report", "json=run.json")
+		e.wantExit(res, 1)
+		e.wantMarker("alpha", "alpha \n")
+		e.wantMarker("beta", "beta \n")
+		doc, decoded := e.report("run.json")
+		if decoded["failFast"] != false {
+			t.Errorf("failFast = %v, want false: a report turns it off", decoded["failFast"])
+		}
+		e.goldenReport("keep_going", doc)
+	})
+
+	t.Run("flag_wins_over_env", func(t *testing.T) {
+		e := newExecProject(t, files, fixtureSpec, tools...)
+		res := e.run("", []string{"DATAMITSU_FAIL_FAST=true"}, "lint", "--fail-fast=false", "--report", "json=run.json")
+		e.wantExit(res, 1)
+		e.wantMarker("beta", "beta \n")
+	})
+
+	for _, tc := range []struct {
+		name string
+		env  []string
+		args []string
+	}{
+		{name: "flag", args: []string{"lint", "--fail-fast=true", "--report", "json=run.json"}},
+		{name: "env", env: []string{"DATAMITSU_FAIL_FAST=true", "DATAMITSU_REPORT=json=run.json"}, args: []string{"lint"}},
+	} {
+		t.Run("explicit_"+tc.name, func(t *testing.T) {
+			e := newExecProject(t, files, fixtureSpec, tools...)
+			res := e.run("", tc.env, tc.args...)
+			e.wantExit(res, 2)
+			e.wantMarker("alpha", "")
+			e.golden("report_fail_fast_"+tc.name, res)
+		})
+	}
+}
+
 func wantReportEvent(t *testing.T, events []clitest.Event, format, path, status, msg string) {
 	t.Helper()
 	got := eventsOf(events, func(e clitest.Event) bool { return e.Type == "report" })

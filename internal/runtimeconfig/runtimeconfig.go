@@ -46,6 +46,7 @@ const (
 // There is intentionally no ToMap() method — map conversion (for the JS VM) is
 // internal to the engine layer via json.Marshal/json.Unmarshal.
 type Effective struct {
+	AllowPartial             string `json:"allowPartial"`
 	Concurrency              int    `json:"concurrency"`
 	ConfigCache              bool   `json:"configCache"`
 	FailFast                 bool   `json:"failFast"`
@@ -85,6 +86,7 @@ func Compute() Effective {
 		failFastSource = FailFastSourceEnv
 	}
 	return Effective{
+		AllowPartial:             env.AllowPartial(),
 		Concurrency:              env.GetConcurrency(),
 		ConfigCache:              env.ConfigCacheEnabled(),
 		FailFast:                 failFast,

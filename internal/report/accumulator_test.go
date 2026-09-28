@@ -86,7 +86,7 @@ func TestInvocationsOfATask(t *testing.T) {
 	op.Stopped(Cancel{TaskID: unreached.ID, Tool: "hadolint", Dir: "x", Cause: "fail-fast"})
 	op.End(false, 40)
 	acc.NotRun("fix")
-	run := acc.Build(BuildInfo{Version: "1.0.0", Configuration: "c", StartedAt: time.Unix(0, 0), EndedAt: time.Unix(1, 0)})
+	run := acc.Build(BuildInfo{Version: "1.0.0", Configuration: "c", StartedAt: time.Unix(0, 0), EndedAt: time.Unix(1, 0), Selection: Selection{Mode: "all"}})
 
 	if len(run.Operations) != 2 || run.Operations[1].Name != "fix" || run.Operations[1].Ran {
 		t.Fatalf("operations = %+v, want lint then a fix that did not run", run.Operations)
@@ -99,7 +99,7 @@ func TestInvocationsOfATask(t *testing.T) {
 	wantTool := ToolRun{
 		Name: "hadolint", App: AppRef{Name: "hadolint", Kind: "binary", Version: "2.12.0"},
 		Parser: &ParserRef{Module: "core", Parser: "hadolint", Version: "0.3.0", Schema: 2, ColumnUnit: "utf-32"},
-		FailOn: "warning", GateActive: true, Category: "security",
+		FailOn: "warning", GateActive: true, Category: "security", Incomplete: []Reason{ReasonNotStarted},
 	}
 	tr.Invocations = nil
 	if !reflect.DeepEqual(tr, wantTool) {

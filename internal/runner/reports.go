@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
+	"strings"
 	"time"
 
 	clr "github.com/datamitsu/datamitsu/internal/color"
@@ -75,6 +77,52 @@ func (sc *sharedContext) reportSelection() report.Selection {
 	case tooling.SelectionAll, tooling.SelectionEmpty:
 	}
 	return sel
+}
+
+// refuseNarrowedReports refuses, before anything runs, a run narrowed at plan
+// time — named files, a subdirectory, --file-scoped, --tools — that is asked
+// for a report listing findings: such a report would read as the findings of
+// the repository. A format that leaves out a tool whose completeness is not
+// established is written anyway. --allow-partial writes every report, with
+// the reasons it is incomplete.
+func refuseNarrowedReports(opts Options, sel tooling.Selection, fileScoped bool, tools []string) error {
+	if len(opts.Reports) == 0 || opts.AllowPartial {
+		return nil
+	}
+	var why []string
+	switch {
+	case fileScoped:
+		why = append(why, "--file-scoped")
+	case sel.Mode == tooling.SelectionPaths:
+		why = append(why, "files named")
+	case sel.Mode == tooling.SelectionSubtree:
+		why = append(why, "run in a subdirectory")
+	}
+	if len(tools) > 0 {
+		why = append(why, "--tools")
+	}
+	if len(why) == 0 {
+		return nil
+	}
+	var listing []string
+	for _, spec := range opts.Reports {
+		if r, ok := render.Lookup(spec.Format); ok && !r.OmitsIncompleteTools() {
+			listing = append(listing, spec.Format)
+		}
+	}
+	if len(listing) == 0 {
+		return nil
+	}
+	for _, spec := range opts.Reports {
+		status := report.ExportOmitted
+		if slices.Contains(listing, spec.Format) {
+			status = report.ExportRefused
+		}
+		emitReport(spec, status, "the run is narrowed: "+strings.Join(why, ", "))
+	}
+	return exitcode.UsageErrorf("the run is narrowed (%s), so report %s would not list every finding: "+
+		"run it over the whole repository, or pass --allow-partial to write it with the reasons it is incomplete",
+		strings.Join(why, ", "), strings.Join(listing, ", "))
 }
 
 // exportTarget is one report on its way to disk: the temporary file it is

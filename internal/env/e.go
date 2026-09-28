@@ -194,6 +194,14 @@ var (
 		Description:  "Reports a fix/lint/check run writes, as comma-separated format=path pairs (json=out/run.json); a --report flag naming the same format wins",
 	}
 
+	// allowPartial is execution-only: it lets one run write a listing report
+	// for a narrowed selection, never what datamitsu installs or produces.
+	allowPartial = envVar{
+		Name:         strings.ToUpper(ldflags.PackageName) + "_ALLOW_PARTIAL",
+		DefaultValue: "",
+		Description:  "Write a report that lists findings for a narrowed fix/lint/check run instead of refusing it (true or 1, false or 0); the --allow-partial flag wins",
+	}
+
 	noParse = envVar{
 		Name:         strings.ToUpper(ldflags.PackageName) + "_NO_PARSE",
 		DefaultValue: "",
